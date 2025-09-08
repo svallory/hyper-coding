@@ -4,7 +4,7 @@ import engine, { ShowHelpError } from './engine.js'
 
 /**
  * V8-only config resolver
- * Simplified configuration without legacy template requirements
+ * Modern configuration for Hypergen V8
  */
 const resolveV8Config = async (config: RunnerConfig) => {
   return {
@@ -43,3 +43,6 @@ const runner = async (
 }
 
 export { runner, engine, resolveV8Config as resolve, Logger }
+
+// Export Recipe Engine V8 System
+export * from './recipe-engine/index.js'

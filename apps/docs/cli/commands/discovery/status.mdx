@@ -1,0 +1,575 @@
+---
+title: "hyper status"
+description: "Comprehensive project health check, progress tracking, and system status overview"
+icon: "pulse"
+---
+
+# hyper status
+
+Comprehensive project health monitoring and status reporting command that provides real-time insights into project progress, code quality, epic status, team health, and system performance.
+
+## Syntax
+
+```bash
+hyper status [options]
+```
+
+## Overview
+
+The `hyper status` command provides a complete project overview:
+
+- **Project health**: Overall project status and health metrics
+- **Epic progress**: Status of all epics and their completion rates
+- **Code quality**: Quality scores, test coverage, and technical debt
+- **Security status**: Vulnerability assessments and security compliance
+- **Performance metrics**: Build times, deployment status, and system performance  
+- **Team health**: Developer productivity and collaboration metrics
+- **System status**: Tool availability and configuration health
+
+<Info>
+  Think of `hyper status` as your project's dashboard - a single command that gives you
+  complete visibility into your project's current state and health.
+</Info>
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--health` | System health check | `false` | `--health` |
+| `--quality` | Code quality metrics | `false` | `--quality` |
+| `--security` | Security status | `false` | `--security` |
+| `--progress` | Development progress | `false` | `--progress` |
+| `--epics` | Epic status | `false` | `--epics` |
+| `--team` | Team metrics | `false` | `--team` |
+| `--performance` | Performance metrics | `false` | `--performance` |
+| `--json` | JSON output format | `false` | `--json` |
+| `--refresh` | Force refresh of status | `false` | `--refresh` |
+| `--detailed` | Detailed status report | `false` | `--detailed` |
+
+## Examples
+
+### Basic Status
+
+```bash
+# Overall project status
+hyper status
+
+# Comprehensive status check  
+hyper status --health --quality --security
+
+# Epic-focused status
+hyper status --epics --progress
+
+# Team health check
+hyper status --team --detailed
+```
+
+### Specific Status Checks
+
+```bash
+# Code quality only
+hyper status --quality
+
+# Security assessment
+hyper status --security --detailed  
+
+# Performance monitoring
+hyper status --performance
+
+# System health diagnostics
+hyper status --health --verbose
+```
+
+## Status Overview
+
+### Default Status Report
+
+```bash
+hyper status
+```
+
+**Complete Status Overview**:
+```
+🎯 HyperDev Project Status
+Project: E-commerce Platform | Last Updated: 2024-01-15 14:32:00
+
+📊 Overall Health: Excellent (9.2/10)
+├── Code Quality: 8.7/10 (Good)
+├── Security: 9.5/10 (Excellent) 
+├── Performance: 8.9/10 (Good)
+├── Team Health: 9.1/10 (Excellent)
+└── Progress: 67% complete (On Track)
+
+🚀 Epic Progress (3 Active)
+├── ✅ User Authentication: 89% (Near Complete)
+├── 🔄 Payment Integration: 45% (In Progress)
+└── 📋 Admin Dashboard: 23% (Planning)
+
+⚡ Quick Metrics
+├── Test Coverage: 84% (Target: 80%) ✅
+├── Build Success Rate: 96% (Last 10 builds) ✅
+├── Security Vulnerabilities: 0 critical, 2 low ✅
+├── Performance Score: 8.9/10 (Good) ✅
+└── Team Velocity: 34 points/sprint (Target: 32) ✅
+
+🔧 Recent Activity
+├── 🎉 Authentication epic completed (2 hours ago)
+├── 🔧 Payment API integration merged (4 hours ago)
+├── 🧪 Test coverage improved to 84% (1 day ago)
+└── 📈 Performance optimization deployed (2 days ago)
+
+💡 Recommendations
+├── Consider security audit for payment integration
+├── Add integration tests for admin dashboard
+└── Schedule performance review for next sprint
+
+🚨 Alerts: None
+✅ All systems operational
+```
+
+## Detailed Status Categories
+
+### Health Check
+
+```bash
+hyper status --health --detailed
+```
+
+**System Health Diagnostics**:
+```
+🏥 System Health Check (Excellent - 9.2/10)
+
+✅ Core Systems (All Operational)
+├── HyperDev CLI: v2.1.0 (Latest) ✅
+├── AI Provider: OpenAI GPT-4 (Responding) ✅ 
+├── Template Cache: 247 templates cached ✅
+├── Git Repository: Clean, no conflicts ✅
+└── Development Environment: Configured ✅
+
+✅ Dependencies (Healthy)
+├── Node.js: v20.10.0 (Supported) ✅
+├── Package Manager: Bun v1.0.25 (Latest) ✅
+├── TypeScript: v5.3.2 (Current) ✅
+├── Testing: Vitest v1.2.0 (Current) ✅
+└── Build Tools: Vite v5.0.8 (Current) ✅
+
+✅ Configuration (Valid)
+├── hyperdev.config.js: Valid configuration ✅
+├── Team Settings: 4 members configured ✅
+├── Quality Gates: Strict mode enabled ✅
+├── Security Settings: Compliant ✅
+└── Epic Configuration: 3 active epics ✅
+
+⚠️ Warnings (1)
+└── Docker not configured for deployment
+
+💡 Recommendations
+├── Configure Docker for consistent deployments
+├── Update ESLint to v8.56.0 for latest rules
+└── Consider upgrading to Node.js v21 for performance
+```
+
+### Code Quality Status
+
+```bash
+hyper status --quality --detailed
+```
+
+**Quality Metrics Report**:
+```
+📊 Code Quality Status (8.7/10 - Good)
+
+🎯 Quality Metrics
+├── Overall Score: 8.7/10 (↑ 0.3 from last week)
+├── Test Coverage: 84% (Target: 80%) ✅
+├── Code Complexity: 6.8/10 (Acceptable)
+├── Documentation: 78% (Good)
+└── Maintainability: 8.5/10 (Good)
+
+🧪 Testing Status
+├── Unit Tests: 342 tests, 98.5% passing ✅
+├── Integration Tests: 89 tests, 96.6% passing ✅
+├── E2E Tests: 23 tests, 100% passing ✅
+├── Test Performance: 2.3s avg runtime (Good)
+└── Flaky Tests: 2 identified (scheduled for fix)
+
+📈 Quality Trends (30 days)
+├── Code Quality: +0.8 improvement
+├── Test Coverage: +6% improvement  
+├── Bug Rate: -23% (fewer bugs)
+├── Code Reviews: +15% participation
+└── Documentation: +12% coverage
+
+⚠️ Quality Issues (3)
+├── HIGH: Complex function in auth/login.ts:45
+├── MEDIUM: Missing tests in utils/validation.ts
+└── LOW: Outdated comments in api/users.ts
+
+🔧 Technical Debt
+├── Total Debt: 2.3 days (Low)
+├── Critical Issues: 0 ✅
+├── Code Smells: 8 (Manageable)
+└── Duplication: 2.1% (Acceptable)
+
+💡 Quality Recommendations
+├── Refactor complex authentication logic
+├── Add unit tests for validation utilities
+├── Update outdated documentation
+└── Schedule quarterly code review session
+```
+
+### Security Status
+
+```bash
+hyper status --security --detailed
+```
+
+**Security Assessment**:
+```
+🔒 Security Status (9.5/10 - Excellent)
+
+🛡️ Vulnerability Scan (Clean)
+├── Critical: 0 vulnerabilities ✅
+├── High: 0 vulnerabilities ✅ 
+├── Medium: 1 vulnerability (lodash@4.17.20)
+├── Low: 2 vulnerabilities (dev dependencies)
+└── Last Scan: 2 hours ago
+
+🔍 Security Analysis
+├── Secret Detection: No exposed secrets ✅
+├── Authentication: JWT properly configured ✅
+├── Authorization: RBAC implemented ✅
+├── Input Validation: Comprehensive validation ✅
+├── HTTPS: Properly configured ✅
+└── CORS: Restrictive policy configured ✅
+
+📋 Compliance Status
+├── OWASP Top 10: Compliant ✅
+├── Security Headers: All configured ✅
+├── Data Protection: GDPR compliant ✅
+├── Audit Logging: Comprehensive logs ✅
+└── Access Controls: Properly configured ✅
+
+⚠️ Security Recommendations
+├── Update lodash to v4.17.21 (medium priority)
+├── Add rate limiting to auth endpoints
+├── Schedule security audit for Q2
+└── Review third-party integrations
+
+🔒 Security Metrics (30 days)
+├── Security Score Trend: +0.3 improvement
+├── Vulnerabilities Fixed: 4
+├── Security Tests: 100% passing
+└── Incident Response Time: <2 hours
+```
+
+### Epic Progress Status
+
+```bash
+hyper status --epics --progress
+```
+
+**Epic Progress Dashboard**:
+```
+📋 Epic Progress Overview (3 Active, 1 On Hold)
+
+🚀 Active Epics
+├── User Authentication System
+│   ├── Progress: 89% complete (8/9 tasks) ✅
+│   ├── Status: Final testing and documentation
+│   ├── Assigned: Alice (Lead), Bob (Support)
+│   ├── Due: March 15, 2024 (3 days remaining)
+│   ├── Health: Excellent (9.1/10)
+│   └── Risk: Low (on track for completion)
+│
+├── Payment Integration
+│   ├── Progress: 45% complete (6/13 tasks) 🔄
+│   ├── Status: Stripe API integration in progress
+│   ├── Assigned: Carol (Lead), David (DevOps)
+│   ├── Due: April 1, 2024 (17 days remaining)
+│   ├── Health: Good (7.8/10)
+│   └── Risk: Medium (dependency on external API)
+│
+└── Admin Dashboard
+    ├── Progress: 23% complete (3/13 tasks) 📋
+    ├── Status: UI components and routing setup
+    ├── Assigned: Alice (Lead), Bob (UI)
+    ├── Due: April 15, 2024 (31 days remaining)
+    ├── Health: Good (8.2/10)
+    └── Risk: Low (sufficient time buffer)
+
+⏸️ On Hold Epics (1)
+└── Mobile App Development
+    └── Waiting for React Native team capacity
+
+✅ Completed This Month (2)
+├── Project Infrastructure Setup
+└── Basic User Registration
+
+📊 Epic Metrics
+├── Average Completion Rate: 67%
+├── On-Time Delivery: 85% (last 6 epics)
+├── Epic Health Score: 8.4/10
+└── Team Satisfaction: 9.2/10
+
+🎯 Milestone Progress
+├── Q1 Goals: 78% complete (on track)
+├── MVP Release: 67% complete (March 30)
+├── Beta Launch: 34% complete (May 15)
+└── Public Release: 12% complete (July 1)
+```
+
+### Team Status
+
+```bash
+hyper status --team --detailed
+```
+
+**Team Health Overview**:
+```
+👥 Team Status (9.1/10 - Excellent)
+
+🏆 Team Performance (Current Sprint)
+├── Sprint Velocity: 34 story points (Target: 32) ✅
+├── Sprint Burndown: On track (67% complete)
+├── Epic Delivery: 2/3 epics on schedule ✅
+├── Bug Resolution: 4.2 days avg (Target: 5) ✅
+└── Code Review Turnaround: 2.1 days ✅
+
+👨‍💻 Individual Performance
+├── Alice (Frontend Lead)
+│   ├── Velocity: 8 points/sprint (Stable)
+│   ├── Code Quality: 8.9/10 (Excellent)
+│   ├── Reviews: 12 completed (High participation)
+│   └── Focus: User Authentication epic
+│
+├── Bob (Full-stack Developer)
+│   ├── Velocity: 7 points/sprint (Consistent)
+│   ├── Code Quality: 8.7/10 (Good)
+│   ├── Reviews: 8 completed (Good participation)
+│   └── Focus: Supporting multiple epics
+│
+├── Carol (Backend Specialist)
+│   ├── Velocity: 9 points/sprint (High)
+│   ├── Code Quality: 9.2/10 (Excellent)
+│   ├── Reviews: 6 completed (Moderate)
+│   └── Focus: Payment Integration epic
+│
+└── David (DevOps Engineer)
+    ├── Velocity: 6 points/sprint (Specialized)
+    ├── Infrastructure: 100% uptime ✅
+    ├── Deployments: 12 successful this week
+    └── Focus: CI/CD optimization
+
+🤝 Collaboration Metrics
+├── Pair Programming: 23% of development time
+├── Knowledge Sharing: 8 sessions this month
+├── Cross-team Support: 15 hours contributed
+├── Team Satisfaction: 9.2/10 (Survey results)
+└── Communication Score: 8.8/10
+
+⚖️ Work-Life Balance
+├── Average Work Hours: 38.5/week (Healthy) ✅
+├── Weekend Work: 2% (Very low) ✅
+├── Overtime Frequency: 5% (Acceptable) ✅
+└── Burnout Risk: Low for all members ✅
+
+💡 Team Recommendations
+├── Continue current collaboration patterns
+├── Consider Bob for technical leadership role
+├── Schedule team building activity
+└── Plan knowledge sharing on payment systems
+```
+
+### Performance Status
+
+```bash
+hyper status --performance --detailed
+```
+
+**Performance Metrics**:
+```
+⚡ Performance Status (8.9/10 - Good)
+
+🏗️ Build Performance
+├── Build Time: 3.2 minutes (Target: <5 min) ✅
+├── Bundle Size: 487KB (Target: <500KB) ✅
+├── Tree Shaking: 92% efficiency ✅
+├── Cache Hit Rate: 89% (Excellent) ✅
+└── Parallel Processing: Enabled ✅
+
+🚀 Application Performance  
+├── Page Load Time: 1.8s (Target: <3s) ✅
+├── First Contentful Paint: 0.9s ✅
+├── Largest Contentful Paint: 2.1s ✅
+├── Cumulative Layout Shift: 0.05 ✅
+└── Time to Interactive: 2.3s ✅
+
+🌐 API Performance
+├── Average Response Time: 145ms ✅
+├── 95th Percentile: 320ms ✅
+├── Error Rate: 0.2% ✅
+├── Throughput: 450 req/s ✅
+└── Database Query Time: 35ms avg ✅
+
+📊 Performance Trends (7 days)
+├── Build Time: -8% (improved)
+├── Bundle Size: +2% (slight increase)
+├── Page Load: -12% (improved)
+├── API Response: Stable
+└── Error Rate: -40% (improved)
+
+⚠️ Performance Issues (1)
+└── Bundle size increased 15KB (investigate new dependencies)
+
+💡 Performance Recommendations
+├── Implement code splitting for routes
+├── Optimize image assets (WebP format)
+├── Add service worker for caching
+└── Review and optimize database queries
+```
+
+## Status Export and Reporting
+
+### JSON Export
+
+```bash
+# Export status as JSON
+hyper status --json --output status-report.json
+
+# Specific status export
+hyper status --epics --json > epic-status.json
+```
+
+### Report Generation
+
+```bash
+# Generate comprehensive report
+hyper status --report --detailed --output project-status.md
+
+# Executive summary
+hyper status --executive-summary --export pdf
+
+# Team performance report
+hyper status --team --report --period 1m
+```
+
+## Configuration
+
+### Status Check Settings
+
+```javascript
+// hyperdev.config.js
+export default {
+  status: {
+    // Default checks to run
+    default_checks: [
+      'health',
+      'quality', 
+      'security',
+      'progress',
+      'epics'
+    ],
+    
+    // Health thresholds
+    thresholds: {
+      quality_score: 7.0,
+      security_score: 8.0,
+      performance_score: 7.5,
+      team_health: 7.0,
+      test_coverage: 75
+    },
+    
+    // Alert configuration
+    alerts: {
+      enabled: true,
+      channels: ['console', 'slack'],
+      severity_levels: ['critical', 'high', 'medium']
+    },
+    
+    // Refresh intervals
+    cache: {
+      status_cache_duration: 300,    // 5 minutes
+      auto_refresh: true,
+      background_updates: true
+    }
+  }
+};
+```
+
+### Team Status Settings
+
+```javascript
+export default {
+  team_status: {
+    // Team metrics to track
+    metrics: [
+      'velocity',
+      'quality',
+      'collaboration', 
+      'satisfaction',
+      'workload'
+    ],
+    
+    // Privacy settings
+    privacy: {
+      individual_metrics: true,      // Show individual performance
+      anonymous_mode: false,         // Anonymous reporting
+      sensitive_data: false          // Include sensitive metrics
+    },
+    
+    // Reporting schedule
+    reports: {
+      daily_standup: true,
+      weekly_retrospective: true,
+      monthly_health_check: true
+    }
+  }
+};
+```
+
+## Integration Features
+
+### Continuous Monitoring
+
+```bash
+# Set up continuous status monitoring
+hyper status --monitor --interval 300  # Check every 5 minutes
+
+# Alert on status changes
+hyper status --alerts --webhook https://hooks.slack.com/...
+```
+
+### CI/CD Integration
+
+```bash
+# Status check in CI pipeline
+hyper status --ci --exit-code  # Non-zero exit on issues
+
+# Quality gate enforcement
+hyper status --quality --gate --fail-on medium
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper monitor" href="/cli/commands/workflow/monitor">
+    Advanced monitoring and analytics dashboard
+  </Card>
+  <Card title="hyper develop" href="/cli/commands/workflow/develop">
+    Real-time development monitoring
+  </Card>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Epic planning and management
+  </Card>
+  <Card title="hyper list" href="/cli/commands/discovery/list">
+    List project resources and components
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Project Health Monitoring](/cli/workflows/health-monitoring)
+- [Status Configuration](/cli/configuration/status-config)
+- [Team Analytics](/tools/dash)
+- [Quality Gates](/cli/configuration/quality-gates)

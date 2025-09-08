@@ -1,0 +1,1330 @@
+---
+title: 'Troubleshooting Guide'
+description: 'Comprehensive troubleshooting and error handling documentation to help you diagnose and resolve issues quickly when using Hypergen'
+---
+
+# Troubleshooting Guide
+
+This guide provides comprehensive solutions for common Hypergen issues and systematic approaches for diagnosing complex problems. When something goes wrong, this should be your first stop.
+
+## Quick Diagnostic Commands
+
+Before diving into specific issues, these commands help identify problems:
+
+<CodeGroup>
+```bash Basic Health Check
+# Check Hypergen installation
+hypergen --version
+
+# Validate current project configuration
+hypergen config info
+
+# List available generators and actions
+hypergen list
+
+# Check generator discovery status
+hypergen discover --dry-run
+```
+
+```bash Verbose Debugging
+# Enable debug logging
+DEBUG=hypergen* hypergen [command]
+
+# Run with maximum verbosity
+hypergen [command] --verbose --debug
+
+# Validate specific template
+hypergen template validate path/to/template
+```
+
+```bash Environment Diagnostics
+# Check Node.js and package versions
+node --version && bun --version
+
+# Verify file permissions
+ls -la _templates/
+
+# Check current working directory
+pwd && ls -la
+```
+</CodeGroup>
+
+## Common Issues by Category
+
+### Installation Problems
+
+<AccordionGroup>
+<Accordion title="Command not found: hypergen">
+
+**Symptoms:** `bash: hypergen: command not found` or similar
+
+**Diagnosis:**
+```bash
+# Check if hypergen is installed globally
+bun list -g | grep hypergen
+# or
+which hypergen
+```
+
+**Solutions:**
+
+1. **Install globally:**
+   ```bash
+   bun install -g hypergen
+   ```
+
+2. **Use bunx for one-time execution:**
+   ```bash
+   bunx hypergen [command]
+   ```
+
+3. **Add to PATH (if installed locally):**
+   ```bash
+   export PATH="$PATH:./node_modules/.bin"
+   ```
+
+4. **Check installation location:**
+   ```bash
+   bun bin -g
+   # Ensure this directory is in your PATH
+   ```
+</Accordion>
+
+<Accordion title="Permission denied errors">
+
+**Symptoms:** `EACCES: permission denied` when running commands
+
+**Diagnosis:**
+```bash
+# Check file permissions
+ls -la $(which hypergen)
+
+# Check directory permissions
+ls -la _templates/
+```
+
+**Solutions:**
+
+1. **Fix file permissions:**
+   ```bash
+   chmod +x $(which hypergen)
+   ```
+
+2. **Use appropriate user permissions:**
+   ```bash
+   # Don't use sudo with package managers
+   bun install --user hypergen
+   ```
+
+3. **Fix template directory permissions:**
+   ```bash
+   chmod -R 755 _templates/
+   ```
+
+4. **Run with proper user context:**
+   ```bash
+   # Avoid running as root
+   whoami  # Should not be root
+   ```
+</Accordion>
+
+<Accordion title="Version conflicts">
+
+**Symptoms:** Unexpected behavior, outdated features not working
+
+**Diagnosis:**
+```bash
+# Check installed version
+hypergen --version
+
+# Check for multiple installations
+which -a hypergen
+
+# List all installed versions
+bun list hypergen
+```
+
+**Solutions:**
+
+1. **Clean install:**
+   ```bash
+   bun uninstall -g hypergen
+   bun install -g hypergen@latest
+   ```
+
+2. **Remove conflicting installations:**
+   ```bash
+   # Remove local installation if using global
+   rm -rf node_modules/hypergen
+   ```
+
+3. **Use specific version:**
+   ```bash
+   bunx hypergen@latest [command]
+   ```
+</Accordion>
+</AccordionGroup>
+
+### Configuration Issues
+
+<AccordionGroup>
+<Accordion title="Configuration file not found">
+
+**Error Code:** `CONFIG_FILE_NOT_FOUND`
+
+**Symptoms:** 
+- `Configuration file not found`
+- Default behavior instead of expected customizations
+
+**Diagnosis:**
+```bash
+# Check for configuration files
+ls -la hypergen.config.js hypergen.config.json .hypergenrc
+
+# Verify current working directory
+pwd
+
+# Check configuration search paths
+DEBUG=hypergen:config hypergen list
+```
+
+**Solutions:**
+
+1. **Create configuration file:**
+   ```bash
+   hypergen init workspace
+   ```
+
+2. **Create minimal configuration:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     templates: [
+       { name: 'local', path: './_templates' }
+     ]
+   }
+   ```
+
+3. **Specify configuration explicitly:**
+   ```bash
+   hypergen --config path/to/config.js [command]
+   ```
+</Accordion>
+
+<Accordion title="Invalid configuration format">
+
+**Error Code:** `CONFIG_INVALID_FORMAT`
+
+**Symptoms:**
+- `Configuration file has invalid format`
+- Syntax errors in config file
+
+**Diagnosis:**
+```bash
+# Validate JSON syntax
+node -p "JSON.parse(require('fs').readFileSync('hypergen.config.json', 'utf8'))"
+
+# Check JavaScript syntax
+node -c hypergen.config.js
+```
+
+**Solutions:**
+
+1. **Fix JSON syntax:**
+   ```bash
+   # Use a JSON validator
+   cat hypergen.config.json | jq .
+   ```
+
+2. **Fix JavaScript syntax:**
+   ```bash
+   # Check for common issues
+   node --check hypergen.config.js
+   ```
+
+3. **Use configuration template:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     templates: [],
+     helpers: {},
+     prompts: {}
+   }
+   ```
+</Accordion>
+
+<Accordion title="Missing required fields">
+
+**Error Code:** `CONFIG_MISSING_REQUIRED`
+
+**Symptoms:** Configuration validation errors about missing fields
+
+**Solutions:**
+
+1. **Add required templates field:**
+   ```javascript
+   export default {
+     templates: [
+       { name: 'default', path: './_templates' }
+     ]
+   }
+   ```
+
+2. **Validate configuration:**
+   ```bash
+   hypergen config validate
+   ```
+
+3. **See full configuration reference:**
+   ```bash
+   hypergen config schema
+   ```
+</Accordion>
+</AccordionGroup>
+
+### Template Errors
+
+<AccordionGroup>
+<Accordion title="Template not found">
+
+**Error Code:** `TEMPLATE_NOT_FOUND`
+
+**Symptoms:**
+- `Template file not found`
+- `Generator not found`
+
+**Diagnosis:**
+```bash
+# List available generators
+hypergen list
+
+# Check template structure
+find _templates -name "*.ejs.t" -o -name "template.yml"
+
+# Verify template path
+ls -la _templates/[generator-name]/
+```
+
+**Solutions:**
+
+1. **Check template structure:**
+   ```
+   _templates/
+   ├── component/
+   │   ├── new/
+   │   │   ├── component.ejs.t
+   │   │   └── index.ejs.t
+   │   └── template.yml
+   ```
+
+2. **Run discovery:**
+   ```bash
+   hypergen discover
+   ```
+
+3. **Create missing template:**
+   ```bash
+   hypergen init generator --name=my-template
+   ```
+
+4. **Check case sensitivity:**
+   ```bash
+   # Ensure generator names match exactly
+   hypergen component:new vs hypergen Component:new
+   ```
+</Accordion>
+
+<Accordion title="Template syntax errors">
+
+**Error Code:** `TEMPLATE_INVALID_SYNTAX`
+
+**Symptoms:**
+- EJS parsing errors
+- YAML frontmatter errors
+- Template compilation failures
+
+**Diagnosis:**
+```bash
+# Validate template syntax
+hypergen template validate _templates/component/new/component.ejs.t
+
+# Check frontmatter syntax
+head -20 _templates/component/new/component.ejs.t
+```
+
+**Solutions:**
+
+1. **Fix EJS syntax:**
+   ```ejs
+   <%# Correct EJS syntax %>
+   <% if (name) { %>
+   export const <%= name %> = () => {
+   <% } %>
+   
+   <%# Common mistakes to avoid %>
+   <%# Don't mix template tags %>
+   <%= <% name %> %>  <!-- WRONG -->
+   <%= name %>        <!-- CORRECT -->
+   ```
+
+2. **Fix YAML frontmatter:**
+   ```yaml
+   ---
+   to: src/components/<%= name %>.tsx
+   ---
+   ```
+
+3. **Escape special characters:**
+   ```ejs
+   <%# Escape angle brackets in generated code %>
+   const Component = (): JSX.Element =<%=">" %> {
+   ```
+
+4. **Test template rendering:**
+   ```bash
+   # Dry run to test rendering
+   hypergen component:new --name=Test --dry-run
+   ```
+</Accordion>
+
+<Accordion title="Missing template variables">
+
+**Error Code:** `TEMPLATE_MISSING_VARIABLES`
+
+**Symptoms:**
+- `Template is missing required variables`
+- Undefined variable errors during rendering
+
+**Diagnosis:**
+```bash
+# Check template.yml for required variables
+cat _templates/component/template.yml
+
+# Run with debug to see variable context
+DEBUG=hypergen* hypergen component:new --name=Test
+```
+
+**Solutions:**
+
+1. **Define required variables in template.yml:**
+   ```yaml
+   # template.yml
+   prompts:
+     - name: name
+       type: input
+       message: Component name
+       required: true
+     - name: type
+       type: select
+       message: Component type
+       choices: ['functional', 'class']
+   ```
+
+2. **Provide variables via command line:**
+   ```bash
+   hypergen component:new --name=MyComponent --type=functional
+   ```
+
+3. **Set default values:**
+   ```yaml
+   # template.yml
+   defaults:
+     type: functional
+     export: true
+   ```
+
+4. **Check variable names match:**
+   ```ejs
+   <%# In template file %>
+   <%= name %>  <%# Must match prompt name %>
+   ```
+</Accordion>
+
+<Accordion title="Template composition errors">
+
+**Error Code:** `TEMPLATE_COMPOSITION_ERROR`
+
+**Symptoms:** Issues with template inheritance and extending
+
+**Solutions:**
+
+1. **Check parent template exists:**
+   ```yaml
+   # In child template.yml
+   extends: 'parent-template'  # Must exist
+   ```
+
+2. **Verify composition chain:**
+   ```bash
+   # Debug composition resolution
+   DEBUG=hypergen:composition hypergen [command]
+   ```
+
+3. **Fix circular dependencies:**
+   ```yaml
+   # template-a.yml
+   extends: template-b
+
+   # template-b.yml  
+   extends: template-a  # ❌ Creates circular dependency
+   ```
+</Accordion>
+</AccordionGroup>
+
+### Action and Recipe Errors
+
+<AccordionGroup>
+<Accordion title="Action not found">
+
+**Error Code:** `ACTION_NOT_FOUND`
+
+**Symptoms:** `Action '[name]' not found`
+
+**Diagnosis:**
+```bash
+# List available actions
+hypergen list
+
+# Search for similar actions
+hypergen list | grep -i [partial-name]
+
+# Check action discovery
+hypergen discover --verbose
+```
+
+**Solutions:**
+
+1. **Run discovery:**
+   ```bash
+   hypergen discover
+   ```
+
+2. **Check spelling and case:**
+   ```bash
+   # Actions are case-sensitive
+   hypergen component:New  # ❌ Wrong case
+   hypergen component:new  # ✅ Correct
+   ```
+
+3. **Create missing action:**
+   ```bash
+   hypergen init generator --name=my-action
+   ```
+
+4. **Check action file structure:**
+   ```typescript
+   // actions.ts
+   export default {
+     'my-action': {
+       params: ['name'],
+       action: async (args, runner) => {
+         // action implementation
+       }
+     }
+   }
+   ```
+</Accordion>
+
+<Accordion title="Invalid action parameters">
+
+**Error Code:** `ACTION_INVALID_PARAMETERS`
+
+**Symptoms:** Parameter validation errors, type mismatches
+
+**Diagnosis:**
+```bash
+# Get action details and parameter requirements
+hypergen info [action-name]
+
+# Run with debug to see parameter validation
+DEBUG=hypergen:params hypergen [action] --param=value
+```
+
+**Solutions:**
+
+1. **Check parameter types:**
+   ```bash
+   # String parameters
+   hypergen action --name="string value"
+
+   # Boolean parameters  
+   hypergen action --enabled=true
+
+   # Array parameters
+   hypergen action --items='["a","b","c"]'
+   ```
+
+2. **Provide required parameters:**
+   ```bash
+   # Check which parameters are required
+   hypergen info component:new
+
+   # Provide all required parameters
+   hypergen component:new --name=MyComponent --type=functional
+   ```
+
+3. **Fix parameter format:**
+   ```bash
+   # Use correct parameter names (check case)
+   hypergen action --fileName=test  # ❌ Wrong case
+   hypergen action --filename=test  # ✅ Correct
+   ```
+</Accordion>
+
+<Accordion title="Recipe execution failures">
+
+**Error Code:** `CODEMOD_EXECUTION_FAILED`
+
+**Symptoms:** Recipe steps fail during execution
+
+**Diagnosis:**
+```bash
+# Run recipe with verbose logging
+DEBUG=hypergen:recipe hypergen recipe run recipe.yml
+
+# Validate recipe syntax
+hypergen recipe validate recipe.yml
+
+# Check file permissions for target files
+ls -la path/to/target/files
+```
+
+**Solutions:**
+
+1. **Fix recipe syntax:**
+   ```yaml
+   # recipe.yml
+   name: My Recipe
+   description: Recipe description
+   
+   steps:
+     - tool: template
+       name: create-component
+       config:
+         generator: component:new
+         args:
+           name: "{{ name }}"
+   ```
+
+2. **Ensure target files exist:**
+   ```bash
+   # Create target files if needed
+   touch src/components/index.ts
+   ```
+
+3. **Fix file permissions:**
+   ```bash
+   # Ensure write permissions
+   chmod 644 src/components/*.ts
+   ```
+
+4. **Use backup option:**
+   ```yaml
+   steps:
+     - tool: codemod
+       config:
+         backup: true  # Create backups before modification
+   ```
+</Accordion>
+</AccordionGroup>
+
+### File System Issues
+
+<AccordionGroup>
+<Accordion title="Permission denied">
+
+**Error Code:** `FILE_PERMISSION_DENIED`
+
+**Symptoms:** `EACCES: permission denied` errors
+
+**Diagnosis:**
+```bash
+# Check file and directory permissions
+ls -la target/directory/
+ls -la target/file.txt
+
+# Check if directory is writable
+test -w target/directory/ && echo "Writable" || echo "Not writable"
+```
+
+**Solutions:**
+
+1. **Fix directory permissions:**
+   ```bash
+   chmod 755 target/directory/
+   ```
+
+2. **Fix file permissions:**
+   ```bash
+   chmod 644 target/file.txt
+   ```
+
+3. **Change ownership (if needed):**
+   ```bash
+   sudo chown -R $USER:$USER target/directory/
+   ```
+
+4. **Use appropriate user context:**
+   ```bash
+   # Avoid running as root
+   whoami  # Should be your regular user
+   ```
+</Accordion>
+
+<Accordion title="File already exists">
+
+**Error Code:** `FILE_ALREADY_EXISTS`
+
+**Symptoms:** Hypergen refuses to overwrite existing files
+
+**Solutions:**
+
+1. **Use force option:**
+   ```bash
+   hypergen component:new --name=Test --force
+   ```
+
+2. **Remove existing file:**
+   ```bash
+   rm target/file.txt
+   hypergen component:new --name=Test
+   ```
+
+3. **Use different name:**
+   ```bash
+   hypergen component:new --name=TestComponent2
+   ```
+
+4. **Configure overwrite behavior:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     helpers: {
+       overwrite: true  // Allow overwriting by default
+     }
+   }
+   ```
+</Accordion>
+
+<Accordion title="Directory not found">
+
+**Error Code:** `DIRECTORY_NOT_FOUND`
+
+**Symptoms:** Target directory doesn't exist
+
+**Solutions:**
+
+1. **Create directory structure:**
+   ```bash
+   mkdir -p src/components/ui/
+   ```
+
+2. **Use template with directory creation:**
+   ```ejs
+   ---
+   to: src/components/<%= name %>/<%= name %>.tsx
+   ---
+   ```
+
+3. **Enable directory creation in config:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     helpers: {
+       createDirs: true
+     }
+   }
+   ```
+</Accordion>
+</AccordionGroup>
+
+### Network and URL Issues
+
+<AccordionGroup>
+<Accordion title="Failed to fetch remote templates">
+
+**Error Code:** `URL_FETCH_FAILED`
+
+**Symptoms:** Cannot download templates from remote sources
+
+**Diagnosis:**
+```bash
+# Test internet connectivity
+ping github.com
+
+# Test URL accessibility
+curl -I https://github.com/user/repo
+
+# Check proxy settings
+echo $HTTP_PROXY $HTTPS_PROXY
+```
+
+**Solutions:**
+
+1. **Check internet connection:**
+   ```bash
+   # Test basic connectivity
+   curl -I https://api.github.com
+   ```
+
+2. **Configure proxy (if needed):**
+   ```bash
+   export HTTP_PROXY=http://proxy.company.com:8080
+   export HTTPS_PROXY=http://proxy.company.com:8080
+   ```
+
+3. **Use alternative URL format:**
+   ```bash
+   # Try different URL formats
+   hypergen use github:user/repo
+   hypergen use https://github.com/user/repo.git
+   hypergen use git+ssh://git@github.com/user/repo.git
+   ```
+
+4. **Cache and retry:**
+   ```bash
+   # Clear URL cache and retry
+   rm -rf ~/.hypergen/cache/
+   hypergen use github:user/repo
+   ```
+</Accordion>
+
+<Accordion title="Invalid URL format">
+
+**Error Code:** `URL_INVALID_FORMAT`
+
+**Symptoms:** URL parsing errors
+
+**Solutions:**
+
+1. **Use correct URL formats:**
+   ```bash
+   # GitHub repositories
+   hypergen use github:user/repo
+   hypergen use github:user/repo#branch
+   
+   # NPM packages
+   hypergen use npm:package-name
+   hypergen use npm:@scope/package-name
+   
+   # Local paths
+   hypergen use file:./path/to/templates
+   hypergen use file:/absolute/path/to/templates
+   ```
+
+2. **Check URL encoding:**
+   ```bash
+   # URL encode special characters
+   hypergen use github:user/repo-with%2Dspecial%2Dchars
+   ```
+</Accordion>
+</AccordionGroup>
+
+## Performance Issues
+
+### Slow Generation
+
+<AccordionGroup>
+<Accordion title="Template rendering is slow">
+
+**Symptoms:** Long delays during template processing
+
+**Diagnosis:**
+```bash
+# Profile template rendering
+time DEBUG=hypergen* hypergen component:new --name=Test
+
+# Check template complexity
+wc -l _templates/**/*.ejs.t
+
+# Monitor resource usage
+top -p $(pgrep node)
+```
+
+**Solutions:**
+
+1. **Optimize template logic:**
+   ```ejs
+   <%# Avoid complex loops in templates %>
+   <% for (let i = 0; i < 1000; i++) { %> <!-- ❌ Slow -->
+   
+   <%# Pre-compute data in helpers instead %>
+   <% items.forEach(item => { %>         <!-- ✅ Better -->
+   ```
+
+2. **Use template partials:**
+   ```ejs
+   <%# Split large templates %>
+   <%- include('_header.ejs', { title: name }) %>
+   <%- include('_body.ejs', { content: body }) %>
+   ```
+
+3. **Cache template compilation:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     cache: {
+       templates: true
+     }
+   }
+   ```
+
+4. **Reduce template discovery:**
+   ```javascript
+   // Specify exact template paths
+   export default {
+     templates: [
+       { name: 'components', path: './_templates/components' }
+     ]
+   }
+   ```
+</Accordion>
+
+<Accordion title="High memory usage">
+
+**Symptoms:** System slowdown, out of memory errors
+
+**Solutions:**
+
+1. **Limit concurrent operations:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     concurrency: 2  // Reduce from default
+   }
+   ```
+
+2. **Clean up large data:**
+   ```ejs
+   <%# Don't store large objects in variables %>
+   <% const data = JSON.parse(hugeJsonString) %> <!-- ❌ Memory intensive -->
+   
+   <%# Process data in chunks %>
+   <% chunks.forEach(processChunk) %>            <!-- ✅ Better -->
+   ```
+
+3. **Clear template cache:**
+   ```bash
+   rm -rf ~/.hypergen/cache/
+   ```
+</Accordion>
+</AccordionGroup>
+
+### Discovery Performance
+
+<AccordionGroup>
+<Accordion title="Slow generator discovery">
+
+**Solutions:**
+
+1. **Limit discovery scope:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     discovery: {
+       directories: ['./_templates'],  // Don't scan entire filesystem
+       depth: 2  // Limit recursion depth
+     }
+   }
+   ```
+
+2. **Use explicit template configuration:**
+   ```javascript
+   // Skip discovery entirely
+   export default {
+     templates: [
+       { name: 'components', path: './_templates/components' },
+       { name: 'pages', path: './_templates/pages' }
+     ]
+   }
+   ```
+
+3. **Cache discovery results:**
+   ```bash
+   # Discovery results are cached automatically
+   # Clear cache if needed
+   rm -rf ~/.hypergen/cache/discovery/
+   ```
+</Accordion>
+</AccordionGroup>
+
+## Integration Issues
+
+### IDE Integration
+
+<AccordionGroup>
+<Accordion title="VS Code extension not working">
+
+**Symptoms:** Hypergen commands not available in VS Code
+
+**Solutions:**
+
+1. **Install VS Code extension:**
+   ```bash
+   code --install-extension hypergen.vscode-hypergen
+   ```
+
+2. **Check extension settings:**
+   ```json
+   // settings.json
+   {
+     "hypergen.executable": "hypergen",
+     "hypergen.configPath": "./hypergen.config.js"
+   }
+   ```
+
+3. **Reload VS Code:**
+   ```
+   Ctrl+Shift+P → "Developer: Reload Window"
+   ```
+
+4. **Check extension logs:**
+   ```
+   View → Output → Select "Hypergen" from dropdown
+   ```
+</Accordion>
+
+<Accordion title="IntelliSense not working for templates">
+
+**Solutions:**
+
+1. **Configure TypeScript for EJS files:**
+   ```json
+   // .vscode/settings.json
+   {
+     "files.associations": {
+       "*.ejs.t": "typescript"
+     }
+   }
+   ```
+
+2. **Add type definitions:**
+   ```typescript
+   // types/hypergen.d.ts
+   declare const name: string
+   declare const type: string
+   // Add other template variables
+   ```
+</Accordion>
+</AccordionGroup>
+
+### CI/CD Integration
+
+<AccordionGroup>
+<Accordion title="Hypergen fails in CI environment">
+
+**Symptoms:** Works locally but fails in continuous integration
+
+**Diagnosis:**
+```yaml
+# Add debugging to CI pipeline
+- name: Debug Hypergen
+  run: |
+    which hypergen
+    hypergen --version
+    DEBUG=hypergen* hypergen list
+```
+
+**Solutions:**
+
+1. **Install in CI:**
+   ```yaml
+   # GitHub Actions
+   - name: Install Hypergen
+     run: bun install -g hypergen
+   
+   - name: Generate code
+     run: hypergen component:new --name=CI-Test
+   ```
+
+2. **Use correct Node.js version:**
+   ```yaml
+   - uses: actions/setup-node@v3
+     with:
+       node-version: '18'  # Use compatible version
+   ```
+
+3. **Set environment variables:**
+   ```yaml
+   env:
+     NODE_ENV: production
+     DEBUG: hypergen:*
+   ```
+
+4. **Handle file permissions:**
+   ```yaml
+   - name: Fix permissions
+     run: chmod -R 755 ./_templates/
+   ```
+</Accordion>
+
+<Accordion title="Generated files not committed">
+
+**Solutions:**
+
+1. **Check .gitignore:**
+   ```gitignore
+   # Don't ignore generated files
+   !src/components/generated/
+   ```
+
+2. **Add files explicitly:**
+   ```bash
+   git add -f src/components/*.tsx
+   ```
+
+3. **Configure CI to commit changes:**
+   ```yaml
+   - name: Commit generated files
+     run: |
+       git config user.name "CI Bot"
+       git config user.email "ci@example.com"
+       git add .
+       git commit -m "Generate code" || true
+       git push
+   ```
+</Accordion>
+</AccordionGroup>
+
+## Systematic Debugging Approach
+
+When facing complex issues, follow this systematic approach:
+
+### 1. Information Gathering
+
+```bash
+# Collect environment information
+cat > debug-info.txt << EOF
+Date: $(date)
+OS: $(uname -a)
+Node: $(node --version)
+Bun: $(bun --version)
+Hypergen: $(hypergen --version)
+PWD: $(pwd)
+EOF
+
+# Add configuration info
+echo "Config:" >> debug-info.txt
+hypergen config info >> debug-info.txt 2>&1 || echo "No config" >> debug-info.txt
+
+# Add template structure
+echo -e "\nTemplates:" >> debug-info.txt
+find _templates -type f -name "*.ejs.t" -o -name "template.yml" >> debug-info.txt 2>&1 || echo "No templates" >> debug-info.txt
+```
+
+### 2. Minimal Reproduction
+
+Create a minimal example that reproduces the issue:
+
+```bash
+# Create test directory
+mkdir hypergen-debug && cd hypergen-debug
+
+# Initialize minimal configuration  
+cat > hypergen.config.js << EOF
+export default {
+  templates: [
+    { name: 'test', path: './_templates' }
+  ]
+}
+EOF
+
+# Create minimal template
+mkdir -p _templates/test/new
+cat > _templates/test/new/test.ejs.t << EOF
+---
+to: test-<%= name %>.txt
+---
+Hello <%= name %>!
+EOF
+
+# Create template.yml
+cat > _templates/test/template.yml << EOF
+prompts:
+  - name: name
+    message: Test name
+    type: input
+EOF
+
+# Test
+hypergen test:new --name=debug
+```
+
+### 3. Verbose Logging
+
+Enable comprehensive logging:
+
+```bash
+# Maximum debugging
+DEBUG=hypergen* hypergen [command] --verbose --debug 2>&1 | tee debug.log
+
+# Focus on specific areas
+DEBUG=hypergen:template,hypergen:config hypergen [command]
+
+# Log to file for analysis
+hypergen [command] --verbose 2>&1 | tee -a debug.log
+```
+
+### 4. Isolation Testing
+
+Test components individually:
+
+```bash
+# Test template syntax only
+hypergen template validate _templates/component/new/component.ejs.t
+
+# Test configuration loading
+hypergen config info
+
+# Test discovery
+hypergen discover --dry-run
+
+# Test without custom configuration
+mv hypergen.config.js hypergen.config.js.bak
+hypergen [command]
+mv hypergen.config.js.bak hypergen.config.js
+```
+
+### 5. Binary Search Debugging
+
+For complex templates, use binary search to isolate issues:
+
+```bash
+# Comment out half the template
+# Test if issue persists
+# Narrow down to problematic section
+```
+
+## Getting Help
+
+When self-service solutions don't work:
+
+### 1. Gather Diagnostic Information
+
+```bash
+# Create comprehensive debug package
+mkdir hypergen-debug-$(date +%s)
+cd hypergen-debug-*
+
+# Copy your configuration
+cp path/to/hypergen.config.js ./
+
+# Export minimal template that reproduces issue
+cp -r _templates/problematic-generator ./
+
+# Create issue report
+cat > ISSUE_REPORT.md << EOF
+# Hypergen Issue Report
+
+## Environment
+- OS: $(uname -a)
+- Node: $(node --version)  
+- Bun: $(bun --version)
+- Hypergen: $(hypergen --version)
+
+## Issue Description
+[Describe the issue]
+
+## Expected Behavior
+[What should happen]
+
+## Actual Behavior
+[What actually happens]
+
+## Reproduction Steps
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+
+## Debug Output
+\`\`\`
+$(DEBUG=hypergen* hypergen [command] 2>&1)
+\`\`\`
+
+EOF
+```
+
+### 2. Community Resources
+
+- **GitHub Issues**: [github.com/svallory/hypergen/issues](https://github.com/svallory/hypergen/issues)
+- **Documentation**: [hypergen.dev/docs](https://hypergen.dev/docs)
+- **Discussions**: [github.com/svallory/hypergen/discussions](https://github.com/svallory/hypergen/discussions)
+
+### 3. Issue Reporting Guidelines
+
+When reporting issues:
+
+1. **Use the issue template**
+2. **Provide minimal reproduction case**  
+3. **Include debug output**
+4. **Describe expected vs actual behavior**
+5. **List troubleshooting steps already tried**
+
+## Preventive Measures
+
+### Template Quality Assurance
+
+```bash
+# Validate templates before use
+hypergen template validate _templates/**/*.ejs.t
+
+# Test template rendering
+hypergen template test _templates/component
+
+# Lint template syntax
+hypergen template lint _templates/
+```
+
+### Configuration Validation
+
+```javascript
+// hypergen.config.js - Use strict validation
+export default {
+  strict: true,  // Enable strict mode
+  templates: [
+    // Always specify explicit paths
+    { name: 'components', path: './_templates/components' }
+  ],
+  validation: {
+    templates: true,
+    parameters: true
+  }
+}
+```
+
+### Monitoring and Alerting
+
+```bash
+# Add health checks to your workflow
+hypergen doctor  # Check system health
+
+# Monitor performance
+time hypergen [command]
+
+# Set up automated testing
+npm test -- --testNamePattern="hypergen"
+```
+
+## Quick Reference
+
+### Common Error Codes
+
+| Code | Issue | Quick Fix |
+|------|-------|-----------|
+| `CONFIG_FILE_NOT_FOUND` | No config file | `hypergen init workspace` |
+| `TEMPLATE_NOT_FOUND` | Missing template | Check `_templates/` structure |
+| `ACTION_NOT_FOUND` | Unknown action | `hypergen list` to see available actions |
+| `FILE_PERMISSION_DENIED` | Permission error | `chmod 755 directory/` |
+| `TEMPLATE_INVALID_SYNTAX` | Template syntax error | Validate EJS and YAML syntax |
+
+### Essential Commands
+
+| Command | Purpose |
+|---------|---------|
+| `hypergen --version` | Check installation |
+| `hypergen list` | See available generators |  
+| `hypergen discover` | Refresh generator list |
+| `hypergen config info` | Validate configuration |
+| `DEBUG=hypergen* hypergen [cmd]` | Enable debug logging |
+
+This troubleshooting guide should help you resolve most Hypergen issues quickly and systematically. When in doubt, start with the diagnostic commands and work through the systematic debugging approach.

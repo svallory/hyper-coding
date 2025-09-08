@@ -1,44 +1,110 @@
-# Mintlify Starter Kit
+# HyperDev Documentation
 
-Use the starter kit to get your docs deployed and ready to customize.
+Comprehensive documentation for HyperDev - the modern code generation ecosystem.
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+## Documentation Structure
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
+This documentation site is built with [Mintlify](https://mintlify.com) and covers the complete HyperDev ecosystem:
 
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
+### Core Documentation
+- **Getting Started**: Installation, quickstart, and user workflows
+- **CLI Reference**: Complete command-line interface documentation
+- **Configuration Guide**: System configuration and setup
+- **Troubleshooting**: Common issues and solutions
 
-## Development
+### Templates & Examples
+- **Template Creation Guide**: Building custom templates
+- **Template Sharing**: Publishing and distributing templates
+- **Examples Library**: Real-world usage examples and patterns
 
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
+### Advanced Topics
+- **Tool Integrations**: IDE, build system, and CI/CD integration
+- **Advanced Usage**: Power user features and enterprise patterns
+- **Performance Guide**: Optimization strategies and best practices
+- **Security Guide**: Security model and trust system
 
+### Community & Development
+- **Migration Guide**: Moving from other code generation tools
+- **Community Guidelines**: Contributing templates and code
+- **Plugin Development**: Building custom plugins and extensions
+
+### API Reference
+- **Auto-generated API docs**: TypeScript API documentation via TypeDoc
+- **Integration APIs**: Programmatic usage patterns
+
+## Building Documentation
+
+### Prerequisites
+- Bun package manager
+- Node.js 16+
+
+### Development
+```bash
+# Start development server
+cd apps/docs
+mintlify dev
+
+# Generate API documentation
+cd packages/hypergen
+bun run docs:api
+
+# Build complete documentation
+bun run scripts/build-docs.js
 ```
-npm i -g mint
+
+### API Documentation Generation
+
+API documentation is automatically generated from TypeScript source code using TypeDoc:
+
+```bash
+# Generate API docs
+cd packages/hypergen
+bun run docs:api
+
+# Watch for changes
+bun run docs:api:watch
 ```
 
-Run the following command at the root of your documentation, where your `docs.json` is located:
+The generated API documentation is integrated into the main documentation site at `/api-reference/generated/`.
 
-```
-mint dev
-```
+## Content Guidelines
 
-View your local preview at `http://localhost:3000`.
+### Writing Style
+- **Clear and Concise**: Use simple, direct language
+- **User-Focused**: Write for the end-user experience
+- **Progressive Disclosure**: Start simple, build complexity
+- **Practical Examples**: Include working code samples
 
-## Publishing changes
+### Documentation Standards
+- Use MDX format for rich content
+- Include proper frontmatter (title, description)
+- Add code examples with syntax highlighting
+- Provide troubleshooting sections where appropriate
+- Cross-reference related topics
 
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
+## Contributing to Documentation
 
-## Need help?
+### Adding New Pages
+1. Create MDX file with proper frontmatter
+2. Add to `docs.json` navigation structure
+3. Follow content guidelines and style standards
+4. Test with local development server
 
-### Troubleshooting
+### Updating API Documentation
+1. Add comprehensive TSDoc comments to source code
+2. Regenerate API docs: `bun run docs:api`
+3. Review generated output for accuracy
+4. Update integration if needed
 
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
+## Support
 
-### Resources
-- [Mintlify documentation](https://mintlify.com/docs)
-- [Mintlify community](https://mintlify.com/community)
+For documentation issues:
+- **GitHub Issues**: Report bugs or request improvements
+- **Discord Community**: Get help and discuss improvements
+- **Direct Contact**: Reach out to the documentation team
+
+---
+
+**Version**: 2.0.0  
+**Last Updated**: January 2025  
+**Build System**: Mintlify + TypeDoc

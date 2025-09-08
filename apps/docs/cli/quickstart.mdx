@@ -1,0 +1,283 @@
+---
+title: "CLI Quickstart"
+description: "Get started with HyperDev CLI in 5 minutes - from installation to your first AI-generated code"
+icon: "rocket"
+---
+
+# 5-Minute CLI Quickstart
+
+Get up and running with the HyperDev CLI in just a few minutes. This guide will take you from installation to generating your first AI-augmented code.
+
+## Prerequisites
+
+- Node.js 18+ or Bun installed
+- An AI provider API key (OpenAI, Anthropic, etc.)
+- 5 minutes of your time
+
+## Step 1: Install the CLI
+
+<CodeGroup>
+```bash bun (Recommended)
+bun install -g @hyperdev/cli
+```
+
+```bash npm
+npm install -g @hyperdev/cli
+```
+</CodeGroup>
+
+Verify installation:
+```bash
+hyper --version
+```
+
+## Step 2: Quick Configuration
+
+Set up your AI provider (we'll use OpenAI for this example):
+
+```bash
+# Set your API key
+export OPENAI_API_KEY="your-api-key-here"
+
+# Quick configuration
+hyper config set ai-provider openai
+hyper config set default-ide cursor
+```
+
+<Tip>
+  Don't have an API key? You can get one from [OpenAI](https://platform.openai.com/api-keys), 
+  [Anthropic](https://console.anthropic.com/), or use Azure OpenAI.
+</Tip>
+
+## Step 3: Create Your First Project
+
+Initialize a new project with HyperDev:
+
+```bash
+# Create project directory
+mkdir my-hyper-app && cd my-hyper-app
+
+# Initialize with HyperDev
+hyper init
+```
+
+The init command will:
+- Set up project structure
+- Configure development environment  
+- Install necessary dependencies
+- Create initial configuration files
+
+<details>
+<summary>What gets created?</summary>
+
+```
+my-hyper-app/
+├── hyperdev.config.js      # Project configuration
+├── .hyper/                 # HyperDev workspace
+│   ├── templates/          # Local templates
+│   └── cache/              # Template cache
+├── package.json            # Dependencies
+└── src/                    # Source code directory
+```
+</details>
+
+## Step 4: Generate Your First Code
+
+Now let's generate some code using AI:
+
+```bash
+# Generate a React component
+hyper gen react-component --name UserProfile
+
+# Generate an API endpoint
+hyper gen api-endpoint --name auth --context "user authentication"
+
+# Generate a full feature
+hyper gen feature --name user-management
+```
+
+Each generation will:
+- Create appropriate files and directories
+- Generate AI-optimized code
+- Include best practices and documentation
+- Set up tests and configuration
+
+## Step 5: Plan Your Architecture
+
+Use the planning tools to design your application:
+
+```bash
+# Start strategic planning
+hyper plan
+
+# Create an epic for a major feature
+hyper plan create --name "User Authentication System"
+```
+
+This opens an interactive planning interface where you can:
+- Define feature requirements
+- Create architecture diagrams  
+- Break down into implementable tasks
+- Generate technical specifications
+
+## Step 6: Monitor Development
+
+Start development monitoring to get real-time AI assistance:
+
+```bash
+# Start development monitoring
+hyper dev --watch
+
+# Focus monitoring on specific areas
+hyper dev --focus auth --assistant claude
+```
+
+The development monitor provides:
+- Real-time code quality feedback
+- Security vulnerability detection
+- Performance optimization suggestions
+- AI-powered debugging assistance
+
+## Common Workflow Examples
+
+Here are some typical workflows you'll use:
+
+### Creating a New Feature
+
+```bash
+# Plan the feature
+hyper plan create --name "Shopping Cart"
+
+# Generate base structure
+hyper gen feature --name shopping-cart
+
+# Generate specific components
+hyper gen component --name CartItem
+hyper gen api-endpoint --name cart --context "shopping cart operations"
+
+# Monitor development
+hyper dev --watch --focus cart
+```
+
+### Working with Templates
+
+```bash
+# Search for templates
+hyper search "nextjs typescript"
+
+# List available templates
+hyper list templates --filter react
+
+# Generate from specific template
+hyper gen next-app-router --name my-app
+```
+
+### Project Health Check
+
+```bash
+# Check overall project status
+hyper status
+
+# Get detailed health report
+hyper status --health --quality --security
+
+# Monitor team progress  
+hyper monitor --team --progress
+```
+
+## Next Steps
+
+<Steps>
+  <Step title="Learn Core Commands">
+    Explore the [workflow commands](/cli/commands/workflow/init) you'll use daily
+  </Step>
+  <Step title="Understand Workflows">
+    Read about [complete development workflows](/cli/workflows/overview)
+  </Step>
+  <Step title="Configure Your Setup">
+    Customize HyperDev for your specific needs in [configuration](/cli/configuration/overview)
+  </Step>
+  <Step title="Join the Community">
+    Connect with other developers in our [community](/community)
+  </Step>
+</Steps>
+
+## Quick Reference
+
+### Essential Commands
+```bash
+hyper init                    # Initialize project
+hyper gen <template>     # Generate code  
+hyper search <query>          # Find templates/solutions
+hyper plan                    # Strategic planning
+hyper dev --watch         # Development monitoring
+hyper status                  # Project health
+hyper --help                  # Get help
+```
+
+### Getting Help
+```bash
+hyper --help                  # Overview of all commands
+hyper [command] --help        # Command-specific help
+hyper help workflows          # Workflow guidance  
+hyper help templates          # Template system help
+```
+
+### Useful Options
+```bash
+--dry-run                     # Preview without making changes
+--verbose                     # Detailed output
+--json                        # JSON format output
+--interactive                 # Interactive mode
+--help                        # Show help
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="AI provider not working">
+    Check your API key and configuration:
+    ```bash
+    hyper config list
+    echo $OPENAI_API_KEY
+    hyper gen --test-ai-connection
+    ```
+  </Accordion>
+  
+  <Accordion title="Templates not found">
+    Refresh the template cache:
+    ```bash
+    hyper cache clear
+    hyper list templates --refresh
+    ```
+  </Accordion>
+  
+  <Accordion title="Slow performance">
+    Try using bun for better performance:
+    ```bash
+    bun install -g @hyperdev/cli
+    hyper dx diagnose --optimize
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## What's Next?
+
+You now have a basic understanding of the HyperDev CLI! Here's what to explore next:
+
+<CardGroup cols={2}>
+  <Card title="Master the Commands" icon="terminal" href="/cli/commands/overview">
+    Learn all available commands and their advanced options
+  </Card>
+  <Card title="Development Workflows" icon="flow" href="/cli/workflows/overview">  
+    Understand complete workflows from project start to deployment
+  </Card>
+  <Card title="Advanced Configuration" icon="gear" href="/cli/configuration/overview">
+    Customize HyperDev for your team and projects
+  </Card>
+  <Card title="Real Examples" icon="code" href="/cli/examples/overview">
+    See the CLI in action with real-world projects
+  </Card>
+</CardGroup>
+
+Ready to dive deeper? [Explore the complete command reference](/cli/commands/overview) or [learn about development workflows](/cli/workflows/overview).

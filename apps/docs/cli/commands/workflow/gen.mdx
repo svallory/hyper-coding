@@ -1,0 +1,452 @@
+---
+title: "hyper gen"
+description: "AI-augmented code generation from templates with intelligent context and validation"
+icon: "code"
+---
+
+# hyper gen
+
+Generate high-quality, AI-augmented code from templates with intelligent context understanding, automatic validation, and best practice integration.
+
+## Syntax
+
+```bash
+hyper gen <template> [options]
+```
+
+## Overview
+
+The `hyper gen` command is your primary tool for AI-augmented code generation. It combines template-based generation with AI intelligence to create:
+
+- **Contextually aware code** that fits your project
+- **Best practice implementations** with security and performance optimization
+- **Complete features** including tests, documentation, and configuration
+- **Validated output** with quality and security checks
+
+<Info>
+  `hyper gen` provides a simplified interface to the [Gen tool](/tools/gen), focusing on common use cases
+  while maintaining access to advanced features through options.
+</Info>
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--context, -c <text>` | AI context for generation | - | `--context "user authentication"` |
+| `--search, -s <query>` | Search templates first | - | `--search "react component"` |
+| `--compose <templates>` | Compose multiple templates | - | `--compose api,ui,tests` |
+| `--output, -o <dir>` | Output directory | `./src` | `--output ./components` |
+| `--variables <json>` | Template variables as JSON | `{}` | `--variables '{"name":"User"}'` |
+| `--trust-level <level>` | Minimum trust level (1-10) | `8` | `--trust-level 9` |
+| `--validate` | Validate after generation | `true` | `--validate` |
+| `--dry-run` | Preview generation | `false` | `--dry-run` |
+| `--interactive, -i` | Interactive mode | `false` | `--interactive` |
+
+## Examples
+
+### Basic Generation
+
+```bash
+# Generate React component
+hyper gen react-component
+
+# Generate with specific name
+hyper gen react-component --variables '{"name": "UserProfile"}'
+
+# Generate API endpoint
+hyper gen api-endpoint --context "user management operations"
+```
+
+### Search and Generate
+
+```bash
+# Search for templates first
+hyper gen --search "nextjs auth"
+
+# This will:
+# 1. Show matching templates
+# 2. Let you choose one
+# 3. Generate from selected template
+```
+
+### AI-Enhanced Generation
+
+```bash
+# Generate with AI context
+hyper gen component --context "dashboard widget for displaying user metrics"
+
+# Generate feature with full context
+hyper gen feature --context "shopping cart with real-time updates and payment integration"
+```
+
+The AI context helps generate more appropriate code by understanding:
+- **Purpose**: What the code should do
+- **Domain**: Business context and requirements  
+- **Architecture**: How it fits in your project
+- **Constraints**: Performance, security, accessibility needs
+
+### Template Composition
+
+```bash
+# Compose multiple templates into a complete feature
+hyper gen feature --compose component,api,tests,docs
+
+# Generate fullstack feature
+hyper gen fullstack --compose frontend,backend,database,deployment
+```
+
+<Accordion title="Template Composition Example">
+When you run:
+```bash
+hyper gen user-management --compose component,api,tests
+```
+
+HyperDev generates:
+- **Component**: React/Vue component with props and styling
+- **API**: Backend endpoints with validation and error handling
+- **Tests**: Unit and integration tests for both frontend and backend
+- **Types**: TypeScript definitions shared between layers
+- **Documentation**: Usage examples and API documentation
+</Accordion>
+
+## Template Categories
+
+### Frontend Templates
+
+```bash
+# React ecosystem
+hyper gen react-component        # React component with TypeScript
+hyper gen react-hook             # Custom React hook
+hyper gen next-page              # Next.js page component
+hyper gen next-api               # Next.js API route
+
+# Vue ecosystem  
+hyper gen vue-component          # Vue 3 component with Composition API
+hyper gen vue-composable         # Vue composable function
+hyper gen nuxt-page              # Nuxt.js page component
+
+# Styling and UI
+hyper gen tailwind-component     # Component with Tailwind CSS
+hyper gen styled-component       # Styled-components template
+hyper gen css-module            # CSS modules template
+```
+
+### Backend Templates
+
+```bash
+# API frameworks
+hyper gen express-api            # Express.js REST API
+hyper gen fastify-api            # Fastify REST API  
+hyper gen nest-controller       # NestJS controller
+hyper gen graphql-resolver      # GraphQL resolver
+
+# Database
+hyper gen prisma-model          # Prisma schema model
+hyper gen mongoose-model        # Mongoose MongoDB model
+hyper gen sql-migration         # SQL database migration
+
+# Authentication & Security
+hyper gen auth-middleware       # Authentication middleware
+hyper gen jwt-service          # JWT token service
+hyper gen rbac-system          # Role-based access control
+```
+
+### Full-Stack Templates
+
+```bash
+# Complete features
+hyper gen crud-feature          # Complete CRUD with frontend + backend
+hyper gen auth-system           # Full authentication system
+hyper gen payment-flow          # Payment processing workflow
+hyper gen admin-dashboard       # Admin interface with API
+
+# Application types
+hyper gen saas-app              # SaaS application structure
+hyper gen e-commerce-app        # E-commerce platform
+hyper gen cms-app               # Content management system
+hyper gen api-service           # Microservice with documentation
+```
+
+### DevOps & Configuration
+
+```bash
+# Deployment
+hyper gen dockerfile           # Docker configuration
+hyper gen k8s-manifest        # Kubernetes manifests
+hyper gen github-workflow     # GitHub Actions workflow
+hyper gen terraform-config    # Terraform infrastructure
+
+# Configuration
+hyper gen env-config          # Environment configuration
+hyper gen eslint-config       # ESLint configuration
+hyper gen jest-config         # Jest testing configuration
+```
+
+## Advanced Usage
+
+### Interactive Generation
+
+```bash
+# Start interactive mode
+hyper gen --interactive
+
+# Interactive mode provides:
+# 1. Template selection with search
+# 2. Variable input with validation
+# 3. Context gathering through prompts
+# 4. Preview before generation
+# 5. Customization options
+```
+
+### Custom Variables
+
+```bash
+# Simple variables
+hyper gen component --variables '{"name": "UserCard", "props": ["user", "onEdit"]}'
+
+# Complex configuration
+hyper gen api --variables '{
+  "name": "UserAPI",
+  "database": "postgresql", 
+  "auth": "jwt",
+  "validation": "zod",
+  "endpoints": ["create", "read", "update", "delete", "list"]
+}'
+```
+
+### Output Directory Control
+
+```bash
+# Specific output directory
+hyper gen component --output ./src/components
+
+# Relative to current directory
+hyper gen api --output ../backend/src/api
+
+# Nested directory creation
+hyper gen feature --output ./src/features/user-management
+```
+
+### Trust and Security
+
+```bash
+# Only use highly trusted templates
+hyper gen component --trust-level 9
+
+# Use official templates only
+hyper gen api --trust-level 10 --official-only
+
+# Allow community templates with moderate trust
+hyper gen utils --trust-level 7
+```
+
+## Integration with AI Context
+
+### Project Context
+
+HyperDev automatically provides context about your project:
+
+- **Existing codebase**: Understands your current architecture
+- **Dependencies**: Knows what libraries you're using
+- **Patterns**: Follows established patterns in your code
+- **Style**: Matches your coding style and conventions
+
+### Epic Context
+
+When generating within an epic:
+
+```bash
+# Generate component for current epic
+hyper plan use "User Authentication" 
+hyper gen login-form --epic-context
+
+# The component will be generated with:
+# - Epic requirements understanding
+# - Consistent naming with epic
+# - Integration with epic architecture
+# - Tests aligned with epic acceptance criteria
+```
+
+### AI-Powered Enhancements
+
+```bash
+# Generate with specific AI enhancements
+hyper gen component --context "accessible form with validation" --enhance accessibility,validation,testing
+
+# Available enhancements:
+# - accessibility: WCAG compliance
+# - performance: Performance optimizations  
+# - security: Security best practices
+# - testing: Comprehensive test coverage
+# - documentation: Inline and external docs
+# - internationalization: i18n support
+```
+
+## Quality and Validation
+
+### Automatic Validation
+
+Generated code is automatically validated for:
+
+- **Syntax**: TypeScript/JavaScript syntax correctness
+- **Security**: Common security vulnerabilities
+- **Performance**: Performance anti-patterns
+- **Best Practices**: Framework-specific best practices
+- **Testing**: Test coverage and quality
+
+### Manual Validation
+
+```bash
+# Validate after generation
+hyper gen component --validate
+
+# Skip validation (not recommended)
+hyper gen component --no-validate
+
+# Custom validation rules
+hyper gen api --validate-rules security,performance
+```
+
+## Preview and Dry Run
+
+### Dry Run Mode
+
+```bash
+# Preview what will be generated
+hyper gen component --dry-run
+
+# Shows:
+# - Files that will be created
+# - Content preview
+# - Dependencies that will be added
+# - Configuration changes
+```
+
+### Interactive Preview
+
+```bash
+# Interactive preview with editing
+hyper gen component --preview --interactive
+
+# Allows you to:
+# - Review generated code
+# - Make modifications  
+# - Approve or reject changes
+# - Customize before final generation
+```
+
+## Error Handling
+
+### Template Not Found
+
+```bash
+$ hyper gen unknown-template
+Error: Template 'unknown-template' not found
+
+Did you mean:
+  - react-component (trust: 9.2)
+  - vue-component (trust: 8.8) 
+  - angular-component (trust: 8.5)
+
+Try:
+  hyper search "component template"
+  hyper list templates --filter component
+  hyper gen react-component
+
+Need help? Run: hyper help templates
+```
+
+### Generation Failures
+
+```bash
+$ hyper gen api --output ./readonly-dir
+Error: Cannot write to './readonly-dir' (permission denied)
+
+Solutions:
+  - Check directory permissions: ls -la ./readonly-dir
+  - Use different output directory: --output ./src/api
+  - Create directory first: mkdir -p ./src/api
+
+Try:
+  hyper gen api --output ./src/api
+  hyper gen api --dry-run
+```
+
+## Configuration
+
+### Template Sources
+
+Configure where templates are loaded from:
+
+```javascript
+// hyperdev.config.js
+export default {
+  generation: {
+    templateSources: [
+      'official',           // Official HyperDev templates
+      'community',          // Trusted community templates
+      './local-templates',  // Local template directory
+      '@company/templates'  // Company template package
+    ],
+    trustThreshold: 8.0,
+    defaultContext: {
+      typescript: true,
+      testing: 'vitest',
+      styling: 'tailwind'
+    }
+  }
+};
+```
+
+### Generation Settings
+
+```javascript
+export default {
+  generation: {
+    // Default output directory
+    outputDir: './src',
+    
+    // Automatic validation
+    validate: true,
+    
+    // AI enhancement settings
+    aiEnhance: {
+      accessibility: true,
+      performance: true,
+      security: true,
+      testing: true
+    },
+    
+    // File naming conventions
+    naming: {
+      components: 'PascalCase',
+      files: 'kebab-case',
+      directories: 'kebab-case'
+    }
+  }
+};
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper search" href="/cli/commands/discovery/search">
+    Find templates before generating
+  </Card>
+  <Card title="hyper list" href="/cli/commands/discovery/list">
+    Browse available templates
+  </Card>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Plan features before generating code
+  </Card>
+  <Card title="hyper gen" href="/cli/commands/tools/gen">
+    Advanced generation features
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Feature Development Workflow](/cli/workflows/feature-development)
+- [Template Configuration](/cli/configuration/template-config)
+- [Gen Tool Documentation](/tools/gen)
+- [Code Generation Examples](/cli/examples/code-generation)

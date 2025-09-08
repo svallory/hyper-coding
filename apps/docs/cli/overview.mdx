@@ -1,0 +1,167 @@
+---
+title: "CLI Overview"
+description: "Introduction to the HyperDev CLI - your gateway to AI-augmented development"
+icon: "terminal"
+---
+
+# HyperDev CLI Overview
+
+The HyperDev CLI is your unified command-line interface for AI-augmented development, providing a single `hyper` command that orchestrates the entire [HyperDev methodology](/methodology) through intuitive subcommands.
+
+## Design Philosophy
+
+### Progressive Disclosure
+The CLI is designed so you don't need to learn everything at once:
+- **Beginners**: Start with simple workflow commands like `hyper init` and `hyper gen`
+- **Intermediate**: Discover resources with `hyper search` and `hyper list`
+- **Advanced**: Access full tool power with `hyper gen`, `hyper epics`, etc.
+
+### Intuitive Discovery
+Commands follow natural language patterns and guide you to what you need:
+```bash
+hyper init              # Start a new project
+hyper gen               # Generate code from templates
+hyper plan              # Strategic planning and architecture
+hyper dev               # Monitor AI-assisted development
+hyper dash              # Launch interactive dashboard
+```
+
+## Command Categories
+
+### 🚀 Workflow Commands
+Primary commands that follow your development workflow:
+- [`hyper init`](/cli/commands/workflow/init) - Initialize new projects with optimal setup
+- [`hyper gen`](/cli/commands/workflow/gen) - AI-augmented code generation
+- [`hyper plan`](/cli/commands/workflow/plan) - Strategic planning and architecture design
+- [`hyper dev`](/cli/commands/workflow/dev) - Real-time development monitoring
+
+### 🔍 Discovery Commands
+Find exactly what you need across the HyperDev ecosystem:
+- [`hyper search`](/cli/commands/discovery/search) - Universal search for templates, patterns, solutions
+- [`hyper list`](/cli/commands/discovery/list) - List available resources with filtering
+- [`hyper status`](/cli/commands/discovery/status) - Project health and progress overview
+
+### 📋 Resource Commands
+Manage project resources and components:
+- [`hyper epic`](/cli/commands/resources/epic) - Epic planning and management
+- [`hyper task`](/cli/commands/resources/task) - Task creation and tracking
+- [`hyper docs`](/cli/commands/resources/docs) - Project documentation management
+
+### 📊 Dashboard
+Interactive monitoring and control:
+- [`hyper dash`](/cli/commands/dash) - Launch TUI dashboard for comprehensive project monitoring
+
+### 🛠️ Advanced Tool Access
+Direct access to the five core HyperDev tools for power users:
+- [`hyper gen`](/cli/commands/tools/gen) - Advanced code generation features  
+- [`hyper epics`](/cli/commands/tools/epics) - Advanced strategic planning tools
+- [`hyper dev`](/cli/commands/tools/dev) - Advanced development monitoring
+- [`hyper dx`](/cli/commands/tools/dx) - Developer experience optimization
+- [`hyper dash`](/cli/commands/tools/dash) - Advanced monitoring and analytics
+
+## Getting Started Paths
+
+<CardGroup cols={2}>
+  <Card title="New to HyperDev" icon="play" href="/cli/quickstart">
+    Start with our CLI quickstart guide for the essential commands you need
+  </Card>
+  <Card title="Coming from Tools" icon="arrow-right" href="/cli/commands/overview">
+    Already familiar with HyperDev tools? See how they map to CLI commands
+  </Card>
+</CardGroup>
+
+<CardGroup cols={2}>
+  <Card title="Workflow Focused" icon="flow" href="/cli/workflows/overview">
+    Learn complete workflows from project start to production deployment
+  </Card>
+  <Card title="Command Reference" icon="book" href="/cli/commands/overview">
+    Comprehensive reference for all commands, options, and examples
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Smart Defaults
+Every command works with sensible defaults that suit most use cases:
+```bash
+hyper init                    # Sets up project with intelligent defaults
+hyper gen react-app     # Uses best practices for React applications
+hyper plan                   # Creates standard epic structure
+```
+
+### Contextual Help
+Get help exactly when and where you need it:
+```bash
+hyper --help                 # Overview of all commands
+hyper gen --help        # Detailed help for generate command
+hyper help workflows         # Workflow guidance and best practices
+```
+
+### Composable Commands
+Commands work together naturally in scripts and workflows:
+```bash
+# Complete project setup flow
+hyper init fullstack-saas
+hyper gen api-gateway --context "user management"
+hyper plan create --name "Authentication System"
+hyper dev --watch --focus auth
+```
+
+## Integration with HyperDev Methodology
+
+The CLI directly implements the [HyperDev methodology](/methodology), providing command-line access to:
+
+- **[Gen Tool](/tools/gen)** - AI-augmented code generation with trust systems
+- **[Epics Tool](/tools/epics)** - Strategic planning and architecture design  
+- **[Dev Tool](/tools/dev)** - Real-time AI monitoring and quality gates
+- **[DX Tool](/tools/dx)** - Developer experience optimization
+- **[Dash Tool](/tools/dash)** - Performance monitoring and team analytics
+
+<Info>
+  The CLI provides a command-line focused view of the same tools documented in the [Tools](/tools/overview) section. 
+  Use the tools documentation to understand concepts, and the CLI documentation to learn command syntax and workflows.
+</Info>
+
+## Error Handling & Guidance
+
+The CLI provides intelligent error messages with suggested solutions:
+
+```bash
+$ hyper gen api-template
+Error: No templates found matching "api-template"
+
+Did you mean:
+  - express-api-template (trust: 9.2) 
+  - fastapi-template (trust: 8.8)
+  - nestjs-api-template (trust: 9.5)
+
+Try:
+  hyper search "api template" --type templates
+  hyper gen express-api-template
+  hyper list templates --filter api
+
+Need help? Run: hyper help templates
+```
+
+## Next Steps
+
+<Steps>
+  <Step title="Install the CLI">
+    Follow the [installation guide](/cli/installation) to get the `hyper` command set up
+  </Step>
+  <Step title="Quick Start">
+    Try our [5-minute quickstart](/cli/quickstart) to see the CLI in action
+  </Step>
+  <Step title="Choose Your Path">
+    Pick a learning path based on your needs and experience level
+  </Step>
+</Steps>
+
+## Community & Support
+
+- **Documentation**: Complete guides and references in this documentation
+- **Examples**: Real-world examples in the [Examples](/cli/examples) section
+- **Community**: Join discussions in our [Community](/community) section
+- **Issues**: Report problems and request features on GitHub
+
+Ready to supercharge your development workflow? [Get started with the CLI](/cli/installation) today.

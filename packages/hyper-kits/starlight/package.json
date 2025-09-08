@@ -1,0 +1,43 @@
+{
+  "name": "@hyper-kits/starlight",
+  "version": "2.0.0",
+  "description": "Hypergen V8 cookbook for creating Astro/Starlight documentation sites with TypeDoc integration",
+  "keywords": [
+    "hypergen",
+    "cookbook",
+    "recipe",
+    "hyper-kit",
+    "astro",
+    "starlight",
+    "documentation",
+    "typedoc",
+    "docs-generator"
+  ],
+  "main": "recipe.yml",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SubtleTools/hyper-kits-starlight.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SubtleTools/hyper-kits-starlight/issues"
+  },
+  "homepage": "https://github.com/SubtleTools/hyper-kits-starlight#readme",
+  "author": "SubtleTools",
+  "license": "MIT",
+  "files": [
+    "recipe.yml",
+    "templates/",
+    "actions/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "peerDependencies": {
+    "hypergen": ">=8.0.0"
+  }
+}

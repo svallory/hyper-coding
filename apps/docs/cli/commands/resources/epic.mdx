@@ -1,0 +1,434 @@
+---
+title: "hyper epic"
+description: "Manage project epics - create, update, track progress, and organize strategic feature development"
+icon: "flag"
+---
+
+# hyper epic
+
+Manage project epics for strategic feature planning and development organization. Create, update, track progress, and coordinate epic-based development workflows.
+
+## Syntax
+
+```bash
+hyper epic [action] [options]
+```
+
+## Overview
+
+The `hyper epic` command provides comprehensive epic management:
+
+- **Epic creation**: Create new epics with templates and requirements
+- **Progress tracking**: Monitor epic status and completion rates
+- **Task coordination**: Connect epics with tasks and subtasks
+- **Documentation**: Generate and maintain epic documentation
+- **Team assignment**: Assign team members and coordinate work
+- **Milestone management**: Track milestones and delivery dates
+
+<Info>
+  Epics represent major features or initiatives that span multiple tasks and often multiple sprints.
+  Use `hyper epic` to manage the strategic level of your development work.
+</Info>
+
+## Actions
+
+| Action | Description | Example |
+|--------|-------------|---------|
+| `list` | List all epics | `hyper epic list` |
+| `create` | Create new epic | `hyper epic create "User Auth"` |
+| `show` | Show epic details | `hyper epic show auth-system` |
+| `update` | Update epic information | `hyper epic update auth-system` |
+| `status` | Check epic status | `hyper epic status auth-system` |
+| `archive` | Archive completed epic | `hyper epic archive auth-system` |
+| `assign` | Assign team members | `hyper epic assign auth-system --user alice` |
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--template <name>` | Epic template to use | `standard` | `--template saas-feature` |
+| `--priority <level>` | Epic priority | `medium` | `--priority high` |
+| `--due <date>` | Due date | - | `--due "2024-03-15"` |
+| `--assignee <user>` | Assign to user | - | `--assignee alice` |
+| `--status <status>` | Epic status | `planning` | `--status in-progress` |
+| `--interactive, -i` | Interactive mode | `false` | `--interactive` |
+| `--json` | JSON output | `false` | `--json` |
+
+## Examples
+
+### Basic Epic Management
+
+```bash
+# List all epics
+hyper epic list
+
+# List epics with status filter
+hyper epic list --status active
+
+# Create new epic
+hyper epic create "User Authentication System"
+
+# Show epic details
+hyper epic show user-auth
+```
+
+### Epic Creation with Options
+
+```bash
+# Create epic with template and priority
+hyper epic create "Payment Integration" \
+  --template saas-feature \
+  --priority high \
+  --due "2024-04-01"
+
+# Interactive epic creation
+hyper epic create --interactive
+
+# Create epic with full specification
+hyper epic create "Admin Dashboard" \
+  --template admin-feature \
+  --assignee alice,bob \
+  --priority medium \
+  --description "Complete admin interface for user management"
+```
+
+### Epic Progress Tracking
+
+```bash
+# Check epic status
+hyper epic status user-auth
+
+# Update epic progress
+hyper epic update user-auth --progress 67
+
+# Mark epic milestone complete
+hyper epic milestone user-auth "Core Auth" --complete
+
+# Generate epic progress report
+hyper epic report user-auth
+```
+
+## Epic Templates
+
+### Available Templates
+
+```bash
+# List available epic templates
+hyper epic templates
+
+# Show template details
+hyper epic template saas-feature --details
+```
+
+**Built-in Templates**:
+- `saas-feature` - SaaS product feature with user stories and acceptance criteria
+- `api-service` - Backend API service development
+- `ui-component` - Frontend component library or major UI feature  
+- `infrastructure` - DevOps and infrastructure improvements
+- `migration` - Data or system migration projects
+- `integration` - Third-party service integration
+- `performance` - Performance optimization initiatives
+- `security` - Security enhancements and compliance
+
+### Custom Templates
+
+```bash
+# Create custom epic template
+hyper epic template create my-feature-template
+
+# Use custom template
+hyper epic create "New Feature" --template my-feature-template
+```
+
+## Epic Lifecycle
+
+### Epic Status Flow
+
+```
+planning → in-progress → review → completed → archived
+    ↓         ↓           ↓         ↓
+  on-hold   blocked    failed   cancelled
+```
+
+### Status Management
+
+```bash
+# Start epic development
+hyper epic update user-auth --status in-progress
+
+# Block epic (with reason)
+hyper epic update user-auth --status blocked --reason "Waiting for API specs"
+
+# Complete epic
+hyper epic update user-auth --status completed
+
+# Archive old epic
+hyper epic archive user-auth
+```
+
+## Epic Structure
+
+### Epic Information
+
+When you create an epic, it includes:
+
+```yaml
+# .hyper/epics/user-authentication/epic.yml
+name: "User Authentication System"
+id: "user-auth"
+status: "in-progress"
+priority: "high"
+created: "2024-01-15"
+due_date: "2024-03-15"
+
+description: |
+  Complete user authentication system with registration, login,
+  password reset, and multi-factor authentication capabilities.
+
+assignees:
+  - alice@company.com
+  - bob@company.com
+
+milestones:
+  - name: "Core Authentication"
+    due: "2024-02-15"
+    status: "completed"
+  - name: "MFA Implementation"
+    due: "2024-03-01"
+    status: "in-progress"
+
+tasks:
+  - AUTH-001: "Database schema setup"
+  - AUTH-002: "Registration API"
+  - AUTH-003: "Login functionality"
+  - AUTH-004: "Password reset flow"
+
+acceptance_criteria:
+  - Users can register with email/password
+  - Login with secure session management
+  - Password reset via email
+  - MFA with TOTP support
+  - Role-based access control
+
+definition_of_done:
+  - All acceptance criteria met
+  - Unit tests >90% coverage
+  - Integration tests passing
+  - Security audit completed
+  - Documentation updated
+```
+
+### Epic Directory Structure
+
+```
+.hyper/epics/user-authentication/
+├── epic.yml                 # Epic configuration
+├── requirements.md          # Detailed requirements
+├── architecture.md          # Technical architecture
+├── tasks/                   # Task breakdown
+│   ├── tasks.yml           # Task definitions
+│   └── progress.md         # Progress tracking
+├── docs/                   # Epic documentation
+│   ├── user-stories.md     # User stories
+│   ├── acceptance-tests.md # Acceptance criteria
+│   └── retrospective.md    # Epic retrospective
+└── assets/                 # Epic assets
+    ├── wireframes/         # UI wireframes
+    ├── diagrams/          # Architecture diagrams
+    └── mockups/           # Design mockups
+```
+
+## Team Collaboration
+
+### Epic Assignment
+
+```bash
+# Assign team members to epic
+hyper epic assign user-auth --user alice --role lead
+hyper epic assign user-auth --user bob --role developer
+
+# List epic assignments
+hyper epic team user-auth
+
+# Transfer epic ownership
+hyper epic transfer user-auth --from alice --to carol
+```
+
+### Epic Communication
+
+```bash
+# Add epic comment/update
+hyper epic comment user-auth "Authentication API completed, starting MFA"
+
+# Epic activity log
+hyper epic activity user-auth
+
+# Epic notifications
+hyper epic notify user-auth --channel slack --message "Epic 75% complete"
+```
+
+## Epic Integration
+
+### Task Connection
+
+```bash
+# Connect tasks to epic
+hyper task create "Login API" --epic user-auth
+hyper task list --epic user-auth
+
+# Epic task progress
+hyper epic tasks user-auth --progress
+```
+
+### Code Generation
+
+```bash
+# Generate code within epic context
+hyper gen component --epic user-auth
+hyper gen api --epic user-auth
+
+# Epic-aware development
+hyper dev --epic user-auth
+```
+
+## Reporting and Analytics
+
+### Epic Reports
+
+```bash
+# Epic progress report
+hyper epic report user-auth
+
+# Epic velocity analysis
+hyper epic velocity user-auth --period 30d
+
+# Epic burndown chart
+hyper epic burndown user-auth --format image
+```
+
+### Epic Metrics
+
+```bash
+# Epic health metrics
+hyper epic health user-auth
+
+# Epic time tracking
+hyper epic time user-auth --breakdown
+
+# Epic cost analysis
+hyper epic cost user-auth --estimate
+```
+
+**Example Epic Report**:
+```
+📊 Epic Report: User Authentication System
+
+📈 Progress Overview
+├── Overall Progress: 75% (15/20 tasks completed)
+├── Status: In Progress (on track)
+├── Time Remaining: 8 days (due: March 15)
+└── Team Health: Excellent (9.2/10)
+
+🎯 Milestones
+├── ✅ Core Authentication (Feb 15) - Completed
+├── 🔄 MFA Implementation (Mar 1) - In Progress (80%)
+└── 📋 Security Audit (Mar 10) - Pending
+
+👥 Team Performance
+├── Alice (Lead): 8 tasks completed, excellent velocity
+├── Bob (Developer): 6 tasks completed, on schedule
+└── Carol (QA): 3 test suites completed, 2 pending
+
+⚠️ Risk Factors
+├── MFA library integration complexity (medium risk)
+└── Security audit scheduling (low risk)
+
+💡 Recommendations
+├── Schedule MFA integration review with security team
+├── Parallel development of audit prep documentation
+└── Consider adding automated security testing
+```
+
+## Configuration
+
+### Epic Settings
+
+```javascript
+// hyperdev.config.js
+export default {
+  epics: {
+    // Default epic template
+    default_template: 'saas-feature',
+    
+    // Epic directory location
+    epic_dir: '.hyper/epics',
+    
+    // Default epic settings
+    defaults: {
+      priority: 'medium',
+      status: 'planning',
+      auto_assign_creator: true
+    },
+    
+    // Progress tracking
+    tracking: {
+      auto_update_progress: true,
+      milestone_reminders: true,
+      velocity_calculation: true
+    },
+    
+    // Team collaboration
+    collaboration: {
+      notification_channels: ['slack', 'email'],
+      auto_assign_reviewers: true,
+      epic_owner_required: true
+    }
+  }
+};
+```
+
+### Epic Templates Configuration
+
+```javascript
+export default {
+  epic_templates: {
+    'saas-feature': {
+      structure: ['requirements', 'architecture', 'tasks', 'tests'],
+      default_milestones: ['Design', 'Development', 'Testing', 'Launch'],
+      required_fields: ['description', 'acceptance_criteria'],
+      auto_generate: ['tasks', 'tests']
+    },
+    
+    'api-service': {
+      structure: ['requirements', 'api-spec', 'implementation', 'docs'],
+      default_milestones: ['Design', 'Implementation', 'Testing', 'Documentation'],
+      required_fields: ['api_specification', 'performance_requirements'],
+      auto_generate: ['openapi_spec', 'tests']
+    }
+  }
+};
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper task" href="/cli/commands/resources/task">
+    Manage individual tasks within epics
+  </Card>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Strategic planning and epic creation workflow
+  </Card>
+  <Card title="hyper status" href="/cli/commands/discovery/status">
+    Check epic status and project health
+  </Card>
+  <Card title="hyper docs" href="/cli/commands/resources/docs">
+    Manage epic documentation and requirements
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Epic Management Workflow](/cli/workflows/epic-management)
+- [Strategic Planning](/cli/workflows/strategic-planning)
+- [Team Collaboration](/cli/workflows/team-collaboration)
+- [Epic Templates](/cli/configuration/epic-templates)

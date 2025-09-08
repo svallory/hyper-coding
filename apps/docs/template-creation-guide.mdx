@@ -1,0 +1,1065 @@
+---
+title: "Template Creation & Customization Guide"
+description: "The definitive guide to building high-quality, reusable templates in HyperDev - from basic file generation to advanced TypeScript actions"
+---
+
+# Template Creation & Customization Guide
+
+Transform from a template consumer into a template creator with this comprehensive guide. Learn to build professional-grade, reusable templates that scale from simple file generation to complex multi-step workflows.
+
+## Learning Path Overview
+
+<CardGroup cols={3}>
+  <Card title="Foundation" icon="building-blocks">
+    Basic template structure, EJS syntax, and simple variables
+  </Card>
+  <Card title="Interactive" icon="comments">
+    Prompts, conditional logic, and dynamic content generation
+  </Card>
+  <Card title="Advanced" icon="rocket">
+    TypeScript actions, composition patterns, and enterprise features
+  </Card>
+</CardGroup>
+
+---
+
+## Chapter 1: Template Architecture Fundamentals
+
+### Template Structure Patterns
+
+HyperDev templates follow a clear, scalable architecture that grows with your needs:
+
+```
+my-template/
+├── template.yml              # Template metadata and configuration
+├── src/
+│   ├── component.tsx.ejs.t   # Template files with .ejs.t extension
+│   ├── test.spec.ts.ejs.t    # Generated test files
+│   └── index.ts.ejs.t        # Entry point template
+├── actions/                  # TypeScript actions (V8 feature)
+│   ├── setup.ts             # Pre-generation setup
+│   └── validate.ts          # Post-generation validation
+└── docs/
+    ├── README.md            # Template documentation
+    └── examples/            # Usage examples
+```
+
+### Template.yml Configuration
+
+The `template.yml` file is your template's control center:
+
+```yaml
+name: "React Component Generator"
+description: "Creates a complete React component with tests, stories, and documentation"
+version: "1.2.0"
+author: "Your Team"
+tags: ["react", "component", "testing"]
+
+# Template variables with validation
+variables:
+  name:
+    prompt: "Component name:"
+    validate: "^[A-Z][a-zA-Z0-9]*$"
+    message: "Component names must be PascalCase"
+  
+  hasTests:
+    prompt: "Include tests? (y/N)"
+    type: "boolean"
+    default: false
+  
+  complexity:
+    prompt: "Component complexity:"
+    type: "select"
+    choices: ["simple", "complex", "enterprise"]
+    default: "simple"
+
+# File generation patterns
+to: "src/components/<%= name %>"
+templates:
+  - from: "component.tsx.ejs.t"
+    to: "<%= name %>.tsx"
+  - from: "test.spec.ts.ejs.t" 
+    to: "<%= name %>.test.tsx"
+    condition: "<%= hasTests %>"
+
+# V8 Actions (Advanced)
+actions:
+  pre: ["setup", "validate-name"]
+  post: ["format-code", "update-index"]
+```
+
+### Organization Best Practices
+
+<Tabs>
+  <Tab title="Single Template">
+    ```
+    simple-template/
+    ├── template.yml
+    ├── file1.ejs.t
+    └── file2.ejs.t
+    ```
+    Perfect for focused, single-purpose generators
+  </Tab>
+  
+  <Tab title="Multi-Template">
+    ```
+    template-collection/
+    ├── templates/
+    │   ├── component/
+    │   │   ├── template.yml
+    │   │   └── *.ejs.t
+    │   ├── service/
+    │   │   ├── template.yml
+    │   │   └── *.ejs.t
+    └── shared/
+        ├── helpers.js
+        └── partials/
+    ```
+    Ideal for related template families
+  </Tab>
+  
+  <Tab title="Enterprise">
+    ```
+    enterprise-templates/
+    ├── packages/
+    │   ├── frontend/
+    │   ├── backend/
+    │   └── shared/
+    ├── workflows/
+    │   ├── onboarding/
+    │   └── deployment/
+    ├── actions/
+    │   └── shared/
+    └── docs/
+        ├── architecture/
+        └── guides/
+    ```
+    Full-scale template ecosystems
+  </Tab>
+</Tabs>
+
+---
+
+## Chapter 2: Template Language Mastery
+
+### EJS Fundamentals
+
+HyperDev uses Enhanced JavaScript Templates (EJS) with powerful extensions:
+
+```javascript
+// Basic variable interpolation
+<%= name %>                    // Outputs: MyComponent
+<%- name %>                    // Outputs raw (unescaped): MyComponent
+
+// JavaScript expressions
+<%= name.toLowerCase() %>      // Outputs: mycomponent
+<%= name.charAt(0) %>         // Outputs: M
+
+// Conditional rendering
+<% if (hasTests) { %>
+  import { render } from '@testing-library/react';
+<% } %>
+
+// Loops and iteration
+<% props.forEach(prop => { %>
+  <%= prop.name %>: <%= prop.type %>;
+<% }); %>
+```
+
+### Advanced EJS Features
+
+#### Custom Helpers and Filters
+
+```javascript
+// In your template or shared helpers
+<%
+function pascalCase(str) {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function generatePropTypes(props) {
+  return props.map(p => `${p.name}: ${p.type}`).join(';\n  ');
+}
+%>
+
+interface <%= pascalCase(name) %>Props {
+  <%= generatePropTypes(props) %>
+}
+```
+
+#### Template Partials and Includes
+
+```javascript
+// Reusable template chunks
+<%- include('_header.ejs', { title: name }) %>
+
+// Component signature
+export const <%= name %>: React.FC<<%= name %>Props> = ({
+  <%- include('_prop-destructuring.ejs', { props }) %>
+}) => {
+  <%- include('_component-body.ejs', { complexity }) %>
+};
+
+<%- include('_footer.ejs') %>
+```
+
+#### Dynamic Content Generation
+
+```javascript
+// Complex logic in templates
+<%
+const generateImports = (dependencies) => {
+  const imports = [];
+  
+  if (dependencies.includes('react')) {
+    imports.push("import React from 'react';");
+  }
+  
+  if (dependencies.includes('styled-components')) {
+    imports.push("import styled from 'styled-components';");
+  }
+  
+  return imports.join('\n');
+}
+%>
+
+<%= generateImports(dependencies) %>
+```
+
+### Template Best Practices
+
+<Accordion>
+  <AccordionItem title="Readable Templates">
+    ```javascript
+    // Good: Clear structure and spacing
+    <%
+    const componentName = pascalCase(name);
+    const hasProps = props && props.length > 0;
+    %>
+    
+    export const <%= componentName %>: React.FC<% if (hasProps) { %><<%= componentName %>Props><% } %> = (<% if (hasProps) { %>{
+      <%= props.map(p => p.name).join(',\n  ') %>
+    }<% } %>) => {
+      return (
+        <div className="<%= kebabCase(name) %>">
+          {/* Component content */}
+        </div>
+      );
+    };
+    ```
+  </AccordionItem>
+  
+  <AccordionItem title="Maintainable Logic">
+    ```javascript
+    // Extract complex logic to functions
+    <%
+    function generateStyleProps(styleConfig) {
+      if (!styleConfig.enabled) return '';
+      
+      const styles = [];
+      if (styleConfig.margin) styles.push(`margin: ${styleConfig.margin}`);
+      if (styleConfig.padding) styles.push(`padding: ${styleConfig.padding}`);
+      
+      return styles.length > 0 ? `style={{ ${styles.join(', ')} }}` : '';
+    }
+    %>
+    ```
+  </AccordionItem>
+  
+  <AccordionItem title="Error Handling">
+    ```javascript
+    <%
+    if (!name || name.trim() === '') {
+      throw new Error('Component name is required');
+    }
+    
+    if (!/^[A-Z][a-zA-Z0-9]*$/.test(name)) {
+      throw new Error('Component name must be PascalCase');
+    }
+    %>
+    ```
+  </AccordionItem>
+</Accordion>
+
+---
+
+## Chapter 3: Interactive Configuration System
+
+### Advanced Variable Types
+
+Create rich, interactive prompts that guide users through template configuration:
+
+```yaml
+variables:
+  # Text input with validation
+  componentName:
+    prompt: "Enter component name:"
+    validate: "^[A-Z][a-zA-Z0-9]*$"
+    transform: "pascalCase"
+    message: "Must be PascalCase (e.g., MyComponent)"
+  
+  # Multi-select with dependencies
+  features:
+    prompt: "Select features to include:"
+    type: "checkbox"
+    choices:
+      - { name: "TypeScript", value: "typescript", checked: true }
+      - { name: "Tests", value: "tests" }
+      - { name: "Storybook", value: "storybook" }
+      - { name: "Documentation", value: "docs" }
+  
+  # Dynamic choices based on project
+  targetFramework:
+    prompt: "Choose target framework:"
+    type: "select"
+    choices: "detectFrameworks()" # Function call
+    validate: "isFrameworkSupported"
+  
+  # Conditional prompts
+  testFramework:
+    prompt: "Choose test framework:"
+    type: "select" 
+    choices: ["jest", "vitest", "mocha"]
+    condition: "features.includes('tests')"
+  
+  # Complex object configuration
+  apiConfig:
+    prompt: "API configuration:"
+    type: "object"
+    properties:
+      baseUrl:
+        prompt: "API base URL:"
+        validate: "^https?://.+"
+      timeout:
+        prompt: "Request timeout (ms):"
+        type: "number"
+        default: 5000
+      retries:
+        prompt: "Max retries:"
+        type: "number"
+        min: 0
+        max: 5
+        default: 3
+```
+
+### Dynamic Prompt Logic
+
+```yaml
+# Conditional prompting based on context
+variables:
+  projectType:
+    prompt: "Project type:"
+    type: "select"
+    choices: ["library", "application", "plugin"]
+  
+  # Only show for applications
+  deployment:
+    prompt: "Deployment target:"
+    type: "select"
+    choices: ["vercel", "netlify", "aws", "docker"]
+    condition: "projectType === 'application'"
+  
+  # Dynamic based on deployment choice
+  awsRegion:
+    prompt: "AWS Region:"
+    type: "select"
+    choices: "getAwsRegions()" # Fetched dynamically
+    condition: "deployment === 'aws'"
+```
+
+### Input Validation and Transformation
+
+```yaml
+variables:
+  packageName:
+    prompt: "Package name:"
+    validate:
+      - pattern: "^@?[a-z0-9-]+(/[a-z0-9-]+)*$"
+        message: "Must be a valid npm package name"
+      - function: "isPackageNameAvailable"
+        message: "Package name already exists on npm"
+    transform: "toLowerCase"
+  
+  version:
+    prompt: "Initial version:"
+    default: "1.0.0"
+    validate:
+      - function: "isValidSemver"
+        message: "Must be valid semantic version"
+  
+  license:
+    prompt: "License:"
+    type: "select"
+    choices: ["MIT", "Apache-2.0", "GPL-3.0", "BSD-3-Clause"]
+    default: "MIT"
+```
+
+---
+
+## Chapter 4: V8 Actions - TypeScript Power
+
+### Action System Overview
+
+V8 Actions bring TypeScript's power to template generation, enabling complex logic, external API calls, and sophisticated workflows:
+
+```typescript
+// actions/setup.ts
+import { Action, Context } from '@hyperdev/action-system';
+import { validateProjectStructure, installDependencies } from '../utils';
+
+@Action('setup')
+export class SetupAction {
+  async before(context: Context) {
+    // Pre-generation validation and setup
+    console.log(`Setting up ${context.vars.name} component...`);
+    
+    await validateProjectStructure(context.targetDir);
+    
+    // Modify variables based on project analysis
+    context.vars.framework = await this.detectFramework(context.targetDir);
+    context.vars.dependencies = await this.analyzeDependencies();
+  }
+  
+  async after(context: Context) {
+    // Post-generation tasks
+    await installDependencies(context.generatedFiles);
+    await this.updateIndexFile(context);
+    
+    console.log('✅ Component generated successfully!');
+  }
+  
+  private async detectFramework(dir: string): Promise<string> {
+    // Complex framework detection logic
+    const packageJson = await this.readPackageJson(dir);
+    
+    if (packageJson.dependencies?.react) return 'react';
+    if (packageJson.dependencies?.vue) return 'vue';
+    if (packageJson.dependencies?.angular) return 'angular';
+    
+    return 'vanilla';
+  }
+}
+```
+
+### Advanced Action Patterns
+
+#### Multi-Step Workflows
+
+```typescript
+// actions/workflow.ts
+@Action('component-workflow')
+export class ComponentWorkflowAction {
+  async execute(context: Context) {
+    const steps = [
+      () => this.validateInput(context),
+      () => this.generateComponent(context),
+      () => this.generateTests(context),
+      () => this.updateExports(context),
+      () => this.formatCode(context),
+      () => this.runLinting(context)
+    ];
+    
+    for (const [index, step] of steps.entries()) {
+      console.log(`Step ${index + 1}/${steps.length}: ${step.name}`);
+      await step();
+    }
+  }
+  
+  private async generateComponent(context: Context) {
+    // Complex component generation with custom logic
+    const template = await this.selectTemplate(context.vars.complexity);
+    const content = await this.renderTemplate(template, context.vars);
+    
+    await this.writeFile(
+      `${context.targetDir}/${context.vars.name}.tsx`,
+      content
+    );
+  }
+  
+  private async updateExports(context: Context) {
+    // Automatically update index.ts exports
+    const indexPath = `${context.targetDir}/index.ts`;
+    const exportLine = `export { ${context.vars.name} } from './${context.vars.name}';`;
+    
+    await this.appendToFile(indexPath, exportLine);
+  }
+}
+```
+
+#### External API Integration
+
+```typescript
+// actions/api-integration.ts
+@Action('api-integration')
+export class ApiIntegrationAction {
+  async execute(context: Context) {
+    // Fetch data from external APIs during generation
+    const apiSpec = await this.fetchOpenApiSpec(context.vars.apiUrl);
+    const generatedTypes = await this.generateTypesFromSpec(apiSpec);
+    
+    // Enhance context with API data
+    context.vars.apiTypes = generatedTypes;
+    context.vars.endpoints = this.extractEndpoints(apiSpec);
+    
+    // Generate client code
+    await this.generateApiClient(context);
+  }
+  
+  private async fetchOpenApiSpec(url: string) {
+    const response = await fetch(url);
+    return response.json();
+  }
+  
+  private generateTypesFromSpec(spec: any): TypeDefinition[] {
+    // Convert OpenAPI spec to TypeScript types
+    return spec.components.schemas.map(schema => ({
+      name: schema.title,
+      definition: this.convertSchemaToTypeScript(schema)
+    }));
+  }
+}
+```
+
+#### File System Operations
+
+```typescript
+// actions/file-operations.ts
+@Action('file-operations')
+export class FileOperationsAction {
+  async execute(context: Context) {
+    // Complex file manipulations
+    await this.createDirectoryStructure(context);
+    await this.copyAssets(context);
+    await this.modifyExistingFiles(context);
+  }
+  
+  private async modifyExistingFiles(context: Context) {
+    // Inject code into existing files
+    const routerPath = `${context.projectRoot}/src/router.ts`;
+    
+    if (await this.fileExists(routerPath)) {
+      await this.injectCode(routerPath, {
+        after: '// Auto-generated routes',
+        content: this.generateRouteDefinition(context.vars)
+      });
+    }
+  }
+  
+  private async injectCode(filePath: string, injection: CodeInjection) {
+    const content = await this.readFile(filePath);
+    const lines = content.split('\n');
+    
+    const targetIndex = lines.findIndex(line => 
+      line.includes(injection.after)
+    );
+    
+    if (targetIndex !== -1) {
+      lines.splice(targetIndex + 1, 0, injection.content);
+      await this.writeFile(filePath, lines.join('\n'));
+    }
+  }
+}
+```
+
+---
+
+## Chapter 5: Testing & Validation
+
+### Template Testing Strategies
+
+Ensure your templates generate correct, functional code:
+
+```typescript
+// tests/component-template.test.ts
+import { generateTemplate, TemplateContext } from '@hyperdev/testing';
+import { resolve } from 'path';
+
+describe('React Component Template', () => {
+  const templatePath = resolve(__dirname, '../templates/react-component');
+  
+  it('generates basic component correctly', async () => {
+    const context: TemplateContext = {
+      name: 'TestComponent',
+      hasTests: true,
+      props: [
+        { name: 'title', type: 'string' },
+        { name: 'onClick', type: '() => void' }
+      ]
+    };
+    
+    const result = await generateTemplate(templatePath, context);
+    
+    // Assert file generation
+    expect(result.files).toContain('TestComponent.tsx');
+    expect(result.files).toContain('TestComponent.test.tsx');
+    
+    // Assert content correctness
+    const componentContent = result.getFileContent('TestComponent.tsx');
+    expect(componentContent).toMatch(/export const TestComponent:/);
+    expect(componentContent).toMatch(/title: string/);
+    expect(componentContent).toMatch(/onClick: \(\) => void/);
+  });
+  
+  it('validates TypeScript compilation', async () => {
+    const result = await generateTemplate(templatePath, {
+      name: 'ValidComponent',
+      framework: 'react'
+    });
+    
+    // Compile generated TypeScript
+    const compilation = await compileTypeScript(result.files);
+    expect(compilation.errors).toHaveLength(0);
+  });
+  
+  it('runs generated tests successfully', async () => {
+    const result = await generateTemplate(templatePath, {
+      name: 'TestableComponent',
+      hasTests: true
+    });
+    
+    // Run the generated tests
+    const testResult = await runTests(result.testFiles);
+    expect(testResult.passed).toBe(true);
+  });
+});
+```
+
+### Validation Schemas
+
+```typescript
+// validation/template-schema.ts
+import Joi from 'joi';
+
+export const templateConfigSchema = Joi.object({
+  name: Joi.string().required().min(1).max(100),
+  description: Joi.string().required(),
+  version: Joi.string().pattern(/^\d+\.\d+\.\d+$/),
+  
+  variables: Joi.object().pattern(
+    Joi.string(),
+    Joi.object({
+      prompt: Joi.string().required(),
+      type: Joi.string().valid('string', 'boolean', 'number', 'select', 'checkbox'),
+      validate: Joi.alternatives().try(
+        Joi.string(), // Regex pattern
+        Joi.function() // Validation function
+      ),
+      default: Joi.any()
+    })
+  ),
+  
+  actions: Joi.object({
+    pre: Joi.array().items(Joi.string()),
+    post: Joi.array().items(Joi.string())
+  })
+});
+
+// Usage in template validation
+export function validateTemplate(templateConfig: any) {
+  const { error, value } = templateConfigSchema.validate(templateConfig);
+  
+  if (error) {
+    throw new Error(`Invalid template configuration: ${error.message}`);
+  }
+  
+  return value;
+}
+```
+
+### Quality Assurance Automation
+
+```yaml
+# .github/workflows/template-quality.yml
+name: Template Quality Assurance
+
+on:
+  push:
+    paths: ['templates/**']
+
+jobs:
+  validate-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Validate template schemas
+        run: bun run validate:templates
+        
+      - name: Test template generation
+        run: bun run test:templates
+        
+      - name: Check generated code quality
+        run: |
+          bun run generate:test-samples
+          bun run lint:generated
+          bun run typecheck:generated
+```
+
+---
+
+## Chapter 6: Distribution & Sharing
+
+### Template Packaging
+
+```json
+// hypergen-package.config.js
+module.exports = {
+  name: '@myorg/react-templates',
+  description: 'Professional React component templates',
+  version: '2.1.0',
+  
+  // Template registry
+  templates: {
+    'component': './templates/component',
+    'hook': './templates/hook',
+    'service': './templates/service'
+  },
+  
+  // Dependencies for generated code
+  peerDependencies: {
+    'react': '^18.0.0',
+    'typescript': '^4.9.0'
+  },
+  
+  // Template metadata
+  keywords: ['react', 'typescript', 'components'],
+  license: 'MIT',
+  
+  // Publishing configuration
+  publishConfig: {
+    registry: 'https://registry.npmjs.org',
+    access: 'public'
+  }
+};
+```
+
+### Distribution Channels
+
+<Tabs>
+  <Tab title="NPM Package">
+    ```bash
+    # Publishing to npm
+    bun version patch
+    bun publish
+    
+    # Using published templates
+    bunx hypergen add @myorg/react-templates
+    bunx hypergen generate component MyComponent
+    ```
+  </Tab>
+  
+  <Tab title="GitHub Repository">
+    ```bash
+    # Direct from GitHub
+    bunx hypergen add github:myorg/react-templates
+    bunx hypergen generate component --from=github:myorg/react-templates
+    ```
+  </Tab>
+  
+  <Tab title="Private Registry">
+    ```bash
+    # Enterprise template distribution
+    bunx hypergen config set registry https://templates.company.com
+    bunx hypergen add @company/enterprise-templates
+    ```
+  </Tab>
+</Tabs>
+
+### Template Marketplace Integration
+
+```typescript
+// Future: Template marketplace features
+interface TemplateMarketplace {
+  // Discovery and search
+  search(query: string, filters: SearchFilters): Promise<Template[]>;
+  
+  // Community features
+  rate(templateId: string, rating: number): Promise<void>;
+  review(templateId: string, review: Review): Promise<void>;
+  
+  // Analytics and insights
+  getUsageStats(templateId: string): Promise<UsageStats>;
+  
+  // Collaboration
+  fork(templateId: string): Promise<Template>;
+  contribute(templateId: string, changes: Changes): Promise<PullRequest>;
+}
+```
+
+---
+
+## Chapter 7: Advanced Template Development
+
+### Visual Template Editor (Future)
+
+Imagine a powerful visual editor for template creation:
+
+<Note>
+**Vision: Visual Template Builder**
+
+A drag-and-drop interface for creating templates without writing EJS manually:
+
+- **Visual Component Library**: Drag components, forms, and logic blocks
+- **Live Preview**: See generated code in real-time as you build
+- **Variable Mapper**: Visual interface for connecting data to templates
+- **Action Builder**: No-code TypeScript action creation
+- **Template Debugger**: Step through generation with visual debugging
+</Note>
+
+```typescript
+// Future: Visual template editor API
+interface VisualTemplateEditor {
+  // Drag-and-drop template building
+  addComponent(type: ComponentType, config: ComponentConfig): void;
+  
+  // Visual variable mapping
+  mapVariable(sourceVar: string, targetElement: ElementId): void;
+  
+  // Live preview
+  preview(context: PreviewContext): GeneratedCode;
+  
+  // Export to traditional template
+  exportToEJS(): TemplateFiles;
+}
+```
+
+### Template Composition Patterns
+
+Build complex templates from smaller, reusable parts:
+
+```typescript
+// Composable template architecture
+interface ComposableTemplate {
+  // Base templates that can be extended
+  extends?: string[];
+  
+  // Mixins for common functionality
+  mixins?: string[];
+  
+  // Override parent behavior
+  overrides?: {
+    [key: string]: TemplateDefinition;
+  };
+  
+  // Compose multiple templates
+  compose?: {
+    templates: string[];
+    strategy: 'merge' | 'sequence' | 'conditional';
+  };
+}
+```
+
+Example composition:
+
+```yaml
+# templates/react-component-pro/template.yml
+name: "Professional React Component"
+extends: ["@base/react-component"]
+
+mixins:
+  - "@common/typescript-support"
+  - "@common/testing-support"
+  - "@common/storybook-support"
+
+overrides:
+  styling:
+    from: "styled-component.ejs.t"
+    condition: "styleSystem === 'styled-components'"
+
+compose:
+  templates: ["component", "test", "story", "docs"]
+  strategy: "sequence"
+```
+
+### Multi-Language Template Support
+
+```yaml
+# International template support
+languages:
+  default: "en"
+  supported: ["en", "es", "fr", "de", "ja"]
+
+prompts:
+  componentName:
+    en: "Component name:"
+    es: "Nombre del componente:"
+    fr: "Nom du composant:"
+    de: "Komponenten-Name:"
+    ja: "コンポーネント名:"
+
+templates:
+  comments:
+    en: "// Created by HyperDev"
+    es: "// Creado por HyperDev"
+    fr: "// Créé par HyperDev"
+```
+
+### Performance Optimization
+
+```typescript
+// Template performance monitoring
+class TemplatePerformanceMonitor {
+  async measureGeneration(template: string, context: Context) {
+    const start = performance.now();
+    
+    const result = await generateTemplate(template, context);
+    
+    const metrics = {
+      duration: performance.now() - start,
+      filesGenerated: result.files.length,
+      memoryUsed: process.memoryUsage().heapUsed,
+      cacheHitRate: this.calculateCacheHitRate()
+    };
+    
+    await this.reportMetrics(template, metrics);
+    return result;
+  }
+  
+  // Template caching strategies
+  enableSmartCaching() {
+    // Cache compiled templates
+    // Cache variable validation results
+    // Cache external API responses
+  }
+}
+```
+
+---
+
+## Chapter 8: Professional Template Development
+
+### Enterprise Template Governance
+
+```typescript
+// Template governance and compliance
+interface TemplateGovernance {
+  // Security scanning
+  securityScan(template: Template): SecurityReport;
+  
+  // License compliance
+  checkLicenseCompliance(template: Template): ComplianceReport;
+  
+  // Code quality standards
+  enforceStandards(generatedCode: GeneratedCode): QualityReport;
+  
+  // Access control
+  authorizeUser(user: User, template: Template): boolean;
+}
+```
+
+### Template Analytics and Insights
+
+```typescript
+// Usage analytics for template optimization
+interface TemplateAnalytics {
+  // Track template usage patterns
+  trackGeneration(templateId: string, context: GenerationContext): void;
+  
+  // Identify optimization opportunities
+  analyzePerformance(templateId: string): PerformanceInsights;
+  
+  // User behavior analysis
+  getUsagePatterns(templateId: string): UsagePatterns;
+  
+  // Template success metrics
+  getSuccessMetrics(templateId: string): SuccessMetrics;
+}
+```
+
+### Collaborative Template Development
+
+<CardGroup cols={2}>
+  <Card title="Team Workflows" icon="users">
+    - Shared template repositories
+    - Code review processes for templates
+    - Collaborative editing features
+    - Team-specific template collections
+  </Card>
+  
+  <Card title="Version Control" icon="git-alt">
+    - Template version management
+    - Breaking change detection
+    - Migration path generation
+    - Rollback capabilities
+  </Card>
+</CardGroup>
+
+---
+
+## Best Practices Summary
+
+### Template Design Principles
+
+1. **Single Responsibility**: Each template should have one clear purpose
+2. **Composability**: Build templates that work well together
+3. **Flexibility**: Support multiple use cases without complexity
+4. **Maintainability**: Write templates that are easy to understand and modify
+5. **Performance**: Optimize for fast generation and low memory usage
+
+### Quality Checklist
+
+<Checklist>
+  - [ ] Template generates syntactically correct code
+  - [ ] All variables are validated properly
+  - [ ] Generated code passes linting and type checking
+  - [ ] Tests are included for template functionality
+  - [ ] Documentation explains usage and customization
+  - [ ] Error handling covers edge cases
+  - [ ] Performance is optimized for target use cases
+  - [ ] Security best practices are followed
+</Checklist>
+
+### Security Considerations
+
+<Warning>
+**Security Best Practices**
+
+- Validate all user inputs to prevent code injection
+- Sanitize external data sources before using in templates
+- Use trusted registries for template distribution
+- Implement template signing and verification
+- Regular security audits of template dependencies
+</Warning>
+
+---
+
+## What's Next?
+
+### Advanced Topics to Explore
+
+<CardGroup cols={2}>
+  <Card title="Custom Helpers" icon="code">
+    Build reusable helper functions for complex template logic
+  </Card>
+  
+  <Card title="API Integration" icon="plug">
+    Connect templates to external services and data sources
+  </Card>
+  
+  <Card title="Workflow Automation" icon="robot">
+    Create multi-step generation workflows with conditional logic
+  </Card>
+  
+  <Card title="Template Testing" icon="vial">
+    Comprehensive testing strategies for template reliability
+  </Card>
+</CardGroup>
+
+### Community and Resources
+
+- **Template Gallery**: Browse community-created templates
+- **Best Practices Guide**: Learn from experienced template creators
+- **Community Forum**: Get help and share knowledge
+- **Contribution Guidelines**: Help improve the template ecosystem
+
+---
+
+Ready to start building? Check out our [Quick Start Guide](/quickstart) to create your first template, or explore our [Template Gallery](/examples) for inspiration.

@@ -40,7 +40,7 @@ export class GeneratorDiscovery {
   
   constructor(private options: GeneratorDiscoveryOptions = {}) {
     this.options = {
-      directories: ['_templates', 'generators', '.hypergen/generators'],
+      directories: ['recipes', 'cookbooks'],
       patterns: ['**/*.{js,ts,mjs}', '**/template.yml', '**/generator.{js,ts,mjs}'],
       excludePatterns: ['**/node_modules/**', '**/dist/**', '**/*.test.*', '**/*.spec.*'],
       enabledSources: ['local', 'workspace'],

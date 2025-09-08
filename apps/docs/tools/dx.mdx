@@ -1,0 +1,493 @@
+---
+title: "dx: Developer Experience"
+description: "IDE integration, Claude Code hooks setup, and development environment automation for optimal developer productivity and workflow standardization."
+icon: "sparkles"
+---
+
+# dx: Developer Experience Optimization
+
+The **dx** tool optimizes your development environment by automating IDE configuration, setting up Claude Code hooks, and standardizing development workflows. It ensures stellar developer experience from project initialization through production deployment.
+
+## Core Capabilities
+
+### IDE Integration & Configuration
+- **Multi-IDE Support**: Automatic configuration for VS Code, Cursor, and other popular editors
+- **Extension Management**: Automated installation and configuration of essential extensions
+- **Settings Synchronization**: Consistent IDE settings across team members
+- **Workspace Optimization**: Project-specific configurations for optimal productivity
+
+### Claude Code Hooks & Workflow Automation
+- **Intelligent Hooks**: Setup hooks for code validation, formatting, and quality checks
+- **Workflow Automation**: Automated development processes and quality gates
+- **Context Engineering**: Optimize Claude Code interactions with project-specific context
+- **Guardrail Implementation**: Automated quality controls and validation checkpoints
+
+### Development Environment Standardization
+- **Tool Configuration**: Standardized linting, formatting, and testing configurations
+- **Dependency Management**: Automated setup of development dependencies
+- **Environment Variables**: Secure management of development environment settings
+- **Git Workflow**: Optimized Git hooks and workflow automation
+
+## Subcommands
+
+### `hyperdev dx init`
+Initialize and optimize the development environment for the current project.
+
+```bash
+# Initialize with default configuration
+hyperdev dx init
+
+# Initialize with specific IDE
+hyperdev dx init --ide=cursor
+
+# Initialize with team template
+hyperdev dx init --template=team-standard
+
+# Initialize with AI optimization
+hyperdev dx init --ai-optimized
+```
+
+### `hyperdev dx hooks`
+Setup and configure Claude Code hooks for automated quality control.
+
+```bash
+# Setup all recommended hooks
+hyperdev dx hooks setup
+
+# Setup specific hook types
+hyperdev dx hooks setup --pre-commit --pre-push
+
+# Configure AI validation hooks
+hyperdev dx hooks ai-validation
+
+# Test hook configuration
+hyperdev dx hooks test
+```
+
+### `hyperdev dx config`
+Configure IDE integrations and development tools.
+
+```bash
+# Configure current IDE
+hyperdev dx config ide
+
+# Setup linting and formatting
+hyperdev dx config quality
+
+# Configure debugging settings
+hyperdev dx config debug
+
+# Export configuration for sharing
+hyperdev dx config export team-config.json
+```
+
+### `hyperdev dx validate`
+Verify development environment setup and configuration.
+
+```bash
+# Validate entire environment
+hyperdev dx validate
+
+# Check specific components
+hyperdev dx validate --hooks --ide --tools
+
+# Generate validation report
+hyperdev dx validate --report
+```
+
+## Configuration Architecture
+
+### DX Configuration File (`.hyperdev/dx.config.js`)
+```javascript
+export default {
+  ide: {
+    primary: "cursor",
+    extensions: [
+      "ms-vscode.vscode-typescript-next",
+      "bradlc.vscode-tailwindcss",
+      "ms-vscode.vscode-eslint"
+    ],
+    settings: {
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": true
+      }
+    }
+  },
+  
+  hooks: {
+    preCommit: [
+      "lint-staged",
+      "type-check",
+      "test-changed"
+    ],
+    preAiAssist: [
+      "context-validation",
+      "security-check"
+    ]
+  },
+  
+  quality: {
+    linting: {
+      tool: "eslint",
+      config: ".eslintrc.js",
+      extends: ["@hyperdev/eslint-config"]
+    },
+    formatting: {
+      tool: "prettier", 
+      config: ".prettierrc"
+    },
+    testing: {
+      framework: "jest",
+      coverage: 90
+    }
+  },
+  
+  ai: {
+    claudeCode: {
+      contextFiles: [
+        "CLAUDE.md",
+        "README.md",
+        "package.json"
+      ],
+      qualityGates: true,
+      securityScanning: true
+    }
+  }
+};
+```
+
+## IDE Integration Features
+
+### VS Code Integration
+```json
+{
+  "recommendations": [
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss", 
+    "ms-vscode.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-jest"
+  ],
+  "settings": {
+    "typescript.preferences.includePackageJsonAutoImports": "on",
+    "editor.formatOnSave": true,
+    "editor.rulers": [80, 120],
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/dist": true
+    }
+  }
+}
+```
+
+### Cursor Integration
+```json
+{
+  "cursor.ai": {
+    "contextFiles": ["CLAUDE.md"],
+    "codeActions": true,
+    "autoCompletion": true,
+    "qualityValidation": true
+  },
+  "cursor.rules": [
+    "Always follow project coding standards",
+    "Run security checks before generation",
+    "Validate against architectural patterns"
+  ]
+}
+```
+
+## Claude Code Hooks System
+
+### Pre-Commit Hooks
+Automated quality checks before code commits:
+
+```yaml
+pre-commit-hooks:
+  linting:
+    tool: eslint
+    fix: true
+    fail_on_error: true
+    
+  formatting:
+    tool: prettier
+    fix: true
+    
+  type_checking:
+    tool: tsc
+    strict: true
+    
+  testing:
+    tool: jest
+    coverage_threshold: 90
+    
+  security:
+    tool: semgrep
+    rules: owasp-top-10
+```
+
+### Pre-AI-Assist Hooks
+Quality gates before AI code generation:
+
+```yaml
+pre-ai-hooks:
+  context_validation:
+    check: project_context_completeness
+    validate: architectural_constraints
+    
+  security_baseline:
+    scan: existing_vulnerabilities
+    enforce: security_policies
+    
+  quality_baseline:
+    measure: current_code_quality
+    enforce: minimum_standards
+```
+
+### Post-Generation Hooks
+Validation after AI code generation:
+
+```yaml
+post-generation-hooks:
+  security_scan:
+    immediate: true
+    tools: [semgrep, bandit, snyk]
+    
+  quality_check:
+    syntax: true
+    patterns: true
+    best_practices: true
+    
+  integration_test:
+    unit_tests: true
+    integration_tests: true
+    e2e_tests: false
+```
+
+## Development Workflow Automation
+
+### Git Workflow Enhancement
+```bash
+# Automated git setup with quality gates
+git config core.hooksPath .hyperdev/hooks
+
+# Pre-commit validation
+.hyperdev/hooks/pre-commit:
+  - lint-staged
+  - type-check  
+  - security-scan
+  - test-affected
+
+# Pre-push validation
+.hyperdev/hooks/pre-push:
+  - full-test-suite
+  - security-audit
+  - performance-check
+```
+
+### Continuous Quality Monitoring
+```yaml
+quality_monitoring:
+  real_time:
+    - syntax_highlighting
+    - inline_linting
+    - type_checking
+    
+  on_save:
+    - format_code
+    - fix_linting_issues
+    - update_imports
+    
+  periodic:
+    - dependency_updates
+    - security_updates
+    - performance_profiling
+```
+
+## Environment Standardization
+
+### Tool Configuration Templates
+```javascript
+// Standard ESLint configuration
+export const eslintConfig = {
+  extends: ["@hyperdev/base"],
+  rules: {
+    "security/detect-object-injection": "error",
+    "security/detect-sql-injection": "error",
+    "@typescript-eslint/no-unused-vars": "error"
+  },
+  overrides: [
+    {
+      files: ["*.test.ts", "*.spec.ts"],
+      rules: {
+        "security/detect-object-injection": "off"
+      }
+    }
+  ]
+};
+
+// Standard Prettier configuration
+export const prettierConfig = {
+  semi: true,
+  trailingComma: "es5",
+  singleQuote: false,
+  printWidth: 80,
+  tabWidth: 2
+};
+```
+
+### Testing Framework Setup
+```javascript
+// Jest configuration with coverage
+export const jestConfig = {
+  preset: "ts-jest",
+  testEnvironment: "node",
+  collectCoverageFrom: [
+    "src/**/*.{ts,tsx}",
+    "!src/**/*.d.ts",
+    "!src/**/*.test.ts"
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90
+    }
+  }
+};
+```
+
+## Integration with Other Tools
+
+### With gen (Code Generation)
+- Automatic IDE configuration for generated code
+- Quality validation of generated templates
+- Integration with generation workflows
+
+### With epics (Strategic Planning) 
+- Development environment aligned with project architecture
+- Tool configuration based on technical requirements
+- Automated setup for planned technology stack
+
+### With dev (Execution Control)
+- Real-time quality monitoring during development
+- Context optimization for AI assistance
+- Automated quality gate enforcement
+
+### With dash (Monitoring)
+- Development environment health monitoring
+- Tool usage analytics and optimization
+- Team productivity metrics
+
+## Advanced Features
+
+### Team Configuration Sharing
+```bash
+# Export team configuration
+hyperdev dx config export --team-config
+
+# Import shared configuration
+hyperdev dx config import team-config.json
+
+# Validate team alignment
+hyperdev dx validate --team-compliance
+```
+
+### AI-Optimized Development
+```yaml
+ai_optimization:
+  context_engineering:
+    auto_context_updates: true
+    project_knowledge_base: true
+    architectural_awareness: true
+    
+  quality_enhancement:
+    real_time_validation: true
+    security_scanning: true
+    pattern_enforcement: true
+    
+  productivity_features:
+    intelligent_autocomplete: true
+    context_aware_suggestions: true
+    automated_refactoring: true
+```
+
+### Performance Monitoring
+```javascript
+// Development environment performance tracking
+const performanceConfig = {
+  metrics: {
+    startup_time: { target: "< 2s" },
+    linting_speed: { target: "< 500ms" },
+    test_execution: { target: "< 10s" },
+    build_time: { target: "< 30s" }
+  },
+  
+  alerts: {
+    slow_operations: true,
+    resource_usage: true,
+    tool_failures: true
+  }
+};
+```
+
+## Best Practices
+
+### Environment Setup
+1. **Start with Standards**: Use recommended configurations as baseline
+2. **Team Consistency**: Ensure all team members have identical setups
+3. **Regular Updates**: Keep tools and configurations current
+4. **Performance Monitoring**: Track and optimize development environment performance
+5. **Documentation**: Maintain clear documentation of all configurations
+
+### Hook Configuration
+1. **Fail Fast**: Configure hooks to catch issues early
+2. **Incremental Checks**: Use staged checks for better performance
+3. **Clear Feedback**: Provide clear error messages and fix suggestions
+4. **Bypass Mechanisms**: Allow emergency bypasses when needed
+5. **Regular Testing**: Test hook configurations regularly
+
+### Quality Gates
+1. **Appropriate Strictness**: Balance quality with development velocity
+2. **Context Awareness**: Adjust quality gates based on project phase
+3. **Clear Standards**: Document all quality requirements clearly
+4. **Automated Fixes**: Provide automated fixes where possible
+5. **Team Training**: Ensure team understands quality standards
+
+## Troubleshooting
+
+### Common Issues
+1. **Slow Performance**: Check tool configurations and resource usage
+2. **Hook Failures**: Validate hook configurations and dependencies
+3. **IDE Integration Issues**: Verify extension compatibility and settings
+4. **Team Sync Problems**: Ensure consistent configuration sharing
+
+### Debug Commands
+```bash
+# Check environment health
+hyperdev dx health-check
+
+# Validate configuration
+hyperdev dx validate --verbose
+
+# Test all hooks
+hyperdev dx hooks test --all
+
+# Generate diagnostic report
+hyperdev dx diagnose --report
+```
+
+---
+
+**The dx tool ensures every developer has an optimally configured, quality-controlled development environment from day one.** By automating environment setup, hook configuration, and quality gates, teams can focus on building great software instead of fighting with their tools.
+
+<Card
+  title="DX Setup Guide"
+  icon="wrench"
+  href="/guides/dx-setup"
+  horizontal
+>
+  Step-by-step guide to optimize your development environment with the dx tool.
+</Card>

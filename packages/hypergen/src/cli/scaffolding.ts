@@ -29,7 +29,7 @@ export class GeneratorScaffolding {
    */
   async initGenerator(options: ScaffoldingOptions): Promise<{ success: boolean; message?: string; filesCreated?: string[] }> {
     try {
-      const generatorDir = path.join(options.directory || '_templates', options.name)
+      const generatorDir = path.join(options.directory || 'recipes', options.name)
       const filesCreated: string[] = []
 
       // Ensure generator directory exists
@@ -95,7 +95,7 @@ export class GeneratorScaffolding {
    */
   async initWorkspace(options: { directory?: string; withExamples?: boolean }): Promise<{ success: boolean; message?: string; filesCreated?: string[] }> {
     try {
-      const workspaceDir = options.directory || '_templates'
+      const workspaceDir = options.directory || 'recipes'
       const filesCreated: string[] = []
 
       // Ensure workspace directory exists
@@ -442,7 +442,7 @@ ${options.author || 'Unknown'}
   templates: [
     {
       name: 'local',
-      path: './_templates'
+      path: './recipes'
     }
   ],
   
@@ -475,7 +475,7 @@ This is a Hypergen workspace containing custom generators and templates.
 ## Structure
 
 \`\`\`
-_templates/
+recipes/
 ├── hypergen.config.js    # Workspace configuration
 ├── component/            # Example component generator
 │   ├── actions.ts
@@ -528,7 +528,7 @@ Edit \`hypergen.config.js\` to customize:
 
 ## Adding New Generators
 
-1. Create a new directory under \`_templates/\`
+1. Create a new directory under \`recipes/\`
 2. Add \`actions.ts\` and/or \`template.yml\`
 3. Create template files in \`templates/\` subdirectory
 4. Test with \`hypergen template validate\`

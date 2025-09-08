@@ -1,0 +1,542 @@
+---
+title: "hyper dev"
+description: "Real-time development monitoring with AI-powered code quality, security analysis, and automated assistance"
+icon: "monitor"
+---
+
+# hyper dev
+
+Real-time development monitoring system that provides AI-powered code analysis, quality gates, security monitoring, and automated development assistance while you code.
+
+## Syntax
+
+```bash
+hyper dev [options]
+```
+
+## Overview
+
+The `hyper dev` command transforms your development experience by providing:
+
+- **Real-time code analysis** with immediate feedback
+- **AI-powered suggestions** for improvements and optimizations
+- **Security vulnerability detection** as you write code
+- **Performance monitoring** and optimization recommendations
+- **Quality gate enforcement** with automatic fixes
+- **Context management** for AI assistants and tools
+
+<Info>
+  `hyper dev` provides streamlined access to the [Dev tool](/tools/dev), focusing on active development
+  monitoring while maintaining access to advanced configuration and control features.
+</Info>
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--watch, -w` | Watch mode for real-time monitoring | `false` | `--watch` |
+| `--focus <area>` | Focus on specific code area | `all` | `--focus auth` |
+| `--assistant <name>` | Specify AI assistant | `auto` | `--assistant claude` |
+| `--validate` | Run validation checks | `true` | `--validate` |
+| `--context` | Context management commands | `false` | `--context` |
+| `--report` | Generate development report | `false` | `--report` |
+| `--verbose, -v` | Verbose output | `false` | `--verbose` |
+| `--epic <name>` | Focus on specific epic | - | `--epic "User Auth"` |
+
+## Examples
+
+### Basic Development Monitoring
+
+```bash
+# Start development monitoring
+hyper dev
+
+# Watch mode for real-time feedback
+hyper dev --watch
+
+# Focus on specific area
+hyper dev --watch --focus authentication
+```
+
+### AI-Assisted Development
+
+```bash
+# Development with specific AI assistant
+hyper dev --watch --assistant claude
+
+# Context-aware development
+hyper dev --watch --context --assistant openai
+
+# Epic-focused development
+hyper dev --watch --epic "Payment System"
+```
+
+### Quality and Security Monitoring
+
+```bash
+# Development with comprehensive validation
+hyper dev --watch --validate --security --performance
+
+# Real-time security monitoring
+hyper dev --watch --focus security --assistant security-focused
+
+# Quality gate enforcement
+hyper dev --watch --quality-gates strict
+```
+
+## Real-Time Monitoring Features
+
+### Code Quality Analysis
+
+The development monitor continuously analyzes your code for:
+
+- **Syntax errors and warnings**: Immediate feedback on code issues
+- **Type safety violations**: TypeScript/Flow type checking
+- **Code complexity**: Cyclomatic complexity and maintainability metrics
+- **Best practice violations**: Framework-specific recommendations
+- **Performance anti-patterns**: Inefficient code patterns
+
+**Example Output**:
+```
+🔍 Code Analysis Results
+├── ✅ Syntax: Clean
+├── ⚠️  Types: 2 issues found
+│   ├── src/auth/login.ts:23 - Missing return type annotation
+│   └── src/auth/session.ts:45 - Unsafe any type usage
+├── 🚀 Performance: Good
+└── 📊 Complexity: 7.2/10 (Acceptable)
+
+💡 AI Suggestions:
+• Add explicit return types to improve type safety
+• Replace 'any' with proper interface in session.ts
+• Consider extracting validation logic to separate function
+```
+
+### Security Monitoring
+
+Continuous security analysis includes:
+
+- **Vulnerability scanning**: Known CVEs in dependencies
+- **Secret detection**: API keys, passwords in code
+- **Security anti-patterns**: SQL injection, XSS vulnerabilities
+- **Dependency analysis**: Security ratings of npm packages
+- **Authentication flaws**: JWT misconfigurations, session issues
+
+**Security Alert Example**:
+```
+🚨 Security Alert
+├── HIGH: Potential SQL Injection in src/api/users.ts:34
+│   └── Raw SQL query with user input
+│   └── 💡 Use parameterized queries or ORM
+├── MEDIUM: Hardcoded API key in src/config/api.ts:12
+│   └── Move to environment variables
+└── LOW: Outdated dependency 'lodash@4.17.19'
+    └── Update to 4.17.21+ to fix vulnerabilities
+```
+
+### Performance Analysis
+
+Real-time performance monitoring:
+
+- **Bundle size analysis**: Track JavaScript bundle growth
+- **Render performance**: React/Vue component performance
+- **API response times**: Backend endpoint monitoring
+- **Memory usage**: Memory leak detection
+- **Core Web Vitals**: LCP, FID, CLS tracking
+
+## AI-Powered Development Assistance
+
+### Intelligent Code Suggestions
+
+```bash
+# Enable AI suggestions during development
+hyper dev --watch --ai-suggestions
+
+# The AI provides:
+# - Code completion suggestions
+# - Refactoring recommendations  
+# - Bug fix suggestions
+# - Performance optimizations
+# - Architecture improvements
+```
+
+**AI Suggestion Example**:
+```
+🤖 AI Assistant: Claude
+
+Based on your current code in src/auth/login.ts:
+
+💡 Suggestion: Optimize authentication flow
+Current implementation has 3 potential improvements:
+1. Add request rate limiting to prevent brute force attacks
+2. Implement proper password hashing with bcrypt
+3. Add input validation using Zod schema
+
+Would you like me to:
+[ ] Generate secure authentication code
+[ ] Add rate limiting middleware
+[ ] Create validation schemas
+[ ] Implement all improvements
+
+Type your choice or 'explain' for more details.
+```
+
+### Context Management
+
+```bash
+# Manage AI context for better suggestions
+hyper dev --context --update
+
+# Context includes:
+# - Current epic and requirements
+# - Recent code changes
+# - Project architecture
+# - Team coding standards
+# - Previous AI interactions
+```
+
+### AI Assistant Options
+
+Configure different AI assistants for specialized help:
+
+```bash
+# Security-focused assistant
+hyper dev --assistant security-expert
+
+# Performance optimization assistant  
+hyper dev --assistant performance-optimizer
+
+# Architecture design assistant
+hyper dev --assistant architect
+
+# Testing and quality assistant
+hyper dev --assistant qa-specialist
+```
+
+## Focus Areas
+
+### Code Area Focusing
+
+```bash
+# Focus on authentication code
+hyper dev --watch --focus auth
+
+# Focus on API endpoints
+hyper dev --watch --focus api
+
+# Focus on frontend components
+hyper dev --watch --focus components
+
+# Focus on database layer
+hyper dev --watch --focus database
+```
+
+**Focus Benefits**:
+- **Reduced noise**: Only relevant feedback and suggestions
+- **Specialized analysis**: Domain-specific checks and recommendations
+- **Faster processing**: Focused analysis is more efficient
+- **Targeted AI**: AI assistant understands the specific context
+
+### Epic-Driven Development
+
+```bash
+# Develop within epic context
+hyper plan use "User Authentication"
+hyper dev --epic-mode
+
+# Epic-focused development provides:
+# - Epic requirement validation
+# - Consistent naming and patterns  
+# - Progress tracking against epic goals
+# - Integration with epic specifications
+```
+
+## Quality Gates
+
+### Automatic Quality Enforcement
+
+```bash
+# Strict quality gates
+hyper dev --watch --quality-gates strict
+
+# Custom quality rules
+hyper dev --watch --quality-gates custom --rules ./dev-rules.yml
+```
+
+**Quality Gate Configuration**:
+```yaml
+# dev-rules.yml
+quality_gates:
+  security:
+    level: "strict"
+    block_on: ["high", "critical"]
+    auto_fix: true
+    
+  performance:
+    level: "standard"  
+    thresholds:
+      bundle_size: "500kb"
+      first_load: "3s"
+      
+  testing:
+    required: true
+    coverage_threshold: 80
+    
+  documentation:
+    required_for: ["public_apis", "components"]
+    
+  accessibility:
+    level: "wcag_aa"
+    auto_check: true
+```
+
+### Automatic Fixes
+
+Many issues can be automatically fixed:
+
+```bash
+# Enable automatic fixes
+hyper dev --watch --auto-fix
+
+# Selective auto-fixing
+hyper dev --watch --auto-fix formatting,imports,types
+```
+
+**Auto-Fix Capabilities**:
+- **Code formatting**: Prettier, ESLint auto-fix
+- **Import organization**: Sort and clean imports
+- **Type annotations**: Add missing TypeScript types
+- **Security patches**: Apply safe security fixes
+- **Performance optimizations**: Safe performance improvements
+
+## Development Reports
+
+### Progress Reports
+
+```bash
+# Generate development report
+hyper dev --report
+
+# Daily development summary
+hyper dev --report --daily
+
+# Epic progress report
+hyper dev --report --epic "Payment System"
+```
+
+**Report Contents**:
+```
+📊 Development Report - Payment System Epic
+Generated: 2024-01-15 14:30:00
+
+📈 Progress Overview
+├── Epic Completion: 67% (8/12 tasks)
+├── Code Quality Score: 8.7/10
+├── Security Score: 9.2/10
+└── Test Coverage: 84%
+
+🚀 Recent Achievements
+├── ✅ Payment form validation completed
+├── ✅ Stripe integration tested
+├── ✅ Error handling improved
+└── ✅ Security audit passed
+
+⚠️ Issues to Address
+├── Bundle size increased by 15%
+├── API response time slower than target
+└── Missing integration tests for refunds
+
+🔮 AI Recommendations
+├── Consider code splitting for payment modules
+├── Implement Redis caching for faster API responses
+├── Add comprehensive integration test suite
+└── Review third-party dependencies for optimization
+
+📅 Next Steps
+├── Optimize bundle size (Priority: High)
+├── Add integration tests (Priority: Medium)
+├── Performance optimization (Priority: Medium)
+└── Final security review (Priority: High)
+```
+
+### Team Collaboration Reports
+
+```bash
+# Team development summary
+hyper dev --report --team
+
+# Cross-epic progress tracking
+hyper dev --report --program
+```
+
+## Integration with Development Workflow
+
+### Continuous Development Loop
+
+```bash
+# Start epic-focused development session
+hyper plan use "Shopping Cart"
+hyper dev --watch --epic "Shopping Cart"
+
+# The development monitor:
+# 1. Watches for code changes
+# 2. Provides real-time feedback
+# 3. Suggests improvements
+# 4. Validates against epic requirements
+# 5. Tracks progress automatically
+```
+
+### Git Integration
+
+```bash
+# Pre-commit validation
+hyper dev --validate --pre-commit
+
+# Commit message enhancement
+hyper dev --enhance-commit-messages
+
+# Branch-specific monitoring
+hyper dev --watch --branch feature/payment-system
+```
+
+## Advanced Configuration
+
+### Development Environment Settings
+
+```javascript
+// hyperdev.config.js  
+export default {
+  development: {
+    // Real-time monitoring
+    monitoring: {
+      enabled: true,
+      interval: 1000,        // Check every second
+      debounce: 300,         // Wait 300ms after changes
+      focus_areas: ['src', 'lib', 'api']
+    },
+    
+    // AI assistance
+    ai: {
+      provider: 'openai',
+      model: 'gpt-4',
+      suggestions: {
+        enabled: true,
+        frequency: 'on_save',
+        types: ['security', 'performance', 'best_practices']
+      }
+    },
+    
+    // Quality gates
+    quality_gates: {
+      security: {
+        level: 'strict',
+        auto_fix: true,
+        block_on: ['critical', 'high']
+      },
+      performance: {
+        bundle_size_limit: '500kb',
+        render_time_limit: '100ms'
+      },
+      testing: {
+        coverage_threshold: 80,
+        required_for_commit: true
+      }
+    },
+    
+    // Notifications
+    notifications: {
+      desktop: true,
+      slack: {
+        webhook: process.env.SLACK_WEBHOOK,
+        channel: '#dev-alerts'
+      }
+    }
+  }
+};
+```
+
+### Custom Rules and Checks
+
+```bash
+# Use custom development rules
+hyper dev --watch --rules ./custom-dev-rules.js
+
+# Add project-specific checks
+hyper dev --watch --checks security,performance,accessibility
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="High CPU usage during monitoring">
+    **Problem**: Development monitoring using too much CPU
+    
+    **Solutions**:
+    ```bash
+    # Reduce monitoring frequency
+    hyper dev --watch --interval 3000
+    
+    # Focus on specific directories
+    hyper dev --watch --focus src/components
+    
+    # Use lightweight mode
+    hyper dev --watch --lightweight
+    ```
+  </Accordion>
+  
+  <Accordion title="AI suggestions not relevant">
+    **Problem**: AI providing irrelevant or poor suggestions
+    
+    **Solutions**:
+    ```bash
+    # Update context
+    hyper dev --context --refresh
+    
+    # Switch AI assistant
+    hyper dev --watch --assistant claude
+    
+    # Configure AI focus
+    hyper dev --watch --ai-focus security,performance
+    ```
+  </Accordion>
+  
+  <Accordion title="Quality gates blocking development">
+    **Problem**: Quality gates preventing necessary changes
+    
+    **Solutions**:
+    ```bash
+    # Temporarily disable strict gates
+    hyper dev --watch --quality-gates relaxed
+    
+    # Skip specific checks
+    hyper dev --watch --skip-checks bundle-size
+    
+    # Override for specific files
+    hyper dev --watch --override ./src/legacy/
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper generate" href="/cli/commands/workflow/generate">
+    Generate code with development monitoring
+  </Card>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Plan features for development monitoring
+  </Card>
+  <Card title="hyper status" href="/cli/commands/discovery/status">
+    Check development progress and health
+  </Card>
+  <Card title="hyper dev" href="/cli/commands/tools/dev">
+    Advanced development monitoring features
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Development Monitoring Workflow](/cli/workflows/development-monitoring)
+- [Quality Gates Configuration](/cli/configuration/quality-gates)
+- [Dev Tool Documentation](/tools/dev)
+- [AI Assistant Configuration](/cli/configuration/ai-assistants)

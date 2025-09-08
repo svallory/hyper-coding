@@ -6,6 +6,7 @@
  * - Action discovery and registration
  * - CLI command execution
  * - Template-to-code generation pipeline
+ * - Recipe Step System Tools Framework
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
@@ -215,6 +216,124 @@ describe('V8 Integration Tests', () => {
       } catch (error: any) {
         expect(error.stdout).toContain('Template file not found')
       }
+    })
+  })
+
+  describe('Recipe Step System - Tools Framework', () => {
+    beforeEach(() => {
+      // Import tools framework for testing
+    })
+
+    it('should be importable and provide core functionality', async () => {
+      // Dynamic import to test our tools framework
+      const {
+        ToolRegistry,
+        getToolRegistry,
+        SUPPORTED_TOOL_TYPES,
+        isSupportedToolType,
+        validateToolType,
+        createValidationResult,
+        initializeToolsFramework
+      } = await import('../src/recipe-engine/tools/index.js')
+
+      // Test basic functionality
+      expect(SUPPORTED_TOOL_TYPES).toContain('template')
+      expect(SUPPORTED_TOOL_TYPES).toContain('action')
+      expect(SUPPORTED_TOOL_TYPES).toContain('codemod')
+      expect(SUPPORTED_TOOL_TYPES).toContain('recipe')
+
+      expect(isSupportedToolType('template')).toBe(true)
+      expect(isSupportedToolType('invalid')).toBe(false)
+
+      expect(validateToolType('template')).toBe('template')
+      expect(() => validateToolType('invalid')).toThrow()
+
+      const validResult = createValidationResult(true, [], ['warning'])
+      expect(validResult.isValid).toBe(true)
+      expect(validResult.warnings).toContain('warning')
+
+      // Test registry singleton
+      const registry1 = getToolRegistry()
+      const registry2 = ToolRegistry.getInstance()
+      expect(registry1).toBe(registry2)
+
+      // Test framework initialization
+      const registry3 = initializeToolsFramework()
+      expect(registry3).toBeInstanceOf(ToolRegistry)
+    })
+
+    it('should maintain tool registry state', async () => {
+      const { getToolRegistry, ToolRegistry } = await import('../src/recipe-engine/tools/index.js')
+      
+      // Reset for clean test
+      ToolRegistry.reset()
+      
+      const registry = getToolRegistry()
+      const stats = registry.getStats()
+      
+      expect(stats.totalRegistrations).toBe(0)
+      expect(stats.cachedInstances).toBe(0)
+      expect(stats.activeInstances).toBe(0)
+    })
+
+    it('should provide proper TypeScript types', async () => {
+      // This test verifies that our types are properly exported
+      const toolsModule = await import('../src/recipe-engine/tools/index.js')
+      
+      // Verify key exports exist
+      expect(typeof toolsModule.getToolRegistry).toBe('function')
+      expect(typeof toolsModule.registerTool).toBe('function')
+      expect(typeof toolsModule.resolveTool).toBe('function')
+      expect(typeof toolsModule.createValidationResult).toBe('function')
+      expect(typeof toolsModule.isSupportedToolType).toBe('function')
+      expect(typeof toolsModule.validateToolType).toBe('function')
+      expect(typeof toolsModule.initializeToolsFramework).toBe('function')
+      
+      // Verify classes are exported
+      expect(toolsModule.Tool).toBeDefined()
+      expect(toolsModule.ToolRegistry).toBeDefined()
+      expect(toolsModule.BaseToolFactory).toBeDefined()
+    })
+
+    it('should support all required tool types', async () => {
+      const { SUPPORTED_TOOL_TYPES } = await import('../src/recipe-engine/tools/index.js')
+      
+      const expectedTypes = ['template', 'action', 'codemod', 'recipe']
+      for (const type of expectedTypes) {
+        expect(SUPPORTED_TOOL_TYPES).toContain(type)
+      }
+      
+      expect(SUPPORTED_TOOL_TYPES).toHaveLength(4)
+    })
+
+    it('should provide development utilities', async () => {
+      const { DevUtils } = await import('../src/recipe-engine/tools/index.js')
+      
+      expect(typeof DevUtils.enableDebugLogging).toBe('function')
+      expect(typeof DevUtils.getRegistryDebugInfo).toBe('function')
+      expect(typeof DevUtils.resetRegistry).toBe('function')
+      
+      // Test debug info
+      const debugInfo = DevUtils.getRegistryDebugInfo()
+      expect(debugInfo.version).toBeDefined()
+      expect(Array.isArray(debugInfo.supportedTypes)).toBe(true)
+      expect(debugInfo.registryStats).toBeDefined()
+      expect(debugInfo.healthCheck).toBeDefined()
+    })
+
+    it('should check registry health', async () => {
+      const { checkRegistryHealth, ToolRegistry } = await import('../src/recipe-engine/tools/index.js')
+      
+      // Reset for clean test
+      ToolRegistry.reset()
+      
+      const health = checkRegistryHealth()
+      expect(typeof health.healthy).toBe('boolean')
+      expect(Array.isArray(health.issues)).toBe(true)
+      expect(health.stats).toBeDefined()
+      
+      // Should report no tools registered as an issue
+      expect(health.issues).toContain('No tools registered in the registry')
     })
   })
 })

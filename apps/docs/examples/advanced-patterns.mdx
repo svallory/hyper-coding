@@ -1,0 +1,1736 @@
+---
+title: "Advanced Patterns"
+description: "Complex template compositions, automation, and sophisticated generation patterns for enterprise use cases"
+---
+
+# Advanced Patterns
+
+Master complex HyperDev patterns for sophisticated code generation scenarios. These examples demonstrate enterprise-level template compositions, advanced automation, and scalable generation strategies.
+
+## Multi-Template Composition
+
+### Modular Architecture Generator
+
+Create complex applications by composing multiple specialized templates.
+
+```yaml title="template.yml"
+name: modular-architecture
+description: Generate modular architecture with composed templates
+variables:
+  - name: projectName
+    message: Project name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: architecture
+    message: Architecture pattern
+    type: list
+    choices:
+      - name: Clean Architecture (Hexagonal)
+        value: clean
+      - name: Domain-Driven Design
+        value: ddd
+      - name: Event-Driven Architecture
+        value: event-driven
+      - name: CQRS + Event Sourcing
+        value: cqrs-es
+  - name: modules
+    message: Select modules to include
+    type: checkbox
+    choices:
+      - name: User Management
+        value: user-management
+        checked: true
+      - name: Authentication & Authorization
+        value: auth
+        checked: true
+      - name: Payment Processing
+        value: payments
+      - name: Notification System
+        value: notifications
+      - name: File Storage
+        value: storage
+      - name: Analytics & Reporting
+        value: analytics
+      - name: Audit Logging
+        value: audit
+      - name: API Gateway
+        value: api-gateway
+  - name: integrationPatterns
+    message: Integration patterns
+    type: checkbox
+    choices:
+      - name: Message Queues (Event Bus)
+        value: message-queue
+      - name: Database per Service
+        value: database-per-service
+      - name: Shared Database
+        value: shared-database
+      - name: Saga Pattern
+        value: saga
+      - name: API Composition
+        value: api-composition
+```
+
+**Master Template Orchestrator** (`templates/_orchestrator.js.ejs.t`)
+```javascript
+---
+to: _templates/_orchestrator.js
+---
+/**
+ * Advanced template orchestration for modular architecture generation
+ * Coordinates multiple sub-templates based on architecture pattern and modules
+ */
+
+const { exec } = require('child_process');
+const path = require('path');
+const fs = require('fs').promises;
+
+class TemplateOrchestrator {
+  constructor(config) {
+    this.config = config;
+    this.generatedFiles = [];
+    this.errors = [];
+  }
+
+  async orchestrate() {
+    console.log(`🚀 Generating modular architecture: ${this.config.architecture}`);
+    
+    try {
+      // Phase 1: Core architecture
+      await this.generateCoreArchitecture();
+      
+      // Phase 2: Module generation
+      await this.generateModules();
+      
+      // Phase 3: Integration patterns
+      await this.generateIntegrations();
+      
+      // Phase 4: Cross-cutting concerns
+      await this.generateCrossCuttingConcerns();
+      
+      // Phase 5: Post-generation hooks
+      await this.runPostGenerationHooks();
+      
+      console.log(`✅ Successfully generated ${this.generatedFiles.length} files`);
+      
+    } catch (error) {
+      console.error('❌ Generation failed:', error);
+      this.errors.push(error);
+      throw error;
+    }
+  }
+
+  async generateCoreArchitecture() {
+    const architectureTemplates = {
+      clean: [
+        'core/domain',
+        'core/application',
+        'core/infrastructure',
+        'core/presentation'
+      ],
+      ddd: [
+        'core/domain/entities',
+        'core/domain/value-objects',
+        'core/domain/aggregates',
+        'core/application/services',
+        'core/infrastructure/repositories'
+      ],
+      'event-driven': [
+        'core/events',
+        'core/handlers',
+        'core/subscribers',
+        'core/publishers'
+      ],
+      'cqrs-es': [
+        'core/commands',
+        'core/queries', 
+        'core/events',
+        'core/projections',
+        'core/event-store'
+      ]
+    };
+
+    const templates = architectureTemplates[this.config.architecture] || [];
+    
+    for (const template of templates) {
+      await this.runSubTemplate(template, {
+        ...this.config,
+        templateType: 'core',
+        modulePath: template
+      });
+    }
+  }
+
+  async generateModules() {
+    for (const moduleName of this.config.modules) {
+      console.log(`📦 Generating module: ${moduleName}`);
+      
+      const moduleConfig = {
+        ...this.config,
+        currentModule: moduleName,
+        templateType: 'module'
+      };
+
+      // Generate module-specific architecture
+      await this.generateModuleArchitecture(moduleName, moduleConfig);
+      
+      // Generate module interfaces
+      await this.generateModuleInterfaces(moduleName, moduleConfig);
+      
+      // Generate module tests
+      await this.generateModuleTests(moduleName, moduleConfig);
+    }
+  }
+
+  async generateModuleArchitecture(moduleName, config) {
+    const moduleTemplates = {
+      'user-management': [
+        'modules/user-management/domain/user.entity',
+        'modules/user-management/application/user.service',
+        'modules/user-management/infrastructure/user.repository',
+        'modules/user-management/presentation/user.controller'
+      ],
+      'auth': [
+        'modules/auth/domain/auth.entity',
+        'modules/auth/application/auth.service',
+        'modules/auth/infrastructure/token.service',
+        'modules/auth/presentation/auth.controller'
+      ],
+      'payments': [
+        'modules/payments/domain/payment.entity',
+        'modules/payments/application/payment.service',
+        'modules/payments/infrastructure/payment-gateway',
+        'modules/payments/presentation/payment.controller'
+      ]
+      // Add more modules as needed
+    };
+
+    const templates = moduleTemplates[moduleName] || [];
+    
+    for (const template of templates) {
+      await this.runSubTemplate(template, config);
+    }
+  }
+
+  async generateIntegrations() {
+    for (const pattern of this.config.integrationPatterns) {
+      console.log(`🔌 Generating integration: ${pattern}`);
+      
+      const integrationTemplates = {
+        'message-queue': [
+          'integrations/message-queue/event-bus',
+          'integrations/message-queue/publishers',
+          'integrations/message-queue/subscribers'
+        ],
+        'database-per-service': [
+          'integrations/database/connection-factory',
+          'integrations/database/migration-runner',
+          'integrations/database/health-checks'
+        ],
+        'saga': [
+          'integrations/saga/saga-orchestrator',
+          'integrations/saga/saga-step',
+          'integrations/saga/compensation-handler'
+        ]
+      };
+
+      const templates = integrationTemplates[pattern] || [];
+      
+      for (const template of templates) {
+        await this.runSubTemplate(template, {
+          ...this.config,
+          templateType: 'integration',
+          integrationPattern: pattern
+        });
+      }
+    }
+  }
+
+  async runSubTemplate(templateName, config) {
+    try {
+      const templatePath = path.join(__dirname, 'sub-templates', `${templateName}.ejs.t`);
+      
+      // Check if template exists
+      try {
+        await fs.access(templatePath);
+      } catch {
+        console.warn(`⚠️  Template not found: ${templatePath}`);
+        return;
+      }
+
+      // Run the sub-template with Hypergen
+      const command = `hypergen ${templateName} --config '${JSON.stringify(config)}'`;
+      
+      await new Promise((resolve, reject) => {
+        exec(command, { cwd: process.cwd() }, (error, stdout, stderr) => {
+          if (error) {
+            console.error(`Error running template ${templateName}:`, stderr);
+            reject(error);
+          } else {
+            console.log(`✓ Generated: ${templateName}`);
+            this.generatedFiles.push(templateName);
+            resolve();
+          }
+        });
+      });
+      
+    } catch (error) {
+      console.error(`Failed to generate ${templateName}:`, error);
+      this.errors.push({ template: templateName, error });
+    }
+  }
+
+  async runPostGenerationHooks() {
+    console.log('🎯 Running post-generation hooks...');
+    
+    // Generate aggregated API documentation
+    await this.generateApiDocumentation();
+    
+    // Generate docker-compose for development
+    await this.generateDockerCompose();
+    
+    // Generate integration tests
+    await this.generateIntegrationTests();
+    
+    // Update package.json with generated scripts
+    await this.updatePackageJson();
+  }
+
+  async generateApiDocumentation() {
+    // Scan generated controllers and create OpenAPI spec
+    console.log('📚 Generating API documentation...');
+    // Implementation details...
+  }
+
+  async generateDockerCompose() {
+    console.log('🐳 Generating Docker Compose...');
+    // Generate docker-compose.yml based on selected modules and integrations
+  }
+}
+
+// Export for use in main template
+module.exports = { TemplateOrchestrator };
+```
+
+**Sub-Template: Clean Architecture Domain** (`templates/sub-templates/core/domain.ejs.t`)
+```typescript
+---
+to: src/core/domain/<%= h.inflection.pluralize(currentModule || 'entity') %>/<%=  h.inflection.singularize(currentModule || 'entity') %>.entity.ts
+---
+/**
+ * Domain Entity for <%= h.inflection.classify(currentModule || 'Entity') %>
+ * Clean Architecture - Domain Layer
+ * 
+ * Contains business rules and domain logic
+ */
+
+import { AggregateRoot } from '../../../shared/domain/aggregate-root';
+import { DomainEvent } from '../../../shared/domain/domain-event';
+import { <%= h.inflection.classify(currentModule || 'Entity') %>Id } from './value-objects/<%= h.inflection.dasherize(currentModule || 'entity') %>-id';
+<% if (currentModule === 'user-management') { %>import { Email } from './value-objects/email';
+import { UserCreatedEvent } from './events/user-created.event';
+import { UserStatus } from './enums/user-status.enum';
+<% } else if (currentModule === 'payments') { %>import { Money } from './value-objects/money';
+import { PaymentCreatedEvent } from './events/payment-created.event';
+import { PaymentStatus } from './enums/payment-status.enum';
+<% } %>
+
+export interface <%= h.inflection.classify(currentModule || 'Entity') %>Props {
+<% if (currentModule === 'user-management') { %>  email: Email;
+  name: string;
+  status: UserStatus;
+  createdAt: Date;
+  updatedAt?: Date;
+<% } else if (currentModule === 'payments') { %>  amount: Money;
+  status: PaymentStatus;
+  description?: string;
+  createdAt: Date;
+  processedAt?: Date;
+<% } else { %>  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+<% } %>}
+
+export class <%= h.inflection.classify(currentModule || 'Entity') %>Entity extends AggregateRoot<<%= h.inflection.classify(currentModule || 'Entity') %>Props> {
+  private constructor(
+    props: <%= h.inflection.classify(currentModule || 'Entity') %>Props,
+    id?: <%= h.inflection.classify(currentModule || 'Entity') %>Id
+  ) {
+    super(props, id);
+  }
+
+  public static create(
+    props: Omit<<%= h.inflection.classify(currentModule || 'Entity') %>Props, 'createdAt'>,
+    id?: <%= h.inflection.classify(currentModule || 'Entity') %>Id
+  ): <%= h.inflection.classify(currentModule || 'Entity') %>Entity {
+    const <%= h.inflection.camelize(currentModule || 'entity', true) %> = new <%= h.inflection.classify(currentModule || 'Entity') %>Entity({
+      ...props,
+      createdAt: new Date(),
+    }, id);
+
+<% if (currentModule === 'user-management') { %>    // Business rule: Email must be valid
+    if (!props.email.isValid()) {
+      throw new Error('Invalid email address');
+    }
+
+    // Domain event: User created
+    <%= h.inflection.camelize(currentModule, true) %>.addDomainEvent(
+      new UserCreatedEvent(<%= h.inflection.camelize(currentModule, true) %>.id, props.email.value)
+    );
+<% } else if (currentModule === 'payments') { %>    // Business rule: Amount must be positive
+    if (!props.amount.isPositive()) {
+      throw new Error('Payment amount must be positive');
+    }
+
+    // Domain event: Payment created
+    <%= h.inflection.camelize(currentModule, true) %>.addDomainEvent(
+      new PaymentCreatedEvent(<%= h.inflection.camelize(currentModule, true) %>.id, props.amount.value)
+    );
+<% } %>
+
+    return <%= h.inflection.camelize(currentModule || 'entity', true) %>;
+  }
+
+<% if (currentModule === 'user-management') { %>  public updateEmail(newEmail: Email): void {
+    if (!newEmail.isValid()) {
+      throw new Error('Invalid email address');
+    }
+
+    this.props.email = newEmail;
+    this.props.updatedAt = new Date();
+  }
+
+  public activate(): void {
+    this.props.status = UserStatus.ACTIVE;
+    this.props.updatedAt = new Date();
+  }
+
+  public deactivate(): void {
+    this.props.status = UserStatus.INACTIVE;
+    this.props.updatedAt = new Date();
+  }
+
+  // Getters
+  get email(): Email {
+    return this.props.email;
+  }
+
+  get name(): string {
+    return this.props.name;
+  }
+
+  get status(): UserStatus {
+    return this.props.status;
+  }
+
+  get isActive(): boolean {
+    return this.props.status === UserStatus.ACTIVE;
+  }
+<% } else if (currentModule === 'payments') { %>  public process(): void {
+    if (this.props.status !== PaymentStatus.PENDING) {
+      throw new Error('Only pending payments can be processed');
+    }
+
+    this.props.status = PaymentStatus.PROCESSING;
+    this.props.processedAt = new Date();
+  }
+
+  public complete(): void {
+    if (this.props.status !== PaymentStatus.PROCESSING) {
+      throw new Error('Only processing payments can be completed');
+    }
+
+    this.props.status = PaymentStatus.COMPLETED;
+  }
+
+  public fail(reason?: string): void {
+    this.props.status = PaymentStatus.FAILED;
+    // Could add failure reason as a property
+  }
+
+  // Getters
+  get amount(): Money {
+    return this.props.amount;
+  }
+
+  get status(): PaymentStatus {
+    return this.props.status;
+  }
+
+  get isCompleted(): boolean {
+    return this.props.status === PaymentStatus.COMPLETED;
+  }
+<% } %>
+
+  get createdAt(): Date {
+    return this.props.createdAt;
+  }
+
+  get updatedAt(): Date | undefined {
+    return this.props.updatedAt;
+  }
+}
+```
+
+**Integration Pattern: Event Bus** (`templates/sub-templates/integrations/message-queue/event-bus.ejs.t`)
+```typescript
+---
+to: src/integrations/event-bus/event-bus.interface.ts
+---
+/**
+ * Event Bus Interface for <%= architecture %> Architecture
+ * Provides abstraction for message queue implementations
+ */
+
+import { DomainEvent } from '../../shared/domain/domain-event';
+
+export interface EventBusConfig {
+  connectionString: string;
+  exchange?: string;
+  prefetchCount?: number;
+  retryAttempts?: number;
+  retryDelay?: number;
+}
+
+export interface EventHandler<T extends DomainEvent = DomainEvent> {
+  handle(event: T): Promise<void>;
+  canHandle(eventType: string): boolean;
+  getHandlerName(): string;
+}
+
+export interface EventBus {
+  /**
+   * Publish an event to the bus
+   */
+  publish<T extends DomainEvent>(event: T): Promise<void>;
+
+  /**
+   * Publish multiple events atomically
+   */
+  publishBatch<T extends DomainEvent>(events: T[]): Promise<void>;
+
+  /**
+   * Subscribe to events with a handler
+   */
+  subscribe<T extends DomainEvent>(
+    eventType: string | string[],
+    handler: EventHandler<T>,
+    options?: SubscriptionOptions
+  ): Promise<void>;
+
+  /**
+   * Unsubscribe from events
+   */
+  unsubscribe(eventType: string, handlerName: string): Promise<void>;
+
+  /**
+   * Start the event bus
+   */
+  start(): Promise<void>;
+
+  /**
+   * Stop the event bus gracefully
+   */
+  stop(): Promise<void>;
+
+  /**
+   * Health check for the event bus
+   */
+  isHealthy(): Promise<boolean>;
+}
+
+export interface SubscriptionOptions {
+  queue?: string;
+  durable?: boolean;
+  exclusive?: boolean;
+  autoDelete?: boolean;
+  deadLetterExchange?: string;
+  messageTtl?: number;
+  maxRetries?: number;
+}
+
+---
+to: src/integrations/event-bus/implementations/<%= messageQueue || 'rabbitmq' %>-event-bus.ts
+---
+/**
+ * <%= h.inflection.classify(messageQueue || 'RabbitMQ') %> Event Bus Implementation
+ */
+
+<% if ((messageQueue || 'rabbitmq') === 'rabbitmq') { %>import amqp, { Connection, Channel, Message } from 'amqplib';
+<% } else if (messageQueue === 'kafka') { %>import { Kafka, Producer, Consumer, KafkaMessage } from 'kafkajs';
+<% } else if (messageQueue === 'redis-pubsub') { %>import Redis from 'ioredis';
+<% } %>
+import { EventBus, EventBusConfig, EventHandler, SubscriptionOptions } from '../event-bus.interface';
+import { DomainEvent } from '../../../shared/domain/domain-event';
+import { Logger } from '../../../shared/infrastructure/logger';
+
+export class <%= h.inflection.classify(messageQueue || 'RabbitMQ') %>EventBus implements EventBus {
+  private readonly logger = new Logger(<%= h.inflection.classify(messageQueue || 'RabbitMQ') %>EventBus.name);
+<% if ((messageQueue || 'rabbitmq') === 'rabbitmq') { %>  private connection: Connection | null = null;
+  private channel: Channel | null = null;
+<% } else if (messageQueue === 'kafka') { %>  private kafka: Kafka;
+  private producer: Producer | null = null;
+  private consumer: Consumer | null = null;
+<% } else if (messageQueue === 'redis-pubsub') { %>  private publisher: Redis;
+  private subscriber: Redis;
+<% } %>
+  private handlers = new Map<string, EventHandler[]>();
+  private isConnected = false;
+
+  constructor(private config: EventBusConfig) {
+<% if (messageQueue === 'kafka') { %>    this.kafka = new Kafka({
+      clientId: '<%= projectName %>-event-bus',
+      brokers: [this.config.connectionString],
+    });
+<% } else if (messageQueue === 'redis-pubsub') { %>    this.publisher = new Redis(this.config.connectionString);
+    this.subscriber = new Redis(this.config.connectionString);
+<% } %>  }
+
+  async start(): Promise<void> {
+    try {
+<% if ((messageQueue || 'rabbitmq') === 'rabbitmq') { %>      this.connection = await amqp.connect(this.config.connectionString);
+      this.channel = await this.connection.createChannel();
+      
+      // Setup exchange
+      const exchange = this.config.exchange || 'domain_events';
+      await this.channel.assertExchange(exchange, 'topic', { durable: true });
+      
+      // Setup dead letter exchange
+      await this.channel.assertExchange(`${exchange}_dlx`, 'topic', { durable: true });
+      
+      // Set prefetch count
+      await this.channel.prefetch(this.config.prefetchCount || 10);
+      
+      this.connection.on('error', this.handleConnectionError.bind(this));
+      this.connection.on('close', this.handleConnectionClose.bind(this));
+<% } else if (messageQueue === 'kafka') { %>      this.producer = this.kafka.producer();
+      this.consumer = this.kafka.consumer({ 
+        groupId: `<%= projectName %>-consumers`,
+        maxWaitTimeInMs: 1000,
+      });
+      
+      await this.producer.connect();
+      await this.consumer.connect();
+<% } else if (messageQueue === 'redis-pubsub') { %>      this.publisher.on('error', this.handleConnectionError.bind(this));
+      this.subscriber.on('error', this.handleConnectionError.bind(this));
+      
+      this.subscriber.on('message', this.handleMessage.bind(this));
+<% } %>
+      
+      this.isConnected = true;
+      this.logger.info('Event bus started successfully');
+      
+    } catch (error) {
+      this.logger.error('Failed to start event bus:', error);
+      throw error;
+    }
+  }
+
+  async publish<T extends DomainEvent>(event: T): Promise<void> {
+    if (!this.isConnected) {
+      throw new Error('Event bus is not connected');
+    }
+
+    try {
+<% if ((messageQueue || 'rabbitmq') === 'rabbitmq') { %>      const exchange = this.config.exchange || 'domain_events';
+      const routingKey = event.eventType;
+      const message = Buffer.from(JSON.stringify({
+        ...event,
+        timestamp: event.occurredOn.toISOString(),
+      }));
+
+      await this.channel!.publish(exchange, routingKey, message, {
+        persistent: true,
+        messageId: event.eventId,
+        timestamp: event.occurredOn.getTime(),
+      });
+<% } else if (messageQueue === 'kafka') { %>      await this.producer!.send({
+        topic: event.eventType,
+        messages: [{
+          key: event.aggregateId,
+          value: JSON.stringify({
+            ...event,
+            timestamp: event.occurredOn.toISOString(),
+          }),
+          timestamp: event.occurredOn.getTime().toString(),
+        }],
+      });
+<% } else if (messageQueue === 'redis-pubsub') { %>      const channel = event.eventType;
+      const message = JSON.stringify({
+        ...event,
+        timestamp: event.occurredOn.toISOString(),
+      });
+      
+      await this.publisher.publish(channel, message);
+<% } %>
+
+      this.logger.debug(`Published event: ${event.eventType}`, { eventId: event.eventId });
+      
+    } catch (error) {
+      this.logger.error(`Failed to publish event: ${event.eventType}`, error);
+      throw error;
+    }
+  }
+
+  async publishBatch<T extends DomainEvent>(events: T[]): Promise<void> {
+    if (!this.isConnected) {
+      throw new Error('Event bus is not connected');
+    }
+
+<% if (messageQueue === 'kafka') { %>    // Kafka supports batch publishing natively
+    const messages = events.map(event => ({
+      topic: event.eventType,
+      messages: [{
+        key: event.aggregateId,
+        value: JSON.stringify({
+          ...event,
+          timestamp: event.occurredOn.toISOString(),
+        }),
+        timestamp: event.occurredOn.getTime().toString(),
+      }],
+    }));
+
+    await this.producer!.sendBatch({
+      topicMessages: messages,
+    });
+<% } else { %>    // For other message queues, publish sequentially
+    // In production, you might want to use transactions
+    for (const event of events) {
+      await this.publish(event);
+    }
+<% } %>
+
+    this.logger.debug(`Published batch of ${events.length} events`);
+  }
+
+  async subscribe<T extends DomainEvent>(
+    eventType: string | string[],
+    handler: EventHandler<T>,
+    options: SubscriptionOptions = {}
+  ): Promise<void> {
+    if (!this.isConnected) {
+      throw new Error('Event bus is not connected');
+    }
+
+    const eventTypes = Array.isArray(eventType) ? eventType : [eventType];
+    
+    for (const type of eventTypes) {
+      if (!this.handlers.has(type)) {
+        this.handlers.set(type, []);
+      }
+      this.handlers.get(type)!.push(handler as EventHandler);
+
+<% if ((messageQueue || 'rabbitmq') === 'rabbitmq') { %>      await this.setupQueueForEventType(type, options);
+<% } else if (messageQueue === 'kafka') { %>      await this.consumer!.subscribe({ topic: type });
+      await this.consumer!.run({
+        eachMessage: async ({ topic, partition, message }) => {
+          await this.handleKafkaMessage(topic, message);
+        },
+      });
+<% } else if (messageQueue === 'redis-pubsub') { %>      await this.subscriber.subscribe(type);
+<% } %>
+    }
+
+    this.logger.info(`Subscribed to events: ${eventTypes.join(', ')}`, {
+      handler: handler.getHandlerName(),
+    });
+  }
+
+<% if ((messageQueue || 'rabbitmq') === 'rabbitmq') { %>  private async setupQueueForEventType(
+    eventType: string,
+    options: SubscriptionOptions
+  ): Promise<void> {
+    const exchange = this.config.exchange || 'domain_events';
+    const queueName = options.queue || `${eventType}_queue`;
+    const dlqName = `${queueName}_dlq`;
+
+    // Setup DLQ first
+    await this.channel!.assertQueue(dlqName, {
+      durable: true,
+      arguments: {
+        'x-message-ttl': options.messageTtl || 86400000, // 24 hours
+      },
+    });
+
+    // Setup main queue with DLX
+    await this.channel!.assertQueue(queueName, {
+      durable: options.durable !== false,
+      exclusive: options.exclusive || false,
+      autoDelete: options.autoDelete || false,
+      arguments: {
+        'x-dead-letter-exchange': `${exchange}_dlx`,
+        'x-dead-letter-routing-key': eventType,
+        'x-max-retries': options.maxRetries || this.config.retryAttempts || 3,
+      },
+    });
+
+    // Bind queue to exchange
+    await this.channel!.bindQueue(queueName, exchange, eventType);
+
+    // Start consuming
+    await this.channel!.consume(queueName, async (msg) => {
+      if (msg) {
+        await this.handleRabbitMessage(eventType, msg);
+      }
+    }, {
+      noAck: false,
+    });
+  }
+<% } %>
+
+  async stop(): Promise<void> {
+    try {
+<% if ((messageQueue || 'rabbitmq') === 'rabbitmq') { %>      if (this.channel) {
+        await this.channel.close();
+        this.channel = null;
+      }
+      if (this.connection) {
+        await this.connection.close();
+        this.connection = null;
+      }
+<% } else if (messageQueue === 'kafka') { %>      if (this.producer) {
+        await this.producer.disconnect();
+        this.producer = null;
+      }
+      if (this.consumer) {
+        await this.consumer.disconnect();
+        this.consumer = null;
+      }
+<% } else if (messageQueue === 'redis-pubsub') { %>      await this.publisher.quit();
+      await this.subscriber.quit();
+<% } %>
+      
+      this.isConnected = false;
+      this.logger.info('Event bus stopped');
+      
+    } catch (error) {
+      this.logger.error('Error stopping event bus:', error);
+      throw error;
+    }
+  }
+
+  async isHealthy(): Promise<boolean> {
+    return this.isConnected;
+  }
+
+  // ... Additional helper methods for message handling
+}
+```
+
+### Usage Example
+```bash
+bun run hypergen modular-architecture
+# Prompts:
+# Project name: enterprise-platform
+# Architecture pattern: Clean Architecture (Hexagonal)
+# Select modules: [x] User Management, [x] Auth, [x] Payments, [x] Notifications
+# Integration patterns: [x] Message Queues, [x] Database per Service, [x] Saga
+
+# Generated: 200+ files in modular architecture
+```
+
+<Accordion title="Advanced Pattern Breakdown">
+This pattern demonstrates several advanced concepts:
+
+- **Template Orchestration**: Master template coordinates multiple sub-templates
+- **Dynamic Composition**: Modules and patterns are selected and combined dynamically
+- **Cross-Template Communication**: Templates share context and generated artifacts
+- **Architecture-Aware Generation**: Different patterns generate different structures
+- **Post-Generation Hooks**: Automated documentation and configuration generation
+- **Error Handling**: Comprehensive error tracking and recovery
+</Accordion>
+
+---
+
+## Conditional Template Logic
+
+### Smart Template with Advanced Logic
+
+Templates that adapt behavior based on complex conditions and context analysis.
+
+```yaml title="template.yml"
+name: smart-template
+description: Advanced template with conditional logic and context awareness
+variables:
+  - name: projectType
+    message: Project type
+    type: list
+    choices:
+      - { name: "Startup MVP", value: "startup" }
+      - { name: "Enterprise Application", value: "enterprise" }
+      - { name: "Open Source Library", value: "library" }
+      - { name: "Microservice", value: "microservice" }
+  - name: teamSize
+    message: Development team size
+    type: list
+    choices:
+      - { name: "Solo (1 developer)", value: "solo" }
+      - { name: "Small (2-5 developers)", value: "small" }
+      - { name: "Medium (6-15 developers)", value: "medium" }
+      - { name: "Large (15+ developers)", value: "large" }
+  - name: timeframe
+    message: Development timeframe
+    type: list
+    choices:
+      - { name: "Rush (< 1 month)", value: "rush" }
+      - { name: "Normal (1-6 months)", value: "normal" }
+      - { name: "Long-term (6+ months)", value: "long-term" }
+  - name: complianceLevel
+    message: Compliance requirements
+    type: list
+    choices:
+      - { name: "Basic", value: "basic" }
+      - { name: "GDPR", value: "gdpr" }
+      - { name: "HIPAA", value: "hipaa" }
+      - { name: "SOX", value: "sox" }
+      - { name: "All (Enterprise)", value: "enterprise" }
+```
+
+**Smart Configuration Generator** (`templates/smart-config.js.ejs.t`)
+```javascript
+---
+to: _templates/smart-config.js
+---
+/**
+ * Smart Template Configuration Generator
+ * Analyzes project context and generates appropriate configurations
+ */
+
+class SmartConfigGenerator {
+  constructor(answers) {
+    this.answers = answers;
+    this.context = this.analyzeContext();
+    this.recommendations = this.generateRecommendations();
+  }
+
+  analyzeContext() {
+    const context = {
+      complexity: this.calculateComplexity(),
+      performanceRequirements: this.assessPerformanceNeeds(),
+      securityRequirements: this.assessSecurityNeeds(),
+      scalabilityNeeds: this.assessScalabilityNeeds(),
+      maintenanceLevel: this.assessMaintenanceNeeds(),
+    };
+
+    return context;
+  }
+
+  calculateComplexity() {
+    let score = 0;
+    
+    // Project type complexity
+    const projectComplexity = {
+      startup: 2,
+      enterprise: 8,
+      library: 6,
+      microservice: 5
+    };
+    score += projectComplexity[this.answers.projectType] || 0;
+
+    // Team size impact
+    const teamComplexity = {
+      solo: 1,
+      small: 3,
+      medium: 6,
+      large: 8
+    };
+    score += teamComplexity[this.answers.teamSize] || 0;
+
+    // Timeframe pressure
+    const timeComplexity = {
+      rush: 2,
+      normal: 5,
+      'long-term': 8
+    };
+    score += timeComplexity[this.answers.timeframe] || 0;
+
+    // Compliance complexity
+    const complianceComplexity = {
+      basic: 1,
+      gdpr: 4,
+      hipaa: 6,
+      sox: 7,
+      enterprise: 10
+    };
+    score += complianceComplexity[this.answers.complianceLevel] || 0;
+
+    return Math.min(score, 10); // Cap at 10
+  }
+
+  generateRecommendations() {
+    const recommendations = {
+      architecturePattern: this.recommendArchitecture(),
+      testingStrategy: this.recommendTesting(),
+      deploymentStrategy: this.recommendDeployment(),
+      monitoringLevel: this.recommendMonitoring(),
+      securityMeasures: this.recommendSecurity(),
+      performanceOptimizations: this.recommendPerformance(),
+      developmentTools: this.recommendTools(),
+    };
+
+    return recommendations;
+  }
+
+  recommendArchitecture() {
+    if (this.context.complexity <= 3) {
+      return {
+        pattern: 'monolith',
+        justification: 'Simple monolithic architecture for quick development and easy deployment',
+        frameworks: ['express', 'fastify'],
+        database: ['sqlite', 'postgres']
+      };
+    } else if (this.context.complexity <= 6) {
+      return {
+        pattern: 'modular-monolith',
+        justification: 'Modular monolith for organized code with future microservice migration path',
+        frameworks: ['nestjs', 'express-with-modules'],
+        database: ['postgres', 'mysql']
+      };
+    } else if (this.context.complexity <= 8) {
+      return {
+        pattern: 'microservices-lite',
+        justification: 'Lightweight microservices with shared infrastructure',
+        frameworks: ['nestjs', 'koa'],
+        database: ['postgres-per-service', 'mongodb']
+      };
+    } else {
+      return {
+        pattern: 'full-microservices',
+        justification: 'Full microservices architecture with comprehensive tooling',
+        frameworks: ['nestjs', 'express', 'fastify'],
+        database: ['postgres-per-service', 'event-store']
+      };
+    }
+  }
+
+  recommendTesting() {
+    const strategies = [];
+
+    if (this.answers.timeframe === 'rush') {
+      strategies.push('unit-tests-critical');
+      strategies.push('integration-tests-basic');
+    } else if (this.context.complexity >= 6) {
+      strategies.push('unit-tests-comprehensive');
+      strategies.push('integration-tests-full');
+      strategies.push('e2e-tests');
+      strategies.push('contract-tests');
+    } else {
+      strategies.push('unit-tests-standard');
+      strategies.push('integration-tests-key-paths');
+    }
+
+    if (this.answers.complianceLevel !== 'basic') {
+      strategies.push('security-tests');
+      strategies.push('compliance-tests');
+    }
+
+    return {
+      strategies,
+      coverage: this.context.complexity >= 7 ? 90 : 80,
+      tools: this.recommendTestingTools()
+    };
+  }
+
+  recommendSecurity() {
+    const measures = ['input-validation', 'error-handling'];
+
+    if (this.answers.complianceLevel === 'gdpr') {
+      measures.push('data-encryption', 'audit-logging', 'consent-management');
+    } else if (this.answers.complianceLevel === 'hipaa') {
+      measures.push('data-encryption', 'access-controls', 'audit-logging', 'data-backup');
+    } else if (this.answers.complianceLevel === 'sox') {
+      measures.push('audit-logging', 'access-controls', 'data-integrity', 'change-tracking');
+    } else if (this.answers.complianceLevel === 'enterprise') {
+      measures.push('data-encryption', 'access-controls', 'audit-logging', 
+                   'consent-management', 'data-backup', 'data-integrity', 
+                   'change-tracking', 'security-headers', 'rate-limiting');
+    }
+
+    if (this.context.complexity >= 6) {
+      measures.push('authentication-middleware', 'authorization-policies');
+    }
+
+    return {
+      measures,
+      authStrategy: this.recommendAuthStrategy(),
+      encryptionLevel: this.answers.complianceLevel === 'basic' ? 'standard' : 'enterprise'
+    };
+  }
+
+  getConfigForTemplate(templateName) {
+    return {
+      ...this.answers,
+      context: this.context,
+      recommendations: this.recommendations,
+      shouldGenerate: this.shouldGenerateTemplate(templateName),
+      templateConfig: this.getTemplateSpecificConfig(templateName)
+    };
+  }
+
+  shouldGenerateTemplate(templateName) {
+    const rules = {
+      'docker': this.answers.teamSize !== 'solo' || this.context.complexity >= 5,
+      'kubernetes': this.context.complexity >= 7,
+      'monitoring': this.context.complexity >= 4,
+      'security-middleware': this.answers.complianceLevel !== 'basic',
+      'audit-logging': ['gdpr', 'hipaa', 'sox', 'enterprise'].includes(this.answers.complianceLevel),
+      'performance-monitoring': this.context.performanceRequirements >= 6,
+      'load-testing': this.context.scalabilityNeeds >= 7,
+      'documentation': this.answers.teamSize === 'large' || this.answers.projectType === 'library',
+    };
+
+    return rules[templateName] !== false;
+  }
+}
+
+module.exports = { SmartConfigGenerator };
+```
+
+**Conditional Main Template** (`templates/conditional-main.ejs.t`)
+```typescript
+---
+to: src/app.ts
+condition: <%= shouldGenerate('main-app') %>
+---
+<%
+const config = h.smartConfig.getConfigForTemplate('main-app');
+const arch = config.recommendations.architecturePattern;
+const security = config.recommendations.securityMeasures;
+%>
+/**
+ * Application Entry Point
+ * Generated for <%= projectType %> project with <%= teamSize %> team
+ * Architecture: <%= arch.pattern %>
+ * Complexity Score: <%= context.complexity %>/10
+ */
+
+import express from 'express';
+<% if (arch.pattern.includes('microservice')) { %>import { createProxyMiddleware } from 'http-proxy-middleware';<% } %>
+<% if (security.measures.includes('rate-limiting')) { %>import rateLimit from 'express-rate-limit';<% } %>
+<% if (security.measures.includes('security-headers')) { %>import helmet from 'helmet';<% } %>
+<% if (recommendations.monitoringLevel >= 6) { %>import prometheus from 'prom-client';<% } %>
+<% if (complianceLevel !== 'basic') { %>import { auditLogger } from './middleware/audit-logger';<% } %>
+
+const app = express();
+
+<% if (security.measures.includes('security-headers')) { %>
+// Security headers (recommended for <%= complianceLevel %> compliance)
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      <% if (complianceLevel === 'enterprise') { %>styleSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:"],<% } else { %>styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],<% } %>
+    },
+  },
+  <% if (['hipaa', 'sox', 'enterprise'].includes(complianceLevel)) { %>hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },<% } %>
+}));
+<% } %>
+
+<% if (security.measures.includes('rate-limiting')) { %>
+// Rate limiting (team size: <%= teamSize %>, expected load: <%= context.scalabilityNeeds %>)
+const limiter = rateLimit({
+  windowMs: <%= teamSize === 'solo' ? '60' : '15' %> * 60 * 1000, // <%= teamSize === 'solo' ? '1 hour' : '15 minutes' %>
+  max: <%= context.scalabilityNeeds <= 3 ? '100' : context.scalabilityNeeds <= 6 ? '1000' : '10000' %>,
+  message: 'Too many requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  <% if (['hipaa', 'sox', 'enterprise'].includes(complianceLevel)) { %>keyGenerator: (req) => {
+    // Enhanced key generation for compliance
+    return req.ip + req.get('User-Agent');
+  },<% } %>
+});
+
+app.use(limiter);
+<% } %>
+
+// Body parsing
+app.use(express.json({ 
+  limit: '<%= context.scalabilityNeeds >= 7 ? '50mb' : '10mb' %>',
+  <% if (complianceLevel !== 'basic') { %>verify: (req, res, buf) => {
+    // Store raw body for audit logging
+    req.rawBody = buf;
+  }<% } %>
+}));
+
+<% if (complianceLevel !== 'basic') { %>
+// Audit logging for compliance
+app.use(auditLogger({
+  <% if (complianceLevel === 'gdpr') { %>includePersonalData: false,
+  dataRetentionDays: 365,<% } %>
+  <% if (complianceLevel === 'hipaa') { %>encryptLogs: true,
+  includeUserActions: true,<% } %>
+  <% if (complianceLevel === 'sox') { %>includeFinancialData: true,
+  immutableLogs: true,<% } %>
+  <% if (complianceLevel === 'enterprise') { %>includePersonalData: false,
+  encryptLogs: true,
+  includeUserActions: true,
+  includeFinancialData: true,
+  immutableLogs: true,
+  dataRetentionDays: 2555, // 7 years<% } %>
+}));
+<% } %>
+
+<% if (recommendations.monitoringLevel >= 6) { %>
+// Prometheus metrics
+const collectDefaultMetrics = prometheus.collectDefaultMetrics;
+collectDefaultMetrics({ timeout: 5000 });
+
+const httpDuration = new prometheus.Histogram({
+  name: 'http_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['route', 'method', 'status'],
+  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10],
+});
+
+// Metrics middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    httpDuration
+      .labels(req.route?.path || req.path, req.method, res.statusCode.toString())
+      .observe(duration);
+  });
+  next();
+});
+
+app.get('/metrics', (req, res) => {
+  res.set('Content-Type', prometheus.register.contentType);
+  res.end(prometheus.register.metrics());
+});
+<% } %>
+
+<% if (arch.pattern === 'monolith') { %>
+// Monolithic routing (recommended for <%= teamSize %> team with <%= timeframe %> timeframe)
+import { userRoutes } from './routes/users';
+import { authRoutes } from './routes/auth';
+<% if (projectType === 'startup') { %>import { apiRoutes } from './routes/api';<% } %>
+
+app.use('/auth', authRoutes);
+app.use('/users', userRoutes);
+<% if (projectType === 'startup') { %>app.use('/api', apiRoutes);<% } %>
+<% } else if (arch.pattern === 'modular-monolith') { %>
+// Modular monolith routing (supports future microservice migration)
+import { loadModules } from './modules/loader';
+
+const modules = await loadModules({
+  pattern: 'modules/*/routes.ts',
+  <% if (timeframe !== 'rush') { %>enableHotReload: true,<% } %>
+  <% if (context.complexity >= 6) { %>enableDependencyInjection: true,<% } %>
+});
+
+modules.forEach(({ path, router }) => {
+  app.use(`/api/${path}`, router);
+});
+<% } else if (arch.pattern.includes('microservice')) { %>
+// Microservices proxy configuration
+const serviceRegistry = {
+  users: process.env.USER_SERVICE_URL || 'http://user-service:3001',
+  orders: process.env.ORDER_SERVICE_URL || 'http://order-service:3002',
+  notifications: process.env.NOTIFICATION_SERVICE_URL || 'http://notification-service:3003',
+};
+
+Object.entries(serviceRegistry).forEach(([service, url]) => {
+  app.use(`/api/${service}`, createProxyMiddleware({
+    target: url,
+    changeOrigin: true,
+    pathRewrite: {
+      [`^/api/${service}`]: '',
+    },
+    <% if (complianceLevel !== 'basic') { %>onProxyReq: (proxyReq, req, res) => {
+      // Add audit headers for compliance
+      proxyReq.setHeader('X-Audit-User', req.user?.id || 'anonymous');
+      proxyReq.setHeader('X-Audit-Session', req.sessionID);
+    },<% } %>
+  }));
+});
+<% } %>
+
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  <% if (context.complexity >= 5) { %>const healthChecks = await Promise.allSettled([
+    // Add specific health checks based on your dependencies
+    <% if (arch.database.includes('postgres')) { %>checkDatabase(),<% } %>
+    <% if (arch.database.includes('redis')) { %>checkRedis(),<% } %>
+    <% if (recommendations.messageQueue) { %>checkMessageQueue(),<% } %>
+  ]);
+
+  const allHealthy = healthChecks.every(check => check.status === 'fulfilled');
+  
+  res.status(allHealthy ? 200 : 503).json({
+    status: allHealthy ? 'healthy' : 'unhealthy',
+    timestamp: new Date().toISOString(),
+    checks: healthChecks.map((check, i) => ({
+      name: ['database', 'redis', 'messageQueue'][i],
+      status: check.status === 'fulfilled' ? 'ok' : 'error',
+      ...(check.status === 'rejected' && { error: check.reason.message }),
+    })),
+  });<% } else { %>res.json({ status: 'ok', timestamp: new Date().toISOString() });<% } %>
+});
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 <%= projectType %> server running on port ${PORT}`);
+  console.log(`📊 Complexity: <%= context.complexity %>/10`);
+  console.log(`🏗️  Architecture: <%= arch.pattern %>`);
+  <% if (complianceLevel !== 'basic') { %>console.log(`🔒 Compliance: <%= complianceLevel %>`);)<% } %>
+});
+```
+
+### Usage Example
+```bash
+bun run hypergen smart-template
+# Prompts:
+# Project type: Enterprise Application
+# Team size: Large (15+ developers)
+# Timeframe: Long-term (6+ months)
+# Compliance: GDPR
+
+# Analyzes context and generates optimized configuration:
+# - Complexity Score: 8/10
+# - Architecture: Full microservices
+# - Security: GDPR-compliant with encryption and audit logging
+# - Testing: Comprehensive with 90% coverage requirement
+# - Generated: Customized templates based on analysis
+```
+
+---
+
+## Template Inheritance
+
+### Hierarchical Template System
+
+Create template hierarchies with inheritance, overrides, and composition.
+
+```yaml title="template.yml"
+name: template-inheritance
+description: Hierarchical template system with inheritance and composition
+variables:
+  - name: baseTemplate
+    message: Base template to extend
+    type: list
+    choices:
+      - name: Web Application Base
+        value: web-app-base
+      - name: API Service Base  
+        value: api-service-base
+      - name: Library Base
+        value: library-base
+      - name: CLI Tool Base
+        value: cli-base
+  - name: extensions
+    message: Template extensions to include
+    type: checkbox
+    choices:
+      - name: Authentication Extension
+        value: auth-extension
+      - name: Database Extension
+        value: database-extension
+      - name: Testing Extension
+        value: testing-extension
+      - name: Docker Extension
+        value: docker-extension
+      - name: CI/CD Extension
+        value: cicd-extension
+  - name: overrides
+    message: Components to override
+    type: checkbox  
+    choices:
+      - name: Error Handling
+        value: error-handling
+      - name: Logging Configuration
+        value: logging
+      - name: Security Middleware
+        value: security
+      - name: API Documentation
+        value: api-docs
+```
+
+**Template Inheritance Engine** (`templates/_inheritance-engine.js.ejs.t`)
+```javascript
+---
+to: _templates/_inheritance-engine.js
+---
+/**
+ * Template Inheritance Engine
+ * Manages hierarchical template relationships, extensions, and overrides
+ */
+
+const fs = require('fs').promises;
+const path = require('path');
+const yaml = require('js-yaml');
+
+class TemplateInheritanceEngine {
+  constructor(config) {
+    this.config = config;
+    this.templateRegistry = new Map();
+    this.extensionRegistry = new Map();
+    this.overrideRegistry = new Map();
+    this.resolutionCache = new Map();
+  }
+
+  async initialize() {
+    await this.loadBaseTemplates();
+    await this.loadExtensions();
+    await this.loadOverrides();
+    await this.resolveInheritanceChain();
+  }
+
+  async loadBaseTemplates() {
+    const baseTemplates = {
+      'web-app-base': {
+        files: [
+          'src/app.ts',
+          'src/server.ts', 
+          'src/routes/index.ts',
+          'package.json',
+          'tsconfig.json'
+        ],
+        dependencies: ['express', 'cors'],
+        devDependencies: ['typescript', '@types/node'],
+        scripts: {
+          'dev': 'ts-node src/server.ts',
+          'build': 'tsc',
+          'start': 'node dist/server.js'
+        },
+        middleware: ['cors', 'express.json'],
+        extensions: ['auth-extension', 'database-extension']
+      },
+      'api-service-base': {
+        extends: 'web-app-base',
+        files: [
+          'src/controllers/health.controller.ts',
+          'src/middleware/validation.middleware.ts',
+          'src/types/api.types.ts'
+        ],
+        dependencies: ['joi', 'swagger-ui-express'],
+        middleware: ['validation', 'swagger'],
+        extensions: ['testing-extension', 'docker-extension']
+      },
+      'library-base': {
+        files: [
+          'src/index.ts',
+          'src/types/index.ts',
+          'package.json',
+          'tsconfig.json',
+          'tsconfig.build.json'
+        ],
+        devDependencies: ['typescript', 'rollup', '@rollup/plugin-typescript'],
+        scripts: {
+          'build': 'rollup -c',
+          'test': 'jest',
+          'prepublishOnly': 'npm run build'
+        },
+        extensions: ['testing-extension']
+      },
+      'cli-base': {
+        files: [
+          'src/cli.ts',
+          'src/commands/index.ts',
+          'src/utils/logger.ts',
+          'package.json'
+        ],
+        dependencies: ['commander', 'chalk', 'inquirer'],
+        devDependencies: ['typescript', '@types/inquirer'],
+        scripts: {
+          'build': 'tsc',
+          'dev': 'ts-node src/cli.ts'
+        },
+        bin: {
+          '<%= projectName %>': 'dist/cli.js'
+        }
+      }
+    };
+
+    for (const [name, template] of Object.entries(baseTemplates)) {
+      this.templateRegistry.set(name, template);
+    }
+  }
+
+  async loadExtensions() {
+    const extensions = {
+      'auth-extension': {
+        files: [
+          'src/middleware/auth.middleware.ts',
+          'src/services/auth.service.ts',
+          'src/types/auth.types.ts',
+          'src/controllers/auth.controller.ts',
+          'src/routes/auth.routes.ts'
+        ],
+        dependencies: ['jsonwebtoken', 'bcryptjs'],
+        devDependencies: ['@types/jsonwebtoken', '@types/bcryptjs'],
+        middleware: ['auth'],
+        routes: ['/auth'],
+        config: {
+          env: ['JWT_SECRET', 'JWT_EXPIRES_IN'],
+          features: ['login', 'register', 'refresh-token']
+        }
+      },
+      'database-extension': {
+        files: [
+          'src/config/database.config.ts',
+          'src/repositories/base.repository.ts',
+          'src/services/database.service.ts'
+        ],
+        dependencies: {
+          postgres: ['pg', 'typeorm'],
+          mysql: ['mysql2', 'typeorm'],
+          mongodb: ['mongoose']
+        },
+        devDependencies: {
+          postgres: ['@types/pg'],
+          mysql: [],
+          mongodb: ['@types/mongoose']
+        },
+        config: {
+          env: ['DATABASE_URL'],
+          migrations: true
+        }
+      },
+      'testing-extension': {
+        files: [
+          'tests/setup.ts',
+          'tests/helpers/test-utils.ts',
+          'jest.config.js'
+        ],
+        devDependencies: ['jest', 'supertest', '@types/jest', '@types/supertest'],
+        scripts: {
+          'test': 'jest',
+          'test:watch': 'jest --watch',
+          'test:coverage': 'jest --coverage'
+        },
+        config: {
+          coverage: {
+            threshold: 80,
+            reporters: ['text', 'lcov', 'html']
+          }
+        }
+      },
+      'docker-extension': {
+        files: [
+          'Dockerfile',
+          'docker-compose.yml',
+          '.dockerignore',
+          'docker/docker-entrypoint.sh'
+        ],
+        scripts: {
+          'docker:build': 'docker build -t <%= projectName %> .',
+          'docker:run': 'docker-compose up',
+          'docker:dev': 'docker-compose -f docker-compose.dev.yml up'
+        }
+      },
+      'cicd-extension': {
+        files: [
+          '.github/workflows/ci.yml',
+          '.github/workflows/cd.yml',
+          'scripts/deploy.sh'
+        ],
+        config: {
+          stages: ['test', 'build', 'deploy'],
+          triggers: ['push', 'pull_request'],
+          environments: ['development', 'staging', 'production']
+        }
+      }
+    };
+
+    for (const [name, extension] of Object.entries(extensions)) {
+      this.extensionRegistry.set(name, extension);
+    }
+  }
+
+  async loadOverrides() {
+    const overrides = {
+      'error-handling': {
+        replaces: ['src/middleware/error.middleware.ts'],
+        files: [
+          'src/middleware/enhanced-error.middleware.ts',
+          'src/types/error.types.ts',
+          'src/utils/error-formatter.ts'
+        ]
+      },
+      'logging': {
+        replaces: ['src/utils/logger.ts'],
+        files: [
+          'src/config/logging.config.ts',
+          'src/services/logger.service.ts',
+          'src/middleware/request-logger.middleware.ts'
+        ],
+        dependencies: ['winston', 'morgan']
+      },
+      'security': {
+        replaces: ['src/middleware/security.middleware.ts'],
+        files: [
+          'src/middleware/advanced-security.middleware.ts',
+          'src/config/security.config.ts'
+        ],
+        dependencies: ['helmet', 'express-rate-limit', 'express-validator']
+      },
+      'api-docs': {
+        replaces: ['src/docs/'],
+        files: [
+          'src/docs/swagger.config.ts',
+          'src/docs/api-spec.yml',
+          'src/middleware/swagger.middleware.ts'
+        ],
+        dependencies: ['swagger-ui-express', 'swagger-jsdoc']
+      }
+    };
+
+    for (const [name, override] of Object.entries(overrides)) {
+      this.overrideRegistry.set(name, override);
+    }
+  }
+
+  async resolveInheritanceChain() {
+    const baseTemplate = this.config.baseTemplate;
+    
+    if (this.resolutionCache.has(baseTemplate)) {
+      return this.resolutionCache.get(baseTemplate);
+    }
+
+    const resolved = await this.resolveTemplate(baseTemplate);
+    this.resolutionCache.set(baseTemplate, resolved);
+    
+    return resolved;
+  }
+
+  async resolveTemplate(templateName) {
+    const template = this.templateRegistry.get(templateName);
+    if (!template) {
+      throw new Error(`Template not found: ${templateName}`);
+    }
+
+    let resolved = { ...template };
+
+    // Handle inheritance (extends)
+    if (template.extends) {
+      const parentTemplate = await this.resolveTemplate(template.extends);
+      resolved = this.mergeTemplates(parentTemplate, resolved);
+    }
+
+    // Apply extensions
+    for (const extensionName of (this.config.extensions || [])) {
+      const extension = this.extensionRegistry.get(extensionName);
+      if (extension) {
+        resolved = this.applyExtension(resolved, extension);
+      }
+    }
+
+    // Apply overrides
+    for (const overrideName of (this.config.overrides || [])) {
+      const override = this.overrideRegistry.get(overrideName);
+      if (override) {
+        resolved = this.applyOverride(resolved, override);
+      }
+    }
+
+    return resolved;
+  }
+
+  mergeTemplates(parent, child) {
+    return {
+      ...parent,
+      ...child,
+      files: [...(parent.files || []), ...(child.files || [])],
+      dependencies: { ...(parent.dependencies || {}), ...(child.dependencies || {}) },
+      devDependencies: { ...(parent.devDependencies || {}), ...(child.devDependencies || {}) },
+      scripts: { ...(parent.scripts || {}), ...(child.scripts || {}) },
+      middleware: [...(parent.middleware || []), ...(child.middleware || [])],
+      routes: [...(parent.routes || []), ...(child.routes || [])],
+      config: this.deepMerge(parent.config || {}, child.config || {}),
+    };
+  }
+
+  applyExtension(template, extension) {
+    return {
+      ...template,
+      files: [...(template.files || []), ...(extension.files || [])],
+      dependencies: this.mergeDependencies(template.dependencies, extension.dependencies),
+      devDependencies: this.mergeDependencies(template.devDependencies, extension.devDependencies),
+      scripts: { ...(template.scripts || {}), ...(extension.scripts || {}) },
+      middleware: [...(template.middleware || []), ...(extension.middleware || [])],
+      routes: [...(template.routes || []), ...(extension.routes || [])],
+      config: this.deepMerge(template.config || {}, extension.config || {}),
+    };
+  }
+
+  applyOverride(template, override) {
+    // Remove files that are being replaced
+    const filteredFiles = (template.files || []).filter(file => 
+      !override.replaces.some(replaced => file.includes(replaced))
+    );
+
+    return {
+      ...template,
+      files: [...filteredFiles, ...(override.files || [])],
+      dependencies: { ...(template.dependencies || {}), ...(override.dependencies || {}) },
+      devDependencies: { ...(template.devDependencies || {}), ...(override.devDependencies || {}) },
+    };
+  }
+
+  getResolvedConfig() {
+    return this.resolutionCache.get(this.config.baseTemplate) || {};
+  }
+
+  // Helper methods
+  deepMerge(target, source) {
+    const result = { ...target };
+    for (const key in source) {
+      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+        result[key] = this.deepMerge(result[key] || {}, source[key]);
+      } else {
+        result[key] = source[key];
+      }
+    }
+    return result;
+  }
+
+  mergeDependencies(target = {}, source = {}) {
+    if (typeof source === 'object' && !Array.isArray(source)) {
+      return { ...target, ...source };
+    }
+    return target;
+  }
+}
+
+module.exports = { TemplateInheritanceEngine };
+```
+
+### Usage Example
+```bash
+bun run hypergen template-inheritance
+# Prompts:
+# Base template: API Service Base
+# Extensions: [x] Authentication, [x] Database, [x] Testing, [x] Docker
+# Overrides: [x] Error Handling, [x] Security
+
+# Resolution chain:
+# 1. web-app-base (parent)
+# 2. api-service-base (extends web-app-base)
+# 3. + auth-extension, database-extension, testing-extension, docker-extension
+# 4. Override error-handling and security components
+# Generated: Composed template with full inheritance chain
+```
+
+---
+
+## What's Next?
+
+These advanced patterns demonstrate enterprise-level template composition and generation strategies. For framework-specific implementations:
+
+- **[Framework Integration](/examples/frameworks)** - React, Vue, Angular, Node.js specific patterns  
+- **[Quick Wins](/examples/quick-wins)** - Simple patterns for immediate productivity
+
+<Note>
+Advanced patterns require careful planning and testing. Start with simpler compositions and gradually build complexity as your team becomes comfortable with the patterns.
+</Note>

@@ -2,7 +2,7 @@ import createDebug from 'debug'
 import ora from 'ora'
 import type { ActionResult } from '../types.js'
 import createResult from './result.js'
-const debug = createDebug('hygen:ops:shell')
+const debug = createDebug('hypergen:ops:shell')
 
 const notEmpty = (x) => x && x.length > 0
 const shell = async (

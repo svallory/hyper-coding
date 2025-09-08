@@ -1,0 +1,396 @@
+---
+title: "hyper init"
+description: "Initialize new projects with optimal setup and AI-augmented development configuration"
+icon: "play"
+---
+
+# hyper init
+
+Initialize a new HyperDev project with intelligent setup, optimal configuration, and AI-augmented development environment.
+
+## Syntax
+
+```bash
+hyper init [template] [options]
+```
+
+## Overview
+
+The `hyper init` command creates a new project with everything you need for AI-augmented development:
+
+- Project structure optimized for your stack
+- Development environment configuration
+- AI provider integration  
+- Template system setup
+- Quality gates and monitoring
+- Team collaboration features
+
+<Info>
+  `hyper init` combines functionality from multiple tools ([DX](/tools/dx), [Gen](/tools/gen)) to provide 
+  a unified project initialization experience.
+</Info>
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--template, -t <name>` | Project template to use | `interactive` | `--template fullstack-saas` |
+| `--ide <name>` | Primary IDE configuration | `cursor` | `--ide vscode` |
+| `--ai-optimized` | Setup AI-optimized environment | `false` | `--ai-optimized` |
+| `--team-config <file>` | Import team configuration | - | `--team-config team.json` |
+| `--interactive, -i` | Interactive setup wizard | `true` | `--interactive` |
+| `--dry-run` | Preview what would be created | `false` | `--dry-run` |
+| `--force` | Overwrite existing files | `false` | `--force` |
+| `--verbose` | Detailed output | `false` | `--verbose` |
+
+## Examples
+
+### Basic Initialization
+
+```bash
+# Interactive setup (default)
+hyper init
+
+# Quick setup with defaults
+hyper init --no-interactive
+```
+
+The interactive setup guides you through:
+1. Project template selection
+2. Stack and framework choices  
+3. AI provider configuration
+4. Development environment setup
+5. Team settings (optional)
+
+### Template-Based Initialization
+
+```bash
+# Use specific template
+hyper init --template fullstack-saas
+
+# Popular templates
+hyper init --template next-app       # Next.js application
+hyper init --template react-lib      # React library
+hyper init --template express-api    # Express API
+hyper init --template minimal        # Minimal setup
+```
+
+<Accordion title="Available Templates">
+| Template | Description | Stack |
+|----------|-------------|-------|
+| `fullstack-saas` | Complete SaaS application | Next.js, TypeScript, Prisma, Auth |
+| `next-app` | Next.js application | Next.js, React, TypeScript |
+| `react-lib` | React component library | React, TypeScript, Storybook |
+| `express-api` | Express REST API | Node.js, Express, TypeScript |
+| `fastify-api` | Fastify REST API | Node.js, Fastify, TypeScript |
+| `react-native` | React Native mobile app | React Native, Expo, TypeScript |
+| `minimal` | Minimal HyperDev setup | Basic structure only |
+</Accordion>
+
+### IDE Integration
+
+```bash
+# Configure for specific IDE
+hyper init --ide cursor              # Cursor IDE (default)
+hyper init --ide vscode              # VS Code
+hyper init --ide jetbrains           # IntelliJ/WebStorm
+
+# AI-optimized setup
+hyper init --ai-optimized --ide cursor
+```
+
+### Team Configuration
+
+```bash
+# Import existing team settings
+hyper init --team-config .hyperdev/team-config.json
+
+# Initialize for team development
+hyper init --template fullstack-saas --team-config team.json
+```
+
+<Accordion title="Team Configuration Example">
+```json
+{
+  "name": "Acme Dev Team",
+  "aiProvider": "openai",
+  "trustThreshold": 8.0,
+  "qualityGates": {
+    "security": "strict",
+    "performance": "standard",
+    "testing": "required"
+  },
+  "templates": {
+    "sources": ["internal", "trusted-community"],
+    "customTemplates": "./team-templates"
+  },
+  "workflows": {
+    "codeReview": "required",
+    "testing": "automated",
+    "deployment": "gitops"
+  }
+}
+```
+</Accordion>
+
+## What Gets Created
+
+### Project Structure
+
+```
+my-project/
+├── hyperdev.config.js      # Project configuration
+├── .hyper/                 # HyperDev workspace
+│   ├── templates/          # Local templates
+│   ├── cache/              # Template cache
+│   ├── epics/              # Project epics
+│   └── reports/            # Generated reports
+├── package.json            # Dependencies
+├── tsconfig.json           # TypeScript config
+├── .gitignore              # Git ignore rules
+├── README.md               # Project documentation
+└── src/                    # Source code
+    ├── components/         # Reusable components
+    ├── pages/              # Application pages
+    ├── api/                # API routes
+    ├── lib/                # Utility libraries
+    └── tests/              # Test files
+```
+
+### Configuration Files
+
+**hyperdev.config.js**
+```javascript
+export default {
+  // AI Configuration
+  aiProvider: 'openai',
+  aiModel: 'gpt-4',
+  
+  // Template Configuration
+  templateSources: [
+    'official',
+    'community',
+    './local-templates'
+  ],
+  trustThreshold: 8.0,
+  
+  // Development Configuration
+  qualityGates: {
+    security: 'strict',
+    performance: 'standard',
+    testing: 'required'
+  },
+  
+  // IDE Integration
+  ide: {
+    primary: 'cursor',
+    extensions: ['hyperdev', 'copilot'],
+    settings: {
+      aiAssistance: true,
+      codeGeneration: true
+    }
+  }
+};
+```
+
+### Development Environment
+
+The init command sets up:
+
+1. **Package Management**: Configures bun/npm with optimal settings
+2. **TypeScript**: Full type safety with strict configuration  
+3. **Linting & Formatting**: ESLint, Prettier, and Biome
+4. **Testing**: Vitest or Jest with coverage reporting
+5. **Git Hooks**: Pre-commit hooks for quality checks
+6. **CI/CD**: GitHub Actions or similar workflows
+7. **Documentation**: Auto-generated docs and README
+
+## Advanced Usage
+
+### Custom Templates
+
+```bash
+# Use local template
+hyper init --template ./my-custom-template
+
+# Use remote template
+hyper init --template github:username/repo-template
+
+# Use npm template
+hyper init --template @company/project-template
+```
+
+### Environment-Specific Setup
+
+```bash
+# Development environment
+hyper init --template saas-app --env development
+
+# Production-ready setup
+hyper init --template saas-app --env production --team-config prod.json
+
+# Staging environment
+hyper init --template saas-app --env staging
+```
+
+### Monorepo Initialization
+
+```bash
+# Initialize monorepo structure
+hyper init --template monorepo-base
+
+# Add workspace packages
+hyper init --template api-package --workspace packages/api
+hyper init --template ui-package --workspace packages/ui
+```
+
+## Integration with HyperDev Workflow
+
+### Next Steps After Init
+
+The `hyper init` command prepares your project for the full HyperDev workflow:
+
+<Steps>
+  <Step title="Verify Setup">
+    ```bash
+    hyper status                    # Check project health
+    ```
+  </Step>
+  <Step title="Plan Your Features">
+    ```bash
+    hyper plan                      # Start strategic planning
+    ```
+  </Step>
+  <Step title="Generate Code">
+    ```bash
+    hyper generate component        # Generate your first component
+    ```
+  </Step>
+  <Step title="Start Monitoring">
+    ```bash
+    hyper develop --watch          # Begin development monitoring
+    ```
+  </Step>
+</Steps>
+
+### Integration Commands
+
+```bash
+# Complete project setup flow
+hyper init --template fullstack-saas
+hyper plan create --name "User Authentication"
+hyper generate auth-system --epic "User Authentication"
+hyper develop --watch --focus auth
+```
+
+## Configuration
+
+### Global Settings Impact
+
+Your global configuration affects init behavior:
+
+```bash
+# Set defaults for all new projects
+hyper config set default-template fullstack-saas
+hyper config set default-ide cursor  
+hyper config set ai-provider openai
+
+# These become defaults for hyper init
+```
+
+### Project-Specific Overrides
+
+```bash
+# Override global defaults for this project
+hyper init --template minimal --ide vscode --ai-provider anthropic
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Template not found">
+    **Problem**: `Template 'my-template' not found`
+    
+    **Solutions**:
+    ```bash
+    # List available templates
+    hyper list templates
+    
+    # Search for similar templates
+    hyper search "my-template"
+    
+    # Update template cache
+    hyper cache clear && hyper init
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission errors during setup">
+    **Problem**: Permission denied when creating files
+    
+    **Solutions**:
+    ```bash
+    # Check directory permissions
+    ls -la
+    
+    # Use different directory
+    mkdir ~/my-project && cd ~/my-project && hyper init
+    
+    # Run with elevated permissions (if necessary)
+    sudo hyper init --force
+    ```
+  </Accordion>
+  
+  <Accordion title="AI provider not configured">
+    **Problem**: AI functionality not working after init
+    
+    **Solutions**:
+    ```bash
+    # Configure AI provider
+    export OPENAI_API_KEY="your-key"
+    hyper config set ai-provider openai
+    
+    # Test AI connection
+    hyper generate --test-ai-connection
+    ```
+  </Accordion>
+  
+  <Accordion title="IDE integration failing">
+    **Problem**: IDE features not working correctly
+    
+    **Solutions**:
+    ```bash
+    # Reconfigure IDE
+    hyper dx setup --ide cursor
+    
+    # Check IDE configuration
+    hyper config list | grep ide
+    
+    # Reset IDE settings
+    hyper config set default-ide cursor --force
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper generate" href="/cli/commands/workflow/generate">
+    Generate code after project initialization
+  </Card>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Plan your project architecture and features
+  </Card>
+  <Card title="hyper status" href="/cli/commands/discovery/status">
+    Check project health and setup status
+  </Card>
+  <Card title="hyper dx" href="/cli/commands/tools/dx">
+    Advanced developer experience configuration
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Project Initialization Workflow](/cli/workflows/project-initialization)
+- [Global Configuration](/cli/configuration/global-config)
+- [Template System](/cli/configuration/template-config)
+- [IDE Integration](/cli/configuration/ide-integration)

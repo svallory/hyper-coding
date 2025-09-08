@@ -1,0 +1,311 @@
+---
+title: "Command Reference"
+description: "Complete reference for all HyperDev CLI commands, organized by category and workflow"
+icon: "list"
+---
+
+# Command Reference
+
+The HyperDev CLI provides a comprehensive set of commands organized into logical categories that follow your development workflow. All commands use the unified `hyper` entry point with intuitive subcommands.
+
+## Command Categories
+
+### 🚀 Workflow Commands
+
+Primary commands that follow your natural development workflow:
+
+<CardGroup cols={2}>
+  <Card title="hyper init" icon="play" href="/cli/commands/workflow/init">
+    Initialize new projects with optimal setup and configuration
+  </Card>
+  <Card title="hyper gen" icon="code" href="/cli/commands/workflow/generate">
+    AI-augmented code generation from templates and patterns
+  </Card>
+  <Card title="hyper plan" icon="map" href="/cli/commands/workflow/plan">
+    Strategic planning and architecture design with epics
+  </Card>
+  <Card title="hyper dev" icon="monitor" href="/cli/commands/workflow/develop">
+    Real-time development monitoring and AI assistance
+  </Card>
+  <Card title="hyper monitor" icon="chart-line" href="/cli/commands/workflow/monitor">
+    Performance monitoring and team analytics dashboard
+  </Card>
+</CardGroup>
+
+### 🔍 Discovery Commands
+
+Find and explore resources across the HyperDev ecosystem:
+
+<CardGroup cols={3}>
+  <Card title="hyper search" icon="search" href="/cli/commands/discovery/search">
+    Universal search for templates, patterns, and solutions
+  </Card>
+  <Card title="hyper list" icon="list" href="/cli/commands/discovery/list">
+    List available resources with filtering and sorting
+  </Card>
+  <Card title="hyper status" icon="pulse" href="/cli/commands/discovery/status">
+    Project health and progress overview
+  </Card>
+</CardGroup>
+
+### 🛠️ Advanced Tool Access
+
+Direct access to the five core HyperDev tools for power users:
+
+<CardGroup cols={2}>
+  <Card title="hyper gen" icon="code" href="/cli/commands/tools/gen">
+    Advanced code generation tools and template management
+  </Card>
+  <Card title="hyper epics" icon="map" href="/cli/commands/tools/epics">
+    Strategic planning and architecture tools
+  </Card>
+  <Card title="hyper dev" icon="monitor" href="/cli/commands/tools/dev">
+    Development monitoring and control system
+  </Card>
+  <Card title="hyper dx" icon="wrench" href="/cli/commands/tools/dx">
+    Developer experience optimization tools
+  </Card>
+  <Card title="hyper dash" icon="chart-line" href="/cli/commands/tools/dash">
+    Monitoring and team analytics platform
+  </Card>
+</CardGroup>
+
+## Command Patterns
+
+### Consistent Structure
+All HyperDev CLI commands follow predictable patterns:
+
+```bash
+hyper [command] [subcommand] [options] [arguments]
+```
+
+**Examples:**
+```bash
+hyper init --template fullstack      # Simple workflow command
+hyper gen component --name User # Generate with options
+hyper plan create --name "Auth"      # Subcommand with arguments
+hyper dev watch --focus api          # Advanced tool with options
+```
+
+### Common Options
+
+These options work across most commands:
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--help` | Show command help | `hyper gen --help` |
+| `--verbose` | Detailed output | `hyper init --verbose` |
+| `--dry-run` | Preview without changes | `hyper gen --dry-run` |
+| `--json` | JSON format output | `hyper status --json` |
+| `--interactive` | Interactive mode | `hyper init --interactive` |
+
+### Help System
+
+Get help at any level:
+
+```bash
+# Global help
+hyper --help
+
+# Category help
+hyper gen --help
+hyper plan --help
+
+# Subcommand help
+hyper plan create --help
+hyper dev watch --help
+
+# Topic help
+hyper help workflows
+hyper help templates
+hyper help configuration
+```
+
+## Quick Command Map
+
+### From HyperDev Tools to CLI Commands
+
+If you're familiar with HyperDev tools, here's how they map to CLI commands:
+
+| Tool | Primary CLI Command | Advanced CLI Access |
+|------|-------------------|-------------------|
+| [Gen](/tools/gen) | `hyper gen` | `hyper gen` |
+| [Epics](/tools/epics) | `hyper plan` | `hyper epics` |
+| [Dev](/tools/dev) | `hyper dev` | `hyper dev` |
+| [DX](/tools/dx) | `hyper init` | `hyper dx` |
+| [Dash](/tools/dash) | `hyper monitor` | `hyper dash` |
+
+### Most Common Commands
+
+Commands you'll use most frequently:
+
+```bash
+# Project setup
+hyper init                          # Initialize new project
+hyper status                        # Check project health
+
+# Code generation  
+hyper search "react component"      # Find templates
+hyper gen component --name User # Generate code
+
+# Planning and architecture
+hyper plan                          # Start planning session
+hyper plan create --name "Feature"  # Create new epic
+
+# Development workflow
+hyper dev --watch               # Monitor development
+hyper gen --context "fix bug"  # Generate with AI context
+```
+
+## Command Categories in Detail
+
+### Workflow Commands: Your Daily Tools
+
+These commands form the core of your daily HyperDev workflow:
+
+1. **`hyper init`** - Project initialization with intelligent setup
+2. **`hyper gen`** - AI-augmented code generation
+3. **`hyper plan`** - Strategic planning and epic management  
+4. **`hyper dev`** - Real-time development monitoring
+5. **`hyper monitor`** - Performance and team analytics
+
+<Info>
+  **Workflow commands** are designed for daily use and provide the most common functionality with sensible defaults.
+  For advanced features, use the corresponding **tool commands**.
+</Info>
+
+### Discovery Commands: Find What You Need
+
+Essential for navigating the HyperDev ecosystem:
+
+- **`hyper search`** - Find templates, patterns, documentation, and solutions
+- **`hyper list`** - Browse available resources with filtering
+- **`hyper status`** - Get project health and progress overview
+
+### Tool Commands: Advanced Access
+
+Direct access to full tool capabilities:
+
+- **`hyper gen`** - Complete code generation toolkit
+- **`hyper epics`** - Full strategic planning suite
+- **`hyper dev`** - Development monitoring and control
+- **`hyper dx`** - Developer experience optimization
+- **`hyper dash`** - Analytics and monitoring platform
+
+## Usage Patterns
+
+### Beginner Workflow
+```bash
+hyper init                    # Start new project
+hyper gen component      # Generate code
+hyper plan                    # Plan features
+hyper status                  # Check progress
+```
+
+### Intermediate Workflow  
+```bash
+hyper search "api template"   # Find resources
+hyper gen api --context "user auth"
+hyper plan create --name "Authentication"
+hyper dev --watch --focus auth
+```
+
+### Advanced Workflow
+```bash
+hyper gen search --trust-level 9
+hyper gen compose --templates api,ui,tests  
+hyper epics arch --diagram system
+hyper dev validate --security --performance
+hyper dash export --format json --team
+```
+
+## Command Composition
+
+Commands work together naturally:
+
+```bash
+# Complete feature development flow
+hyper search "user management" 
+hyper plan create --name "User Management"
+hyper gen feature --name user-mgmt
+hyper dev --watch --focus user
+hyper status --progress
+```
+
+## Error Handling
+
+HyperDev provides intelligent error messages with suggestions:
+
+```bash
+$ hyper gen unknwon-template
+Error: Template 'unknwon-template' not found
+
+Did you mean:
+  - unknown-template (trust: 8.5)
+  - react-component (trust: 9.2) 
+  - api-template (trust: 8.9)
+
+Try:
+  hyper search "unknwon-template"
+  hyper list templates --filter component
+  hyper gen react-component
+
+Need help? Run: hyper help templates
+```
+
+## Configuration Impact
+
+Commands respect your configuration settings:
+
+```bash
+# Global settings affect all commands
+hyper config set default-ide cursor
+hyper config set ai-provider openai
+hyper config set trust-threshold 8
+
+# Project settings override global ones  
+hyper init --ide vscode     # Override default IDE
+hyper gen --trust-level 9  # Override trust threshold
+```
+
+## Next Steps
+
+<Steps>
+  <Step title="Explore Workflow Commands">
+    Start with the [workflow commands](/cli/commands/workflow/init) you'll use daily
+  </Step>
+  <Step title="Learn Discovery Commands">
+    Master [finding resources](/cli/commands/discovery/search) efficiently
+  </Step>
+  <Step title="Advanced Tool Access">
+    Dive into [advanced tool commands](/cli/commands/tools/gen) for power users
+  </Step>
+  <Step title="See Complete Workflows">
+    Check out [workflow guides](/cli/workflows/overview) for end-to-end examples
+  </Step>
+</Steps>
+
+## Quick Reference
+
+### Command Hierarchy
+```
+hyper
+├── init                    # Project initialization
+├── generate                # Code generation  
+├── plan                    # Strategic planning
+├── develop                 # Development monitoring
+├── monitor                 # Performance monitoring
+├── search                  # Universal search
+├── list                    # List resources
+├── status                  # Project status
+├── gen                     # Advanced generation
+├── epics                   # Advanced planning  
+├── dev                     # Advanced development
+├── dx                      # Developer experience
+├── dash                    # Advanced monitoring
+├── config                  # Configuration
+├── help                    # Help system
+└── --help                  # Global help
+```
+
+Ready to dive into specific commands? Pick a category above or explore the [workflow guides](/cli/workflows/overview) to see commands in action.

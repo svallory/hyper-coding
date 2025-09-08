@@ -224,7 +224,7 @@ const resolveTemplates = (
   // Append a config for the local directory
   configs.push({
     config: {
-      templates: pathResolve(cwd, '_templates'),
+      templates: pathResolve(cwd, 'recipes'),
     },
     source: 'hypergen default config',
   })
@@ -249,7 +249,7 @@ const resolveTemplates = (
         3. The following paths from the 'templates' config option (all missing) ${missingPaths
         .map((t) => `      - ${t.path}`)
         .join('\n')}
-        4. in the current folder (${cwd}) from a '_templates' folder
+        4. in the current folder (${cwd}) from a 'recipes' folder
       `,
     )
   }

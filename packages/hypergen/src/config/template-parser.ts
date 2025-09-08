@@ -9,6 +9,7 @@ import fs from 'fs'
 import path from 'path'
 import yaml from 'js-yaml'
 import { ErrorHandler, ErrorCode, withErrorHandling, validateParameter } from '../errors/hypergen-errors.js'
+import type { RecipeConfig, RecipeStepUnion, ToolType } from '../recipe-engine/types.js'
 
 export interface TemplateVariable {
   type: 'string' | 'number' | 'boolean' | 'enum' | 'array' | 'object' | 'file' | 'directory'
@@ -58,6 +59,8 @@ export interface TemplateConfig {
   examples?: TemplateExample[]
   dependencies?: string[] | TemplateDependency[] // Support both string[] and full dependency objects
   outputs?: string[]
+  // V8 Recipe Step System - New!
+  steps?: RecipeStepUnion[] // Recipe steps for V8 system
   // Advanced composition features
   extends?: string // Template inheritance
   includes?: TemplateInclude[] // Template composition
@@ -76,6 +79,14 @@ export interface TemplateConfig {
     post?: string[]
     error?: string[]
   }
+  // V8 Recipe execution settings
+  settings?: {
+    timeout?: number
+    retries?: number
+    continueOnError?: boolean
+    maxParallelSteps?: number
+    workingDir?: string
+  }
 }
 
 export interface ParsedTemplate {
@@ -88,7 +99,9 @@ export interface ParsedTemplate {
 
 export class TemplateParser {
   private static readonly SUPPORTED_VERSIONS = ['1.0.0']
-  private static readonly VALID_VARIABLE_TYPES = ['string', 'number', 'boolean', 'enum', 'array', 'object']
+  private static readonly VALID_VARIABLE_TYPES = ['string', 'number', 'boolean', 'enum', 'array', 'object', 'file', 'directory']
+  private static readonly VALID_TOOL_TYPES: ToolType[] = ['template', 'action', 'codemod', 'recipe']
+  private static readonly VALID_STEP_STATUSES = ['pending', 'running', 'completed', 'failed', 'skipped', 'cancelled']
 
   /**
    * Parse a template.yml file and return validated configuration
@@ -250,6 +263,20 @@ export class TemplateParser {
     // Validate hooks
     if (parsed.hooks) {
       config.hooks = this.validateHooks(parsed.hooks, warnings)
+    }
+
+    // V8 Recipe Step System validation
+    if (parsed.steps) {
+      if (Array.isArray(parsed.steps)) {
+        config.steps = this.validateSteps(parsed.steps, config.variables, errors, warnings)
+      } else {
+        warnings.push('Steps should be an array')
+      }
+    }
+
+    // V8 Recipe settings validation
+    if (parsed.settings) {
+      config.settings = this.validateSettings(parsed.settings, warnings)
     }
 
     return config
@@ -649,6 +676,476 @@ export class TemplateParser {
   }
 
   /**
+   * Validate recipe steps array (V8 Recipe Step System)
+   */
+  private static validateSteps(
+    steps: any[],
+    variables: Record<string, TemplateVariable>,
+    errors: string[],
+    warnings: string[]
+  ): RecipeStepUnion[] {
+    const validSteps: RecipeStepUnion[] = []
+    const stepNames = new Set<string>()
+    const stepDependencies = new Map<string, string[]>()
+
+    for (const [index, step] of steps.entries()) {
+      if (!step || typeof step !== 'object') {
+        errors.push(`Step ${index + 1} must be an object`)
+        continue
+      }
+
+      const validStep = this.validateStep(step, index + 1, variables, errors, warnings)
+      if (validStep) {
+        // Check for duplicate step names
+        if (stepNames.has(validStep.name)) {
+          errors.push(`Duplicate step name: '${validStep.name}'`)
+        } else {
+          stepNames.add(validStep.name)
+        }
+
+        validSteps.push(validStep)
+
+        // Track dependencies for circular dependency check
+        if (validStep.dependsOn) {
+          stepDependencies.set(validStep.name, validStep.dependsOn)
+        }
+      }
+    }
+
+    // Check for circular dependencies
+    this.validateStepDependencies(stepDependencies, errors)
+
+    // Validate step dependencies reference existing steps
+    this.validateStepDependencyReferences(stepDependencies, stepNames, warnings)
+
+    return validSteps
+  }
+
+  /**
+   * Validate individual recipe step
+   */
+  private static validateStep(
+    step: any,
+    index: number,
+    variables: Record<string, TemplateVariable>,
+    errors: string[],
+    warnings: string[]
+  ): RecipeStepUnion | null {
+    // Validate required fields
+    if (!step.name || typeof step.name !== 'string') {
+      errors.push(`Step ${index} must have a name (string)`)
+      return null
+    }
+
+    if (!step.tool || !this.VALID_TOOL_TYPES.includes(step.tool)) {
+      errors.push(`Step '${step.name}' must have a valid tool type (${this.VALID_TOOL_TYPES.join(', ')})`)
+      return null
+    }
+
+    // Base step configuration
+    const baseStep = {
+      name: step.name,
+      tool: step.tool as ToolType
+    }
+
+    // Validate optional base fields
+    if (step.description && typeof step.description === 'string') {
+      (baseStep as any).description = step.description
+    }
+
+    if (step.when && typeof step.when === 'string') {
+      // Basic condition validation - check if it looks like a valid expression
+      if (this.validateConditionExpression(step.when)) {
+        (baseStep as any).when = step.when
+      } else {
+        (warnings as string[]).push(`Step '${step.name}' has potentially invalid condition expression`)
+        (baseStep as any).when = step.when // Still include it
+      }
+    }
+
+    if (step.dependsOn) {
+      if (Array.isArray(step.dependsOn)) {
+        const validDeps = step.dependsOn.filter(dep => typeof dep === 'string')
+        if (validDeps.length !== step.dependsOn.length) {
+          warnings.push(`Step '${step.name}' has some invalid dependencies (must be strings)`)
+        }
+        if (validDeps.length > 0) {
+          (baseStep as any).dependsOn = validDeps
+        }
+      } else {
+        warnings.push(`Step '${step.name}' dependsOn should be an array of strings`)
+      }
+    }
+
+    if (step.parallel !== undefined && typeof step.parallel === 'boolean') {
+      (baseStep as any).parallel = step.parallel
+    }
+
+    if (step.continueOnError !== undefined && typeof step.continueOnError === 'boolean') {
+      (baseStep as any).continueOnError = step.continueOnError
+    }
+
+    if (step.timeout !== undefined && typeof step.timeout === 'number' && step.timeout > 0) {
+      (baseStep as any).timeout = step.timeout
+    }
+
+    if (step.retries !== undefined && typeof step.retries === 'number' && step.retries >= 0) {
+      (baseStep as any).retries = step.retries
+    }
+
+    if (step.tags && Array.isArray(step.tags)) {
+      const validTags = step.tags.filter(tag => typeof tag === 'string')
+      if (validTags.length > 0) {
+        (baseStep as any).tags = validTags
+      }
+    }
+
+    if (step.variables && typeof step.variables === 'object' && step.variables !== null) {
+      (baseStep as any).variables = step.variables
+    }
+
+    if (step.environment && typeof step.environment === 'object' && step.environment !== null) {
+      (baseStep as any).environment = step.environment
+    }
+
+    // Tool-specific validation
+    switch (step.tool) {
+      case 'template':
+        return this.validateTemplateStep(baseStep, step, errors, warnings)
+      case 'action':
+        return this.validateActionStep(baseStep, step, errors, warnings)
+      case 'codemod':
+        return this.validateCodeModStep(baseStep, step, errors, warnings)
+      case 'recipe':
+        return this.validateRecipeStep(baseStep, step, errors, warnings)
+      default:
+        errors.push(`Step '${step.name}' has unsupported tool type: ${step.tool}`)
+        return null
+    }
+  }
+
+  /**
+   * Validate template step configuration
+   */
+  private static validateTemplateStep(
+    baseStep: any,
+    step: any,
+    errors: string[],
+    warnings: string[]
+  ): RecipeStepUnion | null {
+    if (!step.template || typeof step.template !== 'string') {
+      errors.push(`Template step '${step.name}' must have a template (string)`)
+      return null
+    }
+
+    const templateStep = {
+      ...baseStep,
+      template: step.template
+    }
+
+    if (step.engine && ['ejs', 'liquid', 'auto'].includes(step.engine)) {
+      templateStep.engine = step.engine
+    }
+
+    if (step.outputDir && typeof step.outputDir === 'string') {
+      templateStep.outputDir = step.outputDir
+    }
+
+    if (step.overwrite !== undefined && typeof step.overwrite === 'boolean') {
+      templateStep.overwrite = step.overwrite
+    }
+
+    if (step.exclude && Array.isArray(step.exclude)) {
+      const validExcludes = step.exclude.filter(pattern => typeof pattern === 'string')
+      if (validExcludes.length > 0) {
+        templateStep.exclude = validExcludes
+      }
+    }
+
+    if (step.templateConfig && typeof step.templateConfig === 'object') {
+      templateStep.templateConfig = step.templateConfig
+    }
+
+    return templateStep as RecipeStepUnion
+  }
+
+  /**
+   * Validate action step configuration
+   */
+  private static validateActionStep(
+    baseStep: any,
+    step: any,
+    errors: string[],
+    warnings: string[]
+  ): RecipeStepUnion | null {
+    if (!step.action || typeof step.action !== 'string') {
+      errors.push(`Action step '${step.name}' must have an action (string)`)
+      return null
+    }
+
+    const actionStep = {
+      ...baseStep,
+      action: step.action
+    }
+
+    if (step.parameters && typeof step.parameters === 'object' && step.parameters !== null) {
+      actionStep.parameters = step.parameters
+    }
+
+    if (step.dryRun !== undefined && typeof step.dryRun === 'boolean') {
+      actionStep.dryRun = step.dryRun
+    }
+
+    if (step.force !== undefined && typeof step.force === 'boolean') {
+      actionStep.force = step.force
+    }
+
+    if (step.actionConfig && typeof step.actionConfig === 'object') {
+      actionStep.actionConfig = step.actionConfig
+    }
+
+    return actionStep as RecipeStepUnion
+  }
+
+  /**
+   * Validate codemod step configuration
+   */
+  private static validateCodeModStep(
+    baseStep: any,
+    step: any,
+    errors: string[],
+    warnings: string[]
+  ): RecipeStepUnion | null {
+    if (!step.codemod || typeof step.codemod !== 'string') {
+      errors.push(`CodeMod step '${step.name}' must have a codemod (string)`)
+      return null
+    }
+
+    if (!step.files || !Array.isArray(step.files) || step.files.length === 0) {
+      errors.push(`CodeMod step '${step.name}' must have a files array with at least one pattern`)
+      return null
+    }
+
+    const validFiles = step.files.filter(file => typeof file === 'string')
+    if (validFiles.length !== step.files.length) {
+      warnings.push(`CodeMod step '${step.name}' has some invalid file patterns (must be strings)`)
+    }
+
+    if (validFiles.length === 0) {
+      errors.push(`CodeMod step '${step.name}' must have at least one valid file pattern`)
+      return null
+    }
+
+    const codemodStep = {
+      ...baseStep,
+      codemod: step.codemod,
+      files: validFiles
+    }
+
+    if (step.backup !== undefined && typeof step.backup === 'boolean') {
+      codemodStep.backup = step.backup
+    }
+
+    if (step.parser && ['typescript', 'javascript', 'json', 'auto'].includes(step.parser)) {
+      codemodStep.parser = step.parser
+    }
+
+    if (step.parameters && typeof step.parameters === 'object' && step.parameters !== null) {
+      codemodStep.parameters = step.parameters
+    }
+
+    if (step.force !== undefined && typeof step.force === 'boolean') {
+      codemodStep.force = step.force
+    }
+
+    if (step.codemodConfig && typeof step.codemodConfig === 'object') {
+      codemodStep.codemodConfig = step.codemodConfig
+    }
+
+    return codemodStep as RecipeStepUnion
+  }
+
+  /**
+   * Validate recipe step configuration
+   */
+  private static validateRecipeStep(
+    baseStep: any,
+    step: any,
+    errors: string[],
+    warnings: string[]
+  ): RecipeStepUnion | null {
+    if (!step.recipe || typeof step.recipe !== 'string') {
+      errors.push(`Recipe step '${step.name}' must have a recipe (string)`)
+      return null
+    }
+
+    const recipeStep = {
+      ...baseStep,
+      recipe: step.recipe
+    }
+
+    if (step.version && typeof step.version === 'string') {
+      recipeStep.version = step.version
+    }
+
+    if (step.inheritVariables !== undefined && typeof step.inheritVariables === 'boolean') {
+      recipeStep.inheritVariables = step.inheritVariables
+    }
+
+    if (step.variableOverrides && typeof step.variableOverrides === 'object' && step.variableOverrides !== null) {
+      recipeStep.variableOverrides = step.variableOverrides
+    }
+
+    if (step.recipeConfig && typeof step.recipeConfig === 'object') {
+      recipeStep.recipeConfig = step.recipeConfig
+    }
+
+    return recipeStep as RecipeStepUnion
+  }
+
+  /**
+   * Validate step dependencies for circular references
+   */
+  private static validateStepDependencies(
+    dependencies: Map<string, string[]>,
+    errors: string[]
+  ): void {
+    const visited = new Set<string>()
+    const recursionStack = new Set<string>()
+
+    const detectCycle = (stepName: string, path: string[]): string[] | null => {
+      if (recursionStack.has(stepName)) {
+        // Found a cycle - return the cycle path
+        const cycleStart = path.indexOf(stepName)
+        return path.slice(cycleStart).concat(stepName)
+      }
+
+      if (visited.has(stepName)) {
+        return null // Already processed
+      }
+
+      visited.add(stepName)
+      recursionStack.add(stepName)
+      const currentPath = [...path, stepName]
+
+      const stepDeps = dependencies.get(stepName) || []
+      for (const dep of stepDeps) {
+        const cycle = detectCycle(dep, currentPath)
+        if (cycle) {
+          return cycle
+        }
+      }
+
+      recursionStack.delete(stepName)
+      return null
+    }
+
+    for (const stepName of dependencies.keys()) {
+      if (!visited.has(stepName)) {
+        const cycle = detectCycle(stepName, [])
+        if (cycle) {
+          errors.push(`Circular dependency detected: ${cycle.join(' -> ')}`)
+          break // Report only the first cycle found
+        }
+      }
+    }
+  }
+
+  /**
+   * Validate that step dependencies reference existing steps
+   */
+  private static validateStepDependencyReferences(
+    dependencies: Map<string, string[]>,
+    stepNames: Set<string>,
+    warnings: string[]
+  ): void {
+    for (const [stepName, deps] of dependencies) {
+      for (const dep of deps) {
+        if (!stepNames.has(dep)) {
+          warnings.push(`Step '${stepName}' depends on undefined step: '${dep}'`)
+        }
+      }
+    }
+  }
+
+  /**
+   * Basic validation of condition expressions
+   */
+  private static validateConditionExpression(condition: string): boolean {
+    // Basic validation - just check if it looks like a reasonable expression
+    // More sophisticated validation could be added later
+    if (!condition.trim()) {
+      return false
+    }
+
+    // Check for obviously invalid patterns
+    const invalidPatterns = [
+      /^[{}()\[\].,;]*$/, // Only punctuation
+      /^\d+$/, // Only numbers
+      /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*$/, // Only a single identifier
+    ]
+
+    return !invalidPatterns.some(pattern => pattern.test(condition.trim()))
+  }
+
+  /**
+   * Validate recipe execution settings
+   */
+  private static validateSettings(
+    settings: any,
+    warnings: string[]
+  ): { timeout?: number; retries?: number; continueOnError?: boolean; maxParallelSteps?: number; workingDir?: string } {
+    const result: any = {}
+
+    if (typeof settings !== 'object' || settings === null) {
+      warnings.push('Settings should be an object')
+      return result
+    }
+
+    if (settings.timeout !== undefined) {
+      if (typeof settings.timeout === 'number' && settings.timeout > 0) {
+        result.timeout = settings.timeout
+      } else {
+        warnings.push('Settings timeout should be a positive number')
+      }
+    }
+
+    if (settings.retries !== undefined) {
+      if (typeof settings.retries === 'number' && settings.retries >= 0) {
+        result.retries = settings.retries
+      } else {
+        warnings.push('Settings retries should be a non-negative number')
+      }
+    }
+
+    if (settings.continueOnError !== undefined) {
+      if (typeof settings.continueOnError === 'boolean') {
+        result.continueOnError = settings.continueOnError
+      } else {
+        warnings.push('Settings continueOnError should be a boolean')
+      }
+    }
+
+    if (settings.maxParallelSteps !== undefined) {
+      if (typeof settings.maxParallelSteps === 'number' && settings.maxParallelSteps > 0) {
+        result.maxParallelSteps = settings.maxParallelSteps
+      } else {
+        warnings.push('Settings maxParallelSteps should be a positive number')
+      }
+    }
+
+    if (settings.workingDir !== undefined) {
+      if (typeof settings.workingDir === 'string') {
+        result.workingDir = settings.workingDir
+      } else {
+        warnings.push('Settings workingDir should be a string')
+      }
+    }
+
+    return result
+  }
+
+  /**
    * Check if a template version is compatible with current engine
    */
   static isVersionCompatible(templateEngines?: { hypergen?: string; node?: string }): boolean {
@@ -660,6 +1157,131 @@ export class TemplateParser {
     // - Current Hypergen version against templateEngines.hypergen
     // - Current Node.js version against templateEngines.node
     return true
+  }
+
+  /**
+   * Check if this configuration uses V8 Recipe Step System
+   */
+  static isRecipeConfig(config: TemplateConfig): config is TemplateConfig & { steps: RecipeStepUnion[] } {
+    return Array.isArray(config.steps) && config.steps.length > 0
+  }
+
+  /**
+   * Convert a TemplateConfig to RecipeConfig (V8 Recipe Step System)
+   */
+  static toRecipeConfig(templateConfig: TemplateConfig): RecipeConfig | null {
+    if (!this.isRecipeConfig(templateConfig)) {
+      return null // Not a recipe configuration
+    }
+
+    const recipeConfig: RecipeConfig = {
+      name: templateConfig.name,
+      variables: templateConfig.variables,
+      steps: templateConfig.steps
+    }
+
+    // Copy optional fields
+    if (templateConfig.description) recipeConfig.description = templateConfig.description
+    if (templateConfig.version) recipeConfig.version = templateConfig.version
+    if (templateConfig.author) recipeConfig.author = templateConfig.author
+    if (templateConfig.category) recipeConfig.category = templateConfig.category
+    if (templateConfig.tags) recipeConfig.tags = templateConfig.tags
+    if (templateConfig.outputs) recipeConfig.outputs = templateConfig.outputs
+    if (templateConfig.engines) recipeConfig.engines = templateConfig.engines
+
+    // Convert examples if present
+    if (templateConfig.examples) {
+      recipeConfig.examples = templateConfig.examples.map(example => ({
+        title: example.title,
+        description: example.description,
+        variables: example.variables
+      }))
+    }
+
+    // Convert dependencies if present
+    if (templateConfig.dependencies) {
+      recipeConfig.dependencies = templateConfig.dependencies.map(dep => {
+        if (typeof dep === 'string') {
+          return {
+            name: dep,
+            type: 'npm' as const
+          }
+        }
+        return {
+          name: dep.name,
+          version: dep.version,
+          type: (dep.type as any) || 'npm',
+          url: dep.url,
+          optional: dep.optional,
+          dev: dep.dev
+        }
+      })
+    }
+
+    // Convert hooks if present
+    if (templateConfig.hooks) {
+      recipeConfig.hooks = {
+        beforeRecipe: templateConfig.hooks.pre,
+        afterRecipe: templateConfig.hooks.post,
+        onError: templateConfig.hooks.error
+      }
+    }
+
+    // Convert settings if present
+    if (templateConfig.settings) {
+      recipeConfig.settings = templateConfig.settings
+    }
+
+    // Handle composition (extends/includes) - map to recipe composition
+    if (templateConfig.extends || templateConfig.includes) {
+      recipeConfig.composition = {}
+      
+      if (templateConfig.extends) {
+        recipeConfig.composition.extends = templateConfig.extends
+      }
+      
+      if (templateConfig.includes) {
+        recipeConfig.composition.includes = templateConfig.includes.map(include => ({
+          recipe: include.url, // Map URL to recipe identifier
+          version: include.version,
+          variables: include.variables,
+          condition: include.condition,
+          strategy: include.strategy
+        }))
+      }
+      
+      if (templateConfig.conflicts) {
+        recipeConfig.composition.conflicts = templateConfig.conflicts
+      }
+    }
+
+    return recipeConfig
+  }
+
+  /**
+   * Validate that step configuration matches expected tool schema
+   */
+  static validateStepToolConfiguration(
+    step: RecipeStepUnion,
+    errors: string[],
+    warnings: string[]
+  ): void {
+    switch (step.tool) {
+      case 'template':
+        // Additional template-specific validation can be added here
+        break
+      case 'action':
+        // Additional action-specific validation can be added here
+        break
+      case 'codemod':
+        // Additional codemod-specific validation can be added here
+        break
+      case 'recipe':
+        // Additional recipe-specific validation can be added here
+        break
+      default:
+        errors.push(`Unknown tool type: ${(step as any).tool}`)
+    }
   }
 
   /**

@@ -1,0 +1,335 @@
+---
+title: "CLI Installation"
+description: "Install and configure the HyperDev CLI for AI-augmented development"
+icon: "download"
+---
+
+# Install the HyperDev CLI
+
+Get the `hyper` command set up on your system to start using AI-augmented development workflows.
+
+## Quick Installation
+
+<CodeGroup>
+```bash npm
+npm install -g @hyperdev/cli
+```
+
+```bash bun  
+bun install -g @hyperdev/cli
+```
+
+```bash yarn
+yarn global add @hyperdev/cli
+```
+</CodeGroup>
+
+<Note>
+  We recommend using **bun** for the fastest installation and best performance. 
+  HyperDev is optimized for the bun runtime.
+</Note>
+
+## Verify Installation
+
+Check that the CLI is installed correctly:
+
+```bash
+hyper --version
+```
+
+You should see output similar to:
+```
+HyperDev CLI v1.0.0
+Node.js v20.10.0
+Platform: darwin-arm64
+```
+
+## System Requirements
+
+### Minimum Requirements
+- **Node.js**: v18.0.0 or higher (v20.0.0+ recommended)
+- **Operating System**: macOS, Linux, or Windows
+- **Memory**: 512MB available RAM
+- **Storage**: 100MB free disk space
+
+### Recommended Setup
+- **Runtime**: Bun v1.0.0+ for optimal performance
+- **Memory**: 2GB+ available RAM for large projects
+- **Storage**: 1GB+ free disk space for templates and cache
+
+## Configuration
+
+### Initial Setup
+
+Run the setup wizard to configure your environment:
+
+```bash
+hyper config setup
+```
+
+This will guide you through:
+- **AI Provider**: Choose your AI assistant (OpenAI, Anthropic, etc.)
+- **Default IDE**: Set your preferred development environment
+- **Trust Settings**: Configure template security preferences
+- **Team Settings**: Optional team collaboration configuration
+
+### Manual Configuration
+
+You can also configure settings manually:
+
+```bash
+# Set AI provider
+hyper config set ai-provider openai
+
+# Set default IDE  
+hyper config set default-ide cursor
+
+# Set trust threshold
+hyper config set trust-threshold 8.0
+
+# View current configuration
+hyper config list
+```
+
+### Configuration File
+
+The CLI stores configuration in:
+- **Global**: `~/.hyperdev/config.json`
+- **Project**: `./hyperdev.config.js`
+
+<Accordion title="Example Configuration">
+```json
+{
+  "aiProvider": "openai", 
+  "defaultIde": "cursor",
+  "trustThreshold": 8.0,
+  "templateSources": [
+    "official",
+    "community" 
+  ],
+  "qualityGates": {
+    "security": "strict",
+    "performance": "standard"
+  }
+}
+```
+</Accordion>
+
+## AI Provider Setup
+
+HyperDev requires an AI provider for code generation and planning. Set up your preferred provider:
+
+<Tabs>
+  <Tab title="OpenAI">
+    ```bash
+    # Set your OpenAI API key
+    export OPENAI_API_KEY="your-api-key"
+    
+    # Configure OpenAI as provider
+    hyper config set ai-provider openai
+    hyper config set ai-model gpt-4
+    ```
+  </Tab>
+  <Tab title="Anthropic">
+    ```bash
+    # Set your Anthropic API key
+    export ANTHROPIC_API_KEY="your-api-key"
+    
+    # Configure Anthropic as provider  
+    hyper config set ai-provider anthropic
+    hyper config set ai-model claude-3-sonnet
+    ```
+  </Tab>
+  <Tab title="Azure OpenAI">
+    ```bash
+    # Set Azure OpenAI configuration
+    export AZURE_OPENAI_API_KEY="your-key"
+    export AZURE_OPENAI_ENDPOINT="your-endpoint"
+    
+    # Configure Azure as provider
+    hyper config set ai-provider azure-openai
+    hyper config set ai-model gpt-4
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Keep your API keys secure and never commit them to version control. 
+  Use environment variables or secure key management systems.
+</Warning>
+
+## IDE Integration
+
+HyperDev integrates with popular IDEs for enhanced workflows:
+
+<Tabs>
+  <Tab title="Cursor">
+    ```bash
+    # Configure Cursor as default IDE
+    hyper config set default-ide cursor
+    
+    # Install Cursor extension (if available)
+    hyper dx setup --ide cursor
+    ```
+  </Tab>
+  <Tab title="VS Code">
+    ```bash
+    # Configure VS Code as default IDE
+    hyper config set default-ide vscode
+    
+    # Install VS Code extension
+    code --install-extension hyperdev.hyperdev-vscode
+    ```
+  </Tab>
+  <Tab title="JetBrains">
+    ```bash
+    # Configure IntelliJ/WebStorm as default IDE
+    hyper config set default-ide jetbrains
+    
+    # Setup JetBrains integration
+    hyper dx setup --ide jetbrains
+    ```
+  </Tab>
+</Tabs>
+
+## Shell Completion
+
+Enable command completion for your shell:
+
+<Tabs>
+  <Tab title="Bash">
+    ```bash
+    # Add to ~/.bashrc
+    echo 'eval "$(hyper completion bash)"' >> ~/.bashrc
+    source ~/.bashrc
+    ```
+  </Tab>
+  <Tab title="Zsh">
+    ```bash
+    # Add to ~/.zshrc  
+    echo 'eval "$(hyper completion zsh)"' >> ~/.zshrc
+    source ~/.zshrc
+    ```
+  </Tab>
+  <Tab title="Fish">
+    ```bash
+    # Add to fish config
+    hyper completion fish > ~/.config/fish/completions/hyper.fish
+    ```
+  </Tab>
+</Tabs>
+
+## Update CLI
+
+Keep your CLI up to date for the latest features:
+
+```bash
+# Check for updates
+hyper update check
+
+# Update to latest version
+hyper update install
+
+# Update to specific version
+hyper update install --version 1.2.0
+```
+
+## Verification
+
+Test your installation with a quick project:
+
+```bash
+# Create test project
+mkdir hyper-test && cd hyper-test
+
+# Initialize HyperDev project  
+hyper init --template minimal
+
+# Generate sample component
+hyper generate component --name TestComponent
+
+# Check project status
+hyper status
+```
+
+If all commands complete successfully, your installation is ready!
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Command not found: hyper">
+    **Solution**: Ensure the CLI is in your PATH
+    ```bash
+    # Check if installed globally
+    which hyper
+    
+    # Reinstall if needed
+    npm install -g @hyperdev/cli
+    
+    # Add to PATH if using custom installation
+    export PATH="$PATH:/path/to/hyperdev-cli/bin"
+    ```
+  </Accordion>
+  
+  <Accordion title="Permission denied errors">
+    **Solution**: Fix npm permissions or use alternative installation
+    ```bash
+    # Use npx without global install
+    npx @hyperdev/cli init
+    
+    # Or fix npm permissions
+    sudo chown -R $(whoami) ~/.npm
+    ```
+  </Accordion>
+  
+  <Accordion title="AI provider not working">
+    **Solution**: Verify API key and configuration
+    ```bash
+    # Check configuration
+    hyper config list
+    
+    # Test AI connection
+    hyper generate --test-ai-connection
+    
+    # Reset configuration if needed
+    hyper config reset
+    ```
+  </Accordion>
+  
+  <Accordion title="Slow performance">
+    **Solution**: Clear cache and optimize configuration
+    ```bash
+    # Clear template cache
+    hyper cache clear
+    
+    # Optimize configuration
+    hyper dx diagnose --optimize
+    
+    # Use bun for better performance
+    bun install -g @hyperdev/cli
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<Steps>
+  <Step title="Try the Quick Start">
+    Follow our [5-minute quickstart](/cli/quickstart) to see the CLI in action
+  </Step>
+  <Step title="Learn Core Commands">
+    Explore the [command reference](/cli/commands/overview) for detailed usage
+  </Step>
+  <Step title="Set up Your Workflow">
+    Check out [workflow guides](/cli/workflows/overview) for your development process
+  </Step>
+</Steps>
+
+## Getting Help
+
+- **Built-in help**: Use `hyper --help` or `hyper [command] --help`
+- **Documentation**: Complete guides in this documentation site
+- **Community**: Get help in our [community forums](/community)
+- **Issues**: Report installation problems on [GitHub](https://github.com/hyperdev-org/hyperdev)
+
+Ready to start building? [Try the quickstart guide](/cli/quickstart) next!

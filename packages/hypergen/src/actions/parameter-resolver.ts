@@ -18,64 +18,6 @@ const debug = createDebug('hypergen:v8:action:parameters')
 
 export class ActionParameterResolver {
   
-  /**
-   * Resolve and validate action parameters (legacy method)
-   * @deprecated Use resolveParametersInteractively instead
-   */
-  async resolveParameters(
-    metadata: ActionMetadata,
-    provided: Record<string, any> = {}
-  ): Promise<Record<string, any>> {
-    debug('Resolving parameters for action (legacy): %s', metadata.name)
-    
-    const resolved: Record<string, any> = { ...provided }
-    
-    if (!metadata.parameters || metadata.parameters.length === 0) {
-      debug('No parameters defined for action: %s', metadata.name)
-      return resolved
-    }
-
-    for (const param of metadata.parameters) {
-      await this.resolveParameter(param, resolved)
-    }
-
-    debug('Parameters resolved for %s: %o', metadata.name, Object.keys(resolved))
-    return resolved
-  }
-
-  /**
-   * Resolve a single parameter
-   */
-  private async resolveParameter(
-    param: ActionParameter,
-    resolved: Record<string, any>
-  ): Promise<void> {
-    // Skip if value already provided
-    if (resolved[param.name] !== undefined) {
-      // Validate the provided value
-      this.validateParameterValue(param.name, resolved[param.name], param, resolved)
-      return
-    }
-
-    // Apply default value if available
-    if (param.default !== undefined) {
-      resolved[param.name] = param.default
-      debug('Applied default value for %s: %o', param.name, param.default)
-    } else if (param.required) {
-      // For now, throw error; in full CLI integration, this would prompt
-      throw new ActionParameterError(
-        `Required parameter '${param.name}' not provided`,
-        param.name,
-        undefined,
-        param.type
-      )
-    }
-
-    // Validate the resolved value
-    if (resolved[param.name] !== undefined) {
-      this.validateParameterValue(param.name, resolved[param.name], param, resolved)
-    }
-  }
 
   /**
    * Resolve parameters with proper precedence and interactive prompts

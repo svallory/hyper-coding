@@ -29,6 +29,16 @@ export enum ErrorCode {
   ACTION_INVALID_PARAM_TYPE = 'ACTION_INVALID_PARAM_TYPE',
   ACTION_INVALID_PARAM_VALUE = 'ACTION_INVALID_PARAM_VALUE',
   
+  // CodeMod errors
+  CODEMOD_NOT_FOUND = 'CODEMOD_NOT_FOUND',
+  CODEMOD_EXECUTION_FAILED = 'CODEMOD_EXECUTION_FAILED',
+  CODEMOD_INVALID_PARAMETERS = 'CODEMOD_INVALID_PARAMETERS',
+  CODEMOD_TRANSFORMATION_FAILED = 'CODEMOD_TRANSFORMATION_FAILED',
+  CODEMOD_SYNTAX_ERROR = 'CODEMOD_SYNTAX_ERROR',
+  CODEMOD_AST_PARSING_ERROR = 'CODEMOD_AST_PARSING_ERROR',
+  CODEMOD_BACKUP_FAILED = 'CODEMOD_BACKUP_FAILED',
+  CODEMOD_FILE_NOT_FOUND = 'CODEMOD_FILE_NOT_FOUND',
+  
   // File system errors
   FILE_NOT_FOUND = 'FILE_NOT_FOUND',
   FILE_PERMISSION_DENIED = 'FILE_PERMISSION_DENIED',
@@ -96,6 +106,18 @@ export interface ErrorContext {
   phase?: string
   error?: string
   errors?: string[]
+  // Tool-related context
+  toolType?: string
+  toolName?: string
+  // CodeMod-related context
+  codemodType?: string
+  codemodPath?: string
+  parser?: string
+  filePath?: string
+  transformationType?: string
+  backupPath?: string
+  // Additional context
+  cause?: any
 }
 
 export class HypergenError extends Error {
@@ -144,6 +166,15 @@ export class ErrorHandler {
     [ErrorCode.ACTION_MISSING_REQUIRED_PARAM]: 'Action is missing required parameter',
     [ErrorCode.ACTION_INVALID_PARAM_TYPE]: 'Action parameter has invalid type',
     [ErrorCode.ACTION_INVALID_PARAM_VALUE]: 'Action parameter has invalid value',
+    
+    [ErrorCode.CODEMOD_NOT_FOUND]: 'CodeMod not found',
+    [ErrorCode.CODEMOD_EXECUTION_FAILED]: 'CodeMod execution failed',
+    [ErrorCode.CODEMOD_INVALID_PARAMETERS]: 'CodeMod has invalid parameters',
+    [ErrorCode.CODEMOD_TRANSFORMATION_FAILED]: 'CodeMod transformation failed',
+    [ErrorCode.CODEMOD_SYNTAX_ERROR]: 'CodeMod has syntax error',
+    [ErrorCode.CODEMOD_AST_PARSING_ERROR]: 'CodeMod AST parsing failed',
+    [ErrorCode.CODEMOD_BACKUP_FAILED]: 'CodeMod backup creation failed',
+    [ErrorCode.CODEMOD_FILE_NOT_FOUND]: 'CodeMod file not found',
     
     [ErrorCode.FILE_NOT_FOUND]: 'File not found',
     [ErrorCode.FILE_PERMISSION_DENIED]: 'Permission denied',
@@ -573,6 +604,99 @@ export class ErrorHandler {
       {
         title: 'Try again later',
         description: 'The remote server might be temporarily unavailable'
+      }
+    ],
+    
+    [ErrorCode.CODEMOD_NOT_FOUND]: [
+      {
+        title: 'Check CodeMod name',
+        description: 'Verify the CodeMod identifier is correct and supported'
+      },
+      {
+        title: 'View supported CodeMods',
+        description: 'List of supported CodeMod types: add-import, add-export, modify-function, add-property, replace-text, custom'
+      }
+    ],
+    
+    [ErrorCode.CODEMOD_EXECUTION_FAILED]: [
+      {
+        title: 'Check file permissions',
+        description: 'Ensure you have write permissions for the target files'
+      },
+      {
+        title: 'Validate parameters',
+        description: 'Check that all required parameters are provided and valid'
+      },
+      {
+        title: 'Enable backup',
+        description: 'Set backup: true to preserve original files before transformation'
+      }
+    ],
+    
+    [ErrorCode.CODEMOD_INVALID_PARAMETERS]: [
+      {
+        title: 'Check parameter requirements',
+        description: 'Each CodeMod type has specific required parameters'
+      },
+      {
+        title: 'See documentation',
+        description: 'Review CodeMod parameter documentation',
+        url: 'https://hypergen.dev/docs/codemods'
+      }
+    ],
+    
+    [ErrorCode.CODEMOD_TRANSFORMATION_FAILED]: [
+      {
+        title: 'Check file syntax',
+        description: 'Ensure the target files have valid syntax'
+      },
+      {
+        title: 'Simplify transformation',
+        description: 'Try breaking complex transformations into smaller steps'
+      },
+      {
+        title: 'Use text transformation',
+        description: 'Consider using replace-text for simple changes instead of AST transformations'
+      }
+    ],
+    
+    [ErrorCode.CODEMOD_SYNTAX_ERROR]: [
+      {
+        title: 'Fix syntax errors',
+        description: 'Resolve syntax errors in the target file before applying transformations'
+      }
+    ],
+    
+    [ErrorCode.CODEMOD_AST_PARSING_ERROR]: [
+      {
+        title: 'Use correct parser',
+        description: 'Specify the correct parser for your file type (typescript, javascript, etc.)'
+      },
+      {
+        title: 'Check file encoding',
+        description: 'Ensure files are properly encoded (UTF-8)'
+      }
+    ],
+    
+    [ErrorCode.CODEMOD_BACKUP_FAILED]: [
+      {
+        title: 'Check disk space',
+        description: 'Ensure sufficient disk space for backup files'
+      },
+      {
+        title: 'Check permissions',
+        description: 'Verify write permissions in the target directory'
+      }
+    ],
+    
+    [ErrorCode.CODEMOD_FILE_NOT_FOUND]: [
+      {
+        title: 'Check file patterns',
+        description: 'Verify the file patterns match existing files'
+      },
+      {
+        title: 'Use absolute paths',
+        description: 'Consider using absolute paths or checking working directory'
       }
     ]
   }

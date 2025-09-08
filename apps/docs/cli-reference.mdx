@@ -1,0 +1,941 @@
+---
+title: "HyperGen CLI Reference"
+description: "Complete command reference for the HyperGen code generation CLI with syntax, examples, and workflows"
+icon: "terminal"
+---
+
+# HyperGen CLI Reference
+
+The HyperGen CLI is the command-line interface for the scalable code generator that saves you time. This reference provides comprehensive documentation for all commands, options, and workflows.
+
+<Info>
+  This is the definitive reference for the `hypergen` command-line tool. For conceptual overviews, see the [CLI Overview](/cli/overview).
+</Info>
+
+## Installation & Setup
+
+### Installing HyperGen
+
+```bash
+# Install via npm/bun
+bun install -g hypergen
+# or
+npm install -g hypergen
+
+# Verify installation
+hypergen system version
+```
+
+### First Time Setup
+
+Initialize your first workspace to get started:
+
+```bash
+# Initialize a generator workspace with examples
+hypergen init workspace --withExamples=true
+
+# Create your first generator
+hypergen init generator --name=my-component --framework=react
+
+# Discover available generators
+hypergen discover
+
+# List available actions
+hypergen list
+```
+
+## CLI Design Philosophy
+
+### Progressive Complexity
+- **Basic**: Simple action execution and template discovery
+- **Intermediate**: Recipe system for complex workflows
+- **Advanced**: Configuration, custom generators, and power features
+
+### Intelligent Discovery
+Commands automatically discover generators and provide helpful suggestions:
+```bash
+hypergen action my-component  # Auto-discovers if not found
+hypergen list component       # Filters by category
+hypergen info button          # Shows detailed parameter info
+```
+
+### Safety First
+Built-in safety features prevent accidental file overwrites:
+```bash
+hypergen action create-api --dryRun      # Preview changes
+hypergen action create-api --force       # Override safety checks
+```
+
+## Core Commands
+
+### Action Management
+
+#### `hypergen action <name> [parameters...] [options]`
+
+Execute a code generation action with optional parameters.
+
+**Syntax:**
+```bash
+hypergen action <action-name> [--param=value] [--flag]
+```
+
+**Options:**
+- `--defaults` - Use default values instead of prompting
+- `--dryRun` - Preview changes without writing files
+- `--force` - Force overwrite existing files
+
+**Examples:**
+```bash
+# Execute with parameters
+hypergen action create-component --name=Button --type=tsx
+
+# Use defaults for quick generation
+hypergen action create-api --name=UserAPI --defaults
+
+# Preview changes before applying
+hypergen action create-component --name=Header --dryRun
+
+# Force overwrite existing files
+hypergen action update-schema --name=User --force
+```
+
+**Parameter Formats:**
+```bash
+# String parameters
+--name=MyComponent --path=src/components
+
+# Boolean parameters  
+--typescript=true --tests=false
+
+# JSON parameters for complex values
+--config='{"strict": true, "target": "es2020"}'
+--options='["async", "export"]'
+```
+
+#### `hypergen list [category]`
+
+List all available actions, optionally filtered by category.
+
+**Examples:**
+```bash
+# List all actions
+hypergen list
+
+# Filter by category
+hypergen list component
+hypergen list api
+hypergen list utility
+
+# Show available categories
+hypergen list
+```
+
+**Output Format:**
+```
+📝 Available actions:
+
+  • create-component - Generate React components (requires: name)
+  • create-api - Generate API endpoints (requires: name, method)
+  • create-util - Generate utility functions (requires: name)
+
+📂 Categories: component, api, utility, test
+Use "hypergen list <category>" to filter by category
+```
+
+#### `hypergen info <action-name>`
+
+Show detailed information about a specific action including parameters, examples, and usage.
+
+**Examples:**
+```bash
+hypergen info create-component
+hypergen info api-endpoint
+```
+
+**Output Format:**
+```
+📋 Action: create-component
+Description: Generate a React component with TypeScript support
+Category: component
+Tags: react, typescript, component
+
+Parameters (3):
+  • name (string) *required* - Component name
+  • path (string) [default: src/components] - Output directory  
+  • typescript (boolean) [default: true] - Use TypeScript
+
+Examples:
+  Basic component:
+    hypergen action create-component --name=Button
+    
+  Component with custom path:
+    hypergen action create-component --name=Header --path=src/layout
+```
+
+### Generator Discovery
+
+#### `hypergen discover [sources...]`
+
+Discover generators from all configured sources or specific sources.
+
+**Sources:**
+- `local` - Local generators in `recipes/` directory
+- `npm` - Installed npm packages with generators
+- `workspace` - Workspace-level generators
+
+**Examples:**
+```bash
+# Discover from all sources
+hypergen discover
+
+# Discover only local generators
+hypergen discover local
+
+# Discover from specific sources
+hypergen discover local npm
+```
+
+**Output Format:**
+```
+🔍 Discovery complete: found 12 generators
+
+Generators found:
+  📦 react-component (local)
+     Path: recipes/react-component
+     Actions: create, update, test
+     Description: React component generator with TypeScript
+
+  📦 express-api (npm)  
+     Path: node_modules/@hypergen/express-api
+     Actions: create-endpoint, create-middleware
+     Description: Express.js API generator
+```
+
+### Recipe System (V8 Features)
+
+The Recipe System allows you to define multi-step code generation workflows using YAML configuration files.
+
+#### `hypergen recipe execute <recipe> [options...]`
+
+Execute a complete recipe with all its steps.
+
+**Syntax:**
+```bash
+hypergen recipe execute <recipe.yml> [--var=value] [--flag]
+```
+
+**Options:**
+- `--dryRun` - Preview all changes without writing files
+- `--force` - Force overwrite existing files
+- `--skipPrompts` - Use defaults, skip interactive prompts  
+- `--continueOnError` - Continue execution after step failures
+
+**Examples:**
+```bash
+# Execute a recipe with variables
+hypergen recipe execute fullstack-app.yml --name=MyApp --database=postgresql
+
+# Preview recipe execution
+hypergen recipe execute api-service.yml --name=UserService --dryRun
+
+# Execute with error handling
+hypergen recipe execute complex-setup.yml --continueOnError --force
+```
+
+#### `hypergen recipe validate <recipe>`
+
+Validate a recipe file for syntax and configuration errors.
+
+**Examples:**
+```bash
+hypergen recipe validate my-recipe.yml
+hypergen recipe validate recipes/fullstack-app.yml
+```
+
+#### `hypergen recipe info <recipe>`
+
+Show detailed information about a recipe including steps, variables, and examples.
+
+**Examples:**
+```bash
+hypergen recipe info fullstack-app.yml
+hypergen recipe info recipes/api-service.yml
+```
+
+#### `hypergen recipe list [directory]`
+
+List all available recipes in a directory.
+
+**Examples:**
+```bash
+# List recipes in default directory
+hypergen recipe list
+
+# List recipes in specific directory
+hypergen recipe list recipes/
+hypergen recipe list examples/recipes/
+```
+
+### Step Management
+
+#### `hypergen step list <recipe>`
+
+List all steps in a recipe with their dependencies and configuration.
+
+**Examples:**
+```bash
+hypergen step list my-recipe.yml
+```
+
+**Output Format:**
+```
+📋 Steps in recipe: Fullstack App (5)
+
+1. setup-database
+   Description: Initialize database schema
+   Tool: template
+   Template: database/schema.sql.ejs
+
+2. create-api
+   Description: Generate API endpoints
+   Tool: action  
+   Action: express-api
+   Depends on: setup-database
+
+3. create-frontend
+   Description: Generate React frontend
+   Tool: recipe
+   Sub-recipe: react-app.yml
+   Depends on: create-api
+```
+
+#### `hypergen step execute <recipe> <step-name>`
+
+Execute a single step from a recipe.
+
+**Examples:**
+```bash
+# Execute specific step
+hypergen step execute fullstack-app.yml setup-database --database=postgresql
+
+# Preview step execution
+hypergen step execute api-service.yml create-endpoints --dryRun
+```
+
+### Template Management
+
+#### `hypergen template validate <path>`
+
+Validate a template configuration file for syntax errors.
+
+**Examples:**
+```bash
+hypergen template validate template.yml
+hypergen template validate recipes/component/template.yml
+```
+
+#### `hypergen template info <path>`
+
+Show detailed template information including variables and examples.
+
+**Examples:**
+```bash
+hypergen template info component/template.yml
+```
+
+#### `hypergen template list [directory]`
+
+List all templates in a directory.
+
+**Examples:**
+```bash
+hypergen template list
+hypergen template list recipes/
+```
+
+#### `hypergen template examples <path>`
+
+Show example usage for a template.
+
+**Examples:**
+```bash
+hypergen template examples component/template.yml
+```
+
+### Project Initialization
+
+#### `hypergen init generator [options...]`
+
+Create a new generator with scaffolded structure.
+
+**Options:**
+- `--name=<name>` - Generator name (required)
+- `--description=<desc>` - Generator description
+- `--category=<category>` - Generator category [default: custom]
+- `--author=<author>` - Author name
+- `--directory=<dir>` - Output directory [default: recipes]
+- `--type=<type>` - Generator type: action, template, both [default: both]
+- `--framework=<framework>` - Target framework: react, vue, node, cli, api, generic [default: generic]
+- `--withExamples=<boolean>` - Include example templates [default: true]
+- `--withTests=<boolean>` - Include test templates [default: true]
+
+**Examples:**
+```bash
+# Create a basic generator
+hypergen init generator --name=my-widget
+
+# Create a React component generator
+hypergen init generator --name=react-component --framework=react --category=component
+
+# Create an API generator without examples
+hypergen init generator --name=api-endpoint --framework=node --withExamples=false
+```
+
+#### `hypergen init workspace [options...]`
+
+Initialize a generator workspace with example generators.
+
+**Options:**
+- `--directory=<dir>` - Workspace directory [default: recipes]
+- `--withExamples=<boolean>` - Include example generators [default: true]
+
+**Examples:**
+```bash
+# Initialize workspace with examples
+hypergen init workspace
+
+# Initialize clean workspace
+hypergen init workspace --withExamples=false --directory=generators
+```
+
+### Configuration Management
+
+#### `hypergen config init [options...]`
+
+Create a new configuration file with defaults.
+
+**Options:**
+- `--format=<format>` - Config format: js, json [default: js]
+
+**Examples:**
+```bash
+# Create JavaScript config
+hypergen config init
+
+# Create JSON config
+hypergen config init --format=json
+```
+
+#### `hypergen config show`
+
+Display current configuration settings.
+
+**Output Format:**
+```
+📝 Configuration (hypergen.config.js):
+
+Templates: recipes/, generators/
+Environment: development
+Engine: ejs
+Conflict Strategy: prompt
+Cache Enabled: true
+Validation: strict
+Discovery Sources: local, npm
+Plugins: @hypergen/react-plugin
+Helpers: camelCase, pascalCase, kebabCase
+```
+
+#### `hypergen config validate [path]`
+
+Validate a configuration file.
+
+**Examples:**
+```bash
+hypergen config validate
+hypergen config validate hypergen.config.js
+```
+
+#### `hypergen config info`
+
+Show configuration file information and status.
+
+### URL Template Management
+
+#### `hypergen url resolve <url>`
+
+Resolve and validate a template URL.
+
+**Examples:**
+```bash
+hypergen url resolve github:user/repo/templates
+hypergen url resolve https://github.com/user/templates/archive/main.zip
+```
+
+#### `hypergen url cache clear`
+
+Clear the template URL cache.
+
+#### `hypergen url cache info`
+
+Show cache statistics and information.
+
+### System Commands
+
+#### `hypergen system help`
+
+Show comprehensive help for all commands.
+
+#### `hypergen system status`
+
+Show system status including discovered generators and cache information.
+
+**Output Format:**
+```
+📊 HyperGen Status
+
+Generators: 8
+  • Local: 3
+  • NPM: 2  
+  • Workspace: 3
+
+Actions: 15
+Categories: 5
+
+URL Cache:
+  • Entries: 12
+  • Size: 2.4 MB
+
+Project: /Users/dev/my-project
+```
+
+#### `hypergen system version`
+
+Show version information.
+
+## Global Options
+
+These options work with most commands:
+
+- `--debug` - Enable debug logging
+- `--verbose` - Enable verbose output
+- `--config=<path>` - Use specific config file
+
+**Examples:**
+```bash
+# Enable debug mode
+hypergen action create-api --name=Users --debug
+
+# Use custom config
+hypergen --config=custom.config.js list
+```
+
+## Common Workflows
+
+### Quick Component Generation
+
+```bash
+# Discover available generators
+hypergen discover
+
+# List component generators
+hypergen list component
+
+# Generate a component
+hypergen action create-component --name=Button --typescript=true
+
+# Preview before generating
+hypergen action create-component --name=Header --dryRun
+```
+
+### Setting Up a New Project
+
+```bash
+# Initialize workspace
+hypergen init workspace --withExamples=true
+
+# Create project-specific generator
+hypergen init generator --name=api-endpoint --framework=node
+
+# Configure the project
+hypergen config init
+
+# Validate setup
+hypergen system status
+```
+
+### Using Recipes for Complex Workflows
+
+```bash
+# List available recipes
+hypergen recipe list
+
+# Validate recipe before execution
+hypergen recipe validate fullstack-app.yml
+
+# Execute recipe with dry run
+hypergen recipe execute fullstack-app.yml --name=MyApp --dryRun
+
+# Execute recipe for real
+hypergen recipe execute fullstack-app.yml --name=MyApp --database=postgresql
+```
+
+### Template Development Workflow
+
+```bash
+# Create new generator
+hypergen init generator --name=my-template --withTests=true
+
+# Validate template configuration
+hypergen template validate recipes/my-template/template.yml
+
+# Test the generator
+hypergen action my-template --name=TestOutput --dryRun
+
+# Generate examples
+hypergen template examples recipes/my-template/template.yml
+```
+
+## Advanced Usage Patterns
+
+### Parameter Passing Strategies
+
+```bash
+# Simple parameters
+hypergen action create-api --name=Users --method=GET
+
+# Complex JSON parameters
+hypergen action create-config --settings='{"debug": true, "port": 3000}'
+
+# Environment variable parameters
+COMPONENT_NAME=Button hypergen action create-component --name=$COMPONENT_NAME
+
+# File-based parameters
+hypergen action create-schema --config=@schema.json
+```
+
+### Automation & Scripting
+
+```bash
+#!/bin/bash
+# Automated project setup script
+
+set -e
+
+echo "Setting up fullstack project..."
+
+# Initialize workspace
+hypergen init workspace
+
+# Generate API layer
+hypergen recipe execute api-layer.yml --name="$1" --database=postgresql --force
+
+# Generate frontend
+hypergen recipe execute react-frontend.yml --name="$1" --api-url="http://localhost:3000"
+
+# Generate tests
+hypergen action create-tests --name="$1" --type=integration
+
+echo "Project $1 setup complete!"
+```
+
+### Error Handling & Recovery
+
+```bash
+# Continue execution despite step failures
+hypergen recipe execute complex-setup.yml --continueOnError
+
+# Validate before execution
+if hypergen recipe validate my-recipe.yml; then
+  hypergen recipe execute my-recipe.yml --name=MyProject
+else
+  echo "Recipe validation failed"
+  exit 1
+fi
+
+# Dry run for safety
+hypergen action risky-operation --dryRun || {
+  echo "Dry run revealed issues, aborting"
+  exit 1
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**Action Not Found**
+```bash
+$ hypergen action my-component
+❌ Action 'my-component' not found
+
+# Solutions:
+hypergen discover              # Rediscover generators
+hypergen list                  # See available actions
+hypergen list component        # Filter by category
+```
+
+**Template Validation Errors**
+```bash
+$ hypergen template validate template.yml
+❌ Template validation failed:
+  • Missing required field: name
+  • Invalid variable type: config.timeout
+
+# Solutions:
+# 1. Fix template.yml syntax
+# 2. Check variable definitions
+# 3. Validate against schema
+```
+
+**Recipe Execution Failures**
+```bash
+$ hypergen recipe execute broken-recipe.yml
+❌ Recipe execution failed: Step 2 failed
+
+# Solutions:
+hypergen recipe validate broken-recipe.yml  # Check syntax
+hypergen step list broken-recipe.yml        # Review steps
+hypergen recipe execute broken-recipe.yml --continueOnError  # Skip failures
+```
+
+### Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+```bash
+# Global debug mode
+export DEBUG=hypergen*
+hypergen action create-component --name=Test
+
+# Command-specific debugging
+hypergen --debug action create-api --name=Users
+
+# Verbose output
+hypergen --verbose recipe execute complex-recipe.yml
+```
+
+### Performance Tips
+
+```bash
+# Use cache for faster template resolution
+hypergen config show | grep "Cache Enabled: true"
+
+# Batch operations where possible
+hypergen recipe execute batch-operations.yml
+
+# Use defaults to avoid prompts in automation
+hypergen action create-component --name=Button --defaults
+
+# Clear cache if experiencing issues
+hypergen url cache clear
+```
+
+## Configuration Reference
+
+### hypergen.config.js
+
+```javascript
+export default {
+  // Template directories
+  templates: ['recipes/', 'generators/'],
+  
+  // Environment settings
+  environment: 'development',
+  
+  // Template engine configuration
+  engine: {
+    type: 'ejs',
+    options: {
+      strict: true
+    }
+  },
+  
+  // File conflict handling
+  output: {
+    conflictStrategy: 'prompt' // prompt, overwrite, skip
+  },
+  
+  // Caching configuration
+  cache: {
+    enabled: true,
+    ttl: 3600000 // 1 hour
+  },
+  
+  // Discovery sources
+  discovery: {
+    sources: ['local', 'npm', 'workspace']
+  },
+  
+  // Validation settings
+  validation: {
+    strict: true
+  },
+  
+  // Plugin system
+  plugins: [
+    '@hypergen/react-plugin',
+    '@hypergen/typescript-plugin'
+  ],
+  
+  // Helper functions
+  helpers: {
+    camelCase: true,
+    pascalCase: true,
+    kebabCase: true
+  }
+}
+```
+
+### Environment Variables
+
+```bash
+# Configuration
+HYPERGEN_CONFIG=/path/to/config.js    # Custom config file
+HYPERGEN_CACHE_DIR=/path/to/cache     # Cache directory
+HYPERGEN_TEMPLATES=/path/to/templates  # Template directories
+
+# Behavior
+DEBUG=hypergen*                       # Debug logging
+HYPERGEN_DISABLE_CACHE=true          # Disable caching
+HYPERGEN_DEFAULT_FRAMEWORK=react     # Default framework
+```
+
+## Integration Examples
+
+### Package.json Scripts
+
+```json
+{
+  "scripts": {
+    "gen:component": "hypergen action create-component",
+    "gen:api": "hypergen action create-api-endpoint",
+    "gen:test": "hypergen action create-test",
+    "setup:project": "hypergen recipe execute project-setup.yml",
+    "validate:templates": "find recipes/ -name 'template.yml' -exec hypergen template validate {} \\;"
+  }
+}
+```
+
+### CI/CD Integration
+
+```yaml
+# .github/workflows/validate-templates.yml
+name: Validate Templates
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: oven-sh/setup-bun@v1
+      
+      - name: Install HyperGen
+        run: bun install -g hypergen
+        
+      - name: Validate Templates
+        run: |
+          find recipes/ -name "template.yml" -exec hypergen template validate {} \;
+          
+      - name: Validate Recipes  
+        run: |
+          find recipes/ -name "*.yml" -path "*/recipes/*" -exec hypergen recipe validate {} \;
+```
+
+### IDE Integration
+
+```json
+// .vscode/tasks.json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "HyperGen: Create Component",
+      "type": "shell",
+      "command": "hypergen",
+      "args": ["action", "create-component"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always"
+      }
+    }
+  ]
+}
+```
+
+## Best Practices
+
+### Template Organization
+
+```
+recipes/
+├── components/
+│   ├── react-component/
+│   │   ├── template.yml
+│   │   └── templates/
+│   └── vue-component/
+├── api/
+│   ├── express-endpoint/
+│   └── fastapi-endpoint/
+└── recipes/
+    ├── fullstack-app.yml
+    └── microservice.yml
+```
+
+### Naming Conventions
+
+- **Actions**: `verb-noun` (create-component, update-schema)  
+- **Templates**: `technology-type` (react-component, express-api)
+- **Recipes**: `descriptive-name` (fullstack-app, microservice-setup)
+- **Parameters**: `camelCase` (componentName, apiEndpoint)
+
+### Error Handling
+
+Always validate inputs and provide recovery options:
+
+```yaml
+# recipe.yml
+name: "Safe Recipe"
+steps:
+  - name: "validate-inputs"
+    tool: "action"
+    action: "validate-config"
+    continueOnError: false
+    
+  - name: "backup-existing"  
+    tool: "action"
+    action: "backup-files"
+    condition: "!dryRun"
+    
+  - name: "generate-code"
+    tool: "template"
+    template: "component.ejs"
+    continueOnError: true
+```
+
+### Performance Optimization
+
+```javascript
+// hypergen.config.js - Optimized for performance
+export default {
+  cache: {
+    enabled: true,
+    ttl: 7200000, // 2 hours
+    directory: '.hypergen-cache'
+  },
+  
+  discovery: {
+    sources: ['local'], // Limit sources for speed
+    parallel: true
+  },
+  
+  output: {
+    conflictStrategy: 'skip' // Avoid prompts in automation
+  }
+}
+```
+
+---
+
+This comprehensive CLI reference provides everything needed to effectively use the HyperGen code generation tool, from basic action execution to advanced recipe workflows and system integration.

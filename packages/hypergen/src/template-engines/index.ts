@@ -21,7 +21,7 @@ export function initializeTemplateEngines(): void {
   // Register LiquidJS as the default template engine
   templateEngineFactory.register(new LiquidTemplateEngine())
   
-  // Register EJS for backward compatibility
+  // Register EJS as additional template engine
   templateEngineFactory.register(new EJSTemplateEngine())
 }
 

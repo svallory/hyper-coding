@@ -1,0 +1,1395 @@
+---
+title: "Real-World Projects"
+description: "Complete project setups and workflows from starter apps to production systems"
+---
+
+# Real-World Projects
+
+Complete, production-ready project examples that demonstrate how to use HyperDev for real-world applications. Each example includes full project structure, configuration files, and deployment setup.
+
+## Full-Stack Applications
+
+### Next.js SaaS Application
+
+Generate a complete Next.js SaaS application with authentication, billing, and admin dashboard.
+
+```yaml title="template.yml"
+name: nextjs-saas
+description: Complete Next.js SaaS application with authentication and billing
+variables:
+  - name: projectName
+    message: Project name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: databaseType
+    message: Database type
+    type: list
+    choices:
+      - name: PostgreSQL (recommended)
+        value: postgres
+      - name: MySQL
+        value: mysql
+      - name: SQLite (development)
+        value: sqlite
+  - name: authProvider
+    message: Authentication provider
+    type: list
+    choices:
+      - name: NextAuth.js
+        value: nextauth
+      - name: Clerk
+        value: clerk
+      - name: Supabase Auth
+        value: supabase
+  - name: paymentProvider
+    message: Payment provider
+    type: list
+    choices:
+      - name: Stripe
+        value: stripe
+      - name: LemonSqueezy
+        value: lemonsqueezy
+      - name: None (skip billing)
+        value: none
+  - name: uiFramework
+    message: UI Framework
+    type: list
+    choices:
+      - name: Tailwind CSS + shadcn/ui
+        value: shadcn
+      - name: Tailwind CSS + Headless UI
+        value: headless
+      - name: ChakraUI
+        value: chakra
+  - name: includeAdmin
+    message: Include admin dashboard?
+    type: confirm
+    default: true
+```
+
+**Project Structure**
+```
+<%= projectName %>/
+├── app/                          # Next.js 14 App Router
+│   ├── (auth)/                   # Auth routes group
+│   │   ├── signin/
+│   │   └── signup/
+│   ├── (dashboard)/              # Dashboard routes group  
+│   │   ├── dashboard/
+│   │   ├── settings/
+│   │   └── billing/
+<% if (includeAdmin) { %>│   ├── admin/                    # Admin routes
+│   │   ├── users/
+│   │   ├── analytics/
+│   │   └── settings/
+<% } %>│   ├── api/                      # API routes
+│   │   ├── auth/
+<% if (paymentProvider !== 'none') { %>│   │   ├── billing/
+│   │   ├── webhooks/
+<% } %>│   │   └── users/
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx
+├── components/                   # Reusable components
+│   ├── ui/                       # Base UI components
+│   ├── auth/                     # Auth-related components
+│   ├── dashboard/                # Dashboard components
+<% if (paymentProvider !== 'none') { %>│   ├── billing/                 # Billing components
+<% } %>│   └── layout/                  # Layout components
+├── lib/                          # Utility functions
+│   ├── auth.ts
+│   ├── db.ts
+<% if (paymentProvider !== 'none') { %>│   ├── billing.ts
+<% } %>│   ├── utils.ts
+│   └── validations.ts
+├── prisma/                       # Database schema
+│   ├── schema.prisma
+│   └── migrations/
+├── public/                       # Static assets
+├── types/                        # TypeScript types
+└── config files
+```
+
+**Next.js Configuration** (`templates/next.config.js.ejs.t`)
+```javascript
+---
+to: next.config.js
+---
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverActions: true,
+    typedRoutes: true,
+  },
+  images: {
+    domains: [
+      'images.unsplash.com',
+      'avatars.githubusercontent.com',
+<% if (authProvider === 'clerk') { %>      'img.clerk.com',<% } %>
+<% if (authProvider === 'supabase') { %>      'lh3.googleusercontent.com',<% } %>
+    ],
+  },
+  async headers() {
+    return [
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT' },
+          { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version' },
+        ],
+      },
+    ];
+  },
+<% if (paymentProvider === 'stripe') { %>  env: {
+    STRIPE_PUBLIC_KEY: process.env.STRIPE_PUBLIC_KEY,
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+  },<% } %>
+};
+
+module.exports = nextConfig;
+```
+
+**Database Schema** (`templates/schema.prisma.ejs.t`)
+```prisma
+---
+to: prisma/schema.prisma
+---
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "<%= databaseType %>"
+  url      = env("DATABASE_URL")<% if (databaseType === 'postgres') { %>
+  directUrl = env("DIRECT_URL") // Used for migrations<% } %>
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  role          UserRole  @default(USER)
+  
+  // Billing information
+<% if (paymentProvider !== 'none') { %>  customerId          String?   @unique // <%= paymentProvider %> customer ID
+  subscriptionId      String?   @unique // Active subscription
+  subscriptionStatus  String?   // active, canceled, past_due, etc.
+  currentPeriodStart  DateTime?
+  currentPeriodEnd    DateTime?
+  plan                Plan?     @default(FREE)
+<% } %>
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  accounts Account[]
+  sessions Session[]
+<% if (includeAdmin) { %>  
+  // Admin tracking
+  lastLoginAt DateTime?
+  loginCount  Int      @default(0)
+<% } %>
+
+  @@map("users")
+}
+
+<% if (authProvider === 'nextauth') { %>model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+<% } %>
+
+<% if (paymentProvider !== 'none') { %>model Subscription {
+  id                 String            @id @default(cuid())
+  userId             String            @unique
+  <%= paymentProvider %>CustomerId      String
+  <%= paymentProvider %>SubscriptionId String            @unique
+  status             SubscriptionStatus
+  plan               Plan
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean           @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+<% } %>
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+<% if (paymentProvider !== 'none') { %>enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  UNPAID
+  INCOMPLETE
+}
+<% } %>
+```
+
+**Authentication Setup** (`templates/auth.ts.ejs.t`)
+```typescript
+---
+to: lib/auth.ts
+---
+<% if (authProvider === 'nextauth') { %>import { NextAuthOptions } from 'next-auth';
+import { PrismaAdapter } from '@next-auth/prisma-adapter';
+import GoogleProvider from 'next-auth/providers/google';
+import GitHubProvider from 'next-auth/providers/github';
+import EmailProvider from 'next-auth/providers/email';
+import { prisma } from './db';
+
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
+  session: {
+    strategy: 'jwt',
+  },
+  pages: {
+    signIn: '/signin',
+    signUp: '/signup',
+    error: '/error',
+  },
+  providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+    GitHubProvider({
+      clientId: process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    }),
+    EmailProvider({
+      server: {
+        host: process.env.EMAIL_SERVER_HOST,
+        port: process.env.EMAIL_SERVER_PORT,
+        auth: {
+          user: process.env.EMAIL_SERVER_USER,
+          pass: process.env.EMAIL_SERVER_PASSWORD,
+        },
+      },
+      from: process.env.EMAIL_FROM,
+    }),
+  ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = user.role;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token) {
+        session.user.id = token.sub!;
+        session.user.role = token.role as string;
+      }
+      return session;
+    },
+  },
+  events: {
+    async signIn({ user, isNewUser }) {
+      if (isNewUser) {
+        // Track new user registration
+        console.log(`New user registered: ${user.email}`);
+      }
+      
+      // Update last login
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          lastLoginAt: new Date(),
+          loginCount: {
+            increment: 1,
+          },
+        },
+      });
+    },
+  },
+};
+<% } else if (authProvider === 'clerk') { %>import { currentUser } from '@clerk/nextjs';
+import { User } from '@clerk/nextjs/server';
+
+export async function getCurrentUser(): Promise<User | null> {
+  return await currentUser();
+}
+
+export async function requireAuth(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+  return user;
+}
+
+export function isAdmin(user: User): boolean {
+  return user.publicMetadata?.role === 'admin' || 
+         user.publicMetadata?.role === 'super_admin';
+}
+
+export function isSuperAdmin(user: User): boolean {
+  return user.publicMetadata?.role === 'super_admin';
+}
+<% } else if (authProvider === 'supabase') { %>import { createServerSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/types/database';
+
+export async function createSupabaseServerClient() {
+  const supabase = createServerSupabaseClient<Database>();
+  return supabase;
+}
+
+export async function getCurrentUser() {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
+export async function requireAuth() {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error('Unauthorized');
+  }
+  return user;
+}
+<% } %>
+```
+
+<% if (paymentProvider === 'stripe') { %>**Stripe Integration** (`templates/billing.ts.ejs.t`)
+```typescript
+---
+to: lib/billing.ts
+---
+import Stripe from 'stripe';
+import { prisma } from './db';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2023-10-16',
+});
+
+export { stripe };
+
+export const PLANS = {
+  FREE: {
+    name: 'Free',
+    price: 0,
+    interval: null,
+    features: [
+      '5 projects',
+      'Basic templates',
+      'Community support',
+    ],
+  },
+  PRO: {
+    name: 'Pro',
+    price: 19,
+    interval: 'month',
+    stripePriceId: process.env.STRIPE_PRO_MONTHLY_PRICE_ID!,
+    features: [
+      'Unlimited projects',
+      'Premium templates',
+      'Priority support',
+      'Advanced analytics',
+    ],
+  },
+  ENTERPRISE: {
+    name: 'Enterprise',
+    price: 99,
+    interval: 'month',
+    stripePriceId: process.env.STRIPE_ENTERPRISE_MONTHLY_PRICE_ID!,
+    features: [
+      'Everything in Pro',
+      'Custom templates',
+      'SSO integration',
+      'Dedicated support',
+      'SLA guarantee',
+    ],
+  },
+};
+
+export async function createCheckoutSession(
+  userId: string,
+  plan: 'PRO' | 'ENTERPRISE',
+  successUrl: string,
+  cancelUrl: string
+) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  let customerId = user.customerId;
+
+  // Create Stripe customer if doesn't exist
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: user.email,
+      name: user.name || undefined,
+      metadata: {
+        userId: user.id,
+      },
+    });
+
+    customerId = customer.id;
+
+    // Update user with customer ID
+    await prisma.user.update({
+      where: { id: userId },
+      data: { customerId },
+    });
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    customer: customerId,
+    mode: 'subscription',
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price: PLANS[plan].stripePriceId,
+        quantity: 1,
+      },
+    ],
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    allow_promotion_codes: true,
+    billing_address_collection: 'required',
+    customer_update: {
+      address: 'auto',
+    },
+  });
+
+  return session;
+}
+
+export async function createBillingPortalSession(
+  customerId: string,
+  returnUrl: string
+) {
+  const session = await stripe.billingPortal.sessions.create({
+    customer: customerId,
+    return_url: returnUrl,
+  });
+
+  return session;
+}
+
+export async function getUserSubscription(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      customerId: true,
+      subscriptionId: true,
+      subscriptionStatus: true,
+      plan: true,
+      currentPeriodStart: true,
+      currentPeriodEnd: true,
+    },
+  });
+
+  if (!user) return null;
+
+  const isActive = 
+    user.subscriptionStatus === 'active' &&
+    user.currentPeriodEnd &&
+    user.currentPeriodEnd > new Date();
+
+  return {
+    ...user,
+    isActive,
+    isPro: user.plan === 'PRO' && isActive,
+    isEnterprise: user.plan === 'ENTERPRISE' && isActive,
+  };
+}
+
+export async function handleSubscriptionChange(
+  subscriptionId: string,
+  customerId: string
+) {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  
+  const user = await prisma.user.findFirst({
+    where: { customerId },
+  });
+
+  if (!user) {
+    throw new Error(`User not found for customer ${customerId}`);
+  }
+
+  const plan = subscription.items.data[0]?.price.lookup_key?.toUpperCase() as 'PRO' | 'ENTERPRISE';
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      subscriptionId: subscription.id,
+      subscriptionStatus: subscription.status,
+      plan: plan || 'FREE',
+      currentPeriodStart: new Date(subscription.current_period_start * 1000),
+      currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+    },
+  });
+}
+```
+<% } %>
+
+**API Routes** (`templates/users.ts.ejs.t`)
+```typescript
+---
+to: app/api/users/route.ts
+---
+import { NextRequest, NextResponse } from 'next/server';
+<% if (authProvider === 'nextauth') { %>import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';<% } else if (authProvider === 'clerk') { %>import { currentUser } from '@clerk/nextjs';<% } %>
+import { prisma } from '@/lib/db';
+import { z } from 'zod';
+
+const getUsersSchema = z.object({
+  page: z.string().optional().default('1'),
+  limit: z.string().optional().default('10'),
+  search: z.string().optional(),
+  role: z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']).optional(),
+});
+
+export async function GET(request: NextRequest) {
+  try {
+<% if (authProvider === 'nextauth') { %>    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }<% } else if (authProvider === 'clerk') { %>    const user = await currentUser();
+    if (!user || !isAdmin(user)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }<% } %>
+
+    const { searchParams } = new URL(request.url);
+    const { page, limit, search, role } = getUsersSchema.parse({
+      page: searchParams.get('page') || undefined,
+      limit: searchParams.get('limit') || undefined,
+      search: searchParams.get('search') || undefined,
+      role: searchParams.get('role') || undefined,
+    });
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const where = {
+      ...(search && {
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+        ],
+      }),
+      ...(role && { role }),
+    };
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          image: true,
+          role: true,
+          createdAt: true,
+          lastLoginAt: true,
+          loginCount: true,
+<% if (paymentProvider !== 'none') { %>          plan: true,
+          subscriptionStatus: true,<% } %>
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+<% if (authProvider === 'nextauth') { %>    const session = await getServerSession(authOptions);
+    if (!session || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }<% } else if (authProvider === 'clerk') { %>    const user = await currentUser();
+    if (!user || !isAdmin(user)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }<% } %>
+
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('id');
+    
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const updateSchema = z.object({
+      role: z.enum(['USER', 'ADMIN', 'SUPER_ADMIN']).optional(),
+      name: z.string().optional(),
+    });
+
+    const validatedData = updateSchema.parse(body);
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: validatedData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        updatedAt: true,
+      },
+    });
+
+    return NextResponse.json({
+      message: 'User updated successfully',
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+**Environment Configuration** (`templates/.env.example.ejs.t`)
+```bash
+---
+to: .env.example
+---
+# Database
+DATABASE_URL="<%= databaseType %>://username:password@localhost:5432/<%= projectName %>"
+<% if (databaseType === 'postgres') { %>DIRECT_URL="<%= databaseType %>://username:password@localhost:5432/<%= projectName %>"<% } %>
+
+# Next.js
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="your-secret-key"
+
+<% if (authProvider === 'nextauth') { %># NextAuth.js Providers
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+GITHUB_CLIENT_ID=""
+GITHUB_CLIENT_SECRET=""
+
+# Email Provider (optional)
+EMAIL_SERVER_HOST=""
+EMAIL_SERVER_PORT=""
+EMAIL_SERVER_USER=""
+EMAIL_SERVER_PASSWORD=""
+EMAIL_FROM=""
+<% } else if (authProvider === 'clerk') { %># Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=""
+CLERK_SECRET_KEY=""
+NEXT_PUBLIC_CLERK_SIGN_IN_URL="/signin"
+NEXT_PUBLIC_CLERK_SIGN_UP_URL="/signup"
+NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL="/dashboard"
+NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL="/dashboard"
+<% } else if (authProvider === 'supabase') { %># Supabase
+NEXT_PUBLIC_SUPABASE_URL=""
+NEXT_PUBLIC_SUPABASE_ANON_KEY=""
+SUPABASE_SERVICE_ROLE_KEY=""
+<% } %>
+
+<% if (paymentProvider === 'stripe') { %># Stripe
+STRIPE_PUBLIC_KEY=""
+STRIPE_SECRET_KEY=""
+STRIPE_WEBHOOK_SECRET=""
+STRIPE_PRO_MONTHLY_PRICE_ID=""
+STRIPE_ENTERPRISE_MONTHLY_PRICE_ID=""
+<% } else if (paymentProvider === 'lemonsqueezy') { %># Lemon Squeezy
+LEMONSQUEEZY_API_KEY=""
+LEMONSQUEEZY_STORE_ID=""
+LEMONSQUEEZY_WEBHOOK_SECRET=""
+<% } %>
+
+# Optional: Analytics
+GOOGLE_ANALYTICS_ID=""
+MIXPANEL_TOKEN=""
+
+# Optional: Email
+RESEND_API_KEY=""
+SENDGRID_API_KEY=""
+```
+
+### Usage Example
+```bash
+bun run hypergen nextjs-saas
+# Prompts:
+# Project name: my-saas-app
+# Database type: PostgreSQL
+# Authentication provider: NextAuth.js
+# Payment provider: Stripe
+# UI Framework: Tailwind CSS + shadcn/ui
+# Include admin dashboard? Yes
+
+# Generated: Complete Next.js SaaS application with 50+ files
+```
+
+<Accordion title="What makes this a real-world example?">
+This template demonstrates production-ready patterns:
+
+- **Authentication**: Multiple provider support with proper session management
+- **Database**: Proper schema design with relationships and constraints
+- **Billing**: Complete Stripe integration with webhooks and subscription management
+- **Admin Panel**: User management and analytics dashboard
+- **API Design**: RESTful APIs with proper validation and error handling
+- **Security**: Input validation, CSRF protection, and role-based access
+- **Performance**: Optimized queries and proper caching strategies
+- **Deployment**: Environment configurations for multiple stages
+</Accordion>
+
+---
+
+## Microservices Architecture
+
+### Node.js Microservice Template
+
+Generate a complete microservice with Docker, monitoring, and CI/CD.
+
+```yaml title="template.yml"
+name: nodejs-microservice
+description: Complete Node.js microservice with Docker and monitoring
+variables:
+  - name: serviceName
+    message: Service name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: databaseType
+    message: Database type
+    type: list
+    choices:
+      - name: PostgreSQL
+        value: postgres
+      - name: MongoDB
+        value: mongo
+      - name: Redis
+        value: redis
+      - name: None
+        value: none
+  - name: messageQueue
+    message: Message queue
+    type: list
+    choices:
+      - name: RabbitMQ
+        value: rabbitmq
+      - name: Apache Kafka
+        value: kafka
+      - name: Redis Pub/Sub
+        value: redis-pubsub
+      - name: None
+        value: none
+  - name: includeAuth
+    message: Include JWT authentication?
+    type: confirm
+    default: true
+  - name: includeMetrics
+    message: Include Prometheus metrics?
+    type: confirm
+    default: true
+  - name: includeTracing
+    message: Include distributed tracing?
+    type: confirm
+    default: true
+```
+
+**Service Structure**
+```
+<%= serviceName %>/
+├── src/
+│   ├── controllers/              # HTTP request handlers
+│   ├── services/                 # Business logic
+│   ├── repositories/             # Data access layer
+│   ├── middleware/               # Express middleware
+│   ├── routes/                   # API routes
+│   ├── validators/               # Input validation
+│   ├── utils/                    # Utility functions
+│   ├── types/                    # TypeScript types
+│   └── app.ts                    # Application setup
+├── tests/                        # Test suites
+├── docker/                       # Docker configurations
+├── k8s/                          # Kubernetes manifests
+├── scripts/                      # Build and deployment scripts
+├── docs/                         # API documentation
+└── monitoring/                   # Monitoring configurations
+```
+
+**Application Setup** (`templates/app.ts.ejs.t`)
+```typescript
+---
+to: src/app.ts
+---
+import express from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
+<% if (includeMetrics) { %>import promClient from 'prom-client';<% } %>
+<% if (includeTracing) { %>import { trace, context } from '@opentelemetry/api';<% } %>
+import { requestLogger } from './middleware/logger';
+import { errorHandler } from './middleware/errorHandler';
+import { healthRoutes } from './routes/health';
+<% if (includeAuth) { %>import { authRoutes } from './routes/auth';<% } %>
+import { apiRoutes } from './routes/api';
+import { config } from './config';
+
+const app = express();
+
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
+
+// CORS configuration
+app.use(cors({
+  origin: config.CORS_ORIGINS.split(','),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: config.RATE_LIMIT_MAX,
+  message: {
+    error: 'Too many requests',
+    retryAfter: '15 minutes',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use(limiter);
+
+// Body parsing middleware
+app.use(express.json({ limit: config.MAX_REQUEST_SIZE }));
+app.use(express.urlencoded({ extended: true, limit: config.MAX_REQUEST_SIZE }));
+
+// Compression
+app.use(compression());
+
+<% if (includeMetrics) { %>// Metrics collection
+const collectDefaultMetrics = promClient.collectDefaultMetrics;
+collectDefaultMetrics({ timeout: 5000 });
+
+const httpRequestDuration = new promClient.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status'],
+  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10],
+});
+
+// Metrics middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    httpRequestDuration
+      .labels(req.method, req.route?.path || req.path, res.statusCode.toString())
+      .observe(duration);
+  });
+  
+  next();
+});
+
+// Metrics endpoint
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', promClient.register.contentType);
+  const metrics = await promClient.register.metrics();
+  res.send(metrics);
+});
+<% } %>
+
+<% if (includeTracing) { %>// Distributed tracing middleware
+app.use((req, res, next) => {
+  const tracer = trace.getTracer('<%= serviceName %>');
+  const span = tracer.startSpan(`${req.method} ${req.path}`);
+  
+  span.setAttributes({
+    'http.method': req.method,
+    'http.url': req.url,
+    'http.user_agent': req.get('User-Agent') || '',
+    'user.id': req.user?.id || 'anonymous',
+  });
+
+  // Add trace context to request
+  req.traceId = span.spanContext().traceId;
+  
+  res.on('finish', () => {
+    span.setAttribute('http.status_code', res.statusCode);
+    span.end();
+  });
+  
+  context.with(trace.setSpan(context.active(), span), () => {
+    next();
+  });
+});
+<% } %>
+
+// Request logging
+app.use(requestLogger);
+
+// API routes
+app.use('/health', healthRoutes);
+<% if (includeAuth) { %>app.use('/auth', authRoutes);<% } %>
+app.use('/api/v1', apiRoutes);
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.originalUrl} not found`,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Global error handler
+app.use(errorHandler);
+
+export { app };
+```
+
+**Docker Configuration** (`templates/Dockerfile.ejs.t`)
+```dockerfile
+---
+to: Dockerfile
+---
+# Build stage
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig*.json ./
+
+# Install dependencies
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy source code
+COPY src/ ./src/
+COPY tests/ ./tests/
+
+# Build the application
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine AS production
+
+# Create app user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install production dependencies only
+RUN npm ci --only=production && \
+    npm cache clean --force && \
+    rm -rf /tmp/*
+
+# Copy built application
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+
+# Copy necessary files
+COPY --chown=nodejs:nodejs docker/docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
+# Security hardening
+RUN apk add --no-cache dumb-init && \
+    rm -rf /var/cache/apk/*
+
+# Switch to non-root user
+USER nodejs
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node dist/scripts/health-check.js
+
+# Expose port
+EXPOSE 3000
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["./docker-entrypoint.sh"]
+```
+
+**Kubernetes Deployment** (`templates/deployment.yaml.ejs.t`)
+```yaml
+---
+to: k8s/deployment.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <%= serviceName %>
+  labels:
+    app: <%= serviceName %>
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: <%= serviceName %>
+  template:
+    metadata:
+      labels:
+        app: <%= serviceName %>
+        version: v1
+      annotations:
+<% if (includeMetrics) { %>        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"<% } %>
+    spec:
+      serviceAccountName: <%= serviceName %>
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+      - name: <%= serviceName %>
+        image: <%= serviceName %>:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+<% if (databaseType === 'postgres') { %>        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: <%= serviceName %>-secrets
+              key: database-url<% } %>
+<% if (databaseType === 'mongo') { %>        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: <%= serviceName %>-secrets
+              key: mongodb-uri<% } %>
+<% if (includeAuth) { %>        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: <%= serviceName %>-secrets
+              key: jwt-secret<% } %>
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health/live
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health/ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: logs
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: <%= serviceName %>-service
+  labels:
+    app: <%= serviceName %>
+spec:
+  selector:
+    app: <%= serviceName %>
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+```
+
+**GitHub Actions CI/CD** (`templates/.github-workflows-ci.yml.ejs.t`)
+```yaml
+---
+to: .github/workflows/ci.yml
+---
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/<%= serviceName %>
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+<% if (databaseType === 'postgres') { %>      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432<% } %>
+<% if (databaseType === 'mongo') { %>      mongodb:
+        image: mongo:6
+        ports:
+          - 27017:27017<% } %>
+<% if (databaseType === 'redis') { %>      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379<% } %>
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run lint
+      run: npm run lint
+    
+    - name: Run type check
+      run: npm run typecheck
+    
+    - name: Run tests
+      run: npm run test:coverage
+      env:
+<% if (databaseType === 'postgres') { %>        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db<% } %>
+<% if (databaseType === 'mongo') { %>        MONGODB_URI: mongodb://localhost:27017/test_db<% } %>
+<% if (databaseType === 'redis') { %>        REDIS_URL: redis://localhost:6379<% } %>
+        NODE_ENV: test
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage/lcov.info
+        fail_ci_if_error: true
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run security audit
+      run: npm audit --audit-level high
+    
+    - name: Run Snyk security scan
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  build-and-push:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to Kubernetes
+      uses: azure/k8s-deploy@v1
+      with:
+        manifests: |
+          k8s/deployment.yaml
+          k8s/service.yaml
+        images: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        kubectl-version: 'latest'
+```
+
+### Usage Example
+```bash
+bun run hypergen nodejs-microservice
+# Prompts:
+# Service name: user-service
+# Database type: PostgreSQL
+# Message queue: RabbitMQ
+# Include JWT authentication? Yes
+# Include Prometheus metrics? Yes
+# Include distributed tracing? Yes
+
+# Generated: Complete microservice with 40+ files
+```
+
+---
+
+## What's Next?
+
+These real-world examples demonstrate complete, production-ready applications. For more specialized patterns, explore:
+
+- **[Advanced Patterns](/examples/advanced-patterns)** - Complex template compositions and enterprise patterns
+- **[Framework Integration](/examples/frameworks)** - Framework-specific optimizations and patterns
+
+<Note>
+All real-world examples include complete deployment configurations, monitoring setup, and security best practices ready for production use.
+</Note>

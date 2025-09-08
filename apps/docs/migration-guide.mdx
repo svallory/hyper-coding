@@ -1,0 +1,671 @@
+---
+title: "Migration Guide"
+description: "Complete guide for migrating from other code generation tools to HyperDev, with step-by-step instructions and automated migration tools"
+---
+
+# Migration Guide
+
+Seamlessly migrate from existing code generation tools to HyperDev with comprehensive migration paths, automated tools, and step-by-step guidance.
+
+## Migration Overview
+
+### Supported Migration Paths
+
+HyperDev provides automated migration support for popular code generation tools.
+
+<CardGroup cols={2}>
+  <Card title="Hygen" icon="arrow-right" color="blue">
+    Direct migration path with template conversion
+    - Template structure mapping
+    - Configuration migration  
+    - Action system upgrade
+    - Command compatibility layer
+  </Card>
+
+  <Card title="Yeoman" icon="arrow-right" color="green">
+    Generator to template conversion
+    - Generator structure analysis
+    - Prompt system migration
+    - File operation mapping
+    - Dependency resolution
+  </Card>
+
+  <Card title="Plop" icon="arrow-right" color="purple">
+    Configuration-based migration
+    - Plopfile.js conversion
+    - Template engine migration
+    - Action mapping
+    - Helper function migration
+  </Card>
+
+  <Card title="Custom Scripts" icon="arrow-right" color="orange">
+    Script analysis and template generation
+    - Pattern recognition
+    - Template extraction
+    - Configuration generation
+    - Workflow optimization
+  </Card>
+</CardGroup>
+
+## Hygen to HyperDev Migration
+
+### Automated Migration Tool
+
+Use the built-in migration tool for seamless Hygen to HyperDev conversion.
+
+```bash
+# Install HyperDev globally
+npm install -g @hyperdev/hypergen
+
+# Run automated migration
+hypergen migrate hygen \
+  --source="./_templates" \
+  --output="./templates" \
+  --config-output="./hypergen.config.js" \
+  --preserve-structure \
+  --upgrade-actions
+
+# Validate migrated templates
+hypergen validate ./templates --strict
+
+# Test migrated templates
+hypergen test ./templates --all
+```
+
+### Template Structure Migration
+
+Hygen templates migrate directly with enhanced features.
+
+<CodeGroup>
+```yaml Before (Hygen)
+# _templates/component/new/index.js
+module.exports = {
+  prompt: ({ inquirer }) => {
+    const questions = [
+      {
+        type: 'input',
+        name: 'name',
+        message: 'Component name?'
+      }
+    ];
+    return inquirer.prompt(questions);
+  }
+};
+```
+
+```yaml After (HyperDev)
+# templates/component/template.yml
+name: "React Component"
+version: "1.0.0"
+description: "Generate React component with TypeScript"
+
+variables:
+  name:
+    type: string
+    required: true
+    prompt: "Component name?"
+    validation: /^[A-Z][A-Za-z0-9]*$/
+    
+  typescript:
+    type: boolean
+    default: true
+    prompt: "Use TypeScript?"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "src/components/{{ name }}/{{ name }}.tsx"
+    condition: "typescript === true"
+```
+</CodeGroup>
+
+### Action System Upgrade
+
+Hygen actions are enhanced in HyperDev's V8 action system.
+
+<CodeGroup>
+```javascript Before (Hygen Action)
+// _templates/component/new/component.ejs.t
+---
+to: src/components/<%= name %>/<%= name %>.tsx
+---
+import React from 'react';
+
+const <%= name %>: React.FC = () => {
+  return <div><%= name %> Component</div>;
+};
+
+export default <%= name %>;
+```
+
+```typescript After (HyperDev Action)
+// templates/component/actions/component.ts
+import { Action, ActionContext } from '@hyperdev/hypergen';
+
+@Action('generate-component')
+export class GenerateComponentAction {
+  async execute(context: ActionContext) {
+    const { name, typescript } = context.parameters;
+    
+    // Enhanced validation
+    if (!name.match(/^[A-Z][A-Za-z0-9]*$/)) {
+      throw new Error('Component name must be PascalCase');
+    }
+    
+    // Generate files with enhanced logic
+    await context.generateFile('component.tsx.ejs', {
+      to: `src/components/${name}/${name}.tsx`,
+      parameters: { name, typescript }
+    });
+    
+    // Generate tests automatically
+    if (context.config.include_tests) {
+      await context.generateFile('component.test.tsx.ejs', {
+        to: `src/components/${name}/${name}.test.tsx`,
+        parameters: { name }
+      });
+    }
+    
+    // Update index file
+    await context.injectIntoFile('src/components/index.ts', {
+      pattern: /export \* from/,
+      template: `export * from './${name}/${name}';`
+    });
+  }
+}
+```
+</CodeGroup>
+
+### Configuration Migration
+
+Hygen configuration migrates to HyperDev's enhanced config system.
+
+```javascript
+// hypergen.config.js (migrated from .hygen.js)
+export default {
+  // Migrated template directories
+  template_dirs: ['./templates'],
+  
+  // Enhanced configuration options
+  generator: {
+    // Hygen compatibility mode
+    hygen_compatibility: true,
+    
+    // Enhanced features
+    typescript_actions: true,
+    recipe_system: true,
+    multi_template_support: true
+  },
+  
+  // Migration-specific settings
+  migration: {
+    source: 'hygen',
+    preserve_file_structure: true,
+    upgrade_actions: true,
+    
+    // Compatibility mappings
+    action_mappings: {
+      'add': 'generate_file',
+      'inject': 'inject_into_file',
+      'append': 'append_to_file'
+    }
+  },
+  
+  // Enhanced validation
+  validation: {
+    strict_mode: true,
+    require_typescript: true,
+    security_scan: true
+  }
+};
+```
+
+## Yeoman Migration
+
+### Generator Analysis and Conversion
+
+Migrate Yeoman generators to HyperDev templates with enhanced capabilities.
+
+```bash
+# Analyze Yeoman generator
+hypergen migrate yeoman \
+  --source="./generator-myapp" \
+  --analyze \
+  --output-report="./migration-analysis.json"
+
+# Convert generator to templates
+hypergen migrate yeoman \
+  --source="./generator-myapp" \
+  --output="./templates" \
+  --preserve-prompts \
+  --upgrade-features
+
+# Validate converted templates
+hypergen validate ./templates \
+  --check-prompts \
+  --verify-file-operations
+```
+
+### Prompt System Migration
+
+Yeoman prompts are enhanced in HyperDev's variable system.
+
+<CodeGroup>
+```javascript Before (Yeoman)
+// generators/app/index.js
+const Generator = require('yeoman-generator');
+
+module.exports = class extends Generator {
+  async prompting() {
+    this.answers = await this.prompt([
+      {
+        type: 'input',
+        name: 'name',
+        message: 'Your project name',
+        default: this.appname
+      },
+      {
+        type: 'list',
+        name: 'framework',
+        message: 'Which framework?',
+        choices: ['React', 'Vue', 'Angular'],
+        default: 'React'
+      }
+    ]);
+  }
+};
+```
+
+```yaml After (HyperDev)
+# templates/app/template.yml
+name: "Full-Stack Application"
+version: "2.0.0"
+description: "Generate complete application with framework choice"
+
+variables:
+  name:
+    type: string
+    required: true
+    prompt: "Your project name"
+    default: "{{ cwd | basename }}"
+    validation: /^[a-z][a-z0-9-]*$/
+    
+  framework:
+    type: select
+    prompt: "Which framework?"
+    options:
+      - value: "react"
+        label: "React"
+        description: "React with TypeScript and Vite"
+      - value: "vue" 
+        label: "Vue"
+        description: "Vue 3 with TypeScript and Vite"
+      - value: "angular"
+        label: "Angular"
+        description: "Angular with TypeScript and Angular CLI"
+    default: "react"
+    
+  features:
+    type: multiselect
+    prompt: "Additional features?"
+    options: ["testing", "storybook", "docker", "ci-cd"]
+    default: ["testing"]
+```
+</CodeGroup>
+
+## Plop Migration
+
+### Plopfile Configuration Conversion
+
+Convert Plop configurations to HyperDev's enhanced system.
+
+<CodeGroup>
+```javascript Before (Plop)
+// plopfile.js
+module.exports = function (plop) {
+  plop.setGenerator('component', {
+    description: 'React component generator',
+    prompts: [{
+      type: 'input',
+      name: 'name',
+      message: 'Component name?'
+    }],
+    actions: [{
+      type: 'add',
+      path: 'src/components/{{pascalCase name}}/{{pascalCase name}}.tsx',
+      templateFile: 'plop-templates/component.hbs'
+    }]
+  });
+};
+```
+
+```yaml After (HyperDev)
+# templates/component/template.yml
+name: "React Component"
+version: "1.0.0"
+description: "React component generator (migrated from Plop)"
+
+variables:
+  name:
+    type: string
+    required: true
+    prompt: "Component name?"
+    validation: /^[a-zA-Z][a-zA-Z0-9]*$/
+
+# Enhanced template processing
+computed_values:
+  pascal_name: "{{ name | pascalCase }}"
+  kebab_name: "{{ name | kebabCase }}"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "src/components/{{ computed_values.pascal_name }}/{{ computed_values.pascal_name }}.tsx"
+    
+  # Additional files not in original Plop generator
+  - from: "component.test.tsx.ejs"
+    to: "src/components/{{ computed_values.pascal_name }}/{{ computed_values.pascal_name }}.test.tsx"
+    condition: "include_tests !== false"
+    
+  - from: "index.ts.ejs"
+    to: "src/components/{{ computed_values.pascal_name }}/index.ts"
+
+# Enhanced actions
+actions:
+  post_generate:
+    - action: "update_component_index"
+      parameters:
+        component_name: "{{ computed_values.pascal_name }}"
+```
+</CodeGroup>
+
+### Handlebars to EJS Migration
+
+Automatic template conversion from Handlebars to EJS with enhanced features.
+
+```bash
+# Convert Handlebars templates to EJS
+hypergen migrate templates \
+  --source="./plop-templates" \
+  --from="handlebars" \
+  --to="ejs" \
+  --output="./templates" \
+  --preserve-logic \
+  --upgrade-helpers
+
+# Validate converted templates
+hypergen validate ./templates \
+  --template-engine="ejs" \
+  --check-helpers
+```
+
+## Custom Script Migration
+
+### Pattern Recognition and Template Generation
+
+Analyze existing custom scripts and generate equivalent templates.
+
+```bash
+# Analyze custom generation scripts
+hypergen analyze scripts \
+  --source="./scripts/generate" \
+  --recursive \
+  --output-report="./script-analysis.json" \
+  --detect-patterns
+
+# Generate templates from patterns
+hypergen migrate scripts \
+  --source="./scripts/generate" \
+  --output="./templates" \
+  --create-recipes \
+  --preserve-logic \
+  --upgrade-features
+```
+
+### Script Pattern Analysis
+
+HyperDev analyzes common patterns in custom scripts.
+
+<CodeGroup>
+```bash Before (Custom Script)
+#!/bin/bash
+# scripts/create-component.sh
+
+COMPONENT_NAME=$1
+COMPONENT_DIR="src/components/$COMPONENT_NAME"
+
+mkdir -p "$COMPONENT_DIR"
+
+cat > "$COMPONENT_DIR/$COMPONENT_NAME.tsx" << EOF
+import React from 'react';
+
+interface ${COMPONENT_NAME}Props {
+  // Props go here
+}
+
+const $COMPONENT_NAME: React.FC<${COMPONENT_NAME}Props> = () => {
+  return <div>$COMPONENT_NAME Component</div>;
+};
+
+export default $COMPONENT_NAME;
+EOF
+
+echo "Component $COMPONENT_NAME created successfully!"
+```
+
+```yaml After (HyperDev Template)
+# templates/component/template.yml (generated from script analysis)
+name: "React Component"
+version: "1.0.0" 
+description: "Generate React component (migrated from create-component.sh)"
+
+variables:
+  name:
+    type: string
+    required: true
+    prompt: "Component name?"
+    validation: /^[A-Z][A-Za-z0-9]*$/
+
+computed_values:
+  component_dir: "src/components/{{ name }}"
+  props_interface: "{{ name }}Props"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "{{ computed_values.component_dir }}/{{ name }}.tsx"
+    create_dirs: true
+
+actions:
+  post_generate:
+    - action: "log_success"
+      message: "Component {{ name }} created successfully!"
+```
+</CodeGroup>
+
+## Migration Best Practices
+
+### Pre-Migration Checklist
+
+Ensure successful migration with comprehensive preparation.
+
+<AccordionGroup>
+  <Accordion title="Environment Preparation">
+    - [ ] Backup existing templates/generators
+    - [ ] Install HyperDev CLI globally
+    - [ ] Verify Node.js version compatibility (16+)
+    - [ ] Document current workflow patterns
+    - [ ] Identify custom helpers and functions
+  </Accordion>
+
+  <Accordion title="Migration Planning">
+    - [ ] Analyze template complexity and dependencies
+    - [ ] Plan migration phases (templates, configuration, workflows)
+    - [ ] Identify upgrade opportunities
+    - [ ] Plan team training and onboarding
+    - [ ] Establish rollback procedures
+  </Accordion>
+
+  <Accordion title="Testing Strategy">
+    - [ ] Create test cases for existing generators
+    - [ ] Plan validation of migrated templates
+    - [ ] Set up automated testing pipeline
+    - [ ] Plan user acceptance testing
+    - [ ] Establish performance benchmarks
+  </Accordion>
+
+  <Accordion title="Team Preparation">
+    - [ ] Schedule team training sessions
+    - [ ] Prepare documentation updates
+    - [ ] Plan gradual rollout strategy
+    - [ ] Set up support channels
+    - [ ] Create migration timeline
+  </Accordion>
+</AccordionGroup>
+
+### Post-Migration Optimization
+
+Enhance migrated templates with HyperDev's advanced features.
+
+```javascript
+// Post-migration enhancement configuration
+export default {
+  enhancement: {
+    // Upgrade to V8 features
+    v8_features: {
+      typescript_actions: true,
+      recipe_system: true,
+      advanced_validation: true,
+      security_scanning: true
+    },
+    
+    // Performance optimizations
+    performance: {
+      template_caching: true,
+      parallel_generation: true,
+      incremental_updates: true
+    },
+    
+    // Enhanced developer experience
+    developer_experience: {
+      ide_integration: true,
+      auto_completion: true,
+      error_recovery: true,
+      debugging_support: true
+    }
+  }
+};
+```
+
+## Migration Troubleshooting
+
+### Common Migration Issues
+
+<CardGroup cols={2}>
+  <Card title="Template Conversion" icon="exclamation-triangle">
+    **Issue**: Template syntax not converting properly
+    
+    **Solutions**:
+    - Use `--preserve-syntax` flag
+    - Manual template review and adjustment
+    - Custom helper function migration
+    - Template validation with detailed errors
+  </Card>
+
+  <Card title="Action Migration" icon="gear">
+    **Issue**: Complex actions not migrating correctly
+    
+    **Solutions**: 
+    - Break down complex actions into smaller parts
+    - Use TypeScript actions for enhanced functionality
+    - Leverage HyperDev's recipe system
+    - Manual action review and optimization
+  </Card>
+
+  <Card title="Configuration Issues" icon="cog">
+    **Issue**: Configuration not working as expected
+    
+    **Solutions**:
+    - Review configuration mapping
+    - Use compatibility mode initially
+    - Gradual configuration upgrade
+    - Validate with `hypergen config validate`
+  </Card>
+
+  <Card title="Performance Problems" icon="clock">
+    **Issue**: Slower generation after migration
+    
+    **Solutions**:
+    - Enable caching and optimization features
+    - Review template complexity
+    - Use parallel processing
+    - Profile and optimize bottlenecks
+  </Card>
+</CardGroup>
+
+### Migration Support Commands
+
+```bash
+# Migration validation and troubleshooting
+hypergen migrate validate \
+  --source="hygen" \
+  --templates="./templates" \
+  --detailed-report
+
+# Migration rollback
+hypergen migrate rollback \
+  --backup="./migration-backup" \
+  --restore-config \
+  --verify
+
+# Migration optimization
+hypergen migrate optimize \
+  --templates="./templates" \
+  --enable-v8-features \
+  --performance-tune
+```
+
+## Getting Help
+
+### Migration Support Resources
+
+<CardGroup cols={3}>
+  <Card title="Documentation" icon="book">
+    - Comprehensive migration guides
+    - Video tutorials and walkthroughs
+    - Best practices and patterns
+    - Troubleshooting guides
+  </Card>
+
+  <Card title="Community Support" icon="users">
+    - Discord community server
+    - GitHub discussions
+    - Stack Overflow tag
+    - Community templates and examples
+  </Card>
+
+  <Card title="Professional Support" icon="headset">
+    - Enterprise migration services
+    - Training and consultation
+    - Custom migration tools
+    - Priority support channels
+  </Card>
+</CardGroup>
+
+### Migration Assistance
+
+```bash
+# Get migration help
+hypergen migrate help
+
+# Request migration assistance
+hypergen support migration \
+  --source="yeoman" \
+  --complexity="high" \
+  --team-size="15" \
+  --timeline="2-weeks"
+
+# Access migration resources
+hypergen resources migration \
+  --source="hygen" \
+  --include="examples,tutorials,best-practices"
+```
+
+This comprehensive migration guide ensures smooth transitions from any code generation tool to HyperDev, with automated tools, detailed instructions, and ongoing support.

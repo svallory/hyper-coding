@@ -1,0 +1,504 @@
+---
+title: "hyper search"
+description: "Universal search across templates, patterns, documentation, and solutions in the HyperDev ecosystem"
+icon: "search"
+---
+
+# hyper search
+
+Powerful universal search command that helps you find templates, architectural patterns, documentation, solutions, and resources across the entire HyperDev ecosystem with intelligent filtering and ranking.
+
+## Syntax
+
+```bash
+hyper search <query> [options]
+```
+
+## Overview
+
+The `hyper search` command provides comprehensive search capabilities:
+
+- **Template discovery**: Find the perfect template for your needs
+- **Pattern matching**: Discover architectural patterns and best practices
+- **Solution finding**: Search for solutions to common development problems
+- **Documentation search**: Find relevant guides, tutorials, and references
+- **Intelligent ranking**: Results ranked by relevance, trust score, and popularity
+- **Context awareness**: Search results tailored to your project and tech stack
+
+<Info>
+  Search results include trust scores, popularity metrics, and compatibility information to help you
+  make informed decisions about which resources to use.
+</Info>
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--type <type>` | Search type filter | `all` | `--type templates` |
+| `--scope <scope>` | Search scope | `all` | `--scope solutions` |
+| `--language <lang>` | Programming language filter | - | `--language typescript` |
+| `--framework <name>` | Framework filter | - | `--framework react` |
+| `--trust-level <min>` | Minimum trust level (1-10) | `6` | `--trust-level 8` |
+| `--official-only` | Only official resources | `false` | `--official-only` |
+| `--limit <n>` | Limit results | `20` | `--limit 10` |
+| `--json` | JSON format output | `false` | `--json` |
+
+## Examples
+
+### Basic Search
+
+```bash
+# Search for React components
+hyper search "react component"
+
+# Find authentication solutions
+hyper search "user authentication"
+
+# Search for API templates
+hyper search "rest api typescript"
+```
+
+### Filtered Search
+
+```bash
+# Templates only
+hyper search "nextjs" --type templates
+
+# High-trust resources only
+hyper search "payment processing" --trust-level 9
+
+# Official resources only  
+hyper search "database migration" --official-only
+```
+
+### Technology-Specific Search
+
+```bash
+# TypeScript-focused results
+hyper search "form validation" --language typescript
+
+# React ecosystem only
+hyper search "state management" --framework react
+
+# Node.js backend solutions
+hyper search "api authentication" --language javascript --scope backend
+```
+
+## Search Types
+
+### Template Search
+
+```bash
+# Find templates for specific use cases
+hyper search "ecommerce template" --type templates
+hyper search "admin dashboard" --type templates
+hyper search "mobile app" --type templates
+```
+
+**Template Search Results**:
+```
+🔍 Search Results for "ecommerce template"
+
+📦 Templates (4 found)
+├── ⭐ nextjs-ecommerce-starter (Trust: 9.2, ↗️ Trending)
+│   └── Complete e-commerce solution with Next.js, Stripe, and Tailwind
+│   └── Author: HyperDev Official | Downloads: 15.2k | Updated: 2 days ago
+│
+├── ⭐ react-shopify-template (Trust: 8.7, 🔥 Popular) 
+│   └── Shopify-integrated React e-commerce template
+│   └── Author: Community Pro | Downloads: 8.9k | Updated: 1 week ago
+│
+├── ⭐ vue-commerce-template (Trust: 8.4)
+│   └── Vue.js e-commerce template with Nuxt and Vuetify
+│   └── Author: VueCommerce | Downloads: 3.2k | Updated: 3 weeks ago
+│
+└── ⭐ minimal-shop-template (Trust: 7.8)
+    └── Lightweight e-commerce template for small businesses
+    └── Author: IndieDevs | Downloads: 1.1k | Updated: 1 month ago
+
+💡 Quick Actions:
+  hyper generate nextjs-ecommerce-starter
+  hyper list templates --filter ecommerce
+```
+
+### Pattern Search
+
+```bash
+# Find architectural patterns
+hyper search "microservices pattern" --type patterns
+hyper search "event sourcing" --type patterns
+hyper search "clean architecture" --type patterns
+```
+
+**Pattern Search Results**:
+```
+🏗️ Patterns (3 found) for "microservices pattern"
+
+├── 📐 Event-Driven Microservices (Trust: 9.5)
+│   └── Comprehensive guide to event-driven microservice architecture
+│   └── Includes: Message queues, event sourcing, saga patterns
+│   └── Technologies: Node.js, RabbitMQ, Docker, Kubernetes
+│
+├── 📐 API Gateway Pattern (Trust: 9.1)
+│   └── Centralized API gateway for microservice communication
+│   └── Includes: Rate limiting, authentication, load balancing
+│   └── Technologies: Express Gateway, Kong, AWS API Gateway
+│
+└── 📐 CQRS with Microservices (Trust: 8.8)
+    └── Command Query Responsibility Segregation in distributed systems
+    └── Includes: Read/write separation, event stores
+    └── Technologies: EventStore, PostgreSQL, Redis
+
+💡 Related Searches:
+  hyper search "microservices deployment"
+  hyper search "service mesh pattern"
+```
+
+### Solution Search
+
+```bash
+# Find solutions to specific problems
+hyper search "jwt token refresh" --type solutions
+hyper search "file upload security" --type solutions
+hyper search "rate limiting implementation" --type solutions
+```
+
+**Solution Search Results**:
+```
+💡 Solutions (5 found) for "jwt token refresh"
+
+├── 🔧 JWT Refresh Token Implementation (Trust: 9.3)
+│   └── Complete guide to secure JWT refresh token handling
+│   └── Includes: Token rotation, security considerations, examples
+│   └── Languages: TypeScript, JavaScript, Python, Go
+│   
+├── 🔧 Automatic Token Refresh Hook (Trust: 8.9)
+│   └── React hook for automatic JWT token refresh
+│   └── Includes: Error handling, retry logic, storage management
+│   └── Framework: React, Next.js compatible
+│   
+├── 🔧 Express JWT Middleware (Trust: 8.6)
+│   └── Express.js middleware for JWT token validation and refresh
+│   └── Includes: Automatic refresh, secure storage, logging
+│   └── Framework: Express.js, Fastify
+│
+└── 🔧 Token Refresh Pattern (Trust: 8.2)
+    └── General pattern for implementing token refresh in SPAs
+    └── Includes: Best practices, security guidelines
+    └── Frameworks: React, Vue, Angular
+
+💡 Generate Implementation:
+  hyper generate jwt-refresh-system --solution "JWT Refresh Token Implementation"
+```
+
+### Documentation Search
+
+```bash
+# Search documentation and guides
+hyper search "deployment guide" --type docs
+hyper search "testing best practices" --type docs
+hyper search "security checklist" --type docs
+```
+
+## Advanced Search Features
+
+### Context-Aware Search
+
+HyperDev automatically considers your project context:
+
+```bash
+# In a Next.js project
+hyper search "authentication"
+# Results prioritize Next.js-compatible auth solutions
+
+# In a React Native project  
+hyper search "navigation"
+# Results focus on mobile navigation patterns
+```
+
+**Context Factors**:
+- **Current tech stack**: Detected from package.json and project files
+- **Project type**: Web app, mobile app, API service, library, etc.
+- **Team preferences**: Previously used templates and patterns
+- **Active epic**: Current epic context influences results
+
+### Fuzzy and Semantic Search
+
+```bash
+# Fuzzy matching handles typos
+hyper search "recat compnent"  # Finds "react component"
+
+# Semantic understanding
+hyper search "user login system"  # Finds auth, authentication, login templates
+
+# Natural language queries
+hyper search "I need a way to handle payments in my app"
+```
+
+### Search with Composition
+
+```bash
+# Find composable solutions
+hyper search "frontend backend database" --composable
+
+# Multi-technology search
+hyper search "react express postgresql" --stack
+
+# Full-stack search
+hyper search "saas application" --complete
+```
+
+## Search Filters and Refinement
+
+### Trust Level Filtering
+
+```bash
+# Only highly trusted resources
+hyper search "authentication" --trust-level 9
+
+# Community resources with moderate trust
+hyper search "ui components" --trust-level 7
+
+# Include experimental resources
+hyper search "bleeding edge react" --trust-level 5
+```
+
+**Trust Level Guide**:
+- **10**: Official HyperDev resources
+- **9**: Verified community leaders and companies  
+- **8**: Well-tested community resources
+- **7**: Popular community resources
+- **6**: Standard community resources
+- **5 and below**: Experimental or newer resources
+
+### Technology Filtering
+
+```bash
+# Language-specific search
+hyper search "web scraping" --language python
+hyper search "api client" --language typescript
+
+# Framework-specific search  
+hyper search "form handling" --framework react
+hyper search "routing" --framework vue
+
+# Multi-technology filtering
+hyper search "fullstack" --language typescript --framework next
+```
+
+### Scope Filtering
+
+```bash
+# Frontend-only results
+hyper search "component library" --scope frontend
+
+# Backend-focused results
+hyper search "authentication" --scope backend
+
+# DevOps and infrastructure
+hyper search "deployment" --scope devops
+
+# Full-stack solutions
+hyper search "saas starter" --scope fullstack
+```
+
+## Search Result Details
+
+### Understanding Search Results
+
+Each search result includes:
+
+- **Trust Score**: Reliability and quality rating (1-10)
+- **Popularity Indicators**: Download count, stars, usage metrics
+- **Freshness**: Last update, maintenance status
+- **Compatibility**: Technology compatibility and requirements
+- **Author Information**: Creator, maintainer, organization
+- **Quick Actions**: Direct commands to use the resource
+
+### Result Ranking Algorithm
+
+Results are ranked by:
+
+1. **Relevance Score**: Query match quality and semantic similarity
+2. **Trust Level**: Resource reliability and quality assessment
+3. **Popularity**: Community adoption and usage metrics
+4. **Freshness**: Recent updates and active maintenance
+5. **Context Fit**: Compatibility with your project and preferences
+6. **User Behavior**: Previous successful usage by similar projects
+
+## Integration with Other Commands
+
+### Search-to-Generate Workflow
+
+```bash
+# Search and directly generate
+hyper search "react form" --limit 3
+# Choose result and generate:
+hyper generate react-hook-form-template
+
+# Interactive search and generate
+hyper generate --search "payment form"
+```
+
+### Search-to-Plan Workflow
+
+```bash
+# Search for epic templates
+hyper search "user management epic" --type epic-templates
+
+# Search for architecture patterns during planning
+hyper plan user-system --search "user authentication patterns"
+```
+
+### Saved Searches
+
+```bash
+# Save frequently used searches
+hyper search "react components" --save "my-react-search"
+
+# Use saved searches
+hyper search --load "my-react-search"
+
+# List saved searches
+hyper search --saved --list
+```
+
+## Output Formats
+
+### Human-Readable Output (Default)
+
+The default output is optimized for readability with:
+- Color-coded categories and trust levels
+- Hierarchical result organization
+- Quick action suggestions
+- Related search recommendations
+
+### JSON Output
+
+```bash
+# JSON output for scripts and tools
+hyper search "api template" --json
+
+# Example JSON structure:
+{
+  "query": "api template",
+  "results": [
+    {
+      "id": "express-api-template",
+      "name": "Express API Template",
+      "description": "Production-ready Express.js API template",
+      "type": "template",
+      "trustScore": 9.2,
+      "popularity": 15200,
+      "lastUpdated": "2024-01-10",
+      "author": {
+        "name": "HyperDev Official",
+        "verified": true
+      },
+      "technologies": ["node.js", "express", "typescript"],
+      "quickActions": [
+        "hyper generate express-api-template"
+      ]
+    }
+  ],
+  "metadata": {
+    "totalResults": 12,
+    "searchTime": "0.234s",
+    "filters": {
+      "type": "all",
+      "trustLevel": 6
+    }
+  }
+}
+```
+
+## Configuration
+
+### Search Settings
+
+```javascript
+// hyperdev.config.js
+export default {
+  search: {
+    // Default search behavior
+    default_trust_level: 7,
+    max_results: 20,
+    include_experimental: false,
+    
+    // Search sources
+    sources: [
+      'official',        // Official HyperDev resources
+      'community',       // Community templates and patterns
+      'github',          // GitHub repositories
+      'npm',            // NPM packages
+      'documentation'   // Documentation and guides
+    ],
+    
+    // Personalization
+    personalization: {
+      enabled: true,
+      learn_preferences: true,
+      boost_used_technologies: true,
+      boost_team_resources: true
+    },
+    
+    // Output preferences
+    output: {
+      show_trust_scores: true,
+      show_popularity: true,
+      show_quick_actions: true,
+      color_output: true
+    }
+  }
+};
+```
+
+### Team Search Preferences
+
+```javascript
+export default {
+  team_search: {
+    // Preferred sources for team
+    preferred_sources: ['official', 'internal'],
+    
+    // Team technology stack
+    tech_stack: {
+      frontend: ['react', 'typescript', 'tailwind'],
+      backend: ['node.js', 'express', 'postgresql'],
+      mobile: ['react-native', 'expo'],
+      devops: ['docker', 'kubernetes', 'github-actions']
+    },
+    
+    // Custom search aliases
+    aliases: {
+      'components': 'react typescript components --trust-level 8',
+      'api': 'express typescript api --official-only',
+      'mobile': 'react native --type templates'
+    }
+  }
+};
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper list" href="/cli/commands/discovery/list">
+    List available resources with filtering
+  </Card>
+  <Card title="hyper generate" href="/cli/commands/workflow/generate">
+    Generate code from search results
+  </Card>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Use search for planning and architecture
+  </Card>
+  <Card title="hyper gen" href="/cli/commands/tools/gen">
+    Advanced template search and management
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Template Discovery Workflow](/cli/workflows/template-discovery)
+- [Search Configuration](/cli/configuration/search-config)
+- [Template System](/tools/gen)
+- [Search Examples](/cli/examples/search-and-discovery)

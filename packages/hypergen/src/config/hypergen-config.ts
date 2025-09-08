@@ -81,10 +81,10 @@ export class HypergenConfigLoader {
   ]
   
   private static readonly DEFAULT_CONFIG: HypergenConfig = {
-    templates: ['_templates'],
+    templates: ['recipes'],
     discovery: {
       sources: ['local', 'npm', 'workspace'],
-      directories: ['_templates', 'templates', 'generators'],
+      directories: ['recipes', 'cookbooks'],
       exclude: ['node_modules', '.git', 'dist', 'build']
     },
     engine: {
@@ -415,12 +415,12 @@ export class HypergenConfigLoader {
  */
 export default {
   // Template directories to search
-  templates: ['_templates'],
+  templates: ['recipes'],
   
   // Generator discovery options
   discovery: {
     sources: ['local', 'npm', 'workspace'],
-    directories: ['_templates', 'templates', 'generators'],
+    directories: ['recipes', 'cookbooks'],
     exclude: ['node_modules', '.git', 'dist', 'build']
   },
   

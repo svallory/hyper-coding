@@ -7,7 +7,7 @@ import createDebug from 'debug'
 import type { RenderedAction, RunnerConfig } from './types.js'
 import context from './context.js'
 import { initializeTemplateEnginesWithPlugins, getTemplateEngineForFile, getDefaultTemplateEngine } from './template-engines/index.js'
-const debug = createDebug('hygen:render')
+const debug = createDebug('hypergen:render')
 
 // Initialize template engines on module load (will be enhanced with plugin support)
 let templateEnginesInitialized = false
@@ -63,9 +63,15 @@ const renderTemplate = async (tmpl, locals, config, filePath?: string) => {
     }
   }
   
-  // Default to EJS for backward compatibility
-  debug('Using EJS template engine (fallback)')
-  return ejs.render(tmpl, ctx)
+  // Use default template engine (LiquidJS)
+  const defaultEngine = getDefaultTemplateEngine()
+  if (defaultEngine) {
+    debug('Using default template engine: %s', defaultEngine.name)
+    return await defaultEngine.render(tmpl, ctx)
+  }
+  
+  // Should never reach here if engines are properly initialized
+  throw new Error('No template engine available')
 }
 
 async function getFiles(dir) {

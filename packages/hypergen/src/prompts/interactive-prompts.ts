@@ -646,3 +646,107 @@ export class InteractivePrompter {
     return result
   }
 }
+
+/**
+ * Perform interactive prompting for a set of prompts
+ * 
+ * @param prompts Array of prompt configurations
+ * @param logger Optional logger for output
+ * @returns Promise resolving to answers object
+ */
+export async function performInteractivePrompting(
+  prompts: Array<{
+    type: string
+    name: string
+    message: string
+    default?: any
+    choices?: any[]
+    validate?: (input: any) => boolean | string
+  }>,
+  logger?: { log: (message: string) => void }
+): Promise<Record<string, any>> {
+  const answers: Record<string, any> = {}
+  
+  // Show intro message
+  p.intro('🎯 Interactive configuration')
+  
+  try {
+    for (const prompt of prompts) {
+      let result: any
+      
+      switch (prompt.type) {
+        case 'confirm':
+          result = await p.confirm({
+            message: prompt.message,
+            initialValue: prompt.default ?? false
+          })
+          break
+          
+        case 'list':
+          const options = prompt.choices?.map(choice => ({
+            value: choice,
+            label: choice
+          })) || []
+          
+          result = await p.select({
+            message: prompt.message,
+            options,
+            initialValue: prompt.default
+          })
+          break
+          
+        case 'number':
+          result = await p.text({
+            message: prompt.message,
+            placeholder: prompt.default?.toString() || 'Enter number',
+            defaultValue: prompt.default?.toString(),
+            validate: (value) => {
+              if (!value && prompt.default !== undefined) return undefined
+              const num = Number(value)
+              if (isNaN(num)) return 'Must be a valid number'
+              if (prompt.validate) {
+                const validation = prompt.validate(num)
+                return validation === true ? undefined : validation
+              }
+              return undefined
+            }
+          })
+          
+          // Convert to number
+          result = result ? Number(result) : prompt.default
+          break
+          
+        case 'input':
+        default:
+          result = await p.text({
+            message: prompt.message,
+            placeholder: prompt.default?.toString() || `Enter ${prompt.name}`,
+            defaultValue: prompt.default?.toString(),
+            validate: prompt.validate ? (value) => {
+              if (!value && prompt.default !== undefined) return undefined
+              const validation = prompt.validate!(value)
+              return validation === true ? undefined : validation
+            } : undefined
+          })
+          break
+      }
+      
+      // Handle cancellation
+      if (p.isCancel(result)) {
+        p.cancel('Operation cancelled')
+        throw new Error('User cancelled prompts')
+      }
+      
+      answers[prompt.name] = result
+    }
+    
+    p.outro('✅ Configuration complete!')
+    return answers
+    
+  } catch (error) {
+    if (error instanceof Error && error.message !== 'User cancelled prompts') {
+      p.cancel(`❌ Error: ${error.message}`)
+    }
+    throw error
+  }
+}

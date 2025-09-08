@@ -1,0 +1,575 @@
+---
+title: "hyper docs"
+description: "Manage project documentation - create, update, organize, and maintain technical and user documentation"
+icon: "book"
+---
+
+# hyper docs
+
+Manage project documentation including technical specifications, user guides, API documentation, and project knowledge. Create, organize, update, and maintain comprehensive project documentation.
+
+## Syntax
+
+```bash
+hyper docs [action] [options]
+```
+
+## Overview
+
+The `hyper docs` command provides comprehensive documentation management:
+
+- **Documentation creation**: Generate technical specs, user guides, and API docs
+- **Content organization**: Structure and categorize documentation effectively
+- **AI-assisted writing**: Get help writing clear, comprehensive documentation
+- **Template system**: Use templates for consistent documentation standards
+- **Version control**: Track documentation changes and maintain history
+- **Integration**: Connect docs with epics, tasks, and code changes
+
+<Info>
+  Project documentation includes all written materials that help team members and users understand,
+  use, and contribute to your project. This is separate from CLI or code documentation.
+</Info>
+
+## Actions
+
+| Action | Description | Example |
+|--------|-------------|---------|
+| `list` | List all documentation | `hyper docs list` |
+| `create` | Create new documentation | `hyper docs create api-guide` |
+| `edit` | Edit existing documentation | `hyper docs edit user-manual` |
+| `generate` | AI-generate documentation | `hyper docs generate --type api` |
+| `organize` | Organize documentation structure | `hyper docs organize` |
+| `search` | Search documentation content | `hyper docs search "authentication"` |
+| `validate` | Validate documentation quality | `hyper docs validate` |
+| `export` | Export documentation | `hyper docs export --format pdf` |
+| `serve` | Serve documentation site | `hyper docs serve` |
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--type <type>` | Documentation type | `guide` | `--type api` |
+| `--template <name>` | Template to use | `standard` | `--template technical-spec` |
+| `--epic <name>` | Associate with epic | - | `--epic user-auth` |
+| `--format <format>` | Output format | `markdown` | `--format pdf` |
+| `--ai-assist` | Enable AI assistance | `false` | `--ai-assist` |
+| `--interactive, -i` | Interactive mode | `false` | `--interactive` |
+| `--output <path>` | Output directory | `docs/` | `--output ./documentation` |
+
+## Examples
+
+### Basic Documentation Management
+
+```bash
+# List all project documentation
+hyper docs list
+
+# List by category
+hyper docs list --type api
+
+# Create new documentation
+hyper docs create "API Authentication Guide"
+
+# Edit existing documentation
+hyper docs edit user-manual
+```
+
+### AI-Assisted Documentation
+
+```bash
+# Generate API documentation from code
+hyper docs generate --type api --source ./src/api
+
+# Create user guide with AI assistance
+hyper docs create "User Onboarding Guide" --ai-assist
+
+# Generate technical specification for epic
+hyper docs generate --type technical-spec --epic user-auth
+
+# Interactive documentation creation
+hyper docs create --interactive --ai-assist
+```
+
+### Documentation Types
+
+```bash
+# Technical specification
+hyper docs create "Authentication Architecture" --type technical-spec
+
+# User guide
+hyper docs create "Getting Started Guide" --type user-guide
+
+# API documentation
+hyper docs create "REST API Reference" --type api-reference
+
+# Process documentation
+hyper docs create "Deployment Process" --type process
+
+# Troubleshooting guide
+hyper docs create "Common Issues" --type troubleshooting
+```
+
+## Documentation Types
+
+### Available Types
+
+<Accordion title="Documentation Types Reference">
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `technical-spec` | Technical specifications and architecture | System design, technical decisions |
+| `user-guide` | End-user documentation and tutorials | User onboarding, feature guides |
+| `api-reference` | API documentation and examples | Developer integration guides |
+| `process` | Team processes and workflows | Development workflow, deployment |
+| `troubleshooting` | Problem-solving guides | Common issues, debugging |
+| `architecture` | System architecture documentation | High-level system design |
+| `security` | Security documentation and guidelines | Security policies, compliance |
+| `deployment` | Deployment and infrastructure guides | DevOps, environment setup |
+| `testing` | Testing strategies and guides | QA processes, test documentation |
+| `onboarding` | New team member guides | Developer onboarding, setup |
+</Accordion>
+
+### Type-Specific Templates
+
+```bash
+# Show available templates for type
+hyper docs templates --type api-reference
+
+# Create with specific template
+hyper docs create "Payment API" \
+  --type api-reference \
+  --template openapi-spec
+```
+
+## Documentation Structure
+
+### Project Documentation Layout
+
+```
+docs/
+├── README.md                    # Project overview
+├── getting-started/             # User onboarding
+│   ├── installation.md
+│   ├── quick-start.md
+│   └── configuration.md
+├── technical-specs/             # Technical documentation
+│   ├── architecture.md
+│   ├── database-design.md
+│   └── api-architecture.md
+├── user-guides/                 # End-user documentation  
+│   ├── user-manual.md
+│   ├── admin-guide.md
+│   └── troubleshooting.md
+├── api-reference/               # API documentation
+│   ├── authentication.md
+│   ├── endpoints.md
+│   └── examples.md
+├── processes/                   # Team processes
+│   ├── development-workflow.md
+│   ├── code-review.md
+│   └── deployment.md
+└── assets/                      # Documentation assets
+    ├── images/
+    ├── diagrams/
+    └── videos/
+```
+
+### Documentation Metadata
+
+```yaml
+# docs/technical-specs/authentication-architecture.md
+---
+title: "Authentication Architecture"
+type: "technical-spec"  
+epic: "user-auth"
+version: "1.2"
+created: "2024-01-15"
+updated: "2024-01-25"
+authors: ["alice@company.com"]
+reviewers: ["bob@company.com", "carol@company.com"]
+status: "approved"
+tags: ["authentication", "security", "architecture"]
+
+related_docs:
+  - "api-reference/authentication.md"
+  - "user-guides/login-guide.md"
+  
+related_tasks:
+  - "AUTH-001"
+  - "AUTH-002"
+---
+
+# Authentication Architecture
+
+## Overview
+This document outlines the authentication architecture for the user management system...
+```
+
+## AI-Assisted Documentation
+
+### Content Generation
+
+```bash
+# Generate documentation from code
+hyper docs generate --source ./src/auth \
+  --type api-reference \
+  --title "Authentication API"
+
+# Generate user guide from feature specifications
+hyper docs generate --epic user-auth \
+  --type user-guide \
+  --title "User Authentication Guide"
+
+# Generate troubleshooting guide from support tickets
+hyper docs generate --type troubleshooting \
+  --source ./support-tickets \
+  --title "Authentication Issues Guide"
+```
+
+### AI Writing Assistance
+
+```bash
+# Get help improving existing documentation
+hyper docs improve user-manual.md --ai-assist
+
+# Check documentation clarity and completeness
+hyper docs review technical-spec.md --ai-feedback
+
+# Generate documentation outline
+hyper docs outline "API Integration Guide" --ai-assist
+```
+
+### Content Enhancement
+
+```bash
+# Add examples to documentation
+hyper docs enhance api-reference.md --add-examples
+
+# Improve documentation accessibility  
+hyper docs enhance user-guide.md --accessibility
+
+# Add troubleshooting sections
+hyper docs enhance feature-guide.md --add-troubleshooting
+```
+
+## Documentation Organization
+
+### Content Structure
+
+```bash
+# Organize documentation by category
+hyper docs organize --by-type
+
+# Create documentation hierarchy
+hyper docs organize --hierarchical
+
+# Generate table of contents
+hyper docs toc --recursive
+
+# Create documentation index
+hyper docs index --generate
+```
+
+### Cross-References
+
+```bash
+# Add automatic cross-references
+hyper docs crossref --auto
+
+# Validate internal links
+hyper docs validate --check-links
+
+# Generate related document suggestions
+hyper docs relate user-guide.md
+```
+
+## Documentation Quality
+
+### Content Validation
+
+```bash
+# Check documentation quality
+hyper docs validate
+
+# Grammar and style check
+hyper docs lint --grammar --style
+
+# Check for outdated content
+hyper docs audit --outdated
+
+# Validate code examples
+hyper docs validate --test-examples
+```
+
+### Quality Metrics
+
+```bash
+# Documentation coverage report
+hyper docs coverage --by-epic
+
+# Readability analysis
+hyper docs readability user-guides/
+
+# Documentation health score
+hyper docs health --detailed
+```
+
+**Quality Report Example**:
+```
+📊 Documentation Quality Report
+
+📈 Overall Health: 8.4/10 (Good)
+├── Completeness: 85% (34/40 required docs)
+├── Freshness: 78% (updated within 30 days)
+├── Quality Score: 8.7/10 (readability, structure)
+└── Cross-references: 92% (valid internal links)
+
+📚 Coverage by Epic
+├── user-auth: 95% (19/20 docs)
+├── payment-system: 70% (7/10 docs) ⚠️
+├── admin-dashboard: 90% (9/10 docs)
+└── mobile-app: 60% (6/10 docs) ⚠️
+
+⚠️ Issues Found
+├── 6 outdated documents (>90 days old)
+├── 3 broken internal links
+├── 2 missing code examples in API docs
+└── 1 documentation gap (payment webhooks)
+
+💡 Recommendations
+├── Update payment system documentation
+├── Add mobile app user guides
+├── Fix broken links in API reference
+└── Schedule quarterly documentation review
+```
+
+## Documentation Templates
+
+### Built-in Templates
+
+```bash
+# List available templates
+hyper docs templates
+
+# Show template structure
+hyper docs template show technical-spec
+
+# Create custom template
+hyper docs template create my-spec-template
+```
+
+**Template Categories**:
+- `technical-spec` - Technical specification template
+- `user-guide` - User guide with screenshots and examples  
+- `api-reference` - API documentation with OpenAPI structure
+- `troubleshooting` - Problem-solution format
+- `process` - Step-by-step process documentation
+- `architecture` - System architecture with diagrams
+- `security` - Security documentation template
+- `onboarding` - New team member guide template
+
+### Custom Templates
+
+```yaml
+# .hyper/doc-templates/my-api-template.yml
+name: "API Endpoint Documentation"
+type: "api-reference"
+sections:
+  - title: "Overview"
+    required: true
+  - title: "Authentication"  
+    required: true
+  - title: "Endpoints"
+    required: true
+    subsections:
+      - "Request Format"
+      - "Response Format"
+      - "Examples"
+      - "Error Codes"
+  - title: "Rate Limiting"
+    required: false
+  - title: "SDK Examples"
+    required: false
+
+frontmatter:
+  - field: "api_version"
+    required: true
+  - field: "last_updated"
+    auto_generate: true
+
+examples:
+  required: true
+  languages: ["curl", "javascript", "python"]
+```
+
+## Documentation Publishing
+
+### Static Site Generation
+
+```bash
+# Generate documentation website
+hyper docs build --site
+
+# Serve documentation locally
+hyper docs serve --port 3001
+
+# Build for production
+hyper docs build --production --output ./dist
+```
+
+### Export Options
+
+```bash
+# Export as PDF
+hyper docs export --format pdf --output docs.pdf
+
+# Export specific sections
+hyper docs export user-guides/ --format pdf
+
+# Export with custom styling
+hyper docs export --format html --theme corporate
+```
+
+### Documentation Hosting
+
+```bash
+# Deploy to GitHub Pages
+hyper docs deploy --github-pages
+
+# Deploy to Netlify
+hyper docs deploy --netlify
+
+# Export for custom hosting
+hyper docs export --static --optimize
+```
+
+## Team Collaboration
+
+### Review Process
+
+```bash
+# Submit documentation for review
+hyper docs review submit user-guide.md --reviewers alice,bob
+
+# Review documentation changes
+hyper docs review user-guide.md --approve
+
+# Track review status
+hyper docs review status
+```
+
+### Version Control
+
+```bash
+# Track documentation versions
+hyper docs version user-guide.md --tag v1.2
+
+# Show documentation history
+hyper docs history user-guide.md
+
+# Compare versions
+hyper docs diff user-guide.md --versions v1.1,v1.2
+```
+
+## Integration with Development
+
+### Code-Documentation Sync
+
+```bash
+# Update docs when code changes
+hyper docs sync --auto-update
+
+# Generate docs from code comments
+hyper docs extract --source ./src --type api-reference
+
+# Link documentation to code
+hyper docs link user-guide.md --code-refs ./src/components
+```
+
+### Epic Integration
+
+```bash
+# Generate documentation for epic
+hyper docs epic user-auth --generate-all
+
+# List epic documentation
+hyper docs list --epic user-auth
+
+# Epic documentation completeness
+hyper docs epic user-auth --coverage
+```
+
+## Configuration
+
+### Documentation Settings
+
+```javascript
+// hyperdev.config.js
+export default {
+  docs: {
+    // Documentation directory
+    docs_dir: 'docs/',
+    
+    // Default settings
+    defaults: {
+      format: 'markdown',
+      template: 'standard',
+      ai_assist: false
+    },
+    
+    // AI assistance
+    ai: {
+      enabled: true,
+      provider: 'openai',
+      model: 'gpt-4',
+      features: ['generation', 'improvement', 'review']
+    },
+    
+    // Quality standards
+    quality: {
+      min_readability_score: 7.0,
+      max_age_days: 90,
+      require_examples: true,
+      require_reviews: true
+    },
+    
+    // Publishing
+    publishing: {
+      site_generator: 'mintlify',
+      theme: 'default',
+      auto_deploy: true,
+      export_formats: ['pdf', 'html']
+    },
+    
+    // Integration
+    integration: {
+      sync_with_code: true,
+      link_to_epics: true,
+      auto_update_on_changes: true
+    }
+  }
+};
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper epic" href="/cli/commands/resources/epic">
+    Link documentation to epic planning
+  </Card>
+  <Card title="hyper task" href="/cli/commands/resources/task">  
+    Connect documentation to specific tasks
+  </Card>
+  <Card title="hyper search" href="/cli/commands/discovery/search">
+    Search across project documentation
+  </Card>
+  <Card title="hyper status" href="/cli/commands/discovery/status">
+    Check documentation health and coverage
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Documentation Strategy](/cli/workflows/documentation-strategy)
+- [Technical Writing](/cli/workflows/technical-writing)  
+- [Knowledge Management](/cli/workflows/knowledge-management)
+- [Documentation Templates](/cli/configuration/doc-templates)

@@ -3,7 +3,7 @@ import createDebug from 'debug'
 import degit from 'degit'
 import type { ActionResult } from '../types.js'
 import createResult from './result.js'
-const debug = createDebug('hygen:ops:setup')
+const debug = createDebug('hypergen:ops:setup')
 /*
 XXX:
 - Name -> target directory

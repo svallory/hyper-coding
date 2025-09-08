@@ -1,0 +1,617 @@
+---
+title: "hyper plan"
+description: "Strategic planning and architecture design with AI-powered epics and technical specifications"
+icon: "map"
+---
+
+# hyper plan
+
+Strategic planning and architecture design tool that helps you break down complex features into implementable epics with AI-powered technical specifications and architecture guidance.
+
+## Syntax
+
+```bash
+hyper plan [epic] [options]
+```
+
+## Overview
+
+The `hyper plan` command provides comprehensive project planning capabilities:
+
+- **Epic management**: Create and manage feature epics with clear scope
+- **Architecture design**: Generate technical specifications and diagrams
+- **Task breakdown**: Break complex features into implementable tasks
+- **Technical documentation**: Auto-generate PRDs, architecture docs, and specifications
+- **AI-powered insights**: Get architectural guidance and best practice recommendations
+
+<Info>
+  `hyper plan` provides streamlined access to the [Epics tool](/tools/epics), focusing on common planning workflows
+  while maintaining full access to advanced features.
+</Info>
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--create` | Create new epic | `false` | `--create` |
+| `--template <name>` | Epic template to use | `standard` | `--template saas-feature` |
+| `--dashboard, -d` | Launch planning dashboard | `false` | `--dashboard` |
+| `--arch` | Architecture tools | `false` | `--arch` |
+| `--tasks` | Task management | `false` | `--tasks` |
+| `--prd` | PRD management | `false` | `--prd` |
+| `--export <format>` | Export documentation | - | `--export pdf` |
+| `--interactive, -i` | Interactive mode | `true` | `--interactive` |
+
+## Examples
+
+### Basic Planning
+
+```bash
+# Start interactive planning session
+hyper plan
+
+# Launch planning dashboard
+hyper plan --dashboard
+
+# Work on specific epic
+hyper plan user-authentication
+```
+
+### Create New Epic
+
+```bash
+# Create epic with wizard
+hyper plan create --name "User Authentication System"
+
+# Create from template
+hyper plan create --name "Payment System" --template saas-feature
+
+# Create with specific context
+hyper plan create --name "Real-time Chat" --context "websocket-based messaging system"
+```
+
+### Architecture Design
+
+```bash
+# Launch architecture tools
+hyper plan --arch
+
+# Generate system diagram
+hyper plan auth-system --arch --diagram system
+
+# Export architecture documentation
+hyper plan auth-system --arch --export pdf
+```
+
+### Task Management
+
+```bash
+# Manage epic tasks
+hyper plan user-auth --tasks
+
+# Break down epic into tasks
+hyper plan user-auth --tasks --breakdown
+
+# Generate implementation roadmap
+hyper plan user-auth --tasks --roadmap
+```
+
+## Epic Creation
+
+### Epic Templates
+
+Choose from pre-built epic templates:
+
+<Accordion title="Available Epic Templates">
+| Template | Description | Use Case |
+|----------|-------------|----------|
+| `saas-feature` | SaaS product feature | User-facing features with auth, billing, etc. |
+| `api-service` | Backend API service | Microservices, REST APIs, GraphQL |
+| `ui-component` | UI component library | Design system components |
+| `integration` | Third-party integration | External service integrations |
+| `migration` | Data/system migration | Database migrations, system upgrades |
+| `performance` | Performance optimization | Speed, scalability improvements |
+| `security` | Security implementation | Auth, encryption, compliance |
+| `infrastructure` | Infrastructure setup | DevOps, CI/CD, monitoring |
+</Accordion>
+
+### Epic Structure
+
+When you create an epic, HyperDev generates:
+
+```
+.hyper/epics/user-authentication/
+├── epic.yml                    # Epic metadata and configuration
+├── prd.md                      # Product Requirements Document
+├── technical-spec.md           # Technical specification
+├── architecture/
+│   ├── system-diagram.mmd      # Mermaid system diagram
+│   ├── database-schema.sql     # Database design
+│   └── api-spec.yml           # API specification
+├── tasks/
+│   ├── tasks.yml              # Task breakdown
+│   └── roadmap.md             # Implementation roadmap
+├── tests/
+│   ├── acceptance-criteria.md  # Acceptance tests
+│   └── test-strategy.md       # Testing approach
+└── docs/
+    ├── user-guide.md          # User documentation
+    └── developer-guide.md     # Developer documentation
+```
+
+### Epic Configuration
+
+**epic.yml**
+```yaml
+name: "User Authentication System"
+version: "1.0.0"
+status: "planning"
+priority: "high"
+
+description: |
+  Complete user authentication system with registration, login, 
+  password reset, and multi-factor authentication support.
+
+scope:
+  includes:
+    - User registration and login
+    - Password reset functionality
+    - Multi-factor authentication
+    - Session management
+    - Role-based permissions
+  excludes:
+    - Social media login (future phase)
+    - Single sign-on (separate epic)
+
+stakeholders:
+  owner: "jane.smith@company.com"
+  developers: ["john.doe@company.com"]
+  reviewers: ["tech.lead@company.com"]
+
+timeline:
+  start: "2024-02-01"
+  end: "2024-03-15"
+  milestones:
+    - name: "Core auth implementation"
+      date: "2024-02-15"
+    - name: "MFA implementation"  
+      date: "2024-03-01"
+    - name: "Testing and documentation"
+      date: "2024-03-15"
+
+architecture:
+  patterns: ["JWT", "RBAC", "REST"]
+  technologies: ["Node.js", "Express", "PostgreSQL", "Redis"]
+  integrations: ["SendGrid", "Twilio"]
+```
+
+## Architecture Design
+
+### System Diagrams
+
+```bash
+# Generate system architecture diagram
+hyper plan auth-system --arch --diagram system
+
+# Generate database schema diagram  
+hyper plan auth-system --arch --diagram database
+
+# Generate API flow diagram
+hyper plan auth-system --arch --diagram api-flow
+```
+
+**Example System Diagram** (generated as Mermaid):
+```mermaid
+graph TB
+    Client[Web Client] --> API[Authentication API]
+    API --> DB[(PostgreSQL)]
+    API --> Cache[(Redis Cache)]
+    API --> Email[Email Service]
+    API --> SMS[SMS Service]
+    
+    subgraph "Authentication Flow"
+        API --> JWT[JWT Service]
+        API --> MFA[MFA Service] 
+        API --> Session[Session Manager]
+    end
+```
+
+### Technical Specifications
+
+HyperDev generates comprehensive technical specifications:
+
+<Accordion title="Generated Technical Spec Example">
+```markdown
+# User Authentication System - Technical Specification
+
+## Overview
+Complete authentication system supporting multiple authentication factors
+and role-based access control.
+
+## Architecture
+
+### Components
+- **Authentication API**: Core authentication endpoints
+- **JWT Service**: Token generation and validation
+- **MFA Service**: Multi-factor authentication handling
+- **Session Manager**: Session lifecycle management
+- **User Repository**: User data access layer
+
+### Database Schema
+```sql
+-- Users table
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Sessions table  
+CREATE TABLE sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  token_hash VARCHAR(255) NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### API Endpoints
+```yaml
+/auth/register:
+  POST:
+    description: Register new user
+    body:
+      email: string
+      password: string
+    responses:
+      201: User created successfully
+      400: Validation error
+
+/auth/login:
+  POST:
+    description: Authenticate user
+    body:
+      email: string  
+      password: string
+    responses:
+      200: Authentication successful
+      401: Invalid credentials
+```
+
+## Implementation Plan
+
+### Phase 1: Core Authentication
+- User registration endpoint
+- Login/logout functionality
+- JWT token generation
+- Basic password validation
+
+### Phase 2: Enhanced Security
+- Password reset flow
+- Account verification
+- Rate limiting
+- Security headers
+
+### Phase 3: Multi-Factor Authentication
+- SMS-based MFA
+- TOTP support
+- Backup codes
+- MFA recovery
+
+## Testing Strategy
+- Unit tests for all services
+- Integration tests for API endpoints
+- End-to-end authentication flows
+- Security penetration testing
+```
+</Accordion>
+
+## Task Management
+
+### Task Breakdown
+
+```bash
+# Auto-generate tasks from epic
+hyper plan user-auth --tasks --generate
+
+# Interactive task breakdown
+hyper plan user-auth --tasks --breakdown --interactive
+
+# Export tasks for project management
+hyper plan user-auth --tasks --export jira
+```
+
+**Generated Task Structure**:
+```yaml
+epic: "User Authentication System"
+tasks:
+  - id: "AUTH-001"
+    title: "Set up authentication database schema"
+    description: "Create users, sessions, and related tables"
+    priority: "high"
+    estimate: "2 days"
+    dependencies: []
+    
+  - id: "AUTH-002"  
+    title: "Implement user registration API"
+    description: "POST /auth/register endpoint with validation"
+    priority: "high"
+    estimate: "3 days"
+    dependencies: ["AUTH-001"]
+    
+  - id: "AUTH-003"
+    title: "Implement login/logout API"
+    description: "Authentication endpoints with JWT tokens"
+    priority: "high" 
+    estimate: "3 days"
+    dependencies: ["AUTH-001", "AUTH-002"]
+```
+
+### Implementation Roadmap
+
+HyperDev generates visual roadmaps showing:
+- Task dependencies and critical path
+- Timeline with milestones
+- Resource allocation
+- Risk assessment and mitigation
+
+## PRD Management
+
+### Auto-Generated PRDs
+
+```bash
+# Generate Product Requirements Document
+hyper plan payment-system --prd --generate
+
+# Edit PRD interactively
+hyper plan payment-system --prd --edit
+
+# Export PRD for stakeholders
+hyper plan payment-system --prd --export pdf
+```
+
+**PRD Template Structure**:
+```markdown
+# Payment System - Product Requirements Document
+
+## Problem Statement
+Current checkout process lacks payment flexibility and security features
+required for enterprise customers.
+
+## Goals and Success Metrics
+- Reduce cart abandonment by 25%
+- Support 5+ payment methods
+- Achieve PCI DSS compliance
+- Process $1M+ monthly volume
+
+## User Stories
+### Customer Payment Flow
+As a customer, I want to:
+- Choose from multiple payment methods
+- Save payment information securely  
+- Receive immediate payment confirmation
+- Get clear error messages if payment fails
+
+### Admin Payment Management
+As an admin, I want to:
+- View payment analytics and reports
+- Manage refunds and disputes
+- Configure payment method settings
+- Monitor transaction security
+
+## Technical Requirements
+### Functional Requirements
+- Support credit cards, PayPal, bank transfers
+- Real-time payment processing
+- Automatic retry for failed payments
+- Webhook notifications for payment events
+
+### Non-Functional Requirements  
+- 99.9% uptime for payment processing
+- <2 second response time for payment initiation
+- PCI DSS Level 1 compliance
+- SOC 2 Type II certification
+
+## Implementation Phases
+### Phase 1: Core Payment Processing (4 weeks)
+- Basic credit card processing
+- Payment form UI/UX
+- Success/failure handling
+
+### Phase 2: Enhanced Payment Methods (3 weeks)  
+- PayPal integration
+- Bank transfer support
+- Saved payment methods
+
+### Phase 3: Advanced Features (3 weeks)
+- Subscription billing
+- Payment analytics
+- Dispute management
+
+## Success Criteria
+- All user stories completed and tested
+- Performance benchmarks met
+- Security audit passed
+- Stakeholder approval received
+```
+
+## Planning Dashboard
+
+### Interactive Dashboard
+
+```bash
+# Launch planning dashboard
+hyper plan --dashboard
+```
+
+The dashboard provides:
+
+1. **Epic Overview**: Status, progress, and health metrics
+2. **Architecture Viewer**: Interactive diagrams and specifications  
+3. **Task Kanban**: Drag-and-drop task management
+4. **Timeline View**: Gantt charts and milestone tracking
+5. **Documentation Hub**: Centralized docs and specs
+6. **Collaboration Tools**: Comments, reviews, and approvals
+
+### Dashboard Features
+
+- **Real-time collaboration**: Multiple team members can plan together
+- **AI assistance**: Get architectural suggestions and best practices
+- **Integration ready**: Export to Jira, Linear, GitHub Issues
+- **Visual design**: Drag-and-drop diagram creation
+- **Code generation**: Direct integration with `hyper generate`
+
+## Integration with Development Workflow
+
+### From Planning to Implementation
+
+```bash
+# Plan the feature
+hyper plan create --name "User Profile System"
+
+# Generate code from epic
+hyper generate user-profile --epic "User Profile System"
+
+# Monitor implementation
+hyper develop --watch --epic "User Profile System"
+
+# Track progress
+hyper status --epic "User Profile System"
+```
+
+### Epic-Driven Development
+
+When you have an active epic, other commands become epic-aware:
+
+```bash
+# Generate components for current epic
+hyper plan use "Payment System"
+hyper generate payment-form  # Automatically uses epic context
+
+# Monitor epic progress
+hyper develop --epic-mode    # Focus on current epic only
+```
+
+## Advanced Features
+
+### AI-Powered Architecture Review
+
+```bash
+# Get AI architecture recommendations
+hyper plan auth-system --review --ai
+
+# AI provides feedback on:
+# - Security best practices
+# - Scalability concerns  
+# - Performance optimizations
+# - Integration patterns
+# - Technology choices
+```
+
+### Multi-Epic Planning
+
+```bash
+# Plan dependencies between epics
+hyper plan --multi-epic
+
+# Visualize cross-epic dependencies
+hyper plan --dependencies --visualize
+
+# Generate program-level roadmap
+hyper plan --program-roadmap --export gantt
+```
+
+## Export and Integration
+
+### Documentation Export
+
+```bash
+# Export complete epic documentation
+hyper plan auth-system --export all --format pdf
+
+# Export specific artifacts
+hyper plan auth-system --export prd --format markdown
+hyper plan auth-system --export architecture --format png
+hyper plan auth-system --export tasks --format csv
+```
+
+### Project Management Integration
+
+```bash
+# Export to Jira
+hyper plan auth-system --export jira --project AUTH
+
+# Export to Linear  
+hyper plan auth-system --export linear --team engineering
+
+# Export to GitHub Issues
+hyper plan auth-system --export github --repo company/product
+```
+
+## Configuration
+
+### Planning Settings
+
+```javascript
+// hyperdev.config.js
+export default {
+  planning: {
+    // Default epic template
+    defaultTemplate: 'saas-feature',
+    
+    // AI assistance settings
+    aiGuidance: {
+      architecture: true,
+      taskBreakdown: true,
+      riskAssessment: true,
+      bestPractices: true
+    },
+    
+    // Documentation generation
+    documentation: {
+      autoGenerate: ['prd', 'technical-spec'],
+      exportFormats: ['pdf', 'markdown'],
+      templates: './epic-templates'
+    },
+    
+    // Integration settings
+    integrations: {
+      jira: {
+        url: 'https://company.atlassian.net',
+        project: 'PROJ'
+      },
+      github: {
+        repo: 'company/product',
+        labels: ['epic', 'feature']  
+      }
+    }
+  }
+};
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper generate" href="/cli/commands/workflow/generate">
+    Generate code from epic specifications
+  </Card>
+  <Card title="hyper develop" href="/cli/commands/workflow/develop">
+    Monitor epic implementation progress
+  </Card>
+  <Card title="hyper status" href="/cli/commands/discovery/status">
+    Check epic health and progress
+  </Card>
+  <Card title="hyper epics" href="/cli/commands/tools/epics">
+    Advanced epic management features
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Strategic Planning Workflow](/cli/workflows/strategic-planning)
+- [Epic Templates](/cli/configuration/epic-templates)
+- [Epics Tool Documentation](/tools/epics)
+- [Planning Examples](/cli/examples/strategic-planning)

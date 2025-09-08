@@ -52,7 +52,9 @@
 		"docs:prepare": "cd hygen.io && bun install",
 		"docs:watch": "cd hygen.io && bun start",
 		"docs:build": "cd hygen.io && bun run build",
-		"docs:publish": "cd hygen.io && bun run deploy"
+		"docs:publish": "cd hygen.io && bun run deploy",
+		"docs:api": "typedoc --options docs/typedoc.json",
+		"docs:api:watch": "typedoc --options docs/typedoc.json --watch"
 	},
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",

@@ -5,8 +5,8 @@ import type { TemplateEngine } from './types.js'
 /**
  * EJS Template Engine Implementation
  * 
- * Provides backward compatibility with existing EJS templates.
- * This engine maintains compatibility with Hypergen's existing template system.
+ * Provides EJS templating support as one of Hypergen's supported template engines.
+ * This engine offers full EJS functionality alongside LiquidJS.
  */
 export class EJSTemplateEngine implements TemplateEngine {
   readonly name = 'ejs'
@@ -15,7 +15,7 @@ export class EJSTemplateEngine implements TemplateEngine {
   private options: ejs.Options = {}
 
   constructor() {
-    // Default EJS options that match current Hypergen behavior
+    // Default EJS options for optimal performance and functionality
     this.options = {
       async: true,
       cache: false, // Disable cache for string templates

@@ -1,0 +1,588 @@
+---
+title: "hyper list"
+description: "List and browse available resources, templates, epics, and project components with advanced filtering"
+icon: "list"
+---
+
+# hyper list
+
+Browse and list available resources across the HyperDev ecosystem with powerful filtering, sorting, and categorization options for templates, epics, components, and project assets.
+
+## Syntax
+
+```bash
+hyper list [resource] [options]
+```
+
+## Overview
+
+The `hyper list` command provides comprehensive resource browsing:
+
+- **Template catalog**: Browse available templates by category and technology
+- **Epic management**: List and manage project epics and their status
+- **Project inventory**: View components, modules, and assets in your project
+- **Resource discovery**: Explore available tools, patterns, and solutions
+- **Advanced filtering**: Filter by technology, trust level, category, and status
+- **Detailed information**: View metadata, compatibility, and usage statistics
+
+<Info>
+  Use `hyper list` to discover what's available before searching or generating. It provides
+  organized, categorical views of resources with detailed filtering options.
+</Info>
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--detailed, -d` | Show detailed information | `false` | `--detailed` |
+| `--trust-scores` | Include trust scores | `true` | `--trust-scores` |
+| `--official-only` | Only official resources | `false` | `--official-only` |
+| `--filter <criteria>` | Filter results | - | `--filter react` |
+| `--sort <field>` | Sort by field | `name` | `--sort popularity` |
+| `--category <cat>` | Category filter | `all` | `--category frontend` |
+| `--json` | JSON format output | `false` | `--json` |
+| `--limit <n>` | Limit results | `50` | `--limit 20` |
+
+## Examples
+
+### Basic Listing
+
+```bash
+# List all available resources
+hyper list
+
+# List templates only
+hyper list templates
+
+# List current project epics
+hyper list epics
+
+# List project components
+hyper list components
+```
+
+### Filtered Listing
+
+```bash
+# List React templates only
+hyper list templates --filter react
+
+# List high-trust templates
+hyper list templates --trust-scores --filter "trust>8"
+
+# List official resources only
+hyper list --official-only
+
+# List by category
+hyper list templates --category frontend
+```
+
+### Detailed Information
+
+```bash
+# Show detailed template information
+hyper list templates --detailed
+
+# Include trust scores and metrics
+hyper list templates --detailed --trust-scores
+
+# Sort by popularity
+hyper list templates --sort popularity --detailed
+```
+
+## Resource Categories
+
+### Templates
+
+```bash
+# List all templates
+hyper list templates
+```
+
+**Template Categories**:
+```
+📦 Templates Overview (127 available)
+
+🎨 Frontend Templates (45)
+├── React Components (15)
+├── Vue Components (8) 
+├── Angular Components (6)
+├── Styling & UI (16)
+└── Mobile (React Native) (12)
+
+⚙️ Backend Templates (38)
+├── API Services (18)
+├── Database Models (12)
+├── Authentication (8)
+└── Serverless Functions (6)
+
+🚀 Full-Stack Templates (25)
+├── SaaS Applications (8)
+├── E-commerce (6)
+├── CMS Systems (4)
+├── Admin Dashboards (7)
+
+🛠️ DevOps Templates (19)
+├── Docker & K8s (8)
+├── CI/CD Workflows (7)
+├── Infrastructure (4)
+```
+
+**Detailed Template Listing**:
+```bash
+hyper list templates --detailed --category frontend
+```
+
+```
+🎨 Frontend Templates (Detailed View)
+
+⭐ react-component-library (Trust: 9.5, Official)
+├── Description: Production-ready React component library with Storybook
+├── Technologies: React, TypeScript, Storybook, Jest, Tailwind CSS
+├── Downloads: 25.3k | Stars: 1.2k | Updated: 2 days ago
+├── Author: HyperDev Official
+├── Features: Accessible, Themeable, Documented, Tested
+└── Quick Start: hyper generate react-component-library
+
+⭐ vue-composition-starter (Trust: 8.9, Community Pro)
+├── Description: Vue 3 component template with Composition API
+├── Technologies: Vue 3, TypeScript, Vite, Vitest, Pinia
+├── Downloads: 18.7k | Stars: 892 | Updated: 1 week ago  
+├── Author: Vue Community Leaders
+├── Features: Composition API, Script Setup, Auto-imports
+└── Quick Start: hyper generate vue-composition-starter
+
+⭐ next-page-template (Trust: 9.2, Official)
+├── Description: Next.js page template with App Router
+├── Technologies: Next.js 14, React, TypeScript, Tailwind
+├── Downloads: 31.5k | Stars: 2.1k | Updated: 3 days ago
+├── Author: HyperDev Official  
+├── Features: App Router, Server Components, SEO Ready
+└── Quick Start: hyper generate next-page-template
+```
+
+### Epics
+
+```bash
+# List project epics
+hyper list epics
+
+# List epics with status
+hyper list epics --status all
+
+# List active epics only
+hyper list epics --status active
+```
+
+**Epic Listing**:
+```
+📋 Project Epics (8 total)
+
+🚀 Active Epics (3)
+├── User Authentication System
+│   ├── Status: In Progress (67% complete)
+│   ├── Tasks: 8/12 completed
+│   ├── Assigned: Alice, Bob
+│   └── Due: March 15, 2024
+│
+├── Payment Integration
+│   ├── Status: Planning (23% complete)
+│   ├── Tasks: 3/13 completed
+│   ├── Assigned: Carol
+│   └── Due: April 1, 2024
+│
+└── Admin Dashboard
+    ├── Status: Development (45% complete)
+    ├── Tasks: 9/20 completed
+    ├── Assigned: Alice, David
+    └── Due: March 30, 2024
+
+📋 Planned Epics (2)
+├── Mobile App Development (Q2 2024)
+└── Performance Optimization (Q2 2024)
+
+✅ Completed Epics (3)
+├── Project Setup & Infrastructure
+├── Basic User Management  
+└── Landing Page Implementation
+```
+
+### Project Components
+
+```bash
+# List project components
+hyper list components
+
+# List with dependency information
+hyper list components --dependencies
+
+# List unused components
+hyper list components --unused
+```
+
+**Component Inventory**:
+```
+🧩 Project Components (34 total)
+
+📱 UI Components (18)
+├── ✅ Button (src/components/Button.tsx)
+├── ✅ Input (src/components/Input.tsx)
+├── ✅ Modal (src/components/Modal.tsx)
+├── ⚠️  Card (src/components/Card.tsx) - Unused
+├── ✅ Header (src/components/Header.tsx)
+└── ... 13 more
+
+🔧 Utility Components (8)
+├── ✅ AuthProvider (src/providers/AuthProvider.tsx)
+├── ✅ ApiClient (src/utils/apiClient.ts)
+├── ✅ ValidationSchemas (src/utils/validation.ts)
+└── ... 5 more
+
+🎣 Hooks (8)
+├── ✅ useAuth (src/hooks/useAuth.ts)
+├── ✅ useApi (src/hooks/useApi.ts)  
+├── ⚠️  useLocalStorage (src/hooks/useLocalStorage.ts) - Unused
+└── ... 5 more
+
+📊 Component Health
+├── Total Components: 34
+├── Actively Used: 29 (85%)
+├── Unused: 5 (15%)
+├── Test Coverage: 78%
+└── Documentation: 92%
+```
+
+## Advanced Filtering
+
+### Filter Syntax
+
+```bash
+# Simple text filter
+hyper list templates --filter "react"
+
+# Multiple criteria
+hyper list templates --filter "react,typescript"
+
+# Comparison operators
+hyper list templates --filter "trust>8"
+hyper list templates --filter "downloads>1000"
+hyper list templates --filter "updated<30d"
+
+# Complex filters
+hyper list templates --filter "trust>8 AND category=frontend"
+```
+
+**Available Filter Fields**:
+- `trust`: Trust score (1-10)
+- `downloads`: Download count
+- `stars`: GitHub stars
+- `updated`: Last update (use time suffixes: d, w, m)
+- `category`: Template category
+- `technology`: Technology stack
+- `author`: Author or organization
+- `official`: Official status (true/false)
+
+### Sorting Options
+
+```bash
+# Sort by different criteria
+hyper list templates --sort name          # Alphabetical
+hyper list templates --sort trust         # Trust score (desc)
+hyper list templates --sort popularity    # Downloads/stars
+hyper list templates --sort updated       # Most recent first
+hyper list templates --sort relevance     # Context relevance
+```
+
+### Category Filtering
+
+```bash
+# Frontend-specific templates
+hyper list templates --category frontend
+
+# Backend-focused resources
+hyper list templates --category backend
+
+# DevOps and infrastructure
+hyper list templates --category devops
+
+# Full-stack solutions
+hyper list templates --category fullstack
+```
+
+## Output Formats
+
+### Summary View (Default)
+
+The default view provides a concise overview:
+
+```
+📦 Templates (12 found)
+
+Frontend (6)
+├── react-component (Trust: 9.2) - React component with TypeScript
+├── vue-page (Trust: 8.8) - Vue.js page template  
+├── angular-service (Trust: 8.5) - Angular service template
+└── ... 3 more
+
+Backend (4)
+├── express-api (Trust: 9.5) - Express.js REST API
+├── fastify-server (Trust: 8.9) - Fastify web server
+└── ... 2 more
+
+Full-Stack (2)
+├── nextjs-saas (Trust: 9.1) - Complete SaaS template
+└── ... 1 more
+```
+
+### Detailed View
+
+```bash
+hyper list templates --detailed
+```
+
+Shows comprehensive information including:
+- Complete descriptions and features
+- Technology stack details
+- Author and maintenance information
+- Usage statistics and metrics
+- Quick action commands
+- Compatibility information
+
+### JSON Output
+
+```bash
+hyper list templates --json
+```
+
+Structured JSON for programmatic use:
+
+```json
+{
+  "resource_type": "templates",
+  "total_count": 127,
+  "categories": {
+    "frontend": 45,
+    "backend": 38,
+    "fullstack": 25,
+    "devops": 19
+  },
+  "results": [
+    {
+      "id": "react-component-library",
+      "name": "React Component Library",
+      "description": "Production-ready React component library",
+      "category": "frontend",
+      "trust_score": 9.5,
+      "popularity": {
+        "downloads": 25300,
+        "stars": 1200,
+        "forks": 180
+      },
+      "technologies": ["react", "typescript", "storybook"],
+      "author": {
+        "name": "HyperDev Official",
+        "verified": true
+      },
+      "updated": "2024-01-13T10:30:00Z",
+      "quick_actions": [
+        "hyper generate react-component-library"
+      ]
+    }
+  ]
+}
+```
+
+## Project-Specific Listings
+
+### Current Project Resources
+
+```bash
+# List resources in current project
+hyper list --project
+
+# List with usage statistics
+hyper list --project --usage
+
+# List with health metrics
+hyper list --project --health
+```
+
+### Epic Resources
+
+```bash
+# List resources for specific epic
+hyper list --epic "User Authentication"
+
+# List epic templates
+hyper list epic-templates
+
+# List epic progress
+hyper list epics --progress
+```
+
+### Team Resources
+
+```bash
+# List team-specific resources
+hyper list --team
+
+# List team templates
+hyper list templates --team
+
+# List shared components
+hyper list components --shared
+```
+
+## Resource Management
+
+### Template Management
+
+```bash
+# List installed templates
+hyper list templates --installed
+
+# List template updates available
+hyper list templates --updates
+
+# List deprecated templates
+hyper list templates --deprecated
+```
+
+### Cache Management
+
+```bash
+# List cached resources
+hyper list --cached
+
+# List cache statistics
+hyper list --cache-stats
+
+# Refresh cache and list
+hyper list templates --refresh
+```
+
+## Integration Features
+
+### Quick Actions
+
+Each listing includes quick action suggestions:
+
+```bash
+# From any list result, you can:
+hyper generate <template-name>     # Generate from template
+hyper search <template-name>       # Search for similar
+hyper info <template-name>         # Get detailed info
+```
+
+### Bookmarking
+
+```bash
+# Bookmark frequently used resources
+hyper list templates --bookmark react-component
+
+# List bookmarked resources
+hyper list --bookmarked
+
+# Remove bookmarks
+hyper list --bookmarks --remove react-component
+```
+
+### Comparison
+
+```bash
+# Compare similar templates
+hyper list templates --compare react-component,vue-component
+
+# Show differences
+hyper list templates --diff template-a template-b
+```
+
+## Configuration
+
+### List Display Settings
+
+```javascript
+// hyperdev.config.js
+export default {
+  list: {
+    // Default display options
+    default_view: 'summary',        // summary, detailed, compact
+    show_trust_scores: true,
+    show_popularity: true,
+    show_last_updated: true,
+    
+    // Default limits
+    default_limit: 50,
+    max_limit: 200,
+    
+    // Sorting preferences
+    default_sort: 'relevance',      // name, trust, popularity, updated
+    
+    // Filtering preferences
+    default_trust_level: 6,
+    include_experimental: false,
+    
+    // Categories to show
+    categories: [
+      'frontend',
+      'backend', 
+      'fullstack',
+      'devops',
+      'mobile'
+    ]
+  }
+};
+```
+
+### Team Listing Preferences
+
+```javascript
+export default {
+  team_list: {
+    // Preferred categories for team
+    preferred_categories: ['frontend', 'backend'],
+    
+    // Technology focus
+    technology_filter: ['react', 'typescript', 'node.js'],
+    
+    // Custom sorting for team
+    team_sort_priority: [
+      'internal_resources',
+      'trust_score', 
+      'team_usage',
+      'popularity'
+    ],
+    
+    // Bookmarked resources for quick access
+    team_bookmarks: [
+      'react-component-library',
+      'express-api-template',
+      'docker-deployment'
+    ]
+  }
+};
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper search" href="/cli/commands/discovery/search">
+    Search for specific resources and solutions
+  </Card>
+  <Card title="hyper generate" href="/cli/commands/workflow/generate">
+    Generate code from listed templates
+  </Card>
+  <Card title="hyper status" href="/cli/commands/discovery/status">
+    Check project status and health
+  </Card>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Manage and list project epics
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Resource Discovery Workflow](/cli/workflows/resource-discovery)
+- [Template Management](/cli/configuration/template-config)
+- [Epic Management](/tools/epics)
+- [Project Organization Examples](/cli/examples/project-organization)

@@ -39,7 +39,7 @@ Action conflict: "${store.actions.keyFor(action)}" defined by ${generator.path} 
 defined by ${existingAction.path}.
 
 You are seeing this error because the 'conflictResolutionMode' is set to 'fail'.
-Update that value in your hygen config to
+Update that value in your hypergen config to
 
 - "override" if you want to keep the action is defined last
 - "skip" to keep the action that appears first

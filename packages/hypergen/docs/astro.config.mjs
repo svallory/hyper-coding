@@ -10,33 +10,55 @@ export default defineConfig({
 	integrations: [
 		markdoc(),
 		starlight({
-			title: 'Hypergen V8',
+			title: 'Hypergen',
 			description: 'Advanced template composition and workflow orchestration for modern development.',
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/svallory/hypergen' },
 			],
 			sidebar: [
 				{
-					label: 'Getting Started',
+					label: 'Quick Start',
 					items: [
 						{ label: 'Overview', slug: '' },
 						{ label: 'Getting Started', slug: 'getting-started' },
-						{ label: 'V8 Features', slug: 'v8-features' },
 					],
 				},
 				{
-					label: 'Advanced Features',
+					label: 'Core Concepts',
 					items: [
-						{ label: 'Advanced Composition', slug: 'advanced-composition' },
-						{ label: 'Template Inheritance', link: '/hypergen/advanced-composition#template-inheritance-and-composition' },
-						{ label: 'Conditional Templates', link: '/hypergen/advanced-composition#conditional-template-inclusion' },
-						{ label: 'Action Pipelines', link: '/hypergen/advanced-composition#action-pipelines-and-workflows' },
+						{ label: 'Taxonomy & Mental Model', slug: 'concepts/taxonomy' },
 					],
+				},
+				{
+					label: 'Using Cookbooks',
+					items: [
+						{ label: 'Finding Cookbooks', slug: 'tutorials/finding-cookbooks' },
+						{ label: 'Running Recipes', slug: 'tutorials/running-recipes' },
+					],
+				},
+				{
+					label: 'Creating Content',
+					items: [
+						{ label: 'Creating Templates', slug: 'tutorials/creating-templates' },
+						{ label: 'Advanced Composition', slug: 'advanced-composition' },
+					],
+				},
+				{
+					label: 'Reference',
+					items: [
+						{ label: 'Complete Feature List', slug: 'features' },
+						{ label: 'CLI Commands', link: '/hypergen/features#cli-commands-reference' },
+						{ label: 'Template Syntax', link: '/hypergen/advanced-composition#liquidjs-templates' },
+					],
+				},
+				{
+					label: 'API Reference',
+					autogenerate: { directory: 'api' },
 				},
 				{
 					label: 'Development',
 					items: [
-						{ label: 'V8 Roadmap', slug: 'v8-roadmap' },
+						{ label: 'Roadmap', slug: 'roadmap' },
 					],
 				},
 			],

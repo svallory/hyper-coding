@@ -13,6 +13,16 @@ import { TemplateParser } from '../config/template-parser.js'
 import { GeneratorScaffolding } from './scaffolding.js'
 import { ErrorHandler, HypergenError, ErrorCode } from '../errors/hypergen-errors.js'
 import { HypergenConfigLoader, createConfigFile, getConfigInfo, type ResolvedConfig } from '../config/hypergen-config.js'
+import { 
+  RecipeEngine, 
+  type RecipeExecutionOptions, 
+  type RecipeEngineConfig,
+  type RecipeSource,
+  loadRecipe as loadRecipeEngine
+} from '../recipe-engine/recipe-engine.js'
+import { StepExecutor } from '../recipe-engine/step-executor.js'
+import { getToolRegistry } from '../recipe-engine/tools/registry.js'
+import Logger from '../logger.js'
 
 export interface HypergenCliConfig extends RunnerConfig {
   discoveryOptions?: {
@@ -29,6 +39,8 @@ export class HypergenCLI {
   private logger = new ConsoleActionLogger()
   private scaffolding = new GeneratorScaffolding()
   private hypergenConfig?: ResolvedConfig
+  private recipeEngine?: RecipeEngine
+  private consoleLogger = new Logger(console.log)
 
   constructor(private config: HypergenCliConfig) {}
 
@@ -45,6 +57,14 @@ export class HypergenCLI {
       // Configuration is optional, continue without it
       console.warn('Warning: Could not load configuration file')
     }
+
+    // Initialize recipe engine with configuration
+    const recipeConfig: RecipeEngineConfig = {
+      workingDir: this.config.cwd || process.cwd(),
+      enableDebugLogging: process.env.DEBUG?.includes('hypergen') || false
+    }
+
+    this.recipeEngine = new RecipeEngine(recipeConfig)
   }
 
   /**
@@ -71,6 +91,12 @@ export class HypergenCLI {
       
       case 'template':
         return this.handleTemplateCommand(args)
+      
+      case 'recipe':
+        return this.handleRecipeCommand(args)
+      
+      case 'step':
+        return this.handleStepCommand(args)
       
       case 'init':
         return this.handleInitCommand(args)
@@ -150,6 +176,44 @@ export class HypergenCLI {
     const parameters = this.parseParameters(paramArgs)
 
     try {
+      // Check if actionName is actually a recipe file (ends with .yml or .yaml)
+      if (actionName.endsWith('.yml') || actionName.endsWith('.yaml')) {
+        // This is a recipe file - use the new V8 Recipe System
+        if (!this.recipeEngine) {
+          await this.initialize()
+        }
+
+        const options: RecipeExecutionOptions = {
+          variables: parameters,
+          workingDir: this.config.cwd || process.cwd(),
+          dryRun,
+          force,
+          skipPrompts: useDefaults,
+          logger: this.consoleLogger
+        }
+
+        const result = await this.recipeEngine!.executeRecipe(actionName, options)
+        
+        if (result.success) {
+          let message = dryRun 
+            ? `🔍 [DRY RUN] Recipe '${result.recipe.name}' would complete successfully`
+            : `✅ Recipe '${result.recipe.name}' completed successfully`
+          
+          if (result.filesCreated.length > 0) {
+            message += dryRun 
+              ? `\nFiles would be created: ${result.filesCreated.join(', ')}`
+              : `\nFiles created: ${result.filesCreated.join(', ')}`
+          }
+          
+          return { success: true, message }
+        } else {
+          return {
+            success: false,
+            message: `❌ Recipe execution failed: ${result.errors.join(', ')}`
+          }
+        }
+      }
+
       // Check if action exists, if not try auto-discovery
       let actionInfo = this.executor.getActionInfo(actionName)
       if (!actionInfo.exists) {
@@ -158,12 +222,68 @@ export class HypergenCLI {
         await this.discovery.registerDiscoveredActions()
         actionInfo = this.executor.getActionInfo(actionName)
         
-        // If still not found, return error
+        // If still not found, check if it might be a recipe file
         if (!actionInfo.exists) {
+          // Try to find a recipe file with this name
+          const possibleRecipePaths = [
+            `${actionName}.yml`,
+            `${actionName}.yaml`,
+            `_recipes/${actionName}.yml`,
+            `_recipes/${actionName}.yaml`
+          ]
+          
+          for (const recipePath of possibleRecipePaths) {
+            try {
+              const fs = await import('fs')
+              const path = await import('path')
+              const fullPath = path.resolve(this.config.cwd || process.cwd(), recipePath)
+              
+              if (fs.existsSync(fullPath)) {
+                // Found a recipe file - use V8 system
+                if (!this.recipeEngine) {
+                  await this.initialize()
+                }
+
+                const options: RecipeExecutionOptions = {
+                  variables: parameters,
+                  workingDir: this.config.cwd || process.cwd(),
+                  dryRun,
+                  force,
+                  skipPrompts: useDefaults,
+                  logger: this.consoleLogger
+                }
+
+                const result = await this.recipeEngine!.executeRecipe(fullPath, options)
+                
+                if (result.success) {
+                  let message = dryRun 
+                    ? `🔍 [DRY RUN] Recipe '${result.recipe.name}' would complete successfully (found at ${recipePath})`
+                    : `✅ Recipe '${result.recipe.name}' completed successfully (found at ${recipePath})`
+                  
+                  if (result.filesCreated.length > 0) {
+                    message += dryRun 
+                      ? `\nFiles would be created: ${result.filesCreated.join(', ')}`
+                      : `\nFiles created: ${result.filesCreated.join(', ')}`
+                  }
+                  
+                  return { success: true, message }
+                } else {
+                  return {
+                    success: false,
+                    message: `❌ Recipe execution failed: ${result.errors.join(', ')}`
+                  }
+                }
+              }
+            } catch (error) {
+              // Continue searching
+            }
+          }
+          
+          // Not found as action or recipe
           const error = ErrorHandler.createActionNotFoundError(actionName)
           return {
             success: false,
-            message: ErrorHandler.formatError(error)
+            message: ErrorHandler.formatError(error) + '\n\nTip: If this is a recipe, use: hypergen recipe execute <recipe.yml>'
           }
         }
       }
@@ -295,7 +415,7 @@ export class HypergenCLI {
         }
       } else {
         message += '\nNo generators found. Try:\n'
-        message += '  • Adding generators to _templates/ directory\n'
+        message += '  • Adding generators to recipes/ directory\n'
         message += '  • Installing generator packages with npm\n'
         message += '  • Using --sources to specify discovery sources\n'
       }
@@ -339,7 +459,7 @@ export class HypergenCLI {
       if (actions.length === 0) {
         return {
           success: true,
-          message: '📝 No actions available. Check that you have generators in _templates/ or run: hypergen discover'
+          message: '📝 No actions available. Check that you have generators in recipes/ or run: hypergen discover'
         }
       }
 
@@ -596,6 +716,56 @@ export class HypergenCLI {
   }
 
   /**
+   * Handle recipe commands
+   * Usage: hypergen recipe <subcommand> [args...]
+   */
+  private async handleRecipeCommand(args: string[]): Promise<{ success: boolean; message?: string }> {
+    const [subcommand, ...subArgs] = args
+
+    switch (subcommand) {
+      case 'execute':
+        return this.executeRecipe(subArgs)
+      
+      case 'validate':
+        return this.validateRecipe(subArgs)
+      
+      case 'info':
+        return this.showRecipeInfo(subArgs)
+      
+      case 'list':
+        return this.listRecipes(subArgs)
+      
+      default:
+        return {
+          success: false,
+          message: 'Recipe subcommand required. Available: execute, validate, info, list'
+        }
+    }
+  }
+
+  /**
+   * Handle step commands  
+   * Usage: hypergen step <subcommand> [args...]
+   */
+  private async handleStepCommand(args: string[]): Promise<{ success: boolean; message?: string }> {
+    const [subcommand, ...subArgs] = args
+
+    switch (subcommand) {
+      case 'list':
+        return this.listRecipeSteps(subArgs)
+      
+      case 'execute':
+        return this.executeRecipeStep(subArgs)
+      
+      default:
+        return {
+          success: false,
+          message: 'Step subcommand required. Available: list, execute'
+        }
+    }
+  }
+
+  /**
    * Resolve a template URL
    */
   private async resolveUrl(args: string[]): Promise<{ success: boolean; message?: string }> {
@@ -661,6 +831,16 @@ Action Management:
   hypergen list [category]              List available actions
   hypergen info <action-name>           Show action details
 
+Recipe System (V8):
+  hypergen recipe execute <recipe>      Execute a recipe with all steps
+  hypergen recipe validate <recipe>     Validate recipe configuration
+  hypergen recipe info <recipe>         Show recipe details and steps
+  hypergen recipe list [directory]      List available recipes
+
+Step Management (V8):
+  hypergen step list <recipe>           List steps in a recipe
+  hypergen step execute <recipe> <step> Execute a single step
+
 Generator Discovery:
   hypergen discover [sources...]        Discover generators
   hypergen discover local               Discover local generators only
@@ -692,17 +872,31 @@ System:
   hypergen system status                Show system status
   hypergen system version               Show version information
 
+Recipe Examples (V8):
+  hypergen recipe execute my-component.yml --name=Button --typescript=true
+  hypergen recipe execute api-endpoint.yml --dryRun --name=UserAPI
+  hypergen recipe validate _recipes/my-recipe.yml
+  hypergen recipe info _recipes/react-component.yml
+  hypergen step list my-recipe.yml
+  hypergen step execute my-recipe.yml generate-component --name=Button
+
 Examples:
   hypergen discover                     Find all generators
   hypergen list component               List component actions
   hypergen action create-component --name=Button --type=tsx
-  hypergen template validate _templates/react-component/template.yml
-  hypergen template list _templates     List all templates
+  hypergen recipe validate recipes/react-component/recipe.yml
+  hypergen recipe list recipes     List all recipes
   hypergen init generator --name=my-widget --framework=react
   hypergen init workspace --withExamples=true
   hypergen config init --format=js      Create JavaScript config file
   hypergen config show                  View current configuration
   hypergen url resolve github:user/repo/templates
+
+Flags:
+  --dryRun                             Run without making file changes
+  --force                              Force overwrite existing files
+  --skipPrompts                        Use defaults, skip interactive prompts
+  --continueOnError                    Continue execution after step failures
 `
 
     return { success: true, message }
@@ -836,7 +1030,7 @@ Repository: ${packageJson.default.repository?.url || 'https://github.com/svallor
             {
               title: 'See template examples',
               description: 'Look at working template examples',
-              command: 'hypergen template list examples/_templates'
+              command: 'hypergen recipe list examples/recipes'
             }
           ]
         )
@@ -963,7 +1157,7 @@ Repository: ${packageJson.default.repository?.url || 'https://github.com/svallor
    */
   private async listTemplates(args: string[]): Promise<{ success: boolean; message?: string }> {
     const [directory] = args
-    const templatesDir = directory || '_templates'
+    const templatesDir = directory || 'recipes'
 
     try {
       const templates = await TemplateParser.parseTemplateDirectory(templatesDir)
@@ -1113,7 +1307,7 @@ Repository: ${packageJson.default.repository?.url || 'https://github.com/svallor
         description: parameters.description || `Generator for ${parameters.name}`,
         category: parameters.category || 'custom',
         author: parameters.author || 'Unknown',
-        directory: parameters.directory || '_templates',
+        directory: parameters.directory || 'recipes',
         type: parameters.type || 'both',
         framework: parameters.framework || 'generic',
         withExamples: parameters.withExamples !== false,
@@ -1207,7 +1401,7 @@ Repository: ${packageJson.default.repository?.url || 'https://github.com/svallor
     
     try {
       const options = {
-        directory: parameters.directory || '_templates',
+        directory: parameters.directory || 'recipes',
         withExamples: parameters.withExamples !== false
       }
 
@@ -1398,6 +1592,617 @@ Repository: ${packageJson.default.repository?.url || 'https://github.com/svallor
   }
 
   /**
+   * Execute a recipe
+   * Usage: hypergen recipe execute <recipe> [options...]
+   */
+  private async executeRecipe(args: string[]): Promise<{ success: boolean; message?: string }> {
+    if (args.length === 0) {
+      const error = ErrorHandler.createError(
+        ErrorCode.ACTION_INVALID_PARAMETERS,
+        'Recipe path required',
+        {},
+        [
+          {
+            title: 'Provide recipe path',
+            description: 'Specify the path to the recipe file to execute',
+            command: 'hypergen recipe execute <recipe.yml> --var1=value1 --var2=value2'
+          },
+          {
+            title: 'List available recipes',
+            description: 'See all available recipes',
+            command: 'hypergen recipe list'
+          },
+          {
+            title: 'Dry run a recipe',
+            description: 'Test recipe execution without making changes',
+            command: 'hypergen recipe execute <recipe.yml> --dryRun'
+          }
+        ]
+      )
+      return {
+        success: false,
+        message: ErrorHandler.formatError(error)
+      }
+    }
+
+    const [recipePath, ...paramArgs] = args
+    
+    if (!this.recipeEngine) {
+      await this.initialize()
+    }
+
+    try {
+      // Parse flags and parameters
+      const flags = this.parseFlags(paramArgs)
+      const parameters = this.parseParameters(paramArgs)
+      
+      const dryRun = flags.has('dryRun')
+      const force = flags.has('force') 
+      const skipPrompts = flags.has('skipPrompts')
+      const continueOnError = flags.has('continueOnError')
+
+      const options: RecipeExecutionOptions = {
+        variables: parameters,
+        workingDir: this.config.cwd || process.cwd(),
+        dryRun,
+        force,
+        continueOnError,
+        skipPrompts,
+        logger: this.consoleLogger,
+        onProgress: (progress) => {
+          console.log(`📈 ${progress.step}: ${progress.phase} (${progress.percentage}%)`)
+        },
+        onStepComplete: (result) => {
+          const status = result.status === 'completed' ? '✅' : 
+                        result.status === 'failed' ? '❌' :
+                        result.status === 'skipped' ? '⏭️' : '⏸️'
+          console.log(`${status} Step: ${result.stepName} (${result.duration}ms)`)
+        }
+      }
+
+      const result = await this.recipeEngine!.executeRecipe(recipePath, options)
+
+      if (result.success) {
+        let message = dryRun 
+          ? `🔍 [DRY RUN] Recipe '${result.recipe.name}' would complete successfully`
+          : `✅ Recipe '${result.recipe.name}' completed successfully`
+        
+        message += `\n\nExecution Summary:`
+        message += `\n  Duration: ${result.duration}ms`
+        message += `\n  Steps completed: ${result.metadata.completedSteps}/${result.metadata.totalSteps}`
+        
+        if (result.metadata.failedSteps > 0) {
+          message += `\n  Failed steps: ${result.metadata.failedSteps}`
+        }
+        
+        if (result.metadata.skippedSteps > 0) {
+          message += `\n  Skipped steps: ${result.metadata.skippedSteps}`
+        }
+        
+        if (result.filesCreated.length > 0) {
+          message += dryRun 
+            ? `\n\nFiles would be created: ${result.filesCreated.join(', ')}`
+            : `\n\nFiles created: ${result.filesCreated.join(', ')}`
+        }
+        
+        if (result.filesModified.length > 0) {
+          message += dryRun 
+            ? `\nFiles would be modified: ${result.filesModified.join(', ')}`
+            : `\nFiles modified: ${result.filesModified.join(', ')}`
+        }
+        
+        if (result.filesDeleted.length > 0) {
+          message += dryRun 
+            ? `\nFiles would be deleted: ${result.filesDeleted.join(', ')}`
+            : `\nFiles deleted: ${result.filesDeleted.join(', ')}`
+        }
+
+        if (result.warnings.length > 0) {
+          message += `\n\nWarnings:\n${result.warnings.map(w => `  ⚠️ ${w}`).join('\n')}`
+        }
+        
+        return { success: true, message }
+      } else {
+        let message = `❌ Recipe execution failed: ${result.recipe.name || 'Unknown'}`
+        
+        if (result.errors.length > 0) {
+          message += `\n\nErrors:\n${result.errors.map(e => `  • ${e}`).join('\n')}`
+        }
+        
+        if (result.metadata.completedSteps > 0) {
+          message += `\n\nCompleted ${result.metadata.completedSteps}/${result.metadata.totalSteps} steps before failure`
+        }
+        
+        return { success: false, message }
+      }
+
+    } catch (error: any) {
+      if (error instanceof HypergenError) {
+        return {
+          success: false,
+          message: ErrorHandler.formatError(error)
+        }
+      }
+      
+      return {
+        success: false,
+        message: `❌ Recipe execution failed: ${error.message || String(error)}`
+      }
+    }
+  }
+
+  /**
+   * Validate a recipe
+   * Usage: hypergen recipe validate <recipe>
+   */
+  private async validateRecipe(args: string[]): Promise<{ success: boolean; message?: string }> {
+    if (args.length === 0) {
+      const error = ErrorHandler.createError(
+        ErrorCode.VALIDATION_ERROR,
+        'Recipe path required',
+        {},
+        [
+          {
+            title: 'Provide recipe path',
+            description: 'Specify the path to the recipe file to validate',
+            command: 'hypergen recipe validate <recipe.yml>'
+          }
+        ]
+      )
+      return {
+        success: false,
+        message: ErrorHandler.formatError(error)
+      }
+    }
+
+    const [recipePath] = args
+    
+    if (!this.recipeEngine) {
+      await this.initialize()
+    }
+
+    try {
+      const loadResult = await this.recipeEngine!.loadRecipe(recipePath)
+      const { recipe, validation } = loadResult
+
+      if (validation.isValid) {
+        let message = `✅ Recipe validation successful: ${recipe.name}\n`
+        message += `Description: ${recipe.description || 'No description'}\n`
+        message += `Version: ${recipe.version || 'No version'}\n`
+        message += `Category: ${recipe.category || 'No category'}\n`
+        message += `Variables: ${Object.keys(recipe.variables).length}\n`
+        message += `Steps: ${recipe.steps.length}\n`
+        message += `Examples: ${recipe.examples?.length || 0}\n`
+        
+        if (validation.warnings.length > 0) {
+          message += `\n⚠️  Warnings:\n`
+          validation.warnings.forEach(warning => {
+            message += `  • ${warning.message}\n`
+          })
+        }
+        
+        return { success: true, message }
+      } else {
+        let message = `❌ Recipe validation failed: ${recipe.name || recipePath}\n\n`
+        message += 'Validation errors:\n'
+        validation.errors.forEach(error => {
+          message += `  • ${error.message}\n`
+        })
+        
+        if (validation.warnings.length > 0) {
+          message += `\nWarnings:\n`
+          validation.warnings.forEach(warning => {
+            message += `  • ${warning.message}\n`
+          })
+        }
+        
+        return { success: false, message }
+      }
+
+    } catch (error: any) {
+      if (error instanceof HypergenError) {
+        return {
+          success: false,
+          message: ErrorHandler.formatError(error)
+        }
+      }
+      
+      return {
+        success: false,
+        message: `❌ Failed to validate recipe: ${error.message || String(error)}`
+      }
+    }
+  }
+
+  /**
+   * Show recipe information
+   * Usage: hypergen recipe info <recipe>
+   */
+  private async showRecipeInfo(args: string[]): Promise<{ success: boolean; message?: string }> {
+    if (args.length === 0) {
+      return {
+        success: false,
+        message: 'Recipe path required. Usage: hypergen recipe info <recipe>'
+      }
+    }
+
+    const [recipePath] = args
+    
+    if (!this.recipeEngine) {
+      await this.initialize()
+    }
+
+    try {
+      const loadResult = await this.recipeEngine!.loadRecipe(recipePath)
+      const { recipe, validation } = loadResult
+      
+      if (!validation.isValid) {
+        return {
+          success: false,
+          message: `❌ Recipe file is invalid. Use 'hypergen recipe validate' to see errors.`
+        }
+      }
+      
+      let message = `📋 Recipe: ${recipe.name}\n`
+      
+      if (recipe.description) {
+        message += `Description: ${recipe.description}\n`
+      }
+      
+      if (recipe.version) {
+        message += `Version: ${recipe.version}\n`
+      }
+      
+      if (recipe.author) {
+        message += `Author: ${recipe.author}\n`
+      }
+      
+      if (recipe.category) {
+        message += `Category: ${recipe.category}\n`
+      }
+      
+      if (recipe.tags?.length) {
+        message += `Tags: ${recipe.tags.join(', ')}\n`
+      }
+      
+      message += `\nVariables (${Object.keys(recipe.variables).length}):\n`
+      
+      for (const [varName, varConfig] of Object.entries(recipe.variables)) {
+        message += `  • ${varName} (${varConfig.type})`
+        
+        if (varConfig.required) {
+          message += ' *required*'
+        }
+        
+        if (varConfig.default !== undefined) {
+          message += ` [default: ${varConfig.default}]`
+        }
+        
+        if (varConfig.description) {
+          message += ` - ${varConfig.description}`
+        }
+        
+        message += '\n'
+      }
+
+      message += `\nSteps (${recipe.steps.length}):\n`
+      for (const [index, step] of recipe.steps.entries()) {
+        message += `  ${index + 1}. ${step.name} (${step.tool})`
+        
+        if (step.description) {
+          message += ` - ${step.description}`
+        }
+        
+        if (step.dependsOn?.length) {
+          message += ` [depends on: ${step.dependsOn.join(', ')}]`
+        }
+        
+        message += '\n'
+      }
+      
+      if (recipe.examples?.length) {
+        message += `\nExamples (${recipe.examples.length}):\n`
+        
+        for (const example of recipe.examples) {
+          message += `  • ${example.title}\n`
+          
+          if (example.description) {
+            message += `    ${example.description}\n`
+          }
+          
+          message += `    Variables: ${Object.keys(example.variables).join(', ')}\n`
+        }
+      }
+      
+      return { success: true, message }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `❌ Failed to read recipe: ${error.message || String(error)}`
+      }
+    }
+  }
+
+  /**
+   * List recipes in directory
+   * Usage: hypergen recipe list [directory]
+   */
+  private async listRecipes(args: string[]): Promise<{ success: boolean; message?: string }> {
+    const [directory] = args
+    const recipesDir = directory || '_recipes'
+
+    try {
+      // Use fs to find recipe files
+      const fs = await import('fs')
+      const path = await import('path')
+      
+      const fullPath = path.resolve(this.config.cwd || process.cwd(), recipesDir)
+      
+      if (!fs.existsSync(fullPath)) {
+        return {
+          success: true,
+          message: `📝 No recipes directory found: ${recipesDir}\n\nTo create recipes:\n  1. Create the ${recipesDir} directory\n  2. Add .yml or .yaml recipe files\n  3. Run this command again`
+        }
+      }
+
+      // Simple recursive file search for .yml and .yaml files
+      const recipeFiles: string[] = []
+      const searchDir = (dir: string) => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true })
+        for (const entry of entries) {
+          const fullEntryPath = path.join(dir, entry.name)
+          if (entry.isDirectory()) {
+            searchDir(fullEntryPath)
+          } else if (entry.isFile() && (entry.name.endsWith('.yml') || entry.name.endsWith('.yaml'))) {
+            recipeFiles.push(fullEntryPath)
+          }
+        }
+      }
+      searchDir(fullPath)
+      
+      if (recipeFiles.length === 0) {
+        return {
+          success: true,
+          message: `📝 No recipe files found in ${recipesDir}`
+        }
+      }
+
+      if (!this.recipeEngine) {
+        await this.initialize()
+      }
+      
+      let message = `📝 Recipes found in ${recipesDir} (${recipeFiles.length}):\n`
+      
+      for (const filePath of recipeFiles) {
+        try {
+          const loadResult = await this.recipeEngine!.loadRecipe(filePath)
+          const { recipe, validation } = loadResult
+          
+          const relativePath = path.relative(this.config.cwd || process.cwd(), filePath)
+          message += `  • ${recipe.name || 'Unknown'} (${relativePath})`
+          
+          if (recipe.description) {
+            message += ` - ${recipe.description}`
+          }
+          
+          if (!validation.isValid) {
+            message += ` ❌ (invalid)`
+          }
+          
+          message += '\n'
+        } catch (error) {
+          const relativePath = path.relative(this.config.cwd || process.cwd(), filePath)
+          message += `  • Error loading ${relativePath} ❌\n`
+        }
+      }
+      
+      return { success: true, message }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `❌ Failed to list recipes: ${error.message || String(error)}`
+      }
+    }
+  }
+
+  /**
+   * List steps in a recipe
+   * Usage: hypergen step list <recipe>
+   */
+  private async listRecipeSteps(args: string[]): Promise<{ success: boolean; message?: string }> {
+    if (args.length === 0) {
+      return {
+        success: false,
+        message: 'Recipe path required. Usage: hypergen step list <recipe>'
+      }
+    }
+
+    const [recipePath] = args
+    
+    if (!this.recipeEngine) {
+      await this.initialize()
+    }
+
+    try {
+      const loadResult = await this.recipeEngine!.loadRecipe(recipePath)
+      const { recipe, validation } = loadResult
+      
+      if (!validation.isValid) {
+        return {
+          success: false,
+          message: `❌ Recipe file is invalid. Use 'hypergen recipe validate' to see errors.`
+        }
+      }
+      
+      if (recipe.steps.length === 0) {
+        return {
+          success: true,
+          message: `📝 No steps found in recipe: ${recipe.name}`
+        }
+      }
+      
+      let message = `📋 Steps in recipe: ${recipe.name} (${recipe.steps.length})\n`
+      
+      for (const [index, step] of recipe.steps.entries()) {
+        message += `\n${index + 1}. ${step.name}`
+        
+        if (step.description) {
+          message += `\n   Description: ${step.description}`
+        }
+        
+        message += `\n   Tool: ${step.tool}`
+        
+        if (step.dependsOn?.length) {
+          message += `\n   Depends on: ${step.dependsOn.join(', ')}`
+        }
+        
+        if ((step as any).condition) {
+          message += `\n   Condition: ${(step as any).condition}`
+        }
+        
+        if (step.continueOnError) {
+          message += `\n   Continue on error: true`
+        }
+        
+        // Show tool-specific configuration preview
+        if ((step as any).template) {
+          message += `\n   Template: ${(step as any).template}`
+        }
+        
+        if ((step as any).action) {
+          message += `\n   Action: ${(step as any).action}`
+        }
+        
+        if ((step as any).recipe) {
+          message += `\n   Sub-recipe: ${(step as any).recipe}`
+        }
+        
+        message += '\n'
+      }
+      
+      return { success: true, message }
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `❌ Failed to list recipe steps: ${error.message || String(error)}`
+      }
+    }
+  }
+
+  /**
+   * Execute a single step from a recipe
+   * Usage: hypergen step execute <recipe> <step-name>
+   */
+  private async executeRecipeStep(args: string[]): Promise<{ success: boolean; message?: string }> {
+    if (args.length < 2) {
+      return {
+        success: false,
+        message: 'Recipe path and step name required. Usage: hypergen step execute <recipe> <step-name> [--var1=value1]'
+      }
+    }
+
+    const [recipePath, stepName, ...paramArgs] = args
+    
+    if (!this.recipeEngine) {
+      await this.initialize()
+    }
+
+    try {
+      // Load recipe first
+      const loadResult = await this.recipeEngine!.loadRecipe(recipePath)
+      const { recipe, validation } = loadResult
+      
+      if (!validation.isValid) {
+        return {
+          success: false,
+          message: `❌ Recipe file is invalid. Use 'hypergen recipe validate' to see errors.`
+        }
+      }
+
+      // Find the specific step
+      const step = recipe.steps.find(s => s.name === stepName)
+      if (!step) {
+        return {
+          success: false,
+          message: `❌ Step '${stepName}' not found in recipe '${recipe.name}'. Use 'hypergen step list ${recipePath}' to see available steps.`
+        }
+      }
+
+      // Parse parameters
+      const flags = this.parseFlags(paramArgs)
+      const parameters = this.parseParameters(paramArgs)
+      
+      const dryRun = flags.has('dryRun')
+      const force = flags.has('force')
+      
+      const options: RecipeExecutionOptions = {
+        variables: parameters,
+        workingDir: this.config.cwd || process.cwd(),
+        dryRun,
+        force,
+        logger: this.consoleLogger
+      }
+
+      // Create a temporary recipe with just this step
+      const singleStepRecipe = {
+        ...recipe,
+        steps: [step]
+      }
+
+      // Convert recipe back to YAML for execution
+      const yaml = await import('js-yaml')
+      const result = await this.recipeEngine!.executeRecipe({
+        type: 'content',
+        content: yaml.dump(singleStepRecipe),
+        name: `${recipe.name}_${stepName}`
+      }, options)
+
+      if (result.success) {
+        let message = dryRun 
+          ? `🔍 [DRY RUN] Step '${stepName}' would complete successfully`
+          : `✅ Step '${stepName}' completed successfully`
+        
+        message += `\n  Duration: ${result.duration}ms`
+        
+        if (result.filesCreated.length > 0) {
+          message += dryRun 
+            ? `\n  Files would be created: ${result.filesCreated.join(', ')}`
+            : `\n  Files created: ${result.filesCreated.join(', ')}`
+        }
+        
+        if (result.filesModified.length > 0) {
+          message += dryRun 
+            ? `\n  Files would be modified: ${result.filesModified.join(', ')}`
+            : `\n  Files modified: ${result.filesModified.join(', ')}`
+        }
+        
+        return { success: true, message }
+      } else {
+        let message = `❌ Step execution failed: ${stepName}`
+        
+        if (result.errors.length > 0) {
+          message += `\n  Errors: ${result.errors.join(', ')}`
+        }
+        
+        return { success: false, message }
+      }
+
+    } catch (error: any) {
+      if (error instanceof HypergenError) {
+        return {
+          success: false,
+          message: ErrorHandler.formatError(error)
+        }
+      }
+      
+      return {
+        success: false,
+        message: `❌ Step execution failed: ${error.message || String(error)}`
+      }
+    }
+  }
+
+  /**
    * Parse command line flags
    */
   private parseFlags(args: string[]): Set<string> {
@@ -1418,7 +2223,7 @@ Repository: ${packageJson.default.repository?.url || 'https://github.com/svallor
    */
   private parseParameters(args: string[]): Record<string, any> {
     const parameters: Record<string, any> = {}
-    const flagArgs = ['defaults', 'dryRun', 'force'] // Known flags to exclude
+    const flagArgs = ['defaults', 'dryRun', 'force', 'skipPrompts', 'continueOnError'] // Known flags to exclude
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i]

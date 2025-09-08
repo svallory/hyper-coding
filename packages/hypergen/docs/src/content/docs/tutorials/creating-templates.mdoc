@@ -1,0 +1,441 @@
+---
+title: Creating Your First Template
+description: Build your first template and recipe from scratch
+time: 20 minutes
+prerequisites: Understanding of Hypergen concepts, text editor
+---
+
+# Creating Your First Template
+
+**What you'll learn**: How to create a template, recipe, and test your first custom cookbook
+**Time needed**: 20 minutes
+**Prerequisites**: Understanding of Hypergen concepts, text editor
+
+Let's build a simple cookbook that generates React components. This will teach you the fundamentals of template creation.
+
+## Setup Your Cookbook Structure
+
+Create the directory structure for your cookbook:
+
+```bash
+# Create cookbook directory
+mkdir -p my-cookbook/react/component
+cd my-cookbook/react/component
+
+# Create the required subdirectories
+mkdir templates actions
+```
+
+Your structure should look like:
+```
+my-cookbook/
+└── react/
+    └── component/
+        ├── recipe.yml          # Recipe configuration (we'll create this)
+        ├── templates/          # Template files
+        └── actions/            # Action functions (optional)
+```
+
+## Create Your Recipe Configuration
+
+Create `recipe.yml` with your recipe definition:
+
+```yaml
+# recipe.yml
+name: component
+description: Generate React component with TypeScript support
+version: 1.0.0
+author: your-name
+
+variables:
+  name:
+    type: string
+    required: true
+    pattern: ^[A-Z][a-zA-Z0-9]*$
+    description: Component name in PascalCase
+    prompt: "What's your component name?"
+  
+  typescript:
+    type: boolean
+    default: true
+    description: Generate TypeScript component
+    prompt: "Include TypeScript?"
+  
+  includeTests:
+    type: boolean
+    default: true
+    description: Generate test file
+    prompt: "Include test file?"
+  
+  styling:
+    type: enum
+    values: [css, scss, styled-components, none]
+    default: css
+    description: Styling approach
+    prompt: "Choose styling approach:"
+
+steps:
+  - name: Generate component
+    tool: template
+    template: component.liquid
+    
+  - name: Generate styles
+    tool: template
+    template: styles.liquid
+    when: "{% raw %}{{ styling != 'none' }}{% endraw %}"
+    
+  - name: Generate tests
+    tool: template  
+    template: test.liquid
+    when: "{% raw %}{{ includeTests }}{% endraw %}"
+    
+  - name: Update index
+    tool: action
+    action: update-exports
+```
+
+## Create Your First Template
+
+Create `templates/component.liquid` with the component template:
+
+```liquid
+---
+to: src/components/{% raw %}{{ name }}{% endraw %}.{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}
+---
+import React from 'react';
+{% raw %}{% if styling == 'styled-components' -%}{% endraw %}
+import styled from 'styled-components';
+{% raw %}{% elsif styling == 'css' or styling == 'scss' -%}{% endraw %}
+import styles from './{% raw %}{{ name }}{% endraw %}.module.{% raw %}{{ styling }}{% endraw %}';
+{% raw %}{% endif -%}{% endraw %}
+
+{% raw %}{% if typescript -%}{% endraw %}
+interface {% raw %}{{ name }}{% endraw %}Props {
+  children?: React.ReactNode;
+  className?: string;
+}
+
+export const {% raw %}{{ name }}{% endraw %}: React.FC<{% raw %}{{ name }}{% endraw %}Props> = ({ 
+  children, 
+  className 
+}) => {
+{% raw %}{% else -%}{% endraw %}
+export const {% raw %}{{ name }}{% endraw %} = ({ children, className }) => {
+{% raw %}{% endif -%}{% endraw %}
+  return (
+    {% raw %}{% if styling == 'styled-components' -%}{% endraw %}
+    <StyledWrapper className={className}>
+      {children || 'Hello from {% raw %}{{ name }}{% endraw %}!'}
+    </StyledWrapper>
+    {% raw %}{% elsif styling == 'css' or styling == 'scss' -%}{% endraw %}
+    <div className={`${styles.{% raw %}{{ name | camelCase }}{% endraw %} ${className || ''}`}>
+      {children || 'Hello from {% raw %}{{ name }}{% endraw %}!'}
+    </div>
+    {% raw %}{% else -%}{% endraw %}
+    <div className={className}>
+      {children || 'Hello from {% raw %}{{ name }}{% endraw %}!'}
+    </div>
+    {% raw %}{% endif -%}{% endraw %}
+  );
+};
+
+{% raw %}{% if styling == 'styled-components' -%}{% endraw %}
+const StyledWrapper = styled.div`
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  
+  &:hover {
+    border-color: #007acc;
+  }
+`;
+{% raw %}{% endif -%}{% endraw %}
+
+export default {% raw %}{{ name }}{% endraw %};
+```
+
+## Create the Styles Template
+
+Create `templates/styles.liquid` for CSS/SCSS files:
+
+```liquid
+---
+to: src/components/{% raw %}{{ name }}{% endraw %}.module.{% raw %}{{ styling }}{% endraw %}
+when: {% raw %}{{ styling == 'css' or styling == 'scss' }}{% endraw %}
+---
+{% raw %}{% if styling == 'scss' -%}{% endraw %}
+$border-color: #ddd;
+$hover-color: #007acc;
+$padding: 1rem;
+
+.{% raw %}{{ name | camelCase }}{% endraw %} {
+  padding: $padding;
+  border: 1px solid $border-color;
+  border-radius: 4px;
+  
+  &:hover {
+    border-color: $hover-color;
+  }
+}
+{% raw %}{% else -%}{% endraw %}
+.{% raw %}{{ name | camelCase }}{% endraw %} {
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.{% raw %}{{ name | camelCase }}{% endraw %}:hover {
+  border-color: #007acc;
+}
+{% raw %}{% endif -%}{% endraw %}
+```
+
+## Create the Test Template
+
+Create `templates/test.liquid` for test files:
+
+```liquid
+---
+to: src/components/{% raw %}{{ name }}{% endraw %}.test.{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}
+---
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+{% raw %}{% if typescript -%}{% endraw %}
+import '@testing-library/jest-dom';
+{% raw %}{% endif -%}{% endraw %}
+import {% raw %}{{ name }}{% endraw %} from './{% raw %}{{ name }}{% endraw %}';
+
+describe('{% raw %}{{ name }}{% endraw %}', () => {
+  it('renders without crashing', () => {
+    render(<{% raw %}{{ name }}{% endraw %} />);
+    expect(screen.getByText('Hello from {% raw %}{{ name }}{% endraw %}!')).toBeInTheDocument();
+  });
+
+  it('renders children when provided', () => {
+    render(<{% raw %}{{ name }}{% endraw %}>Custom content</{% raw %}{{ name }}{% endraw %}>);
+    expect(screen.getByText('Custom content')).toBeInTheDocument();
+  });
+
+  it('applies className when provided', () => {
+    render(<{% raw %}{{ name }}{% endraw %} className="custom-class" />);
+    const element = screen.getByText('Hello from {% raw %}{{ name }}{% endraw %}!');
+    expect(element.parentElement).toHaveClass('custom-class');
+  });
+});
+```
+
+## Create an Action (Optional)
+
+Create `actions/update-exports.js` to update index files:
+
+```javascript
+// actions/update-exports.js
+import { action } from 'hypergen/actions';
+import type { ActionContext, ActionResult } from 'hypergen/types';
+import fs from 'fs/promises';
+import path from 'path';
+
+async function updateExports(context: ActionContext): Promise<ActionResult> {
+  const { args, utils, logger } = context;
+  const indexPath = path.join(process.cwd(), 'src/components/index.ts');
+  
+  try {
+    let content = '';
+    
+    // Read existing content if file exists
+    try {
+      content = await fs.readFile(indexPath, 'utf8');
+    } catch (error) {
+      // File doesn't exist, start with empty content
+      content = '// Component exports\n';
+    }
+    
+    // Check if export already exists
+    const exportLine = `export { ${args.name} } from './${args.name}';`;
+    if (!content.includes(exportLine)) {
+      content += `${exportLine}\n`;
+      
+      // Write updated content
+      await fs.writeFile(indexPath, content, 'utf8');
+      logger.info(`✅ Added ${args.name} export to index.ts`);
+    } else {
+      logger.info(`ℹ️  Export for ${args.name} already exists`);
+    }
+    
+    return { success: true };
+  } catch (error) {
+    logger.error(`❌ Failed to update exports: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
+// Apply decorator
+const decoratedAction = action({
+  name: 'update-exports',
+  description: 'Update component exports in index file',
+  parameters: {
+    name: { type: 'string', required: true }
+  }
+})(updateExports);
+
+export { decoratedAction as updateExports };
+```
+
+## Test Your Recipe
+
+### 1. Validate Configuration
+```bash
+# Validate your recipe.yml
+hypergen recipe validate my-cookbook/react/component/recipe.yml
+```
+
+### 2. Dry Run
+```bash
+# See what would be generated
+hypergen recipe execute my-cookbook/react/component/recipe.yml \
+  --name="Button" \
+  --dryRun
+```
+
+### 3. Execute Recipe
+```bash
+# Create a test directory
+mkdir test-component && cd test-component
+
+# Execute your recipe
+hypergen recipe execute ../my-cookbook/react/component/recipe.yml \
+  --name="Button" \
+  --typescript=true \
+  --includeTests=true \
+  --styling="css"
+```
+
+**Success!** You should now have:
+- `src/components/Button.tsx`
+- `src/components/Button.module.css`  
+- `src/components/Button.test.tsx`
+- `src/components/index.ts` (created/updated)
+
+## Understanding Template Features
+
+### Frontmatter Options
+Templates use YAML frontmatter for configuration:
+
+```liquid
+---
+to: src/{% raw %}{{ name }}{% endraw %}.ts                    # Destination path
+skip_if: {% raw %}{{ name == 'Skip' }}{% endraw %}           # Skip condition
+inject: true                            # Enable injection mode
+inject_at_line: 10                      # Inject at specific line
+unless_exists: true                     # Only if file doesn't exist
+---
+Template content here...
+```
+
+### LiquidJS Filters
+Hypergen provides many built-in filters:
+
+```liquid
+{% raw %}{{ name | camelCase }}{% endraw %}        # Convert to camelCase
+{% raw %}{{ name | pascalCase }}{% endraw %}       # Convert to PascalCase  
+{% raw %}{{ name | kebabCase }}{% endraw %}        # Convert to kebab-case
+{% raw %}{{ name | snakeCase }}{% endraw %}        # Convert to snake_case
+{% raw %}{{ name | humanize }}{% endraw %}         # Convert to human readable
+{% raw %}{{ name | pluralize }}{% endraw %}        # Make plural
+{% raw %}{{ name | singularize }}{% endraw %}      # Make singular
+{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}  # Conditional output
+```
+
+### Conditional Logic
+Use LiquidJS conditions and loops:
+
+```liquid
+{% raw %}{% if typescript %}{% endraw %}
+interface {% raw %}{{ name }}{% endraw %}Props {
+  // TypeScript interface
+}
+{% raw %}{% endif %}{% endraw %}
+
+{% raw %}{% for feature in features %}{% endraw %}
+import {% raw %}{{ feature }}{% endraw %} from './{% raw %}{{ feature }}{% endraw %}';
+{% raw %}{% endfor %}{% endraw %}
+
+{% raw %}{% unless styling == 'none' %}{% endraw %}
+import styles from './styles.css';
+{% raw %}{% endunless %}{% endraw %}
+```
+
+## Advanced Template Techniques
+
+### Partial Templates
+Break complex templates into reusable parts:
+
+```liquid
+<!-- templates/partials/imports.liquid -->
+import React from 'react';
+{% raw %}{% if typescript %}{% endraw %}import type { FC } from 'react';{% raw %}{% endif %}{% endraw %}
+{% raw %}{% if styling == 'styled-components' %}{% endraw %}import styled from 'styled-components';{% raw %}{% endif %}{% endraw %}
+```
+
+```liquid  
+<!-- templates/component.liquid -->
+---
+to: src/{% raw %}{{ name }}{% endraw %}.tsx
+---
+{% raw %}{% include 'partials/imports.liquid' %}{% endraw %}
+
+// Component implementation...
+```
+
+### Dynamic File Extensions
+```liquid
+---
+to: src/{% raw %}{{ name }}{% endraw %}.{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}
+---
+```
+
+### Conditional File Creation
+```liquid
+---
+to: src/{% raw %}{{ name }}{% endraw %}.test.{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}
+skip_if: {% raw %}{{ not includeTests }}{% endraw %}
+---
+```
+
+## Debugging Templates
+
+### 1. Use Dry Run
+```bash
+hypergen recipe execute my-cookbook/react/component/recipe.yml \
+  --name="Debug" \
+  --dryRun \
+  --verbose
+```
+
+### 2. Check Variable Values
+Add debug output to templates:
+
+```liquid
+<!-- Debug: name={% raw %}{{ name }}{% endraw %}, typescript={% raw %}{{ typescript }}{% endraw %} -->
+```
+
+### 3. Validate JSON in Variables
+```bash
+# Test complex variables
+hypergen recipe execute my-cookbook/react/component/recipe.yml \
+  --name="Test" \
+  --config='{"debug": true, "port": 3000}' \
+  --dryRun
+```
+
+## What's Next?
+
+Now that you can create templates:
+
+- **[Advanced Recipe Composition](/advanced-composition)** - Complex multi-step recipes
+- **[TypeScript Actions](/tutorials/typescript-actions)** - Custom actions with TypeScript
+- **[CodeMods and AST](/tutorials/codemods)** - Transform existing code
+
+---
+
+**Congratulations!** You've created your first cookbook with templates, recipes, and actions. This is the foundation for all advanced Hypergen development.

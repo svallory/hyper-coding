@@ -1,0 +1,223 @@
+---
+title: 'HyperGen API'
+description: 'TypeScript API documentation for HyperGen code generation engine'
+---
+
+# HyperGen API
+
+The HyperGen API provides programmatic access to HyperDev's powerful code generation engine. This documentation is automatically generated from TypeScript source code.
+
+## Overview
+
+HyperGen is the core code generation engine powering HyperDev tools. It provides:
+
+- **Template Engine**: EJS-based rendering with frontmatter support
+- **Configuration System**: Hierarchical configuration loading
+- **Template Discovery**: Multi-source template resolution
+- **Actions System**: TypeScript decorator-based actions
+- **Trust System**: Security model for external templates
+- **Performance**: Multi-level caching and parallel processing
+
+## Installation
+
+```bash
+npm install @hyperdev/hypergen
+# or
+bun install @hyperdev/hypergen
+```
+
+## Quick Start
+
+```typescript
+import { HyperGen, Engine } from '@hyperdev/hypergen';
+
+// Initialize the engine
+const engine = new Engine({
+  templatesDir: './templates',
+  outputDir: './output'
+});
+
+// Generate code from template
+await engine.generate('component', {
+  name: 'UserProfile',
+  props: ['user', 'onUpdate']
+});
+```
+
+## Core Classes
+
+### Engine
+
+The main orchestration class for code generation workflows.
+
+```typescript
+class Engine {
+  constructor(options: EngineOptions);
+  
+  // Generate code from template
+  async generate(templateName: string, variables: Record<string, any>): Promise<GenerationResult>;
+  
+  // Discover available templates
+  async discoverTemplates(): Promise<Template[]>;
+  
+  // Validate template structure
+  async validateTemplate(template: Template): Promise<ValidationResult>;
+}
+```
+
+### TemplateStore
+
+Hash-indexed storage system for fast template lookup.
+
+```typescript
+class TemplateStore {
+  constructor(directories: string[]);
+  
+  // Find template by name or hash
+  async findTemplate(identifier: string): Promise<Template | null>;
+  
+  // Index templates from directories
+  async indexTemplates(): Promise<void>;
+  
+  // Get template metadata
+  getTemplateMetadata(template: Template): TemplateMetadata;
+}
+```
+
+### Configuration
+
+Hierarchical configuration management system.
+
+```typescript
+class ConfigurationManager {
+  // Load configuration from multiple sources
+  async loadConfig(): Promise<Configuration>;
+  
+  // Merge configuration objects
+  mergeConfigs(configs: Configuration[]): Configuration;
+  
+  // Validate configuration
+  validateConfig(config: Configuration): ValidationResult;
+}
+```
+
+## Template System
+
+### Template Structure
+
+Templates follow a consistent structure:
+
+```
+template/
+├── template.yml          # Template metadata
+├── component.tsx.ejs.t   # React component template
+├── test.spec.ts.ejs.t   # Test file template
+└── index.ts.ejs.t       # Export template
+```
+
+### Template Metadata
+
+```yaml
+# template.yml
+name: "React Component"
+description: "Generate React component with tests"
+version: "1.0.0"
+variables:
+  - name: componentName
+    type: string
+    required: true
+  - name: withTests
+    type: boolean
+    default: true
+```
+
+### EJS Templates
+
+Templates use EJS syntax with frontmatter:
+
+```ejs
+---
+to: src/components/<%= componentName %>.tsx
+unless_exists: true
+---
+import React from 'react';
+
+interface <%= componentName %>Props {
+  // Component props
+}
+
+export const <%= componentName %>: React.FC<<%= componentName %>Props> = (props) => {
+  return (
+    <div>
+      {/* Component implementation */}
+    </div>
+  );
+};
+```
+
+## Actions System
+
+HyperGen supports TypeScript-based actions for complex operations:
+
+```typescript
+import { Action, BeforeGenerate, AfterGenerate } from '@hyperdev/hypergen';
+
+@Action('setup-component')
+export class ComponentSetupAction {
+  
+  @BeforeGenerate()
+  async setupDirectories(context: GenerationContext) {
+    // Create necessary directories
+    await context.fs.ensureDir('src/components');
+  }
+  
+  @AfterGenerate()
+  async updateIndex(context: GenerationContext) {
+    // Update index file with new component export
+    await context.operations.inject({
+      path: 'src/index.ts',
+      pattern: '// Export components',
+      template: "export { <%= componentName %> } from './components/<%= componentName %>';"
+    });
+  }
+}
+```
+
+## Error Handling
+
+HyperGen provides detailed error information:
+
+```typescript
+import { HyperGenError, ErrorCode } from '@hyperdev/hypergen';
+
+try {
+  await engine.generate('component', variables);
+} catch (error) {
+  if (error instanceof HyperGenError) {
+    console.log(`Error Code: ${error.code}`);
+    console.log(`Message: ${error.message}`);
+    console.log(`Context:`, error.context);
+  }
+}
+```
+
+## Performance Features
+
+- **Lazy Loading**: Templates loaded on demand
+- **Caching**: Multi-level caching system
+- **Parallel Processing**: Concurrent template processing
+- **Incremental Generation**: Skip unchanged files
+
+## Security
+
+- **Template Validation**: Comprehensive template security checks
+- **Sandboxed Execution**: Safe template rendering environment
+- **Trust System**: Configurable trust levels for external templates
+
+---
+
+<Note>
+The complete TypeScript API documentation is automatically generated from source code using TypeDoc. This ensures accuracy and stays current with code changes.
+</Note>
+
+For more examples and tutorials, visit our [Examples section](/examples).

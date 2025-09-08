@@ -1,0 +1,522 @@
+---
+title: "epics: Strategic Planning"
+description: "Product requirements management, architecture design, and strategic task planning with AI-assisted documentation and TUI dashboard for project coordination."
+icon: "map"
+---
+
+# epics: Strategic Planning & Architecture
+
+The **epics** tool provides comprehensive strategic planning capabilities, combining product requirements management, architecture design, and task orchestration in a unified system. It serves as the strategic brain of your development workflow, ensuring alignment between business objectives and technical implementation.
+
+## Core Capabilities
+
+### Product Requirements Management (PRD)
+- **AI-Assisted PRD Creation**: Generate comprehensive product requirements with AI assistance
+- **Requirement Validation**: Automated completeness and consistency checking
+- **Stakeholder Alignment**: Collaborative requirement refinement and approval workflows
+- **Change Management**: Track requirement evolution and impact analysis
+
+### Architecture Design & Documentation
+- **System Architecture Design**: Create and maintain comprehensive system architecture
+- **Design Pattern Enforcement**: Ensure consistency with established architectural patterns
+- **Technical Decision Records**: Document architectural decisions and rationale
+- **Dependency Mapping**: Visualize and manage system dependencies
+
+### Strategic Task Planning & Orchestration
+- **Epic Decomposition**: Break down large initiatives into manageable tasks
+- **Dependency Management**: Track and visualize task dependencies
+- **Resource Planning**: Allocate resources and estimate timelines
+- **Progress Tracking**: Monitor epic progress with comprehensive dashboards
+
+### TUI Dashboard & Collaboration
+- **Real-time Dashboard**: Terminal-based interface for epic management
+- **Team Collaboration**: Shared planning spaces and decision workflows
+- **Progress Visualization**: Graphical progress tracking and reporting
+- **Alert Management**: Proactive notifications for blockers and delays
+
+## Subcommands
+
+### `hyperdev epics init`
+Initialize epic planning for the current project.
+
+```bash
+# Initialize with default template
+hyperdev epics init
+
+# Initialize with specific epic template
+hyperdev epics init --template=saas-product
+
+# Initialize with AI-assisted planning
+hyperdev epics init --ai-planning
+
+# Initialize with existing PRD
+hyperdev epics init --prd=path/to/prd.md
+```
+
+### `hyperdev epics arch`
+Architecture design and documentation tools.
+
+```bash
+# Create architecture documentation
+hyperdev epics arch create
+
+# Generate architecture diagrams
+hyperdev epics arch diagram --type=system
+
+# Validate architecture compliance
+hyperdev epics arch validate
+
+# Export architecture documentation
+hyperdev epics arch export --format=pdf
+```
+
+### `hyperdev epics tasks`
+Task management and orchestration interface.
+
+```bash
+# Launch task management interface
+hyperdev epics tasks
+
+# Create new epic
+hyperdev epics tasks create-epic
+
+# Break down epic into tasks
+hyperdev epics tasks decompose <epic-id>
+
+# Manage dependencies
+hyperdev epics tasks dependencies
+```
+
+### `hyperdev epics dash`
+Strategic dashboard for epic management and monitoring.
+
+```bash
+# Launch strategic dashboard
+hyperdev epics dash
+
+# View specific epic dashboard
+hyperdev epics dash --epic=user-auth
+
+# Generate progress reports
+hyperdev epics dash report --format=weekly
+
+# View team allocation
+hyperdev epics dash team-view
+```
+
+## Epic Planning Architecture
+
+### Epic Structure (`.hyperdev/epics/`)
+```
+epics/
+├── prd/                    # Product Requirements Documents
+│   ├── main-prd.md        # Primary PRD
+│   ├── user-auth.md       # Feature-specific PRDs
+│   └── api-gateway.md     # Component PRDs
+├── architecture/          # Architecture Documentation
+│   ├── system-overview.md # High-level architecture
+│   ├── service-map.yaml   # Service dependencies
+│   ├── data-flow.md       # Data flow documentation
+│   └── security-model.md  # Security architecture
+├── epics/                 # Epic Definitions
+│   ├── user-management/   # Epic directory
+│   │   ├── epic.yaml     # Epic configuration
+│   │   ├── tasks.yaml    # Task definitions
+│   │   └── timeline.yaml # Timeline and milestones
+├── decisions/             # Technical Decision Records
+│   ├── adr-001-auth.md   # Authentication decisions
+│   └── adr-002-db.md     # Database decisions
+└── dashboard/             # Dashboard Configuration
+    ├── metrics.yaml      # Metric definitions
+    └── views.yaml        # Dashboard views
+```
+
+### Epic Configuration (`epic.yaml`)
+```yaml
+epic:
+  name: "User Management System"
+  description: "Complete user authentication and profile management"
+  priority: "high"
+  owner: "backend-team"
+  
+  objectives:
+    - "Implement secure user authentication"
+    - "Create user profile management"
+    - "Add role-based access control"
+    - "Integrate with existing systems"
+  
+  success_criteria:
+    - "Zero security vulnerabilities"
+    - "Sub-200ms authentication response"
+    - "99.9% uptime SLA"
+    - "GDPR compliance"
+  
+  timeline:
+    start_date: "2024-01-15"
+    end_date: "2024-03-15"
+    milestones:
+      - name: "Authentication MVP"
+        date: "2024-02-01"
+      - name: "Profile Management"
+        date: "2024-02-15"
+      - name: "RBAC Implementation"
+        date: "2024-03-01"
+  
+  resources:
+    team_size: 3
+    budget: "$50000"
+    dependencies: ["api-gateway", "user-database"]
+  
+  risks:
+    - risk: "Third-party integration delays"
+      probability: "medium" 
+      impact: "high"
+      mitigation: "Parallel development with mocks"
+```
+
+## PRD Management
+
+### AI-Assisted PRD Generation
+```yaml
+prd_generation:
+  ai_prompts:
+    business_context: |
+      Generate a comprehensive PRD section covering:
+      - Market analysis and competitive landscape
+      - User personas and use cases
+      - Business objectives and success metrics
+    
+    technical_requirements: |
+      Based on the business context, generate:
+      - Functional requirements with acceptance criteria
+      - Non-functional requirements (performance, security, scalability)
+      - Technical constraints and assumptions
+      
+    implementation_plan: |
+      Create an implementation roadmap including:
+      - Development phases and milestones
+      - Resource requirements and timeline
+      - Risk analysis and mitigation strategies
+```
+
+### PRD Template Structure
+```markdown
+# Product Requirements Document
+
+## Executive Summary
+- **Problem Statement**: What problem are we solving?
+- **Solution Overview**: High-level solution description
+- **Success Metrics**: How will we measure success?
+
+## Market Analysis
+- **Target Market**: Who are our users?
+- **Competitive Analysis**: How do we compare to competitors?
+- **Market Opportunity**: What's the business opportunity?
+
+## User Requirements
+- **User Personas**: Who will use this product?
+- **User Stories**: What do users want to accomplish?
+- **Use Cases**: Detailed scenarios and workflows
+
+## Functional Requirements
+- **Core Features**: Essential functionality
+- **User Interface**: UI/UX requirements
+- **Integration Requirements**: External system connections
+
+## Non-Functional Requirements
+- **Performance**: Response times, throughput, scalability
+- **Security**: Authentication, authorization, data protection
+- **Reliability**: Uptime, error handling, disaster recovery
+- **Compliance**: Regulatory and legal requirements
+
+## Technical Architecture
+- **System Architecture**: High-level technical design
+- **Technology Stack**: Chosen technologies and rationale
+- **Data Architecture**: Data models and storage strategy
+- **Security Architecture**: Security design and controls
+
+## Implementation Plan
+- **Development Phases**: Breakdown into deliverable phases
+- **Timeline**: Milestones and delivery dates
+- **Resource Requirements**: Team, budget, infrastructure
+- **Risk Analysis**: Potential risks and mitigation strategies
+
+## Success Criteria
+- **Acceptance Criteria**: How do we know when we're done?
+- **Quality Gates**: Quality and performance thresholds
+- **Launch Criteria**: Requirements for production release
+```
+
+## Architecture Documentation System
+
+### System Architecture Overview
+```yaml
+system_architecture:
+  overview:
+    style: "microservices"
+    patterns: ["event-driven", "cqrs", "api-gateway"]
+    
+  services:
+    - name: "user-service"
+      type: "microservice"
+      responsibilities: ["authentication", "user-management"]
+      dependencies: ["user-database", "auth-provider"]
+      
+    - name: "api-gateway"
+      type: "gateway"
+      responsibilities: ["routing", "rate-limiting", "authentication"]
+      dependencies: ["user-service", "order-service"]
+  
+  data_architecture:
+    databases:
+      - name: "user-db"
+        type: "postgresql"
+        purpose: "user data and authentication"
+      - name: "analytics-db"  
+        type: "clickhouse"
+        purpose: "analytics and reporting"
+        
+  security_architecture:
+    authentication: "JWT with refresh tokens"
+    authorization: "RBAC with policy engine"
+    data_protection: "encryption at rest and in transit"
+    compliance: ["GDPR", "SOC2"]
+```
+
+### Technical Decision Records (ADR)
+```markdown
+# ADR-001: Authentication Strategy
+
+## Status
+Accepted
+
+## Context
+We need to implement user authentication for our SaaS platform with requirements for:
+- Scalability to handle 100k+ users
+- Integration with multiple client applications
+- Strong security with modern best practices
+- Compliance with GDPR and SOC2
+
+## Decision
+We will implement JWT-based authentication with:
+- Access tokens (15-minute expiry)
+- Refresh tokens (30-day expiry)
+- Role-based access control (RBAC)
+- OAuth2 integration for third-party providers
+
+## Consequences
+### Positive
+- Stateless authentication scales horizontally
+- Industry-standard approach with good library support
+- Flexible authorization model
+- Strong security with token rotation
+
+### Negative
+- Token management complexity
+- Requires secure refresh token storage
+- Additional infrastructure for token validation
+
+## Implementation Plan
+1. Set up JWT library and token generation
+2. Implement refresh token rotation
+3. Create RBAC policy engine
+4. Add OAuth2 provider integration
+5. Implement security monitoring
+```
+
+## Task Orchestration System
+
+### Epic Decomposition Process
+```yaml
+decomposition_process:
+  phases:
+    1_analysis:
+      - epic_requirements_review
+      - technical_constraint_analysis
+      - dependency_identification
+      
+    2_breakdown:
+      - user_story_creation
+      - technical_task_definition
+      - acceptance_criteria_specification
+      
+    3_planning:
+      - dependency_mapping
+      - effort_estimation
+      - resource_allocation
+      
+    4_validation:
+      - completeness_check
+      - feasibility_review
+      - stakeholder_approval
+```
+
+### Task Definition Structure
+```yaml
+tasks:
+  - id: "AUTH-001"
+    title: "Implement JWT Authentication"
+    epic: "user-management"
+    type: "development"
+    
+    description: |
+      Create JWT-based authentication system with access and refresh tokens
+    
+    acceptance_criteria:
+      - "User can authenticate with email/password"
+      - "JWT tokens are generated with 15-minute expiry"
+      - "Refresh tokens enable seamless token renewal"
+      - "All endpoints validate JWT tokens"
+    
+    technical_requirements:
+      - "Use RS256 algorithm for JWT signing"
+      - "Implement secure refresh token storage"
+      - "Add rate limiting to auth endpoints"
+      - "Include comprehensive error handling"
+    
+    dependencies: ["AUTH-000-setup", "DB-001-user-schema"]
+    effort: "5 days"
+    assignee: "backend-team"
+    priority: "high"
+    
+    definition_of_done:
+      - "Code review completed"
+      - "Unit tests with 90% coverage"
+      - "Security scan passed"
+      - "Integration tests passed"
+      - "Documentation updated"
+```
+
+## TUI Dashboard Features
+
+### Dashboard Components
+```yaml
+dashboard_layout:
+  overview_panel:
+    - epic_progress_summary
+    - milestone_tracking
+    - resource_utilization
+    - blocker_alerts
+    
+  epic_detail_panel:
+    - task_completion_status
+    - dependency_graph
+    - timeline_visualization
+    - team_allocation
+    
+  metrics_panel:
+    - velocity_tracking
+    - quality_metrics
+    - security_compliance
+    - performance_indicators
+    
+  alerts_panel:
+    - overdue_tasks
+    - dependency_blockers
+    - resource_conflicts
+    - risk_escalations
+```
+
+### Real-time Collaboration Features
+- **Shared Planning Sessions**: Collaborative epic planning with real-time updates
+- **Decision Workflows**: Structured decision-making processes with approvals
+- **Progress Synchronization**: Real-time progress updates across team members
+- **Communication Integration**: Integrated chat and notification system
+
+## Integration with Other Tools
+
+### With gen (Code Generation)
+- Generate code templates based on epic requirements
+- Ensure generated code aligns with architectural decisions
+- Automate implementation of defined technical patterns
+
+### With dx (Developer Experience)
+- Configure development environment based on epic technology choices
+- Setup tooling aligned with architectural decisions
+- Automate quality gates defined in epic requirements
+
+### With dev (Execution Control)
+- Monitor development progress against epic timelines
+- Validate implementation against architectural requirements
+- Enforce quality gates defined in epic planning
+
+### With dash (Monitoring)
+- Track epic progress and milestone achievement
+- Monitor system performance against non-functional requirements
+- Generate executive reports on epic delivery
+
+## Best Practices
+
+### PRD Development
+1. **Collaborative Creation**: Involve all stakeholders in PRD development
+2. **Iterative Refinement**: Continuously refine requirements based on feedback
+3. **Clear Success Criteria**: Define measurable success criteria
+4. **Regular Review**: Schedule regular PRD review and update sessions
+5. **Version Control**: Maintain clear versioning of requirement changes
+
+### Architecture Design
+1. **Document Decisions**: Use ADRs to capture architectural decisions
+2. **Visual Documentation**: Create diagrams for complex architectural concepts
+3. **Regular Review**: Schedule architecture review sessions
+4. **Evolution Planning**: Plan for architectural evolution and scaling
+5. **Compliance Alignment**: Ensure architecture meets compliance requirements
+
+### Task Management
+1. **Right-sized Tasks**: Keep tasks small and manageable (< 1 week)
+2. **Clear Dependencies**: Explicitly define and manage dependencies
+3. **Regular Updates**: Maintain current task status and progress
+4. **Risk Management**: Proactively identify and mitigate risks
+5. **Quality Focus**: Define clear quality criteria for each task
+
+## Advanced Features
+
+### AI-Powered Planning
+```yaml
+ai_planning_features:
+  requirement_analysis:
+    - automatic_gap_detection
+    - consistency_validation
+    - completeness_scoring
+    
+  task_generation:
+    - epic_decomposition_suggestions
+    - effort_estimation_assistance
+    - dependency_inference
+    
+  risk_analysis:
+    - potential_bottleneck_identification
+    - resource_conflict_detection
+    - timeline_risk_assessment
+```
+
+### Analytics & Reporting
+```yaml
+analytics_capabilities:
+  progress_tracking:
+    - epic_completion_rates
+    - milestone_achievement
+    - velocity_measurement
+    
+  quality_metrics:
+    - requirement_coverage
+    - defect_rates
+    - technical_debt_tracking
+    
+  resource_utilization:
+    - team_capacity_analysis
+    - skill_gap_identification
+    - budget_tracking
+```
+
+---
+
+**The epics tool transforms chaotic project planning into systematic, AI-assisted strategic management.** By combining PRD management, architecture design, and task orchestration, teams can ensure alignment between business objectives and technical implementation while maintaining visibility into progress and risks.
+
+<Card
+  title="Epic Planning Guide"
+  icon="map"
+  href="/guides/epic-planning"
+  horizontal
+>
+  Learn to create comprehensive epics with PRDs, architecture design, and task orchestration.
+</Card>

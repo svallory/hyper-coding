@@ -1,0 +1,255 @@
+---
+title: Finding Cookbooks
+description: Discover and use community cookbooks from NPM, GitHub, and local sources
+time: 10 minutes
+prerequisites: Hypergen installed and working
+---
+
+# Finding Cookbooks
+
+**What you'll learn**: How to discover, evaluate, and use cookbooks from the community
+**Time needed**: 10 minutes
+**Prerequisites**: Hypergen installed and working
+
+Cookbooks are collections of recipes that solve specific problems or work with specific tools. Let's explore how to find and use them.
+
+## Built-in Discovery
+
+Hypergen can discover cookbooks from multiple sources:
+
+```bash
+# Search for React-related cookbooks
+hypergen discover react
+
+# Search for specific functionality
+hypergen discover "component generator"
+
+# Discover by tool name
+hypergen discover starlight
+```
+
+## NPM Cookbook Discovery
+
+### Official Hyper-Kits
+Official cookbooks are published under `@hyper-kits`:
+
+```bash
+# Install official Starlight cookbook
+npm install @hyper-kits/starlight
+
+# Use it immediately
+hypergen starlight create --name="My Docs" --description="Documentation site"
+```
+
+### Community Conventions
+Community cookbooks follow these patterns:
+
+- `@hyper-kits/*` - Official cookbooks
+- `hyper-kit-*` - Community cookbooks  
+- `@user/hyper-kit-*` - Organization cookbooks
+
+```bash
+# Browse NPM for community cookbooks
+npm search hyper-kit
+
+# Install a community cookbook
+npm install hyper-kit-react-native
+```
+
+## GitHub Discovery
+
+Find cookbooks via GitHub topics:
+
+```bash
+# Search GitHub repositories with "hyper-kit" topic
+hypergen discover --source=github "react components"
+
+# Clone and use a GitHub cookbook
+hypergen url resolve https://github.com/user/my-hyper-kit
+```
+
+**Requirements for GitHub cookbooks**:
+- Must have `hyper-kit` topic
+- Must contain `kit.yml` or `hypergen.yml`
+- Should have clear README with usage examples
+
+## Local Cookbooks
+
+Use local cookbook directories:
+
+```bash
+# List cookbooks in current project
+hypergen cookbook list
+
+# Use local cookbook
+hypergen ./recipes/my-cookbook create --name=Component
+```
+
+**Directory structure Hypergen searches**:
+- `recipes/` 
+- `cookbooks/`
+- `_templates/` (legacy compatibility)
+- Custom paths from `hypergen.config.js`
+
+## Evaluating Cookbooks
+
+Before using a cookbook, check its quality:
+
+### 1. Inspect Cookbook Information
+```bash
+# Get cookbook metadata
+hypergen cookbook info @hyper-kits/starlight
+
+# List available recipes
+hypergen recipe list @hyper-kits/starlight
+```
+
+### 2. Check Recipe Details  
+```bash
+# See what a recipe will do
+hypergen recipe info starlight/create
+
+# View recipe steps
+hypergen step list starlight/create
+```
+
+### 3. Test Safely
+```bash
+# Dry run to see what would be generated
+hypergen recipe execute starlight/create --name="Test" --dryRun
+
+# Validate recipe configuration
+hypergen recipe validate starlight/create
+```
+
+## Security & Trust
+
+Hypergen includes a trust system for safe cookbook execution:
+
+### Trust Management
+```bash
+# Trust a specific author (one-time setup)
+hypergen trust @company
+
+# Trust an organization
+hypergen trust @hyper-kits
+
+# View your trusted sources
+hypergen trust list
+
+# Remove trust
+hypergen trust remove @someone
+```
+
+### Execution Consent
+When using untrusted cookbooks, Hypergen will:
+
+1. **Show what will be executed** - All actions and file operations
+2. **Prompt for consent** - Explicit approval before execution
+3. **Allow inspection** - You can examine templates before proceeding
+
+## Using Discovered Cookbooks
+
+### Install and Use NPM Cookbooks
+```bash
+# Install globally for all projects
+npm install -g @hyper-kits/starlight
+
+# Or install locally per project
+npm install --save-dev @hyper-kits/starlight
+
+# Use immediately
+hypergen starlight create --name="My Documentation"
+```
+
+### Use GitHub Cookbooks
+```bash
+# Clone and cache
+hypergen url resolve https://github.com/company/react-kit
+
+# Use directly
+hypergen company/react-kit component --name=Button
+```
+
+### Configure Local Discovery
+Add to your `hypergen.config.js`:
+
+```javascript
+export default {
+  cookbooks: ['recipes', 'my-cookbooks', '_templates'],
+  
+  discovery: {
+    sources: ['npm', 'github', 'local'],
+    cacheTimeout: 3600, // Cache results for 1 hour
+    
+    // NPM-specific settings
+    npm: {
+      registries: ['https://registry.npmjs.org'],
+      scopes: ['@hyper-kits', '@company']
+    },
+    
+    // GitHub-specific settings
+    github: {
+      topics: ['hyper-kit', 'hypergen-cookbook'],
+      orgs: ['company', 'hyper-kits']
+    }
+  }
+};
+```
+
+## Common Cookbook Categories
+
+### Framework Cookbooks
+- `@hyper-kits/react` - React components and apps
+- `@hyper-kits/vue` - Vue.js projects
+- `@hyper-kits/svelte` - Svelte applications
+- `@hyper-kits/angular` - Angular projects
+
+### Tool Cookbooks  
+- `@hyper-kits/starlight` - Documentation sites
+- `@hyper-kits/vite` - Vite configuration
+- `@hyper-kits/eslint` - ESLint configurations
+- `@hyper-kits/jest` - Testing setups
+
+### Architecture Cookbooks
+- `@hyper-kits/monorepo` - Monorepo structures
+- `@hyper-kits/microservice` - Microservice templates
+- `@hyper-kits/serverless` - Serverless functions
+
+## Troubleshooting Discovery
+
+### Cookbook Not Found
+```bash
+# Clear discovery cache
+hypergen cache clear
+
+# Search with different terms  
+hypergen discover "react component" --source=all
+
+# Check your network connection
+hypergen system status
+```
+
+### Permission Issues
+```bash
+# Check trust settings
+hypergen trust list
+
+# Trust required authors
+hypergen trust @hyper-kits
+
+# Use --force for testing (be careful!)
+hypergen recipe execute cookbook/recipe --force
+```
+
+## What's Next?
+
+Now that you can find cookbooks:
+
+- **[Running Recipes](/tutorials/running-recipes)** (15 minutes) - Master recipe execution
+- **[Understanding Variables](/tutorials/recipe-variables)** (10 minutes) - Customize recipe output
+- **[Creating Templates](/tutorials/creating-templates)** (20 minutes) - Build your own cookbook
+
+---
+
+**You now know how to discover and safely use community cookbooks!** The ecosystem of shared cookbooks is one of Hypergen's greatest strengths.

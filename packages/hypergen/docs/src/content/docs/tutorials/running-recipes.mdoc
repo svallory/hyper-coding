@@ -1,0 +1,394 @@
+---
+title: Running Recipes
+description: Master recipe execution, variables, and customization options
+time: 15 minutes
+prerequisites: Hypergen installed, basic cookbook discovery knowledge
+---
+
+# Running Recipes
+
+**What you'll learn**: How to execute recipes effectively, use variables, and customize output
+**Time needed**: 15 minutes
+**Prerequisites**: Hypergen installed, basic cookbook discovery knowledge
+
+Recipes are step-by-step instructions that generate code. Let's learn how to run them effectively and customize their output.
+
+## Basic Recipe Execution
+
+### Simple Execution
+```bash
+# Execute a recipe with all required variables
+hypergen recipe execute my-cookbook/create --name="MyProject" --type="library"
+
+# Shorter syntax (if cookbook is installed)
+hypergen my-cookbook create --name="MyProject" --type="library"
+```
+
+### Interactive Mode
+When you don't provide all variables, Hypergen prompts you:
+
+```bash
+# Run without variables - Hypergen will prompt
+hypergen react component
+
+# Output:
+# ? Component name: Button
+# ? Include TypeScript? (Y/n) Y
+# ? Include tests? (Y/n) Y
+# ? Styling approach: (Use arrow keys)
+#   ❯ CSS Modules
+#     Styled Components  
+#     Emotion
+#     Plain CSS
+```
+
+## Understanding Variables
+
+### Variable Types
+Recipes can define different types of variables:
+
+```yaml
+# In recipe.yml
+variables:
+  name:
+    type: string
+    required: true
+    pattern: ^[A-Z][a-zA-Z0-9]*$
+    description: Component name in PascalCase
+  
+  typescript:
+    type: boolean  
+    default: true
+    description: Generate TypeScript files
+  
+  styling:
+    type: enum
+    values: [css, scss, styled-components, emotion]
+    default: css
+    description: Styling approach
+    
+  features:
+    type: array
+    values: [routing, state, testing, docs]
+    default: []
+    description: Additional features to include
+    
+  config:
+    type: object
+    properties:
+      port: { type: number, default: 3000 }
+      debug: { type: boolean, default: false }
+    description: Configuration options
+```
+
+### Providing Variables
+
+**Via CLI arguments**:
+```bash
+hypergen react component \
+  --name="Button" \
+  --typescript=true \
+  --styling="styled-components" \
+  --features="testing,docs"
+```
+
+**Via configuration file**:
+```javascript
+// hypergen.vars.js
+export default {
+  name: "Button",
+  typescript: true,
+  styling: "styled-components",
+  features: ["testing", "docs"],
+  config: {
+    port: 3001,
+    debug: true
+  }
+};
+```
+
+```bash
+# Use variables file
+hypergen react component --vars=hypergen.vars.js
+```
+
+**Via environment variables**:
+```bash
+export HYPERGEN_NAME="Button"
+export HYPERGEN_TYPESCRIPT="true"
+hypergen react component
+```
+
+## Recipe Validation and Dry Runs
+
+### Validate Before Execution
+```bash
+# Check recipe configuration
+hypergen recipe validate react/component
+
+# Check with specific variables
+hypergen recipe validate react/component --name="Button"
+```
+
+### Dry Run Mode
+See what would be generated without creating files:
+
+```bash
+hypergen recipe execute react/component --name="Button" --dryRun
+
+# Output:
+# Would create files:
+#   src/components/Button.tsx
+#   src/components/Button.module.css  
+#   src/components/Button.test.tsx
+#   src/components/index.ts (modified)
+# 
+# Would execute actions:
+#   install-dependencies: react, @types/react
+#   update-exports: add Button to index
+```
+
+## Step-by-Step Execution
+
+### View Recipe Steps
+```bash
+# List all steps in a recipe
+hypergen step list react/component
+
+# Output:
+# Steps in react/component:
+#   1. Generate component file
+#   2. Generate styles  
+#   3. Generate tests (conditional)
+#   4. Update exports
+#   5. Install dependencies
+```
+
+### Execute Individual Steps
+```bash
+# Execute only step 1
+hypergen step execute react/component "Generate component file" --name="Button"
+
+# Execute steps 1-3
+hypergen step execute react/component "Generate component file,Generate styles,Generate tests" --name="Button"
+
+# Resume from step 3
+hypergen step execute react/component --from="Generate tests" --name="Button"
+```
+
+## Working with Conditional Logic
+
+Recipes can include conditional steps:
+
+```yaml
+# recipe.yml
+steps:
+  - name: Generate component
+    tool: template
+    template: component.tsx.liquid
+    
+  - name: Generate tests
+    tool: template  
+    template: test.tsx.liquid
+    when: "{{ includeTests }}"
+    
+  - name: Setup Storybook
+    tool: action
+    action: setup-storybook  
+    when: "{{ features contains 'storybook' }}"
+    
+  - name: Add TypeScript types
+    tool: codemod
+    codemod: add-types
+    when: "{{ typescript and features contains 'strict-types' }}"
+```
+
+Control which steps run:
+```bash
+# Skip tests
+hypergen react component --name="Button" --includeTests=false
+
+# Include storybook  
+hypergen react component --name="Button" --features="storybook,docs"
+```
+
+## Advanced Execution Options
+
+### Output Directory Control
+```bash
+# Generate in specific directory
+hypergen react component --name="Button" --outputDir="src/ui"
+
+# Use current directory
+hypergen react component --name="Button" --outputDir="."
+```
+
+### Conflict Resolution
+```bash  
+# Skip existing files
+hypergen react component --name="Button" --conflict=skip
+
+# Overwrite existing files  
+hypergen react component --name="Button" --conflict=overwrite
+
+# Prompt for each conflict
+hypergen react component --name="Button" --conflict=prompt
+```
+
+### Verbose Output
+```bash
+# Show detailed execution information
+hypergen recipe execute react/component --name="Button" --verbose
+
+# Show debug information
+hypergen recipe execute react/component --name="Button" --debug
+```
+
+## Recipe Composition
+
+Some recipes can include other recipes:
+
+```yaml
+# recipe.yml with composition
+composition:
+  includes:
+    - recipe: typescript-setup
+      condition: "{{ typescript }}"
+    - recipe: testing-setup  
+      condition: "{{ includeTests }}"
+    - recipe: docs-setup
+      condition: "{{ features contains 'docs' }}"
+
+steps:
+  - name: Generate base files
+    tool: template
+    template: base.liquid
+```
+
+```bash
+# Execute with composition
+hypergen full-stack-app create \
+  --name="MyApp" \
+  --typescript=true \
+  --includeTests=true \
+  --features="docs,storybook"
+```
+
+## Error Handling and Recovery
+
+### Common Issues and Solutions
+
+**Missing variables**:
+```bash
+# Error: Required variable 'name' not provided
+hypergen react component --name="Button"
+```
+
+**Invalid variable values**:
+```bash  
+# Error: 'name' must match pattern ^[A-Z][a-zA-Z0-9]*$
+hypergen react component --name="button" # ❌ lowercase
+hypergen react component --name="Button" # ✅ PascalCase
+```
+
+**Template not found**:
+```bash
+# Error: Template 'missing.liquid' not found
+# Check recipe.yml and template files
+hypergen recipe info problematic/recipe
+```
+
+### Recovery Options
+```bash
+# Skip failed steps and continue
+hypergen recipe execute my-recipe --name="Test" --continue-on-error
+
+# Rollback on failure (if supported by recipe)
+hypergen recipe execute my-recipe --name="Test" --rollback-on-error
+```
+
+## Recipe Information and Help
+
+### Get Recipe Help
+```bash
+# Show detailed recipe information
+hypergen recipe info react/component
+
+# Output:
+# Recipe: react/component
+# Description: Create React components with TypeScript
+# Version: 2.1.0
+# Author: @hyper-kits
+# 
+# Variables:
+#   name (string, required): Component name in PascalCase
+#   typescript (boolean, default: true): Generate TypeScript
+#   styling (enum, default: css): Styling approach
+# 
+# Steps:
+#   1. Generate component → component.tsx.liquid
+#   2. Generate styles → styles.module.css.liquid
+#   3. Generate tests → test.tsx.liquid (conditional)
+
+# Show variable details
+hypergen recipe info react/component --show-variables
+
+# Show example usage
+hypergen recipe info react/component --show-examples
+```
+
+## Best Practices
+
+### 1. Always Validate First
+```bash
+# Validate before executing
+hypergen recipe validate my-cookbook/recipe --name="Test"
+hypergen recipe execute my-cookbook/recipe --name="Test"
+```
+
+### 2. Use Dry Run for Complex Recipes
+```bash
+# See what will happen first
+hypergen recipe execute complex-app/create --name="MyApp" --dryRun
+hypergen recipe execute complex-app/create --name="MyApp"
+```
+
+### 3. Start with Minimal Variables
+```bash
+# Start simple
+hypergen react component --name="Button"
+
+# Add complexity gradually  
+hypergen react component --name="Button" --styling="styled-components" --features="storybook"
+```
+
+### 4. Use Configuration Files for Complex Setups
+```javascript
+// project.vars.js
+export default {
+  name: "MyApp",
+  typescript: true,
+  features: ["routing", "state", "testing", "docs"],
+  config: {
+    port: 3001,
+    apiUrl: "https://api.example.com",
+    database: "postgresql"
+  }
+};
+```
+
+```bash
+hypergen full-stack-app create --vars=project.vars.js
+```
+
+## What's Next?
+
+Now that you can run recipes effectively:
+
+- **[Understanding Variables](/tutorials/recipe-variables)** (10 minutes) - Deep dive into variable systems
+- **[Creating Templates](/tutorials/creating-templates)** (20 minutes) - Build your own recipes
+- **[Advanced Composition](/advanced-composition)** - Complex recipe patterns
+
+---
+
+**You now know how to execute recipes effectively and customize their output!** Recipe execution is the core of your Hypergen workflow.

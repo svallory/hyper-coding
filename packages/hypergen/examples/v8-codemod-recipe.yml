@@ -1,0 +1,190 @@
+#
+# CodeMod Tool Example Recipe
+# 
+# This recipe demonstrates various CodeMod transformations including
+# TypeScript/JavaScript AST manipulations and text transformations.
+#
+
+name: "codemod-example-recipe"
+description: "Demonstrates CodeMod tool capabilities with various transformations"
+version: "1.0.0"
+author: "Hypergen Team"
+category: "examples"
+tags: ["codemod", "ast", "transformation", "typescript"]
+
+# Recipe variables with type definitions
+variables:
+  componentName:
+    type: "string"
+    description: "Name of the React component to modify"
+    required: true
+    default: "MyComponent"
+  
+  importLibrary:
+    type: "string" 
+    description: "Library to import (e.g., 'react', 'lodash')"
+    required: true
+    default: "react"
+    
+  updateApiVersion:
+    type: "string"
+    description: "New API version for endpoints"
+    required: false
+    default: "v2"
+
+# Recipe execution steps
+steps:
+  # Step 1: Add React import to TypeScript/JSX files
+  - name: "add-react-imports"
+    description: "Add React imports to all TypeScript React components"
+    tool: codemod
+    codemod: add-import
+    files:
+      - "src/components/**/*.tsx"
+      - "src/pages/**/*.tsx"
+    backup: true
+    parameters:
+      import: "React"
+      from: "{{ importLibrary }}"
+      importType: "default"
+    codemodConfig:
+      transform:
+        preserveFormatting: true
+        includeComments: true
+      validation:
+        validateSyntax: true
+        validateTypes: true
+
+  # Step 2: Add utility library imports
+  - name: "add-utility-imports"
+    description: "Add utility library imports to helper files"
+    tool: codemod
+    codemod: add-import
+    files:
+      - "src/utils/**/*.ts"
+      - "src/helpers/**/*.ts"
+    parameters:
+      import: "{ debounce, throttle }"
+      from: "lodash"
+      importType: "named"
+    when: "{{ importLibrary === 'lodash' }}"
+    
+  # Step 3: Add properties to configuration objects
+  - name: "add-config-properties"
+    description: "Add new configuration properties"
+    tool: codemod
+    codemod: add-property
+    files:
+      - "src/config/**/*.ts"
+    parameters:
+      objectName: "appConfig"
+      propertyName: "apiVersion"
+      propertyValue: "{{ updateApiVersion }}"
+      propertyType: "string"
+
+  # Step 4: Update API endpoint versions using text replacement
+  - name: "update-api-endpoints"
+    description: "Update API endpoint versions throughout the codebase"
+    tool: codemod
+    codemod: replace-text
+    files:
+      - "src/api/**/*.ts"
+      - "src/services/**/*.ts"
+      - "src/hooks/**/*.ts"
+    backup: true
+    parameters:
+      find: "/api/v1/"
+      replace: "/api/{{ updateApiVersion }}/"
+      global: true
+    codemodConfig:
+      validation:
+        validateSyntax: true
+
+  # Step 5: Add exports to index files
+  - name: "add-component-exports"
+    description: "Add component exports to index files"
+    tool: codemod
+    codemod: add-export
+    files:
+      - "src/components/index.ts"
+      - "src/utils/index.ts"
+    parameters:
+      export: "{{ componentName }}"
+      exportType: "named"
+
+  # Step 6: Custom transformation for advanced modifications
+  - name: "custom-transformation"
+    description: "Apply custom transformation logic"
+    tool: codemod
+    codemod: custom
+    files:
+      - "src/types/**/*.ts"
+    parameters:
+      # Note: In real usage, this would be a more sophisticated function
+      # For this example, we're just documenting the capability
+      transformFunction: |
+        function(sourceFile, context) {
+          // Custom AST transformation logic would go here
+          // This is a placeholder for demonstration
+          return sourceFile;
+        }
+    continueOnError: true
+
+  # Step 7: Batch text transformations for documentation
+  - name: "update-documentation"
+    description: "Update version references in documentation"
+    tool: codemod
+    codemod: replace-text
+    files:
+      - "README.md"
+      - "docs/**/*.md"
+      - "CHANGELOG.md"
+    parameters:
+      find: "v1.0.0"
+      replace: "v2.0.0"
+      global: true
+    backup: false
+    continueOnError: true
+
+# Example configurations
+examples:
+  - title: "Add React imports to existing project"
+    description: "Adds React imports to all component files"
+    variables:
+      componentName: "Dashboard"
+      importLibrary: "react"
+      updateApiVersion: "v2"
+      
+  - title: "Modernize API endpoints"
+    description: "Updates all API endpoints from v1 to v2"
+    variables:
+      componentName: "ApiClient"
+      importLibrary: "axios"
+      updateApiVersion: "v2"
+
+# Expected outputs
+outputs:
+  - "Modified TypeScript files with proper imports"
+  - "Updated API endpoint references"
+  - "Enhanced configuration objects"
+  - "Backup files for safety"
+
+# Recipe settings
+settings:
+  timeout: 30000  # 30 seconds
+  retries: 1
+  continueOnError: false
+  maxParallelSteps: 2
+  
+# Lifecycle hooks
+hooks:
+  beforeRecipe:
+    - "echo Starting CodeMod transformations..."
+    
+  afterRecipe:
+    - "echo CodeMod transformations completed!"
+    - "echo Check backup files if you need to revert changes"
+    
+  onError:
+    - "echo CodeMod transformation failed - check error logs"
+    - "echo Consider restoring from backup files if needed"

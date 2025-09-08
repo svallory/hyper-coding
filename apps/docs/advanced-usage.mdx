@@ -1,0 +1,493 @@
+---
+title: "Advanced Usage Patterns"
+description: "Advanced features and power user capabilities for enterprise workflows and complex automation scenarios"
+---
+
+# Advanced Usage Patterns
+
+Unlock HyperDev's full potential with advanced template composition, enterprise automation, and sophisticated workflow patterns designed for power users and large-scale deployments.
+
+## Advanced Template Composition
+
+### Multi-Template Orchestration
+
+Execute complex workflows that coordinate multiple templates with dependencies and conditional logic.
+
+```yaml
+# hypergen.recipe.yml
+name: "Full-Stack Component"
+description: "Generate complete full-stack feature with frontend, backend, and tests"
+
+steps:
+  - name: "backend-api"
+    template: "express-api"
+    config:
+      endpoint: "{{ feature.name }}"
+      model: "{{ feature.model }}"
+    
+  - name: "frontend-component" 
+    template: "react-component"
+    depends_on: ["backend-api"]
+    config:
+      name: "{{ feature.name | capitalize }}"
+      api_endpoint: "{{ steps.backend-api.output.endpoint }}"
+      
+  - name: "integration-tests"
+    template: "playwright-tests"
+    depends_on: ["backend-api", "frontend-component"]
+    config:
+      test_target: "{{ feature.name }}"
+```
+
+### Template Inheritance Hierarchies
+
+Build sophisticated template inheritance systems for consistent patterns across your organization.
+
+```yaml
+# templates/base/component.yml
+name: "Base Component"
+variables:
+  name:
+    type: string
+    required: true
+  styling:
+    type: select
+    options: ["styled-components", "emotion", "css-modules"]
+    default: "styled-components"
+
+hooks:
+  pre_generate:
+    - action: "validate_component_name"
+    - action: "check_dependencies"
+```
+
+```yaml  
+# templates/react/component.yml
+extends: "base/component"
+name: "React Component"
+
+variables:
+  typescript:
+    type: boolean 
+    default: true
+  testing_library:
+    type: select
+    options: ["jest", "vitest"]
+    default: "vitest"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "src/components/{{ name }}/{{ name }}.tsx"
+```
+
+## Enterprise Automation
+
+### Programmatic API Usage
+
+Use HyperDev's programmatic API for bulk operations and system integration.
+
+```typescript
+// scripts/bulk-migration.ts
+import { HypergenEngine, createEngine } from '@hyperdev/hypergen';
+
+class BulkMigrationService {
+  private engine: HypergenEngine;
+
+  constructor() {
+    this.engine = createEngine({
+      template_dirs: ['./templates', './enterprise-templates'],
+      cache_enabled: true,
+      parallel_execution: true,
+      max_workers: 8
+    });
+  }
+
+  async migrateComponents(components: ComponentDefinition[]) {
+    const results = await Promise.allSettled(
+      components.map(async (component) => {
+        return this.engine.generateFromTemplate('react-v2-component', {
+          name: component.name,
+          legacy_path: component.currentPath,
+          migration_mode: true,
+          preserve_state: component.hasState,
+          dry_run: false
+        });
+      })
+    );
+
+    return this.processResults(results);
+  }
+}
+```
+
+### Event-Driven Generation
+
+Integrate with external systems for automatic code generation based on events.
+
+```typescript
+// integrations/github-webhook.ts
+import { WebhookEvent, HypergenOrchestrator } from '@hyperdev/hypergen';
+
+export class GitHubIntegration {
+  constructor(private orchestrator: HypergenOrchestrator) {}
+
+  async handlePullRequestEvent(event: WebhookEvent) {
+    if (event.action === 'opened' && this.isFeatureBranch(event.pull_request)) {
+      // Auto-generate test scaffolding for new features
+      await this.orchestrator.executeRecipe('feature-scaffold', {
+        branch_name: event.pull_request.head.ref,
+        feature_type: this.inferFeatureType(event.pull_request),
+        author: event.pull_request.user.login,
+        generate_tests: true,
+        include_docs: true
+      });
+    }
+  }
+
+  async handleIssueEvent(event: WebhookEvent) {
+    if (this.isBugReport(event.issue)) {
+      // Generate bug reproduction template
+      await this.orchestrator.generateFromTemplate('bug-reproduction', {
+        issue_number: event.issue.number,
+        description: event.issue.body,
+        labels: event.issue.labels,
+        priority: this.calculatePriority(event.issue)
+      });
+    }
+  }
+}
+```
+
+## Performance and Scale
+
+### Advanced Caching Strategies
+
+Implement sophisticated caching for large-scale template operations.
+
+```javascript
+// hypergen.config.js
+export default {
+  cache: {
+    strategy: 'multi-tier',
+    levels: {
+      memory: {
+        enabled: true,
+        max_size: '512MB',
+        ttl: 3600
+      },
+      disk: {
+        enabled: true,
+        path: '.hypergen/cache',
+        max_size: '2GB',
+        compression: 'gzip'
+      },
+      distributed: {
+        enabled: true,
+        provider: 'redis',
+        connection: process.env.REDIS_URL,
+        key_prefix: 'hg:cache:'
+      }
+    },
+    invalidation: {
+      template_change: true,
+      config_change: true,
+      dependency_change: true,
+      custom_triggers: ['env:NODE_ENV', 'git:HEAD']
+    }
+  },
+  
+  performance: {
+    parallel_execution: true,
+    max_workers: 16,
+    batch_size: 50,
+    memory_limit: '4GB',
+    optimization: {
+      template_precompilation: true,
+      dependency_bundling: true,
+      incremental_updates: true
+    }
+  }
+};
+```
+
+### Large-Scale Deployment Patterns
+
+Deploy templates across multiple environments and teams.
+
+```yaml
+# .hypergen/deployment.yml
+environments:
+  development:
+    templates:
+      source: "git+https://github.com/company/dev-templates.git"
+      branch: "main"
+    validation:
+      enabled: false
+    
+  staging:
+    templates:
+      source: "git+https://github.com/company/templates.git#v2.1.0"
+    validation:
+      enabled: true
+      rules: ["security", "performance", "style"]
+      
+  production:
+    templates:
+      source: "artifactory://templates/v2.1.0"
+    validation:
+      enabled: true
+      rules: ["security", "performance", "style", "compliance"]
+      approval_required: true
+      
+deployment:
+  strategy: "blue-green"
+  rollback: 
+    enabled: true
+    triggers: ["validation_failure", "error_rate > 5%"]
+  monitoring:
+    metrics: ["generation_time", "error_rate", "template_usage"]
+    alerting: 
+      slack_webhook: "${SLACK_WEBHOOK_URL}"
+```
+
+## Custom Extensions
+
+### Plugin Development
+
+Create sophisticated plugins for organization-specific workflows.
+
+```typescript
+// plugins/enterprise-security/index.ts
+import { HypergenPlugin, PluginContext, GenerationContext } from '@hyperdev/hypergen';
+
+export class EnterpriseSecurityPlugin implements HypergenPlugin {
+  name = 'enterprise-security';
+  version = '1.2.0';
+
+  async initialize(context: PluginContext) {
+    context.registerHook('pre_generation', this.validateSecurity.bind(this));
+    context.registerHook('post_generation', this.scanGenerated.bind(this));
+    context.registerAction('security_scan', this.performSecurityScan.bind(this));
+    context.registerValidator('pii_check', this.validatePII.bind(this));
+  }
+
+  async validateSecurity(context: GenerationContext) {
+    // Check template source trustworthiness
+    const trustLevel = await this.assessTemplateTrust(context.template);
+    if (trustLevel < context.config.security.min_trust_level) {
+      throw new SecurityValidationError(
+        `Template trust level ${trustLevel} below required ${context.config.security.min_trust_level}`
+      );
+    }
+
+    // Validate generation parameters for sensitive data
+    await this.scanParametersForSensitiveData(context.parameters);
+  }
+
+  async performSecurityScan(files: GeneratedFile[]) {
+    const results = await Promise.all([
+      this.scanForSecrets(files),
+      this.scanForVulnerabilities(files), 
+      this.checkCompliance(files),
+      this.validateDataClassification(files)
+    ]);
+
+    return this.consolidateSecurityResults(results);
+  }
+}
+```
+
+### Advanced Template Testing
+
+Build comprehensive testing frameworks for template validation.
+
+```typescript
+// testing/template-test-framework.ts
+export class TemplateTestSuite {
+  constructor(private engine: HypergenEngine) {}
+
+  async runComprehensiveTests(templatePath: string) {
+    const results = await Promise.all([
+      this.testSyntaxValidation(templatePath),
+      this.testVariableValidation(templatePath),
+      this.testOutputValidation(templatePath),
+      this.testPerformanceBenchmarks(templatePath),
+      this.testSecurityCompliance(templatePath),
+      this.testCrossEnvironmentCompatibility(templatePath)
+    ]);
+
+    return this.generateTestReport(results);
+  }
+
+  async testOutputValidation(templatePath: string) {
+    const testCases = await this.loadTestCases(templatePath);
+    
+    for (const testCase of testCases) {
+      const result = await this.engine.generateFromTemplate(
+        templatePath, 
+        testCase.parameters
+      );
+      
+      // Validate structure
+      await this.validateFileStructure(result.files, testCase.expected.structure);
+      
+      // Validate content
+      await this.validateContent(result.files, testCase.expected.content);
+      
+      // Validate compilation
+      if (testCase.compile_test) {
+        await this.validateCompilation(result.files, testCase.compile_test);
+      }
+    }
+  }
+}
+```
+
+## Enterprise Features
+
+### Governance and Compliance
+
+Implement enterprise governance for template usage and compliance.
+
+```yaml
+# .hypergen/governance.yml
+governance:
+  approval_workflows:
+    template_publication:
+      required: true
+      approvers: ["@platform-team", "@security-team"]
+      checks: ["security-scan", "performance-test", "documentation-complete"]
+      
+    production_deployment:
+      required: true
+      approvers: ["@tech-leads"]
+      requirements:
+        - template_version: "stable"
+        - security_clearance: "high"
+        - test_coverage: "> 90%"
+
+  compliance:
+    frameworks: ["SOC2", "GDPR", "HIPAA"]
+    data_classification:
+      enabled: true
+      levels: ["public", "internal", "confidential", "restricted"]
+      default_level: "internal"
+      
+    audit_trail:
+      enabled: true
+      retention_period: "7 years"
+      events: ["template_usage", "parameter_access", "file_generation"]
+
+  template_standards:
+    required_metadata:
+      - description
+      - version
+      - maintainer
+      - security_classification
+      - compliance_tags
+      
+    quality_gates:
+      - name: "security-scan"
+        provider: "veracode"
+        fail_on: ["high", "critical"]
+      - name: "performance-test"  
+        provider: "internal"
+        max_generation_time: "30s"
+```
+
+### Multi-Tenant Repository Management
+
+Manage templates across multiple teams and organizations.
+
+```typescript
+// enterprise/multi-tenant-manager.ts
+export class MultiTenantTemplateManager {
+  constructor(private config: EnterpriseConfig) {}
+
+  async resolveTemplate(templateName: string, context: RequestContext) {
+    const tenant = await this.identifyTenant(context);
+    const permissions = await this.getPermissions(tenant, templateName);
+    
+    // Check access rights
+    this.validateAccess(permissions, context.operation);
+    
+    // Resolve template with tenant-specific overrides
+    const template = await this.loadTemplate(templateName, {
+      tenant_overrides: tenant.template_overrides,
+      compliance_rules: tenant.compliance_requirements,
+      custom_variables: tenant.default_variables
+    });
+
+    return this.applyTenantPolicies(template, tenant);
+  }
+
+  async trackUsage(tenant: string, template: string, context: GenerationContext) {
+    await this.analytics.record({
+      event: 'template_generation',
+      tenant,
+      template,
+      user: context.user.id,
+      timestamp: new Date(),
+      parameters: this.sanitizeForAudit(context.parameters),
+      output_files: context.result.files.length,
+      generation_time: context.performance.total_time,
+      compliance_tags: context.template.compliance_tags
+    });
+  }
+}
+```
+
+## Advanced Debugging and Profiling
+
+### Performance Profiling
+
+Deep insights into template generation performance.
+
+```bash
+# Enable comprehensive profiling
+DEBUG=hypergen:* HYPERGEN_PROFILE=true \
+  hypergen action MyComponent \
+    --name="UserProfile" \
+    --profile-output=./profiles/user-profile-generation.json
+```
+
+```typescript
+// Advanced debugging with custom instrumentation
+import { HypergenProfiler, PerformanceMonitor } from '@hyperdev/hypergen';
+
+const profiler = new HypergenProfiler({
+  track_memory: true,
+  track_cpu: true,
+  track_io: true,
+  sample_rate: 100, // microseconds
+  output_format: 'chromium-trace'
+});
+
+await profiler.profile(async () => {
+  await engine.generateFromTemplate('complex-template', parameters);
+}, {
+  output_file: './profiles/generation-trace.json',
+  metadata: {
+    template: 'complex-template',
+    parameters_hash: hashParameters(parameters),
+    environment: process.env.NODE_ENV
+  }
+});
+```
+
+### Template Development Environment
+
+Sophisticated development environment for template creators.
+
+```bash
+# Start development server with hot reload
+hypergen dev-server \
+  --templates="./templates" \
+  --hot-reload \
+  --validation \
+  --security-scanning \
+  --performance-monitoring \
+  --port=3001
+```
+
+This advanced usage documentation showcases HyperDev as an enterprise-grade platform capable of sophisticated automation, complex workflows, and large-scale deployment scenarios.

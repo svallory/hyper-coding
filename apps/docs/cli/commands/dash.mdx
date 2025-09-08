@@ -1,0 +1,521 @@
+---
+title: "hyper dash"
+description: "Launch the interactive TUI dashboard for comprehensive project monitoring, analytics, and team collaboration"
+icon: "chart-mixed"
+---
+
+# hyper dash
+
+Launch the interactive Terminal User Interface (TUI) dashboard that provides comprehensive project monitoring, real-time analytics, team collaboration views, and centralized control of your HyperDev workflow.
+
+## Syntax
+
+```bash
+hyper dash [view] [options]
+```
+
+## Overview
+
+The `hyper dash` command launches a full-featured TUI dashboard that serves as mission control for your project:
+
+- **Real-time monitoring**: Live project metrics, build status, and team activity
+- **Interactive navigation**: Keyboard-driven interface for efficient project management
+- **Multi-view dashboard**: Switch between different perspectives (dev, team, epic, analytics)
+- **Live updates**: Auto-refreshing data with configurable intervals
+- **Team collaboration**: Real-time team activity and communication
+- **Quick actions**: Perform common tasks directly from the dashboard
+
+<Info>
+  The TUI dashboard provides a comprehensive overview of your entire HyperDev project in a single,
+  interactive terminal interface. It's designed for developers who prefer keyboard-driven workflows.
+</Info>
+
+## Views
+
+| View | Description | Shortcut |
+|------|-------------|----------|
+| `overview` | Project overview with key metrics | `o` |
+| `epics` | Epic management and progress tracking | `e` |
+| `tasks` | Task management and assignment | `t` |
+| `team` | Team activity and collaboration | `m` |
+| `dev` | Development monitoring and quality | `d` |
+| `analytics` | Performance analytics and insights | `a` |
+| `logs` | System logs and activity feed | `l` |
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--refresh <seconds>` | Auto-refresh interval | `30` | `--refresh 10` |
+| `--theme <theme>` | Dashboard theme | `auto` | `--theme dark` |
+| `--layout <layout>` | Dashboard layout | `default` | `--layout minimal` |
+| `--focus <view>` | Start with specific view | `overview` | `--focus team` |
+| `--port <port>` | Web dashboard port | `3001` | `--port 8080` |
+| `--web` | Launch web dashboard | `false` | `--web` |
+| `--readonly` | Read-only mode | `false` | `--readonly` |
+
+## Examples
+
+### Basic Dashboard Usage
+
+```bash
+# Launch default dashboard
+hyper dash
+
+# Start with specific view
+hyper dash --focus epics
+
+# Launch with faster refresh rate
+hyper dash --refresh 5
+
+# Dark theme with minimal layout
+hyper dash --theme dark --layout minimal
+```
+
+### Specialized Views
+
+```bash
+# Epic-focused dashboard
+hyper dash epics
+
+# Team collaboration view
+hyper dash team
+
+# Development monitoring
+hyper dash dev --refresh 15
+
+# Analytics and reports
+hyper dash analytics
+```
+
+### Web Dashboard
+
+```bash
+# Launch web-based dashboard
+hyper dash --web
+
+# Web dashboard on custom port
+hyper dash --web --port 8080
+
+# Readonly web dashboard for stakeholders
+hyper dash --web --readonly --port 3000
+```
+
+## Dashboard Interface
+
+### Overview View
+
+```
+┌─ HyperDev Dashboard ─────────────────────────── [o] Overview ┐
+│ Project: E-commerce Platform              Last Update: 14:32 │
+├────────────────────────────────────────────────────────────┤
+│ 🎯 PROJECT HEALTH                    📊 QUICK METRICS       │
+│ ├─ Overall: 8.7/10 (Good)           ├─ Active Epics: 3      │
+│ ├─ Quality: 8.5/10                  ├─ Open Tasks: 23       │
+│ ├─ Security: 9.2/10                 ├─ Team Members: 4      │
+│ └─ Performance: 8.9/10              └─ Build Status: ✅      │
+├────────────────────────────────────────────────────────────┤
+│ 🚀 ACTIVE EPICS                      ⏰ RECENT ACTIVITY     │
+│ ├─ User Auth (89%) ──────────────■■■ ├─ Alice: AUTH-003 ✅   │
+│ ├─ Payments (45%) ──────■■■□□□□□□□  ├─ Bob: PAY-001 🔄      │
+│ └─ Dashboard (23%) ──■□□□□□□□□□□□   └─ Carol: DOC-002 📝     │
+├────────────────────────────────────────────────────────────┤
+│ 🔧 SYSTEM STATUS                     📈 PERFORMANCE         │
+│ ├─ Build: Passing (96% success)     ├─ Build Time: 3.2min   │
+│ ├─ Tests: 847/850 passing          ├─ Test Time: 1.4min    │
+│ ├─ Deploy: Staging ready           └─ Bundle: 487KB        │
+│ └─ Health: All systems operational                          │
+└────────────────────────────────────────────────────────────┘
+ [Tab] Switch View  [r] Refresh  [q] Quit  [?] Help
+```
+
+### Epic Management View
+
+```
+┌─ Epic Management ──────────────────────────── [e] Epics ──┐
+│                                                           │
+├─ ACTIVE EPICS ────────────────────────────────────────────┤
+│                                                           │
+│ 🚀 User Authentication System                    89% ■■■■ │
+│    │ Status: Final testing        Due: Mar 15            │
+│    │ Team: Alice (Lead), Bob      Risk: Low              │
+│    └─ Tasks: 8/9 complete         Health: 9.1/10         │
+│                                                           │
+│ 💳 Payment Integration                           45% ■■□□ │
+│    │ Status: API integration      Due: Apr 1             │
+│    │ Team: Carol (Lead), David    Risk: Medium           │
+│    └─ Tasks: 6/13 complete        Health: 7.8/10         │
+│                                                           │
+│ 📊 Admin Dashboard                               23% ■□□□ │
+│    │ Status: UI components        Due: Apr 15            │
+│    │ Team: Alice, Bob             Risk: Low              │
+│    └─ Tasks: 3/13 complete        Health: 8.2/10         │
+│                                                           │
+├─ EPIC ACTIONS ────────────────────────────────────────────┤
+│ [n] New Epic  [v] View Details  [u] Update  [a] Assign   │
+└───────────────────────────────────────────────────────────┘
+ Selected: User Authentication System
+ [Enter] View Tasks  [↑↓] Navigate  [Tab] Switch View
+```
+
+### Team Activity View
+
+```
+┌─ Team Activity ────────────────────────────── [m] Team ───┐
+│                                            🟢 4 Online    │
+├─ TEAM MEMBERS ────────────────────────────────────────────┤
+│                                                           │
+│ 👩‍💻 Alice Johnson (Frontend Lead)              🟢 Active  │
+│    │ Currently: Working on AUTH-003 (Login UI)           │
+│    │ Today: 3 tasks completed, 6h logged                 │
+│    │ This Sprint: 8 points, 92% velocity                 │
+│    └─ Last Commit: 12 minutes ago                        │
+│                                                           │
+│ 👨‍💻 Bob Smith (Full-stack)                      🟢 Active  │
+│    │ Currently: Code review on PAY-001                   │
+│    │ Today: 2 tasks completed, 5h logged                 │
+│    │ This Sprint: 7 points, 89% velocity                 │
+│    └─ Last Commit: 23 minutes ago                        │
+│                                                           │
+│ 👩‍💻 Carol Davis (Backend)                      🟢 Active  │
+│    │ Currently: Payment API integration                  │
+│    │ Today: 1 task in progress, 4h logged                │
+│    │ This Sprint: 9 points, 105% velocity                │
+│    └─ Last Commit: 8 minutes ago                         │
+│                                                           │
+├─ TEAM CHAT ───────────────────────────────────────────────┤
+│ [14:28] Alice: Auth epic almost done! 🎉                  │
+│ [14:25] Bob: Reviewed the payment changes, looks good     │
+│ [14:20] Carol: API integration tests all passing ✅       │
+│ [14:15] David: Staging deployment successful              │
+└───────────────────────────────────────────────────────────┘
+ [c] Send Message  [p] @mention  [h] Show History
+```
+
+### Development Monitoring View
+
+```
+┌─ Development Monitor ──────────────────────── [d] Dev ────┐
+│ Real-time Code Quality & Security Monitoring             │
+├─ BUILD STATUS ────────────────────────────────────────────┤
+│ 🟢 Build #127: SUCCESS (3m 12s)        Branch: feature/auth │
+│ ├─ Compile: ✅ Clean (0 errors, 2 warnings)              │
+│ ├─ Tests: ✅ 847/850 passing (99.6%)                      │
+│ ├─ Lint: ⚠️  12 issues (11 warnings, 1 error)            │
+│ └─ Bundle: 487KB (+15KB from last build)                 │
+│                                                           │
+├─ CODE QUALITY ────────────────────────────────────────────┤
+│ Overall Score: 8.7/10 ──────────────────■■■■□            │
+│ ├─ Maintainability: 8.5/10                               │
+│ ├─ Test Coverage: 84% (target: 80%) ✅                    │
+│ ├─ Complexity: 6.8/10 (acceptable)                       │
+│ └─ Technical Debt: 2.3 days (low)                        │
+│                                                           │
+├─ SECURITY SCAN ───────────────────────────────────────────┤
+│ Security Score: 9.2/10 ─────────────────■■■■■            │
+│ ├─ Vulnerabilities: 0 critical, 0 high, 1 medium        │
+│ ├─ Secrets: No exposed credentials ✅                     │
+│ ├─ Dependencies: 2 outdated, 1 with known issues         │
+│ └─ Last Scan: 15 minutes ago                             │
+│                                                           │
+├─ RECENT ISSUES ───────────────────────────────────────────┤
+│ 🔴 ESLint: Unused variable in auth/login.ts:45           │
+│ 🟡 Bundle: Size increased 15KB (investigate)             │
+│ 🟡 Deps: lodash@4.17.20 has medium severity vuln        │
+└───────────────────────────────────────────────────────────┘
+ [f] Fix Issues  [r] Run Build  [t] Run Tests  [s] Security
+```
+
+## Dashboard Navigation
+
+### Keyboard Shortcuts
+
+#### Global Navigation
+- `Tab` / `Shift+Tab` - Switch between views
+- `q` / `Ctrl+C` - Quit dashboard  
+- `r` - Force refresh current view
+- `?` - Show help and shortcuts
+- `Ctrl+R` - Restart dashboard
+
+#### View-Specific Shortcuts
+- `o` - Switch to Overview
+- `e` - Switch to Epics  
+- `t` - Switch to Tasks
+- `m` - Switch to Team
+- `d` - Switch to Development  
+- `a` - Switch to Analytics
+- `l` - Switch to Logs
+
+#### List Navigation
+- `↑` / `↓` - Navigate up/down
+- `Enter` - Select/open item
+- `Space` - Toggle selection
+- `Home` / `End` - Go to first/last item
+- `/` - Search/filter
+
+### Quick Actions
+
+#### Epic Management
+- `n` - Create new epic
+- `u` - Update selected epic
+- `a` - Assign team members
+- `v` - View epic details
+- `s` - Change epic status
+
+#### Task Management  
+- `c` - Create new task
+- `a` - Assign task
+- `s` - Update task status
+- `d` - Set due date
+- `p` - Set priority
+
+#### Development Actions
+- `b` - Trigger build
+- `t` - Run tests
+- `f` - Fix automatically fixable issues
+- `d` - Deploy to staging
+- `s` - Security scan
+
+## Dashboard Customization
+
+### Themes
+
+```bash
+# Available themes
+hyper dash --theme light
+hyper dash --theme dark  
+hyper dash --theme high-contrast
+hyper dash --theme solarized
+hyper dash --theme custom
+```
+
+### Layouts
+
+```bash
+# Layout options
+hyper dash --layout default      # Standard 4-panel layout
+hyper dash --layout minimal      # Simplified 2-panel layout  
+hyper dash --layout wide         # Optimized for wide screens
+hyper dash --layout focus        # Single-panel focus mode
+hyper dash --layout custom       # User-defined layout
+```
+
+### Custom Views
+
+```bash
+# Create custom dashboard view
+hyper dash config view create my-view \
+  --panels "epics,team,recent-activity" \
+  --layout grid \
+  --refresh 10
+
+# Use custom view
+hyper dash my-view
+
+# Save current view as default
+hyper dash config save-layout
+```
+
+## Web Dashboard
+
+### Web Interface
+
+```bash
+# Launch web dashboard
+hyper dash --web
+
+# Access at http://localhost:3001
+# Features:
+# - Responsive design for all devices
+# - Real-time updates via WebSocket
+# - Shareable URLs for specific views
+# - Screenshot and PDF export
+# - Team collaboration features
+```
+
+### Web Dashboard Features
+
+- **Responsive Design**: Works on desktop, tablet, and mobile
+- **Real-time Updates**: Live data updates without refresh
+- **Shareable Links**: Share specific views with team members
+- **Export Options**: Generate PDF reports and screenshots
+- **Collaborative Features**: Comments, annotations, and discussions
+- **Embedding**: Embed dashboard views in other tools
+
+### Stakeholder Views
+
+```bash
+# Readonly dashboard for stakeholders
+hyper dash --web --readonly
+
+# Executive dashboard with high-level metrics
+hyper dash --web --view executive
+
+# Client-facing project status  
+hyper dash --web --view client --readonly
+```
+
+## Dashboard Configuration
+
+### Settings
+
+```javascript
+// hyperdev.config.js
+export default {
+  dashboard: {
+    // TUI settings
+    tui: {
+      theme: 'auto',           // auto, dark, light
+      refresh_interval: 30,    // seconds
+      default_view: 'overview',
+      enable_mouse: true,
+      enable_colors: true
+    },
+    
+    // Web dashboard
+    web: {
+      port: 3001,
+      enable_auth: false,
+      theme: 'corporate',
+      real_time_updates: true,
+      export_formats: ['pdf', 'png']
+    },
+    
+    // View configuration
+    views: {
+      overview: {
+        panels: ['health', 'epics', 'activity', 'metrics'],
+        layout: 'grid'
+      },
+      team: {
+        show_activity: true,
+        show_chat: true,
+        show_presence: true
+      },
+      dev: {
+        auto_refresh: 15,
+        show_logs: true,
+        alert_on_failures: true
+      }
+    },
+    
+    // Notifications
+    notifications: {
+      desktop: true,
+      sound: false,
+      build_failures: true,
+      security_alerts: true,
+      epic_updates: false
+    }
+  }
+};
+```
+
+### Advanced Configuration
+
+```javascript
+export default {
+  dashboard: {
+    // Custom panels
+    custom_panels: {
+      'deployment-status': {
+        title: 'Deployment Pipeline',
+        type: 'status',
+        data_source: 'ci/cd',
+        refresh_interval: 60
+      },
+      'customer-metrics': {
+        title: 'Customer Impact',  
+        type: 'metrics',
+        data_source: 'analytics',
+        chart_type: 'line'
+      }
+    },
+    
+    // Integrations
+    integrations: {
+      slack: {
+        show_in_team_view: true,
+        webhook_updates: true
+      },
+      jira: {
+        sync_tasks: true,
+        show_status: true
+      },
+      github: {
+        show_prs: true,
+        show_issues: true
+      }
+    }
+  }
+};
+```
+
+## Performance and Resources
+
+### Resource Usage
+
+The TUI dashboard is optimized for minimal resource usage:
+- **Memory**: ~50-100MB typical usage
+- **CPU**: <5% during normal operation
+- **Network**: Minimal data transfer (only updates)
+- **Battery**: Efficient for laptop development
+
+### Performance Tips
+
+```bash
+# Reduce refresh rate for battery savings
+hyper dash --refresh 60
+
+# Use minimal layout for slower systems
+hyper dash --layout minimal --refresh 45
+
+# Readonly mode uses fewer resources
+hyper dash --readonly
+```
+
+## Integration with HyperDev Workflow
+
+### Real-time Updates
+
+The dashboard automatically updates when:
+- Code is committed or pushed
+- Tasks status changes  
+- Epic progress updates
+- Build/test results change
+- Team members come online/offline
+- Security alerts are triggered
+
+### Quick Actions
+
+Perform common tasks directly from dashboard:
+- Create and assign tasks
+- Update epic status
+- Trigger builds and deployments  
+- Send team notifications
+- Generate reports
+- Export project data
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper status" href="/cli/commands/discovery/status">
+    Command-line project status (feeds dashboard data)
+  </Card>
+  <Card title="hyper dev" href="/cli/commands/workflow/dev">
+    Development monitoring (integrates with dev view)
+  </Card>
+  <Card title="hyper epic" href="/cli/commands/resources/epic">
+    Epic management (accessible via dashboard)
+  </Card>
+  <Card title="hyper task" href="/cli/commands/resources/task">
+    Task management (integrated with dashboard)
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Dashboard Customization](/cli/configuration/dashboard-config)
+- [Team Collaboration](/cli/workflows/team-collaboration)
+- [Project Monitoring](/cli/workflows/project-monitoring)
+- [TUI Interface Guide](/cli/guides/tui-interface)

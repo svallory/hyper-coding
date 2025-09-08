@@ -1,0 +1,2011 @@
+---
+title: "Framework Integration"
+description: "Framework-specific templates and patterns for React, Vue, Angular, Node.js, Python, and other popular frameworks"
+---
+
+# Framework Integration
+
+Framework-optimized templates that leverage specific patterns, conventions, and best practices for popular development frameworks and libraries.
+
+## React Ecosystem
+
+### React + TypeScript + Tailwind Component Library
+
+Generate a complete React component library with modern tooling and best practices.
+
+```yaml title="template.yml"
+name: react-component-library
+description: Complete React component library with TypeScript and modern tooling
+variables:
+  - name: libraryName
+    message: Library name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: uiFramework
+    message: UI Framework
+    type: list
+    choices:
+      - name: Tailwind CSS
+        value: tailwind
+      - name: Styled Components
+        value: styled-components
+      - name: Emotion
+        value: emotion
+      - name: CSS Modules
+        value: css-modules
+  - name: buildTool
+    message: Build tool
+    type: list
+    choices:
+      - name: Vite
+        value: vite
+      - name: Rollup
+        value: rollup
+      - name: Webpack
+        value: webpack
+  - name: includeStorybook
+    message: Include Storybook?
+    type: confirm
+    default: true
+  - name: includeTesting
+    message: Include testing setup?
+    type: confirm
+    default: true
+  - name: includeChangesets
+    message: Include changesets for versioning?
+    type: confirm
+    default: true
+```
+
+**Package Configuration** (`templates/package.json.ejs.t`)
+```json
+---
+to: package.json
+---
+{
+  "name": "@<%= h.getPackageScope() %>/<%= libraryName %>",
+  "version": "1.0.0",
+  "description": "A modern React component library",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./styles": {
+      "import": "./dist/styles.css"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+<% if (buildTool === 'vite') { %>    "build": "vite build && tsc --emitDeclarationOnly",<% } else if (buildTool === 'rollup') { %>    "build": "rollup -c",<% } else { %>    "build": "webpack --mode=production",<% } %>
+    "dev": "vite build --watch",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+<% if (includeTesting) { %>    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",<% } %>
+<% if (includeStorybook) { %>    "storybook": "storybook dev -p 6006",
+    "storybook:build": "storybook build",<% } %>
+<% if (includeChangesets) { %>    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "changeset publish",<% } %>
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "typescript": "^5.0.0",
+<% if (buildTool === 'vite') { %>    "vite": "^4.0.0",
+    "vite-plugin-dts": "^3.0.0",<% } else if (buildTool === 'rollup') { %>    "rollup": "^3.0.0",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-commonjs": "^24.0.0",<% } %>
+<% if (uiFramework === 'tailwind') { %>    "tailwindcss": "^3.0.0",
+    "autoprefixer": "^10.0.0",
+    "postcss": "^8.0.0",<% } else if (uiFramework === 'styled-components') { %>    "styled-components": "^6.0.0",
+    "@types/styled-components": "^5.1.0",<% } else if (uiFramework === 'emotion') { %>    "@emotion/react": "^11.0.0",
+    "@emotion/styled": "^11.0.0",<% } %>
+<% if (includeTesting) { %>    "vitest": "^0.34.0",
+    "@testing-library/react": "^13.0.0",
+    "@testing-library/jest-dom": "^6.0.0",
+    "@testing-library/user-event": "^14.0.0",
+    "jsdom": "^22.0.0",
+    "@vitest/coverage-v8": "^0.34.0",
+    "@vitest/ui": "^0.34.0",<% } %>
+<% if (includeStorybook) { %>    "@storybook/react": "^7.0.0",
+    "@storybook/react-vite": "^7.0.0",
+    "@storybook/addon-essentials": "^7.0.0",
+    "@storybook/addon-docs": "^7.0.0",
+    "@storybook/addon-a11y": "^7.0.0",<% } %>
+<% if (includeChangesets) { %>    "@changesets/cli": "^2.26.0",<% } %>
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-hooks": "^4.6.0"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0"
+  },
+  "keywords": [
+    "react",
+    "typescript",
+    "components",
+    "ui",
+    "<%= uiFramework %>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<%= h.getPackageScope() %>/<%= libraryName %>.git"
+  },
+  "license": "MIT"
+}
+```
+
+**Modern Component Template** (`templates/Button.tsx.ejs.t`)
+```tsx
+---
+to: src/components/Button/Button.tsx
+---
+import React, { forwardRef } from 'react';
+<% if (uiFramework === 'styled-components') { %>import styled from 'styled-components';
+<% } else if (uiFramework === 'emotion') { %>import styled from '@emotion/styled';
+<% } %>import { cn } from '../../utils/cn';
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  /** Button variant */
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
+  /** Button size */
+  size?: 'sm' | 'md' | 'lg';
+  /** Show loading state */
+  loading?: boolean;
+  /** Icon to display before text */
+  startIcon?: React.ReactNode;
+  /** Icon to display after text */
+  endIcon?: React.ReactNode;
+  /** Full width button */
+  fullWidth?: boolean;
+}
+
+<% if (uiFramework === 'tailwind') { %>const buttonVariants = {
+  primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+  secondary: 'bg-gray-600 hover:bg-gray-700 text-white', 
+  outline: 'border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white',
+  ghost: 'text-blue-600 hover:bg-blue-50',
+  destructive: 'bg-red-600 hover:bg-red-700 text-white',
+};
+
+const buttonSizes = {
+  sm: 'px-3 py-1.5 text-sm',
+  md: 'px-4 py-2 text-base',
+  lg: 'px-6 py-3 text-lg',
+};
+<% } else if (uiFramework === 'styled-components' || uiFramework === 'emotion') { %>
+const StyledButton = styled.button<{ 
+  $variant: ButtonProps['variant']; 
+  $size: ButtonProps['size'];
+  $fullWidth: boolean;
+  $loading: boolean;
+}>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  
+  ${props => props.$fullWidth && 'width: 100%;'}
+  ${props => props.$loading && 'pointer-events: none; opacity: 0.6;'}
+  
+  /* Variants */
+  ${props => props.$variant === 'primary' && `
+    background-color: #2563eb;
+    color: white;
+    &:hover { background-color: #1d4ed8; }
+  `}
+  
+  ${props => props.$variant === 'secondary' && `
+    background-color: #4b5563;
+    color: white;
+    &:hover { background-color: #374151; }
+  `}
+  
+  ${props => props.$variant === 'outline' && `
+    background-color: transparent;
+    color: #2563eb;
+    border: 2px solid #2563eb;
+    &:hover { 
+      background-color: #2563eb;
+      color: white;
+    }
+  `}
+  
+  ${props => props.$variant === 'ghost' && `
+    background-color: transparent;
+    color: #2563eb;
+    &:hover { background-color: #eff6ff; }
+  `}
+  
+  ${props => props.$variant === 'destructive' && `
+    background-color: #dc2626;
+    color: white;
+    &:hover { background-color: #b91c1c; }
+  `}
+  
+  /* Sizes */
+  ${props => props.$size === 'sm' && 'padding: 0.375rem 0.75rem; font-size: 0.875rem;'}
+  ${props => props.$size === 'md' && 'padding: 0.5rem 1rem; font-size: 1rem;'}
+  ${props => props.$size === 'lg' && 'padding: 0.75rem 1.5rem; font-size: 1.125rem;'}
+  
+  &:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+`;
+<% } %>
+
+const LoadingSpinner = ({ size }: { size: ButtonProps['size'] }) => (
+  <svg 
+    className={cn(
+      "animate-spin",
+      size === 'sm' && "h-4 w-4",
+      size === 'md' && "h-5 w-5", 
+      size === 'lg' && "h-6 w-6"
+    )}
+    xmlns="http://www.w3.org/2000/svg" 
+    fill="none" 
+    viewBox="0 0 24 24"
+  >
+    <circle 
+      className="opacity-25" 
+      cx="12" 
+      cy="12" 
+      r="10" 
+      stroke="currentColor" 
+      strokeWidth="4"
+    />
+    <path 
+      className="opacity-75" 
+      fill="currentColor" 
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    />
+  </svg>
+);
+
+/**
+ * Button component with multiple variants and sizes
+ * 
+ * @example
+ * <Button variant="primary" size="md" onClick={handleClick}>
+ *   Click me
+ * </Button>
+ */
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
+  variant = 'primary',
+  size = 'md',
+  loading = false,
+  startIcon,
+  endIcon,
+  fullWidth = false,
+  className,
+  disabled,
+  children,
+  ...props
+}, ref) => {
+<% if (uiFramework === 'tailwind') { %>  return (
+    <button
+      ref={ref}
+      className={cn(
+        // Base styles
+        'inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors duration-200',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+        'disabled:opacity-50 disabled:pointer-events-none',
+        
+        // Variants
+        buttonVariants[variant],
+        
+        // Sizes
+        buttonSizes[size],
+        
+        // Full width
+        fullWidth && 'w-full',
+        
+        // Loading state
+        loading && 'pointer-events-none opacity-60',
+        
+        className
+      )}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {loading && <LoadingSpinner size={size} />}
+      {!loading && startIcon && startIcon}
+      {children}
+      {!loading && endIcon && endIcon}
+    </button>
+  );
+<% } else { %>  return (
+    <StyledButton
+      ref={ref}
+      $variant={variant}
+      $size={size}
+      $fullWidth={fullWidth}
+      $loading={loading}
+      className={className}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {loading && <LoadingSpinner size={size} />}
+      {!loading && startIcon && startIcon}
+      {children}
+      {!loading && endIcon && endIcon}
+    </StyledButton>
+  );
+<% } %>});
+
+Button.displayName = 'Button';
+```
+
+<% if (includeStorybook) { %>**Storybook Stories** (`templates/Button.stories.tsx.ejs.t`)
+```tsx
+---
+to: src/components/Button/Button.stories.tsx
+---
+import type { Meta, StoryObj } from '@storybook/react';
+import { fn } from '@storybook/test';
+import { Button } from './Button';
+import { 
+  HeartIcon, 
+  ArrowRightIcon, 
+  DownloadIcon 
+} from '@heroicons/react/24/outline';
+
+const meta: Meta<typeof Button> = {
+  title: 'Components/Button',
+  component: Button,
+  parameters: {
+    layout: 'centered',
+    docs: {
+      description: {
+        component: 'A versatile button component with multiple variants, sizes, and states.',
+      },
+    },
+  },
+  tags: ['autodocs'],
+  argTypes: {
+    variant: {
+      control: { type: 'select' },
+      options: ['primary', 'secondary', 'outline', 'ghost', 'destructive'],
+    },
+    size: {
+      control: { type: 'select' },
+      options: ['sm', 'md', 'lg'],
+    },
+    loading: {
+      control: { type: 'boolean' },
+    },
+    disabled: {
+      control: { type: 'boolean' },
+    },
+    fullWidth: {
+      control: { type: 'boolean' },
+    },
+  },
+  args: {
+    onClick: fn(),
+  },
+};
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Primary: Story = {
+  args: {
+    variant: 'primary',
+    children: 'Button',
+  },
+};
+
+export const Secondary: Story = {
+  args: {
+    variant: 'secondary',
+    children: 'Button',
+  },
+};
+
+export const Outline: Story = {
+  args: {
+    variant: 'outline',
+    children: 'Button',
+  },
+};
+
+export const Ghost: Story = {
+  args: {
+    variant: 'ghost',
+    children: 'Button',
+  },
+};
+
+export const Destructive: Story = {
+  args: {
+    variant: 'destructive',
+    children: 'Delete',
+  },
+};
+
+export const Sizes: Story = {
+  render: () => (
+    <div className="flex items-center gap-4">
+      <Button size="sm">Small</Button>
+      <Button size="md">Medium</Button>
+      <Button size="lg">Large</Button>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Buttons come in three sizes: small, medium (default), and large.',
+      },
+    },
+  },
+};
+
+export const WithIcons: Story = {
+  render: () => (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-4">
+        <Button startIcon={<HeartIcon className="w-5 h-5" />}>
+          Like
+        </Button>
+        <Button endIcon={<ArrowRightIcon className="w-5 h-5" />}>
+          Next
+        </Button>
+      </div>
+      <div className="flex gap-4">
+        <Button 
+          variant="outline"
+          startIcon={<DownloadIcon className="w-5 h-5" />}
+          endIcon={<ArrowRightIcon className="w-5 h-5" />}
+        >
+          Download
+        </Button>
+      </div>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Buttons can display icons before or after the text using startIcon and endIcon props.',
+      },
+    },
+  },
+};
+
+export const Loading: Story = {
+  args: {
+    loading: true,
+    children: 'Loading...',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: 'Loading state shows a spinner and disables the button.',
+      },
+    },
+  },
+};
+
+export const Disabled: Story = {
+  args: {
+    disabled: true,
+    children: 'Disabled',
+  },
+};
+
+export const FullWidth: Story = {
+  args: {
+    fullWidth: true,
+    children: 'Full Width Button',
+  },
+  decorators: [
+    (Story) => (
+      <div style={{ width: '400px' }}>
+        <Story />
+      </div>
+    ),
+  ],
+};
+
+export const AllVariants: Story = {
+  render: () => (
+    <div className="grid grid-cols-2 gap-4 max-w-md">
+      <Button variant="primary">Primary</Button>
+      <Button variant="secondary">Secondary</Button>
+      <Button variant="outline">Outline</Button>
+      <Button variant="ghost">Ghost</Button>
+      <Button variant="destructive">Destructive</Button>
+      <Button disabled>Disabled</Button>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'Overview of all button variants including disabled state.',
+      },
+    },
+  },
+};
+```
+<% } %>
+
+**Build Configuration** (`templates/vite.config.ts.ejs.t`)
+```typescript
+---
+to: vite.config.ts
+condition: <%= buildTool === 'vite' %>
+---
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import dts from 'vite-plugin-dts';
+import { resolve } from 'path';
+<% if (uiFramework === 'tailwind') { %>import tailwindcss from 'tailwindcss';
+import autoprefixer from 'autoprefixer';
+<% } %>
+
+export default defineConfig({
+  plugins: [
+    react(),
+    dts({
+      insertTypesEntry: true,
+      rollupTypes: true,
+    }),
+  ],
+<% if (uiFramework === 'tailwind') { %>  css: {
+    postcss: {
+      plugins: [tailwindcss, autoprefixer],
+    },
+  },
+<% } %>  build: {
+    lib: {
+      entry: resolve(__dirname, 'src/index.ts'),
+      name: '<%= h.inflection.classify(libraryName) %>',
+      formats: ['es', 'cjs'],
+      fileName: (format) => `index.${format === 'es' ? 'js' : 'cjs'}`,
+    },
+    rollupOptions: {
+      external: ['react', 'react-dom'],
+      output: {
+        globals: {
+          react: 'React',
+          'react-dom': 'ReactDOM',
+        },
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name === 'style.css') return 'styles.css';
+          return assetInfo.name as string;
+        },
+      },
+    },
+    sourcemap: true,
+    emptyOutDir: true,
+  },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
+    },
+  },
+});
+```
+
+### Usage Example
+```bash
+bun run hypergen react-component-library
+# Prompts:
+# Library name: design-system
+# UI Framework: Tailwind CSS
+# Build tool: Vite
+# Include Storybook? Yes
+# Include testing setup? Yes
+# Include changesets for versioning? Yes
+
+# Generated: Complete React component library with modern tooling
+```
+
+---
+
+## Vue.js Ecosystem
+
+### Vue 3 + TypeScript + Pinia Store Generator
+
+Generate Vue 3 applications with Composition API, TypeScript, and Pinia for state management.
+
+```yaml title="template.yml"
+name: vue3-typescript-app
+description: Vue 3 application with TypeScript and modern tooling
+variables:
+  - name: projectName
+    message: Project name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: router
+    message: Include Vue Router?
+    type: confirm
+    default: true
+  - name: stateManagement
+    message: State management
+    type: list
+    choices:
+      - name: Pinia (recommended)
+        value: pinia
+      - name: Vuex 4
+        value: vuex
+      - name: None
+        value: none
+  - name: uiFramework
+    message: UI Framework
+    type: list
+    choices:
+      - name: Vuetify 3
+        value: vuetify
+      - name: Quasar
+        value: quasar
+      - name: PrimeVue
+        value: primevue
+      - name: Tailwind CSS
+        value: tailwind
+      - name: None
+        value: none
+  - name: features
+    message: Additional features
+    type: checkbox
+    choices:
+      - name: PWA Support
+        value: pwa
+      - name: Internationalization (vue-i18n)
+        value: i18n
+      - name: Testing (Vitest + Vue Test Utils)
+        value: testing
+      - name: Storybook
+        value: storybook
+```
+
+**Vite Configuration** (`templates/vite.config.ts.ejs.t`)
+```typescript
+---
+to: vite.config.ts
+---
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+<% if (features.includes('pwa')) { %>import { VitePWA } from 'vite-plugin-pwa';<% } %>
+<% if (uiFramework === 'vuetify') { %>import vuetify, { transformAssetUrls } from 'vite-plugin-vuetify';<% } %>
+<% if (uiFramework === 'quasar') { %>import { quasar, transformAssetUrls } from '@quasar/vite-plugin';<% } %>
+import { resolve } from 'path';
+
+export default defineConfig({
+  plugins: [
+    vue({
+<% if (uiFramework === 'vuetify' || uiFramework === 'quasar') { %>      template: { transformAssetUrls },<% } %>
+    }),
+<% if (uiFramework === 'vuetify') { %>    vuetify({
+      autoImport: true,
+      theme: {
+        defaultTheme: 'light'
+      }
+    }),<% } %>
+<% if (uiFramework === 'quasar') { %>    quasar({
+      sassVariables: 'src/quasar-variables.sass'
+    }),<% } %>
+<% if (features.includes('pwa')) { %>    VitePWA({
+      registerType: 'autoUpdate',
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+      },
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+      manifest: {
+        name: '<%= h.inflection.titleize(projectName) %>',
+        short_name: '<%= h.inflection.titleize(projectName) %>',
+        description: 'Vue 3 PWA Application',
+        theme_color: '#ffffff',
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#ffffff',
+        icons: [
+          {
+            src: 'icon-192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'icon-512.png', 
+            sizes: '512x512',
+            type: 'image/png'
+          }
+        ]
+      }
+    }),<% } %>
+  ],
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, 'src'),
+    },
+  },
+<% if (uiFramework === 'tailwind') { %>  css: {
+    postcss: './postcss.config.js',
+  },<% } %>
+  server: {
+    host: true,
+    port: 3000,
+  },
+<% if (features.includes('testing')) { %>  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['src/test-setup.ts'],
+  },<% } %>
+});
+```
+
+**Pinia Store Template** (`templates/store.ts.ejs.t`)
+```typescript
+---
+to: src/stores/user.ts
+condition: <%= stateManagement === 'pinia' %>
+---
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import type { User, LoginCredentials, UserPreferences } from '@/types/user';
+import { authApi } from '@/api/auth';
+
+export const useUserStore = defineStore('user', () => {
+  // State
+  const user = ref<User | null>(null);
+  const isLoading = ref(false);
+  const error = ref<string | null>(null);
+  const preferences = ref<UserPreferences>({
+    theme: 'light',
+    language: 'en',
+    notifications: true,
+  });
+
+  // Getters
+  const isAuthenticated = computed(() => !!user.value);
+  const userName = computed(() => user.value?.name || 'Anonymous');
+  const userInitials = computed(() => {
+    if (!user.value?.name) return 'AN';
+    return user.value.name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase();
+  });
+  const isDarkMode = computed(() => preferences.value.theme === 'dark');
+
+  // Actions
+  const login = async (credentials: LoginCredentials) => {
+    isLoading.value = true;
+    error.value = null;
+    
+    try {
+      const response = await authApi.login(credentials);
+      user.value = response.user;
+      
+      // Store token in localStorage
+      localStorage.setItem('auth_token', response.token);
+      
+      return response;
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Login failed';
+      throw err;
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  const logout = async () => {
+    isLoading.value = true;
+    
+    try {
+      await authApi.logout();
+    } catch (err) {
+      console.warn('Logout request failed:', err);
+    } finally {
+      user.value = null;
+      localStorage.removeItem('auth_token');
+      isLoading.value = false;
+    }
+  };
+
+  const updateProfile = async (updates: Partial<User>) => {
+    if (!user.value) throw new Error('No user logged in');
+    
+    isLoading.value = true;
+    error.value = null;
+    
+    try {
+      const updatedUser = await authApi.updateProfile(user.value.id, updates);
+      user.value = { ...user.value, ...updatedUser };
+      return updatedUser;
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Profile update failed';
+      throw err;
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  const updatePreferences = (newPreferences: Partial<UserPreferences>) => {
+    preferences.value = { ...preferences.value, ...newPreferences };
+    
+    // Persist preferences
+    localStorage.setItem('user_preferences', JSON.stringify(preferences.value));
+  };
+
+  const loadPreferences = () => {
+    const stored = localStorage.getItem('user_preferences');
+    if (stored) {
+      try {
+        preferences.value = { ...preferences.value, ...JSON.parse(stored) };
+      } catch (err) {
+        console.warn('Failed to load user preferences:', err);
+      }
+    }
+  };
+
+  const initializeAuth = async () => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    
+    isLoading.value = true;
+    
+    try {
+      const user = await authApi.getCurrentUser();
+      user.value = user;
+    } catch (err) {
+      // Token is invalid, remove it
+      localStorage.removeItem('auth_token');
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  // Initialize preferences on store creation
+  loadPreferences();
+
+  return {
+    // State
+    user: readonly(user),
+    isLoading: readonly(isLoading),
+    error: readonly(error),
+    preferences: readonly(preferences),
+    
+    // Getters
+    isAuthenticated,
+    userName,
+    userInitials,
+    isDarkMode,
+    
+    // Actions
+    login,
+    logout,
+    updateProfile,
+    updatePreferences,
+    initializeAuth,
+  };
+});
+```
+
+**Vue Component with Composition API** (`templates/UserProfile.vue.ejs.t`)
+```vue
+---
+to: src/components/UserProfile.vue
+---
+<template>
+  <div class="user-profile">
+<% if (uiFramework === 'vuetify') { %>    <v-card class="mx-auto" max-width="600">
+      <v-card-title class="d-flex align-center">
+        <v-avatar size="48" class="mr-3">
+          <img v-if="user?.avatar" :src="user.avatar" :alt="user.name" />
+          <span v-else class="text-h6">{{ userInitials }}</span>
+        </v-avatar>
+        <div>
+          <h2>{{ userName }}</h2>
+          <p class="text-body-2 text-medium-emphasis mb-0">{{ user?.email }}</p>
+        </div>
+        <v-spacer />
+        <v-btn
+          icon="mdi-cog"
+          variant="text"
+          @click="showPreferences = !showPreferences"
+        />
+      </v-card-title>
+      
+      <v-card-text>
+        <v-row>
+          <v-col cols="12" md="6">
+            <v-text-field
+              v-model="editedUser.name"
+              label="Name"
+              :disabled="!isEditing"
+              variant="outlined"
+            />
+          </v-col>
+          <v-col cols="12" md="6">
+            <v-text-field
+              v-model="editedUser.email"
+              label="Email"
+              :disabled="!isEditing"
+              variant="outlined"
+            />
+          </v-col>
+        </v-row>
+        
+        <v-expand-transition>
+          <v-card v-show="showPreferences" class="mt-4" variant="outlined">
+            <v-card-title>Preferences</v-card-title>
+            <v-card-text>
+              <v-row>
+                <v-col cols="12" md="6">
+                  <v-select
+                    v-model="editedPreferences.theme"
+                    :items="themeOptions"
+                    label="Theme"
+                    variant="outlined"
+                  />
+                </v-col>
+                <v-col cols="12" md="6">
+                  <v-select
+                    v-model="editedPreferences.language"
+                    :items="languageOptions"
+                    label="Language"
+                    variant="outlined"
+                  />
+                </v-col>
+                <v-col cols="12">
+                  <v-switch
+                    v-model="editedPreferences.notifications"
+                    label="Enable notifications"
+                    color="primary"
+                  />
+                </v-col>
+              </v-row>
+            </v-card-text>
+          </v-card>
+        </v-expand-transition>
+      </v-card-text>
+      
+      <v-card-actions>
+        <v-spacer />
+        <v-btn
+          v-if="!isEditing"
+          color="primary"
+          @click="startEditing"
+        >
+          Edit Profile
+        </v-btn>
+        <template v-else>
+          <v-btn @click="cancelEditing">Cancel</v-btn>
+          <v-btn
+            color="primary"
+            :loading="isLoading"
+            @click="saveChanges"
+          >
+            Save Changes
+          </v-btn>
+        </template>
+      </v-card-actions>
+    </v-card>
+<% } else if (uiFramework === 'tailwind') { %>    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-md">
+      <div class="p-6 border-b border-gray-200">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
+              <img v-if="user?.avatar" :src="user.avatar" :alt="user.name" class="w-12 h-12 rounded-full object-cover" />
+              <span v-else>{{ userInitials }}</span>
+            </div>
+            <div>
+              <h2 class="text-xl font-semibold text-gray-900">{{ userName }}</h2>
+              <p class="text-sm text-gray-600">{{ user?.email }}</p>
+            </div>
+          </div>
+          <button 
+            @click="showPreferences = !showPreferences"
+            class="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      <div class="p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input
+              v-model="editedUser.name"
+              type="text"
+              :disabled="!isEditing"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input
+              v-model="editedUser.email"
+              type="email"
+              :disabled="!isEditing"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            />
+          </div>
+        </div>
+        
+        <Transition name="slide-fade">
+          <div v-show="showPreferences" class="mt-6 p-4 bg-gray-50 rounded-md">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Preferences</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Theme</label>
+                <select 
+                  v-model="editedPreferences.theme"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option v-for="option in themeOptions" :key="option.value" :value="option.value">
+                    {{ option.title }}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                <select 
+                  v-model="editedPreferences.language"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option v-for="option in languageOptions" :key="option.value" :value="option.value">
+                    {{ option.title }}
+                  </option>
+                </select>
+              </div>
+              <div class="md:col-span-2">
+                <label class="flex items-center">
+                  <input
+                    v-model="editedPreferences.notifications"
+                    type="checkbox"
+                    class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                  />
+                  <span class="ml-2 text-sm text-gray-700">Enable notifications</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </div>
+      
+      <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end space-x-3">
+        <button
+          v-if="!isEditing"
+          @click="startEditing"
+          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+        >
+          Edit Profile
+        </button>
+        <template v-else>
+          <button
+            @click="cancelEditing"
+            class="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            @click="saveChanges"
+            :disabled="isLoading"
+            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+          >
+            <svg v-if="isLoading" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Save Changes
+          </button>
+        </template>
+      </div>
+    </div>
+<% } %>  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch } from 'vue';
+import { useUserStore } from '@/stores/user';
+import type { User, UserPreferences } from '@/types/user';
+
+// Store
+const userStore = useUserStore();
+
+// Computed
+const user = computed(() => userStore.user);
+const userName = computed(() => userStore.userName);
+const userInitials = computed(() => userStore.userInitials);
+const isLoading = computed(() => userStore.isLoading);
+
+// Local state
+const isEditing = ref(false);
+const showPreferences = ref(false);
+const editedUser = ref<Partial<User>>({});
+const editedPreferences = ref<UserPreferences>({ ...userStore.preferences });
+
+// Options
+const themeOptions = [
+  { title: 'Light', value: 'light' },
+  { title: 'Dark', value: 'dark' },
+  { title: 'System', value: 'system' },
+];
+
+const languageOptions = [
+  { title: 'English', value: 'en' },
+  { title: 'Spanish', value: 'es' },
+  { title: 'French', value: 'fr' },
+  { title: 'German', value: 'de' },
+];
+
+// Methods
+const startEditing = () => {
+  if (user.value) {
+    editedUser.value = { ...user.value };
+    editedPreferences.value = { ...userStore.preferences };
+  }
+  isEditing.value = true;
+};
+
+const cancelEditing = () => {
+  editedUser.value = {};
+  editedPreferences.value = { ...userStore.preferences };
+  isEditing.value = false;
+};
+
+const saveChanges = async () => {
+  try {
+    // Update user profile
+    if (Object.keys(editedUser.value).length > 0) {
+      await userStore.updateProfile(editedUser.value);
+    }
+    
+    // Update preferences
+    userStore.updatePreferences(editedPreferences.value);
+    
+    isEditing.value = false;
+  } catch (error) {
+    console.error('Failed to save changes:', error);
+    // Handle error (show toast, etc.)
+  }
+};
+
+// Watch for preference changes
+watch(
+  () => editedPreferences.value.theme,
+  (newTheme) => {
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }
+);
+</script>
+
+<style scoped>
+.slide-fade-enter-active,
+.slide-fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-fade-enter-from {
+  transform: translateY(-10px);
+  opacity: 0;
+}
+
+.slide-fade-leave-to {
+  transform: translateY(-10px);
+  opacity: 0;
+}
+</style>
+```
+
+### Usage Example
+```bash
+bun run hypergen vue3-typescript-app
+# Prompts:
+# Project name: vue-dashboard
+# Include Vue Router? Yes
+# State management: Pinia (recommended)
+# UI Framework: Vuetify 3
+# Features: [x] PWA, [x] i18n, [x] Testing, [x] Storybook
+
+# Generated: Complete Vue 3 application with modern tooling
+```
+
+---
+
+## Node.js Backend Templates
+
+### Express + TypeScript API with Clean Architecture
+
+Generate a scalable Node.js API with clean architecture patterns.
+
+```yaml title="template.yml" 
+name: node-clean-api
+description: Node.js API with Clean Architecture and TypeScript
+variables:
+  - name: apiName
+    message: API name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: database
+    message: Database
+    type: list
+    choices:
+      - name: PostgreSQL + Prisma
+        value: postgres-prisma
+      - name: MongoDB + Mongoose
+        value: mongodb-mongoose
+      - name: MySQL + TypeORM
+        value: mysql-typeorm
+  - name: authentication
+    message: Authentication strategy
+    type: list
+    choices:
+      - name: JWT + Passport
+        value: jwt-passport
+      - name: OAuth 2.0
+        value: oauth2
+      - name: Basic Auth
+        value: basic
+      - name: None
+        value: none
+  - name: documentation
+    message: API Documentation
+    type: list
+    choices:
+      - name: OpenAPI/Swagger
+        value: openapi
+      - name: GraphQL + Apollo
+        value: graphql
+      - name: Both
+        value: both
+  - name: features
+    message: Additional features
+    type: checkbox
+    choices:
+      - name: Rate Limiting
+        value: rate-limiting
+      - name: Caching (Redis)
+        value: caching
+      - name: File Upload (Multer)
+        value: file-upload
+      - name: Email Service
+        value: email
+      - name: WebSocket Support
+        value: websocket
+      - name: Background Jobs (Bull)
+        value: background-jobs
+```
+
+**Clean Architecture Structure** (`templates/_app-structure.js.ejs.t`)
+```javascript
+---
+to: _templates/_app-structure.js
+---
+/**
+ * Clean Architecture Structure Generator
+ * Creates the proper folder structure for Clean Architecture principles
+ */
+
+const fs = require('fs').promises;
+const path = require('path');
+
+const createDirectoryStructure = async () => {
+  const structure = {
+    'src': {
+      // Enterprise Business Rules (Entities)
+      'domain': {
+        'entities': {},
+        'value-objects': {},
+        'enums': {},
+        'errors': {},
+        'events': {},
+      },
+      
+      // Application Business Rules (Use Cases)
+      'application': {
+        'use-cases': {
+          'user': {},
+          'auth': {},
+        },
+        'interfaces': {
+          'repositories': {},
+          'services': {},
+        },
+        'dto': {},
+        'mappers': {},
+      },
+      
+      // Interface Adapters
+      'infrastructure': {
+        'repositories': {},
+        'services': {
+          'external': {},
+          'email': {},
+          'storage': {},
+        },
+        'config': {},
+        'database': {
+          'migrations': {},
+          'seeds': {},
+        },
+      },
+      
+      // Frameworks & Drivers
+      'presentation': {
+        'controllers': {},
+        'middleware': {},
+        'routes': {},
+        'validators': {},
+      },
+      
+      // Shared/Common
+      'shared': {
+        'utils': {},
+        'constants': {},
+        'types': {},
+      },
+    },
+    
+    // Tests (mirror the source structure)
+    'tests': {
+      'unit': {
+        'domain': {},
+        'application': {},
+      },
+      'integration': {},
+      'e2e': {},
+      'fixtures': {},
+    },
+    
+    'docs': {},
+    'scripts': {},
+  };
+
+  const createDirs = async (obj, basePath = '.') => {
+    for (const [key, value] of Object.entries(obj)) {
+      const dirPath = path.join(basePath, key);
+      await fs.mkdir(dirPath, { recursive: true });
+      
+      if (typeof value === 'object' && Object.keys(value).length > 0) {
+        await createDirs(value, dirPath);
+      }
+    }
+  };
+
+  await createDirs(structure);
+  console.log('✅ Clean Architecture structure created');
+};
+
+module.exports = { createDirectoryStructure };
+```
+
+**Domain Entity Example** (`templates/user.entity.ts.ejs.t`)
+```typescript
+---
+to: src/domain/entities/user.entity.ts
+---
+/**
+ * User Entity - Enterprise Business Rules
+ * Contains the most general and high-level business rules
+ */
+
+import { Entity } from '../../shared/domain/entity';
+import { UniqueEntityId } from '../../shared/domain/unique-entity-id';
+import { Email } from '../value-objects/email';
+import { Password } from '../value-objects/password';
+import { UserStatus } from '../enums/user-status.enum';
+import { DomainEvents } from '../../shared/domain/events/domain-events';
+import { UserCreatedEvent } from '../events/user-created.event';
+import { UserEmailChangedEvent } from '../events/user-email-changed.event';
+
+export interface UserProps {
+  email: Email;
+  password: Password;
+  name: string;
+  status: UserStatus;
+  emailVerified: boolean;
+  lastLoginAt?: Date;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export class User extends Entity<UserProps> {
+  private constructor(props: UserProps, id?: UniqueEntityId) {
+    super(props, id);
+  }
+
+  public static create(props: Omit<UserProps, 'createdAt' | 'status' | 'emailVerified'>, id?: UniqueEntityId): User {
+    const user = new User({
+      ...props,
+      status: UserStatus.PENDING,
+      emailVerified: false,
+      createdAt: new Date(),
+    }, id);
+
+    // Domain event: User created
+    DomainEvents.markAggregateForDispatch(user);
+    user.addDomainEvent(new UserCreatedEvent(user));
+
+    return user;
+  }
+
+  // Business Rules
+  public changeEmail(newEmail: Email): void {
+    // Business rule: Email must be different from current
+    if (this.props.email.equals(newEmail)) {
+      throw new Error('New email must be different from current email');
+    }
+
+    const oldEmail = this.props.email;
+    this.props.email = newEmail;
+    this.props.emailVerified = false; // Must re-verify new email
+    this.props.updatedAt = new Date();
+
+    // Domain event: Email changed
+    this.addDomainEvent(new UserEmailChangedEvent(this, oldEmail, newEmail));
+  }
+
+  public changePassword(newPassword: Password): void {
+    // Business rule: Password must meet security requirements
+    if (!newPassword.isSecure()) {
+      throw new Error('Password does not meet security requirements');
+    }
+
+    this.props.password = newPassword;
+    this.props.updatedAt = new Date();
+  }
+
+  public activate(): void {
+    // Business rule: Can only activate pending or inactive users
+    if (this.props.status === UserStatus.ACTIVE) {
+      throw new Error('User is already active');
+    }
+
+    if (this.props.status === UserStatus.BANNED) {
+      throw new Error('Cannot activate a banned user');
+    }
+
+    this.props.status = UserStatus.ACTIVE;
+    this.props.updatedAt = new Date();
+  }
+
+  public deactivate(): void {
+    // Business rule: Can only deactivate active users
+    if (this.props.status !== UserStatus.ACTIVE) {
+      throw new Error('Can only deactivate active users');
+    }
+
+    this.props.status = UserStatus.INACTIVE;
+    this.props.updatedAt = new Date();
+  }
+
+  public ban(reason?: string): void {
+    this.props.status = UserStatus.BANNED;
+    this.props.updatedAt = new Date();
+    // Could add ban reason as a property or event
+  }
+
+  public verifyEmail(): void {
+    // Business rule: Can only verify unverified emails
+    if (this.props.emailVerified) {
+      throw new Error('Email is already verified');
+    }
+
+    this.props.emailVerified = true;
+    this.props.updatedAt = new Date();
+
+    // If user was pending verification, activate them
+    if (this.props.status === UserStatus.PENDING) {
+      this.props.status = UserStatus.ACTIVE;
+    }
+  }
+
+  public recordLogin(): void {
+    this.props.lastLoginAt = new Date();
+  }
+
+  public canLogin(): boolean {
+    return this.props.status === UserStatus.ACTIVE && this.props.emailVerified;
+  }
+
+  // Getters
+  get id(): UniqueEntityId {
+    return this._id;
+  }
+
+  get email(): Email {
+    return this.props.email;
+  }
+
+  get name(): string {
+    return this.props.name;
+  }
+
+  get status(): UserStatus {
+    return this.props.status;
+  }
+
+  get isActive(): boolean {
+    return this.props.status === UserStatus.ACTIVE;
+  }
+
+  get isEmailVerified(): boolean {
+    return this.props.emailVerified;
+  }
+
+  get lastLoginAt(): Date | undefined {
+    return this.props.lastLoginAt;
+  }
+
+  get createdAt(): Date {
+    return this.props.createdAt;
+  }
+
+  get updatedAt(): Date | undefined {
+    return this.props.updatedAt;
+  }
+}
+```
+
+**Use Case Implementation** (`templates/create-user.use-case.ts.ejs.t`)
+```typescript
+---
+to: src/application/use-cases/user/create-user.use-case.ts
+---
+/**
+ * Create User Use Case - Application Business Rules
+ * Orchestrates the creation of a new user following business rules
+ */
+
+import { UseCase } from '../../interfaces/use-case';
+import { IUserRepository } from '../../interfaces/repositories/user-repository.interface';
+import { IEmailService } from '../../interfaces/services/email-service.interface';
+import { IPasswordHashingService } from '../../interfaces/services/password-hashing-service.interface';
+import { User } from '../../../domain/entities/user.entity';
+import { Email } from '../../../domain/value-objects/email';
+import { Password } from '../../../domain/value-objects/password';
+import { CreateUserDTO } from '../../dto/create-user.dto';
+import { UserMapper } from '../../mappers/user.mapper';
+import { DomainEvents } from '../../../shared/domain/events/domain-events';
+
+export interface CreateUserRequest {
+  email: string;
+  password: string;
+  name: string;
+}
+
+export interface CreateUserResponse {
+  id: string;
+  email: string;
+  name: string;
+  status: string;
+  createdAt: Date;
+}
+
+export class CreateUserUseCase implements UseCase<CreateUserRequest, CreateUserResponse> {
+  constructor(
+    private userRepository: IUserRepository,
+    private emailService: IEmailService,
+    private passwordHashingService: IPasswordHashingService,
+  ) {}
+
+  async execute(request: CreateUserRequest): Promise<CreateUserResponse> {
+    // 1. Validate input and create value objects
+    const email = Email.create(request.email);
+    const password = Password.create(request.password);
+
+    // 2. Business rule: Check if user already exists
+    const existingUser = await this.userRepository.findByEmail(email);
+    if (existingUser) {
+      throw new Error('User with this email already exists');
+    }
+
+    // 3. Hash password using infrastructure service
+    const hashedPassword = await this.passwordHashingService.hash(password.value);
+    const securePassword = Password.createFromHash(hashedPassword);
+
+    // 4. Create domain entity
+    const user = User.create({
+      email,
+      password: securePassword,
+      name: request.name,
+    });
+
+    // 5. Persist the user
+    await this.userRepository.save(user);
+
+    // 6. Dispatch domain events (like sending welcome email)
+    await DomainEvents.dispatchEventsForAggregate(user.id);
+
+    // 7. Return response DTO
+    return UserMapper.toResponse(user);
+  }
+}
+```
+
+**Infrastructure Repository** (`templates/prisma-user.repository.ts.ejs.t`)
+```typescript
+---
+to: src/infrastructure/repositories/prisma-user.repository.ts
+condition: <%= database === 'postgres-prisma' %>
+---
+/**
+ * Prisma User Repository - Infrastructure Layer
+ * Implements the domain repository interface using Prisma ORM
+ */
+
+import { PrismaClient, User as PrismaUser } from '@prisma/client';
+import { IUserRepository } from '../../application/interfaces/repositories/user-repository.interface';
+import { User } from '../../domain/entities/user.entity';
+import { Email } from '../../domain/value-objects/email';
+import { UniqueEntityId } from '../../shared/domain/unique-entity-id';
+import { UserMapper } from '../../application/mappers/user.mapper';
+
+export class PrismaUserRepository implements IUserRepository {
+  constructor(private prisma: PrismaClient) {}
+
+  async save(user: User): Promise<void> {
+    const exists = await this.exists(user.id);
+    const data = UserMapper.toPersistence(user);
+
+    if (exists) {
+      await this.prisma.user.update({
+        where: { id: user.id.toString() },
+        data,
+      });
+    } else {
+      await this.prisma.user.create({
+        data: {
+          id: user.id.toString(),
+          ...data,
+        },
+      });
+    }
+  }
+
+  async findById(id: UniqueEntityId): Promise<User | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: id.toString() },
+    });
+
+    return user ? UserMapper.toDomain(user) : null;
+  }
+
+  async findByEmail(email: Email): Promise<User | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.value },
+    });
+
+    return user ? UserMapper.toDomain(user) : null;
+  }
+
+  async findMany(params: {
+    skip?: number;
+    take?: number;
+    where?: Partial<{
+      status: string;
+      emailVerified: boolean;
+      createdAfter: Date;
+      createdBefore: Date;
+    }>;
+    orderBy?: {
+      field: 'createdAt' | 'updatedAt' | 'lastLoginAt';
+      direction: 'asc' | 'desc';
+    };
+  }): Promise<User[]> {
+    const { skip, take, where, orderBy } = params;
+
+    const users = await this.prisma.user.findMany({
+      skip,
+      take,
+      where: {
+        ...(where?.status && { status: where.status }),
+        ...(where?.emailVerified !== undefined && { emailVerified: where.emailVerified }),
+        ...(where?.createdAfter && { createdAt: { gte: where.createdAfter } }),
+        ...(where?.createdBefore && { createdAt: { lte: where.createdBefore } }),
+      },
+      orderBy: orderBy ? { [orderBy.field]: orderBy.direction } : { createdAt: 'desc' },
+    });
+
+    return users.map(UserMapper.toDomain);
+  }
+
+  async count(where?: Partial<{
+    status: string;
+    emailVerified: boolean;
+  }>): Promise<number> {
+    return this.prisma.user.count({
+      where: {
+        ...(where?.status && { status: where.status }),
+        ...(where?.emailVerified !== undefined && { emailVerified: where.emailVerified }),
+      },
+    });
+  }
+
+  async delete(id: UniqueEntityId): Promise<void> {
+    await this.prisma.user.delete({
+      where: { id: id.toString() },
+    });
+  }
+
+  async exists(id: UniqueEntityId): Promise<boolean> {
+    const count = await this.prisma.user.count({
+      where: { id: id.toString() },
+    });
+    return count > 0;
+  }
+
+  // Additional query methods for specific business needs
+  async findActiveUsers(): Promise<User[]> {
+    return this.findMany({
+      where: { status: 'ACTIVE', emailVerified: true },
+      orderBy: { field: 'lastLoginAt', direction: 'desc' },
+    });
+  }
+
+  async findUsersRequiringEmailVerification(): Promise<User[]> {
+    return this.findMany({
+      where: { status: 'PENDING', emailVerified: false },
+      orderBy: { field: 'createdAt', direction: 'asc' },
+    });
+  }
+
+  async findInactiveUsers(daysSinceLastLogin: number): Promise<User[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysSinceLastLogin);
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          { lastLoginAt: { lt: cutoffDate } },
+          { lastLoginAt: null, createdAt: { lt: cutoffDate } },
+        ],
+      },
+      orderBy: { lastLoginAt: 'asc' },
+    });
+
+    return users.map(UserMapper.toDomain);
+  }
+}
+```
+
+**Express Controller** (`templates/user.controller.ts.ejs.t`)
+```typescript
+---
+to: src/presentation/controllers/user.controller.ts
+---
+/**
+ * User Controller - Presentation Layer
+ * Handles HTTP requests and responses for user-related operations
+ */
+
+import { Request, Response, NextFunction } from 'express';
+import { container } from '../../infrastructure/config/container';
+import { CreateUserUseCase } from '../../application/use-cases/user/create-user.use-case';
+import { GetUserUseCase } from '../../application/use-cases/user/get-user.use-case';
+import { UpdateUserUseCase } from '../../application/use-cases/user/update-user.use-case';
+import { DeleteUserUseCase } from '../../application/use-cases/user/delete-user.use-case';
+import { ListUsersUseCase } from '../../application/use-cases/user/list-users.use-case';
+import { CreateUserValidator } from '../validators/create-user.validator';
+import { UpdateUserValidator } from '../validators/update-user.validator';
+import { ListUsersValidator } from '../validators/list-users.validator';
+import { ApiResponse } from '../../shared/types/api-response';
+import { HttpStatusCode } from '../../shared/enums/http-status-code.enum';
+
+export class UserController {
+  private createUserUseCase: CreateUserUseCase;
+  private getUserUseCase: GetUserUseCase;
+  private updateUserUseCase: UpdateUserUseCase;
+  private deleteUserUseCase: DeleteUserUseCase;
+  private listUsersUseCase: ListUsersUseCase;
+
+  constructor() {
+    this.createUserUseCase = container.resolve('CreateUserUseCase');
+    this.getUserUseCase = container.resolve('GetUserUseCase');
+    this.updateUserUseCase = container.resolve('UpdateUserUseCase');
+    this.deleteUserUseCase = container.resolve('DeleteUserUseCase');
+    this.listUsersUseCase = container.resolve('ListUsersUseCase');
+  }
+
+  public createUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // Validate request
+      const validationResult = await CreateUserValidator.validate(req.body);
+      if (!validationResult.isValid) {
+        res.status(HttpStatusCode.BAD_REQUEST).json(
+          ApiResponse.error('Validation failed', validationResult.errors)
+        );
+        return;
+      }
+
+      // Execute use case
+      const result = await this.createUserUseCase.execute(validationResult.data);
+      
+      res.status(HttpStatusCode.CREATED).json(
+        ApiResponse.success(result, 'User created successfully')
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public getUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      
+      const result = await this.getUserUseCase.execute({ id });
+      
+      if (!result) {
+        res.status(HttpStatusCode.NOT_FOUND).json(
+          ApiResponse.error('User not found')
+        );
+        return;
+      }
+
+      res.status(HttpStatusCode.OK).json(
+        ApiResponse.success(result, 'User retrieved successfully')
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public updateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      
+      // Validate request
+      const validationResult = await UpdateUserValidator.validate(req.body);
+      if (!validationResult.isValid) {
+        res.status(HttpStatusCode.BAD_REQUEST).json(
+          ApiResponse.error('Validation failed', validationResult.errors)
+        );
+        return;
+      }
+
+      // Execute use case
+      const result = await this.updateUserUseCase.execute({
+        id,
+        ...validationResult.data,
+      });
+
+      res.status(HttpStatusCode.OK).json(
+        ApiResponse.success(result, 'User updated successfully')
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public deleteUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      
+      await this.deleteUserUseCase.execute({ id });
+
+      res.status(HttpStatusCode.NO_CONTENT).send();
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public listUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // Validate query parameters
+      const validationResult = await ListUsersValidator.validate(req.query);
+      if (!validationResult.isValid) {
+        res.status(HttpStatusCode.BAD_REQUEST).json(
+          ApiResponse.error('Validation failed', validationResult.errors)
+        );
+        return;
+      }
+
+      // Execute use case
+      const result = await this.listUsersUseCase.execute(validationResult.data);
+
+      res.status(HttpStatusCode.OK).json(
+        ApiResponse.success(result, 'Users retrieved successfully')
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Additional endpoints for specific business operations
+  public activateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      
+      // This would use an ActivateUserUseCase
+      // Implementation depends on your specific business requirements
+      
+      res.status(HttpStatusCode.OK).json(
+        ApiResponse.success(null, 'User activated successfully')
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public deactivateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      
+      // This would use a DeactivateUserUseCase
+      // Implementation depends on your specific business requirements
+      
+      res.status(HttpStatusCode.OK).json(
+        ApiResponse.success(null, 'User deactivated successfully')
+      );
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+```
+
+### Usage Example
+```bash
+bun run hypergen node-clean-api
+# Prompts:
+# API name: user-management-api
+# Database: PostgreSQL + Prisma
+# Authentication: JWT + Passport
+# Documentation: OpenAPI/Swagger
+# Features: [x] Rate Limiting, [x] Caching, [x] Email Service
+
+# Generated: Complete Clean Architecture Node.js API
+```
+
+---
+
+## What's Next?
+
+These framework examples demonstrate production-ready patterns optimized for specific technologies. Each template includes:
+
+- **Modern tooling** and build configurations
+- **Best practices** for the framework ecosystem  
+- **Production-ready** patterns and architectures
+- **Testing setups** with appropriate frameworks
+- **Development workflows** optimized for team collaboration
+
+For more examples and patterns:
+- **[Quick Wins](/examples/quick-wins)** - Simple, immediate solutions
+- **[Real-World Projects](/examples/real-world)** - Complete project examples
+- **[Advanced Patterns](/examples/advanced-patterns)** - Complex composition strategies
+
+<Note>
+Framework examples are regularly updated to reflect the latest versions and best practices. Check the compatibility notes in each template for version requirements.
+</Note>

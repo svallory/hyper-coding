@@ -1,0 +1,1031 @@
+---
+title: "Quick Wins"
+description: "Common patterns and templates developers need immediately - components, configs, and boilerplate code"
+---
+
+# Quick Wins Examples
+
+Get up and running fast with these common patterns and templates. Each example is designed to solve immediate developer needs with copy-paste ready templates.
+
+## Component Generation
+
+### React Component with TypeScript
+
+Generate a complete React component with TypeScript, tests, and documentation.
+
+```yaml title="template.yml"
+name: react-component
+description: Generate a TypeScript React component with tests and stories
+variables:
+  - name: componentName
+    message: Component name (PascalCase)
+    validate: /^[A-Z][a-zA-Z0-9]*$/
+  - name: hasProps
+    message: Does this component accept props?
+    type: confirm
+    default: true
+  - name: includeStories
+    message: Include Storybook stories?
+    type: confirm
+    default: true
+```
+
+**Component Template** (`templates/Component.tsx.ejs.t`)
+```tsx
+---
+to: src/components/<%= componentName %>/<%= componentName %>.tsx
+---
+import React<% if (hasProps) { %>, { FC }<% } %> from 'react';
+<% if (hasProps) { %>
+export interface <%= componentName %>Props {
+  className?: string;
+  children?: React.ReactNode;
+}
+
+export const <%= componentName %>: FC<<%= componentName %>Props> = ({ 
+  className,
+  children,
+  ...props 
+}) => {<% } else { %>
+export const <%= componentName %> = () => {<% } %>
+  return (
+    <div className={`<%= componentName.toLowerCase() %><% if (hasProps) { %> ${className || ''}<% } %>`}<% if (hasProps) { %> {...props}<% } %>>
+      <% if (hasProps) { %>{children || 'Hello from <%= componentName %>!'}<% } else { %>Hello from <%= componentName %>!<% } %>
+    </div>
+  );
+};
+
+export default <%= componentName %>;
+```
+
+**Test Template** (`templates/Component.test.tsx.ejs.t`)
+```tsx
+---
+to: src/components/<%= componentName %>/<%= componentName %>.test.tsx
+---
+import React from 'react';
+import { render, screen } from '@testing-library/react';
+import { <%= componentName %> } from './<%= componentName %>';
+
+describe('<%= componentName %>', () => {
+  it('renders without crashing', () => {
+    render(<<%= componentName %><% if (hasProps) { %> /><% } else { %> /><% } %>);
+    expect(screen.getByText(/hello from <%= componentName.toLowerCase() %>/i)).toBeInTheDocument();
+  });
+
+<% if (hasProps) { %>  it('renders children when provided', () => {
+    const testContent = 'Test content';
+    render(<<%= componentName %>>{testContent}</<%= componentName %>>);
+    expect(screen.getByText(testContent)).toBeInTheDocument();
+  });
+
+  it('applies custom className', () => {
+    const customClass = 'custom-class';
+    const { container } = render(<<%= componentName %> className={customClass} />);
+    expect(container.firstChild).toHaveClass(customClass);
+  });
+<% } %>});
+```
+
+<% if (includeStories) { %>**Storybook Stories** (`templates/Component.stories.tsx.ejs.t`)
+```tsx
+---
+to: src/components/<%= componentName %>/<%= componentName %>.stories.tsx
+---
+import type { Meta, StoryObj } from '@storybook/react';
+import { <%= componentName %> } from './<%= componentName %>';
+
+const meta: Meta<typeof <%= componentName %>> = {
+  title: 'Components/<%= componentName %>',
+  component: <%= componentName %>,
+  parameters: {
+    layout: 'centered',
+  },
+  tags: ['autodocs'],
+<% if (hasProps) { %>  argTypes: {
+    className: {
+      control: 'text',
+      description: 'Additional CSS classes',
+    },
+    children: {
+      control: 'text',
+      description: 'Content to display inside the component',
+    },
+  },<% } %>
+};
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {<% if (hasProps) { %>
+  args: {},<% } %>
+};
+
+<% if (hasProps) { %>export const WithContent: Story = {
+  args: {
+    children: 'Custom content',
+  },
+};
+
+export const WithCustomClass: Story = {
+  args: {
+    className: 'custom-styling',
+    children: 'Styled component',
+  },
+};<% } %>
+```
+<% } %>
+
+**Index File** (`templates/index.ts.ejs.t`)
+```tsx
+---
+to: src/components/<%= componentName %>/index.ts
+---
+export { <%= componentName %><% if (hasProps) { %>, type <%= componentName %>Props<% } %> } from './<%= componentName %>';
+```
+
+### Usage Example
+```bash
+bun run hypergen react-component
+# Prompts:
+# Component name (PascalCase): Button  
+# Does this component accept props? Yes
+# Include Storybook stories? Yes
+
+# Generated files:
+# src/components/Button/Button.tsx
+# src/components/Button/Button.test.tsx  
+# src/components/Button/Button.stories.tsx
+# src/components/Button/index.ts
+```
+
+<Accordion title="What's happening in this template?">
+This template demonstrates several key HyperDev concepts:
+
+- **Conditional rendering**: Uses `<% if (hasProps) { %>` to conditionally include TypeScript interfaces
+- **Variable interpolation**: `<%= componentName %>` inserts the provided component name
+- **Dynamic file paths**: `to: src/components/<%= componentName %>/` creates component-specific directories
+- **Template composition**: Multiple files work together to create a complete component structure
+- **Validation**: Ensures component names follow PascalCase convention
+</Accordion>
+
+---
+
+## API Endpoint Generation
+
+### Express.js REST API Endpoint
+
+Generate a complete Express.js REST API endpoint with validation and tests.
+
+```yaml title="template.yml"
+name: express-endpoint
+description: Generate Express.js REST API endpoint with validation
+variables:
+  - name: resourceName
+    message: Resource name (singular, lowercase)
+    validate: /^[a-z][a-z0-9]*$/
+  - name: includeAuth
+    message: Include authentication middleware?
+    type: confirm
+    default: true
+  - name: includeValidation
+    message: Include input validation?
+    type: confirm  
+    default: true
+```
+
+**Controller Template** (`templates/controller.ts.ejs.t`)
+```typescript
+---
+to: src/controllers/<%= resourceName %>Controller.ts
+---
+import { Request, Response, NextFunction } from 'express';
+<% if (includeValidation) { %>import { validationResult } from 'express-validator';<% } %>
+import { <%= h.inflection.classify(resourceName) %>Service } from '../services/<%= resourceName %>Service';
+
+export class <%= h.inflection.classify(resourceName) %>Controller {
+  private <%= resourceName %>Service: <%= h.inflection.classify(resourceName) %>Service;
+
+  constructor() {
+    this.<%= resourceName %>Service = new <%= h.inflection.classify(resourceName) %>Service();
+  }
+
+  public getAll = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { page = 1, limit = 10 } = req.query;
+      const <%= h.inflection.pluralize(resourceName) %> = await this.<%= resourceName %>Service.findAll({
+        page: Number(page),
+        limit: Number(limit),
+      });
+      
+      res.status(200).json({
+        success: true,
+        data: <%= h.inflection.pluralize(resourceName) %>,
+        message: '<%= h.inflection.classify(h.inflection.pluralize(resourceName)) %> retrieved successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public getById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+<% if (includeValidation) { %>      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array(),
+        });
+        return;
+      }
+<% } %>
+      const { id } = req.params;
+      const <%= resourceName %> = await this.<%= resourceName %>Service.findById(id);
+      
+      if (!<%= resourceName %>) {
+        res.status(404).json({
+          success: false,
+          message: '<%= h.inflection.classify(resourceName) %> not found',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: <%= resourceName %>,
+        message: '<%= h.inflection.classify(resourceName) %> retrieved successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+<% if (includeValidation) { %>      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array(),
+        });
+        return;
+      }
+<% } %>
+      const <%= resourceName %>Data = req.body;
+      const new<%= h.inflection.classify(resourceName) %> = await this.<%= resourceName %>Service.create(<%= resourceName %>Data);
+      
+      res.status(201).json({
+        success: true,
+        data: new<%= h.inflection.classify(resourceName) %>,
+        message: '<%= h.inflection.classify(resourceName) %> created successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public update = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+<% if (includeValidation) { %>      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array(),
+        });
+        return;
+      }
+<% } %>
+      const { id } = req.params;
+      const updateData = req.body;
+      
+      const updated<%= h.inflection.classify(resourceName) %> = await this.<%= resourceName %>Service.update(id, updateData);
+      
+      if (!updated<%= h.inflection.classify(resourceName) %>) {
+        res.status(404).json({
+          success: false,
+          message: '<%= h.inflection.classify(resourceName) %> not found',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: updated<%= h.inflection.classify(resourceName) %>,
+        message: '<%= h.inflection.classify(resourceName) %> updated successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  public delete = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+<% if (includeValidation) { %>      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        res.status(400).json({
+          success: false,
+          message: 'Validation failed',
+          errors: errors.array(),
+        });
+        return;
+      }
+<% } %>
+      const { id } = req.params;
+      const deleted = await this.<%= resourceName %>Service.delete(id);
+      
+      if (!deleted) {
+        res.status(404).json({
+          success: false,
+          message: '<%= h.inflection.classify(resourceName) %> not found',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        message: '<%= h.inflection.classify(resourceName) %> deleted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+```
+
+**Routes Template** (`templates/routes.ts.ejs.t`)
+```typescript
+---
+to: src/routes/<%= resourceName %>Routes.ts
+---
+import { Router } from 'express';
+<% if (includeValidation) { %>import { body, param } from 'express-validator';<% } %>
+<% if (includeAuth) { %>import { authenticate } from '../middleware/auth';<% } %>
+import { <%= h.inflection.classify(resourceName) %>Controller } from '../controllers/<%= resourceName %>Controller';
+
+const router = Router();
+const <%= resourceName %>Controller = new <%= h.inflection.classify(resourceName) %>Controller();
+
+<% if (includeValidation) { %>// Validation rules
+const create<%= h.inflection.classify(resourceName) %>Validation = [
+  body('name').notEmpty().withMessage('Name is required'),
+  // Add more validation rules as needed
+];
+
+const update<%= h.inflection.classify(resourceName) %>Validation = [
+  param('id').isUUID().withMessage('Invalid ID format'),
+  body('name').optional().notEmpty().withMessage('Name cannot be empty'),
+  // Add more validation rules as needed
+];
+
+const idValidation = [
+  param('id').isUUID().withMessage('Invalid ID format'),
+];
+<% } %>
+
+// Routes
+router.get(
+  '/', 
+<% if (includeAuth) { %>  authenticate,<% } %>
+  <%= resourceName %>Controller.getAll
+);
+
+router.get(
+  '/:id', 
+<% if (includeAuth) { %>  authenticate,<% } %>
+<% if (includeValidation) { %>  idValidation,<% } %>
+  <%= resourceName %>Controller.getById
+);
+
+router.post(
+  '/', 
+<% if (includeAuth) { %>  authenticate,<% } %>
+<% if (includeValidation) { %>  create<%= h.inflection.classify(resourceName) %>Validation,<% } %>
+  <%= resourceName %>Controller.create
+);
+
+router.put(
+  '/:id', 
+<% if (includeAuth) { %>  authenticate,<% } %>
+<% if (includeValidation) { %>  update<%= h.inflection.classify(resourceName) %>Validation,<% } %>
+  <%= resourceName %>Controller.update
+);
+
+router.delete(
+  '/:id', 
+<% if (includeAuth) { %>  authenticate,<% } %>
+<% if (includeValidation) { %>  idValidation,<% } %>
+  <%= resourceName %>Controller.delete
+);
+
+export { router as <%= resourceName %>Routes };
+```
+
+### Usage Example
+```bash
+bun run hypergen express-endpoint
+# Prompts:
+# Resource name (singular, lowercase): user
+# Include authentication middleware? Yes  
+# Include input validation? Yes
+
+# Generated files:
+# src/controllers/userController.ts
+# src/routes/userRoutes.ts
+```
+
+---
+
+## Configuration Files
+
+### TypeScript Configuration
+
+Generate production-ready TypeScript configurations for different project types.
+
+```yaml title="template.yml"
+name: typescript-config
+description: Generate TypeScript configuration files
+variables:
+  - name: projectType
+    message: Project type
+    type: list
+    choices:
+      - name: Library
+        value: library
+      - name: Node.js Application  
+        value: node
+      - name: React Application
+        value: react
+      - name: Next.js Application
+        value: nextjs
+  - name: strict
+    message: Enable strict mode?
+    type: confirm
+    default: true
+  - name: includeTests
+    message: Include test configuration?
+    type: confirm
+    default: true
+```
+
+**Main TypeScript Config** (`templates/tsconfig.json.ejs.t`)
+```json
+---
+to: tsconfig.json
+---
+{
+  "compilerOptions": {
+    "target": "<%= projectType === 'library' ? 'ES2020' : 'ES2022' %>",
+    "module": "<%= projectType === 'library' ? 'ESNext' : 'ESNext' %>",
+    "moduleResolution": "node",
+    "lib": [
+<% if (projectType === 'react' || projectType === 'nextjs') { %>      "DOM",
+      "DOM.Iterable",<% } %>
+      "ES2022"
+    ],
+    "allowJs": <%= projectType === 'nextjs' ? 'true' : 'false' %>,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": <%= strict %>,
+<% if (strict) { %>    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,<% } %>
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": <%= projectType === 'nextjs' ? 'true' : 'false' %>,
+<% if (projectType === 'library') { %>    "declaration": true,
+    "declarationMap": true,
+    "outDir": "./dist",<% } %>
+<% if (projectType === 'react' || projectType === 'nextjs') { %>    "jsx": "<%= projectType === 'nextjs' ? 'preserve' : 'react-jsx' %>",<% } %>
+    "moduleDetection": "force",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "baseUrl": ".",
+    "paths": {
+<% if (projectType === 'nextjs') { %>      "@/*": ["./src/*"]<% } else { %>      "@/*": ["./src/*"],
+      "@/types/*": ["./src/types/*"],
+      "@/utils/*": ["./src/utils/*"]<% } %>
+    }
+  },
+  "include": [
+    "src/**/*"<% if (includeTests) { %>,
+    "tests/**/*"<% } %><% if (projectType === 'nextjs') { %>,
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"<% } %>
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"<% if (includeTests) { %>,
+    "coverage"<% } %>
+  ]
+}
+```
+
+<% if (projectType === 'library') { %>**Build Configuration** (`templates/tsconfig.build.json.ejs.t`)
+```json
+---
+to: tsconfig.build.json
+---
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist"
+  },
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts", 
+    "**/*.spec.tsx",
+    "tests/**/*",
+    "**/__tests__/**/*",
+    "**/*.stories.ts",
+    "**/*.stories.tsx"
+  ]
+}
+```
+<% } %>
+
+<% if (includeTests) { %>**Test Configuration** (`templates/tsconfig.test.json.ejs.t`)
+```json
+---
+to: tsconfig.test.json  
+---
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "jest",
+      "node"<% if (projectType === 'react' || projectType === 'nextjs') { %>,
+      "@testing-library/jest-dom"<% } %>
+    ]
+  },
+  "include": [
+    "src/**/*",
+    "tests/**/*",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ]
+}
+```
+<% } %>
+
+### Usage Example
+```bash
+bun run hypergen typescript-config
+# Prompts:
+# Project type: React Application
+# Enable strict mode? Yes
+# Include test configuration? Yes
+
+# Generated files:
+# tsconfig.json
+# tsconfig.test.json
+```
+
+---
+
+## Database Models
+
+### Prisma Schema Generator
+
+Generate Prisma database models with relationships and validations.
+
+```yaml title="template.yml"  
+name: prisma-model
+description: Generate Prisma database model
+variables:
+  - name: modelName
+    message: Model name (singular, PascalCase)
+    validate: /^[A-Z][a-zA-Z0-9]*$/
+  - name: includeTimestamps
+    message: Include created/updated timestamps?
+    type: confirm
+    default: true
+  - name: includeUser
+    message: Include user relationship?
+    type: confirm
+    default: false
+```
+
+**Prisma Model** (`templates/model.prisma.ejs.t`)
+```prisma
+---
+to: prisma/schema/<%= modelName.toLowerCase() %>.prisma
+inject: true
+after: "// Models will be added here"
+---
+
+model <%= modelName %> {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      Status   @default(ACTIVE)
+<% if (includeUser) { %>
+  // User relationship
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+<% } %>
+<% if (includeTimestamps) { %>
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+<% } %>
+
+  @@map("<%= h.inflection.pluralize(modelName.toLowerCase()) %>")
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  PENDING
+  ARCHIVED
+}
+```
+
+**Type Definitions** (`templates/types.ts.ejs.t`)
+```typescript
+---
+to: src/types/<%= modelName.toLowerCase() %>.types.ts
+---
+import { Prisma } from '@prisma/client';
+
+// Base <%= modelName %> type from Prisma
+export type <%= modelName %> = Prisma.<%= modelName %>GetPayload<{}>;
+
+// <%= modelName %> with user relation
+<% if (includeUser) { %>export type <%= modelName %>WithUser = Prisma.<%= modelName %>GetPayload<{
+  include: { user: true }
+}>;<% } %>
+
+// Create <%= modelName %> input type
+export type Create<%= modelName %>Input = Omit<<%= modelName %>, 'id'<% if (includeTimestamps) { %> | 'createdAt' | 'updatedAt'<% } %>>;
+
+// Update <%= modelName %> input type  
+export type Update<%= modelName %>Input = Partial<Create<%= modelName %>Input>;
+
+// <%= modelName %> query filters
+export type <%= modelName %>Filters = {
+  status?: Status;
+<% if (includeUser) { %>  userId?: string;<% } %>
+  name?: string;
+  search?: string;
+};
+
+// Pagination options
+export type PaginationOptions = {
+  page?: number;
+  limit?: number;
+  sortBy?: keyof <%= modelName %>;
+  sortOrder?: 'asc' | 'desc';
+};
+
+export enum Status {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE', 
+  PENDING = 'PENDING',
+  ARCHIVED = 'ARCHIVED',
+}
+```
+
+### Usage Example
+```bash
+bun run hypergen prisma-model
+# Prompts:
+# Model name (singular, PascalCase): Product
+# Include created/updated timestamps? Yes
+# Include user relationship? Yes
+
+# Generated files:
+# prisma/schema/product.prisma (injected into existing schema)
+# src/types/product.types.ts
+```
+
+<Accordion title="Advanced Pattern: Template Helpers">
+Notice how we use `h.inflection.pluralize()` and `h.inflection.classify()` in templates. These are built-in helper functions that:
+
+- **pluralize**: Converts singular words to plural (product → products)
+- **classify**: Converts strings to PascalCase (product → Product)  
+- **tableize**: Converts to snake_case table names
+- **humanize**: Creates human-readable labels
+
+You can also create custom helpers in your template configuration.
+</Accordion>
+
+---
+
+## Package.json Generator  
+
+### Complete Package Configuration
+
+Generate production-ready package.json with scripts, dependencies, and metadata.
+
+```yaml title="template.yml"
+name: package-json
+description: Generate package.json with common configurations
+variables:
+  - name: projectName
+    message: Project name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: projectType
+    message: Project type
+    type: list
+    choices:
+      - name: Library
+        value: library
+      - name: CLI Tool
+        value: cli
+      - name: Web Application
+        value: webapp
+      - name: API Server
+        value: api
+  - name: useTypeScript
+    message: Use TypeScript?
+    type: confirm
+    default: true
+  - name: includeTesting
+    message: Include testing framework?
+    type: confirm
+    default: true
+  - name: includeDocker
+    message: Include Docker configuration?
+    type: confirm
+    default: false
+```
+
+**Package.json Template** (`templates/package.json.ejs.t`)
+```json
+---
+to: package.json
+---
+{
+  "name": "<%= projectName %>",
+  "version": "1.0.0",
+  "description": "",
+  "main": "<% if (projectType === 'library') { %>dist/index.js<% } else { %>src/index.<%= useTypeScript ? 'ts' : 'js' %><% } %>",
+<% if (projectType === 'library') { %>  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],<% } %>
+<% if (projectType === 'cli') { %>  "bin": {
+    "<%= projectName %>": "<% if (useTypeScript) { %>dist/cli.js<% } else { %>src/cli.js<% } %>"
+  },<% } %>
+  "scripts": {
+<% if (useTypeScript) { %>    "build": "tsc<% if (projectType === 'library') { %> -p tsconfig.build.json<% } %>",
+    "build:watch": "tsc --watch",<% } %>
+    "dev": "<% if (projectType === 'webapp') { %>next dev<% } else if (projectType === 'api') { %>nodemon src/index.<%= useTypeScript ? 'ts' : 'js' %><% } else { %>ts-node src/index.ts<% } %>",
+    "start": "<% if (projectType === 'webapp') { %>next start<% } else if (useTypeScript && projectType !== 'library') { %>node dist/index.js<% } else { %>node src/index.js<% } %>",
+<% if (includeTesting) { %>    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",<% } %>
+    "lint": "eslint src/**/*.<%= useTypeScript ? 'ts' : 'js' %><% if (projectType === 'webapp') { %>x<% } %>",
+    "lint:fix": "eslint src/**/*.<%= useTypeScript ? 'ts' : 'js' %><% if (projectType === 'webapp') { %>x<% } %> --fix",
+    "format": "prettier --write \"src/**/*.<%= useTypeScript ? 'ts' : 'js' %><% if (projectType === 'webapp') { %>x<% } %>\"",
+    "format:check": "prettier --check \"src/**/*.<%= useTypeScript ? 'ts' : 'js' %><% if (projectType === 'webapp') { %>x<% } %>\"",
+<% if (projectType === 'library') { %>    "prepublishOnly": "npm run build && npm test",<% } %>
+<% if (includeDocker) { %>    "docker:build": "docker build -t <%= projectName %> .",
+    "docker:run": "docker run -p 3000:3000 <%= projectName %>",<% } %>
+    "typecheck": "<% if (useTypeScript) { %>tsc --noEmit<% } else { %>echo 'No TypeScript configured'<% } %>"
+  },
+  "dependencies": {<% if (projectType === 'webapp') { %>
+    "next": "^14.0.0",
+    "react": "^18.0.0", 
+    "react-dom": "^18.0.0"<% } else if (projectType === 'api') { %>
+    "express": "^4.18.0",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "morgan": "^1.10.0"<% if (useTypeScript) { %>,
+    "@types/express": "^4.17.0",
+    "@types/cors": "^2.8.0",
+    "@types/morgan": "^1.9.0"<% } %><% } else if (projectType === 'cli') { %>
+    "commander": "^11.0.0",
+    "inquirer": "^9.0.0",
+    "chalk": "^5.0.0"<% if (useTypeScript) { %>,
+    "@types/inquirer": "^9.0.0"<% } %><% } %>
+  },
+  "devDependencies": {
+<% if (useTypeScript) { %>    "typescript": "^5.0.0",<% } %>
+<% if (includeTesting) { %>    "jest": "^29.0.0",<% if (useTypeScript) { %>
+    "ts-jest": "^29.0.0",
+    "@types/jest": "^29.0.0",<% } %><% } %>
+    "eslint": "^8.0.0",
+<% if (useTypeScript) { %>    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",<% } %>
+    "prettier": "^3.0.0",
+<% if (projectType === 'api' || projectType === 'cli') { %>    "nodemon": "^3.0.0",<% } %>
+<% if (useTypeScript) { %>    "ts-node": "^10.9.0",<% } %>
+    "husky": "^8.0.0",
+    "lint-staged": "^14.0.0"
+  },
+<% if (projectType === 'library') { %>  "publishConfig": {
+    "access": "public"
+  },<% } %>
+  "lint-staged": {
+    "*.{<%= useTypeScript ? 'ts' : 'js' %><% if (projectType === 'webapp') { %>,tsx<% } %>,json,md}": [
+      "prettier --write"
+    ],
+    "*.{<%= useTypeScript ? 'ts' : 'js' %><% if (projectType === 'webapp') { %>,tsx<% } %>}": [
+      "eslint --fix"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
+}
+```
+
+### Usage Example
+```bash
+bun run hypergen package-json
+# Prompts:
+# Project name (kebab-case): my-awesome-api
+# Project type: API Server  
+# Use TypeScript? Yes
+# Include testing framework? Yes
+# Include Docker configuration? Yes
+
+# Generated files:
+# package.json
+```
+
+---
+
+## Testing Templates
+
+### Jest Configuration
+
+Generate complete Jest testing setup with TypeScript support.
+
+```yaml title="template.yml"
+name: jest-config
+description: Generate Jest testing configuration
+variables:
+  - name: useTypeScript
+    message: Use TypeScript?
+    type: confirm
+    default: true
+  - name: projectType
+    message: Project type
+    type: list
+    choices:
+      - name: Node.js/API
+        value: node
+      - name: React
+        value: react
+      - name: Library
+        value: library
+  - name: includeCoverage
+    message: Include coverage configuration?
+    type: confirm
+    default: true
+```
+
+**Jest Configuration** (`templates/jest.config.js.ejs.t`)
+```javascript
+---
+to: jest.config.js
+---
+/** @type {import('jest').Config} */
+module.exports = {
+<% if (useTypeScript) { %>  preset: 'ts-jest',<% } %>
+  testEnvironment: '<%= projectType === 'react' ? 'jsdom' : 'node' %>',
+  roots: ['<rootDir>/src', '<rootDir>/tests'],
+  testMatch: [
+    '**/__tests__/**/*.<%= useTypeScript ? '(ts|tsx|js|jsx)' : '(js|jsx)' %>',
+    '**/*.(test|spec).<%= useTypeScript ? '(ts|tsx|js|jsx)' : '(js|jsx)' %>'
+  ],
+<% if (useTypeScript) { %>  transform: {
+    '^.+\\.(ts|tsx)$': 'ts-jest',
+  },<% } %>
+  moduleFileExtensions: [<% if (useTypeScript) { %>'ts', 'tsx', <% } %>'js', 'jsx', 'json'],
+  moduleNameMapping: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '^@/types/(.*)$': '<rootDir>/src/types/$1',
+    '^@/utils/(.*)$': '<rootDir>/src/utils/$1',
+  },
+<% if (projectType === 'react') { %>  setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+<% } %>  clearMocks: true,
+  restoreMocks: true,
+<% if (includeCoverage) { %>  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: [
+    'text',
+    'lcov',
+    'html',
+    'json-summary'
+  ],
+  collectCoverageFrom: [
+    'src/**/*.<%= useTypeScript ? '(ts|tsx)' : '(js|jsx)' %>',
+    '!src/**/*.d.ts',
+    '!src/**/*.stories.<%= useTypeScript ? '(ts|tsx)' : '(js|jsx)' %>',
+    '!src/**/*.test.<%= useTypeScript ? '(ts|tsx)' : '(js|jsx)' %>',
+    '!src/**/__tests__/**/*',
+    '!src/index.<%= useTypeScript ? 'ts' : 'js' %>',
+  ],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80,
+    },
+  },<% } %>
+<% if (useTypeScript) { %>  globals: {
+    'ts-jest': {
+      tsconfig: 'tsconfig.test.json',
+      isolatedModules: true,
+    },
+  },<% } %>
+  testTimeout: 10000,
+  verbose: true,
+};
+```
+
+<% if (projectType === 'react') { %>**Test Setup** (`templates/setup.ts.ejs.t`)
+```typescript
+---
+to: tests/setup.ts
+---
+import '@testing-library/jest-dom';
+<% if (useTypeScript) { %>
+// Global test utilities and mocks
+declare global {
+  namespace jest {
+    interface Matchers<R> {
+      toBeInTheDocument(): R;
+      toHaveClass(className: string): R;
+    }
+  }
+}
+<% } %>
+// Mock window.matchMedia
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: jest.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(), // Deprecated
+    removeListener: jest.fn(), // Deprecated
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  })),
+});
+
+// Mock IntersectionObserver
+global.IntersectionObserver = class IntersectionObserver {
+  constructor() {}
+  disconnect() {}
+  observe() {}
+  unobserve() {}
+};
+```
+<% } %>
+
+### Usage Example
+```bash
+bun run hypergen jest-config
+# Prompts:
+# Use TypeScript? Yes
+# Project type: React
+# Include coverage configuration? Yes
+
+# Generated files:
+# jest.config.js
+# tests/setup.ts
+```
+
+---
+
+## What's Next?
+
+These quick win examples get you started immediately with common development patterns. For more complex scenarios, check out:
+
+- **[Real-World Projects](/examples/real-world)** - Complete application examples
+- **[Advanced Patterns](/examples/advanced-patterns)** - Complex template compositions
+- **[Framework Integration](/examples/frameworks)** - Framework-specific templates
+
+<Note>
+All examples are maintained and tested with the latest versions of their respective frameworks and tools.
+</Note>

@@ -1,31 +1,36 @@
 ---
-title: Template Composition Guide
-description: Complete guide to Hypergen V8's template composition, inheritance, and discovery capabilities
+title: Advanced Recipe Composition
+description: Master complex recipe patterns, tool coordination, and advanced Hypergen techniques
+time: 25 minutes
+prerequisites: Created basic templates, understanding of Hypergen concepts
 ---
 
-# Template Composition Guide
+# Advanced Recipe Composition
 
-Hypergen V8 provides powerful template composition capabilities that enable template reuse, inheritance, and conditional inclusion. This guide covers all composition features available in V8.
+**What you'll learn**: Complex recipe patterns, multi-tool coordination, and advanced composition techniques
+**Time needed**: 25 minutes
+**Prerequisites**: Created basic templates, understanding of Hypergen concepts
+
+This guide covers advanced patterns for building sophisticated code generation workflows that coordinate multiple tools and handle complex scenarios.
 
 ## Table of Contents
 
-- [Template.yml Configuration System](#templateyml-configuration-system)
-- [Template Composition & Inheritance](#template-composition--inheritance)
-- [Template Discovery & Sources](#template-discovery--sources)
-- [TypeScript Action Integration](#typescript-action-integration)
-- [LiquidJS Template Engine](#liquidjs-template-engine)
-- [Security & Trust System](#security--trust-system)
+- [Recipe.yml Configuration System](#recipeyml-configuration-system)
+- [Recipe Step System](#recipe-step-system)
+- [Tool Coordination](#tool-coordination)
+- [Step Execution Engine](#step-execution-engine)
+- [Working CLI Commands](#working-cli-commands)
 - [Real-World Examples](#real-world-examples)
 - [Best Practices](#best-practices)
 
-## Template.yml Configuration System
+## Recipe.yml Configuration System
 
 ### Rich Variable System
 
-Create templates with sophisticated variable validation:
+Create recipes with sophisticated variable validation:
 
 ```yaml
-# template.yml
+# recipe.yml
 name: react-component
 description: Create React components with full type safety
 version: 1.0.0
@@ -86,41 +91,17 @@ variables:
 - Nested object validation
 - Array value restrictions
 
-## Template Composition & Inheritance
+## Recipe Step System
 
-### Basic Composition
+### Complete Step Execution Framework
 
-Inherit from remote templates and compose functionality:
+The Recipe Step System coordinates four tools in sequential execution:
 
 ```yaml
-# template.yml with composition
-name: enhanced-component
-description: Component with base functionality and enhancements
+# recipe.yml with complete step system
+name: full-stack-component
+description: Component with all tools coordinated
 version: 1.0.0
-
-# Inherit from a base template
-composition:
-  base: https://github.com/company/base-component
-  
-  # Conditionally include other templates
-  includes:
-    - template: typescript-types
-      condition: typescript == true
-      variables:
-        strictMode: true
-        
-    - template: styled-props
-      condition: styling == "styled-components"
-      variables:
-        theme: dark
-        
-    - template: storybook-setup
-      condition: withStorybook == true
-      
-    - template: testing-setup
-      condition: withTests == true
-      variables:
-        framework: jest
 
 variables:
   name:
@@ -131,691 +112,452 @@ variables:
     type: boolean
     default: true
     
+  includeTests:
+    type: boolean
+    default: false
+    
   styling:
     type: enum
     values: [css, styled-components]
     default: css
+
+steps:
+  # Template Tool - Process template files
+  - name: Generate component
+    tool: template
+    template: component.tsx.ejs
     
-  withStorybook:
-    type: boolean
-    default: false
+  - name: Generate styles
+    tool: template
+    template: styles.scss.ejs
+    when: "{{ styling == 'css' }}"
     
-  withTests:
-    type: boolean
-    default: true
+  # Template Tool - Conditional templates
+  - name: Generate tests
+    tool: template
+    template: component.test.tsx.ejs
+    when: "{{ includeTests }}"
+    
+  # Action Tool - Execute TypeScript functions
+  - name: Setup project structure
+    tool: action
+    action: setup-directories
+    
+  - name: Install dependencies
+    tool: action
+    action: install-packages
+    when: "{{ typescript }}"
+    
+  # CodeMod Tool - Transform existing code
+  - name: Format generated code
+    tool: codemod
+    codemod: prettier-format
+    files: ["src/**/*.{ts,tsx}"]
+    
+  - name: Add TypeScript strict mode
+    tool: codemod
+    codemod: enable-strict-mode
+    files: ["tsconfig.json"]
+    when: "{{ typescript }}"
+    
+  # Recipe Tool - Execute nested recipes
+  - name: Setup testing framework
+    tool: recipe
+    recipe: ./test-setup.yml
+    when: "{{ includeTests }}"
+    
+  - name: Configure styling system
+    tool: recipe
+    recipe: ./styling-setup.yml
+    when: "{{ styling == 'styled-components' }}"
 ```
 
-### Template Sources
+### Step Dependencies and Conditions
 
-Templates can be composed from multiple sources:
-
-**GitHub Repositories:**
-```yaml
-composition:
-  base: https://github.com/user/template-repo
-  includes:
-    - template: https://github.com/company/shared-components/tree/main/base
-```
-
-**NPM Packages:**
-```yaml
-composition:
-  base: @company/base-template
-  includes:
-    - template: @hypergen/react-typescript
-```
-
-**Local Templates:**
-```yaml
-composition:
-  base: ../shared/base-template
-  includes:
-    - template: ./extensions/typescript-support
-```
-
-### Conditional Inclusion
-
-Use powerful condition expressions:
-
-```yaml
-composition:
-  includes:
-    # Simple boolean check
-    - template: typescript-config
-      condition: typescript == true
-      
-    # Complex expressions
-    - template: advanced-styling
-      condition: styling == "styled-components" && theme != "basic"
-      
-    # Array membership
-    - template: hooks-setup
-      condition: features.includes("hooks")
-      
-    # Multiple conditions
-    - template: production-config
-      condition: environment == "production" && deployment.includes("docker")
-```
-
-### Variable Mapping
-
-Pass variables between composed templates:
+Control step execution with conditional logic:
 
 ```yaml
-composition:
-  includes:
-    - template: database-setup
-      variables:
-        # Map local variables to template variables
-        dbType: database
-        connectionPool: maxConnections
-        # Set fixed values
-        ssl: true
-        migrations: auto
-      condition: withDatabase == true
+steps:
+  # Basic conditional execution
+  - name: Generate TypeScript config
+    tool: template
+    template: tsconfig.json.ejs
+    when: "{{ typescript }}"
+    
+  # Complex conditions
+  - name: Setup advanced features
+    tool: action
+    action: setup-advanced
+    when: "{{ typescript && includeTests }}"
+    
+  # Array-based conditions
+  - name: Install React hooks
+    tool: action
+    action: install-hooks
+    when: "{{ features.includes('hooks') }}"
+    
+  # Object property conditions
+  - name: Configure metadata
+    tool: template
+    template: package.json.ejs
+    when: "{{ metadata.version }}"
 ```
 
-## Template Discovery & Sources
+## Tool Coordination
 
-### NPM Integration
+### Template Tool
 
-Discover and use templates from NPM:
+Processes template files with variable substitution:
 
-**Naming Conventions:**
-- `hypergen-*` (e.g., `hypergen-react`, `hypergen-node-api`)
-- `@user/hypergen-*` (e.g., `@company/hypergen-templates`)
-- `@hypergen/template-*` (official templates)
-
-```bash
-# Discover NPM templates
-hypergen discover react
-hypergen discover @company/templates
-hypergen discover database
-
-# Use NPM templates directly
-hypergen @company/hypergen-react --name=Button
+```yaml
+steps:
+  - name: Generate React component
+    tool: template
+    template: component.tsx.ejs  # .ejs or .liquid files
+    # Variables automatically available in template
 ```
 
-### GitHub Discovery
+**Template File Example:**
+```typescript
+// component.tsx.ejs
+import React from 'react';
 
-Find templates via GitHub topics and direct URLs:
+interface <%= name %>Props {
+  children?: React.ReactNode;
+}
 
-**GitHub Conventions:**
-- Repository topic: `hypergen-template`
-- Must contain `template.yml` or `hypergen.yml`
-- Support for specific branches/paths
-
-```bash
-# Discover GitHub templates
-hypergen discover --source=github "react-component"
-hypergen discover --source=github "hypergen-template"
-
-# Use GitHub templates directly
-hypergen url resolve https://github.com/user/my-template
-hypergen https://github.com/user/my-template --name=MyComponent
+export const <%= name %>: React.FC<<%= name %>Props> = ({ children }) => {
+  return (
+    <div className="<%= name.toLowerCase() %>">
+      {children}
+    </div>
+  );
+};
 ```
 
-### Local Template Discovery
+### Action Tool
 
-Organize and discover local templates:
+Executes TypeScript functions with full context:
 
-```bash
-# List local templates
-hypergen template list
-hypergen template list _templates/
-hypergen template list generators/
-
-# Validate templates
-hypergen template validate _templates/my-generator
-hypergen template validate generators/react-components/
+```yaml
+steps:
+  - name: Setup directory structure
+    tool: action
+    action: create-directories  # References function in actions/
 ```
 
-**Local Structure:**
-```
-_templates/
-├── react-components/
-│   ├── template.yml
-│   ├── component.liquid.t
-│   ├── test.liquid.t
-│   └── actions.ts
-├── api-endpoints/
-│   ├── template.yml
-│   ├── controller.liquid.t
-│   └── routes.liquid.t
-└── shared/
-    └── base-template/
-        ├── template.yml
-        └── common.liquid.t
-```
-
-## TypeScript Action Integration
-
-### Modern Action System
-
-Combine template composition with TypeScript actions:
-
+**Action File Example:**
 ```typescript
 // actions.ts
-import { action } from 'hypergen/actions';
 import type { ActionContext, ActionResult } from 'hypergen/types';
 
-async function createEnhancedComponent(context: ActionContext): Promise<ActionResult> {
+export async function createDirectories(context: ActionContext): Promise<ActionResult> {
   const { args, utils, logger } = context;
   
-  // Use template composition results
-  const hasTypescript = args.typescript === true;
-  const hasStyling = args.styling !== 'css';
+  await utils.createDirectory(`src/components/${args.name}`);
+  await utils.createDirectory(`src/components/${args.name}/tests`);
   
-  // Create directory structure
-  const componentDir = `src/components/${args.name}`;
-  await utils.createDirectory(componentDir);
-  
-  // Conditional file generation based on composition
-  if (hasTypescript) {
-    await utils.createDirectory(`${componentDir}/types`);
-    logger.info('📝 Created TypeScript types directory');
-  }
-  
-  if (hasStyling) {
-    await utils.createDirectory(`${componentDir}/styles`);
-    logger.info('🎨 Created styles directory');
-  }
-  
-  // Generate files based on template composition
-  const files = [`${componentDir}/${args.name}.tsx`];
-  
-  if (args.withTests) {
-    files.push(`${componentDir}/${args.name}.test.tsx`);
-  }
-  
-  if (args.withStorybook) {
-    files.push(`${componentDir}/${args.name}.stories.tsx`);
-  }
-  
-  logger.info(`✅ Created enhanced component ${args.name}`);
+  logger.info(`✅ Created directories for ${args.name}`);
   
   return { 
     success: true,
-    files: files,
-    metadata: {
-      componentName: args.name,
-      hasTypescript,
-      hasStyling,
-      features: args.features || []
-    }
+    files: [`src/components/${args.name}`]
   };
 }
-
-// Bun-compatible decorator application
-const decoratedAction = action({
-  name: 'create-enhanced-component',
-  description: 'Create a React component with composition-based enhancements',
-  category: 'react',
-  parameters: {
-    name: { type: 'string', required: true },
-    typescript: { type: 'boolean', default: true },
-    styling: { type: 'enum', values: ['css', 'styled-components', 'emotion'], default: 'css' },
-    withTests: { type: 'boolean', default: true },
-    withStorybook: { type: 'boolean', default: false },
-    features: { type: 'array', values: ['hooks', 'context', 'memo'], default: [] }
-  }
-})(createEnhancedComponent);
-
-export { decoratedAction as createEnhancedComponent };
 ```
 
-### Action Discovery
+### CodeMod Tool
 
-Actions are automatically discovered and integrated:
+Transforms existing code using AST modifications:
 
-```bash
-# List all discovered actions
-hypergen action list
-
-# Get detailed action information
-hypergen action info create-enhanced-component
-
-# Execute action with composition
-hypergen create-enhanced-component --name=UserCard --typescript=true --styling=styled-components
+```yaml
+steps:
+  - name: Format all TypeScript files
+    tool: codemod
+    codemod: prettier-format
+    files: ["src/**/*.{ts,tsx}"]
+    
+  - name: Add strict null checks
+    tool: codemod
+    codemod: enable-strict-nulls
+    files: ["tsconfig.json"]
 ```
 
-## LiquidJS Template Engine
+### Recipe Tool
 
-### Advanced Template Features
+Executes nested recipes for composition:
 
-Use LiquidJS for powerful templating with composition context:
+```yaml
+steps:
+  - name: Setup testing framework
+    tool: recipe
+    recipe: ./sub-recipes/jest-setup.yml
+    
+  - name: Configure CI/CD
+    tool: recipe
+    recipe: https://github.com/company/ci-setup/recipe.yml
+```
 
-```liquid
----
-to: src/components/{{ name }}/{{ name }}.{{ typescript | ternary: "tsx", "jsx" }}
-skip_if: {{ name == "Skip" }}
----
-import React{% if typescript %}, { FC }{% endif %} from 'react';
-{% if styling == "styled-components" %}
-import styled from 'styled-components';
-{% endif %}
-{% if features contains "hooks" %}
-import { useState, useEffect } from 'react';
-{% endif %}
+## Step Execution Engine
 
-{% if typescript %}
-interface {{ name }}Props {
-  children?: React.ReactNode;
-  {% if features contains "context" %}
-  context?: any;
-  {% endif %}
-}
-{% endif %}
+### RecipeEngine Architecture
 
-{% if styling == "styled-components" %}
-const {{ name }}Container = styled.div`
-  /* Styled components styles */
-  padding: 1rem;
-  border-radius: 0.5rem;
-`;
-{% endif %}
+The RecipeEngine coordinates the entire execution:
 
-{% if features contains "memo" %}
-const {{ name }}Component{% if typescript %}: FC<{{ name }}Props>{% endif %} = React.memo(({% if typescript %}{ children, ...props }: {{ name }}Props{% else %}props{% endif %}) => {
-{% else %}
-export const {{ name }}{% if typescript %}: FC<{{ name }}Props>{% endif %} = ({% if typescript %}{ children, ...props }: {{ name }}Props{% else %}props{% endif %}) => {
-{% endif %}
-  {% if features contains "hooks" %}
-  const [isLoaded, setIsLoaded] = useState(false);
-  
-  useEffect(() => {
-    setIsLoaded(true);
-  }, []);
-  {% endif %}
+```typescript
+// Usage example
+import { RecipeEngine } from 'hypergen/recipe-engine';
 
-  return (
-    {% if styling == "styled-components" %}
-    <{{ name }}Container>
-    {% else %}
-    <div className="{{ name | kebabCase }}">
-    {% endif %}
-      <h1>{{ name | humanize }}</h1>
-      {% if features contains "hooks" %}
-      {isLoaded && (
-        <p>Component loaded successfully!</p>
-      )}
-      {% endif %}
-      {children}
-    {% if styling == "styled-components" %}
-    </{{ name }}Container>
-    {% else %}
-    </div>
-    {% endif %}
-  );
-{% if features contains "memo" %}
+const engine = new RecipeEngine({
+  workingDir: process.cwd(),
+  enableDebugLogging: true
 });
 
-export const {{ name }} = {{ name }}Component;
-{% else %}
-};
-{% endif %}
-
-{% if typescript %}
-export type { {{ name }}Props };
-{% endif %}
+// Execute complete recipe
+const result = await engine.executeRecipe('my-component.yml', {
+  variables: { name: 'Button', typescript: true },
+  dryRun: false
+});
 ```
 
-### Rich Filter System
+### StepExecutor Coordination
 
-LiquidJS provides extensive filters:
+The StepExecutor manages individual step execution:
 
-```liquid
-{{ name | camelCase }}          # userName
-{{ name | pascalCase }}         # UserName
-{{ name | snakeCase }}          # user_name
-{{ name | kebabCase }}          # user-name
-{{ name | constantCase }}       # USER_NAME
-{{ name | pluralize }}          # users
-{{ name | singularize }}        # user
-{{ name | humanize }}           # User name
-{{ name | titleize }}           # User Name
-{{ name | capitalize }}         # User name
-```
+- **Sequential Execution**: Steps run in defined order
+- **Conditional Logic**: `when` clauses control execution
+- **Context Sharing**: Variables available across all steps
+- **Error Handling**: Continue or fail based on configuration
+- **Progress Tracking**: Real-time step completion reporting
 
-## Security & Trust System
+## Working CLI Commands
 
-### Creator Trust Management
-
-Safely use templates from remote sources:
+### Recipe Execution Commands
 
 ```bash
-# Trust a GitHub user/organization
-hypergen trust @username
-hypergen trust @company
+# Execute complete recipe with all steps
+hypergen recipe execute my-component.yml --name=Button --typescript=true
 
-# Trust for specific operations
-hypergen trust @company --scope=templates
-hypergen trust @dev-team --scope=actions
+# Validate recipe configuration
+hypergen recipe validate my-component.yml
 
-# List trusted creators
-hypergen trust list
+# Show recipe details and all steps
+hypergen recipe info my-component.yml
 
-# Revoke trust
-hypergen trust revoke @username
+# List available recipes
+hypergen recipe list ./recipes
+
+# Dry run - see what would be generated
+hypergen recipe execute my-component.yml --name=Button --dryRun
 ```
 
-### Safe Template Execution
+### Step-by-Step Execution
 
-Hypergen V8 includes comprehensive security features:
+```bash
+# List all steps in a recipe
+hypergen step list my-component.yml
 
-**Security Model:**
-- No `eval()` usage (LiquidJS benefit)
-- Sandboxed template execution
-- Explicit consent for untrusted templates
-- Transparent logging of remote access
-- Template validation before execution
+# Execute a single step by name
+hypergen step execute my-component.yml "Generate component" --name=Button
 
-**Trust Workflow:**
-1. Template requested from untrusted source
-2. User prompted with template details and creator info
-3. One-time consent or permanent trust decision
-4. Template cached with trust metadata
-5. Future uses skip consent for trusted creators
+# Execute specific step with different variables
+hypergen step execute my-component.yml "Setup tests" --name=Button --includeTests=true
+```
+
+### Flags and Options
+
+```bash
+# Common execution flags
+hypergen recipe execute recipe.yml \
+  --name=MyComponent \          # Variable values
+  --typescript=true \            # Boolean variables  
+  --dryRun \                     # Don't write files
+  --force \                      # Overwrite existing files
+  --skipPrompts \                # Use defaults
+  --continueOnError              # Don't stop on step failures
+```
 
 ## Real-World Examples
 
-### Full-Stack Component Generation
+### Complete React Component Recipe
 
 ```yaml
-# template.yml
-name: fullstack-component
-description: Generate component with API integration
+name: react-component-full
+description: Complete React component with all toolchain integration
 version: 1.0.0
 
-composition:
-  base: @hypergen/react-component
-  includes:
-    - template: @hypergen/api-client
-      condition: withApi == true
-      variables:
-        endpoint: api/{{ name | kebabCase }}
-        method: GET
-        
-    - template: @company/styled-system
-      condition: styling == "styled-system"
-      
-    - template: ./local/testing-utils
-      condition: withTests == true
-
-variables:
-  name:
-    type: string
-    required: true
-    
-  withApi:
-    type: boolean
-    default: true
-    
-  apiEndpoint:
-    type: string
-    default: ""
-    
-  styling:
-    type: enum
-    values: [css, styled-components, styled-system]
-    default: css
-    
-  withTests:
-    type: boolean
-    default: true
-```
-
-### Micro-Service Template
-
-```yaml
-# template.yml
-name: microservice
-description: Complete microservice with all configurations
-version: 2.0.0
-
-composition:
-  base: https://github.com/company/base-service
-  includes:
-    - template: database-integration
-      condition: database != "none"
-      variables:
-        type: "{{ database }}"
-        migrations: true
-        
-    - template: auth-middleware
-      condition: requiresAuth == true
-      
-    - template: docker-config
-      condition: deployment.includes("docker")
-      
-    - template: k8s-config
-      condition: deployment.includes("kubernetes")
-
-variables:
-  serviceName:
-    type: string
-    required: true
-    pattern: ^[a-z][a-z0-9-]*$
-    
-  database:
-    type: enum
-    values: [none, postgres, mongodb, mysql]
-    default: postgres
-    
-  requiresAuth:
-    type: boolean
-    default: true
-    
-  deployment:
-    type: array
-    values: [docker, kubernetes, serverless]
-    default: [docker]
-    
-  port:
-    type: number
-    default: 3000
-    min: 1000
-    max: 65535
-```
-
-### Design System Component
-
-```yaml
-# template.yml
-name: design-system-component
-description: Component following design system patterns
-version: 1.0.0
-
-composition:
-  base: @company/design-system-base
-  includes:
-    - template: accessibility-features
-      variables:
-        level: AA
-        
-    - template: responsive-behavior
-      condition: responsive == true
-      
-    - template: theme-integration
-      variables:
-        tokens: "{{ themeTokens }}"
-        
-    - template: documentation-generation
-      condition: withDocs == true
-
-variables:
-  componentType:
-    type: enum
-    values: [atom, molecule, organism, template, page]
-    required: true
-    
-  responsive:
-    type: boolean
-    default: true
-    
-  themeTokens:
-    type: array
-    values: [colors, typography, spacing, shadows, borders]
-    default: [colors, spacing]
-    
-  withDocs:
-    type: boolean
-    default: true
-    
-  accessibility:
-    type: object
-    properties:
-      level: { type: enum, values: [A, AA, AAA], default: AA }
-      features: { type: array, values: [keyboard, screenReader, highContrast] }
-```
-
-## Best Practices
-
-### Template Design
-
-**1. Use Clear Variable Names**
-```yaml
-# Good
-variables:
-  componentName: { type: string, required: true }
-  includeTests: { type: boolean, default: true }
-  
-# Avoid
-variables:
-  n: { type: string }
-  t: { type: boolean }
-```
-
-**2. Provide Rich Descriptions**
-```yaml
-variables:
-  deploymentTarget:
-    type: enum
-    values: [development, staging, production]
-    default: development
-    description: "Target environment for deployment configuration"
-```
-
-**3. Use Composition Thoughtfully**
-```yaml
-composition:
-  base: @company/base-template  # Stable, well-tested base
-  includes:
-    - template: experimental-features
-      condition: enableExperimentalFeatures == true  # Opt-in only
-```
-
-### Performance Optimization
-
-**1. Conditional Loading**
-- Only include templates that are actually needed
-- Use specific conditions to avoid unnecessary composition
-
-**2. Caching Strategy**
-- Remote templates are automatically cached
-- Local template discovery is optimized with hash indexing
-
-**3. Parallel Processing**
-- Template discovery happens in parallel
-- Multiple composition sources resolved concurrently
-
-### Security Guidelines
-
-**1. Trust Management**
-- Be selective with trust decisions
-- Review template sources before trusting
-- Use organization-level trust for team templates
-
-**2. Template Validation**
-- Always validate templates before use
-- Use the built-in validation commands
-- Test templates in safe environments first
-
-**3. Source Verification**
-- Prefer official and well-maintained templates
-- Review template code when possible
-- Use version pinning for production templates
-
-### Error Handling
-
-**1. Graceful Degradation**
-```yaml
-composition:
-  includes:
-    - template: optional-enhancement
-      condition: advancedFeatures == true
-      continueOnError: true  # Don't fail if template unavailable
-```
-
-**2. Clear Error Messages**
-```yaml
 variables:
   name:
     type: string
     required: true
     pattern: ^[A-Z][a-zA-Z0-9]*$
-    description: "Component name in PascalCase (e.g., UserProfile)"
+    
+  typescript:
+    type: boolean
+    default: true
+    
+  styling:
+    type: enum
+    values: [css, scss, styled-components, emotion]
+    default: css
+    
+  features:
+    type: array
+    values: [hooks, context, memo, forwardRef, suspense]
+    default: []
+    
+  withTests:
+    type: boolean
+    default: true
+    
+  withStorybook:
+    type: boolean
+    default: false
+
+steps:
+  # Template Tool - Generate base files
+  - name: Generate component file
+    tool: template
+    template: component.tsx.ejs
+    
+  - name: Generate styles
+    tool: template
+    template: styles.scss.ejs
+    when: "{{ styling === 'scss' }}"
+    
+  - name: Generate TypeScript types
+    tool: template
+    template: types.d.ts.ejs
+    when: "{{ typescript }}"
+    
+  # Action Tool - Setup project structure
+  - name: Create component directory
+    tool: action
+    action: setup-component-structure
+    
+  - name: Install styled-components
+    tool: action
+    action: install-styling-deps
+    when: "{{ styling === 'styled-components' }}"
+    
+  # Template Tool - Generate test files
+  - name: Generate component tests
+    tool: template
+    template: component.test.tsx.ejs
+    when: "{{ withTests }}"
+    
+  - name: Generate Storybook story
+    tool: template
+    template: component.stories.tsx.ejs
+    when: "{{ withStorybook }}"
+    
+  # CodeMod Tool - Transform and optimize
+  - name: Format all generated files
+    tool: codemod
+    codemod: prettier-format
+    files: ["src/**/*.{ts,tsx,scss}"]
+    
+  - name: Optimize imports
+    tool: codemod
+    codemod: organize-imports
+    files: ["src/**/*.{ts,tsx}"]
+    when: "{{ typescript }}"
+    
+  - name: Add React.memo optimization
+    tool: codemod
+    codemod: add-memo-wrapper
+    files: ["src/components/{{ name }}.tsx"]
+    when: "{{ features.includes('memo') }}"
+    
+  # Recipe Tool - Execute related recipes
+  - name: Setup Jest testing
+    tool: recipe
+    recipe: ./test-setup.yml
+    when: "{{ withTests }}"
+    
+  - name: Configure Storybook
+    tool: recipe
+    recipe: ./storybook-setup.yml
+    when: "{{ withStorybook }}"
+    
+  # Action Tool - Final setup
+  - name: Update index exports
+    tool: action
+    action: update-exports
+    
+  - name: Run initial tests
+    tool: action
+    action: run-tests
+    when: "{{ withTests }}"
 ```
 
-## Troubleshooting
+### Execution Examples
 
-### Common Issues
-
-**Template Not Found:**
 ```bash
-# Check template discovery
-hypergen template list
-hypergen discover <template-name>
+# Basic component
+hypergen recipe execute react-component-full.yml --name=Button
 
-# Validate template structure
-hypergen template validate <path>
+# Advanced component with all features
+hypergen recipe execute react-component-full.yml \
+  --name=AdvancedButton \
+  --typescript=true \
+  --styling=styled-components \
+  --features=hooks,memo,forwardRef \
+  --withTests=true \
+  --withStorybook=true
+
+# Step-by-step execution for debugging
+hypergen step list react-component-full.yml
+hypergen step execute react-component-full.yml "Generate component file" --name=Button
+hypergen step execute react-component-full.yml "Format all generated files"
 ```
 
-**Composition Failures:**
-```bash
-# Check network connectivity for remote templates
-curl -I https://github.com/user/template
+## Best Practices
 
-# Verify trust settings
-hypergen trust list
+### Step Organization
 
-# Check template compatibility
-hypergen template validate --composition <path>
+1. **Group Related Steps**: Keep template generation together, then actions, then codemods
+2. **Use Descriptive Names**: Step names should clearly indicate what they do
+3. **Conditional Logic**: Use `when` clauses to make steps conditional
+4. **Error Handling**: Design steps to be recoverable from failures
+
+### Tool Selection Guidelines
+
+- **Template Tool**: For generating new files from templates
+- **Action Tool**: For file system operations, package management, shell commands
+- **CodeMod Tool**: For modifying existing files programmatically  
+- **Recipe Tool**: For composing functionality from other recipes
+
+### Variable Design
+
+```yaml
+variables:
+  # Use descriptive names and types
+  componentName:
+    type: string
+    required: true
+    pattern: ^[A-Z][a-zA-Z0-9]*$
+    description: React component name in PascalCase
+    
+  # Provide sensible defaults
+  includeTests:
+    type: boolean
+    default: true
+    description: Generate test files alongside component
+    
+  # Use enums for predefined choices
+  framework:
+    type: enum
+    values: [react, vue, svelte, angular]
+    default: react
+    description: Frontend framework to target
 ```
 
-**Variable Validation Errors:**
-```bash
-# Use debug mode for detailed validation info
-DEBUG=hypergen:validation hypergen <template> --name=Test
-```
+### Performance Optimization
 
-### Getting Help
+- **Minimize Step Count**: Combine related operations when possible
+- **Use Conditional Steps**: Avoid unnecessary work with `when` clauses
+- **Cache Template Results**: Let the engine cache processed templates
+- **Parallel Safe**: Design steps that don't interfere with each other
 
-- Built-in help: `hypergen help`
-- Template validation: `hypergen template validate <path>`
-- Action information: `hypergen action info <action>`
-- System status: `hypergen system status`
-- GitHub Issues: [Report problems](https://github.com/svallory/hypergen/issues)
-
-## Migration from V7
-
-### Gradual Adoption
-
-V8's composition features are fully optional:
-
-1. **Existing templates work unchanged** - No migration required
-2. **Add template.yml gradually** - Enhance templates over time
-3. **Use LiquidJS selectively** - Mix with existing EJS templates
-4. **Enable discovery when ready** - Start with local templates
-
-### Enhanced Capabilities
-
-V8 adds powerful new features while maintaining compatibility:
-
-- Rich variable validation
-- Template composition and inheritance  
-- Multi-source template discovery
-- TypeScript action integration
-- Enhanced security with trust system
-
-The composition system represents a major advancement in template reusability and maintainability, enabling sophisticated template architectures while keeping simple use cases simple.
+The Recipe Step System provides a complete, production-ready framework for coordinating code generation tools. All features are implemented and ready for use in your projects.

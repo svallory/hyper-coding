@@ -1,0 +1,221 @@
+# V8 Recipe Step System Example
+# This example demonstrates the new Recipe Step System in Hypergen V8
+
+name: react-component-recipe
+description: Generate a complete React component with tests, styles, and documentation
+version: 1.0.0
+author: Hypergen Team
+category: react
+tags: [react, component, typescript, testing]
+
+variables:
+  # Component configuration
+  componentName:
+    type: string
+    required: true
+    description: Name of the React component (PascalCase)
+    pattern: "^[A-Z][a-zA-Z0-9]*$"
+  
+  # Feature flags
+  includeTests:
+    type: boolean
+    default: true
+    description: Generate test files
+  
+  includeStories:
+    type: boolean
+    default: false
+    description: Generate Storybook stories
+  
+  includeStyles:
+    type: boolean
+    default: true
+    description: Generate CSS module
+  
+  # Component type
+  componentType:
+    type: enum
+    values: [functional, class]
+    default: functional
+    description: Type of React component to generate
+  
+  # Directory structure
+  outputDir:
+    type: string
+    default: "src/components"
+    description: Output directory for generated files
+
+steps:
+  # Step 1: Generate the main component file
+  - name: Generate component
+    tool: template
+    template: react-component.tsx.ejs
+    description: Generate the main React component TypeScript file
+    outputDir: "{{ outputDir }}/{{ componentName }}"
+    templateConfig:
+      variables:
+        componentName: "{{ componentName }}"
+        componentType: "{{ componentType }}"
+    
+  # Step 2: Generate styles (conditional)
+  - name: Generate styles
+    tool: template
+    template: component-styles.module.css.ejs
+    description: Generate CSS module for component styling
+    when: "{{ includeStyles }}"
+    outputDir: "{{ outputDir }}/{{ componentName }}"
+    dependsOn: ["Generate component"]
+    parallel: true
+    templateConfig:
+      variables:
+        componentName: "{{ componentName }}"
+  
+  # Step 3: Generate tests (conditional, can run in parallel with styles)
+  - name: Generate tests
+    tool: template
+    template: component-test.test.tsx.ejs
+    description: Generate Jest/Testing Library test file
+    when: "{{ includeTests }}"
+    outputDir: "{{ outputDir }}/{{ componentName }}"
+    dependsOn: ["Generate component"]
+    parallel: true
+    templateConfig:
+      variables:
+        componentName: "{{ componentName }}"
+        componentType: "{{ componentType }}"
+  
+  # Step 4: Generate Storybook stories (conditional)
+  - name: Generate stories
+    tool: template
+    template: component-stories.stories.tsx.ejs
+    description: Generate Storybook stories file
+    when: "{{ includeStories }}"
+    outputDir: "{{ outputDir }}/{{ componentName }}"
+    dependsOn: ["Generate component"]
+    parallel: true
+    templateConfig:
+      variables:
+        componentName: "{{ componentName }}"
+        componentType: "{{ componentType }}"
+  
+  # Step 5: Generate index file for easy imports
+  - name: Generate index
+    tool: template
+    template: component-index.ts.ejs
+    description: Generate index.ts file for component exports
+    outputDir: "{{ outputDir }}/{{ componentName }}"
+    dependsOn: ["Generate component"]
+    templateConfig:
+      variables:
+        componentName: "{{ componentName }}"
+        includeStyles: "{{ includeStyles }}"
+  
+  # Step 6: Update parent index (using action)
+  - name: Update parent index
+    tool: action
+    action: update-component-index
+    description: Add component to parent directory index file
+    parameters:
+      componentName: "{{ componentName }}"
+      componentDir: "{{ outputDir }}/{{ componentName }}"
+      parentDir: "{{ outputDir }}"
+    dependsOn: ["Generate index"]
+  
+  # Step 7: Format generated code (using codemod)
+  - name: Format code
+    tool: codemod
+    codemod: prettier-format
+    description: Format all generated files with Prettier
+    files: 
+      - "{{ outputDir }}/{{ componentName }}/**/*.{ts,tsx,css,json}"
+    dependsOn: ["Generate styles", "Generate tests", "Generate stories", "Update parent index"]
+    continueOnError: true
+    codemodConfig:
+      transform:
+        preserveFormatting: false
+      validation:
+        validateSyntax: true
+  
+  # Step 8: Run linting (optional step that can fail)
+  - name: Lint code
+    tool: action
+    action: eslint-check
+    description: Run ESLint on generated TypeScript files
+    parameters:
+      files: "{{ outputDir }}/{{ componentName }}/**/*.{ts,tsx}"
+      fix: true
+    dependsOn: ["Format code"]
+    continueOnError: true
+    retries: 1
+    timeout: 30000
+
+# Recipe execution settings
+settings:
+  timeout: 120000  # 2 minute timeout for entire recipe
+  retries: 1       # Retry failed steps once
+  continueOnError: false  # Stop on first error
+  maxParallelSteps: 4     # Allow up to 4 steps to run in parallel
+  workingDir: "."         # Execute in current directory
+
+# Example configurations
+examples:
+  - title: Basic functional component
+    description: Generate a simple functional component with tests and styles
+    variables:
+      componentName: "UserCard"
+      componentType: "functional"
+      includeTests: true
+      includeStyles: true
+      includeStories: false
+  
+  - title: Class component with stories
+    description: Generate a class component with Storybook stories
+    variables:
+      componentName: "DataTable"
+      componentType: "class"
+      includeTests: true
+      includeStyles: true
+      includeStories: true
+      outputDir: "src/components/tables"
+  
+  - title: Minimal component
+    description: Generate just the component file without extras
+    variables:
+      componentName: "SimpleButton"
+      includeTests: false
+      includeStyles: false
+      includeStories: false
+
+# Dependencies and outputs
+dependencies:
+  - name: react
+    type: npm
+    version: "^18.0.0"
+    description: React library for component generation
+  - name: typescript
+    type: npm
+    version: "^5.0.0"
+    optional: true
+    dev: true
+    description: TypeScript for type checking
+
+outputs:
+  - "{{ outputDir }}/{{ componentName }}/{{ componentName }}.tsx"
+  - "{{ outputDir }}/{{ componentName }}/{{ componentName }}.module.css"
+  - "{{ outputDir }}/{{ componentName }}/{{ componentName }}.test.tsx"
+  - "{{ outputDir }}/{{ componentName }}/{{ componentName }}.stories.tsx"
+  - "{{ outputDir }}/{{ componentName }}/index.ts"
+
+# Engine requirements
+engines:
+  hypergen: "^8.0.0"
+  node: "^18.0.0"
+
+# Lifecycle hooks
+hooks:
+  beforeRecipe:
+    - "echo 'Starting React component generation...'"
+  afterRecipe:
+    - "echo 'Component generation completed successfully!'"
+  onError:
+    - "echo 'Component generation failed. Check the logs for details.'"

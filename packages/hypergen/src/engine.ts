@@ -1,7 +1,7 @@
 /**
  * Hypergen V8 Engine
  * 
- * Clean V8-only implementation without legacy compatibility
+ * Modern implementation for Hypergen V8
  */
 
 import type { ActionResult, ResolvedRunnerConfig } from './types.js'
