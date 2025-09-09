@@ -204,6 +204,20 @@ export class ActionExecutor {
   }
 
   /**
+   * Execute an action without interactive prompts (uses defaults or provided parameters)
+   */
+  async execute(
+    actionName: string,
+    parameters: Record<string, any> = {},
+    context: Partial<ActionContext> = {}
+  ): Promise<ActionResult> {
+    return this.executeInteractively(actionName, parameters, context, {
+      useDefaults: true,
+      skipOptional: true
+    })
+  }
+
+  /**
    * Execute multiple actions in sequence
    */
   async executeSequence(

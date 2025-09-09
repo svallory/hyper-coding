@@ -1,0 +1,38 @@
+{
+  "name": "mintlify-tsdocs",
+  "version": "7.26.32",
+  "description": "Read JSON files from api-extractor, generate documentation pages",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/rushstack.git",
+    "directory": "apps/api-documenter"
+  },
+  "homepage": "https://api-extractor.com/",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc && cp -r src/schemas lib/",
+    "clean": "rm -rf lib",
+    "rebuild": "bun run clean && bun run build",
+    "docs:extract": "api-extractor run --local",
+    "docs:generate": "node ./bin/mintlify-tsdocs markdown --tab-name Packages --group mintlify-tsdocs --menu --readme -o ../docs/packages/mintlify-tsdocs --docs-json ../docs/docs.json",
+    "docs": "bun run build && bun run docs:extract && bun run docs:generate"
+  },
+  "bin": {
+    "api-documenter": "./bin/mintlify-tsdocs"
+  },
+  "main": "lib/index.js",
+  "typings": "dist/rollup.d.ts",
+  "dependencies": {
+    "@microsoft/api-extractor-model": "^7.30.7",
+    "@microsoft/tsdoc": "^0.15.1",
+    "@rushstack/node-core-library": "^5.14.0",
+    "@rushstack/terminal": "^0.15.4",
+    "@rushstack/ts-command-line": "^5.0.2",
+    "resolve": "~1.22.1"
+  },
+  "devDependencies": {
+    "@types/resolve": "1.20.2",
+    "@types/node": "^18.0.0",
+    "typescript": "^5.0.0"
+  }
+}

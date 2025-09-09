@@ -287,25 +287,64 @@ hyper develop --watch --focus auth
 
 ## Configuration
 
-### Global Settings Impact
+The `hyper init` command respects HyperDev's configuration hierarchy, applying settings in priority order:
 
-Your global configuration affects init behavior:
+### Configuration Priority (Highest to Lowest)
+
+1. **Command-line flags** - Always take precedence
+2. **Environment variables** - `HYPERDEV_*` variables
+3. **Project context** - Inherited from parent directories
+4. **User configuration** - Your personal defaults
+5. **System defaults** - Built-in fallbacks
+
+### Setting Init Defaults
 
 ```bash
-# Set defaults for all new projects
+# Set user-level defaults (affects all new projects)
 hyper config set default-template fullstack-saas
 hyper config set default-ide cursor  
 hyper config set ai-provider openai
 
-# These become defaults for hyper init
+# Set environment-specific defaults
+export HYPERDEV_DEFAULT_TEMPLATE=minimal
+export HYPERDEV_DEFAULT_IDE=vscode
+
+# Command-line flags override all other settings
+hyper init --template react-lib --ide cursor --ai-provider anthropic
 ```
 
-### Project-Specific Overrides
+### Configuration Examples
 
-```bash
-# Override global defaults for this project
-hyper init --template minimal --ide vscode --ai-provider anthropic
+<CodeGroup>
+```bash User Defaults
+# These settings apply to all new projects
+~/.hyperdevrc.js:
+{
+  defaults: {
+    template: "fullstack-saas",
+    ide: "cursor",
+    aiProvider: "openai"
+  }
+}
 ```
+
+```bash Environment Override
+# Override user defaults with environment variables
+export HYPERDEV_DEFAULT_TEMPLATE=minimal
+export HYPERDEV_AI_PROVIDER=anthropic
+hyper init  # Uses environment settings
+```
+
+```bash Command Override
+# Command flags have highest priority
+hyper init --template react-lib --ide vscode
+# Ignores both user defaults and environment variables
+```
+</CodeGroup>
+
+<Tip>
+**Configuration Tip**: Use `hyper config show` to see your resolved configuration before running `hyper init` to understand which settings will be applied.
+</Tip>
 
 ## Troubleshooting
 

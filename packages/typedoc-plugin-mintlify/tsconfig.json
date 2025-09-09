@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.options.json", 
+  "compilerOptions": {
+    "outDir": "./dist",
+    "esModuleInterop": true,
+    "emitDeclarationOnly": false,
+    "noEmit": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["./dist", "./test", "**/*.spec.ts"]
+}

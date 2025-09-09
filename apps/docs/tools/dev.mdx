@@ -6,104 +6,164 @@ og:title: "dev: Execution Control"
 og:description: "Real-time AI assistant monitoring and control with quality gates, validation checkpoints, and continuous verification loops for controlled development execution."
 ---
 
-# dev: Execution Control & AI Monitoring
+# dev: Development Monitoring & Control
 
-The **dev** tool provides real-time monitoring and control of AI-assisted development sessions. It implements the core **Hyper Coding** methodology with continuous validation, quality gates, and intelligent context management to ensure high-quality, secure code generation.
+The **dev** tool helps you monitor and control your AI-assisted development sessions. It ensures your AI interactions stay focused, secure, and produce high-quality code.
 
-## Core Capabilities
+## Quick Start
 
-### Real-time AI Development Monitoring
-- **Session Tracking**: Monitor AI interactions and code generation in real-time
-- **Context Management**: Maintain and optimize AI context throughout development sessions
-- **Quality Gate Enforcement**: Automated quality checks at every generation step
-- **Performance Monitoring**: Track generation speed, accuracy, and resource usage
+Monitor your development session in real-time:
 
-### Intelligent Quality Gates
-- **Pre-generation Validation**: Context completeness and objective clarity checks
-- **Real-time Security Scanning**: Immediate vulnerability detection during generation
-- **Architecture Compliance**: Ensure generated code follows established patterns
-- **Code Quality Assessment**: Continuous quality scoring and improvement suggestions
+```bash
+# Start monitoring your current session
+hyper dev watch
 
-### Context Engineering & Optimization
+# Monitor with focus on specific files
+hyper dev watch --focus src/components
+```
+
+## Core Concept: AI Development Control
+
+When working with AI assistants, the **dev** tool provides:
+
+- **Session Monitoring**: See what your AI is doing in real-time
+- **Quality Checks**: Automatic validation of generated code
+- **Focus Control**: Keep AI focused on your objectives
+
+### Basic Development Flow
+
+1. **Start monitoring**: `hyper dev watch`
+2. **Work with AI**: Generate code as usual
+3. **Review results**: See quality reports and suggestions
+4. **Iterate safely**: Automated checks prevent issues
+
+## Foundation Features
+
+### Session Monitoring
+Track your AI development in real-time:
+
+```bash
+# Basic monitoring
+hyper dev watch
+
+# Monitor specific files or directories
+hyper dev watch --focus src/auth
+hyper dev watch --focus "*.ts"
+```
+
+### Quality Validation
+Ensure generated code meets standards:
+
+```bash
+# Run quality checks
+hyper dev validate
+
+# Check specific files
+hyper dev validate src/components/Button.tsx
+```
+
+### Progress Tracking
+Monitor development progress:
+
+```bash
+# Check current session status
+hyper dev status
+
+# View development reports
+hyper dev report
+```
+
+## Advanced Features
+
+### Intelligent Context Management
+Advanced AI context optimization:
+
 - **Dynamic Context Updates**: Automatically maintain relevant context for AI
 - **Pattern Recognition**: Learn from codebase patterns to improve generation
 - **Objective Tracking**: Ensure AI stays focused on defined goals
-- **Scope Enforcement**: Prevent feature creep and context drift
 
-### Validation Checkpoints & Reporting
+### Quality Gates & Validation
+Enterprise-grade quality assurance:
+
+- **Real-time Security Scanning**: Immediate vulnerability detection during generation
+- **Architecture Compliance**: Ensure generated code follows established patterns
 - **Multi-layer Validation**: Security, quality, and compliance checks
-- **Progress Reporting**: Detailed reports on development progress and quality
-- **Issue Detection**: Proactive identification of potential problems
-- **Remediation Guidance**: Intelligent suggestions for issue resolution
+
+### Performance Optimization
+Monitor and optimize development performance:
+
+- **Generation Speed Tracking**: Monitor AI response times
+- **Resource Usage**: Track memory and processing usage
+- **Quality Metrics**: Measure code quality improvements over time
 
 ## Subcommands
 
-### `hyperdev dev watch`
+### `hyper dev watch`
 Launch real-time AI development session monitoring.
 
 ```bash
 # Start development monitoring
-hyperdev dev watch
+hyper dev watch
 
 # Monitor specific AI assistant
-hyperdev dev watch --assistant=claude-sonnet
+hyper dev watch --assistant=claude-sonnet
 
 # Enable verbose logging
-hyperdev dev watch --verbose
+hyper dev watch --verbose
 
 # Focus on specific project area
-hyperdev dev watch --focus=src/auth
+hyper dev watch --focus=src/auth
 ```
 
-### `hyperdev dev validate`
+### `hyper dev validate`
 Run comprehensive quality gate checks on current code.
 
 ```bash
 # Run all validation checks
-hyperdev dev validate
+hyper dev validate
 
 # Run specific validation types
-hyperdev dev validate --security --quality --architecture
+hyper dev validate --security --quality --architecture
 
 # Validate specific files or directories
-hyperdev dev validate src/components/
+hyper dev validate src/components/
 
 # Generate validation report
-hyperdev dev validate --report --format=json
+hyper dev validate --report --format=json
 ```
 
-### `hyperdev dev context`
+### `hyper dev context`
 Manage and optimize AI context for development sessions.
 
 ```bash
 # View current AI context
-hyperdev dev context show
+hyper dev context show
 
 # Update context with new information
-hyperdev dev context update --architectural-changes
+hyper dev context update --architectural-changes
 
 # Optimize context for performance
-hyperdev dev context optimize
+hyper dev context optimize
 
 # Export context for sharing
-hyperdev dev context export team-context.json
+hyper dev context export team-context.json
 ```
 
-### `hyperdev dev report`
+### `hyper dev report`
 Generate comprehensive development progress and quality reports.
 
 ```bash
 # Generate daily development report
-hyperdev dev report --daily
+hyper dev report --daily
 
 # Create quality metrics report
-hyperdev dev report --quality-metrics
+hyper dev report --quality-metrics
 
 # Generate security assessment report
-hyperdev dev report --security-assessment
+hyper dev report --security-assessment
 
 # Export report for stakeholders
-hyperdev dev report --executive-summary --format=pdf
+hyper dev report --executive-summary --format=pdf
 ```
 
 ## Development Session Architecture
@@ -501,16 +561,16 @@ performance_analytics:
 ### Debug Commands
 ```bash
 # Debug current session state
-hyperdev dev debug --session-state
+hyper dev debug --session-state
 
 # Validate context integrity
-hyperdev dev debug --context-validation
+hyper dev debug --context-validation
 
 # Check quality gate configuration
-hyperdev dev debug --quality-gates
+hyper dev debug --quality-gates
 
 # Performance analysis
-hyperdev dev debug --performance-analysis
+hyper dev debug --performance-analysis
 ```
 
 ---

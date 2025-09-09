@@ -7,6 +7,9 @@
       ".moon/tasks.yml",
       ".moon/tasks/**/*.yml"
     ],
+    "https://mintlify.com/schema.json": [
+      "docs.json"
+    ],
     "https://moonrepo.dev/schemas/project.json": [
       "**/moon.yml"
     ],

@@ -16,6 +16,8 @@ import { StepExecutor, type StepExecutorConfig } from './step-executor.js'
 import { ToolRegistry, getToolRegistry } from './tools/registry.js'
 import { HypergenError, ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
 import Logger from '../logger.js'
+import type { ActionLogger } from '../actions/types.js'
+import type { Logger as LoggerInterface } from '../types.js'
 import context from '../context.js'
 import { performInteractivePrompting } from '../prompts/interactive-prompts.js'
 import type {
@@ -799,7 +801,7 @@ export class RecipeEngine extends EventEmitter {
       throw ErrorHandler.createError(
         ErrorCode.VALIDATION_ERROR,
         `Failed to parse recipe content: ${error instanceof Error ? error.message : String(error)}`,
-        { source }
+        { source: this.recipeSourceToString(source) }
       )
     }
   }
@@ -949,7 +951,30 @@ export class RecipeEngine extends EventEmitter {
       evaluateCondition: this.createConditionEvaluator(baseContext),
       dryRun: options.dryRun,
       force: options.force,
-      logger: options.logger || this.logger
+      logger: options.logger ? this.createLoggerAdapter(options.logger) : this.createLoggerAdapter(this.logger)
+    }
+  }
+
+  private recipeSourceToString(source: RecipeSource): string {
+    switch (source.type) {
+      case 'file':
+        return source.path
+      case 'url':
+        return source.url
+      case 'package':
+        return source.name
+      default:
+        return JSON.stringify(source)
+    }
+  }
+
+  private createLoggerAdapter(logger: LoggerInterface): ActionLogger {
+    return {
+      info: (message: string) => logger.notice(message),
+      warn: (message: string) => logger.warn(message),
+      error: (message: string) => logger.err(message),
+      debug: (message: string) => logger.log(message),
+      trace: (message: string) => logger.log(message)
     }
   }
 
@@ -1247,9 +1272,5 @@ export async function validateRecipe(
 
 // Export types for external use
 export type {
-  RecipeSource,
-  RecipeExecutionOptions,
-  RecipeEngineConfig,
-  RecipeExecutionResult,
   RecipeLoadResult
 }

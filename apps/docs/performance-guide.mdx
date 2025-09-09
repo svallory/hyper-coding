@@ -17,7 +17,7 @@ Maximize HyperDev's performance with proven optimization strategies, caching tec
 Optimize template generation for sub-second response times.
 
 ```javascript
-// hypergen.config.js - Performance-optimized configuration
+// hyperdev.config.js - Performance-optimized configuration
 export default {
   performance: {
     // Parallel processing for multi-template operations
@@ -104,7 +104,7 @@ export default {
       // L2: Disk cache for persistent storage
       disk: {
         enabled: true,
-        path: '.hypergen/cache',
+        path: '.hyperdev/cache',
         max_size: '5GB',
         compression: 'lz4', // Fast compression
         cleanup_interval: '24h'
@@ -119,7 +119,7 @@ export default {
           port: process.env.REDIS_PORT,
           db: 1
         },
-        key_prefix: 'hypergen:cache:',
+        key_prefix: 'hyperdev:cache:',
         ttl: 7200 // 2 hours
       }
     },
@@ -145,13 +145,13 @@ Pre-populate caches for optimal performance.
 
 ```bash
 # Warm cache with commonly used templates
-hypergen cache warm \
+hyper cache warm \
   --templates="react-component,express-api,test-suite" \
   --parallel=8 \
   --verify
 
 # Schedule cache warming in CI/CD
-hypergen cache warm \
+hyper cache warm \
   --from-usage-stats \
   --top=20 \
   --background
@@ -159,10 +159,10 @@ hypergen cache warm \
 
 ```javascript
 // Programmatic cache warming
-import { HypergenCache } from '@hyperdev/hypergen';
+import { HyperdevCache } from '@hyperdev/hyperdev';
 
 class CacheWarmingService {
-  constructor(private cache: HypergenCache) {}
+  constructor(private cache: HyperdevCache) {}
 
   async warmProductionCache() {
     const popularTemplates = await this.getPopularTemplates();
@@ -266,11 +266,11 @@ Integrate HyperDev efficiently with build systems and development workflows.
 ```json
 {
   "scripts": {
-    "generate": "hypergen",
-    "generate:fast": "hypergen --cache-only --no-validation",
-    "generate:parallel": "hypergen --parallel --max-workers=8",
-    "generate:watch": "hypergen watch --debounce=500ms",
-    "generate:production": "hypergen --optimize --minify --tree-shake"
+    "generate": "hyper gen",
+    "generate:fast": "hyper gen --cache-only --no-validation",
+    "generate:parallel": "hyper gen --parallel --max-workers=8",
+    "generate:watch": "hyper gen watch --debounce=500ms",
+    "generate:production": "hyper gen --optimize --minify --tree-shake"
   }
 }
 ```
@@ -279,13 +279,13 @@ Integrate HyperDev efficiently with build systems and development workflows.
 
 ```javascript
 // webpack.config.js
-const HypergenWebpackPlugin = require('@hyperdev/webpack-plugin');
+const HyperdevWebpackPlugin = require('@hyperdev/webpack-plugin');
 
 module.exports = {
   plugins: [
-    new HypergenWebpackPlugin({
+    new HyperdevWebpackPlugin({
       // Only generate when source files change
-      watch: ['src/templates/**/*', 'hypergen.config.js'],
+      watch: ['src/templates/**/*', 'hyperdev.config.js'],
       
       // Performance optimizations
       parallel: true,
@@ -305,11 +305,11 @@ module.exports = {
 
 ```typescript
 // vite.config.ts
-import { hypergen } from '@hyperdev/vite-plugin';
+import { hyperdev } from '@hyperdev/vite-plugin';
 
 export default defineConfig({
   plugins: [
-    hypergen({
+    hyperdev({
       // Hot reload optimization
       hmr: {
         enabled: true,
@@ -321,7 +321,7 @@ export default defineConfig({
       build: {
         parallel: true,
         cache: {
-          directory: 'node_modules/.cache/hypergen',
+          directory: 'node_modules/.cache/hyperdev',
           version: 'auto'
         }
       }
@@ -343,7 +343,7 @@ export default {
     // Distributed processing
     distributed: {
       enabled: true,
-      coordinator: process.env.HYPERGEN_COORDINATOR_URL,
+      coordinator: process.env.HYPERDEV_COORDINATOR_URL,
       worker_pool_size: 32,
       queue_strategy: 'priority',
       load_balancing: 'least-connections'
@@ -439,7 +439,7 @@ export default {
     
     // Profiling
     profiling: {
-      enabled: process.env.HYPERGEN_PROFILE === 'true',
+      enabled: process.env.HYPERDEV_PROFILE === 'true',
       sample_rate: 0.01, // 1% of requests
       output: 'traces/',
       format: 'chromium-trace'
@@ -452,10 +452,10 @@ export default {
 
 ```typescript
 // Performance dashboard integration
-import { HypergenMetrics } from '@hyperdev/monitoring';
+import { HyperdevMetrics } from '@hyperdev/monitoring';
 
 class PerformanceDashboard {
-  private metrics: HypergenMetrics;
+  private metrics: HyperdevMetrics;
 
   async getPerformanceReport() {
     return {
@@ -564,15 +564,15 @@ class PerformanceDashboard {
 <CodeGroup>
 ```bash Diagnose Slow Generation
 # Enable detailed performance logging
-DEBUG=hypergen:performance hypergen action MyComponent \
+DEBUG=hyperdev:performance hyper action MyComponent \
   --name="TestComponent" \
   --profile
 
 # Check cache status
-hypergen cache status --detailed
+hyper cache status --detailed
 
 # Analyze template complexity
-hypergen analyze template --performance MyComponent
+hyper analyze template --performance MyComponent
 ```
 
 ```javascript Memory Issues
@@ -591,13 +591,13 @@ export default {
 
 ```bash Performance Profiling
 # Generate performance profile
-hypergen profile \
+hyper profile \
   --template="MyComponent" \
   --iterations=100 \
   --output="./profiles/component-performance.json"
 
 # Analyze bottlenecks
-hypergen profile analyze \
+hyper profile analyze \
   --input="./profiles/component-performance.json" \
   --report="detailed"
 ```
@@ -607,10 +607,10 @@ hypergen profile analyze \
 
 ```bash
 # Performance analysis commands
-hypergen perf analyze                    # Analyze current performance
-hypergen perf benchmark                  # Run performance benchmarks  
-hypergen perf optimize                   # Apply automatic optimizations
-hypergen perf report --format=json      # Generate performance report
+hyper perf analyze                    # Analyze current performance
+hyper perf benchmark                  # Run performance benchmarks  
+hyper perf optimize                   # Apply automatic optimizations
+hyper perf report --format=json      # Generate performance report
 ```
 
 This comprehensive performance guide ensures HyperDev runs efficiently at any scale, from individual developers to large enterprise deployments.

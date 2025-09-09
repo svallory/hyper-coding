@@ -370,7 +370,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
 Button.displayName = 'Button';
 ```
 
-<% if (includeStorybook) { %>**Storybook Stories** (`templates/Button.stories.tsx.ejs.t`)
+**Storybook Stories** (`templates/Button.stories.tsx.ejs.t`)
+
+```ejs
+<% if (includeStorybook) { %>
+```
 ```tsx
 ---
 to: src/components/Button/Button.stories.tsx
@@ -560,8 +564,8 @@ export const AllVariants: Story = {
     },
   },
 };
-```
 <% } %>
+```
 
 **Build Configuration** (`templates/vite.config.ts.ejs.t`)
 ```typescript

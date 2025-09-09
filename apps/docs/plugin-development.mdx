@@ -85,9 +85,9 @@ Create a well-structured plugin following HyperDev conventions.
 
 ```typescript
 // src/index.ts - Main plugin entry point
-import { HypergenPlugin, PluginContext, PluginMetadata } from '@hyperdev/hypergen';
+import { HyperdevPlugin, PluginContext, PluginMetadata } from '@hyperdev/hyperdev';
 
-export class MyCustomPlugin implements HypergenPlugin {
+export class MyCustomPlugin implements HyperdevPlugin {
   // Plugin metadata
   readonly metadata: PluginMetadata = {
     name: 'my-custom-plugin',
@@ -106,7 +106,7 @@ export class MyCustomPlugin implements HypergenPlugin {
     
     // Compatibility and requirements
     engines: {
-      hypergen: '>=2.0.0'
+      hyperdev: '>=2.0.0'
     },
     
     // Plugin configuration schema
@@ -227,7 +227,7 @@ Implement sophisticated actions with full lifecycle management.
 
 ```typescript
 // Custom action with comprehensive functionality
-import { Action, ActionContext, ActionResult } from '@hyperdev/hypergen';
+import { Action, ActionContext, ActionResult } from '@hyperdev/hyperdev';
 
 @Action({
   name: 'api-code-generator',
@@ -433,7 +433,7 @@ Add custom commands and enhance CLI functionality.
 
 ```typescript
 // CLI plugin with custom commands
-import { CLIPlugin, CommandContext, CommandDefinition } from '@hyperdev/hypergen';
+import { CLIPlugin, CommandContext, CommandDefinition } from '@hyperdev/hyperdev';
 
 export class CustomCLIPlugin implements CLIPlugin {
   async initialize(context: PluginContext): Promise<void> {
@@ -566,7 +566,7 @@ export class CustomCLIPlugin implements CLIPlugin {
       const isAuthenticated = await this.checkAuthentication();
       
       if (!isAuthenticated) {
-        console.error('Authentication required. Run `hypergen login` first.');
+        console.error('Authentication required. Run `hyper login` first.');
         process.exit(1);
       }
     }
@@ -583,7 +583,7 @@ export class CustomCLIPlugin implements CLIPlugin {
 Organize plugins following npm package conventions.
 
 ```text
-my-hypergen-plugin/
+my-hyperdev-plugin/
 ├── src/
 │   ├── index.ts              # Main plugin entry
 │   ├── actions/             # Custom actions
@@ -606,10 +606,10 @@ Package and publish plugins to npm registry.
 
 ```json
 {
-  "name": "@yourorg/hypergen-custom-plugin",
+  "name": "@yourorg/hyperdev-custom-plugin",
   "version": "1.0.0",
   "description": "Custom HyperDev plugin for specialized workflows",
-  "keywords": ["hypergen", "plugin", "code-generation"],
+  "keywords": ["hyperdev", "plugin", "code-generation"],
   
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -626,10 +626,10 @@ Package and publish plugins to npm registry.
   },
   
   "peerDependencies": {
-    "@hyperdev/hypergen": ">=2.0.0"
+    "@hyperdev/hyperdev": ">=2.0.0"
   },
   
-  "hypergen": {
+  "hyperdev": {
     "plugin": true,
     "category": "workflow",
     "capabilities": [
@@ -653,28 +653,28 @@ Users install and configure plugins seamlessly.
 
 ```bash
 # Install plugin from npm
-npm install -g @yourorg/hypergen-custom-plugin
+npm install -g @yourorg/hyperdev-custom-plugin
 
 # Install plugin from local directory
-hypergen plugin install ./my-plugin
+hyper plugin install ./my-plugin
 
 # List installed plugins
-hypergen plugin list
+hyper plugin list
 
 # Configure plugin
-hypergen plugin configure @yourorg/hypergen-custom-plugin
+hyper plugin configure @yourorg/hyperdev-custom-plugin
 ```
 
 ```javascript
-// hypergen.config.js - Plugin configuration
+// hyperdev.config.js - Plugin configuration
 export default {
   plugins: [
     // Simple plugin registration
-    '@yourorg/hypergen-custom-plugin',
+    '@yourorg/hyperdev-custom-plugin',
     
     // Plugin with configuration
     {
-      name: '@yourorg/hypergen-custom-plugin',
+      name: '@yourorg/hyperdev-custom-plugin',
       config: {
         enable_advanced_features: true,
         api: {

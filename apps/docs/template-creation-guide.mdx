@@ -713,7 +713,7 @@ jobs:
 ### Template Packaging
 
 ```json
-// hypergen-package.config.js
+// hyperdev-package.config.js
 module.exports = {
   name: '@myorg/react-templates',
   description: 'Professional React component templates',
@@ -754,24 +754,24 @@ module.exports = {
     bun publish
     
     # Using published templates
-    bunx hypergen add @myorg/react-templates
-    bunx hypergen generate component MyComponent
+    bunx hyper add @myorg/react-templates
+    bunx hyper gen component MyComponent
     ```
   </Tab>
   
   <Tab title="GitHub Repository">
     ```bash
     # Direct from GitHub
-    bunx hypergen add github:myorg/react-templates
-    bunx hypergen generate component --from=github:myorg/react-templates
+    bunx hyper add github:myorg/react-templates
+    bunx hyper gen component --from=github:myorg/react-templates
     ```
   </Tab>
   
   <Tab title="Private Registry">
     ```bash
     # Enterprise template distribution
-    bunx hypergen config set registry https://templates.company.com
-    bunx hypergen add @company/enterprise-templates
+    bunx hyper config set registry https://templates.company.com
+    bunx hyper add @company/enterprise-templates
     ```
   </Tab>
 </Tabs>

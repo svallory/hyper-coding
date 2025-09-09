@@ -1,0 +1,11 @@
+{
+  "extends": "./typedoc.base.json",
+  "sidebar": {
+    "collapsed": false,
+    "pretty": true
+  },
+  "docsRoot": "./out",
+  "navigation": {
+    "includeGroups": true
+  }
+}

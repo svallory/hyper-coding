@@ -42,7 +42,7 @@ graph TB
 Templates are classified into trust levels based on their source and validation status.
 
 ```javascript
-// hypergen.config.js - Security configuration
+// hyperdev.config.js - Security configuration
 export default {
   security: {
     // Trust level requirements
@@ -128,19 +128,19 @@ Implement cryptographic signing for template integrity and authenticity.
 
 ```bash
 # Generate signing keys
-hypergen security generate-keys \
+hyper security generate-keys \
   --type=rsa-4096 \
   --output=./keys/ \
   --name="template-signing"
 
 # Sign a template package
-hypergen security sign-template \
+hyper security sign-template \
   --template=./my-template/ \
   --key=./keys/private.pem \
   --output=./signed-template.tar.gz
 
 # Verify template signature
-hypergen security verify-template \
+hyper security verify-template \
   --template=./signed-template.tar.gz \
   --key=./keys/public.pem \
   --strict
@@ -148,7 +148,7 @@ hypergen security verify-template \
 
 ```javascript
 // Programmatic signature verification
-import { TemplateSecurityManager } from '@hyperdev/hypergen';
+import { TemplateSecurityManager } from '@hyperdev/hyperdev';
 
 class TemplateVerificationService {
   constructor(private security: TemplateSecurityManager) {}
@@ -179,7 +179,7 @@ class TemplateVerificationService {
 Comprehensive security scanning for templates and generated code.
 
 ```yaml
-# .hypergen/security-rules.yml
+# .hyperdev/security-rules.yml
 security_rules:
   template_validation:
     # File system access restrictions
@@ -269,7 +269,7 @@ export default {
 Implement role-based access control for enterprise template management.
 
 ```yaml
-# .hypergen/rbac.yml
+# .hyperdev/rbac.yml
 roles:
   template_admin:
     permissions:

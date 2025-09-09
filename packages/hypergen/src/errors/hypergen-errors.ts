@@ -116,6 +116,16 @@ export interface ErrorContext {
   filePath?: string
   transformationType?: string
   backupPath?: string
+  // Recipe/Step execution context
+  executionId?: string
+  source?: string
+  config?: any
+  missingVariables?: string[]
+  step?: string
+  steps?: number
+  assigned?: any
+  total?: number
+  tool?: string
   // Additional context
   cause?: any
 }

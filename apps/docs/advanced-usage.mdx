@@ -17,7 +17,7 @@ Unlock HyperDev's full potential with advanced template composition, enterprise 
 Execute complex workflows that coordinate multiple templates with dependencies and conditional logic.
 
 ```yaml
-# hypergen.recipe.yml
+# hyperdev.recipe.yml
 name: "Full-Stack Component"
 description: "Generate complete full-stack feature with frontend, backend, and tests"
 
@@ -91,7 +91,7 @@ Use HyperDev's programmatic API for bulk operations and system integration.
 
 ```typescript
 // scripts/bulk-migration.ts
-import { HypergenEngine, createEngine } from '@hyperdev/hypergen';
+import { HyperdevEngine, createEngine } from '@hyperdev/hyperdev';
 
 class BulkMigrationService {
   private engine: HypergenEngine;
@@ -129,7 +129,7 @@ Integrate with external systems for automatic code generation based on events.
 
 ```typescript
 // integrations/github-webhook.ts
-import { WebhookEvent, HypergenOrchestrator } from '@hyperdev/hypergen';
+import { WebhookEvent, HyperdevOrchestrator } from '@hyperdev/hyperdev';
 
 export class GitHubIntegration {
   constructor(private orchestrator: HypergenOrchestrator) {}
@@ -168,7 +168,7 @@ export class GitHubIntegration {
 Implement sophisticated caching for large-scale template operations.
 
 ```javascript
-// hypergen.config.js
+// hyperdev.config.js
 export default {
   cache: {
     strategy: 'multi-tier',
@@ -180,7 +180,7 @@ export default {
       },
       disk: {
         enabled: true,
-        path: '.hypergen/cache',
+        path: '.hyperdev/cache',
         max_size: '2GB',
         compression: 'gzip'
       },
@@ -218,7 +218,7 @@ export default {
 Deploy templates across multiple environments and teams.
 
 ```yaml
-# .hypergen/deployment.yml
+# .hyperdev/deployment.yml
 environments:
   development:
     templates:
@@ -261,7 +261,7 @@ Create sophisticated plugins for organization-specific workflows.
 
 ```typescript
 // plugins/enterprise-security/index.ts
-import { HypergenPlugin, PluginContext, GenerationContext } from '@hyperdev/hypergen';
+import { HyperdevPlugin, PluginContext, GenerationContext } from '@hyperdev/hyperdev';
 
 export class EnterpriseSecurityPlugin implements HypergenPlugin {
   name = 'enterprise-security';
@@ -353,7 +353,7 @@ export class TemplateTestSuite {
 Implement enterprise governance for template usage and compliance.
 
 ```yaml
-# .hypergen/governance.yml
+# .hyperdev/governance.yml
 governance:
   approval_workflows:
     template_publication:
@@ -448,15 +448,15 @@ Deep insights into template generation performance.
 
 ```bash
 # Enable comprehensive profiling
-DEBUG=hypergen:* HYPERGEN_PROFILE=true \
-  hypergen action MyComponent \
+DEBUG=hyperdev:* HYPERDEV_PROFILE=true \
+  hyper action MyComponent \
     --name="UserProfile" \
     --profile-output=./profiles/user-profile-generation.json
 ```
 
 ```typescript
 // Advanced debugging with custom instrumentation
-import { HypergenProfiler, PerformanceMonitor } from '@hyperdev/hypergen';
+import { HyperdevProfiler, PerformanceMonitor } from '@hyperdev/hyperdev';
 
 const profiler = new HypergenProfiler({
   track_memory: true,
@@ -484,7 +484,7 @@ Sophisticated development environment for template creators.
 
 ```bash
 # Start development server with hot reload
-hypergen dev-server \
+hyper dev-server \
   --templates="./templates" \
   --hot-reload \
   --validation \

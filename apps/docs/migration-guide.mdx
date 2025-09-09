@@ -58,21 +58,21 @@ Use the built-in migration tool for seamless Hygen to HyperDev conversion.
 
 ```bash
 # Install HyperDev globally
-npm install -g @hyperdev/hypergen
+npm install -g @hyperdev/hyperdev
 
 # Run automated migration
-hypergen migrate hygen \
+hyper migrate hygen \
   --source="./_templates" \
   --output="./templates" \
-  --config-output="./hypergen.config.js" \
+  --config-output="./hyperdev.config.js" \
   --preserve-structure \
   --upgrade-actions
 
 # Validate migrated templates
-hypergen validate ./templates --strict
+hyper validate ./templates --strict
 
 # Test migrated templates
-hypergen test ./templates --all
+hyper test ./templates --all
 ```
 
 ### Template Structure Migration
@@ -142,7 +142,7 @@ export default <%= name %>;
 
 ```typescript After (HyperDev Action)
 // templates/component/actions/component.ts
-import { Action, ActionContext } from '@hyperdev/hypergen';
+import { Action, ActionContext } from '@hyperdev/hyperdev';
 
 @Action('generate-component')
 export class GenerateComponentAction {
@@ -183,7 +183,7 @@ export class GenerateComponentAction {
 Hygen configuration migrates to HyperDev's enhanced config system.
 
 ```javascript
-// hypergen.config.js (migrated from .hygen.js)
+// hyperdev.config.js (migrated from .hygen.js)
 export default {
   // Migrated template directories
   template_dirs: ['./templates'],
@@ -230,20 +230,20 @@ Migrate Yeoman generators to HyperDev templates with enhanced capabilities.
 
 ```bash
 # Analyze Yeoman generator
-hypergen migrate yeoman \
+hyper migrate yeoman \
   --source="./generator-myapp" \
   --analyze \
   --output-report="./migration-analysis.json"
 
 # Convert generator to templates
-hypergen migrate yeoman \
+hyper migrate yeoman \
   --source="./generator-myapp" \
   --output="./templates" \
   --preserve-prompts \
   --upgrade-features
 
 # Validate converted templates
-hypergen validate ./templates \
+hyper validate ./templates \
   --check-prompts \
   --verify-file-operations
 ```
@@ -386,7 +386,7 @@ Automatic template conversion from Handlebars to EJS with enhanced features.
 
 ```bash
 # Convert Handlebars templates to EJS
-hypergen migrate templates \
+hyper migrate templates \
   --source="./plop-templates" \
   --from="handlebars" \
   --to="ejs" \
@@ -395,7 +395,7 @@ hypergen migrate templates \
   --upgrade-helpers
 
 # Validate converted templates
-hypergen validate ./templates \
+hyper validate ./templates \
   --template-engine="ejs" \
   --check-helpers
 ```
@@ -408,14 +408,14 @@ Analyze existing custom scripts and generate equivalent templates.
 
 ```bash
 # Analyze custom generation scripts
-hypergen analyze scripts \
+hyper analyze scripts \
   --source="./scripts/generate" \
   --recursive \
   --output-report="./script-analysis.json" \
   --detect-patterns
 
 # Generate templates from patterns
-hypergen migrate scripts \
+hyper migrate scripts \
   --source="./scripts/generate" \
   --output="./templates" \
   --create-recipes \
@@ -589,7 +589,7 @@ export default {
     - Review configuration mapping
     - Use compatibility mode initially
     - Gradual configuration upgrade
-    - Validate with `hypergen config validate`
+    - Validate with `hyper config validate`
   </Card>
 
   <Card title="Performance Problems" icon="clock">
@@ -607,19 +607,19 @@ export default {
 
 ```bash
 # Migration validation and troubleshooting
-hypergen migrate validate \
+hyper migrate validate \
   --source="hygen" \
   --templates="./templates" \
   --detailed-report
 
 # Migration rollback
-hypergen migrate rollback \
+hyper migrate rollback \
   --backup="./migration-backup" \
   --restore-config \
   --verify
 
 # Migration optimization
-hypergen migrate optimize \
+hyper migrate optimize \
   --templates="./templates" \
   --enable-v8-features \
   --performance-tune
@@ -656,17 +656,17 @@ hypergen migrate optimize \
 
 ```bash
 # Get migration help
-hypergen migrate help
+hyper migrate help
 
 # Request migration assistance
-hypergen support migration \
+hyper support migration \
   --source="yeoman" \
   --complexity="high" \
   --team-size="15" \
   --timeline="2-weeks"
 
 # Access migration resources
-hypergen resources migration \
+hyper resources migration \
   --source="hygen" \
   --include="examples,tutorials,best-practices"
 ```

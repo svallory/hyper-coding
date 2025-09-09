@@ -1,7 +1,7 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "theme": "aspen",
+  "$schema": "https://www.mintlify.com/docs.json",
   "name": "HyperDev",
+  "theme": "aspen",
   "logo": {
     "dark": "/logo/logo.png",
     "light": "/logo/logo.png"
@@ -24,26 +24,39 @@
         "tab": "Documentation",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "🚀 Get Started",
+            "icon": "rocket",
             "pages": [
               "index",
               "installation",
               "quickstart",
+              "getting-started-tutorial",
+              "tutorial-validation-guide",
               "user-workflows"
             ]
           },
           {
-            "group": "CLI",
+            "group": "💡 Core Concepts",
+            "icon": "lightbulb",
+            "pages": [
+              "methodology",
+              "methodology/hyper-vs-vibe"
+            ]
+          },
+          {
+            "group": "⚒️ CLI Tools",
+            "icon": "wrench",
             "pages": [
               "cli/overview",
               "cli/installation",
               "cli/quickstart",
               {
-                "group": "Commands",
+                "group": "Core Commands",
+                "icon": "terminal",
                 "pages": [
                   "cli/commands/overview",
                   {
-                    "group": "Workflow Commands",
+                    "group": "🔄 Workflow Commands",
                     "pages": [
                       "cli/commands/workflow/init",
                       "cli/commands/workflow/gen",
@@ -52,7 +65,7 @@
                     ]
                   },
                   {
-                    "group": "Discovery Commands",
+                    "group": "🔍 Discovery Commands",
                     "pages": [
                       "cli/commands/discovery/search",
                       "cli/commands/discovery/list",
@@ -60,7 +73,7 @@
                     ]
                   },
                   {
-                    "group": "Resource Commands",
+                    "group": "📦 Resource Commands",
                     "pages": [
                       "cli/commands/resources/epic",
                       "cli/commands/resources/task",
@@ -68,7 +81,7 @@
                     ]
                   },
                   {
-                    "group": "Dashboard",
+                    "group": "📊 Dashboard",
                     "pages": [
                       "cli/commands/dash"
                     ]
@@ -78,48 +91,47 @@
             ]
           },
           {
-            "group": "Methodology",
-            "pages": [
-              "methodology",
-              "methodology/hyper-vs-vibe"
-            ]
-          },
-          {
-            "group": "Tools",
+            "group": "🛠️ Tools & Integrations",
+            "icon": "cog",
             "pages": [
               "tools/overview",
               "tools/gen",
               "tools/epics",
-              "tools/dev"
+              "tools/dev",
+              "tools/dx",
+              {
+                "group": "🤖 AI Tool Integrations",
+                "pages": [
+                  "ai-tools/claude-code",
+                  "ai-tools/cursor",
+                  "ai-tools/windsurf"
+                ]
+              },
+              "tool-integrations"
             ]
           },
           {
-            "group": "Core Reference",
-            "pages": [
-              "cli-reference",
-              "configuration-guide",
-              "troubleshooting"
-            ]
-          },
-          {
-            "group": "Guides",
+            "group": "📖 Guides & Best Practices",
+            "icon": "book-open",
             "pages": [
               "guides/overview",
-              "tool-integrations",
               "advanced-usage",
               "performance-guide",
-              "security-guide"
+              "security-guide",
+              "development"
             ]
           },
           {
-            "group": "Templates",
+            "group": "📄 Templates",
+            "icon": "file-text",
             "pages": [
               "template-creation-guide",
               "template-sharing"
             ]
           },
           {
-            "group": "Examples",
+            "group": "🎯 Examples",
+            "icon": "target",
             "pages": [
               "examples/overview",
               "examples/quick-wins",
@@ -129,7 +141,17 @@
             ]
           },
           {
-            "group": "Community",
+            "group": "📚 Reference",
+            "icon": "book",
+            "pages": [
+              "cli-reference",
+              "configuration-guide",
+              "troubleshooting"
+            ]
+          },
+          {
+            "group": "👥 Community",
+            "icon": "users",
             "pages": [
               "community/overview",
               "migration-guide",
@@ -140,28 +162,197 @@
         ]
       },
       {
-        "tab": "API Reference",
+        "tab": "SDK Reference",
         "groups": [
           {
-            "group": "Introduction",
+            "group": "Interfaces",
+            "icon": "square-dashed",
             "pages": [
-              "api-reference/introduction"
+              "sdk-reference/hypergen/hypergen.actionstep",
+              "sdk-reference/hypergen/hypergen.baserecipestep",
+              "sdk-reference/hypergen/hypergen.codemodexecutionresult",
+              "sdk-reference/hypergen/hypergen.codemodstep",
+              "sdk-reference/hypergen/hypergen.recipeconfig",
+              "sdk-reference/hypergen/hypergen.recipedependency",
+              "sdk-reference/hypergen/hypergen.recipeengineconfig",
+              "sdk-reference/hypergen/hypergen.recipeexample",
+              "sdk-reference/hypergen/hypergen.recipeexecution",
+              "sdk-reference/hypergen/hypergen.recipeexecutionoptions",
+              "sdk-reference/hypergen/hypergen.recipeexecutionplan",
+              "sdk-reference/hypergen/hypergen.recipeexecutionresult",
+              "sdk-reference/hypergen/hypergen.recipeloadresult",
+              "sdk-reference/hypergen/hypergen.recipestep",
+              "sdk-reference/hypergen/hypergen.recipevalidationresult",
+              "sdk-reference/hypergen/hypergen.recipevalidationwarning",
+              "sdk-reference/hypergen/hypergen.stepcontext",
+              "sdk-reference/hypergen/hypergen.stepdependencynode",
+              "sdk-reference/hypergen/hypergen.stepexecutionmetrics",
+              "sdk-reference/hypergen/hypergen.stepexecutionoptions",
+              "sdk-reference/hypergen/hypergen.stepexecutionprogress",
+              "sdk-reference/hypergen/hypergen.stepexecutorconfig",
+              "sdk-reference/hypergen/hypergen.stepresult",
+              "sdk-reference/hypergen/hypergen.templateexecutionresult",
+              "sdk-reference/hypergen/hypergen.templatestep",
+              "sdk-reference/hypergen/hypergen.toolfactory",
+              "sdk-reference/hypergen/hypergen.toollifecyclemetrics",
+              "sdk-reference/hypergen/hypergen.toolregistration",
+              "sdk-reference/hypergen/hypergen.toolregistrystats",
+              "sdk-reference/hypergen/hypergen.toolresolutionoptions",
+              "sdk-reference/hypergen/hypergen.toolresource",
+              "sdk-reference/hypergen/hypergen.toolsearchcriteria",
+              "sdk-reference/hypergen/hypergen.toolvalidationresult"
             ]
           },
           {
-            "group": "HyperGen Engine",
+            "group": "Classes",
+            "icon": "cube",
             "pages": [
-              "api-reference/hypergen"
+              "sdk-reference/hypergen/hypergen.actiontool",
+              "sdk-reference/hypergen/hypergen.actiontoolfactory",
+              "sdk-reference/hypergen/hypergen.basetoolfactory",
+              "sdk-reference/hypergen/hypergen.circulardependencyerror",
+              "sdk-reference/hypergen/hypergen.logger",
+              "sdk-reference/hypergen/hypergen.recipedependencyerror",
+              "sdk-reference/hypergen/hypergen.recipeengine",
+              "sdk-reference/hypergen/hypergen.recipetool",
+              "sdk-reference/hypergen/hypergen.recipetoolfactory",
+              "sdk-reference/hypergen/hypergen.recipevalidationerror",
+              "sdk-reference/hypergen/hypergen.stepexecutionerror",
+              "sdk-reference/hypergen/hypergen.stepexecutor",
+              "sdk-reference/hypergen/hypergen.templatetool",
+              "sdk-reference/hypergen/hypergen.templatetoolfactory",
+              "sdk-reference/hypergen/hypergen.tool",
+              "sdk-reference/hypergen/hypergen.toolregistry"
             ]
           },
           {
-            "group": "Endpoints",
+            "group": "Functions",
+            "icon": "function",
             "pages": [
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "sdk-reference/hypergen/hypergen.checkrecipeenginehealth",
+              "sdk-reference/hypergen/hypergen.checkregistryhealth",
+              "sdk-reference/hypergen/hypergen.createrecipeengine",
+              "sdk-reference/hypergen/hypergen.createtool",
+              "sdk-reference/hypergen/hypergen.createvalidationresult",
+              "sdk-reference/hypergen/hypergen.engine",
+              "sdk-reference/hypergen/hypergen.executerecipe",
+              "sdk-reference/hypergen/hypergen.gettoolregistry",
+              "sdk-reference/hypergen/hypergen.initializerecipeengine",
+              "sdk-reference/hypergen/hypergen.initializetoolsframework",
+              "sdk-reference/hypergen/hypergen.isactionstep",
+              "sdk-reference/hypergen/hypergen.iscodemodstep",
+              "sdk-reference/hypergen/hypergen.isrecipestep",
+              "sdk-reference/hypergen/hypergen.issupportedtooltype",
+              "sdk-reference/hypergen/hypergen.istemplatestep",
+              "sdk-reference/hypergen/hypergen.loadrecipe",
+              "sdk-reference/hypergen/hypergen.registertool",
+              "sdk-reference/hypergen/hypergen.resolve",
+              "sdk-reference/hypergen/hypergen.resolvetool",
+              "sdk-reference/hypergen/hypergen.resolvetools",
+              "sdk-reference/hypergen/hypergen.runner",
+              "sdk-reference/hypergen/hypergen.validaterecipe",
+              "sdk-reference/hypergen/hypergen.validatetooltype"
             ]
+          },
+          {
+            "group": "Variables",
+            "icon": "variable",
+            "pages": [
+              "sdk-reference/hypergen/hypergen.default_registry_config",
+              "sdk-reference/hypergen/hypergen.devutils",
+              "sdk-reference/hypergen/hypergen.recipe_engine_features",
+              "sdk-reference/hypergen/hypergen.recipe_engine_version",
+              "sdk-reference/hypergen/hypergen.recipeenginedevutils",
+              "sdk-reference/hypergen/hypergen.recipeenginepresets",
+              "sdk-reference/hypergen/hypergen.supported_tool_types",
+              "sdk-reference/hypergen/hypergen.tool_execution_phases",
+              "sdk-reference/hypergen/hypergen.tool_framework_constants",
+              "sdk-reference/hypergen/hypergen.tool_framework_version"
+            ]
+          },
+          {
+            "group": "Types",
+            "icon": "type",
+            "pages": [
+              "sdk-reference/hypergen/hypergen.recipeenginefeature",
+              "sdk-reference/hypergen/hypergen.recipesource",
+              "sdk-reference/hypergen/hypergen.recipestepunion",
+              "sdk-reference/hypergen/hypergen.stepbytool",
+              "sdk-reference/hypergen/hypergen.stepstatus",
+              "sdk-reference/hypergen/hypergen.toolphase",
+              "sdk-reference/hypergen/hypergen.tooltype"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Package Docs",
+        "groups": [
+          {
+            "group": "typedoc-plugin-mintlify",
+            "icon": "code",
+            "pages": [
+              "packages/typedoc-plugin-mintlify/index",
+              "packages/typedoc-plugin-mintlify/globals",
+              {
+                "group": "Interfaces",
+                "pages": [
+                  "packages/typedoc-plugin-mintlify/interfaces/MintlifyPluginOptions"
+                ]
+              },
+              {
+                "group": "Functions",
+                "pages": [
+                  "packages/typedoc-plugin-mintlify/functions/generateMintlifyDocs",
+                  "packages/typedoc-plugin-mintlify/functions/cli"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "typedoc-mintlify-theme",
+            "icon": "code",
+            "pages": [
+              "packages/typedoc-mintlify-theme/index",
+              "packages/typedoc-mintlify-theme/globals",
+              {
+                "group": "Functions",
+                "pages": [
+                  "packages/typedoc-mintlify-theme/functions/load"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Packages",
+        "groups": [
+          {
+            "group": "mintlify-tsdocs",
+            "icon": "code",
+            "pages": [
+              "packages/mintlify-tsdocs/index",
+              {
+                "group": "Classes",
+                "icon": "cube",
+                "pages": [
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.custommarkdownemitter",
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.markdowndocumenter"
+                ]
+              },
+              {
+                "group": "Interfaces",
+                "icon": "square-dashed",
+                "pages": [
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.icustommarkdownemitteroptions",
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.imarkdowndocumenteroptions",
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.imarkdownemittercontext",
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.imarkdownemitteroptions"
+                ]
+              }
+            ],
+            "menu": "mintlify-tsdocs"
           }
         ]
       }
@@ -169,21 +360,42 @@
   },
   "anchors": [
     {
-      "name": "Documentation",
+      "name": "📚 Documentation",
       "icon": "book-open-cover",
       "url": "https://docs.hyperdev.ai"
     },
     {
-      "name": "Community",
-      "icon": "slack",
+      "name": "👥 Community",
+      "icon": "discord",
       "url": "https://hyperdev.ai/discord"
     },
     {
-      "name": "Blog",
+      "name": "📰 Blog",
       "icon": "newspaper",
       "url": "https://hyperdev.ai/blog"
+    },
+    {
+      "name": "🚀 Quick Start",
+      "icon": "play",
+      "url": "/quickstart"
     }
   ],
+  "versions": [
+    "v1",
+    "v2"
+  ],
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
+  },
+  "search": {
+    "prompt": "Search HyperDev docs..."
+  },
+  "modeToggle": {
+    "default": "light",
+    "isHidden": false
+  },
   "topbarLinks": [
     {
       "name": "Support",
@@ -191,8 +403,31 @@
     }
   ],
   "topbarCtaButton": {
-    "name": "Dashboard",
-    "url": "https://dashboard.hyperdev.ai"
+    "name": "📊 Dashboard",
+    "url": "https://dashboard.hyperdev.ai",
+    "style": "roundedFull"
+  },
+  "seo": {
+    "indexHiddenPages": false
+  },
+  "redirects": [
+    {
+      "source": "/docs",
+      "destination": "/"
+    },
+    {
+      "source": "/getting-started",
+      "destination": "/quickstart"
+    }
+  ],
+  "openGraph": {
+    "enabled": true,
+    "logo": "/logo/logo.png"
+  },
+  "integrations": {
+    "intercom": {
+      "appId": "app_id"
+    }
   },
   "api": {
     "baseUrl": "https://api.hyperdev.ai",
@@ -201,11 +436,31 @@
     },
     "playground": {
       "mode": "show"
-    }
+    },
+    "maintainOrder": true
   },
+  "tabs": [
+    {
+      "name": "Home",
+      "url": "https://hyperdev.ai"
+    },
+    {
+      "name": "Changelog",
+      "url": "https://hyperdev.ai/changelog"
+    }
+  ],
   "footerSocials": {
     "x": "https://x.com/hyperdev_ai",
     "github": "https://github.com/hyperdev-ai",
-    "linkedin": "https://www.linkedin.com/company/hyperdev-ai"
+    "linkedin": "https://www.linkedin.com/company/hyperdev-ai",
+    "discord": "https://hyperdev.ai/discord"
+  },
+  "analytics": {
+    "posthog": {
+      "apiKey": "phc_api_key"
+    },
+    "gtm": {
+      "tagId": "GTM-ID"
+    }
   }
 }

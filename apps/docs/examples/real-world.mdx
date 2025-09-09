@@ -408,7 +408,11 @@ export async function requireAuth() {
 <% } %>
 ```
 
-<% if (paymentProvider === 'stripe') { %>**Stripe Integration** (`templates/billing.ts.ejs.t`)
+**Stripe Integration** (`templates/billing.ts.ejs.t`)
+
+```ejs
+<% if (paymentProvider === 'stripe') { %>
+```
 ```typescript
 ---
 to: lib/billing.ts
@@ -584,8 +588,8 @@ export async function handleSubscriptionChange(
     },
   });
 }
-```
 <% } %>
+```
 
 **API Routes** (`templates/users.ts.ejs.t`)
 ```typescript

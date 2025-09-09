@@ -12,6 +12,14 @@ import { ToolRegistry, getToolRegistry } from './tools/registry.js'
 import { Tool } from './tools/base.js'
 import { ErrorHandler, ErrorCode, HypergenError } from '../errors/hypergen-errors.js'
 import Logger from '../logger.js'
+import {
+  isTemplateStep,
+  isActionStep,
+  isCodeModStep,
+  isRecipeStep,
+  StepExecutionError,
+  CircularDependencyError
+} from './types.js'
 import type {
   RecipeStepUnion,
   StepContext,
@@ -24,13 +32,7 @@ import type {
   TemplateStep,
   ActionStep,
   CodeModStep,
-  RecipeStep,
-  isTemplateStep,
-  isActionStep,
-  isCodeModStep,
-  isRecipeStep,
-  StepExecutionError,
-  CircularDependencyError
+  RecipeStep
 } from './types.js'
 
 const debug = createDebug('hypergen:v8:recipe:step-executor')
@@ -842,7 +844,7 @@ export class StepExecutor extends EventEmitter {
       }
       
       // Validate step configuration
-      const validation = await tool.validateStep(step, context)
+      const validation = await tool.validate(step, context)
       if (!validation.isValid) {
         throw ErrorHandler.createError(
           ErrorCode.VALIDATION_ERROR,
@@ -852,7 +854,7 @@ export class StepExecutor extends EventEmitter {
       }
       
       // Execute step through tool
-      const result = await tool.executeStep(step, context)
+      const result = await tool.execute(step, context)
       
       this.debug('Tool execution completed: %s', step.name)
       return result
@@ -877,7 +879,7 @@ export class StepExecutor extends EventEmitter {
       throw ErrorHandler.createError(
         ErrorCode.VALIDATION_ERROR,
         `Unknown step type: ${(step as any).tool}`,
-        { step: step.name }
+        { step: (step as any).name }
       )
     }
   }

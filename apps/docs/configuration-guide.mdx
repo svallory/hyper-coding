@@ -40,7 +40,7 @@ flowchart TD
     B -->|Yes| C[Apply ENV overrides]
     B -->|No| D[Load Project Config]
     C --> D
-    D --> E{hypergen.config.js exists?}
+    D --> E{hyperdev.config.js exists?}
     E -->|Yes| F[Load Project Config]
     E -->|No| G[Search Parent Directories]
     F --> H[Load Workspace Config]
@@ -55,14 +55,14 @@ flowchart TD
 
 ### Hypergen Configuration
 
-The primary configuration file for HyperDev projects is `hypergen.config.js`:
+The primary configuration file for HyperDev projects is `hyperdev.config.js`:
 
 <CodeGroup>
 
-```javascript hypergen.config.js
+```javascript hyperdev.config.js
 /**
  * Hypergen Configuration
- * @type {import('hypergen').HypergenConfig}
+ * @type {import('hyperdev').HyperdevConfig}
  */
 export default {
   // Template Discovery
@@ -103,15 +103,15 @@ export default {
   // Performance & Caching
   cache: {
     enabled: true,
-    directory: '.hypergen-cache',
+    directory: '.hyperdev-cache',
     ttl: 3600000, // 1 hour
     strategy: 'memory-disk' // memory | disk | memory-disk
   },
   
   // Extensions
   plugins: [
-    '@hypergen/plugin-typescript',
-    '@hypergen/plugin-react',
+    '@hyperdev/plugin-typescript',
+    '@hyperdev/plugin-react',
     './custom-plugins/my-plugin.js'
   ],
   
@@ -153,7 +153,7 @@ export default {
 }
 ```
 
-```json hypergen.config.json
+```json hyperdev.config.json
 {
   "$schema": "https://hyperdev.ai/schemas/config.json",
   "templates": ["recipes"],
@@ -181,18 +181,18 @@ HyperDev searches for configuration files in the following locations:
 
 <Accordion title="Configuration File Search Order">
   1. **Explicit path**: `--config path/to/config.js`
-  2. **Environment variable**: `HYPERGEN_CONFIG=path/to/config.js`
+  2. **Environment variable**: `HYPERDEV_CONFIG=path/to/config.js`
   3. **Project root** (current directory):
-     - `hypergen.config.js`
-     - `hypergen.config.mjs` 
-     - `hypergen.config.cjs`
-     - `hypergen.config.json`
-     - `.hypergenrc`
-     - `.hypergenrc.js`
-     - `.hypergenrc.json`
+     - `hyperdev.config.js`
+     - `hyperdev.config.mjs` 
+     - `hyperdev.config.cjs`
+     - `hyperdev.config.json`
+     - `.hyperdevrc`
+     - `.hyperdevrc.js`
+     - `.hyperdevrc.json`
   4. **Parent directories**: Walks up the directory tree
-  5. **Home directory**: `~/.hypergenrc` or `~/.config/hypergen/config.js`
-  6. **System-wide**: `/etc/hypergen/config.js` (Linux/macOS)
+  5. **Home directory**: `~/.hyperdevrc` or `~/.config/hyperdev.config.js`
+  6. **System-wide**: `/etc/hyperdev.config.js` (Linux/macOS)
 </Accordion>
 
 ## Workspace Configuration
@@ -219,45 +219,45 @@ workspace:
   dependencyGraph: true
   
 # HyperDev integration
-hypergen:
+hyperdev:
   discovery:
     workspaceRoot: true
     projectTemplates: true
-  sharedTemplates: '.hypergen/shared'
+  sharedTemplates: '.hyperdev/shared'
   
 # Task definitions
 tasks:
   generate:
-    command: 'hypergen'
+    command: 'hyper'
     inputs: ['templates/**/*']
     platform: 'node'
 ```
 
-```yaml .moon/tasks/hypergen.yml
+```yaml .moon/tasks/hyperdev.yml
 $schema: "https://moonrepo.dev/schemas/tasks.json"
 
 tasks:
   generate:
-    command: 'hypergen'
+    command: 'hyper'
     args: ['$template', '$generator']
     inputs:
       - 'templates/**/*'
       - '_templates/**/*'
-      - 'hypergen.config.js'
+      - 'hyperdev.config.js'
     outputs:
       - 'src/**/*'
     options:
       cache: false
       
   template-validate:
-    command: 'hypergen'
+    command: 'hyper'
     args: ['validate']
     inputs: ['templates/**/*']
     
   template-build:
-    command: 'hypergen'
+    command: 'hyper'
     args: ['build']
-    outputs: ['.hypergen/build/**/*']
+    outputs: ['.hyperdev/build/**/*']
 ```
 
 </CodeGroup>
@@ -427,25 +427,25 @@ Override any configuration setting using environment variables:
 
 ```bash
 # Template discovery
-export HYPERGEN_TEMPLATES="./my-templates,./shared-templates"
-export HYPERGEN_DISCOVERY_SOURCES="local,npm"
+export HYPERDEV_TEMPLATES="./my-templates,./shared-templates"
+export HYPERDEV_DISCOVERY_SOURCES="local,npm"
 
 # Engine settings
-export HYPERGEN_ENGINE_TYPE="handlebars"
-export HYPERGEN_CONFLICT_STRATEGY="merge"
+export HYPERDEV_ENGINE_TYPE="handlebars"
+export HYPERDEV_CONFLICT_STRATEGY="merge"
 
 # Performance
-export HYPERGEN_CACHE_ENABLED="true"
-export HYPERGEN_CACHE_TTL="7200000"
+export HYPERDEV_CACHE_ENABLED="true"
+export HYPERDEV_CACHE_TTL="7200000"
 
 # Security
-export HYPERGEN_ALLOW_REMOTE="false"
-export HYPERGEN_TRUSTED_SOURCES="npm:@myorg/*,github:myorg/*"
+export HYPERDEV_ALLOW_REMOTE="false"
+export HYPERDEV_TRUSTED_SOURCES="npm:@myorg/*,github:myorg/*"
 
 # Development
 export NODE_ENV="development"
-export HYPERGEN_DEBUG="true"
-export HYPERGEN_VERBOSE="true"
+export HYPERDEV_DEBUG="true"
+export HYPERDEV_VERBOSE="true"
 ```
 
 ### Conditional Configuration
@@ -454,7 +454,7 @@ Create environment-specific configurations:
 
 <CodeGroup>
 
-```javascript hypergen.config.js
+```javascript hyperdev.config.js
 export default {
   // Base configuration
   templates: ['recipes'],
@@ -501,7 +501,7 @@ export default {
 }
 ```
 
-```javascript config/hypergen.prod.js
+```javascript config/hyperdev.prod.js
 // Production-specific configuration
 export default {
   templates: ['production-recipes'],
@@ -541,12 +541,12 @@ Create personal defaults in your home directory:
 
 <CodeGroup>
 
-```javascript ~/.hypergenrc.js
+```javascript ~/.hyperdevrc.js
 // Global user configuration
 export default {
   // Personal template preferences
   discovery: {
-    directories: ['~/templates', '~/.hypergen/templates']
+    directories: ['~/templates', '~/.hyperdev/templates']
   },
   
   // Default author info
@@ -557,7 +557,7 @@ export default {
   },
   
   // Personal helpers
-  helpers: '~/.hypergen/helpers.js',
+  helpers: '~/.hyperdev/helpers.js',
   
   // UI preferences
   ui: {
@@ -575,7 +575,7 @@ export default {
 }
 ```
 
-```json ~/.config/hypergen/config.json
+```json ~/.config/hyperdev.config.json
 {
   "defaults": {
     "author": "John Doe",
@@ -629,20 +629,20 @@ export default {
 }
 ```
 
-```javascript hypergen.config.js
+```javascript hyperdev.config.js
 export default {
   plugins: [
     // Built-in plugins
-    '@hypergen/plugin-typescript',
-    '@hypergen/plugin-react',
-    '@hypergen/plugin-testing',
+    '@hyperdev/plugin-typescript',
+    '@hyperdev/plugin-react',
+    '@hyperdev/plugin-testing',
     
     // Local plugins
     './plugins/custom-plugin.js',
     
     // Plugin with options
     {
-      plugin: '@hypergen/plugin-database',
+      plugin: '@hyperdev/plugin-database',
       options: {
         provider: 'postgresql',
         migrations: true
@@ -659,7 +659,7 @@ export default {
 HyperDev provides built-in configuration validation:
 
 ```javascript
-import { validateConfig } from 'hypergen'
+import { validateConfig } from 'hyperdev'
 
 // Validate configuration
 const config = { /* your config */ }
@@ -679,8 +679,8 @@ Use JSON Schema for IDE support and validation:
 ```json package.json
 {
   "scripts": {
-    "config:validate": "hypergen validate-config",
-    "config:init": "hypergen init-config --interactive"
+    "config:validate": "hyper validate-config",
+    "config:init": "hyper init-config --interactive"
   }
 }
 ```
@@ -693,16 +693,16 @@ Initialize configuration interactively:
 
 ```bash
 # Create new configuration
-hypergen init --interactive
+hyper init --interactive
 
 # Upgrade existing configuration
-hypergen config upgrade
+hyper config upgrade
 
 # Validate current configuration
-hypergen config validate
+hyper config validate
 
 # Show resolved configuration
-hypergen config show
+hyper config show
 ```
 
 ### Configuration Templates
@@ -712,23 +712,23 @@ Generate configuration for common scenarios:
 <Tabs>
   <Tab title="Frontend Project">
     ```bash
-    hypergen init --template=react-app
-    hypergen init --template=vue-app
-    hypergen init --template=angular-app
+    hyper init --template=react-app
+    hyper init --template=vue-app
+    hyper init --template=angular-app
     ```
   </Tab>
   <Tab title="Backend Project">
     ```bash
-    hypergen init --template=node-api
-    hypergen init --template=fastify-api
-    hypergen init --template=express-app
+    hyper init --template=node-api
+    hyper init --template=fastify-api
+    hyper init --template=express-app
     ```
   </Tab>
   <Tab title="Full-Stack">
     ```bash
-    hypergen init --template=next-app
-    hypergen init --template=nuxt-app
-    hypergen init --template=t3-stack
+    hyper init --template=next-app
+    hyper init --template=nuxt-app
+    hyper init --template=t3-stack
     ```
   </Tab>
 </Tabs>
@@ -804,13 +804,13 @@ Upgrade configurations between versions:
 
 ```bash
 # Migrate from v1 to v2 configuration format
-hypergen migrate --from=1.0 --to=2.0
+hyper migrate --from=1.0 --to=2.0
 
 # Show migration preview
-hypergen migrate --dry-run
+hyper migrate --dry-run
 
 # Backup before migration
-hypergen migrate --backup
+hyper migrate --backup
 ```
 
 ### Backward Compatibility
@@ -842,7 +842,7 @@ export default {
     **Problem**: HyperDev can't find your configuration file
     
     **Solutions**:
-    - Check file name spelling: `hypergen.config.js` (not `hypergen.config.ts`)
+    - Check file name spelling: `hyperdev.config.js` (not `hyperdev.config.ts`)
     - Ensure file is in project root or parent directory
     - Use absolute path with `--config` flag
     - Verify file permissions are readable
@@ -852,8 +852,8 @@ export default {
     **Problem**: Configuration file has syntax errors
     
     **Solutions**:
-    - Validate JSON syntax with `hypergen config validate`
-    - Check JavaScript syntax with `node -c hypergen.config.js`
+    - Validate JSON syntax with `hyper config validate`
+    - Check JavaScript syntax with `node -c hyperdev.config.js`
     - Use IDE with schema validation
     - Start with minimal configuration and build up
   </Accordion>
@@ -862,9 +862,9 @@ export default {
     **Problem**: Environment variables aren't overriding config
     
     **Solutions**:
-    - Check variable naming: `HYPERGEN_CACHE_ENABLED` not `CACHE_ENABLED`
+    - Check variable naming: `HYPERDEV_CACHE_ENABLED` not `CACHE_ENABLED`
     - Verify environment is correctly detected: `NODE_ENV=production`
-    - Use `hypergen config show` to see resolved configuration
+    - Use `hyper config show` to see resolved configuration
     - Ensure environment config exists in `environments` object
   </Accordion>
 </AccordionGroup>
@@ -875,13 +875,13 @@ Enable debug mode to troubleshoot configuration issues:
 
 ```bash
 # Debug configuration loading
-DEBUG=hypergen:config hypergen generate
+DEBUG=hyperdev:config hyper gen
 
 # Show resolved configuration
-hypergen config show --verbose
+hyper config show --verbose
 
 # Validate configuration
-hypergen config validate --strict
+hyper config validate --strict
 ```
 
 This comprehensive configuration guide should help you set up and manage HyperDev configurations effectively across all levels of your development workflow.

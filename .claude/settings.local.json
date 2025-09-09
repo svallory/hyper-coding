@@ -23,7 +23,12 @@
       "Bash(cat:*)",
       "Bash(grep:*)",
       "Bash(pkill:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "WebSearch",
+      "WebSearch",
+      "WebSearch"
     ]
   },
   "enableAllProjectMcpServers": true,

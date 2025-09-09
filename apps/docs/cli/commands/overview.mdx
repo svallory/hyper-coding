@@ -257,18 +257,47 @@ Need help? Run: hyper help templates
 
 ## Configuration Impact
 
-Commands respect your configuration settings:
+All CLI commands respect HyperDev's hierarchical configuration system, which resolves settings in priority order:
+
+<Steps>
+  <Step title="Command-line flags">
+    Highest priority - overrides all other settings
+  </Step>
+  <Step title="Environment variables">
+    `HYPERDEV_*` variables override configuration files
+  </Step>
+  <Step title="Project configuration">
+    `hyperdev.config.js` in project root or parent directories
+  </Step>
+  <Step title="User configuration">
+    Personal settings in `~/.hyperdevrc` or `~/.config/hyperdev.config.js`
+  </Step>
+  <Step title="System defaults">
+    Built-in defaults when no other configuration is found
+  </Step>
+</Steps>
+
+### Configuration Examples
 
 ```bash
-# Global settings affect all commands
+# Environment variable overrides (highest priority)
+HYPERDEV_DEFAULT_IDE=cursor hyper init
+
+# Command-line flag overrides (highest priority)
+hyper init --ide vscode     # Overrides environment and config file settings
+
+# Global user settings (lower priority)
 hyper config set default-ide cursor
 hyper config set ai-provider openai
 hyper config set trust-threshold 8
 
-# Project settings override global ones  
-hyper init --ide vscode     # Override default IDE
-hyper gen --trust-level 9  # Override trust threshold
+# Project settings (higher priority than user settings)
+# Defined in hyperdev.config.js in your project
 ```
+
+<Info>
+**Configuration Precedence**: Command-line flags always win, followed by environment variables, then project config, then user config, and finally system defaults. See the [Configuration Guide](/configuration-guide) for complete details.
+</Info>
 
 ## Next Steps
 

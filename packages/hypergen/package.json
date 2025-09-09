@@ -53,12 +53,16 @@
 		"docs:watch": "cd hygen.io && bun start",
 		"docs:build": "cd hygen.io && bun run build",
 		"docs:publish": "cd hygen.io && bun run deploy",
-		"docs:api": "typedoc --options docs/typedoc.json",
-		"docs:api:watch": "typedoc --options docs/typedoc.json --watch"
+		"docs:api": "bun run build:lib && api-extractor run --local && node /work/hyperdev/apps/mintlify-tsdocs/bin/mintlify-tsdocs markdown -i temp -o /work/hyperdev/apps/docs/sdk-reference/hypergen --docs-json /work/hyperdev/apps/docs/docs.json --tab-name 'SDK Reference'",
+		"docs:api:watch": "echo 'Watch mode not yet supported for api-documenter'",
+		"docs:typedoc": "bun run build:lib && typedoc",
+		"docs:typedoc:watch": "bun run build:lib && typedoc --watch"
 	},
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",
+		"@microsoft/api-extractor": "^7.52.11",
 		"@types/node": "^17.0.45",
+		"ajv": "^8.17.1",
 		"chalk": "^4.1.2",
 		"change-case": "^3.1.0",
 		"debug": "^4.3.4",
@@ -74,6 +78,7 @@
 		"js-yaml": "^4.1.0",
 		"liquidjs": "^10.21.1",
 		"ora": "^5.4.1",
+		"typedoc-theme-mintlify": "../typedoc-theme-mintlify",
 		"yaml": "^2.8.0",
 		"yargs-parser": "^21.1.1"
 	},
@@ -91,6 +96,7 @@
 		"stylomatic": "^0.3.2",
 		"time-require": "^0.1.2",
 		"ts-node": "^10.9.2",
+		"typedoc": "^0.26.0",
 		"typescript": "^5.5.3",
 		"vitest": "^3.2.4",
 		"zeroconf-typescript-eslint": "^2.4.0"

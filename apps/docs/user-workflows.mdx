@@ -58,9 +58,9 @@ The system should understand user context and provide relevant suggestions and s
 ### Phase 1: Installation (2 minutes)
 ```bash
 # One-command installation
-npm install -g hypergen
+npm install -g hyperdev
 # or
-brew install hypergen
+brew install hyperdev
 ```
 
 **UX Elements**:
@@ -71,7 +71,7 @@ brew install hypergen
 ### Phase 2: Environment Setup (3 minutes)
 ```bash
 # Auto-detects project type and suggests templates
-hypergen init
+hyper init
 ```
 
 **User Experience Flow**:
@@ -85,15 +85,15 @@ hypergen init
 ✓ Detected React + TypeScript project
 ✓ Added component templates
 ✓ Configured with your existing patterns
-→ Ready to generate! Try: hypergen component MyButton
+→ Ready to generate! Try: hyper gen component MyButton
 ```
 
 ### Phase 3: First Generation (5 minutes)
 ```bash
 # Interactive template selection
-hypergen generate
+hyper generate
 # or direct generation
-hypergen component UserCard
+hyper gen component UserCard
 ```
 
 **UX Journey**:
@@ -111,8 +111,8 @@ hypergen component UserCard
 ### Phase 4: Learning Loop (5 minutes)
 ```bash
 # Discover more possibilities
-hypergen list
-hypergen help component
+hyper gen list
+hyper gen help component
 ```
 
 **Discovery Experience**:
@@ -127,7 +127,7 @@ hypergen help component
 ### Smart Project Detection
 ```bash
 cd my-react-app
-hypergen init
+hyper init
 ```
 
 **Intelligence Features**:
@@ -153,14 +153,14 @@ hypergen init
 4. Testing Strategy  
    → Jest + Testing Library detected
    
-✨ Setup complete! Generated hypergen.config.js
+✨ Setup complete! Generated hyperdev.config.js
 ```
 
 ### Team Configuration Sync
 ```bash
 # Share configuration across team
-hypergen config export team-config.json
-hypergen config import team-config.json
+hyper config export team-config.json
+hyper config import team-config.json
 ```
 
 **Collaboration Features**:
@@ -176,7 +176,7 @@ hypergen config import team-config.json
 ### Intelligent Discovery
 ```bash
 # Context-aware template suggestions
-hypergen discover
+hyper gen discover
 ```
 
 **Discovery Experience**:
@@ -199,7 +199,7 @@ hypergen discover
 ### Template Preview System
 ```bash
 # Preview template without generating
-hypergen preview react-component UserProfile
+hyper gen preview react-component UserProfile
 ```
 
 **Preview Features**:
@@ -222,10 +222,10 @@ hypergen preview react-component UserProfile
 ### Streamlined Generation
 ```bash
 # One-command generation with smart defaults
-hypergen component UserCard --interactive=false
+hyper gen component UserCard --interactive=false
 
 # Interactive mode for customization
-hypergen component UserCard --interactive
+hyper gen component UserCard --interactive
 ```
 
 ### Interactive Generation Flow
@@ -274,7 +274,7 @@ Generate? [Y/n]
    → Test: npm test UserCard
    → Customize: Edit the component files as needed
 
-💡 Tip: Try 'hypergen page UserProfile' to create a page using this component
+💡 Tip: Try 'hyper gen page UserProfile' to create a page using this component
 ```
 
 ## Workflow 5: Template Creation & Customization
@@ -284,7 +284,7 @@ Generate? [Y/n]
 ### Template Creation Wizard
 ```bash
 # Interactive template creation
-hypergen create-template my-component
+hyper create-template my-component
 ```
 
 **Creation Flow**:
@@ -320,7 +320,7 @@ hypergen create-template my-component
 ### Template Testing
 ```bash
 # Test template during development
-hypergen test-template my-component TestComponent
+hyper test-template my-component TestComponent
 ```
 
 **Testing Features**:
@@ -336,10 +336,10 @@ hypergen test-template my-component TestComponent
 ### Team Template Registry
 ```bash
 # Set up team registry
-hypergen registry add @company/templates
+hyper registry add @company/templates
 
 # Publish team template
-hypergen publish component-library
+hyper publish component-library
 ```
 
 **Registry Features**:
@@ -351,7 +351,7 @@ hypergen publish component-library
 ### Standards Enforcement
 ```bash
 # Validate code follows team patterns
-hypergen lint-patterns
+hyper lint-patterns
 ```
 
 **Enforcement Tools**:
@@ -374,7 +374,7 @@ hypergen lint-patterns
 #### Custom Workflow Automation
 ```bash
 # Create complex multi-step workflows
-hypergen workflow create-feature
+hyper workflow create-feature
 ```
 
 **Workflow Steps**:
@@ -387,7 +387,7 @@ hypergen workflow create-feature
 #### Template Composition
 ```bash
 # Combine multiple templates
-hypergen compose api-endpoint + react-page + tests
+hyper compose api-endpoint + react-page + tests
 ```
 
 ### Integration Workflows
@@ -395,7 +395,7 @@ hypergen compose api-endpoint + react-page + tests
 #### CI/CD Integration
 ```bash
 # Generate deployment configurations
-hypergen infra staging --environment=aws
+hyper infra staging --environment=aws
 ```
 
 #### IDE Integration
@@ -412,7 +412,7 @@ hypergen infra staging --environment=aws
 ❌ Generation failed: Invalid component name 'user card'
 
 💡 Suggestion: Component names should be PascalCase
-   Try: hypergen component UserCard
+   Try: hyper gen component UserCard
 
 🔗 Learn more: https://hyperdev.tools/docs/naming-conventions
 ```
@@ -428,9 +428,9 @@ hypergen infra staging --environment=aws
 #### Contextual Help
 ```bash
 # Context-aware help
-hypergen help             # General help
-hypergen help component   # Component-specific help
-hypergen help --errors    # Common error solutions
+hyper help             # General help
+hyper gen help component   # Component-specific help
+hyper help --errors    # Common error solutions
 ```
 
 #### Learning Resources

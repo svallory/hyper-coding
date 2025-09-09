@@ -6,11 +6,11 @@ og:title: "Template Sharing & Distribution"
 
 # Template Sharing & Distribution
 
-Build and participate in the collaborative template ecosystem with HyperGen's comprehensive sharing and distribution system. From team repositories to public marketplaces, learn how to effectively distribute and discover high-quality templates.
+Build and participate in the collaborative template ecosystem with HyperDev's comprehensive sharing and distribution system. From team repositories to public marketplaces, learn how to effectively distribute and discover high-quality templates.
 
 ## Distribution Architecture Overview
 
-HyperGen's multi-source template distribution enables flexible sharing patterns:
+HyperDev's multi-source template distribution enables flexible sharing patterns:
 
 <CardGroup cols={2}>
   <Card title="Package Registries" icon="package">
@@ -38,7 +38,7 @@ Create distributable template packages with proper structure:
 ```
 my-template-package/
 ├── package.json                 # Package metadata and dependencies
-├── hypergen-package.config.js   # HyperGen package configuration
+├── hyperdev-package.config.js   # HyperDev package configuration
 ├── README.md                    # Usage documentation
 ├── CHANGELOG.md                 # Version history
 ├── LICENSE                      # Legal terms
@@ -66,7 +66,7 @@ my-template-package/
 Configure your template package for optimal distribution:
 
 ```javascript
-// hypergen-package.config.js
+// hyperdev-package.config.js
 module.exports = {
   name: '@myorg/react-templates',
   description: 'Professional React component templates with TypeScript and testing support',
@@ -91,7 +91,7 @@ module.exports = {
   
   // Development dependencies for template actions
   devDependencies: {
-    '@hypergen/action-system': '^2.0.0',
+    '@hyperdev/action-system': '^2.0.0',
     'jest': '^29.0.0'
   },
   
@@ -110,7 +110,7 @@ module.exports = {
   // Quality requirements
   engines: {
     node: '>=16.0.0',
-    hypergen: '^8.0.0'
+    hyperdev: '^8.0.0'
   },
   
   // Trust and security settings
@@ -136,18 +136,18 @@ Ensure NPM compatibility with proper package.json:
     "templates/**/*",
     "actions/**/*", 
     "docs/**/*",
-    "hypergen-package.config.js",
+    "hyperdev-package.config.js",
     "README.md",
     "CHANGELOG.md"
   ],
   "keywords": [
-    "hypergen",
+    "hyperdev",
     "template",
     "react",
     "typescript",
     "generator"
   ],
-  "hypergen": {
+  "hyperdev": {
     "packageType": "templates",
     "version": "^8.0.0"
   },
@@ -156,13 +156,13 @@ Ensure NPM compatibility with proper package.json:
     "typescript": "^4.9.0"
   },
   "devDependencies": {
-    "@hypergen/testing": "^2.0.0",
+    "@hyperdev/testing": "^2.0.0",
     "jest": "^29.0.0"
   },
   "scripts": {
     "test": "jest",
-    "validate": "hypergen validate-package",
-    "build": "hypergen build-package",
+    "validate": "hyper validate-package",
+    "build": "hyper build-package",
     "prepublishOnly": "npm run validate && npm run test"
   },
   "repository": {
@@ -187,7 +187,7 @@ Publish to NPM for maximum discoverability:
     
     ```bash
     # Validate package structure and metadata
-    bunx hypergen validate-package
+    bunx hyper validate-package
     
     # Test all templates
     bun run test
@@ -234,10 +234,10 @@ Configure private registries for enterprise distribution:
 
 ```bash
 # Configure private registry
-bunx hypergen config set registry https://npm.company.com
+bunx hyper config set registry https://npm.company.com
 
 # Set authentication
-bunx hypergen config set registry-auth ${NPM_TOKEN}
+bunx hyper config set registry-auth ${NPM_TOKEN}
 
 # Publish to private registry  
 bun publish --registry https://npm.company.com
@@ -265,10 +265,10 @@ registry=https://npm.company.com
     **Usage**:
     ```bash
     # Install templates
-    bunx hypergen add @myorg/react-templates
+    bunx hyper add @myorg/react-templates
     
     # Use templates  
-    bunx hypergen gen component MyComponent --from @myorg/react-templates
+    bunx hyper gen component MyComponent --from @myorg/react-templates
     ```
   </Tab>
   
@@ -284,10 +284,10 @@ registry=https://npm.company.com
     **Usage**:
     ```bash
     # Configure private access
-    bunx hypergen auth login --registry https://templates.company.com
+    bunx hyper auth login --registry https://templates.company.com
     
     # Install private templates
-    bunx hypergen add @company/enterprise-templates
+    bunx hyper add @company/enterprise-templates
     ```
   </Tab>
   
@@ -303,7 +303,7 @@ registry=https://npm.company.com
     **Usage**:
     ```bash
     # Install from GitHub Packages
-    bunx hypergen add @myorg/templates --registry https://npm.pkg.github.com
+    bunx hyper add @myorg/templates --registry https://npm.pkg.github.com
     ```
   </Tab>
 </Tabs>
@@ -318,17 +318,17 @@ Share templates directly from git repositories:
 
 ```bash
 # Install from GitHub repository
-bunx hypergen add github:myorg/react-templates
+bunx hyper add github:myorg/react-templates
 
 # Install specific branch or tag
-bunx hypergen add github:myorg/react-templates#v2.1.0
-bunx hypergen add github:myorg/react-templates#develop
+bunx hyper add github:myorg/react-templates#v2.1.0
+bunx hyper add github:myorg/react-templates#develop
 
 # Install from private repository
-bunx hypergen add git+ssh://git@github.com/myorg/private-templates.git
+bunx hyper add git+ssh://git@github.com/myorg/private-templates.git
 
 # Use templates from repository
-bunx hypergen gen component --from github:myorg/react-templates
+bunx hyper gen component --from github:myorg/react-templates
 ```
 
 ### Repository Structure for Sharing
@@ -337,7 +337,7 @@ Optimize repositories for direct template sharing:
 
 ```
 template-repository/
-├── .hypergen/                  # Repository configuration
+├── .hyperdev/                  # Repository configuration
 │   └── config.yml
 ├── README.md                   # Repository documentation
 ├── templates/                  # Template collection
@@ -359,7 +359,7 @@ template-repository/
 Repository configuration for optimal sharing:
 
 ```yaml
-# .hypergen/config.yml
+# .hyperdev/config.yml
 repository:
   type: "template-collection"
   version: "2.1.0"
@@ -412,7 +412,7 @@ jobs:
         run: bun install
         
       - name: Validate templates
-        run: bunx hypergen validate-package
+        run: bunx hyper validate-package
         
       - name: Run tests
         run: bun test
@@ -432,7 +432,7 @@ jobs:
         run: bun publish
         
       - name: Update marketplace
-        run: bunx hypergen marketplace update
+        run: bunx hyper marketplace update
         env:
           HYPERGEN_API_KEY: ${{ secrets.HYPERGEN_API_KEY }}
         
@@ -466,7 +466,7 @@ my-monorepo/
 │       └── shared/
 │           ├── actions/
 │           └── helpers/
-├── .hypergen/
+├── .hyperdev/
 │   └── workspace.yml
 └── README.md
 ```
@@ -474,7 +474,7 @@ my-monorepo/
 Workspace configuration for template sharing:
 
 ```yaml
-# .hypergen/workspace.yml
+# .hyperdev/workspace.yml
 workspace:
   name: "MyTeam Development Templates"
   version: "1.0.0"
@@ -510,16 +510,16 @@ Enable seamless team template sharing:
 
 ```bash
 # Discover team templates
-bunx hypergen list --source workspace
+bunx hyper list --source workspace
 
 # Use workspace templates
-bunx hypergen gen component --workspace
+bunx hyper gen component --workspace
 
 # Add external templates to workspace
-bunx hypergen workspace add @company/design-system
+bunx hyper workspace add @company/design-system
 
 # Update all workspace templates
-bunx hypergen workspace sync
+bunx hyper workspace sync
 ```
 
 ### Access Control and Governance
@@ -575,22 +575,22 @@ Find templates across multiple sources:
 
 ```bash
 # Search all sources
-bunx hypergen search "react component"
+bunx hyper search "react component"
 
 # Search specific source
-bunx hypergen search "react" --source npm
-bunx hypergen search "service" --source workspace
-bunx hypergen search "workflow" --source github
+bunx hyper search "react" --source npm
+bunx hyper search "service" --source workspace
+bunx hyper search "workflow" --source github
 
 # Advanced filtering
-bunx hypergen search --category frontend --language typescript
-bunx hypergen search --tags "testing,storybook" --author myorg
+bunx hyper search --category frontend --language typescript
+bunx hyper search --tags "testing,storybook" --author myorg
 
 # List installed templates
-bunx hypergen list
+bunx hyper list
 
 # List available templates
-bunx hypergen list --available --source all
+bunx hyper list --available --source all
 ```
 
 ### Installation Workflows
@@ -599,45 +599,45 @@ bunx hypergen list --available --source all
   <Tab title="NPM Package">
     ```bash
     # Install latest version
-    bunx hypergen add @myorg/react-templates
+    bunx hyper add @myorg/react-templates
     
     # Install specific version
-    bunx hypergen add @myorg/react-templates@2.1.0
+    bunx hyper add @myorg/react-templates@2.1.0
     
     # Install with alias
-    bunx hypergen add @myorg/react-templates --as react-pro
+    bunx hyper add @myorg/react-templates --as react-pro
     
     # Install globally
-    bunx hypergen add @myorg/react-templates --global
+    bunx hyper add @myorg/react-templates --global
     ```
   </Tab>
   
   <Tab title="Git Repository">
     ```bash
     # Install from GitHub
-    bunx hypergen add github:myorg/react-templates
+    bunx hyper add github:myorg/react-templates
     
     # Install specific branch
-    bunx hypergen add github:myorg/react-templates#develop
+    bunx hyper add github:myorg/react-templates#develop
     
     # Install with custom name
-    bunx hypergen add github:myorg/react-templates --as team-react
+    bunx hyper add github:myorg/react-templates --as team-react
     
     # Install private repository
-    bunx hypergen add git+ssh://git@github.com/myorg/private.git
+    bunx hyper add git+ssh://git@github.com/myorg/private.git
     ```
   </Tab>
   
   <Tab title="Local Path">
     ```bash
     # Install from local directory
-    bunx hypergen add ./my-templates
+    bunx hyper add ./my-templates
     
     # Install with symlink (development)
-    bunx hypergen add ./my-templates --link
+    bunx hyper add ./my-templates --link
     
     # Install to workspace
-    bunx hypergen add ./my-templates --workspace
+    bunx hyper add ./my-templates --workspace
     ```
   </Tab>
 </Tabs>
@@ -648,22 +648,22 @@ Handle template versions effectively:
 
 ```bash
 # Check template versions
-bunx hypergen list --versions
+bunx hyper list --versions
 
 # Update to latest
-bunx hypergen update @myorg/react-templates
+bunx hyper update @myorg/react-templates
 
 # Update all templates
-bunx hypergen update --all
+bunx hyper update --all
 
 # Pin to specific version
-bunx hypergen pin @myorg/react-templates 2.1.0
+bunx hyper pin @myorg/react-templates 2.1.0
 
 # Check for updates
-bunx hypergen outdated
+bunx hyper outdated
 
 # Remove old versions
-bunx hypergen clean
+bunx hyper clean
 ```
 
 ---
@@ -673,7 +673,7 @@ bunx hypergen clean
 ### Template Marketplace
 
 <Info>
-**Coming Soon**: HyperGen Template Marketplace - A curated collection of high-quality templates with community ratings, reviews, and contribution systems.
+**Coming Soon**: HyperDev Template Marketplace - A curated collection of high-quality templates with community ratings, reviews, and contribution systems.
 </Info>
 
 Future marketplace features will include:
@@ -1100,21 +1100,21 @@ interface DistributionOptimization {
 
 <AccordionGroup>
   <Accordion title="Template not found after installation">
-    **Symptoms**: `hypergen gen` reports template not found despite successful installation
+    **Symptoms**: `hyper gen` reports template not found despite successful installation
     
     **Solutions**:
     ```bash
     # Refresh template cache
-    bunx hypergen cache clear
+    bunx hyper cache clear
     
     # Verify installation
-    bunx hypergen list --verbose
+    bunx hyper list --verbose
     
     # Check discovery paths
-    bunx hypergen config get discovery.paths
+    bunx hyper config get discovery.paths
     
     # Force re-discovery
-    bunx hypergen refresh --all
+    bunx hyper refresh --all
     ```
   </Accordion>
 
@@ -1124,16 +1124,16 @@ interface DistributionOptimization {
     **Solutions**:
     ```bash
     # Check dependency tree
-    bunx hypergen deps --tree
+    bunx hyper deps --tree
     
     # Resolve conflicts
-    bunx hypergen resolve-conflicts
+    bunx hyper resolve-conflicts
     
     # Pin specific versions
-    bunx hypergen pin @org/template 1.2.3
+    bunx hyper pin @org/template 1.2.3
     
     # Use resolution overrides
-    bunx hypergen config set resolutions.@org/template "1.2.3"
+    bunx hyper config set resolutions.@org/template "1.2.3"
     ```
   </Accordion>
 
@@ -1143,16 +1143,16 @@ interface DistributionOptimization {
     **Solutions**:
     ```bash
     # Re-authenticate
-    bunx hypergen auth login --registry https://private-registry.com
+    bunx hyper auth login --registry https://private-registry.com
     
     # Check token validity
-    bunx hypergen auth status
+    bunx hyper auth status
     
     # Update credentials
-    bunx hypergen auth refresh
+    bunx hyper auth refresh
     
     # Clear auth cache
-    bunx hypergen auth logout --all
+    bunx hyper auth logout --all
     ```
   </Accordion>
 </AccordionGroup>
@@ -1247,7 +1247,7 @@ Track distribution success with key metrics:
   <Card title="Enterprise Features" icon="building" href="/guides/enterprise-integration">
     Implement enterprise-grade template governance and distribution
   </Card>
-  <Card title="API Reference" icon="code" href="/api-reference/hypergen">
+  <Card title="API Reference" icon="code" href="/api-reference/hyperdev">
     Deep dive into programmatic template management APIs
   </Card>
 </CardGroup>

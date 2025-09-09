@@ -38,73 +38,115 @@ The **epics** tool provides comprehensive strategic planning capabilities, combi
 
 ## Subcommands
 
-### `hyperdev epics init`
+### `hyper epics init`
 Initialize epic planning for the current project.
 
 ```bash
 # Initialize with default template
-hyperdev epics init
+hyper epics init
 
-# Initialize with specific epic template
-hyperdev epics init --template=saas-product
+# Initialize with specific document template
+hyper epics init --template=technical-prd
 
 # Initialize with AI-assisted planning
-hyperdev epics init --ai-planning
+hyper epics init --ai-planning
 
 # Initialize with existing PRD
-hyperdev epics init --prd=path/to/prd.md
+hyper epics init --prd=path/to/prd.md
 ```
 
-### `hyperdev epics arch`
+### `hyper epics arch`
 Architecture design and documentation tools.
 
 ```bash
 # Create architecture documentation
-hyperdev epics arch create
+hyper epics arch create
 
 # Generate architecture diagrams
-hyperdev epics arch diagram --type=system
+hyper epics arch diagram --type=system
 
 # Validate architecture compliance
-hyperdev epics arch validate
+hyper epics arch validate
 
 # Export architecture documentation
-hyperdev epics arch export --format=pdf
+hyper epics arch export --format=pdf
 ```
 
-### `hyperdev epics tasks`
+### `hyper epics tasks`
 Task management and orchestration interface.
 
 ```bash
 # Launch task management interface
-hyperdev epics tasks
+hyper epics tasks
 
 # Create new epic
-hyperdev epics tasks create-epic
+hyper epics tasks create-epic
 
 # Break down epic into tasks
-hyperdev epics tasks decompose <epic-id>
+hyper epics tasks decompose <epic-id>
 
 # Manage dependencies
-hyperdev epics tasks dependencies
+hyper epics tasks dependencies
 ```
 
-### `hyperdev epics dash`
+### `hyper epics dash`
 Strategic dashboard for epic management and monitoring.
 
 ```bash
 # Launch strategic dashboard
-hyperdev epics dash
+hyper epics dash
 
 # View specific epic dashboard
-hyperdev epics dash --epic=user-auth
+hyper epics dash --epic=user-auth
 
 # Generate progress reports
-hyperdev epics dash report --format=weekly
+hyper epics dash report --format=weekly
 
 # View team allocation
-hyperdev epics dash team-view
+hyper epics dash team-view
 ```
+
+## Epic Template System
+
+### Understanding Epic Templates
+
+Epic templates define **document formats** and **planning structures**, not what you're building. Templates specify how to organize and present information, not the specific features or products you're developing.
+
+#### Correct Template Usage (Document Formats)
+```bash
+# Document structure templates
+hyper epics init --template=technical-prd      # Technical PRD format
+hyper epics init --template=business-prd       # Business-focused PRD format
+hyper epics init --template=feature-spec       # Feature specification format
+hyper epics init --template=architecture-doc   # Architecture documentation format
+hyper epics init --template=minimal-epic       # Lightweight epic format
+```
+
+#### Incorrect Template Usage (Feature Types)
+```bash
+# ❌ Wrong - These describe WHAT you're building, not HOW to document it
+hyper epics init --template=saas-product
+hyper epics init --template=e-commerce-app  
+hyper epics init --template=mobile-app
+hyper epics init --template=api-service
+```
+
+### Available Epic Templates
+
+<Accordion title="Document Format Templates">
+| Template | Description | Use Case |
+|----------|-------------|----------|
+| `technical-prd` | Comprehensive PRD with technical details | Complex features requiring technical depth |
+| `business-prd` | Business-focused PRD format | Business stakeholder communication |
+| `feature-spec` | Lightweight feature specification | Small to medium features |
+| `architecture-doc` | System architecture documentation | Technical planning and system design |
+| `minimal-epic` | Basic epic structure | Simple features or proof of concepts |
+| `enterprise-prd` | Enterprise-grade PRD with compliance | Regulated industries and large organizations |
+</Accordion>
+
+<Note>
+**Key Concept**: Epic templates are about **HOW** you plan and document, not **WHAT** you're planning to build. The content (your SaaS product, mobile app, etc.) comes from your specific requirements, while the template provides the structure for organizing that information.
+</Note>
 
 ## Epic Planning Architecture
 

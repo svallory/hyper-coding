@@ -745,7 +745,7 @@ export class TemplateParser {
     // Base step configuration
     const baseStep = {
       name: step.name,
-      tool: step.tool as ToolType
+      tool: step.tool as ToolType,
     }
 
     // Validate optional base fields
@@ -758,8 +758,8 @@ export class TemplateParser {
       if (this.validateConditionExpression(step.when)) {
         (baseStep as any).when = step.when
       } else {
-        (warnings as string[]).push(`Step '${step.name}' has potentially invalid condition expression`)
-        (baseStep as any).when = step.when // Still include it
+        warnings.push(`Step '${step.name}' has potentially invalid condition expression`)
+        ;(baseStep as any).when = step.when // Still include it
       }
     }
 

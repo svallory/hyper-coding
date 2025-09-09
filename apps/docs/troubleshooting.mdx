@@ -1,14 +1,14 @@
 ---
 title: "Troubleshooting Guide"
-description: "Comprehensive troubleshooting and error handling documentation to help you diagnose and resolve issues quickly when using Hypergen"
+description: "Comprehensive troubleshooting and error handling documentation to help you diagnose and resolve issues quickly when using HyperDev"
 icon: "exclamation-triangle"
 og:title: "Troubleshooting Guide"
-og:description: "Comprehensive troubleshooting and error handling documentation to help you diagnose and resolve issues quickly when using Hypergen"
+og:description: "Comprehensive troubleshooting and error handling documentation to help you diagnose and resolve issues quickly when using HyperDev"
 ---
 
 # Troubleshooting Guide
 
-This guide provides comprehensive solutions for common Hypergen issues and systematic approaches for diagnosing complex problems. When something goes wrong, this should be your first stop.
+This guide provides comprehensive solutions for common HyperDev issues and systematic approaches for diagnosing complex problems. When something goes wrong, this should be your first stop.
 
 ## Quick Diagnostic Commands
 
@@ -17,27 +17,27 @@ Before diving into specific issues, these commands help identify problems:
 <CodeGroup>
 ```bash Basic Health Check
 # Check Hypergen installation
-hypergen --version
+hyper --version
 
 # Validate current project configuration
-hypergen config info
+hyper config info
 
 # List available generators and actions
-hypergen list
+hyper list
 
 # Check generator discovery status
-hypergen discover --dry-run
+hyper discover --dry-run
 ```
 
 ```bash Verbose Debugging
 # Enable debug logging
-DEBUG=hypergen* hypergen [command]
+DEBUG=hyperdev* hyper [command]
 
 # Run with maximum verbosity
-hypergen [command] --verbose --debug
+hyper [command] --verbose --debug
 
 # Validate specific template
-hypergen template validate path/to/template
+hyper template validate path/to/template
 ```
 
 ```bash Environment Diagnostics
@@ -57,28 +57,28 @@ pwd && ls -la
 ### Installation Problems
 
 <AccordionGroup>
-<Accordion title="Command not found: hypergen">
+<Accordion title="Command not found: hyper">
 
-**Symptoms:** `bash: hypergen: command not found` or similar
+**Symptoms:** `bash: hyper: command not found` or similar
 
 **Diagnosis:**
 ```bash
-# Check if hypergen is installed globally
-bun list -g | grep hypergen
+# Check if hyper is installed globally
+bun list -g | grep hyper
 # or
-which hypergen
+which hyper
 ```
 
 **Solutions:**
 
 1. **Install globally:**
    ```bash
-   bun install -g hypergen
+   bun install -g hyper
    ```
 
 2. **Use bunx for one-time execution:**
    ```bash
-   bunx hypergen [command]
+   bunx hyper [command]
    ```
 
 3. **Add to PATH (if installed locally):**
@@ -100,7 +100,7 @@ which hypergen
 **Diagnosis:**
 ```bash
 # Check file permissions
-ls -la $(which hypergen)
+ls -la $(which hyper)
 
 # Check directory permissions
 ls -la _templates/
@@ -110,13 +110,13 @@ ls -la _templates/
 
 1. **Fix file permissions:**
    ```bash
-   chmod +x $(which hypergen)
+   chmod +x $(which hyper)
    ```
 
 2. **Use appropriate user permissions:**
    ```bash
    # Don't use sudo with package managers
-   bun install --user hypergen
+   bun install --user hyper
    ```
 
 3. **Fix template directory permissions:**
@@ -138,32 +138,32 @@ ls -la _templates/
 **Diagnosis:**
 ```bash
 # Check installed version
-hypergen --version
+hyper --version
 
 # Check for multiple installations
-which -a hypergen
+which -a hyper
 
 # List all installed versions
-bun list hypergen
+bun list hyper
 ```
 
 **Solutions:**
 
 1. **Clean install:**
    ```bash
-   bun uninstall -g hypergen
-   bun install -g hypergen@latest
+   bun uninstall -g hyper
+   bun install -g hyper@latest
    ```
 
 2. **Remove conflicting installations:**
    ```bash
    # Remove local installation if using global
-   rm -rf node_modules/hypergen
+   rm -rf node_modules/hyper
    ```
 
 3. **Use specific version:**
    ```bash
-   bunx hypergen@latest [command]
+   bunx hyper@latest [command]
    ```
 </Accordion>
 </AccordionGroup>
@@ -182,25 +182,25 @@ bun list hypergen
 **Diagnosis:**
 ```bash
 # Check for configuration files
-ls -la hypergen.config.js hypergen.config.json .hypergenrc
+ls -la hyperdev.config.js hyperdev.config.json .hyperdevrc
 
 # Verify current working directory
 pwd
 
 # Check configuration search paths
-DEBUG=hypergen:config hypergen list
+DEBUG=hyperdev:config hyper list
 ```
 
 **Solutions:**
 
 1. **Create configuration file:**
    ```bash
-   hypergen init workspace
+   hyper init workspace
    ```
 
 2. **Create minimal configuration:**
    ```javascript
-   // hypergen.config.js
+   // hyperdev.config.js
    export default {
      templates: [
        { name: 'local', path: './_templates' }
@@ -210,7 +210,7 @@ DEBUG=hypergen:config hypergen list
 
 3. **Specify configuration explicitly:**
    ```bash
-   hypergen --config path/to/config.js [command]
+   hyper --config path/to/config.js [command]
    ```
 </Accordion>
 
@@ -225,10 +225,10 @@ DEBUG=hypergen:config hypergen list
 **Diagnosis:**
 ```bash
 # Validate JSON syntax
-node -p "JSON.parse(require('fs').readFileSync('hypergen.config.json', 'utf8'))"
+node -p "JSON.parse(require('fs').readFileSync('hyperdev.config.json', 'utf8'))"
 
 # Check JavaScript syntax
-node -c hypergen.config.js
+node -c hyperdev.config.js
 ```
 
 **Solutions:**
@@ -236,18 +236,18 @@ node -c hypergen.config.js
 1. **Fix JSON syntax:**
    ```bash
    # Use a JSON validator
-   cat hypergen.config.json | jq .
+   cat hyperdev.config.json | jq .
    ```
 
 2. **Fix JavaScript syntax:**
    ```bash
    # Check for common issues
-   node --check hypergen.config.js
+   node --check hyperdev.config.js
    ```
 
 3. **Use configuration template:**
    ```javascript
-   // hypergen.config.js
+   // hyperdev.config.js
    export default {
      templates: [],
      helpers: {},
@@ -275,12 +275,12 @@ node -c hypergen.config.js
 
 2. **Validate configuration:**
    ```bash
-   hypergen config validate
+   hyper config validate
    ```
 
 3. **See full configuration reference:**
    ```bash
-   hypergen config schema
+   hyper config schema
    ```
 </Accordion>
 </AccordionGroup>
@@ -299,7 +299,7 @@ node -c hypergen.config.js
 **Diagnosis:**
 ```bash
 # List available generators
-hypergen list
+hyper list
 
 # Check template structure
 find _templates -name "*.ejs.t" -o -name "template.yml"
@@ -322,18 +322,18 @@ ls -la _templates/[generator-name]/
 
 2. **Run discovery:**
    ```bash
-   hypergen discover
+   hyper discover
    ```
 
 3. **Create missing template:**
    ```bash
-   hypergen init generator --name=my-template
+   hyper init generator --name=my-template
    ```
 
 4. **Check case sensitivity:**
    ```bash
    # Ensure generator names match exactly
-   hypergen component:new vs hypergen Component:new
+   hyper gen component:new vs hyper gen Component:new
    ```
 </Accordion>
 
@@ -349,7 +349,7 @@ ls -la _templates/[generator-name]/
 **Diagnosis:**
 ```bash
 # Validate template syntax
-hypergen template validate _templates/component/new/component.ejs.t
+hyper template validate _templates/component/new/component.ejs.t
 
 # Check frontmatter syntax
 head -20 _templates/component/new/component.ejs.t
@@ -386,7 +386,7 @@ head -20 _templates/component/new/component.ejs.t
 4. **Test template rendering:**
    ```bash
    # Dry run to test rendering
-   hypergen component:new --name=Test --dry-run
+   hyper gen component:new --name=Test --dry-run
    ```
 </Accordion>
 
@@ -404,7 +404,7 @@ head -20 _templates/component/new/component.ejs.t
 cat _templates/component/template.yml
 
 # Run with debug to see variable context
-DEBUG=hypergen* hypergen component:new --name=Test
+DEBUG=hyperdev* hyper gen component:new --name=Test
 ```
 
 **Solutions:**
@@ -425,7 +425,7 @@ DEBUG=hypergen* hypergen component:new --name=Test
 
 2. **Provide variables via command line:**
    ```bash
-   hypergen component:new --name=MyComponent --type=functional
+   hyper gen component:new --name=MyComponent --type=functional
    ```
 
 3. **Set default values:**
@@ -460,7 +460,7 @@ DEBUG=hypergen* hypergen component:new --name=Test
 2. **Verify composition chain:**
    ```bash
    # Debug composition resolution
-   DEBUG=hypergen:composition hypergen [command]
+   DEBUG=hyperdev:composition hyper [command]
    ```
 
 3. **Fix circular dependencies:**
@@ -486,32 +486,32 @@ DEBUG=hypergen* hypergen component:new --name=Test
 **Diagnosis:**
 ```bash
 # List available actions
-hypergen list
+hyper list
 
 # Search for similar actions
-hypergen list | grep -i [partial-name]
+hyper list | grep -i [partial-name]
 
 # Check action discovery
-hypergen discover --verbose
+hyper discover --verbose
 ```
 
 **Solutions:**
 
 1. **Run discovery:**
    ```bash
-   hypergen discover
+   hyper discover
    ```
 
 2. **Check spelling and case:**
    ```bash
    # Actions are case-sensitive
-   hypergen component:New  # ❌ Wrong case
-   hypergen component:new  # ✅ Correct
+   hyper gen component:New  # ❌ Wrong case
+   hyper gen component:new  # ✅ Correct
    ```
 
 3. **Create missing action:**
    ```bash
-   hypergen init generator --name=my-action
+   hyper init generator --name=my-action
    ```
 
 4. **Check action file structure:**
@@ -537,10 +537,10 @@ hypergen discover --verbose
 **Diagnosis:**
 ```bash
 # Get action details and parameter requirements
-hypergen info [action-name]
+hyper info [action-name]
 
 # Run with debug to see parameter validation
-DEBUG=hypergen:params hypergen [action] --param=value
+DEBUG=hyperdev:params hyper gen [action] --param=value
 ```
 
 **Solutions:**
@@ -548,29 +548,29 @@ DEBUG=hypergen:params hypergen [action] --param=value
 1. **Check parameter types:**
    ```bash
    # String parameters
-   hypergen action --name="string value"
+   hyper gen --name="string value"
 
    # Boolean parameters  
-   hypergen action --enabled=true
+   hyper gen --enabled=true
 
    # Array parameters
-   hypergen action --items='["a","b","c"]'
+   hyper gen --items='["a","b","c"]'
    ```
 
 2. **Provide required parameters:**
    ```bash
    # Check which parameters are required
-   hypergen info component:new
+   hyper info component:new
 
    # Provide all required parameters
-   hypergen component:new --name=MyComponent --type=functional
+   hyper gen component:new --name=MyComponent --type=functional
    ```
 
 3. **Fix parameter format:**
    ```bash
    # Use correct parameter names (check case)
-   hypergen action --fileName=test  # ❌ Wrong case
-   hypergen action --filename=test  # ✅ Correct
+   hyper gen --fileName=test  # ❌ Wrong case
+   hyper gen --filename=test  # ✅ Correct
    ```
 </Accordion>
 
@@ -583,10 +583,10 @@ DEBUG=hypergen:params hypergen [action] --param=value
 **Diagnosis:**
 ```bash
 # Run recipe with verbose logging
-DEBUG=hypergen:recipe hypergen recipe run recipe.yml
+DEBUG=hyperdev:recipe hyper recipe run recipe.yml
 
 # Validate recipe syntax
-hypergen recipe validate recipe.yml
+hyper recipe validate recipe.yml
 
 # Check file permissions for target files
 ls -la path/to/target/files
@@ -684,23 +684,23 @@ test -w target/directory/ && echo "Writable" || echo "Not writable"
 
 1. **Use force option:**
    ```bash
-   hypergen component:new --name=Test --force
+   hyper gen component:new --name=Test --force
    ```
 
 2. **Remove existing file:**
    ```bash
    rm target/file.txt
-   hypergen component:new --name=Test
+   hyper gen component:new --name=Test
    ```
 
 3. **Use different name:**
    ```bash
-   hypergen component:new --name=TestComponent2
+   hyper gen component:new --name=TestComponent2
    ```
 
 4. **Configure overwrite behavior:**
    ```javascript
-   // hypergen.config.js
+   // hyperdev.config.js
    export default {
      helpers: {
        overwrite: true  // Allow overwriting by default
@@ -731,7 +731,7 @@ test -w target/directory/ && echo "Writable" || echo "Not writable"
 
 3. **Enable directory creation in config:**
    ```javascript
-   // hypergen.config.js
+   // hyperdev.config.js
    export default {
      helpers: {
        createDirs: true
@@ -779,16 +779,16 @@ echo $HTTP_PROXY $HTTPS_PROXY
 3. **Use alternative URL format:**
    ```bash
    # Try different URL formats
-   hypergen use github:user/repo
-   hypergen use https://github.com/user/repo.git
-   hypergen use git+ssh://git@github.com/user/repo.git
+   hyper use github:user/repo
+   hyper use https://github.com/user/repo.git
+   hyper use git+ssh://git@github.com/user/repo.git
    ```
 
 4. **Cache and retry:**
    ```bash
    # Clear URL cache and retry
-   rm -rf ~/.hypergen/cache/
-   hypergen use github:user/repo
+   rm -rf ~/.hyperdev/cache/
+   hyper use github:user/repo
    ```
 </Accordion>
 
@@ -803,22 +803,22 @@ echo $HTTP_PROXY $HTTPS_PROXY
 1. **Use correct URL formats:**
    ```bash
    # GitHub repositories
-   hypergen use github:user/repo
-   hypergen use github:user/repo#branch
+   hyper use github:user/repo
+   hyper use github:user/repo#branch
    
    # NPM packages
-   hypergen use npm:package-name
-   hypergen use npm:@scope/package-name
+   hyper use npm:package-name
+   hyper use npm:@scope/package-name
    
    # Local paths
-   hypergen use file:./path/to/templates
-   hypergen use file:/absolute/path/to/templates
+   hyper use file:./path/to/templates
+   hyper use file:/absolute/path/to/templates
    ```
 
 2. **Check URL encoding:**
    ```bash
    # URL encode special characters
-   hypergen use github:user/repo-with%2Dspecial%2Dchars
+   hyper use github:user/repo-with%2Dspecial%2Dchars
    ```
 </Accordion>
 </AccordionGroup>
@@ -835,7 +835,7 @@ echo $HTTP_PROXY $HTTPS_PROXY
 **Diagnosis:**
 ```bash
 # Profile template rendering
-time DEBUG=hypergen* hypergen component:new --name=Test
+time DEBUG=hyperdev* hyper gen component:new --name=Test
 
 # Check template complexity
 wc -l _templates/**/*.ejs.t
@@ -864,7 +864,7 @@ top -p $(pgrep node)
 
 3. **Cache template compilation:**
    ```javascript
-   // hypergen.config.js
+   // hyperdev.config.js
    export default {
      cache: {
        templates: true
@@ -891,7 +891,7 @@ top -p $(pgrep node)
 
 1. **Limit concurrent operations:**
    ```javascript
-   // hypergen.config.js
+   // hyperdev.config.js
    export default {
      concurrency: 2  // Reduce from default
    }
@@ -908,7 +908,7 @@ top -p $(pgrep node)
 
 3. **Clear template cache:**
    ```bash
-   rm -rf ~/.hypergen/cache/
+   rm -rf ~/.hyperdev/cache/
    ```
 </Accordion>
 </AccordionGroup>
@@ -922,7 +922,7 @@ top -p $(pgrep node)
 
 1. **Limit discovery scope:**
    ```javascript
-   // hypergen.config.js
+   // hyperdev.config.js
    export default {
      discovery: {
        directories: ['./_templates'],  // Don't scan entire filesystem
@@ -946,7 +946,7 @@ top -p $(pgrep node)
    ```bash
    # Discovery results are cached automatically
    # Clear cache if needed
-   rm -rf ~/.hypergen/cache/discovery/
+   rm -rf ~/.hyperdev/cache/discovery/
    ```
 </Accordion>
 </AccordionGroup>
@@ -964,15 +964,15 @@ top -p $(pgrep node)
 
 1. **Install VS Code extension:**
    ```bash
-   code --install-extension hypergen.vscode-hypergen
+   code --install-extension hyperdev.vscode-hyperdev
    ```
 
 2. **Check extension settings:**
    ```json
    // settings.json
    {
-     "hypergen.executable": "hypergen",
-     "hypergen.configPath": "./hypergen.config.js"
+     "hyperdev.executable": "hyper",
+     "hyperdev.configPath": "./hyperdev.config.js"
    }
    ```
 
@@ -1003,7 +1003,7 @@ top -p $(pgrep node)
 
 2. **Add type definitions:**
    ```typescript
-   // types/hypergen.d.ts
+   // types/hyperdev.d.ts
    declare const name: string
    declare const type: string
    // Add other template variables
@@ -1023,9 +1023,9 @@ top -p $(pgrep node)
 # Add debugging to CI pipeline
 - name: Debug Hypergen
   run: |
-    which hypergen
-    hypergen --version
-    DEBUG=hypergen* hypergen list
+    which hyper
+    hyper --version
+    DEBUG=hyperdev* hyper list
 ```
 
 **Solutions:**
@@ -1034,10 +1034,10 @@ top -p $(pgrep node)
    ```yaml
    # GitHub Actions
    - name: Install Hypergen
-     run: bun install -g hypergen
+     run: bun install -g hyper
    
    - name: Generate code
-     run: hypergen component:new --name=CI-Test
+     run: hyper gen component:new --name=CI-Test
    ```
 
 2. **Use correct Node.js version:**
@@ -1051,7 +1051,7 @@ top -p $(pgrep node)
    ```yaml
    env:
      NODE_ENV: production
-     DEBUG: hypergen:*
+     DEBUG: hyperdev:*
    ```
 
 4. **Handle file permissions:**
@@ -1102,13 +1102,13 @@ Date: $(date)
 OS: $(uname -a)
 Node: $(node --version)
 Bun: $(bun --version)
-Hypergen: $(hypergen --version)
+Hypergen: $(hyper --version)
 PWD: $(pwd)
 EOF
 
 # Add configuration info
 echo "Config:" >> debug-info.txt
-hypergen config info >> debug-info.txt 2>&1 || echo "No config" >> debug-info.txt
+hyper config info >> debug-info.txt 2>&1 || echo "No config" >> debug-info.txt
 
 # Add template structure
 echo -e "\nTemplates:" >> debug-info.txt
@@ -1121,10 +1121,10 @@ Create a minimal example that reproduces the issue:
 
 ```bash
 # Create test directory
-mkdir hypergen-debug && cd hypergen-debug
+mkdir hyperdev-debug && cd hyperdev-debug
 
 # Initialize minimal configuration  
-cat > hypergen.config.js << EOF
+cat > hyperdev.config.js << EOF
 export default {
   templates: [
     { name: 'test', path: './_templates' }
@@ -1150,7 +1150,7 @@ prompts:
 EOF
 
 # Test
-hypergen test:new --name=debug
+hyper gen test:new --name=debug
 ```
 
 ### 3. Verbose Logging
@@ -1159,13 +1159,13 @@ Enable comprehensive logging:
 
 ```bash
 # Maximum debugging
-DEBUG=hypergen* hypergen [command] --verbose --debug 2>&1 | tee debug.log
+DEBUG=hyperdev* hyper [command] --verbose --debug 2>&1 | tee debug.log
 
 # Focus on specific areas
-DEBUG=hypergen:template,hypergen:config hypergen [command]
+DEBUG=hyperdev:template,hyperdev:config hyper [command]
 
 # Log to file for analysis
-hypergen [command] --verbose 2>&1 | tee -a debug.log
+hyper [command] --verbose 2>&1 | tee -a debug.log
 ```
 
 ### 4. Isolation Testing
@@ -1174,18 +1174,18 @@ Test components individually:
 
 ```bash
 # Test template syntax only
-hypergen template validate _templates/component/new/component.ejs.t
+hyper template validate _templates/component/new/component.ejs.t
 
 # Test configuration loading
-hypergen config info
+hyper config info
 
 # Test discovery
-hypergen discover --dry-run
+hyper discover --dry-run
 
 # Test without custom configuration
-mv hypergen.config.js hypergen.config.js.bak
-hypergen [command]
-mv hypergen.config.js.bak hypergen.config.js
+mv hyperdev.config.js hyperdev.config.js.bak
+hyper [command]
+mv hyperdev.config.js.bak hyperdev.config.js
 ```
 
 ### 5. Binary Search Debugging
@@ -1206,24 +1206,24 @@ When self-service solutions don't work:
 
 ```bash
 # Create comprehensive debug package
-mkdir hypergen-debug-$(date +%s)
-cd hypergen-debug-*
+mkdir hyperdev-debug-$(date +%s)
+cd hyperdev-debug-*
 
 # Copy your configuration
-cp path/to/hypergen.config.js ./
+cp path/to/hyperdev.config.js ./
 
 # Export minimal template that reproduces issue
 cp -r _templates/problematic-generator ./
 
 # Create issue report
 cat > ISSUE_REPORT.md << EOF
-# Hypergen Issue Report
+# HyperDev Issue Report
 
 ## Environment
 - OS: $(uname -a)
 - Node: $(node --version)  
 - Bun: $(bun --version)
-- Hypergen: $(hypergen --version)
+- Hypergen: $(hyper --version)
 
 ## Issue Description
 [Describe the issue]
@@ -1241,7 +1241,7 @@ cat > ISSUE_REPORT.md << EOF
 
 ## Debug Output
 \`\`\`
-$(DEBUG=hypergen* hypergen [command] 2>&1)
+$(DEBUG=hyperdev* hyper [command] 2>&1)
 \`\`\`
 
 EOF
@@ -1249,9 +1249,9 @@ EOF
 
 ### 2. Community Resources
 
-- **GitHub Issues**: [github.com/svallory/hypergen/issues](https://github.com/svallory/hypergen/issues)
-- **Documentation**: [hypergen.dev/docs](https://hypergen.dev/docs)
-- **Discussions**: [github.com/svallory/hypergen/discussions](https://github.com/svallory/hypergen/discussions)
+- **GitHub Issues**: [github.com/svallory/hyperdev/issues](https://github.com/svallory/hyperdev/issues)
+- **Documentation**: [hyperdev.ai/docs](https://hyperdev.ai/docs)
+- **Discussions**: [github.com/svallory/hyperdev/discussions](https://github.com/svallory/hyperdev/discussions)
 
 ### 3. Issue Reporting Guidelines
 
@@ -1269,19 +1269,19 @@ When reporting issues:
 
 ```bash
 # Validate templates before use
-hypergen template validate _templates/**/*.ejs.t
+hyper template validate _templates/**/*.ejs.t
 
 # Test template rendering
-hypergen template test _templates/component
+hyper template test _templates/component
 
 # Lint template syntax
-hypergen template lint _templates/
+hyper template lint _templates/
 ```
 
 ### Configuration Validation
 
 ```javascript
-// hypergen.config.js - Use strict validation
+// hyperdev.config.js - Use strict validation
 export default {
   strict: true,  // Enable strict mode
   templates: [
@@ -1299,13 +1299,13 @@ export default {
 
 ```bash
 # Add health checks to your workflow
-hypergen doctor  # Check system health
+hyper doctor  # Check system health
 
 # Monitor performance
-time hypergen [command]
+time hyper [command]
 
 # Set up automated testing
-npm test -- --testNamePattern="hypergen"
+npm test -- --testNamePattern="hyperdev"
 ```
 
 ## Quick Reference
@@ -1314,9 +1314,9 @@ npm test -- --testNamePattern="hypergen"
 
 | Code | Issue | Quick Fix |
 |------|-------|-----------|
-| `CONFIG_FILE_NOT_FOUND` | No config file | `hypergen init workspace` |
+| `CONFIG_FILE_NOT_FOUND` | No config file | `hyper init workspace` |
 | `TEMPLATE_NOT_FOUND` | Missing template | Check `_templates/` structure |
-| `ACTION_NOT_FOUND` | Unknown action | `hypergen list` to see available actions |
+| `ACTION_NOT_FOUND` | Unknown action | `hyper list` to see available actions |
 | `FILE_PERMISSION_DENIED` | Permission error | `chmod 755 directory/` |
 | `TEMPLATE_INVALID_SYNTAX` | Template syntax error | Validate EJS and YAML syntax |
 
@@ -1324,10 +1324,10 @@ npm test -- --testNamePattern="hypergen"
 
 | Command | Purpose |
 |---------|---------|
-| `hypergen --version` | Check installation |
-| `hypergen list` | See available generators |  
-| `hypergen discover` | Refresh generator list |
-| `hypergen config info` | Validate configuration |
-| `DEBUG=hypergen* hypergen [cmd]` | Enable debug logging |
+| `hyper --version` | Check installation |
+| `hyper list` | See available generators |  
+| `hyper discover` | Refresh generator list |
+| `hyper config info` | Validate configuration |
+| `DEBUG=hyperdev* hyper [cmd]` | Enable debug logging |
 
-This troubleshooting guide should help you resolve most Hypergen issues quickly and systematically. When in doubt, start with the diagnostic commands and work through the systematic debugging approach.
+This troubleshooting guide should help you resolve most HyperDev issues quickly and systematically. When in doubt, start with the diagnostic commands and work through the systematic debugging approach.

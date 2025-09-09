@@ -187,6 +187,48 @@ export class ActionParameterResolver {
   }
 
   /**
+   * Resolve parameters without interactive prompts (uses defaults and validates provided values)
+   */
+  async resolveParameters(
+    metadata: ActionMetadata,
+    provided: Record<string, any> = {}
+  ): Promise<Record<string, any>> {
+    debug('Resolving parameters for action: %s', metadata.name)
+    
+    const resolved: Record<string, any> = { ...provided }
+    
+    if (!metadata.parameters || metadata.parameters.length === 0) {
+      debug('No parameters defined for action: %s', metadata.name)
+      return resolved
+    }
+
+    // Apply default values for missing parameters
+    for (const param of metadata.parameters) {
+      if (resolved[param.name] === undefined && param.default !== undefined) {
+        resolved[param.name] = param.default
+        debug('Applied default value for %s: %o', param.name, param.default)
+      }
+    }
+
+    // Validate all parameter values
+    for (const param of metadata.parameters) {
+      if (resolved[param.name] !== undefined) {
+        this.validateParameterValue(param.name, resolved[param.name], param, resolved)
+      } else if (param.required) {
+        throw new ActionParameterError(
+          `Required parameter '${param.name}' is missing`,
+          param.name,
+          undefined,
+          param.type
+        )
+      }
+    }
+
+    debug('Parameters resolved for %s: %o', metadata.name, Object.keys(resolved))
+    return resolved
+  }
+
+  /**
    * Convert ActionParameter to TemplateVariable format
    */
   private convertParameterToVariable(param: ActionParameter): TemplateVariable {
