@@ -1,0 +1,250 @@
+---
+title: "Webpack"
+description: "Integrate HyperDev with Webpack for template validation, auto-generation, and quality gates during the build process."
+icon: "webpack-missing.svg"
+og:title: "Webpack Integration"
+og:description: "Integrate HyperDev with Webpack for template validation, auto-generation, and quality gates during the build process."
+---
+
+# Webpack Integration
+
+Configure Webpack to work with HyperDev through plugins, loaders, and build-time validation.
+
+## Webpack Plugin Configuration
+
+Set up the HyperDev Webpack plugin:
+
+```javascript
+// webpack.config.js
+const HyperDevPlugin = require('@hyperdev/webpack-plugin')
+const path = require('path')
+
+module.exports = {
+  // ... other config
+  plugins: [
+    new HyperDevPlugin({
+      // Template validation during build
+      validateTemplates: true,
+      // Auto-generate files based on templates
+      autoGenerate: {
+        enabled: true,
+        patterns: ['src/**/*.template.yml'],
+        outputDir: 'src/generated'
+      },
+      // Quality gates integration
+      qualityGates: {
+        enabled: process.env.NODE_ENV === 'production',
+        failOnError: true,
+        rules: ['typescript', 'eslint', 'security', 'performance']
+      },
+      // Template hot reload in development
+      hotReload: process.env.NODE_ENV === 'development'
+    })
+  ],
+  module: {
+    rules: [
+      {
+        test: /\.ejs\.t$/,
+        use: '@hyperdev/template-loader',
+        exclude: /node_modules/
+      }
+    ]
+  }
+}
+```
+
+## Template Loader Configuration
+
+Configure the HyperDev template loader:
+
+```javascript
+// webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.ejs\.t$/,
+        use: {
+          loader: '@hyperdev/template-loader',
+          options: {
+            // Enable caching for better performance
+            cache: true,
+            // Validate templates during load
+            validate: true,
+            // Include source maps in development
+            sourceMap: process.env.NODE_ENV === 'development'
+          }
+        }
+      },
+      {
+        test: /\.template\.yml$/,
+        use: {
+          loader: '@hyperdev/config-loader',
+          options: {
+            // Parse and validate template configuration
+            validate: true,
+            // Include in dependency graph
+            track: true
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+## Development Configuration
+
+Configure Webpack dev server with HyperDev:
+
+```javascript
+// webpack.dev.js
+const { merge } = require('webpack-merge')
+const common = require('./webpack.common.js')
+const HyperDevPlugin = require('@hyperdev/webpack-plugin')
+
+module.exports = merge(common, {
+  mode: 'development',
+  devServer: {
+    hot: true,
+    // Proxy HyperDev dashboard
+    proxy: {
+      '/hyperdev': {
+        target: 'http://localhost:4000',
+        changeOrigin: true
+      }
+    }
+  },
+  plugins: [
+    new HyperDevPlugin({
+      dev: {
+        // Enable hot reloading for templates
+        hotReload: true,
+        // Watch for template changes
+        watchTemplates: true,
+        // Live validation
+        liveValidation: true
+      }
+    })
+  ]
+})
+```
+
+## Production Configuration
+
+Configure production builds with HyperDev quality gates:
+
+```javascript
+// webpack.prod.js
+const { merge } = require('webpack-merge')
+const common = require('./webpack.common.js')
+const HyperDevPlugin = require('@hyperdev/webpack-plugin')
+
+module.exports = merge(common, {
+  mode: 'production',
+  plugins: [
+    new HyperDevPlugin({
+      production: {
+        // Strict validation in production
+        strictValidation: true,
+        // Optimize generated code
+        optimizeOutput: true,
+        // Fail build on quality gate failures
+        failOnQualityGate: true,
+        // Generate build report
+        generateReport: true
+      },
+      qualityGates: {
+        enabled: true,
+        strict: true,
+        rules: ['typescript', 'eslint', 'security', 'performance', 'accessibility']
+      }
+    })
+  ]
+})
+```
+
+## Custom Loaders Integration
+
+Create custom loaders for specific HyperDev patterns:
+
+```javascript
+// loaders/hyperdev-schema-loader.js
+module.exports = function(source) {
+  const callback = this.async()
+  const hyperdev = require('@hyperdev/core')
+  
+  // Process HyperDev schema files
+  hyperdev.processSchema(source)
+    .then(result => {
+      callback(null, result)
+    })
+    .catch(error => {
+      callback(error)
+    })
+}
+```
+
+## Plugin Configuration Options
+
+Advanced HyperDev plugin configuration:
+
+```javascript
+// webpack.config.js
+new HyperDevPlugin({
+  // Template processing
+  templates: {
+    // Directory patterns to watch
+    patterns: ['src/**/*.template.yml', 'templates/**/*.ejs.t'],
+    // Output directory for generated files
+    outputDir: 'src/generated',
+    // Template compilation options
+    compile: {
+      sourceMap: true,
+      minify: process.env.NODE_ENV === 'production'
+    }
+  },
+  
+  // Validation settings
+  validation: {
+    // Validate on every build
+    onBuild: true,
+    // Validate on file changes (dev mode)
+    onWatch: true,
+    // Validation rules
+    rules: {
+      syntax: true,
+      security: true,
+      performance: true
+    }
+  },
+  
+  // Build integration
+  build: {
+    // Generate manifest file
+    manifest: true,
+    // Include metadata in output
+    metadata: true,
+    // Clean generated files before build
+    clean: true
+  }
+})
+```
+
+## Build Scripts Integration
+
+Package.json scripts for Webpack and HyperDev:
+
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"hyperdev dev --watch\" \"webpack serve --config webpack.dev.js\"",
+    "build": "hyperdev validate --all && webpack --config webpack.prod.js",
+    "build:analyze": "webpack-bundle-analyzer dist/stats.json",
+    "hyperdev:validate": "hyperdev validate --all",
+    "hyperdev:gen": "hyperdev gen"
+  }
+}
+```
+
+This integration ensures HyperDev templates are validated and processed correctly during your Webpack build pipeline.

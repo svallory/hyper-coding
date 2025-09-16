@@ -78,7 +78,7 @@
 		"js-yaml": "^4.1.0",
 		"liquidjs": "^10.21.1",
 		"ora": "^5.4.1",
-		"typedoc-theme-mintlify": "../typedoc-theme-mintlify",
+		"typedoc-theme-mintlify": "workspace:*",
 		"yaml": "^2.8.0",
 		"yargs-parser": "^21.1.1"
 	},

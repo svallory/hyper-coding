@@ -2,6 +2,12 @@
   "$schema": "https://www.mintlify.com/docs.json",
   "name": "HyperDev",
   "theme": "aspen",
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  },
+  "icons": {
+    "library": "lucide"
+  },
   "logo": {
     "dark": "/logo/logo.png",
     "light": "/logo/logo.png"
@@ -19,36 +25,54 @@
     }
   },
   "navigation": {
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Github",
+          "icon": "github",
+          "href": "https://github.com/subtletools/hyperdev"
+        }
+      ]
+    },
     "tabs": [
       {
         "tab": "Documentation",
         "groups": [
           {
-            "group": "🚀 Get Started",
-            "icon": "rocket",
+            "group": "Get Started",
             "pages": [
               "index",
-              "installation",
-              "quickstart",
-              "getting-started-tutorial",
-              "tutorial-validation-guide",
-              "user-workflows"
+              "get-started/installation",
+              "get-started/quickstart",
+              "get-started/tutorial"
             ]
           },
           {
-            "group": "💡 Core Concepts",
-            "icon": "lightbulb",
+            "group": "What is Hyper Coding?",
             "pages": [
-              "methodology",
-              "methodology/hyper-vs-vibe"
+              "hyper-coding/introduction-to-hyper-coding",
+              "hyper-coding/hyper-vs-vibe"
             ]
           },
           {
-            "group": "⚒️ CLI Tools",
-            "icon": "wrench",
+            "group": "How To",
+            "pages": [
+              "workflow/workflow-overview",
+              "workflow/gen",
+              "workflow/plan",
+              "workflow/dev"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/customize-setup"
+            ]
+          },
+          {
+            "group": "CLI",
             "pages": [
               "cli/overview",
-              "cli/installation",
               "cli/quickstart",
               {
                 "group": "Core Commands",
@@ -56,7 +80,7 @@
                 "pages": [
                   "cli/commands/overview",
                   {
-                    "group": "🔄 Workflow Commands",
+                    "group": "Workflow Commands",
                     "pages": [
                       "cli/commands/workflow/init",
                       "cli/commands/workflow/gen",
@@ -65,23 +89,22 @@
                     ]
                   },
                   {
-                    "group": "🔍 Discovery Commands",
+                    "group": "Discovery Commands",
                     "pages": [
                       "cli/commands/discovery/search",
-                      "cli/commands/discovery/list",
-                      "cli/commands/discovery/status"
+                      "cli/commands/discovery/list"
                     ]
                   },
                   {
-                    "group": "📦 Resource Commands",
+                    "group": "Resource Commands",
                     "pages": [
-                      "cli/commands/resources/epic",
-                      "cli/commands/resources/task",
-                      "cli/commands/resources/docs"
+                      "cli/commands/resources/docs",
+                      "cli/commands/resources/plan",
+                      "cli/commands/resources/task"
                     ]
                   },
                   {
-                    "group": "📊 Dashboard",
+                    "group": "Dashboard",
                     "pages": [
                       "cli/commands/dash"
                     ]
@@ -91,47 +114,57 @@
             ]
           },
           {
-            "group": "🛠️ Tools & Integrations",
-            "icon": "cog",
+            "group": "Tools & Integrations",
             "pages": [
-              "tools/overview",
-              "tools/gen",
-              "tools/epics",
-              "tools/dev",
-              "tools/dx",
               {
-                "group": "🤖 AI Tool Integrations",
+                "group": "AI Tools",
+                "icon": "bot",
                 "pages": [
                   "ai-tools/claude-code",
                   "ai-tools/cursor",
                   "ai-tools/windsurf"
                 ]
               },
-              "tool-integrations"
+              {
+                "group": "Tool Integrations",
+                "icon": "puzzle",
+                "pages": [
+                  "integrations/vscode",
+                  "integrations/jetbrains",
+                  "integrations/vim",
+                  "integrations/vite",
+                  "integrations/webpack",
+                  "integrations/nextjs",
+                  "integrations/github-actions",
+                  "integrations/docker",
+                  "integrations/git-hooks",
+                  "integrations/claude-code-hooks",
+                  "integrations/user-analytics-scenario",
+                  "integrations/package-scripts"
+                ]
+              }
             ]
           },
           {
-            "group": "📖 Guides & Best Practices",
-            "icon": "book-open",
+            "group": "Guides",
             "pages": [
               "guides/overview",
               "advanced-usage",
-              "performance-guide",
+              "guides/best-practices",
               "security-guide",
               "development"
             ]
           },
           {
-            "group": "📄 Templates",
-            "icon": "file-text",
+            "group": "Templates",
             "pages": [
-              "template-creation-guide",
-              "template-sharing"
+              "templates/creating-templates",
+              "templates/sharing-templates",
+              "templates/migration-guide"
             ]
           },
           {
-            "group": "🎯 Examples",
-            "icon": "target",
+            "group": "Examples",
             "pages": [
               "examples/overview",
               "examples/quick-wins",
@@ -141,20 +174,10 @@
             ]
           },
           {
-            "group": "📚 Reference",
-            "icon": "book",
-            "pages": [
-              "cli-reference",
-              "configuration-guide",
-              "troubleshooting"
-            ]
-          },
-          {
-            "group": "👥 Community",
+            "group": "Community",
             "icon": "users",
             "pages": [
               "community/overview",
-              "migration-guide",
               "community-guidelines",
               "plugin-development"
             ]
@@ -162,172 +185,24 @@
         ]
       },
       {
-        "tab": "SDK Reference",
+        "tab": "References",
         "groups": [
           {
-            "group": "Interfaces",
-            "icon": "square-dashed",
             "pages": [
-              "sdk-reference/hypergen/hypergen.actionstep",
-              "sdk-reference/hypergen/hypergen.baserecipestep",
-              "sdk-reference/hypergen/hypergen.codemodexecutionresult",
-              "sdk-reference/hypergen/hypergen.codemodstep",
-              "sdk-reference/hypergen/hypergen.recipeconfig",
-              "sdk-reference/hypergen/hypergen.recipedependency",
-              "sdk-reference/hypergen/hypergen.recipeengineconfig",
-              "sdk-reference/hypergen/hypergen.recipeexample",
-              "sdk-reference/hypergen/hypergen.recipeexecution",
-              "sdk-reference/hypergen/hypergen.recipeexecutionoptions",
-              "sdk-reference/hypergen/hypergen.recipeexecutionplan",
-              "sdk-reference/hypergen/hypergen.recipeexecutionresult",
-              "sdk-reference/hypergen/hypergen.recipeloadresult",
-              "sdk-reference/hypergen/hypergen.recipestep",
-              "sdk-reference/hypergen/hypergen.recipevalidationresult",
-              "sdk-reference/hypergen/hypergen.recipevalidationwarning",
-              "sdk-reference/hypergen/hypergen.stepcontext",
-              "sdk-reference/hypergen/hypergen.stepdependencynode",
-              "sdk-reference/hypergen/hypergen.stepexecutionmetrics",
-              "sdk-reference/hypergen/hypergen.stepexecutionoptions",
-              "sdk-reference/hypergen/hypergen.stepexecutionprogress",
-              "sdk-reference/hypergen/hypergen.stepexecutorconfig",
-              "sdk-reference/hypergen/hypergen.stepresult",
-              "sdk-reference/hypergen/hypergen.templateexecutionresult",
-              "sdk-reference/hypergen/hypergen.templatestep",
-              "sdk-reference/hypergen/hypergen.toolfactory",
-              "sdk-reference/hypergen/hypergen.toollifecyclemetrics",
-              "sdk-reference/hypergen/hypergen.toolregistration",
-              "sdk-reference/hypergen/hypergen.toolregistrystats",
-              "sdk-reference/hypergen/hypergen.toolresolutionoptions",
-              "sdk-reference/hypergen/hypergen.toolresource",
-              "sdk-reference/hypergen/hypergen.toolsearchcriteria",
-              "sdk-reference/hypergen/hypergen.toolvalidationresult"
-            ]
-          },
-          {
-            "group": "Classes",
-            "icon": "cube",
-            "pages": [
-              "sdk-reference/hypergen/hypergen.actiontool",
-              "sdk-reference/hypergen/hypergen.actiontoolfactory",
-              "sdk-reference/hypergen/hypergen.basetoolfactory",
-              "sdk-reference/hypergen/hypergen.circulardependencyerror",
-              "sdk-reference/hypergen/hypergen.logger",
-              "sdk-reference/hypergen/hypergen.recipedependencyerror",
-              "sdk-reference/hypergen/hypergen.recipeengine",
-              "sdk-reference/hypergen/hypergen.recipetool",
-              "sdk-reference/hypergen/hypergen.recipetoolfactory",
-              "sdk-reference/hypergen/hypergen.recipevalidationerror",
-              "sdk-reference/hypergen/hypergen.stepexecutionerror",
-              "sdk-reference/hypergen/hypergen.stepexecutor",
-              "sdk-reference/hypergen/hypergen.templatetool",
-              "sdk-reference/hypergen/hypergen.templatetoolfactory",
-              "sdk-reference/hypergen/hypergen.tool",
-              "sdk-reference/hypergen/hypergen.toolregistry"
-            ]
-          },
-          {
-            "group": "Functions",
-            "icon": "function",
-            "pages": [
-              "sdk-reference/hypergen/hypergen.checkrecipeenginehealth",
-              "sdk-reference/hypergen/hypergen.checkregistryhealth",
-              "sdk-reference/hypergen/hypergen.createrecipeengine",
-              "sdk-reference/hypergen/hypergen.createtool",
-              "sdk-reference/hypergen/hypergen.createvalidationresult",
-              "sdk-reference/hypergen/hypergen.engine",
-              "sdk-reference/hypergen/hypergen.executerecipe",
-              "sdk-reference/hypergen/hypergen.gettoolregistry",
-              "sdk-reference/hypergen/hypergen.initializerecipeengine",
-              "sdk-reference/hypergen/hypergen.initializetoolsframework",
-              "sdk-reference/hypergen/hypergen.isactionstep",
-              "sdk-reference/hypergen/hypergen.iscodemodstep",
-              "sdk-reference/hypergen/hypergen.isrecipestep",
-              "sdk-reference/hypergen/hypergen.issupportedtooltype",
-              "sdk-reference/hypergen/hypergen.istemplatestep",
-              "sdk-reference/hypergen/hypergen.loadrecipe",
-              "sdk-reference/hypergen/hypergen.registertool",
-              "sdk-reference/hypergen/hypergen.resolve",
-              "sdk-reference/hypergen/hypergen.resolvetool",
-              "sdk-reference/hypergen/hypergen.resolvetools",
-              "sdk-reference/hypergen/hypergen.runner",
-              "sdk-reference/hypergen/hypergen.validaterecipe",
-              "sdk-reference/hypergen/hypergen.validatetooltype"
-            ]
-          },
-          {
-            "group": "Variables",
-            "icon": "variable",
-            "pages": [
-              "sdk-reference/hypergen/hypergen.default_registry_config",
-              "sdk-reference/hypergen/hypergen.devutils",
-              "sdk-reference/hypergen/hypergen.recipe_engine_features",
-              "sdk-reference/hypergen/hypergen.recipe_engine_version",
-              "sdk-reference/hypergen/hypergen.recipeenginedevutils",
-              "sdk-reference/hypergen/hypergen.recipeenginepresets",
-              "sdk-reference/hypergen/hypergen.supported_tool_types",
-              "sdk-reference/hypergen/hypergen.tool_execution_phases",
-              "sdk-reference/hypergen/hypergen.tool_framework_constants",
-              "sdk-reference/hypergen/hypergen.tool_framework_version"
-            ]
-          },
-          {
-            "group": "Types",
-            "icon": "type",
-            "pages": [
-              "sdk-reference/hypergen/hypergen.recipeenginefeature",
-              "sdk-reference/hypergen/hypergen.recipesource",
-              "sdk-reference/hypergen/hypergen.recipestepunion",
-              "sdk-reference/hypergen/hypergen.stepbytool",
-              "sdk-reference/hypergen/hypergen.stepstatus",
-              "sdk-reference/hypergen/hypergen.toolphase",
-              "sdk-reference/hypergen/hypergen.tooltype"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Package Docs",
-        "groups": [
-          {
-            "group": "typedoc-plugin-mintlify",
-            "icon": "code",
-            "pages": [
-              "packages/typedoc-plugin-mintlify/index",
-              "packages/typedoc-plugin-mintlify/globals",
               {
-                "group": "Interfaces",
-                "pages": [
-                  "packages/typedoc-plugin-mintlify/interfaces/MintlifyPluginOptions"
-                ]
+                "icon": "terminal",
+                "root": "CLI Reference"
               },
               {
-                "group": "Functions",
-                "pages": [
-                  "packages/typedoc-plugin-mintlify/functions/generateMintlifyDocs",
-                  "packages/typedoc-plugin-mintlify/functions/cli"
-                ]
+                "icon": "cog",
+                "root": "Configuration Guide"
+              },
+              {
+                "icon": "bug",
+                "root": "Troubleshooting"
               }
             ]
           },
-          {
-            "group": "typedoc-mintlify-theme",
-            "icon": "code",
-            "pages": [
-              "packages/typedoc-mintlify-theme/index",
-              "packages/typedoc-mintlify-theme/globals",
-              {
-                "group": "Functions",
-                "pages": [
-                  "packages/typedoc-mintlify-theme/functions/load"
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "Packages",
-        "groups": [
           {
             "group": "mintlify-tsdocs",
             "icon": "code",
@@ -351,39 +226,12 @@
                   "packages/mintlify-tsdocs/mintlify-tsdocs.imarkdownemitteroptions"
                 ]
               }
-            ],
-            "menu": "mintlify-tsdocs"
+            ]
           }
         ]
       }
     ]
   },
-  "anchors": [
-    {
-      "name": "📚 Documentation",
-      "icon": "book-open-cover",
-      "url": "https://docs.hyperdev.ai"
-    },
-    {
-      "name": "👥 Community",
-      "icon": "discord",
-      "url": "https://hyperdev.ai/discord"
-    },
-    {
-      "name": "📰 Blog",
-      "icon": "newspaper",
-      "url": "https://hyperdev.ai/blog"
-    },
-    {
-      "name": "🚀 Quick Start",
-      "icon": "play",
-      "url": "/quickstart"
-    }
-  ],
-  "versions": [
-    "v1",
-    "v2"
-  ],
   "feedback": {
     "thumbsRating": true,
     "suggestEdit": true,
@@ -397,14 +245,10 @@
     "isHidden": false
   },
   "topbarLinks": [
-    {
-      "name": "Support",
-      "url": "mailto:support@hyperdev.ai"
-    }
   ],
   "topbarCtaButton": {
-    "name": "📊 Dashboard",
-    "url": "https://dashboard.hyperdev.ai",
+    "name": "GitHub",
+    "url": "https://github.com/subtletools/hyperdev",
     "style": "roundedFull"
   },
   "seo": {
@@ -424,43 +268,9 @@
     "enabled": true,
     "logo": "/logo/logo.png"
   },
-  "integrations": {
-    "intercom": {
-      "appId": "app_id"
-    }
-  },
-  "api": {
-    "baseUrl": "https://api.hyperdev.ai",
-    "auth": {
-      "method": "bearer"
-    },
-    "playground": {
-      "mode": "show"
-    },
-    "maintainOrder": true
-  },
   "tabs": [
-    {
-      "name": "Home",
-      "url": "https://hyperdev.ai"
-    },
-    {
-      "name": "Changelog",
-      "url": "https://hyperdev.ai/changelog"
-    }
   ],
   "footerSocials": {
-    "x": "https://x.com/hyperdev_ai",
-    "github": "https://github.com/hyperdev-ai",
-    "linkedin": "https://www.linkedin.com/company/hyperdev-ai",
-    "discord": "https://hyperdev.ai/discord"
-  },
-  "analytics": {
-    "posthog": {
-      "apiKey": "phc_api_key"
-    },
-    "gtm": {
-      "tagId": "GTM-ID"
-    }
+    "github": "https://github.com/subtletools/hyperdev"
   }
 }

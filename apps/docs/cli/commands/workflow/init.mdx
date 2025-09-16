@@ -8,12 +8,12 @@ og:description: "Initialize new projects with optimal setup and AI-augmented dev
 
 # hyper init
 
-Initialize a new HyperDev project with intelligent setup, optimal configuration, and AI-augmented development environment.
+Initialize a new HyperDev project with optimal configuration.
 
 ## Syntax
 
 ```bash
-hyper init [template] [options]
+hyper init [options]
 ```
 
 ## Overview
@@ -36,11 +36,6 @@ The `hyper init` command creates a new project with everything you need for AI-a
 
 | Option | Description | Default | Example |
 |--------|-------------|---------|---------|
-| `--template, -t <name>` | Project template to use | `interactive` | `--template fullstack-saas` |
-| `--ide <name>` | Primary IDE configuration | `cursor` | `--ide vscode` |
-| `--ai-optimized` | Setup AI-optimized environment | `false` | `--ai-optimized` |
-| `--team-config <file>` | Import team configuration | - | `--team-config team.json` |
-| `--interactive, -i` | Interactive setup wizard | `true` | `--interactive` |
 | `--dry-run` | Preview what would be created | `false` | `--dry-run` |
 | `--force` | Overwrite existing files | `false` | `--force` |
 | `--verbose` | Detailed output | `false` | `--verbose` |
@@ -58,82 +53,10 @@ hyper init --no-interactive
 ```
 
 The interactive setup guides you through:
-1. Project template selection
-2. Stack and framework choices  
-3. AI provider configuration
-4. Development environment setup
-5. Team settings (optional)
+1. Development environment setup
+2. Basic configuration options
 
-### Template-Based Initialization
 
-```bash
-# Use specific template
-hyper init --template fullstack-saas
-
-# Popular templates
-hyper init --template next-app       # Next.js application
-hyper init --template react-lib      # React library
-hyper init --template express-api    # Express API
-hyper init --template minimal        # Minimal setup
-```
-
-<Accordion title="Available Templates">
-| Template | Description | Stack |
-|----------|-------------|-------|
-| `fullstack-saas` | Complete SaaS application | Next.js, TypeScript, Prisma, Auth |
-| `next-app` | Next.js application | Next.js, React, TypeScript |
-| `react-lib` | React component library | React, TypeScript, Storybook |
-| `express-api` | Express REST API | Node.js, Express, TypeScript |
-| `fastify-api` | Fastify REST API | Node.js, Fastify, TypeScript |
-| `react-native` | React Native mobile app | React Native, Expo, TypeScript |
-| `minimal` | Minimal HyperDev setup | Basic structure only |
-</Accordion>
-
-### IDE Integration
-
-```bash
-# Configure for specific IDE
-hyper init --ide cursor              # Cursor IDE (default)
-hyper init --ide vscode              # VS Code
-hyper init --ide jetbrains           # IntelliJ/WebStorm
-
-# AI-optimized setup
-hyper init --ai-optimized --ide cursor
-```
-
-### Team Configuration
-
-```bash
-# Import existing team settings
-hyper init --team-config .hyperdev/team-config.json
-
-# Initialize for team development
-hyper init --template fullstack-saas --team-config team.json
-```
-
-<Accordion title="Team Configuration Example">
-```json
-{
-  "name": "Acme Dev Team",
-  "aiProvider": "openai",
-  "trustThreshold": 8.0,
-  "qualityGates": {
-    "security": "strict",
-    "performance": "standard",
-    "testing": "required"
-  },
-  "templates": {
-    "sources": ["internal", "trusted-community"],
-    "customTemplates": "./team-templates"
-  },
-  "workflows": {
-    "codeReview": "required",
-    "testing": "automated",
-    "deployment": "gitops"
-  }
-}
-```
-</Accordion>
 
 ## What Gets Created
 
@@ -361,7 +284,7 @@ hyper init --template react-lib --ide vscode
     hyper search "my-template"
     
     # Update template cache
-    hyper cache clear && hyper init
+    hyper config clear-cache clear && hyper init
     ```
   </Accordion>
   
@@ -401,7 +324,7 @@ hyper init --template react-lib --ide vscode
     **Solutions**:
     ```bash
     # Reconfigure IDE
-    hyper dx setup --ide cursor
+    hyper config --ide cursor
     
     # Check IDE configuration
     hyper config list | grep ide
@@ -424,7 +347,7 @@ hyper init --template react-lib --ide vscode
   <Card title="hyper status" href="/cli/commands/discovery/status">
     Check project health and setup status
   </Card>
-  <Card title="hyper dx" href="/cli/commands/tools/dx">
+  <Card title="hyper config" href="/cli/commands/tools/dx">
     Advanced developer experience configuration
   </Card>
 </CardGroup>

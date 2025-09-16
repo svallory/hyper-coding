@@ -1,0 +1,241 @@
+---
+title: "Git Hooks"
+description: "Integrate HyperDev with Git hooks for automated template validation and quality checks."
+icon: "git-branch"
+og:title: "Git Hooks Integration"
+og:description: "Integrate HyperDev with Git hooks for automated template validation and quality checks."
+---
+
+# Git Hooks Integration
+
+Automate HyperDev validation and quality checks using Git hooks to ensure code quality at every commit.
+
+## Pre-commit Hooks
+
+Validate templates before commits:
+
+```bash
+#!/bin/sh
+# .git/hooks/pre-commit
+
+echo "Running HyperDev pre-commit validations..."
+
+# Validate templates before commit
+if ! hyperdev validate --changed-only --quiet; then
+    echo "❌ Template validation failed. Please fix templates before committing."
+    exit 1
+fi
+
+# Check for security issues in templates
+if ! hyperdev security-scan --changed-only --fail-on-medium; then
+    echo "❌ Security issues found in templates. Please address before committing."
+    exit 1
+fi
+
+# Validate generated code is up to date
+if ! hyperdev verify-generated --fail-on-outdated; then
+    echo "❌ Generated code is outdated. Run 'hyperdev generate --all' to update."
+    exit 1
+fi
+
+echo "✅ All HyperDev validations passed."
+exit 0
+```
+
+## Pre-push Hooks
+
+Run quality gates before pushing:
+
+```bash
+#!/bin/sh
+# .git/hooks/pre-push
+
+echo "Running HyperDev pre-push quality gates..."
+
+# Run full quality gate suite
+if ! hyperdev quality-gate --all --strict; then
+    echo "❌ Quality gates failed. Push blocked."
+    exit 1
+fi
+
+# Verify template compatibility
+if ! hyperdev compatibility-check --remote; then
+    echo "❌ Template compatibility issues detected."
+    exit 1
+fi
+
+echo "✅ All quality gates passed. Push allowed."
+exit 0
+```
+
+## Husky Integration
+
+Use Husky for easier Git hook management:
+
+```json
+// package.json
+{
+  "husky": {
+    "hooks": {
+      "pre-commit": "hyperdev validate --staged && lint-staged",
+      "pre-push": "hyperdev quality-gate --all",
+      "commit-msg": "hyperdev validate-commit-msg",
+      "post-merge": "hyperdev sync-templates --auto"
+    }
+  },
+  "lint-staged": {
+    "**/*.{ts,tsx,js,jsx}": [
+      "hyperdev validate-generated",
+      "eslint --fix",
+      "git add"
+    ],
+    "**/*.template.yml": [
+      "hyperdev validate-template",
+      "git add"
+    ],
+    ".hyperdev/**/*": [
+      "hyperdev validate-config",
+      "git add"
+    ]
+  }
+}
+```
+
+## Commit Message Validation
+
+Validate commit messages for HyperDev conventions:
+
+```bash
+#!/bin/sh
+# .git/hooks/commit-msg
+
+commit_regex='^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .{1,50}'
+
+if ! grep -qE "$commit_regex" "$1"; then
+    echo "❌ Invalid commit message format."
+    echo "Format: type(scope): description"
+    echo "Example: feat(templates): add new React component template"
+    exit 1
+fi
+
+# Check if commit involves HyperDev files
+if git diff --cached --name-only | grep -qE '\.(template\.yml|ejs\.t)$|^\.hyperdev/'; then
+    echo "📝 HyperDev files detected in commit."
+    
+    # Run quick validation
+    if ! hyperdev validate --staged --quick; then
+        echo "❌ HyperDev validation failed for staged files."
+        exit 1
+    fi
+fi
+
+echo "✅ Commit message and HyperDev validation passed."
+```
+
+## Post-checkout Hooks
+
+Sync templates after branch switches:
+
+```bash
+#!/bin/sh
+# .git/hooks/post-checkout
+
+prev_head=$1
+new_head=$2
+branch_switch=$3
+
+# Only run on branch switches
+if [ $branch_switch -eq 1 ]; then
+    echo "Branch switched. Syncing HyperDev templates..."
+    
+    # Check if templates need updating
+    if hyperdev needs-sync --quiet; then
+        echo "Templates need syncing. Running sync..."
+        hyperdev sync-templates --auto
+    fi
+    
+    # Validate current templates
+    hyperdev validate --all --quiet
+    
+    echo "✅ HyperDev templates synced."
+fi
+```
+
+## Post-merge Hooks
+
+Handle template updates after merges:
+
+```bash
+#!/bin/sh
+# .git/hooks/post-merge
+
+echo "Post-merge: Checking HyperDev updates..."
+
+# Check if HyperDev files were modified
+if git diff-tree --name-only HEAD@{1} HEAD | grep -qE '\.(template\.yml|ejs\.t)$|^\.hyperdev/'; then
+    echo "HyperDev files were updated. Running validation..."
+    
+    # Validate all templates
+    if ! hyperdev validate --all; then
+        echo "⚠️ Template validation failed after merge."
+        echo "Please resolve issues and run 'hyperdev validate --all'."
+        exit 1
+    fi
+    
+    # Update generated files if needed
+    if hyperdev needs-regeneration --quiet; then
+        echo "Regenerating updated templates..."
+        hyperdev generate --all --updated-only
+    fi
+    
+    echo "✅ HyperDev post-merge validation completed."
+fi
+```
+
+## Setup Script
+
+Automate Git hook installation:
+
+```bash
+#!/bin/bash
+# scripts/setup-git-hooks.sh
+
+echo "Setting up HyperDev Git hooks..."
+
+# Make hooks directory if it doesn't exist
+mkdir -p .git/hooks
+
+# Copy hook scripts
+cp scripts/hooks/pre-commit .git/hooks/pre-commit
+cp scripts/hooks/pre-push .git/hooks/pre-push
+cp scripts/hooks/commit-msg .git/hooks/commit-msg
+cp scripts/hooks/post-checkout .git/hooks/post-checkout
+cp scripts/hooks/post-merge .git/hooks/post-merge
+
+# Make hooks executable
+chmod +x .git/hooks/pre-commit
+chmod +x .git/hooks/pre-push
+chmod +x .git/hooks/commit-msg
+chmod +x .git/hooks/post-checkout
+chmod +x .git/hooks/post-merge
+
+echo "✅ HyperDev Git hooks installed successfully!"
+```
+
+## Package.json Scripts
+
+Add convenience scripts for hook management:
+
+```json
+{
+  "scripts": {
+    "hooks:install": "./scripts/setup-git-hooks.sh",
+    "hooks:test": "hyperdev validate --all && echo 'Hooks would pass'",
+    "hooks:bypass": "git commit --no-verify",
+    "validate:pre-commit": "hyperdev validate --staged",
+    "validate:pre-push": "hyperdev quality-gate --all"
+  }
+}
+```
+
+This Git hooks integration ensures that HyperDev validations and quality checks are automatically enforced throughout your development workflow.

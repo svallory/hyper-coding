@@ -1,0 +1,80 @@
+---
+title: "plan"
+description: "Product requirements management, architecture design, and strategic task planning with AI-assisted documentation."
+icon: "map"
+og:title: "plan: Strategic Planning"
+og:description: "Product requirements management, architecture design, and strategic task planning with AI-assisted documentation."
+---
+
+# plan: Strategic Planning & Architecture
+
+The **plan** tool provides comprehensive strategic planning capabilities for your development projects. It helps you create structured documentation, break down complex features, and maintain alignment between business objectives and technical implementation.
+
+## Core Features
+
+### Document Templates
+- **technical-prd** - Comprehensive PRD with technical details
+- **business-prd** - Business-focused PRD format  
+- **feature-spec** - Lightweight feature specification
+- **architecture-doc** - System architecture documentation
+- **minimal-plan** - Basic planning structure
+- **enterprise-prd** - Enterprise-grade PRD with compliance
+
+### Planning Workflow
+1. **Create Plan** - Initialize with template or from existing documents
+2. **Document Requirements** - Structure business and technical requirements
+3. **Design Architecture** - Create technical specifications and diagrams
+4. **Break Down Tasks** - Decompose features into implementable tasks
+5. **Track Progress** - Monitor implementation against plan
+
+## Commands
+
+### `hyper plan [plan-title]`
+Start interactive planning session or work on specific plan.
+
+```bash
+# Start new planning session
+hyper plan
+
+# Work on specific plan
+hyper plan "User Authentication System"
+
+# Create plan with template
+hyper plan --template technical-prd
+
+# Initialize from existing document
+hyper plan --from requirements.md
+```
+
+## File Structure
+
+Plans are stored in `.hyper/plans/<plan-title>/` with organized documentation:
+
+```
+.hyper/plans/user-auth/
+├── plan.yaml           # Plan metadata
+├── prd.md             # Product requirements
+├── architecture.md    # Technical architecture
+├── tasks.yaml         # Task breakdown
+└── progress.md        # Implementation progress
+```
+
+## Integration
+
+The plan tool integrates with:
+- Code generation (requirements-driven templates)
+- Development monitoring (progress tracking)
+- Quality assurance (requirement validation)
+- Team collaboration (shared planning)
+
+## Best Practices
+
+1. **Start with Templates** - Use appropriate document templates
+2. **Clear Requirements** - Define specific, measurable objectives
+3. **Iterative Planning** - Refine plans based on feedback
+4. **Track Progress** - Monitor implementation against requirements
+5. **Team Collaboration** - Share plans for alignment and review
+
+---
+
+The **plan** tool transforms ad-hoc development into systematic, requirement-driven implementation with clear documentation and progress tracking.

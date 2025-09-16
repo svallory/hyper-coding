@@ -1,8 +1,8 @@
 ---
-title: "CLI Quickstart"
+title: "Quickstart"
 description: "Get started with HyperDev CLI in 5 minutes - from installation to your first AI-generated code"
 icon: "rocket"
-og:title: "CLI Quickstart"
+og:title: "Hyperdev CLI Quickstart"
 og:description: "Get started with HyperDev CLI in 5 minutes - from installation to your first AI-generated code"
 ---
 
@@ -20,11 +20,11 @@ Get up and running with the HyperDev CLI in just a few minutes. This guide will 
 
 <CodeGroup>
 ```bash bun (Recommended)
-bun install -g @hyperdev/cli
+bun install -g @hyper-coding/cli
 ```
 
 ```bash npm
-npm install -g @hyperdev/cli
+npm install -g @hyper-coding/cli
 ```
 </CodeGroup>
 
@@ -249,7 +249,7 @@ hyper help templates          # Template system help
   <Accordion title="Templates not found">
     Refresh the template cache:
     ```bash
-    hyper cache clear
+    hyper config clear-cache clear
     hyper list templates --refresh
     ```
   </Accordion>
@@ -257,8 +257,8 @@ hyper help templates          # Template system help
   <Accordion title="Slow performance">
     Try using bun for better performance:
     ```bash
-    bun install -g @hyperdev/cli
-    hyper dx diagnose --optimize
+    bun install -g @hyper-coding/cli
+    hyper config doctor --optimize
     ```
   </Accordion>
 </AccordionGroup>

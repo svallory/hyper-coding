@@ -8,7 +8,7 @@ Successfully created a TypeDoc plugin that transforms TypeDoc-generated markdown
 ### ✅ Completed Features
 
 1. **Plugin Architecture**
-   - Created a complete TypeDoc plugin structure at `/work/hyperdev/packages/typedoc-plugin-mintlify/`
+   - Created a complete TypeDoc plugin structure at `/work/hyperdev/packages/typedoc-theme-mintlify/`
    - Properly configured as an npm package with correct exports and dependencies
    - Follows TypeDoc plugin conventions and patterns
 
@@ -43,7 +43,7 @@ Successfully created a TypeDoc plugin that transforms TypeDoc-generated markdown
 
 ### Plugin Structure
 ```
-packages/typedoc-plugin-mintlify/
+packages/typedoc-theme-mintlify/
 ├── src/
 │   ├── index.ts                    # Main plugin entry point
 │   ├── options/
@@ -92,7 +92,7 @@ packages/typedoc-plugin-mintlify/
 - Studied typedoc-plugin-markdown architecture and extension patterns
 - Researched existing theme plugins (vitepress, vuepress, docusaurus)
 - Created implementation strategy based on proven patterns
-- Documented in `/work/hyperdev/agent/notes/typedoc-plugin-mintlify-implementation-plan.md`
+- Documented in `/work/hyperdev/agent/notes/typedoc-theme-mintlify-implementation-plan.md`
 
 ## Current Status
 
@@ -138,7 +138,7 @@ packages/typedoc-plugin-mintlify/
 ```bash
 $ bun run docs:api
 [info] Loaded plugin typedoc-plugin-markdown
-[info] Loaded plugin typedoc-plugin-mintlify
+[info] Loaded plugin typedoc-theme-mintlify
 [info] markdown generated at /work/hyperdev/apps/docs/api-reference/hypergen
 [warning] Found 0 errors and 5 warnings
 ```
@@ -171,9 +171,9 @@ Main Recipe Engine for Hypergen V8
 ## File Locations
 
 ### Plugin Source
-- `/work/hyperdev/packages/typedoc-plugin-mintlify/` - Main plugin directory
-- `/work/hyperdev/packages/typedoc-plugin-mintlify/src/index.ts` - Plugin entry point
-- `/work/hyperdev/packages/typedoc-plugin-mintlify/src/transformers/mintlify-transformer.ts` - Core logic
+- `/work/hyperdev/packages/typedoc-theme-mintlify/` - Main plugin directory
+- `/work/hyperdev/packages/typedoc-theme-mintlify/src/index.ts` - Plugin entry point
+- `/work/hyperdev/packages/typedoc-theme-mintlify/src/transformers/mintlify-transformer.ts` - Core logic
 
 ### Configuration
 - `/work/hyperdev/packages/hypergen/docs/typedoc.json` - TypeDoc configuration
@@ -181,7 +181,7 @@ Main Recipe Engine for Hypergen V8
 
 ### Documentation
 - `/work/hyperdev/agent/notes/mintlify-components-list.md` - Component research
-- `/work/hyperdev/agent/notes/typedoc-plugin-mintlify-implementation-plan.md` - Implementation plan
+- `/work/hyperdev/agent/notes/typedoc-theme-mintlify-implementation-plan.md` - Implementation plan
 
 ### Output Directory
 - `/work/hyperdev/apps/docs/api-reference/hypergen/` - Generated API documentation

@@ -3,7 +3,7 @@
 
 ### Features
 
-* **typedoc-plugin-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
 
 
 
@@ -12,7 +12,7 @@
 
 ### Features
 
-* **typedoc-plugin-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
 
 
 
@@ -21,7 +21,7 @@
 
 ### Features
 
-* **typedoc-plugin-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
 
 
 
@@ -30,7 +30,7 @@
 
 ### Features
 
-* **typedoc-plugin-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
 
 
 

@@ -1,0 +1,317 @@
+---
+title: "Installation"
+description: "Install and configure the HyperDev CLI for local code generation and development"
+icon: "download"
+og:title: "Installation"
+og:description: "Install and configure the HyperDev CLI for local code generation and development"
+---
+
+# Installation
+
+> Get the HyperDev CLI installed and start generating code locally
+
+Install the HyperDev command-line interface to start using intelligent code generation and template management. HyperDev operates entirely locally - no cloud services or authentication required.
+
+<Info>
+  **Prerequisites**: Before you begin, ensure you have [Node.js v18+](https://nodejs.org/) and [Bun](https://bun.sh/) installed on your system.
+</Info>
+
+## System Requirements
+
+Before installing HyperDev, verify your system meets these requirements:
+
+<Card title="Operating System Support" icon="desktop">
+  **Supported Platforms:**
+  - macOS 10.15 (Catalina) or later
+  - Ubuntu 20.04+ or equivalent Linux distribution
+  - Windows 11 with WSL2 (recommended) or Windows 10 build 19041+
+</Card>
+
+<Card title="Runtime Requirements" icon="cog">
+  **Required Software:**
+  - **Node.js**: Version 18.0.0 or higher
+  - **Package Manager**: Bun (recommended) or npm/yarn
+  - **Git**: Latest stable version
+  - **Terminal**: Modern terminal with Unicode support
+</Card>
+
+## Installation
+
+Install HyperDev using your preferred package manager:
+
+<CodeGroup>
+  ```bash Bun (Recommended)
+  bun install -g @hyper-coding/cli
+  ```
+
+  ```bash npm
+  npm install -g @hyper-coding/cli
+  ```
+
+  ```bash yarn
+  yarn global add @hyper-coding/cli
+  ```
+</CodeGroup>
+
+This will install the `hyper` command globally on your system.
+
+## Manual Installation
+
+For advanced users who prefer granular control over the installation process:
+
+<AccordionGroup>
+  <Accordion title="Step 1: Install Core CLI">
+    Install the HyperDev command-line interface:
+
+    <CodeGroup>
+      ```bash Bun (Recommended)
+      bun install -g @hyper-coding/cli
+      ```
+
+      ```bash npm
+      npm install -g @hyper-coding/cli
+      ```
+
+      ```bash yarn
+      yarn global add @hyper-coding/cli
+      ```
+    </CodeGroup>
+
+    <Tip>
+      Bun provides significantly faster installation and better performance. Install Bun first if you haven't already.
+    </Tip>
+  </Accordion>
+
+  <Accordion title="Step 2: Install Tool Suite">
+    Install the complete HyperDev toolkit:
+
+    ```bash
+    # Verify CLI installation
+    hyper --version
+    
+    # Initialize in current directory
+    hyper init
+    ```
+  </Accordion>
+
+  <Accordion title="Step 3: Initialize Environment">
+    Set up your development environment:
+
+    ```bash
+    # Initialize HyperDev in current directory
+    hyper init
+
+    # Configure basic settings
+    hyper config
+
+    # Verify installation
+    hyper --version
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Verification & Testing
+
+Verify your installation is working correctly:
+
+<Steps>
+  <Step title="Run System Check">
+    Execute the built-in diagnostic tool:
+    
+    ```bash
+    hyper --version
+    ```
+    
+    This checks that the CLI is properly installed.
+  </Step>
+  
+  <Step title="Test Code Generation">
+    Try generating a simple project:
+    
+    ```bash
+    hyper gen component --name TestComponent
+    ```
+  </Step>
+  
+  <Step title="Verify Tool Integration">
+    Ensure all tools are properly linked:
+    
+    ```bash
+    hyper --version
+    hyper gen --help
+    ```
+  </Step>
+</Steps>
+
+<Frame>
+  <img src="/images/doctor-output.png" alt="HyperDev Doctor Output" />
+</Frame>
+
+## Configuration
+
+Initialize your development workspace:
+
+```bash
+hyper init
+```
+
+## IDE Integration
+
+HyperDev provides first-class integrations with popular development environments:
+
+<Tabs>
+  <Tab title="VS Code">
+    Install the HyperDev extension from the VS Code marketplace or via command line:
+    ```bash
+    code --install-extension hyperdev.hyperdev-vscode
+    ```
+  </Tab>
+
+  <Tab title="Cursor">
+    Setup Cursor integration:
+    ```bash
+    hyper config set default-ide cursor
+    ```
+  </Tab>
+
+  <Tab title="JetBrains">
+    Supports IntelliJ IDEA, WebStorm, PyCharm, and other JetBrains IDEs.
+    
+    ```bash
+    hyper config set default-ide jetbrains
+    ```
+  </Tab>
+
+  <Tab title="Vim/Neovim">
+    Install via your preferred plugin manager:
+    
+    <CodeGroup>
+      ```lua lazy.nvim
+      {
+        "hyperdev-ai/hyperdev.nvim",
+        config = function()
+          require("hyperdev").setup()
+        end
+      }
+      ```
+      
+      ```vim vim-plug
+      Plug 'hyperdev-ai/hyperdev.vim'
+      ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Permission errors on macOS/Linux">
+    Fix file permissions for HyperDev configuration:
+    
+    ```bash
+    sudo chown -R $(whoami) ~/.hyperdev
+    chmod -R 755 ~/.hyperdev
+    ```
+    
+    Or install without sudo:
+    ```bash
+    npm config set prefix '~/.local'
+    echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+    ```
+  </Accordion>
+
+  <Accordion title="Node.js version conflicts">
+    Use a Node.js version manager to handle multiple versions:
+    
+    <CodeGroup>
+      ```bash nvm
+      nvm install 18
+      nvm use 18
+      nvm alias default 18
+      ```
+      
+      ```bash fnm (faster alternative)
+      fnm install 18
+      fnm use 18
+      fnm default 18
+      ```
+    </CodeGroup>
+  </Accordion>
+
+  <Accordion title="Installation hanging or failing">
+    Try these solutions in order:
+    
+    1. **Clear package cache:**
+       ```bash
+       bun cache clear
+       npm cache clean --force
+       ```
+    
+    2. **Use different registry:**
+       ```bash
+       bun install -g @hyper-coding/cli --registry https://registry.npmjs.org/
+       ```
+    
+    3. **Install with verbose logging:**
+       ```bash
+       bun install -g @hyper-coding/cli --verbose
+       ```
+  </Accordion>
+
+  <Accordion title="Windows WSL2 specific issues">
+    Common Windows/WSL2 solutions:
+    
+    1. **Update WSL2:**
+       ```bash
+       wsl --update
+       ```
+    
+    2. **Fix line ending issues:**
+       ```bash
+       git config --global core.autocrlf false
+       ```
+    
+    3. **Set proper WSL2 path:**
+       ```bash
+       echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Getting Help
+
+If you encounter issues during installation:
+
+<Columns cols={2}>
+  <Card title="Documentation" icon="book" href="/guides/troubleshooting">
+    Comprehensive troubleshooting guide with common solutions
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/hyperdev-ai/hyperdev/issues">
+    Search existing issues or report new problems
+  </Card>
+</Columns>
+
+## Next Steps
+
+<Card title="Continue with Quickstart" icon="rocket" href="/quickstart" horizontal>
+  Now that HyperDev is installed, follow our quickstart guide to create your first project and experience the complete workflow.
+</Card>
+
+## Updating HyperDev
+
+Keep your HyperDev installation current with the latest features and security updates:
+
+<CodeGroup>
+  ```bash Update CLI
+  bun update -g @hyper-coding/cli
+  ```
+
+  ```bash Check Current Version
+  hyper --version
+  ```
+</CodeGroup>
+
+The update process handles:
+- CLI binary updates
+- Configuration migration
+- Template cache cleanup
