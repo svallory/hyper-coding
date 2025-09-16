@@ -151,7 +151,7 @@ export { <%= componentName %>, type <%= componentName %>Props } from './<%= comp
 
 ### Usage Example
 ```bash
-bun run hypergen react-component
+hyper gen react-component
 # Prompts:
 # Component name (PascalCase): Button  
 # Does this component accept props? Yes
@@ -430,7 +430,7 @@ export { router as <%= resourceName %>Routes };
 
 ### Usage Example
 ```bash
-bun run hypergen express-endpoint
+hyper gen express-endpoint
 # Prompts:
 # Resource name (singular, lowercase): user
 # Include authentication middleware? Yes  
@@ -590,7 +590,7 @@ to: tsconfig.test.json
 
 ### Usage Example
 ```bash
-bun run hypergen typescript-config
+hyper gen typescript-config
 # Prompts:
 # Project type: React Application
 # Enable strict mode? Yes
@@ -708,7 +708,7 @@ export enum Status {
 
 ### Usage Example
 ```bash
-bun run hypergen prisma-model
+hyper gen prisma-model
 # Prompts:
 # Model name (singular, PascalCase): Product
 # Include created/updated timestamps? Yes
@@ -860,7 +860,7 @@ to: package.json
 
 ### Usage Example
 ```bash
-bun run hypergen package-json
+hyper gen package-json
 # Prompts:
 # Project name (kebab-case): my-awesome-api
 # Project type: API Server  
@@ -1009,7 +1009,7 @@ global.IntersectionObserver = class IntersectionObserver {
 
 ### Usage Example
 ```bash
-bun run hypergen jest-config
+hyper gen jest-config
 # Prompts:
 # Use TypeScript? Yes
 # Project type: React

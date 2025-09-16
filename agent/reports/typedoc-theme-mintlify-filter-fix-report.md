@@ -3,7 +3,7 @@
 ## Issue Identified
 The plugin was generating useless documentation pages for itself, showing:
 - "TypeDoc Mintlify Theme v1.0.0" in navigation
-- "typedoc-plugin-mintlify" entries  
+- "typedoc-theme-mintlify" entries  
 - Bogus content with package name + version as title
 - Plugin function documentation (like `load()` function)
 
@@ -26,7 +26,7 @@ private shouldIncludeReflection(reflection: DeclarationReflection): boolean {
   // Default exclude patterns for plugin-related modules
   const defaultExcludePatterns = [
     'typedoc-theme-mintlify',
-    'typedoc-plugin-mintlify', 
+    'typedoc-theme-mintlify', 
     'mintlify-theme',
     'mintlify-converter'
   ];
@@ -59,7 +59,7 @@ private shouldSkipFile(filePath: string): boolean {
   
   const skipPatterns = [
     'typedoc-theme-mintlify',
-    'typedoc-plugin-mintlify', 
+    'typedoc-theme-mintlify', 
     'mintlify-theme',
     'mintlify-converter',
     'load.html',  // Plugin function documentation

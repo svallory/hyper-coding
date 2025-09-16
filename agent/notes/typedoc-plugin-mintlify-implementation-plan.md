@@ -98,7 +98,7 @@ Based on my research of the `typedoc-plugin-markdown` ecosystem, I've identified
 
 ### Plugin Structure
 ```
-packages/typedoc-plugin-mintlify/
+packages/typedoc-theme-mintlify/
 ├── src/
 │   ├── index.ts                 # Main plugin entry point
 │   ├── options/

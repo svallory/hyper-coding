@@ -1,0 +1,79 @@
+---
+title: "hyper plan"
+description: "Create and manage project plans with templates and documentation"
+icon: "flag"
+og:title: "hyper plan"
+og:description: "Create and manage project plans with templates and documentation"
+---
+
+# hyper plan
+
+Create and manage project plans for feature development. Simple documentation-focused planning with templates.
+
+## Syntax
+
+```bash
+hyper plan [plan-title] [options]
+```
+
+## Overview
+
+The `hyper plan` command provides basic plan management:
+
+- **Plan creation**: Create new plans with document templates
+- **Documentation**: Generate plan documentation
+- **Template support**: Use predefined document templates
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--template <name>` | Plan document template to use | `standard` | `--template technical-prd` |
+| `--from <document>` | Initialize with existing document | - | `--from requirements.md` |
+
+## Examples
+
+### Basic Plan Management
+
+```bash
+# Create new plan
+hyper plan "User Authentication System"
+
+# Create plan with template
+hyper plan "API Service" --template technical-prd
+
+# Initialize from existing document
+hyper plan "Migration" --from existing-spec.md
+```
+
+## Plan Document Templates
+
+**Available Templates**:
+- `technical-prd` - Comprehensive PRD with technical details
+- `business-prd` - Business-focused PRD format  
+- `feature-spec` - Lightweight feature specification
+- `architecture-doc` - System architecture documentation
+- `minimal-plan` - Basic planning structure
+
+## Plan Structure
+
+Plans are stored in `.hyper/plans/<plan-title>/` with organized documentation:
+
+```
+.hyper/plans/user-auth/
+├── plan.yaml           # Plan metadata
+├── prd.md             # Product requirements
+├── architecture.md    # Technical architecture
+└── tasks.yaml         # Task breakdown
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper list" href="/cli/commands/discovery/list">
+    List available plans and resources
+  </Card>
+  <Card title="hyper status" href="/cli/commands/discovery/status">
+    Check plan status and project health
+  </Card>
+</CardGroup>

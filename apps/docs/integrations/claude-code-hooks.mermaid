@@ -1,0 +1,153 @@
+flowchart TD
+    Start([Developer starts session]) --> SessionStart[1. SessionStart Hook]
+    SessionStart --> InitDaemon[Initialize intrusive thoughts daemon]
+    SessionStart --> SetupWatchers[Setup real-time linting watchers]
+    
+    InitDaemon --> UserPrompt[Developer gives prompt]
+    SetupWatchers --> UserPrompt
+    
+    UserPrompt --> UserPromptSubmit[2. UserPromptSubmit Hook]
+    UserPromptSubmit --> QuerySimilar[Query daemon for similar patterns]
+    QuerySimilar --> HasSimilar{Similar patterns found?}
+    HasSimilar -->|Yes| InjectContext[Inject intrusive thoughts]
+    HasSimilar -->|No| PreToolUse
+    InjectContext --> PreToolUse[3. PreToolUse Hook]
+    
+    PreToolUse --> ASTAnalysis[AST duplicate analysis]
+    PreToolUse --> SyntaxCheck[Real-time syntax check]
+    ASTAnalysis --> DuplicateFound{Duplicate detected?}
+    SyntaxCheck --> SyntaxValid{Syntax valid?}
+    
+    DuplicateFound -->|Yes| WarnDuplicate[Warn about duplicate]
+    DuplicateFound -->|No| WriteCode
+    SyntaxValid -->|No| SyntaxError[Return syntax error]
+    SyntaxValid -->|Yes| WriteCode[Claude writes code]
+    WarnDuplicate --> WriteCode
+    SyntaxError --> UserPrompt
+    
+    WriteCode --> PostToolUse[4. PostToolUse Hook]
+    PostToolUse --> ImmediateLint[Immediate linting]
+    PostToolUse --> FormatCheck[Format validation]
+    ImmediateLint --> LintPassed{Lint passed?}
+    FormatCheck --> FormatPassed{Format valid?}
+    
+    LintPassed -->|No| LintFeedback[Provide lint feedback]
+    LintPassed -->|Yes| CodeComplete
+    FormatPassed -->|No| FormatFeedback[Provide format feedback]
+    FormatPassed -->|Yes| CodeComplete[Code writing complete]
+    LintFeedback --> UserPrompt
+    FormatFeedback --> UserPrompt
+    
+    CodeComplete --> CommitReady{Ready to commit?}
+    CommitReady -->|Yes| PreCommit[5. pre-commit Hook]
+    CommitReady -->|No| UserPrompt
+    
+    PreCommit --> PCFormat[Code formatting check]
+    PreCommit --> PCLint[Comprehensive linting]
+    PreCommit --> PCType[Type checking]
+    PreCommit --> PCSecurity[Security scanning]
+    PreCommit --> PCTest[Unit tests]
+    
+    PCFormat --> PCFormatPass{Format OK?}
+    PCLint --> PCLintPass{Lint OK?}
+    PCType --> PCTypePass{Types OK?}
+    PCSecurity --> PCSecurityPass{Security OK?}
+    PCTest --> PCTestPass{Tests pass?}
+    
+    PCFormatPass -->|No| FixFormat[Fix formatting issues]
+    PCLintPass -->|No| FixLint[Fix lint issues]
+    PCTypePass -->|No| FixTypes[Fix type errors]
+    PCSecurityPass -->|No| FixSecurity[Fix security issues]
+    PCTestPass -->|No| FixTests[Fix failing tests]
+    
+    FixFormat --> UserPrompt
+    FixLint --> UserPrompt
+    FixTypes --> UserPrompt
+    FixSecurity --> UserPrompt
+    FixTests --> UserPrompt
+    
+    PCFormatPass -->|Yes| AllPreCommitChecks
+    PCLintPass -->|Yes| AllPreCommitChecks
+    PCTypePass -->|Yes| AllPreCommitChecks
+    PCSecurityPass -->|Yes| AllPreCommitChecks
+    PCTestPass -->|Yes| AllPreCommitChecks{All pre-commit checks pass?}
+    
+    AllPreCommitChecks -->|No| PreCommitFail[Pre-commit failed]
+    AllPreCommitChecks -->|Yes| PrepareCommitMsg[6. prepare-commit-msg Hook]
+    PreCommitFail --> UserPrompt
+    
+    PrepareCommitMsg --> SuggestCommitFormat[Suggest conventional commit format]
+    SuggestCommitFormat --> CommitMsg[7. commit-msg Hook]
+    CommitMsg --> ValidateCommitMsg[Validate commit message format]
+    ValidateCommitMsg --> CommitMsgValid{Message valid?}
+    
+    CommitMsgValid -->|No| FixCommitMsg[Fix commit message]
+    CommitMsgValid -->|Yes| CreateCommit[Create commit]
+    FixCommitMsg --> CommitMsg
+    
+    CreateCommit --> PostCommit[8. post-commit Hook]
+    PostCommit --> UpdateMetrics[Update code metrics]
+    PostCommit --> IndexPatterns[Index new patterns for future awareness]
+    
+    UpdateMetrics --> PushReady{Ready to push?}
+    IndexPatterns --> PushReady
+    PushReady -->|Yes| PrePush[9. pre-push Hook]
+    PushReady -->|No| End
+    
+    PrePush --> FullBuild[Full build verification]
+    PrePush --> IntegrationTests[Integration test suite]
+    FullBuild --> BuildPass{Build successful?}
+    IntegrationTests --> TestsPass{Integration tests pass?}
+    
+    BuildPass -->|No| FixBuild[Fix build issues]
+    TestsPass -->|No| FixIntegrationTests[Fix integration tests]
+    FixBuild --> UserPrompt
+    FixIntegrationTests --> UserPrompt
+    
+    BuildPass -->|Yes| AllPrePushChecks
+    TestsPass -->|Yes| AllPrePushChecks{All pre-push checks pass?}
+    
+    AllPrePushChecks -->|No| PrePushFail[Pre-push failed]
+    AllPrePushChecks -->|Yes| PushChanges[Push to remote]
+    PrePushFail --> UserPrompt
+    
+    PushChanges --> CI[10. CI/CD Pipeline]
+    CI --> PerformanceTests[Performance tests]
+    CI --> SecurityAudit[Security audit]
+    CI --> DocsGeneration[Documentation generation]
+    
+    PerformanceTests --> PerfPass{Performance OK?}
+    SecurityAudit --> SecAuditPass{Security audit OK?}
+    DocsGeneration --> DocsPass{Docs generated?}
+    
+    PerfPass -->|No| PerfFail[Performance regression detected]
+    SecAuditPass -->|No| SecFail[Security vulnerabilities found]
+    DocsPass -->|No| DocsFail[Documentation generation failed]
+    
+    PerfFail --> CIFail[CI Pipeline failed]
+    SecFail --> CIFail
+    DocsFail --> CIFail
+    
+    PerfPass -->|Yes| CISuccess
+    SecAuditPass -->|Yes| CISuccess
+    DocsPass -->|Yes| CISuccess[CI Pipeline successful]
+    
+    CIFail --> End[Session continues with feedback]
+    CISuccess --> SessionEnd[11. SessionEnd Hook]
+    SessionEnd --> SavePatterns[Save learned patterns]
+    SessionEnd --> ArchiveMetrics[Archive session metrics]
+    SavePatterns --> End
+    ArchiveMetrics --> End
+    
+    %% Styling
+    classDef hookNode fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef qualityGate fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef decisionNode fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef errorNode fill:#ffebee,stroke:#c62828,stroke-width:2px
+    classDef successNode fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    
+    class SessionStart,UserPromptSubmit,PreToolUse,PostToolUse,PreCommit,PrepareCommitMsg,CommitMsg,PostCommit,PrePush,SessionEnd hookNode
+    class InitDaemon,SetupWatchers,QuerySimilar,ASTAnalysis,SyntaxCheck,ImmediateLint,FormatCheck,PCFormat,PCLint,PCType,PCSecurity,PCTest,UpdateMetrics,IndexPatterns,FullBuild,IntegrationTests,PerformanceTests,SecurityAudit,DocsGeneration qualityGate
+    class HasSimilar,DuplicateFound,SyntaxValid,LintPassed,FormatPassed,CommitReady,PCFormatPass,PCLintPass,PCTypePass,PCSecurityPass,PCTestPass,AllPreCommitChecks,CommitMsgValid,PushReady,BuildPass,TestsPass,AllPrePushChecks,PerfPass,SecAuditPass,DocsPass decisionNode
+    class SyntaxError,LintFeedback,FormatFeedback,FixFormat,FixLint,FixTypes,FixSecurity,FixTests,PreCommitFail,FixCommitMsg,FixBuild,FixIntegrationTests,PrePushFail,PerfFail,SecFail,DocsFail,CIFail errorNode
+    class CodeComplete,CreateCommit,PushChanges,CISuccess,SavePatterns,ArchiveMetrics successNode

@@ -13,7 +13,7 @@ Generate high-quality, AI-augmented code from templates with intelligent context
 ## Syntax
 
 ```bash
-hyper gen <template> [options]
+hyper [gen] <template> [options]
 ```
 
 ## Overview
@@ -34,13 +34,7 @@ The `hyper gen` command is your primary tool for AI-augmented code generation. I
 
 | Option | Description | Default | Example |
 |--------|-------------|---------|---------|
-| `--context, -c <text>` | AI context for generation | - | `--context "user authentication"` |
-| `--search, -s <query>` | Search templates first | - | `--search "react component"` |
-| `--compose <templates>` | Compose multiple templates | - | `--compose api,ui,tests` |
 | `--output, -o <dir>` | Output directory | `./src` | `--output ./components` |
-| `--variables <json>` | Template variables as JSON | `{}` | `--variables '{"name":"User"}'` |
-| `--trust-level <level>` | Minimum trust level (1-10) | `8` | `--trust-level 9` |
-| `--validate` | Validate after generation | `true` | `--validate` |
 | `--dry-run` | Preview generation | `false` | `--dry-run` |
 | `--interactive, -i` | Interactive mode | `false` | `--interactive` |
 

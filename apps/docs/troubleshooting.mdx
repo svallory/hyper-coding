@@ -20,7 +20,7 @@ Before diving into specific issues, these commands help identify problems:
 hyper --version
 
 # Validate current project configuration
-hyper config info
+hyper config show
 
 # List available generators and actions
 hyper list
@@ -1108,7 +1108,7 @@ EOF
 
 # Add configuration info
 echo "Config:" >> debug-info.txt
-hyper config info >> debug-info.txt 2>&1 || echo "No config" >> debug-info.txt
+hyper config show >> debug-info.txt 2>&1 || echo "No config" >> debug-info.txt
 
 # Add template structure
 echo -e "\nTemplates:" >> debug-info.txt
@@ -1177,7 +1177,7 @@ Test components individually:
 hyper template validate _templates/component/new/component.ejs.t
 
 # Test configuration loading
-hyper config info
+hyper config show
 
 # Test discovery
 hyper discover --dry-run
@@ -1299,7 +1299,7 @@ export default {
 
 ```bash
 # Add health checks to your workflow
-hyper doctor  # Check system health
+hyper config doctor  # Check system health
 
 # Monitor performance
 time hyper [command]
@@ -1327,7 +1327,6 @@ npm test -- --testNamePattern="hyperdev"
 | `hyper --version` | Check installation |
 | `hyper list` | See available generators |  
 | `hyper discover` | Refresh generator list |
-| `hyper config info` | Validate configuration |
 | `DEBUG=hyperdev* hyper [cmd]` | Enable debug logging |
 
 This troubleshooting guide should help you resolve most HyperDev issues quickly and systematically. When in doubt, start with the diagnostic commands and work through the systematic debugging approach.

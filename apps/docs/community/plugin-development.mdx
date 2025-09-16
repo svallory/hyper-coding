@@ -1,0 +1,123 @@
+---
+title: "Plugin Development"
+description: "Guide to building simple plugins and extensions for HyperDev"
+icon: "document-text"
+og:title: "Plugin Development"
+og:description: "Guide to building simple plugins and extensions for HyperDev"
+---
+
+# Plugin Development
+
+Extend HyperDev with custom plugins and integrations. Create simple extensions for your specific workflow needs.
+
+## Plugin Basics
+
+### Simple Plugin Types
+
+HyperDev supports basic plugin extensions:
+
+<CardGroup cols={2}>
+  <Card title="Template Helpers" icon="file-code">
+    Add custom template functions
+    - String formatting helpers
+    - Date/time utilities
+    - Simple data transformations
+  </Card>
+
+  <Card title="Claude Code Integration" icon="puzzle-piece">
+    Claude Code Enhancements
+    - Git hooks integration
+    - Basic automation
+    - Claude hooks
+  </Card>
+</CardGroup>
+
+## Basic Plugin Development
+
+### Creating Simple Template Helpers
+
+Add custom template functions with basic JavaScript:
+
+```javascript
+// helpers.js - Simple template helpers
+export const helpers = {
+  // String formatting
+  capitalize: (str) => str.charAt(0).toUpperCase() + str.slice(1),
+  
+  // Case conversion
+  kebabCase: (str) => str.replace(/\s+/g, '-').toLowerCase(),
+  
+  // Date utilities
+  currentDate: () => new Date().toISOString().split('T')[0],
+  
+  // Simple pluralization
+  pluralize: (word, count) => count === 1 ? word : word + 's'
+};
+```
+
+Use in templates:
+
+```ejs
+---
+to: components/<%= kebabCase(name) %>.tsx
+---
+// Generated on <%= currentDate() %>
+export const <%= capitalize(name) %> = () => {
+  return <div>Hello World</div>;
+};
+```
+
+### Claude Code Integration
+
+Connect HyperDev with Claude Code for enhanced development workflow:
+
+```javascript
+// hyperdev.config.js - Claude Code integration
+export default {
+  sources: [
+    { name: 'local', path: './_templates' }
+  ],
+  
+  // Git hooks integration
+  hooks: {
+    'pre-commit': ['hyper gen validate'],
+    'post-commit': ['hyper gen cleanup']
+  }
+};
+```
+
+### Basic Plugin Configuration
+
+```javascript
+// hyperdev.config.js
+export default {
+  // Local template helpers
+  helpers: './helpers.js',
+  
+  // Quality gates
+  quality: {
+    syntax_validation: true,
+    security_scanning: true
+  },
+  
+  // Simple integrations
+  integrations: {
+    claude_code: true
+  }
+};
+```
+
+## Related Commands
+
+For advanced plugin development and integrations:
+
+<CardGroup cols={2}>
+  <Card title="hyper config hooks" href="/cli/commands/coding/hooks">
+    Setup git hooks integration
+  </Card>
+  <Card title="hyper config" href="/cli/commands/coding/config">
+    Configure IDE integrations
+  </Card>
+</CardGroup>
+
+This guide provides the basics for extending HyperDev with simple plugins and Claude Code integrations.

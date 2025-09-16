@@ -83,174 +83,77 @@ files:
     to: "src/components/{{ name }}/{{ name }}.tsx"
 ```
 
-## Enterprise Automation
+## Automation
 
-### Programmatic API Usage
+### Batch Operations
 
-Use HyperDev's programmatic API for bulk operations and system integration.
+Use command line tools for batch operations:
 
-```typescript
-// scripts/bulk-migration.ts
-import { HyperdevEngine, createEngine } from '@hyperdev/hyperdev';
+```bash
+# Generate multiple components
+for component in UserCard ProfileCard SettingsCard; do
+  hyper gen component $component --output ./src/components/
+done
 
-class BulkMigrationService {
-  private engine: HypergenEngine;
-
-  constructor() {
-    this.engine = createEngine({
-      template_dirs: ['./templates', './enterprise-templates'],
-      cache_enabled: true,
-      parallel_execution: true,
-      max_workers: 8
-    });
-  }
-
-  async migrateComponents(components: ComponentDefinition[]) {
-    const results = await Promise.allSettled(
-      components.map(async (component) => {
-        return this.engine.generateFromTemplate('react-v2-component', {
-          name: component.name,
-          legacy_path: component.currentPath,
-          migration_mode: true,
-          preserve_state: component.hasState,
-          dry_run: false
-        });
-      })
-    );
-
-    return this.processResults(results);
-  }
-}
+# Batch generation with template
+hyper generate-batch components.list --template react-component
 ```
 
-### Event-Driven Generation
 
-Integrate with external systems for automatic code generation based on events.
+## Configuration
 
-```typescript
-// integrations/github-webhook.ts
-import { WebhookEvent, HyperdevOrchestrator } from '@hyperdev/hyperdev';
+### Basic Configuration
 
-export class GitHubIntegration {
-  constructor(private orchestrator: HypergenOrchestrator) {}
-
-  async handlePullRequestEvent(event: WebhookEvent) {
-    if (event.action === 'opened' && this.isFeatureBranch(event.pull_request)) {
-      // Auto-generate test scaffolding for new features
-      await this.orchestrator.executeRecipe('feature-scaffold', {
-        branch_name: event.pull_request.head.ref,
-        feature_type: this.inferFeatureType(event.pull_request),
-        author: event.pull_request.user.login,
-        generate_tests: true,
-        include_docs: true
-      });
-    }
-  }
-
-  async handleIssueEvent(event: WebhookEvent) {
-    if (this.isBugReport(event.issue)) {
-      // Generate bug reproduction template
-      await this.orchestrator.generateFromTemplate('bug-reproduction', {
-        issue_number: event.issue.number,
-        description: event.issue.body,
-        labels: event.issue.labels,
-        priority: this.calculatePriority(event.issue)
-      });
-    }
-  }
-}
-```
-
-## Performance and Scale
-
-### Advanced Caching Strategies
-
-Implement sophisticated caching for large-scale template operations.
+Configure HyperDev for your project needs:
 
 ```javascript
 // hyperdev.config.js
 export default {
-  cache: {
-    strategy: 'multi-tier',
-    levels: {
-      memory: {
-        enabled: true,
-        max_size: '512MB',
-        ttl: 3600
-      },
-      disk: {
-        enabled: true,
-        path: '.hyperdev/cache',
-        max_size: '2GB',
-        compression: 'gzip'
-      },
-      distributed: {
-        enabled: true,
-        provider: 'redis',
-        connection: process.env.REDIS_URL,
-        key_prefix: 'hg:cache:'
-      }
-    },
-    invalidation: {
-      template_change: true,
-      config_change: true,
-      dependency_change: true,
-      custom_triggers: ['env:NODE_ENV', 'git:HEAD']
-    }
+  // Template source configuration
+  sources: [
+    { name: 'local', path: './_templates' },
+    { name: 'shared', path: 'https://github.com/company/cookbooks.git' }
+  ],
+  
+  // Quality gate settings
+  quality: {
+    syntax_validation: true,
+    security_scanning: true
   },
   
-  performance: {
-    parallel_execution: true,
-    max_workers: 16,
-    batch_size: 50,
-    memory_limit: '4GB',
-    optimization: {
-      template_precompilation: true,
-      dependency_bundling: true,
-      incremental_updates: true
-    }
+  // Trusted sources
+  trust: {
+    'github:company/*': 'high',
+    '@company/cookbook-*': 'high'
   }
 };
 ```
 
 ### Large-Scale Deployment Patterns
 
-Deploy templates across multiple environments and teams.
+Deploy cookbooks across multiple environments and teams.
 
 ```yaml
 # .hyperdev/deployment.yml
 environments:
   development:
-    templates:
-      source: "git+https://github.com/company/dev-templates.git"
-      branch: "main"
-    validation:
-      enabled: false
+    sources:
+      - "github:company/dev-cookbooks"
+    validation: false
     
   staging:
-    templates:
-      source: "git+https://github.com/company/templates.git#v2.1.0"
-    validation:
-      enabled: true
-      rules: ["security", "performance", "style"]
+    sources:
+      - "github:company/cookbooks#v2.1.0"
+    validation: true
       
   production:
-    templates:
-      source: "artifactory://templates/v2.1.0"
-    validation:
-      enabled: true
-      rules: ["security", "performance", "style", "compliance"]
-      approval_required: true
+    sources:
+      - "@company/production-cookbooks@2.1.0"
+    validation: true
+    approval_required: true
       
-deployment:
-  strategy: "blue-green"
-  rollback: 
-    enabled: true
-    triggers: ["validation_failure", "error_rate > 5%"]
-  monitoring:
-    metrics: ["generation_time", "error_rate", "template_usage"]
-    alerting: 
-      slack_webhook: "${SLACK_WEBHOOK_URL}"
+monitoring:
+  metrics: ["generation_time", "error_rate", "cookbook_usage"]
 ```
 
 ## Custom Extensions
@@ -449,7 +352,7 @@ Deep insights into template generation performance.
 ```bash
 # Enable comprehensive profiling
 DEBUG=hyperdev:* HYPERDEV_PROFILE=true \
-  hyper action MyComponent \
+  hyper gen action MyComponent \
     --name="UserProfile" \
     --profile-output=./profiles/user-profile-generation.json
 ```

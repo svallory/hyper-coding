@@ -33,8 +33,12 @@
   },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
+    "claude-context",
+    "figma",
+    "moon",
+    "infisical",
     "playwright",
-    "context7",
-    "appwrite"
+    "task-master-ai",
+    "lsmcp"
   ]
 }

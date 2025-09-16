@@ -1,0 +1,100 @@
+---
+title: "JetBrains IDE"
+description: "Integrate HyperDev with JetBrains IDEs (WebStorm, IntelliJ IDEA) through external tools and live templates."
+icon: "code"
+og:title: "JetBrains IDE Integration"
+og:description: "Integrate HyperDev with JetBrains IDEs (WebStorm, IntelliJ IDEA) through external tools and live templates."
+---
+
+# JetBrains IDE Integration
+
+Set up HyperDev to work seamlessly with WebStorm, IntelliJ IDEA, and other JetBrains IDEs.
+
+## External Tools Configuration
+
+Configure HyperDev as external tools in your JetBrains IDE:
+
+```xml
+<!-- .idea/externalTools.xml -->
+<toolSet name="HyperDev">
+  <tool name="Generate Component" description="Generate React component with HyperDev">
+    <exec>
+      <option name="COMMAND" value="hyperdev" />
+      <option name="PARAMETERS" value="gen component $Prompt$" />
+      <option name="WORKING_DIRECTORY" value="$ProjectFileDir$" />
+    </exec>
+  </tool>
+  <tool name="Validate Templates" description="Validate all HyperDev templates">
+    <exec>
+      <option name="COMMAND" value="hyperdev" />
+      <option name="PARAMETERS" value="validate --all" />
+      <option name="WORKING_DIRECTORY" value="$ProjectFileDir$" />
+    </exec>
+  </tool>
+</toolSet>
+```
+
+## Live Templates Integration
+
+Create live templates for quick HyperDev template markers:
+
+```xml
+<!-- .idea/liveTemplates/HyperDev.xml -->
+<templateSet group="HyperDev">
+  <template name="hgen" value="// HyperDev: $TEMPLATE$ - $DESCRIPTION$&#10;// Generated: $DATE$&#10;$END$" 
+            description="HyperDev template marker" toReformat="false" toShortenFQNames="true">
+    <variable name="TEMPLATE" expression="&quot;component&quot;" defaultValue="" alwaysStopAt="true" />
+    <variable name="DESCRIPTION" expression="&quot;Auto-generated component&quot;" defaultValue="" alwaysStopAt="true" />
+    <variable name="DATE" expression="date()" defaultValue="" alwaysStopAt="false" />
+    <context>
+      <option name="JAVA_SCRIPT" value="true" />
+      <option name="TypeScript" value="true" />
+    </context>
+  </template>
+</templateSet>
+```
+
+## Menu Integration
+
+Access HyperDev commands directly from the Tools menu by configuring external tools through:
+
+1. **File → Settings → Tools → External Tools**
+2. Click the **+** button to add new tools
+3. Configure each HyperDev command as shown above
+
+## Keyboard Shortcuts
+
+Set up keyboard shortcuts for HyperDev commands:
+
+1. Go to **File → Settings → Keymap**
+2. Navigate to **External Tools → HyperDev**
+3. Assign shortcuts to your HyperDev tools:
+   - `Ctrl+Shift+G C` for Generate Component
+   - `Ctrl+Shift+G V` for Validate Templates
+
+## File Templates
+
+Create custom file templates that integrate with HyperDev:
+
+1. **File → Settings → Editor → File and Code Templates**
+2. Create templates that include HyperDev metadata
+3. Use variables like `${PROJECT_NAME}`, `${USER}`, `${DATE}`
+
+## Project Configuration
+
+Configure your JetBrains IDE project to recognize HyperDev files:
+
+```xml
+<!-- .idea/misc.xml -->
+<project version="4">
+  <component name="ProjectRootManager">
+    <!-- Project configuration -->
+  </component>
+  <component name="HyperDevSettings">
+    <option name="templatePath" value=".hyperdev/templates" />
+    <option name="autoValidate" value="true" />
+  </component>
+</project>
+```
+
+This integration makes HyperDev commands easily accessible from within your JetBrains IDE workflow.

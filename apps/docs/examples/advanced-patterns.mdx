@@ -261,7 +261,7 @@ class TemplateOrchestrator {
       }
 
       // Run the sub-template with Hypergen
-      const command = `hypergen ${templateName} --config '${JSON.stringify(config)}'`;
+      const command = `hyper gen ${templateName} --config '${JSON.stringify(config)}'`;
       
       await new Promise((resolve, reject) => {
         exec(command, { cwd: process.cwd() }, (error, stdout, stderr) => {
@@ -823,7 +823,7 @@ export class <%= h.inflection.classify(messageQueue || 'RabbitMQ') %>EventBus im
 
 ### Usage Example
 ```bash
-bun run hypergen modular-architecture
+hyper gen modular-architecture
 # Prompts:
 # Project name: enterprise-platform
 # Architecture pattern: Clean Architecture (Hexagonal)
@@ -1292,7 +1292,7 @@ app.listen(PORT, () => {
 
 ### Usage Example
 ```bash
-bun run hypergen smart-template
+hyper gen smart-template
 # Prompts:
 # Project type: Enterprise Application
 # Team size: Large (15+ developers)
@@ -1711,7 +1711,7 @@ module.exports = { TemplateInheritanceEngine };
 
 ### Usage Example
 ```bash
-bun run hypergen template-inheritance
+hyper gen template-inheritance
 # Prompts:
 # Base template: API Service Base
 # Extensions: [x] Authentication, [x] Database, [x] Testing, [x] Docker

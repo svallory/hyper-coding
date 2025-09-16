@@ -13,7 +13,7 @@ Manage individual development tasks, subtasks, and work items. Create, update, a
 ## Syntax
 
 ```bash
-hyper task [action] [options]
+hyper tasks [action] [options]
 ```
 
 ## Overview
@@ -36,15 +36,15 @@ The `hyper task` command provides comprehensive task management:
 
 | Action | Description | Example |
 |--------|-------------|---------|
-| `list` | List tasks | `hyper task list` |
-| `create` | Create new task | `hyper task create "Login API"` |
-| `show` | Show task details | `hyper task show AUTH-001` |
-| `update` | Update task information | `hyper task update AUTH-001` |
-| `assign` | Assign task to team member | `hyper task assign AUTH-001 alice` |
-| `start` | Start working on task | `hyper task start AUTH-001` |
-| `complete` | Mark task complete | `hyper task complete AUTH-001` |
-| `block` | Block task with reason | `hyper task block AUTH-001` |
-| `subtask` | Manage subtasks | `hyper task subtask AUTH-001` |
+| `list` | List tasks | `hyper tasks list` |
+| `create` | Create new task | `hyper tasks create "Login API"` |
+| `show` | Show task details | `hyper tasks show AUTH-001` |
+| `update` | Update task information | `hyper tasks update AUTH-001` |
+| `assign` | Assign task to team member | `hyper tasks assign AUTH-001 alice` |
+| `start` | Start working on task | `hyper tasks start AUTH-001` |
+| `complete` | Mark task complete | `hyper tasks complete AUTH-001` |
+| `block` | Block task with reason | `hyper tasks block AUTH-001` |
+| `subtask` | Manage subtasks | `hyper tasks subtask AUTH-001` |
 
 ## Options
 
@@ -65,23 +65,23 @@ The `hyper task` command provides comprehensive task management:
 
 ```bash
 # List all tasks
-hyper task list
+hyper tasks list
 
 # List tasks by status
-hyper task list --status in-progress
+hyper tasks list --status in-progress
 
 # List tasks for specific epic
-hyper task list --epic user-auth
+hyper tasks list --epic user-auth
 
 # Create simple task
-hyper task create "Implement login endpoint"
+hyper tasks create "Implement login endpoint"
 ```
 
 ### Task Creation with Details
 
 ```bash
 # Create task with full details
-hyper task create "User registration API" \
+hyper tasks create "User registration API" \
   --epic user-auth \
   --priority high \
   --estimate "6h" \
@@ -90,32 +90,32 @@ hyper task create "User registration API" \
   --tags "api,backend,registration"
 
 # Create task with dependencies
-hyper task create "Login UI component" \
+hyper tasks create "Login UI component" \
   --depends-on AUTH-001,AUTH-002 \
   --assignee bob \
   --estimate "4h"
 
 # Interactive task creation
-hyper task create --interactive
+hyper tasks create --interactive
 ```
 
 ### Task Progress Management
 
 ```bash
 # Start working on task
-hyper task start AUTH-001
+hyper tasks start AUTH-001
 
 # Update task progress
-hyper task update AUTH-001 --progress 50
+hyper tasks update AUTH-001 --progress 50
 
 # Add task comment
-hyper task comment AUTH-001 "API endpoint completed, working on validation"
+hyper tasks comment AUTH-001 "API endpoint completed, working on validation"
 
 # Complete task
-hyper task complete AUTH-001
+hyper tasks complete AUTH-001
 
 # Block task with reason
-hyper task block AUTH-002 --reason "Waiting for database schema approval"
+hyper tasks block AUTH-002 --reason "Waiting for database schema approval"
 ```
 
 ## Task Status Lifecycle
@@ -134,19 +134,19 @@ todo ← cancelled ← todo → done
 
 ```bash
 # Start task (todo → in-progress)
-hyper task start AUTH-001
+hyper tasks start AUTH-001
 
 # Submit for review (in-progress → review)
-hyper task review AUTH-001
+hyper tasks review AUTH-001
 
 # Mark as done (review → done)
-hyper task done AUTH-001
+hyper tasks done AUTH-001
 
 # Block task with reason
-hyper task block AUTH-001 --reason "Blocked by AUTH-000"
+hyper tasks block AUTH-001 --reason "Blocked by AUTH-000"
 
 # Reopen completed task
-hyper task reopen AUTH-001 --reason "Found regression issue"
+hyper tasks reopen AUTH-001 --reason "Found regression issue"
 ```
 
 ## Task Structure
@@ -208,30 +208,30 @@ comments:
 
 ```bash
 # Add subtasks to existing task
-hyper task subtask AUTH-001 add "Input validation schema"
-hyper task subtask AUTH-001 add "Password hashing" --estimate "2h"
-hyper task subtask AUTH-001 add "Email verification" --assignee bob
+hyper tasks subtask AUTH-001 add "Input validation schema"
+hyper tasks subtask AUTH-001 add "Password hashing" --estimate "2h"
+hyper tasks subtask AUTH-001 add "Email verification" --assignee bob
 
 # Create task with subtasks
-hyper task create "User profile API" \
+hyper tasks create "User profile API" \
   --subtasks "Get profile,Update profile,Delete profile"
 
 # List subtasks
-hyper task subtask AUTH-001 list
+hyper tasks subtask AUTH-001 list
 
 # Update subtask status
-hyper task subtask AUTH-001.1 complete
+hyper tasks subtask AUTH-001.1 complete
 ```
 
 ### Subtask Progress
 
 ```bash
 # Subtask progress affects parent task
-hyper task show AUTH-001
+hyper tasks show AUTH-001
 # Shows: Progress: 66% (2/3 subtasks completed)
 
 # Auto-complete parent when all subtasks done
-hyper task subtask AUTH-001.3 complete
+hyper tasks subtask AUTH-001.3 complete
 # Parent AUTH-001 automatically moves to review
 ```
 
@@ -241,23 +241,23 @@ hyper task subtask AUTH-001.3 complete
 
 ```bash
 # Add dependency
-hyper task depends AUTH-002 --on AUTH-001
+hyper tasks depends AUTH-002 --on AUTH-001
 
 # Remove dependency
-hyper task depends AUTH-002 --remove AUTH-001
+hyper tasks depends AUTH-002 --remove AUTH-001
 
 # Show dependency chain
-hyper task deps AUTH-002 --chain
+hyper tasks deps AUTH-002 --chain
 
 # Check for circular dependencies
-hyper task deps --validate
+hyper tasks deps --validate
 ```
 
 ### Dependency Visualization
 
 ```bash
 # Show task dependency graph
-hyper task deps --graph --format mermaid
+hyper tasks deps --graph --format mermaid
 
 # Example output:
 # graph TD
@@ -273,32 +273,32 @@ hyper task deps --graph --format mermaid
 
 ```bash
 # Add time estimate
-hyper task estimate AUTH-001 "6h"
+hyper tasks estimate AUTH-001 "6h"
 
 # Start time tracking
-hyper task start AUTH-001
+hyper tasks start AUTH-001
 
 # Log time spent
-hyper task log AUTH-001 --time "2h" --comment "Implemented validation"
+hyper tasks log AUTH-001 --time "2h" --comment "Implemented validation"
 
 # Stop time tracking
-hyper task stop AUTH-001
+hyper tasks stop AUTH-001
 
 # Time report
-hyper task time AUTH-001 --report
+hyper tasks time AUTH-001 --report
 ```
 
 ### Time Analysis
 
 ```bash
 # Task time breakdown
-hyper task time AUTH-001 --breakdown
+hyper tasks time AUTH-001 --breakdown
 
 # Team time tracking
-hyper task time --team --period 1w
+hyper tasks time --team --period 1w
 
 # Epic time rollup
-hyper task time --epic user-auth --rollup
+hyper tasks time --epic user-auth --rollup
 ```
 
 ## Task Filtering and Search
@@ -307,35 +307,35 @@ hyper task time --epic user-auth --rollup
 
 ```bash
 # Filter by multiple criteria
-hyper task list \
+hyper tasks list \
   --status in-progress,review \
   --assignee alice,bob \
   --priority high \
   --epic user-auth
 
 # Search by text
-hyper task search "registration"
+hyper tasks search "registration"
 
 # Filter by tags
-hyper task list --tags "api,backend"
+hyper tasks list --tags "api,backend"
 
 # Filter by date range
-hyper task list --created-after "2024-01-01" --due-before "2024-02-01"
+hyper tasks list --created-after "2024-01-01" --due-before "2024-02-01"
 ```
 
 ### Saved Filters
 
 ```bash
 # Save commonly used filters
-hyper task filter save "my-tasks" \
+hyper tasks filter save "my-tasks" \
   --assignee alice \
   --status in-progress,review
 
 # Use saved filter
-hyper task list --filter my-tasks
+hyper tasks list --filter my-tasks
 
 # List saved filters
-hyper task filter list
+hyper tasks filter list
 ```
 
 ## Task Templates
@@ -344,13 +344,13 @@ hyper task filter list
 
 ```bash
 # List available task templates
-hyper task templates
+hyper tasks templates
 
 # Create task from template
-hyper task create --template api-endpoint "User login API"
+hyper tasks create --template api-endpoint "User login API"
 
 # Show template structure
-hyper task template show api-endpoint
+hyper tasks template show api-endpoint
 ```
 
 **Built-in Templates**:
@@ -367,13 +367,13 @@ hyper task template show api-endpoint
 
 ```bash
 # Create custom template
-hyper task template create my-api-template \
+hyper tasks template create my-api-template \
   --subtasks "Design API,Implement,Write tests,Documentation" \
   --tags "api,backend" \
   --estimate-default "4h"
 
 # Use custom template
-hyper task create --template my-api-template "Payment API"
+hyper tasks create --template my-api-template "Payment API"
 ```
 
 ## Team Coordination
@@ -382,29 +382,29 @@ hyper task create --template my-api-template "Payment API"
 
 ```bash
 # Assign task to team member
-hyper task assign AUTH-001 alice
+hyper tasks assign AUTH-001 alice
 
 # Reassign task
-hyper task assign AUTH-001 bob --from alice
+hyper tasks assign AUTH-001 bob --from alice
 
 # Auto-assign based on workload
-hyper task assign AUTH-001 --auto
+hyper tasks assign AUTH-001 --auto
 
 # Bulk assignment
-hyper task assign --epic user-auth --distribute --team alice,bob,carol
+hyper tasks assign --epic user-auth --distribute --team alice,bob,carol
 ```
 
 ### Workload Management
 
 ```bash
 # Check team workload
-hyper task workload --team
+hyper tasks workload --team
 
 # Individual workload
-hyper task workload alice
+hyper tasks workload alice
 
 # Rebalance tasks
-hyper task rebalance --epic user-auth
+hyper tasks rebalance --epic user-auth
 ```
 
 ## Task Reporting
@@ -413,26 +413,26 @@ hyper task rebalance --epic user-auth
 
 ```bash
 # Task progress summary
-hyper task report --epic user-auth
+hyper tasks report --epic user-auth
 
 # Individual performance
-hyper task report --assignee alice --period 1w
+hyper tasks report --assignee alice --period 1w
 
 # Task completion trends
-hyper task trends --period 1m --format chart
+hyper tasks trends --period 1m --format chart
 ```
 
 ### Task Metrics
 
 ```bash
 # Task velocity
-hyper task velocity --team --period 1w
+hyper tasks velocity --team --period 1w
 
 # Task completion rate
-hyper task completion --epic user-auth
+hyper tasks completion --epic user-auth
 
 # Average task cycle time
-hyper task cycle-time --period 1m
+hyper tasks cycle-time --period 1m
 ```
 
 ## Integration with Development Workflow
@@ -454,10 +454,10 @@ hyper dev --task AUTH-001
 
 ```bash
 # Create PR for task
-hyper task pr AUTH-001 --create
+hyper tasks pr AUTH-001 --create
 
 # Link task to existing PR
-hyper task pr AUTH-001 --link 123
+hyper tasks pr AUTH-001 --link 123
 
 # Auto-transition task when PR merged
 # AUTH-001 automatically moves to done when PR #123 is merged

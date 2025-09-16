@@ -1,0 +1,278 @@
+---
+title: "GitHub Actions"
+description: "Integrate HyperDev with GitHub Actions for automated template validation, testing, and deployment."
+icon: "github"
+og:title: "GitHub Actions Integration"
+og:description: "Integrate HyperDev with GitHub Actions for automated template validation, testing, and deployment."
+---
+
+# GitHub Actions Integration
+
+Automate HyperDev workflows with GitHub Actions for template validation, quality gates, and deployment.
+
+## Template Validation Workflow
+
+Create a workflow to validate HyperDev templates:
+
+```yaml
+# .github/workflows/hyperdev-validation.yml
+name: HyperDev Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '.hyperdev/**'
+      - '**/templates/**'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install HyperDev
+        run: |
+          npm install -g @hyper-coding/cli
+          hyperdev --version
+          
+      - name: Validate Templates
+        run: |
+          hyperdev validate --all --format json > template-validation.json
+          
+      - name: Test Template Generation
+        run: |
+          # Test critical templates
+          hyperdev gen component TestComponent --dry-run
+          hyperdev gen api-route test-route --dry-run
+          hyperdev gen page test-page --dry-run
+          
+      - name: Upload Validation Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyperdev-validation-results
+          path: template-validation.json
+```
+
+## Quality Gates Workflow
+
+Implement quality gates in your CI/CD pipeline:
+
+```yaml
+# .github/workflows/quality-gates.yml
+name: HyperDev Quality Gates
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install Dependencies
+        run: |
+          npm install -g @hyper-coding/cli
+          npm install
+          
+      - name: Run Quality Gates
+        run: |
+          # TypeScript validation
+          hyperdev quality-gate typescript --strict
+          
+          # ESLint validation
+          hyperdev quality-gate eslint --max-warnings 0
+          
+          # Security scanning
+          hyperdev quality-gate security --fail-on-high
+          
+          # Generate quality report
+          hyperdev quality-gate report --format json --output quality-report.json
+          
+      - name: Upload Quality Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-report
+          path: quality-report.json
+          
+      - name: Comment PR with Results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('quality-report.json'));
+            
+            const comment = `## HyperDev Quality Gates Results
+            
+            | Gate | Status | Score |
+            |------|--------|---------|
+            | TypeScript | ${report.typescript.passed ? '✅' : '❌'} | ${report.typescript.score} |
+            | ESLint | ${report.eslint.passed ? '✅' : '❌'} | ${report.eslint.score} |
+            | Security | ${report.security.passed ? '✅' : '❌'} | ${report.security.score} |
+            
+            **Overall Score: ${report.overall.score}/100**
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+```
+
+## Deployment Workflow
+
+Deploy applications with HyperDev validation:
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy with HyperDev
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install Dependencies
+        run: |
+          npm install -g @hyper-coding/cli
+          npm install
+          
+      - name: Generate Production Code
+        run: |
+          hyperdev generate --all --env production --optimize
+          
+      - name: Run Quality Gates
+        run: |
+          hyperdev quality-gate --all --strict
+          
+      - name: Build Application
+        run: |
+          npm run build
+          
+      - name: Deploy to Production
+        run: |
+          # Your deployment commands here
+          echo "Deploying to production..."
+```
+
+## Template Update Workflow
+
+Automate template updates:
+
+```yaml
+# .github/workflows/template-updates.yml
+name: Template Updates
+
+on:
+  schedule:
+    - cron: '0 2 * * 1' # Weekly on Monday at 2 AM
+  workflow_dispatch:
+
+jobs:
+  update-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Update HyperDev Templates
+        run: |
+          npm install -g @hyper-coding/cli
+          hyperdev update-templates --all --save-manifest
+          
+      - name: Validate Updated Templates
+        run: |
+          hyperdev validate --all --strict
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          title: 'chore: update HyperDev templates'
+          body: |
+            Automated template updates from HyperDev registry.
+            
+            Changes:
+            - Updated template dependencies
+            - Applied security patches
+            - Enhanced template features
+            
+            Validation: ✅ All templates validated successfully
+          branch: hyperdev/template-updates
+          commit-message: 'chore: update HyperDev templates'
+```
+
+## Integration Testing
+
+Test template generation across multiple environments:
+
+```yaml
+# .github/workflows/integration-test.yml
+name: HyperDev Integration Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+        template: [component, api-route, page]
+        
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          
+      - name: Install HyperDev
+        run: |
+          npm install -g @hyper-coding/cli
+          
+      - name: Test Template Generation
+        run: |
+          hyperdev gen ${{ matrix.template }} test-${{ matrix.template }} --output temp/
+          
+      - name: Validate Generated Code
+        run: |
+          cd temp/
+          npm install
+          npm run lint || true
+          npm run type-check || true
+```
+
+These workflows provide comprehensive automation for HyperDev template validation, quality assurance, and deployment processes.

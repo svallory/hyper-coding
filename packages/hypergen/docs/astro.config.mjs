@@ -1,17 +1,18 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import markdoc from '@astrojs/markdoc';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://svallory.github.io',
 	base: '/hypergen',
 	integrations: [
-		markdoc(),
 		starlight({
 			title: 'Hypergen',
 			description: 'Advanced template composition and workflow orchestration for modern development.',
+			customCss: [
+				'./src/styles/custom.css',
+			],
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/svallory/hypergen' },
 			],
@@ -20,6 +21,7 @@ export default defineConfig({
 					label: 'Quick Start',
 					items: [
 						{ label: 'Overview', slug: '' },
+						{ label: 'Quick Start', slug: 'quick-start' },
 						{ label: 'Getting Started', slug: 'getting-started' },
 					],
 				},

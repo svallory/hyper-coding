@@ -1,0 +1,68 @@
+---
+title: Quick Start
+description: Get up and running with Hypergen in 5 minutes
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+# Quick Start
+
+Get Hypergen installed and generate your first files in under 5 minutes.
+
+## Installation
+
+```bash
+bun add hypergen
+```
+
+Or with npm:
+
+```bash
+npm install hypergen
+```
+
+## Your First Recipe
+
+Execute a recipe to generate files:
+
+```bash
+hypergen recipe execute my-component.yml --name=Button --typescript=true
+```
+
+## Explore Commands
+
+### Recipe Commands
+
+```bash
+# Validate a recipe
+hypergen recipe validate my-component.yml
+
+# Get recipe information
+hypergen recipe info my-component.yml
+
+# List recipe steps
+hypergen step list my-component.yml
+```
+
+### Discovery Commands
+
+```bash
+# List available actions
+hypergen action list
+
+# Discover cookbooks
+hypergen discover react
+```
+
+## What's Next?
+
+<Aside type="note" title="New to Hypergen?">
+  Follow the [Getting Started Guide](/getting-started) for a complete walkthrough with your first code generation in under 15 minutes.
+</Aside>
+
+### Learn More
+
+- **[Understanding Concepts](/concepts/taxonomy)** - Learn the mental model behind Hypergen
+- **[Finding Cookbooks](/tutorials/finding-cookbooks)** - Discover community cookbooks
+- **[Creating Templates](/tutorials/creating-templates)** - Build your own templates
+- **[Complete Feature List](/features)** - All capabilities and commands

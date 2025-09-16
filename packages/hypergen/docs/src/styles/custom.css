@@ -1,0 +1,61 @@
+/* Remove colored background boxes from card icons but keep the border colors */
+.card .icon {
+  background-color: transparent !important;
+  border: none !important;
+  width: 4rem !important;
+  height: 4rem !important;
+}
+
+.card .icon svg {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Apply the colored borders to cards based on their position */
+.card-grid .card:nth-child(4n + 1) {
+  border-color: var(--sl-color-orange) !important;
+}
+
+.card-grid .card:nth-child(4n + 1) svg {
+  color: var(--sl-color-orange) !important;
+}
+
+.card-grid .card:nth-child(4n + 1) svg path {
+  fill: var(--sl-color-orange) !important;
+}
+
+.card-grid .card:nth-child(4n + 2) {
+  border-color: var(--sl-color-purple) !important;
+}
+
+.card-grid .card:nth-child(4n + 2) svg {
+  color: var(--sl-color-purple) !important;
+}
+
+.card-grid .card:nth-child(4n + 2) svg path {
+  fill: var(--sl-color-purple) !important;
+}
+
+.card-grid .card:nth-child(4n + 3) {
+  border-color: var(--sl-color-green) !important;
+}
+
+.card-grid .card:nth-child(4n + 3) svg {
+  color: var(--sl-color-green) !important;
+}
+
+.card-grid .card:nth-child(4n + 3) svg path {
+  fill: var(--sl-color-green) !important;
+}
+
+.card-grid .card:nth-child(4n + 4) {
+  border-color: var(--sl-color-red) !important;
+}
+
+.card-grid .card:nth-child(4n + 4) svg {
+  color: var(--sl-color-red) !important;
+}
+
+.card-grid .card:nth-child(4n + 4) svg path {
+  fill: var(--sl-color-red) !important;
+}

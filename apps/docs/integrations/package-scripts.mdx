@@ -1,0 +1,246 @@
+---
+title: "Package.json Scripts"
+description: "Integrate HyperDev commands seamlessly into your npm/yarn scripts for streamlined development workflows."
+icon: "package"
+og:title: "Package.json Scripts Integration"
+og:description: "Integrate HyperDev commands seamlessly into your npm/yarn scripts for streamlined development workflows."
+---
+
+# Package.json Scripts Integration
+
+Streamline your development workflow by integrating HyperDev commands into your package.json scripts.
+
+## Basic Script Integration
+
+Add HyperDev commands to your package.json scripts:
+
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"hyperdev dev --watch\" \"next dev\"",
+    "build": "hyperdev validate --all && next build",
+    "gen": "hyperdev gen",
+    "gen:component": "hyperdev gen component",
+    "gen:page": "hyperdev gen page",
+    "gen:api": "hyperdev gen api-route",
+    "validate": "hyperdev validate --all",
+    "templates:update": "hyperdev update-templates",
+    "templates:list": "hyperdev list",
+    "hyperdev:init": "hyperdev init --interactive",
+    "hyperdev:status": "hyperdev status --detailed",
+    "postinstall": "hyperdev setup --verify"
+  }
+}
+```
+
+## Development Workflow Scripts
+
+Create scripts for different development phases:
+
+```json
+{
+  "scripts": {
+    "start:dev": "concurrently \"hyperdev dev --watch\" \"npm run dev\"",
+    "start:staging": "hyperdev generate --env staging && npm run build && npm start",
+    "start:prod": "hyperdev generate --env production --optimize && npm run build && npm start",
+    
+    "test": "hyperdev validate --all && jest",
+    "test:templates": "hyperdev test-templates --all",
+    "test:generated": "hyperdev validate-generated && npm run test",
+    
+    "lint": "hyperdev validate --all && eslint src/",
+    "lint:fix": "hyperdev validate --all && eslint src/ --fix",
+    "lint:templates": "hyperdev lint-templates",
+    
+    "typecheck": "hyperdev generate --types-only && tsc --noEmit",
+    "typecheck:watch": "hyperdev dev --types-watch & tsc --noEmit --watch"
+  }
+}
+```
+
+## Quality Gates Integration
+
+Integrate HyperDev quality gates into your scripts:
+
+```json
+{
+  "scripts": {
+    "quality:check": "hyperdev quality-gate --all",
+    "quality:typescript": "hyperdev quality-gate typescript --strict",
+    "quality:eslint": "hyperdev quality-gate eslint --max-warnings 0",
+    "quality:security": "hyperdev quality-gate security --fail-on-high",
+    "quality:performance": "hyperdev quality-gate performance --threshold 90",
+    "quality:report": "hyperdev quality-gate report --format json --output quality-report.json",
+    
+    "prebuild": "npm run quality:check",
+    "pretest": "npm run validate",
+    "prepublishOnly": "npm run quality:check && npm run build"
+  }
+}
+```
+
+## Template Management Scripts
+
+Manage templates through npm scripts:
+
+```json
+{
+  "scripts": {
+    "templates:validate": "hyperdev validate --all --strict",
+    "templates:update": "hyperdev update-templates --all",
+    "templates:sync": "hyperdev sync-templates --auto",
+    "templates:list": "hyperdev list --format table",
+    "templates:search": "hyperdev search",
+    "templates:install": "hyperdev install-template",
+    "templates:create": "hyperdev create-template",
+    "templates:test": "hyperdev test-templates --coverage"
+  }
+}
+```
+
+## Generation Scripts
+
+Scripts for different types of code generation:
+
+```json
+{
+  "scripts": {
+    "gen:all": "hyperdev generate --all",
+    "gen:component": "hyperdev gen component",
+    "gen:page": "hyperdev gen page",
+    "gen:api": "hyperdev gen api-route",
+    "gen:model": "hyperdev gen database-model",
+    "gen:test": "hyperdev gen test-suite",
+    "gen:docs": "hyperdev gen documentation",
+    
+    "gen:interactive": "hyperdev gen --interactive",
+    "gen:dry-run": "hyperdev gen --dry-run",
+    "gen:force": "hyperdev gen --force"
+  }
+}
+```
+
+## Environment-Specific Scripts
+
+Configure scripts for different environments:
+
+```json
+{
+  "scripts": {
+    "build:dev": "hyperdev generate --env development && npm run build",
+    "build:staging": "hyperdev generate --env staging --optimize && npm run build",
+    "build:prod": "hyperdev generate --env production --optimize && npm run build",
+    
+    "deploy:staging": "npm run build:staging && deploy-staging",
+    "deploy:prod": "npm run quality:check && npm run build:prod && deploy-prod",
+    
+    "env:setup": "hyperdev setup-env",
+    "env:validate": "hyperdev validate-env",
+    "env:sync": "hyperdev sync-env"
+  }
+}
+```
+
+## Advanced Configuration with HyperDev
+
+Include HyperDev configuration directly in package.json:
+
+```json
+{
+  "scripts": {
+    "dev": "hyperdev dev --watch & next dev",
+    "build": "hyperdev validate --all && next build"
+  },
+  "hyperdev": {
+    "templates": {
+      "component": "@hyperdev/react-component",
+      "page": "@hyperdev/next-page",
+      "api": "@hyperdev/api-route"
+    },
+    "qualityGates": {
+      "enabled": true,
+      "onBuild": true,
+      "rules": ["typescript", "eslint", "security"]
+    },
+    "environments": {
+      "development": {
+        "features": {
+          "debugging": true,
+          "hotReload": true
+        }
+      },
+      "production": {
+        "features": {
+          "optimization": true,
+          "minification": true
+        }
+      }
+    }
+  }
+}
+```
+
+## Workflow Automation Scripts
+
+Automate common workflows:
+
+```json
+{
+  "scripts": {
+    "workflow:new-feature": "hyperdev gen component $npm_config_name && hyperdev gen test $npm_config_name",
+    "workflow:new-page": "hyperdev gen page $npm_config_name && hyperdev gen api $npm_config_name",
+    "workflow:cleanup": "hyperdev cleanup --generated && npm run lint:fix",
+    
+    "release:prepare": "npm run quality:check && npm run templates:update && npm run build",
+    "release:deploy": "npm run release:prepare && npm publish",
+    
+    "onboarding": "hyperdev init && npm run templates:update && npm run setup:complete",
+    "setup:complete": "hyperdev validate --all && echo 'Setup completed successfully!'"
+  }
+}
+```
+
+## Debugging and Troubleshooting Scripts
+
+Scripts to help with debugging:
+
+```json
+{
+  "scripts": {
+    "debug:templates": "hyperdev debug --templates --verbose",
+    "debug:generation": "hyperdev debug --generation --trace",
+    "debug:quality-gates": "hyperdev debug --quality-gates --details",
+    
+    "troubleshoot": "hyperdev doctor --full-check",
+    "troubleshoot:templates": "hyperdev doctor --templates-only",
+    "troubleshoot:config": "hyperdev doctor --config-only",
+    
+    "logs:hyperdev": "hyperdev logs --tail 100",
+    "logs:clear": "hyperdev logs --clear",
+    "logs:export": "hyperdev logs --export logs/hyperdev-$(date +%Y%m%d).log"
+  }
+}
+```
+
+## Performance and Monitoring Scripts
+
+Monitor HyperDev performance:
+
+```json
+{
+  "scripts": {
+    "perf:measure": "hyperdev perf measure --all",
+    "perf:report": "hyperdev perf report --format json",
+    "perf:optimize": "hyperdev perf optimize --suggestions",
+    
+    "monitor:templates": "hyperdev monitor --templates --interval 30s",
+    "monitor:generation": "hyperdev monitor --generation --continuous",
+    
+    "stats:usage": "hyperdev stats usage --period 30d",
+    "stats:templates": "hyperdev stats templates --detailed",
+    "stats:export": "hyperdev stats export --format csv"
+  }
+}
+```
+
+This comprehensive script integration makes HyperDev a natural part of your development workflow, accessible through familiar npm/yarn commands.
