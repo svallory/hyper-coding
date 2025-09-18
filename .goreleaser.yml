@@ -1,0 +1,343 @@
+# GoReleaser configuration for HyperDash
+# Documentation: https://goreleaser.com/
+
+version: 2
+
+project_name: hyper-dash
+
+env:
+  - GO_VERSION=1.24.3
+
+before:
+  hooks:
+    # Clean up previous builds
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - id: hyper-dash
+    dir: ./apps/dash
+    main: ./cmd/dash
+    binary: hyper-dash
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows ARM64 has limited support
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.builtBy=goreleaser
+    flags:
+      - -trimpath
+      - -mod=readonly
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - id: hyper-dash
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    builds_info:
+      group: root
+      owner: root
+    files:
+      - README.md
+      - LICENSE
+      - apps/dash/USAGE.md
+      - completions/*
+
+nfpms:
+  - id: hyper-dash
+    package_name: hyper-dash
+    vendor: HyperDev
+    homepage: https://github.com/hyperdev-io/hyper-dash
+    maintainer: HyperDev Team <team@hyperdev.io>
+    description: |-
+      A modern, high-performance task management and epic tracking dashboard built with Go and Bubble Tea.
+      Features real-time task monitoring, performance analytics, and TaskMaster CLI integration.
+    license: MIT
+    section: utils
+    priority: optional
+    formats:
+      - apk
+      - deb
+      - rpm
+      - archlinux
+    bindir: /usr/local/bin
+    epoch: 1
+    release: 1
+    prerelease: auto
+    version_metadata: git
+    dependencies:
+      - git
+    recommends:
+      - curl
+    suggests:
+      - taskmaster
+    contents:
+      - src: ./completions/hyper-dash.bash
+        dst: /usr/share/bash-completion/completions/hyper-dash
+        file_info:
+          mode: 0644
+      - src: ./completions/hyper-dash.zsh
+        dst: /usr/share/zsh/site-functions/_hyper-dash
+        file_info:
+          mode: 0644
+      - src: ./completions/hyper-dash.fish
+        dst: /usr/share/fish/vendor_completions.d/hyper-dash.fish
+        file_info:
+          mode: 0644
+      - src: ./LICENSE
+        dst: /usr/share/doc/hyper-dash/LICENSE
+        file_info:
+          mode: 0644
+      - src: ./apps/dash/USAGE.md
+        dst: /usr/share/doc/hyper-dash/USAGE.md
+        file_info:
+          mode: 0644
+    scripts:
+      postinstall: "scripts/postinstall.sh"
+      preremove: "scripts/preremove.sh"
+
+brews:
+  - name: hyper-dash
+    homepage: https://github.com/hyperdev-io/hyper-dash
+    description: |-
+      A modern, high-performance task management and epic tracking dashboard built with Go and Bubble Tea.
+      Features real-time task monitoring, performance analytics, and TaskMaster CLI integration.
+    license: MIT
+    skip_upload: auto
+    folder: Formula
+    dependencies:
+      - name: git
+    install: |-
+      bin.install "hyper-dash"
+      bash_completion.install "completions/hyper-dash.bash" => "hyper-dash"
+      zsh_completion.install "completions/hyper-dash.zsh" => "_hyper-dash"
+      fish_completion.install "completions/hyper-dash.fish"
+    test: |
+      system "#{bin}/hyper-dash -version"
+
+scoops:
+  - name: hyper-dash
+    homepage: https://github.com/hyperdev-io/hyper-dash
+    description: |-
+      A modern, high-performance task management and epic tracking dashboard built with Go and Bubble Tea.
+      Features real-time task monitoring, performance analytics, and TaskMaster CLI integration.
+    license: MIT
+    skip_upload: auto
+    folder: bucket
+
+snapcrafts:
+  - id: hyper-dash
+    name: hyper-dash
+    summary: Modern task management and epic tracking dashboard
+    description: |-
+      A modern, high-performance task management and epic tracking dashboard built with Go and Bubble Tea.
+      Features real-time task monitoring, performance analytics, and TaskMaster CLI integration.
+    grade: stable
+    confinement: strict
+    license: MIT
+    base: core22
+    apps:
+      hyper-dash:
+        command: hyper-dash
+        plugs: ["home", "network", "removable-media"]
+
+dockers:
+  - id: hyper-dash
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/hyperdev-io/hyper-dash:latest"
+      - "ghcr.io/hyperdev-io/hyper-dash:{{ .Tag }}"
+      - "ghcr.io/hyperdev-io/hyper-dash:v{{ .Major }}"
+      - "ghcr.io/hyperdev-io/hyper-dash:v{{ .Major }}.{{ .Minor }}"
+    dockerfile: apps/dash/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+    extra_files:
+      - "apps/dash/USAGE.md"
+      - "LICENSE"
+
+  - id: hyper-dash-arm64
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/hyperdev-io/hyper-dash:latest-arm64"
+      - "ghcr.io/hyperdev-io/hyper-dash:{{ .Tag }}-arm64"
+      - "ghcr.io/hyperdev-io/hyper-dash:v{{ .Major }}-arm64"
+      - "ghcr.io/hyperdev-io/hyper-dash:v{{ .Major }}.{{ .Minor }}-arm64"
+    dockerfile: apps/dash/Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+    extra_files:
+      - "apps/dash/USAGE.md"
+      - "LICENSE"
+
+docker_manifests:
+  - name_template: ghcr.io/hyperdev-io/hyper-dash:{{ .Tag }}
+    image_templates:
+      - ghcr.io/hyperdev-io/hyper-dash:{{ .Tag }}-amd64
+      - ghcr.io/hyperdev-io/hyper-dash:{{ .Tag }}-arm64
+  - name_template: ghcr.io/hyperdev-io/hyper-dash:latest
+    image_templates:
+      - ghcr.io/hyperdev-io/hyper-dash:latest
+      - ghcr.io/hyperdev-io/hyper-dash:latest-arm64
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - typo
+      - minor
+  groups:
+    - title: 'New Features'
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug Fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance Improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: 'Refactors'
+      regexp: '^.*?refactor(\([[:word:]]+\))??!?:.+$'
+      order: 3
+    - title: 'Documentation'
+      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
+      order: 4
+    - title: 'Other'
+      order: 999
+
+release:
+  github:
+    owner: hyperdev-io
+    name: hyper-dash
+  prerelease: auto
+  mode: replace
+  header: |
+    ## Release {{ .Tag }} ({{ .Date }})
+
+    Welcome to this new release of HyperDash!
+
+  footer: |
+    ## Installation
+
+    ### Package Managers
+
+    #### Homebrew (macOS/Linux)
+    ```bash
+    brew install hyperdev-io/tap/hyper-dash
+    ```
+
+    #### Scoop (Windows)
+    ```bash
+    scoop bucket add hyperdev-io https://github.com/hyperdev-io/scoop-bucket.git
+    scoop install hyper-dash
+    ```
+
+    #### APT (Debian/Ubuntu)
+    ```bash
+    echo "deb [trusted=yes] https://repo.hyperdev.io/apt/ /" | sudo tee /etc/apt/sources.list.d/hyperdev.list
+    sudo apt update
+    sudo apt install hyper-dash
+    ```
+
+    #### YUM/DNF (RHEL/Fedora)
+    ```bash
+    sudo yum-config-manager --add-repo https://repo.hyperdev.io/yum/hyperdev.repo
+    sudo yum install hyper-dash
+    ```
+
+    ### Direct Download
+
+    Download the appropriate binary for your platform from the assets below.
+
+    ### Docker
+
+    ```bash
+    docker run --rm -it ghcr.io/hyperdev-io/hyper-dash:{{ .Tag }}
+    ```
+
+    **Full Changelog**: https://github.com/hyperdev-io/hyper-dash/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+  extra_files:
+    - glob: './apps/dash/dist/*.tar.gz'
+    - glob: './apps/dash/dist/*.zip'
+
+milestones:
+  - close: true
+    fail_on_error: false
+    name_template: "{{ .Tag }}"
+
+announce:
+  skip: '{{gt .Patch 0}}'
+  slack:
+    enabled: false
+    message_template: 'HyperDash {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+  discord:
+    enabled: false
+    message_template: 'HyperDash {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+  teams:
+    enabled: false
+    title_template: 'HyperDash {{ .Tag }} is out!'
+    message_template: 'Check it out at {{ .ReleaseURL }}'
+
+# Source control metadata
+scm:
+  url: https://github.com/hyperdev-io/hyper-dash
+
+# Validation and signing
+signs:
+  - cmd: gpg
+    artifacts: checksum
+    args:
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+
+# Metadata
+metadata:
+  mod_timestamp: '{{ .CommitTimestamp }}'

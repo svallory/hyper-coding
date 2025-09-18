@@ -2231,7 +2231,7 @@
         "dependencies": [
           4
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       },
       {
@@ -2244,7 +2244,7 @@
         "dependencies": [
           6
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       },
       {
@@ -2258,13 +2258,13 @@
           5,
           7
         ],
-        "status": "pending",
+        "status": "done",
         "subtasks": []
       }
     ],
     "metadata": {
       "created": "2025-09-18T00:05:27.246Z",
-      "updated": "2025-09-18T01:13:04.302Z",
+      "updated": "2025-09-18T02:28:30.655Z",
       "description": "Tasks for hyper-dash context"
     }
   }

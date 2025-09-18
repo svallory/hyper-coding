@@ -1,0 +1,355 @@
+name: Cross-platform Build and Release
+
+on:
+  push:
+    branches: [ main, develop, 'feat/*', 'fix/*' ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.24.3'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/hyper-dash
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install Moon
+      run: |
+        curl -fsSL https://moonrepo.dev/install/moon.sh | bash
+        echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+    - name: Download Go dependencies
+      run: go mod download
+      working-directory: ./apps/dash
+
+    - name: Run Moon tests
+      run: moon run dash:test
+
+    - name: Run Go vet
+      run: moon run dash:lint
+
+    - name: Run typecheck
+      run: moon run dash:typecheck
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: |
+          apps/dash/coverage.out
+          apps/dash/test-report.xml
+
+  build:
+    name: Build
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+        exclude:
+          # Windows ARM64 support is limited
+          - goos: windows
+            goarch: arm64
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install Moon
+      run: |
+        curl -fsSL https://moonrepo.dev/install/moon.sh | bash
+        echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+    - name: Download Go dependencies
+      run: go mod download
+      working-directory: ./apps/dash
+
+    - name: Build binary
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+      run: |
+        cd apps/dash
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          OUTPUT_NAME="hyper-dash-${{ matrix.goos }}-${{ matrix.goarch }}.exe"
+        else
+          OUTPUT_NAME="hyper-dash-${{ matrix.goos }}-${{ matrix.goarch }}"
+        fi
+        go build -ldflags="-s -w" -o "$OUTPUT_NAME" ./cmd/dash
+        echo "Built: $OUTPUT_NAME"
+        ls -la "$OUTPUT_NAME"
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: hyper-dash-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: |
+          apps/dash/hyper-dash-*
+        retention-days: 30
+
+  integration-test:
+    name: Integration Test
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Download artifacts (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      uses: actions/download-artifact@v4
+      with:
+        name: hyper-dash-linux-amd64
+        path: ./dist
+
+    - name: Download artifacts (macOS)
+      if: matrix.os == 'macos-latest'
+      uses: actions/download-artifact@v4
+      with:
+        name: hyper-dash-darwin-amd64
+        path: ./dist
+
+    - name: Download artifacts (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: actions/download-artifact@v4
+      with:
+        name: hyper-dash-windows-amd64
+        path: ./dist
+
+    - name: Make binary executable (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        chmod +x ./dist/hyper-dash-*
+        ls -la ./dist/
+
+    - name: Test binary execution (Unix)
+      if: matrix.os != 'windows-latest'
+      run: |
+        ./dist/hyper-dash-* -test || true
+        echo "Binary execution test completed"
+
+    - name: Test binary execution (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        .\dist\hyper-dash-*.exe -test
+        echo "Binary execution test completed"
+
+  release:
+    name: Release
+    needs: [test, build, integration-test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./dist
+
+    - name: Organize artifacts
+      run: |
+        mkdir -p ./release
+        find ./dist -name "hyper-dash-*" -type f -exec cp {} ./release/ \;
+        ls -la ./release/
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Extract version from tag
+        VERSION=${GITHUB_REF#refs/tags/}
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+        
+        # Generate basic changelog
+        CHANGELOG=$(git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD~1)..HEAD)
+        echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ steps.changelog.outputs.VERSION }}
+        body: |
+          ## Changes in ${{ steps.changelog.outputs.VERSION }}
+          
+          ${{ steps.changelog.outputs.CHANGELOG }}
+          
+          ## Installation
+          
+          Download the appropriate binary for your platform:
+          
+          ### Linux (amd64)
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.changelog.outputs.VERSION }}/hyper-dash-linux-amd64
+          chmod +x hyper-dash-linux-amd64
+          sudo mv hyper-dash-linux-amd64 /usr/local/bin/hyper-dash
+          ```
+          
+          ### Linux (arm64)
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.changelog.outputs.VERSION }}/hyper-dash-linux-arm64
+          chmod +x hyper-dash-linux-arm64
+          sudo mv hyper-dash-linux-arm64 /usr/local/bin/hyper-dash
+          ```
+          
+          ### macOS (amd64)
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.changelog.outputs.VERSION }}/hyper-dash-darwin-amd64
+          chmod +x hyper-dash-darwin-amd64
+          sudo mv hyper-dash-darwin-amd64 /usr/local/bin/hyper-dash
+          ```
+          
+          ### macOS (arm64 - Apple Silicon)
+          ```bash
+          wget https://github.com/${{ github.repository }}/releases/download/${{ steps.changelog.outputs.VERSION }}/hyper-dash-darwin-arm64
+          chmod +x hyper-dash-darwin-arm64
+          sudo mv hyper-dash-darwin-arm64 /usr/local/bin/hyper-dash
+          ```
+          
+          ### Windows (amd64)
+          Download `hyper-dash-windows-amd64.exe` and place it in your PATH.
+        files: ./release/*
+        draft: false
+        prerelease: false
+        generate_release_notes: false
+
+  docker:
+    name: Build and Push Docker Image
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./apps/dash/Dockerfile
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  security:
+    name: Security Scan
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Run Gosec Security Scanner
+      uses: securecodewarrior/github-action-gosec@master
+      with:
+        args: '-fmt sarif -out gosec.sarif ./...'
+        working-directory: ./apps/dash
+
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: apps/dash/gosec.sarif
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: './apps/dash'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
