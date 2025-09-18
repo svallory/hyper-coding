@@ -34,7 +34,7 @@ func NewTaskTable(tasks []taskmaster.Task) *TaskTableModel {
 			DataType: DataTypeCustom,
 			Formatter: func(v interface{}) string {
 				if task, ok := v.(taskmaster.Task); ok {
-					return task.GetPrioritySymbol()
+					return RenderPriority(task.Priority)
 				}
 				return ""
 			},
@@ -52,7 +52,7 @@ func NewTaskTable(tasks []taskmaster.Task) *TaskTableModel {
 			Width:      12,
 			Sortable:   true,
 			DataType:   DataTypeStatus,
-			Formatter:  formatTaskStatus,
+			Formatter:  formatTaskStatusWithIndicator,
 			Comparator: compareTaskStatus,
 		},
 		{
@@ -61,7 +61,7 @@ func NewTaskTable(tasks []taskmaster.Task) *TaskTableModel {
 			Width:      10,
 			Sortable:   true,
 			DataType:   DataTypePriority,
-			Formatter:  formatTaskPriority,
+			Formatter:  formatTaskPriorityWithIndicator,
 			Comparator: compareTaskPriority,
 		},
 		{
@@ -341,6 +341,40 @@ func formatTaskStatus(v interface{}) string {
 	return status
 }
 
+// formatTaskStatusWithIndicator uses the new StatusIndicator component
+func formatTaskStatusWithIndicator(v interface{}) string {
+	status, ok := v.(string)
+	if !ok {
+		return ""
+	}
+
+	// Create status indicator with label
+	indicator := NewStatusIndicator(StatusIndicatorConfig{
+		Type:      StatusTypeTask,
+		Value:     status,
+		Label:     getStatusLabel(status),
+		ShowLabel: true,
+	})
+
+	return indicator.View()
+}
+
+func getStatusLabel(status string) string {
+	labels := map[string]string{
+		"done":        "Done",
+		"in_progress": "In Progress",
+		"pending":     "Pending",
+		"blocked":     "Blocked",
+		"deferred":    "Deferred",
+		"cancelled":   "Cancelled",
+	}
+
+	if label, ok := labels[status]; ok {
+		return label
+	}
+	return status
+}
+
 func formatTaskPriority(v interface{}) string {
 	priority, ok := v.(string)
 	if !ok {
@@ -352,6 +386,38 @@ func formatTaskPriority(v interface{}) string {
 		"high":     "⚡ High",
 		"medium":   "📋 Medium",
 		"low":      "📝 Low",
+	}
+
+	if label, ok := labels[priority]; ok {
+		return label
+	}
+	return priority
+}
+
+// formatTaskPriorityWithIndicator uses the new StatusIndicator component
+func formatTaskPriorityWithIndicator(v interface{}) string {
+	priority, ok := v.(string)
+	if !ok {
+		return ""
+	}
+
+	// Create priority indicator with label
+	indicator := NewStatusIndicator(StatusIndicatorConfig{
+		Type:      StatusTypePriority,
+		Value:     priority,
+		Label:     getPriorityLabel(priority),
+		ShowLabel: true,
+	})
+
+	return indicator.View()
+}
+
+func getPriorityLabel(priority string) string {
+	labels := map[string]string{
+		"critical": "Critical",
+		"high":     "High",
+		"medium":   "Medium",
+		"low":      "Low",
 	}
 
 	if label, ok := labels[priority]; ok {
