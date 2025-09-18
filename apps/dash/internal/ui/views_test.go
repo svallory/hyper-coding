@@ -114,8 +114,8 @@ func TestViewRendering(t *testing.T) {
 			expectedInView: []string{
 				"1:Overview",
 				"3:Agents",
-				"Agent Activity",
-				"TaskMaster Integration",
+				"TaskMaster Agents",
+				"Summary:",
 			},
 		},
 		{
@@ -176,7 +176,7 @@ func TestFooterControls(t *testing.T) {
 			name:     "Overview footer",
 			viewMode: OverviewView,
 			expectedControls: []string{
-				"[1-6] Switch Tab",
+				"[1-7] Switch Tab",
 				"[enter] Select Epic",
 				"[gg] Top",
 				"[G] Bottom",
@@ -189,7 +189,7 @@ func TestFooterControls(t *testing.T) {
 			name:     "Tasks footer",
 			viewMode: TasksView,
 			expectedControls: []string{
-				"[1-6] Switch Tab",
+				"[1-7] Switch Tab",
 				"[gg] Top",
 				"[G] Bottom",
 				"[/] Search",
@@ -201,7 +201,7 @@ func TestFooterControls(t *testing.T) {
 			name:     "Agents footer",
 			viewMode: AgentsView,
 			expectedControls: []string{
-				"[1-6] Switch Tab",
+				"[1-7] Switch Tab",
 				"[gg] Top",
 				"[G] Bottom",
 				"[/] Search",
@@ -213,7 +213,7 @@ func TestFooterControls(t *testing.T) {
 			name:     "Documents footer",
 			viewMode: DocumentsView,
 			expectedControls: []string{
-				"[1-6] Switch Tab",
+				"[1-7] Switch Tab",
 				"[enter] Open",
 				"[gg] Top",
 				"[G] Bottom",
@@ -225,7 +225,7 @@ func TestFooterControls(t *testing.T) {
 			name:     "Logs footer",
 			viewMode: LogsView,
 			expectedControls: []string{
-				"[1-6] Switch Tab",
+				"[1-7] Switch Tab",
 				"[gg] Top",
 				"[G] Bottom",
 				"[/] Search",
@@ -237,7 +237,7 @@ func TestFooterControls(t *testing.T) {
 			name:     "Help footer",
 			viewMode: HelpView,
 			expectedControls: []string{
-				"[1-6] Switch Tab",
+				"[1-7] Switch Tab",
 				"[gg] Top",
 				"[G] Bottom",
 				"[:] Command",

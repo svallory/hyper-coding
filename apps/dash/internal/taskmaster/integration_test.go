@@ -216,7 +216,9 @@ func TestGetTasksFormatted(t *testing.T) {
 		EpicDir: "/tmp",
 	})
 	
-	// Mock tasks for testing
+	// Set client as available and mock tasks for testing
+	integration.client.available = true
+	integration.client.cache.ttl = time.Hour // Set long TTL to avoid CLI calls
 	integration.client.cache.tasks = []Task{
 		{
 			ID:       1,
@@ -281,9 +283,11 @@ func TestGetTasksFormattedEmpty(t *testing.T) {
 		EpicDir: "/tmp",
 	})
 	
-	// No tasks in cache
+	// Set client as available and no tasks in cache
+	integration.client.available = true
 	integration.client.cache.tasks = []Task{}
 	integration.client.cache.lastUpdate = time.Now()
+	integration.client.cache.ttl = time.Hour // Set long TTL to avoid CLI calls
 	
 	formatted, err := integration.GetTasksFormatted()
 	if err != nil {

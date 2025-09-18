@@ -483,7 +483,7 @@ func (m Model) renderDocumentReaderFooter() string {
 func (m Model) renderHelpContent() string {
 	help := `
 🎯 Navigation:
-  1-6         Quick switch to tab (Overview/Tasks/Agents/Docs/Logs/Help)
+  1-7         Quick switch to tab (Overview/Tasks/Agents/Docs/Logs/Performance/Help)
   ↑/k, ↓/j    Move up/down in lists
   ←/h, →/l    Move left/right  
   enter       Select epic or item
@@ -502,7 +502,8 @@ func (m Model) renderHelpContent() string {
   3:Agents    TaskMaster agent monitoring and analytics
   4:Docs      Browse and read markdown files in epic directory
   5:Logs      Real-time log viewer with auto-scroll
-  6:Help      This help screen with keyboard shortcuts
+  6:Performance Performance monitoring and system metrics
+  7:Help      This help screen with keyboard shortcuts
 
 🎨 Features:
   • Real-time monitoring of epic progress
@@ -535,21 +536,21 @@ func (m Model) renderFooter() string {
 	
 	switch m.viewMode {
 	case OverviewView:
-		controls = []string{"[1-6] Switch Tab", "[enter] Select Epic", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
+		controls = []string{"[1-7] Switch Tab", "[enter] Select Epic", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
 	case TasksView:
-		controls = []string{"[1-6] Switch Tab", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
+		controls = []string{"[1-7] Switch Tab", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
 	case AgentsView:
-		controls = []string{"[1-6] Switch Tab", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
+		controls = []string{"[1-7] Switch Tab", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
 	case DocumentsView:
 		if m.selectedDoc != nil {
 			controls = []string{"[esc] Back", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
 		} else {
-			controls = []string{"[1-6] Switch Tab", "[enter] Open", "[gg] Top", "[G] Bottom", "[/] Search", "[q] Quit"}
+			controls = []string{"[1-7] Switch Tab", "[enter] Open", "[gg] Top", "[G] Bottom", "[/] Search", "[q] Quit"}
 		}
 	case LogsView:
-		controls = []string{"[1-6] Switch Tab", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
+		controls = []string{"[1-7] Switch Tab", "[gg] Top", "[G] Bottom", "[/] Search", "[:] Command", "[q] Quit"}
 	case HelpView:
-		controls = []string{"[1-6] Switch Tab", "[gg] Top", "[G] Bottom", "[:] Command", "[q] Quit"}
+		controls = []string{"[1-7] Switch Tab", "[gg] Top", "[G] Bottom", "[:] Command", "[q] Quit"}
 	}
 
 	return styles.FooterStyle.Render(strings.Join(controls, " • "))

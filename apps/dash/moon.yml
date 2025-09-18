@@ -6,15 +6,29 @@ type: 'application'
 platform: 'system'
 
 tasks:
+  # Development tasks
   build:
     command: 'go build -o dash ./cmd/dash'
     inputs:
       - 'cmd/**/*'
       - 'internal/**/*'
+      - 'pkg/**/*'
       - 'go.mod'
       - 'go.sum'
     outputs:
       - 'dash'
+
+  build-release:
+    command: '../scripts/build.sh'
+    inputs:
+      - 'cmd/**/*'
+      - 'internal/**/*'
+      - 'pkg/**/*'
+      - 'go.mod'
+      - 'go.sum'
+      - '../scripts/build.sh'
+    outputs:
+      - 'dist/**/*'
 
   run:
     command: 'go run ./cmd/dash'
@@ -22,11 +36,24 @@ tasks:
       - 'build'
     local: true
 
+  # Testing tasks
   test:
-    command: 'go test ./...'
+    command: 'go test ./... -v -race -cover -coverprofile=coverage.out'
     inputs:
       - 'internal/**/*'
       - 'cmd/**/*'
+      - 'pkg/**/*'
+      - 'go.mod'
+      - 'go.sum'
+    outputs:
+      - 'coverage.out'
+
+  test-short:
+    command: 'go test ./... -short'
+    inputs:
+      - 'internal/**/*'
+      - 'cmd/**/*'
+      - 'pkg/**/*'
       - 'go.mod'
       - 'go.sum'
 
@@ -36,6 +63,23 @@ tasks:
       - 'build'
     local: true
 
+  test-coverage:
+    command: 'go test ./... -coverprofile=coverage.out && go tool cover -html=coverage.out -o coverage.html'
+    deps:
+      - 'test'
+    outputs:
+      - 'coverage.html'
+
+  benchmark:
+    command: 'go test ./... -bench=. -benchmem'
+    inputs:
+      - 'internal/**/*'
+      - 'cmd/**/*'
+      - 'pkg/**/*'
+      - 'go.mod'
+      - 'go.sum'
+
+  # Simulation and testing
   quick-test:
     command: './scripts/quick-test.sh'
     deps:
@@ -48,14 +92,20 @@ tasks:
       - 'build'
     local: true
 
+  # Maintenance tasks
   clean:
-    command: 'go clean && rm -f dash'
+    command: 'go clean && rm -f dash && rm -rf dist/ && rm -f coverage.out coverage.html'
     local: true
 
   deps:
     command: 'go mod download && go mod tidy'
     local: true
 
+  deps-update:
+    command: 'go get -u ./... && go mod tidy'
+    local: true
+
+  # Code quality tasks
   format:
     command: 'go fmt ./...'
     local: true
@@ -63,10 +113,98 @@ tasks:
   lint:
     command: 'go vet ./...'
 
+  lint-full:
+    command: 'golangci-lint run ./...'
+
   typecheck:
     command: 'go build -o /dev/null ./...'
     inputs:
       - 'cmd/**/*'
       - 'internal/**/*'
+      - 'pkg/**/*'
       - 'go.mod'
       - 'go.sum'
+
+  # Security tasks
+  security:
+    command: 'gosec ./...'
+
+  security-full:
+    command: 'gosec -fmt sarif -out gosec.sarif ./...'
+    outputs:
+      - 'gosec.sarif'
+
+  # Docker tasks
+  docker-build:
+    command: 'docker build -t hyper-dash:latest .'
+    inputs:
+      - 'Dockerfile'
+      - 'cmd/**/*'
+      - 'internal/**/*'
+      - 'pkg/**/*'
+      - 'go.mod'
+      - 'go.sum'
+
+  docker-run:
+    command: 'docker run --rm -it hyper-dash:latest'
+    deps:
+      - 'docker-build'
+    local: true
+
+  # Release tasks
+  release-prepare:
+    command: 'goreleaser check'
+
+  release-snapshot:
+    command: 'goreleaser release --snapshot --rm-dist'
+    deps:
+      - 'test'
+      - 'lint'
+
+  release:
+    command: 'goreleaser release --rm-dist'
+    deps:
+      - 'test'
+      - 'lint'
+
+  # CI/CD tasks
+  ci-test:
+    command: 'go test ./... -v -race -cover -coverprofile=coverage.out -json > test-report.json'
+    inputs:
+      - 'internal/**/*'
+      - 'cmd/**/*'
+      - 'pkg/**/*'
+      - 'go.mod'
+      - 'go.sum'
+    outputs:
+      - 'coverage.out'
+      - 'test-report.json'
+
+  ci-build:
+    command: 'CGO_ENABLED=0 go build -ldflags="-s -w" -o hyper-dash ./cmd/dash'
+    inputs:
+      - 'cmd/**/*'
+      - 'internal/**/*'
+      - 'pkg/**/*'
+      - 'go.mod'
+      - 'go.sum'
+    outputs:
+      - 'hyper-dash'
+
+  ci-validate:
+    deps:
+      - 'format'
+      - 'lint'
+      - 'typecheck'
+      - 'test'
+
+  # Performance tasks
+  profile-cpu:
+    command: 'go test ./... -cpuprofile=cpu.prof'
+    outputs:
+      - 'cpu.prof'
+
+  profile-mem:
+    command: 'go test ./... -memprofile=mem.prof'
+    outputs:
+      - 'mem.prof'

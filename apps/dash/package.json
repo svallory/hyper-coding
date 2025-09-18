@@ -1,0 +1,75 @@
+{
+  "name": "hyper-dash",
+  "version": "1.0.0-beta.1",
+  "description": "A modern, high-performance task management and epic tracking dashboard built with Go and Bubble Tea. Features real-time task monitoring, performance analytics, and TaskMaster CLI integration.",
+  "keywords": [
+    "task-management",
+    "dashboard",
+    "tui",
+    "terminal",
+    "go",
+    "bubble-tea",
+    "cli",
+    "epic-tracking",
+    "performance-monitoring",
+    "taskmaster"
+  ],
+  "homepage": "https://github.com/hyperdev-io/hyper-dash",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperdev-io/hyper-dash.git",
+    "directory": "apps/dash"
+  },
+  "bugs": {
+    "url": "https://github.com/hyperdev-io/hyper-dash/issues"
+  },
+  "license": "MIT",
+  "author": "HyperDev Team <team@hyperdev.io>",
+  "maintainers": [
+    "HyperDev Team <team@hyperdev.io>"
+  ],
+  "bin": {
+    "hyper-dash": "./bin/hyper-dash"
+  },
+  "files": [
+    "bin/",
+    "install.js",
+    "uninstall.js",
+    "README.md",
+    "USAGE.md"
+  ],
+  "scripts": {
+    "postinstall": "node install.js",
+    "preuninstall": "node uninstall.js",
+    "test": "node -e \"console.log('Testing hyper-dash installation...'); require('./install.js');\"",
+    "clean": "node uninstall.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "preferGlobal": true,
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+  "config": {
+    "binary": {
+      "name": "hyper-dash",
+      "host": "https://github.com",
+      "remote_path": "/hyperdev-io/hyper-dash/releases/download/{version}/",
+      "package_name": "hyper-dash_{platform}_{arch}.{ext}"
+    }
+  },
+  "bundledDependencies": [],
+  "dependencies": {},
+  "devDependencies": {},
+  "optionalDependencies": {}
+}

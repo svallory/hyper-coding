@@ -1,245 +1,183 @@
-# HyperDash - Epic Workflow Monitor
+# HyperDash
 
-A beautiful TUI dashboard for monitoring HyperDev epic workflows in real-time.
+A modern, high-performance task management and epic tracking dashboard built with Go and Bubble Tea. Features real-time task monitoring, performance analytics, and TaskMaster CLI integration.
 
-## 🚀 Quick Start
+## 🚀 Quick Installation
 
-### Using Go (Recommended)
-```bash
-cd apps/dash
-
-# Build and test
-go build -o dash ./cmd/dash
-./dash -test
-
-# Run the dashboard
-./dash
-```
-
-### Using Moon (Monorepo Integration)
-```bash
-# From repo root
-moon run dash:build
-moon run dash:test-headless
-```
-
-## 🧪 Testing the Dashboard
-
-The dashboard is thoroughly tested and works correctly! Here's how to verify:
-
-### 1. Headless Testing (CI/Automated)
-```bash
-# Test data loading and core functionality
-./dash -test
-
-# Run complete test suite
-./scripts/test-tui.sh
-```
-
-### 2. Interactive Testing
-```bash
-# Terminal 1: Create live test data
-./scripts/quick-test.sh
-
-# Terminal 2: Watch the dashboard
-./dash
-```
-
-### 3. Realistic Demo
-```bash
-# Terminal 1: Run realistic epic simulation
-./scripts/simulate-epic.sh demo-user-auth
-
-# Terminal 2: Monitor in real-time
-./dash
-```
-
-## 🎬 Creating Demos
-
-Install a terminal recorder:
-```bash
-# macOS
-brew install asciinema
-
-# Ubuntu
-apt install asciinema
-
-# Others
-pip install asciinema
-```
-
-Record a demo:
-```bash
-# Start recording
-asciinema rec dashboard-demo.cast -c "./dash"
-
-# In another terminal, run simulation
-./scripts/simulate-epic.sh
-
-# Playback
-asciinema play dashboard-demo.cast
-```
-
-## ✅ Verified Features
-
-The dashboard has been tested and works correctly:
-
-- ✅ **Data Loading**: Correctly loads epics and logs from `agent/epics/`
-- ✅ **Real-time Updates**: File changes trigger immediate UI updates
-- ✅ **Epic Overview**: Table showing status, progress, agents, timing
-- ✅ **Navigation**: Tab/Shift+Tab, Enter, Esc, arrow keys
-- ✅ **Epic Detail**: Deep dive into selected epic with task breakdown
-- ✅ **Log Viewer**: Live log streaming with color coding
-- ✅ **Error Handling**: Graceful handling of missing files/malformed data
-- ✅ **Responsive UI**: Adapts to terminal size changes
-- ✅ **Performance**: Efficient file watching and memory usage
-
-## 🔧 Build System Integration
-
-### Go Standard Tools
-```bash
-# Development workflow
-go mod download              # Install dependencies
-go build -o dash ./cmd/dash  # Build binary
-go test ./...               # Run tests
-go fmt ./...                # Format code
-go vet ./...                # Static analysis
-```
-
-### Moon Integration
-The dashboard integrates with the moon monorepo system:
+### npm (Recommended)
 
 ```bash
-# Moon tasks (from repo root)
-moon run dash:build         # Build the dashboard
-moon run dash:test          # Run unit tests
-moon run dash:test-headless # Test functionality
-moon run dash:quick-test    # Quick integration test
-moon run dash:simulate      # Run epic simulation
-moon run dash:clean         # Clean build artifacts
+# Global installation
+npm install -g hyper-dash
+
+# Local installation
+npm install hyper-dash
 ```
 
-## 📊 What You'll See
+### Other Installation Methods
 
-When running the dashboard, you'll see:
-
-### Overview Mode (Default)
-- **Epic Table**: Name, status, progress bar, active agents, last update
-- **Status Indicators**: ✅ Completed, 🔄 Running, ⏸️ Pending, ❌ Failed
-- **Real-time Stats**: Total epics, active agents, completed tasks
-- **Live Updates**: Immediate reflection of file changes
-
-### Epic Detail Mode (Enter on epic)
-- **Epic Information**: Current step, completed steps, timestamps
-- **Task Progress**: Visual progress bar with completed/total counts
-- **Agent Status**: Active agents, deployment status, task assignments
-- **Configuration**: Workflow settings and artifact paths
-
-### Log Viewer Mode (Tab to navigate)
-- **Live Streaming**: Real-time log entries as they're written
-- **Color Coding**: 🤖 Agent, ✅ Success, ⚠️ Warning, ❌ Error, ℹ️ Info
-- **Epic Association**: Logs grouped by epic name
-- **Auto-scroll**: Automatically scrolls to show latest entries
-
-### Help Mode
-- **Keyboard Shortcuts**: Complete navigation reference
-- **Usage Instructions**: How to use each view
-- **Feature Overview**: Dashboard capabilities
-
-## 🎯 Testing Scenarios Verified
-
-### Data Loading
+#### Homebrew (macOS/Linux)
 ```bash
-./dash -test
-# ✅ Loads 2 epics, 56 log entries correctly
-# ✅ Parses JSON workflow states accurately  
-# ✅ Associates logs with correct epics
+brew install hyperdev-io/tap/hyper-dash
 ```
 
-### Real-time Updates
+#### Direct Download
+Download the appropriate binary for your platform from [GitHub Releases](https://github.com/hyperdev-io/hyper-dash/releases).
+
+#### Docker
 ```bash
-# Terminal 1
-./scripts/quick-test.sh
-# ✅ Creates rapid state changes
-
-# Terminal 2  
-./dash
-# ✅ Dashboard updates immediately
-# ✅ Progress bars animate correctly
-# ✅ Agent counts update in real-time
+docker run --rm -it ghcr.io/hyperdev-io/hyper-dash:latest
 ```
 
-### Error Handling
+## 🎯 Usage
+
+After installation, you can run HyperDash using:
+
 ```bash
-# Test with malformed data
-echo "invalid json" > agent/epics/test/workflow-state.json
-./dash
-# ✅ Shows error gracefully, doesn't crash
-# ✅ Recovers when file is fixed
+# Start the interactive dashboard
+hyper-dash
+
+# Test data loading and functionality
+hyper-dash -test
+
+# Show version information
+hyper-dash --version
+
+# Show help
+hyper-dash --help
 ```
 
-## 🏗️ Architecture
+## ✨ Features
 
-### Go Project Structure
-```
-apps/dash/
-├── cmd/dash/              # Application entry point
-│   ├── main.go           # CLI and TUI initialization
-│   └── test.go           # Headless testing mode
-├── internal/             # Private packages
-│   ├── models/           # Data structures
-│   ├── ui/              # TUI components  
-│   ├── watcher/         # File monitoring
-│   └── styles/          # Lipgloss styling
-├── scripts/             # Testing and demo scripts
-├── moon.yml            # Moon task configuration
-└── go.mod              # Go module definition
-```
+### Core Functionality
+- **Real-time Epic Monitoring**: Track multiple development epics simultaneously
+- **7-Tab Interface**: Comprehensive dashboard with dedicated views for all aspects
+- **TaskMaster Integration**: Seamless integration with TaskMaster AI workflows
+- **Performance Analytics**: Advanced system performance monitoring and metrics
+- **Vi-mode Navigation**: Efficient keyboard-driven interface with vim-style shortcuts
 
-### Moon Integration
-- **Proper Go Language Support**: Uses `platform: system` for Go binaries
-- **Task Dependencies**: Build tasks properly depend on source files
-- **Local Tasks**: Interactive tasks marked as `local: true`
-- **Input/Output Tracking**: Efficient rebuilds based on file changes
+### Task & Agent Management
+- **Task Progress Visualization**: Beautiful progress bars and status indicators
+- **Agent Activity Tracking**: Monitor TaskMaster agent efficiency and status
+- **Dependency Visualization**: Clear task dependency mapping and status tracking
+- **Real-time Updates**: Live sync with TaskMaster CLI for current task states
+
+### Documentation & Logs
+- **Markdown Document Viewer**: Browse epic documentation with syntax highlighting
+- **Real-time Log Streaming**: Auto-scrolling log viewer with color coding
+- **File Watching**: Automatic updates when epic data changes
+- **Search Functionality**: Full-text search across views and content
+
+### Technical Excellence
+- **Cross-platform Support**: Works on macOS, Linux, and Windows
+- **Responsive UI**: Adapts to terminal size changes dynamically
+- **High Performance**: Optimized rendering and minimal resource usage
+- **Error Recovery**: Robust error handling with graceful fallbacks
+
+## 🖥️ Interface Overview
+
+### 7-Tab Dashboard Structure
+
+HyperDash provides a comprehensive 7-tab interface for complete project monitoring:
+
+1. **Overview** (`1`): Main dashboard showing all epics with status and progress
+2. **Tasks** (`2`): Task management and tracking across all epics with TaskMaster integration
+3. **Agents** (`3`): TaskMaster agent monitoring and analytics with efficiency tracking
+4. **Docs** (`4`): Browse and read markdown files in epic directory with syntax highlighting
+5. **Logs** (`5`): Real-time log viewer with auto-scroll and color coding
+6. **Performance** (`6`): System performance monitoring and resource usage metrics
+7. **Help** (`7`): Keyboard shortcuts reference and usage instructions
+
+### Navigation & Keyboard Shortcuts
+
+#### Quick Tab Switching
+- **1-7**: Direct jump to specific tabs
+- **Tab/Shift+Tab**: Cycle through tabs sequentially
+
+#### List Navigation
+- **↑/↓, j/k**: Move up/down in lists
+- **←/→, h/l**: Move left/right  
+- **Enter**: Select epic or item
+- **Esc**: Go back to previous view
+
+#### Vi-mode Navigation
+- **gg**: Go to top of current list/viewport
+- **G**: Go to bottom of current list/viewport
+- **/** : Search in current view (press enter to search, esc to cancel)
+- **:** : Command mode (q/quit, help, overview, tasks, agents, docs, logs)
+
+#### General Controls
+- **r**: Refresh data
+- **q**: Quit application
+
+## 🔧 Configuration
+
+HyperDash automatically discovers epic data from:
+
+- `agent/epics/` directory
+- TaskMaster workflow files
+- Project configuration files
+
+No additional setup required for basic usage.
+
+## 🛠️ Development
+
+This package downloads and installs pre-compiled binaries for your platform. The source code is written in Go and uses the Charmbracelet ecosystem (Bubble Tea, Bubbles, Lipgloss) for the TUI interface.
+
+### Supported Platforms
+
+- **macOS**: x64, ARM64
+- **Linux**: x64, ARM64  
+- **Windows**: x64
+
+### Building from Source
+
+If you prefer to build from source:
+
+```bash
+git clone https://github.com/hyperdev-io/hyper-dash.git
+cd hyper-dash/apps/dash
+go build -o hyper-dash ./cmd/dash
+```
 
 ## 🐛 Troubleshooting
 
-### Dashboard doesn't start
-```bash
-# Verify build
-go build -o dash ./cmd/dash
+### Installation Issues
 
-# Test data loading
-./dash -test
+If installation fails:
 
-# Check epic directory
-ls -la agent/epics/
-```
+1. **Check Platform Support**: Ensure your platform is supported
+2. **Network Issues**: Check internet connectivity and GitHub access
+3. **Permission Issues**: Try with `sudo` (for global install) or use local install
+4. **Clear Cache**: Run `npm cache clean --force`
 
-### No epics detected  
-```bash
-# Create test data
-./scripts/quick-test.sh
+### Runtime Issues
 
-# Verify file format
-cat agent/epics/*/workflow-state.json | jq .
-```
+If the dashboard doesn't start:
 
-### TUI issues in CI
-```bash
-# Use headless mode for automation
-./dash -test
+1. **Test Installation**: Run `hyper-dash -test`
+2. **Check Data**: Ensure epic data exists in `agent/epics/`
+3. **Permissions**: Verify binary has execute permissions
+4. **Version**: Run `hyper-dash --version` to verify installation
 
-# Use timeout for TUI testing
-timeout 5s ./dash
-```
+### Getting Help
 
-## 🎯 Moon Monorepo Benefits
+- 📖 [Documentation](https://github.com/hyperdev-io/hyper-dash/blob/main/apps/dash/USAGE.md)
+- 🐛 [Report Issues](https://github.com/hyperdev-io/hyper-dash/issues)
+- 💬 [Discussions](https://github.com/hyperdev-io/hyper-dash/discussions)
 
-1. **Unified Build System**: Consistent task interface across all projects
-2. **Dependency Tracking**: Efficient rebuilds when source files change  
-3. **Task Orchestration**: Can coordinate with other monorepo projects
-4. **Consistent Tooling**: Same commands work across different languages
-5. **CI Integration**: Easy integration with monorepo CI/CD pipelines
+## 📄 License
 
-The dashboard is now properly integrated with the moon monorepo system while maintaining standard Go development practices. It's thoroughly tested, performs well, and provides a beautiful monitoring experience for epic workflows!
+MIT License - see [LICENSE](https://github.com/hyperdev-io/hyper-dash/blob/main/LICENSE) for details.
+
+## 🏗️ Built With
+
+- [Go](https://golang.org/) - Core language
+- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
+- [Bubbles](https://github.com/charmbracelet/bubbles) - TUI components
+- [Lipgloss](https://github.com/charmbracelet/lipgloss) - Styling
+- [Glamour](https://github.com/charmbracelet/glamour) - Markdown rendering
+
+---
+
+Made with ❤️ by the HyperDev Team

@@ -163,7 +163,7 @@ func (c *Client) GetTasks() ([]Task, error) {
 	
 	// Check cache first
 	c.cache.mu.RLock()
-	if time.Since(c.cache.lastUpdate) < c.cache.ttl && len(c.cache.tasks) > 0 {
+	if time.Since(c.cache.lastUpdate) < c.cache.ttl {
 		tasks := c.cache.tasks
 		c.cache.mu.RUnlock()
 		return tasks, nil
