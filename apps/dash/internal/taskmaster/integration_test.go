@@ -182,19 +182,30 @@ func TestIntegrationSubscription(t *testing.T) {
 		t.Errorf("Expected 1 subscriber after unsubscribe, got %d", len(integration.subscribers))
 	}
 	
-	// Test that unsubscribed channel doesn't receive updates
-	integration.notifySubscribers(update)
+	// Test that unsubscribed channel doesn't receive new updates
+	update2 := TaskUpdate{
+		Type:      UpdateTypeTaskCompleted,
+		Timestamp: time.Now(),
+	}
+	integration.notifySubscribers(update2)
 	
+	// Since ch1 is closed after unsubscribe, check if it's closed properly
 	select {
-	case <-ch1:
-		t.Error("Unsubscribed channel should not receive updates")
+	case _, ok := <-ch1:
+		if ok {
+			t.Error("Unsubscribed channel should be closed or not receive new updates")
+		}
+		// If !ok, channel is closed which is expected
 	case <-time.After(50 * time.Millisecond):
-		// Expected - no update received
+		// Expected - no update received on closed channel
 	}
 	
 	select {
-	case <-ch2:
+	case received := <-ch2:
 		// Expected - update received
+		if received.Type != UpdateTypeTaskCompleted {
+			t.Errorf("Expected UpdateTypeTaskCompleted, got %s", received.Type)
+		}
 	case <-time.After(100 * time.Millisecond):
 		t.Error("Subscribed channel should receive updates")
 	}

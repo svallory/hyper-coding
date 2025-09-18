@@ -16,7 +16,9 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/hyperdev-io/hyper-dash/apps/dash/internal/cache"
 	"github.com/hyperdev-io/hyper-dash/apps/dash/internal/models"
+	"github.com/hyperdev-io/hyper-dash/apps/dash/internal/performance"
 	"github.com/hyperdev-io/hyper-dash/apps/dash/internal/styles"
 	"github.com/hyperdev-io/hyper-dash/apps/dash/internal/taskmaster"
 )
@@ -30,6 +32,7 @@ const (
 	AgentsView
 	DocumentsView
 	LogsView
+	PerformanceView
 	HelpView
 )
 
@@ -108,6 +111,15 @@ type Model struct {
 	taskmasterTasks  []taskmaster.Task
 	taskmasterAgents []taskmaster.Agent
 	taskmasterStatus taskmaster.SystemStatus
+	
+	// Performance monitoring
+	perfMonitor      *performance.Monitor
+	perfViewport     viewport.Model
+	perfMetrics      performance.Metrics
+	perfHistory      []performance.Metrics
+	cacheSystem      *cache.Cache
+	lazyLoader       *cache.LazyLoader
+	bgWorker         *performance.BackgroundWorker
 }
 
 // EpicItem represents an epic in the list component
@@ -157,6 +169,7 @@ type keyMap struct {
 	Four    key.Binding
 	Five    key.Binding
 	Six     key.Binding
+	Seven   key.Binding
 	// Vi-mode navigation enhancements
 	GotoTop    key.Binding // gg - goto top
 	GotoBottom key.Binding // G - goto bottom
@@ -228,7 +241,11 @@ func newKeyMap() keyMap {
 		),
 		Six: key.NewBinding(
 			key.WithKeys("6"),
-			key.WithHelp("6", "help"),
+			key.WithHelp("6", "performance"),
+		),
+		Seven: key.NewBinding(
+			key.WithKeys("7"),
+			key.WithHelp("7", "help"),
 		),
 		// Vi-mode navigation enhancements
 		GotoTop: key.NewBinding(
@@ -313,21 +330,38 @@ func InitialModel(epicDir string) Model {
 			Timeout:    30 * time.Second,
 		},
 	})
+	
+	// Initialize performance monitoring
+	perfMonitor, _ := performance.NewMonitor(performance.DefaultMonitorOptions())
+	
+	// Initialize cache system
+	cacheSystem, _ := cache.New(cache.DefaultOptions())
+	
+	// Initialize background worker
+	bgWorker := performance.NewBackgroundWorker(performance.DefaultWorkerOptions())
+	
+	// Initialize performance viewport
+	perfVp := viewport.New(0, 0)
+	perfVp.Style = styles.LogViewerStyle
 
 	return Model{
-		epicDir:      epicDir,
-		viewMode:     OverviewView,
-		epicList:     epicList,
-		docList:      docList,
-		logViewport:  logVp,
-		docViewport:  docVp,
+		epicDir:       epicDir,
+		viewMode:      OverviewView,
+		epicList:      epicList,
+		docList:       docList,
+		logViewport:   logVp,
+		docViewport:   docVp,
 		tasksViewport: tasksVp,
-		spinner:      s,
-		progress:     prog,
-		loading:      true,
-		lastUpdate:   time.Now(),
-		keys:         newKeyMap(),
-		taskmaster:   tmIntegration,
+		perfViewport:  perfVp,
+		spinner:       s,
+		progress:      prog,
+		loading:       true,
+		lastUpdate:    time.Now(),
+		keys:          newKeyMap(),
+		taskmaster:    tmIntegration,
+		perfMonitor:   perfMonitor,
+		cacheSystem:   cacheSystem,
+		bgWorker:      bgWorker,
 	}
 }
 
@@ -522,6 +556,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewMode = LogsView
 			
 		case key.Matches(msg, m.keys.Six):
+			m.viewMode = PerformanceView
+			
+		case key.Matches(msg, m.keys.Seven):
 			m.viewMode = HelpView
 			
 		case key.Matches(msg, m.keys.Enter):
@@ -648,6 +685,8 @@ func (m Model) View() string {
 		return m.documentsView()
 	case LogsView:
 		return m.logsView()
+	case PerformanceView:
+		return m.performanceView()
 	case HelpView:
 		return m.helpView()
 	default:
@@ -688,6 +727,8 @@ func (m *Model) nextView() {
 	case DocumentsView:
 		m.viewMode = LogsView
 	case LogsView:
+		m.viewMode = PerformanceView
+	case PerformanceView:
 		m.viewMode = HelpView
 	case HelpView:
 		m.viewMode = OverviewView
@@ -710,8 +751,10 @@ func (m *Model) previousView() {
 		}
 	case LogsView:
 		m.viewMode = DocumentsView
-	case HelpView:
+	case PerformanceView:
 		m.viewMode = LogsView
+	case HelpView:
+		m.viewMode = PerformanceView
 	default:
 		m.viewMode = OverviewView
 	}

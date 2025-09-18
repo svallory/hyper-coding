@@ -85,8 +85,8 @@ func TestEpicHelperMethods(t *testing.T) {
 		CompletedSteps: []int{1, 2},
 		Execution: Execution{
 			ParallelAgentsActive: 3,
-			TasksCompleted:       []string{"task-1", "task-2"},
-			TasksInProgress:      []string{"task-3", "task-4"},
+			TasksCompleted:       []interface{}{"task-1", "task-2"},
+			TasksInProgress:      []interface{}{"task-3", "task-4"},
 		},
 		LastUpdated: time.Now().Add(-5 * time.Minute),
 	}

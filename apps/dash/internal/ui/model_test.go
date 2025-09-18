@@ -42,14 +42,20 @@ func TestViewModeTransitions(t *testing.T) {
 		{
 			name:         "Logs transitions",
 			startMode:    LogsView,
-			expectedNext: HelpView,
+			expectedNext: PerformanceView,
 			expectedPrev: DocumentsView,
+		},
+		{
+			name:         "Performance transitions",
+			startMode:    PerformanceView,
+			expectedNext: HelpView,
+			expectedPrev: LogsView,
 		},
 		{
 			name:         "Help transitions",
 			startMode:    HelpView,
 			expectedNext: OverviewView,
-			expectedPrev: LogsView,
+			expectedPrev: PerformanceView,
 		},
 	}
 
@@ -102,8 +108,13 @@ func TestNumberKeyboardShortcuts(t *testing.T) {
 			expectedTab: LogsView,
 		},
 		{
-			name:        "Press 6 for Help",
+			name:        "Press 6 for Performance",
 			key:         tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'6'}},
+			expectedTab: PerformanceView,
+		},
+		{
+			name:        "Press 7 for Help",
+			key:         tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'7'}},
 			expectedTab: HelpView,
 		},
 	}
@@ -132,6 +143,7 @@ func TestTabKeyNavigation(t *testing.T) {
 		AgentsView,
 		DocumentsView,
 		LogsView,
+		PerformanceView,
 		HelpView,
 		OverviewView, // Should cycle back
 	}
@@ -155,7 +167,8 @@ func TestViewModeEnumValues(t *testing.T) {
 	assert.Equal(t, ViewMode(2), AgentsView, "AgentsView should be 2")
 	assert.Equal(t, ViewMode(3), DocumentsView, "DocumentsView should be 3")
 	assert.Equal(t, ViewMode(4), LogsView, "LogsView should be 4")
-	assert.Equal(t, ViewMode(5), HelpView, "HelpView should be 5")
+	assert.Equal(t, ViewMode(5), PerformanceView, "PerformanceView should be 5")
+	assert.Equal(t, ViewMode(6), HelpView, "HelpView should be 6")
 }
 
 func TestKeyBindings(t *testing.T) {
@@ -174,6 +187,8 @@ func TestKeyBindings(t *testing.T) {
 		"Key 5 should match Five binding")
 	assert.True(t, key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'6'}}, keys.Six),
 		"Key 6 should match Six binding")
+	assert.True(t, key.Matches(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'7'}}, keys.Seven),
+		"Key 7 should match Seven binding")
 
 	// Test tab key binding
 	assert.True(t, key.Matches(tea.KeyMsg{Type: tea.KeyTab}, keys.Tab),

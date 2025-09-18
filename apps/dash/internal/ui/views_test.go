@@ -26,7 +26,8 @@ func TestTabBarRendering(t *testing.T) {
 				"3:Agents",
 				"4:Docs",
 				"5:Logs",
-				"6:Help",
+				"6:Performance",
+				"7:Help",
 			},
 		},
 		{
@@ -38,7 +39,8 @@ func TestTabBarRendering(t *testing.T) {
 				"3:Agents",
 				"4:Docs",
 				"5:Logs",
-				"6:Help",
+				"6:Performance",
+				"7:Help",
 			},
 		},
 		{
@@ -50,7 +52,8 @@ func TestTabBarRendering(t *testing.T) {
 				"3:Agents", // Should be highlighted
 				"4:Docs",
 				"5:Logs",
-				"6:Help",
+				"6:Performance",
+				"7:Help",
 			},
 		},
 	}
@@ -90,7 +93,8 @@ func TestViewRendering(t *testing.T) {
 				"3:Agents",
 				"4:Docs",
 				"5:Logs",
-				"6:Help",
+				"6:Performance",
+				"7:Help",
 			},
 		},
 		{
@@ -138,9 +142,9 @@ func TestViewRendering(t *testing.T) {
 			expectedTitle: "HyperDash Help",
 			expectedInView: []string{
 				"1:Overview",
-				"6:Help",
+				"7:Help",
 				"Navigation",
-				"1-6",
+				"1-7",
 				"Quick switch to tab",
 			},
 		},
@@ -327,7 +331,7 @@ func TestTabBarHighlighting(t *testing.T) {
 	model.width = 100
 
 	// Test that active tab is highlighted differently
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 7; i++ {
 		model.viewMode = ViewMode(i)
 		tabBar := model.renderTabBar()
 
@@ -337,6 +341,7 @@ func TestTabBarHighlighting(t *testing.T) {
 		assert.Contains(t, tabBar, "3:Agents")
 		assert.Contains(t, tabBar, "4:Docs")
 		assert.Contains(t, tabBar, "5:Logs")
-		assert.Contains(t, tabBar, "6:Help")
+		assert.Contains(t, tabBar, "6:Performance")
+		assert.Contains(t, tabBar, "7:Help")
 	}
 }

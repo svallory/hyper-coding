@@ -174,6 +174,29 @@ func (m Model) logsView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
+// performanceView renders the performance monitoring dashboard
+func (m Model) performanceView() string {
+	var sections []string
+
+	// Tab bar
+	tabs := m.renderTabBar()
+	sections = append(sections, tabs)
+
+	// Header
+	header := styles.TitleStyle.Render("📊 Performance Dashboard")
+	sections = append(sections, header)
+
+	// Performance metrics content
+	content := m.renderPerformanceContent()
+	sections = append(sections, content)
+
+	// Footer
+	footer := m.renderFooter()
+	sections = append(sections, footer)
+
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
 // helpView renders the help screen
 func (m Model) helpView() string {
 	var sections []string
@@ -594,7 +617,7 @@ func (m Model) interfaceSliceToStrings(slice []interface{}) []string {
 	return result
 }
 
-// renderTabBar renders the 6-tab navigation bar with numbered shortcuts
+// renderTabBar renders the 7-tab navigation bar with numbered shortcuts
 func (m Model) renderTabBar() string {
 	tabs := []string{
 		"1:Overview",
@@ -602,7 +625,8 @@ func (m Model) renderTabBar() string {
 		"3:Agents",
 		"4:Docs",
 		"5:Logs",
-		"6:Help",
+		"6:Performance",
+		"7:Help",
 	}
 
 	var renderedTabs []string
