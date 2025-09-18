@@ -1,0 +1,297 @@
+{
+  "master": {
+    "tasks": [],
+    "metadata": {
+      "version": "1.0",
+      "tags": {
+        "master": {
+          "name": "master",
+          "description": "Default tag",
+          "created": "2025-08-17T12:00:00Z"
+        }
+      },
+      "activeTag": "master",
+      "created": "2025-08-17T18:39:48.899Z",
+      "description": "Tasks for master context"
+    }
+  },
+  "dashboard-tui-ux-improvements": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Implement Enhanced Layout System with Responsive Design",
+        "description": "Create a responsive layout system that adapts to different terminal sizes and provides better visual hierarchy using Ink.js advanced components.",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [],
+        "details": "Implement responsive layout components that can adapt to terminal window size changes. Use Ink.js Box components with flexible sizing, create consistent spacing system, and establish visual hierarchy through typography and color schemes. Should support minimum terminal sizes and gracefully degrade on very small terminals.",
+        "testStrategy": "Test across different terminal sizes, verify layout doesn't break on resize, ensure visual hierarchy is maintained",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Add Keyboard Navigation and Focus Management",
+        "description": "Implement comprehensive keyboard navigation system with arrow keys, tab cycling, and visual focus indicators throughout the interface.",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "details": "Use Ink.js useFocus hooks to create keyboard navigation. Implement arrow key navigation between components, tab cycling through interactive elements, and clear visual focus indicators. Include keyboard shortcuts for common actions and ensure all interface elements are keyboard accessible.",
+        "testStrategy": "Test all keyboard combinations, verify focus flow is logical, ensure no elements are unreachable via keyboard",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Integrate TaskMaster CLI with Data Caching",
+        "description": "Create async integration layer with TaskMaster CLI to fetch rich task data, implement caching system for performance, and handle CLI unavailability gracefully.",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [
+          "2"
+        ],
+        "details": "Build service layer that executes TaskMaster CLI commands asynchronously. Implement intelligent caching to avoid repeated CLI calls. Add error handling for when TaskMaster is unavailable and provide fallback data display. Include background refresh system for real-time updates.",
+        "testStrategy": "Test with TaskMaster available and unavailable, verify caching behavior, test background refresh cycles",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Create Interactive Task Detail Views",
+        "description": "Build detailed task information panels with drill-down capabilities, dependency visualization, and comprehensive task metadata display.",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "3"
+        ],
+        "details": "Create expandable task detail components that show full task information including descriptions, dependencies, subtasks, complexity analysis, and historical data. Implement drill-down navigation for dependencies and related tasks. Add task action capabilities when possible.",
+        "testStrategy": "Test detail view navigation, verify all task data is displayed correctly, test dependency chain visualization",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Implement Multi-Epic Context Management",
+        "description": "Add epic switching interface to allow users to view and manage multiple epic contexts without application restart.",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "3"
+        ],
+        "details": "Create epic selection interface that lists available epics and allows switching between them. Maintain separate state for each epic context including task lists, progress tracking, and configuration. Provide epic metadata display and context-aware data filtering.",
+        "testStrategy": "Test switching between multiple epics, verify state separation, test with missing/invalid epic folders",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Add Analytics Dashboard with Complexity Reports",
+        "description": "Create analytics views showing task complexity analysis, workflow bottlenecks, historical trends, and productivity insights from TaskMaster data.",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "4"
+        ],
+        "details": "Build analytics components that display complexity analysis from TaskMaster, show task completion trends, identify workflow bottlenecks, and provide productivity insights. Integrate with TaskMaster CLI commands: 'task-master complexity-report', 'task-master analyze-complexity', and 'task-master list --with-subtasks'. Implement efficient data caching with TTL-based invalidation to prevent CLI command spam. Create ASCII-based visualizations: horizontal bar charts for complexity scores, sparklines for trends, Unicode heat maps for bottleneck analysis. Add real-time streaming with intelligent update intervals and delta processing to handle large datasets efficiently.",
+        "testStrategy": "Test analytics with various data sets (10-1000+ tasks), verify chart rendering in different terminal sizes (80x24 to 300x100), test data refresh cycles, benchmark memory usage with large datasets, validate ASCII chart readability across different terminal types",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Integrate TaskMaster Analytics Commands",
+            "description": "Create service layer to execute 'task-master complexity-report' and 'analyze-complexity' commands with caching",
+            "status": "done",
+            "details": "Implement async command execution with proper error handling, JSON parsing, and data transformation for terminal display",
+            "estimatedHours": 8
+          },
+          {
+            "id": 2,
+            "title": "Build ASCII Chart Rendering System",
+            "description": "Create reusable chart components for horizontal bars, sparklines, and heat maps using Unicode characters",
+            "status": "done",
+            "details": "Optimize for terminal constraints, implement responsive sizing, ensure cross-platform character compatibility",
+            "estimatedHours": 12
+          },
+          {
+            "id": 3,
+            "title": "Implement Data Caching and Stream Processing",
+            "description": "Add intelligent caching layer with TTL and delta processing for real-time updates without performance degradation",
+            "status": "done",
+            "details": "Implement cache invalidation strategies, data aggregation windows, and memory-efficient data structures",
+            "estimatedHours": 10
+          },
+          {
+            "id": 4,
+            "title": "Create Interactive Analytics Navigation",
+            "description": "Add keyboard navigation for drilling down from analytics charts to detailed task information",
+            "status": "done",
+            "details": "Implement focus management for chart elements, breadcrumb navigation, and seamless transitions",
+            "estimatedHours": 6
+          },
+          {
+            "id": 5,
+            "title": "Add Export and Historical Analysis",
+            "description": "Implement data export capabilities and historical trend analysis with time range selection",
+            "status": "done",
+            "details": "Support CSV/JSON export, implement time-based filtering, add comparative analysis features",
+            "estimatedHours": 8
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Implement Progressive Mode System",
+        "description": "Create mode switching system that allows users to toggle between simple monitoring mode and full interactive management mode with preserved preferences.",
+        "status": "done",
+        "priority": "low",
+        "dependencies": [
+          "2",
+          "4"
+        ],
+        "details": "Implement mode switching interface that toggles between basic monitoring (current functionality) and enhanced interactive mode. Save user preferences for default mode, keyboard shortcuts, and display options. Ensure seamless transitions between modes without data loss.",
+        "testStrategy": "Test mode switching functionality, verify preference persistence, ensure backward compatibility with simple mode",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Enhanced Error Handling and Fallback Systems",
+        "description": "Implement comprehensive error handling for CLI integration failures, file system issues, and graceful degradation when features are unavailable.",
+        "status": "done",
+        "priority": "medium",
+        "dependencies": [
+          "3"
+        ],
+        "details": "Create robust error handling system that gracefully handles TaskMaster CLI failures, missing files, permission issues, and network problems. Implement fallback displays when full functionality is unavailable. Add user-friendly error messages and recovery suggestions.",
+        "testStrategy": "Test various failure scenarios, verify graceful degradation, test error message clarity and recovery procedures",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Performance Monitoring and Optimization",
+        "description": "Implement performance monitoring system, optimize rendering cycles, and ensure responsive user interface even with large task datasets.",
+        "status": "cancelled",
+        "priority": "high",
+        "dependencies": [
+          "6",
+          "3"
+        ],
+        "details": "Add comprehensive performance monitoring to track rendering times, memory usage, event loop lag, and user interaction response times. Implement React.memo for component optimization, useMemo for expensive calculations, and virtual scrolling for handling 1000+ tasks efficiently. Create real-time performance dashboard showing memory usage graphs, render time metrics, and component count tracking. Add automatic garbage collection triggering and memory leak detection with alerts. Optimize data polling intervals based on user activity and implement delta-based updates to reduce unnecessary re-renders. Include performance profiling tools for identifying bottlenecks in real-time.",
+        "testStrategy": "Performance testing with large datasets (100-2000+ tasks), memory leak testing over extended periods (24+ hours), response time measurements across different terminal types, benchmark against current implementation, validate performance on resource-constrained environments",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Real-time Performance Monitoring",
+            "description": "Create performance metrics collection system tracking memory, render times, and event loop lag",
+            "status": "pending",
+            "details": "Use Node.js performance APIs, implement custom metrics aggregation, create performance data visualization components",
+            "estimatedHours": 10
+          },
+          {
+            "id": 2,
+            "title": "Add Component Optimization and Memoization",
+            "description": "Optimize React components with memo, useMemo, and useCallback to prevent unnecessary re-renders",
+            "status": "pending",
+            "details": "Identify expensive render operations, implement shallow comparison strategies, optimize component props",
+            "estimatedHours": 8
+          },
+          {
+            "id": 3,
+            "title": "Implement Virtual Scrolling for Large Datasets",
+            "description": "Create virtual scrolling system to handle 1000+ tasks without performance degradation",
+            "status": "pending",
+            "details": "Build custom virtual list component for terminal constraints, implement windowing with buffer zones",
+            "estimatedHours": 14
+          },
+          {
+            "id": 4,
+            "title": "Add Memory Management and Leak Detection",
+            "description": "Implement automatic memory monitoring with leak detection and garbage collection optimization",
+            "status": "pending",
+            "details": "Create memory usage tracking, implement leak detection algorithms, add automatic cleanup strategies",
+            "estimatedHours": 12
+          },
+          {
+            "id": 5,
+            "title": "Optimize Data Processing and Caching",
+            "description": "Implement intelligent data processing with delta updates and optimized caching strategies",
+            "status": "pending",
+            "details": "Add data diffing algorithms, implement incremental updates, optimize cache eviction policies",
+            "estimatedHours": 10
+          },
+          {
+            "id": 6,
+            "title": "Create Performance Analytics Dashboard",
+            "description": "Build in-app performance monitoring dashboard with real-time metrics and historical analysis",
+            "status": "pending",
+            "details": "Create performance metrics visualization, implement performance trend analysis, add performance alerts",
+            "estimatedHours": 8
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Comprehensive Help System and Documentation",
+        "description": "Create in-app help system with keyboard shortcuts reference, feature discovery guides, and contextual assistance throughout the interface.",
+        "status": "cancelled",
+        "priority": "medium",
+        "dependencies": [
+          "7",
+          "9"
+        ],
+        "details": "Build comprehensive multi-modal help system with context-sensitive assistance, interactive tutorials, and progressive disclosure based on user proficiency. Implement keyboard shortcut reference with searchable commands, feature discovery with guided tours, and contextual help panels that appear based on current focus. Create comprehensive TaskMaster CLI integration documentation with command examples and troubleshooting guides. Add interactive onboarding flow for first-time users with hands-on examples. Implement adaptive help that adjusts complexity based on usage patterns and user expertise level. Include accessibility features for screen readers and alternative input methods.",
+        "testStrategy": "Test help system accessibility via keyboard and screen readers, verify all features are documented accurately, test contextual help accuracy across all interface states, validate tutorial completeness and clarity, test progressive disclosure effectiveness",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Implement Context-Sensitive Help System",
+            "description": "Create help overlay system that provides relevant assistance based on current interface focus and user context",
+            "status": "pending",
+            "details": "Build help content mapping, implement focus-aware help display, create context detection algorithms",
+            "estimatedHours": 10
+          },
+          {
+            "id": 2,
+            "title": "Build Interactive Keyboard Reference",
+            "description": "Create comprehensive, searchable keyboard shortcut reference with categorization and visual indicators",
+            "status": "pending",
+            "details": "Implement shortcut search functionality, create visual key combination display, add shortcut customization",
+            "estimatedHours": 8
+          },
+          {
+            "id": 3,
+            "title": "Create Interactive Tutorial System",
+            "description": "Build step-by-step guided tutorials for key workflows with hands-on practice and progress tracking",
+            "status": "pending",
+            "details": "Implement tutorial state management, create interactive examples, add progress tracking and completion rewards",
+            "estimatedHours": 14
+          },
+          {
+            "id": 4,
+            "title": "Add TaskMaster CLI Documentation Integration",
+            "description": "Integrate comprehensive TaskMaster command documentation with live examples and error troubleshooting",
+            "status": "pending",
+            "details": "Create command reference with examples, implement live command testing, add error code explanations",
+            "estimatedHours": 8
+          },
+          {
+            "id": 5,
+            "title": "Implement Adaptive Help and User Proficiency Tracking",
+            "description": "Create system that adapts help complexity based on user behavior and provides progressive disclosure",
+            "status": "pending",
+            "details": "Implement user behavior analytics, create proficiency assessment algorithms, build adaptive content delivery",
+            "estimatedHours": 12
+          },
+          {
+            "id": 6,
+            "title": "Add Accessibility and Alternative Input Support",
+            "description": "Ensure help system works with screen readers and alternative input methods for inclusive access",
+            "status": "pending",
+            "details": "Implement ARIA labels, create audio descriptions, add alternative navigation methods",
+            "estimatedHours": 6
+          }
+        ]
+      }
+    ],
+    "metadata": {
+      "created": "2025-08-17T18:39:48.899Z",
+      "updated": "2025-08-17T20:03:39.520Z",
+      "description": "Tasks for dashboard TUI UX improvements epic"
+    }
+  }
+}

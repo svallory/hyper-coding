@@ -1,0 +1,77 @@
+{
+	"meta": {
+		"generatedAt": "2025-09-18T00:07:52.211Z",
+		"tasksAnalyzed": 8,
+		"totalTasks": 8,
+		"analysisCount": 8,
+		"thresholdScore": 5,
+		"projectName": "Taskmaster",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 1,
+			"taskTitle": "Implement 6-Tab UI Structure Alignment",
+			"complexityScore": 4,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down the 6-tab UI implementation into: 1) Extend ViewMode enum and add AgentsView constant, 2) Update keyboard shortcut handling in Update() function for numbered keys 1-6, 3) Implement tab rendering with professional Lipgloss styling in View() function, 4) Create new Agents dashboard view with TaskMaster integration placeholder",
+			"reasoning": "Low-medium complexity. The codebase already has a solid 5-tab ViewMode enum structure with clean navigation. The task involves extending existing patterns rather than creating new architecture. Charmbracelet Bubbles and Lipgloss are already integrated with professional styling."
+		},
+		{
+			"taskId": 2,
+			"taskTitle": "Implement Vi-mode Navigation Enhancement",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down vi-mode navigation into: 1) Extend existing keyMap structure with hjkl bindings mapped to arrow keys, 2) Implement gg (goto top) and G (goto bottom) for list navigation using Bubbles list methods, 3) Add / search functionality using existing Bubbles textinput component, 4) Implement : command mode with conflict resolution, 5) Add comprehensive keyboard navigation testing",
+			"reasoning": "Medium complexity. The existing keyMap structure already supports hjkl partially (k/j for up/down). The codebase uses Bubbles components extensively, making search and navigation implementation straightforward. Command mode implementation requires careful state management to avoid conflicts with existing shortcuts."
+		},
+		{
+			"taskId": 3,
+			"taskTitle": "Create TaskMaster CLI Integration Package",
+			"complexityScore": 7,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down TaskMaster integration into: 1) Create internal/taskmaster/ package structure following existing patterns, 2) Implement CLI wrapper using os/exec.Command() with proper error handling, 3) Define TaskMaster data models (Task, Agent, Status structs) compatible with existing models package, 4) Add fallback modes for TaskMaster unavailability, 5) Integrate with existing file watcher system for real-time updates, 6) Implement JSON parsing and caching layer",
+			"reasoning": "Medium-high complexity. No existing TaskMaster integration found in codebase. The task requires creating new external process communication, data models, and error handling. However, the existing models pattern and file watcher system provide good foundation. The codebase has solid error handling patterns to follow."
+		},
+		{
+			"taskId": 4,
+			"taskTitle": "Enhance Table Components with Advanced Features",
+			"complexityScore": 5,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down table enhancement into: 1) Extend existing table.Model in model_advanced.go with sorting capabilities using Bubbles table v0.21.0 features, 2) Implement filtering system integrated with search functionality from Task 2, 3) Add multi-column sorting state management, 4) Create custom rendering delegates for different data types maintaining existing Lipgloss styling",
+			"reasoning": "Medium complexity. The codebase already uses Bubbles table v0.21.0 in model_advanced.go with professional styling. The existing epicTable and docTable provide solid foundation. Task depends on search functionality from Task 2, which adds complexity."
+		},
+		{
+			"taskId": 5,
+			"taskTitle": "Implement Performance Optimization and Caching",
+			"complexityScore": 8,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Break down performance optimization into: 1) Create internal/cache/ package with LRU cache implementation using golang-lru v2, 2) Implement lazy loading for large epic datasets with pagination, 3) Add memory profiling using pprof for monitoring, 4) Implement background goroutines for non-blocking file operations, 5) Add memory limits and garbage collection optimization, 6) Cache TaskMaster responses and epic data with proper invalidation",
+			"reasoning": "High complexity. This requires significant architectural changes to the existing data loading patterns. The current code loads all data synchronously. Adding caching, lazy loading, and background processing requires careful coordination with existing file watcher system and state management."
+		},
+		{
+			"taskId": 6,
+			"taskTitle": "Setup Cross-platform CI/CD and GitHub Actions",
+			"complexityScore": 5,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Break down CI/CD setup into: 1) Create .github/workflows/build.yml with Go 1.24.3 cross-compilation for multiple platforms (macOS, Linux, Windows with amd64, arm64), 2) Implement goreleaser configuration for automated releases with proper versioning, 3) Add automated testing pipeline on all platforms using existing test suite, 4) Configure build caching and Moon monorepo integration",
+			"reasoning": "Medium complexity. The project uses Go 1.24.3 and has existing test infrastructure (test files found in internal/models/). Moon monorepo integration adds some complexity, but standard GitHub Actions patterns can be followed. No existing CI/CD found in codebase."
+		},
+		{
+			"taskId": 7,
+			"taskTitle": "Create npm Package Wrapper with Binary Distribution",
+			"complexityScore": 6,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down npm package creation into: 1) Create package.json with platform-specific binary downloads using node-pre-gyp pattern, 2) Implement install.js script for platform detection (darwin, linux, win32) and architecture (x64, arm64), 3) Add binary download functionality from GitHub releases with error handling, 4) Create symlinks in node_modules/.bin/hyperdash, 5) Add comprehensive installation testing across platforms and uninstall cleanup",
+			"reasoning": "Medium complexity. This is mostly configuration and scripting work that doesn't modify the core Go application. The complexity comes from handling multiple platforms and architectures correctly, and ensuring robust error handling for network issues and platform detection."
+		},
+		{
+			"taskId": 8,
+			"taskTitle": "Comprehensive Testing and Production Polish",
+			"complexityScore": 4,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down testing and polish into: 1) Create comprehensive test suite covering all new features from previous tasks, 2) Update README.md and create keyboard shortcut reference guide, 3) Add API documentation for TaskMaster integration, 4) Implement version checking and update notifications, 5) Add error logging, monitoring, and performance benchmarking with memory usage validation",
+			"reasoning": "Low-medium complexity. This task is primarily about documentation, testing, and validation rather than new feature development. The existing codebase has good test examples and documentation patterns to follow. Most complexity comes from ensuring comprehensive coverage of all new features."
+		}
+	]
+}

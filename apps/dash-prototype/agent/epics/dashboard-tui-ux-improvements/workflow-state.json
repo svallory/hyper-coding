@@ -1,0 +1,35 @@
+{
+  "epic_name": "dashboard-tui-ux-improvements",
+  "current_step": 10,
+  "completed_steps": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "workflow_config": {
+    "no_stop": true,
+    "max_subagents": 9,
+    "use_research": null
+  },
+  "tag_name": "dashboard-tui-ux-improvements",
+  "artifacts": {
+    "original_doc": "original-spec.md",
+    "prd": "plan/prd.md",
+    "tasks_file": ".taskmaster/tasks/tasks.json",
+    "complexity_report": ".taskmaster/reports/task-complexity-report_dashboard-tui-ux-improvements.json",
+    "review_report": "review/final-report.md"
+  },
+  "agents": {
+    "required": [],
+    "created": [],
+    "available": []
+  },
+  "execution": {
+    "tasks_in_progress": [],
+    "tasks_completed": ["1", "2", "3", "4", "5", "6", "7", "8"],
+    "tasks_cancelled": ["9", "10"],
+    "parallel_agents_active": 0,
+    "last_task_completion": "2025-08-17T19:57:00Z",
+    "execution_start": "2025-08-17T18:54:00Z",
+    "execution_completed": "2025-08-17T20:04:00Z"
+  },
+  "timestamp": "2025-08-17T10:30:00Z",
+  "last_updated": "2025-08-17T20:04:00Z",
+  "status": "execution-completed"
+}

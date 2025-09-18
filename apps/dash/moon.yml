@@ -1,0 +1,72 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'go'
+type: 'application'
+
+platform: 'system'
+
+tasks:
+  build:
+    command: 'go build -o dash ./cmd/dash'
+    inputs:
+      - 'cmd/**/*'
+      - 'internal/**/*'
+      - 'go.mod'
+      - 'go.sum'
+    outputs:
+      - 'dash'
+
+  run:
+    command: 'go run ./cmd/dash'
+    deps: 
+      - 'build'
+    local: true
+
+  test:
+    command: 'go test ./...'
+    inputs:
+      - 'internal/**/*'
+      - 'cmd/**/*'
+      - 'go.mod'
+      - 'go.sum'
+
+  test-headless:
+    command: 'go run ./cmd/dash -test'
+    deps:
+      - 'build'
+    local: true
+
+  quick-test:
+    command: './scripts/quick-test.sh'
+    deps:
+      - 'build'
+    local: true
+
+  simulate:
+    command: './scripts/simulate-epic.sh'
+    deps:
+      - 'build'
+    local: true
+
+  clean:
+    command: 'go clean && rm -f dash'
+    local: true
+
+  deps:
+    command: 'go mod download && go mod tidy'
+    local: true
+
+  format:
+    command: 'go fmt ./...'
+    local: true
+
+  lint:
+    command: 'go vet ./...'
+
+  typecheck:
+    command: 'go build -o /dev/null ./...'
+    inputs:
+      - 'cmd/**/*'
+      - 'internal/**/*'
+      - 'go.mod'
+      - 'go.sum'

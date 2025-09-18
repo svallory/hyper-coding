@@ -2155,5 +2155,117 @@
       "updated": "2025-09-08T05:57:31.226Z",
       "description": "Tasks for hyperdev-docs-transformation context"
     }
+  },
+  "hyper-dash": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Implement 6-Tab UI Structure Alignment",
+        "description": "Extend existing 5-tab ViewMode enum to 6-tab structure (Overview, Tasks, Agents, Docs, Logs, Help) with numbered keyboard shortcuts",
+        "details": "Modify internal/ui/model.go ViewMode enum to add AgentsView. Update Update() function in internal/ui/model.go to handle numbered shortcuts (1-6). Implement tab rendering in View() function with professional Lipgloss styling. Separate Tasks content from Overview tab. Create new Agents dashboard view for TaskMaster integration placeholder. Use existing Charmbracelet Bubbles components for consistent styling.",
+        "testStrategy": "Unit tests for ViewMode transitions, keyboard shortcut validation, visual regression testing for tab rendering, manual testing of navigation flow between all 6 tabs",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Implement Vi-mode Navigation Enhancement",
+        "description": "Add hjkl navigation, gg/G goto functionality, and / search to existing keyboard handling system",
+        "details": "Extend existing keyMap structure in internal/ui/model.go with hjkl bindings mapped to arrow keys. Implement gg (goto top) and G (goto bottom) for list navigation using Bubbles list component methods. Add / search functionality using existing Bubbles textinput component. Implement : command mode with conflict resolution for existing shortcuts. Maintain backward compatibility with arrow key navigation.",
+        "testStrategy": "Keyboard navigation testing for all vi-mode shortcuts, search functionality validation, performance testing for large lists, compatibility testing with existing navigation",
+        "priority": "medium",
+        "dependencies": [
+          1
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Create TaskMaster CLI Integration Package",
+        "description": "Build TaskMaster integration system for real-time task display and CLI communication",
+        "details": "Create internal/taskmaster/ package with CLI wrapper using os/exec.Command(). Implement TaskMaster data models (Task, Agent, Status structs) compatible with existing models pattern. Add error handling and fallback modes for TaskMaster unavailability. Integrate with existing file watcher system for real-time updates. Use JSON parsing for TaskMaster CLI output. Implement caching layer for performance.",
+        "testStrategy": "Integration tests with TaskMaster CLI, error handling validation for missing TaskMaster, performance testing for real-time updates, mock testing for TaskMaster responses",
+        "priority": "medium",
+        "dependencies": [
+          1
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Enhance Table Components with Advanced Features",
+        "description": "Extend existing Bubbles table components with sorting, filtering, and multi-column support",
+        "details": "Extend existing epicDelegate in internal/ui/components/ for sortable columns using table.Model.Sort(). Implement filtering system integrated with / search functionality. Add multi-column sorting state management. Create custom rendering delegates for different data types. Use Bubbles table v0.21.0 advanced features. Maintain existing styling with Lipgloss.",
+        "testStrategy": "Table sorting validation across data types, filtering performance testing, multi-column sort state testing, visual testing for table rendering",
+        "priority": "medium",
+        "dependencies": [
+          2
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Implement Performance Optimization and Caching",
+        "description": "Add LRU caching, lazy loading, and memory management for improved performance",
+        "details": "Create internal/cache/ package with LRU cache implementation using golang-lru v2. Implement lazy loading for large epic datasets with pagination. Add memory profiling using pprof for monitoring. Implement background goroutines for non-blocking file operations. Add memory limits and garbage collection optimization. Cache TaskMaster responses and epic data.",
+        "testStrategy": "Memory usage benchmarking, performance testing under load, cache hit ratio validation, memory leak testing, goroutine leak detection",
+        "priority": "medium",
+        "dependencies": [
+          3
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Setup Cross-platform CI/CD and GitHub Actions",
+        "description": "Create automated build system for cross-platform Go binaries with GitHub Actions",
+        "details": "Create .github/workflows/build.yml with Go 1.24.3 cross-compilation for macOS, Linux, Windows (amd64, arm64). Use goreleaser for automated releases with proper versioning. Implement artifact uploading and release creation. Add automated testing on all platforms. Configure build caching for faster CI times. Include Moon monorepo integration tests.",
+        "testStrategy": "Cross-platform build validation, automated test execution on all platforms, release artifact verification, installation testing across platforms",
+        "priority": "medium",
+        "dependencies": [
+          4
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Create npm Package Wrapper with Binary Distribution",
+        "description": "Build npm package for easy installation with platform detection and binary management",
+        "details": "Create package.json with platform-specific binary downloads using node-pre-gyp pattern. Implement install.js script for platform detection (darwin, linux, win32) and architecture (x64, arm64). Download binaries from GitHub releases. Create symlinks in node_modules/.bin/hyperdash. Add uninstall cleanup. Use npm scripts for post-install hooks. Include error handling for network issues.",
+        "testStrategy": "npm installation testing across platforms, binary download validation, symlink creation testing, uninstall cleanup verification, offline installation testing",
+        "priority": "medium",
+        "dependencies": [
+          6
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Comprehensive Testing and Production Polish",
+        "description": "Final testing suite, documentation updates, and production readiness validation",
+        "details": "Create comprehensive test suite covering all new features. Update README.md with 6-tab structure documentation and installation instructions. Create keyboard shortcut reference guide. Add API documentation for TaskMaster integration. Implement version checking and update notifications. Add error logging and monitoring. Performance benchmarking and optimization. Memory usage validation under extended usage.",
+        "testStrategy": "End-to-end testing of complete workflow, regression testing of existing functionality, documentation accuracy validation, performance benchmarking, memory leak detection, user acceptance testing",
+        "priority": "low",
+        "dependencies": [
+          5,
+          7
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-09-18T00:05:27.246Z",
+      "updated": "2025-09-18T01:13:04.302Z",
+      "description": "Tasks for hyper-dash context"
+    }
   }
 }

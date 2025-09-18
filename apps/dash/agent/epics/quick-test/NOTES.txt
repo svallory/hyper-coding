@@ -1,0 +1,19 @@
+Quick Test Epic Notes
+===================
+
+This is a plain text file to test non-markdown document viewing.
+
+Key Points:
+- Epic created for testing purposes
+- Contains minimal workflow state
+- Used for dashboard validation
+
+Files in this epic:
+- workflow-state.json (system file)
+- workflow.log (system file)
+- NOTES.txt (this file)
+
+The dashboard should be able to display this file even though it's not markdown,
+showing file information and basic preview capabilities.
+
+Last updated: September 17, 2025

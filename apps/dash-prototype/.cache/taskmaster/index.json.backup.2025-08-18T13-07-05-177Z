@@ -1,0 +1,22 @@
+{
+  "entries": {
+    "tasks_list": {
+      "key": "tasks_list",
+      "timestamp": 1755522371496,
+      "ttl": 30000,
+      "accessCount": 0,
+      "lastAccessed": 1755522371496,
+      "source": "cli",
+      "compressed": true,
+      "encrypted": false,
+      "size": 2096
+    }
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "created": 1755522367107,
+    "lastModified": 1755522371497,
+    "totalSize": 2096,
+    "entryCount": 1
+  }
+}

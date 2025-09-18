@@ -1,0 +1,164 @@
+{
+  "reportMetadata": {
+    "generated": "2025-08-17T18:45:00.000Z",
+    "version": "1.0",
+    "analysisType": "manual",
+    "tagName": "dashboard-tui-ux-improvements",
+    "totalTasks": 10,
+    "threshold": 5
+  },
+  "overallAnalysis": {
+    "averageComplexity": 6.2,
+    "tasksAboveThreshold": 7,
+    "tasksRequiringExpansion": 7,
+    "criticalPath": ["1", "2", "3", "4"],
+    "riskAreas": ["TaskMaster CLI integration", "Performance optimization", "Cross-platform compatibility"]
+  },
+  "taskAnalysis": [
+    {
+      "id": "1",
+      "title": "Implement Enhanced Layout System with Responsive Design",
+      "complexityScore": 7,
+      "requiresExpansion": true,
+      "reason": "Complex responsive layout implementation requiring Ink.js advanced features, cross-platform testing, and visual hierarchy design",
+      "recommendedSubtasks": 5,
+      "estimatedDays": "4-6 days",
+      "riskFactors": ["Terminal size variations", "Visual hierarchy consistency", "Performance on resize"]
+    },
+    {
+      "id": "2", 
+      "title": "Add Keyboard Navigation and Focus Management",
+      "complexityScore": 8,
+      "requiresExpansion": true,
+      "reason": "Comprehensive keyboard navigation system requiring focus management, accessibility compliance, and complex interaction patterns",
+      "recommendedSubtasks": 6,
+      "estimatedDays": "5-7 days",
+      "riskFactors": ["Focus management complexity", "Keyboard shortcuts conflicts", "Cross-platform key handling"]
+    },
+    {
+      "id": "3",
+      "title": "Integrate TaskMaster CLI with Data Caching",
+      "complexityScore": 9,
+      "requiresExpansion": true,
+      "reason": "Complex async integration with external CLI, caching strategy, error handling, and real-time data synchronization",
+      "recommendedSubtasks": 7,
+      "estimatedDays": "6-8 days",
+      "riskFactors": ["CLI version compatibility", "Async error handling", "Data consistency", "Performance under load"]
+    },
+    {
+      "id": "4",
+      "title": "Create Interactive Task Detail Views",
+      "complexityScore": 6,
+      "requiresExpansion": true,
+      "reason": "Complex UI components with drill-down navigation, data visualization, and interactive elements",
+      "recommendedSubtasks": 5,
+      "estimatedDays": "4-5 days",
+      "riskFactors": ["Data visualization in terminal", "Navigation complexity", "State management"]
+    },
+    {
+      "id": "5",
+      "title": "Implement Multi-Epic Context Management",
+      "complexityScore": 7,
+      "requiresExpansion": true,
+      "reason": "Complex state management for multiple contexts, epic switching logic, and data isolation",
+      "recommendedSubtasks": 5,
+      "estimatedDays": "4-6 days",
+      "riskFactors": ["State isolation", "Context switching performance", "Data synchronization"]
+    },
+    {
+      "id": "6",
+      "title": "Add Analytics Dashboard with Complexity Reports",
+      "complexityScore": 6,
+      "requiresExpansion": true,
+      "reason": "Analytics implementation with data visualization, chart rendering in terminal, and statistical analysis",
+      "recommendedSubtasks": 5,
+      "estimatedDays": "4-5 days",
+      "riskFactors": ["ASCII chart rendering", "Data processing performance", "Real-time updates"]
+    },
+    {
+      "id": "7",
+      "title": "Implement Progressive Mode System",
+      "complexityScore": 5,
+      "requiresExpansion": false,
+      "reason": "Moderate complexity mode switching with preference management and state transitions",
+      "recommendedSubtasks": 3,
+      "estimatedDays": "2-3 days",
+      "riskFactors": ["Preference persistence", "Mode transition smoothness"]
+    },
+    {
+      "id": "8",
+      "title": "Enhanced Error Handling and Fallback Systems",
+      "complexityScore": 6,
+      "requiresExpansion": true,
+      "reason": "Comprehensive error handling across multiple integration points and graceful degradation",
+      "recommendedSubtasks": 4,
+      "estimatedDays": "3-4 days",
+      "riskFactors": ["Error recovery strategies", "Fallback system reliability", "User experience during failures"]
+    },
+    {
+      "id": "9",
+      "title": "Performance Monitoring and Optimization",
+      "complexityScore": 7,
+      "requiresExpansion": true,
+      "reason": "Performance monitoring implementation, optimization strategies, and memory management",
+      "recommendedSubtasks": 5,
+      "estimatedDays": "4-6 days",
+      "riskFactors": ["Memory leak detection", "Performance measurement accuracy", "Optimization impact on functionality"]
+    },
+    {
+      "id": "10",
+      "title": "Comprehensive Help System and Documentation",
+      "complexityScore": 4,
+      "requiresExpansion": false,
+      "reason": "Documentation and help system implementation with moderate complexity",
+      "recommendedSubtasks": 3,
+      "estimatedDays": "2-3 days",
+      "riskFactors": ["Content accuracy", "Context-sensitive help", "Accessibility"]
+    }
+  ],
+  "recommendations": {
+    "expansionPriority": [
+      {"id": "3", "priority": "critical", "reason": "Core integration complexity with highest risk"},
+      {"id": "2", "priority": "high", "reason": "Foundation for all interactive features"},
+      {"id": "1", "priority": "high", "reason": "Base layout system required for all other components"},
+      {"id": "5", "priority": "medium", "reason": "Complex state management but well-defined scope"},
+      {"id": "9", "priority": "medium", "reason": "Performance critical but can be implemented incrementally"},
+      {"id": "4", "priority": "medium", "reason": "UI complexity manageable with proper planning"},
+      {"id": "6", "priority": "medium", "reason": "Analytics features can be built incrementally"},
+      {"id": "8", "priority": "low", "reason": "Error handling can be added incrementally"}
+    ],
+    "developmentPhases": [
+      {
+        "phase": 1,
+        "name": "Foundation",
+        "tasks": ["1", "2"],
+        "description": "Establish core layout and navigation infrastructure"
+      },
+      {
+        "phase": 2,
+        "name": "Integration", 
+        "tasks": ["3", "8"],
+        "description": "Implement TaskMaster integration with robust error handling"
+      },
+      {
+        "phase": 3,
+        "name": "Features",
+        "tasks": ["4", "5", "6"],
+        "description": "Build interactive features and analytics"
+      },
+      {
+        "phase": 4,
+        "name": "Polish",
+        "tasks": ["7", "9", "10"],
+        "description": "Add progressive features, optimization, and documentation"
+      }
+    ],
+    "totalEstimatedDays": "35-50 days",
+    "criticalRisks": [
+      "TaskMaster CLI compatibility across versions",
+      "Performance with large datasets",
+      "Cross-platform keyboard handling",
+      "Terminal compatibility variations"
+    ]
+  }
+}
