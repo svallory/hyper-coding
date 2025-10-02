@@ -67,9 +67,37 @@ type RetryState struct {
 
 // LoadEpic loads an epic from a workflow-state.json file
 func LoadEpic(data []byte, epicPath string) (*Epic, error) {
+	// First unmarshal into a generic map to handle different field names
+	var rawEpic map[string]interface{}
+	if err := json.Unmarshal(data, &rawEpic); err != nil {
+		return nil, err
+	}
+	
+	// Now unmarshal into struct
 	var epic Epic
 	if err := json.Unmarshal(data, &epic); err != nil {
 		return nil, err
+	}
+	
+	// Handle alternative field names
+	if epic.Name == "" {
+		if name, ok := rawEpic["name"].(string); ok {
+			epic.Name = name
+		}
+	}
+	
+	if epic.CurrentStep == 0 {
+		if step, ok := rawEpic["currentStep"].(float64); ok {
+			epic.CurrentStep = int(step)
+		}
+	}
+	
+	if epic.LastUpdated.IsZero() {
+		if lastUpdated, ok := rawEpic["lastUpdated"].(string); ok {
+			if parsed, err := time.Parse(time.RFC3339, lastUpdated); err == nil {
+				epic.LastUpdated = parsed
+			}
+		}
 	}
 	
 	epic.Path = epicPath

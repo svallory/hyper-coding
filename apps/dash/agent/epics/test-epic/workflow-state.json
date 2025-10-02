@@ -1,31 +1,14 @@
 {
-  "epic_name": "test-epic",
-  "current_step": 5,
-  "completed_steps": [1, 2, 3, 4],
-  "workflow_config": {
-    "no_stop": false,
-    "max_subagents": 8,
-    "use_research": true
-  },
-  "tag_name": "feature/test-epic",
-  "artifacts": {
-    "original_doc": "user-auth-spec.md",
-    "prd": "user-auth-prd.md",
-    "tasks_file": "tasks.json",
-    "complexity_report": "complexity-analysis.md"
-  },
-  "agents": {
-    "required": ["api-architect", "react-expert", "typescript-expert", "dx-optimizer"],
-    "created": ["api-architect", "react-expert"],
-    "available": ["typescript-expert", "dx-optimizer"]
-  },
+  "name": "test-epic",
+  "status": "in_progress",
+  "currentStep": 3,
   "execution": {
-    "tasks_in_progress": ["task-2.1", "task-3.1", "task-1.2"],
-    "tasks_completed": ["setup-epic", "create-branch", "generate-prd", "analyze-requirements", "create-agents", "parse-prd", "complexity-analysis", "task-1.1"],
-    "parallel_agents_active": 3,
-    "last_task_completion": "2025-09-17T00:30:59-03:00"
+    "tasksCompleted": ["setup", "analyze"],
+    "tasksInProgress": ["develop"],
+    "tasksPending": ["test", "deploy"]
   },
-  "timestamp": "2025-09-17T00:30:59-03:00",
-  "last_updated": "2025-09-17T00:30:59-03:00",
-  "status": "executing"
+  "workflowConfig": {
+    "useResearch": true
+  },
+  "lastUpdated": "2025-09-19T03:18:00Z"
 }

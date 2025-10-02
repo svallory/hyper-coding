@@ -26,9 +26,10 @@ var (
 	builtBy      = "dev"
 	
 	// Command-line flags
-	epicDir  string
-	testMode bool
-	showVersion bool
+	singleEpicDir string
+	epicsDir      string
+	testMode      bool
+	showVersion   bool
 )
 
 var rootCmd = &cobra.Command{
@@ -41,9 +42,10 @@ and beautiful terminal interface powered by Charmbracelet.
 
 Examples:
   dash                                    Monitor epics in ./agent/epics/
-  dash --epic /path/to/epics             Monitor specific epic directory  
+  dash --epic /path/to/single/epic       Monitor a single epic
+  dash --epics-dir /path/to/epics         Monitor epics in a custom directory
   dash --test                            Run in headless test mode
-  dash --epic agent/epics --test         Test specific epic directory
+  dash --epic agent/epics/demo --test    Test a specific epic
 
 For best results, run epic simulations in another terminal:
   ./scripts/quick-test.sh                Quick test data
@@ -53,7 +55,8 @@ For best results, run epic simulations in another terminal:
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&epicDir, "epic", "e", "", "path to epic directory to monitor (default: ./agent/epics/)")
+	rootCmd.Flags().StringVar(&singleEpicDir, "epic", "", "path to a single epic to monitor")
+	rootCmd.Flags().StringVarP(&epicsDir, "epics-dir", "d", "", "path to the parent directory of epics (default: ./agent/epics/)")
 	rootCmd.Flags().BoolVarP(&testMode, "test", "t", false, "run in headless test mode without TUI")
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "v", false, "show version information")
 	
@@ -122,48 +125,118 @@ func runDashboard(cmd *cobra.Command, args []string) {
 		fmt.Printf("Built by: %s\n", builtBy)
 		return
 	}
-	
-	// Default to monitoring epics in agent/epics/ relative to current directory
-	if epicDir == "" {
+
+	// If a specific epic is provided, use it directly
+	if singleEpicDir != "" {
+		var finalEpicPath string = singleEpicDir
+		
+		// Convert relative path to absolute for clarity
+		if !filepath.IsAbs(finalEpicPath) {
+			wd, err := os.Getwd()
+			if err != nil {
+				log.Fatalf("Failed to get working directory: %v", err)
+			}
+			finalEpicPath = filepath.Join(wd, finalEpicPath)
+		}
+		
+		// Run in test mode if requested
+		if testMode {
+			fmt.Printf("Test mode: Monitoring %s\n", finalEpicPath)
+			return
+		}
+		
+		// Ensure the epic directory exists
+		if _, err := os.Stat(finalEpicPath); os.IsNotExist(err) {
+			fmt.Printf("Epic directory does not exist: %s\n", finalEpicPath)
+			os.Exit(1)
+		}
+		
+		updateChan := checkForUpdatesInBackground()
+		runMainDashboard(finalEpicPath, logger, monitor, updateChan)
+		return
+	}
+
+	// No specific epic provided - show epic selector modal
+	var epicsDirectory string
+	if epicsDir == "" {
 		wd, err := os.Getwd()
 		if err != nil {
 			log.Fatalf("Failed to get working directory: %v", err)
 		}
-		epicDir = filepath.Join(wd, "agent", "epics")
+		epicsDirectory = filepath.Join(wd, "agent", "epics")
+	} else {
+		epicsDirectory = epicsDir
 	}
 
 	// Convert relative path to absolute for clarity
-	if !filepath.IsAbs(epicDir) {
+	if !filepath.IsAbs(epicsDirectory) {
 		wd, err := os.Getwd()
 		if err != nil {
 			log.Fatalf("Failed to get working directory: %v", err)
 		}
-		epicDir = filepath.Join(wd, epicDir)
+		epicsDirectory = filepath.Join(wd, epicsDirectory)
 	}
 
 	// Run in test mode if requested
 	if testMode {
-		fmt.Printf("Test mode: Monitoring %s\n", epicDir)
-		// Test mode implementation would go here
+		fmt.Printf("Test mode: Monitoring epics in %s\n", epicsDirectory)
 		return
-	}
-
-	// Ensure the epic directory exists for TUI mode
-	if _, err := os.Stat(epicDir); os.IsNotExist(err) {
-		fmt.Printf("Epic directory does not exist: %s\n", epicDir)
-		fmt.Println("\nTo create test data:")
-		fmt.Println("  ./scripts/quick-test.sh")
-		fmt.Println("  ./scripts/simulate-epic.sh demo")
-		fmt.Println("\nOr specify a different directory:")
-		fmt.Println("  dash --epic /path/to/epics")
-		os.Exit(1)
 	}
 
 	// Start background update check
 	updateChan := checkForUpdatesInBackground()
 
+	// Show epic selector modal
+	selectedEpic, err := showEpicSelector(epicsDirectory)
+	if err != nil {
+		logger.WithError(err).Error("Error in epic selection")
+		fmt.Printf("Error in epic selection: %v\n", err)
+		os.Exit(1)
+	}
+	
+	if selectedEpic == "" {
+		// User cancelled or quit
+		logger.Info("Epic selection cancelled")
+		return
+	}
+
+	// Run main dashboard with selected epic
+	runMainDashboard(selectedEpic, logger, monitor, updateChan)
+}
+
+// showEpicSelector displays the epic selection modal and returns the selected epic path
+func showEpicSelector(epicsDir string) (string, error) {
+	// Create epic selector model
+	selector := ui.NewEpicSelector(epicsDir, 80, 24)
+	
+	// Create the Bubble Tea program for the selector
+	p := tea.NewProgram(
+		selector,
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	)
+
+	// Run the selector
+	finalModel, err := p.Run()
+	if err != nil {
+		return "", err
+	}
+
+	// Extract the selected epic from the final model state
+	if selectorModel, ok := finalModel.(*ui.EpicSelectorModel); ok {
+		if selectorModel.IsCancelled() {
+			return "", nil // User cancelled
+		}
+		return selectorModel.GetSelectedEpic(), nil
+	}
+
+	return "", nil
+}
+
+// runMainDashboard runs the main dashboard with the specified epic path
+func runMainDashboard(epicPath string, logger interface{}, monitor interface{}, updateChan <-chan *version.UpdateCheck) {
 	// Initialize the TUI model
-	model := ui.InitialModel(epicDir)
+	model := ui.InitialModel(epicPath)
 
 	// Create the Bubble Tea program
 	p := tea.NewProgram(
@@ -173,15 +246,27 @@ func runDashboard(cmd *cobra.Command, args []string) {
 	)
 
 	// Run the program
-	timer := monitor.NewTimer("app_runtime", map[string]string{"epic_dir": epicDir})
-	if _, err := p.Run(); err != nil {
-		monitor.RecordError(err, "application_runtime", map[string]interface{}{"epic_dir": epicDir})
-		logger.WithError(err).Error("Error running program")
-		log.Fatalf("Error running program: %v", err)
+	if mon, ok := monitor.(interface{ NewTimer(string, map[string]string) interface{ Stop() } }); ok {
+		timer := mon.NewTimer("app_runtime", map[string]string{"epic_dir": epicPath})
+		if _, err := p.Run(); err != nil {
+			if errorRecorder, ok := monitor.(interface{ RecordError(error, string, map[string]interface{}) }); ok {
+				errorRecorder.RecordError(err, "application_runtime", map[string]interface{}{"epic_dir": epicPath})
+			}
+			if loggerWithError, ok := logger.(interface{ WithError(error) interface{ Error(string) } }); ok {
+				loggerWithError.WithError(err).Error("Error running program")
+			}
+			log.Fatalf("Error running program: %v", err)
+		}
+		timer.Stop()
+	} else {
+		if _, err := p.Run(); err != nil {
+			log.Fatalf("Error running program: %v", err)
+		}
 	}
-	timer.Stop()
 	
-	logger.Info("HyperDash shutting down")
+	if loggerInfo, ok := logger.(interface{ Info(string) }); ok {
+		loggerInfo.Info("HyperDash shutting down")
+	}
 
 	// After TUI exits, check if there was an update available
 	select {
@@ -194,10 +279,13 @@ func runDashboard(cmd *cobra.Command, args []string) {
 	}
 	
 	// Export final metrics to log file
-	if metricsData, err := monitor.ExportMetrics(); err == nil {
-		logger.Debug("Final metrics exported")
-		// Could write to separate metrics file if needed
-		_ = metricsData
+	if metricsExporter, ok := monitor.(interface{ ExportMetrics() (interface{}, error) }); ok {
+		if metricsData, err := metricsExporter.ExportMetrics(); err == nil {
+			if loggerDebug, ok := logger.(interface{ Debug(string) }); ok {
+				loggerDebug.Debug("Final metrics exported")
+			}
+			_ = metricsData
+		}
 	}
 }
 

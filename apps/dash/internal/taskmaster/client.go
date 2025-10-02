@@ -81,6 +81,8 @@ func NewClient(config ClientConfig) *Client {
 }
 
 // checkAvailability tests if TaskMaster CLI is available
+// SECURITY: This function uses exec.CommandContext and is vulnerable to command injection if not properly sandboxed.
+// Future implementations should include robust input sanitization, privilege dropping, and resource limiting.
 func (c *Client) checkAvailability() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

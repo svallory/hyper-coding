@@ -5,19 +5,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/hyperdev-io/hyper-dash/apps/dash/internal/taskmaster"
 )
 
-// AgentTableModel extends TableModel for TaskMaster agents
+// AgentTableModel extends DataTableModel for TaskMaster agents
 type AgentTableModel struct {
-	*TableModel
+	*DataTableModel
 	agents []taskmaster.Agent
 }
 
 // NewAgentTable creates a new agent table with predefined columns
 func NewAgentTable(agents []taskmaster.Agent) *AgentTableModel {
-	columns := []TableColumn{
+	columns := []DataTableColumn{
 		{
 			Key:      "status_icon",
 			Title:    "●",
@@ -118,28 +117,30 @@ func NewAgentTable(agents []taskmaster.Agent) *AgentTableModel {
 	// Convert agents to table rows
 	rows := agentsToRows(agents)
 
-	// Create base table
-	table := NewTable(columns, rows)
-
-	// Customize styles for agents
-	table.styles.StatusColors = map[string]lipgloss.Style{
-		"active":  lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Bold(true),
-		"busy":    lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500")).Bold(true),
-		"idle":    lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFF00")),
-		"error":   lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Bold(true).Blink(true),
-		"offline": lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")),
+	// Create base table with default config
+	config := DataTableConfig{
+		Type:              DataTableTypeAgents,
+		Title:             "Agents",
+		ShowHeader:        true,
+		ShowFooter:        true,
+		ShowBorder:        true,
+		ShowRowNumbers:    false,
+		ShowStatusBar:     true,
+		EnableSorting:     true,
+		EnableFiltering:   true,
+		EnableSearch:      true,
+		EnableMultiSelect: false,
+		PageSize:          20,
 	}
+	table := NewDataTable(config)
+	table.SetColumns(columns)
+	table.SetRows(rows)
 
-	// Custom colors for efficiency ratings
-	table.styles.PriorityColors["excellent"] = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")).Bold(true)
-	table.styles.PriorityColors["good"] = lipgloss.NewStyle().Foreground(lipgloss.Color("#00CC00"))
-	table.styles.PriorityColors["average"] = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFAA00"))
-	table.styles.PriorityColors["below_average"] = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6600"))
-	table.styles.PriorityColors["poor"] = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000"))
+	// Note: Custom styling removed for now as DataTableModel doesn't expose styles
 
 	return &AgentTableModel{
-		TableModel: table,
-		agents:     agents,
+		DataTableModel: table,
+		agents:         agents,
 	}
 }
 

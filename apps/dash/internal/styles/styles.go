@@ -259,6 +259,59 @@ var (
 		Bold(true)
 )
 
+// Input mode styles
+var (
+	NormalModeStyle = lipgloss.NewStyle().
+		Foreground(textColor).
+		Background(lipgloss.Color("#2D2D2D")).
+		Bold(true)
+
+	InsertModeStyle = lipgloss.NewStyle().
+		Foreground(backgroundColor).
+		Background(successColor).
+		Bold(true)
+
+	CommandModeStyle = lipgloss.NewStyle().
+		Foreground(backgroundColor).
+		Background(primaryColor).
+		Bold(true)
+
+	SearchStyle = lipgloss.NewStyle().
+		Foreground(warningColor).
+		Bold(true)
+
+	CommandStyle = lipgloss.NewStyle().
+		Foreground(primaryColor).
+		Bold(true)
+	
+	// Input field style
+	InputStyle = lipgloss.NewStyle().
+		Foreground(textColor).
+		Background(backgroundColor).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(primaryColor).
+		Padding(0, 1)
+	
+	// Highlight style for search results
+	HighlightStyle = lipgloss.NewStyle().
+		Foreground(backgroundColor).
+		Background(warningColor).
+		Bold(true)
+)
+
+// Content styles
+var (
+	ContentStyle = lipgloss.NewStyle().
+		Foreground(textColor).
+		Padding(1)
+
+	InfoStyle = lipgloss.NewStyle().
+		Foreground(infoColor)
+
+	ProgressStyle = lipgloss.NewStyle().
+		Foreground(primaryColor)
+)
+
 // Utility functions for dynamic styling
 func GetLevelStyle(level string) lipgloss.Style {
 	switch level {

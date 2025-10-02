@@ -39,19 +39,19 @@
         "tab": "Documentation",
         "groups": [
           {
+            "group": "Intro",
+            "pages": [
+              "intro/what-is-hyper-coding",
+              "intro/hyperdev-toolkit"
+            ]
+          },
+          {
             "group": "Get Started",
             "pages": [
               "index",
               "get-started/installation",
               "get-started/quickstart",
               "get-started/tutorial"
-            ]
-          },
-          {
-            "group": "What is Hyper Coding?",
-            "pages": [
-              "hyper-coding/introduction-to-hyper-coding",
-              "hyper-coding/hyper-vs-vibe"
             ]
           },
           {
