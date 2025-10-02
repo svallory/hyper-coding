@@ -1,0 +1,46 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  background-color: #fdfdf7;
+}
+
+code {
+  background-color: var(--color-code-background);
+  color: var(--color-text);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 80%;
+  font-weight: normal;
+  white-space: nowrap;
+}
+
+.site-header {
+  margin: 3rem 0;
+  text-align: center;
+
+  /* Default/Paper Light Theme */
+  & .title {
+    font-size: 4rem;
+    font-weight: 300;
+    color: var(--color-text);
+    margin-bottom: 1rem;
+  }
+
+  .subtitle {
+    font-size: 2rem;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+}
+
+.dark {
+  background-color: var(--color-background);
+}

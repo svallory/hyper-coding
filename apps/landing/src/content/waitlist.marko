@@ -1,0 +1,112 @@
+<section class="waitlist-section">
+  <h2 class="waitlist-title">Join the Waitlist</h2>
+  <form method="post" action="https://newsletter.tokilabs.io/subscription/form" class="waitlist-form">
+    <input type="hidden" name="nonce" />
+    
+    <div class="form-group">
+      <input type="email" name="email" required placeholder="E-mail" class="form-input" />
+    </div>
+    
+    <div class="form-group">
+      <input type="text" name="name" placeholder="Name (optional)" class="form-input" />
+    </div>
+
+    <div class="form-group checkbox-group">
+      <input id="f9b1c" type="checkbox" name="l" checked value="f9b1cd42-fbbe-4fc9-bb82-1ef7809353d8" />
+      <label for="f9b1c">HyperDev Launch</label>
+    </div>
+
+    <button type="submit" class="form-submit">Subscribe</button>
+  </form>
+</section>
+
+<style>
+  .waitlist-section {
+    margin-top: 4rem;
+    padding: 3rem;
+    background: hsla(34, 56%, 66%, 0.05);
+    border: 2px solid var(--color-primary);
+    border-radius: 12px;
+    text-align: center;
+  }
+
+  .waitlist-title {
+    font-size: 2.5rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    margin-bottom: 2rem;
+  }
+
+  .waitlist-form {
+    max-width: 400px;
+    margin: 0 auto;
+  }
+
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 1rem;
+    background: hsla(220, 30%, 15%, 0.8);
+    border: 1px solid hsla(34, 56%, 66%, 0.3);
+    border-radius: 6px;
+    color: hsl(0, 0%, 90%);
+    font-size: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  .form-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px hsla(34, 56%, 66%, 0.1);
+  }
+
+  .form-input::placeholder {
+    color: hsl(0, 0%, 50%);
+  }
+
+  .checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    justify-content: center;
+  }
+
+  .checkbox-group input[type="checkbox"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+  }
+
+  .checkbox-group label {
+    color: hsl(0, 0%, 80%);
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+
+  .form-submit {
+    width: 100%;
+    padding: 1rem 2rem;
+    background: var(--color-primary);
+    color: hsl(220, 30%, 10%);
+    border: none;
+    border-radius: 6px;
+    font-size: 1.125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .form-submit:hover {
+    background: #c9936b;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px hsla(34, 56%, 66%, 0.4);
+  }
+
+  .form-submit:active {
+    transform: translateY(0);
+  }
+</style>

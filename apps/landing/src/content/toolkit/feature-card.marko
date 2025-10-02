@@ -1,0 +1,38 @@
+export type Input = {
+  title: string;
+  icon?: string;
+  content: Marko.Body;
+}
+
+.feature-card
+  h3.feature-title
+    if=input.icon
+      icon.feature-icon name=input.icon
+    
+    -- ${input.title}
+  
+  .feature-content
+    ${input.content}
+
+
+style.scss --
+  .feature-card {
+    padding: 2rem;
+    background: rgb(11, 10, 11);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgb(207, 207, 207);
+    border-radius: 8px;
+  }
+
+  .feature-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem 0;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .feature-icon {
+    color: #d4a280;
+  }

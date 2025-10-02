@@ -1,0 +1,309 @@
+import Principle from "./principle.marko";
+
+// Import SVG path contents
+import pathL1tSvg from "../../assets/paths/path-l1t.svg";
+import pathL1bR1Svg from "../../assets/paths/path-l1b-r1.svg";
+import pathR1lL2Svg from "../../assets/paths/path-r1l-l2.svg";
+import pathL2bR2Svg from "../../assets/paths/path-l2b-r2.svg";
+import pathL3rR3Svg from "../../assets/paths/path-l3r-r3.svg";
+import pathL4bL5Svg from "../../assets/paths/path-l4b-l5.svg";
+import pathL5tR4Svg from "../../assets/paths/path-l5t-r4.svg";
+
+<div class="light paper container">
+  <article class="content">
+    <decorate id="principle1">
+      <@decoration class="path-in" side="top" src=pathL1tSvg />
+      <@decoration class="path-out" side="right" src=pathL1bR1Svg />
+
+      <Principle
+        number="01"
+        title="Deterministic First"
+        style={"z-index": 2, "background-color": "var(--color-light-bg)"}
+      >
+        <@description>
+          Experienced developers build habits and intuition for writing code that meets quality standards. In time, the right way becomes the easier way. We can simulate this "habitual" correctness by reducing what the AI generates freely. This means that we should limit the AI's freedom to generate code, and instead provide it with a structure to follow. A simple implementation of this principle is to use <strong>code templates</strong>. Using a template, we can ensure that the AI will follow the current project's coding standards and architectural patterns. The AI's task becomes filling in the blanks of a pre-approved structure, rather than creating one from scratch.
+        </@description>
+        <@statement>
+          If it <strong>can be done deterministically,</strong> you <strong>should not use an LLM</strong> to generate it.
+        </@statement>
+      </Principle>
+    </decorate>
+
+    <decorate id="principle2">
+      <@decoration class="path-in" side="top" src=pathR1lL2Svg />
+      <@decoration class="path-out" side="bottom" src=pathL2bR2Svg />
+      <Principle
+        number="02"
+        title="Tools Integration"
+      >
+        <@description>
+          Just as a human developer relies on an IDE, linters, and scanners, a core tenet of Hyper Coding is to give the AI Agent the same external advantages. The external tooling layer of Hyper Coding includes: <ul><li><strong>Integrated Linting and Formatting:</strong> Every generated code snippet is immediately validated against project-specific linting rules.</li><li><strong>Security Scanning Integration:</strong> Real-time security analysis runs on each generated piece of code.</li><li><strong>API Validation:</strong> Automatic verification that all referenced APIs and packages exist and are compatible.</li><li><strong>Architecture Compliance Checks:</strong> Generated code is validated against the project's established design patterns.</li></ul>
+        </@description>
+        <@statement>
+          Give your AI Agent the same external advantages you have.
+        </@statement>
+      </Principle>
+    </decorate>
+
+    <decorate id="principle3">
+      <@decoration class="path-out" side="bottom" src=pathL3rR3Svg />
+      <Principle
+        number="03"
+        title="Engineered Friction"
+      >
+        <@description>
+          A human developer naturally avoids over-engineering because it's hard work. This "cognitive cost" creates a preference for the simplest path. An AI, however, feels no such friction; it will gladly build a labyrinth when a straight line would suffice. Since we can't make the AI "tired", we must simulate this cost by making undesirable paths systematically more difficult to travel. This isn't about just telling the agent "no" to the agent. It's about designing a system where doing the "wrong thing", like adding unnecessary complexity, requires the agent to perform additional, difficult tasks, such as formally justifying its deviation from the simpler path. By making the "right" path the "easy" path, we create a powerful, passive guidance system that steers the agent toward the desired outcome even when we're not looking. Remember, this is about probabilities. Sometimes, adding more information to the context can actually be counterproductive, as it increases the chance of context drift.
+        </@description>
+        <@statement>
+          <strong>Make simplicity the most probable path</strong>, by intentionally increasing the friction for complex solutions.
+        </@statement>
+      </Principle>
+    </decorate>
+
+    <decorate id="principle4">
+      <@decoration class="path-out" side="bottom" src=pathL4bL5Svg />
+      <Principle
+        number="04"
+        title="Reactive Context"
+      >
+        <@description>
+          Humans have "peripheral awareness" that brings relevant thoughts to mind without active searching. We can simulate this by building a system that provides the right context at the right time. Instead of providing every possible piece of documentation for every task, the system recognizes the task's nature—for example, a database operation—and automatically injects only the relevant context, such as security guidelines, schema definitions, or established data access patterns.
+        </@description>
+        <@statement>
+          <strong>Automate</strong> context engineering to provide the model with <strong>the right context at the right time</strong>, without overwhelming it.
+        </@statement>
+      </Principle>
+    </decorate>
+
+    <decorate id="principle5">
+      <@decoration class="path-out" side="top" src=pathL5tR4Svg />
+      <Principle
+        number="05"
+        title="Real-time Feedback"
+      >
+        <@description>
+          Integrating tools is only half the story. The real power comes from using them to create an immediate, automated feedback loop, which is our final principle. What makes this different from a traditional CI pipeline is the immediacy and context of the feedback. When a validation fails, the AI agent doesn't just receive an error message – it is immediately halted, provided with contextual information about <em>why</em> the validation failed, and tasked with attempting the correction. This prevents errors from compounding and teaches the agent the project's rules through direct, iterative experience.
+        </@description>
+        <@statement>
+          Provide feedback to the agent as soon as possible to avoid compounding errors.
+        </@statement>
+      </Principle>
+    </decorate>
+
+  </article>
+</div>
+
+<style.scss>
+
+  #principle1 {
+    margin-top: 100px;
+
+    & .path-out {
+      top: 100px;
+      
+      & > img {
+        top: 0;
+      }
+    }
+  }
+
+  #command1 {
+    margin-top: 40px;
+  }
+
+  #principle2 {
+    margin-top: 200px;
+    
+    & .path-in {
+      top: 40px !important;
+      right: 100px;
+    }
+
+    & .path-out {
+      right: 0px;
+
+      & > img {
+        right: -80px;
+        top: -130px;
+      }
+    }
+  }
+
+  #command2 {
+    margin: 100px 0 140px 0;
+
+    & .path-out {
+      /* debug */
+      // z-index: 2000;
+      // width: 8px;
+      // height: 8px;
+      // background-color: red;
+      
+      & > img {
+        top: -20px;
+        left: -80px;
+      }
+    }
+  }
+
+  #principle3 {
+    margin: 200px 0 50px;
+    padding: 0;
+
+    & .path-out {
+      right: 500px;
+
+      & img {
+        top: -40px;
+      }
+    }
+  }
+
+  #command3 {
+    margin-top: 0px;
+
+    & .path-out {
+      left: 0;
+      top: 60%;
+      /* debug */
+      // z-index: 2000;
+      // width: 8px;
+      // height: 8px;
+      // background-color: red;
+      
+      & > img {
+        bottom: 0px !important;
+        right: -40px;
+      }
+    }
+  }
+
+  #principle4 {
+    margin: 200px 0 240px 0;
+    padding: 0;
+
+    & .path-out {
+      left: 0;
+      /* debug */
+      // z-index: 2000;
+      // width: 8px;
+      // height: 8px;
+      // background-color: red;
+      
+      & > img {
+        top: -40px;
+        left: 40px;
+      }
+    }
+  }
+
+  #principle5 {
+    margin-top: 20px;
+
+    & .path-out {
+      left: 50%;
+      /* debug */
+      // z-index: 2000;
+      // width: 8px;
+      // height: 8px;
+      // background-color: red;
+      
+      & > img {
+        bottom: -80px !important;
+        // left: 40px;
+      }
+    }
+  }
+
+  #command4 {
+    margin: 150px 0 0 0;
+    padding: 0;
+
+    & .path-out {
+      left: 0;
+      /* debug */
+      // z-index: 2000;
+      // width: 8px;
+      // height: 8px;
+      // background-color: red;
+      
+      & > img {
+        right: 0px;
+      }
+    }
+  }
+
+  #command5 {
+    margin-top: 200px;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+
+  .content {
+    background-color: var(--color-background);
+  }
+
+  .principles-list,
+  .issues-list,
+  .reasons-list,
+  .tools-list,
+  .mapping-list {
+    margin-left: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .principles-list li,
+  .mapping-list li {
+    margin-bottom: 0.75rem;
+  }
+
+  .issues-list li,
+  .reasons-list li {
+    margin-bottom: 1rem;
+  }
+
+  .issues-list ul,
+  .reasons-list ul {
+    margin-top: 0.5rem;
+    margin-left: 1.5rem;
+  }
+
+  .issues-list ul li {
+    margin-bottom: 0.5rem;
+  }
+
+  .commands-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.95rem;
+  }
+
+  .commands-table thead {
+    background-color: var(--color-border);
+  }
+
+  .commands-table th {
+    text-align: left;
+    padding: 0.75rem;
+    border: 1px solid var(--color-border);
+  }
+
+  .commands-table td {
+    padding: 0.75rem;
+    border: 1px solid var(--color-quote-border);
+  }
+
+  .commands-table tbody tr:nth-child(even) {
+    background-color: var(--color-card-background);
+  }
+
+  .emphasis {
+    font-weight: 500;
+    font-size: 1.125rem;
+  }
+</style>

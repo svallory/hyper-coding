@@ -1,0 +1,236 @@
+import CommandSection from "./command.marko";
+
+import FeatureCard from "./feature-card.marko";
+
+// Import SVG path contents
+import pathR1rSvg from "../../assets/paths/path-r1r.svg";
+import pathR2bL3Svg from "../../assets/paths/path-r2b-l3.svg";
+import pathR3lL4Svg from "../../assets/paths/path-r3l-l4.svg";
+import pathR4lL5Svg from "../../assets/paths/path-r4l-l5.svg";
+import pathR5bSvg from "../../assets/paths/path-r5b.svg";
+
+<div class="container toolkit-column">
+  <article class="content">
+
+    <decorate id="command1">
+      <@decoration class="path-self" side="right" src=pathR1rSvg style={display: "none"} />
+      <CommandSection command="hyper gen" iconName="square-chevron-right">
+        <@description>
+          Code generation engine <br>
+          for the age of AI.
+        </@description>
+        <grid cols=2>
+          <FeatureCard title="Starter Kits" icon="package">
+            Project Starter Kits that set your agent up for success.
+          </FeatureCard>
+
+          <FeatureCard title="Code Templates" icon="code">
+            <p class="feature-description">Tailor made templates for consistent and high-quality AI-generated code.</p>
+          </FeatureCard>
+        </grid>
+        <br>
+        <p class="command-intro">
+          Beyond anything you can do with Yeoman and similar tools, hyper templates support <strong>prompt placeholders</strong> that allow
+          you to seemingly integrate rule-based deterministic generation that always follows the rules with context-dependent
+          AI-driven generation.
+        </p>
+      </CommandSection>
+    </decorate>
+
+    <decorate id="command2">
+      <@decoration class="path-out" side="bottom" src=pathR2bL3Svg />
+      <CommandSection command="hyper tools" iconName="pocket-knife" description="Swiss army knife for your Agent.">
+        <p class="command-intro">
+          Takes care of the laborious task of setting up and configuring all the tools for your project.
+
+          Here's a non-exhaustive list of tools the user will be able to configure:
+        </p>
+
+        <grid cols=2>
+          <FeatureCard title="AI" icon="bot">
+            <ul class="tool-list">
+              <li>MCP servers</li>
+              <li>Agent Definitions</li>
+              <li>Claude Code commands</li>
+            </ul>
+          </FeatureCard>
+
+          <FeatureCard title="Security" icon="shield-check">
+            <ul class="tool-list">
+              <li>Dependency Scanners</li>
+              <li>Secret Scanners</li>
+              <li>SAST tools</li>
+            </ul>
+          </FeatureCard>
+
+          <FeatureCard title="Code" icon="scan-text">
+            <ul class="tool-list">
+              <li>Linters</li>
+              <li>Formatter</li>
+              <li>Type Checkers</li>
+              <li>Tests & Coverage</li>
+              <li>CI/CD Pipelines</li>
+            </ul>
+          </FeatureCard>
+
+          <FeatureCard title="Architecture" icon="send-to-back">
+            <ul class="tool-list">
+              <li>Complexity Scanners</li>
+              <li>PyTestArch, TSArch, etc</li>
+              <li>Plan-adherence Monitor Agent</li>
+              <li>Architectural Decision Records (ADR) Tools</li>
+            </ul>
+          </FeatureCard>
+        </grid>
+      </CommandSection>
+    </decorate>
+
+    <decorate id="command3">
+      <@decoration class="path-out" side="left" src=pathR3lL4Svg />
+      <CommandSection command="hyper plan" iconName="map">
+        <@description>
+          Every journey starts with <br>
+          deciding where to go.
+        </@description>
+
+        <p class="command-intro">
+          Seeing Claude Code coordinate 12 parallel agents is marvelous! But to actually achieve good results, you need a good plan.
+
+          Also, if we want to "keep the agents on track", we first need to define where the track is.
+
+          The <code>hyper</code> CLI helps you plan the work ahead so it can be split among several parallel agents, dramatically incresing the efficiency of your development.
+
+          You can customize you planning workflow and document formats. The only required part is to have clearly defined tasks with dependencies.
+          The rest is up to you and the task at hand.
+        </p>
+
+        <grid cols=2>
+          <FeatureCard title="Define" icon="text-select">
+            <p class="workflow-description">
+              Translates high-level business goals into an executable product definition, clearly outlining the what, the why (user journey), and success metrics for the feature. This artifact becomes the source of truth, preventing "vibe-coding" and ensuring the outcome solves a real user need.
+            </p>
+          </FeatureCard>
+
+          <FeatureCard title="Design" icon="square-dot">
+            <p class="workflow-description">
+              Generates a detailed technical plan and architectural blueprint. It sets the rules for the agents by specifying the stack, outlining architectural constraints, and ensuring compliance with existing system standards before any code is written.
+            </p>
+          </FeatureCard>
+
+          <FeatureCard title="Decompose" icon="layout-template">
+            <p class="workflow-description">
+              Breaks down the technical design into a sequenced list of small, actionable work units (user stories or tasks) complete with dependencies and acceptance criteria. This granular breakdown is crucial for orchestrating multiple, parallel agents and enabling reliable, incremental development.
+            </p>
+          </FeatureCard>
+
+          <FeatureCard title="Develop" icon="square-chevron-right">
+            <p class="workflow-description">
+              Orchestrates AI agents to execute the decomposed task list, generating code, tests, and documentation task-by-task. It shifts review from large, ambiguous code dumps to focused, targeted changes that are easily validated against the initial definition.
+            </p>
+          </FeatureCard>
+        </grid>
+      </CommandSection>
+    </decorate>
+
+    <decorate id="command4">
+      <@decoration side="bottom" src=pathR4lL5Svg />
+      <CommandSection command="hyper watch" iconName="tower-control" description="The alaways-on agent whisperer.">
+        <p class="command-intro">
+          
+        </p>
+
+        <grid cols=2>
+          <FeatureCard title="Knowledge Capture" icon="brain-circuit">
+            <p class="feature-description">
+              Everything the Agent learns from your interactions is captured and stored <strong>locally</strong> in a versioned vector database.
+            </p>
+          </FeatureCard>
+
+          <FeatureCard title="Real-time Monitoring" icon="package-plus">
+            <p class="feature-description">
+              Monitor agent activity, task progress, and system health in real-time.
+            </p>
+          </FeatureCard>
+        </grid>
+      </CommandSection>
+    </decorate>
+
+    <decorate id="command5">
+      <@decoration class="path-out" side="bottom" src=pathR5bSvg />
+      <CommandSection command="hyper dash" iconName="brain-circuit" description="Peek into your Agent's brain.">
+        <p class="command-intro">A dashboard for real-time monitoring and oversight of multi-agent workflows.</p>
+
+        <grid cols=2>
+          <FeatureCard title="Knowledge Capture" icon="brain-circuit">
+            <p class="feature-description">
+              Everything the Agent learns from your interactions is captured and stored <strong>locally</strong> in a versioned vector database.
+            </p>
+          </FeatureCard>
+
+          <FeatureCard title="Real-time Monitoring" icon="package-plus">
+            <p class="feature-description">
+              Monitor agent activity, task progress, and system health in real-time.
+            </p>
+          </FeatureCard>
+        </grid>
+      </CommandSection>
+    </decorate>
+  </article>
+</div>
+
+<style.scss>
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+
+  .content {
+    background: transparent;
+  }
+
+  .command-intro {
+    margin-bottom: 1.5rem;
+    font-size: 1.0625rem;
+    color: hsl(0, 0%, 80%);
+    line-height: 1.7;
+  }
+
+  .command-note {
+    margin-top: 1.5rem;
+    padding: 1rem 1.5rem;
+    background: hsla(34, 56%, 66%, 0.1);
+    border-left: 3px solid #d4a280;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    color: hsl(0, 0%, 85%);
+  }
+
+  .tool-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .tool-list li {
+    padding: 0.5rem 0 0.5rem 1.5rem;
+    position: relative;
+    color: hsl(0, 0%, 80%);
+    font-size: 0.95rem;
+  }
+
+  .tool-list li::before {
+    content: "▹";
+    position: absolute;
+    left: 0;
+    color: #d4a280;
+    font-weight: bold;
+  }
+
+  @media (min-width: 1024px) {
+    .toolkit-column header {
+      padding: 300px 0 100px 0;
+    }
+  }
+</style>

@@ -1,0 +1,80 @@
+export type Input = {
+  id?: string;
+  number: string;
+  title: string;
+  description: Marko.AttrTag<{content: Marko.Body}>;
+  statement: Marko.AttrTag<{content: Marko.Body}>;
+  style?: Marko.CSS.Properties;
+}
+
+<let/sectionStyle={
+  "z-index": 1000,
+  "background-color": "var(--color-background)",
+  ...(input.style ?? {})
+} as Marko.CSS.Properties />
+
+<section id=input.id class="principle-section" style=sectionStyle>
+  <div class="principle-number">${input.number}</div>
+  <h3 class="principle-title">${input.title}</h3>
+  <p><${input.description}/></p>
+  <div class="principle-card">
+    <div class="principle-icon">
+      <icon name="book-heart"/>
+    </div>
+    <p class="principle-statement"><${input.statement}/></p>
+  </div>
+</section>
+
+<style>
+  .principle-section {
+    background-color: var(--color-card-background);
+    padding: 2rem;
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    position: relative;
+    z-index: 2;
+  }
+
+  .principle-number {
+    font-size: 3rem;
+    font-weight: 300;
+    color: var(--color-text-subtle);
+    margin-bottom: 0.5rem;
+  }
+
+  .principle-title {
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--color-text);
+    margin-bottom: 1.5rem;
+  }
+
+  .principle-section p {
+    margin-bottom: 1rem;
+    font-size: 1.0625rem;
+    line-height: 1.7;
+  }
+
+  .principle-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  .principle-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .principle-statement {
+    font-size: 1rem;
+    font-style: italic;
+    color: var(--color-text);
+    margin: 0;
+    line-height: 1.6;
+  }
+</style>

@@ -1,0 +1,247 @@
+import Methodology from "../content/methodology/index.marko";
+import Toolkit from "../content/toolkit/index.marko";
+import Problem from "../content/the-problem.marko";
+import Solution from "../content/the-solution.marko";
+import WaitlistSection from "../content/waitlist.marko";
+
+import AngleSvg from "../assets/paths/angle.marko";
+
+<div id="prose landing-intro">
+  <header class="site-header">
+    <h2 class="title">What is Hyper Coding?</h2>
+    <p class="subtitle">
+      Learn how Hyper Coding can improve your AI-assisted development,<br>
+      <strong>reduce tokens</strong> used and <strong>ensure output quality</strong>.
+    </p>
+  </header>
+
+  <div class="prose cool-explanation tech">
+    <h2 class="cool-explanation-title">
+      <icon name="hand-metal"/> The Cool Explanation
+    </h2>
+    <p class="cool-explanation-content">
+      Hyper Coding is the evolution of Vibe Coding
+      You'll still vibe it, but with a whole ecosystem ensuring your assistant stays on track.
+    </p>
+    <p class="cool-explanation-content">
+      In essence, <strong>Hyper Coding is</strong> the practice of <strong>feedback loops automation</strong> to steer the AI Agent in the right direction, it is <strong>Context Engineering on steroids.</strong>
+    </p>
+  </div>
+</div>
+
+<div style="display: flex; position: relative; height: 50px; overflow: visible;">
+  <AngleSvg
+    style="position: absolute; bottom: 0; left: -100px; transform: scaleX(-1); rotate: 180deg; z-index: 100"
+    width='50%'
+    height="180px"
+    corner="var(--color-dark-bg)" 
+    quarter="transparent" />
+  <AngleSvg
+    style="position: absolute; bottom: 0; right: 0; rotate: 180deg; z-index: 1"
+    width='50%'
+    height="180px"
+    corner="var(--color-dark-bg)" 
+    quarter="transparent" />
+</div>
+
+<div class="dark paper full-width-section">
+  <div class="prose">
+    <Problem />
+  </div>
+</div>
+
+<div style="display: flex; position: relative; height: 0px; overflow: visible;">
+  <AngleSvg
+    style="position: absolute; top: 0; left: 0px; scale: -1 -1; rotate: 180deg; z-index: 100"
+    width='200px'
+    height="180px"
+    corner="var(--color-dark-bg)" 
+    quarter="transparent" />
+</div>
+
+<div class="light tech full-width-section">
+  <div class="prose">
+    <Solution />
+  </div>
+</div>
+
+<div style="border: 0px solid black; position: relative; height: 0px; overflow: visible;">
+  <AngleSvg
+    style="border: 0px solid blue; position: absolute; top: -180px; left: -20px; rotate: 180deg; scale: -1 1; z-index: 1"
+    width='25%'
+    height="180px"
+    corner="var(--color-dark-bg)" 
+    quarter="transparent" />
+  <AngleSvg
+    style="border: 0px solid red; position: absolute; top: -100px; left: -40px; rotate: 180deg; scale: -1 1; z-index: 2"
+    width='20%'
+    height="100px"
+    corner="var(--color-light-bg)" 
+    quarter="transparent" />
+  <div style="width: 50%; height: 200px; position: absolute; top: 0px; right: 50%; z-index: 4">
+    <AngleSvg
+      style="position: absolute; scale: -1 1; right: 0"
+      width='70%'
+      height="300px"
+      corner="var(--color-dark-bg)"
+      quarter="var(--color-light-bg)" 
+    />
+  </div>
+  <AngleSvg
+    style="position: absolute; top: 0px; right: 0; scale: -1 1; z-index: 3"
+    width='51%'
+    height="300px"
+    corner="var(--color-light-bg)"
+    quarter="var(--color-dark-bg)" />
+</div>
+
+<div class="split-container" style="z-index: 1000; background-color: transparent">
+  <div class="left side" style="z-index: 1000; background-color: transparent">
+    <section-header
+      title="Hyper Coding"
+      theme="paper"
+      colorScheme="light"
+      style="background-color: transparent; margin: 8rem auto 0; text-align: center"
+    >
+      Learn the principles that will guide you<br>
+      through adopting the methodology.
+    </section-header>
+    <Methodology />
+  </div>
+  <div class="dark tech right side" style="margin-top: 300px">
+    <section-header
+      title="HyperDev Toolkit"
+      theme="tech"
+      colorScheme="dark"
+      style="margin: 0 auto 8rem; text-align: center"
+    >
+      Give your Agent superpowers,<br>
+      without the configuration hassle. 
+    </section-header>
+    <Toolkit />
+  </div>
+</div>
+
+<div class="split-container" style={ "min-height": "unset" }>
+  <div class="paper left side" style={ display: 'flex', 'justify-content': 'end'}>
+    <div style={position: "relative", overflow: "hidden", width: "175px"}>
+      <AngleSvg
+        style="rotate: 180deg; position: absolute; right: 0"
+        width='250px'
+        height="272px"
+        corner="var(--color-dark-bg)" 
+        quarter="transparent" />
+    </div>
+  </div>
+  <div class="right side">
+    <div class="dark" style={ height: "90px" }>
+      <AngleSvg
+        style="rotate: 180deg; float: right"
+        width='90px'
+        height="90px"
+        corner="var(--color-light-bg)" 
+        quarter="transparent" />
+    </div>
+    <div class="light">
+      <AngleSvg
+        width='120px'
+        height="90px"
+        corner="var(--color-dark-bg)" 
+        quarter="transparent" />
+    </div>
+    <div class="light" style={ height: "90px" }>
+      <AngleSvg
+        style="scale: 1 -1"
+        width='42px'
+        height="42px"
+        corner="var(--color-dark-bg)" 
+        quarter="transparent" />
+    </div>
+  </div>
+</div>
+
+<div id="page-footer" class="dark full-width-section">
+  <div class="prose tech">
+    <WaitlistSection />
+  </div>
+</div>
+
+<style.scss>
+  :root {
+    --page-width: 1280px;
+  }
+
+  #page-footer {
+    border-radius: 50%;
+    width: 1024px;
+    height: 1024px;
+    margin: auto;
+    display: flex;
+    align-content: center;
+    align-items: center;
+    margin-top: -50px;
+  }
+
+  .prose {
+    max-width: 900px;
+    margin: 40px auto;
+  }
+
+  #hyper-coding-heading {
+    margin: 8rem 0 0 8rem;
+    text-align: left;
+  }
+
+  #landing-intro {
+    margin: 50px auto
+  }
+
+  .full-width-section {
+    padding: 2em 4em;
+  }
+
+  .split-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 100vh;
+    position: relative; /* Needed for absolute positioning of connection lines */
+  }
+
+  @media (max-width: 1024px) {
+    .split-container {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .cool-explanation {
+    background-color: #fff;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 2rem;
+    margin: 0 auto 2rem;
+    width: 70%;
+    background-color: #fdf5f0;
+    border-color: var(--color-primary);
+
+    & h2 {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 0;
+      margin-bottom: 1rem;
+    }
+  }
+
+  .cool-explanation-title {
+    font-size: 1.5rem;
+    color: var(--color-text);
+  }
+
+  .cool-explanation-content {
+    margin-bottom: 1rem;
+  }
+
+  .cool-explanation-content:last-child {
+    margin-bottom: 0;
+  }
+</style>

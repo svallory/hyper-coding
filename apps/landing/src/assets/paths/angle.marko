@@ -1,0 +1,28 @@
+export type Input = {
+  corner: string;
+  quarter: string;
+
+  style?: string;
+  class?: string;
+  width?: string;
+  height?: string;
+}
+
+<let/svgStyle=
+  (input.width ? `width: ${input.width};` : '') +
+  (input.height ? `height: ${input.height};` : '') +
+  (input.style || "")
+/>
+
+<svg
+  style=svgStyle
+  class=input.class
+  viewBox="0 0 200 200"
+  fill="none"
+  preserveAspectRatio="none"
+>
+  <path d="M200 200H0C0 89.5431 89.5431 0 200 0V200Z" fill=input.quarter />
+  <path d="M200 0C89.5431 0 0 89.5431 0 200V0H200Z" fill=input.corner />
+</svg>
+
+${svgStyle}

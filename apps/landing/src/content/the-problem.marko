@@ -1,0 +1,158 @@
+export type Input = {
+  class?: string;
+}
+
+<section class=`section ${input.class}`>
+  <h2 class="section-title">The Problem<br/><small>with Vibe Coding</small></h2>
+  
+  <blockquote class="quote">
+    "Oh, you are absolutely right!" - Claude
+  </blockquote>
+
+  <p>
+    How many times have read that after pointing out a glaring
+    mistake in an AI-generated response?
+  </p>
+
+  <p>
+    Many times the thing being overlooked is so simple and obvious,
+    yet so critical, that you can't help but question in fear:
+  </p>
+
+  <blockquote class="quote">
+    What else have the Assistant missed?<br>    
+    Did I catch all the critical mistakes?
+  </blockquote>
+
+  <p>Here's a non-exhaustive list of things you should be checking for:</p>
+
+  <ul class="issues-list">
+    <li>Security Vulnerabilities</li>
+    <li>Inconsistent code patterns</li>
+    <li>Scope Creep / Over-engineering</li>
+    <li>Poor documentation</li>
+    <li>Lack of Error Handling / Edge cases</li>
+    <li>Context Drift</li>
+  </ul>
+
+  <p>
+    Through years of practice, an experience developer will learn to avoid many of these pitfalls without even thinking about them.
+    But if the same developer is asked to review code and check for these issues,
+    they will spend a significant amount of time and effort doing so, 
+    much more than they would have spent writing the code in the first place.
+  </p>
+
+  <p>
+    But why is that so?
+  </p>
+
+  <h3>Devs vs Agents</h3>
+
+  <p>
+    There are several reasons for why is it easier to write code than to review it,
+    some internal (in our own brain) and some external (the environment we work in).
+  </p>
+
+  <h4>Internal Reasons</h4>
+
+  <ul class="reasons-list">
+    <li>
+      <strong>Habit:</strong>
+      Experienced developers develop habits and intuition for writing code that meets quality standards. 
+      In time, the right way becomes the easier way and we apply it without thinking.
+    </li>
+    <li>
+      <strong>Cognitive Cost:</strong>
+      Scope creep has a cognitive cost, and that cost will automatically steer
+      humans away from it when they are focused on a task.
+    </li>
+    <li>
+      <strong>Peripheral Awareness:</strong>
+      While an AI takes the context beforehand, humans have peripheral awareness,
+      which brings to our attention thoughts and context that we did not actively search for.
+    </li>
+  </ul>
+
+  <h4>External Reasons</h4>
+
+  <p>
+    These can be summarized in one word: <strong>tooling</strong>.
+  </p>
+
+  <ul class="reasons-list">
+    <li><strong>Linters and Formatters</strong> remove any effort to keep code style standards and catch errors.</li>
+    <li><strong>IDE Integrations</strong> offer autocompletion and real-time feedback.</li>
+    <li><strong>Continuous Integration Pipelines</strong> run automated tests, static analysis, and provide more feedback before code is merged.</li>
+    <li><strong>Security Scanners</strong> tools like Snyk, Dependabot, and Bandit scan for vulnerabilities in dependencies and code.</li>
+  </ul>
+
+  <p>
+    The question then becomes:
+  </p>
+  <p class="emphasis">
+    How can we bring the same advantages to our AI agent?
+  </p>
+</section>
+
+<style>
+  .section {
+    margin-bottom: 3rem;
+  }
+
+  h2, h3, h4, h5, h6 {
+    font-weight: 400;
+    margin-top: 2rem;
+    margin-bottom: 1.5rem;
+    color: var(--color-text);
+  }
+
+  h2, .section-title {
+    line-height: 1em;
+    font-size: 2rem;
+
+    & > small {
+      margin-top: -10px;
+      font-size: 60%;
+    }
+  }
+
+  h3 {
+    font-size: 1.5rem;
+  }
+
+  h4 {
+    font-size: 1.25rem;
+  }
+
+  p {
+    margin-bottom: 1rem;
+    font-size: 1.0625rem;
+    color: var(--color-text);
+  }
+
+  .quote {
+    border-left: 4px solid var(--color-border);
+    padding-left: 1.5rem;
+    margin: 1.5rem 0;
+    font-style: italic;
+    font-size: 1.125rem;
+    color: var(--color-quote-text);
+  }
+
+  .issues-list,
+  .reasons-list {
+    margin-left: 3rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .issues-list li,
+  .reasons-list li {
+    margin-bottom: 0;
+  }
+
+  .emphasis {
+    font-weight: bold;
+    font-style: italic;
+    font-size: 1.5rem;
+  }
+</style>

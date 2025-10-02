@@ -38,6 +38,7 @@
   },
   "packageManager": "bun@1.2.22",
   "dependencies": {
-    "ejs": "^3.1.10"
+    "ejs": "^3.1.10",
+    "lucide": "^0.544.0"
   }
 }

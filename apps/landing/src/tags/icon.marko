@@ -1,0 +1,6 @@
+export type Input = {
+  name: string;
+  class?: string;
+}
+
+<span class=`icon ${input.class ?? ""}` data-lucide=input.name aria-label=input.name>${input.name}</span>

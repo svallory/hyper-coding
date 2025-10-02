@@ -1,0 +1,22 @@
+export type Input = {
+  cols: number;
+  content: Marko.Body;
+}
+
+<div class="grid" style={"grid-template-columns": `repeat(${input.cols}, 1fr);`}>
+  <${input.content}/>
+</div>
+
+<style>
+  .grid {
+    display: grid;
+    gap: 1.5rem; /* This is the common gap from the original CSS */
+    margin-top: 1.5rem; /* This is also common */
+  }
+
+  @media(max-width: 1081px) {
+    .grid {
+      grid-template-columns: repeat(1, 1fr) !important;
+    }
+  }
+</style>
