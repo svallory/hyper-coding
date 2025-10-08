@@ -1,0 +1,67 @@
+import type { FlexAttr } from "<attr>";
+
+export type Input = {
+  title: FlexAttr;
+  id?: string;
+  theme?: 'paper' | 'tech';
+  colorScheme?: 'light' | 'dark';
+  center?: boolean;
+  style?: string;
+  content: Marko.Body;
+  class?: Marko.HTMLAttributes['class'];
+}
+
+header id=input.id style=`${input.style};${input.center ? 'text-align: center' : ''}` class=["header", input.theme, input.colorScheme]
+  h2.title
+    <attr=input.title/>
+
+  p.subtitle
+    ${input.content}
+
+<style>
+  .header {
+    margin-bottom: 3rem;
+  }
+
+  /* Default/Paper Light Theme */
+  .header .title {
+    font-size: 3rem;
+    font-weight: 300;
+    color: var(--color-text);
+    margin-bottom: 1rem;
+  }
+
+  .header .subtitle {
+    font-size: 1.25rem;
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+  }
+
+  /* Tech Theme Overrides */
+  .tech-theme .title {
+    font-size: 3rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--color-primary);
+    text-shadow: 0 0 30px var(--color-card-border);
+  }
+
+  .mobile header.header {
+    padding: 2rem 1rem;
+    margin: 0;
+
+    & .title {
+      font-size: 1.5rem;
+      line-height: 150%;
+    }
+
+    & .subtitle {
+      font-size: 1rem;
+      line-height: 150%;
+
+      .paper & {
+        font-size: 1.25rem;
+      }
+    }
+  }
+</style>

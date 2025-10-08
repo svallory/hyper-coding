@@ -1,0 +1,17 @@
+import Principle from "./principle.marko";
+import pathL3rR3Svg from "../../assets/paths/path-l3r-r3.svg";
+
+<decorate id="principle3">
+    <@decoration class="path-out" side="bottom" src=pathL3rR3Svg />
+    <Principle
+    number="03"
+    title="Engineered Friction"
+    >
+    <@description>
+        A human developer naturally avoids over-engineering because it's hard work. This "cognitive cost" creates a preference for the simplest path. An AI, however, feels no such friction; it will gladly build a labyrinth when a straight line would suffice. Since we can't make the AI "tired", we must simulate this cost by making undesirable paths systematically more difficult to travel. This isn't about just telling the agent "no" to the agent. It's about designing a system where doing the "wrong thing", like adding unnecessary complexity, requires the agent to perform additional, difficult tasks, such as formally justifying its deviation from the simpler path. By making the "right" path the "easy" path, we create a powerful, passive guidance system that steers the agent toward the desired outcome even when we're not looking. Remember, this is about probabilities. Sometimes, adding more information to the context can actually be counterproductive, as it increases the chance of context drift.
+    </@description>
+    <@statement>
+        <strong>Make simplicity the most probable path</strong>, by intentionally increasing the friction for complex solutions.
+    </@statement>
+    </Principle>
+</decorate>

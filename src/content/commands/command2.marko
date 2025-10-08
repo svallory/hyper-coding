@@ -1,0 +1,57 @@
+import CommandSection from "./command.marko";
+import FeatureCard from "./feature-card.marko";
+import pathR2bL3Svg from "../../assets/paths/path-r2b-l3.svg";
+
+<define/Cards>
+    <FeatureCard title="AI" icon="bot">
+        <ul class="tool-list">
+            <li>MCP servers</li>
+            <li>Agent Definitions</li>
+            <li>Claude Code commands</li>
+        </ul>
+    </FeatureCard>
+
+    <FeatureCard title="Security" icon="shield-check">
+        <ul class="tool-list">
+            <li>Dependency Scanners</li>
+            <li>Secret Scanners</li>
+            <li>SAST tools</li>
+        </ul>
+    </FeatureCard>
+
+    <FeatureCard title="Code" icon="scan-text">
+        <ul class="tool-list">
+            <li>Linters</li>
+            <li>Formatter</li>
+            <li>Type Checkers</li>
+            <li>Tests & Coverage</li>
+            <li>CI/CD Pipelines</li>
+        </ul>
+    </FeatureCard>
+
+    <FeatureCard title="Architecture" icon="send-to-back">
+        <ul class="tool-list">
+            <li>Complexity Scanners</li>
+            <li>PyTestArch, TSArch, etc</li>
+            <li>Plan-adherence Monitor Agent</li>
+            <li>Architectural Decision Records (ADR) Tools</li>
+        </ul>
+    </FeatureCard>
+</define>
+
+<decorate id="command2">
+    <@decoration class="path-out" side="bottom" src=pathR2bL3Svg/>
+    <CommandSection
+        command="hyper tools"
+        iconName="pocket-knife"
+        description="Swiss army knife for your Agent.">
+        <p class="command-intro">
+            Takes care of the laborious task of setting up and configuring all
+            the tools for your project. Here's a non-exhaustive list of tools
+            the user will be able to configure:
+        </p>
+
+        <grid.desktop cols=2 content=Cards.content />
+        <div.mobile.card-slider content=Cards.content />
+    </CommandSection>
+</decorate>

@@ -1,0 +1,327 @@
+import Principle1 from "./methodology/principle1.marko";
+import Principle2 from "./methodology/principle2.marko";
+import Principle3 from "./methodology/principle3.marko";
+import Principle4 from "./methodology/principle4.marko";
+import Principle5 from "./methodology/principle5.marko";
+import Command1 from "./commands/command1.marko";
+import Command2 from "./commands/command2.marko";
+import Command3 from "./commands/command3.marko";
+import Command4 from "./commands/command4.marko";
+import Command5 from "./commands/command5.marko";
+import AngleSvg from "../assets/paths/angle.marko";
+
+<div
+  class="desktop"
+  style="border: 0px solid black; position: relative; height: 0px; overflow: visible;">
+  <AngleSvg
+    style="border: 0px solid blue; position: absolute; top: -180px; left: -20px; rotate: 180deg; scale: -1 1; z-index: 1"
+    width="25%"
+    height="180px"
+    corner="var(--color-dark-bg)"
+    quarter="transparent"/>
+  <AngleSvg
+    style="border: 0px solid red; position: absolute; top: -100px; left: -40px; rotate: 180deg; scale: -1 1; z-index: 2"
+    width="20%"
+    height="100px"
+    corner="var(--color-light-bg)"
+    quarter="transparent"/>
+  <div style="width: 50%; height: 200px; position: absolute; top: 0px; right: 50%; z-index: 4">
+    <AngleSvg
+      style="position: absolute; scale: -1 1; right: 0"
+      width="70%"
+      height="300px"
+      corner="var(--color-dark-bg)"
+      quarter="var(--color-light-bg)"/>
+  </div>
+  <AngleSvg
+    style="position: absolute; top: 0px; right: 0; scale: -1 1; z-index: 3"
+    width="51%"
+    height="300px"
+    corner="var(--color-light-bg)"
+    quarter="var(--color-dark-bg)"/>
+</div>
+
+<div
+  class="desktop split-container"
+  style="z-index: 1000; background-color: transparent">
+  <div class="left side">
+    <div>
+      <section-header
+        title="Hyper Coding"
+        theme="paper"
+        colorScheme="light"
+        style="background-color: transparent; margin: 10rem auto 0; text-align: center">
+        Learn the principles that will guide you
+        <br>
+        ${" "}through adopting the methodology.
+      </section-header>
+      <div class="light paper container">
+        <article class="content">
+          <Principle1/>
+          <Principle2/>
+          <Principle3/>
+          <Principle4/>
+          <Principle5/>
+        </article>
+      </div>
+    </div>
+  </div>
+  <div class="dark tech right side" style="margin-top: 300px">
+    <div>
+      <section-header
+        title="HyperDev Toolkit"
+        theme="tech"
+        colorScheme="dark"
+        style="margin: 0 auto 8rem; text-align: center">
+        Give your Agent superpowers,
+        <br>
+        without the configuration hassle.
+      </section-header>
+      <div class="container toolkit-column">
+        <article class="content">
+          <Command1/>
+          <Command2/>
+          <Command3/>
+          <Command4/>
+          <Command5/>
+        </article>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mobile method-vs-toolkit">
+  <div class="header" style="display: flex; flex-direction: row; justify-content: center;">
+    <div style="position: relative; flex-basis: 50%">
+      <section-header
+        theme="paper"
+        colorScheme="light"
+        style="flex-grow: 1; flex-basis: 50%; text-align: right;">
+        <@title>
+          <div style="display: flex; flex-direction: row; justify-content: right; align-content: right; align-items: center;">
+            <div><icon name="book-heart" circle /></div>
+            Hyper Coding
+          </div>
+        </@title>
+        Learn the <br/> principles.
+      </section-header>
+    </div>
+    <div class="dark" style="position: relative; flex-basis: 50%;">
+      <AngleSvg
+        style="border: 0px solid blue; position: absolute; top: 0; left: 0px;"
+        width="70px"
+        height="60px"
+        corner="var(--color-light-bg)"
+        quarter="transparent"/>
+
+      <AngleSvg
+        style="border: 0px solid blue; position: absolute; top: -180px; right: 0px; scale: -1 -1; z-index: 1"
+        width="calc(100% - 60px)"
+        height="180px"
+        corner="var(--color-dark-bg)"
+        quarter="transparent"/>
+
+      <section-header
+        theme="tech"
+        colorScheme="dark"
+        style="flex-grow: 1; flex-basis: 50%">
+        <@title>
+          <div style="display: flex; flex-direction: row; gap: 16px; justify-content: right; align-content: center; align-items: center; width: 100%;">
+            Hyper Dev
+            <div><icon name="terminal" circle /></div>
+          </div>
+        </@title>
+        See how the toolkit can help you
+      </section-header>
+
+      <AngleSvg
+        style="border: 0px solid blue; position: absolute; bottom: 0px; left: 0px; scale: 1 -1;"
+        width="70px"
+        height="60px"
+        corner="var(--color-light-bg)"
+        quarter="transparent"/>
+      <AngleSvg
+        style="border: 0px solid blue; position: absolute; bottom: -40px; right: 0px; scale: -1 1; z-index: 1"
+        width="calc(100% - 60px)"
+        height="40px"
+        corner="var(--color-dark-bg)"
+        quarter="transparent"/>
+    </div>
+  </div>
+
+  <scroll-snapper>
+    <card-pair>
+      <@leftCard>
+        <Principle1 id="mobile-principle-1" />
+      </@leftCard>
+      <@rightCard>
+        <Command1 id="mobile-command-1" />
+      </@rightCard>
+    </card-pair>
+
+    <card-pair>
+      <@leftCard>
+        <Principle2 id="mobile-principle-2" />
+      </@leftCard>
+      <@rightCard>
+        <Command2 id="mobile-command-2" />
+      </@rightCard>
+    </card-pair>
+  
+    <card-pair>
+      <@leftCard>
+        <Principle3 id="mobile-principle-3" />
+      </@leftCard>
+      <@rightCard>
+        <Command3 id="mobile-command-3" />
+      </@rightCard>
+    </card-pair>
+
+    <card-pair>
+      <@leftCard>
+        <Principle4 id="mobile-principle-4" />
+      </@leftCard>
+      <@rightCard>
+        <Command4 id="mobile-command-4" />
+      </@rightCard>
+    </card-pair>
+
+    <card-pair>
+      <@leftCard>
+        <Principle5 id="mobile-principle-5" />
+      </@leftCard>
+      <@rightCard>
+        <Command5 id="mobile-command-5" />
+      </@rightCard>
+    </card-pair>
+  </scroll-snapper>
+</div>
+
+<style.scss>
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+
+  .method-vs-toolkit .header {
+    margin-bottom: 60px;
+  }
+
+  .content {
+    background-color: var(--color-background);
+  }
+
+  .principles-list,
+  .issues-list,
+  .reasons-list,
+  .tools-list,
+  .mapping-list {
+    margin-left: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .principles-list li,
+  .mapping-list li {
+    margin-bottom: 0.75rem;
+  }
+
+  .issues-list li,
+  .reasons-list li {
+    margin-bottom: 1rem;
+  }
+
+  .issues-list ul,
+  .reasons-list ul {
+    margin-top: 0.5rem;
+    margin-left: 1.5rem;
+  }
+
+  .issues-list ul li {
+    margin-bottom: 0.5rem;
+  }
+
+  .commands-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 0.95rem;
+  }
+
+  .commands-table thead {
+    background-color: var(--color-border);
+  }
+
+  .commands-table th {
+    text-align: left;
+    padding: 0.75rem;
+    border: 1px solid var(--color-border);
+  }
+
+  .commands-table td {
+    padding: 0.75rem;
+    border: 1px solid var(--color-quote-border);
+  }
+
+  .commands-table tbody tr:nth-child(even) {
+    background-color: var(--color-card-background);
+  }
+
+  .emphasis {
+    font-weight: 500;
+    font-size: 1.125rem;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 3rem 2rem;
+  }
+
+  .content {
+    background: transparent;
+  }
+
+  .command-intro {
+    margin-bottom: 1.5rem;
+    color: hsl(0, 0%, 80%);
+    line-height: 1.7;
+  }
+
+  .command-note {
+    margin-top: 1.5rem;
+    padding: 1rem 1.5rem;
+    background: hsla(34, 56%, 66%, 0.1);
+    border-left: 3px solid #d4a280;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    color: hsl(0, 0%, 85%);
+  }
+
+  .tool-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .tool-list li {
+    padding: 0.5rem 0 0.5rem 1.5rem;
+    position: relative;
+    color: hsl(0, 0%, 80%);
+    font-size: 0.95rem;
+  }
+
+  .tool-list li::before {
+    content: "▹";
+    position: absolute;
+    left: 0;
+    color: #d4a280;
+    font-weight: bold;
+  }
+
+  @media (min-width: 1024px) {
+    .toolkit-column header {
+      padding: 300px 0 100px 0;
+    }
+  }
+</style>

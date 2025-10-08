@@ -1,0 +1,36 @@
+import CommandSection from "./command.marko";
+import FeatureCard from "./feature-card.marko";
+import pathR4lL5Svg from "../../assets/paths/path-r4l-l5.svg";
+
+<define/Cards>
+
+    <FeatureCard title="Knowledge Capture" icon="brain-circuit">
+        <p>
+            Everything the Agent learns from your interactions is captured and
+            stored${" "}
+            <strong>locally</strong>
+            ${" "}in a versioned vector database.
+        </p>
+    </FeatureCard>
+
+    <FeatureCard title="Real-time Monitoring" icon="package-plus">
+        <p>
+            Monitor agent activity, task progress, and system health in
+            real-time.
+        </p>
+    </FeatureCard>
+</define>
+
+<decorate id="command4">
+    <@decoration class="path-out" side="bottom" src=pathR4lL5Svg/>
+    <CommandSection
+        command="hyper watch"
+        iconName="tower-control"
+        description="The alaways-on agent whisperer.">
+        
+        <p class="command-intro"/>
+
+        <grid.desktop cols=2 content=Cards.content />
+        <div.mobile.card-slider content=Cards.content />
+    </CommandSection>
+</decorate>

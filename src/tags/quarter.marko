@@ -1,0 +1,84 @@
+export type Input = {
+  bg?: string | 'transparent';
+  fill?: string | 'transparent';
+  pos?: 'tl' | 'tr' | 'bl' | 'br';
+  dir?: 'tl' | 'tr' | 'bl' | 'br';
+
+  style?: string;
+  class?: string;
+  width?: string;
+  height?: string;
+}
+
+<let/svgStyle=
+  (input.bg ? `background-color: ${input.bg};` : '') +
+  (input.width ? `width: ${input.width};` : '') +
+  (input.height ? `height: ${input.height};` : '') +
+  (input.style || "")
+/>
+
+<div class=`quarter ${input.pos ? `abs pos-${input.pos}` : ""} dir-${input.dir ?? "tl"} ${input.class ?? ""}` style=svgStyle>
+  <div class="fill" style=`background-color: ${ input.fill ?? 'transparent' };`></div>
+</div>
+
+// <svg
+//   style=svgStyle
+//   class=`quarter ${input.class ?? ""}`
+//   viewBox="0 0 200 200"
+//   fill="none"
+//   preserveAspectRatio="none"
+// >
+//   <path d="M200 200H0C0 89.5431 89.5431 0 200 0V200Z" fill=input.fill />
+//   <path d="M200 0C89.5431 0 0 89.5431 0 200V0H200Z" fill=input.bg />
+// </svg>
+
+style.scss --
+  .quarter {
+    &.abs {
+      position: absolute;
+    }
+
+    & .fill {
+      width: 100%;
+      height: 100%;
+    }
+
+    &.pos-tl {
+      top: 0;
+      left: 0;
+    }
+
+    &.dir-tl .fill {
+      border-radius: 100% 0 0;
+    }
+
+    &.pos-tr {
+      top: 0;
+      right: 0;
+    }
+
+    &.dir-tr .fill {
+      border-radius: 100% 0 0;
+      scale: -1 1;
+    }
+
+    &.pos-bl {
+      bottom: 0;
+      left: 0;
+    }
+
+    &.dir-bl .fill {
+      border-radius: 100% 0 0;
+      scale: 1 -1;
+    }
+
+    &.pos-br {
+      bottom: 0;
+      right: 0;
+    }
+
+    &.dir-br .fill {
+      border-radius: 100% 0 0;
+      scale: -1 -1;
+    }
+  }
