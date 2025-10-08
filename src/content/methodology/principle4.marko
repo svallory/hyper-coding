@@ -1,0 +1,19 @@
+import Principle from "./principle.marko";
+import pathR3lL4Svg from "../../assets/paths/path-r3l-l4.svg";
+import pathL4bL5Svg from "../../assets/paths/path-l4b-l5.svg";
+
+<decorate id="principle4">
+    <@decoration class="path-in" side="top" src=pathR3lL4Svg />
+    <@decoration class="path-out" side="bottom" src=pathL4bL5Svg />
+    <Principle
+    number="04"
+    title="Reactive Context"
+    >
+    <@description>
+        Humans have "peripheral awareness" that brings relevant thoughts to mind without active searching. We can simulate this by building a system that provides the right context at the right time. Instead of providing every possible piece of documentation for every task, the system recognizes the task's nature—for example, a database operation—and automatically injects only the relevant context, such as security guidelines, schema definitions, or established data access patterns.
+    </@description>
+    <@statement>
+        <strong>Automate</strong> context engineering to provide the model with <strong>the right context at the right time</strong>, without overwhelming it.
+    </@statement>
+    </Principle>
+</decorate>

@@ -1,0 +1,26 @@
+export type Input = {
+  name: string;
+  class?: string;
+  circle?: boolean;
+}
+
+<if=input.circle>
+  <div class="icon-circle">
+    <span class=`icon ${input.class ?? ""}` data-lucide=input.name aria-label=input.name>${input.name}</span>
+  </div>
+</if>
+<else>
+  <span class=`icon ${input.class ?? ""}` data-lucide=input.name aria-label=input.name>${input.name}</span>
+</else>
+
+<style.scss>
+  .icon-circle {
+    border: 2px solid var(--color-text);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+</style>

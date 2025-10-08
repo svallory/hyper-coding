@@ -1,0 +1,77 @@
+export type Input = {
+  side: "left" | "right";
+  content: Marko.Body;
+  theme: 'light' | 'dark';
+}
+
+let/inverseTheme=input.theme === "dark" ? "light" : "dark";
+
+.fab-container.${input.side}
+  if=(input.side === "left")
+    quarter.${input.theme}
+      , dir="bl"
+      , width="10px"
+      , height="10px"
+      , bg=`var(--color-${input.theme}-bg)`
+      , fill=`var(--color-${inverseTheme}-bg)`
+  else
+    quarter.${input.theme}
+      , dir="br"
+      , width="10px"
+      , height="10px"
+      , bg=`var(--color-${input.theme}-bg)`
+      , fill=`var(--color-${inverseTheme}-bg)`
+
+  .fab.${input.theme}
+    .fab-button
+      ${input.content}
+
+  if=(input.side === "left")
+    quarter.${input.theme}
+      , dir="tl"
+      , width="10px"
+      , height="10px"
+      , bg=`var(--color-${input.theme}-bg)`
+      , fill=`var(--color-${inverseTheme}-bg)`
+  else
+    quarter.${input.theme}
+      , dir="tr"
+      , width="10px"
+      , height="10px"
+      , bg=`var(--color-${input.theme}-bg)`
+      , fill=`var(--color-${inverseTheme}-bg)`
+      
+style.scss --
+  .fab-container {
+    position: absolute;
+    z-index: 9000;
+
+    &.right {
+      right: -1px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    &.left {
+      left: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+
+  .fab {
+    padding: 10px;
+    position: relative;
+    color: var(--color-text);
+    background-color: var(--color-background);
+
+    .left & {
+      border-radius: 0 50% 50% 0;
+    }
+
+    .right & {
+      border-radius: 50% 0 0 50%;
+    }
+  }

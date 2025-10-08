@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,200..900;1,200..900&family=Figtree:ital,wght@0,300..900;1,300..900&family=Martian+Mono:wght@100..800&family=Young+Serif&display=swap');
+
+@font-face {
+  font-family: MartianGroteskVF;
+  src: url('../assets/fonts/MartianGrotesk-VF.woff2') format('woff2-variations');
+  font-weight: 100 1000;
+  font-stretch: 75% 200%;
+}
+
+.paper {
+  font-family: "Crimsom Pro", Georgia, "Times New Roman", serif;
+  // background-color: var(--color-background);
+  color: var(--color-text);
+  
+  .display, h1, h2, h3, h4, h5, h6 {
+    font-family: "Young Serif", "Crimsom Pro", Georgia, "Times New Roman", serif;
+  }
+}
+
+.tech {
+  font-family: MartianGroteskVF, "JetBrains Mono", "SF Mono", "Inter", sans-serif;
+  // background-color: var(--color-background);
+  color: var(--color-text);
+
+  .display, h1, h2, h3, h4, h5, h6 {
+    font-family: MartianGroteskVF, "Martian Mono", "JetBrains Mono", "SF Mono", "Inter", sans-serif;
+    font-optical-sizing: auto;
+    font-weight: 700;
+    font-style: normal;
+  }
+}
+
+.light {
+  background-color: var(--color-background);
+}
+
+.dark {
+  background-color: var(--color-background);
+}
+
+code {
+  font-family: "Martian Mono" !important;
+}

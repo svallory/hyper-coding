@@ -1,0 +1,17 @@
+import Principle from "./principle.marko";
+import pathL5tR4Svg from "../../assets/paths/path-l5t-r4.svg";
+
+<decorate id="principle5">
+    <@decoration class="path-out" side="top" src=pathL5tR4Svg />
+    <Principle
+    number="05"
+    title="Real-time Feedback"
+    >
+    <@description>
+        Integrating tools is only half the story. The real power comes from using them to create an immediate, automated feedback loop, which is our final principle. What makes this different from a traditional CI pipeline is the immediacy and context of the feedback. When a validation fails, the AI agent doesn't just receive an error message – it is immediately halted, provided with contextual information about <em>why</em> the validation failed, and tasked with attempting the correction. This prevents errors from compounding and teaches the agent the project's rules through direct, iterative experience.
+    </@description>
+    <@statement>
+        Provide feedback to the agent as soon as possible to avoid compounding errors.
+    </@statement>
+    </Principle>
+</decorate>

@@ -1,0 +1,31 @@
+import Principle from "./principle.marko";
+import pathL1tSvg from "../../assets/paths/path-l1t.svg";
+import pathL1bR1Svg from "../../assets/paths/path-l1b-r1.svg";
+
+<decorate id="principle1">
+  <@decoration class="path-in" side="top" src=pathL1tSvg />
+  <@decoration class="path-out" side="right" src=pathL1bR1Svg />
+
+  <Principle
+    number="01"
+    title="Deterministic First"
+  >
+    <@description>
+      <p>
+        Experienced developers build habits and intuition for writing code that meets quality standards.
+      In time, the right way becomes the easier way. We can simulate this "habitual" correctness by reducing what the AI generates freely.
+      </p>
+      
+      <p>
+        This means that we should limit the AI's freedom to generate code, and instead provide it with a structure to follow. A simple implementation of this principle is to use <strong>code templates</strong>.
+      </p>
+      <p>
+        Using a template, we can ensure that the AI will follow the current project's coding standards and architectural patterns.
+        The AI's task becomes filling in the blanks of a pre-approved structure, rather than creating one from scratch.
+      </p>
+    </@description>
+    <@statement>
+      If it <strong>can be done deterministically,</strong> you <strong>should not use an LLM</strong> to generate it.
+    </@statement>
+  </Principle>
+</decorate>

@@ -1,0 +1,114 @@
+export type Input = {
+  id?: string;
+  class?: string;
+  content: Marko.Body<[], void>;
+  decoration?: Marko.AttrTag<Decoration>;
+  style?: Marko.CSS.Properties;
+}
+
+export type Decoration = {
+  side: 'top' | 'right' | 'bottom' | 'left';
+  x?: number;
+  y?: number;
+  height?: number;
+  src?: string;
+  content?: Marko.Body<[], void>;
+  style?: Marko.CSS.Properties;
+  imgStyle?: Marko.CSS.Properties;
+  id?: string;
+  class?: string;
+}
+
+static function calculatePosition(decoration: Decoration) {
+  const style = { overflow: 'visible', position: 'absolute' } as Marko.CSS.Properties;
+  const xOffset = decoration.x !== undefined ? `${decoration.x}px` : '0px';
+  const yOffset = decoration.y !== undefined ? `${decoration.y}px` : '0px';
+
+  switch (decoration.side) {
+    case 'top':
+      style.bottom = yOffset === '0px' ? '100%' : `calc(100% + ${yOffset})`;
+      if (decoration.x !== undefined) style.left = xOffset;
+      break;
+    case 'bottom':
+      style.top = yOffset === '0px' ? '100%' : `calc(100% + ${yOffset})`;
+      if (decoration.x !== undefined) style.left = xOffset;
+      break;
+    case 'left':
+      style.right = xOffset === '0px' ? '100%' : `calc(100% + ${xOffset})`;
+      if (decoration.y !== undefined) style.top = yOffset;
+      break;
+    case 'right':
+      style.left = xOffset === '0px' ? '100%' : `calc(100% + ${xOffset})`;
+      if (decoration.y !== undefined) style.top = yOffset;
+      break;
+    default:
+      // Default to top-left if side is not specified or invalid
+      style.top = yOffset;
+      if (decoration.x !== undefined) style.left = xOffset;
+      break;
+  }
+
+  return {
+    ...style,
+    ...(decoration.style ?? {})
+  };
+}
+
+static function getContainerStyle({ style, decoration }: Input) {
+  const finalStyle: Marko.CSS.Properties = {};
+  const items = [...decoration || []];
+
+  for (const decoration of items) if (decoration.height) {
+    if (decoration.side == "top") {
+      finalStyle['margin-top'] = `${decoration.height + (decoration.y || 0)}px`;
+    }
+    else if(decoration.side === "bottom") {
+      finalStyle['margin-bottom'] = `${decoration.height + (decoration.y || 0)}px`;
+    }
+  }
+
+
+  return {
+    ...finalStyle,
+    ...(style || {})
+  };
+}
+
+<let/defaultImgStyle={ position: "absolute", bottom: "0px", "z-index": 1 } as Marko.CSS.Properties/>
+
+<div id=input.id class=`decorate-wrapper ${input.class ?? ""}` style=getContainerStyle(input)>
+  <for|decoration| of=input.decoration>
+    <div
+      id=decoration.id
+      class=`decoration-item ${decoration.class ?? ""}`
+      style=calculatePosition(decoration)
+    >
+      <if=!!decoration.src>
+        <img aria-hidden="true" style=(decoration.imgStyle ?? defaultImgStyle) src=decoration.src height=decoration.height />
+      </if>
+      <else>
+        <${decoration.content}/>
+      </else>
+    </div>
+  </for>
+
+  <${input.content} />
+</div>
+
+<style>
+  .decorate-wrapper {
+    position: relative; /* Establish positioning context for decorations */
+    display: inline-block; /* Ensure wrapper only takes up necessary space */
+  }
+  .decoration-item {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1;
+    color: var(--color-primary); /* Apply the accent color here */
+  }
+  .decoration-item svg {
+    width: auto;
+    height: auto;
+    overflow: visible;
+  }
+</style>

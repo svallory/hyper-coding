@@ -1,0 +1,189 @@
+{
+	"meta": {
+		"generatedAt": "2025-09-08T04:12:02.764Z",
+		"tasksAnalyzed": 22,
+		"totalTasks": 22,
+		"analysisCount": 22,
+		"thresholdScore": 5,
+		"projectName": "Taskmaster",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 1,
+			"taskTitle": "Audit Existing Documentation Structure",
+			"complexityScore": 4,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Break down the documentation audit into systematic analysis phases: scan all 58 MDX files for frontmatter completeness, validate internal link integrity, check for broken code examples, analyze content quality consistency, and compile comprehensive audit report with specific file locations and remediation priorities.",
+			"reasoning": "Medium complexity - involves systematic scanning of 58 existing MDX files but can be largely automated. The codebase shows well-structured documentation with consistent patterns, making audit tasks straightforward to implement and execute."
+		},
+		{
+			"taskId": 2,
+			"taskTitle": "Fix Frontmatter Inconsistencies",
+			"complexityScore": 3,
+			"recommendedSubtasks": 4,
+			"expansionPrompt": "Systematically standardize frontmatter across all documentation files: create frontmatter validation schema, batch process files for missing title/description fields, ensure consistent icon field usage following Mintlify standards, and validate SEO-optimized descriptions (50-160 characters) across all pages.",
+			"reasoning": "Low-medium complexity - mechanical task with clear patterns. Existing files show good structure (title, description, icon fields present), making this primarily a standardization and completion task rather than complex refactoring."
+		},
+		{
+			"taskId": 3,
+			"taskTitle": "Update Navigation Structure in docs.json",
+			"complexityScore": 5,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Redesign navigation architecture for optimal user experience: analyze current 140+ page structure, redesign information architecture for beginner-to-expert flow, reorganize existing 9 groups into logical progression, optimize mobile navigation experience, validate all internal links, and test user journey flows across different personas.",
+			"reasoning": "Medium-high complexity - requires information architecture analysis and UX considerations. The existing docs.json shows complex nested structure with 2 tabs and multiple groups. Changes impact user experience and require careful testing."
+		},
+		{
+			"taskId": 4,
+			"taskTitle": "Create Comprehensive Getting Started Tutorial",
+			"complexityScore": 7,
+			"recommendedSubtasks": 8,
+			"expansionPrompt": "Build complete tutorial sequence from installation to production deployment: create step-by-step installation guide, develop first template generation walkthrough, build template customization examples, create custom template creation tutorial, add troubleshooting sections, include interactive code examples, implement progress tracking, and validate tutorial completion in under 30 minutes across different environments.",
+			"reasoning": "High complexity - requires understanding HyperGen v8.0.0 implementation, CLI commands from bin.ts, and creating comprehensive tutorial content. Involves testing across multiple environments and ensuring 90%+ success rate for new users."
+		},
+		{
+			"taskId": 5,
+			"taskTitle": "Document Current HyperGen CLI Commands",
+			"complexityScore": 6,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "Create comprehensive CLI reference documentation: analyze HypergenCLI implementation from src/cli/cli.ts, document all command syntax and parameters, create tested examples for each command, add usage scenarios and error handling guides, implement command validation testing, create interactive examples, and ensure cross-platform compatibility documentation.",
+			"reasoning": "Medium-high complexity - requires deep analysis of CLI implementation, testing all commands in isolation, and creating comprehensive reference documentation. The codebase shows complex CLI structure that needs thorough documentation."
+		},
+		{
+			"taskId": 8,
+			"taskTitle": "Document Moon Build System Integration",
+			"complexityScore": 6,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "Create comprehensive Moon integration guide: document Moon workspace configuration patterns, explain task definition and build orchestration, create monorepo workflow examples, document template generation within Moon projects, provide best practices for complex monorepo structures, create integration testing examples, and validate examples in actual monorepo environments.",
+			"reasoning": "Medium-high complexity - requires understanding Moon build system integration patterns from .moon/workspace.yml and the monorepo structure. The codebase shows Moon integration but documentation needs to be comprehensive and tested."
+		},
+		{
+			"taskId": 10,
+			"taskTitle": "Document Task Master AI Integration",
+			"complexityScore": 5,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Document Task Master AI workflow comprehensively: analyze .taskmaster directory structure and configuration, document project initialization and PRD generation workflows, create epic management and task orchestration guides, explain AI model configuration and state tracking, document integration with development workflow, and provide real examples from the project's task management system.",
+			"reasoning": "Medium complexity - requires understanding Task Master AI integration patterns. The .taskmaster directory exists but needs systematic documentation. Integration is already implemented, making this primarily a documentation and example creation task."
+		},
+		{
+			"taskId": 13,
+			"taskTitle": "Create Advanced Usage Patterns Documentation",
+			"complexityScore": 8,
+			"recommendedSubtasks": 10,
+			"expansionPrompt": "Build comprehensive advanced usage documentation: create complex template composition examples, document performance optimization strategies with real benchmarks, establish security best practices with validation examples, design enterprise deployment patterns, create scaling strategies for large teams, develop custom plugin development guide, document CI/CD integration patterns, create real-world case studies, implement performance testing examples, and validate all patterns in realistic project scenarios.",
+			"reasoning": "High complexity - requires deep understanding of HyperGen architecture, performance characteristics, and enterprise usage patterns. Involves creating benchmarks, security examples, and comprehensive real-world scenarios."
+		},
+		{
+			"taskId": 15,
+			"taskTitle": "Document Community Guidelines and Contribution Process",
+			"complexityScore": 4,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Establish comprehensive community framework: create template contribution workflow documentation, establish code of conduct and review processes, document quality standards and validation requirements, design community recognition programs, create template marketplace guidelines with governance structure, and validate contribution processes through test submissions.",
+			"reasoning": "Medium complexity - involves community management and process documentation. Requires establishing workflows and governance but builds on existing community-guidelines.mdx foundation. Primarily organizational and process documentation."
+		},
+		{
+			"taskId": 20,
+			"taskTitle": "Optimize Search and Content Discovery",
+			"complexityScore": 6,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "Enhance search and discovery capabilities: optimize page metadata for search performance, implement content categorization and tagging system, create cross-reference and related content systems, implement search result relevance optimization, configure Mintlify search index settings, implement content relationship mapping, and ensure sub-500ms search response times across all content.",
+			"reasoning": "Medium-high complexity - involves search optimization, metadata enhancement, and performance considerations. Requires understanding Mintlify search capabilities and implementing systematic content organization across 58+ MDX files."
+		},
+		{
+			"taskId": 17,
+			"taskTitle": "Build Security Best Practices Documentation",
+			"complexityScore": 9,
+			"recommendedSubtasks": 12,
+			"expansionPrompt": "Create comprehensive security framework documentation: expand existing security-guide.mdx with template security validation systems, document trust system architecture and implementation, create secure template distribution guidelines, establish input validation best practices with examples, document dependency security scanning procedures, create secrets management workflows, establish secure development lifecycle procedures, implement security audit checklists, create automated security validation tools, validate security measures with professionals, test security scenarios, and ensure actionable security guidelines throughout.",
+			"reasoning": "Very high complexity - security documentation requires deep technical knowledge, validation with security professionals, and comprehensive testing. The existing security-guide.mdx shows sophisticated security patterns that need expert-level documentation and validation."
+		},
+		{
+			"taskId": 6,
+			"taskTitle": "Update Code Examples to Match Current Implementation",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on update code examples to match current implementation.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 7,
+			"taskTitle": "Create HyperDev Architecture Overview",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on create hyperdev architecture overview.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 9,
+			"taskTitle": "Create Template Creation Comprehensive Guide",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on create template creation comprehensive guide.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 11,
+			"taskTitle": "Create Migration Guide from Hygen",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on create migration guide from hygen.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 12,
+			"taskTitle": "Build Interactive API Documentation",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on build interactive api documentation.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 14,
+			"taskTitle": "Build Comprehensive Troubleshooting Guide",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on build comprehensive troubleshooting guide.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 16,
+			"taskTitle": "Create Performance Optimization Guide",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on create performance optimization guide.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 18,
+			"taskTitle": "Create Real-World Examples Collection",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on create real-world examples collection.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 19,
+			"taskTitle": "Implement Feature Status Indicators",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on implement feature status indicators.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 21,
+			"taskTitle": "Implement Accessibility Compliance",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on implement accessibility compliance.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		},
+		{
+			"taskId": 22,
+			"taskTitle": "Create Content Maintenance and Review Process",
+			"complexityScore": 5,
+			"recommendedSubtasks": 3,
+			"expansionPrompt": "Break down this task with a focus on create content maintenance and review process.",
+			"reasoning": "Automatically added due to missing analysis in AI response."
+		}
+	]
+}

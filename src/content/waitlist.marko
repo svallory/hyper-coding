@@ -1,0 +1,92 @@
+export type Input = {
+  class?: Marko.HTMLAttributes['class']
+}
+
+<section class=`waitlist-section ${input.class ?? ''}`>
+  <h2 class="waitlist-title">Join the<br>Waitlist</h2>
+  <form method="post" action="https://newsletter.tokilabs.io/subscription/form" class="waitlist-form">
+    <input type="hidden" name="nonce" />
+    
+    <div class="form-group">
+      <input class="form-input" type="email" name="email" required placeholder="Your e-mail" />
+    </div>
+    <input id="f9b1c" type="hidden" name="l" value="f9b1cd42-fbbe-4fc9-bb82-1ef7809353d8" />
+
+    <button type="submit" class="form-submit">Sign me Up!</button>
+  </form>
+</section>
+
+<style>
+  .waitlist-section {
+    text-align: center;
+  }
+
+  .waitlist-title {
+    font-size: 4rem;
+    margin-top: 0;
+    margin-bottom: 2.5rem;
+  }
+
+  .waitlist-form {
+    max-width: 80%;
+    margin: 0 auto;
+  }
+
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .form-input {
+    width: 100%;
+    padding: 1rem;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-width: 0;
+    border-bottom: 1px solid hsla(34, 56%, 66%, 0.3);
+    border-radius: 6px;
+    color: #333;
+    font-size: 1.5rem;
+    transition: all 0.3s ease;
+    text-align: center;
+    font-family: "Figtree";
+    font-weight: normal;
+  }
+
+  input::placeholder {
+    color: red; /* Sets the placeholder color to red */
+  }
+
+  .form-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px hsla(34, 56%, 66%, 0.1);
+  }
+
+  .form-input::placeholder {
+    color: hsl(0, 0%, 50%);
+  }
+
+  .form-submit {
+    font-family: MartianGroteskVF;
+    font-size: 1.125rem;
+    font-weight: 900;
+    font-stretch: expanded;
+    width: 100%;
+    padding: 1rem 2rem;
+    background: #d8b69c;
+    color: hsl(220, 30%, 10%);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.s ease;
+  }
+
+  .form-submit:hover {
+    background: #c9936b;
+    box-shadow: 0 4px 20px hsla(34, 56%, 66%, 0.4);
+    transition: all 0.3s ease;
+  }
+
+  .form-submit:active {
+    transform: translateY(0);
+  }
+</style>

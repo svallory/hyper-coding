@@ -1,0 +1,21 @@
+
+.section {
+  margin-bottom: 3rem;
+
+  & > h2 {
+    margin-top: 0;
+    margin-left: 2rem;
+  }
+}
+
+.section-title {
+  font-size: 2rem;
+  font-weight: 400;
+  margin-bottom: 1.5rem;
+  color: var(--color-text);
+}
+
+p {
+  margin-bottom: 1rem;
+  font-size: 1rem;
+}

@@ -1,0 +1,33 @@
+import CommandSection from "./command.marko";
+import FeatureCard from "./feature-card.marko";
+import pathR1rSvg from "../../assets/paths/path-r1r.svg";
+
+<define/Cards>
+  <FeatureCard title="Starter Kits" icon="package">
+    <p>Project Starter Kits that set your agent up for success.</p>
+  </FeatureCard>
+
+  <FeatureCard title="Code Templates" icon="code">
+    <p>Tailor made templates for consistent and high-quality AI-generated code.</p>
+  </FeatureCard>
+</define>
+
+<decorate id="command1">
+  <@decoration class="path-self" side="right" src=pathR1rSvg style={display: "none"} />
+  <CommandSection command="hyper gen" iconName="square-chevron-right">
+    <@description>
+      Code generation engine <br>
+      for the age of AI.
+    </@description>
+
+    <grid class="desktop" cols=2 content=Cards.content />
+
+    <p class="command-intro">
+      Beyond anything you can do with Yeoman and similar tools, hyper templates support <strong>prompt placeholders</strong> that allow
+      you to seemingly integrate rule-based deterministic generation that always follows the rules with context-dependent
+      AI-driven generation.
+    </p>
+
+    <div.mobile.card-slider content=Cards.content />
+  </CommandSection>
+</decorate>

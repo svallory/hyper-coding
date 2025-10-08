@@ -1,0 +1,22 @@
+.circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  width: 10vw;
+  min-width: 600px;
+  max-width: 1024px;
+}
+
+@media (max-width: 1024px) {
+  .desktop {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mobile {
+    display: none !important;
+  }
+}

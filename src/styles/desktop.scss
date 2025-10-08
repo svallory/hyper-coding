@@ -1,0 +1,137 @@
+
+  .desktop {
+    #principle1 {
+      margin-top: 100px;
+
+      & .path-out {
+        top: 100px;
+
+        & > img {
+          top: 0;
+        }
+      }
+    }
+
+    #command1 {
+      margin-top: 40px;
+    }
+
+    #principle2 {
+      margin-top: 200px;
+
+      & .path-in {
+        top: 40px !important;
+        right: 100px;
+      }
+
+      & .path-out {
+        right: 0px;
+
+        & > img {
+          right: -80px;
+          top: -130px;
+        }
+      }
+    }
+
+    #command2 {
+      margin: 100px 0 140px 0;
+
+      & .path-out {
+        /* debug */
+        // z-index: 2000;
+        // width: 8px;
+        // height: 8px;
+        // background-color: red;
+
+        & > img {
+          top: -20px;
+          left: -80px;
+        }
+      }
+    }
+
+    #principle3 {
+      margin: 200px 0 50px;
+      padding: 0;
+
+      & .path-out {
+        left: 200px;
+
+        & img {
+          top: -40px;
+        }
+      }
+    }
+
+    #command3 {
+      margin-top: 0px;
+    }
+
+    #principle4 {
+      margin: 200px 0 240px 0;
+      padding: 0;
+
+      & .path-in {
+        left: 60px;
+        /* debug */
+        // z-index: 2000;
+        // width: 8px;
+        // height: 8px;
+        // background-color: red;
+      }
+
+      & .path-out {
+        left: 0;
+        /* debug */
+        // z-index: 2000;
+        // width: 8px;
+        // height: 8px;
+        // background-color: red;
+
+        & > img {
+          top: -40px;
+          left: 40px;
+        }
+      }
+    }
+
+    #principle5 {
+      margin-top: 20px;
+
+      & .path-out {
+        left: 50%;
+        /* debug */
+        // z-index: 2000;
+        // width: 8px;
+        // height: 8px;
+        // background-color: red;
+
+        & > img {
+          bottom: -90px !important;
+        }
+      }
+    }
+
+    #command4 {
+      margin: 150px 0 0 0;
+
+      & .path-out {
+        left: 0;
+        /* debug */
+        // z-index: 2000;
+        // width: 8px;
+        // height: 8px;
+        // background-color: red;
+
+        & > img {
+          left: 30px;
+          top: 0;
+        }
+      }
+    }
+
+    #command5 {
+      margin: 200px 0 130px 0;
+    }
+  }

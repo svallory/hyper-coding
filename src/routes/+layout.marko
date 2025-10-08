@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Learn about Hyper Coding methodology and the HyperDev toolkit for AI-assisted development.">
+    <title>Hyper Coding & HyperDev Toolkit</title>
+    <style>
+      @import "../styles/index.scss";
+    </style>
+  </head>
+  <body>
+    <${input.content}/>
+
+    <html-script src="https://unpkg.com/lucide@latest"></html-script>
+    <html-script>
+      lucide.createIcons();
+
+      if (window.matchMedia("(max-width: 768px)").matches) {
+        document.body.classList.add("mobile");
+      }
+    </html-script>
+  </body>
+</html>

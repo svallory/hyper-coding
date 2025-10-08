@@ -1,0 +1,12 @@
+export type FlexAttr = string | Marko.AttrTag<{ content: Marko.Body }>;
+
+export type Input = {
+  value?: FlexAttr;
+}
+
+<if=typeof input.value === "string">
+  ${input.value}
+</if>
+<else if=input.value>
+  <${input.value}/>
+</else>
