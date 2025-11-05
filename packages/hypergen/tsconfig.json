@@ -15,12 +15,19 @@
     "types": ["bun-types"],
     "resolveJsonModule": true,
     "rootDir": "src",
-    "baseUrl": ".",
     "skipLibCheck": true,
     "paths": {
-      "~/*": ["src/*"]
+      "~/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.json", ".hypergen.js"],
-  "exclude": ["node_modules", "hygen.io"]
+  "exclude": [
+    "node_modules",
+    "hygen.io",
+    "**/*.test.ts",
+    "**/*.test.js",
+    "**/*.spec.ts",
+    "**/*.spec.js",
+    "tests/**/*"
+  ]
 }

@@ -1,0 +1,27 @@
+# Bun configuration for hypergen
+
+[test]
+# Test file patterns
+preload = []
+
+# Coverage configuration
+coverage = true
+coverageThreshold = 0
+coverageSkipTestFiles = true
+
+# Exclude patterns - ensure no test files are compiled to dist
+coverageExclude = [
+  "dist/**",
+  "node_modules/**",
+  "**/*.test.ts",
+  "**/*.test.js",
+  "**/*.spec.ts",
+  "**/*.spec.js",
+  "tests/**/*"
+]
+
+# Test timeout
+timeout = 5000
+
+# Test output
+bail = false

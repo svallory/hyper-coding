@@ -1,6 +1,6 @@
 import ejs from 'ejs'
-import fs from 'fs-extra'
 import type { TemplateEngine } from './types.js'
+import { JsonValue } from 'type-fest'
 
 /**
  * EJS Template Engine Implementation
@@ -10,6 +10,7 @@ import type { TemplateEngine } from './types.js'
  */
 export class EJSTemplateEngine implements TemplateEngine {
   readonly name = 'ejs'
+
   readonly supportedExtensions = ['.ejs', '.ejs.t', '.t']
   
   private options: ejs.Options = {}
@@ -17,33 +18,31 @@ export class EJSTemplateEngine implements TemplateEngine {
   constructor() {
     // Default EJS options for optimal performance and functionality
     this.options = {
+      _with: true,
       async: true,
       cache: false, // Disable cache for string templates
-      rmWhitespace: false,
-      strict: false,
-      _with: true,
-      localsName: 'locals',
-      // Enable file system access for includes
-      filename: undefined,
-      root: undefined,
-      views: [],
+      closeDelimiter: '>',
       compileDebug: process.env.NODE_ENV !== 'production',
       delimiter: '%',
+      filename: undefined,
+      localsName: 'locals',
       openDelimiter: '<',
-      closeDelimiter: '>',
+      rmWhitespace: false,
+      root: undefined,
+      strict: false,
+      views: [], // Enable file system access for includes
     }
   }
 
-  async render(template: string, context: Record<string, any>): Promise<string> {
+  async render(template: string, context: Record<string, JsonValue>): Promise<string> {
     try {
-      const result = await ejs.render(template, context, this.options)
-      return result
+      return ejs.render(template, context, { ...this.options, async: true });
     } catch (error) {
       throw new Error(`EJS template rendering failed: ${error.message}`)
     }
   }
 
-  async renderFile(filePath: string, context: Record<string, any>): Promise<string> {
+  async renderFile(filePath: string, context: Record<string, JsonValue>): Promise<string> {
     try {
       const result = await ejs.renderFile(filePath, context, this.options)
       return result
@@ -56,7 +55,7 @@ export class EJSTemplateEngine implements TemplateEngine {
     return this.supportedExtensions.includes(extension)
   }
 
-  configure(options: Record<string, any>): void {
+  configure(options: Record<string, JsonValue>): void {
     this.options = {
       ...this.options,
       ...options,

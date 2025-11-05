@@ -79,11 +79,13 @@
 		"js-yaml": "^4.1.0",
 		"liquidjs": "^10.21.1",
 		"ora": "^5.4.1",
+		"type-fest": "^5.2.0",
 		"typedoc-theme-mintlify": "workspace:*",
 		"yaml": "^2.8.0",
 		"yargs-parser": "^21.1.1"
 	},
 	"devDependencies": {
+		"@types/ejs": "^3.1.5",
 		"@types/js-yaml": "^4.0.5",
 		"@types/react": "latest",
 		"bun-types": "latest",
@@ -99,8 +101,7 @@
 		"ts-node": "^10.9.2",
 		"typedoc": "^0.26.0",
 		"typescript": "^5.5.3",
-		"vitest": "^3.2.4",
-		"zeroconf-typescript-eslint": "^2.4.0"
+		"vitest": "^3.2.4"
 	},
 	"nodemonConfig": {
 		"ignore": ["**/test/**", "**/docs/**"],
