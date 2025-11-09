@@ -1,0 +1,22 @@
+{
+	"epic": {
+		"workingName": "oclif-refactoring",
+		"finalName": "oclif-refactoring",
+		"status": "assessment",
+		"createdAt": "2025-11-07T12:00:00Z",
+		"lastUpdated": "2025-11-07T12:00:00Z"
+	},
+	"artifacts": [],
+	"phases": {
+		"assessment": {
+			"status": "in-progress"
+		},
+		"validation": { "status": "pending" },
+		"requirements": { "status": "pending" },
+		"generation": { "status": "pending" },
+		"finalization": { "status": "pending" }
+	},
+	"decisions": [],
+	"risks": [],
+	"nextSteps": ["Complete project assessment", "Validate epic idea"]
+}

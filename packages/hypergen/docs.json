@@ -1,134 +1,134 @@
 {
-  "navigation": [
-    {
-      "group": "SDK Reference",
-      "icon": "code",
-      "pages": [
-        {
-          "group": "Kind Plural Class",
-          "pages": [
-            "classes/ActionTool",
-            "classes/ActionToolFactory",
-            "classes/BaseToolFactory",
-            "classes/CircularDependencyError",
-            "classes/Logger",
-            "classes/RecipeDependencyError",
-            "classes/RecipeEngine",
-            "classes/RecipeTool",
-            "classes/RecipeToolFactory",
-            "classes/RecipeValidationError",
-            "classes/StepExecutionError",
-            "classes/StepExecutor",
-            "classes/TemplateTool",
-            "classes/TemplateToolFactory",
-            "classes/Tool",
-            "classes/ToolRegistry"
-          ],
-          "icon": "cube"
-        },
-        {
-          "group": "Kind Plural Function",
-          "pages": [
-            "functions/checkRecipeEngineHealth",
-            "functions/checkRegistryHealth",
-            "functions/createRecipeEngine",
-            "functions/createTool",
-            "functions/createValidationResult",
-            "functions/engine",
-            "functions/executeRecipe",
-            "functions/getToolRegistry",
-            "functions/initializeRecipeEngine",
-            "functions/initializeToolsFramework",
-            "functions/isActionStep",
-            "functions/isCodeModStep",
-            "functions/isRecipeStep",
-            "functions/isSupportedToolType",
-            "functions/isTemplateStep",
-            "functions/loadRecipe",
-            "functions/registerTool",
-            "functions/resolve",
-            "functions/resolveTool",
-            "functions/resolveTools",
-            "functions/runner",
-            "functions/validateRecipe",
-            "functions/validateToolType"
-          ],
-          "icon": "function"
-        },
-        {
-          "group": "Kind Plural Interface",
-          "pages": [
-            "interfaces/ActionStep",
-            "interfaces/BaseRecipeStep",
-            "interfaces/CodeModExecutionResult",
-            "interfaces/CodeModStep",
-            "interfaces/RecipeConfig",
-            "interfaces/RecipeDependency",
-            "interfaces/RecipeEngineConfig",
-            "interfaces/RecipeExample",
-            "interfaces/RecipeExecution",
-            "interfaces/RecipeExecutionOptions",
-            "interfaces/RecipeExecutionPlan",
-            "interfaces/RecipeExecutionResult",
-            "interfaces/RecipeLoadResult",
-            "interfaces/RecipeStep",
-            "interfaces/RecipeValidationResult",
-            "interfaces/RecipeValidationWarning",
-            "interfaces/StepContext",
-            "interfaces/StepDependencyNode",
-            "interfaces/StepExecutionMetrics",
-            "interfaces/StepExecutionOptions",
-            "interfaces/StepExecutionProgress",
-            "interfaces/StepExecutorConfig",
-            "interfaces/StepResult",
-            "interfaces/TemplateExecutionResult",
-            "interfaces/TemplateStep",
-            "interfaces/ToolFactory",
-            "interfaces/ToolLifecycleMetrics",
-            "interfaces/ToolRegistration",
-            "interfaces/ToolRegistryStats",
-            "interfaces/ToolResolutionOptions",
-            "interfaces/ToolResource",
-            "interfaces/ToolSearchCriteria",
-            "interfaces/ToolValidationResult"
-          ],
-          "icon": "square-dashed"
-        },
-        "modules",
-        {
-          "group": "Kind Plural Type Alias",
-          "pages": [
-            "types/RecipeEngineFeature",
-            "types/RecipeSource",
-            "types/RecipeStepUnion",
-            "types/StepByTool",
-            "types/StepStatus",
-            "types/ToolPhase",
-            "types/ToolType"
-          ],
-          "icon": "type"
-        },
-        {
-          "group": "Kind Plural Variable",
-          "pages": [
-            "variables/actionToolFactory-1",
-            "variables/DEFAULT_REGISTRY_CONFIG",
-            "variables/DevUtils",
-            "variables/RECIPE_ENGINE_FEATURES",
-            "variables/RECIPE_ENGINE_VERSION",
-            "variables/RecipeEngineDevUtils",
-            "variables/RecipeEnginePresets",
-            "variables/recipeToolFactory-1",
-            "variables/SUPPORTED_TOOL_TYPES",
-            "variables/templateToolFactory-1",
-            "variables/TOOL_EXECUTION_PHASES",
-            "variables/TOOL_FRAMEWORK_CONSTANTS",
-            "variables/TOOL_FRAMEWORK_VERSION"
-          ],
-          "icon": "variable"
-        },
-        "hierarchy"
-      ]
-    }
-  ]
+	"navigation": [
+		{
+			"group": "SDK Reference",
+			"icon": "code",
+			"pages": [
+				{
+					"group": "Kind Plural Class",
+					"pages": [
+						"classes/ActionTool",
+						"classes/ActionToolFactory",
+						"classes/BaseToolFactory",
+						"classes/CircularDependencyError",
+						"classes/Logger",
+						"classes/RecipeDependencyError",
+						"classes/RecipeEngine",
+						"classes/RecipeTool",
+						"classes/RecipeToolFactory",
+						"classes/RecipeValidationError",
+						"classes/StepExecutionError",
+						"classes/StepExecutor",
+						"classes/TemplateTool",
+						"classes/TemplateToolFactory",
+						"classes/Tool",
+						"classes/ToolRegistry"
+					],
+					"icon": "cube"
+				},
+				{
+					"group": "Kind Plural Function",
+					"pages": [
+						"functions/checkRecipeEngineHealth",
+						"functions/checkRegistryHealth",
+						"functions/createRecipeEngine",
+						"functions/createTool",
+						"functions/createValidationResult",
+						"functions/engine",
+						"functions/executeRecipe",
+						"functions/getToolRegistry",
+						"functions/initializeRecipeEngine",
+						"functions/initializeToolsFramework",
+						"functions/isActionStep",
+						"functions/isCodeModStep",
+						"functions/isRecipeStep",
+						"functions/isSupportedToolType",
+						"functions/isTemplateStep",
+						"functions/loadRecipe",
+						"functions/registerTool",
+						"functions/resolve",
+						"functions/resolveTool",
+						"functions/resolveTools",
+						"functions/runner",
+						"functions/validateRecipe",
+						"functions/validateToolType"
+					],
+					"icon": "function"
+				},
+				{
+					"group": "Kind Plural Interface",
+					"pages": [
+						"interfaces/ActionStep",
+						"interfaces/BaseRecipeStep",
+						"interfaces/CodeModExecutionResult",
+						"interfaces/CodeModStep",
+						"interfaces/RecipeConfig",
+						"interfaces/RecipeDependency",
+						"interfaces/RecipeEngineConfig",
+						"interfaces/RecipeExample",
+						"interfaces/RecipeExecution",
+						"interfaces/RecipeExecutionOptions",
+						"interfaces/RecipeExecutionPlan",
+						"interfaces/RecipeExecutionResult",
+						"interfaces/RecipeLoadResult",
+						"interfaces/RecipeStep",
+						"interfaces/RecipeValidationResult",
+						"interfaces/RecipeValidationWarning",
+						"interfaces/StepContext",
+						"interfaces/StepDependencyNode",
+						"interfaces/StepExecutionMetrics",
+						"interfaces/StepExecutionOptions",
+						"interfaces/StepExecutionProgress",
+						"interfaces/StepExecutorConfig",
+						"interfaces/StepResult",
+						"interfaces/TemplateExecutionResult",
+						"interfaces/TemplateStep",
+						"interfaces/ToolFactory",
+						"interfaces/ToolLifecycleMetrics",
+						"interfaces/ToolRegistration",
+						"interfaces/ToolRegistryStats",
+						"interfaces/ToolResolutionOptions",
+						"interfaces/ToolResource",
+						"interfaces/ToolSearchCriteria",
+						"interfaces/ToolValidationResult"
+					],
+					"icon": "square-dashed"
+				},
+				"modules",
+				{
+					"group": "Kind Plural Type Alias",
+					"pages": [
+						"types/RecipeEngineFeature",
+						"types/RecipeSource",
+						"types/RecipeStepUnion",
+						"types/StepByTool",
+						"types/StepStatus",
+						"types/ToolPhase",
+						"types/ToolType"
+					],
+					"icon": "type"
+				},
+				{
+					"group": "Kind Plural Variable",
+					"pages": [
+						"variables/actionToolFactory-1",
+						"variables/DEFAULT_REGISTRY_CONFIG",
+						"variables/DevUtils",
+						"variables/RECIPE_ENGINE_FEATURES",
+						"variables/RECIPE_ENGINE_VERSION",
+						"variables/RecipeEngineDevUtils",
+						"variables/RecipeEnginePresets",
+						"variables/recipeToolFactory-1",
+						"variables/SUPPORTED_TOOL_TYPES",
+						"variables/templateToolFactory-1",
+						"variables/TOOL_EXECUTION_PHASES",
+						"variables/TOOL_FRAMEWORK_CONSTANTS",
+						"variables/TOOL_FRAMEWORK_VERSION"
+					],
+					"icon": "variable"
+				},
+				"hierarchy"
+			]
+		}
+	]
 }

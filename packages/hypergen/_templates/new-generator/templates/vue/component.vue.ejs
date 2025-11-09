@@ -1,0 +1,24 @@
+---
+to: src/components/<%= name %>.vue
+---
+<template>
+  <div class="<%= name.toLowerCase() %>">
+    <slot><%= name %> Component</slot>
+  </div>
+</template>
+
+<script setup lang="ts">
+interface Props {
+  className?: string;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  className: ''
+});
+</script>
+
+<style scoped>
+.<%= name.toLowerCase() %> {
+  /* Add your styles here */
+}
+</style>

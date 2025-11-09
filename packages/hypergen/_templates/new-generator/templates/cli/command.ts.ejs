@@ -1,0 +1,24 @@
+---
+to: src/commands/<%= name %>.ts
+---
+import { Command } from 'commander';
+
+export const <%= name %>Command = new Command('<%= name %>')
+  .description('<%= name %> command')
+  .option('-v, --verbose', 'Enable verbose logging')
+  .action(async (options) => {
+    try {
+      console.log('Running <%= name %> command');
+      
+      if (options.verbose) {
+        console.log('Verbose mode enabled');
+      }
+      
+      // TODO: Implement <%= name %> command logic
+      
+      console.log('<%= name %> command completed');
+    } catch (error: any) {
+      console.error(`<%= name %> command failed: ${error.message}`);
+      process.exit(1);
+    }
+  });

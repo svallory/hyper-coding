@@ -1,0 +1,78 @@
+name: new-workspace
+description: Initializes a new Hypergen workspace
+author: Hypergen
+version: 1.0.0
+
+variables:
+  directory:
+    type: string
+    default: recipes
+    description: Directory to initialize the workspace in
+  withExamples:
+    type: boolean
+    default: true
+    description: Include example generators
+
+steps:
+  - name: create-workspace-directory
+    tool: fs.ensureDir
+    args:
+      path: "<%= directory %>"
+
+  - name: generate-workspace-config
+    tool: template.render
+    args:
+      template: "_templates/new-workspace/templates/hypergen.config.js.ejs"
+      outputPath: "<%= directory %>/hypergen.config.js"
+
+  - name: generate-workspace-readme
+    tool: template.render
+    args:
+      template: "_templates/new-workspace/templates/README.md.ejs"
+      outputPath: "<%= directory %>/README.md"
+
+  - name: create-example-generators
+    if: "withExamples"
+    tool: recipe.execute
+    args:
+      recipe: "_templates/new-generator/recipe.yml"
+      variables:
+        name: "component"
+        description: "Example component generator"
+        category: "examples"
+        author: "Hypergen"
+        directory: "<%= directory %>"
+        type: "both"
+        framework: "react"
+        withExamples: true
+        withTests: true
+  - name: create-api-example-generator
+    if: "withExamples"
+    tool: recipe.execute
+    args:
+      recipe: "_templates/new-generator/recipe.yml"
+      variables:
+        name: "api-route"
+        description: "Example API route generator"
+        category: "examples"
+        author: "Hypergen"
+        directory: "<%= directory %>"
+        type: "both"
+        framework: "api"
+        withExamples: true
+        withTests: true
+  - name: create-util-example-generator
+    if: "withExamples"
+    tool: recipe.execute
+    args:
+      recipe: "_templates/new-generator/recipe.yml"
+      variables:
+        name: "util-function"
+        description: "Example utility function generator"
+        category: "examples"
+        author: "Hypergen"
+        directory: "<%= directory %>"
+        type: "both"
+        framework: "generic"
+        withExamples: true
+        withTests: true

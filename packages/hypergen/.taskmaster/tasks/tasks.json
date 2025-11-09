@@ -1,0 +1,67 @@
+{
+	"master": [],
+	"oclif-refactoring": {
+		"tasks": [
+			{
+				"id": 1,
+				"title": "Phase 1: Initial Setup and Proof of Concept",
+				"description": "Install `oclif` as a dependency. Create a single `oclif` command (e.g., `hypergen version`) to verify the setup. Configure `package.json` for `oclif` and the `hypergen` executable.",
+				"details": "",
+				"testStrategy": "",
+				"status": "pending",
+				"dependencies": [],
+				"priority": "medium",
+				"subtasks": []
+			},
+			{
+				"id": 2,
+				"title": "Phase 2: Migrate `new` command to `oclif`",
+				"description": "Migrate the `new` command to the `oclif` structure. Refactor argument and flag parsing for that command. Ensure the core `hypergen` logic is correctly invoked. Test the migrated command thoroughly.",
+				"details": "",
+				"testStrategy": "",
+				"status": "pending",
+				"dependencies": [1],
+				"priority": "medium",
+				"subtasks": []
+			},
+			{
+				"id": 3,
+				"title": "Phase 3: Full Migration of remaining commands",
+				"description": "Migrate all remaining commands to the `oclif` structure. Refactor the entry point (`src/bin.ts`) to use the `oclif` runtime. Remove old CLI handling code from `src/cli`.",
+				"details": "",
+				"testStrategy": "",
+				"status": "pending",
+				"dependencies": [2],
+				"priority": "medium",
+				"subtasks": []
+			},
+			{
+				"id": 4,
+				"title": "Phase 4: Plugin Integration",
+				"description": "Configure `package.json` to make `hypergen` a plugin for `hyper`. Test the integration with a mock `hyper` CLI.",
+				"details": "",
+				"testStrategy": "",
+				"status": "pending",
+				"dependencies": [3],
+				"priority": "medium",
+				"subtasks": []
+			},
+			{
+				"id": 5,
+				"title": "Phase 5: Documentation and Cleanup",
+				"description": "Update `README.md` and other documentation to reflect the new CLI structure and usage. Remove any dead code related to the old CLI implementation.",
+				"details": "",
+				"testStrategy": "",
+				"status": "pending",
+				"dependencies": [4],
+				"priority": "medium",
+				"subtasks": []
+			}
+		],
+		"metadata": {
+			"created": "2025-11-07T20:13:46.720Z",
+			"updated": "2025-11-07T20:25:07.258Z",
+			"description": "Tasks for oclif-refactoring epic"
+		}
+	}
+}

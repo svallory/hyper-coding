@@ -1,0 +1,78 @@
+# Hypergen Workspace
+
+This is a Hypergen workspace containing custom generators and templates.
+
+## Structure
+
+```
+recipes/
+├── hypergen.config.js    # Workspace configuration
+├── component/            # Example component generator
+│   ├── actions.ts
+│   ├── template.yml
+│   └── templates/
+├── api-route/           # Example API route generator
+│   ├── actions.ts
+│   ├── template.yml
+│   └── templates/
+└── util-function/       # Example utility function generator
+    ├── actions.ts
+    ├── template.yml
+    └── templates/
+```
+
+## Usage
+
+### List available generators
+```bash
+hypergen discover
+hypergen list
+```
+
+### Use a generator
+```bash
+hypergen action component --name=Button --type=functional
+hypergen action api-route --name=users --method=GET
+hypergen action util-function --name=formatDate
+```
+
+### Create new generator
+```bash
+hypergen init generator --name=my-generator --framework=react
+```
+
+### Validate templates
+```bash
+hypergen template validate component/template.yml
+hypergen template list
+```
+
+## Configuration
+
+Edit `hypergen.config.js` to customize:
+
+- Template discovery paths
+- Default values for generators
+- Custom helper functions
+- Workspace-wide settings
+
+## Adding New Generators
+
+1. Create a new directory under `recipes/`
+2. Add `actions.ts` and/or `template.yml`
+3. Create template files in `templates/` subdirectory
+4. Test with `hypergen template validate`
+
+## Best Practices
+
+- Use descriptive names for generators
+- Include comprehensive examples
+- Add tests for complex generators
+- Document all parameters
+- Follow consistent file naming conventions
+
+## Resources
+
+- [Hypergen Documentation](https://hypergen.dev)
+- [Template Syntax Guide](https://hypergen.dev/templates)
+- [Action API Reference](https://hypergen.dev/actions)

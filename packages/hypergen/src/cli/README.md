@@ -18,8 +18,20 @@ The CLI module serves as the bridge between user input (from `bin.ts`) and Hyper
 ```
 src/cli/
 ├── index.ts           # Module exports
-├── cli.ts             # Main HypergenCLI class with all command handlers
-└── scaffolding.ts     # Generator scaffolding and workspace initialization
+├── cli.ts             # Main HypergenCLI class that routes to command handlers
+├── scaffolding.ts     # Generator scaffolding and workspace initialization
+├── commands/          # Command handler classes
+│   ├── config.ts      # Configuration management commands
+│   ├── cookbook.ts    # Recipe execution commands
+│   ├── discover.ts    # Generator discovery commands
+│   ├── help.ts        # Help command
+│   ├── info.ts        # Action information commands
+│   ├── init.ts        # Generator/workspace initialization
+│   ├── list.ts        # List actions commands
+│   ├── template.ts    # Template management commands
+│   └── version.ts     # Version information command
+└── utils/             # Shared utilities
+    └── command-parser.ts  # Command-line argument parsing utilities
 ```
 
 ## Key Files and Their Purposes
@@ -33,24 +45,25 @@ Exports the public API of the CLI module:
 - `HypergenCLI` - Main CLI class
 - `HypergenCliConfig` - Configuration interface for the CLI
 
-### `cli.ts` (2,270 lines)
+### `cli.ts` (~190 lines)
 
-**Purpose**: Core CLI implementation with all command handlers
+**Purpose**: Core CLI orchestration and command routing
 
 **Main Class**: `HypergenCLI`
 
 Contains:
 
 - Command routing logic
-- Command-specific implementations
-- Parameter and flag parsing utilities
+- Component initialization (executor, discovery, URL manager, scaffolding)
+- Command handler instantiation
 - Integration with other Hypergen systems
 
 **Key Methods**:
 
 - `initialize()` - Initialize CLI with configuration and recipe engine.
-- `execute(argv)` - Routes commands to dedicated command handler classes (e.g., `ActionCommand`, `ConfigCommand`, etc.) for processing.
-- Private utilities: `parseFlags()`, `parseParameters()` - Parse CLI arguments.
+- `execute(argv)` - Routes commands to dedicated command handler classes (e.g., `CookbookCommand`, `ConfigCommand`, `InitCommand`, etc.) for processing.
+
+**Architecture Note**: This file follows a modular design where each command has its own dedicated class in the `commands/` directory. The `HypergenCLI` class acts as a lightweight orchestrator that initializes shared components and routes incoming commands to the appropriate handlers.
 
 ### `scaffolding.ts` (1,019 lines)
 
@@ -199,38 +212,24 @@ Provides:
 
 ### Integration Architecture
 
+The CLI now leverages a modular architecture, with each top-level command handled by its own dedicated class.
+
 ```
 HypergenCLI
-├── ActionExecutor      (actions/index.js)       - Execute registered actions
-├── GeneratorDiscovery  (discovery/index.js)     - Find generators
-├── TemplateURLManager  (config/url-resolution/) - Resolve template URLs
-├── TemplateParser      (config/template-parser) - Parse template files
-├── RecipeEngine        (recipe-engine/)         - Execute recipes (V8)
-├── HypergenConfigLoader (config/hypergen-config) - Load configuration
-├── ErrorHandler        (errors/hypergen-errors) - Handle errors
-├── GeneratorScaffolding (scaffolding.ts)        - Scaffold generators
-└── Logger              (logger.ts)              - Log messages
+├── commands/
+│   ├── config.ts
+│   ├── cookbook.ts
+│   ├── discover.ts
+│   ├── help.ts
+│   ├── info.ts
+│   ├── init.ts
+│   ├── list.ts
+│   ├── template.ts
+│   └── version.ts
+└── ... (other core modules)
 ```
 
-### Dual System Support
 
-The CLI supports **two execution systems**:
-
-1. **V7 Action System** - Direct action execution via `ActionExecutor`
-   - Uses registered action decorators
-   - Synchronous parameter resolution
-   - Direct file operations
-
-2. **V8 Recipe System** - Orchestrated recipe execution
-   - YAML-based recipe definitions
-   - Multi-step workflows with dependencies
-   - Advanced features: conditions, error handling, progress tracking
-
-The CLI intelligently routes between them:
-
-- If `.yml`/`.yaml` file is provided → use Recipe System
-- If action name is provided → use Action System
-- Auto-discovery attempts both
 
 ## How the Code Works
 
@@ -245,77 +244,20 @@ HypergenCLI.initialize()
   ↓
 HypergenCLI.execute(argv)
   - Parse command name
-  - Route to handler
+  - Route to command handler
   ↓
-Handler Method (e.g., executeAction)
+Command Handler (e.g., CookbookCommand.execute())
   - Parse parameters/flags
-  - Execute action or recipe
+  - Execute command logic
   - Return result
   ↓
 Return result to bin.ts
   - Exit with code (0 = success, 1 = failure)
 ```
 
-### Command Execution: Action Example
 
-```typescript
-// User: hypergen action my-component --name=Button --dryRun
 
-executeAction(['my-component', '--name=Button', '--dryRun'])
-  ↓
-1. Parse flags: { 'dryRun': true }
-2. Parse parameters: { 'name': 'Button' }
-3. Check if action exists (auto-discover if needed)
-4. Execute via ActionExecutor.executeInteractively()
-5. Format result message with file changes
-6. Return { success: true, message: "..." }
-```
 
-### Recipe Execution Flow
-
-```typescript
-// User: hypergen recipe execute my-recipe.yml --name=Button
-
-executeRecipe(['my-recipe.yml', '--name=Button'])
-  ↓
-1. Parse parameters: { 'name': 'Button' }
-2. Load recipe via RecipeEngine.loadRecipe()
-3. Execute recipe with options:
-   - variables: parsed parameters
-   - dryRun: flag status
-   - workingDir: project directory
-4. Recipe engine:
-   - Loads recipe YAML
-   - Validates configuration
-   - Executes steps in order
-   - Handles dependencies
-   - Manages error handling
-5. Collect results:
-   - Success/failure status
-   - Files created/modified/deleted
-   - Execution duration
-   - Step summaries
-6. Format detailed message
-7. Return { success: true, message: "..." }
-```
-
-### Parameter Parsing
-
-The CLI implements flexible parameter parsing:
-
-```typescript
-// Supported formats:
---name=Button              // key=value
---name Button              // key value (space-separated)
---dryRun                   // boolean flag
---tags=["tag1","tag2"]     // JSON parsing for complex values
-
-parseParameters(args)
-  - Filter out known flags
-  - Parse --key=value or --key value formats
-  - Attempt JSON parsing for complex values
-  - Fall back to string values
-```
 
 ### Scaffolding System
 
@@ -481,7 +423,11 @@ Results include structured messages with:
 1.  **Create a new command class** in `src/cli/commands/` (e.g., `MyNewCommand.ts`):
     ```typescript
     // src/cli/commands/MyNewCommand.ts
+    import type { RunnerConfig } from '../../types.js';
+
     export class MyNewCommand {
+      constructor(private config: RunnerConfig) {}
+
       async execute(args: string[]): Promise<{ success: boolean; message?: string }> {
         // Implementation for your new command
       }
@@ -496,9 +442,9 @@ Results include structured messages with:
     export class HypergenCLI {
       private myNewCommand: MyNewCommand;
 
-      constructor(...) {
+      constructor(private config: HypergenCliConfig) {
         // ... other initializations
-        this.myNewCommand = new MyNewCommand();
+        this.myNewCommand = new MyNewCommand(this.config);
       }
 
       async execute(argv: string[]): Promise<{ success: boolean; message?: string }> {
@@ -512,17 +458,9 @@ Results include structured messages with:
     }
     ```
 
-3.  **Update help text** in `SystemCommand.showSystemHelp()` method (located in `src/cli/commands/system.ts`).
+3.  **Update help text** in `src/cli/commands/help.ts`.
 
 4.  **Add error handling** using `ErrorHandler.createError()` within your new command class.
-
-### Adding a New Scaffolding Framework
-
-1. Add framework name to `ScaffoldingOptions.framework` type
-2. Implement framework parameters in `getFrameworkParameters()`
-3. Create template generators: `get<Framework>ComponentTemplate()`, etc.
-4. Update `generateExampleTemplates()` switch statement
-5. Add to `getFrameworkFileList()` for file listing
 
 ### Testing Commands Locally
 
@@ -531,11 +469,10 @@ Results include structured messages with:
 bun run hygen [command] [args...]
 
 # Examples:
-bun run hygen action my-component --name=Button
 bun run hygen discover
 bun run hygen list
 bun run hygen init generator --name=test --framework=react
-bun run hygen recipe validate my-recipe.yml
+bun run hygen cookbook my-recipe.yml
 ```
 
 ### Debugging
@@ -563,26 +500,13 @@ Check logs in the result messages and console output.
 ### List all available commands
 
 ```bash
-hypergen system help
-```
-
-### Execute an action with parameters
-
-```bash
-hypergen action component-generator --name=Button --type=functional
+hypergen help
 ```
 
 ### Run a recipe
 
 ```bash
-hypergen recipe execute my-recipe.yml --var1=value1 --var2=value2
-```
-
-### Validate before execution
-
-```bash
-hypergen recipe validate my-recipe.yml
-hypergen template validate path/to/template.yml
+hypergen cookbook my-recipe.yml --var1=value1 --var2=value2
 ```
 
 ### Create a new generator
@@ -608,8 +532,7 @@ hypergen config info
 
 The CLI module is a comprehensive command-line interface that:
 
-- Routes user commands to appropriate handlers
-- Supports both V7 actions and V8 recipes
+- Routes user commands to appropriate handlers via dedicated command classes
 - Provides rich discovery, validation, and execution capabilities
 - Includes scaffolding for rapid generator development
 - Integrates all major Hypergen subsystems
@@ -618,10 +541,4 @@ The CLI module is a comprehensive command-line interface that:
 
 It's designed to be extensible, maintainable, and user-friendly while supporting both simple one-off actions and complex multi-step recipes.
 
-## TODO
 
-
-- [ ] **Scaffolding (`scaffolding.ts`)**:
-  - Implement `getFrameworkImports` function for all frameworks.
-  - Implement `getFrameworkImplementation` function for all frameworks.
-  - Implement `getFrameworkHelperFunctions` function for all frameworks.

@@ -1,0 +1,20 @@
+---
+to: src/<%= name %>.ts
+---
+export interface <%= name %>Options {
+  // Define options here
+}
+
+export class <%= name %> {
+  private options: <%= name %>Options;
+
+  constructor(options: <%= name %>Options = {}) {
+    this.options = options;
+  }
+
+  // TODO: Implement <%= name %> methods
+}
+
+export function create<%= name %>(options?: <%= name %>Options): <%= name %> {
+  return new <%= name %>(options);
+}

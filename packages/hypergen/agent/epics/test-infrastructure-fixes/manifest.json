@@ -1,0 +1,85 @@
+{
+	"epic": {
+		"name": "test-infrastructure-fixes",
+		"originalWorkingName": "test-infrastructure-fixes",
+		"status": "ready-for-tasks",
+		"createdAt": "2025-11-05T15:40:00Z",
+		"finalizedAt": "2025-11-05T15:45:00Z",
+		"planningSummary": {
+			"problemStatement": "23 failing recipe engine integration tests prevent confident development",
+			"solutionApproach": "Create test tool fixtures, extend validation for computed variables, fix error structures",
+			"keyDecisions": [
+				"Use real minimal tools instead of complex mocks",
+				"Phased implementation: fixtures first, validation second, edge cases third",
+				"Maintain backward compatibility in validation schema"
+			],
+			"risksMitigated": [
+				"Test fixtures may diverge from real tools - mitigated by documentation and review",
+				"Validation changes could break production - mitigated by backward compatibility",
+				"Performance regression - mitigated by benchmarks and timeouts"
+			]
+		}
+	},
+	"artifacts": [
+		{
+			"id": "original-spec",
+			"path": "original-spec.md",
+			"type": "specification",
+			"description": "Original user request and test failure context",
+			"essential": true,
+			"createdAt": "2025-11-05T15:45:00Z"
+		},
+		{
+			"id": "project-assessment",
+			"path": "project-assessment.md",
+			"type": "analysis",
+			"description": "Current project state, architecture, and technical assessment",
+			"essential": true,
+			"createdAt": "2025-11-05T15:40:00Z"
+		},
+		{
+			"id": "validation-analysis",
+			"path": "validation-analysis.md",
+			"type": "analysis",
+			"description": "Critical analysis, alternatives, and recommendation",
+			"essential": true,
+			"createdAt": "2025-11-05T15:42:00Z"
+		},
+		{
+			"id": "requirements-session",
+			"path": "requirements-session.md",
+			"type": "requirements",
+			"description": "Systematic requirements gathering with Q&A",
+			"essential": true,
+			"createdAt": "2025-11-05T15:43:00Z"
+		},
+		{
+			"id": "prd",
+			"path": "prd.md",
+			"type": "requirements",
+			"description": "Final Product Requirements Document optimized for task generation",
+			"essential": true,
+			"readyForTaskGeneration": true,
+			"createdAt": "2025-11-05T15:44:00Z"
+		}
+	],
+	"validation": {
+		"criticalConcerns": "none",
+		"alternativesConsidered": [
+			"Skip recipe engine tests if not production-critical",
+			"Use real tools in tests instead of mocks",
+			"Phased implementation by priority",
+			"Re-evaluate recipe engine architecture"
+		],
+		"userConfirmation": "implicit-approval",
+		"risksAccepted": [
+			"Test fixtures require maintenance as APIs evolve",
+			"Mock behavior may not perfectly match production"
+		]
+	},
+	"nextSteps": {
+		"command": "/epic:plan-to-tasks",
+		"arguments": "test-infrastructure-fixes agent/epics/test-infrastructure-fixes/prd.md",
+		"expectedOutcome": "18-25 tasks generated across 4 phases: infrastructure, tools, validation, testing"
+	}
+}

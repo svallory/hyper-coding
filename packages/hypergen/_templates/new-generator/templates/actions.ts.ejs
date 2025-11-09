@@ -1,0 +1,117 @@
+/**
+ * <%= h.inflection.pascalCase(name) %> Generator Actions
+ * 
+ * <%= description || `Generator for ${name}` %>
+ */
+
+import { action } from '../../src/actions/index.js'
+import type { ActionContext, ActionResult } from '../../src/actions/index.js'
+import path from 'path'
+<% if (framework === 'react' || framework === 'vue') { %>
+<% } else if (framework === 'api') { %>
+<% } else if (framework === 'cli') { %>
+<% } else if (framework === 'node') { %>
+<% } else { %>
+<% } %>
+
+@action({
+  name: '<%= name %>',
+  description: '<%= description || `Generate ${name} files` %>',
+  category: '<%= category || 'custom' %>',
+  tags: ['<%= category || 'custom' %>', '<%= framework %>'],
+  parameters: [
+    {
+      name: 'name',
+      type: 'string',
+      required: true,
+      description: '<%= h.inflection.pascalCase(name) %> name',
+      pattern: '^[a-zA-Z][a-zA-Z0-9-_]*$'
+    },
+<% 
+const parameters = {
+  react: [
+    { name: 'type', type: 'enum', values: ['functional', 'class'], default: 'functional', description: 'Component type' },
+    { name: 'withProps', type: 'boolean', default: true, description: 'Include props interface' },
+    { name: 'withStorybook', type: 'boolean', default: false, description: 'Generate Storybook stories' },
+    { name: 'styling', type: 'enum', values: ['css', 'scss', 'styled-components'], default: 'css', description: 'Styling approach' }
+  ],
+  vue: [
+    { name: 'type', type: 'enum', values: ['sfc', 'composition', 'options'], default: 'composition', description: 'Component type' },
+    { name: 'withProps', type: 'boolean', default: true, description: 'Include props definition' },
+    { name: 'withEmits', type: 'boolean', default: false, description: 'Include emits definition' }
+  ],
+  api: [
+    { name: 'method', type: 'enum', values: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], default: 'GET', description: 'HTTP method' },
+    { name: 'withAuth', type: 'boolean', default: true, description: 'Include authentication' },
+    { name: 'withValidation', type: 'boolean', default: true, description: 'Include validation' }
+  ],
+  cli: [
+    { name: 'hasOptions', type: 'boolean', default: true, description: 'Include command options' },
+    { name: 'hasSubcommands', type: 'boolean', default: false, description: 'Include subcommands' }
+  ],
+  node: [
+    { name: 'type', type: 'enum', values: ['class', 'function', 'module'], default: 'function', description: 'Module type' },
+    { name: 'withAsync', type: 'boolean', default: false, description: 'Use async/await' }
+  ],
+  generic: [
+    { name: 'type', type: 'enum', values: ['typescript', 'javascript'], default: 'typescript', description: 'File type' },
+    { name: 'withExports', type: 'boolean', default: true, description: 'Include exports' }
+  ]
+}[framework];
+-%>
+<%- parameters.map(p => `    {
+      name: '${p.name}',
+      type: '${p.type}',
+      ${p.required ? 'required: true,' : ''}
+      ${p.default !== undefined ? `default: ${JSON.stringify(p.default)},` : ''}
+      description: '${p.description}'${p.values ? `,
+      values: ${JSON.stringify(p.values)}` : ''}
+    }`).join(',
+') %>
+  ],
+  examples: [
+    {
+      title: 'Basic <%= name %>',
+      description: 'Create a basic <%= name %>',
+      parameters: {
+        name: 'example-<%= name %>',
+<%- parameters.filter(p => p.default !== undefined).map(p => `        ${p.name}: ${JSON.stringify(p.default)}`).join(',\n') %>
+      }
+    }
+  ]
+})
+export async function <%= h.inflection.camelCase(name) %>(context: ActionContext): Promise<ActionResult> {
+  const { variables, utils, logger } = context
+  const { name<%- parameters.length > 0 ? ', ' + parameters.map(p => p.name).join(', ') : '' %> } = variables
+  
+  logger.info(`Creating <%= name %>: ${name}`)
+  
+  const filesCreated: string[] = []
+  
+  try {
+    // Ensure output directory exists
+    const outputDir = path.join(process.cwd(), 'src', '<%= name %>s')
+    await utils.ensureDir(outputDir)
+    
+    // Generate main file
+    const mainFile = path.join(outputDir, `${name}.ts`)
+    const mainContent = `// Generated file for ${name}`
+    await utils.writeFile(mainFile, mainContent)
+    filesCreated.push(mainFile)
+    
+    logger.success(`Created <%= name %> ${name} with ${filesCreated.length} files`)
+    
+    return {
+      success: true,
+      message: `Successfully created <%= name %>: ${name}`,
+      filesCreated
+    }
+    
+  } catch (error: any) {
+    logger.error(`Failed to create <%= name %>: ${error.message}`)
+    return {
+      success: false,
+      message: `Failed to create <%= name %>: ${error.message}`
+    }
+  }
+}

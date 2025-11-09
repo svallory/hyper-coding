@@ -1,0 +1,45 @@
+{
+	"epic_name": "oclif-refactoring",
+	"current_step": 10,
+	"completed_steps": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+	"workflow_config": {
+		"no_stop": 0,
+		"max_subagents": 9,
+		"use_research": true
+	},
+	"tag_name": "oclif-refactoring",
+	"artifacts": {
+		"prd": "prd.md",
+		"tasks_file": ".taskmaster/tasks/tasks.json",
+		"complexity_report": null
+	},
+	"agents": {
+		"required": [
+			"oclif-expert",
+			"typescript-expert",
+			"cli-design-expert",
+			"testing-expert"
+		],
+		"created": [
+			"oclif-expert",
+			"typescript-expert",
+			"cli-design-expert",
+			"testing-expert"
+		],
+		"available": [
+			"oclif-expert",
+			"typescript-expert",
+			"cli-design-expert",
+			"testing-expert"
+		]
+	},
+	"execution": {
+		"tasks_in_progress": [],
+		"tasks_completed": [],
+		"parallel_agents_active": 0,
+		"last_task_completion": null
+	},
+	"timestamp": "2025-11-07T12:01:00+00:00",
+	"last_updated": "2025-11-07T12:12:00+00:00",
+	"status": "completed"
+}

@@ -1,0 +1,16 @@
+---
+to: src/<%= name %>.test.ts
+---
+import <%= name %> from './<%= name %>';
+
+describe('<%= name %>', () => {
+  it('should be defined', () => {
+    expect(<%= name %>).toBeDefined();
+  });
+
+  it('should run without errors', () => {
+    expect(() => {
+      <%= name %>({});
+    }).not.toThrow();
+  });
+});

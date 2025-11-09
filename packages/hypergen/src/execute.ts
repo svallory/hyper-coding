@@ -1,34 +1,34 @@
-import createDebug from 'debug'
-import resolve from './ops/index.js'
-import type { ActionResult, RenderedAction, RunnerConfig } from './types.js'
-const debug = createDebug('hypergen:execute')
+import createDebug from 'debug';
+import resolve from './ops/index.js';
+import type { ActionResult, RenderedAction, RunnerConfig } from './types.js';
+const debug = createDebug('hypergen:execute');
 
 const execute = async (
-  renderedActions: RenderedAction[],
-  args: any,
-  config: RunnerConfig,
+	renderedActions: RenderedAction[],
+	args: any,
+	config: RunnerConfig,
 ): Promise<ActionResult[]> => {
-  const { logger } = config
-  const messages = []
-  const results = []
-  for (const action of renderedActions) {
-    const { message } = action.attributes
-    if (message) {
-      messages.push(message)
-    }
-    const ops = await resolve(action.attributes)
-    debug('executing %o ops', ops.length)
-    for (const op of ops) {
-      debug('executing: %o', op)
-      results.push(await op(action, args, config))
-    }
-    debug('executing ops: done')
-  }
-  if (messages.length > 0) {
-    logger.colorful(`${args.action}:\n${messages.join('\n')}`)
-  }
+	const { logger } = config;
+	const messages = [];
+	const results = [];
+	for (const action of renderedActions) {
+		const { message } = action.attributes;
+		if (message) {
+			messages.push(message);
+		}
+		const ops = await resolve(action.attributes);
+		debug('executing %o ops', ops.length);
+		for (const op of ops) {
+			debug('executing: %o', op);
+			results.push(await op(action, args, config));
+		}
+		debug('executing ops: done');
+	}
+	if (messages.length > 0) {
+		logger.colorful(`${args.action}:\n${messages.join('\n')}`);
+	}
 
-  return results
-}
+	return results;
+};
 
-export default execute
+export default execute;

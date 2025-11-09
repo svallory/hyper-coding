@@ -1,0 +1,105 @@
+name: new-generator
+description: Scaffolds a new Hypergen generator
+author: Hypergen
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    required: true
+    description: Name of the generator
+    pattern: "^[a-zA-Z][a-zA-Z0-9-_]*$"
+  description:
+    type: string
+    description: Description of the generator
+  category:
+    type: string
+    default: custom
+    description: Category of the generator
+  author:
+    type: string
+    default: Unknown
+    description: Author of the generator
+  directory:
+    type: string
+    default: recipes
+    description: Directory to create the generator in
+  type:
+    type: enum
+    values: ['action', 'template', 'both']
+    default: both
+    description: Type of generator to create
+  framework:
+    type: enum
+    values: ['react', 'vue', 'node', 'cli', 'api', 'generic']
+    default: generic
+    description: Framework for the generator
+  withExamples:
+    type: boolean
+    default: true
+    description: Include example template files
+  withTests:
+    type: boolean
+    default: true
+    description: Include test files
+
+steps:
+  - name: create-generator-directory
+    tool: fs.ensureDir
+    args:
+      path: "<%= directory %>/<%= name %>"
+
+  - name: generate-actions-file
+    if: "type === 'action' || type === 'both'"
+    tool: template.render
+    args:
+      template: "_templates/new-generator/templates/actions.ts.ejs"
+      outputPath: "<%= directory %>/<%= name %>/actions.ts"
+      variables:
+        name: "<%= name %>"
+        description: "<%= description %>"
+        category: "<%= category %>"
+        framework: "<%= framework %>"
+        author: "<%= author %>"
+
+  - name: generate-template-file
+    if: "type === 'template' || type === 'both'"
+    tool: template.render
+    args:
+      template: "_templates/new-generator/templates/template.yml.ejs"
+      outputPath: "<%= directory %>/<%= name %>/template.yml"
+      variables:
+        name: "<%= name %>"
+        description: "<%= description %>"
+        category: "<%= category %>"
+        framework: "<%= framework %>"
+        author: "<%= author %>"
+
+  - name: generate-example-templates
+    if: "withExamples"
+    tool: fs.copy
+    args:
+      from: "_templates/new-generator/templates/<%= framework %>"
+      to: "<%= directory %>/<%= name %>/templates"
+
+  - name: generate-test-file
+    if: "withTests"
+    tool: template.render
+    args:
+      template: "_templates/new-generator/templates/test.ts.ejs"
+      outputPath: "<%= directory %>/<%= name %>/<%= name %>.test.ts"
+      variables:
+        name: "<%= name %>"
+        framework: "<%= framework %>"
+
+  - name: generate-readme-file
+    tool: template.render
+    args:
+      template: "_templates/new-generator/templates/README.md.ejs"
+      outputPath: "<%= directory %>/<%= name %>/README.md"
+      variables:
+        name: "<%= name %>"
+        description: "<%= description %>"
+        category: "<%= category %>"
+        framework: "<%= framework %>"
+        author: "<%= author %>"

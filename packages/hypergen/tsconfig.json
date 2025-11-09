@@ -1,33 +1,33 @@
 {
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["esnext"],
-    "strict": false,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "importHelpers": true,
-    "pretty": true,
-    "sourceMap": true,
-    "declaration": true,
-    "outDir": "./dist",
-    "types": ["bun-types"],
-    "resolveJsonModule": true,
-    "rootDir": "src",
-    "skipLibCheck": true,
-    "paths": {
-      "~/*": ["./src/*"]
-    }
-  },
-  "include": ["src/**/*.ts", "src/**/*.json", ".hypergen.js"],
-  "exclude": [
-    "node_modules",
-    "hygen.io",
-    "**/*.test.ts",
-    "**/*.test.js",
-    "**/*.spec.ts",
-    "**/*.spec.js",
-    "tests/**/*"
-  ]
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"lib": ["esnext"],
+		"strict": false,
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"importHelpers": true,
+		"pretty": true,
+		"sourceMap": true,
+		"declaration": true,
+		"outDir": "./dist",
+		"types": ["bun-types"],
+		"resolveJsonModule": true,
+		"rootDir": "src",
+		"skipLibCheck": true,
+		"paths": {
+			"~/*": ["./src/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "src/**/*.json", ".hypergen.js"],
+	"exclude": [
+		"node_modules",
+		"hygen.io",
+		"**/*.test.ts",
+		"**/*.test.js",
+		"**/*.spec.ts",
+		"**/*.spec.js",
+		"tests/**/*"
+	]
 }

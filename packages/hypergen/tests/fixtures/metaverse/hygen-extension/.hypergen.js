@@ -1,5 +1,5 @@
 module.exports = {
-  helpers: {
-    extended: s => s.toUpperCase()
-  }
-}
+	helpers: {
+		extended: (s) => s.toUpperCase(),
+	},
+};

@@ -1,0 +1,1 @@
+The user wants to refactor the hypergen CLI (mostly in @src/cli/** ) using the oclif CLI framework. We want the hypergen package to provide a `hypergen` command and, at same time, to be a plugin for the `hyper` CLI (where it will become the `gen` subcommand) as explained in https://hyper-coding.saulo.engineer

@@ -1,0 +1,17 @@
+---
+to: src/<%= name %>.test.ts
+---
+import { <%= name %>, create<%= name %> } from './<%= name %>';
+
+describe('<%= name %>', () => {
+  it('should create instance', () => {
+    const instance = create<%= name %>();
+    expect(instance).toBeInstanceOf(<%= name %>);
+  });
+
+  it('should accept options', () => {
+    const options = {};
+    const instance = create<%= name %>(options);
+    expect(instance).toBeInstanceOf(<%= name %>);
+  });
+});

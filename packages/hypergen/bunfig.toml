@@ -2,7 +2,7 @@
 
 [test]
 # Test file patterns
-preload = []
+# preload = []
 
 # Coverage configuration
 coverage = true

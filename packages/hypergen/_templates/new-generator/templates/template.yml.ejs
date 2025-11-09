@@ -1,0 +1,58 @@
+name: <%= name %>
+description: <%= description || `Generate ${name} files` %>
+version: 1.0.0
+author: <%= author || 'Unknown' %>
+category: <%= category || 'custom' %>
+tags: [<%= category || 'custom' %>, <%= framework %>]
+
+variables:
+  name:
+    type: string
+    required: true
+    description: <%= name %> name
+    pattern: "^[a-zA-Z][a-zA-Z0-9-_]*$"
+<% 
+const parameters = {
+  react: [
+    { name: 'type', type: 'enum', values: ['functional', 'class'], default: 'functional', description: 'Component type' },
+    { name: 'withProps', type: 'boolean', default: true, description: 'Include props interface' },
+    { name: 'withStorybook', type: 'boolean', default: false, description: 'Generate Storybook stories' },
+    { name: 'styling', type: 'enum', values: ['css', 'scss', 'styled-components'], default: 'css', description: 'Styling approach' }
+  ],
+  vue: [
+    { name: 'type', type: 'enum', values: ['sfc', 'composition', 'options'], default: 'composition', description: 'Component type' },
+    { name: 'withProps', type: 'boolean', default: true, description: 'Include props definition' },
+    { name: 'withEmits', type: 'boolean', default: false, description: 'Include emits definition' }
+  ],
+  api: [
+    { name: 'method', type: 'enum', values: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], default: 'GET', description: 'HTTP method' },
+    { name: 'withAuth', type: 'boolean', default: true, description: 'Include authentication' },
+    { name: 'withValidation', type: 'boolean', default: true, description: 'Include validation' }
+  ],
+  cli: [
+    { name: 'hasOptions', type: 'boolean', default: true, description: 'Include command options' },
+    { name: 'hasSubcommands', type: 'boolean', default: false, description: 'Include subcommands' }
+  ],
+  node: [
+    { name: 'type', type: 'enum', values: ['class', 'function', 'module'], default: 'function', description: 'Module type' },
+    { name: 'withAsync', type: 'boolean', default: false, description: 'Use async/await' }
+  ],
+  generic: [
+    { name: 'type', type: 'enum', values: ['typescript', 'javascript'], default: 'typescript', description: 'File type' },
+    { name: 'withExports', type: 'boolean', default: true, description: 'Include exports' }
+  ]
+}[framework];
+-%>
+<%- parameters.map(p => `    
+  ${p.name}:
+    type: ${p.type}
+    ${p.required ? 'required: true' : ''}
+    ${p.default !== undefined ? `default: ${JSON.stringify(p.default)}` : ''}
+    description: ${p.description}${p.values ? `\n    values: ${JSON.stringify(p.values)}` : ''}`).join('\n') %>
+
+examples:
+  - title: "Basic <%= name %>"
+    description: "Create a basic <%= name %>"
+    variables:
+      name: "example-<%= name %>"
+<%- parameters.filter(p => p.default !== undefined).map(p => `      ${p.name}: ${JSON.stringify(p.default)}`).join('\n') %>

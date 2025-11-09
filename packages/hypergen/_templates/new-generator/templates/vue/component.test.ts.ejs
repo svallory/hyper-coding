@@ -1,0 +1,21 @@
+---
+to: src/components/<%= name %>.test.ts
+---
+import { mount } from '@vue/test-utils';
+import <%= name %> from './<%= name %>.vue';
+
+describe('<%= name %>', () => {
+  it('renders properly', () => {
+    const wrapper = mount(<%= name %>);
+    expect(wrapper.text()).toContain('<%= name %> Component');
+  });
+
+  it('renders slot content', () => {
+    const wrapper = mount(<%= name %>, {
+      slots: {
+        default: 'Custom content'
+      }
+    });
+    expect(wrapper.text()).toContain('Custom content');
+  });
+});

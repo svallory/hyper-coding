@@ -1,40 +1,54 @@
 /**
  * Recipe Step System Integration Tests
- * 
+ *
  * Comprehensive integration tests for the complete Recipe Step System implementation
  * including RecipeEngine, all tools, parser updates, and CLI integration.
- * 
+ *
  * These tests validate that all components work together correctly in real-world scenarios.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import fs from 'fs-extra'
-import path from 'node:path'
-import os from 'node:os'
-import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
-import { withTempFixtures, fixture } from './util/fixtures.js'
-import { RecipeEngine, createRecipeEngine } from '../src/recipe-engine/recipe-engine.js'
-import { ToolRegistry, getToolRegistry, initializeToolsFramework } from '../src/recipe-engine/tools/index.js'
-import type { RecipeSource, RecipeConfig, StepResult, RecipeExecutionOptions } from '../src/recipe-engine/types.js'
+import { exec } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import fs from 'fs-extra';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+	type RecipeEngine,
+	createRecipeEngine,
+} from '../src/recipe-engine/recipe-engine.js';
+import {
+	ToolRegistry,
+	getToolRegistry,
+	initializeToolsFramework,
+} from '../src/recipe-engine/tools/index.js';
+import type {
+	RecipeConfig,
+	RecipeExecutionOptions,
+	RecipeSource,
+	StepResult,
+} from '../src/recipe-engine/types.js';
+import { fixture, withTempFixtures } from './util/fixtures.js';
 
-const execAsync = promisify(exec)
+const execAsync = promisify(exec);
 
 describe('Recipe Step System Integration', () => {
-  let tempDir: string
-  let cleanup: () => void
-  let engine: RecipeEngine
-  const hypergenBin = path.join(__dirname, '..', 'src', 'bin.ts')
+	let tempDir: string;
+	let cleanup: () => void;
+	let engine: RecipeEngine;
+	const hypergenBin = path.join(__dirname, '..', 'src', 'bin.ts');
 
-  beforeEach(async () => {
-    // Create temporary test environment
-    const tempFixtures = await withTempFixtures(async (dir) => {
-      // Create test template structure
-      const templatesDir = path.join(dir, '_templates', 'test-component')
-      await fs.ensureDir(templatesDir)
-      
-      // Create template.yml
-      await fs.writeFile(path.join(templatesDir, 'template.yml'), `
+	beforeEach(async () => {
+		// Create temporary test environment
+		const tempFixtures = await withTempFixtures(async (dir) => {
+			// Create test template structure
+			const templatesDir = path.join(dir, '_templates', 'test-component');
+			await fs.ensureDir(templatesDir);
+
+			// Create template.yml
+			await fs.writeFile(
+				path.join(templatesDir, 'template.yml'),
+				`
 name: test-component
 description: Test component generator
 version: 1.0.0
@@ -57,10 +71,13 @@ examples:
   - name: Basic component
     description: Create a basic component
     command: hypergen action test-component --name Button --type functional
-`)
-      
-      // Create template files
-      await fs.writeFile(path.join(templatesDir, 'component.ejs.t'), `---
+`,
+			);
+
+			// Create template files
+			await fs.writeFile(
+				path.join(templatesDir, 'component.ejs.t'),
+				`---
 to: src/components/<%= name %>.ts
 ---
 /**
@@ -77,10 +94,14 @@ export const <%= name %><% if (type === 'functional') { %> = ({ children }: <%= 
     return <div className="<%= name.toLowerCase() %>">{this.props.children}</div>;
   }
 }<% } %>
-`)
+`,
+			);
 
-      if (true) { // Always create test file for consistency
-        await fs.writeFile(path.join(templatesDir, 'test.ejs.t'), `---
+			if (true) {
+				// Always create test file for consistency
+				await fs.writeFile(
+					path.join(templatesDir, 'test.ejs.t'),
+					`---
 to: src/components/<%= name %>.test.ts
 skip_if: <%= !withTests %>
 ---
@@ -93,11 +114,14 @@ describe('<%= name %>', () => {
     expect(baseElement).toBeTruthy();
   });
 });
-`)
-      }
+`,
+				);
+			}
 
-      // Create actions.ts for V8 integration
-      await fs.writeFile(path.join(templatesDir, 'actions.ts'), `
+			// Create actions.ts for V8 integration
+			await fs.writeFile(
+				path.join(templatesDir, 'actions.ts'),
+				`
 import type { ActionContext, ActionResult } from '@hypergen/core';
 
 export interface TestComponentActionParams {
@@ -142,14 +166,17 @@ export async function testComponent(
     };
   }
 }
-`)
+`,
+			);
 
-      // Create sample recipe files
-      const recipesDir = path.join(dir, 'recipes')
-      await fs.ensureDir(recipesDir)
-      
-      // Simple recipe
-      await fs.writeFile(path.join(recipesDir, 'simple-component.yml'), `
+			// Create sample recipe files
+			const recipesDir = path.join(dir, 'recipes');
+			await fs.ensureDir(recipesDir);
+
+			// Simple recipe
+			await fs.writeFile(
+				path.join(recipesDir, 'simple-component.yml'),
+				`
 name: Simple Component Recipe
 description: Create a basic React component
 version: 1.0.0
@@ -171,10 +198,13 @@ steps:
       name: "{{ componentName }}"
       type: functional
       withTests: "{{ includeTests }}"
-`)
+`,
+			);
 
-      // Multi-step recipe with dependencies
-      await fs.writeFile(path.join(recipesDir, 'full-component-setup.yml'), `
+			// Multi-step recipe with dependencies
+			await fs.writeFile(
+				path.join(recipesDir, 'full-component-setup.yml'),
+				`
 name: Full Component Setup
 description: Create component with all supporting files
 version: 1.0.0
@@ -227,10 +257,13 @@ steps:
       name: "{{ componentName }}"
       type: "{{ componentType }}"
     continueOnError: true
-`)
+`,
+			);
 
-      // Recipe composition example
-      await fs.writeFile(path.join(recipesDir, 'component-library.yml'), `
+			// Recipe composition example
+			await fs.writeFile(
+				path.join(recipesDir, 'component-library.yml'),
+				`
 name: Component Library Setup
 description: Set up a complete component library
 version: 1.0.0
@@ -257,10 +290,13 @@ steps:
       componentType: functional
       withStorybook: true
       withDocs: true
-`)
+`,
+			);
 
-      // Error handling recipe
-      await fs.writeFile(path.join(recipesDir, 'error-handling-test.yml'), `
+			// Error handling recipe
+			await fs.writeFile(
+				path.join(recipesDir, 'error-handling-test.yml'),
+				`
 name: Error Handling Test
 description: Recipe to test error handling scenarios
 version: 1.0.0
@@ -296,113 +332,126 @@ steps:
       name: RecoveryComponent
       type: functional
       withTests: false
-`)
-    })
-    
-    tempDir = tempFixtures.path
-    cleanup = tempFixtures.cleanup
-    
-    // Initialize recipe engine with test configuration
-    engine = createRecipeEngine({
-      enableDebugLogging: false,
-      cache: { enabled: false },
-      security: { 
-        allowExternalSources: false,
-        allowShellCommands: false 
-      },
-      templatesPath: path.join(tempDir, '_templates'),
-      recipesPath: path.join(tempDir, 'recipes')
-    })
-    
-    // Initialize tools framework
-    initializeToolsFramework()
-  })
+`,
+			);
+		});
 
-  afterEach(async () => {
-    if (engine) {
-      await engine.cleanup()
-    }
-    if (cleanup) {
-      cleanup()
-    }
-    // Reset tool registry for clean state
-    ToolRegistry.reset()
-  })
+		tempDir = tempFixtures.path;
+		cleanup = tempFixtures.cleanup;
 
-  describe('End-to-End Recipe Execution', () => {
-    it('should execute simple recipe with template tool', async () => {
-      const recipeSource: RecipeSource = {
-        type: 'file',
-        path: path.join(tempDir, 'recipes', 'simple-component.yml')
-      }
+		// Initialize recipe engine with test configuration
+		engine = createRecipeEngine({
+			enableDebugLogging: false,
+			cache: { enabled: false },
+			security: {
+				allowExternalSources: false,
+				allowShellCommands: false,
+			},
+			templatesPath: path.join(tempDir, '_templates'),
+			recipesPath: path.join(tempDir, 'recipes'),
+		});
 
-      const options: RecipeExecutionOptions = {
-        variables: {
-          componentName: 'TestButton',
-          includeTests: true
-        },
-        skipPrompts: true,
-        dryRun: false,
-        workingDirectory: tempDir
-      }
+		// Initialize tools framework
+		initializeToolsFramework();
+	});
 
-      const result = await engine.executeRecipe(recipeSource, options)
+	afterEach(async () => {
+		if (engine) {
+			await engine.cleanup();
+		}
+		if (cleanup) {
+			cleanup();
+		}
+		// Reset tool registry for clean state
+		ToolRegistry.reset();
+	});
 
-      expect(result.success).toBe(true)
-      expect(result.steps).toHaveLength(1)
-      expect(result.steps[0].status).toBe('completed')
-      expect(result.variables.componentName).toBe('TestButton')
-      expect(result.variables.includeTests).toBe(true)
-      
-      // Verify files were created
-      const componentPath = path.join(tempDir, 'src', 'components', 'TestButton.ts')
-      const testPath = path.join(tempDir, 'src', 'components', 'TestButton.test.ts')
-      
-      expect(await fs.pathExists(componentPath)).toBe(true)
-      expect(await fs.pathExists(testPath)).toBe(true)
-      
-      const componentContent = await fs.readFile(componentPath, 'utf-8')
-      expect(componentContent).toContain('export const TestButton')
-      expect(componentContent).toContain('TestButtonProps')
-    })
+	describe('End-to-End Recipe Execution', () => {
+		it('should execute simple recipe with template tool', async () => {
+			const recipeSource: RecipeSource = {
+				type: 'file',
+				path: path.join(tempDir, 'recipes', 'simple-component.yml'),
+			};
 
-    it('should execute multi-step recipe with dependencies', async () => {
-      const recipeSource: RecipeSource = {
-        type: 'file',
-        path: path.join(tempDir, 'recipes', 'full-component-setup.yml')
-      }
+			const options: RecipeExecutionOptions = {
+				variables: {
+					componentName: 'TestButton',
+					includeTests: true,
+				},
+				skipPrompts: true,
+				dryRun: false,
+				workingDirectory: tempDir,
+			};
 
-      const options: RecipeExecutionOptions = {
-        variables: {
-          componentName: 'AdvancedButton',
-          componentType: 'functional',
-          withStorybook: false, // Disable storybook to avoid missing action
-          withDocs: false // Disable docs to avoid missing template
-        },
-        skipPrompts: true,
-        dryRun: false,
-        workingDirectory: tempDir
-      }
+			const result = await engine.executeRecipe(recipeSource, options);
 
-      const result = await engine.executeRecipe(recipeSource, options)
+			expect(result.success).toBe(true);
+			expect(result.steps).toHaveLength(1);
+			expect(result.steps[0].status).toBe('completed');
+			expect(result.variables.componentName).toBe('TestButton');
+			expect(result.variables.includeTests).toBe(true);
 
-      expect(result.success).toBe(true)
-      expect(result.steps.length).toBeGreaterThan(0)
-      
-      // First step should complete
-      const firstStep = result.steps.find(s => s.stepName === 'create-component')
-      expect(firstStep?.status).toBe('completed')
-      
-      // Other steps should be skipped due to conditions
-      const storyStep = result.steps.find(s => s.stepName === 'create-story')
-      const docsStep = result.steps.find(s => s.stepName === 'create-docs')
-      
-      if (storyStep) expect(storyStep.status).toBe('skipped')
-      if (docsStep) expect(docsStep.status).toBe('skipped')
-    })
+			// Verify files were created
+			const componentPath = path.join(
+				tempDir,
+				'src',
+				'components',
+				'TestButton.ts',
+			);
+			const testPath = path.join(
+				tempDir,
+				'src',
+				'components',
+				'TestButton.test.ts',
+			);
 
-    it('should handle variable resolution and templating', async () => {
-      const recipeContent = `
+			expect(await fs.pathExists(componentPath)).toBe(true);
+			expect(await fs.pathExists(testPath)).toBe(true);
+
+			const componentContent = await fs.readFile(componentPath, 'utf-8');
+			expect(componentContent).toContain('export const TestButton');
+			expect(componentContent).toContain('TestButtonProps');
+		});
+
+		it('should execute multi-step recipe with dependencies', async () => {
+			const recipeSource: RecipeSource = {
+				type: 'file',
+				path: path.join(tempDir, 'recipes', 'full-component-setup.yml'),
+			};
+
+			const options: RecipeExecutionOptions = {
+				variables: {
+					componentName: 'AdvancedButton',
+					componentType: 'functional',
+					withStorybook: false, // Disable storybook to avoid missing action
+					withDocs: false, // Disable docs to avoid missing template
+				},
+				skipPrompts: true,
+				dryRun: false,
+				workingDirectory: tempDir,
+			};
+
+			const result = await engine.executeRecipe(recipeSource, options);
+
+			expect(result.success).toBe(true);
+			expect(result.steps.length).toBeGreaterThan(0);
+
+			// First step should complete
+			const firstStep = result.steps.find(
+				(s) => s.stepName === 'create-component',
+			);
+			expect(firstStep?.status).toBe('completed');
+
+			// Other steps should be skipped due to conditions
+			const storyStep = result.steps.find((s) => s.stepName === 'create-story');
+			const docsStep = result.steps.find((s) => s.stepName === 'create-docs');
+
+			if (storyStep) expect(storyStep.status).toBe('skipped');
+			if (docsStep) expect(docsStep.status).toBe('skipped');
+		});
+
+		it('should handle variable resolution and templating', async () => {
+			const recipeContent = `
 name: Variable Resolution Test
 description: Test variable resolution in templates
 version: 1.0.0
@@ -428,38 +477,43 @@ steps:
       name: "{{ fullName }}"
       type: functional
       withTests: true
-`
+`;
 
-      const recipeSource: RecipeSource = {
-        type: 'content',
-        content: recipeContent,
-        name: 'variable-resolution-test'
-      }
+			const recipeSource: RecipeSource = {
+				type: 'content',
+				content: recipeContent,
+				name: 'variable-resolution-test',
+			};
 
-      const options: RecipeExecutionOptions = {
-        variables: {
-          baseName: 'Button'
-        },
-        skipPrompts: true,
-        dryRun: false,
-        workingDirectory: tempDir
-      }
+			const options: RecipeExecutionOptions = {
+				variables: {
+					baseName: 'Button',
+				},
+				skipPrompts: true,
+				dryRun: false,
+				workingDirectory: tempDir,
+			};
 
-      const result = await engine.executeRecipe(recipeSource, options)
+			const result = await engine.executeRecipe(recipeSource, options);
 
-      expect(result.success).toBe(true)
-      expect(result.variables.fullName).toBe('TestButtonComponent')
-      
-      // Verify file was created with computed name
-      const componentPath = path.join(tempDir, 'src', 'components', 'TestButtonComponent.ts')
-      expect(await fs.pathExists(componentPath)).toBe(true)
-      
-      const content = await fs.readFile(componentPath, 'utf-8')
-      expect(content).toContain('TestButtonComponent')
-    })
+			expect(result.success).toBe(true);
+			expect(result.variables.fullName).toBe('TestButtonComponent');
 
-    it('should handle conditional step execution', async () => {
-      const recipeContent = `
+			// Verify file was created with computed name
+			const componentPath = path.join(
+				tempDir,
+				'src',
+				'components',
+				'TestButtonComponent.ts',
+			);
+			expect(await fs.pathExists(componentPath)).toBe(true);
+
+			const content = await fs.readFile(componentPath, 'utf-8');
+			expect(content).toContain('TestButtonComponent');
+		});
+
+		it('should handle conditional step execution', async () => {
+			const recipeContent = `
 name: Conditional Execution Test
 version: 1.0.0
 variables:
@@ -490,48 +544,52 @@ steps:
       name: "{{ componentName }}Test"
       type: functional
       withTests: true
-`
+`;
 
-      const recipeSource: RecipeSource = {
-        type: 'content',
-        content: recipeContent,
-        name: 'conditional-test'
-      }
+			const recipeSource: RecipeSource = {
+				type: 'content',
+				content: recipeContent,
+				name: 'conditional-test',
+			};
 
-      // Test with createMain=true, createTest=false
-      const result1 = await engine.executeRecipe(recipeSource, {
-        variables: { createMain: true, createTest: false },
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			// Test with createMain=true, createTest=false
+			const result1 = await engine.executeRecipe(recipeSource, {
+				variables: { createMain: true, createTest: false },
+				skipPrompts: true,
+				workingDirectory: tempDir,
+			});
 
-      expect(result1.success).toBe(true)
-      const mainStep = result1.steps.find(s => s.stepName === 'create-main')
-      const testStep = result1.steps.find(s => s.stepName === 'create-test-only')
-      
-      expect(mainStep?.status).toBe('completed')
-      expect(testStep?.status).toBe('skipped')
+			expect(result1.success).toBe(true);
+			const mainStep = result1.steps.find((s) => s.stepName === 'create-main');
+			const testStep = result1.steps.find(
+				(s) => s.stepName === 'create-test-only',
+			);
 
-      // Clean up for second test
-      await fs.remove(path.join(tempDir, 'src'))
-      
-      // Test with createMain=false, createTest=true  
-      const result2 = await engine.executeRecipe(recipeSource, {
-        variables: { createMain: false, createTest: true },
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			expect(mainStep?.status).toBe('completed');
+			expect(testStep?.status).toBe('skipped');
 
-      expect(result2.success).toBe(true)
-      const mainStep2 = result2.steps.find(s => s.stepName === 'create-main')
-      const testStep2 = result2.steps.find(s => s.stepName === 'create-test-only')
-      
-      expect(mainStep2?.status).toBe('skipped')
-      expect(testStep2?.status).toBe('completed')
-    })
+			// Clean up for second test
+			await fs.remove(path.join(tempDir, 'src'));
 
-    it('should execute steps with proper dependency order', async () => {
-      const recipeContent = `
+			// Test with createMain=false, createTest=true
+			const result2 = await engine.executeRecipe(recipeSource, {
+				variables: { createMain: false, createTest: true },
+				skipPrompts: true,
+				workingDirectory: tempDir,
+			});
+
+			expect(result2.success).toBe(true);
+			const mainStep2 = result2.steps.find((s) => s.stepName === 'create-main');
+			const testStep2 = result2.steps.find(
+				(s) => s.stepName === 'create-test-only',
+			);
+
+			expect(mainStep2?.status).toBe('skipped');
+			expect(testStep2?.status).toBe('completed');
+		});
+
+		it('should execute steps with proper dependency order', async () => {
+			const recipeContent = `
 name: Dependency Order Test
 version: 1.0.0
 variables:
@@ -567,44 +625,48 @@ steps:
       name: "{{ componentName }}Middle"
       type: functional
       withTests: false
-`
+`;
 
-      const recipeSource: RecipeSource = {
-        type: 'content',
-        content: recipeContent,
-        name: 'dependency-order-test'
-      }
+			const recipeSource: RecipeSource = {
+				type: 'content',
+				content: recipeContent,
+				name: 'dependency-order-test',
+			};
 
-      const result = await engine.executeRecipe(recipeSource, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(recipeSource, {
+				skipPrompts: true,
+				workingDirectory: tempDir,
+			});
 
-      expect(result.success).toBe(true)
-      expect(result.steps).toHaveLength(3)
-      
-      // Verify execution order
-      const stepA = result.steps.find(s => s.stepName === 'step-a')
-      const stepB = result.steps.find(s => s.stepName === 'step-b')
-      const stepC = result.steps.find(s => s.stepName === 'step-c')
-      
-      expect(stepA?.status).toBe('completed')
-      expect(stepB?.status).toBe('completed')
-      expect(stepC?.status).toBe('completed')
-      
-      // Step A should start before B, and B before C
-      expect(stepA!.startTime).toBeDefined()
-      expect(stepB!.startTime).toBeDefined()
-      expect(stepC!.startTime).toBeDefined()
-      
-      expect(stepA!.startTime!.getTime()).toBeLessThan(stepB!.startTime!.getTime())
-      expect(stepB!.startTime!.getTime()).toBeLessThan(stepC!.startTime!.getTime())
-    })
-  })
+			expect(result.success).toBe(true);
+			expect(result.steps).toHaveLength(3);
 
-  describe('Tool Integration Tests', () => {
-    it('should integrate template tool with file generation', async () => {
-      const recipeContent = `
+			// Verify execution order
+			const stepA = result.steps.find((s) => s.stepName === 'step-a');
+			const stepB = result.steps.find((s) => s.stepName === 'step-b');
+			const stepC = result.steps.find((s) => s.stepName === 'step-c');
+
+			expect(stepA?.status).toBe('completed');
+			expect(stepB?.status).toBe('completed');
+			expect(stepC?.status).toBe('completed');
+
+			// Step A should start before B, and B before C
+			expect(stepA?.startTime).toBeDefined();
+			expect(stepB?.startTime).toBeDefined();
+			expect(stepC?.startTime).toBeDefined();
+
+			expect(stepA?.startTime?.getTime()).toBeLessThan(
+				stepB?.startTime?.getTime(),
+			);
+			expect(stepB?.startTime?.getTime()).toBeLessThan(
+				stepC?.startTime?.getTime(),
+			);
+		});
+	});
+
+	describe('Tool Integration Tests', () => {
+		it('should integrate template tool with file generation', async () => {
+			const recipeContent = `
 name: Template Tool Integration
 version: 1.0.0
 variables:
@@ -620,32 +682,35 @@ steps:
       name: "{{ componentName }}"
       type: functional
       withTests: true
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'template-integration'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'template-integration',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      expect(result.success).toBe(true)
-      
-      const step = result.steps[0]
-      expect(step.status).toBe('completed')
-      expect(step.toolType).toBe('template')
-      expect(step.output?.generatedFiles).toBeGreaterThan(0)
-      
-      // Verify template tool result structure
-      expect(step.toolResult?.templateName).toBe('test-component')
-      expect(step.toolResult?.engine).toBeDefined()
-      expect(Array.isArray(step.toolResult?.files)).toBe(true)
-    })
+			expect(result.success).toBe(true);
 
-    it('should handle template tool errors gracefully', async () => {
-      const recipeContent = `
+			const step = result.steps[0];
+			expect(step.status).toBe('completed');
+			expect(step.toolType).toBe('template');
+			expect(step.output?.generatedFiles).toBeGreaterThan(0);
+
+			// Verify template tool result structure
+			expect(step.toolResult?.templateName).toBe('test-component');
+			expect(step.toolResult?.engine).toBeDefined();
+			expect(Array.isArray(step.toolResult?.files)).toBe(true);
+		});
+
+		it('should handle template tool errors gracefully', async () => {
+			const recipeContent = `
 name: Template Error Test
 version: 1.0.0
 steps:
@@ -655,29 +720,32 @@ steps:
     description: This should fail
     variables:
       name: ErrorComponent
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'template-error-test'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'template-error-test',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      expect(result.success).toBe(false)
-      
-      const step = result.steps[0]
-      expect(step.status).toBe('failed')
-      expect(step.error).toBeDefined()
-      expect(step.error?.message).toContain('not found')
-    })
+			expect(result.success).toBe(false);
 
-    it('should handle action tool with parameter resolution', async () => {
-      // Note: This test will likely fail in integration until we have actual action tools
-      // But it validates the structure and error handling
-      const recipeContent = `
+			const step = result.steps[0];
+			expect(step.status).toBe('failed');
+			expect(step.error).toBeDefined();
+			expect(step.error?.message).toContain('not found');
+		});
+
+		it('should handle action tool with parameter resolution', async () => {
+			// Note: This test will likely fail in integration until we have actual action tools
+			// But it validates the structure and error handling
+			const recipeContent = `
 name: Action Tool Test
 version: 1.0.0
 variables:
@@ -692,32 +760,35 @@ steps:
     variables:
       param: "{{ actionParam }}"
     continueOnError: true
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'action-test'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'action-test',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      const step = result.steps[0]
-      expect(step.toolType).toBe('action')
-      
-      // Action will likely fail in integration test, but structure should be correct
-      if (step.status === 'failed') {
-        expect(step.error).toBeDefined()
-        expect(step.error?.message).toContain('not found')
-      } else {
-        expect(step.status).toBe('completed')
-        expect(step.toolResult).toBeDefined()
-      }
-    })
+			const step = result.steps[0];
+			expect(step.toolType).toBe('action');
 
-    it('should provide proper tool metrics and timing', async () => {
-      const recipeContent = `
+			// Action will likely fail in integration test, but structure should be correct
+			if (step.status === 'failed') {
+				expect(step.error).toBeDefined();
+				expect(step.error?.message).toContain('not found');
+			} else {
+				expect(step.status).toBe('completed');
+				expect(step.toolResult).toBeDefined();
+			}
+		});
+
+		it('should provide proper tool metrics and timing', async () => {
+			const recipeContent = `
 name: Metrics Test
 version: 1.0.0
 steps:
@@ -728,139 +799,157 @@ steps:
       name: MetricsComponent
       type: functional
       withTests: false
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'metrics-test'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'metrics-test',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      expect(result.success).toBe(true)
-      
-      const step = result.steps[0]
-      expect(step.status).toBe('completed')
-      expect(step.startTime).toBeDefined()
-      expect(step.endTime).toBeDefined()
-      expect(step.duration).toBeGreaterThan(0)
-      expect(step.toolResult?.executionTime).toBeGreaterThan(0)
-    })
-  })
+			expect(result.success).toBe(true);
 
-  describe('CLI Integration Tests', () => {
-    it('should execute recipe through CLI', async () => {
-      const recipePath = path.join(tempDir, 'recipes', 'simple-component.yml')
-      
-      try {
-        const { stdout } = await execAsync(
-          `cd ${tempDir} && bun --bun ${hypergenBin} recipe execute ${recipePath} --componentName CLITestComponent --includeTests true --skip-prompts`
-        )
-        
-        expect(stdout).toContain('Recipe execution')
-        expect(stdout).toContain('CLITestComponent')
-        
-        // Verify files were created
-        const componentPath = path.join(tempDir, 'src', 'components', 'CLITestComponent.ts')
-        expect(await fs.pathExists(componentPath)).toBe(true)
-      } catch (error: any) {
-        // CLI integration might fail in test environment - verify error structure
-        expect(error.stdout || error.stderr).toContain('recipe')
-      }
-    })
+			const step = result.steps[0];
+			expect(step.status).toBe('completed');
+			expect(step.startTime).toBeDefined();
+			expect(step.endTime).toBeDefined();
+			expect(step.duration).toBeGreaterThan(0);
+			expect(step.toolResult?.executionTime).toBeGreaterThan(0);
+		});
+	});
 
-    it('should validate recipe through CLI', async () => {
-      const recipePath = path.join(tempDir, 'recipes', 'simple-component.yml')
-      
-      try {
-        const { stdout } = await execAsync(
-          `cd ${tempDir} && bun --bun ${hypergenBin} recipe validate ${recipePath}`
-        )
-        
-        expect(stdout).toContain('validation')
-        expect(stdout).toContain('simple-component')
-      } catch (error: any) {
-        // Verify error contains recipe-related information
-        expect(error.stdout || error.stderr).toContain('recipe')
-      }
-    })
+	describe('CLI Integration Tests', () => {
+		it('should execute recipe through CLI', async () => {
+			const recipePath = path.join(tempDir, 'recipes', 'simple-component.yml');
 
-    it('should list available recipes through CLI', async () => {
-      try {
-        const { stdout } = await execAsync(
-          `cd ${tempDir} && bun --bun ${hypergenBin} recipe list ${path.join(tempDir, 'recipes')}`
-        )
-        
-        expect(stdout).toContain('recipes')
-        expect(stdout).toContain('simple-component')
-      } catch (error: any) {
-        // Verify error structure
-        expect(error.stdout || error.stderr).toContain('recipe')
-      }
-    })
+			try {
+				const { stdout } = await execAsync(
+					`cd ${tempDir} && bun --bun ${hypergenBin} recipe execute ${recipePath} --componentName CLITestComponent --includeTests true --skip-prompts`,
+				);
 
-    it('should show recipe info through CLI', async () => {
-      const recipePath = path.join(tempDir, 'recipes', 'full-component-setup.yml')
-      
-      try {
-        const { stdout } = await execAsync(
-          `cd ${tempDir} && bun --bun ${hypergenBin} recipe info ${recipePath}`
-        )
-        
-        expect(stdout).toContain('Full Component Setup')
-        expect(stdout).toContain('variables')
-        expect(stdout).toContain('steps')
-      } catch (error: any) {
-        expect(error.stdout || error.stderr).toContain('recipe')
-      }
-    })
+				expect(stdout).toContain('Recipe execution');
+				expect(stdout).toContain('CLITestComponent');
 
-    it('should handle CLI error reporting', async () => {
-      const invalidRecipePath = path.join(tempDir, 'nonexistent-recipe.yml')
-      
-      try {
-        await execAsync(
-          `cd ${tempDir} && bun --bun ${hypergenBin} recipe execute ${invalidRecipePath}`
-        )
-        // Should not reach here
-        expect(false).toBe(true)
-      } catch (error: any) {
-        expect(error.stderr || error.stdout).toContain('not found')
-      }
-    })
-  })
+				// Verify files were created
+				const componentPath = path.join(
+					tempDir,
+					'src',
+					'components',
+					'CLITestComponent.ts',
+				);
+				expect(await fs.pathExists(componentPath)).toBe(true);
+			} catch (error: any) {
+				// CLI integration might fail in test environment - verify error structure
+				expect(error.stdout || error.stderr).toContain('recipe');
+			}
+		});
 
-  describe('Advanced Scenarios', () => {
-    it('should handle error recovery and continue execution', async () => {
-      const recipeSource: RecipeSource = {
-        type: 'file',
-        path: path.join(tempDir, 'recipes', 'error-handling-test.yml')
-      }
+		it('should validate recipe through CLI', async () => {
+			const recipePath = path.join(tempDir, 'recipes', 'simple-component.yml');
 
-      const result = await engine.executeRecipe(recipeSource, {
-        variables: {
-          shouldFail: false // Don't trigger the failing step
-        },
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			try {
+				const { stdout } = await execAsync(
+					`cd ${tempDir} && bun --bun ${hypergenBin} recipe validate ${recipePath}`,
+				);
 
-      expect(result.success).toBe(true)
-      
-      const validStep = result.steps.find(s => s.stepName === 'valid-step')
-      const failingStep = result.steps.find(s => s.stepName === 'failing-step')
-      const recoveryStep = result.steps.find(s => s.stepName === 'recovery-step')
-      
-      expect(validStep?.status).toBe('completed')
-      expect(failingStep?.status).toBe('skipped') // Due to condition
-      expect(recoveryStep?.status).toBe('completed')
-    })
+				expect(stdout).toContain('validation');
+				expect(stdout).toContain('simple-component');
+			} catch (error: any) {
+				// Verify error contains recipe-related information
+				expect(error.stdout || error.stderr).toContain('recipe');
+			}
+		});
 
-    it('should handle recipe composition with nested recipes', async () => {
-      // Create a simple nested recipe
-      await fs.writeFile(path.join(tempDir, 'recipes', 'base-component.yml'), `
+		it('should list available recipes through CLI', async () => {
+			try {
+				const { stdout } = await execAsync(
+					`cd ${tempDir} && bun --bun ${hypergenBin} recipe list ${path.join(tempDir, 'recipes')}`,
+				);
+
+				expect(stdout).toContain('recipes');
+				expect(stdout).toContain('simple-component');
+			} catch (error: any) {
+				// Verify error structure
+				expect(error.stdout || error.stderr).toContain('recipe');
+			}
+		});
+
+		it('should show recipe info through CLI', async () => {
+			const recipePath = path.join(
+				tempDir,
+				'recipes',
+				'full-component-setup.yml',
+			);
+
+			try {
+				const { stdout } = await execAsync(
+					`cd ${tempDir} && bun --bun ${hypergenBin} recipe info ${recipePath}`,
+				);
+
+				expect(stdout).toContain('Full Component Setup');
+				expect(stdout).toContain('variables');
+				expect(stdout).toContain('steps');
+			} catch (error: any) {
+				expect(error.stdout || error.stderr).toContain('recipe');
+			}
+		});
+
+		it('should handle CLI error reporting', async () => {
+			const invalidRecipePath = path.join(tempDir, 'nonexistent-recipe.yml');
+
+			try {
+				await execAsync(
+					`cd ${tempDir} && bun --bun ${hypergenBin} recipe execute ${invalidRecipePath}`,
+				);
+				// Should not reach here
+				expect(false).toBe(true);
+			} catch (error: any) {
+				expect(error.stderr || error.stdout).toContain('not found');
+			}
+		});
+	});
+
+	describe('Advanced Scenarios', () => {
+		it('should handle error recovery and continue execution', async () => {
+			const recipeSource: RecipeSource = {
+				type: 'file',
+				path: path.join(tempDir, 'recipes', 'error-handling-test.yml'),
+			};
+
+			const result = await engine.executeRecipe(recipeSource, {
+				variables: {
+					shouldFail: false, // Don't trigger the failing step
+				},
+				skipPrompts: true,
+				workingDirectory: tempDir,
+			});
+
+			expect(result.success).toBe(true);
+
+			const validStep = result.steps.find((s) => s.stepName === 'valid-step');
+			const failingStep = result.steps.find(
+				(s) => s.stepName === 'failing-step',
+			);
+			const recoveryStep = result.steps.find(
+				(s) => s.stepName === 'recovery-step',
+			);
+
+			expect(validStep?.status).toBe('completed');
+			expect(failingStep?.status).toBe('skipped'); // Due to condition
+			expect(recoveryStep?.status).toBe('completed');
+		});
+
+		it('should handle recipe composition with nested recipes', async () => {
+			// Create a simple nested recipe
+			await fs.writeFile(
+				path.join(tempDir, 'recipes', 'base-component.yml'),
+				`
 name: Base Component
 version: 1.0.0
 variables:
@@ -875,9 +964,10 @@ steps:
       name: "{{ name }}"
       type: functional
       withTests: false
-`)
+`,
+			);
 
-      const recipeContent = `
+			const recipeContent = `
 name: Nested Recipe Test
 version: 1.0.0
 variables:
@@ -890,25 +980,28 @@ steps:
     recipe: base-component
     variables:
       name: "{{ componentName }}"
-`
+`;
 
-      // Note: This will likely fail without full recipe tool implementation
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'nested-test'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			// Note: This will likely fail without full recipe tool implementation
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'nested-test',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      // Verify structure regardless of success
-      expect(result.steps).toHaveLength(1)
-      expect(result.steps[0].toolType).toBe('recipe')
-    })
+			// Verify structure regardless of success
+			expect(result.steps).toHaveLength(1);
+			expect(result.steps[0].toolType).toBe('recipe');
+		});
 
-    it('should validate complex variable dependencies', async () => {
-      const recipeContent = `
+		it('should validate complex variable dependencies', async () => {
+			const recipeContent = `
 name: Complex Variables Test
 version: 1.0.0
 variables:
@@ -935,32 +1028,35 @@ steps:
       name: "{{ componentName }}"
       type: functional
       withTests: "{{ environment !== 'prod' }}"
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'complex-variables'
-      }, {
-        variables: {
-          baseName: 'TestComponent',
-          environment: 'staging'
-        },
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'complex-variables',
+				},
+				{
+					variables: {
+						baseName: 'TestComponent',
+						environment: 'staging',
+					},
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      expect(result.variables.componentName).toBe('TestComponentDev')
-      expect(result.variables.generateDocs).toBe(true)
-      
-      if (result.success) {
-        const step = result.steps[0]
-        expect(step.status).toBe('completed')
-      }
-    })
+			expect(result.variables.componentName).toBe('TestComponentDev');
+			expect(result.variables.generateDocs).toBe(true);
 
-    it('should support parallel step execution', async () => {
-      const recipeContent = `
+			if (result.success) {
+				const step = result.steps[0];
+				expect(step.status).toBe('completed');
+			}
+		});
+
+		it('should support parallel step execution', async () => {
+			const recipeContent = `
 name: Parallel Execution Test
 version: 1.0.0
 variables:
@@ -997,84 +1093,97 @@ steps:
       name: FinalComponent
       type: functional
       withTests: false
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'parallel-test'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'parallel-test',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      if (result.success) {
-        expect(result.steps).toHaveLength(3)
-        
-        const stepA = result.steps.find(s => s.stepName === 'create-a')
-        const stepB = result.steps.find(s => s.stepName === 'create-b')
-        const finalStep = result.steps.find(s => s.stepName === 'finalize')
-        
-        expect(stepA?.status).toBe('completed')
-        expect(stepB?.status).toBe('completed')
-        expect(finalStep?.status).toBe('completed')
-        
-        // Final step should start after both A and B complete
-        expect(finalStep!.startTime!.getTime()).toBeGreaterThan(stepA!.endTime!.getTime())
-        expect(finalStep!.startTime!.getTime()).toBeGreaterThan(stepB!.endTime!.getTime())
-      }
-    })
-  })
+			if (result.success) {
+				expect(result.steps).toHaveLength(3);
 
-  describe('Performance Tests', () => {
-    it('should execute large recipe efficiently', async () => {
-      // Generate a recipe with many steps
-      const steps = Array.from({ length: 10 }, (_, i) => `
+				const stepA = result.steps.find((s) => s.stepName === 'create-a');
+				const stepB = result.steps.find((s) => s.stepName === 'create-b');
+				const finalStep = result.steps.find((s) => s.stepName === 'finalize');
+
+				expect(stepA?.status).toBe('completed');
+				expect(stepB?.status).toBe('completed');
+				expect(finalStep?.status).toBe('completed');
+
+				// Final step should start after both A and B complete
+				expect(finalStep?.startTime?.getTime()).toBeGreaterThan(
+					stepA?.endTime?.getTime(),
+				);
+				expect(finalStep?.startTime?.getTime()).toBeGreaterThan(
+					stepB?.endTime?.getTime(),
+				);
+			}
+		});
+	});
+
+	describe('Performance Tests', () => {
+		it('should execute large recipe efficiently', async () => {
+			// Generate a recipe with many steps
+			const steps = Array.from(
+				{ length: 10 },
+				(_, i) => `
   - name: step-${i}
     tool: template
     template: test-component
     variables:
       name: Component${i}
       type: functional
-      withTests: false`).join('')
+      withTests: false`,
+			).join('');
 
-      const recipeContent = `
+			const recipeContent = `
 name: Large Recipe Test
 version: 1.0.0
 variables: {}
 steps:${steps}
-`
+`;
 
-      const startTime = Date.now()
-      
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'large-recipe'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const startTime = Date.now();
 
-      const executionTime = Date.now() - startTime
-      
-      expect(result.steps).toHaveLength(10)
-      expect(executionTime).toBeLessThan(30000) // Should complete within 30 seconds
-      
-      if (result.success) {
-        result.steps.forEach(step => {
-          expect(step.status).toBe('completed')
-          expect(step.duration).toBeLessThan(5000) // Each step under 5 seconds
-        })
-      }
-    })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'large-recipe',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-    it('should validate tool caching effectiveness', async () => {
-      const registry = getToolRegistry()
-      const initialStats = registry.getStats()
-      
-      // Execute the same template multiple times
-      const recipeContent = `
+			const executionTime = Date.now() - startTime;
+
+			expect(result.steps).toHaveLength(10);
+			expect(executionTime).toBeLessThan(30000); // Should complete within 30 seconds
+
+			if (result.success) {
+				result.steps.forEach((step) => {
+					expect(step.status).toBe('completed');
+					expect(step.duration).toBeLessThan(5000); // Each step under 5 seconds
+				});
+			}
+		});
+
+		it('should validate tool caching effectiveness', async () => {
+			const registry = getToolRegistry();
+			const initialStats = registry.getStats();
+
+			// Execute the same template multiple times
+			const recipeContent = `
 name: Caching Test
 version: 1.0.0
 steps:
@@ -1092,34 +1201,39 @@ steps:
       name: CacheTest2
       type: functional
       withTests: false
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'caching-test'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'caching-test',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      const finalStats = registry.getStats()
-      
-      // Should reuse template tool instances
-      expect(finalStats.cachedInstances).toBeGreaterThan(initialStats.cachedInstances)
-      
-      if (result.success) {
-        expect(result.steps).toHaveLength(2)
-        result.steps.forEach(step => {
-          expect(step.status).toBe('completed')
-        })
-      }
-    })
+			const finalStats = registry.getStats();
 
-    it('should monitor memory usage during execution', async () => {
-      const initialMemory = process.memoryUsage()
-      
-      const recipeContent = `
+			// Should reuse template tool instances
+			expect(finalStats.cachedInstances).toBeGreaterThan(
+				initialStats.cachedInstances,
+			);
+
+			if (result.success) {
+				expect(result.steps).toHaveLength(2);
+				result.steps.forEach((step) => {
+					expect(step.status).toBe('completed');
+				});
+			}
+		});
+
+		it('should monitor memory usage during execution', async () => {
+			const initialMemory = process.memoryUsage();
+
+			const recipeContent = `
 name: Memory Test
 version: 1.0.0
 steps:
@@ -1130,80 +1244,89 @@ steps:
       name: MemoryTestComponent
       type: functional
       withTests: true
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'memory-test'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'memory-test',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      const finalMemory = process.memoryUsage()
-      const memoryDelta = finalMemory.heapUsed - initialMemory.heapUsed
-      
-      // Memory increase should be reasonable (less than 50MB)
-      expect(memoryDelta).toBeLessThan(50 * 1024 * 1024)
-      
-      if (result.success) {
-        expect(result.steps[0].status).toBe('completed')
-      }
-      
-      // Force garbage collection to clean up
-      if (global.gc) {
-        global.gc()
-      }
-    })
+			const finalMemory = process.memoryUsage();
+			const memoryDelta = finalMemory.heapUsed - initialMemory.heapUsed;
 
-    it('should provide performance metrics for optimization', async () => {
-      const result = await engine.executeRecipe({
-        type: 'file',
-        path: path.join(tempDir, 'recipes', 'simple-component.yml')
-      }, {
-        variables: {
-          componentName: 'PerfTestComponent',
-          includeTests: true
-        },
-        skipPrompts: true,
-        workingDirectory: tempDir,
-        enableMetrics: true
-      })
+			// Memory increase should be reasonable (less than 50MB)
+			expect(memoryDelta).toBeLessThan(50 * 1024 * 1024);
 
-      expect(result.metrics).toBeDefined()
-      expect(result.metrics?.totalExecutionTime).toBeGreaterThan(0)
-      expect(result.metrics?.stepsExecuted).toBe(1)
-      expect(result.metrics?.toolInvocations).toBeGreaterThan(0)
-      
-      if (result.success) {
-        expect(result.metrics?.successfulSteps).toBe(1)
-        expect(result.metrics?.failedSteps).toBe(0)
-      }
-    })
-  })
+			if (result.success) {
+				expect(result.steps[0].status).toBe('completed');
+			}
 
-  describe('Integration Edge Cases', () => {
-    it('should handle malformed recipe gracefully', async () => {
-      const malformedRecipe = `
+			// Force garbage collection to clean up
+			if (global.gc) {
+				global.gc();
+			}
+		});
+
+		it('should provide performance metrics for optimization', async () => {
+			const result = await engine.executeRecipe(
+				{
+					type: 'file',
+					path: path.join(tempDir, 'recipes', 'simple-component.yml'),
+				},
+				{
+					variables: {
+						componentName: 'PerfTestComponent',
+						includeTests: true,
+					},
+					skipPrompts: true,
+					workingDirectory: tempDir,
+					enableMetrics: true,
+				},
+			);
+
+			expect(result.metrics).toBeDefined();
+			expect(result.metrics?.totalExecutionTime).toBeGreaterThan(0);
+			expect(result.metrics?.stepsExecuted).toBe(1);
+			expect(result.metrics?.toolInvocations).toBeGreaterThan(0);
+
+			if (result.success) {
+				expect(result.metrics?.successfulSteps).toBe(1);
+				expect(result.metrics?.failedSteps).toBe(0);
+			}
+		});
+	});
+
+	describe('Integration Edge Cases', () => {
+		it('should handle malformed recipe gracefully', async () => {
+			const malformedRecipe = `
 name: Malformed Recipe
 variables:
   - invalid: structure
 steps:
   invalid_step_structure
-`
+`;
 
-      await expect(
-        engine.executeRecipe({
-          type: 'content',
-          content: malformedRecipe,
-          name: 'malformed'
-        }, { skipPrompts: true })
-      ).rejects.toThrow()
-    })
+			await expect(
+				engine.executeRecipe(
+					{
+						type: 'content',
+						content: malformedRecipe,
+						name: 'malformed',
+					},
+					{ skipPrompts: true },
+				),
+			).rejects.toThrow();
+		});
 
-    it('should validate step names and prevent duplicates', async () => {
-      const recipeContent = `
+		it('should validate step names and prevent duplicates', async () => {
+			const recipeContent = `
 name: Duplicate Steps Test
 version: 1.0.0
 steps:
@@ -1221,20 +1344,24 @@ steps:
       name: Component2
       type: functional
       withTests: false
-`
+`;
 
-      const result = await engine.loadRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'duplicate-test'
-      })
+			const result = await engine.loadRecipe({
+				type: 'content',
+				content: recipeContent,
+				name: 'duplicate-test',
+			});
 
-      expect(result.validation.isValid).toBe(false)
-      expect(result.validation.errors.some(e => e.includes('duplicate') || e.includes('unique'))).toBe(true)
-    })
+			expect(result.validation.isValid).toBe(false);
+			expect(
+				result.validation.errors.some(
+					(e) => e.includes('duplicate') || e.includes('unique'),
+				),
+			).toBe(true);
+		});
 
-    it('should handle circular dependencies', async () => {
-      const recipeContent = `
+		it('should handle circular dependencies', async () => {
+			const recipeContent = `
 name: Circular Dependencies Test
 version: 1.0.0
 steps:
@@ -1262,20 +1389,24 @@ steps:
       name: ComponentC
       type: functional
       withTests: false
-`
+`;
 
-      const result = await engine.loadRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'circular-test'
-      })
+			const result = await engine.loadRecipe({
+				type: 'content',
+				content: recipeContent,
+				name: 'circular-test',
+			});
 
-      expect(result.validation.isValid).toBe(false)
-      expect(result.validation.errors.some(e => e.includes('circular') || e.includes('dependency'))).toBe(true)
-    })
+			expect(result.validation.isValid).toBe(false);
+			expect(
+				result.validation.errors.some(
+					(e) => e.includes('circular') || e.includes('dependency'),
+				),
+			).toBe(true);
+		});
 
-    it('should handle timeout scenarios', async () => {
-      const recipeContent = `
+		it('should handle timeout scenarios', async () => {
+			const recipeContent = `
 name: Timeout Test
 version: 1.0.0
 steps:
@@ -1287,30 +1418,33 @@ steps:
       name: TimeoutComponent
       type: functional
       withTests: false
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'timeout-test'
-      }, {
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'timeout-test',
+				},
+				{
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      // Step might complete quickly or timeout - verify structure
-      expect(result.steps).toHaveLength(1)
-      const step = result.steps[0]
-      
-      if (step.status === 'failed') {
-        expect(step.error?.message).toContain('timeout')
-      } else {
-        expect(step.status).toBe('completed')
-      }
-    })
+			// Step might complete quickly or timeout - verify structure
+			expect(result.steps).toHaveLength(1);
+			const step = result.steps[0];
 
-    it('should provide detailed error context for debugging', async () => {
-      const recipeContent = `
+			if (step.status === 'failed') {
+				expect(step.error?.message).toContain('timeout');
+			} else {
+				expect(step.status).toBe('completed');
+			}
+		});
+
+		it('should provide detailed error context for debugging', async () => {
+			const recipeContent = `
 name: Error Context Test
 version: 1.0.0
 variables:
@@ -1324,35 +1458,38 @@ steps:
     template: nonexistent-template
     variables:
       name: "{{ invalidVar }}"
-`
+`;
 
-      const result = await engine.executeRecipe({
-        type: 'content',
-        content: recipeContent,
-        name: 'error-context-test'
-      }, {
-        variables: {
-          invalidVar: 'invalid-pattern' // Violates pattern
-        },
-        skipPrompts: true,
-        workingDirectory: tempDir
-      })
+			const result = await engine.executeRecipe(
+				{
+					type: 'content',
+					content: recipeContent,
+					name: 'error-context-test',
+				},
+				{
+					variables: {
+						invalidVar: 'invalid-pattern', // Violates pattern
+					},
+					skipPrompts: true,
+					workingDirectory: tempDir,
+				},
+			);
 
-      expect(result.success).toBe(false)
-      
-      // Should have detailed error information
-      if (result.error) {
-        expect(result.error.stepName).toBeDefined()
-        expect(result.error.stepContext).toBeDefined()
-        expect(result.error.stackTrace).toBeDefined()
-      }
-      
-      // Or step-level errors should contain context
-      const failedStep = result.steps.find(s => s.status === 'failed')
-      if (failedStep?.error) {
-        expect(failedStep.error.context).toBeDefined()
-        expect(failedStep.error.stepName).toBe('failing-step')
-      }
-    })
-  })
-})
+			expect(result.success).toBe(false);
+
+			// Should have detailed error information
+			if (result.error) {
+				expect(result.error.stepName).toBeDefined();
+				expect(result.error.stepContext).toBeDefined();
+				expect(result.error.stackTrace).toBeDefined();
+			}
+
+			// Or step-level errors should contain context
+			const failedStep = result.steps.find((s) => s.status === 'failed');
+			if (failedStep?.error) {
+				expect(failedStep.error.context).toBeDefined();
+				expect(failedStep.error.stepName).toBe('failing-step');
+			}
+		});
+	});
+});

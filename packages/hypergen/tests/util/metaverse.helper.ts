@@ -1,101 +1,101 @@
-import { describe, it, expect, mock } from 'bun:test'
-import path from 'node:path'
-import execa from 'execa'
-import * as dirCompare from 'dir-compare'
-import fs from 'fs-extra'
-import Enquirer from 'enquirer'
-import { runner } from '~/index.js'
-import Logger from '~/logger.js'
-import { fixture } from './fixtures.js'
+import { describe, expect, it, mock } from 'bun:test';
+import path from 'node:path';
+import * as dirCompare from 'dir-compare';
+import Enquirer from 'enquirer';
+import execa from 'execa';
+import fs from 'fs-extra';
+import { runner } from '~/index.js';
+import Logger from '~/logger.js';
+import { fixture } from './fixtures.js';
 
-mock.module('enquirer', () => import('./enquirer.js'))
+mock.module('enquirer', () => import('./enquirer.js'));
 
-const opts = { compareContent: true }
+const opts = { compareContent: true };
 
-const logger = new Logger(console.log)
+const logger = new Logger(console.log);
 
 const createConfig = (metaDir) => ({
-  templates: '_templates',
-  cwd: metaDir,
+	templates: '_templates',
+	cwd: metaDir,
 
-  exec: (action, body) => {
-    const execOpts = body && body.length > 0 ? { input: body } : {}
-    return execa.command(action, { ...execOpts, shell: true, cwd: metaDir })
-  },
-  logger,
-  createPrompter: () => new Enquirer(),
-})
+	exec: (action, body) => {
+		const execOpts = body && body.length > 0 ? { input: body } : {};
+		return execa.command(action, { ...execOpts, shell: true, cwd: metaDir });
+	},
+	logger,
+	createPrompter: () => new Enquirer(),
+});
 
-const dir = (m) => fixture(m, { base: 'metaverse' })
+const dir = (m) => fixture(m, { base: 'metaverse' });
 
 export const metaverse = async (folder, cmds, promptResponse: any = null) => {
-  const metaDir = dir(folder)
-  console.log('=====> metaverse test in:', metaDir)
-  const config = createConfig(metaDir)
+	const metaDir = dir(folder);
+	console.log('=====> metaverse test in:', metaDir);
+	const config = createConfig(metaDir);
 
-  console.log('=====> MetaDir files:', fs.readdirSync(metaDir))
-  const results = []
-  
-  for (let cmd of cmds) {
-    console.log('=====> Testing command:', cmd)
-    if (process.env.TEST_FOCUS && process.env.TEST_FOCUS !== cmd[0]) {
-      console.log('=====> skipping (focus):', cmd)
-      continue
-    }
+	console.log('=====> MetaDir files:', fs.readdirSync(metaDir));
+	const results = [];
 
-    console.log('=====> testing', cmd)
+	for (let cmd of cmds) {
+		console.log('=====> Testing command:', cmd);
+		if (process.env.TEST_FOCUS && process.env.TEST_FOCUS !== cmd[0]) {
+			console.log('=====> skipping (focus):', cmd);
+			continue;
+		}
 
-    if (promptResponse) {
-      const last = cmd[cmd.length - 1]
-      if (typeof last === 'object') {
-        cmd = cmd.slice(0, cmd.length - 1)
-        mock.module('enquirer', () => ({
-          prompt: () => Promise.resolve({ ...promptResponse, ...last }),
-        }))
-      } else {
-        mock.module('enquirer', () => ({
-          prompt: () => Promise.resolve(promptResponse),
-        }))
-      }
-    }
+		console.log('=====> testing', cmd);
 
-    const res = await runner(cmd, config)
-    res.actions.forEach((a) => {
-      a.timing = -1
-      a.subject = a.subject.replace(/\\/g, '/').replace(/.*hygen\/src/, '')
-      if (a.payload?.name) {
-        a.payload.name = a.payload.name
-          .replace(/\\/g, '/')
-          .replace(/.*hygen\/src/, '')
-      }
-      if (a.payload?.to) {
-        a.payload.to = a.payload.to
-          .replace(/\\/g, '/')
-          .replace(/.*hygen\/src/, '')
-      }
-    })
+		if (promptResponse) {
+			const last = cmd[cmd.length - 1];
+			if (typeof last === 'object') {
+				cmd = cmd.slice(0, cmd.length - 1);
+				mock.module('enquirer', () => ({
+					prompt: () => Promise.resolve({ ...promptResponse, ...last }),
+				}));
+			} else {
+				mock.module('enquirer', () => ({
+					prompt: () => Promise.resolve(promptResponse),
+				}));
+			}
+		}
 
-    results.push({ cmd: cmd.join(' '), res })
-  }
+		const res = await runner(cmd, config);
+		res.actions.forEach((a) => {
+			a.timing = -1;
+			a.subject = a.subject.replace(/\\/g, '/').replace(/.*hygen\/src/, '');
+			if (a.payload?.name) {
+				a.payload.name = a.payload.name
+					.replace(/\\/g, '/')
+					.replace(/.*hygen\/src/, '');
+			}
+			if (a.payload?.to) {
+				a.payload.to = a.payload.to
+					.replace(/\\/g, '/')
+					.replace(/.*hygen\/src/, '');
+			}
+		});
 
-  let dirComparison = null
-  if (!process.env.TEST_FOCUS) {
-    const givenDir = path.join(metaDir, 'given')
-    const expectedDir = path.join(metaDir, 'expected')
+		results.push({ cmd: cmd.join(' '), res });
+	}
 
-    console.log('=====> after', {
-      [givenDir]: fs.readdirSync(givenDir),
-      [expectedDir]: fs.readdirSync(expectedDir),
-    })
+	let dirComparison = null;
+	if (!process.env.TEST_FOCUS) {
+		const givenDir = path.join(metaDir, 'given');
+		const expectedDir = path.join(metaDir, 'expected');
 
-    const res = dirCompare.compareSync(givenDir, expectedDir, opts)
-    res.diffSet = res.diffSet.filter((d) => d.state !== 'equal')
+		console.log('=====> after', {
+			[givenDir]: fs.readdirSync(givenDir),
+			[expectedDir]: fs.readdirSync(expectedDir),
+		});
 
-    if (!res.same) {
-      console.log('=====> res:', res)
-    }
-    dirComparison = res
-  }
-  
-  return { results, dirComparison }
-}
+		const res = dirCompare.compareSync(givenDir, expectedDir, opts);
+		res.diffSet = res.diffSet.filter((d) => d.state !== 'equal');
+
+		if (!res.same) {
+			console.log('=====> res:', res);
+		}
+		dirComparison = res;
+	}
+
+	return { results, dirComparison };
+};

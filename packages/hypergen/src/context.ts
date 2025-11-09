@@ -1,51 +1,51 @@
-import type { RunnerConfig } from './types.js'
-import helpers from './helpers.js'
+import helpers from './helpers.js';
+import type { RunnerConfig } from './types.js';
 
-const localsToCapitalize = ['name']
-const localsToPluralize = ['name']
+const localsToCapitalize = ['name'];
+const localsToPluralize = ['name'];
 const localsDefaults = {
-  name: 'unnamed',
-}
+	name: 'unnamed',
+};
 
 const processLocals = (hsh, [key, value]) => {
-  hsh[key] = value
+	hsh[key] = value;
 
-  if (localsToCapitalize.includes(key)) {
-    hsh[helpers.capitalize(key)] = helpers.capitalize(value)
-  }
+	if (localsToCapitalize.includes(key)) {
+		hsh[helpers.capitalize(key)] = helpers.capitalize(value);
+	}
 
-  if (localsToPluralize.includes(key)) {
-    hsh[helpers.inflection.pluralize(key)] = helpers.inflection.pluralize(value)
-    hsh[
-      helpers.capitalize(helpers.inflection.pluralize(key))
-    ] = helpers.capitalize(helpers.inflection.pluralize(value))
-  }
+	if (localsToPluralize.includes(key)) {
+		hsh[helpers.inflection.pluralize(key)] =
+			helpers.inflection.pluralize(value);
+		hsh[helpers.capitalize(helpers.inflection.pluralize(key))] =
+			helpers.capitalize(helpers.inflection.pluralize(value));
+	}
 
-  return hsh
-}
+	return hsh;
+};
 
 const processedLocals = (locals: any) =>
-  Object.entries(locals).reduce(processLocals, {})
+	Object.entries(locals).reduce(processLocals, {});
 
 const context = (locals: any, config: RunnerConfig = {}) => {
-  const localsWithDefaults = {
-    ...localsDefaults,
-    ...config.localsDefaults,
-    ...locals,
-  }
-  const configHelpers =
-    (config &&
-      (typeof config.helpers === 'function'
-        ? config.helpers(locals, config)
-        : config.helpers)) ||
-    {}
-  return Object.assign(
-    localsWithDefaults,
-    processedLocals(localsWithDefaults),
-    {
-      h: { ...helpers, ...configHelpers },
-    },
-  )
-}
+	const localsWithDefaults = {
+		...localsDefaults,
+		...config.localsDefaults,
+		...locals,
+	};
+	const configHelpers =
+		(config &&
+			(typeof config.helpers === 'function'
+				? config.helpers(locals, config)
+				: config.helpers)) ||
+		{};
+	return Object.assign(
+		localsWithDefaults,
+		processedLocals(localsWithDefaults),
+		{
+			h: { ...helpers, ...configHelpers },
+		},
+	);
+};
 
-export default context
+export default context;

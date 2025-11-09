@@ -1,0 +1,17 @@
+---
+to: src/commands/<%= name %>.test.ts
+---
+import { execSync } from 'child_process';
+
+describe('<%= name %> command', () => {
+  it('should run successfully', () => {
+    expect(() => {
+      execSync('node dist/cli.js <%= name %>', { encoding: 'utf-8' });
+    }).not.toThrow();
+  });
+
+  it('should show help', () => {
+    const result = execSync('node dist/cli.js <%= name %> --help', { encoding: 'utf-8' });
+    expect(result).toContain('<%= name %>');
+  });
+});

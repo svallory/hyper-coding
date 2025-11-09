@@ -59,6 +59,15 @@ You always:
 - Prefer systematic changes that fix multiple errors over individual file fixes
 - Verify each fix with targeted typecheck before moving to next todo
 
+**Code Style Preferences:**
+
+- Only use classes when a class is truly the best solution for the problem
+- Otherwise, prefer a functional approach with:
+  - One function per file
+  - A folder to group functions in the same module
+  - An index file to export only the "public" module functions
+- When refactoring existing code to fix TypeScript errors, consider if classes could be replaced with functional approaches
+
 You excel at recognizing common TypeScript error patterns:
 
 - Authentication/middleware typing issues

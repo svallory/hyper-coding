@@ -1,0 +1,44 @@
+import { <%= h.inflection.camelCase(name) %> } from './<%= name %>'
+import { ActionContext } from '../../src/actions/index.js'
+import { beforeEach, describe, it, expect } from 'bun:test'
+
+describe('<%= name %> generator', () => {
+  let mockContext: ActionContext
+  
+  beforeEach(() => {
+    mockContext = {
+      variables: {
+        name: 'test-<%= name %>'
+      },
+      utils: {
+        ensureDir: jest.fn(),
+        writeFile: jest.fn(),
+        readFile: jest.fn(),
+        fileExists: jest.fn()
+      },
+      logger: {
+        info: jest.fn(),
+        success: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn()
+      }
+    }
+  })
+
+  it('should create <%= name %> successfully', async () => {
+    const result = await <%= h.inflection.camelCase(name) %>(mockContext)
+    
+    expect(result.success).toBe(true)
+    expect(result.message).toContain('test-<%= name %>')
+    expect(result.filesCreated).toBeDefined()
+  })
+
+  it('should handle errors gracefully', async () => {
+    mockContext.utils.writeFile = jest.fn().mockRejectedValue(new Error('Write failed'))
+    
+    const result = await <%= h.inflection.camelCase(name) %>(mockContext)
+    
+    expect(result.success).toBe(false)
+    expect(result.message).toContain('Failed to create <%= name %>')
+  })
+})

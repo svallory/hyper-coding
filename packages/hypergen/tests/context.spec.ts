@@ -1,25 +1,25 @@
-import { describe, it, expect } from 'bun:test'
-import context from '~/context.js'
+import { describe, expect, it } from 'bun:test';
+import context from '~/context.js';
 
 describe('context', () => {
-  it('should populate with capitalized keys', () => {
-    const ctx = context({ name: 'foobar' })
-    delete ctx.h.path // platform dependent
-    expect(ctx).toMatchSnapshot()
-  })
-  it('allows helpers to be initialized with current context', () => {
-    const helpers = (args, ctx) => ({
-      testArgs: () => args,
-      testCtx: () => ctx,
-    })
-    const locals = {}
-    const config = {
-      helpers,
-    }
-    const ctx = context(locals, config)
-    expect(typeof ctx.h.testArgs).toBe('function')
-    expect(typeof ctx.h.testCtx).toBe('function')
-    expect(ctx.h.testArgs()).toBe(locals)
-    expect(ctx.h.testCtx()).toBe(config)
-  })
-})
+	it('should populate with capitalized keys', () => {
+		const ctx = context({ name: 'foobar' });
+		ctx.h.path; // platform dependent = undefined // platform dependent
+		expect(ctx).toMatchSnapshot();
+	});
+	it('allows helpers to be initialized with current context', () => {
+		const helpers = (args, ctx) => ({
+			testArgs: () => args,
+			testCtx: () => ctx,
+		});
+		const locals = {};
+		const config = {
+			helpers,
+		};
+		const ctx = context(locals, config);
+		expect(typeof ctx.h.testArgs).toBe('function');
+		expect(typeof ctx.h.testCtx).toBe('function');
+		expect(ctx.h.testArgs()).toBe(locals);
+		expect(ctx.h.testCtx()).toBe(config);
+	});
+});

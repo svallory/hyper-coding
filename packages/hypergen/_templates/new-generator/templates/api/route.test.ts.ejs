@@ -1,0 +1,20 @@
+---
+to: src/routes/<%= name %>.test.ts
+---
+import request from 'supertest';
+import express from 'express';
+import <%= name %>Router from './<%= name %>';
+
+const app = express();
+app.use(express.json());
+app.use('/api/<%= name %>', <%= name %>Router);
+
+describe('<%= name %> API', () => {
+  it('should respond to <%= method %> /<%= name %>', async () => {
+    const response = await request(app)
+      .<%= method.toLowerCase() %>('/api/<%= name %>')
+      .expect(200);
+    
+    expect(response.body.message).toBe('<%= name %> endpoint');
+  });
+});

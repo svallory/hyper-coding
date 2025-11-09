@@ -1,0 +1,31 @@
+---
+to: src/models/<%= name %>.ts
+---
+export interface <%= name %> {
+  id: string;
+  name: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export class <%= name %>Model {
+  static async findById(id: string): Promise<<%= name %> | null> {
+    // TODO: Implement database query
+    return null;
+  }
+
+  static async create(data: Partial<<%= name %>>): Promise<<%= name %>> {
+    // TODO: Implement database creation
+    throw new Error('Not implemented');
+  }
+
+  static async update(id: string, data: Partial<<%= name %>>): Promise<<%= name %> | null> {
+    // TODO: Implement database update
+    return null;
+  }
+
+  static async delete(id: string): Promise<boolean> {
+    // TODO: Implement database deletion
+    return false;
+  }
+}

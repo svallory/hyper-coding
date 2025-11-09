@@ -1,0 +1,95 @@
+# <%= name %> Generator
+
+<%= description || `Generator for creating ${name} files` %>
+
+## Usage
+
+```bash
+hypergen action <%= name %> --name=my-<%= name %>
+```
+
+## Parameters
+
+- **name** (required): <%= name %> name
+<% 
+const parameters = {
+  react: [
+    { name: 'type', type: 'enum', values: ['functional', 'class'], default: 'functional', description: 'Component type' },
+    { name: 'withProps', type: 'boolean', default: true, description: 'Include props interface' },
+    { name: 'withStorybook', type: 'boolean', default: false, description: 'Generate Storybook stories' },
+    { name: 'styling', type: 'enum', values: ['css', 'scss', 'styled-components'], default: 'css', description: 'Styling approach' }
+  ],
+  vue: [
+    { name: 'type', type: 'enum', values: ['sfc', 'composition', 'options'], default: 'composition', description: 'Component type' },
+    { name: 'withProps', type: 'boolean', default: true, description: 'Include props definition' },
+    { name: 'withEmits', type: 'boolean', default: false, description: 'Include emits definition' }
+  ],
+  api: [
+    { name: 'method', type: 'enum', values: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], default: 'GET', description: 'HTTP method' },
+    { name: 'withAuth', type: 'boolean', default: true, description: 'Include authentication' },
+    { name: 'withValidation', type: 'boolean', default: true, description: 'Include validation' }
+  ],
+  cli: [
+    { name: 'hasOptions', type: 'boolean', default: true, description: 'Include command options' },
+    { name: 'hasSubcommands', type: 'boolean', default: false, description: 'Include subcommands' }
+  ],
+  node: [
+    { name: 'type', type: 'enum', values: ['class', 'function', 'module'], default: 'function', description: 'Module type' },
+    { name: 'withAsync', type: 'boolean', default: false, description: 'Use async/await' }
+  ],
+  generic: [
+    { name: 'type', type: 'enum', values: ['typescript', 'javascript'], default: 'typescript', description: 'File type' },
+    { name: 'withExports', type: 'boolean', default: true, description: 'Include exports' }
+  ]
+}[framework];
+-%>
+<%- parameters.map(p => 
+  `- **${p.name}**: ${p.description}${p.default !== undefined ? ` (default: ${JSON.stringify(p.default)})` : ''}`
+).join('\n') %>
+
+## Examples
+
+```bash
+# Basic usage
+hypergen action <%= name %> --name=example-<%= name %>
+
+# With all options
+hypergen action <%= name %> --name=my-<%= name %> <%- parameters.filter(p => p.default !== undefined).map(p => `--${p.name}=${JSON.stringify(p.default)}`).join(' ') %>
+```
+
+## Generated Files
+
+This generator creates the following files:
+
+<% 
+const fileList = {
+  react: ['Component.tsx', 'Component.test.tsx', 'Component.stories.tsx', 'index.ts'],
+  vue: ['Component.vue', 'Component.test.ts', 'index.ts'],
+  api: ['route.ts', 'route.test.ts', 'model.ts'],
+  cli: ['command.ts', 'command.test.ts'],
+  node: ['module.ts', 'module.test.ts', 'index.ts'],
+  generic: ['file.ts', 'file.test.ts']
+}[framework];
+-%>
+<%- fileList.map(f => `- ${f}`).join('\n') %>
+
+## Configuration
+
+You can customize the generator by modifying:
+
+- `actions.ts` - Action implementation
+- `template.yml` - Variable definitions and examples
+- `templates/` - Template files
+- `README.md` - Documentation
+
+## Framework
+
+This generator is configured for: **<%= framework %>**
+
+## Category
+
+Category: **<%= category || 'custom' %>**
+
+## Author
+
+<%= author || 'Unknown' %>

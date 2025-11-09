@@ -94,8 +94,9 @@ A cookbook is composed of one or more "recipes". Each cookbook should be focused
 - `@hyper-kits/monorepo`: Recipes for creating and managing monorepos
 - `@hyper-kits/security`: Security-focused setup recipes
 
-### Kits
-A kit is a shareable bundle containing one or more cookbooks and, in the future, tools, plugins, assets, etc. Kits can be shared via NPM or via a git repository and allow sharing across different projects.
+### Hyper Kits
+A kit is a shareable bundle containing one or more cookbooks and, in the future, tools, plugins, assets, etc.
+Kits can be shared via NPM or via a git repository so you can reuse them across different projects.
 
 **Think of kits as**: Packages that you can install and share, containing everything needed for a specific use case.
 
@@ -156,7 +157,7 @@ Here's the structure of our `@hyper-kits/starlight` example:
 │       │   └── plugin.js.liquid
 │       └── codemods/
 │           └── register-plugin.js
-├── typedocs/                # Recipe: add TypeDoc integration
+├── enable-typedocs/                # Recipe: add TypeDoc integration
 │   ├── recipe.yml
 │   ├── templates/
 │   │   └── typedoc.config.js.liquid
