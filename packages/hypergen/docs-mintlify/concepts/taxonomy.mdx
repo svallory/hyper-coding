@@ -1,0 +1,206 @@
+---
+title: 'Hypergen Concepts & Taxonomy'
+description: 'Understanding the core concepts and terminology used throughout Hypergen'
+---
+
+<Info>
+  **What you'll learn**: The core concepts and terminology that power Hypergen
+  **Time needed**: 8 minutes
+  **Prerequisites**: None - this is your foundation for understanding Hypergen
+</Info>
+
+Understanding these concepts is essential for effectively using Hypergen. Think of this as learning the vocabulary of a new language - once you understand these building blocks, everything else will make much more sense.
+
+## Core Building Blocks
+
+<AccordionGroup>
+  <Accordion title="Recipes" icon="book">
+    A **Recipe** defines a process that modifies a codebase, including from non-existence to existing. Each Recipe achieves a **specific goal**. Recipes execute their steps sequentially to move the codebase from one state to another.
+
+    A Recipe is defined by a folder that contains a `recipe.yml` file.
+
+    **Think of recipes as**: Step-by-step instructions that orchestrate templates, actions, and codemods to accomplish a specific task.
+
+    **Examples**:
+    - Create new monorepo
+    - Add microservice
+    - Setup CI
+  </Accordion>
+
+  <Accordion title="Steps and Tools" icon="list">
+    Tools provide capabilities to Hypergen. Every **Step** in a Recipe uses one specific tool. In the future we'll define conventions allowing users to provide their own tools. For now, only the built-in tools are supported.
+
+    **Built-in Tools:**
+    - **Template Tool**: Processes template files using template engines
+    - **Action Tool**: Executes a function or shell command
+    - **CodeMod Tool**: Runs an AST-transforming function provided by the developer to transform an existing file
+
+    **Think of tools as**: The engines that power each step in your recipes.
+  </Accordion>
+
+  <Accordion title="Templates" icon="file-code">
+    Template files (EJS, Liquid, etc.) that the Template Tool processes to generate code files. These are assets used in steps, not tools themselves.
+
+    **Think of templates as**: Blueprints or stencils that define what your generated code will look like.
+
+    **Example**: A `component.tsx.ejs` template that generates React components with your specific naming and structure conventions.
+  </Accordion>
+
+  <Accordion title="Actions" icon="bolt">
+    Actions are either commands or function calls. Both will require the user to authorize their execution, either before or during the generation process. Functions executed by actions must be part of the cookbook, either directly implemented in it, or imported and registered in the cookbook before it can be used.
+
+    **Think of actions as**: Automated tasks that do work beyond just creating files - like installing dependencies, running tests, or updating configurations.
+
+    **Examples**:
+    - Installing npm packages after generating a new project
+    - Running database migrations after creating new models
+    - Updating configuration files with new settings
+  </Accordion>
+
+  <Accordion title="CodeMods" icon="code">
+    A **CodeMod** is a function that takes an AST (Abstract Syntax Tree) and returns an AST. CodeMods allow existing code to be transformed. They will also be used in the upcoming migrations feature, which will allow new cookbook versions to provide automated code refactoring to conform previously generated code to the new template format.
+
+    **Think of codemods as**: Smart find-and-replace that understands your code's structure, not just text.
+
+    **Examples**:
+    - Adding new imports to existing files
+    - Updating function signatures across your codebase
+    - Transforming old API calls to new patterns
+  </Accordion>
+
+  <Accordion title="Hooks" icon="webhook">
+    Event-driven triggers within recipes that execute actions when specific events occur (like "start", "end", "before:file" or "post:command"). Similar to Ansible handlers but more flexible.
+
+    **Think of hooks as**: Event listeners that let you respond to things happening during generation.
+
+    **Examples**:
+    - Cleaning up temporary files after generation completes
+    - Sending notifications when certain files are created
+    - Running validation checks before proceeding to the next step
+  </Accordion>
+
+  <Accordion title="Variables" icon="input-text">
+    Cookbooks can utilize variables to store and reuse values throughout code generation. Variables can be defined globally (in the cookbook) or per recipe. Each defined variable can be required or not. Required variables will demand a `prompt` message. The values of variables can be directly provided via the CLI, or interactively, via prompts after the command is executed.
+
+    **Think of variables as**: Placeholders that make your recipes flexible and reusable.
+
+    **Examples**:
+    - `projectName`: Used throughout templates to name files and update configurations
+    - `author`: Your name, inserted into generated files
+    - `database`: The database type to configure for your project
+  </Accordion>
+</AccordionGroup>
+
+## Organizational Concepts
+
+<Tabs>
+  <Tab title="Cookbooks">
+    A cookbook is composed of one or more "recipes". Each cookbook should be focused on a specific tool (e.g. Starlight, Astro, ESLint), or a specific scenario (e.g. Monorepo, Security).
+
+    **Think of cookbooks as**: Collections of related recipes that solve problems in a specific domain.
+
+    **Examples**:
+    - `@hyper-kits/starlight`: All recipes for working with Starlight documentation sites
+    - `@hyper-kits/monorepo`: Recipes for creating and managing monorepos
+    - `@hyper-kits/security`: Security-focused setup recipes
+  </Tab>
+
+  <Tab title="Hyper Kits">
+    A kit is a shareable bundle containing one or more cookbooks and, in the future, tools, plugins, assets, etc.
+    Kits can be shared via NPM or via a git repository so you can reuse them across different projects.
+
+    **Think of kits as**: Packages that you can install and share, containing everything needed for a specific use case.
+  </Tab>
+</Tabs>
+
+## How It All Works Together
+
+Here's how these concepts work together in practice:
+
+```
+Kit (@hyper-kits/starlight)
+├── Cookbook (starlight documentation)
+    ├── Recipe (create new site)
+    │   ├── Steps using Tools:
+    │   │   ├── Template Tool → processes config.js.ejs template
+    │   │   ├── Action Tool → runs `npm install`
+    │   │   └── CodeMod Tool → updates existing package.json
+    │   ├── Variables: projectName, description, author
+    │   └── Hooks: cleanup after completion
+    └── Recipe (add new page)
+        ├── Steps using Tools:
+        │   └── Template Tool → processes page.mdx.ejs template
+        └── Variables: pageTitle, pageContent
+```
+
+## Understanding the Hypergen Kit Structure
+
+Official kits will be published in the `@hyper-kits` npm organization.
+
+In the Hypergen CLI, folder nesting is converted to positional arguments. For example, the recipe at `add/plugin` is executed with:
+
+```bash
+hypergen starlight add plugin
+```
+
+Here's the structure of our `@hyper-kits/starlight` example:
+
+```
+@hyper-kits/starlight/
+├── kit.yml                    # Kit metadata and configuration
+├── create/                    # Recipe: create new Starlight site
+│   ├── recipe.yml            # Recipe configuration
+│   ├── templates/            # Templates used by this recipe
+│   │   ├── starlight.config.js.liquid
+│   │   ├── astro.config.js.liquid
+│   │   └── package.json.liquid
+│   ├── actions/              # Actions used by this recipe
+│   │   └── install-deps.js
+│   └── codemods/            # CodeMods used by this recipe
+├── add/
+│   ├── page/                 # Recipe: add new page
+│   │   ├── recipe.yml
+│   │   ├── templates/
+│   │   │   └── page.mdx.liquid
+│   │   └── actions/
+│   │       └── update-sidebar.js
+│   └── plugin/              # Recipe: add plugin
+│       ├── recipe.yml
+│       ├── templates/
+│       │   └── plugin.js.liquid
+│       └── codemods/
+│           └── register-plugin.js
+├── enable-typedocs/                # Recipe: add TypeDoc integration
+│   ├── recipe.yml
+│   ├── templates/
+│   │   └── typedoc.config.js.liquid
+│   └── actions/
+│       └── generate-api-docs.sh
+└── shared/                  # Shared assets across recipes
+    ├── templates/
+    ├── codemods/
+    └── actions/
+```
+
+## What's Next?
+
+Now that you understand Hypergen's core concepts, you're ready to:
+
+<CardGroup cols={2}>
+  <Card title="Install and Setup" icon="download" href="/getting-started">
+    Get Hypergen running on your machine (10 minutes)
+  </Card>
+  <Card title="Your First Generation" icon="play" href="/getting-started#your-first-generation">
+    Generate your first files (10 minutes)
+  </Card>
+  <Card title="Use Existing Cookbooks" icon="book" href="/tutorials/finding-cookbooks">
+    Learn to use community cookbooks (15 minutes)
+  </Card>
+  <Card title="Create Templates" icon="file-code" href="/tutorials/creating-templates">
+    Build your own templates (20 minutes)
+  </Card>
+</CardGroup>
+
+<Tip>
+  **Key Takeaway**: Hypergen orchestrates Templates, Actions, and CodeMods through Recipes to transform your codebase. Everything is organized into Cookbooks that focus on specific tools or scenarios, and shared as Kits.
+</Tip>

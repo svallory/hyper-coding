@@ -1,0 +1,77 @@
+---
+title: 'Quick Start'
+description: 'Get up and running with Hypergen in 5 minutes'
+---
+
+Get Hypergen installed and generate your first files in under 5 minutes.
+
+## Installation
+
+<Tabs>
+  <Tab title="Bun">
+    ```bash
+    bun add hypergen
+    ```
+  </Tab>
+  <Tab title="npm">
+    ```bash
+    npm install hypergen
+    ```
+  </Tab>
+</Tabs>
+
+## Your First Recipe
+
+Execute a recipe to generate files:
+
+```bash
+hypergen recipe execute my-component.yml --name=Button --typescript=true
+```
+
+## Explore Commands
+
+<Tabs>
+  <Tab title="Recipe Commands">
+    ```bash
+    # Validate a recipe
+    hypergen recipe validate my-component.yml
+
+    # Get recipe information
+    hypergen recipe info my-component.yml
+
+    # List recipe steps
+    hypergen step list my-component.yml
+    ```
+  </Tab>
+
+  <Tab title="Discovery Commands">
+    ```bash
+    # List available actions
+    hypergen action list
+
+    # Discover cookbooks
+    hypergen discover react
+    ```
+  </Tab>
+</Tabs>
+
+## What's Next?
+
+<Note>
+  **New to Hypergen?** Follow the [Getting Started Guide](/getting-started) for a complete walkthrough with your first code generation in under 15 minutes.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="Understanding Concepts" icon="lightbulb" href="/concepts/taxonomy">
+    Learn the mental model behind Hypergen
+  </Card>
+  <Card title="Finding Cookbooks" icon="magnifying-glass" href="/tutorials/finding-cookbooks">
+    Discover community cookbooks
+  </Card>
+  <Card title="Creating Templates" icon="file-code" href="/tutorials/creating-templates">
+    Build your own templates
+  </Card>
+  <Card title="Complete Feature List" icon="list" href="/features">
+    All capabilities and commands
+  </Card>
+</CardGroup>

@@ -1,0 +1,693 @@
+---
+title: Advanced Recipe Composition
+description: Master complex recipe patterns, tool coordination, and advanced Hypergen techniques
+time: 25 minutes
+prerequisites: Created basic templates, understanding of Hypergen concepts
+---
+
+# Advanced Recipe Composition
+
+**What you'll learn**: Complex recipe patterns, multi-tool coordination, and advanced composition techniques
+**Time needed**: 25 minutes
+**Prerequisites**: Created basic templates, understanding of Hypergen concepts
+
+This guide covers advanced patterns for building sophisticated code generation workflows that coordinate multiple tools and handle complex scenarios.
+
+## Recipe.yml Configuration System
+
+### Rich Variable System
+
+Create recipes with sophisticated variable validation:
+
+```yaml
+# recipe.yml
+name: react-component
+description: Create React components with full type safety
+version: 1.0.0
+author: "@company"
+
+variables:
+  # String with pattern validation
+  name:
+    type: string
+    required: true
+    pattern: ^[A-Z][a-zA-Z0-9]*$
+    description: Component name in PascalCase
+
+  # Boolean with default
+  typescript:
+    type: boolean
+    default: true
+    description: Generate TypeScript component
+
+  # Enum with predefined values
+  styling:
+    type: enum
+    values: [css, scss, styled-components, emotion, tailwind]
+    default: css
+    description: Styling approach to use
+
+  # Array with allowed values
+  features:
+    type: array
+    values: [hooks, context, memo, forwardRef, suspense]
+    default: []
+    description: React features to include
+
+  # Object with nested properties
+  metadata:
+    type: object
+    properties:
+      author: { type: string }
+      version: { type: string, pattern: ^\d+\.\d+\.\d+$ }
+      license: { type: enum, values: [MIT, Apache-2.0, GPL-3.0] }
+    description: Component metadata
+```
+
+### Variable Types & Validation
+
+<Tabs>
+  <Tab title="String Type">
+    Text with optional regex pattern validation
+
+    ```yaml
+    variables:
+      componentName:
+        type: string
+        required: true
+        pattern: ^[A-Z][a-zA-Z0-9]*$
+        description: Component name in PascalCase
+    ```
+  </Tab>
+
+  <Tab title="Boolean Type">
+    True/false values with defaults
+
+    ```yaml
+    variables:
+      typescript:
+        type: boolean
+        default: true
+        description: Generate TypeScript component
+    ```
+  </Tab>
+
+  <Tab title="Enum Type">
+    Predefined list of allowed values
+
+    ```yaml
+    variables:
+      styling:
+        type: enum
+        values: [css, scss, styled-components, emotion]
+        default: css
+        description: Styling approach
+    ```
+  </Tab>
+
+  <Tab title="Array Type">
+    Lists with optional value constraints
+
+    ```yaml
+    variables:
+      features:
+        type: array
+        values: [hooks, context, memo, forwardRef]
+        default: []
+        description: React features to include
+    ```
+  </Tab>
+
+  <Tab title="Object Type">
+    Nested objects with property schemas
+
+    ```yaml
+    variables:
+      metadata:
+        type: object
+        properties:
+          author: { type: string }
+          version: { type: string, pattern: ^\d+\.\d+\.\d+$ }
+        description: Component metadata
+    ```
+  </Tab>
+
+  <Tab title="Number Type">
+    Numeric values with min/max constraints
+
+    ```yaml
+    variables:
+      port:
+        type: number
+        default: 3000
+        min: 1024
+        max: 65535
+        description: Server port number
+    ```
+  </Tab>
+</Tabs>
+
+**Validation Features:**
+- Required field checking
+- Pattern matching with regex
+- Default values
+- Nested object validation
+- Array value restrictions
+
+## Recipe Step System
+
+### Complete Step Execution Framework
+
+The Recipe Step System coordinates four tools in sequential execution:
+
+<AccordionGroup>
+  <Accordion title="Full Recipe Example with All Tools" icon="code">
+    ```yaml
+    # recipe.yml with complete step system
+    name: full-stack-component
+    description: Component with all tools coordinated
+    version: 1.0.0
+
+    variables:
+      name:
+        type: string
+        required: true
+
+      typescript:
+        type: boolean
+        default: true
+
+      includeTests:
+        type: boolean
+        default: false
+
+      styling:
+        type: enum
+        values: [css, styled-components]
+        default: css
+
+    steps:
+      # Template Tool - Process template files
+      - name: Generate component
+        tool: template
+        template: component.tsx.ejs
+
+      - name: Generate styles
+        tool: template
+        template: styles.scss.ejs
+        when: "{{ styling == 'css' }}"
+
+      # Template Tool - Conditional templates
+      - name: Generate tests
+        tool: template
+        template: component.test.tsx.ejs
+        when: "{{ includeTests }}"
+
+      # Action Tool - Execute TypeScript functions
+      - name: Setup project structure
+        tool: action
+        action: setup-directories
+
+      - name: Install dependencies
+        tool: action
+        action: install-packages
+        when: "{{ typescript }}"
+
+      # CodeMod Tool - Transform existing code
+      - name: Format generated code
+        tool: codemod
+        codemod: prettier-format
+        files: ["src/**/*.{ts,tsx}"]
+
+      - name: Add TypeScript strict mode
+        tool: codemod
+        codemod: enable-strict-mode
+        files: ["tsconfig.json"]
+        when: "{{ typescript }}"
+
+      # Recipe Tool - Execute nested recipes
+      - name: Setup testing framework
+        tool: recipe
+        recipe: ./test-setup.yml
+        when: "{{ includeTests }}"
+
+      - name: Configure styling system
+        tool: recipe
+        recipe: ./styling-setup.yml
+        when: "{{ styling == 'styled-components' }}"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Step Dependencies and Conditions
+
+Control step execution with conditional logic:
+
+<Tabs>
+  <Tab title="Basic Conditions">
+    ```yaml
+    steps:
+      # Basic conditional execution
+      - name: Generate TypeScript config
+        tool: template
+        template: tsconfig.json.ejs
+        when: "{{ typescript }}"
+    ```
+  </Tab>
+
+  <Tab title="Complex Conditions">
+    ```yaml
+    steps:
+      # Complex conditions
+      - name: Setup advanced features
+        tool: action
+        action: setup-advanced
+        when: "{{ typescript && includeTests }}"
+    ```
+  </Tab>
+
+  <Tab title="Array Conditions">
+    ```yaml
+    steps:
+      # Array-based conditions
+      - name: Install React hooks
+        tool: action
+        action: install-hooks
+        when: "{{ features.includes('hooks') }}"
+    ```
+  </Tab>
+
+  <Tab title="Object Conditions">
+    ```yaml
+    steps:
+      # Object property conditions
+      - name: Configure metadata
+        tool: template
+        template: package.json.ejs
+        when: "{{ metadata.version }}"
+    ```
+  </Tab>
+</Tabs>
+
+## Tool Coordination
+
+### Template Tool
+
+Processes template files with variable substitution:
+
+<CodeGroup>
+  ```yaml Recipe Configuration
+  steps:
+    - name: Generate React component
+      tool: template
+      template: component.tsx.ejs  # .ejs or .liquid files
+      # Variables automatically available in template
+  ```
+
+  ```typescript Template File
+  // component.tsx.ejs
+  import React from 'react';
+
+  interface <%= name %>Props {
+    children?: React.ReactNode;
+  }
+
+  export const <%= name %>: React.FC<<%= name %>Props> = ({ children }) => {
+    return (
+      <div className="<%= name.toLowerCase() %>">
+        {children}
+      </div>
+    );
+  };
+  ```
+</CodeGroup>
+
+### Action Tool
+
+Executes TypeScript functions with full context:
+
+<CodeGroup>
+  ```yaml Recipe Configuration
+  steps:
+    - name: Setup directory structure
+      tool: action
+      action: create-directories  # References function in actions/
+  ```
+
+  ```typescript Action Implementation
+  // actions.ts
+  import type { ActionContext, ActionResult } from 'hypergen/types';
+
+  export async function createDirectories(context: ActionContext): Promise<ActionResult> {
+    const { args, utils, logger } = context;
+
+    await utils.createDirectory(`src/components/${args.name}`);
+    await utils.createDirectory(`src/components/${args.name}/tests`);
+
+    logger.info(`✅ Created directories for ${args.name}`);
+
+    return {
+      success: true,
+      files: [`src/components/${args.name}`]
+    };
+  }
+  ```
+</CodeGroup>
+
+### CodeMod Tool
+
+Transforms existing code using AST modifications:
+
+```yaml
+steps:
+  - name: Format all TypeScript files
+    tool: codemod
+    codemod: prettier-format
+    files: ["src/**/*.{ts,tsx}"]
+
+  - name: Add strict null checks
+    tool: codemod
+    codemod: enable-strict-nulls
+    files: ["tsconfig.json"]
+```
+
+### Recipe Tool
+
+Executes nested recipes for composition:
+
+```yaml
+steps:
+  - name: Setup testing framework
+    tool: recipe
+    recipe: ./sub-recipes/jest-setup.yml
+
+  - name: Configure CI/CD
+    tool: recipe
+    recipe: https://github.com/company/ci-setup/recipe.yml
+```
+
+## Step Execution Engine
+
+### RecipeEngine Architecture
+
+The RecipeEngine coordinates the entire execution:
+
+```typescript
+// Usage example
+import { RecipeEngine } from 'hypergen/recipe-engine';
+
+const engine = new RecipeEngine({
+  workingDir: process.cwd(),
+  enableDebugLogging: true
+});
+
+// Execute complete recipe
+const result = await engine.executeRecipe('my-component.yml', {
+  variables: { name: 'Button', typescript: true },
+  dryRun: false
+});
+```
+
+### StepExecutor Coordination
+
+<Info>
+  The StepExecutor manages individual step execution with the following capabilities:
+</Info>
+
+- **Sequential Execution**: Steps run in defined order
+- **Conditional Logic**: `when` clauses control execution
+- **Context Sharing**: Variables available across all steps
+- **Error Handling**: Continue or fail based on configuration
+- **Progress Tracking**: Real-time step completion reporting
+
+## Working CLI Commands
+
+### Recipe Execution Commands
+
+```bash
+# Execute complete recipe with all steps
+hypergen recipe execute my-component.yml --name=Button --typescript=true
+
+# Validate recipe configuration
+hypergen recipe validate my-component.yml
+
+# Show recipe details and all steps
+hypergen recipe info my-component.yml
+
+# List available recipes
+hypergen recipe list ./recipes
+
+# Dry run - see what would be generated
+hypergen recipe execute my-component.yml --name=Button --dryRun
+```
+
+### Step-by-Step Execution
+
+```bash
+# List all steps in a recipe
+hypergen step list my-component.yml
+
+# Execute a single step by name
+hypergen step execute my-component.yml "Generate component" --name=Button
+
+# Execute specific step with different variables
+hypergen step execute my-component.yml "Setup tests" --name=Button --includeTests=true
+```
+
+### Flags and Options
+
+```bash
+# Common execution flags
+hypergen recipe execute recipe.yml \
+  --name=MyComponent \          # Variable values
+  --typescript=true \            # Boolean variables
+  --dryRun \                     # Don't write files
+  --force \                      # Overwrite existing files
+  --skipPrompts \                # Use defaults
+  --continueOnError              # Don't stop on step failures
+```
+
+## Real-World Examples
+
+### Complete React Component Recipe
+
+<AccordionGroup>
+  <Accordion title="Full Recipe Configuration" icon="react" iconType="brand">
+    ```yaml
+    name: react-component-full
+    description: Complete React component with all toolchain integration
+    version: 1.0.0
+
+    variables:
+      name:
+        type: string
+        required: true
+        pattern: ^[A-Z][a-zA-Z0-9]*$
+
+      typescript:
+        type: boolean
+        default: true
+
+      styling:
+        type: enum
+        values: [css, scss, styled-components, emotion]
+        default: css
+
+      features:
+        type: array
+        values: [hooks, context, memo, forwardRef, suspense]
+        default: []
+
+      withTests:
+        type: boolean
+        default: true
+
+      withStorybook:
+        type: boolean
+        default: false
+
+    steps:
+      # Template Tool - Generate base files
+      - name: Generate component file
+        tool: template
+        template: component.tsx.ejs
+
+      - name: Generate styles
+        tool: template
+        template: styles.scss.ejs
+        when: "{{ styling === 'scss' }}"
+
+      - name: Generate TypeScript types
+        tool: template
+        template: types.d.ts.ejs
+        when: "{{ typescript }}"
+
+      # Action Tool - Setup project structure
+      - name: Create component directory
+        tool: action
+        action: setup-component-structure
+
+      - name: Install styled-components
+        tool: action
+        action: install-styling-deps
+        when: "{{ styling === 'styled-components' }}"
+
+      # Template Tool - Generate test files
+      - name: Generate component tests
+        tool: template
+        template: component.test.tsx.ejs
+        when: "{{ withTests }}"
+
+      - name: Generate Storybook story
+        tool: template
+        template: component.stories.tsx.ejs
+        when: "{{ withStorybook }}"
+
+      # CodeMod Tool - Transform and optimize
+      - name: Format all generated files
+        tool: codemod
+        codemod: prettier-format
+        files: ["src/**/*.{ts,tsx,scss}"]
+
+      - name: Optimize imports
+        tool: codemod
+        codemod: organize-imports
+        files: ["src/**/*.{ts,tsx}"]
+        when: "{{ typescript }}"
+
+      - name: Add React.memo optimization
+        tool: codemod
+        codemod: add-memo-wrapper
+        files: ["src/components/{{ name }}.tsx"]
+        when: "{{ features.includes('memo') }}"
+
+      # Recipe Tool - Execute related recipes
+      - name: Setup Jest testing
+        tool: recipe
+        recipe: ./test-setup.yml
+        when: "{{ withTests }}"
+
+      - name: Configure Storybook
+        tool: recipe
+        recipe: ./storybook-setup.yml
+        when: "{{ withStorybook }}"
+
+      # Action Tool - Final setup
+      - name: Update index exports
+        tool: action
+        action: update-exports
+
+      - name: Run initial tests
+        tool: action
+        action: run-tests
+        when: "{{ withTests }}"
+    ```
+  </Accordion>
+
+  <Accordion title="Execution Examples" icon="terminal">
+    ```bash
+    # Basic component
+    hypergen recipe execute react-component-full.yml --name=Button
+
+    # Advanced component with all features
+    hypergen recipe execute react-component-full.yml \
+      --name=AdvancedButton \
+      --typescript=true \
+      --styling=styled-components \
+      --features=hooks,memo,forwardRef \
+      --withTests=true \
+      --withStorybook=true
+
+    # Step-by-step execution for debugging
+    hypergen step list react-component-full.yml
+    hypergen step execute react-component-full.yml "Generate component file" --name=Button
+    hypergen step execute react-component-full.yml "Format all generated files"
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+### Step Organization
+
+<Steps>
+  <Step title="Group Related Steps">
+    Keep template generation together, then actions, then codemods for better maintainability.
+  </Step>
+
+  <Step title="Use Descriptive Names">
+    Step names should clearly indicate what they do - this helps with debugging and documentation.
+  </Step>
+
+  <Step title="Apply Conditional Logic">
+    Use `when` clauses to make steps conditional and avoid unnecessary work.
+  </Step>
+
+  <Step title="Design for Recovery">
+    Design steps to be recoverable from failures - avoid hard dependencies where possible.
+  </Step>
+</Steps>
+
+### Tool Selection Guidelines
+
+<CardGroup cols={2}>
+  <Card title="Template Tool" icon="file-code">
+    For generating new files from templates
+  </Card>
+
+  <Card title="Action Tool" icon="bolt">
+    For file system operations, package management, shell commands
+  </Card>
+
+  <Card title="CodeMod Tool" icon="code">
+    For modifying existing files programmatically
+  </Card>
+
+  <Card title="Recipe Tool" icon="layer-group">
+    For composing functionality from other recipes
+  </Card>
+</CardGroup>
+
+### Variable Design
+
+<Tip>
+  Always use descriptive names, appropriate types, and provide sensible defaults for the best user experience.
+</Tip>
+
+```yaml
+variables:
+  # Use descriptive names and types
+  componentName:
+    type: string
+    required: true
+    pattern: ^[A-Z][a-zA-Z0-9]*$
+    description: React component name in PascalCase
+
+  # Provide sensible defaults
+  includeTests:
+    type: boolean
+    default: true
+    description: Generate test files alongside component
+
+  # Use enums for predefined choices
+  framework:
+    type: enum
+    values: [react, vue, svelte, angular]
+    default: react
+    description: Frontend framework to target
+```
+
+### Performance Optimization
+
+<Note>
+  Optimize your recipes for performance with these techniques:
+</Note>
+
+- **Minimize Step Count**: Combine related operations when possible
+- **Use Conditional Steps**: Avoid unnecessary work with `when` clauses
+- **Cache Template Results**: Let the engine cache processed templates
+- **Parallel Safe**: Design steps that don't interfere with each other
+
+---
+
+The Recipe Step System provides a complete, production-ready framework for coordinating code generation tools. All features are implemented and ready for use in your projects.

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Hypergen",
+  "logo": {
+    "dark": "/logo/favicon.svg",
+    "light": "/logo/favicon.svg"
+  },
+  "favicon": "/logo/favicon.svg",
+  "colors": {
+    "primary": "#007acc",
+    "light": "#4d94ff",
+    "dark": "#005a99",
+    "anchors": {
+      "from": "#007acc",
+      "to": "#005a99"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/svallory/hypergen"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "/getting-started"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api-reference"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/svallory/hypergen"
+    },
+    {
+      "name": "Community",
+      "icon": "comments",
+      "url": "https://github.com/svallory/hypergen/discussions"
+    },
+    {
+      "name": "Report Issues",
+      "icon": "bug",
+      "url": "https://github.com/svallory/hypergen/issues"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "index",
+        "quick-start",
+        "getting-started"
+      ]
+    },
+    {
+      "group": "Core Concepts",
+      "pages": [
+        "concepts/taxonomy"
+      ]
+    },
+    {
+      "group": "Using Cookbooks",
+      "pages": [
+        "tutorials/finding-cookbooks",
+        "tutorials/running-recipes"
+      ]
+    },
+    {
+      "group": "Creating Content",
+      "pages": [
+        "tutorials/creating-templates",
+        "advanced-composition"
+      ]
+    },
+    {
+      "group": "Reference",
+      "pages": [
+        "features",
+        "roadmap"
+      ]
+    }
+  ],
+  "api": {
+    "baseUrl": "https://github.com/svallory/hypergen",
+    "playground": {
+      "mode": "hide"
+    }
+  },
+  "footerSocials": {
+    "github": "https://github.com/svallory/hypergen"
+  },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
+  }
+}

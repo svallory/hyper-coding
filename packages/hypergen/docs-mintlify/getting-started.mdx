@@ -1,0 +1,147 @@
+---
+title: 'Getting Started with Hypergen'
+description: 'Install Hypergen and get your first code generation working in under 15 minutes'
+---
+
+<Info>
+  **What you'll learn**: How to install Hypergen and generate your first files
+  **Time needed**: 15 minutes
+  **Prerequisites**: Node.js 18+, basic command line knowledge
+</Info>
+
+Hypergen is a modern code generator that orchestrates templates, actions, and codemods through recipes. This guide gets you up and running quickly.
+
+## Before You Start
+
+Make sure you have Node.js 18+ installed:
+
+```bash
+node --version  # Should show v18 or higher
+```
+
+## Installation
+
+<Tabs>
+  <Tab title="Using Bun (Recommended)">
+    ```bash
+    # Install with bun
+    bun add -g hypergen
+
+    # Verify installation
+    hypergen --version
+    ```
+  </Tab>
+  <Tab title="Using npm">
+    ```bash
+    # Install with npm
+    npm install -g hypergen
+
+    # Verify installation
+    hypergen --version
+    ```
+  </Tab>
+</Tabs>
+
+## Your First Generation
+
+Let's generate your first files to see Hypergen in action:
+
+<Steps>
+  <Step title="Create a test directory">
+    ```bash
+    mkdir hypergen-test && cd hypergen-test
+    ```
+  </Step>
+
+  <Step title="Generate a React component">
+    ```bash
+    # Uses built-in cookbook
+    hypergen react component --name=HelloWorld --typescript=true
+    ```
+  </Step>
+
+  <Step title="Verify the output">
+    **Success!** You should now have:
+    - `src/components/HelloWorld.tsx` - Your React component
+    - `src/components/HelloWorld.test.tsx` - Basic test file
+  </Step>
+</Steps>
+
+## Understanding What Happened
+
+When you ran that command, Hypergen:
+
+<Steps>
+  <Step title="Found the recipe">
+    Located the `react/component` recipe from built-in cookbooks
+  </Step>
+  <Step title="Processed variables">
+    Used `name=HelloWorld` and `typescript=true`
+  </Step>
+  <Step title="Executed steps">
+    Ran each step in the recipe sequentially
+  </Step>
+  <Step title="Generated files">
+    Created files from templates with your variables
+  </Step>
+</Steps>
+
+## Explore Available Commands
+
+<CodeGroup>
+  ```bash List Recipes
+  # List all available recipes
+  hypergen recipe list
+  ```
+
+  ```bash Recipe Info
+  # Get details about a specific recipe
+  hypergen recipe info react/component
+  ```
+
+  ```bash Step List
+  # See what steps a recipe will execute
+  hypergen step list react/component
+  ```
+</CodeGroup>
+
+## Configuration (Optional)
+
+Create `hypergen.config.js` in your project root for custom settings:
+
+```javascript hypergen.config.js
+// hypergen.config.js
+export default {
+  // Where to look for cookbooks
+  cookbooks: ['recipes', 'cookbooks', '_templates'],
+
+  // Template engine preferences
+  engines: {
+    default: 'liquidjs',
+    fallback: 'ejs'
+  }
+};
+```
+
+## What's Next?
+
+Now that Hypergen is working, choose your learning path:
+
+<CardGroup cols={2}>
+  <Card title="Find Cookbooks" icon="magnifying-glass" href="/tutorials/finding-cookbooks">
+    Discover community cookbooks (10 minutes)
+  </Card>
+  <Card title="Run Recipes" icon="play" href="/tutorials/running-recipes">
+    Master recipe execution and variables (15 minutes)
+  </Card>
+  <Card title="Understand Concepts" icon="lightbulb" href="/concepts/taxonomy">
+    Learn Hypergen's mental model (8 minutes)
+  </Card>
+  <Card title="Create Templates" icon="file-code" href="/tutorials/creating-templates">
+    Build your first template (20 minutes)
+  </Card>
+</CardGroup>
+
+<Check>
+  **Congratulations!** You've successfully installed Hypergen and generated your first files. The next step depends on whether you want to use existing cookbooks or create your own content.
+</Check>
