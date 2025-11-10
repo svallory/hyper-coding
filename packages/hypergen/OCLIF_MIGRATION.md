@@ -17,9 +17,10 @@ When installed as a standalone package:
 
 ```bash
 npm install -g hypergen
-hypergen init:generator --name=my-generator
-hypergen discover
-hypergen list
+hypergen init                    # Initialize project
+hypergen starlight create        # Run cookbook recipe
+hypergen list                    # List available actions
+hypergen discover                # Discover cookbooks
 ```
 
 ### Plugin Mode
@@ -28,31 +29,57 @@ When installed as a plugin in the future `hyper` CLI:
 
 ```bash
 hyper plugins install hypergen
-hyper gen init:generator --name=my-generator  # Maps to hypergen init:generator
-hyper gen discover                            # Maps to hypergen discover
-hyper gen list                                # Maps to hypergen list
+hyper gen init                       # Maps to hypergen init
+hyper gen starlight create           # Maps to hypergen starlight create
+hyper gen list                       # Maps to hypergen list
 ```
 
 The `gen` prefix is automatically added by oclif's plugin system when hypergen is loaded as a plugin.
 
+## New Taxonomy
+
+Hypergen uses a cookbook/recipe model instead of the old generator concept:
+
+- **Cookbooks**: Collections of recipes focused on a specific tool or scenario (e.g., @hyper-kits/starlight)
+- **Recipes**: Specific processes that modify your codebase (e.g., create, add/page)
+- **Tools**: Template, Action, and CodeMod engines that power recipe steps
+- **Kits**: Shareable bundles containing cookbooks and related assets
+
 ## Command Structure
 
-All commands follow oclif conventions:
+### Core Commands
 
-- **Commands**: Located in `src/oclif-commands/`
-- **Topics**: Commands can be organized into topics (e.g., `init:generator`, `config:show`)
-- **Flags**: Use oclif's `Flags` for consistent flag parsing
-- **Args**: Use oclif's `Args` for positional arguments
-
-### Available Commands
-
-- `hypergen init` - Initialize workspace or generator (with subcommands)
-  - `init:generator` - Create a new generator
-  - `init:workspace` - Initialize a new workspace
-- `hypergen discover` - Discover generators from all sources
-- `hypergen list` - List available actions
-- `hypergen info <action>` - Show detailed information about an action
+- `hypergen init` - Initialize Hypergen in current project (finds root package.json, handles monorepos)
+- `hypergen discover` - Discover available cookbooks from all sources
+- `hypergen list` - List available actions/recipes
+- `hypergen info <action>` - Show detailed information
 - `hypergen config` - Manage configuration (with subcommands)
+
+### Cookbook Invocation
+
+The CLI supports flexible cookbook invocation:
+
+```bash
+# Explicit cookbook command
+hypergen cookbook starlight create
+
+# Direct invocation (recommended)
+hypergen starlight create
+
+# With recipe and variables
+hypergen starlight add page --title="Getting Started"
+
+# Built-in cookbook
+hypergen cookbook default
+hypergen cookbook recipe --name=MyComponent
+```
+
+When you run `hypergen COOKBOOK [RECIPE]` and COOKBOOK is not a recognized command, Hypergen automatically:
+1. Treats COOKBOOK as a cookbook name
+2. Treats RECIPE (if present) as the recipe name
+3. Routes to the cookbook execution engine
+
+This is handled by the `command_not_found` hook.
 
 ## Configuration
 
@@ -64,15 +91,15 @@ The oclif configuration in `package.json`:
     "bin": "hypergen",
     "dirname": "hypergen",
     "commands": "./dist/oclif-commands",
+    "hooks": {
+      "command_not_found": "./dist/oclif-commands/hooks/command-not-found"
+    },
     "plugins": [
       "@oclif/plugin-help",
       "@oclif/plugin-plugins"
     ],
     "topicSeparator": ":",
     "topics": {
-      "init": {
-        "description": "Initialize workspace or generator"
-      },
       "config": {
         "description": "Manage configuration"
       }
@@ -85,7 +112,8 @@ The oclif configuration in `package.json`:
 
 - **bin**: The command name for standalone mode
 - **commands**: Directory containing command classes
-- **topicSeparator**: Uses `:` for subcommands (e.g., `init:generator`)
+- **hooks**: Custom hooks for command routing (enables COOKBOOK pattern)
+- **topicSeparator**: Uses `:` for subcommands (e.g., `config:show`)
 - **plugins**: Built-in plugins for help and plugin management
 
 ## Development Workflow
@@ -100,7 +128,8 @@ bun run build:lib  # Compile TypeScript to dist/
 
 ```bash
 node dist/bin-oclif.js --help
-node dist/bin-oclif.js init:generator --help
+node dist/bin-oclif.js init
+node dist/bin-oclif.js starlight create
 ```
 
 ### Adding New Commands
@@ -146,7 +175,8 @@ When the `hyper` CLI is ready, hypergen will be installable as a plugin:
 hyper plugins install hypergen
 
 # All hypergen commands become available under 'hyper gen'
-hyper gen init:generator --name=my-generator
+hyper gen init
+hyper gen starlight create
 hyper gen list
 ```
 
@@ -162,15 +192,17 @@ The oclif plugin system automatically:
 2. **Plugin System**: Easy integration with other oclif-based CLIs
 3. **Auto-generated Help**: Help text generated from command metadata
 4. **Type Safety**: Full TypeScript support with type inference
-5. **Testing**: Built-in testing utilities for CLI commands
-6. **Extensibility**: Easy to add new commands and plugins
+5. **Extensibility**: Easy to add new commands and hooks
+6. **Flexible Routing**: Custom hooks enable dynamic command routing
 
 ## Migration Notes
 
 - Original CLI structure in `src/cli/` is preserved for reference
 - New oclif commands in `src/oclif-commands/` follow oclif patterns
-- Functionality is maintained - only the CLI framework changed
-- All existing features work in both standalone and plugin modes
+- Removed `init:generator` and `init:workspace` (old generator concept)
+- Replaced with cookbook/recipe model
+- `hypergen init` now initializes the current project (no subcommands)
+- Cookbook invocation via `hypergen COOKBOOK RECIPE` pattern
 
 ## Installation Note
 

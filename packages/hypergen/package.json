@@ -36,15 +36,15 @@
 		"bin": "hypergen",
 		"dirname": "hypergen",
 		"commands": "./dist/oclif-commands",
+		"hooks": {
+			"command_not_found": "./dist/oclif-commands/hooks/command-not-found"
+		},
 		"plugins": [
 			"@oclif/plugin-help",
 			"@oclif/plugin-plugins"
 		],
 		"topicSeparator": ":",
 		"topics": {
-			"init": {
-				"description": "Initialize workspace or generator"
-			},
 			"config": {
 				"description": "Manage configuration"
 			}
