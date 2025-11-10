@@ -29,9 +29,28 @@
 	},
 	"main": "dist/index.js",
 	"bin": {
-		"hypergen": "dist/bin.js"
+		"hypergen": "dist/bin-oclif.js"
 	},
 	"type": "module",
+	"oclif": {
+		"bin": "hypergen",
+		"dirname": "hypergen",
+		"commands": "./dist/oclif-commands",
+		"plugins": [
+			"@oclif/plugin-help",
+			"@oclif/plugin-plugins"
+		],
+		"topicSeparator": ":",
+		"topics": {
+			"init": {
+				"description": "Initialize workspace or generator"
+			},
+			"config": {
+				"description": "Manage configuration"
+			}
+		},
+		"repositoryPrefix": "<%- repo %>/blob/main/<%- commandPath %>"
+	},
 	"scripts": {
 		"standalone": "rm -rf standalone; bun run build:lib && bun pkg package.json --out-path standalone && bun scripts/standalone.js",
 		"standalone:brew-sha": "shasum -a 256 standalone/*.macos.*.tar.gz",
@@ -61,6 +80,9 @@
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",
 		"@microsoft/api-extractor": "^7.52.11",
+		"@oclif/core": "^4.0.0",
+		"@oclif/plugin-help": "^6.0.0",
+		"@oclif/plugin-plugins": "^5.0.0",
 		"@types/node": "^17.0.45",
 		"ajv": "^8.17.1",
 		"chalk": "^4.1.2",
