@@ -1,0 +1,36 @@
+type: 'library'
+language: 'typescript'
+project:
+  name: '@hyperdev/plugin-watch'
+  description: 'Oclif plugin for hyper watch command'
+
+tasks:
+  build:
+    command: 'bun run build'
+    inputs:
+      - 'src/**/*'
+      - 'tsconfig.json'
+      - 'package.json'
+    outputs:
+      - 'dist'
+
+  typecheck:
+    command: 'bun run typecheck'
+    inputs:
+      - 'src/**/*'
+      - 'tsconfig.json'
+
+  lint:
+    command: 'bun run lint'
+    inputs:
+      - 'src/**/*'
+      - '.eslintrc*'
+
+  clean:
+    command: 'bun run clean'
+
+  test:
+    command: 'bun run test'
+    inputs:
+      - 'src/**/*'
+      - 'tests/**/*'

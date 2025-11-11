@@ -1,0 +1,62 @@
+{
+  "name": "@hyperdev/plugin-watch",
+  "version": "0.1.0",
+  "description": "Oclif plugin for hyper watch command - monitor agent activity and capture knowledge",
+  "author": "HyperDev",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "type": "module",
+  "files": [
+    "/dist",
+    "/oclif.manifest.json"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist",
+    "prepack": "bun run build && oclif manifest",
+    "postpack": "rm -f oclif.manifest.json",
+    "test": "echo \"No tests yet\"",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "oclif-plugin",
+    "hyper",
+    "watch",
+    "monitoring",
+    "agent"
+  ],
+  "dependencies": {
+    "@oclif/core": "^4.0.0",
+    "chokidar": "^4.0.3",
+    "chalk": "^5.3.0"
+  },
+  "devDependencies": {
+    "@oclif/plugin-help": "^6.2.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "oclif": "^4.0.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "oclif": {
+    "bin": "hyper",
+    "dirname": "hyper",
+    "commands": "./dist/commands",
+    "topicSeparator": " ",
+    "topics": {
+      "watch": {
+        "description": "Monitor agent activity and capture knowledge locally"
+      }
+    }
+  }
+}
