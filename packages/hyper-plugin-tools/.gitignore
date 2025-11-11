@@ -1,0 +1,13 @@
+*.js
+*.d.ts
+*.js.map
+*.d.ts.map
+!jest.config.js
+!.eslintrc.js
+/lib/
+/dist/
+/node_modules/
+/oclif.manifest.json
+/coverage/
+/.nyc_output/
+/tmp/

@@ -1,0 +1,54 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+# The technology stack this project belongs to
+stack: backend
+
+# The type of project
+type: library
+
+language: typescript
+platform: bun
+
+tags:
+  - oclif
+  - cli
+  - plugin
+  - tools
+  - typescript
+
+tasks:
+  build:
+    command: 'bun run build'
+    inputs:
+      - 'src/**/*'
+      - 'tsconfig.json'
+      - 'package.json'
+    outputs:
+      - 'dist/**/*'
+
+  clean:
+    command: 'bun run clean'
+
+  dev:
+    command: 'bun run dev'
+    local: true
+
+  test:
+    command: 'bun run test'
+    inputs:
+      - 'src/**/*'
+      - 'test/**/*'
+
+  test:watch:
+    command: 'bun run test:watch'
+    local: true
+
+  lint:
+    command: 'bun run lint'
+    inputs:
+      - 'src/**/*'
+
+  format:
+    command: 'bun run format'
+    inputs:
+      - 'src/**/*'

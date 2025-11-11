@@ -1,0 +1,92 @@
+{
+  "name": "@hyper/plugin-tools",
+  "version": "0.1.0",
+  "description": "HyperDev tools plugin - Swiss army knife for configuring development tools for AI agents",
+  "author": "HyperDev Team",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "oclif.manifest.json"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist/ oclif.manifest.json",
+    "dev": "tsc --build --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/ --ext .ts",
+    "format": "prettier --write src/",
+    "prepack": "bun run clean && bun run build && oclif manifest"
+  },
+  "dependencies": {
+    "@oclif/core": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "oclif": "^4.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "oclif": {
+    "bin": "hyper",
+    "dirname": "hyper",
+    "commands": "./dist/commands",
+    "topicSeparator": " ",
+    "topics": {
+      "tools": {
+        "description": "Configure and manage development tools for AI agents"
+      },
+      "tools:ai": {
+        "description": "Configure AI integration tools (MCP servers, agent definitions, Claude Code commands)"
+      },
+      "tools:security": {
+        "description": "Configure security tools (dependency scanners, secret scanners, SAST)"
+      },
+      "tools:quality": {
+        "description": "Configure code quality tools (linters, formatters, type checkers, tests)"
+      },
+      "tools:architecture": {
+        "description": "Configure architecture tools (complexity scanners, arch testing, ADR tools)"
+      }
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperdev/hyper-coding.git",
+    "directory": "packages/hyper-plugin-tools"
+  },
+  "bugs": {
+    "url": "https://github.com/hyperdev/hyper-coding/issues"
+  },
+  "homepage": "https://hyper-coding.saulo.engineer",
+  "keywords": [
+    "oclif-plugin",
+    "hyper",
+    "hyperdev",
+    "tools",
+    "ai-tools",
+    "developer-tools",
+    "mcp",
+    "claude-code",
+    "linter",
+    "formatter",
+    "security-scanner",
+    "architecture"
+  ]
+}
