@@ -1,0 +1,64 @@
+{
+  "name": "@hyper-coding/cli",
+  "version": "1.0.0",
+  "description": "HyperDev CLI - A unified command-line interface for HyperDev tools",
+  "keywords": [
+    "cli",
+    "hyperdev",
+    "code-generation",
+    "development-tools"
+  ],
+  "author": {
+    "name": "Saulo Vallory",
+    "email": "saulo@toki.life",
+    "url": "https://saulo.engineer"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/svallory/hyper-coding.git"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "hyper": "./bin/run.js"
+  },
+  "type": "module",
+  "files": [
+    "/bin",
+    "/dist",
+    "/oclif.manifest.json"
+  ],
+  "scripts": {
+    "build": "shx rm -rf dist && tsc -b",
+    "postpack": "shx rm -f oclif.manifest.json",
+    "prepack": "bun run build && oclif manifest",
+    "test": "echo \"No tests yet\" && exit 0",
+    "version": "oclif readme && git add README.md"
+  },
+  "dependencies": {
+    "@oclif/core": "^4.0.30",
+    "@oclif/plugin-help": "^6.2.16",
+    "@oclif/plugin-plugins": "^5.4.16",
+    "hypergen": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^17.0.45",
+    "oclif": "^4.15.23",
+    "shx": "^0.3.4",
+    "typescript": "^5.5.3"
+  },
+  "oclif": {
+    "bin": "hyper",
+    "dirname": "hyper",
+    "commands": "./dist/commands",
+    "plugins": [
+      "@oclif/plugin-help"
+    ],
+    "topicSeparator": " ",
+    "topics": {}
+  },
+  "engines": {
+    "node": ">=14.18.0"
+  }
+}

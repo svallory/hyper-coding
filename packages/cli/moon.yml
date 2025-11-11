@@ -1,0 +1,41 @@
+# Technology stack
+stack: systems
+
+# Project type
+type: tool
+
+language: typescript
+platform: bun
+
+tags:
+  - cli
+  - oclif
+  - typescript
+  - bun
+
+# Project dependencies
+dependsOn:
+  - hypergen
+
+# Tasks configuration
+tasks:
+  build:
+    command: 'bun run build'
+    inputs:
+      - 'src/**/*'
+      - 'tsconfig.json'
+      - 'package.json'
+    outputs:
+      - 'dist'
+
+  test:
+    command: 'bun run test'
+    inputs:
+      - 'src/**/*'
+      - 'test/**/*'
+
+  dev:
+    command: './bin/dev.js'
+    local: true
+    options:
+      runInCI: false

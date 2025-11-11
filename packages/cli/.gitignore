@@ -1,0 +1,10 @@
+*-debug.log
+*-error.log
+*.tsbuildinfo
+.nyc_output
+coverage
+dist
+lib
+node_modules
+oclif.manifest.json
+tmp
