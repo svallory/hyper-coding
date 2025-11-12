@@ -1,0 +1,112 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "mintlify-tsdocs",
+  "theme": "mint",
+  "description": "TypeScript documentation generator with Mintlify integration",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0D9373"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/microsoft/rushstack"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get Started",
+      "href": "https://github.com/microsoft/rushstack/tree/main/README.md"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Components",
+            "icon": "puzzle",
+            "pages": [
+              "components/type-tree"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Architecture",
+        "groups": [
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/cli-layer",
+              "architecture/generation-layer",
+              "architecture/emission-layer",
+              "architecture/utils-layer",
+              "architecture/ast-nodes-layer"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "TypeScript API",
+        "groups": [
+          {
+            "group": "TypeScript API",
+            "icon": "code",
+            "pages": [
+              "api/overview",
+              "api/mintlify-tsdocs.custommarkdownemitter",
+              "api/mintlify-tsdocs.icustommarkdownemitteroptions",
+              "api/mintlify-tsdocs.imarkdowndocumenteroptions",
+              "api/mintlify-tsdocs.imarkdownemittercontext",
+              "api/mintlify-tsdocs.imarkdownemitteroptions",
+              "api/mintlify-tsdocs.markdowndocumenter"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Code API",
+            "icon": "code",
+            "pages": []
+          }
+        ]
+      }
+    ],
+    "anchors": [
+      {
+        "anchor": "GitHub",
+        "icon": "github",
+        "href": "https://github.com/microsoft/rushstack"
+      },
+      {
+        "anchor": "Rush Stack",
+        "icon": "layers",
+        "href": "https://rushstack.io"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/microsoft/rushstack"
+    }
+  }
+}

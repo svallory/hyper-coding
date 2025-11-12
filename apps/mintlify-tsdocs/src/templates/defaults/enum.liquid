@@ -1,0 +1,22 @@
+{% layout "layout" %}
+
+{% block content %}
+## Members
+
+{% if members and members.size > 0 %}
+{% for member in members %}
+### {{ member.title }}
+
+{% if member.defaultValue %}
+**Value**: `{{ member.defaultValue }}`
+{% endif %}
+
+{% if member.description %}
+{{ member.description }}
+{% endif %}
+
+{% endfor %}
+{% else %}
+*No members defined.*
+{% endif %}
+{% endblock %}

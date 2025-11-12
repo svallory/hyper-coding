@@ -1,0 +1,641 @@
+---
+title: Generation Layer
+description: Document generation orchestration and AST construction
+icon: "cogs"
+---
+
+## Overview
+
+The generation layer is the central orchestrator of `mintlify-tsdocs`. It traverses the API model and constructs the semantic structure of each documentation page using TSDoc AST nodes. The layer has been refactored to use modular components for navigation management, caching, and performance monitoring.
+
+<Info>
+  **Primary Component**: `src/documenters/MarkdownDocumenter.ts`
+</Info>
+
+<Note>
+  **Recent Architecture Changes**: The generation layer now delegates navigation to `NavigationManager`, integrates caching through `CacheManager`, and includes performance monitoring via `PerformanceMonitor`.
+</Note>
+
+## Key Responsibilities
+
+<CardGroup cols={2}>
+  <Card title="File Management" icon="folder">
+    Deletes old output and writes new MDX files
+  </Card>
+  <Card title="API Traversal" icon="sitemap">
+    Recursively iterates through packages and API items
+  </Card>
+  <Card title="AST Construction" icon="diagram-project">
+    Builds TSDoc AST representing document structure
+  </Card>
+  <Card title="Navigation Management" icon="map">
+    Delegates to `NavigationManager` for docs.json updates
+  </Card>
+  <Card title="Performance Monitoring" icon="gauge-high">
+    Integrates `PerformanceMonitor` for execution tracking
+  </Card>
+  <Card title="Caching Integration" icon="database">
+    Coordinates with `CacheManager` for optimization
+  </Card>
+</CardGroup>
+
+## Core Generation Flow
+
+<Steps>
+  <Step title="Delete Old Output">
+    `_deleteOldOutputFiles()` cleans the output directory
+
+    <Warning>
+      This step **permanently deletes** all files in the output folder!
+    </Warning>
+  </Step>
+
+  <Step title="Traverse API Model">
+    Recursively iterate through the API hierarchy:
+    - Packages
+    - Namespaces
+    - Classes, Interfaces, Types
+    - Functions, Variables
+
+    Member-level items (methods, properties) are documented within their parent's page, not as separate files.
+  </Step>
+
+  <Step title="Generate Each Page">
+    For each API item, call `_writeApiItemPage()`:
+    1. Build frontmatter (YAML)
+    2. Construct TSDoc AST
+    3. Pass to emitter
+    4. Write MDX file
+    5. Add to navigation list
+  </Step>
+
+  <Step title="Update Navigation">
+    `NavigationManager.generateNavigation()` merges new pages into `docs.json`
+  </Step>
+
+  <Step title="Performance Reporting">
+    `PerformanceMonitor.printSummary()` displays execution statistics
+  </Step>
+
+  <Step title="Cache Statistics">
+    `CacheManager.printStats()` reports cache hit rates and performance
+  </Step>
+</Steps>
+
+## Modular Architecture
+
+<Note>
+  **Architecture Evolution**: The generation layer has been refactored to separate concerns and improve maintainability.
+</Note>
+
+<AccordionGroup>
+  <Accordion title="Navigation Management Extraction" icon="map">
+**Before**: Navigation logic was embedded in `MarkdownDocumenter`
+
+**After**: Dedicated `NavigationManager` handles all navigation concerns:
+
+```typescript
+// Initialization
+this._navigationManager = new NavigationManager({
+  docsJsonPath: options.docsJsonPath,
+  tabName: options.tabName,
+  groupName: options.groupName,
+  enableMenu: options.enableMenu,
+  outputFolder: this._outputFolder
+});
+
+// Usage
+this._navigationManager.addApiItem(apiItem, filename);
+this._navigationManager.generateNavigation();
+```
+
+**Benefits**:
+- Separation of concerns
+- Reusable navigation logic
+- Better testability
+- Mintlify v4 compatibility
+  </Accordion>
+
+  <Accordion title="Caching Integration" icon="database">
+**Performance Optimization**: Coordinates with caching layer for improved performance:
+
+```typescript
+// Initialize cache manager
+const cacheManager = getGlobalCacheManager({
+  enabled: true,
+  enableStats: true,
+  typeAnalysis: { maxSize: 1000, enabled: true },
+  apiResolution: { maxSize: 500, enabled: true }
+});
+
+// Cache statistics reported after generation
+cacheManager.printStats();
+```
+
+**Performance Improvements**:
+- 30-50% faster type analysis
+- 20-40% faster API resolution
+- Significant speedup for large codebases
+  </Accordion>
+
+  <Accordion title="Performance Monitoring" icon="gauge-high">
+**Built-in Performance Tracking**: Integrated monitoring for optimization:
+
+```typescript
+// Initialize performance monitoring
+const performanceMonitor = getGlobalPerformanceMonitor(true);
+
+// Measure overall generation
+performanceMonitor.measure('Documentation Generation', () => {
+  // Generation logic here
+});
+
+// Print performance statistics
+performanceMonitor.printSummary();
+```
+
+**Metrics Tracked**:
+- Operation execution times
+- Cache hit rates
+- Generation statistics
+- Performance bottlenecks
+  </Accordion>
+</AccordionGroup>
+
+## AST Construction (Not Markdown!)
+
+<Note>
+  **Key Insight**: The documenter builds a TSDoc **AST** (Abstract Syntax Tree), not Markdown strings. This separates content structure from presentation format.
+</Note>
+
+### Why Use an AST?
+
+<AccordionGroup>
+  <Accordion title="Separation of Concerns" icon="layer-group">
+    - **What** a document contains (generation layer)
+    - **How** it looks (emission layer)
+
+    Clear separation makes both easier to maintain.
+  </Accordion>
+
+  <Accordion title="Maintainability" icon="wrench">
+    To change MDX output for a specific element:
+    - Modify only the emitter's handling for that node type
+    - No need to touch document generation logic
+  </Accordion>
+
+  <Accordion title="Extensibility" icon="puzzle-piece">
+    Can define custom `DocNode` types for unique concepts:
+    - `DocTable` for tabular data
+    - `DocHeading` for section titles
+    - `DocExpandable` for Mintlify expandables
+  </Accordion>
+</AccordionGroup>
+
+## Page Generation Example
+
+Let's trace how a class page is generated:
+
+<Tabs>
+  <Tab title="1. Entry Point">
+    ```typescript
+    // User's API includes:
+    export class DatabaseClient {
+      constructor(config: Config) { }
+      async connect(): Promise<void> { }
+      async query(sql: string): Promise<Results> { }
+    }
+    ```
+
+    `MarkdownDocumenter` receives this as an `ApiClass` item.
+  </Tab>
+
+  <Tab title="2. Create Page Structure">
+    ```typescript
+    function _writeApiItemPage(apiClass: ApiClass) {
+      // Root section for the page
+      const output = new DocSection({ configuration });
+
+      // Add breadcrumb navigation
+      _writeBreadcrumb(output, apiClass);
+
+      // Add class heading
+      output.appendNode(new DocHeading({
+        title: 'DatabaseClient class',
+        level: 1
+      }));
+
+      // Add summary and remarks
+      _appendSection(output, apiClass.tsdocComment);
+
+      // Add heritage (extends/implements)
+      _writeHeritageTypes(output, apiClass);
+
+      // Add members table
+      _writeClassTables(output, apiClass);
+
+      return output;
+    }
+    ```
+  </Tab>
+
+  <Tab title="3. Build Members Table">
+    ```typescript
+    function _writeClassTables(output: DocSection, apiClass: ApiClass) {
+      // Create table for constructors
+      const constructorTable = new DocTable({
+        header: new DocTableRow({
+          cells: [
+            new DocTableCell({ content: 'Constructor' }),
+            new DocTableCell({ content: 'Modifiers' }),
+            new DocTableCell({ content: 'Description' })
+          ]
+        })
+      });
+
+      // Add rows for each constructor
+      for (const member of apiClass.members) {
+        if (member.kind === ApiItemKind.Constructor) {
+          constructorTable.addRow(new DocTableRow({
+            cells: [
+              new DocTableCell({ content: member.displayName }),
+              new DocTableCell({ content: getModifiers(member) }),
+              new DocTableCell({ content: getDescription(member) })
+            ]
+          }));
+        }
+      }
+
+      output.appendNode(constructorTable);
+    }
+    ```
+
+    Similar logic for Properties and Methods tables.
+  </Tab>
+
+  <Tab title="4. Generate Frontmatter">
+    ```typescript
+    function _generateFrontmatter(apiItem: ApiItem): string {
+      return `---
+title: "${apiItem.displayName} ${getKindLabel(apiItem)}"
+icon: "${getIcon(apiItem)}"
+description: "${getFirstSentence(apiItem.tsdocComment)}"
+---`;
+    }
+    ```
+  </Tab>
+
+  <Tab title="5. Emit to MDX">
+    ```typescript
+    // Pass AST to emitter
+    const mdxString = this._markdownEmitter.emit(
+      stringBuilder,
+      output,  // The TSDoc AST we built
+      options
+    );
+
+    // Write to file
+    FileSystem.writeFile(
+      './docs/api/databaseclient.mdx',
+      frontmatter + '\n' + mdxString
+    );
+    ```
+  </Tab>
+</Tabs>
+
+## Key Methods
+
+<Accordion title="_writeApiItemPage()" icon="file-code">
+  **The Main Page Generator**
+
+  Responsibilities:
+  - Determine page type (class, interface, function, etc.)
+  - Build appropriate AST structure
+  - Generate frontmatter
+  - Invoke emitter
+  - Write file
+  - Add to navigation
+
+  ```typescript
+  private _writeApiItemPage(apiItem: ApiItem): void {
+    const output = new DocSection({ configuration });
+
+    // Build AST based on item kind
+    switch (apiItem.kind) {
+      case ApiItemKind.Class:
+        this._writeClassPage(output, apiItem as ApiClass);
+        break;
+      case ApiItemKind.Interface:
+        this._writeInterfacePage(output, apiItem as ApiInterface);
+        break;
+      // ... other kinds
+    }
+
+    // Generate and write file
+    const filename = this._getFilenameForApiItem(apiItem);
+    const mdx = this._emitApiItem(output, apiItem);
+    FileSystem.writeFile(filename, mdx);
+
+    // Track for navigation
+    this._navigationItems.push({
+      page: relativePath,
+      apiKind: apiItem.kind
+    });
+  }
+  ```
+</Accordion>
+
+<Accordion title="_writeClassTables()" icon="table">
+  **Class Members Documentation**
+
+  Creates three tables:
+  1. **Constructors** - Class constructors
+  2. **Properties** - Class properties
+  3. **Methods** - Class methods
+
+  Each table is a `DocTable` with:
+  - Header row defining columns
+  - Data rows for each member
+  - Cells containing name, modifiers, type, description
+
+  The emitter later decides whether to render as HTML `<table>` or Mintlify components.
+</Accordion>
+
+<Accordion title="_writeInterfaceTables()" icon="table-cells">
+  **Interface Members Documentation**
+
+  Similar to class tables, but for interfaces:
+  - Properties table
+  - Methods table
+  - Call signatures table (if any)
+
+  Includes logic to handle:
+  - Optional properties (`prop?:`)
+  - Readonly modifiers
+  - Generic type parameters
+</Accordion>
+
+<Accordion title="_writeParameterTables()" icon="list">
+  **Function Parameters**
+
+  For functions and methods:
+  - Creates parameter table
+  - Shows name, type, description
+  - Indicates optional vs required
+  - Links to type definitions
+
+  This table is converted by the emitter into Mintlify `<ParamField>` components.
+</Accordion>
+
+<Accordion title="generateNavigation()" icon="map">
+  **Navigation Updates** (Now Delegated to NavigationManager)
+
+  After all files are generated, navigation is handled by the dedicated `NavigationManager`:
+
+  <Steps>
+    <Step title="Delegate to NavigationManager">
+      Pass navigation generation to specialized component
+    </Step>
+
+    <Step title="Hierarchical Organization">
+      `NavigationManager` categorizes pages by API item type
+    </Step>
+
+    <Step title="docs.json Integration">
+      Supports both simple and Mintlify v4 tab structures
+    </Step>
+
+    <Step title="Error Handling">
+      Comprehensive error handling with detailed context
+    </Step>
+  </Steps>
+
+  ```typescript
+  public generateNavigation(): void {
+    try {
+      this._navigationManager.generateNavigation();
+    } catch (error) {
+      console.error('❌ Failed to generate navigation:', error);
+      throw error;
+    }
+  }
+  ```
+
+  **Benefits of Delegation**:
+  - Separation of concerns
+  - Specialized navigation logic
+  - Mintlify v4 compatibility
+  - Better error handling
+  - Hierarchical categorization
+</Accordion>
+
+## Frontmatter Generation
+
+Each MDX file starts with YAML frontmatter:
+
+```yaml
+---
+title: "ClassName class"
+icon: "box"
+description: "Brief description from TSDoc comment"
+---
+```
+
+<CodeGroup>
+
+```typescript Icon Selection
+function getIcon(apiItem: ApiItem): string {
+  switch (apiItem.kind) {
+    case ApiItemKind.Class: return 'box';
+    case ApiItemKind.Interface: return 'square-i';
+    case ApiItemKind.Function: return 'function';
+    case ApiItemKind.TypeAlias: return 'type';
+    case ApiItemKind.Variable: return 'variable';
+    default: return 'file';
+  }
+}
+```
+
+```typescript Description Extraction
+function getFirstSentence(comment?: DocComment): string {
+  if (!comment || !comment.summarySection) {
+    return '';
+  }
+
+  // Extract first sentence from summary
+  const text = comment.summarySection.getChildNodes()
+    .map(node => node.toString())
+    .join('');
+
+  const match = text.match(/^[^.!?]+[.!?]/);
+  return match ? match[0].trim() : text.trim();
+}
+```
+
+</CodeGroup>
+
+## File Organization
+
+Generated files follow a consistent naming pattern:
+
+| API Item | Generated File |
+|----------|----------------|
+| Package `my-package` | `my-package.mdx` |
+| Class `MyClass` | `my-package.myclass.mdx` |
+| Interface `IConfig` | `my-package.iconfig.mdx` |
+| Function `helper()` | `my-package.helper.mdx` |
+| Type `Status` | `my-package.status.mdx` |
+
+<Tip>
+  Lowercased filenames with package prefix prevent naming collisions
+</Tip>
+
+## Performance Considerations
+
+<Note>
+  **Significant Performance Improvements**: The new caching layer provides substantial performance gains for large codebases.
+</Note>
+
+<AccordionGroup>
+  <Accordion title="Intelligent Caching" icon="database">
+    **Type Analysis Cache**: 30-50% performance improvement
+    - Caches expensive TypeScript type parsing operations
+    - LRU eviction with configurable size (default: 1000 items)
+    - Automatic integration with `ObjectTypeAnalyzer`
+
+    **API Resolution Cache**: 20-40% performance improvement
+    - Caches API model cross-reference resolution
+    - Reduces redundant symbol lookups
+    - Configurable size (default: 500 items)
+
+    **Cache Statistics**: Monitor effectiveness with built-in reporting
+    ```
+    📊 Cache Statistics:
+       Overall Hit Rate: 42.3%
+       Type Analysis Cache: 45.7% hit rate (457/1000)
+       API Resolution Cache: 38.9% hit rate (194/500)
+    ```
+  </Accordion>
+
+  <Accordion title="Performance Monitoring" icon="gauge-high">
+    **Built-in Performance Tracking**:
+    - Operation-level execution time measurement
+    - Detailed statistics for optimization
+    - Error-aware timing (includes failed operations)
+
+    **Example Output**:
+    ```
+    📊 Performance Summary:
+       Documentation Generation:
+         Count: 1
+         Total: 5234.56ms
+         Average: 5234.56ms
+       Type Analysis:
+         Count: 150
+         Total: 2345.67ms
+         Average: 15.64ms
+         Range: 2.34ms - 145.23ms
+    ```
+  </Accordion>
+
+  <Accordion title="Incremental Generation" icon="clock">
+    **Future Enhancement**: Currently, all files are regenerated each time. Potential optimizations:
+    - Track file timestamps and API changes
+    - Only regenerate changed API items
+    - Cache unchanged AST structures
+    - Implement dependency tracking
+  </Accordion>
+
+  <Accordion title="Memory Usage" icon="memory">
+    **Current Optimizations**:
+    - Sequential processing to control memory usage
+    - LRU cache eviction to limit memory growth
+    - Efficient AST construction
+
+    **For Very Large APIs**:
+    - Monitor cache hit rates vs. memory usage
+    - Adjust cache sizes based on available memory
+    - Consider streaming approaches for massive projects
+  </Accordion>
+
+  <Accordion title="Parallel Processing" icon="diagram-project">
+    **Potential Future Optimization**:
+    - Generate pages in parallel (currently sequential)
+    - Use worker threads for large packages
+    - Batch file writes for I/O optimization
+    - Thread-safe cache implementations
+  </Accordion>
+</AccordionGroup>
+
+## Extending the Generator
+
+### Adding a New Section
+
+To add a new section to all class pages:
+
+```typescript
+function _writeClassPage(output: DocSection, apiClass: ApiClass) {
+  // ... existing sections
+
+  // New section: Examples
+  if (apiClass.tsdocComment?.customBlocks) {
+    const examplesBlock = apiClass.tsdocComment.customBlocks
+      .find(b => b.blockTag.tagName === '@example');
+
+    if (examplesBlock) {
+      output.appendNode(new DocHeading({
+        title: 'Examples',
+        level: 2
+      }));
+      output.appendNode(examplesBlock.content);
+    }
+  }
+}
+```
+
+### Supporting a New API Item Kind
+
+```typescript
+case ApiItemKind.Enum:
+  this._writeEnumPage(output, apiItem as ApiEnum);
+  break;
+
+private _writeEnumPage(output: DocSection, apiEnum: ApiEnum): void {
+  // Build table of enum members
+  const table = new DocTable({
+    header: new DocTableRow({
+      cells: [
+        new DocTableCell({ content: 'Member' }),
+        new DocTableCell({ content: 'Value' }),
+        new DocTableCell({ content: 'Description' })
+      ]
+    })
+  });
+
+  for (const member of apiEnum.members) {
+    table.addRow(/* ... */);
+  }
+
+  output.appendNode(table);
+}
+```
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Navigation Layer" icon="map" href="/architecture/navigation-layer">
+    Learn about the extracted navigation management
+  </Card>
+  <Card title="Caching Layer" icon="database" href="/architecture/caching-layer">
+    Explore performance optimization through caching
+  </Card>
+  <Card title="Performance Layer" icon="gauge-high" href="/architecture/performance-layer">
+    Understand performance monitoring and metrics
+  </Card>
+  <Card title="Emission Layer" icon="file-export" href="/architecture/emission-layer">
+    See how AST is converted to MDX
+  </Card>
+  <Card title="AST Nodes" icon="diagram-project" href="/architecture/ast-nodes-layer">
+    Learn about custom TSDoc nodes
+  </Card>
+</CardGroup>

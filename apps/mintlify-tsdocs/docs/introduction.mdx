@@ -1,0 +1,101 @@
+---
+title: Introduction
+description: Generate beautiful Mintlify documentation from your TypeScript API
+icon: "book-open"
+---
+
+# mintlify-tsdocs
+
+This tool generates [Mintlify](https://mintlify.com/)-compatible API documentation for your TypeScript library.
+It reads the `*.api.json` data files produced by [API Extractor](https://api-extractor.com/) and generates
+MDX files with proper frontmatter, navigation integration, and Mintlify-specific components.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in minutes
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture/overview">
+    Understand how it works
+  </Card>
+  <Card title="Examples" icon="code" href="/examples/basic-setup">
+    Learn from practical examples
+  </Card>
+  <Card title="API Reference" icon="book" href="/api">
+    Explore the API documentation
+  </Card>
+</CardGroup>
+
+## Features
+
+<AccordionGroup>
+  <Accordion title="Mintlify-Native Components" icon="puzzle-piece">
+    Generates MDX files with Mintlify frontmatter (title, description, icon) and uses native Mintlify components like `<ParamField>`, `<ResponseField>`, and `<Expandable>` for rich, interactive documentation.
+  </Accordion>
+
+  <Accordion title="Automatic Navigation" icon="map">
+    Automatically updates your `docs.json` file with proper navigation structure, organizing your API documentation into tabs and groups.
+  </Accordion>
+
+  <Accordion title="Complex Type Support" icon="brackets-curly">
+    Full support for complex TypeScript types including nested objects, unions, intersections, and generics. Nested object properties are automatically expanded with their own `<ParamField>` components.
+  </Accordion>
+
+  <Accordion title="README Integration" icon="file-lines">
+    Convert your package `README.md` to a Mintlify-compatible `index.mdx` for seamless package overview pages.
+  </Accordion>
+</AccordionGroup>
+
+## How It Works
+
+<Steps>
+  <Step title="Extract API Data">
+    Use API Extractor to generate `.api.json` files from your TypeScript project
+  </Step>
+  <Step title="Generate Documentation">
+    Run `mintlify-tsdocs` to convert API data into beautiful MDX files
+  </Step>
+  <Step title="Deploy">
+    Your documentation is ready to deploy with Mintlify
+  </Step>
+</Steps>
+
+## Quick Example
+
+```bash
+# Install API Extractor and generate .api.json files
+npm install -g @microsoft/api-extractor
+api-extractor run --local
+
+# Generate Mintlify documentation
+npx mintlify-tsdocs markdown \
+  -i ./temp \
+  -o ./docs/api \
+  --docs-json ./docs/docs.json \
+  --tab-name "API Reference" \
+  --group "Core API"
+```
+
+<Note>
+  This documentation site itself is generated using `mintlify-tsdocs` - it's the ultimate example of what the tool can do!
+</Note>
+
+## What Gets Generated
+
+When you run `mintlify-tsdocs`, you get:
+
+- **MDX Files** - One file per API item (class, interface, function, etc.)
+- **Rich Components** - Interactive `<ParamField>` and `<ResponseField>` components
+- **Nested Documentation** - Expandable sections for complex types
+- **Cross-References** - Automatic linking between related API items
+- **Navigation** - Auto-updated `docs.json` with your API structure
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install and configure the tool
+  </Card>
+  <Card title="Your First Docs" icon="play" href="/quickstart">
+    Generate your first documentation
+  </Card>
+</CardGroup>

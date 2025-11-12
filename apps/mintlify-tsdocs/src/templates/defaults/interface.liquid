@@ -1,0 +1,76 @@
+{% layout "layout" %}
+
+{% block content %}
+## Properties
+
+{% if properties and properties.size > 0 %}
+{% for property in properties %}
+### {{ property.title }}
+
+{% if property.modifiers and property.modifiers.size > 0 %}
+**Modifiers**: {{ property.modifiers | join: ', ' }}
+{% endif %}
+
+{% if property.type %}
+**Type**: {% if property.typePath %}[{{ property.type }}]({{ property.typePath }}){% else %}{{ property.type }}{% endif %}
+{% endif %}
+
+{% if property.isOptional %}
+**Optional**: Yes
+{% endif %}
+
+{% if property.isInherited %}
+**Inherited**: Yes
+{% endif %}
+
+{% if property.description %}
+{{ property.description }}
+{% endif %}
+
+{% endfor %}
+{% else %}
+*No properties defined.*
+{% endif %}
+
+## Methods
+
+{% if methods and methods.size > 0 %}
+{% for method in methods %}
+### {{ method.title }}
+
+{% if method.modifiers and method.modifiers.size > 0 %}
+**Modifiers**: {{ method.modifiers | join: ', ' }}
+{% endif %}
+
+{% if method.isInherited %}
+**Inherited**: Yes
+{% endif %}
+
+{% if method.description %}
+{{ method.description }}
+{% endif %}
+
+{% endfor %}
+{% else %}
+*No methods defined.*
+{% endif %}
+
+## Events
+
+{% if events and events.size > 0 %}
+{% for event in events %}
+### {{ event.title }}
+
+{% if event.type %}
+**Type**: {% if event.typePath %}[{{ event.type }}]({{ event.typePath }}){% else %}{{ event.type }}{% endif %}
+{% endif %}
+
+{% if event.description %}
+{{ event.description }}
+{% endif %}
+
+{% endfor %}
+{% else %}
+*No events defined.*
+{% endif %}
+{% endblock %}

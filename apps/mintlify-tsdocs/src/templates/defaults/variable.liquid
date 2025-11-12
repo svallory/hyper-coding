@@ -1,0 +1,44 @@
+{% layout "layout" %}
+
+{% block content %}
+## Parameters
+
+{% if parameters and parameters.size > 0 %}
+{% for parameter in parameters %}
+### {{ parameter.title }}
+
+{% if parameter.type %}
+**Type**: {% if parameter.typePath %}[{{ parameter.type }}]({{ parameter.typePath }}){% else %}{{ parameter.type }}{% endif %}
+{% endif %}
+
+{% if parameter.isOptional %}
+**Optional**: Yes
+{% endif %}
+
+{% if parameter.defaultValue %}
+**Default**: `{{ parameter.defaultValue }}`
+{% endif %}
+
+{% if parameter.description %}
+{{ parameter.description }}
+{% endif %}
+
+{% endfor %}
+{% else %}
+*This function takes no parameters.*
+{% endif %}
+
+## Returns
+
+{% if returnType %}
+{% if returnType.type %}
+**Type**: {% if returnType.typePath %}[{{ returnType.type }}]({{ returnType.typePath }}){% else %}{{ returnType.type }}{% endif %}
+{% endif %}
+
+{% if returnType.description %}
+{{ returnType.description }}
+{% endif %}
+{% else %}
+*This function has no return value.*
+{% endif %}
+{% endblock %}

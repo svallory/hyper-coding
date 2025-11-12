@@ -1,0 +1,9 @@
+{% layout "layout" %}
+
+{% block content %}
+{% if apiItem.description %}
+## Description
+
+{{ apiItem.description }}
+{% endif %}
+{% endblock %}

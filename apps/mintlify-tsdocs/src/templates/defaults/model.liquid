@@ -1,0 +1,11 @@
+{% layout "layout" %}
+
+{% block content %}
+## API Model
+
+This is the root API model documentation.
+
+{% if apiItem.description %}
+{{ apiItem.description }}
+{% endif %}
+{% endblock %}

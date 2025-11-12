@@ -1,0 +1,399 @@
+---
+title: TypeTree
+description: Display recursive type structures with expandable nested properties
+icon: "diagram-project"
+---
+
+The `TypeTree` component provides an elegant way to document complex type structures with nested properties. It automatically handles recursive rendering and provides an intuitive expandable interface for exploring deeply nested types.
+
+## Basic Usage
+
+Import the component in your MDX file and pass the type information:
+
+```jsx
+import { TypeTree } from "/snippets/TypeTree.jsx"
+
+<TypeTree
+  name="config"
+  type="object"
+  description="Configuration settings for the application"
+  required={true}
+  properties={[
+    { name: "host", type: "string", description: "Database host address", required: true },
+    { name: "port", type: "number", description: "Database port number", defaultValue: "5432" }
+  ]}
+/>
+```
+
+<Frame>
+  <img src="/images/typetree-basic.png" alt="Basic TypeTree example" />
+</Frame>
+
+## Properties
+
+<ResponseField name="name" type="string" required>
+  The name of the property or type being documented
+</ResponseField>
+
+<ResponseField name="type" type="string" required>
+  The TypeScript type annotation (e.g., `string`, `number`, `object`, `Array<string>`)
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Human-readable description of what this property represents
+</ResponseField>
+
+<ResponseField name="required" type="boolean" default="false">
+  Whether this property is required. Displays a red "required" badge when `true`
+</ResponseField>
+
+<ResponseField name="deprecated" type="boolean" default="false">
+  Whether this property is deprecated. Displays an orange "deprecated" badge when `true`
+</ResponseField>
+
+<ResponseField name="defaultValue" type="string">
+  The default value for this property, if any. Displayed below the description
+</ResponseField>
+
+<ResponseField name="properties" type="array">
+  Array of nested properties for complex types. Each item should be an object with the same structure as TypeTree props
+</ResponseField>
+
+<ResponseField name="level" type="number" default="0">
+  Internal property for tracking nesting depth. Automatically managed by the component (don't set manually)
+</ResponseField>
+
+## Nested Objects
+
+TypeTree automatically renders nested properties with expandable sections:
+
+```jsx
+<TypeTree
+  name="database"
+  type="object"
+  description="Database configuration"
+  required={true}
+  properties={[
+    {
+      name: "connection",
+      type: "object",
+      description: "Connection settings",
+      required: true,
+      properties: [
+        { name: "host", type: "string", required: true },
+        { name: "port", type: "number", defaultValue: "5432" },
+        {
+          name: "ssl",
+          type: "object",
+          description: "SSL configuration",
+          properties: [
+            { name: "enabled", type: "boolean", defaultValue: "false" },
+            { name: "cert", type: "string" }
+          ]
+        }
+      ]
+    },
+    {
+      name: "pool",
+      type: "object",
+      description: "Connection pool settings",
+      properties: [
+        { name: "min", type: "number", defaultValue: "2" },
+        { name: "max", type: "number", defaultValue: "10" }
+      ]
+    }
+  ]}
+/>
+```
+
+## Auto-Expansion Behavior
+
+TypeTree automatically expands the first two levels of nesting for better discoverability:
+
+- **Level 0** (root): Always visible
+- **Level 1**: Expanded by default
+- **Level 2**: Expanded by default
+- **Level 3+**: Collapsed by default (user must click to expand)
+
+This provides an optimal balance between information density and discoverability.
+
+## Grouping Multiple Types
+
+Use `TypeTreeGroup` to organize multiple related types:
+
+```jsx
+import { TypeTree, TypeTreeGroup } from "/snippets/TypeTree.jsx"
+
+<TypeTreeGroup title="Request Parameters">
+  <TypeTree
+    name="id"
+    type="string"
+    description="Unique identifier"
+    required={true}
+  />
+  <TypeTree
+    name="options"
+    type="object"
+    description="Optional configuration"
+    properties={[
+      { name: "timeout", type: "number", defaultValue: "5000" },
+      { name: "retries", type: "number", defaultValue: "3" }
+    ]}
+  />
+</TypeTreeGroup>
+```
+
+## Complex Type Examples
+
+### Union Types
+
+```jsx
+<TypeTree
+  name="status"
+  type="'pending' | 'active' | 'completed'"
+  description="Current status of the task"
+  required={true}
+/>
+```
+
+### Array Types
+
+```jsx
+<TypeTree
+  name="tags"
+  type="Array<string>"
+  description="List of tags associated with the item"
+/>
+```
+
+### Generic Types
+
+```jsx
+<TypeTree
+  name="response"
+  type="Promise<Result<T>>"
+  description="Async operation result"
+/>
+```
+
+### Function Types
+
+```jsx
+<TypeTree
+  name="handler"
+  type="(event: Event) => void"
+  description="Event handler callback"
+  required={true}
+/>
+```
+
+## Deprecated Properties
+
+Mark deprecated properties with the `deprecated` flag:
+
+```jsx
+<TypeTree
+  name="oldField"
+  type="string"
+  description="This field is deprecated. Use 'newField' instead."
+  deprecated={true}
+/>
+```
+
+## Optional vs Required
+
+The component automatically displays badges for required and optional properties:
+
+```jsx
+<TypeTree
+  name="email"
+  type="string"
+  description="User email address"
+  required={true}  // Shows red "required" badge
+/>
+
+<TypeTree
+  name="phone"
+  type="string"
+  description="User phone number"
+  // Shows gray "optional" text
+/>
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Clear Descriptions" icon="message">
+    Write descriptions that explain **what** the property does and **why** it exists, not just restating the type.
+
+    ```jsx
+    // ❌ Not helpful
+    <TypeTree
+      name="timeout"
+      type="number"
+      description="A number"
+    />
+
+    // ✅ Clear and helpful
+    <TypeTree
+      name="timeout"
+      type="number"
+      description="Maximum time in milliseconds to wait for a response before aborting"
+      defaultValue="5000"
+    />
+    ```
+  </Accordion>
+
+  <Accordion title="Include Default Values" icon="sparkles">
+    Always document default values to help users understand the expected behavior:
+
+    ```jsx
+    <TypeTree
+      name="retries"
+      type="number"
+      description="Number of retry attempts for failed requests"
+      defaultValue="3"
+    />
+    ```
+  </Accordion>
+
+  <Accordion title="Organize Complex Structures" icon="layer-group">
+    For very complex types with many properties, use TypeTreeGroup to create logical sections:
+
+    ```jsx
+    <TypeTreeGroup title="Authentication Options">
+      <TypeTree name="apiKey" type="string" />
+      <TypeTree name="token" type="string" />
+    </TypeTreeGroup>
+
+    <TypeTreeGroup title="Request Options">
+      <TypeTree name="timeout" type="number" />
+      <TypeTree name="retries" type="number" />
+    </TypeTreeGroup>
+    ```
+  </Accordion>
+
+  <Accordion title="Keep Nesting Reasonable" icon="sitemap">
+    While TypeTree supports unlimited nesting, try to limit depth to 3-4 levels for readability. Consider breaking very deep structures into separate documentation pages.
+  </Accordion>
+</AccordionGroup>
+
+## Styling and Theming
+
+TypeTree automatically adapts to Mintlify's light and dark themes using Tailwind CSS:
+
+- **Light mode**: Uses gray borders and backgrounds
+- **Dark mode**: Uses darker backgrounds with lighter borders
+- **Hover states**: Subtle background changes on expandable items
+- **Badges**: Color-coded for required (red), deprecated (orange), optional (gray)
+
+## Comparison with ParamField
+
+TypeTree is designed as a cleaner alternative to deeply nested ParamField components:
+
+<Tabs>
+  <Tab title="TypeTree (Recommended)">
+    ```jsx
+    <TypeTree
+      name="config"
+      type="object"
+      properties={[
+        { name: "host", type: "string", required: true },
+        { name: "port", type: "number", defaultValue: "5432" }
+      ]}
+    />
+    ```
+
+    **Advantages:**
+    - Single component declaration
+    - Easy to maintain
+    - Properties defined as data
+    - Built-in expansion logic
+  </Tab>
+
+  <Tab title="ParamField (Verbose)">
+    ```jsx
+    <ParamField name="config" type="object">
+      <Expandable title="Properties">
+        <ParamField name="host" type="string" required>
+        </ParamField>
+        <ParamField name="port" type="number">
+          Default: 5432
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    ```
+
+    **Drawbacks:**
+    - Deeply nested JSX
+    - Hard to maintain
+    - Repetitive structure
+    - Manual expansion handling
+  </Tab>
+</Tabs>
+
+## Auto-Generated Documentation
+
+When using `mintlify-tsdocs` to generate API documentation, TypeTree components are automatically created for complex type structures:
+
+1. The tool analyzes TypeScript types
+2. Extracts nested property information
+3. Generates TypeTree components with full type information
+4. Installs the component to your `docs/snippets/` folder
+
+This means you get clean, maintainable documentation without manual work!
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Component not found" icon="triangle-exclamation">
+    If you see `Cannot find module "/snippets/TypeTree.jsx"`:
+
+    1. Ensure TypeTree.jsx exists in your `docs/snippets/` folder
+    2. Run `mintlify-tsdocs` to auto-install the component
+    3. Check that the import path is correct (should start with `/snippets/`)
+  </Accordion>
+
+  <Accordion title="Properties not expanding" icon="hand-pointer">
+    If nested properties don't expand when clicked:
+
+    1. Verify the `properties` array is properly formatted JSON
+    2. Check browser console for JavaScript errors
+    3. Ensure each nested property has at least `name` and `type` fields
+  </Accordion>
+
+  <Accordion title="Styling issues" icon="paintbrush">
+    If the component doesn't look right:
+
+    1. Ensure Tailwind CSS is properly loaded in your Mintlify site
+    2. Check that you're using an up-to-date version of the component
+    3. Try refreshing the page to reload styles
+  </Accordion>
+</AccordionGroup>
+
+## Version History
+
+<CardGroup cols={2}>
+  <Card title="v1.0.0" icon="rocket">
+    Initial release with full recursive rendering support
+  </Card>
+  <Card title="Future" icon="sparkles">
+    - Syntax highlighting for code examples
+    - Copy-to-clipboard for type definitions
+    - Collapsible all/expand all controls
+  </Card>
+</CardGroup>
+
+## Related Components
+
+<CardGroup cols={3}>
+  <Card title="ParamField" icon="square-dashed" href="https://mintlify.com/docs/components/params">
+    Standard Mintlify component for parameters
+  </Card>
+  <Card title="ResponseField" icon="reply" href="https://mintlify.com/docs/components/responses">
+    Document API response structures
+  </Card>
+  <Card title="Expandable" icon="chevron-down" href="https://mintlify.com/docs/components/accordion">
+    Create expandable sections
+  </Card>
+</CardGroup>
