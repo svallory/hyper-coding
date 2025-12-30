@@ -1,0 +1,53 @@
+---
+to: .moon/tasks/tag-typescript.yml
+---
+$schema: "https://moonrepo.dev/schemas/tasks.json"
+
+tasks:
+{%- if create_typecheck_task %}
+  # Type checking with TypeScript
+  typecheck:
+    command:
+      - "tsc"
+      - "--build"
+      {%- if ts_config_path != "tsconfig.json" %}
+      - "--project"
+      - "{{ ts_config_path }}"
+      {%- endif %}
+    inputs:
+      - "@globs(sources)"
+      - "@globs(tests)"
+      - "{{ ts_config_path }}"
+      {%- if ts_config_path != "tsconfig.json" %}
+      - "tsconfig.json"
+      {%- endif %}
+    outputs:
+      - "*.tsbuildinfo"
+    options:
+      cache: true
+      runInCI: true
+{%- endif %}
+
+{%- if create_build_task %}
+  # Build TypeScript to JavaScript
+  build:
+    command:
+      - "tsc"
+      - "--build"
+      {%- if ts_config_path != "tsconfig.json" %}
+      - "--project"
+      - "{{ ts_config_path }}"
+      {%- endif %}
+    inputs:
+      - "@globs(sources)"
+      - "{{ ts_config_path }}"
+      {%- if ts_config_path != "tsconfig.json" %}
+      - "tsconfig.json"
+      {%- endif %}
+    outputs:
+      - "{{ build_output }}"
+      - "*.tsbuildinfo"
+    options:
+      cache: true
+      runInCI: true
+{%- endif %}

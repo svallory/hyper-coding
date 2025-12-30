@@ -286,35 +286,35 @@ ${parameters.filter(p => p.default !== undefined).map(p => `      ${p.name}: ${J
 
     switch (framework) {
       case 'react':
-        templates['templates/component.tsx.ejs'] = this.getReactComponentTemplate()
-        templates['templates/component.test.tsx.ejs'] = this.getReactTestTemplate()
-        templates['templates/component.stories.tsx.ejs'] = this.getReactStoryTemplate()
+        templates['templates/component.tsx.liquid'] = this.getReactComponentTemplate()
+        templates['templates/component.test.tsx.liquid'] = this.getReactTestTemplate()
+        templates['templates/component.stories.tsx.liquid'] = this.getReactStoryTemplate()
         break
-        
+
       case 'vue':
-        templates['templates/component.vue.ejs'] = this.getVueComponentTemplate()
-        templates['templates/component.test.ts.ejs'] = this.getVueTestTemplate()
+        templates['templates/component.vue.liquid'] = this.getVueComponentTemplate()
+        templates['templates/component.test.ts.liquid'] = this.getVueTestTemplate()
         break
-        
+
       case 'api':
-        templates['templates/route.ts.ejs'] = this.getApiRouteTemplate()
-        templates['templates/route.test.ts.ejs'] = this.getApiTestTemplate()
-        templates['templates/model.ts.ejs'] = this.getApiModelTemplate()
+        templates['templates/route.ts.liquid'] = this.getApiRouteTemplate()
+        templates['templates/route.test.ts.liquid'] = this.getApiTestTemplate()
+        templates['templates/model.ts.liquid'] = this.getApiModelTemplate()
         break
-        
+
       case 'cli':
-        templates['templates/command.ts.ejs'] = this.getCliCommandTemplate()
-        templates['templates/command.test.ts.ejs'] = this.getCliTestTemplate()
+        templates['templates/command.ts.liquid'] = this.getCliCommandTemplate()
+        templates['templates/command.test.ts.liquid'] = this.getCliTestTemplate()
         break
-        
+
       case 'node':
-        templates['templates/module.ts.ejs'] = this.getNodeModuleTemplate()
-        templates['templates/module.test.ts.ejs'] = this.getNodeTestTemplate()
+        templates['templates/module.ts.liquid'] = this.getNodeModuleTemplate()
+        templates['templates/module.test.ts.liquid'] = this.getNodeTestTemplate()
         break
         
       default:
-        templates['templates/file.ts.ejs'] = this.getGenericFileTemplate()
-        templates['templates/file.test.ts.ejs'] = this.getGenericTestTemplate()
+        templates['templates/file.ts.liquid'] = this.getGenericFileTemplate()
+        templates['templates/file.test.ts.liquid'] = this.getGenericTestTemplate()
     }
 
     return templates

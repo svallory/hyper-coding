@@ -1,0 +1,55 @@
+name: typescript
+description: |
+  Add TypeScript compilation tasks to moon.
+  This will create or update task configurations for TypeScript projects.
+version: 1.0.0
+
+variables:
+  ts_config_path:
+    prompt: "Path to TypeScript config file?"
+    type: string
+    required: false
+    default: "tsconfig.json"
+    description: "Path to tsconfig.json (relative to project root)"
+
+  build_output:
+    prompt: "TypeScript build output directory?"
+    type: string
+    required: false
+    default: "lib"
+    description: "Directory for TypeScript compilation output"
+
+  create_build_task:
+    prompt: "Should create a build task?"
+    type: boolean
+    required: false
+    default: true
+    description: "Create a TypeScript build task"
+
+  create_typecheck_task:
+    prompt: "Should create a typecheck task?"
+    type: boolean
+    required: false
+    default: true
+    description: "Create a TypeScript typecheck task"
+
+# Templates are automatically processed from ./templates/
+# The tag-typescript.yml.liquid file will be processed automatically
+
+steps:
+  post:
+    # Post-steps: Execute after automatic template processing
+    - name: Display completion message
+      tool: shell
+      command: |
+        echo "✅ TypeScript tasks configured!"
+        echo "   Config file: {{ ts_config_path }}"
+        echo "   Output dir: {{ build_output }}"
+        echo "   Tasks created:"
+        {%- if create_typecheck_task %}
+        echo "     - typecheck: Type checking"
+        {%- endif %}
+        {%- if create_build_task %}
+        echo "     - build: TypeScript compilation"
+        {%- endif %}
+        echo "   Add 'tags: [typescript]' to your moon.yml to use these tasks."

@@ -22,6 +22,7 @@ import {
 } from '../recipe-engine/recipe-engine.js'
 import { StepExecutor } from '../recipe-engine/step-executor.js'
 import { getToolRegistry } from '../recipe-engine/tools/registry.js'
+import { registerDefaultTools } from '../recipe-engine/tools/index.js'
 import Logger from '../logger.js'
 
 export interface HypergenCliConfig extends RunnerConfig {
@@ -65,6 +66,9 @@ export class HypergenCLI {
     }
 
     this.recipeEngine = new RecipeEngine(recipeConfig)
+    
+    // Register default tools
+    registerDefaultTools()
   }
 
   /**

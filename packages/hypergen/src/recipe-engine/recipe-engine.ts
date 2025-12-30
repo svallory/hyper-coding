@@ -38,20 +38,20 @@ const debug = createDebug('hypergen:v8:recipe:engine')
  * Recipe source types for loading
  */
 export type RecipeSource = {
+  type: 'content'
+  content: string
+  name: string
+} | {
   type: 'file'
   path: string
-} | {
-  type: 'url'
-  url: string
-  version?: string
 } | {
   type: 'package'
   name: string
   version?: string
 } | {
-  type: 'content'
-  content: string
-  name: string
+  type: 'url'
+  url: string
+  version?: string
 }
 
 /**
@@ -182,7 +182,7 @@ export interface RecipeExecutionResult {
 /**
  * Recipe loading result
  */
-interface RecipeLoadResult {
+export interface RecipeLoadResult {
   recipe: RecipeConfig
   source: RecipeSource
   validation: RecipeValidationResult
@@ -339,11 +339,12 @@ export class RecipeEngine extends EventEmitter {
       this.debug('Variables resolved: %o', Object.keys(resolvedVariables))
       
       // Create execution context
-      const executionContext = await this.createExecutionContext(
+      const context = await this.createExecutionContext(
         recipe,
         resolvedVariables,
         options,
-        executionId
+        executionId,
+        normalizedSource
       )
       
       // Create step execution options
@@ -358,7 +359,7 @@ export class RecipeEngine extends EventEmitter {
       this.debug('Starting step execution with %d steps', recipe.steps.length)
       const stepResults = await this.stepExecutor.executeSteps(
         recipe.steps,
-        executionContext,
+        context,
         stepOptions
       )
       
@@ -369,7 +370,7 @@ export class RecipeEngine extends EventEmitter {
         stepResults,
         resolvedVariables,
         startTime,
-        executionContext
+        context
       )
       
       this.debug('Recipe execution completed [%s] in %dms', executionId, result.duration)
@@ -783,7 +784,7 @@ export class RecipeEngine extends EventEmitter {
         category: parsed.category || 'general',
         tags: parsed.tags || [],
         variables: parsed.variables || {},
-        steps: parsed.steps || [],
+        steps: this.normalizeSteps(parsed.steps || []),
         examples: parsed.examples || [],
         dependencies: parsed.dependencies || [],
         outputs: parsed.outputs || [],
@@ -802,6 +803,40 @@ export class RecipeEngine extends EventEmitter {
         { source }
       )
     }
+  }
+
+  /**
+   * Normalize steps to infer tool types from shorthands
+   */
+  private normalizeSteps(steps: any[]): RecipeStepUnion[] {
+    return steps.map(step => {
+      if (!step.tool) {
+        if (step.command) {
+          step.tool = 'shell'
+        } else if (step.recipe) {
+          step.tool = 'recipe'
+        } else if (step.promptType) { // Inference for prompt
+          step.tool = 'prompt'
+        } else if (step.sequence) { // Inference for sequence shorthand
+          step.tool = 'sequence'
+          step.steps = step.sequence
+          delete step.sequence
+        } else if (step.parallel) { // Inference for parallel shorthand
+          step.tool = 'parallel'
+          step.steps = step.parallel
+          delete step.parallel
+        } else if (step.steps) { // Default to sequence for generic steps property
+          step.tool = 'sequence'
+        } else if (step.template) {
+          step.tool = 'template'
+        } else if (step.action) {
+          step.tool = 'action'
+        } else if (step.codemod) {
+          step.tool = 'codemod'
+        }
+      }
+      return step as RecipeStepUnion
+    })
   }
 
   private async resolveVariables(
@@ -925,7 +960,8 @@ export class RecipeEngine extends EventEmitter {
     recipe: RecipeConfig,
     variables: Record<string, any>,
     options: RecipeExecutionOptions,
-    executionId: string
+    executionId: string,
+    source?: string | RecipeSource
   ): Promise<StepContext> {
     // Create base context using existing context function
     const baseContext = context(variables, {
@@ -949,7 +985,10 @@ export class RecipeEngine extends EventEmitter {
       evaluateCondition: this.createConditionEvaluator(baseContext),
       dryRun: options.dryRun,
       force: options.force,
-      logger: options.logger || this.logger
+      logger: options.logger || this.logger,
+      templatePath: source && typeof source === 'object' && source.type === 'file' 
+        ? path.dirname(source.path) 
+        : undefined
     }
   }
 
@@ -958,9 +997,32 @@ export class RecipeEngine extends EventEmitter {
       try {
         // Simple expression evaluation
         // In production, you'd want a safer evaluation method
-        const mergedContext = { ...context, ...ctx }
-        const func = new Function(...Object.keys(mergedContext), `return ${expression}`)
-        return Boolean(func(...Object.values(mergedContext)))
+        // Flatten variables into scope for easier access
+        const variableScope = { 
+          ...context.variables, 
+          ...(ctx.variables || {}),
+          variables: { ...context.variables, ...(ctx.variables || {}) }
+        }
+        const mergedContext = { ...context, ...ctx, ...variableScope }
+        // Remove 'variables' from root if it conflicts (though we just added it back explicitly)
+        
+        // Use a set to ensure unique argument names for Function constructor
+        // Filter out reserved keywords to prevent SyntaxError
+        const reservedKeywords = new Set([
+          'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
+          'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
+          'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void', 'while',
+          'with', 'yield', 'let', 'static', 'enum', 'await', 'implements', 'interface', 'package', 
+          'private', 'protected', 'public'
+        ])
+        
+        const argNames = Array.from(new Set(Object.keys(mergedContext)))
+          .filter(name => !reservedKeywords.has(name) && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name))
+          
+        const argValues = argNames.map(name => mergedContext[name])
+        
+        const func = new Function(...argNames, `return ${expression}`)
+        return Boolean(func(...argValues))
       } catch (error) {
         this.debug('Condition evaluation failed: %s - %s', expression, 
           error instanceof Error ? error.message : String(error))
@@ -1139,7 +1201,7 @@ export class RecipeEngine extends EventEmitter {
       ))
     }
     
-    const validTools = ['template', 'action', 'codemod', 'recipe']
+    const validTools = ['template', 'action', 'codemod', 'recipe', 'shell', 'prompt', 'sequence', 'parallel']
     if (step.tool && !validTools.includes(step.tool)) {
       errors.push(new RecipeValidationError(
         `Step ${step.name || index + 1} has invalid tool: ${step.tool}`,
@@ -1243,13 +1305,4 @@ export async function validateRecipe(
 ): Promise<RecipeValidationResult> {
   const engine = createRecipeEngine(config)
   return await engine.validateRecipe(recipe)
-}
-
-// Export types for external use
-export type {
-  RecipeSource,
-  RecipeExecutionOptions,
-  RecipeEngineConfig,
-  RecipeExecutionResult,
-  RecipeLoadResult
 }

@@ -1,0 +1,34 @@
+name: test-interactive
+description: Test recipe for interactive prompts and groups
+version: 1.0.0
+
+variables:
+  favoriteColor:
+    type: string
+    description: What is your favorite color?
+    default: blue
+
+steps:
+  - name: ask-color
+    tool: prompt
+    message: What is your favorite color?
+    variable: favoriteColor
+    promptType: select
+    options:
+      - blue
+      - red
+      - green
+    default: blue
+
+  - name: color-reaction
+    tool: group
+    when: favoriteColor == 'blue'
+    steps:
+      - name: praise-blue
+        tool: shell
+        command: echo "Blue is a great choice!"
+
+  - name: other-reaction
+    tool: shell
+    when: favoriteColor != 'blue'
+    command: 'echo "Interesting choice: {{favoriteColor}}"'

@@ -1,6 +1,5 @@
 import path from 'node:path'
 import fs from 'fs-extra'
-import ejs from 'ejs'
 import fm from 'front-matter'
 import walk from 'ignore-walk'
 import createDebug from 'debug'
@@ -11,9 +10,12 @@ const debug = createDebug('hypergen:render')
 
 // Initialize template engines on module load (will be enhanced with plugin support)
 let templateEnginesInitialized = false
-const initializeTemplateEngines = async () => {
-  if (!templateEnginesInitialized) {
-    await initializeTemplateEnginesWithPlugins()
+let currentConfig: any = null
+
+const initializeTemplateEngines = async (config?: any) => {
+  if (!templateEnginesInitialized || config !== currentConfig) {
+    currentConfig = config
+    await initializeTemplateEnginesWithPlugins(config)
     templateEnginesInitialized = true
   }
 }
@@ -86,7 +88,7 @@ const render = async (
   config: RunnerConfig,
 ): Promise<RenderedAction[]> => {
   // Ensure template engines are initialized
-  await initializeTemplateEngines()
+  await initializeTemplateEngines(config)
   
   if (!args.actionFolder) {
     return []

@@ -70,7 +70,7 @@ hypergen url resolve https://github.com/user/my-hyper-kit
 
 **Requirements for GitHub cookbooks**:
 - Must have `hyper-kit` topic
-- Must contain `kit.yml` or `hypergen.yml`
+- Must contain `kit.yml` (supports cookbooks and direct recipes) or `hypergen.yml`
 - Should have clear README with usage examples
 
 ## Local Cookbooks
@@ -170,6 +170,25 @@ hypergen url resolve https://github.com/company/react-kit
 # Use directly
 hypergen company/react-kit component --name=Button
 ```
+
+## Using Direct Recipes
+
+Some kits provide direct recipes that don't belong to cookbooks:
+
+```bash
+# List all recipes (including direct)
+hypergen recipe list @hyper-kits/utils
+
+# Run a direct recipe (no cookbook needed)
+hypergen utils init
+hypergen utils help
+hypergen utils upgrade
+```
+
+Direct recipes are useful for:
+- Simple, one-off operations
+- Kit-level commands like help, init, or upgrade
+- Quick utilities that don't need organization
 
 ### Configure Local Discovery
 Add to your `hypergen.config.js`:

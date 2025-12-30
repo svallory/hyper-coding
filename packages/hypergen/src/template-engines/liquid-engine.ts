@@ -67,7 +67,7 @@ export class LiquidTemplateEngine implements TemplateEngine {
 
   configure(options: Record<string, any>): void {
     // Create new Liquid instance with custom options
-    this.liquid = new Liquid({
+    const liquidOptions: any = {
       ...this.liquid.options,
       ...options,
       relativeReference: false,
@@ -78,8 +78,52 @@ export class LiquidTemplateEngine implements TemplateEngine {
         exists: async (file: string) => fs.existsSync(file),
         readFile: async (file: string) => fs.readFileSync(file, 'utf8'),
       },
-    })
-    
+    }
+
+    // Apply resource limits if provided
+    if (options.limits) {
+      if (options.limits.memoryLimit !== undefined) {
+        liquidOptions.memoryLimit = options.limits.memoryLimit
+      }
+      if (options.limits.renderLimit !== undefined) {
+        liquidOptions.renderLimit = options.limits.renderLimit
+      }
+      if (options.limits.parseLimit !== undefined) {
+        liquidOptions.parseLimit = options.limits.parseLimit
+      }
+    }
+
+    // Apply cache configuration
+    if (options.cache !== undefined) {
+      if (typeof options.cache === 'boolean') {
+        liquidOptions.cache = options.cache
+      } else if (typeof options.cache === 'object') {
+        // For more advanced cache configuration, we might need to create a custom cache
+        liquidOptions.cache = options.cache.enabled !== false
+      }
+    }
+
+    // Apply whitespace control
+    if (options.whitespace) {
+      if (options.whitespace.trimTagLeft !== undefined) {
+        liquidOptions.trimTagLeft = options.whitespace.trimTagLeft
+      }
+      if (options.whitespace.trimTagRight !== undefined) {
+        liquidOptions.trimTagRight = options.whitespace.trimTagRight
+      }
+      if (options.whitespace.trimOutputLeft !== undefined) {
+        liquidOptions.trimOutputLeft = options.whitespace.trimOutputLeft
+      }
+      if (options.whitespace.trimOutputRight !== undefined) {
+        liquidOptions.trimOutputRight = options.whitespace.trimOutputRight
+      }
+      if (options.whitespace.greedy !== undefined) {
+        liquidOptions.greedy = options.whitespace.greedy
+      }
+    }
+
+    this.liquid = new Liquid(liquidOptions)
+
     this.setupDefaultFilters()
     this.configured = true
   }

@@ -1,6 +1,6 @@
 /**
  * Template Engines Module
- * 
+ *
  * This module provides the template engine abstraction layer for Hypergen.
  * It includes interfaces, factory, and implementations for different template engines.
  */
@@ -8,21 +8,23 @@
 export * from './types.js'
 export * from './factory.js'
 export * from './liquid-engine.js'
-export * from './ejs-engine.js'
 
 import { templateEngineFactory } from './factory.js'
 import { LiquidTemplateEngine } from './liquid-engine.js'
-import { EJSTemplateEngine } from './ejs-engine.js'
 
 /**
  * Initialize and register default template engines
  */
-export function initializeTemplateEngines(): void {
-  // Register LiquidJS as the default template engine
-  templateEngineFactory.register(new LiquidTemplateEngine())
-  
-  // Register EJS as additional template engine
-  templateEngineFactory.register(new EJSTemplateEngine())
+export function initializeTemplateEngines(config?: any): void {
+  // Register LiquidJS as the default and only built-in template engine
+  const liquidEngine = new LiquidTemplateEngine()
+
+  // Apply configuration if provided
+  if (config?.engine?.liquid) {
+    liquidEngine.configure(config.engine.liquid)
+  }
+
+  templateEngineFactory.register(liquidEngine)
 }
 
 /**

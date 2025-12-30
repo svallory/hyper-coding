@@ -1,0 +1,15 @@
+name: prettier
+description: Configure Prettier for the workspace
+version: 1.0.0
+
+steps:
+  - name: Install Prettier
+    command: npm install -D prettier
+
+  - name: Create Prettier Configuration
+    tool: template
+    template: .prettierrc.yml.liquid
+
+  - name: Add Prettier Ignore
+    tool: template
+    template: .prettierignore.liquid

@@ -1,0 +1,20 @@
+---
+to: "{{ name }}/AGENTS.md"
+---
+# Project Context for AI Agents
+
+This project is a Hypergen Kit. It contains recipes, actions, and templates to scaffold and manage projects.
+
+## Structure
+
+- **cookbooks/**: Contains recipes. The default recipe is usually in `cookbooks/create`.
+- **actions/**: Custom actions written in TypeScript.
+- **reference/**: Place reference code here for AI agents to analyze.
+- **sandbox/**: A sandbox environment to test your kit.
+- **tests/**: Automated tests.
+
+## Conventions
+
+- Recipes are written in YAML.
+- Templates use LiquidJS.
+- Actions are TypeScript files defaulting to `index.ts` in their folder.

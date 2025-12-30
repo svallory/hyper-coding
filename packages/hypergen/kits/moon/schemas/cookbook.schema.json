@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hypergen.dev/schemas/cookbook.json",
+  "title": "Cookbook Configuration",
+  "description": "Schema for Hypergen cookbook.yml configuration files",
+  "type": "object",
+  "required": ["name", "description", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Cookbook name",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "description": {
+      "type": "string",
+      "description": "Cookbook description"
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9]+)?$"
+    },
+    "defaultRecipe": {
+      "type": "string",
+      "description": "Default recipe for this cookbook"
+    },
+    "variables": {
+      "$ref": "kit.schema.json#/definitions/variables"
+    },
+    "recipes": {
+      "type": "array",
+      "description": "Available recipes",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Recipe name",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "description": {
+            "type": "string",
+            "description": "Recipe description"
+          },
+          "path": {
+            "type": "string",
+            "description": "Path to recipe directory"
+          }
+        }
+      }
+    },
+    "extends": {
+      "type": "string",
+      "description": "Path to parent cookbook to extend from"
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Lifecycle hooks",
+      "additionalProperties": false,
+      "properties": {
+        "preExecute": {
+          "type": "string",
+          "description": "Script to run before recipe execution"
+        },
+        "postExecute": {
+          "type": "string",
+          "description": "Script to run after recipe execution"
+        }
+      }
+    }
+  }
+}

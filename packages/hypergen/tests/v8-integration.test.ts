@@ -35,7 +35,7 @@ describe('V8 Integration Tests', () => {
   describe('Template.yml Configuration System', () => {
     it('should validate template.yml files', async () => {
       const { stdout } = await execAsync(
-        `cd ${path.dirname(hypergenBin)} && bun --bun ${hypergenBin} template validate _templates/my-test-generator/template.yml`
+        `cd ${path.dirname(hypergenBin)} && bun --bun ${hypergenBin} template validate templates/my-test-generator/template.yml`
       )
       
       expect(stdout).toContain('✅ Template validation successful')
@@ -46,7 +46,7 @@ describe('V8 Integration Tests', () => {
 
     it('should show template information', async () => {
       const { stdout } = await execAsync(
-        `cd ${path.dirname(hypergenBin)} && bun --bun ${hypergenBin} template info _templates/my-test-generator/template.yml`
+        `cd ${path.dirname(hypergenBin)} && bun --bun ${hypergenBin} template info templates/my-test-generator/template.yml`
       )
       
       expect(stdout).toContain('📋 Template: my-test-generator')
@@ -59,16 +59,16 @@ describe('V8 Integration Tests', () => {
 
     it('should list templates', async () => {
       const { stdout } = await execAsync(
-        `cd ${path.dirname(hypergenBin)} && bun --bun ${hypergenBin} template list _templates`
+        `cd ${path.dirname(hypergenBin)} && bun --bun ${hypergenBin} template list templates`
       )
       
-      expect(stdout).toContain('📝 Templates found in _templates (1):')
+      expect(stdout).toContain('📝 Templates found in templates (1):')
       expect(stdout).toContain('• my-test-generator - Test generator for React components')
     })
 
     it('should show template examples', async () => {
       const { stdout } = await execAsync(
-        `cd ${path.dirname(hypergenBin)} && bun --bun ${hypergenBin} template examples _templates/my-test-generator/template.yml`
+        `cd ${path.dirname(hypergenBin)} && bun --bun ${hypergenBin} template examples templates/my-test-generator/template.yml`
       )
       
       expect(stdout).toContain('📝 Examples for template: my-test-generator')

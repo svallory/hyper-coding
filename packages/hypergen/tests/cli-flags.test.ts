@@ -7,7 +7,7 @@ describe('CLI Flag Parsing', () => {
   beforeEach(() => {
     cli = new HypergenCLI({
       cwd: process.cwd(),
-      templates: ['_templates']
+      templates: ['templates']
     })
   })
 

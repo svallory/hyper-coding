@@ -1,0 +1,46 @@
+name: kit
+description: scaffolding for a new hypergen kit
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Name of the new kit
+    required: true
+
+steps:
+  - name: Generate Kit Files
+    sequence:
+      - name: Generate package.json
+        template: templates/package.json.liquid
+      
+      - name: Generate AGENTS.md
+        template: templates/AGENTS.md.liquid
+        
+      - name: Generate Hyper Chef Agent
+        template: templates/ai/agents/hyper-chef.md.liquid
+        
+      - name: Generate Sample Recipe
+        template: templates/cookbooks/create/recipe.yml.liquid
+        
+      - name: Generate Sample Action
+        template: templates/actions/sample-action/index.ts.liquid
+        
+      - name: Generate Test
+        template: templates/tests/kit.test.ts.liquid
+
+  - name: Setup Agents
+    sequence:
+      - name: Create Agents Directory
+        tool: shell
+        command: mkdir -p {{name}}/.claude/agents
+      - name: Symlink Agent
+        tool: shell
+        command: cd {{name}} && ln -sf ../../ai/agents/hyper-chef.md .claude/agents/hyper-chef.md
+      - name: Create Sandbox
+        tool: shell
+        command: mkdir -p {{name}}/sandbox {{name}}/reference
+
+  - name: Install Dependencies
+    tool: shell
+    command: cd {{name}} && bun install

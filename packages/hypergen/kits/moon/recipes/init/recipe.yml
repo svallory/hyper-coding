@@ -1,0 +1,69 @@
+name: "init"
+description: |
+  Initialize a new project directly without using a cookbook.
+  This is a direct recipe that doesn't belong to any cookbook.
+version: "1.0.0"
+
+variables:
+  projectName:
+    type: "string"
+    prompt: "Project name?"
+    required: true
+    validate:
+      pattern: "^[a-z][a-z0-9-]*$"
+      message: "Project name must be lowercase alphanumeric with hyphens"
+
+  projectType:
+    type: "enum"
+    prompt: "Project type?"
+    values:
+      - "library"
+      - "application"
+      - "cli"
+    default: "library"
+
+  includeTests:
+    type: "boolean"
+    prompt: "Include test setup?"
+    default: true
+
+# Pre and post steps for template processing
+steps:
+  pre:
+    - name: "Create project directory"
+      tool: "shell"
+      command: "mkdir -p {{ projectName }}"
+
+    - name: "Initialize git repository"
+      tool: "shell"
+      command: |
+        cd {{ projectName }}
+        git init
+
+  # Templates are automatically processed here
+  # Files in ./templates/ are copied/processed based on their extension:
+  # - .liquid.t or .liquid files are processed as Liquid templates
+  # - Other files are copied as-is
+  # - .t extension is removed from filenames
+  # - Files are placed relative to the execution directory
+
+  post:
+    - name: "Install dependencies"
+      tool: "shell"
+      command: |
+        cd {{ projectName }}
+        echo "Installing dependencies..."
+        # Package manager installation would go here
+
+    - name: "Display next steps"
+      tool: "shell"
+      command: |
+        echo "✅ Project '{{ projectName }}' created successfully!"
+        echo ""
+        echo "Next steps:"
+        echo "  cd {{ projectName }}"
+        {%- if includeTests %}
+        echo "  npm test          # Run tests"
+        {%- endif %}
+        echo "  npm run dev       # Start development"
+        echo "  npm run build     # Build for production"

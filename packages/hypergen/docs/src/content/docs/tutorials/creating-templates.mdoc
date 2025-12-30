@@ -5,6 +5,10 @@ time: 20 minutes
 prerequisites: Understanding of Hypergen concepts, text editor
 ---
 
+<Note>
+Hypergen now supports **automatic template processing**! All files in your `templates/` directory are automatically processed based on their extensions. No need to define explicit template steps in your recipe.
+</Note>
+
 # Creating Your First Template
 
 **What you'll learn**: How to create a template, recipe, and test your first custom cookbook
@@ -54,19 +58,19 @@ variables:
     pattern: ^[A-Z][a-zA-Z0-9]*$
     description: Component name in PascalCase
     prompt: "What's your component name?"
-  
+
   typescript:
     type: boolean
     default: true
     description: Generate TypeScript component
     prompt: "Include TypeScript?"
-  
+
   includeTests:
     type: boolean
     default: true
     description: Generate test file
     prompt: "Include test file?"
-  
+
   styling:
     type: enum
     values: [css, scss, styled-components, none]
@@ -74,29 +78,44 @@ variables:
     description: Styling approach
     prompt: "Choose styling approach:"
 
+# Templates are automatically processed from ./templates/
+# No explicit steps needed for template generation!
+# Files are processed based on extension:
+# - .liquid.t or .liquid → Processed as Liquid templates
+# - .t.* → Processed with extension removed
+# - Other files → Copied as-is
+
 steps:
-  - name: Generate component
-    tool: template
-    template: component.liquid
-    
-  - name: Generate styles
-    tool: template
-    template: styles.liquid
-    when: "{% raw %}{{ styling != 'none' }}{% endraw %}"
-    
-  - name: Generate tests
-    tool: template  
-    template: test.liquid
-    when: "{% raw %}{{ includeTests }}{% endraw %}"
-    
-  - name: Update index
-    tool: action
-    action: update-exports
+  # Optional: Add pre/post steps for complex workflows
+  post:
+    - name: Update index
+      tool: action
+      action: update-exports
+```
+
+### Understanding Automatic Template Processing
+
+Hypergen automatically processes all files in your `templates/` directory. The file extension determines how each file is handled:
+
+| Extension | Processing | Example |
+|-----------|------------|---------|
+| `.liquid.t` | Liquid template → removes `.liquid.t` | `component.liquid.t` → `component.tsx` |
+| `.liquid` | Liquid template → removes `.liquid` | `package.json.liquid` → `package.json` |
+| `.t.*` | Template → removes `.t` | `config.t.ts` → `config.ts` |
+| No special extension | Copied as-is | `.gitignore` → `.gitignore` |
+
+Templates can use YAML frontmatter to control their behavior:
+
+```liquid
+---
+to: src/components/{{ name }}.tsx
+when: {{ includeTests }}
+---
 ```
 
 ## Create Your First Template
 
-Create `templates/component.liquid` with the component template:
+Create `templates/component.liquid.t` with the component template:
 
 ```liquid
 ---
@@ -156,7 +175,7 @@ export default {% raw %}{{ name }}{% endraw %};
 
 ## Create the Styles Template
 
-Create `templates/styles.liquid` for CSS/SCSS files:
+Create `templates/styles.liquid.t` for CSS/SCSS files:
 
 ```liquid
 ---
@@ -192,7 +211,7 @@ $padding: 1rem;
 
 ## Create the Test Template
 
-Create `templates/test.liquid` for test files:
+Create `templates/test.liquid.t` for test files:
 
 ```liquid
 ---

@@ -10,6 +10,7 @@ import { glob } from 'glob'
 import createDebug from 'debug'
 import { ActionRegistry } from '../actions/registry.js'
 import { isActionFunction } from '../actions/decorator.js'
+import { getGlobalPackages } from '../utils/global-packages.js'
 
 const debug = createDebug('hypergen:discovery')
 
@@ -20,7 +21,7 @@ export interface GeneratorDiscoveryOptions {
   enabledSources?: DiscoverySource[]
 }
 
-export type DiscoverySource = 'local' | 'npm' | 'git' | 'workspace'
+export type DiscoverySource = 'local' | 'npm' | 'git' | 'workspace' | 'global'
 
 export interface DiscoveredGenerator {
   name: string
@@ -43,7 +44,7 @@ export class GeneratorDiscovery {
       directories: ['recipes', 'cookbooks'],
       patterns: ['**/*.{js,ts,mjs}', '**/template.yml', '**/generator.{js,ts,mjs}'],
       excludePatterns: ['**/node_modules/**', '**/dist/**', '**/*.test.*', '**/*.spec.*'],
-      enabledSources: ['local', 'workspace'],
+      enabledSources: ['local', 'workspace', 'global'],
       ...this.options
     }
   }
@@ -74,6 +75,11 @@ export class GeneratorDiscovery {
     if (this.options.enabledSources?.includes('git')) {
       const gitGenerators = await this.discoverGit()
       discoveries.push(...gitGenerators)
+    }
+
+    if (this.options.enabledSources?.includes('global')) {
+      const globalGenerators = await this.discoverGlobal()
+      discoveries.push(...globalGenerators)
     }
     
     // Store discovered generators
@@ -238,6 +244,108 @@ export class GeneratorDiscovery {
   async discoverGit(): Promise<DiscoveredGenerator[]> {
     debug('Git discovery not yet implemented')
     return []
+  }
+
+  /**
+   * Discover global packages (npm/bun global installs)
+   */
+  async discoverGlobal(): Promise<DiscoveredGenerator[]> {
+    debug('Discovering global generators via engine')
+    
+    const generators: DiscoveredGenerator[] = []
+    
+    try {
+      const globalPackages = await getGlobalPackages()
+      debug('Found %d global packages installed: %o', globalPackages.length, globalPackages.map(p => p.name))
+      
+      for (const pkg of globalPackages) {
+        // Filter by naming convention
+        const isHyperKit = pkg.name.endsWith('-hyper-kit') || pkg.name.startsWith('@hyper-kits/')
+        
+        if (isHyperKit) {
+           debug('Checking potential kit: %s at %s', pkg.name, pkg.path)
+           await this.checkAndAddGlobalPackage(pkg.path, generators)
+        }
+      }
+    } catch (error) {
+       debug('Global discovery failed: %s', error)
+    }
+    
+    debug('Found %d global generators', generators.length)
+    return generators
+  }
+
+  private async checkAndAddGlobalPackage(packagePath: string, generators: DiscoveredGenerator[]) {
+    try {
+      const packageJsonPath = path.join(packagePath, 'package.json')
+      if (!(await fs.pathExists(packageJsonPath))) return
+
+      const packageJson = await fs.readJson(packageJsonPath)
+      const packageName = packageJson.name
+
+      // Check name requirement: ends with -hyper-kit or starts with @hyper-kits/
+      const isHyperKit = packageName.endsWith('-hyper-kit') || packageName.startsWith('@hyper-kits/')
+      
+      if (!isHyperKit) return
+
+      // It's a match! Check for generator content (actions/templates)
+      // Usually in a 'generators' dir or root? 
+      // The `discoverNpm` logic checks for `generators` dir. 
+      // The prompt didn't specify structure, but "hypergen kit my-templates" implies it acts like a kit.
+      // We'll stick to the convention of looking for a 'generators' folder OR 
+      // just treat the root as a potential generator if it has actions/templates.
+      // Let's try `generators` dir first to match npm logic, and fall back to root?
+      // Actually `npm` discovery explicitly looks for `generators` subdir.
+      // "Will hypergen be able to find the kit...?"
+      // If it's a kit package, it probably follows the kit structure.
+      
+      // Let's look for `generators` folder logic first, similar to discoverNpm
+      let generatorPath = path.join(packagePath, 'generators')
+      let hasGeneratorsDir = await fs.pathExists(generatorPath)
+      
+      if (!hasGeneratorsDir) {
+        // Fallback: maybe the package IS the generator (root) if it has template.yml or actions
+        // But `discoverNpm` enforces `generators` subdir. 
+        // Let's be a bit more flexible for global kits or stick to `npm` convention?
+        // existing `discoverNpm` logic:
+        // if (await fs.pathExists(generatorPath)) { ... }
+        // Let's stick to that for consistency, but maybe allow root if template.yml exists?
+        // For now, I'll match `discoverNpm` logic but applying to these filtered packages.
+        
+        // Actually, if the package name is explicitly `@kits/kit`, the user command `hypergen kit my-templates`
+        // implies we are looking for a generator named `kit`. 
+        // If the package is `my-hyper-kit`, and inside it has `generators/my-templates`...
+        // The user said `hypergen kit my-templates`.
+        // If the package IS the kit, maybe the generator name is the package name? 
+        // Or if the package contains multiple generators?
+        // `discoverNpm` uses `packageJson.name` as the generator name!
+        // `generators.push({ name: packageJson.name ... })`
+        // And it sets path to `path.join(packagePath, 'generators')`.
+        // This implies the `generators` folder contains the actions/code.
+        // I will follow the same pattern.
+        if (!hasGeneratorsDir) return 
+      }
+
+      if (hasGeneratorsDir) {
+        const actionFiles = await this.findActionFiles(generatorPath)
+        const actions = await this.extractActionsFromFiles(actionFiles)
+        
+        generators.push({
+          name: packageName,
+          source: 'global',
+          path: generatorPath,
+          actions,
+          metadata: {
+            description: packageJson.description,
+            version: packageJson.version,
+            author: packageJson.author
+          }
+        })
+      }
+
+    } catch (e) {
+      debug('Error checking global package %s: %s', packagePath, e)
+    }
   }
 
   /**

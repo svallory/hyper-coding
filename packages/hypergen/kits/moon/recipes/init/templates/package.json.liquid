@@ -1,0 +1,31 @@
+---
+to: "{{ projectName }}/package.json"
+---
+{
+  "name": "{{ projectName }}",
+  "version": "0.1.0",
+  "description": "{{ projectType | capitalize }} project: {{ projectName }}",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup src/index.ts",
+    {%- if includeTests %}
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+    {%- else %}
+    "typecheck": "tsc --noEmit"
+    {%- endif %}
+  },
+  "keywords": ["{{ projectType }}"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "tsx": "^4.0.0",
+    "tsup": "^8.0.0"
+    {%- if includeTests %},
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0"
+    {%- endif %}
+  }
+}

@@ -1,0 +1,12 @@
+name: deno
+description: Add Deno toolchain configuration
+version: 1.0.0
+
+steps:
+  - name: Update toolchain configuration
+    tool: template
+    template: toolchain-deno.yml.liquid
+
+  - name: Install Deno
+    command: curl -fsSL https://deno.land/x/install/install.sh | sh
+    when: "environment.OS !== 'Windows_NT'"

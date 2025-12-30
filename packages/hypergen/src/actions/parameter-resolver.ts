@@ -20,6 +20,61 @@ export class ActionParameterResolver {
   
 
   /**
+   * Resolve parameters without interactive prompts.
+   * Validates provided parameters and applies defaults.
+   * Throws an error if required parameters are missing.
+   */
+  async resolveParameters(
+    metadata: ActionMetadata,
+    provided: Record<string, any> = {},
+    options: {
+      useDefaults?: boolean
+    } = {}
+  ): Promise<Record<string, any>> {
+    debug('Resolving parameters for action: %s', metadata.name)
+    
+    const resolved: Record<string, any> = { ...provided }
+    
+    if (!metadata.parameters || metadata.parameters.length === 0) {
+      debug('No parameters defined for action: %s', metadata.name)
+      return resolved
+    }
+
+    // Step 1: Apply provided values and validate them
+    for (const param of metadata.parameters) {
+      if (resolved[param.name] !== undefined) {
+        this.validateParameterValue(param.name, resolved[param.name], param, resolved)
+        debug('Using provided value for %s: %o', param.name, resolved[param.name])
+      }
+    }
+
+    // Step 2: Apply default values if useDefaults is true
+    if (options.useDefaults) {
+      for (const param of metadata.parameters) {
+        if (resolved[param.name] === undefined && param.default !== undefined) {
+          resolved[param.name] = param.default
+          debug('Applied default value for %s: %o', param.name, param.default)
+        }
+      }
+    }
+
+    // Step 3: Final validation - ensure all required parameters have values
+    for (const param of metadata.parameters) {
+      if (resolved[param.name] === undefined && param.required) {
+        throw new ActionParameterError(
+          `Required parameter '${param.name}' not provided and no default available`,
+          param.name,
+          undefined,
+          param.type
+        )
+      }
+    }
+
+    debug('Parameters resolved for %s: %o', metadata.name, Object.keys(resolved))
+    return resolved
+  }
+
+  /**
    * Resolve parameters with proper precedence and interactive prompts
    * 
    * Resolution order:

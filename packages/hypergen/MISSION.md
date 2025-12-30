@@ -88,7 +88,7 @@ Also, in any scenario, there are these questions:
 
 ### Sharing Templates Must Be Easy
 
-We'll allow users to share standalone templates or Packs which contain one or more templates.
+We'll allow users to share standalone cookbooks or Hyper Kits which contain one or more cookbooks and, in the future, plugins, actions, etc.
 
 #### Multiple Template Locations
 

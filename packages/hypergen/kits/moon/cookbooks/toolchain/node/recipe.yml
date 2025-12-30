@@ -1,0 +1,43 @@
+name: node
+description: |
+  Add Node.js toolchain configuration to moon.
+  This will update the .moon/toolchain.yml file to include Node.js settings.
+version: 1.0.0
+
+variables:
+  node_version:
+    prompt: "What Node.js version should be used?"
+    type: string
+    required: true
+    default: "20.11.0"
+    pattern: "^\\d+\\.\\d+\\.\\d+$"
+    description: "Node.js version (semver format)"
+
+  package_manager:
+    prompt: "Which package manager should be used?"
+    type: enum
+    required: true
+    values: [npm, yarn, pnpm, bun]
+    default: bun
+    description: "Package manager for dependency management"
+
+  sync_version_manager:
+    prompt: "Should moon sync with a version manager?"
+    type: enum
+    required: false
+    values: [none, nodenv, nvm]
+    default: none
+    description: "Version manager to sync with (optional)"
+
+steps:
+  - name: Update toolchain configuration
+    tool: template
+    template: toolchain-node.yml.liquid
+
+  - name: Display completion message
+    tool: shell
+    command: |
+      echo "✅ Node.js toolchain configured!"
+      echo "   Version: {{ node_version }}"
+      echo "   Update .moon/toolchain.yml with your preferred settings."
+      echo "   Consider creating a .nvmrc or .node-version file in your workspace root."}

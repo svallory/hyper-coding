@@ -1,0 +1,15 @@
+name: husky
+description: Configure Husky for git hooks
+version: 1.0.0
+
+steps:
+  - name: Install Husky
+    command: npm install -D husky
+    
+  - name: Initialize Husky
+    command: npx husky init
+
+  - name: Configure Pre-commit Hook
+    tool: template
+    template: pre-commit.liquid
+    outputDir: .husky

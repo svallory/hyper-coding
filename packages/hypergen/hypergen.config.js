@@ -5,18 +5,18 @@
  */
 export default {
   // Template directories to search
-  templates: ['_templates'],
-  
+  templates: ['templates'],
+
   // Generator discovery options
   discovery: {
     sources: ['local', 'npm', 'workspace'],
-    directories: ['_templates', 'templates', 'generators'],
+    directories: ['templates', 'generators'],
     exclude: ['node_modules', '.git', 'dist', 'build']
   },
-  
+
   // Template engine configuration
   engine: {
-    type: 'ejs',
+    type: 'liquid',
     options: {}
   },
   

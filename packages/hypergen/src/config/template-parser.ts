@@ -14,6 +14,7 @@ import type { RecipeConfig, RecipeStepUnion, ToolType } from '../recipe-engine/t
 export interface TemplateVariable {
   type: 'string' | 'number' | 'boolean' | 'enum' | 'array' | 'object' | 'file' | 'directory'
   required?: boolean
+  multiple?: boolean
   default?: any
   description?: string
   pattern?: string
@@ -100,7 +101,7 @@ export interface ParsedTemplate {
 export class TemplateParser {
   private static readonly SUPPORTED_VERSIONS = ['1.0.0']
   private static readonly VALID_VARIABLE_TYPES = ['string', 'number', 'boolean', 'enum', 'array', 'object', 'file', 'directory']
-  private static readonly VALID_TOOL_TYPES: ToolType[] = ['template', 'action', 'codemod', 'recipe']
+  private static readonly VALID_TOOL_TYPES: ToolType[] = ['template', 'action', 'codemod', 'recipe', 'shell']
   private static readonly VALID_STEP_STATUSES = ['pending', 'running', 'completed', 'failed', 'skipped', 'cancelled']
 
   /**
@@ -515,7 +516,13 @@ export class TemplateParser {
         break
 
       case 'enum':
-        if (!variable.values || !variable.values.includes(value)) {
+        if (variable.multiple && Array.isArray(value)) {
+          // Validate each value in array
+          const invalid = value.find(v => !variable.values?.includes(v))
+          if (invalid) {
+            return { isValid: false, error: `Value '${invalid}' for variable '${varName}' must be one of: ${variable.values?.join(', ')}` }
+          }
+        } else if (!variable.values || !variable.values.includes(value)) {
           return { isValid: false, error: `Variable '${varName}' must be one of: ${variable.values?.join(', ')}` }
         }
         break
@@ -737,6 +744,21 @@ export class TemplateParser {
       return null
     }
 
+    // Tool inference / Shorthand support
+    if (!step.tool) {
+      if (step.command) {
+        step.tool = 'shell'
+      } else if (step.recipe) {
+        step.tool = 'recipe'
+      } else if (step.template) {
+        step.tool = 'template'
+      } else if (step.action) {
+        step.tool = 'action'
+      } else if (step.codemod) {
+        step.tool = 'codemod'
+      }
+    }
+
     if (!step.tool || !this.VALID_TOOL_TYPES.includes(step.tool)) {
       errors.push(`Step '${step.name}' must have a valid tool type (${this.VALID_TOOL_TYPES.join(', ')})`)
       return null
@@ -758,8 +780,7 @@ export class TemplateParser {
       if (this.validateConditionExpression(step.when)) {
         (baseStep as any).when = step.when
       } else {
-        (warnings as string[]).push(`Step '${step.name}' has potentially invalid condition expression`)
-        (baseStep as any).when = step.when // Still include it
+(baseStep as any).when = step.when; warnings.push(`Step '${step.name}' has potentially invalid condition expression`)
       }
     }
 
@@ -843,7 +864,7 @@ export class TemplateParser {
       template: step.template
     }
 
-    if (step.engine && ['ejs', 'liquid', 'auto'].includes(step.engine)) {
+    if (step.engine && ['liquid', 'auto'].includes(step.engine)) {
       templateStep.engine = step.engine
     }
 

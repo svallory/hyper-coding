@@ -30,7 +30,7 @@ describe('Recipe Step System Integration', () => {
     // Create temporary test environment
     const tempFixtures = await withTempFixtures(async (dir) => {
       // Create test template structure
-      const templatesDir = path.join(dir, '_templates', 'test-component')
+      const templatesDir = path.join(dir, 'templates', 'test-component')
       await fs.ensureDir(templatesDir)
       
       // Create template.yml
@@ -60,36 +60,36 @@ examples:
 `)
       
       // Create template files
-      await fs.writeFile(path.join(templatesDir, 'component.ejs.t'), `---
-to: src/components/<%= name %>.ts
+      await fs.writeFile(path.join(templatesDir, 'component.liquid.t'), `---
+to: src/components/{{ name }}.ts
 ---
 /**
- * Generated component: <%= name %>
+ * Generated component: {{ name }}
  */
-export interface <%= name %>Props {
+export interface {{ name }}Props {
   children?: React.ReactNode;
 }
 
-export const <%= name %><% if (type === 'functional') { %> = ({ children }: <%= name %>Props) => {
-  return <div className="<%= name.toLowerCase() %>">{children}</div>;
-}<% } else { %> extends React.Component<<%= name %>Props> {
+export const {{ name }}{% if type == 'functional' %} = ({ children }: {{ name }}Props) => {
+  return <div className="{{ name | downcase }}">{children}</div>;
+}{% else %} extends React.Component<{{ name }}Props> {
   render() {
-    return <div className="<%= name.toLowerCase() %>">{this.props.children}</div>;
+    return <div className="{{ name | downcase }}">{this.props.children}</div>;
   }
-}<% } %>
+}{% endif %}
 `)
 
       if (true) { // Always create test file for consistency
-        await fs.writeFile(path.join(templatesDir, 'test.ejs.t'), `---
-to: src/components/<%= name %>.test.ts
-skip_if: <%= !withTests %>
+        await fs.writeFile(path.join(templatesDir, 'test.liquid.t'), `---
+to: src/components/{{ name }}.test.ts
+skip_if: "{{ !withTests }}"
 ---
 import { render } from '@testing-library/react';
-import { <%= name %> } from './<%= name %>';
+import { {{ name }} } from './{{ name }}';
 
-describe('<%= name %>', () => {
+describe('{{ name }}', () => {
   it('should render successfully', () => {
-    const { baseElement } = render(<<%= name %> />);
+    const { baseElement } = render(<{{ name }} />);
     expect(baseElement).toBeTruthy();
   });
 });
@@ -116,14 +116,14 @@ export async function testComponent(
   
   try {
     // Generate component file
-    await templateEngine.renderTemplate('component.ejs.t', {
+    await templateEngine.renderTemplate('component.liquid.t', {
       ...params,
       name: utils.inflection.classify(params.name)
     });
-    
+
     // Generate test file if requested
     if (params.withTests) {
-      await templateEngine.renderTemplate('test.ejs.t', {
+      await templateEngine.renderTemplate('test.liquid.t', {
         ...params,
         name: utils.inflection.classify(params.name)
       });
@@ -306,11 +306,11 @@ steps:
     engine = createRecipeEngine({
       enableDebugLogging: false,
       cache: { enabled: false },
-      security: { 
+      security: {
         allowExternalSources: false,
-        allowShellCommands: false 
+        allowShellCommands: false
       },
-      templatesPath: path.join(tempDir, '_templates'),
+      templatesPath: path.join(tempDir, 'templates'),
       recipesPath: path.join(tempDir, 'recipes')
     })
     

@@ -1,0 +1,33 @@
+# Cookbook configuration for Repository Management
+# This is optional - cookbook can work without this file
+name: 'repo'
+description: 'Manage Moon monorepos'
+version: '1.0.0'
+
+# Default recipe for this cookbook
+defaults:
+  recipe: 'create'
+
+# Recipes available in this cookbook
+# Accepts a single glob or an array of globs.
+# Globs can match `recipe.yml` files or folders.
+# If a folder matched by a glob does not contain a `recipe.yml` file, it is silently ignored
+# An error is thrown only if no recipe.yml files can be found.
+# @default './**/*/recipe.yml'
+recipes:
+  - './*/recipe.yml'
+
+# Cookbook-specific variables (optional)
+variables:
+  workspaceName:
+    type: 'string'
+    prompt: 'Workspace name?'
+    required: true
+    validate:
+      pattern: '^[a-z][a-z0-9-]*$'
+      message: 'Workspace name must be lowercase alphanumeric with hyphens'
+
+# Optional: Define cookbook-level hooks
+hooks:
+  preExecute: './hooks/validate-workspace.js'
+  postExecute: './hooks/post-create.js'

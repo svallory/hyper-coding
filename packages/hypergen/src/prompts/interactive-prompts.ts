@@ -706,6 +706,9 @@ export async function performInteractivePrompting(
               if (isNaN(num)) return 'Must be a valid number'
               if (prompt.validate) {
                 const validation = prompt.validate(num)
+                if (validation === false) {
+                  return 'Invalid input'
+                }
                 return validation === true ? undefined : validation
               }
               return undefined
@@ -725,6 +728,9 @@ export async function performInteractivePrompting(
             validate: prompt.validate ? (value) => {
               if (!value && prompt.default !== undefined) return undefined
               const validation = prompt.validate!(value)
+              if (validation === false) {
+                return 'Invalid input'
+              }
               return validation === true ? undefined : validation
             } : undefined
           })

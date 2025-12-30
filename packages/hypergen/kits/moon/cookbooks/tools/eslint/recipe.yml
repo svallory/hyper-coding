@@ -1,0 +1,24 @@
+name: eslint
+description: Configure ESLint for the workspace
+version: 1.0.0
+
+variables:
+  config_type:
+    type: enum
+    values: [new, legacy]
+    default: new
+    description: 'ESLint configuration type (flat vs legacy)'
+
+steps:
+  - name: Install ESLint
+    command: npm install -D eslint
+
+  - name: Create ESLint Configuration
+    tool: template
+    template: eslint.config.js.liquid
+    when: "config_type === 'new'"
+
+  - name: Create Legacy ESLint Configuration
+    tool: template
+    template: .eslintrc.js.liquid
+    when: "config_type === 'legacy'"

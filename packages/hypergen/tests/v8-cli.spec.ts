@@ -126,7 +126,7 @@ describe('HypergenCLI Integration', () => {
       debug: false,
       discoveryOptions: {
         sources: ['local'],
-        directories: ['_templates']
+        directories: ['templates']
       }
     }
     

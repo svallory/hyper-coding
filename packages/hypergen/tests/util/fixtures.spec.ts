@@ -14,17 +14,17 @@ import {
 describe('fixture helpers', () => {
   describe('fixture()', () => {
     it('should resolve fixture paths', () => {
-      const fixturePath = fixture('app/new.ejs.t')
-      expect(fixturePath).toContain('fixtures/app/new.ejs.t')
+      const fixturePath = fixture('app/new.liquid.t')
+      expect(fixturePath).toContain('fixtures/app/new.liquid.t')
     })
 
     it('should resolve fixture paths with base directory', () => {
-      const fixturePath = fixture('new.ejs.t', { base: 'app' })
-      expect(fixturePath).toContain('fixtures/app/new.ejs.t')
+      const fixturePath = fixture('new.liquid.t', { base: 'app' })
+      expect(fixturePath).toContain('fixtures/app/new.liquid.t')
     })
 
     it('should read fixture content when read option is true', () => {
-      const content = fixture('empty.ejs.t', { read: true })
+      const content = fixture('empty.liquid.t', { read: true })
       expect(content).toBeDefined()
       expect(typeof content).toBe('string')
     })
@@ -33,8 +33,8 @@ describe('fixture helpers', () => {
   describe('fixtureFor()', () => {
     it('should create specialized fixture functions', () => {
       const appFix = fixtureFor('app')
-      const fixturePath = appFix('new.ejs.t')
-      expect(fixturePath).toContain('fixtures/app/new.ejs.t')
+      const fixturePath = appFix('new.liquid.t')
+      expect(fixturePath).toContain('fixtures/app/new.liquid.t')
     })
   })
 
@@ -47,7 +47,7 @@ describe('fixture helpers', () => {
 
   describe('fixtureExists()', () => {
     it('should return true for existing fixtures', () => {
-      expect(fixtureExists('empty.ejs.t')).toBe(true)
+      expect(fixtureExists('empty.liquid.t')).toBe(true)
     })
 
     it('should return false for non-existing fixtures', () => {
@@ -97,9 +97,9 @@ describe('fixture helpers', () => {
   describe('copyFixture()', () => {
     it('should copy fixtures to destination', async () => {
       const { path: tempPath, cleanup } = await withTempFixtures(async (dir) => {
-        await copyFixture('empty.ejs.t', path.join(dir, 'copied.ejs.t'))
-        
-        expect(fs.existsSync(path.join(dir, 'copied.ejs.t'))).toBe(true)
+        await copyFixture('empty.liquid.t', path.join(dir, 'copied.liquid.t'))
+
+        expect(fs.existsSync(path.join(dir, 'copied.liquid.t'))).toBe(true)
       })
       
       cleanup()

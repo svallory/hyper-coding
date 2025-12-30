@@ -41,6 +41,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Creating Templates', slug: 'tutorials/creating-templates' },
 						{ label: 'Advanced Composition', slug: 'advanced-composition' },
+						{ label: 'Automatic Template Processing', slug: 'guides/automatic-template-processing' },
 					],
 				},
 				{

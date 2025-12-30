@@ -15,7 +15,7 @@ const opts = { compareContent: true }
 const logger = new Logger(console.log)
 
 const createConfig = (metaDir) => ({
-  templates: '_templates',
+  templates: 'templates',
   cwd: metaDir,
 
   exec: (action, body) => {

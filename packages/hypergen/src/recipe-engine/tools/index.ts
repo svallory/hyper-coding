@@ -30,6 +30,12 @@ export {
   recipeToolFactory
 } from './recipe-tool.js'
 
+export {
+  ShellTool,
+  ShellToolFactory,
+  shellToolFactory
+} from './shell-tool.js'
+
 export type {
   ToolFactory,
   ToolPhase,
@@ -63,6 +69,7 @@ export type {
   ActionStep,
   CodeModStep,
   RecipeStep,
+  ShellStep,
   
   // Context and execution
   StepContext,
@@ -92,6 +99,13 @@ import type { ToolType, RecipeStepUnion } from '../types.js'
 import type { ToolPhase, ToolValidationResult } from './base.js'
 import { Tool } from './base.js'
 import { ToolRegistry, getToolRegistry, type ToolResolutionOptions, type ToolRegistryStats } from './registry.js'
+import { templateToolFactory } from './template-tool.js'
+import { actionToolFactory } from './action-tool.js'
+import { recipeToolFactory } from './recipe-tool.js'
+import { shellToolFactory } from './shell-tool.js'
+import { promptToolFactory } from './prompt-tool.js'
+import { sequenceToolFactory } from './sequence-tool.js'
+import { parallelToolFactory } from './parallel-tool.js'
 
 // Re-export type guard functions for convenience
 export {
@@ -116,7 +130,7 @@ export const TOOL_FRAMEWORK_VERSION = '8.0.0'
 /**
  * Supported tool types in the Recipe Step System
  */
-export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = ['template', 'action', 'codemod', 'recipe'] as const
+export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = ['template', 'action', 'codemod', 'recipe', 'shell'] as const
 
 /**
  * Default tool registry configuration
@@ -155,6 +169,69 @@ export function initializeToolsFramework(options?: {
   }
 
   return registry
+}
+
+/**
+ * Register default tools (template, action, recipe, shell)
+ */
+export function registerDefaultTools(): void {
+  const registry = getToolRegistry()
+  
+  // Register Template Tool
+  if (!registry.isRegistered('template', 'default')) {
+    registry.register('template', 'default', templateToolFactory, {
+      description: 'Process template files',
+      category: 'core'
+    })
+  }
+  
+  // Register Action Tool
+  if (!registry.isRegistered('action', 'default')) {
+    registry.register('action', 'default', actionToolFactory, {
+      description: 'Execute TypeScript actions',
+      category: 'core'
+    })
+  }
+  
+  // Register Recipe Tool
+  if (!registry.isRegistered('recipe', 'default')) {
+    registry.register('recipe', 'default', recipeToolFactory, {
+      description: 'Execute other recipes',
+      category: 'core'
+    })
+  }
+  
+  // Register Shell Tool
+  if (!registry.isRegistered('shell', 'default')) {
+    registry.register('shell', 'default', shellToolFactory, {
+      description: 'Execute shell commands',
+      category: 'core'
+    })
+  }
+
+  // Register Prompt Tool
+  if (!registry.isRegistered('prompt', 'default')) {
+    registry.register('prompt', 'default', promptToolFactory, {
+      description: 'Interactive user prompts',
+      category: 'interaction'
+    })
+  }
+
+  // Register Sequence Tool
+  if (!registry.isRegistered('sequence', 'default')) {
+    registry.register('sequence', 'default', sequenceToolFactory, {
+      description: 'Sequential step execution',
+      category: 'core'
+    })
+  }
+
+  // Register Parallel Tool
+  if (!registry.isRegistered('parallel', 'default')) {
+    registry.register('parallel', 'default', parallelToolFactory, {
+      description: 'Parallel step execution',
+      category: 'core'
+    })
+  }
 }
 
 /**

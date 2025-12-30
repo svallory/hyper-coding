@@ -180,23 +180,27 @@ hypergen step execute react/component --from="Generate tests" --name="Button"
 
 Recipes can include conditional steps:
 
+<Note>
+Modern Hypergen recipes support **automatic template processing**. Instead of explicit template steps, place templates in the `templates/` directory and they'll be processed automatically. Use pre/post steps for conditional logic. See [Automatic Template Processing](/guides/automatic-template-processing) for details.
+</Note>
+
 ```yaml
 # recipe.yml
 steps:
   - name: Generate component
     tool: template
     template: component.tsx.liquid
-    
+
   - name: Generate tests
-    tool: template  
+    tool: template
     template: test.tsx.liquid
     when: "{{ includeTests }}"
-    
+
   - name: Setup Storybook
     tool: action
-    action: setup-storybook  
+    action: setup-storybook
     when: "{{ features contains 'storybook' }}"
-    
+
   - name: Add TypeScript types
     tool: codemod
     codemod: add-types

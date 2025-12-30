@@ -1,0 +1,83 @@
+# Kit configuration for @hyper-kits/moon
+# Schema version: 1.0.0
+# Note: kit.yml support is documented but not yet implemented in Hypergen
+# This file follows the proposed schema design for future implementation
+
+name: "@hyper-kits/moon"
+description: |
+  Comprehensive Moon monorepo management kit.
+  Create and manage Moon-based monorepos with ease.
+version: "1.0.0"
+author: "Hypergen Team"
+repository: "https://github.com/hypergen/hyper-kits/tree/main/moon"
+homepage: "https://hypergen.dev/kits/moon"
+keywords:
+  - moon
+  - monorepo
+  - build-tools
+  - typescript
+  - javascript
+  - toolchain
+  - tasks
+license: "MIT"
+
+# Default cookbook and recipe when running `hypergen moon`
+defaults:
+  cookbook: "repo"        # Default cookbook
+  recipe: "create"        # Default recipe within default cookbook
+
+  # Per-cookbook defaults (optional)
+  cookbookDefaults:
+    toolchain: "node"     # Default recipe for toolchain cookbook
+    tasks: "typescript"   # Default recipe for tasks cookbook
+
+# Cookbooks available in this kit
+# Accepts a single glob or an array of globs.
+# Globs can match `cookbook.yml` files or folders.
+# If a folder matched by a glob does not contain a `cookbook.yml` file,
+# it is NOT ignored as long as it has at least one recipe.
+# @default './**/cookbook.yml'
+cookbooks:
+  - "./cookbooks/*/cookbook.yml"
+  - "./cookbooks/*/"  # Also match folders without cookbook.yml
+
+# Direct recipes that don't belong to a cookbook
+# Accepts a single glob or an array of globs.
+# Globs can match `recipe.yml` files or folders.
+# If a folder matched by a glob does not contain a `recipe.yml` file,
+# it is silently ignored.
+# @default './recipes/**/recipe.yml'
+recipes:
+  - "./recipes/*/recipe.yml"
+  - "./recipes/*/"  # Also match folders without recipe.yml
+
+# Kit-wide variables that can be referenced in recipes
+variables:
+  moonVersion:
+    type: "string"
+    default: "^1.22.0"
+    description: "Moon version constraint"
+
+  nodeVersion:
+    type: "string"
+    default: "20.11.0"
+    description: "Default Node.js version"
+
+# Metadata for discovery and categorization
+tags:
+  - "monorepo"
+  - "moon"
+  - "typescript"
+  - "javascript"
+  - "nodejs"
+
+categories:
+  - "Development Tools"
+  - "Monorepo Management"
+
+# Optional: Define shared templates or partials
+shared:
+  templates:
+    - "./shared/templates/*.liquid"
+  partials:
+    - "./shared/partials/*.liquid"

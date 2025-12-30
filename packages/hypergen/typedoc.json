@@ -2,10 +2,8 @@
   "$schema": "https://typedoc.org/schema.json",
   "name": "Hypergen API Documentation",
   "entryPoints": ["./src/index.ts"],
-  "out": "../../apps/docs/typedocs",
-  "plugin": [
-    "typedoc-theme-mintlify"
-  ],
+  "out": "../../apps/docs/packages/hypergen-typedoc",
+  "plugin": [],
   "readme": "README.md",
   "excludePrivate": true,
   "excludeProtected": true,
@@ -42,10 +40,5 @@
   },
   "treatWarningsAsErrors": false,
   "treatValidationWarningsAsErrors": false,
-  "logLevel": "Info",
-  
-  "mintlifyNavigation": "folder,kind",
-  "mintlifySidebarIcons": "groups",
-  "mintlifyDocsJsonPath": "../../apps/docs/docs.json",
-  "mintlifyTabName": "Hypergen SDK"
+  "logLevel": "Info"
 }

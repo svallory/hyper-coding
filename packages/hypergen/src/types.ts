@@ -62,7 +62,6 @@ export enum ConflictResolutionStrategy {
 export interface RunnerConfig {
   exec?: (sh: string, body: string) => void
   templates?: TemplatesConfigOption
-  templatesOverride?: TemplatesConfigOption
   /**
    * Sets how action conflicts get resolved
    *

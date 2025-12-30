@@ -1,0 +1,54 @@
+name: create
+description: Create a new moon monorepo with configurable platforms and tools
+version: 1.0.0
+
+variables:
+  platform:
+    prompt: "What platform will your projects run on?"
+    type: enum
+    required: true
+    values: [node, deno, bun]
+    default: node
+
+  tools:
+    prompt: "Which development tools would you like to configure?"
+    type: enum
+    multiple: true
+    required: false
+    values: [typescript, eslint, prettier, husky]
+    default: [typescript, eslint, prettier]
+
+steps:
+  - name: Create project architecture
+    command: |
+      echo "Creating monorepo structure..."
+      mkdir -p apps libs packages
+
+  # Delegated Toolchain Setup
+  - name: Setup Node.js Toolchain
+    recipe: ../../../cookbooks/toolchain/node/recipe.yml
+    when: "platform === 'node'"
+
+  - name: Setup Bun Toolchain
+    recipe: ../../../cookbooks/toolchain/bun/recipe.yml
+    when: "platform === 'bun'"
+
+  - name: Setup Deno Toolchain
+    recipe: ../../../cookbooks/toolchain/deno/recipe.yml
+    when: "platform === 'deno'"
+
+  # Delegated Tools Setup
+  - name: Setup ESLint
+    recipe: ../../../cookbooks/tools/eslint/recipe.yml
+    when: "tools.includes('eslint')"
+
+  - name: Setup Prettier
+    recipe: ../../../cookbooks/tools/prettier/recipe.yml
+    when: "tools.includes('prettier')"
+
+  - name: Setup Husky
+    recipe: ../../../cookbooks/tools/husky/recipe.yml
+    when: "tools.includes('husky')"
+
+  - name: Finalize
+    command: echo "✅ Monorepo created!"

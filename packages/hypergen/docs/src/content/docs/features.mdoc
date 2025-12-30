@@ -83,10 +83,34 @@ variables:
 ### 🧬 Recipe Step System
 **Status: ✅ Complete**
 
-Complete Recipe Step System with 4 coordinated tools:
+Complete Recipe Step System with 4 coordinated tools and automatic template processing:
 
+#### Automatic Template Processing
 ```yaml
-# recipe.yml with step execution
+# recipe.yml with automatic template processing
+name: project-init
+description: Initialize a new project
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    required: true
+  typescript:
+    type: boolean
+    default: true
+
+# Automatic template processing - no explicit steps needed!
+# All files in ./templates/ are processed automatically:
+# - .liquid.t or .liquid files → Processed as Liquid templates
+# - Other files → Copied as-is
+# - .t extension removed from filenames
+# - Files placed relative to execution directory (or frontmatter 'to:')
+```
+
+#### Manual Step Configuration
+```yaml
+# recipe.yml with pre/post steps
 name: react-component
 description: Create React components with steps
 version: 1.0.0
@@ -104,31 +128,72 @@ variables:
     default: false
 
 steps:
+  # Pre-steps: Execute before automatic template processing
+  pre:
+    - name: Create directory
+      tool: shell
+      command: mkdir -p src/components
+
+    - name: Validate name
+      tool: action
+      action: validate-component-name
+
+  # Templates are automatically processed here
+  # Files from ./templates/ are processed according to their extension
+
+  # Post-steps: Execute after automatic template processing
+  post:
+    - name: Format code
+      tool: codemod
+      codemod: prettier-format
+      files: ["src/**/*.{ts,tsx}"]
+
+    - name: Run tests
+      tool: shell
+      command: npm test
+      when: "{{ includeTests }}"
+
+    - name: Execute setup action
+      tool: action
+      action: setup-component
+      when: "{{ typescript }}"
+```
+
+#### Legacy Step Format (Still Supported)
+```yaml
+# recipe.yml with explicit template steps
+name: legacy-recipe
+description: Legacy recipe format
+version: 1.0.0
+
+steps:
   - name: Generate component
     tool: template
     template: component.tsx.ejs
-    
+
   - name: Generate tests
     tool: template
     template: test.tsx.ejs
     when: "{{ includeTests }}"
-    
+
   - name: Format code
     tool: codemod
     codemod: prettier-format
     files: ["src/**/*.{ts,tsx}"]
-    
+
   - name: Execute setup action
     tool: action
     action: setup-component
     when: "{{ typescript }}"
-    
+
   - name: Run child recipe
     tool: recipe
     recipe: ./sub-recipes/add-exports.yml
 ```
 
 **Key Capabilities:**
+- ✅ **Automatic Template Processing**: Process all templates in ./templates/ automatically
+- ✅ **Pre/Post Steps**: Execute steps before and after template processing
 - ✅ **Template Tool**: Process .ejs/.liquid templates with variables
 - ✅ **Action Tool**: Execute TypeScript actions with context
 - ✅ **CodeMod Tool**: Transform code using AST modifications
@@ -370,6 +435,63 @@ hypergen recipe validate my-cookbook/create
 - ✅ Recipe conflict detection
 
 **Implementation Location:** `src/discovery/local-discovery.ts`
+
+### 🏗️ Kit Configuration
+**Status: ✅ Complete**
+
+Rich kit-level configuration with support for cookbooks, direct recipes, and defaults:
+
+```yaml
+# kit.yml with cookbooks and direct recipes
+name: "@hyper-kits/moon"
+description: "Comprehensive Moon monorepo management"
+version: "1.0.0"
+
+# Flexible defaults for cookbooks and direct recipes
+defaults:
+  cookbook: "repo"        # Default cookbook
+  recipe: "create"        # Default recipe within cookbook
+  directRecipe: "help"    # Default direct recipe
+  cookbookDefaults:
+    toolchain: "node"
+    tasks: "typescript"
+
+# Cookbook discovery via glob patterns
+cookbooks:
+  - "./cookbooks/*/cookbook.yml"
+  - "./cookbooks/*/"  # Match folders without cookbook.yml
+
+# Direct recipes (no cookbook)
+recipes:
+  - "./recipes/*/recipe.yml"
+  - "./recipes/*/"  # Match folders without recipe.yml
+
+# Kit-wide variables available to all recipes
+variables:
+  nodeVersion:
+    type: string
+    default: "20.11.0"
+    description: "Node.js version"
+
+# Shared resources across recipes
+shared:
+  templates:
+    - "./shared/templates/*.liquid"
+  partials:
+    - "./shared/partials/*.liquid"
+```
+
+**Key Capabilities:**
+- ✅ Glob pattern discovery for cookbooks and recipes
+- ✅ Direct recipes (recipes without cookbooks)
+- ✅ Flexible defaults (cookbook, recipe, directRecipe)
+- ✅ Per-cookbook default recipes
+- ✅ Kit-wide variables
+- ✅ Shared templates and partials
+- ✅ Hierarchical configuration resolution
+- ✅ Mixed cookbook + direct recipe kits
+
+**Implementation Location:** `src/config/kit-config.ts`
 
 ## 🛡️ Security & Trust System
 

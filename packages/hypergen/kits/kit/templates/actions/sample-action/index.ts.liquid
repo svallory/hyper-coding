@@ -1,0 +1,7 @@
+---
+to: "{{ name }}/actions/sample-action/index.ts"
+---
+export async function run(context: any) {
+  console.log('Running sample action');
+  return { success: true };
+}

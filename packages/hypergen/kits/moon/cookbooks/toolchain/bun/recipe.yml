@@ -1,0 +1,18 @@
+name: bun
+description: Add Bun toolchain configuration
+version: 1.0.0
+
+variables:
+  version:
+    prompt: "Bun version?"
+    type: string
+    default: "1.0.0"
+
+steps:
+  - name: Update toolchain configuration
+    tool: template
+    template: toolchain-bun.yml.liquid
+  
+  - name: Install Bun
+    command: curl -fsSL https://bun.sh/install | bash
+    when: "environment.OS !== 'Windows_NT'"

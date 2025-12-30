@@ -8,6 +8,7 @@ import fs from 'fs'
 import path from 'path'
 import { pathToFileURL } from 'url'
 import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
+import { DEFAULT_TEMPLATE_DIRECTORY } from '../constants.js'
 
 export interface HypergenConfig {
   // Template directories
@@ -22,8 +23,30 @@ export interface HypergenConfig {
   
   // Template engine options
   engine?: {
-    type?: 'ejs' | 'handlebars' | 'mustache'
+    type?: 'liquid'
     options?: Record<string, any>
+    // LiquidJS specific options
+    liquid?: {
+      // Resource limits for DoS protection
+      limits?: {
+        memoryLimit?: number // Memory limit in bytes (default: 1GB)
+        renderLimit?: number // Render timeout in ms (default: 1000)
+        parseLimit?: number // Parse limit in characters (default: 100M)
+      }
+      // Cache configuration
+      cache?: boolean | {
+        enabled?: boolean
+        maxSize?: number // Max number of cached templates
+      }
+      // Whitespace control
+      whitespace?: {
+        trimTagLeft?: boolean
+        trimTagRight?: boolean
+        trimOutputLeft?: boolean
+        trimOutputRight?: boolean
+        greedy?: boolean
+      }
+    }
   }
   
   // Output options
@@ -74,21 +97,18 @@ export class HypergenConfigLoader {
     'hypergen.config.js',
     'hypergen.config.mjs',
     'hypergen.config.cjs',
-    'hypergen.config.json',
-    '.hypergenrc',
-    '.hypergenrc.js',
-    '.hypergenrc.json'
+    'hypergen.config.json'
   ]
   
   private static readonly DEFAULT_CONFIG: HypergenConfig = {
-    templates: ['recipes'],
+    templates: [DEFAULT_TEMPLATE_DIRECTORY],
     discovery: {
       sources: ['local', 'npm', 'workspace'],
-      directories: ['recipes', 'cookbooks'],
+      directories: [DEFAULT_TEMPLATE_DIRECTORY, 'cookbooks'],
       exclude: ['node_modules', '.git', 'dist', 'build']
     },
     engine: {
-      type: 'ejs',
+      type: 'liquid',
       options: {}
     },
     output: {
@@ -375,9 +395,9 @@ export class HypergenConfigLoader {
     
     // Validate engine type
     if (config.engine?.type) {
-      const validEngines = ['ejs', 'handlebars', 'mustache']
+      const validEngines = ['liquid']
       if (!validEngines.includes(config.engine.type)) {
-        errors.push(`Invalid engine type: ${config.engine.type}`)
+        errors.push(`Invalid engine type: ${config.engine.type}. Only 'liquid' is supported.`)
       }
     }
     
@@ -415,18 +435,18 @@ export class HypergenConfigLoader {
  */
 export default {
   // Template directories to search
-  templates: ['recipes'],
-  
+  templates: ['templates'],
+
   // Generator discovery options
   discovery: {
     sources: ['local', 'npm', 'workspace'],
-    directories: ['recipes', 'cookbooks'],
+    directories: ['templates', 'cookbooks'],
     exclude: ['node_modules', '.git', 'dist', 'build']
   },
   
   // Template engine configuration
   engine: {
-    type: 'ejs',
+    type: 'liquid',
     options: {}
   },
   

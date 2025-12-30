@@ -1,0 +1,17 @@
+---
+to: "{{ name }}/cookbooks/create/recipe.yml"
+---
+name: {{ name }}
+description: A new recipe for {{ name }}
+version: 1.0.0
+
+variables:
+  author:
+    type: string
+    description: Name of the author
+    default: Anonymous
+
+steps:
+  - name: Say Hello
+    tool: shell
+    command: echo "Hello from {{ name }} kit, created by {{ author }}!"

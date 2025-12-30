@@ -5,75 +5,131 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Build and Development
-- `bun run build` - Build the project (compiles TypeScript and generates changelog)
-- `bun run build:lib` - Compile TypeScript only
-- `bun run test` - Run tests with coverage
-- `bun run test:code` - Run tests without coverage
-- `bun run watch` - Run tests in watch mode
-- `bun run hygen` - Run hypergen locally during development
-- `bun run hygen:build` - Run built version of hypergen
+- `bun run build` - Build TypeScript and generate changelog
+- `bun run build:lib` - Compile TypeScript only (no changelog)
+- `bun run hypergen` - Run hypergen locally from source during development
+- `bun run hypergen:build` - Run the built version of hypergen
+- `bun run watch` - Run tests in watch mode for TDD
 
 ### Testing
 - `bun test` - Run full test suite with coverage
 - `bun test --watch` - Run tests in watch mode
-- Tests are located in `tests/` directory and use Vitest
-- Metaverse testing in `src/__tests__/metaverse/` validates real-world template usage
+- `bun test tests/specific-file.test.ts` - Run a single test file
+- `bun test recipe` - Run tests matching a pattern
+- Tests use Vitest and are in `tests/` directory
+
+### Documentation
+- `bun run typedoc:generate` - Generate TypeDoc HTML documentation
+- `bun run tsdoc:all` - Generate Mintlify-compatible MDX docs (extract + generate)
 
 ## Architecture Overview
 
-### Core Components
+Hypergen is a code generator forked from Hygen, built with TypeScript. It uses decorators for action definitions and LiquidJS for templating.
 
-**Main Entry Point**: `src/bin.ts` - CLI entry point that sets up the runner with configuration
-**Engine**: `src/engine.ts` - Core orchestration logic that validates arguments and coordinates rendering/execution
-**Render**: `src/render.ts` - Template rendering engine using EJS, processes frontmatter and template files
-**Execute**: `src/execute.ts` - Executes rendered actions (file operations, injections, shell commands)
+### Core Flow
+
+**Entry**: `bin.ts` → `HypergenCLI` (in `cli/cli.ts`) → command routing
+
+Commands route to:
+- **Actions**: Decorator-based generators (`@action` decorator)
+- **Recipes**: YAML multi-step workflows
+- **Templates**: LiquidJS rendering with YAML frontmatter
 
 ### Key Systems
 
-**Template Resolution**: Uses `TemplateStore.ts` with hash-indexed storage for fast template lookup across multiple directories
-**Configuration**: `config.ts` and `config-resolver.ts` handle configuration loading and resolution
-**Operations**: `src/ops/` contains file operations (add, inject, shell) that can be performed on templates
-**Context**: `src/context.ts` provides template variables and helpers (inflection, change-case, etc.)
+**CLI** (`src/cli/`):
+- `cli.ts` - Command routing (action, discover, list, info, url, template, recipe, step, init, system)
+- `scaffolding.ts` - Generator initialization
 
-### Template Structure
-- Templates live in `_templates/` directories (configurable)
-- Folder structure maps to command structure: `_templates/generator/action/`
-- Files use `.ejs.t` extension for EJS templates
-- Frontmatter (YAML) defines metadata like `to:` (destination path), `inject:` (injection mode)
-- Multiple template directories supported via configuration
+**Actions** (`src/actions/`):
+- `decorator.ts` - `@action` decorator
+- `executor.ts` - Action execution with parameter resolution
+- `parameter-resolver.ts` - Parameter validation
+- `registry.ts` - Action discovery
+- `lifecycle.ts` - Pre/post/error hooks
+- `pipelines.ts` - Sequential execution
 
-### Current Template Engine
-- Uses **EJS** for template rendering (`src/render.ts:28-29`)
-- Templates processed through `ejs.render()` with context helpers
-- Frontmatter attributes are also templated
+**Recipe Engine** (`src/recipe-engine/`):
+- `recipe-engine.ts` - Workflow orchestrator
+- `step-executor.ts` - Step execution
+- `tools/` - 7 tool implementations:
+  - `template-tool.ts` - Process templates
+  - `action-tool.ts` - Execute actions
+  - `recipe-tool.ts` - Nested recipes
+  - `shell-tool.ts` - Shell commands
+  - `prompt-tool.ts` - Interactive prompts
+  - `sequence-tool.ts` - Sequential steps
+  - `parallel-tool.ts` - Parallel steps
+- `registry.ts` - Tool registration/resolution
 
-### Configuration Files
-- `hypergen.json` - Main configuration file (differs from hygen's `hygen.json`)
-- Supports `conflictResolutionStrategy`, `templates` array, `helpers` path
-- Uses `config-resolver.ts` for loading from multiple locations
+**Template Engines** (`src/template-engines/`):
+- `factory.ts` - Engine factory (LiquidJS only)
+- `liquid-engine.ts` - LiquidJS implementation
+- Extensions: `.liquid.t`, `.liquid`, `.liq.t`, `.liq`
 
-## Important Implementation Details
+**Configuration** (`src/config/`):
+- `hypergen-config.ts` - Config loading (cosmiconfig)
+- `template-parser.ts` - `template.yml` parsing
+- `template-composition.ts` - Template inheritance/includes
+- `url-resolution/` - GitHub/npm/local template resolution with caching
 
-### Performance Considerations
-- Lazy loading of dependencies for better startup performance
-- Hash-indexed template store for fast lookups with hundreds of generators
-- Startup speed testing available via `bun run test:require`
+**Operations** (`src/ops/`):
+- `add.ts` - Create files
+- `inject.ts` - Inject into existing files
+- `shell.ts` - Run shell commands
+- `injector.ts` - Injection strategies
+
+**Other**:
+- `indexed-store/` - Hash-indexed template storage for fast lookups
+- `plugin-system/` - Plugin discovery and loading
+- `prompts/interactive-prompts.ts` - Clack-based interactive prompts
+- `errors/hypergen-errors.ts` - Centralized error handling with codes
 
 ### Template Processing Pipeline
-1. Arguments parsed via `params.ts`
-2. Templates discovered via `TemplateStore.ts`
-3. Files rendered via `render.ts` (EJS + frontmatter)
-4. Actions executed via `execute.ts` (file operations)
+1. Arguments parsed (`params.ts`)
+2. Config loaded (`hypergen-config.ts`)
+3. Templates discovered
+4. Variables resolved (prompts if needed)
+5. LiquidJS renders templates
+6. File operations executed (`execute.ts`)
 
-### Testing Strategy
-- Unit tests in `tests/` directory
-- Metaverse tests validate real-world template usage
-- Snapshot testing for template outputs
-- Coverage reporting enabled by default
+### Configuration Hierarchy
+1. `hypergen.config.js` - Project config
+2. `template.yml` - Template config with variables
+3. Environment variables
+4. CLI flags (highest priority)
 
-## Migration Context (Hygen → Hypergen)
-- Forked from Hygen with additional features
-- Changed command name and config file names for coexistence
-- Added multiple template directory support
-- Enhanced conflict resolution strategies
-- Improved scalability for large generator sets
+## Implementation Details
+
+### Decorator-Based Actions
+```typescript
+@action({
+  name: 'create-component',
+  description: 'Create a React component',
+  parameters: [/* ... */]
+})
+async function createComponent(context) { /* ... */ }
+```
+
+### Recipe Steps
+Steps can be: `template`, `action`, `codemod`, `recipe`, `shell`, `prompt`, `sequence`, `parallel`
+
+### Template Composition
+- `extends:` - Inherit from another template
+- `includes:` - Include other templates
+- Conflict strategies: merge, replace, extend, error
+
+### Debugging
+```bash
+# Recipe tools debugging
+DEBUG=hypergen:v8:recipe:tool* bun test
+
+# All hypergen debugging
+DEBUG=hypergen:* bun test
+```
+
+## TypeScript Config
+- Target: ESNext, NodeNext modules
+- Path alias: `~/` → `src/`
+- Strict mode: disabled (legacy)
+- Output: `dist/`

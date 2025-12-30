@@ -12,7 +12,7 @@ import { ToolRegistry, getToolRegistry } from './tools/registry.js'
 import { Tool } from './tools/base.js'
 import { ErrorHandler, ErrorCode, HypergenError } from '../errors/hypergen-errors.js'
 import Logger from '../logger.js'
-import type {
+import {
   RecipeStepUnion,
   StepContext,
   StepResult,
@@ -29,6 +29,10 @@ import type {
   isActionStep,
   isCodeModStep,
   isRecipeStep,
+  isShellStep,
+  isPromptStep,
+  isSequenceStep,
+  isParallelStep,
   StepExecutionError,
   CircularDependencyError
 } from './types.js'
@@ -842,7 +846,7 @@ export class StepExecutor extends EventEmitter {
       }
       
       // Validate step configuration
-      const validation = await tool.validateStep(step, context)
+      const validation = await tool.validate(step, context)
       if (!validation.isValid) {
         throw ErrorHandler.createError(
           ErrorCode.VALIDATION_ERROR,
@@ -852,7 +856,7 @@ export class StepExecutor extends EventEmitter {
       }
       
       // Execute step through tool
-      const result = await tool.executeStep(step, context)
+      const result = await tool.execute(step, context)
       
       this.debug('Tool execution completed: %s', step.name)
       return result
@@ -872,14 +876,22 @@ export class StepExecutor extends EventEmitter {
     } else if (isCodeModStep(step)) {
       return step.codemod
     } else if (isRecipeStep(step)) {
-      return step.recipe
-    } else {
-      throw ErrorHandler.createError(
-        ErrorCode.VALIDATION_ERROR,
-        `Unknown step type: ${(step as any).tool}`,
-        { step: step.name }
-      )
+      return 'default'
+    } else if (isShellStep(step)) {
+      return 'default'
+    } else if (isPromptStep(step)) {
+      return 'default'
+    } else if (isSequenceStep(step)) {
+      return 'default'
+    } else if (isParallelStep(step)) {
+      return 'default'
     }
+    
+    throw ErrorHandler.createError(
+      ErrorCode.VALIDATION_ERROR,
+      `Unknown step type: ${(step as any).tool}`,
+      { step: (step as any).name }
+    )
   }
 
   private extractFileChanges(result: StepResult, toolResult: any): void {
@@ -1002,7 +1014,11 @@ export class StepExecutor extends EventEmitter {
       template: 5000, // 5 seconds average
       action: 3000,   // 3 seconds average
       codemod: 10000, // 10 seconds average
-      recipe: 15000   // 15 seconds average (sub-recipes)
+      recipe: 15000,  // 15 seconds average (sub-recipes)
+      shell: 2000,     // 2 seconds average
+      prompt: 30000,   // 30 seconds average (interactive)
+      sequence: 0,     // Sequence tool itself is instant
+      parallel: 0      // Parallel tool itself is instant
     }
     
     let totalEstimate = 0

@@ -118,6 +118,15 @@ export interface ErrorContext {
   backupPath?: string
   // Additional context
   cause?: any
+  executionId?: string
+  source?: any
+  config?: any
+  missingVariables?: string[]
+  assigned?: any
+  step?: any
+  steps?: any
+  total?: any
+  tool?: any
 }
 
 export class HypergenError extends Error {

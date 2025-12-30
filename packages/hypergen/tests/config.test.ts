@@ -24,7 +24,7 @@ describe('Hypergen Configuration System', () => {
       const config = await HypergenConfigLoader.loadConfig(undefined, tempDir, 'development')
       
       expect(config).toBeDefined()
-      expect(config.templates).toEqual([path.resolve(tempDir, '_templates')])
+      expect(config.templates).toEqual([path.resolve(tempDir, 'templates')])
       expect(config.configPath).toBe('default')
       expect(config.projectRoot).toBe(tempDir)
       expect(config.environment).toBe('development')
@@ -120,7 +120,7 @@ describe('Hypergen Configuration System', () => {
   describe('Configuration Validation', () => {
     it('should validate valid configuration', () => {
       const validConfig = {
-        templates: ['_templates'],
+        templates: ['templates'],
         discovery: { sources: ['local', 'npm'] },
         engine: { type: 'ejs' },
         output: { conflictStrategy: 'fail' }
@@ -197,7 +197,7 @@ describe('Hypergen Configuration System', () => {
       
       const content = fs.readFileSync(createdPath, 'utf-8')
       expect(content).toContain('export default {')
-      expect(content).toContain('templates: [\'_templates\']')
+      expect(content).toContain('templates: [\'templates\']')
     })
 
     it('should create JSON configuration file', async () => {
@@ -208,7 +208,7 @@ describe('Hypergen Configuration System', () => {
       
       const content = fs.readFileSync(createdPath, 'utf-8')
       const parsed = JSON.parse(content)
-      expect(parsed.templates).toEqual(['_templates'])
+      expect(parsed.templates).toEqual(['templates'])
     })
 
     it('should throw error if config file already exists', async () => {
@@ -279,7 +279,7 @@ describe('Hypergen Configuration System', () => {
       expect(config.cache.enabled).toBe(false)
       expect(config.cache.ttl).toBe(3600000) // Should keep default
       expect(config.discovery.sources).toEqual(['local'])
-      expect(config.discovery.directories).toEqual(['_templates', 'templates', 'generators']) // Should keep defaults
+      expect(config.discovery.directories).toEqual(['templates', 'generators']) // Should keep defaults
     })
   })
 

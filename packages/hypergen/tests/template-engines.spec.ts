@@ -1,13 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { 
-  initializeTemplateEngines, 
-  getTemplateEngineFactory, 
-  getTemplateEngine, 
+import {
+  initializeTemplateEngines,
+  getTemplateEngineFactory,
+  getTemplateEngine,
   getTemplateEngineForFile,
   getDefaultTemplateEngine
 } from '../src/template-engines/index.js'
 import { LiquidTemplateEngine } from '../src/template-engines/liquid-engine.js'
-import { EJSTemplateEngine } from '../src/template-engines/ejs-engine.js'
 
 describe('Template Engines', () => {
   beforeEach(() => {
@@ -15,10 +14,10 @@ describe('Template Engines', () => {
   })
 
   describe('Factory', () => {
-    it('should register template engines', () => {
+    it('should register LiquidJS template engine', () => {
       const factory = getTemplateEngineFactory()
       expect(factory.list()).toContain('liquidjs')
-      expect(factory.list()).toContain('ejs')
+      expect(factory.list()).toHaveLength(1)
     })
 
     it('should set LiquidJS as default template engine', () => {
@@ -28,18 +27,19 @@ describe('Template Engines', () => {
 
     it('should get template engine by name', () => {
       const liquidEngine = getTemplateEngine('liquidjs')
-      const ejsEngine = getTemplateEngine('ejs')
-      
+
       expect(liquidEngine).toBeInstanceOf(LiquidTemplateEngine)
-      expect(ejsEngine).toBeInstanceOf(EJSTemplateEngine)
     })
 
     it('should get template engine by file extension', () => {
       const liquidEngine = getTemplateEngineForFile('.liquid')
-      const ejsEngine = getTemplateEngineForFile('.ejs')
-      
+
       expect(liquidEngine?.name).toBe('liquidjs')
-      expect(ejsEngine?.name).toBe('ejs')
+    })
+
+    it('should return undefined for unsupported extensions', () => {
+      const engine = getTemplateEngineForFile('.unsupported')
+      expect(engine).toBeUndefined()
     })
   })
 
@@ -82,7 +82,7 @@ describe('Template Engines', () => {
     it('should handle template errors gracefully', async () => {
       const template = '{{ undefined_var | invalid_filter }}'
       const context = {}
-      
+
       try {
         await engine.render(template, context)
         // If we get here, the template didn't throw an error
@@ -91,42 +91,6 @@ describe('Template Engines', () => {
       } catch (error) {
         expect(error.message).toContain('LiquidJS template rendering failed')
       }
-    })
-  })
-
-  describe('EJS Template Engine', () => {
-    let engine: EJSTemplateEngine
-
-    beforeEach(() => {
-      engine = new EJSTemplateEngine()
-    })
-
-    it('should render simple templates', async () => {
-      const template = 'Hello <%= name %>!'
-      const context = { name: 'World' }
-      const result = await engine.render(template, context)
-      expect(result).toBe('Hello World!')
-    })
-
-    it('should support JavaScript expressions', async () => {
-      const template = '<% if (name) { %>Hello <%= name.toUpperCase() %>!<% } %>'
-      const context = { name: 'john' }
-      const result = await engine.render(template, context)
-      expect(result).toBe('Hello JOHN!')
-    })
-
-    it('should support supported file extensions', () => {
-      expect(engine.supports('.ejs')).toBe(true)
-      expect(engine.supports('.ejs.t')).toBe(true)
-      expect(engine.supports('.t')).toBe(true)
-      expect(engine.supports('.liquid')).toBe(false)
-    })
-
-    it('should handle template errors gracefully', async () => {
-      const template = '<%= undefined_var.invalid_method() %>'
-      const context = {}
-      
-      await expect(engine.render(template, context)).rejects.toThrow('EJS template rendering failed')
     })
   })
 
@@ -140,13 +104,9 @@ describe('Template Engines', () => {
       expect(result).toBe('World')
     })
 
-    it('should handle EJS templates for compatibility', async () => {
+    it('should return undefined for EJS extension', async () => {
       const ejsEngine = getTemplateEngineForFile('.ejs')
-      const template = '<%= name.toUpperCase() %>'
-      const context = { name: 'world' }
-      
-      const result = await ejsEngine!.render(template, context)
-      expect(result).toBe('WORLD')
+      expect(ejsEngine).toBeUndefined()
     })
   })
 })

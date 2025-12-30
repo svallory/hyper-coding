@@ -1,0 +1,47 @@
+name: verify-sequence-parallel
+description: Verify Sequence and Parallel tools
+version: 1.0.0
+
+variables:
+  foo:
+    type: string
+    default: bar
+
+steps:
+  - name: Sequence Test
+    sequence:
+      - name: Step 1
+        command: echo "Step 1"
+      - name: Step 2
+        command: echo "Step 2"
+
+  - name: Parallel Test
+    parallel:
+      - name: Parallel 1
+        command: sleep 1 && echo "Parallel 1"
+      - name: Parallel 2
+        command: sleep 1 && echo "Parallel 2"
+      - name: Parallel 3
+        command: echo "Parallel 3"
+    limit: 2
+
+  - name: Nesting Test
+    sequence:
+      - name: Nested Sequence
+        sequence:
+          - name: Nested 1
+            command: echo "Nested 1"
+      - name: Nested Parallel
+        parallel:
+          - name: NP 1
+            command: echo "NP 1"
+          - name: NP 2
+            command: echo "NP 2"
+
+  - name: Failure Handling (Continue On Error)
+    parallel:
+      - name: Failing Step
+        command: exit 1
+      - name: Success Step
+        command: echo "Success"
+    continueOnError: true

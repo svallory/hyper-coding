@@ -68,7 +68,7 @@ hypergen action create-react-component \
 hypergen init generator --name=my-widget --framework=react
 
 # Validate the template
-hypergen template validate _templates/my-widget/template.yml
+hypergen template validate templates/my-widget/template.yml
 
 # Test your generator
 hypergen action my-widget --name=TestWidget
@@ -79,7 +79,7 @@ hypergen action my-widget --name=TestWidget
 - **[📚 Complete Documentation](./docs/README.md)** - Comprehensive guides and references
 - **[🚀 Getting Started](./docs/getting-started.md)** - Installation and first steps
 - **[🎯 CLI Reference](./docs/cli-reference.md)** - All CLI commands and options
-- **[📝 Template Syntax](./docs/template-syntax.md)** - EJS template syntax and helpers
+- **[📝 Template Syntax](./docs/template-syntax.md)** - LiquidJS template syntax and helpers
 - **[⚙️ Template.yml Reference](./docs/template-yml-reference.md)** - Configuration file reference
 - **[💡 Examples](./docs/examples.md)** - Real-world examples and patterns
 
@@ -103,20 +103,20 @@ async function createComponent(context: ActionContext): Promise<ActionResult> {
 
 ### Templates
 
-EJS-based templates with YAML frontmatter:
+LiquidJS-based templates with YAML frontmatter:
 
-```ejs
+```liquid
 ---
-to: src/components/<%= name %>.tsx
+to: src/components/{{ name }}.tsx
 ---
 import React from 'react';
 
-interface <%= name %>Props {
+interface {{ name }}Props {
   children?: React.ReactNode;
 }
 
-export const <%= name %>: React.FC<<%= name %>Props> = ({ children }) => {
-  return <div className="<%= h.kebabCase(name) %>">{children}</div>;
+export const {{ name }}: React.FC<{{ name }}Props> = ({ children }) => {
+  return <div className="{{ name | kebab_case }}">{children}</div>;
 };
 ```
 
@@ -169,13 +169,13 @@ hypergen system status
 
 ```bash
 # Validate specific template
-hypergen template validate _templates/my-generator/template.yml
+hypergen template validate templates/my-generator/template.yml
 
 # Show template information
-hypergen template info _templates/my-generator/template.yml
+hypergen template info templates/my-generator/template.yml
 
 # List all templates
-hypergen template list _templates
+hypergen template list templates
 ```
 
 ### URL Templates
@@ -205,7 +205,7 @@ hypergen/
 │   └── templates/        # Template processing
 ├── docs/                 # Documentation
 ├── examples/             # Example generators
-│   └── _templates/       # Sample generators
+│   └── templates/        # Sample generators
 ├── tests/               # Test suite
 └── package.json
 ```
@@ -255,10 +255,10 @@ bun test tests/metaverse.spec.ts
 bun run dev
 
 # Run hypergen locally
-bun run hygen
+bun run hypergen
 
 # Run built version
-bun run hygen:build
+bun run hypergen:build
 
 # Type checking
 bun run tsc
@@ -348,8 +348,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built with [TypeScript](https://www.typescriptlang.org/)
-- Powered by [EJS](https://ejs.co/) templating
-- Inspired by [Hygen](https://www.hygen.io/)
+- Powered by [LiquidJS](https://liquidjs.com/) templating
 - Testing with [Vitest](https://vitest.dev/)
 
 ## 📞 Support

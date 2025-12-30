@@ -1,6 +1,6 @@
 __tests__/
 _book/
-_templates/
+templates/
 .babelrc
 .eslintrc
 .github/

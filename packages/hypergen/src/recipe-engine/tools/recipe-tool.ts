@@ -21,8 +21,10 @@ import yaml from 'js-yaml'
 import createDebug from 'debug'
 import { Tool, type ToolValidationResult, type ToolResource } from './base.js'
 import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '../../errors/hypergen-errors.js'
+import { StepExecutor } from '../step-executor.js'
 import { 
   type RecipeStep, 
+  type RecipeStepUnion, 
   type StepContext, 
   type StepResult,
   type StepExecutionOptions,
@@ -319,91 +321,29 @@ export class RecipeTool extends Tool<RecipeStep> {
       const subContext = this.buildSubRecipeContext(step, context, recipeResolution)
       
       // Execute sub-recipe steps
-      const stepResults: StepResult[] = []
       const recipe = recipeResolution.config
       
       this.debug('Executing %d steps in sub-recipe: %s', recipe.steps.length, recipe.name)
       
-      for (let i = 0; i < recipe.steps.length; i++) {
-        const subStep = recipe.steps[i]
-        this.debug('Executing sub-recipe step %d: %s (%s)', i + 1, subStep.name, subStep.tool)
-        
-        try {
-          // Create step-specific context
-          const stepContext = this.createStepContext(subStep, subContext, stepResults)
-          
-          // Check step conditions
-          if (subStep.when && !stepContext.evaluateCondition(subStep.when, stepContext.variables)) {
-            this.debug('Skipping step due to condition: %s', subStep.when)
-            
-            stepResults.push({
-              status: 'skipped',
-              stepName: subStep.name,
-              toolType: subStep.tool,
-              startTime: new Date(),
-              endTime: new Date(),
-              duration: 0,
-              retryCount: 0,
-              dependenciesSatisfied: true,
-              conditionResult: false
-            })
-            continue
-          }
-          
-          // Execute step using appropriate tool
-          const stepResult = await this.executeSubStep(subStep, stepContext, options)
-          stepResults.push(stepResult)
-          
-          // Aggregate file results
-          if (stepResult.filesCreated) {
-            filesCreated.push(...stepResult.filesCreated)
-          }
-          if (stepResult.filesModified) {
-            filesModified.push(...stepResult.filesModified)
-          }
-          if (stepResult.filesDeleted) {
-            filesDeleted.push(...stepResult.filesDeleted)
-          }
-          
-          // Handle step failures
-          if (stepResult.status === 'failed' && !subStep.continueOnError) {
-            throw ErrorHandler.createError(
-              ErrorCode.TEMPLATE_EXECUTION_ERROR,
-              `Sub-recipe step '${subStep.name}' failed: ${stepResult.error?.message}`,
-              { 
-                template: step.recipe,
-                cause: stepResult.error?.cause
-              }
-            )
-          }
-          
-        } catch (error) {
-          this.debug('Sub-recipe step failed: %s - %s', subStep.name, error instanceof Error ? error.message : String(error))
-          
-          if (!subStep.continueOnError) {
-            throw error
-          }
-          
-          // Log error but continue execution
-          this.logger.warn(`Sub-recipe step '${subStep.name}' failed but continuing: ${error instanceof Error ? error.message : String(error)}`)
-          
-          stepResults.push({
-            status: 'failed',
-            stepName: subStep.name,
-            toolType: subStep.tool,
-            startTime: new Date(),
-            endTime: new Date(),
-            duration: 0,
-            retryCount: 0,
-            dependenciesSatisfied: true,
-            error: {
-              message: error instanceof Error ? error.message : String(error),
-              code: error instanceof HypergenError ? error.code : 'SUB_STEP_ERROR',
-              stack: error instanceof Error ? error.stack : undefined,
-              cause: error
-            }
-          })
+      // Execute sub-recipe steps using StepExecutor
+      const executor = new StepExecutor(undefined, {
+        continueOnError: options?.continueOnError
+      })
+      
+      const stepResults = await executor.executeSteps(
+        recipe.steps,
+        subContext,
+        {
+          ...options,
+          timeout: subContext.isolation.timeout || options?.timeout
         }
+      )
+      
+      // Update files lists from results
+      for (const result of stepResults) {
+        if (result.filesCreated) filesCreated.push(...result.filesCreated)
+        if (result.filesModified) filesModified.push(...result.filesModified)
+        if (result.filesDeleted) filesDeleted.push(...result.filesDeleted)
       }
 
       // Update cache metadata
@@ -422,6 +362,19 @@ export class RecipeTool extends Tool<RecipeStep> {
         subSteps: stepResults,
         totalDuration: duration,
         inheritedVariables: subContext.inheritance.inherit ? context.variables : {}
+      }
+
+      // Check for failures
+      const failedStep = stepResults.find(r => r.status === 'failed' && !options?.continueOnError)
+      if (failedStep) {
+        throw ErrorHandler.createError(
+          ErrorCode.TEMPLATE_EXECUTION_ERROR,
+          `Sub-recipe execution failed: ${failedStep.error?.message || 'Unknown error'}`,
+          { 
+            template: step.recipe,
+            cause: failedStep.error?.cause
+          }
+        )
       }
 
       return {
@@ -571,11 +524,23 @@ export class RecipeTool extends Tool<RecipeStep> {
       path.resolve(context.projectRoot, `recipes/${recipeId}/recipe.yml`)
     ]
 
+    // If templatePath is available (from parent recipe), try resolving relative to it
+    if (context.templatePath) {
+      possiblePaths.unshift(
+        path.resolve(context.templatePath, recipeId),
+        path.resolve(context.templatePath, `${recipeId}.yml`)
+      )
+    }
+
     for (const filePath of possiblePaths) {
       if (await fs.pathExists(filePath)) {
         const stats = await fs.stat(filePath)
         const content = await fs.readFile(filePath, 'utf8')
-        const config = yaml.load(content) as RecipeConfig
+        const rawConfig = yaml.load(content) as any
+        const config: RecipeConfig = {
+          ...rawConfig,
+          steps: this.normalizeSteps(rawConfig.steps || [])
+        }
 
         return {
           source: filePath,
@@ -600,7 +565,11 @@ export class RecipeTool extends Tool<RecipeStep> {
    */
   private async resolveURLRecipe(recipeId: string, context: StepContext) {
     const resolved = await this.urlManager.resolveURL(recipeId)
-    const config = yaml.load(resolved.content) as RecipeConfig
+    const rawConfig = yaml.load(resolved.content) as any
+    const config: RecipeConfig = {
+      ...rawConfig,
+      steps: this.normalizeSteps(rawConfig.steps || [])
+    }
 
     return {
       source: recipeId,
@@ -629,7 +598,11 @@ export class RecipeTool extends Tool<RecipeStep> {
 
     const stats = await fs.stat(recipeFile)
     const content = await fs.readFile(recipeFile, 'utf8')
-    const config = yaml.load(content) as RecipeConfig
+    const rawConfig = yaml.load(content) as any
+    const config: RecipeConfig = {
+      ...rawConfig,
+      steps: this.normalizeSteps(rawConfig.steps || [])
+    }
 
     return {
       source: recipeFile,
@@ -801,7 +774,41 @@ export class RecipeTool extends Tool<RecipeStep> {
   }
 
   /**
-   * Validate recipe configuration
+   * Normalize steps to infer tool types from shorthands
+   */
+  private normalizeSteps(steps: any[]): RecipeStepUnion[] {
+    return steps.map(step => {
+      if (!step.tool) {
+        if (step.command) {
+          step.tool = 'shell'
+        } else if (step.recipe) {
+          step.tool = 'recipe'
+        } else if (step.promptType) { // Inference for prompt
+          step.tool = 'prompt'
+        } else if (step.sequence) { // Inference for sequence shorthand
+          step.tool = 'sequence'
+          step.steps = step.sequence
+          delete step.sequence
+        } else if (step.parallel) { // Inference for parallel shorthand
+          step.tool = 'parallel'
+          step.steps = step.parallel
+          delete step.parallel
+        } else if (step.steps) { // Default to sequence for generic steps property
+          step.tool = 'sequence'
+        } else if (step.template) {
+          step.tool = 'template'
+        } else if (step.action) {
+          step.tool = 'action'
+        } else if (step.codemod) {
+          step.tool = 'codemod'
+        }
+      }
+      return step as RecipeStepUnion
+    })
+  }
+
+  /**
+   * Tool-specific cleanup logicipe configuration
    */
   private validateRecipeConfig(config: RecipeConfig): { errors: string[]; warnings: string[] } {
     const errors: string[] = []

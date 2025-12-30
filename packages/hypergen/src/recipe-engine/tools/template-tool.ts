@@ -160,8 +160,8 @@ export class TemplateTool extends Tool<TemplateStep> {
     }
 
     // Validate engine configuration
-    if (step.engine && !['ejs', 'liquid', 'auto'].includes(step.engine)) {
-      errors.push(`Invalid template engine: ${step.engine}. Must be 'ejs', 'liquid', or 'auto'`)
+    if (step.engine && !['liquid', 'auto'].includes(step.engine)) {
+      errors.push(`Invalid template engine: ${step.engine}. Must be 'liquid' or 'auto'`)
     }
 
     // Validate output directory
@@ -390,9 +390,7 @@ export class TemplateTool extends Tool<TemplateStep> {
       context.templatePath ? path.resolve(path.dirname(context.templatePath), templateId) : null,
       // With common extensions
       path.resolve(context.projectRoot, `${templateId}.liquid`),
-      path.resolve(context.projectRoot, `${templateId}.ejs`),
       path.resolve(context.projectRoot, `${templateId}.liquid.t`),
-      path.resolve(context.projectRoot, `${templateId}.ejs.t`),
     ].filter(Boolean) as string[]
 
     for (const candidatePath of resolutionPaths) {

@@ -16,7 +16,7 @@ export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipp
 /**
  * Tool types supported by the recipe system
  */
-export type ToolType = 'template' | 'action' | 'codemod' | 'recipe'
+export type ToolType = 'template' | 'action' | 'codemod' | 'recipe' | 'shell' | 'prompt' | 'sequence' | 'parallel'
 
 /**
  * Base interface for all recipe steps
@@ -67,7 +67,7 @@ export interface TemplateStep extends BaseRecipeStep {
   template: string
   
   /** Template engine to use (defaults to auto-detection) */
-  engine?: 'ejs' | 'liquid' | 'auto'
+  engine?: 'liquid' | 'auto'
   
   /** Output directory override (relative to project root) */
   outputDir?: string
@@ -222,9 +222,83 @@ export interface RecipeStep extends BaseRecipeStep {
 }
 
 /**
+ * Shell step configuration
+ * Executes a shell command
+ */
+export interface ShellStep extends BaseRecipeStep {
+  tool: 'shell'
+  
+  /** Command to execute */
+  command: string
+  
+  /** Working directory override */
+  cwd?: string
+  
+  /** Environment variables */
+  env?: Record<string, string>
+  
+  /** Stream output to stdout/stderr */
+  stream?: boolean
+  
+  /** Shell executable to use */
+  shell?: string
+}
+
+/**
+ * Prompt step configuration
+ * Interactive prompt for user input
+ */
+export interface PromptStep extends BaseRecipeStep {
+  tool: 'prompt'
+  
+  /** Prompt message */
+  message?: string
+  
+  /** Target variable to store answer */
+  variable: string
+  
+  /** Prompt type */
+  promptType: 'text' | 'confirm' | 'select' | 'multiselect'
+  
+  /** Default value */
+  default?: any
+  
+  /** Options for select/multiselect */
+  options?: Array<{ label: string; value: any; hint?: string }> | string[]
+  
+  /** Validation function or regex pattern */
+  validate?: string
+}
+
+/**
+ * Sequence step configuration
+ * Executes a list of steps sequentially
+ */
+export interface SequenceStep extends BaseRecipeStep {
+  tool: 'sequence'
+  
+  /** Steps to execute in sequence */
+  steps: RecipeStepUnion[]
+}
+
+/**
+ * Parallel step configuration
+ * Executes a list of steps concurrently
+ */
+export interface ParallelStep extends BaseRecipeStep {
+  tool: 'parallel'
+  
+  /** Steps to execute in parallel */
+  steps: RecipeStepUnion[]
+  
+  /** Maximum number of concurrent steps */
+  limit?: number
+}
+
+/**
  * Union type for all step types (discriminated union)
  */
-export type RecipeStepUnion = TemplateStep | ActionStep | CodeModStep | RecipeStep
+export type RecipeStepUnion = TemplateStep | ActionStep | CodeModStep | RecipeStep | ShellStep | PromptStep | SequenceStep | ParallelStep
 
 /**
  * Step execution context
@@ -319,7 +393,7 @@ export interface StepResult {
   conditionResult?: boolean
   
   /** Tool-specific execution result */
-  toolResult?: ActionResult | TemplateExecutionResult | CodeModExecutionResult | RecipeExecutionResult
+  toolResult?: ActionResult | TemplateExecutionResult | CodeModExecutionResult | RecipeExecutionResult | ShellExecutionResult | PromptExecutionResult | SequenceExecutionResult | ParallelExecutionResult
   
   /** Files created by this step */
   filesCreated?: string[]
@@ -369,6 +443,37 @@ export interface CodeModExecutionResult {
     errors: number
   }
   backupFiles?: string[]
+}
+
+/**
+ * Shell execution result
+ */
+export interface ShellExecutionResult {
+  exitCode: number
+  stdout: string
+  stderr: string
+}
+
+/**
+ * Prompt execution result
+ */
+export interface PromptExecutionResult {
+  variable: string
+  value: any
+}
+
+/**
+ * Sequence execution result
+ */
+export interface SequenceExecutionResult {
+  steps: StepResult[]
+}
+
+/**
+ * Parallel execution result
+ */
+export interface ParallelExecutionResult {
+  steps: StepResult[]
 }
 
 /**
@@ -920,6 +1025,21 @@ export class RecipeDependencyError extends Error {
   }
 }
 
+export function isShellStep(step: BaseRecipeStep): step is ShellStep {
+  return (step as ShellStep).tool === 'shell'
+}
+
+export function isPromptStep(step: BaseRecipeStep): step is PromptStep {
+  return (step as PromptStep).tool === 'prompt'
+}
+
+export function isSequenceStep(step: BaseRecipeStep): step is SequenceStep {
+  return (step as SequenceStep).tool === 'sequence'
+}
+
+export function isParallelStep(step: BaseRecipeStep): step is ParallelStep {
+  return (step as ParallelStep).tool === 'parallel'
+}
 export class CircularDependencyError extends Error {
   constructor(
     message: string,

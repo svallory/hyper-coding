@@ -49,6 +49,122 @@ export class ActionExecutor {
 
 
   /**
+   * Execute an action (internal method)
+   */
+  private async execute(
+    actionName: string,
+    parameters: Record<string, any> = {},
+    context: Partial<ActionContext> = {},
+    options: {
+      dryRun?: boolean
+      force?: boolean
+      timeout?: number
+      actionId?: string
+    } = {}
+  ): Promise<ActionResult> {
+    const actionId = options.actionId || `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    debug('Executing action: %s with actionId: %s', actionName, actionId)
+
+    try {
+      this.communicationManager.registerAction(actionId, actionName, parameters)
+
+      const registry = ActionRegistry.getInstance()
+      const action = registry.get(actionName)
+
+      if (!action) {
+        const error = ErrorHandler.createActionNotFoundError(actionName)
+        this.communicationManager.failAction(actionId, error.message)
+        throw error
+      }
+
+      const resolvedParams = await this.parameterResolver.resolveParameters(action.metadata, parameters)
+      this.communicationManager.updateActionState(actionId, { resolvedParameters: resolvedParams })
+
+      const executionContext: ActionContext = {
+        variables: resolvedParams,
+        projectRoot: context.projectRoot || process.cwd(),
+        templatePath: context.templatePath,
+        logger: context.logger || this.defaultLogger,
+        utils: context.utils || this.defaultUtils,
+        dryRun: options.dryRun || false,
+        force: options.force || false,
+        communication: {
+          actionId,
+          manager: this.communicationManager,
+          sendMessage: (type: string, payload: any, target?: string) => {
+            this.communicationManager.sendMessage({
+              source: actionId,
+              target,
+              type,
+              payload,
+              timestamp: new Date()
+            })
+          },
+          getSharedData: (key: string) => this.communicationManager.getSharedData(key),
+          setSharedData: (key: string, value: any) => this.communicationManager.setSharedData(key, value, actionId),
+          waitForAction: (targetActionId: string, timeout?: number) => 
+            this.communicationManager.waitForAction(targetActionId, timeout),
+          subscribeToMessages: (messageType: string, handler: (message: any) => void) =>
+            this.communicationManager.subscribeToMessages(actionId, messageType, handler)
+        }
+      }
+
+      if (options.dryRun) {
+        const dryRunResult: ActionResult = {
+          success: true,
+          message: `[DRY RUN] Action '${actionName}' would execute with parameters: ${Object.keys(resolvedParams).join(', ')}`,
+          filesCreated: [],
+          filesModified: [],
+          filesDeleted: []
+        }
+        this.communicationManager.completeAction(actionId, dryRunResult)
+        return dryRunResult
+      }
+
+      const mainAction: ActionFunction = async (ctx: ActionContext) => {
+        return await action.fn(ctx)
+      }
+
+      const { result, lifecycle } = await this.lifecycleManager.executeLifecycle(
+        actionName,
+        executionContext,
+        mainAction,
+        {
+          timeout: options.timeout,
+          continueOnError: false
+        }
+      )
+
+      this.communicationManager.completeAction(actionId, {
+        filesCreated: result.filesCreated,
+        message: result.message
+      })
+
+      debug('Action %s completed with lifecycle: %o', actionName, {
+        success: result.success,
+        lifecycleSuccess: lifecycle.success,
+        totalDuration: lifecycle.totalDuration,
+        hooksExecuted: lifecycle.results.length
+      })
+
+      return result
+    } catch (error: any) {
+      debug('Action execution failed: %s', error.message)
+      this.communicationManager.failAction(actionId, error.message || 'Action execution failed')
+      
+      if (error instanceof HypergenError) {
+        throw error
+      }
+
+      throw ErrorHandler.createError(
+        ErrorCode.ACTION_EXECUTION_FAILED,
+        error.message || 'Action execution failed',
+        { action: actionName }
+      )
+    }
+  }
+
+  /**
    * Execute an action with interactive parameter resolution
    */
   async executeInteractively(
