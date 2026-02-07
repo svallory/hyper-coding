@@ -29,26 +29,58 @@
 	},
 	"main": "dist/index.js",
 	"bin": {
-		"hypergen": "dist/bin.js"
+		"hypergen": "./bin/run.js"
 	},
 	"type": "module",
+	"oclif": {
+		"bin": "hypergen",
+		"dirname": "hypergen",
+		"commands": "./dist/commands",
+		"plugins": [
+			"@oclif/plugin-help",
+			"@oclif/plugin-not-found"
+		],
+		"topics": {
+			"kit": {
+				"description": "Manage kits (installable bundles of cookbooks)"
+			},
+			"cookbook": {
+				"description": "Manage cookbooks (collections of related recipes)"
+			},
+			"recipe": {
+				"description": "Work with recipes (code generation workflows)"
+			},
+			"config": {
+				"description": "Configuration management"
+			},
+			"system": {
+				"description": "System information and diagnostics"
+			}
+		},
+		"topicSeparator": " "
+	},
+	"files": [
+		"bin",
+		"dist",
+		"oclif.manifest.json"
+	],
 	"scripts": {
 		"standalone": "rm -rf standalone; bun run build:lib && bun pkg package.json --out-path standalone && bun scripts/standalone.js",
 		"standalone:brew-sha": "shasum -a 256 standalone/*.macos.*.tar.gz",
 		"build:changelog": "bunx conventional-changelog -i CHANGELOG.md -p angular -s",
 		"build:lib": "bun run tsc",
 		"prebuild": "echo 'Building...'",
-		"build": "bun run build:lib && bun run build:changelog",
+		"build": "bun run build:lib && bun run build:changelog && bun run manifest",
 		"postbuild": "echo 'Done building!'",
+		"manifest": "oclif manifest",
 		"prepack": "bun run build",
 		"test:win32": "bun test --testPathIgnorePatterns '.*metaverse-conditional.*'",
 		"test": "bun test --coverage --exclude-v8-coverage=false --exclude=dist/**",
 		"test:code": "bun test",
-		"test:require": "time node -e 'require(\"./dist/hypergen.js\")'",
+		"test:require": "time node -e 'require(\"./dist/index.js\")'",
 		"watch": "bun test --watch",
-		"hypergen": "bun --bun src/bin.ts",
-		"hypergen:build": "bun dist/bin.js",
-		"hypergen:timed": "bun dist/bin.timed.js",
+		"hypergen": "./bin/dev.js",
+		"hypergen:build": "./bin/run.js",
 		"docs:prepare": "cd hygen.io && bun install",
 		"docs:watch": "cd hygen.io && bun start",
 		"docs:build": "cd hygen.io && bun run build",
@@ -59,8 +91,13 @@
 		"docs:typedoc:watch": "bun run build:lib && typedoc --watch"
 	},
 	"dependencies": {
+		"ai": "^4.0.0",
+		"zod": "^3.22.0",
 		"@clack/prompts": "^0.11.0",
 		"@microsoft/api-extractor": "^7.55.0",
+		"@oclif/core": "^4",
+		"@oclif/plugin-help": "^6",
+		"@oclif/plugin-not-found": "^3",
 		"@types/node": "^17.0.45",
 		"ajv": "^8.17.1",
 		"chalk": "^4.1.2",
@@ -89,6 +126,8 @@
 		"dir-compare": "^4.2.0",
 		"eslint-plugin-prettier": "^5.5.4",
 		"gh-pages": "^3.2.3",
+		"jscpd": "^4.0.7",
+		"madge": "^8.0.0",
 		"nodemon": "^3.1.11",
 		"pkg": "^5.8.1",
 		"react": "17.0.2",
@@ -109,6 +148,18 @@
 		"assets": "src/**/*",
 		"outPath": "standalone",
 		"targets": ["node17-macos", "node17-linux", "node17-win"]
+	},
+	"peerDependencies": {
+		"@ai-sdk/anthropic": "^1.0.0",
+		"@ai-sdk/openai": "^1.0.0"
+	},
+	"peerDependenciesMeta": {
+		"@ai-sdk/anthropic": {
+			"optional": true
+		},
+		"@ai-sdk/openai": {
+			"optional": true
+		}
 	},
 	"engines": {
 		"node": ">=14.18.0"

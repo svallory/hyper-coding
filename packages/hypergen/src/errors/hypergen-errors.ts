@@ -64,6 +64,17 @@ export enum ErrorCode {
   NETWORK_TIMEOUT = 'NETWORK_TIMEOUT',
   NETWORK_UNAUTHORIZED = 'NETWORK_UNAUTHORIZED',
   
+  // AI errors
+  AI_API_KEY_MISSING = 'AI_API_KEY_MISSING',
+  AI_PROVIDER_UNAVAILABLE = 'AI_PROVIDER_UNAVAILABLE',
+  AI_GENERATION_FAILED = 'AI_GENERATION_FAILED',
+  AI_BUDGET_EXCEEDED = 'AI_BUDGET_EXCEEDED',
+  AI_SCHEMA_VALIDATION_FAILED = 'AI_SCHEMA_VALIDATION_FAILED',
+  AI_SYNTAX_VALIDATION_FAILED = 'AI_SYNTAX_VALIDATION_FAILED',
+  AI_IMPORT_VALIDATION_FAILED = 'AI_IMPORT_VALIDATION_FAILED',
+  AI_RATE_LIMITED = 'AI_RATE_LIMITED',
+  AI_CONTEXT_TOO_LARGE = 'AI_CONTEXT_TOO_LARGE',
+
   // General errors
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
@@ -205,6 +216,16 @@ export class ErrorHandler {
     [ErrorCode.NETWORK_TIMEOUT]: 'Network request timed out',
     [ErrorCode.NETWORK_UNAUTHORIZED]: 'Network request unauthorized',
     
+    [ErrorCode.AI_API_KEY_MISSING]: 'AI provider API key is not configured',
+    [ErrorCode.AI_PROVIDER_UNAVAILABLE]: 'AI provider is unavailable',
+    [ErrorCode.AI_GENERATION_FAILED]: 'AI code generation failed',
+    [ErrorCode.AI_BUDGET_EXCEEDED]: 'AI cost budget exceeded',
+    [ErrorCode.AI_SCHEMA_VALIDATION_FAILED]: 'AI output failed schema validation',
+    [ErrorCode.AI_SYNTAX_VALIDATION_FAILED]: 'AI output has syntax errors',
+    [ErrorCode.AI_IMPORT_VALIDATION_FAILED]: 'AI output contains invalid imports',
+    [ErrorCode.AI_RATE_LIMITED]: 'AI provider rate limit exceeded',
+    [ErrorCode.AI_CONTEXT_TOO_LARGE]: 'AI context exceeds token budget',
+
     [ErrorCode.UNKNOWN_ERROR]: 'Unknown error occurred',
     [ErrorCode.INTERNAL_ERROR]: 'Internal error occurred',
     [ErrorCode.VALIDATION_ERROR]: 'Validation error occurred'
@@ -706,6 +727,122 @@ export class ErrorHandler {
       {
         title: 'Use absolute paths',
         description: 'Consider using absolute paths or checking working directory'
+      }
+    ],
+
+    [ErrorCode.AI_API_KEY_MISSING]: [
+      {
+        title: 'Set API key environment variable',
+        description: 'Set the appropriate environment variable for your AI provider (e.g., ANTHROPIC_API_KEY, OPENAI_API_KEY)'
+      },
+      {
+        title: 'Configure in hypergen.config.js',
+        description: 'Set ai.apiKey to an env var reference like "$ANTHROPIC_API_KEY"'
+      }
+    ],
+
+    [ErrorCode.AI_PROVIDER_UNAVAILABLE]: [
+      {
+        title: 'Check internet connection',
+        description: 'Verify you have an active internet connection'
+      },
+      {
+        title: 'Install provider SDK',
+        description: 'Install the provider SDK package (e.g., bun add @ai-sdk/anthropic)',
+        command: 'bun add @ai-sdk/anthropic'
+      },
+      {
+        title: 'Configure fallback models',
+        description: 'Add fallbackModels in hypergen.config.js ai configuration'
+      }
+    ],
+
+    [ErrorCode.AI_GENERATION_FAILED]: [
+      {
+        title: 'Check prompt',
+        description: 'Review the prompt for clarity and completeness'
+      },
+      {
+        title: 'Try a different model',
+        description: 'Some models perform better for specific tasks'
+      },
+      {
+        title: 'Increase temperature',
+        description: 'Higher temperature may help with creative generation'
+      }
+    ],
+
+    [ErrorCode.AI_BUDGET_EXCEEDED]: [
+      {
+        title: 'Increase budget',
+        description: 'Raise maxTotalCostUsd in ai.budget configuration'
+      },
+      {
+        title: 'Use a cheaper model',
+        description: 'Switch to a more cost-effective model for bulk operations'
+      },
+      {
+        title: 'Reduce context',
+        description: 'Include fewer context files to reduce token usage'
+      }
+    ],
+
+    [ErrorCode.AI_SCHEMA_VALIDATION_FAILED]: [
+      {
+        title: 'Check schema definition',
+        description: 'Verify the output schema matches expected AI output format'
+      },
+      {
+        title: 'Add examples',
+        description: 'Provide few-shot examples to guide the model output format'
+      }
+    ],
+
+    [ErrorCode.AI_SYNTAX_VALIDATION_FAILED]: [
+      {
+        title: 'Enable retry-with-feedback',
+        description: 'Set guardrails.onFailure to "retry-with-feedback" for automatic correction'
+      },
+      {
+        title: 'Lower temperature',
+        description: 'Lower temperature produces more deterministic, syntactically correct output'
+      }
+    ],
+
+    [ErrorCode.AI_IMPORT_VALIDATION_FAILED]: [
+      {
+        title: 'Enable requireKnownImports',
+        description: 'Set guardrails.requireKnownImports to validate imports against package.json'
+      },
+      {
+        title: 'Specify allowedImports',
+        description: 'Explicitly list allowed packages in guardrails.allowedImports'
+      }
+    ],
+
+    [ErrorCode.AI_RATE_LIMITED]: [
+      {
+        title: 'Wait and retry',
+        description: 'The rate limit will reset automatically. Hypergen retries with backoff.'
+      },
+      {
+        title: 'Configure fallback provider',
+        description: 'Add fallbackModels to switch providers when rate limited'
+      }
+    ],
+
+    [ErrorCode.AI_CONTEXT_TOO_LARGE]: [
+      {
+        title: 'Reduce context files',
+        description: 'Include fewer files in the context configuration'
+      },
+      {
+        title: 'Set maxContextTokens',
+        description: 'Configure context.maxContextTokens to limit context size'
+      },
+      {
+        title: 'Use truncation',
+        description: 'Set context.overflow to "truncate" to automatically trim context'
       }
     ]
   }

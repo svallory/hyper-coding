@@ -1,48 +1,75 @@
-import type { RunnerConfig, RunnerResult } from './types.js'
-import Logger from './logger.js'
-import engine, { ShowHelpError } from './engine.js'
-
 /**
- * V8-only config resolver
- * Modern configuration for Hypergen V8
+ * Hypergen - Modern Code Generator
+ *
+ * Public API exports for programmatic usage
  */
-const resolveV8Config = async (config: RunnerConfig) => {
-  return {
-    ...config,
-    templates: [],
-    logger: config.logger || new Logger(console.log.bind(console)),
-    cwd: config.cwd || process.cwd(),
-    debug: config.debug || false
-  }
-}
 
-const runner = async (
-  argv: string[],
-  config: RunnerConfig,
-): Promise<RunnerResult> => {
-  const resolvedConfig = await resolveV8Config(config)
-  const { logger } = resolvedConfig
-  
-  try {
-    const actions = await engine(argv, resolvedConfig)
-    console.debug('V8 engine returned actions:', actions)
-    return { success: true, actions, time: 0 }
-  } catch (err: any) {
-    logger.log(err.toString())
-    if (resolvedConfig.debug) {
-      logger.log('details -----------')
-      logger.log(err.stack)
-      logger.log('-------------------')
-    }
-    if (err instanceof ShowHelpError) {
-      // Help was already displayed in engine
-      return { success: true, actions: [], time: 0 }
-    }
-    return { success: false, actions: [], time: 0 }
-  }
-}
+// Core types
+export type { RunnerConfig, RunnerResult } from './types.js'
 
-export { runner, engine, resolveV8Config as resolve, Logger }
+// Logger
+export { default as Logger } from './logger.js'
 
-// Export Recipe Engine V8 System
+// Engine (for programmatic use)
+export { default as engine, ShowHelpError } from './engine.js'
+
+// Configuration
+export {
+  HypergenConfigLoader,
+  createConfigFile,
+  getConfigInfo,
+  type ResolvedConfig,
+  type HypergenConfig,
+} from './config/hypergen-config.js'
+
+// Template parsing
+export { TemplateParser, type TemplateConfig } from './config/template-parser.js'
+
+// URL resolution
+export { TemplateURLManager } from './config/url-resolution/index.js'
+
+// Actions system
+export {
+  ActionExecutor,
+  ActionRegistry,
+  DefaultActionUtils,
+  ConsoleActionLogger,
+  action,
+} from './actions/index.js'
+
+// Discovery
+export { GeneratorDiscovery } from './discovery/index.js'
+
+// Recipe Engine
 export * from './recipe-engine/index.js'
+
+// AI Integration
+export {
+  AiService,
+  CostTracker,
+  ModelRouter,
+  PromptPipeline,
+  ContextCollector,
+} from './ai/index.js'
+
+export type {
+  AiServiceConfig,
+  AIOutputConfig,
+  AIContextConfig,
+  AIExample,
+  AIGuardrailConfig,
+  AIBudgetConfig,
+  AIExecutionResult,
+  AICostSummary,
+  GenerateOptions,
+} from './ai/index.js'
+
+// Errors
+export {
+  HypergenError,
+  ErrorCode,
+  ErrorHandler,
+} from './errors/hypergen-errors.js'
+
+// oclif base command for plugin development
+export { BaseCommand } from './lib/base-command.js'

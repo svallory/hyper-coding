@@ -1,0 +1,37 @@
+/**
+ * AI Integration Module
+ *
+ * Public exports for Hypergen's AI integration.
+ */
+
+// Configuration types
+export type {
+  AiServiceConfig,
+  AIModelRef,
+  AIModelPricing,
+  AIBudgetConfig,
+  AIOutputConfig,
+  AIContextConfig,
+  AIExample,
+  AIGuardrailConfig,
+  AIExecutionResult,
+  AICostSummary,
+} from './ai-config.js'
+
+// Core service
+export { AiService, type GenerateOptions } from './ai-service.js'
+
+// Model routing
+export { ModelRouter, type ResolvedModel } from './model-router.js'
+
+// Cost tracking
+export { CostTracker } from './cost-tracker.js'
+
+// Prompt pipeline
+export { PromptPipeline, type AssembledPrompt, type PromptPipelineOptions } from './prompt-pipeline.js'
+
+// Context collection
+export { ContextCollector, type ContextBundle } from './context-collector.js'
+
+// Output validation
+export { validateOutput, buildValidationFeedback, type ValidationResult } from './output-validator.js'

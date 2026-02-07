@@ -2,6 +2,7 @@ import { Liquid } from 'liquidjs'
 import fs from 'fs-extra'
 import path from 'path'
 import type { TemplateEngine } from './types.js'
+import { registerAiTag } from './ai-liquid-tag.js'
 
 /**
  * LiquidJS Template Engine Implementation
@@ -43,6 +44,7 @@ export class LiquidTemplateEngine implements TemplateEngine {
     })
 
     this.setupDefaultFilters()
+    this.setupAiTag()
   }
 
   async render(template: string, context: Record<string, any>): Promise<string> {
@@ -125,6 +127,7 @@ export class LiquidTemplateEngine implements TemplateEngine {
     this.liquid = new Liquid(liquidOptions)
 
     this.setupDefaultFilters()
+    this.setupAiTag()
     this.configured = true
   }
 
@@ -204,6 +207,17 @@ export class LiquidTemplateEngine implements TemplateEngine {
     this.liquid.registerFilter('humanize', (str: string) => {
       return str.replace(/[-_]/g, ' ').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.slice(1).toLowerCase())
     })
+  }
+
+  /**
+   * Register the {% ai %} custom tag
+   */
+  private setupAiTag(): void {
+    try {
+      registerAiTag(this.liquid)
+    } catch {
+      // AI tag registration is best-effort; fails gracefully if ai dependencies missing
+    }
   }
 
   /**

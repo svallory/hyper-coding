@@ -7,6 +7,7 @@
 
 import type { TemplateVariable } from '../config/template-parser.js'
 import type { ActionResult, ActionContext, ActionParameter, ActionLogger, ActionUtils } from '../actions/types.js'
+import type { AIOutputConfig, AIContextConfig, AIExample, AIGuardrailConfig, AIBudgetConfig, AIExecutionResult } from '../ai/ai-config.js'
 
 /**
  * Core step execution status
@@ -16,7 +17,7 @@ export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipp
 /**
  * Tool types supported by the recipe system
  */
-export type ToolType = 'template' | 'action' | 'codemod' | 'recipe' | 'shell' | 'prompt' | 'sequence' | 'parallel'
+export type ToolType = 'template' | 'action' | 'codemod' | 'recipe' | 'shell' | 'prompt' | 'sequence' | 'parallel' | 'ai'
 
 /**
  * Base interface for all recipe steps
@@ -287,18 +288,62 @@ export interface SequenceStep extends BaseRecipeStep {
  */
 export interface ParallelStep extends BaseRecipeStep {
   tool: 'parallel'
-  
+
   /** Steps to execute in parallel */
   steps: RecipeStepUnion[]
-  
+
   /** Maximum number of concurrent steps */
   limit?: number
 }
 
 /**
+ * AI step configuration
+ * Generates code or content using an LLM via Vercel AI SDK
+ */
+export interface AIStep extends BaseRecipeStep {
+  tool: 'ai'
+
+  /** Prompt template (supports Liquid variable interpolation) */
+  prompt: string
+
+  /** System prompt override */
+  system?: string
+
+  /** Model override (e.g., 'claude-sonnet-4-5', 'gpt-4o') */
+  model?: string
+
+  /** Provider override (e.g., 'anthropic', 'openai', 'ollama') */
+  provider?: string
+
+  /** How the AI output is used */
+  output: AIOutputConfig
+
+  /** Context files to include in the prompt */
+  context?: AIContextConfig
+
+  /** Few-shot examples to improve generation quality */
+  examples?: AIExample[]
+
+  /** Validation guardrails */
+  guardrails?: AIGuardrailConfig
+
+  /** Per-step cost limits */
+  budget?: AIBudgetConfig
+
+  /** Stream output to terminal */
+  stream?: boolean
+
+  /** Temperature (0-2) */
+  temperature?: number
+
+  /** Max output tokens */
+  maxTokens?: number
+}
+
+/**
  * Union type for all step types (discriminated union)
  */
-export type RecipeStepUnion = TemplateStep | ActionStep | CodeModStep | RecipeStep | ShellStep | PromptStep | SequenceStep | ParallelStep
+export type RecipeStepUnion = TemplateStep | ActionStep | CodeModStep | RecipeStep | ShellStep | PromptStep | SequenceStep | ParallelStep | AIStep
 
 /**
  * Step execution context
@@ -393,7 +438,7 @@ export interface StepResult {
   conditionResult?: boolean
   
   /** Tool-specific execution result */
-  toolResult?: ActionResult | TemplateExecutionResult | CodeModExecutionResult | RecipeExecutionResult | ShellExecutionResult | PromptExecutionResult | SequenceExecutionResult | ParallelExecutionResult
+  toolResult?: ActionResult | TemplateExecutionResult | CodeModExecutionResult | RecipeExecutionResult | ShellExecutionResult | PromptExecutionResult | SequenceExecutionResult | ParallelExecutionResult | AIExecutionResult
   
   /** Files created by this step */
   filesCreated?: string[]
@@ -981,11 +1026,12 @@ export function isRecipeStep(step: RecipeStepUnion): step is RecipeStep {
 /**
  * Utility type for extracting step types
  */
-export type StepByTool<T extends ToolType> = 
+export type StepByTool<T extends ToolType> =
   T extends 'template' ? TemplateStep :
   T extends 'action' ? ActionStep :
   T extends 'codemod' ? CodeModStep :
   T extends 'recipe' ? RecipeStep :
+  T extends 'ai' ? AIStep :
   never
 
 /**
@@ -1039,6 +1085,10 @@ export function isSequenceStep(step: BaseRecipeStep): step is SequenceStep {
 
 export function isParallelStep(step: BaseRecipeStep): step is ParallelStep {
   return (step as ParallelStep).tool === 'parallel'
+}
+
+export function isAIStep(step: BaseRecipeStep): step is AIStep {
+  return (step as AIStep).tool === 'ai'
 }
 export class CircularDependencyError extends Error {
   constructor(

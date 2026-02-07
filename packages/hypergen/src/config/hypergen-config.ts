@@ -9,6 +9,7 @@ import path from 'path'
 import { pathToFileURL } from 'url'
 import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
 import { DEFAULT_TEMPLATE_DIRECTORY } from '../constants.js'
+import type { AiServiceConfig } from '../ai/ai-config.js'
 
 export interface HypergenConfig {
   // Template directories
@@ -72,10 +73,13 @@ export interface HypergenConfig {
   
   // Plugin system
   plugins?: string[]
-  
+
   // Custom helpers
   helpers?: string | Record<string, Function>
-  
+
+  /** AI integration configuration */
+  ai?: AiServiceConfig
+
   // Environment-specific settings
   environments?: Record<string, Partial<HypergenConfig>>
 }
@@ -84,10 +88,10 @@ export interface ResolvedConfig extends Required<HypergenConfig> {
   // Resolved paths
   configPath: string
   projectRoot: string
-  
+
   // Runtime environment
   environment: string
-  
+
   // Loaded helpers
   loadedHelpers: Record<string, Function>
 }

@@ -36,6 +36,12 @@ export {
   shellToolFactory
 } from './shell-tool.js'
 
+export {
+  AiTool,
+  AiToolFactory,
+  aiToolFactory
+} from './ai-tool.js'
+
 export type {
   ToolFactory,
   ToolPhase,
@@ -70,6 +76,7 @@ export type {
   CodeModStep,
   RecipeStep,
   ShellStep,
+  AIStep,
   
   // Context and execution
   StepContext,
@@ -106,6 +113,7 @@ import { shellToolFactory } from './shell-tool.js'
 import { promptToolFactory } from './prompt-tool.js'
 import { sequenceToolFactory } from './sequence-tool.js'
 import { parallelToolFactory } from './parallel-tool.js'
+import { aiToolFactory } from './ai-tool.js'
 
 // Re-export type guard functions for convenience
 export {
@@ -113,6 +121,7 @@ export {
   isActionStep,
   isCodeModStep,
   isRecipeStep,
+  isAIStep,
   
   // Error classes
   StepExecutionError,
@@ -130,7 +139,7 @@ export const TOOL_FRAMEWORK_VERSION = '8.0.0'
 /**
  * Supported tool types in the Recipe Step System
  */
-export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = ['template', 'action', 'codemod', 'recipe', 'shell'] as const
+export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = ['template', 'action', 'codemod', 'recipe', 'shell', 'ai'] as const
 
 /**
  * Default tool registry configuration
@@ -230,6 +239,14 @@ export function registerDefaultTools(): void {
     registry.register('parallel', 'default', parallelToolFactory, {
       description: 'Parallel step execution',
       category: 'core'
+    })
+  }
+
+  // Register AI Tool
+  if (!registry.isRegistered('ai', 'default')) {
+    registry.register('ai', 'default', aiToolFactory, {
+      description: 'AI-powered code generation',
+      category: 'ai'
     })
   }
 }
