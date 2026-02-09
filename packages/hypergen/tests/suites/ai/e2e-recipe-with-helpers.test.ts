@@ -1,0 +1,274 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { RecipeEngine } from '~/recipe-engine/recipe-engine'
+import { AiCollector } from '~/ai/ai-collector'
+import type { Recipe } from '~/recipe-engine/types'
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import yaml from 'js-yaml'
+import { initializeJig, getJig } from '~/template-engines/jig-engine'
+
+describe('AI Collection E2E with Helpers', () => {
+  let testDir: string
+  let collector: AiCollector
+
+  beforeEach(() => {
+    // Create temporary test directory
+    testDir = mkdtempSync(join(tmpdir(), 'hypergen-test-'))
+
+    // Get collector instance and reset state
+    collector = AiCollector.getInstance()
+    collector.clear()
+
+    // CRITICAL: Initialize Jig to register @ai tags
+    initializeJig({ cache: false })
+  })
+
+  afterEach(() => {
+    // Cleanup
+    rmSync(testDir, { recursive: true, force: true })
+    collector.clear()
+    collector.collectMode = false
+  })
+
+  it('should collect AI entries when template uses helper functions', async () => {
+    // 1. Setup helpers that templates will use
+    const helpers = {
+      getFields: (model: string) => {
+        return JSON.stringify([
+          { name: 'id', type: 'string' },
+          { name: 'name', type: 'string' },
+          { name: 'email', type: 'string' }
+        ])
+      },
+      listModelFields: (model: string) => {
+        const fields = [
+          { name: 'id', type: 'string' },
+          { name: 'name', type: 'string' }
+        ]
+        return fields.map(f => `- ${f.name}: ${f.type}`).join('\n')
+      }
+    }
+
+    // Register helpers as Jig globals
+    const jig = getJig()
+    jig.global('getFields', helpers.getFields)
+    jig.global('listModelFields', helpers.listModelFields)
+
+    // 2. Create recipe YAML content
+    const recipeYaml = yaml.dump({
+      name: 'test-recipe-with-helpers',
+      description: 'Test recipe with AI tags and helper functions',
+      steps: [
+        {
+          name: 'generate-handler',
+          tool: 'template',
+          template: 'handler.jig',
+          variables: {
+            model: 'User'
+          }
+        }
+      ]
+    })
+
+    // 3. Write recipe file
+    const recipeFile = join(testDir, 'recipe.yml')
+    writeFileSync(recipeFile, recipeYaml)
+
+    // 4. Write template file
+    const templateContent = `---
+to: "src/handlers/{{ kebabCase(model) }}-handler.ts"
+---
+@ai()
+  @context()
+    Model: {{ model }}
+    Fields from helper: {{ getFields(model) }}
+
+    Formatted fields:
+    {{ listModelFields(model) }}
+  @end
+
+  @prompt()
+    Generate a TypeScript handler for the {{ model }} model.
+    Include CRUD operations for these fields.
+  @end
+
+  @output({ key: 'handler' })
+    // Default handler implementation
+    export class {{ pascalCase(model) }}Handler {
+      // TODO: Implement CRUD operations
+    }
+  @end
+@end`
+
+    writeFileSync(join(testDir, 'handler.jig'), templateContent)
+
+    // 5. Create recipe engine with helpers
+    const recipeEngine = new RecipeEngine({
+      workingDir: testDir,
+      helpers,
+      config: {
+        templates: testDir,
+        helpers
+      }
+    })
+
+    // 6. Execute Pass 1 (collect mode)
+    collector.collectMode = true
+
+    const result = await recipeEngine.executeRecipe(
+      { type: 'file', path: recipeFile },
+      {
+        variables: { model: 'User' },
+        skipPrompts: true
+      }
+    )
+
+    // 5. CRITICAL ASSERTIONS - These should FAIL with current bug
+    expect(collector.hasEntries()).toBe(true)
+    expect(collector.getEntries().size).toBeGreaterThan(0)
+
+    // 6. Verify the collected entry has the correct structure
+    const entries = Array.from(collector.getEntries().values())
+    expect(entries).toHaveLength(1)
+
+    const entry = entries[0]
+    expect(entry.key).toBe('handler')
+    expect(entry.context).toContain('Model: User')
+    expect(entry.context).toContain('Fields from helper:')
+    expect(entry.context).toContain('"name":"id"')
+    expect(entry.prompt).toContain('Generate a TypeScript handler')
+    expect(entry.prompt).toContain('User model')
+    expect(entry.defaultOutput).toContain('export class UserHandler')
+
+    // 7. Verify no files were created in Pass 1
+    expect(result.filesCreated).toHaveLength(0)
+    expect(result.filesModified).toHaveLength(0)
+  })
+
+  it('should collect multiple AI entries from templates with nested helper calls', async () => {
+    const helpers = {
+      getRelations: (model: string) => {
+        return model === 'User' ? ['posts', 'comments'] : []
+      },
+      formatList: (items: string[]) => {
+        return items.map((item, i) => `${i + 1}. ${item}`).join('\n')
+      }
+    }
+
+    // Register helpers as Jig globals
+    const jig = getJig()
+    jig.global('getRelations', helpers.getRelations)
+    jig.global('formatList', helpers.formatList)
+
+    const recipeYaml = yaml.dump({
+      name: 'test-multiple-ai-entries',
+      description: 'Test multiple AI blocks with helpers',
+      steps: [
+        {
+          name: 'generate-model',
+          tool: 'template',
+          template: 'model.jig',
+          variables: {
+            model: 'User'
+          }
+        }
+      ]
+    })
+
+    const recipeFile = join(testDir, 'recipe-multi.yml')
+    writeFileSync(recipeFile, recipeYaml)
+
+    const templateContent = `---
+to: "src/models/{{ kebabCase(model) }}.ts"
+---
+@ai()
+  @context()
+    Relations for {{ model }}:
+    {{ formatList(getRelations(model)) }}
+  @end
+  @prompt()Generate model with relations@end
+  @output({ key: 'model' })export interface {{ pascalCase(model) }} {}@end
+@end
+
+@ai()
+  @context()Tests for {{ model }}@end
+  @prompt()Generate tests@end
+  @output({ key: 'tests' })// Tests@end
+@end`
+
+    writeFileSync(join(testDir, 'model.jig'), templateContent)
+
+    const recipeEngine = new RecipeEngine({
+      workingDir: testDir,
+      helpers,
+      config: { templates: testDir, helpers }
+    })
+
+    collector.collectMode = true
+    await recipeEngine.executeRecipe(
+      { type: 'file', path: recipeFile },
+      {
+        variables: { model: 'User' },
+        skipPrompts: true
+      }
+    )
+
+    // Should collect 2 AI entries
+    expect(collector.hasEntries()).toBe(true)
+    expect(collector.getEntries().size).toBe(2)
+
+    const entries = Array.from(collector.getEntries().values())
+    expect(entries.find(e => e.key === 'model')).toBeDefined()
+    expect(entries.find(e => e.key === 'tests')).toBeDefined()
+  })
+
+  it('should fail test when collectMode is not properly passed through', async () => {
+    // This is a NEGATIVE test - it verifies the test framework itself
+    // If collectMode is false, collector should NOT collect entries
+
+    const recipeYaml = yaml.dump({
+      name: 'test-no-collect',
+      description: 'Should not collect when collectMode is false',
+      steps: [
+        {
+          name: 'generate',
+          tool: 'template',
+          template: 'simple.jig'
+        }
+      ]
+    })
+
+    const recipeFile = join(testDir, 'recipe-negative.yml')
+    writeFileSync(recipeFile, recipeYaml)
+
+    const templateContent = `---
+to: "test.ts"
+---
+@ai()
+  @prompt()Test@end
+  @output({ key: 'test' })Default@end
+@end`
+
+    writeFileSync(join(testDir, 'simple.jig'), templateContent)
+
+    const recipeEngine = new RecipeEngine({
+      workingDir: testDir,
+      config: { templates: testDir }
+    })
+
+    // Explicitly set collectMode to false
+    collector.collectMode = false
+
+    await recipeEngine.executeRecipe(
+      { type: 'file', path: recipeFile },
+      {
+        skipPrompts: true
+      }
+    )
+
+    // Should NOT collect entries when collectMode is false
+    expect(collector.hasEntries()).toBe(false)
+    expect(collector.getEntries().size).toBe(0)
+  })
+})
