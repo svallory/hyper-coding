@@ -62,7 +62,7 @@ export interface HypergenConfig {
   environments?: Record<string, Partial<HypergenConfig>>
 }
 
-export interface ResolvedConfig extends Required<HypergenConfig> {
+export interface ResolvedConfig {
   // Resolved paths
   configPath: string
   projectRoot: string
@@ -72,6 +72,36 @@ export interface ResolvedConfig extends Required<HypergenConfig> {
 
   // Loaded helpers
   loadedHelpers: Record<string, Function>
+
+  // All config properties (with defaults applied)
+  templates: string[]
+  discovery: {
+    sources?: ('local' | 'npm' | 'workspace' | 'github' | 'git')[]
+    directories?: string[]
+    exclude?: string[]
+  }
+  engine: {
+    cache?: boolean
+  }
+  output: {
+    conflictStrategy?: 'fail' | 'overwrite' | 'skip' | 'merge'
+    createDirectories?: boolean
+    preserveTimestamps?: boolean
+  }
+  validation: {
+    strict?: boolean
+    validateTemplates?: boolean
+    validateVariables?: boolean
+  }
+  cache: {
+    enabled?: boolean
+    directory?: string
+    ttl?: number
+  }
+  plugins: string[]
+  helpers: string | Record<string, Function>
+  ai?: AiServiceConfig
+  environments: Record<string, Partial<HypergenConfig>>
 }
 
 export class HypergenConfigLoader {
@@ -331,26 +361,49 @@ export class HypergenConfigLoader {
     projectRoot: string
   ): Promise<Record<string, Function>> {
     if (!helpers) return {}
-    
+
     if (typeof helpers === 'string') {
-      // Load helpers from file
-      const helpersPath = path.isAbsolute(helpers) 
-        ? helpers 
+      // Load helpers from file or directory
+      let helpersPath = path.isAbsolute(helpers)
+        ? helpers
         : path.resolve(projectRoot, helpers)
-      
+
       try {
+        // Check if path is a directory
+        if (fs.existsSync(helpersPath)) {
+          const stats = fs.statSync(helpersPath)
+          if (stats.isDirectory()) {
+            // Try index.js, index.mjs, index.cjs
+            const indexFiles = ['index.js', 'index.mjs', 'index.cjs']
+            for (const indexFile of indexFiles) {
+              const indexPath = path.join(helpersPath, indexFile)
+              if (fs.existsSync(indexPath)) {
+                helpersPath = indexPath
+                break
+              }
+            }
+          }
+        }
+
+        // Check if the resolved file exists
+        if (!fs.existsSync(helpersPath)) {
+          console.warn(`Warning: Could not load helpers from ${helpersPath} (file not found)`)
+          return {}
+        }
+
         const fileUrl = pathToFileURL(helpersPath).href
         const module = await import(fileUrl)
         return module.default || module
       } catch (error) {
         console.warn(`Warning: Could not load helpers from ${helpersPath}`)
+        console.warn(`  Error: ${error instanceof Error ? error.message : String(error)}`)
         return {}
       }
     } else if (typeof helpers === 'object') {
       // Use provided helpers object
       return helpers
     }
-    
+
     return {}
   }
   

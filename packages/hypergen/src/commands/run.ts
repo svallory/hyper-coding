@@ -5,6 +5,7 @@
  */
 
 import fs from 'node:fs'
+import path from 'node:path'
 import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../lib/base-command.js'
 import { AiCollector } from '../ai/ai-collector.js'
@@ -18,6 +19,7 @@ export default class Run extends BaseCommand<typeof Run> {
     '<%= config.bin %> run @hyper-kits/starlight/create',
     '<%= config.bin %> run create-component --name=Button',
     '<%= config.bin %> run ./my-recipe --answers ./ai-answers.json',
+    '<%= config.bin %> run crud edit-page --model=Organization',
   ]
 
   static override flags = {
@@ -43,7 +45,7 @@ export default class Run extends BaseCommand<typeof Run> {
 
   static override args = {
     recipe: Args.string({
-      description: 'Recipe to execute (path, package, or kit recipe)',
+      description: 'Recipe to execute (path, package, or cookbook/recipe)',
       required: true,
     }),
   }
@@ -52,7 +54,9 @@ export default class Run extends BaseCommand<typeof Run> {
 
   async run(): Promise<void> {
     const { args, flags, argv } = await this.parse(Run)
-    const recipePath = args.recipe
+
+    // Resolve recipe path - handle cookbook/recipe syntax
+    const recipePath = await this.resolveRecipePath(args.recipe, argv as string[], flags.cwd)
     const params = this.parseParameters(argv as string[])
 
     // Load AI answers if provided (Pass 2)
@@ -126,5 +130,88 @@ export default class Run extends BaseCommand<typeof Run> {
       collector.clear()
       this.error(`Failed to execute recipe: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  /**
+   * Resolve recipe path from cookbook/recipe syntax or direct path
+   * Supports:
+   * - Direct paths: ./my-recipe, /absolute/path/recipe.yml
+   * - Cookbook syntax: cookbook recipe (e.g., crud edit-page)
+   * - Package syntax: @scope/package/recipe
+   */
+  private async resolveRecipePath(recipeName: string, argv: string[], cwd: string): Promise<string> {
+    // If it's a file path (starts with ./ or / or ends with .yml/.yaml), return as-is
+    if (
+      recipeName.startsWith('./') ||
+      recipeName.startsWith('../') ||
+      recipeName.startsWith('/') ||
+      recipeName.endsWith('.yml') ||
+      recipeName.endsWith('.yaml')
+    ) {
+      return recipeName
+    }
+
+    // Check if next arg (after recipe) is another string that doesn't start with --
+    // This would indicate cookbook/recipe syntax: hypergen run crud edit-page
+    const recipeIndex = argv.indexOf(recipeName)
+    const nextArg = argv[recipeIndex + 1]
+    const isRecipeSubpath = nextArg && !nextArg.startsWith('--')
+
+    if (isRecipeSubpath) {
+      // Cookbook/recipe syntax - need to discover cookbook location
+      const cookbookName = recipeName
+      const recipeName2 = nextArg
+
+      // Use config to find cookbook directories
+      const searchDirs = this.hypergenConfig?.discovery?.directories || ['.hypergen/cookbooks', 'cookbooks']
+
+      for (const dir of searchDirs) {
+        const fullDir = path.resolve(cwd, dir)
+        const cookbookPath = path.join(fullDir, cookbookName)
+
+        // Check if cookbook directory exists
+        if (fs.existsSync(cookbookPath)) {
+          // Try to find the recipe
+          const recipePath = path.join(cookbookPath, recipeName2, 'recipe.yml')
+          if (fs.existsSync(recipePath)) {
+            return recipePath
+          }
+
+          // Try without subdirectory (recipe.yml directly in cookbook)
+          const directRecipePath = path.join(cookbookPath, 'recipe.yml')
+          if (fs.existsSync(directRecipePath)) {
+            return directRecipePath
+          }
+        }
+      }
+
+      // If we couldn't find it, throw error
+      this.error(
+        `Recipe not found: ${cookbookName}/${recipeName2}\n` +
+        `Searched in: ${searchDirs.join(', ')}`
+      )
+    }
+
+    // Otherwise, treat as a simple recipe name - look in discovery directories
+    const searchDirs = this.hypergenConfig?.discovery?.directories || ['.hypergen/cookbooks', 'cookbooks', 'recipes']
+
+    for (const dir of searchDirs) {
+      const fullDir = path.resolve(cwd, dir)
+
+      // Try recipe.yml in a subdirectory
+      const recipePath = path.join(fullDir, recipeName, 'recipe.yml')
+      if (fs.existsSync(recipePath)) {
+        return recipePath
+      }
+
+      // Try direct recipe file
+      const directPath = path.join(fullDir, `${recipeName}.yml`)
+      if (fs.existsSync(directPath)) {
+        return directPath
+      }
+    }
+
+    // If still not found, return as-is and let RecipeEngine handle it
+    return recipeName
   }
 }

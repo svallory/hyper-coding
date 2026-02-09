@@ -869,8 +869,9 @@ export class StepExecutor extends EventEmitter {
 
   private getToolName(step: RecipeStepUnion): string {
     // Route to appropriate tool based on step type
+    // Most tools use 'default' as the tool name, but action and codemod use specific names
     if (isTemplateStep(step)) {
-      return step.template
+      return 'default'
     } else if (isActionStep(step)) {
       return step.action
     } else if (isCodeModStep(step)) {
@@ -1018,7 +1019,8 @@ export class StepExecutor extends EventEmitter {
       shell: 2000,     // 2 seconds average
       prompt: 30000,   // 30 seconds average (interactive)
       sequence: 0,     // Sequence tool itself is instant
-      parallel: 0      // Parallel tool itself is instant
+      parallel: 0,     // Parallel tool itself is instant
+      ai: 20000        // 20 seconds average (AI generation)
     }
     
     let totalEstimate = 0

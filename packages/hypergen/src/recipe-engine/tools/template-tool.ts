@@ -21,7 +21,7 @@ import {
   type TemplateExecutionResult,
   isTemplateStep
 } from '../types.js'
-import { initializeJig, renderTemplate as jigRenderTemplate } from '../../template-engines/index.js'
+import { getJig, renderTemplate as jigRenderTemplate } from '../../template-engines/index.js'
 import contextHelper from '../../context.js'
 import addOp from '../../ops/add.js'
 import injectOp from '../../ops/inject.js'
@@ -99,9 +99,12 @@ export class TemplateTool extends Tool<TemplateStep> {
    */
   protected async onInitialize(): Promise<void> {
     this.debug('Initializing template engines')
-    
+
     try {
-      initializeJig(this.options.templateEngineConfig)
+      // Use getJig() to reuse the existing singleton rather than
+      // creating a fresh instance per tool. This preserves any
+      // globals/filters registered before recipe execution.
+      getJig()
       this.templateEnginesInitialized = true
       
       this.registerResource({
@@ -406,12 +409,17 @@ export class TemplateTool extends Tool<TemplateStep> {
       templateId,
       // Relative to project root
       path.resolve(context.projectRoot, templateId),
-      // Relative to template path if available
-      context.templatePath ? path.resolve(path.dirname(context.templatePath), templateId) : null,
+      // Relative to template path if available (recipe directory)
+      context.templatePath ? path.resolve(context.templatePath, templateId) : null,
       // With common extensions
       path.resolve(context.projectRoot, `${templateId}.jig`),
       path.resolve(context.projectRoot, `${templateId}.jig.t`),
     ].filter(Boolean) as string[]
+
+    this.debug('Resolving template: %s', templateId)
+    this.debug('  projectRoot: %s', context.projectRoot)
+    this.debug('  templatePath: %s', context.templatePath)
+    this.debug('  Trying paths: %o', resolutionPaths)
 
     for (const candidatePath of resolutionPaths) {
       if (await fs.pathExists(candidatePath)) {

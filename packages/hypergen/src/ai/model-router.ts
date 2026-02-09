@@ -71,6 +71,7 @@ async function createModelInstance(provider: string, modelName: string, apiKey?:
   switch (provider) {
     case 'anthropic': {
       try {
+        // @ts-ignore - Optional dependency, will be checked at runtime
         const { createAnthropic } = await import('@ai-sdk/anthropic')
         const anthropic = createAnthropic({ apiKey })
         return anthropic(modelName)
@@ -88,6 +89,7 @@ async function createModelInstance(provider: string, modelName: string, apiKey?:
 
     case 'openai': {
       try {
+        // @ts-ignore - Optional dependency, will be checked at runtime
         const { createOpenAI } = await import('@ai-sdk/openai')
         const openai = createOpenAI({ apiKey })
         return openai(modelName)
