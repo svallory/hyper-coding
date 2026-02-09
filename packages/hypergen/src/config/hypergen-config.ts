@@ -393,7 +393,10 @@ export class HypergenConfigLoader {
 
         const fileUrl = pathToFileURL(helpersPath).href
         const module = await import(fileUrl)
-        return module.default || module
+        const helpers = module.default || module
+        // Ensure we return a plain object with own properties
+        // to avoid prototype chain issues when spreading
+        return { ...helpers }
       } catch (error) {
         console.warn(`Warning: Could not load helpers from ${helpersPath}`)
         console.warn(`  Error: ${error instanceof Error ? error.message : String(error)}`)

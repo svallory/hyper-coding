@@ -386,7 +386,7 @@ export interface StepContext {
 
   /** Dry run mode */
   dryRun?: boolean
-  
+
   /** Force overwrite existing files */
   force?: boolean
   

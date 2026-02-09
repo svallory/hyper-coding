@@ -1,341 +1,100 @@
-# Plan: 2-Pass AI-Integrated Generation System
+# Plan: Helpers-based template DX + directory restructure
 
 ## Context
 
-Hypergen currently has an `@ai` tag that calls an LLM inline during template rendering. This doesn't work well with AI coding agents — the agent can't control the LLM calls, doesn't know what context to provide, and can't review/edit AI output before it lands in files.
-
-The solution is a **2-pass system**:
-- **Pass 1**: Render all templates, collect AI prompts/context/output specs, print a markdown prompt to stdout, write no files.
-- **Pass 2**: Agent provides answers via `--answers path.json`, templates resolve `@ai` blocks from the answers, files are written normally.
-
-This enables agents to orchestrate AI generation externally while template authors declaratively specify what AI help they need.
+The E2E test currently passes `modelFields` and `modelRelations` as hardcoded JSON string variables. This is clunky — users shouldn't manually construct field metadata. Instead, helpers should parse the actual Go source files and extract struct fields + relations automatically. This embodies the design principle: "the template author does the heavy lifting to save AI tokens."
 
 ---
 
-## New Tag Design
+## Changes
 
-### `@ai` — Block container (replaces current `@ai` tag)
+### 1. Create Go parser: `sandbox/go/.hypergen/helpers/parse_model.go`
 
-```jig
-@ai()
-  @context()
-    The Customer model has these fields:
-    {{ JSON.stringify(modelFields, null, 2) }}
-  @end
+A standalone Go script (uses stdlib only: `go/parser`, `go/ast`, `encoding/json`) that:
+- Takes a model name as arg (e.g. `Organization`)
+- Resolves `internal/model/<snake_case>.go` relative to cwd
+- Parses the struct using Go AST, extracting fields: `{name, type, dbTag, nullable}`
+  - Nullable = pointer type (`*string`, `*time.Time`)
+- Scans all `.go` files in `internal/model/` for structs with a `<ModelName>ID` field to discover relations: `{name, model, type, foreignKey}`
+  - Relation type heuristic: singular model name → `hasOne`, otherwise → `hasMany`
+- Outputs JSON: `{"fields": [...], "relations": [...]}`
 
-  @prompt()
-    Which fields are most relevant for a quick-view card?
-  @end
+### 2. Create JS helpers: `sandbox/go/.hypergen/helpers/index.js`
 
-  @output({ key: 'mainFields' })
-    ["fieldName1", "fieldName2"]
-  @end
-@end
-```
-
-- Contains `@context`, `@prompt`, `@output` children
-- In Pass 1 (collect mode): collects children data, outputs nothing
-- In Pass 2 (answers mode): outputs `answers.mainFields`
-
-### `@context` — Block tag (inside or outside `@ai`)
-
-- Body is rendered text that becomes context for the LLM
-- Inside `@ai`: scoped to that block's prompt
-- Outside `@ai`: global context shared across all prompts
-
-### `@prompt` — Block tag (inside `@ai` only)
-
-- Body is the rendered question/instruction for the LLM
-
-### `@output({ key: 'myKey' })` — Block tag (inside `@ai` only)
-
-- `key` is the JSON property name the LLM fills in
-- Body is a text description / example of expected format
-- In Pass 2, `{{ answers.myKey }}` resolves to the LLM's answer
-
----
-
-## Files to Create
-
-### 1. `src/ai/ai-collector.ts` — Collection singleton
-
-Accumulates AI block data across all templates in a single run.
-
-```typescript
-interface AiBlockEntry {
-  key: string              // from @output({ key })
-  contexts: string[]       // rendered @context bodies within this @ai block
-  prompt: string           // rendered @prompt body
-  outputDescription: string // rendered @output body (format hint)
-  sourceFile: string       // which template file
-}
-
-class AiCollector {
-  // Singleton (same pattern as AiService)
-  static getInstance(): AiCollector
-  static reset(): void
-
-  collectMode: boolean     // true = Pass 1, false = normal/Pass 2
-
-  addGlobalContext(text: string): void
-  addEntry(entry: AiBlockEntry): void
-  hasEntries(): boolean
-  getGlobalContexts(): string[]
-  getEntries(): Map<string, AiBlockEntry>
-  clear(): void
-}
-```
-
-### 2. `src/ai/prompt-assembler.ts` — Markdown prompt builder
-
-Takes AiCollector data, produces a self-contained markdown document.
-
-```typescript
-interface AssemblerOptions {
-  originalCommand: string   // for the callback instruction
-  answersPath?: string      // suggested path for answers file
-}
-
-class PromptAssembler {
-  assemble(collector: AiCollector, options: AssemblerOptions): string
-}
-```
-
-Output format:
-
-```markdown
-# Hypergen AI Generation Request
-
-## Context
-<global @context blocks>
-<per-block @context blocks, labeled by key>
-
-## Prompts
-
-### `mainFields`
-<prompt body>
-
-**Expected output format:**
-<output description>
-
-### `relationships`
-<prompt body>
-...
-
-## Response Format
-
-Respond with a JSON object:
-\```json
-{
-  "mainFields": "<see format above>",
-  "relationships": "<see format above>"
-}
-\```
-
-## Instructions
-
-Save your response as JSON to a file and run:
-\```
-hypergen crud edit --model Customer --answers ./answers.json
-\```
-```
-
-### 3. `src/template-engines/ai-tags.ts` — New tag implementations
-
-Replaces `ai-jig-tag.ts`. Registers 4 tags with the Edge.js instance.
-
-**Compile strategy**: The `@ai` tag's `compile()` method:
-1. Iterates `token.children`, identifies `@context`/`@prompt`/`@output` children by `child.properties.name`
-2. For each child type, processes them via `parser.processToken()` into separate capture buffers
-3. Emits runtime code that branches on `state.__hypergenCollectMode`:
-   - **Collect mode**: calls `__hypergenAiCollect(key, contexts, prompt, outputDesc, filename)`
-   - **Answers mode**: emits `out += state.answers[key]`
-
-The `@context` tag (standalone, outside `@ai`):
-- `block: true, seekable: true`
-- Renders body, calls `__hypergenAddGlobalContext(renderedText)`
-
-**Variable namespacing**: Each `@ai` block uses `token.loc.start.line` as suffix to prevent collisions when multiple `@ai` blocks exist in one template.
-
-**Key compile output pattern** (inside `@ai`):
+Two exported functions that shell out to `go run parse_model.go`:
 
 ```javascript
-// --- @ai block at line N ---
-let __aiCtx_N = [];
-let __aiPrompt_N = '';
-let __aiKey_N = '';
-let __aiOutDesc_N = '';
-
-// (children compile here, pushing to the above vars)
-
-if (state.__hypergenCollectMode) {
-  __hypergenAiCollect(__aiKey_N, __aiCtx_N, __aiPrompt_N, __aiOutDesc_N, $filename);
-  // output nothing
-} else {
-  out += (state.answers && state.answers[__aiKey_N]) || '';
-}
+export function listModelFields(modelName)    // → JSON string of fields
+export function listModelRelations(modelName)  // → JSON string of relations
 ```
 
-Child tags (`@context`, `@prompt`, `@output` when inside `@ai`) compile to:
-- `@context`: captures rendered body into `__aiCtx_N.push(renderedText)`
-- `@prompt`: captures rendered body into `__aiPrompt_N = renderedText`
-- `@output`: extracts key from jsArg, captures body: `__aiKey_N = 'myKey'; __aiOutDesc_N = renderedText`
+These will be registered as **Jig globals** (like `snakeCase`, `camelCase`) so templates call `{{ listModelFields(model) }}` directly.
 
-**Important implementation detail**: Child tags need to know they're inside an `@ai` parent. The parent sets a variable `let __insideAi = N` before processing children and clears it after. Child tags check this to know whether to push to scoped vars or call global functions.
+### 3. Move cookbook directory
+
+```
+sandbox/go/recipes/crud/ → sandbox/go/.hypergen/cookbooks/crud/
+```
+
+Delete `sandbox/go/recipes/` after moving.
+
+### 4. Update `sandbox/go/hypergen.config.js`
+
+Point `templates` and `discovery.directories` to `.hypergen/cookbooks`, add `helpers` path.
+
+### 5. Update `recipe.yml`
+
+Remove `modelFields` and `modelRelations` variables — only `model` remains.
+
+### 6. Update templates
+
+Replace `{{ modelFields }}` → `{{ listModelFields(model) }}` and `{{ modelRelations }}` → `{{ listModelRelations(model) }}` in `handler.go.jig` and `edit_page.templ.jig`.
+
+### 7. Update E2E test
+
+- Remove `modelFields` and `modelRelations` from `VARIABLES`
+- In `beforeEach`, after `initializeJig()`, register `listModelFields` and `listModelRelations` as Jig globals via `getJig().global(...)`
+- The test helpers will shell out to `go run` pointing at the real `sandbox/go/.hypergen/helpers/parse_model.go` with cwd set to `sandbox/go/`
+- Copy the Go model files (`organization.go`, `member.go`, `invite.go`, `membership.go`) into `tempDir/internal/model/` so the parser can find them — OR point the helpers at the real `sandbox/go/` path
+- Update template string constants to use `{{ listModelFields(model) }}` and `{{ listModelRelations(model) }}`
+- Test assertions remain unchanged (same output, just different variable source)
+
+**Decision on `projectRoot`**: Since `context.ts` does NOT expose `cwd` to the template, and we don't want to modify hypergen source for this sandbox change, the helpers will be registered as Jig globals that close over the project root (baked in at registration time). Templates call `{{ listModelFields(model) }}` with just the model name. In the test, we bake in the path to the sandbox `internal/model/` directory when registering the globals.
 
 ---
 
-## Files to Modify
+## Files to Create/Modify
 
-### 4. `src/template-engines/jig-engine.ts`
-
-- **Line 39**: Replace `registerAiTag(jig)` call to use new `ai-tags.ts`
-- **Lines 146-155**: Replace `registerAiTag()` function body
-- Register global functions for the compiled tag code:
-  - `__hypergenAiCollect` → delegates to `AiCollector.getInstance().addEntry()`
-  - `__hypergenAddGlobalContext` → delegates to `AiCollector.getInstance().addGlobalContext()`
-- No changes to `renderTemplate()` signature — `answers` and `__hypergenCollectMode` flow through the existing `context` parameter
-
-### 5. `src/lib/flags.ts`
-
-Add to `executionFlags`:
-
-```typescript
-answers: Flags.file({
-  description: 'Path to AI answers JSON file (2-pass generation)',
-}),
-```
-
-### 6. `src/commands/run.ts`
-
-- Add `answers` flag (via `executionFlags` or directly)
-- Before execution: initialize `AiCollector`, set collect mode if no `--answers`
-- If `--answers`: load JSON, pass as `options.answers`
-- After execution: if collect mode and `AiCollector.hasEntries()`, run `PromptAssembler`, write to stdout, exit with code 2
-- If collect mode and no entries: proceed normally (no AI tags found)
-
-### 7. `src/commands/recipe/run.ts`
-
-Same changes as `run.ts`.
-
-### 8. `src/recipe-engine/types.ts`
-
-Add to `StepContext`:
-
-```typescript
-answers?: Record<string, any>
-collectMode?: boolean
-```
-
-### 9. `src/recipe-engine/recipe-engine.ts`
-
-Add to `RecipeExecutionOptions`:
-
-```typescript
-answers?: Record<string, any>
-```
-
-In execution context creation: propagate `answers` and derive `collectMode` from absence of answers + AiCollector state.
-
-### 10. `src/recipe-engine/tools/template-tool.ts`
-
-- In `buildRenderContext()` (~line 541): inject `answers` and `__hypergenCollectMode` into the Jig render context
-- In `onExecute()`: skip file generation when `context.collectMode` is true (still render templates to trigger collection)
-
-### 11. `src/render.ts` (legacy pipeline)
-
-In `renderTmpl()` (~line 38): inject `answers` and `__hypergenCollectMode` into context.
-
-### 12. `src/execute.ts` (legacy pipeline)
-
-Add early return when `config._collectMode` is true — return empty results, write no files.
-
-### 13. `src/template-engines/ai-jig-tag.ts`
-
-Deprecate. Keep file but add `@deprecated` JSDoc. The new `ai-tags.ts` replaces it.
-
-### 14. `src/ai/index.ts`
-
-Export new modules:
-
-```typescript
-export { AiCollector } from './ai-collector.js'
-export { PromptAssembler } from './prompt-assembler.js'
-```
+| File | Action |
+|------|--------|
+| `sandbox/go/.hypergen/helpers/parse_model.go` | **Create** — Go AST parser |
+| `sandbox/go/.hypergen/helpers/index.js` | **Create** — JS wrapper |
+| `sandbox/go/.hypergen/cookbooks/crud/cookbook.yml` | **Move** from `recipes/crud/` |
+| `sandbox/go/.hypergen/cookbooks/crud/edit-page/recipe.yml` | **Move** + remove modelFields/modelRelations vars |
+| `sandbox/go/.hypergen/cookbooks/crud/edit-page/templates/*.jig` | **Move** + update variable refs to helper calls |
+| `sandbox/go/hypergen.config.js` | **Update** |
+| `sandbox/go/recipes/` | **Delete** |
+| `tests/suites/ai/e2e-edit-page-recipe.test.ts` | **Update** |
 
 ---
 
 ## Implementation Order
 
-| Step | File | Complexity | Depends On |
-|------|------|-----------|------------|
-| 1 | `src/ai/ai-collector.ts` | Low | Nothing |
-| 2 | `src/ai/prompt-assembler.ts` | Low | Step 1 |
-| 3 | `src/template-engines/ai-tags.ts` | **High** | Step 1 |
-| 4 | `src/template-engines/jig-engine.ts` | Medium | Step 3 |
-| 5 | `src/template-engines/ai-jig-tag.ts` | Trivial | Step 4 |
-| 6 | `src/lib/flags.ts` | Trivial | Nothing |
-| 7 | `src/recipe-engine/types.ts` | Trivial | Nothing |
-| 8 | `src/recipe-engine/recipe-engine.ts` | Low | Step 7 |
-| 9 | `src/recipe-engine/tools/template-tool.ts` | Medium | Steps 4, 7, 8 |
-| 10 | `src/render.ts` + `src/execute.ts` | Low | Step 4 |
-| 11 | `src/commands/run.ts` + `recipe/run.ts` | Medium | Steps 1, 2, 6 |
-| 12 | `src/ai/index.ts` | Trivial | Steps 1, 2 |
-| 13 | Tests | Medium | All above |
-
-Steps 1-2 and 6-7 can be done in parallel. Step 3 is the critical path.
+1. Create `sandbox/go/.hypergen/helpers/parse_model.go`
+2. Test it: `cd sandbox/go && go run .hypergen/helpers/parse_model.go Organization`
+3. Create `sandbox/go/.hypergen/helpers/index.js`
+4. Move `sandbox/go/recipes/crud/` → `sandbox/go/.hypergen/cookbooks/crud/`
+5. Delete `sandbox/go/recipes/`
+6. Update `sandbox/go/hypergen.config.js`
+7. Update `recipe.yml` — remove modelFields/modelRelations variables
+8. Update templates — replace variable refs with helper calls
+9. Update E2E test — register helpers as Jig globals, update template constants, update VARIABLES
+10. Run tests, verify
 
 ---
 
-## Testing Strategy
+## Verification
 
-### Unit Tests
-
-| Test File | Covers |
-|-----------|--------|
-| `tests/suites/ai/ai-collector.test.ts` | Singleton, addEntry, addGlobalContext, collectMode, clear, hasEntries, duplicate key handling |
-| `tests/suites/ai/prompt-assembler.test.ts` | Markdown output format, all keys present, callback command, global vs scoped context |
-| `tests/template-engines/ai-tags.test.ts` | Collect mode collection, answers mode resolution, @context outside @ai, multiple @ai blocks, variable interpolation inside tags |
-
-### Integration Tests
-
-| Test File | Covers |
-|-----------|--------|
-| `tests/suites/ai/two-pass-integration.test.ts` | Full Pass 1 → stdout prompt → Pass 2 → files written |
-
-### Test Fixtures
-
-```
-tests/fixtures/ai-2pass/
-  basic.jig.t               — Single @ai block with all 3 child tags
-  multi-block.jig.t          — Multiple @ai blocks with different keys
-  global-context.jig.t       — @context outside @ai (global)
-  no-ai.jig.t                — Template without @ai (unchanged behavior)
-  nested-vars.jig.t          — {{ name }} inside @prompt body
-  answers.json               — Sample answers for Pass 2 tests
-```
-
-### Verification Steps
-
-1. Create a test template with `@ai`/`@context`/`@prompt`/`@output`
-2. Run `bun run hypergen run ./test-recipe` — verify markdown prompt on stdout, exit code 2, no files
-3. Create `answers.json` with the expected keys
-4. Run `bun run hypergen run ./test-recipe --answers ./answers.json` — verify files written with answer content
-5. Run `bun test` — all existing tests still pass
-6. Run new test suites
-
----
-
-## Design Decisions
-
-1. **Singleton AiCollector** — Matches existing AiService pattern. Avoids threading collector through every function. Requires `.clear()` at execution start.
-
-2. **Exit code 2** — Distinct from 0 (success) and 1 (error). Scripts/agents can detect "AI needed" programmatically.
-
-3. **Child tags compile to scoped variables** — `__aiCtx_N`, `__aiPrompt_N` etc. use line number suffix. Parent `@ai` tag orchestrates capture/dispatch. This avoids runtime registry lookups.
-
-4. **`@context` dual behavior** — Inside `@ai`: scoped. Outside `@ai`: global. Determined at compile time by checking `__insideAi` variable.
-
-5. **Existing AI infrastructure untouched** — `AiService`, `ModelRouter`, `CostTracker`, recipe `tool: ai` steps all continue to work as-is. The 2-pass system is a parallel path for template `@ai` blocks only.
-
-6. **Prompt delivery decoupled** — `PromptAssembler` produces text. The CLI writes it to stdout. Future: API call, pipe to process, etc. — just different consumers of the same assembled prompt.
+1. `cd sandbox/go && go run .hypergen/helpers/parse_model.go Organization` → valid JSON with 9 fields and 3 relations
+2. `bun test tests/suites/ai/e2e-edit-page-recipe.test.ts` → all 15 tests pass
+3. `bun test tests/suites/ai/` → no regressions (89 tests)

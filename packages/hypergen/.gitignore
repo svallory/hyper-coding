@@ -76,6 +76,5 @@ node_modules
 yarn-error.log
 # Project
 dist/
-sandbox/
 standalone/
 .yarn

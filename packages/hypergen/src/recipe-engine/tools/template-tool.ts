@@ -595,7 +595,9 @@ export class TemplateTool extends Tool<TemplateStep> {
       helpers: context.utils || {}
     } as any)
 
-    return {
+    this.debug('baseContext.h keys: %o', Object.keys(baseContext.h || {}))
+
+    const renderContext = {
       ...baseContext,
       // Recipe-specific context
       recipe: context.recipe,
@@ -610,7 +612,14 @@ export class TemplateTool extends Tool<TemplateStep> {
       // 2-pass AI generation state
       answers: context.answers,
       __hypergenCollectMode: context.collectMode || false,
+      // Spread helpers from baseContext.h at top level so templates can call them directly
+      ...(baseContext.h || {}),
     }
+
+    this.debug('Building Jig context: collectMode=%s, __hypergenCollectMode=%s, renderContext has listModelFields=%s',
+      context.collectMode, renderContext.__hypergenCollectMode, 'listModelFields' in renderContext)
+
+    return renderContext
   }
 
   /**
