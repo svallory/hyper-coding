@@ -97,7 +97,7 @@ import (
 )
 
 type {{ model }}EditHandler struct {
-@ai()
+@ai({ key: 'handlerDeps' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -110,14 +110,16 @@ this edit handler needs as Go struct fields (unexported, pointer to service type
 Include only the service for the model itself. Format: one field per line.
 Example: \`svc *service.OrganizationService\`
   @end
-  @output({ key: 'handlerDeps' })
+  @output()
+    @example()
 	svc *service.{{ model }}Service
+    @end
   @end
 @end
 }
 
 func New{{ model }}EditHandler(
-@ai()
+@ai({ key: 'constructorParams' })
   @context()
 Handler constructor for {{ model }}EditHandler.
   @end
@@ -125,13 +127,15 @@ Handler constructor for {{ model }}EditHandler.
 List the constructor parameters matching the struct fields above.
 Format: one param per line as \`paramName *service.ServiceType,\`
   @end
-  @output({ key: 'constructorParams' })
+  @output()
+    @example()
 	svc *service.{{ model }}Service,
+    @end
   @end
 @end
 ) *{{ model }}EditHandler {
 	return &{{ model }}EditHandler{
-@ai()
+@ai({ key: 'constructorAssign' })
   @context()
 Assign constructor params to struct fields.
   @end
@@ -139,8 +143,10 @@ Assign constructor params to struct fields.
 List the field assignments matching the constructor params above.
 Format: one assignment per line as \`fieldName: paramName,\`
   @end
-  @output({ key: 'constructorAssign' })
+  @output()
+    @example()
 		svc: svc,
+    @end
   @end
 @end
 	}
@@ -154,7 +160,7 @@ func (h *{{ model }}EditHandler) EditPage(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-@ai()
+@ai({ key: 'editPageBody' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -166,7 +172,8 @@ Write the handler body to load {{ model }} by ID and render the edit page.
 Call h.svc (or appropriate service) to fetch the entity. Handle errors.
 Return only the Go statements (no func signature).
   @end
-  @output({ key: 'editPageBody' })
+  @output()
+    @example()
 	entity, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		slog.Error("failed to load {{ snakeCase(model) }}", "error", err, "id", id)
@@ -175,6 +182,7 @@ Return only the Go statements (no func signature).
 	}
 
 	ui.Render(w, r, pages.App{{ model }}Edit(entity))
+    @end
   @end
 @end
 }
@@ -192,7 +200,7 @@ func (h *{{ model }}EditHandler) Update(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-@ai()
+@ai({ key: 'updateBody' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -207,7 +215,8 @@ Write the handler body to update a {{ model }}.
 Extract editable form values, validate required fields, call the service, show snackbar.
 Return only the Go statements (no func signature).
   @end
-  @output({ key: 'updateBody' })
+  @output()
+    @example()
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name == "" {
 		ui.ShowSnackbar(w, "Name is required")
@@ -221,6 +230,7 @@ Return only the Go statements (no func signature).
 	}
 
 	ui.ShowSnackbar(w, "{{ model }} updated")
+    @end
   @end
 @end
 }
@@ -253,7 +263,7 @@ templ App{{ model }}Edit(entity *model.{{ model }}) {
 			>
 				@csrf.Token()
 
-@ai()
+@ai({ key: 'formFields' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -268,7 +278,8 @@ Use proper input types (text, email, url, number, etc.) based on field types.
 Skip non-editable fields (ID, timestamps, status, computed fields).
 Return only the templ markup (no package/import/function wrapper).
   @end
-  @output({ key: 'formFields' })
+  @output()
+    @example()
 				<div class="space-y-2">
 					@label.Label(label.Props{For: "name"}) { Name }
 					@input.Input(input.Props{
@@ -279,6 +290,7 @@ Return only the templ markup (no package/import/function wrapper).
 						Required: true,
 					})
 				</div>
+    @end
   @end
 @end
 

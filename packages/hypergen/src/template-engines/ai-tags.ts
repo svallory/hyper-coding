@@ -4,18 +4,19 @@
  * Registers @ai, @context, @prompt, and @output tags with the Jig (Edge.js) engine.
  *
  * In the 2-pass system:
- *   Pass 1 (collect mode): @ai blocks collect prompt/context/output specs
- *          via __hypergenAiCollect. No output is produced.
- *   Pass 2 (answers mode): @ai blocks resolve from state.answers[key].
+ *   Pass 1 (collect mode): @ai blocks render their children to collect
+ *          prompt/context/output specs via __hypergenAiCollect. No template
+ *          output is produced.
+ *   Pass 2 (answers mode): @ai blocks skip children entirely and resolve
+ *          from state.answers[key]. This prevents errors from variables
+ *          that only exist during collection.
  *
  * @context outside @ai adds global context via __hypergenAddGlobalContext.
  *
  * Compile strategy:
- *   The @ai tag creates a runtime object (__aiBlock) for collecting child data.
- *   Child tags (@context, @prompt, @output) reference __aiBlock to push data.
- *   After children run, @ai either collects (pass 1) or outputs answers (pass 2).
- *   The __aiBlock variable is scoped by the enclosing @ai tag's braces, so
- *   multiple @ai blocks don't collide.
+ *   The @ai tag extracts the `key` from its own argument (e.g. @ai({ key: 'x' })).
+ *   Children are compiled into a conditional block that only runs during Pass 1.
+ *   In Pass 2, the tag skips children and outputs state.answers[key] directly.
  */
 
 import type { Edge } from '@jig-lang/jig'
@@ -31,14 +32,20 @@ export function registerAiTags(edge: Edge): void {
   registerContextTag(edge)
   registerPromptTag(edge)
   registerOutputTag(edge)
-  debug('Registered @ai, @context, @prompt, @output tags')
+  registerExampleTag(edge)
+  debug('Registered @ai, @context, @prompt, @output, @example tags')
 }
 
 /**
  * @ai — Block container for AI generation.
  *
- * Creates a runtime scope with __aiBlock, processes children, then
- * either collects (pass 1) or outputs answers (pass 2).
+ * Usage: @ai({ key: 'myKey' })
+ *
+ * The key identifies this AI block across both passes. It is required.
+ *
+ * Pass 1 (collect): renders children to populate __aiBlock, then calls
+ *   __hypergenAiCollect with the collected data. Produces no template output.
+ * Pass 2 (resolve): skips children entirely, outputs state.answers[key].
  */
 function registerAiTag(edge: Edge): void {
   edge.registerTag({
@@ -48,45 +55,67 @@ function registerAiTag(edge: Edge): void {
 
     compile(parser, buffer, token) {
       const line = token.loc.start.line
+      const jsArg = token.properties.jsArg.trim()
 
-      // Open a block scope so __aiBlock doesn't leak between @ai blocks
+      // Open a block scope so variables don't leak between @ai blocks
       buffer.writeStatement(`{`, token.filename, line)
 
-      // Create the block data object that child tags will populate
-      buffer.writeStatement(
-        `let __aiBlock = { contexts: [], prompt: '', key: '', outputDesc: '' };`,
-        token.filename, line
-      )
-
-      // Process children — @context/@prompt/@output tags will populate __aiBlock
-      for (const child of token.children) {
-        parser.processToken(child, buffer)
+      // Extract key from @ai argument at runtime
+      // Supports: @ai({ key: 'x' }) or @ai('x')
+      if (jsArg) {
+        buffer.writeStatement(
+          `let __aiArgs = ${jsArg};`,
+          token.filename, line
+        )
+        buffer.writeStatement(
+          `let __aiKey = (typeof __aiArgs === 'string') ? __aiArgs : (__aiArgs.key || '');`,
+          token.filename, line
+        )
+      } else {
+        buffer.writeStatement(
+          `let __aiKey = '';`,
+          token.filename, line
+        )
       }
 
-      // Runtime dispatch: collect or resolve
-      // Globals registered via edge.global() are accessed via state.<name>
       const escapedFilename = JSON.stringify(token.filename || 'unknown')
+
+      // --- Pass 1: collect mode — render children, collect data ---
       buffer.writeStatement(
         `if (state.__hypergenCollectMode) {`,
         token.filename, line
       )
+
+      // Create the block data object that child tags will populate
       buffer.writeStatement(
-        `  state.__hypergenAiCollect(__aiBlock.key, __aiBlock.contexts, __aiBlock.prompt, __aiBlock.outputDesc, ${escapedFilename});`,
+        `  let __aiBlock = { contexts: [], prompt: '', key: __aiKey, outputDesc: '', typeHint: '', examples: [] };`,
         token.filename, line
       )
-      // Set the output key as a state variable with the default output value
-      // so templates that reference the key (e.g. @let(x = JSON.parse(myKey)))
-      // can still render during pass 1
+
+      // Process children inside the collect-mode branch only
+      for (const child of token.children) {
+        parser.processToken(child, buffer)
+      }
+
+      // Collect the block
       buffer.writeStatement(
-        `  if (__aiBlock.key) { state[__aiBlock.key] = __aiBlock.outputDesc.trim(); }`,
+        `  state.__hypergenAiCollect(__aiBlock.key, __aiBlock.contexts, __aiBlock.prompt, __aiBlock.outputDesc, __aiBlock.typeHint, __aiBlock.examples, ${escapedFilename});`,
         token.filename, line
       )
+      // Set the key as a state variable with the first example's value
+      // so templates that reference the key can still render during pass 1
+      buffer.writeStatement(
+        `  if (__aiBlock.key) { state[__aiBlock.key] = (__aiBlock.examples.length > 0 ? __aiBlock.examples[0].trim() : __aiBlock.outputDesc.trim()); }`,
+        token.filename, line
+      )
+
+      // --- Pass 2: answers mode — skip children, output answer ---
       buffer.writeStatement(
         `} else {`,
         token.filename, -1
       )
       buffer.writeStatement(
-        `  let __aiAnswer = (state.answers && state.answers[__aiBlock.key]) || '';`,
+        `  let __aiAnswer = (state.answers && state.answers[__aiKey]) || '';`,
         token.filename, line
       )
       buffer.writeStatement(
@@ -95,7 +124,7 @@ function registerAiTag(edge: Edge): void {
       )
       // Also set the key as a state variable for downstream usage
       buffer.writeStatement(
-        `  if (__aiBlock.key) { state[__aiBlock.key] = __aiAnswer; }`,
+        `  if (__aiKey) { state[__aiKey] = __aiAnswer; }`,
         token.filename, line
       )
       buffer.writeStatement(
@@ -209,8 +238,10 @@ function registerPromptTag(edge: Edge): void {
 /**
  * @output — Block tag (inside @ai only).
  *
- * Takes { key: 'myKey' } argument. Captures rendered body as format hint.
- * Sets __aiBlock.key and __aiBlock.outputDesc.
+ * Takes optional { typeHint: 'jsx-fragment' } argument.
+ * The body is a free-form description of the expected output format.
+ * Use @example child tags inside @output to provide concrete examples.
+ * Sets __aiBlock.outputDesc and __aiBlock.typeHint.
  */
 function registerOutputTag(edge: Edge): void {
   edge.registerTag({
@@ -244,13 +275,13 @@ function registerOutputTag(edge: Edge): void {
       )
 
       if (jsArg) {
-        // Parse argument — supports { key: 'myKey' } or just 'myKey'
         buffer.writeStatement(
           `  let __oArgs_${line} = ${jsArg};`,
           token.filename, line
         )
+        // Extract typeHint from argument object
         buffer.writeStatement(
-          `  __aiBlock.key = (typeof __oArgs_${line} === 'string') ? __oArgs_${line} : (__oArgs_${line}.key || '');`,
+          `  if (typeof __oArgs_${line} === 'object' && __oArgs_${line}.typeHint) { __aiBlock.typeHint = __oArgs_${line}.typeHint; }`,
           token.filename, line
         )
       }
@@ -260,6 +291,55 @@ function registerOutputTag(edge: Edge): void {
         token.filename, line
       )
 
+      buffer.writeStatement(`}`, token.filename, -1)
+    },
+  })
+}
+
+/**
+ * @example — Block tag (inside @ai only).
+ *
+ * Captures rendered body as a concrete example of expected output.
+ * Multiple @example tags per @ai block are allowed — each is appended
+ * to __aiBlock.examples[].
+ *
+ * The first example's body also serves as the default value for the key
+ * variable during Pass 1, enabling downstream template code that references
+ * the key to render during collection.
+ */
+function registerExampleTag(edge: Edge): void {
+  edge.registerTag({
+    tagName: 'example',
+    block: true,
+    seekable: true,
+
+    compile(parser, buffer, token) {
+      const line = token.loc.start.line
+
+      const captureVar = `__exampleBody_${line}`
+      const childBuffer = buffer.create(token.filename, { outputVar: captureVar })
+
+      for (const child of token.children) {
+        parser.processToken(child, childBuffer)
+      }
+
+      buffer.writeStatement(
+        childBuffer
+          .disableFileAndLineVariables()
+          .disableReturnStatement()
+          .disableTryCatchBlock()
+          .flush(),
+        token.filename, line
+      )
+
+      buffer.writeStatement(
+        `if (typeof __aiBlock !== 'undefined') {`,
+        token.filename, line
+      )
+      buffer.writeStatement(
+        `  __aiBlock.examples.push(${captureVar});`,
+        token.filename, line
+      )
       buffer.writeStatement(`}`, token.filename, -1)
     },
   })

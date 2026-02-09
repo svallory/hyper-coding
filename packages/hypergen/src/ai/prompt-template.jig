@@ -34,6 +34,16 @@
 
 {{ entry.outputDescription }}
 @end
+@if(entry.examples.length > 0)
+
+**Example{{ entry.examples.length > 1 ? 's' : '' }}:**
+@each(ex in entry.examples)
+
+```
+{{ ex }}
+```
+@end
+@end
 @end
 
 ## Response Format

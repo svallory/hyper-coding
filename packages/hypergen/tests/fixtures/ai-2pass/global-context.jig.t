@@ -6,12 +6,14 @@ to: "output/{{ name }}.ts"
   Database: PostgreSQL.
 @end
 
-@ai()
+@ai({ key: 'repository' })
   @prompt()
     Generate a repository for {{ name }}
   @end
 
-  @output({ key: 'repository' })
+  @output()
+    @example()
     class NameRepository { ... }
+    @end
   @end
 @end

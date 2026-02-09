@@ -49,12 +49,14 @@ describe('Template Tool Collector Integration', () => {
     writeFileSync(templatePath, `---
 to: "test.ts"
 ---
-@ai()
+@ai({ key: 'test' })
   @prompt()
 Generate something
   @end
-  @output({ key: 'test' })
+  @output()
+    @example()
 Default output
+    @end
   @end
 @end`)
 
@@ -114,12 +116,14 @@ Default output
     writeFileSync(templatePath, `---
 to: "test.ts"
 ---
-@ai()
+@ai({ key: 'test' })
   @prompt()
 Test
   @end
-  @output({ key: 'test' })
+  @output()
+    @example()
 Default
+    @end
   @end
 @end`)
 
@@ -179,7 +183,7 @@ Default
     writeFileSync(templatePath, `---
 to: "test.ts"
 ---
-@ai()
+@ai({ key: 'code' })
   @context()
 Model: {{ model }}
 Feature: {{ feature }}
@@ -188,8 +192,10 @@ Helper output: {{ getFields(model) }}
   @prompt()
 Generate code
   @end
-  @output({ key: 'code' })
+  @output()
+    @example()
 Default
+    @end
   @end
 @end`)
 
@@ -244,12 +250,14 @@ Default
       writeFileSync(templatePath, `---
 to: "test-${i}.ts"
 ---
-@ai()
+@ai({ key: 'test${i}' })
   @prompt()
 Test ${i}
   @end
-  @output({ key: 'test${i}' })
+  @output()
+    @example()
 Output ${i}
+    @end
   @end
 @end`)
     }
@@ -306,15 +314,17 @@ Output ${i}
     writeFileSync(templatePath, `---
 to: "test.ts"
 ---
-@ai()
+@ai({ key: 'handler' })
   @context()
 Model: {{ model }}
   @end
   @prompt()
 Generate handler
   @end
-  @output({ key: 'handler' })
+  @output()
+    @example()
 Default handler
+    @end
   @end
 @end`)
 

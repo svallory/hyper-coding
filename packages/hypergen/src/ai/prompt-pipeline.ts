@@ -67,7 +67,7 @@ export class PromptPipeline {
     debug('Starting prompt pipeline')
 
     // Stage 1: Template rendering is done before this pipeline is called
-    // (by the AiTool or ai-jig-tag, which have access to the Jig engine)
+    // (by the AiTool or @ai template tags, which have access to the Jig engine)
 
     // Stage 2: Context collection
     const contextBundle = await this.contextCollector.collect(

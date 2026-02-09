@@ -158,6 +158,8 @@ function registerAi2PassTags(edge: Edge): void {
       contexts: string[],
       prompt: string,
       outputDesc: string,
+      typeHint: string,
+      examples: string[],
       sourceFile: string
     ) => {
       collector.addEntry({
@@ -165,6 +167,8 @@ function registerAi2PassTags(edge: Edge): void {
         contexts: contexts.filter(c => c.trim()),
         prompt: prompt.trim(),
         outputDescription: outputDesc.trim(),
+        typeHint: typeHint || '',
+        examples: (examples || []).filter(e => e.trim()).map(e => e.trim()),
         sourceFile: sourceFile || 'unknown',
       })
     })

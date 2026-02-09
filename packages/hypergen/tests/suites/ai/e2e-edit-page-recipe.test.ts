@@ -60,7 +60,7 @@ Pattern: handlers receive services via DI, use ctxkeys for request context.
 @end
 
 type {{ model }}EditHandler struct {
-@ai()
+@ai({ key: 'handlerDeps' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -71,14 +71,16 @@ Given the {{ model }} fields and relations, list the service dependencies
 this handler needs (one per line, as Go struct fields).
 Only include services for the model itself and its direct relations.
   @end
-  @output({ key: 'handlerDeps' })
+  @output()
+    @example()
 \tsvc *service.{{ model }}Service
+    @end
   @end
 @end
 }
 
 func (h *{{ model }}EditHandler) EditPage(w http.ResponseWriter, r *http.Request) {
-@ai()
+@ai({ key: 'editPageHandler' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -90,14 +92,16 @@ Load the entity by ID from URL path, load related data needed for the edit form,
 then render the templ page. Use slog for errors. Follow the existing handler pattern.
 Return only the function body (no signature).
   @end
-  @output({ key: 'editPageHandler' })
+  @output()
+    @example()
 \t// Load entity, render pages.{{ model }}EditPage(entity)
+    @end
   @end
 @end
 }
 
 func (h *{{ model }}EditHandler) Update(w http.ResponseWriter, r *http.Request) {
-@ai()
+@ai({ key: 'updateHandler' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -108,8 +112,10 @@ Parse the form, validate inputs, call the service to update, then redirect.
 Only update user-editable fields (skip ID, timestamps, computed fields).
 Return only the function body (no signature).
   @end
-  @output({ key: 'updateHandler' })
+  @output()
+    @example()
 \t// Parse form, validate, update, redirect
+    @end
   @end
 @end
 }
@@ -130,7 +136,7 @@ import (
 \t"github.com/hlibco/gostart/internal/ui/layouts"
 )
 
-@ai()
+@ai({ key: 'editableFields' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -144,8 +150,10 @@ Exclude: ID, timestamps (created_at, updated_at), computed/internal fields.
 Include: user-facing text fields, enums (as selects), optional fields.
 Return as a JSON array of field names.
   @end
-  @output({ key: 'editableFields' })
+  @output()
+    @example()
 ["name"]
+    @end
   @end
 @end
 
@@ -161,7 +169,7 @@ templ App{{ model }}Edit(entity *model.{{ model }}) {
 \t\t\t\t\tclass="space-y-6"
 \t\t\t\t>
 \t\t\t\t\t@csrf.Token()
-@ai()
+@ai({ key: 'formBody' })
   @context()
 Model: {{ model }}
 Fields: {{ listModelFields(model) }}
@@ -176,11 +184,13 @@ Use proper input types (text, email, url, number, etc.) based on field types.
 For enum fields, use a select element.
 Return only the templ markup (no package/import/function wrapper).
   @end
-  @output({ key: 'formBody' })
+  @output()
+    @example()
 \t\t\t\t\t<div class="space-y-2">
 \t\t\t\t\t\t@label.Label(label.Props{For: "name"}) { Name }
 \t\t\t\t\t\t@input.Input(input.Props{ID: "name", Name: "name", Type: input.TypeText, Value: entity.Name})
 \t\t\t\t\t</div>
+    @end
   @end
 @end
 \t\t\t\t\t<div class="flex justify-end gap-2 pt-4">

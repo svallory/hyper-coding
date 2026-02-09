@@ -1,78 +1,113 @@
 ---
 title: AI Jig Tags Reference
-description: Complete reference for @ai, @context, @prompt, and @output template tags
-time: 8 minutes
+description: Complete reference for @ai, @context, @prompt, @output, and @example template tags
+time: 10 minutes
 prerequisites: Understanding of Jig template syntax and the 2-pass overview
 ---
 
 # AI Jig Tags Reference
 
 **What you'll learn**: How to use each AI tag, their behavior in each pass, and the rules for combining them
-**Time needed**: 8 minutes
+**Time needed**: 10 minutes
 **Prerequisites**: [Jig syntax basics](/tutorials/creating-templates), [2-pass overview](/guides/ai-integration/overview)
 
 ## Tag Summary
 
 | Tag | Block? | Location | Purpose |
 |-----|--------|----------|---------|
-| `@ai()` | Yes | Template body | Container for an AI generation block |
+| `@ai({ key })` | Yes | Template body | Container for an AI generation block, identified by key |
 | `@context()` | Yes | Inside `@ai` or standalone | Provide information the AI needs |
 | `@prompt()` | Yes | Inside `@ai` only | The question or instruction for the AI |
-| `@output()` | Yes | Inside `@ai` only | Name the answer key and provide a format example |
+| `@output()` | Yes | Inside `@ai` only | Describe the expected output format and provide examples |
+| `@example()` | Yes | Inside `@output` only | A concrete example of expected output |
 
-All four tags are **block tags** — they have a body between the opening tag and `@end`.
+All five tags are **block tags** — they have a body between the opening tag and `@end`.
 
 ---
 
 ## `@ai()`
 
-The container tag. Groups a context, prompt, and output specification into a single AI generation unit.
+The container tag. Groups a context, prompt, and output specification into a single AI generation unit. The `key` argument identifies this block across both passes.
 
 ### Syntax
 
 ```jig
-@ai()
+@ai({ key: 'myKey' })
   {{-- child tags go here --}}
 @end
 ```
 
-`@ai` takes no arguments. Its children must include at least `@output` (to name the key) and typically `@prompt`.
+Or with a plain string key:
+
+```jig
+@ai('myKey')
+  {{-- child tags go here --}}
+@end
+```
+
+### The `key` Parameter
+
+The key is **required** and serves three purposes:
+
+1. **JSON property name**: In the answers file, this is the property the AI fills in
+2. **Template variable**: During both passes, the key is set as a template variable — in Pass 1 with the first `@example` value, in Pass 2 with the actual answer
+3. **Prompt document heading**: Each key gets its own section in the generated prompt
+
+Keys must be unique across all `@ai` blocks in a single recipe run. Use descriptive names:
+
+```jig
+{{-- Good keys --}}
+@ai({ key: 'cardFields' })
+@ai({ key: 'validationRules' })
+@ai({ key: 'migrationSQL' })
+
+{{-- Avoid generic keys --}}
+@ai({ key: 'code' })
+@ai({ key: 'result' })
+```
 
 ### Behavior
 
 **Pass 1 (collect mode)**:
-- Processes all child tags to populate an internal block object
-- Calls the collector with the gathered context, prompt, output key, and format hint
-- Sets the output key as a template variable with the format hint as its value, so downstream template code that references the key can still render
+- Renders all child tags (`@context`, `@prompt`, `@output`, `@example`) to populate an internal block object
+- Calls the collector with the gathered context, prompt, output description, examples, and type hint
+- Sets the key as a template variable with the first `@example` value, so downstream template code that references the key can still render
 - Produces **no output** in the rendered template
 
 **Pass 2 (answers mode)**:
+- **Skips all child tags entirely** — they are not rendered at all
 - Looks up the answer by key from the provided answers object
 - Outputs the answer text in place of the entire `@ai` block
 - Also sets the key as a template variable for downstream use
 
+This design is intentional: children may reference variables (like helper functions or context data) that are only available during collection. Skipping children in Pass 2 prevents errors from undefined variables.
+
 ### Multiple Blocks
 
-You can have multiple `@ai` blocks in a single template. Each must have a unique key (via `@output`):
+You can have multiple `@ai` blocks in a single template. Each must have a unique key:
 
 ```jig
 // Fields:
-@ai()
+@ai({ key: 'fields' })
   @prompt()
     List the main fields for {{ name }}
   @end
-  @output({ key: 'fields' })
+  @output()
+    @example()
     field1, field2, field3
+    @end
   @end
 @end
 
 // Relations:
-@ai()
+@ai({ key: 'relations' })
   @prompt()
     List the relationships for {{ name }}
   @end
-  @output({ key: 'relations' })
+  @output()
+    @example()
     hasMany: [], belongsTo: []
+    @end
   @end
 @end
 ```
@@ -81,7 +116,7 @@ If two `@ai` blocks use the same key, the later one overwrites the earlier one (
 
 ### Scoping
 
-Each `@ai` block creates its own JavaScript scope. The internal `__aiBlock` variable does not leak between blocks, so multiple `@ai` tags in one template are safe.
+Each `@ai` block creates its own JavaScript scope. Internal variables do not leak between blocks, so multiple `@ai` tags in one template are safe.
 
 ---
 
@@ -102,7 +137,7 @@ Provides information the AI needs to make a good decision. The body is rendered 
 When nested inside an `@ai` block, the context is associated with that specific block. You can have multiple `@context` tags per block:
 
 ```jig
-@ai()
+@ai({ key: 'repository' })
   @context()
     The {{ name }} model has these fields:
     {{ JSON.stringify(fields, null, 2) }}
@@ -116,8 +151,10 @@ When nested inside an `@ai` block, the context is associated with that specific 
     Generate a repository class.
   @end
 
-  @output({ key: 'repository' })
+  @output()
+    @example()
     class NameRepository { ... }
+    @end
   @end
 @end
 ```
@@ -134,12 +171,14 @@ When `@context` appears **outside** any `@ai` block, it becomes **global context
   Database: PostgreSQL.
 @end
 
-@ai()
+@ai({ key: 'repository' })
   @prompt()
     Generate a repository for {{ name }}
   @end
-  @output({ key: 'repository' })
+  @output()
+    @example()
     class NameRepository { ... }
+    @end
   @end
 @end
 ```
@@ -192,62 +231,130 @@ Be specific about:
 
 ## `@output()`
 
-Names the answer key and provides a format example. This is how Hypergen knows where to store and retrieve the AI's answer.
+Describes the expected output format and contains `@example` tags with concrete examples. The body text (outside `@example` children) becomes a free-form format description. Each `@output` should contain at least one `@example`.
 
 ### Syntax
 
 ```jig
-@output({ key: 'myKey' })
-  Example of expected output format
+@output()
+  @example()
+    ["fieldName1", "fieldName2"]
+  @end
 @end
 ```
 
-Or with a plain string key:
+With a format description and type hint:
 
 ```jig
-@output('myKey')
-  Example output
+@output({ typeHint: 'json' })
+  A JSON array of field name strings.
+  @example()
+    ["name", "email"]
+  @end
 @end
 ```
 
-### The `key` Parameter
+### The `typeHint` Parameter
 
-The key serves three purposes:
+An optional, free-form string that describes what kind of output is expected. This is advisory — it helps the prompt assembler add formatting constraints and may enable validation in the future.
 
-1. **JSON property name**: In the answers file, this is the property the AI fills in
-2. **Template variable**: During both passes, the key is set as a template variable — in Pass 1 with the format hint value, in Pass 2 with the actual answer
-3. **Prompt document heading**: Each key gets its own section in the generated prompt
-
-Keys must be unique across all `@ai` blocks in a single recipe run. Use descriptive names:
+Common values: `'json'`, `'typescript'`, `'jsx-fragment'`, `'sql'`, `'go'`, `'markdown'`
 
 ```jig
-{{-- Good keys --}}
-@output({ key: 'cardFields' })
-@output({ key: 'validationRules' })
-@output({ key: 'migrationSQL' })
-
-{{-- Avoid generic keys --}}
-@output({ key: 'code' })
-@output({ key: 'result' })
-```
-
-### The Body (Format Hint)
-
-The body of `@output` is rendered and used as a **format example** in the prompt document. It shows the AI what shape the answer should take:
-
-```jig
-@output({ key: 'mainFields' })
-  ["fieldName1", "fieldName2"]
+@ai({ key: 'editableFields' })
+  @prompt()
+    Which fields should appear on the edit form?
+    Return as a JSON array of field names.
+  @end
+  @output({ typeHint: 'json' })
+    @example()
+    ["name", "email"]
+    @end
+  @end
 @end
 ```
 
-The format hint also becomes the **default value** for the key variable during Pass 1. This means templates that reference the key downstream (e.g., `@let(parsed = JSON.parse(mainFields))`) can still render during collection.
+### The Body (Format Description)
+
+The body of `@output` — the text outside any `@example` children — is a free-form description of the expected output format. It's rendered and included in the prompt document:
+
+```jig
+@output({ typeHint: 'typescript' })
+  A TypeScript interface with JSDoc comments on each field.
+  @example()
+  interface UserResponse {
+    /** Unique identifier */
+    id: string;
+    /** Full display name */
+    name: string;
+  }
+  @end
+@end
+```
 
 ### Rules
 
 - Must be inside an `@ai` block
 - One `@output` per `@ai` block (last one wins if multiple)
-- The key argument is required — without it, the block has no way to store/retrieve its answer
+- Should contain at least one `@example`
+
+---
+
+## `@example()`
+
+Provides a concrete example of expected output. Must be inside `@output`. Multiple `@example` tags are allowed — each is collected separately.
+
+### Syntax
+
+```jig
+@example()
+  concrete example content here
+@end
+```
+
+### Purpose
+
+The `@example` tag serves two purposes:
+
+1. **Prompt guidance**: Examples are rendered in the prompt document under the key's heading, showing the AI exactly what shape the answer should take
+2. **Pass 1 default value**: The first `@example`'s content becomes the default value for the key variable during Pass 1, so downstream template code that references the key (e.g., `@let(parsed = JSON.parse(mainFields))`) can still render during collection
+
+### Multiple Examples
+
+You can provide multiple examples to better illustrate the expected output:
+
+```jig
+@ai({ key: 'validationRules' })
+  @prompt()
+    Generate Zod validation rules for the {{ name }} model.
+  @end
+  @output({ typeHint: 'typescript' })
+    @example()
+    z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+    })
+    @end
+    @example()
+    z.object({
+      title: z.string().min(1).max(100),
+      priority: z.enum(['low', 'medium', 'high']),
+      dueDate: z.date().optional(),
+    })
+    @end
+  @end
+@end
+```
+
+### Jig Expressions in Examples
+
+The body of `@example` is rendered as Jig — variables and expressions work:
+
+```jig
+@example()
+  CREATE TABLE {{ snakeCase(name) }} (...);
+@end
+```
 
 ---
 
@@ -261,7 +368,7 @@ Here's the canonical structure of an `@ai` block with all tags:
   Project-wide information here.
 @end
 
-@ai()
+@ai({ key: 'uniqueKey' })
   {{-- Block-specific context (0 or more) --}}
   @context()
     Information specific to this generation task.
@@ -273,44 +380,72 @@ Here's the canonical structure of an `@ai` block with all tags:
     What to generate or decide.
   @end
 
-  {{-- The output spec (exactly 1, with key) --}}
-  @output({ key: 'uniqueKey' })
-    Example of expected format
+  {{-- The output spec (exactly 1, with optional typeHint) --}}
+  @output({ typeHint: 'typescript' })
+    {{-- Optional format description --}}
+    A TypeScript class with constructor injection.
+    {{-- At least one example --}}
+    @example()
+    class NameService {
+      constructor(private repo: NameRepository) {}
+    }
+    @end
   @end
 @end
 ```
 
 ### Minimal Block
 
-The only strictly required child is `@output` (for the key). In practice, you always want `@prompt` too:
+The only strictly required parts are the key on `@ai`, a `@prompt`, and an `@output` with at least one `@example`:
 
 ```jig
-@ai()
+@ai({ key: 'greeting' })
   @prompt()
     Generate a greeting for {{ name }}
   @end
-  @output({ key: 'greeting' })
+  @output()
+    @example()
     Hello, World!
+    @end
   @end
 @end
 ```
 
 ### Using the Answer Downstream
 
-Since `@output` sets the key as a template variable, you can reference it later in the same template:
+Since `@ai` sets the key as a template variable, you can reference it later in the same template:
 
 ```jig
-@ai()
+@ai({ key: 'requiredFields' })
   @prompt()
     Which fields should be required?
   @end
-  @output({ key: 'requiredFields' })
+  @output({ typeHint: 'json' })
+    @example()
     ["name", "email"]
+    @end
   @end
 @end
 
 {{-- Use the answer later in the template --}}
-// Required: {{ requiredFields }}
+@let(fields = JSON.parse(requiredFields))
+@each(field in fields)
+  // Required: {{ field }}
+@end
 ```
 
-During Pass 1, `requiredFields` holds the format hint (`["name", "email"]`). During Pass 2, it holds the actual AI answer.
+During Pass 1, `requiredFields` holds the first `@example` value (`["name", "email"]`). During Pass 2, it holds the actual AI answer.
+
+---
+
+## Planned Tags
+
+The following tags are planned for future releases:
+
+| Tag | Location | Purpose |
+|-----|----------|---------|
+| `@schema()` | Inside `@output` | Provide a JSON Schema to validate the AI's response |
+| `@zod()` | Inside `@output` | Provide a Zod schema for runtime validation |
+| `@typescript()` | Inside `@output` | Provide a TypeScript type/interface for type-safe responses |
+
+These will enable automatic validation of AI responses before they're injected into templates.

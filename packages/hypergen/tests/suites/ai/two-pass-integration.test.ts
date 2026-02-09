@@ -15,24 +15,28 @@ describe('2-Pass AI Integration', () => {
   TypeScript project, strict mode
 @end
 
-@ai()
+@ai({ key: 'listFields' })
   @context()
     Model: User with id, name, email
   @end
   @prompt()
     Which fields should appear on the list view?
   @end
-  @output({ key: 'listFields' })
+  @output()
+    @example()
     ["field1", "field2"]
+    @end
   @end
 @end
 
-@ai()
+@ai({ key: 'serviceCode' })
   @prompt()
     Write a service class for User
   @end
-  @output({ key: 'serviceCode' })
+  @output()
+    @example()
     class UserService { ... }
+    @end
   @end
 @end`
 
@@ -132,11 +136,11 @@ describe('2-Pass AI Integration', () => {
 @context()
   Context B
 @end
-@ai()
+@ai({ key: 'k' })
   @prompt()
     test
   @end
-  @output({ key: 'k' })
+  @output()
   @end
 @end`
 

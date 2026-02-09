@@ -25,12 +25,14 @@ describe('AI Tags State Access', () => {
     collector.collectMode = true
 
     const template = `
-@ai()
+@ai({ key: 'test' })
   @prompt()
 Test prompt
   @end
-  @output({ key: 'test' })
+  @output()
+    @example()
 Default output
+    @end
   @end
 @end
 `
@@ -45,14 +47,14 @@ Default output
     expect(entries.length).toBe(1)
     expect(entries[0].key).toBe('test')
     expect(entries[0].prompt).toContain('Test prompt')
-    expect(entries[0].outputDescription).toContain('Default output')
+    expect(entries[0].examples[0]).toContain('Default output')
   })
 
   it('should access state variables in @context block', async () => {
     collector.collectMode = true
 
     const template = `
-@ai()
+@ai({ key: 'code' })
   @context()
 Model: {{ model }}
 Feature: {{ feature }}
@@ -61,8 +63,10 @@ CollectMode: {{ __hypergenCollectMode }}
   @prompt()
 Generate code
   @end
-  @output({ key: 'code' })
+  @output()
+    @example()
 Default
+    @end
   @end
 @end
 `
@@ -86,12 +90,14 @@ Default
   it('should handle undefined __hypergenCollectMode gracefully', async () => {
     // Don't set collectMode - test fallback behavior
     const template = `
-@ai()
+@ai({ key: 'test' })
   @prompt()
 Test
   @end
-  @output({ key: 'test' })
+  @output()
+    @example()
 Default
+    @end
   @end
 @end
 `
@@ -111,12 +117,14 @@ Default
 
   it('should handle __hypergenCollectMode = false explicitly', async () => {
     const template = `
-@ai()
+@ai({ key: 'test' })
   @prompt()
 Test
   @end
-  @output({ key: 'test' })
+  @output()
+    @example()
 Default output content
+    @end
   @end
 @end
 `
@@ -146,7 +154,7 @@ Default output content
 
     const template = `
 @if(model)
-  @ai()
+  @ai({ key: 'handler' })
     @context()
 Nested context with model: {{ model }}
 CollectMode in nested: {{ __hypergenCollectMode }}
@@ -154,8 +162,10 @@ CollectMode in nested: {{ __hypergenCollectMode }}
     @prompt()
 Generate {{ model }} handler
     @end
-    @output({ key: 'handler' })
+    @output()
+      @example()
 Default handler
+      @end
     @end
   @end
 @end
@@ -178,27 +188,31 @@ Default handler
     collector.collectMode = true
 
     const template = `
-@ai()
+@ai({ key: 'block1' })
   @context()
 Block 1 - collectMode: {{ __hypergenCollectMode }}
   @end
   @prompt()
 First prompt
   @end
-  @output({ key: 'block1' })
+  @output()
+    @example()
 Output 1
+    @end
   @end
 @end
 
-@ai()
+@ai({ key: 'block2' })
   @context()
 Block 2 - collectMode: {{ __hypergenCollectMode }}
   @end
   @prompt()
 Second prompt
   @end
-  @output({ key: 'block2' })
+  @output()
+    @example()
 Output 2
+    @end
   @end
 @end
 `
@@ -230,15 +244,17 @@ Output 2
     }
 
     const template = `
-@ai()
+@ai({ key: 'test' })
   @context()
 {{ getDebugInfo() }}
   @end
   @prompt()
 Test
   @end
-  @output({ key: 'test' })
+  @output()
+    @example()
 Default
+    @end
   @end
 @end
 `
@@ -260,12 +276,14 @@ Default
     collector.collectMode = true
 
     const template = `
-@ai()
+@ai({ key: 'testKey' })
   @prompt()
 Test
   @end
-  @output({ key: 'testKey' })
+  @output()
+    @example()
 Default
+    @end
   @end
 @end
 `
@@ -280,6 +298,6 @@ Default
     expect(entries.length).toBe(1)
     expect(entries[0].key).toBe('testKey')
     expect(entries[0].prompt).toContain('Test')
-    expect(entries[0].outputDescription).toContain('Default')
+    expect(entries[0].examples[0]).toContain('Default')
   })
 })

@@ -90,7 +90,7 @@ describe('AI Collection E2E with Helpers', () => {
     const templateContent = `---
 to: "src/handlers/{{ kebabCase(model) }}-handler.ts"
 ---
-@ai()
+@ai({ key: 'handler' })
   @context()
     Model: {{ model }}
     Fields from helper: {{ getFields(model) }}
@@ -104,11 +104,13 @@ to: "src/handlers/{{ kebabCase(model) }}-handler.ts"
     Include CRUD operations for these fields.
   @end
 
-  @output({ key: 'handler' })
+  @output()
+    @example()
     // Default handler implementation
     export class {{ pascalCase(model) }}Handler {
       // TODO: Implement CRUD operations
     }
+    @end
   @end
 @end`
 
@@ -156,8 +158,9 @@ to: "src/handlers/{{ kebabCase(model) }}-handler.ts"
     expect(entry.prompt).toContain('Generate a TypeScript handler')
     expect(entry.prompt).toContain('User model')
 
-    // Check output description (the default/example output)
-    expect(entry.outputDescription).toContain('export class UserHandler')
+    // Check examples array (the default/example output)
+    expect(entry.examples).toHaveLength(1)
+    expect(entry.examples[0]).toContain('export class UserHandler')
 
     // 7. Verify no files were created in Pass 1
     expect(result.filesCreated).toHaveLength(0)
@@ -200,7 +203,7 @@ to: "src/handlers/{{ kebabCase(model) }}-handler.ts"
     const templateContent = `---
 to: "src/models/{{ kebabCase(model) }}.ts"
 ---
-@ai()
+@ai({ key: 'model' })
   @context()
     Relations for {{ model }}:
     {{ formatList(getRelations(model)) }}
@@ -208,20 +211,24 @@ to: "src/models/{{ kebabCase(model) }}.ts"
   @prompt()
 Generate model with relations
   @end
-  @output({ key: 'model' })
+  @output()
+    @example()
 export interface {{ pascalCase(model) }} {}
+    @end
   @end
 @end
 
-@ai()
+@ai({ key: 'tests' })
   @context()
 Tests for {{ model }}
   @end
   @prompt()
 Generate tests
   @end
-  @output({ key: 'tests' })
+  @output()
+    @example()
 // Tests
+    @end
   @end
 @end`
 
@@ -277,12 +284,14 @@ Generate tests
     const templateContent = `---
 to: "test.ts"
 ---
-@ai()
+@ai({ key: 'test' })
   @prompt()
     Test prompt
   @end
-  @output({ key: 'test' })
+  @output()
+    @example()
     Default output
+    @end
   @end
 @end`
 

@@ -37,7 +37,7 @@ Related files outside this directory:
 | File | Purpose |
 |---|---|
 | `src/recipe-engine/tools/ai-tool.ts` | Recipe `tool: ai` implementation — validates step config, calls AiService, handles output routing |
-| `src/template-engines/ai-jig-tag.ts` | `@ai` Jig template tag — inline AI generation during template rendering |
+| `src/template-engines/ai-tags.ts` | 2-pass `@ai`/`@context`/`@prompt`/`@output` Jig template tags |
 
 ## Execution Flow
 

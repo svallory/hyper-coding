@@ -90,7 +90,7 @@ Now `@ai` blocks output the corresponding answer instead of collecting. Files ar
 
 Here's a template that asks AI to choose which fields to display on a card:
 
-```edge
+```jig
 ---
 to: "src/components/{{ name }}Card.tsx"
 ---
@@ -103,7 +103,7 @@ interface {{ name }}CardProps {
 export const {{ name }}Card: React.FC<{{ name }}CardProps> = ({ data }) => {
   return (
     <div className="card">
-      @ai()
+      @ai({ key: 'cardFields' })
         @context()
           The {{ name }} model has these fields:
           {{ JSON.stringify(fields, null, 2) }}
@@ -114,9 +114,11 @@ export const {{ name }}Card: React.FC<{{ name }}CardProps> = ({ data }) => {
           Return a JSX fragment showing each field in a <p> tag.
         @end
 
-        @output({ key: 'cardFields' })
+        @output({ typeHint: 'jsx-fragment' })
+          @example()
           <p>{data.name}</p>
           <p>{data.email}</p>
+          @end
         @end
       @end
     </div>
@@ -124,9 +126,9 @@ export const {{ name }}Card: React.FC<{{ name }}CardProps> = ({ data }) => {
 };
 ```
 
-**Pass 1** renders the template context (interpolating `{{ name }}` and `{{ fields }}`) and collects the `cardFields` block. The output example (`<p>{data.name}</p>...`) serves as a format hint.
+**Pass 1** renders the template context (interpolating `{{ name }}` and `{{ fields }}`) and collects the `cardFields` block. The `@example` body (`<p>{data.name}</p>...`) shows the AI the expected shape, and `typeHint: 'jsx-fragment'` tells it what kind of output is expected. Children (`@context`, `@prompt`, `@output`, `@example`) are only executed during this pass.
 
-**Pass 2** replaces the entire `@ai` block with the answer from `ai-answers.json`:
+**Pass 2** skips all children entirely and replaces the `@ai` block with the answer from `ai-answers.json`:
 
 ```json
 {
@@ -136,6 +138,6 @@ export const {{ name }}Card: React.FC<{{ name }}CardProps> = ({ data }) => {
 
 ## What's Next
 
-- **[Custom Jig Tags Reference](/guides/ai-integration/jig-tags)** — Full reference for `@ai`, `@context`, `@prompt`, and `@output`
+- **[Custom Jig Tags Reference](/guides/ai-integration/jig-tags)** — Full reference for `@ai`, `@context`, `@prompt`, `@output`, and `@example`
 - **[Prompt Assembly](/guides/ai-integration/prompt-assembly)** — How the prompt document is structured
 - **[Complete Example](/guides/ai-integration/example)** — End-to-end walkthrough with a real recipe

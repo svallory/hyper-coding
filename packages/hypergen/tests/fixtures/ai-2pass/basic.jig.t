@@ -3,7 +3,7 @@ to: "output/{{ name }}.ts"
 ---
 // Generated for {{ name }}
 
-@ai()
+@ai({ key: 'mainFields' })
   @context()
     The {{ name }} model has these fields:
     {{ JSON.stringify(fields, null, 2) }}
@@ -13,7 +13,9 @@ to: "output/{{ name }}.ts"
     Which fields are most relevant for a quick-view card?
   @end
 
-  @output({ key: 'mainFields' })
+  @output()
+    @example()
     ["fieldName1", "fieldName2"]
+    @end
   @end
 @end

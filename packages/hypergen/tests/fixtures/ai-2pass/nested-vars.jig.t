@@ -1,7 +1,7 @@
 ---
 to: "output/{{ name }}.ts"
 ---
-@ai()
+@ai({ key: 'migration' })
   @context()
     Model name: {{ name }}
     Table name: {{ snakeCase(name) }}
@@ -11,7 +11,9 @@ to: "output/{{ name }}.ts"
     Generate a migration for the {{ name }} model with table {{ snakeCase(name) }}
   @end
 
-  @output({ key: 'migration' })
+  @output()
+    @example()
     CREATE TABLE {{ snakeCase(name) }} (...);
+    @end
   @end
 @end

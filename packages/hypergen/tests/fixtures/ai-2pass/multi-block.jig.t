@@ -2,23 +2,27 @@
 to: "output/{{ name }}.ts"
 ---
 // Fields:
-@ai()
+@ai({ key: 'fields' })
   @prompt()
     List the main fields for {{ name }}
   @end
 
-  @output({ key: 'fields' })
+  @output()
+    @example()
     field1, field2, field3
+    @end
   @end
 @end
 
 // Relations:
-@ai()
+@ai({ key: 'relations' })
   @prompt()
     List the relationships for {{ name }}
   @end
 
-  @output({ key: 'relations' })
+  @output()
+    @example()
     hasMany: [], belongsTo: []
+    @end
   @end
 @end

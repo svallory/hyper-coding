@@ -19,7 +19,7 @@ const debug = createDebug('hypergen:ai:collector')
  * Data collected from a single @ai block in a template
  */
 export interface AiBlockEntry {
-  /** JSON property name the LLM fills in (from @output({ key })) */
+  /** JSON property name the LLM fills in (from @ai({ key })) */
   key: string
 
   /** Rendered @context bodies within this @ai block */
@@ -28,8 +28,14 @@ export interface AiBlockEntry {
   /** Rendered @prompt body */
   prompt: string
 
-  /** Rendered @output body (format hint / example) */
+  /** Rendered @output body (format description) */
   outputDescription: string
+
+  /** Advisory type hint for the output (e.g. 'jsx-fragment', 'sql', 'json') */
+  typeHint: string
+
+  /** Rendered @example bodies (concrete examples of expected output) */
+  examples: string[]
 
   /** Which template file this block came from */
   sourceFile: string

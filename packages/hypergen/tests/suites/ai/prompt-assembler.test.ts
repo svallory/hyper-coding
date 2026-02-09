@@ -22,6 +22,7 @@ describe('PromptAssembler', () => {
       contexts: ['Model: User with id, name, email'],
       prompt: 'Which fields for the card?',
       outputDescription: '["field1", "field2"]',
+      examples: [],
       sourceFile: 'user.jig.t',
     })
 
@@ -44,6 +45,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Generate code',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -62,6 +64,7 @@ describe('PromptAssembler', () => {
       contexts: ['Model has id, name'],
       prompt: 'Select fields',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -80,6 +83,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'First prompt',
       outputDescription: 'format A',
+      examples: [],
       sourceFile: 'f',
     })
     collector.addEntry({
@@ -87,6 +91,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Second prompt',
       outputDescription: 'format B',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -108,6 +113,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Pick fields',
       outputDescription: '["a", "b"]',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -126,6 +132,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'p',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -144,6 +151,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'p',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -161,6 +169,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'p',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -198,6 +207,7 @@ describe('PromptAssembler', () => {
         contexts: [],
         prompt: 'Do something',
         outputDescription: '',
+        examples: [],
         sourceFile: 'f',
       })
 
@@ -250,6 +260,7 @@ describe('PromptAssembler', () => {
         contexts: ['Model User has id, name, email'],
         prompt: 'Generate the Zod schema',
         outputDescription: 'z.object({ ... })',
+        examples: [],
         sourceFile: 'user-schema.jig.t',
       })
       collector.addEntry({
@@ -257,6 +268,7 @@ describe('PromptAssembler', () => {
         contexts: ['REST endpoint for /users', 'Auth required'],
         prompt: 'Generate the route handler',
         outputDescription: '',
+        examples: [],
         sourceFile: 'user-handler.jig.t',
       })
 
@@ -316,6 +328,7 @@ describe('PromptAssembler', () => {
         contexts: [],
         prompt: 'p',
         outputDescription: '',
+        examples: [],
         sourceFile: 'f',
       })
 
@@ -341,6 +354,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Generate a component',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -367,6 +381,7 @@ describe('PromptAssembler', () => {
       ],
       prompt: 'Define the user schema',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -391,6 +406,7 @@ describe('PromptAssembler', () => {
       contexts: ['REST API with Express'],
       prompt: 'Create an endpoint',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -419,6 +435,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: '',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -440,6 +457,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Do something',
       outputDescription: '   \t  \n  ',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -463,6 +481,7 @@ describe('PromptAssembler', () => {
         contexts: [],
         prompt: `Prompt for ${key}`,
         outputDescription: '',
+        examples: [],
         sourceFile: 'f',
       })
     }
@@ -491,6 +510,7 @@ describe('PromptAssembler', () => {
       contexts: ['Template uses @let(x = 5) syntax'],
       prompt: jigPrompt,
       outputDescription: '{{ someVar }}',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -519,6 +539,7 @@ describe('PromptAssembler', () => {
         contexts: [],
         prompt: `Prompt for ${key}`,
         outputDescription: '',
+        examples: [],
         sourceFile: 'f',
       })
     }
@@ -545,6 +566,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Prompt A',
       outputDescription: '["a", "b"]',
+      examples: [],
       sourceFile: 'f',
     })
     collector.addEntry({
@@ -552,6 +574,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Prompt B',
       outputDescription: '',
+      examples: [],
       sourceFile: 'f',
     })
     collector.addEntry({
@@ -559,6 +582,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Prompt C',
       outputDescription: 'A JSON object with name and age',
+      examples: [],
       sourceFile: 'f',
     })
 
@@ -585,6 +609,7 @@ describe('PromptAssembler', () => {
       contexts: [],
       prompt: 'Do it',
       outputDescription: '   ',
+      examples: [],
       sourceFile: 'f',
     })
 

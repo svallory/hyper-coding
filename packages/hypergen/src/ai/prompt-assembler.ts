@@ -44,15 +44,19 @@ export class PromptAssembler {
     const answersPath = options.answersPath || './ai-answers.json'
 
     // Convert Map to array for Jig @each iteration
-    const entries: (AiBlockEntry & { hasOutputDesc: boolean })[] = []
+    const entries: (AiBlockEntry & { hasOutputDesc: boolean; hasExamples: boolean })[] = []
     for (const [, entry] of entriesMap) {
-      entries.push({ ...entry, hasOutputDesc: !!entry.outputDescription.trim() })
+      entries.push({
+        ...entry,
+        hasOutputDesc: !!entry.outputDescription.trim(),
+        hasExamples: (entry.examples && entry.examples.length > 0) || false,
+      })
     }
 
     // Build the JSON response schema
     const schema: Record<string, string> = {}
     for (const entry of entries) {
-      schema[entry.key] = entry.hasOutputDesc ? '<see format above>' : '<your answer>'
+      schema[entry.key] = (entry.hasOutputDesc || entry.hasExamples) ? '<see format above>' : '<your answer>'
     }
     const responseSchema = JSON.stringify(schema, null, 2)
 
