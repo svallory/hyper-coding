@@ -14,7 +14,7 @@ const add = async (
   } = action
   const result = createResult('add', to)
   const prompter = createPrompter()
-  if (!to || inject) {
+  if (inject) {
     return result('ignored')
   }
   if (!to) {
@@ -46,7 +46,7 @@ const add = async (
     }
   }
 
-  const shouldSkip = skip_if === 'true'
+  const shouldSkip = skip_if === true || skip_if === 'true'
 
   if (shouldSkip) {
     return result('skipped')

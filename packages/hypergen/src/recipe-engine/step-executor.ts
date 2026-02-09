@@ -794,13 +794,12 @@ export class StepExecutor extends EventEmitter {
           }
           
         } finally {
-          this.runningSteps.delete(stepKey)
-          
-          // Release tool
+          // Release tool before deleting from tracking map
           const runningStep = this.runningSteps.get(stepKey)
           if (runningStep) {
             this.toolRegistry.release(step.tool, this.getToolName(step), runningStep.tool)
           }
+          this.runningSteps.delete(stepKey)
         }
         
         // Execute next step
