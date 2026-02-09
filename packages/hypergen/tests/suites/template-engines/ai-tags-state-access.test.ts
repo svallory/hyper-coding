@@ -21,7 +21,7 @@ describe('AI Tags State Access', () => {
     consoleLogSpy.mockRestore()
   })
 
-  it('should access state.__hypergenCollectMode in compiled template', async () => {
+  it('should collect AI entry when __hypergenCollectMode is true', async () => {
     collector.collectMode = true
 
     const template = `
@@ -39,22 +39,13 @@ Default output
       __hypergenCollectMode: true
     })
 
-    // Verify the console.log from ai-tags.ts executed
-    // The console.log should show state.__hypergenCollectMode = true
-    expect(consoleLogSpy).toHaveBeenCalled()
-
-    // Find the call that logs the AI TAG debug info
-    const aiTagCalls = consoleLogSpy.mock.calls.filter(call =>
-      call.some(arg => typeof arg === 'string' && arg.includes('[AI TAG]'))
-    )
-
-    expect(aiTagCalls.length).toBeGreaterThan(0)
-
-    // The log format is: '[AI TAG] __hypergenCollectMode:', true, 'key:', 'test'
-    const debugCall = aiTagCalls[0]
-    expect(debugCall[1]).toBe(true) // state.__hypergenCollectMode
-    expect(debugCall[2]).toBe('key:') // label
-    expect(debugCall[3]).toBe('test') // key value
+    // Verify the collector captured the entry
+    expect(collector.hasEntries()).toBe(true)
+    const entries = Array.from(collector.getEntries().values())
+    expect(entries.length).toBe(1)
+    expect(entries[0].key).toBe('test')
+    expect(entries[0].prompt).toContain('Test prompt')
+    expect(entries[0].outputDescription).toContain('Default output')
   })
 
   it('should access state variables in @context block', async () => {
@@ -265,7 +256,7 @@ Default
     expect(context).toContain('CollectMode from helper')
   })
 
-  it('should detect when console.log is called with correct arguments', async () => {
+  it('should collect entry with correct key when collectMode is true', async () => {
     collector.collectMode = true
 
     const template = `
@@ -283,21 +274,12 @@ Default
       __hypergenCollectMode: true
     })
 
-    // Find the specific debug log from ai-tags.ts
-    const debugCalls = consoleLogSpy.mock.calls.filter(call => {
-      return call[0]?.includes('[AI TAG]') &&
-             call.length >= 4 &&
-             typeof call[1] === 'boolean' &&
-             call[2] === 'key:'
-    })
-
-    expect(debugCalls.length).toBeGreaterThan(0)
-
-    // Log format: '[AI TAG] __hypergenCollectMode:', true, 'key:', 'testKey'
-    const [prefix, collectMode, keyLabel, keyValue] = debugCalls[0]
-    expect(prefix).toContain('[AI TAG]')
-    expect(collectMode).toBe(true)
-    expect(keyLabel).toBe('key:')
-    expect(keyValue).toBe('testKey')
+    // Verify the collector captured the entry with the correct key
+    expect(collector.hasEntries()).toBe(true)
+    const entries = Array.from(collector.getEntries().values())
+    expect(entries.length).toBe(1)
+    expect(entries[0].key).toBe('testKey')
+    expect(entries[0].prompt).toContain('Test')
+    expect(entries[0].outputDescription).toContain('Default')
   })
 })

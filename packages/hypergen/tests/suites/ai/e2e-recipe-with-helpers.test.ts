@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import yaml from 'js-yaml'
 import { initializeJig, getJig } from '~/template-engines/jig-engine'
+import { getToolRegistry, ToolRegistry } from '~/recipe-engine/tools/registry'
+import { templateToolFactory } from '~/recipe-engine/tools/template-tool'
 
 describe('AI Collection E2E with Helpers', () => {
   let testDir: string
@@ -22,6 +24,14 @@ describe('AI Collection E2E with Helpers', () => {
 
     // CRITICAL: Initialize Jig to register @ai tags
     initializeJig({ cache: false })
+
+    // Register template tool with 'default' name
+    ToolRegistry.reset()
+    const registry = getToolRegistry()
+    registry.register('template', 'default', templateToolFactory, {
+      description: 'Default template tool',
+      category: 'core',
+    })
   })
 
   afterEach(() => {
@@ -29,6 +39,7 @@ describe('AI Collection E2E with Helpers', () => {
     rmSync(testDir, { recursive: true, force: true })
     collector.clear()
     collector.collectMode = false
+    ToolRegistry.reset()
   })
 
   it('should collect AI entries when template uses helper functions', async () => {
@@ -134,12 +145,19 @@ to: "src/handlers/{{ kebabCase(model) }}-handler.ts"
 
     const entry = entries[0]
     expect(entry.key).toBe('handler')
-    expect(entry.context).toContain('Model: User')
-    expect(entry.context).toContain('Fields from helper:')
-    expect(entry.context).toContain('"name":"id"')
+
+    // Check contexts array (contains all @context blocks)
+    const allContexts = entry.contexts.join(' ')
+    expect(allContexts).toContain('Model: User')
+    expect(allContexts).toContain('Fields from helper:')
+    expect(allContexts).toContain('"name":"id"')
+
+    // Check prompt
     expect(entry.prompt).toContain('Generate a TypeScript handler')
     expect(entry.prompt).toContain('User model')
-    expect(entry.defaultOutput).toContain('export class UserHandler')
+
+    // Check output description (the default/example output)
+    expect(entry.outputDescription).toContain('export class UserHandler')
 
     // 7. Verify no files were created in Pass 1
     expect(result.filesCreated).toHaveLength(0)
@@ -187,14 +205,24 @@ to: "src/models/{{ kebabCase(model) }}.ts"
     Relations for {{ model }}:
     {{ formatList(getRelations(model)) }}
   @end
-  @prompt()Generate model with relations@end
-  @output({ key: 'model' })export interface {{ pascalCase(model) }} {}@end
+  @prompt()
+Generate model with relations
+  @end
+  @output({ key: 'model' })
+export interface {{ pascalCase(model) }} {}
+  @end
 @end
 
 @ai()
-  @context()Tests for {{ model }}@end
-  @prompt()Generate tests@end
-  @output({ key: 'tests' })// Tests@end
+  @context()
+Tests for {{ model }}
+  @end
+  @prompt()
+Generate tests
+  @end
+  @output({ key: 'tests' })
+// Tests
+  @end
 @end`
 
     writeFileSync(join(testDir, 'model.jig'), templateContent)
@@ -206,13 +234,17 @@ to: "src/models/{{ kebabCase(model) }}.ts"
     })
 
     collector.collectMode = true
-    await recipeEngine.executeRecipe(
+
+    const result = await recipeEngine.executeRecipe(
       { type: 'file', path: recipeFile },
       {
         variables: { model: 'User' },
         skipPrompts: true
       }
     )
+
+    // Verify recipe executed successfully
+    expect(result.success).toBe(true)
 
     // Should collect 2 AI entries
     expect(collector.hasEntries()).toBe(true)

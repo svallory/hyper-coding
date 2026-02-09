@@ -80,8 +80,8 @@ describe('Parameter Resolver with Prompts', () => {
         framework: 'react'
       }
 
-      const result = await resolver.resolveParametersWithPrompts(metadata, providedValues, {
-        interactive: false // No prompts needed
+      const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+        skipOptional: true // No prompts needed
       })
 
       expect(result.name).toBe('TestComponent')
@@ -120,8 +120,8 @@ describe('Parameter Resolver with Prompts', () => {
         name: 'TestComponent'
       }
 
-      const result = await resolver.resolveParametersWithPrompts(metadata, providedValues, {
-        interactive: false
+      const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+        useDefaults: true
       })
 
       expect(result.name).toBe('TestComponent')
@@ -155,11 +155,17 @@ describe('Parameter Resolver with Prompts', () => {
         // Missing required 'framework' parameter
       }
 
-      // This should throw an error since interactive mode is disabled
-      // and a required parameter is missing
-      await expect(resolver.resolveParametersWithPrompts(metadata, providedValues, {
-        interactive: false
-      })).rejects.toThrow('Required parameter \'framework\' not provided')
+      // Set NODE_ENV to test mode to prevent prompts
+      const oldEnv = process.env.NODE_ENV
+      process.env.NODE_ENV = 'test'
+
+      try {
+        await expect(resolver.resolveParametersInteractively(metadata, providedValues, {
+          skipOptional: true
+        })).rejects.toThrow('Required parameter \'framework\' not provided')
+      } finally {
+        process.env.NODE_ENV = oldEnv
+      }
     })
   })
 
@@ -184,8 +190,8 @@ describe('Parameter Resolver with Prompts', () => {
         port: 99 // Invalid: below minimum
       }
 
-      await expect(resolver.resolveParametersWithPrompts(metadata, providedValues, {
-        interactive: false
+      await expect(resolver.resolveParametersInteractively(metadata, providedValues, {
+        skipOptional: true
       })).rejects.toThrow('Parameter validation failed')
     })
 
@@ -208,8 +214,8 @@ describe('Parameter Resolver with Prompts', () => {
         framework: 'svelte' // Invalid enum value
       }
 
-      await expect(resolver.resolveParametersWithPrompts(metadata, providedValues, {
-        interactive: false
+      await expect(resolver.resolveParametersInteractively(metadata, providedValues, {
+        skipOptional: true
       })).rejects.toThrow('Parameter validation failed')
     })
   })
@@ -230,8 +236,8 @@ describe('Parameter Resolver with Prompts', () => {
         ]
       }
 
-      const result = await resolver.resolveParameters(metadata, {})
-      
+      const result = await resolver.resolveParameters(metadata, {}, { useDefaults: true })
+
       expect(result.name).toBe('DefaultName')
     })
 

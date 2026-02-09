@@ -374,11 +374,19 @@ describe('Interactive Parameter Resolution', () => {
 
       const providedValues = {}
 
-      // This should fail because name is required but not provided and has no default
-      await expect(resolver.resolveParametersInteractively(metadata, providedValues, {
-        useDefaults: false,
-        skipOptional: true // This won't help because name is required
-      })).rejects.toThrow('Required parameter \'name\' not provided and no default available')
+      // Set NODE_ENV to test mode to prevent prompts
+      const oldEnv = process.env.NODE_ENV
+      process.env.NODE_ENV = 'test'
+
+      try {
+        // This should fail because name is required but not provided and has no default
+        await expect(resolver.resolveParametersInteractively(metadata, providedValues, {
+          useDefaults: false,
+          skipOptional: true // This won't help because name is required
+        })).rejects.toThrow('Required parameter \'name\' not provided and no default available')
+      } finally {
+        process.env.NODE_ENV = oldEnv
+      }
     })
 
     it('should handle empty parameters gracefully', async () => {

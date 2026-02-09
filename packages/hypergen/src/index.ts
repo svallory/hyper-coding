@@ -13,6 +13,30 @@ export { default as Logger } from './logger.js'
 // Engine (for programmatic use)
 export { default as engine, ShowHelpError } from './engine.js'
 
+// Runner (for backward compatibility with tests)
+export async function runner(
+  argv: string[],
+  config: RunnerConfig,
+): Promise<RunnerResult> {
+  const logger = config.logger || new Logger(console.log.bind(console))
+
+  try {
+    const actions = await engine(argv, config)
+    return { success: true, actions, time: 0 }
+  } catch (err: any) {
+    logger.log(err.toString())
+    if (config.debug) {
+      logger.log('details -----------')
+      logger.log(err.stack)
+      logger.log('-------------------')
+    }
+    if (err instanceof ShowHelpError) {
+      return { success: true, actions: [], time: 0 }
+    }
+    return { success: false, actions: [], time: 0 }
+  }
+}
+
 // Configuration
 export {
   HypergenConfigLoader,

@@ -10,7 +10,58 @@ import path from 'path'
 import fs from 'fs-extra'
 import { tmpdir } from 'os'
 import { RecipeTool, RecipeToolFactory, recipeToolFactory } from '../src/recipe-engine/tools/recipe-tool.js'
-import type { RecipeStep, StepContext, RecipeConfig } from '../src/recipe-engine/types.js'
+import { Tool } from '../src/recipe-engine/tools/base.js'
+import { getToolRegistry } from '../src/recipe-engine/tools/registry.js'
+import type { RecipeStep, StepContext, RecipeConfig, StepResult, StepExecutionOptions, TemplateStep } from '../src/recipe-engine/types.js'
+
+/**
+ * Mock template tool for testing recipe execution without needing actual template processing
+ */
+class MockTemplateTool extends Tool<TemplateStep> {
+  constructor(name: string = 'mock-template-tool', options: Record<string, any> = {}) {
+    super('template', name, options)
+  }
+
+  protected async onInitialize(): Promise<void> {
+    // No-op for mock
+  }
+
+  protected async onValidate(step: TemplateStep, context: StepContext) {
+    return {
+      isValid: true,
+      errors: [],
+      warnings: [],
+      suggestions: []
+    }
+  }
+
+  protected async onExecute(
+    step: TemplateStep,
+    context: StepContext,
+    options?: StepExecutionOptions
+  ): Promise<StepResult> {
+    const startTime = new Date()
+    const endTime = new Date()
+
+    return {
+      status: 'completed',
+      stepName: step.name,
+      toolType: 'template',
+      startTime,
+      endTime,
+      duration: endTime.getTime() - startTime.getTime(),
+      retryCount: 0,
+      dependenciesSatisfied: true,
+      filesCreated: ['test-file.txt'],
+      filesModified: [],
+      filesDeleted: []
+    }
+  }
+
+  protected async onCleanup(): Promise<void> {
+    // No-op for mock
+  }
+}
 
 describe('RecipeTool Integration Tests', () => {
   let tempDir: string
@@ -20,15 +71,30 @@ describe('RecipeTool Integration Tests', () => {
   beforeEach(async () => {
     // Create temporary directory for test files
     tempDir = await fs.mkdtemp(path.join(tmpdir(), 'hypergen-recipe-tool-test-'))
-    
+
+    // Register mock template tool in the tool registry
+    const toolRegistry = getToolRegistry()
+    toolRegistry.register('template', 'default', {
+      create: (name: string, options?: Record<string, any>) => {
+        return new MockTemplateTool(name, options)
+      },
+      getToolType: () => 'template' as const,
+      validateConfig: (config: Record<string, any>) => ({
+        isValid: true,
+        errors: [],
+        warnings: [],
+        suggestions: []
+      })
+    })
+
     // Create recipe tool instance
     recipeTool = recipeToolFactory.create('test-recipe-tool', {
       cacheEnabled: false, // Disable cache for testing
       timeout: 5000
     })
-    
+
     await recipeTool.initialize()
-    
+
     // Create mock context
     mockContext = {
       step: {} as any, // Will be overridden in individual tests
@@ -63,6 +129,10 @@ describe('RecipeTool Integration Tests', () => {
     // Cleanup
     await recipeTool.cleanup()
     await fs.remove(tempDir)
+
+    // Unregister mock template tool
+    const toolRegistry = getToolRegistry()
+    toolRegistry.unregister('template', 'default')
   })
 
   describe('Tool Initialization', () => {
@@ -360,41 +430,76 @@ describe('RecipeTool Integration Tests', () => {
 
       mockContext.step = step
 
-      // Mock the sub-step execution to avoid needing actual template tool
-      const originalExecuteSubStep = (recipeTool as any).executeSubStep
-      ;(recipeTool as any).executeSubStep = vi.fn().mockResolvedValue({
-        status: 'completed',
-        stepName: 'simple-step',
-        toolType: 'template',
-        startTime: new Date(),
-        endTime: new Date(),
-        duration: 100,
-        retryCount: 0,
-        dependenciesSatisfied: true,
-        filesCreated: ['test-file.txt'],
-        filesModified: [],
-        filesDeleted: []
-      })
+      const result = await recipeTool.execute(step, mockContext)
 
-      try {
-        const result = await recipeTool.execute(step, mockContext)
+      expect(result.status).toBe('completed')
+      expect(result.toolType).toBe('recipe')
+      expect(result.filesCreated).toEqual(['test-file.txt'])
 
-        expect(result.status).toBe('completed')
-        expect(result.toolType).toBe('recipe')
-        expect(result.filesCreated).toEqual(['test-file.txt'])
-        
-        // Verify tool result contains sub-recipe information
-        const toolResult = result.toolResult as any
-        expect(toolResult.recipeName).toBe('Simple Execution Recipe')
-        expect(toolResult.subSteps).toHaveLength(1)
-        expect(toolResult.subSteps[0].stepName).toBe('simple-step')
-      } finally {
-        // Restore original method
-        ;(recipeTool as any).executeSubStep = originalExecuteSubStep
-      }
+      // Verify tool result contains sub-recipe information
+      const toolResult = result.toolResult as any
+      expect(toolResult.recipeName).toBe('Simple Execution Recipe')
+      expect(toolResult.subSteps).toHaveLength(1)
+      expect(toolResult.subSteps[0].stepName).toBe('simple-step')
     })
 
     it('should handle recipe execution failure', async () => {
+      // Create a failing mock template tool that will replace the default
+      class FailingMockTemplateTool extends Tool<TemplateStep> {
+        constructor(name: string = 'failing-mock-template-tool', options: Record<string, any> = {}) {
+          super('template', name, options)
+        }
+
+        protected async onInitialize(): Promise<void> {
+          // No-op for mock
+        }
+
+        protected async onValidate(step: TemplateStep, context: StepContext) {
+          return {
+            isValid: true,
+            errors: [],
+            warnings: [],
+            suggestions: []
+          }
+        }
+
+        protected async onExecute(
+          step: TemplateStep,
+          context: StepContext,
+          options?: StepExecutionOptions
+        ): Promise<StepResult> {
+          // Tools should throw errors to indicate failure, not return failed results
+          throw new Error('Template not found')
+        }
+
+        protected async onCleanup(): Promise<void> {
+          // No-op for mock
+        }
+      }
+
+      // Temporarily replace the default template tool with a failing one
+      const toolRegistry = getToolRegistry()
+
+      // Save the original factory
+      const originalFactory = toolRegistry['registrations'].get('template:default')
+
+      // Clear the cached instance of the default template tool
+      toolRegistry['removeCachedInstances']('template', 'default')
+
+      // Register the failing mock tool as 'default'
+      toolRegistry.register('template', 'default', {
+        create: (name: string, options?: Record<string, any>) => {
+          return new FailingMockTemplateTool(name, options)
+        },
+        getToolType: () => 'template' as const,
+        validateConfig: (config: Record<string, any>) => ({
+          isValid: true,
+          errors: [],
+          warnings: [],
+          suggestions: []
+        })
+      })
+
       const recipeContent = {
         name: 'Failing Recipe',
         steps: [
@@ -419,27 +524,17 @@ describe('RecipeTool Integration Tests', () => {
 
       mockContext.step = step
 
-      // Mock a failing sub-step execution
-      ;(recipeTool as any).executeSubStep = vi.fn().mockResolvedValue({
-        status: 'failed',
-        stepName: 'failing-step',
-        toolType: 'template',
-        startTime: new Date(),
-        endTime: new Date(),
-        duration: 100,
-        retryCount: 0,
-        dependenciesSatisfied: true,
-        error: {
-          message: 'Template not found',
-          code: 'TEMPLATE_NOT_FOUND'
-        }
-      })
-
       const result = await recipeTool.execute(step, mockContext)
 
       expect(result.status).toBe('failed')
       expect(result.error).toBeDefined()
       expect(result.error!.message).toContain('failed')
+
+      // Restore the original factory and clear the cache
+      toolRegistry['removeCachedInstances']('template', 'default')
+      if (originalFactory) {
+        toolRegistry['registrations'].set('template:default', originalFactory)
+      }
     })
   })
 

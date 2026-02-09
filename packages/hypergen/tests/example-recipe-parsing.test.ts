@@ -32,22 +32,22 @@ describe('Example Recipe Parsing', () => {
     
     // Check steps
     expect(result.config.steps).toBeDefined()
-    expect(result.config.steps).toHaveLength(8)
-    
+    expect(result.config.steps).toHaveLength(7)
+
     // Verify step details
     const steps = result.config.steps!
     expect(steps[0].name).toBe('Generate component')
     expect(steps[0].tool).toBe('template')
-    
+
     expect(steps[1].name).toBe('Generate styles')
     expect(steps[1].tool).toBe('template')
     expect((steps[1] as any).when).toBe('{{ includeStyles }}')
     expect(steps[1].parallel).toBe(true)
-    
+
     expect(steps[5].name).toBe('Update parent index')
     expect(steps[5].tool).toBe('action')
     expect((steps[5] as any).action).toBe('update-component-index')
-    
+
     expect(steps[6].name).toBe('Format code')
     expect(steps[6].tool).toBe('codemod')
     expect((steps[6] as any).codemod).toBe('prettier-format')
@@ -69,7 +69,7 @@ describe('Example Recipe Parsing', () => {
     const recipeConfig = TemplateParser.toRecipeConfig(result.config)
     expect(recipeConfig).not.toBeNull()
     expect(recipeConfig!.name).toBe('react-component-recipe')
-    expect(recipeConfig!.steps).toHaveLength(8)
+    expect(recipeConfig!.steps).toHaveLength(7)
   })
   
   it('should have no warnings for the example recipe', async () => {

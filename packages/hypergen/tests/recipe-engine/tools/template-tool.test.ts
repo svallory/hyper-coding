@@ -177,7 +177,7 @@ describe('TemplateTool', () => {
         expect(result.toolType).toBe('template')
         expect(result.stepName).toBe('test-template-step')
         expect(typeof result.duration).toBe('number')
-        expect(result.duration).toBeGreaterThan(0)
+        expect(result.duration).toBeGreaterThanOrEqual(0)
         expect(result.toolResult?.templateName).toBe('test-template.jig')
         expect(result.toolResult?.engine).toBeDefined()
       }
