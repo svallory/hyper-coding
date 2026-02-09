@@ -39,6 +39,30 @@ export interface AiServiceConfig {
   /** Default max output tokens */
   maxTokens?: number
 
+  /**
+   * AI resolution mode for 2-pass @ai blocks.
+   * - 'auto': detect from config (default) — API key → api, command set → command, else stdout
+   * - 'api': call LLM via Vercel AI SDK (requires provider + apiKey)
+   * - 'command': pipe prompt to a CLI command (requires ai.command)
+   * - 'stdout': print prompt to stdout, exit code 2 (for AI agents)
+   * - 'off': no AI automation (same as stdout now; future: interactive prompts)
+   */
+  mode?: 'auto' | 'api' | 'command' | 'stdout' | 'off'
+
+  /**
+   * CLI command template for 'command' mode.
+   * Include {prompt} for argument substitution, or omit to pipe via stdin.
+   * Examples: 'claude -p {prompt}', 'llm', 'aichat -r coder'
+   */
+  command?: string
+
+  /**
+   * How command mode handles multiple @ai blocks.
+   * - 'batched': one invocation, expects JSON response (default)
+   * - 'per-block': one invocation per @ai block, raw text response
+   */
+  commandMode?: 'batched' | 'per-block'
+
   /** Cost budget configuration */
   budget?: AIBudgetConfig
 

@@ -39,3 +39,14 @@ export { validateOutput, buildValidationFeedback, type ValidationResult } from '
 // 2-pass AI generation
 export { AiCollector, type AiBlockEntry } from './ai-collector.js'
 export { PromptAssembler, type AssemblerOptions } from './prompt-assembler.js'
+
+// AI transports (pluggable resolution for 2-pass @ai blocks)
+export {
+  resolveTransport,
+  StdoutTransport,
+  ApiTransport,
+  CommandTransport,
+  type AiTransport,
+  type TransportResult,
+  type TransportContext,
+} from './transports/index.js'

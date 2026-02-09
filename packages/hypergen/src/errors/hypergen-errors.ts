@@ -74,6 +74,7 @@ export enum ErrorCode {
   AI_IMPORT_VALIDATION_FAILED = 'AI_IMPORT_VALIDATION_FAILED',
   AI_RATE_LIMITED = 'AI_RATE_LIMITED',
   AI_CONTEXT_TOO_LARGE = 'AI_CONTEXT_TOO_LARGE',
+  AI_TRANSPORT_FAILED = 'AI_TRANSPORT_FAILED',
 
   // General errors
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
@@ -225,6 +226,7 @@ export class ErrorHandler {
     [ErrorCode.AI_IMPORT_VALIDATION_FAILED]: 'AI output contains invalid imports',
     [ErrorCode.AI_RATE_LIMITED]: 'AI provider rate limit exceeded',
     [ErrorCode.AI_CONTEXT_TOO_LARGE]: 'AI context exceeds token budget',
+    [ErrorCode.AI_TRANSPORT_FAILED]: 'AI transport resolution failed',
 
     [ErrorCode.UNKNOWN_ERROR]: 'Unknown error occurred',
     [ErrorCode.INTERNAL_ERROR]: 'Internal error occurred',
@@ -843,6 +845,21 @@ export class ErrorHandler {
       {
         title: 'Use truncation',
         description: 'Set context.overflow to "truncate" to automatically trim context'
+      }
+    ],
+
+    [ErrorCode.AI_TRANSPORT_FAILED]: [
+      {
+        title: 'Check AI mode configuration',
+        description: 'Verify ai.mode and related settings in hypergen.config.js'
+      },
+      {
+        title: 'Use stdout mode',
+        description: 'Fall back to --ai-mode stdout to print the prompt and resolve manually'
+      },
+      {
+        title: 'Check command output',
+        description: 'If using command mode, verify the command returns valid JSON'
       }
     ]
   }

@@ -8,8 +8,9 @@ import { Args } from '@oclif/core'
 import { BaseCommand } from '../../lib/base-command.js'
 import { executionFlags, outputFlags } from '../../lib/flags.js'
 import { AiCollector } from '../../ai/ai-collector.js'
-import { PromptAssembler } from '../../ai/prompt-assembler.js'
-import type { RecipeExecutionOptions } from '../../recipe-engine/recipe-engine.js'
+import { resolveTransport } from '../../ai/transports/index.js'
+import type { AiServiceConfig } from '../../ai/ai-config.js'
+import type { RecipeExecutionOptions, RecipeExecutionResult } from '../../recipe-engine/recipe-engine.js'
 
 export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
   static override description = 'Execute a recipe to generate code'
@@ -19,6 +20,7 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
     '<%= config.bin %> recipe run _recipes/component.yml --name=Button',
     '<%= config.bin %> recipe run recipe.yml --dry',
     '<%= config.bin %> recipe run recipe.yml --answers ./ai-answers.json',
+    '<%= config.bin %> recipe run recipe.yml --ai-mode stdout',
   ]
 
   static override flags = {
@@ -35,6 +37,45 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 
   // Allow pass-through for recipe variables
   static override strict = false
+
+  private reportResult(result: RecipeExecutionResult, flags: Record<string, any>): void {
+    if (flags.json) {
+      this.log(JSON.stringify({
+        success: result.success,
+        recipe: result.recipe.name,
+        stepsCompleted: result.metadata.completedSteps,
+        filesCreated: result.filesCreated,
+        filesModified: result.filesModified,
+        errors: result.errors,
+      }, null, 2))
+      return
+    }
+
+    if (result.success) {
+      const prefix = flags.dryRun ? '[DRY RUN] ' : ''
+      this.log(`${prefix}Recipe '${result.recipe.name}' completed successfully`)
+
+      if (result.metadata.completedSteps > 0) {
+        this.log(`Steps executed: ${result.metadata.completedSteps}`)
+      }
+
+      if (result.filesCreated.length > 0) {
+        const verb = flags.dryRun ? 'would be created' : 'created'
+        this.log(`Files ${verb}: ${result.filesCreated.join(', ')}`)
+      }
+
+      if (result.filesModified.length > 0) {
+        const verb = flags.dryRun ? 'would be modified' : 'modified'
+        this.log(`Files ${verb}: ${result.filesModified.join(', ')}`)
+      }
+    } else {
+      this.log(`Recipe execution failed:`)
+      for (const error of result.errors) {
+        this.log(`  - ${error}`)
+      }
+      this.exit(1)
+    }
+  }
 
   async run(): Promise<void> {
     const { args, argv, flags } = await this.parse(RecipeRun)
@@ -74,61 +115,44 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
     }
 
     try {
-      const result = await this.recipeEngine.executeRecipe(recipePath, options)
+      let result = await this.recipeEngine.executeRecipe(recipePath, options)
 
       // Check if Pass 1 collected any AI entries
       if (collector.collectMode && collector.hasEntries()) {
-        const assembler = new PromptAssembler()
+        // CLI flag overrides config
+        const aiConfig: AiServiceConfig = { ...this.hypergenConfig?.ai }
+        const aiModeFlag = flags['ai-mode'] as AiServiceConfig['mode'] | undefined
+        if (aiModeFlag) aiConfig.mode = aiModeFlag
+
         const originalCommand = ['hypergen', 'recipe', 'run', recipePath, ...process.argv.slice(4).filter(a => a !== '--answers' && !a.endsWith('.json'))].join(' ')
-        const prompt = assembler.assemble(collector, {
+
+        const transport = resolveTransport(aiConfig)
+        const transportResult = await transport.resolve({
+          collector,
+          config: aiConfig,
           originalCommand,
           answersPath: './ai-answers.json',
+          projectRoot: flags.cwd,
+          promptTemplate: aiConfig.promptTemplate,
         })
 
-        process.stdout.write(prompt)
         collector.clear()
-        this.exit(2)
-        return
+
+        if (transportResult.status === 'deferred') {
+          this.exit(transportResult.exitCode)
+          return
+        }
+
+        // Answers resolved inline — auto-run Pass 2
+        collector.collectMode = false
+        result = await this.recipeEngine.executeRecipe(recipePath, {
+          ...options,
+          answers: transportResult.answers,
+        })
       }
 
       collector.clear()
-
-      if (flags.json) {
-        this.log(JSON.stringify({
-          success: result.success,
-          recipe: result.recipe.name,
-          stepsCompleted: result.metadata.completedSteps,
-          filesCreated: result.filesCreated,
-          filesModified: result.filesModified,
-          errors: result.errors,
-        }, null, 2))
-        return
-      }
-
-      if (result.success) {
-        const prefix = flags.dryRun ? '[DRY RUN] ' : ''
-        this.log(`${prefix}Recipe '${result.recipe.name}' completed successfully`)
-
-        if (result.metadata.completedSteps > 0) {
-          this.log(`Steps executed: ${result.metadata.completedSteps}`)
-        }
-
-        if (result.filesCreated.length > 0) {
-          const verb = flags.dryRun ? 'would be created' : 'created'
-          this.log(`Files ${verb}: ${result.filesCreated.join(', ')}`)
-        }
-
-        if (result.filesModified.length > 0) {
-          const verb = flags.dryRun ? 'would be modified' : 'modified'
-          this.log(`Files ${verb}: ${result.filesModified.join(', ')}`)
-        }
-      } else {
-        this.log(`Recipe execution failed:`)
-        for (const error of result.errors) {
-          this.log(`  - ${error}`)
-        }
-        this.exit(1)
-      }
+      this.reportResult(result, flags)
     } catch (error: unknown) {
       collector.clear()
       const message = error instanceof Error ? error.message : String(error)
