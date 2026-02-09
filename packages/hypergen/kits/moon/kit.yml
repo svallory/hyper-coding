@@ -78,6 +78,6 @@ categories:
 # Optional: Define shared templates or partials
 shared:
   templates:
-    - "./shared/templates/*.liquid"
+    - "./shared/templates/*.jig"
   partials:
-    - "./shared/partials/*.liquid"
+    - "./shared/partials/*.jig"

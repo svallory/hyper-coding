@@ -129,17 +129,17 @@ steps:
   # Template Tool - Process template files
   - name: Generate component
     tool: template
-    template: component.tsx.ejs
+    template: component.tsx.jig.t
     
   - name: Generate styles
     tool: template
-    template: styles.scss.ejs
+    template: styles.scss.jig.t
     when: "{{ styling == 'css' }}"
     
   # Template Tool - Conditional templates
   - name: Generate tests
     tool: template
-    template: component.test.tsx.ejs
+    template: component.test.tsx.jig.t
     when: "{{ includeTests }}"
     
   # Action Tool - Execute TypeScript functions
@@ -185,7 +185,7 @@ steps:
   # Basic conditional execution
   - name: Generate TypeScript config
     tool: template
-    template: tsconfig.json.ejs
+    template: tsconfig.json.jig.t
     when: "{{ typescript }}"
     
   # Complex conditions
@@ -203,7 +203,7 @@ steps:
   # Object property conditions
   - name: Configure metadata
     tool: template
-    template: package.json.ejs
+    template: package.json.jig.t
     when: "{{ metadata.version }}"
 ```
 
@@ -217,13 +217,13 @@ Processes template files with variable substitution:
 steps:
   - name: Generate React component
     tool: template
-    template: component.tsx.ejs  # .ejs or .liquid files
+    template: component.tsx.jig.t  # .jig files
     # Variables automatically available in template
 ```
 
 **Template File Example:**
 ```typescript
-// component.tsx.ejs
+// component.tsx.jig.t
 import React from 'react';
 
 interface <%= name %>Props {
@@ -422,16 +422,16 @@ steps:
   # Template Tool - Generate base files
   - name: Generate component file
     tool: template
-    template: component.tsx.ejs
-    
+    template: component.tsx.jig.t
+
   - name: Generate styles
     tool: template
-    template: styles.scss.ejs
+    template: styles.scss.jig.t
     when: "{{ styling === 'scss' }}"
     
   - name: Generate TypeScript types
     tool: template
-    template: types.d.ts.ejs
+    template: types.d.ts.jig.t
     when: "{{ typescript }}"
     
   # Action Tool - Setup project structure
@@ -447,12 +447,12 @@ steps:
   # Template Tool - Generate test files
   - name: Generate component tests
     tool: template
-    template: component.test.tsx.ejs
+    template: component.test.tsx.jig.t
     when: "{{ withTests }}"
     
   - name: Generate Storybook story
     tool: template
-    template: component.stories.tsx.ejs
+    template: component.stories.tsx.jig.t
     when: "{{ withStorybook }}"
     
   # CodeMod Tool - Transform and optimize

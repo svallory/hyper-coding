@@ -60,7 +60,7 @@ examples:
 `)
       
       // Create template files
-      await fs.writeFile(path.join(templatesDir, 'component.liquid.t'), `---
+      await fs.writeFile(path.join(templatesDir, 'component.jig.t'), `---
 to: src/components/{{ name }}.ts
 ---
 /**
@@ -80,7 +80,7 @@ export const {{ name }}{% if type == 'functional' %} = ({ children }: {{ name }}
 `)
 
       if (true) { // Always create test file for consistency
-        await fs.writeFile(path.join(templatesDir, 'test.liquid.t'), `---
+        await fs.writeFile(path.join(templatesDir, 'test.jig.t'), `---
 to: src/components/{{ name }}.test.ts
 skip_if: "{{ !withTests }}"
 ---
@@ -116,14 +116,14 @@ export async function testComponent(
   
   try {
     // Generate component file
-    await templateEngine.renderTemplate('component.liquid.t', {
+    await templateEngine.renderTemplate('component.jig.t', {
       ...params,
       name: utils.inflection.classify(params.name)
     });
 
     // Generate test file if requested
     if (params.withTests) {
-      await templateEngine.renderTemplate('test.liquid.t', {
+      await templateEngine.renderTemplate('test.jig.t', {
         ...params,
         name: utils.inflection.classify(params.name)
       });

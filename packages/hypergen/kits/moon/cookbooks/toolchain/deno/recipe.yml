@@ -5,7 +5,7 @@ version: 1.0.0
 steps:
   - name: Update toolchain configuration
     tool: template
-    template: toolchain-deno.yml.liquid
+    template: toolchain-deno.yml.jig
 
   - name: Install Deno
     command: curl -fsSL https://deno.land/x/install/install.sh | sh

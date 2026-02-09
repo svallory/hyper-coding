@@ -42,7 +42,7 @@ steps:
 
   # Templates are automatically processed here
   # Files in ./templates/ are copied/processed based on their extension:
-  # - .liquid.t or .liquid files are processed as Liquid templates
+  # - .jig files are processed as Jig templates
   # - Other files are copied as-is
   # - .t extension is removed from filenames
   # - Files are placed relative to the execution directory
@@ -62,8 +62,8 @@ steps:
         echo ""
         echo "Next steps:"
         echo "  cd {{ projectName }}"
-        {%- if includeTests %}
+        @if(includeTests)
         echo "  npm test          # Run tests"
-        {%- endif %}
+        @end
         echo "  npm run dev       # Start development"
         echo "  npm run build     # Build for production"

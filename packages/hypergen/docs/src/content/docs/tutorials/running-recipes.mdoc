@@ -189,11 +189,11 @@ Modern Hypergen recipes support **automatic template processing**. Instead of ex
 steps:
   - name: Generate component
     tool: template
-    template: component.tsx.liquid
+    template: component.tsx.jig.t
 
   - name: Generate tests
     tool: template
-    template: test.tsx.liquid
+    template: test.tsx.jig.t
     when: "{{ includeTests }}"
 
   - name: Setup Storybook
@@ -266,7 +266,7 @@ composition:
 steps:
   - name: Generate base files
     tool: template
-    template: base.liquid
+    template: base.jig.t
 ```
 
 ```bash
@@ -297,7 +297,7 @@ hypergen react component --name="Button" # ✅ PascalCase
 
 **Template not found**:
 ```bash
-# Error: Template 'missing.liquid' not found
+# Error: Template 'missing.jig' not found
 # Check recipe.yml and template files
 hypergen recipe info problematic/recipe
 ```
@@ -330,9 +330,9 @@ hypergen recipe info react/component
 #   styling (enum, default: css): Styling approach
 # 
 # Steps:
-#   1. Generate component → component.tsx.liquid
-#   2. Generate styles → styles.module.css.liquid
-#   3. Generate tests → test.tsx.liquid (conditional)
+#   1. Generate component → component.tsx.jig.t
+#   2. Generate styles → styles.module.css.jig.t
+#   3. Generate tests → test.tsx.jig.t (conditional)
 
 # Show variable details
 hypergen recipe info react/component --show-variables

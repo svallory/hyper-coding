@@ -15,10 +15,10 @@ steps:
 
   - name: Create ESLint Configuration
     tool: template
-    template: eslint.config.js.liquid
+    template: eslint.config.js.jig
     when: "config_type === 'new'"
 
   - name: Create Legacy ESLint Configuration
     tool: template
-    template: .eslintrc.js.liquid
+    template: .eslintrc.js.jig
     when: "config_type === 'legacy'"

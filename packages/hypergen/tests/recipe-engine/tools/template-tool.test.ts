@@ -31,7 +31,7 @@ describe('TemplateTool', () => {
     templateStep = {
       tool: 'template',
       name: 'test-template-step',
-      template: 'test-template.liquid',
+      template: 'test-template.jig',
       variables: { name: 'TestComponent', typescript: true }
     }
 
@@ -114,20 +114,9 @@ describe('TemplateTool', () => {
       expect(result.errors.some(error => error.includes('Template identifier is required'))).toBe(true)
     })
 
-    it('should validate template engine options', async () => {
-      const stepWithInvalidEngine = { 
-        ...templateStep, 
-        engine: 'invalid-engine' as any 
-      }
-      
-      const result = await tool.validate(stepWithInvalidEngine, stepContext)
-      
-      expect(result.errors.some(error => error.includes('Invalid template engine'))).toBe(true)
-    })
-
     it('should provide execution time estimates', async () => {
       // Create a template file to make validation pass template existence check
-      const templatePath = path.join(tempDir, 'test-template.liquid')
+      const templatePath = path.join(tempDir, 'test-template.jig')
       await fs.writeFile(templatePath, '---\nto: test.txt\n---\nContent')
       
       const result = await tool.validate(templateStep, stepContext)
@@ -137,7 +126,7 @@ describe('TemplateTool', () => {
     })
 
     it('should provide resource requirements', async () => {
-      const templatePath = path.join(tempDir, 'test-template.liquid')
+      const templatePath = path.join(tempDir, 'test-template.jig')
       await fs.writeFile(templatePath, '---\nto: test.txt\n---\nContent')
       
       const result = await tool.validate(templateStep, stepContext)
@@ -160,7 +149,7 @@ describe('TemplateTool', () => {
 
     it('should execute with dry run mode successfully', async () => {
       // Create a simple template file  
-      const templatePath = path.join(tempDir, 'test-template.liquid')
+      const templatePath = path.join(tempDir, 'test-template.jig')
       const templateContent = [
         '---',
         'to: src/{{ name }}.txt',
@@ -189,14 +178,14 @@ describe('TemplateTool', () => {
         expect(result.stepName).toBe('test-template-step')
         expect(typeof result.duration).toBe('number')
         expect(result.duration).toBeGreaterThan(0)
-        expect(result.toolResult?.templateName).toBe('test-template.liquid')
+        expect(result.toolResult?.templateName).toBe('test-template.jig')
         expect(result.toolResult?.engine).toBeDefined()
       }
     })
 
     it('should handle skip conditions', async () => {
       // Create template with skip condition that evaluates to true
-      const templatePath = path.join(tempDir, 'test-template.liquid')
+      const templatePath = path.join(tempDir, 'test-template.jig')
       const templateContent = [
         '---',
         'to: src/{{ name }}.txt',
@@ -260,7 +249,7 @@ describe('TemplateToolFactory', () => {
   })
 
   it('should create tools with options', () => {
-    const options = { templateEngineConfig: { default: 'liquidjs' } }
+    const options = { templateEngineConfig: { default: 'jig' } }
     const tool = factory.create('test-tool-with-options', options)
     
     expect(tool).toBeInstanceOf(TemplateTool)
@@ -273,7 +262,7 @@ describe('TemplateToolFactory', () => {
 
   it('should validate configuration', () => {
     const validConfig = {
-      templateEngineConfig: { default: 'liquidjs' }
+      templateEngineConfig: { default: 'jig' }
     }
     
     const result = factory.validateConfig(validConfig)

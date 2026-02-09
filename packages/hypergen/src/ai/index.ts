@@ -35,3 +35,7 @@ export { ContextCollector, type ContextBundle } from './context-collector.js'
 
 // Output validation
 export { validateOutput, buildValidationFeedback, type ValidationResult } from './output-validator.js'
+
+// 2-pass AI generation
+export { AiCollector, type AiBlockEntry } from './ai-collector.js'
+export { PromptAssembler, type AssemblerOptions } from './prompt-assembler.js'

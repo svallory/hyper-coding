@@ -12,9 +12,9 @@
 - **Multi-Recipe Support**: Both single recipe and multi-recipe cookbook structures
 
 ## Template Engines (Used by Template Tool)
-- **LiquidJS (Default)**: Primary engine with `.liquid`, `.liq` extensions
+- **Jig (Default)**: Unified template engine with `.jig`, `.jig.t` extensions
 - **Rich Filters**: camelCase, snakeCase, kebabCase, pluralize, singularize, humanize, etc.
-- **EJS Support**: Full EJS templating alongside LiquidJS
+- **Legacy Support**: Full backward compatibility with legacy template syntax
 - **Auto-detection**: Engine selection based on file extension or syntax patterns
 
 ## Action System
@@ -68,7 +68,7 @@ hypergen help [command]              # Comprehensive help system
 ```
 
 ## ✅ 4-Tool Coordination System
-- **Template Tool**: Process template files (.ejs/.liquid) with variable substitution
+- **Template Tool**: Process template files (.jig/.jig.t) with variable substitution
 - **Action Tool**: Execute TypeScript functions with full ActionContext (args, utils, logger)
 - **CodeMod Tool**: Apply AST transformations to existing code files with file targeting
 - **Recipe Tool**: Execute nested recipes for composition and modularity
@@ -96,9 +96,9 @@ hypergen help [command]              # Comprehensive help system
 - **Moon Integration**: Native moonrepo build system support
 
 ## Multi-Engine Support
-- **Template Engines**: LiquidJS (default) and EJS both fully supported
+- **Template Engines**: Jig unified engine fully supported
 - **Directory Support**: Modern `recipes` and `cookbooks` directory structure
-- **File Extensions**: `.liquid`, `.ejs`, and `.ejs.t` extensions supported
+- **File Extensions**: `.jig` and `.jig.t` extensions supported
 - **Template Patterns**: Rich frontmatter and template processing capabilities
 
 ---

@@ -16,11 +16,11 @@ Understanding these concepts is essential for effectively using Hypergen. Think 
 ## Core Building Blocks
 
 ### Templates
-Template files (EJS, Liquid, etc.) that the Template Tool processes to generate code files. These are assets used in steps, not tools themselves.
+Template files (Jig, etc.) that the Template Tool processes to generate code files. These are assets used in steps, not tools themselves.
 
 **Think of templates as**: Blueprints or stencils that define what your generated code will look like.
 
-**Example**: A `component.tsx.ejs` template that generates React components with your specific naming and structure conventions.
+**Example**: A `component.tsx.jig` template that generates React components with your specific naming and structure conventions.
 
 ### Actions
 Actions are either commands or function calls. Both will require the user to authorize their execution, either before or during the generation process. Functions executed by actions must be part of the cookbook, either directly implemented in it, or imported and registered in the cookbook before it can be used.
@@ -112,14 +112,14 @@ Kit (@hyper-kits/starlight)
 ├── Cookbook (starlight documentation)
     ├── Recipe (create new site)
     │   ├── Steps using Tools:
-    │   │   ├── Template Tool → processes config.js.ejs template
+    │   │   ├── Template Tool → processes config.js.jig template
     │   │   ├── Action Tool → runs `npm install`
     │   │   └── CodeMod Tool → updates existing package.json
     │   ├── Variables: projectName, description, author
     │   └── Hooks: cleanup after completion
     └── Recipe (add new page)
         ├── Steps using Tools:
-        │   └── Template Tool → processes page.mdx.ejs template
+        │   └── Template Tool → processes page.mdx.jig template
         └── Variables: pageTitle, pageContent
 ```
 
@@ -141,9 +141,9 @@ Here's the structure of our `@hyper-kits/starlight` example:
 ├── create/                    # Recipe: create new Starlight site
 │   ├── recipe.yml            # Recipe configuration
 │   ├── templates/            # Templates used by this recipe
-│   │   ├── starlight.config.js.liquid
-│   │   ├── astro.config.js.liquid
-│   │   └── package.json.liquid
+│   │   ├── starlight.config.js.jig
+│   │   ├── astro.config.js.jig
+│   │   └── package.json.jig
 │   ├── actions/              # Actions used by this recipe
 │   │   └── install-deps.js
 │   └── codemods/            # CodeMods used by this recipe
@@ -151,7 +151,7 @@ Here's the structure of our `@hyper-kits/starlight` example:
 │   ├── page/                 # Recipe: add new page
 │   │   ├── recipe.yml
 │   │   ├── templates/
-│   │   │   └── page.mdx.liquid
+│   │   │   └── page.mdx.jig
 │   │   └── actions/
 │   │       └── update-sidebar.js
 │   └── plugin/              # Recipe: add plugin
@@ -177,13 +177,13 @@ Here's the structure of our `@hyper-kits/starlight` example:
 
 │       ├── recipe.yml
 │       ├── templates/
-│       │   └── plugin.js.liquid
+│       │   └── plugin.js.jig
 │       └── codemods/
 │           └── register-plugin.js
 ├── typedocs/                # Recipe: add TypeDoc integration
 │   ├── recipe.yml
 │   ├── templates/
-│   │   └── typedoc.config.js.liquid
+│   │   └── typedoc.config.js.jig
 │   └── actions/
 │       └── generate-api-docs.sh
 ├── recipes/                 # Direct recipes (no cookbook)

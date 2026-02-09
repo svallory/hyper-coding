@@ -8,6 +8,12 @@ const execute = async (
   args: any,
   config: RunnerConfig,
 ): Promise<ActionResult[]> => {
+  // In collect mode (Pass 1), skip all file operations
+  if (config._collectMode) {
+    debug('Collect mode: skipping file operations (Pass 1)')
+    return []
+  }
+
   const { logger } = config
   const messages = []
   const results = []

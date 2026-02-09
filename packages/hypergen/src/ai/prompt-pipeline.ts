@@ -66,8 +66,8 @@ export class PromptPipeline {
   async assemble(options: PromptPipelineOptions): Promise<AssembledPrompt> {
     debug('Starting prompt pipeline')
 
-    // Stage 1: Liquid rendering is done before this pipeline is called
-    // (by the AiTool or ai-liquid-tag, which have access to the Liquid engine)
+    // Stage 1: Template rendering is done before this pipeline is called
+    // (by the AiTool or ai-jig-tag, which have access to the Jig engine)
 
     // Stage 2: Context collection
     const contextBundle = await this.contextCollector.collect(

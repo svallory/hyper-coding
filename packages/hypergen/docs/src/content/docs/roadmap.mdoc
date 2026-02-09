@@ -65,7 +65,7 @@ composition:
 steps:
   - name: Generate base structure
     tool: template
-    template: base.liquid
+    template: base.jig.t
     
   - name: Add authentication
     tool: action
@@ -109,7 +109,7 @@ hypergen explain recipe <path>          # Explain recipe behavior
 Professional IDE support for template development:
 
 **VS Code Extension Features:**
-- Syntax highlighting for `.liquid` and `recipe.yml` files
+- Syntax highlighting for `.jig` and `recipe.yml` files
 - IntelliSense for template variables and filters
 - Recipe validation and linting integration
 - Cookbook discovery and execution from IDE
@@ -277,7 +277,7 @@ version: 1.0.0
 steps:
   - name: Setup monorepo
     tool: template
-    template: moon-setup.liquid
+    template: moon-setup.jig.t
     
   - name: Configure Claude Code
     tool: action

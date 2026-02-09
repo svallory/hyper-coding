@@ -79,7 +79,7 @@ hypergen action my-widget --name=TestWidget
 - **[📚 Complete Documentation](./docs/README.md)** - Comprehensive guides and references
 - **[🚀 Getting Started](./docs/getting-started.md)** - Installation and first steps
 - **[🎯 CLI Reference](./docs/cli-reference.md)** - All CLI commands and options
-- **[📝 Template Syntax](./docs/template-syntax.md)** - LiquidJS template syntax and helpers
+- **[📝 Template Syntax](./docs/template-syntax.md)** - Jig template syntax and helpers
 - **[⚙️ Template.yml Reference](./docs/template-yml-reference.md)** - Configuration file reference
 - **[💡 Examples](./docs/examples.md)** - Real-world examples and patterns
 
@@ -103,7 +103,7 @@ async function createComponent(context: ActionContext): Promise<ActionResult> {
 
 ### Templates
 
-LiquidJS-based templates with YAML frontmatter:
+Jig-based templates with YAML frontmatter:
 
 ```liquid
 ---
@@ -348,7 +348,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built with [TypeScript](https://www.typescriptlang.org/)
-- Powered by [LiquidJS](https://liquidjs.com/) templating
+- Powered by [Jig](https://github.com/jig-lang/jig) templating (Edge.js fork)
 - Testing with [Vitest](https://vitest.dev/)
 
 ## 📞 Support

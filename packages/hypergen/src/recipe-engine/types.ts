@@ -67,9 +67,6 @@ export interface TemplateStep extends BaseRecipeStep {
   /** Template identifier or path */
   template: string
   
-  /** Template engine to use (defaults to auto-detection) */
-  engine?: 'liquid' | 'auto'
-  
   /** Output directory override (relative to project root) */
   outputDir?: string
   
@@ -381,6 +378,12 @@ export interface StepContext {
   /** Condition evaluator */
   evaluateCondition: (expression: string, context: Record<string, any>) => boolean
   
+  /** AI answers for 2-pass generation (Pass 2) */
+  answers?: Record<string, any>
+
+  /** Whether we're in AI collect mode (Pass 1) */
+  collectMode?: boolean
+
   /** Dry run mode */
   dryRun?: boolean
   

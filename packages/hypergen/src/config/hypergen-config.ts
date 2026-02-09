@@ -22,32 +22,10 @@ export interface HypergenConfig {
     exclude?: string[]
   }
   
-  // Template engine options
+  // Template engine options (Jig)
   engine?: {
-    type?: 'liquid'
-    options?: Record<string, any>
-    // LiquidJS specific options
-    liquid?: {
-      // Resource limits for DoS protection
-      limits?: {
-        memoryLimit?: number // Memory limit in bytes (default: 1GB)
-        renderLimit?: number // Render timeout in ms (default: 1000)
-        parseLimit?: number // Parse limit in characters (default: 100M)
-      }
-      // Cache configuration
-      cache?: boolean | {
-        enabled?: boolean
-        maxSize?: number // Max number of cached templates
-      }
-      // Whitespace control
-      whitespace?: {
-        trimTagLeft?: boolean
-        trimTagRight?: boolean
-        trimOutputLeft?: boolean
-        trimOutputRight?: boolean
-        greedy?: boolean
-      }
-    }
+    /** Enable template caching */
+    cache?: boolean
   }
   
   // Output options
@@ -112,8 +90,7 @@ export class HypergenConfigLoader {
       exclude: ['node_modules', '.git', 'dist', 'build']
     },
     engine: {
-      type: 'liquid',
-      options: {}
+      cache: false
     },
     output: {
       conflictStrategy: 'fail',
@@ -397,25 +374,12 @@ export class HypergenConfigLoader {
       }
     }
     
-    // Validate engine type
-    if (config.engine?.type) {
-      const validEngines = ['liquid']
-      if (!validEngines.includes(config.engine.type)) {
-        errors.push(`Invalid engine type: ${config.engine.type}. Only 'liquid' is supported.`)
-      }
-    }
-    
     // Validate conflict strategy
     if (config.output?.conflictStrategy) {
       const validStrategies = ['fail', 'overwrite', 'skip', 'merge']
       if (!validStrategies.includes(config.output.conflictStrategy)) {
         errors.push(`Invalid conflict strategy: ${config.output.conflictStrategy}`)
       }
-    }
-    
-    // Validate plugins
-    if (config.plugins && !Array.isArray(config.plugins)) {
-      errors.push('plugins must be an array of strings')
     }
     
     return {
@@ -448,10 +412,9 @@ export default {
     exclude: ['node_modules', '.git', 'dist', 'build']
   },
   
-  // Template engine configuration
+  // Template engine configuration (Jig)
   engine: {
-    type: 'liquid',
-    options: {}
+    cache: false
   },
   
   // Output handling

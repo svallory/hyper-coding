@@ -28,20 +28,18 @@ When a recipe is executed, Hypergen automatically:
 
 | Extension | Processing | Example Input | Output |
 |-----------|------------|---------------|---------|
-| `.liquid.t` | Liquid template processing | `index.ts.liquid.t` | `index.ts` |
-| `.liquid` | Liquid template processing | `package.json.liquid` | `package.json` |
+| `.jig.t` | Jig template processing | `index.ts.jig.t` | `index.ts` |
+| `.jig` | Jig template processing | `package.json.jig` | `package.json` |
 | `.t.ts` | Template with extension removal | `config.t.ts` | `config.ts` |
 | `.t.md` | Template with extension removal | `README.t.md` | `README.md` |
 | `.t.json` | Template with extension removal | `tsconfig.t.json` | `tsconfig.json` |
 | No special extension | Copied as-is | `.gitignore` | `.gitignore` |
-| `.ejs.t` | EJS template processing | `app.js.ejs.t` | `app.js` |
-| `.ejs` | EJS template processing | `index.html.ejs` | `index.html` |
 
 ### File Placement
 
 By default, files are placed relative to the directory where the command was executed. This can be overridden using frontmatter:
 
-```liquid
+```jig
 ---
 to: src/components/{{ name }}.tsx
 ---
@@ -56,11 +54,11 @@ to: src/components/{{ name }}.tsx
 my-recipe/
 ├── recipe.yml
 └── templates/
-    ├── package.json.liquid
+    ├── package.json.jig
     ├── src/
-    │   └── index.ts.liquid
+    │   └── index.ts.jig
     ├── .gitignore
-    └── README.md.liquid
+    └── README.md.jig
 ```
 
 ### Recipe Configuration
@@ -82,7 +80,7 @@ variables:
 
 ### Template Example
 
-```liquid
+```jig
 ---
 to: "{{ projectName }}/package.json"
 ---
@@ -139,7 +137,7 @@ Templates can use YAML frontmatter to control processing:
 
 ### Destination Override
 
-```liquid
+```jig
 ---
 to: src/components/{{ name }}.tsx
 ---
@@ -152,16 +150,16 @@ export const {{ name }} = () => {
 
 ### Conditional Generation
 
-```liquid
+```jig
 ---
-to: {{ includeTests | ternary: 'test/setup.ts', false }}
+to: {{ ternary :: includeTests, 'test/setup.ts', false }}
 ---
 // Test setup code
 ```
 
 ### Skip Conditions
 
-```liquid
+```jig
 ---
 skip_if: {{ skipComponent }}
 to: src/components/{{ name }}.tsx
@@ -171,7 +169,7 @@ to: src/components/{{ name }}.tsx
 
 ### Multiple Conditions
 
-```liquid
+```jig
 ---
 to: "{{ outputDir }}/{{ fileName }}.{{ extension }}"
 inject: true
@@ -190,15 +188,15 @@ Before:
 steps:
   - name: Generate package.json
     tool: template
-    template: package.json.liquid
+    template: package.json.jig
 
   - name: Generate README
     tool: template
-    template: README.md.liquid
+    template: README.md.jig
 
   - name: Generate source files
     tool: template
-    template: src/index.ts.liquid
+    template: src/index.ts.jig
 ```
 
 After:
@@ -220,35 +218,35 @@ After:
 
 Use includes for shared template parts:
 
-```liquid
+```jig
 ---
 to: src/components/{{ name }}/{{ name }}.tsx
 ---
-{% include 'shared/component-header' %}
+@include('shared/component-header')
 
 export const {{ name }}: React.FC = () => {
   return (
-    <div className="{{ name | kebabCase }}">
-      {% include 'shared/component-body' %}
+    <div className="{{ kebabCase :: name }}">
+      @include('shared/component-body')
     </div>
   );
 };
 
-{% include 'shared/component-footer' %}
+@include('shared/component-footer')
 ```
 
 ### Dynamic File Names
 
-```liquid
+```jig
 ---
-to: "{{ componentType }}s/{{ name }}.{{ typescript | ternary: 'tsx', 'jsx' }}"
+to: "{{ componentType }}s/{{ name }}.{{ ternary :: typescript, 'tsx', 'jsx' }}"
 ---
 // Component content
 ```
 
 ### Environment-Specific Templates
 
-```liquid
+```jig
 ---
 to: "{{ environment }}/config.json"
 ---
@@ -281,9 +279,9 @@ variables:
 ```yaml
 name: component
 templates:
-  - src/components/{{ name }}.tsx.liquid
-  - src/components/{{ name }}.test.tsx.liquid
-  - src/components/{{ name }}.stories.tsx.liquid
+  - src/components/{{ name }}.tsx.jig
+  - src/components/{{ name }}.test.tsx.jig
+  - src/components/{{ name }}.stories.tsx.jig
 ```
 
 ### Pattern 3: Configuration Generator
@@ -312,8 +310,8 @@ steps:
 
 ### Variables Not Resolved
 - Check variable names match those defined in recipe.yml
-- Ensure proper Liquid syntax: `{{ variableName }}`
-- Use `{% raw %}` to prevent premature processing
+- Ensure proper Jig syntax: `{{ variableName }}`
+- Use `@raw` / `@endraw` to prevent premature processing
 
 ### Files in Wrong Location
 - Use `to:` in frontmatter to specify exact destination

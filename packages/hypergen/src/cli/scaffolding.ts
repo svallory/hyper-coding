@@ -286,35 +286,35 @@ ${parameters.filter(p => p.default !== undefined).map(p => `      ${p.name}: ${J
 
     switch (framework) {
       case 'react':
-        templates['templates/component.tsx.liquid'] = this.getReactComponentTemplate()
-        templates['templates/component.test.tsx.liquid'] = this.getReactTestTemplate()
-        templates['templates/component.stories.tsx.liquid'] = this.getReactStoryTemplate()
+        templates['templates/component.tsx.jig'] = this.getReactComponentTemplate()
+        templates['templates/component.test.tsx.jig'] = this.getReactTestTemplate()
+        templates['templates/component.stories.tsx.jig'] = this.getReactStoryTemplate()
         break
 
       case 'vue':
-        templates['templates/component.vue.liquid'] = this.getVueComponentTemplate()
-        templates['templates/component.test.ts.liquid'] = this.getVueTestTemplate()
+        templates['templates/component.vue.jig'] = this.getVueComponentTemplate()
+        templates['templates/component.test.ts.jig'] = this.getVueTestTemplate()
         break
 
       case 'api':
-        templates['templates/route.ts.liquid'] = this.getApiRouteTemplate()
-        templates['templates/route.test.ts.liquid'] = this.getApiTestTemplate()
-        templates['templates/model.ts.liquid'] = this.getApiModelTemplate()
+        templates['templates/route.ts.jig'] = this.getApiRouteTemplate()
+        templates['templates/route.test.ts.jig'] = this.getApiTestTemplate()
+        templates['templates/model.ts.jig'] = this.getApiModelTemplate()
         break
 
       case 'cli':
-        templates['templates/command.ts.liquid'] = this.getCliCommandTemplate()
-        templates['templates/command.test.ts.liquid'] = this.getCliTestTemplate()
+        templates['templates/command.ts.jig'] = this.getCliCommandTemplate()
+        templates['templates/command.test.ts.jig'] = this.getCliTestTemplate()
         break
 
       case 'node':
-        templates['templates/module.ts.liquid'] = this.getNodeModuleTemplate()
-        templates['templates/module.test.ts.liquid'] = this.getNodeTestTemplate()
+        templates['templates/module.ts.jig'] = this.getNodeModuleTemplate()
+        templates['templates/module.test.ts.jig'] = this.getNodeTestTemplate()
         break
         
       default:
-        templates['templates/file.ts.liquid'] = this.getGenericFileTemplate()
-        templates['templates/file.test.ts.liquid'] = this.getGenericTestTemplate()
+        templates['templates/file.ts.jig'] = this.getGenericFileTemplate()
+        templates['templates/file.test.ts.jig'] = this.getGenericTestTemplate()
     }
 
     return templates
@@ -666,43 +666,43 @@ describe('\${name}', () => {
   // Template generation methods
   private getReactComponentTemplate(): string {
     return `---
-to: src/components/<%= name %>/<%= name %>.tsx
+to: src/components/{{name }}/{{name }}.tsx
 ---
 import React from 'react';
 
-export interface <%= name %>Props {
+export interface {{name }}Props {
   children?: React.ReactNode;
   className?: string;
 }
 
-const <%= name %>: React.FC<<%= name %>Props> = ({ children, className }) => {
+const {{name }}: React.FC<{{name }}Props> = ({ children, className }) => {
   return (
-    <div className={\`<%= name.toLowerCase() %>\${className ? \` \${className}\` : ''}\`}>
-      {children || '<%= name %> Component'}
+    <div className={\`{{name.toLowerCase() }}\${className ? \` \${className}\` : ''}\`}>
+      {children || '{{name }} Component'}
     </div>
   );
 };
 
-export default <%= name %>;
+export default {{name }};
 `
   }
 
   private getReactTestTemplate(): string {
     return `---
-to: src/components/<%= name %>/<%= name %>.test.tsx
+to: src/components/{{name }}/{{name }}.test.tsx
 ---
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import <%= name %> from './<%= name %>';
+import {{name }} from './{{name }}';
 
-describe('<%= name %>', () => {
+describe('{{name }}', () => {
   it('renders without crashing', () => {
-    render(<<%= name %> />);
-    expect(screen.getByText('<%= name %> Component')).toBeInTheDocument();
+    render(<{{name }} />);
+    expect(screen.getByText('{{name }} Component')).toBeInTheDocument();
   });
 
   it('renders children when provided', () => {
-    render(<<%= name %>>Custom content</<%= name %>>);
+    render(<{{name }}>Custom content</{{name }}>);
     expect(screen.getByText('Custom content')).toBeInTheDocument();
   });
 });
@@ -711,14 +711,14 @@ describe('<%= name %>', () => {
 
   private getReactStoryTemplate(): string {
     return `---
-to: src/components/<%= name %>/<%= name %>.stories.tsx
+to: src/components/{{name }}/{{name }}.stories.tsx
 ---
 import type { Meta, StoryObj } from '@storybook/react';
-import <%= name %> from './<%= name %>';
+import {{name }} from './{{name }}';
 
-const meta: Meta<typeof <%= name %>> = {
-  title: 'Components/<%= name %>',
-  component: <%= name %>,
+const meta: Meta<typeof {{name }}> = {
+  title: 'Components/{{name }}',
+  component: {{name }},
   parameters: {
     layout: 'centered',
   },
@@ -742,11 +742,11 @@ export const WithContent: Story = {
 
   private getVueComponentTemplate(): string {
     return `---
-to: src/components/<%= name %>.vue
+to: src/components/{{name }}.vue
 ---
 <template>
-  <div class="<%= name.toLowerCase() %>">
-    <slot><%= name %> Component</slot>
+  <div class="{{name.toLowerCase() }}">
+    <slot>{{name }} Component</slot>
   </div>
 </template>
 
@@ -761,7 +761,7 @@ const props = withDefaults(defineProps<Props>(), {
 </script>
 
 <style scoped>
-.<%= name.toLowerCase() %> {
+.{{name.toLowerCase() }} {
   /* Add your styles here */
 }
 </style>
@@ -770,19 +770,19 @@ const props = withDefaults(defineProps<Props>(), {
 
   private getVueTestTemplate(): string {
     return `---
-to: src/components/<%= name %>.test.ts
+to: src/components/{{name }}.test.ts
 ---
 import { mount } from '@vue/test-utils';
-import <%= name %> from './<%= name %>.vue';
+import {{name }} from './{{name }}.vue';
 
-describe('<%= name %>', () => {
+describe('{{name }}', () => {
   it('renders properly', () => {
-    const wrapper = mount(<%= name %>);
-    expect(wrapper.text()).toContain('<%= name %> Component');
+    const wrapper = mount({{name }});
+    expect(wrapper.text()).toContain('{{name }} Component');
   });
 
   it('renders slot content', () => {
-    const wrapper = mount(<%= name %>, {
+    const wrapper = mount({{name }}, {
       slots: {
         default: 'Custom content'
       }
@@ -795,16 +795,16 @@ describe('<%= name %>', () => {
 
   private getApiRouteTemplate(): string {
     return `---
-to: src/routes/<%= name %>.ts
+to: src/routes/{{name }}.ts
 ---
 import { Router, Request, Response } from 'express';
 
 const router = Router();
 
-router.<%= method.toLowerCase() %>('/<%= name %>', async (req: Request, res: Response) => {
+router.{{method.toLowerCase() }}('/{{name }}', async (req: Request, res: Response) => {
   try {
-    // TODO: Implement <%= method %> /<%= name %> logic
-    res.json({ message: '<%= name %> endpoint' });
+    // TODO: Implement {{method }} /{{name }} logic
+    res.json({ message: '{{name }} endpoint' });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -816,23 +816,23 @@ export default router;
 
   private getApiTestTemplate(): string {
     return `---
-to: src/routes/<%= name %>.test.ts
+to: src/routes/{{name }}.test.ts
 ---
 import request from 'supertest';
 import express from 'express';
-import <%= name %>Router from './<%= name %>';
+import {{name }}Router from './{{name }}';
 
 const app = express();
 app.use(express.json());
-app.use('/api/<%= name %>', <%= name %>Router);
+app.use('/api/{{name }}', {{name }}Router);
 
-describe('<%= name %> API', () => {
-  it('should respond to <%= method %> /<%= name %>', async () => {
+describe('{{name }} API', () => {
+  it('should respond to {{method }} /{{name }}', async () => {
     const response = await request(app)
-      .<%= method.toLowerCase() %>('/api/<%= name %>')
+      .{{method.toLowerCase() }}('/api/{{name }}')
       .expect(200);
     
-    expect(response.body.message).toBe('<%= name %> endpoint');
+    expect(response.body.message).toBe('{{name }} endpoint');
   });
 });
 `
@@ -840,27 +840,27 @@ describe('<%= name %> API', () => {
 
   private getApiModelTemplate(): string {
     return `---
-to: src/models/<%= name %>.ts
+to: src/models/{{name }}.ts
 ---
-export interface <%= name %> {
+export interface {{name }} {
   id: string;
   name: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export class <%= name %>Model {
-  static async findById(id: string): Promise<<%= name %> | null> {
+export class {{name }}Model {
+  static async findById(id: string): Promise<{{name }} | null> {
     // TODO: Implement database query
     return null;
   }
 
-  static async create(data: Partial<<%= name %>>): Promise<<%= name %>> {
+  static async create(data: Partial<{{name }}>): Promise<{{name }}> {
     // TODO: Implement database creation
     throw new Error('Not implemented');
   }
 
-  static async update(id: string, data: Partial<<%= name %>>): Promise<<%= name %> | null> {
+  static async update(id: string, data: Partial<{{name }}>): Promise<{{name }} | null> {
     // TODO: Implement database update
     return null;
   }
@@ -875,26 +875,26 @@ export class <%= name %>Model {
 
   private getCliCommandTemplate(): string {
     return `---
-to: src/commands/<%= name %>.ts
+to: src/commands/{{name }}.ts
 ---
 import { Command } from 'commander';
 
-export const <%= name %>Command = new Command('<%= name %>')
-  .description('<%= name %> command')
+export const {{name }}Command = new Command('{{name }}')
+  .description('{{name }} command')
   .option('-v, --verbose', 'Enable verbose logging')
   .action(async (options) => {
     try {
-      console.log('Running <%= name %> command');
+      console.log('Running {{name }} command');
       
       if (options.verbose) {
         console.log('Verbose mode enabled');
       }
       
-      // TODO: Implement <%= name %> command logic
+      // TODO: Implement {{name }} command logic
       
-      console.log('<%= name %> command completed');
+      console.log('{{name }} command completed');
     } catch (error: any) {
-      console.error(\`<%= name %> command failed: \${error.message}\`);
+      console.error(\`{{name }} command failed: \${error.message}\`);
       process.exit(1);
     }
   });
@@ -903,20 +903,20 @@ export const <%= name %>Command = new Command('<%= name %>')
 
   private getCliTestTemplate(): string {
     return `---
-to: src/commands/<%= name %>.test.ts
+to: src/commands/{{name }}.test.ts
 ---
 import { execSync } from 'child_process';
 
-describe('<%= name %> command', () => {
+describe('{{name }} command', () => {
   it('should run successfully', () => {
     expect(() => {
-      execSync('node dist/cli.js <%= name %>', { encoding: 'utf-8' });
+      execSync('node dist/cli.js {{name }}', { encoding: 'utf-8' });
     }).not.toThrow();
   });
 
   it('should show help', () => {
-    const result = execSync('node dist/cli.js <%= name %> --help', { encoding: 'utf-8' });
-    expect(result).toContain('<%= name %>');
+    const result = execSync('node dist/cli.js {{name }} --help', { encoding: 'utf-8' });
+    expect(result).toContain('{{name }}');
   });
 });
 `
@@ -924,44 +924,44 @@ describe('<%= name %> command', () => {
 
   private getNodeModuleTemplate(): string {
     return `---
-to: src/<%= name %>.ts
+to: src/{{name }}.ts
 ---
-export interface <%= name %>Options {
+export interface {{name }}Options {
   // Define options here
 }
 
-export class <%= name %> {
-  private options: <%= name %>Options;
+export class {{name }} {
+  private options: {{name }}Options;
 
-  constructor(options: <%= name %>Options = {}) {
+  constructor(options: {{name }}Options = {}) {
     this.options = options;
   }
 
-  // TODO: Implement <%= name %> methods
+  // TODO: Implement {{name }} methods
 }
 
-export function create<%= name %>(options?: <%= name %>Options): <%= name %> {
-  return new <%= name %>(options);
+export function create{{name }}(options?: {{name }}Options): {{name }} {
+  return new {{name }}(options);
 }
 `
   }
 
   private getNodeTestTemplate(): string {
     return `---
-to: src/<%= name %>.test.ts
+to: src/{{name }}.test.ts
 ---
-import { <%= name %>, create<%= name %> } from './<%= name %>';
+import { {{name }}, create{{name }} } from './{{name }}';
 
-describe('<%= name %>', () => {
+describe('{{name }}', () => {
   it('should create instance', () => {
-    const instance = create<%= name %>();
-    expect(instance).toBeInstanceOf(<%= name %>);
+    const instance = create{{name }}();
+    expect(instance).toBeInstanceOf({{name }});
   });
 
   it('should accept options', () => {
     const options = {};
-    const instance = create<%= name %>(options);
-    expect(instance).toBeInstanceOf(<%= name %>);
+    const instance = create{{name }}(options);
+    expect(instance).toBeInstanceOf({{name }});
   });
 });
 `
@@ -969,39 +969,39 @@ describe('<%= name %>', () => {
 
   private getGenericFileTemplate(): string {
     return `---
-to: src/<%= name %>.ts
+to: src/{{name }}.ts
 ---
 /**
- * <%= name %> - Generated file
+ * {{name }} - Generated file
  */
 
-export interface <%= name %>Config {
+export interface {{name }}Config {
   // Define configuration here
 }
 
-export function <%= name %>(config: <%= name %>Config): void {
-  // TODO: Implement <%= name %> functionality
-  console.log('Running <%= name %> with config:', config);
+export function {{name }}(config: {{name }}Config): void {
+  // TODO: Implement {{name }} functionality
+  console.log('Running {{name }} with config:', config);
 }
 
-export default <%= name %>;
+export default {{name }};
 `
   }
 
   private getGenericTestTemplate(): string {
     return `---
-to: src/<%= name %>.test.ts
+to: src/{{name }}.test.ts
 ---
-import <%= name %> from './<%= name %>';
+import {{name }} from './{{name }}';
 
-describe('<%= name %>', () => {
+describe('{{name }}', () => {
   it('should be defined', () => {
-    expect(<%= name %>).toBeDefined();
+    expect({{name }}).toBeDefined();
   });
 
   it('should run without errors', () => {
     expect(() => {
-      <%= name %>({});
+      {{name }}({});
     }).not.toThrow();
   });
 });

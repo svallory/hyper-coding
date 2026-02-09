@@ -24,7 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-Hypergen is a code generator forked from Hygen, built with TypeScript. It uses decorators for action definitions and LiquidJS for templating.
+Hypergen is a code generator forked from Hygen, built with TypeScript. It uses decorators for action definitions and Jig (Edge.js fork) for templating.
 
 ### Core Flow
 
@@ -33,7 +33,7 @@ Hypergen is a code generator forked from Hygen, built with TypeScript. It uses d
 Commands route to:
 - **Actions**: Decorator-based generators (`@action` decorator)
 - **Recipes**: YAML multi-step workflows
-- **Templates**: LiquidJS rendering with YAML frontmatter
+- **Templates**: Jig rendering with YAML frontmatter
 
 ### Key Systems
 
@@ -62,10 +62,10 @@ Commands route to:
   - `parallel-tool.ts` - Parallel steps
 - `registry.ts` - Tool registration/resolution
 
-**Template Engines** (`src/template-engines/`):
-- `factory.ts` - Engine factory (LiquidJS only)
-- `liquid-engine.ts` - LiquidJS implementation
-- Extensions: `.liquid.t`, `.liquid`, `.liq.t`, `.liq`
+**Template Engine** (`src/template-engines/`):
+- `jig-engine.ts` - Jig (Edge.js) engine singleton with filters and globals
+- `ai-jig-tag.ts` - Custom `@ai` tag for AI-generated content
+- Extensions: `.jig`, `.jig.t`
 
 **Configuration** (`src/config/`):
 - `hypergen-config.ts` - Config loading (cosmiconfig)
@@ -81,7 +81,6 @@ Commands route to:
 
 **Other**:
 - `indexed-store/` - Hash-indexed template storage for fast lookups
-- `plugin-system/` - Plugin discovery and loading
 - `prompts/interactive-prompts.ts` - Clack-based interactive prompts
 - `errors/hypergen-errors.ts` - Centralized error handling with codes
 
@@ -90,7 +89,7 @@ Commands route to:
 2. Config loaded (`hypergen-config.ts`)
 3. Templates discovered
 4. Variables resolved (prompts if needed)
-5. LiquidJS renders templates
+5. Jig renders templates
 6. File operations executed (`execute.ts`)
 
 ### Configuration Hierarchy

@@ -155,7 +155,7 @@ Run tests: `bun test-recipe-tools.js`
 
 This foundation enables the implementation of specific tool types:
 
-1. **TemplateTools** - File generation from .ejs.t templates
+1. **TemplateTools** - File generation from .jig templates
 2. **ActionTools** - V8 decorator-based action execution  
 3. **CodeModTools** - AST-based code transformations
 4. **RecipeTools** - Nested recipe execution

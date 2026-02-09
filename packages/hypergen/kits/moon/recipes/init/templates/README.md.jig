@@ -1,0 +1,41 @@
+# {{ projectName }}
+
+{{ capitalize :: projectType }} project generated with Hypergen.
+
+## Getting Started
+
+```bash
+# Install dependencies
+bun install
+
+# Start development
+bun run dev
+
+@if(includeTests)
+# Run tests
+bun test
+
+# Run tests with coverage
+bun test:coverage
+@else
+# Type check
+bun run typecheck
+@end
+
+# Build for production
+bun run build
+```
+
+## Project Structure
+
+```
+.
+├── src/
+│   └── index.ts
+@if(includeTests)
+├── test/
+│   └── setup.ts
+@end
+├── package.json
+└── README.md
+```

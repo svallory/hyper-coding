@@ -1,112 +1,153 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  initializeTemplateEngines,
-  getTemplateEngineFactory,
-  getTemplateEngine,
-  getTemplateEngineForFile,
-  getDefaultTemplateEngine
+  initializeJig,
+  getJig,
+  renderTemplate,
+  renderFile,
 } from '../src/template-engines/index.js'
-import { LiquidTemplateEngine } from '../src/template-engines/liquid-engine.js'
 
-describe('Template Engines', () => {
+describe('Jig Template Engine', () => {
   beforeEach(() => {
-    initializeTemplateEngines()
+    initializeJig()
   })
 
-  describe('Factory', () => {
-    it('should register LiquidJS template engine', () => {
-      const factory = getTemplateEngineFactory()
-      expect(factory.list()).toContain('liquidjs')
-      expect(factory.list()).toHaveLength(1)
+  describe('Engine Initialization', () => {
+    it('should initialize and return a Jig (Edge) instance', () => {
+      const jig = getJig()
+      expect(jig).toBeDefined()
+      expect(typeof jig.renderRaw).toBe('function')
+      expect(typeof jig.registerFilter).toBe('function')
     })
 
-    it('should set LiquidJS as default template engine', () => {
-      const defaultEngine = getDefaultTemplateEngine()
-      expect(defaultEngine.name).toBe('liquidjs')
+    it('should return the same instance on subsequent calls', () => {
+      const jig1 = getJig()
+      const jig2 = getJig()
+      expect(jig1).toBe(jig2)
     })
 
-    it('should get template engine by name', () => {
-      const liquidEngine = getTemplateEngine('liquidjs')
-
-      expect(liquidEngine).toBeInstanceOf(LiquidTemplateEngine)
-    })
-
-    it('should get template engine by file extension', () => {
-      const liquidEngine = getTemplateEngineForFile('.liquid')
-
-      expect(liquidEngine?.name).toBe('liquidjs')
-    })
-
-    it('should return undefined for unsupported extensions', () => {
-      const engine = getTemplateEngineForFile('.unsupported')
-      expect(engine).toBeUndefined()
+    it('should reinitialize when called again', () => {
+      const jig1 = getJig()
+      initializeJig()
+      const jig2 = getJig()
+      // After reinit, should be a new instance
+      expect(jig2).toBeDefined()
     })
   })
 
-  describe('LiquidJS Template Engine', () => {
-    let engine: LiquidTemplateEngine
-
-    beforeEach(() => {
-      engine = new LiquidTemplateEngine()
-    })
-
+  describe('Template Rendering', () => {
     it('should render simple templates', async () => {
       const template = 'Hello {{ name }}!'
       const context = { name: 'World' }
-      const result = await engine.render(template, context)
-      expect(result).toBe('Hello World!')
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('Hello World!')
     })
 
-    it('should support filters', async () => {
-      const template = '{{ name | capitalize }}'
-      const context = { name: 'john' }
-      const result = await engine.render(template, context)
-      expect(result).toBe('John')
+    it('should render templates with expressions', async () => {
+      const template = '{{ name }} and {{ count + 1 }}'
+      const context = { name: 'test', count: 5 }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('test and 6')
     })
 
-    it('should support case transformation filters', async () => {
-      const template = '{{ name | camelCase }}'
-      const context = { name: 'hello-world' }
-      const result = await engine.render(template, context)
-      expect(result).toBe('helloWorld')
+    it('should render conditionals', async () => {
+      const template = '@if(show)\nVisible\n@else\nHidden\n@end'
+      const result1 = await renderTemplate(template, { show: true })
+      expect(result1.trim()).toContain('Visible')
+
+      const result2 = await renderTemplate(template, { show: false })
+      expect(result2.trim()).toContain('Hidden')
     })
 
-    it('should support supported file extensions', () => {
-      expect(engine.supports('.liquid')).toBe(true)
-      expect(engine.supports('.liquid.t')).toBe(true)
-      expect(engine.supports('.liq')).toBe(true)
-      expect(engine.supports('.liq.t')).toBe(true)
-      expect(engine.supports('.ejs')).toBe(false)
-    })
-
-    it('should handle template errors gracefully', async () => {
-      const template = '{{ undefined_var | invalid_filter }}'
-      const context = {}
-
-      try {
-        await engine.render(template, context)
-        // If we get here, the template didn't throw an error
-        // This is actually OK for LiquidJS with strictFilters: false
-        expect(true).toBe(true)
-      } catch (error) {
-        expect(error.message).toContain('LiquidJS template rendering failed')
-      }
+    it('should render loops', async () => {
+      const template = '@each(item in items)\n{{ item }}\n@end'
+      const result = await renderTemplate(template, { items: ['a', 'b', 'c'] })
+      expect(result).toContain('a')
+      expect(result).toContain('b')
+      expect(result).toContain('c')
     })
   })
 
-  describe('Template Engine Integration', () => {
-    it('should auto-detect LiquidJS templates', async () => {
-      const liquidEngine = getTemplateEngineForFile('.liquid')
-      const template = '{{ name | capitalize }}'
-      const context = { name: 'world' }
-      
-      const result = await liquidEngine!.render(template, context)
-      expect(result).toBe('World')
+  describe('Filters', () => {
+    it('should support capitalize filter', async () => {
+      const template = '{{ capitalize :: name }}'
+      const context = { name: 'john' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('John')
     })
 
-    it('should return undefined for EJS extension', async () => {
-      const ejsEngine = getTemplateEngineForFile('.ejs')
-      expect(ejsEngine).toBeUndefined()
+    it('should support camelCase filter', async () => {
+      const template = '{{ camelCase :: name }}'
+      const context = { name: 'hello-world' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('helloWorld')
+    })
+
+    it('should support pascalCase filter', async () => {
+      const template = '{{ pascalCase :: name }}'
+      const context = { name: 'hello-world' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('HelloWorld')
+    })
+
+    it('should support snakeCase filter', async () => {
+      const template = '{{ snakeCase :: name }}'
+      const context = { name: 'helloWorld' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('hello_world')
+    })
+
+    it('should support kebabCase filter', async () => {
+      const template = '{{ kebabCase :: name }}'
+      const context = { name: 'helloWorld' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('hello-world')
+    })
+
+    it('should support pluralize filter', async () => {
+      const template = '{{ pluralize :: name }}'
+      const context = { name: 'person' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('people')
+    })
+
+    it('should support singularize filter', async () => {
+      const template = '{{ singularize :: name }}'
+      const context = { name: 'people' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('person')
+    })
+  })
+
+  describe('Global Functions', () => {
+    it('should support filters as global functions', async () => {
+      const template = '{{ camelCase(name) }}'
+      const context = { name: 'hello-world' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('helloWorld')
+    })
+
+    it('should support capitalize as global function', async () => {
+      const template = '{{ capitalize(name) }}'
+      const context = { name: 'john' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('John')
+    })
+
+    it('should support pluralize as global function', async () => {
+      const template = '{{ pluralize(name) }}'
+      const context = { name: 'person' }
+      const result = await renderTemplate(template, context)
+      expect(result.trim()).toBe('people')
+    })
+  })
+
+  describe('Error Handling', () => {
+    it('should handle undefined variables gracefully', async () => {
+      const template = '{{ undefinedVar }}'
+      const context = {}
+      const result = await renderTemplate(template, context)
+      // Edge.js/Jig renders undefined as the string "undefined"
+      expect(result.trim()).toBe('undefined')
     })
   })
 })

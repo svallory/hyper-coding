@@ -1,0 +1,73 @@
+---
+to: "middleware.ts"
+---
+import { NextRequest, NextResponse } from "next/server";
+
+export function middleware(request: NextRequest) {
+  @if(purpose == "auth")
+  const token = request.cookies.get("auth-token")?.value;
+
+  // Allow public routes
+  const publicPaths = ["/", "/login", "/register"];
+  if (publicPaths.some((path) => request.nextUrl.pathname === path)) {
+    return NextResponse.next();
+  }
+
+  // Allow API auth routes
+  if (request.nextUrl.pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
+
+  // Redirect to login if no token
+  if (!token) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("from", request.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
+  @elseif(purpose == "headers")
+  const response = NextResponse.next();
+
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()",
+  );
+
+  return response;
+  @elseif(purpose == "i18n")
+  const { pathname } = request.nextUrl;
+  const defaultLocale = "en";
+  const locales = ["en", "es", "fr", "de"];
+
+  const pathnameHasLocale = locales.some(
+    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`,
+  );
+
+  if (pathnameHasLocale) {
+    return NextResponse.next();
+  }
+
+  // Detect locale from Accept-Language header
+  const acceptLanguage = request.headers.get("Accept-Language") || "";
+  const detectedLocale =
+    locales.find((locale) => acceptLanguage.includes(locale)) || defaultLocale;
+
+  // Redirect to locale-prefixed path
+  const url = new URL(`/${detectedLocale}${pathname}`, request.url);
+  return NextResponse.redirect(url);
+  @elseif(purpose == "redirect")
+  // TODO: Add redirect/rewrite rules
+  return NextResponse.next();
+  @else
+  // TODO: Implement custom middleware logic
+  return NextResponse.next();
+  @end
+}
+
+export const config = {
+  matcher: ["{{ matcher }}"],
+};

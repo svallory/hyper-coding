@@ -8,8 +8,8 @@ steps:
 
   - name: Create Prettier Configuration
     tool: template
-    template: .prettierrc.yml.liquid
+    template: .prettierrc.yml.jig
 
   - name: Add Prettier Ignore
     tool: template
-    template: .prettierignore.liquid
+    template: .prettierignore.jig

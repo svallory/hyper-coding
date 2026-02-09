@@ -34,7 +34,7 @@ variables:
     description: "Create a TypeScript typecheck task"
 
 # Templates are automatically processed from ./templates/
-# The tag-typescript.yml.liquid file will be processed automatically
+# The tag-typescript.yml.jig file will be processed automatically
 
 steps:
   post:
@@ -46,10 +46,10 @@ steps:
         echo "   Config file: {{ ts_config_path }}"
         echo "   Output dir: {{ build_output }}"
         echo "   Tasks created:"
-        {%- if create_typecheck_task %}
+        @if(create_typecheck_task)
         echo "     - typecheck: Type checking"
-        {%- endif %}
-        {%- if create_build_task %}
+        @end
+        @if(create_build_task)
         echo "     - build: TypeScript compilation"
-        {%- endif %}
+        @end
         echo "   Add 'tags: [typescript]' to your moon.yml to use these tasks."

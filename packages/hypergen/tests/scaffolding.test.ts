@@ -61,9 +61,9 @@ describe('GeneratorScaffolding', () => {
 
       // Check React-specific files
       const generatorDir = path.join(tempDir, 'react-widget')
-      expect(fs.existsSync(path.join(generatorDir, 'templates', 'component.tsx.ejs'))).toBe(true)
-      expect(fs.existsSync(path.join(generatorDir, 'templates', 'component.test.tsx.ejs'))).toBe(true)
-      expect(fs.existsSync(path.join(generatorDir, 'templates', 'component.stories.tsx.ejs'))).toBe(true)
+      expect(fs.existsSync(path.join(generatorDir, 'templates', 'component.tsx.jig'))).toBe(true)
+      expect(fs.existsSync(path.join(generatorDir, 'templates', 'component.test.tsx.jig'))).toBe(true)
+      expect(fs.existsSync(path.join(generatorDir, 'templates', 'component.stories.tsx.jig'))).toBe(true)
 
       // Check actions.ts content
       const actionsContent = fs.readFileSync(path.join(generatorDir, 'actions.ts'), 'utf-8')
@@ -91,9 +91,9 @@ describe('GeneratorScaffolding', () => {
 
       // Check API-specific files
       const generatorDir = path.join(tempDir, 'api-endpoint')
-      expect(fs.existsSync(path.join(generatorDir, 'templates', 'route.ts.ejs'))).toBe(true)
-      expect(fs.existsSync(path.join(generatorDir, 'templates', 'route.test.ts.ejs'))).toBe(true)
-      expect(fs.existsSync(path.join(generatorDir, 'templates', 'model.ts.ejs'))).toBe(true)
+      expect(fs.existsSync(path.join(generatorDir, 'templates', 'route.ts.jig'))).toBe(true)
+      expect(fs.existsSync(path.join(generatorDir, 'templates', 'route.test.ts.jig'))).toBe(true)
+      expect(fs.existsSync(path.join(generatorDir, 'templates', 'model.ts.jig'))).toBe(true)
 
       // Check template.yml content
       const templateContent = fs.readFileSync(path.join(generatorDir, 'template.yml'), 'utf-8')
@@ -191,7 +191,7 @@ describe('GeneratorScaffolding', () => {
   })
 
   describe('template content validation', () => {
-    it('should generate valid EJS templates', async () => {
+    it('should generate valid Jig templates', async () => {
       const result = await scaffolding.initGenerator({
         name: 'test-template',
         directory: tempDir,
@@ -204,10 +204,10 @@ describe('GeneratorScaffolding', () => {
       expect(result.success).toBe(true)
 
       const templateDir = path.join(tempDir, 'test-template', 'templates')
-      const componentTemplate = fs.readFileSync(path.join(templateDir, 'component.tsx.ejs'), 'utf-8')
-      
-      // Check for valid EJS syntax
-      expect(componentTemplate).toContain('<%=')
+      const componentTemplate = fs.readFileSync(path.join(templateDir, 'component.tsx.jig'), 'utf-8')
+
+      // Check for valid Jig syntax
+      expect(componentTemplate).toContain('{{')
       expect(componentTemplate).toContain('---')
       expect(componentTemplate).toContain('to:')
       expect(componentTemplate).toContain('React.FC')

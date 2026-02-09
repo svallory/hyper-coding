@@ -1,6 +1,6 @@
 ---
 title: Hypergen Documentation
-description: Modern code generator with LiquidJS engine, TypeScript actions, and intelligent cookbook discovery
+description: Modern code generator with Jig template engine, TypeScript actions, and intelligent cookbook discovery
 ---
 
 # Hypergen
@@ -9,7 +9,7 @@ description: Modern code generator with LiquidJS engine, TypeScript actions, and
 **Who it's for**: Developers who want to automate repetitive coding tasks and share code generation patterns
 **Key benefit**: Generate consistent, high-quality code faster than manual coding
 
-Hypergen is a modern, scalable code generator built with TypeScript. It provides an intuitive recipe system with LiquidJS engine, TypeScript decorators for actions, and intelligent cookbook discovery from NPM and GitHub.
+Hypergen is a modern, scalable code generator built with TypeScript. It provides an intuitive recipe system with Jig template engine, TypeScript decorators for actions, and intelligent cookbook discovery from NPM and GitHub.
 
 ## Why Use Hypergen?
 
@@ -23,7 +23,7 @@ Hypergen is a modern, scalable code generator built with TypeScript. It provides
 ### 🚀 Recipe Step System
 - **Recipe.yml Configuration**: Rich variable types with validation and defaults
 - **4-Tool Coordination**: Template/Action/CodeMod/Recipe tools executed in sequential steps
-- **LiquidJS Engine**: Fast, secure templating with rich filters (camelCase, snakeCase, pluralize)
+- **Jig Engine**: Fast, secure templating with rich filters (camelCase, snakeCase, pluralize)
 - **StepExecutor**: Orchestrates step execution with conditional logic and error handling
 - **RecipeEngine**: Complete recipe lifecycle management with validation and caching
 
@@ -95,7 +95,7 @@ Hypergen is built on a modular architecture that enables:
 - **Recipe Step System**: Complete framework with RecipeEngine and StepExecutor
 - **4-Tool Coordination**: Template, Action, CodeMod, and Recipe tools working together
 - **Sequential Execution**: Steps run in order with conditional logic and error handling
-- **Template Engines**: Pluggable system with LiquidJS as default, EJS for compatibility
+- **Template Engine**: Jig (Edge.js fork) with no HTML escaping, auto-indentation, and full JS expressions
 - **Action System**: TypeScript decorators with auto-discovery and validation
 - **Cookbook Discovery**: Multi-source discovery (NPM, GitHub, local) with caching
 - **Security Model**: Creator trust system with transparent consent

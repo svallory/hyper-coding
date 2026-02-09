@@ -32,7 +32,7 @@ variables:
 steps:
   - name: Update toolchain configuration
     tool: template
-    template: toolchain-node.yml.liquid
+    template: toolchain-node.yml.jig
 
   - name: Display completion message
     tool: shell

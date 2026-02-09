@@ -8,7 +8,6 @@ import createDebug from 'debug'
 import { ActionRegistry } from './registry.js'
 import { ActionParameterResolver } from './parameter-resolver.js'
 import { DefaultActionUtils, ConsoleActionLogger } from './utils.js'
-import { ActionLifecycleManager, BuiltinHooks } from './lifecycle.js'
 import { TemplateCompositionEngine } from '../config/template-composition.js'
 import { TemplateParser } from '../config/template-parser.js'
 import { 
@@ -19,13 +18,10 @@ import {
 import type { 
   ActionContext, 
   ActionResult, 
-  ActionLogger, 
-  ActionUtils,
   ActionFunction
 } from './types.js'
 import { ActionExecutionError } from './types.js'
-import { ErrorHandler, ErrorCode, HypergenError, validateParameter } from '../errors/hypergen-errors.js'
-import { type PromptOptions } from '../prompts/interactive-prompts.js'
+import { ErrorHandler, ErrorCode, HypergenError } from '../errors/hypergen-errors.js'
 
 const debug = createDebug('hypergen:v8:action:executor')
 
@@ -33,16 +29,10 @@ export class ActionExecutor {
   private parameterResolver = new ActionParameterResolver()
   private defaultUtils = new DefaultActionUtils()
   private defaultLogger = new ConsoleActionLogger()
-  private lifecycleManager = new ActionLifecycleManager()
   private compositionEngine = new TemplateCompositionEngine()
   private communicationManager: ActionCommunicationManager
 
   constructor(communicationConfig?: Partial<CommunicationConfig>) {
-    // Register built-in lifecycle hooks
-    for (const hook of BuiltinHooks.getAll()) {
-      this.lifecycleManager.registerHook('*', hook)
-    }
-
     // Initialize communication manager
     this.communicationManager = getCommunicationManager(communicationConfig)
   }
@@ -121,31 +111,14 @@ export class ActionExecutor {
         return dryRunResult
       }
 
-      const mainAction: ActionFunction = async (ctx: ActionContext) => {
-        return await action.fn(ctx)
-      }
-
-      const { result, lifecycle } = await this.lifecycleManager.executeLifecycle(
-        actionName,
-        executionContext,
-        mainAction,
-        {
-          timeout: options.timeout,
-          continueOnError: false
-        }
-      )
+      const result = await action.fn(executionContext)
 
       this.communicationManager.completeAction(actionId, {
         filesCreated: result.filesCreated,
         message: result.message
       })
 
-      debug('Action %s completed with lifecycle: %o', actionName, {
-        success: result.success,
-        lifecycleSuccess: lifecycle.success,
-        totalDuration: lifecycle.totalDuration,
-        hooksExecuted: lifecycle.results.length
-      })
+      debug('Action %s completed', actionName)
 
       return result
     } catch (error: any) {
@@ -264,20 +237,8 @@ export class ActionExecutor {
         return dryRunResult
       }
 
-      // Execute action with lifecycle management
-      const mainAction: ActionFunction = async (ctx: ActionContext) => {
-        return await action.fn(ctx)
-      }
-
-      const { result, lifecycle } = await this.lifecycleManager.executeLifecycle(
-        actionName,
-        executionContext,
-        mainAction,
-        {
-          timeout: options.timeout,
-          continueOnError: false
-        }
-      )
+      // Execute action
+      const result = await action.fn(executionContext)
 
       // Complete action with communication manager
       this.communicationManager.completeAction(actionId, {
@@ -285,12 +246,7 @@ export class ActionExecutor {
         message: result.message
       })
 
-      debug('Action %s completed with lifecycle: %o', actionName, {
-        success: result.success,
-        lifecycleSuccess: lifecycle.success,
-        totalDuration: lifecycle.totalDuration,
-        hooksExecuted: lifecycle.results.length
-      })
+      debug('Action %s completed', actionName)
 
       return result
     } catch (error: any) {
@@ -317,52 +273,6 @@ export class ActionExecutor {
         { action: actionName }
       )
     }
-  }
-
-  /**
-   * Execute multiple actions in sequence
-   */
-  async executeSequence(
-    actions: Array<{ name: string; parameters?: Record<string, any> }>,
-    context: Partial<ActionContext> = {}
-  ): Promise<ActionResult[]> {
-    debug('Executing action sequence: %d actions', actions.length)
-
-    const results: ActionResult[] = []
-
-    for (const actionConfig of actions) {
-      const result = await this.execute(
-        actionConfig.name,
-        actionConfig.parameters || {},
-        context
-      )
-
-      results.push(result)
-
-      // Stop execution if an action fails
-      if (!result.success) {
-        debug('Action sequence stopped due to failure: %s', actionConfig.name)
-        break
-      }
-    }
-
-    return results
-  }
-
-  /**
-   * Execute multiple actions in parallel
-   */
-  async executeParallel(
-    actions: Array<{ name: string; parameters?: Record<string, any> }>,
-    context: Partial<ActionContext> = {}
-  ): Promise<ActionResult[]> {
-    debug('Executing actions in parallel: %d actions', actions.length)
-
-    const promises = actions.map(actionConfig =>
-      this.execute(actionConfig.name, actionConfig.parameters || {}, context)
-    )
-
-    return Promise.all(promises)
   }
 
   /**
@@ -555,99 +465,10 @@ export class ActionExecutor {
   }
 
   /**
-   * Register a lifecycle hook for actions
-   */
-  registerLifecycleHook(actionName: string, hook: import('./lifecycle.js').LifecycleHook): void {
-    this.lifecycleManager.registerHook(actionName, hook)
-  }
-
-  /**
-   * Get lifecycle hooks for an action
-   */
-  getLifecycleHooks(actionName: string): import('./lifecycle.js').LifecycleHook[] {
-    return this.lifecycleManager.getHooks(actionName)
-  }
-
-  /**
-   * Clear lifecycle hooks
-   */
-  clearLifecycleHooks(actionName?: string): void {
-    if (actionName) {
-      this.lifecycleManager.clearActionHooks(actionName)
-    } else {
-      this.lifecycleManager.clearHooks()
-    }
-  }
-
-  /**
    * Get communication manager instance
    */
   getCommunicationManager(): ActionCommunicationManager {
     return this.communicationManager
-  }
-
-  /**
-   * Execute multiple actions with communication support
-   */
-  async executeWorkflow(
-    actions: Array<{
-      name: string
-      parameters?: Record<string, any>
-      actionId?: string
-      dependsOn?: string[]
-      parallel?: boolean
-    }>,
-    context: Partial<ActionContext> = {}
-  ): Promise<ActionResult[]> {
-    debug('Executing workflow with %d actions', actions.length)
-
-    const results: ActionResult[] = []
-    const actionIds = new Map<string, string>()
-
-    // Generate action IDs and register dependencies
-    for (const actionConfig of actions) {
-      const actionId = actionConfig.actionId || `workflow_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      actionIds.set(actionConfig.name, actionId)
-
-      // Set shared data about dependencies
-      if (actionConfig.dependsOn) {
-        this.communicationManager.setSharedData(`${actionId}_dependencies`, actionConfig.dependsOn, 'workflow')
-      }
-    }
-
-    // Execute actions with dependency management
-    for (const actionConfig of actions) {
-      const actionId = actionIds.get(actionConfig.name)!
-
-      // Wait for dependencies to complete
-      if (actionConfig.dependsOn) {
-        debug('Waiting for dependencies: %o', actionConfig.dependsOn)
-        for (const dependency of actionConfig.dependsOn) {
-          const dependencyId = actionIds.get(dependency)
-          if (dependencyId) {
-            await this.communicationManager.waitForAction(dependencyId, 30000) // 30 second timeout
-          }
-        }
-      }
-
-      // Execute action
-      const result = await this.executeInteractively(
-        actionConfig.name,
-        actionConfig.parameters || {},
-        context,
-        { actionId }
-      )
-
-      results.push(result)
-
-      // Stop workflow if action fails (unless marked as optional)
-      if (!result.success) {
-        debug('Workflow stopped due to action failure: %s', actionConfig.name)
-        break
-      }
-    }
-
-    return results
   }
 
   /**

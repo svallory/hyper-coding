@@ -1,0 +1,116 @@
+---
+to: .moon/tasks.yml
+---
+$schema: "https://moonrepo.dev/schemas/tasks.json"
+
+# File groups are a mechanism for grouping similar types of files based on a
+# pattern, and can be referenced by a task's `inputs` or `outputs`.
+fileGroups:
+  configs:
+    - "*config*"
+    - ".*rc*"
+    - ".*ignore"
+  sources:
+    - "src/**/*"
+    - "types/**/*"
+  tests:
+    - "tests/**/*"
+    - "**/*.test.*"
+    - "**/*.spec.*"
+  @if(tools.includes("typescript"))
+  typescript:
+    - "tsconfig.json"
+    - "src/**/*.ts"
+    - "src/**/*.tsx"
+    - "types/**/*.d.ts"
+  @end
+
+tasks:
+  # Basic tasks for all projects
+  build:
+    command: "echo 'Build task not configured'"
+    inputs:
+      - "@globs(sources)"
+    outputs:
+      - "lib"
+      - "dist"
+
+  clean:
+    command: "rm -rf lib dist build"
+
+  @if(tools.includes("typescript"))
+  # TypeScript compilation
+  typecheck:
+    command: "tsc --build"
+    inputs:
+      - "@globs(sources)"
+      - "@globs(typescript)"
+    outputs:
+      - "tsconfig.tsbuildinfo"
+  @end
+
+  @if(tools.includes("eslint"))
+  # Linting with ESLint
+  lint:
+    command: "eslint --cache --fix ."
+    inputs:
+      - "@globs(sources)"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - ".eslintrc*"
+    outputs:
+      - ".eslintcache"
+  @end
+
+  @if(tools.includes("prettier"))
+  # Formatting with Prettier
+  format:
+    command: "prettier --write ."
+    inputs:
+      - "@globs(sources)"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.json"
+      - "**/*.md"
+      - ".prettierrc*"
+  @end
+
+  @if(tools.includes("jest"))
+  # Testing with Jest
+  test:
+    command: "jest"
+    inputs:
+      - "@globs(sources)"
+      - "@globs(tests)"
+      - "jest.config.*"
+    outputs:
+      - "coverage"
+  @end
+
+  @if(tools.includes("vitest"))
+  # Testing with Vitest
+  test:
+    command: "vitest run"
+    inputs:
+      - "@globs(sources)"
+      - "@globs(tests)"
+      - "vitest.config.*"
+    outputs:
+      - "coverage"
+  @end
+
+  # Development server
+  dev:
+    command: "echo 'Dev server not configured'"
+    options:
+      runInCI: false
+
+  # Release/publish
+  release:
+    command: "echo 'Release not configured'"
+    options:
+      runInCI: false

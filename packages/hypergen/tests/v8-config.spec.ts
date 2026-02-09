@@ -33,8 +33,8 @@ variables:
     type: boolean
     default: true
 files:
-  - component.liquid
-  - test.liquid
+  - component.jig
+  - test.jig
 `
       
       const config = await parser.parseConfigFromString(yaml)
@@ -46,7 +46,7 @@ files:
       expect(config.allVariables.name.type).toBe('string')
       expect(config.allVariables.name.required).toBe(true)
       expect(config.allVariables.typescript.default).toBe(true)
-      expect(config.files).toEqual(['component.liquid', 'test.liquid'])
+      expect(config.files).toEqual(['component.jig', 'test.jig'])
     })
 
     it('should handle all variable types', async () => {

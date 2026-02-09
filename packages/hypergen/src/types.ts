@@ -78,6 +78,10 @@ export interface RunnerConfig {
   helpers?: any
   localsDefaults?: any
   createPrompter?: <Q, T>() => Prompter<Q, T>
+  /** AI answers for 2-pass generation (Pass 2) */
+  _answers?: Record<string, any>
+  /** Whether we're in AI collect mode (Pass 1) */
+  _collectMode?: boolean
 }
 
 export interface ResolvedRunnerConfig extends RunnerConfig {

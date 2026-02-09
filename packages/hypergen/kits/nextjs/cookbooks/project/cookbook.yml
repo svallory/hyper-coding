@@ -1,0 +1,9 @@
+name: project
+description: Project-level scaffolding and configuration
+version: 1.0.0
+
+defaults:
+  recipe: create
+
+recipes:
+  - "./*/recipe.yml"

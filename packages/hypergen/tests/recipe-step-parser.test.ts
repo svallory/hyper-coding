@@ -73,7 +73,7 @@ describe('Recipe Step System Parser', () => {
           {
             name: 'Generate template',
             tool: 'template',
-            template: 'component.liquid',
+            template: 'component.jig',
             when: '{{ enabled }}'
           },
           {
@@ -107,7 +107,7 @@ describe('Recipe Step System Parser', () => {
       const steps = result.config.steps!
       expect(steps[0].name).toBe('Generate template')
       expect(steps[0].tool).toBe('template')
-      expect((steps[0] as any).template).toBe('component.liquid')
+      expect((steps[0] as any).template).toBe('component.jig')
       expect((steps[0] as any).when).toBe('{{ enabled }}')
 
       expect(steps[1].name).toBe('Run setup')
@@ -251,7 +251,7 @@ describe('Recipe Step System Parser', () => {
           {
             name: 'Generate files',
             tool: 'template',
-            template: 'component.ejs'
+            template: 'component.jig'
           }
         ],
         examples: [
@@ -317,9 +317,8 @@ describe('Recipe Step System Parser', () => {
           {
             name: 'Template step',
             tool: 'template',
-            template: 'component.ejs',
-            engine: 'ejs',
-            outputDir: 'src/components',
+            template: 'component.jig',
+                        outputDir: 'src/components',
             overwrite: true,
             exclude: ['*.test.ts'],
             templateConfig: {
@@ -338,8 +337,7 @@ describe('Recipe Step System Parser', () => {
       
       expect(result.isValid).toBe(true)
       const templateStep = result.config.steps![0] as any
-      expect(templateStep.template).toBe('component.ejs')
-      expect(templateStep.engine).toBe('ejs')
+      expect(templateStep.template).toBe('component.jig')
       expect(templateStep.outputDir).toBe('src/components')
       expect(templateStep.overwrite).toBe(true)
       expect(templateStep.exclude).toEqual(['*.test.ts'])
@@ -478,12 +476,12 @@ describe('Recipe Step System Parser', () => {
           {
             name: 'Generate component',
             tool: 'template',
-            template: 'component.ejs'
+            template: 'component.jig'
           },
           {
             name: 'Generate tests',
             tool: 'template',
-            template: 'test.ejs',
+            template: 'test.jig',
             when: '!{{ skipTests }}',
             dependsOn: ['Generate component']
           }
@@ -508,19 +506,19 @@ describe('Recipe Step System Parser', () => {
           {
             name: 'Generate component',
             tool: 'template',
-            template: 'component.ejs'
+            template: 'component.jig'
           },
           {
             name: 'Generate styles',
             tool: 'template',
-            template: 'styles.ejs',
+            template: 'styles.jig',
             parallel: true,
             dependsOn: ['Generate component']
           },
           {
             name: 'Generate tests',
             tool: 'template',
-            template: 'test.ejs',
+            template: 'test.jig',
             parallel: true,
             dependsOn: ['Generate component']
           }
@@ -545,7 +543,7 @@ describe('Recipe Step System Parser', () => {
           {
             name: 'Generate files',
             tool: 'template',
-            template: 'component.ejs'
+            template: 'component.jig'
           }
         ],
         settings: {

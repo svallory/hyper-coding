@@ -77,9 +77,9 @@ categories:
 # Optional: Define shared templates or partials
 shared:
   templates:
-    - "./shared/templates/*.liquid"
+    - "./shared/templates/*.jig"
   partials:
-    - "./shared/partials/*.liquid"
+    - "./shared/partials/*.jig"
 ```
 
 ### 2. cookbook.yml - Cookbook-Level Configuration (Optional)
@@ -215,7 +215,7 @@ variables:
 # Templates are automatically processed from ./templates/
 # No explicit steps needed for template generation!
 # Files are processed based on extension:
-# - .liquid.t or .liquid → Processed as Liquid templates
+# - .jig.t or .jig → Processed as Jig templates
 # - .t.* → Processed with extension removed
 # - Other files → Copied as-is
 

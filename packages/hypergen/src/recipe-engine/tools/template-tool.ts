@@ -3,7 +3,7 @@
  * 
  * This tool processes template files using Hypergen's existing template engines,
  * handles frontmatter processing, and generates files to the filesystem.
- * It integrates seamlessly with LiquidJS and EJS engines while supporting
+ * It integrates seamlessly with the Jig template engine while supporting
  * all existing template features like composition and variable substitution.
  */
 
@@ -21,12 +21,7 @@ import {
   type TemplateExecutionResult,
   isTemplateStep
 } from '../types.js'
-import { 
-  getTemplateEngineFactory,
-  initializeTemplateEnginesWithPlugins,
-  getTemplateEngineForFile,
-  getDefaultTemplateEngine
-} from '../../template-engines/index.js'
+import { initializeJig, renderTemplate as jigRenderTemplate } from '../../template-engines/index.js'
 import contextHelper from '../../context.js'
 import addOp from '../../ops/add.js'
 import injectOp from '../../ops/inject.js'
@@ -83,7 +78,7 @@ interface RenderedTemplateFile {
  * Template Tool for processing template files in the Recipe Step System
  * 
  * Features:
- * - Integration with existing LiquidJS and EJS engines
+ * - Integration with the Jig template engine
  * - Frontmatter processing (to:, skip_if:, inject:, unless_exists:, force:)
  * - Template discovery and resolution
  * - Variable substitution and context management
@@ -106,7 +101,7 @@ export class TemplateTool extends Tool<TemplateStep> {
     this.debug('Initializing template engines')
     
     try {
-      await initializeTemplateEnginesWithPlugins(this.options.templateEngineConfig)
+      initializeJig(this.options.templateEngineConfig)
       this.templateEnginesInitialized = true
       
       this.registerResource({
@@ -157,11 +152,6 @@ export class TemplateTool extends Tool<TemplateStep> {
       } catch (error) {
         errors.push(`Template resolution failed: ${error instanceof Error ? error.message : String(error)}`)
       }
-    }
-
-    // Validate engine configuration
-    if (step.engine && !['liquid', 'auto'].includes(step.engine)) {
-      errors.push(`Invalid template engine: ${step.engine}. Must be 'liquid' or 'auto'`)
     }
 
     // Validate output directory
@@ -267,6 +257,36 @@ export class TemplateTool extends Tool<TemplateStep> {
       const skippedFiles = renderedFiles.filter(file => file.shouldSkip)
 
       this.debug('Processing %d files, skipping %d files', filesToGenerate.length, skippedFiles.length)
+
+      // In collect mode (Pass 1), skip all file generation — templates were
+      // rendered only to trigger @ai block collection
+      if (context.collectMode) {
+        this.debug('Collect mode: skipping file generation (Pass 1)')
+        const endTime = new Date()
+        const duration = endTime.getTime() - startTime.getTime()
+
+        return {
+          status: 'completed',
+          stepName: step.name,
+          toolType: 'template',
+          startTime,
+          endTime,
+          duration,
+          retryCount: 0,
+          dependenciesSatisfied: true,
+          toolResult: {
+            templateName: step.template,
+            templatePath: templateResolution.filePath,
+            engine: templateResolution.engine,
+            filesGenerated: [],
+            variables: context.variables
+          } as TemplateExecutionResult,
+          output: {
+            collectMode: true,
+            templatesRendered: renderedFiles.length,
+          },
+        }
+      }
 
       // Generate files
       for (const renderedFile of filesToGenerate) {
@@ -389,8 +409,8 @@ export class TemplateTool extends Tool<TemplateStep> {
       // Relative to template path if available
       context.templatePath ? path.resolve(path.dirname(context.templatePath), templateId) : null,
       // With common extensions
-      path.resolve(context.projectRoot, `${templateId}.liquid`),
-      path.resolve(context.projectRoot, `${templateId}.liquid.t`),
+      path.resolve(context.projectRoot, `${templateId}.jig`),
+      path.resolve(context.projectRoot, `${templateId}.jig.t`),
     ].filter(Boolean) as string[]
 
     for (const candidatePath of resolutionPaths) {
@@ -424,14 +444,10 @@ export class TemplateTool extends Tool<TemplateStep> {
       )
     }
 
-    // Determine template engine
-    const factory = getTemplateEngineFactory()
-    const engine = factory.getForExtension(extension) || factory.getDefault()
-
     const resolution: TemplateResolution = {
       filePath: filePath!,
       content,
-      engine: engine.name,
+      engine: 'jig',
       metadata: {
         exists: true,
         size: stats.size,
@@ -538,27 +554,8 @@ export class TemplateTool extends Tool<TemplateStep> {
     }
 
     try {
-      // Get template engine based on file extension or auto-detect
-      let engine = getDefaultTemplateEngine()
-
-      if (filePath) {
-        const ext = path.extname(filePath)
-        const fileEngine = getTemplateEngineForFile(ext)
-        if (fileEngine) {
-          engine = fileEngine
-        }
-      } else {
-        // Auto-detect based on template syntax
-        if (template.includes('{{') && template.includes('}}')) {
-          const liquidEngine = getTemplateEngineForFile('.liquid')
-          if (liquidEngine) {
-            engine = liquidEngine
-          }
-        }
-      }
-
-      this.debug('Rendering with engine: %s', engine.name)
-      return await engine.render(template, renderContext)
+      this.debug('Rendering with Jig engine')
+      return await jigRenderTemplate(template, renderContext)
     } catch (error) {
       throw ErrorHandler.createError(
         ErrorCode.TEMPLATE_EXECUTION_ERROR,
@@ -601,7 +598,10 @@ export class TemplateTool extends Tool<TemplateStep> {
       // Utility functions
       utils: context.utils,
       // Step results for dependency access
-      stepResults: context.stepResults ? Object.fromEntries(context.stepResults) : {}
+      stepResults: context.stepResults ? Object.fromEntries(context.stepResults) : {},
+      // 2-pass AI generation state
+      answers: context.answers,
+      __hypergenCollectMode: context.collectMode || false,
     }
   }
 

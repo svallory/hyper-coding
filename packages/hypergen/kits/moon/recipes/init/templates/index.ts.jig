@@ -1,0 +1,10 @@
+export function main() {
+  console.log("Hello from {{ projectName }}!");
+}
+
+@if(projectType == "cli")
+// CLI entry point
+if (import.meta.main) {
+  main();
+}
+@end

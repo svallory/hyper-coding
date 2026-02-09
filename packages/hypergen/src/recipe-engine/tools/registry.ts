@@ -147,16 +147,19 @@ export interface ToolResolutionOptions {
  */
 export class ToolRegistry {
   private static instance: ToolRegistry | null = null
-  
+
   private readonly registrations = new Map<string, ToolRegistration>()
   private readonly instanceCache = new Map<string, ToolCacheEntry>()
   private readonly logger: Logger
   private readonly debug: ReturnType<typeof createDebug>
-  
+
   // Configuration
   private readonly maxCacheSize: number
   private readonly cacheTimeoutMs: number
   private readonly enableInstanceReuse: boolean
+
+  // Timer for cache cleanup
+  private cleanupIntervalId: NodeJS.Timeout | null = null
   
   private constructor(options: {
     maxCacheSize?: number
@@ -644,9 +647,43 @@ export class ToolRegistry {
 
   private startCacheCleanup(): void {
     // Run cleanup every 10 minutes
-    setInterval(() => {
+    this.cleanupIntervalId = setInterval(() => {
       this.cleanupExpiredInstances()
     }, 10 * 60 * 1000)
+  }
+
+  /**
+   * Stop the cache cleanup timer
+   */
+  public stopCacheCleanup(): void {
+    if (this.cleanupIntervalId) {
+      clearInterval(this.cleanupIntervalId)
+      this.cleanupIntervalId = null
+      this.debug('Cache cleanup timer stopped')
+    }
+  }
+
+  /**
+   * Clean up the registry and all its resources
+   */
+  public cleanup(): void {
+    this.stopCacheCleanup()
+
+    // Clear all cached instances
+    for (const [key, entry] of this.instanceCache.entries()) {
+      if (entry.instance?.cleanup) {
+        try {
+          entry.instance.cleanup()
+        } catch (error) {
+          this.debug('Error cleaning up tool instance %s: %o', key, error)
+        }
+      }
+    }
+
+    this.instanceCache.clear()
+    this.registrations.clear()
+
+    this.debug('Tool registry cleaned up')
   }
 }
 

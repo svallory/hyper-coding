@@ -81,7 +81,7 @@ variables:
 # Templates are automatically processed from ./templates/
 # No explicit steps needed for template generation!
 # Files are processed based on extension:
-# - .liquid.t or .liquid → Processed as Liquid templates
+# - .jig.t or .jig → Processed as Jig templates
 # - .t.* → Processed with extension removed
 # - Other files → Copied as-is
 
@@ -99,14 +99,14 @@ Hypergen automatically processes all files in your `templates/` directory. The f
 
 | Extension | Processing | Example |
 |-----------|------------|---------|
-| `.liquid.t` | Liquid template → removes `.liquid.t` | `component.liquid.t` → `component.tsx` |
-| `.liquid` | Liquid template → removes `.liquid` | `package.json.liquid` → `package.json` |
+| `.jig.t` | Jig template → removes `.jig.t` | `component.jig.t` → `component.tsx` |
+| `.jig` | Jig template → removes `.jig` | `package.json.jig` → `package.json` |
 | `.t.*` | Template → removes `.t` | `config.t.ts` → `config.ts` |
 | No special extension | Copied as-is | `.gitignore` → `.gitignore` |
 
 Templates can use YAML frontmatter to control their behavior:
 
-```liquid
+```jig
 ---
 to: src/components/{{ name }}.tsx
 when: {{ includeTests }}
@@ -115,129 +115,129 @@ when: {{ includeTests }}
 
 ## Create Your First Template
 
-Create `templates/component.liquid.t` with the component template:
+Create `templates/component.jig` with the component template:
 
-```liquid
+```jig
 ---
-to: src/components/{% raw %}{{ name }}{% endraw %}.{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}
+to: src/components/{{ name }}.{{ ternary :: typescript, "tsx", "jsx" }}
 ---
 import React from 'react';
-{% raw %}{% if styling == 'styled-components' -%}{% endraw %}
+@if(styling == 'styled-components')
 import styled from 'styled-components';
-{% raw %}{% elsif styling == 'css' or styling == 'scss' -%}{% endraw %}
-import styles from './{% raw %}{{ name }}{% endraw %}.module.{% raw %}{{ styling }}{% endraw %}';
-{% raw %}{% endif -%}{% endraw %}
+@elseif(styling == 'css' or styling == 'scss')
+import styles from './{{ name }}.module.{{ styling }}';
+@end
 
-{% raw %}{% if typescript -%}{% endraw %}
-interface {% raw %}{{ name }}{% endraw %}Props {
+@if(typescript)
+interface {{ name }}Props {
   children?: React.ReactNode;
   className?: string;
 }
 
-export const {% raw %}{{ name }}{% endraw %}: React.FC<{% raw %}{{ name }}{% endraw %}Props> = ({ 
-  children, 
-  className 
+export const {{ name }}: React.FC<{{ name }}Props> = ({
+  children,
+  className
 }) => {
-{% raw %}{% else -%}{% endraw %}
-export const {% raw %}{{ name }}{% endraw %} = ({ children, className }) => {
-{% raw %}{% endif -%}{% endraw %}
+@else
+export const {{ name }} = ({ children, className }) => {
+@end
   return (
-    {% raw %}{% if styling == 'styled-components' -%}{% endraw %}
+    @if(styling == 'styled-components')
     <StyledWrapper className={className}>
-      {children || 'Hello from {% raw %}{{ name }}{% endraw %}!'}
+      {children || 'Hello from {{ name }}!'}
     </StyledWrapper>
-    {% raw %}{% elsif styling == 'css' or styling == 'scss' -%}{% endraw %}
-    <div className={`${styles.{% raw %}{{ name | camelCase }}{% endraw %} ${className || ''}`}>
-      {children || 'Hello from {% raw %}{{ name }}{% endraw %}!'}
+    @elseif(styling == 'css' or styling == 'scss')
+    <div className={`${styles.{{ camelCase :: name }} ${className || ''}`}>
+      {children || 'Hello from {{ name }}!'}
     </div>
-    {% raw %}{% else -%}{% endraw %}
+    @else
     <div className={className}>
-      {children || 'Hello from {% raw %}{{ name }}{% endraw %}!'}
+      {children || 'Hello from {{ name }}!'}
     </div>
-    {% raw %}{% endif -%}{% endraw %}
+    @end
   );
 };
 
-{% raw %}{% if styling == 'styled-components' -%}{% endraw %}
+@if(styling == 'styled-components')
 const StyledWrapper = styled.div`
   padding: 1rem;
   border: 1px solid #ddd;
   border-radius: 4px;
-  
+
   &:hover {
     border-color: #007acc;
   }
 `;
-{% raw %}{% endif -%}{% endraw %}
+@end
 
-export default {% raw %}{{ name }}{% endraw %};
+export default {{ name }};
 ```
 
 ## Create the Styles Template
 
-Create `templates/styles.liquid.t` for CSS/SCSS files:
+Create `templates/styles.jig` for CSS/SCSS files:
 
-```liquid
+```jig
 ---
-to: src/components/{% raw %}{{ name }}{% endraw %}.module.{% raw %}{{ styling }}{% endraw %}
-when: {% raw %}{{ styling == 'css' or styling == 'scss' }}{% endraw %}
+to: src/components/{{ name }}.module.{{ styling }}
+when: {{ styling == 'css' or styling == 'scss' }}
 ---
-{% raw %}{% if styling == 'scss' -%}{% endraw %}
+@if(styling == 'scss')
 $border-color: #ddd;
 $hover-color: #007acc;
 $padding: 1rem;
 
-.{% raw %}{{ name | camelCase }}{% endraw %} {
+.{{ camelCase :: name }} {
   padding: $padding;
   border: 1px solid $border-color;
   border-radius: 4px;
-  
+
   &:hover {
     border-color: $hover-color;
   }
 }
-{% raw %}{% else -%}{% endraw %}
-.{% raw %}{{ name | camelCase }}{% endraw %} {
+@else
+.{{ camelCase :: name }} {
   padding: 1rem;
   border: 1px solid #ddd;
   border-radius: 4px;
 }
 
-.{% raw %}{{ name | camelCase }}{% endraw %}:hover {
+.{{ camelCase :: name }}:hover {
   border-color: #007acc;
 }
-{% raw %}{% endif -%}{% endraw %}
+@end
 ```
 
 ## Create the Test Template
 
-Create `templates/test.liquid.t` for test files:
+Create `templates/test.jig` for test files:
 
-```liquid
+```jig
 ---
-to: src/components/{% raw %}{{ name }}{% endraw %}.test.{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}
+to: src/components/{{ name }}.test.{{ ternary :: typescript, "tsx", "jsx" }}
 ---
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-{% raw %}{% if typescript -%}{% endraw %}
+@if(typescript)
 import '@testing-library/jest-dom';
-{% raw %}{% endif -%}{% endraw %}
-import {% raw %}{{ name }}{% endraw %} from './{% raw %}{{ name }}{% endraw %}';
+@end
+import {{ name }} from './{{ name }}';
 
-describe('{% raw %}{{ name }}{% endraw %}', () => {
+describe('{{ name }}', () => {
   it('renders without crashing', () => {
-    render(<{% raw %}{{ name }}{% endraw %} />);
-    expect(screen.getByText('Hello from {% raw %}{{ name }}{% endraw %}!')).toBeInTheDocument();
+    render(<{{ name }} />);
+    expect(screen.getByText('Hello from {{ name }}!')).toBeInTheDocument();
   });
 
   it('renders children when provided', () => {
-    render(<{% raw %}{{ name }}{% endraw %}>Custom content</{% raw %}{{ name }}{% endraw %}>);
+    render(<{{ name }}>Custom content</{{ name }}>);
     expect(screen.getByText('Custom content')).toBeInTheDocument();
   });
 
   it('applies className when provided', () => {
-    render(<{% raw %}{{ name }}{% endraw %} className="custom-class" />);
-    const element = screen.getByText('Hello from {% raw %}{{ name }}{% endraw %}!');
+    render(<{{ name }} className="custom-class" />);
+    const element = screen.getByText('Hello from {{ name }}!');
     expect(element.parentElement).toHaveClass('custom-class');
   });
 });
@@ -340,10 +340,10 @@ hypergen recipe execute ../my-cookbook/react/component/recipe.yml \
 ### Frontmatter Options
 Templates use YAML frontmatter for configuration:
 
-```liquid
+```jig
 ---
-to: src/{% raw %}{{ name }}{% endraw %}.ts                    # Destination path
-skip_if: {% raw %}{{ name == 'Skip' }}{% endraw %}           # Skip condition
+to: src/{{ name }}.ts                    # Destination path
+skip_if: {{ name == 'Skip' }}           # Skip condition
 inject: true                            # Enable injection mode
 inject_at_line: 10                      # Inject at specific line
 unless_exists: true                     # Only if file doesn't exist
@@ -351,37 +351,37 @@ unless_exists: true                     # Only if file doesn't exist
 Template content here...
 ```
 
-### LiquidJS Filters
+### Jig Filters
 Hypergen provides many built-in filters:
 
-```liquid
-{% raw %}{{ name | camelCase }}{% endraw %}        # Convert to camelCase
-{% raw %}{{ name | pascalCase }}{% endraw %}       # Convert to PascalCase  
-{% raw %}{{ name | kebabCase }}{% endraw %}        # Convert to kebab-case
-{% raw %}{{ name | snakeCase }}{% endraw %}        # Convert to snake_case
-{% raw %}{{ name | humanize }}{% endraw %}         # Convert to human readable
-{% raw %}{{ name | pluralize }}{% endraw %}        # Make plural
-{% raw %}{{ name | singularize }}{% endraw %}      # Make singular
-{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}  # Conditional output
+```jig
+{{ camelCase :: name }}        # Convert to camelCase
+{{ pascalCase :: name }}       # Convert to PascalCase
+{{ kebabCase :: name }}        # Convert to kebab-case
+{{ snakeCase :: name }}        # Convert to snake_case
+{{ humanize :: name }}         # Convert to human readable
+{{ pluralize :: name }}        # Make plural
+{{ singularize :: name }}      # Make singular
+{{ ternary :: typescript, "tsx", "jsx" }}  # Conditional output
 ```
 
 ### Conditional Logic
-Use LiquidJS conditions and loops:
+Use Jig conditions and loops:
 
-```liquid
-{% raw %}{% if typescript %}{% endraw %}
-interface {% raw %}{{ name }}{% endraw %}Props {
+```jig
+@if(typescript)
+interface {{ name }}Props {
   // TypeScript interface
 }
-{% raw %}{% endif %}{% endraw %}
+@end
 
-{% raw %}{% for feature in features %}{% endraw %}
-import {% raw %}{{ feature }}{% endraw %} from './{% raw %}{{ feature }}{% endraw %}';
-{% raw %}{% endfor %}{% endraw %}
+@for(feature in features)
+import {{ feature }} from './{{ feature }}';
+@end
 
-{% raw %}{% unless styling == 'none' %}{% endraw %}
+@unless(styling == 'none')
 import styles from './styles.css';
-{% raw %}{% endunless %}{% endraw %}
+@end
 ```
 
 ## Advanced Template Techniques
@@ -389,35 +389,35 @@ import styles from './styles.css';
 ### Partial Templates
 Break complex templates into reusable parts:
 
-```liquid
-<!-- templates/partials/imports.liquid -->
+```jig
+<!-- templates/partials/imports.jig -->
 import React from 'react';
-{% raw %}{% if typescript %}{% endraw %}import type { FC } from 'react';{% raw %}{% endif %}{% endraw %}
-{% raw %}{% if styling == 'styled-components' %}{% endraw %}import styled from 'styled-components';{% raw %}{% endif %}{% endraw %}
+@if(typescript)import type { FC } from 'react';@end
+@if(styling == 'styled-components')import styled from 'styled-components';@end
 ```
 
-```liquid  
-<!-- templates/component.liquid -->
+```jig
+<!-- templates/component.jig -->
 ---
-to: src/{% raw %}{{ name }}{% endraw %}.tsx
+to: src/{{ name }}.tsx
 ---
-{% raw %}{% include 'partials/imports.liquid' %}{% endraw %}
+@include('partials/imports.jig')
 
 // Component implementation...
 ```
 
 ### Dynamic File Extensions
-```liquid
+```jig
 ---
-to: src/{% raw %}{{ name }}{% endraw %}.{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}
+to: src/{{ name }}.{{ ternary :: typescript, "tsx", "jsx" }}
 ---
 ```
 
 ### Conditional File Creation
-```liquid
+```jig
 ---
-to: src/{% raw %}{{ name }}{% endraw %}.test.{% raw %}{{ typescript | ternary: "tsx", "jsx" }}{% endraw %}
-skip_if: {% raw %}{{ not includeTests }}{% endraw %}
+to: src/{{ name }}.test.{{ ternary :: typescript, "tsx", "jsx" }}
+skip_if: {{ not includeTests }}
 ---
 ```
 
@@ -434,8 +434,8 @@ hypergen recipe execute my-cookbook/react/component/recipe.yml \
 ### 2. Check Variable Values
 Add debug output to templates:
 
-```liquid
-<!-- Debug: name={% raw %}{{ name }}{% endraw %}, typescript={% raw %}{{ typescript }}{% endraw %} -->
+```jig
+<!-- Debug: name={{ name }}, typescript={{ typescript }} -->
 ```
 
 ### 3. Validate JSON in Variables

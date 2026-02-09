@@ -5,18 +5,16 @@ import walk from 'ignore-walk'
 import createDebug from 'debug'
 import type { RenderedAction, RunnerConfig } from './types.js'
 import context from './context.js'
-import { initializeTemplateEnginesWithPlugins, getTemplateEngineForFile, getDefaultTemplateEngine } from './template-engines/index.js'
+import { initializeJig, renderTemplate } from './template-engines/index.js'
 const debug = createDebug('hypergen:render')
 
-// Initialize template engines on module load (will be enhanced with plugin support)
-let templateEnginesInitialized = false
-let currentConfig: any = null
+// Initialize Jig on first use
+let jigInitialized = false
 
-const initializeTemplateEngines = async (config?: any) => {
-  if (!templateEnginesInitialized || config !== currentConfig) {
-    currentConfig = config
-    await initializeTemplateEnginesWithPlugins(config)
-    templateEnginesInitialized = true
+const ensureJigInitialized = (config?: any) => {
+  if (!jigInitialized) {
+    initializeJig(config?.engine)
+    jigInitialized = true
   }
 }
 
@@ -37,43 +35,22 @@ const ignores = [
   'ehthumbs.db',
   'Thumbs.db',
 ]
-const renderTemplate = async (tmpl, locals, config, filePath?: string) => {
+const renderTmpl = async (tmpl, locals, config) => {
   if (typeof tmpl !== 'string') {
     return tmpl
   }
 
   const ctx = context(locals, config)
-  
-  // Determine template engine based on file extension
-  if (filePath) {
-    const ext = path.extname(filePath)
-    const engine = getTemplateEngineForFile(ext)
-    
-    if (engine) {
-      debug('Using template engine: %s for file: %s', engine.name, filePath)
-      return await engine.render(tmpl, ctx)
-    }
+
+  // Inject 2-pass AI generation state into render context
+  if (config?._answers) {
+    ctx.answers = config._answers
   }
-  
-  // Try to detect template engine from content
-  if (tmpl.includes('{{') && tmpl.includes('}}')) {
-    // Likely LiquidJS template
-    const liquidEngine = getTemplateEngineForFile('.liquid')
-    if (liquidEngine) {
-      debug('Auto-detected LiquidJS template')
-      return await liquidEngine.render(tmpl, ctx)
-    }
+  if (config?._collectMode) {
+    ctx.__hypergenCollectMode = true
   }
-  
-  // Use default template engine (LiquidJS)
-  const defaultEngine = getDefaultTemplateEngine()
-  if (defaultEngine) {
-    debug('Using default template engine: %s', defaultEngine.name)
-    return await defaultEngine.render(tmpl, ctx)
-  }
-  
-  // Should never reach here if engines are properly initialized
-  throw new Error('No template engine available')
+
+  return await renderTemplate(tmpl, ctx)
 }
 
 async function getFiles(dir) {
@@ -87,9 +64,9 @@ const render = async (
   args: any,
   config: RunnerConfig,
 ): Promise<RenderedAction[]> => {
-  // Ensure template engines are initialized
-  await initializeTemplateEngines(config)
-  
+  // Ensure Jig is initialized
+  ensureJigInitialized(config)
+
   if (!args.actionFolder) {
     return []
   }
@@ -120,17 +97,16 @@ const render = async (
       map(async ({ file, attributes, body }) => {
         const renderedAttrs = {}
         for (const [key, value] of Object.entries(attributes)) {
-          renderedAttrs[key] = await renderTemplate(value, args, config, file)
+          renderedAttrs[key] = await renderTmpl(value, args, config)
         }
         debug('Rendering file: %o', file)
         return {
           file,
           attributes: renderedAttrs,
-          body: await renderTemplate(
+          body: await renderTmpl(
             body,
             { ...args, attributes: renderedAttrs },
             config,
-            file,
           ),
         }
       }),

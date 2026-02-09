@@ -146,9 +146,9 @@ Define templates and partials shared across recipes:
 ```yaml
 shared:
   templates:
-    - "./shared/templates/*.liquid"
+    - "./shared/templates/*.jig"
   partials:
-    - "./shared/partials/*.liquid"
+    - "./shared/partials/*.jig"
 ```
 
 ### Direct Recipes
@@ -196,7 +196,7 @@ When a recipe has a `templates/` directory, all files are automatically processe
 
 1. **Discovery**: All files in `./templates/` (relative to recipe.yml) are discovered
 2. **Processing Rules**:
-   - `.liquid.t` or `.liquid` files → Processed as Liquid templates
+   - `.jig.t` or `.jig` files → Processed as Jig templates
    - `.t.*` files (e.g., `.t.ts`, `.t.md`) → Processed with extension removed
    - Other files → Copied as-is
 3. **Destination**: Files are placed relative to the execution directory
@@ -206,8 +206,8 @@ When a recipe has a `templates/` directory, all files are automatically processe
 
 | Extension | Processing | Example | Output |
 |-----------|------------|---------|---------|
-| `.liquid.t` | Liquid template | `index.ts.liquid.t` | `index.ts` |
-| `.liquid` | Liquid template | `package.json.liquid` | `package.json` |
+| `.jig.t` | Jig template | `index.ts.jig.t` | `index.ts` |
+| `.jig` | Jig template | `package.json.jig` | `package.json` |
 | `.t.ts` | Template with extension removal | `config.t.ts` | `config.ts` |
 | `.t.md` | Template with extension removal | `README.t.md` | `README.md` |
 | No special extension | Copied as-is | `.gitignore` | `.gitignore` |
@@ -216,7 +216,7 @@ When a recipe has a `templates/` directory, all files are automatically processe
 
 Templates can include YAML frontmatter to control processing:
 
-```liquid
+```jig
 ---
 to: src/components/{{ name }}.tsx
 skip_if: {{ skipComponent }}
@@ -275,7 +275,7 @@ name: legacy-recipe
 steps:
   - name: Generate file
     tool: template
-    template: file.liquid
+    template: file.jig
 
   - name: Copy config
     tool: template
@@ -297,31 +297,31 @@ Before:
 steps:
   - name: Generate package.json
     tool: template
-    template: package.json.liquid
+    template: package.json.jig
 
   - name: Generate README
     tool: template
-    template: README.md.liquid
+    template: README.md.jig
 ```
 
 After:
 ```yaml
 # Just ensure files are in ./templates/
-# package.json.liquid and README.md.liquid are processed automatically
+# package.json.jig and README.md.jig are processed automatically
 ```
 
 ### Advanced Usage
 
 #### Conditional Templates
-```liquid
+```jig
 ---
-to: "{{ includeTests | ternary: 'test/setup.ts', false }}"
+to: "{{ includeTests ? 'test/setup.ts' : false }}"
 ---
 // Test setup code
 ```
 
 #### Multiple Outputs
-```liquid
+```jig
 ---
 to: "{{ outputDir }}/{{ fileName }}.{{ extension }}"
 ---
@@ -329,12 +329,12 @@ File content here
 ```
 
 #### Template Includes
-```liquid
-{% include 'shared/header' %}
+```jig
+@include('shared/header')
 
 Main content here
 
-{% include 'shared/footer' %}
+@include('shared/footer')
 ```
 
 ## cookbook.yml Configuration
@@ -513,7 +513,7 @@ For common templates across recipes:
 ```yaml
 shared:
   templates:
-    - "./shared/templates/*.liquid"
+    - "./shared/templates/*.jig"
 ```
 
 ## Migration Guide

@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -e
+
+echo "🌚 Setting up your moon monorepo..."
+
+# Initialize git repository if not already initialized
+if [ ! -d ".git" ]; then
+  echo "📁 Initializing git repository..."
+  git init
+  git add .
+  git commit -m "Initial commit"
+fi
+
+# Create project directories
+@each(type in project_types)
+echo "📂 Creating {{ type }} directory..."
+mkdir -p {{ type }}
+@end
+
+# Create initial gitignore if it doesn't exist
+if [ ! -f ".gitignore" ]; then
+  echo "📝 Creating .gitignore..."
+  cat > .gitignore <<EOF
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+lib/
+dist/
+build/
+.tshy/
+
+# Cache
+*.tsbuildinfo
+.eslintcache
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+EOF
+fi
+
+# Install dependencies
+echo "📦 Installing dependencies..."
+@if(package_manager == "npm")
+npm install
+@elseif(package_manager == "yarn")
+yarn install
+@elseif(package_manager == "pnpm")
+pnpm install
+@elseif(package_manager == "bun")
+bun install
+@end
+
+echo "✅ Monorepo setup complete!"
+echo ""
+echo "Next steps:"
+echo "1. Create your first project in one of the directories:"
+@each(type in project_types)
+echo "   - {{ type }}/my-{{ type.slice(0, -1) }}"
+@end
+echo "2. Add a moon.yml file to your project"
+echo "3. Run 'moon project' to see your workspace"
+echo ""
+echo "Happy coding! 🚀"

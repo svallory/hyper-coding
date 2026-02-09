@@ -142,9 +142,9 @@ Templates and partials shared across recipes:
 ```yaml
 shared:
   templates:
-    - "./shared/templates/*.liquid"
+    - "./shared/templates/*.jig"
   partials:
-    - "./shared/partials/*.liquid"
+    - "./shared/partials/*.jig"
 ```
 
 ## Command Resolution
@@ -269,9 +269,9 @@ variables:
 
 shared:
   templates:
-    - "./shared/templates/*.liquid"
+    - "./shared/templates/*.jig"
   partials:
-    - "./shared/partials/*.liquid"
+    - "./shared/partials/*.jig"
 ```
 
 ## Best Practices

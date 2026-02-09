@@ -1,72 +1,16 @@
 /**
  * Template Engines Module
  *
- * This module provides the template engine abstraction layer for Hypergen.
- * It includes interfaces, factory, and implementations for different template engines.
+ * Jig (@jig-lang/jig) is the sole template engine for Hypergen.
+ * No factory pattern, no plugin system — just Jig.
  */
 
-export * from './types.js'
-export * from './factory.js'
-export * from './liquid-engine.js'
-
-import { templateEngineFactory } from './factory.js'
-import { LiquidTemplateEngine } from './liquid-engine.js'
-
-/**
- * Initialize and register default template engines
- */
-export function initializeTemplateEngines(config?: any): void {
-  // Register LiquidJS as the default and only built-in template engine
-  const liquidEngine = new LiquidTemplateEngine()
-
-  // Apply configuration if provided
-  if (config?.engine?.liquid) {
-    liquidEngine.configure(config.engine.liquid)
-  }
-
-  templateEngineFactory.register(liquidEngine)
-}
-
-/**
- * Initialize template engines with plugin system support
- */
-export async function initializeTemplateEnginesWithPlugins(config?: any): Promise<void> {
-  // Initialize built-in template engines
-  initializeTemplateEngines()
-  
-  // Initialize plugin system for template engines
-  try {
-    const { initializePluginSystem } = await import('../plugin-system/index.js')
-    await initializePluginSystem(config)
-  } catch (error) {
-    console.warn('Failed to initialize plugin system:', error.message)
-  }
-}
-
-/**
- * Get the configured template engine factory
- */
-export function getTemplateEngineFactory() {
-  return templateEngineFactory
-}
-
-/**
- * Convenience function to get a template engine by name
- */
-export function getTemplateEngine(name: string) {
-  return templateEngineFactory.get(name)
-}
-
-/**
- * Convenience function to get a template engine for a file extension
- */
-export function getTemplateEngineForFile(extension: string) {
-  return templateEngineFactory.getForExtension(extension)
-}
-
-/**
- * Convenience function to get the default template engine
- */
-export function getDefaultTemplateEngine() {
-  return templateEngineFactory.getDefault()
-}
+export {
+  initializeJig,
+  getJig,
+  renderTemplate,
+  renderTemplateSync,
+  renderFile,
+  mountDirectory,
+  type JigConfig,
+} from './jig-engine.js'

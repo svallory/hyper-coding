@@ -109,7 +109,7 @@ describe('PromptPipeline', () => {
         dependenciesSatisfied: true,
         toolResult: {
           templateName: 'api-controller',
-          templatePath: '/templates/api-controller.liquid.t',
+          templatePath: '/templates/api-controller.jig.t',
           engine: 'liquid',
           filesGenerated: ['src/controllers/user.controller.ts'],
           variables: { name: 'user' },

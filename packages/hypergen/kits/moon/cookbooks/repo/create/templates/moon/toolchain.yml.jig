@@ -1,0 +1,44 @@
+---
+to: moon/toolchain.yml
+---
+$schema: "https://moonrepo.dev/schemas/toolchain.json"
+
+# Configures Node.js
+@if(platform == "node")
+node:
+  version: "20.11.0"
+  @if(package_manager != "npm")
+  packageManager: {{ package_manager }}
+  @end
+  @if(tools.includes("typescript"))
+
+  # Configures TypeScript
+  typescript:
+    routeOutDirToCache: true
+    syncProjectReferences: true
+  @end
+@end
+
+# Configures Deno
+@if(platform == "deno")
+deno:
+  version: "1.40.0"
+  @if(tools.includes("typescript"))
+
+  # TypeScript is built-in with Deno
+  typescript:
+    syncProjectReferences: true
+  @end
+@end
+
+# Configures Bun
+@if(platform == "bun")
+bun:
+  version: "1.0.26"
+  @if(tools.includes("typescript"))
+
+  # TypeScript is built-in with Bun
+  typescript:
+    syncProjectReferences: true
+  @end
+@end

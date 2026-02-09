@@ -197,7 +197,7 @@ variables:
     type: string
     required: true
 files:
-  - component.liquid
+  - component.jig
 `
     await fs.writeFile(path.join(templateDir, 'template.yml'), templateConfig)
 

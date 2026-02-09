@@ -864,10 +864,6 @@ export class TemplateParser {
       template: step.template
     }
 
-    if (step.engine && ['liquid', 'auto'].includes(step.engine)) {
-      templateStep.engine = step.engine
-    }
-
     if (step.outputDir && typeof step.outputDir === 'string') {
       templateStep.outputDir = step.outputDir
     }

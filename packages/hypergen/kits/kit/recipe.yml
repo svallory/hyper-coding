@@ -12,22 +12,22 @@ steps:
   - name: Generate Kit Files
     sequence:
       - name: Generate package.json
-        template: templates/package.json.liquid
+        template: templates/package.json.jig
       
       - name: Generate AGENTS.md
-        template: templates/AGENTS.md.liquid
+        template: templates/AGENTS.md.jig
         
       - name: Generate Hyper Chef Agent
-        template: templates/ai/agents/hyper-chef.md.liquid
+        template: templates/ai/agents/hyper-chef.md.jig
         
       - name: Generate Sample Recipe
-        template: templates/cookbooks/create/recipe.yml.liquid
+        template: templates/cookbooks/create/recipe.yml.jig
         
       - name: Generate Sample Action
-        template: templates/actions/sample-action/index.ts.liquid
+        template: templates/actions/sample-action/index.ts.jig
         
       - name: Generate Test
-        template: templates/tests/kit.test.ts.liquid
+        template: templates/tests/kit.test.ts.jig
 
   - name: Setup Agents
     sequence:

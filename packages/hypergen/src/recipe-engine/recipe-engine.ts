@@ -60,36 +60,39 @@ export type RecipeSource = {
 export interface RecipeExecutionOptions {
   /** Variables to pass to the recipe */
   variables?: Record<string, any>
-  
+
   /** Environment variables */
   environment?: Record<string, string>
-  
+
   /** Working directory for execution */
   workingDir?: string
-  
+
   /** Whether to run in dry-run mode */
   dryRun?: boolean
-  
+
   /** Whether to force overwrite existing files */
   force?: boolean
-  
+
   /** Whether to continue on step failures */
   continueOnError?: boolean
-  
+
   /** Custom step execution options */
   stepOptions?: Partial<StepExecutionOptions>
-  
+
   /** Whether to skip user prompts (use defaults/existing values) */
   skipPrompts?: boolean
-  
+
   /** Custom logger for output */
   logger?: Logger
-  
+
   /** Progress callback */
   onProgress?: (progress: { step: string; phase: string; percentage: number }) => void
-  
+
   /** Step completion callback */
   onStepComplete?: (result: StepResult) => void
+
+  /** AI answers for 2-pass generation (Pass 2) */
+  answers?: Record<string, any>
 }
 
 /**
@@ -241,13 +244,16 @@ export class RecipeEngine extends EventEmitter {
   private readonly debug: ReturnType<typeof createDebug>
   private readonly stepExecutor: StepExecutor
   private readonly toolRegistry: ToolRegistry
-  
+
   // Execution state
   private readonly activeExecutions = new Map<string, RecipeExecution>()
   private executionCounter = 0
-  
+
   // Caching
   private readonly recipeCache = new Map<string, { recipe: RecipeConfig; timestamp: number }>()
+
+  // Timer for cache cleanup
+  private cleanupIntervalId: NodeJS.Timeout | null = null
   
   constructor(config: RecipeEngineConfig = {}) {
     super()
@@ -619,16 +625,19 @@ export class RecipeEngine extends EventEmitter {
    */
   async cleanup(): Promise<void> {
     this.debug('Cleaning up recipe engine')
-    
+
+    // Stop the cache cleanup timer
+    this.stopCacheCleanup()
+
     // Cancel all executions
     await this.cancelAllExecutions()
-    
+
     // Clear caches
     this.recipeCache.clear()
-    
+
     // Clean up step executor
     await this.stepExecutor.cancelAllExecutions()
-    
+
     this.emit('cleanup:completed')
   }
 
@@ -969,6 +978,16 @@ export class RecipeEngine extends EventEmitter {
       helpers: undefined
     })
     
+    // Determine collect mode: if no answers provided and AiCollector is in collect mode
+    const collectMode = !options.answers && (() => {
+      try {
+        const { AiCollector } = require('../ai/ai-collector.js')
+        return AiCollector.getInstance().collectMode
+      } catch {
+        return false
+      }
+    })()
+
     return {
       step: {} as RecipeStepUnion, // Will be set by step executor
       variables: baseContext,
@@ -983,11 +1002,13 @@ export class RecipeEngine extends EventEmitter {
       },
       stepData: {},
       evaluateCondition: this.createConditionEvaluator(baseContext),
+      answers: options.answers,
+      collectMode,
       dryRun: options.dryRun,
       force: options.force,
       logger: options.logger || this.logger,
-      templatePath: source && typeof source === 'object' && source.type === 'file' 
-        ? path.dirname(source.path) 
+      templatePath: source && typeof source === 'object' && source.type === 'file'
+        ? path.dirname(source.path)
         : undefined
     }
   }
@@ -1201,7 +1222,7 @@ export class RecipeEngine extends EventEmitter {
       ))
     }
     
-    const validTools = ['template', 'action', 'codemod', 'recipe', 'shell', 'prompt', 'sequence', 'parallel']
+    const validTools = ['template', 'action', 'codemod', 'recipe', 'shell', 'prompt', 'sequence', 'parallel', 'ai']
     if (step.tool && !validTools.includes(step.tool)) {
       errors.push(new RecipeValidationError(
         `Step ${step.name || index + 1} has invalid tool: ${step.tool}`,
@@ -1248,22 +1269,33 @@ export class RecipeEngine extends EventEmitter {
 
   private startCacheCleanup(): void {
     // Clean up cache every 10 minutes
-    setInterval(() => {
+    this.cleanupIntervalId = setInterval(() => {
       const now = Date.now()
       const keysToDelete: string[] = []
-      
+
       for (const [key, entry] of this.recipeCache) {
         if ((now - entry.timestamp) > this.config.cache.ttl) {
           keysToDelete.push(key)
         }
       }
-      
+
       keysToDelete.forEach(key => this.recipeCache.delete(key))
-      
+
       if (keysToDelete.length > 0) {
         this.debug('Cleaned up %d expired cache entries', keysToDelete.length)
       }
     }, 10 * 60 * 1000)
+  }
+
+  /**
+   * Stop the cache cleanup timer
+   */
+  public stopCacheCleanup(): void {
+    if (this.cleanupIntervalId) {
+      clearInterval(this.cleanupIntervalId)
+      this.cleanupIntervalId = null
+      this.debug('Recipe cache cleanup timer stopped')
+    }
   }
 }
 

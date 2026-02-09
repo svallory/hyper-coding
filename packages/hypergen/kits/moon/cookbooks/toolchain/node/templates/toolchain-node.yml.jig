@@ -1,0 +1,29 @@
+---
+to: .moon/toolchain.yml
+inject: true
+after: "$schema:"
+---
+# Node.js toolchain configuration
+node:
+  # The version to use
+  version: "{{ node_version }}"
+
+  # The package manager to use
+  packageManager: "{{ package_manager }}"
+
+  # Add node.version as a constraint in package.json engines
+  addEnginesConstraint: true
+
+  # Dedupe dependencies after lockfile changes
+  dedupeOnLockfileChange: true
+
+  # Infer tasks from package.json scripts
+  inferTasksFromScripts: true
+
+  # Sync project workspace dependencies
+  syncProjectWorkspaceDependencies: true
+
+  @if(sync_version_manager != "none")
+  # Sync version to version manager config
+  syncVersionManagerConfig: "{{ sync_version_manager }}"
+  @end

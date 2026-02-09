@@ -1,0 +1,22 @@
+{
+  "name": "@hyper-kits/nextjs",
+  "version": "0.0.1",
+  "description": "Hypergen kit for scaffolding Next.js projects with Tailwind CSS and AI-powered customization",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "recipe.yml",
+    "cookbooks",
+    "templates"
+  ],
+  "keywords": [
+    "hypergen",
+    "kit",
+    "nextjs",
+    "react",
+    "tailwind",
+    "scaffold"
+  ]
+}

@@ -1,0 +1,37 @@
+# Kit configuration for @hyper-kits/nextjs
+name: "@hyper-kits/nextjs"
+description: |
+  Next.js App Router code generation kit.
+  Scaffold projects, add pages, API routes, components, and more.
+version: "1.0.0"
+author: "Hypergen Team"
+license: "MIT"
+
+keywords:
+  - nextjs
+  - react
+  - tailwind
+  - typescript
+  - app-router
+
+defaults:
+  cookbook: "project"
+  recipe: "create"
+
+cookbooks:
+  - "./cookbooks/*/cookbook.yml"
+  - "./cookbooks/*/"
+
+recipes:
+  - "./recipes/*/recipe.yml"
+  - "./recipes/*/"
+
+tags:
+  - "nextjs"
+  - "react"
+  - "frontend"
+  - "fullstack"
+
+categories:
+  - "Web Development"
+  - "React Frameworks"

@@ -1,0 +1,12 @@
+// This file demonstrates .jig extension processing
+export function main() {
+  console.log("Hello from {{ projectName }}!");
+  console.log("Project type: {{ projectType }}");
+}
+
+@if(projectType == "cli")
+// CLI entry point
+if (import.meta.main) {
+  main();
+}
+@end

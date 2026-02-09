@@ -43,7 +43,7 @@ variables:
 steps:
   - name: Generate component
     tool: template
-    template: component.liquid
+    template: component.jig
     outputDir: src/components
     
   - name: Setup project files
@@ -61,7 +61,7 @@ steps:
     
   - name: Generate tests
     tool: template
-    template: test.liquid
+    template: test.jig
     when: "!{{ skipTests }}"
     dependsOn: ["Generate component"]
     parallel: true
@@ -82,8 +82,7 @@ Executes a template to generate files.
 ```yaml
 - name: Generate files
   tool: template
-  template: component.ejs
-  engine: ejs                    # Optional: ejs, liquid, auto
+  template: component.jig
   outputDir: src/components      # Optional: override output directory
   overwrite: true               # Optional: overwrite existing files
   exclude: ["*.test.ts"]        # Optional: file patterns to exclude
@@ -158,7 +157,7 @@ Steps can depend on other steps to enforce execution order:
 steps:
   - name: step1
     tool: template
-    template: base.ejs
+    template: base.jig
     
   - name: step2
     tool: action
@@ -167,7 +166,7 @@ steps:
     
   - name: step3
     tool: template
-    template: final.ejs
+    template: final.jig
     dependsOn: ["step1", "step2"]  # Wait for both steps
 ```
 
@@ -179,7 +178,7 @@ Steps can be conditionally executed based on variable expressions:
 steps:
   - name: Generate tests
     tool: template
-    template: test.ejs
+    template: test.jig
     when: "{{ generateTests }}"     # Execute only if generateTests is true
     
   - name: Skip expensive step
@@ -196,17 +195,17 @@ Steps can run in parallel when dependencies allow:
 steps:
   - name: base-step
     tool: template
-    template: base.ejs
+    template: base.jig
     
   - name: parallel-step-1
     tool: template
-    template: style.ejs
+    template: style.jig
     dependsOn: ["base-step"]
     parallel: true              # Can run in parallel with other parallel steps
     
   - name: parallel-step-2
     tool: template
-    template: test.ejs
+    template: test.jig
     dependsOn: ["base-step"]
     parallel: true              # Will run simultaneously with parallel-step-1
 ```
@@ -224,7 +223,7 @@ steps:
     
   - name: critical-step
     tool: template
-    template: critical.ejs
+    template: critical.jig
     retries: 3                  # Retry up to 3 times on failure
     timeout: 60000              # Timeout after 60 seconds
 ```
@@ -319,7 +318,7 @@ variables:
 steps:
   - name: Generate files
     tool: template
-    template: original-template.ejs  # Reference your existing template
+    template: original-template.jig  # Reference your existing template
 ```
 
 ### Gradual Migration
@@ -335,7 +334,7 @@ steps:
   # Start with existing template
   - name: Generate base files
     tool: template
-    template: existing-template.ejs
+    template: existing-template.jig
     
   # Add new steps incrementally
   - name: Setup additional files

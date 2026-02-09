@@ -187,7 +187,7 @@ export interface BaseStep {
   name: string;
   /** Tool to use */
   tool: "template" | "action" | "codemod" | "recipe" | "shell";
-  /** Condition for execution (LiquidJS expression) */
+  /** Condition for execution (Jig expression) */
   condition?: string;
 }
 
