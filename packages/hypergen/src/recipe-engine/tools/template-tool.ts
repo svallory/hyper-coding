@@ -582,10 +582,11 @@ export class TemplateTool extends Tool<TemplateStep> {
     attributes: Record<string, any>
   ): Record<string, any> {
     // Use existing context helper for consistency with current template system
+    // Order matters: step.variables should override context.variables
     const baseContext = contextHelper({
       ...context.recipeVariables,
-      ...step.variables,
-      ...context.variables
+      ...context.variables,
+      ...step.variables
     }, {
       // Mock RunnerConfig for compatibility
       cwd: context.projectRoot,
