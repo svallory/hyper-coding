@@ -1,0 +1,190 @@
+---
+title: "StepResult"
+description: "Step execution result"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / StepResult
+
+Defined in: [recipe-engine/types.ts:293](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L293)
+
+Step execution result
+
+## Properties
+
+### status
+
+> **status**: [`StepStatus`](/api-reference/generated/type-aliases/StepStatus.mdx)
+
+Defined in: [recipe-engine/types.ts:295](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L295)
+
+Step execution status
+
+***
+
+### stepName
+
+> **stepName**: `string`
+
+Defined in: [recipe-engine/types.ts:298](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L298)
+
+Step name
+
+***
+
+### toolType
+
+> **toolType**: [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+Defined in: [recipe-engine/types.ts:301](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L301)
+
+Tool type that was executed
+
+***
+
+### startTime
+
+> **startTime**: `Date`
+
+Defined in: [recipe-engine/types.ts:304](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L304)
+
+Execution start time
+
+***
+
+### endTime?
+
+> `optional` **endTime**: `Date`
+
+Defined in: [recipe-engine/types.ts:307](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L307)
+
+Execution end time
+
+***
+
+### duration?
+
+> `optional` **duration**: `number`
+
+Defined in: [recipe-engine/types.ts:310](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L310)
+
+Execution duration in milliseconds
+
+***
+
+### retryCount
+
+> **retryCount**: `number`
+
+Defined in: [recipe-engine/types.ts:313](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L313)
+
+Number of retry attempts made
+
+***
+
+### dependenciesSatisfied
+
+> **dependenciesSatisfied**: `boolean`
+
+Defined in: [recipe-engine/types.ts:316](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L316)
+
+Whether step dependencies were satisfied
+
+***
+
+### conditionResult?
+
+> `optional` **conditionResult**: `boolean`
+
+Defined in: [recipe-engine/types.ts:319](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L319)
+
+Condition evaluation result (if applicable)
+
+***
+
+### toolResult?
+
+> `optional` **toolResult**: `ActionResult` \| [`TemplateExecutionResult`](/api-reference/generated/interfaces/TemplateExecutionResult.mdx) \| [`CodeModExecutionResult`](/api-reference/generated/interfaces/CodeModExecutionResult.mdx) \| `RecipeExecutionResult`
+
+Defined in: [recipe-engine/types.ts:322](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L322)
+
+Tool-specific execution result
+
+***
+
+### filesCreated?
+
+> `optional` **filesCreated**: `string`[]
+
+Defined in: [recipe-engine/types.ts:325](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L325)
+
+Files created by this step
+
+***
+
+### filesModified?
+
+> `optional` **filesModified**: `string`[]
+
+Defined in: [recipe-engine/types.ts:328](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L328)
+
+Files modified by this step
+
+***
+
+### filesDeleted?
+
+> `optional` **filesDeleted**: `string`[]
+
+Defined in: [recipe-engine/types.ts:331](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L331)
+
+Files deleted by this step
+
+***
+
+### error?
+
+> `optional` **error**: `object`
+
+Defined in: [recipe-engine/types.ts:334](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L334)
+
+Error information (if failed)
+
+#### message
+
+> **message**: `string`
+
+#### code?
+
+> `optional` **code**: `string`
+
+#### stack?
+
+> `optional` **stack**: `string`
+
+#### cause?
+
+> `optional` **cause**: `any`
+
+***
+
+### output?
+
+> `optional` **output**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/types.ts:342](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L342)
+
+Step output data
+
+***
+
+### metadata?
+
+> `optional` **metadata**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/types.ts:345](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L345)
+
+Metadata for debugging and analysis

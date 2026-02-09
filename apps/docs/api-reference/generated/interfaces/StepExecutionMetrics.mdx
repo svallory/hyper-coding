@@ -1,0 +1,158 @@
+---
+title: "StepExecutionMetrics"
+description: "Step execution metrics and progress tracking"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / StepExecutionMetrics
+
+Defined in: [recipe-engine/step-executor.ts:41](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L41)
+
+Step execution metrics and progress tracking
+
+## Properties
+
+### totalExecutionTime
+
+> **totalExecutionTime**: `number`
+
+Defined in: [recipe-engine/step-executor.ts:43](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L43)
+
+Total execution time in milliseconds
+
+***
+
+### stepExecutionTimes
+
+> **stepExecutionTimes**: `Map`\<`string`, `number`\>
+
+Defined in: [recipe-engine/step-executor.ts:46](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L46)
+
+Individual step execution times
+
+***
+
+### memoryUsage
+
+> **memoryUsage**: `object`
+
+Defined in: [recipe-engine/step-executor.ts:49](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L49)
+
+Memory usage statistics
+
+#### peak
+
+> **peak**: `number`
+
+Peak memory usage during execution
+
+#### average
+
+> **average**: `number`
+
+Average memory usage
+
+#### start
+
+> **start**: `number`
+
+Memory at start
+
+#### end
+
+> **end**: `number`
+
+Memory at end
+
+***
+
+### parallelization
+
+> **parallelization**: `object`
+
+Defined in: [recipe-engine/step-executor.ts:61](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L61)
+
+Parallelization statistics
+
+#### maxConcurrentSteps
+
+> **maxConcurrentSteps**: `number`
+
+Maximum concurrent steps
+
+#### averageConcurrentSteps
+
+> **averageConcurrentSteps**: `number`
+
+Average concurrent steps
+
+#### parallelPhases
+
+> **parallelPhases**: `number`
+
+Total parallel execution phases
+
+***
+
+### errors
+
+> **errors**: `object`
+
+Defined in: [recipe-engine/step-executor.ts:71](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L71)
+
+Error and retry statistics
+
+#### totalFailures
+
+> **totalFailures**: `number`
+
+Total number of step failures
+
+#### totalRetries
+
+> **totalRetries**: `number`
+
+Total number of retries performed
+
+#### permanentFailures
+
+> **permanentFailures**: `string`[]
+
+Steps that failed permanently
+
+#### recoveredAfterRetries
+
+> **recoveredAfterRetries**: `string`[]
+
+Steps that succeeded after retries
+
+***
+
+### dependencies
+
+> **dependencies**: `object`
+
+Defined in: [recipe-engine/step-executor.ts:83](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L83)
+
+Dependency resolution statistics
+
+#### resolutionTime
+
+> **resolutionTime**: `number`
+
+Total dependency resolution time
+
+#### cyclesDetected
+
+> **cyclesDetected**: `number`
+
+Number of dependency cycles detected
+
+#### maxDepth
+
+> **maxDepth**: `number`
+
+Dependency depth levels

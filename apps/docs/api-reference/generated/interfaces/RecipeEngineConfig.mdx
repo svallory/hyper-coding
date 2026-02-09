@@ -1,0 +1,66 @@
+---
+title: "RecipeEngineConfig"
+description: "Recipe Engine initialization configuration"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeEngineConfig
+
+Defined in: [recipe-engine/index.ts:65](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/index.ts#L65)
+
+Recipe Engine initialization configuration
+
+## Properties
+
+### stepExecutor?
+
+> `optional` **stepExecutor**: `Partial`\<[`StepExecutorConfig`](/api-reference/generated/interfaces/StepExecutorConfig.mdx)\>
+
+Defined in: [recipe-engine/index.ts:67](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/index.ts#L67)
+
+Step executor configuration
+
+***
+
+### toolRegistry?
+
+> `optional` **toolRegistry**: `object`
+
+Defined in: [recipe-engine/index.ts:70](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/index.ts#L70)
+
+Tool registry configuration
+
+#### maxCacheSize?
+
+> `optional` **maxCacheSize**: `number`
+
+#### cacheTimeoutMs?
+
+> `optional` **cacheTimeoutMs**: `number`
+
+#### enableInstanceReuse?
+
+> `optional` **enableInstanceReuse**: `boolean`
+
+***
+
+### enableDebugLogging?
+
+> `optional` **enableDebugLogging**: `boolean`
+
+Defined in: [recipe-engine/index.ts:73](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/index.ts#L73)
+
+Enable debug logging
+
+***
+
+### enabledFeatures?
+
+> `optional` **enabledFeatures**: (`"step-orchestration"` \| `"dependency-management"` \| `"parallel-execution"` \| `"conditional-logic"` \| `"error-handling"` \| `"progress-tracking"` \| `"metrics-collection"` \| `"tool-registry"` \| `"template-composition"` \| `"action-pipelines"` \| `"codemod-transformations"` \| `"sub-recipe-execution"`)[]
+
+Defined in: [recipe-engine/index.ts:76](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/index.ts#L76)
+
+Features to enable (all enabled by default)

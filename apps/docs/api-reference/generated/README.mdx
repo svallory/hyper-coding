@@ -1,0 +1,115 @@
+---
+title: "hypergen"
+description: "API documentation for hypergen"
+---
+
+**hypergen**
+
+***
+
+## Classes
+
+- [Logger](/api-reference/generated/classes/Logger.mdx)
+- [RecipeEngine](/api-reference/generated/classes/RecipeEngine.mdx)
+- [StepExecutor](/api-reference/generated/classes/StepExecutor.mdx)
+- [ActionTool](/api-reference/generated/classes/ActionTool.mdx)
+- [ActionToolFactory](/api-reference/generated/classes/ActionToolFactory.mdx)
+- [Tool](/api-reference/generated/classes/Tool.mdx)
+- [BaseToolFactory](/api-reference/generated/classes/BaseToolFactory.mdx)
+- [RecipeTool](/api-reference/generated/classes/RecipeTool.mdx)
+- [RecipeToolFactory](/api-reference/generated/classes/RecipeToolFactory.mdx)
+- [ToolRegistry](/api-reference/generated/classes/ToolRegistry.mdx)
+- [TemplateTool](/api-reference/generated/classes/TemplateTool.mdx)
+- [TemplateToolFactory](/api-reference/generated/classes/TemplateToolFactory.mdx)
+- [StepExecutionError](/api-reference/generated/classes/StepExecutionError.mdx)
+- [RecipeDependencyError](/api-reference/generated/classes/RecipeDependencyError.mdx)
+- [CircularDependencyError](/api-reference/generated/classes/CircularDependencyError.mdx)
+
+## Interfaces
+
+- [RecipeEngineConfig](/api-reference/generated/interfaces/RecipeEngineConfig.mdx)
+- [RecipeExecutionOptions](/api-reference/generated/interfaces/RecipeExecutionOptions.mdx)
+- [RecipeExecutionResult](/api-reference/generated/interfaces/RecipeExecutionResult.mdx)
+- [RecipeLoadResult](/api-reference/generated/interfaces/RecipeLoadResult.mdx)
+- [StepExecutionMetrics](/api-reference/generated/interfaces/StepExecutionMetrics.mdx)
+- [StepExecutionProgress](/api-reference/generated/interfaces/StepExecutionProgress.mdx)
+- [StepExecutorConfig](/api-reference/generated/interfaces/StepExecutorConfig.mdx)
+- [ToolResource](/api-reference/generated/interfaces/ToolResource.mdx)
+- [ToolLifecycleMetrics](/api-reference/generated/interfaces/ToolLifecycleMetrics.mdx)
+- [ToolValidationResult](/api-reference/generated/interfaces/ToolValidationResult.mdx)
+- [ToolFactory](/api-reference/generated/interfaces/ToolFactory.mdx)
+- [ToolRegistration](/api-reference/generated/interfaces/ToolRegistration.mdx)
+- [ToolRegistryStats](/api-reference/generated/interfaces/ToolRegistryStats.mdx)
+- [ToolSearchCriteria](/api-reference/generated/interfaces/ToolSearchCriteria.mdx)
+- [ToolResolutionOptions](/api-reference/generated/interfaces/ToolResolutionOptions.mdx)
+- [BaseRecipeStep](/api-reference/generated/interfaces/BaseRecipeStep.mdx)
+- [TemplateStep](/api-reference/generated/interfaces/TemplateStep.mdx)
+- [ActionStep](/api-reference/generated/interfaces/ActionStep.mdx)
+- [CodeModStep](/api-reference/generated/interfaces/CodeModStep.mdx)
+- [RecipeStep](/api-reference/generated/interfaces/RecipeStep.mdx)
+- [StepContext](/api-reference/generated/interfaces/StepContext.mdx)
+- [StepResult](/api-reference/generated/interfaces/StepResult.mdx)
+- [TemplateExecutionResult](/api-reference/generated/interfaces/TemplateExecutionResult.mdx)
+- [CodeModExecutionResult](/api-reference/generated/interfaces/CodeModExecutionResult.mdx)
+- [RecipeConfig](/api-reference/generated/interfaces/RecipeConfig.mdx)
+- [RecipeExample](/api-reference/generated/interfaces/RecipeExample.mdx)
+- [RecipeDependency](/api-reference/generated/interfaces/RecipeDependency.mdx)
+- [RecipeExecution](/api-reference/generated/interfaces/RecipeExecution.mdx)
+- [RecipeValidationResult](/api-reference/generated/interfaces/RecipeValidationResult.mdx)
+- [RecipeValidationError](/api-reference/generated/interfaces/RecipeValidationError.mdx)
+- [RecipeValidationWarning](/api-reference/generated/interfaces/RecipeValidationWarning.mdx)
+- [StepDependencyNode](/api-reference/generated/interfaces/StepDependencyNode.mdx)
+- [RecipeExecutionPlan](/api-reference/generated/interfaces/RecipeExecutionPlan.mdx)
+- [StepExecutionOptions](/api-reference/generated/interfaces/StepExecutionOptions.mdx)
+
+## Type Aliases
+
+- [RecipeEngineFeature](/api-reference/generated/type-aliases/RecipeEngineFeature.mdx)
+- [RecipeSource](/api-reference/generated/type-aliases/RecipeSource.mdx)
+- [ToolPhase](/api-reference/generated/type-aliases/ToolPhase.mdx)
+- [StepStatus](/api-reference/generated/type-aliases/StepStatus.mdx)
+- [ToolType](/api-reference/generated/type-aliases/ToolType.mdx)
+- [RecipeStepUnion](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)
+- [StepByTool](/api-reference/generated/type-aliases/StepByTool.mdx)
+
+## Variables
+
+- [RECIPE\_ENGINE\_VERSION](/api-reference/generated/variables/RECIPE_ENGINE_VERSION.mdx)
+- [RECIPE\_ENGINE\_FEATURES](/api-reference/generated/variables/RECIPE_ENGINE_FEATURES.mdx)
+- [RecipeEnginePresets](/api-reference/generated/variables/RecipeEnginePresets.mdx)
+- [RecipeEngineDevUtils](/api-reference/generated/variables/RecipeEngineDevUtils.mdx)
+- [actionToolFactory](/api-reference/generated/variables/actionToolFactory.mdx)
+- [TOOL\_FRAMEWORK\_VERSION](/api-reference/generated/variables/TOOL_FRAMEWORK_VERSION.mdx)
+- [SUPPORTED\_TOOL\_TYPES](/api-reference/generated/variables/SUPPORTED_TOOL_TYPES.mdx)
+- [DEFAULT\_REGISTRY\_CONFIG](/api-reference/generated/variables/DEFAULT_REGISTRY_CONFIG.mdx)
+- [TOOL\_EXECUTION\_PHASES](/api-reference/generated/variables/TOOL_EXECUTION_PHASES.mdx)
+- [TOOL\_FRAMEWORK\_CONSTANTS](/api-reference/generated/variables/TOOL_FRAMEWORK_CONSTANTS.mdx)
+- [DevUtils](/api-reference/generated/variables/DevUtils.mdx)
+- [recipeToolFactory](/api-reference/generated/variables/recipeToolFactory.mdx)
+- [templateToolFactory](/api-reference/generated/variables/templateToolFactory.mdx)
+
+## Functions
+
+- [engine](/api-reference/generated/functions/engine.mdx)
+- [resolve](/api-reference/generated/functions/resolve.mdx)
+- [runner](/api-reference/generated/functions/runner.mdx)
+- [initializeRecipeEngine](/api-reference/generated/functions/initializeRecipeEngine.mdx)
+- [checkRecipeEngineHealth](/api-reference/generated/functions/checkRecipeEngineHealth.mdx)
+- [createRecipeEngine](/api-reference/generated/functions/createRecipeEngine.mdx)
+- [executeRecipe](/api-reference/generated/functions/executeRecipe.mdx)
+- [loadRecipe](/api-reference/generated/functions/loadRecipe.mdx)
+- [validateRecipe](/api-reference/generated/functions/validateRecipe.mdx)
+- [initializeToolsFramework](/api-reference/generated/functions/initializeToolsFramework.mdx)
+- [createValidationResult](/api-reference/generated/functions/createValidationResult.mdx)
+- [isSupportedToolType](/api-reference/generated/functions/isSupportedToolType.mdx)
+- [validateToolType](/api-reference/generated/functions/validateToolType.mdx)
+- [createTool](/api-reference/generated/functions/createTool.mdx)
+- [resolveTools](/api-reference/generated/functions/resolveTools.mdx)
+- [checkRegistryHealth](/api-reference/generated/functions/checkRegistryHealth.mdx)
+- [getToolRegistry](/api-reference/generated/functions/getToolRegistry.mdx)
+- [registerTool](/api-reference/generated/functions/registerTool.mdx)
+- [resolveTool](/api-reference/generated/functions/resolveTool.mdx)
+- [isTemplateStep](/api-reference/generated/functions/isTemplateStep.mdx)
+- [isActionStep](/api-reference/generated/functions/isActionStep.mdx)
+- [isCodeModStep](/api-reference/generated/functions/isCodeModStep.mdx)
+- [isRecipeStep](/api-reference/generated/functions/isRecipeStep.mdx)

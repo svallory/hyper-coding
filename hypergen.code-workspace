@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "packages/hypergen"
+		},
+		{
+			"path": "packages/hyper-kits/moon"
+		}
+	],
+	"settings": {
+		"typescript.tsdk": "node_modules/typescript/lib"
+	}
+}

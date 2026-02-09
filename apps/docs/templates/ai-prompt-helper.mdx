@@ -1,0 +1,126 @@
+---
+title: "When to Use the AI Prompt Helper"
+description: "Guidelines for using the `tool: ai` recipe step effectively — and when to skip it"
+icon: "sparkles"
+---
+
+# When to Use the AI Prompt Helper
+
+Hypergen has two AI integration points:
+
+- **`{% ai %}` template tag** — Asks the AI agent to make **decisions** (pick components, order fields, group items). The template renders the output deterministically using the answers. See [AI Decisions in Templates](/templates/ai-decisions-tag).
+- **`tool: ai` recipe step** — Sends a prompt to an LLM and writes the **generated code** to a file. This is the Scaffold+Complete pattern.
+
+This page covers the `tool: ai` recipe step — when it's worth using, and when to skip it.
+
+## Skip it for simple recipes
+
+If your recipe generates a single file with clear structure — a page, a component, a route handler — the template alone is enough. The AI step adds token cost and latency without meaningful improvement.
+
+**Why?** An AI agent calling `hypergen nextjs page add` already knows what it wants. It will edit the generated file directly. Having Hypergen's AI step rewrite the file first is redundant — the agent would rewrite it again anyway.
+
+Templates are valuable here because they handle **conventions**: correct file placement, proper imports, framework-specific patterns (like Next.js `params` being a `Promise`), and TypeScript types. That's deterministic work that doesn't need an LLM.
+
+## Use it when templates do heavy lifting
+
+The AI prompt helper earns its keep when the template generates **substantial structural code** that would be tedious to describe in a prompt, and the AI fills in the remaining gaps.
+
+### Complex model-driven generation
+
+A CRUD recipe that takes `--model Customer --relations "Address:hasMany, Order:hasMany"` could generate:
+
+- Database schema and migrations
+- API routes with proper joins across relations
+- List page with columns typed to each field
+- Form with nested sub-forms for related models
+- Validation rules derived from the schema
+- TypeScript type definitions
+
+The template handles the 80% that's deterministic — routing structure, type mappings, relation wiring, form field rendering per type. The AI fills the 20% that benefits from judgment — UX copy, layout decisions, edge case handling.
+
+```yaml
+steps:
+  - name: Generate CRUD scaffold
+    tool: template
+    template: templates/crud-scaffold.liquid
+    # Generates 8+ files with correct cross-references
+
+  - name: AI-enhance list page
+    tool: ai
+    prompt: |
+      Enhance the customer list page with:
+      - Smart column formatting (dates, currency, status badges)
+      - Search that covers: {{ model.fields | map: "name" | join: ", " }}
+      - Bulk actions appropriate for {{ model.name }} records
+    output:
+      type: inject
+      to: "app/admin/{{ model.name | downcase }}/page.tsx"
+      after: "// ENHANCE:LIST_CONTENT"
+```
+
+### Enforcing project-specific conventions
+
+When a company has specific patterns that every file must follow — auth wrappers, logging setup, analytics hooks, error boundaries — the template bakes those in. The AI only fills the business logic inside the convention scaffold.
+
+This is especially useful when the conventions are complex enough that describing them in every prompt would be error-prone:
+
+```yaml
+- name: AI-complete business logic
+  tool: ai
+  prompt: |
+    Implement the {{ name }} feature logic inside the existing scaffold.
+    The auth, logging, and error handling are already wired.
+    Focus only on the business logic between the markers.
+  output:
+    type: inject
+    to: "{{ outputPath }}"
+    after: "// BUSINESS_LOGIC_START"
+    before: "// BUSINESS_LOGIC_END"
+```
+
+### Security and compliance constraints
+
+For recipes that generate code touching auth, payments, or sensitive data, you don't want the AI to "figure out" your security model. The template hardcodes CSP headers, RBAC checks, audit logging, and input sanitization. The AI fills in business logic within the secure scaffold.
+
+### Multi-file orchestration
+
+A "feature" recipe that generates 8+ files needing correct cross-references — barrel exports, route registrations, navigation entries, test files importing the right modules. Templates handle the wiring; AI fills each file's content.
+
+## The decision framework
+
+| Scenario | Template only | Template + AI |
+|---|---|---|
+| Single file, clear structure | Yes | No |
+| Agent will edit the output anyway | Yes | No |
+| Multiple files with cross-references | Maybe | Yes |
+| Model-driven generation (CRUD, etc.) | No | Yes |
+| Convention enforcement + business logic | No | Yes |
+| Security-sensitive scaffolds | No | Yes |
+
+## Best practices for AI steps
+
+When you do use `tool: ai`, follow these guidelines:
+
+<AccordionGroup>
+  <Accordion title="Use inject, not overwrite">
+    Prefer `output.type: inject` targeting specific markers over `output.type: file` which replaces the entire scaffold. This preserves the deterministic structure and limits the AI's scope to where it adds value.
+  </Accordion>
+
+  <Accordion title="Always set guardrails">
+    ```yaml
+    guardrails:
+      validateSyntax: typescript
+      retryOnFailure: 2
+      onFailure: retry-with-feedback
+    ```
+    Syntax validation catches malformed output. Retries with feedback let the AI self-correct.
+  </Accordion>
+
+  <Accordion title="Keep temperature low">
+    Use `temperature: 0.3-0.5` for code generation. Higher values introduce unnecessary variation in structural code.
+  </Accordion>
+
+  <Accordion title="The scaffold is your fallback">
+    If `useAI` is false or the AI fails all retries, the template output should still be a valid, runnable file. Never make the AI step required for correctness.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,60 @@
+---
+title: "RecipeEngine"
+description: "Main Recipe Engine for Hypergen V8  The RecipeEngine provides the primary API for executing recipes. It handles: - Recipe discovery and loading from various sou"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeEngine
+
+Defined in: [recipe-engine/recipe-engine.ts:238](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L238)
+
+Main Recipe Engine for Hypergen V8
+
+The RecipeEngine provides the primary API for executing recipes. It handles:
+- Recipe discovery and loading from various sources
+- Recipe validation and preprocessing
+- Variable resolution with user prompts
+- Step orchestration through StepExecutor
+- Result aggregation and reporting
+- Error handling and recovery
+
+## Extends
+
+- `EventEmitter`
+
+## Constructors
+
+### Constructor
+
+> **new RecipeEngine**(`config`): `RecipeEngine`
+
+Defined in: [recipe-engine/recipe-engine.ts:252](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L252)
+
+#### Parameters
+
+##### config
+
+`RecipeEngineConfig` = `{}`
+
+#### Returns
+
+`RecipeEngine`
+
+#### Overrides
+
+`EventEmitter.constructor`
+
+## Methods
+
+### executeRecipe()
+
+> **executeRecipe**(`source`, `options`): `Promise`\<[`RecipeExecutionResult`](/api-reference/generated/interfaces/RecipeExecutionResult.mdx)\>
+
+Defined in: [recipe-engine/recipe-engine.ts:303](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L303)
+
+Execute a recipe from various sources
+
+#### Parameters

@@ -1,5 +1,0 @@
-{
-  "$schema": "https://api.api-extractor.com/schemas/mintlify-tsdocs.schema.json",
-  "outputTarget": "docfx",
-  "newlineKind": "lf"
-}

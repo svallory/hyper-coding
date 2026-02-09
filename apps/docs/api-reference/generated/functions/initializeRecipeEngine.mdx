@@ -1,0 +1,45 @@
+---
+title: "initializeRecipeEngine"
+description: "initializeRecipeEngine function documentation and examples"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / initializeRecipeEngine
+
+> **initializeRecipeEngine**(`config`): `object`
+
+Defined in: [recipe-engine/index.ts:85](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/index.ts#L85)
+
+Initialize the Recipe Engine with all components
+
+This is the main entry point for setting up the complete Recipe Step System.
+Call this once during application startup to configure all components.
+
+## Parameters
+
+### config
+
+[`RecipeEngineConfig`](/api-reference/generated/interfaces/RecipeEngineConfig.mdx) = `{}`
+
+## Returns
+
+`object`
+
+### stepExecutor
+
+> **stepExecutor**: [`StepExecutor`](/api-reference/generated/classes/StepExecutor.mdx)
+
+### toolRegistry
+
+> **toolRegistry**: [`ToolRegistry`](/api-reference/generated/classes/ToolRegistry.mdx)
+
+### version
+
+> **version**: `string`
+
+### features
+
+> **features**: readonly (`"step-orchestration"` \| `"dependency-management"` \| `"parallel-execution"` \| `"conditional-logic"` \| `"error-handling"` \| `"progress-tracking"` \| `"metrics-collection"` \| `"tool-registry"` \| `"template-composition"` \| `"action-pipelines"` \| `"codemod-transformations"` \| `"sub-recipe-execution"`)[]

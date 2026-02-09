@@ -159,6 +159,8 @@
             "group": "Templates",
             "pages": [
               "templates/creating-templates",
+              "templates/ai-decisions-tag",
+              "templates/ai-prompt-helper",
               "templates/sharing-templates",
               "templates/migration-guide"
             ]
@@ -229,6 +231,243 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Hypergen SDK (TsDoc)",
+        "groups": [
+          {
+            "group": "Interfaces",
+            "icon": "square-dashed",
+            "pages": [
+              "packages/hypergen-tsdoc/hypergen.actionstep",
+              "packages/hypergen-tsdoc/hypergen.baserecipestep",
+              "packages/hypergen-tsdoc/hypergen.codemodexecutionresult",
+              "packages/hypergen-tsdoc/hypergen.codemodstep",
+              "packages/hypergen-tsdoc/hypergen.recipeconfig",
+              "packages/hypergen-tsdoc/hypergen.recipedependency",
+              "packages/hypergen-tsdoc/hypergen.recipeengineconfig",
+              "packages/hypergen-tsdoc/hypergen.recipeexample",
+              "packages/hypergen-tsdoc/hypergen.recipeexecution",
+              "packages/hypergen-tsdoc/hypergen.recipeexecutionoptions",
+              "packages/hypergen-tsdoc/hypergen.recipeexecutionplan",
+              "packages/hypergen-tsdoc/hypergen.recipeexecutionresult",
+              "packages/hypergen-tsdoc/hypergen.recipeloadresult",
+              "packages/hypergen-tsdoc/hypergen.recipestep",
+              "packages/hypergen-tsdoc/hypergen.recipevalidationresult",
+              "packages/hypergen-tsdoc/hypergen.recipevalidationwarning",
+              "packages/hypergen-tsdoc/hypergen.stepcontext",
+              "packages/hypergen-tsdoc/hypergen.stepdependencynode",
+              "packages/hypergen-tsdoc/hypergen.stepexecutionmetrics",
+              "packages/hypergen-tsdoc/hypergen.stepexecutionoptions",
+              "packages/hypergen-tsdoc/hypergen.stepexecutionprogress",
+              "packages/hypergen-tsdoc/hypergen.stepexecutorconfig",
+              "packages/hypergen-tsdoc/hypergen.stepresult",
+              "packages/hypergen-tsdoc/hypergen.templateexecutionresult",
+              "packages/hypergen-tsdoc/hypergen.templatestep",
+              "packages/hypergen-tsdoc/hypergen.toolfactory",
+              "packages/hypergen-tsdoc/hypergen.toollifecyclemetrics",
+              "packages/hypergen-tsdoc/hypergen.toolregistration",
+              "packages/hypergen-tsdoc/hypergen.toolregistrystats",
+              "packages/hypergen-tsdoc/hypergen.toolresolutionoptions",
+              "packages/hypergen-tsdoc/hypergen.toolresource",
+              "packages/hypergen-tsdoc/hypergen.toolsearchcriteria",
+              "packages/hypergen-tsdoc/hypergen.toolvalidationresult"
+            ]
+          },
+          {
+            "group": "Classes",
+            "icon": "cube",
+            "pages": [
+              "packages/hypergen-tsdoc/hypergen.actiontool",
+              "packages/hypergen-tsdoc/hypergen.actiontoolfactory",
+              "packages/hypergen-tsdoc/hypergen.basetoolfactory",
+              "packages/hypergen-tsdoc/hypergen.circulardependencyerror",
+              "packages/hypergen-tsdoc/hypergen.logger",
+              "packages/hypergen-tsdoc/hypergen.recipedependencyerror",
+              "packages/hypergen-tsdoc/hypergen.recipeengine",
+              "packages/hypergen-tsdoc/hypergen.recipetool",
+              "packages/hypergen-tsdoc/hypergen.recipetoolfactory",
+              "packages/hypergen-tsdoc/hypergen.recipevalidationerror",
+              "packages/hypergen-tsdoc/hypergen.stepexecutionerror",
+              "packages/hypergen-tsdoc/hypergen.stepexecutor",
+              "packages/hypergen-tsdoc/hypergen.templatetool",
+              "packages/hypergen-tsdoc/hypergen.templatetoolfactory",
+              "packages/hypergen-tsdoc/hypergen.tool",
+              "packages/hypergen-tsdoc/hypergen.toolregistry"
+            ]
+          },
+          {
+            "group": "Functions",
+            "icon": "function",
+            "pages": [
+              "packages/hypergen-tsdoc/hypergen.checkrecipeenginehealth",
+              "packages/hypergen-tsdoc/hypergen.checkregistryhealth",
+              "packages/hypergen-tsdoc/hypergen.createrecipeengine",
+              "packages/hypergen-tsdoc/hypergen.createtool",
+              "packages/hypergen-tsdoc/hypergen.createvalidationresult",
+              "packages/hypergen-tsdoc/hypergen.engine",
+              "packages/hypergen-tsdoc/hypergen.executerecipe",
+              "packages/hypergen-tsdoc/hypergen.gettoolregistry",
+              "packages/hypergen-tsdoc/hypergen.initializerecipeengine",
+              "packages/hypergen-tsdoc/hypergen.initializetoolsframework",
+              "packages/hypergen-tsdoc/hypergen.isactionstep",
+              "packages/hypergen-tsdoc/hypergen.iscodemodstep",
+              "packages/hypergen-tsdoc/hypergen.isrecipestep",
+              "packages/hypergen-tsdoc/hypergen.issupportedtooltype",
+              "packages/hypergen-tsdoc/hypergen.istemplatestep",
+              "packages/hypergen-tsdoc/hypergen.loadrecipe",
+              "packages/hypergen-tsdoc/hypergen.registertool",
+              "packages/hypergen-tsdoc/hypergen.resolve",
+              "packages/hypergen-tsdoc/hypergen.resolvetool",
+              "packages/hypergen-tsdoc/hypergen.resolvetools",
+              "packages/hypergen-tsdoc/hypergen.runner",
+              "packages/hypergen-tsdoc/hypergen.validaterecipe",
+              "packages/hypergen-tsdoc/hypergen.validatetooltype"
+            ]
+          },
+          {
+            "group": "Variables",
+            "icon": "variable",
+            "pages": [
+              "packages/hypergen-tsdoc/hypergen.default_registry_config",
+              "packages/hypergen-tsdoc/hypergen.devutils",
+              "packages/hypergen-tsdoc/hypergen.recipe_engine_features",
+              "packages/hypergen-tsdoc/hypergen.recipe_engine_version",
+              "packages/hypergen-tsdoc/hypergen.recipeenginedevutils",
+              "packages/hypergen-tsdoc/hypergen.recipeenginepresets",
+              "packages/hypergen-tsdoc/hypergen.supported_tool_types",
+              "packages/hypergen-tsdoc/hypergen.tool_execution_phases",
+              "packages/hypergen-tsdoc/hypergen.tool_framework_constants",
+              "packages/hypergen-tsdoc/hypergen.tool_framework_version"
+            ]
+          },
+          {
+            "group": "Types",
+            "icon": "type",
+            "pages": [
+              "packages/hypergen-tsdoc/hypergen.recipeenginefeature",
+              "packages/hypergen-tsdoc/hypergen.recipesource",
+              "packages/hypergen-tsdoc/hypergen.recipestepunion",
+              "packages/hypergen-tsdoc/hypergen.stepbytool",
+              "packages/hypergen-tsdoc/hypergen.stepstatus",
+              "packages/hypergen-tsdoc/hypergen.toolphase",
+              "packages/hypergen-tsdoc/hypergen.tooltype"
+            ]
+          }
+        ]
+      },
+      {
+        "groups": [
+          {
+            "group": "API",
+            "pages": [
+              "api-reference/generated/README",
+              "api-reference/generated/classes/ActionTool",
+              "api-reference/generated/classes/ActionToolFactory",
+              "api-reference/generated/classes/BaseToolFactory",
+              "api-reference/generated/classes/CircularDependencyError",
+              "api-reference/generated/classes/Logger",
+              "api-reference/generated/classes/RecipeDependencyError",
+              "api-reference/generated/classes/RecipeEngine",
+              "api-reference/generated/classes/RecipeTool",
+              "api-reference/generated/classes/RecipeToolFactory",
+              "api-reference/generated/classes/StepExecutionError",
+              "api-reference/generated/classes/StepExecutor",
+              "api-reference/generated/classes/TemplateTool",
+              "api-reference/generated/classes/TemplateToolFactory",
+              "api-reference/generated/classes/Tool",
+              "api-reference/generated/classes/ToolRegistry",
+              "api-reference/generated/functions/checkRecipeEngineHealth",
+              "api-reference/generated/functions/checkRegistryHealth",
+              "api-reference/generated/functions/createRecipeEngine",
+              "api-reference/generated/functions/createTool",
+              "api-reference/generated/functions/createValidationResult",
+              "api-reference/generated/functions/engine",
+              "api-reference/generated/functions/executeRecipe",
+              "api-reference/generated/functions/getToolRegistry",
+              "api-reference/generated/functions/initializeRecipeEngine",
+              "api-reference/generated/functions/initializeToolsFramework",
+              "api-reference/generated/functions/isActionStep",
+              "api-reference/generated/functions/isCodeModStep",
+              "api-reference/generated/functions/isRecipeStep",
+              "api-reference/generated/functions/isSupportedToolType",
+              "api-reference/generated/functions/isTemplateStep",
+              "api-reference/generated/functions/loadRecipe",
+              "api-reference/generated/functions/registerTool",
+              "api-reference/generated/functions/resolve",
+              "api-reference/generated/functions/resolveTool",
+              "api-reference/generated/functions/resolveTools",
+              "api-reference/generated/functions/runner",
+              "api-reference/generated/functions/validateRecipe",
+              "api-reference/generated/functions/validateToolType",
+              "api-reference/generated/interfaces/ActionStep",
+              "api-reference/generated/interfaces/BaseRecipeStep",
+              "api-reference/generated/interfaces/CodeModExecutionResult",
+              "api-reference/generated/interfaces/CodeModStep",
+              "api-reference/generated/interfaces/RecipeConfig",
+              "api-reference/generated/interfaces/RecipeDependency",
+              "api-reference/generated/interfaces/RecipeEngineConfig",
+              "api-reference/generated/interfaces/RecipeExample",
+              "api-reference/generated/interfaces/RecipeExecution",
+              "api-reference/generated/interfaces/RecipeExecutionOptions",
+              "api-reference/generated/interfaces/RecipeExecutionPlan",
+              "api-reference/generated/interfaces/RecipeExecutionResult",
+              "api-reference/generated/interfaces/RecipeLoadResult",
+              "api-reference/generated/interfaces/RecipeStep",
+              "api-reference/generated/interfaces/RecipeValidationError",
+              "api-reference/generated/interfaces/RecipeValidationResult",
+              "api-reference/generated/interfaces/RecipeValidationWarning",
+              "api-reference/generated/interfaces/StepContext",
+              "api-reference/generated/interfaces/StepDependencyNode",
+              "api-reference/generated/interfaces/StepExecutionMetrics",
+              "api-reference/generated/interfaces/StepExecutionOptions",
+              "api-reference/generated/interfaces/StepExecutionProgress",
+              "api-reference/generated/interfaces/StepExecutorConfig",
+              "api-reference/generated/interfaces/StepResult",
+              "api-reference/generated/interfaces/TemplateExecutionResult",
+              "api-reference/generated/interfaces/TemplateStep",
+              "api-reference/generated/interfaces/ToolFactory",
+              "api-reference/generated/interfaces/ToolLifecycleMetrics",
+              "api-reference/generated/interfaces/ToolRegistration",
+              "api-reference/generated/interfaces/ToolRegistryStats",
+              "api-reference/generated/interfaces/ToolResolutionOptions",
+              "api-reference/generated/interfaces/ToolResource",
+              "api-reference/generated/interfaces/ToolSearchCriteria",
+              "api-reference/generated/interfaces/ToolValidationResult",
+              "api-reference/generated/type-aliases/RecipeEngineFeature",
+              "api-reference/generated/type-aliases/RecipeSource",
+              "api-reference/generated/type-aliases/RecipeStepUnion",
+              "api-reference/generated/type-aliases/StepByTool",
+              "api-reference/generated/type-aliases/StepStatus",
+              "api-reference/generated/type-aliases/ToolPhase",
+              "api-reference/generated/type-aliases/ToolType",
+              "api-reference/generated/variables/actionToolFactory",
+              "api-reference/generated/variables/DEFAULT_REGISTRY_CONFIG",
+              "api-reference/generated/variables/DevUtils",
+              "api-reference/generated/variables/RECIPE_ENGINE_FEATURES",
+              "api-reference/generated/variables/RECIPE_ENGINE_VERSION",
+              "api-reference/generated/variables/RecipeEngineDevUtils",
+              "api-reference/generated/variables/RecipeEnginePresets",
+              "api-reference/generated/variables/recipeToolFactory",
+              "api-reference/generated/variables/SUPPORTED_TOOL_TYPES",
+              "api-reference/generated/variables/templateToolFactory",
+              "api-reference/generated/variables/TOOL_EXECUTION_PHASES",
+              "api-reference/generated/variables/TOOL_FRAMEWORK_CONSTANTS",
+              "api-reference/generated/variables/TOOL_FRAMEWORK_VERSION"
+            ]
+          }
+        ],
+        "tab": "Hypergen SDK (TypeDoc MDX)"
+      },
+      {
+        "tab": "Packages",
+        "groups": [
+          {
+            "group": "mintlify-tsdocs",
+            "icon": "code",
+            "pages": []
+          }
+        ]
       }
     ]
   },
@@ -244,8 +483,7 @@
     "default": "light",
     "isHidden": false
   },
-  "topbarLinks": [
-  ],
+  "topbarLinks": [],
   "topbarCtaButton": {
     "name": "GitHub",
     "url": "https://github.com/subtletools/hyperdev",
@@ -268,8 +506,7 @@
     "enabled": true,
     "logo": "/logo/logo.png"
   },
-  "tabs": [
-  ],
+  "tabs": [],
   "footerSocials": {
     "github": "https://github.com/subtletools/hyperdev"
   }

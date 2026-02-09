@@ -1,0 +1,392 @@
+---
+title: "AI Decisions in Templates"
+description: "Use the {% ai %} tag to let an AI agent make design decisions while Hypergen handles the code generation"
+icon: "brain-circuit"
+---
+
+# AI Decisions in Templates
+
+The `{% ai %}` template tag lets you delegate **design decisions** to an AI agent while keeping code generation fully deterministic. The AI never writes code — it answers structured questions. Your template uses those answers to render the output.
+
+## The Problem
+
+Complex templates often need judgment calls that depend on the project's context:
+
+- "Which of these 15 fields should be prominent vs. hidden?"
+- "What component should render this relationship?"
+- "In what order should these fields appear?"
+
+A purely deterministic template can't make these decisions. But having the AI write raw code means losing control over structure, conventions, and consistency.
+
+## The Solution: Ask, Then Render
+
+The `{% ai %}` tag splits the work:
+
+1. **You define the question** — what decision needs to be made, what data to consider, and what shape the answer should take
+2. **The AI agent answers** — making the judgment call based on the context you provided
+3. **Your template renders** — using the answer deterministically, with full control over the output
+
+```liquid
+{% ai output: { kind: "select", from: components } %}
+  Which component is best for displaying a list of customer addresses?
+  Consider that addresses have: street, city, state, zip, country, isPrimary.
+{% endai %}
+```
+
+The AI picks one component from your list. Your template uses that choice. If the AI picks `"DataTable"`, the template renders a `<DataTable />`. If it picks `"CardGrid"`, the template renders a `<CardGrid />`. Either way, the surrounding code is exactly what you wrote.
+
+## How It Works
+
+Hypergen uses a **two-pass execution model** when templates contain `{% ai %}` tags.
+
+### Pass 1: Compile the prompt
+
+Hypergen evaluates the template up to each `{% ai %}` tag, collecting:
+- The question text (with Liquid variables already resolved)
+- The context data referenced by the output definition
+- The output schema (what shape the answer must take)
+
+All `{% ai %}` blocks across all templates in the recipe are bundled into a single **compiled prompt** — a structured document that contains every question, its context, and its expected answer format.
+
+Hypergen then **pauses** and outputs this prompt to the agent.
+
+### Pass 2: Render with answers
+
+The agent processes the compiled prompt, makes its decisions, and calls Hypergen again with the answers (via `--answers answers.json` or stdin).
+
+Hypergen re-evaluates the templates. This time, each `{% ai %}` tag resolves to the agent's answer. The `{% answer %}` block inside renders using that answer, producing the final output.
+
+### Data Deduplication
+
+If two `{% ai %}` blocks reference the same data (e.g., both need the list of model fields), Hypergen includes it only once in the compiled prompt. This keeps the prompt compact and avoids wasting tokens.
+
+## Tag Syntax
+
+### Basic structure
+
+```liquid
+{% ai output: { kind: "...", ... } %}
+  Your question to the agent, with {{ liquid_variables }} resolved.
+{% endai %}
+```
+
+The tag takes an `output` parameter that defines the expected answer shape. The body is the question text — it supports full Liquid syntax, so you can include dynamic context.
+
+### With an answer block
+
+The `{% answer %}` block defines how to render the AI's decision into code:
+
+```liquid
+{% ai output: { kind: "select", from: styles } %}
+  Which loading style is most appropriate for a data-heavy dashboard page?
+{% answer %}
+  {%- if answer == "skeleton" %}
+  <div className="animate-pulse">
+    <div className="h-8 w-48 rounded bg-zinc-200" />
+  </div>
+  {%- elsif answer == "spinner" %}
+  <Spinner size="lg" />
+  {%- endif %}
+{% endai %}
+```
+
+Inside `{% answer %}`, the variable `answer` holds the AI's response, typed according to the output schema.
+
+### Without an answer block
+
+If you omit `{% answer %}`, the AI's response is stored as a template variable using the `as` attribute:
+
+```liquid
+{% ai output: { kind: "select", from: styles }, as: "loadingStyle" %}
+  Which loading style is most appropriate for a data-heavy dashboard page?
+{% endai %}
+
+{# Use the answer later in the template #}
+{%- if loadingStyle == "skeleton" %}
+  ...
+{%- endif %}
+```
+
+## Output Types
+
+Output types are shortcuts that define the shape of the expected answer. Hypergen validates the agent's response against the type before proceeding.
+
+### `select` — Pick one from a list
+
+The AI chooses exactly one item from a set.
+
+```liquid
+{% ai output: { kind: "select", from: components } %}
+  Which component should render the orders relationship?
+  Orders have columns: orderNumber, date, total, status.
+{% endai %}
+```
+
+**Answer shape**: A single string value that exists in `components`.
+
+```json
+{ "answer": "DataTable" }
+```
+
+### `pick` — Choose a subset
+
+The AI selects multiple items from a set.
+
+```liquid
+{% ai output: { kind: "pick", from: fields } %}
+  Which fields should appear in the main section of the customer edit form?
+  The remaining fields will be hidden behind a "Show all fields" toggle.
+{% endai %}
+```
+
+**Answer shape**: An array of strings, each from `fields`.
+
+```json
+{ "answer": ["name", "email", "status", "company"] }
+```
+
+### `order` — Sort items
+
+The AI reorders items from a set. All items must be included.
+
+```liquid
+{% ai output: { kind: "order", from: fields } %}
+  What order should these fields appear in the customer form?
+  Put the most frequently edited fields first.
+{% endai %}
+```
+
+**Answer shape**: An array containing all items from `fields`, in the chosen order.
+
+```json
+{ "answer": ["name", "email", "phone", "company", "status", "notes"] }
+```
+
+### `map` — Assign values to keys
+
+The AI maps each item in one set to an item in another set.
+
+```liquid
+{% ai output: { kind: "map", from: relations, to: components } %}
+  Which component should render each relation?
+  Available components are UI components that accept a `data` prop.
+{% answer %}
+  {%- for entry in answer %}
+  <{{ entry[1] }} data={data.{{ entry[0] }}} />
+  {%- endfor %}
+{% endai %}
+```
+
+**Answer shape**: An object where every key is from `from` and every value is from `to`.
+
+```json
+{
+  "answer": {
+    "addresses": "CardGrid",
+    "contacts": "SimpleList",
+    "orders": "DataTable",
+    "conversations": "DataTable"
+  }
+}
+```
+
+### `group` — Partition into buckets
+
+The AI distributes items into named groups.
+
+```liquid
+{% ai output: { kind: "group", from: fields, groups: ["main", "sidebar", "hidden"] } %}
+  Organize these customer fields into sections.
+  "main" — primary fields always visible.
+  "sidebar" — secondary info shown alongside.
+  "hidden" — rarely edited, behind a toggle.
+{% answer %}
+  <div className="grid grid-cols-3">
+    <div className="col-span-2">
+      {%- for field in answer.main %}
+      <FormField name="{{ field }}" />
+      {%- endfor %}
+    </div>
+    <aside>
+      {%- for field in answer.sidebar %}
+      <FormField name="{{ field }}" />
+      {%- endfor %}
+    </aside>
+  </div>
+  {%- if answer.hidden.size > 0 %}
+  <Collapsible title="More fields">
+    {%- for field in answer.hidden %}
+    <FormField name="{{ field }}" />
+    {%- endfor %}
+  </Collapsible>
+  {%- endif %}
+{% endai %}
+```
+
+**Answer shape**: An object where keys are from `groups` and values are arrays of items from `from`. Every item must appear in exactly one group.
+
+```json
+{
+  "answer": {
+    "main": ["name", "email", "status"],
+    "sidebar": ["company", "phone"],
+    "hidden": ["notes", "joinedAt", "lastActiveAt"]
+  }
+}
+```
+
+### `boolean` — Yes/no per item
+
+The AI makes a yes/no decision for each item.
+
+```liquid
+{% ai output: { kind: "boolean", items: fields } %}
+  Which of these fields should be editable inline (without opening a form)?
+  Consider that inline editing works best for short, simple values.
+{% answer %}
+  {%- for entry in answer %}
+    {%- if entry[1] %}
+  <InlineEditField name="{{ entry[0] }}" />
+    {%- else %}
+  <ReadonlyField name="{{ entry[0] }}" />
+    {%- endif %}
+  {%- endfor %}
+{% endai %}
+```
+
+**Answer shape**: An object where every key is from `items` and every value is `true` or `false`.
+
+```json
+{
+  "answer": {
+    "name": true,
+    "email": true,
+    "status": true,
+    "company": true,
+    "phone": true,
+    "notes": false,
+    "joinedAt": false,
+    "lastActiveAt": false
+  }
+}
+```
+
+## Validation
+
+Hypergen validates every answer before rendering:
+
+- **Type checking**: Does the answer match the declared output kind?
+- **Set membership**: Are all values from the declared sets (`from`, `to`, `groups`)?
+- **Completeness**: For `order` and `boolean`, are all items accounted for? For `group`, is every item placed in exactly one group?
+- **No extras**: Are there unexpected keys or values not in the declared sets?
+
+If validation fails, Hypergen reports the specific error and the agent can retry with corrected answers.
+
+## Full Example: Customer Update Page
+
+Here's a realistic template for a customer admin edit page. The recipe scans the codebase for model fields, available components, and relation data. The template asks the AI to make layout and UX decisions.
+
+```liquid
+---
+to: "app/admin/{{ model.name | downcase | pluralize }}/[id]/page.tsx"
+---
+import type { {{ model.name }} } from "@/types";
+{%- for rel in model.relations %}
+import type { {{ rel.model }} } from "@/types";
+{%- endfor %}
+
+{# --- AI Decision: Field grouping --- #}
+{%- assign editableFields = model.fields | where: "readonly", false %}
+{%- assign fieldNames = editableFields | map: "name" %}
+
+{% ai output: { kind: "group", from: fieldNames, groups: ["primary", "secondary", "advanced"] } %}
+  This is an admin edit page for {{ model.name }}.
+  Fields: {{ editableFields | map: "name" | join: ", " }}.
+  Types: {{ editableFields | map: "type" | join: ", " }}.
+
+  Group them:
+  - "primary" — most important, always visible at the top
+  - "secondary" — visible but lower priority
+  - "advanced" — hidden behind a disclosure by default
+{% answer %}
+export default async function {{ model.name }}EditPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
+  return (
+    <div className="space-y-8 p-6">
+      <h1 className="text-2xl font-bold">Edit {{ model.name }}</h1>
+
+      <section>
+        <h2 className="text-lg font-semibold">Details</h2>
+        <div className="grid grid-cols-2 gap-4">
+          {%- for field in answer.primary %}
+          <FormField name="{{ field }}" />
+          {%- endfor %}
+        </div>
+      </section>
+
+      <section>
+        <div className="grid grid-cols-2 gap-4">
+          {%- for field in answer.secondary %}
+          <FormField name="{{ field }}" />
+          {%- endfor %}
+        </div>
+      </section>
+
+      {%- if answer.advanced.size > 0 %}
+      <Collapsible title="Advanced">
+        <div className="grid grid-cols-2 gap-4">
+          {%- for field in answer.advanced %}
+          <FormField name="{{ field }}" />
+          {%- endfor %}
+        </div>
+      </Collapsible>
+      {%- endif %}
+
+      {# --- Relations --- #}
+      {%- if model.relations.size > 0 %}
+      <Tabs defaultValue="{{ model.relations | first | map: 'name' }}">
+        <TabsList>
+          {%- for rel in model.relations %}
+          <TabsTrigger value="{{ rel.name }}">
+            {{ rel.name | capitalize }}
+          </TabsTrigger>
+          {%- endfor %}
+        </TabsList>
+        {%- for rel in model.relations %}
+        <TabsContent value="{{ rel.name }}">
+          <!-- Relation component rendered below -->
+        </TabsContent>
+        {%- endfor %}
+      </Tabs>
+      {%- endif %}
+    </div>
+  );
+}
+{% endai %}
+
+{# --- AI Decision: Relation components (only if relations exist) --- #}
+{%- if model.relations.size > 0 %}
+{%- assign relationNames = model.relations | map: "name" %}
+
+{% ai output: { kind: "map", from: relationNames, to: listComponents } %}
+  The {{ model.name }} model has these relations:
+  {%- for rel in model.relations %}
+  - {{ rel.name }}: {{ rel.type }} {{ rel.model }} (fields: {{ rel.fields | join: ", " }})
+  {%- endfor %}
+
+  Available list/table components: {{ listComponents | join: ", " }}.
+  Which component should render each relation?
+{% endai %}
+{%- endif %}
+```
+
+In this example:
+- The template generates all imports, types, and page structure deterministically
+- The AI decides how to group fields and which components to use for relations
+- If the model has no relations, the second `{% ai %}` block is never emitted
+- The compiled prompt sent to the agent contains both questions with all relevant context, deduplicated

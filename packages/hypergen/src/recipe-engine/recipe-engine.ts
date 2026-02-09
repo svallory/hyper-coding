@@ -18,6 +18,7 @@ import { HypergenError, ErrorHandler, ErrorCode } from '../errors/hypergen-error
 import Logger from '../logger.js'
 import context from '../context.js'
 import { performInteractivePrompting } from '../prompts/interactive-prompts.js'
+import { AiCollector } from '../ai/ai-collector.js'
 import type {
   RecipeConfig,
   RecipeExecution,
@@ -101,36 +102,39 @@ export interface RecipeExecutionOptions {
 export interface RecipeEngineConfig {
   /** Step executor configuration */
   stepExecutor?: Partial<StepExecutorConfig>
-  
+
   /** Tool registry configuration */
   toolRegistry?: {
     maxCacheSize?: number
     cacheTimeoutMs?: number
     enableInstanceReuse?: boolean
   }
-  
+
   /** Working directory for all operations */
   workingDir?: string
-  
+
   /** Default timeout for all operations */
   defaultTimeout?: number
-  
+
   /** Whether to enable debug logging */
   enableDebugLogging?: boolean
-  
+
   /** Recipe cache configuration */
   cache?: {
     enabled: boolean
     directory?: string
     ttl?: number
   }
-  
+
   /** Security settings */
   security?: {
     allowExternalSources?: boolean
     trustedSources?: string[]
     validateSignatures?: boolean
   }
+
+  /** Helper functions from hypergen config */
+  helpers?: Record<string, any>
 }
 
 /**
@@ -224,7 +228,8 @@ const DEFAULT_CONFIG: Required<RecipeEngineConfig> = {
     allowExternalSources: true,
     trustedSources: [],
     validateSignatures: false
-  }
+  },
+  helpers: {}
 }
 
 /**
@@ -975,18 +980,11 @@ export class RecipeEngine extends EventEmitter {
     // Create base context using existing context function
     const baseContext = context(variables, {
       localsDefaults: {},
-      helpers: undefined
+      helpers: this.config.helpers
     })
-    
+
     // Determine collect mode: if no answers provided and AiCollector is in collect mode
-    const collectMode = !options.answers && (() => {
-      try {
-        const { AiCollector } = require('../ai/ai-collector.js')
-        return AiCollector.getInstance().collectMode
-      } catch {
-        return false
-      }
-    })()
+    const collectMode = !options.answers && AiCollector.getInstance().collectMode
 
     return {
       step: {} as RecipeStepUnion, // Will be set by step executor

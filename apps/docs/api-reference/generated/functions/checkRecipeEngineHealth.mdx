@@ -1,0 +1,60 @@
+---
+title: "checkRecipeEngineHealth"
+description: "checkRecipeEngineHealth function documentation and examples"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / checkRecipeEngineHealth
+
+> **checkRecipeEngineHealth**(): `object`
+
+Defined in: [recipe-engine/index.ts:205](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/index.ts#L205)
+
+Recipe Engine health check utility
+
+## Returns
+
+`object`
+
+### healthy
+
+> **healthy**: `boolean`
+
+### version
+
+> **version**: `string`
+
+### issues
+
+> **issues**: `string`[]
+
+### components
+
+> **components**: `object`
+
+#### components.stepExecutor
+
+> **stepExecutor**: `boolean`
+
+#### components.toolRegistry
+
+> **toolRegistry**: `boolean`
+
+### toolRegistryHealth
+
+> **toolRegistryHealth**: `object`
+
+#### toolRegistryHealth.healthy
+
+> **healthy**: `boolean`
+
+#### toolRegistryHealth.issues
+
+> **issues**: `string`[]
+
+#### toolRegistryHealth.stats
+
+> **stats**: [`ToolRegistryStats`](/api-reference/generated/interfaces/ToolRegistryStats.mdx)

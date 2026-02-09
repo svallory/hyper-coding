@@ -1,0 +1,232 @@
+---
+title: "RecipeExecution"
+description: "Recipe execution instance"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeExecution
+
+Defined in: [recipe-engine/types.ts:547](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L547)
+
+Recipe execution instance
+
+## Properties
+
+### id
+
+> **id**: `string`
+
+Defined in: [recipe-engine/types.ts:549](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L549)
+
+Unique execution ID
+
+***
+
+### recipeId
+
+> **recipeId**: `string`
+
+Defined in: [recipe-engine/types.ts:552](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L552)
+
+Recipe identifier
+
+***
+
+### recipe
+
+> **recipe**: [`RecipeConfig`](/api-reference/generated/interfaces/RecipeConfig.mdx)
+
+Defined in: [recipe-engine/types.ts:555](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L555)
+
+Recipe configuration used
+
+***
+
+### status
+
+> **status**: `"pending"` \| `"running"` \| `"completed"` \| `"failed"` \| `"cancelled"`
+
+Defined in: [recipe-engine/types.ts:558](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L558)
+
+Current execution status
+
+***
+
+### startTime
+
+> **startTime**: `Date`
+
+Defined in: [recipe-engine/types.ts:561](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L561)
+
+Execution start time
+
+***
+
+### endTime?
+
+> `optional` **endTime**: `Date`
+
+Defined in: [recipe-engine/types.ts:564](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L564)
+
+Execution end time
+
+***
+
+### duration?
+
+> `optional` **duration**: `number`
+
+Defined in: [recipe-engine/types.ts:567](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L567)
+
+Total execution duration
+
+***
+
+### steps
+
+> **steps**: [`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)[]
+
+Defined in: [recipe-engine/types.ts:570](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L570)
+
+Step execution results
+
+***
+
+### variables
+
+> **variables**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/types.ts:573](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L573)
+
+Recipe-level variables
+
+***
+
+### environment
+
+> **environment**: `Record`\<`string`, `string`\>
+
+Defined in: [recipe-engine/types.ts:576](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L576)
+
+Environment variables
+
+***
+
+### errors
+
+> **errors**: `string`[]
+
+Defined in: [recipe-engine/types.ts:579](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L579)
+
+Execution errors
+
+***
+
+### warnings
+
+> **warnings**: `string`[]
+
+Defined in: [recipe-engine/types.ts:582](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L582)
+
+Execution warnings
+
+***
+
+### metadata
+
+> **metadata**: `object`
+
+Defined in: [recipe-engine/types.ts:585](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L585)
+
+Execution metadata
+
+#### totalSteps
+
+> **totalSteps**: `number`
+
+Total number of steps
+
+#### completedSteps
+
+> **completedSteps**: `number`
+
+Number of completed steps
+
+#### failedSteps
+
+> **failedSteps**: `number`
+
+Number of failed steps
+
+#### skippedSteps
+
+> **skippedSteps**: `number`
+
+Number of skipped steps
+
+#### cancelledSteps
+
+> **cancelledSteps**: `number`
+
+Number of cancelled steps
+
+#### peakMemory?
+
+> `optional` **peakMemory**: `number`
+
+Peak memory usage
+
+#### context
+
+> **context**: `object`
+
+Execution context
+
+##### context.workingDir
+
+> **workingDir**: `string`
+
+Working directory
+
+##### context.userId?
+
+> `optional` **userId**: `string`
+
+User ID
+
+##### context.sessionId?
+
+> `optional` **sessionId**: `string`
+
+Session ID
+
+***
+
+### artifacts?
+
+> `optional` **artifacts**: `object`
+
+Defined in: [recipe-engine/types.ts:618](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L618)
+
+Execution artifacts
+
+#### files
+
+> **files**: `string`[]
+
+Generated files
+
+#### logs
+
+> **logs**: `string`[]
+
+Log files
+
+#### reports
+
+> **reports**: `string`[]
+
+Report files

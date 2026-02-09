@@ -1,0 +1,261 @@
+---
+title: "RecipeStep"
+description: "Recipe step configuration Executes another recipe as a sub-recipe"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeStep
+
+Defined in: [recipe-engine/types.ts:190](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L190)
+
+Recipe step configuration
+Executes another recipe as a sub-recipe
+
+## Extends
+
+- [`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx)
+
+## Properties
+
+### name
+
+> **name**: `string`
+
+Defined in: [recipe-engine/types.ts:26](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L26)
+
+Unique identifier for this step
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`name`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#name)
+
+***
+
+### description?
+
+> `optional` **description**: `string`
+
+Defined in: [recipe-engine/types.ts:29](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L29)
+
+Human-readable description of what this step does
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`description`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#description)
+
+***
+
+### when?
+
+> `optional` **when**: `string`
+
+Defined in: [recipe-engine/types.ts:32](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L32)
+
+Conditional expression that determines if this step should execute
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`when`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#when)
+
+***
+
+### dependsOn?
+
+> `optional` **dependsOn**: `string`[]
+
+Defined in: [recipe-engine/types.ts:35](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L35)
+
+Steps that must complete successfully before this step can run
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`dependsOn`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#dependson)
+
+***
+
+### parallel?
+
+> `optional` **parallel**: `boolean`
+
+Defined in: [recipe-engine/types.ts:38](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L38)
+
+Whether this step can run in parallel with other steps
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`parallel`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#parallel)
+
+***
+
+### continueOnError?
+
+> `optional` **continueOnError**: `boolean`
+
+Defined in: [recipe-engine/types.ts:41](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L41)
+
+Whether to continue recipe execution if this step fails
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`continueOnError`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#continueonerror)
+
+***
+
+### timeout?
+
+> `optional` **timeout**: `number`
+
+Defined in: [recipe-engine/types.ts:44](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L44)
+
+Timeout in milliseconds for step execution
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`timeout`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#timeout)
+
+***
+
+### retries?
+
+> `optional` **retries**: `number`
+
+Defined in: [recipe-engine/types.ts:47](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L47)
+
+Number of retry attempts on failure
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`retries`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#retries)
+
+***
+
+### tags?
+
+> `optional` **tags**: `string`[]
+
+Defined in: [recipe-engine/types.ts:50](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L50)
+
+Tags for categorization and filtering
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`tags`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#tags)
+
+***
+
+### variables?
+
+> `optional` **variables**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/types.ts:53](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L53)
+
+Variables to pass to the tool (merged with recipe-level variables)
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`variables`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#variables)
+
+***
+
+### environment?
+
+> `optional` **environment**: `Record`\<`string`, `string`\>
+
+Defined in: [recipe-engine/types.ts:56](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L56)
+
+Environment variables specific to this step
+
+#### Inherited from
+
+[`BaseRecipeStep`](/api-reference/generated/interfaces/BaseRecipeStep.mdx).[`environment`](/api-reference/generated/interfaces/BaseRecipeStep.mdx#environment)
+
+***
+
+### tool
+
+> **tool**: `"recipe"`
+
+Defined in: [recipe-engine/types.ts:191](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L191)
+
+***
+
+### recipe
+
+> **recipe**: `string`
+
+Defined in: [recipe-engine/types.ts:194](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L194)
+
+Recipe identifier or path
+
+***
+
+### version?
+
+> `optional` **version**: `string`
+
+Defined in: [recipe-engine/types.ts:197](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L197)
+
+Recipe version constraint
+
+***
+
+### inheritVariables?
+
+> `optional` **inheritVariables**: `boolean`
+
+Defined in: [recipe-engine/types.ts:200](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L200)
+
+Whether to inherit parent recipe variables
+
+***
+
+### variableOverrides?
+
+> `optional` **variableOverrides**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/types.ts:203](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L203)
+
+Variable overrides for the sub-recipe
+
+***
+
+### recipeConfig?
+
+> `optional` **recipeConfig**: `object`
+
+Defined in: [recipe-engine/types.ts:206](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L206)
+
+Recipe-specific configuration
+
+#### execution?
+
+> `optional` **execution**: `object`
+
+Execution mode
+
+##### execution.isolated?
+
+> `optional` **isolated**: `boolean`
+
+Whether to run sub-recipe in isolation
+
+##### execution.workingDir?
+
+> `optional` **workingDir**: `string`
+
+Working directory for sub-recipe
+
+##### execution.timeout?
+
+> `optional` **timeout**: `number`
+
+Timeout for entire sub-recipe
+
+#### variableMapping?
+
+> `optional` **variableMapping**: `Record`\<`string`, `string`\>
+
+Variable mapping from parent to child

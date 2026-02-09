@@ -1,0 +1,150 @@
+---
+title: "RecipeExecutionOptions"
+description: "Recipe execution options"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeExecutionOptions
+
+Defined in: [recipe-engine/recipe-engine.ts:60](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L60)
+
+Recipe execution options
+
+## Properties
+
+### variables?
+
+> `optional` **variables**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/recipe-engine.ts:62](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L62)
+
+Variables to pass to the recipe
+
+***
+
+### environment?
+
+> `optional` **environment**: `Record`\<`string`, `string`\>
+
+Defined in: [recipe-engine/recipe-engine.ts:65](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L65)
+
+Environment variables
+
+***
+
+### workingDir?
+
+> `optional` **workingDir**: `string`
+
+Defined in: [recipe-engine/recipe-engine.ts:68](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L68)
+
+Working directory for execution
+
+***
+
+### dryRun?
+
+> `optional` **dryRun**: `boolean`
+
+Defined in: [recipe-engine/recipe-engine.ts:71](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L71)
+
+Whether to run in dry-run mode
+
+***
+
+### force?
+
+> `optional` **force**: `boolean`
+
+Defined in: [recipe-engine/recipe-engine.ts:74](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L74)
+
+Whether to force overwrite existing files
+
+***
+
+### continueOnError?
+
+> `optional` **continueOnError**: `boolean`
+
+Defined in: [recipe-engine/recipe-engine.ts:77](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L77)
+
+Whether to continue on step failures
+
+***
+
+### stepOptions?
+
+> `optional` **stepOptions**: `Partial`\<[`StepExecutionOptions`](/api-reference/generated/interfaces/StepExecutionOptions.mdx)\>
+
+Defined in: [recipe-engine/recipe-engine.ts:80](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L80)
+
+Custom step execution options
+
+***
+
+### skipPrompts?
+
+> `optional` **skipPrompts**: `boolean`
+
+Defined in: [recipe-engine/recipe-engine.ts:83](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L83)
+
+Whether to skip user prompts (use defaults/existing values)
+
+***
+
+### logger?
+
+> `optional` **logger**: [`Logger`](/api-reference/generated/classes/Logger.mdx)
+
+Defined in: [recipe-engine/recipe-engine.ts:86](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L86)
+
+Custom logger for output
+
+***
+
+### onProgress()?
+
+> `optional` **onProgress**: (`progress`) => `void`
+
+Defined in: [recipe-engine/recipe-engine.ts:89](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L89)
+
+Progress callback
+
+#### Parameters
+
+##### progress
+
+###### step
+
+`string`
+
+###### phase
+
+`string`
+
+###### percentage
+
+`number`
+
+**Returns:** `void`
+
+***
+
+### onStepComplete()?
+
+> `optional` **onStepComplete**: (`result`) => `void`
+
+Defined in: [recipe-engine/recipe-engine.ts:92](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L92)
+
+Step completion callback
+
+#### Parameters
+
+##### result
+
+[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)
+
+**Returns:** `void`

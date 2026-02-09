@@ -39,11 +39,12 @@ const context = (locals: any, config: RunnerConfig = {}) => {
         ? config.helpers(locals, config)
         : config.helpers)) ||
     {}
+  const hValue = { ...helpers, ...configHelpers }
   return Object.assign(
     localsWithDefaults,
     processedLocals(localsWithDefaults),
     {
-      h: { ...helpers, ...configHelpers },
+      h: hValue,
     },
   )
 }

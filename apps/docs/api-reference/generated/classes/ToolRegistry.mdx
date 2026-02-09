@@ -1,0 +1,299 @@
+---
+title: "ToolRegistry"
+description: "Centralized registry for managing tool instances and factories  The ToolRegistry provides a singleton pattern for managing tool lifecycle, including registratio"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / ToolRegistry
+
+Defined in: [recipe-engine/tools/registry.ts:148](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L148)
+
+Centralized registry for managing tool instances and factories
+
+The ToolRegistry provides a singleton pattern for managing tool lifecycle,
+including registration, discovery, caching, and cleanup.
+
+## Methods
+
+### getInstance()
+
+> `static` **getInstance**(`options?`): `ToolRegistry`
+
+Defined in: [recipe-engine/tools/registry.ts:186](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L186)
+
+Get the singleton registry instance
+
+#### Parameters
+
+##### options?
+
+###### maxCacheSize?
+
+`number`
+
+###### cacheTimeoutMs?
+
+`number`
+
+###### enableInstanceReuse?
+
+`boolean`
+
+**Returns:** `ToolRegistry`
+
+***
+
+### reset()
+
+> `static` **reset**(): `void`
+
+Defined in: [recipe-engine/tools/registry.ts:200](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L200)
+
+Reset the singleton instance (primarily for testing)
+
+**Returns:** `void`
+
+***
+
+### register()
+
+> **register**(`toolType`, `name`, `factory`, `metadata?`): `void`
+
+Defined in: [recipe-engine/tools/registry.ts:210](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L210)
+
+Register a tool factory
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+**`name`** `string`
+
+##### factory
+
+[`ToolFactory`](/api-reference/generated/interfaces/ToolFactory.mdx)
+
+##### metadata?
+
+`Partial`\<[`ToolRegistration`](/api-reference/generated/interfaces/ToolRegistration.mdx)\>
+
+**Returns:** `void`
+
+***
+
+### unregister()
+
+> **unregister**(`toolType`, `name`): `boolean`
+
+Defined in: [recipe-engine/tools/registry.ts:258](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L258)
+
+Unregister a tool
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+**`name`** `string`
+
+**Returns:** `boolean`
+
+***
+
+### isRegistered()
+
+> **isRegistered**(`toolType`, `name`): `boolean`
+
+Defined in: [recipe-engine/tools/registry.ts:274](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L274)
+
+Check if a tool is registered
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+**`name`** `string`
+
+**Returns:** `boolean`
+
+***
+
+### getRegistration()
+
+> **getRegistration**(`toolType`, `name`): [`ToolRegistration`](/api-reference/generated/interfaces/ToolRegistration.mdx)
+
+Defined in: [recipe-engine/tools/registry.ts:282](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L282)
+
+Get tool registration information
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+**`name`** `string`
+
+#### Returns
+
+[`ToolRegistration`](/api-reference/generated/interfaces/ToolRegistration.mdx)
+
+***
+
+### resolve()
+
+> **resolve**(`toolType`, `name`, `options?`): `Promise`\<[`Tool`](/api-reference/generated/classes/Tool.mdx)\<[`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)\>\>
+
+Defined in: [recipe-engine/tools/registry.ts:290](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L290)
+
+Resolve a tool instance by type and name
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+**`name`** `string`
+
+##### options?
+
+[`ToolResolutionOptions`](/api-reference/generated/interfaces/ToolResolutionOptions.mdx)
+
+**Returns:** `Promise`\<[`Tool`](/api-reference/generated/classes/Tool.mdx)\<[`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)\>\>
+
+***
+
+### release()
+
+> **release**(`toolType`, `name`, `instance`): `void`
+
+Defined in: [recipe-engine/tools/registry.ts:367](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L367)
+
+Release a tool instance (mark as not in use)
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+**`name`** `string`
+
+##### instance
+
+[`Tool`](/api-reference/generated/classes/Tool.mdx)
+
+**Returns:** `void`
+
+***
+
+### search()
+
+> **search**(`criteria`): [`ToolRegistration`](/api-reference/generated/interfaces/ToolRegistration.mdx)[]
+
+Defined in: [recipe-engine/tools/registry.ts:381](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L381)
+
+Search for tools based on criteria
+
+#### Parameters
+
+##### criteria
+
+[`ToolSearchCriteria`](/api-reference/generated/interfaces/ToolSearchCriteria.mdx) = `{}`
+
+#### Returns
+
+[`ToolRegistration`](/api-reference/generated/interfaces/ToolRegistration.mdx)[]
+
+***
+
+### getByType()
+
+> **getByType**(`toolType`): [`ToolRegistration`](/api-reference/generated/interfaces/ToolRegistration.mdx)[]
+
+Defined in: [recipe-engine/tools/registry.ts:400](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L400)
+
+Get all registered tools of a specific type
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+#### Returns
+
+[`ToolRegistration`](/api-reference/generated/interfaces/ToolRegistration.mdx)[]
+
+***
+
+### getRegisteredTypes()
+
+> **getRegisteredTypes**(): [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)[]
+
+Defined in: [recipe-engine/tools/registry.ts:407](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L407)
+
+Get all tool types with registrations
+
+#### Returns
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)[]
+
+***
+
+### getCategories()
+
+> **getCategories**(): `string`[]
+
+Defined in: [recipe-engine/tools/registry.ts:420](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L420)
+
+Get all categories
+
+**Returns:** `string`[]
+
+***
+
+### getStats()
+
+> **getStats**(): [`ToolRegistryStats`](/api-reference/generated/interfaces/ToolRegistryStats.mdx)
+
+Defined in: [recipe-engine/tools/registry.ts:435](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L435)
+
+Get registry statistics
+
+#### Returns
+
+[`ToolRegistryStats`](/api-reference/generated/interfaces/ToolRegistryStats.mdx)
+
+***
+
+### clearCache()
+
+> **clearCache**(): `void`
+
+Defined in: [recipe-engine/tools/registry.ts:479](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L479)
+
+Clear the instance cache
+
+**Returns:** `void`
+
+***
+
+### cleanupExpiredInstances()
+
+> **cleanupExpiredInstances**(): `number`
+
+Defined in: [recipe-engine/tools/registry.ts:498](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L498)
+
+Cleanup expired cached instances
+
+**Returns:** `number`
