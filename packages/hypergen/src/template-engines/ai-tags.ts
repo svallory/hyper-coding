@@ -74,12 +74,28 @@ function registerAiTag(edge: Edge): void {
         `  state.__hypergenAiCollect(__aiBlock.key, __aiBlock.contexts, __aiBlock.prompt, __aiBlock.outputDesc, ${escapedFilename});`,
         token.filename, line
       )
+      // Set the output key as a state variable with the default output value
+      // so templates that reference the key (e.g. @let(x = JSON.parse(myKey)))
+      // can still render during pass 1
+      buffer.writeStatement(
+        `  if (__aiBlock.key) { state[__aiBlock.key] = __aiBlock.outputDesc.trim(); }`,
+        token.filename, line
+      )
       buffer.writeStatement(
         `} else {`,
         token.filename, -1
       )
       buffer.writeStatement(
-        `  out += (state.answers && state.answers[__aiBlock.key]) || '';`,
+        `  let __aiAnswer = (state.answers && state.answers[__aiBlock.key]) || '';`,
+        token.filename, line
+      )
+      buffer.writeStatement(
+        `  out += __aiAnswer;`,
+        token.filename, line
+      )
+      // Also set the key as a state variable for downstream usage
+      buffer.writeStatement(
+        `  if (__aiBlock.key) { state[__aiBlock.key] = __aiAnswer; }`,
         token.filename, line
       )
       buffer.writeStatement(

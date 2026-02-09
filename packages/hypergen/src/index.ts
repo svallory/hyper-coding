@@ -14,14 +14,18 @@ export { default as Logger } from './logger.js'
 export { default as engine, ShowHelpError } from './engine.js'
 
 // Runner (for backward compatibility with tests)
+import type { RunnerConfig as _RunnerConfig, RunnerResult as _RunnerResult } from './types.js'
+import _Logger from './logger.js'
+import _engine, { ShowHelpError as _ShowHelpError } from './engine.js'
+
 export async function runner(
   argv: string[],
-  config: RunnerConfig,
-): Promise<RunnerResult> {
-  const logger = config.logger || new Logger(console.log.bind(console))
+  config: _RunnerConfig,
+): Promise<_RunnerResult> {
+  const logger = config.logger || new _Logger(console.log.bind(console))
 
   try {
-    const actions = await engine(argv, config)
+    const actions = await _engine(argv, config as any)
     return { success: true, actions, time: 0 }
   } catch (err: any) {
     logger.log(err.toString())
@@ -30,7 +34,7 @@ export async function runner(
       logger.log(err.stack)
       logger.log('-------------------')
     }
-    if (err instanceof ShowHelpError) {
+    if (err instanceof _ShowHelpError) {
       return { success: true, actions: [], time: 0 }
     }
     return { success: false, actions: [], time: 0 }

@@ -330,7 +330,19 @@ export class StepExecutor extends EventEmitter {
           return stepResult
         }
       }
-      
+
+      // In collect mode (pass 1), only template steps need to run
+      // Other tools (shell, action, recipe, prompt) are skipped
+      if (context.collectMode && step.tool !== 'template') {
+        this.debug('Skipping non-template step in collect mode: %s (%s)', step.name, step.tool)
+        stepResult.status = 'skipped'
+        stepResult.endTime = new Date()
+        stepResult.duration = Date.now() - stepStartTime
+
+        this.emit('step:skipped', { step: step.name, reason: 'collect-mode' })
+        return stepResult
+      }
+
       // Execute step with retries
       const maxRetries = options.retries ?? step.retries ?? this.config.defaultRetries
       let lastError: Error | undefined
@@ -346,8 +358,18 @@ export class StepExecutor extends EventEmitter {
           
           // Route to appropriate tool and execute
           const toolResult = await this.routeAndExecuteStep(step, context, options)
-          
+
           stepResult.toolResult = toolResult
+
+          // Respect failure status returned by the tool
+          if (toolResult.status === 'failed') {
+            stepResult.status = 'failed'
+            stepResult.error = toolResult.error
+            stepResult.endTime = new Date()
+            stepResult.duration = Date.now() - stepStartTime
+            throw new Error(toolResult.error?.message || `Step '${step.name}' failed`)
+          }
+
           stepResult.status = 'completed'
           stepResult.endTime = new Date()
           stepResult.duration = Date.now() - stepStartTime

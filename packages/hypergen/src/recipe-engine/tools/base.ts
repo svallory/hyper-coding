@@ -305,7 +305,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
             filesDeleted: result.filesDeleted?.length || 0
           })
 
-          this.debug('Tool execution completed successfully: %s (duration: %dms, attempt: %d)', 
+          this.debug('Tool execution completed: %s (duration: %dms, attempt: %d)',
             result.status, executionTime, attempt + 1)
 
           this._isExecuting = false
