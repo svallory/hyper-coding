@@ -4,17 +4,24 @@
  * Takes AiCollector data and produces a self-contained markdown document
  * that an AI agent (or human) can read, answer, and save as JSON.
  *
- * The output includes:
- * - Global and per-block context
- * - Each prompt with its expected output format
- * - A response format section with JSON schema
- * - A callback instruction for Pass 2
+ * Uses a Jig template internally — the same engine Hypergen users write
+ * templates in.  A custom template path can be provided via the
+ * `ai.promptTemplate` config key or `--prompt-template` CLI flag.
  */
 
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import createDebug from 'debug'
-import type { AiCollector } from './ai-collector.js'
+import { renderTemplateSync } from '../template-engines/jig-engine.js'
+import type { AiBlockEntry, AiCollector } from './ai-collector.js'
 
 const debug = createDebug('hypergen:ai:prompt-assembler')
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+/** Path to the built-in prompt template shipped with Hypergen */
+const DEFAULT_TEMPLATE_PATH = path.join(__dirname, 'prompt-template.jig')
 
 export interface AssemblerOptions {
   /** The original command that was run (for the callback instruction) */
@@ -22,84 +29,67 @@ export interface AssemblerOptions {
 
   /** Suggested path for the answers JSON file */
   answersPath?: string
+
+  /**
+   * Path to a custom Jig prompt template.
+   * When provided, this template is used instead of the built-in one.
+   */
+  promptTemplate?: string
 }
 
 export class PromptAssembler {
   assemble(collector: AiCollector, options: AssemblerOptions): string {
-    const parts: string[] = []
     const globalContexts = collector.getGlobalContexts()
-    const entries = collector.getEntries()
+    const entriesMap = collector.getEntries()
     const answersPath = options.answersPath || './ai-answers.json'
 
-    parts.push('# Hypergen AI Generation Request\n')
-
-    // Context section
-    if (globalContexts.length > 0 || this.hasBlockContexts(entries)) {
-      parts.push('## Context\n')
-
-      if (globalContexts.length > 0) {
-        parts.push('### Global Context\n')
-        for (const ctx of globalContexts) {
-          parts.push(ctx)
-          parts.push('')
-        }
-      }
-
-      for (const [key, entry] of entries) {
-        if (entry.contexts.length > 0) {
-          parts.push(`### Context for \`${key}\`\n`)
-          for (const ctx of entry.contexts) {
-            parts.push(ctx)
-            parts.push('')
-          }
-        }
-      }
+    // Convert Map to array for Jig @each iteration
+    const entries: (AiBlockEntry & { hasOutputDesc: boolean })[] = []
+    for (const [, entry] of entriesMap) {
+      entries.push({ ...entry, hasOutputDesc: !!entry.outputDescription.trim() })
     }
 
-    // Prompts section
-    parts.push('## Prompts\n')
-
-    for (const [key, entry] of entries) {
-      parts.push(`### \`${key}\`\n`)
-      parts.push(entry.prompt)
-      parts.push('')
-
-      if (entry.outputDescription.trim()) {
-        parts.push('**Expected output format:**\n')
-        parts.push(entry.outputDescription)
-        parts.push('')
-      }
-    }
-
-    // Response format section
-    parts.push('## Response Format\n')
-    parts.push('Respond with a JSON object:\n')
-    parts.push('```json')
-
+    // Build the JSON response schema
     const schema: Record<string, string> = {}
-    for (const [key, entry] of entries) {
-      schema[key] = entry.outputDescription.trim() ? '<see format above>' : '<your answer>'
+    for (const entry of entries) {
+      schema[entry.key] = entry.hasOutputDesc ? '<see format above>' : '<your answer>'
     }
-    parts.push(JSON.stringify(schema, null, 2))
+    const responseSchema = JSON.stringify(schema, null, 2)
 
-    parts.push('```\n')
+    const hasContext = globalContexts.length > 0 || entries.some(e => e.contexts.length > 0)
 
-    // Instructions section
-    parts.push('## Instructions\n')
-    parts.push(`Save your response as JSON to a file and run:\n`)
-    parts.push('```')
-    parts.push(`${options.originalCommand} --answers ${answersPath}`)
-    parts.push('```\n')
+    const templatePath = options.promptTemplate || DEFAULT_TEMPLATE_PATH
+    const templateSource = this.loadTemplate(templatePath, !!options.promptTemplate)
 
-    const result = parts.join('\n')
-    debug('Assembled prompt (%d chars, %d entries)', result.length, entries.size)
-    return result
+    const context = {
+      globalContexts,
+      entries,
+      responseSchema,
+      hasContext,
+      originalCommand: options.originalCommand,
+      answersPath,
+    }
+
+    try {
+      const result = renderTemplateSync(templateSource, context)
+      debug('Assembled prompt (%d chars, %d entries)', result.length, entries.length)
+      return result
+    } catch (error: any) {
+      throw new Error(`Failed to render prompt template: ${error.message}`)
+    }
   }
 
-  private hasBlockContexts(entries: Map<string, { contexts: string[] }>): boolean {
-    for (const entry of entries.values()) {
-      if (entry.contexts.length > 0) return true
+  private loadTemplate(templatePath: string, isCustom: boolean): string {
+    try {
+      return fs.readFileSync(templatePath, 'utf-8')
+    } catch {
+      if (isCustom) {
+        throw new Error(
+          `Custom prompt template not found: ${templatePath}\n` +
+          `Provide an absolute path or a path relative to the working directory.`
+        )
+      }
+      throw new Error(`Built-in prompt template missing: ${templatePath}`)
     }
-    return false
   }
 }

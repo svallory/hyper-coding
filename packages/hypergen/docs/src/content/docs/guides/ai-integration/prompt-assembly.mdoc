@@ -1,0 +1,299 @@
+---
+title: Prompt Document Structure
+description: How Hypergen assembles the collected AI blocks into a structured prompt document
+time: 5 minutes
+prerequisites: Understanding of the 2-pass overview and custom Jig tags
+---
+
+# Prompt Document Structure
+
+**What you'll learn**: The structure of the prompt document that Hypergen generates after Pass 1
+**Time needed**: 5 minutes
+**Prerequisites**: [2-pass overview](/guides/ai-integration/overview), [Jig tags reference](/guides/ai-integration/jig-tags)
+
+## What Is the Prompt Document?
+
+After Pass 1, Hypergen has collected all `@ai` blocks across all templates in the recipe. The **PromptAssembler** combines this data into a single, self-contained markdown document that provides everything an AI (or human) needs to produce the answers.
+
+The document is printed to **stdout**. Hypergen exits with code **2** to signal completion of Pass 1.
+
+## Document Sections
+
+The prompt document has four sections:
+
+### 1. Context
+
+Contains all context information, organized by scope.
+
+**Global context** (from standalone `@context` tags) appears first under a "Global Context" heading. This information applies to all prompts.
+
+**Block context** (from `@context` tags inside `@ai` blocks) appears under headings like "Context for \`keyName\`", one per block that has context.
+
+If no context exists (no `@context` tags anywhere), this entire section is omitted.
+
+### 2. Prompts
+
+Each `@ai` block gets a subsection headed by its key name (e.g., "### \`mainFields\`"). The subsection contains:
+
+- The rendered prompt text
+- If the block had a non-empty `@output` body: an "Expected output format" note showing the format example
+
+### 3. Response Format
+
+A JSON code block showing the expected shape of the answers file. Each key maps to a placeholder:
+
+```json
+{
+  "mainFields": "<see format above>",
+  "validationRules": "<your answer>"
+}
+```
+
+Keys with a format hint show `<see format above>`. Keys without show `<your answer>`.
+
+### 4. Instructions
+
+Tells the user how to complete Pass 2:
+
+```
+Save your response as JSON to a file and run:
+hypergen run ./my-recipe --name=User --answers ./ai-answers.json
+```
+
+The command mirrors the original invocation with `--answers` appended.
+
+## Full Example
+
+Given these templates in a recipe:
+
+**Template 1** (`user-card.jig`):
+```jig
+@context()
+  This project uses React with TypeScript.
+@end
+
+@ai()
+  @context()
+    The User model has: id, name, email, role, createdAt
+  @end
+  @prompt()
+    Which fields for the card component?
+  @end
+  @output({ key: 'cardFields' })
+    ["name", "email"]
+  @end
+@end
+```
+
+**Template 2** (`user-service.jig`):
+```jig
+@ai()
+  @prompt()
+    Generate validation rules for User creation.
+  @end
+  @output({ key: 'validationRules' })
+    { name: required(), email: email() }
+  @end
+@end
+```
+
+**Generated prompt document:**
+
+```markdown
+# Hypergen AI Generation Request
+
+## Context
+
+### Global Context
+
+This project uses React with TypeScript.
+
+### Context for `cardFields`
+
+The User model has: id, name, email, role, createdAt
+
+## Prompts
+
+### `cardFields`
+
+Which fields for the card component?
+
+**Expected output format:**
+
+["name", "email"]
+
+### `validationRules`
+
+Generate validation rules for User creation.
+
+**Expected output format:**
+
+{ name: required(), email: email() }
+
+## Response Format
+
+Respond with a JSON object:
+
+```json
+{
+  "cardFields": "<see format above>",
+  "validationRules": "<see format above>"
+}
+```
+
+## Instructions
+
+Save your response as JSON to a file and run:
+
+```
+hypergen run ./my-recipe --name=User --answers ./ai-answers.json
+```
+```
+
+## The Answers File
+
+The answers file is a plain JSON object mapping keys to string values:
+
+```json
+{
+  "cardFields": "[\"name\", \"email\", \"role\"]",
+  "validationRules": "{ name: z.string().min(1), email: z.string().email() }"
+}
+```
+
+Each value is inserted verbatim where the `@ai` block appeared in the template. The value is a **string** — if your answer needs to contain JSON, it must be a JSON-encoded string within the outer JSON.
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Recipe completed successfully (Pass 2, or no `@ai` blocks) |
+| `2` | Pass 1 complete — prompt document printed to stdout, awaiting answers |
+| `1` | Error |
+
+## Automation Patterns
+
+### Pipe to an AI Tool
+
+```bash
+hypergen run ./recipe --name=User 2>/dev/null | my-ai-tool > answers.json
+hypergen run ./recipe --name=User --answers answers.json
+```
+
+### Script Both Passes
+
+```bash
+#!/bin/bash
+PROMPT=$(hypergen run ./recipe --name=User 2>/dev/null)
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 2 ]; then
+  echo "$PROMPT" | ai-complete --format json > answers.json
+  hypergen run ./recipe --name=User --answers answers.json
+fi
+```
+
+### Review Before Pass 2
+
+```bash
+# Save prompt for review
+hypergen run ./recipe --name=User > prompt.md 2>/dev/null
+
+# Review/edit prompt.md, then get AI answers
+cat prompt.md | ai-tool > answers.json
+
+# Review/edit answers.json, then generate
+hypergen run ./recipe --name=User --answers answers.json
+```
+
+## Customizing the Prompt Template
+
+The default prompt document format works well for most AI tools, but you can replace it entirely with your own Jig template.
+
+### How to Override
+
+**CLI flag** (takes precedence over config):
+
+```bash
+hypergen run ./recipe --name=User --prompt-template ./my-prompt.jig
+```
+
+**Config file** (`hypergen.config.js`):
+
+```javascript
+export default {
+  ai: {
+    promptTemplate: './my-prompt.jig',
+  },
+};
+```
+
+When both are set, the CLI flag wins.
+
+### Template Variables
+
+Your custom template receives these variables:
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `globalContexts` | `string[]` | Text from standalone `@context` tags |
+| `entries` | `Array<{key, contexts, prompt, outputDescription, sourceFile, hasOutputDesc}>` | Collected AI blocks |
+| `responseSchema` | `string` | Pre-formatted JSON response schema |
+| `hasContext` | `boolean` | Whether any context (global or block-level) exists |
+| `originalCommand` | `string` | The CLI command to re-run with answers |
+| `answersPath` | `string` | Suggested path for the answers file |
+
+Each item in `entries` has:
+
+- `key` — the output key name (from `@output({ key: '...' })`)
+- `contexts` — array of context strings specific to this block
+- `prompt` — the rendered prompt text
+- `outputDescription` — the example output (from `@output` body), may be empty
+- `sourceFile` — which template file the block came from
+- `hasOutputDesc` — `true` when `outputDescription` is non-empty
+
+### Example: Plain Text Prompt
+
+This template produces a plain-text format instead of markdown:
+
+```jig
+HYPERGEN AI REQUEST
+====================
+@if(hasContext)
+
+CONTEXT:
+@each(ctx in globalContexts)
+- {{ ctx }}
+@end
+@each(entry in entries)
+@if(entry.contexts.length > 0)
+
+Context for "{{ entry.key }}":
+@each(ctx in entry.contexts)
+  {{ ctx }}
+@end
+@end
+@end
+@end
+
+QUESTIONS:
+@each(entry in entries)
+
+[{{ entry.key }}]
+{{ entry.prompt }}
+@if(entry.hasOutputDesc)
+Format: {{ entry.outputDescription }}
+@end
+@end
+
+RESPONSE FORMAT:
+Return a JSON object with these keys:
+{{ responseSchema }}
+
+Re-run command:
+{{ originalCommand }} --answers {{ answersPath }}
+```
+
+### Default Template Reference
+
+The built-in template lives at `src/ai/prompt-template.jig` in the Hypergen source. Use it as a starting point when creating your own.

@@ -1,0 +1,53 @@
+# Hypergen AI Generation Request
+@if(hasContext)
+
+## Context
+@if(globalContexts.length > 0)
+
+### Global Context
+@each(ctx in globalContexts)
+
+{{ ctx }}
+@end
+@end
+@each(entry in entries)
+@if(entry.contexts.length > 0)
+
+### Context for `{{ entry.key }}`
+@each(ctx in entry.contexts)
+
+{{ ctx }}
+@end
+@end
+@end
+@end
+
+## Prompts
+@each(entry in entries)
+
+### `{{ entry.key }}`
+
+{{ entry.prompt }}
+@if(entry.outputDescription.trim())
+
+**Expected output format:**
+
+{{ entry.outputDescription }}
+@end
+@end
+
+## Response Format
+
+Respond with a JSON object:
+
+```json
+{{ responseSchema }}
+```
+
+## Instructions
+
+Save your response as JSON to a file and run:
+
+```
+{{ originalCommand }} --answers {{ answersPath }}
+```

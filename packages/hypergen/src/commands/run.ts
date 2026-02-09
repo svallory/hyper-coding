@@ -41,6 +41,9 @@ export default class Run extends BaseCommand<typeof Run> {
     answers: Flags.file({
       description: 'Path to AI answers JSON file (2-pass generation)',
     }),
+    'prompt-template': Flags.file({
+      description: 'Path to a custom Jig template for the AI prompt document',
+    }),
   }
 
   static override args = {
@@ -77,7 +80,9 @@ export default class Run extends BaseCommand<typeof Run> {
       collector.collectMode = true
     }
 
-    this.log(`Executing recipe: ${recipePath}`)
+    if (answers) {
+      this.log(`Executing recipe: ${recipePath}`)
+    }
 
     if (flags.dry) {
       this.log('(dry run - no files will be written)')
@@ -99,9 +104,11 @@ export default class Run extends BaseCommand<typeof Run> {
       if (collector.collectMode && collector.hasEntries()) {
         const assembler = new PromptAssembler()
         const originalCommand = ['hypergen', 'run', recipePath, ...process.argv.slice(3).filter(a => a !== '--answers' && !a.endsWith('.json'))].join(' ')
+        const promptTemplatePath = flags['prompt-template'] || this.hypergenConfig?.ai?.promptTemplate
         const prompt = assembler.assemble(collector, {
           originalCommand,
           answersPath: './ai-answers.json',
+          promptTemplate: promptTemplatePath,
         })
 
         // Write prompt to stdout
@@ -126,8 +133,10 @@ export default class Run extends BaseCommand<typeof Run> {
         const errorMsg = result.errors.length > 0 ? result.errors.join(', ') : 'Unknown error'
         this.error(`Recipe failed: ${errorMsg}`)
       }
-    } catch (error) {
+    } catch (error: any) {
       collector.clear()
+      // Re-throw oclif exit errors (from this.exit())
+      if (error?.code === 'EEXIT') throw error
       this.error(`Failed to execute recipe: ${error instanceof Error ? error.message : String(error)}`)
     }
   }

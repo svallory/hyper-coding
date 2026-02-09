@@ -45,6 +45,15 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'AI Integration',
+					items: [
+						{ label: 'Overview', slug: 'guides/ai-integration/overview' },
+						{ label: 'Jig Tags Reference', slug: 'guides/ai-integration/jig-tags' },
+						{ label: 'Prompt Document', slug: 'guides/ai-integration/prompt-assembly' },
+						{ label: 'Complete Example', slug: 'guides/ai-integration/example' },
+					],
+				},
+				{
 					label: 'Reference',
 					items: [
 						{ label: 'Complete Feature List', slug: 'features' },

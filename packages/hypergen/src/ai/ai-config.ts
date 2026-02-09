@@ -9,6 +9,14 @@
  * Top-level AI configuration for hypergen.config.js
  */
 export interface AiServiceConfig {
+  /**
+   * Path to a custom Jig template for the prompt document generated during
+   * Pass 1 of 2-pass AI generation.  When omitted the built-in template
+   * shipped with Hypergen is used.  Relative paths are resolved from the
+   * project root.
+   */
+  promptTemplate?: string
+
   /** Default AI provider (e.g., 'anthropic', 'openai', 'ollama') */
   provider?: string
 
