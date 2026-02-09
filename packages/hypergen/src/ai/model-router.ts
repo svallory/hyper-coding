@@ -7,6 +7,7 @@
 
 import createDebug from 'debug'
 import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
+import { resolveApiKey, getExpectedEnvVar } from './env.js'
 import type { AiServiceConfig, AIModelRef } from './ai-config.js'
 
 const debug = createDebug('hypergen:ai:model-router')
@@ -33,33 +34,6 @@ function inferProvider(model: string): string {
   if (model.startsWith('gemini')) return 'google'
   if (model.startsWith('llama') || model.startsWith('mistral') || model.startsWith('codellama')) return 'ollama'
   return 'openai' // fallback assumption
-}
-
-/**
- * Resolve API key from config.
- * Strings starting with '$' are resolved from environment variables.
- */
-function resolveApiKey(apiKey: string | undefined, provider: string): string | undefined {
-  if (!apiKey) {
-    // Try common env var names
-    const envVarNames: Record<string, string> = {
-      anthropic: 'ANTHROPIC_API_KEY',
-      openai: 'OPENAI_API_KEY',
-      google: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    }
-    const envVar = envVarNames[provider]
-    if (envVar) {
-      return process.env[envVar]
-    }
-    return undefined
-  }
-
-  if (apiKey.startsWith('$')) {
-    const envVar = apiKey.slice(1)
-    return process.env[envVar]
-  }
-
-  return apiKey
 }
 
 /**
@@ -122,10 +96,10 @@ export class ModelRouter {
    *
    * @param stepProvider Provider override from step config
    * @param stepModel Model override from step config
-   * @param stepApiKey API key override from step config
+   * @param stepApiKeyEnvVar Env var name override for API key (from step config)
    * @returns ResolvedModel ready for Vercel AI SDK
    */
-  async resolve(stepProvider?: string, stepModel?: string, stepApiKey?: string): Promise<ResolvedModel> {
+  async resolve(stepProvider?: string, stepModel?: string, stepApiKeyEnvVar?: string): Promise<ResolvedModel> {
     const modelName = stepModel || this.config.model
     if (!modelName) {
       throw ErrorHandler.createError(
@@ -136,7 +110,7 @@ export class ModelRouter {
     }
 
     const provider = stepProvider || this.config.provider || inferProvider(modelName)
-    const apiKey = resolveApiKey(stepApiKey || this.config.apiKey, provider)
+    const apiKey = resolveApiKey(stepApiKeyEnvVar || this.config.apiKeyEnvVar, provider)
 
     // Try primary model
     try {
@@ -149,8 +123,8 @@ export class ModelRouter {
       const fallbacks = this.config.fallbackModels || []
       for (const fallback of fallbacks) {
         try {
-          const fallbackApiKey = resolveApiKey(fallback.apiKey, fallback.provider)
-          const model = await createModelInstance(fallback.provider, fallback.model, fallbackApiKey)
+          const fallbackKey = resolveApiKey(fallback.apiKeyEnvVar, fallback.provider)
+          const model = await createModelInstance(fallback.provider, fallback.model, fallbackKey)
           debug('Using fallback model: %s/%s', fallback.provider, fallback.model)
           return { model, provider: fallback.provider, modelName: fallback.model }
         } catch (fallbackError: any) {

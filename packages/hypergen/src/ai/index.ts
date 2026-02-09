@@ -36,6 +36,16 @@ export { ContextCollector, type ContextBundle } from './context-collector.js'
 // Output validation
 export { validateOutput, buildValidationFeedback, type ValidationResult } from './output-validator.js'
 
+// Environment / API key resolution
+export {
+  resolveApiKey,
+  hasApiKeyAvailable,
+  getExpectedEnvVar,
+  loadDotenv,
+  PROVIDER_API_KEY_ENV_VARS,
+  ALL_KNOWN_API_KEY_VARS,
+} from './env.js'
+
 // 2-pass AI generation
 export { AiCollector, type AiBlockEntry } from './ai-collector.js'
 export { PromptAssembler, type AssemblerOptions } from './prompt-assembler.js'

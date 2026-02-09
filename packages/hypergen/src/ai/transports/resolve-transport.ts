@@ -7,6 +7,7 @@
 
 import createDebug from 'debug'
 import { ErrorHandler, ErrorCode } from '../../errors/hypergen-errors.js'
+import { hasApiKeyAvailable, getExpectedEnvVar } from '../env.js'
 import { StdoutTransport } from './stdout-transport.js'
 import { ApiTransport } from './api-transport.js'
 import { CommandTransport } from './command-transport.js'
@@ -14,13 +15,6 @@ import type { AiServiceConfig } from '../ai-config.js'
 import type { AiTransport } from './types.js'
 
 const debug = createDebug('hypergen:ai:transport:resolve')
-
-/** Well-known env vars checked during auto-detection */
-const WELL_KNOWN_API_KEY_VARS = [
-  'ANTHROPIC_API_KEY',
-  'OPENAI_API_KEY',
-  'GOOGLE_GENERATIVE_AI_API_KEY',
-]
 
 /**
  * Resolve the AI transport to use based on config and mode.
@@ -72,7 +66,7 @@ export function resolveTransport(config: AiServiceConfig | undefined): AiTranspo
  * 3. Otherwise → StdoutTransport
  */
 function autoDetect(config: AiServiceConfig | undefined): AiTransport {
-  if (config && hasApiKeyAvailable(config)) {
+  if (config && hasApiKeyAvailable(config.apiKeyEnvVar, config.provider)) {
     debug('Auto-detected: api (provider + API key available)')
     return new ApiTransport()
   }
@@ -84,27 +78,6 @@ function autoDetect(config: AiServiceConfig | undefined): AiTransport {
 
   debug('Auto-detected: stdout (no API key or command configured)')
   return new StdoutTransport()
-}
-
-/**
- * Check if an API key is available for the configured provider.
- */
-function hasApiKeyAvailable(config: AiServiceConfig): boolean {
-  if (!config.provider) return false
-
-  // Explicit apiKey in config
-  if (config.apiKey) {
-    // If it's an env var reference, check if the env var exists
-    if (config.apiKey.startsWith('$')) {
-      const envVar = config.apiKey.slice(1)
-      return !!process.env[envVar]
-    }
-    // Direct value (not recommended but valid)
-    return true
-  }
-
-  // Check well-known env vars
-  return WELL_KNOWN_API_KEY_VARS.some(v => !!process.env[v])
 }
 
 function validateApiConfig(config: AiServiceConfig | undefined): void {
@@ -122,19 +95,20 @@ function validateApiConfig(config: AiServiceConfig | undefined): void {
     )
   }
 
-  if (!hasApiKeyAvailable(config)) {
+  if (!hasApiKeyAvailable(config.apiKeyEnvVar, config.provider)) {
+    const envVar = getExpectedEnvVar(config.apiKeyEnvVar, config.provider)
     throw ErrorHandler.createError(
       ErrorCode.AI_API_KEY_MISSING,
-      `AI mode 'api' requires an API key for provider '${config.provider}'`,
+      `AI mode 'api' requires ${envVar} to be set (provider: '${config.provider}')`,
       {},
       [
         {
-          title: 'Set API key environment variable',
-          description: 'Set the appropriate environment variable (e.g., ANTHROPIC_API_KEY)',
+          title: 'Set API key in .env',
+          description: `Add ${envVar}=your-key to your .env file`,
         },
         {
-          title: 'Configure in hypergen.config.js',
-          description: 'Set ai.apiKey to an env var reference like "$ANTHROPIC_API_KEY"',
+          title: 'Or set the environment variable directly',
+          description: `export ${envVar}=your-key`,
         },
       ]
     )

@@ -734,12 +734,16 @@ export class ErrorHandler {
 
     [ErrorCode.AI_API_KEY_MISSING]: [
       {
-        title: 'Set API key environment variable',
-        description: 'Set the appropriate environment variable for your AI provider (e.g., ANTHROPIC_API_KEY, OPENAI_API_KEY)'
+        title: 'Add API key to .env file',
+        description: 'Add the appropriate env var to your .env file (e.g., ANTHROPIC_API_KEY=sk-...)'
       },
       {
-        title: 'Configure in hypergen.config.js',
-        description: 'Set ai.apiKey to an env var reference like "$ANTHROPIC_API_KEY"'
+        title: 'Or set it as an environment variable',
+        description: 'Export the env var in your shell (e.g., export ANTHROPIC_API_KEY=sk-...)'
+      },
+      {
+        title: 'Custom env var name',
+        description: 'Set ai.apiKeyEnvVar in hypergen.config.js to use a non-default env var name'
       }
     ],
 

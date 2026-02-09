@@ -24,11 +24,16 @@ export interface AiServiceConfig {
   model?: string
 
   /**
-   * API key or env var reference (e.g., '$ANTHROPIC_API_KEY').
-   * Strings starting with '$' are resolved from environment variables.
-   * NEVER hardcode API keys.
+   * Name of the environment variable that holds the API key.
+   * Example: 'ANTHROPIC_API_KEY'
+   *
+   * When omitted, a well-known default is inferred from the provider
+   * (e.g., provider 'anthropic' → ANTHROPIC_API_KEY).
+   *
+   * The env var is loaded automatically from .env files via dotenvx.
+   * NEVER put actual API keys in config — config files are committed.
    */
-  apiKey?: string
+  apiKeyEnvVar?: string
 
   /** Default system prompt prepended to all AI calls */
   systemPrompt?: string
@@ -42,7 +47,7 @@ export interface AiServiceConfig {
   /**
    * AI resolution mode for 2-pass @ai blocks.
    * - 'auto': detect from config (default) — API key → api, command set → command, else stdout
-   * - 'api': call LLM via Vercel AI SDK (requires provider + apiKey)
+   * - 'api': call LLM via Vercel AI SDK (requires provider + API key env var)
    * - 'command': pipe prompt to a CLI command (requires ai.command)
    * - 'stdout': print prompt to stdout, exit code 2 (for AI agents)
    * - 'off': no AI automation (same as stdout now; future: interactive prompts)
@@ -82,7 +87,8 @@ export interface AiServiceConfig {
 export interface AIModelRef {
   provider: string
   model: string
-  apiKey?: string
+  /** Name of the environment variable holding the API key for this fallback */
+  apiKeyEnvVar?: string
 }
 
 /**

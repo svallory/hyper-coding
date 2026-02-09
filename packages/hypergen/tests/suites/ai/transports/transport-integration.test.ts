@@ -7,13 +7,17 @@ import { ApiTransport } from '../../../../src/ai/transports/api-transport.js'
 import type { AIExecutionResult } from '../../../../src/ai/ai-config.js'
 
 describe('Transport Integration', () => {
+  const savedEnv = { ...process.env }
+
   beforeEach(() => {
     AiCollector.reset()
     AiService.reset()
+    process.env.ANTHROPIC_API_KEY = 'test-key'
   })
 
   afterEach(() => {
     AiService.reset()
+    process.env = { ...savedEnv }
   })
 
   function seedCollector(): AiCollector {
@@ -98,7 +102,7 @@ describe('Transport Integration', () => {
     const transport = resolveTransport({
       mode: 'api',
       provider: 'anthropic',
-      apiKey: 'test-key',
+      apiKeyEnvVar: 'ANTHROPIC_API_KEY',
     })
     expect(transport).toBeInstanceOf(ApiTransport)
 
@@ -107,7 +111,7 @@ describe('Transport Integration', () => {
       config: {
         mode: 'api',
         provider: 'anthropic',
-        apiKey: 'test-key',
+        apiKeyEnvVar: 'ANTHROPIC_API_KEY',
       },
       originalCommand: 'hypergen recipe run button.yml',
       answersPath: './ai-answers.json',

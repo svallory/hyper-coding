@@ -25,7 +25,8 @@ Recipe Step / @ai Template Tag
 |---|---|
 | `ai-config.ts` | All type definitions — no runtime code |
 | `ai-service.ts` | Singleton orchestrator: model resolution → prompt assembly → generate → validate → retry |
-| `model-router.ts` | Dynamic provider loading (`@ai-sdk/*`), API key resolution, fallback chains |
+| `env.ts` | API key resolution from env vars + dotenvx .env loading; provider → env var defaults |
+| `model-router.ts` | Dynamic provider loading (`@ai-sdk/*`), fallback chains |
 | `prompt-pipeline.ts` | 5-stage assembly: context collection → token budgeting → system+user prompt construction |
 | `context-collector.ts` | Gathers files (glob/explicit), project configs, step results; enforces `maxContextTokens` |
 | `cost-tracker.ts` | Per-step token/cost recording, budget limits, warning thresholds, formatted reports |
@@ -77,7 +78,8 @@ Calls `AiService.generate()` inline during template rendering. Returns the gener
 ```typescript
 // Top-level config (hypergen.config.js → ai property)
 AiServiceConfig {
-  provider, model, apiKey,
+  provider, model, apiKeyEnvVar?,
+  mode?, command?, commandMode?,
   systemPrompt, temperature, maxTokens,
   budget: AIBudgetConfig,
   defaultGuardrails: AIGuardrailConfig,

@@ -31,10 +31,19 @@ describe('resolveTransport', () => {
       const transport = resolveTransport({
         mode: 'api',
         provider: 'anthropic',
-        apiKey: '$ANTHROPIC_API_KEY',
       })
       expect(transport).toBeInstanceOf(ApiTransport)
       expect(transport.name).toBe('api')
+    })
+
+    it('returns ApiTransport for mode=api with custom env var', () => {
+      process.env.MY_CLAUDE_KEY = 'test-key'
+      const transport = resolveTransport({
+        mode: 'api',
+        provider: 'anthropic',
+        apiKeyEnvVar: 'MY_CLAUDE_KEY',
+      })
+      expect(transport).toBeInstanceOf(ApiTransport)
     })
 
     it('throws for mode=api without provider', () => {
@@ -42,10 +51,11 @@ describe('resolveTransport', () => {
     })
 
     it('throws for mode=api without API key', () => {
+      delete process.env.ANTHROPIC_API_KEY
       expect(() => resolveTransport({
         mode: 'api',
         provider: 'anthropic',
-      })).toThrow(/API key/)
+      })).toThrow(/ANTHROPIC_API_KEY/)
     })
 
     it('returns CommandTransport for mode=command with command set', () => {
@@ -73,16 +83,24 @@ describe('resolveTransport', () => {
       expect(transport).toBeInstanceOf(StdoutTransport)
     })
 
-    it('returns ApiTransport when provider and API key env var are set', () => {
+    it('returns ApiTransport when provider and well-known env var are set', () => {
       process.env.ANTHROPIC_API_KEY = 'sk-test'
       const transport = resolveTransport({
         provider: 'anthropic',
-        apiKey: '$ANTHROPIC_API_KEY',
       })
       expect(transport).toBeInstanceOf(ApiTransport)
     })
 
-    it('returns ApiTransport when well-known env var is set', () => {
+    it('returns ApiTransport when provider and custom apiKeyEnvVar are set', () => {
+      process.env.MY_KEY = 'sk-test'
+      const transport = resolveTransport({
+        provider: 'anthropic',
+        apiKeyEnvVar: 'MY_KEY',
+      })
+      expect(transport).toBeInstanceOf(ApiTransport)
+    })
+
+    it('returns ApiTransport when well-known env var is set (openai)', () => {
       process.env.OPENAI_API_KEY = 'sk-test'
       const transport = resolveTransport({
         provider: 'openai',
@@ -90,11 +108,11 @@ describe('resolveTransport', () => {
       expect(transport).toBeInstanceOf(ApiTransport)
     })
 
-    it('does not auto-detect api when env var reference is missing', () => {
+    it('does not auto-detect api when env var is missing', () => {
       delete process.env.ANTHROPIC_API_KEY
       const transport = resolveTransport({
         provider: 'anthropic',
-        apiKey: '$ANTHROPIC_API_KEY',
+        apiKeyEnvVar: 'ANTHROPIC_API_KEY',
       })
       // Falls through to stdout since the env var doesn't exist
       expect(transport).toBeInstanceOf(StdoutTransport)
@@ -114,7 +132,6 @@ describe('resolveTransport', () => {
       process.env.ANTHROPIC_API_KEY = 'sk-test'
       const transport = resolveTransport({
         provider: 'anthropic',
-        apiKey: '$ANTHROPIC_API_KEY',
         command: 'llm',
       })
       expect(transport).toBeInstanceOf(ApiTransport)

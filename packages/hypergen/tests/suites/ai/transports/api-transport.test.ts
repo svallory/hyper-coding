@@ -6,13 +6,17 @@ import type { TransportContext } from '../../../../src/ai/transports/types.js'
 import type { AIExecutionResult } from '../../../../src/ai/ai-config.js'
 
 describe('ApiTransport', () => {
+  const savedEnv = { ...process.env }
+
   beforeEach(() => {
     AiCollector.reset()
     AiService.reset()
+    process.env.ANTHROPIC_API_KEY = 'test-key'
   })
 
   afterEach(() => {
     AiService.reset()
+    process.env = { ...savedEnv }
   })
 
   function makeCollector(): AiCollector {
@@ -45,7 +49,7 @@ describe('ApiTransport', () => {
       config: {
         provider: 'anthropic',
         model: 'claude-sonnet-4-5',
-        apiKey: 'test-key',
+        apiKeyEnvVar: 'ANTHROPIC_API_KEY',
       },
       originalCommand: 'hypergen recipe run test.yml',
       answersPath: './ai-answers.json',
