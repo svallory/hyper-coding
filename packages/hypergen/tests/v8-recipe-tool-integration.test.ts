@@ -524,7 +524,9 @@ describe('RecipeTool Integration Tests', () => {
 
       mockContext.step = step
 
-      const result = await recipeTool.execute(step, mockContext)
+      // Pass retries: 0 to avoid the StepExecutor's default 3 retries with
+      // exponential backoff (1s + 2s + 4s = 7s) which would exceed the test timeout
+      const result = await recipeTool.execute(step, mockContext, { retries: 0 })
 
       expect(result.status).toBe('failed')
       expect(result.error).toBeDefined()

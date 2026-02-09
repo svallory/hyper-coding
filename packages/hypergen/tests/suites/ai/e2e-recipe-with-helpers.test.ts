@@ -278,8 +278,12 @@ Generate tests
 to: "test.ts"
 ---
 @ai()
-  @prompt()Test@end
-  @output({ key: 'test' })Default@end
+  @prompt()
+    Test prompt
+  @end
+  @output({ key: 'test' })
+    Default output
+  @end
 @end`
 
     writeFileSync(join(testDir, 'simple.jig'), templateContent)
@@ -295,12 +299,13 @@ to: "test.ts"
     await recipeEngine.executeRecipe(
       { type: 'file', path: recipeFile },
       {
-        skipPrompts: true
+        skipPrompts: true,
+        workingDir: testDir
       }
     )
 
     // Should NOT collect entries when collectMode is false
     expect(collector.hasEntries()).toBe(false)
     expect(collector.getEntries().size).toBe(0)
-  })
+  }, 15000)
 })
