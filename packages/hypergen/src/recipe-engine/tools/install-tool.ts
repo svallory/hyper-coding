@@ -142,9 +142,11 @@ export class InstallTool extends Tool<InstallStep> {
         }
       }
 
+      // Strip CLAUDECODE to avoid "nested session" errors inside Claude Code
+      const { CLAUDECODE: _, ...cleanEnv } = process.env
       const { stdout, stderr } = await execAsync(command, {
         cwd: context.projectRoot,
-        env: { ...process.env },
+        env: { ...cleanEnv },
       })
 
       const endTime = new Date()

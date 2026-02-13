@@ -123,6 +123,8 @@ export abstract class BaseCommand<T extends typeof Command> extends Command {
     for (let i = 0; i < argv.length; i++) {
       const arg = argv[i]
 
+      if (arg === '--') continue // skip separator
+
       if (arg.startsWith('--')) {
         const withoutPrefix = arg.slice(2)
 

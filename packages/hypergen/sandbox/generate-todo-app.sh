@@ -26,15 +26,13 @@ set -euo pipefail
 # ─── Configuration ────────────────────────────────────────────────────
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-HYPERGEN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-KIT_PATH="$HYPERGEN_ROOT/kits/nextjs"
 OUTPUT_DIR="${1:-$SCRIPT_DIR/todo-app}"
 
 # ─── Setup ────────────────────────────────────────────────────────────
 
 echo "=== Hypergen: Multi-tenant Todo App ==="
 echo ""
-echo "  Kit:    $KIT_PATH"
+echo "  Kit:    hyper-kits/nextjs"
 echo "  Output: $OUTPUT_DIR"
 echo ""
 
@@ -55,7 +53,7 @@ hypergen init --force
 # ─── Step 2: Install Next.js kit ─────────────────────────────────────
 
 echo "[2/8] Installing Next.js kit..."
-hypergen kit install "$KIT_PATH"
+hypergen kit install hyper-kits/nextjs
 
 # ─── Step 3: Scaffold project + configure tools ──────────────────────
 #
@@ -64,7 +62,7 @@ hypergen kit install "$KIT_PATH"
 # what "organization" and "member" mean in this app.
 
 echo "[3/8] Scaffolding project structure..."
-hypergen nextjs project create \
+hypergen nextjs project create --name my-app \
   --orm=drizzle \
   --ui=shadcn \
   --description="A multi-tenant ToDo app where users belong to multiple organizations. \

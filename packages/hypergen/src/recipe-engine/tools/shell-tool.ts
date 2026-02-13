@@ -15,6 +15,7 @@ import {
   type BaseRecipeStep,
   type ShellStep
 } from '../types.js'
+import { renderTemplate } from '../../template-engines/jig-engine.js'
 
 const debug = createDebug('hypergen:v8:recipe:tool:shell')
 
@@ -60,9 +61,10 @@ export class ShellTool extends Tool<ShellStep> {
     this.debug('Executing shell command: %s', step.command)
 
     try {
-      // Resolve command variables
-      const command = this.resolveVariables(step.command, context.variables)
-      const cwd = step.cwd ? this.resolveVariables(step.cwd, context.variables) : context.projectRoot
+      // Render command through Jig to support @if/@elseif/@end tags and {{ variable }} interpolation
+      const renderContext = this.buildRenderContext(step, context)
+      const command = await renderTemplate(step.command, renderContext)
+      const cwd = step.cwd ? await renderTemplate(step.cwd, renderContext) : context.projectRoot
       
       // shell() returns a Promise<ActionResult> (which is { status: string }) 
       // but also executes the command. The current shell op implementation seems to be
@@ -83,9 +85,13 @@ export class ShellTool extends Tool<ShellStep> {
       const { promisify } = await import('util')
       const execAsync = promisify(exec)
 
+      // Strip CLAUDECODE env var to prevent "nested session" errors when
+      // running inside Claude Code (the env var makes child processes think
+      // they're inside a Claude session and refuse to run).
+      const { CLAUDECODE, ...cleanEnv } = process.env
       const { stdout, stderr } = await execAsync(command, {
         cwd,
-        env: { ...process.env, ...step.env }
+        env: { ...cleanEnv, ...step.env }
       })
 
       const endTime = new Date()
@@ -130,12 +136,32 @@ export class ShellTool extends Tool<ShellStep> {
       }
     }
   }
-  
-  private resolveVariables(template: string, variables: Record<string, any>): string {
-    return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, key) => {
-      const value = key.split('.').reduce((obj: any, k: string) => obj?.[k], variables)
-      return value !== undefined ? String(value) : `{{${key}}}`
-    })
+
+  /**
+   * Build render context by merging step and recipe variables.
+   * This matches the pattern used in template-tool.ts for consistency.
+   */
+  private buildRenderContext(
+    step: ShellStep,
+    context: StepContext
+  ): Record<string, any> {
+    // Merge variables: recipe vars < context vars < step vars
+    const mergedVars = {
+      ...context.recipeVariables,
+      ...context.variables,
+      ...step.variables
+    }
+
+    return {
+      ...mergedVars,
+      // Recipe-specific context
+      recipe: context.recipe,
+      step: { name: step.name, description: step.description },
+      // Utility functions
+      utils: context.utils,
+      // Step results for dependency access
+      stepResults: context.stepResults ? Object.fromEntries(context.stepResults) : {},
+    }
   }
 }
 

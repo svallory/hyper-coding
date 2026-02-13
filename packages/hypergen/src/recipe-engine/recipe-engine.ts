@@ -1187,12 +1187,14 @@ export class RecipeEngine extends EventEmitter {
         }
 
         // Flatten variables into scope for easier access in condition expressions
+        // ctx is the current context.variables dict (flat key-value), which includes
+        // both initial variables AND any exports from earlier steps.
         const variableScope = {
           ...variables,
-          ...(ctx.variables || {}),
-          variables: { ...variables, ...(ctx.variables || {}) }
+          ...ctx,
+          variables: { ...variables, ...ctx }
         }
-        const mergedContext = { ...builtinFunctions, ...ctx, ...variableScope }
+        const mergedContext = { ...builtinFunctions, ...variableScope }
 
         // Use a set to ensure unique argument names for Function constructor
         // Filter out reserved keywords to prevent SyntaxError

@@ -29,7 +29,7 @@ export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipp
 /**
  * Tool types supported by the recipe system
  */
-export type ToolType = 'template' | 'action' | 'codemod' | 'recipe' | 'shell' | 'prompt' | 'sequence' | 'parallel' | 'ai' | 'install'
+export type ToolType = 'template' | 'action' | 'codemod' | 'recipe' | 'shell' | 'prompt' | 'sequence' | 'parallel' | 'ai' | 'install' | 'query' | 'patch' | 'ensure-dirs'
 
 /**
  * Base interface for all recipe steps
@@ -306,6 +306,76 @@ export interface InstallStep extends BaseRecipeStep {
 }
 
 /**
+ * Query step configuration
+ * Reads structured data files and evaluates expressions against them.
+ * Supports JSON, YAML, TOML, and .env files.
+ */
+export interface QueryStep extends BaseRecipeStep {
+  tool: 'query'
+
+  /** Path to the file to query (relative to project root) */
+  file: string
+
+  /** File format (auto-detected from extension if omitted) */
+  format?: 'json' | 'yaml' | 'toml' | 'env'
+
+  /**
+   * Dot-path checks to evaluate.
+   * Each check tests whether a path exists in the data and optionally exports the value.
+   */
+  checks?: Array<{
+    /** Dot-path into the data (e.g. "dependencies.drizzle-orm") */
+    path: string
+    /** Variable name to export the resolved value to */
+    export?: string
+    /** Variable name to export a boolean (true if path exists and is truthy) */
+    exportExists?: string
+  }>
+
+  /**
+   * A single expression to evaluate against the parsed data.
+   * The parsed data is available as `data` in the expression scope.
+   * Result is placed in toolResult.value.
+   */
+  expression?: string
+}
+
+/**
+ * Patch step configuration
+ * Deep-merges structured data into an existing file.
+ * Creates the file if it doesn't exist.
+ */
+export interface PatchStep extends BaseRecipeStep {
+  tool: 'patch'
+
+  /** Path to the file to patch (relative to project root) */
+  file: string
+
+  /** File format (auto-detected from extension if omitted) */
+  format?: 'json' | 'yaml' | 'toml'
+
+  /** Data to deep-merge into the file */
+  merge: Record<string, any>
+
+  /** If true, create the file when it doesn't exist (default: true) */
+  createIfMissing?: boolean
+
+  /** Indentation for JSON output (default: 2) */
+  indent?: number
+}
+
+/**
+ * EnsureDirs step configuration
+ * Creates directories (mkdir -p) for each path in the array.
+ */
+export interface EnsureDirsStep extends BaseRecipeStep {
+  tool: 'ensure-dirs'
+
+  /** Array of directory paths to create (relative to project root) */
+  paths: string[]
+}
+
+/**
  * Sequence step configuration
  * Executes a list of steps sequentially
  */
@@ -377,7 +447,7 @@ export interface AIStep extends BaseRecipeStep {
 /**
  * Union type for all step types (discriminated union)
  */
-export type RecipeStepUnion = TemplateStep | ActionStep | CodeModStep | RecipeStep | ShellStep | PromptStep | SequenceStep | ParallelStep | AIStep | InstallStep
+export type RecipeStepUnion = TemplateStep | ActionStep | CodeModStep | RecipeStep | ShellStep | PromptStep | SequenceStep | ParallelStep | AIStep | InstallStep | QueryStep | PatchStep | EnsureDirsStep
 
 /**
  * Step execution context
@@ -478,7 +548,7 @@ export interface StepResult {
   conditionResult?: boolean
   
   /** Tool-specific execution result */
-  toolResult?: ActionResult | TemplateExecutionResult | CodeModExecutionResult | RecipeExecutionResult | ShellExecutionResult | PromptExecutionResult | SequenceExecutionResult | ParallelExecutionResult | AIExecutionResult | InstallExecutionResult
+  toolResult?: ActionResult | TemplateExecutionResult | CodeModExecutionResult | RecipeExecutionResult | ShellExecutionResult | PromptExecutionResult | SequenceExecutionResult | ParallelExecutionResult | AIExecutionResult | InstallExecutionResult | QueryExecutionResult | PatchExecutionResult | EnsureDirsExecutionResult
   
   /** Files created by this step */
   filesCreated?: string[]
@@ -575,6 +645,40 @@ export interface InstallExecutionResult {
   exitCode?: number
   stdout?: string
   stderr?: string
+}
+
+/**
+ * Query execution result
+ */
+export interface QueryExecutionResult {
+  file: string
+  format: string
+  checks?: Array<{
+    path: string
+    exists: boolean
+    value?: any
+  }>
+  value?: any
+  expression?: string
+}
+
+/**
+ * Patch execution result
+ */
+export interface PatchExecutionResult {
+  file: string
+  format: string
+  created: boolean
+  merged: Record<string, any>
+}
+
+/**
+ * EnsureDirs execution result
+ */
+export interface EnsureDirsExecutionResult {
+  paths: string[]
+  created: string[]
+  alreadyExisted: string[]
 }
 
 /**
@@ -1158,6 +1262,18 @@ export function isAIStep(step: BaseRecipeStep): step is AIStep {
 
 export function isInstallStep(step: BaseRecipeStep): step is InstallStep {
   return (step as InstallStep).tool === 'install'
+}
+
+export function isQueryStep(step: BaseRecipeStep): step is QueryStep {
+  return (step as QueryStep).tool === 'query'
+}
+
+export function isPatchStep(step: BaseRecipeStep): step is PatchStep {
+  return (step as PatchStep).tool === 'patch'
+}
+
+export function isEnsureDirsStep(step: BaseRecipeStep): step is EnsureDirsStep {
+  return (step as EnsureDirsStep).tool === 'ensure-dirs'
 }
 export class CircularDependencyError extends Error {
   constructor(

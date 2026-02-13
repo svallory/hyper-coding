@@ -48,6 +48,24 @@ export {
   installToolFactory
 } from './install-tool.js'
 
+export {
+  QueryTool,
+  QueryToolFactory,
+  queryToolFactory
+} from './query-tool.js'
+
+export {
+  PatchTool,
+  PatchToolFactory,
+  patchToolFactory
+} from './patch-tool.js'
+
+export {
+  EnsureDirsTool,
+  EnsureDirsToolFactory,
+  ensureDirsToolFactory
+} from './ensure-dirs-tool.js'
+
 export type {
   ToolFactory,
   ToolPhase,
@@ -84,6 +102,9 @@ export type {
   ShellStep,
   AIStep,
   InstallStep,
+  QueryStep,
+  PatchStep,
+  EnsureDirsStep,
   
   // Context and execution
   StepContext,
@@ -122,6 +143,9 @@ import { sequenceToolFactory } from './sequence-tool.js'
 import { parallelToolFactory } from './parallel-tool.js'
 import { aiToolFactory } from './ai-tool.js'
 import { installToolFactory } from './install-tool.js'
+import { queryToolFactory } from './query-tool.js'
+import { patchToolFactory } from './patch-tool.js'
+import { ensureDirsToolFactory } from './ensure-dirs-tool.js'
 
 // Re-export type guard functions for convenience
 export {
@@ -131,6 +155,9 @@ export {
   isRecipeStep,
   isAIStep,
   isInstallStep,
+  isQueryStep,
+  isPatchStep,
+  isEnsureDirsStep,
 
   // Error classes
   StepExecutionError,
@@ -148,7 +175,7 @@ export const TOOL_FRAMEWORK_VERSION = '8.0.0'
 /**
  * Supported tool types in the Recipe Step System
  */
-export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = ['template', 'action', 'codemod', 'recipe', 'shell', 'ai', 'install'] as const
+export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = ['template', 'action', 'codemod', 'recipe', 'shell', 'ai', 'install', 'query', 'patch', 'ensure-dirs'] as const
 
 /**
  * Default tool registry configuration
@@ -263,6 +290,30 @@ export function registerDefaultTools(): void {
   if (!registry.isRegistered('install', 'default')) {
     registry.register('install', 'default', installToolFactory, {
       description: 'Install packages via package manager',
+      category: 'core'
+    })
+  }
+
+  // Register Query Tool
+  if (!registry.isRegistered('query', 'default')) {
+    registry.register('query', 'default', queryToolFactory, {
+      description: 'Query structured data files (JSON, YAML, TOML, .env)',
+      category: 'core'
+    })
+  }
+
+  // Register Patch Tool
+  if (!registry.isRegistered('patch', 'default')) {
+    registry.register('patch', 'default', patchToolFactory, {
+      description: 'Deep-merge data into structured files',
+      category: 'core'
+    })
+  }
+
+  // Register EnsureDirs Tool
+  if (!registry.isRegistered('ensure-dirs', 'default')) {
+    registry.register('ensure-dirs', 'default', ensureDirsToolFactory, {
+      description: 'Create directories (mkdir -p)',
       category: 'core'
     })
   }

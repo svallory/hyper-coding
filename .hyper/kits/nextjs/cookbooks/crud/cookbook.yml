@@ -1,9 +1,0 @@
-name: crud
-description: Generate CRUD pages and functionality (individual or complete workflows)
-version: 2.0.0
-
-defaults:
-  recipe: resource
-
-recipes:
-  - './*/recipe.yml'

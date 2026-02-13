@@ -1,9 +1,0 @@
-name: loading
-description: Add loading UI to Next.js route segments
-version: 1.0.0
-
-defaults:
-  recipe: add
-
-recipes:
-  - "./*/recipe.yml"

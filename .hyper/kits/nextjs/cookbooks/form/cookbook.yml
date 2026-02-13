@@ -1,9 +1,0 @@
-name: form
-description: Generate forms with validation and Server Actions
-version: 1.0.0
-
-defaults:
-  recipe: rhf
-
-recipes:
-  - "./*/recipe.yml"

@@ -94,9 +94,12 @@ export async function discoverKits(
     // Look for kit.yml in immediate subdirectories
     const entries = fs.readdirSync(dir, { withFileTypes: true })
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue
+      // Check if entry is a directory or a symlink pointing to a directory
+      const entryPath = path.join(dir, entry.name)
+      const stat = fs.statSync(entryPath)
+      if (!stat.isDirectory()) continue
 
-      const kitYml = path.join(dir, entry.name, 'kit.yml')
+      const kitYml = path.join(entryPath, 'kit.yml')
       if (fs.existsSync(kitYml)) {
         const parsed = await parseKitFile(kitYml)
         if (parsed.isValid) {
@@ -132,6 +135,7 @@ export async function discoverKits(
  */
 export function getDefaultKitSearchDirs(projectRoot: string): string[] {
   return [
+    path.join(projectRoot, '.hyper', 'kits'),
     path.join(projectRoot, 'kits'),
     path.join(projectRoot, 'node_modules', '@hyper-kits'),
   ]

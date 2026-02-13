@@ -33,6 +33,11 @@ import {
   isPromptStep,
   isSequenceStep,
   isParallelStep,
+  isAIStep,
+  isInstallStep,
+  isQueryStep,
+  isPatchStep,
+  isEnsureDirsStep,
   StepExecutionError,
   CircularDependencyError
 } from './types.js'
@@ -333,8 +338,9 @@ export class StepExecutor extends EventEmitter {
       }
 
       // In collect mode (pass 1), only template steps need to run
-      // Other tools (shell, action, recipe, prompt) are skipped
-      if (context.collectMode && step.tool !== 'template') {
+      // Sequence/parallel are structural containers that must execute so their
+      // nested template steps can run. Other tools (shell, action, prompt) are skipped.
+      if (context.collectMode && step.tool !== 'template' && step.tool !== 'sequence' && step.tool !== 'parallel') {
         this.debug('Skipping non-template step in collect mode: %s (%s)', step.name, step.tool)
         stepResult.status = 'skipped'
         stepResult.endTime = new Date()
@@ -541,12 +547,31 @@ export class StepExecutor extends EventEmitter {
 
   private buildDependencyGraph(steps: RecipeStepUnion[]): Map<string, StepDependencyNode> {
     const graph = new Map<string, StepDependencyNode>()
-    
-    // Initialize nodes
-    for (const step of steps) {
+
+    // If ANY step declares explicit dependsOn, assume the recipe author manages
+    // dependencies manually — don't add implicit sequential deps.
+    // Otherwise, add implicit sequential deps so YAML order = execution order.
+    // This ensures that exports from earlier steps are available when later
+    // step conditions evaluate.
+    const hasExplicitDeps = steps.some(s => s.dependsOn && s.dependsOn.length > 0)
+
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]
+      let dependencies: string[]
+
+      if (step.dependsOn && step.dependsOn.length > 0) {
+        // Explicit dependencies — use as-is
+        dependencies = [...step.dependsOn]
+      } else if (!hasExplicitDeps && i > 0) {
+        // No explicit deps in the recipe — implicitly depend on previous step
+        dependencies = [steps[i - 1].name]
+      } else {
+        dependencies = []
+      }
+
       graph.set(step.name, {
         stepName: step.name,
-        dependencies: step.dependsOn || [],
+        dependencies,
         dependents: [],
         priority: 0,
         parallelizable: step.parallel ?? true
@@ -915,8 +940,24 @@ export class StepExecutor extends EventEmitter {
       return 'default'
     } else if (isParallelStep(step)) {
       return 'default'
+    } else if (isAIStep(step)) {
+      return 'default'
+    } else if (isInstallStep(step)) {
+      return 'default'
+    } else if (isQueryStep(step)) {
+      return 'default'
+    } else if (isPatchStep(step)) {
+      return 'default'
+    } else if (isEnsureDirsStep(step)) {
+      return 'default'
     }
-    
+
+    // Fallback: check if the tool type is registered
+    const toolType = (step as any).tool as ToolType
+    if (typeof toolType === 'string' && this.toolRegistry.isRegistered(toolType, 'default')) {
+      return 'default'
+    }
+
     throw ErrorHandler.createError(
       ErrorCode.VALIDATION_ERROR,
       `Unknown step type: ${(step as any).tool}`,
@@ -1050,7 +1091,10 @@ export class StepExecutor extends EventEmitter {
       sequence: 0,     // Sequence tool itself is instant
       parallel: 0,     // Parallel tool itself is instant
       ai: 20000,       // 20 seconds average (AI generation)
-      install: 15000   // 15 seconds average (package install)
+      install: 15000,  // 15 seconds average (package install)
+      query: 100,      // 100ms average (file read + parse)
+      patch: 200,      // 200ms average (read + merge + write)
+      'ensure-dirs': 50 // 50ms average (mkdir -p)
     }
     
     let totalEstimate = 0

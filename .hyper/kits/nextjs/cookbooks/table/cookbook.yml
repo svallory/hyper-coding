@@ -1,9 +1,0 @@
-name: table
-description: Generate TanStack Table data tables with sorting, filtering, and CRUD
-version: 1.0.0
-
-defaults:
-  recipe: basic
-
-recipes:
-  - "./*/recipe.yml"

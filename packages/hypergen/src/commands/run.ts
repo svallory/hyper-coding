@@ -9,11 +9,12 @@ import path from 'node:path'
 import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../lib/base-command.js'
 import { AiCollector } from '../ai/ai-collector.js'
-import { PromptAssembler } from '../ai/prompt-assembler.js'
+import { resolveTransport } from '../ai/transports/resolve-transport.js'
 import { PathResolver, type ResolvedPath } from '../config/path-resolver.js'
 import { discoverKits, getDefaultKitSearchDirs } from '../config/kit-parser.js'
 import { GroupExecutor } from '../recipe-engine/group-executor.js'
 import type { TemplateVariable } from '../config/template-parser.js'
+import { findProjectRoot } from '../utils/find-project-root.js'
 
 export default class Run extends BaseCommand<typeof Run> {
   static override description = 'Execute a recipe to generate code'
@@ -139,7 +140,7 @@ export default class Run extends BaseCommand<typeof Run> {
     }
 
     try {
-      const result = await this.recipeEngine.executeRecipe(
+      let result = await this.recipeEngine.executeRecipe(
         { type: 'file', path: resolved.fullPath },
         {
           variables: params,
@@ -155,22 +156,65 @@ export default class Run extends BaseCommand<typeof Run> {
 
       // Check if Pass 1 collected any AI entries
       if (collector.collectMode && collector.hasEntries()) {
-        const assembler = new PromptAssembler()
+        const aiConfig = this.hypergenConfig?.ai
+        const transport = resolveTransport(aiConfig)
         const originalCommand = ['hypergen', 'run', ...resolved.consumed, ...process.argv.slice(3).filter(a => a !== '--answers' && !a.endsWith('.json'))].join(' ')
-        const promptTemplatePath = flags['prompt-template'] || this.hypergenConfig?.ai?.promptTemplate
-        const prompt = assembler.assemble(collector, {
+        const promptTemplatePath = flags['prompt-template'] || aiConfig?.promptTemplate
+
+        const transportResult = await transport.resolve({
+          collector,
+          config: aiConfig ?? {},
           originalCommand,
           answersPath: './ai-answers.json',
+          projectRoot: flags.cwd,
           promptTemplate: promptTemplatePath,
         })
 
-        process.stdout.write(prompt)
+        if (transportResult.status === 'deferred') {
+          collector.clear()
+          this.exit(transportResult.exitCode)
+          return
+        }
+
+        // Transport resolved answers inline — re-run as Pass 2
         collector.clear()
-        this.exit(2)
-        return
+        collector.collectMode = false
+        result = await this.recipeEngine.executeRecipe(
+          { type: 'file', path: resolved.fullPath },
+          {
+            variables: params,
+            workingDir: flags.cwd,
+            dryRun: flags.dry,
+            force: flags.force,
+            answers: transportResult.answers,
+            askMode: 'nobody',
+            noDefaults,
+            aiConfig,
+          }
+        )
       }
 
-      collector.clear()
+      // Pass 1 found no @ai entries — recipe doesn't use AI generation.
+      // Re-run without collect mode so files are actually written.
+      if (collector.collectMode) {
+        collector.collectMode = false
+        collector.clear()
+        result = await this.recipeEngine.executeRecipe(
+          { type: 'file', path: resolved.fullPath },
+          {
+            variables: params,
+            workingDir: flags.cwd,
+            dryRun: flags.dry,
+            force: flags.force,
+            answers,
+            askMode: 'nobody', // Don't prompt again — variables already resolved
+            noDefaults,
+            aiConfig: this.hypergenConfig?.ai,
+          }
+        )
+      } else {
+        collector.clear()
+      }
 
       if (result.success) {
         this.log(`\n✓ Recipe completed successfully`)
@@ -285,8 +329,12 @@ export default class Run extends BaseCommand<typeof Run> {
   ): Promise<ResolvedPath | null> {
     if (segments.length === 0) return null
 
-    // Discover kits
-    const kitSearchDirs = getDefaultKitSearchDirs(cwd)
+    // Find project root with monorepo detection
+    const projectInfo = findProjectRoot(cwd)
+    const projectRoot = projectInfo.workspaceRoot
+
+    // Discover kits from workspace root
+    const kitSearchDirs = getDefaultKitSearchDirs(projectRoot)
 
     // Also add configured search directories
     const configDirs = this.hypergenConfig?.discovery?.directories || []

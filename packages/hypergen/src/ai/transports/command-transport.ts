@@ -134,9 +134,12 @@ function executeCommand(commandTemplate: string, prompt: string): Promise<string
 
     debug('Executing: %s %s', cmd, usesSubstitution ? '(with substitution)' : '(with stdin pipe)')
 
+    // Strip CLAUDECODE to avoid "nested session" errors inside Claude Code
+    const { CLAUDECODE: _cc, ...cleanEnv } = process.env
     const child = execFile(cmd, args, {
       maxBuffer: 10 * 1024 * 1024, // 10MB
       timeout: 300_000, // 5 minutes
+      env: cleanEnv,
     }, (error, stdout, stderr) => {
       if (error) {
         const msg = stderr?.trim() || error.message

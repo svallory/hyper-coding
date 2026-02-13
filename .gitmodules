@@ -7,3 +7,6 @@
 [submodule ".moon/templates"]
 	path = .moon/templates
 	url = git@github.com:svallory/moon-templates.git
+[submodule "hyper-kits/nextjs"]
+	path = hyper-kits/nextjs
+	url = git@github.com:hyper-kits/nextjs.git
