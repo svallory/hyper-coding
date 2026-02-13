@@ -10,6 +10,10 @@ import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../lib/base-command.js'
 import { AiCollector } from '../ai/ai-collector.js'
 import { PromptAssembler } from '../ai/prompt-assembler.js'
+import { PathResolver, type ResolvedPath } from '../config/path-resolver.js'
+import { discoverKits, getDefaultKitSearchDirs } from '../config/kit-parser.js'
+import { GroupExecutor } from '../recipe-engine/group-executor.js'
+import type { TemplateVariable } from '../config/template-parser.js'
 
 export default class Run extends BaseCommand<typeof Run> {
   static override description = 'Execute a recipe to generate code'
@@ -20,6 +24,7 @@ export default class Run extends BaseCommand<typeof Run> {
     '<%= config.bin %> run create-component --name=Button',
     '<%= config.bin %> run ./my-recipe --answers ./ai-answers.json',
     '<%= config.bin %> run crud edit-page --model=Organization',
+    '<%= config.bin %> nextjs crud update Organization',
   ]
 
   static override flags = {
@@ -44,6 +49,14 @@ export default class Run extends BaseCommand<typeof Run> {
     'prompt-template': Flags.file({
       description: 'Path to a custom Jig template for the AI prompt document',
     }),
+    ask: Flags.string({
+      description: 'Who resolves missing variables: me (interactive), ai, or nobody (error)',
+      options: ['me', 'ai', 'nobody'],
+    }),
+    'no-defaults': Flags.boolean({
+      description: "Don't use default values — ask about every variable",
+      default: false,
+    }),
   }
 
   static override args = {
@@ -58,9 +71,22 @@ export default class Run extends BaseCommand<typeof Run> {
   async run(): Promise<void> {
     const { args, flags, argv } = await this.parse(Run)
 
-    // Resolve recipe path - handle cookbook/recipe syntax
-    const recipePath = await this.resolveRecipePath(args.recipe, argv as string[], flags.cwd)
-    const params = this.parseParameters(argv as string[])
+    // Collect all non-flag segments for path resolution
+    const segments = this.extractPathSegments(argv as string[])
+
+    // Resolve recipe path using PathResolver
+    const resolved = await this.resolveRecipePath(segments, flags.cwd)
+
+    if (!resolved) {
+      this.error(`Recipe not found: ${segments.join(' ')}\nTry 'hypergen run --help' for usage.`)
+    }
+
+    // Parse named parameters (--key=value and --key value)
+    const namedParams = this.parseParameters(argv as string[])
+
+    // Map positional args to variables if recipe has position definitions
+    const positionalParams = await this.mapPositionalArgs(resolved)
+    const params = { ...positionalParams, ...namedParams } // named wins
 
     // Load AI answers if provided (Pass 2)
     let answers: Record<string, any> | undefined
@@ -73,6 +99,30 @@ export default class Run extends BaseCommand<typeof Run> {
       }
     }
 
+    // Determine effective ask mode
+    const askMode = (flags.ask as 'me' | 'ai' | 'nobody' | undefined)
+      ?? (process.stdout.isTTY ? 'me' : 'nobody')
+
+    const noDefaults = flags['no-defaults'] ?? false
+
+    if (resolved.type === 'group') {
+      return this.executeGroup(resolved, params, flags, answers, askMode, noDefaults)
+    }
+
+    return this.executeSingleRecipe(resolved, params, flags, answers, askMode, noDefaults)
+  }
+
+  /**
+   * Execute a single recipe
+   */
+  private async executeSingleRecipe(
+    resolved: ResolvedPath,
+    params: Record<string, unknown>,
+    flags: Record<string, any>,
+    answers?: Record<string, any>,
+    askMode: 'me' | 'ai' | 'nobody' = 'me',
+    noDefaults: boolean = false
+  ): Promise<void> {
     // Initialize AiCollector for Pass 1 if no answers provided
     const collector = AiCollector.getInstance()
     collector.clear()
@@ -81,7 +131,7 @@ export default class Run extends BaseCommand<typeof Run> {
     }
 
     if (answers) {
-      this.log(`Executing recipe: ${recipePath}`)
+      this.log(`Executing recipe: ${resolved.fullPath}`)
     }
 
     if (flags.dry) {
@@ -90,20 +140,23 @@ export default class Run extends BaseCommand<typeof Run> {
 
     try {
       const result = await this.recipeEngine.executeRecipe(
-        { type: 'file', path: recipePath },
+        { type: 'file', path: resolved.fullPath },
         {
           variables: params,
           workingDir: flags.cwd,
           dryRun: flags.dry,
           force: flags.force,
           answers,
+          askMode,
+          noDefaults,
+          aiConfig: this.hypergenConfig?.ai,
         }
       )
 
       // Check if Pass 1 collected any AI entries
       if (collector.collectMode && collector.hasEntries()) {
         const assembler = new PromptAssembler()
-        const originalCommand = ['hypergen', 'run', recipePath, ...process.argv.slice(3).filter(a => a !== '--answers' && !a.endsWith('.json'))].join(' ')
+        const originalCommand = ['hypergen', 'run', ...resolved.consumed, ...process.argv.slice(3).filter(a => a !== '--answers' && !a.endsWith('.json'))].join(' ')
         const promptTemplatePath = flags['prompt-template'] || this.hypergenConfig?.ai?.promptTemplate
         const prompt = assembler.assemble(collector, {
           originalCommand,
@@ -111,7 +164,6 @@ export default class Run extends BaseCommand<typeof Run> {
           promptTemplate: promptTemplatePath,
         })
 
-        // Write prompt to stdout
         process.stdout.write(prompt)
         collector.clear()
         this.exit(2)
@@ -135,92 +187,158 @@ export default class Run extends BaseCommand<typeof Run> {
       }
     } catch (error: any) {
       collector.clear()
-      // Re-throw oclif exit errors (from this.exit())
       if (error?.code === 'EEXIT') throw error
       this.error(`Failed to execute recipe: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
   /**
-   * Resolve recipe path from cookbook/recipe syntax or direct path
-   * Supports:
-   * - Direct paths: ./my-recipe, /absolute/path/recipe.yml
-   * - Cookbook syntax: cookbook recipe (e.g., crud edit-page)
-   * - Package syntax: @scope/package/recipe
+   * Execute a group of recipes with dependency resolution
    */
-  private async resolveRecipePath(recipeName: string, argv: string[], cwd: string): Promise<string> {
-    // If it's a file path (starts with ./ or / or ends with .yml/.yaml), return as-is
-    if (
-      recipeName.startsWith('./') ||
-      recipeName.startsWith('../') ||
-      recipeName.startsWith('/') ||
-      recipeName.endsWith('.yml') ||
-      recipeName.endsWith('.yaml')
-    ) {
-      return recipeName
+  private async executeGroup(
+    resolved: ResolvedPath,
+    params: Record<string, unknown>,
+    flags: Record<string, any>,
+    answers?: Record<string, any>,
+    askMode: 'me' | 'ai' | 'nobody' = 'me',
+    noDefaults: boolean = false
+  ): Promise<void> {
+    const groupExecutor = new GroupExecutor(this.recipeEngine)
+
+    this.log(`Executing recipe group: ${resolved.fullPath}`)
+    if (flags.dry) {
+      this.log('(dry run - no files will be written)')
     }
 
-    // Check if next arg (after recipe) is another string that doesn't start with --
-    // This would indicate cookbook/recipe syntax: hypergen run crud edit-page
-    const recipeIndex = argv.indexOf(recipeName)
-    const nextArg = argv[recipeIndex + 1]
-    const isRecipeSubpath = nextArg && !nextArg.startsWith('--')
+    try {
+      const group = await groupExecutor.discoverGroup(resolved.fullPath)
 
-    if (isRecipeSubpath) {
-      // Cookbook/recipe syntax - need to discover cookbook location
-      const cookbookName = recipeName
-      const recipeName2 = nextArg
+      if (group.recipes.length === 0) {
+        this.error(`No recipes found in directory: ${resolved.fullPath}`)
+      }
 
-      // Use config to find cookbook directories
-      const searchDirs = this.hypergenConfig?.discovery?.directories || ['.hypergen/cookbooks', 'cookbooks']
+      this.log(`Found ${group.recipes.length} recipes: ${group.recipes.map(r => r.name).join(', ')}`)
 
-      for (const dir of searchDirs) {
-        const fullDir = path.resolve(cwd, dir)
-        const cookbookPath = path.join(fullDir, cookbookName)
+      const result = await groupExecutor.executeGroup(group, params as Record<string, any>, {
+        variables: params,
+        workingDir: flags.cwd,
+        dryRun: flags.dry,
+        force: flags.force,
+        answers,
+        continueOnError: false,
+        askMode,
+        noDefaults,
+        aiConfig: this.hypergenConfig?.ai,
+      })
 
-        // Check if cookbook directory exists
-        if (fs.existsSync(cookbookPath)) {
-          // Try to find the recipe
-          const recipePath = path.join(cookbookPath, recipeName2, 'recipe.yml')
-          if (fs.existsSync(recipePath)) {
-            return recipePath
+      if (result.success) {
+        this.log(`\n✓ Group execution completed successfully`)
+        this.log(`  Recipes executed: ${result.recipeResults.length}`)
+        for (const rr of result.recipeResults) {
+          const status = rr.result.success ? '✓' : '✗'
+          this.log(`  ${status} ${rr.name}: ${rr.result.metadata.completedSteps} steps`)
+        }
+      } else {
+        const errorMsg = result.errors.length > 0 ? result.errors.join('\n  ') : 'Unknown error'
+        this.error(`Group execution failed:\n  ${errorMsg}`)
+      }
+    } catch (error: any) {
+      if (error?.code === 'EEXIT') throw error
+      this.error(`Failed to execute group: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  /**
+   * Extract non-flag path segments from argv.
+   * Everything before `--` and not starting with `-` is a path segment.
+   */
+  private extractPathSegments(argv: string[]): string[] {
+    const segments: string[] = []
+
+    for (const arg of argv) {
+      if (arg === '--') break
+      if (arg.startsWith('-')) {
+        // If it's --key=value, skip
+        if (arg.startsWith('--')) {
+          // If next arg is the value (--key value), we'll handle that in parseParameters
+          // but we need to skip it here
+          const withoutPrefix = arg.slice(2)
+          if (!withoutPrefix.includes('=')) {
+            // The next non-flag arg would be the value — but we can't know that here
+            // without lookahead. For safety, just skip flags.
           }
+        }
+        continue
+      }
+      segments.push(arg)
+    }
 
-          // Try without subdirectory (recipe.yml directly in cookbook)
-          const directRecipePath = path.join(cookbookPath, 'recipe.yml')
-          if (fs.existsSync(directRecipePath)) {
-            return directRecipePath
-          }
+    return segments
+  }
+
+  /**
+   * Resolve recipe path using the PathResolver with kit/cookbook discovery
+   */
+  private async resolveRecipePath(
+    segments: string[],
+    cwd: string
+  ): Promise<ResolvedPath | null> {
+    if (segments.length === 0) return null
+
+    // Discover kits
+    const kitSearchDirs = getDefaultKitSearchDirs(cwd)
+
+    // Also add configured search directories
+    const configDirs = this.hypergenConfig?.discovery?.directories || []
+    const allSearchDirs = [
+      ...configDirs.map((d: string) => path.resolve(cwd, d)),
+      path.resolve(cwd, '.hypergen/cookbooks'),
+      path.resolve(cwd, 'cookbooks'),
+    ]
+
+    const kits = await discoverKits(kitSearchDirs)
+
+    const resolver = new PathResolver(kits, allSearchDirs, cwd)
+    return resolver.resolve(segments)
+  }
+
+  /**
+   * Map positional args (resolved.remaining) to recipe variables by position.
+   */
+  private async mapPositionalArgs(resolved: ResolvedPath): Promise<Record<string, any>> {
+    if (resolved.remaining.length === 0) return {}
+    if (resolved.type !== 'recipe') return {}
+
+    try {
+      // Load the recipe to get variable definitions
+      const loadResult = await this.recipeEngine.loadRecipe({
+        type: 'file',
+        path: resolved.fullPath,
+      })
+
+      const variables = loadResult.recipe.variables
+      if (!variables) return {}
+
+      // Find variables with `position` field, sorted by position
+      const positionalVars: Array<{ name: string; position: number; config: TemplateVariable }> = []
+      for (const [name, config] of Object.entries(variables)) {
+        if (config.position !== undefined) {
+          positionalVars.push({ name, position: config.position, config })
         }
       }
 
-      // If we couldn't find it, throw error
-      this.error(
-        `Recipe not found: ${cookbookName}/${recipeName2}\n` +
-        `Searched in: ${searchDirs.join(', ')}`
-      )
-    }
+      positionalVars.sort((a, b) => a.position - b.position)
 
-    // Otherwise, treat as a simple recipe name - look in discovery directories
-    const searchDirs = this.hypergenConfig?.discovery?.directories || ['.hypergen/cookbooks', 'cookbooks', 'recipes']
-
-    for (const dir of searchDirs) {
-      const fullDir = path.resolve(cwd, dir)
-
-      // Try recipe.yml in a subdirectory
-      const recipePath = path.join(fullDir, recipeName, 'recipe.yml')
-      if (fs.existsSync(recipePath)) {
-        return recipePath
+      // Map remaining segments to positional variables
+      const mapped: Record<string, any> = {}
+      for (let i = 0; i < Math.min(resolved.remaining.length, positionalVars.length); i++) {
+        mapped[positionalVars[i].name] = resolved.remaining[i]
       }
 
-      // Try direct recipe file
-      const directPath = path.join(fullDir, `${recipeName}.yml`)
-      if (fs.existsSync(directPath)) {
-        return directPath
-      }
+      return mapped
+    } catch {
+      // If we can't load the recipe, return empty — error will surface during execution
+      return {}
     }
-
-    // If still not found, return as-is and let RecipeEngine handle it
-    return recipeName
   }
 }

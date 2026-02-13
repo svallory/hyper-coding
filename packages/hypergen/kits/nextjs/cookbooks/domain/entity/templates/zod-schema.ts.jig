@@ -1,0 +1,64 @@
+---
+to: lib/schemas/{{ name }}-schema.ts
+---
+@let(modelName = model || pascalCase(name))
+@let(modelFields = typeof parseFieldsString === 'function' && fields ? parseFieldsString(fields) : [])
+@let(fieldDescriptions = typeof buildFieldDescriptions === 'function' ? buildFieldDescriptions(modelFields) : '')
+import { z } from 'zod'
+
+@ai({ key: 'zodSchema' })
+  @context()
+Entity name: {{ modelName }}
+Fields:
+{{ fieldDescriptions }}
+@if(relations)
+Relations: {{ relations }}
+@end
+  @end
+  @prompt()
+Generate a Zod validation schema for the {{ modelName }} entity. For each field:
+- Use z.string().min(1, "X is required") for required string fields
+- Use z.string().email() for fields named "email"
+- Use z.string().url() for fields ending in "url" or "website"
+- Use z.number().int().positive() for integer IDs
+- Use z.number() for numeric fields
+- Use z.boolean().default(false) for boolean fields
+- Use z.coerce.date() for date/datetime fields
+- Use z.string() for text fields (long content)
+- Use z.enum([...]) for fields named "status" or "role" with reasonable defaults
+- Do NOT include id, createdAt, or updatedAt — those are managed by the ORM
+Output ONLY the z.object({...}) call with all fields — no imports, no variable declaration.
+  @end
+  @output({ typeHint: 'typescript-code' })
+A Zod z.object() schema with proper validation for each field.
+  @end
+  @example()
+z.object({
+  name: z.string().min(1, "Name is required").max(255),
+  email: z.string().email("Invalid email address"),
+  isActive: z.boolean().default(true),
+})
+  @end
+@end
+
+/**
+ * Zod schema for {{ modelName }} validation
+ */
+export const {{ camelCase(modelName) }}Schema = {{ zodSchema }}
+
+export type {{ modelName }} = z.infer<typeof {{ camelCase(modelName) }}Schema>
+
+/**
+ * Schema for creating a new {{ modelName }}
+ * Omits auto-generated fields (id, timestamps)
+ */
+export const create{{ modelName }}Schema = {{ camelCase(modelName) }}Schema
+
+/**
+ * Schema for updating a {{ modelName }}
+ * All fields are optional for partial updates
+ */
+export const update{{ modelName }}Schema = {{ camelCase(modelName) }}Schema.partial()
+
+export type Create{{ modelName }}Input = z.infer<typeof create{{ modelName }}Schema>
+export type Update{{ modelName }}Input = z.infer<typeof update{{ modelName }}Schema>

@@ -1,0 +1,56 @@
+name: edit-page
+description: |
+  Generate a production-ready edit page with pre-filled form, validation, and Server Actions.
+
+  Features:
+  - Client Component with React Hook Form
+  - Pre-fill form with existing data
+  - Zod validation schema
+  - Server Action for updates
+  - Auto-redirect after success
+  - Auto-detect ORM schema
+  - Reuses form component from create-page
+
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Resource name (singular, e.g., 'post', 'user', 'product')
+    required: true
+    prompt: What is the resource name? (singular, e.g., 'post', 'user')
+    position: 0
+
+  model:
+    type: string
+    description: Model name (PascalCase, defaults to capitalized name)
+    required: false
+
+  fields:
+    type: string
+    description: Comma-separated fields with types
+    required: false
+
+steps:
+  - name: Generate edit page
+    tool: template
+    template: templates/edit-page.tsx.jig
+
+  - name: Generate update Server Action
+    tool: template
+    template: templates/update-action.ts.jig
+
+  - name: Success message
+    tool: shell
+    command: |
+      echo "✅ Edit page for '{{ name }}' generated successfully!"
+      echo ""
+      echo "Generated files:"
+      echo "  📄 app/{{ name }}/[id]/edit/page.tsx - Edit page"
+      echo "  ⚡ app/actions/{{ name }}.ts - update{{ model || name }} Server Action"
+      echo ""
+      echo "Note: This recipe reuses the form component from create-page"
+      echo ""
+      echo "Next steps:"
+      echo "  1. Implement the database update in the Server Action"
+      echo "  2. Visit /{{ name }}/[id]/edit to test the edit form"

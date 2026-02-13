@@ -1,0 +1,9 @@
+name: action
+description: Generate Server Actions with validation and cache revalidation
+version: 1.0.0
+
+defaults:
+  recipe: basic
+
+recipes:
+  - "./*/recipe.yml"

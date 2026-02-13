@@ -1,0 +1,95 @@
+---
+to: components/{{ model || pascalCase(name) }}DeleteDialog.tsx
+---
+@{
+  const helpers = require('../../../../helpers')
+  const { pascalCase, camelCase, titleCase } = helpers
+
+  const modelName = model || pascalCase(name)
+  const title = titleCase(name)
+}
+'use client'
+
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { delete{{ modelName }} } from '@/app/actions/{{ name }}'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import { Trash2 } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+
+interface {{ modelName }}DeleteDialogProps {
+  id: string
+}
+
+export function {{ modelName }}DeleteDialog({ id }: {{ modelName }}DeleteDialogProps) {
+  const router = useRouter()
+  const { toast } = useToast()
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
+
+  async function handleDelete() {
+    setIsDeleting(true)
+
+    try {
+      await delete{{ modelName }}(id)
+      toast({
+        title: 'Success',
+        description: '{{ title }} deleted successfully',
+      })
+      router.push('/{{ name }}')
+      router.refresh()
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete {{ title.toLowerCase() }}',
+        variant: 'destructive',
+      })
+      setIsDeleting(false)
+      setIsOpen(false)
+    }
+  }
+
+  return (
+    <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+      <AlertDialogTrigger asChild>
+        <Button variant="destructive" size="sm">
+          <Trash2 className="h-4 w-4 mr-2" />
+          Delete
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete this
+            {{ title.toLowerCase() }} and remove the data from the server.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault()
+              handleDelete()
+            }}
+            disabled={isDeleting}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}

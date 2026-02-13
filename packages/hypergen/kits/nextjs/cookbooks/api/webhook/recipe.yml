@@ -1,0 +1,89 @@
+name: webhook
+description: |
+  Generate webhook handlers with signature verification for external services.
+  Supports common providers (Stripe, GitHub, Shopify) with built-in verification.
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Webhook name in kebab-case (e.g. "stripe", "github")
+    required: true
+    pattern: "^[a-z][a-z0-9-]*$"
+
+  provider:
+    type: string
+    description: |
+      Pre-configured provider (optional)
+      Supported: stripe, github, shopify, clerk, resend
+    required: false
+    default: "custom"
+
+  verification:
+    type: boolean
+    description: Add signature verification (recommended for security)
+    default: true
+
+  dir:
+    type: string
+    description: Output directory for webhook handler
+    default: "app/api/webhooks"
+
+steps:
+  - name: Create webhooks directory
+    tool: shell
+    command: mkdir -p {{ dir }}/{{ name }}
+
+  - name: Create verification utilities directory
+    tool: shell
+    command: mkdir -p lib/webhooks
+    when: "{{ verification }}"
+
+  - name: Generate webhook handler
+    tool: template
+    template: templates/webhook-route.ts.jig
+
+  - name: Generate signature verifier
+    tool: template
+    template: templates/verifier.ts.jig
+    when: "{{ verification }}"
+
+  - name: Instructions
+    tool: shell
+    command: |
+      echo "✅ Webhook handler generated successfully!"
+      echo ""
+      echo "Created files:"
+      echo "  - {{ dir }}/{{ name }}/route.ts"
+      {% if verification %}echo "  - lib/webhooks/{{ name }}-verifier.ts"{% endif %}
+      echo ""
+      echo "Provider: {{ provider }}"
+      echo ""
+      echo "Webhook URL:"
+      echo "  https://yourdomain.com/api/webhooks/{{ name }}"
+      echo ""
+      echo "Required environment variables:"
+      {% if provider == 'stripe' %}
+      echo "  STRIPE_WEBHOOK_SECRET=whsec_..."
+      {% elsif provider == 'github' %}
+      echo "  GITHUB_WEBHOOK_SECRET=your_secret"
+      {% elsif provider == 'shopify' %}
+      echo "  SHOPIFY_WEBHOOK_SECRET=your_secret"
+      {% elsif provider == 'clerk' %}
+      echo "  CLERK_WEBHOOK_SECRET=whsec_..."
+      {% elsif provider == 'resend' %}
+      echo "  RESEND_WEBHOOK_SECRET=your_secret"
+      {% elsif verification %}
+      echo "  {{ name | upcase }}_WEBHOOK_SECRET=your_secret"
+      {% endif %}
+      echo ""
+      echo "Next steps:"
+      echo "  1. Add the webhook secret to your .env.local"
+      echo "  2. Configure the webhook in your provider's dashboard"
+      echo "  3. Implement event handlers in the route file"
+      echo "  4. Test using the provider's CLI or test mode"
+      {% if provider == 'stripe' %}
+      echo ""
+      echo "Test with Stripe CLI:"
+      echo "  stripe listen --forward-to localhost:3000/api/webhooks/{{ name }}"
+      {% endif %}

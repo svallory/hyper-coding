@@ -1,0 +1,7 @@
+{{!--
+  Shared import statements partial
+  Usage: @include('shared/partials/imports.jig', { imports: ['useState', 'useEffect'] })
+--}}
+@each(imp in imports)
+  import { {{ imp }} } from 'react'
+@endeach

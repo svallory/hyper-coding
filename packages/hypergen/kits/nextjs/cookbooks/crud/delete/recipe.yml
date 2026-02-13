@@ -1,0 +1,48 @@
+name: delete
+description: |
+  Generate delete functionality with confirmation dialog, Server Action, and optimistic updates.
+
+  Features:
+  - Delete dialog component with confirmation
+  - Server Action for deletion
+  - Optimistic UI updates
+  - Toast notifications
+  - Auto-redirect after deletion
+
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Resource name (singular, e.g., 'post', 'user', 'product')
+    required: true
+    prompt: What is the resource name? (singular, e.g., 'post', 'user')
+    position: 0
+
+  model:
+    type: string
+    description: Model name (PascalCase, defaults to capitalized name)
+    required: false
+
+steps:
+  - name: Generate delete dialog component
+    tool: template
+    template: templates/delete-dialog.tsx.jig
+
+  - name: Generate delete Server Action
+    tool: template
+    template: templates/delete-action.ts.jig
+
+  - name: Success message
+    tool: shell
+    command: |
+      echo "✅ Delete functionality for '{{ name }}' generated successfully!"
+      echo ""
+      echo "Generated files:"
+      echo "  🗑️  components/{{ model || name }}DeleteDialog.tsx - Delete dialog"
+      echo "  ⚡ app/actions/{{ name }}.ts - delete{{ model || name }} Server Action"
+      echo ""
+      echo "Next steps:"
+      echo "  1. Implement the database delete in the Server Action"
+      echo "  2. Import and use the DeleteDialog in your detail/list pages"
+      echo "  Example: <{{ model || name }}DeleteDialog id={item.id} />"

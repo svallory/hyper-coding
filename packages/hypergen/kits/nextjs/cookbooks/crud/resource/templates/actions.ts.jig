@@ -1,0 +1,266 @@
+---
+to: app/actions/{{ name }}.ts
+---
+@let(modelName = model || pascalCase(name))
+@let(modelVar = camelCase(model || pascalCase(name)))
+@let(pluralName = pluralize(name))
+@let(features = typeof detectProjectFeatures === 'function' ? detectProjectFeatures() : { orm: 'none' })
+@let(modelFields = typeof parseFieldsString === 'function' && fields ? parseFieldsString(fields) : [])
+@let(fieldDescriptions = typeof buildFieldDescriptionsInline === 'function' ? buildFieldDescriptionsInline(modelFields) : '')
+@let(dbImport = features.orm === 'prisma' ? "import { prisma } from '@/lib/prisma'" : features.orm === 'drizzle' ? "import { db } from '@/lib/db'" : '')
+@let(dbClient = features.orm === 'prisma' ? 'prisma' : 'db')
+'use server'
+
+import { revalidatePath } from 'next/cache'
+@if(dbImport)
+{{ dbImport }}
+@end
+@if(features.orm === 'drizzle')
+import { eq, sql, like, or, desc, asc } from 'drizzle-orm'
+import { {{ pluralName }} } from '@/db/schema/{{ name }}'
+@end
+import {
+  create{{ modelName }}Schema,
+  update{{ modelName }}Schema,
+  type Create{{ modelName }}Input,
+  type Update{{ modelName }}Input,
+} from '@/lib/schemas/{{ name }}-schema'
+
+@if(features.orm === 'drizzle')
+@ai({ key: 'drizzleListQuery' })
+  @context()
+Model: {{ modelName }}
+Table variable: {{ pluralName }}
+DB client: db
+Fields: {{ fieldDescriptions }}
+ORM: Drizzle with drizzle-orm
+Available imports: eq, sql, like, or, desc, asc from 'drizzle-orm'
+  @end
+  @prompt()
+Generate the body of a list function for the {{ modelName }} model using Drizzle ORM.
+The function receives: page (number), pageSize (number), sortBy (string), sortOrder ('asc'|'desc'), search (string|undefined), skip (number).
+It should:
+1. Build a search condition using `like` on string fields if search is provided
+2. Query items with .select().from({{ pluralName }}) with limit, offset, orderBy
+3. Query total count
+4. Return { items, total, page, pageSize, totalPages: Math.ceil(total / pageSize) }
+Output ONLY the function body (no function declaration). Use the `db` client.
+  @end
+  @output({ typeHint: 'typescript-code' })
+The function body for listing {{ pluralName }} with Drizzle, including search, pagination, and sorting.
+  @end
+  @example()
+    const searchCondition = search
+      ? or(
+          like({{ pluralName }}.name, `%${search}%`),
+        )
+      : undefined
+
+    const items = await db
+      .select()
+      .from({{ pluralName }})
+      .where(searchCondition)
+      .limit(pageSize)
+      .offset(skip)
+      .orderBy(sortOrder === 'desc' ? desc({{ pluralName }}.createdAt) : asc({{ pluralName }}.createdAt))
+
+    const [{ count: total }] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from({{ pluralName }})
+      .where(searchCondition)
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    }
+  @end
+@end
+
+@ai({ key: 'drizzleMutations' })
+  @context()
+Model: {{ modelName }}
+Table variable: {{ pluralName }}
+DB client: db
+Fields: {{ fieldDescriptions }}
+ORM: Drizzle with drizzle-orm
+Available imports: eq from 'drizzle-orm'
+Schema types: Create{{ modelName }}Input, Update{{ modelName }}Input
+  @end
+  @prompt()
+Generate three Drizzle ORM function bodies for {{ modelName }}:
+
+1. GET_BY_ID: Query a single {{ modelName }} by id. Throw "{{ modelName }} not found" if not found. Return the record.
+2. CREATE: Insert validated data into {{ pluralName }}. Return the created record using .returning().
+3. UPDATE: Update by id with validated data. Return the updated record using .returning().
+4. DELETE: Delete by id. Return { success: true }.
+
+Format as a JSON object with keys: getById, create, update, delete — each containing ONLY the function body code (no function declarations).
+  @end
+  @output({ typeHint: 'json' })
+A JSON object with getById, create, update, delete keys, each containing TypeScript function body code.
+  @end
+  @example()
+{
+  "getById": "const [record] = await db.select().from({{ pluralName }}).where(eq({{ pluralName }}.id, id))\n    if (!record) {\n      throw new Error('{{ modelName }} not found')\n    }\n    return record",
+  "create": "const [record] = await db.insert({{ pluralName }}).values(validated).returning()\n    revalidatePath('/{{ name }}')\n    return record",
+  "update": "const [record] = await db.update({{ pluralName }}).set(validated).where(eq({{ pluralName }}.id, id)).returning()\n    revalidatePath('/{{ name }}')\n    revalidatePath(`/{{ name }}/${id}`)\n    return record",
+  "delete": "await db.delete({{ pluralName }}).where(eq({{ pluralName }}.id, id))\n    revalidatePath('/{{ name }}')\n    return { success: true }"
+}
+  @end
+@end
+@end
+
+/**
+ * Get all {{ pluralName }} with optional filtering and pagination
+ */
+export async function get{{ pluralize(modelName) }}(params?: {
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+  search?: string
+}) {
+  try {
+    const { page = 1, pageSize = 10, sortBy = 'createdAt', sortOrder = 'desc', search } = params || {}
+    const skip = (page - 1) * pageSize
+
+@if(features.orm === 'prisma')
+    const where = search
+      ? {
+          OR: [
+            // Add searchable fields here
+          ],
+        }
+      : {}
+
+    const [items, total] = await Promise.all([
+      {{ dbClient }}.{{ modelVar }}.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { [sortBy]: sortOrder },
+      }),
+      {{ dbClient }}.{{ modelVar }}.count({ where }),
+    ])
+
+    return {
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    }
+@elseif(features.orm === 'drizzle')
+{{ drizzleListQuery }}
+@else
+    throw new Error('Database not configured')
+@end
+  } catch (error) {
+    console.error('Error fetching {{ pluralName }}:', error)
+    throw new Error('Failed to fetch {{ pluralName }}')
+  }
+}
+
+/**
+ * Get a single {{ modelName }} by ID
+ */
+export async function get{{ modelName }}(id: string) {
+  try {
+@if(features.orm === 'prisma')
+    const {{ modelVar }} = await {{ dbClient }}.{{ modelVar }}.findUnique({
+      where: { id },
+    })
+
+    if (!{{ modelVar }}) {
+      throw new Error('{{ modelName }} not found')
+    }
+
+    return {{ modelVar }}
+@elseif(features.orm === 'drizzle')
+    {{ JSON.parse(drizzleMutations).getById }}
+@else
+    throw new Error('Database not configured')
+@end
+  } catch (error) {
+    console.error('Error fetching {{ modelName }}:', error)
+    throw new Error('Failed to fetch {{ modelName }}')
+  }
+}
+
+/**
+ * Create a new {{ modelName }}
+ */
+export async function create{{ modelName }}(data: Create{{ modelName }}Input) {
+  try {
+    const validated = create{{ modelName }}Schema.parse(data)
+
+@if(features.orm === 'prisma')
+    const {{ modelVar }} = await {{ dbClient }}.{{ modelVar }}.create({
+      data: validated,
+    })
+
+    revalidatePath('/{{ name }}')
+    return {{ modelVar }}
+@elseif(features.orm === 'drizzle')
+    {{ JSON.parse(drizzleMutations).create }}
+@else
+    throw new Error('Database not configured')
+@end
+  } catch (error) {
+    console.error('Error creating {{ modelName }}:', error)
+    throw new Error('Failed to create {{ modelName }}')
+  }
+}
+
+/**
+ * Update a {{ modelName }}
+ */
+export async function update{{ modelName }}(id: string, data: Update{{ modelName }}Input) {
+  try {
+    const validated = update{{ modelName }}Schema.parse(data)
+
+@if(features.orm === 'prisma')
+    const {{ modelVar }} = await {{ dbClient }}.{{ modelVar }}.update({
+      where: { id },
+      data: validated,
+    })
+
+    revalidatePath('/{{ name }}')
+    revalidatePath(`/{{ name }}/${id}`)
+    return {{ modelVar }}
+@elseif(features.orm === 'drizzle')
+    {{ JSON.parse(drizzleMutations).update }}
+@else
+    throw new Error('Database not configured')
+@end
+  } catch (error) {
+    console.error('Error updating {{ modelName }}:', error)
+    throw new Error('Failed to update {{ modelName }}')
+  }
+}
+
+/**
+ * Delete a {{ modelName }}
+ */
+export async function delete{{ modelName }}(id: string) {
+  try {
+@if(features.orm === 'prisma')
+    await {{ dbClient }}.{{ modelVar }}.delete({
+      where: { id },
+    })
+
+    revalidatePath('/{{ name }}')
+    return { success: true }
+@elseif(features.orm === 'drizzle')
+    {{ JSON.parse(drizzleMutations).delete }}
+@else
+    throw new Error('Database not configured')
+@end
+  } catch (error) {
+    console.error('Error deleting {{ modelName }}:', error)
+    throw new Error('Failed to delete {{ modelName }}')
+  }
+}

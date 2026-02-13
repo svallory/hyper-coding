@@ -1,0 +1,261 @@
+---
+to: components/{{ model || pascalCase(name) }}Table.tsx
+---
+@{
+  const helpers = require('../../../helpers')
+  const { pascalCase, camelCase, pluralize } = helpers
+
+  const modelName = model || pascalCase(name)
+  const modelVar = camelCase(modelName)
+  const features = helpers.detectProjectFeatures()
+
+  // Parse schema to get fields
+  let modelFields = []
+  if (!fields && features.orm === 'prisma') {
+    const models = helpers.parsePrismaSchema()
+    const foundModel = models.find(m => m.name === modelName)
+    if (foundModel) {
+      modelFields = foundModel.fields.filter(f => !f.isId && !f.isCreatedAt && !f.isUpdatedAt).slice(0, 4)
+    }
+  } else if (fields) {
+    modelFields = fields.split(',').map(f => {
+      const [name, type] = f.trim().split(':')
+      return { name, type: type || 'string' }
+    }).slice(0, 4)
+  }
+}
+'use client'
+
+import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  ChevronLeft,
+  ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react'
+import { useState } from 'react'
+
+interface {{ modelName }}TableProps {
+  data: any[]
+  totalPages: number
+  currentPage: number
+}
+
+export function {{ modelName }}Table({
+  data,
+  totalPages,
+  currentPage,
+}: {{ modelName }}TableProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [search, setSearch] = useState(searchParams.get('search') || '')
+
+  const handleSort = (column: string) => {
+    const params = new URLSearchParams(searchParams)
+    const currentSort = params.get('sortBy')
+    const currentOrder = params.get('sortOrder')
+
+    if (currentSort === column) {
+      params.set('sortOrder', currentOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      params.set('sortBy', column)
+      params.set('sortOrder', 'asc')
+    }
+
+    router.push(`?${params.toString()}`)
+  }
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(searchParams)
+    params.set('page', page.toString())
+    router.push(`?${params.toString()}`)
+  }
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    const params = new URLSearchParams(searchParams)
+    if (search) {
+      params.set('search', search)
+    } else {
+      params.delete('search')
+    }
+    params.set('page', '1')
+    router.push(`?${params.toString()}`)
+  }
+
+  const getSortIcon = (column: string) => {
+    const sortBy = searchParams.get('sortBy')
+    const sortOrder = searchParams.get('sortOrder')
+
+    if (sortBy !== column) {
+      return <ArrowUpDown className="ml-2 h-4 w-4" />
+    }
+
+    return sortOrder === 'asc' ? (
+      <ArrowUp className="ml-2 h-4 w-4" />
+    ) : (
+      <ArrowDown className="ml-2 h-4 w-4" />
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+@if(includeFiltering)
+      {/* Search */}
+      <form onSubmit={handleSearch} className="flex gap-2">
+        <Input
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-sm"
+        />
+        <Button type="submit">Search</Button>
+        {search && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setSearch('')
+              const params = new URLSearchParams(searchParams)
+              params.delete('search')
+              params.set('page', '1')
+              router.push(`?${params.toString()}`)
+            }}
+          >
+            Clear
+          </Button>
+        )}
+      </form>
+@end
+
+      {/* Table */}
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+@if(includeSorting)
+@if(modelFields.length > 0)
+@each(field in modelFields)
+              <TableHead>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleSort('{{ field.name }}')}
+                  className="font-semibold"
+                >
+                  {{ field.name.charAt(0).toUpperCase() + field.name.slice(1) }}
+                  {getSortIcon('{{ field.name }}')}
+                </Button>
+              </TableHead>
+@end
+@else
+              <TableHead>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleSort('id')}
+                  className="font-semibold"
+                >
+                  ID
+                  {getSortIcon('id')}
+                </Button>
+              </TableHead>
+@end
+@else
+@if(modelFields.length > 0)
+@each(field in modelFields)
+              <TableHead className="font-semibold">
+                {{ field.name.charAt(0).toUpperCase() + field.name.slice(1) }}
+              </TableHead>
+@end
+@else
+              <TableHead className="font-semibold">ID</TableHead>
+@end
+@end
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={{{ modelFields.length > 0 ? modelFields.length + 1 : 2 }}}
+                  className="text-center text-muted-foreground py-8"
+                >
+                  No results found
+                </TableCell>
+              </TableRow>
+            ) : (
+              data.map(({{ modelVar }}) => (
+                <TableRow key={ {{ modelVar }}.id}>
+@if(modelFields.length > 0)
+@each(field in modelFields)
+                  <TableCell>
+                    {typeof {{ modelVar }}.{{ field.name }} === 'boolean'
+                      ? {{ modelVar }}.{{ field.name }} ? 'Yes' : 'No'
+                      : {{ modelVar }}.{{ field.name }} instanceof Date
+                      ? {{ modelVar }}.{{ field.name }}.toLocaleDateString()
+                      : {{ modelVar }}.{{ field.name }}}
+                  </TableCell>
+@end
+@else
+                  <TableCell>{ {{ modelVar }}.id}</TableCell>
+@end
+                  <TableCell className="text-right">
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href={`/{{ name }}/${ {{ modelVar }}.id}`}>View</Link>
+                    </Button>
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href={`/{{ name }}/${ {{ modelVar }}.id}/edit`}>Edit</Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+@if(includePagination)
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Page {currentPage} of {totalPages}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+@end
+    </div>
+  )
+}

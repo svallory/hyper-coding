@@ -1,0 +1,92 @@
+---
+to: lib/infrastructure/repositories/{{ name }}-repository.impl.ts
+---
+@let(entityName = entity || pascalCase(name))
+@let(modelVar = camelCase(entityName))
+@ai({ key: 'prismaRepoImpl' })
+  @context()
+Entity: {{ entityName }}
+Prisma model variable: {{ modelVar }}
+Repository interface: {{ pascalCase(name) }}Repository
+Schema types import: @/lib/schemas/{{ name }}-schema
+Interface import: @/lib/domain/repositories/{{ name }}-repository
+@if(methods)
+Additional methods: {{ methods }}
+@end
+  @end
+  @prompt()
+Generate a Prisma repository implementation class for {{ entityName }}.
+
+The class must:
+- Be named `{{ pascalCase(name) }}RepositoryImpl`
+- Implement the `{{ pascalCase(name) }}Repository` interface
+- Accept a `PrismaClient` instance in its constructor
+- Import `PrismaClient` from '@prisma/client'
+- Import types from '@/lib/schemas/{{ name }}-schema'
+- Import the interface from '@/lib/domain/repositories/{{ name }}-repository'
+
+Implement all CRUD methods:
+- findById: prisma.{{ modelVar }}.findUnique({ where: { id } })
+- findAll: prisma.{{ modelVar }}.findMany with skip/take/orderBy + prisma.{{ modelVar }}.count
+- create: prisma.{{ modelVar }}.create({ data })
+- update: prisma.{{ modelVar }}.update({ where: { id }, data })
+- delete: prisma.{{ modelVar }}.delete({ where: { id } })
+
+@if(methods)
+Also implement these additional methods: {{ methods }}
+@end
+
+Output the COMPLETE file including all imports, the class, and export.
+  @end
+  @output({ typeHint: 'typescript-code' })
+A Prisma repository implementation class.
+  @end
+  @example()
+import type { PrismaClient } from '@prisma/client'
+import type { {{ entityName }}, Create{{ entityName }}Input, Update{{ entityName }}Input } from '@/lib/schemas/{{ name }}-schema'
+import type { {{ pascalCase(name) }}Repository } from '@/lib/domain/repositories/{{ name }}-repository'
+
+export class {{ pascalCase(name) }}RepositoryImpl implements {{ pascalCase(name) }}Repository {
+  constructor(private prisma: PrismaClient) {}
+
+  async findById(id: string): Promise<{{ entityName }} | null> {
+    return this.prisma.{{ modelVar }}.findUnique({ where: { id } })
+  }
+
+  async findAll(params?: {
+    page?: number
+    pageSize?: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  }): Promise<{ items: {{ entityName }}[]; total: number }> {
+    const { page = 1, pageSize = 10, sortBy = 'createdAt', sortOrder = 'desc' } = params ?? {}
+    const skip = (page - 1) * pageSize
+
+    const [items, total] = await Promise.all([
+      this.prisma.{{ modelVar }}.findMany({
+        skip,
+        take: pageSize,
+        orderBy: { [sortBy]: sortOrder },
+      }),
+      this.prisma.{{ modelVar }}.count(),
+    ])
+
+    return { items, total }
+  }
+
+  async create(data: Create{{ entityName }}Input): Promise<{{ entityName }}> {
+    return this.prisma.{{ modelVar }}.create({ data })
+  }
+
+  async update(id: string, data: Update{{ entityName }}Input): Promise<{{ entityName }}> {
+    return this.prisma.{{ modelVar }}.update({ where: { id }, data })
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.prisma.{{ modelVar }}.delete({ where: { id } })
+  }
+}
+  @end
+@end
+
+{{ prismaRepoImpl }}

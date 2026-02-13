@@ -1,0 +1,7 @@
+---
+to: db/schema/index.ts
+inject: true
+after: "// Exports"
+skip_if: "from './{{ name }}'"
+---
+export * from './{{ name }}'

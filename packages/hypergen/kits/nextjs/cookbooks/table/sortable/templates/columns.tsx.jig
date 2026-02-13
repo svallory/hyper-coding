@@ -1,0 +1,62 @@
+---
+to: "{{ dir }}/columns.tsx"
+---
+'use client'
+
+import { ColumnDef } from '@tanstack/react-table'
+import { ArrowUpDown } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { {{ pascalCase(name) }}Row } from '@/lib/types/{{ kebabCase(name) }}'
+
+/**
+ * Sortable column definitions for {{ name }}
+ */
+export const columns: ColumnDef<{{ pascalCase(name) }}Row>[] = [
+@each(column in columns)
+@let(parts = column.split(':'))
+@let(key = parts[0])
+@let(label = parts[1] || titleCase(key))
+@let(type = parts[2] || 'string')
+@let(sortable = parts[3] === 'true')
+  {
+    accessorKey: '{{ key }}',
+@if(sortable)
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="-ml-4"
+        >
+          {{ label }}
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+@else
+    header: '{{ label }}',
+@end
+@if(type === 'date')
+    cell: ({ row }) => {
+      const date = row.getValue('{{ key }}') as Date
+      return date ? new Intl.DateTimeFormat('en-US', {
+        dateStyle: 'medium'
+      }).format(date) : '-'
+    },
+@else if(type === 'boolean')
+    cell: ({ row }) => {
+      const value = row.getValue('{{ key }}') as boolean
+      return value ? '✓' : '✗'
+    },
+@else if(type === 'number')
+    cell: ({ row }) => {
+      const value = row.getValue('{{ key }}') as number
+      return value.toLocaleString()
+    },
+@end
+@if(sortable && (type === 'date' || type === 'number'))
+    sortingFn: @if(type === 'date')'datetime'@else'basic'@end,
+@end
+  },
+@endeach
+]

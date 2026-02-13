@@ -1,0 +1,140 @@
+---
+to: "{{ dir }}/{{ name }}.tsx"
+---
+'use client'
+
+/**
+ * {{ name }} Component
+ *
+ * Progressively enhanced form with Server Action.
+ * Works without JavaScript.
+ */
+
+import { useActionState } from 'react'
+import { {{ camelCase(name) }}Action } from '@/{{ actionPath }}/{{ kebabCase(name) }}-action'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+@if(fields.some(f => f.includes(':textarea')))
+import { Textarea } from '@/components/ui/textarea'
+@end
+@if(fields.some(f => f.includes(':select')))
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+@end
+@if(fields.some(f => f.includes(':checkbox')))
+import { Checkbox } from '@/components/ui/checkbox'
+@end
+
+interface {{ name }}Props {
+  submitLabel?: string
+  className?: string
+}
+
+export function {{ name }}({
+  submitLabel = 'Submit',
+  className,
+}: {{ name }}Props) {
+  const [state, formAction, isPending] = useActionState({{ camelCase(name) }}Action, null)
+
+  return (
+    <form action={formAction} className={className}>
+      <div className="space-y-4">
+        {/* Success message */}
+        {state?.success && (
+          <div className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+            Form submitted successfully!
+          </div>
+        )}
+
+        {/* General error message */}
+        {state?.error && !state?.success && (
+          <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+            {state.error}
+          </div>
+        )}
+
+@each(field in fields)
+@let(parts = field.split(':'))
+@let(fieldName = parts[0])
+@let(fieldType = parts[1] || 'text')
+@if(fieldType === 'checkbox')
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="{{ fieldName }}"
+            name="{{ fieldName }}"
+            disabled={isPending}
+          />
+          <Label
+            htmlFor="{{ fieldName }}"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+          >
+            {{ titleCase(fieldName) }}
+          </Label>
+          {state?.fieldErrors?.{{ fieldName }} && (
+            <p className="text-sm text-destructive">
+              {state.fieldErrors.{{ fieldName }}[0]}
+            </p>
+          )}
+        </div>
+@else
+        <div className="space-y-2">
+          <Label htmlFor="{{ fieldName }}">{{ titleCase(fieldName) }}</Label>
+@if(fieldType === 'textarea')
+          <Textarea
+            id="{{ fieldName }}"
+            name="{{ fieldName }}"
+            placeholder="Enter {{ fieldName }}..."
+            className="resize-none"
+            required
+            disabled={isPending}
+            aria-invalid={!!state?.fieldErrors?.{{ fieldName }}}
+            aria-describedby="{{ fieldName }}-error"
+          />
+@else if(fieldType === 'select')
+          <Select name="{{ fieldName }}" disabled={isPending} required>
+            <SelectTrigger
+              aria-invalid={!!state?.fieldErrors?.{{ fieldName }}}
+              aria-describedby="{{ fieldName }}-error"
+            >
+              <SelectValue placeholder="Select an option" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="option1">Option 1</SelectItem>
+              <SelectItem value="option2">Option 2</SelectItem>
+              <SelectItem value="option3">Option 3</SelectItem>
+            </SelectContent>
+          </Select>
+@else
+          <Input
+            id="{{ fieldName }}"
+            name="{{ fieldName }}"
+            type="{{ fieldType }}"
+            placeholder="Enter {{ fieldName }}..."
+            required
+            disabled={isPending}
+            aria-invalid={!!state?.fieldErrors?.{{ fieldName }}}
+            aria-describedby="{{ fieldName }}-error"
+          />
+@end
+          {state?.fieldErrors?.{{ fieldName }} && (
+            <p id="{{ fieldName }}-error" className="text-sm text-destructive">
+              {state.fieldErrors.{{ fieldName }}[0]}
+            </p>
+          )}
+        </div>
+@end
+
+@endeach
+        <Button type="submit" disabled={isPending} className="w-full">
+          {isPending ? 'Submitting...' : submitLabel}
+        </Button>
+      </div>
+    </form>
+  )
+}

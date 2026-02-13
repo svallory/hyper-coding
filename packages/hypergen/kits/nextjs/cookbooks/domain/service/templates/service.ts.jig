@@ -1,0 +1,86 @@
+---
+to: lib/domain/services/{{ name }}Service.ts
+---
+@ai({ key: 'serviceImpl' })
+  @context()
+Service name: {{ name }}Service
+@if(entities)
+Entities: {{ entities }}
+@end
+@if(operations)
+Operations: {{ operations }}
+@end
+  @end
+  @prompt()
+Generate a complete TypeScript domain service class named `{{ name }}Service`.
+
+@if(entities)
+This service operates on these entities: {{ entities }}
+For each entity, the constructor should accept its repository interface as a dependency.
+Import repository interfaces from '@/lib/domain/repositories/<entity>-repository'.
+Import entity types from '@/lib/schemas/<entity>-schema'.
+@end
+
+@if(operations)
+Implement these business operations: {{ operations }}
+Each operation should:
+- Use the injected repositories to read/write data
+- Validate business rules
+- Return a result (success data or throw descriptive errors)
+@else
+@if(entities)
+Generate reasonable CRUD-coordinating methods based on the entity names and their likely relationships.
+@else
+Generate a skeleton with a constructor accepting dependencies and placeholder methods with TODO comments.
+@end
+@end
+
+Requirements:
+- Constructor-injected repository dependencies (not global imports)
+- Each method should have JSDoc describing the business rule it enforces
+- Use async/await consistently
+- Throw descriptive Error messages for business rule violations
+
+Output the COMPLETE module including all imports, the class, and export.
+  @end
+  @output({ typeHint: 'typescript-code' })
+A complete TypeScript domain service class with constructor injection and business logic methods.
+  @end
+  @example()
+import type { OrganizationRepository } from '@/lib/domain/repositories/organization-repository'
+import type { MemberRepository } from '@/lib/domain/repositories/member-repository'
+import type { Organization } from '@/lib/schemas/organization-schema'
+import type { Member, CreateMemberInput } from '@/lib/schemas/member-schema'
+
+export class {{ name }}Service {
+  constructor(
+    private organizationRepo: OrganizationRepository,
+    private memberRepo: MemberRepository,
+  ) {}
+
+  /**
+   * Add a member to an organization with role validation
+   */
+  async addMember(organizationId: string, data: CreateMemberInput): Promise<Member> {
+    const org = await this.organizationRepo.findById(organizationId)
+    if (!org) {
+      throw new Error('Organization not found')
+    }
+    return this.memberRepo.create({ ...data, organizationId })
+  }
+
+  /**
+   * Remove a member, ensuring at least one admin remains
+   */
+  async removeMember(organizationId: string, memberId: string): Promise<void> {
+    const member = await this.memberRepo.findById(memberId)
+    if (!member) {
+      throw new Error('Member not found')
+    }
+    await this.memberRepo.delete(memberId)
+  }
+}
+  @end
+@end
+
+{{ serviceImpl }}

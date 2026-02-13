@@ -1,0 +1,44 @@
+---
+to: prisma/schema.prisma
+inject: true
+after: "// Models"
+skip_if: "model {{ pascalCase(name) }}"
+---
+@let(modelName = model || pascalCase(name))
+@let(modelFields = typeof parseFieldsString === 'function' && fields ? parseFieldsString(fields) : [])
+@let(fieldDescriptions = typeof buildFieldDescriptions === 'function' ? buildFieldDescriptions(modelFields) : '')
+
+@ai({ key: 'prismaModel' })
+  @context()
+Entity: {{ modelName }}
+Fields: {{ fieldDescriptions }}
+@if(relations)
+Relations: {{ relations }}
+@end
+  @end
+  @prompt()
+Generate a Prisma model block for {{ modelName }}.
+Include:
+- id field (String @id @default(cuid()) or Int @id @default(autoincrement()))
+- All entity fields with appropriate Prisma types
+- createdAt DateTime @default(now())
+- updatedAt DateTime @updatedAt
+- Relation fields if relations are specified (parse "belongsTo:entity" and "hasMany:entities")
+Output ONLY the model block: model {{ modelName }} { ... }
+  @end
+  @output({ typeHint: 'prisma' })
+A Prisma model definition block.
+  @end
+  @example()
+model {{ modelName }} {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+  @end
+@end
+
+{{ prismaModel }}

@@ -1,0 +1,54 @@
+---
+to: lib/domain/repositories/{{ name }}-repository.ts
+---
+@let(entityName = entity || pascalCase(name))
+@ai({ key: 'repositoryInterface' })
+  @context()
+Entity: {{ entityName }}
+Repository name: {{ pascalCase(name) }}Repository
+@if(methods)
+Additional methods: {{ methods }}
+@end
+  @end
+  @prompt()
+Generate a TypeScript repository interface for the {{ entityName }} entity.
+
+The interface must be named `{{ pascalCase(name) }}Repository` and include:
+
+Standard CRUD methods:
+- findById(id: string): Promise<{{ entityName }} | null>
+- findAll(params?: { page?: number; pageSize?: number; sortBy?: string; sortOrder?: 'asc' | 'desc' }): Promise<{ items: {{ entityName }}[]; total: number }>
+- create(data: Create{{ entityName }}Input): Promise<{{ entityName }}>
+- update(id: string, data: Update{{ entityName }}Input): Promise<{{ entityName }}>
+- delete(id: string): Promise<void>
+
+@if(methods)
+Additional methods (infer parameter types and return types from the method names):
+{{ methods }}
+@end
+
+Import types from '@/lib/schemas/{{ name }}-schema'.
+Output the COMPLETE file including imports, the interface declaration, and export.
+  @end
+  @output({ typeHint: 'typescript-code' })
+A TypeScript interface with CRUD methods and any custom methods.
+  @end
+  @example()
+import type { {{ entityName }}, Create{{ entityName }}Input, Update{{ entityName }}Input } from '@/lib/schemas/{{ name }}-schema'
+
+export interface {{ pascalCase(name) }}Repository {
+  findById(id: string): Promise<{{ entityName }} | null>
+  findAll(params?: {
+    page?: number
+    pageSize?: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  }): Promise<{ items: {{ entityName }}[]; total: number }>
+  create(data: Create{{ entityName }}Input): Promise<{{ entityName }}>
+  update(id: string, data: Update{{ entityName }}Input): Promise<{{ entityName }}>
+  delete(id: string): Promise<void>
+}
+  @end
+@end
+
+{{ repositoryInterface }}

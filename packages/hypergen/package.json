@@ -36,9 +36,11 @@
 		"bin": "hypergen",
 		"dirname": "hypergen",
 		"commands": "./dist/commands",
+		"hooks": {
+			"command_not_found": "./dist/hooks/command-not-found"
+		},
 		"plugins": [
-			"@oclif/plugin-help",
-			"@oclif/plugin-not-found"
+			"@oclif/plugin-help"
 		],
 		"topics": {
 			"kit": {

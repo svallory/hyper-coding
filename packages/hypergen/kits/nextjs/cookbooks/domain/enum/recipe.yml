@@ -1,0 +1,50 @@
+name: enum
+description: |
+  Generate a DDD-style enum (const object pattern) with TypeScript type,
+  Zod schema, type guard, label helper, and iteration utilities.
+
+  Uses the const object pattern instead of TypeScript enums for better
+  tree-shaking, type inference, and runtime utilities.
+
+  Time saved: 10-20 min → 1 min
+
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Enum name (PascalCase — e.g., 'UserRole', 'TodoStatus', 'OrderState')
+    required: true
+    position: 0
+    prompt: What is the enum name? (PascalCase, e.g., 'UserRole', 'TodoStatus')
+
+  values:
+    type: string
+    description: Comma-separated enum values (e.g., "admin,member,viewer")
+    required: false
+    prompt: |
+      Enter enum values (comma-separated)
+      Leave empty for AI to infer from name
+      Example: admin,member,viewer
+
+steps:
+  - name: Ensure directory exists
+    tool: shell
+    command: mkdir -p lib/domain/enums
+
+  - name: Generate enum module
+    tool: template
+    template: templates/enum.ts.jig
+
+  - name: Success message
+    tool: shell
+    command: |
+      echo "Enum '{{ name }}' generated successfully!"
+      echo ""
+      echo "Generated files:"
+      echo "  lib/domain/enums/{{ name }}.ts"
+      echo ""
+      echo "Usage:"
+      echo "  import { {{ name }}, type {{ name }}Type, is{{ name }} } from '@/lib/domain/enums/{{ name }}'"
+      echo "  const role = {{ name }}.ADMIN"
+      echo "  is{{ name }}('admin') // true"

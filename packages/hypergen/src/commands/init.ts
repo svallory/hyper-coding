@@ -2,7 +2,7 @@
  * Initialize Hypergen in a project
  */
 
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Flags } from '@oclif/core'
 import { BaseCommand } from '../lib/base-command.js'
@@ -46,24 +46,31 @@ export default class Init extends BaseCommand<typeof Init> {
     }),
   }
 
-  async run(): Promise<void> {
+  async run(): Promise<{ success: boolean }> {
     const { flags } = await this.parse(Init)
 
     try {
       this.log('Initializing Hypergen...')
 
       const configPath = join(flags.cwd, 'hypergen.config.js')
+      const recipesDir = join(flags.cwd, '_recipes')
 
       // Check if already initialized
       if (existsSync(configPath) && !flags.force) {
         this.log('Hypergen is already initialized in this project.')
         this.log('Use --force to reinitialize.')
-        return
+        return { success: true }
       }
 
       // Create basic configuration
       writeFileSync(configPath, DEFAULT_CONFIG)
       this.log('✓ Created hypergen.config.js')
+
+      // Create the recipes directory
+      if (!existsSync(recipesDir)) {
+        mkdirSync(recipesDir, { recursive: true })
+        this.log('✓ Created _recipes/ directory')
+      }
 
       // If a kit was specified, install it
       if (flags.kit) {
@@ -78,6 +85,7 @@ export default class Init extends BaseCommand<typeof Init> {
       this.log('  2. List recipes: hypergen recipe list')
       this.log('  3. Run a recipe: hypergen run <recipe>')
 
+      return { success: true }
     } catch (error) {
       this.error(`Failed to initialize: ${error instanceof Error ? error.message : String(error)}`)
     }

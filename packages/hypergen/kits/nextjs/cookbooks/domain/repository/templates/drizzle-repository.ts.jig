@@ -1,0 +1,104 @@
+---
+to: lib/infrastructure/repositories/{{ name }}-repository.impl.ts
+---
+@let(entityName = entity || pascalCase(name))
+@let(tableName = pluralize(name))
+@ai({ key: 'drizzleRepoImpl' })
+  @context()
+Entity: {{ entityName }}
+Table variable: {{ tableName }}
+Repository interface: {{ pascalCase(name) }}Repository
+Schema import path: @/db/schema/{{ name }}
+Schema types import: @/lib/schemas/{{ name }}-schema
+Interface import: @/lib/domain/repositories/{{ name }}-repository
+@if(methods)
+Additional methods: {{ methods }}
+@end
+  @end
+  @prompt()
+Generate a Drizzle ORM repository implementation class for {{ entityName }}.
+
+The class must:
+- Be named `{{ pascalCase(name) }}RepositoryImpl`
+- Implement the `{{ pascalCase(name) }}Repository` interface
+- Accept `db` (Drizzle database instance) in its constructor
+- Import `{{ tableName }}` from '@/db/schema/{{ name }}'
+- Import types from '@/lib/schemas/{{ name }}-schema'
+- Import the interface from '@/lib/domain/repositories/{{ name }}-repository'
+- Import `eq, sql, desc, asc` from 'drizzle-orm'
+
+Implement all CRUD methods:
+- findById: select().from({{ tableName }}).where(eq({{ tableName }}.id, id)), return first or null
+- findAll: select with limit/offset/orderBy, count query, return { items, total }
+- create: insert().values(data).returning(), return first record
+- update: update().set(data).where(eq({{ tableName }}.id, id)).returning(), return first record
+- delete: delete().where(eq({{ tableName }}.id, id))
+
+@if(methods)
+Also implement these additional methods: {{ methods }}
+@end
+
+Output the COMPLETE file including all imports, the class, and export.
+  @end
+  @output({ typeHint: 'typescript-code' })
+A Drizzle ORM repository implementation class.
+  @end
+  @example()
+import { eq, sql, desc, asc } from 'drizzle-orm'
+import { {{ tableName }} } from '@/db/schema/{{ name }}'
+import type { {{ entityName }}, Create{{ entityName }}Input, Update{{ entityName }}Input } from '@/lib/schemas/{{ name }}-schema'
+import type { {{ pascalCase(name) }}Repository } from '@/lib/domain/repositories/{{ name }}-repository'
+
+export class {{ pascalCase(name) }}RepositoryImpl implements {{ pascalCase(name) }}Repository {
+  constructor(private db: ReturnType<typeof import('drizzle-orm').drizzle>) {}
+
+  async findById(id: string): Promise<{{ entityName }} | null> {
+    const [record] = await this.db.select().from({{ tableName }}).where(eq({{ tableName }}.id, id))
+    return record ?? null
+  }
+
+  async findAll(params?: {
+    page?: number
+    pageSize?: number
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  }): Promise<{ items: {{ entityName }}[]; total: number }> {
+    const { page = 1, pageSize = 10, sortOrder = 'desc' } = params ?? {}
+    const offset = (page - 1) * pageSize
+
+    const items = await this.db
+      .select()
+      .from({{ tableName }})
+      .limit(pageSize)
+      .offset(offset)
+      .orderBy(sortOrder === 'desc' ? desc({{ tableName }}.createdAt) : asc({{ tableName }}.createdAt))
+
+    const [{ count }] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from({{ tableName }})
+
+    return { items, total: count }
+  }
+
+  async create(data: Create{{ entityName }}Input): Promise<{{ entityName }}> {
+    const [record] = await this.db.insert({{ tableName }}).values(data).returning()
+    return record
+  }
+
+  async update(id: string, data: Update{{ entityName }}Input): Promise<{{ entityName }}> {
+    const [record] = await this.db
+      .update({{ tableName }})
+      .set(data)
+      .where(eq({{ tableName }}.id, id))
+      .returning()
+    return record
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.db.delete({{ tableName }}).where(eq({{ tableName }}.id, id))
+  }
+}
+  @end
+@end
+
+{{ drizzleRepoImpl }}

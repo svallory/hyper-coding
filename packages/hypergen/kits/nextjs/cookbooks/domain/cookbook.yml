@@ -1,0 +1,12 @@
+name: domain
+description: |
+  Generate DDD-style domain layer components for Next.js applications.
+  Supports Drizzle and Prisma ORMs. Generates entities, value objects,
+  enums, repositories, and domain services.
+version: 1.0.0
+
+defaults:
+  recipe: entity
+
+recipes:
+  - './*/recipe.yml'

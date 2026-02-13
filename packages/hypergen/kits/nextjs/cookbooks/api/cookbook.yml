@@ -1,0 +1,9 @@
+name: api
+description: Generate REST API routes and webhook handlers for Next.js
+version: 1.0.0
+
+defaults:
+  recipe: route
+
+recipes:
+  - "./*/recipe.yml"

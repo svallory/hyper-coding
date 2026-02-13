@@ -1,0 +1,54 @@
+name: service
+description: |
+  Generate a domain service class that encapsulates business logic.
+
+  Generates a TypeScript class with:
+  - Constructor-injected repository dependencies
+  - Business logic methods operating on domain entities
+  - Proper error handling patterns
+
+  Services coordinate between repositories and enforce business rules
+  that don't belong to a single entity.
+
+  Time saved: 20-40 min → 2 min
+
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Service name (PascalCase — e.g., 'MembershipManagement', 'OrderProcessing')
+    required: true
+    position: 0
+    prompt: What is the service name? (PascalCase, e.g., 'MembershipManagement')
+
+  entities:
+    type: string
+    description: Comma-separated entities this service operates on (e.g., "organization,member")
+    required: false
+
+  operations:
+    type: string
+    description: Business operations to implement (e.g., "inviteMember,removeMember,changeRole")
+    required: false
+
+steps:
+  - name: Ensure directory exists
+    tool: shell
+    command: mkdir -p lib/domain/services
+
+  - name: Generate service
+    tool: template
+    template: templates/service.ts.jig
+
+  - name: Success message
+    tool: shell
+    command: |
+      echo "Service '{{ name }}Service' generated successfully!"
+      echo ""
+      echo "Generated files:"
+      echo "  lib/domain/services/{{ name }}Service.ts"
+      echo ""
+      echo "Usage:"
+      echo "  import { {{ name }}Service } from '@/lib/domain/services/{{ name }}Service'"
+      echo "  const service = new {{ name }}Service(repo1, repo2)"

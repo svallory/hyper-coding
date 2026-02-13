@@ -1,17 +1,17 @@
 ---
-to: "app/{{ path }}/page.tsx"
+to: "app/{{ pagePath }}/page.tsx"
 ---
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "{{ capitalize(path.split('/').pop().replace('[', '').replace(']', '')) }}",
+  title: "{{ capitalize(pagePath.split('/').pop().replace('[', '').replace(']', '')) }}",
   description: "{{ pageDescription }}",
 };
 
-@if(path.includes("["))
+@if(pagePath.includes("["))
 
 type Params = {
-  @let(segments = path.split("/"))
+  @let(segments = pagePath.split("/"))
   @each(segment in segments)
   @if(segment.includes("[..."))
   {{ segment.replace("[...", "").replace("[[...", "").replace("]]", "").replace("]", "") }}: string[];

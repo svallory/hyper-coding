@@ -1,0 +1,99 @@
+---
+to: lib/domain/enums/{{ name }}.ts
+---
+@ai({ key: 'enumImpl' })
+  @context()
+Enum name: {{ name }}
+@if(values)
+Values: {{ values }}
+@end
+  @end
+  @prompt()
+Generate a complete TypeScript enum module for {{ name }} using the const object pattern.
+
+@if(values)
+Values: {{ values }}
+@else
+Infer appropriate values from the name "{{ name }}" (e.g., UserRole → admin, member, viewer; TodoStatus → pending, in_progress, done, cancelled).
+@end
+
+The module must include:
+
+1. A `{{ name }}` const object with SCREAMING_SNAKE_CASE keys and lowercase string values:
+   ```
+   export const {{ name }} = { ADMIN: 'admin', MEMBER: 'member' } as const
+   ```
+
+2. A TypeScript type extracting the values:
+   ```
+   export type {{ name }}Type = (typeof {{ name }})[keyof typeof {{ name }}]
+   ```
+
+3. A Zod schema:
+   ```
+   export const {{ camelCase(name) }}Schema = z.enum([...values])
+   ```
+
+4. A type guard:
+   ```
+   export function is{{ name }}(value: unknown): value is {{ name }}Type
+   ```
+
+5. A label helper that returns human-readable labels:
+   ```
+   export function get{{ name }}Label(value: {{ name }}Type): string
+   ```
+
+6. A getter for all values:
+   ```
+   export function getAll{{ pluralize(name) }}(): {{ name }}Type[]
+   ```
+
+7. A string parser:
+   ```
+   export function from{{ name }}String(value: string): {{ name }}Type | undefined
+   ```
+
+Output the COMPLETE module. Import { z } from 'zod'.
+  @end
+  @output({ typeHint: 'typescript-code' })
+A complete TypeScript module with const object enum, type, Zod schema, and utility functions.
+  @end
+  @example()
+import { z } from 'zod'
+
+export const {{ name }} = {
+  ADMIN: 'admin',
+  MEMBER: 'member',
+  VIEWER: 'viewer',
+} as const
+
+export type {{ name }}Type = (typeof {{ name }})[keyof typeof {{ name }}]
+
+export const {{ camelCase(name) }}Schema = z.enum(['admin', 'member', 'viewer'])
+
+export function is{{ name }}(value: unknown): value is {{ name }}Type {
+  return Object.values({{ name }}).includes(value as {{ name }}Type)
+}
+
+export function get{{ name }}Label(value: {{ name }}Type): string {
+  const labels: Record<{{ name }}Type, string> = {
+    admin: 'Admin',
+    member: 'Member',
+    viewer: 'Viewer',
+  }
+  return labels[value]
+}
+
+export function getAll{{ pluralize(name) }}(): {{ name }}Type[] {
+  return Object.values({{ name }})
+}
+
+export function from{{ name }}String(value: string): {{ name }}Type | undefined {
+  const lower = value.toLowerCase()
+  return is{{ name }}(lower) ? lower : undefined
+}
+  @end
+@end
+
+{{ enumImpl }}

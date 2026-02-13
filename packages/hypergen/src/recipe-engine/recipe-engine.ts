@@ -19,10 +19,14 @@ import Logger from '../logger.js'
 import context from '../context.js'
 import { performInteractivePrompting } from '../prompts/interactive-prompts.js'
 import { AiCollector } from '../ai/ai-collector.js'
+import { AiVariableResolver, type UnresolvedVariable } from '../ai/ai-variable-resolver.js'
+import { resolveTransport } from '../ai/transports/resolve-transport.js'
+import type { AiServiceConfig } from '../ai/ai-config.js'
 import type {
   RecipeConfig,
   RecipeExecution,
   RecipeValidationResult,
+  RecipeProvides,
   StepContext,
   StepResult,
   RecipeStepUnion,
@@ -82,6 +86,15 @@ export interface RecipeExecutionOptions {
 
   /** Whether to skip user prompts (use defaults/existing values) */
   skipPrompts?: boolean
+
+  /** Who resolves missing variables: 'me' (interactive), 'ai', 'nobody' (error) */
+  askMode?: 'me' | 'ai' | 'nobody'
+
+  /** Don't auto-apply default values — treat all vars as unresolved */
+  noDefaults?: boolean
+
+  /** AI config for --ask=ai mode (from hypergen.config.js) */
+  aiConfig?: AiServiceConfig
 
   /** Custom logger for output */
   logger?: Logger
@@ -183,6 +196,8 @@ export interface RecipeExecutionResult {
     completedSteps: number
     failedSteps: number
     skippedSteps: number
+    /** Values collected from recipe.provides declarations */
+    providedValues?: Record<string, any>
   }
 }
 
@@ -339,12 +354,20 @@ export class RecipeEngine extends EventEmitter {
       
       this.debug('Recipe loaded and validated: %s', recipe.name)
       
+      // Determine effective ask mode (skipPrompts is legacy compat for --ask=nobody)
+      const effectiveAskMode = options.askMode
+        ?? (options.skipPrompts ? 'nobody' : undefined)
+
       // Resolve variables with user input if needed
       const resolvedVariables = await this.resolveVariables(
-        recipe, 
-        options.variables || {}, 
-        options.skipPrompts || false,
-        options.logger
+        recipe,
+        options.variables || {},
+        {
+          askMode: effectiveAskMode,
+          noDefaults: options.noDefaults || false,
+          aiConfig: options.aiConfig,
+          logger: options.logger,
+        }
       )
       
       this.debug('Variables resolved: %o', Object.keys(resolvedVariables))
@@ -799,6 +822,7 @@ export class RecipeEngine extends EventEmitter {
         tags: parsed.tags || [],
         variables: parsed.variables || {},
         steps: this.normalizeSteps(parsed.steps || []),
+        provides: this.parseProvides(parsed.provides),
         examples: parsed.examples || [],
         dependencies: parsed.dependencies || [],
         outputs: parsed.outputs || [],
@@ -817,6 +841,26 @@ export class RecipeEngine extends EventEmitter {
         { source }
       )
     }
+  }
+
+  /**
+   * Parse the `provides` field from recipe YAML
+   */
+  private parseProvides(raw: any): RecipeProvides[] | undefined {
+    if (!raw || !Array.isArray(raw)) return undefined
+
+    const provides: RecipeProvides[] = []
+    for (const item of raw) {
+      if (typeof item === 'string') {
+        provides.push({ name: item })
+      } else if (typeof item === 'object' && item !== null && typeof item.name === 'string') {
+        const entry: RecipeProvides = { name: item.name }
+        if (item.type && typeof item.type === 'string') entry.type = item.type
+        if (item.description && typeof item.description === 'string') entry.description = item.description
+        provides.push(entry)
+      }
+    }
+    return provides.length > 0 ? provides : undefined
   }
 
   /**
@@ -849,6 +893,13 @@ export class RecipeEngine extends EventEmitter {
           step.tool = 'codemod'
         }
       }
+
+      // Map args shorthand to variableOverrides for recipe steps
+      if (step.args && !step.variableOverrides) {
+        step.variableOverrides = step.args
+        delete step.args
+      }
+
       return step as RecipeStepUnion
     })
   }
@@ -856,35 +907,46 @@ export class RecipeEngine extends EventEmitter {
   private async resolveVariables(
     recipe: RecipeConfig,
     providedVariables: Record<string, any>,
-    skipPrompts: boolean,
-    logger?: Logger
+    opts: {
+      askMode?: 'me' | 'ai' | 'nobody'
+      noDefaults?: boolean
+      aiConfig?: AiServiceConfig
+      logger?: Logger
+    }
   ): Promise<Record<string, any>> {
+    const { noDefaults = false, aiConfig, logger } = opts
+    // Default: interactive in TTY, error in non-TTY (matches plan)
+    const askMode = opts.askMode ?? (process.stdout.isTTY ? 'me' : 'nobody')
+
     const resolved: Record<string, any> = {}
     const missingRequired: string[] = []
-    
-    this.debug('Resolving variables for recipe: %s', recipe.name)
-    
-    // Process all defined variables
+    const toAsk: Array<{ varName: string; varConfig: TemplateVariable; hint?: any }> = []
+
+    this.debug('Resolving variables for recipe: %s (askMode=%s, noDefaults=%s)', recipe.name, askMode, noDefaults)
+
+    // Phase 1: Apply provided values and defaults
     for (const [varName, varConfig] of Object.entries(recipe.variables)) {
+      // Step 1: Check provided value
       let value = providedVariables[varName]
-      
-      // Use default if no value provided
-      if (value === undefined) {
+
+      // Step 2: Apply default (unless --no-defaults)
+      if (value === undefined && !noDefaults) {
         value = varConfig.default
       }
-      
-      // Check if required variable is missing
-      if (varConfig.required && (value === undefined || value === null || value === '')) {
-        if (skipPrompts) {
-          missingRequired.push(varName)
+
+      // Step 3: If still unresolved, determine if we need to ask
+      if (value === undefined || value === null || value === '') {
+        const hint = varConfig.suggestion ?? (noDefaults ? varConfig.default : undefined)
+        const shouldAsk = varConfig.required || noDefaults
+
+        if (shouldAsk) {
+          toAsk.push({ varName, varConfig, hint })
           continue
-        } else {
-          // Prompt for missing required variable
-          value = await this.promptForVariable(varName, varConfig, logger)
         }
+        // Optional, not asked about — value stays undefined
       }
-      
-      // Validate the value
+
+      // Step 4: If we have a value, validate it
       if (value !== undefined) {
         const validation = TemplateParser.validateVariableValue(varName, value, varConfig)
         if (!validation.isValid) {
@@ -895,10 +957,100 @@ export class RecipeEngine extends EventEmitter {
           )
         }
       }
-      
-      resolved[varName] = TemplateParser.getResolvedValue(value, varConfig)
+
+      resolved[varName] = value !== undefined ? value : TemplateParser.getResolvedValue(value, varConfig)
     }
-    
+
+    // Phase 2: Resolve unresolved variables based on ask mode
+    if (toAsk.length > 0) {
+      switch (askMode) {
+        case 'me': {
+          for (const { varName, varConfig, hint } of toAsk) {
+            const configWithHint = hint !== undefined
+              ? { ...varConfig, default: hint }
+              : varConfig
+            const value = await this.promptForVariable(varName, configWithHint, logger)
+
+            const validation = TemplateParser.validateVariableValue(varName, value, varConfig)
+            if (!validation.isValid) {
+              throw ErrorHandler.createError(
+                ErrorCode.VALIDATION_ERROR,
+                validation.error || `Invalid value for variable: ${varName}`,
+                { variable: varName, value }
+              )
+            }
+            resolved[varName] = value
+          }
+          break
+        }
+
+        case 'ai': {
+          // Check transport compatibility
+          const transport = aiConfig ? resolveTransport(aiConfig) : null
+          const transportName = transport?.name
+
+          if (!transport || transportName === 'stdout') {
+            this.debug('AI mode requires api or command transport, falling back to interactive')
+            console.warn(
+              'Warning: --ask=ai requires an API key or command transport configured. ' +
+              'Falling back to interactive prompts.'
+            )
+            // Fall through to interactive
+            for (const { varName, varConfig, hint } of toAsk) {
+              const configWithHint = hint !== undefined
+                ? { ...varConfig, default: hint }
+                : varConfig
+              const value = await this.promptForVariable(varName, configWithHint, logger)
+              resolved[varName] = value
+            }
+            break
+          }
+
+          // Batch-resolve via AI
+          const unresolvedVars: UnresolvedVariable[] = toAsk.map(({ varName, varConfig, hint }) => ({
+            name: varName,
+            config: varConfig,
+            defaultValue: noDefaults ? varConfig.default : undefined,
+          }))
+
+          const resolver = new AiVariableResolver(aiConfig!)
+          const aiAnswers = await resolver.resolveBatch(
+            unresolvedVars,
+            resolved,
+            { name: recipe.name, description: recipe.description }
+          )
+
+          // Apply AI answers and validate
+          for (const { varName, varConfig } of toAsk) {
+            const value = aiAnswers[varName]
+            if (value !== undefined) {
+              const validation = TemplateParser.validateVariableValue(varName, value, varConfig)
+              if (!validation.isValid) {
+                this.debug('AI value for %s failed validation: %s', varName, validation.error)
+                if (varConfig.required) {
+                  missingRequired.push(varName)
+                }
+              } else {
+                resolved[varName] = value
+              }
+            } else if (varConfig.required) {
+              missingRequired.push(varName)
+            }
+          }
+          break
+        }
+
+        case 'nobody': {
+          for (const { varName, varConfig } of toAsk) {
+            if (varConfig.required) {
+              missingRequired.push(varName)
+            }
+          }
+          break
+        }
+      }
+    }
+
     if (missingRequired.length > 0) {
       throw ErrorHandler.createError(
         ErrorCode.VALIDATION_ERROR,
@@ -906,16 +1058,16 @@ export class RecipeEngine extends EventEmitter {
         { missingVariables: missingRequired }
       )
     }
-    
+
     // Add any additional provided variables not defined in recipe
     for (const [varName, value] of Object.entries(providedVariables)) {
       if (!recipe.variables[varName]) {
         resolved[varName] = value
       }
     }
-    
+
     this.debug('Variables resolved successfully: %o', Object.keys(resolved))
-    
+
     return resolved
   }
 
@@ -1085,6 +1237,20 @@ export class RecipeEngine extends EventEmitter {
       }
     }
     
+    // Collect providedValues from recipe.provides declarations
+    let providedValues: Record<string, any> | undefined
+    if (recipe.provides && recipe.provides.length > 0) {
+      providedValues = {}
+      for (const p of recipe.provides) {
+        if (p.name in context.variables) {
+          providedValues[p.name] = context.variables[p.name]
+        }
+      }
+      if (Object.keys(providedValues).length === 0) {
+        providedValues = undefined
+      }
+    }
+
     return {
       executionId,
       recipe,
@@ -1104,7 +1270,8 @@ export class RecipeEngine extends EventEmitter {
         totalSteps: stepResults.length,
         completedSteps: completedSteps.length,
         failedSteps: failedSteps.length,
-        skippedSteps: skippedSteps.length
+        skippedSteps: skippedSteps.length,
+        providedValues,
       }
     }
   }

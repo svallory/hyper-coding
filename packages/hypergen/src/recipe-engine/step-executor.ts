@@ -36,6 +36,7 @@ import {
   StepExecutionError,
   CircularDependencyError
 } from './types.js'
+import { evaluateStepOutputs } from './output-evaluator.js'
 
 const debug = createDebug('hypergen:v8:recipe:step-executor')
 
@@ -376,7 +377,14 @@ export class StepExecutor extends EventEmitter {
           
           // Extract file changes from tool result
           this.extractFileChanges(stepResult, toolResult)
-          
+
+          // Evaluate export expressions and inject into context.variables
+          if (step.exports && Object.keys(step.exports).length > 0) {
+            const outputs = await evaluateStepOutputs(step.exports, toolResult, context)
+            stepResult.output = { ...stepResult.output, ...outputs }
+            Object.assign(context.variables, outputs)
+          }
+
           this.debug('Step completed successfully: %s in %dms', step.name, stepResult.duration)
           this.emit('step:completed', { 
             step: step.name, 

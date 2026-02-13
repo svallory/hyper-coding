@@ -16,11 +16,15 @@ export interface TemplateVariable {
   required?: boolean
   multiple?: boolean
   default?: any
+  /** Suggested value shown in prompts (interactive or AI). Never auto-applied. */
+  suggestion?: any
   description?: string
   pattern?: string
   values?: string[]
   min?: number
   max?: number
+  /** Positional argument index (0-based) for CLI mapping */
+  position?: number
   validation?: {
     message?: string
   }
@@ -343,10 +347,19 @@ export class TemplateParser {
     // Validate default value
     if (varConfig.default !== undefined) {
       if (variable.required) {
-        warnings.push(`Variable '${varName}' cannot have default value when required`)
-      } else {
-        variable.default = varConfig.default
+        errors.push(`Variable '${varName}': 'default' and 'required' are mutually exclusive`)
+        return null
       }
+      if (varConfig.suggestion !== undefined) {
+        errors.push(`Variable '${varName}': 'default' and 'suggestion' are mutually exclusive`)
+        return null
+      }
+      variable.default = varConfig.default
+    }
+
+    // Validate suggestion value
+    if (varConfig.suggestion !== undefined) {
+      variable.suggestion = varConfig.suggestion
     }
 
     // Validate description
@@ -385,6 +398,15 @@ export class TemplateParser {
         if (variable.values.length === 0) {
           errors.push(`Variable '${varName}' enum must have at least one value`)
         }
+      }
+    }
+
+    // Validate position (for positional CLI args)
+    if (varConfig.position !== undefined) {
+      if (typeof varConfig.position !== 'number' || varConfig.position < 0 || !Number.isInteger(varConfig.position)) {
+        warnings.push(`Variable '${varName}' position should be a non-negative integer`)
+      } else {
+        variable.position = varConfig.position
       }
     }
 

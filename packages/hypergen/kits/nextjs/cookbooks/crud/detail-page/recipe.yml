@@ -1,0 +1,62 @@
+name: detail-page
+description: |
+  Generate a production-ready detail/show page to display a single resource.
+
+  Features:
+  - Server Component for optimal performance
+  - Display all resource fields
+  - Edit and delete action buttons
+  - Back to list navigation
+  - Auto-detect ORM (Prisma/Drizzle)
+  - Error handling with notFound()
+
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Resource name (singular, e.g., 'post', 'user', 'product')
+    required: true
+    prompt: What is the resource name? (singular, e.g., 'post', 'user')
+    position: 0
+
+  model:
+    type: string
+    description: Model name (PascalCase, defaults to capitalized name)
+    required: false
+
+  includeDelete:
+    type: boolean
+    description: Include delete button with confirmation dialog
+    default: true
+
+steps:
+  - name: Generate detail page
+    tool: template
+    template: templates/detail-page.tsx.jig
+
+  - name: Generate get action
+    tool: template
+    template: templates/get-action.ts.jig
+
+  - name: Generate delete dialog
+    tool: template
+    template: templates/delete-dialog.tsx.jig
+    when: "{{ includeDelete }}"
+
+  - name: Success message
+    tool: shell
+    command: |
+      echo "✅ Detail page for '{{ name }}' generated successfully!"
+      echo ""
+      echo "Generated files:"
+      echo "  📄 app/{{ name }}/[id]/page.tsx - Detail page"
+      echo "  ⚡ app/actions/{{ name }}.ts - get{{ model || name }} Server Action"
+      @if(includeDelete)
+      echo "  🗑️  components/{{ model || name }}DeleteDialog.tsx - Delete dialog"
+      @end
+      echo ""
+      echo "Next steps:"
+      echo "  1. Implement the get{{ model || name }}() function in Server Actions"
+      echo "  2. Customize the displayed fields"
+      echo "  3. Visit /{{ name }}/[id] to see your detail page"

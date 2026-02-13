@@ -1,0 +1,71 @@
+---
+to: lib/domain/value-objects/{{ name }}.ts
+---
+@let(baseType = baseType || 'string')
+@ai({ key: 'valueObjectImpl' })
+  @context()
+Value object name: {{ name }}
+Base type: {{ baseType }}
+@if(validation)
+Validation rules: {{ validation }}
+@end
+  @end
+  @prompt()
+Generate a complete TypeScript value object module for {{ name }} with base type {{ baseType }}.
+
+The module must include:
+
+1. A Zod schema named `{{ camelCase(name) }}Schema` that validates the {{ baseType }} value.
+@if(validation)
+   Validation: {{ validation }}
+@else
+   Infer appropriate validation rules from the name "{{ name }}" (e.g., Email → email format, Slug → lowercase with hyphens, etc.)
+@end
+
+2. A branded type:
+   ```
+   type {{ name }}Brand = { readonly __brand: '{{ name }}' }
+   export type {{ name }} = {{ baseType }} & {{ name }}Brand
+   ```
+
+3. A factory function `create{{ name }}(value: {{ baseType }}): { success: true; data: {{ name }} } | { success: false; error: string }` that:
+   - Validates using the Zod schema
+   - Returns a success/error result object (no throwing)
+   - Casts valid values to the branded type
+
+4. A type guard `is{{ name }}(value: unknown): value is {{ name }}` that checks validity without throwing
+
+5. An unsafe factory `from{{ name }}Unsafe(value: {{ baseType }}): {{ name }}` for trusted inputs (skips validation, just casts)
+
+Output the COMPLETE module including all imports, types, and functions. Import { z } from 'zod'.
+  @end
+  @output({ typeHint: 'typescript-code' })
+A complete TypeScript module with branded type, Zod schema, factory functions, and type guard.
+  @end
+  @example()
+import { z } from 'zod'
+
+export const {{ camelCase(name) }}Schema = z.string().min(1).max(255)
+
+type {{ name }}Brand = { readonly __brand: '{{ name }}' }
+export type {{ name }} = string & {{ name }}Brand
+
+export function create{{ name }}(value: string): { success: true; data: {{ name }} } | { success: false; error: string } {
+  const result = {{ camelCase(name) }}Schema.safeParse(value)
+  if (!result.success) {
+    return { success: false, error: result.error.errors[0]?.message ?? 'Invalid {{ name }}' }
+  }
+  return { success: true, data: result.data as {{ name }} }
+}
+
+export function is{{ name }}(value: unknown): value is {{ name }} {
+  return {{ camelCase(name) }}Schema.safeParse(value).success
+}
+
+export function from{{ name }}Unsafe(value: string): {{ name }} {
+  return value as {{ name }}
+}
+  @end
+@end
+
+{{ valueObjectImpl }}

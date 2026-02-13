@@ -26,6 +26,8 @@ export interface VariableDefinition {
   type: VariableType
   required?: boolean
   default?: any
+  /** Suggested value shown in prompts (interactive or AI). Never auto-applied. */
+  suggestion?: any
   prompt?: string
   description?: string
   internal?: boolean
@@ -97,6 +99,48 @@ export interface ValidationResult {
   valid: boolean
   message?: string
   code?: string
+}
+
+// Kit configuration
+export interface KitConfig {
+  /** Kit name (e.g., "@hyper-kits/nextjs") */
+  name: string
+  /** Kit description */
+  description?: string
+  /** Kit version */
+  version?: string
+  /** Kit author */
+  author?: string
+  /** License */
+  license?: string
+  /** Keywords for discovery */
+  keywords?: string[]
+  /** Default cookbook and recipe */
+  defaults?: { cookbook?: string; recipe?: string }
+  /** Glob patterns for discovering cookbooks */
+  cookbooks?: string[]
+  /** Glob patterns for discovering standalone recipes */
+  recipes?: string[]
+  /** Tags for categorization */
+  tags?: string[]
+  /** Categories */
+  categories?: string[]
+  /** Kit-level variables shared across all cookbooks/recipes */
+  variables?: Record<string, VariableDefinition>
+}
+
+// Cookbook configuration
+export interface CookbookConfig {
+  /** Cookbook name (e.g., "crud", "component") */
+  name: string
+  /** Cookbook description */
+  description?: string
+  /** Cookbook version */
+  version?: string
+  /** Default recipe to run when cookbook is invoked without a recipe */
+  defaults?: { recipe?: string }
+  /** Glob patterns for discovering recipes within this cookbook */
+  recipes?: string[]
 }
 
 // Error types

@@ -6,17 +6,18 @@ description: |
 version: 1.0.0
 
 variables:
-  path:
+  pagePath:
     type: string
     description: |
       Route path relative to app/ (e.g. "about", "blog/[slug]", "dashboard/settings").
       Supports dynamic segments [param], catch-all [...slug], and optional catch-all [[...slug]].
     required: true
+    position: 0
 
   pageDescription:
     type: string
     description: Brief description of what this page does
-    required: true
+    suggestion: ""
 
   withLayout:
     type: boolean
@@ -36,7 +37,7 @@ variables:
 steps:
   - name: Create route directory
     tool: shell
-    command: mkdir -p app/{{ path }}
+    command: mkdir -p app/{{ pagePath }}
 
   - name: Generate page scaffold
     tool: template
@@ -46,20 +47,20 @@ steps:
     tool: recipe
     recipe: ../../layout/add/recipe.yml
     when: "withLayout === true"
-    variables:
-      path: "{{ path }}"
+    args:
+      path: "{{ pagePath }}"
       layoutDescription: "Layout for {{ pageDescription }}"
 
   - name: Generate loading UI
     tool: recipe
     recipe: ../../loading/add/recipe.yml
     when: "withLoading === true"
-    variables:
-      path: "{{ path }}"
+    args:
+      path: "{{ pagePath }}"
 
   - name: Generate error boundary
     tool: recipe
     recipe: ../../error/add/recipe.yml
     when: "withError === true"
-    variables:
-      path: "{{ path }}"
+    args:
+      path: "{{ pagePath }}"

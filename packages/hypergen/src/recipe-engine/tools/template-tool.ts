@@ -626,6 +626,11 @@ export class TemplateTool extends Tool<TemplateStep> {
       // 2-pass AI generation state
       answers: context.answers,
       __hypergenCollectMode: context.collectMode || false,
+      // provide() helper — allows templates to export values to subsequent steps
+      provide: (key: string, value: any) => {
+        context.variables[key] = value
+        return ''
+      },
     }
 
     this.debug('Building Jig context: collectMode=%s, __hypergenCollectMode=%s, renderContext has listModelFields=%s',

@@ -1,0 +1,11 @@
+{{!--
+  Shared TypeScript types partial
+  Usage: @include('shared/partials/types.jig', { typeName: 'UserProps', fields: [...] })
+--}}
+export interface {{ typeName }} {
+@each(field in fields)
+  {{ field.name }}{{ field.optional ? '?' : '' }}: {{ field.type }}@if(field.description)
+ // {{ field.description }}@end
+
+@endeach
+}

@@ -10,6 +10,18 @@ import type { ActionResult, ActionContext, ActionParameter, ActionLogger, Action
 import type { AIOutputConfig, AIContextConfig, AIExample, AIGuardrailConfig, AIBudgetConfig, AIExecutionResult } from '../ai/ai-config.js'
 
 /**
+ * Declares a value that a recipe provides to its callers or sibling recipes
+ */
+export interface RecipeProvides {
+  /** Name of the provided variable */
+  name: string
+  /** Expected type of the provided value */
+  type?: 'string' | 'number' | 'boolean' | 'object' | 'array'
+  /** Human-readable description */
+  description?: string
+}
+
+/**
  * Core step execution status
  */
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled'
@@ -55,6 +67,11 @@ export interface BaseRecipeStep {
   
   /** Environment variables specific to this step */
   environment?: Record<string, string>
+
+  /** Output expressions evaluated against the step's toolResult after execution.
+   *  Keys become variable names, values are Jig template expressions.
+   *  Extracted values are injected into context.variables for subsequent steps. */
+  exports?: Record<string, string>
 }
 
 /**
@@ -569,6 +586,9 @@ export interface RecipeConfig {
   /** Recipe dependencies */
   dependencies?: RecipeDependency[]
   
+  /** Values this recipe provides to callers or sibling recipes in group execution */
+  provides?: RecipeProvides[]
+
   /** Expected outputs */
   outputs?: string[]
   

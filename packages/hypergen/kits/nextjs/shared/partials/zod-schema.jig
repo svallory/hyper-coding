@@ -1,0 +1,15 @@
+{{!--
+  Shared Zod schema generation
+  Usage: @include('shared/partials/zod-schema.jig', { schemaName: 'userSchema', fields: [...] })
+--}}
+import { z } from 'zod'
+
+export const {{ schemaName }} = z.object({
+@each(field in fields)
+  {{ field.name }}: {{ field.zodType || 'z.string()' }}@if(!field.required)
+.optional()@end
+,
+@endeach
+})
+
+export type {{ pascalCase(schemaName.replace('Schema', '')) }} = z.infer<typeof {{ schemaName }}>

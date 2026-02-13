@@ -1,0 +1,168 @@
+---
+to: lib/webhooks/{{ name }}-verifier.ts
+when: "{{ verification }}"
+---
+<%
+const isStripe = provider === 'stripe';
+const isGitHub = provider === 'github';
+const isShopify = provider === 'shopify';
+const isClerk = provider === 'clerk';
+const isResend = provider === 'resend';
+const isCustom = provider === 'custom';
+%>import { createHmac, timingSafeEqual } from 'crypto'
+
+<% if (isStripe) { %>
+/**
+ * Stripe signature verification is handled by the Stripe SDK
+ * in the webhook route file using stripe.webhooks.constructEvent()
+ *
+ * This file is provided for reference and custom verification if needed.
+ */
+export function verify{{ name | pascalCase }}Signature(
+  payload: string,
+  signature: string
+): boolean {
+  // Stripe verification is handled in the route file
+  // This is a placeholder for custom verification logic
+  return true
+}
+<% } else if (isGitHub) { %>
+/**
+ * Verify GitHub webhook signature using SHA-256 HMAC
+ *
+ * @param payload - Raw request body
+ * @param signature - Value from x-hub-signature-256 header
+ * @returns true if signature is valid
+ */
+export async function verify{{ name | pascalCase }}Signature(
+  payload: string,
+  signature: string
+): Promise<boolean> {
+  const secret = process.env.GITHUB_WEBHOOK_SECRET
+
+  if (!secret) {
+    throw new Error('GITHUB_WEBHOOK_SECRET is not configured')
+  }
+
+  // GitHub sends signature as "sha256=<hash>"
+  const [algorithm, hash] = signature.split('=')
+  if (algorithm !== 'sha256') {
+    return false
+  }
+
+  // Compute expected signature
+  const hmac = createHmac('sha256', secret)
+  hmac.update(payload, 'utf8')
+  const expectedHash = hmac.digest('hex')
+
+  // Timing-safe comparison
+  try {
+    return timingSafeEqual(
+      Buffer.from(hash, 'hex'),
+      Buffer.from(expectedHash, 'hex')
+    )
+  } catch {
+    return false
+  }
+}
+<% } else if (isShopify) { %>
+/**
+ * Verify Shopify webhook signature using SHA-256 HMAC
+ *
+ * @param payload - Raw request body
+ * @param signature - Value from x-shopify-hmac-sha256 header (base64)
+ * @returns true if signature is valid
+ */
+export async function verify{{ name | pascalCase }}Signature(
+  payload: string,
+  signature: string
+): Promise<boolean> {
+  const secret = process.env.SHOPIFY_WEBHOOK_SECRET
+
+  if (!secret) {
+    throw new Error('SHOPIFY_WEBHOOK_SECRET is not configured')
+  }
+
+  // Compute expected signature
+  const hmac = createHmac('sha256', secret)
+  hmac.update(payload, 'utf8')
+  const expectedSignature = hmac.digest('base64')
+
+  // Timing-safe comparison
+  try {
+    return timingSafeEqual(
+      Buffer.from(signature, 'base64'),
+      Buffer.from(expectedSignature, 'base64')
+    )
+  } catch {
+    return false
+  }
+}
+<% } else if (isClerk || isResend) { %>
+/**
+ * {{ provider | capitalize }} webhook verification is handled by Svix
+ * in the webhook route file using the Svix SDK.
+ *
+ * This file is provided for reference and custom verification if needed.
+ */
+export function verify{{ name | pascalCase }}Signature(
+  payload: string,
+  signature: string
+): boolean {
+  // Verification is handled in the route file using Svix
+  // This is a placeholder for custom verification logic
+  return true
+}
+<% } else { %>
+/**
+ * Verify webhook signature using HMAC-SHA256
+ *
+ * @param payload - Raw request body
+ * @param signature - Signature from webhook header
+ * @returns true if signature is valid
+ */
+export async function verify{{ name | pascalCase }}Signature(
+  payload: string,
+  signature: string
+): Promise<boolean> {
+  const secret = process.env.{{ name.toUpperCase().replace(/-/g, '_') }}_WEBHOOK_SECRET
+
+  if (!secret) {
+    throw new Error('{{ name.toUpperCase().replace(/-/g, '_') }}_WEBHOOK_SECRET is not configured')
+  }
+
+  // Compute expected signature using HMAC-SHA256
+  const hmac = createHmac('sha256', secret)
+  hmac.update(payload, 'utf8')
+  const expectedSignature = hmac.digest('hex')
+
+  // Timing-safe comparison to prevent timing attacks
+  try {
+    return timingSafeEqual(
+      Buffer.from(signature, 'hex'),
+      Buffer.from(expectedSignature, 'hex')
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Generate webhook signature for testing
+ * Use this to generate test signatures for your webhook payload
+ *
+ * @param payload - Webhook payload to sign
+ * @returns HMAC-SHA256 signature (hex)
+ */
+export function generate{{ name | pascalCase }}Signature(payload: string): string {
+  const secret = process.env.{{ name.toUpperCase().replace(/-/g, '_') }}_WEBHOOK_SECRET
+
+  if (!secret) {
+    throw new Error('{{ name.toUpperCase().replace(/-/g, '_') }}_WEBHOOK_SECRET is not configured')
+  }
+
+  const hmac = createHmac('sha256', secret)
+  hmac.update(payload, 'utf8')
+  return hmac.digest('hex')
+}
+<% } %>

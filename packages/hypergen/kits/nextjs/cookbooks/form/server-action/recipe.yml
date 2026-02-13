@@ -1,0 +1,115 @@
+name: server-action
+description: |
+  Generate a progressively enhanced form with Server Action.
+  Works without JavaScript and includes server-side validation.
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Form component name in PascalCase (e.g. "SignupForm", "LoginForm")
+    required: true
+    pattern: "^[A-Z][a-zA-Z0-9]*$"
+
+  fields:
+    type: array
+    description: |
+      Form fields in format "name:type" (e.g. "email:email", "name:text", "bio:textarea")
+      Supported types: text, email, password, number, tel, url, date, time, datetime, textarea, select, checkbox
+    required: true
+
+  dir:
+    type: string
+    description: Output directory for form component
+    default: "components/forms"
+
+  actionPath:
+    type: string
+    description: Path to Server Actions file
+    default: "app/actions"
+
+  redirectPath:
+    type: string
+    description: Path to redirect to on success (optional)
+    default: ""
+
+  revalidatePath:
+    type: string
+    description: Path to revalidate on success (optional)
+    default: ""
+
+steps:
+  - name: Check dependencies
+    tool: shell
+    command: |
+      # Install Zod if not present
+      if ! bun pm ls zod &>/dev/null; then
+        echo "Installing Zod for validation..."
+        if command -v bun &> /dev/null; then
+          bun add zod
+        elif command -v pnpm &> /dev/null; then
+          pnpm add zod
+        elif command -v yarn &> /dev/null; then
+          yarn add zod
+        else
+          npm install zod
+        fi
+      fi
+
+      # Check if shadcn/ui components are installed
+      if [ ! -f "components/ui/input.tsx" ]; then
+        echo "Installing shadcn/ui Input component..."
+        npx shadcn@latest add input --yes
+      fi
+
+      if [ ! -f "components/ui/button.tsx" ]; then
+        echo "Installing shadcn/ui Button component..."
+        npx shadcn@latest add button --yes
+      fi
+
+      if [ ! -f "components/ui/label.tsx" ]; then
+        echo "Installing shadcn/ui Label component..."
+        npx shadcn@latest add label --yes
+      fi
+
+  - name: Create directories
+    tool: shell
+    command: |
+      mkdir -p {{ dir }}
+      mkdir -p {{ actionPath }}
+      mkdir -p lib/schemas
+
+  - name: Generate Zod schema
+    tool: template
+    template: templates/schema.ts.jig
+
+  - name: Generate Server Action
+    tool: template
+    template: templates/action.ts.jig
+
+  - name: Generate form component
+    tool: template
+    template: templates/form.tsx.jig
+
+  - name: Instructions
+    tool: shell
+    command: |
+      echo "✅ Form with Server Action generated successfully!"
+      echo ""
+      echo "Created files:"
+      echo "  - {{ dir }}/{{ name }}.tsx"
+      echo "  - {{ actionPath }}/{{ kebabCase(name) }}-action.ts"
+      echo "  - lib/schemas/{{ kebabCase(name) }}-schema.ts"
+      echo ""
+      echo "Usage:"
+      echo "  import { {{ name }} } from '@/{{ dir }}/{{ name }}'"
+      echo ""
+      echo "  export default function MyPage() {"
+      echo "    return <{{ name }} />"
+      echo "  }"
+      echo ""
+      echo "Features:"
+      echo "  ✓ Works without JavaScript (progressive enhancement)"
+      echo "  ✓ Server-side validation with Zod"
+      echo "  ✓ Automatic error handling"
+      echo "  ✓ useActionState for optimistic UI"

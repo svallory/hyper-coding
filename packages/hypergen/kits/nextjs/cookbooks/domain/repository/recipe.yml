@@ -1,0 +1,84 @@
+name: repository
+description: |
+  Generate a repository interface and ORM-specific implementation for a domain entity.
+
+  Generates:
+  - Repository interface with standard CRUD + custom methods
+  - Drizzle ORM implementation (when ORM is Drizzle)
+  - Prisma implementation (when ORM is Prisma)
+
+  Follows the repository pattern: domain layer defines the interface,
+  infrastructure layer provides the implementation.
+
+  Time saved: 30-50 min → 2 min
+
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Repository name (camelCase entity name — e.g., 'user', 'organization')
+    required: true
+    position: 0
+    prompt: What entity does this repository manage? (e.g., 'user', 'organization')
+
+  entity:
+    type: string
+    description: Entity name if different from repository name (PascalCase)
+    required: false
+
+  methods:
+    type: string
+    description: Extra methods beyond CRUD (e.g., "findByEmail,findByOrganization,countActive")
+    required: false
+
+steps:
+  - name: Ensure directories exist
+    tool: shell
+    command: mkdir -p lib/domain/repositories lib/infrastructure/repositories
+
+  - name: Detect ORM
+    tool: shell
+    command: |
+      if grep -q '"drizzle-orm"' package.json 2>/dev/null; then
+        echo "drizzle"
+      elif grep -q '"@prisma/client"' package.json 2>/dev/null; then
+        echo "prisma"
+      else
+        echo "none"
+      fi
+    exports:
+      detectedOrm: "{{ result.stdout.trim() }}"
+
+  - name: Generate repository interface
+    tool: template
+    template: templates/repository-interface.ts.jig
+
+  - name: Generate Drizzle implementation
+    tool: template
+    template: templates/drizzle-repository.ts.jig
+    when: "detectedOrm === 'drizzle'"
+
+  - name: Generate Prisma implementation
+    tool: template
+    template: templates/prisma-repository.ts.jig
+    when: "detectedOrm === 'prisma'"
+
+  - name: Success message
+    tool: shell
+    command: |
+      echo "Repository for '{{ name }}' generated successfully!"
+      echo ""
+      echo "Generated files:"
+      echo "  lib/domain/repositories/{{ name }}-repository.ts — Interface"
+      if [ "{{ detectedOrm }}" = "drizzle" ]; then
+        echo "  lib/infrastructure/repositories/{{ name }}-repository.impl.ts — Drizzle implementation"
+      elif [ "{{ detectedOrm }}" = "prisma" ]; then
+        echo "  lib/infrastructure/repositories/{{ name }}-repository.impl.ts — Prisma implementation"
+      fi
+      echo ""
+      echo "Usage:"
+      echo "  import type { {{ pascalCase(name) }}Repository } from '@/lib/domain/repositories/{{ name }}-repository'"
+      if [ "{{ detectedOrm }}" != "none" ]; then
+        echo "  import { {{ pascalCase(name) }}RepositoryImpl } from '@/lib/infrastructure/repositories/{{ name }}-repository.impl'"
+      fi

@@ -1,0 +1,99 @@
+---
+to: db/schema/{{ name }}.ts
+---
+@let(modelName = model || pascalCase(name))
+@let(tableName = pluralize(name))
+@let(modelFields = typeof parseFieldsString === 'function' && fields ? parseFieldsString(fields) : [])
+@let(fieldDescriptions = typeof buildFieldDescriptions === 'function' ? buildFieldDescriptions(modelFields) : '')
+@ai({ key: 'drizzleImports' })
+  @context()
+Entity: {{ modelName }}
+Table name: {{ tableName }}
+Fields: {{ fieldDescriptions }}
+@if(relations)
+Relations: {{ relations }}
+@end
+  @end
+  @prompt()
+Generate the import statement for this Drizzle ORM table definition.
+Import from 'drizzle-orm/sqlite-core' (or 'drizzle-orm/pg-core' if fields suggest PostgreSQL features).
+Include: sqliteTable (or pgTable), text, integer, real, blob, and any other column types needed for the fields.
+If relations are specified, also import { relations } from 'drizzle-orm'.
+Output ONLY the import statement(s).
+  @end
+  @output({ typeHint: 'typescript-code' })
+Import statements for drizzle-orm column types.
+  @end
+  @example()
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+  @end
+@end
+
+{{ drizzleImports }}
+
+@ai({ key: 'drizzleColumns' })
+  @context()
+Entity: {{ modelName }}
+Table name: {{ tableName }}
+Fields: {{ fieldDescriptions }}
+  @end
+  @prompt()
+Generate a Drizzle ORM table definition for {{ modelName }}.
+Table variable should be named `{{ tableName }}`.
+Include:
+- id column (text primary key with $defaultFn generating crypto.randomUUID(), or integer primary key autoincrement)
+- All entity fields with appropriate Drizzle column types
+- createdAt (integer timestamp, default Date.now())
+- updatedAt (integer timestamp, default Date.now())
+Output ONLY the table definition (export const {{ tableName }} = sqliteTable(...)) — no imports.
+  @end
+  @output({ typeHint: 'typescript-code' })
+A Drizzle sqliteTable() definition with all columns.
+  @end
+  @example()
+export const {{ tableName }} = sqliteTable('{{ tableName }}', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
+})
+  @end
+@end
+
+{{ drizzleColumns }}
+
+@if(relations)
+@ai({ key: 'drizzleRelations' })
+  @context()
+Entity: {{ modelName }}
+Table variable: {{ tableName }}
+Relations: {{ relations }}
+  @end
+  @prompt()
+Generate Drizzle ORM relations for the {{ tableName }} table.
+Use the `relations` helper from 'drizzle-orm'.
+Parse these relation descriptors: {{ relations }}
+Format: "belongsTo:entity" → one(), "hasMany:entities" → many()
+Import referenced tables from their schema files (e.g., import { organizations } from './organization').
+Output ONLY the relations definition (export const {{ tableName }}Relations = relations(...)).
+  @end
+  @output({ typeHint: 'typescript-code' })
+A Drizzle relations() definition.
+  @end
+  @example()
+export const {{ tableName }}Relations = relations({{ tableName }}, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [{{ tableName }}.organizationId],
+    references: [organizations.id],
+  }),
+}))
+  @end
+@end
+
+{{ drizzleRelations }}
+@end
+
+export type {{ modelName }} = typeof {{ tableName }}.$inferSelect
+export type New{{ modelName }} = typeof {{ tableName }}.$inferInsert
