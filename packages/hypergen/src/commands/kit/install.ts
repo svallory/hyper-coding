@@ -8,6 +8,12 @@ import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../../lib/base-command.js'
 import { execSync } from 'node:child_process'
 import { resolveKitSource, buildInstallCommand } from '../../lib/kit/source-resolver.js'
+import {
+  addKitToManifest,
+  isKitInstalled,
+  extractPackageVersion,
+  type KitManifestEntry,
+} from '../../lib/kit/manifest.js'
 import tiged from 'tiged'
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {
@@ -110,10 +116,12 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
   }
 
   /**
-   * Install kit to ./kits/ directory (for GitHub, Git URLs, local paths, etc.)
+   * Install kit to .hyper/kits/ directory (for GitHub, Git URLs, local paths, etc.)
    */
   private async installToKitsDir(resolved: any, flags: any): Promise<void> {
-    const kitsDir = join(flags.cwd, 'kits')
+    // Find project root (where package.json is)
+    const projectRoot = this.findProjectRoot(flags.cwd)
+    const kitsDir = join(projectRoot, '.hyper', 'kits')
 
     // Ensure kits directory exists
     if (!existsSync(kitsDir)) {
@@ -125,27 +133,35 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
     const kitName = flags.name || this.extractKitName(resolved)
     const targetDir = join(kitsDir, kitName)
 
-    // Check if kit already exists
-    if (existsSync(targetDir)) {
+    // Check if kit already exists (directory or manifest)
+    if (existsSync(targetDir) || isKitInstalled(projectRoot, kitName)) {
       this.error(
         `Kit already exists: ${kitName}\n` +
-        `Remove it first with: rm -rf kits/${kitName}\n` +
+        `Remove it first with: rm -rf .hyper/kits/${kitName}\n` +
         `Or specify a different name with: --name <name>`
       )
     }
 
-    this.log(`Installing to: kits/${kitName}`)
+    this.log(`Installing to: .hyper/kits/${kitName}`)
 
     // Install based on source type
+    let commit: string | undefined
+    let branch: string | undefined
+    let tag: string | undefined
+
     switch (resolved.type) {
       case 'github':
       case 'gitlab':
       case 'bitbucket':
-        await this.cloneFromGitHost(resolved, targetDir)
+        const gitInfo = await this.cloneFromGitHost(resolved, targetDir)
+        commit = gitInfo.commit
+        branch = gitInfo.branch
+        tag = gitInfo.tag
         break
 
       case 'git':
-        await this.cloneFromGitUrl(resolved.source, targetDir)
+        const gitUrlInfo = await this.cloneFromGitUrl(resolved.source, targetDir)
+        commit = gitUrlInfo.commit
         break
 
       case 'local':
@@ -159,19 +175,51 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
       default:
         this.error(`Unsupported source type for kit installation: ${resolved.type}`)
     }
+
+    // Extract version from package.json if available
+    const version = extractPackageVersion(targetDir)
+
+    // Add to manifest
+    const manifestEntry: KitManifestEntry = {
+      name: kitName,
+      source: resolved.original,
+      type: resolved.type,
+      installedAt: new Date().toISOString(),
+      commit,
+      version,
+      branch,
+      tag,
+    }
+
+    addKitToManifest(projectRoot, manifestEntry)
+    this.log(`Added ${kitName} to manifest`)
   }
 
   /**
    * Download from GitHub/GitLab/Bitbucket using tiged
    */
-  private async cloneFromGitHost(resolved: any, targetDir: string): Promise<void> {
+  private async cloneFromGitHost(
+    resolved: any,
+    targetDir: string
+  ): Promise<{ commit?: string; branch?: string; tag?: string }> {
     // Convert to tiged-compatible format
     let tigedSource = resolved.source
 
-    // tiged supports: user/repo, github:user/repo, gitlab:user/repo, bitbucket:user/repo
-    // Also supports branches/tags: user/repo#branch
-    // Convert @tag to #tag for tiged compatibility
-    tigedSource = tigedSource.replace(/@([^/]+)$/, '#$1')
+    // Extract branch/tag information
+    let branch: string | undefined
+    let tag: string | undefined
+
+    // Check for branch (#) or tag (@) in source
+    const branchMatch = tigedSource.match(/#([^/]+)$/)
+    const tagMatch = tigedSource.match(/@([^/]+)$/)
+
+    if (branchMatch) {
+      branch = branchMatch[1]
+    } else if (tagMatch) {
+      tag = tagMatch[1]
+      // Convert @tag to #tag for tiged compatibility
+      tigedSource = tigedSource.replace(/@([^/]+)$/, '#$1')
+    }
 
     this.log(`Downloading from: ${tigedSource}`)
 
@@ -193,12 +241,19 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
     })
 
     await emitter.clone(targetDir)
+
+    // Note: tiged doesn't provide commit hash, we'd need to get it from the repo
+    // This is a limitation we accept for now
+    return { branch, tag }
   }
 
   /**
    * Download from Git URL using tiged
    */
-  private async cloneFromGitUrl(gitUrl: string, targetDir: string): Promise<void> {
+  private async cloneFromGitUrl(
+    gitUrl: string,
+    targetDir: string
+  ): Promise<{ commit?: string }> {
     this.log(`Downloading from: ${gitUrl}`)
 
     // tiged can handle Git URLs directly
@@ -219,6 +274,28 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
     })
 
     await emitter.clone(targetDir)
+
+    return {}
+  }
+
+  /**
+   * Find project root by walking up to find package.json
+   */
+  private findProjectRoot(startDir: string): string {
+    let dir = startDir
+
+    while (dir !== '/' && dir !== '.') {
+      if (existsSync(join(dir, 'package.json'))) {
+        return dir
+      }
+
+      const parent = join(dir, '..')
+      if (parent === dir) break
+      dir = parent
+    }
+
+    // If no package.json found, use startDir
+    return startDir
   }
 
   /**

@@ -78,4 +78,4 @@ yarn-error.log
 dist/
 standalone/
 .yarn
-/kits/
+/.hyper/kits/
