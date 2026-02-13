@@ -8,6 +8,7 @@ import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../../lib/base-command.js'
 import { execSync } from 'node:child_process'
 import { resolveKitSource, buildInstallCommand } from '../../lib/kit/source-resolver.js'
+import tiged from 'tiged'
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {
   static override description = 'Install a kit from npm, JSR, GitHub, or local path'
@@ -161,38 +162,63 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
   }
 
   /**
-   * Clone from GitHub/GitLab/Bitbucket using shorthand or prefix
+   * Download from GitHub/GitLab/Bitbucket using tiged
    */
   private async cloneFromGitHost(resolved: any, targetDir: string): Promise<void> {
-    // Convert github:user/repo to https://github.com/user/repo.git
-    let gitUrl = resolved.source
+    // Convert to tiged-compatible format
+    let tigedSource = resolved.source
 
-    if (gitUrl.startsWith('github:')) {
-      gitUrl = gitUrl.replace('github:', 'https://github.com/') + '.git'
-    } else if (gitUrl.startsWith('gitlab:')) {
-      gitUrl = gitUrl.replace('gitlab:', 'https://gitlab.com/') + '.git'
-    } else if (gitUrl.startsWith('bitbucket:')) {
-      gitUrl = gitUrl.replace('bitbucket:', 'https://bitbucket.org/') + '.git'
-    }
+    // tiged supports: user/repo, github:user/repo, gitlab:user/repo, bitbucket:user/repo
+    // Also supports branches/tags: user/repo#branch
+    // Convert @tag to #tag for tiged compatibility
+    tigedSource = tigedSource.replace(/@([^/]+)$/, '#$1')
 
-    this.log(`Cloning from: ${gitUrl}`)
+    this.log(`Downloading from: ${tigedSource}`)
 
-    execSync(`git clone ${gitUrl} "${targetDir}"`, {
-      cwd: this.flags.cwd,
-      stdio: 'inherit',
+    const emitter = tiged(tigedSource, {
+      cache: false,
+      force: false,
+      verbose: this.flags.debug,
     })
+
+    // Handle tiged events
+    emitter.on('info', (info: any) => {
+      if (this.flags.debug) {
+        this.log(`[tiged] ${info.message}`)
+      }
+    })
+
+    emitter.on('warn', (warning: any) => {
+      this.warn(`[tiged] ${warning.message}`)
+    })
+
+    await emitter.clone(targetDir)
   }
 
   /**
-   * Clone from Git URL
+   * Download from Git URL using tiged
    */
   private async cloneFromGitUrl(gitUrl: string, targetDir: string): Promise<void> {
-    this.log(`Cloning from: ${gitUrl}`)
+    this.log(`Downloading from: ${gitUrl}`)
 
-    execSync(`git clone "${gitUrl}" "${targetDir}"`, {
-      cwd: this.flags.cwd,
-      stdio: 'inherit',
+    // tiged can handle Git URLs directly
+    const emitter = tiged(gitUrl, {
+      cache: false,
+      force: false,
+      verbose: this.flags.debug,
     })
+
+    emitter.on('info', (info: any) => {
+      if (this.flags.debug) {
+        this.log(`[tiged] ${info.message}`)
+      }
+    })
+
+    emitter.on('warn', (warning: any) => {
+      this.warn(`[tiged] ${warning.message}`)
+    })
+
+    await emitter.clone(targetDir)
   }
 
   /**
