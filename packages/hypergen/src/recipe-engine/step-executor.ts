@@ -1049,7 +1049,8 @@ export class StepExecutor extends EventEmitter {
       prompt: 30000,   // 30 seconds average (interactive)
       sequence: 0,     // Sequence tool itself is instant
       parallel: 0,     // Parallel tool itself is instant
-      ai: 20000        // 20 seconds average (AI generation)
+      ai: 20000,       // 20 seconds average (AI generation)
+      install: 15000   // 15 seconds average (package install)
     }
     
     let totalEstimate = 0

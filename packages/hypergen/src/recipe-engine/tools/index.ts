@@ -42,6 +42,12 @@ export {
   aiToolFactory
 } from './ai-tool.js'
 
+export {
+  InstallTool,
+  InstallToolFactory,
+  installToolFactory
+} from './install-tool.js'
+
 export type {
   ToolFactory,
   ToolPhase,
@@ -77,6 +83,7 @@ export type {
   RecipeStep,
   ShellStep,
   AIStep,
+  InstallStep,
   
   // Context and execution
   StepContext,
@@ -114,6 +121,7 @@ import { promptToolFactory } from './prompt-tool.js'
 import { sequenceToolFactory } from './sequence-tool.js'
 import { parallelToolFactory } from './parallel-tool.js'
 import { aiToolFactory } from './ai-tool.js'
+import { installToolFactory } from './install-tool.js'
 
 // Re-export type guard functions for convenience
 export {
@@ -122,7 +130,8 @@ export {
   isCodeModStep,
   isRecipeStep,
   isAIStep,
-  
+  isInstallStep,
+
   // Error classes
   StepExecutionError,
   RecipeDependencyError,
@@ -139,7 +148,7 @@ export const TOOL_FRAMEWORK_VERSION = '8.0.0'
 /**
  * Supported tool types in the Recipe Step System
  */
-export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = ['template', 'action', 'codemod', 'recipe', 'shell', 'ai'] as const
+export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = ['template', 'action', 'codemod', 'recipe', 'shell', 'ai', 'install'] as const
 
 /**
  * Default tool registry configuration
@@ -247,6 +256,14 @@ export function registerDefaultTools(): void {
     registry.register('ai', 'default', aiToolFactory, {
       description: 'AI-powered code generation',
       category: 'ai'
+    })
+  }
+
+  // Register Install Tool
+  if (!registry.isRegistered('install', 'default')) {
+    registry.register('install', 'default', installToolFactory, {
+      description: 'Install packages via package manager',
+      category: 'core'
     })
   }
 }

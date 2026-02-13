@@ -15,6 +15,7 @@ import { TemplateParser, type TemplateVariable } from '../config/template-parser
 import { StepExecutor, type StepExecutorConfig } from './step-executor.js'
 import { ToolRegistry, getToolRegistry } from './tools/registry.js'
 import { HypergenError, ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
+import { renderTemplate as jigRenderTemplate } from '../template-engines/jig-engine.js'
 import Logger from '../logger.js'
 import { performInteractivePrompting } from '../prompts/interactive-prompts.js'
 import { AiCollector } from '../ai/ai-collector.js'
@@ -403,9 +404,12 @@ export class RecipeEngine extends EventEmitter {
         context
       )
       
+      // Render and print onSuccess/onError messages
+      await this.renderLifecycleMessage(recipe, result, resolvedVariables, options)
+
       this.debug('Recipe execution completed [%s] in %dms', executionId, result.duration)
       this.emit('recipe:completed', { executionId, result })
-      
+
       return result
       
     } catch (error) {
@@ -821,6 +825,8 @@ export class RecipeEngine extends EventEmitter {
         provides: this.parseProvides(parsed.provides),
         examples: parsed.examples || [],
         dependencies: parsed.dependencies || [],
+        onSuccess: parsed.onSuccess,
+        onError: parsed.onError,
         outputs: parsed.outputs || [],
         engines: parsed.engines,
         hooks: parsed.hooks,
@@ -887,6 +893,8 @@ export class RecipeEngine extends EventEmitter {
           step.tool = 'action'
         } else if (step.codemod) {
           step.tool = 'codemod'
+        } else if (step.packages) {
+          step.tool = 'install'
         }
       }
 
@@ -1264,6 +1272,50 @@ export class RecipeEngine extends EventEmitter {
     }
   }
 
+  /**
+   * Render and print onSuccess or onError message after recipe execution
+   */
+  private async renderLifecycleMessage(
+    recipe: RecipeConfig,
+    result: RecipeExecutionResult,
+    variables: Record<string, any>,
+    options: RecipeExecutionOptions
+  ): Promise<void> {
+    const template = result.success ? recipe.onSuccess : recipe.onError
+    if (!template) return
+
+    try {
+      const renderContext = {
+        ...variables,
+        recipe: { name: recipe.name, description: recipe.description, version: recipe.version },
+        result: {
+          success: result.success,
+          filesCreated: result.filesCreated,
+          filesModified: result.filesModified,
+          errors: result.errors,
+          duration: result.duration,
+        },
+      }
+
+      const rendered = await jigRenderTemplate(template, renderContext)
+      const trimmed = rendered.trim()
+
+      if (trimmed) {
+        const logger = options.logger || this.logger
+        console.log() // blank line before message
+        if (result.success) {
+          logger.ok(trimmed)
+        } else {
+          logger.err(trimmed)
+        }
+      }
+    } catch (error) {
+      this.debug('Failed to render %s message: %s',
+        result.success ? 'onSuccess' : 'onError',
+        error instanceof Error ? error.message : String(error))
+    }
+  }
+
   private async loadDependencies(recipe: RecipeConfig): Promise<RecipeConfig[]> {
     const dependencies: RecipeConfig[] = []
     
@@ -1375,7 +1427,7 @@ export class RecipeEngine extends EventEmitter {
       ))
     }
     
-    const validTools = ['template', 'action', 'codemod', 'recipe', 'shell', 'prompt', 'sequence', 'parallel', 'ai']
+    const validTools = ['template', 'action', 'codemod', 'recipe', 'shell', 'prompt', 'sequence', 'parallel', 'ai', 'install']
     if (step.tool && !validTools.includes(step.tool)) {
       errors.push(new RecipeValidationError(
         `Step ${step.name || index + 1} has invalid tool: ${step.tool}`,

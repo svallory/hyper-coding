@@ -29,7 +29,7 @@ export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipp
 /**
  * Tool types supported by the recipe system
  */
-export type ToolType = 'template' | 'action' | 'codemod' | 'recipe' | 'shell' | 'prompt' | 'sequence' | 'parallel' | 'ai'
+export type ToolType = 'template' | 'action' | 'codemod' | 'recipe' | 'shell' | 'prompt' | 'sequence' | 'parallel' | 'ai' | 'install'
 
 /**
  * Base interface for all recipe steps
@@ -286,6 +286,26 @@ export interface PromptStep extends BaseRecipeStep {
 }
 
 /**
+ * Install step configuration
+ * Installs packages using the project's package manager
+ */
+export interface InstallStep extends BaseRecipeStep {
+  tool: 'install'
+
+  /** Packages to install */
+  packages: string[]
+
+  /** Install as dev dependencies */
+  dev?: boolean
+
+  /** Don't fail if install fails */
+  optional?: boolean
+
+  /** Package manager override (auto-detected from lockfiles if omitted) */
+  packageManager?: 'bun' | 'pnpm' | 'yarn' | 'npm'
+}
+
+/**
  * Sequence step configuration
  * Executes a list of steps sequentially
  */
@@ -357,7 +377,7 @@ export interface AIStep extends BaseRecipeStep {
 /**
  * Union type for all step types (discriminated union)
  */
-export type RecipeStepUnion = TemplateStep | ActionStep | CodeModStep | RecipeStep | ShellStep | PromptStep | SequenceStep | ParallelStep | AIStep
+export type RecipeStepUnion = TemplateStep | ActionStep | CodeModStep | RecipeStep | ShellStep | PromptStep | SequenceStep | ParallelStep | AIStep | InstallStep
 
 /**
  * Step execution context
@@ -458,7 +478,7 @@ export interface StepResult {
   conditionResult?: boolean
   
   /** Tool-specific execution result */
-  toolResult?: ActionResult | TemplateExecutionResult | CodeModExecutionResult | RecipeExecutionResult | ShellExecutionResult | PromptExecutionResult | SequenceExecutionResult | ParallelExecutionResult | AIExecutionResult
+  toolResult?: ActionResult | TemplateExecutionResult | CodeModExecutionResult | RecipeExecutionResult | ShellExecutionResult | PromptExecutionResult | SequenceExecutionResult | ParallelExecutionResult | AIExecutionResult | InstallExecutionResult
   
   /** Files created by this step */
   filesCreated?: string[]
@@ -539,6 +559,22 @@ export interface SequenceExecutionResult {
  */
 export interface ParallelExecutionResult {
   steps: StepResult[]
+}
+
+/**
+ * Install execution result
+ */
+export interface InstallExecutionResult {
+  packageManager?: string
+  packages: string[]
+  dev?: boolean
+  dryRun?: boolean
+  command?: string
+  optional?: boolean
+  warning?: string
+  exitCode?: number
+  stdout?: string
+  stderr?: string
 }
 
 /**
@@ -637,6 +673,12 @@ export interface RecipeConfig {
     workingDir?: string
   }
   
+  /** Message rendered and printed after successful execution (Jig template) */
+  onSuccess?: string
+
+  /** Message rendered and printed after failed execution (Jig template) */
+  onError?: string
+
   /** Advanced composition features */
   composition?: {
     /** Base recipe to extend */
@@ -1112,6 +1154,10 @@ export function isParallelStep(step: BaseRecipeStep): step is ParallelStep {
 
 export function isAIStep(step: BaseRecipeStep): step is AIStep {
   return (step as AIStep).tool === 'ai'
+}
+
+export function isInstallStep(step: BaseRecipeStep): step is InstallStep {
+  return (step as InstallStep).tool === 'install'
 }
 export class CircularDependencyError extends Error {
   constructor(
