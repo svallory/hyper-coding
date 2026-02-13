@@ -22,7 +22,6 @@ import {
   isTemplateStep
 } from '../types.js'
 import { getJig, renderTemplate as jigRenderTemplate } from '../../template-engines/index.js'
-import builtinHelpers from '../../helpers.js'
 import addOp from '../../ops/add.js'
 import injectOp from '../../ops/inject.js'
 import type { RenderedAction, RunnerConfig } from '../../types.js'
@@ -574,7 +573,10 @@ export class TemplateTool extends Tool<TemplateStep> {
   }
 
   /**
-   * Build render context by merging step and recipe variables
+   * Build render context by merging step and recipe variables.
+   *
+   * Helpers are registered as Jig globals (not spread into context),
+   * so the context only contains data: variables, step results, and utilities.
    */
   private buildRenderContext(
     step: TemplateStep,
@@ -588,34 +590,8 @@ export class TemplateTool extends Tool<TemplateStep> {
       ...step.variables
     }
 
-    // Build helpers: built-in helpers < config helpers (from context.variables.h) < utils
-    // context.variables.h already has config helpers from recipe engine's createExecutionContext.
-    // We layer built-in helpers first, then config helpers on top so custom helpers like
-    // listModelFields are preserved and not overwritten by contextHelper() rebuilding h.
-    const helpers = { ...builtinHelpers, ...(mergedVars.h || {}), ...(context.utils || {}) }
-
-    // Apply processedLocals: auto-generate capitalized/pluralized variants of 'name'
-    // This replicates the behavior of contextHelper's processedLocals
-    const processedLocals: Record<string, any> = {}
-    const nameValue = mergedVars.name
-    if (nameValue != null) {
-      const capitalize = builtinHelpers.capitalize
-      const pluralize = builtinHelpers.inflection.pluralize
-      processedLocals.Name = capitalize(nameValue)
-      processedLocals.names = pluralize(nameValue)
-      processedLocals.Names = capitalize(pluralize(nameValue))
-    }
-
-    const renderContext = {
-      // Start with defaults for expected locals
-      name: 'unnamed',
+    return {
       ...mergedVars,
-      // Apply auto-generated capitalized/pluralized variants
-      ...processedLocals,
-      // Spread helpers at top level so templates can call them directly
-      ...helpers,
-      // Also keep them in .h for backward compatibility
-      h: helpers,
       // Recipe-specific context
       recipe: context.recipe,
       step: { name: step.name, description: step.description },
@@ -632,11 +608,6 @@ export class TemplateTool extends Tool<TemplateStep> {
         return ''
       },
     }
-
-    this.debug('Building Jig context: collectMode=%s, __hypergenCollectMode=%s, renderContext has listModelFields=%s',
-      context.collectMode, renderContext.__hypergenCollectMode, 'listModelFields' in renderContext)
-
-    return renderContext
   }
 
   /**

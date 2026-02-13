@@ -11,6 +11,8 @@ import yaml from 'js-yaml'
 import { glob } from 'glob'
 import createDebug from 'debug'
 import type { KitConfig } from './types.js'
+import { loadHelpers } from './load-helpers.js'
+import { registerHelpers } from '../template-engines/jig-engine.js'
 
 const debug = createDebug('hypergen:config:kit-parser')
 
@@ -21,6 +23,7 @@ export interface ParsedKit {
   isValid: boolean
   errors: string[]
   warnings: string[]
+  loadedHelpers?: Record<string, Function>
 }
 
 /**
@@ -52,6 +55,15 @@ export async function parseKitFile(filePath: string): Promise<ParsedKit> {
 
     result.config = validateKitConfig(parsed, result.errors, result.warnings)
     result.isValid = result.errors.length === 0
+
+    // Load helpers if configured
+    if (result.isValid && result.config.helpers) {
+      try {
+        result.loadedHelpers = await loadHelpers(result.config.helpers, result.dirPath)
+      } catch (error) {
+        result.warnings.push(`Failed to load helpers: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
 
     return result
   } catch (error: any) {
@@ -160,6 +172,17 @@ export async function resolveKitCookbooks(
   return cookbookDirs
 }
 
+/**
+ * Register a parsed kit's helpers as Jig globals.
+ * Call this after parsing and before recipe execution.
+ */
+export function registerKitHelpers(kit: ParsedKit): void {
+  if (kit.loadedHelpers && Object.keys(kit.loadedHelpers).length > 0) {
+    registerHelpers(kit.loadedHelpers, `kit:${kit.config.name}`)
+    debug('Registered %d helpers for kit: %s', Object.keys(kit.loadedHelpers).length, kit.config.name)
+  }
+}
+
 // -- Validation helpers --
 
 function validateKitConfig(
@@ -219,6 +242,10 @@ function validateKitConfig(
 
   if (parsed.categories && Array.isArray(parsed.categories)) {
     config.categories = parsed.categories.filter((c: any) => typeof c === 'string')
+  }
+
+  if (parsed.helpers && typeof parsed.helpers === 'string') {
+    config.helpers = parsed.helpers
   }
 
   return config

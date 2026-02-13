@@ -16,7 +16,6 @@ import { StepExecutor, type StepExecutorConfig } from './step-executor.js'
 import { ToolRegistry, getToolRegistry } from './tools/registry.js'
 import { HypergenError, ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
 import Logger from '../logger.js'
-import context from '../context.js'
 import { performInteractivePrompting } from '../prompts/interactive-prompts.js'
 import { AiCollector } from '../ai/ai-collector.js'
 import { AiVariableResolver, type UnresolvedVariable } from '../ai/ai-variable-resolver.js'
@@ -146,8 +145,6 @@ export interface RecipeEngineConfig {
     validateSignatures?: boolean
   }
 
-  /** Helper functions from hypergen config */
-  helpers?: Record<string, any>
 }
 
 /**
@@ -243,8 +240,7 @@ const DEFAULT_CONFIG: Required<RecipeEngineConfig> = {
     allowExternalSources: true,
     trustedSources: [],
     validateSignatures: false
-  },
-  helpers: {}
+  }
 }
 
 /**
@@ -1129,18 +1125,12 @@ export class RecipeEngine extends EventEmitter {
     executionId: string,
     source?: string | RecipeSource
   ): Promise<StepContext> {
-    // Create base context using existing context function
-    const baseContext = context(variables, {
-      localsDefaults: {},
-      helpers: this.config.helpers
-    })
-
     // Determine collect mode: if no answers provided and AiCollector is in collect mode
     const collectMode = !options.answers && AiCollector.getInstance().collectMode
 
     return {
       step: {} as RecipeStepUnion, // Will be set by step executor
-      variables: baseContext,
+      variables: { ...variables },
       projectRoot: options.workingDir || this.config.workingDir,
       recipeVariables: variables,
       stepResults: new Map(),
@@ -1151,7 +1141,7 @@ export class RecipeEngine extends EventEmitter {
         startTime: new Date()
       },
       stepData: {},
-      evaluateCondition: this.createConditionEvaluator(baseContext),
+      evaluateCondition: this.createConditionEvaluator(variables),
       answers: options.answers,
       collectMode,
       dryRun: options.dryRun,
@@ -1163,18 +1153,16 @@ export class RecipeEngine extends EventEmitter {
     }
   }
 
-  private createConditionEvaluator(context: Record<string, any>): (expression: string, ctx: Record<string, any>) => boolean {
+  private createConditionEvaluator(variables: Record<string, any>): (expression: string, ctx: Record<string, any>) => boolean {
     return (expression: string, ctx: Record<string, any>) => {
       try {
-        // Simple expression evaluation
-        // In production, you'd want a safer evaluation method
-        // Flatten variables into scope for easier access
-        const variableScope = { 
-          ...context.variables, 
+        // Flatten variables into scope for easier access in condition expressions
+        const variableScope = {
+          ...variables,
           ...(ctx.variables || {}),
-          variables: { ...context.variables, ...(ctx.variables || {}) }
+          variables: { ...variables, ...(ctx.variables || {}) }
         }
-        const mergedContext = { ...context, ...ctx, ...variableScope }
+        const mergedContext = { ...ctx, ...variableScope }
         // Remove 'variables' from root if it conflicts (though we just added it back explicitly)
         
         // Use a set to ensure unique argument names for Function constructor

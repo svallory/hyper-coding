@@ -9,6 +9,8 @@ import path from 'path'
 import { pathToFileURL } from 'url'
 import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
 import { DEFAULT_TEMPLATE_DIRECTORY } from '../constants.js'
+import { loadHelpers } from './load-helpers.js'
+import { registerHelpers } from '../template-engines/jig-engine.js'
 import type { AiServiceConfig } from '../ai/ai-config.js'
 
 export interface HypergenConfig {
@@ -230,8 +232,11 @@ export class HypergenConfigLoader {
         Object.assign(mergedConfig, this.mergeConfig(mergedConfig, envConfig))
       }
       
-      // Load helpers
-      const loadedHelpers = await this.loadHelpers(mergedConfig.helpers, projectRoot)
+      // Load helpers and register as Jig globals
+      const loadedHelpers = await loadHelpers(mergedConfig.helpers, projectRoot)
+      if (Object.keys(loadedHelpers).length > 0) {
+        registerHelpers(loadedHelpers, 'config:hypergen.config')
+      }
       
       // Resolve paths
       const resolvedConfig: ResolvedConfig = {
@@ -351,63 +356,6 @@ export class HypergenConfigLoader {
     }
     
     return merged
-  }
-  
-  /**
-   * Load helper functions
-   */
-  private static async loadHelpers(
-    helpers: string | Record<string, Function> | undefined,
-    projectRoot: string
-  ): Promise<Record<string, Function>> {
-    if (!helpers) return {}
-
-    if (typeof helpers === 'string') {
-      // Load helpers from file or directory
-      let helpersPath = path.isAbsolute(helpers)
-        ? helpers
-        : path.resolve(projectRoot, helpers)
-
-      try {
-        // Check if path is a directory
-        if (fs.existsSync(helpersPath)) {
-          const stats = fs.statSync(helpersPath)
-          if (stats.isDirectory()) {
-            // Try index.js, index.mjs, index.cjs
-            const indexFiles = ['index.js', 'index.mjs', 'index.cjs']
-            for (const indexFile of indexFiles) {
-              const indexPath = path.join(helpersPath, indexFile)
-              if (fs.existsSync(indexPath)) {
-                helpersPath = indexPath
-                break
-              }
-            }
-          }
-        }
-
-        // Check if the resolved file exists
-        if (!fs.existsSync(helpersPath)) {
-          console.warn(`Warning: Could not load helpers from ${helpersPath} (file not found)`)
-          return {}
-        }
-
-        const fileUrl = pathToFileURL(helpersPath).href
-        const module = await import(fileUrl)
-        const helpers = module.default || module
-        // Ensure we return a plain object with own properties
-        // to avoid prototype chain issues when spreading
-        return { ...helpers }
-      } catch (error) {
-        console.warn(`Warning: Could not load helpers from ${helpersPath}`)
-        console.warn(`  Error: ${error instanceof Error ? error.message : String(error)}`)
-        return {}
-      }
-    } else if (typeof helpers === 'object') {
-      // Use provided helpers object
-      return helpers
-    }
-
-    return {}
   }
   
   /**

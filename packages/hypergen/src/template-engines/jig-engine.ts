@@ -23,6 +23,12 @@ export interface JigConfig {
 let jig: Edge | null = null
 
 /**
+ * Track registered globals for collision warnings.
+ * Maps global name -> source string (e.g. "kit:@hyper-kits/nextjs").
+ */
+const registeredGlobals = new Map<string, string>()
+
+/**
  * Get the Jig (Edge) instance, creating it if needed.
  */
 export function getJig(): Edge {
@@ -37,6 +43,7 @@ export function getJig(): Edge {
  */
 export function initializeJig(config?: JigConfig): void {
   jig = Edge.create({ cache: config?.cache ?? false })
+  registeredGlobals.clear()
   registerFilters(jig)
   registerAi2PassTags(jig)
   debug('Jig template engine initialized (cache=%s)', config?.cache ?? false)
@@ -141,6 +148,35 @@ function registerFilters(edge: Edge): void {
   }
 
   debug('Registered %d filters + globals', Object.keys(allFilters).length)
+}
+
+// ─── Helper Registration ──────────────────────────────────────────────
+
+/**
+ * Register helper functions as Jig globals.
+ * Warns on collision (last registration wins).
+ *
+ * @param helpers  Record of name -> function
+ * @param source   Human-readable source identifier for collision warnings
+ */
+export function registerHelpers(
+  helpers: Record<string, any>,
+  source?: string
+): void {
+  const engine = getJig()
+  for (const [name, value] of Object.entries(helpers)) {
+    if (typeof value === 'function') {
+      if (registeredGlobals.has(name)) {
+        const existingSource = registeredGlobals.get(name)
+        console.warn(
+          `Warning: Helper "${name}" from ${source ?? 'unknown'} overwrites existing helper from ${existingSource}`
+        )
+      }
+      engine.global(name, value)
+      registeredGlobals.set(name, source ?? 'unknown')
+    }
+  }
+  debug('Registered %d helpers from %s', Object.keys(helpers).length, source ?? 'unknown')
 }
 
 // ─── AI Tags (2-Pass System) ──────────────────────────────────────────

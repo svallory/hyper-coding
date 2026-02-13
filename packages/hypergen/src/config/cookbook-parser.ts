@@ -11,6 +11,8 @@ import yaml from 'js-yaml'
 import { glob } from 'glob'
 import createDebug from 'debug'
 import type { CookbookConfig } from './types.js'
+import { loadHelpers } from './load-helpers.js'
+import { registerHelpers } from '../template-engines/jig-engine.js'
 
 const debug = createDebug('hypergen:config:cookbook-parser')
 
@@ -21,6 +23,7 @@ export interface ParsedCookbook {
   isValid: boolean
   errors: string[]
   warnings: string[]
+  loadedHelpers?: Record<string, Function>
 }
 
 /**
@@ -52,6 +55,15 @@ export async function parseCookbookFile(filePath: string): Promise<ParsedCookboo
 
     result.config = validateCookbookConfig(parsed, result.errors, result.warnings)
     result.isValid = result.errors.length === 0
+
+    // Load helpers if configured
+    if (result.isValid && result.config.helpers) {
+      try {
+        result.loadedHelpers = await loadHelpers(result.config.helpers, result.dirPath)
+      } catch (error) {
+        result.warnings.push(`Failed to load helpers: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
 
     return result
   } catch (error: any) {
@@ -140,6 +152,17 @@ export async function discoverRecipesInCookbook(
   return recipes
 }
 
+/**
+ * Register a parsed cookbook's helpers as Jig globals.
+ * Call this after parsing and before recipe execution.
+ */
+export function registerCookbookHelpers(cookbook: ParsedCookbook): void {
+  if (cookbook.loadedHelpers && Object.keys(cookbook.loadedHelpers).length > 0) {
+    registerHelpers(cookbook.loadedHelpers, `cookbook:${cookbook.config.name}`)
+    debug('Registered %d helpers for cookbook: %s', Object.keys(cookbook.loadedHelpers).length, cookbook.config.name)
+  }
+}
+
 // -- Validation helpers --
 
 function validateCookbookConfig(
@@ -175,6 +198,10 @@ function validateCookbookConfig(
   } else {
     // Default pattern: immediate subdirectories with recipe.yml
     config.recipes = ['./*/recipe.yml']
+  }
+
+  if (parsed.helpers && typeof parsed.helpers === 'string') {
+    config.helpers = parsed.helpers
   }
 
   return config

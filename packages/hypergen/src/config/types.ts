@@ -127,6 +127,8 @@ export interface KitConfig {
   categories?: string[]
   /** Kit-level variables shared across all cookbooks/recipes */
   variables?: Record<string, VariableDefinition>
+  /** Path to helpers file or directory (relative to kit.yml) */
+  helpers?: string
 }
 
 // Cookbook configuration
@@ -141,6 +143,8 @@ export interface CookbookConfig {
   defaults?: { recipe?: string }
   /** Glob patterns for discovering recipes within this cookbook */
   recipes?: string[]
+  /** Path to helpers file or directory (relative to cookbook.yml) */
+  helpers?: string
 }
 
 // Error types

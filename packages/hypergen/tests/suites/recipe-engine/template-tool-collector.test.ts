@@ -236,8 +236,10 @@ Default
     expect(contextArg).toHaveProperty('__hypergenCollectMode', true)
     expect(contextArg).toHaveProperty('model', 'User')
     expect(contextArg).toHaveProperty('feature', 'authentication')
-    expect(contextArg).toHaveProperty('getFields')
-    expect(contextArg).toHaveProperty('customHelper')
+    // Helpers are registered as Jig globals, not spread into context
+    expect(contextArg).toHaveProperty('utils')
+    expect(contextArg.utils).toHaveProperty('getFields')
+    expect(contextArg.utils).toHaveProperty('customHelper')
   })
 
   it('should maintain collectMode through multiple template renderings', async () => {

@@ -5,41 +5,10 @@
  */
 
 // Core types
-export type { RunnerConfig, RunnerResult } from './types.js'
+export type { RunnerConfig, RenderedAction, ActionResult, Logger as LoggerInterface, Prompter } from './types.js'
 
 // Logger
 export { default as Logger } from './logger.js'
-
-// Engine (for programmatic use)
-export { default as engine, ShowHelpError } from './engine.js'
-
-// Runner (for backward compatibility with tests)
-import type { RunnerConfig as _RunnerConfig, RunnerResult as _RunnerResult } from './types.js'
-import _Logger from './logger.js'
-import _engine, { ShowHelpError as _ShowHelpError } from './engine.js'
-
-export async function runner(
-  argv: string[],
-  config: _RunnerConfig,
-): Promise<_RunnerResult> {
-  const logger = config.logger || new _Logger(console.log.bind(console))
-
-  try {
-    const actions = await _engine(argv, config as any)
-    return { success: true, actions, time: 0 }
-  } catch (err: any) {
-    logger.log(err.toString())
-    if (config.debug) {
-      logger.log('details -----------')
-      logger.log(err.stack)
-      logger.log('-------------------')
-    }
-    if (err instanceof _ShowHelpError) {
-      return { success: true, actions: [], time: 0 }
-    }
-    return { success: false, actions: [], time: 0 }
-  }
-}
 
 // Configuration
 export {
@@ -101,3 +70,9 @@ export {
 
 // oclif base command for plugin development
 export { BaseCommand } from './lib/base-command.js'
+
+// Template engine
+export { registerHelpers, getJig, initializeJig, renderTemplate } from './template-engines/jig-engine.js'
+
+// Helper loading utility
+export { loadHelpers } from './config/load-helpers.js'

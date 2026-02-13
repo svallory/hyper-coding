@@ -8,14 +8,13 @@
 import createDebug from 'debug'
 import { Tool, type ToolValidationResult } from './base.js'
 import { ErrorHandler, ErrorCode } from '../../errors/hypergen-errors.js'
-import { 
-  type StepContext, 
+import {
+  type StepContext,
   type StepResult,
   type StepExecutionOptions,
   type BaseRecipeStep,
   type ShellStep
 } from '../types.js'
-import shell from '../../ops/shell.js'
 
 const debug = createDebug('hypergen:v8:recipe:tool:shell')
 

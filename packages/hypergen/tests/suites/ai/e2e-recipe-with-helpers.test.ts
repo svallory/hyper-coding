@@ -116,14 +116,9 @@ to: "src/handlers/{{ kebabCase(model) }}-handler.ts"
 
     writeFileSync(join(testDir, 'handler.jig'), templateContent)
 
-    // 5. Create recipe engine with helpers
+    // 5. Create recipe engine (helpers are already registered as Jig globals above)
     const recipeEngine = new RecipeEngine({
       workingDir: testDir,
-      helpers,
-      config: {
-        templates: testDir,
-        helpers
-      }
     })
 
     // 6. Execute Pass 1 (collect mode)
@@ -236,8 +231,6 @@ Generate tests
 
     const recipeEngine = new RecipeEngine({
       workingDir: testDir,
-      helpers,
-      config: { templates: testDir, helpers }
     })
 
     collector.collectMode = true
@@ -299,7 +292,6 @@ to: "test.ts"
 
     const recipeEngine = new RecipeEngine({
       workingDir: testDir,
-      config: { templates: testDir }
     })
 
     // Explicitly set collectMode to false
