@@ -40,13 +40,13 @@ This documentation site is built with [Mintlify](https://mintlify.com) and cover
 
 ### Development
 ```bash
+# Generate API documentation
+cd packages/hyperdev
+bun run docs:api
+
 # Start development server
 cd apps/docs
-mintlify dev
-
-# Generate API documentation
-cd packages/hypergen
-bun run docs:api
+mint dev
 
 # Build complete documentation
 bun run scripts/build-docs.js
@@ -58,7 +58,7 @@ API documentation is automatically generated from TypeScript source code using T
 
 ```bash
 # Generate API docs
-cd packages/hypergen
+cd packages/hyperdev
 bun run docs:api
 
 # Watch for changes

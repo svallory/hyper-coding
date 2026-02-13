@@ -408,7 +408,11 @@ export async function requireAuth() {
 <% } %>
 ```
 
-<% if (paymentProvider === 'stripe') { %>**Stripe Integration** (`templates/billing.ts.ejs.t`)
+**Stripe Integration** (`templates/billing.ts.ejs.t`)
+
+```ejs
+<% if (paymentProvider === 'stripe') { %>
+```
 ```typescript
 ---
 to: lib/billing.ts
@@ -584,8 +588,8 @@ export async function handleSubscriptionChange(
     },
   });
 }
-```
 <% } %>
+```
 
 **API Routes** (`templates/users.ts.ejs.t`)
 ```typescript
@@ -787,7 +791,7 @@ SENDGRID_API_KEY=""
 
 ### Usage Example
 ```bash
-bun run hypergen nextjs-saas
+hyper gen nextjs-saas
 # Prompts:
 # Project name: my-saas-app
 # Database type: PostgreSQL
@@ -1372,7 +1376,7 @@ jobs:
 
 ### Usage Example
 ```bash
-bun run hypergen nodejs-microservice
+hyper gen nodejs-microservice
 # Prompts:
 # Service name: user-service
 # Database type: PostgreSQL

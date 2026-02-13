@@ -1,0 +1,441 @@
+---
+title: "Generate"
+description: "Template-based code generation with AI augmentation, trust systems, and intelligent composition frameworks for rapid, secure project kickstart."
+icon: "layers-2"
+og:title: "gen: Code Generation"
+og:description: "Template-based code generation with AI augmentation, trust systems, and intelligent composition frameworks for rapid, secure project kickstart."
+---
+
+# gen: Code Generation Tool
+
+The **gen** tool is HyperDev's template-based code generation system. It helps you quickly create consistent, high-quality code from reusable templates.
+
+## Quick Start
+
+Generate your first component in seconds:
+
+```bash
+# Generate a basic React component
+hyper gen component MyButton
+
+# Generate with options
+hyper gen api-endpoint --name UserAPI --method GET
+```
+
+## Core Concept: Template-Based Generation
+
+Templates are reusable code blueprints that generate files based on your input:
+
+- **Templates**: Pre-built code structures you can customize
+- **Variables**: Your inputs (names, types, options) that customize the output
+- **Generated Code**: The final files created from templates + your inputs
+
+### Basic Usage Pattern
+
+1. **Find** a template: `hyper gen search "react component"`
+2. **Use** the template: `hyper gen component MyButton`
+3. **Customize** with options: `hyper gen component MyButton --with-tests`
+
+## Foundation Features
+
+### Template Discovery
+Find templates from multiple sources:
+
+```bash
+# List available templates
+hyper gen list
+
+# Search for specific templates
+hyper gen search "react component"
+hyper gen search "api endpoint"
+```
+
+### Basic Generation
+
+```bash
+# Generate from local template
+hyper gen react-component
+
+# Generate with custom variables
+hyper gen api-endpoint --name UserAPI --method POST
+```
+
+## Advanced Features
+
+### Multi-Source Templates
+Access templates from anywhere:
+
+```bash
+# Generate from npm package
+hyper gen npm:@company/api-template
+
+# Generate from GitHub repository  
+hyper gen github:username/template-repo
+```
+
+### AI-Enhanced Generation
+Leverage AI for smarter code generation:
+
+- **Context-Aware**: AI understands your project and generates appropriate code
+- **Quality Enhancement**: AI improves code quality and consistency
+- **Adaptive Templates**: Templates adjust to your specific needs
+
+```bash
+# Generate with AI context
+hyper gen api-endpoint --ai-context="REST API for user management"
+```
+
+### Security & Trust
+Advanced security features for enterprise use:
+
+- **Trust System**: Security validation and scoring for external templates
+- **Template Validation**: Automatic security and quality checks
+- **Safe Composition**: Secure combination of multiple templates
+
+## Command Reference
+
+### Essential Commands
+
+#### `hyper gen <template>`
+Generate code from a specified template.
+
+```bash
+# Generate from local template
+hyper gen react-component
+
+# Generate with parameters
+hyper gen api-endpoint --name UserAPI --method POST
+```
+
+#### `hyper gen search <query>`
+Find templates that match your needs.
+
+```bash
+# Search for React templates
+hyper gen search "react component"
+
+# Find API templates with specific features
+hyper gen search "express api with authentication"
+```
+
+#### `hyper gen list`
+List available templates.
+
+```bash
+# List all available templates
+hyper gen list
+
+# Show template details
+hyper gen list --detailed
+```
+
+### Advanced Commands
+
+#### Multi-Source Generation
+
+```bash
+# Generate from npm package
+hyper gen npm:@company/api-template
+
+# Generate from GitHub repository
+hyper gen github:username/template-repo
+
+# Generate with AI context enhancement
+hyper gen api-endpoint --ai-context="REST API for user management"
+```
+
+#### Template Management
+
+```bash
+# Filter by trust level
+hyper gen list --trusted-only
+
+# Package templates for distribution
+hyper gen pack my-template
+
+# Validate template security
+hyper gen validate path/to/template
+```
+
+## Template Architecture
+
+### Single Template Structure
+```
+my-template/
+├── template.yml          # Template metadata and configuration
+├── _templates/           # Template files directory
+│   ├── component.tsx.ejs.t   # EJS template file
+│   ├── test.spec.ts.ejs.t    # Test template
+│   └── styles.css.ejs.t      # Style template
+└── action.ts            # Optional: Custom generation actions (V8)
+```
+
+### Multi-Template Structure
+```
+template-collection/
+├── template.yml          # Collection metadata
+├── templates/           # Multiple template definitions
+│   ├── component/
+│   │   ├── template.yml
+│   │   └── _templates/
+│   └── service/
+│       ├── template.yml
+│       └── _templates/
+└── shared/              # Shared template assets
+```
+
+### Template Configuration (`template.yml`)
+```yaml
+name: "React Component Template"
+description: "Generate React components with TypeScript and tests"
+version: "1.0.0"
+trust_score: 9.2
+
+# AI Enhancement Context
+ai_context:
+  framework: "React 18"
+  language: "TypeScript"
+  patterns: ["hooks", "functional-components"]
+  
+# Template Variables
+variables:
+  - name: "componentName"
+    type: "string"
+    required: true
+    description: "Name of the React component"
+  - name: "withTests" 
+    type: "boolean"
+    default: true
+    description: "Include test files"
+
+# Security Configuration
+security:
+  trusted_sources: ["npm:@company/*", "github:org/*"]
+  scan_generated: true
+  validate_dependencies: true
+
+# Quality Controls
+quality:
+  enforce_patterns: true
+  validate_syntax: true
+  check_best_practices: true
+```
+
+## Trust System
+
+### Trust Score Calculation
+The trust system evaluates templates based on multiple factors:
+
+- **Source Reputation**: Known and verified template sources (8.0-10.0)
+- **Security Validation**: Automated security scanning results (7.0-9.0)
+- **Community Usage**: Download counts and user feedback (6.0-8.0)
+- **Code Quality**: Automated quality assessment (7.0-9.0)
+- **Maintenance**: Regular updates and issue resolution (6.0-8.0)
+
+### Trust Levels
+- **10.0 - Verified**: HyperDev official templates
+- **8.0-9.9 - Trusted**: Well-established community templates
+- **6.0-7.9 - Reviewed**: Community templates with basic validation
+- **4.0-5.9 - Caution**: Use with additional review
+- **0.0-3.9 - Untrusted**: Requires manual security validation
+
+### Security Validation Pipeline
+```yaml
+security_pipeline:
+  static_analysis:
+    - tool: semgrep
+      rules: owasp-top-10
+    - tool: bandit
+      config: strict
+      
+  dependency_analysis:
+    - tool: npm-audit
+    - tool: snyk
+    
+  secrets_detection:
+    - tool: truffleHog
+    - tool: detect-secrets
+    
+  template_validation:
+    - check: no_hardcoded_secrets
+    - check: safe_file_operations
+    - check: input_sanitization
+```
+
+## AI Augmentation Features
+
+### Context Engineering
+The gen tool provides comprehensive context to AI systems:
+
+```yaml
+ai_context:
+  project_info:
+    language: "TypeScript"
+    framework: "React"
+    architecture: "clean-architecture"
+    patterns: ["hooks", "context", "custom-hooks"]
+    
+  security_requirements:
+    input_validation: required
+    output_encoding: required
+    authentication: "jwt-bearer"
+    
+  quality_standards:
+    test_coverage: 90
+    code_style: "prettier + eslint"
+    documentation: "tsdoc"
+```
+
+### Dynamic Template Adaptation
+AI adapts templates based on project context:
+- **Naming Conventions**: Adjusts to project naming patterns
+- **Import Statements**: Uses existing project dependencies
+- **Code Patterns**: Follows established architectural patterns
+- **Test Structure**: Matches existing test organization
+
+### Quality Enhancement
+AI improves generated code quality:
+- **Error Handling**: Adds appropriate error handling patterns
+- **Type Safety**: Enhances TypeScript type definitions
+- **Performance**: Optimizes for performance best practices
+- **Accessibility**: Adds accessibility attributes and patterns
+
+## Integration with Other HyperDev Tools
+
+The **gen** tool works seamlessly with other HyperDev tools to provide a complete development experience:
+
+### With [dx (Developer Experience)](/tools/dx)
+- Automatic IDE configuration for generated code
+- Setup of linting rules and formatting for generated files
+- Integration with development workflows
+- See: [DX CLI Commands](/cli/commands/tools/dx)
+
+### With [epics (Strategic Planning)](/tools/epics)
+- Generation aligned with PRD requirements and epic specifications
+- Architecture pattern enforcement from strategic plans
+- Task-specific code generation from epic breakdown
+- See: [Epic-driven Development](/cli/workflows/epic-driven-development)
+
+### With [dev (Execution Control)](/tools/dev)
+- Real-time quality validation of generated code
+- Context engineering for improved AI assistance
+- Security scanning integration during generation
+- See: [Development Monitoring](/cli/commands/workflow/develop)
+
+### With [dash (Monitoring)](/tools/dash)
+- Template usage analytics and adoption tracking
+- Generation quality metrics and success rates
+- Security vulnerability tracking across generated code
+- See: [Team Analytics](/cli/commands/workflow/monitor)
+
+## Best Practices
+
+### Template Development
+1. **Start Simple**: Begin with basic template structure
+2. **Add AI Context**: Enhance with comprehensive context information
+3. **Security First**: Include security validation from the start
+4. **Test Thoroughly**: Validate templates with multiple scenarios
+5. **Document Clearly**: Provide comprehensive usage documentation
+
+### Template Usage
+1. **Verify Trust Scores**: Always check template trust scores
+2. **Review Generated Code**: Validate AI-augmented output
+3. **Customize Context**: Provide project-specific context for better results
+4. **Test Integration**: Ensure generated code integrates properly
+5. **Monitor Quality**: Track generation quality metrics
+
+### Security Guidelines
+1. **Trusted Sources Only**: Prefer high-trust templates for production
+2. **Security Scanning**: Always scan generated code for vulnerabilities
+3. **Dependency Validation**: Verify all generated dependencies
+4. **Secret Management**: Never include hardcoded secrets in templates
+5. **Regular Updates**: Keep templates and dependencies current
+
+## Advanced Features
+
+### Template Composition
+Combine multiple templates for complex scenarios:
+
+```bash
+# Compose API and frontend templates
+hyperdev gen compose api-backend+react-frontend
+
+# Layer templates with inheritance
+hyperdev gen base-template --extend=auth-layer,api-layer
+```
+
+### Custom Actions (V8 Feature)
+Extend templates with TypeScript actions:
+
+```typescript
+// action.ts
+export class ComponentAction {
+  @validate({ required: true })
+  async generateComponent(context: GenerationContext) {
+    // Custom generation logic with AI integration
+    const aiResponse = await this.aiService.enhance(context);
+    return this.renderWithAI(aiResponse);
+  }
+}
+```
+
+### Performance Optimization
+- **Lazy Loading**: Templates load on-demand for faster startup
+- **Caching**: Multi-level caching for template discovery and generation
+- **Parallel Processing**: Concurrent template processing for complex compositions
+- **Hash-Based Storage**: Efficient template indexing and retrieval
+
+## Troubleshooting
+
+### Common Issues
+1. **Template Not Found**: Check template name and source availability
+2. **Trust Score Too Low**: Use `--force` flag or find higher-trust alternative
+3. **Generation Errors**: Validate template variables and context
+4. **AI Enhancement Failures**: Check AI service availability and context
+
+### Debug Commands
+```bash
+# Enable verbose logging
+hyperdev gen --verbose template-name
+
+# Show template resolution process
+hyperdev gen --trace-resolution template-name
+
+# Validate template without generation
+hyperdev gen --dry-run template-name
+```
+
+## Related Documentation
+
+### Getting Started
+- [Template Creation Guide](/template-creation-guide) - Build your own templates
+- [Quick Start Tutorial](/quickstart) - Get up and running quickly
+- [Configuration Guide](/configuration-guide) - Configure template behavior
+
+### CLI Commands  
+- [hyper gen Command Reference](/cli/commands/workflow/generate) - Daily workflow command
+- [Advanced Gen Commands](/cli/commands/tools/gen) - Full tool capabilities
+- [CLI Command Overview](/cli/commands/overview) - All available commands
+
+### Advanced Topics
+- [Template Sharing & Distribution](/template-sharing) - Share templates with teams
+- [Security Model](/security-guide) - Template security and trust system
+- [Performance Guide](/performance-guide) - Optimization best practices
+
+### Workflows & Integration
+- [Project Initialization Workflow](/cli/workflows/project-initialization) - Complete setup flow
+- [Epic-driven Development](/methodology) - Strategic development approach
+- [Team Collaboration](/community/guidelines) - Working with teams
+
+---
+
+**The gen tool transforms traditional template-based generation into an AI-augmented, security-validated, quality-controlled code generation system.** Start your projects faster while maintaining professional standards and security best practices.
+
+<Card
+  title="Quick Start Guide"
+  icon="rocket"
+  href="/guides/gen-quick-start"
+  horizontal
+>
+  Learn to use gen with a step-by-step tutorial for your first AI-augmented code generation.
+</Card>

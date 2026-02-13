@@ -1,3 +1,39 @@
+# 8.0.0 (2025-09-09)
+
+
+### Features
+
+* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+
+
+
+# 8.0.0 (2025-09-09)
+
+
+### Features
+
+* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+
+
+
+# 8.0.0 (2025-09-09)
+
+
+### Features
+
+* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+
+
+
+# 8.0.0 (2025-09-09)
+
+
+### Features
+
+* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+
+
+
 # [8.0.0-dev](https://github.com/svallory/hypergen/compare/v7.0.0-rc.1...HEAD) (2025-07-19)
 
 

@@ -1,0 +1,96 @@
+---
+title: "Best Practices"
+description: "Simple tips for optimizing HyperDev performance"
+icon: "bolt"
+og:title: "Hyperd Coding Best Practices"
+og:description: "Simple tips for optimizing HyperDev performance"
+---
+
+# Performance Tips & Best Practices
+
+Basic tips to keep HyperDev running efficiently for your development workflow.
+
+## Basic Performance Tips
+
+### Template Caching
+
+Simple caching helps speed up repeated generation:
+
+```javascript
+// hyperdev.config.js - Basic caching
+export default {
+  // Enable basic caching
+  cache: {
+    enabled: true
+  }
+};
+```
+
+### Large File Handling
+
+For large projects, consider:
+- Keep templates simple and focused
+- Break complex templates into smaller parts
+- Use `--dry-run` to test before generating
+
+## Template Best Practices
+
+### Simple Template Design
+
+Keep templates simple and focused:
+
+```yaml
+# template.yml - Simple template configuration
+name: "Basic Component"
+description: "Simple component template"
+
+variables:
+  name:
+    type: string
+    required: true
+    
+files:
+  - from: "component.ejs"
+    to: "src/components/{{ name }}.tsx"
+```
+
+### Template Organization
+
+- Keep templates focused on single functionality
+- Use descriptive names
+- Include clear documentation
+
+## Common Performance Tips
+
+<CardGroup cols={2}>
+  <Card title="Template Design" icon="code">
+    - Keep templates simple and focused
+    - Avoid complex nested logic
+    - Use clear variable names
+    - Test templates before sharing
+  </Card>
+
+  <Card title="File Management" icon="folder">
+    - Organize templates in logical folders
+    - Clean up unused templates
+    - Use meaningful file names
+    - Keep template files small
+  </Card>
+</CardGroup>
+
+## Quick Tips
+
+### Development Workflow
+- Use `--dry-run` to test templates
+- Keep templates version controlled
+- Test with real data
+- Document template usage
+
+### Troubleshooting
+If generation seems slow:
+- Check template complexity
+- Verify file paths are correct
+- Test with smaller data sets
+- Check available disk space
+
+This guide covers the basic performance considerations for efficient HyperDev usage.

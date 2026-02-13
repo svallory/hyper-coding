@@ -10,6 +10,7 @@
     "importHelpers": true,
     "pretty": true,
     "sourceMap": true,
+    "declaration": true,
     "outDir": "./dist",
     "types": ["bun-types"],
     "resolveJsonModule": true,

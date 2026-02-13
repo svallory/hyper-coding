@@ -1,7 +1,13 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "theme": "aspen",
+  "$schema": "https://www.mintlify.com/docs.json",
   "name": "HyperDev",
+  "theme": "aspen",
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  },
+  "icons": {
+    "library": "lucide"
+  },
   "logo": {
     "dark": "/logo/logo.png",
     "light": "/logo/logo.png"
@@ -19,6 +25,15 @@
     }
   },
   "navigation": {
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Github",
+          "icon": "github",
+          "href": "https://github.com/subtletools/hyperdev"
+        }
+      ]
+    },
     "tabs": [
       {
         "tab": "Documentation",
@@ -27,19 +42,41 @@
             "group": "Get Started",
             "pages": [
               "index",
-              "installation",
-              "quickstart",
-              "user-workflows"
+              "get-started/installation",
+              "get-started/quickstart",
+              "get-started/tutorial"
+            ]
+          },
+          {
+            "group": "What is Hyper Coding?",
+            "pages": [
+              "hyper-coding/introduction-to-hyper-coding",
+              "hyper-coding/hyper-vs-vibe"
+            ]
+          },
+          {
+            "group": "How To",
+            "pages": [
+              "workflow/workflow-overview",
+              "workflow/gen",
+              "workflow/plan",
+              "workflow/dev"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/customize-setup"
             ]
           },
           {
             "group": "CLI",
             "pages": [
               "cli/overview",
-              "cli/installation",
               "cli/quickstart",
               {
-                "group": "Commands",
+                "group": "Core Commands",
+                "icon": "terminal",
                 "pages": [
                   "cli/commands/overview",
                   {
@@ -55,16 +92,15 @@
                     "group": "Discovery Commands",
                     "pages": [
                       "cli/commands/discovery/search",
-                      "cli/commands/discovery/list",
-                      "cli/commands/discovery/status"
+                      "cli/commands/discovery/list"
                     ]
                   },
                   {
                     "group": "Resource Commands",
                     "pages": [
-                      "cli/commands/resources/epic",
-                      "cli/commands/resources/task",
-                      "cli/commands/resources/docs"
+                      "cli/commands/resources/docs",
+                      "cli/commands/resources/plan",
+                      "cli/commands/resources/task"
                     ]
                   },
                   {
@@ -78,44 +114,53 @@
             ]
           },
           {
-            "group": "Methodology",
+            "group": "Tools & Integrations",
             "pages": [
-              "methodology",
-              "methodology/hyper-vs-vibe"
-            ]
-          },
-          {
-            "group": "Tools",
-            "pages": [
-              "tools/overview",
-              "tools/gen",
-              "tools/epics",
-              "tools/dev"
-            ]
-          },
-          {
-            "group": "Core Reference",
-            "pages": [
-              "cli-reference",
-              "configuration-guide",
-              "troubleshooting"
+              {
+                "group": "AI Tools",
+                "icon": "bot",
+                "pages": [
+                  "ai-tools/claude-code",
+                  "ai-tools/cursor",
+                  "ai-tools/windsurf"
+                ]
+              },
+              {
+                "group": "Tool Integrations",
+                "icon": "puzzle",
+                "pages": [
+                  "integrations/vscode",
+                  "integrations/jetbrains",
+                  "integrations/vim",
+                  "integrations/vite",
+                  "integrations/webpack",
+                  "integrations/nextjs",
+                  "integrations/github-actions",
+                  "integrations/docker",
+                  "integrations/git-hooks",
+                  "integrations/claude-code-hooks",
+                  "integrations/user-analytics-scenario",
+                  "integrations/package-scripts"
+                ]
+              }
             ]
           },
           {
             "group": "Guides",
             "pages": [
               "guides/overview",
-              "tool-integrations",
               "advanced-usage",
-              "performance-guide",
-              "security-guide"
+              "guides/best-practices",
+              "security-guide",
+              "development"
             ]
           },
           {
             "group": "Templates",
             "pages": [
-              "template-creation-guide",
-              "template-sharing"
+              "templates/creating-templates",
+              "templates/sharing-templates",
+              "templates/migration-guide"
             ]
           },
           {
@@ -130,9 +175,9 @@
           },
           {
             "group": "Community",
+            "icon": "users",
             "pages": [
               "community/overview",
-              "migration-guide",
               "community-guidelines",
               "plugin-development"
             ]
@@ -140,72 +185,92 @@
         ]
       },
       {
-        "tab": "API Reference",
+        "tab": "References",
         "groups": [
           {
-            "group": "Introduction",
             "pages": [
-              "api-reference/introduction"
+              {
+                "icon": "terminal",
+                "root": "CLI Reference"
+              },
+              {
+                "icon": "cog",
+                "root": "Configuration Guide"
+              },
+              {
+                "icon": "bug",
+                "root": "Troubleshooting"
+              }
             ]
           },
           {
-            "group": "HyperGen Engine",
+            "group": "mintlify-tsdocs",
+            "icon": "code",
             "pages": [
-              "api-reference/hypergen"
-            ]
-          },
-          {
-            "group": "Endpoints",
-            "pages": [
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "packages/mintlify-tsdocs/index",
+              {
+                "group": "Classes",
+                "icon": "cube",
+                "pages": [
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.custommarkdownemitter",
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.markdowndocumenter"
+                ]
+              },
+              {
+                "group": "Interfaces",
+                "icon": "square-dashed",
+                "pages": [
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.icustommarkdownemitteroptions",
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.imarkdowndocumenteroptions",
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.imarkdownemittercontext",
+                  "packages/mintlify-tsdocs/mintlify-tsdocs.imarkdownemitteroptions"
+                ]
+              }
             ]
           }
         ]
       }
     ]
   },
-  "anchors": [
-    {
-      "name": "Documentation",
-      "icon": "book-open-cover",
-      "url": "https://docs.hyperdev.ai"
-    },
-    {
-      "name": "Community",
-      "icon": "slack",
-      "url": "https://hyperdev.ai/discord"
-    },
-    {
-      "name": "Blog",
-      "icon": "newspaper",
-      "url": "https://hyperdev.ai/blog"
-    }
-  ],
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
+  },
+  "search": {
+    "prompt": "Search HyperDev docs..."
+  },
+  "modeToggle": {
+    "default": "light",
+    "isHidden": false
+  },
   "topbarLinks": [
-    {
-      "name": "Support",
-      "url": "mailto:support@hyperdev.ai"
-    }
   ],
   "topbarCtaButton": {
-    "name": "Dashboard",
-    "url": "https://dashboard.hyperdev.ai"
+    "name": "GitHub",
+    "url": "https://github.com/subtletools/hyperdev",
+    "style": "roundedFull"
   },
-  "api": {
-    "baseUrl": "https://api.hyperdev.ai",
-    "auth": {
-      "method": "bearer"
+  "seo": {
+    "indexHiddenPages": false
+  },
+  "redirects": [
+    {
+      "source": "/docs",
+      "destination": "/"
     },
-    "playground": {
-      "mode": "show"
+    {
+      "source": "/getting-started",
+      "destination": "/quickstart"
     }
+  ],
+  "openGraph": {
+    "enabled": true,
+    "logo": "/logo/logo.png"
   },
+  "tabs": [
+  ],
   "footerSocials": {
-    "x": "https://x.com/hyperdev_ai",
-    "github": "https://github.com/hyperdev-ai",
-    "linkedin": "https://www.linkedin.com/company/hyperdev-ai"
+    "github": "https://github.com/subtletools/hyperdev"
   }
 }

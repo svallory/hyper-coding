@@ -1,33 +1,33 @@
 ---
 title: "hyper plan"
-description: "Strategic planning and architecture design with AI-powered epics and technical specifications"
+description: "Strategic planning and architecture design with AI-powered plans and technical specifications"
 icon: "map"
 og:title: "hyper plan"
-og:description: "Strategic planning and architecture design with AI-powered epics and technical specifications"
+og:description: "Strategic planning and architecture design with AI-powered plans and technical specifications"
 ---
 
 # hyper plan
 
-Strategic planning and architecture design tool that helps you break down complex features into implementable epics with AI-powered technical specifications and architecture guidance.
+Strategic planning and architecture design tool that helps you break down complex features into implementable plans with AI-powered technical specifications and architecture guidance.
 
 ## Syntax
 
 ```bash
-hyper plan [epic] [options]
+hyper plan [plan-title] [options]
 ```
 
 ## Overview
 
 The `hyper plan` command provides comprehensive project planning capabilities:
 
-- **Epic management**: Create and manage feature epics with clear scope
+- **Plan management**: Create and manage feature plans with clear scope
 - **Architecture design**: Generate technical specifications and diagrams
 - **Task breakdown**: Break complex features into implementable tasks
 - **Technical documentation**: Auto-generate PRDs, architecture docs, and specifications
 - **AI-powered insights**: Get architectural guidance and best practice recommendations
 
 <Info>
-  `hyper plan` provides streamlined access to the [Epics tool](/tools/epics), focusing on common planning workflows
+  `hyper plan` provides streamlined access to the planning tools, focusing on common planning workflows
   while maintaining full access to advanced features.
 </Info>
 
@@ -35,14 +35,8 @@ The `hyper plan` command provides comprehensive project planning capabilities:
 
 | Option | Description | Default | Example |
 |--------|-------------|---------|---------|
-| `--create` | Create new epic | `false` | `--create` |
-| `--template <name>` | Epic template to use | `standard` | `--template saas-feature` |
-| `--dashboard, -d` | Launch planning dashboard | `false` | `--dashboard` |
-| `--arch` | Architecture tools | `false` | `--arch` |
-| `--tasks` | Task management | `false` | `--tasks` |
-| `--prd` | PRD management | `false` | `--prd` |
-| `--export <format>` | Export documentation | - | `--export pdf` |
-| `--interactive, -i` | Interactive mode | `true` | `--interactive` |
+| `--template <name>` | Plan document template to use | `standard` | `--template technical-prd` |
+| `--from <document>` | Initialize with existing document | - | `--from requirements.md` |
 
 ## Examples
 
@@ -223,6 +217,7 @@ graph TB
 HyperDev generates comprehensive technical specifications:
 
 <Accordion title="Generated Technical Spec Example">
+
 ```markdown
 # User Authentication System - Technical Specification
 
@@ -240,6 +235,8 @@ and role-based access control.
 - **User Repository**: User data access layer
 
 ### Database Schema
+```
+
 ```sql
 -- Users table
 CREATE TABLE users (
@@ -260,7 +257,10 @@ CREATE TABLE sessions (
 );
 ```
 
+```markdown
 ### API Endpoints
+```
+
 ```yaml
 /auth/register:
   POST:
@@ -283,6 +283,7 @@ CREATE TABLE sessions (
       401: Invalid credentials
 ```
 
+```markdown
 ## Implementation Plan
 
 ### Phase 1: Core Authentication
@@ -309,6 +310,7 @@ CREATE TABLE sessions (
 - End-to-end authentication flows
 - Security penetration testing
 ```
+
 </Accordion>
 
 ## Task Management

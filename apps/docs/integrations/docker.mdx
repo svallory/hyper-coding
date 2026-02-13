@@ -1,0 +1,323 @@
+---
+title: "Docker"
+description: "Containerize HyperDev applications with Docker, including development and production configurations."
+icon: "docker"
+og:title: "Docker Integration"
+og:description: "Containerize HyperDev applications with Docker, including development and production configurations."
+---
+
+# Docker Integration
+
+Integrate HyperDev with Docker for consistent development and production environments.
+
+## Basic Dockerfile
+
+Create a Dockerfile that includes HyperDev:
+
+```dockerfile
+# Dockerfile
+FROM node:20-alpine AS base
+
+# Install HyperDev globally
+RUN npm install -g @hyper-coding/cli
+
+# Set working directory
+WORKDIR /app
+
+# Copy HyperDev configuration
+COPY .hyperdev/ ./.hyperdev/
+COPY hyperdev.config.js ./
+
+# Development stage
+FROM base AS development
+COPY package*.json ./
+RUN npm install
+
+# Generate development code
+RUN hyperdev generate --all --env development
+
+# Start development server with HyperDev watching
+CMD ["sh", "-c", "hyperdev dev --watch & npm run dev"]
+
+# Production stage  
+FROM base AS production
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copy source code
+COPY . .
+
+# Generate production code
+RUN hyperdev generate --all --env production --optimize
+
+# Run quality gates
+RUN hyperdev quality-gate --all --strict
+
+# Build application
+RUN npm run build
+
+# Start production server
+CMD ["npm", "start"]
+```
+
+## Multi-stage Build
+
+Optimize Docker builds with multi-stage approach:
+
+```dockerfile
+# Dockerfile.multistage
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+# Install HyperDev
+RUN npm install -g @hyper-coding/cli
+
+# Copy source and generate code
+COPY . .
+RUN hyperdev generate --all --env production
+RUN hyperdev quality-gate --all --strict
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV production
+
+# Copy built application
+COPY --from=builder /app/dist ./dist
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+```
+
+## Docker Compose for Development
+
+Set up a complete development environment:
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./.hyperdev:/app/.hyperdev
+    environment:
+      - HYPERDEV_ENV=development
+      - HYPERDEV_WATCH=true
+    ports:
+      - "3000:3000"
+    command: >
+      sh -c "
+        hyperdev dev --watch --detached &&
+        npm run dev
+      "
+      
+  hyperdev-dashboard:
+    image: hyperdev/dashboard:latest
+    ports:
+      - "4000:4000"
+    environment:
+      - HYPERDEV_PROJECT_PATH=/project
+    volumes:
+      - .:/project:ro
+    depends_on:
+      - app
+
+  template-validator:
+    build:
+      context: .
+      dockerfile: Dockerfile.hyperdev-validator
+    volumes:
+      - ./.hyperdev:/templates:ro
+    command: hyperdev validate --all --watch --continuous
+```
+
+## Development Container Configuration
+
+Create a development container for consistent environments:
+
+```json
+// .devcontainer/devcontainer.json
+{
+  "name": "HyperDev Development",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "target": "development"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "hyperdev.hyperdev-vscode",
+        "ms-vscode.vscode-typescript-next"
+      ],
+      "settings": {
+        "hyperdev.autoDiscoverTemplates": true,
+        "hyperdev.enableIntelliSense": true
+      }
+    }
+  },
+  "forwardPorts": [3000, 4000],
+  "postCreateCommand": "npm install && hyperdev validate --all",
+  "remoteUser": "node"
+}
+```
+
+## Production Docker Compose
+
+Production-ready Docker Compose configuration:
+
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      target: production
+    environment:
+      - NODE_ENV=production
+      - HYPERDEV_ENV=production
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/ssl
+    depends_on:
+      - app
+    restart: unless-stopped
+```
+
+## Build Optimization
+
+Optimize Docker builds with caching:
+
+```dockerfile
+# Dockerfile.optimized
+FROM node:20-alpine AS base
+
+# Install HyperDev (cached layer)
+RUN npm install -g @hyper-coding/cli
+
+FROM base AS deps
+WORKDIR /app
+# Copy only package files for dependency caching
+COPY package*.json ./
+RUN npm ci --only=production
+
+FROM base AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+# Copy HyperDev config first (changes less frequently)
+COPY .hyperdev/ ./.hyperdev/
+COPY hyperdev.config.js ./
+
+# Copy source code
+COPY . .
+
+# Generate and build (these steps are cached if code doesn't change)
+RUN hyperdev generate --all --env production --optimize
+RUN hyperdev quality-gate --all --strict  
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package.json ./
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+```
+
+## Environment-Specific Builds
+
+Configure different builds for different environments:
+
+```dockerfile
+# Dockerfile.env
+ARG BUILD_ENV=production
+
+FROM node:20-alpine AS base
+RUN npm install -g @hyper-coding/cli
+WORKDIR /app
+
+FROM base AS development
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN hyperdev generate --all --env development
+CMD ["npm", "run", "dev"]
+
+FROM base AS staging
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN hyperdev generate --all --env staging
+RUN hyperdev quality-gate --all
+RUN npm run build
+CMD ["npm", "start"]
+
+FROM base AS production
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN hyperdev generate --all --env production --optimize
+RUN hyperdev quality-gate --all --strict
+RUN npm run build
+CMD ["npm", "start"]
+
+FROM ${BUILD_ENV} AS final
+```
+
+## Build Scripts
+
+Package.json scripts for Docker integration:
+
+```json
+{
+  "scripts": {
+    "docker:build": "docker build -t myapp .",
+    "docker:dev": "docker-compose up --build",
+    "docker:prod": "docker-compose -f docker-compose.prod.yml up --build",
+    "docker:test": "docker build --target test -t myapp:test .",
+    "docker:clean": "docker system prune -f"
+  }
+}
+```
+
+This Docker integration ensures consistent HyperDev environments across development, staging, and production deployments.

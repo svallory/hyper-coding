@@ -1,0 +1,207 @@
+---
+title: "Vite"
+description: "Integrate HyperDev with Vite for automatic type generation, template watching, and quality gates."
+icon: "vite-missing.svg"
+og:title: "Vite Integration"
+og:description: "Integrate HyperDev with Vite for automatic type generation, template watching, and quality gates."
+---
+
+# Vite Integration
+
+Configure Vite to work seamlessly with HyperDev through plugins, automatic generation, and development features.
+
+## Vite Plugin Configuration
+
+Set up the HyperDev Vite plugin:
+
+```javascript
+// vite.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { hyperdevPlugin } from '@hyperdev/vite-plugin'
+
+export default defineConfig({
+  plugins: [
+    react(),
+    hyperdevPlugin({
+      // Auto-generate types on schema changes
+      autoGenerateTypes: true,
+      // Watch template changes in development
+      watchTemplates: true,
+      // Template directories to watch
+      templateDirs: ['./.hyperdev/templates'],
+      // Quality gates integration
+      qualityGates: {
+        enabled: true,
+        failOnError: process.env.NODE_ENV === 'production',
+        rules: ['typescript', 'eslint', 'security']
+      },
+      // Development features
+      dev: {
+        enableHMR: true,
+        templateReload: true
+      }
+    })
+  ],
+  // HyperDev file processing
+  define: {
+    __HYPERDEV_TEMPLATES__: JSON.stringify(process.env.HYPERDEV_TEMPLATES)
+  }
+})
+```
+
+## Development Server Integration
+
+Configure Vite dev server to work with HyperDev:
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  server: {
+    // Proxy HyperDev dashboard
+    proxy: {
+      '/hyperdev-dashboard': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/hyperdev-dashboard/, '')
+      }
+    }
+  },
+  plugins: [
+    hyperdevPlugin({
+      dev: {
+        // Enable live template reloading
+        liveReload: true,
+        // Watch for config changes
+        watchConfig: true,
+        // Auto-validate on template changes
+        validateOnChange: true
+      }
+    })
+  ]
+})
+```
+
+## Build Integration
+
+Integrate HyperDev into the Vite build process:
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      plugins: [
+        // Pre-build validation
+        {
+          name: 'hyperdev-pre-build',
+          buildStart() {
+            const { execSync } = require('child_process')
+            try {
+              execSync('hyperdev validate --all', { stdio: 'inherit' })
+            } catch (error) {
+              throw new Error('HyperDev validation failed')
+            }
+          }
+        }
+      ]
+    }
+  }
+})
+```
+
+## Package.json Scripts
+
+Set up npm scripts for Vite and HyperDev integration:
+
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"hyperdev dev --watch\" \"vite\"",
+    "build": "hyperdev validate --all && vite build",
+    "preview": "vite preview",
+    "hyperdev:gen": "hyperdev gen",
+    "hyperdev:validate": "hyperdev validate --all"
+  }
+}
+```
+
+## Environment Configuration
+
+Configure environment variables for HyperDev in Vite:
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  define: {
+    // Make HyperDev config available to client
+    __HYPERDEV_CONFIG__: JSON.stringify({
+      templates: process.env.HYPERDEV_TEMPLATES,
+      environment: process.env.NODE_ENV
+    })
+  },
+  plugins: [
+    hyperdevPlugin({
+      // Environment-specific configuration
+      templates: {
+        development: {
+          includeDebugInfo: true,
+          verbose: true
+        },
+        production: {
+          optimize: true,
+          stripComments: true
+        }
+      }
+    })
+  ]
+})
+```
+
+## TypeScript Integration
+
+Configure TypeScript types generation with Vite:
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  plugins: [
+    hyperdevPlugin({
+      typescript: {
+        // Auto-generate types from templates
+        generateTypes: true,
+        // Output directory for generated types
+        typesOutput: './src/types/generated',
+        // Watch schema files for changes
+        watchSchemas: true,
+        // Include in TypeScript compilation
+        include: true
+      }
+    })
+  ]
+})
+```
+
+## Hot Module Replacement
+
+Enable HMR for HyperDev templates:
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  plugins: [
+    hyperdevPlugin({
+      hmr: {
+        // Enable template hot reload
+        templates: true,
+        // Reload on config changes
+        config: true,
+        // Update types on schema changes
+        types: true
+      }
+    })
+  ]
+})
+```
+
+This integration provides a smooth development experience with automatic template validation, type generation, and live reloading.

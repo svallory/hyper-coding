@@ -1,0 +1,762 @@
+---
+title: "Community Contribution Guidelines"
+description: "Comprehensive guidelines for contributing templates, code, and documentation to the HyperDev community"
+icon: "document-text"
+og:title: "Community Contribution Guidelines"
+og:description: "Comprehensive guidelines for contributing templates, code, and documentation to the HyperDev community"
+---
+
+# Community Contribution Guidelines
+
+Welcome to the HyperDev community! These guidelines help ensure high-quality contributions and a positive experience for everyone.
+
+## Contributing Overview
+
+### Types of Contributions
+
+The HyperDev ecosystem welcomes diverse contributions from the community.
+
+<CardGroup cols={2}>
+  <Card title="Templates" icon="file-code">
+    Create and share reusable templates
+    - Component generators
+    - Project scaffolds
+    - Integration patterns
+    - Industry-specific solutions
+  </Card>
+
+  <Card title="Core Development" icon="wrench">
+    Contribute to HyperDev core functionality
+    - Bug fixes and improvements
+    - New features and APIs
+    - Performance optimizations
+    - Security enhancements
+  </Card>
+
+  <Card title="Documentation" icon="book-open">
+    Improve documentation and guides
+    - Tutorial creation
+    - Example improvements
+    - Translation efforts
+    - Video content
+  </Card>
+
+  <Card title="Community Support" icon="users">
+    Help other community members
+    - Answer questions
+    - Code reviews
+    - Mentoring newcomers
+    - Community events
+  </Card>
+</CardGroup>
+
+## Template Contribution Standards
+
+### Template Quality Guidelines
+
+All community templates must meet these quality standards.
+
+<AccordionGroup>
+  <Accordion title="Template Structure Standards">
+    **Required Files**:
+    - `template.yml` with complete metadata
+    - `README.md` with usage instructions
+    - `CHANGELOG.md` for version history
+    - `LICENSE` file with appropriate license
+    
+    **Recommended Files**:
+    - `examples/` directory with usage examples
+    - `tests/` directory with template tests
+    - `.hyperdevignore` for template-specific ignores
+    - `docs/` for detailed documentation
+  </Accordion>
+
+  <Accordion title="Code Quality Requirements">
+    **Template Code**:
+    - Follow language-specific style guides
+    - Include comprehensive error handling
+    - Provide meaningful variable names
+    - Add inline documentation for complex logic
+    
+    **Generated Code**:
+    - Must be production-ready
+    - Follow security best practices
+    - Include appropriate tests
+    - Meet accessibility standards (for UI components)
+  </Accordion>
+
+  <Accordion title="Documentation Standards">
+    **Required Documentation**:
+    - Clear description of template purpose
+    - Complete usage instructions with examples
+    - Variable documentation with types and validation
+    - Generated file structure explanation
+    
+    **Best Practices**:
+    - Include screenshots/demos for visual components
+    - Provide troubleshooting section
+    - Add related templates and resources
+    - Keep documentation up-to-date with template changes
+  </Accordion>
+</AccordionGroup>
+
+### Template Metadata Requirements
+
+Comprehensive metadata ensures discoverability and proper attribution.
+
+```yaml
+# template.yml - Complete metadata example
+name: "React TypeScript Component"
+version: "2.1.0"
+description: "Production-ready React component with TypeScript, testing, and Storybook integration"
+
+# Author information
+author:
+  name: "Jane Developer"
+  email: "jane@example.com"
+  url: "https://github.com/jane-dev"
+  
+# Template classification
+category: "frontend"
+subcategory: "react"
+tags: ["react", "typescript", "component", "testing", "storybook"]
+
+# Compatibility and requirements
+compatibility:
+  hyperdev_version: ">=2.0.0"
+  node_version: ">=16.0.0"
+  
+requirements:
+  dependencies: ["react", "typescript"]
+  dev_dependencies: ["@types/react", "jest", "storybook"]
+  
+# Quality indicators
+quality:
+  complexity_score: 6
+  test_coverage: 95
+  security_scan: "passed"
+  performance_score: "A"
+  
+# License and legal
+license: "MIT"
+repository: "https://github.com/jane-dev/hyperdev-react-component"
+
+# Community metrics (auto-updated)
+community:
+  downloads: 0
+  stars: 0
+  forks: 0
+  issues: 0
+  last_updated: "2024-01-15"
+```
+
+### Template Testing Framework
+
+All community templates must include comprehensive tests.
+
+```typescript
+// tests/template.test.ts - Template testing example
+import { TemplateTestSuite, HypergenTestEngine } from '@hyperdev/testing';
+
+describe('React TypeScript Component Template', () => {
+  let testEngine: HypergenTestEngine;
+  
+  beforeAll(() => {
+    testEngine = new HypergenTestEngine('./template.yml');
+  });
+
+  describe('Template Validation', () => {
+    test('should have valid template metadata', async () => {
+      const validation = await testEngine.validateTemplate();
+      expect(validation.valid).toBe(true);
+      expect(validation.errors).toHaveLength(0);
+    });
+
+    test('should validate all required variables', async () => {
+      const variables = await testEngine.getRequiredVariables();
+      expect(variables).toContain('name');
+      expect(variables).toContain('typescript');
+    });
+  });
+
+  describe('Code Generation', () => {
+    test('should generate valid TypeScript component', async () => {
+      const result = await testEngine.generate({
+        name: 'TestComponent',
+        typescript: true,
+        includeTests: true
+      });
+
+      expect(result.files).toContainFile('TestComponent.tsx');
+      expect(result.files).toContainFile('TestComponent.test.tsx');
+      
+      const componentCode = result.files.find(f => 
+        f.path.endsWith('TestComponent.tsx')
+      )?.content;
+      
+      expect(componentCode).toContain('interface TestComponentProps');
+      expect(componentCode).toMatch(/const TestComponent: React\.FC/);
+    });
+
+    test('should generate compilable TypeScript', async () => {
+      const result = await testEngine.generate({
+        name: 'CompileTest',
+        typescript: true
+      });
+
+      const tsCompilation = await testEngine.compileTypeScript(result.files);
+      expect(tsCompilation.errors).toHaveLength(0);
+    });
+  });
+
+  describe('Output Quality', () => {
+    test('should generate code that passes ESLint', async () => {
+      const result = await testEngine.generate({
+        name: 'LintTest',
+        typescript: true
+      });
+
+      const lintResults = await testEngine.runESLint(result.files);
+      expect(lintResults.errorCount).toBe(0);
+    });
+
+    test('should generate accessible components', async () => {
+      const result = await testEngine.generate({
+        name: 'AccessibilityTest',
+        includeAccessibility: true
+      });
+
+      const a11yResults = await testEngine.runAccessibilityCheck(result.files);
+      expect(a11yResults.violations).toHaveLength(0);
+    });
+  });
+});
+```
+
+## Community Template Standards
+
+### Template Categories and Organization
+
+Templates are organized into standardized categories for easy discovery.
+
+<Tabs>
+  <Tab title="Frontend">
+    **Component Libraries**:
+    - React components (functional, class, hooks)
+    - Vue components (composition API, options API)  
+    - Angular components (standalone, module-based)
+    - Web components (lit, stencil)
+    
+    **Application Scaffolds**:
+    - SPA applications (React, Vue, Angular)
+    - Static site generators (Next.js, Nuxt, Astro)
+    - PWA templates
+    - Mobile app templates (React Native, Ionic)
+  </Tab>
+
+  <Tab title="Backend">
+    **API Development**:
+    - REST API services (Express, Fastify, NestJS)
+    - GraphQL servers (Apollo, Mercurius)
+    - Microservice templates
+    - Serverless function templates
+    
+    **Database Integration**:
+    - Database schema generators
+    - ORM model templates (Prisma, TypeORM)
+    - Migration templates
+    - Seed data generators
+  </Tab>
+
+  <Tab title="Full-Stack">
+    **Complete Applications**:
+    - CRUD application templates
+    - Authentication systems
+    - E-commerce platforms
+    - CMS implementations
+    
+    **Integration Patterns**:
+    - API client generators
+    - Real-time communication (WebSocket, SSE)
+    - Background job systems
+    - Deployment configurations
+  </Tab>
+
+  <Tab title="DevOps">
+    **Infrastructure**:
+    - Docker configurations
+    - Kubernetes manifests
+    - CI/CD pipelines
+    - Monitoring setups
+    
+    **Development Tools**:
+    - Testing configurations
+    - Build system setups
+    - Development environment configs
+    - Quality assurance tools
+  </Tab>
+</Tabs>
+
+### Template Naming Conventions
+
+Follow standardized naming patterns for consistency.
+
+```bash
+# Template naming patterns
+hyperdev-[framework]-[component-type]
+hyperdev-[language]-[application-type]
+hyperdev-[platform]-[feature]
+
+# Examples
+hyperdev-react-component
+hyperdev-vue-composable  
+hyperdev-node-microservice
+hyperdev-python-fastapi
+hyperdev-docker-multi-stage
+```
+
+### Version Management
+
+Use semantic versioning with clear upgrade paths.
+
+```yaml
+# Version management in template.yml
+version: "2.1.0"
+
+# Version compatibility
+compatibility:
+  hyperdev_version: ">=2.0.0 <3.0.0"
+  breaking_changes: []
+  deprecated_features: []
+  
+# Migration guidance
+migration:
+  from_version: "2.0.0"
+  breaking_changes: false
+  migration_guide: "./MIGRATION.md"
+  
+# Version history
+changelog: "./CHANGELOG.md"
+```
+
+## Code Contribution Process
+
+### Development Setup
+
+Set up your development environment for core contributions.
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/yourusername/hyperdev.git
+cd hyperdev
+
+# Install dependencies
+bun install
+
+# Setup development environment
+bun run setup:dev
+
+# Run tests to verify setup
+bun run test
+
+# Start development mode
+bun run dev
+```
+
+### Code Quality Standards
+
+All code contributions must meet these quality standards.
+
+<CodeGroup>
+```typescript TypeScript Standards
+// Use strict TypeScript configuration
+export interface ComponentConfig {
+  readonly name: string;
+  readonly type: 'functional' | 'class';
+  readonly props?: Record<string, unknown>;
+}
+
+// Prefer composition over inheritance
+export class TemplateGenerator {
+  constructor(
+    private readonly config: ComponentConfig,
+    private readonly validator: InputValidator,
+    private readonly renderer: TemplateRenderer
+  ) {}
+
+  async generate(): Promise<GenerationResult> {
+    // Always validate inputs
+    const validationResult = await this.validator.validate(this.config);
+    if (!validationResult.isValid) {
+      throw new ValidationError(validationResult.errors);
+    }
+
+    return this.renderer.render(this.config);
+  }
+}
+```
+
+```javascript Testing Standards
+// Comprehensive test coverage
+describe('TemplateGenerator', () => {
+  let generator: TemplateGenerator;
+  
+  beforeEach(() => {
+    generator = new TemplateGenerator(
+      mockConfig,
+      mockValidator,
+      mockRenderer
+    );
+  });
+
+  describe('input validation', () => {
+    test('should reject invalid component names', async () => {
+      await expect(generator.generate({
+        name: '123invalid'
+      })).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('error handling', () => {
+    test('should handle template rendering errors gracefully', async () => {
+      mockRenderer.render.mockRejectedValue(new Error('Template error'));
+      
+      await expect(generator.generate()).rejects.toThrow('Template error');
+    });
+  });
+});
+```
+
+```yaml Documentation Standards
+# Comprehensive JSDoc comments
+/**
+ * Generates code from templates with validation and error handling.
+ * 
+ * @example
+ * ```typescript
+ * const generator = new TemplateGenerator(config, validator, renderer);
+ * const result = await generator.generate();
+ * console.log(`Generated ${result.files.length} files`);
+ * ```
+ * 
+ * @param config - Template configuration object
+ * @param validator - Input validation service  
+ * @param renderer - Template rendering engine
+ * 
+ * @throws {ValidationError} When input validation fails
+ * @throws {TemplateError} When template rendering fails
+ * 
+ * @since 2.0.0
+ */
+export class TemplateGenerator {
+  // Implementation...
+}
+```
+</CodeGroup>
+
+### Pull Request Process
+
+Follow this process for code contributions.
+
+<Steps>
+  <Step title="Preparation">
+    - Create feature branch from `main`
+    - Write comprehensive tests for new functionality
+    - Update documentation for any API changes
+    - Run full test suite locally
+  </Step>
+
+  <Step title="Pull Request Creation">
+    - Use descriptive PR title following conventional commits
+    - Complete PR template with detailed description
+    - Link related issues and discussions
+    - Request appropriate reviewers
+  </Step>
+
+  <Step title="Review Process">
+    - Address reviewer feedback promptly
+    - Maintain clean commit history
+    - Keep PR focused and atomic
+    - Ensure CI/CD passes all checks
+  </Step>
+
+  <Step title="Merge Requirements">
+    - Minimum 2 approvals from core contributors
+    - All CI/CD checks must pass
+    - Documentation must be updated
+    - Breaking changes require RFC discussion
+  </Step>
+</Steps>
+
+## Documentation Contributions
+
+### Documentation Standards
+
+Help improve HyperDev documentation with high-quality contributions.
+
+<AccordionGroup>
+  <Accordion title="Writing Style Guide">
+    **Tone and Voice**:
+    - Clear, concise, and helpful
+    - Professional but approachable
+    - Assume basic development knowledge
+    - Define technical terms on first use
+    
+    **Structure**:
+    - Start with practical examples
+    - Use progressive disclosure
+    - Include troubleshooting sections
+    - Provide code examples for all concepts
+  </Accordion>
+
+  <Accordion title="Content Organization">
+    **Page Structure**:
+    - Clear title and description
+    - Quick start section
+    - Detailed explanation
+    - Examples and code samples
+    - Related links and next steps
+    
+    **Navigation**:
+    - Logical information hierarchy
+    - Clear section headings
+    - Cross-references between related topics
+    - Search-friendly content structure
+  </Accordion>
+
+  <Accordion title="Code Examples">
+    **Quality Requirements**:
+    - All code examples must be tested
+    - Use realistic, practical examples
+    - Include error handling where appropriate
+    - Show both basic and advanced usage
+    
+    **Format Standards**:
+    - Proper syntax highlighting
+    - Clear language identification
+    - Consistent indentation and style
+    - Inline comments for complex logic
+  </Accordion>
+</AccordionGroup>
+
+### Tutorial Creation Guidelines
+
+Create engaging tutorials that help users learn effectively.
+
+```markdown
+# Tutorial Template Structure
+
+## What You'll Learn
+- Clear learning objectives
+- Prerequisites and requirements
+- Estimated completion time
+- Final result preview
+
+## Before You Begin
+- Required tools and setup
+- Basic knowledge assumptions
+- Links to prerequisite tutorials
+
+## Step-by-Step Instructions
+1. **Setup and Preparation**
+   - Environment setup
+   - Initial project creation
+   - Dependency installation
+
+2. **Core Implementation**
+   - Build the main functionality
+   - Explain each step thoroughly
+   - Show intermediate results
+
+3. **Enhancement and Testing**
+   - Add advanced features
+   - Implement testing
+   - Validation and verification
+
+## Troubleshooting
+- Common issues and solutions
+- Error message explanations
+- Alternative approaches
+
+## Next Steps
+- Related tutorials and guides
+- Advanced topics to explore
+- Community resources
+```
+
+## Community Support
+
+### Getting Help
+
+Multiple channels available for community support and contribution assistance.
+
+<CardGroup cols={3}>
+  <Card title="Discord Community" icon="discord">
+    **Real-time Discussion**
+    - General help and support
+    - Template showcase
+    - Development discussions
+    - Community events
+    
+    [Join Discord →](https://discord.gg/hyperdev)
+  </Card>
+
+  <Card title="GitHub Discussions" icon="github">
+    **Structured Discussion**
+    - Feature requests
+    - Architecture discussions
+    - Long-form Q&A
+    - Community proposals
+    
+    [Join Discussion →](https://github.com/hyperdev-official/hyperdev/discussions)
+  </Card>
+
+  <Card title="Stack Overflow" icon="stack-overflow">
+    **Technical Q&A**
+    - Specific technical questions
+    - Code-related problems
+    - Best practices
+    - Integration issues
+    
+    Tag: `hyperdev`
+  </Card>
+</CardGroup>
+
+### Mentorship Program
+
+Connect with experienced contributors for guidance and support.
+
+```yaml
+# Mentorship matching criteria
+experience_levels:
+  beginner:
+    - New to code generation
+    - Learning template development
+    - First open source contributions
+    
+  intermediate:
+    - Some template creation experience
+    - Ready for core contributions
+    - Interested in advanced features
+    
+  expert:
+    - Experienced with HyperDev
+    - Regular contributor
+    - Interested in mentoring others
+
+mentor_specializations:
+  - template_development
+  - core_engine_development
+  - documentation_writing
+  - community_management
+  - testing_and_qa
+```
+
+### Recognition and Rewards
+
+Acknowledge valuable community contributions.
+
+<Tabs>
+  <Tab title="Contributor Levels">
+    **Community Contributor**
+    - First merged contribution
+    - Community Discord role
+    - Profile badge
+    
+    **Regular Contributor**
+    - 5+ merged contributions
+    - Reviewer privileges
+    - Early access to features
+    
+    **Core Contributor**
+    - 25+ merged contributions
+    - Maintainer privileges
+    - Influence on roadmap decisions
+  </Tab>
+
+  <Tab title="Special Recognition">
+    **Template of the Month**
+    - Outstanding template contributions
+    - Featured on community blog
+    - Social media promotion
+    
+    **Community Champion**
+    - Exceptional help and support
+    - Community event speaking opportunities
+    - HyperDev swag and merchandise
+    
+    **Innovation Award**
+    - Breakthrough features or improvements
+    - Conference presentation opportunities
+    - Collaboration on future features
+  </Tab>
+</Tabs>
+
+## Code of Conduct
+
+### Community Standards
+
+We are committed to providing a welcoming and inclusive experience for everyone.
+
+**Our Standards**:
+- Use welcoming and inclusive language
+- Respect differing viewpoints and experiences
+- Accept constructive criticism gracefully
+- Focus on what is best for the community
+- Show empathy towards other community members
+
+**Unacceptable Behavior**:
+- Harassment, discrimination, or intimidation
+- Trolling, insulting, or derogatory comments
+- Public or private harassment
+- Publishing others' private information
+- Other conduct inappropriate in a professional setting
+
+### Enforcement
+
+Community guidelines are enforced by our moderation team.
+
+**Reporting Issues**:
+- Email: community@hyperdev.org
+- Discord: Direct message to moderators
+- GitHub: Use issue templates for code-related concerns
+
+**Consequences**:
+- Warning for minor violations
+- Temporary suspension for repeated violations
+- Permanent ban for severe violations or repeated offenses
+
+## Getting Started Checklist
+
+Ready to contribute? Follow this checklist to get started.
+
+<AccordionGroup>
+  <Accordion title="For Template Contributors">
+    - [ ] Read template quality guidelines
+    - [ ] Set up development environment
+    - [ ] Create your first template using our standards
+    - [ ] Write comprehensive tests and documentation
+    - [ ] Submit template following our process
+    - [ ] Join Discord community for feedback
+  </Accordion>
+
+  <Accordion title="For Code Contributors">  
+    - [ ] Fork and clone the repository
+    - [ ] Set up development environment
+    - [ ] Read code style guidelines
+    - [ ] Find good first issues to work on
+    - [ ] Create feature branch and make changes
+    - [ ] Submit pull request with comprehensive description
+  </Accordion>
+
+  <Accordion title="For Documentation Contributors">
+    - [ ] Review documentation standards
+    - [ ] Identify areas for improvement
+    - [ ] Follow content organization guidelines
+    - [ ] Create or improve documentation
+    - [ ] Test all code examples
+    - [ ] Submit changes for review
+  </Accordion>
+</AccordionGroup>
+
+Thank you for contributing to HyperDev! Your contributions help make code generation faster, safer, and more enjoyable for developers worldwide.

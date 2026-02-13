@@ -1,0 +1,21 @@
+{
+  "navigation": [
+    {
+      "group": "Packages",
+      "icon": "code",
+      "pages": [
+        "packages/mintlify-tsdocs-test/index",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.iapidocumenterpluginmanifest",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.ifeaturedefinition",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.imarkdowndocumenterfeatureonbeforewritepageargs",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.imarkdowndocumenterfeatureonfinishedargs",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.markdowndocumenteraccessor",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.markdowndocumenterfeature",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.markdowndocumenterfeaturecontext",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.pluginfeature",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.pluginfeaturecontext",
+        "packages/mintlify-tsdocs-test/mintlify-tsdocs.pluginfeatureinitialization"
+      ]
+    }
+  ]
+}

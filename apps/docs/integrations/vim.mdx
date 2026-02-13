@@ -1,0 +1,158 @@
+---
+title: "Vim / Neovim"
+description: "Configure Vim and Neovim to work seamlessly with HyperDev through plugins, key mappings, and autocomplete."
+icon: "neovim-missing.svg"
+og:title: "Vim/Neovim Integration"
+og:description: "Configure Vim and Neovim to work seamlessly with HyperDev through plugins, key mappings, and autocomplete."
+---
+
+# Vim/Neovim Integration
+
+Integrate HyperDev into your Vim or Neovim workflow with custom functions, key mappings, and autocomplete.
+
+## Vim Plugin Configuration
+
+Create a HyperDev plugin for Vim/Neovim:
+
+```lua
+-- ~/.config/nvim/lua/hyperdev.lua
+local M = {}
+
+-- HyperDev command integration
+function M.generate_component()
+  local component_name = vim.fn.input('Component name: ')
+  if component_name ~= '' then
+    vim.cmd('!hyperdev gen component ' .. component_name)
+    vim.cmd('edit')
+  end
+end
+
+function M.validate_templates()
+  vim.cmd('!hyperdev validate --all')
+end
+
+function M.start_dev_mode()
+  vim.cmd('terminal hyperdev dev --watch')
+end
+
+-- Key mappings
+vim.keymap.set('n', '<leader>hc', M.generate_component, { desc = 'HyperDev: Generate Component' })
+vim.keymap.set('n', '<leader>hv', M.validate_templates, { desc = 'HyperDev: Validate Templates' })
+vim.keymap.set('n', '<leader>hd', M.start_dev_mode, { desc = 'HyperDev: Dev Mode' })
+
+return M
+```
+
+## Autocomplete Integration
+
+Add HyperDev template autocomplete to nvim-cmp:
+
+```lua
+-- ~/.config/nvim/lua/hyperdev-cmp.lua
+local cmp = require('cmp')
+
+-- HyperDev template autocomplete source
+local source = {}
+
+function source:complete(request, callback)
+  local templates = vim.fn.systemlist('hyperdev list --format json')
+  local items = {}
+  
+  for _, template in ipairs(templates) do
+    table.insert(items, {
+      label = template.name,
+      kind = cmp.lsp.CompletionItemKind.Snippet,
+      detail = template.description,
+      insertText = 'hyperdev gen ' .. template.name .. ' ${1:name}'
+    })
+  end
+  
+  callback({ items = items })
+end
+
+cmp.register_source('hyperdev', source)
+```
+
+## Custom Commands
+
+Add custom Vim commands for HyperDev:
+
+```vim
+" ~/.vimrc or ~/.config/nvim/init.vim
+command! -nargs=1 HyperDevGen execute '!hyperdev gen component ' . <q-args>
+command! HyperDevValidate execute '!hyperdev validate --all'
+command! HyperDevList execute '!hyperdev list'
+command! HyperDevStatus execute '!hyperdev status'
+
+" Quick mappings
+nnoremap <leader>hg :HyperDevGen 
+nnoremap <leader>hv :HyperDevValidate<CR>
+nnoremap <leader>hl :HyperDevList<CR>
+nnoremap <leader>hs :HyperDevStatus<CR>
+```
+
+## Template File Detection
+
+Configure Vim to recognize HyperDev template files:
+
+```vim
+" ~/.vimrc or ~/.config/nvim/init.vim
+augroup HyperDevFiles
+  autocmd!
+  autocmd BufNewFile,BufRead *.ejs.t set filetype=javascript
+  autocmd BufNewFile,BufRead *.template.yml set filetype=yaml
+  autocmd BufNewFile,BufRead hyperdev.config.js set filetype=javascript
+augroup END
+```
+
+## Status Line Integration
+
+Add HyperDev status to your status line:
+
+```lua
+-- Example for lualine.nvim
+require('lualine').setup {
+  sections = {
+    lualine_x = {
+      function()
+        local handle = io.popen('hyperdev status --short 2>/dev/null')
+        local result = handle:read('*a')
+        handle:close()
+        return result:gsub('\n', '')
+      end
+    }
+  }
+}
+```
+
+## Neovim Configuration Example
+
+Complete Neovim configuration for HyperDev:
+
+```lua
+-- ~/.config/nvim/lua/config/hyperdev.lua
+local M = {}
+
+function M.setup()
+  -- Load HyperDev functions
+  require('hyperdev')
+  
+  -- Set up keymaps
+  local opts = { noremap = true, silent = true }
+  vim.keymap.set('n', '<leader>hc', '<cmd>lua require("hyperdev").generate_component()<CR>', opts)
+  vim.keymap.set('n', '<leader>hv', '<cmd>lua require("hyperdev").validate_templates()<CR>', opts)
+  vim.keymap.set('n', '<leader>hd', '<cmd>lua require("hyperdev").start_dev_mode()<CR>', opts)
+  
+  -- Set up autocommands
+  vim.api.nvim_create_autocmd('BufWritePost', {
+    pattern = '*.template.yml',
+    callback = function()
+      vim.cmd('!hyperdev validate ' .. vim.fn.expand('%'))
+    end,
+  })
+end
+
+return M
+```
+
+This configuration provides a smooth HyperDev experience within your Vim/Neovim environment.

@@ -1,0 +1,150 @@
+---
+title: "VS Code"
+description: "Integrate HyperDev seamlessly into Visual Studio Code with IntelliSense, templates, and workflow automation."
+icon: "vscode-missing.svg"
+og:title: "VS Code Integration"
+og:description: "Integrate HyperDev seamlessly into Visual Studio Code with IntelliSense, templates, and workflow automation."
+---
+
+# VS Code Integration
+
+Create a rich VS Code experience with HyperDev through workspace configuration, custom tasks, and keyboard shortcuts.
+
+## Extension Configuration
+
+Set up VS Code to work seamlessly with HyperDev:
+
+```json
+// .vscode/extensions.json
+{
+  "recommendations": [
+    "hyperdev.hyperdev-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss"
+  ]
+}
+```
+
+## Workspace Settings
+
+Configure VS Code workspace settings for optimal HyperDev experience:
+
+```json
+// .vscode/settings.json
+{
+  "hyperdev.autoDiscoverTemplates": true,
+  "hyperdev.enableIntelliSense": true,
+  "hyperdev.defaultGenerator": "react-component",
+  "hyperdev.templatePaths": [
+    "./.hyperdev/templates",
+    "~/.hyperdev/global-templates"
+  ],
+  "hyperdev.qualityGates.enabled": true,
+  "hyperdev.qualityGates.onSave": true,
+  "files.associations": {
+    "*.ejs.t": "javascript"
+  },
+  "emmet.includeLanguages": {
+    "ejs": "html"
+  }
+}
+```
+
+## Command Palette Integration
+
+Add HyperDev commands to VS Code tasks:
+
+```json
+// .vscode/tasks.json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "HyperDev: Generate Component",
+      "type": "shell",
+      "command": "hyperdev",
+      "args": ["gen", "component", "${input:componentName}"],
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "HyperDev: Validate Templates",
+      "type": "shell",
+      "command": "hyperdev",
+      "args": ["validate", "--all"],
+      "group": "test"
+    },
+    {
+      "label": "HyperDev: Start Dev Mode",
+      "type": "shell",
+      "command": "hyperdev",
+      "args": ["dev", "--watch"],
+      "group": "build",
+      "isBackground": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "componentName",
+      "description": "Component name",
+      "default": "MyComponent",
+      "type": "promptString"
+    }
+  ]
+}
+```
+
+## Keyboard Shortcuts
+
+Set up convenient keyboard shortcuts:
+
+```json
+// .vscode/keybindings.json
+[
+  {
+    "key": "ctrl+shift+g c",
+    "command": "workbench.action.tasks.runTask",
+    "args": "HyperDev: Generate Component"
+  },
+  {
+    "key": "ctrl+shift+g v",
+    "command": "workbench.action.tasks.runTask",
+    "args": "HyperDev: Validate Templates"
+  },
+  {
+    "key": "ctrl+shift+g d",
+    "command": "workbench.action.tasks.runTask",
+    "args": "HyperDev: Start Dev Mode"
+  }
+]
+```
+
+## File Watchers and Auto-Generation
+
+Configure VS Code to watch for template changes:
+
+```json
+// .vscode/settings.json (file watcher configuration)
+{
+  "hyperdev.watchers": [
+    {
+      "pattern": "**/*.template.yml",
+      "command": "hyperdev validate ${file}",
+      "runOnSave": true
+    },
+    {
+      "pattern": "**/schemas/**/*.json",
+      "command": "hyperdev gen types --schema ${file}",
+      "runOnSave": true,
+      "debounce": 500
+    }
+  ]
+}
+```
+
+This configuration makes HyperDev feel like a native part of VS Code, providing quick access to generation commands and automatic template validation.

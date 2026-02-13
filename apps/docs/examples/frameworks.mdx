@@ -370,7 +370,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
 Button.displayName = 'Button';
 ```
 
-<% if (includeStorybook) { %>**Storybook Stories** (`templates/Button.stories.tsx.ejs.t`)
+**Storybook Stories** (`templates/Button.stories.tsx.ejs.t`)
+
+```ejs
+<% if (includeStorybook) { %>
+```
 ```tsx
 ---
 to: src/components/Button/Button.stories.tsx
@@ -560,8 +564,8 @@ export const AllVariants: Story = {
     },
   },
 };
-```
 <% } %>
+```
 
 **Build Configuration** (`templates/vite.config.ts.ejs.t`)
 ```typescript
@@ -623,7 +627,7 @@ export default defineConfig({
 
 ### Usage Example
 ```bash
-bun run hypergen react-component-library
+hyper gen react-component-library
 # Prompts:
 # Library name: design-system
 # UI Framework: Tailwind CSS
@@ -1234,7 +1238,7 @@ watch(
 
 ### Usage Example
 ```bash
-bun run hypergen vue3-typescript-app
+hyper gen vue3-typescript-app
 # Prompts:
 # Project name: vue-dashboard
 # Include Vue Router? Yes
@@ -1981,7 +1985,7 @@ export class UserController {
 
 ### Usage Example
 ```bash
-bun run hypergen node-clean-api
+hyper gen node-clean-api
 # Prompts:
 # API name: user-management-api
 # Database: PostgreSQL + Prisma

@@ -1,0 +1,808 @@
+---
+title: "Tutorial Validation Guide"
+description: "Step-by-step validation checklist and troubleshooting for the Getting Started Tutorial"
+icon: "check-circle"
+og:title: "Tutorial Validation Guide"
+og:description: "Step-by-step validation checklist and troubleshooting for the Getting Started Tutorial"
+---
+
+# Tutorial Validation Guide
+
+> **Companion guide to the Getting Started Tutorial**  
+> Use this guide to validate your progress and troubleshoot issues at each step.
+
+This validation guide provides specific commands and expected outputs for each section of the [Getting Started Tutorial](/getting-started-tutorial). Use it to verify your setup is working correctly and troubleshoot any issues.
+
+## Quick Health Check
+
+Before starting any section, run this comprehensive health check:
+
+<CodeGroup>
+```bash Full System Check
+# Check all prerequisites
+echo "=== System Information ==="
+echo "OS: $(uname -s)"
+echo "Node: $(node --version)"
+echo "Bun: $(bun --version 2>/dev/null || echo 'Not installed')"
+echo "HyperDev: $(hyper --version 2>/dev/null || echo 'Not installed')"
+echo ""
+
+echo "=== Directory Structure ==="
+ls -la
+echo ""
+
+echo "=== Recipe Discovery ==="
+hyper gen list 2>/dev/null || echo "No recipes found"
+```
+
+```bash Quick Diagnostic
+# Minimal check for tutorial readiness
+hyper --version && echo "✅ HyperDev installed" || echo "❌ HyperDev missing"
+node --version | grep -q "v1[8-9]\|v[2-9][0-9]" && echo "✅ Node.js compatible" || echo "❌ Node.js upgrade needed"
+```
+</CodeGroup>
+
+---
+
+## Part 1: Installation & Environment Verification
+
+### 1.1 Installation Validation
+
+<Steps>
+  <Step title="Verify Installation">
+    ```bash
+    # Expected: Version number like "8.x.x"
+    hyper --version
+    ```
+    
+    **✅ Success Indicators:**
+    - Version number displays (e.g., "8.2.1")
+    - No "command not found" errors
+    
+    **❌ Troubleshooting:**
+    - **Command not found**: Install with `bun install -g hyperdev`
+    - **Permission errors**: Use `bun install -g hyperdev --user`
+  </Step>
+  
+  <Step title="System Status Check">
+    ```bash
+    # Expected: Status report with configuration details
+    hyper system status
+    ```
+    
+    **✅ Success Indicators:**
+    - System status displays without errors
+    - Shows cookbook paths and configuration
+    
+    **❌ Troubleshooting:**
+    - **No configuration found**: This is normal for first run
+    - **Permission errors**: Check file permissions in home directory
+  </Step>
+</Steps>
+
+### 1.2 Environment Validation
+
+<AccordionGroup>
+<Accordion title="Node.js Version Check">
+
+```bash
+# Must be 18+ for compatibility
+node --version
+
+# Alternative check with more details
+node -p "process.version"
+```
+
+**Expected Output Format:** `v18.x.x` or higher
+
+**Common Issues:**
+- **v16.x.x or lower**: Upgrade Node.js to 18+
+- **No node command**: Install Node.js from [nodejs.org](https://nodejs.org)
+
+</Accordion>
+
+<Accordion title="Recipe Discovery Validation">
+
+```bash
+# Should show built-in recipes
+hyper gen list
+
+# More detailed information
+hyper gen discover --verbose
+```
+
+**Expected Results:**
+- At least 1-3 built-in recipes listed
+- No error messages about cookbook access
+
+**Troubleshooting:**
+- **Empty list**: Check internet connection for remote cookbook access
+- **Permission errors**: Ensure write access to `~/.hyperdev/` directory
+
+</Accordion>
+</AccordionGroup>
+
+### 1.3 Workspace Creation Validation
+
+```bash
+# Verify directory structure was created correctly
+ls -la hyperdev-tutorial/
+
+# Expected directory listing:
+# drwxr-xr-x  src/
+# -rw-r--r--  package.json
+# -rw-r--r--  README.md
+```
+
+<Tip>
+  **Quick Fix:** If directories are missing, recreate them:
+  ```bash
+  mkdir -p hyperdev-tutorial/src/{components,pages,utils}
+  ```
+</Tip>
+
+---
+
+## Part 2: First Template Generation
+
+### 2.1 Component Generation Validation
+
+<Steps>
+  <Step title="Execute Generation Command">
+    ```bash
+    # Generate WelcomeCard component
+    hyper gen react-component \
+      --name=WelcomeCard \
+      --typescript=true \
+      --styled=true \
+      --testing=true
+    ```
+    
+    **Expected Console Output:**
+    ```
+    ✅ Generated component files:
+    📁 src/components/WelcomeCard/WelcomeCard.tsx
+    📁 src/components/WelcomeCard/WelcomeCard.module.css
+    📁 src/components/WelcomeCard/WelcomeCard.test.tsx
+    📁 src/components/WelcomeCard/index.ts
+    ```
+  </Step>
+  
+  <Step title="Verify Generated Files">
+    ```bash
+    # Check all files were created
+    find src -name "*WelcomeCard*" -type f
+    
+    # Verify file contents are not empty
+    wc -l src/components/WelcomeCard/*.tsx src/components/WelcomeCard/*.css src/components/WelcomeCard/*.ts
+    ```
+    
+    **Expected Results:**
+    - 4 files found
+    - Each file should have multiple lines (not empty)
+    - File extensions match your configuration
+  </Step>
+  
+  <Step title="Content Quality Check">
+    ```bash
+    # Check main component file
+    head -10 src/components/WelcomeCard/WelcomeCard.tsx
+    
+    # Verify TypeScript interface exists
+    grep -n "interface.*Props" src/components/WelcomeCard/WelcomeCard.tsx
+    ```
+    
+    **Quality Indicators:**
+    - Valid TypeScript syntax
+    - React import statement present
+    - Component interface defined
+    - Export statements at bottom
+  </Step>
+</Steps>
+
+### 2.2 Recipe Information Validation
+
+<AccordionGroup>
+<Accordion title="Recipe Details Check">
+
+```bash
+# Get comprehensive recipe information
+hyper gen info react-component
+
+# Check specific recipe steps
+hyper gen step list react-component
+```
+
+**Expected Information:**
+- Recipe name and description
+- List of available variables
+- Required vs optional parameters
+- Step-by-step execution plan
+
+</Accordion>
+
+<Accordion title="Variable Understanding">
+
+```bash
+# Test different variable combinations
+hyper gen react-component \
+  --name=TestComponent \
+  --typescript=false \
+  --styled=false \
+  --dry-run
+```
+
+**Validation Points:**
+- `--dry-run` should show what would be generated
+- Different variables should change the output
+- No actual files should be created with `--dry-run`
+
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Part 3: Template Variable Customization
+
+### 3.1 Variable Options Validation
+
+<Steps>
+  <Step title="Generate with Different Options">
+    ```bash
+    # Create UserProfile with different settings
+    hyper gen react-component \
+      --name=UserProfile \
+      --typescript=true \
+      --styled=false \
+      --testing=true \
+      --hooks=true \
+      --state=true
+    ```
+    
+    **Validation Command:**
+    ```bash
+    # Compare with previous component
+    diff src/components/WelcomeCard/WelcomeCard.tsx src/components/UserProfile/UserProfile.tsx
+    ```
+    
+    **Expected Differences:**
+    - Different component names
+    - UserProfile may have hooks if supported
+    - Styling imports may differ based on `styled` option
+  </Step>
+  
+  <Step title="Interactive Mode Test">
+    ```bash
+    # If supported by the recipe
+    hyper gen react-component --interactive
+    ```
+    
+    **Success Indicators:**
+    - Prompts appear for each variable
+    - Default values are shown
+    - Help text is available
+    - Generated component reflects your choices
+  </Step>
+</Steps>
+
+### 3.2 Preview and Dry Run Validation
+
+<CodeGroup>
+```bash Preview Generation
+# Test dry-run functionality
+hyper gen react-component \
+  --name=PreviewTest \
+  --typescript=true \
+  --dry-run
+
+# Expected: File list without actual creation
+```
+
+```bash Verify No Files Created
+# Confirm dry-run didn't create files
+ls -la src/components/ | grep PreviewTest || echo "✅ No files created (correct behavior)"
+```
+</CodeGroup>
+
+**Validation Checklist:**
+- ☐ Dry run shows file paths that would be created
+- ☐ Dry run shows template content preview
+- ☐ No actual files are created during dry run
+- ☐ Different variables produce different previews
+
+---
+
+## Part 4: Custom Template Creation
+
+### 4.1 Recipe Structure Validation
+
+<Steps>
+  <Step title="Validate Recipe Syntax">
+    ```bash
+    # Check recipe.yml syntax
+    hyper gen validate cookbooks/my-components/recipe.yml
+    ```
+    
+    **Expected Output:**
+    ```
+    ✅ Recipe validation passed
+    📋 Found 4 steps
+    🔧 All tools available
+    ```
+  </Step>
+  
+  <Step title="Template File Validation">
+    ```bash
+    # Check all template files exist
+    find cookbooks/my-components -name "*.liquid" -o -name "*.ejs"
+    
+    # Verify template syntax
+    head -5 cookbooks/my-components/component.tsx.liquid
+    ```
+    
+    **Success Indicators:**
+    - All 4 template files exist
+    - Templates contain Liquid syntax (e.g., `{{ name }}`)
+    - No syntax errors in templates
+  </Step>
+</Steps>
+
+### 4.2 Custom Recipe Testing
+
+<AccordionGroup>
+<Accordion title="Dry Run Validation">
+
+```bash
+# Test custom recipe without generating files
+hyper gen cookbooks/my-components/recipe.yml \
+  --name=TestButton \
+  --variant_support=true \
+  --interactive=true \
+  --description="A reusable button component" \
+  --dry-run
+```
+
+**Expected Results:**
+- Shows 4 files that would be created
+- File paths include component name
+- No actual files created
+- Template variables are properly substituted in preview
+
+</Accordion>
+
+<Accordion title="Actual Generation Test">
+
+```bash
+# Generate real component with custom recipe
+hyper gen cookbooks/my-components/recipe.yml \
+  --name=CustomButton \
+  --variant_support=true \
+  --interactive=true \
+  --description="A custom button following our design system"
+
+# Validate generated files
+ls -la src/components/CustomButton/
+wc -l src/components/CustomButton/*
+```
+
+**Quality Checks:**
+- All 4 files created
+- Files contain meaningful content
+- Component name appears in all files
+- Variable substitution worked correctly
+
+</Accordion>
+
+<Accordion title="Content Quality Validation">
+
+```bash
+# Check generated component quality
+cat src/components/CustomButton/CustomButton.tsx
+
+# Verify specific features based on variables
+grep -n "variant" src/components/CustomButton/CustomButton.tsx
+grep -n "onClick" src/components/CustomButton/CustomButton.tsx
+```
+
+**Quality Indicators:**
+- Valid TypeScript syntax
+- Props interface includes expected properties
+- Conditional logic based on your variables works
+- CSS module imports present if styled=true
+
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Part 5: Advanced Features Validation
+
+### 5.1 Actions Validation
+
+<Steps>
+  <Step title="Action File Creation">
+    ```bash
+    # Verify action file exists and has correct structure
+    ls -la cookbooks/my-components/actions/update-index.ts
+    
+    # Check TypeScript syntax
+    node -c cookbooks/my-components/actions/update-index.ts
+    ```
+    
+    **Success Indicators:**
+    - Action file exists
+    - TypeScript syntax is valid
+    - Export function is properly defined
+  </Step>
+  
+  <Step title="Action Execution Test">
+    ```bash
+    # Generate component that should trigger action
+    hyper gen cookbooks/my-components/recipe.yml \
+      --name=ActionTest \
+      --variant_support=true
+    
+    # Check if main index was updated
+    cat src/components/index.ts
+    ```
+    
+    **Expected Results:**
+    - Component files generated
+    - `src/components/index.ts` created/updated
+    - Export line for ActionTest component added
+    - Action success message in console
+  </Step>
+</Steps>
+
+### 5.2 CodeMods Validation
+
+<CodeGroup>
+```bash CodeMod File Check
+# Verify codemod exists
+ls -la cookbooks/my-components/codemods/add-storybook.ts
+
+# Check TypeScript syntax
+node -c cookbooks/my-components/codemods/add-storybook.ts
+```
+
+```bash CodeMod Execution Test
+# Generate component with codemod
+hyper gen cookbooks/my-components/recipe.yml \
+  --name=StorybookTest \
+  --variant_support=true
+
+# Check if Storybook story was created
+ls -la src/components/StorybookTest/*.stories.tsx
+```
+</CodeGroup>
+
+### 5.3 Recipe Composition Validation
+
+<AccordionGroup>
+<Accordion title="Feature Recipe Structure">
+
+```bash
+# Validate feature recipe
+hyper gen validate cookbooks/feature-generator/recipe.yml
+
+# Check template files
+ls -la cookbooks/feature-generator/
+```
+
+**Validation Points:**
+- Recipe.yml validates without errors
+- Feature index template exists
+- Recipe references the correct sub-recipe
+
+</Accordion>
+
+<Accordion title="Composition Execution Test">
+
+```bash
+# Test feature generation
+hyper gen cookbooks/feature-generator/recipe.yml \
+  --feature_name=user-management \
+  --components='["List", "Item", "Form"]' \
+  --dry-run
+```
+
+**Expected Results:**
+- Shows multiple components would be generated
+- Feature index file would be created
+- Component names follow the pattern (e.g., UserManagementList)
+
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Part 6: Production Setup Validation
+
+### 6.1 Configuration Validation
+
+<Steps>
+  <Step title="Config File Syntax">
+    ```bash
+    # Test configuration loading
+    node -c hyperdev.config.js
+    
+    # Check if HyperDev can load it
+    hyper system status
+    ```
+    
+    **Success Indicators:**
+    - No JavaScript syntax errors
+    - HyperDev loads configuration without warnings
+    - System status shows your cookbook paths
+  </Step>
+  
+  <Step title="Global Variables Test">
+    ```bash
+    # Test if global variables are available
+    hyper gen cookbooks/my-components/recipe.yml \
+      --name=ConfigTest \
+      --description="Testing global config variables" \
+      --dry-run | grep -i "company\|author\|year"
+    ```
+    
+    **Expected:** Global variables should appear in generated content
+  </Step>
+</Steps>
+
+### 6.2 Team Setup Validation
+
+<AccordionGroup>
+<Accordion title="Documentation Quality Check">
+
+```bash
+# Verify documentation exists
+ls -la docs/COOKBOOK_STANDARDS.md cookbooks/README.md
+
+# Check content quality
+wc -l docs/COOKBOOK_STANDARDS.md
+grep -n "## " docs/COOKBOOK_STANDARDS.md
+```
+
+**Quality Indicators:**
+- Documentation files exist
+- Substantial content (not just boilerplate)
+- Clear section headers
+- Practical examples and guidelines
+
+</Accordion>
+
+<Accordion title="Onboarding Script Test">
+
+```bash
+# Make script executable
+chmod +x scripts/setup-hyperdev.sh
+
+# Test script execution (dry run mode if available)
+bash -n scripts/setup-hyperdev.sh  # Syntax check only
+```
+
+**Validation Points:**
+- Script has proper permissions
+- Bash syntax is correct
+- Script includes error handling
+- Prerequisites are checked
+
+</Accordion>
+</AccordionGroup>
+
+### 6.3 CI/CD Integration Validation
+
+<CodeGroup>
+```bash GitHub Actions Syntax Check
+# Validate YAML syntax
+cat .github/workflows/validate-cookbooks.yml | grep -E "^\s*-\s*name:" | wc -l
+
+# Check for required sections
+grep -n "on:\|jobs:\|steps:" .github/workflows/validate-cookbooks.yml
+```
+
+```bash Local CI Simulation
+# Run the same commands that CI would run
+find cookbooks recipes -name "recipe.yml" -exec hyper gen validate {} \; 2>/dev/null || echo "Some recipes not found (may be expected)"
+```
+</CodeGroup>
+
+---
+
+## Common Issues & Solutions
+
+### Installation Issues
+
+<AccordionGroup>
+<Accordion title="Command not found: hyper">
+
+**Diagnostic:**
+```bash
+which hyper
+echo $PATH
+bun list -g | grep hyperdev
+```
+
+**Solutions:**
+1. **Install globally:** `bun install -g hyperdev`
+2. **Check PATH:** Ensure bun global bin directory is in PATH
+3. **Use bunx:** `bunx hyper` as alternative
+
+</Accordion>
+
+<Accordion title="Permission Denied Errors">
+
+**Diagnostic:**
+```bash
+ls -la $(which hyper 2>/dev/null || echo "/usr/local/bin/hyper")
+whoami
+groups
+```
+
+**Solutions:**
+1. **Fix permissions:** `chmod +x $(which hyper)`
+2. **Use user install:** `bun install -g hyperdev --user`
+3. **Check ownership:** `sudo chown $USER:$USER ~/.bun`
+
+</Accordion>
+</AccordionGroup>
+
+### Generation Issues
+
+<AccordionGroup>
+<Accordion title="Recipe not found">
+
+**Diagnostic:**
+```bash
+hyper gen list
+hyper gen discover --verbose
+ls -la cookbooks/
+```
+
+**Solutions:**
+1. **Run discovery:** `hyper gen discover`
+2. **Check paths:** Verify cookbook directory structure
+3. **Use full paths:** `hyper gen ./cookbooks/my-recipe/recipe.yml`
+
+</Accordion>
+
+<Accordion title="Template syntax errors">
+
+**Diagnostic:**
+```bash
+hyper gen validate path/to/recipe.yml
+head -20 path/to/template.liquid
+```
+
+**Solutions:**
+1. **Check Liquid syntax:** Ensure `{{ }}` and `{% %}` are correct
+2. **Validate YAML:** Check recipe.yml frontmatter
+3. **Test variables:** Use `--dry-run` to preview output
+
+</Accordion>
+</AccordionGroup>
+
+### File System Issues
+
+<AccordionGroup>
+<Accordion title="Files not generated">
+
+**Diagnostic:**
+```bash
+ls -la target/directory/
+pwd
+DEBUG=hyperdev* hyper gen path/to/recipe.yml --name=Test
+```
+
+**Solutions:**
+1. **Check permissions:** Ensure write access to target directory
+2. **Verify paths:** Confirm current working directory is correct
+3. **Use absolute paths:** Specify full paths in templates
+
+</Accordion>
+
+<Accordion title="Overwrite conflicts">
+
+**Diagnostic:**
+```bash
+ls -la src/components/ExistingComponent/
+hyper gen path/to/recipe.yml --name=ExistingComponent --dry-run
+```
+
+**Solutions:**
+1. **Use force flag:** Add `--force` to overwrite
+2. **Remove existing:** Delete existing files first
+3. **Different name:** Use a different component name
+
+</Accordion>
+</AccordionGroup>
+
+---
+
+## Performance Validation
+
+### Generation Speed Test
+
+```bash
+# Time a typical generation
+time hyper gen cookbooks/my-components/recipe.yml \
+  --name=SpeedTest \
+  --variant_support=true
+
+# Expected: < 2 seconds for simple component
+```
+
+### Memory Usage Check
+
+```bash
+# Monitor memory during generation
+top -p $$ &
+TOP_PID=$!
+
+hyper gen cookbooks/my-components/recipe.yml \
+  --name=MemoryTest \
+  --variant_support=true
+
+kill $TOP_PID
+```
+
+**Performance Targets:**
+- **Generation time:** < 2 seconds for simple components
+- **Memory usage:** < 100MB peak usage
+- **Startup time:** < 1 second for recipe list
+
+---
+
+## Final Validation Checklist
+
+Use this comprehensive checklist to verify your tutorial completion:
+
+### ✅ Core Functionality
+- [ ] HyperDev CLI installed and working
+- [ ] Built-in recipes execute successfully  
+- [ ] Variable customization working
+- [ ] Dry-run and preview functionality operational
+- [ ] Generated files compile without errors
+
+### ✅ Custom Templates  
+- [ ] Custom recipe created and validates
+- [ ] All template files render correctly
+- [ ] Variables and conditionals function properly
+- [ ] Generated components follow project patterns
+- [ ] Recipe composition works with nested recipes
+
+### ✅ Advanced Features
+- [ ] Actions execute and modify files correctly
+- [ ] CodeMods generate additional files as expected
+- [ ] Recipe composition with forEach loops working
+- [ ] All 4 tools (Template/Action/CodeMod/Recipe) functional
+
+### ✅ Production Setup
+- [ ] Configuration file loads without errors
+- [ ] Team documentation comprehensive and helpful
+- [ ] CI/CD workflow validates cookbooks automatically
+- [ ] Onboarding script works for new team members
+- [ ] Performance optimizations show measurable improvements
+
+### ✅ Integration Testing
+- [ ] Generated components integrate with existing project
+- [ ] TypeScript compilation succeeds
+- [ ] Tests run without failures
+- [ ] Build process includes generated files
+- [ ] Version control tracks cookbook changes appropriately
+
+**🎉 Success Criteria Met:** If all items are checked, you've successfully completed the Getting Started Tutorial and are ready for advanced HyperDev usage!
+
+---
+
+## Getting Help
+
+If validation fails at any step:
+
+1. **Check this guide first** - Most issues have solutions here
+2. **Review error messages** - They often contain specific guidance
+3. **Use debug mode** - `DEBUG=hyperdev* hyper [command]`
+4. **Check the main [Troubleshooting Guide](/troubleshooting)** - Comprehensive issue database
+5. **Ask the community** - [Discord](https://discord.gg/hyperdev) or [GitHub Discussions](https://github.com/hyperdev-ai/hyperdev/discussions)
+
+**Remember:** Validation failures are learning opportunities. Each issue you resolve makes you more proficient with HyperDev!
