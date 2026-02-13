@@ -1,0 +1,41 @@
+---
+to: app/{{ name }}/new/page.tsx
+---
+@{
+  const helpers = require('../../../../helpers')
+  const { pascalCase, titleCase } = helpers
+
+  const modelName = model || pascalCase(name)
+  const title = titleCase(name)
+}
+import Link from 'next/link'
+import { {{ modelName }}Form } from '@/components/{{ modelName }}Form'
+
+export const metadata = {
+  title: 'Create {{ title }}',
+  description: 'Create a new {{ title.toLowerCase() }}',
+}
+
+export default function Create{{ modelName }}Page() {
+  return (
+    <div className="container mx-auto py-8 max-w-2xl">
+      <div className="mb-8">
+        <Link
+          href="/{{ name }}"
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          ← Back to {{ title }}s
+        </Link>
+      </div>
+
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Create {{ title }}</h1>
+        <p className="text-muted-foreground">
+          Add a new {{ title.toLowerCase() }} to your collection
+        </p>
+      </div>
+
+      <{{ modelName }}Form />
+    </div>
+  )
+}

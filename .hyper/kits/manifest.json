@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "kits": {
+    "nextjs": {
+      "name": "nextjs",
+      "source": "hyper-kits/nextjs",
+      "type": "github",
+      "installedAt": "2026-02-13T14:58:00.820Z",
+      "version": "0.1.0"
+    }
+  }
+}

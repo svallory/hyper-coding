@@ -1,0 +1,35 @@
+name: add
+description: |
+  Add an API route handler to a Next.js App Router project.
+  Creates route.ts with selected HTTP method handlers.
+version: 1.0.0
+
+variables:
+  path:
+    type: string
+    description: |
+      API route path relative to app/ (e.g. "api/users", "api/posts/[id]").
+      Convention: place under "api/" prefix.
+    required: true
+
+  routeDescription:
+    type: string
+    description: Brief description of what this API route does
+    required: true
+
+  methods:
+    type: enum
+    description: HTTP methods to generate handlers for
+    multiple: true
+    values: [GET, POST, PUT, PATCH, DELETE]
+    default: [GET, POST]
+
+steps:
+  - name: Create route directory
+    tool: shell
+    command: mkdir -p app/{{ path }}
+
+  - name: Generate route scaffold
+    tool: template
+    template: templates/route.ts.jig
+

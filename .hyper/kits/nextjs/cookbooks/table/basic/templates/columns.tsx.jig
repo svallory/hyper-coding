@@ -1,0 +1,41 @@
+---
+to: "{{ dir }}/columns.tsx"
+---
+'use client'
+
+import { ColumnDef } from '@tanstack/react-table'
+import { {{ pascalCase(name) }}Row } from '@/lib/types/{{ kebabCase(name) }}'
+
+/**
+ * Column definitions for {{ name }}
+ */
+export const columns: ColumnDef<{{ pascalCase(name) }}Row>[] = [
+@each(column in columns)
+@let(parts = column.split(':'))
+@let(key = parts[0])
+@let(label = parts[1] || titleCase(key))
+@let(type = parts[2] || 'string')
+  {
+    accessorKey: '{{ key }}',
+    header: '{{ label }}',
+@if(type === 'date')
+    cell: ({ row }) => {
+      const date = row.getValue('{{ key }}') as Date
+      return date ? new Intl.DateTimeFormat('en-US', {
+        dateStyle: 'medium'
+      }).format(date) : '-'
+    },
+@else if(type === 'boolean')
+    cell: ({ row }) => {
+      const value = row.getValue('{{ key }}') as boolean
+      return value ? '✓' : '✗'
+    },
+@else if(type === 'number')
+    cell: ({ row }) => {
+      const value = row.getValue('{{ key }}') as number
+      return value.toLocaleString()
+    },
+@end
+  },
+@endeach
+]

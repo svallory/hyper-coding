@@ -18,6 +18,25 @@ Kit configuration is defined in `kit.yml` and controls how your kit behaves. You
 - Kit-wide variables
 - Shared templates and partials
 
+## Kit Installation Locations
+
+Kits can be installed in different locations:
+
+```
+my-project/
+├── .hyper/
+│   └── kits/                  # Installed kits (GitHub, local)
+│       └── my-kit/
+├── node_modules/              # NPM-installed kits
+│   └── @hyper-kits/
+│       └── my-kit/
+├── recipes/                   # Workspace kit (auto-discovered)
+├── cookbooks/                 # Workspace kit (auto-discovered)
+└── package.json
+```
+
+See **[Kit Management](/guides/kit-management)** for installation details.
+
 ## Basic Kit Structure
 
 A kit can have both cookbooks and direct recipes:

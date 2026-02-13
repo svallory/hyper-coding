@@ -1,0 +1,31 @@
+name: add
+description: |
+  Add a layout to a Next.js App Router route segment.
+  Creates layout.tsx that wraps child pages in the segment.
+version: 1.0.0
+
+variables:
+  path:
+    type: string
+    description: Route segment path relative to app/ (e.g. "dashboard", "blog", "(marketing)")
+    required: true
+
+  layoutDescription:
+    type: string
+    description: Brief description of the layout purpose
+    default: "Layout for this route segment"
+
+  withNav:
+    type: boolean
+    description: Include a navigation sidebar or header in the layout
+    default: true
+
+steps:
+  - name: Create route directory
+    tool: shell
+    command: mkdir -p app/{{ path }}
+
+  - name: Generate layout scaffold
+    tool: template
+    template: templates/layout.tsx.jig
+

@@ -1,0 +1,24 @@
+name: add
+description: |
+  Add middleware to a Next.js project.
+  Creates middleware.ts in the project root (or src/ if using src directory).
+  Middleware runs before every request and can rewrite, redirect, or modify headers.
+version: 1.0.0
+
+variables:
+  purpose:
+    type: enum
+    description: Primary purpose of the middleware
+    values: [auth, redirect, headers, i18n, custom]
+    default: auth
+
+  matcher:
+    type: string
+    description: Route matcher pattern (e.g. "/dashboard/:path*", "/((?!api|_next/static|favicon.ico).*)")
+    default: "/((?!api|_next/static|_next/image|favicon.ico).*)"
+
+steps:
+  - name: Generate middleware scaffold
+    tool: template
+    template: templates/middleware.ts.jig
+

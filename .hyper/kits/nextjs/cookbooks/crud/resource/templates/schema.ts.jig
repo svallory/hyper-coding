@@ -1,0 +1,87 @@
+---
+to: lib/schemas/{{ name }}-schema.ts
+---
+@{
+  const helpers = require('../../../helpers')
+  const { pascalCase, camelCase } = helpers
+
+  const modelName = model || pascalCase(name)
+  const features = helpers.detectProjectFeatures()
+
+  // Parse schema from ORM or use provided fields
+  let modelFields = []
+
+  if (!fields && features.orm === 'prisma') {
+    const models = helpers.parsePrismaSchema()
+    const foundModel = models.find(m => m.name === modelName)
+    if (foundModel) {
+      modelFields = foundModel.fields.filter(f => !f.isId && !f.isCreatedAt && !f.isUpdatedAt)
+    }
+  } else if (!fields && features.orm === 'drizzle') {
+    // Parse Drizzle schema
+    const models = helpers.parseDrizzleSchema()
+    const foundModel = models.find(m => m.name === modelName)
+    if (foundModel) {
+      modelFields = foundModel.fields.filter(f => !f.isId && !f.isTimestamp)
+    }
+  } else if (fields) {
+    // Parse provided fields
+    modelFields = fields.split(',').map(f => {
+      const [name, type] = f.trim().split(':')
+      return { name, type: type || 'string', isRequired: true }
+    })
+  }
+
+  // Helper to convert field type to Zod schema
+  function getZodType(field) {
+    const typeMap = {
+      'string': 'z.string()',
+      'text': 'z.string()',
+      'number': 'z.number()',
+      'int': 'z.number().int()',
+      'float': 'z.number()',
+      'boolean': 'z.boolean()',
+      'date': 'z.date()',
+      'datetime': 'z.date()',
+      'email': 'z.string().email()',
+      'url': 'z.string().url()',
+      'json': 'z.any()',
+    }
+
+    let zodType = typeMap[field.type?.toLowerCase()] || 'z.string()'
+
+    if (!field.isRequired) {
+      zodType += '.optional()'
+    }
+
+    return zodType
+  }
+}
+import { z } from 'zod'
+
+/**
+ * Zod schema for {{ modelName }} validation
+ * Auto-generated from @if(features.orm !== 'none'){{ features.orm }} schema@else manual field definition@end
+ */
+export const {{ camelCase(modelName) }}Schema = z.object({
+@each(field in modelFields)
+  {{ field.name }}: {{ getZodType(field) }},@if(field.documentation) // {{ field.documentation }}@end
+@end
+})
+
+export type {{ modelName }} = z.infer<typeof {{ camelCase(modelName) }}Schema>
+
+/**
+ * Schema for creating a new {{ modelName }}
+ * Same as base schema but can be extended with different rules
+ */
+export const create{{ modelName }}Schema = {{ camelCase(modelName) }}Schema
+
+/**
+ * Schema for updating a {{ modelName }}
+ * All fields are optional for partial updates
+ */
+export const update{{ modelName }}Schema = {{ camelCase(modelName) }}Schema.partial()
+
+export type Create{{ modelName }}Input = z.infer<typeof create{{ modelName }}Schema>
+export type Update{{ modelName }}Input = z.infer<typeof update{{ modelName }}Schema>

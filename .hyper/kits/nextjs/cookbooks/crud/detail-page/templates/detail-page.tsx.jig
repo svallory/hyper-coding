@@ -1,0 +1,92 @@
+---
+to: app/{{ name }}/[id]/page.tsx
+---
+@{
+  const helpers = require('../../../../helpers')
+  const { pascalCase, camelCase, titleCase } = helpers
+
+  const modelName = model || pascalCase(name)
+  const modelVar = camelCase(modelName)
+  const title = titleCase(name)
+}
+import Link from 'next/link'
+import { notFound } from 'next/navigation'
+import { get{{ modelName }} } from '@/app/actions/{{ name }}'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+@if(includeDelete)
+import { {{ modelName }}DeleteDialog } from '@/components/{{ modelName }}DeleteDialog'
+@end
+
+interface PageProps {
+  params: {
+    id: string
+  }
+}
+
+export default async function {{ modelName }}DetailPage({ params }: PageProps) {
+  let {{ modelVar }}
+
+  try {
+    {{ modelVar }} = await get{{ modelName }}(params.id)
+  } catch (error) {
+    notFound()
+  }
+
+  return (
+    <div className="container mx-auto py-8">
+      <div className="mb-8">
+        <Link
+          href="/{{ name }}"
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
+          ← Back to {{ title }}s
+        </Link>
+      </div>
+
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">{{ title }} Details</h1>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/{{ name }}/${params.id}/edit`}>Edit</Link>
+          </Button>
+@if(includeDelete)
+          <{{ modelName }}DeleteDialog id={params.id} />
+@end
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* TODO: Customize fields based on your model */}
+          <div>
+            <dt className="text-sm font-medium text-muted-foreground">ID</dt>
+            <dd className="mt-1 text-sm">{{{ modelVar }}.id}</dd>
+          </div>
+
+          {/* Add more fields here */}
+          {Object.entries({{ modelVar }}).map(([key, value]) => {
+            if (key === 'id') return null
+            return (
+              <div key={key}>
+                <dt className="text-sm font-medium text-muted-foreground capitalize">
+                  {key.replace(/([A-Z])/g, ' $1').trim()}
+                </dt>
+                <dd className="mt-1 text-sm">
+                  {value instanceof Date
+                    ? value.toLocaleString()
+                    : typeof value === 'boolean'
+                    ? value ? 'Yes' : 'No'
+                    : String(value)}
+                </dd>
+              </div>
+            )
+          })}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

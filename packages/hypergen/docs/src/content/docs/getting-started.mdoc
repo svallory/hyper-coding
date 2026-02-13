@@ -41,7 +41,10 @@ Let's generate your first files to see Hypergen in action:
 # Create a test directory
 mkdir hypergen-test && cd hypergen-test
 
-# Generate a simple React component (uses built-in cookbook)
+# Install a kit (optional - many kits available)
+hypergen kit install @hyper-kits/react
+
+# Generate a simple React component
 hypergen react component --name=HelloWorld --typescript=true
 ```
 
@@ -61,6 +64,9 @@ When you ran that command, Hypergen:
 ## Explore Available Commands
 
 ```bash
+# List installed kits
+hypergen kit list
+
 # List all available recipes
 hypergen recipe list
 
@@ -93,7 +99,8 @@ export default {
 
 Now that Hypergen is working, choose your learning path:
 
-**Using Existing Cookbooks** (recommended for most users):
+**Using Existing Kits** (recommended for most users):
+- **[Kit Management](/guides/kit-management)** (10 minutes) - Install and manage kits
 - **[Finding Cookbooks](/tutorials/finding-cookbooks)** (10 minutes) - Discover community cookbooks
 - **[Running Recipes](/tutorials/running-recipes)** (15 minutes) - Master recipe execution and variables
 

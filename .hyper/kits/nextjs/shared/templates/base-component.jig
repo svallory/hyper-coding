@@ -1,0 +1,40 @@
+{{!--
+  Base template for React components
+  Extended by specific component recipes
+--}}
+---
+to: "{{ outputPath }}"
+---
+@if(useClient)
+  "use client"
+@end
+
+@if(imports && imports.length > 0)
+@each(imp in imports)
+  {{ imp }}
+@endeach
+
+@end
+@if(withProps)
+  export interface {{ componentName }}Props {
+@each(prop in props || [])
+    {{ prop.name }}{{ prop.optional ? '?' : '' }}: {{ prop.type }}
+@endeach
+    children?: React.ReactNode
+  }
+
+@end
+@if(withProps)
+  export default function {{ componentName }}({ children, ...props }: {{ componentName }}Props) {
+@else
+  export default function {{ componentName }}() {
+@end
+  return (
+    <div>
+      <p>{{ componentName }} component</p>
+@if(withProps)
+      {children}
+@end
+    </div>
+  )
+}

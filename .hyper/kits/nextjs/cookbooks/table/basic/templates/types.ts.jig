@@ -1,0 +1,19 @@
+---
+to: "lib/types/{{ kebabCase(name) }}.ts"
+---
+/**
+ * {{ name }} Data Type
+ *
+ * Type definitions for the {{ name }} component.
+ */
+
+export interface {{ pascalCase(name) }}Row {
+@each(column in columns)
+@let(parts = column.split(':'))
+@let(key = parts[0])
+@let(label = parts[1] || titleCase(key))
+@let(type = parts[2] || 'string')
+  {{ key }}: @if(type === 'number')number@else if(type === 'boolean')boolean@else if(type === 'date')Date@else string@end
+
+@endeach
+}

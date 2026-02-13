@@ -28,14 +28,38 @@ hypergen discover "component generator"
 hypergen discover starlight
 ```
 
-## NPM Cookbook Discovery
+## Installing Kits
 
-### Official Hyper-Kits
-Official cookbooks are published under `@hyper-kits`:
+### Using the Kit Install Command (Recommended)
+
+Hypergen provides a dedicated `kit install` command for managing kits:
+
+```bash
+# Install from npm
+hypergen kit install @hyper-kits/starlight
+
+# Install from GitHub
+hypergen kit install svallory/hypergen-kit-nextjs
+
+# Install from local path
+hypergen kit install ./my-local-kit
+
+# Use it immediately
+hypergen starlight create --name="My Docs" --description="Documentation site"
+```
+
+See **[Kit Management Guide](/guides/kit-management)** for complete installation options.
+
+### Traditional NPM Installation
+
+You can also install kits as npm packages:
 
 ```bash
 # Install official Starlight cookbook
 npm install @hyper-kits/starlight
+
+# Or with bun (recommended)
+bun add @hyper-kits/starlight
 
 # Use it immediately
 hypergen starlight create --name="My Docs" --description="Documentation site"
@@ -58,14 +82,21 @@ npm install hyper-kit-react-native
 
 ## GitHub Discovery
 
-Find cookbooks via GitHub topics:
+Install kits directly from GitHub:
 
 ```bash
-# Search GitHub repositories with "hyper-kit" topic
-hypergen discover --source=github "react components"
+# Install from GitHub (shorthand)
+hypergen kit install user/my-hyper-kit
 
-# Clone and use a GitHub cookbook
-hypergen url resolve https://github.com/user/my-hyper-kit
+# Install specific branch or tag
+hypergen kit install user/my-hyper-kit#develop
+hypergen kit install user/my-hyper-kit@v1.0.0
+
+# Full URL
+hypergen kit install https://github.com/user/my-hyper-kit.git
+
+# List installed kits
+hypergen kit list
 ```
 
 **Requirements for GitHub cookbooks**:
@@ -75,20 +106,44 @@ hypergen url resolve https://github.com/user/my-hyper-kit
 
 ## Local Cookbooks
 
-Use local cookbook directories:
+### Workspace Kit
+
+Standalone cookbooks and recipes in your project appear under a virtual "workspace" kit:
 
 ```bash
-# List cookbooks in current project
-hypergen cookbook list
+# List workspace recipes
+hypergen recipe list workspace
 
-# Use local cookbook
-hypergen ./recipes/my-cookbook create --name=Component
+# Use workspace recipes
+hypergen workspace my-recipe --name=Component
+```
+
+Your project structure might look like:
+```
+my-project/
+├── .hyper/kits/          # Installed kits
+├── recipes/              # Workspace recipes (auto-discovered)
+├── cookbooks/            # Workspace cookbooks (auto-discovered)
+└── package.json
+```
+
+### Installing Local Kits
+
+Install kits from local directories:
+
+```bash
+# Install from local path
+hypergen kit install ./my-local-kit
+hypergen kit install ../shared-templates
+
+# List all kits (including local)
+hypergen kit list
 ```
 
 **Directory structure Hypergen searches**:
-- `recipes/` 
-- `cookbooks/`
-- `_templates/` (legacy compatibility)
+- `.hyper/kits/` - Installed kits (auto-added)
+- `recipes/` - Workspace recipes
+- `cookbooks/` - Workspace cookbooks
 - Custom paths from `hypergen.config.js`
 
 ## Evaluating Cookbooks

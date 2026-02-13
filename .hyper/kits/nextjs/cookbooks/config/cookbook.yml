@@ -1,0 +1,9 @@
+name: config
+description: Configure and setup your Next.js stack (can be re-run to update configuration)
+version: 1.0.0
+
+defaults:
+  recipe: all
+
+recipes:
+  - './*/recipe.yml'

@@ -1,0 +1,107 @@
+name: filterable
+description: |
+  Generate a TanStack Table with column filtering and global search.
+  Includes filter inputs, debounced search, and multi-column filtering.
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Table component name in PascalCase (e.g. "UsersTable", "ProductsTable")
+    required: true
+    pattern: "^[A-Z][a-zA-Z0-9]*$"
+
+  columns:
+    type: array
+    description: |
+      Table columns in format "key:label:type:filterable" (e.g. "name:Name:string:true")
+      Types: string, number, boolean, date
+      Set filterable to 'true' to enable filtering on that column
+    required: true
+
+  dir:
+    type: string
+    description: Output directory for table component
+    default: "components/tables"
+
+  withGlobalSearch:
+    type: boolean
+    description: Include global search input
+    default: true
+
+  withPagination:
+    type: boolean
+    description: Include pagination controls
+    default: true
+
+  pageSize:
+    type: number
+    description: Default page size
+    default: 10
+
+steps:
+  - name: Check dependencies
+    tool: shell
+    command: |
+      # Check if required packages are installed
+      if ! bun pm ls @tanstack/react-table &>/dev/null; then
+        if command -v bun &> /dev/null; then
+          bun add @tanstack/react-table
+        else
+          npm install @tanstack/react-table
+        fi
+      fi
+
+      # Check shadcn/ui components
+      if [ ! -f "components/ui/table.tsx" ]; then
+        npx shadcn@latest add table --yes
+      fi
+
+      if [ ! -f "components/ui/input.tsx" ]; then
+        npx shadcn@latest add input --yes
+      fi
+
+      if [ ! -f "components/ui/button.tsx" ]; then
+        npx shadcn@latest add button --yes
+      fi
+
+      # Install lucide-react for icons
+      if ! bun pm ls lucide-react &>/dev/null; then
+        if command -v bun &> /dev/null; then
+          bun add lucide-react
+        else
+          npm install lucide-react
+        fi
+      fi
+
+  - name: Create output directory
+    tool: shell
+    command: mkdir -p {{ dir }}
+
+  - name: Generate TypeScript types
+    tool: template
+    template: templates/types.ts.jig
+
+  - name: Generate filterable columns
+    tool: template
+    template: templates/columns.tsx.jig
+
+  - name: Generate filterable table component
+    tool: template
+    template: templates/table.tsx.jig
+
+  - name: Instructions
+    tool: shell
+    command: |
+      echo "✅ Filterable data table generated successfully!"
+      echo ""
+      echo "Features:"
+@if(withGlobalSearch)
+      echo "  ✓ Global search across all columns"
+@end
+      echo "  ✓ Column-specific filters"
+      echo "  ✓ Debounced filter inputs"
+      echo "  ✓ Clear all filters button"
+      echo ""
+      echo "Usage:"
+      echo "  <{{ name }} columns={columns} data={data} />"

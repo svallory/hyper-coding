@@ -1,0 +1,371 @@
+---
+to: {{ dir }}/{{ name }}/route.ts
+---
+<%
+const isStripe = provider === 'stripe';
+const isGitHub = provider === 'github';
+const isShopify = provider === 'shopify';
+const isClerk = provider === 'clerk';
+const isResend = provider === 'resend';
+const isCustom = provider === 'custom';
+%>import { NextRequest, NextResponse } from 'next/server'
+<% if (verification) { %>
+import { verify{{ name | pascalCase }}Signature } from '@/lib/webhooks/{{ name }}-verifier'
+<% } %>
+<% if (isStripe) { %>
+import Stripe from 'stripe'
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2024-11-20.acacia',
+})
+<% } %>
+
+/**
+ * POST /api/webhooks/{{ name }}
+ * Handle incoming webhooks from {{ provider }}
+ */
+export async function POST(request: NextRequest) {
+  try {
+<% if (isStripe) { %>
+    // Get the raw body for signature verification
+    const body = await request.text()
+    const signature = request.headers.get('stripe-signature')
+
+    if (!signature) {
+      return NextResponse.json(
+        { error: 'Missing signature header' },
+        { status: 400 }
+      )
+    }
+
+    // Verify webhook signature
+    let event: Stripe.Event
+    try {
+      event = stripe.webhooks.constructEvent(
+        body,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET!
+      )
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err)
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 400 }
+      )
+    }
+
+    // Handle different event types
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session
+        // TODO: Handle successful checkout
+        console.log('Checkout completed:', session.id)
+        break
+      }
+
+      case 'customer.subscription.created': {
+        const subscription = event.data.object as Stripe.Subscription
+        // TODO: Handle new subscription
+        console.log('Subscription created:', subscription.id)
+        break
+      }
+
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription
+        // TODO: Handle subscription update
+        console.log('Subscription updated:', subscription.id)
+        break
+      }
+
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription
+        // TODO: Handle subscription cancellation
+        console.log('Subscription deleted:', subscription.id)
+        break
+      }
+
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object as Stripe.Invoice
+        // TODO: Handle successful payment
+        console.log('Payment succeeded:', invoice.id)
+        break
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice
+        // TODO: Handle failed payment
+        console.log('Payment failed:', invoice.id)
+        break
+      }
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`)
+    }
+
+    return NextResponse.json({ received: true })
+<% } else if (isGitHub) { %>
+    // Get the raw body for signature verification
+    const body = await request.text()
+    const signature = request.headers.get('x-hub-signature-256')
+    const event = request.headers.get('x-github-event')
+
+    if (!signature || !event) {
+      return NextResponse.json(
+        { error: 'Missing required headers' },
+        { status: 400 }
+      )
+    }
+
+<% if (verification) { %>
+    // Verify webhook signature
+    const isValid = await verify{{ name | pascalCase }}Signature(body, signature)
+    if (!isValid) {
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      )
+    }
+<% } %>
+
+    const payload = JSON.parse(body)
+
+    // Handle different event types
+    switch (event) {
+      case 'push': {
+        // TODO: Handle push event
+        console.log('Push event:', payload.ref)
+        break
+      }
+
+      case 'pull_request': {
+        const action = payload.action
+        // TODO: Handle pull request event
+        console.log(`Pull request ${action}:`, payload.pull_request.number)
+        break
+      }
+
+      case 'issues': {
+        const action = payload.action
+        // TODO: Handle issue event
+        console.log(`Issue ${action}:`, payload.issue.number)
+        break
+      }
+
+      default:
+        console.log(`Unhandled event type: ${event}`)
+    }
+
+    return NextResponse.json({ received: true })
+<% } else if (isShopify) { %>
+    // Get the raw body for signature verification
+    const body = await request.text()
+    const signature = request.headers.get('x-shopify-hmac-sha256')
+    const topic = request.headers.get('x-shopify-topic')
+
+    if (!signature || !topic) {
+      return NextResponse.json(
+        { error: 'Missing required headers' },
+        { status: 400 }
+      )
+    }
+
+<% if (verification) { %>
+    // Verify webhook signature
+    const isValid = await verify{{ name | pascalCase }}Signature(body, signature)
+    if (!isValid) {
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      )
+    }
+<% } %>
+
+    const payload = JSON.parse(body)
+
+    // Handle different topics
+    switch (topic) {
+      case 'orders/create': {
+        // TODO: Handle new order
+        console.log('New order:', payload.id)
+        break
+      }
+
+      case 'orders/updated': {
+        // TODO: Handle order update
+        console.log('Order updated:', payload.id)
+        break
+      }
+
+      case 'orders/cancelled': {
+        // TODO: Handle order cancellation
+        console.log('Order cancelled:', payload.id)
+        break
+      }
+
+      case 'products/create': {
+        // TODO: Handle new product
+        console.log('New product:', payload.id)
+        break
+      }
+
+      default:
+        console.log(`Unhandled topic: ${topic}`)
+    }
+
+    return NextResponse.json({ received: true })
+<% } else if (isClerk) { %>
+    // Get the raw body for signature verification
+    const body = await request.text()
+
+<% if (verification) { %>
+    // Verify webhook signature using Svix
+    import { Webhook } from 'svix'
+
+    const webhookSecret = process.env.CLERK_WEBHOOK_SECRET!
+    const wh = new Webhook(webhookSecret)
+
+    let event: any
+    try {
+      event = wh.verify(body, {
+        'svix-id': request.headers.get('svix-id')!,
+        'svix-timestamp': request.headers.get('svix-timestamp')!,
+        'svix-signature': request.headers.get('svix-signature')!,
+      })
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err)
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 400 }
+      )
+    }
+<% } else { %>
+    const event = JSON.parse(body)
+<% } %>
+
+    // Handle different event types
+    switch (event.type) {
+      case 'user.created': {
+        const user = event.data
+        // TODO: Handle new user creation
+        console.log('User created:', user.id)
+        break
+      }
+
+      case 'user.updated': {
+        const user = event.data
+        // TODO: Handle user update
+        console.log('User updated:', user.id)
+        break
+      }
+
+      case 'user.deleted': {
+        const user = event.data
+        // TODO: Handle user deletion
+        console.log('User deleted:', user.id)
+        break
+      }
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`)
+    }
+
+    return NextResponse.json({ received: true })
+<% } else if (isResend) { %>
+    // Get the raw body for signature verification
+    const body = await request.text()
+
+<% if (verification) { %>
+    // Verify webhook signature using Svix
+    import { Webhook } from 'svix'
+
+    const webhookSecret = process.env.RESEND_WEBHOOK_SECRET!
+    const wh = new Webhook(webhookSecret)
+
+    let event: any
+    try {
+      event = wh.verify(body, {
+        'svix-id': request.headers.get('svix-id')!,
+        'svix-timestamp': request.headers.get('svix-timestamp')!,
+        'svix-signature': request.headers.get('svix-signature')!,
+      })
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err)
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 400 }
+      )
+    }
+<% } else { %>
+    const event = JSON.parse(body)
+<% } %>
+
+    // Handle different event types
+    switch (event.type) {
+      case 'email.sent': {
+        // TODO: Handle email sent
+        console.log('Email sent:', event.data.email_id)
+        break
+      }
+
+      case 'email.delivered': {
+        // TODO: Handle email delivered
+        console.log('Email delivered:', event.data.email_id)
+        break
+      }
+
+      case 'email.bounced': {
+        // TODO: Handle email bounce
+        console.log('Email bounced:', event.data.email_id)
+        break
+      }
+
+      case 'email.complained': {
+        // TODO: Handle spam complaint
+        console.log('Email complained:', event.data.email_id)
+        break
+      }
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`)
+    }
+
+    return NextResponse.json({ received: true })
+<% } else { %>
+    // Custom webhook handler
+    const body = await request.text()
+<% if (verification) { %>
+
+    // Get signature from header (adjust header name as needed)
+    const signature = request.headers.get('x-webhook-signature')
+    if (!signature) {
+      return NextResponse.json(
+        { error: 'Missing signature header' },
+        { status: 400 }
+      )
+    }
+
+    // Verify webhook signature
+    const isValid = await verify{{ name | pascalCase }}Signature(body, signature)
+    if (!isValid) {
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      )
+    }
+<% } %>
+
+    const payload = JSON.parse(body)
+
+    // TODO: Handle webhook payload
+    console.log('Webhook received:', payload)
+
+    return NextResponse.json({ received: true })
+<% } %>
+  } catch (error) {
+    console.error('Webhook error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

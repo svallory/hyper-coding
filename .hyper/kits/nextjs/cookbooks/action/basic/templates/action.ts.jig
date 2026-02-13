@@ -1,0 +1,96 @@
+---
+to: "{{ dir }}/{{ name }}.ts"
+---
+'use server'
+
+/**
+ * {{ pascalCase(name) }} Server Action
+ *
+ * Handles form submission with basic error handling.
+ * @if(withPrevState)
+ * Can be used with useActionState hook for progressive enhancement.
+ * @end
+ */
+
+@if(returnPath)
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
+@end
+
+@if(withPrevState)
+export type {{ pascalCase(name) }}State = {
+  error?: string
+  success?: boolean
+  data?: any
+} | null
+
+export async function {{ name }}(
+  prevState: {{ pascalCase(name) }}State,
+  formData: FormData
+): Promise<{{ pascalCase(name) }}State> {
+@else
+export async function {{ name }}(formData: FormData) {
+@end
+  try {
+    // Extract form data
+    const data = {
+@each(field in fields)
+@let(parts = field.split(':'))
+@let(fieldName = parts[0])
+@let(fieldType = parts[1] || 'string')
+      {{ fieldName }}: @if(fieldType === 'number')
+Number(formData.get('{{ fieldName }}'))@elseif(fieldType === 'boolean')
+formData.get('{{ fieldName }}') === 'true'@elseif(fieldType === 'date')
+new Date(formData.get('{{ fieldName }}') as string)@else
+formData.get('{{ fieldName }}')@end
+,
+@endeach
+    }
+
+    // Basic validation
+@each(field in fields)
+@let(parts = field.split(':'))
+@let(fieldName = parts[0])
+    if (!data.{{ fieldName }}) {
+@if(withPrevState)
+      return { error: '{{ sentenceCase(fieldName) }} is required' }
+@else
+      throw new Error('{{ sentenceCase(fieldName) }} is required')
+@end
+    }
+@endeach
+
+    // TODO: Implement your business logic here
+    // Example: Save to database, call API, etc.
+    console.log('{{ pascalCase(name) }} data:', data)
+
+    // Simulate async operation
+    await new Promise(resolve => setTimeout(resolve, 100))
+
+@if(returnPath)
+    // Revalidate the path to show updated data
+    revalidatePath('{{ returnPath }}')
+
+    // Redirect to the specified path
+    redirect('{{ returnPath }}')
+@else
+@if(withPrevState)
+    return {
+      success: true,
+      data,
+    }
+@else
+    return { success: true, data }
+@end
+@end
+  } catch (error) {
+    console.error('{{ pascalCase(name) }} error:', error)
+@if(withPrevState)
+    return {
+      error: error instanceof Error ? error.message : 'An unexpected error occurred',
+    }
+@else
+    throw error
+@end
+  }
+}

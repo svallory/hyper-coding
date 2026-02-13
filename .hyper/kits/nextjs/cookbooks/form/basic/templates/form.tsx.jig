@@ -1,0 +1,203 @@
+---
+to: "{{ dir }}/{{ name }}.tsx"
+---
+'use client'
+
+/**
+ * {{ name }} Component
+ *
+ * Simple form with native HTML validation and shadcn/ui components.
+ */
+
+import { useState } from 'react'
+@if(withValidation)
+import { validate{{ pascalCase(name) }}, type {{ pascalCase(name) }}Data } from '@/lib/schemas/{{ kebabCase(name) }}-schema'
+@end
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+@if(fields.some(f => f.includes(':textarea')))
+import { Textarea } from '@/components/ui/textarea'
+@end
+@if(fields.some(f => f.includes(':select')))
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+@end
+@if(fields.some(f => f.includes(':checkbox')))
+import { Checkbox } from '@/components/ui/checkbox'
+@end
+
+interface {{ name }}Props {
+  onSubmit?: (formData: FormData) => void | Promise<void>
+  submitLabel?: string
+  className?: string
+}
+
+export function {{ name }}({
+  onSubmit,
+  submitLabel = 'Submit',
+  className,
+}: {{ name }}Props) {
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+@if(withValidation)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+@end
+@if(fields.some(f => f.includes(':select')))
+@each(field in fields)
+@let(parts = field.split(':'))
+@let(fieldName = parts[0])
+@let(fieldType = parts[1] || 'text')
+@if(fieldType === 'select')
+  const [{{ fieldName }}, set{{ pascalCase(fieldName) }}] = useState<string>('')
+@end
+@endeach
+@end
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+@if(withValidation)
+    setFieldErrors({})
+@end
+
+    try {
+      const formData = new FormData(e.currentTarget)
+@if(fields.some(f => f.includes(':select')))
+
+      // Add select values to FormData
+@each(field in fields)
+@let(parts = field.split(':'))
+@let(fieldName = parts[0])
+@let(fieldType = parts[1] || 'text')
+@if(fieldType === 'select')
+      formData.set('{{ fieldName }}', {{ fieldName }})
+@end
+@endeach
+@end
+@if(withValidation)
+
+      // Validate form data
+      const result = validate{{ pascalCase(name) }}(formData)
+      if (!result.success) {
+        const errors: Record<string, string> = {}
+        result.error.errors.forEach((err) => {
+          if (err.path[0]) {
+            errors[err.path[0].toString()] = err.message
+          }
+        })
+        setFieldErrors(errors)
+        return
+      }
+@end
+
+      await onSubmit?.(formData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className={className}>
+      <div className="space-y-4">
+        {error && (
+          <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+@each(field in fields)
+@let(parts = field.split(':'))
+@let(fieldName = parts[0])
+@let(fieldType = parts[1] || 'text')
+@if(fieldType === 'checkbox')
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="{{ fieldName }}"
+            name="{{ fieldName }}"
+            disabled={isLoading}
+          />
+          <Label
+            htmlFor="{{ fieldName }}"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+          >
+            {{ titleCase(fieldName) }}
+          </Label>
+        </div>
+@else
+        <div className="space-y-2">
+          <Label htmlFor="{{ fieldName }}">{{ titleCase(fieldName) }}</Label>
+@if(fieldType === 'textarea')
+          <Textarea
+            id="{{ fieldName }}"
+            name="{{ fieldName }}"
+            placeholder="Enter {{ fieldName }}..."
+            className="resize-none"
+            required
+            disabled={isLoading}
+@if(withValidation)
+            aria-invalid={!!fieldErrors.{{ fieldName }}}
+            aria-describedby="{{ fieldName }}-error"
+@end
+          />
+@else if(fieldType === 'select')
+          <Select
+            value={@{{{ fieldName }}}@}
+            onValueChange={set{{ pascalCase(fieldName) }}}
+            disabled={isLoading}
+            required
+          >
+            <SelectTrigger
+@if(withValidation)
+              aria-invalid={!!fieldErrors.{{ fieldName }}}
+              aria-describedby="{{ fieldName }}-error"
+@end
+            >
+              <SelectValue placeholder="Select an option" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="option1">Option 1</SelectItem>
+              <SelectItem value="option2">Option 2</SelectItem>
+              <SelectItem value="option3">Option 3</SelectItem>
+            </SelectContent>
+          </Select>
+@else
+          <Input
+            id="{{ fieldName }}"
+            name="{{ fieldName }}"
+            type="{{ fieldType }}"
+            placeholder="Enter {{ fieldName }}..."
+            required
+            disabled={isLoading}
+@if(withValidation)
+            aria-invalid={!!fieldErrors.{{ fieldName }}}
+            aria-describedby="{{ fieldName }}-error"
+@end
+          />
+@end
+@if(withValidation)
+          {fieldErrors.{{ fieldName }} && (
+            <p id="{{ fieldName }}-error" className="text-sm text-destructive">
+              {fieldErrors.{{ fieldName }}}
+            </p>
+          )}
+@end
+        </div>
+@end
+
+@endeach
+        <Button type="submit" disabled={isLoading} className="w-full">
+          {isLoading ? 'Submitting...' : submitLabel}
+        </Button>
+      </div>
+    </form>
+  )
+}

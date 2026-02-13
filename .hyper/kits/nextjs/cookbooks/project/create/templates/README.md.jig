@@ -1,0 +1,42 @@
+---
+to: "{{ name }}/README.md"
+---
+# {{ name }}
+
+{{ description }}
+
+## Getting Started
+
+Install dependencies:
+
+```bash
+bun install
+```
+
+Run the development server:
+
+```bash
+bun dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+You can start editing the page by modifying `@if(useSrcDir)src/@end app/page.tsx`. The page auto-updates as you edit the file.
+
+## Tech Stack
+
+- [Next.js](https://nextjs.org/) - React framework
+- [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS
+- [TypeScript](https://www.typescriptlang.org/) - Type safety
+
+## Learn More
+
+- [Next.js Documentation](https://nextjs.org/docs) - Next.js features and API
+- [Learn Next.js](https://nextjs.org/learn) - Interactive tutorial
+- [Tailwind CSS Documentation](https://tailwindcss.com/docs) - Tailwind reference
+
+## Deploy
+
+The easiest way to deploy is with [Vercel](https://vercel.com/new):
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)

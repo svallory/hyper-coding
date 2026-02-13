@@ -1,0 +1,9 @@
+name: component
+description: Add React components to a Next.js project
+version: 1.0.0
+
+defaults:
+  recipe: add
+
+recipes:
+  - "./*/recipe.yml"

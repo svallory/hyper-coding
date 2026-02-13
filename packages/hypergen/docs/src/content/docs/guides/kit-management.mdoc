@@ -1,0 +1,420 @@
+---
+title: Kit Management
+description: Installing, listing, and managing Hypergen kits across your projects
+time: 10 minutes
+prerequisites: Hypergen installed
+---
+
+# Kit Management
+
+**What you'll learn**: How to install, discover, and manage kits in your projects
+**Time needed**: 10 minutes
+**Prerequisites**: Hypergen installed and basic familiarity with the command line
+
+Hypergen kits are collections of cookbooks and recipes that can be installed and shared across projects. This guide covers how to manage kits effectively.
+
+## Understanding Kit Storage
+
+Hypergen stores installed kits in `.hyper/kits/` at your project root:
+
+```
+my-project/
+├── .hyper/
+│   └── kits/              # Installed kits go here
+│       ├── nextjs/        # Kit from GitHub
+│       └── my-templates/  # Kit from local path
+├── package.json
+└── src/
+```
+
+**Monorepo Support**: If you're in a monorepo (npm workspaces, pnpm, lerna), Hypergen automatically detects the workspace root and installs kits there, ensuring all workspace packages can access them.
+
+## Installing Kits
+
+### From NPM
+
+Install kits published to npm:
+
+```bash
+# Install from npm registry
+hypergen kit install @hyper-kits/nextjs
+
+# Install from JSR
+hypergen kit install jsr:@std/path
+```
+
+NPM/JSR packages are installed to `node_modules/` using your package manager (bun/npm/pnpm/yarn).
+
+### From GitHub
+
+Install kits directly from GitHub repositories:
+
+```bash
+# GitHub shorthand (owner/repo)
+hypergen kit install svallory/hypergen-kit-nextjs
+
+# Specific branch
+hypergen kit install svallory/hypergen-kit-nextjs#develop
+
+# Specific tag
+hypergen kit install svallory/hypergen-kit-nextjs@v1.0.0
+
+# Full URL
+hypergen kit install https://github.com/svallory/hypergen-kit-nextjs.git
+```
+
+GitHub kits are downloaded to `.hyper/kits/` without version control history (using tiged).
+
+### From Local Paths
+
+Install kits from local directories:
+
+```bash
+# Relative path
+hypergen kit install ./my-local-kit
+hypergen kit install ../shared-kits/templates
+
+# Absolute path
+hypergen kit install /Users/me/kits/custom-kit
+
+# Windows absolute path
+hypergen kit install C:\\Projects\\my-kit
+```
+
+Local kits are copied to `.hyper/kits/` (excluding `node_modules`, `.git`, etc.).
+
+### Custom Kit Names
+
+Override the default kit name during installation:
+
+```bash
+# Default: uses repository/directory name
+hypergen kit install svallory/hypergen-kit-nextjs
+
+# Custom name
+hypergen kit install svallory/hypergen-kit-nextjs --name my-nextjs-kit
+```
+
+## Listing Installed Kits
+
+View all kits available in your project:
+
+```bash
+# List all installed kits
+hypergen kit list
+
+# Output as JSON
+hypergen kit list --json
+```
+
+### Kit Sources
+
+Kits can come from multiple sources:
+
+1. **Installed kits** - In `.hyper/kits/` or `node_modules/`
+2. **Workspace kit** - Standalone cookbooks/recipes in `recipes/` or `cookbooks/` directories that don't belong to any kit
+
+The virtual "workspace" kit groups your project-specific cookbooks and recipes that aren't part of an installed kit.
+
+## Kit Discovery Locations
+
+Hypergen searches for kits in these locations (in order):
+
+1. **`.hyper/kits/`** - Installed kits at project/workspace root
+2. **Custom directories** - From `hypergen.config.js`:
+   ```javascript
+   export default {
+     discovery: {
+       directories: ['recipes', 'cookbooks', 'custom-templates']
+     }
+   }
+   ```
+3. **`node_modules/`** - NPM-installed packages matching naming conventions
+4. **Global packages** - Globally installed kits (bun/npm/pnpm global)
+
+## Monorepo Behavior
+
+When working in a monorepo, Hypergen intelligently handles kit installation:
+
+### Monorepo Detection
+
+Hypergen automatically detects:
+- **npm/yarn/bun workspaces** - `workspaces` field in package.json
+- **pnpm workspaces** - `pnpm-workspace.yaml` file
+- **lerna** - `lerna.json` file
+
+### Installation Location
+
+```bash
+# From anywhere in the monorepo:
+cd my-monorepo/packages/app/src
+hypergen kit install svallory/nextjs-kit
+
+# Installs to: my-monorepo/.hyper/kits/
+```
+
+All workspace packages can access kits installed at the workspace root.
+
+### Example Monorepo Structure
+
+```
+my-monorepo/
+├── .hyper/
+│   └── kits/              # Shared across all packages
+│       └── nextjs/
+├── packages/
+│   ├── app/
+│   │   └── package.json   # Can use kits from ../../.hyper/kits
+│   ├── admin/
+│   │   └── package.json   # Can use kits from ../../.hyper/kits
+│   └── shared/
+│       └── package.json   # Can use kits from ../../.hyper/kits
+├── package.json           # Monorepo root with workspaces
+└── pnpm-workspace.yaml
+```
+
+## Configuration
+
+### Customize Discovery
+
+In `hypergen.config.js`:
+
+```javascript
+export default {
+  discovery: {
+    // Where to look for kits
+    directories: [
+      'recipes',         // Default
+      'cookbooks',       // Default
+      '.hyper/kits',     // Default (auto-added)
+      'custom-templates' // Your custom location
+    ],
+
+    // Discovery sources
+    sources: ['local', 'npm', 'workspace', 'global'],
+
+    // Files to exclude
+    exclude: ['node_modules', '.git', 'dist', 'build']
+  }
+}
+```
+
+**Note**: `.hyper/kits` is always included automatically, even if not specified.
+
+## Kit Manifest
+
+Hypergen tracks installed kits in `.hyper/manifest.json`:
+
+```json
+{
+  "kits": [
+    {
+      "name": "nextjs",
+      "source": "svallory/hypergen-kit-nextjs",
+      "type": "github",
+      "installedAt": "2024-01-15T10:30:00Z",
+      "version": "1.2.0",
+      "commit": "abc123def456"
+    }
+  ]
+}
+```
+
+This manifest helps track:
+- What kits are installed
+- Where they came from
+- When they were installed
+- Version information (for npm packages)
+- Commit hash (for git repositories)
+
+## Working with Kits
+
+### Using Installed Kits
+
+Once a kit is installed, use it by name:
+
+```bash
+# List recipes in a kit
+hypergen recipe list nextjs
+
+# Run a recipe from a kit
+hypergen nextjs page create --name Home
+
+# Run a cookbook recipe
+hypergen nextjs crud create User
+```
+
+### Workspace Kit
+
+Your project's standalone recipes automatically appear under "workspace":
+
+```bash
+# List workspace recipes
+hypergen recipe list workspace
+
+# Run a workspace recipe
+hypergen workspace init
+```
+
+Project structure example:
+```
+my-project/
+├── .hyper/kits/
+│   └── nextjs/          # Installed kit
+├── recipes/
+│   ├── init/            # Standalone recipe → workspace kit
+│   └── setup/           # Standalone recipe → workspace kit
+└── cookbooks/
+    └── custom/          # Standalone cookbook → workspace kit
+```
+
+## Updating Kits
+
+### NPM Kits
+
+Use your package manager:
+
+```bash
+# Update to latest
+bun update @hyper-kits/nextjs
+
+# Or with npm
+npm update @hyper-kits/nextjs
+```
+
+### GitHub Kits
+
+Reinstall to get latest changes:
+
+```bash
+# Remove old version
+rm -rf .hyper/kits/nextjs
+
+# Install latest
+hypergen kit install svallory/hypergen-kit-nextjs
+```
+
+### Local Kits
+
+Re-run the install command:
+
+```bash
+hypergen kit install ./my-local-kit
+```
+
+## Removing Kits
+
+### NPM Kits
+
+Use your package manager:
+
+```bash
+bun remove @hyper-kits/nextjs
+# or
+npm uninstall @hyper-kits/nextjs
+```
+
+### GitHub/Local Kits
+
+Remove the directory:
+
+```bash
+rm -rf .hyper/kits/nextjs
+```
+
+The kit will be removed from the manifest automatically.
+
+## Best Practices
+
+### 1. Use Version Control
+
+Add to `.gitignore`:
+```gitignore
+# Don't commit installed kits
+.hyper/kits/
+
+# But do commit the manifest
+!.hyper/manifest.json
+```
+
+This ensures team members can reinstall kits from the manifest.
+
+### 2. Document Kit Dependencies
+
+In your `README.md`:
+```markdown
+## Setup
+
+Install required kits:
+\`\`\`bash
+hypergen kit install svallory/nextjs-kit
+hypergen kit install @hyper-kits/react
+\`\`\`
+```
+
+### 3. Pin Versions for NPM Kits
+
+Use exact versions in `package.json`:
+```json
+{
+  "devDependencies": {
+    "@hyper-kits/nextjs": "1.2.0"  // Not "^1.2.0"
+  }
+}
+```
+
+### 4. Use Tags for GitHub Kits
+
+Install from specific tags:
+```bash
+hypergen kit install svallory/nextjs-kit@v1.2.0
+```
+
+## Troubleshooting
+
+### Kit Not Found After Installation
+
+```bash
+# Verify kit is installed
+hypergen kit list
+
+# Check if you're in a monorepo
+# (kit might be at workspace root)
+cd ../..
+hypergen kit list
+
+# Clear cache and retry
+rm -rf .hyper/kits
+hypergen kit install <kit>
+```
+
+### Monorepo Detection Issues
+
+```bash
+# Check if monorepo is detected
+DEBUG=hypergen:* hypergen kit install <kit>
+# Look for "Detected monorepo" message
+
+# Verify workspace configuration
+cat package.json | grep workspaces
+cat pnpm-workspace.yaml
+```
+
+### Conflicting Kit Names
+
+```bash
+# Use custom name
+hypergen kit install <source> --name unique-name
+```
+
+## What's Next?
+
+Now that you understand kit management:
+
+- **[Kit Configuration](/concepts/kit-configuration)** - Learn how kits are configured
+- **[Creating Kits](/guides/creating-kits)** - Build your own shareable kits
+- **[Running Recipes](/tutorials/running-recipes)** - Execute recipes from installed kits
+
+---
+
+**You now know how to install, discover, and manage Hypergen kits!** Kits make it easy to share and reuse code generation templates across projects and teams.

@@ -1,0 +1,55 @@
+---
+to: app/actions/{{ name }}.ts
+inject: true
+after: "export async function update{{ model || pascalCase(name) }}"
+skip_if: "export async function delete{{ model || pascalCase(name) }}"
+---
+@{
+  const helpers = require('../../../../helpers')
+  const { pascalCase, camelCase } = helpers
+
+  const modelName = model || pascalCase(name)
+  const modelVar = camelCase(modelName)
+  const features = helpers.detectProjectFeatures()
+
+  let dbClient = 'db'
+  if (features.orm === 'prisma') {
+    dbClient = 'prisma'
+  }
+}
+
+/**
+ * Delete a {{ name }} by ID
+ */
+export async function delete{{ modelName }}(id: string) {
+  try {
+@if(features.orm === 'prisma')
+    // Delete from database
+    await {{ dbClient }}.{{ modelVar }}.delete({
+      where: { id },
+    })
+
+    // Revalidate list page
+    revalidatePath('/{{ name }}')
+
+    return { success: true }
+@else if(features.orm === 'drizzle')
+    // TODO: Implement Drizzle delete
+    // Example:
+    // await db.delete({{ name }}s).where(eq({{ name }}s.id, id))
+    // revalidatePath('/{{ name }}')
+    // return { success: true }
+
+    throw new Error('Database not configured')
+@else
+    // TODO: Implement database delete
+    throw new Error('Database not configured')
+@end
+  } catch (error) {
+    console.error('Error deleting {{ name }}:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to delete {{ name }}',
+    }
+  }
+}

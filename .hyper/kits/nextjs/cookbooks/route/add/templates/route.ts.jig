@@ -1,0 +1,49 @@
+---
+to: "app/{{ path }}/route.ts"
+---
+import { NextRequest, NextResponse } from "next/server";
+
+@if(path.includes("["))
+
+@let(segments = path.split("/"))
+type Params = {
+  @each(segment in segments)
+  @if(segment.includes("[..."))
+  {{ segment.replace("[...", "").replace("[[...", "").replace("]]", "").replace("]", "") }}: string[];
+  @elseif(segment.includes("["))
+  {{ segment.replace("[", "").replace("]", "") }}: string;
+  @end
+  @end
+};
+
+type RouteContext = { params: Promise<Params> };
+
+@end
+
+@each(method in methods)
+
+@if(path.includes("["))
+export async function {{ method }}(
+  request: NextRequest,
+  { params }: RouteContext,
+) {
+  const resolvedParams = await params;
+
+  // TODO: Implement {{ method }} handler
+
+  return NextResponse.json(
+    { message: "{{ method }} {{ path }} - not implemented" },
+    { status: @if(method == "POST")201@elseif(method == "DELETE")204@else 200@end },
+  );
+}
+@else
+export async function {{ method }}(request: NextRequest) {
+  // TODO: Implement {{ method }} handler
+
+  return NextResponse.json(
+    { message: "{{ method }} {{ path }} - not implemented" },
+    { status: @if(method == "POST")201@elseif(method == "DELETE")204@else 200@end },
+  );
+}
+@end
+@end

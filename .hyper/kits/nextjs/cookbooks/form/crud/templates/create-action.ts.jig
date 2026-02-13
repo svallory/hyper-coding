@@ -1,0 +1,75 @@
+---
+to: "{{ actionPath }}/create-{{ kebabCase(model) }}.ts"
+---
+@let(orm = env('DETECTED_ORM') || 'prisma')
+'use server'
+
+/**
+ * Create {{ model }} Server Action
+ *
+ * Handles {{ model }} creation with server-side validation.
+ */
+
+import { revalidatePath } from 'next/cache'
+@if(orm === 'prisma')
+import { prisma } from '@/lib/db'
+@else
+import { db } from '@/lib/db'
+@end
+import { create{{ pascalCase(model) }}Schema } from '@/lib/schemas/{{ kebabCase(model) }}-schema'
+
+export type Create{{ pascalCase(model) }}State = {
+  success?: boolean
+  error?: string
+  fieldErrors?: Record<string, string[]>
+  data?: any
+}
+
+export async function create{{ pascalCase(model) }}(
+  prevState: Create{{ pascalCase(model) }}State | null,
+  formData: FormData,
+): Promise<Create{{ pascalCase(model) }}State> {
+  // Extract form data
+  const rawData = Object.fromEntries(formData.entries())
+
+  // Validate with Zod
+  const parsed = create{{ pascalCase(model) }}Schema.safeParse(rawData)
+
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: 'Validation failed. Please check your inputs.',
+      fieldErrors: parsed.error.flatten().fieldErrors,
+    }
+  }
+
+  try {
+@if(orm === 'prisma')
+    // Create {{ model }} in database using Prisma
+    const {{ camelCase(model) }} = await prisma.{{ camelCase(model) }}.create({
+      data: parsed.data,
+    })
+@else
+    // Create {{ model }} in database using Drizzle
+    const [{{ camelCase(model) }}] = await db
+      .insert({{ camelCase(model) }}Table)
+      .values(parsed.data)
+      .returning()
+@end
+
+    // Revalidate relevant paths
+    revalidatePath('/{{ kebabCase(pluralize(model)) }}')
+
+    return {
+      success: true,
+      data: {{ camelCase(model) }},
+    }
+  } catch (error) {
+    console.error('create{{ pascalCase(model) }} error:', error)
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create {{ model }}',
+    }
+  }
+}

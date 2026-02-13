@@ -1,0 +1,198 @@
+---
+to: "{{ dir }}/{{ name }}.tsx"
+---
+'use client'
+
+import { useState } from 'react'
+import {
+  ColumnDef,
+  ColumnFiltersState,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+@if(withPagination)
+  getPaginationRowModel,
+@end
+  useReactTable,
+} from '@tanstack/react-table'
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { X } from 'lucide-react'
+
+interface {{ name }}Props<TData, TValue> {
+  columns: ColumnDef<TData, TValue>[]
+  data: TData[]
+}
+
+/**
+ * {{ name }} - Filterable Data Table
+ *
+ * Features:
+@if(withGlobalSearch)
+ * - Global search across all columns
+@end
+ * - Column-specific filters
+ * - Debounced filter inputs
+ * - Clear filters button
+ */
+export function {{ name }}<TData, TValue>({
+  columns,
+  data,
+}: {{ name }}Props<TData, TValue>) {
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+@if(withGlobalSearch)
+  const [globalFilter, setGlobalFilter] = useState('')
+@end
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+@if(withPagination)
+    getPaginationRowModel: getPaginationRowModel(),
+@end
+    onColumnFiltersChange: setColumnFilters,
+@if(withGlobalSearch)
+    onGlobalFilterChange: setGlobalFilter,
+@end
+    state: {
+      columnFilters,
+@if(withGlobalSearch)
+      globalFilter,
+@end
+    },
+    initialState: {
+      pagination: {
+        pageSize: {{ pageSize }},
+      },
+    },
+  })
+
+  return (
+    <div className="space-y-4">
+@if(withGlobalSearch)
+      {/* Global Search */}
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="Search all columns..."
+          value={globalFilter ?? ''}
+          onChange={(e) => setGlobalFilter(e.target.value)}
+          className="max-w-sm"
+        />
+        {(globalFilter || columnFilters.length > 0) && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setGlobalFilter('')
+              setColumnFilters([])
+            }}
+          >
+            <X className="mr-2 h-4 w-4" />
+            Clear filters
+          </Button>
+        )}
+      </div>
+@end
+
+      {/* Column Filters */}
+      <div className="flex gap-2 flex-wrap">
+@each(column in columns)
+@let(parts = column.split(':'))
+@let(key = parts[0])
+@let(label = parts[1] || titleCase(key))
+@let(filterable = parts[3] === 'true')
+@if(filterable)
+        <Input
+          placeholder="Filter {{ label }}..."
+          value={(table.getColumn('{{ key }}')?.getFilterValue() as string) ?? ''}
+          onChange={(e) =>
+            table.getColumn('{{ key }}')?.setFilterValue(e.target.value)
+          }
+          className="max-w-xs"
+        />
+@end
+@endeach
+      </div>
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  No results.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+@if(withPagination)
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          {table.getFilteredRowModel().rows.length} row(s) found
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            Previous
+          </Button>
+          <div className="text-sm">
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+@end
+    </div>
+  )
+}

@@ -1,0 +1,70 @@
+---
+to: app/{{ name }}/page.tsx
+---
+@{
+  const helpers = require('../../../../helpers')
+  const { pascalCase, camelCase, pluralize, titleCase } = helpers
+
+  const modelName = model || pascalCase(name)
+  const pluralName = pluralize(name)
+  const pluralModel = pluralize(modelName)
+  const title = titleCase(pluralName)
+}
+import Link from 'next/link'
+import { Suspense } from 'react'
+import { get{{ pluralModel }} } from '@/app/actions/{{ name }}'
+import { {{ modelName }}Table } from '@/components/{{ modelName }}Table'
+import { Button } from '@/components/ui/button'
+
+export const metadata = {
+  title: '{{ title }}',
+  description: 'Manage {{ title.toLowerCase() }}',
+}
+
+interface PageProps {
+  searchParams: {
+    page?: string
+    search?: string
+    sortBy?: string
+    sortOrder?: 'asc' | 'desc'
+  }
+}
+
+export default async function {{ pluralModel }}Page({ searchParams }: PageProps) {
+  const page = Number(searchParams.page) || 1
+  const search = searchParams.search || ''
+  const sortBy = searchParams.sortBy || 'createdAt'
+  const sortOrder = searchParams.sortOrder || 'desc'
+
+  const { items, total, totalPages } = await get{{ pluralModel }}({
+    page,
+    pageSize: 10,
+    search,
+    sortBy,
+    sortOrder,
+  })
+
+  return (
+    <div className="container mx-auto py-8">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{{ title }}</h1>
+          <p className="text-muted-foreground">
+            Manage your {{ title.toLowerCase() }} ({total} total)
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/{{ name }}/new">Create {{ modelName }}</Link>
+        </Button>
+      </div>
+
+      <Suspense fallback={<div>Loading...</div>}>
+        <{{ modelName }}Table
+          data={items}
+          totalPages={totalPages}
+          currentPage={page}
+        />
+      </Suspense>
+    </div>
+  )
+}

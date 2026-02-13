@@ -1,0 +1,199 @@
+---
+to: lib/graphql/resolvers.ts
+---
+<%
+const { detectProjectFeatures } = require('../../../../helpers/detect-project');
+const features = detectProjectFeatures(process.cwd());
+
+const needsAuth = auth;
+const hasPrisma = features.orm === 'prisma';
+const hasDrizzle = features.orm === 'drizzle';
+%>import type { YogaInitialContext } from 'graphql-yoga'
+<% if (hasPrisma) { %>
+import { prisma } from '@/lib/db'
+<% } else if (hasDrizzle) { %>
+import { db } from '@/lib/db'
+// import { users } from '@/lib/db/schema'
+// import { eq } from 'drizzle-orm'
+<% } %>
+
+/**
+ * GraphQL Context
+ * Add user, database, and other dependencies here
+ */
+export interface GraphQLContext extends YogaInitialContext {
+<% if (needsAuth) { %>
+  user?: {
+    id: string
+    email: string
+  }
+<% } %>
+}
+
+/**
+ * GraphQL Resolvers
+ *
+ * Implement your query, mutation, and subscription resolvers here.
+ */
+export const resolvers = {
+  Query: {
+    hello: () => 'Hello from GraphQL!',
+
+    user: async (
+      _parent: unknown,
+      args: { id: string },
+      _context: GraphQLContext
+    ) => {
+      const { id } = args
+
+<% if (hasPrisma) { %>
+      // Fetch user using Prisma
+      const user = await prisma.user.findUnique({
+        where: { id },
+      })
+
+      return user
+<% } else if (hasDrizzle) { %>
+      // Fetch user using Drizzle
+      // const [user] = await db.select().from(users).where(eq(users.id, id))
+      // return user
+
+      // TODO: Implement with your Drizzle schema
+      return null
+<% } else { %>
+      // TODO: Implement user fetching
+      return null
+<% } %>
+    },
+
+    users: async (
+      _parent: unknown,
+      _args: unknown,
+      _context: GraphQLContext
+    ) => {
+<% if (hasPrisma) { %>
+      // Fetch all users using Prisma
+      const users = await prisma.user.findMany({
+        orderBy: { createdAt: 'desc' },
+      })
+
+      return users
+<% } else if (hasDrizzle) { %>
+      // Fetch all users using Drizzle
+      // const allUsers = await db.select().from(users)
+      // return allUsers
+
+      // TODO: Implement with your Drizzle schema
+      return []
+<% } else { %>
+      // TODO: Implement users fetching
+      return []
+<% } %>
+    },
+  },
+
+  Mutation: {
+    createUser: async (
+      _parent: unknown,
+      args: { input: { name: string; email: string } },
+      context: GraphQLContext
+    ) => {
+<% if (needsAuth) { %>
+      // Check authentication
+      if (!context.user) {
+        throw new Error('Unauthorized')
+      }
+
+<% } %>
+      const { input } = args
+
+<% if (hasPrisma) { %>
+      // Create user using Prisma
+      const user = await prisma.user.create({
+        data: input,
+      })
+
+      return user
+<% } else if (hasDrizzle) { %>
+      // Create user using Drizzle
+      // const [user] = await db.insert(users).values(input).returning()
+      // return user
+
+      // TODO: Implement with your Drizzle schema
+      return { id: '1', ...input, createdAt: new Date().toISOString() }
+<% } else { %>
+      // TODO: Implement user creation
+      return { id: '1', ...input, createdAt: new Date().toISOString() }
+<% } %>
+    },
+
+    updateUser: async (
+      _parent: unknown,
+      args: { id: string; input: { name?: string; email?: string } },
+      context: GraphQLContext
+    ) => {
+<% if (needsAuth) { %>
+      // Check authentication
+      if (!context.user) {
+        throw new Error('Unauthorized')
+      }
+
+<% } %>
+      const { id, input } = args
+
+<% if (hasPrisma) { %>
+      // Update user using Prisma
+      const user = await prisma.user.update({
+        where: { id },
+        data: input,
+      })
+
+      return user
+<% } else if (hasDrizzle) { %>
+      // Update user using Drizzle
+      // const [user] = await db.update(users).set(input).where(eq(users.id, id)).returning()
+      // return user
+
+      // TODO: Implement with your Drizzle schema
+      return { id, name: 'Updated', email: 'updated@example.com', createdAt: new Date().toISOString() }
+<% } else { %>
+      // TODO: Implement user update
+      return { id, name: 'Updated', email: 'updated@example.com', createdAt: new Date().toISOString() }
+<% } %>
+    },
+
+    deleteUser: async (
+      _parent: unknown,
+      args: { id: string },
+      context: GraphQLContext
+    ) => {
+<% if (needsAuth) { %>
+      // Check authentication
+      if (!context.user) {
+        throw new Error('Unauthorized')
+      }
+
+<% } %>
+      const { id } = args
+
+<% if (hasPrisma) { %>
+      // Delete user using Prisma
+      await prisma.user.delete({
+        where: { id },
+      })
+
+      return true
+<% } else if (hasDrizzle) { %>
+      // Delete user using Drizzle
+      // await db.delete(users).where(eq(users.id, id))
+      // return true
+
+      // TODO: Implement with your Drizzle schema
+      return true
+<% } else { %>
+      // TODO: Implement user deletion
+      return true
+<% } %>
+    },
+  },
+}

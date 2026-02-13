@@ -1,0 +1,47 @@
+---
+to: "{{ actionsPath }}/{{ kebabCase(name) }}-actions.ts"
+---
+'use server'
+
+import { revalidatePath } from 'next/cache'
+
+/**
+ * Delete {{ pascalCase(name) }}
+ *
+ * TODO: Implement actual deletion logic with your database
+ */
+export async function delete{{ pascalCase(name) }}(id: string) {
+  try {
+    // TODO: Add your database delete logic here
+    // Example with Prisma:
+    // await prisma.{{ camelCase(name) }}.delete({ where: { id } })
+
+    // Revalidate the page to reflect changes
+    revalidatePath('/{{ kebabCase(name) }}s')
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to delete {{ camelCase(name) }}:', error)
+    return { success: false, error: 'Failed to delete {{ camelCase(name) }}' }
+  }
+}
+
+/**
+ * Update {{ pascalCase(name) }}
+ *
+ * TODO: Implement actual update logic with your database
+ */
+export async function update{{ pascalCase(name) }}(id: string, data: any) {
+  try {
+    // TODO: Add your database update logic here
+    // Example with Prisma:
+    // await prisma.{{ camelCase(name) }}.update({ where: { id }, data })
+
+    revalidatePath('/{{ kebabCase(name) }}s')
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to update {{ camelCase(name) }}:', error)
+    return { success: false, error: 'Failed to update {{ camelCase(name) }}' }
+  }
+}

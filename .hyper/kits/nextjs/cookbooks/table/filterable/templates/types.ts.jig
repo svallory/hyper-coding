@@ -1,0 +1,12 @@
+---
+to: "lib/types/{{ kebabCase(name) }}.ts"
+---
+export interface {{ pascalCase(name) }}Row {
+@each(column in columns)
+@let(parts = column.split(':'))
+@let(key = parts[0])
+@let(type = parts[2] || 'string')
+  {{ key }}: @if(type === 'number')number@else if(type === 'boolean')boolean@else if(type === 'date')Date@else string@end
+
+@endeach
+}

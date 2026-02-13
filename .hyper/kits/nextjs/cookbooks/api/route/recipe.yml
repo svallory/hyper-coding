@@ -1,0 +1,95 @@
+name: route
+description: |
+  Generate a REST API endpoint with type-safe request/response handling.
+  Supports GET, POST, PUT, PATCH, DELETE methods with optional Zod validation,
+  authentication, and ORM integration.
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    description: Route name in kebab-case (e.g. "users", "blog-posts")
+    required: true
+    pattern: "^[a-z][a-z0-9-]*$"
+
+  methods:
+    type: array
+    description: |
+      HTTP methods to support (e.g. ["GET", "POST"])
+      Supported: GET, POST, PUT, PATCH, DELETE
+    required: true
+    default: ["GET", "POST"]
+
+  auth:
+    type: boolean
+    description: Add authentication check using detected auth provider
+    default: false
+
+  validation:
+    type: boolean
+    description: Add Zod validation schemas for POST/PUT/PATCH
+    default: true
+
+  cors:
+    type: boolean
+    description: Add CORS headers for external API access
+    default: false
+
+  dir:
+    type: string
+    description: Output directory for API route
+    default: "app/api"
+
+steps:
+  - name: Detect project features
+    tool: shell
+    command: |
+      echo "Detecting ORM and auth provider..."
+
+  - name: Create API route directory
+    tool: shell
+    command: mkdir -p {{ dir }}/{{ name }}
+
+  - name: Create validation schemas directory
+    tool: shell
+    command: |
+      if [ "{{ validation }}" = "true" ]; then
+        mkdir -p lib/schemas
+      fi
+    when: "{{ validation }}"
+
+  - name: Generate route handler
+    tool: template
+    template: templates/route.ts.jig
+
+  - name: Generate validation schemas
+    tool: template
+    template: templates/schemas.ts.jig
+    when: "{{ validation }}"
+
+  - name: Instructions
+    tool: shell
+    command: |
+      echo "✅ API route generated successfully!"
+      echo ""
+      echo "Created files:"
+      echo "  - {{ dir }}/{{ name }}/route.ts"
+      {% if validation %}echo "  - lib/schemas/api-{{ name }}-schema.ts"{% endif %}
+      echo ""
+      echo "Supported methods: {{ methods | join: ', ' }}"
+      {% if auth %}echo "🔒 Authentication: Enabled"{% endif %}
+      {% if cors %}echo "🌐 CORS: Enabled"{% endif %}
+      echo ""
+      echo "Test your API:"
+      echo "  curl http://localhost:3000/api/{{ name }}"
+      {% if methods | includes: 'POST' %}
+      echo "  curl -X POST http://localhost:3000/api/{{ name }} \\"
+      echo "    -H 'Content-Type: application/json' \\"
+      echo "    -d '{\"name\":\"test\"}'"
+      {% endif %}
+      echo ""
+      echo "Next steps:"
+      echo "  1. Update the response types in route.ts"
+      echo "  2. Implement database queries using your ORM"
+      {% if validation %}echo "  3. Customize validation schemas in lib/schemas/api-{{ name }}-schema.ts"{% endif %}
+      {% if auth %}echo "  4. Configure authentication middleware"{% endif %}

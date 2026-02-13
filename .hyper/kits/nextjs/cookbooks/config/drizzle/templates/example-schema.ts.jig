@@ -1,0 +1,100 @@
+---
+to: "db/schema/index.ts"
+---
+/**
+ * Database Schema
+ *
+ * Define your tables here. You can split schemas into multiple files
+ * and export them all from this index file.
+ */
+
+@if(database === 'postgresql')
+import { pgTable, text, timestamp, boolean } from 'drizzle-orm/pg-core'
+@else if(database === 'mysql')
+import { mysqlTable, text, timestamp, boolean } from 'drizzle-orm/mysql-core'
+@else if(database === 'sqlite')
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+@end
+import { relations } from 'drizzle-orm'
+@if(database === 'postgresql' || database === 'mysql')
+import { createId } from '@paralleldrive/cuid2'
+@end
+
+// Example: Users table
+@if(database === 'postgresql')
+export const users = pgTable('users', {
+  id: text('id').$defaultFn(() => createId()).primaryKey(),
+  email: text('email').notNull().unique(),
+  name: text('name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+// Example: Posts table
+export const posts = pgTable('posts', {
+  id: text('id').$defaultFn(() => createId()).primaryKey(),
+  title: text('title').notNull(),
+  content: text('content'),
+  published: boolean('published').default(false).notNull(),
+  authorId: text('author_id').notNull().references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+@else if(database === 'mysql')
+export const users = mysqlTable('users', {
+  id: text('id').$defaultFn(() => createId()).primaryKey(),
+  email: text('email').notNull().unique(),
+  name: text('name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+// Example: Posts table
+export const posts = mysqlTable('posts', {
+  id: text('id').$defaultFn(() => createId()).primaryKey(),
+  title: text('title').notNull(),
+  content: text('content'),
+  published: boolean('published').default(false).notNull(),
+  authorId: text('author_id').notNull().references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+@else if(database === 'sqlite')
+export const users = sqliteTable('users', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  email: text('email').notNull().unique(),
+  name: text('name'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+})
+
+// Example: Posts table
+export const posts = sqliteTable('posts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  title: text('title').notNull(),
+  content: text('content'),
+  published: integer('published', { mode: 'boolean' }).default(false).notNull(),
+  authorId: integer('author_id').notNull().references(() => users.id),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+})
+@end
+
+// Relations
+export const usersRelations = relations(users, ({ many }) => ({
+  posts: many(posts),
+}))
+
+export const postsRelations = relations(posts, ({ one }) => ({
+  author: one(users, {
+    fields: [posts.authorId],
+    references: [users.id],
+  }),
+}))
+
+// Export types for use in your app
+export type User = typeof users.$inferSelect
+export type NewUser = typeof users.$inferInsert
+
+export type Post = typeof posts.$inferSelect
+export type NewPost = typeof posts.$inferInsert

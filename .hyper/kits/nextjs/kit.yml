@@ -1,0 +1,67 @@
+# Kit configuration for @hyper-kits/nextjs
+name: "@hyper-kits/nextjs"
+description: |
+  Comprehensive Next.js App Router code generation kit.
+  Generate forms, data tables, complete CRUD workflows, Server Actions, and more.
+
+  Features:
+  - 🎨 Forms with React Hook Form + Zod validation (30-45x faster)
+  - 📊 Data tables with TanStack Table (22-45x faster)
+  - ⚡ Complete CRUD workflows (12-24x faster)
+  - 🔄 Server Actions with validation and revalidation
+  - 🗄️ Dual ORM support (Prisma + Drizzle)
+  - 🎭 shadcn/ui with Base UI or Radix primitives
+  - 📡 TanStack Query for server state
+  - 💎 TypeScript type-safe throughout
+
+  Time savings: 60-120 minutes → 5 minutes for full CRUD workflows
+
+version: "1.0.0"
+author: "Hypergen Team"
+license: "MIT"
+
+keywords:
+  - nextjs
+  - react
+  - tailwind
+  - typescript
+  - app-router
+  - forms
+  - crud
+  - prisma
+  - drizzle
+  - shadcn-ui
+  - tanstack-query
+  - server-actions
+  - react-hook-form
+  - zod
+  - data-tables
+
+defaults:
+  cookbook: "forms"
+  recipe: "add-rhf"
+
+cookbooks:
+  - "./cookbooks/*/cookbook.yml"
+  - "./cookbooks/*/"
+
+recipes:
+  - "./recipes/*/recipe.yml"
+  - "./recipes/*/"
+
+tags:
+  - "nextjs"
+  - "react"
+  - "frontend"
+  - "fullstack"
+  - "forms"
+  - "crud"
+  - "database"
+  - "orm"
+  - "validation"
+
+categories:
+  - "Web Development"
+  - "React Frameworks"
+  - "Full-Stack Development"
+  - "Database ORMs"
