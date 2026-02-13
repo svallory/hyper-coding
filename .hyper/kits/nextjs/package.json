@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Comprehensive Next.js code generation kit with forms, tables, CRUD, Server Actions, and ORM integration",
   "license": "MIT",
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "https://github.com/hyperdevhq/nextjs-kit.git"

@@ -12,6 +12,8 @@ import { ActionRegistry } from '../actions/registry.js'
 import { isActionFunction } from '../actions/decorator.js'
 import { getGlobalPackages } from '../utils/global-packages.js'
 import { findProjectRoot } from '../utils/find-project-root.js'
+import { parseKitFile } from '../config/kit-parser.js'
+import { discoverCookbooksInKit } from '../config/cookbook-parser.js'
 
 const debug = createDebug('hypergen:discovery')
 
@@ -30,12 +32,18 @@ export interface DiscoveredGenerator {
   name: string
   source: DiscoverySource
   path: string
+  /** @deprecated Legacy field from Hygen, use cookbooks/recipes instead */
   actions: string[]
+  cookbooks?: string[]
+  recipes?: string[]
+  helpers?: string[]
   metadata?: {
     description?: string
     version?: string
     author?: string
     tags?: string[]
+    license?: string
+    keywords?: string[]
   }
 }
 
@@ -102,6 +110,9 @@ export class GeneratorDiscovery {
     if (workspaceKit) {
       discoveries.push(workspaceKit)
     }
+
+    // Enrich all discovered generators with kit metadata
+    await Promise.all(discoveries.map(gen => this.enrichWithKitMetadata(gen)))
 
     // Store discovered generators
     for (const generator of discoveries) {
@@ -659,5 +670,103 @@ export class GeneratorDiscovery {
       }
     }
     return false
+  }
+
+  /**
+   * Enrich a discovered generator with kit metadata
+   */
+  private async enrichWithKitMetadata(generator: DiscoveredGenerator): Promise<void> {
+    // Look for kit.yml in the generator path
+    const kitYmlPath = path.join(generator.path, 'kit.yml')
+
+    if (await fs.pathExists(kitYmlPath)) {
+      try {
+        const parsedKit = await parseKitFile(kitYmlPath)
+
+        if (parsedKit.isValid) {
+          const { config } = parsedKit
+
+          // Update metadata
+          generator.metadata = {
+            ...generator.metadata,
+            description: config.description || generator.metadata?.description,
+            version: config.version || generator.metadata?.version,
+            author: config.author || generator.metadata?.author,
+            tags: config.tags || generator.metadata?.tags,
+            license: config.license,
+            keywords: config.keywords,
+          }
+
+          // Discover cookbooks
+          if (config.cookbooks && config.cookbooks.length > 0) {
+            const cookbooks = await discoverCookbooksInKit(generator.path, config.cookbooks)
+            generator.cookbooks = Array.from(cookbooks.values()).map(c => c.config.name)
+          }
+
+          // Discover recipes (direct recipes not in cookbooks)
+          if (config.recipes && config.recipes.length > 0) {
+            const recipePatterns = config.recipes
+            const recipeFiles: string[] = []
+
+            for (const pattern of recipePatterns) {
+              const matches = await glob(pattern, {
+                cwd: generator.path,
+                ignore: this.options.excludePatterns
+              })
+              recipeFiles.push(...matches)
+            }
+
+            // Extract recipe names from paths
+            const recipeNames = recipeFiles
+              .map(f => {
+                const dir = path.dirname(f)
+                const parts = dir.split(path.sep)
+                return parts[parts.length - 1]
+              })
+              .filter((name, index, self) => self.indexOf(name) === index) // unique
+
+            generator.recipes = recipeNames
+          }
+
+          // Check for helpers
+          if (config.helpers) {
+            const helpersPath = path.join(generator.path, config.helpers)
+            if (await fs.pathExists(helpersPath)) {
+              const stats = await fs.stat(helpersPath)
+              if (stats.isDirectory()) {
+                // List helper files
+                const helperFiles = await fs.readdir(helpersPath)
+                generator.helpers = helperFiles
+                  .filter(f => f.endsWith('.js') || f.endsWith('.ts') || f.endsWith('.mjs'))
+                  .map(f => path.basename(f, path.extname(f)))
+              } else {
+                // Single helper file
+                generator.helpers = [path.basename(config.helpers, path.extname(config.helpers))]
+              }
+            }
+          }
+        }
+      } catch (error) {
+        debug('Failed to parse kit.yml for %s: %s', generator.name, error)
+      }
+    }
+
+    // Also check package.json for additional metadata
+    const packageJsonPath = path.join(generator.path, 'package.json')
+    if (await fs.pathExists(packageJsonPath)) {
+      try {
+        const packageJson = await fs.readJson(packageJsonPath)
+        generator.metadata = {
+          ...generator.metadata,
+          version: generator.metadata?.version || packageJson.version,
+          author: generator.metadata?.author || packageJson.author,
+          description: generator.metadata?.description || packageJson.description,
+          license: generator.metadata?.license || packageJson.license,
+          keywords: generator.metadata?.keywords || packageJson.keywords,
+        }
+      } catch (error) {
+        debug('Failed to read package.json for %s: %s', generator.name, error)
+      }
+    }
   }
 }
