@@ -41,7 +41,7 @@ export class GeneratorDiscovery {
   
   constructor(private options: GeneratorDiscoveryOptions = {}) {
     this.options = {
-      directories: ['recipes', 'cookbooks'],
+      directories: ['recipes', 'cookbooks', '.hyper/kits'],
       patterns: ['**/*.{js,ts,mjs}', '**/template.yml', '**/generator.{js,ts,mjs}'],
       excludePatterns: ['**/node_modules/**', '**/dist/**', '**/*.test.*', '**/*.spec.*'],
       enabledSources: ['local', 'workspace', 'global'],
