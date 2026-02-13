@@ -5,7 +5,14 @@ description: "Learn how to install kits from npm, JSR, GitHub, and local sources
 
 ## Overview
 
-Hypergen kits can be installed from multiple sources using the `hypergen kit install` command. The CLI automatically detects the source type and installs the kit using your project's package manager.
+Hypergen kits can be installed from multiple sources using the `hypergen kit install` command. The CLI automatically detects the source type and uses the appropriate installation method:
+
+- **NPM/JSR packages** → Installed to `node_modules/` using your package manager
+- **GitHub/GitLab/Git repos** → Downloaded to `.hyper/kits/` using tiged (no git history)
+- **Local paths** → Copied to `.hyper/kits/`
+- **Tarball URLs** → Downloaded and extracted to `.hyper/kits/`
+
+All installations are tracked in `.hyper/kits/manifest.json` for version management and reproducibility.
 
 ## Quick Start
 
@@ -95,6 +102,10 @@ hypergen kit install https://github.com/svallory/hypergen-kit-nextjs.git
 <Tip>
 The `user/repo` pattern is automatically detected as GitHub. No prefix needed!
 </Tip>
+
+<Info>
+**Installation Location**: GitHub kits are downloaded to `.hyper/kits/` without git history using [tiged](https://github.com/tiged/tiged) - faster and cleaner than `git clone`.
+</Info>
 
 ### GitLab
 
@@ -188,33 +199,111 @@ Install from hosted tarball files:
 hypergen kit install https://example.com/my-kit-1.0.0.tgz
 ```
 
+## Installation Destinations
+
+Kits are installed to different locations based on their source type:
+
+### NPM/JSR Packages → `node_modules/`
+
+```bash
+hypergen kit install @hyper-kits/nextjs
+# Installed to: node_modules/@hyper-kits/nextjs/
+
+hypergen kit install jsr:@std/path
+# Installed to: node_modules/@jsr/std__path/
+```
+
+Managed by your package manager (bun, npm, pnpm, yarn) and tracked in `package.json`.
+
+### GitHub/Git Sources → `.hyper/kits/`
+
+```bash
+hypergen kit install hyper-kits/nextjs
+# Downloaded to: .hyper/kits/nextjs/
+
+hypergen kit install user/repo#develop
+# Downloaded to: .hyper/kits/repo/
+```
+
+Downloaded using [tiged](https://github.com/tiged/tiged) - no `.git` directory, just clean template files.
+
+### Local Paths → `.hyper/kits/`
+
+```bash
+hypergen kit install ./my-local-kit
+# Copied to: .hyper/kits/my-local-kit/
+
+hypergen kit install ../sibling-kit --name custom
+# Copied to: .hyper/kits/custom/
+```
+
+Files are copied (excluding `node_modules/`, `.git/`, `dist/`, `build/`).
+
+## Kit Manifest Tracking
+
+All installed kits (except npm/JSR packages) are tracked in `.hyper/kits/manifest.json`:
+
+```json
+{
+  "version": "1.0.0",
+  "kits": {
+    "nextjs": {
+      "name": "nextjs",
+      "source": "hyper-kits/nextjs#main",
+      "type": "github",
+      "installedAt": "2026-02-13T14:23:15.944Z",
+      "version": "0.1.0",
+      "branch": "main"
+    }
+  }
+}
+```
+
+**Tracked Information**:
+- Kit name and source
+- Installation timestamp
+- Version (from `package.json`)
+- Git branch/tag (if applicable)
+- Source type
+
+**Benefits**:
+- Prevent duplicate installations
+- Track kit versions
+- Enable reproducible environments
+- Audit trail of installations
+
 ## Installation Options
+
+### Custom Kit Name
+
+Override the auto-detected kit name:
+
+```bash
+hypergen kit install hyper-kits/nextjs --name my-nextjs
+# Installed to: .hyper/kits/my-nextjs/
+```
 
 ### Development Dependency
 
-Install as a development dependency:
+Install npm/JSR packages as dev dependencies:
 
 ```bash
 hypergen kit install @hyper-kits/nextjs --dev
 ```
 
-### Global Installation
-
-Install globally (available system-wide):
-
-```bash
-hypergen kit install @hyper-kits/nextjs --global
-# or
-hypergen kit install @hyper-kits/nextjs -g
-```
+<Note>
+The `--dev` flag only applies to npm/JSR packages. Kits installed to `.hyper/kits/` are not added to `package.json`.
+</Note>
 
 ### Working Directory
 
-Install in a specific directory:
+Install in a specific project:
 
 ```bash
-hypergen kit install @hyper-kits/nextjs --cwd /path/to/project
+hypergen kit install hyper-kits/nextjs --cwd /path/to/project
 ```
+
+The kit will be installed to `/path/to/project/.hyper/kits/nextjs/` (or the nearest parent with `package.json`).
 
 ## Package Manager Detection
 
@@ -260,11 +349,25 @@ hypergen kit install svallory/hypergen-kit-nextjs#develop
 ### Development Workflow
 
 ```bash
-# Link local kit during development
-hypergen kit install ../my-kit-in-progress --dev
+# Use local kit during development
+hypergen kit install ../my-kit-in-progress
 
 # Install published version for production
 hypergen kit install @my-org/my-kit
+```
+
+### Check Installed Kits
+
+View the manifest to see all installed kits:
+
+```bash
+cat .hyper/kits/manifest.json
+```
+
+Or list kit directories:
+
+```bash
+ls -la .hyper/kits/
 ```
 
 ## Source Resolution Examples
@@ -284,16 +387,56 @@ Here's how different inputs are resolved:
 | `user/repo@v1.0.0` | github | `github:user/repo@v1.0.0` |
 | `@scope/pkg@^2.0.0` | npm | `@scope/pkg@^2.0.0` |
 
+## Project Structure
+
+After installing kits, your project structure will look like:
+
+```
+my-project/
+├── package.json
+├── node_modules/
+│   └── @hyper-kits/         # NPM kits
+│       └── nextjs/
+├── .hyper/
+│   └── kits/
+│       ├── manifest.json    # Installation tracking
+│       ├── my-custom-kit/   # GitHub/local kits
+│       └── another-kit/
+└── src/
+```
+
+**Key Directories**:
+- `.hyper/kits/` - GitHub, GitLab, local kits (tracked in manifest.json)
+- `node_modules/` - NPM/JSR packages (tracked in package.json)
+
 ## Troubleshooting
+
+### Kit Already Exists
+
+```
+Error: Kit already exists: nextjs
+Remove it first with: rm -rf .hyper/kits/nextjs
+Or specify a different name with: --name <name>
+```
+
+**Solution**: Either remove the existing kit or use `--name` to install with a different name:
+
+```bash
+# Remove existing kit
+rm -rf .hyper/kits/nextjs
+
+# Or install with different name
+hypergen kit install hyper-kits/nextjs --name nextjs-v2
+```
 
 ### Kit Not Found
 
 If you get a "Kit not found" error:
 
-1. Verify the package name is correct on npm or GitHub
-2. Check if the repository is public
-3. For private packages, ensure you're authenticated
-4. For local paths, verify the path exists
+1. **NPM/JSR**: Verify the package name is correct on the registry
+2. **GitHub**: Check if the repository exists and is public
+3. **Private repos**: Ensure you're authenticated (`gh auth login`)
+4. **Local paths**: Verify the path exists and is accessible
 
 ```bash
 # Verify npm package exists
