@@ -1,0 +1,385 @@
+---
+title: "Kit Installation Guide"
+description: "Learn how to install kits from npm, JSR, GitHub, and local sources with smart source resolution"
+---
+
+## Overview
+
+Hypergen kits can be installed from multiple sources using the `hypergen kit install` command. The CLI automatically detects the source type and installs the kit using your project's package manager.
+
+## Quick Start
+
+```bash
+# Install from npm
+hypergen kit install @hyper-kits/nextjs
+
+# Install from GitHub (shorthand)
+hypergen kit install svallory/hypergen-kit-nextjs
+
+# Install from local path
+hypergen kit install ./my-local-kit
+```
+
+## Source Resolution
+
+Hypergen uses intelligent source resolution to determine where to install kits from. You don't need to specify prefixes in most cases—the CLI automatically detects the source type.
+
+### Resolution Priority
+
+The CLI resolves kit sources in the following order:
+
+1. **Explicit Prefixes** (highest priority)
+2. **Registry-Specific Patterns**
+3. **Local Paths** (Unix and Windows)
+4. **Git URLs**
+5. **GitHub Shorthand**
+6. **NPM Packages** (default)
+
+## Installation Sources
+
+### NPM Packages
+
+Install kits from the npm registry:
+
+```bash
+# Scoped package
+hypergen kit install @hyper-kits/nextjs
+
+# Unscoped package
+hypergen kit install my-kit
+
+# Specific version
+hypergen kit install @hyper-kits/nextjs@1.2.0
+
+# Version range
+hypergen kit install @hyper-kits/nextjs@^1.0.0
+```
+
+### JSR (JavaScript Registry)
+
+Install from the [JSR registry](https://jsr.io):
+
+```bash
+# Using jsr: prefix
+hypergen kit install jsr:@std/path
+
+# Using @jsr/ pattern (auto-detected)
+hypergen kit install @jsr/std__path
+```
+
+<Note>
+Bun supports JSR natively. For npm/pnpm/yarn, Hypergen uses `npx jsr add` automatically.
+</Note>
+
+### GitHub
+
+Install kits directly from GitHub repositories:
+
+```bash
+# Shorthand (auto-detected)
+hypergen kit install svallory/hypergen-kit-nextjs
+
+# With branch
+hypergen kit install svallory/hypergen-kit-nextjs#develop
+
+# With tag
+hypergen kit install svallory/hypergen-kit-nextjs@v1.0.0
+
+# Explicit prefix
+hypergen kit install github:svallory/hypergen-kit-nextjs
+
+# Full Git URL
+hypergen kit install https://github.com/svallory/hypergen-kit-nextjs.git
+```
+
+<Tip>
+The `user/repo` pattern is automatically detected as GitHub. No prefix needed!
+</Tip>
+
+### GitLab
+
+Install from GitLab repositories:
+
+```bash
+# Explicit prefix
+hypergen kit install gitlab:username/my-kit
+
+# Full Git URL
+hypergen kit install https://gitlab.com/username/my-kit.git
+```
+
+### Bitbucket
+
+Install from Bitbucket repositories:
+
+```bash
+hypergen kit install bitbucket:username/my-kit
+```
+
+### Local Paths
+
+Install kits from your local filesystem:
+
+#### Unix/macOS Paths
+
+```bash
+# Relative path
+hypergen kit install ./my-local-kit
+hypergen kit install ../sibling-kit
+
+# Absolute path
+hypergen kit install /absolute/path/to/kit
+
+# Home directory
+hypergen kit install ~/projects/my-kit
+
+# With file: prefix
+hypergen kit install file:./my-local-kit
+```
+
+#### Windows Paths
+
+```bash
+# Drive letter (backslash)
+hypergen kit install C:\Projects\my-kit
+
+# Drive letter (forward slash)
+hypergen kit install C:/Projects/my-kit
+
+# Relative path
+hypergen kit install .\my-local-kit
+hypergen kit install ..\sibling-kit
+
+# UNC path
+hypergen kit install \\server\share\kit
+```
+
+<Note>
+Windows paths are automatically detected—no prefix needed for drive letters or UNC paths.
+</Note>
+
+### Git URLs
+
+Install from any Git repository:
+
+```bash
+# HTTPS
+hypergen kit install https://example.com/repo.git
+
+# Git protocol
+hypergen kit install git://example.com/repo.git
+
+# SSH
+hypergen kit install git+ssh://git@example.com/repo.git
+
+# With git+ prefix
+hypergen kit install git+https://github.com/user/repo.git
+```
+
+<Info>
+URLs ending in `.git` are automatically treated as Git repositories.
+</Info>
+
+### Tarball URLs
+
+Install from hosted tarball files:
+
+```bash
+hypergen kit install https://example.com/my-kit-1.0.0.tgz
+```
+
+## Installation Options
+
+### Development Dependency
+
+Install as a development dependency:
+
+```bash
+hypergen kit install @hyper-kits/nextjs --dev
+```
+
+### Global Installation
+
+Install globally (available system-wide):
+
+```bash
+hypergen kit install @hyper-kits/nextjs --global
+# or
+hypergen kit install @hyper-kits/nextjs -g
+```
+
+### Working Directory
+
+Install in a specific directory:
+
+```bash
+hypergen kit install @hyper-kits/nextjs --cwd /path/to/project
+```
+
+## Package Manager Detection
+
+Hypergen automatically detects your project's package manager by checking for lock files:
+
+| Lock File | Package Manager |
+|-----------|----------------|
+| `bun.lockb` or `bun.lock` | Bun |
+| `pnpm-lock.yaml` | pnpm |
+| `yarn.lock` | Yarn |
+| `package-lock.json` | npm |
+
+<Tip>
+If no lock file is found, Hypergen defaults to npm.
+</Tip>
+
+## Examples
+
+### Install Multiple Kits
+
+```bash
+# Install from different sources
+hypergen kit install @hyper-kits/nextjs
+hypergen kit install svallory/hypergen-kit-react
+hypergen kit install ./kits/custom-kit --dev
+```
+
+### Install Specific Versions
+
+```bash
+# NPM version syntax
+hypergen kit install @hyper-kits/nextjs@1.2.3
+hypergen kit install @hyper-kits/nextjs@^1.0.0
+hypergen kit install @hyper-kits/nextjs@latest
+
+# GitHub tags
+hypergen kit install svallory/hypergen-kit-nextjs@v1.0.0
+
+# GitHub branches
+hypergen kit install svallory/hypergen-kit-nextjs#develop
+```
+
+### Development Workflow
+
+```bash
+# Link local kit during development
+hypergen kit install ../my-kit-in-progress --dev
+
+# Install published version for production
+hypergen kit install @my-org/my-kit
+```
+
+## Source Resolution Examples
+
+Here's how different inputs are resolved:
+
+| Input | Type | Resolved Source |
+|-------|------|----------------|
+| `@hyper-kits/nextjs` | npm | `@hyper-kits/nextjs` |
+| `svallory/hypergen-kit` | github | `github:svallory/hypergen-kit` |
+| `jsr:@std/path` | jsr | `jsr:@std/path` |
+| `./my-kit` | local | `./my-kit` |
+| `C:\Projects\kit` | local | `C:\Projects\kit` |
+| `~/kits/my-kit` | local | `~/kits/my-kit` |
+| `https://github.com/user/repo.git` | git | `https://github.com/user/repo.git` |
+| `github:user/repo` | github | `github:user/repo` |
+| `user/repo@v1.0.0` | github | `github:user/repo@v1.0.0` |
+| `@scope/pkg@^2.0.0` | npm | `@scope/pkg@^2.0.0` |
+
+## Troubleshooting
+
+### Kit Not Found
+
+If you get a "Kit not found" error:
+
+1. Verify the package name is correct on npm or GitHub
+2. Check if the repository is public
+3. For private packages, ensure you're authenticated
+4. For local paths, verify the path exists
+
+```bash
+# Verify npm package exists
+npm view @hyper-kits/nextjs
+
+# Verify GitHub repo exists
+gh repo view svallory/hypergen-kit-nextjs
+```
+
+### Package Manager Not Found
+
+If you get "Package manager not found":
+
+```bash
+# Install bun (recommended)
+curl -fsSL https://bun.sh/install | bash
+
+# Or install pnpm
+npm install -g pnpm
+
+# Or install yarn
+npm install -g yarn
+```
+
+### Permission Errors
+
+For global installations, you may need elevated permissions:
+
+```bash
+# Unix/macOS
+sudo hypergen kit install @hyper-kits/nextjs -g
+
+# Windows (run as Administrator)
+hypergen kit install @hyper-kits/nextjs -g
+```
+
+### Path Resolution Issues
+
+**Windows users**: If you have issues with paths containing spaces:
+
+```bash
+# Wrap in quotes
+hypergen kit install "C:\Program Files\my-kit"
+
+# Or use forward slashes
+hypergen kit install "C:/Program Files/my-kit"
+```
+
+**Unix users**: Escape spaces or use quotes:
+
+```bash
+hypergen kit install ./my\ kit
+hypergen kit install "./my kit"
+```
+
+## Security
+
+Hypergen validates all kit sources to prevent command injection:
+
+- Shell metacharacters (`;`, `|`, `` ` ``, `$`, etc.) are rejected
+- Sources are properly escaped before execution
+- Only valid package manager commands are used
+
+<Warning>
+Only install kits from trusted sources. Installing malicious kits could compromise your system.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="List Available Kits" icon="list" href="/cli/commands/discovery/list">
+    Browse installed kits and available recipes
+  </Card>
+  <Card title="Create Kits" icon="hammer" href="/templates/creating-templates">
+    Learn how to create your own kits
+  </Card>
+  <Card title="Share Kits" icon="share" href="/templates/sharing-templates">
+    Publish kits to npm or GitHub
+  </Card>
+  <Card title="Recipe Authoring" icon="book" href="/templates/recipe-authoring">
+    Write multi-step recipes for kits
+  </Card>
+</CardGroup>
+
+## Related Commands
+
+- [`hypergen kit list`](/cli/commands/discovery/list) - List installed kits
+- [`hypergen kit info`](/cli/commands/resources/kit) - Get kit information
+- [`hypergen recipe list`](/cli/commands/discovery/list) - List available recipes

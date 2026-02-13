@@ -115,6 +115,7 @@
 		"ignore-walk": "^4.0.1",
 		"inflection": "^1.13.4",
 		"js-yaml": "^4.1.0",
+		"oclif": "^4.22.77",
 		"ora": "^5.4.1",
 		"typedoc-theme-mintlify": "workspace:*",
 		"yaml": "^2.8.1",

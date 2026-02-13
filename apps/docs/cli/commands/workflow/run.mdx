@@ -1,0 +1,196 @@
+---
+title: "hypergen run"
+description: "Execute recipes and generate code with configurable variable resolution"
+icon: "play"
+---
+
+# hypergen run
+
+Execute a recipe to generate code. Supports kit-based path resolution, positional arguments, and configurable variable resolution via `--ask` and `--no-defaults`.
+
+## Syntax
+
+```bash
+hypergen run <recipe> [options] [-- key=value ...]
+```
+
+Or using kit shorthand:
+
+```bash
+hypergen <kit> <cookbook> <recipe> [positional-args] [--key=value ...]
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--ask <mode>` | Who resolves missing variables: `me`, `ai`, or `nobody` | `me` (TTY) / `nobody` (CI) |
+| `--no-defaults` | Skip default values and ask about every variable | `false` |
+| `--dry` | Preview what would be generated without writing files | `false` |
+| `--force, -f` | Overwrite existing files | `false` |
+| `--yes, -y` | Skip confirmation prompts | `false` |
+| `--answers <path>` | Path to AI answers JSON file (2-pass generation) | - |
+| `--prompt-template <path>` | Custom Jig template for the AI prompt document | - |
+
+## Variable Resolution
+
+When a recipe declares variables, hypergen resolves their values through a pipeline. Two flags control how this works: **`--ask`** and **`--no-defaults`**.
+
+### The `--ask` flag
+
+Controls **who** fills in missing variable values.
+
+<Tabs>
+  <Tab title="me (default in TTY)">
+    Interactive prompts in the terminal. Variables with defaults are used silently; only missing required variables trigger prompts.
+
+    ```bash
+    hypergen nextjs crud resource --name=organization
+    # Prompts you for any missing required variables
+    ```
+  </Tab>
+  <Tab title="ai">
+    Delegates all unresolved variables to AI in a single batch call. Requires an API key configured.
+
+    ```bash
+    hypergen nextjs crud resource --name=organization --ask=ai
+    # AI infers field types, relationships, etc.
+    ```
+  </Tab>
+  <Tab title="nobody">
+    No resolution at all. Errors if any required variable is missing. Ideal for CI/CD pipelines and scripting.
+
+    ```bash
+    hypergen nextjs crud resource --name=organization --fields="name:string,slug:string" --ask=nobody
+    # Fails fast if anything is missing
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+  In non-TTY environments (CI, pipes), `--ask` defaults to `nobody` automatically.
+</Info>
+
+### The `--no-defaults` flag
+
+Controls **what** gets asked about. When set, default values are ignored and every variable becomes unresolved.
+
+```bash
+# Normal: color defaults to "blue" silently
+hypergen run my-recipe --name=App
+# color = "blue" (default applied)
+
+# With --no-defaults: you're asked about color too
+hypergen run my-recipe --name=App --no-defaults
+# Prompts for color (shows "blue" as suggestion)
+```
+
+### Resolution matrix
+
+| Variable state | Default | `--ask=ai` | `--no-defaults` | `--no-defaults --ask=ai` |
+|---|---|---|---|---|
+| Has `default` | Use default | Use default | Prompt (default as hint) | AI decides (sees default as hint) |
+| Has `suggestion` + required | Prompt (show suggestion) | AI (sees suggestion) | Prompt (show suggestion) | AI (sees suggestion) |
+| Required, no default | Prompt | AI resolves | Prompt | AI resolves |
+| Optional, no default | Skip | Skip | Prompt | AI resolves |
+
+### `default` vs `suggestion` in recipe variables
+
+Recipe variables support two distinct hint mechanisms:
+
+- **`default`** — auto-applied silently. The variable always gets this value unless overridden.
+- **`suggestion`** — shown as a hint in prompts (to the user or AI) but never auto-applied.
+
+```yaml
+variables:
+  name:
+    type: string
+    required: true
+    description: "Application name"
+
+  port:
+    type: number
+    required: true
+    suggestion: 3000           # Shown in prompts, never auto-applied
+
+  color:
+    type: string
+    default: "blue"            # Applied silently unless --no-defaults
+```
+
+<Warning>
+  `default` is mutually exclusive with both `required` and `suggestion`. A variable cannot have a default and also be required (the default would always satisfy it), and cannot have both a default and a suggestion (pick one: auto-apply or hint).
+</Warning>
+
+## Examples
+
+### Let AI fill in the gaps
+
+Provide just the essentials and let AI determine the rest based on context:
+
+```bash
+hypergen nextjs crud resource \
+  --name=organization \
+  --ask=ai
+```
+
+The AI sees the recipe description, your project context (from `AGENTS.md`), and any already-provided values, then infers appropriate fields, types, and relationships.
+
+### Override everything interactively
+
+```bash
+hypergen nextjs crud resource \
+  --name=organization \
+  --no-defaults --ask=me
+```
+
+Every variable is prompted, even ones with defaults. Default values appear as pre-filled suggestions you can accept or change.
+
+### CI/CD strict mode
+
+```bash
+hypergen nextjs crud resource \
+  --name=organization \
+  --fields="name:string,slug:string,createdAt:date" \
+  --ask=nobody
+```
+
+Fails immediately if any required variable is missing. No prompts, no AI calls.
+
+### Full AI generation
+
+```bash
+hypergen nextjs crud resource \
+  --name=organization \
+  --no-defaults --ask=ai
+```
+
+Even variables with defaults are sent to AI. The AI sees the original defaults as hints but can choose different values.
+
+### Kit shorthand with positional args
+
+```bash
+# These are equivalent:
+hypergen run nextjs/crud/resource --name=organization
+hypergen nextjs crud resource --name=organization
+hypergen nextjs crud resource Organization   # positional arg mapped to 'name'
+```
+
+## AI Transport Requirements
+
+`--ask=ai` requires either:
+- An **API key** configured (e.g., `ANTHROPIC_API_KEY` in your environment)
+- A **command transport** configured in `hypergen.config.js`
+
+If neither is available, hypergen warns and falls back to interactive prompts (`--ask=me` behavior).
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Templates: @ai tag" href="/templates/ai-decisions-tag">
+    AI-generated content inside templates (2-pass system)
+  </Card>
+  <Card title="hyper gen" href="/cli/commands/workflow/gen">
+    High-level AI-augmented generation
+  </Card>
+</CardGroup>

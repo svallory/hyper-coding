@@ -83,6 +83,7 @@
                     "group": "Workflow Commands",
                     "pages": [
                       "cli/commands/workflow/init",
+                      "cli/commands/workflow/run",
                       "cli/commands/workflow/gen",
                       "cli/commands/workflow/plan",
                       "cli/commands/workflow/dev"
@@ -158,7 +159,9 @@
           {
             "group": "Templates",
             "pages": [
+              "templates/kit-installation",
               "templates/creating-templates",
+              "templates/recipe-authoring",
               "templates/ai-decisions-tag",
               "templates/ai-prompt-helper",
               "templates/sharing-templates",

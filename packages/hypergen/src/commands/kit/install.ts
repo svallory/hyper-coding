@@ -1,5 +1,5 @@
 /**
- * Install a kit from npm or git
+ * Install a kit from npm, JSR, GitHub, local paths, or other sources
  */
 
 import { existsSync } from 'node:fs'
@@ -7,34 +7,18 @@ import { join } from 'node:path'
 import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../../lib/base-command.js'
 import { execSync } from 'node:child_process'
-
-/**
- * Validate and shell-escape a kit name/specifier.
- * Allows: scoped packages (@foo/bar), file: prefixes, github: prefixes,
- * git URLs, relative/absolute paths, and version specifiers.
- * Rejects anything with shell metacharacters that could enable injection.
- */
-function shellEscapeKitName(kit: string): string {
-  // Reject obvious shell injection characters
-  const dangerousChars = /[;&|`$(){}!><\n\r]/
-  if (dangerousChars.test(kit)) {
-    throw new Error(
-      `Invalid kit specifier: "${kit}"\n` +
-      `Kit names must not contain shell metacharacters.`
-    )
-  }
-  // Wrap in single quotes for shell safety, escaping internal single quotes
-  return `'${kit.replace(/'/g, "'\\''")}'`
-}
+import { resolveKitSource, buildInstallCommand } from '../../lib/kit/source-resolver.js'
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {
-  static override description = 'Install a kit from npm or git repository'
+  static override description = 'Install a kit from npm, JSR, GitHub, or local path'
 
   static override examples = [
-    '<%= config.bin %> kit install @hyper-kits/starlight',
-    '<%= config.bin %> kit install github:user/my-kit',
-    '<%= config.bin %> kit install ./local-kit --dev',
-    '<%= config.bin %> kit install file:../path/to/kit',
+    '<%= config.bin %> kit install @hyper-kits/nextjs',
+    '<%= config.bin %> kit install svallory/hypergen-kit-nextjs',
+    '<%= config.bin %> kit install jsr:@std/path',
+    '<%= config.bin %> kit install ./local-kit',
+    '<%= config.bin %> kit install C:\\\\Projects\\\\my-kit --dev',
+    '<%= config.bin %> kit install https://github.com/user/repo.git',
   ]
 
   static override flags = {
@@ -52,7 +36,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 
   static override args = {
     kit: Args.string({
-      description: 'Kit to install (npm package, git URL, or local path)',
+      description: 'Kit to install (npm, JSR, GitHub shorthand, git URL, or local path)',
       required: true,
     }),
   }
@@ -61,41 +45,20 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
     const { args, flags } = await this.parse(KitInstall)
 
     try {
-      this.log(`Installing kit: ${args.kit}`)
+      // Resolve kit source to determine type and normalized source
+      const resolved = resolveKitSource(args.kit)
 
-      // Shell-escape the kit name to prevent command injection
-      const escapedKit = shellEscapeKitName(args.kit)
+      this.log(`Installing kit: ${args.kit}`)
+      this.log(`Source type: ${resolved.type}`)
 
       // Determine the package manager
       const pm = this.detectPackageManager()
 
-      // Build the install command with escaped kit name
-      let cmd: string
-      if (pm === 'bun') {
-        cmd = flags.global
-          ? `bun add -g ${escapedKit}`
-          : flags.dev
-            ? `bun add -d ${escapedKit}`
-            : `bun add ${escapedKit}`
-      } else if (pm === 'pnpm') {
-        cmd = flags.global
-          ? `pnpm add -g ${escapedKit}`
-          : flags.dev
-            ? `pnpm add -D ${escapedKit}`
-            : `pnpm add ${escapedKit}`
-      } else if (pm === 'yarn') {
-        cmd = flags.global
-          ? `yarn global add ${escapedKit}`
-          : flags.dev
-            ? `yarn add -D ${escapedKit}`
-            : `yarn add ${escapedKit}`
-      } else {
-        cmd = flags.global
-          ? `npm install -g ${escapedKit}`
-          : flags.dev
-            ? `npm install -D ${escapedKit}`
-            : `npm install ${escapedKit}`
-      }
+      // Build the install command
+      const cmd = buildInstallCommand(resolved, pm, {
+        dev: flags.dev,
+        global: flags.global,
+      })
 
       this.log(`Running: ${cmd}`)
 
@@ -118,9 +81,11 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
       if (msg.includes('not found') || msg.includes('404')) {
         this.error(
           `Kit not found: ${args.kit}\n\n` +
-          `Make sure the package name is correct. For local kits, use:\n` +
-          `  hypergen kit install file:./path/to/kit\n` +
-          `  hypergen kit install ./path/to/kit`
+          `Make sure the source is correct. Examples:\n` +
+          `  NPM:     hypergen kit install @hyper-kits/nextjs\n` +
+          `  GitHub:  hypergen kit install user/repo\n` +
+          `  JSR:     hypergen kit install jsr:@std/path\n` +
+          `  Local:   hypergen kit install ./path/to/kit`
         )
       }
       if (msg.includes('ENOENT')) {

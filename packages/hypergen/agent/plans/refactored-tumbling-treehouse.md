@@ -1,307 +1,337 @@
-# Plan: Domain Cookbook for Next.js Kit
+# Plan: Helpers as Jig Globals + Hygen Legacy Removal
 
 ## Context
 
-The Next.js kit needs a `domain` cookbook for DDD-style domain layer generation, independent from the `crud` cookbook (which handles UI). This enables workflows like:
+Hypergen was forked from Hygen. The recipe engine replaced the old pipeline, but legacy modules remain: `context.ts`, `render.ts`, `execute.ts`, `engine.ts`, `params.ts`, `help.ts`, `generators.ts`, `TemplateStore.ts`, `prompt.ts`. These are dead code — nothing imports them except each other and `index.ts` re-exports.
 
-```bash
-hypergen nextjs domain entity Organization --ask=ai
-hypergen nextjs domain enum UserRole --ask=ai
-hypergen nextjs domain value-object Email
-hypergen nextjs domain repository user --ask=ai
-hypergen nextjs domain service UserManagement --ask=ai
+The helpers system is broken: kit helpers (`kits/nextjs/helpers/`) are never loaded into the template render context. Config helpers go through a convoluted chain (`context()` → `h` namespace → flat spread) that causes variable collisions (e.g., Node's `path` module overwrites a `path` template variable).
+
+This plan:
+1. Registers all helpers (kit, cookbook, project-config) as **Jig globals** — no context plumbing
+2. Deletes all dead Hygen legacy modules
+3. Simplifies `buildRenderContext()` to only handle data (variables, step results)
+4. Drops the `processedLocals` magic (no more auto-generated `Name`/`names`/`Names` — templates use Jig filters)
+
+## Decision Record
+
+- **Helpers = Jig globals only.** No flat spread into context. No `h` namespace. No collision risk.
+- **No recipe-level helpers.** Only kit.yml and cookbook.yml can define helpers.
+- **`hypergen.config.js` helpers** also register as Jig globals (same mechanism).
+- **Warn on collision.** If two sources register a global with the same name, log a warning. Last registration wins.
+- **Drop `processedLocals`.** No `.jig` template uses `{{ Name }}`, `{{ names }}`, or `{{ Names }}`. Templates should use `{{ pascalCase(name) }}` and `{{ pluralize(name) }}`.
+- **Keep `ops/add.ts` and `ops/inject.ts`.** The recipe engine's template-tool still uses them for file operations.
+
+---
+
+## Step 1: Shared helper loading utility
+
+Extract `HypergenConfigLoader.loadHelpers()` to a standalone utility.
+
+**Create** `src/config/load-helpers.ts`:
+```typescript
+/**
+ * Load helpers from a file path or object.
+ * Resolves relative paths against baseDir.
+ * Returns Record<string, Function>.
+ */
+export async function loadHelpers(
+  helpers: string | Record<string, Function> | undefined,
+  baseDir: string
+): Promise<Record<string, Function>>
 ```
 
-And the sandbox flow becomes: **domain** (schemas/types/repositories) → **crud** (UI pages/actions).
+- Same logic as current `HypergenConfigLoader.loadHelpers()` (lines 359-411 of `hypergen-config.ts`)
+- Add `index.ts` to the directory scan list (bun handles `.ts` natively)
+- Remove from `HypergenConfigLoader` — call the shared utility instead
 
-A `create` orchestrator recipe was considered but dropped — the recipe engine lacks iteration primitives (`forEach`), making it impossible to fan out a single AI-designed domain into N sub-recipe calls without hacky shell loops or engine scope creep. Individual recipes work well with `--ask=ai` independently.
+**Modify** `src/config/hypergen-config.ts`:
+- Import `loadHelpers` from `./load-helpers.js`
+- Delete the private `loadHelpers` method
+- Update callers to use the imported function
 
-## Existing Patterns (discovered via exploration)
+---
 
-- **cookbook.yml**: `name`, `description`, `version`, `defaults.recipe`, `recipes: ["./*/recipe.yml"]`
-- **recipe.yml**: `name`, `description`, `version`, `variables`, `steps`
-- **Templates**: `.jig` files with YAML frontmatter (`to:`, `inject:`, `when:`)
-- **ORM detection**: `detectProjectFeatures()` → `{ orm: 'prisma' | 'drizzle' | 'none' }` (from `kits/nextjs/helpers/detect-project.ts`)
-- **@ai tags**: `@ai({ key })` → `@context()` → `@prompt()` → `@output()` → `@example()` → `@end`
-- **Drizzle schemas**: `db/schema/<name>.ts`, index at `db/schema/index.ts`
-- **Prisma schemas**: `prisma/schema.prisma` (inject mode)
-- **Zod schemas**: `lib/schemas/<name>-schema.ts`
-- **Shared partials**: `kits/nextjs/shared/partials/{zod-schema,types}.jig`
-- **Helpers**: `parseFieldsString()`, `buildFieldDescriptions()`, `pluralize()`, `pascalCase()`, etc. from `kits/nextjs/helpers/`
+## Step 2: `registerHelpers()` on Jig engine
 
-## Directory Structure
+**Modify** `src/template-engines/jig-engine.ts`:
 
-```
-kits/nextjs/cookbooks/domain/
-├── cookbook.yml
-├── entity/
-│   ├── recipe.yml
-│   └── templates/
-│       ├── drizzle-schema.ts.jig      → db/schema/<name>.ts
-│       ├── prisma-schema.prisma.jig   → prisma/schema.prisma (inject)
-│       ├── zod-schema.ts.jig          → lib/schemas/<name>-schema.ts
-│       └── schema-index.ts.jig        → db/schema/index.ts (inject)
-├── value-object/
-│   ├── recipe.yml
-│   └── templates/
-│       └── value-object.ts.jig        → lib/domain/value-objects/<Name>.ts
-├── enum/
-│   ├── recipe.yml
-│   └── templates/
-│       └── enum.ts.jig                → lib/domain/enums/<Name>.ts
-├── repository/
-│   ├── recipe.yml
-│   └── templates/
-│       ├── repository-interface.ts.jig → lib/domain/repositories/<name>-repository.ts
-│       ├── drizzle-repository.ts.jig   → lib/infrastructure/repositories/<name>-repository.impl.ts
-│       └── prisma-repository.ts.jig    → lib/infrastructure/repositories/<name>-repository.impl.ts
-└── service/
-    ├── recipe.yml
-    └── templates/
-        └── service.ts.jig             → lib/domain/services/<Name>Service.ts
+Add a new exported function:
+```typescript
+export function registerHelpers(
+  helpers: Record<string, any>,
+  source?: string  // e.g. "kit:@hyper-kits/nextjs" for collision warnings
+): void {
+  const engine = getJig()
+  for (const [name, value] of Object.entries(helpers)) {
+    if (typeof value === 'function') {
+      if (registeredGlobals.has(name)) {
+        const existingSource = registeredGlobals.get(name)
+        console.warn(
+          `Warning: Helper "${name}" from ${source ?? 'unknown'} overwrites existing helper from ${existingSource}`
+        )
+      }
+      engine.global(name, value)
+      registeredGlobals.set(name, source ?? 'unknown')
+    }
+  }
+}
 ```
 
----
-
-## 1. cookbook.yml
-
-```yaml
-name: domain
-description: |
-  Generate DDD-style domain layer components for Next.js applications.
-  Supports Drizzle and Prisma ORMs. Generates entities, value objects,
-  enums, repositories, and domain services.
-version: 1.0.0
-defaults:
-  recipe: entity
-recipes:
-  - './*/recipe.yml'
+Add module-level collision tracking:
+```typescript
+const registeredGlobals = new Map<string, string>()
 ```
 
----
-
-## 2. Entity Recipe
-
-**`domain/entity/recipe.yml`**
-
-Variables:
-- `name` — string, required, position: 0, camelCase entity name
-- `fields` — string, optional (AI infers when missing)
-- `relations` — string, optional
-
-Steps:
-1. `shell` — `mkdir -p db/schema lib/schemas`
-2. `template` — `zod-schema.ts.jig` (always)
-3. `template` — `drizzle-schema.ts.jig` (when orm === 'drizzle')
-4. `template` — `prisma-schema.prisma.jig` (when orm === 'prisma')
-5. `template` — `schema-index.ts.jig` (when orm === 'drizzle', inject export)
-6. `shell` — success message
-
-**Templates:**
-
-`zod-schema.ts.jig` → `lib/schemas/{{ name }}-schema.ts`
-- Uses `@ai({ key: 'zodSchema' })` to generate z.object() definition
-- Exports: `<name>Schema`, `create<Name>Schema` (.omit id/timestamps), `update<Name>Schema` (.partial), plus `z.infer` types
-
-`drizzle-schema.ts.jig` → `db/schema/{{ name }}.ts`
-- Uses `@ai({ key: 'drizzleColumns' })` for column definitions
-- Uses `@ai({ key: 'drizzleRelations' })` for relations (when provided)
-- Exports table variable + `$inferSelect` / `$inferInsert` types
-
-`prisma-schema.prisma.jig` → `prisma/schema.prisma` (inject after `// Models`)
-- Uses `@ai({ key: 'prismaModel' })` for full model block
-
-`schema-index.ts.jig` → `db/schema/index.ts` (inject, skip_if already exported)
-- Single line: `export * from './<name>'`
+Update `initializeJig()` to clear `registeredGlobals` on reinit.
 
 ---
 
-## 3. Value Object Recipe
+## Step 3: Add `helpers` to KitConfig and CookbookConfig
 
-**`domain/value-object/recipe.yml`**
-
-Variables:
-- `name` — string, required, position: 0, PascalCase
-- `baseType` — enum ['string', 'number', 'bigint'], default: 'string'
-- `validation` — string, optional (AI infers from name)
-
-Steps:
-1. `shell` — `mkdir -p lib/domain/value-objects`
-2. `template` — `value-object.ts.jig`
-3. `shell` — success message
-
-**Template:** `value-object.ts.jig` → `lib/domain/value-objects/{{ name }}.ts`
-- Uses `@ai({ key: 'valueObjectImpl' })` for full implementation
-- Generates: branded type, Zod schema, `create<Name>()` with Result type, `is<Name>()` guard, `from<Name>Unsafe()`
+**Modify** `src/config/types.ts`:
+- Add `helpers?: string` to `KitConfig` (around line 130)
+- Add `helpers?: string` to `CookbookConfig` (around line 144)
 
 ---
 
-## 4. Enum Recipe
+## Step 4: Kit/Cookbook parsers load and register helpers
 
-**`domain/enum/recipe.yml`**
+**Modify** `src/config/kit-parser.ts`:
+- Import `loadHelpers` from `./load-helpers.js` and `registerHelpers` from `../template-engines/jig-engine.js`
+- Add `helpers` to `validateKitConfig()` accepted fields
+- Add `loadedHelpers?: Record<string, Function>` to `ParsedKit` interface
+- After parsing, if `config.helpers` is set, resolve path relative to `dirPath` and call `loadHelpers()`
+- Add exported `registerKitHelpers(kit: ParsedKit)` that calls `registerHelpers(kit.loadedHelpers, 'kit:' + kit.config.name)`
 
-Variables:
-- `name` — string, required, position: 0, PascalCase
-- `values` — string, optional (AI infers from name)
-
-Steps:
-1. `shell` — `mkdir -p lib/domain/enums`
-2. `template` — `enum.ts.jig`
-3. `shell` — success message
-
-**Template:** `enum.ts.jig` → `lib/domain/enums/{{ name }}.ts`
-- Uses `@ai({ key: 'enumImpl' })` for full implementation
-- Generates: const object (SCREAMING_SNAKE keys), TypeScript type, Zod schema, `is<Name>()`, `get<Name>Label()`, `getAll<Name>s()`, `from<Name>String()`
+**Modify** `src/config/cookbook-parser.ts`:
+- Same pattern: add `loadedHelpers` to `ParsedCookbook`, add `registerCookbookHelpers()`
 
 ---
 
-## 5. Repository Recipe
+## Step 5: Register `hypergen.config.js` helpers as Jig globals
 
-**`domain/repository/recipe.yml`**
+**Modify** `src/config/hypergen-config.ts`:
+- After loading config helpers, call `registerHelpers(loadedHelpers, 'config:hypergen.config')`
+- Remove `loadedHelpers` from `ResolvedConfig` — no longer passed through config chain
 
-Variables:
-- `name` — string, required, position: 0, camelCase
-- `entity` — string, optional (defaults to name)
-- `methods` — string, optional (extra methods beyond CRUD)
-
-Steps:
-1. `shell` — `mkdir -p lib/domain/repositories lib/infrastructure/repositories`
-2. `template` — `repository-interface.ts.jig` (always)
-3. `template` — `drizzle-repository.ts.jig` (when orm === 'drizzle')
-4. `template` — `prisma-repository.ts.jig` (when orm === 'prisma')
-5. `shell` — success message
-
-**Templates:**
-
-`repository-interface.ts.jig` → `lib/domain/repositories/{{ name }}-repository.ts`
-- Uses `@ai({ key: 'repositoryInterface' })` for interface
-- Standard CRUD: `findById`, `findAll`, `create`, `update`, `delete`
-- AI adds custom methods from `methods` variable
-
-`drizzle-repository.ts.jig` → `lib/infrastructure/repositories/{{ name }}-repository.impl.ts`
-- Uses `@ai({ key: 'drizzleRepoImpl' })` for class implementation
-- Imports from `@/db/schema/<name>`, uses `db` client
-
-`prisma-repository.ts.jig` → `lib/infrastructure/repositories/{{ name }}-repository.impl.ts`
-- Uses `@ai({ key: 'prismaRepoImpl' })` for class implementation
-- Uses `prisma` client
+**Modify** `src/lib/base-command.ts` (line 105):
+- Remove `helpers: this.hypergenConfig?.loadedHelpers` from `RecipeEngineConfig`
 
 ---
 
-## 6. Service Recipe
+## Step 6: Simplify recipe engine
 
-**`domain/service/recipe.yml`**
+**Modify** `src/recipe-engine/recipe-engine.ts`:
+- Remove `import context from '../context.js'` (line 19)
+- Remove `helpers` from `RecipeEngineConfig` interface (line 150)
+- Remove `helpers: {}` from `DEFAULT_CONFIG` (line 247)
+- Rewrite `createExecutionContext()` — stop calling `context()`, build variables directly:
 
-Variables:
-- `name` — string, required, position: 0, PascalCase
-- `entities` — string, optional (which entities it operates on)
-- `operations` — string, optional (business operations)
-
-Steps:
-1. `shell` — `mkdir -p lib/domain/services`
-2. `template` — `service.ts.jig`
-3. `shell` — success message
-
-**Template:** `service.ts.jig` → `lib/domain/services/{{ name }}Service.ts`
-- Uses `@ai({ key: 'serviceImpl' })` for full class
-- Constructor takes repository dependencies
-- AI generates business logic methods from entities/operations context
-
----
-
-## 7. Sandbox Updates
-
-**`sandbox/generate-todo-app.sh`** — Add Step 3.5 after project scaffolding:
-
-```bash
-# ─── Step 4: Generate domain layer ───────────────────────────────────
-echo "[4/8] Generating domain layer..."
-
-hypergen nextjs domain entity organization --ask=ai
-hypergen nextjs domain entity member --ask=ai
-hypergen nextjs domain entity todo --ask=ai
-
-hypergen nextjs domain enum UserRole --values=admin,member,viewer
-hypergen nextjs domain enum TodoStatus --values=pending,in_progress,done,cancelled
-
-hypergen nextjs domain value-object Email
-hypergen nextjs domain value-object Slug
-
-hypergen nextjs domain repository organization --ask=ai
-hypergen nextjs domain repository member --ask=ai
-hypergen nextjs domain repository todo --ask=ai
-
-hypergen nextjs domain service MembershipManagement --entities=organization,member --ask=ai
+```typescript
+private async createExecutionContext(
+  recipe: RecipeConfig, variables: Record<string, any>,
+  options: RecipeExecutionOptions, executionId: string,
+  source?: string | RecipeSource
+): Promise<StepContext> {
+  const collectMode = !options.answers && AiCollector.getInstance().collectMode
+  return {
+    step: {} as RecipeStepUnion,
+    variables: { ...variables },
+    projectRoot: options.workingDir || this.config.workingDir,
+    recipeVariables: variables,
+    stepResults: new Map(),
+    recipe: { id: executionId, name: recipe.name, version: recipe.version, startTime: new Date() },
+    stepData: {},
+    evaluateCondition: this.createConditionEvaluator(variables),
+    answers: options.answers,
+    collectMode,
+    dryRun: options.dryRun,
+    force: options.force,
+    logger: options.logger || this.logger,
+    templatePath: source && typeof source === 'object' && source.type === 'file'
+      ? path.dirname(source.path) : undefined
+  }
+}
 ```
 
-Renumber subsequent steps (CRUD becomes Step 5, auth pages Step 6, etc.).
-
-**`sandbox/build-todo-app-prompt.md`** — Add domain layer section.
+Update `createConditionEvaluator` to accept raw variables instead of the old `context()` result.
 
 ---
 
-## 8. ORM Detection in `when:` Conditions
+## Step 7: Simplify `buildRenderContext()`
 
-Templates use `when:` conditions for ORM branching. The condition needs access to `detectProjectFeatures()`. Based on existing CRUD patterns, this is available in the template render context via helpers. For recipe-level `when:` conditions, we need to verify it works — if not, use a shell step to detect ORM and export it as a variable.
+**Modify** `src/recipe-engine/tools/template-tool.ts`:
 
-Fallback pattern:
-```yaml
-steps:
-  - name: Detect ORM
-    tool: shell
-    command: |
-      if grep -q '"drizzle-orm"' package.json 2>/dev/null; then
-        echo "drizzle"
-      elif grep -q '"@prisma/client"' package.json 2>/dev/null; then
-        echo "prisma"
-      else
-        echo "none"
-      fi
-    exports:
-      detectedOrm: "{{ result.stdout.trim() }}"
+Remove imports:
+- `import builtinHelpers from '../../helpers.js'` (line 25)
 
-  - name: Generate Drizzle schema
-    tool: template
-    template: templates/drizzle-schema.ts.jig
-    when: "detectedOrm === 'drizzle'"
+Rewrite `buildRenderContext()` (lines 579-640):
+```typescript
+private buildRenderContext(
+  step: TemplateStep, context: StepContext, attributes: Record<string, any>
+): Record<string, any> {
+  const mergedVars = {
+    ...context.recipeVariables,
+    ...context.variables,
+    ...step.variables
+  }
+  return {
+    ...mergedVars,
+    recipe: context.recipe,
+    step: { name: step.name, description: step.description },
+    utils: context.utils,
+    stepResults: context.stepResults ? Object.fromEntries(context.stepResults) : {},
+    answers: context.answers,
+    __hypergenCollectMode: context.collectMode || false,
+    provide: (key: string, value: any) => { context.variables[key] = value; return '' },
+  }
+}
+```
+
+No `...helpers` spread. No `h:` key. No `processedLocals`.
+
+---
+
+## Step 8: Clean up `helpers.ts`
+
+**Modify** `src/helpers.ts` — remove `path` export:
+
+```typescript
+import inflection from 'inflection'
+import changeCase from 'change-case'
+
+inflection.undasherize = (str) =>
+  str.split(/[-_]/).map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join('')
+
+const helpers = {
+  capitalize(str) {
+    const toBeCapitalized = String(str)
+    return toBeCapitalized.charAt(0).toUpperCase() + toBeCapitalized.slice(1)
+  },
+  inflection,
+  changeCase,
+}
+export default helpers
 ```
 
 ---
 
-## Files to Create
+## Step 9: Remove dead import from shell-tool
 
-| File | Description |
-|------|-------------|
-| `cookbooks/domain/cookbook.yml` | Cookbook metadata |
-| `cookbooks/domain/entity/recipe.yml` | Entity recipe |
-| `cookbooks/domain/entity/templates/zod-schema.ts.jig` | Zod validation + types |
-| `cookbooks/domain/entity/templates/drizzle-schema.ts.jig` | Drizzle table definition |
-| `cookbooks/domain/entity/templates/prisma-schema.prisma.jig` | Prisma model (inject) |
-| `cookbooks/domain/entity/templates/schema-index.ts.jig` | Schema index export (inject) |
-| `cookbooks/domain/value-object/recipe.yml` | Value object recipe |
-| `cookbooks/domain/value-object/templates/value-object.ts.jig` | Branded type + validation |
-| `cookbooks/domain/enum/recipe.yml` | Enum recipe |
-| `cookbooks/domain/enum/templates/enum.ts.jig` | Const object + Zod + helpers |
-| `cookbooks/domain/repository/recipe.yml` | Repository recipe |
-| `cookbooks/domain/repository/templates/repository-interface.ts.jig` | Interface |
-| `cookbooks/domain/repository/templates/drizzle-repository.ts.jig` | Drizzle impl |
-| `cookbooks/domain/repository/templates/prisma-repository.ts.jig` | Prisma impl |
-| `cookbooks/domain/service/recipe.yml` | Service recipe |
-| `cookbooks/domain/service/templates/service.ts.jig` | Service class |
+**Modify** `src/recipe-engine/tools/shell-tool.ts`:
+- Remove `import shell from '../../ops/shell.js'` (line 18)
 
-## Files to Modify
+---
 
-| File | Change |
+## Step 10: Slim down types
+
+**Modify** `src/types.ts`:
+
+Keep only what `ops/add.ts` and `ops/inject.ts` actually use:
+
+```typescript
+export interface RunnerConfig {
+  exec?: (sh: string, body: string) => void
+  cwd?: string
+  logger?: Logger
+  createPrompter?: <Q, T>() => Prompter<Q, T>
+}
+```
+
+Delete: `ResolvedRunnerConfig`, `ConflictResolutionStrategy`, `TemplatesConfigOption`, `ResolvedTemplatePathConfig`, `ParamsResult`, `RunnerResult`.
+
+Keep: `Logger`, `Prompter`, `RenderedAction`, `ActionResult`.
+
+Check if `Action`, `ActionsMap`, `Generator` are used by live code — delete if not.
+
+---
+
+## Step 11: Delete dead legacy modules
+
+**Delete source files:**
+- `src/context.ts`, `src/render.ts`, `src/execute.ts`, `src/engine.ts`
+- `src/params.ts`, `src/help.ts`, `src/prompt.ts`
+- `src/generators.ts`, `src/TemplateStore.ts`, `src/indexed-store/` (directory)
+- `src/ops/shell.ts`, `src/ops/echo.ts`, `src/ops/setup.ts`, `src/ops/index.ts`
+
+**Delete test files:**
+- `tests/context.spec.ts`, `tests/render.spec.ts`, `tests/params.spec.ts`
+- `tests/util/metaverse.helper.ts`
+
+---
+
+## Step 12: Clean up `src/index.ts`
+
+Remove dead re-exports:
+- `RunnerConfig`, `RunnerResult` type exports
+- `engine`, `ShowHelpError` exports
+- Entire `runner()` function and its imports
+- `Logger` — check if still needed by live consumers; keep if so
+
+---
+
+## Step 13: Update affected tests
+
+- `tests/recipe-engine.test.ts` — remove any `helpers` from `RecipeEngineConfig` construction
+- `tests/recipe-engine/tools/template-tool.test.ts` — remove assertions on `h` namespace or `processedLocals`
+- `tests/suites/ai/e2e-recipe-with-helpers.test.ts` — already uses Jig globals, should work as-is
+- `tests/e2e/full-workflow.test.ts` — already uses Jig globals, should work as-is
+- Any test importing deleted types (`RunnerResult`, `ConflictResolutionStrategy`, etc.) — update imports
+
+---
+
+## Files Summary
+
+### Create (1 file)
+| File | Purpose |
+|------|---------|
+| `src/config/load-helpers.ts` | Shared helper loading utility |
+
+### Modify (12 files)
+| File | Changes |
+|------|---------|
+| `src/template-engines/jig-engine.ts` | Add `registerHelpers()` with collision tracking |
+| `src/config/types.ts` | Add `helpers?: string` to KitConfig, CookbookConfig |
+| `src/config/kit-parser.ts` | Load helpers, register as Jig globals |
+| `src/config/cookbook-parser.ts` | Load helpers, register as Jig globals |
+| `src/config/hypergen-config.ts` | Use shared `loadHelpers()`, register as Jig globals |
+| `src/recipe-engine/recipe-engine.ts` | Remove context() import, simplify createExecutionContext |
+| `src/recipe-engine/tools/template-tool.ts` | Simplify buildRenderContext |
+| `src/recipe-engine/tools/shell-tool.ts` | Remove dead ops/shell import |
+| `src/helpers.ts` | Remove `path` export |
+| `src/types.ts` | Slim RunnerConfig, remove dead types |
+| `src/index.ts` | Remove dead re-exports |
+| `src/lib/base-command.ts` | Remove `helpers` from RecipeEngineConfig |
+
+### Delete (14+ source, 4 test files)
+| File | Reason |
 |------|--------|
-| `sandbox/generate-todo-app.sh` | Add domain layer generation step, renumber |
-| `sandbox/build-todo-app-prompt.md` | Add domain layer section |
+| `src/context.ts` | Replaced by Jig globals |
+| `src/render.ts` | Dead — old Hygen pipeline |
+| `src/execute.ts` | Dead — old ops orchestrator |
+| `src/engine.ts` | Dead — deprecated stub |
+| `src/params.ts` | Dead — replaced by oclif |
+| `src/help.ts` | Dead — replaced by oclif |
+| `src/prompt.ts` | Dead — replaced by interactive-prompts |
+| `src/generators.ts` | Dead — old template scanner |
+| `src/TemplateStore.ts` | Dead — old template store |
+| `src/indexed-store/` | Dead — TemplateStore support |
+| `src/ops/shell.ts` | Dead — never called |
+| `src/ops/echo.ts` | Dead — only used by dead execute.ts |
+| `src/ops/setup.ts` | Dead — only used by dead execute.ts |
+| `src/ops/index.ts` | Dead — only used by dead execute.ts |
+| `tests/context.spec.ts` | Tests deleted module |
+| `tests/render.spec.ts` | Tests deleted module |
+| `tests/params.spec.ts` | Tests deleted module |
+| `tests/util/metaverse.helper.ts` | Dead utility |
 
 ---
 
 ## Verification
 
-1. `bun test` — all existing tests pass (no engine changes)
-2. Manual: verify `hypergen nextjs domain entity user --fields=name:string,email:string` resolves correctly via path-resolver
-3. Verify each recipe YAML parses without errors (existing recipe parser tests cover structure)
-4. Verify ORM detection works in `when:` conditions (test with a mock project)
-5. Verify template `@ai` blocks collect correctly in Pass 1 (existing AI collection tests)
+1. **`bun test`** — all surviving tests pass
+2. **Grep for broken imports** — no remaining imports of deleted modules
+3. **Grep for `h.` in live code** — only in orphaned test fixtures
+4. **`bun run build:lib`** — TypeScript compiles cleanly
+5. **Test helper registration** — verify `registerHelpers()` makes functions callable in Jig templates
+6. **Test collision warning** — register same name twice, verify warning

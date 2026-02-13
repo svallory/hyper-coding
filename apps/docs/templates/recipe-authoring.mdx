@@ -1,0 +1,806 @@
+---
+title: Recipe Authoring Guide
+description: Learn how to write recipes in Hypergen to automate code generation workflows
+---
+
+Recipes are YAML-based workflow definitions that orchestrate code generation steps. They combine templates, actions, shell commands, and other recipes into reusable automation workflows.
+
+## Recipe YAML Structure
+
+Every recipe starts with a `recipe.yml` file that defines metadata, variables, and steps:
+
+```yaml
+name: my-recipe
+description: What this recipe does
+version: 1.0.0
+variables:
+  # variable definitions
+steps:
+  # step definitions
+```
+
+<Note>The `name` field must match the recipe's directory name in the cookbook structure.</Note>
+
+## Variable Types
+
+Recipes use variables to capture user input and pass data between steps. Hypergen supports these variable types:
+
+### String Variables
+
+Text values with optional validation:
+
+```yaml
+variables:
+  name:
+    type: string
+    required: true
+    description: Resource name (singular)
+    pattern: "^[A-Z][a-zA-Z0-9]*$"
+```
+
+### Number Variables
+
+Numeric values with optional range constraints:
+
+```yaml
+variables:
+  port:
+    type: number
+    default: 3000
+    min: 1024
+    max: 65535
+    description: Server port number
+```
+
+### Boolean Variables
+
+True/false flags:
+
+```yaml
+variables:
+  includeAuth:
+    type: boolean
+    default: true
+    description: Include authentication in generated pages
+```
+
+### Enum Variables
+
+Single or multiple selection from predefined values:
+
+<CodeGroup>
+
+```yaml Single Selection
+variables:
+  framework:
+    type: enum
+    values: ['react', 'vue', 'svelte']
+    default: 'react'
+    description: UI framework to use
+```
+
+```yaml Multiple Selection
+variables:
+  pages:
+    type: enum
+    multiple: true
+    values: ['list', 'detail', 'create', 'edit']
+    default: ['list', 'detail']
+    description: Which pages to generate
+```
+
+</CodeGroup>
+
+<Tip>Use `multiple: true` for enum variables when users should select multiple options. This is perfect for feature flags or selecting which components to generate.</Tip>
+
+### Array Variables
+
+Lists of values:
+
+```yaml
+variables:
+  fields:
+    type: array
+    default: []
+    description: List of fields for the resource
+```
+
+### Object Variables
+
+Key-value pairs:
+
+```yaml
+variables:
+  config:
+    type: object
+    default: {}
+    description: Additional configuration options
+```
+
+### File and Directory Variables
+
+Path references:
+
+```yaml
+variables:
+  templatePath:
+    type: file
+    description: Path to custom template file
+
+  outputDir:
+    type: directory
+    default: './src/components'
+    description: Output directory for generated files
+```
+
+## Variable Fields
+
+Each variable supports multiple configuration fields to control validation, prompts, and AI behavior:
+
+```yaml
+variables:
+  name:
+    type: string                # Required: variable type
+    required: true              # Is this variable mandatory?
+    default: 'MyResource'       # Default value (skipped with --no-defaults)
+    suggestion: 'Use PascalCase for resource names'  # AI hint (not a default)
+    position: 0                 # Positional CLI argument (0-based)
+    description: 'Resource name in singular form'    # Human/AI description
+    prompt: 'What is the resource name?'             # Interactive prompt text
+    pattern: '^[A-Z][a-zA-Z0-9]*$'  # Regex validation (string only)
+    min: 1                      # Minimum value (number only)
+    max: 100                    # Maximum value (number only)
+    values: ['option1', 'option2']  # Allowed values (enum only)
+    multiple: true              # Allow multiple selections (enum only)
+```
+
+### Comprehensive Example
+
+Here's a realistic example showing multiple variable types working together:
+
+```yaml
+variables:
+  name:
+    type: string
+    required: true
+    position: 0
+    description: Resource name (singular, PascalCase)
+    prompt: What is the resource name?
+    pattern: "^[A-Z][a-zA-Z0-9]*$"
+
+  pages:
+    type: enum
+    multiple: true
+    values: ['list', 'detail', 'create', 'edit']
+    default: ['list', 'detail', 'create', 'edit']
+    description: Which pages to generate for this resource
+
+  includeAuth:
+    type: boolean
+    default: true
+    suggestion: "Consider the project's authentication requirements"
+    description: Add authentication guards to generated pages
+
+  itemsPerPage:
+    type: number
+    default: 10
+    min: 5
+    max: 100
+    description: Number of items to show per page in list view
+
+  fields:
+    type: array
+    default: ['id', 'name', 'createdAt']
+    description: Fields to display in the resource tables
+```
+
+## Step Types
+
+Each step in a recipe has a `name`, `tool`, and tool-specific configuration fields. Here are the available step types:
+
+### Template Steps
+
+Render Jig templates to generate files:
+
+```yaml
+steps:
+  - name: Generate list page
+    tool: template
+    template: templates/list-page.tsx.jig
+```
+
+<Note>Template paths are relative to the recipe directory. Templates use the `.jig` extension.</Note>
+
+### Shell Steps
+
+Execute shell commands:
+
+```yaml
+steps:
+  - name: Install dependencies
+    tool: shell
+    command: "bun add @tanstack/react-table"
+```
+
+<Warning>Shell commands run in the project root. Use caution with destructive operations.</Warning>
+
+### Recipe Steps
+
+Call other recipes (see [Sub-Recipe Steps](#sub-recipe-steps) below):
+
+```yaml
+steps:
+  - name: Generate list page
+    tool: recipe
+    recipe: ../list-page
+    args:
+      name: "{{ name }}"
+```
+
+### Prompt Steps
+
+Interactive user prompts:
+
+```yaml
+steps:
+  - name: Confirm generation
+    tool: prompt
+```
+
+### Action Steps
+
+Execute registered TypeScript actions:
+
+```yaml
+steps:
+  - name: Run custom validator
+    tool: action
+    action: validate-schema
+```
+
+### Sequence Steps
+
+Run steps sequentially:
+
+```yaml
+steps:
+  - name: Setup phase
+    tool: sequence
+    steps:
+      - name: Create directories
+        tool: shell
+        command: "mkdir -p src/pages src/components"
+      - name: Generate base files
+        tool: template
+        template: templates/base.tsx.jig
+```
+
+### Parallel Steps
+
+Run steps in parallel for better performance:
+
+```yaml
+steps:
+  - name: Generate all pages
+    tool: parallel
+    steps:
+      - name: Generate list page
+        tool: template
+        template: templates/list-page.tsx.jig
+      - name: Generate detail page
+        tool: template
+        template: templates/detail-page.tsx.jig
+```
+
+<Tip>Use `parallel` for independent steps like generating multiple files. Use `sequence` when steps depend on each other.</Tip>
+
+### AI Steps
+
+Direct AI content generation:
+
+```yaml
+steps:
+  - name: Generate validation logic
+    tool: ai
+```
+
+<Note>AI steps are separate from the `@ai` tags inside templates. Template `@ai` tags handle code-level generation, while AI steps generate entire content blocks.</Note>
+
+## Sub-Recipe Steps
+
+Recipes can call other recipes, creating modular and reusable workflows. When calling sub-recipes, you have fine-grained control over variable passing:
+
+### Basic Sub-Recipe Call
+
+```yaml
+steps:
+  - name: Generate list page
+    tool: recipe
+    recipe: ../list-page
+```
+
+By default, all parent variables flow to the sub-recipe (`inheritVariables: true`).
+
+### Passing Variables with args
+
+Use `args:` to pass variables to sub-recipes. This is shorthand for `variableOverrides`:
+
+```yaml
+steps:
+  - name: Generate list page
+    tool: recipe
+    recipe: ../list-page
+    args:
+      name: "{{ name }}"
+      fields: "{{ fields }}"
+      pageTitle: "{{ name }} List"
+```
+
+<Note>`args:` supports Jig template syntax for transforming variables. You can rename, combine, or compute new values.</Note>
+
+### Preventing Variable Inheritance
+
+Set `inheritVariables: false` to start with a clean slate:
+
+```yaml
+steps:
+  - name: Call isolated recipe
+    tool: recipe
+    recipe: ../isolated-recipe
+    inheritVariables: false
+    args:
+      onlyThis: "{{ someValue }}"
+```
+
+### Explicit Variable Mapping
+
+Use `variableOverrides` for complete control:
+
+```yaml
+steps:
+  - name: Generate page with custom mapping
+    tool: recipe
+    recipe: ../page
+    variableOverrides:
+      resourceName: "{{ name }}"
+      includeSearch: "{{ pages.includes('list') }}"
+```
+
+## Conditional Steps
+
+Control step execution with `when:` conditions. Conditions are JavaScript expressions evaluated against the variable context:
+
+```yaml
+steps:
+  - name: Generate list page
+    tool: recipe
+    recipe: ../list-page
+    when: "pages.includes('list')"
+
+  - name: Generate delete dialog
+    tool: template
+    template: templates/delete-dialog.tsx.jig
+    when: "includeDelete === true"
+
+  - name: Add auth guards
+    tool: template
+    template: templates/auth-guard.tsx.jig
+    when: "includeAuth && pages.length > 0"
+```
+
+<Warning>`when:` conditions use plain JavaScript expressions — do NOT wrap them in `{{ }}`. The expression has access to all variables in the current context.</Warning>
+
+### Conditional Examples
+
+<CodeGroup>
+
+```yaml Boolean Check
+- name: Add authentication
+  tool: template
+  template: templates/auth.tsx.jig
+  when: "includeAuth === true"
+```
+
+```yaml Array Check
+- name: Generate list view
+  tool: recipe
+  recipe: ../list-page
+  when: "pages.includes('list')"
+```
+
+```yaml Numeric Comparison
+- name: Add pagination
+  tool: template
+  template: templates/pagination.tsx.jig
+  when: "itemsPerPage < 50"
+```
+
+```yaml Complex Condition
+- name: Add advanced features
+  tool: template
+  template: templates/advanced.tsx.jig
+  when: "includeAuth && pages.length > 2 && itemsPerPage >= 20"
+```
+
+</CodeGroup>
+
+## Meta-Recipes Pattern
+
+A meta-recipe is a high-level orchestrator that calls multiple granular sub-recipes. This pattern creates flexible, composable workflows where each piece is independently usable.
+
+### Example: CRUD Resource Recipe
+
+Consider a CRUD resource recipe that generates list, detail, create, and edit pages:
+
+```yaml
+name: resource
+description: Generate a complete CRUD resource with multiple pages
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    required: true
+    position: 0
+    description: Resource name (singular, PascalCase)
+
+  pages:
+    type: enum
+    multiple: true
+    values: ['list', 'detail', 'create', 'edit']
+    default: ['list', 'detail', 'create', 'edit']
+    description: Which pages to generate
+
+steps:
+  - name: Generate list page
+    tool: recipe
+    recipe: ../list-page
+    when: "pages.includes('list')"
+    args:
+      name: "{{ name }}"
+
+  - name: Generate detail page
+    tool: recipe
+    recipe: ../detail-page
+    when: "pages.includes('detail')"
+    args:
+      name: "{{ name }}"
+
+  - name: Generate create page
+    tool: recipe
+    recipe: ../create-page
+    when: "pages.includes('create')"
+    args:
+      name: "{{ name }}"
+
+  - name: Generate edit page
+    tool: recipe
+    recipe: ../edit-page
+    when: "pages.includes('edit')"
+    args:
+      name: "{{ name }}"
+```
+
+### Benefits of Meta-Recipes
+
+<AccordionGroup>
+  <Accordion title="Granular Control">
+    Each sub-recipe is independently callable:
+
+    ```bash
+    # Just the list page
+    hypergen nextjs crud list-page Organization
+
+    # Just create and edit
+    hypergen nextjs crud resource Product --pages=create,edit
+    ```
+  </Accordion>
+
+  <Accordion title="Efficient Batch Generation">
+    The meta-recipe generates everything at once:
+
+    ```bash
+    # All pages with AI assistance
+    hypergen nextjs crud resource Organization --ask=ai
+    ```
+  </Accordion>
+
+  <Accordion title="Reusability">
+    Sub-recipes can be used by multiple meta-recipes:
+
+    ```yaml
+    # Both 'resource' and 'admin-panel' recipes can call 'list-page'
+    - name: Generate list page
+      tool: recipe
+      recipe: ../list-page
+    ```
+  </Accordion>
+
+  <Accordion title="Maintainability">
+    Changes to a page type update all resources using it:
+
+    - Update `list-page` recipe once
+    - All resources calling it get the improvement
+  </Accordion>
+</AccordionGroup>
+
+<Tip>Start with granular recipes for individual features, then create meta-recipes to combine them. This gives users flexibility while saving time on common workflows.</Tip>
+
+## Working with --ask=ai
+
+The `--ask=ai` flag enables AI-assisted variable resolution. Understanding how AI interacts with your recipe variables helps you design better recipes.
+
+### How AI Resolves Variables
+
+<Steps>
+  <Step title="Variables with defaults are used as-is">
+    ```yaml
+    variables:
+      includeAuth:
+        type: boolean
+        default: true  # AI uses this default
+    ```
+
+    AI doesn't override defaults — they're treated as explicit choices.
+  </Step>
+
+  <Step title="Variables with suggestions get AI-informed values">
+    ```yaml
+    variables:
+      port:
+        type: number
+        suggestion: "Analyze package.json and existing config to suggest an available port"
+    ```
+
+    AI considers the suggestion, project context, and generates an appropriate value.
+  </Step>
+
+  <Step title="Variables without values get AI-generated values">
+    ```yaml
+    variables:
+      name:
+        type: string
+        required: true
+        description: "Resource name (singular, PascalCase)"
+    ```
+
+    AI infers values from project context, file structure, and the description.
+  </Step>
+</Steps>
+
+### Best Practices for AI-Friendly Variables
+
+<CodeGroup>
+
+```yaml Good: Clear Description
+variables:
+  name:
+    type: string
+    required: true
+    description: "Resource name in singular form, PascalCase (e.g., User, BlogPost, OrderItem)"
+```
+
+```yaml Good: Helpful Suggestion
+variables:
+  tableColumns:
+    type: array
+    suggestion: "Analyze the database schema and suggest relevant columns to display"
+```
+
+```yaml Bad: Vague Description
+variables:
+  name:
+    type: string
+    description: "The name"  # Too vague for AI to understand
+```
+
+```yaml Bad: Suggestion as Default
+variables:
+  port:
+    type: number
+    default: 3000  # If you want AI to choose, use 'suggestion' instead
+```
+
+</CodeGroup>
+
+### Template @ai Tags vs AI Variable Resolution
+
+<Note>
+AI operates at two levels in Hypergen:
+
+1. **Variable Resolution** (`--ask=ai`): AI fills in recipe variables before templates render
+2. **Template @ai Tags**: AI generates code snippets during template rendering
+
+These are separate systems that work together. Variable resolution happens first, then templates render with `@ai` tags generating code-level content.
+</Note>
+
+Example combining both:
+
+```yaml
+variables:
+  name:
+    type: string
+    suggestion: "Suggest a resource name based on the project domain"
+
+  fields:
+    type: array
+    suggestion: "Analyze the database schema and suggest fields"
+
+steps:
+  - name: Generate component
+    tool: template
+    template: templates/component.tsx.jig
+```
+
+In `component.tsx.jig`:
+
+```jig
+---
+to: "src/components/{{ pascalCase(name) }}.tsx"
+---
+import React from 'react';
+
+interface {{ pascalCase(name) }}Props {
+  @ai({ key: 'props' })
+    @context(fields)
+    @prompt Generate TypeScript interface properties based on these fields: {{ fields }}
+    @output({ typeHint: 'typescript' })
+      TypeScript interface property definitions
+    @end
+  @end
+}
+
+export function {{ pascalCase(name) }}(props: {{ pascalCase(name) }}Props) {
+  @ai({ key: 'implementation' })
+    @prompt Generate component implementation for {{ name }}
+  @end
+}
+```
+
+## Positional Arguments
+
+The `position` field enables CLI-friendly syntax without explicit flags:
+
+```yaml
+variables:
+  name:
+    type: string
+    position: 0
+    required: true
+    description: Resource name
+
+  action:
+    type: enum
+    position: 1
+    values: ['create', 'update', 'delete']
+    description: Action to perform
+```
+
+This allows natural command syntax:
+
+```bash
+# Instead of: hypergen nextjs crud resource --name=Organization
+hypergen nextjs crud resource Organization
+
+# With multiple positional args:
+hypergen nextjs crud resource Organization update
+```
+
+<Tip>Use `position: 0` for the most important required variable (usually a name). Reserve higher positions for optional or action-type variables.</Tip>
+
+### Positional Arguments Best Practices
+
+1. **Order by importance**: `position: 0` should be the most critical variable
+2. **Keep it simple**: Avoid more than 2-3 positional arguments
+3. **Make them intuitive**: Users should understand what goes where
+4. **Document the syntax**: Show examples in your recipe description
+
+<Warning>Positional arguments are zero-based. `position: 0` is the first argument, `position: 1` is the second, etc.</Warning>
+
+## Complete Recipe Example
+
+Here's a complete recipe demonstrating all the concepts:
+
+```yaml
+name: crud-resource
+description: Generate a complete CRUD resource with configurable pages and features
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    required: true
+    position: 0
+    description: Resource name (singular, PascalCase)
+    prompt: What is the resource name?
+    pattern: "^[A-Z][a-zA-Z0-9]*$"
+
+  pages:
+    type: enum
+    multiple: true
+    values: ['list', 'detail', 'create', 'edit', 'delete']
+    default: ['list', 'detail', 'create', 'edit']
+    description: Which pages to generate
+
+  includeAuth:
+    type: boolean
+    default: true
+    suggestion: "Consider whether this resource requires authentication"
+    description: Add authentication guards to pages
+
+  itemsPerPage:
+    type: number
+    default: 10
+    min: 5
+    max: 100
+    description: Items per page in list view
+
+  fields:
+    type: array
+    suggestion: "Analyze the project and suggest relevant fields"
+    description: Fields to display in tables and forms
+
+steps:
+  - name: Create directories
+    tool: shell
+    command: "mkdir -p src/pages/{{ kebabCase(name) }}"
+
+  - name: Generate list page
+    tool: recipe
+    recipe: ../list-page
+    when: "pages.includes('list')"
+    args:
+      name: "{{ name }}"
+      fields: "{{ fields }}"
+      itemsPerPage: "{{ itemsPerPage }}"
+      includeAuth: "{{ includeAuth }}"
+
+  - name: Generate detail page
+    tool: recipe
+    recipe: ../detail-page
+    when: "pages.includes('detail')"
+    args:
+      name: "{{ name }}"
+      fields: "{{ fields }}"
+      includeAuth: "{{ includeAuth }}"
+
+  - name: Generate form pages
+    tool: parallel
+    when: "pages.includes('create') || pages.includes('edit')"
+    steps:
+      - name: Generate create page
+        tool: recipe
+        recipe: ../create-page
+        when: "pages.includes('create')"
+        args:
+          name: "{{ name }}"
+          fields: "{{ fields }}"
+
+      - name: Generate edit page
+        tool: recipe
+        recipe: ../edit-page
+        when: "pages.includes('edit')"
+        args:
+          name: "{{ name }}"
+          fields: "{{ fields }}"
+
+  - name: Generate delete dialog
+    tool: template
+    template: templates/delete-dialog.tsx.jig
+    when: "pages.includes('delete')"
+
+  - name: Add to navigation
+    tool: template
+    template: templates/nav-item.tsx.jig
+```
+
+This recipe demonstrates:
+- Multiple variable types with validation
+- Positional arguments for ergonomic CLI usage
+- Conditional step execution
+- Sub-recipe calls with variable passing
+- Parallel execution for independent steps
+- Template generation
+- Shell commands for file system operations
+
+<Tip>Use this structure as a starting point for your own meta-recipes, then break down complex steps into their own sub-recipes for better reusability.</Tip>

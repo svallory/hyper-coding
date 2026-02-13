@@ -1,9 +1,139 @@
-# 8.0.0 (2025-09-09)
+# 8.0.0 (2026-02-13)
+
+
+### Bug Fixes
+
+* **hypergen:** fix use-after-free bug and skip_if logic errors ([a95de19](https://github.com/svallory/hypergen/commit/a95de19feb2aa911220b587975acfd0daf2483b4))
+* **hypergen:** improve step executor, template tool, and AI tag correctness ([a48f76e](https://github.com/svallory/hypergen/commit/a48f76eac6fd3fab5a4be2c792af62977b452114))
+* **hypergen:** recipe resolution and helpers loading ([4b078df](https://github.com/svallory/hypergen/commit/4b078df567712ce5ea8ff462a4b9495b0329f617))
+* **hypergen:** remove debug log pollution from CLI output ([876432d](https://github.com/svallory/hypergen/commit/876432dc8765eb9bfee5a665e5e4b5e3ad9c1a48))
+* **template-tool:** fix variable merge order in buildRenderContext ([2bcf55c](https://github.com/svallory/hypergen/commit/2bcf55c3774caf12f7046ad7a2c97eb7624e879f))
+* **tests:** comprehensive test suite cleanup and fixes ([51e7195](https://github.com/svallory/hypergen/commit/51e71952cad570801b3933afa9831050b24ea0a8))
+* **tests:** implement CLI integration tests and fix test reliability ([e1526b8](https://github.com/svallory/hypergen/commit/e1526b8af8b03e6d5a74c4a208c5753d02c6d9a1))
 
 
 ### Features
 
-* **typedoc-theme-mintlify:** implement post-generation navigation to eliminate broken links ([a1741cd](https://github.com/svallory/hypergen/commit/a1741cd175834208f14d673fbfc80e1adfd0c012))
+* **ai:** add pluggable AI transport system for 2-pass [@ai](https://github.com/ai) block resolution ([44d8f00](https://github.com/svallory/hypergen/commit/44d8f0050783b726eebe830b470f513681e565a5))
+* **ai:** redesign [@ai](https://github.com/ai) tag system and add [@example](https://github.com/example) tag ([8b8e8e5](https://github.com/svallory/hypergen/commit/8b8e8e578abf4090242cba067279e80dcf9e1c4b))
+* **ai:** use Jig template for prompt assembly and allow custom templates ([1f1ad37](https://github.com/svallory/hypergen/commit/1f1ad37a07d49b64fce78208055d4ccc6b0f4d9d))
+* **hypergen:** implement AI integration (Scaffold+Complete pattern) ([1bfa88a](https://github.com/svallory/hypergen/commit/1bfa88afe4fcb8ecd90582d49681ce39b738e042))
+* **hypergen:** Jig template engine ([bf390a1](https://github.com/svallory/hypergen/commit/bf390a12091bd3ddd4d6a978e221ad6854dde618))
+* **kit:** add intelligent source resolution for kit install command ([7d25533](https://github.com/svallory/hypergen/commit/7d25533bcd91e4976008445357b961c955aeab58))
+* **recipe-engine:** add onSuccess/onError messages, install tool, and DX improvements ([cca1d43](https://github.com/svallory/hypergen/commit/cca1d43e116a6dd97ed5a553b2ff50322311b894))
+* **tests:** comprehensive test audit and E2E file content tests ([9c7ee17](https://github.com/svallory/hypergen/commit/9c7ee1768eb3d61bf2d68ba3906afb7d3bd805b7))
+
+
+
+# 8.0.0 (2026-02-13)
+
+
+### Bug Fixes
+
+* **hypergen:** fix use-after-free bug and skip_if logic errors ([a95de19](https://github.com/svallory/hypergen/commit/a95de19feb2aa911220b587975acfd0daf2483b4))
+* **hypergen:** improve step executor, template tool, and AI tag correctness ([a48f76e](https://github.com/svallory/hypergen/commit/a48f76eac6fd3fab5a4be2c792af62977b452114))
+* **hypergen:** recipe resolution and helpers loading ([4b078df](https://github.com/svallory/hypergen/commit/4b078df567712ce5ea8ff462a4b9495b0329f617))
+* **hypergen:** remove debug log pollution from CLI output ([876432d](https://github.com/svallory/hypergen/commit/876432dc8765eb9bfee5a665e5e4b5e3ad9c1a48))
+* **template-tool:** fix variable merge order in buildRenderContext ([2bcf55c](https://github.com/svallory/hypergen/commit/2bcf55c3774caf12f7046ad7a2c97eb7624e879f))
+* **tests:** comprehensive test suite cleanup and fixes ([51e7195](https://github.com/svallory/hypergen/commit/51e71952cad570801b3933afa9831050b24ea0a8))
+* **tests:** implement CLI integration tests and fix test reliability ([e1526b8](https://github.com/svallory/hypergen/commit/e1526b8af8b03e6d5a74c4a208c5753d02c6d9a1))
+
+
+### Features
+
+* **ai:** add pluggable AI transport system for 2-pass [@ai](https://github.com/ai) block resolution ([44d8f00](https://github.com/svallory/hypergen/commit/44d8f0050783b726eebe830b470f513681e565a5))
+* **ai:** redesign [@ai](https://github.com/ai) tag system and add [@example](https://github.com/example) tag ([8b8e8e5](https://github.com/svallory/hypergen/commit/8b8e8e578abf4090242cba067279e80dcf9e1c4b))
+* **ai:** use Jig template for prompt assembly and allow custom templates ([1f1ad37](https://github.com/svallory/hypergen/commit/1f1ad37a07d49b64fce78208055d4ccc6b0f4d9d))
+* **hypergen:** implement AI integration (Scaffold+Complete pattern) ([1bfa88a](https://github.com/svallory/hypergen/commit/1bfa88afe4fcb8ecd90582d49681ce39b738e042))
+* **hypergen:** Jig template engine ([bf390a1](https://github.com/svallory/hypergen/commit/bf390a12091bd3ddd4d6a978e221ad6854dde618))
+* **kit:** add intelligent source resolution for kit install command ([7d25533](https://github.com/svallory/hypergen/commit/7d25533bcd91e4976008445357b961c955aeab58))
+* **recipe-engine:** add onSuccess/onError messages, install tool, and DX improvements ([cca1d43](https://github.com/svallory/hypergen/commit/cca1d43e116a6dd97ed5a553b2ff50322311b894))
+* **tests:** comprehensive test audit and E2E file content tests ([9c7ee17](https://github.com/svallory/hypergen/commit/9c7ee1768eb3d61bf2d68ba3906afb7d3bd805b7))
+
+
+
+# 8.0.0 (2026-02-13)
+
+
+### Bug Fixes
+
+* **hypergen:** fix use-after-free bug and skip_if logic errors ([a95de19](https://github.com/svallory/hypergen/commit/a95de19feb2aa911220b587975acfd0daf2483b4))
+* **hypergen:** improve step executor, template tool, and AI tag correctness ([a48f76e](https://github.com/svallory/hypergen/commit/a48f76eac6fd3fab5a4be2c792af62977b452114))
+* **hypergen:** recipe resolution and helpers loading ([4b078df](https://github.com/svallory/hypergen/commit/4b078df567712ce5ea8ff462a4b9495b0329f617))
+* **hypergen:** remove debug log pollution from CLI output ([876432d](https://github.com/svallory/hypergen/commit/876432dc8765eb9bfee5a665e5e4b5e3ad9c1a48))
+* **template-tool:** fix variable merge order in buildRenderContext ([2bcf55c](https://github.com/svallory/hypergen/commit/2bcf55c3774caf12f7046ad7a2c97eb7624e879f))
+* **tests:** comprehensive test suite cleanup and fixes ([51e7195](https://github.com/svallory/hypergen/commit/51e71952cad570801b3933afa9831050b24ea0a8))
+* **tests:** implement CLI integration tests and fix test reliability ([e1526b8](https://github.com/svallory/hypergen/commit/e1526b8af8b03e6d5a74c4a208c5753d02c6d9a1))
+
+
+### Features
+
+* **ai:** add pluggable AI transport system for 2-pass [@ai](https://github.com/ai) block resolution ([44d8f00](https://github.com/svallory/hypergen/commit/44d8f0050783b726eebe830b470f513681e565a5))
+* **ai:** redesign [@ai](https://github.com/ai) tag system and add [@example](https://github.com/example) tag ([8b8e8e5](https://github.com/svallory/hypergen/commit/8b8e8e578abf4090242cba067279e80dcf9e1c4b))
+* **ai:** use Jig template for prompt assembly and allow custom templates ([1f1ad37](https://github.com/svallory/hypergen/commit/1f1ad37a07d49b64fce78208055d4ccc6b0f4d9d))
+* **hypergen:** implement AI integration (Scaffold+Complete pattern) ([1bfa88a](https://github.com/svallory/hypergen/commit/1bfa88afe4fcb8ecd90582d49681ce39b738e042))
+* **hypergen:** Jig template engine ([bf390a1](https://github.com/svallory/hypergen/commit/bf390a12091bd3ddd4d6a978e221ad6854dde618))
+* **kit:** add intelligent source resolution for kit install command ([7d25533](https://github.com/svallory/hypergen/commit/7d25533bcd91e4976008445357b961c955aeab58))
+* **recipe-engine:** add onSuccess/onError messages, install tool, and DX improvements ([cca1d43](https://github.com/svallory/hypergen/commit/cca1d43e116a6dd97ed5a553b2ff50322311b894))
+* **tests:** comprehensive test audit and E2E file content tests ([9c7ee17](https://github.com/svallory/hypergen/commit/9c7ee1768eb3d61bf2d68ba3906afb7d3bd805b7))
+
+
+
+# 8.0.0 (2026-02-13)
+
+
+### Bug Fixes
+
+* **hypergen:** fix use-after-free bug and skip_if logic errors ([a95de19](https://github.com/svallory/hypergen/commit/a95de19feb2aa911220b587975acfd0daf2483b4))
+* **hypergen:** improve step executor, template tool, and AI tag correctness ([a48f76e](https://github.com/svallory/hypergen/commit/a48f76eac6fd3fab5a4be2c792af62977b452114))
+* **hypergen:** recipe resolution and helpers loading ([4b078df](https://github.com/svallory/hypergen/commit/4b078df567712ce5ea8ff462a4b9495b0329f617))
+* **hypergen:** remove debug log pollution from CLI output ([876432d](https://github.com/svallory/hypergen/commit/876432dc8765eb9bfee5a665e5e4b5e3ad9c1a48))
+* **template-tool:** fix variable merge order in buildRenderContext ([2bcf55c](https://github.com/svallory/hypergen/commit/2bcf55c3774caf12f7046ad7a2c97eb7624e879f))
+* **tests:** comprehensive test suite cleanup and fixes ([51e7195](https://github.com/svallory/hypergen/commit/51e71952cad570801b3933afa9831050b24ea0a8))
+* **tests:** implement CLI integration tests and fix test reliability ([e1526b8](https://github.com/svallory/hypergen/commit/e1526b8af8b03e6d5a74c4a208c5753d02c6d9a1))
+
+
+### Features
+
+* **ai:** add pluggable AI transport system for 2-pass [@ai](https://github.com/ai) block resolution ([44d8f00](https://github.com/svallory/hypergen/commit/44d8f0050783b726eebe830b470f513681e565a5))
+* **ai:** redesign [@ai](https://github.com/ai) tag system and add [@example](https://github.com/example) tag ([8b8e8e5](https://github.com/svallory/hypergen/commit/8b8e8e578abf4090242cba067279e80dcf9e1c4b))
+* **ai:** use Jig template for prompt assembly and allow custom templates ([1f1ad37](https://github.com/svallory/hypergen/commit/1f1ad37a07d49b64fce78208055d4ccc6b0f4d9d))
+* **hypergen:** implement AI integration (Scaffold+Complete pattern) ([1bfa88a](https://github.com/svallory/hypergen/commit/1bfa88afe4fcb8ecd90582d49681ce39b738e042))
+* **hypergen:** Jig template engine ([bf390a1](https://github.com/svallory/hypergen/commit/bf390a12091bd3ddd4d6a978e221ad6854dde618))
+* **kit:** add intelligent source resolution for kit install command ([7d25533](https://github.com/svallory/hypergen/commit/7d25533bcd91e4976008445357b961c955aeab58))
+* **recipe-engine:** add onSuccess/onError messages, install tool, and DX improvements ([cca1d43](https://github.com/svallory/hypergen/commit/cca1d43e116a6dd97ed5a553b2ff50322311b894))
+* **tests:** comprehensive test audit and E2E file content tests ([9c7ee17](https://github.com/svallory/hypergen/commit/9c7ee1768eb3d61bf2d68ba3906afb7d3bd805b7))
+
+
+
+# 8.0.0 (2026-02-13)
+
+
+### Bug Fixes
+
+* **hypergen:** fix use-after-free bug and skip_if logic errors ([a95de19](https://github.com/svallory/hypergen/commit/a95de19feb2aa911220b587975acfd0daf2483b4))
+* **hypergen:** improve step executor, template tool, and AI tag correctness ([a48f76e](https://github.com/svallory/hypergen/commit/a48f76eac6fd3fab5a4be2c792af62977b452114))
+* **hypergen:** recipe resolution and helpers loading ([4b078df](https://github.com/svallory/hypergen/commit/4b078df567712ce5ea8ff462a4b9495b0329f617))
+* **hypergen:** remove debug log pollution from CLI output ([876432d](https://github.com/svallory/hypergen/commit/876432dc8765eb9bfee5a665e5e4b5e3ad9c1a48))
+* **template-tool:** fix variable merge order in buildRenderContext ([2bcf55c](https://github.com/svallory/hypergen/commit/2bcf55c3774caf12f7046ad7a2c97eb7624e879f))
+* **tests:** comprehensive test suite cleanup and fixes ([51e7195](https://github.com/svallory/hypergen/commit/51e71952cad570801b3933afa9831050b24ea0a8))
+* **tests:** implement CLI integration tests and fix test reliability ([e1526b8](https://github.com/svallory/hypergen/commit/e1526b8af8b03e6d5a74c4a208c5753d02c6d9a1))
+
+
+### Features
+
+* **ai:** add pluggable AI transport system for 2-pass [@ai](https://github.com/ai) block resolution ([44d8f00](https://github.com/svallory/hypergen/commit/44d8f0050783b726eebe830b470f513681e565a5))
+* **ai:** redesign [@ai](https://github.com/ai) tag system and add [@example](https://github.com/example) tag ([8b8e8e5](https://github.com/svallory/hypergen/commit/8b8e8e578abf4090242cba067279e80dcf9e1c4b))
+* **ai:** use Jig template for prompt assembly and allow custom templates ([1f1ad37](https://github.com/svallory/hypergen/commit/1f1ad37a07d49b64fce78208055d4ccc6b0f4d9d))
+* **hypergen:** implement AI integration (Scaffold+Complete pattern) ([1bfa88a](https://github.com/svallory/hypergen/commit/1bfa88afe4fcb8ecd90582d49681ce39b738e042))
+* **hypergen:** Jig template engine ([bf390a1](https://github.com/svallory/hypergen/commit/bf390a12091bd3ddd4d6a978e221ad6854dde618))
+* **kit:** add intelligent source resolution for kit install command ([7d25533](https://github.com/svallory/hypergen/commit/7d25533bcd91e4976008445357b961c955aeab58))
+* **recipe-engine:** add onSuccess/onError messages, install tool, and DX improvements ([cca1d43](https://github.com/svallory/hypergen/commit/cca1d43e116a6dd97ed5a553b2ff50322311b894))
+* **tests:** comprehensive test audit and E2E file content tests ([9c7ee17](https://github.com/svallory/hypergen/commit/9c7ee1768eb3d61bf2d68ba3906afb7d3bd805b7))
+
+
+
+# 8.0.0 (2025-11-12)
 
 
 
