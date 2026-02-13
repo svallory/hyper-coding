@@ -11,6 +11,7 @@ import createDebug from 'debug'
 import { ActionRegistry } from '../actions/registry.js'
 import { isActionFunction } from '../actions/decorator.js'
 import { getGlobalPackages } from '../utils/global-packages.js'
+import { findProjectRoot } from '../utils/find-project-root.js'
 
 const debug = createDebug('hypergen:discovery')
 
@@ -19,6 +20,8 @@ export interface GeneratorDiscoveryOptions {
   patterns?: string[]
   excludePatterns?: string[]
   enabledSources?: DiscoverySource[]
+  /** Starting directory for discovery (defaults to process.cwd()) */
+  startDir?: string
 }
 
 export type DiscoverySource = 'local' | 'npm' | 'git' | 'github' | 'workspace' | 'global'
@@ -38,8 +41,15 @@ export interface DiscoveredGenerator {
 
 export class GeneratorDiscovery {
   private discoveredGenerators: Map<string, DiscoveredGenerator> = new Map()
+  private projectRoot: string
 
   constructor(private options: GeneratorDiscoveryOptions = {}) {
+    // Find project root with monorepo detection
+    const projectInfo = findProjectRoot(this.options.startDir)
+    this.projectRoot = projectInfo.workspaceRoot
+
+    debug('Using project root: %s (isMonorepo: %s)', this.projectRoot, projectInfo.isMonorepo)
+
     // Always include .hyper/kits in addition to any configured directories
     const defaultDirs = ['recipes', 'cookbooks']
     const configDirs = this.options.directories || []
@@ -107,12 +117,11 @@ export class GeneratorDiscovery {
    */
   async discoverLocal(): Promise<DiscoveredGenerator[]> {
     debug('Discovering local generators in directories: %o', this.options.directories)
-    
+
     const generators: DiscoveredGenerator[] = []
-    const cwd = process.cwd()
-    
+
     for (const dir of this.options.directories || []) {
-      const fullPath = path.resolve(cwd, dir)
+      const fullPath = path.resolve(this.projectRoot, dir)
       
       if (!(await fs.pathExists(fullPath))) {
         continue
@@ -591,14 +600,13 @@ export class GeneratorDiscovery {
   private async createWorkspaceKit(discoveries: DiscoveredGenerator[]): Promise<DiscoveredGenerator | null> {
     debug('Creating virtual workspace kit for standalone cookbooks/recipes')
 
-    const cwd = process.cwd()
     const workspaceItems: { actions: string[]; templates: string[] } = { actions: [], templates: [] }
 
     // Check default workspace directories (excluding .hyper/kits)
     const workspaceDirs = this.options.directories?.filter(dir => dir !== '.hyper/kits') || []
 
     for (const dir of workspaceDirs) {
-      const fullPath = path.resolve(cwd, dir)
+      const fullPath = path.resolve(this.projectRoot, dir)
 
       if (!(await fs.pathExists(fullPath))) {
         continue
@@ -629,7 +637,7 @@ export class GeneratorDiscovery {
       return {
         name: 'workspace',
         source: 'local',
-        path: cwd,
+        path: this.projectRoot,
         actions,
         metadata: {
           description: 'Standalone cookbooks and recipes not belonging to any kit'

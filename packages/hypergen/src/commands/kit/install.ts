@@ -14,6 +14,7 @@ import {
   extractPackageVersion,
   type KitManifestEntry,
 } from '../../lib/kit/manifest.js'
+import { findProjectRoot } from '../../utils/find-project-root.js'
 import tiged from 'tiged'
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {
@@ -119,9 +120,14 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
    * Install kit to .hyper/kits/ directory (for GitHub, Git URLs, local paths, etc.)
    */
   private async installToKitsDir(resolved: any, flags: any): Promise<void> {
-    // Find project root (where package.json is)
-    const projectRoot = this.findProjectRoot(flags.cwd)
+    // Find project root (with monorepo detection)
+    const projectInfo = findProjectRoot(flags.cwd)
+    const projectRoot = projectInfo.workspaceRoot // Use workspace root for monorepos
     const kitsDir = join(projectRoot, '.hyper', 'kits')
+
+    if (projectInfo.isMonorepo) {
+      this.log(`Detected monorepo, installing to workspace root: ${projectRoot}`)
+    }
 
     // Ensure kits directory exists
     if (!existsSync(kitsDir)) {
@@ -278,25 +284,6 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
     return {}
   }
 
-  /**
-   * Find project root by walking up to find package.json
-   */
-  private findProjectRoot(startDir: string): string {
-    let dir = startDir
-
-    while (dir !== '/' && dir !== '.') {
-      if (existsSync(join(dir, 'package.json'))) {
-        return dir
-      }
-
-      const parent = join(dir, '..')
-      if (parent === dir) break
-      dir = parent
-    }
-
-    // If no package.json found, use startDir
-    return startDir
-  }
 
   /**
    * Copy from local path

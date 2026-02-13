@@ -92,7 +92,8 @@ export abstract class BaseCommand<T extends typeof Command> extends Command {
     this.executor = new ActionExecutor()
     this.discovery = new GeneratorDiscovery({
       directories: this.hypergenConfig?.discovery?.directories,
-      enabledSources: this.hypergenConfig?.discovery?.sources as any
+      enabledSources: this.hypergenConfig?.discovery?.sources as any,
+      startDir: this.flags.cwd
     })
     this.urlManager = new TemplateURLManager()
     this.templateParser = new TemplateParser()
