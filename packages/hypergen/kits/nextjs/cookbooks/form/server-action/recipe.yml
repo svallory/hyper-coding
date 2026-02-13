@@ -39,23 +39,14 @@ variables:
     default: ""
 
 steps:
-  - name: Check dependencies
+  - name: Install Zod
+    tool: install
+    packages: [zod]
+    optional: true
+
+  - name: Check shadcn/ui components
     tool: shell
     command: |
-      # Install Zod if not present
-      if ! bun pm ls zod &>/dev/null; then
-        echo "Installing Zod for validation..."
-        if command -v bun &> /dev/null; then
-          bun add zod
-        elif command -v pnpm &> /dev/null; then
-          pnpm add zod
-        elif command -v yarn &> /dev/null; then
-          yarn add zod
-        else
-          npm install zod
-        fi
-      fi
-
       # Check if shadcn/ui components are installed
       if [ ! -f "components/ui/input.tsx" ]; then
         echo "Installing shadcn/ui Input component..."
@@ -72,13 +63,6 @@ steps:
         npx shadcn@latest add label --yes
       fi
 
-  - name: Create directories
-    tool: shell
-    command: |
-      mkdir -p {{ dir }}
-      mkdir -p {{ actionPath }}
-      mkdir -p lib/schemas
-
   - name: Generate Zod schema
     tool: template
     template: templates/schema.ts.jig
@@ -91,25 +75,23 @@ steps:
     tool: template
     template: templates/form.tsx.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Form with Server Action generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ name }}.tsx"
-      echo "  - {{ actionPath }}/{{ kebabCase(name) }}-action.ts"
-      echo "  - lib/schemas/{{ kebabCase(name) }}-schema.ts"
-      echo ""
-      echo "Usage:"
-      echo "  import { {{ name }} } from '@/{{ dir }}/{{ name }}'"
-      echo ""
-      echo "  export default function MyPage() {"
-      echo "    return <{{ name }} />"
-      echo "  }"
-      echo ""
-      echo "Features:"
-      echo "  ✓ Works without JavaScript (progressive enhancement)"
-      echo "  ✓ Server-side validation with Zod"
-      echo "  ✓ Automatic error handling"
-      echo "  ✓ useActionState for optimistic UI"
+onSuccess: |
+  Form with Server Action generated successfully!
+
+  Created files:
+    - {{ dir }}/{{ name }}.tsx
+    - {{ actionPath }}/{{ kebabCase(name) }}-action.ts
+    - lib/schemas/{{ kebabCase(name) }}-schema.ts
+
+  Usage:
+    import { {{ name }} } from '@/{{ dir }}/{{ name }}'
+
+    export default function MyPage() {
+      return <{{ name }} />
+    }
+
+  Features:
+    - Works without JavaScript (progressive enhancement)
+    - Server-side validation with Zod
+    - Automatic error handling
+    - useActionState for optimistic UI

@@ -18,16 +18,6 @@ variables:
     default: eslint
 
 steps:
-  - name: Create directory structure
-    tool: shell
-    command: |
-      mkdir -p {{ name }}/public
-      @if(useSrcDir)
-      mkdir -p {{ name }}/src/app
-      @else
-      mkdir -p {{ name }}/app
-      @end
-
   - name: Generate project files
     sequence:
       - name: Generate package.json

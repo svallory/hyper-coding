@@ -60,27 +60,9 @@ variables:
     required: false
 
 steps:
-  - name: Check Zod dependency
-    tool: shell
-    command: |
-      if ! bun pm ls zod &>/dev/null && ! npm list zod &>/dev/null; then
-        echo "Installing zod..."
-        if command -v bun &> /dev/null; then
-          bun add zod
-        elif command -v pnpm &> /dev/null; then
-          pnpm add zod
-        elif command -v yarn &> /dev/null; then
-          yarn add zod
-        else
-          npm install zod
-        fi
-      fi
-
-  - name: Create directories
-    tool: shell
-    command: |
-      mkdir -p {{ dir }}
-      mkdir -p {{ schemaDir }}
+  - name: Install Zod
+    tool: install
+    packages: [zod]
 
   - name: Generate Zod schema
     tool: template
@@ -90,45 +72,43 @@ steps:
     tool: template
     template: templates/action.ts.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Server Action with cache revalidation generated!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ name }}.ts"
-      echo "  - {{ schemaDir }}/{{ kebabCase(name) }}.ts"
-      echo ""
-      echo "Cache revalidation strategy:"
-@if(revalidationType === 'path' || revalidationType === 'both')
-@if(revalidatePath)
-      echo "  ✓ Path revalidation: {{ revalidatePath }}"
-@else
-      echo "  ✓ Path revalidation enabled (configure in action)"
-@end
-@end
-@if(revalidationType === 'tag' || revalidationType === 'both')
-@if(revalidateTags && revalidateTags.length > 0)
-      echo "  ✓ Tag revalidation: {{ revalidateTags.join(', ') }}"
-@else
-      echo "  ✓ Tag revalidation enabled (configure in action)"
-@end
-@end
-      echo ""
-      echo "Usage with useActionState:"
-      echo "  import { useActionState } from 'react'"
-      echo "  import { {{ name }} } from '@/{{ dir }}/{{ name }}'"
-      echo ""
-      echo "  const [state, formAction] = useActionState({{ name }}, null)"
-@if(withOptimistic)
-      echo ""
-      echo "Optimistic updates:"
-      echo "  import { useOptimistic } from 'react'"
-      echo ""
-      echo "  const [optimisticData, addOptimistic] = useOptimistic("
-      echo "    data,"
-      echo "    (state, newItem) => [...state, newItem]"
-      echo "  )"
-@end
-      echo ""
-      echo "Next.js cache will be automatically revalidated on success."
+onSuccess: |
+  Server Action with cache revalidation generated!
+
+  Created files:
+    - {{ dir }}/{{ name }}.ts
+    - {{ schemaDir }}/{{ kebabCase(name) }}.ts
+
+  Cache revalidation strategy:
+  @if(revalidationType === 'path' || revalidationType === 'both')
+  @if(revalidatePath)
+    Path revalidation: {{ revalidatePath }}
+  @else
+    Path revalidation enabled (configure in action)
+  @end
+  @end
+  @if(revalidationType === 'tag' || revalidationType === 'both')
+  @if(revalidateTags && revalidateTags.length > 0)
+    Tag revalidation: {{ revalidateTags.join(', ') }}
+  @else
+    Tag revalidation enabled (configure in action)
+  @end
+  @end
+
+  Usage with useActionState:
+    import { useActionState } from 'react'
+    import { {{ name }} } from '@/{{ dir }}/{{ name }}'
+
+    const [state, formAction] = useActionState({{ name }}, null)
+  @if(withOptimistic)
+
+  Optimistic updates:
+    import { useOptimistic } from 'react'
+
+    const [optimisticData, addOptimistic] = useOptimistic(
+      data,
+      (state, newItem) => [...state, newItem]
+    )
+  @end
+
+  Next.js cache will be automatically revalidated on success.

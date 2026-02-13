@@ -33,16 +33,14 @@ steps:
     tool: template
     template: templates/delete-action.ts.jig
 
-  - name: Success message
-    tool: shell
-    command: |
-      echo "✅ Delete functionality for '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  🗑️  components/{{ model || name }}DeleteDialog.tsx - Delete dialog"
-      echo "  ⚡ app/actions/{{ name }}.ts - delete{{ model || name }} Server Action"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Implement the database delete in the Server Action"
-      echo "  2. Import and use the DeleteDialog in your detail/list pages"
-      echo "  Example: <{{ model || name }}DeleteDialog id={item.id} />"
+onSuccess: |
+  Delete functionality for '{{ name }}' generated successfully!
+
+  Generated files:
+    components/{{ model || name }}DeleteDialog.tsx - Delete dialog
+    app/actions/{{ name }}.ts - delete{{ model || name }} Server Action
+
+  Next steps:
+    1. Implement the database delete in the Server Action
+    2. Import and use the DeleteDialog in your detail/list pages
+    Example: <{{ model || name }}DeleteDialog id={item.id} />

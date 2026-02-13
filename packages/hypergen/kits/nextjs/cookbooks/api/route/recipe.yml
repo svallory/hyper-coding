@@ -46,18 +46,6 @@ steps:
     command: |
       echo "Detecting ORM and auth provider..."
 
-  - name: Create API route directory
-    tool: shell
-    command: mkdir -p {{ dir }}/{{ name }}
-
-  - name: Create validation schemas directory
-    tool: shell
-    command: |
-      if [ "{{ validation }}" = "true" ]; then
-        mkdir -p lib/schemas
-      fi
-    when: "{{ validation }}"
-
   - name: Generate route handler
     tool: template
     template: templates/route.ts.jig
@@ -67,29 +55,38 @@ steps:
     template: templates/schemas.ts.jig
     when: "{{ validation }}"
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ API route generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ name }}/route.ts"
-      {% if validation %}echo "  - lib/schemas/api-{{ name }}-schema.ts"{% endif %}
-      echo ""
-      echo "Supported methods: {{ methods | join: ', ' }}"
-      {% if auth %}echo "🔒 Authentication: Enabled"{% endif %}
-      {% if cors %}echo "🌐 CORS: Enabled"{% endif %}
-      echo ""
-      echo "Test your API:"
-      echo "  curl http://localhost:3000/api/{{ name }}"
-      {% if methods | includes: 'POST' %}
-      echo "  curl -X POST http://localhost:3000/api/{{ name }} \\"
-      echo "    -H 'Content-Type: application/json' \\"
-      echo "    -d '{\"name\":\"test\"}'"
-      {% endif %}
-      echo ""
-      echo "Next steps:"
-      echo "  1. Update the response types in route.ts"
-      echo "  2. Implement database queries using your ORM"
-      {% if validation %}echo "  3. Customize validation schemas in lib/schemas/api-{{ name }}-schema.ts"{% endif %}
-      {% if auth %}echo "  4. Configure authentication middleware"{% endif %}
+onSuccess: |
+  API route generated successfully!
+
+  Created files:
+    - {{ dir }}/{{ name }}/route.ts
+  @if(validation)
+    - lib/schemas/api-{{ name }}-schema.ts
+  @end
+
+  Supported methods: {{ methods | join: ', ' }}
+  @if(auth)
+  Authentication: Enabled
+  @end
+  @if(cors)
+  CORS: Enabled
+  @end
+
+  Test your API:
+    curl http://localhost:3000/api/{{ name }}
+  @if(methods.includes('POST'))
+
+    curl -X POST http://localhost:3000/api/{{ name }} \
+      -H 'Content-Type: application/json' \
+      -d '{"name":"test"}'
+  @end
+
+  Next steps:
+    1. Update the response types in route.ts
+    2. Implement database queries using your ORM
+  @if(validation)
+    3. Customize validation schemas in lib/schemas/api-{{ name }}-schema.ts
+  @end
+  @if(auth)
+    4. Configure authentication middleware
+  @end

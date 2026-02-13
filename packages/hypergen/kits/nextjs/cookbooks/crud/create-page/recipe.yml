@@ -51,18 +51,16 @@ steps:
     tool: template
     template: templates/create-action.ts.jig
 
-  - name: Success message
-    tool: shell
-    command: |
-      echo "✅ Create page for '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  📄 app/{{ name }}/new/page.tsx - Create page"
-      echo "  📝 components/{{ model || name }}Form.tsx - Form component"
-      echo "  ✅ lib/schemas/{{ name }}-schema.ts - Zod validation"
-      echo "  ⚡ app/actions/{{ name }}.ts - create{{ model || name }} Server Action"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Implement the database insert in the Server Action"
-      echo "  2. Customize form fields and validation"
-      echo "  3. Visit /{{ name }}/new to test the create form"
+onSuccess: |
+  Create page for '{{ name }}' generated successfully!
+
+  Generated files:
+    app/{{ name }}/new/page.tsx - Create page
+    components/{{ model || name }}Form.tsx - Form component
+    lib/schemas/{{ name }}-schema.ts - Zod validation
+    app/actions/{{ name }}.ts - create{{ model || name }} Server Action
+
+  Next steps:
+    1. Implement the database insert in the Server Action
+    2. Customize form fields and validation
+    3. Visit /{{ name }}/new to test the create form

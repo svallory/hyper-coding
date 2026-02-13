@@ -17,10 +17,6 @@ variables:
     default: skeleton
 
 steps:
-  - name: Create route directory
-    tool: shell
-    command: mkdir -p app/{{ path }}
-
   - name: Generate loading UI
     tool: template
     template: templates/loading.tsx.jig

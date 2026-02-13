@@ -21,10 +21,6 @@ variables:
     default: false
 
 steps:
-  - name: Create route directory
-    tool: shell
-    command: mkdir -p app/{{ path }}
-
   - name: Generate error boundary
     tool: template
     template: templates/error.tsx.jig

@@ -17,54 +17,41 @@ variables:
     required: false
 
 steps:
-  - name: Install Drizzle dependencies
-    tool: shell
-    command: |
-      if command -v bun &> /dev/null; then
-        bun add drizzle-orm @if(database === 'postgresql')
-postgres@else if(database === 'mysql')
-mysql2@else if(database === 'sqlite')
-better-sqlite3@end
+  - name: Install Drizzle ORM
+    tool: install
+    packages: [drizzle-orm]
 
-        bun add -d drizzle-kit @if(database === 'postgresql')
-@types/pg@else if(database === 'mysql')
-@types/mysql2@else if(database === 'sqlite')
-@types/better-sqlite3@end
+  - name: Install PostgreSQL driver
+    tool: install
+    packages: [postgres]
+    when: "database === 'postgresql'"
 
-      elif command -v pnpm &> /dev/null; then
-        pnpm add drizzle-orm @if(database === 'postgresql')
-postgres@else if(database === 'mysql')
-mysql2@else if(database === 'sqlite')
-better-sqlite3@end
+  - name: Install MySQL driver
+    tool: install
+    packages: [mysql2]
+    when: "database === 'mysql'"
 
-        pnpm add -D drizzle-kit @if(database === 'postgresql')
-@types/pg@else if(database === 'mysql')
-@types/mysql2@else if(database === 'sqlite')
-@types/better-sqlite3@end
+  - name: Install SQLite driver
+    tool: install
+    packages: ["better-sqlite3"]
+    when: "database === 'sqlite'"
 
-      elif command -v yarn &> /dev/null; then
-        yarn add drizzle-orm @if(database === 'postgresql')
-postgres@else if(database === 'mysql')
-mysql2@else if(database === 'sqlite')
-better-sqlite3@end
+  - name: Install Drizzle Kit
+    tool: install
+    packages: [drizzle-kit]
+    dev: true
 
-        yarn add -D drizzle-kit @if(database === 'postgresql')
-@types/pg@else if(database === 'mysql')
-@types/mysql2@else if(database === 'sqlite')
-@types/better-sqlite3@end
+  - name: Install PostgreSQL types
+    tool: install
+    packages: ["@types/pg"]
+    dev: true
+    when: "database === 'postgresql'"
 
-      else
-        npm install drizzle-orm @if(database === 'postgresql')
-postgres@else if(database === 'mysql')
-mysql2@else if(database === 'sqlite')
-better-sqlite3@end
-
-        npm install -D drizzle-kit @if(database === 'postgresql')
-@types/pg@else if(database === 'mysql')
-@types/mysql2@else if(database === 'sqlite')
-@types/better-sqlite3@end
-
-      fi
+  - name: Install SQLite types
+    tool: install
+    packages: ["@types/better-sqlite3"]
+    dev: true
+    when: "database === 'sqlite'"
 
   - name: Create Drizzle config
     tool: template
@@ -73,10 +60,6 @@ better-sqlite3@end
   - name: Create database client
     tool: template
     template: templates/db-client.ts.jig
-
-  - name: Create schema directory
-    tool: shell
-    command: mkdir -p db/schema
 
   - name: Create example schema
     tool: template
@@ -113,20 +96,18 @@ better-sqlite3@end
         npm pkg set scripts.db:studio="drizzle-kit studio"
       fi
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Drizzle ORM initialized successfully!"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Update DATABASE_URL in .env with your database credentials"
-      echo "  2. Edit db/schema/*.ts to define your data models"
-      echo "  3. Run 'bun run db:generate' to generate migrations"
-      echo "  4. Run 'bun run db:migrate' to apply migrations"
-      echo "  5. Import db: import { db } from '@/db'"
-      echo ""
-      echo "Available commands:"
-      echo "  bun run db:generate  - Generate migrations from schema"
-      echo "  bun run db:migrate   - Apply migrations to database"
-      echo "  bun run db:push      - Push schema changes directly (dev only)"
-      echo "  bun run db:studio    - Launch Drizzle Studio GUI"
+onSuccess: |
+  Drizzle ORM initialized successfully!
+
+  Next steps:
+    1. Update DATABASE_URL in .env with your database credentials
+    2. Edit db/schema/*.ts to define your data models
+    3. Run 'bun run db:generate' to generate migrations
+    4. Run 'bun run db:migrate' to apply migrations
+    5. Import db: import { db } from '@/db'
+
+  Available commands:
+    bun run db:generate  - Generate migrations from schema
+    bun run db:migrate   - Apply migrations to database
+    bun run db:push      - Push schema changes directly (dev only)
+    bun run db:studio    - Launch Drizzle Studio GUI

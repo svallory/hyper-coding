@@ -21,10 +21,6 @@ variables:
     default: true
 
 steps:
-  - name: Create route directory
-    tool: shell
-    command: mkdir -p app/{{ path }}
-
   - name: Generate layout scaffold
     tool: template
     template: templates/layout.tsx.jig

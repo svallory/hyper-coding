@@ -32,10 +32,6 @@ variables:
     default: true
 
 steps:
-  - name: Create component directory
-    tool: shell
-    command: mkdir -p {{ dir }}
-
   - name: Generate component scaffold
     tool: template
     template: templates/component.tsx.jig

@@ -57,43 +57,24 @@ steps:
       elif [ -d "db/schema" ] || [ -f "db/schema.ts" ]; then
         echo "DETECTED_ORM=drizzle" > .hypergen-temp
       else
-        echo "❌ Error: No ORM detected. Please set up Prisma or Drizzle first."
+        echo "Error: No ORM detected. Please set up Prisma or Drizzle first."
         echo "Run: hypergen nextjs database prisma-init"
         echo "Or:  hypergen nextjs database drizzle-init"
         exit 1
       fi
 
-  - name: Check dependencies
+  - name: Install Zod
+    tool: install
+    packages: [zod]
+    optional: true
+
+  - name: Check shadcn/ui Form component
     tool: shell
     command: |
-      # Install Zod if not present
-      if ! bun pm ls zod &>/dev/null; then
-        echo "Installing Zod for validation..."
-        if command -v bun &> /dev/null; then
-          bun add zod
-        elif command -v pnpm &> /dev/null; then
-          pnpm add zod
-        elif command -v yarn &> /dev/null; then
-          yarn add zod
-        else
-          npm install zod
-        fi
-      fi
-
-      # Check if shadcn/ui Form component is installed
       if [ ! -f "components/ui/form.tsx" ]; then
         echo "Installing shadcn/ui Form component..."
         npx shadcn@latest add form --yes
       fi
-
-  - name: Create directories
-    tool: shell
-    command: |
-      mkdir -p {{ dir }}
-      mkdir -p lib/schemas
-@if(withServerAction)
-      mkdir -p {{ actionPath }}
-@end
 
   - name: Generate schema
     tool: template
@@ -119,31 +100,29 @@ steps:
     tool: shell
     command: rm -f .hypergen-temp
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ CRUD form generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ model }}Form.tsx"
-      echo "  - lib/schemas/{{ kebabCase(model) }}-schema.ts"
-@if(withServerAction)
-@if(mode === 'both' || mode === 'create')
-      echo "  - {{ actionPath }}/create-{{ kebabCase(model) }}.ts"
-@end
-@if(mode === 'both' || mode === 'edit')
-      echo "  - {{ actionPath }}/update-{{ kebabCase(model) }}.ts"
-@end
-@end
-      echo ""
-      echo "Usage:"
-      echo ""
-      echo "Create mode:"
-      echo "  import { {{ model }}Form } from '@/{{ dir }}/{{ model }}Form'"
-      echo "  "
-      echo "  <{{ model }}Form mode=\"create\" />"
-      echo ""
-      echo "Edit mode:"
-      echo "  import { {{ model }}Form } from '@/{{ dir }}/{{ model }}Form'"
-      echo "  "
-      echo "  <{{ model }}Form mode=\"edit\" initialData={existing{{ model }}} />"
+onSuccess: |
+  CRUD form generated successfully!
+
+  Created files:
+    - {{ dir }}/{{ model }}Form.tsx
+    - lib/schemas/{{ kebabCase(model) }}-schema.ts
+  @if(withServerAction)
+  @if(mode === 'both' || mode === 'create')
+    - {{ actionPath }}/create-{{ kebabCase(model) }}.ts
+  @end
+  @if(mode === 'both' || mode === 'edit')
+    - {{ actionPath }}/update-{{ kebabCase(model) }}.ts
+  @end
+  @end
+
+  Usage:
+
+  Create mode:
+    import { {{ model }}Form } from '@/{{ dir }}/{{ model }}Form'
+
+    <{{ model }}Form mode="create" />
+
+  Edit mode:
+    import { {{ model }}Form } from '@/{{ dir }}/{{ model }}Form'
+
+    <{{ model }}Form mode="edit" initialData={existing{{ model }}} />

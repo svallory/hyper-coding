@@ -27,24 +27,18 @@ variables:
       Leave empty for AI to infer from name
       Example: admin,member,viewer
 
-steps:
-  - name: Ensure directory exists
-    tool: shell
-    command: mkdir -p lib/domain/enums
+onSuccess: |
+  Enum '{{ name }}' generated successfully!
 
+  Generated files:
+    lib/domain/enums/{{ name }}.ts
+
+  Usage:
+    import { {{ name }}, type {{ name }}Type, is{{ name }} } from '@/lib/domain/enums/{{ name }}'
+    const role = {{ name }}.ADMIN
+    is{{ name }}('admin') // true
+
+steps:
   - name: Generate enum module
     tool: template
     template: templates/enum.ts.jig
-
-  - name: Success message
-    tool: shell
-    command: |
-      echo "Enum '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  lib/domain/enums/{{ name }}.ts"
-      echo ""
-      echo "Usage:"
-      echo "  import { {{ name }}, type {{ name }}Type, is{{ name }} } from '@/lib/domain/enums/{{ name }}'"
-      echo "  const role = {{ name }}.ADMIN"
-      echo "  is{{ name }}('admin') // true"

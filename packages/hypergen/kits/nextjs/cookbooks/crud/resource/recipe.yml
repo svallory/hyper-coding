@@ -110,68 +110,45 @@ steps:
       model: "{{ model }}"
       fields: "{{ fields }}"
 
-  - name: Install dependencies if needed
-    tool: shell
-    command: |
-      # Check if zod is installed
-      if ! grep -q '"zod"' package.json; then
-        echo "Installing zod..."
-        if command -v bun &> /dev/null; then
-          bun add zod
-        elif command -v pnpm &> /dev/null; then
-          pnpm add zod
-        elif command -v yarn &> /dev/null; then
-          yarn add zod
-        else
-          npm install zod
-        fi
-      fi
+  - name: Install zod
+    tool: install
+    packages: [zod]
+    optional: true
 
-      # Check if react-hook-form is installed
-      if ! grep -q '"react-hook-form"' package.json; then
-        echo "Installing react-hook-form..."
-        if command -v bun &> /dev/null; then
-          bun add react-hook-form @hookform/resolvers
-        elif command -v pnpm &> /dev/null; then
-          pnpm add react-hook-form @hookform/resolvers
-        elif command -v yarn &> /dev/null; then
-          yarn add react-hook-form @hookform/resolvers
-        else
-          npm install react-hook-form @hookform/resolvers
-        fi
-      fi
+  - name: Install react-hook-form
+    tool: install
+    packages: [react-hook-form, "@hookform/resolvers"]
+    optional: true
 
-  - name: Success message
-    tool: shell
-    command: |
-      echo "✅ Complete CRUD resource '{{ name }}' generated successfully!"
-      echo ""
-      echo "This meta-recipe orchestrated 4 granular recipes:"
-      echo "  1. list-page - List view with data table"
-      echo "  2. detail-page - Detail view with actions"
-      echo "  3. create-page - Create form with validation"
-      echo "  4. edit-page - Edit form with pre-fill"
-      echo ""
-      echo "Generated files:"
-      echo "  📄 app/{{ name }}/page.tsx - List view"
-      echo "  📄 app/{{ name }}/[id]/page.tsx - Detail view"
-      echo "  📄 app/{{ name }}/[id]/edit/page.tsx - Edit page"
-      echo "  📄 app/{{ name }}/new/page.tsx - Create page"
-      echo "  📦 components/{{ model || name }}Table.tsx - Data table"
-      echo "  📝 components/{{ model || name }}Form.tsx - Create/edit form"
-      @if(includeDelete)
-      echo "  🗑️  components/{{ model || name }}DeleteDialog.tsx - Delete confirmation"
-      @end
-      echo "  ⚡ app/actions/{{ name }}.ts - All CRUD Server Actions"
-      echo "  ✅ lib/schemas/{{ name }}-schema.ts - Validation"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Review and customize the generated files"
-      @if(fields)
-      echo "  2. Update your database schema and run migrations"
-      @else
-      echo "  2. Make sure your database model matches the schema"
-      @end
-      echo "  3. Visit /{{ name }} to see your CRUD interface"
-      echo ""
-      echo "Time saved: ~90 minutes 🎉"
+onSuccess: |
+  Complete CRUD resource '{{ name }}' generated successfully!
+
+  This meta-recipe orchestrated 4 granular recipes:
+    1. list-page - List view with data table
+    2. detail-page - Detail view with actions
+    3. create-page - Create form with validation
+    4. edit-page - Edit form with pre-fill
+
+  Generated files:
+    app/{{ name }}/page.tsx - List view
+    app/{{ name }}/[id]/page.tsx - Detail view
+    app/{{ name }}/[id]/edit/page.tsx - Edit page
+    app/{{ name }}/new/page.tsx - Create page
+    components/{{ model || name }}Table.tsx - Data table
+    components/{{ model || name }}Form.tsx - Create/edit form
+  @if(includeDelete)
+    components/{{ model || name }}DeleteDialog.tsx - Delete confirmation
+  @end
+    app/actions/{{ name }}.ts - All CRUD Server Actions
+    lib/schemas/{{ name }}-schema.ts - Validation
+
+  Next steps:
+    1. Review and customize the generated files
+  @if(fields)
+    2. Update your database schema and run migrations
+  @else
+    2. Make sure your database model matches the schema
+  @end
+    3. Visit /{{ name }} to see your CRUD interface
+
+  Time saved: ~90 minutes

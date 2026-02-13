@@ -48,33 +48,13 @@ steps:
         npx shadcn@latest add label --yes
       fi
 
-  - name: Install Zod if needed
-    tool: shell
-    command: |
-      if [ "{{ withValidation }}" = "true" ]; then
-        if ! bun pm ls zod &>/dev/null; then
-          echo "Installing Zod for validation..."
-          if command -v bun &> /dev/null; then
-            bun add zod
-          elif command -v pnpm &> /dev/null; then
-            pnpm add zod
-          elif command -v yarn &> /dev/null; then
-            yarn add zod
-          else
-            npm install zod
-          fi
-        fi
-      fi
-
-  - name: Create output directory
-    tool: shell
-    command: mkdir -p {{ dir }}
+  - name: Install Zod
+    tool: install
+    packages: [zod]
+    optional: true
+    when: "withValidation === true"
 
 @if(withValidation)
-  - name: Create schemas directory
-    tool: shell
-    command: mkdir -p lib/schemas
-
   - name: Generate Zod schema
     tool: template
     template: templates/schema.ts.jig
@@ -84,24 +64,22 @@ steps:
     tool: template
     template: templates/form.tsx.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Form generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ name }}.tsx"
-@if(withValidation)
-      echo "  - lib/schemas/{{ kebabCase(name) }}-schema.ts"
-@end
-      echo ""
-      echo "Usage:"
-      echo "  import { {{ name }} } from '@/{{ dir }}/{{ name }}'"
-      echo ""
-      echo "  export default function MyPage() {"
-      echo "    const handleSubmit = async (formData: FormData) => {"
-      echo "      // Handle form submission"
-      echo "    }"
-      echo ""
-      echo "    return <{{ name }} onSubmit={handleSubmit} />"
-      echo "  }"
+onSuccess: |
+  Form generated successfully!
+
+  Created files:
+    - {{ dir }}/{{ name }}.tsx
+  @if(withValidation)
+    - lib/schemas/{{ kebabCase(name) }}-schema.ts
+  @end
+
+  Usage:
+    import { {{ name }} } from '@/{{ dir }}/{{ name }}'
+
+    export default function MyPage() {
+      const handleSubmit = async (formData: FormData) => {
+        // Handle form submission
+      }
+
+      return <{{ name }} onSubmit={handleSubmit} />
+    }

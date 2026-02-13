@@ -25,10 +25,6 @@ variables:
     default: [GET, POST]
 
 steps:
-  - name: Create route directory
-    tool: shell
-    command: mkdir -p app/{{ path }}
-
   - name: Generate route scaffold
     tool: template
     template: templates/route.ts.jig

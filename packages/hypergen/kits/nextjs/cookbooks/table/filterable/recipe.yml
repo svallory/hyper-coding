@@ -40,43 +40,23 @@ variables:
     default: 10
 
 steps:
-  - name: Check dependencies
+  - name: Install dependencies
+    tool: install
+    packages: ["@tanstack/react-table", "lucide-react"]
+    optional: true
+
+  - name: Install shadcn/ui components
     tool: shell
     command: |
-      # Check if required packages are installed
-      if ! bun pm ls @tanstack/react-table &>/dev/null; then
-        if command -v bun &> /dev/null; then
-          bun add @tanstack/react-table
-        else
-          npm install @tanstack/react-table
-        fi
-      fi
-
-      # Check shadcn/ui components
       if [ ! -f "components/ui/table.tsx" ]; then
         npx shadcn@latest add table --yes
       fi
-
       if [ ! -f "components/ui/input.tsx" ]; then
         npx shadcn@latest add input --yes
       fi
-
       if [ ! -f "components/ui/button.tsx" ]; then
         npx shadcn@latest add button --yes
       fi
-
-      # Install lucide-react for icons
-      if ! bun pm ls lucide-react &>/dev/null; then
-        if command -v bun &> /dev/null; then
-          bun add lucide-react
-        else
-          npm install lucide-react
-        fi
-      fi
-
-  - name: Create output directory
-    tool: shell
-    command: mkdir -p {{ dir }}
 
   - name: Generate TypeScript types
     tool: template
@@ -90,18 +70,16 @@ steps:
     tool: template
     template: templates/table.tsx.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Filterable data table generated successfully!"
-      echo ""
-      echo "Features:"
-@if(withGlobalSearch)
-      echo "  ✓ Global search across all columns"
-@end
-      echo "  ✓ Column-specific filters"
-      echo "  ✓ Debounced filter inputs"
-      echo "  ✓ Clear all filters button"
-      echo ""
-      echo "Usage:"
-      echo "  <{{ name }} columns={columns} data={data} />"
+onSuccess: |
+  Filterable data table generated successfully!
+
+  Features:
+  @if(withGlobalSearch)
+    - Global search across all columns
+  @end
+    - Column-specific filters
+    - Debounced filter inputs
+    - Clear all filters button
+
+  Usage:
+    <{{ name }} columns={columns} data={data} />

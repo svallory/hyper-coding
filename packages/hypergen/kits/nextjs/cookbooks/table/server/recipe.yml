@@ -32,28 +32,20 @@ variables:
     default: 10
 
 steps:
-  - name: Check dependencies
+  - name: Install dependencies
+    tool: install
+    packages: ["@tanstack/react-table", "@tanstack/react-query"]
+    optional: true
+
+  - name: Install shadcn/ui components
     tool: shell
     command: |
-      if ! bun pm ls @tanstack/react-table &>/dev/null; then
-        bun add @tanstack/react-table 2>/dev/null || npm install @tanstack/react-table
-      fi
-
-      if ! bun pm ls @tanstack/react-query &>/dev/null; then
-        bun add @tanstack/react-query 2>/dev/null || npm install @tanstack/react-query
-      fi
-
       if [ ! -f "components/ui/table.tsx" ]; then
         npx shadcn@latest add table --yes
       fi
-
       if [ ! -f "components/ui/skeleton.tsx" ]; then
         npx shadcn@latest add skeleton --yes
       fi
-
-  - name: Create output directory
-    tool: shell
-    command: mkdir -p {{ dir }}
 
   - name: Generate types
     tool: template
@@ -71,24 +63,22 @@ steps:
     tool: template
     template: templates/table.tsx.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Server-side data table generated!"
-      echo ""
-      echo "Features:"
-      echo "  ✓ Server-side pagination"
-      echo "  ✓ Server-side sorting"
-      echo "  ✓ Server-side filtering"
-      echo "  ✓ Loading states"
-      echo "  ✓ URL query params"
-      echo ""
-      echo "API endpoint: {{ apiEndpoint }}"
-      echo ""
-      echo "Expected API response format:"
-      echo "{"
-      echo "  \"data\": [],        // Array of rows"
-      echo "  \"total\": 100,      // Total count"
-      echo "  \"page\": 1,         // Current page"
-      echo "  \"pageSize\": 10     // Page size"
-      echo "}"
+onSuccess: |
+  Server-side data table generated!
+
+  Features:
+    - Server-side pagination
+    - Server-side sorting
+    - Server-side filtering
+    - Loading states
+    - URL query params
+
+  API endpoint: {{ apiEndpoint }}
+
+  Expected API response format:
+  {
+    "data": [],        // Array of rows
+    "total": 100,      // Total count
+    "page": 1,         // Current page
+    "pageSize": 10     // Page size
+  }

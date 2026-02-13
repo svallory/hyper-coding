@@ -33,7 +33,7 @@ steps:
     tool: shell
     command: |
       if [ -f "components.json" ]; then
-        echo "⚠️  Warning: components.json already exists"
+        echo "Warning: components.json already exists"
         echo "This may overwrite your existing shadcn/ui configuration"
         read -p "Continue? (y/n) " -n 1 -r
         echo
@@ -52,8 +52,8 @@ steps:
         --base-color {{ baseColor }} \
         --primitives {{ primitives }} \
         @if(cssVariables)
---css-variables@else
---no-css-variables@end
+      --css-variables@else
+      --no-css-variables@end
 
 
   - name: Install essential components
@@ -66,27 +66,25 @@ steps:
     tool: template
     template: templates/components-readme.md.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ shadcn/ui initialized successfully!"
-      echo ""
-      echo "Primitive library: {{ primitives }}"
-      echo "Style: {{ style }}"
-      echo "Base color: {{ baseColor }}"
-      echo ""
-      echo "Installed components:"
-      echo "  - Button"
-      echo "  - Form (with React Hook Form + Zod)"
-      echo "  - Input"
-      echo "  - Label"
-      echo "  - Select"
-      echo "  - Textarea"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Add more components: npx shadcn@latest add <component>"
-      echo "  2. Browse components: https://ui.shadcn.com/docs/components"
-      echo "  3. Customize theme in components.json"
-      echo "  4. Import components: import { Button } from '@/components/ui/button'"
-      echo ""
-      echo "See components/ui/README.md for usage examples"
+onSuccess: |
+  shadcn/ui initialized successfully!
+
+  Primitive library: {{ primitives }}
+  Style: {{ style }}
+  Base color: {{ baseColor }}
+
+  Installed components:
+    - Button
+    - Form (with React Hook Form + Zod)
+    - Input
+    - Label
+    - Select
+    - Textarea
+
+  Next steps:
+    1. Add more components: npx shadcn@latest add <component>
+    2. Browse components: https://ui.shadcn.com/docs/components
+    3. Customize theme in components.json
+    4. Import components: import { Button } from '@/components/ui/button'
+
+  See components/ui/README.md for usage examples

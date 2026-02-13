@@ -44,19 +44,17 @@ steps:
     template: templates/delete-dialog.tsx.jig
     when: "{{ includeDelete }}"
 
-  - name: Success message
-    tool: shell
-    command: |
-      echo "✅ Detail page for '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  📄 app/{{ name }}/[id]/page.tsx - Detail page"
-      echo "  ⚡ app/actions/{{ name }}.ts - get{{ model || name }} Server Action"
-      @if(includeDelete)
-      echo "  🗑️  components/{{ model || name }}DeleteDialog.tsx - Delete dialog"
-      @end
-      echo ""
-      echo "Next steps:"
-      echo "  1. Implement the get{{ model || name }}() function in Server Actions"
-      echo "  2. Customize the displayed fields"
-      echo "  3. Visit /{{ name }}/[id] to see your detail page"
+onSuccess: |
+  Detail page for '{{ name }}' generated successfully!
+
+  Generated files:
+    app/{{ name }}/[id]/page.tsx - Detail page
+    app/actions/{{ name }}.ts - get{{ model || name }} Server Action
+  @if(includeDelete)
+    components/{{ model || name }}DeleteDialog.tsx - Delete dialog
+  @end
+
+  Next steps:
+    1. Implement the get{{ model || name }}() function in Server Actions
+    2. Customize the displayed fields
+    3. Visit /{{ name }}/[id] to see your detail page

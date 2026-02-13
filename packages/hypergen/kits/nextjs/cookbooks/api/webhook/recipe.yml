@@ -30,15 +30,6 @@ variables:
     default: "app/api/webhooks"
 
 steps:
-  - name: Create webhooks directory
-    tool: shell
-    command: mkdir -p {{ dir }}/{{ name }}
-
-  - name: Create verification utilities directory
-    tool: shell
-    command: mkdir -p lib/webhooks
-    when: "{{ verification }}"
-
   - name: Generate webhook handler
     tool: template
     template: templates/webhook-route.ts.jig
@@ -48,42 +39,42 @@ steps:
     template: templates/verifier.ts.jig
     when: "{{ verification }}"
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Webhook handler generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ name }}/route.ts"
-      {% if verification %}echo "  - lib/webhooks/{{ name }}-verifier.ts"{% endif %}
-      echo ""
-      echo "Provider: {{ provider }}"
-      echo ""
-      echo "Webhook URL:"
-      echo "  https://yourdomain.com/api/webhooks/{{ name }}"
-      echo ""
-      echo "Required environment variables:"
-      {% if provider == 'stripe' %}
-      echo "  STRIPE_WEBHOOK_SECRET=whsec_..."
-      {% elsif provider == 'github' %}
-      echo "  GITHUB_WEBHOOK_SECRET=your_secret"
-      {% elsif provider == 'shopify' %}
-      echo "  SHOPIFY_WEBHOOK_SECRET=your_secret"
-      {% elsif provider == 'clerk' %}
-      echo "  CLERK_WEBHOOK_SECRET=whsec_..."
-      {% elsif provider == 'resend' %}
-      echo "  RESEND_WEBHOOK_SECRET=your_secret"
-      {% elsif verification %}
-      echo "  {{ name | upcase }}_WEBHOOK_SECRET=your_secret"
-      {% endif %}
-      echo ""
-      echo "Next steps:"
-      echo "  1. Add the webhook secret to your .env.local"
-      echo "  2. Configure the webhook in your provider's dashboard"
-      echo "  3. Implement event handlers in the route file"
-      echo "  4. Test using the provider's CLI or test mode"
-      {% if provider == 'stripe' %}
-      echo ""
-      echo "Test with Stripe CLI:"
-      echo "  stripe listen --forward-to localhost:3000/api/webhooks/{{ name }}"
-      {% endif %}
+onSuccess: |
+  Webhook handler generated successfully!
+
+  Created files:
+    - {{ dir }}/{{ name }}/route.ts
+  @if(verification)
+    - lib/webhooks/{{ name }}-verifier.ts
+  @end
+
+  Provider: {{ provider }}
+
+  Webhook URL:
+    https://yourdomain.com/api/webhooks/{{ name }}
+
+  Required environment variables:
+  @if(provider === 'stripe')
+    STRIPE_WEBHOOK_SECRET=whsec_...
+  @else if(provider === 'github')
+    GITHUB_WEBHOOK_SECRET=your_secret
+  @else if(provider === 'shopify')
+    SHOPIFY_WEBHOOK_SECRET=your_secret
+  @else if(provider === 'clerk')
+    CLERK_WEBHOOK_SECRET=whsec_...
+  @else if(provider === 'resend')
+    RESEND_WEBHOOK_SECRET=your_secret
+  @else if(verification)
+    {{ name | upper }}_WEBHOOK_SECRET=your_secret
+  @end
+
+  Next steps:
+    1. Add the webhook secret to your .env.local
+    2. Configure the webhook in your provider's dashboard
+    3. Implement event handlers in the route file
+    4. Test using the provider's CLI or test mode
+  @if(provider === 'stripe')
+
+  Test with Stripe CLI:
+    stripe listen --forward-to localhost:3000/api/webhooks/{{ name }}
+  @end

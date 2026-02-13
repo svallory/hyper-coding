@@ -40,17 +40,15 @@ steps:
     tool: template
     template: templates/update-action.ts.jig
 
-  - name: Success message
-    tool: shell
-    command: |
-      echo "✅ Edit page for '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  📄 app/{{ name }}/[id]/edit/page.tsx - Edit page"
-      echo "  ⚡ app/actions/{{ name }}.ts - update{{ model || name }} Server Action"
-      echo ""
-      echo "Note: This recipe reuses the form component from create-page"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Implement the database update in the Server Action"
-      echo "  2. Visit /{{ name }}/[id]/edit to test the edit form"
+onSuccess: |
+  Edit page for '{{ name }}' generated successfully!
+
+  Generated files:
+    app/{{ name }}/[id]/edit/page.tsx - Edit page
+    app/actions/{{ name }}.ts - update{{ model || name }} Server Action
+
+  Note: This recipe reuses the form component from create-page
+
+  Next steps:
+    1. Implement the database update in the Server Action
+    2. Visit /{{ name }}/[id]/edit to test the edit form

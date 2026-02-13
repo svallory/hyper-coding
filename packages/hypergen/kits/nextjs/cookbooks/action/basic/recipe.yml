@@ -33,41 +33,35 @@ variables:
     description: Path to redirect/revalidate after success (optional)
     required: false
 
-steps:
-  - name: Create actions directory
-    tool: shell
-    command: mkdir -p {{ dir }}
+onSuccess: |
+  Server Action generated successfully!
 
+  Created file:
+    - {{ dir }}/{{ name }}.ts
+
+  Usage with useActionState:
+    'use client'
+    import { useActionState } from 'react'
+    import { {{ name }} } from '@/{{ dir }}/{{ name }}'
+
+    export function MyForm() {
+      const [state, formAction, pending] = useActionState({{ name }}, null)
+
+      return (
+        <form action={formAction}>
+          {/* form fields */}
+          <button disabled={pending}>Submit</button>
+          {state?.error && <p>{state.error}</p>}
+        </form>
+      )
+    }
+
+  Usage with plain form:
+    <form action={ {{ name }} }>
+      {/* form fields */}
+    </form>
+
+steps:
   - name: Generate Server Action
     tool: template
     template: templates/action.ts.jig
-
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Server Action generated successfully!"
-      echo ""
-      echo "Created file:"
-      echo "  - {{ dir }}/{{ name }}.ts"
-      echo ""
-      echo "Usage with useActionState:"
-      echo "  'use client'"
-      echo "  import { useActionState } from 'react'"
-      echo "  import { {{ name }} } from '@/{{ dir }}/{{ name }}'"
-      echo ""
-      echo "  export function MyForm() {"
-      echo "    const [state, formAction, pending] = useActionState({{ name }}, null)"
-      echo ""
-      echo "    return ("
-      echo "      <form action={formAction}>"
-      echo "        {/* form fields */}"
-      echo "        <button disabled={pending}>Submit</button>"
-      echo "        {state?.error && <p>{state.error}</p>}"
-      echo "      </form>"
-      echo "    )"
-      echo "  }"
-      echo ""
-      echo "Usage with plain form:"
-      echo "  <form action={{{ name }}}>"
-      echo "    {/* form fields */}"
-      echo "  </form>"

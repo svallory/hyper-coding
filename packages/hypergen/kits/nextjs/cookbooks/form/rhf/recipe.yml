@@ -34,32 +34,18 @@ variables:
     default: "app/actions"
 
 steps:
-  - name: Check dependencies
+  - name: Install dependencies
+    tool: install
+    packages: [react-hook-form, zod, "@hookform/resolvers"]
+    optional: true
+
+  - name: Install shadcn/ui Form component
     tool: shell
     command: |
-      # Check if required packages are installed
-      if ! bun pm ls react-hook-form &>/dev/null; then
-        echo "Installing required dependencies..."
-        if command -v bun &> /dev/null; then
-          bun add react-hook-form zod @hookform/resolvers
-        elif command -v pnpm &> /dev/null; then
-          pnpm add react-hook-form zod @hookform/resolvers
-        elif command -v yarn &> /dev/null; then
-          yarn add react-hook-form zod @hookform/resolvers
-        else
-          npm install react-hook-form zod @hookform/resolvers
-        fi
-      fi
-
-      # Check if shadcn/ui Form component is installed
       if [ ! -f "components/ui/form.tsx" ]; then
         echo "Installing shadcn/ui Form component..."
         npx shadcn@latest add form --yes
       fi
-
-  - name: Create output directory
-    tool: shell
-    command: mkdir -p {{ dir }}
 
   - name: Generate Zod schema
     tool: template
@@ -70,30 +56,24 @@ steps:
     template: templates/form.tsx.jig
 
 @if(withServerAction)
-  - name: Create actions directory
-    tool: shell
-    command: mkdir -p {{ actionPath }}
-
   - name: Generate Server Action
     tool: template
     template: templates/action.ts.jig
 @end
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Form generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ name }}.tsx"
-      echo "  - lib/schemas/{{ kebabCase(name) }}-schema.ts"
-@if(withServerAction)
-      echo "  - {{ actionPath }}/{{ kebabCase(name) }}-action.ts"
-@end
-      echo ""
-      echo "Usage:"
-      echo "  import { {{ name }} } from '@/{{ dir }}/{{ name }}'"
-      echo ""
-      echo "  export default function MyPage() {"
-      echo "    return <{{ name }} />"
-      echo "  }"
+onSuccess: |
+  Form generated successfully!
+
+  Created files:
+    - {{ dir }}/{{ name }}.tsx
+    - lib/schemas/{{ kebabCase(name) }}-schema.ts
+  @if(withServerAction)
+    - {{ actionPath }}/{{ kebabCase(name) }}-action.ts
+  @end
+
+  Usage:
+    import { {{ name }} } from '@/{{ dir }}/{{ name }}'
+
+    export default function MyPage() {
+      return <{{ name }} />
+    }

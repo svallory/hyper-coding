@@ -21,21 +21,10 @@ variables:
     default: false
 
 steps:
-  - name: Check GraphQL dependencies
-    tool: shell
-    command: |
-      if ! grep -q "graphql-yoga" package.json; then
-        echo "⚠️  GraphQL Yoga not found. Installing dependencies..."
-        npm install graphql graphql-yoga
-      fi
-
-  - name: Create GraphQL directory
-    tool: shell
-    command: mkdir -p {{ dir }}
-
-  - name: Create schema directory
-    tool: shell
-    command: mkdir -p lib/graphql
+  - name: Install GraphQL dependencies
+    tool: install
+    packages: [graphql, graphql-yoga]
+    optional: true
 
   - name: Generate GraphQL route handler
     tool: template
@@ -53,35 +42,35 @@ steps:
     tool: template
     template: templates/context.ts.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ GraphQL endpoint generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/route.ts"
-      echo "  - lib/graphql/schema.ts"
-      echo "  - lib/graphql/resolvers.ts"
-      echo "  - lib/graphql/context.ts"
-      echo ""
-      echo "GraphQL endpoint:"
-      echo "  http://localhost:3000/api/graphql"
-      echo ""
-      {% if playground %}
-      echo "GraphQL Playground (dev only):"
-      echo "  http://localhost:3000/api/graphql"
-      echo ""
-      {% endif %}
-      echo "Example query:"
-      echo "  query {"
-      echo "    hello"
-      echo "  }"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Define your GraphQL schema in lib/graphql/schema.ts"
-      echo "  2. Implement resolvers in lib/graphql/resolvers.ts"
-      {% if auth %}echo "  3. Configure authentication in lib/graphql/context.ts"{% endif %}
-      echo "  4. Test queries in GraphQL Playground"
-      echo ""
-      echo "Learn more:"
-      echo "  https://the-guild.dev/graphql/yoga-server/docs"
+onSuccess: |
+  GraphQL endpoint generated successfully!
+
+  Created files:
+    - {{ dir }}/route.ts
+    - lib/graphql/schema.ts
+    - lib/graphql/resolvers.ts
+    - lib/graphql/context.ts
+
+  GraphQL endpoint:
+    http://localhost:3000/api/graphql
+  @if(playground)
+
+  GraphQL Playground (dev only):
+    http://localhost:3000/api/graphql
+  @end
+
+  Example query:
+    query {
+      hello
+    }
+
+  Next steps:
+    1. Define your GraphQL schema in lib/graphql/schema.ts
+    2. Implement resolvers in lib/graphql/resolvers.ts
+  @if(auth)
+    3. Configure authentication in lib/graphql/context.ts
+  @end
+    4. Test queries in GraphQL Playground
+
+  Learn more:
+    https://the-guild.dev/graphql/yoga-server/docs

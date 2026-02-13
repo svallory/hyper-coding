@@ -17,18 +17,14 @@ variables:
     required: false
 
 steps:
-  - name: Install Prisma dependencies
-    tool: shell
-    command: |
-      if command -v bun &> /dev/null; then
-        bun add -d prisma && bun add @prisma/client
-      elif command -v pnpm &> /dev/null; then
-        pnpm add -D prisma && pnpm add @prisma/client
-      elif command -v yarn &> /dev/null; then
-        yarn add -D prisma && yarn add @prisma/client
-      else
-        npm install -D prisma && npm install @prisma/client
-      fi
+  - name: Install Prisma CLI
+    tool: install
+    packages: [prisma]
+    dev: true
+
+  - name: Install Prisma Client
+    tool: install
+    packages: ["@prisma/client"]
 
   - name: Initialize Prisma
     tool: shell
@@ -65,13 +61,11 @@ steps:
         @end
       fi
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Prisma initialized successfully!"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Update DATABASE_URL in .env with your database credentials"
-      echo "  2. Edit prisma/schema.prisma to define your data models"
-      echo "  3. Run 'npx prisma migrate dev --name init' to create your database"
-      echo "  4. Import Prisma client: import { prisma } from '@/lib/prisma'"
+onSuccess: |
+  Prisma initialized successfully!
+
+  Next steps:
+    1. Update DATABASE_URL in .env with your database credentials
+    2. Edit prisma/schema.prisma to define your data models
+    3. Run 'npx prisma migrate dev --name init' to create your database
+    4. Import Prisma client: import { prisma } from '@/lib/prisma'

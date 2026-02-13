@@ -32,24 +32,18 @@ variables:
     description: Validation rules description (e.g., "must be valid email format", "3-50 chars, lowercase, hyphens only")
     required: false
 
-steps:
-  - name: Ensure directory exists
-    tool: shell
-    command: mkdir -p lib/domain/value-objects
+onSuccess: |
+  Value object '{{ name }}' generated successfully!
 
+  Generated files:
+    lib/domain/value-objects/{{ name }}.ts
+
+  Usage:
+    import { create{{ name }}, is{{ name }}, type {{ name }} } from '@/lib/domain/value-objects/{{ name }}'
+    const result = create{{ name }}('value')
+    if (result.success) { /* result.data is {{ name }} */ }
+
+steps:
   - name: Generate value object
     tool: template
     template: templates/value-object.ts.jig
-
-  - name: Success message
-    tool: shell
-    command: |
-      echo "Value object '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  lib/domain/value-objects/{{ name }}.ts"
-      echo ""
-      echo "Usage:"
-      echo "  import { create{{ name }}, is{{ name }}, type {{ name }} } from '@/lib/domain/value-objects/{{ name }}'"
-      echo "  const result = create{{ name }}('value')"
-      echo "  if (result.success) { /* result.data is {{ name }} */ }"

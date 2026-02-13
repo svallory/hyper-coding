@@ -39,11 +39,32 @@ variables:
     description: Also generate a repository interface and ORM implementation
     default: false
 
-steps:
-  - name: Ensure directories exist
-    tool: shell
-    command: mkdir -p db/schema lib/schemas
+onSuccess: |
+  Entity '{{ name }}' generated successfully!
 
+  Generated files:
+    lib/schemas/{{ name }}-schema.ts -- Zod validation + types
+  @if(detectedOrm === 'drizzle')
+    db/schema/{{ name }}.ts -- Drizzle table definition
+    db/schema/index.ts -- Updated barrel export
+  @elseif(detectedOrm === 'prisma')
+    prisma/schema.prisma -- Prisma model (injected)
+  @end
+  @if(withRepository)
+    lib/domain/repositories/{{ name }}-repository.ts -- Repository interface
+  @if(detectedOrm !== 'none')
+    lib/infrastructure/repositories/{{ name }}-repository.impl.ts -- {{ detectedOrm }} implementation
+  @end
+  @end
+
+  Next steps:
+    1. Review the generated schema
+    2. Run migrations (drizzle-kit push / prisma db push)
+  @if(!withRepository)
+    3. Use 'hypergen nextjs domain repository {{ name }}' to add a repository
+  @end
+
+steps:
   - name: Detect ORM
     tool: shell
     command: |
@@ -83,29 +104,3 @@ steps:
     args:
       name: "{{ name }}"
 
-  - name: Success message
-    tool: shell
-    command: |
-      echo "Entity '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  lib/schemas/{{ name }}-schema.ts — Zod validation + types"
-      if [ "{{ detectedOrm }}" = "drizzle" ]; then
-        echo "  db/schema/{{ name }}.ts — Drizzle table definition"
-        echo "  db/schema/index.ts — Updated barrel export"
-      elif [ "{{ detectedOrm }}" = "prisma" ]; then
-        echo "  prisma/schema.prisma — Prisma model (injected)"
-      fi
-      if [ "{{ withRepository }}" = "true" ]; then
-        echo "  lib/domain/repositories/{{ name }}-repository.ts — Repository interface"
-        if [ "{{ detectedOrm }}" != "none" ]; then
-          echo "  lib/infrastructure/repositories/{{ name }}-repository.impl.ts — {{ detectedOrm }} implementation"
-        fi
-      fi
-      echo ""
-      echo "Next steps:"
-      echo "  1. Review the generated schema"
-      echo "  2. Run migrations (drizzle-kit push / prisma db push)"
-      if [ "{{ withRepository }}" != "true" ]; then
-        echo "  3. Use 'hypergen nextjs domain repository {{ name }}' to add a repository"
-      fi

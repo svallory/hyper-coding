@@ -16,42 +16,20 @@ variables:
     default: false
 
 steps:
-  - name: Install TanStack Query
-    tool: shell
-    command: |
-      if command -v bun &> /dev/null; then
-        bun add @tanstack/react-query
-        @if(withDevtools)
-bun add -d @tanstack/react-query-devtools@end
+  - name: Install TanStack React Query
+    tool: install
+    packages: ["@tanstack/react-query"]
 
-        @if(withPersister)
-bun add @tanstack/react-query-persist-client@end
+  - name: Install devtools
+    tool: install
+    packages: ["@tanstack/react-query-devtools"]
+    dev: true
+    when: "withDevtools === true"
 
-      elif command -v pnpm &> /dev/null; then
-        pnpm add @tanstack/react-query
-        @if(withDevtools)
-pnpm add -D @tanstack/react-query-devtools@end
-
-        @if(withPersister)
-pnpm add @tanstack/react-query-persist-client@end
-
-      elif command -v yarn &> /dev/null; then
-        yarn add @tanstack/react-query
-        @if(withDevtools)
-yarn add -D @tanstack/react-query-devtools@end
-
-        @if(withPersister)
-yarn add @tanstack/react-query-persist-client@end
-
-      else
-        npm install @tanstack/react-query
-        @if(withDevtools)
-npm install -D @tanstack/react-query-devtools@end
-
-        @if(withPersister)
-npm install @tanstack/react-query-persist-client@end
-
-      fi
+  - name: Install persister
+    tool: install
+    packages: ["@tanstack/react-query-persist-client"]
+    when: "withPersister === true"
 
   - name: Create Query Provider
     tool: template
@@ -69,50 +47,44 @@ npm install @tanstack/react-query-persist-client@end
     tool: template
     template: templates/example-mutation-hook.ts.jig
 
-  - name: Update root layout
-    tool: shell
-    command: |
-      echo ""
-      echo "⚠️  MANUAL STEP REQUIRED:"
-      echo ""
-      echo "Add QueryProvider to your root layout:"
-      echo ""
-      echo "// app/layout.tsx"
-      echo "import { QueryProvider } from '@/components/providers/query-provider'"
-      echo ""
-      echo "export default function RootLayout({ children }) {"
-      echo "  return ("
-      echo "    <html>"
-      echo "      <body>"
-      echo "        <QueryProvider>{children}</QueryProvider>"
-      echo "      </body>"
-      echo "    </html>"
-      echo "  )"
-      echo "}"
+onSuccess: |
+  MANUAL STEP REQUIRED:
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ TanStack Query initialized successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - components/providers/query-provider.tsx"
-      echo "  - lib/query-client.ts"
-      echo "  - hooks/use-example-query.ts"
-      echo "  - hooks/use-example-mutation.ts"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Add <QueryProvider> to your root layout (see above)"
-      echo "  2. Create query hooks in hooks/ directory"
-      echo "  3. Use hooks in your components"
-      @if(withDevtools)
-echo "  4. Open React Query Devtools (bottom-left corner in dev mode)"@end
+  Add QueryProvider to your root layout:
 
-      echo ""
-      echo "Example usage:"
-      echo "  import { useExampleQuery } from '@/hooks/use-example-query'"
-      echo ""
-      echo "  export function MyComponent() {"
-      echo "    const { data, isLoading } = useExampleQuery()"
-      echo "    // ..."
-      echo "  }"
+  // app/layout.tsx
+  import { QueryProvider } from '@/components/providers/query-provider'
+
+  export default function RootLayout({ children }) {
+    return (
+      <html>
+        <body>
+          <QueryProvider>{children}</QueryProvider>
+        </body>
+      </html>
+    )
+  }
+
+  TanStack Query initialized successfully!
+
+  Created files:
+    - components/providers/query-provider.tsx
+    - lib/query-client.ts
+    - hooks/use-example-query.ts
+    - hooks/use-example-mutation.ts
+
+  Next steps:
+    1. Add <QueryProvider> to your root layout (see above)
+    2. Create query hooks in hooks/ directory
+    3. Use hooks in your components
+  @if(withDevtools)
+    4. Open React Query Devtools (bottom-left corner in dev mode)
+  @end
+
+  Example usage:
+    import { useExampleQuery } from '@/hooks/use-example-query'
+
+    export function MyComponent() {
+      const { data, isLoading } = useExampleQuery()
+      // ...
+    }

@@ -34,38 +34,20 @@ variables:
     default: 10
 
 steps:
-  - name: Check dependencies
+  - name: Install TanStack Table
+    tool: install
+    packages: ["@tanstack/react-table"]
+    optional: true
+
+  - name: Install shadcn/ui components
     tool: shell
     command: |
-      # Check if required packages are installed
-      if ! bun pm ls @tanstack/react-table &>/dev/null; then
-        echo "Installing required dependencies..."
-        if command -v bun &> /dev/null; then
-          bun add @tanstack/react-table
-        elif command -v pnpm &> /dev/null; then
-          pnpm add @tanstack/react-table
-        elif command -v yarn &> /dev/null; then
-          yarn add @tanstack/react-table
-        else
-          npm install @tanstack/react-table
-        fi
-      fi
-
-      # Check if shadcn/ui Table component is installed
       if [ ! -f "components/ui/table.tsx" ]; then
-        echo "Installing shadcn/ui Table component..."
         npx shadcn@latest add table --yes
       fi
-
-      # Install Button if pagination is enabled
       if [ "{{ withPagination }}" = "true" ] && [ ! -f "components/ui/button.tsx" ]; then
-        echo "Installing shadcn/ui Button component..."
         npx shadcn@latest add button --yes
       fi
-
-  - name: Create output directory
-    tool: shell
-    command: mkdir -p {{ dir }}
 
   - name: Generate TypeScript types
     tool: template
@@ -79,25 +61,23 @@ steps:
     tool: template
     template: templates/table.tsx.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Data table generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ name }}.tsx"
-      echo "  - {{ dir }}/columns.tsx"
-      echo "  - lib/types/{{ kebabCase(name) }}.ts"
-      echo ""
-      echo "Usage:"
-      echo "  import { {{ name }} } from '@/{{ dir }}/{{ name }}'"
-      echo ""
-      echo "  export default function Page() {"
-      echo "    const data = [] // Your data array"
-      echo "    return <{{ name }} data={data} />"
-      echo "  }"
-      echo ""
-      echo "Next steps:"
-      echo "  - Add sorting: hypergen nextjs table sortable"
-      echo "  - Add filtering: hypergen nextjs table filterable"
-      echo "  - Add server features: hypergen nextjs table server"
+onSuccess: |
+  Data table generated successfully!
+
+  Created files:
+    - {{ dir }}/{{ name }}.tsx
+    - {{ dir }}/columns.tsx
+    - lib/types/{{ kebabCase(name) }}.ts
+
+  Usage:
+    import { {{ name }} } from '@/{{ dir }}/{{ name }}'
+
+    export default function Page() {
+      const data = [] // Your data array
+      return <{{ name }} data={data} />
+    }
+
+  Next steps:
+    - Add sorting: hypergen nextjs table sortable
+    - Add filtering: hypergen nextjs table filterable
+    - Add server features: hypergen nextjs table server

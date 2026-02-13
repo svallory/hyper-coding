@@ -42,38 +42,26 @@ variables:
     default: "app/actions"
 
 steps:
-  - name: Check dependencies
+  - name: Install dependencies
+    tool: install
+    packages: ["@tanstack/react-table", "lucide-react"]
+    optional: true
+
+  - name: Install shadcn/ui components
     tool: shell
     command: |
-      if ! bun pm ls @tanstack/react-table &>/dev/null; then
-        bun add @tanstack/react-table 2>/dev/null || npm install @tanstack/react-table
-      fi
-
       if [ ! -f "components/ui/table.tsx" ]; then
         npx shadcn@latest add table --yes
       fi
-
       if [ ! -f "components/ui/button.tsx" ]; then
         npx shadcn@latest add button --yes
       fi
-
       if [ ! -f "components/ui/dialog.tsx" ]; then
         npx shadcn@latest add dialog --yes
       fi
-
       if [ ! -f "components/ui/dropdown-menu.tsx" ]; then
         npx shadcn@latest add dropdown-menu --yes
       fi
-
-      if ! bun pm ls lucide-react &>/dev/null; then
-        bun add lucide-react 2>/dev/null || npm install lucide-react
-      fi
-
-  - name: Create directories
-    tool: shell
-    command: |
-      mkdir -p {{ dir }}
-      mkdir -p {{ actionsPath }}
 
   - name: Generate types
     tool: template
@@ -97,19 +85,17 @@ steps:
     template: templates/delete-dialog.tsx.jig
 @end
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ CRUD data table generated!"
-      echo ""
-      echo "Features:"
-@if(withEdit)
-      echo "  ✓ Edit button per row"
-@end
-@if(withDelete)
-      echo "  ✓ Delete with confirmation"
-@end
-      echo "  ✓ Actions dropdown menu"
-      echo "  ✓ Optimistic updates"
-      echo ""
-      echo "TODO: Implement Server Actions in {{ actionsPath }}/{{ kebabCase(name) }}-actions.ts"
+onSuccess: |
+  CRUD data table generated!
+
+  Features:
+  @if(withEdit)
+    - Edit button per row
+  @end
+  @if(withDelete)
+    - Delete with confirmation
+  @end
+    - Actions dropdown menu
+    - Optimistic updates
+
+  TODO: Implement Server Actions in {{ actionsPath }}/{{ kebabCase(name) }}-actions.ts

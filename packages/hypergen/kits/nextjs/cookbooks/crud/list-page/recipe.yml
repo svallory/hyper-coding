@@ -62,17 +62,15 @@ steps:
     tool: template
     template: templates/actions.ts.jig
 
-  - name: Success message
-    tool: shell
-    command: |
-      echo "✅ List page for '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  📄 app/{{ name }}/page.tsx - List page"
-      echo "  📦 components/{{ model || name }}Table.tsx - Data table component"
-      echo "  ⚡ app/actions/{{ name }}.ts - Server Actions for fetching data"
-      echo ""
-      echo "Next steps:"
-      echo "  1. Implement the database query in the Server Action"
-      echo "  2. Customize table columns and styling"
-      echo "  3. Visit /{{ name }} to see your list page"
+onSuccess: |
+  List page for '{{ name }}' generated successfully!
+
+  Generated files:
+    app/{{ name }}/page.tsx - List page
+    components/{{ model || name }}Table.tsx - Data table component
+    app/actions/{{ name }}.ts - Server Actions for fetching data
+
+  Next steps:
+    1. Implement the database query in the Server Action
+    2. Customize table columns and styling
+    3. Visit /{{ name }} to see your list page

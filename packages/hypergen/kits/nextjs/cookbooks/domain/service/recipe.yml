@@ -32,23 +32,17 @@ variables:
     description: Business operations to implement (e.g., "inviteMember,removeMember,changeRole")
     required: false
 
-steps:
-  - name: Ensure directory exists
-    tool: shell
-    command: mkdir -p lib/domain/services
+onSuccess: |
+  Service '{{ name }}Service' generated successfully!
 
+  Generated files:
+    lib/domain/services/{{ name }}Service.ts
+
+  Usage:
+    import { {{ name }}Service } from '@/lib/domain/services/{{ name }}Service'
+    const service = new {{ name }}Service(repo1, repo2)
+
+steps:
   - name: Generate service
     tool: template
     template: templates/service.ts.jig
-
-  - name: Success message
-    tool: shell
-    command: |
-      echo "Service '{{ name }}Service' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  lib/domain/services/{{ name }}Service.ts"
-      echo ""
-      echo "Usage:"
-      echo "  import { {{ name }}Service } from '@/lib/domain/services/{{ name }}Service'"
-      echo "  const service = new {{ name }}Service(repo1, repo2)"

@@ -40,27 +40,9 @@ variables:
     required: false
 
 steps:
-  - name: Check Zod dependency
-    tool: shell
-    command: |
-      if ! bun pm ls zod &>/dev/null && ! npm list zod &>/dev/null; then
-        echo "Installing zod..."
-        if command -v bun &> /dev/null; then
-          bun add zod
-        elif command -v pnpm &> /dev/null; then
-          pnpm add zod
-        elif command -v yarn &> /dev/null; then
-          yarn add zod
-        else
-          npm install zod
-        fi
-      fi
-
-  - name: Create directories
-    tool: shell
-    command: |
-      mkdir -p {{ dir }}
-      mkdir -p {{ schemaDir }}
+  - name: Install Zod
+    tool: install
+    packages: [zod]
 
   - name: Generate Zod schema
     tool: template
@@ -70,33 +52,31 @@ steps:
     tool: template
     template: templates/action.ts.jig
 
-  - name: Instructions
-    tool: shell
-    command: |
-      echo "✅ Validated Server Action generated successfully!"
-      echo ""
-      echo "Created files:"
-      echo "  - {{ dir }}/{{ name }}.ts"
-      echo "  - {{ schemaDir }}/{{ kebabCase(name) }}.ts"
-      echo ""
-      echo "Usage with useActionState:"
-      echo "  'use client'"
-      echo "  import { useActionState } from 'react'"
-      echo "  import { {{ name }} } from '@/{{ dir }}/{{ name }}'"
-      echo ""
-      echo "  export function MyForm() {"
-      echo "    const [state, formAction, pending] = useActionState({{ name }}, null)"
-      echo ""
-      echo "    return ("
-      echo "      <form action={formAction}>"
-      echo "        {/* Field-level error display */}"
-      echo "        {state?.errors?.fieldName && ("
-      echo "          <p className=\"text-red-500\">{state.errors.fieldName[0]}</p>"
-      echo "        )}"
-      echo "        <button disabled={pending}>Submit</button>"
-      echo "      </form>"
-      echo "    )"
-      echo "  }"
-      echo ""
-      echo "The schema is also exported and can be reused:"
-      echo "  import { {{ camelCase(name) }}Schema } from '@/{{ schemaDir }}/{{ kebabCase(name) }}'"
+onSuccess: |
+  Validated Server Action generated successfully!
+
+  Created files:
+    - {{ dir }}/{{ name }}.ts
+    - {{ schemaDir }}/{{ kebabCase(name) }}.ts
+
+  Usage with useActionState:
+    'use client'
+    import { useActionState } from 'react'
+    import { {{ name }} } from '@/{{ dir }}/{{ name }}'
+
+    export function MyForm() {
+      const [state, formAction, pending] = useActionState({{ name }}, null)
+
+      return (
+        <form action={formAction}>
+          {/* Field-level error display */}
+          {state?.errors?.fieldName && (
+            <p className="text-red-500">{state.errors.fieldName[0]}</p>
+          )}
+          <button disabled={pending}>Submit</button>
+        </form>
+      )
+    }
+
+  The schema is also exported and can be reused:
+    import { {{ camelCase(name) }}Schema } from '@/{{ schemaDir }}/{{ kebabCase(name) }}'

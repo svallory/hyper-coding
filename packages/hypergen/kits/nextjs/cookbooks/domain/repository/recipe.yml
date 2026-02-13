@@ -32,11 +32,24 @@ variables:
     description: Extra methods beyond CRUD (e.g., "findByEmail,findByOrganization,countActive")
     required: false
 
-steps:
-  - name: Ensure directories exist
-    tool: shell
-    command: mkdir -p lib/domain/repositories lib/infrastructure/repositories
+onSuccess: |
+  Repository for '{{ name }}' generated successfully!
 
+  Generated files:
+    lib/domain/repositories/{{ name }}-repository.ts -- Interface
+  @if(detectedOrm === 'drizzle')
+    lib/infrastructure/repositories/{{ name }}-repository.impl.ts -- Drizzle implementation
+  @elseif(detectedOrm === 'prisma')
+    lib/infrastructure/repositories/{{ name }}-repository.impl.ts -- Prisma implementation
+  @end
+
+  Usage:
+    import type { {{ pascalCase(name) }}Repository } from '@/lib/domain/repositories/{{ name }}-repository'
+  @if(detectedOrm !== 'none')
+    import { {{ pascalCase(name) }}RepositoryImpl } from '@/lib/infrastructure/repositories/{{ name }}-repository.impl'
+  @end
+
+steps:
   - name: Detect ORM
     tool: shell
     command: |
@@ -64,21 +77,3 @@ steps:
     template: templates/prisma-repository.ts.jig
     when: "detectedOrm === 'prisma'"
 
-  - name: Success message
-    tool: shell
-    command: |
-      echo "Repository for '{{ name }}' generated successfully!"
-      echo ""
-      echo "Generated files:"
-      echo "  lib/domain/repositories/{{ name }}-repository.ts — Interface"
-      if [ "{{ detectedOrm }}" = "drizzle" ]; then
-        echo "  lib/infrastructure/repositories/{{ name }}-repository.impl.ts — Drizzle implementation"
-      elif [ "{{ detectedOrm }}" = "prisma" ]; then
-        echo "  lib/infrastructure/repositories/{{ name }}-repository.impl.ts — Prisma implementation"
-      fi
-      echo ""
-      echo "Usage:"
-      echo "  import type { {{ pascalCase(name) }}Repository } from '@/lib/domain/repositories/{{ name }}-repository'"
-      if [ "{{ detectedOrm }}" != "none" ]; then
-        echo "  import { {{ pascalCase(name) }}RepositoryImpl } from '@/lib/infrastructure/repositories/{{ name }}-repository.impl'"
-      fi

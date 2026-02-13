@@ -29,16 +29,6 @@ variables:
     default: none
 
 steps:
-  - name: Welcome message
-    tool: shell
-    command: |
-      echo "🚀 Next.js Stack Configuration Wizard"
-      echo "======================================"
-      echo ""
-      echo "This wizard will help you configure your Next.js application stack."
-      echo "You can re-run this recipe at any time to update your configuration."
-      echo ""
-
   - name: Ask database choice
     tool: prompt
     message: Choose a database ORM (or skip)
@@ -75,22 +65,6 @@ steps:
       - clerk
     default: none
 
-  - name: Configuration summary
-    tool: shell
-    command: |
-      echo ""
-      echo "📋 Configuration Summary"
-      echo "========================"
-      echo "Database ORM: {{ database }}"
-      echo "UI Library: @if(ui)shadcn/ui@else
-      None@end"
-      echo "State Management: @if(stateManagement)TanStack Query@else
-      None@end"
-      echo "Authentication: {{ auth }}"
-      echo ""
-      echo "Starting configuration..."
-      echo ""
-
   - name: Setup Prisma
     tool: recipe
     recipe: ../prisma/recipe.yml
@@ -125,40 +99,48 @@ steps:
       withDevtools: true
       withPersister: false
 
-  - name: Auth setup notice
-    tool: shell
-    when: auth === 'nextauth' || auth === 'clerk'
-    command: |
-      echo ""
-      echo "⚠️  Authentication setup for {{ auth }} is not yet implemented."
-      echo "This feature will be added in a future version."
-      echo ""
+onSuccess: |
+  Next.js Stack Configuration Wizard
+  ======================================
 
-  - name: Completion message
-    tool: shell
-    command: |
-      echo ""
-      echo "✅ Stack configuration completed!"
-      echo ""
-      echo "Next steps:"
-      @if(database === 'prisma')
-      echo "  • Update DATABASE_URL in .env with your database credentials"
-      echo "  • Edit prisma/schema.prisma to define your data models"
-      echo "  • Run 'npx prisma migrate dev --name init' to create your database"
-      @else if(database === 'drizzle')
-      echo "  • Update DATABASE_URL in .env with your database credentials"
-      echo "  • Edit db/schema/*.ts to define your data models"
-      echo "  • Run 'bun run db:generate' to generate migrations"
-      echo "  • Run 'bun run db:migrate' to apply migrations"
-      @end
-      @if(ui)
-      echo "  • Browse available components at https://ui.shadcn.com/docs/components"
-      echo "  • Add more components with 'npx shadcn@latest add <component>'"
-      @end
-      @if(stateManagement)
-      echo "  • Add <QueryProvider> to your root layout (see components/providers/query-provider.tsx)"
-      echo "  • Create query hooks in the hooks/ directory"
-      @end
-      echo ""
-      echo "You can re-run this recipe anytime with: hypergen nextjs config all"
-      echo ""
+  Configuration Summary
+  ========================
+  Database ORM: {{ database }}
+  UI Library: @if(ui)
+  shadcn/ui@else
+  None@end
+
+  State Management: @if(stateManagement)
+  TanStack Query@else
+  None@end
+
+  Authentication: {{ auth }}
+  @if(auth === 'nextauth' || auth === 'clerk')
+
+  Note: Authentication setup for {{ auth }} is not yet implemented.
+  This feature will be added in a future version.
+  @end
+
+  Stack configuration completed!
+
+  Next steps:
+  @if(database === 'prisma')
+    - Update DATABASE_URL in .env with your database credentials
+    - Edit prisma/schema.prisma to define your data models
+    - Run 'npx prisma migrate dev --name init' to create your database
+  @else if(database === 'drizzle')
+    - Update DATABASE_URL in .env with your database credentials
+    - Edit db/schema/*.ts to define your data models
+    - Run 'bun run db:generate' to generate migrations
+    - Run 'bun run db:migrate' to apply migrations
+  @end
+  @if(ui)
+    - Browse available components at https://ui.shadcn.com/docs/components
+    - Add more components with 'npx shadcn@latest add <component>'
+  @end
+  @if(stateManagement)
+    - Add <QueryProvider> to your root layout (see components/providers/query-provider.tsx)
+    - Create query hooks in the hooks/ directory
+  @end
+
+  You can re-run this recipe anytime with: hypergen nextjs config all
