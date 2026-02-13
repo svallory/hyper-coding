@@ -98,17 +98,53 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
   }
 
   private detectPackageManager(): 'bun' | 'pnpm' | 'yarn' | 'npm' {
-    const cwd = this.flags.cwd
+    let dir = this.flags.cwd
 
-    if (existsSync(join(cwd, 'bun.lockb')) || existsSync(join(cwd, 'bun.lock'))) {
+    // Walk up the directory tree to find a lock file
+    while (dir !== '/' && dir !== '.') {
+      // Check for lock files in order of preference
+      if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock'))) {
+        return 'bun'
+      }
+      if (existsSync(join(dir, 'pnpm-lock.yaml'))) {
+        return 'pnpm'
+      }
+      if (existsSync(join(dir, 'yarn.lock'))) {
+        return 'yarn'
+      }
+      if (existsSync(join(dir, 'package-lock.json'))) {
+        return 'npm'
+      }
+
+      // Move up one directory
+      const parent = join(dir, '..')
+      if (parent === dir) break // Reached root
+      dir = parent
+    }
+
+    // No lock file found, check which package manager is available
+    try {
+      execSync('bun --version', { stdio: 'ignore' })
       return 'bun'
+    } catch {
+      // bun not available
     }
-    if (existsSync(join(cwd, 'pnpm-lock.yaml'))) {
+
+    try {
+      execSync('pnpm --version', { stdio: 'ignore' })
       return 'pnpm'
+    } catch {
+      // pnpm not available
     }
-    if (existsSync(join(cwd, 'yarn.lock'))) {
+
+    try {
+      execSync('yarn --version', { stdio: 'ignore' })
       return 'yarn'
+    } catch {
+      // yarn not available
     }
+
+    // Default to npm (should always be available with Node.js)
     return 'npm'
   }
 }

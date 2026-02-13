@@ -767,6 +767,132 @@
         "list.js"
       ]
     },
+    "system:status": {
+      "aliases": [],
+      "args": {},
+      "description": "Show hypergen system status and configuration",
+      "examples": [
+        "<%= config.bin %> <%= command.id %>",
+        "<%= config.bin %> <%= command.id %> --json"
+      ],
+      "flags": {
+        "cwd": {
+          "description": "Working directory",
+          "name": "cwd",
+          "default": "/work/hyperdev/packages/hypergen",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "debug": {
+          "char": "d",
+          "description": "Enable debug output",
+          "env": "DEBUG",
+          "name": "debug",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "config": {
+          "description": "Path to config file",
+          "env": "HYPERGEN_CONFIG",
+          "name": "config",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "json": {
+          "description": "Output as JSON",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "char": "q",
+          "description": "Suppress non-essential output",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "system:status",
+      "pluginAlias": "hypergen",
+      "pluginName": "hypergen",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "system",
+        "status.js"
+      ]
+    },
+    "system:version": {
+      "aliases": [],
+      "args": {},
+      "description": "Show hypergen version information",
+      "examples": [
+        "<%= config.bin %> <%= command.id %>",
+        "<%= config.bin %> <%= command.id %> --json"
+      ],
+      "flags": {
+        "cwd": {
+          "description": "Working directory",
+          "name": "cwd",
+          "default": "/work/hyperdev/packages/hypergen",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "debug": {
+          "char": "d",
+          "description": "Enable debug output",
+          "env": "DEBUG",
+          "name": "debug",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "config": {
+          "description": "Path to config file",
+          "env": "HYPERGEN_CONFIG",
+          "name": "config",
+          "hasDynamicHelp": false,
+          "multiple": false,
+          "type": "option"
+        },
+        "json": {
+          "description": "Output as JSON",
+          "name": "json",
+          "allowNo": false,
+          "type": "boolean"
+        },
+        "quiet": {
+          "char": "q",
+          "description": "Suppress non-essential output",
+          "name": "quiet",
+          "allowNo": false,
+          "type": "boolean"
+        }
+      },
+      "hasDynamicHelp": false,
+      "hiddenAliases": [],
+      "id": "system:version",
+      "pluginAlias": "hypergen",
+      "pluginName": "hypergen",
+      "pluginType": "core",
+      "strict": true,
+      "enableJsonFlag": false,
+      "isESM": true,
+      "relativePath": [
+        "dist",
+        "commands",
+        "system",
+        "version.js"
+      ]
+    },
     "recipe:info": {
       "aliases": [],
       "args": {
@@ -1104,132 +1230,6 @@
         "commands",
         "recipe",
         "validate.js"
-      ]
-    },
-    "system:status": {
-      "aliases": [],
-      "args": {},
-      "description": "Show hypergen system status and configuration",
-      "examples": [
-        "<%= config.bin %> <%= command.id %>",
-        "<%= config.bin %> <%= command.id %> --json"
-      ],
-      "flags": {
-        "cwd": {
-          "description": "Working directory",
-          "name": "cwd",
-          "default": "/work/hyperdev/packages/hypergen",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "debug": {
-          "char": "d",
-          "description": "Enable debug output",
-          "env": "DEBUG",
-          "name": "debug",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "config": {
-          "description": "Path to config file",
-          "env": "HYPERGEN_CONFIG",
-          "name": "config",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "char": "q",
-          "description": "Suppress non-essential output",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "system:status",
-      "pluginAlias": "hypergen",
-      "pluginName": "hypergen",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "system",
-        "status.js"
-      ]
-    },
-    "system:version": {
-      "aliases": [],
-      "args": {},
-      "description": "Show hypergen version information",
-      "examples": [
-        "<%= config.bin %> <%= command.id %>",
-        "<%= config.bin %> <%= command.id %> --json"
-      ],
-      "flags": {
-        "cwd": {
-          "description": "Working directory",
-          "name": "cwd",
-          "default": "/work/hyperdev/packages/hypergen",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "debug": {
-          "char": "d",
-          "description": "Enable debug output",
-          "env": "DEBUG",
-          "name": "debug",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "config": {
-          "description": "Path to config file",
-          "env": "HYPERGEN_CONFIG",
-          "name": "config",
-          "hasDynamicHelp": false,
-          "multiple": false,
-          "type": "option"
-        },
-        "json": {
-          "description": "Output as JSON",
-          "name": "json",
-          "allowNo": false,
-          "type": "boolean"
-        },
-        "quiet": {
-          "char": "q",
-          "description": "Suppress non-essential output",
-          "name": "quiet",
-          "allowNo": false,
-          "type": "boolean"
-        }
-      },
-      "hasDynamicHelp": false,
-      "hiddenAliases": [],
-      "id": "system:version",
-      "pluginAlias": "hypergen",
-      "pluginName": "hypergen",
-      "pluginType": "core",
-      "strict": true,
-      "enableJsonFlag": false,
-      "isESM": true,
-      "relativePath": [
-        "dist",
-        "commands",
-        "system",
-        "version.js"
       ]
     }
   },
