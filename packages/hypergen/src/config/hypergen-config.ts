@@ -6,7 +6,7 @@
 
 import fs from 'fs'
 import path from 'path'
-import { pathToFileURL } from 'url'
+import { cosmiconfig } from 'cosmiconfig'
 import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
 import { DEFAULT_TEMPLATE_DIRECTORY } from '../constants.js'
 import { loadHelpers } from './load-helpers.js'
@@ -145,7 +145,7 @@ export class HypergenConfigLoader {
   }
   
   /**
-   * Load configuration from various sources
+   * Load configuration from various sources using cosmiconfig
    */
   static async loadConfig(
     configPath?: string,
@@ -154,13 +154,26 @@ export class HypergenConfigLoader {
   ): Promise<ResolvedConfig> {
     let config: HypergenConfig = {}
     let actualConfigPath: string | null = null
-    
+
     try {
-      // 1. Try explicit config path
+      const explorer = cosmiconfig('hypergen', {
+        searchPlaces: [
+          'hypergen.config.js',
+          'hypergen.config.mjs',
+          'hypergen.config.cjs',
+          'hypergen.config.json',
+          '.hypergenrc',
+          '.hypergenrc.json'
+        ],
+        stopDir: path.dirname(projectRoot) // Stop searching at project root's parent
+      })
+
+      let result
+
+      // 1. Try explicit config path first
       if (configPath) {
         if (fs.existsSync(configPath)) {
-          config = await this.loadConfigFile(configPath)
-          actualConfigPath = configPath
+          result = await explorer.load(configPath)
         } else {
           throw ErrorHandler.createError(
             ErrorCode.CONFIG_FILE_NOT_FOUND,
@@ -168,59 +181,14 @@ export class HypergenConfigLoader {
             { file: configPath }
           )
         }
+      } else {
+        // 2. Auto-detect using cosmiconfig (searches from projectRoot upwards)
+        result = await explorer.search(projectRoot)
       }
-      
-      // 2. Try environment variable
-      if (!actualConfigPath) {
-        const envConfigPath = process.env.HYPERGEN_CONFIG
-        if (envConfigPath && fs.existsSync(envConfigPath)) {
-          config = await this.loadConfigFile(envConfigPath)
-          actualConfigPath = envConfigPath
-        }
-      }
-      
-      // 3. Try default config files
-      if (!actualConfigPath) {
-        for (const fileName of this.CONFIG_FILES) {
-          const fullPath = path.join(projectRoot, fileName)
-          if (fs.existsSync(fullPath)) {
-            config = await this.loadConfigFile(fullPath)
-            actualConfigPath = fullPath
-            break
-          }
-        }
-      }
-      
-      // 4. Try parent directories
-      if (!actualConfigPath) {
-        let currentDir = projectRoot
-        while (currentDir !== path.dirname(currentDir)) {
-          for (const fileName of this.CONFIG_FILES) {
-            const fullPath = path.join(currentDir, fileName)
-            if (fs.existsSync(fullPath)) {
-              config = await this.loadConfigFile(fullPath)
-              actualConfigPath = fullPath
-              break
-            }
-          }
-          if (actualConfigPath) break
-          currentDir = path.dirname(currentDir)
-        }
-      }
-      
-      // 5. Try home directory
-      if (!actualConfigPath) {
-        const homeDir = process.env.HOME || process.env.USERPROFILE
-        if (homeDir) {
-          for (const fileName of this.CONFIG_FILES) {
-            const fullPath = path.join(homeDir, fileName)
-            if (fs.existsSync(fullPath)) {
-              config = await this.loadConfigFile(fullPath)
-              actualConfigPath = fullPath
-              break
-            }
-          }
-        }
+
+      if (result) {
+        config = result.config
+        actualConfigPath = result.filepath
       }
       
       // Merge with default config
@@ -238,37 +206,30 @@ export class HypergenConfigLoader {
         registerHelpers(loadedHelpers, 'config:hypergen.config')
       }
       
+      // Determine the base directory for resolving relative paths
+      // If config was found, use its directory; otherwise use projectRoot
+      const configDir = actualConfigPath ? path.dirname(actualConfigPath) : projectRoot
+
       // Resolve paths
       const resolvedConfig: ResolvedConfig = {
         ...mergedConfig,
         configPath: actualConfigPath || 'default',
         projectRoot,
         environment,
-        loadedHelpers,
-        
-        // Ensure required properties are set
-        templates: mergedConfig.templates || this.DEFAULT_CONFIG.templates!,
-        discovery: mergedConfig.discovery || this.DEFAULT_CONFIG.discovery!,
-        engine: mergedConfig.engine || this.DEFAULT_CONFIG.engine!,
-        output: mergedConfig.output || this.DEFAULT_CONFIG.output!,
-        validation: mergedConfig.validation || this.DEFAULT_CONFIG.validation!,
-        cache: mergedConfig.cache || this.DEFAULT_CONFIG.cache!,
-        plugins: mergedConfig.plugins || this.DEFAULT_CONFIG.plugins!,
-        helpers: mergedConfig.helpers || this.DEFAULT_CONFIG.helpers!,
-        environments: mergedConfig.environments || this.DEFAULT_CONFIG.environments!
-      }
-      
-      // Resolve template paths
+        loadedHelpers
+      } as ResolvedConfig
+
+      // Resolve template paths relative to config file directory
       resolvedConfig.templates = resolvedConfig.templates.map(templatePath => {
         if (path.isAbsolute(templatePath)) {
           return templatePath
         }
-        return path.resolve(projectRoot, templatePath)
+        return path.resolve(configDir, templatePath)
       })
       
-      // Resolve cache directory
+      // Resolve cache directory relative to config file directory
       if (resolvedConfig.cache.directory && !path.isAbsolute(resolvedConfig.cache.directory)) {
-        resolvedConfig.cache.directory = path.resolve(projectRoot, resolvedConfig.cache.directory)
+        resolvedConfig.cache.directory = path.resolve(configDir, resolvedConfig.cache.directory)
       }
       
       return resolvedConfig
@@ -293,45 +254,6 @@ export class HypergenConfigLoader {
     }
   }
   
-  /**
-   * Load configuration from a specific file
-   */
-  private static async loadConfigFile(configPath: string): Promise<HypergenConfig> {
-    const ext = path.extname(configPath).toLowerCase()
-    
-    try {
-      if (ext === '.json' || path.basename(configPath) === '.hypergenrc') {
-        // JSON configuration
-        const content = fs.readFileSync(configPath, 'utf-8')
-        return JSON.parse(content)
-      } else if (ext === '.js' || ext === '.mjs' || ext === '.cjs') {
-        // JavaScript/ES module configuration
-        const fileUrl = pathToFileURL(configPath).href
-        const module = await import(fileUrl)
-        return module.default || module
-      } else {
-        throw ErrorHandler.createError(
-          ErrorCode.CONFIG_INVALID_FORMAT,
-          `Unsupported configuration file format: ${ext}`,
-          { file: configPath }
-        )
-      }
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
-        throw ErrorHandler.createError(
-          ErrorCode.CONFIG_FILE_NOT_FOUND,
-          `Configuration file not found: ${configPath}`,
-          { file: configPath }
-        )
-      }
-      
-      throw ErrorHandler.createError(
-        ErrorCode.CONFIG_INVALID_FORMAT,
-        `Failed to load configuration: ${error.message}`,
-        { file: configPath }
-      )
-    }
-  }
   
   /**
    * Merge configuration objects

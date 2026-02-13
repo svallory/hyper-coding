@@ -21,7 +21,7 @@ export interface GeneratorDiscoveryOptions {
   enabledSources?: DiscoverySource[]
 }
 
-export type DiscoverySource = 'local' | 'npm' | 'git' | 'workspace' | 'global'
+export type DiscoverySource = 'local' | 'npm' | 'git' | 'github' | 'workspace' | 'global'
 
 export interface DiscoveredGenerator {
   name: string
@@ -38,14 +38,19 @@ export interface DiscoveredGenerator {
 
 export class GeneratorDiscovery {
   private discoveredGenerators: Map<string, DiscoveredGenerator> = new Map()
-  
+
   constructor(private options: GeneratorDiscoveryOptions = {}) {
+    // Always include .hyper/kits in addition to any configured directories
+    const defaultDirs = ['recipes', 'cookbooks']
+    const configDirs = this.options.directories || []
+    const allDirs = [...new Set([...defaultDirs, ...configDirs, '.hyper/kits'])]
+
     this.options = {
-      directories: ['recipes', 'cookbooks', '.hyper/kits'],
       patterns: ['**/*.{js,ts,mjs}', '**/template.yml', '**/generator.{js,ts,mjs}'],
       excludePatterns: ['**/node_modules/**', '**/dist/**', '**/*.test.*', '**/*.spec.*'],
       enabledSources: ['local', 'workspace', 'global'],
-      ...this.options
+      ...this.options,
+      directories: allDirs // Always use merged directories
     }
   }
 
@@ -54,24 +59,24 @@ export class GeneratorDiscovery {
    */
   async discoverAll(): Promise<DiscoveredGenerator[]> {
     debug('Starting generator discovery with sources: %o', this.options.enabledSources)
-    
+
     const discoveries: DiscoveredGenerator[] = []
-    
+
     if (this.options.enabledSources?.includes('local')) {
       const localGenerators = await this.discoverLocal()
       discoveries.push(...localGenerators)
     }
-    
+
     if (this.options.enabledSources?.includes('workspace')) {
       const workspaceGenerators = await this.discoverWorkspace()
       discoveries.push(...workspaceGenerators)
     }
-    
+
     if (this.options.enabledSources?.includes('npm')) {
       const npmGenerators = await this.discoverNpm()
       discoveries.push(...npmGenerators)
     }
-    
+
     if (this.options.enabledSources?.includes('git')) {
       const gitGenerators = await this.discoverGit()
       discoveries.push(...gitGenerators)
@@ -81,12 +86,18 @@ export class GeneratorDiscovery {
       const globalGenerators = await this.discoverGlobal()
       discoveries.push(...globalGenerators)
     }
-    
+
+    // Create virtual "workspace" kit for standalone cookbooks/recipes
+    const workspaceKit = await this.createWorkspaceKit(discoveries)
+    if (workspaceKit) {
+      discoveries.push(workspaceKit)
+    }
+
     // Store discovered generators
     for (const generator of discoveries) {
       this.discoveredGenerators.set(generator.name, generator)
     }
-    
+
     debug('Discovery complete: found %d generators', discoveries.length)
     return discoveries
   }
@@ -571,5 +582,74 @@ export class GeneratorDiscovery {
       packageJson.name?.includes('hypergen-') ||
       packageJson.hypergen !== undefined
     )
+  }
+
+  /**
+   * Create a virtual "workspace" kit containing standalone cookbooks and recipes
+   * that don't belong to any installed kit
+   */
+  private async createWorkspaceKit(discoveries: DiscoveredGenerator[]): Promise<DiscoveredGenerator | null> {
+    debug('Creating virtual workspace kit for standalone cookbooks/recipes')
+
+    const cwd = process.cwd()
+    const workspaceItems: { actions: string[]; templates: string[] } = { actions: [], templates: [] }
+
+    // Check default workspace directories (excluding .hyper/kits)
+    const workspaceDirs = this.options.directories?.filter(dir => dir !== '.hyper/kits') || []
+
+    for (const dir of workspaceDirs) {
+      const fullPath = path.resolve(cwd, dir)
+
+      if (!(await fs.pathExists(fullPath))) {
+        continue
+      }
+
+      debug('Scanning for standalone items in: %s', fullPath)
+
+      // Find cookbooks and recipes that are not part of any kit
+      const actionFiles = await this.findActionFiles(fullPath)
+      const templateFiles = await this.findTemplateFiles(fullPath)
+
+      // Check if these files belong to a discovered kit
+      const kitPaths = discoveries.map(d => d.path)
+      const standaloneActions = actionFiles.filter(file => !this.belongsToKit(file, kitPaths))
+      const standaloneTemplates = templateFiles.filter(file => !this.belongsToKit(file, kitPaths))
+
+      workspaceItems.actions.push(...standaloneActions)
+      workspaceItems.templates.push(...standaloneTemplates)
+    }
+
+    // If we found standalone items, create the workspace kit
+    if (workspaceItems.actions.length > 0 || workspaceItems.templates.length > 0) {
+      const actions = await this.extractActionsFromFiles(workspaceItems.actions)
+
+      debug('Created workspace kit with %d actions and %d templates',
+        actions.length, workspaceItems.templates.length)
+
+      return {
+        name: 'workspace',
+        source: 'local',
+        path: cwd,
+        actions,
+        metadata: {
+          description: 'Standalone cookbooks and recipes not belonging to any kit'
+        }
+      }
+    }
+
+    debug('No standalone workspace items found')
+    return null
+  }
+
+  /**
+   * Check if a file path belongs to any of the given kit paths
+   */
+  private belongsToKit(filePath: string, kitPaths: string[]): boolean {
+    for (const kitPath of kitPaths) {
+      if (filePath.startsWith(kitPath)) {
+        return true
+      }
+    }
+    return false
   }
 }

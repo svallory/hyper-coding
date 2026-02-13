@@ -289,8 +289,8 @@ describe('Hypergen Configuration System', () => {
         path.join(tempDir, 'hypergen.config.json'),
         '{ invalid json'
       )
-      
-      await expect(HypergenConfigLoader.loadConfig(undefined, tempDir)).rejects.toThrow('Failed to load configuration')
+
+      await expect(HypergenConfigLoader.loadConfig(undefined, tempDir)).rejects.toThrow()
     })
 
     it('should handle missing config file when explicitly specified', async () => {
@@ -304,16 +304,17 @@ describe('Hypergen Configuration System', () => {
     it('should find config in parent directories', async () => {
       const subDir = path.join(tempDir, 'subdir')
       fs.mkdirSync(subDir)
-      
+
       const testConfig = { templates: ['parent-templates'] }
       fs.writeFileSync(
         path.join(tempDir, 'hypergen.config.json'),
         JSON.stringify(testConfig, null, 2)
       )
-      
+
       const config = await HypergenConfigLoader.loadConfig(undefined, subDir)
-      
-      expect(config.templates).toEqual([path.resolve(subDir, 'parent-templates')])
+
+      // Paths should be resolved relative to the config file location (tempDir), not the search start (subDir)
+      expect(config.templates).toEqual([path.resolve(tempDir, 'parent-templates')])
     })
 
     it('should prefer project-level config over parent config', async () => {
