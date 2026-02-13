@@ -904,6 +904,11 @@ export class RecipeEngine extends EventEmitter {
         delete step.args
       }
 
+      // Recursively normalize nested steps in sequence/parallel
+      if (step.steps && Array.isArray(step.steps)) {
+        step.steps = this.normalizeSteps(step.steps)
+      }
+
       return step as RecipeStepUnion
     })
   }
@@ -1164,38 +1169,85 @@ export class RecipeEngine extends EventEmitter {
   private createConditionEvaluator(variables: Record<string, any>): (expression: string, ctx: Record<string, any>) => boolean {
     return (expression: string, ctx: Record<string, any>) => {
       try {
+        // Built-in helper functions available in condition expressions
+        const projectRoot = ctx.projectRoot || this.config.workingDir || process.cwd()
+        const builtinFunctions: Record<string, (...args: any[]) => any> = {
+          fileExists: (filePath: string) => {
+            const resolved = path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath)
+            return fs.existsSync(resolved)
+          },
+          dirExists: (dirPath: string) => {
+            const resolved = path.isAbsolute(dirPath) ? dirPath : path.resolve(projectRoot, dirPath)
+            try {
+              return fs.statSync(resolved).isDirectory()
+            } catch {
+              return false
+            }
+          },
+        }
+
         // Flatten variables into scope for easier access in condition expressions
         const variableScope = {
           ...variables,
           ...(ctx.variables || {}),
           variables: { ...variables, ...(ctx.variables || {}) }
         }
-        const mergedContext = { ...ctx, ...variableScope }
-        // Remove 'variables' from root if it conflicts (though we just added it back explicitly)
-        
+        const mergedContext = { ...builtinFunctions, ...ctx, ...variableScope }
+
         // Use a set to ensure unique argument names for Function constructor
         // Filter out reserved keywords to prevent SyntaxError
         const reservedKeywords = new Set([
           'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do',
           'else', 'export', 'extends', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof',
           'new', 'return', 'super', 'switch', 'this', 'throw', 'try', 'typeof', 'var', 'void', 'while',
-          'with', 'yield', 'let', 'static', 'enum', 'await', 'implements', 'interface', 'package', 
+          'with', 'yield', 'let', 'static', 'enum', 'await', 'implements', 'interface', 'package',
           'private', 'protected', 'public'
         ])
-        
+
         const argNames = Array.from(new Set(Object.keys(mergedContext)))
           .filter(name => !reservedKeywords.has(name) && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name))
-          
+
         const argValues = argNames.map(name => mergedContext[name])
-        
+
         const func = new Function(...argNames, `return ${expression}`)
         return Boolean(func(...argValues))
       } catch (error) {
-        this.debug('Condition evaluation failed: %s - %s', expression, 
+        this.debug('Condition evaluation failed: %s - %s', expression,
           error instanceof Error ? error.message : String(error))
         return false
       }
     }
+  }
+
+  /**
+   * Recursively count steps including those nested in sequence/parallel tools
+   */
+  private countNestedSteps(results: StepResult[], status?: 'completed' | 'failed' | 'skipped', depth = 0): number {
+    let count = 0
+
+    for (const result of results) {
+      // For sequence/parallel tools, count only their nested steps (not the container itself)
+      // For all other tools, count the step if status matches or no filter
+      const isContainer = result.toolType === 'sequence' || result.toolType === 'parallel'
+
+      if (!isContainer && (!status || result.status === status)) {
+        count++
+      }
+
+      // Recursively count nested steps in sequence/parallel tools
+      // Note: The toolResult is wrapped - it's result.toolResult.toolResult.steps, not result.toolResult.steps
+      // This is because the tool returns a StepResult with toolResult field, creating double nesting
+      if (isContainer && result.toolResult) {
+        const wrapped = result.toolResult as any
+        const executionResult = wrapped.toolResult as { steps?: StepResult[] } | undefined
+        if (executionResult?.steps && Array.isArray(executionResult.steps) && executionResult.steps.length > 0) {
+          const nestedCount = this.countNestedSteps(executionResult.steps, status, depth + 1)
+          count += nestedCount
+        }
+      }
+    }
+
+    return count
   }
 
   private aggregateResults(
@@ -1207,17 +1259,20 @@ export class RecipeEngine extends EventEmitter {
     context: StepContext
   ): RecipeExecutionResult {
     const duration = Date.now() - startTime
-    const completedSteps = stepResults.filter(r => r.status === 'completed')
-    const failedSteps = stepResults.filter(r => r.status === 'failed')
-    const skippedSteps = stepResults.filter(r => r.status === 'skipped')
-    
+
+    // Count steps recursively including nested ones in sequences/parallel
+    const totalSteps = this.countNestedSteps(stepResults)
+    const completedSteps = this.countNestedSteps(stepResults, 'completed')
+    const failedSteps = this.countNestedSteps(stepResults, 'failed')
+    const skippedSteps = this.countNestedSteps(stepResults, 'skipped')
+
     // Aggregate file changes
     const filesCreated = new Set<string>()
     const filesModified = new Set<string>()
     const filesDeleted = new Set<string>()
     const errors: string[] = []
     const warnings: string[] = []
-    
+
     for (const result of stepResults) {
       if (result.filesCreated) {
         result.filesCreated.forEach(file => filesCreated.add(file))
@@ -1232,7 +1287,7 @@ export class RecipeEngine extends EventEmitter {
         errors.push(`${result.stepName}: ${result.error.message}`)
       }
     }
-    
+
     // Collect providedValues from recipe.provides declarations
     let providedValues: Record<string, any> | undefined
     if (recipe.provides && recipe.provides.length > 0) {
@@ -1250,7 +1305,7 @@ export class RecipeEngine extends EventEmitter {
     return {
       executionId,
       recipe,
-      success: failedSteps.length === 0,
+      success: failedSteps === 0,
       stepResults,
       duration,
       filesCreated: Array.from(filesCreated),
@@ -1263,10 +1318,10 @@ export class RecipeEngine extends EventEmitter {
         startTime: new Date(startTime),
         endTime: new Date(),
         workingDir: context.projectRoot,
-        totalSteps: stepResults.length,
-        completedSteps: completedSteps.length,
-        failedSteps: failedSteps.length,
-        skippedSteps: skippedSteps.length,
+        totalSteps,
+        completedSteps,
+        failedSteps,
+        skippedSteps,
         providedValues,
       }
     }
@@ -1427,7 +1482,7 @@ export class RecipeEngine extends EventEmitter {
       ))
     }
     
-    const validTools = ['template', 'action', 'codemod', 'recipe', 'shell', 'prompt', 'sequence', 'parallel', 'ai', 'install']
+    const validTools = ['template', 'action', 'codemod', 'recipe', 'shell', 'prompt', 'sequence', 'parallel', 'ai', 'install', 'query', 'patch', 'ensure-dirs']
     if (step.tool && !validTools.includes(step.tool)) {
       errors.push(new RecipeValidationError(
         `Step ${step.name || index + 1} has invalid tool: ${step.tool}`,
