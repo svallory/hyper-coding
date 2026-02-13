@@ -2,7 +2,7 @@
  * Install a kit from npm, JSR, GitHub, local paths, or other sources
  */
 
-import { existsSync, mkdirSync, cpSync } from 'node:fs'
+import { existsSync, mkdirSync, cpSync, rmSync } from 'node:fs'
 import { join, basename, isAbsolute, resolve } from 'node:path'
 import { Args, Flags } from '@oclif/core'
 import { BaseCommand } from '../../lib/base-command.js'
@@ -38,6 +38,11 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
     name: Flags.string({
       char: 'n',
       description: 'Name to use for the kit directory (default: auto-detect from source)',
+    }),
+    force: Flags.boolean({
+      char: 'f',
+      description: 'Replace existing kit even if already installed (allows changing source)',
+      default: false,
     }),
   }
 
@@ -141,11 +146,18 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 
     // Check if kit already exists (directory or manifest)
     if (existsSync(targetDir) || isKitInstalled(projectRoot, kitName)) {
-      this.error(
-        `Kit already exists: ${kitName}\n` +
-        `Remove it first with: rm -rf .hyper/kits/${kitName}\n` +
-        `Or specify a different name with: --name <name>`
-      )
+      if (!flags.force) {
+        this.error(
+          `Kit already exists: ${kitName}\n` +
+          `Use --force to replace it, or --name <name> for a different name`
+        )
+      }
+
+      // --force: remove existing kit directory before reinstalling
+      this.log(`Replacing existing kit: ${kitName}`)
+      if (existsSync(targetDir)) {
+        rmSync(targetDir, { recursive: true, force: true })
+      }
     }
 
     this.log(`Installing to: .hyper/kits/${kitName}`)
