@@ -3,6 +3,6 @@ to: templates/generator/help/index.jig
 ---
 ---
 message: |
-  hygen {bold generator new} --name [NAME] --action [ACTION]
-  hygen {bold generator with-prompt} --name [NAME] --action [ACTION]
+  hypergen {bold generator new} --name [NAME] --action [ACTION]
+  hypergen {bold generator with-prompt} --name [NAME] --action [ACTION]
 ---

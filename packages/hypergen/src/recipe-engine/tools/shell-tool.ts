@@ -71,7 +71,7 @@ export class ShellTool extends Tool<ShellStep> {
       // specific to the legacy action system. We might need to adapt it or use simple exec.
       // However, for now let's use it as requested.
       
-      // NOTE: The current ops/shell.ts implementation is a bit tied to Hygen's legacy ops.
+      // NOTE: The current ops/shell.ts implementation is tied to legacy ops.
       // It returns a function runner format. Since we want standard behavior, we might
       // rely on node's child_process directly if ops/shell is too specific, but let's try to reuse.
       

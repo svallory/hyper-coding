@@ -9,11 +9,11 @@ to: app/hello.js
 ---
 const hello = ```
 Hello!
-This is your first prompt based hygen template.
+This is your first prompt based hypergen template.
 
 Learn what it can do here:
 
-https://github.com/jondot/hygen
+https://github.com/svallory/hypergen
 ```
 
 console.log(hello)

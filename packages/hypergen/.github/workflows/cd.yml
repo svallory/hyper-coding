@@ -25,7 +25,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: yarn install
       - run: yarn build
-      - run: yarn hygen:build -- init self # smoke test the built bundle
+      - run: yarn hypergen:build -- init self # smoke test the built bundle
       - run: npm publish # add the package to npm
         env:
           NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
@@ -40,9 +40,9 @@ jobs:
           printf "::set-output name=%s::%s\n" tag-name "${GITHUB_REF#refs/tags/}"
       - uses: mislav/bump-homebrew-formula-action@v1
         with:
-          formula-path: hygen.rb
+          formula-path: hypergen.rb
           homebrew-tap: jondot/homebrew-tap
-          download-url: "https://github.com/jondot/hygen/releases/download/${{ steps.extract-version.outputs.tag-name }}/hygen.macos.${{ steps.extract-version.outputs.tag-name }}.tar.gz"
-          commit-message: updating formula for Hygen
+          download-url: "https://github.com/svallory/hypergen/releases/download/${{ steps.extract-version.outputs.tag-name }}/hypergen.macos.${{ steps.extract-version.outputs.tag-name }}.tar.gz"
+          commit-message: updating formula for Hypergen
         env:
           COMMITTER_TOKEN: ${{ secrets.COMMITTER_TOKEN }}

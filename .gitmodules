@@ -1,12 +1,3 @@
-[submodule "packages/moon-launch"]
-	path = packages/moon-launch
-	url = git@github.com:svallory/moon-launch.git
-[submodule "packages/moon-templates"]
-	path = packages/moon-templates
-	url = git@github.com:svallory/moon-templates.git
-[submodule ".moon/templates"]
-	path = .moon/templates
-	url = git@github.com:svallory/moon-templates.git
 [submodule "hyper-kits/nextjs"]
 	path = hyper-kits/nextjs
 	url = git@github.com:hyper-kits/nextjs.git

@@ -5,7 +5,7 @@
 	"keywords": [
 		"template",
 		"generator",
-		"hygen",
+		"hypergen",
 		"boilerplate",
 		"redux",
 		"react"
@@ -83,10 +83,10 @@
 		"watch": "bun test --watch",
 		"hypergen": "./bin/dev.js",
 		"hypergen:build": "./bin/run.js",
-		"docs:prepare": "cd hygen.io && bun install",
-		"docs:watch": "cd hygen.io && bun start",
-		"docs:build": "cd hygen.io && bun run build",
-		"docs:publish": "cd hygen.io && bun run deploy",
+		"docs:prepare": "cd docs && bun install",
+		"docs:watch": "cd docs && bun start",
+		"docs:build": "cd docs && bun run build",
+		"docs:publish": "cd docs && bun run deploy",
 		"docs:api": "bun run build:lib && api-extractor run --local && node /work/hyperdev/apps/mintlify-tsdocs/bin/mintlify-tsdocs markdown -i temp -o /work/hyperdev/apps/docs/sdk-reference/hypergen --docs-json /work/hyperdev/apps/docs/docs.json --tab-name 'SDK Reference'",
 		"docs:api:watch": "echo 'Watch mode not yet supported for api-documenter'",
 		"docs:typedoc": "bun run build:lib && typedoc",

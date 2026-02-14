@@ -21,15 +21,15 @@ const main = async () => {
     await fs.mkdir(`${wd}/tar-${file}`)
     // give Windows special treatment: it should be a zip file and keep an .exe suffix
     if (plat === 'win.exe') {
-      await fs.move(`${wd}/${file}`, `${wd}/tar-${file}/hygen.exe`)
+      await fs.move(`${wd}/${file}`, `${wd}/tar-${file}/hypergen.exe`)
       await execa.command(
-        `cd ${wd}/tar-${file} && zip ../hygen.${plat}.v${v}.zip hygen.exe`,
+        `cd ${wd}/tar-${file} && zip ../hypergen.${plat}.v${v}.zip hypergen.exe`,
         opts,
       )
     } else {
-      await fs.move(`${wd}/${file}`, `${wd}/tar-${file}/hygen`)
+      await fs.move(`${wd}/${file}`, `${wd}/tar-${file}/hypergen`)
       await execa.command(
-        `cd ${wd}/tar-${file} && tar -czvf ../hygen.${plat}.v${v}.tar.gz hygen`,
+        `cd ${wd}/tar-${file} && tar -czvf ../hypergen.${plat}.v${v}.tar.gz hypergen`,
         opts,
       )
     }
@@ -42,20 +42,20 @@ const main = async () => {
   if (process.env.MANUAL_HB_PUBLISH) {
     console.log('standalone: publishing to homebrew tap...')
     const matches = (
-      await execa.command(`shasum -a 256 ${wd}/hygen.macos.v${v}.tar.gz`, opts)
+      await execa.command(`shasum -a 256 ${wd}/hypergen.macos.v${v}.tar.gz`, opts)
     ).stdout.match(/([a-f0-9]+)\s+/)
     if (matches && matches.length > 1) {
       const sha = matches[1]
-      await fs.writeFile('/tmp/hygen.rb', brewFormula(sha, v)) // eslint-disable-line @typescript-eslint/no-use-before-define
+      await fs.writeFile('/tmp/hypergen.rb', brewFormula(sha, v)) // eslint-disable-line @typescript-eslint/no-use-before-define
       const cmd = [
         `cd /tmp`,
         `git clone git://${repo} brew-tap`,
         `cd brew-tap`,
-        `mv /tmp/hygen.rb .`,
+        `mv /tmp/hypergen.rb .`,
         `git config user.email jondotan@gmail.com`,
         `git config user.name 'Dotan Nahum'`,
         `git add .`,
-        `git commit -m 'hygen: auto-release'`,
+        `git commit -m 'hypergen: auto-release'`,
         `git push https://${process.env.GITHUB_TOKEN}@${repo}`,
       ].join(' && ')
       await execa.command(cmd, opts)
@@ -69,15 +69,15 @@ const brewFormula = (sha, ver) => `
 VER = "${ver}"
 SHA = "${sha}"
 
-class Hygen < Formula
+class Hypergen < Formula
   desc "The scalable code generator that saves you time."
-  homepage "https://hygen.io"
-  url "https://github.com/jondot/hygen/releases/download/v#{VER}/hygen.macos.v#{VER}.tar.gz"
+  homepage "https://hypergen.dev"
+  url "https://github.com/svallory/hypergen/releases/download/v#{VER}/hypergen.macos.v#{VER}.tar.gz"
   version VER
   sha256 SHA
 
   def install
-    bin.install "hygen"
+    bin.install "hypergen"
   end
 end
 `

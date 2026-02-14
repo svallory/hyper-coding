@@ -32,7 +32,7 @@ export interface DiscoveredGenerator {
   name: string
   source: DiscoverySource
   path: string
-  /** @deprecated Legacy field from Hygen, use cookbooks/recipes instead */
+  /** @deprecated Legacy field, use cookbooks/recipes instead */
   actions: string[]
   cookbooks?: string[]
   recipes?: string[]
@@ -130,40 +130,96 @@ export class GeneratorDiscovery {
     debug('Discovering local generators in directories: %o', this.options.directories)
 
     const generators: DiscoveredGenerator[] = []
+    const discoveredKitPaths = new Set<string>()
 
     for (const dir of this.options.directories || []) {
       const fullPath = path.resolve(this.projectRoot, dir)
-      
+
       if (!(await fs.pathExists(fullPath))) {
         continue
       }
-      
+
       debug('Scanning directory: %s', fullPath)
-      
-      // Look for action files
+
+      // Look for kit.yml files first (recipe-based kits)
+      const kitYmlFiles = await this.findKitYmlFiles(fullPath)
+      for (const kitYmlPath of kitYmlFiles) {
+        const kitPath = path.dirname(kitYmlPath)
+        const kitName = path.basename(kitPath)
+
+        // Avoid duplicates
+        if (discoveredKitPaths.has(kitPath)) {
+          continue
+        }
+        discoveredKitPaths.add(kitPath)
+
+        try {
+          const parsedKit = await parseKitFile(kitYmlPath)
+          if (parsedKit.isValid) {
+            generators.push({
+              name: kitName,
+              source: 'local',
+              path: kitPath,
+              actions: [],
+              metadata: {
+                description: parsedKit.config.description,
+                version: parsedKit.config.version,
+                author: parsedKit.config.author,
+                license: parsedKit.config.license,
+                keywords: parsedKit.config.keywords,
+                tags: parsedKit.config.tags,
+              }
+            })
+            debug('Discovered kit from kit.yml: %s at %s', kitName, kitPath)
+          }
+        } catch (error) {
+          debug('Failed to parse kit.yml at %s: %s', kitYmlPath, error)
+        }
+      }
+
+      // Look for action files (traditional action-based generators)
       const actionFiles = await this.findActionFiles(fullPath)
-      
+
       // Look for template.yml files
       const templateFiles = await this.findTemplateFiles(fullPath)
-      
+
       // Group by generator name (typically directory name)
       const generatorGroups = this.groupFilesByGenerator(actionFiles, templateFiles, fullPath)
-      
+
       for (const [generatorName, files] of generatorGroups) {
+        const generatorPath = path.join(fullPath, generatorName)
+
+        // Skip if already discovered as a kit
+        if (discoveredKitPaths.has(generatorPath)) {
+          continue
+        }
+
         const actions = await this.extractActionsFromFiles(files.actions)
-        
+
         generators.push({
           name: generatorName,
           source: 'local',
-          path: path.join(fullPath, generatorName),
+          path: generatorPath,
           actions,
           metadata: await this.extractGeneratorMetadata(files.templates[0])
         })
       }
     }
-    
+
     debug('Found %d local generators', generators.length)
     return generators
+  }
+
+  /**
+   * Find kit.yml files in a directory
+   */
+  private async findKitYmlFiles(directory: string): Promise<string[]> {
+    const matches = await glob('**/kit.yml', {
+      cwd: directory,
+      ignore: this.options.excludePatterns
+    })
+
+    return matches.map(f => path.resolve(directory, f))
   }
 
   /**

@@ -4,7 +4,8 @@
 
 import { Flags } from '@oclif/core'
 import { BaseCommand } from '../../lib/base-command.js'
-import chalk from 'chalk'
+import { c } from '../../lib/colors.js'
+import { s } from '../../lib/styles.js'
 
 export default class KitList extends BaseCommand<typeof KitList> {
   static override description = 'List installed kits'
@@ -46,8 +47,8 @@ export default class KitList extends BaseCommand<typeof KitList> {
       }
 
       if (kits.length === 0) {
-        this.log('No kits installed.')
-        this.log('\nInstall a kit with: hypergen kit install <kit>')
+        this.log(c.warning('No kits installed.'))
+        this.log(s.hint('\nInstall a kit with: hypergen kit install <kit>'))
         return
       }
 
@@ -58,8 +59,8 @@ export default class KitList extends BaseCommand<typeof KitList> {
         if (sourceKits.length === 0) continue
 
         // Print source header
-        this.log(`\n${chalk.bold(this.formatSourceHeader(source))}`)
-        this.log(chalk.gray('─'.repeat(60)))
+        this.log(`\n${c.heading(this.formatSourceHeader(source))}`)
+        this.log(s.hr())
 
         for (const kit of sourceKits) {
           this.printKit(kit, flags.verbose)
@@ -106,55 +107,55 @@ export default class KitList extends BaseCommand<typeof KitList> {
   private printKit(kit: any, verbose: boolean): void {
     // Title with optional version
     const title = kit.metadata?.version
-      ? `${chalk.cyan(kit.name)} ${chalk.gray(`v${kit.metadata.version}`)}`
-      : chalk.cyan(kit.name)
+      ? `${c.kit(kit.name)} ${s.version(kit.metadata.version)}`
+      : c.kit(kit.name)
 
-    this.log(`\n  ${chalk.bold('Title:')} ${title}`)
+    this.log(`\n  ${s.keyValue('Title', title, 10)}`)
 
     // Description
     if (kit.metadata?.description) {
-      this.log(`  ${chalk.bold('Description:')} ${kit.metadata.description}`)
+      this.log(`  ${s.keyValue('Description', kit.metadata.description, 10)}`)
     }
 
     // Source location
     if (verbose) {
-      this.log(`  ${chalk.bold('Source location:')} ${chalk.gray(kit.path)}`)
+      this.log(`  ${s.keyValue('Source location', s.path(kit.path), 10)}`)
     }
 
     // Cookbooks
     if (kit.cookbooks && kit.cookbooks.length > 0) {
       const cookbookList = verbose
         ? kit.cookbooks.join(', ')
-        : kit.cookbooks.slice(0, 5).join(', ') + (kit.cookbooks.length > 5 ? `, +${kit.cookbooks.length - 5} more` : '')
-      this.log(`  ${chalk.bold('Cookbooks:')} ${cookbookList}`)
+        : kit.cookbooks.slice(0, 5).join(', ') + (kit.cookbooks.length > 5 ? c.subtle(`, +${kit.cookbooks.length - 5} more`) : '')
+      this.log(`  ${s.keyValue('Cookbooks', cookbookList, 10)}`)
     }
 
     // Recipes (direct recipes)
     if (kit.recipes && kit.recipes.length > 0) {
       const recipeList = verbose
         ? kit.recipes.join(', ')
-        : kit.recipes.slice(0, 5).join(', ') + (kit.recipes.length > 5 ? `, +${kit.recipes.length - 5} more` : '')
-      this.log(`  ${chalk.bold('Recipes:')} ${recipeList}`)
+        : kit.recipes.slice(0, 5).join(', ') + (kit.recipes.length > 5 ? c.subtle(`, +${kit.recipes.length - 5} more`) : '')
+      this.log(`  ${s.keyValue('Recipes', recipeList, 10)}`)
     }
 
     // Helpers
     if (verbose && kit.helpers && kit.helpers.length > 0) {
-      this.log(`  ${chalk.bold('Helpers:')} ${kit.helpers.join(', ')}`)
+      this.log(`  ${s.keyValue('Helpers', kit.helpers.join(', '), 10)}`)
     }
 
     // Additional metadata in verbose mode
     if (verbose) {
       if (kit.metadata?.author) {
-        this.log(`  ${chalk.bold('Author:')} ${kit.metadata.author}`)
+        this.log(`  ${s.keyValue('Author', kit.metadata.author, 10)}`)
       }
       if (kit.metadata?.license) {
-        this.log(`  ${chalk.bold('License:')} ${kit.metadata.license}`)
+        this.log(`  ${s.keyValue('License', kit.metadata.license, 10)}`)
       }
       if (kit.metadata?.keywords && kit.metadata.keywords.length > 0) {
-        this.log(`  ${chalk.bold('Keywords:')} ${kit.metadata.keywords.join(', ')}`)
+        this.log(`  ${s.keyValue('Keywords', kit.metadata.keywords.join(', '), 10)}`)
       }
       if (kit.metadata?.tags && kit.metadata.tags.length > 0) {
-        this.log(`  ${chalk.bold('Tags:')} ${kit.metadata.tags.join(', ')}`)
+        this.log(`  ${s.keyValue('Tags', kit.metadata.tags.join(', '), 10)}`)
       }
     }
   }

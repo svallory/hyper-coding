@@ -24,7 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-Hypergen is a code generator forked from Hygen, built with TypeScript. It uses decorators for action definitions and Jig (Edge.js fork) for templating.
+Hypergen is a scalable code generator built with TypeScript. It uses decorators for action definitions and Jig (Edge.js fork) for templating.
 
 ### Core Flow
 

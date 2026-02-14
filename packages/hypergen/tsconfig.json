@@ -22,5 +22,5 @@
     }
   },
   "include": ["src/**/*.ts", "src/**/*.json", ".hypergen.js"],
-  "exclude": ["node_modules", "hygen.io"]
+  "exclude": ["node_modules", "docs"]
 }

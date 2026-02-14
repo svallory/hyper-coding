@@ -1,7 +1,7 @@
 hello metaverse!
-This is your first hygen template.
+This is your first hypergen template.
 
 Learn what it can do here:
 
-https://github.com/jondot/hygen
+https://github.com/svallory/hypergen
 

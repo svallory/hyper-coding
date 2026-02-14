@@ -3,10 +3,15 @@
   "kits": {
     "nextjs": {
       "name": "nextjs",
-      "source": "hyper-kits/nextjs",
-      "type": "github",
-      "installedAt": "2026-02-13T17:55:51.158Z",
-      "version": "0.1.0"
+      "source": "./hyper-kits/nextjs",
+      "type": "local",
+      "installedAt": "2026-02-14T02:19:05.477Z"
+    },
+    "oss": {
+      "name": "oss",
+      "source": "./../../hyper-kits/oss",
+      "type": "local",
+      "installedAt": "2026-02-13T23:18:58.838Z"
     }
   }
 }

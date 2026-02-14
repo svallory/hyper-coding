@@ -35,7 +35,7 @@ jobs:
         cache: 'yarn'
     - run: yarn install
     - run: yarn build
-    - run: yarn hygen:build -- init self
+    - run: yarn hypergen:build -- init self
 
     - run: yarn test
       if: matrix.os == 'ubuntu-latest'
