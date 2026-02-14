@@ -1,0 +1,117 @@
+name: setup
+description: Create a complete open-source GitHub repository with all essential files
+
+variables:
+  dir:
+    type: string
+    required: true
+    description: Target directory where the project should be generated
+    position: 0
+
+  projectName:
+    type: string
+    required: true
+    description: Project name
+
+  description:
+    type: string
+    required: true
+    description: One-line description of the project
+
+  author:
+    type: string
+    required: true
+    description: Author name and email (e.g., "John Doe <john@example.com>")
+
+  license:
+    type: enum
+    required: false
+    default: MIT
+    description: License type
+    values:
+      - MIT
+      - Apache-2.0
+      - BSD-3-Clause
+
+  includeCodeOfConduct:
+    type: boolean
+    required: false
+    default: true
+    description: Include CODE_OF_CONDUCT.md
+
+  includeSecurity:
+    type: boolean
+    required: false
+    default: true
+    description: Include SECURITY.md
+
+  includeFunding:
+    type: boolean
+    required: false
+    default: false
+    description: Include FUNDING.yml
+
+steps:
+  - name: LICENSE
+    tool: template
+    template: templates/LICENSE.jig
+
+  - name: README
+    tool: template
+    template: templates/README.md.jig
+
+  - name: CONTRIBUTING
+    tool: template
+    template: templates/CONTRIBUTING.md.jig
+
+  - name: CODE_OF_CONDUCT
+    tool: template
+    template: templates/CODE_OF_CONDUCT.md.jig
+    when: includeCodeOfConduct
+
+  - name: SECURITY
+    tool: template
+    template: templates/SECURITY.md.jig
+    when: includeSecurity
+
+  - name: CHANGELOG
+    tool: template
+    template: templates/CHANGELOG.md.jig
+
+  - name: GITIGNORE
+    tool: template
+    template: templates/.gitignore.jig
+
+  - name: EDITORCONFIG
+    tool: template
+    template: templates/.editorconfig.jig
+
+  - name: BUG_REPORT_TEMPLATE
+    tool: template
+    template: templates/.github/ISSUE_TEMPLATE/bug_report.yml.jig
+
+  - name: FEATURE_REQUEST_TEMPLATE
+    tool: template
+    template: templates/.github/ISSUE_TEMPLATE/feature_request.yml.jig
+
+  - name: PULL_REQUEST_TEMPLATE
+    tool: template
+    template: templates/.github/pull_request_template.md.jig
+
+  - name: CI_WORKFLOW
+    tool: template
+    template: templates/.github/workflows/ci.yml.jig
+
+  - name: FUNDING
+    tool: template
+    template: templates/.github/FUNDING.yml.jig
+    when: includeFunding
+
+onSuccess: |
+  OSS project "{{ projectName }}" created successfully at {{ dir }}!
+
+  Next steps:
+  1. Review and customize the generated files
+  2. Initialize git: cd {{ dir }} && git init
+  3. Create a repository on GitHub
+  4. Push your code: git push -u origin main

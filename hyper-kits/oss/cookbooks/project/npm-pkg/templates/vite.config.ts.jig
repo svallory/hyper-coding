@@ -1,0 +1,25 @@
+---
+to: "{{ dir }}/vite.config.ts"
+---
+import { defineConfig } from 'vite'
+import { resolve } from 'path'
+import dts from 'vite-plugin-dts'
+
+export default defineConfig({
+  plugins: [dts({ rollupTypes: true })],
+  build: {
+    lib: {
+      entry: {
+        @each((entry, index) in entryPoints)
+        '{{ entry === 'index' ? 'index' : entry + '/index' }}': resolve(__dirname, 'src/{{ entry === 'index' ? 'index' : entry + '/index' }}.ts'){{ index < entryPoints.length - 1 ? ',' : '' }}
+        @end
+      },
+      formats: ['es'],
+    },
+    rollupOptions: {
+      external: [
+        /^node:/,
+      ],
+    },
+  },
+})

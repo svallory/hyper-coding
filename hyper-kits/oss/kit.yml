@@ -1,0 +1,9 @@
+name: oss
+version: 0.1.0
+description: Open-source project setup kit for GitHub repositories and npm packages
+
+# Recipe discovery - finds cookbooks within this kit
+cookbooks:
+  - "cookbooks/*"
+
+# No kit-wide variables - all variables are recipe-specific

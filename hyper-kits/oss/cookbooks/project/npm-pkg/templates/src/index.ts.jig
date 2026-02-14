@@ -1,0 +1,18 @@
+---
+to: "{{ dir }}/src/index.ts"
+---
+/**
+ * {{ description }}
+ *
+ * @packageDocumentation
+ */
+
+/**
+ * Main entry point for {{ projectName }}
+ */
+export function main(): string {
+  return 'Hello from {{ projectName }}!'
+}
+
+// Re-export all public APIs
+export * from './types.js'

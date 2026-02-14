@@ -1,0 +1,9 @@
+name: project
+description: Open-source project setup recipes
+
+# Recipe discovery pattern
+recipes:
+  - "*/recipe.yml"
+
+# Default recipe when none specified
+defaultRecipe: setup

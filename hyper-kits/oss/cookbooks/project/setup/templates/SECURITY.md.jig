@@ -1,0 +1,36 @@
+---
+to: "{{ dir }}/SECURITY.md"
+---
+# Security Policy
+
+## Supported Versions
+
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.x.x   | :white_check_mark: |
+
+## Reporting a Vulnerability
+
+If you discover a security vulnerability in {{ projectName }}, please report it responsibly.
+
+**Do NOT open a public issue for security vulnerabilities.**
+
+Instead, please email {{ author.match(/\u003c(.+)\u003e/) ? author.match(/\u003c(.+)\u003e/)[1] : '[INSERT SECURITY EMAIL]' }} with:
+
+- A description of the vulnerability
+- Steps to reproduce (if applicable)
+- Potential impact
+- Suggested fix (if any)
+
+You can expect:
+- An initial response within 48 hours
+- Regular updates on our progress
+- Credit for the discovery (unless you prefer to remain anonymous)
+
+We will:
+- Investigate and verify the vulnerability
+- Develop and test a fix
+- Release a security update as soon as possible
+- Publish a security advisory after the fix is released
+
+Thank you for helping keep {{ projectName }} and its users safe!

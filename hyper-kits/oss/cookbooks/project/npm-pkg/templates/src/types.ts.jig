@@ -1,0 +1,24 @@
+---
+to: "{{ dir }}/src/types.ts"
+---
+/**
+ * Type definitions for {{ projectName }}
+ */
+
+/**
+ * Configuration options
+ */
+export interface Options {
+  /** Enable debug mode */
+  debug?: boolean
+}
+
+/**
+ * Result type
+ */
+export interface Result {
+  /** Operation success status */
+  success: boolean
+  /** Optional message */
+  message?: string
+}

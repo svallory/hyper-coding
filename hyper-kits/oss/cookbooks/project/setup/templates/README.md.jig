@@ -1,0 +1,41 @@
+---
+to: "{{ dir }}/README.md"
+---
+# {{ projectName }}
+
+> {{ description }}
+
+[![CI](https://img.shields.io/github/actions/workflow/status/{{ author.split(' ').join('').toLowerCase() }}/{{ projectName }}/ci.yml?branch=main)](https://github.com/{{ author.split(' ').join('').toLowerCase() }}/{{ projectName }}/actions)
+[![License](https://img.shields.io/github/license/{{ author.split(' ').join('').toLowerCase() }}/{{ projectName }})](./LICENSE)
+
+## Features
+
+- Feature 1
+- Feature 2
+- Feature 3
+
+## Installation
+
+```bash
+# Add installation instructions here
+```
+
+## Quick Start
+
+```bash
+# Add quick start example here
+```
+
+## Usage
+
+```typescript
+// Add usage example here
+```
+
+## Contributing
+
+Contributions are welcome! Please read our [Contributing Guide](./CONTRIBUTING.md) for details.
+
+## License
+
+[{{ license }}](./LICENSE)

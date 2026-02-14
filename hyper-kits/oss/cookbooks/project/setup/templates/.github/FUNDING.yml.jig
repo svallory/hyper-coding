@@ -1,0 +1,9 @@
+---
+to: "{{ dir }}/.github/FUNDING.yml"
+---
+# Add your funding information here
+# github: [username]
+# ko_fi: username
+# open_collective: project-name
+# patreon: username
+# liberapay: username

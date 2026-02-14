@@ -1,0 +1,126 @@
+name: npm-pkg
+description: Add npm package configuration to an existing project or create from scratch
+
+variables:
+  dir:
+    type: string
+    required: true
+    description: Target directory where the package should be generated
+    position: 0
+
+  projectName:
+    type: string
+    required: true
+    description: Package name (with optional @scope, e.g., "@hypergen/cli")
+
+  description:
+    type: string
+    required: true
+    description: Package description
+
+  entryPoints:
+    type: array
+    required: false
+    default:
+      - index
+    description: Entry points (e.g., ["index", "utils", "cli"])
+
+  includeTests:
+    type: boolean
+    required: false
+    default: true
+    description: Include Vitest setup
+
+  includeChangesets:
+    type: boolean
+    required: false
+    default: true
+    description: Include changesets for release automation
+
+  buildTool:
+    type: enum
+    required: false
+    default: tsup
+    description: Build tool
+    values:
+      - tsup
+      - vite
+      - tsc
+
+  runtime:
+    type: enum
+    required: false
+    default: node18
+    description: Target runtime
+    values:
+      - node18
+      - node20
+      - node22
+
+steps:
+  - name: PACKAGE_JSON
+    tool: template
+    template: templates/package.json.jig
+
+  - name: TSCONFIG
+    tool: template
+    template: templates/tsconfig.json.jig
+
+  - name: BUILD_CONFIG
+    tool: template
+    template: templates/tsup.config.ts.jig
+    when: buildTool == 'tsup'
+
+  - name: VITE_CONFIG
+    tool: template
+    template: templates/vite.config.ts.jig
+    when: buildTool == 'vite'
+
+  - name: TSCONFIG_BUILD
+    tool: template
+    template: templates/tsconfig.build.json.jig
+    when: buildTool == 'tsc'
+
+  - name: VITEST_CONFIG
+    tool: template
+    template: templates/vitest.config.ts.jig
+    when: includeTests
+
+  - name: BIOME_CONFIG
+    tool: template
+    template: templates/biome.json.jig
+
+  - name: CHANGESET_CONFIG
+    tool: template
+    template: templates/.changeset/config.json.jig
+    when: includeChangesets
+
+  - name: RELEASE_WORKFLOW
+    tool: template
+    template: templates/.github/workflows/release.yml.jig
+    when: includeChangesets
+
+  - name: NPMRC
+    tool: template
+    template: templates/.npmrc.jig
+    when: includeChangesets
+
+  - name: SRC_INDEX
+    tool: template
+    template: templates/src/index.ts.jig
+
+  - name: SRC_TYPES
+    tool: template
+    template: templates/src/types.ts.jig
+
+onSuccess: |
+  NPM package "{{ projectName }}" configured successfully at {{ dir }}!
+
+  Next steps:
+  1. Install dependencies: cd {{ dir }} && bun install
+  2. Run tests: bun test
+  3. Build: bun run build
+  @if(includeChangesets)
+  4. Add changeset: bun run changeset
+  5. Set up NPM_TOKEN secret in GitHub for automated releases
+  @end

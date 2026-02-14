@@ -1,0 +1,18 @@
+---
+to: "{{ dir }}/tsup.config.ts"
+---
+import { defineConfig } from 'tsup'
+
+export default defineConfig({
+  entry: {
+    @each((entry, index) in entryPoints)
+    '{{ entry === 'index' ? 'index' : entry + '/index' }}': 'src/{{ entry === 'index' ? 'index' : entry + '/index' }}.ts'{{ index < entryPoints.length - 1 ? ',' : '' }}
+    @end
+  },
+  format: ['esm'],
+  dts: true,
+  sourcemap: true,
+  clean: true,
+  target: '{{ runtime.replace('node', 'node') }}',
+  splitting: false,
+})
