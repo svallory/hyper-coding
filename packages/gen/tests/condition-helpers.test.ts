@@ -17,12 +17,10 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 		registerDefaultTools();
 		engine = new RecipeEngine({
 			workingDir: tempDir,
-			cache: { enabled: false },
 		});
 	});
 
 	afterEach(() => {
-		engine.stopCacheCleanup();
 		if (tempDir) {
 			rmSync(tempDir, { recursive: true, force: true });
 		}

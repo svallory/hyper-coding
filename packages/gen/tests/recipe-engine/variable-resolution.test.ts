@@ -106,7 +106,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	engine.stopCacheCleanup();
+	
 	if (tempDir && fs.existsSync(tempDir)) {
 		fs.rmSync(tempDir, { recursive: true, force: true });
 	}

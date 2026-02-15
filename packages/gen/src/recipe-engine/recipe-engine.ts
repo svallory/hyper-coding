@@ -48,16 +48,6 @@ export type RecipeSource =
 	| {
 			type: "file";
 			path: string;
-	  }
-	| {
-			type: "package";
-			name: string;
-			version?: string;
-	  }
-	| {
-			type: "url";
-			url: string;
-			version?: string;
 	  };
 
 /**
@@ -136,20 +126,6 @@ export interface RecipeEngineConfig {
 
 	/** Whether to enable debug logging */
 	enableDebugLogging?: boolean;
-
-	/** Recipe cache configuration */
-	cache?: {
-		enabled: boolean;
-		directory?: string;
-		ttl?: number;
-	};
-
-	/** Security settings */
-	security?: {
-		allowExternalSources?: boolean;
-		trustedSources?: string[];
-		validateSignatures?: boolean;
-	};
 }
 
 /**
@@ -236,16 +212,6 @@ const DEFAULT_CONFIG: Required<RecipeEngineConfig> = {
 	workingDir: process.cwd(),
 	defaultTimeout: 60000,
 	enableDebugLogging: false,
-	cache: {
-		enabled: true,
-		directory: path.join(process.cwd(), ".hypergen", "cache"),
-		ttl: 3600000, // 1 hour
-	},
-	security: {
-		allowExternalSources: true,
-		trustedSources: [],
-		validateSignatures: false,
-	},
 };
 
 /**
@@ -270,11 +236,8 @@ export class RecipeEngine extends EventEmitter {
 	private readonly activeExecutions = new Map<string, RecipeExecution>();
 	private executionCounter = 0;
 
-	// Caching
-	private readonly recipeCache = new Map<string, { recipe: RecipeConfig; timestamp: number }>();
-
-	// Timer for cache cleanup
-	private cleanupIntervalId: NodeJS.Timeout | null = null;
+	// Caching (simple in-memory, no TTL)
+	private readonly recipeCache = new Map<string, RecipeConfig>();
 
 	constructor(config: RecipeEngineConfig = {}) {
 		super();
@@ -291,8 +254,6 @@ export class RecipeEngine extends EventEmitter {
 
 		this.debug("Recipe engine initialized with config: %o", {
 			workingDir: this.config.workingDir,
-			cacheEnabled: this.config.cache.enabled,
-			allowExternalSources: this.config.security.allowExternalSources,
 		});
 
 		// Set up debug logging if enabled
@@ -311,11 +272,6 @@ export class RecipeEngine extends EventEmitter {
 		this.stepExecutor.on("step:failed", (data) => this.emit("step:failed", data));
 		this.stepExecutor.on("phase:started", (data) => this.emit("phase:started", data));
 		this.stepExecutor.on("phase:completed", (data) => this.emit("phase:completed", data));
-
-		// Start cache cleanup if enabled
-		if (this.config.cache.enabled) {
-			this.startCacheCleanup();
-		}
 	}
 
 	/**
@@ -466,20 +422,18 @@ export class RecipeEngine extends EventEmitter {
 		const cacheKey = this.getCacheKey(normalizedSource);
 
 		// Check cache first
-		if (this.config.cache.enabled) {
-			const cached = this.recipeCache.get(cacheKey);
-			if (cached && Date.now() - cached.timestamp < this.config.cache.ttl) {
-				this.debug("Recipe loaded from cache: %s", cacheKey);
+		const cached = this.recipeCache.get(cacheKey);
+		if (cached) {
+			this.debug("Recipe loaded from cache: %s", cacheKey);
 
-				// Still need to validate for dependencies
-				const validation = await this.validateRecipe(cached.recipe);
-				return {
-					recipe: cached.recipe,
-					source: normalizedSource,
-					validation,
-					dependencies: [],
-				};
-			}
+			// Still need to validate for dependencies
+			const validation = await this.validateRecipe(cached);
+			return {
+				recipe: cached,
+				source: normalizedSource,
+				validation,
+				dependencies: [],
+			};
 		}
 
 		this.debug("Loading recipe from source: %o", normalizedSource);
@@ -497,11 +451,8 @@ export class RecipeEngine extends EventEmitter {
 		const dependencies = await this.loadDependencies(recipe);
 
 		// Cache result
-		if (this.config.cache.enabled && validation.isValid) {
-			this.recipeCache.set(cacheKey, {
-				recipe,
-				timestamp: Date.now(),
-			});
+		if (validation.isValid) {
+			this.recipeCache.set(cacheKey, recipe);
 		}
 
 		this.debug("Recipe loaded successfully: %s", recipe.name);
@@ -659,9 +610,6 @@ export class RecipeEngine extends EventEmitter {
 	async cleanup(): Promise<void> {
 		this.debug("Cleaning up recipe engine");
 
-		// Stop the cache cleanup timer
-		this.stopCacheCleanup();
-
 		// Cancel all executions
 		await this.cancelAllExecutions();
 
@@ -678,19 +626,8 @@ export class RecipeEngine extends EventEmitter {
 
 	private normalizeSource(source: string | RecipeSource): RecipeSource {
 		if (typeof source === "string") {
-			// Auto-detect source type
-			if (source.startsWith("http://") || source.startsWith("https://")) {
-				return { type: "url", url: source };
-			}
-			if (
-				source.includes("/") ||
-				source.includes("\\") ||
-				source.endsWith(".yml") ||
-				source.endsWith(".yaml")
-			) {
-				return { type: "file", path: source };
-			}
-			return { type: "package", name: source };
+			// Auto-detect source type - only file paths supported
+			return { type: "file", path: source };
 		}
 		return source;
 	}
@@ -699,10 +636,6 @@ export class RecipeEngine extends EventEmitter {
 		switch (source.type) {
 			case "file":
 				return `file:${source.path}`;
-			case "url":
-				return `url:${source.url}${source.version ? `@${source.version}` : ""}`;
-			case "package":
-				return `package:${source.name}${source.version ? `@${source.version}` : ""}`;
 			case "content":
 				return `content:${source.name}`;
 			default:
@@ -714,12 +647,6 @@ export class RecipeEngine extends EventEmitter {
 		switch (source.type) {
 			case "file":
 				return this.loadFileContent(source.path);
-
-			case "url":
-				return this.loadUrlContent(source.url);
-
-			case "package":
-				return this.loadPackageContent(source.name, source.version);
 
 			case "content":
 				return source.content;
@@ -755,65 +682,6 @@ export class RecipeEngine extends EventEmitter {
 				{ filePath },
 			);
 		}
-	}
-
-	private async loadUrlContent(url: string): Promise<string> {
-		if (!this.config.security.allowExternalSources) {
-			throw ErrorHandler.createError(
-				ErrorCode.ACTION_EXECUTION_FAILED,
-				"External recipe sources are not allowed by security policy",
-				{ url },
-			);
-		}
-
-		// Check if URL is trusted
-		const isTrusted =
-			this.config.security.trustedSources.length === 0 ||
-			this.config.security.trustedSources.some((trusted) => url.startsWith(trusted));
-
-		if (!isTrusted) {
-			throw ErrorHandler.createError(
-				ErrorCode.ACTION_EXECUTION_FAILED,
-				`Untrusted recipe source: ${url}`,
-			);
-		}
-
-		try {
-			// Use dynamic import for fetch to support Node.js environments
-			const fetch = await import("node-fetch")
-				.then((m) => m.default)
-				.catch(() => {
-					throw new Error("node-fetch is required for URL sources");
-				});
-
-			const response = await fetch(url, {
-				timeout: this.config.defaultTimeout,
-				headers: {
-					"User-Agent": "Hypergen-V8-RecipeEngine/8.0.0",
-				},
-			});
-
-			if (!response.ok) {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-			}
-
-			return await response.text();
-		} catch (error) {
-			throw ErrorHandler.createError(
-				ErrorCode.INTERNAL_ERROR,
-				`Failed to load recipe from URL: ${error instanceof Error ? error.message : String(error)}`,
-			);
-		}
-	}
-
-	private async loadPackageContent(packageName: string, version?: string): Promise<string> {
-		// For now, treat packages as npm packages with recipe.yml in root
-		// In a full implementation, this would use npm/yarn APIs
-		const packagePath = version
-			? `node_modules/${packageName}@${version}/recipe.yml`
-			: `node_modules/${packageName}/recipe.yml`;
-
-		return this.loadFileContent(packagePath);
 	}
 
 	private async parseRecipeContent(content: string, source: RecipeSource): Promise<RecipeConfig> {
@@ -1499,29 +1367,10 @@ export class RecipeEngine extends EventEmitter {
 
 	private dependencyToSource(dependency: any): RecipeSource {
 		const name = typeof dependency === "string" ? dependency : dependency.name;
-		const version = typeof dependency === "object" ? dependency.version : undefined;
-		const type = typeof dependency === "object" ? dependency.type : "npm";
-		const url = typeof dependency === "object" ? dependency.url : undefined;
+		const type = typeof dependency === "object" ? dependency.type : "local";
 
-		switch (type) {
-			case "github":
-				return {
-					type: "url",
-					url: url || `https://raw.githubusercontent.com/${name}/main/recipe.yml`,
-					version,
-				};
-
-			case "http":
-				if (!url) {
-					throw new Error(`HTTP dependency requires URL: ${name}`);
-				}
-				return { type: "url", url, version };
-
-			case "local":
-				return { type: "file", path: name };
-			default:
-				return { type: "package", name, version };
-		}
+		// Only local file dependencies supported
+		return { type: "file", path: name };
 	}
 
 	private validateVariable(varName: string, varConfig: TemplateVariable): { error?: string } {
@@ -1650,40 +1499,6 @@ export class RecipeEngine extends EventEmitter {
 
 	private generateExecutionId(): string {
 		return `recipe_${Date.now()}_${++this.executionCounter}`;
-	}
-
-	private startCacheCleanup(): void {
-		// Clean up cache every 10 minutes
-		this.cleanupIntervalId = setInterval(
-			() => {
-				const now = Date.now();
-				const keysToDelete: string[] = [];
-
-				for (const [key, entry] of this.recipeCache) {
-					if (now - entry.timestamp > this.config.cache.ttl) {
-						keysToDelete.push(key);
-					}
-				}
-
-				keysToDelete.forEach((key) => this.recipeCache.delete(key));
-
-				if (keysToDelete.length > 0) {
-					this.debug("Cleaned up %d expired cache entries", keysToDelete.length);
-				}
-			},
-			10 * 60 * 1000,
-		);
-	}
-
-	/**
-	 * Stop the cache cleanup timer
-	 */
-	public stopCacheCleanup(): void {
-		if (this.cleanupIntervalId) {
-			clearInterval(this.cleanupIntervalId);
-			this.cleanupIntervalId = null;
-			this.debug("Recipe cache cleanup timer stopped");
-		}
 	}
 }
 

@@ -18,7 +18,6 @@
 import path from "node:path";
 import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
 import { TemplateParser } from "@hypercli/core";
-import { TemplateURLManager } from "@hypercli/kit";
 import createDebug from "debug";
 import fs from "fs-extra";
 import yaml from "js-yaml";
@@ -58,7 +57,7 @@ interface RecipeResolution {
 		cached: boolean;
 		lastModified?: Date;
 		size?: number;
-		source: "local" | "npm" | "github" | "url" | "inline";
+		source: "local" | "npm" | "inline";
 	};
 
 	/** Working directory for recipe execution */
@@ -110,7 +109,7 @@ interface RecipeDependencyNode {
  * passing patterns.
  *
  * Features:
- * - Multiple recipe source discovery (local files, URLs, npm packages)
+ * - Recipe source discovery (local files, npm packages)
  * - Variable inheritance with clear override patterns
  * - Sub-recipe execution with proper context management
  * - Result aggregation from child recipes
@@ -122,25 +121,9 @@ interface RecipeDependencyNode {
 export class RecipeTool extends Tool<RecipeStep> {
 	private recipeCache = new Map<string, RecipeResolution>();
 	private executionStack: string[] = [];
-	private urlManager: TemplateURLManager;
 
 	constructor(name = "recipe-tool", options: Record<string, any> = {}) {
 		super("recipe", name, options);
-
-		this.urlManager = new TemplateURLManager({
-			cache: {
-				cacheDir: options.cacheDirectory || ".hypergen/cache",
-				ttl: 24 * 60 * 60 * 1000, // 24 hours
-				maxSize: options.maxCacheSize || 100 * 1024 * 1024, // 100MB
-				integrityCheck: true,
-			},
-			security: {
-				allowedDomains: options.allowedDomains || ["github.com", "raw.githubusercontent.com"],
-				requireHttps: options.requireHttps !== false,
-				maxFileSize: options.maxFileSize || 10 * 1024 * 1024, // 10MB
-			},
-			timeout: options.timeout || 30000,
-		});
 	}
 
 	/**
@@ -150,8 +133,6 @@ export class RecipeTool extends Tool<RecipeStep> {
 		this.debug("Initializing recipe tool");
 
 		try {
-			// URL manager doesn't need initialization in the current implementation
-
 			// Register cache resource for cleanup
 			this.registerResource({
 				id: "recipe-cache",
@@ -160,15 +141,6 @@ export class RecipeTool extends Tool<RecipeStep> {
 					this.recipeCache.clear();
 				},
 				metadata: { cacheSize: 0 },
-			});
-
-			// Register URL manager resource
-			this.registerResource({
-				id: "url-manager",
-				type: "network",
-				cleanup: async () => {
-					// URL manager cleanup if needed
-				},
 			});
 
 			this.debug("Recipe tool initialized successfully");
@@ -484,15 +456,8 @@ export class RecipeTool extends Tool<RecipeStep> {
 					recipeId,
 					context,
 				));
-			} else if (this.isURL(recipeId)) {
-				({ source, config, metadata, workingDir } = await this.resolveURLRecipe(recipeId, context));
 			} else if (this.isNpmPackage(recipeId)) {
 				({ source, config, metadata, workingDir } = await this.resolveNpmRecipe(recipeId, context));
-			} else if (this.isGitHubRepo(recipeId)) {
-				({ source, config, metadata, workingDir } = await this.resolveGitHubRecipe(
-					recipeId,
-					context,
-				));
 			} else {
 				// Default: try local first, then treat as npm package
 				try {
@@ -579,31 +544,6 @@ export class RecipeTool extends Tool<RecipeStep> {
 	}
 
 	/**
-	 * Resolve recipe from URL
-	 */
-	private async resolveURLRecipe(recipeId: string, context: StepContext) {
-		const resolved = await this.urlManager.resolveURL(recipeId);
-		const rawConfig = yaml.load(resolved.content) as any;
-		const config: RecipeConfig = {
-			...rawConfig,
-			steps: this.normalizeSteps(rawConfig.steps || []),
-		};
-
-		return {
-			source: recipeId,
-			config,
-			metadata: {
-				exists: true,
-				cached: false,
-				lastModified: resolved.metadata.lastFetched,
-				size: resolved.content.length,
-				source: "url" as const,
-			},
-			workingDir: context.projectRoot,
-		};
-	}
-
-	/**
 	 * Resolve recipe from npm package
 	 */
 	private async resolveNpmRecipe(recipeId: string, context: StepContext) {
@@ -634,18 +574,6 @@ export class RecipeTool extends Tool<RecipeStep> {
 			},
 			workingDir: packagePath,
 		};
-	}
-
-	/**
-	 * Resolve recipe from GitHub repository
-	 */
-	private async resolveGitHubRecipe(recipeId: string, context: StepContext) {
-		// Convert github:user/repo format to URL
-		const url = recipeId.startsWith("github:")
-			? `https://raw.githubusercontent.com/${recipeId.slice(7)}/main/recipe.yml`
-			: recipeId;
-
-		return this.resolveURLRecipe(url, context);
 	}
 
 	/**
@@ -877,13 +805,6 @@ export class RecipeTool extends Tool<RecipeStep> {
 	}
 
 	/**
-	 * Check if recipe identifier is a URL
-	 */
-	private isURL(recipeId: string): boolean {
-		return recipeId.startsWith("http://") || recipeId.startsWith("https://");
-	}
-
-	/**
 	 * Check if recipe identifier is an npm package
 	 */
 	private isNpmPackage(recipeId: string): boolean {
@@ -893,19 +814,6 @@ export class RecipeTool extends Tool<RecipeStep> {
 		);
 	}
 
-	/**
-	 * Check if recipe identifier is a GitHub repository
-	 */
-	private isGitHubRepo(recipeId: string): boolean {
-		return recipeId.startsWith("github:") || /^[a-zA-Z0-9-_.]+\/[a-zA-Z0-9-_.]+$/.test(recipeId);
-	}
-
-	/**
-	 * Check if recipe requires network access
-	 */
-	private isRemoteRecipe(recipeId: string): boolean {
-		return this.isURL(recipeId) || this.isGitHubRepo(recipeId);
-	}
 }
 
 /**

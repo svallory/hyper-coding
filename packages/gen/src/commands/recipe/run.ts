@@ -17,7 +17,7 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 
 	static override examples = [
 		"<%= config.bin %> recipe run my-recipe.yml",
-		"<%= config.bin %> recipe run _recipes/component.yml --name=Button",
+		"<%= config.bin %> recipe run .hyper/kits/my-kit/cookbooks/component/recipe.yml --name=Button",
 		"<%= config.bin %> recipe run recipe.yml --dry",
 		"<%= config.bin %> recipe run recipe.yml --answers ./ai-answers.json",
 		"<%= config.bin %> recipe run recipe.yml --ai-mode stdout",

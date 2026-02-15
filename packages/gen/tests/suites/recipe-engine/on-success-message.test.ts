@@ -111,7 +111,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	engine.stopCacheCleanup();
+	
 	rmSync(testDir, { recursive: true, force: true });
 	ToolRegistry.reset();
 	vi.restoreAllMocks();

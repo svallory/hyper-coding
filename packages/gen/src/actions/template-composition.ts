@@ -11,8 +11,8 @@ import {
 	type TemplateVariable,
 } from "@hypercli/core";
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
-import { TemplateURLManager } from "@hypercli/kit";
 import createDebug from "debug";
+import path from "node:path";
 
 const debug = createDebug("hypergen:v8:composition");
 
@@ -41,8 +41,6 @@ export interface ComposedTemplate {
 }
 
 export class TemplateCompositionEngine {
-	private urlManager = new TemplateURLManager();
-
 	/**
 	 * Compose a template with its inheritance chain and includes
 	 */
@@ -331,26 +329,27 @@ export class TemplateCompositionEngine {
 	}
 
 	/**
-	 * Resolve a template by URL
+	 * Resolve a template by path (local file resolution only)
 	 */
 	private async resolveTemplate(
-		url: string,
+		templatePath: string,
 		context: CompositionContext,
 		version?: string,
 	): Promise<TemplateConfig> {
 		// Check cache first
-		const cacheKey = version ? `${url}@${version}` : url;
+		const cacheKey = version ? `${templatePath}@${version}` : templatePath;
 		if (context.resolvedTemplates.has(cacheKey)) {
 			return context.resolvedTemplates.get(cacheKey)!;
 		}
 
 		try {
-			// Use URL manager to resolve template
-			const resolved = await this.urlManager.resolveURL(url, context.projectRoot);
-			const templatePath = resolved.basePath;
+			// Resolve path relative to project root
+			const resolvedPath = path.isAbsolute(templatePath)
+				? templatePath
+				: path.resolve(context.projectRoot, templatePath);
 
 			// Parse template
-			const parsed = await TemplateParser.parseTemplateFile(templatePath);
+			const parsed = await TemplateParser.parseTemplateFile(resolvedPath);
 			if (!parsed.isValid) {
 				throw new Error(`Invalid template: ${parsed.errors.join(", ")}`);
 			}
@@ -362,7 +361,7 @@ export class TemplateCompositionEngine {
 			throw ErrorHandler.createError(
 				ErrorCode.TEMPLATE_RESOLUTION_ERROR,
 				`Failed to resolve template: ${error.message}`,
-				{ url, version },
+				{ templatePath, version },
 			);
 		}
 	}

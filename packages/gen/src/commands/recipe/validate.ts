@@ -12,7 +12,7 @@ export default class RecipeValidate extends BaseCommand<typeof RecipeValidate> {
 
 	static examples = [
 		"<%= config.bin %> <%= command.id %> my-recipe.yml",
-		"<%= config.bin %> <%= command.id %> _recipes/component.yml --strict",
+		"<%= config.bin %> <%= command.id %> .hyper/kits/component.yml --strict",
 	];
 
 	static flags = {

@@ -349,13 +349,6 @@ steps:
 		// Initialize recipe engine with test configuration
 		engine = createRecipeEngine({
 			enableDebugLogging: false,
-			cache: { enabled: false },
-			security: {
-				allowExternalSources: false,
-				allowShellCommands: false,
-			},
-			templatesPath: path.join(tempDir, "templates"),
-			recipesPath: path.join(tempDir, "recipes"),
 		});
 
 		// Initialize tools framework and register default tools

@@ -42,7 +42,6 @@ describe("Hypergen Configuration System", () => {
 			const testConfig = {
 				templates: ["custom-templates"],
 				engine: { type: "ejs" },
-				cache: { enabled: false },
 			};
 
 			fs.writeFileSync(
@@ -55,15 +54,13 @@ describe("Hypergen Configuration System", () => {
 			expect(config.templates).toEqual([
 				path.resolve(tempDir, "custom-templates"),
 			]);
-			expect(config.cache.enabled).toBe(false);
 		});
 
 		it("should load JavaScript configuration file", async () => {
 			const configContent = `
         export default {
           templates: ['js-templates'],
-          engine: { type: 'ejs' },
-          cache: { enabled: true, ttl: 5000 }
+          engine: { type: 'ejs' }
         }
       `;
 
@@ -72,17 +69,13 @@ describe("Hypergen Configuration System", () => {
 			const config = await HypergenConfigLoader.loadConfig(undefined, tempDir);
 
 			expect(config.templates).toEqual([path.resolve(tempDir, "js-templates")]);
-			expect(config.cache.enabled).toBe(true);
-			expect(config.cache.ttl).toBe(5000);
 		});
 
 		it("should apply environment-specific configuration", async () => {
 			const testConfig = {
 				templates: ["base-templates"],
-				cache: { enabled: true },
 				environments: {
 					test: {
-						cache: { enabled: false },
 						validation: { strict: false },
 					},
 				},
@@ -99,7 +92,6 @@ describe("Hypergen Configuration System", () => {
 				"test",
 			);
 
-			expect(config.cache.enabled).toBe(false);
 			expect(config.validation.strict).toBe(false);
 			expect(config.environment).toBe("test");
 		});
@@ -259,7 +251,6 @@ describe("Hypergen Configuration System", () => {
 
 			expect(info.templates).toHaveLength(2);
 			expect(info.environment).toBe("development");
-			expect(info.cacheEnabled).toBe(true);
 			expect(info.pluginCount).toBe(2);
 			expect(info.source).toContain("hypergen.config.json");
 		});
@@ -286,9 +277,6 @@ describe("Hypergen Configuration System", () => {
 
 		it("should merge nested objects", async () => {
 			const testConfig = {
-				cache: {
-					enabled: false,
-				},
 				discovery: {
 					sources: ["local"],
 				},
@@ -301,8 +289,6 @@ describe("Hypergen Configuration System", () => {
 
 			const config = await HypergenConfigLoader.loadConfig(undefined, tempDir);
 
-			expect(config.cache.enabled).toBe(false);
-			expect(config.cache.ttl).toBe(3600000); // Should keep default
 			expect(config.discovery.sources).toEqual(["local"]);
 			expect(config.discovery.directories).toEqual(["templates", "cookbooks"]); // Should keep defaults (updated from 'generators' to 'cookbooks')
 		});

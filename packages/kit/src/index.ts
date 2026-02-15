@@ -8,6 +8,3 @@ export {
 	type KitSourceType,
 	type ResolvedKitSource,
 } from "#/source-resolver.js";
-
-// URL resolution
-export * from "#/url-resolution/index.js";

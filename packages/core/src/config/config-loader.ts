@@ -51,13 +51,6 @@ export interface HypergenConfig {
 		validateVariables?: boolean;
 	};
 
-	// Cache options
-	cache?: {
-		enabled?: boolean;
-		directory?: string;
-		ttl?: number;
-	};
-
 	// Plugin system
 	plugins?: string[];
 
@@ -102,11 +95,6 @@ export interface ResolvedConfig {
 		validateTemplates?: boolean;
 		validateVariables?: boolean;
 	};
-	cache: {
-		enabled?: boolean;
-		directory?: string;
-		ttl?: number;
-	};
 	plugins: string[];
 	helpers: string | Record<string, Function>;
 	ai?: AiServiceConfig;
@@ -142,11 +130,6 @@ export class HypergenConfigLoader {
 			validateTemplates: true,
 			validateVariables: true,
 		},
-		cache: {
-			enabled: true,
-			directory: ".hypergen-cache",
-			ttl: 3600000, // 1 hour
-		},
 		plugins: [],
 		helpers: {},
 		environments: {},
@@ -165,14 +148,14 @@ export class HypergenConfigLoader {
 		let actualConfigPath: string | null = null;
 
 		try {
-			const explorer = cosmiconfig("hypergen", {
+			const explorer = cosmiconfig("hyper", {
 				searchPlaces: [
-					"hypergen.config.js",
-					"hypergen.config.mjs",
-					"hypergen.config.cjs",
-					"hypergen.config.json",
-					".hypergenrc",
-					".hypergenrc.json",
+					"hyper.config.js",
+					"hyper.config.mjs",
+					"hyper.config.cjs",
+					"hyper.config.json",
+					".hyperrc",
+					".hyperrc.json",
 				],
 				stopDir: path.dirname(projectRoot), // Stop searching at project root's parent
 			});
@@ -221,7 +204,7 @@ export class HypergenConfigLoader {
 				projectRoot,
 			);
 			if (Object.keys(loadedHelpers).length > 0 && options?.onHelpersLoaded) {
-				options.onHelpersLoaded(loadedHelpers, "config:hypergen.config");
+				options.onHelpersLoaded(loadedHelpers, "config:hyper.config");
 			}
 
 			// Determine the base directory for resolving relative paths
@@ -248,17 +231,6 @@ export class HypergenConfigLoader {
 					return path.resolve(configDir, templatePath);
 				},
 			);
-
-			// Resolve cache directory relative to config file directory
-			if (
-				resolvedConfig.cache.directory &&
-				!path.isAbsolute(resolvedConfig.cache.directory)
-			) {
-				resolvedConfig.cache.directory = path.resolve(
-					configDir,
-					resolvedConfig.cache.directory,
-				);
-			}
 
 			return resolvedConfig;
 		} catch (error: any) {
@@ -367,9 +339,9 @@ export class HypergenConfigLoader {
 		}
 
 		return `/**
- * Hypergen Configuration
+ * HyperDev Configuration
  *
- * @type {import('hypergen').HypergenConfig}
+ * @type {import('@hypercli/core').HypergenConfig}
  */
 export default {
   // Template directories to search
@@ -401,13 +373,6 @@ export default {
     validateVariables: true
   },
 
-  // Cache configuration
-  cache: {
-    enabled: true,
-    directory: '.hypergen-cache',
-    ttl: 3600000 // 1 hour in milliseconds
-  },
-
   // Plugins to load
   plugins: [],
 
@@ -419,12 +384,6 @@ export default {
     development: {
       validation: {
         strict: false
-      }
-    },
-    production: {
-      cache: {
-        enabled: true,
-        ttl: 86400000 // 24 hours
       }
     }
   }
@@ -441,7 +400,7 @@ export async function createConfigFile(
 	format: "js" | "json" = "js",
 ): Promise<string> {
 	const fileName =
-		format === "json" ? "hypergen.config.json" : "hypergen.config.js";
+		format === "json" ? "hyper.config.json" : "hyper.config.js";
 	const configPath = path.join(projectRoot, fileName);
 
 	if (fs.existsSync(configPath)) {
@@ -465,7 +424,6 @@ export function getConfigInfo(config: ResolvedConfig): {
 	source: string;
 	templates: string[];
 	environment: string;
-	cacheEnabled: boolean;
 	pluginCount: number;
 	helperCount: number;
 } {
@@ -473,7 +431,6 @@ export function getConfigInfo(config: ResolvedConfig): {
 		source: config.configPath,
 		templates: config.templates,
 		environment: config.environment,
-		cacheEnabled: config.cache.enabled ?? false,
 		pluginCount: config.plugins.length,
 		helperCount: Object.keys(config.loadedHelpers).length,
 	};

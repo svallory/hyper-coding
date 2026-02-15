@@ -12,7 +12,7 @@ export default class RecipeInfo extends BaseCommand<typeof RecipeInfo> {
 
 	static examples = [
 		"<%= config.bin %> <%= command.id %> my-recipe.yml",
-		"<%= config.bin %> <%= command.id %> _recipes/component.yml --json",
+		"<%= config.bin %> <%= command.id %> .hyper/kits/component.yml --json",
 	];
 
 	static flags = {
