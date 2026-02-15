@@ -1,0 +1,10 @@
+# Biome ignore patterns
+# See: https://biomejs.dev/guides/configure-biome/#ignoring-files
+
+# Build output
+**/dist
+**/node_modules
+**/.moon
+
+# Deprecated package
+packages/hypergen

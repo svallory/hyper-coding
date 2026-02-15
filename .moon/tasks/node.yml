@@ -1,7 +1,9 @@
 $schema: "https://moonrepo.dev/schemas/tasks.json"
 
-implicitDeps:
-  - "^:build"
+# Removed implicitDeps: ["^:build"] because:
+# - Tests work on source files (via #/ aliases), not dist/
+# - Lint/format/typecheck work on source files
+# - Only prepublishOnly needs build (handled in package.json)
 
 implicitInputs:
   - "package.json"
@@ -40,19 +42,19 @@ tasks:
     outputs:
       - "dist"
 
-  # Format check with biome check
+  # Format check only (no fixes)
   format:
     description: Check code formatting with biome
-    command: "biome check ."
+    command: "biome format ."
     inputs:
       - "@globs(sources)"
       - "@globs(tests)"
       - "@globs(configs)"
       - "**/*.md"
 
-  # Format and write with biome
+  # Format and write changes
   format-write:
-    description: Format code with biome
+    description: Format code and write changes
     command: "biome format . --write"
     inputs:
       - "@globs(sources)"
@@ -62,14 +64,24 @@ tasks:
     options:
       cache: local
 
-  # Lint with biome
+  # Lint and auto-fix
   lint:
-    description: Lint code with biome
-    command: "biome check . --apply"
+    description: Lint code and apply safe fixes
+    command: "biome lint . --write"
     inputs:
       - "@globs(sources)"
       - "@globs(tests)"
       - "@globs(configs)"
+
+  # Check everything (lint + format) and fix
+  check:
+    description: Check and fix code quality (lint + format)
+    command: "biome check . --write"
+    inputs:
+      - "@globs(sources)"
+      - "@globs(tests)"
+      - "@globs(configs)"
+      - "**/*.md"
 
   # Test with vitest
   test:

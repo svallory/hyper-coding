@@ -9,10 +9,10 @@ min_version: 2.0.0
 pre-commit:
   parallel: true
   commands:
-    # Biome linting - check code quality on staged files
+    # Biome linting - lint and auto-fix staged files
     lint:
       glob: "*.{ts,tsx,js,jsx,json,md}"
-      run: biome check --staged --no-errors-on-unmatched {staged_files}
+      run: biome lint --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
       skip:
         - merge
