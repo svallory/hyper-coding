@@ -13,10 +13,10 @@ import path from 'node:path'
 import os from 'node:os'
 import { exec, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
-import { withTempFixtures, fixture } from './util/fixtures.js'
-import { RecipeEngine, createRecipeEngine } from '../src/recipe-engine/recipe-engine.js'
-import { ToolRegistry, getToolRegistry, initializeToolsFramework, registerDefaultTools } from '../src/recipe-engine/tools/index.js'
-import type { RecipeSource, RecipeConfig, StepResult, RecipeExecutionOptions } from '../src/recipe-engine/types.js'
+import { withTempFixtures, fixture } from '#//util/fixtures.js'
+import { RecipeEngine, createRecipeEngine } from '#/recipe-engine/recipe-engine'
+import { ToolRegistry, getToolRegistry, initializeToolsFramework, registerDefaultTools } from '#/recipe-engine/tools/index'
+import type { RecipeSource, RecipeConfig, StepResult, RecipeExecutionOptions } from '#/recipe-engine/types'
 
 const execAsync = promisify(exec)
 
@@ -89,7 +89,7 @@ to: src/components/{{ name }}.test.ts
 skip_if: !withTests
 ---
 import { render } from '@testing-library/react';
-import { {{ name }} } from './{{ name }}';
+import { {{ name }} } from '#//{{ name }}';
 
 describe('{{ name }}', () => {
   it('should render successfully', () => {

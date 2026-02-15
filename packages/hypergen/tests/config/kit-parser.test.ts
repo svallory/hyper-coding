@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import { tmpdir } from 'os'
@@ -8,7 +8,7 @@ import {
   getDefaultKitSearchDirs,
   deriveShortName,
   resolveKitCookbooks,
-} from '../../src/config/kit-parser.js'
+} from '#/config/kit-parser'
 
 describe('KitParser', () => {
   let tempDir: string

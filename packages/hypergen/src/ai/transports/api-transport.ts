@@ -6,10 +6,10 @@
  */
 
 import createDebug from 'debug'
-import { PromptAssembler } from '../prompt-assembler.js'
-import { AiService } from '../ai-service.js'
-import { ErrorHandler, ErrorCode } from '../../errors/hypergen-errors.js'
-import type { AiTransport, TransportContext, TransportResult } from './types.js'
+import { PromptAssembler } from '#/ai/prompt-assembler'
+import { AiService } from '#/ai-service'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
+import type { AiTransport, TransportContext, TransportResult } from '#//types.js'
 
 const debug = createDebug('hypergen:ai:transport:api')
 

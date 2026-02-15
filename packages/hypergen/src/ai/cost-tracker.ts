@@ -6,8 +6,8 @@
  */
 
 import createDebug from 'debug'
-import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
-import type { AIBudgetConfig, AIModelPricing, AICostSummary } from './ai-config.js'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
+import type { AIBudgetConfig, AIModelPricing, AICostSummary } from '#//ai-config.js'
 
 const debug = createDebug('hypergen:ai:cost-tracker')
 

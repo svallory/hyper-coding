@@ -8,8 +8,8 @@
 import fs from 'fs'
 import path from 'path'
 import yaml from 'js-yaml'
-import { ErrorHandler, ErrorCode, withErrorHandling, validateParameter } from '../errors/hypergen-errors.js'
-import type { RecipeConfig, RecipeStepUnion, ToolType } from '../recipe-engine/types.js'
+import { ErrorHandler, ErrorCode, withErrorHandling, validateParameter } from '#/errors/hypergen-errors'
+import type { RecipeConfig, RecipeStepUnion, ToolType } from '#/recipe-engine/types'
 
 export interface TemplateVariable {
   type: 'string' | 'number' | 'boolean' | 'enum' | 'array' | 'object' | 'file' | 'directory'

@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
+import { describe, it, expect, beforeEach } from 'vitest'
 import {
   AiVariableResolver,
   type UnresolvedVariable,
   type RecipeMetadata,
-} from '../../src/ai/ai-variable-resolver'
-import type { TemplateVariable } from '../../src/config/template-parser'
+} from '#/ai/ai-variable-resolver'
+import type { TemplateVariable } from '#/config/template-parser'
 
 describe('AiVariableResolver', () => {
   let resolver: AiVariableResolver

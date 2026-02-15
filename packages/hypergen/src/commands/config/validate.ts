@@ -5,9 +5,9 @@
 import { Args } from '@oclif/core'
 import { existsSync } from 'fs'
 import { resolve } from 'path'
-import { BaseCommand } from '../../lib/base-command.js'
-import { outputFlags, validationFlags } from '../../lib/flags.js'
-import { HypergenConfigLoader } from '../../config/hypergen-config.js'
+import { BaseCommand } from '#/lib/base-command'
+import { outputFlags, validationFlags } from '#/lib/flags'
+import { HypergenConfigLoader } from '#/config/hypergen-config'
 
 export default class ConfigValidate extends BaseCommand<typeof ConfigValidate> {
   static description = 'Validate a hypergen configuration file'

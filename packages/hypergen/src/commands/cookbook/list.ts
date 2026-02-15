@@ -3,10 +3,10 @@
  */
 
 import { Args, Flags } from '@oclif/core'
-import { BaseCommand } from '../../lib/base-command.js'
-import { discoverCookbooksInKit } from '../../config/cookbook-parser.js'
-import { c } from '../../lib/colors.js'
-import { s } from '../../lib/styles.js'
+import { BaseCommand } from '#/lib/base-command'
+import { discoverCookbooksInKit } from '#/config/cookbook-parser'
+import { c } from '#/lib/colors'
+import { s } from '#/lib/styles'
 
 interface CookbookInfo {
   name: string

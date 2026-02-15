@@ -1,0 +1,13 @@
+import { defineConfig } from 'tsup'
+
+export default defineConfig({
+  entry: {
+    index: 'src/index.ts'
+  },
+  format: ['esm'],
+  dts: false, // Disabled due to inflection types issue
+  sourcemap: true,
+  clean: true,
+  target: 'node20',
+  splitting: false,
+})

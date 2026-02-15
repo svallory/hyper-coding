@@ -1,0 +1,13 @@
+type: application
+language: typescript
+platform: node
+stack: backend
+
+tags:
+  - typescript
+  - hyperdev
+  - cli
+
+toolchain:
+  typescript:
+    syncProjectReferences: false

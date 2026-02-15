@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { TemplateParser } from '../src/config/template-parser.js'
-import type { RecipeStepUnion } from '../src/recipe-engine/types.js'
+import { TemplateParser } from '#/config/template-parser'
+import type { RecipeStepUnion } from '#/recipe-engine/types'
 import fs from 'fs'
 import path from 'path'
 import yaml from 'js-yaml'

@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect } from 'vitest'
 import fs from 'fs-extra'
 import path from 'node:path'
 import add from '~/ops/add.js'
 import Logger from '~/logger.js'
-import MockEnquirer from './util/enquirer.js'
+import MockEnquirer from '#//util/enquirer.js'
 
 describe('add', () => {
   const logger = new Logger(console.log)

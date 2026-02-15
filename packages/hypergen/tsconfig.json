@@ -18,7 +18,14 @@
     "baseUrl": ".",
     "skipLibCheck": true,
     "paths": {
-      "~/*": ["src/*"]
+      "#": ["src"],
+      "#/*": ["src/*"],
+      "#/tests": ["tests"],
+      "#/tests/*": ["tests/*"],
+      "#/fixtures": ["tests/fixtures"],
+      "#/fixtures/*": ["tests/fixtures/*"],
+      "#/helpers": ["tests/helpers"],
+      "#/helpers/*": ["tests/helpers/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.json", ".hypergen.js"],

@@ -23,7 +23,7 @@ import { getToolRegistry, ToolRegistry } from '~/recipe-engine/tools/registry'
 import { templateToolFactory } from '~/recipe-engine/tools/template-tool'
 import { shellToolFactory } from '~/recipe-engine/tools/shell-tool'
 import { recipeToolFactory } from '~/recipe-engine/tools/recipe-tool'
-import fixtureAnswers from './fixtures/answers.json'
+import fixtureAnswers from '#//fixtures/answers.json'
 
 // ─── Constants ──────────────────────────────────────────────────────
 

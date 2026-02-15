@@ -3,19 +3,19 @@
  */
 
 import { Command, Flags, Interfaces } from '@oclif/core'
-import { ActionExecutor } from '../actions/index.js'
-import { GeneratorDiscovery } from '../discovery/index.js'
-import { TemplateURLManager } from '../config/url-resolution/index.js'
-import { DefaultActionUtils, ConsoleActionLogger } from '../actions/index.js'
-import { TemplateParser } from '../config/template-parser.js'
-import { GeneratorScaffolding } from '../cli/scaffolding.js'
-import { HypergenConfigLoader, type ResolvedConfig } from '../config/hypergen-config.js'
+import { ActionExecutor } from '#/actions/index'
+import { GeneratorDiscovery } from '#/discovery/index'
+import { TemplateURLManager } from '#/config/url-resolution/index'
+import { DefaultActionUtils, ConsoleActionLogger } from '#/actions/index'
+import { TemplateParser } from '#/config/template-parser'
+import { GeneratorScaffolding } from '#/cli/scaffolding'
+import { HypergenConfigLoader, type ResolvedConfig } from '#/config/hypergen-config'
 import {
   RecipeEngine,
   type RecipeEngineConfig,
-} from '../recipe-engine/recipe-engine.js'
-import { registerDefaultTools, getToolRegistry } from '../recipe-engine/tools/index.js'
-import Logger from '../logger.js'
+} from '#/recipe-engine/recipe-engine'
+import { registerDefaultTools, getToolRegistry } from '#/recipe-engine/tools/index'
+import Logger from '#/logger'
 
 export type BaseFlags<T extends typeof Command> = Interfaces.InferredFlags<
   typeof BaseCommand['baseFlags'] & T['flags']

@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
-import { TemplateCompositionEngine } from '../src/config/template-composition'
-import type { TemplateConfig } from '../src/config/template-parser'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { TemplateCompositionEngine } from '#/config/template-composition'
+import type { TemplateConfig } from '#/config/template-parser'
 
 describe('Conditional Template Inclusion', () => {
   let compositionEngine: TemplateCompositionEngine

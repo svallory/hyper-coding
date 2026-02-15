@@ -4,8 +4,8 @@
 
 import { existsSync } from 'fs'
 import { resolve } from 'path'
-import { BaseCommand } from '../../lib/base-command.js'
-import { outputFlags } from '../../lib/flags.js'
+import { BaseCommand } from '#/lib/base-command'
+import { outputFlags } from '#/lib/flags'
 
 export default class SystemStatus extends BaseCommand<typeof SystemStatus> {
   static description = 'Show hypergen system status and configuration'

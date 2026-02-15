@@ -8,10 +8,10 @@
 
 import createDebug from 'debug'
 import { EventEmitter } from 'events'
-import { ToolRegistry, getToolRegistry } from './tools/registry.js'
-import { Tool } from './tools/base.js'
-import { ErrorHandler, ErrorCode, HypergenError } from '../errors/hypergen-errors.js'
-import Logger from '../logger.js'
+import { ToolRegistry, getToolRegistry } from '#//tools/registry.js'
+import { Tool } from '#//tools/base.js'
+import { ErrorHandler, ErrorCode, HypergenError } from '#/errors/hypergen-errors'
+import Logger from '#/logger'
 import {
   RecipeStepUnion,
   StepContext,
@@ -40,8 +40,8 @@ import {
   isEnsureDirsStep,
   StepExecutionError,
   CircularDependencyError
-} from './types.js'
-import { evaluateStepOutputs } from './output-evaluator.js'
+} from '#//types.js'
+import { evaluateStepOutputs } from '#//output-evaluator.js'
 
 const debug = createDebug('hypergen:v8:recipe:step-executor')
 

@@ -12,7 +12,7 @@ import {
   LocalResolver,
   GitHubResolver,
   URLCache
-} from '../src/config/url-resolution/index.js'
+} from '#/config/url-resolution/index'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)

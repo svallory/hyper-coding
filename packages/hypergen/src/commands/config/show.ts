@@ -4,8 +4,8 @@
 
 import { existsSync, readFileSync } from 'fs'
 import { resolve } from 'path'
-import { BaseCommand } from '../../lib/base-command.js'
-import { outputFlags } from '../../lib/flags.js'
+import { BaseCommand } from '#/lib/base-command'
+import { outputFlags } from '#/lib/flags'
 
 export default class ConfigShow extends BaseCommand<typeof ConfigShow> {
   static description = 'Show current hypergen configuration'

@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
-import { InteractivePrompter, type PromptOptions } from '../src/prompts/interactive-prompts'
-import { type TemplateVariable } from '../src/config/template-parser'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { InteractivePrompter, type PromptOptions } from '#/prompts/interactive-prompts'
+import { type TemplateVariable } from '#/config/template-parser'
 
 describe('Interactive Prompts System', () => {
   let prompter: InteractivePrompter

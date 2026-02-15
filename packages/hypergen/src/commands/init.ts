@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Flags } from '@oclif/core'
-import { BaseCommand } from '../lib/base-command.js'
+import { BaseCommand } from '#/lib/base-command'
 
 const DEFAULT_CONFIG = `/**
  * Hypergen Configuration

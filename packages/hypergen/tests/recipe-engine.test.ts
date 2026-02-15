@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { RecipeEngine, createRecipeEngine, executeRecipe, loadRecipe, validateRecipe } from '../src/recipe-engine/recipe-engine.js'
-import type { RecipeConfig, RecipeSource } from '../src/recipe-engine/types.js'
-import { TemplateParser } from '../src/config/template-parser.js'
+import { RecipeEngine, createRecipeEngine, executeRecipe, loadRecipe, validateRecipe } from '#/recipe-engine/recipe-engine'
+import type { RecipeConfig, RecipeSource } from '#/recipe-engine/types'
+import { TemplateParser } from '#/config/template-parser'
 
 describe('RecipeEngine', () => {
   let engine: RecipeEngine

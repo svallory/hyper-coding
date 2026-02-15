@@ -13,10 +13,10 @@
 
 import { execFile } from 'node:child_process'
 import createDebug from 'debug'
-import { PromptAssembler } from '../prompt-assembler.js'
-import { ErrorHandler, ErrorCode } from '../../errors/hypergen-errors.js'
-import type { AiBlockEntry } from '../ai-collector.js'
-import type { AiTransport, TransportContext, TransportResult } from './types.js'
+import { PromptAssembler } from '#/ai/prompt-assembler'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
+import type { AiBlockEntry } from '#/ai-collector'
+import type { AiTransport, TransportContext, TransportResult } from '#//types.js'
 
 const debug = createDebug('hypergen:ai:transport:command')
 

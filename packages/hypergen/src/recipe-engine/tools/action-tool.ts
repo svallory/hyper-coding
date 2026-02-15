@@ -8,20 +8,20 @@
  */
 
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from './base.js'
-import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '../../errors/hypergen-errors.js'
+import { Tool, type ToolValidationResult } from '#//base.js'
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '#/errors/hypergen-errors'
 import { 
   type ActionStep, 
   type StepContext, 
   type StepResult,
   type StepExecutionOptions,
   isActionStep
-} from '../types.js'
-import type { ActionResult, ActionContext, ActionLogger, ActionUtils } from '../../actions/types.js'
-import { ActionExecutor } from '../../actions/executor.js'
-import { ActionRegistry } from '../../actions/registry.js'
-import { ActionParameterResolver } from '../../actions/parameter-resolver.js'
-import { DefaultActionUtils, ConsoleActionLogger } from '../../actions/utils.js'
+} from '#/recipe-engine/types'
+import type { ActionResult, ActionContext, ActionLogger, ActionUtils } from '#/actions/types'
+import { ActionExecutor } from '#/actions/executor'
+import { ActionRegistry } from '#/actions/registry'
+import { ActionParameterResolver } from '#/actions/parameter-resolver'
+import { DefaultActionUtils, ConsoleActionLogger } from '#/actions/utils'
 
 const debug = createDebug('hypergen:v8:recipe:tool:action')
 

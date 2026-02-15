@@ -11,8 +11,8 @@ import fs from 'fs-extra'
 import createDebug from 'debug'
 import * as ts from 'typescript'
 import { glob } from 'glob'
-import { Tool, type ToolValidationResult } from './base.js'
-import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '../../errors/hypergen-errors.js'
+import { Tool, type ToolValidationResult } from '#//base.js'
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '#/errors/hypergen-errors'
 import { 
   type CodeModStep, 
   type StepContext, 
@@ -20,7 +20,7 @@ import {
   type StepExecutionOptions,
   type CodeModExecutionResult,
   isCodeModStep
-} from '../types.js'
+} from '#/recipe-engine/types'
 
 const debug = createDebug('hypergen:v8:recipe:tool:codemod')
 

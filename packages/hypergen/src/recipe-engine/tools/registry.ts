@@ -6,11 +6,11 @@
  */
 
 import createDebug from 'debug'
-import { HypergenError, ErrorCode, ErrorHandler } from '../../errors/hypergen-errors.js'
-import Logger from '../../logger.js'
-import { Tool } from './base.js'
-import type { ToolFactory, ToolValidationResult } from './base.js'
-import type { ToolType, RecipeStepUnion } from '../types.js'
+import { HypergenError, ErrorCode, ErrorHandler } from '#/errors/hypergen-errors'
+import Logger from '#/logger'
+import { Tool } from '#//base.js'
+import type { ToolFactory, ToolValidationResult } from '#//base.js'
+import type { ToolType, RecipeStepUnion } from '#/recipe-engine/types'
 
 const debug = createDebug('hypergen:v8:recipe:registry')
 

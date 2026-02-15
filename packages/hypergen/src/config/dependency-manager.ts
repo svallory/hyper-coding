@@ -7,9 +7,9 @@
 import createDebug from 'debug'
 import fs from 'fs'
 import path from 'path'
-import { TemplateURLManager } from './url-resolution/index.js'
-import { TemplateParser, type TemplateDependency, type TemplateConfig } from './template-parser.js'
-import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
+import { TemplateURLManager } from '#//url-resolution/index.js'
+import { TemplateParser, type TemplateDependency, type TemplateConfig } from '#//template-parser.js'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 
 const debug = createDebug('hypergen:v8:dependency-manager')
 

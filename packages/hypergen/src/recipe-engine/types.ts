@@ -5,9 +5,9 @@
  * that coordinates Template, Action, CodeMod, and Recipe tools through sequential steps.
  */
 
-import type { TemplateVariable } from '../config/template-parser.js'
-import type { ActionResult, ActionContext, ActionParameter, ActionLogger, ActionUtils } from '../actions/types.js'
-import type { AIOutputConfig, AIContextConfig, AIExample, AIGuardrailConfig, AIBudgetConfig, AIExecutionResult } from '../ai/ai-config.js'
+import type { TemplateVariable } from '#/config/template-parser'
+import type { ActionResult, ActionContext, ActionParameter, ActionLogger, ActionUtils } from '#/actions/types'
+import type { AIOutputConfig, AIContextConfig, AIExample, AIGuardrailConfig, AIBudgetConfig, AIExecutionResult } from '#/ai/ai-config'
 
 /**
  * Declares a value that a recipe provides to its callers or sibling recipes

@@ -6,16 +6,16 @@
  */
 
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from './base.js'
-import { ErrorHandler, ErrorCode } from '../../errors/hypergen-errors.js'
+import { Tool, type ToolValidationResult } from '#//base.js'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 import {
   type StepContext,
   type StepResult,
   type StepExecutionOptions,
   type BaseRecipeStep,
   type ShellStep
-} from '../types.js'
-import { renderTemplate } from '../../template-engines/jig-engine.js'
+} from '#/recipe-engine/types'
+import { renderTemplate } from '#/template-engines/jig-engine'
 
 const debug = createDebug('hypergen:v8:recipe:tool:shell')
 

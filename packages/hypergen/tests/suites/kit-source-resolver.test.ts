@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveKitSource, buildInstallCommand } from '../../src/lib/kit/source-resolver.js'
+import { resolveKitSource, buildInstallCommand } from '#/lib/kit/source-resolver'
 
 describe('Kit Source Resolver', () => {
   describe('NPM Packages', () => {

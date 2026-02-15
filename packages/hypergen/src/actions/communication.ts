@@ -7,7 +7,7 @@
 
 import createDebug from 'debug'
 import { EventEmitter } from 'events'
-import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 
 const debug = createDebug('hypergen:v8:communication')
 

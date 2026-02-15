@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import { tmpdir } from 'os'
-import { HypergenConfigLoader, createConfigFile, getConfigInfo } from '../src/config/hypergen-config'
+import { HypergenConfigLoader, createConfigFile, getConfigInfo } from '#/config/hypergen-config'
 
 describe('Hypergen Configuration System', () => {
   let tempDir: string

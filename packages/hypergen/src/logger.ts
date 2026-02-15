@@ -1,5 +1,5 @@
 import chalk from 'chalk'
-import { ActionLogger } from './actions/types.js'
+import { ActionLogger } from '#//actions/types.js'
 
 // chalk 4.1.2 doesn't type template property
 const { yellow, red, green, magenta, gray, blue, template }: any = chalk

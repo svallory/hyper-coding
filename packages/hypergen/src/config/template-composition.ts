@@ -5,9 +5,9 @@
  */
 
 import createDebug from 'debug'
-import { TemplateURLManager } from './url-resolution/index.js'
-import { TemplateParser, type TemplateConfig, type TemplateInclude, type TemplateVariable } from './template-parser.js'
-import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
+import { TemplateURLManager } from '#//url-resolution/index.js'
+import { TemplateParser, type TemplateConfig, type TemplateInclude, type TemplateVariable } from '#//template-parser.js'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 
 const debug = createDebug('hypergen:v8:composition')
 

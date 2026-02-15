@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { TemplateParser } from '../src/config/template-parser.js'
+import { TemplateParser } from '#/config/template-parser'
 import path from 'path'
 
 describe('Example Recipe Parsing', () => {

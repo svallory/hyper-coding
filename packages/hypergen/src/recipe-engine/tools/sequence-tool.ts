@@ -7,16 +7,16 @@
  */
 
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from './base.js'
+import { Tool, type ToolValidationResult } from '#//base.js'
 import { 
   type StepContext, 
   type StepResult,
   type StepExecutionOptions,
   type SequenceStep,
   type SequenceExecutionResult
-} from '../types.js'
-import { StepExecutor } from '../step-executor.js'
-import { ErrorHandler, ErrorCode } from '../../errors/hypergen-errors.js'
+} from '#/recipe-engine/types'
+import { StepExecutor } from '#/recipe-engine/step-executor'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 
 const debug = createDebug('hypergen:v8:recipe:tool:sequence')
 

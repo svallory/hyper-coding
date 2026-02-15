@@ -5,16 +5,16 @@
 import { existsSync, mkdirSync, cpSync, rmSync } from 'node:fs'
 import { join, basename, isAbsolute, resolve } from 'node:path'
 import { Args, Flags } from '@oclif/core'
-import { BaseCommand } from '../../lib/base-command.js'
+import { BaseCommand } from '#/lib/base-command'
 import { execSync } from 'node:child_process'
-import { resolveKitSource, buildInstallCommand } from '../../lib/kit/source-resolver.js'
+import { resolveKitSource, buildInstallCommand } from '#/lib/kit/source-resolver'
 import {
   addKitToManifest,
   isKitInstalled,
   extractPackageVersion,
   type KitManifestEntry,
-} from '../../lib/kit/manifest.js'
-import { findProjectRoot } from '../../utils/find-project-root.js'
+} from '#/lib/kit/manifest'
+import { findProjectRoot } from '#/utils/find-project-root'
 import tiged from 'tiged'
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {

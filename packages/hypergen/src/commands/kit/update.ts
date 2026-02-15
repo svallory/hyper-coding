@@ -5,15 +5,15 @@
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Args, Flags } from '@oclif/core'
-import { BaseCommand } from '../../lib/base-command.js'
+import { BaseCommand } from '#/lib/base-command'
 import {
   loadManifest,
   addKitToManifest,
   extractPackageVersion,
   type KitManifestEntry,
-} from '../../lib/kit/manifest.js'
-import { resolveKitSource } from '../../lib/kit/source-resolver.js'
-import { findProjectRoot } from '../../utils/find-project-root.js'
+} from '#/lib/kit/manifest'
+import { resolveKitSource } from '#/lib/kit/source-resolver'
+import { findProjectRoot } from '#/utils/find-project-root'
 import tiged from 'tiged'
 
 export default class KitUpdate extends BaseCommand<typeof KitUpdate> {

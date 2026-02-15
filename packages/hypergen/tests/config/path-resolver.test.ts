@@ -11,14 +11,14 @@
  *   4. Slash-separated single arg splitting
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs-extra'
 import path from 'node:path'
 import { tmpdir } from 'os'
-import { PathResolver } from '../../src/config/path-resolver.js'
-import type { ResolvedPath } from '../../src/config/path-resolver.js'
-import { parseKitFile } from '../../src/config/kit-parser.js'
-import type { ParsedKit } from '../../src/config/kit-parser.js'
+import { PathResolver } from '#/config/path-resolver'
+import type { ResolvedPath } from '#/config/path-resolver'
+import { parseKitFile } from '#/config/kit-parser'
+import type { ParsedKit } from '#/config/kit-parser'
 
 // ---------------------------------------------------------------------------
 // Helpers to build the fixture directory tree

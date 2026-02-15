@@ -5,8 +5,8 @@
 import { Flags } from '@oclif/core'
 import { existsSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
-import { BaseCommand } from '../../lib/base-command.js'
-import { executionFlags, outputFlags } from '../../lib/flags.js'
+import { BaseCommand } from '#/lib/base-command'
+import { executionFlags, outputFlags } from '#/lib/flags'
 
 export default class ConfigInit extends BaseCommand<typeof ConfigInit> {
   static description = 'Initialize a hypergen configuration file'

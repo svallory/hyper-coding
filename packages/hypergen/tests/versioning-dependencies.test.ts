@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from 'bun:test'
-import { TemplateParser, type TemplateConfig, type TemplateDependency } from '../src/config/template-parser'
-import { TemplateDependencyManager } from '../src/config/dependency-manager'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { TemplateParser, type TemplateConfig, type TemplateDependency } from '#/config/template-parser'
+import { TemplateDependencyManager } from '#/config/dependency-manager'
 
 describe('Template Versioning and Dependencies', () => {
   let dependencyManager: TemplateDependencyManager

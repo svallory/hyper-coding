@@ -11,8 +11,8 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import fm from 'front-matter'
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from './base.js'
-import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '../../errors/hypergen-errors.js'
+import { Tool, type ToolValidationResult } from '#//base.js'
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '#/errors/hypergen-errors'
 import { 
   type TemplateStep, 
   type StepContext, 
@@ -20,11 +20,11 @@ import {
   type StepExecutionOptions,
   type TemplateExecutionResult,
   isTemplateStep
-} from '../types.js'
-import { getJig, renderTemplate as jigRenderTemplate } from '../../template-engines/index.js'
-import addOp from '../../ops/add.js'
-import injectOp from '../../ops/inject.js'
-import type { RenderedAction, RunnerConfig } from '../../types.js'
+} from '#/recipe-engine/types'
+import { getJig, renderTemplate as jigRenderTemplate } from '#/template-engines/index'
+import addOp from '#/ops/add'
+import injectOp from '#/ops/inject'
+import type { RenderedAction, RunnerConfig } from '#/recipe-engine/types'
 
 const debug = createDebug('hypergen:v8:recipe:tool:template')
 

@@ -32,6 +32,12 @@
 		"hypergen": "./bin/run.js"
 	},
 	"type": "module",
+	"imports": {
+		"#/*": "./src/*",
+		"#/tests/*": "./tests/*",
+		"#/fixtures/*": "./tests/fixtures/*",
+		"#/helpers/*": "./tests/helpers/*"
+	},
 	"oclif": {
 		"bin": "hypergen",
 		"dirname": "hypergen",
@@ -120,7 +126,6 @@
 		"js-yaml": "^4.1.0",
 		"oclif": "^4.22.77",
 		"ora": "^5.4.1",
-		"typedoc-theme-mintlify": "workspace:*",
 		"yaml": "^2.8.1",
 		"yargs-parser": "^21.1.1",
 		"zod": "^3.22.0"

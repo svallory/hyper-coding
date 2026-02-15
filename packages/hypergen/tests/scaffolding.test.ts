@@ -1,5 +1,5 @@
-import { GeneratorScaffolding } from '../src/cli/scaffolding'
-import { beforeEach, afterEach, describe, it, expect } from 'bun:test'
+import { GeneratorScaffolding } from '#/cli/scaffolding'
+import { beforeEach, afterEach, describe, it, expect } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import { tmpdir } from 'os'

@@ -9,9 +9,9 @@
 import fs from 'fs'
 import path from 'path'
 import createDebug from 'debug'
-import { RecipeEngine, type RecipeExecutionOptions, type RecipeExecutionResult } from './recipe-engine.js'
-import type { RecipeConfig, RecipeProvides } from './types.js'
-import type { TemplateVariable } from '../config/template-parser.js'
+import { RecipeEngine, type RecipeExecutionOptions, type RecipeExecutionResult } from '#//recipe-engine.js'
+import type { RecipeConfig, RecipeProvides } from '#//types.js'
+import type { TemplateVariable } from '#/config/template-parser'
 
 const debug = createDebug('hypergen:v8:recipe:group-executor')
 

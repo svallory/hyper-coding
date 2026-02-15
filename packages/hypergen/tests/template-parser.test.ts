@@ -1,5 +1,5 @@
-import { TemplateParser } from '../src/config/template-parser'
-import { beforeEach, afterEach, describe, it, expect } from 'bun:test'
+import { TemplateParser } from '#/config/template-parser'
+import { beforeEach, afterEach, describe, it, expect } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import { tmpdir } from 'os'

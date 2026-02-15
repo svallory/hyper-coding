@@ -3,12 +3,12 @@ import { execSync } from 'child_process'
 import fs from 'fs-extra'
 import path from 'path'
 import { tmpdir } from 'os'
-import { AiCollector } from '../../../src/ai/ai-collector.js'
-import { PromptAssembler } from '../../../src/ai/prompt-assembler.js'
-import { RecipeEngine } from '../../../src/recipe-engine/recipe-engine.js'
-import { initializeJig, getJig } from '../../../src/template-engines/jig-engine.js'
-import { getToolRegistry, ToolRegistry } from '../../../src/recipe-engine/tools/registry.js'
-import { templateToolFactory } from '../../../src/recipe-engine/tools/template-tool.js'
+import { AiCollector } from '#/ai/ai-collector'
+import { PromptAssembler } from '#/ai/prompt-assembler'
+import { RecipeEngine } from '#/recipe-engine/recipe-engine'
+import { initializeJig, getJig } from '#/template-engines/jig-engine'
+import { getToolRegistry, ToolRegistry } from '#/recipe-engine/tools/registry'
+import { templateToolFactory } from '#/recipe-engine/tools/template-tool'
 
 // ─── Fixtures ────────────────────────────────────────────────────────
 

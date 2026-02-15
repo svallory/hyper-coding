@@ -5,23 +5,23 @@
  */
 
 import createDebug from 'debug'
-import { ActionRegistry } from './registry.js'
-import { ActionParameterResolver } from './parameter-resolver.js'
-import { DefaultActionUtils, ConsoleActionLogger } from './utils.js'
-import { TemplateCompositionEngine } from '../config/template-composition.js'
-import { TemplateParser } from '../config/template-parser.js'
+import { ActionRegistry } from '#//registry.js'
+import { ActionParameterResolver } from '#//parameter-resolver.js'
+import { DefaultActionUtils, ConsoleActionLogger } from '#//utils.js'
+import { TemplateCompositionEngine } from '#/config/template-composition'
+import { TemplateParser } from '#/config/template-parser'
 import { 
   ActionCommunicationManager, 
   getCommunicationManager,
   type CommunicationConfig 
-} from './communication.js'
+} from '#//communication.js'
 import type { 
   ActionContext, 
   ActionResult, 
   ActionFunction
-} from './types.js'
-import { ActionExecutionError } from './types.js'
-import { ErrorHandler, ErrorCode, HypergenError } from '../errors/hypergen-errors.js'
+} from '#//types.js'
+import { ActionExecutionError } from '#//types.js'
+import { ErrorHandler, ErrorCode, HypergenError } from '#/errors/hypergen-errors'
 
 const debug = createDebug('hypergen:v8:action:executor')
 

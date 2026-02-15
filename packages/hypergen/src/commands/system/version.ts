@@ -2,8 +2,8 @@
  * System Version command - Show version information
  */
 
-import { BaseCommand } from '../../lib/base-command.js'
-import { outputFlags } from '../../lib/flags.js'
+import { BaseCommand } from '#/lib/base-command'
+import { outputFlags } from '#/lib/flags'
 
 export default class SystemVersion extends BaseCommand<typeof SystemVersion> {
   static description = 'Show hypergen version information'

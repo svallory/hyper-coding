@@ -5,14 +5,14 @@
  * Uses the RecipeEngine directly with mocked prompts and AI transport.
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
 import yaml from 'js-yaml'
-import { RecipeEngine } from '../../src/recipe-engine/recipe-engine'
-import { registerDefaultTools } from '../../src/recipe-engine/tools/index'
-import type { TemplateVariable } from '../../src/config/template-parser'
+import { RecipeEngine } from '#/recipe-engine/recipe-engine'
+import { registerDefaultTools } from '#/recipe-engine/tools/index'
+import type { TemplateVariable } from '#/config/template-parser'
 
 // ---------------------------------------------------------------------------
 // Mocking

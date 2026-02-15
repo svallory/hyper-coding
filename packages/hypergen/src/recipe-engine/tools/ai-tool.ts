@@ -9,16 +9,16 @@
 import createDebug from 'debug'
 import fs from 'fs'
 import path from 'path'
-import { Tool, type ToolValidationResult } from './base.js'
-import { ErrorHandler, ErrorCode } from '../../errors/hypergen-errors.js'
+import { Tool, type ToolValidationResult } from '#//base.js'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 import type {
   StepContext,
   StepResult,
   StepExecutionOptions,
   AIStep,
-} from '../types.js'
-import { AiService } from '../../ai/ai-service.js'
-import type { AIExecutionResult } from '../../ai/ai-config.js'
+} from '#/recipe-engine/types'
+import { AiService } from '#/ai/ai-service'
+import type { AIExecutionResult } from '#/ai/ai-config'
 
 const debug = createDebug('hypergen:v8:recipe:tool:ai')
 

@@ -4,8 +4,8 @@
  * Export point for the new template.yml configuration system
  */
 
-export * from './types.js'
-export { TemplateConfigParser } from './parser.js'
+export * from '#//types.js'
+export { TemplateConfigParser } from '#//parser.js'
 
 // Re-export for convenience
 export type {
@@ -15,4 +15,4 @@ export type {
   VariableDefinition,
   TemplateInclude,
   ParserOptions
-} from './types.js'
+} from '#//types.js'

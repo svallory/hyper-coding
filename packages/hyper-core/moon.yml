@@ -1,0 +1,13 @@
+type: library
+language: typescript
+platform: node
+stack: backend
+
+tags:
+  - typescript
+  - hyperdev
+  - core
+
+toolchain:
+  typescript:
+    syncProjectReferences: false

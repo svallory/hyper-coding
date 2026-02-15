@@ -8,12 +8,12 @@ import fs from 'fs-extra'
 import path from 'path'
 import { glob } from 'glob'
 import createDebug from 'debug'
-import { ActionRegistry } from '../actions/registry.js'
-import { isActionFunction } from '../actions/decorator.js'
-import { getGlobalPackages } from '../utils/global-packages.js'
-import { findProjectRoot } from '../utils/find-project-root.js'
-import { parseKitFile } from '../config/kit-parser.js'
-import { discoverCookbooksInKit } from '../config/cookbook-parser.js'
+import { ActionRegistry } from '#/actions/registry'
+import { isActionFunction } from '#/actions/decorator'
+import { getGlobalPackages } from '#/utils/global-packages'
+import { findProjectRoot } from '#/utils/find-project-root'
+import { parseKitFile } from '#/config/kit-parser'
+import { discoverCookbooksInKit } from '#/config/cookbook-parser'
 
 const debug = createDebug('hypergen:discovery')
 

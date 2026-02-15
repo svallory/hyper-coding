@@ -7,8 +7,8 @@
 import * as p from '@clack/prompts'
 import type { Option } from '@clack/prompts'
 import { setTimeout } from 'timers/promises'
-import { ErrorHandler, ErrorCode } from '../errors/hypergen-errors.js'
-import type { TemplateVariable } from '../config/template-parser.js'
+import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
+import type { TemplateVariable } from '#/config/template-parser'
 
 export interface PromptOptions {
   /**

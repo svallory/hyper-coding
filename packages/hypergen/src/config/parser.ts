@@ -18,8 +18,8 @@ import type {
   ParserOptions,
   ValidatorFunction,
   ValidationContext
-} from './types.js'
-import { TemplateConfigError } from './types.js'
+} from '#//types.js'
+import { TemplateConfigError } from '#//types.js'
 
 const debug = createDebug('hypergen:v8:config')
 

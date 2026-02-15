@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'fs'
 import path from 'path'
 import { tmpdir } from 'os'
@@ -8,7 +8,7 @@ import {
   discoverCookbooksInKit,
   discoverRecipesInCookbook,
   type ParsedCookbook,
-} from '../../src/config/cookbook-parser'
+} from '#/config/cookbook-parser'
 
 /**
  * Helper to create a temporary directory prefixed for easy identification.

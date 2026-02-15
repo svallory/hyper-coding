@@ -19,9 +19,9 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import yaml from 'js-yaml'
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult, type ToolResource } from './base.js'
-import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '../../errors/hypergen-errors.js'
-import { StepExecutor } from '../step-executor.js'
+import { Tool, type ToolValidationResult, type ToolResource } from '#//base.js'
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '#/errors/hypergen-errors'
+import { StepExecutor } from '#/recipe-engine/step-executor'
 import { 
   type RecipeStep, 
   type RecipeStepUnion, 
@@ -33,9 +33,9 @@ import {
   type RecipeDependencyError,
   type CircularDependencyError,
   isRecipeStep
-} from '../types.js'
-import { TemplateParser } from '../../config/template-parser.js'
-import { TemplateURLManager } from '../../config/url-resolution/index.js'
+} from '#/recipe-engine/types'
+import { TemplateParser } from '#/config/template-parser'
+import { TemplateURLManager } from '#/config/url-resolution/index'
 
 const debug = createDebug('hypergen:v8:recipe:tool:recipe')
 
