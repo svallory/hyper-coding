@@ -5,7 +5,7 @@ export default defineConfig({
 		index: "src/index.ts",
 	},
 	format: ["esm"],
-	dts: false, // Disabled due to inflection types issue
+	dts: true, // Type declarations enabled
 	sourcemap: true,
 	clean: true,
 	target: "node20",

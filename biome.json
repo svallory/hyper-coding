@@ -1,10 +1,6 @@
 {
 	"files": {
-		"ignore": [
-			"packages/hypergen/scripts/standalone.js",
-			"packages/hypergen/**",
-			"**/dist/**"
-		]
+		"ignore": ["packages/hypergen/**", "**/dist"]
 	},
 	"formatter": {
 		"enabled": true,

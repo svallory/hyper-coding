@@ -1,0 +1,75 @@
+# Lefthook configuration for HyperDev monorepo
+# https://github.com/evilmartians/lefthook
+
+# Global settings
+colors: true
+min_version: 2.0.0
+
+# Pre-commit hook - runs on git commit
+pre-commit:
+  parallel: true
+  commands:
+    # Biome linting - check code quality on staged files
+    lint:
+      glob: "*.{ts,tsx,js,jsx,json,md}"
+      run: biome check --staged --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+      skip:
+        - merge
+        - rebase
+
+    # Biome formatting - auto-format staged files
+    format:
+      glob: "*.{ts,tsx,js,jsx,json,md}"
+      run: biome format --write --no-errors-on-unmatched {staged_files}
+      stage_fixed: true
+      skip:
+        - merge
+        - rebase
+
+# Commit message hook - runs on git commit after message is entered
+commit-msg:
+  commands:
+    # Validate conventional commits format
+    conventional-commit:
+      run: |
+        commit_msg=$(cat {1})
+
+        # Allow merge commits
+        if echo "$commit_msg" | grep -qE "^Merge "; then
+          exit 0
+        fi
+
+        # Validate conventional commit format
+        if ! echo "$commit_msg" | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+"; then
+          echo "❌ Commit message must follow conventional commits format:"
+          echo "   <type>[optional scope]: <description>"
+          echo ""
+          echo "   Examples:"
+          echo "     feat(core): add new parser for cookbook.yml"
+          echo "     fix(gen): resolve template variable collision"
+          echo "     docs: update README with installation steps"
+          echo ""
+          echo "   Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          exit 1
+        fi
+
+# Pre-push hook - runs on git push
+pre-push:
+  parallel: false
+  commands:
+    # Type checking before push
+    typecheck:
+      run: moon run :typecheck --affected
+      skip:
+        - merge
+        - rebase
+      fail_text: "TypeScript errors detected. Fix them before pushing."
+
+    # Run tests before push
+    test:
+      run: moon run :test --affected
+      skip:
+        - merge
+        - rebase
+      fail_text: "Tests failed. Fix them before pushing."

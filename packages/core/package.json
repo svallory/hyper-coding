@@ -36,13 +36,12 @@
 	"dependencies": {
 		"chalk": "^4.1.2",
 		"debug": "^4.3.4",
-		"inflection": "^1.13.4",
+		"inflection": "^3.0.2",
 		"change-case": "^3.1.0",
 		"cosmiconfig": "^9.0.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
-		"@types/inflection": "^2.0.0",
 		"@types/node": "^20.0.0",
 		"tsup": "^8.0.0",
 		"typescript": "^5.4.0",
