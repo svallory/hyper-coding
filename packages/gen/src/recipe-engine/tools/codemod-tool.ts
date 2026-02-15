@@ -7,20 +7,20 @@
  */
 
 import path from "node:path";
-import fs from "fs-extra";
+import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
 import createDebug from "debug";
-import * as ts from "typescript";
+import fs from "fs-extra";
 import { glob } from "glob";
-import { Tool, type ToolValidationResult } from "./base.js";
-import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
+import * as ts from "typescript";
 import {
+	type CodeModExecutionResult,
 	type CodeModStep,
 	type StepContext,
-	type StepResult,
 	type StepExecutionOptions,
-	type CodeModExecutionResult,
+	type StepResult,
 	isCodeModStep,
 } from "#/recipe-engine/types";
+import { Tool, type ToolValidationResult } from "./base.js";
 
 const debug = createDebug("hypergen:v8:recipe:tool:codemod");
 
@@ -366,15 +366,13 @@ class CodeModTransformations {
 		if (typeof parameters.find === "string") {
 			if (parameters.global) {
 				return content.split(parameters.find).join(parameters.replace);
-			} else {
-				return content.replace(parameters.find, parameters.replace);
 			}
-		} else {
-			// RegExp
-			const flags = parameters.global ? "g" : "";
-			const regex = new RegExp(parameters.find.source, flags);
-			return content.replace(regex, parameters.replace);
+			return content.replace(parameters.find, parameters.replace);
 		}
+		// RegExp
+		const flags = parameters.global ? "g" : "";
+		const regex = new RegExp(parameters.find.source, flags);
+		return content.replace(regex, parameters.replace);
 	}
 }
 
@@ -395,7 +393,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 	private transformationCache = new Map<string, ts.TransformerFactory<ts.SourceFile>>();
 	private backupFiles = new Set<string>();
 
-	constructor(name: string = "codemod-tool", options: Record<string, any> = {}) {
+	constructor(name = "codemod-tool", options: Record<string, any> = {}) {
 		super("codemod", name, options);
 	}
 
@@ -1016,7 +1014,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 
 		try {
 			switch (step.codemod) {
-				case "replace-text":
+				case "replace-text": {
 					const originalContent = transformedContent;
 					transformedContent = CodeModTransformations.replaceText(
 						transformedContent,
@@ -1030,6 +1028,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 						});
 					}
 					break;
+				}
 
 				default:
 					throw new Error(`Unsupported text transformation type: ${step.codemod}`);
@@ -1100,7 +1099,7 @@ export class CodeModTool extends Tool<CodeModStep> {
  * CodeMod Tool Factory
  */
 export class CodeModToolFactory {
-	create(name: string = "codemod-tool", options: Record<string, any> = {}): CodeModTool {
+	create(name = "codemod-tool", options: Record<string, any> = {}): CodeModTool {
 		return new CodeModTool(name, options);
 	}
 

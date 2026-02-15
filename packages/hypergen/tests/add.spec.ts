@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import fs from "fs-extra";
 import path from "node:path";
-import add from "~/ops/add.js";
+import fs from "fs-extra";
+import { describe, expect, it } from "vitest";
 import Logger from "~/logger.js";
+import add from "~/ops/add.js";
 import MockEnquirer from "#/util/enquirer.js";
 
 describe("add", () => {

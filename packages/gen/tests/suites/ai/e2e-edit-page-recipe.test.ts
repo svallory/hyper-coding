@@ -10,17 +10,17 @@
  * Uses the real Next.js kit at /work/hyperdev/kit/nextjs/cookbooks/crud/resource/
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import fs from "fs-extra";
-import path from "path";
-import { tmpdir } from "os";
 import yaml from "js-yaml";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AiCollector } from "#/ai/ai-collector";
 import { PromptAssembler } from "#/ai/prompt-assembler";
 import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { initializeJig, getJig } from "#/template-engines/jig-engine";
-import { getToolRegistry, ToolRegistry } from "#/recipe-engine/tools/registry";
+import { ToolRegistry, getToolRegistry } from "#/recipe-engine/tools/registry";
 import { templateToolFactory } from "#/recipe-engine/tools/template-tool";
+import { getJig, initializeJig } from "#/template-engines/jig-engine";
 
 // ─── Constants ──────────────────────────────────────────────────────
 
@@ -185,7 +185,7 @@ const buildFieldDescriptions = (
 	return modelFields
 		.map(
 			(f: any) =>
-				`${f.name}: ${f.type}${f.isRequired ? " (required)" : " (optional)"}${f.documentation ? " — " + f.documentation : ""}`,
+				`${f.name}: ${f.type}${f.isRequired ? " (required)" : " (optional)"}${f.documentation ? ` — ${f.documentation}` : ""}`,
 		)
 		.join("\n");
 };

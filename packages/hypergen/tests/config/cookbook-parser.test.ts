@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import path from "path";
-import { tmpdir } from "os";
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import yaml from "js-yaml";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-	parseCookbookFile,
+	type ParsedCookbook,
 	discoverCookbooksInKit,
 	discoverRecipesInCookbook,
-	type ParsedCookbook,
+	parseCookbookFile,
 } from "#/config/cookbook-parser";
 
 /**
@@ -228,7 +228,7 @@ describe("Cookbook Parser", () => {
 
 			expect(result.isValid).toBe(true);
 			expect(result.config.defaults).toBeDefined();
-			expect(result.config.defaults!.recipe).toBe("list");
+			expect(result.config.defaults?.recipe).toBe("list");
 		});
 
 		it("should handle defaults object without recipe key", async () => {
@@ -241,7 +241,7 @@ describe("Cookbook Parser", () => {
 
 			expect(result.isValid).toBe(true);
 			expect(result.config.defaults).toBeDefined();
-			expect(result.config.defaults!.recipe).toBeUndefined();
+			expect(result.config.defaults?.recipe).toBeUndefined();
 		});
 
 		it("should ignore non-string description", async () => {

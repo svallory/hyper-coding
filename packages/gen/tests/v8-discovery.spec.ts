@@ -2,7 +2,7 @@
  * V8 Discovery System Tests
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { GeneratorDiscovery } from "#/discovery/index";
 import type { DiscoveredGenerator } from "#/discovery/index";
 

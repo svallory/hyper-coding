@@ -1,5 +1,5 @@
-import { ErrorHandler, ErrorCode, HypergenError } from "#/errors/hypergen-errors";
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import { ErrorCode, ErrorHandler, HypergenError } from "#/errors/hypergen-errors";
 
 describe("Error Handling System", () => {
 	describe("ErrorHandler", () => {

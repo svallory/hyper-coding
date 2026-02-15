@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { TemplateDependencyManager } from "#/config/dependency-manager";
 import {
-	TemplateParser,
 	type TemplateConfig,
 	type TemplateDependency,
+	TemplateParser,
 } from "#/config/template-parser";
-import { TemplateDependencyManager } from "#/config/dependency-manager";
 
 describe("Template Versioning and Dependencies", () => {
 	let dependencyManager: TemplateDependencyManager;
@@ -36,7 +36,7 @@ dependencies:
 				dependencies: ["react", "lodash", "@types/react"],
 			};
 
-			const config = TemplateParser["validateAndBuildConfig"](yamlData, [], []);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], []);
 
 			expect(config.dependencies).toHaveLength(3);
 			expect(config.dependencies[0]).toEqual({
@@ -77,7 +77,7 @@ dependencies:
 				],
 			};
 
-			const config = TemplateParser["validateAndBuildConfig"](yamlData, [], []);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], []);
 
 			expect(config.dependencies).toHaveLength(3);
 
@@ -108,11 +108,11 @@ dependencies:
 				},
 			};
 
-			const config = TemplateParser["validateAndBuildConfig"](yamlData, [], []);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], []);
 
 			expect(config.engines).toBeDefined();
-			expect(config.engines!.hypergen).toBe(">=8.0.0");
-			expect(config.engines!.node).toBe(">=16.0.0");
+			expect(config.engines?.hypergen).toBe(">=8.0.0");
+			expect(config.engines?.node).toBe(">=16.0.0");
 		});
 
 		it("should validate version compatibility", () => {
@@ -143,12 +143,12 @@ dependencies:
 				},
 			};
 
-			const config = TemplateParser["validateAndBuildConfig"](yamlData, [], []);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], []);
 
 			expect(config.hooks).toBeDefined();
-			expect(config.hooks!.pre).toEqual(["validate-environment", "check-dependencies"]);
-			expect(config.hooks!.post).toEqual(["format-code", "run-tests"]);
-			expect(config.hooks!.error).toEqual(["cleanup-temp-files"]);
+			expect(config.hooks?.pre).toEqual(["validate-environment", "check-dependencies"]);
+			expect(config.hooks?.post).toEqual(["format-code", "run-tests"]);
+			expect(config.hooks?.error).toEqual(["cleanup-temp-files"]);
 		});
 
 		it("should filter invalid hooks", async () => {
@@ -163,11 +163,11 @@ dependencies:
 			};
 
 			const warnings: string[] = [];
-			const config = TemplateParser["validateAndBuildConfig"](yamlData, [], warnings);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], warnings);
 
-			expect(config.hooks!.pre).toEqual(["valid-hook", "another-valid-hook"]);
-			expect(config.hooks!.post).toBeUndefined();
-			expect(config.hooks!.error).toEqual([]);
+			expect(config.hooks?.pre).toEqual(["valid-hook", "another-valid-hook"]);
+			expect(config.hooks?.post).toBeUndefined();
+			expect(config.hooks?.error).toEqual([]);
 			expect(warnings).toContain("Some pre hooks were ignored (must be strings)");
 			expect(warnings).toContain("Post hooks should be an array of strings");
 		});
@@ -316,7 +316,7 @@ dependencies:
 				],
 			};
 
-			const config = TemplateParser["validateAndBuildConfig"](yamlData, [], []);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], []);
 
 			expect(config.dependencies).toHaveLength(3);
 
@@ -345,7 +345,7 @@ dependencies:
 			};
 
 			const warnings: string[] = [];
-			const config = TemplateParser["validateAndBuildConfig"](yamlData, [], warnings);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], warnings);
 
 			expect(config.dependencies).toHaveLength(1); // Only valid dep should remain
 			expect(warnings).toContain("Dependency 1 must have a name");

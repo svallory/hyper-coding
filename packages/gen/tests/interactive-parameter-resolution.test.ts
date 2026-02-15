@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ActionParameterResolver } from "#/actions/parameter-resolver";
 import type { ActionMetadata } from "#/actions/types";
 

@@ -1,7 +1,7 @@
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import fs from "fs-extra";
-import os from "node:os";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,10 +79,7 @@ export function fixtureExists(
 /**
  * List all fixtures in a directory
  */
-export function listFixtures(
-	dir: string = "",
-	options: Pick<FixtureOptions, "base"> = {},
-): string[] {
+export function listFixtures(dir = "", options: Pick<FixtureOptions, "base"> = {}): string[] {
 	const fixturePath = fixture(dir, { ...options, read: false });
 	if (!fs.existsSync(fixturePath) || !fs.statSync(fixturePath).isDirectory()) {
 		return [];

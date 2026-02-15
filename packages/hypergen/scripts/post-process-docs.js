@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 const DOCS_ROOT = "../../apps/docs";
 const TYPEDOCS_DIR = path.join(DOCS_ROOT, "typedocs");
@@ -70,7 +70,7 @@ function updateDocsJson() {
 	const docsJson = JSON.parse(fs.readFileSync(DOCS_JSON_PATH, "utf8"));
 
 	// Remove existing TypeDocs tab if it exists
-	if (docsJson.navigation && docsJson.navigation.tabs) {
+	if (docsJson.navigation?.tabs) {
 		docsJson.navigation.tabs = docsJson.navigation.tabs.filter((tab) => tab.tab !== "TypeDocs");
 	}
 

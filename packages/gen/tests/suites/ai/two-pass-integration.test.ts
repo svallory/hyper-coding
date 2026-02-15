@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { AiCollector } from "#/ai/ai-collector";
 import { PromptAssembler } from "#/ai/prompt-assembler";
 import { initializeJig, renderTemplate } from "#/template-engines/jig-engine";

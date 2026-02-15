@@ -4,13 +4,13 @@
  * Tests for the updated template parser supporting V8 Recipe Step System
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import yaml from "js-yaml";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TemplateParser } from "#/config/template-parser";
 import type { RecipeStepUnion } from "#/recipe-engine/types";
-import fs from "fs";
-import path from "path";
-import yaml from "js-yaml";
-import { tmpdir } from "os";
 
 describe("Recipe Step System Parser", () => {
 	let tempDir: string;
@@ -281,12 +281,12 @@ describe("Recipe Step System Parser", () => {
 
 			const recipeConfig = TemplateParser.toRecipeConfig(result.config);
 			expect(recipeConfig).not.toBeNull();
-			expect(recipeConfig!.name).toBe("convertible-recipe");
-			expect(recipeConfig!.description).toBe("Recipe for conversion");
-			expect(recipeConfig!.steps).toHaveLength(1);
-			expect(recipeConfig!.examples).toHaveLength(1);
-			expect(recipeConfig!.dependencies).toHaveLength(1);
-			expect(recipeConfig!.settings?.timeout).toBe(30000);
+			expect(recipeConfig?.name).toBe("convertible-recipe");
+			expect(recipeConfig?.description).toBe("Recipe for conversion");
+			expect(recipeConfig?.steps).toHaveLength(1);
+			expect(recipeConfig?.examples).toHaveLength(1);
+			expect(recipeConfig?.dependencies).toHaveLength(1);
+			expect(recipeConfig?.settings?.timeout).toBe(30000);
 		});
 
 		it("should return null for non-recipe configs", async () => {
@@ -336,7 +336,7 @@ describe("Recipe Step System Parser", () => {
 			const result = await TemplateParser.parseTemplateFile(filePath);
 
 			expect(result.isValid).toBe(true);
-			const templateStep = result.config.steps![0] as any;
+			const templateStep = result.config.steps?.[0] as any;
 			expect(templateStep.template).toBe("component.jig");
 			expect(templateStep.outputDir).toBe("src/components");
 			expect(templateStep.overwrite).toBe(true);
@@ -372,7 +372,7 @@ describe("Recipe Step System Parser", () => {
 			const result = await TemplateParser.parseTemplateFile(filePath);
 
 			expect(result.isValid).toBe(true);
-			const actionStep = result.config.steps![0] as any;
+			const actionStep = result.config.steps?.[0] as any;
 			expect(actionStep.action).toBe("setup-project");
 			expect(actionStep.parameters).toEqual({ projectType: "library" });
 			expect(actionStep.dryRun).toBe(false);
@@ -414,7 +414,7 @@ describe("Recipe Step System Parser", () => {
 			const result = await TemplateParser.parseTemplateFile(filePath);
 
 			expect(result.isValid).toBe(true);
-			const codemodStep = result.config.steps![0] as any;
+			const codemodStep = result.config.steps?.[0] as any;
 			expect(codemodStep.codemod).toBe("add-import");
 			expect(codemodStep.files).toEqual(["src/**/*.ts", "src/**/*.tsx"]);
 			expect(codemodStep.backup).toBe(true);
@@ -455,7 +455,7 @@ describe("Recipe Step System Parser", () => {
 			const result = await TemplateParser.parseTemplateFile(filePath);
 
 			expect(result.isValid).toBe(true);
-			const recipeStep = result.config.steps![0] as any;
+			const recipeStep = result.config.steps?.[0] as any;
 			expect(recipeStep.recipe).toBe("setup-base-project");
 			expect(recipeStep.version).toBe("^1.0.0");
 			expect(recipeStep.inheritVariables).toBe(true);
@@ -494,7 +494,7 @@ describe("Recipe Step System Parser", () => {
 			const result = await TemplateParser.parseTemplateFile(filePath);
 
 			expect(result.isValid).toBe(true);
-			const conditionalStep = result.config.steps![1] as any;
+			const conditionalStep = result.config.steps?.[1] as any;
 			expect(conditionalStep.when).toBe("!{{ skipTests }}");
 		});
 
@@ -531,8 +531,8 @@ describe("Recipe Step System Parser", () => {
 			const result = await TemplateParser.parseTemplateFile(filePath);
 
 			expect(result.isValid).toBe(true);
-			expect(result.config.steps![1].parallel).toBe(true);
-			expect(result.config.steps![2].parallel).toBe(true);
+			expect(result.config.steps?.[1].parallel).toBe(true);
+			expect(result.config.steps?.[2].parallel).toBe(true);
 		});
 
 		it("should validate recipe settings", async () => {

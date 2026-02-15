@@ -2,9 +2,9 @@
  * Config Init command - Initialize a configuration file
  */
 
+import { existsSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { Flags } from "@oclif/core";
-import { existsSync, writeFileSync } from "fs";
-import { resolve } from "path";
 import { BaseCommand } from "#/lib/base-command";
 import { executionFlags, outputFlags } from "#/lib/flags";
 
@@ -87,19 +87,17 @@ export default class ConfigInit extends BaseCommand<typeof ConfigInit> {
 	private generateConfig(format: "js" | "mjs" | "ts" | "json", minimal: boolean): string {
 		if (format === "json") {
 			if (minimal) {
-				return JSON.stringify({ templates: "templates" }, null, 2) + "\n";
+				return `${JSON.stringify({ templates: "templates" }, null, 2)}\n`;
 			}
-			return (
-				JSON.stringify(
-					{
-						templates: "templates",
-						helpers: {},
-						plugins: [],
-					},
-					null,
-					2,
-				) + "\n"
-			);
+			return `${JSON.stringify(
+				{
+					templates: "templates",
+					helpers: {},
+					plugins: [],
+				},
+				null,
+				2,
+			)}\n`;
 		}
 
 		const typeAnnotation = format === "ts" ? ': import("hypergen").HypergenConfig' : "";

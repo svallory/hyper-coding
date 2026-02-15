@@ -4,11 +4,11 @@
  * Implements caching for resolved templates with TTL and integrity checking
  */
 
-import fs from "fs-extra";
-import path from "path";
-import crypto from "crypto";
+import crypto from "node:crypto";
+import path from "node:path";
 import createDebug from "debug";
-import type { ResolvedTemplate, URLCacheConfig, CacheInfo, ValidationResult } from "#/types.js";
+import fs from "fs-extra";
+import type { CacheInfo, ResolvedTemplate, URLCacheConfig, ValidationResult } from "#/types.js";
 
 const debug = createDebug("hypergen:v8:cache");
 

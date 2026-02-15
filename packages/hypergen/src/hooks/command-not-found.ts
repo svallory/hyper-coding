@@ -10,9 +10,9 @@
  *   hypergen run nextjs crud update Organization
  */
 
-import type { Hook } from "@oclif/core";
-import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import type { Hook } from "@oclif/core";
 
 /**
  * Flags that the Run command declares and oclif should parse normally.
@@ -35,7 +35,7 @@ const KNOWN_RUN_FLAGS = new Set([
 	"d",
 ]);
 
-const hook: Hook.CommandNotFound = async function (opts) {
+const hook: Hook.CommandNotFound = async (opts) => {
 	const commandId = opts.id;
 
 	// Don't intercept commands that look like they're trying to be actual CLI commands

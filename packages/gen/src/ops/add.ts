@@ -1,7 +1,7 @@
 import path from "node:path";
-import fs from "fs-extra";
-import chalk from "chalk";
 import type { ActionResult, RenderedAction, RunnerConfig } from "@hypercli/core";
+import chalk from "chalk";
+import fs from "fs-extra";
 import createResult from "./result.js";
 
 const add = async (

@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AiCollector } from "#/ai/ai-collector";
 import { PromptAssembler } from "#/ai/prompt-assembler";
 import { initializeJig } from "#/template-engines/jig-engine";
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 
 describe("PromptAssembler", () => {
 	let assembler: PromptAssembler;
@@ -590,10 +590,10 @@ describe("PromptAssembler", () => {
 		const jsonMatch = result.match(/```json\s*([\s\S]*?)\s*```/);
 		expect(jsonMatch).not.toBeNull();
 
-		const schema = JSON.parse(jsonMatch![1]);
-		expect(schema["withDesc"]).toBe("<see format above>");
-		expect(schema["withoutDesc"]).toBe("<your answer>");
-		expect(schema["alsoWithDesc"]).toBe("<see format above>");
+		const schema = JSON.parse(jsonMatch?.[1]);
+		expect(schema.withDesc).toBe("<see format above>");
+		expect(schema.withoutDesc).toBe("<your answer>");
+		expect(schema.alsoWithDesc).toBe("<see format above>");
 	});
 
 	// ─── Edge case: whitespace-only outputDescription in schema ─────────
@@ -615,7 +615,7 @@ describe("PromptAssembler", () => {
 
 		const jsonMatch = result.match(/```json\s*([\s\S]*?)\s*```/);
 		expect(jsonMatch).not.toBeNull();
-		const schema = JSON.parse(jsonMatch![1]);
-		expect(schema["spacey"]).toBe("<your answer>");
+		const schema = JSON.parse(jsonMatch?.[1]);
+		expect(schema.spacey).toBe("<your answer>");
 	});
 });

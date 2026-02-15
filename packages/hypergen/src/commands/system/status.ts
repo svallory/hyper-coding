@@ -2,8 +2,8 @@
  * System Status command - Show system status and configuration
  */
 
-import { existsSync } from "fs";
-import { resolve } from "path";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { BaseCommand } from "#/lib/base-command";
 import { outputFlags } from "#/lib/flags";
 

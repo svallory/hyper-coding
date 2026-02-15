@@ -3,8 +3,8 @@
  */
 
 import { Args, Flags } from "@oclif/core";
-import { BaseCommand } from "#/lib/base-command";
 import { discoverCookbooksInKit, discoverRecipesInCookbook } from "#/config/cookbook-parser";
+import { BaseCommand } from "#/lib/base-command";
 import { c } from "#/lib/colors";
 import { s } from "#/lib/styles";
 
@@ -237,7 +237,7 @@ export default class KitInfo extends BaseCommand<typeof KitInfo> {
 				const name = c.kit(`  ${kit.name}`) + version;
 
 				if (kit.metadata?.description) {
-					this.log(`${name} ${c.subtle("— " + kit.metadata.description)}`);
+					this.log(`${name} ${c.subtle(`— ${kit.metadata.description}`)}`);
 				} else {
 					this.log(name);
 				}

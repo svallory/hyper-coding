@@ -228,7 +228,7 @@ function shellEscape(source: string): string {
 	const dangerousChars = /[;&|`$(){}!><\n\r]/;
 	if (dangerousChars.test(source)) {
 		throw new Error(
-			`Invalid kit specifier: "${source}"\n` + `Kit sources must not contain shell metacharacters.`,
+			`Invalid kit specifier: "${source}"\nKit sources must not contain shell metacharacters.`,
 		);
 	}
 	// Wrap in single quotes for shell safety, escaping internal single quotes

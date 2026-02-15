@@ -1,6 +1,6 @@
-import { exec } from "child_process";
-import { promisify } from "util";
-import path from "path";
+import { exec } from "node:child_process";
+import path from "node:path";
+import { promisify } from "node:util";
 import createDebug from "debug";
 
 const debug = createDebug("hypergen:utils:global-packages");
@@ -21,9 +21,8 @@ export async function getGlobalPackages(): Promise<GlobalPackage[]> {
 
 	if (isBun) {
 		return getBunGlobalPackages();
-	} else {
-		return getNpmGlobalPackages();
 	}
+	return getNpmGlobalPackages();
 }
 
 async function getNpmGlobalPackages(): Promise<GlobalPackage[]> {

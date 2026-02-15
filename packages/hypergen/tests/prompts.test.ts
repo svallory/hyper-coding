@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { TemplateVariable } from "#/config/template-parser";
 import { InteractivePrompter, type PromptOptions } from "#/prompts/interactive-prompts";
-import { type TemplateVariable } from "#/config/template-parser";
 
 describe("Interactive Prompts System", () => {
 	let prompter: InteractivePrompter;
@@ -99,21 +99,21 @@ describe("Interactive Prompts System", () => {
 			};
 
 			// Valid string
-			const validResult = prompter["validateStringInput"]("ComponentName", variable);
+			const validResult = prompter.validateStringInput("ComponentName", variable);
 			expect(validResult).toBeUndefined();
 
 			// Invalid pattern
-			const invalidPatternResult = prompter["validateStringInput"]("componentName", variable);
+			const invalidPatternResult = prompter.validateStringInput("componentName", variable);
 			expect(invalidPatternResult).toBeDefined();
 			expect(invalidPatternResult).toContain("Must match pattern");
 
 			// Too short
-			const tooShortResult = prompter["validateStringInput"]("AB", variable);
+			const tooShortResult = prompter.validateStringInput("AB", variable);
 			expect(tooShortResult).toBeDefined();
 			expect(tooShortResult).toContain("Must be at least 3 characters");
 
 			// Too long
-			const tooLongResult = prompter["validateStringInput"]("A".repeat(51), variable);
+			const tooLongResult = prompter.validateStringInput("A".repeat(51), variable);
 			expect(tooLongResult).toBeDefined();
 			expect(tooLongResult).toContain("Must be no more than 50 characters");
 		});
@@ -127,21 +127,21 @@ describe("Interactive Prompts System", () => {
 			};
 
 			// Valid number
-			const validResult = prompter["validateNumberInput"]("50", variable);
+			const validResult = prompter.validateNumberInput("50", variable);
 			expect(validResult).toBeUndefined();
 
 			// Invalid number
-			const invalidResult = prompter["validateNumberInput"]("not-a-number", variable);
+			const invalidResult = prompter.validateNumberInput("not-a-number", variable);
 			expect(invalidResult).toBeDefined();
 			expect(invalidResult).toContain("Must be a valid number");
 
 			// Too small
-			const tooSmallResult = prompter["validateNumberInput"]("0", variable);
+			const tooSmallResult = prompter.validateNumberInput("0", variable);
 			expect(tooSmallResult).toBeDefined();
 			expect(tooSmallResult).toContain("Must be at least 1");
 
 			// Too large
-			const tooLargeResult = prompter["validateNumberInput"]("101", variable);
+			const tooLargeResult = prompter.validateNumberInput("101", variable);
 			expect(tooLargeResult).toBeDefined();
 			expect(tooLargeResult).toContain("Must be no more than 100");
 		});
@@ -155,16 +155,16 @@ describe("Interactive Prompts System", () => {
 			};
 
 			// Valid array
-			const validResult = prompter["validateArrayInput"]("item1, item2, item3", variable);
+			const validResult = prompter.validateArrayInput("item1, item2, item3", variable);
 			expect(validResult).toBeUndefined();
 
 			// Too few items
-			const tooFewResult = prompter["validateArrayInput"]("item1", variable);
+			const tooFewResult = prompter.validateArrayInput("item1", variable);
 			expect(tooFewResult).toBeDefined();
 			expect(tooFewResult).toContain("Must have at least 2 items");
 
 			// Too many items
-			const tooManyResult = prompter["validateArrayInput"](
+			const tooManyResult = prompter.validateArrayInput(
 				"item1, item2, item3, item4, item5, item6",
 				variable,
 			);
@@ -191,7 +191,7 @@ describe("Interactive Prompts System", () => {
 				tags: ["web", "frontend"],
 			};
 
-			const validation = prompter["validateParameters"](variables, values);
+			const validation = prompter.validateParameters(variables, values);
 			expect(validation.valid).toBe(true);
 			expect(validation.errors).toHaveLength(0);
 		});
@@ -209,7 +209,7 @@ describe("Interactive Prompts System", () => {
 				framework: "angular", // Invalid enum value
 			};
 
-			const validation = prompter["validateParameters"](variables, values);
+			const validation = prompter.validateParameters(variables, values);
 			expect(validation.valid).toBe(false);
 			expect(validation.errors).toContain("name is required");
 			expect(validation.errors).toContain("port must be at least 1000");
@@ -232,7 +232,7 @@ describe("Interactive Prompts System", () => {
 				methods: ["GET", "POST", "PUT"],
 			};
 
-			const validation = prompter["validateParameters"](variables, values);
+			const validation = prompter.validateParameters(variables, values);
 			expect(validation.valid).toBe(true);
 			expect(validation.errors).toHaveLength(0);
 		});
@@ -250,7 +250,7 @@ describe("Interactive Prompts System", () => {
 				methods: ["GET", "PATCH", "OPTIONS"], // PATCH and OPTIONS are not valid
 			};
 
-			const validation = prompter["validateParameters"](variables, values);
+			const validation = prompter.validateParameters(variables, values);
 			expect(validation.valid).toBe(false);
 			expect(validation.errors).toContain("methods contains invalid values: PATCH, OPTIONS");
 		});

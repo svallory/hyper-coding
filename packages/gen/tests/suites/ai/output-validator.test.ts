@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { validateOutput, buildValidationFeedback } from "#/ai/output-validator";
-import path from "path";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { buildValidationFeedback, validateOutput } from "#/ai/output-validator";
 
 const projectRoot = path.resolve(__dirname, "../../..");
 
@@ -71,7 +71,7 @@ describe("validateOutput", () => {
 		});
 
 		it("ignores node built-in imports", async () => {
-			const code = `import fs from 'fs'\nimport path from 'node:path'`;
+			const code = `import fs from 'node:fs'\nimport path from 'node:path'`;
 			const result = await validateOutput(code, { requireKnownImports: true }, projectRoot);
 			expect(result.passed).toBe(true);
 		});
@@ -89,7 +89,7 @@ describe("validateOutput", () => {
 		});
 
 		it("blocks blocked imports", async () => {
-			const code = `import { exec } from 'child_process'\nimport evil from 'evil-package'`;
+			const code = `import { exec } from 'node:child_process'\nimport evil from 'evil-package'`;
 			const result = await validateOutput(code, { blockedImports: ["evil-package"] }, projectRoot);
 			expect(result.passed).toBe(false);
 			expect(result.errors.some((e) => e.includes("evil-package"))).toBe(true);

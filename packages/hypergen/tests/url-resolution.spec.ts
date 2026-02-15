@@ -2,15 +2,15 @@
  * URL Resolution System Tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import fs from "fs-extra";
-import path from "path";
-import os from "os";
-import { fileURLToPath } from "url";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-	TemplateURLManager,
-	LocalResolver,
 	GitHubResolver,
+	LocalResolver,
+	TemplateURLManager,
 	URLCache,
 } from "#/config/url-resolution/index";
 
@@ -46,7 +46,7 @@ describe("URLCache", () => {
 				url,
 				type: "http" as const,
 				lastFetched: new Date(),
-				checksum: require("crypto").createHash("sha256").update(content).digest("hex"),
+				checksum: require("node:crypto").createHash("sha256").update(content).digest("hex"),
 			},
 		};
 
@@ -63,8 +63,8 @@ describe("URLCache", () => {
 		// Retrieve cached entry
 		const cached = await cache.get(url);
 		expect(cached).toBeDefined();
-		expect(cached!.content).toBe(resolved.content);
-		expect(cached!.metadata.url).toBe(url);
+		expect(cached?.content).toBe(resolved.content);
+		expect(cached?.metadata.url).toBe(url);
 	});
 
 	it("should handle cache expiration", async () => {
@@ -116,7 +116,7 @@ describe("URLCache", () => {
 		await cache.set(url, resolved);
 
 		// Manually corrupt the cached content
-		const cacheKey = require("crypto").createHash("sha256").update(url).digest("hex");
+		const cacheKey = require("node:crypto").createHash("sha256").update(url).digest("hex");
 		const cachePath = path.join(tempDir, cacheKey);
 		await fs.writeFile(path.join(cachePath, "template.yml"), "corrupted content");
 

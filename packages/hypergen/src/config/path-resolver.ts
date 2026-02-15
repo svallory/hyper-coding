@@ -8,12 +8,12 @@
  * Algorithm: greedy path matching — longest filesystem match wins.
  */
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import createDebug from "debug";
-import type { ParsedKit } from "#/kit-parser.js";
 import type { ParsedCookbook } from "#/cookbook-parser.js";
 import { discoverCookbooksInKit, discoverRecipesInCookbook } from "#/cookbook-parser.js";
+import type { ParsedKit } from "#/kit-parser.js";
 
 const debug = createDebug("hypergen:config:path-resolver");
 

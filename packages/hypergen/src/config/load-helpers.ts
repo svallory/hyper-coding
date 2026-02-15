@@ -5,9 +5,9 @@
  * Used by HypergenConfigLoader, kit-parser, and cookbook-parser.
  */
 
-import fs from "fs";
-import path from "path";
-import { pathToFileURL } from "url";
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * Load helpers from a file path, directory, or object.

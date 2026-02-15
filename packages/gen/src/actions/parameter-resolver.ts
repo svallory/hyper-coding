@@ -4,11 +4,11 @@
  * Handles parameter validation and resolution for action execution
  */
 
+import { TemplateParser, type TemplateVariable } from "@hypercli/core";
 import createDebug from "debug";
+import { InteractivePrompter, type PromptOptions } from "#/prompts/interactive-prompts";
 import type { ActionMetadata, ActionParameter, ParameterType } from "./types.js";
 import { ActionParameterError } from "./types.js";
-import { InteractivePrompter, type PromptOptions } from "#/prompts/interactive-prompts";
-import { TemplateParser, type TemplateVariable } from "@hypercli/core";
 
 const debug = createDebug("hypergen:v8:action:parameters");
 
@@ -347,7 +347,7 @@ export class ActionParameterResolver {
 		value: any,
 		param: ActionParameter,
 	): { valid: boolean; message?: string } {
-		if (typeof value !== "number" || isNaN(value)) {
+		if (typeof value !== "number" || Number.isNaN(value)) {
 			return { valid: false, message: `Expected number, got ${typeof value}` };
 		}
 

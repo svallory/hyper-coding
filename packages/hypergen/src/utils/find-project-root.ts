@@ -4,7 +4,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import createDebug from "debug";
 
 const debug = createDebug("hypergen:utils:project-root");

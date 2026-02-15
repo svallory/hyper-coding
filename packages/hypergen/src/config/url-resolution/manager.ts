@@ -4,22 +4,22 @@
  * Main orchestrator for template URL resolution and caching
  */
 
-import path from "path";
-import os from "os";
+import os from "node:os";
+import path from "node:path";
 import createDebug from "debug";
 import { URLCache } from "#/cache.js";
-import { LocalResolver } from "#/resolvers/local.js";
 import { GitHubResolver } from "#/resolvers/github.js";
+import { LocalResolver } from "#/resolvers/local.js";
 import type {
-	TemplateURLResolver,
+	CacheInfo,
 	ResolvedTemplate,
+	SecurityConfig,
+	TemplateURLResolver,
+	URLCacheConfig,
+	URLInfo,
 	URLManagerConfig,
 	URLType,
-	URLInfo,
-	CacheInfo,
 	ValidationResult,
-	SecurityConfig,
-	URLCacheConfig,
 } from "#/types.js";
 import { URLResolutionError } from "#/types.js";
 
@@ -156,21 +156,23 @@ export class TemplateURLManager {
 	private parseURL(url: string): URLInfo {
 		if (url.startsWith("github:") || url.includes("github.com")) {
 			return { type: "github", url };
-		} else if (url.startsWith("gist:") || url.includes("gist.github.com")) {
-			return { type: "gist", url };
-		} else if (url.startsWith("npm:")) {
-			return { type: "npm", url };
-		} else if (url.startsWith("http://") || url.startsWith("https://")) {
-			return { type: "http", url };
-		} else {
-			return { type: "local", url };
 		}
+		if (url.startsWith("gist:") || url.includes("gist.github.com")) {
+			return { type: "gist", url };
+		}
+		if (url.startsWith("npm:")) {
+			return { type: "npm", url };
+		}
+		if (url.startsWith("http://") || url.startsWith("https://")) {
+			return { type: "http", url };
+		}
+		return { type: "local", url };
 	}
 
 	private findResolver(url: string, type: URLType): TemplateURLResolver | undefined {
 		// First try to find resolver by type
 		const resolver = this.resolvers.get(type);
-		if (resolver && resolver.supports(url)) {
+		if (resolver?.supports(url)) {
 			return resolver;
 		}
 

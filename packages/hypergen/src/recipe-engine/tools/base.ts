@@ -7,18 +7,18 @@
 
 import createDebug from "debug";
 import {
-	HypergenError,
 	ErrorCode,
 	ErrorHandler,
+	HypergenError,
 	withErrorHandling,
 } from "#/errors/hypergen-errors";
 import Logger from "#/logger";
 import type {
-	ToolType,
-	StepContext,
-	StepResult,
-	StepExecutionOptions,
 	RecipeStepUnion,
+	StepContext,
+	StepExecutionOptions,
+	StepResult,
+	ToolType,
 } from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:v8:recipe:tool");
@@ -299,7 +299,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 					this.metrics.retryAttempts = attempt;
 
 					// Add exponential backoff delay
-					const delay = Math.min(1000 * Math.pow(2, attempt - 1), 30000);
+					const delay = Math.min(1000 * 2 ** (attempt - 1), 30000);
 					await new Promise((resolve) => setTimeout(resolve, delay));
 				}
 

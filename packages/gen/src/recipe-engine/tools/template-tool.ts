@@ -8,23 +8,23 @@
  */
 
 import path from "node:path";
-import fs from "fs-extra";
-import fm from "front-matter";
+import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
 import createDebug from "debug";
-import { Tool, type ToolValidationResult } from "./base.js";
-import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
-import {
-	type TemplateStep,
-	type StepContext,
-	type StepResult,
-	type StepExecutionOptions,
-	type TemplateExecutionResult,
-	isTemplateStep,
-} from "#/recipe-engine/types";
-import { getJig, renderTemplate as jigRenderTemplate } from "#/template-engines/index";
+import fm from "front-matter";
+import fs from "fs-extra";
 import addOp from "#/ops/add";
 import injectOp from "#/ops/inject";
+import {
+	type StepContext,
+	type StepExecutionOptions,
+	type StepResult,
+	type TemplateExecutionResult,
+	type TemplateStep,
+	isTemplateStep,
+} from "#/recipe-engine/types";
 import type { RenderedAction, RunnerConfig } from "#/recipe-engine/types";
+import { getJig, renderTemplate as jigRenderTemplate } from "#/template-engines/index";
+import { Tool, type ToolValidationResult } from "./base.js";
 
 const debug = createDebug("hypergen:v8:recipe:tool:template");
 
@@ -89,7 +89,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 	private templateEnginesInitialized = false;
 	private templateCache = new Map<string, TemplateResolution>();
 
-	constructor(name: string = "template-tool", options: Record<string, any> = {}) {
+	constructor(name = "template-tool", options: Record<string, any> = {}) {
 		super("template", name, options);
 	}
 
@@ -416,7 +416,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 		// Check cache first
 		const cacheKey = `${templateId}:${context.projectRoot}`;
 		const cached = this.templateCache.get(cacheKey);
-		if (cached && cached.metadata.exists) {
+		if (cached?.metadata.exists) {
 			return cached;
 		}
 
@@ -735,12 +735,11 @@ export class TemplateTool extends Tool<TemplateStep> {
 				this.debug("Injecting content into file: %s", renderedFile.targetPath);
 				const result = await injectOp(renderedAction, opArgs, runnerConfig);
 				return { status: result.status || "injected" };
-			} else {
-				// Use add operation for file creation
-				this.debug("Adding/creating file: %s", renderedFile.targetPath);
-				const result = await addOp(renderedAction, opArgs, runnerConfig);
-				return { status: result.status || "added" };
 			}
+			// Use add operation for file creation
+			this.debug("Adding/creating file: %s", renderedFile.targetPath);
+			const result = await addOp(renderedAction, opArgs, runnerConfig);
+			return { status: result.status || "added" };
 		} catch (error) {
 			// For testing purposes, if it's a simple write operation, try direct file write
 			if (options?.dryRun || context.dryRun) {
@@ -764,7 +763,7 @@ export class TemplateTool extends Tool<TemplateStep> {
  * Template Tool Factory
  */
 export class TemplateToolFactory {
-	create(name: string = "template-tool", options: Record<string, any> = {}): TemplateTool {
+	create(name = "template-tool", options: Record<string, any> = {}): TemplateTool {
 		return new TemplateTool(name, options);
 	}
 

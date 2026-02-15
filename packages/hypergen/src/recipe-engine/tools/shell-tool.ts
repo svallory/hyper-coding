@@ -7,20 +7,20 @@
 
 import createDebug from "debug";
 import { Tool, type ToolValidationResult } from "#/base.js";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
-import {
-	type StepContext,
-	type StepResult,
-	type StepExecutionOptions,
-	type BaseRecipeStep,
-	type ShellStep,
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
+import type {
+	BaseRecipeStep,
+	ShellStep,
+	StepContext,
+	StepExecutionOptions,
+	StepResult,
 } from "#/recipe-engine/types";
 import { renderTemplate } from "#/template-engines/jig-engine";
 
 const debug = createDebug("hypergen:v8:recipe:tool:shell");
 
 export class ShellTool extends Tool<ShellStep> {
-	constructor(name: string = "shell-tool", options: Record<string, any> = {}) {
+	constructor(name = "shell-tool", options: Record<string, any> = {}) {
 		super("shell", name, options);
 	}
 
@@ -81,8 +81,8 @@ export class ShellTool extends Tool<ShellStep> {
 			// For now, let's implement a direct execution to be safe and avoid legacy baggage,
 			// enabling full control over the step result.
 
-			const { exec } = await import("child_process");
-			const { promisify } = await import("util");
+			const { exec } = await import("node:child_process");
+			const { promisify } = await import("node:util");
 			const execAsync = promisify(exec);
 
 			// Strip CLAUDECODE env var to prevent "nested session" errors when
@@ -163,7 +163,7 @@ export class ShellTool extends Tool<ShellStep> {
 }
 
 export class ShellToolFactory {
-	create(name: string = "shell-tool", options: Record<string, any> = {}): ShellTool {
+	create(name = "shell-tool", options: Record<string, any> = {}): ShellTool {
 		return new ShellTool(name, options);
 	}
 

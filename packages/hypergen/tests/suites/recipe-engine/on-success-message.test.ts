@@ -11,15 +11,15 @@
  *   - renderLifecycleMessage() in RecipeEngine (recipe-engine.ts)
  */
 
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { RecipeEngine } from "~/recipe-engine/recipe-engine";
-import { initializeJig } from "~/template-engines/jig-engine";
-import { ToolRegistry } from "~/recipe-engine/tools/registry";
-import { registerDefaultTools } from "~/recipe-engine/tools/index";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import yaml from "js-yaml";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { RecipeEngine } from "~/recipe-engine/recipe-engine";
+import { registerDefaultTools } from "~/recipe-engine/tools/index";
+import { ToolRegistry } from "~/recipe-engine/tools/registry";
+import { initializeJig } from "~/template-engines/jig-engine";
 
 // ---------------------------------------------------------------------------
 // Helpers

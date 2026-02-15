@@ -4,7 +4,8 @@
  * Tests for the main RecipeEngine orchestrator
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { TemplateParser } from "#/config/template-parser";
 import {
 	RecipeEngine,
 	createRecipeEngine,
@@ -13,7 +14,6 @@ import {
 	validateRecipe,
 } from "#/recipe-engine/recipe-engine";
 import type { RecipeConfig, RecipeSource } from "#/recipe-engine/types";
-import { TemplateParser } from "#/config/template-parser";
 
 describe("RecipeEngine", () => {
 	let engine: RecipeEngine;
@@ -196,8 +196,8 @@ steps:
 			};
 
 			// Mock the step executor to avoid actual execution
-			const originalExecuteSteps = engine["stepExecutor"].executeSteps;
-			engine["stepExecutor"].executeSteps = async () => [];
+			const originalExecuteSteps = engine.stepExecutor.executeSteps;
+			engine.stepExecutor.executeSteps = async () => [];
 
 			try {
 				const result = await engine.executeRecipe(source, {
@@ -207,7 +207,7 @@ steps:
 				expect(result.variables.name).toBe("DefaultName");
 				expect(result.variables.enabled).toBe(false);
 			} finally {
-				engine["stepExecutor"].executeSteps = originalExecuteSteps;
+				engine.stepExecutor.executeSteps = originalExecuteSteps;
 			}
 		});
 
@@ -234,8 +234,8 @@ steps:
 			};
 
 			// Mock the step executor
-			const originalExecuteSteps = engine["stepExecutor"].executeSteps;
-			engine["stepExecutor"].executeSteps = async () => [];
+			const originalExecuteSteps = engine.stepExecutor.executeSteps;
+			engine.stepExecutor.executeSteps = async () => [];
 
 			try {
 				const result = await engine.executeRecipe(source, {
@@ -249,7 +249,7 @@ steps:
 				expect(result.variables.name).toBe("CustomName");
 				expect(result.variables.count).toBe(5);
 			} finally {
-				engine["stepExecutor"].executeSteps = originalExecuteSteps;
+				engine.stepExecutor.executeSteps = originalExecuteSteps;
 			}
 		});
 
@@ -296,8 +296,8 @@ steps: []
 
 			// Mock to avoid actual execution
 			const mockEngine = createRecipeEngine();
-			const originalExecuteSteps = mockEngine["stepExecutor"].executeSteps;
-			mockEngine["stepExecutor"].executeSteps = async () => [];
+			const originalExecuteSteps = mockEngine.stepExecutor.executeSteps;
+			mockEngine.stepExecutor.executeSteps = async () => [];
 
 			try {
 				const result = await mockEngine.executeRecipe({
@@ -315,7 +315,7 @@ steps:
 
 				expect(result.success).toBe(true);
 			} finally {
-				mockEngine["stepExecutor"].executeSteps = originalExecuteSteps;
+				mockEngine.stepExecutor.executeSteps = originalExecuteSteps;
 				await mockEngine.cleanup();
 			}
 		});

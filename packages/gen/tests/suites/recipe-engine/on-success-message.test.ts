@@ -11,15 +11,15 @@
  *   - renderLifecycleMessage() in RecipeEngine (recipe-engine.ts)
  */
 
-import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
-import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { initializeJig } from "#/template-engines/jig-engine";
-import { ToolRegistry } from "#/recipe-engine/tools/registry";
-import { registerDefaultTools } from "#/recipe-engine/tools/index";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import yaml from "js-yaml";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { RecipeEngine } from "#/recipe-engine/recipe-engine";
+import { registerDefaultTools } from "#/recipe-engine/tools/index";
+import { ToolRegistry } from "#/recipe-engine/tools/registry";
+import { initializeJig } from "#/template-engines/jig-engine";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -27,7 +27,7 @@ import yaml from "js-yaml";
 
 /** Strip ANSI escape codes so we can assert on plain text content. */
 function stripAnsi(str: string): string {
-	// eslint-disable-next-line no-control-regex
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes intentionally use control characters
 	return str.replace(/\x1B\[[0-9;]*m/g, "");
 }
 

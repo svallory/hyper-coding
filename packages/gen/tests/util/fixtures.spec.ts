@@ -1,14 +1,14 @@
-import { describe, it, expect } from "vitest";
-import fs from "fs-extra";
 import path from "node:path";
+import fs from "fs-extra";
+import { describe, expect, it } from "vitest";
 import {
-	fixture,
-	fixtureFor,
-	templateFixture,
-	fixtureExists,
-	listFixtures,
-	withTempFixtures,
 	copyFixture,
+	fixture,
+	fixtureExists,
+	fixtureFor,
+	listFixtures,
+	templateFixture,
+	withTempFixtures,
 } from "#tests/util/fixtures";
 
 describe("fixture helpers", () => {

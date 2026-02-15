@@ -3,8 +3,8 @@
  */
 
 import { Args, Flags } from "@oclif/core";
-import { BaseCommand } from "#/lib/base-command";
 import { discoverCookbooksInKit } from "#/config/cookbook-parser";
+import { BaseCommand } from "#/lib/base-command";
 import { c } from "#/lib/colors";
 import { s } from "#/lib/styles";
 

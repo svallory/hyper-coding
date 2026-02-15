@@ -1,9 +1,9 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
-	resolveApiKey,
-	hasApiKeyAvailable,
-	getExpectedEnvVar,
 	PROVIDER_API_KEY_ENV_VARS,
+	getExpectedEnvVar,
+	hasApiKeyAvailable,
+	resolveApiKey,
 } from "#/ai/env";
 
 describe("AI env utilities", () => {
@@ -42,7 +42,7 @@ describe("AI env utilities", () => {
 		});
 
 		it("returns undefined when explicit env var is not set", () => {
-			delete process.env.NONEXISTENT_VAR;
+			process.env.NONEXISTENT_VAR = undefined;
 			expect(resolveApiKey("NONEXISTENT_VAR", "anthropic")).toBeUndefined();
 		});
 
@@ -78,7 +78,7 @@ describe("AI env utilities", () => {
 		});
 
 		it("returns false when env var is not set", () => {
-			delete process.env.ANTHROPIC_API_KEY;
+			process.env.ANTHROPIC_API_KEY = undefined;
 			expect(hasApiKeyAvailable(undefined, "anthropic")).toBe(false);
 		});
 	});

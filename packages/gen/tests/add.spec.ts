@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import fs from "fs-extra";
 import path from "node:path";
-import add from "#/ops/add";
 import { Logger } from "@hypercli/core";
+import fs from "fs-extra";
+import { describe, expect, it } from "vitest";
+import add from "#/ops/add";
 import MockEnquirer from "#tests/util/enquirer.js";
 
 describe("add", () => {

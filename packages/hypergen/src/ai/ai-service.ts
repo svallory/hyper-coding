@@ -8,17 +8,17 @@
  */
 
 import createDebug from "debug";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
-import { ModelRouter } from "#/model-router.js";
-import { CostTracker } from "#/cost-tracker.js";
-import { PromptPipeline, type PromptPipelineOptions } from "#/prompt-pipeline.js";
-import { validateOutput, buildValidationFeedback } from "#/output-validator.js";
 import type {
-	AiServiceConfig,
-	AIGuardrailConfig,
-	AIExecutionResult,
 	AICostSummary,
+	AIExecutionResult,
+	AIGuardrailConfig,
+	AiServiceConfig,
 } from "#/ai-config.js";
+import { CostTracker } from "#/cost-tracker.js";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
+import { ModelRouter } from "#/model-router.js";
+import { buildValidationFeedback, validateOutput } from "#/output-validator.js";
+import { PromptPipeline, type PromptPipelineOptions } from "#/prompt-pipeline.js";
 import type { StepResult } from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:ai:service");
@@ -268,7 +268,7 @@ export class AiService {
 				// Rate limiting
 				if (error.status === 429 || error.statusCode === 429) {
 					const retryAfter = error.headers?.["retry-after"]
-						? parseInt(error.headers["retry-after"]) * 1000
+						? Number.parseInt(error.headers["retry-after"]) * 1000
 						: 5000;
 					debug("Rate limited, waiting %dms", retryAfter);
 					await sleep(retryAfter);
@@ -286,7 +286,7 @@ export class AiService {
 				}
 
 				// Retry with backoff
-				const backoff = Math.min(1000 * Math.pow(2, attempt), 30000);
+				const backoff = Math.min(1000 * 2 ** attempt, 30000);
 				debug("API error, retrying in %dms: %s", backoff, error.message);
 				await sleep(backoff);
 				retryAttempts++;

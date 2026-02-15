@@ -1,6 +1,10 @@
 {
 	"files": {
-		"ignore": ["packages/hypergen/scripts/standalone.js"]
+		"ignore": [
+			"packages/hypergen/scripts/standalone.js",
+			"packages/hypergen/**",
+			"**/dist/**"
+		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -16,7 +20,12 @@
 			},
 			"complexity": {
 				"noBannedTypes": "off",
-				"noStaticOnlyClass": "off"
+				"noStaticOnlyClass": "off",
+				"noForEach": "off"
+			},
+			"style": {
+				"noNonNullAssertion": "off",
+				"noParameterAssign": "off"
 			}
 		}
 	}

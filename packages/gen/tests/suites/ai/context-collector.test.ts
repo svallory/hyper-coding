@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ContextCollector } from "#/ai/context-collector";
 import type { StepResult } from "#/recipe-engine/types";
-import fs from "fs";
-import path from "path";
-import os from "os";
 
 describe("ContextCollector", () => {
 	let collector: ContextCollector;

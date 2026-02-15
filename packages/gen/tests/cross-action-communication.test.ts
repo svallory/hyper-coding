@@ -4,14 +4,14 @@
  * Tests for action communication, state sharing, and workflow coordination
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-	ActionCommunicationManager,
-	getCommunicationManager,
-	clearCommunicationManager,
-	type CommunicationConfig,
+	type ActionCommunicationManager,
 	type ActionMessage,
 	type ActionState,
+	type CommunicationConfig,
+	clearCommunicationManager,
+	getCommunicationManager,
 } from "#/actions/communication";
 
 describe("Cross-Action Communication", () => {
@@ -41,11 +41,11 @@ describe("Cross-Action Communication", () => {
 
 			const state = communicationManager.getActionState(actionId);
 			expect(state).toBeDefined();
-			expect(state!.id).toBe(actionId);
-			expect(state!.action).toBe(actionName);
-			expect(state!.status).toBe("running");
-			expect(state!.data).toEqual(initialData);
-			expect(state!.metadata.startTime).toBeInstanceOf(Date);
+			expect(state?.id).toBe(actionId);
+			expect(state?.action).toBe(actionName);
+			expect(state?.status).toBe("running");
+			expect(state?.data).toEqual(initialData);
+			expect(state?.metadata.startTime).toBeInstanceOf(Date);
 		});
 
 		it("should update action state", () => {
@@ -56,9 +56,9 @@ describe("Cross-Action Communication", () => {
 			communicationManager.updateActionState(actionId, updates, "running");
 
 			const state = communicationManager.getActionState(actionId);
-			expect(state!.data.filesCreated).toEqual(["component.tsx"]);
-			expect(state!.data.progress).toBe(50);
-			expect(state!.status).toBe("running");
+			expect(state?.data.filesCreated).toEqual(["component.tsx"]);
+			expect(state?.data.progress).toBe(50);
+			expect(state?.status).toBe("running");
 		});
 
 		it("should complete an action", () => {
@@ -72,10 +72,10 @@ describe("Cross-Action Communication", () => {
 			communicationManager.completeAction(actionId, result);
 
 			const state = communicationManager.getActionState(actionId);
-			expect(state!.status).toBe("completed");
-			expect(state!.metadata.filesCreated).toEqual(result.filesCreated);
-			expect(state!.metadata.endTime).toBeInstanceOf(Date);
-			expect(state!.metadata.duration).toBeGreaterThanOrEqual(0);
+			expect(state?.status).toBe("completed");
+			expect(state?.metadata.filesCreated).toEqual(result.filesCreated);
+			expect(state?.metadata.endTime).toBeInstanceOf(Date);
+			expect(state?.metadata.duration).toBeGreaterThanOrEqual(0);
 		});
 
 		it("should fail an action", () => {
@@ -86,9 +86,9 @@ describe("Cross-Action Communication", () => {
 			communicationManager.failAction(actionId, error);
 
 			const state = communicationManager.getActionState(actionId);
-			expect(state!.status).toBe("failed");
-			expect(state!.metadata.errors).toContain(error);
-			expect(state!.metadata.endTime).toBeInstanceOf(Date);
+			expect(state?.status).toBe("failed");
+			expect(state?.metadata.errors).toContain(error);
+			expect(state?.metadata.endTime).toBeInstanceOf(Date);
 		});
 
 		it("should get actions by status", () => {
@@ -479,7 +479,7 @@ describe("Real-world Communication Scenarios", () => {
 
 		// Verify workflow completion
 		const testState = manager.getActionState("generate-test");
-		expect(testState!.status).toBe("completed");
+		expect(testState?.status).toBe("completed");
 		expect(manager.getSharedData("component-name")).toBe(componentName);
 	});
 
@@ -500,7 +500,7 @@ describe("Real-world Communication Scenarios", () => {
 		}
 
 		const installState = manager.getActionState("install-deps");
-		expect(installState!.status).toBe("failed");
+		expect(installState?.status).toBe("failed");
 	});
 
 	it("should support progress tracking across multiple actions", () => {
@@ -527,7 +527,7 @@ describe("Real-world Communication Scenarios", () => {
 
 		// Check final state
 		const finalAction = manager.getActionState("output");
-		expect(finalAction!.data.progress).toBe(100);
+		expect(finalAction?.data.progress).toBe(100);
 
 		const completedActions = manager.getActionsByStatus("completed");
 		expect(completedActions).toHaveLength(3); // All except 'output' which is still running

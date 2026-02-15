@@ -5,23 +5,23 @@
  * Validates recipe discovery, variable inheritance, sub-recipe execution, and error handling.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import path from "path";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import fs from "fs-extra";
-import { tmpdir } from "os";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Tool } from "#/recipe-engine/tools/base";
 import {
 	RecipeTool,
 	RecipeToolFactory,
 	recipeToolFactory,
 } from "#/recipe-engine/tools/recipe-tool";
-import { Tool } from "#/recipe-engine/tools/base";
 import { getToolRegistry } from "#/recipe-engine/tools/registry";
 import type {
+	RecipeConfig,
 	RecipeStep,
 	StepContext,
-	RecipeConfig,
-	StepResult,
 	StepExecutionOptions,
+	StepResult,
 	TemplateStep,
 } from "#/recipe-engine/types";
 
@@ -29,7 +29,7 @@ import type {
  * Mock template tool for testing recipe execution without needing actual template processing
  */
 class MockTemplateTool extends Tool<TemplateStep> {
-	constructor(name: string = "mock-template-tool", options: Record<string, any> = {}) {
+	constructor(name = "mock-template-tool", options: Record<string, any> = {}) {
 		super("template", name, options);
 	}
 
@@ -461,10 +461,7 @@ describe("RecipeTool Integration Tests", () => {
 		it("should handle recipe execution failure", async () => {
 			// Create a failing mock template tool that will replace the default
 			class FailingMockTemplateTool extends Tool<TemplateStep> {
-				constructor(
-					name: string = "failing-mock-template-tool",
-					options: Record<string, any> = {},
-				) {
+				constructor(name = "failing-mock-template-tool", options: Record<string, any> = {}) {
 					super("template", name, options);
 				}
 
@@ -499,10 +496,10 @@ describe("RecipeTool Integration Tests", () => {
 			const toolRegistry = getToolRegistry();
 
 			// Save the original factory
-			const originalFactory = toolRegistry["registrations"].get("template:default");
+			const originalFactory = toolRegistry.registrations.get("template:default");
 
 			// Clear the cached instance of the default template tool
-			toolRegistry["removeCachedInstances"]("template", "default");
+			toolRegistry.removeCachedInstances("template", "default");
 
 			// Register the failing mock tool as 'default'
 			toolRegistry.register("template", "default", {
@@ -550,12 +547,12 @@ describe("RecipeTool Integration Tests", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.message).toContain("failed");
+			expect(result.error?.message).toContain("failed");
 
 			// Restore the original factory and clear the cache
-			toolRegistry["removeCachedInstances"]("template", "default");
+			toolRegistry.removeCachedInstances("template", "default");
 			if (originalFactory) {
-				toolRegistry["registrations"].set("template:default", originalFactory);
+				toolRegistry.registrations.set("template:default", originalFactory);
 			}
 		});
 	});
@@ -574,7 +571,7 @@ describe("RecipeTool Integration Tests", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.message).toContain("not found");
+			expect(result.error?.message).toContain("not found");
 		});
 
 		it("should handle malformed recipe file", async () => {

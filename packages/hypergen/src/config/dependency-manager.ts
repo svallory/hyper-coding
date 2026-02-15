@@ -4,12 +4,12 @@
  * Handles template dependency resolution, installation, and management
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import createDebug from "debug";
-import fs from "fs";
-import path from "path";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
+import { type TemplateConfig, type TemplateDependency, TemplateParser } from "#/template-parser.js";
 import { TemplateURLManager } from "#/url-resolution/index.js";
-import { TemplateParser, type TemplateDependency, type TemplateConfig } from "#/template-parser.js";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
 
 const debug = createDebug("hypergen:v8:dependency-manager");
 
@@ -322,10 +322,7 @@ export class TemplateDependencyManager {
 		for (const strategy of strategies) {
 			try {
 				return await strategy();
-			} catch (error) {
-				// Continue to next strategy
-				continue;
-			}
+			} catch (error) {}
 		}
 
 		throw ErrorHandler.createError(
@@ -374,7 +371,7 @@ export class TemplateDependencyManager {
 			if (!dependencyMap.has(dep.name)) {
 				dependencyMap.set(dep.name, []);
 			}
-			dependencyMap.get(dep.name)!.push(dep);
+			dependencyMap.get(dep.name)?.push(dep);
 		}
 
 		const conflicts = [];

@@ -8,11 +8,10 @@ class MockEnquirer {
 				answers[question.name] = this._getDefaultAnswer(question);
 			}
 			return answers;
-		} else {
-			return {
-				[questions.name]: this._getDefaultAnswer(questions),
-			};
 		}
+		return {
+			[questions.name]: this._getDefaultAnswer(questions),
+		};
 	}
 
 	_getDefaultAnswer(question) {

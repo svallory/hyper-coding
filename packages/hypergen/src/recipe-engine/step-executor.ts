@@ -6,42 +6,42 @@
  * coordination layer that brings together all recipe tools.
  */
 
+import { EventEmitter } from "node:events";
 import createDebug from "debug";
-import { EventEmitter } from "events";
-import { ToolRegistry, getToolRegistry } from "#/tools/registry.js";
-import { Tool } from "#/tools/base.js";
-import { ErrorHandler, ErrorCode, HypergenError } from "#/errors/hypergen-errors";
+import { ErrorCode, ErrorHandler, HypergenError } from "#/errors/hypergen-errors";
 import Logger from "#/logger";
+import { evaluateStepOutputs } from "#/output-evaluator.js";
+import type { Tool } from "#/tools/base.js";
+import { type ToolRegistry, getToolRegistry } from "#/tools/registry.js";
 import {
-	RecipeStepUnion,
-	StepContext,
-	StepResult,
-	StepStatus,
-	ToolType,
-	RecipeExecutionPlan,
-	StepDependencyNode,
-	StepExecutionOptions,
-	TemplateStep,
 	ActionStep,
+	CircularDependencyError,
 	CodeModStep,
+	type RecipeExecutionPlan,
 	RecipeStep,
-	isTemplateStep,
+	type RecipeStepUnion,
+	type StepContext,
+	type StepDependencyNode,
+	StepExecutionError,
+	type StepExecutionOptions,
+	type StepResult,
+	StepStatus,
+	TemplateStep,
+	type ToolType,
+	isAIStep,
 	isActionStep,
 	isCodeModStep,
-	isRecipeStep,
-	isShellStep,
-	isPromptStep,
-	isSequenceStep,
-	isParallelStep,
-	isAIStep,
-	isInstallStep,
-	isQueryStep,
-	isPatchStep,
 	isEnsureDirsStep,
-	StepExecutionError,
-	CircularDependencyError,
+	isInstallStep,
+	isParallelStep,
+	isPatchStep,
+	isPromptStep,
+	isQueryStep,
+	isRecipeStep,
+	isSequenceStep,
+	isShellStep,
+	isTemplateStep,
 } from "#/types.js";
-import { evaluateStepOutputs } from "#/output-evaluator.js";
 
 const debug = createDebug("hypergen:v8:recipe:step-executor");
 
@@ -610,7 +610,7 @@ export class StepExecutor extends EventEmitter {
 
 		const calculatePriority = (stepName: string): number => {
 			if (visited.has(stepName)) {
-				return graph.get(stepName)!.priority;
+				return graph.get(stepName)?.priority;
 			}
 
 			visited.add(stepName);
@@ -940,29 +940,41 @@ export class StepExecutor extends EventEmitter {
 		// Most tools use 'default' as the tool name, but action and codemod use specific names
 		if (isTemplateStep(step)) {
 			return "default";
-		} else if (isActionStep(step)) {
+		}
+		if (isActionStep(step)) {
 			return step.action;
-		} else if (isCodeModStep(step)) {
+		}
+		if (isCodeModStep(step)) {
 			return step.codemod;
-		} else if (isRecipeStep(step)) {
+		}
+		if (isRecipeStep(step)) {
 			return "default";
-		} else if (isShellStep(step)) {
+		}
+		if (isShellStep(step)) {
 			return "default";
-		} else if (isPromptStep(step)) {
+		}
+		if (isPromptStep(step)) {
 			return "default";
-		} else if (isSequenceStep(step)) {
+		}
+		if (isSequenceStep(step)) {
 			return "default";
-		} else if (isParallelStep(step)) {
+		}
+		if (isParallelStep(step)) {
 			return "default";
-		} else if (isAIStep(step)) {
+		}
+		if (isAIStep(step)) {
 			return "default";
-		} else if (isInstallStep(step)) {
+		}
+		if (isInstallStep(step)) {
 			return "default";
-		} else if (isQueryStep(step)) {
+		}
+		if (isQueryStep(step)) {
 			return "default";
-		} else if (isPatchStep(step)) {
+		}
+		if (isPatchStep(step)) {
 			return "default";
-		} else if (isEnsureDirsStep(step)) {
+		}
+		if (isEnsureDirsStep(step)) {
 			return "default";
 		}
 
@@ -1072,7 +1084,7 @@ export class StepExecutor extends EventEmitter {
 		const baseDelay = 1000; // 1 second
 		const maxDelay = 30000; // 30 seconds
 
-		let delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+		let delay = Math.min(baseDelay * 2 ** attempt, maxDelay);
 
 		// Add jitter (±25%)
 		const jitter = delay * 0.25 * (Math.random() - 0.5);

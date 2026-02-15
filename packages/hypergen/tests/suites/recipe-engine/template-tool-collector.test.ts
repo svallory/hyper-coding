@@ -8,15 +8,15 @@
  * 4. TemplateStep.template must be a STRING path, not an object
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AiCollector } from "~/ai/ai-collector";
 import { TemplateTool } from "~/recipe-engine/tools/template-tool";
 import type { StepContext, TemplateStep } from "~/recipe-engine/types";
 import * as jigEngine from "~/template-engines/jig-engine";
-import { initializeJig, getJig } from "~/template-engines/jig-engine";
-import { AiCollector } from "~/ai/ai-collector";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { getJig, initializeJig } from "~/template-engines/jig-engine";
 
 describe("Template Tool Collector Integration", () => {
 	let testDir: string;

@@ -6,9 +6,9 @@
  */
 
 import createDebug from "debug";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
-import { resolveApiKey, getExpectedEnvVar } from "#/env.js";
-import type { AiServiceConfig, AIModelRef } from "#/ai-config.js";
+import type { AIModelRef, AiServiceConfig } from "#/ai-config.js";
+import { getExpectedEnvVar, resolveApiKey } from "#/env.js";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
 
 const debug = createDebug("hypergen:ai:model-router");
 
@@ -58,7 +58,7 @@ async function createModelInstance(
 				if (e.code === "ERR_MODULE_NOT_FOUND" || e.code === "MODULE_NOT_FOUND") {
 					throw ErrorHandler.createError(
 						ErrorCode.AI_PROVIDER_UNAVAILABLE,
-						`Anthropic provider not installed. Run: bun add @ai-sdk/anthropic`,
+						"Anthropic provider not installed. Run: bun add @ai-sdk/anthropic",
 						{},
 					);
 				}
@@ -76,7 +76,7 @@ async function createModelInstance(
 				if (e.code === "ERR_MODULE_NOT_FOUND" || e.code === "MODULE_NOT_FOUND") {
 					throw ErrorHandler.createError(
 						ErrorCode.AI_PROVIDER_UNAVAILABLE,
-						`OpenAI provider not installed. Run: bun add @ai-sdk/openai`,
+						"OpenAI provider not installed. Run: bun add @ai-sdk/openai",
 						{},
 					);
 				}

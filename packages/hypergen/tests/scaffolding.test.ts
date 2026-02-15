@@ -1,8 +1,8 @@
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GeneratorScaffolding } from "#/cli/scaffolding";
-import { beforeEach, afterEach, describe, it, expect } from "vitest";
-import fs from "fs";
-import path from "path";
-import { tmpdir } from "os";
 
 describe("GeneratorScaffolding", () => {
 	let scaffolding: GeneratorScaffolding;
@@ -33,7 +33,7 @@ describe("GeneratorScaffolding", () => {
 
 			expect(result.success).toBe(true);
 			expect(result.filesCreated).toBeDefined();
-			expect(result.filesCreated!.length).toBeGreaterThan(0);
+			expect(result.filesCreated?.length).toBeGreaterThan(0);
 
 			// Check that files were created
 			const generatorDir = path.join(tempDir, "test-generator");
@@ -155,7 +155,7 @@ describe("GeneratorScaffolding", () => {
 
 			expect(result.success).toBe(true);
 			expect(result.filesCreated).toBeDefined();
-			expect(result.filesCreated!.length).toBeGreaterThan(0);
+			expect(result.filesCreated?.length).toBeGreaterThan(0);
 
 			// Check workspace files
 			expect(fs.existsSync(path.join(tempDir, "hypergen.config.js"))).toBe(true);

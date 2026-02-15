@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { resolveTransport } from "#/ai/transports/resolve-transport";
-import { StdoutTransport } from "#/ai/transports/stdout-transport";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AiServiceConfig } from "#/ai/ai-config";
 import { ApiTransport } from "#/ai/transports/api-transport";
 import { CommandTransport } from "#/ai/transports/command-transport";
-import type { AiServiceConfig } from "#/ai/ai-config";
+import { resolveTransport } from "#/ai/transports/resolve-transport";
+import { StdoutTransport } from "#/ai/transports/stdout-transport";
 
 describe("resolveTransport", () => {
 	const savedEnv = { ...process.env };
@@ -51,7 +51,7 @@ describe("resolveTransport", () => {
 		});
 
 		it("throws for mode=api without API key", () => {
-			delete process.env.ANTHROPIC_API_KEY;
+			process.env.ANTHROPIC_API_KEY = undefined;
 			expect(() =>
 				resolveTransport({
 					mode: "api",
@@ -111,7 +111,7 @@ describe("resolveTransport", () => {
 		});
 
 		it("does not auto-detect api when env var is missing", () => {
-			delete process.env.ANTHROPIC_API_KEY;
+			process.env.ANTHROPIC_API_KEY = undefined;
 			const transport = resolveTransport({
 				provider: "anthropic",
 				apiKeyEnvVar: "ANTHROPIC_API_KEY",
@@ -121,9 +121,9 @@ describe("resolveTransport", () => {
 		});
 
 		it("returns CommandTransport when command is set (no API key)", () => {
-			delete process.env.ANTHROPIC_API_KEY;
-			delete process.env.OPENAI_API_KEY;
-			delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+			process.env.ANTHROPIC_API_KEY = undefined;
+			process.env.OPENAI_API_KEY = undefined;
+			process.env.GOOGLE_GENERATIVE_AI_API_KEY = undefined;
 			const transport = resolveTransport({
 				command: "llm",
 			});

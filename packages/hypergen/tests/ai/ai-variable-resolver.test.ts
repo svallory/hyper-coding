@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
 	AiVariableResolver,
-	type UnresolvedVariable,
 	type RecipeMetadata,
+	type UnresolvedVariable,
 } from "#/ai/ai-variable-resolver";
 import type { TemplateVariable } from "#/config/template-parser";
 

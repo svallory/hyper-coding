@@ -5,16 +5,16 @@
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { Args, Flags } from "@oclif/core";
+import tiged from "tiged";
 import { BaseCommand } from "#/lib/base-command";
 import {
-	loadManifest,
+	type KitManifestEntry,
 	addKitToManifest,
 	extractPackageVersion,
-	type KitManifestEntry,
+	loadManifest,
 } from "#/lib/kit/manifest";
 import { resolveKitSource } from "#/lib/kit/source-resolver";
 import { findProjectRoot } from "#/utils/find-project-root";
-import tiged from "tiged";
 
 export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 	static override description = "Update installed kits from their original source";
@@ -99,7 +99,7 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 		this.log(`  Source: ${entry.source} (${entry.type})`);
 
 		if (entry.type === "npm" || entry.type === "jsr") {
-			this.log(`  npm/JSR kits are updated through your package manager.`);
+			this.log("  npm/JSR kits are updated through your package manager.");
 			this.log(`  Run: bun update ${entry.source}`);
 			return;
 		}

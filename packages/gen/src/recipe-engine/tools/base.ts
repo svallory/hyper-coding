@@ -5,15 +5,15 @@
  * Provides common lifecycle management, error handling, and resource management.
  */
 
-import createDebug from "debug";
-import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
+import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
 import { Logger } from "@hypercli/core";
+import createDebug from "debug";
 import type {
-	ToolType,
-	StepContext,
-	StepResult,
-	StepExecutionOptions,
 	RecipeStepUnion,
+	StepContext,
+	StepExecutionOptions,
+	StepResult,
+	ToolType,
 } from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:v8:recipe:tool");
@@ -294,7 +294,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 					this.metrics.retryAttempts = attempt;
 
 					// Add exponential backoff delay
-					const delay = Math.min(1000 * Math.pow(2, attempt - 1), 30000);
+					const delay = Math.min(1000 * 2 ** (attempt - 1), 30000);
 					await new Promise((resolve) => setTimeout(resolve, delay));
 				}
 

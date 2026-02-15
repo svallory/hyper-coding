@@ -5,9 +5,9 @@
  * and schema compliance. Supports retry-with-feedback.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import createDebug from "debug";
-import fs from "fs";
-import path from "path";
 import type { AIGuardrailConfig } from "#/ai-config.js";
 
 const debug = createDebug("hypergen:ai:output-validator");

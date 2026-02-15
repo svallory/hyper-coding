@@ -5,8 +5,8 @@
  */
 
 import createDebug from "debug";
-import type { ActionMetadata, ActionFunction, DecoratedAction } from "#/types.js";
 import { ActionRegistry } from "#/registry.js";
+import type { ActionFunction, ActionMetadata, DecoratedAction } from "#/types.js";
 
 const debug = createDebug("hypergen:v8:action:decorator");
 
@@ -20,11 +20,11 @@ const ACTION_METADATA_SYMBOL = Symbol("actionMetadata");
  * @returns Decorator function
  */
 export function action(metadata: ActionMetadata) {
-	return function <T extends ActionFunction>(
+	return <T extends ActionFunction>(
 		target: T,
 		propertyKey?: string | symbol,
 		descriptor?: PropertyDescriptor,
-	): T {
+	): T => {
 		debug("Decorating action: %s", metadata.name);
 
 		// Validate metadata

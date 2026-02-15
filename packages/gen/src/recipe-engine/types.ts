@@ -7,19 +7,19 @@
 
 import type { TemplateVariable } from "@hypercli/core";
 import type {
-	ActionResult,
 	ActionContext,
-	ActionParameter,
 	ActionLogger,
+	ActionParameter,
+	ActionResult,
 	ActionUtils,
 } from "#/actions/types";
 import type {
-	AIOutputConfig,
+	AIBudgetConfig,
 	AIContextConfig,
 	AIExample,
-	AIGuardrailConfig,
-	AIBudgetConfig,
 	AIExecutionResult,
+	AIGuardrailConfig,
+	AIOutputConfig,
 } from "#/ai/ai-config";
 
 /**
@@ -1006,7 +1006,7 @@ export interface RecipeValidationResult {
 	isValid: boolean;
 
 	/** Validation errors */
-	errors: RecipeValidationError[];
+	errors: RecipeValidationErrorDetails[];
 
 	/** Validation warnings */
 	warnings: RecipeValidationWarning[];
@@ -1028,9 +1028,9 @@ export interface RecipeValidationResult {
 }
 
 /**
- * Recipe validation error
+ * Recipe validation error details
  */
-export interface RecipeValidationError {
+export interface RecipeValidationErrorDetails {
 	/** Error code */
 	code: string;
 

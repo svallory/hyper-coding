@@ -5,12 +5,12 @@
  * included in AI prompts. Enforces token budgets.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import createDebug from "debug";
-import fs from "fs";
-import path from "path";
 import { glob } from "glob";
-import type { AIContextConfig } from "./ai-config.js";
 import type { StepResult } from "#/recipe-engine/types";
+import type { AIContextConfig } from "./ai-config.js";
 
 const debug = createDebug("hypergen:ai:context-collector");
 
@@ -73,7 +73,7 @@ export class ContextCollector {
 
 		if (!config) return bundle;
 
-		const maxTokens = config.maxContextTokens ?? Infinity;
+		const maxTokens = config.maxContextTokens ?? Number.POSITIVE_INFINITY;
 		let currentTokens = 0;
 
 		// 1. Project config files (highest priority — smallest, most relevant)
@@ -133,7 +133,7 @@ export class ContextCollector {
 						if (config.overflow === "truncate") {
 							const remainingChars = (maxTokens - currentTokens) * 4;
 							if (remainingChars > 100) {
-								bundle.files.set(filePath, content.slice(0, remainingChars) + "\n... [truncated]");
+								bundle.files.set(filePath, `${content.slice(0, remainingChars)}\n... [truncated]`);
 								currentTokens = maxTokens;
 								bundle.truncated = true;
 								debug("Truncated file %s to fit budget", filePath);

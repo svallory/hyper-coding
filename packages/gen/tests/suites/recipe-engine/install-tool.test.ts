@@ -9,16 +9,16 @@
  * Real execution tests use guaranteed-to-fail package names to verify error handling.
  */
 
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	InstallTool,
 	InstallToolFactory,
 	installToolFactory,
 } from "#/recipe-engine/tools/install-tool";
-import type { InstallStep, StepContext, InstallExecutionResult } from "#/recipe-engine/types";
+import type { InstallExecutionResult, InstallStep, StepContext } from "#/recipe-engine/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -225,10 +225,10 @@ describe("InstallTool", () => {
 			const result = await tool.validate(step, context);
 
 			expect(result.resourceRequirements).toBeDefined();
-			expect(result.resourceRequirements!.network).toBe(true);
-			expect(result.resourceRequirements!.processes).toBe(1);
-			expect(result.resourceRequirements!.memory).toBeGreaterThan(0);
-			expect(result.resourceRequirements!.disk).toBeGreaterThan(0);
+			expect(result.resourceRequirements?.network).toBe(true);
+			expect(result.resourceRequirements?.processes).toBe(1);
+			expect(result.resourceRequirements?.memory).toBeGreaterThan(0);
+			expect(result.resourceRequirements?.disk).toBeGreaterThan(0);
 		});
 
 		it("should collect multiple validation errors at once", async () => {
@@ -713,8 +713,8 @@ describe("InstallTool", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.code).toBe("INSTALL_FAILED");
-			expect(result.error!.message).toBeTruthy();
+			expect(result.error?.code).toBe("INSTALL_FAILED");
+			expect(result.error?.message).toBeTruthy();
 		}, 30000);
 
 		it("should include timing on failure", async () => {
@@ -741,7 +741,7 @@ describe("InstallTool", () => {
 			const result = await tool.execute(step, context);
 
 			expect(result.error).toBeDefined();
-			expect(result.error!.cause).toBeDefined();
+			expect(result.error?.cause).toBeDefined();
 		}, 30000);
 	});
 
@@ -792,7 +792,7 @@ describe("InstallTool", () => {
 			const result = await tool.execute(step, context);
 
 			expect(result.output).toBeDefined();
-			expect(result.output!.warning).toBeTruthy();
+			expect(result.output?.warning).toBeTruthy();
 		}, 30000);
 
 		it("should include packages in optional failure toolResult", async () => {
@@ -821,7 +821,7 @@ describe("InstallTool", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.code).toBe("INSTALL_FAILED");
+			expect(result.error?.code).toBe("INSTALL_FAILED");
 		}, 30000);
 	});
 

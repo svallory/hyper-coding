@@ -1,8 +1,8 @@
 import path from "node:path";
-import fs from "fs-extra";
 import chalk from "chalk";
-import type { ActionResult, RenderedAction, RunnerConfig } from "#/types";
+import fs from "fs-extra";
 import createResult from "#/result.js";
+import type { ActionResult, RenderedAction, RunnerConfig } from "#/types";
 
 const add = async (
 	action: RenderedAction,

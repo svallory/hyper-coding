@@ -2,17 +2,17 @@
  * Base command class for all Hypergen oclif commands
  */
 
-import { Command, Flags, Interfaces } from "@oclif/core";
+import { Command, Flags, type Interfaces } from "@oclif/core";
 import { ActionExecutor } from "#/actions/index";
-import { GeneratorDiscovery } from "#/discovery/index";
-import { TemplateURLManager } from "#/config/url-resolution/index";
-import { DefaultActionUtils, ConsoleActionLogger } from "#/actions/index";
-import { TemplateParser } from "#/config/template-parser";
+import { ConsoleActionLogger, DefaultActionUtils } from "#/actions/index";
 import { GeneratorScaffolding } from "#/cli/scaffolding";
 import { HypergenConfigLoader, type ResolvedConfig } from "#/config/hypergen-config";
-import { RecipeEngine, type RecipeEngineConfig } from "#/recipe-engine/recipe-engine";
-import { registerDefaultTools, getToolRegistry } from "#/recipe-engine/tools/index";
+import { TemplateParser } from "#/config/template-parser";
+import { TemplateURLManager } from "#/config/url-resolution/index";
+import { GeneratorDiscovery } from "#/discovery/index";
 import Logger from "#/logger";
+import { RecipeEngine, type RecipeEngineConfig } from "#/recipe-engine/recipe-engine";
+import { getToolRegistry, registerDefaultTools } from "#/recipe-engine/tools/index";
 
 export type BaseFlags<T extends typeof Command> = Interfaces.InferredFlags<
 	(typeof BaseCommand)["baseFlags"] & T["flags"]
@@ -154,7 +154,7 @@ export abstract class BaseCommand<T extends typeof Command> extends Command {
 
 		// Number
 		const num = Number(value);
-		if (!isNaN(num) && value.trim() !== "") return num;
+		if (!Number.isNaN(num) && value.trim() !== "") return num;
 
 		// String
 		return value;

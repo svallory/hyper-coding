@@ -7,7 +7,7 @@ class Message extends Mailer {
 
 	static sendFoo(user) {
 		// https://nodemailer.com/message/
-		this.mail({
+		Message.mail({
 			to: user.email,
 			template: "foo",
 			locals: {

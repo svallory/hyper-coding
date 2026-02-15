@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { AiCollector, type AiBlockEntry } from "#/ai/ai-collector";
+import { beforeEach, describe, expect, it } from "vitest";
+import { type AiBlockEntry, AiCollector } from "#/ai/ai-collector";
 
 describe("AiCollector", () => {
 	beforeEach(() => {
@@ -84,7 +84,7 @@ describe("AiCollector", () => {
 
 			const entries = collector.getEntries();
 			expect(entries.size).toBe(1);
-			expect(entries.get("dup")!.prompt).toBe("second");
+			expect(entries.get("dup")?.prompt).toBe("second");
 		});
 
 		it("returns a copy from getEntries()", () => {

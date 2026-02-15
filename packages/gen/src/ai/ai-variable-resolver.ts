@@ -5,11 +5,11 @@
  * Uses the existing AiService/transport infrastructure for the actual LLM call.
  */
 
-import createDebug from "debug";
-import { AiService } from "./ai-service.js";
-import { ErrorHandler, ErrorCode } from "@hypercli/core";
-import type { AiServiceConfig } from "./ai-config.js";
+import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import type { TemplateVariable } from "@hypercli/core";
+import createDebug from "debug";
+import type { AiServiceConfig } from "./ai-config.js";
+import { AiService } from "./ai-service.js";
 
 const debug = createDebug("hypergen:ai:variable-resolver");
 
@@ -93,7 +93,7 @@ export class AiVariableResolver {
 	): string {
 		const lines: string[] = [];
 
-		lines.push(`# Variable Resolution Request`);
+		lines.push("# Variable Resolution Request");
 		lines.push("");
 		lines.push(`**Recipe:** ${recipeMeta.name}`);
 		if (recipeMeta.description) {
@@ -131,7 +131,7 @@ export class AiVariableResolver {
 		for (const { name, config, defaultValue } of unresolvedVars) {
 			lines.push(`### \`${name}\``);
 			lines.push(`- **Type:** ${config.type}`);
-			if (config.required) lines.push(`- **Required:** yes`);
+			if (config.required) lines.push("- **Required:** yes");
 			if (config.description) lines.push(`- **Description:** ${config.description}`);
 			if (config.suggestion !== undefined)
 				lines.push(`- **Suggestion:** \`${JSON.stringify(config.suggestion)}\``);
@@ -236,7 +236,7 @@ export class AiVariableResolver {
 
 			case "number": {
 				const num = typeof value === "number" ? value : Number(value);
-				return isNaN(num) ? undefined : num;
+				return Number.isNaN(num) ? undefined : num;
 			}
 
 			case "boolean":
@@ -246,12 +246,12 @@ export class AiVariableResolver {
 				return undefined;
 
 			case "enum":
-				if (config.values && config.values.includes(String(value))) {
+				if (config.values?.includes(String(value))) {
 					return String(value);
 				}
 				// For multi-select enums
 				if (Array.isArray(value) && config.values) {
-					const filtered = value.map(String).filter((v) => config.values!.includes(v));
+					const filtered = value.map(String).filter((v) => config.values?.includes(v));
 					return filtered.length > 0 ? filtered : undefined;
 				}
 				return undefined;

@@ -4,20 +4,20 @@
  * Implements template.yml parsing with rich variable types and validation
  */
 
-import yaml from "yaml";
-import fs from "fs-extra";
-import path from "path";
+import path from "node:path";
 import createDebug from "debug";
+import fs from "fs-extra";
+import yaml from "yaml";
 import type {
-	TemplateConfig,
 	ParsedTemplateConfig,
-	ResolvedVariables,
-	VariableDefinition,
-	ValidationResult,
-	ValidationError,
 	ParserOptions,
-	ValidatorFunction,
+	ResolvedVariables,
+	TemplateConfig,
 	ValidationContext,
+	ValidationError,
+	ValidationResult,
+	ValidatorFunction,
+	VariableDefinition,
 } from "#/types.js";
 import { TemplateConfigError } from "#/types.js";
 
@@ -52,7 +52,7 @@ export class TemplateConfigParser {
 	async parseConfigFromString(
 		yamlContent: string,
 		basePath: string = process.cwd(),
-		configPath: string = "inline",
+		configPath = "inline",
 	): Promise<ParsedTemplateConfig> {
 		debug("Parsing YAML content");
 

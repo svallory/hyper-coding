@@ -4,12 +4,12 @@
  * Tests the ActionTool implementation with the Recipe Step System
  */
 
-import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
-import { ActionTool, ActionToolFactory } from "#/recipe-engine/tools/action-tool";
-import { ActionRegistry } from "#/actions/registry";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ActionExecutor } from "#/actions/executor";
+import { ActionRegistry } from "#/actions/registry";
+import type { ActionContext, ActionMetadata, ActionResult } from "#/actions/types";
+import { ActionTool, ActionToolFactory } from "#/recipe-engine/tools/action-tool";
 import type { ActionStep, StepContext, StepExecutionOptions } from "#/recipe-engine/types";
-import type { ActionMetadata, ActionContext, ActionResult } from "#/actions/types";
 
 describe("ActionTool", () => {
 	let actionTool: ActionTool;
@@ -372,7 +372,7 @@ describe("ActionTool", () => {
 			// If an action returns success: false, the step should be marked as failed
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.message).toContain("Action failed for testing");
+			expect(result.error?.message).toContain("Action failed for testing");
 		});
 
 		test("should handle action throwing error", async () => {
@@ -400,7 +400,7 @@ describe("ActionTool", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.message).toContain("Action threw an error");
+			expect(result.error?.message).toContain("Action threw an error");
 		});
 
 		test("should track execution statistics", async () => {

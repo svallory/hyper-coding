@@ -1,5 +1,5 @@
-import type { RenderedAction } from "#/types";
 import newline from "#/newline";
+import type { RenderedAction } from "#/types";
 
 const EOLRegex = /\r?\n/;
 
@@ -13,7 +13,7 @@ const getPragmaticIndex = (pattern, lines, isBefore) => {
 		const fullText = lines.join("\n");
 		const fullMatch = fullText.match(new RegExp(pattern, "m"));
 
-		if (fullMatch && fullMatch.length) {
+		if (fullMatch?.length) {
 			if (isBefore) {
 				const fullTextUntilMatchStart = fullText.substring(0, fullMatch.index);
 				return fullTextUntilMatchStart.split(EOLRegex).length - 1;
@@ -73,9 +73,8 @@ const injector = (action: RenderedAction, content: string): string => {
 			lines.splice(idx, 0, body);
 		}
 		return lines.join(NL);
-	} else {
-		return content;
 	}
+	return content;
 };
 
 export default injector;

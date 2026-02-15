@@ -153,7 +153,7 @@ export class HypergenError extends Error {
 		message: string,
 		context: ErrorContext = {},
 		suggestions: ErrorSuggestion[] = [],
-		isUserError: boolean = true,
+		isUserError = true,
 		severity: "low" | "medium" | "high" | "critical" = "medium",
 	) {
 		super(message);
@@ -880,10 +880,10 @@ export class ErrorHandler {
 		context: ErrorContext = {},
 		customSuggestions: ErrorSuggestion[] = [],
 	): HypergenError {
-		const baseMessage = this.ERROR_MESSAGES[code] || "Unknown error";
+		const baseMessage = ErrorHandler.ERROR_MESSAGES[code] || "Unknown error";
 		const message = customMessage || baseMessage;
 		const suggestions =
-			customSuggestions.length > 0 ? customSuggestions : this.ERROR_SUGGESTIONS[code] || [];
+			customSuggestions.length > 0 ? customSuggestions : ErrorHandler.ERROR_SUGGESTIONS[code] || [];
 
 		return new HypergenError(code, message, context, suggestions);
 	}
@@ -958,51 +958,63 @@ export class ErrorHandler {
 	 */
 	static handleError(error: unknown): string {
 		if (error instanceof HypergenError) {
-			return this.formatError(error);
+			return ErrorHandler.formatError(error);
 		}
 
 		if (error instanceof Error) {
 			// Try to categorize common Node.js errors
 			if (error.message.includes("ENOENT")) {
-				const hypergenError = this.createError(ErrorCode.FILE_NOT_FOUND, error.message, {
-					file: this.extractFileFromError(error.message),
+				const hypergenError = ErrorHandler.createError(ErrorCode.FILE_NOT_FOUND, error.message, {
+					file: ErrorHandler.extractFileFromError(error.message),
 				});
-				return this.formatError(hypergenError);
+				return ErrorHandler.formatError(hypergenError);
 			}
 
 			if (error.message.includes("EACCES")) {
-				const hypergenError = this.createError(ErrorCode.FILE_PERMISSION_DENIED, error.message, {
-					file: this.extractFileFromError(error.message),
-				});
-				return this.formatError(hypergenError);
+				const hypergenError = ErrorHandler.createError(
+					ErrorCode.FILE_PERMISSION_DENIED,
+					error.message,
+					{
+						file: ErrorHandler.extractFileFromError(error.message),
+					},
+				);
+				return ErrorHandler.formatError(hypergenError);
 			}
 
 			if (error.message.includes("EEXIST")) {
-				const hypergenError = this.createError(ErrorCode.FILE_ALREADY_EXISTS, error.message, {
-					file: this.extractFileFromError(error.message),
-				});
-				return this.formatError(hypergenError);
+				const hypergenError = ErrorHandler.createError(
+					ErrorCode.FILE_ALREADY_EXISTS,
+					error.message,
+					{
+						file: ErrorHandler.extractFileFromError(error.message),
+					},
+				);
+				return ErrorHandler.formatError(hypergenError);
 			}
 
 			if (error.message.includes("ENOTDIR")) {
-				const hypergenError = this.createError(ErrorCode.DIRECTORY_NOT_FOUND, error.message, {
-					file: this.extractFileFromError(error.message),
-				});
-				return this.formatError(hypergenError);
+				const hypergenError = ErrorHandler.createError(
+					ErrorCode.DIRECTORY_NOT_FOUND,
+					error.message,
+					{
+						file: ErrorHandler.extractFileFromError(error.message),
+					},
+				);
+				return ErrorHandler.formatError(hypergenError);
 			}
 
 			// Generic error handling
-			const hypergenError = this.createError(ErrorCode.UNKNOWN_ERROR, error.message, {}, [
+			const hypergenError = ErrorHandler.createError(ErrorCode.UNKNOWN_ERROR, error.message, {}, [
 				{
 					title: "Check the error details",
 					description: "Review the error message for specific issues",
 				},
 			]);
-			return this.formatError(hypergenError);
+			return ErrorHandler.formatError(hypergenError);
 		}
 
 		// Unknown error type
-		const hypergenError = this.createError(
+		const hypergenError = ErrorHandler.createError(
 			ErrorCode.INTERNAL_ERROR,
 			"An unexpected error occurred",
 			{},
@@ -1014,7 +1026,7 @@ export class ErrorHandler {
 				},
 			],
 		);
-		return this.formatError(hypergenError);
+		return ErrorHandler.formatError(hypergenError);
 	}
 
 	/**
@@ -1034,7 +1046,7 @@ export class ErrorHandler {
 		expected: string,
 		action?: string,
 	): HypergenError {
-		return this.createError(
+		return ErrorHandler.createError(
 			ErrorCode.ACTION_INVALID_PARAM_VALUE,
 			`Invalid value for parameter '${parameter}'`,
 			{
@@ -1066,9 +1078,9 @@ export class ErrorHandler {
 		column?: number,
 		details?: string,
 	): HypergenError {
-		return this.createError(
+		return ErrorHandler.createError(
 			ErrorCode.TEMPLATE_INVALID_SYNTAX,
-			`Template validation failed${details ? ": " + details : ""}`,
+			`Template validation failed${details ? `: ${details}` : ""}`,
 			{ file, line, column },
 			[
 				{
@@ -1088,7 +1100,7 @@ export class ErrorHandler {
 	 * Create action not found error
 	 */
 	static createActionNotFoundError(actionName: string): HypergenError {
-		return this.createError(
+		return ErrorHandler.createError(
 			ErrorCode.ACTION_NOT_FOUND,
 			`Action '${actionName}' not found`,
 			{ action: actionName },
@@ -1123,7 +1135,9 @@ export class ErrorHandler {
 			code = ErrorCode.FILE_ALREADY_EXISTS;
 		}
 
-		return this.createError(code, `Failed to ${operation} file '${file}': ${reason}`, { file });
+		return ErrorHandler.createError(code, `Failed to ${operation} file '${file}': ${reason}`, {
+			file,
+		});
 	}
 }
 
@@ -1160,7 +1174,7 @@ export function validateParameter(
 	name: string,
 	value: any,
 	type: string,
-	required: boolean = false,
+	required = false,
 	pattern?: string,
 	allowedValues?: string[],
 ): void {

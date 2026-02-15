@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import path from "path";
-import { tmpdir } from "os";
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { HypergenConfigLoader, createConfigFile, getConfigInfo } from "#/config/hypergen-config";
 
 describe("Hypergen Configuration System", () => {

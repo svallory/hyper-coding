@@ -2,8 +2,8 @@
  * Config Show command - Show current configuration
  */
 
-import { existsSync, readFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { BaseCommand } from "#/lib/base-command";
 import { outputFlags } from "#/lib/flags";
 
@@ -77,7 +77,7 @@ export default class ConfigShow extends BaseCommand<typeof ConfigShow> {
 		}
 
 		// Show raw file contents if config exists
-		if (foundConfigPath && foundConfigPath.endsWith(".json")) {
+		if (foundConfigPath?.endsWith(".json")) {
 			this.log("");
 			this.log("Raw Configuration:");
 			try {
@@ -95,7 +95,7 @@ export default class ConfigShow extends BaseCommand<typeof ConfigShow> {
 				this.log(`${indent}${key}: null`);
 			} else if (typeof value === "object" && !Array.isArray(value)) {
 				this.log(`${indent}${key}:`);
-				this.logConfig(value as Record<string, unknown>, indent + "  ");
+				this.logConfig(value as Record<string, unknown>, `${indent}  `);
 			} else if (Array.isArray(value)) {
 				if (value.length === 0) {
 					this.log(`${indent}${key}: []`);
@@ -104,7 +104,7 @@ export default class ConfigShow extends BaseCommand<typeof ConfigShow> {
 					for (const item of value) {
 						if (typeof item === "object") {
 							this.log(`${indent}  -`);
-							this.logConfig(item as Record<string, unknown>, indent + "    ");
+							this.logConfig(item as Record<string, unknown>, `${indent}    `);
 						} else {
 							this.log(`${indent}  - ${item}`);
 						}

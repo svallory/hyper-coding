@@ -5,9 +5,9 @@
  * during execution workflows
  */
 
+import { EventEmitter } from "node:events";
+import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import { EventEmitter } from "events";
-import { ErrorHandler, ErrorCode } from "@hypercli/core";
 
 const debug = createDebug("hypergen:v8:communication");
 
@@ -638,7 +638,7 @@ export class ActionCommunicationManager extends EventEmitter {
 			this.messageCorrelations.set(message.correlationId, []);
 		}
 
-		this.messageCorrelations.get(message.correlationId)!.push(message.id);
+		this.messageCorrelations.get(message.correlationId)?.push(message.id);
 	}
 
 	/**

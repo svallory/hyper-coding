@@ -4,15 +4,15 @@
  * Handles template inheritance, composition, and conflict resolution
  */
 
-import createDebug from "debug";
-import { TemplateURLManager } from "@hypercli/kit";
 import {
-	TemplateParser,
 	type TemplateConfig,
 	type TemplateInclude,
+	TemplateParser,
 	type TemplateVariable,
 } from "@hypercli/core";
-import { ErrorHandler, ErrorCode } from "@hypercli/core";
+import { ErrorCode, ErrorHandler } from "@hypercli/core";
+import { TemplateURLManager } from "@hypercli/kit";
+import createDebug from "debug";
 
 const debug = createDebug("hypergen:v8:composition");
 
@@ -444,9 +444,9 @@ export class TemplateCompositionEngine {
 				case "!==":
 					return actualValue !== parsedExpected;
 				case "==":
-					return actualValue == parsedExpected; // eslint-disable-line eqeqeq
+					return actualValue === parsedExpected; // eslint-disable-line eqeqeq
 				case "!=":
-					return actualValue != parsedExpected; // eslint-disable-line eqeqeq
+					return actualValue !== parsedExpected; // eslint-disable-line eqeqeq
 				default:
 					return false;
 			}
@@ -476,10 +476,10 @@ export class TemplateCompositionEngine {
 
 		// Numbers
 		if (/^\d+$/.test(trimmed)) {
-			return parseInt(trimmed, 10);
+			return Number.parseInt(trimmed, 10);
 		}
 		if (/^\d*\.\d+$/.test(trimmed)) {
-			return parseFloat(trimmed);
+			return Number.parseFloat(trimmed);
 		}
 
 		return trimmed;
@@ -556,7 +556,7 @@ export class TemplateCompositionEngine {
 
 		try {
 			// Use Function constructor with no access to external scope
-			return new Function("return " + expression)();
+			return new Function(`return ${expression}`)();
 		} catch (error) {
 			debug("Expression evaluation error: %s", error.message);
 			return false;
@@ -598,7 +598,7 @@ export class TemplateCompositionEngine {
 		if (!conflicts) return defaultStrategy;
 
 		// Check for specific rule
-		if (conflicts.rules && conflicts.rules[name]) {
+		if (conflicts.rules?.[name]) {
 			return conflicts.rules[name];
 		}
 

@@ -13,9 +13,9 @@
 
 import { execFile } from "node:child_process";
 import createDebug from "debug";
-import { PromptAssembler } from "#/ai/prompt-assembler";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
 import type { AiBlockEntry } from "#/ai-collector";
+import { PromptAssembler } from "#/ai/prompt-assembler";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
 import type { AiTransport, TransportContext, TransportResult } from "#/types.js";
 
 const debug = createDebug("hypergen:ai:transport:command");
@@ -64,9 +64,7 @@ export class CommandTransport implements AiTransport {
 		});
 
 		// Append JSON-only instruction
-		const fullPrompt =
-			prompt +
-			"\n\nIMPORTANT: Respond with ONLY a valid JSON object. No markdown fences, no explanation.\n";
+		const fullPrompt = `${prompt}\n\nIMPORTANT: Respond with ONLY a valid JSON object. No markdown fences, no explanation.\n`;
 
 		const stdout = await executeCommand(command, fullPrompt);
 		const answers = parseBatchedResponse(stdout, expectedKeys);
@@ -89,18 +87,18 @@ export class CommandTransport implements AiTransport {
 			const parts: string[] = [];
 			if (entry.contexts.length > 0) {
 				parts.push("## Context\n");
-				for (const c of entry.contexts) parts.push(c + "\n");
+				for (const c of entry.contexts) parts.push(`${c}\n`);
 			}
 			parts.push("## Prompt\n");
-			parts.push(entry.prompt + "\n");
+			parts.push(`${entry.prompt}\n`);
 			if (entry.outputDescription.trim()) {
 				parts.push("## Expected Output Format\n");
-				parts.push(entry.outputDescription + "\n");
+				parts.push(`${entry.outputDescription}\n`);
 			}
 			if (entry.examples.length > 0) {
 				parts.push("## Examples\n");
 				for (const ex of entry.examples) {
-					parts.push("```\n" + ex + "\n```\n");
+					parts.push(`\`\`\`\n${ex}\n\`\`\`\n`);
 				}
 			}
 			parts.push(
@@ -240,7 +238,7 @@ function parseBatchedResponse(raw: string, expectedKeys: string[]): Record<strin
  * Simple shell escape for single-quoting a string.
  */
 function shellEscape(s: string): string {
-	return "'" + s.replace(/'/g, "'\\''") + "'";
+	return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
 /**

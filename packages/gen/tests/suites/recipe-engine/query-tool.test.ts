@@ -1,9 +1,9 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { QueryTool, QueryToolFactory, queryToolFactory } from "#/recipe-engine/tools/query-tool";
-import type { QueryStep, StepContext, QueryExecutionResult } from "#/recipe-engine/types";
+import type { QueryExecutionResult, QueryStep, StepContext } from "#/recipe-engine/types";
 
 describe("QueryTool", () => {
 	let tmpDir: string;
@@ -101,12 +101,12 @@ describe("QueryTool", () => {
 			expect(qr.file).toBe("package.json");
 			expect(qr.format).toBe("json");
 			expect(qr.checks).toHaveLength(2);
-			expect(qr.checks![0].path).toBe("name");
-			expect(qr.checks![0].exists).toBe(true);
-			expect(qr.checks![0].value).toBe("test-package");
-			expect(qr.checks![1].path).toBe("version");
-			expect(qr.checks![1].exists).toBe(true);
-			expect(qr.checks![1].value).toBe("1.0.0");
+			expect(qr.checks?.[0].path).toBe("name");
+			expect(qr.checks?.[0].exists).toBe(true);
+			expect(qr.checks?.[0].value).toBe("test-package");
+			expect(qr.checks?.[1].path).toBe("version");
+			expect(qr.checks?.[1].exists).toBe(true);
+			expect(qr.checks?.[1].value).toBe("1.0.0");
 		});
 
 		it("should check existing dot path", async () => {
@@ -127,8 +127,8 @@ describe("QueryTool", () => {
 			expect(result.status).toBe("completed");
 
 			const qr = result.toolResult as QueryExecutionResult;
-			expect(qr.checks![0].exists).toBe(true);
-			expect(qr.checks![0].value).toBe("^18.0.0");
+			expect(qr.checks?.[0].exists).toBe(true);
+			expect(qr.checks?.[0].value).toBe("^18.0.0");
 		});
 
 		it("should check missing path — exists false, value undefined", async () => {
@@ -146,8 +146,8 @@ describe("QueryTool", () => {
 			expect(result.status).toBe("completed");
 
 			const qr = result.toolResult as QueryExecutionResult;
-			expect(qr.checks![0].exists).toBe(false);
-			expect(qr.checks![0].value).toBeUndefined();
+			expect(qr.checks?.[0].exists).toBe(false);
+			expect(qr.checks?.[0].value).toBeUndefined();
 		});
 
 		it("should resolve deeply nested path", async () => {
@@ -174,8 +174,8 @@ describe("QueryTool", () => {
 			expect(result.status).toBe("completed");
 
 			const qr = result.toolResult as QueryExecutionResult;
-			expect(qr.checks![0].value).toBe(true);
-			expect(qr.checks![1].value).toBe("/path/to/cert");
+			expect(qr.checks?.[0].value).toBe(true);
+			expect(qr.checks?.[1].value).toBe("/path/to/cert");
 		});
 
 		it("should export value via result.output", async () => {
@@ -192,7 +192,7 @@ describe("QueryTool", () => {
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
 			expect(result.output).toBeDefined();
-			expect(result.output!.currentVersion).toBe("2.0.0");
+			expect(result.output?.currentVersion).toBe("2.0.0");
 		});
 
 		it("should export existence check as boolean via exportExists", async () => {
@@ -216,8 +216,8 @@ describe("QueryTool", () => {
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
 			expect(result.output).toBeDefined();
-			expect(result.output!.hasReact).toBe(true);
-			expect(result.output!.hasVue).toBe(false);
+			expect(result.output?.hasReact).toBe(true);
+			expect(result.output?.hasVue).toBe(false);
 		});
 
 		it("should handle multiple exports from the same file", async () => {
@@ -289,10 +289,10 @@ config:
 
 			const qr = result.toolResult as QueryExecutionResult;
 			expect(qr.format).toBe("yaml");
-			expect(qr.checks![0].value).toBe("test-project");
-			expect(qr.checks![1].value).toBe(true);
-			expect(result.output!.projectName).toBe("test-project");
-			expect(result.output!.debugMode).toBe(true);
+			expect(qr.checks?.[0].value).toBe("test-project");
+			expect(qr.checks?.[1].value).toBe(true);
+			expect(result.output?.projectName).toBe("test-project");
+			expect(result.output?.debugMode).toBe(true);
 		});
 
 		it("should handle dot-path checks in YAML", async () => {
@@ -319,9 +319,9 @@ database:
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.dbHost).toBe("localhost");
-			expect(result.output!.dbUser).toBe("admin");
-			expect(result.output!.hasApiKey).toBe(false);
+			expect(result.output?.dbHost).toBe("localhost");
+			expect(result.output?.dbUser).toBe("admin");
+			expect(result.output?.hasApiKey).toBe(false);
 		});
 
 		it("should auto-detect .yaml extension", async () => {
@@ -385,9 +385,9 @@ EMPTY_VAR=
 
 			const qr = result.toolResult as QueryExecutionResult;
 			expect(qr.format).toBe("env");
-			expect(result.output!.dbHost).toBe("localhost");
-			expect(result.output!.apiKey).toBe("abc123");
-			expect(result.output!.hasMissing).toBe(false);
+			expect(result.output?.dbHost).toBe("localhost");
+			expect(result.output?.apiKey).toBe("abc123");
+			expect(result.output?.hasMissing).toBe(false);
 		});
 
 		it("should handle quoted values in .env", async () => {
@@ -411,9 +411,9 @@ DOUBLE_QUOTED="double value"
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.simple).toBe("value");
-			expect(result.output!.singleQuoted).toBe("single value");
-			expect(result.output!.doubleQuoted).toBe("double value");
+			expect(result.output?.simple).toBe("value");
+			expect(result.output?.singleQuoted).toBe("single value");
+			expect(result.output?.doubleQuoted).toBe("double value");
 		});
 
 		it("should handle empty lines and comments", async () => {
@@ -438,12 +438,12 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.dbName).toBe("mydb");
-			expect(result.output!.apiUrl).toBe("https://api.example.com");
+			expect(result.output?.dbName).toBe("mydb");
+			expect(result.output?.apiUrl).toBe("https://api.example.com");
 		});
 
 		it("should handle env file with explicit format override", async () => {
-			const envContent = `HOST=0.0.0.0\nPORT=8080\n`;
+			const envContent = "HOST=0.0.0.0\nPORT=8080\n";
 			writeFileSync(join(tmpDir, "settings.txt"), envContent);
 
 			const step: QueryStep = {
@@ -459,8 +459,8 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.host).toBe("0.0.0.0");
-			expect(result.output!.port).toBe("8080");
+			expect(result.output?.host).toBe("0.0.0.0");
+			expect(result.output?.port).toBe("8080");
 		});
 	});
 
@@ -624,8 +624,8 @@ API_URL=https://api.example.com
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.message).toMatch(/expression evaluation failed/i);
-			expect(result.error!.code).toBe("QUERY_FAILED");
+			expect(result.error?.message).toMatch(/expression evaluation failed/i);
+			expect(result.error?.code).toBe("QUERY_FAILED");
 		});
 
 		it("should handle array index access in expression", async () => {
@@ -714,7 +714,7 @@ API_URL=https://api.example.com
 			// Parsing will fail because smol-toml isn't installed, but that's expected
 			// The important thing is that format was detected as 'toml'
 			if (result.status === "failed") {
-				expect(result.error!.message).toMatch(/smol-toml/i);
+				expect(result.error?.message).toMatch(/smol-toml/i);
 			} else {
 				const qr = result.toolResult as QueryExecutionResult;
 				expect(qr.format).toBe("toml");
@@ -753,7 +753,7 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("failed");
-			expect(result.error!.message).toMatch(/cannot detect format/i);
+			expect(result.error?.message).toMatch(/cannot detect format/i);
 		});
 
 		it("should use explicit format over auto-detection", async () => {
@@ -770,7 +770,7 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.result).toBe("value");
+			expect(result.output?.result).toBe("value");
 		});
 	});
 
@@ -797,8 +797,8 @@ API_URL=https://api.example.com
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.message).toMatch(/file not found/i);
-			expect(result.error!.code).toBe("QUERY_FAILED");
+			expect(result.error?.message).toMatch(/file not found/i);
+			expect(result.error?.code).toBe("QUERY_FAILED");
 		});
 
 		it("should return failed when JSON is invalid", async () => {
@@ -814,7 +814,7 @@ API_URL=https://api.example.com
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.code).toBe("QUERY_FAILED");
+			expect(result.error?.code).toBe("QUERY_FAILED");
 		});
 
 		it("should return failed when YAML is malformed", async () => {
@@ -846,7 +846,7 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("failed");
-			expect(result.error!.message).toMatch(/cannot detect format/i);
+			expect(result.error?.message).toMatch(/cannot detect format/i);
 		});
 
 		it("should return failed when an unsupported format string is given and file does not exist", async () => {
@@ -863,7 +863,7 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("failed");
-			expect(result.error!.message).toMatch(/unsupported format/i);
+			expect(result.error?.message).toMatch(/unsupported format/i);
 		});
 
 		it("should set stepName and toolType on error result", async () => {
@@ -928,8 +928,8 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.hasPresent).toBe(true);
-			expect(result.output!.hasAbsent).toBe(false);
+			expect(result.output?.hasPresent).toBe(true);
+			expect(result.output?.hasAbsent).toBe(false);
 		});
 
 		it("should set output.value for expression result", async () => {
@@ -963,7 +963,7 @@ API_URL=https://api.example.com
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
 			// When checks produce output, checks take priority over expression for the output field
-			expect(result.output!.pkgName).toBe("test");
+			expect(result.output?.pkgName).toBe("test");
 			// The expression value is still in toolResult
 			const qr = result.toolResult as QueryExecutionResult;
 			expect(qr.value).toBe("1.0.0");
@@ -986,8 +986,8 @@ API_URL=https://api.example.com
 			expect(result.output).toBeUndefined();
 			// But the toolResult still has the check data
 			const qr = result.toolResult as QueryExecutionResult;
-			expect(qr.checks![0].exists).toBe(true);
-			expect(qr.checks![0].value).toBe("test");
+			expect(qr.checks?.[0].exists).toBe(true);
+			expect(qr.checks?.[0].value).toBe("test");
 		});
 
 		it("should NOT mutate context.variables", async () => {
@@ -1005,7 +1005,7 @@ API_URL=https://api.example.com
 			expect(result.status).toBe("completed");
 			// The tool puts exports into result.output, NOT into context.variables
 			expect(context.variables).toEqual({});
-			expect(result.output!.myKey).toBe("val");
+			expect(result.output?.myKey).toBe("val");
 		});
 	});
 
@@ -1201,7 +1201,7 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.exists).toBe(false);
+			expect(result.output?.exists).toBe(false);
 		});
 
 		it("should handle empty array value", async () => {
@@ -1217,7 +1217,7 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.items).toEqual([]);
+			expect(result.output?.items).toEqual([]);
 		});
 
 		it("should handle null values — export is null, exportExists is false", async () => {
@@ -1236,9 +1236,9 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.val).toBeNull();
-			// exportExists: resolved.exists (true) && resolved.value != null (false) → false
-			expect(result.output!.exists).toBe(false);
+			expect(result.output?.val).toBeNull();
+			// exportExists: resolved.exists (true) && resolved.value !== null (false) → false
+			expect(result.output?.exists).toBe(false);
 		});
 
 		it("should handle boolean values", async () => {
@@ -1257,8 +1257,8 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.isEnabled).toBe(true);
-			expect(result.output!.isDisabled).toBe(false);
+			expect(result.output?.isEnabled).toBe(true);
+			expect(result.output?.isDisabled).toBe(false);
 		});
 
 		it("should handle false value with exportExists — false is treated as non-existent", async () => {
@@ -1274,8 +1274,8 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			// exportExists: exists (true) && value != null (true) && value !== false (false) → false
-			expect(result.output!.hasFlag).toBe(false);
+			// exportExists: exists (true) && value !== null (true) && value !== false (false) → false
+			expect(result.output?.hasFlag).toBe(false);
 		});
 
 		it("should handle numeric values including zero", async () => {
@@ -1295,9 +1295,9 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.count).toBe(42);
-			expect(result.output!.price).toBe(19.99);
-			expect(result.output!.zero).toBe(0);
+			expect(result.output?.count).toBe(42);
+			expect(result.output?.price).toBe(19.99);
+			expect(result.output?.zero).toBe(0);
 		});
 
 		it("should handle relative file paths with subdirectories", async () => {
@@ -1315,7 +1315,7 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			expect(result.output!.result).toBe("value");
+			expect(result.output?.result).toBe("value");
 		});
 
 		it("should populate StepResult timing fields on success", async () => {
@@ -1371,8 +1371,8 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			// exportExists: exists (true) && value != null (true, 0 != null) && value !== false (true, 0 !== false) → true
-			expect(result.output!.hasCount).toBe(true);
+			// exportExists: exists (true) && value !== null (true, 0 !== null) && value !== false (true, 0 !== false) → true
+			expect(result.output?.hasCount).toBe(true);
 		});
 
 		it("should handle empty string as exportExists — truthy for existsCheck", async () => {
@@ -1388,8 +1388,8 @@ API_URL=https://api.example.com
 
 			const result = await tool.execute(step, context);
 			expect(result.status).toBe("completed");
-			// exportExists: exists (true) && '' != null (true) && '' !== false (true) → true
-			expect(result.output!.hasEmpty).toBe(true);
+			// exportExists: exists (true) && '' !== null (true) && '' !== false (true) → true
+			expect(result.output?.hasEmpty).toBe(true);
 		});
 	});
 });

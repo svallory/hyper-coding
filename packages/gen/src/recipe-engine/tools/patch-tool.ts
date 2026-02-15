@@ -8,14 +8,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import createDebug from "debug";
-import { Tool, type ToolValidationResult } from "./base.js";
 import type {
-	PatchStep,
 	PatchExecutionResult,
+	PatchStep,
 	StepContext,
-	StepResult,
 	StepExecutionOptions,
+	StepResult,
 } from "#/recipe-engine/types";
+import { Tool, type ToolValidationResult } from "./base.js";
 
 const debug = createDebug("hypergen:v8:recipe:tool:patch");
 
@@ -46,10 +46,10 @@ function deepMerge(target: Record<string, any>, source: Record<string, any>): Re
 		const srcVal = source[key];
 		const tgtVal = target[key];
 		if (
-			srcVal != null &&
+			srcVal !== null &&
 			typeof srcVal === "object" &&
 			!Array.isArray(srcVal) &&
-			tgtVal != null &&
+			tgtVal !== null &&
 			typeof tgtVal === "object" &&
 			!Array.isArray(tgtVal)
 		) {
@@ -98,7 +98,7 @@ async function serializeFile(
 ): Promise<string> {
 	switch (format) {
 		case "json":
-			return JSON.stringify(data, null, indent) + "\n";
+			return `${JSON.stringify(data, null, indent)}\n`;
 		case "yaml": {
 			const { stringify } = await import("yaml");
 			return stringify(data, { indent });
@@ -107,7 +107,7 @@ async function serializeFile(
 			try {
 				// @ts-ignore -- optional dependency, only needed for TOML files
 				const { stringify } = await import("smol-toml");
-				return stringify(data) + "\n";
+				return `${stringify(data)}\n`;
 			} catch {
 				throw new Error(
 					'TOML serialization requires the "smol-toml" package. Install it with: bun add smol-toml',
@@ -120,7 +120,7 @@ async function serializeFile(
 }
 
 export class PatchTool extends Tool<PatchStep> {
-	constructor(name: string = "patch-tool", options: Record<string, any> = {}) {
+	constructor(name = "patch-tool", options: Record<string, any> = {}) {
 		super("patch", name, options);
 	}
 
@@ -259,7 +259,7 @@ export class PatchTool extends Tool<PatchStep> {
 		if (Array.isArray(obj)) {
 			return obj.map((item) => this.resolveVariablesInObject(item, variables));
 		}
-		if (obj != null && typeof obj === "object") {
+		if (obj !== null && typeof obj === "object") {
 			const result: Record<string, any> = {};
 			for (const [key, val] of Object.entries(obj)) {
 				result[key] = this.resolveVariablesInObject(val, variables);
@@ -271,7 +271,7 @@ export class PatchTool extends Tool<PatchStep> {
 }
 
 export class PatchToolFactory {
-	create(name: string = "patch-tool", options: Record<string, any> = {}): PatchTool {
+	create(name = "patch-tool", options: Record<string, any> = {}): PatchTool {
 		return new PatchTool(name, options);
 	}
 

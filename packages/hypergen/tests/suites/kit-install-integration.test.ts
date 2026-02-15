@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { resolveKitSource, buildInstallCommand } from "#/lib/kit/source-resolver";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildInstallCommand, resolveKitSource } from "#/lib/kit/source-resolver";
 import type { KitSourceType } from "#/lib/kit/source-resolver";
 
 describe("Kit Install Integration Tests", () => {

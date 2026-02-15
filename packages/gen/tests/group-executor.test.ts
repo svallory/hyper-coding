@@ -7,21 +7,21 @@
  * providedValues between recipes.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import path from "path";
-import os from "os";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	GroupExecutor,
 	type GroupRecipeEntry,
 	type RecipeGroup,
 } from "#/recipe-engine/group-executor";
-import type { RecipeConfig } from "#/recipe-engine/types";
 import type {
-	RecipeExecutionResult,
 	RecipeExecutionOptions,
+	RecipeExecutionResult,
 	RecipeSource,
 } from "#/recipe-engine/recipe-engine";
+import type { RecipeConfig } from "#/recipe-engine/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,7 +37,7 @@ function cleanupTempDir(dirPath: string): void {
 	}
 }
 
-function writeRecipeYml(dirPath: string, content: string = "name: test\nsteps: []\n"): void {
+function writeRecipeYml(dirPath: string, content = "name: test\nsteps: []\n"): void {
 	fs.mkdirSync(dirPath, { recursive: true });
 	fs.writeFileSync(path.join(dirPath, "recipe.yml"), content, "utf-8");
 }
@@ -251,8 +251,8 @@ describe("GroupExecutor", () => {
 			const { depGraph, providesMap, errors } = executor.buildDependencyGraph(entries);
 
 			expect(errors).toHaveLength(0);
-			expect(depGraph.get("alpha")!.size).toBe(0);
-			expect(depGraph.get("beta")!.size).toBe(0);
+			expect(depGraph.get("alpha")?.size).toBe(0);
+			expect(depGraph.get("beta")?.size).toBe(0);
 			expect(providesMap.size).toBe(0);
 		});
 
@@ -269,9 +269,9 @@ describe("GroupExecutor", () => {
 			expect(errors).toHaveLength(0);
 			expect(providesMap.get("x")).toBe("recipe-a");
 			// recipe-b depends on recipe-a
-			expect(depGraph.get("recipe-b")!.has("recipe-a")).toBe(true);
+			expect(depGraph.get("recipe-b")?.has("recipe-a")).toBe(true);
 			// recipe-a has no dependencies
-			expect(depGraph.get("recipe-a")!.size).toBe(0);
+			expect(depGraph.get("recipe-a")?.size).toBe(0);
 		});
 
 		it("does NOT create dependency when recipe B has x with a default value", () => {
@@ -286,7 +286,7 @@ describe("GroupExecutor", () => {
 
 			expect(errors).toHaveLength(0);
 			// No dependency because recipe-b has a default for x
-			expect(depGraph.get("recipe-b")!.size).toBe(0);
+			expect(depGraph.get("recipe-b")?.size).toBe(0);
 		});
 
 		it("reports error when two recipes provide the same variable", () => {
@@ -321,13 +321,13 @@ describe("GroupExecutor", () => {
 			expect(providesMap.get("y")).toBe("recipe-b");
 
 			// A has no deps
-			expect(depGraph.get("recipe-a")!.size).toBe(0);
+			expect(depGraph.get("recipe-a")?.size).toBe(0);
 			// B depends on A
-			expect(depGraph.get("recipe-b")!.has("recipe-a")).toBe(true);
-			expect(depGraph.get("recipe-b")!.size).toBe(1);
+			expect(depGraph.get("recipe-b")?.has("recipe-a")).toBe(true);
+			expect(depGraph.get("recipe-b")?.size).toBe(1);
 			// C depends on B
-			expect(depGraph.get("recipe-c")!.has("recipe-b")).toBe(true);
-			expect(depGraph.get("recipe-c")!.size).toBe(1);
+			expect(depGraph.get("recipe-c")?.has("recipe-b")).toBe(true);
+			expect(depGraph.get("recipe-c")?.size).toBe(1);
 		});
 
 		it("does not create self-dependency when a recipe provides and requires the same variable", () => {
@@ -342,7 +342,7 @@ describe("GroupExecutor", () => {
 			const { depGraph, errors } = executor.buildDependencyGraph(entries);
 
 			expect(errors).toHaveLength(0);
-			expect(depGraph.get("recipe-a")!.size).toBe(0);
+			expect(depGraph.get("recipe-a")?.size).toBe(0);
 		});
 	});
 
@@ -539,8 +539,8 @@ describe("GroupExecutor", () => {
 				executionOrder.push(name);
 
 				const providedValues: Record<string, any> = {};
-				if (name === "recipe-a") providedValues["x"] = "value-x";
-				if (name === "recipe-b") providedValues["y"] = "value-y";
+				if (name === "recipe-a") providedValues.x = "value-x";
+				if (name === "recipe-b") providedValues.y = "value-y";
 
 				return makeSuccessResult(name, options?.variables || {}, providedValues);
 			});
@@ -718,8 +718,8 @@ describe("GroupExecutor", () => {
 
 			// recipe-b should have received the 'x' variable provided by recipe-a
 			expect(receivedVariables["recipe-b"]).toBeDefined();
-			expect(receivedVariables["recipe-b"]["x"]).toBe("provided-by-a");
-			expect(receivedVariables["recipe-b"]["initial"]).toBe("yes");
+			expect(receivedVariables["recipe-b"].x).toBe("provided-by-a");
+			expect(receivedVariables["recipe-b"].initial).toBe("yes");
 		});
 
 		it("handles recipe execution throwing an exception", async () => {
@@ -745,7 +745,7 @@ describe("GroupExecutor", () => {
 			// Even though recipe-a throws, we should still get a result entry for it
 			const recipeAResult = result.recipeResults.find((r) => r.name === "recipe-a");
 			expect(recipeAResult).toBeDefined();
-			expect(recipeAResult!.result.success).toBe(false);
+			expect(recipeAResult?.result.success).toBe(false);
 		});
 
 		it("records duration in the result", async () => {
@@ -808,9 +808,9 @@ describe("GroupExecutor", () => {
 			// Only recipe-a should have been loaded (recipe-b already had config)
 			expect(loadCalls).toEqual(["/fake/recipe-a/recipe.yml"]);
 			expect(entries[0].config).toBeDefined();
-			expect(entries[0].config!.name).toBe("recipe-a");
+			expect(entries[0].config?.name).toBe("recipe-a");
 			// recipe-b config should be unchanged
-			expect(entries[1].config!.name).toBe("already-loaded");
+			expect(entries[1].config?.name).toBe("already-loaded");
 		});
 	});
 
@@ -834,8 +834,8 @@ describe("GroupExecutor", () => {
 			const { depGraph, errors } = executor.buildDependencyGraph(entries);
 
 			expect(errors).toHaveLength(0);
-			expect(depGraph.get("recipe-a")!.size).toBe(0);
-			expect(depGraph.get("recipe-b")!.size).toBe(0);
+			expect(depGraph.get("recipe-a")?.size).toBe(0);
+			expect(depGraph.get("recipe-b")?.size).toBe(0);
 		});
 
 		it("handles a recipe with variables but none are required", () => {
@@ -851,7 +851,7 @@ describe("GroupExecutor", () => {
 
 			expect(errors).toHaveLength(0);
 			// No dependency because none of recipe-b's variables are required without defaults
-			expect(depGraph.get("recipe-b")!.size).toBe(0);
+			expect(depGraph.get("recipe-b")?.size).toBe(0);
 		});
 
 		it("handles a required variable not provided by any sibling (no dependency, just external)", () => {
@@ -866,7 +866,7 @@ describe("GroupExecutor", () => {
 
 			expect(errors).toHaveLength(0);
 			// No dependency — orphanVar is not provided by anyone
-			expect(depGraph.get("recipe-b")!.size).toBe(0);
+			expect(depGraph.get("recipe-b")?.size).toBe(0);
 		});
 
 		it("topologicalSort breaks out of loop on unresolvable deps (avoids infinite loop)", () => {

@@ -2,12 +2,12 @@
  * Config Validate command - Validate configuration file
  */
 
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { Args } from "@oclif/core";
-import { existsSync } from "fs";
-import { resolve } from "path";
+import { HypergenConfigLoader } from "#/config/hypergen-config";
 import { BaseCommand } from "#/lib/base-command";
 import { outputFlags, validationFlags } from "#/lib/flags";
-import { HypergenConfigLoader } from "#/config/hypergen-config";
 
 export default class ConfigValidate extends BaseCommand<typeof ConfigValidate> {
 	static description = "Validate a hypergen configuration file";

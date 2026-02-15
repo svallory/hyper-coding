@@ -5,18 +5,18 @@
  * Auto-detects bun/pnpm/yarn/npm from lockfiles.
  */
 
+import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import createDebug from "debug";
 import { Tool, type ToolValidationResult } from "#/base.js";
 import type {
-	InstallStep,
 	InstallExecutionResult,
+	InstallStep,
 	StepContext,
-	StepResult,
 	StepExecutionOptions,
+	StepResult,
 } from "#/recipe-engine/types";
 
 const execAsync = promisify(exec);
@@ -65,7 +65,7 @@ function buildInstallCommand(pm: PackageManager, packages: string[], dev: boolea
 }
 
 export class InstallTool extends Tool<InstallStep> {
-	constructor(name: string = "install-tool", options: Record<string, any> = {}) {
+	constructor(name = "install-tool", options: Record<string, any> = {}) {
 		super("install", name, options);
 	}
 
@@ -213,7 +213,7 @@ export class InstallTool extends Tool<InstallStep> {
 }
 
 export class InstallToolFactory {
-	create(name: string = "install-tool", options: Record<string, any> = {}): InstallTool {
+	create(name = "install-tool", options: Record<string, any> = {}): InstallTool {
 		return new InstallTool(name, options);
 	}
 

@@ -5,14 +5,14 @@
  * Uses the RecipeEngine directly with mocked prompts and AI transport.
  */
 
-import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from "vitest";
-import fs from "fs";
-import path from "path";
-import os from "os";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import yaml from "js-yaml";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "vitest";
+import type { TemplateVariable } from "#/config/template-parser";
 import { RecipeEngine } from "#/recipe-engine/recipe-engine";
 import { registerDefaultTools } from "#/recipe-engine/tools/index";
-import type { TemplateVariable } from "#/config/template-parser";
 
 // ---------------------------------------------------------------------------
 // Mocking
@@ -114,7 +114,7 @@ afterEach(() => {
 	if (savedAnthropicKey !== undefined) {
 		process.env.ANTHROPIC_API_KEY = savedAnthropicKey;
 	} else {
-		delete process.env.ANTHROPIC_API_KEY;
+		process.env.ANTHROPIC_API_KEY = undefined;
 	}
 });
 

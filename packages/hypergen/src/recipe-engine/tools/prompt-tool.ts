@@ -9,18 +9,18 @@
 import createDebug from "debug";
 import { Tool, type ToolValidationResult } from "#/base.js";
 import { performInteractivePrompting } from "#/prompts/interactive-prompts";
-import {
-	type StepContext,
-	type StepResult,
-	type StepExecutionOptions,
-	type PromptStep,
-	type PromptExecutionResult,
+import type {
+	PromptExecutionResult,
+	PromptStep,
+	StepContext,
+	StepExecutionOptions,
+	StepResult,
 } from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:v8:recipe:tool:prompt");
 
 export class PromptTool extends Tool<PromptStep> {
-	constructor(name: string = "prompt-tool", options: Record<string, any> = {}) {
+	constructor(name = "prompt-tool", options: Record<string, any> = {}) {
 		super("prompt", name, options);
 	}
 
@@ -155,7 +155,6 @@ export class PromptTool extends Tool<PromptStep> {
 				return "multiselect"; // assuming supported by prompt tool, otherwise list
 			case "confirm":
 				return "confirm";
-			case "text":
 			default:
 				return "input";
 		}
@@ -185,7 +184,7 @@ export class PromptTool extends Tool<PromptStep> {
 }
 
 export class PromptToolFactory {
-	create(name: string = "prompt-tool", options: Record<string, any> = {}): PromptTool {
+	create(name = "prompt-tool", options: Record<string, any> = {}): PromptTool {
 		return new PromptTool(name, options);
 	}
 

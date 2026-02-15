@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { AiCollector } from "#/ai/ai-collector";
 import { initializeJig, renderTemplate } from "#/template-engines/jig-engine";
 
@@ -84,8 +84,8 @@ separator
 
 			const entries = collector.getEntries();
 			expect(entries.size).toBe(2);
-			expect(entries.get("first")!.prompt).toContain("First prompt");
-			expect(entries.get("second")!.prompt).toContain("Second prompt");
+			expect(entries.get("first")?.prompt).toContain("First prompt");
+			expect(entries.get("second")?.prompt).toContain("Second prompt");
 		});
 
 		it("collects global @context outside @ai", async () => {
@@ -216,7 +216,7 @@ after`;
 
 	describe("no @ai tags", () => {
 		it("renders normally without @ai", async () => {
-			const template = `Hello {{ name }}`;
+			const template = "Hello {{ name }}";
 
 			const result = await renderTemplate(template, {
 				__hypergenCollectMode: false,
@@ -230,7 +230,7 @@ after`;
 			const collector = AiCollector.getInstance();
 			collector.collectMode = true;
 
-			const template = `{{ name }}`;
+			const template = "{{ name }}";
 
 			await renderTemplate(template, {
 				__hypergenCollectMode: true,

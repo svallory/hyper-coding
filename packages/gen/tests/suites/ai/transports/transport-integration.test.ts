@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { resolveTransport } from "#/ai/transports/resolve-transport";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiCollector } from "#/ai/ai-collector";
-import { AiService } from "#/ai/ai-service";
-import { StdoutTransport } from "#/ai/transports/stdout-transport";
-import { ApiTransport } from "#/ai/transports/api-transport";
 import type { AIExecutionResult } from "#/ai/ai-config";
+import { AiService } from "#/ai/ai-service";
+import { ApiTransport } from "#/ai/transports/api-transport";
+import { resolveTransport } from "#/ai/transports/resolve-transport";
+import { StdoutTransport } from "#/ai/transports/stdout-transport";
 
 describe("Transport Integration", () => {
 	const savedEnv = { ...process.env };
@@ -159,9 +159,9 @@ describe("Transport Integration", () => {
 
 	it("auto detection falls back to stdout when nothing configured", async () => {
 		const savedEnv = { ...process.env };
-		delete process.env.ANTHROPIC_API_KEY;
-		delete process.env.OPENAI_API_KEY;
-		delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+		process.env.ANTHROPIC_API_KEY = undefined;
+		process.env.OPENAI_API_KEY = undefined;
+		process.env.GOOGLE_GENERATIVE_AI_API_KEY = undefined;
 
 		const transport = resolveTransport({});
 		expect(transport).toBeInstanceOf(StdoutTransport);

@@ -11,11 +11,11 @@ import path from "node:path";
 import createDebug from "debug";
 import { Tool, type ToolValidationResult } from "#/base.js";
 import type {
-	QueryStep,
 	QueryExecutionResult,
+	QueryStep,
 	StepContext,
-	StepResult,
 	StepExecutionOptions,
+	StepResult,
 } from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:v8:recipe:tool:query");
@@ -73,7 +73,7 @@ function resolveDotPath(data: any, dotPath: string): { exists: boolean; value: a
 	const segments = dotPath.split(".");
 	let current = data;
 	for (const segment of segments) {
-		if (current == null || typeof current !== "object") {
+		if (current === null || typeof current !== "object") {
 			return { exists: false, value: undefined };
 		}
 		if (!(segment in current)) {
@@ -115,7 +115,7 @@ async function parseFile(content: string, format: string): Promise<any> {
 }
 
 export class QueryTool extends Tool<QueryStep> {
-	constructor(name: string = "query-tool", options: Record<string, any> = {}) {
+	constructor(name = "query-tool", options: Record<string, any> = {}) {
 		super("query", name, options);
 	}
 
@@ -214,7 +214,7 @@ export class QueryTool extends Tool<QueryStep> {
 					}
 					if (check.exportExists) {
 						outputVars[check.exportExists] =
-							resolved.exists && resolved.value != null && resolved.value !== false;
+							resolved.exists && resolved.value !== null && resolved.value !== false;
 					}
 				}
 			}
@@ -270,7 +270,7 @@ export class QueryTool extends Tool<QueryStep> {
 }
 
 export class QueryToolFactory {
-	create(name: string = "query-tool", options: Record<string, any> = {}): QueryTool {
+	create(name = "query-tool", options: Record<string, any> = {}): QueryTool {
 		return new QueryTool(name, options);
 	}
 

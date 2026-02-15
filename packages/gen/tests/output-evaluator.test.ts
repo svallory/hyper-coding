@@ -6,10 +6,10 @@
  * template expressions (containing {{ or @).
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { evaluateStepOutputs } from "#/recipe-engine/output-evaluator";
-import { initializeJig } from "#/template-engines/jig-engine";
 import type { StepContext } from "#/recipe-engine/types";
+import { initializeJig } from "#/template-engines/jig-engine";
 
 // Initialize the Jig template engine once before all tests
 beforeAll(() => {

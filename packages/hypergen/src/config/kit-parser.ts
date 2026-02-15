@@ -5,14 +5,14 @@
  * A kit is the top-level container that holds cookbooks and standalone recipes.
  */
 
-import fs from "fs";
-import path from "path";
-import yaml from "js-yaml";
-import { glob } from "glob";
+import fs from "node:fs";
+import path from "node:path";
 import createDebug from "debug";
-import type { KitConfig } from "#/types.js";
+import { glob } from "glob";
+import yaml from "js-yaml";
 import { loadHelpers } from "#/load-helpers.js";
 import { registerHelpers } from "#/template-engines/jig-engine";
+import type { KitConfig } from "#/types.js";
 
 const debug = createDebug("hypergen:config:kit-parser");
 

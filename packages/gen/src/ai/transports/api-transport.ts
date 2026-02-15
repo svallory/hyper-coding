@@ -5,10 +5,10 @@
  * Sends a single batched prompt with all blocks and parses a JSON response.
  */
 
+import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import { PromptAssembler } from "#/ai/prompt-assembler";
 import { AiService } from "#/ai/ai-service";
-import { ErrorHandler, ErrorCode } from "@hypercli/core";
+import { PromptAssembler } from "#/ai/prompt-assembler";
 import type { AiTransport, TransportContext, TransportResult } from "./types.js";
 
 const debug = createDebug("hypergen:ai:transport:api");

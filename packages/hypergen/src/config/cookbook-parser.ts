@@ -5,14 +5,14 @@
  * A cookbook groups related recipes (e.g., "crud" groups create/read/update/delete).
  */
 
-import fs from "fs";
-import path from "path";
-import yaml from "js-yaml";
-import { glob } from "glob";
+import fs from "node:fs";
+import path from "node:path";
 import createDebug from "debug";
-import type { CookbookConfig } from "#/types.js";
+import { glob } from "glob";
+import yaml from "js-yaml";
 import { loadHelpers } from "#/load-helpers.js";
 import { registerHelpers } from "#/template-engines/jig-engine";
+import type { CookbookConfig } from "#/types.js";
 
 const debug = createDebug("hypergen:config:cookbook-parser");
 

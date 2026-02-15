@@ -6,33 +6,33 @@
  * coordination through the complete Recipe Step System.
  */
 
-import fs from "fs";
-import path from "path";
-import yaml from "js-yaml";
-import createDebug from "debug";
-import { EventEmitter } from "events";
+import { EventEmitter } from "node:events";
+import fs from "node:fs";
+import path from "node:path";
 import { TemplateParser, type TemplateVariable } from "@hypercli/core";
-import { StepExecutor, type StepExecutorConfig } from "./step-executor.js";
-import { ToolRegistry, getToolRegistry } from "./tools/registry.js";
-import { HypergenError, ErrorHandler, ErrorCode } from "@hypercli/core";
-import { renderTemplate as jigRenderTemplate } from "#/template-engines/jig-engine";
+import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
 import { Logger } from "@hypercli/core";
-import { performInteractivePrompting } from "#/prompts/interactive-prompts";
+import createDebug from "debug";
+import yaml from "js-yaml";
 import { AiCollector } from "#/ai/ai-collector";
+import type { AiServiceConfig } from "#/ai/ai-config";
 import { AiVariableResolver, type UnresolvedVariable } from "#/ai/ai-variable-resolver";
 import { resolveTransport } from "#/ai/transports/resolve-transport";
-import type { AiServiceConfig } from "#/ai/ai-config";
+import { performInteractivePrompting } from "#/prompts/interactive-prompts";
+import { renderTemplate as jigRenderTemplate } from "#/template-engines/jig-engine";
+import { StepExecutor, type StepExecutorConfig } from "./step-executor.js";
+import { type ToolRegistry, getToolRegistry } from "./tools/registry.js";
 import type {
 	RecipeConfig,
 	RecipeExecution,
-	RecipeValidationResult,
 	RecipeProvides,
-	StepContext,
-	StepResult,
 	RecipeStepUnion,
+	RecipeValidationResult,
+	StepContext,
 	StepExecutionOptions,
+	StepResult,
 } from "./types.js";
-import { RecipeValidationError, RecipeDependencyError } from "./types.js";
+import { RecipeDependencyError, RecipeValidationError } from "./types.js";
 
 const debug = createDebug("hypergen:v8:recipe:engine");
 
@@ -681,16 +681,16 @@ export class RecipeEngine extends EventEmitter {
 			// Auto-detect source type
 			if (source.startsWith("http://") || source.startsWith("https://")) {
 				return { type: "url", url: source };
-			} else if (
+			}
+			if (
 				source.includes("/") ||
 				source.includes("\\") ||
 				source.endsWith(".yml") ||
 				source.endsWith(".yaml")
 			) {
 				return { type: "file", path: source };
-			} else {
-				return { type: "package", name: source };
 			}
+			return { type: "package", name: source };
 		}
 		return source;
 	}
@@ -894,12 +894,12 @@ export class RecipeEngine extends EventEmitter {
 					// Inference for sequence shorthand
 					step.tool = "sequence";
 					step.steps = step.sequence;
-					delete step.sequence;
+					step.sequence = undefined;
 				} else if (step.parallel) {
 					// Inference for parallel shorthand
 					step.tool = "parallel";
 					step.steps = step.parallel;
-					delete step.parallel;
+					step.parallel = undefined;
 				} else if (step.steps) {
 					// Default to sequence for generic steps property
 					step.tool = "sequence";
@@ -917,7 +917,7 @@ export class RecipeEngine extends EventEmitter {
 			// Map args shorthand to variableOverrides for recipe steps
 			if (step.args && !step.variableOverrides) {
 				step.variableOverrides = step.args;
-				delete step.args;
+				step.args = undefined;
 			}
 
 			// Recursively normalize nested steps in sequence/parallel
@@ -1519,8 +1519,6 @@ export class RecipeEngine extends EventEmitter {
 
 			case "local":
 				return { type: "file", path: name };
-
-			case "npm":
 			default:
 				return { type: "package", name, version };
 		}

@@ -2,20 +2,20 @@
  * Install a kit from npm, JSR, GitHub, local paths, or other sources
  */
 
-import { existsSync, mkdirSync, cpSync, rmSync } from "node:fs";
-import { join, basename, isAbsolute, resolve } from "node:path";
-import { Args, Flags } from "@oclif/core";
-import { BaseCommand } from "#/lib/base-command";
 import { execSync } from "node:child_process";
-import { resolveKitSource, buildInstallCommand } from "#/lib/kit/source-resolver";
-import {
-	addKitToManifest,
-	isKitInstalled,
-	extractPackageVersion,
-	type KitManifestEntry,
-} from "#/lib/kit/manifest";
-import { findProjectRoot } from "#/utils/find-project-root";
+import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { basename, isAbsolute, join, resolve } from "node:path";
+import { Args, Flags } from "@oclif/core";
 import tiged from "tiged";
+import { BaseCommand } from "#/lib/base-command";
+import {
+	type KitManifestEntry,
+	addKitToManifest,
+	extractPackageVersion,
+	isKitInstalled,
+} from "#/lib/kit/manifest";
+import { buildInstallCommand, resolveKitSource } from "#/lib/kit/source-resolver";
+import { findProjectRoot } from "#/utils/find-project-root";
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {
 	static override description = "Install a kit from npm, JSR, GitHub, or local path";
@@ -73,7 +73,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 			}
 
 			this.log(`\n✓ Kit installed successfully: ${args.kit}`);
-			this.log(`\nList available recipes with: hypergen recipe list`);
+			this.log("\nList available recipes with: hypergen recipe list");
 		} catch (error: any) {
 			// Distinguish our validation errors from execSync errors
 			if (error?.message?.startsWith("Invalid kit specifier")) {
@@ -84,17 +84,12 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 			const msg = error instanceof Error ? error.message : String(error);
 			if (msg.includes("not found") || msg.includes("404")) {
 				this.error(
-					`Kit not found: ${args.kit}\n\n` +
-						`Make sure the source is correct. Examples:\n` +
-						`  NPM:     hypergen kit install @kit/nextjs\n` +
-						`  GitHub:  hypergen kit install user/repo\n` +
-						`  JSR:     hypergen kit install jsr:@std/path\n` +
-						`  Local:   hypergen kit install ./path/to/kit`,
+					`Kit not found: ${args.kit}\n\nMake sure the source is correct. Examples:\n  NPM:     hypergen kit install @kit/nextjs\n  GitHub:  hypergen kit install user/repo\n  JSR:     hypergen kit install jsr:@std/path\n  Local:   hypergen kit install ./path/to/kit`,
 				);
 			}
 			if (msg.includes("ENOENT")) {
 				this.error(
-					`Command not found. Make sure git or the required package manager is installed.`,
+					"Command not found. Make sure git or the required package manager is installed.",
 				);
 			}
 			this.error(`Failed to install kit: ${msg}`);
@@ -147,8 +142,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 		if (existsSync(targetDir) || isKitInstalled(projectRoot, kitName)) {
 			if (!flags.force) {
 				this.error(
-					`Kit already exists: ${kitName}\n` +
-						`Use --force to replace it, or --name <name> for a different name`,
+					`Kit already exists: ${kitName}\nUse --force to replace it, or --name <name> for a different name`,
 				);
 			}
 
@@ -169,17 +163,19 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 		switch (resolved.type) {
 			case "github":
 			case "gitlab":
-			case "bitbucket":
+			case "bitbucket": {
 				const gitInfo = await this.cloneFromGitHost(resolved, targetDir);
 				commit = gitInfo.commit;
 				branch = gitInfo.branch;
 				tag = gitInfo.tag;
 				break;
+			}
 
-			case "git":
+			case "git": {
 				const gitUrlInfo = await this.cloneFromGitUrl(resolved.source, targetDir);
 				commit = gitUrlInfo.commit;
 				break;
+			}
 
 			case "local":
 				await this.copyFromLocal(resolved.source, targetDir);
@@ -343,7 +339,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 				},
 			);
 		} else {
-			this.error(`Unsupported archive format. Only .tar.gz, .tgz, and .zip are supported.`);
+			this.error("Unsupported archive format. Only .tar.gz, .tgz, and .zip are supported.");
 		}
 	}
 

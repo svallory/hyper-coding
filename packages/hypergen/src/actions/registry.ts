@@ -6,10 +6,10 @@
 
 import createDebug from "debug";
 import type {
-	ActionMetadata,
 	ActionFunction,
-	DecoratedAction,
+	ActionMetadata,
 	ActionQueryOptions,
+	DecoratedAction,
 } from "#/types.js";
 
 const debug = createDebug("hypergen:v8:action:registry");
@@ -114,7 +114,7 @@ export class ActionRegistry {
 		// Filter by tags
 		if (options.tags && options.tags.length > 0) {
 			results = results.filter((action) =>
-				action.metadata.tags?.some((tag) => options.tags!.includes(tag)),
+				action.metadata.tags?.some((tag) => options.tags?.includes(tag)),
 			);
 		}
 
@@ -213,7 +213,7 @@ export class ActionRegistry {
 			if (!this.categoriesIndex.has(metadata.category)) {
 				this.categoriesIndex.set(metadata.category, new Set());
 			}
-			this.categoriesIndex.get(metadata.category)!.add(metadata.name);
+			this.categoriesIndex.get(metadata.category)?.add(metadata.name);
 		}
 
 		// Update tags index
@@ -222,7 +222,7 @@ export class ActionRegistry {
 				if (!this.tagsIndex.has(tag)) {
 					this.tagsIndex.set(tag, new Set());
 				}
-				this.tagsIndex.get(tag)!.add(metadata.name);
+				this.tagsIndex.get(tag)?.add(metadata.name);
 			}
 		}
 	}

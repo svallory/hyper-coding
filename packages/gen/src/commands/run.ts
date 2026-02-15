@@ -6,15 +6,15 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { Args, Flags } from "@oclif/core";
-import { BaseCommand } from "#/lib/base-command";
-import { AiCollector } from "#/ai/ai-collector";
-import { resolveTransport } from "#/ai/transports/resolve-transport";
 import { PathResolver, type ResolvedPath } from "@hypercli/core";
 import { discoverKits, getDefaultKitSearchDirs } from "@hypercli/core";
-import { GroupExecutor } from "#/recipe-engine/group-executor";
 import type { TemplateVariable } from "@hypercli/core";
 import { findProjectRoot } from "@hypercli/core";
+import { Args, Flags } from "@oclif/core";
+import { AiCollector } from "#/ai/ai-collector";
+import { resolveTransport } from "#/ai/transports/resolve-transport";
+import { BaseCommand } from "#/lib/base-command";
+import { GroupExecutor } from "#/recipe-engine/group-executor";
 
 export default class Run extends BaseCommand<typeof Run> {
 	static override description = "Execute a recipe to generate code";
@@ -124,7 +124,7 @@ export default class Run extends BaseCommand<typeof Run> {
 		flags: Record<string, any>,
 		answers?: Record<string, any>,
 		askMode: "me" | "ai" | "nobody" = "me",
-		noDefaults: boolean = false,
+		noDefaults = false,
 	): Promise<void> {
 		// Initialize AiCollector for Pass 1 if no answers provided
 		const collector = AiCollector.getInstance();
@@ -224,7 +224,7 @@ export default class Run extends BaseCommand<typeof Run> {
 			}
 
 			if (result.success) {
-				this.log(`\n✓ Recipe completed successfully`);
+				this.log("\n✓ Recipe completed successfully");
 				this.log(`  Steps completed: ${result.metadata.completedSteps}`);
 				if (result.filesCreated.length > 0) {
 					this.log(`  Files created: ${result.filesCreated.length}`);
@@ -254,7 +254,7 @@ export default class Run extends BaseCommand<typeof Run> {
 		flags: Record<string, any>,
 		answers?: Record<string, any>,
 		askMode: "me" | "ai" | "nobody" = "me",
-		noDefaults: boolean = false,
+		noDefaults = false,
 	): Promise<void> {
 		const groupExecutor = new GroupExecutor(this.recipeEngine);
 
@@ -287,7 +287,7 @@ export default class Run extends BaseCommand<typeof Run> {
 			});
 
 			if (result.success) {
-				this.log(`\n✓ Group execution completed successfully`);
+				this.log("\n✓ Group execution completed successfully");
 				this.log(`  Recipes executed: ${result.recipeResults.length}`);
 				for (const rr of result.recipeResults) {
 					const status = rr.result.success ? "✓" : "✗";

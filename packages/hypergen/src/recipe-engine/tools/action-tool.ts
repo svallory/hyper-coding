@@ -8,25 +8,25 @@
  */
 
 import createDebug from "debug";
+import { ActionExecutor } from "#/actions/executor";
+import { ActionParameterResolver } from "#/actions/parameter-resolver";
+import { ActionRegistry } from "#/actions/registry";
+import type { ActionContext, ActionLogger, ActionResult, ActionUtils } from "#/actions/types";
+import { ConsoleActionLogger, DefaultActionUtils } from "#/actions/utils";
 import { Tool, type ToolValidationResult } from "#/base.js";
 import {
-	HypergenError,
 	ErrorCode,
 	ErrorHandler,
+	HypergenError,
 	withErrorHandling,
 } from "#/errors/hypergen-errors";
 import {
 	type ActionStep,
 	type StepContext,
-	type StepResult,
 	type StepExecutionOptions,
+	type StepResult,
 	isActionStep,
 } from "#/recipe-engine/types";
-import type { ActionResult, ActionContext, ActionLogger, ActionUtils } from "#/actions/types";
-import { ActionExecutor } from "#/actions/executor";
-import { ActionRegistry } from "#/actions/registry";
-import { ActionParameterResolver } from "#/actions/parameter-resolver";
-import { DefaultActionUtils, ConsoleActionLogger } from "#/actions/utils";
 
 const debug = createDebug("hypergen:v8:recipe:tool:action");
 
@@ -71,7 +71,7 @@ export class ActionTool extends Tool<ActionStep> {
 	private defaultLogger: ActionLogger;
 	private executorInitialized = false;
 
-	constructor(name: string = "action-tool", options: Record<string, any> = {}) {
+	constructor(name = "action-tool", options: Record<string, any> = {}) {
 		super("action", name, options);
 
 		// Initialize action system components
@@ -596,7 +596,7 @@ export class ActionTool extends Tool<ActionStep> {
  * Action Tool Factory
  */
 export class ActionToolFactory {
-	create(name: string = "action-tool", options: Record<string, any> = {}): ActionTool {
+	create(name = "action-tool", options: Record<string, any> = {}): ActionTool {
 		return new ActionTool(name, options);
 	}
 

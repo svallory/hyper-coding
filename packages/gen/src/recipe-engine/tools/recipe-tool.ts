@@ -16,26 +16,26 @@
  */
 
 import path from "node:path";
+import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
+import { TemplateParser } from "@hypercli/core";
+import { TemplateURLManager } from "@hypercli/kit";
+import createDebug from "debug";
 import fs from "fs-extra";
 import yaml from "js-yaml";
-import createDebug from "debug";
-import { Tool, type ToolValidationResult, type ToolResource } from "./base.js";
-import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
 import { StepExecutor } from "#/recipe-engine/step-executor";
 import {
+	type CircularDependencyError,
+	type RecipeConfig,
+	type RecipeDependencyError,
+	type RecipeExecutionResult,
 	type RecipeStep,
 	type RecipeStepUnion,
 	type StepContext,
-	type StepResult,
 	type StepExecutionOptions,
-	type RecipeExecutionResult,
-	type RecipeConfig,
-	type RecipeDependencyError,
-	type CircularDependencyError,
+	type StepResult,
 	isRecipeStep,
 } from "#/recipe-engine/types";
-import { TemplateParser } from "@hypercli/core";
-import { TemplateURLManager } from "@hypercli/kit";
+import { Tool, type ToolResource, type ToolValidationResult } from "./base.js";
 
 const debug = createDebug("hypergen:v8:recipe:tool:recipe");
 
@@ -124,7 +124,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 	private executionStack: string[] = [];
 	private urlManager: TemplateURLManager;
 
-	constructor(name: string = "recipe-tool", options: Record<string, any> = {}) {
+	constructor(name = "recipe-tool", options: Record<string, any> = {}) {
 		super("recipe", name, options);
 
 		this.urlManager = new TemplateURLManager({
@@ -467,7 +467,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 		// Check cache first
 		const cacheKey = `${recipeId}:${context.projectRoot}`;
 		const cached = this.recipeCache.get(cacheKey);
-		if (cached && cached.metadata.exists) {
+		if (cached?.metadata.exists) {
 			cached.metadata.cached = true;
 			return cached;
 		}
@@ -810,12 +810,12 @@ export class RecipeTool extends Tool<RecipeStep> {
 					// Inference for sequence shorthand
 					step.tool = "sequence";
 					step.steps = step.sequence;
-					delete step.sequence;
+					step.sequence = undefined;
 				} else if (step.parallel) {
 					// Inference for parallel shorthand
 					step.tool = "parallel";
 					step.steps = step.parallel;
-					delete step.parallel;
+					step.parallel = undefined;
 				} else if (step.steps) {
 					// Default to sequence for generic steps property
 					step.tool = "sequence";
@@ -912,7 +912,7 @@ export class RecipeTool extends Tool<RecipeStep> {
  * Recipe Tool Factory
  */
 export class RecipeToolFactory {
-	create(name: string = "recipe-tool", options: Record<string, any> = {}): RecipeTool {
+	create(name = "recipe-tool", options: Record<string, any> = {}): RecipeTool {
 		return new RecipeTool(name, options);
 	}
 

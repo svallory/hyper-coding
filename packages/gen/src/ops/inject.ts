@@ -1,8 +1,8 @@
 import path from "node:path";
-import fs from "fs-extra";
 import type { ActionResult, RenderedAction, RunnerConfig } from "@hypercli/core";
-import createResult from "./result.js";
+import fs from "fs-extra";
 import injector from "./injector.js";
+import createResult from "./result.js";
 
 const injectOp = async (
 	action: RenderedAction,

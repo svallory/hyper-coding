@@ -4,10 +4,10 @@
  * Uses @clack/prompts for beautiful interactive prompts when parameters are missing
  */
 
+import { setTimeout } from "node:timers/promises";
 import * as p from "@clack/prompts";
 import type { Option } from "@clack/prompts";
-import { setTimeout } from "timers/promises";
-import { ErrorHandler, ErrorCode } from "@hypercli/core";
+import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import type { TemplateVariable } from "@hypercli/core";
 
 export interface PromptOptions {
@@ -163,7 +163,7 @@ export class InteractivePrompter {
 	private getMissingParameters(
 		variables: Record<string, TemplateVariable>,
 		providedValues: Record<string, any>,
-		skipOptional: boolean = false,
+		skipOptional = false,
 	): string[] {
 		const missing: string[] = [];
 
@@ -238,7 +238,7 @@ export class InteractivePrompter {
 					initialValue: variable.default ?? false,
 				});
 
-			case "enum":
+			case "enum": {
 				if (!variable.values || variable.values.length === 0) {
 					throw new Error(`Enum variable '${name}' has no values defined`);
 				}
@@ -264,19 +264,19 @@ export class InteractivePrompter {
 						initialValues: Array.isArray(variable.default) ? variable.default : [],
 						required: variable.required,
 					});
-				} else {
-					const options = variable.values.map((value) => ({
-						value,
-						label: value,
-						hint: this.getEnumValueHint(value),
-					}));
-
-					return p.select({
-						message,
-						options,
-						initialValue: variable.default,
-					});
 				}
+				const options = variable.values.map((value) => ({
+					value,
+					label: value,
+					hint: this.getEnumValueHint(value),
+				}));
+
+				return p.select({
+					message,
+					options,
+					initialValue: variable.default,
+				});
+			}
 
 			case "array":
 				return p.text({
@@ -385,7 +385,7 @@ export class InteractivePrompter {
 
 		if (value) {
 			const num = Number(value);
-			if (isNaN(num)) {
+			if (Number.isNaN(num)) {
 				return "Must be a valid number";
 			}
 
@@ -463,9 +463,9 @@ export class InteractivePrompter {
 					}
 					break;
 
-				case "number":
+				case "number": {
 					const num = typeof value === "string" ? Number(value) : value;
-					if (isNaN(num)) {
+					if (Number.isNaN(num)) {
 						errors.push(`${name} must be a number`);
 					} else {
 						if (variable.min !== undefined && num < variable.min) {
@@ -476,6 +476,7 @@ export class InteractivePrompter {
 						}
 					}
 					break;
+				}
 
 				case "boolean":
 					if (typeof value !== "boolean") {
@@ -487,7 +488,7 @@ export class InteractivePrompter {
 					if (variable.values) {
 						if (Array.isArray(value)) {
 							// Multi-select enum
-							const invalidValues = value.filter((v) => !variable.values!.includes(v));
+							const invalidValues = value.filter((v) => !variable.values?.includes(v));
 							if (invalidValues.length > 0) {
 								errors.push(`${name} contains invalid values: ${invalidValues.join(", ")}`);
 							}
@@ -526,7 +527,7 @@ export class InteractivePrompter {
 	/**
 	 * Create a spinner for long-running operations
 	 */
-	static createSpinner(message: string = "Working...") {
+	static createSpinner(message = "Working...") {
 		return p.spinner();
 	}
 
@@ -575,7 +576,7 @@ export class InteractivePrompter {
 	/**
 	 * Create a simple confirmation prompt
 	 */
-	static async confirm(message: string, initialValue: boolean = false): Promise<boolean> {
+	static async confirm(message: string, initialValue = false): Promise<boolean> {
 		const result = await p.confirm({
 			message,
 			initialValue,
@@ -642,7 +643,7 @@ export class InteractivePrompter {
 		message: string,
 		options: Array<Option<T>>,
 		initialValues: T[] = [],
-		required: boolean = false,
+		required = false,
 	): Promise<T[]> {
 		const result = await p.multiselect({
 			message,
@@ -695,7 +696,7 @@ export async function performInteractivePrompting(
 					});
 					break;
 
-				case "list":
+				case "list": {
 					const options =
 						prompt.choices?.map((choice) => ({
 							value: choice,
@@ -708,6 +709,7 @@ export async function performInteractivePrompting(
 						initialValue: prompt.default,
 					});
 					break;
+				}
 
 				case "number":
 					result = await p.text({
@@ -717,7 +719,7 @@ export async function performInteractivePrompting(
 						validate: (value) => {
 							if (!value && prompt.default !== undefined) return undefined;
 							const num = Number(value);
-							if (isNaN(num)) return "Must be a valid number";
+							if (Number.isNaN(num)) return "Must be a valid number";
 							if (prompt.validate) {
 								const validation = prompt.validate(num);
 								if (validation === false) {
@@ -732,8 +734,6 @@ export async function performInteractivePrompting(
 					// Convert to number
 					result = result ? Number(result) : prompt.default;
 					break;
-
-				case "input":
 				default:
 					result = await p.text({
 						message: prompt.message,
@@ -742,7 +742,7 @@ export async function performInteractivePrompting(
 						validate: prompt.validate
 							? (value) => {
 									if (!value && prompt.default !== undefined) return undefined;
-									const validation = prompt.validate!(value);
+									const validation = prompt.validate?.(value);
 									if (validation === false) {
 										return "Invalid input";
 									}

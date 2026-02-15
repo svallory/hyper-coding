@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { renderTemplate } from "#/template-engines/jig-engine";
 
 describe("Shell Tool - Jig Rendering", () => {

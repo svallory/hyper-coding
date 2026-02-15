@@ -1017,7 +1017,7 @@ export interface RecipeValidationResult {
 	isValid: boolean;
 
 	/** Validation errors */
-	errors: RecipeValidationError[];
+	errors: RecipeValidationErrorDetails[];
 
 	/** Validation warnings */
 	warnings: RecipeValidationWarning[];
@@ -1039,9 +1039,9 @@ export interface RecipeValidationResult {
 }
 
 /**
- * Recipe validation error
+ * Recipe validation error details
  */
-export interface RecipeValidationError {
+export interface RecipeValidationErrorDetails {
 	/** Error code */
 	code: string;
 

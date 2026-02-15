@@ -1,8 +1,8 @@
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TemplateParser } from "#/config/template-parser";
-import { beforeEach, afterEach, describe, it, expect } from "vitest";
-import fs from "fs";
-import path from "path";
-import { tmpdir } from "os";
 
 describe("TemplateParser", () => {
 	let tempDir: string;
@@ -81,8 +81,8 @@ examples:
 
 			// Check examples
 			expect(result.config.examples).toHaveLength(1);
-			expect(result.config.examples![0].title).toBe("Basic component");
-			expect(result.config.examples![0].variables.name).toBe("Button");
+			expect(result.config.examples?.[0].title).toBe("Basic component");
+			expect(result.config.examples?.[0].variables.name).toBe("Button");
 		});
 
 		it("should return errors for invalid template.yml", async () => {

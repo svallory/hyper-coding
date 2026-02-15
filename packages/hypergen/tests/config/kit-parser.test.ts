@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "fs";
-import path from "path";
-import { tmpdir } from "os";
+import fs from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-	parseKitFile,
+	deriveShortName,
 	discoverKits,
 	getDefaultKitSearchDirs,
-	deriveShortName,
+	parseKitFile,
 	resolveKitCookbooks,
 } from "#/config/kit-parser";
 
@@ -237,7 +237,7 @@ defaults:
 
 			expect(result.isValid).toBe(true);
 			expect(result.config.defaults).toEqual({ cookbook: "page" });
-			expect(result.config.defaults!.recipe).toBeUndefined();
+			expect(result.config.defaults?.recipe).toBeUndefined();
 		});
 
 		it("parses defaults with only recipe set (no cookbook)", async () => {
@@ -256,7 +256,7 @@ defaults:
 
 			expect(result.isValid).toBe(true);
 			expect(result.config.defaults).toEqual({ recipe: "create" });
-			expect(result.config.defaults!.cookbook).toBeUndefined();
+			expect(result.config.defaults?.cookbook).toBeUndefined();
 		});
 
 		it("ignores non-string description/version/author/license values", async () => {
@@ -449,8 +449,8 @@ keywords: "not-an-array"
 			expect(result.size).toBe(2);
 			expect(result.has("alpha-kit")).toBe(true);
 			expect(result.has("beta-kit")).toBe(true);
-			expect(result.get("alpha-kit")!.config.name).toBe("alpha-kit");
-			expect(result.get("beta-kit")!.config.name).toBe("@scope/beta-kit");
+			expect(result.get("alpha-kit")?.config.name).toBe("alpha-kit");
+			expect(result.get("beta-kit")?.config.name).toBe("@scope/beta-kit");
 		});
 
 		it("skips non-directory entries in search directories", async () => {
@@ -532,7 +532,7 @@ keywords: "not-an-array"
 			const result = await discoverKits([dir1, dir2]);
 
 			expect(result.size).toBe(1);
-			expect(result.get("mykit")!.config.description).toBe("first");
+			expect(result.get("mykit")?.config.description).toBe("first");
 		});
 
 		it("subdirectory kit discovery takes precedence over direct kit.yml in the same dir", async () => {
@@ -557,7 +557,7 @@ keywords: "not-an-array"
 			const result = await discoverKits([kitsDir]);
 
 			expect(result.size).toBe(1);
-			expect(result.get("mykit")!.config.description).toBe("from-subdir");
+			expect(result.get("mykit")?.config.description).toBe("from-subdir");
 		});
 
 		it("discovers kits from multiple search directories", async () => {

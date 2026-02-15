@@ -7,9 +7,9 @@
  * and `{{ filter :: value }}` syntax.
  */
 
+import { helpers } from "@hypercli/core";
 import { Edge } from "@jig-lang/jig";
 import createDebug from "debug";
-import { helpers } from "@hypercli/core";
 import { AiCollector } from "#/ai/ai-collector";
 import { registerAiTags } from "./ai-tags.js";
 

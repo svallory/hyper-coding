@@ -1,5 +1,5 @@
-import inflection from "inflection";
 import changeCase from "change-case";
+import inflection from "inflection";
 
 // supports kebab-case to KebabCase
 inflection.undasherize = (str) =>

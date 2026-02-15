@@ -13,9 +13,9 @@
  */
 
 import createDebug from "debug";
-import { ContextCollector, type ContextBundle } from "./context-collector.js";
-import type { AIContextConfig, AIExample, AIGuardrailConfig } from "./ai-config.js";
 import type { StepResult } from "#/recipe-engine/types";
+import type { AIContextConfig, AIExample, AIGuardrailConfig } from "./ai-config.js";
+import { type ContextBundle, ContextCollector } from "./context-collector.js";
 
 const debug = createDebug("hypergen:ai:prompt-pipeline");
 
@@ -197,6 +197,6 @@ export class PromptPipeline {
 
 		if (rules.length === 0) return null;
 
-		return "## Rules\n\n" + rules.join("\n");
+		return `## Rules\n\n${rules.join("\n")}`;
 	}
 }

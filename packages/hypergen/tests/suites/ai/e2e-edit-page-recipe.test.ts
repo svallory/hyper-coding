@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import fs from "fs-extra";
-import path from "path";
-import { tmpdir } from "os";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiCollector } from "#/ai/ai-collector";
 import { PromptAssembler } from "#/ai/prompt-assembler";
 import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { initializeJig, getJig } from "#/template-engines/jig-engine";
-import { getToolRegistry, ToolRegistry } from "#/recipe-engine/tools/registry";
+import { ToolRegistry, getToolRegistry } from "#/recipe-engine/tools/registry";
 import { templateToolFactory } from "#/recipe-engine/tools/template-tool";
+import { getJig, initializeJig } from "#/template-engines/jig-engine";
 
 // ─── Fixtures ────────────────────────────────────────────────────────
 
@@ -494,11 +494,11 @@ describe("E2E: edit-page recipe with 2-pass AI generation", () => {
 			const collector = AiCollector.getInstance();
 			const entries = collector.getEntries();
 
-			expect(entries.get("handlerDeps")!.prompt).toContain("service dependencies");
-			expect(entries.get("editPageHandler")!.prompt).toContain("GET handler body");
-			expect(entries.get("updateHandler")!.prompt).toContain("POST handler body");
-			expect(entries.get("editableFields")!.prompt).toContain("edit form");
-			expect(entries.get("formBody")!.prompt).toContain("templ form body");
+			expect(entries.get("handlerDeps")?.prompt).toContain("service dependencies");
+			expect(entries.get("editPageHandler")?.prompt).toContain("GET handler body");
+			expect(entries.get("updateHandler")?.prompt).toContain("POST handler body");
+			expect(entries.get("editableFields")?.prompt).toContain("edit form");
+			expect(entries.get("formBody")?.prompt).toContain("templ form body");
 		});
 
 		it("should NOT create any output files", async () => {
@@ -563,7 +563,7 @@ describe("E2E: edit-page recipe with 2-pass AI generation", () => {
 			const handlerDeps = entries.get("handlerDeps");
 			expect(handlerDeps).toBeDefined();
 
-			const allContext = handlerDeps!.contexts.join(" ");
+			const allContext = handlerDeps?.contexts.join(" ");
 
 			// Should contain valid JSON arrays (which come from helpers)
 			expect(allContext).toMatch(/\[\{.*"name".*"type".*\}\]/);

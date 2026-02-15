@@ -2,8 +2,8 @@
  * Show detailed information about a cookbook
  */
 
+import path from "node:path";
 import { Args, Flags } from "@oclif/core";
-import path from "path";
 import { BaseCommand } from "#/lib/base-command";
 import { c } from "#/lib/colors";
 import { s } from "#/lib/styles";
@@ -274,7 +274,7 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 			for (const cookbook of cookbooks) {
 				const name = c.cookbook(`  ${cookbook.name}`);
 				if (cookbook.description) {
-					this.log(`${name} ${c.subtle("— " + cookbook.description)}`);
+					this.log(`${name} ${c.subtle(`— ${cookbook.description}`)}`);
 				} else {
 					this.log(name);
 				}

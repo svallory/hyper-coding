@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import fs from "fs-extra";
-import path from "path";
-import { tmpdir } from "os";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AiCollector } from "~/ai/ai-collector";
 import { RecipeEngine } from "~/recipe-engine/recipe-engine";
-import { initializeJig, getJig } from "~/template-engines/jig-engine";
-import { getToolRegistry, ToolRegistry } from "~/recipe-engine/tools/registry";
+import { ToolRegistry, getToolRegistry } from "~/recipe-engine/tools/registry";
 import { templateToolFactory } from "~/recipe-engine/tools/template-tool";
+import { getJig, initializeJig } from "~/template-engines/jig-engine";
 
 /**
  * E2E Tests for Generated File Content
@@ -872,7 +872,7 @@ describe("Generated File Content E2E", () => {
 			expect(handlerDepsEntry).toBeDefined();
 
 			// Context should include parsed model data
-			const contexts = handlerDepsEntry!.contexts;
+			const contexts = handlerDepsEntry?.contexts;
 			const allContext = contexts.join(" ");
 
 			expect(allContext).toContain("Organization");

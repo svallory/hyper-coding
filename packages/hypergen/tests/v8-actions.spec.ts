@@ -2,19 +2,19 @@
  * V8 Actions System Tests
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
+	ActionExecutor,
+	ActionParameterResolver,
+	ActionRegistry,
+	ConsoleActionLogger,
+	DefaultActionUtils,
+	SilentActionLogger,
 	action,
 	getActionMetadata,
 	isActionFunction,
-	ActionRegistry,
-	ActionParameterResolver,
-	ActionExecutor,
-	DefaultActionUtils,
-	ConsoleActionLogger,
-	SilentActionLogger,
 } from "#/actions/index";
-import type { ActionContext, ActionResult, ActionMetadata } from "#/actions/index";
+import type { ActionContext, ActionMetadata, ActionResult } from "#/actions/index";
 
 // Helper function to create test actions
 function createTestAction(
@@ -45,9 +45,9 @@ describe("Action Decorator", () => {
 
 		const metadata = getActionMetadata(testAction);
 		expect(metadata).toBeDefined();
-		expect(metadata!.name).toBe("test-action");
-		expect(metadata!.description).toBe("A test action");
-		expect(metadata!.category).toBe("testing");
+		expect(metadata?.name).toBe("test-action");
+		expect(metadata?.description).toBe("A test action");
+		expect(metadata?.category).toBe("testing");
 	});
 
 	it("should register actions with the registry", () => {
@@ -60,8 +60,8 @@ describe("Action Decorator", () => {
 		const registered = registry.get("registry-test");
 
 		expect(registered).toBeDefined();
-		expect(registered!.metadata.name).toBe("registry-test");
-		expect(registered!.fn).toBe(registryTest);
+		expect(registered?.metadata.name).toBe("registry-test");
+		expect(registered?.fn).toBe(registryTest);
 	});
 
 	it("should validate action metadata", () => {
@@ -140,9 +140,9 @@ describe("ActionRegistry", () => {
 
 		const retrieved = registry.get("test-action");
 		expect(retrieved).toBeDefined();
-		expect(retrieved!.metadata.name).toBe("test-action");
-		expect(retrieved!.metadata.category).toBe("test");
-		expect(retrieved!.metadata.tags).toEqual(["unit", "test"]);
+		expect(retrieved?.metadata.name).toBe("test-action");
+		expect(retrieved?.metadata.category).toBe("test");
+		expect(retrieved?.metadata.tags).toEqual(["unit", "test"]);
 	});
 
 	it("should get actions by category", () => {

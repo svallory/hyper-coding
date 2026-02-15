@@ -123,28 +123,28 @@ export type {
 	StepByTool,
 } from "#/recipe-engine/types";
 
-// Import types and classes for internal use
-import type { ToolType, RecipeStepUnion } from "#/recipe-engine/types";
+import { actionToolFactory } from "#/action-tool.js";
+import { aiToolFactory } from "#/ai-tool.js";
 import type { ToolPhase, ToolValidationResult } from "#/base.js";
-import { Tool } from "#/base.js";
+import type { Tool } from "#/base.js";
+import { ensureDirsToolFactory } from "#/ensure-dirs-tool.js";
+import { installToolFactory } from "#/install-tool.js";
+import { parallelToolFactory } from "#/parallel-tool.js";
+import { patchToolFactory } from "#/patch-tool.js";
+import { promptToolFactory } from "#/prompt-tool.js";
+import { queryToolFactory } from "#/query-tool.js";
+// Import types and classes for internal use
+import type { RecipeStepUnion, ToolType } from "#/recipe-engine/types";
+import { recipeToolFactory } from "#/recipe-tool.js";
 import {
 	ToolRegistry,
-	getToolRegistry,
-	type ToolResolutionOptions,
 	type ToolRegistryStats,
+	type ToolResolutionOptions,
+	getToolRegistry,
 } from "#/registry.js";
-import { templateToolFactory } from "#/template-tool.js";
-import { actionToolFactory } from "#/action-tool.js";
-import { recipeToolFactory } from "#/recipe-tool.js";
-import { shellToolFactory } from "#/shell-tool.js";
-import { promptToolFactory } from "#/prompt-tool.js";
 import { sequenceToolFactory } from "#/sequence-tool.js";
-import { parallelToolFactory } from "#/parallel-tool.js";
-import { aiToolFactory } from "#/ai-tool.js";
-import { installToolFactory } from "#/install-tool.js";
-import { queryToolFactory } from "#/query-tool.js";
-import { patchToolFactory } from "#/patch-tool.js";
-import { ensureDirsToolFactory } from "#/ensure-dirs-tool.js";
+import { shellToolFactory } from "#/shell-tool.js";
+import { templateToolFactory } from "#/template-tool.js";
 
 // Re-export type guard functions for convenience
 export {

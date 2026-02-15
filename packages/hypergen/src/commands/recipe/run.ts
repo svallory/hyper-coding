@@ -5,11 +5,11 @@
 
 import fs from "node:fs";
 import { Args } from "@oclif/core";
+import { AiCollector } from "#/ai/ai-collector";
+import type { AiServiceConfig } from "#/ai/ai-config";
+import { resolveTransport } from "#/ai/transports/index";
 import { BaseCommand } from "#/lib/base-command";
 import { executionFlags, outputFlags } from "#/lib/flags";
-import { AiCollector } from "#/ai/ai-collector";
-import { resolveTransport } from "#/ai/transports/index";
-import type { AiServiceConfig } from "#/ai/ai-config";
 import type { RecipeExecutionOptions, RecipeExecutionResult } from "#/recipe-engine/recipe-engine";
 
 export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
@@ -75,7 +75,7 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 				this.log(`Files ${verb}: ${result.filesModified.join(", ")}`);
 			}
 		} else {
-			this.log(`Recipe execution failed:`);
+			this.log("Recipe execution failed:");
 			for (const error of result.errors) {
 				this.log(`  - ${error}`);
 			}

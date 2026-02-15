@@ -4,14 +4,14 @@
  * Provides configuration loading and management for hypergen projects
  */
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { cosmiconfig } from "cosmiconfig";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
+import type { AiServiceConfig } from "#/ai/ai-config";
 import { DEFAULT_TEMPLATE_DIRECTORY } from "#/constants";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
 import { loadHelpers } from "#/load-helpers.js";
 import { registerHelpers } from "#/template-engines/jig-engine";
-import type { AiServiceConfig } from "#/ai/ai-config";
 
 export interface HypergenConfig {
 	// Template directories
@@ -192,12 +192,15 @@ export class HypergenConfigLoader {
 			}
 
 			// Merge with default config
-			const mergedConfig = this.mergeConfig(this.DEFAULT_CONFIG, config);
+			const mergedConfig = HypergenConfigLoader.mergeConfig(
+				HypergenConfigLoader.DEFAULT_CONFIG,
+				config,
+			);
 
 			// Apply environment-specific settings
-			if (mergedConfig.environments && mergedConfig.environments[environment]) {
+			if (mergedConfig.environments?.[environment]) {
 				const envConfig = mergedConfig.environments[environment];
-				Object.assign(mergedConfig, this.mergeConfig(mergedConfig, envConfig));
+				Object.assign(mergedConfig, HypergenConfigLoader.mergeConfig(mergedConfig, envConfig));
 			}
 
 			// Load helpers and register as Jig globals
@@ -323,7 +326,7 @@ export class HypergenConfigLoader {
 	 */
 	static generateDefaultConfig(format: "js" | "json" = "js"): string {
 		if (format === "json") {
-			return JSON.stringify(this.DEFAULT_CONFIG, null, 2);
+			return JSON.stringify(HypergenConfigLoader.DEFAULT_CONFIG, null, 2);
 		}
 
 		return `/**

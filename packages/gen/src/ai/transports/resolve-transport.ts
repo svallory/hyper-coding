@@ -5,13 +5,13 @@
  * Handles 'auto' mode detection based on config.
  */
 
+import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import { ErrorHandler, ErrorCode } from "@hypercli/core";
-import { hasApiKeyAvailable, getExpectedEnvVar } from "#/ai/env";
-import { StdoutTransport } from "./stdout-transport.js";
+import { getExpectedEnvVar, hasApiKeyAvailable } from "#/ai/env";
+import type { AiServiceConfig } from "../ai-config.js";
 import { ApiTransport } from "./api-transport.js";
 import { CommandTransport } from "./command-transport.js";
-import type { AiServiceConfig } from "../ai-config.js";
+import { StdoutTransport } from "./stdout-transport.js";
 import type { AiTransport } from "./types.js";
 
 const debug = createDebug("hypergen:ai:transport:resolve");

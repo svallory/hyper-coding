@@ -8,19 +8,19 @@
 import fs from "node:fs";
 import path from "node:path";
 import createDebug from "debug";
-import { Tool, type ToolValidationResult } from "./base.js";
 import type {
-	EnsureDirsStep,
 	EnsureDirsExecutionResult,
+	EnsureDirsStep,
 	StepContext,
-	StepResult,
 	StepExecutionOptions,
+	StepResult,
 } from "#/recipe-engine/types";
+import { Tool, type ToolValidationResult } from "./base.js";
 
 const debug = createDebug("hypergen:v8:recipe:tool:ensure-dirs");
 
 export class EnsureDirsTool extends Tool<EnsureDirsStep> {
-	constructor(name: string = "ensure-dirs-tool", options: Record<string, any> = {}) {
+	constructor(name = "ensure-dirs-tool", options: Record<string, any> = {}) {
 		super("ensure-dirs", name, options);
 	}
 
@@ -140,7 +140,7 @@ export class EnsureDirsTool extends Tool<EnsureDirsStep> {
 }
 
 export class EnsureDirsToolFactory {
-	create(name: string = "ensure-dirs-tool", options: Record<string, any> = {}): EnsureDirsTool {
+	create(name = "ensure-dirs-tool", options: Record<string, any> = {}): EnsureDirsTool {
 		return new EnsureDirsTool(name, options);
 	}
 

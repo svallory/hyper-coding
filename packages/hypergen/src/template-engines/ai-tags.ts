@@ -58,7 +58,7 @@ function registerAiTag(edge: Edge): void {
 			const jsArg = token.properties.jsArg.trim();
 
 			// Open a block scope so variables don't leak between @ai blocks
-			buffer.writeStatement(`{`, token.filename, line);
+			buffer.writeStatement("{", token.filename, line);
 
 			// Extract key from @ai argument at runtime
 			// Supports: @ai({ key: 'x' }) or @ai('x')
@@ -76,7 +76,7 @@ function registerAiTag(edge: Edge): void {
 			const escapedFilename = JSON.stringify(token.filename || "unknown");
 
 			// --- Pass 1: collect mode — render children, collect data ---
-			buffer.writeStatement(`if (state.__hypergenCollectMode) {`, token.filename, line);
+			buffer.writeStatement("if (state.__hypergenCollectMode) {", token.filename, line);
 
 			// Create the block data object that child tags will populate
 			buffer.writeStatement(
@@ -99,29 +99,29 @@ function registerAiTag(edge: Edge): void {
 			// Set the key as a state variable with the first example's value
 			// so templates that reference the key can still render during pass 1
 			buffer.writeStatement(
-				`  if (__aiBlock.key) { state[__aiBlock.key] = (__aiBlock.examples.length > 0 ? __aiBlock.examples[0].trim() : __aiBlock.outputDesc.trim()); }`,
+				"  if (__aiBlock.key) { state[__aiBlock.key] = (__aiBlock.examples.length > 0 ? __aiBlock.examples[0].trim() : __aiBlock.outputDesc.trim()); }",
 				token.filename,
 				line,
 			);
 
 			// --- Pass 2: answers mode — skip children, output answer ---
-			buffer.writeStatement(`} else {`, token.filename, -1);
+			buffer.writeStatement("} else {", token.filename, -1);
 			buffer.writeStatement(
 				`  let __aiAnswer = (state.answers && state.answers[__aiKey]) || '';`,
 				token.filename,
 				line,
 			);
-			buffer.writeStatement(`  out += __aiAnswer;`, token.filename, line);
+			buffer.writeStatement("  out += __aiAnswer;", token.filename, line);
 			// Also set the key as a state variable for downstream usage
 			buffer.writeStatement(
-				`  if (__aiKey) { state[__aiKey] = __aiAnswer; }`,
+				"  if (__aiKey) { state[__aiKey] = __aiAnswer; }",
 				token.filename,
 				line,
 			);
-			buffer.writeStatement(`}`, token.filename, -1);
+			buffer.writeStatement("}", token.filename, -1);
 
 			// Close the block scope
-			buffer.writeStatement(`}`, token.filename, -1);
+			buffer.writeStatement("}", token.filename, -1);
 		},
 	});
 }
@@ -167,13 +167,13 @@ function registerContextTag(edge: Edge): void {
 			// Runtime: inside @ai or standalone?
 			buffer.writeStatement(`if (typeof __aiBlock !== 'undefined') {`, token.filename, line);
 			buffer.writeStatement(`  __aiBlock.contexts.push(${captureVar});`, token.filename, line);
-			buffer.writeStatement(`} else {`, token.filename, -1);
+			buffer.writeStatement("} else {", token.filename, -1);
 			buffer.writeStatement(
 				`  state.__hypergenAddGlobalContext(${captureVar});`,
 				token.filename,
 				line,
 			);
-			buffer.writeStatement(`}`, token.filename, -1);
+			buffer.writeStatement("}", token.filename, -1);
 		},
 	});
 }
@@ -213,7 +213,7 @@ function registerPromptTag(edge: Edge): void {
 
 			buffer.writeStatement(`if (typeof __aiBlock !== 'undefined') {`, token.filename, line);
 			buffer.writeStatement(`  __aiBlock.prompt = ${captureVar};`, token.filename, line);
-			buffer.writeStatement(`}`, token.filename, -1);
+			buffer.writeStatement("}", token.filename, -1);
 		},
 	});
 }
@@ -269,7 +269,7 @@ function registerOutputTag(edge: Edge): void {
 
 			buffer.writeStatement(`  __aiBlock.outputDesc = ${captureVar};`, token.filename, line);
 
-			buffer.writeStatement(`}`, token.filename, -1);
+			buffer.writeStatement("}", token.filename, -1);
 		},
 	});
 }
@@ -315,7 +315,7 @@ function registerExampleTag(edge: Edge): void {
 
 			buffer.writeStatement(`if (typeof __aiBlock !== 'undefined') {`, token.filename, line);
 			buffer.writeStatement(`  __aiBlock.examples.push(${captureVar});`, token.filename, line);
-			buffer.writeStatement(`}`, token.filename, -1);
+			buffer.writeStatement("}", token.filename, -1);
 		},
 	});
 }

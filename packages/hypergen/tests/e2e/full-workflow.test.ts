@@ -11,18 +11,18 @@
  * Uses pre-computed fixture answers for deterministic, CI-friendly testing.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import fs from "fs-extra";
-import path from "path";
-import { tmpdir } from "os";
 import yaml from "js-yaml";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AiCollector } from "~/ai/ai-collector";
 import { RecipeEngine } from "~/recipe-engine/recipe-engine";
-import { initializeJig, getJig } from "~/template-engines/jig-engine";
-import { getToolRegistry, ToolRegistry } from "~/recipe-engine/tools/registry";
-import { templateToolFactory } from "~/recipe-engine/tools/template-tool";
-import { shellToolFactory } from "~/recipe-engine/tools/shell-tool";
 import { recipeToolFactory } from "~/recipe-engine/tools/recipe-tool";
+import { ToolRegistry, getToolRegistry } from "~/recipe-engine/tools/registry";
+import { shellToolFactory } from "~/recipe-engine/tools/shell-tool";
+import { templateToolFactory } from "~/recipe-engine/tools/template-tool";
+import { getJig, initializeJig } from "~/template-engines/jig-engine";
 import fixtureAnswers from "#fixtures/answers.json";
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -205,7 +205,7 @@ const buildFieldDescriptions = (
 	return modelFields
 		.map(
 			(f: any) =>
-				`${f.name}: ${f.type}${f.isRequired ? " (required)" : " (optional)"}${f.documentation ? " — " + f.documentation : ""}`,
+				`${f.name}: ${f.type}${f.isRequired ? " (required)" : " (optional)"}${f.documentation ? ` — ${f.documentation}` : ""}`,
 		)
 		.join("\n");
 };

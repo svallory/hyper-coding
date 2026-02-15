@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import type { TemplateVariable } from "@hypercli/core";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
 	AiVariableResolver,
-	type UnresolvedVariable,
 	type RecipeMetadata,
+	type UnresolvedVariable,
 } from "#/ai/ai-variable-resolver";
-import type { TemplateVariable } from "@hypercli/core";
 
 describe("AiVariableResolver", () => {
 	let resolver: AiVariableResolver;

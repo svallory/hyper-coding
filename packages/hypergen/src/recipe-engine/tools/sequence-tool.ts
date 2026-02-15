@@ -8,20 +8,20 @@
 
 import createDebug from "debug";
 import { Tool, type ToolValidationResult } from "#/base.js";
-import {
-	type StepContext,
-	type StepResult,
-	type StepExecutionOptions,
-	type SequenceStep,
-	type SequenceExecutionResult,
-} from "#/recipe-engine/types";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
 import { StepExecutor } from "#/recipe-engine/step-executor";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
+import type {
+	SequenceExecutionResult,
+	SequenceStep,
+	StepContext,
+	StepExecutionOptions,
+	StepResult,
+} from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:v8:recipe:tool:sequence");
 
 export class SequenceTool extends Tool<SequenceStep> {
-	constructor(name: string = "sequence-tool", options: Record<string, any> = {}) {
+	constructor(name = "sequence-tool", options: Record<string, any> = {}) {
 		super("sequence", name, options);
 	}
 
@@ -142,7 +142,7 @@ export class SequenceTool extends Tool<SequenceStep> {
 }
 
 export class SequenceToolFactory {
-	create(name: string = "sequence-tool", options: Record<string, any> = {}): SequenceTool {
+	create(name = "sequence-tool", options: Record<string, any> = {}): SequenceTool {
 		return new SequenceTool(name, options);
 	}
 

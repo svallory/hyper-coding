@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { ActionParameterResolver } from "#/actions/parameter-resolver";
 import type { ActionMetadata, ActionParameter } from "#/actions/types";
 
@@ -24,7 +24,7 @@ describe("Parameter Resolver with Prompts", () => {
 				},
 			};
 
-			const converted = resolver["convertParameterToVariable"](actionParam);
+			const converted = resolver.convertParameterToVariable(actionParam);
 
 			expect(converted.type).toBe("string");
 			expect(converted.description).toBe("Name of the component");
@@ -45,7 +45,7 @@ describe("Parameter Resolver with Prompts", () => {
 				default: ["GET", "POST"],
 			};
 
-			const converted = resolver["convertParameterToVariable"](actionParam);
+			const converted = resolver.convertParameterToVariable(actionParam);
 
 			expect(converted.type).toBe("enum");
 			expect(converted.values).toEqual(["GET", "POST", "PUT", "DELETE"]);

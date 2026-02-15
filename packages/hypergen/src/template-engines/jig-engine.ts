@@ -9,9 +9,9 @@
 
 import { Edge } from "@jig-lang/jig";
 import createDebug from "debug";
-import helpers from "#/helpers";
-import { AiCollector } from "#/ai/ai-collector";
 import { registerAiTags } from "#/ai-tags.js";
+import { AiCollector } from "#/ai/ai-collector";
+import helpers from "#/helpers";
 
 const debug = createDebug("hypergen:template:jig");
 

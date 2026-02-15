@@ -5,12 +5,12 @@
  * Provides tool discovery, registration, and resolution capabilities.
  */
 
-import createDebug from "debug";
-import { HypergenError, ErrorCode, ErrorHandler } from "@hypercli/core";
+import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
 import { Logger } from "@hypercli/core";
-import { Tool } from "./base.js";
+import createDebug from "debug";
+import type { RecipeStepUnion, ToolType } from "#/recipe-engine/types";
+import type { Tool } from "./base.js";
 import type { ToolFactory, ToolValidationResult } from "./base.js";
-import type { ToolType, RecipeStepUnion } from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:v8:recipe:registry");
 

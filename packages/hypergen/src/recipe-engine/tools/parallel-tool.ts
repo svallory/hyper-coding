@@ -7,20 +7,20 @@
 
 import createDebug from "debug";
 import { Tool, type ToolValidationResult } from "#/base.js";
-import {
-	type StepContext,
-	type StepResult,
-	type StepExecutionOptions,
-	type ParallelStep,
-	type ParallelExecutionResult,
-} from "#/recipe-engine/types";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
 import { StepExecutor } from "#/recipe-engine/step-executor";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
+import type {
+	ParallelExecutionResult,
+	ParallelStep,
+	StepContext,
+	StepExecutionOptions,
+	StepResult,
+} from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:v8:recipe:tool:parallel");
 
 export class ParallelTool extends Tool<ParallelStep> {
-	constructor(name: string = "parallel-tool", options: Record<string, any> = {}) {
+	constructor(name = "parallel-tool", options: Record<string, any> = {}) {
 		super("parallel", name, options);
 	}
 
@@ -157,7 +157,7 @@ export class ParallelTool extends Tool<ParallelStep> {
 }
 
 export class ParallelToolFactory {
-	create(name: string = "parallel-tool", options: Record<string, any> = {}): ParallelTool {
+	create(name = "parallel-tool", options: Record<string, any> = {}): ParallelTool {
 		return new ParallelTool(name, options);
 	}
 

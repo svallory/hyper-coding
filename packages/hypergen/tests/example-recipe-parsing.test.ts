@@ -4,9 +4,9 @@
  * Test that the example V8 recipe parses correctly
  */
 
-import { describe, it, expect } from "vitest";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
 import { TemplateParser } from "#/config/template-parser";
-import path from "path";
 
 describe("Example Recipe Parsing", () => {
 	it("should parse the V8 recipe example correctly", async () => {
@@ -60,7 +60,7 @@ describe("Example Recipe Parsing", () => {
 		// Check examples
 		expect(result.config.examples).toBeDefined();
 		expect(result.config.examples).toHaveLength(3);
-		expect(result.config.examples![0].title).toBe("Basic functional component");
+		expect(result.config.examples?.[0].title).toBe("Basic functional component");
 
 		// Verify it's recognized as a recipe config
 		expect(TemplateParser.isRecipeConfig(result.config)).toBe(true);
@@ -68,8 +68,8 @@ describe("Example Recipe Parsing", () => {
 		// Test conversion to RecipeConfig
 		const recipeConfig = TemplateParser.toRecipeConfig(result.config);
 		expect(recipeConfig).not.toBeNull();
-		expect(recipeConfig!.name).toBe("react-component-recipe");
-		expect(recipeConfig!.steps).toHaveLength(7);
+		expect(recipeConfig?.name).toBe("react-component-recipe");
+		expect(recipeConfig?.steps).toHaveLength(7);
 	});
 
 	it("should have no warnings for the example recipe", async () => {
@@ -120,7 +120,7 @@ describe("Example Recipe Parsing", () => {
 		// All parallel steps should have dependencies (can't be the first step)
 		for (const step of parallelSteps) {
 			expect(step.dependsOn).toBeDefined();
-			expect(step.dependsOn!.length).toBeGreaterThan(0);
+			expect(step.dependsOn?.length).toBeGreaterThan(0);
 		}
 
 		// Parallel steps should be able to run together

@@ -4,13 +4,13 @@
  * Resolves templates from GitHub repositories and caches them locally
  */
 
-import fs from "fs-extra";
-import path from "path";
-import crypto from "crypto";
-import https from "https";
-import { URL } from "url";
+import crypto from "node:crypto";
+import https from "node:https";
+import path from "node:path";
+import { URL } from "node:url";
 import createDebug from "debug";
-import type { TemplateURLResolver, ResolvedTemplate, GitHubURLInfo, SecurityConfig } from "#/types";
+import fs from "fs-extra";
+import type { GitHubURLInfo, ResolvedTemplate, SecurityConfig, TemplateURLResolver } from "#/types";
 import { URLResolutionError } from "#/types";
 
 const debug = createDebug("hypergen:v8:resolver:github");
@@ -90,9 +90,8 @@ export class GitHubResolver implements TemplateURLResolver {
 
 		if (url.startsWith("github:")) {
 			return this.parseGitHubShorthand(url);
-		} else {
-			return this.parseGitHubFullURL(url);
 		}
+		return this.parseGitHubFullURL(url);
 	}
 
 	private parseGitHubShorthand(url: string): GitHubURLInfo {
@@ -210,7 +209,7 @@ export class GitHubResolver implements TemplateURLResolver {
 				}
 
 				// Check content length
-				const contentLength = parseInt(response.headers["content-length"] || "0");
+				const contentLength = Number.parseInt(response.headers["content-length"] || "0");
 				if (this.security.maxFileSize && contentLength > this.security.maxFileSize) {
 					reject(new Error(`Template file too large: ${contentLength} bytes`));
 					return;

@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ShellTool } from "#/recipe-engine/tools/shell-tool";
-import { ShellStep } from "#/recipe-engine/types";
+import type { ShellStep } from "#/recipe-engine/types";
 
 describe("ShellTool", () => {
 	const tool = new ShellTool();

@@ -13,8 +13,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import createDebug from "debug";
-import { renderTemplateSync } from "#/template-engines/jig-engine";
 import type { AiBlockEntry, AiCollector } from "#/ai-collector.js";
+import { renderTemplateSync } from "#/template-engines/jig-engine";
 
 const debug = createDebug("hypergen:ai:prompt-assembler");
 
@@ -93,8 +93,7 @@ export class PromptAssembler {
 		} catch {
 			if (isCustom) {
 				throw new Error(
-					`Custom prompt template not found: ${templatePath}\n` +
-						`Provide an absolute path or a path relative to the working directory.`,
+					`Custom prompt template not found: ${templatePath}\nProvide an absolute path or a path relative to the working directory.`,
 				);
 			}
 			throw new Error(`Built-in prompt template missing: ${templatePath}`);

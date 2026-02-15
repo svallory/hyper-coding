@@ -6,16 +6,16 @@
  * sort, and executes batches — piping providedValues between recipes.
  */
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
+import type { TemplateVariable } from "@hypercli/core";
 import createDebug from "debug";
-import {
+import type {
 	RecipeEngine,
-	type RecipeExecutionOptions,
-	type RecipeExecutionResult,
+	RecipeExecutionOptions,
+	RecipeExecutionResult,
 } from "./recipe-engine.js";
 import type { RecipeConfig, RecipeProvides } from "./types.js";
-import type { TemplateVariable } from "@hypercli/core";
 
 const debug = createDebug("hypergen:v8:recipe:group-executor");
 
@@ -161,7 +161,7 @@ export class GroupExecutor {
 
 				const provider = providesMap.get(varName);
 				if (provider && provider !== entry.name) {
-					depGraph.get(entry.name)!.add(provider);
+					depGraph.get(entry.name)?.add(provider);
 					debug("Dependency: %s depends on %s (via %s)", entry.name, provider, varName);
 				}
 			}

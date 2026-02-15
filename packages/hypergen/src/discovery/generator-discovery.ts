@@ -4,16 +4,16 @@
  * Automatically discovers and registers generators from various sources
  */
 
-import fs from "fs-extra";
-import path from "path";
-import { glob } from "glob";
+import path from "node:path";
 import createDebug from "debug";
-import { ActionRegistry } from "#/actions/registry";
+import fs from "fs-extra";
+import { glob } from "glob";
 import { isActionFunction } from "#/actions/decorator";
-import { getGlobalPackages } from "#/utils/global-packages";
-import { findProjectRoot } from "#/utils/find-project-root";
-import { parseKitFile } from "#/config/kit-parser";
+import { ActionRegistry } from "#/actions/registry";
 import { discoverCookbooksInKit } from "#/config/cookbook-parser";
+import { parseKitFile } from "#/config/kit-parser";
+import { findProjectRoot } from "#/utils/find-project-root";
+import { getGlobalPackages } from "#/utils/global-packages";
 
 const debug = createDebug("hypergen:discovery");
 
@@ -391,8 +391,8 @@ export class GeneratorDiscovery {
 			// If it's a kit package, it probably follows the kit structure.
 
 			// Let's look for `generators` folder logic first, similar to discoverNpm
-			let generatorPath = path.join(packagePath, "generators");
-			let hasGeneratorsDir = await fs.pathExists(generatorPath);
+			const generatorPath = path.join(packagePath, "generators");
+			const hasGeneratorsDir = await fs.pathExists(generatorPath);
 
 			if (!hasGeneratorsDir) {
 				// Fallback: maybe the package IS the generator (root) if it has template.yml or actions
@@ -523,7 +523,7 @@ export class GeneratorDiscovery {
 				groups.set(generatorName, { actions: [], templates: [] });
 			}
 
-			groups.get(generatorName)!.actions.push(file);
+			groups.get(generatorName)?.actions.push(file);
 		}
 
 		// Group template files
@@ -535,7 +535,7 @@ export class GeneratorDiscovery {
 				groups.set(generatorName, { actions: [], templates: [] });
 			}
 
-			groups.get(generatorName)!.templates.push(file);
+			groups.get(generatorName)?.templates.push(file);
 		}
 
 		return groups;

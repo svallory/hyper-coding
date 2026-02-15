@@ -1,14 +1,14 @@
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ToolValidationResult } from "~/recipe-engine/tools/base";
 import {
 	EnsureDirsTool,
 	EnsureDirsToolFactory,
 	ensureDirsToolFactory,
 } from "~/recipe-engine/tools/ensure-dirs-tool";
 import type { EnsureDirsStep, StepContext, StepResult } from "~/recipe-engine/types";
-import type { ToolValidationResult } from "~/recipe-engine/tools/base";
 
 /**
  * Build a minimal StepContext with the required fields.
@@ -102,8 +102,8 @@ describe("EnsureDirsTool", () => {
 			expect(existsSync(dirPath)).toBe(true);
 			expect(statSync(dirPath).isDirectory()).toBe(true);
 			expect(result.toolResult).toBeDefined();
-			expect(result.toolResult!.created).toContain("newdir");
-			expect(result.toolResult!.alreadyExisted).toHaveLength(0);
+			expect(result.toolResult?.created).toContain("newdir");
+			expect(result.toolResult?.alreadyExisted).toHaveLength(0);
 		});
 
 		it("should create multiple directories", async () => {
@@ -154,7 +154,7 @@ describe("EnsureDirsTool", () => {
 
 			expect(result.status).toBe("completed");
 			expect(existsSync(absolutePath)).toBe(true);
-			expect(result.toolResult!.created).toContain(absolutePath);
+			expect(result.toolResult?.created).toContain(absolutePath);
 		});
 	});
 
@@ -236,7 +236,7 @@ describe("EnsureDirsTool", () => {
 
 			expect(result.status).toBe("completed");
 			expect(existsSync(join(testDir, "components/MyComponent"))).toBe(true);
-			expect(result.toolResult!.created).toContain("components/MyComponent");
+			expect(result.toolResult?.created).toContain("components/MyComponent");
 		});
 
 		it("should resolve multiple variables in multiple paths", async () => {
@@ -254,8 +254,8 @@ describe("EnsureDirsTool", () => {
 			expect(result.status).toBe("completed");
 			expect(existsSync(join(testDir, "src/auth/components"))).toBe(true);
 			expect(existsSync(join(testDir, "src/auth/Button"))).toBe(true);
-			expect(result.toolResult!.created).toContain("src/auth/components");
-			expect(result.toolResult!.created).toContain("src/auth/Button");
+			expect(result.toolResult?.created).toContain("src/auth/components");
+			expect(result.toolResult?.created).toContain("src/auth/Button");
 		});
 
 		it("should resolve dot-path variables", async () => {
@@ -273,7 +273,7 @@ describe("EnsureDirsTool", () => {
 
 			expect(result.status).toBe("completed");
 			expect(existsSync(join(testDir, "acme/web/dashboard/components"))).toBe(true);
-			expect(result.toolResult!.created).toContain("acme/web/dashboard/components");
+			expect(result.toolResult?.created).toContain("acme/web/dashboard/components");
 		});
 
 		it("should leave unresolvable variables as-is", async () => {
@@ -287,9 +287,9 @@ describe("EnsureDirsTool", () => {
 			// the raw capture group re-wrapped, which may alter internal whitespace.
 			// Just verify the path was created and contains "unknown".
 			expect(result.status).toBe("completed");
-			expect(result.toolResult!.created).toHaveLength(1);
-			expect(result.toolResult!.created[0]).toContain("unknown");
-			expect(result.toolResult!.created[0]).toContain("/src");
+			expect(result.toolResult?.created).toHaveLength(1);
+			expect(result.toolResult?.created[0]).toContain("unknown");
+			expect(result.toolResult?.created[0]).toContain("/src");
 		});
 	});
 
@@ -325,8 +325,8 @@ describe("EnsureDirsTool", () => {
 			expect(result.status).toBe("completed");
 			expect(existsSync(join(testDir, "src"))).toBe(false);
 			expect(existsSync(join(testDir, "lib"))).toBe(false);
-			expect(result.toolResult!.created).toContain("src");
-			expect(result.toolResult!.created).toContain("lib");
+			expect(result.toolResult?.created).toContain("src");
+			expect(result.toolResult?.created).toContain("lib");
 		});
 
 		it("should report existing directories correctly in dry run", async () => {
@@ -339,8 +339,8 @@ describe("EnsureDirsTool", () => {
 			const result = await tool.execute(step, context);
 
 			expect(result.status).toBe("completed");
-			expect(result.toolResult!.alreadyExisted).toContain("existing");
-			expect(result.toolResult!.created).toContain("newdir");
+			expect(result.toolResult?.alreadyExisted).toContain("existing");
+			expect(result.toolResult?.created).toContain("newdir");
 			// newdir must NOT be created on disk
 			expect(existsSync(join(testDir, "newdir"))).toBe(false);
 		});
@@ -354,7 +354,7 @@ describe("EnsureDirsTool", () => {
 
 			expect(result.status).toBe("completed");
 			expect(existsSync(join(testDir, "src"))).toBe(false);
-			expect(result.toolResult!.created).toContain("src/components/forms");
+			expect(result.toolResult?.created).toContain("src/components/forms");
 		});
 	});
 
@@ -468,8 +468,8 @@ describe("EnsureDirsTool", () => {
 			const result = await tool.execute(step, context);
 
 			expect(result.status).toBe("completed");
-			expect(result.toolResult!.alreadyExisted).toContain("conflict");
-			expect(result.toolResult!.created).toHaveLength(0);
+			expect(result.toolResult?.alreadyExisted).toContain("conflict");
+			expect(result.toolResult?.created).toHaveLength(0);
 		});
 
 		it("should return failed when mkdir fails (e.g., nested path through a file)", async () => {
@@ -485,7 +485,7 @@ describe("EnsureDirsTool", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.code).toBe("ENSURE_DIRS_FAILED");
+			expect(result.error?.code).toBe("ENSURE_DIRS_FAILED");
 		});
 
 		it("should return completed with empty arrays when given an empty paths array via execute()", async () => {
@@ -497,8 +497,8 @@ describe("EnsureDirsTool", () => {
 			const result = await tool.execute(step, context);
 
 			expect(result.status).toBe("completed");
-			expect(result.toolResult!.created).toHaveLength(0);
-			expect(result.toolResult!.alreadyExisted).toHaveLength(0);
+			expect(result.toolResult?.created).toHaveLength(0);
+			expect(result.toolResult?.alreadyExisted).toHaveLength(0);
 		});
 
 		it("should return failed when paths is undefined (runtime crash caught)", async () => {
@@ -513,7 +513,7 @@ describe("EnsureDirsTool", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.code).toBe("ENSURE_DIRS_FAILED");
+			expect(result.error?.code).toBe("ENSURE_DIRS_FAILED");
 		});
 	});
 
@@ -530,8 +530,8 @@ describe("EnsureDirsTool", () => {
 
 			expect(result.status).toBe("completed");
 			expect(result.output).toBeDefined();
-			expect(result.output!.created).toEqual(["dir1", "dir2", "dir3"]);
-			expect(result.output!.alreadyExisted).toEqual([]);
+			expect(result.output?.created).toEqual(["dir1", "dir2", "dir3"]);
+			expect(result.output?.alreadyExisted).toEqual([]);
 		});
 
 		it("should include full EnsureDirsExecutionResult in toolResult", async () => {
@@ -542,9 +542,9 @@ describe("EnsureDirsTool", () => {
 			const result = await tool.execute(step, context);
 
 			expect(result.toolResult).toBeDefined();
-			expect(result.toolResult!.paths).toEqual(["dir1", "dir2", "dir3"]);
-			expect(result.toolResult!.created).toEqual(["dir1", "dir2", "dir3"]);
-			expect(result.toolResult!.alreadyExisted).toEqual([]);
+			expect(result.toolResult?.paths).toEqual(["dir1", "dir2", "dir3"]);
+			expect(result.toolResult?.created).toEqual(["dir1", "dir2", "dir3"]);
+			expect(result.toolResult?.alreadyExisted).toEqual([]);
 		});
 
 		it("should include alreadyExisted paths in both output and toolResult", async () => {
@@ -557,12 +557,12 @@ describe("EnsureDirsTool", () => {
 			const step = createStep(["dir1", "dir2"]);
 			const result = await tool.execute(step, context);
 
-			expect(result.output!.created).toEqual([]);
-			expect(result.output!.alreadyExisted).toEqual(["dir1", "dir2"]);
+			expect(result.output?.created).toEqual([]);
+			expect(result.output?.alreadyExisted).toEqual(["dir1", "dir2"]);
 
-			expect(result.toolResult!.paths).toEqual(["dir1", "dir2"]);
-			expect(result.toolResult!.created).toEqual([]);
-			expect(result.toolResult!.alreadyExisted).toEqual(["dir1", "dir2"]);
+			expect(result.toolResult?.paths).toEqual(["dir1", "dir2"]);
+			expect(result.toolResult?.created).toEqual([]);
+			expect(result.toolResult?.alreadyExisted).toEqual(["dir1", "dir2"]);
 		});
 
 		it("should set standard StepResult fields", async () => {
@@ -596,8 +596,8 @@ describe("EnsureDirsTool", () => {
 			expect(result.stepName).toBe("fail-step");
 			expect(result.toolType).toBe("ensure-dirs");
 			expect(result.error).toBeDefined();
-			expect(typeof result.error!.message).toBe("string");
-			expect(result.error!.code).toBe("ENSURE_DIRS_FAILED");
+			expect(typeof result.error?.message).toBe("string");
+			expect(result.error?.code).toBe("ENSURE_DIRS_FAILED");
 		});
 	});
 

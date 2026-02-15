@@ -5,9 +5,9 @@
  * and schema compliance. Supports retry-with-feedback.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import createDebug from "debug";
-import fs from "fs";
-import path from "path";
 import type { AIGuardrailConfig } from "./ai-config.js";
 
 const debug = createDebug("hypergen:ai:output-validator");
@@ -169,9 +169,9 @@ function validateImports(
 	const importRegex =
 		/(?:import\s+(?:[\w{}\s,*]+\s+from\s+)?['"]([^'"]+)['"]|require\s*\(\s*['"]([^'"]+)['"]\s*\))/g;
 	const imports: string[] = [];
-	let match: RegExpExecArray | null;
+	let match: RegExpExecArray | null = importRegex.exec(output);
 
-	while ((match = importRegex.exec(output)) !== null) {
+	while (match !== null) {
 		const pkg = match[1] || match[2];
 		// Only check external packages (not relative paths or built-in modules)
 		if (
@@ -187,6 +187,7 @@ function validateImports(
 				: pkg.split("/")[0];
 			imports.push(packageName);
 		}
+		match = importRegex.exec(output);
 	}
 
 	if (imports.length === 0) return { passed: true, errors, warnings };

@@ -7,14 +7,13 @@
  * These tests validate that all components work together correctly in real-world scenarios.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "fs-extra";
-import path from "node:path";
-import os from "node:os";
 import { exec, spawn } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
-import { withTempFixtures, fixture } from "#/util/fixtures.js";
-import { RecipeEngine, createRecipeEngine } from "#/recipe-engine/recipe-engine";
+import fs from "fs-extra";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type RecipeEngine, createRecipeEngine } from "#/recipe-engine/recipe-engine";
 import {
 	ToolRegistry,
 	getToolRegistry,
@@ -22,11 +21,12 @@ import {
 	registerDefaultTools,
 } from "#/recipe-engine/tools/index";
 import type {
-	RecipeSource,
 	RecipeConfig,
-	StepResult,
 	RecipeExecutionOptions,
+	RecipeSource,
+	StepResult,
 } from "#/recipe-engine/types";
+import { fixture, withTempFixtures } from "#/util/fixtures.js";
 
 const execAsync = promisify(exec);
 
@@ -660,12 +660,12 @@ steps:
 			expect(stepC?.status).toBe("completed");
 
 			// Step A should start before B, and B before C
-			expect(stepA!.startTime).toBeDefined();
-			expect(stepB!.startTime).toBeDefined();
-			expect(stepC!.startTime).toBeDefined();
+			expect(stepA?.startTime).toBeDefined();
+			expect(stepB?.startTime).toBeDefined();
+			expect(stepC?.startTime).toBeDefined();
 
-			expect(stepA!.startTime!.getTime()).toBeLessThan(stepB!.startTime!.getTime());
-			expect(stepB!.startTime!.getTime()).toBeLessThan(stepC!.startTime!.getTime());
+			expect(stepA?.startTime?.getTime()).toBeLessThan(stepB?.startTime?.getTime());
+			expect(stepB?.startTime?.getTime()).toBeLessThan(stepC?.startTime?.getTime());
 		});
 	});
 
@@ -1187,11 +1187,11 @@ steps:
 			expect(finalStep?.status).toBe("completed");
 
 			// Verify timing - final step should start after both A and B complete
-			expect(stepA!.endTime).toBeDefined();
-			expect(stepB!.endTime).toBeDefined();
-			expect(finalStep!.startTime).toBeDefined();
-			expect(finalStep!.startTime!.getTime()).toBeGreaterThanOrEqual(stepA!.endTime!.getTime());
-			expect(finalStep!.startTime!.getTime()).toBeGreaterThanOrEqual(stepB!.endTime!.getTime());
+			expect(stepA?.endTime).toBeDefined();
+			expect(stepB?.endTime).toBeDefined();
+			expect(finalStep?.startTime).toBeDefined();
+			expect(finalStep?.startTime?.getTime()).toBeGreaterThanOrEqual(stepA?.endTime?.getTime());
+			expect(finalStep?.startTime?.getTime()).toBeGreaterThanOrEqual(stepB?.endTime?.getTime());
 		});
 	});
 

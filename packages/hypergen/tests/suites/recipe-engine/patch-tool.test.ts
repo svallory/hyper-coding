@@ -5,12 +5,12 @@
  * Supports JSON, YAML, and TOML formats with auto-detection and explicit format override.
  */
 
-import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PatchTool, PatchToolFactory, patchToolFactory } from "~/recipe-engine/tools/patch-tool";
-import type { PatchStep, StepContext, PatchExecutionResult } from "~/recipe-engine/types";
+import type { PatchExecutionResult, PatchStep, StepContext } from "~/recipe-engine/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -180,10 +180,10 @@ describe("PatchTool", () => {
 			const result = await tool.validate(step, context);
 
 			expect(result.resourceRequirements).toBeDefined();
-			expect(result.resourceRequirements!.network).toBe(false);
-			expect(result.resourceRequirements!.processes).toBe(0);
-			expect(result.resourceRequirements!.memory).toBeGreaterThan(0);
-			expect(result.resourceRequirements!.disk).toBeGreaterThan(0);
+			expect(result.resourceRequirements?.network).toBe(false);
+			expect(result.resourceRequirements?.processes).toBe(0);
+			expect(result.resourceRequirements?.memory).toBeGreaterThan(0);
+			expect(result.resourceRequirements?.disk).toBeGreaterThan(0);
 		});
 
 		it("should collect multiple validation errors at once", async () => {
@@ -330,8 +330,8 @@ describe("PatchTool", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.code).toBe("PATCH_FAILED");
-			expect(result.error!.message).toContain("File not found");
+			expect(result.error?.code).toBe("PATCH_FAILED");
+			expect(result.error?.message).toContain("File not found");
 		});
 
 		it("should respect indent option with 4 spaces", async () => {
@@ -604,7 +604,7 @@ describe("PatchTool", () => {
 			expect(result.status).toBe("completed");
 			expect(result.filesModified).toBeDefined();
 			expect(result.filesModified).toHaveLength(1);
-			expect(result.filesModified![0]).toBe(configPath);
+			expect(result.filesModified?.[0]).toBe(configPath);
 			expect(result.filesCreated).toBeUndefined();
 		});
 
@@ -620,7 +620,7 @@ describe("PatchTool", () => {
 			expect(result.status).toBe("completed");
 			expect(result.filesCreated).toBeDefined();
 			expect(result.filesCreated).toHaveLength(1);
-			expect(result.filesCreated![0]).toBe(join(testDir, "new-config.json"));
+			expect(result.filesCreated?.[0]).toBe(join(testDir, "new-config.json"));
 			expect(result.filesModified).toBeUndefined();
 		});
 	});
@@ -753,9 +753,9 @@ describe("PatchTool", () => {
 			const result = await tool.execute(step, context);
 
 			expect(result.output).toBeDefined();
-			expect(result.output!.file).toBe("config.json");
-			expect(result.output!.created).toBe(false);
-			expect(result.output!.format).toBe("json");
+			expect(result.output?.file).toBe("config.json");
+			expect(result.output?.created).toBe(false);
+			expect(result.output?.format).toBe("json");
 		});
 
 		it("should handle null values in merge", async () => {
@@ -872,7 +872,7 @@ describe("PatchTool", () => {
 
 			expect(result.status).toBe("failed");
 			expect(result.error).toBeDefined();
-			expect(result.error!.code).toBe("PATCH_FAILED");
+			expect(result.error?.code).toBe("PATCH_FAILED");
 		});
 
 		it("should include error cause on failure", async () => {
@@ -888,7 +888,7 @@ describe("PatchTool", () => {
 			const result = await tool.execute(step, context);
 
 			expect(result.error).toBeDefined();
-			expect(result.error!.cause).toBeDefined();
+			expect(result.error?.cause).toBeDefined();
 		});
 
 		it("should include timing information on failure", async () => {

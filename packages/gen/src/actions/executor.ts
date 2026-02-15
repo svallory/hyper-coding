@@ -4,20 +4,20 @@
  * Handles action discovery, parameter resolution, and execution
  */
 
-import createDebug from "debug";
-import { ActionRegistry } from "./registry.js";
-import { ActionParameterResolver } from "./parameter-resolver.js";
-import { DefaultActionUtils, ConsoleActionLogger } from "./utils.js";
-import { TemplateCompositionEngine } from "./template-composition.js";
 import { TemplateParser } from "@hypercli/core";
+import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
+import createDebug from "debug";
 import {
-	ActionCommunicationManager,
-	getCommunicationManager,
+	type ActionCommunicationManager,
 	type CommunicationConfig,
+	getCommunicationManager,
 } from "./communication.js";
-import type { ActionContext, ActionResult, ActionFunction } from "./types.js";
+import { ActionParameterResolver } from "./parameter-resolver.js";
+import { ActionRegistry } from "./registry.js";
+import { TemplateCompositionEngine } from "./template-composition.js";
+import type { ActionContext, ActionFunction, ActionResult } from "./types.js";
 import { ActionExecutionError } from "./types.js";
-import { ErrorHandler, ErrorCode, HypergenError } from "@hypercli/core";
+import { ConsoleActionLogger, DefaultActionUtils } from "./utils.js";
 
 const debug = createDebug("hypergen:v8:action:executor");
 

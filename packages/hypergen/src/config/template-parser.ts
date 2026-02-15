@@ -5,14 +5,14 @@
  * and variable configurations for code generation
  */
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import yaml from "js-yaml";
 import {
-	ErrorHandler,
 	ErrorCode,
-	withErrorHandling,
+	ErrorHandler,
 	validateParameter,
+	withErrorHandling,
 } from "#/errors/hypergen-errors";
 import type { RecipeConfig, RecipeStepUnion, ToolType } from "#/recipe-engine/types";
 
@@ -164,7 +164,7 @@ export class TemplateParser {
 			}
 
 			// Validate and build config
-			result.config = this.validateAndBuildConfig(parsed, result.errors, result.warnings);
+			result.config = TemplateParser.validateAndBuildConfig(parsed, result.errors, result.warnings);
 			result.isValid = result.errors.length === 0;
 
 			return result;
@@ -187,7 +187,7 @@ export class TemplateParser {
 				if (entry.isDirectory()) {
 					const templatePath = path.join(dirPath, entry.name, "template.yml");
 					if (fs.existsSync(templatePath)) {
-						const parsed = await this.parseTemplateFile(templatePath);
+						const parsed = await TemplateParser.parseTemplateFile(templatePath);
 						results.push(parsed);
 					}
 				}
@@ -223,7 +223,7 @@ export class TemplateParser {
 		if (!parsed.variables || typeof parsed.variables !== "object") {
 			errors.push("Template variables section is required and must be an object");
 		} else {
-			this.validateVariables(parsed.variables, config, errors, warnings);
+			TemplateParser.validateVariables(parsed.variables, config, errors, warnings);
 		}
 
 		// Validate optional fields
@@ -236,7 +236,7 @@ export class TemplateParser {
 				warnings.push("Template version should be a string");
 			} else {
 				config.version = parsed.version;
-				if (!this.SUPPORTED_VERSIONS.includes(parsed.version)) {
+				if (!TemplateParser.SUPPORTED_VERSIONS.includes(parsed.version)) {
 					warnings.push(`Unsupported template version: ${parsed.version}`);
 				}
 			}
@@ -263,7 +263,11 @@ export class TemplateParser {
 
 		if (parsed.examples) {
 			if (Array.isArray(parsed.examples)) {
-				config.examples = this.validateExamples(parsed.examples, config.variables, warnings);
+				config.examples = TemplateParser.validateExamples(
+					parsed.examples,
+					config.variables,
+					warnings,
+				);
 			} else {
 				warnings.push("Examples should be an array");
 			}
@@ -271,7 +275,7 @@ export class TemplateParser {
 
 		if (parsed.dependencies) {
 			if (Array.isArray(parsed.dependencies)) {
-				config.dependencies = this.validateDependencies(parsed.dependencies, warnings);
+				config.dependencies = TemplateParser.validateDependencies(parsed.dependencies, warnings);
 			} else {
 				warnings.push("Dependencies should be an array");
 			}
@@ -287,18 +291,23 @@ export class TemplateParser {
 
 		// Validate engines
 		if (parsed.engines) {
-			config.engines = this.validateEngines(parsed.engines, warnings);
+			config.engines = TemplateParser.validateEngines(parsed.engines, warnings);
 		}
 
 		// Validate hooks
 		if (parsed.hooks) {
-			config.hooks = this.validateHooks(parsed.hooks, warnings);
+			config.hooks = TemplateParser.validateHooks(parsed.hooks, warnings);
 		}
 
 		// V8 Recipe Step System validation
 		if (parsed.steps) {
 			if (Array.isArray(parsed.steps)) {
-				config.steps = this.validateSteps(parsed.steps, config.variables, errors, warnings);
+				config.steps = TemplateParser.validateSteps(
+					parsed.steps,
+					config.variables,
+					errors,
+					warnings,
+				);
 			} else {
 				warnings.push("Steps should be an array");
 			}
@@ -306,7 +315,7 @@ export class TemplateParser {
 
 		// V8 Recipe settings validation
 		if (parsed.settings) {
-			config.settings = this.validateSettings(parsed.settings, warnings);
+			config.settings = TemplateParser.validateSettings(parsed.settings, warnings);
 		}
 
 		return config;
@@ -327,7 +336,7 @@ export class TemplateParser {
 				continue;
 			}
 
-			const variable = this.validateVariable(varName, varConfig as any, errors, warnings);
+			const variable = TemplateParser.validateVariable(varName, varConfig as any, errors, warnings);
 			if (variable) {
 				config.variables[varName] = variable;
 			}
@@ -353,7 +362,7 @@ export class TemplateParser {
 			return null;
 		}
 
-		if (!this.VALID_VARIABLE_TYPES.includes(varConfig.type)) {
+		if (!TemplateParser.VALID_VARIABLE_TYPES.includes(varConfig.type)) {
 			errors.push(`Variable '${varName}' has invalid type: ${varConfig.type}`);
 			return null;
 		}
@@ -649,7 +658,7 @@ export class TemplateParser {
 				result.push({ name: dep, type: "npm" });
 			} else if (typeof dep === "object" && dep !== null) {
 				// Validate TemplateDependency object
-				const dependency = this.validateDependency(dep, index, warnings);
+				const dependency = TemplateParser.validateDependency(dep, index, warnings);
 				if (dependency) {
 					result.push(dependency);
 				}
@@ -792,7 +801,7 @@ export class TemplateParser {
 				continue;
 			}
 
-			const validStep = this.validateStep(step, index + 1, variables, errors, warnings);
+			const validStep = TemplateParser.validateStep(step, index + 1, variables, errors, warnings);
 			if (validStep) {
 				// Check for duplicate step names
 				if (stepNames.has(validStep.name)) {
@@ -811,10 +820,10 @@ export class TemplateParser {
 		}
 
 		// Check for circular dependencies
-		this.validateStepDependencies(stepDependencies, errors);
+		TemplateParser.validateStepDependencies(stepDependencies, errors);
 
 		// Validate step dependencies reference existing steps
-		this.validateStepDependencyReferences(stepDependencies, stepNames, warnings);
+		TemplateParser.validateStepDependencyReferences(stepDependencies, stepNames, warnings);
 
 		return validSteps;
 	}
@@ -850,9 +859,9 @@ export class TemplateParser {
 			}
 		}
 
-		if (!step.tool || !this.VALID_TOOL_TYPES.includes(step.tool)) {
+		if (!step.tool || !TemplateParser.VALID_TOOL_TYPES.includes(step.tool)) {
 			errors.push(
-				`Step '${step.name}' must have a valid tool type (${this.VALID_TOOL_TYPES.join(", ")})`,
+				`Step '${step.name}' must have a valid tool type (${TemplateParser.VALID_TOOL_TYPES.join(", ")})`,
 			);
 			return null;
 		}
@@ -870,7 +879,7 @@ export class TemplateParser {
 
 		if (step.when && typeof step.when === "string") {
 			// Basic condition validation - check if it looks like a valid expression
-			if (this.validateConditionExpression(step.when)) {
+			if (TemplateParser.validateConditionExpression(step.when)) {
 				(baseStep as any).when = step.when;
 			} else {
 				(baseStep as any).when = step.when;
@@ -926,13 +935,13 @@ export class TemplateParser {
 		// Tool-specific validation
 		switch (step.tool) {
 			case "template":
-				return this.validateTemplateStep(baseStep, step, errors, warnings);
+				return TemplateParser.validateTemplateStep(baseStep, step, errors, warnings);
 			case "action":
-				return this.validateActionStep(baseStep, step, errors, warnings);
+				return TemplateParser.validateActionStep(baseStep, step, errors, warnings);
 			case "codemod":
-				return this.validateCodeModStep(baseStep, step, errors, warnings);
+				return TemplateParser.validateCodeModStep(baseStep, step, errors, warnings);
 			case "recipe":
-				return this.validateRecipeStep(baseStep, step, errors, warnings);
+				return TemplateParser.validateRecipeStep(baseStep, step, errors, warnings);
 			default:
 				errors.push(`Step '${step.name}' has unsupported tool type: ${step.tool}`);
 				return null;
@@ -1296,7 +1305,7 @@ export class TemplateParser {
 	 * Convert a TemplateConfig to RecipeConfig (V8 Recipe Step System)
 	 */
 	static toRecipeConfig(templateConfig: TemplateConfig): RecipeConfig | null {
-		if (!this.isRecipeConfig(templateConfig)) {
+		if (!TemplateParser.isRecipeConfig(templateConfig)) {
 			return null; // Not a recipe configuration
 		}
 

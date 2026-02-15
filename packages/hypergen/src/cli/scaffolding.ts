@@ -4,9 +4,9 @@
  * Provides commands to initialize new generators and templates
  */
 
-import fs from "fs";
-import path from "path";
-import { DefaultActionUtils, ConsoleActionLogger } from "#/actions/index";
+import fs from "node:fs";
+import path from "node:path";
+import { ConsoleActionLogger, DefaultActionUtils } from "#/actions/index";
 
 export interface ScaffoldingOptions {
 	name: string;
@@ -177,7 +177,7 @@ export class GeneratorScaffolding {
 
 import { action } from '#/actions/index'
 import type { ActionContext, ActionResult } from '#/actions/index'
-import path from 'path'
+import path from 'node:path'
 ${imports}
 
 @action({
@@ -221,7 +221,7 @@ ${parameters
 })
 export async function ${actionName}(context: ActionContext): Promise<ActionResult> {
   const { variables, utils, logger } = context
-  const { name${parameters.length > 0 ? ", " + parameters.map((p) => p.name).join(", ") : ""} } = variables
+  const { name${parameters.length > 0 ? `, ${parameters.map((p) => p.name).join(", ")}` : ""} } = variables
   
   logger.info(\`Creating ${options.name}: \${name}\`)
   
@@ -1025,7 +1025,7 @@ export const {{name }}Command = new Command('{{name }}')
 		return `---
 to: src/commands/{{name }}.test.ts
 ---
-import { execSync } from 'child_process';
+import { execSync } from 'node:child_process';
 
 describe('{{name }} command', () => {
   it('should run successfully', () => {

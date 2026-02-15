@@ -6,12 +6,12 @@
  */
 
 import createDebug from "debug";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
-import { hasApiKeyAvailable, getExpectedEnvVar } from "#/ai/env";
-import { StdoutTransport } from "#/stdout-transport.js";
+import type { AiServiceConfig } from "#/ai-config";
+import { getExpectedEnvVar, hasApiKeyAvailable } from "#/ai/env";
 import { ApiTransport } from "#/api-transport.js";
 import { CommandTransport } from "#/command-transport.js";
-import type { AiServiceConfig } from "#/ai-config";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
+import { StdoutTransport } from "#/stdout-transport.js";
 import type { AiTransport } from "#/types.js";
 
 const debug = createDebug("hypergen:ai:transport:resolve");

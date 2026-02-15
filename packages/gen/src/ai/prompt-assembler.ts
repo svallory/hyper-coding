@@ -93,8 +93,7 @@ export class PromptAssembler {
 		} catch {
 			if (isCustom) {
 				throw new Error(
-					`Custom prompt template not found: ${templatePath}\n` +
-						`Provide an absolute path or a path relative to the working directory.`,
+					`Custom prompt template not found: ${templatePath}\nProvide an absolute path or a path relative to the working directory.`,
 				);
 			}
 			throw new Error(`Built-in prompt template missing: ${templatePath}`);

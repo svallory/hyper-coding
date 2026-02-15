@@ -6,8 +6,8 @@
  */
 
 import createDebug from "debug";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
-import type { AIBudgetConfig, AIModelPricing, AICostSummary } from "#/ai-config.js";
+import type { AIBudgetConfig, AICostSummary, AIModelPricing } from "#/ai-config.js";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
 
 const debug = createDebug("hypergen:ai:cost-tracker");
 
@@ -70,7 +70,7 @@ export class CostTracker {
 		model: string,
 		inputTokens: number,
 		outputTokens: number,
-		retryAttempts: number = 0,
+		retryAttempts = 0,
 	): void {
 		const costUsd = this.calculateCost(model, inputTokens, outputTokens);
 
@@ -184,10 +184,10 @@ export class CostTracker {
 		);
 
 		if (this.budgetWarningTriggered) {
-			lines.push(`  Warning: Budget warning threshold was triggered`);
+			lines.push("  Warning: Budget warning threshold was triggered");
 		}
 		if (this.budgetLimitHit) {
-			lines.push(`  Error: Budget limit was exceeded`);
+			lines.push("  Error: Budget limit was exceeded");
 		}
 
 		return lines.join("\n");

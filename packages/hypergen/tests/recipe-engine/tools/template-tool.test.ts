@@ -7,16 +7,16 @@
  * - Factory functionality
  */
 
-import { beforeEach, afterEach, describe, expect, it } from "vitest";
-import fs from "fs-extra";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { tmpdir } from "os";
+import fs from "fs-extra";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	TemplateTool,
 	TemplateToolFactory,
 	templateToolFactory,
 } from "#/recipe-engine/tools/template-tool";
-import type { TemplateStep, StepContext } from "#/recipe-engine/types";
+import type { StepContext, TemplateStep } from "#/recipe-engine/types";
 
 describe("TemplateTool", () => {
 	let tool: TemplateTool;

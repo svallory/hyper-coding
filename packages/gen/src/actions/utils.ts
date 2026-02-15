@@ -4,12 +4,12 @@
  * Utilities and helpers for action implementations
  */
 
-import fs from "fs-extra";
-import path from "path";
-import { glob } from "glob";
-import execa from "execa";
+import path from "node:path";
 import createDebug from "debug";
-import type { ActionUtils, ActionLogger } from "./types.js";
+import execa from "execa";
+import fs from "fs-extra";
+import { glob } from "glob";
+import type { ActionLogger, ActionUtils } from "./types.js";
 
 const debug = createDebug("hypergen:v8:action:utils");
 

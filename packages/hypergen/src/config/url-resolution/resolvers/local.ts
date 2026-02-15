@@ -4,11 +4,11 @@
  * Resolves local template references (relative and absolute paths)
  */
 
-import fs from "fs-extra";
-import path from "path";
-import crypto from "crypto";
+import crypto from "node:crypto";
+import path from "node:path";
 import createDebug from "debug";
-import type { TemplateURLResolver, ResolvedTemplate } from "#/types";
+import fs from "fs-extra";
+import type { ResolvedTemplate, TemplateURLResolver } from "#/types";
 import { URLResolutionError } from "#/types";
 
 const debug = createDebug("hypergen:v8:resolver:local");
@@ -96,7 +96,8 @@ export class LocalResolver implements TemplateURLResolver {
 
 			if (await fs.pathExists(ymlPath)) {
 				return ymlPath;
-			} else if (await fs.pathExists(yamlPath)) {
+			}
+			if (await fs.pathExists(yamlPath)) {
 				return yamlPath;
 			}
 		}

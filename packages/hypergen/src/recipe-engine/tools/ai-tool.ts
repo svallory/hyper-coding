@@ -6,19 +6,19 @@
  * output validation, retry-with-feedback, and cost tracking.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import createDebug from "debug";
-import fs from "fs";
-import path from "path";
-import { Tool, type ToolValidationResult } from "#/base.js";
-import { ErrorHandler, ErrorCode } from "#/errors/hypergen-errors";
-import type { StepContext, StepResult, StepExecutionOptions, AIStep } from "#/recipe-engine/types";
-import { AiService } from "#/ai/ai-service";
 import type { AIExecutionResult } from "#/ai/ai-config";
+import { AiService } from "#/ai/ai-service";
+import { Tool, type ToolValidationResult } from "#/base.js";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
+import type { AIStep, StepContext, StepExecutionOptions, StepResult } from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:v8:recipe:tool:ai");
 
 export class AiTool extends Tool<AIStep> {
-	constructor(name: string = "ai-tool", options: Record<string, any> = {}) {
+	constructor(name = "ai-tool", options: Record<string, any> = {}) {
 		super("ai", name, options);
 	}
 
@@ -221,19 +221,19 @@ export class AiTool extends Tool<AIStep> {
 					const idx = content.indexOf(pattern);
 					if (idx !== -1) {
 						const insertAt = idx + pattern.length;
-						content = content.slice(0, insertAt) + "\n" + output + content.slice(insertAt);
+						content = `${content.slice(0, insertAt)}\n${output}${content.slice(insertAt)}`;
 					}
 				} else if (step.output.before) {
 					const pattern = step.output.before;
 					const idx = content.indexOf(pattern);
 					if (idx !== -1) {
-						content = content.slice(0, idx) + output + "\n" + content.slice(idx);
+						content = `${content.slice(0, idx) + output}\n${content.slice(idx)}`;
 					}
 				} else if (step.output.at === "start") {
-					content = output + "\n" + content;
+					content = `${output}\n${content}`;
 				} else {
 					// Default: append to end
-					content = content + "\n" + output;
+					content = `${content}\n${output}`;
 				}
 
 				fs.writeFileSync(resolved, content, "utf-8");
@@ -259,7 +259,7 @@ export class AiTool extends Tool<AIStep> {
 }
 
 export class AiToolFactory {
-	create(name: string = "ai-tool", options: Record<string, any> = {}): AiTool {
+	create(name = "ai-tool", options: Record<string, any> = {}): AiTool {
 		return new AiTool(name, options);
 	}
 
