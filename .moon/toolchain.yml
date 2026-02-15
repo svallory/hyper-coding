@@ -51,10 +51,11 @@ node:
 
   # The package manager to use when managing dependencies.
   # Accepts "npm" (default), "pnpm", "yarn", or "bun".
-  packageManager: 'pnpm'
+  packageManager: 'bun'
 
   # The version of the package manager (above) to use.
-  pnpm:
+  bun:
+    version: '1.3.9'
     # version: "Managed in .prototools"
 
   # Add `node.version` as a constraint in the root `package.json` `engines`.

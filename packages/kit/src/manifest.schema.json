@@ -36,7 +36,7 @@
 					"description": "Original source string provided by user",
 					"minLength": 1,
 					"examples": [
-						"@kit/nextjs",
+						"@hyper-kits/nextjs",
 						"user/repo",
 						"github:user/repo#branch",
 						"./local-kit",

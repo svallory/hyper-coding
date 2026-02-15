@@ -101,7 +101,6 @@
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",
 		"@dotenvx/dotenvx": "^1.52.0",
-		"@kit/nextjs": "github:kit/nextjs",
 		"@jig-lang/jig": "^1.0.1",
 		"@microsoft/api-extractor": "^7.55.0",
 		"@oclif/core": "^4",

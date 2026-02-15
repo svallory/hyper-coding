@@ -596,7 +596,7 @@
 			},
 			"description": "Install a kit from npm, JSR, GitHub, or local path",
 			"examples": [
-				"<%= config.bin %> kit install @kit/nextjs",
+				"<%= config.bin %> kit install @hyper-kits/nextjs",
 				"<%= config.bin %> kit install svallory/hypergen-kit-nextjs",
 				"<%= config.bin %> kit install jsr:@std/path",
 				"<%= config.bin %> kit install ./local-kit",

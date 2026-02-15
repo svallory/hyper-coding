@@ -5,109 +5,93 @@ implicitDeps:
 
 implicitInputs:
   - "package.json"
+  - "tsconfig.json"
+  - "biome.json"
+  - ".biomerc*"
 
 fileGroups:
-  # Application specific files
-  app: []
-  configs:
-    - "*.{js,json,yml,yaml}"
+  # Source files
   sources:
-    - "public/**/*"
     - "src/**/*"
     - "types/**/*"
+
+  # Test files
   tests:
     - "tests/**/*.test.*"
-    - "tests/**/*.stories.*"
+    - "tests/**/*.spec.*"
     - "**/__tests__/**/*"
-  assets:
-    - "assets/**/*"
-    - "images/**/*"
-    - "static/**/*"
-    - "**/*.{scss,css}"
-    - "**/*.{md,mdx}"
+
+  # Configuration files
+  configs:
+    - "*.config.*"
+    - ".eslintrc.*"
+    - ".prettierrc*"
+    - "tsconfig*.json"
 
 tasks:
-  # https://moonrepo.dev/docs/guides/examples/prettier
-  format:
-    command:
-      - "prettier"
-      - "--ignore-path"
-      - "@in(0)"
-      - "--check"
-      - "."
+  # Build with tsup
+  build:
+    description: Build library/package with tsup
+    command: "tsup"
     inputs:
-      - "/.prettierignore"
-      - "/prettier.config.js"
-      - "@group(app)"
       - "@globs(sources)"
-      - "@globs(tests)"
       - "@globs(configs)"
-      - "**/*.{md,mdx}"
+      - "package.json"
+    outputs:
+      - "dist"
 
-  format-write:
-    command:
-      - "prettier"
-      - "--ignore-path"
-      - "@in(0)"
-      - "--write"
-      - "."
+  # Format with biome
+  format:
+    description: Check code formatting with biome
+    command: "biome format . --check"
     inputs:
-      - "/.prettierignore"
-      - "/prettier.config.js"
-      - "@group(app)"
       - "@globs(sources)"
       - "@globs(tests)"
       - "@globs(configs)"
-      - "**/*.{md,mdx}"
+      - "**/*.md"
+
+  # Format and write with biome
+  format-write:
+    description: Format code with biome
+    command: "biome format . --write"
+    inputs:
+      - "@globs(sources)"
+      - "@globs(tests)"
+      - "@globs(configs)"
+      - "**/*.md"
     options:
       cache: local
 
-  # https://moonrepo.dev/docs/guides/examples/eslint
+  # Lint with biome
   lint:
-    command:
-      - "eslint"
-      - "--ext"
-      - ".ts,.tsx,.cts,.mts,.js,.jsx,.cjs,.mjs"
-      - "--fix"
-      - "--report-unused-disable-directives"
-      - "--no-error-on-unmatched-pattern"
-      - "--exit-on-fatal-error"
-      - "--ignore-path"
-      - "@in(2)"
-      - "."
+    description: Lint code with biome
+    command: "biome check . --apply"
     inputs:
-      - "*.config.*"
-      - "**/.eslintrc.*"
-      - "/.eslintignore"
-      - "/.eslintrc.*"
-      - "tsconfig.json"
-      - "/tsconfig.eslint.json"
-      - "/tsconfig.options.json"
-      - "@group(app)"
       - "@globs(sources)"
       - "@globs(tests)"
+      - "@globs(configs)"
 
-  # https://moonrepo.dev/docs/guides/examples/jest
+  # Test with vitest
   test:
-    command:
-      - "jest"
-      - "--passWithNoTests"
-      - "--preset"
-      - "jest-preset-moon"
+    description: Run tests with vitest
+    command: "vitest run"
     inputs:
       - "@globs(sources)"
       - "@globs(tests)"
-      - "jest.config.*"
+      - "vitest.config.*"
 
-  # https://moonrepo.dev/docs/guides/examples/typescript
+  # Watch tests with vitest
+  test-watch:
+    description: Run tests in watch mode with vitest
+    command: "vitest"
+    options:
+      cache: local
+
+  # Typecheck with tsc
   typecheck:
-    command:
-      - "tsc"
-      - "--build"
+    description: Check TypeScript types
+    command: "tsc --noEmit"
     inputs:
-      - "@group(app)"
       - "@globs(sources)"
       - "@globs(tests)"
-      - "tsconfig.json"
-      - "tsconfig.*.json"
-      - "/tsconfig.options.json"
+      - "@globs(configs)"
