@@ -60,7 +60,7 @@ function writeYaml(filePath: string, content: string): void {
 function createFixtures(root: string): void {
   // -- Kit: nextjs ----------------------------------------------------------
   writeYaml(path.join(root, 'kits', 'nextjs', 'kit.yml'), `\
-name: "@hyper-kits/nextjs"
+name: "@kit/nextjs"
 cookbooks:
   - "./cookbooks/*/cookbook.yml"
 defaults:
@@ -142,7 +142,7 @@ describe('PathResolver', () => {
     expect(parsedKit.isValid).toBe(true)
 
     kitMap = new Map<string, ParsedKit>()
-    // Register under the short name "nextjs" (mirrors deriveShortName("@hyper-kits/nextjs"))
+    // Register under the short name "nextjs" (mirrors deriveShortName("@kit/nextjs"))
     kitMap.set('nextjs', parsedKit)
 
     searchDirs = [

@@ -36,7 +36,7 @@ Hypergen provides a dedicated `kit install` command for managing kits:
 
 ```bash
 # Install from npm
-hypergen kit install @hyper-kits/starlight
+hypergen kit install @kit/starlight
 
 # Install from GitHub
 hypergen kit install svallory/hypergen-kit-nextjs
@@ -56,10 +56,10 @@ You can also install kits as npm packages:
 
 ```bash
 # Install official Starlight cookbook
-npm install @hyper-kits/starlight
+npm install @kit/starlight
 
 # Or with bun (recommended)
-bun add @hyper-kits/starlight
+bun add @kit/starlight
 
 # Use it immediately
 hypergen starlight create --name="My Docs" --description="Documentation site"
@@ -68,8 +68,8 @@ hypergen starlight create --name="My Docs" --description="Documentation site"
 ### Community Conventions
 Community cookbooks follow these patterns:
 
-- `@hyper-kits/*` - Official cookbooks
-- `hyper-kit-*` - Community cookbooks  
+- `@kit/*` - Official cookbooks
+- `hyper-kit-*` - Community cookbooks
 - `@user/hyper-kit-*` - Organization cookbooks
 
 ```bash
@@ -153,13 +153,13 @@ Before using a cookbook, check its quality:
 ### 1. Inspect Cookbook Information
 ```bash
 # Get cookbook metadata
-hypergen cookbook info @hyper-kits/starlight
+hypergen cookbook info @kit/starlight
 
 # List available recipes
-hypergen recipe list @hyper-kits/starlight
+hypergen recipe list @kit/starlight
 ```
 
-### 2. Check Recipe Details  
+### 2. Check Recipe Details
 ```bash
 # See what a recipe will do
 hypergen recipe info starlight/create
@@ -187,7 +187,7 @@ Hypergen includes a trust system for safe cookbook execution:
 hypergen trust @company
 
 # Trust an organization
-hypergen trust @hyper-kits
+hypergen trust @kit
 
 # View your trusted sources
 hypergen trust list
@@ -208,10 +208,10 @@ When using untrusted cookbooks, Hypergen will:
 ### Install and Use NPM Cookbooks
 ```bash
 # Install globally for all projects
-npm install -g @hyper-kits/starlight
+npm install -g @kit/starlight
 
 # Or install locally per project
-npm install --save-dev @hyper-kits/starlight
+npm install --save-dev @kit/starlight
 
 # Use immediately
 hypergen starlight create --name="My Documentation"
@@ -232,7 +232,7 @@ Some kits provide direct recipes that don't belong to cookbooks:
 
 ```bash
 # List all recipes (including direct)
-hypergen recipe list @hyper-kits/utils
+hypergen recipe list @kit/utils
 
 # Run a direct recipe (no cookbook needed)
 hypergen utils init
@@ -251,21 +251,21 @@ Add to your `hypergen.config.js`:
 ```javascript
 export default {
   cookbooks: ['recipes', 'my-cookbooks', '_templates'],
-  
+
   discovery: {
     sources: ['npm', 'github', 'local'],
     cacheTimeout: 3600, // Cache results for 1 hour
-    
+
     // NPM-specific settings
     npm: {
       registries: ['https://registry.npmjs.org'],
-      scopes: ['@hyper-kits', '@company']
+      scopes: ['@kit', '@company']
     },
-    
+
     // GitHub-specific settings
     github: {
       topics: ['hyper-kit', 'hypergen-cookbook'],
-      orgs: ['company', 'hyper-kits']
+      orgs: ['company', 'kit']
     }
   }
 };
@@ -274,21 +274,21 @@ export default {
 ## Common Cookbook Categories
 
 ### Framework Cookbooks
-- `@hyper-kits/react` - React components and apps
-- `@hyper-kits/vue` - Vue.js projects
-- `@hyper-kits/svelte` - Svelte applications
-- `@hyper-kits/angular` - Angular projects
+- `@kit/react` - React components and apps
+- `@kit/vue` - Vue.js projects
+- `@kit/svelte` - Svelte applications
+- `@kit/angular` - Angular projects
 
-### Tool Cookbooks  
-- `@hyper-kits/starlight` - Documentation sites
-- `@hyper-kits/vite` - Vite configuration
-- `@hyper-kits/eslint` - ESLint configurations
-- `@hyper-kits/jest` - Testing setups
+### Tool Cookbooks
+- `@kit/starlight` - Documentation sites
+- `@kit/vite` - Vite configuration
+- `@kit/eslint` - ESLint configurations
+- `@kit/jest` - Testing setups
 
 ### Architecture Cookbooks
-- `@hyper-kits/monorepo` - Monorepo structures
-- `@hyper-kits/microservice` - Microservice templates
-- `@hyper-kits/serverless` - Serverless functions
+- `@kit/monorepo` - Monorepo structures
+- `@kit/microservice` - Microservice templates
+- `@kit/serverless` - Serverless functions
 
 ## Troubleshooting Discovery
 
@@ -297,7 +297,7 @@ export default {
 # Clear discovery cache
 hypergen cache clear
 
-# Search with different terms  
+# Search with different terms
 hypergen discover "react component" --source=all
 
 # Check your network connection
@@ -310,7 +310,7 @@ hypergen system status
 hypergen trust list
 
 # Trust required authors
-hypergen trust @hyper-kits
+hypergen trust @kit
 
 # Use --force for testing (be careful!)
 hypergen recipe execute cookbook/recipe --force

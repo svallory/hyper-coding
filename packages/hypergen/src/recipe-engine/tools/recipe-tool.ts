@@ -19,7 +19,7 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import yaml from 'js-yaml'
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult, type ToolResource } from '#//base.js'
+import { Tool, type ToolValidationResult, type ToolResource } from '#/base.js'
 import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '#/errors/hypergen-errors'
 import { StepExecutor } from '#/recipe-engine/step-executor'
 import { 

@@ -11,7 +11,7 @@ import { Edge } from '@jig-lang/jig'
 import createDebug from 'debug'
 import helpers from '#/helpers'
 import { AiCollector } from '#/ai/ai-collector'
-import { registerAiTags } from '#//ai-tags.js'
+import { registerAiTags } from '#/ai-tags.js'
 
 const debug = createDebug('hypergen:template:jig')
 
@@ -24,7 +24,7 @@ let jig: Edge | null = null
 
 /**
  * Track registered globals for collision warnings.
- * Maps global name -> source string (e.g. "kit:@hyper-kits/nextjs").
+ * Maps global name -> source string (e.g. "kit:@kit/nextjs").
  */
 const registeredGlobals = new Map<string, string>()
 

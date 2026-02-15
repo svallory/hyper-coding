@@ -8,7 +8,7 @@ prerequisites: Node.js 18+, basic command line knowledge
 # Getting Started with Hypergen
 
 **What you'll learn**: How to install Hypergen and generate your first files
-**Time needed**: 15 minutes  
+**Time needed**: 15 minutes
 **Prerequisites**: Node.js 18+, basic command line knowledge
 
 Hypergen is a modern code generator that orchestrates templates, actions, and codemods through recipes. This guide gets you up and running quickly.
@@ -42,7 +42,7 @@ Let's generate your first files to see Hypergen in action:
 mkdir hypergen-test && cd hypergen-test
 
 # Install a kit (optional - many kits available)
-hypergen kit install @hyper-kits/react
+hypergen kit install @kit/react
 
 # Generate a simple React component
 hypergen react component --name=HelloWorld --typescript=true
@@ -57,7 +57,7 @@ hypergen react component --name=HelloWorld --typescript=true
 When you ran that command, Hypergen:
 
 1. **Found the recipe**: Located the `react/component` recipe from built-in cookbooks
-2. **Processed variables**: Used `name=HelloWorld` and `typescript=true` 
+2. **Processed variables**: Used `name=HelloWorld` and `typescript=true`
 3. **Executed steps**: Ran each step in the recipe sequentially
 4. **Generated files**: Created files from templates with your variables
 
@@ -86,8 +86,8 @@ Create `hypergen.config.js` in your project root for custom settings:
 export default {
   // Where to look for cookbooks
   cookbooks: ['recipes', 'cookbooks', '_templates'],
-  
-  // Template engine preferences  
+
+  // Template engine preferences
   engines: {
     default: 'liquidjs',
     fallback: 'ejs'

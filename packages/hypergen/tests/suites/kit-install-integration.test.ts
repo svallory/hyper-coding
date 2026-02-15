@@ -18,13 +18,13 @@ describe('Kit Install Integration Tests', () => {
     const testCases: TestCase[] = [
       // NPM packages
       {
-        input: '@hyper-kits/nextjs',
+        input: '@kit/nextjs',
         expectedType: 'npm',
         expectedCommands: {
-          bun: "bun add '@hyper-kits/nextjs'",
-          npm: "npm install '@hyper-kits/nextjs'",
-          pnpm: "pnpm add '@hyper-kits/nextjs'",
-          yarn: "yarn add '@hyper-kits/nextjs'",
+          bun: "bun add '@kit/nextjs'",
+          npm: "npm install '@kit/nextjs'",
+          pnpm: "pnpm add '@kit/nextjs'",
+          yarn: "yarn add '@kit/nextjs'",
         },
       },
       {
@@ -253,51 +253,51 @@ describe('Kit Install Integration Tests', () => {
 
   describe('Installation Flags', () => {
     it('adds --dev flag correctly for all package managers', () => {
-      const resolved = resolveKitSource('@hyper-kits/nextjs')
+      const resolved = resolveKitSource('@kit/nextjs')
 
       expect(buildInstallCommand(resolved, 'bun', { dev: true }))
-        .toBe("bun add -d '@hyper-kits/nextjs'")
+        .toBe("bun add -d '@kit/nextjs'")
       expect(buildInstallCommand(resolved, 'npm', { dev: true }))
-        .toBe("npm install -D '@hyper-kits/nextjs'")
+        .toBe("npm install -D '@kit/nextjs'")
       expect(buildInstallCommand(resolved, 'pnpm', { dev: true }))
-        .toBe("pnpm add -D '@hyper-kits/nextjs'")
+        .toBe("pnpm add -D '@kit/nextjs'")
       expect(buildInstallCommand(resolved, 'yarn', { dev: true }))
-        .toBe("yarn add -D '@hyper-kits/nextjs'")
+        .toBe("yarn add -D '@kit/nextjs'")
     })
 
     it('adds --global flag correctly for all package managers', () => {
-      const resolved = resolveKitSource('@hyper-kits/nextjs')
+      const resolved = resolveKitSource('@kit/nextjs')
 
       expect(buildInstallCommand(resolved, 'bun', { global: true }))
-        .toBe("bun add -g '@hyper-kits/nextjs'")
+        .toBe("bun add -g '@kit/nextjs'")
       expect(buildInstallCommand(resolved, 'npm', { global: true }))
-        .toBe("npm install -g '@hyper-kits/nextjs'")
+        .toBe("npm install -g '@kit/nextjs'")
       expect(buildInstallCommand(resolved, 'pnpm', { global: true }))
-        .toBe("pnpm add -g '@hyper-kits/nextjs'")
+        .toBe("pnpm add -g '@kit/nextjs'")
       expect(buildInstallCommand(resolved, 'yarn', { global: true }))
-        .toBe("yarn global add '@hyper-kits/nextjs'")
+        .toBe("yarn global add '@kit/nextjs'")
     })
   })
 
   describe('Critical GitHub Scenarios', () => {
     it('user/repo resolves to github (not npm)', () => {
-      const resolved = resolveKitSource('hyper-kits/nextjs')
+      const resolved = resolveKitSource('kit/nextjs')
       expect(resolved.type).toBe('github')
-      expect(resolved.source).toBe('github:hyper-kits/nextjs')
+      expect(resolved.source).toBe('github:kit/nextjs')
     })
 
     it('GitHub shorthand builds correct commands for all PMs', () => {
-      const resolved = resolveKitSource('hyper-kits/nextjs')
+      const resolved = resolveKitSource('kit/nextjs')
 
       // All package managers should use github: prefix
       expect(buildInstallCommand(resolved, 'bun', {}))
-        .toBe("bun add 'github:hyper-kits/nextjs'")
+        .toBe("bun add 'github:kit/nextjs'")
       expect(buildInstallCommand(resolved, 'npm', {}))
-        .toBe("npm install 'github:hyper-kits/nextjs'")
+        .toBe("npm install 'github:kit/nextjs'")
       expect(buildInstallCommand(resolved, 'pnpm', {}))
-        .toBe("pnpm add 'github:hyper-kits/nextjs'")
+        .toBe("pnpm add 'github:kit/nextjs'")
       expect(buildInstallCommand(resolved, 'yarn', {}))
-        .toBe("yarn add 'github:hyper-kits/nextjs'")
+        .toBe("yarn add 'github:kit/nextjs'")
     })
 
     it('does not confuse npm scoped packages with GitHub repos', () => {
@@ -351,7 +351,7 @@ describe('Kit Install Integration Tests', () => {
     })
 
     it('handles npm packages with complex version specifiers', () => {
-      const caret = resolveKitSource('@hyper-kits/nextjs@^1.0.0')
+      const caret = resolveKitSource('@kit/nextjs@^1.0.0')
       expect(caret.type).toBe('npm')
 
       const tilde = resolveKitSource('my-kit@~2.3.0')

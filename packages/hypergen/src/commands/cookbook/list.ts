@@ -22,7 +22,7 @@ export default class CookbookList extends BaseCommand<typeof CookbookList> {
 
   static override examples = [
     '<%= config.bin %> cookbook list',
-    '<%= config.bin %> cookbook list @hyper-kits/starlight',
+    '<%= config.bin %> cookbook list @kit/starlight',
     '<%= config.bin %> cookbook list --json',
   ]
 
@@ -56,10 +56,10 @@ export default class CookbookList extends BaseCommand<typeof CookbookList> {
       const kitFilter = args.kit || flags.kit
       const targetKits = kitFilter
         ? kits.filter(k =>
-            k.name === kitFilter ||
-            k.name.endsWith(`/${kitFilter}`) ||
-            k.name === `@hyper-kits/${kitFilter}`
-          )
+          k.name === kitFilter ||
+          k.name.endsWith(`/${kitFilter}`) ||
+          k.name === `@kit/${kitFilter}`
+        )
         : kits
 
       if (targetKits.length === 0 && kitFilter) {

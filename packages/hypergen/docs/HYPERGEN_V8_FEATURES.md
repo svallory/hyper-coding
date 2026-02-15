@@ -24,7 +24,7 @@
 - **Rich Metadata**: Categories, descriptions, parameter schemas for help generation
 
 ## Cookbook Discovery & Distribution
-- **NPM Conventions**: `@hyper-kits/*`, `hyper-kit-*`, `@user/hyper-kit-*` patterns
+- **NPM Conventions**: `@kit/*`, `hyper-kit-*`, `@user/hyper-kit-*` patterns
 - **GitHub Discovery**: Cookbooks identified via `hyper-kit` topic
 - **URL Resolution**: Direct cookbook loading from GitHub repos, gists, npm packages
 - **Repository Validation**: Automatic structure validation for discovered cookbooks

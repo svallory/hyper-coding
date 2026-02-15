@@ -32,7 +32,7 @@ OUTPUT_DIR="${1:-$SCRIPT_DIR/todo-app}"
 
 echo "=== Hypergen: Multi-tenant Todo App ==="
 echo ""
-echo "  Kit:    hyper-kits/nextjs"
+echo "  Kit:    kit/nextjs"
 echo "  Output: $OUTPUT_DIR"
 echo ""
 
@@ -53,7 +53,7 @@ hypergen init --force
 # ─── Step 2: Install Next.js kit ─────────────────────────────────────
 
 echo "[2/8] Installing Next.js kit..."
-hypergen kit install hyper-kits/nextjs
+hypergen kit install kit/nextjs
 
 # ─── Step 3: Scaffold project + configure tools ──────────────────────
 #

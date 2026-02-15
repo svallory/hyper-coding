@@ -9,8 +9,8 @@ import type {
   ActionMetadata, 
   ActionParameter, 
   ParameterType
-} from '#//types.js'
-import { ActionParameterError } from '#//types.js'
+} from '#/types.js'
+import { ActionParameterError } from '#/types.js'
 import { InteractivePrompter, type PromptOptions } from '#/prompts/interactive-prompts'
 import { TemplateParser, type TemplateVariable } from '#/config/template-parser'
 

@@ -10,8 +10,8 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { glob } from 'glob'
 import createDebug from 'debug'
-import type { KitConfig } from '#//types.js'
-import { loadHelpers } from '#//load-helpers.js'
+import type { KitConfig } from '#/types.js'
+import { loadHelpers } from '#/load-helpers.js'
 import { registerHelpers } from '#/template-engines/jig-engine'
 
 const debug = createDebug('hypergen:config:kit-parser')
@@ -77,7 +77,7 @@ export async function parseKitFile(filePath: string): Promise<ParsedKit> {
  *
  * Search order:
  * 1. `./kits/` (project-local)
- * 2. `./node_modules/@hyper-kits/` (npm installed)
+ * 2. `./node_modules/@kit/` (npm installed)
  * 3. Explicit additional directories
  */
 export async function discoverKits(
@@ -137,13 +137,13 @@ export function getDefaultKitSearchDirs(projectRoot: string): string[] {
   return [
     path.join(projectRoot, '.hyper', 'kits'),
     path.join(projectRoot, 'kits'),
-    path.join(projectRoot, 'node_modules', '@hyper-kits'),
+    path.join(projectRoot, 'node_modules', '@kit'),
   ]
 }
 
 /**
  * Derive a short, CLI-friendly name from a kit's full name.
- * "@hyper-kits/nextjs" -> "nextjs"
+ * "@kit/nextjs" -> "nextjs"
  * "my-kit" -> "my-kit"
  */
 export function deriveShortName(name: string): string {

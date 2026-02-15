@@ -6,7 +6,7 @@ The `hypergen` package has been split into a multi-package architecture:
 
 - **[@hypercli/cli](https://www.npmjs.com/package/@hypercli/cli)** - Main CLI (install this)
 - **[@hypercli/core](https://www.npmjs.com/package/@hypercli/core)** - Core types and config
-- **[@hypercli/kits](https://www.npmjs.com/package/@hypercli/kits)** - Kit management
+- **[@hypercli/kit](https://www.npmjs.com/package/@hypercli/kit)** - Kit management
 - **[@hypercli/gen](https://www.npmjs.com/package/@hypercli/gen)** - Generation engine
 
 ## Migration
@@ -50,7 +50,7 @@ Foundation types and utilities. Provides:
 - Parsers for kit.yml and cookbook.yml
 - Logger and helper utilities
 
-### @hypercli/kits
+### @hypercli/kit
 Kit lifecycle management. Provides:
 - Kit installation from npm, GitHub, or local paths
 - Kit manifest management
@@ -67,7 +67,7 @@ Code generation engine. Provides:
 
 ## Links
 
-- [GitHub Repository](https://github.com/hyperdev-io/hyper-cli)
+- [GitHub Repository](https://github.com/hyperdev-io/cli)
 - [Documentation](https://hyperdev.io/docs)
 - [Migration Guide](https://hyperdev.io/docs/migrating-from-hypergen)
 

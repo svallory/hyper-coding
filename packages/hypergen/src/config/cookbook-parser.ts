@@ -10,8 +10,8 @@ import path from 'path'
 import yaml from 'js-yaml'
 import { glob } from 'glob'
 import createDebug from 'debug'
-import type { CookbookConfig } from '#//types.js'
-import { loadHelpers } from '#//load-helpers.js'
+import type { CookbookConfig } from '#/types.js'
+import { loadHelpers } from '#/load-helpers.js'
 import { registerHelpers } from '#/template-engines/jig-engine'
 
 const debug = createDebug('hypergen:config:cookbook-parser')

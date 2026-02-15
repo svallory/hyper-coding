@@ -326,7 +326,7 @@ ${parameters.filter(p => p.default !== undefined).map(p => `      ${p.name}: ${J
   private generateTestFile(options: ScaffoldingOptions): string {
     const actionName = this.toCamelCase(options.name)
     
-    return `import { ${actionName} } from '#//${options.name}'
+    return `import { ${actionName} } from '#/${options.name}'
 import { ActionContext } from '#/actions/index'
 import { beforeEach, describe, it, expect } from 'bun:test'
 
@@ -635,7 +635,7 @@ export const \${name} = {
 }
 
 function generate${pascalName}Test(name: string, variables: any): string {
-  return \`import { \${name} } from '#//${options.name}';
+  return \`import { \${name} } from '#/${options.name}';
 
 describe('\${name}', () => {
   it('should be defined', () => {
@@ -693,7 +693,7 @@ to: src/components/{{name }}/{{name }}.test.tsx
 ---
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import {{name }} from '#//{{name }}';
+import {{name }} from '#/{{name }}';
 
 describe('{{name }}', () => {
   it('renders without crashing', () => {
@@ -714,7 +714,7 @@ describe('{{name }}', () => {
 to: src/components/{{name }}/{{name }}.stories.tsx
 ---
 import type { Meta, StoryObj } from '@storybook/react';
-import {{name }} from '#//{{name }}';
+import {{name }} from '#/{{name }}';
 
 const meta: Meta<typeof {{name }}> = {
   title: 'Components/{{name }}',
@@ -773,7 +773,7 @@ const props = withDefaults(defineProps<Props>(), {
 to: src/components/{{name }}.test.ts
 ---
 import { mount } from '@vue/test-utils';
-import {{name }} from '#//{{name }}.vue';
+import {{name }} from '#/{{name }}.vue';
 
 describe('{{name }}', () => {
   it('renders properly', () => {
@@ -820,7 +820,7 @@ to: src/routes/{{name }}.test.ts
 ---
 import request from 'supertest';
 import express from 'express';
-import {{name }}Router from '#//{{name }}';
+import {{name }}Router from '#/{{name }}';
 
 const app = express();
 app.use(express.json());
@@ -950,7 +950,7 @@ export function create{{name }}(options?: {{name }}Options): {{name }} {
     return `---
 to: src/{{name }}.test.ts
 ---
-import { {{name }}, create{{name }} } from '#//{{name }}';
+import { {{name }}, create{{name }} } from '#/{{name }}';
 
 describe('{{name }}', () => {
   it('should create instance', () => {
@@ -992,7 +992,7 @@ export default {{name }};
     return `---
 to: src/{{name }}.test.ts
 ---
-import {{name }} from '#//{{name }}';
+import {{name }} from '#/{{name }}';
 
 describe('{{name }}', () => {
   it('should be defined', () => {

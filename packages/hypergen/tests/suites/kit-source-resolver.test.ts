@@ -14,11 +14,11 @@ describe('Kit Source Resolver', () => {
     })
 
     it('resolves scoped npm package', () => {
-      const result = resolveKitSource('@hyper-kits/nextjs')
+      const result = resolveKitSource('@kit/nextjs')
       expect(result).toEqual({
         type: 'npm',
-        source: '@hyper-kits/nextjs',
-        original: '@hyper-kits/nextjs',
+        source: '@kit/nextjs',
+        original: '@kit/nextjs',
         registry: 'npm',
       })
     })
@@ -34,21 +34,21 @@ describe('Kit Source Resolver', () => {
     })
 
     it('resolves scoped npm package with version', () => {
-      const result = resolveKitSource('@hyper-kits/nextjs@^1.0.0')
+      const result = resolveKitSource('@kit/nextjs@^1.0.0')
       expect(result).toEqual({
         type: 'npm',
-        source: '@hyper-kits/nextjs@^1.0.0',
-        original: '@hyper-kits/nextjs@^1.0.0',
+        source: '@kit/nextjs@^1.0.0',
+        original: '@kit/nextjs@^1.0.0',
         registry: 'npm',
       })
     })
 
     it('resolves npm package with explicit prefix', () => {
-      const result = resolveKitSource('npm:@hyper-kits/nextjs')
+      const result = resolveKitSource('npm:@kit/nextjs')
       expect(result).toEqual({
         type: 'npm',
-        source: '@hyper-kits/nextjs',
-        original: 'npm:@hyper-kits/nextjs',
+        source: '@kit/nextjs',
+        original: 'npm:@kit/nextjs',
         registry: 'npm',
       })
     })
@@ -330,39 +330,39 @@ describe('Kit Source Resolver', () => {
 
   describe('buildInstallCommand', () => {
     it('builds bun command for npm package', () => {
-      const resolved = resolveKitSource('@hyper-kits/nextjs')
+      const resolved = resolveKitSource('@kit/nextjs')
       const cmd = buildInstallCommand(resolved, 'bun', {})
-      expect(cmd).toBe("bun add '@hyper-kits/nextjs'")
+      expect(cmd).toBe("bun add '@kit/nextjs'")
     })
 
     it('builds bun command with --dev flag', () => {
-      const resolved = resolveKitSource('@hyper-kits/nextjs')
+      const resolved = resolveKitSource('@kit/nextjs')
       const cmd = buildInstallCommand(resolved, 'bun', { dev: true })
-      expect(cmd).toBe("bun add -d '@hyper-kits/nextjs'")
+      expect(cmd).toBe("bun add -d '@kit/nextjs'")
     })
 
     it('builds bun command with --global flag', () => {
-      const resolved = resolveKitSource('@hyper-kits/nextjs')
+      const resolved = resolveKitSource('@kit/nextjs')
       const cmd = buildInstallCommand(resolved, 'bun', { global: true })
-      expect(cmd).toBe("bun add -g '@hyper-kits/nextjs'")
+      expect(cmd).toBe("bun add -g '@kit/nextjs'")
     })
 
     it('builds pnpm command', () => {
-      const resolved = resolveKitSource('@hyper-kits/nextjs')
+      const resolved = resolveKitSource('@kit/nextjs')
       const cmd = buildInstallCommand(resolved, 'pnpm', {})
-      expect(cmd).toBe("pnpm add '@hyper-kits/nextjs'")
+      expect(cmd).toBe("pnpm add '@kit/nextjs'")
     })
 
     it('builds yarn command', () => {
-      const resolved = resolveKitSource('@hyper-kits/nextjs')
+      const resolved = resolveKitSource('@kit/nextjs')
       const cmd = buildInstallCommand(resolved, 'yarn', {})
-      expect(cmd).toBe("yarn add '@hyper-kits/nextjs'")
+      expect(cmd).toBe("yarn add '@kit/nextjs'")
     })
 
     it('builds npm command', () => {
-      const resolved = resolveKitSource('@hyper-kits/nextjs')
+      const resolved = resolveKitSource('@kit/nextjs')
       const cmd = buildInstallCommand(resolved, 'npm', {})
-      expect(cmd).toBe("npm install '@hyper-kits/nextjs'")
+      expect(cmd).toBe("npm install '@kit/nextjs'")
     })
 
     it('builds GitHub command', () => {

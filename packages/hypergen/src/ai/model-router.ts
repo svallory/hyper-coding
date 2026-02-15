@@ -7,8 +7,8 @@
 
 import createDebug from 'debug'
 import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
-import { resolveApiKey, getExpectedEnvVar } from '#//env.js'
-import type { AiServiceConfig, AIModelRef } from '#//ai-config.js'
+import { resolveApiKey, getExpectedEnvVar } from '#/env.js'
+import type { AiServiceConfig, AIModelRef } from '#/ai-config.js'
 
 const debug = createDebug('hypergen:ai:model-router')
 

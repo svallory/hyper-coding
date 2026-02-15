@@ -59,7 +59,7 @@ Add a new exported function:
 ```typescript
 export function registerHelpers(
   helpers: Record<string, any>,
-  source?: string  // e.g. "kit:@hyper-kits/nextjs" for collision warnings
+  source?: string  // e.g. "kit:@kit/nextjs" for collision warnings
 ): void {
   const engine = getJig()
   for (const [name, value] of Object.entries(helpers)) {
@@ -283,47 +283,47 @@ Remove dead re-exports:
 ## Files Summary
 
 ### Create (1 file)
-| File | Purpose |
-|------|---------|
+| File                         | Purpose                       |
+| ---------------------------- | ----------------------------- |
 | `src/config/load-helpers.ts` | Shared helper loading utility |
 
 ### Modify (12 files)
-| File | Changes |
-|------|---------|
-| `src/template-engines/jig-engine.ts` | Add `registerHelpers()` with collision tracking |
-| `src/config/types.ts` | Add `helpers?: string` to KitConfig, CookbookConfig |
-| `src/config/kit-parser.ts` | Load helpers, register as Jig globals |
-| `src/config/cookbook-parser.ts` | Load helpers, register as Jig globals |
-| `src/config/hypergen-config.ts` | Use shared `loadHelpers()`, register as Jig globals |
-| `src/recipe-engine/recipe-engine.ts` | Remove context() import, simplify createExecutionContext |
-| `src/recipe-engine/tools/template-tool.ts` | Simplify buildRenderContext |
-| `src/recipe-engine/tools/shell-tool.ts` | Remove dead ops/shell import |
-| `src/helpers.ts` | Remove `path` export |
-| `src/types.ts` | Slim RunnerConfig, remove dead types |
-| `src/index.ts` | Remove dead re-exports |
-| `src/lib/base-command.ts` | Remove `helpers` from RecipeEngineConfig |
+| File                                       | Changes                                                  |
+| ------------------------------------------ | -------------------------------------------------------- |
+| `src/template-engines/jig-engine.ts`       | Add `registerHelpers()` with collision tracking          |
+| `src/config/types.ts`                      | Add `helpers?: string` to KitConfig, CookbookConfig      |
+| `src/config/kit-parser.ts`                 | Load helpers, register as Jig globals                    |
+| `src/config/cookbook-parser.ts`            | Load helpers, register as Jig globals                    |
+| `src/config/hypergen-config.ts`            | Use shared `loadHelpers()`, register as Jig globals      |
+| `src/recipe-engine/recipe-engine.ts`       | Remove context() import, simplify createExecutionContext |
+| `src/recipe-engine/tools/template-tool.ts` | Simplify buildRenderContext                              |
+| `src/recipe-engine/tools/shell-tool.ts`    | Remove dead ops/shell import                             |
+| `src/helpers.ts`                           | Remove `path` export                                     |
+| `src/types.ts`                             | Slim RunnerConfig, remove dead types                     |
+| `src/index.ts`                             | Remove dead re-exports                                   |
+| `src/lib/base-command.ts`                  | Remove `helpers` from RecipeEngineConfig                 |
 
 ### Delete (14+ source, 4 test files)
-| File | Reason |
-|------|--------|
-| `src/context.ts` | Replaced by Jig globals |
-| `src/render.ts` | Dead — old Hygen pipeline |
-| `src/execute.ts` | Dead — old ops orchestrator |
-| `src/engine.ts` | Dead — deprecated stub |
-| `src/params.ts` | Dead — replaced by oclif |
-| `src/help.ts` | Dead — replaced by oclif |
-| `src/prompt.ts` | Dead — replaced by interactive-prompts |
-| `src/generators.ts` | Dead — old template scanner |
-| `src/TemplateStore.ts` | Dead — old template store |
-| `src/indexed-store/` | Dead — TemplateStore support |
-| `src/ops/shell.ts` | Dead — never called |
-| `src/ops/echo.ts` | Dead — only used by dead execute.ts |
-| `src/ops/setup.ts` | Dead — only used by dead execute.ts |
-| `src/ops/index.ts` | Dead — only used by dead execute.ts |
-| `tests/context.spec.ts` | Tests deleted module |
-| `tests/render.spec.ts` | Tests deleted module |
-| `tests/params.spec.ts` | Tests deleted module |
-| `tests/util/metaverse.helper.ts` | Dead utility |
+| File                             | Reason                                 |
+| -------------------------------- | -------------------------------------- |
+| `src/context.ts`                 | Replaced by Jig globals                |
+| `src/render.ts`                  | Dead — old Hygen pipeline              |
+| `src/execute.ts`                 | Dead — old ops orchestrator            |
+| `src/engine.ts`                  | Dead — deprecated stub                 |
+| `src/params.ts`                  | Dead — replaced by oclif               |
+| `src/help.ts`                    | Dead — replaced by oclif               |
+| `src/prompt.ts`                  | Dead — replaced by interactive-prompts |
+| `src/generators.ts`              | Dead — old template scanner            |
+| `src/TemplateStore.ts`           | Dead — old template store              |
+| `src/indexed-store/`             | Dead — TemplateStore support           |
+| `src/ops/shell.ts`               | Dead — never called                    |
+| `src/ops/echo.ts`                | Dead — only used by dead execute.ts    |
+| `src/ops/setup.ts`               | Dead — only used by dead execute.ts    |
+| `src/ops/index.ts`               | Dead — only used by dead execute.ts    |
+| `tests/context.spec.ts`          | Tests deleted module                   |
+| `tests/render.spec.ts`           | Tests deleted module                   |
+| `tests/params.spec.ts`           | Tests deleted module                   |
+| `tests/util/metaverse.helper.ts` | Dead utility                           |
 
 ---
 

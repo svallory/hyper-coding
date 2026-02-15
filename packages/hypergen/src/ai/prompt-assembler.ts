@@ -14,7 +14,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import createDebug from 'debug'
 import { renderTemplateSync } from '#/template-engines/jig-engine'
-import type { AiBlockEntry, AiCollector } from '#//ai-collector.js'
+import type { AiBlockEntry, AiCollector } from '#/ai-collector.js'
 
 const debug = createDebug('hypergen:ai:prompt-assembler')
 

@@ -1,8 +1,8 @@
 import path from 'node:path'
 import fs from 'fs-extra'
 import type { ActionResult, RenderedAction, RunnerConfig } from '#/types'
-import createResult from '#//result.js'
-import injector from '#//injector.js'
+import createResult from '#/result.js'
+import injector from '#/injector.js'
 
 const injectOp = async (
   action: RenderedAction,

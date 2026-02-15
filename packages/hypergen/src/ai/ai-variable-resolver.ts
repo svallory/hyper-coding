@@ -6,9 +6,9 @@
  */
 
 import createDebug from 'debug'
-import { AiService } from '#//ai-service.js'
+import { AiService } from '#/ai-service.js'
 import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
-import type { AiServiceConfig } from '#//ai-config.js'
+import type { AiServiceConfig } from '#/ai-config.js'
 import type { TemplateVariable } from '#/config/template-parser'
 
 const debug = createDebug('hypergen:ai:variable-resolver')

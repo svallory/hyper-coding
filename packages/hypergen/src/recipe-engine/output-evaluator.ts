@@ -18,7 +18,7 @@
 
 import createDebug from 'debug'
 import { renderTemplate } from '#/template-engines/index'
-import type { StepContext } from '#//types.js'
+import type { StepContext } from '#/types.js'
 
 const debug = createDebug('hypergen:v8:recipe:output-evaluator')
 

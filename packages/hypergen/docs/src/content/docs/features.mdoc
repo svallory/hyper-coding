@@ -45,24 +45,24 @@ variables:
     required: true
     pattern: ^[A-Z][a-zA-Z0-9]*$
     description: Component name in PascalCase
-  
+
   typescript:
     type: boolean
     default: true
     description: Generate TypeScript component
-  
+
   styling:
     type: enum
     values: [css, scss, styled-components, emotion]
     default: css
     description: Styling approach
-  
+
   features:
     type: array
     values: [hooks, context, memo, forwardRef]
     default: []
     description: React features to include
-  
+
   metadata:
     type: object
     properties:
@@ -305,14 +305,14 @@ import type { ActionContext, ActionResult } from 'hypergen/types';
 
 async function createComponent(context: ActionContext): Promise<ActionResult> {
   const { args, utils, logger } = context;
-  
+
   // Create directory structure
   await utils.createDirectory(`src/components`);
-  
+
   // Log progress
   logger.info(`✅ Created component ${args.name}`);
-  
-  return { 
+
+  return {
     success: true,
     files: [`src/components/${args.name}.tsx`]
   };
@@ -377,7 +377,7 @@ hypergen discover @company/cookbooks
 ```
 
 **NPM Naming Conventions:**
-- `@hyper-kits/*` (e.g., `@hyper-kits/starlight`)
+- `@kit/*` (e.g., `@kit/starlight`)
 - `hyper-kit-*` (e.g., `hyper-kit-react`)
 - `@user/hyper-kit-*` (e.g., `@company/hyper-kit-web`)
 
@@ -395,7 +395,7 @@ hypergen discover @company/cookbooks
 Discover cookbooks from GitHub repositories:
 
 ```bash
-# GitHub cookbook discovery  
+# GitHub cookbook discovery
 hypergen discover --source=github "hyper-kit"
 hypergen url resolve https://github.com/user/cookbook-repo
 ```
@@ -443,7 +443,7 @@ Rich kit-level configuration with support for cookbooks, direct recipes, and def
 
 ```yaml
 # kit.yml with cookbooks and direct recipes
-name: "@hyper-kits/moon"
+name: "@kit/moon"
 description: "Comprehensive Moon monorepo management"
 version: "1.0.0"
 
@@ -495,7 +495,7 @@ shared:
 
 ## 🛡️ Security & Trust System
 
-### 🔐 Creator Trust Management  
+### 🔐 Creator Trust Management
 **Status: Fully Implemented**
 
 Per-creator trust system with explicit consent:
@@ -503,7 +503,7 @@ Per-creator trust system with explicit consent:
 ```bash
 # Trust management
 hypergen trust @username          # Trust a GitHub user
-hypergen trust @company           # Trust an organization  
+hypergen trust @company           # Trust an organization
 hypergen trust list               # Show trusted creators
 hypergen trust revoke @username   # Revoke trust
 ```
@@ -574,7 +574,7 @@ hypergen recipe list [directory]       # List available recipes
 hypergen step list <recipe.yml>        # List steps in a recipe
 hypergen step execute <recipe> <step>  # Execute a single step
 
-# Legacy Action System  
+# Legacy Action System
 hypergen action list                    # List all available actions
 hypergen action info <action>          # Show action details and parameters
 hypergen <action> [options]           # Execute specific action
@@ -672,7 +672,7 @@ Performance optimizations throughout:
 
 **Recipe Processing Pipeline:**
 1. **Discovery** → Cookbook identification from multiple sources
-2. **Trust Validation** → Security check with creator consent  
+2. **Trust Validation** → Security check with creator consent
 3. **Composition Resolution** → Recipe inheritance and includes
 4. **Variable Validation** → Type checking and constraint validation
 5. **Step Execution** → Sequential tool execution (Template/Action/CodeMod)
@@ -694,7 +694,7 @@ Performance optimizations throughout:
 All features include complete test suites:
 
 - ✅ **Unit Tests**: Individual component testing
-- ✅ **Integration Tests**: Cross-component workflows  
+- ✅ **Integration Tests**: Cross-component workflows
 - ✅ **End-to-End Tests**: Complete template → file generation
 - ✅ **Performance Tests**: Startup time and throughput
 - ✅ **Security Tests**: Trust system validation
@@ -755,7 +755,7 @@ All documented features are **ready for production use**:
 Explore the powerful capabilities:
 
 1. **Recipe Composition**: Inherit from remote recipes and cookbooks
-2. **Rich Variables**: Use complex validation and types  
+2. **Rich Variables**: Use complex validation and types
 3. **Tool System**: Coordinate Template/Action/CodeMod tools in recipe steps
 4. **Discovery Integration**: Leverage community cookbooks and kits
 5. **Performance**: Take advantage of 4x rendering improvements

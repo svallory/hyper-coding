@@ -13,4 +13,4 @@ export {
   renderFile,
   mountDirectory,
   type JigConfig,
-} from '#//jig-engine.js'
+} from '#/jig-engine.js'

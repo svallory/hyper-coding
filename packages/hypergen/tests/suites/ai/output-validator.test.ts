@@ -61,7 +61,7 @@ describe('validateOutput', () => {
     })
 
     it('ignores relative imports', async () => {
-      const code = `import { foo } from '#//local-file'`
+      const code = `import { foo } from '#/local-file'`
       const result = await validateOutput(code, { requireKnownImports: true }, projectRoot)
       expect(result.passed).toBe(true)
     })

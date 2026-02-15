@@ -10,7 +10,7 @@ import type {
   ActionFunction, 
   DecoratedAction, 
   ActionQueryOptions 
-} from '#//types.js'
+} from '#/types.js'
 
 const debug = createDebug('hypergen:v8:action:registry')
 

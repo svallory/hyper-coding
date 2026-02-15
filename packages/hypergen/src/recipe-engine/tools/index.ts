@@ -9,62 +9,62 @@
 export {
   Tool,
   BaseToolFactory
-} from '#//base.js'
+} from '#/base.js'
 
 // Concrete tool implementations
 export {
   TemplateTool,
   TemplateToolFactory,
   templateToolFactory
-} from '#//template-tool.js'
+} from '#/template-tool.js'
 
 export {
   ActionTool,
   ActionToolFactory,
   actionToolFactory
-} from '#//action-tool.js'
+} from '#/action-tool.js'
 
 export {
   RecipeTool,
   RecipeToolFactory,
   recipeToolFactory
-} from '#//recipe-tool.js'
+} from '#/recipe-tool.js'
 
 export {
   ShellTool,
   ShellToolFactory,
   shellToolFactory
-} from '#//shell-tool.js'
+} from '#/shell-tool.js'
 
 export {
   AiTool,
   AiToolFactory,
   aiToolFactory
-} from '#//ai-tool.js'
+} from '#/ai-tool.js'
 
 export {
   InstallTool,
   InstallToolFactory,
   installToolFactory
-} from '#//install-tool.js'
+} from '#/install-tool.js'
 
 export {
   QueryTool,
   QueryToolFactory,
   queryToolFactory
-} from '#//query-tool.js'
+} from '#/query-tool.js'
 
 export {
   PatchTool,
   PatchToolFactory,
   patchToolFactory
-} from '#//patch-tool.js'
+} from '#/patch-tool.js'
 
 export {
   EnsureDirsTool,
   EnsureDirsToolFactory,
   ensureDirsToolFactory
-} from '#//ensure-dirs-tool.js'
+} from '#/ensure-dirs-tool.js'
 
 export type {
   ToolFactory,
@@ -72,7 +72,7 @@ export type {
   ToolResource,
   ToolLifecycleMetrics,
   ToolValidationResult
-} from '#//base.js'
+} from '#/base.js'
 
 // Tool registry system
 export {
@@ -84,7 +84,7 @@ export {
   type ToolRegistryStats,
   type ToolSearchCriteria,
   type ToolResolutionOptions
-} from '#//registry.js'
+} from '#/registry.js'
 
 // Re-export types from recipe-engine types for convenience
 export type {
@@ -131,21 +131,21 @@ export type {
 
 // Import types and classes for internal use
 import type { ToolType, RecipeStepUnion } from '#/recipe-engine/types'
-import type { ToolPhase, ToolValidationResult } from '#//base.js'
-import { Tool } from '#//base.js'
-import { ToolRegistry, getToolRegistry, type ToolResolutionOptions, type ToolRegistryStats } from '#//registry.js'
-import { templateToolFactory } from '#//template-tool.js'
-import { actionToolFactory } from '#//action-tool.js'
-import { recipeToolFactory } from '#//recipe-tool.js'
-import { shellToolFactory } from '#//shell-tool.js'
-import { promptToolFactory } from '#//prompt-tool.js'
-import { sequenceToolFactory } from '#//sequence-tool.js'
-import { parallelToolFactory } from '#//parallel-tool.js'
-import { aiToolFactory } from '#//ai-tool.js'
-import { installToolFactory } from '#//install-tool.js'
-import { queryToolFactory } from '#//query-tool.js'
-import { patchToolFactory } from '#//patch-tool.js'
-import { ensureDirsToolFactory } from '#//ensure-dirs-tool.js'
+import type { ToolPhase, ToolValidationResult } from '#/base.js'
+import { Tool } from '#/base.js'
+import { ToolRegistry, getToolRegistry, type ToolResolutionOptions, type ToolRegistryStats } from '#/registry.js'
+import { templateToolFactory } from '#/template-tool.js'
+import { actionToolFactory } from '#/action-tool.js'
+import { recipeToolFactory } from '#/recipe-tool.js'
+import { shellToolFactory } from '#/shell-tool.js'
+import { promptToolFactory } from '#/prompt-tool.js'
+import { sequenceToolFactory } from '#/sequence-tool.js'
+import { parallelToolFactory } from '#/parallel-tool.js'
+import { aiToolFactory } from '#/ai-tool.js'
+import { installToolFactory } from '#/install-tool.js'
+import { queryToolFactory } from '#/query-tool.js'
+import { patchToolFactory } from '#/patch-tool.js'
+import { ensureDirsToolFactory } from '#/ensure-dirs-tool.js'
 
 // Re-export type guard functions for convenience
 export {

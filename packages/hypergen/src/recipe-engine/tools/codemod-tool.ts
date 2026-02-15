@@ -11,7 +11,7 @@ import fs from 'fs-extra'
 import createDebug from 'debug'
 import * as ts from 'typescript'
 import { glob } from 'glob'
-import { Tool, type ToolValidationResult } from '#//base.js'
+import { Tool, type ToolValidationResult } from '#/base.js'
 import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '#/errors/hypergen-errors'
 import { 
   type CodeModStep, 

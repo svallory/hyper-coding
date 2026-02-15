@@ -9,7 +9,7 @@ import path from 'path'
 import { cosmiconfig } from 'cosmiconfig'
 import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 import { DEFAULT_TEMPLATE_DIRECTORY } from '#/constants'
-import { loadHelpers } from '#//load-helpers.js'
+import { loadHelpers } from '#/load-helpers.js'
 import { registerHelpers } from '#/template-engines/jig-engine'
 import type { AiServiceConfig } from '#/ai/ai-config'
 

@@ -21,7 +21,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
   static override description = 'Install a kit from npm, JSR, GitHub, or local path'
 
   static override examples = [
-    '<%= config.bin %> kit install @hyper-kits/nextjs',
+    '<%= config.bin %> kit install @kit/nextjs',
     '<%= config.bin %> kit install svallory/hypergen-kit-nextjs',
     '<%= config.bin %> kit install jsr:@std/path',
     '<%= config.bin %> kit install ./local-kit',
@@ -87,7 +87,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
         this.error(
           `Kit not found: ${args.kit}\n\n` +
           `Make sure the source is correct. Examples:\n` +
-          `  NPM:     hypergen kit install @hyper-kits/nextjs\n` +
+          `  NPM:     hypergen kit install @kit/nextjs\n` +
           `  GitHub:  hypergen kit install user/repo\n` +
           `  JSR:     hypergen kit install jsr:@std/path\n` +
           `  Local:   hypergen kit install ./path/to/kit`

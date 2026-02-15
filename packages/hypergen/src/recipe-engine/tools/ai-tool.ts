@@ -9,7 +9,7 @@
 import createDebug from 'debug'
 import fs from 'fs'
 import path from 'path'
-import { Tool, type ToolValidationResult } from '#//base.js'
+import { Tool, type ToolValidationResult } from '#/base.js'
 import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 import type {
   StepContext,

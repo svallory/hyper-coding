@@ -9,7 +9,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from '#//base.js'
+import { Tool, type ToolValidationResult } from '#/base.js'
 import type {
   QueryStep,
   QueryExecutionResult,

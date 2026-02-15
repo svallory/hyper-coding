@@ -16,7 +16,7 @@ import createDebug from 'debug'
 import { PromptAssembler } from '#/ai/prompt-assembler'
 import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 import type { AiBlockEntry } from '#/ai-collector'
-import type { AiTransport, TransportContext, TransportResult } from '#//types.js'
+import type { AiTransport, TransportContext, TransportResult } from '#/types.js'
 
 const debug = createDebug('hypergen:ai:transport:command')
 

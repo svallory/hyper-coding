@@ -12,7 +12,7 @@ export default class KitInfo extends BaseCommand<typeof KitInfo> {
   static override description = 'Show detailed information about a kit'
 
   static override examples = [
-    '<%= config.bin %> kit info @hyper-kits/starlight',
+    '<%= config.bin %> kit info @kit/starlight',
     '<%= config.bin %> kit info starlight --json',
   ]
 
@@ -40,7 +40,7 @@ export default class KitInfo extends BaseCommand<typeof KitInfo> {
       const kit = kits.find(k =>
         k.name === args.kit ||
         k.name.endsWith(`/${args.kit}`) ||
-        k.name === `@hyper-kits/${args.kit}`
+        k.name === `@kit/${args.kit}`
       )
 
       if (!kit) {

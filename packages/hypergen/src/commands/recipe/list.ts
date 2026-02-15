@@ -60,10 +60,10 @@ export default class RecipeList extends BaseCommand<typeof RecipeList> {
       const kitFilter = args.kit || flags.kit
       const targetKits = kitFilter
         ? kits.filter(k =>
-            k.name === kitFilter ||
-            k.name.endsWith(`/${kitFilter}`) ||
-            k.name === `@hyper-kits/${kitFilter}`
-          )
+          k.name === kitFilter ||
+          k.name.endsWith(`/${kitFilter}`) ||
+          k.name === `@kit/${kitFilter}`
+        )
         : kits
 
       if (targetKits.length === 0 && kitFilter) {

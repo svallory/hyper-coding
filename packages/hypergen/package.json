@@ -34,9 +34,9 @@
 	"type": "module",
 	"imports": {
 		"#/*": "./src/*",
-		"#/tests/*": "./tests/*",
-		"#/fixtures/*": "./tests/fixtures/*",
-		"#/helpers/*": "./tests/helpers/*"
+		"#tests/*": "./tests/*",
+		"#fixtures/*": "./tests/fixtures/*",
+		"#helpers/*": "./tests/helpers/*"
 	},
 	"oclif": {
 		"bin": "hypergen",
@@ -101,7 +101,7 @@
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",
 		"@dotenvx/dotenvx": "^1.52.0",
-		"@hyper-kits/nextjs": "github:hyper-kits/nextjs",
+		"@kit/nextjs": "github:kit/nextjs",
 		"@jig-lang/jig": "^1.0.1",
 		"@microsoft/api-extractor": "^7.55.0",
 		"@oclif/core": "^4",
@@ -152,14 +152,21 @@
 		"zeroconf-typescript-eslint": "^2.4.0"
 	},
 	"nodemonConfig": {
-		"ignore": ["**/test/**", "**/docs/**"],
+		"ignore": [
+			"**/test/**",
+			"**/docs/**"
+		],
 		"delay": 500
 	},
 	"pkg": {
 		"scripts": "dist/**/*.js",
 		"assets": "src/**/*",
 		"outPath": "standalone",
-		"targets": ["node17-macos", "node17-linux", "node17-win"]
+		"targets": [
+			"node17-macos",
+			"node17-linux",
+			"node17-win"
+		]
 	},
 	"peerDependencies": {
 		"@ai-sdk/anthropic": "^1.0.0",
@@ -181,7 +188,9 @@
 	},
 	"test": {
 		"coverage": {
-			"exclude": ["dist/**"]
+			"exclude": [
+				"dist/**"
+			]
 		}
 	}
 }

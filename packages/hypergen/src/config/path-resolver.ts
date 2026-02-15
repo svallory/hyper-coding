@@ -11,9 +11,9 @@
 import fs from 'fs'
 import path from 'path'
 import createDebug from 'debug'
-import type { ParsedKit } from '#//kit-parser.js'
-import type { ParsedCookbook } from '#//cookbook-parser.js'
-import { discoverCookbooksInKit, discoverRecipesInCookbook } from '#//cookbook-parser.js'
+import type { ParsedKit } from '#/kit-parser.js'
+import type { ParsedCookbook } from '#/cookbook-parser.js'
+import { discoverCookbooksInKit, discoverRecipesInCookbook } from '#/cookbook-parser.js'
 
 const debug = createDebug('hypergen:config:path-resolver')
 

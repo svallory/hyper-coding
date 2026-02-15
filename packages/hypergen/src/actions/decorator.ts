@@ -5,8 +5,8 @@
  */
 
 import createDebug from 'debug'
-import type { ActionMetadata, ActionFunction, DecoratedAction } from '#//types.js'
-import { ActionRegistry } from '#//registry.js'
+import type { ActionMetadata, ActionFunction, DecoratedAction } from '#/types.js'
+import { ActionRegistry } from '#/registry.js'
 
 const debug = createDebug('hypergen:v8:action:decorator')
 

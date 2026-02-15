@@ -10,7 +10,7 @@ import path from 'node:path'
 import { exec } from 'node:child_process'
 import { promisify } from 'node:util'
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from '#//base.js'
+import { Tool, type ToolValidationResult } from '#/base.js'
 import type {
   InstallStep,
   InstallExecutionResult,

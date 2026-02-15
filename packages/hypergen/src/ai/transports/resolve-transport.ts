@@ -8,11 +8,11 @@
 import createDebug from 'debug'
 import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 import { hasApiKeyAvailable, getExpectedEnvVar } from '#/ai/env'
-import { StdoutTransport } from '#//stdout-transport.js'
-import { ApiTransport } from '#//api-transport.js'
-import { CommandTransport } from '#//command-transport.js'
+import { StdoutTransport } from '#/stdout-transport.js'
+import { ApiTransport } from '#/api-transport.js'
+import { CommandTransport } from '#/command-transport.js'
 import type { AiServiceConfig } from '#/ai-config'
-import type { AiTransport } from '#//types.js'
+import type { AiTransport } from '#/types.js'
 
 const debug = createDebug('hypergen:ai:transport:resolve')
 

@@ -21,7 +21,7 @@ export default class Run extends BaseCommand<typeof Run> {
 
   static override examples = [
     '<%= config.bin %> run ./my-recipe',
-    '<%= config.bin %> run @hyper-kits/starlight/create',
+    '<%= config.bin %> run @kit/starlight/create',
     '<%= config.bin %> run create-component --name=Button',
     '<%= config.bin %> run ./my-recipe --answers ./ai-answers.json',
     '<%= config.bin %> run crud edit-page --model=Organization',

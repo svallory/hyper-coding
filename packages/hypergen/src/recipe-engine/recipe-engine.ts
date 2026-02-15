@@ -12,8 +12,8 @@ import yaml from 'js-yaml'
 import createDebug from 'debug'
 import { EventEmitter } from 'events'
 import { TemplateParser, type TemplateVariable } from '#/config/template-parser'
-import { StepExecutor, type StepExecutorConfig } from '#//step-executor.js'
-import { ToolRegistry, getToolRegistry } from '#//tools/registry.js'
+import { StepExecutor, type StepExecutorConfig } from '#/step-executor.js'
+import { ToolRegistry, getToolRegistry } from '#/tools/registry.js'
 import { HypergenError, ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 import { renderTemplate as jigRenderTemplate } from '#/template-engines/jig-engine'
 import Logger from '#/logger'
@@ -31,11 +31,11 @@ import type {
   StepResult,
   RecipeStepUnion,
   StepExecutionOptions
-} from '#//types.js'
+} from '#/types.js'
 import {
   RecipeValidationError,
   RecipeDependencyError
-} from '#//types.js'
+} from '#/types.js'
 
 const debug = createDebug('hypergen:v8:recipe:engine')
 

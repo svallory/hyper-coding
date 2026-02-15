@@ -20,7 +20,7 @@ export {
   type RecipeExecutionOptions,
   type RecipeExecutionResult,
   type RecipeLoadResult
-} from '#//recipe-engine.js'
+} from '#/recipe-engine.js'
 
 // Step Execution Engine
 export {
@@ -28,13 +28,13 @@ export {
   type StepExecutorConfig,
   type StepExecutionMetrics,
   type StepExecutionProgress
-} from '#//step-executor.js'
+} from '#/step-executor.js'
 
 // Complete Tool Framework
-export * from '#//tools/index.js'
+export * from '#/tools/index.js'
 
 // Complete Type System
-export * from '#//types.js'
+export * from '#/types.js'
 
 // Recipe Engine Constants and Utilities
 export const RECIPE_ENGINE_VERSION = '8.0.0'

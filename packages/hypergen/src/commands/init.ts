@@ -20,7 +20,7 @@ export default {
 
   // Trusted kit sources
   trustedSources: [
-    '@hyper-kits/*',
+    '@kit/*',
   ],
 }
 `
@@ -30,7 +30,7 @@ export default class Init extends BaseCommand<typeof Init> {
 
   static override examples = [
     '<%= config.bin %> init',
-    '<%= config.bin %> init --kit @hyper-kits/starlight',
+    '<%= config.bin %> init --kit @kit/starlight',
   ]
 
   static override flags = {

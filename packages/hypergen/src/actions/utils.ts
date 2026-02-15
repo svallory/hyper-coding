@@ -9,7 +9,7 @@ import path from 'path'
 import { glob } from 'glob'
 import execa from 'execa'
 import createDebug from 'debug'
-import type { ActionUtils, ActionLogger } from '#//types.js'
+import type { ActionUtils, ActionLogger } from '#/types.js'
 
 const debug = createDebug('hypergen:v8:action:utils')
 

@@ -13,7 +13,7 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 
   static override examples = [
     '<%= config.bin %> cookbook info starlight',
-    '<%= config.bin %> cookbook info @hyper-kits/starlight/docs --json',
+    '<%= config.bin %> cookbook info @kit/starlight/docs --json',
   ]
 
   static override flags = {
@@ -70,19 +70,19 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
           const parsedKit = await parseKitFile(kitYmlPath)
 
           if (parsedKit.isValid && parsedKit.config.cookbooks) {
-             const cookbooks = await discoverCookbooksInKit(generator.path, parsedKit.config.cookbooks)
-             const cookbook = cookbooks.get(targetCookbook)
+            const cookbooks = await discoverCookbooksInKit(generator.path, parsedKit.config.cookbooks)
+            const cookbook = cookbooks.get(targetCookbook)
 
-             if (cookbook) {
-               foundCookbook = {
-                 kitName: generator.name,
-                 kitPath: generator.path,
-                 cookbookName: cookbook.config.name,
-                 cookbookPath: cookbook.dirPath,
-                 config: cookbook.config
-               }
-               break // Stop searching once found
-             }
+            if (cookbook) {
+              foundCookbook = {
+                kitName: generator.name,
+                kitPath: generator.path,
+                cookbookName: cookbook.config.name,
+                cookbookPath: cookbook.dirPath,
+                config: cookbook.config
+              }
+              break // Stop searching once found
+            }
           }
         }
       }
@@ -170,7 +170,7 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
               }
 
               if (varAny.default !== undefined) {
-                 varLine += c.default(varAny.default)
+                varLine += c.default(varAny.default)
               }
 
               this.log(s.indent(varLine, 4))
@@ -181,11 +181,11 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 
               // Helper to check for enum properties safely
               if (varAny.options && Array.isArray(varAny.options)) {
-                 this.log(s.indent(c.enum(`Enum: ${varAny.options.map((o: any) => typeof o === 'object' ? o.value : o).join(', ')}`), 6))
+                this.log(s.indent(c.enum(`Enum: ${varAny.options.map((o: any) => typeof o === 'object' ? o.value : o).join(', ')}`), 6))
               }
 
               if (varAny.suggestion) {
-                 this.log(s.indent(c.subtle(`Suggestion: ${varAny.suggestion}`), 6))
+                this.log(s.indent(c.subtle(`Suggestion: ${varAny.suggestion}`), 6))
               }
             }
           }

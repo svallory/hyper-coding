@@ -16,25 +16,25 @@ export type {
   AIGuardrailConfig,
   AIExecutionResult,
   AICostSummary,
-} from '#//ai-config.js'
+} from '#/ai-config.js'
 
 // Core service
-export { AiService, type GenerateOptions } from '#//ai-service.js'
+export { AiService, type GenerateOptions } from '#/ai-service.js'
 
 // Model routing
-export { ModelRouter, type ResolvedModel } from '#//model-router.js'
+export { ModelRouter, type ResolvedModel } from '#/model-router.js'
 
 // Cost tracking
-export { CostTracker } from '#//cost-tracker.js'
+export { CostTracker } from '#/cost-tracker.js'
 
 // Prompt pipeline
-export { PromptPipeline, type AssembledPrompt, type PromptPipelineOptions } from '#//prompt-pipeline.js'
+export { PromptPipeline, type AssembledPrompt, type PromptPipelineOptions } from '#/prompt-pipeline.js'
 
 // Context collection
-export { ContextCollector, type ContextBundle } from '#//context-collector.js'
+export { ContextCollector, type ContextBundle } from '#/context-collector.js'
 
 // Output validation
-export { validateOutput, buildValidationFeedback, type ValidationResult } from '#//output-validator.js'
+export { validateOutput, buildValidationFeedback, type ValidationResult } from '#/output-validator.js'
 
 // Environment / API key resolution
 export {
@@ -44,11 +44,11 @@ export {
   loadDotenv,
   PROVIDER_API_KEY_ENV_VARS,
   ALL_KNOWN_API_KEY_VARS,
-} from '#//env.js'
+} from '#/env.js'
 
 // 2-pass AI generation
-export { AiCollector, type AiBlockEntry } from '#//ai-collector.js'
-export { PromptAssembler, type AssemblerOptions } from '#//prompt-assembler.js'
+export { AiCollector, type AiBlockEntry } from '#/ai-collector.js'
+export { PromptAssembler, type AssemblerOptions } from '#/prompt-assembler.js'
 
 // AI transports (pluggable resolution for 2-pass @ai blocks)
 export {
@@ -59,4 +59,4 @@ export {
   type AiTransport,
   type TransportResult,
   type TransportContext,
-} from '#//transports/index.js'
+} from '#/transports/index.js'

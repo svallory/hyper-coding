@@ -44,8 +44,8 @@ export interface ResolvedKitSource {
  *
  * @example
  * ```typescript
- * resolveKitSource('@hyper-kits/nextjs')
- * // → { type: 'npm', source: '@hyper-kits/nextjs', registry: 'npm' }
+ * resolveKitSource('@kit/nextjs')
+ * // → { type: 'npm', source: '@kit/nextjs', registry: 'npm' }
  *
  * resolveKitSource('svallory/hypergen-kit-nextjs')
  * // → { type: 'github', source: 'github:svallory/hypergen-kit-nextjs' }
@@ -90,7 +90,7 @@ export function resolveKitSource(input: string): ResolvedKitSource {
 
   // 3. Git URLs (by protocol or .git extension)
   if (trimmed.startsWith('git://') ||
-      trimmed.startsWith('ssh://git@')) {
+    trimmed.startsWith('ssh://git@')) {
     return { type: 'git', source: trimmed, original: input }
   }
 
@@ -120,9 +120,9 @@ export function resolveKitSource(input: string): ResolvedKitSource {
 
   // 6. Unix paths
   if (trimmed.startsWith('/') ||      // Absolute
-      trimmed.startsWith('./') ||     // Relative
-      trimmed.startsWith('../') ||    // Parent
-      trimmed.startsWith('~/')) {     // Home
+    trimmed.startsWith('./') ||     // Relative
+    trimmed.startsWith('../') ||    // Parent
+    trimmed.startsWith('~/')) {     // Home
     return { type: 'local', source: trimmed, original: input }
   }
 

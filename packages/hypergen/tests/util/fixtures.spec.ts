@@ -9,7 +9,7 @@ import {
   listFixtures,
   withTempFixtures,
   copyFixture
-} from '#//fixtures.js'
+} from '#/fixtures.js'
 
 describe('fixture helpers', () => {
   describe('fixture()', () => {

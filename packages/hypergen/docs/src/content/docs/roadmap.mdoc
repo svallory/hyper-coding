@@ -24,7 +24,7 @@ Enhanced development workflow for recipe creators:
 ```bash
 # Development workflow commands
 hypergen dev --watch                     # Hot reload during development
-hypergen preview recipe <cookbook>/<recipe> # Preview without executing  
+hypergen preview recipe <cookbook>/<recipe> # Preview without executing
 hypergen test recipe <path>              # Test recipe with sample data
 hypergen lint recipe <path>              # Validate recipe best practices
 hypergen benchmark recipe <path>         # Performance analysis
@@ -45,18 +45,18 @@ Building on the existing composition system:
 ```yaml
 # Enhanced composition features
 composition:
-  base: @hyper-kits/base-recipe
+  base: @kit/base-recipe
   includes:
     - recipe: feature-module
       condition: features.includes("authentication")
       merge_strategy: deep_merge
       conflict_resolution: prompt
-      
+
   # Recipe parameterization
   parameters:
     theme: "{% raw %}{{ styling.theme }}{% endraw %}"
     components: "{% raw %}{{ features }}{% endraw %}"
-    
+
   # Composition validation
   validation:
     required_variables: [name, version]
@@ -66,7 +66,7 @@ steps:
   - name: Generate base structure
     tool: template
     template: base.jig.t
-    
+
   - name: Add authentication
     tool: action
     action: setup-auth
@@ -216,7 +216,7 @@ Extended template engine ecosystem:
 export class CustomTemplateEngine implements TemplateEngine {
   readonly name = 'custom'
   readonly supportedExtensions = ['.custom']
-  
+
   async render(template: string, context: any): Promise<string> {
     // Custom rendering logic
     return processedTemplate;
@@ -241,13 +241,13 @@ Integration with development workflows:
 - name: Generate with Hypergen
   uses: hypergen/hypergen-action@v1
   with:
-    cookbook: '@hyper-kits/api'
+    cookbook: '@kit/api'
     recipe: 'create'
     variables: |
       name: user-service
       database: postgres
       features: [auth, logging]
-    
+
 # CI/CD pipeline integration
 hypergen validate --only               # Validate without generating
 hypergen diff --output                 # Show what would be generated
@@ -278,34 +278,34 @@ steps:
   - name: Setup monorepo
     tool: template
     template: moon-setup.jig.t
-    
+
   - name: Configure Claude Code
     tool: action
     action: setup-claude-hooks
-    
+
   - name: Setup quality gates
     tool: codemod
     codemod: add-quality-gates
 
 composition:
-  base: @hyper-kits/base-project
+  base: @kit/base-project
   includes:
     - recipe: moon-monorepo-setup
     - recipe: claude-code-hooks
     - recipe: quality-gates
     - recipe: development-daemon
-      
+
 variables:
   projectName:
     type: string
     required: true
     pattern: ^[a-z][a-z0-9-]*$
-    
+
   toolStack:
     type: enum
     values: [typescript-react, typescript-node, go-cli]
     default: typescript-react
-    
+
   hyperCodingLevel:
     type: enum
     values: [basic, standard, advanced]
@@ -427,7 +427,7 @@ As features are developed, documentation will expand:
 Hypergen is already a complete, modern code generation platform. Future enhancements will focus on:
 
 - **Developer Experience**: Making recipe development even more intuitive
-- **Enterprise Features**: Supporting large-scale organizational adoption  
+- **Enterprise Features**: Supporting large-scale organizational adoption
 - **Community Growth**: Fostering a thriving ecosystem of shared cookbooks
 - **Innovation**: Pushing the boundaries of what's possible with code generation
 

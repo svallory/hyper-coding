@@ -37,7 +37,7 @@ hypergen react component
 # ? Include tests? (Y/n) Y
 # ? Styling approach: (Use arrow keys)
 #   ❯ CSS Modules
-#     Styled Components  
+#     Styled Components
 #     Emotion
 #     Plain CSS
 ```
@@ -55,24 +55,24 @@ variables:
     required: true
     pattern: ^[A-Z][a-zA-Z0-9]*$
     description: Component name in PascalCase
-  
+
   typescript:
-    type: boolean  
+    type: boolean
     default: true
     description: Generate TypeScript files
-  
+
   styling:
     type: enum
     values: [css, scss, styled-components, emotion]
     default: css
     description: Styling approach
-    
+
   features:
     type: array
     values: [routing, state, testing, docs]
     default: []
     description: Additional features to include
-    
+
   config:
     type: object
     properties:
@@ -139,10 +139,10 @@ hypergen recipe execute react/component --name="Button" --dryRun
 # Output:
 # Would create files:
 #   src/components/Button.tsx
-#   src/components/Button.module.css  
+#   src/components/Button.module.css
 #   src/components/Button.test.tsx
 #   src/components/index.ts (modified)
-# 
+#
 # Would execute actions:
 #   install-dependencies: react, @types/react
 #   update-exports: add Button to index
@@ -158,7 +158,7 @@ hypergen step list react/component
 # Output:
 # Steps in react/component:
 #   1. Generate component file
-#   2. Generate styles  
+#   2. Generate styles
 #   3. Generate tests (conditional)
 #   4. Update exports
 #   5. Install dependencies
@@ -212,7 +212,7 @@ Control which steps run:
 # Skip tests
 hypergen react component --name="Button" --includeTests=false
 
-# Include storybook  
+# Include storybook
 hypergen react component --name="Button" --features="storybook,docs"
 ```
 
@@ -228,11 +228,11 @@ hypergen react component --name="Button" --outputDir="."
 ```
 
 ### Conflict Resolution
-```bash  
+```bash
 # Skip existing files
 hypergen react component --name="Button" --conflict=skip
 
-# Overwrite existing files  
+# Overwrite existing files
 hypergen react component --name="Button" --conflict=overwrite
 
 # Prompt for each conflict
@@ -258,7 +258,7 @@ composition:
   includes:
     - recipe: typescript-setup
       condition: "{{ typescript }}"
-    - recipe: testing-setup  
+    - recipe: testing-setup
       condition: "{{ includeTests }}"
     - recipe: docs-setup
       condition: "{{ features contains 'docs' }}"
@@ -289,7 +289,7 @@ hypergen react component --name="Button"
 ```
 
 **Invalid variable values**:
-```bash  
+```bash
 # Error: 'name' must match pattern ^[A-Z][a-zA-Z0-9]*$
 hypergen react component --name="button" # ❌ lowercase
 hypergen react component --name="Button" # ✅ PascalCase
@@ -322,13 +322,13 @@ hypergen recipe info react/component
 # Recipe: react/component
 # Description: Create React components with TypeScript
 # Version: 2.1.0
-# Author: @hyper-kits
-# 
+# Author: @kit
+#
 # Variables:
 #   name (string, required): Component name in PascalCase
 #   typescript (boolean, default: true): Generate TypeScript
 #   styling (enum, default: css): Styling approach
-# 
+#
 # Steps:
 #   1. Generate component → component.tsx.jig.t
 #   2. Generate styles → styles.module.css.jig.t
@@ -362,7 +362,7 @@ hypergen recipe execute complex-app/create --name="MyApp"
 # Start simple
 hypergen react component --name="Button"
 
-# Add complexity gradually  
+# Add complexity gradually
 hypergen react component --name="Button" --styling="styled-components" --features="storybook"
 ```
 

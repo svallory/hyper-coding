@@ -28,7 +28,7 @@ my-project/
 │   └── kits/                  # Installed kits (GitHub, local)
 │       └── my-kit/
 ├── node_modules/              # NPM-installed kits
-│   └── @hyper-kits/
+│   └── @kit/
 │       └── my-kit/
 ├── recipes/                   # Workspace kit (auto-discovered)
 ├── cookbooks/                 # Workspace kit (auto-discovered)
@@ -42,7 +42,7 @@ See **[Kit Management](/guides/kit-management)** for installation details.
 A kit can have both cookbooks and direct recipes:
 
 ```
-@hyper-kits/my-kit/
+@kit/my-kit/
 ├── kit.yml                    # Kit configuration
 ├── cookbooks/                 # Organized recipe collections
 │   ├── frontend/
@@ -68,7 +68,7 @@ A kit can have both cookbooks and direct recipes:
 
 ```yaml
 # kit.yml
-name: "@hyper-kits/my-kit"
+name: "@kit/my-kit"
 description: "My custom Hypergen kit"
 version: "1.0.0"
 author: "Your Name"
@@ -192,7 +192,7 @@ For commands like `hypergen my-kit frontend create`:
 
 ```yaml
 # kit.yml
-name: "@hyper-kits/mixed-kit"
+name: "@kit/mixed-kit"
 description: "Kit with both cookbooks and direct recipes"
 
 defaults:
@@ -229,7 +229,7 @@ hypergen mixed-kit backend api
 
 ```yaml
 # kit.yml
-name: "@hyper-kits/utils"
+name: "@kit/utils"
 description: "Utility recipes"
 
 defaults:
@@ -257,7 +257,7 @@ hypergen utils clean
 
 ```yaml
 # kit.yml
-name: "@hyper-kits/enterprise"
+name: "@kit/enterprise"
 description: "Enterprise development kit"
 
 defaults:

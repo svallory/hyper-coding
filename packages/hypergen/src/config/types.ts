@@ -1,6 +1,6 @@
 /**
  * V8 Template Configuration Types
- * 
+ *
  * Core type definitions for the new template.yml configuration system
  */
 
@@ -103,7 +103,7 @@ export interface ValidationResult {
 
 // Kit configuration
 export interface KitConfig {
-  /** Kit name (e.g., "@hyper-kits/nextjs") */
+  /** Kit name (e.g., "@kit/nextjs") */
   name: string
   /** Kit description */
   description?: string

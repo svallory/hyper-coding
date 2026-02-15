@@ -8,7 +8,7 @@
 import createDebug from 'debug'
 import fs from 'fs'
 import path from 'path'
-import type { AIGuardrailConfig } from '#//ai-config.js'
+import type { AIGuardrailConfig } from '#/ai-config.js'
 
 const debug = createDebug('hypergen:ai:output-validator')
 

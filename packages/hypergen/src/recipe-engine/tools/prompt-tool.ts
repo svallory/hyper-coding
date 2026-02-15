@@ -7,7 +7,7 @@
  */
 
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from '#//base.js'
+import { Tool, type ToolValidationResult } from '#/base.js'
 import { performInteractivePrompting } from '#/prompts/interactive-prompts'
 import { 
   type StepContext, 

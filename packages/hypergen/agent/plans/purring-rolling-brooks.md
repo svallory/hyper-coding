@@ -10,7 +10,7 @@ The `sandbox/generate-todo-app.sh` script demonstrates the full hypergen workflo
 
 1. **User Agent** — Runs hypergen commands, states expectations before each run, compares expectation vs reality, reports errors in detail.
 
-2. **Senior Dev Agent** — Diagnoses and fixes bugs in both hypergen core (`src/`) and the nextjs kit (`/work/hyperdev/packages/hyper-kits/nextjs/`).
+2. **Senior Dev Agent** — Diagnoses and fixes bugs in both hypergen core (`src/`) and the nextjs kit (`/work/hyperdev/packages/kit/nextjs/`).
 
 ### Protocol
 
@@ -24,24 +24,24 @@ Each round:
 
 **Subagents MUST use Haiku model by default.** Only use Sonnet when Haiku genuinely cannot handle the task.
 
-| Task | Model |
-|------|-------|
-| Running commands, reporting output | **Haiku** |
-| Simple file reads, directory listings | **Haiku** |
-| Comparing expected vs actual | **Haiku** |
-| Re-running commands to verify fixes | **Haiku** |
-| Small targeted fixes (typos, missing imports, config) | **Haiku** |
-| Complex multi-file bug diagnosis | **Sonnet** |
-| Architectural changes across recipe engine layers | **Sonnet** |
-| Tracing through template rendering pipeline | **Sonnet** |
+| Task                                                  | Model      |
+| ----------------------------------------------------- | ---------- |
+| Running commands, reporting output                    | **Haiku**  |
+| Simple file reads, directory listings                 | **Haiku**  |
+| Comparing expected vs actual                          | **Haiku**  |
+| Re-running commands to verify fixes                   | **Haiku**  |
+| Small targeted fixes (typos, missing imports, config) | **Haiku**  |
+| Complex multi-file bug diagnosis                      | **Sonnet** |
+| Architectural changes across recipe engine layers     | **Sonnet** |
+| Tracing through template rendering pipeline           | **Sonnet** |
 
 **The User Agent is ALWAYS Haiku. The Senior Dev Agent starts as Haiku; escalate to Sonnet only when the bug is genuinely complex (multi-file, requires deep code understanding).**
 
 ## Setup
 
 - Create clean sandbox dir: `sandbox/todo-app-test/`
-- The kit is already "installed" via symlink at `kits/nextjs → ../../hyper-kits/nextjs`
-- The user agent should consider the kit as pre-installed (it's a symlink to the real kit repo at `/work/hyperdev/packages/hyper-kits/nextjs/`)
+- The kit is already "installed" via symlink at `kits/nextjs → ../../kit/nextjs`
+- The user agent should consider the kit as pre-installed (it's a symlink to the real kit repo at `/work/hyperdev/packages/kit/nextjs/`)
 
 ## AI Configuration
 
@@ -51,7 +51,7 @@ After `hypergen init`, update `hypergen.config.js` to configure AI via command t
 export default {
   recipesDir: '_recipes',
   variables: {},
-  trustedSources: ['@hyper-kits/*'],
+  trustedSources: ['@kit/*'],
   ai: {
     mode: 'command',
     command: 'klaude --model sonnet -p {prompt}',
@@ -164,7 +164,7 @@ Note: The **variable resolution** path (`--ask=ai` for missing vars) already use
 - `src/ai/ai-collector.ts` — AI block collection
 - `src/ai/prompt-assembler.ts` — prompt assembly
 
-**Next.js Kit (`/work/hyperdev/packages/hyper-kits/nextjs/`):**
+**Next.js Kit (`/work/hyperdev/packages/kit/nextjs/`):**
 - `kit.yml` — kit metadata and cookbook globs
 - `cookbooks/project/create/recipe.yml` + `templates/`
 - `cookbooks/config/{drizzle,shadcn,tanstack-query}/recipe.yml` + `templates/`

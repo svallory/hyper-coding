@@ -6,7 +6,7 @@
  */
 
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from '#//base.js'
+import { Tool, type ToolValidationResult } from '#/base.js'
 import { ErrorHandler, ErrorCode } from '#/errors/hypergen-errors'
 import {
   type StepContext,

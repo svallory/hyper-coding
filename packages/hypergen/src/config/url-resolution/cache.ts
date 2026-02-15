@@ -13,7 +13,7 @@ import type {
   URLCacheConfig,
   CacheInfo,
   ValidationResult
-} from '#//types.js'
+} from '#/types.js'
 
 const debug = createDebug('hypergen:v8:cache')
 

@@ -49,7 +49,7 @@ A `Recipe` is defined by a folder that contains a `recipe.yml` file.
 
 **Think of recipes as**: Step-by-step instructions that orchestrate templates, actions, and codemods to accomplish a specific task.
 
-**Examples**: 
+**Examples**:
 - Create new monorepo
 - Add microservice
 - Setup CI
@@ -59,7 +59,7 @@ Tools provide capabilities to Hypergen. Every `Step` in a `Recipe` uses one spec
 
 **Built-in Tools:**
 - **Template Tool**: Processes template files using template engines
-- **Action Tool**: Executes a function or shell command  
+- **Action Tool**: Executes a function or shell command
 - **CodeMod Tool**: Runs an AST-transforming function provided by the developer to transform an existing file
 
 **Think of tools as**: The engines that power each step in your recipes.
@@ -92,9 +92,9 @@ A cookbook is composed of one or more "recipes". Each cookbook should be focused
 **Think of cookbooks as**: Collections of related recipes that solve problems in a specific domain.
 
 **Examples**:
-- `@hyper-kits/starlight`: All recipes for working with Starlight documentation sites
-- `@hyper-kits/monorepo`: Recipes for creating and managing monorepos
-- `@hyper-kits/security`: Security-focused setup recipes
+- `@kit/starlight`: All recipes for working with Starlight documentation sites
+- `@kit/monorepo`: Recipes for creating and managing monorepos
+- `@kit/security`: Security-focused setup recipes
 
 ### Kits
 A kit is a shareable bundle containing one or more cookbooks and, in the future, tools, plugins, assets, etc. Kits can be shared via NPM or via a git repository and allow sharing across different projects.
@@ -108,7 +108,7 @@ Kits can also contain **direct recipes** - recipes that don't belong to any cook
 Here's how these concepts work together in practice:
 
 ```
-Kit (@hyper-kits/starlight)
+Kit (@kit/starlight)
 ├── Cookbook (starlight documentation)
     ├── Recipe (create new site)
     │   ├── Steps using Tools:
@@ -125,7 +125,7 @@ Kit (@hyper-kits/starlight)
 
 ## Understanding the Hypergen Kit Structure
 
-Official kits will be published in the `@hyper-kits` npm organization.
+Official kits will be published in the `@kit` npm organization.
 
 In the Hypergen CLI, folder nesting is converted to positional arguments. For example, the recipe at `add/plugin` is executed with:
 
@@ -133,10 +133,10 @@ In the Hypergen CLI, folder nesting is converted to positional arguments. For ex
 hypergen starlight add plugin
 ```
 
-Here's the structure of our `@hyper-kits/starlight` example:
+Here's the structure of our `@kit/starlight` example:
 
 ```
-@hyper-kits/starlight/
+@kit/starlight/
 ├── kit.yml                    # Kit metadata and configuration
 ├── create/                    # Recipe: create new Starlight site
 │   ├── recipe.yml            # Recipe configuration

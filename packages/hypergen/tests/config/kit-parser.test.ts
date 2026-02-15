@@ -34,7 +34,7 @@ describe('KitParser', () => {
       fs.writeFileSync(
         kitYml,
         `
-name: "@hyper-kits/nextjs"
+name: "@kit/nextjs"
 description: "Next.js code generation kit"
 version: "1.0.0"
 author: "Test Author"
@@ -67,7 +67,7 @@ categories:
       expect(result.errors).toHaveLength(0)
       expect(result.filePath).toBe(kitYml)
       expect(result.dirPath).toBe(kitDir)
-      expect(result.config.name).toBe('@hyper-kits/nextjs')
+      expect(result.config.name).toBe('@kit/nextjs')
       expect(result.config.description).toBe('Next.js code generation kit')
       expect(result.config.version).toBe('1.0.0')
       expect(result.config.author).toBe('Test Author')
@@ -363,8 +363,8 @@ keywords: "not-an-array"
   // ---------------------------------------------------------------------------
 
   describe('deriveShortName', () => {
-    it('strips @hyper-kits/ scope from scoped name', () => {
-      expect(deriveShortName('@hyper-kits/nextjs')).toBe('nextjs')
+    it('strips @kit/ scope from scoped name', () => {
+      expect(deriveShortName('@kit/nextjs')).toBe('nextjs')
     })
 
     it('strips arbitrary @scope/ prefix', () => {
@@ -398,12 +398,12 @@ keywords: "not-an-array"
   // ---------------------------------------------------------------------------
 
   describe('getDefaultKitSearchDirs', () => {
-    it('returns kits/ and node_modules/@hyper-kits/ relative to project root', () => {
+    it('returns kits/ and node_modules/@kit/ relative to project root', () => {
       const dirs = getDefaultKitSearchDirs('/my/project')
 
       expect(dirs).toHaveLength(2)
       expect(dirs[0]).toBe(path.join('/my/project', 'kits'))
-      expect(dirs[1]).toBe(path.join('/my/project', 'node_modules', '@hyper-kits'))
+      expect(dirs[1]).toBe(path.join('/my/project', 'node_modules', '@kit'))
     })
 
     it('works with trailing slash in project root', () => {
@@ -412,7 +412,7 @@ keywords: "not-an-array"
 
       expect(dirs).toHaveLength(2)
       expect(dirs[0]).toBe(path.join('/my/project', 'kits'))
-      expect(dirs[1]).toBe(path.join('/my/project', 'node_modules', '@hyper-kits'))
+      expect(dirs[1]).toBe(path.join('/my/project', 'node_modules', '@kit'))
     })
 
     it('works with relative-looking project root', () => {
@@ -420,7 +420,7 @@ keywords: "not-an-array"
 
       expect(dirs).toHaveLength(2)
       expect(dirs[0]).toBe(path.join('.', 'kits'))
-      expect(dirs[1]).toBe(path.join('.', 'node_modules', '@hyper-kits'))
+      expect(dirs[1]).toBe(path.join('.', 'node_modules', '@kit'))
     })
   })
 

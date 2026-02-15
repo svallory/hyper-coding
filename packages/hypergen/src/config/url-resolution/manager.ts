@@ -7,9 +7,9 @@
 import path from 'path'
 import os from 'os'
 import createDebug from 'debug'
-import { URLCache } from '#//cache.js'
-import { LocalResolver } from '#//resolvers/local.js'
-import { GitHubResolver } from '#//resolvers/github.js'
+import { URLCache } from '#/cache.js'
+import { LocalResolver } from '#/resolvers/local.js'
+import { GitHubResolver } from '#/resolvers/github.js'
 import type {
   TemplateURLResolver,
   ResolvedTemplate,
@@ -20,8 +20,8 @@ import type {
   ValidationResult,
   SecurityConfig,
   URLCacheConfig
-} from '#//types.js'
-import { URLResolutionError } from '#//types.js'
+} from '#/types.js'
+import { URLResolutionError } from '#/types.js'
 
 const debug = createDebug('hypergen:v8:url-manager')
 

@@ -63,11 +63,11 @@ Implementation:
 - extractKitName() - Smart name extraction from source
 
 Examples:
-$ hypergen kit install hyper-kits/nextjs
+$ hypergen kit install kit/nextjs
 # Clones to: ./kits/nextjs
 
-$ hypergen kit install @hyper-kits/nextjs
-# Installs to: node_modules/@hyper-kits/nextjs
+$ hypergen kit install @kit/nextjs
+# Installs to: node_modules/@kit/nextjs
 
 $ hypergen kit install ./my-kit --name custom
 # Copies to: ./kits/custom
@@ -140,11 +140,11 @@ Implementation:
 - extractKitName() - Smart name extraction from source
 
 Examples:
-$ hypergen kit install hyper-kits/nextjs
+$ hypergen kit install kit/nextjs
 # Clones to: ./kits/nextjs
 
-$ hypergen kit install @hyper-kits/nextjs
-# Installs to: node_modules/@hyper-kits/nextjs
+$ hypergen kit install @kit/nextjs
+# Installs to: node_modules/@kit/nextjs
 
 $ hypergen kit install ./my-kit --name custom
 # Copies to: ./kits/custom
@@ -217,11 +217,11 @@ Implementation:
 - extractKitName() - Smart name extraction from source
 
 Examples:
-$ hypergen kit install hyper-kits/nextjs
+$ hypergen kit install kit/nextjs
 # Clones to: ./kits/nextjs
 
-$ hypergen kit install @hyper-kits/nextjs
-# Installs to: node_modules/@hyper-kits/nextjs
+$ hypergen kit install @kit/nextjs
+# Installs to: node_modules/@kit/nextjs
 
 $ hypergen kit install ./my-kit --name custom
 # Copies to: ./kits/custom
@@ -487,7 +487,7 @@ Tested:
 ### ⚠ BREAKING CHANGES
 
 * **architecture**: Complete rewrite of core architecture with TypeScript-first approach
-* **templates**: New action-based system with @action decorators replacing template-based approach  
+* **templates**: New action-based system with @action decorators replacing template-based approach
 * **cli**: Interactive parameter resolution with mandatory prompts for missing values
 * **config**: Configuration system redesigned with hypergen.config.js support
 
@@ -540,7 +540,7 @@ Tested:
 #### ⚡ Performance
 * **indexing**: add hash indexed store to speed up action conflict resolution ([#3](https://github.com/svallory/hypergen/issues/3)) ([f68d330](https://github.com/svallory/hypergen/commit/f68d330fb6e0bf41b4e862b0bf7ba85f8b49ef96))
 
-#### 📋 Planning & Strategy  
+#### 📋 Planning & Strategy
 * **roadmap**: initial analysis and roadmap for hypergen evolution ([f863dd5](https://github.com/svallory/hypergen/commit/f863dd59060b144bf064e99ef7c94efc2ebd819f))
   - Comprehensive CLAUDE.md with development guidance
   - Create notes folder with initial analysis and roadmap

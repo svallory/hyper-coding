@@ -1,0 +1,58 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"module": "Node16",
+		"moduleResolution": "Node16",
+		"outDir": "../../.moon/cache/types/packages/core",
+		"rootDir": "./src",
+		"baseUrl": ".",
+		"declaration": true,
+		"declarationMap": true,
+		"sourceMap": true,
+		"strict": false,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false,
+		"noImplicitReturns": false,
+		"noFallthroughCasesInSwitch": true,
+		"paths": {
+			"#": [
+				"src"
+			],
+			"#/*": [
+				"src/*"
+			],
+			"#tests": [
+				"tests"
+			],
+			"#tests/*": [
+				"tests/*"
+			],
+			"#fixtures": [
+				"tests/fixtures"
+			],
+			"#fixtures/*": [
+				"tests/fixtures/*"
+			],
+			"#helpers": [
+				"tests/helpers"
+			],
+			"#helpers/*": [
+				"tests/helpers/*"
+			]
+		}
+	},
+	"include": [
+		"src"
+	],
+	"exclude": [
+		"node_modules",
+		"dist",
+		"**/*.test.ts",
+		"**/*.spec.ts"
+	]
+}

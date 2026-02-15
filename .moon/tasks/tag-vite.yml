@@ -1,8 +1,5 @@
 $schema: "https://moonrepo.dev/schemas/tasks.json"
 
-inheritedBy:
-  tags: ['vite']
-
 tasks:
   build:
     description: Build the Vite project for production

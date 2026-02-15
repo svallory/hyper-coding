@@ -1,6 +1,6 @@
 /**
  * Generator Auto-Discovery
- * 
+ *
  * Automatically discovers and registers generators from various sources
  */
 
@@ -227,29 +227,29 @@ export class GeneratorDiscovery {
    */
   async discoverWorkspace(): Promise<DiscoveredGenerator[]> {
     debug('Discovering workspace generators')
-    
+
     const generators: DiscoveredGenerator[] = []
     const cwd = process.cwd()
-    
+
     // Look for workspace packages that might contain generators
     const workspacePatterns = [
       'packages/*/generators/**',
-      'apps/*/generators/**', 
+      'apps/*/generators/**',
       'tools/generators/**'
     ]
-    
+
     for (const pattern of workspacePatterns) {
-      const matches = await glob(pattern, { 
+      const matches = await glob(pattern, {
         cwd
       })
-      
+
       for (const match of matches) {
         const fullPath = path.resolve(cwd, match)
         const packageName = this.extractPackageNameFromPath(match)
-        
+
         const actionFiles = await this.findActionFiles(fullPath)
         const actions = await this.extractActionsFromFiles(actionFiles)
-        
+
         if (actions.length > 0) {
           generators.push({
             name: packageName,
@@ -263,7 +263,7 @@ export class GeneratorDiscovery {
         }
       }
     }
-    
+
     debug('Found %d workspace generators', generators.length)
     return generators
   }
@@ -273,36 +273,36 @@ export class GeneratorDiscovery {
    */
   async discoverNpm(): Promise<DiscoveredGenerator[]> {
     debug('Discovering npm generators')
-    
+
     const generators: DiscoveredGenerator[] = []
     const nodeModulesPath = path.resolve(process.cwd(), 'node_modules')
-    
+
     if (!(await fs.pathExists(nodeModulesPath))) {
       return generators
     }
-    
+
     // Look for packages that follow hypergen generator conventions
     const packageDirs = await fs.readdir(nodeModulesPath)
-    
+
     for (const packageDir of packageDirs) {
       if (packageDir.startsWith('.')) continue
-      
+
       const packagePath = path.join(nodeModulesPath, packageDir)
       const packageJsonPath = path.join(packagePath, 'package.json')
-      
+
       if (!(await fs.pathExists(packageJsonPath))) continue
-      
+
       try {
         const packageJson = await fs.readJson(packageJsonPath)
-        
+
         // Check if package is a hypergen generator
         if (this.isHypergenPackage(packageJson)) {
           const generatorPath = path.join(packagePath, 'generators')
-          
+
           if (await fs.pathExists(generatorPath)) {
             const actionFiles = await this.findActionFiles(generatorPath)
             const actions = await this.extractActionsFromFiles(actionFiles)
-            
+
             generators.push({
               name: packageJson.name,
               source: 'npm',
@@ -320,7 +320,7 @@ export class GeneratorDiscovery {
         debug('Failed to read package.json for %s: %s', packageDir, error)
       }
     }
-    
+
     debug('Found %d npm generators', generators.length)
     return generators
   }
@@ -338,26 +338,26 @@ export class GeneratorDiscovery {
    */
   async discoverGlobal(): Promise<DiscoveredGenerator[]> {
     debug('Discovering global generators via engine')
-    
+
     const generators: DiscoveredGenerator[] = []
-    
+
     try {
       const globalPackages = await getGlobalPackages()
       debug('Found %d global packages installed: %o', globalPackages.length, globalPackages.map(p => p.name))
-      
+
       for (const pkg of globalPackages) {
         // Filter by naming convention
-        const isHyperKit = pkg.name.endsWith('-hyper-kit') || pkg.name.startsWith('@hyper-kits/')
-        
+        const isHyperKit = pkg.name.endsWith('-hyper-kit') || pkg.name.startsWith('@kit/')
+
         if (isHyperKit) {
-           debug('Checking potential kit: %s at %s', pkg.name, pkg.path)
-           await this.checkAndAddGlobalPackage(pkg.path, generators)
+          debug('Checking potential kit: %s at %s', pkg.name, pkg.path)
+          await this.checkAndAddGlobalPackage(pkg.path, generators)
         }
       }
     } catch (error) {
-       debug('Global discovery failed: %s', error)
+      debug('Global discovery failed: %s', error)
     }
-    
+
     debug('Found %d global generators', generators.length)
     return generators
   }
@@ -370,53 +370,53 @@ export class GeneratorDiscovery {
       const packageJson = await fs.readJson(packageJsonPath)
       const packageName = packageJson.name
 
-      // Check name requirement: ends with -hyper-kit or starts with @hyper-kits/
-      const isHyperKit = packageName.endsWith('-hyper-kit') || packageName.startsWith('@hyper-kits/')
-      
+      // Check name requirement: ends with -hyper-kit or starts with @kit/
+      const isHyperKit = packageName.endsWith('-hyper-kit') || packageName.startsWith('@kit/')
+
       if (!isHyperKit) return
 
       // It's a match! Check for generator content (actions/templates)
-      // Usually in a 'generators' dir or root? 
-      // The `discoverNpm` logic checks for `generators` dir. 
+      // Usually in a 'generators' dir or root?
+      // The `discoverNpm` logic checks for `generators` dir.
       // The prompt didn't specify structure, but "hypergen kit my-templates" implies it acts like a kit.
-      // We'll stick to the convention of looking for a 'generators' folder OR 
+      // We'll stick to the convention of looking for a 'generators' folder OR
       // just treat the root as a potential generator if it has actions/templates.
       // Let's try `generators` dir first to match npm logic, and fall back to root?
       // Actually `npm` discovery explicitly looks for `generators` subdir.
       // "Will hypergen be able to find the kit...?"
       // If it's a kit package, it probably follows the kit structure.
-      
+
       // Let's look for `generators` folder logic first, similar to discoverNpm
       let generatorPath = path.join(packagePath, 'generators')
       let hasGeneratorsDir = await fs.pathExists(generatorPath)
-      
+
       if (!hasGeneratorsDir) {
         // Fallback: maybe the package IS the generator (root) if it has template.yml or actions
-        // But `discoverNpm` enforces `generators` subdir. 
+        // But `discoverNpm` enforces `generators` subdir.
         // Let's be a bit more flexible for global kits or stick to `npm` convention?
         // existing `discoverNpm` logic:
         // if (await fs.pathExists(generatorPath)) { ... }
         // Let's stick to that for consistency, but maybe allow root if template.yml exists?
         // For now, I'll match `discoverNpm` logic but applying to these filtered packages.
-        
+
         // Actually, if the package name is explicitly `@kits/kit`, the user command `hypergen kit my-templates`
-        // implies we are looking for a generator named `kit`. 
+        // implies we are looking for a generator named `kit`.
         // If the package is `my-hyper-kit`, and inside it has `generators/my-templates`...
         // The user said `hypergen kit my-templates`.
-        // If the package IS the kit, maybe the generator name is the package name? 
+        // If the package IS the kit, maybe the generator name is the package name?
         // Or if the package contains multiple generators?
         // `discoverNpm` uses `packageJson.name` as the generator name!
         // `generators.push({ name: packageJson.name ... })`
         // And it sets path to `path.join(packagePath, 'generators')`.
         // This implies the `generators` folder contains the actions/code.
         // I will follow the same pattern.
-        if (!hasGeneratorsDir) return 
+        if (!hasGeneratorsDir) return
       }
 
       if (hasGeneratorsDir) {
         const actionFiles = await this.findActionFiles(generatorPath)
         const actions = await this.extractActionsFromFiles(actionFiles)
-        
+
         generators.push({
           name: packageName,
           source: 'global',
@@ -461,29 +461,29 @@ export class GeneratorDiscovery {
    */
   private async findActionFiles(directory: string): Promise<string[]> {
     debug('Finding action files in directory: %s', directory)
-    
+
     // Filter patterns that match JavaScript/TypeScript files
-    const patterns = this.options.patterns?.filter(p => 
+    const patterns = this.options.patterns?.filter(p =>
       p.includes('.js') || p.includes('.ts') || p.includes('.mjs') || p.includes('{js,ts,mjs}')
     ) || ['**/*.{js,ts,mjs}']
-    
+
     debug('Using patterns: %o', patterns)
     debug('Exclude patterns: %o', this.options.excludePatterns)
-    
+
     const files: string[] = []
-    
+
     for (const pattern of patterns) {
       debug('Searching with pattern: %s in directory: %s', pattern, directory)
-      
+
       const matches = await glob(pattern, {
         cwd: directory,
         ignore: this.options.excludePatterns
       })
-      
+
       debug('Pattern %s found %d matches: %o', pattern, matches.length, matches)
       files.push(...matches.map(f => path.resolve(directory, f)))
     }
-    
+
     debug('Total action files found: %d', files.length)
     return files
   }
@@ -496,7 +496,7 @@ export class GeneratorDiscovery {
       cwd: directory,
       ignore: this.options.excludePatterns
     })
-    
+
     return matches.map(f => path.resolve(directory, f))
   }
 
@@ -504,36 +504,36 @@ export class GeneratorDiscovery {
    * Group files by generator name
    */
   private groupFilesByGenerator(
-    actionFiles: string[], 
-    templateFiles: string[], 
+    actionFiles: string[],
+    templateFiles: string[],
     baseDir: string
   ): Map<string, { actions: string[]; templates: string[] }> {
     const groups = new Map<string, { actions: string[]; templates: string[] }>()
-    
+
     // Group action files
     for (const file of actionFiles) {
       const relativePath = path.relative(baseDir, file)
       const generatorName = relativePath.split(path.sep)[0]
-      
+
       if (!groups.has(generatorName)) {
         groups.set(generatorName, { actions: [], templates: [] })
       }
-      
+
       groups.get(generatorName)!.actions.push(file)
     }
-    
+
     // Group template files
     for (const file of templateFiles) {
       const relativePath = path.relative(baseDir, file)
       const generatorName = relativePath.split(path.sep)[0]
-      
+
       if (!groups.has(generatorName)) {
         groups.set(generatorName, { actions: [], templates: [] })
       }
-      
+
       groups.get(generatorName)!.templates.push(file)
     }
-    
+
     return groups
   }
 
@@ -542,13 +542,13 @@ export class GeneratorDiscovery {
    */
   private async extractActionsFromFiles(files: string[]): Promise<string[]> {
     const actions: string[] = []
-    
+
     for (const file of files) {
       try {
         // Import the module and check for decorated actions
         // This will also register the actions via their decorators
         const module = await this.importModule(file)
-        
+
         for (const [exportName, exportValue] of Object.entries(module)) {
           if (typeof exportValue === 'function' && isActionFunction(exportValue)) {
             actions.push(exportName)
@@ -558,7 +558,7 @@ export class GeneratorDiscovery {
         debug('Failed to load module %s: %s', file, error)
       }
     }
-    
+
     return actions
   }
 
@@ -569,14 +569,14 @@ export class GeneratorDiscovery {
     try {
       // Convert to absolute path for consistent importing
       const absolutePath = path.resolve(filePath)
-      
+
       // Use Bun's built-in TypeScript support with file:// protocol
       const fileUrl = `file://${absolutePath}`
       debug('Importing module: %s', fileUrl)
-      
+
       const module = await import(fileUrl)
       debug('Successfully imported module with exports: %o', Object.keys(module))
-      
+
       return module
     } catch (error: any) {
       debug('Failed to import module %s: %s', filePath, error.message)
@@ -596,15 +596,15 @@ export class GeneratorDiscovery {
    */
   async registerDiscoveredActions(): Promise<void> {
     debug('Registering discovered actions...')
-    
+
     const generators = this.getGenerators()
     debug('Found %d generators to register', generators.length)
-    
+
     for (const generator of generators) {
       debug('Looking for action files in generator: %s at path: %s', generator.name, generator.path)
       const actionFiles = await this.findActionFiles(generator.path)
       debug('Found %d action files for generator %s: %o', actionFiles.length, generator.name, actionFiles)
-      
+
       for (const file of actionFiles) {
         try {
           debug('Attempting to import action file: %s', file)
@@ -616,7 +616,7 @@ export class GeneratorDiscovery {
         }
       }
     }
-    
+
     debug('Action registration complete')
   }
 
@@ -627,7 +627,7 @@ export class GeneratorDiscovery {
     if (!templateFile || !(await fs.pathExists(templateFile))) {
       return undefined
     }
-    
+
     try {
       // This would integrate with the template.yml parser from Phase 1
       // For now, return basic metadata

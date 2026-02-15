@@ -11,7 +11,7 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import fm from 'front-matter'
 import createDebug from 'debug'
-import { Tool, type ToolValidationResult } from '#//base.js'
+import { Tool, type ToolValidationResult } from '#/base.js'
 import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from '#/errors/hypergen-errors'
 import { 
   type TemplateStep, 
