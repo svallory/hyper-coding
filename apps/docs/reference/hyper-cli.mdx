@@ -85,7 +85,7 @@ hyper gen <action-name|recipe-file> [--param=value] [--flag]
 HyperDev intelligently resolves actions and recipes:
 - Registered actions by name: `hyper gen create-component`
 - Recipe files directly: `hyper gen my-component.yml`
-- Auto-discovery: Searches for `_recipes/<name>.yml` if action not found
+- Auto-discovery: Searches for `.hyper/kits/<name>.yml` if action not found
 
 **Options:**
 - `--defaults` - Use default values instead of prompting
@@ -121,7 +121,7 @@ hyper gen recipes/react-component.yml --name=Header --dryRun
 
 # Auto-discovery of recipe files
 hyper gen fullstack-app --name=MyApp --database=postgresql
-# Searches for: fullstack-app.yml, _recipes/fullstack-app.yml
+# Searches for: fullstack-app.yml, .hyper/kits/fullstack-app.yml
 ```
   </Tab>
   <Tab title="Parameter Formats">
@@ -471,7 +471,7 @@ hyper recipe list [directory]
 ```
 
 **Parameters:**
-- `directory`: Directory to search for recipes (default: `_recipes`)
+- `directory`: Directory to search for recipes (default: `.hyper/kits`)
 
 **Examples:**
 ```bash
@@ -487,18 +487,18 @@ hyper recipe list ./examples/recipes/
 
 **Output Format:**
 ```bash
-📝 Recipes found in _recipes (12):
+📝 Recipes found in .hyper/kits (12):
 
-  • Fullstack Application (_recipes/fullstack-app.yml)
+  • Fullstack Application (.hyper/kits/fullstack-app.yml)
     Creates a complete React + Node.js application
     
-  • API Microservice (_recipes/api-microservice.yml)  
+  • API Microservice (.hyper/kits/api-microservice.yml)  
     Generates scalable API microservice with Docker
     
-  • React Component Library (_recipes/component-library.yml)
+  • React Component Library (.hyper/kits/component-library.yml)
     Creates reusable React component library with Storybook
     
-  • Database Migration (_recipes/db-migration.yml) ❌ (invalid)
+  • Database Migration (.hyper/kits/db-migration.yml) ❌ (invalid)
     Creates database migration scripts
 
 ⚠️  1 recipe(s) have validation errors. Use 'hyper recipe validate' to check.
@@ -523,7 +523,7 @@ hyper step list <recipe-path>
 hyper step list my-recipe.yml
 
 # List steps with full details
-hyper step list _recipes/fullstack-app.yml
+hyper step list .hyper/kits/fullstack-app.yml
 ```
 
 **Detailed Output Format:**
