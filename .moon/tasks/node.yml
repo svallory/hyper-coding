@@ -42,20 +42,11 @@ tasks:
     outputs:
       - "dist"
 
-  # Format check only (no fixes)
-  format:
-    description: Check code formatting with biome
-    command: "biome format ."
-    inputs:
-      - "@globs(sources)"
-      - "@globs(tests)"
-      - "@globs(configs)"
-      - "**/*.md"
-
-  # Format and write changes
-  format-write:
-    description: Format code and write changes
-    command: "biome format . --write"
+  # Fix code quality (format + lint with auto-fix)
+  # This is what you run locally: moon run :fix
+  fix:
+    description: Fix code quality (format + lint)
+    command: "biome check . --write"
     inputs:
       - "@globs(sources)"
       - "@globs(tests)"
@@ -64,19 +55,11 @@ tasks:
     options:
       cache: local
 
-  # Lint and auto-fix
-  lint:
-    description: Lint code and apply safe fixes
-    command: "biome lint . --write"
-    inputs:
-      - "@globs(sources)"
-      - "@globs(tests)"
-      - "@globs(configs)"
-
-  # Check everything (lint + format) and fix
-  check:
-    description: Check and fix code quality (lint + format)
-    command: "biome check . --write"
+  # CI check (check only, no auto-fix)
+  # This runs in CI pipelines: moon run :ci
+  ci:
+    description: Check code quality for CI (no fixes)
+    command: "biome ci ."
     inputs:
       - "@globs(sources)"
       - "@globs(tests)"
