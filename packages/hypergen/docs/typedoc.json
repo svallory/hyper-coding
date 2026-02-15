@@ -2,7 +2,7 @@
   "entryPoints": ["../../../packages/hypergen/src/index.ts"],
   "tsconfig": "../../../packages/hypergen/tsconfig.json",
   "out": "../../../apps/docs/api-reference/generated",
-  "plugin": ["typedoc-plugin-markdown", "typedoc-theme-mintlify"],
+  "plugin": ["typedoc-plugin-markdown"],
   "excludePrivate": true,
   "excludeProtected": false,
   "excludeInternal": true,
