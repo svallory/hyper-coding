@@ -59,7 +59,8 @@ tasks:
       - "@globs(tests)"
       - "@globs(configs)"
       - "**/*.{md,mdx}"
-    local: true
+    options:
+      cache: local
 
   # https://moonrepo.dev/docs/guides/examples/eslint
   lint:

@@ -1,6 +1,16 @@
 $schema: "https://moonrepo.dev/schemas/tasks.json"
 
-extends: 'https://raw.githubusercontent.com/moonrepo/moon-configs/master/javascript/vitest/tasks.yml'
-
 inheritedBy:
   tags: ['vitest']
+
+tasks:
+  test:
+    description: Run tests with Vitest
+    command: 'vitest'
+    args: ['run']
+    inputs:
+      - '@globs(sources)'
+      - '@globs(tests)'
+      - 'vitest.config.*'
+    options:
+      cache: local

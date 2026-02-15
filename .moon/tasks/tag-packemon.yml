@@ -1,6 +1,17 @@
 $schema: "https://moonrepo.dev/schemas/tasks.json"
 
-extends: "https://raw.githubusercontent.com/moonrepo/moon-configs/master/javascript/packemon/tasks.yml"
-
 inheritedBy:
   tags: ['packemon']
+
+tasks:
+  build:
+    description: Build the library with Packemon
+    command: 'packemon'
+    args: ['pack', '--addEngines', '--addExports', '--declaration']
+    inputs:
+      - '@globs(sources)'
+      - 'package.json'
+      - 'tsconfig.*.json'
+    outputs:
+      - 'lib'
+      - 'esm'
