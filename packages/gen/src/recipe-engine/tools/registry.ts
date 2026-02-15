@@ -303,11 +303,7 @@ export class ToolRegistry {
 	/**
 	 * Resolve a tool instance by type and name
 	 */
-	async resolve(
-		toolType: ToolType,
-		name: string,
-		options?: ToolResolutionOptions,
-	): Promise<Tool> {
+	async resolve(toolType: ToolType, name: string, options?: ToolResolutionOptions): Promise<Tool> {
 		const registrationKey = this.getRegistrationKey(toolType, name);
 		const registration = this.registrations.get(registrationKey);
 
@@ -348,10 +344,7 @@ export class ToolRegistry {
 		this.debug("Creating new tool instance: %s", registrationKey);
 
 		try {
-			const instance = registration.factory.create(
-				name,
-				options?.instanceOptions,
-			);
+			const instance = registration.factory.create(name, options?.instanceOptions);
 
 			// Validate instance if requested
 			if (options?.validate) {
@@ -415,11 +408,7 @@ export class ToolRegistry {
 		// Sort by name for consistent results
 		results.sort((a, b) => a.name.localeCompare(b.name));
 
-		this.debug(
-			"Tool search returned %d results for criteria: %o",
-			results.length,
-			criteria,
-		);
+		this.debug("Tool search returned %d results for criteria: %o", results.length, criteria);
 		return results;
 	}
 
@@ -510,10 +499,7 @@ export class ToolRegistry {
 	 * Clear the instance cache
 	 */
 	clearCache(): void {
-		this.debug(
-			"Clearing tool instance cache (%d instances)",
-			this.instanceCache.size,
-		);
+		this.debug("Clearing tool instance cache (%d instances)", this.instanceCache.size);
 
 		// Clean up all cached instances
 		for (const [key, cached] of this.instanceCache) {
@@ -647,10 +633,7 @@ export class ToolRegistry {
 		}
 	}
 
-	private matchesCriteria(
-		registration: ToolRegistration,
-		criteria: ToolSearchCriteria,
-	): boolean {
+	private matchesCriteria(registration: ToolRegistration, criteria: ToolSearchCriteria): boolean {
 		// Type filter
 		if (criteria.type && registration.toolType !== criteria.type) {
 			return false;

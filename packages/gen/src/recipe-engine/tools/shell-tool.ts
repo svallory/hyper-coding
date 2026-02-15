@@ -24,10 +24,7 @@ export class ShellTool extends Tool<ShellStep> {
 		super("shell", name, options);
 	}
 
-	protected async onValidate(
-		step: ShellStep,
-		context: StepContext,
-	): Promise<ToolValidationResult> {
+	protected async onValidate(step: ShellStep, context: StepContext): Promise<ToolValidationResult> {
 		const errors: string[] = [];
 		const warnings: string[] = [];
 		const suggestions: string[] = [];
@@ -67,9 +64,7 @@ export class ShellTool extends Tool<ShellStep> {
 			// Render command through Jig to support @if/@elseif/@end tags and {{ variable }} interpolation
 			const renderContext = this.buildRenderContext(step, context);
 			const command = await renderTemplate(step.command, renderContext);
-			const cwd = step.cwd
-				? await renderTemplate(step.cwd, renderContext)
-				: context.projectRoot;
+			const cwd = step.cwd ? await renderTemplate(step.cwd, renderContext) : context.projectRoot;
 
 			// shell() returns a Promise<ActionResult> (which is { status: string })
 			// but also executes the command. The current shell op implementation seems to be
@@ -146,10 +141,7 @@ export class ShellTool extends Tool<ShellStep> {
 	 * Build render context by merging step and recipe variables.
 	 * This matches the pattern used in template-tool.ts for consistency.
 	 */
-	private buildRenderContext(
-		step: ShellStep,
-		context: StepContext,
-	): Record<string, any> {
+	private buildRenderContext(step: ShellStep, context: StepContext): Record<string, any> {
 		// Merge variables: recipe vars < context vars < step vars
 		const mergedVars = {
 			...context.recipeVariables,
@@ -165,18 +157,13 @@ export class ShellTool extends Tool<ShellStep> {
 			// Utility functions
 			utils: context.utils,
 			// Step results for dependency access
-			stepResults: context.stepResults
-				? Object.fromEntries(context.stepResults)
-				: {},
+			stepResults: context.stepResults ? Object.fromEntries(context.stepResults) : {},
 		};
 	}
 }
 
 export class ShellToolFactory {
-	create(
-		name: string = "shell-tool",
-		options: Record<string, any> = {},
-	): ShellTool {
+	create(name: string = "shell-tool", options: Record<string, any> = {}): ShellTool {
 		return new ShellTool(name, options);
 	}
 

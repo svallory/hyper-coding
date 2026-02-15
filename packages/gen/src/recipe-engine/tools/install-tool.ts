@@ -49,11 +49,7 @@ function detectPackageManager(projectRoot: string): PackageManager {
 /**
  * Build the install command for a package manager
  */
-function buildInstallCommand(
-	pm: PackageManager,
-	packages: string[],
-	dev: boolean,
-): string {
+function buildInstallCommand(pm: PackageManager, packages: string[], dev: boolean): string {
 	const pkgList = packages.join(" ");
 
 	switch (pm) {
@@ -69,10 +65,7 @@ function buildInstallCommand(
 }
 
 export class InstallTool extends Tool<InstallStep> {
-	constructor(
-		name: string = "install-tool",
-		options: Record<string, any> = {},
-	) {
+	constructor(name: string = "install-tool", options: Record<string, any> = {}) {
 		super("install", name, options);
 	}
 
@@ -84,11 +77,7 @@ export class InstallTool extends Tool<InstallStep> {
 		const warnings: string[] = [];
 		const suggestions: string[] = [];
 
-		if (
-			!step.packages ||
-			!Array.isArray(step.packages) ||
-			step.packages.length === 0
-		) {
+		if (!step.packages || !Array.isArray(step.packages) || step.packages.length === 0) {
 			errors.push("At least one package is required");
 		}
 
@@ -124,8 +113,7 @@ export class InstallTool extends Tool<InstallStep> {
 		this.debug("Installing packages: %o", step.packages);
 
 		try {
-			const pm =
-				step.packageManager || detectPackageManager(context.projectRoot);
+			const pm = step.packageManager || detectPackageManager(context.projectRoot);
 			const dev = step.dev || false;
 			const command = buildInstallCommand(pm, step.packages, dev);
 
@@ -225,10 +213,7 @@ export class InstallTool extends Tool<InstallStep> {
 }
 
 export class InstallToolFactory {
-	create(
-		name: string = "install-tool",
-		options: Record<string, any> = {},
-	): InstallTool {
+	create(name: string = "install-tool", options: Record<string, any> = {}): InstallTool {
 		return new InstallTool(name, options);
 	}
 

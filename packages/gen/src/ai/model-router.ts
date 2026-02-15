@@ -30,18 +30,9 @@ export interface ResolvedModel {
  */
 function inferProvider(model: string): string {
 	if (model.startsWith("claude")) return "anthropic";
-	if (
-		model.startsWith("gpt") ||
-		model.startsWith("o1") ||
-		model.startsWith("o3")
-	)
-		return "openai";
+	if (model.startsWith("gpt") || model.startsWith("o1") || model.startsWith("o3")) return "openai";
 	if (model.startsWith("gemini")) return "google";
-	if (
-		model.startsWith("llama") ||
-		model.startsWith("mistral") ||
-		model.startsWith("codellama")
-	)
+	if (model.startsWith("llama") || model.startsWith("mistral") || model.startsWith("codellama"))
 		return "ollama";
 	return "openai"; // fallback assumption
 }
@@ -64,10 +55,7 @@ async function createModelInstance(
 				const anthropic = createAnthropic({ apiKey });
 				return anthropic(modelName);
 			} catch (e: any) {
-				if (
-					e.code === "ERR_MODULE_NOT_FOUND" ||
-					e.code === "MODULE_NOT_FOUND"
-				) {
+				if (e.code === "ERR_MODULE_NOT_FOUND" || e.code === "MODULE_NOT_FOUND") {
 					throw ErrorHandler.createError(
 						ErrorCode.AI_PROVIDER_UNAVAILABLE,
 						`Anthropic provider not installed. Run: bun add @ai-sdk/anthropic`,
@@ -85,10 +73,7 @@ async function createModelInstance(
 				const openai = createOpenAI({ apiKey });
 				return openai(modelName);
 			} catch (e: any) {
-				if (
-					e.code === "ERR_MODULE_NOT_FOUND" ||
-					e.code === "MODULE_NOT_FOUND"
-				) {
+				if (e.code === "ERR_MODULE_NOT_FOUND" || e.code === "MODULE_NOT_FOUND") {
 					throw ErrorHandler.createError(
 						ErrorCode.AI_PROVIDER_UNAVAILABLE,
 						`OpenAI provider not installed. Run: bun add @ai-sdk/openai`,
@@ -133,12 +118,8 @@ export class ModelRouter {
 			);
 		}
 
-		const provider =
-			stepProvider || this.config.provider || inferProvider(modelName);
-		const apiKey = resolveApiKey(
-			stepApiKeyEnvVar || this.config.apiKeyEnvVar,
-			provider,
-		);
+		const provider = stepProvider || this.config.provider || inferProvider(modelName);
+		const apiKey = resolveApiKey(stepApiKeyEnvVar || this.config.apiKeyEnvVar, provider);
 
 		// Try primary model
 		try {
@@ -151,20 +132,9 @@ export class ModelRouter {
 			const fallbacks = this.config.fallbackModels || [];
 			for (const fallback of fallbacks) {
 				try {
-					const fallbackKey = resolveApiKey(
-						fallback.apiKeyEnvVar,
-						fallback.provider,
-					);
-					const model = await createModelInstance(
-						fallback.provider,
-						fallback.model,
-						fallbackKey,
-					);
-					debug(
-						"Using fallback model: %s/%s",
-						fallback.provider,
-						fallback.model,
-					);
+					const fallbackKey = resolveApiKey(fallback.apiKeyEnvVar, fallback.provider);
+					const model = await createModelInstance(fallback.provider, fallback.model, fallbackKey);
+					debug("Using fallback model: %s/%s", fallback.provider, fallback.model);
 					return {
 						model,
 						provider: fallback.provider,

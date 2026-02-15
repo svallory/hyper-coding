@@ -5,7 +5,15 @@
  */
 
 export interface TemplateVariable {
-	type: 'string' | 'number' | 'boolean' | 'enum' | 'array' | 'object' | 'file' | 'directory';
+	type:
+		| "string"
+		| "number"
+		| "boolean"
+		| "enum"
+		| "array"
+		| "object"
+		| "file"
+		| "directory";
 	required?: boolean;
 	multiple?: boolean;
 	default?: any;
@@ -34,13 +42,13 @@ export interface TemplateInclude {
 	version?: string;
 	variables?: Record<string, any>; // Variable overrides
 	condition?: string; // JavaScript expression for conditional inclusion
-	strategy?: 'merge' | 'replace' | 'extend'; // Conflict resolution strategy
+	strategy?: "merge" | "replace" | "extend"; // Conflict resolution strategy
 }
 
 export interface TemplateDependency {
 	name: string;
 	version?: string;
-	type?: 'npm' | 'github' | 'local' | 'http';
+	type?: "npm" | "github" | "local" | "http";
 	url?: string;
 	optional?: boolean;
 	dev?: boolean;
@@ -61,8 +69,8 @@ export interface TemplateConfig {
 	extends?: string; // Template inheritance
 	includes?: TemplateInclude[]; // Template composition
 	conflicts?: {
-		strategy: 'merge' | 'replace' | 'extend' | 'error';
-		rules?: Record<string, 'merge' | 'replace' | 'extend' | 'error'>;
+		strategy: "merge" | "replace" | "extend" | "error";
+		rules?: Record<string, "merge" | "replace" | "extend" | "error">;
 	};
 	// Versioning and compatibility
 	engines?: {

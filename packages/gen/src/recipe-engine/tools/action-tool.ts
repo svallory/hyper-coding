@@ -9,12 +9,7 @@
 
 import createDebug from "debug";
 import { Tool, type ToolValidationResult } from "./base.js";
-import {
-	HypergenError,
-	ErrorCode,
-	ErrorHandler,
-	withErrorHandling,
-} from "@hypercli/core";
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
 import {
 	type ActionStep,
 	type StepContext,
@@ -22,12 +17,7 @@ import {
 	type StepExecutionOptions,
 	isActionStep,
 } from "#/recipe-engine/types";
-import type {
-	ActionResult,
-	ActionContext,
-	ActionLogger,
-	ActionUtils,
-} from "#/actions/types";
+import type { ActionResult, ActionContext, ActionLogger, ActionUtils } from "#/actions/types";
 import { ActionExecutor } from "#/actions/executor";
 import { ActionRegistry } from "#/actions/registry";
 import { ActionParameterResolver } from "#/actions/parameter-resolver";
@@ -164,9 +154,7 @@ export class ActionTool extends Tool<ActionStep> {
 				.slice(0, 3);
 
 			if (similarActions.length > 0) {
-				suggestions.push(
-					`Similar actions available: ${similarActions.join(", ")}`,
-				);
+				suggestions.push(`Similar actions available: ${similarActions.join(", ")}`);
 			}
 
 			return { isValid: false, errors, warnings, suggestions };
@@ -183,10 +171,7 @@ export class ActionTool extends Tool<ActionStep> {
 				if (!paramValidation.valid) {
 					// Convert parameter errors to warnings for recipe steps, unless they're type validation errors
 					for (const error of paramValidation.errors) {
-						if (
-							error.includes("not provided") ||
-							error.includes("Required parameter")
-						) {
+						if (error.includes("not provided") || error.includes("Required parameter")) {
 							// Missing parameter - this is fine for recipes, will be prompted
 							warnings.push(`Parameter will be prompted: ${error}`);
 						} else {
@@ -205,22 +190,15 @@ export class ActionTool extends Tool<ActionStep> {
 		}
 
 		// Check for missing required parameters
-		if (
-			actionInfo.requiredParameters &&
-			actionInfo.requiredParameters.length > 0
-		) {
+		if (actionInfo.requiredParameters && actionInfo.requiredParameters.length > 0) {
 			const providedParams = Object.keys(step.parameters || {});
 			const missingRequired = actionInfo.requiredParameters.filter(
 				(param) => !providedParams.includes(param),
 			);
 
 			if (missingRequired.length > 0) {
-				warnings.push(
-					`Missing required parameters: ${missingRequired.join(", ")}`,
-				);
-				suggestions.push(
-					"These will be prompted interactively during execution",
-				);
+				warnings.push(`Missing required parameters: ${missingRequired.join(", ")}`);
+				suggestions.push("These will be prompted interactively during execution");
 			}
 		}
 
@@ -247,9 +225,7 @@ export class ActionTool extends Tool<ActionStep> {
 
 		// Performance and complexity warnings
 		if (actionInfo.parameterCount && actionInfo.parameterCount > 10) {
-			warnings.push(
-				"Action has many parameters, consider using configuration file",
-			);
+			warnings.push("Action has many parameters, consider using configuration file");
 		}
 
 		// Estimate execution time (basic heuristic)
@@ -298,11 +274,7 @@ export class ActionTool extends Tool<ActionStep> {
 			}
 
 			// Prepare action context from step context
-			const contextPrep = await this.prepareActionContext(
-				step,
-				context,
-				options,
-			);
+			const contextPrep = await this.prepareActionContext(step, context, options);
 
 			// Track active action
 			if (activeActionsResource?.metadata?.activeActions) {
@@ -319,11 +291,7 @@ export class ActionTool extends Tool<ActionStep> {
 			);
 
 			// Execute action using the ActionExecutor
-			const actionResult = await this.executeActionWithLifecycle(
-				step,
-				contextPrep,
-				options,
-			);
+			const actionResult = await this.executeActionWithLifecycle(step, contextPrep, options);
 
 			const endTime = new Date();
 			const duration = endTime.getTime() - startTime.getTime();
@@ -336,14 +304,7 @@ export class ActionTool extends Tool<ActionStep> {
 			);
 
 			// Create step result from action result
-			return this.createStepResult(
-				step,
-				actionResult,
-				startTime,
-				endTime,
-				duration,
-				contextPrep,
-			);
+			return this.createStepResult(step, actionResult, startTime, endTime, duration, contextPrep);
 		} catch (error) {
 			const endTime = new Date();
 			const duration = endTime.getTime() - startTime.getTime();
@@ -367,10 +328,7 @@ export class ActionTool extends Tool<ActionStep> {
 				filesDeleted: [],
 				error: {
 					message: error instanceof Error ? error.message : String(error),
-					code:
-						error instanceof HypergenError
-							? error.code
-							: "ACTION_EXECUTION_ERROR",
+					code: error instanceof HypergenError ? error.code : "ACTION_EXECUTION_ERROR",
 					stack: error instanceof Error ? error.stack : undefined,
 					cause: error,
 				},
@@ -382,11 +340,8 @@ export class ActionTool extends Tool<ActionStep> {
 		} finally {
 			// Clean up active action tracking
 			if (activeActionsResource?.metadata?.activeActions) {
-				const actionId =
-					step.actionConfig?.communication?.actionId || step.name;
-				(activeActionsResource.metadata.activeActions as Set<string>).delete(
-					actionId,
-				);
+				const actionId = step.actionConfig?.communication?.actionId || step.name;
+				(activeActionsResource.metadata.activeActions as Set<string>).delete(actionId);
 			}
 		}
 	}
@@ -422,26 +377,25 @@ export class ActionTool extends Tool<ActionStep> {
 		}
 
 		// Resolve parameters using ActionParameterResolver
-		const resolvedParameters =
-			await this.parameterResolver.resolveParametersInteractively(
-				actionInfo.metadata,
-				{
-					...step.parameters,
-					// Merge step and recipe variables
-					...context.recipeVariables,
-					...step.variables,
-					...context.variables,
-				},
-				{
-					useDefaults: true, // Use defaults for recipe step execution
-					dryRun: options?.dryRun || context.dryRun || false,
-					force: step.force || context.force || false,
-					skipOptional: false, // Don't skip optional in recipes
-					timeout: step.timeout || options?.timeout,
-					intro: `🎯 Configuring action: ${step.action}`,
-					outro: `✅ Action ${step.action} configured`,
-				},
-			);
+		const resolvedParameters = await this.parameterResolver.resolveParametersInteractively(
+			actionInfo.metadata,
+			{
+				...step.parameters,
+				// Merge step and recipe variables
+				...context.recipeVariables,
+				...step.variables,
+				...context.variables,
+			},
+			{
+				useDefaults: true, // Use defaults for recipe step execution
+				dryRun: options?.dryRun || context.dryRun || false,
+				force: step.force || context.force || false,
+				skipOptional: false, // Don't skip optional in recipes
+				timeout: step.timeout || options?.timeout,
+				intro: `🎯 Configuring action: ${step.action}`,
+				outro: `✅ Action ${step.action} configured`,
+			},
+		);
 
 		// Prepare communication configuration
 		let communication: ActionContextPreparation["communication"];
@@ -637,10 +591,7 @@ export class ActionTool extends Tool<ActionStep> {
  * Action Tool Factory
  */
 export class ActionToolFactory {
-	create(
-		name: string = "action-tool",
-		options: Record<string, any> = {},
-	): ActionTool {
+	create(name: string = "action-tool", options: Record<string, any> = {}): ActionTool {
 		return new ActionTool(name, options);
 	}
 
@@ -662,8 +613,7 @@ export class ActionToolFactory {
 
 				if (
 					commConfig.maxMessages !== undefined &&
-					(typeof commConfig.maxMessages !== "number" ||
-						commConfig.maxMessages < 0)
+					(typeof commConfig.maxMessages !== "number" || commConfig.maxMessages < 0)
 				) {
 					warnings.push("maxMessages should be a positive number");
 				}
@@ -679,19 +629,14 @@ export class ActionToolFactory {
 
 		// Validate timeout settings
 		if (config.defaultTimeout !== undefined) {
-			if (
-				typeof config.defaultTimeout !== "number" ||
-				config.defaultTimeout < 0
-			) {
+			if (typeof config.defaultTimeout !== "number" || config.defaultTimeout < 0) {
 				warnings.push("defaultTimeout should be a positive number");
 			}
 		}
 
 		// Performance suggestions
 		if (config.enableProfiling === undefined) {
-			suggestions.push(
-				"Consider enabling profiling for performance monitoring",
-			);
+			suggestions.push("Consider enabling profiling for performance monitoring");
 		}
 
 		return {

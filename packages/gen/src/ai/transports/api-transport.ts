@@ -9,11 +9,7 @@ import createDebug from "debug";
 import { PromptAssembler } from "#/ai/prompt-assembler";
 import { AiService } from "#/ai/ai-service";
 import { ErrorHandler, ErrorCode } from "@hypercli/core";
-import type {
-	AiTransport,
-	TransportContext,
-	TransportResult,
-} from "./types.js";
+import type { AiTransport, TransportContext, TransportResult } from "./types.js";
 
 const debug = createDebug("hypergen:ai:transport:api");
 
@@ -72,10 +68,7 @@ export class ApiTransport implements AiTransport {
 /**
  * Parse a JSON response from the LLM, stripping common artifacts.
  */
-function parseJsonResponse(
-	raw: string,
-	expectedKeys: string[],
-): Record<string, string> {
+function parseJsonResponse(raw: string, expectedKeys: string[]): Record<string, string> {
 	let text = raw.trim();
 
 	// Strip markdown code fences (common LLM quirk)

@@ -5,8 +5,8 @@
 export function someFunction() {}
 
 export class SomeClass {
-  someProperty: string;
-  someMethod() {}
+	someProperty: string;
+	someMethod() {}
 }
 
 export interface SomeInterface {}

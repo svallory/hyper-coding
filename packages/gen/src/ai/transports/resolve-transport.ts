@@ -21,9 +21,7 @@ const debug = createDebug("hypergen:ai:transport:resolve");
  *
  * Pure function — no side effects.
  */
-export function resolveTransport(
-	config: AiServiceConfig | undefined,
-): AiTransport {
+export function resolveTransport(config: AiServiceConfig | undefined): AiTransport {
 	const mode = config?.mode ?? "auto";
 
 	debug("Resolving transport for mode: %s", mode);
@@ -91,8 +89,7 @@ function validateApiConfig(config: AiServiceConfig | undefined): void {
 			[
 				{
 					title: "Set AI provider",
-					description:
-						"Add ai.provider to hypergen.config.js (e.g., 'anthropic', 'openai')",
+					description: "Add ai.provider to hypergen.config.js (e.g., 'anthropic', 'openai')",
 				},
 			],
 		);
@@ -127,8 +124,7 @@ function validateCommandConfig(config: AiServiceConfig | undefined): void {
 			[
 				{
 					title: "Set AI command",
-					description:
-						"Add ai.command to hypergen.config.js (e.g., 'claude -p {prompt}', 'llm')",
+					description: "Add ai.command to hypergen.config.js (e.g., 'claude -p {prompt}', 'llm')",
 				},
 			],
 		);

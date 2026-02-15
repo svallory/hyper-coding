@@ -89,9 +89,7 @@ describe("ApiTransport", () => {
 
 		expect(result.status).toBe("resolved");
 		if (result.status === "resolved") {
-			expect(result.answers.component).toBe(
-				'<button className="btn">Click me</button>',
-			);
+			expect(result.answers.component).toBe('<button className="btn">Click me</button>');
 			expect(result.answers.styles).toBe(".btn { color: blue; }");
 		}
 
@@ -150,9 +148,7 @@ describe("ApiTransport", () => {
 
 		const collector = makeCollector();
 		const transport = new ApiTransport();
-		await expect(transport.resolve(makeContext(collector))).rejects.toThrow(
-			/Failed to parse JSON/,
-		);
+		await expect(transport.resolve(makeContext(collector))).rejects.toThrow(/Failed to parse JSON/);
 	});
 
 	it("throws on missing keys in response", async () => {

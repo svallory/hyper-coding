@@ -11,12 +11,7 @@ import fs from "fs";
 import path from "path";
 import { Tool, type ToolValidationResult } from "./base.js";
 import { ErrorHandler, ErrorCode } from "@hypercli/core";
-import type {
-	StepContext,
-	StepResult,
-	StepExecutionOptions,
-	AIStep,
-} from "#/recipe-engine/types";
+import type { StepContext, StepResult, StepExecutionOptions, AIStep } from "#/recipe-engine/types";
 import { AiService } from "#/ai/ai-service";
 import type { AIExecutionResult } from "#/ai/ai-config";
 
@@ -27,10 +22,7 @@ export class AiTool extends Tool<AIStep> {
 		super("ai", name, options);
 	}
 
-	protected async onValidate(
-		step: AIStep,
-		context: StepContext,
-	): Promise<ToolValidationResult> {
+	protected async onValidate(step: AIStep, context: StepContext): Promise<ToolValidationResult> {
 		const errors: string[] = [];
 		const warnings: string[] = [];
 		const suggestions: string[] = [];
@@ -65,10 +57,7 @@ export class AiTool extends Tool<AIStep> {
 		}
 
 		// Temperature range
-		if (
-			step.temperature !== undefined &&
-			(step.temperature < 0 || step.temperature > 2)
-		) {
+		if (step.temperature !== undefined && (step.temperature < 0 || step.temperature > 2)) {
 			errors.push("Temperature must be between 0 and 2");
 		}
 
@@ -79,8 +68,7 @@ export class AiTool extends Tool<AIStep> {
 
 		// Check for API key availability (warn, don't error — might be set at runtime)
 		// This is intentionally a warning, not an error, since env vars might be set later
-		const hasApiKey =
-			process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
+		const hasApiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
 		if (!hasApiKey) {
 			warnings.push(
 				"No AI provider API key found in environment. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.",
@@ -120,9 +108,7 @@ export class AiTool extends Tool<AIStep> {
 			// Generate
 			const result = await aiService.generate({
 				prompt,
-				system: step.system
-					? this.resolveVariables(step.system, context.variables)
-					: undefined,
+				system: step.system ? this.resolveVariables(step.system, context.variables) : undefined,
 				model: step.model,
 				provider: step.provider,
 				temperature: step.temperature,
@@ -152,10 +138,7 @@ export class AiTool extends Tool<AIStep> {
 				retryCount: result.retryAttempts,
 				dependenciesSatisfied: true,
 				toolResult: result,
-				filesCreated:
-					step.output.type === "file" && step.output.to
-						? [step.output.to]
-						: undefined,
+				filesCreated: step.output.type === "file" && step.output.to ? [step.output.to] : undefined,
 				filesModified:
 					step.output.type === "inject" && step.output.injectInto
 						? [step.output.injectInto]
@@ -209,10 +192,7 @@ export class AiTool extends Tool<AIStep> {
 			}
 
 			case "file": {
-				const filePath = this.resolveVariables(
-					step.output.to!,
-					context.variables,
-				);
+				const filePath = this.resolveVariables(step.output.to!, context.variables);
 				const resolved = path.resolve(context.projectRoot, filePath);
 				const dir = path.dirname(resolved);
 				if (!fs.existsSync(dir)) {
@@ -224,10 +204,7 @@ export class AiTool extends Tool<AIStep> {
 			}
 
 			case "inject": {
-				const filePath = this.resolveVariables(
-					step.output.injectInto!,
-					context.variables,
-				);
+				const filePath = this.resolveVariables(step.output.injectInto!, context.variables);
 				const resolved = path.resolve(context.projectRoot, filePath);
 				if (!fs.existsSync(resolved)) {
 					throw ErrorHandler.createError(
@@ -244,18 +221,13 @@ export class AiTool extends Tool<AIStep> {
 					const idx = content.indexOf(pattern);
 					if (idx !== -1) {
 						const insertAt = idx + pattern.length;
-						content =
-							content.slice(0, insertAt) +
-							"\n" +
-							output +
-							content.slice(insertAt);
+						content = content.slice(0, insertAt) + "\n" + output + content.slice(insertAt);
 					}
 				} else if (step.output.before) {
 					const pattern = step.output.before;
 					const idx = content.indexOf(pattern);
 					if (idx !== -1) {
-						content =
-							content.slice(0, idx) + output + "\n" + content.slice(idx);
+						content = content.slice(0, idx) + output + "\n" + content.slice(idx);
 					}
 				} else if (step.output.at === "start") {
 					content = output + "\n" + content;
@@ -277,15 +249,10 @@ export class AiTool extends Tool<AIStep> {
 		}
 	}
 
-	private resolveVariables(
-		template: string,
-		variables: Record<string, any>,
-	): string {
+	private resolveVariables(template: string, variables: Record<string, any>): string {
 		return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, key) => {
 			const trimmed = key.trim();
-			const value = trimmed
-				.split(".")
-				.reduce((obj: any, k: string) => obj?.[k], variables);
+			const value = trimmed.split(".").reduce((obj: any, k: string) => obj?.[k], variables);
 			return value !== undefined ? String(value) : `{{${trimmed}}}`;
 		});
 	}

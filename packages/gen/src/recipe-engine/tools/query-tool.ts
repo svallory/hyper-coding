@@ -69,10 +69,7 @@ function parseEnvFile(content: string): Record<string, string> {
  * Supports keys with dots/special chars via bracket-like segments if needed,
  * but the primary use case is simple dot-separated paths like "dependencies.drizzle-orm".
  */
-function resolveDotPath(
-	data: any,
-	dotPath: string,
-): { exists: boolean; value: any } {
+function resolveDotPath(data: any, dotPath: string): { exists: boolean; value: any } {
 	const segments = dotPath.split(".");
 	let current = data;
 	for (const segment of segments) {
@@ -122,10 +119,7 @@ export class QueryTool extends Tool<QueryStep> {
 		super("query", name, options);
 	}
 
-	protected async onValidate(
-		step: QueryStep,
-		context: StepContext,
-	): Promise<ToolValidationResult> {
+	protected async onValidate(step: QueryStep, context: StepContext): Promise<ToolValidationResult> {
 		const errors: string[] = [];
 		const warnings: string[] = [];
 		const suggestions: string[] = [];
@@ -139,9 +133,7 @@ export class QueryTool extends Tool<QueryStep> {
 		}
 
 		if (step.checks && step.expression) {
-			warnings.push(
-				'Both "checks" and "expression" are specified; both will be evaluated',
-			);
+			warnings.push('Both "checks" and "expression" are specified; both will be evaluated');
 		}
 
 		if (step.checks) {
@@ -159,9 +151,7 @@ export class QueryTool extends Tool<QueryStep> {
 		}
 
 		if (step.format && !["json", "yaml", "toml", "env"].includes(step.format)) {
-			errors.push(
-				`Unsupported format: ${step.format}. Must be one of: json, yaml, toml, env`,
-			);
+			errors.push(`Unsupported format: ${step.format}. Must be one of: json, yaml, toml, env`);
 		}
 
 		return {
@@ -192,9 +182,7 @@ export class QueryTool extends Tool<QueryStep> {
 			const format = step.format || detectFormat(step.file);
 
 			if (!format) {
-				throw new Error(
-					`Cannot detect format for "${step.file}". Specify "format" explicitly.`,
-				);
+				throw new Error(`Cannot detect format for "${step.file}". Specify "format" explicitly.`);
 			}
 
 			if (!fs.existsSync(filePath)) {
@@ -226,9 +214,7 @@ export class QueryTool extends Tool<QueryStep> {
 					}
 					if (check.exportExists) {
 						outputVars[check.exportExists] =
-							resolved.exists &&
-							resolved.value != null &&
-							resolved.value !== false;
+							resolved.exists && resolved.value != null && resolved.value !== false;
 					}
 				}
 			}
@@ -284,10 +270,7 @@ export class QueryTool extends Tool<QueryStep> {
 }
 
 export class QueryToolFactory {
-	create(
-		name: string = "query-tool",
-		options: Record<string, any> = {},
-	): QueryTool {
+	create(name: string = "query-tool", options: Record<string, any> = {}): QueryTool {
 		return new QueryTool(name, options);
 	}
 

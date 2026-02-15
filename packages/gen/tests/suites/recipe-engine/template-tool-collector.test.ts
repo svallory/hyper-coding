@@ -375,10 +375,7 @@ Default handler
 
 		console.log("Tool execution result:", result);
 		console.log("Collector hasEntries:", collector.hasEntries());
-		console.log(
-			"Collector entries:",
-			Array.from(collector.getEntries().values()),
-		);
+		console.log("Collector entries:", Array.from(collector.getEntries().values()));
 
 		// CRITICAL: This will FAIL if __hypergenCollectMode isn't passed correctly
 		expect(collector.hasEntries()).toBe(true);

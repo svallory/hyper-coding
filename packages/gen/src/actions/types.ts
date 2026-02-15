@@ -66,10 +66,7 @@ export interface ActionCommunication {
 	getSharedData: (key: string) => any;
 	setSharedData: (key: string, value: any) => void;
 	waitForAction: (actionId: string, timeout?: number) => Promise<any>;
-	subscribeToMessages: (
-		messageType: string,
-		handler: (message: any) => void,
-	) => () => void;
+	subscribeToMessages: (messageType: string, handler: (message: any) => void) => () => void;
 }
 
 // Action execution result

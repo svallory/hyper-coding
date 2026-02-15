@@ -1,2 +1,2 @@
-import 'time-require'
-import './bin.js'
+import "time-require";
+import "./bin.js";

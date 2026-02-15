@@ -98,15 +98,8 @@ export function resolveApiKey(
 /**
  * Get the env var name that would be used for a provider (for error messages).
  */
-export function getExpectedEnvVar(
-	envVarName: string | undefined,
-	provider: string,
-): string {
-	return (
-		envVarName ||
-		PROVIDER_API_KEY_ENV_VARS[provider] ||
-		`${provider.toUpperCase()}_API_KEY`
-	);
+export function getExpectedEnvVar(envVarName: string | undefined, provider: string): string {
+	return envVarName || PROVIDER_API_KEY_ENV_VARS[provider] || `${provider.toUpperCase()}_API_KEY`;
 }
 
 /**

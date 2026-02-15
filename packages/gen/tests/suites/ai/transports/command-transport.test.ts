@@ -8,9 +8,7 @@ describe("CommandTransport", () => {
 		AiCollector.reset();
 	});
 
-	function makeCollector(
-		entries?: Array<{ key: string; prompt: string }>,
-	): AiCollector {
+	function makeCollector(entries?: Array<{ key: string; prompt: string }>): AiCollector {
 		const collector = AiCollector.getInstance();
 		collector.collectMode = true;
 
@@ -89,9 +87,9 @@ describe("CommandTransport", () => {
 			const collector = makeCollector();
 			const transport = new CommandTransport();
 
-			await expect(
-				transport.resolve(makeContext(collector, "echo 'not json'")),
-			).rejects.toThrow(/Failed to parse JSON/);
+			await expect(transport.resolve(makeContext(collector, "echo 'not json'"))).rejects.toThrow(
+				/Failed to parse JSON/,
+			);
 		});
 
 		it("throws on missing keys", async () => {
@@ -107,9 +105,9 @@ describe("CommandTransport", () => {
 			const collector = makeCollector();
 			const transport = new CommandTransport();
 
-			await expect(
-				transport.resolve(makeContext(collector, "false")),
-			).rejects.toThrow(/Command failed/);
+			await expect(transport.resolve(makeContext(collector, "false"))).rejects.toThrow(
+				/Command failed/,
+			);
 		});
 	});
 

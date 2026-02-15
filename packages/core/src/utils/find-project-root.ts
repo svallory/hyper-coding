@@ -3,11 +3,11 @@
  * with monorepo detection support
  */
 
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import createDebug from 'debug';
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import createDebug from "debug";
 
-const debug = createDebug('hypergen:utils:project-root');
+const debug = createDebug("hypergen:utils:project-root");
 
 export interface ProjectRootInfo {
 	/** The project root directory */
@@ -26,13 +26,13 @@ export interface ProjectRootInfo {
 function findNearestPackageJson(startDir: string): string | null {
 	let dir = startDir;
 
-	while (dir !== '/' && dir !== '.') {
-		const packageJsonPath = join(dir, 'package.json');
+	while (dir !== "/" && dir !== ".") {
+		const packageJsonPath = join(dir, "package.json");
 		if (existsSync(packageJsonPath)) {
 			return packageJsonPath;
 		}
 
-		const parent = join(dir, '..');
+		const parent = join(dir, "..");
 		if (parent === dir) break;
 		dir = parent;
 	}
@@ -45,7 +45,7 @@ function findNearestPackageJson(startDir: string): string | null {
  */
 function isMonorepoRoot(packageJsonPath: string): boolean {
 	try {
-		const content = readFileSync(packageJsonPath, 'utf-8');
+		const content = readFileSync(packageJsonPath, "utf-8");
 		const packageJson = JSON.parse(content);
 
 		// Check for common monorepo indicators
@@ -53,12 +53,12 @@ function isMonorepoRoot(packageJsonPath: string): boolean {
 			(
 				packageJson.workspaces || // npm/yarn/pnpm workspaces
 				packageJson.bolt?.workspaces || // bolt
-				existsSync(join(dirname(packageJsonPath), 'pnpm-workspace.yaml')) || // pnpm
-				existsSync(join(dirname(packageJsonPath), 'lerna.json'))
+				existsSync(join(dirname(packageJsonPath), "pnpm-workspace.yaml")) || // pnpm
+				existsSync(join(dirname(packageJsonPath), "lerna.json"))
 			) // lerna
 		);
 	} catch (error) {
-		debug('Error reading package.json: %s', error);
+		debug("Error reading package.json: %s", error);
 		return false;
 	}
 }
@@ -71,11 +71,11 @@ function isWorkspacePackage(packageJsonPath: string): boolean {
 		// Workspace packages typically don't have a "private: true" at root
 		// but we need to check if there's a parent with workspaces
 		const dir = dirname(packageJsonPath);
-		const parentPackageJson = findNearestPackageJson(join(dir, '..'));
+		const parentPackageJson = findNearestPackageJson(join(dir, ".."));
 
 		if (parentPackageJson && isMonorepoRoot(parentPackageJson)) {
 			debug(
-				'Found workspace package at %s with monorepo root at %s',
+				"Found workspace package at %s with monorepo root at %s",
 				packageJsonPath,
 				parentPackageJson,
 			);
@@ -84,7 +84,7 @@ function isWorkspacePackage(packageJsonPath: string): boolean {
 
 		return false;
 	} catch (error) {
-		debug('Error checking if workspace package: %s', error);
+		debug("Error checking if workspace package: %s", error);
 		return false;
 	}
 }
@@ -100,14 +100,16 @@ function isWorkspacePackage(packageJsonPath: string): boolean {
  * @param startDir - Directory to start searching from (defaults to process.cwd())
  * @returns Project root information
  */
-export function findProjectRoot(startDir: string = process.cwd()): ProjectRootInfo {
-	debug('Finding project root from: %s', startDir);
+export function findProjectRoot(
+	startDir: string = process.cwd(),
+): ProjectRootInfo {
+	debug("Finding project root from: %s", startDir);
 
 	// Find nearest package.json
 	const nearestPackageJson = findNearestPackageJson(startDir);
 
 	if (!nearestPackageJson) {
-		debug('No package.json found, using startDir as root');
+		debug("No package.json found, using startDir as root");
 		return {
 			root: startDir,
 			isMonorepo: false,
@@ -117,11 +119,11 @@ export function findProjectRoot(startDir: string = process.cwd()): ProjectRootIn
 	}
 
 	const immediateRoot = dirname(nearestPackageJson);
-	debug('Found package.json at: %s', nearestPackageJson);
+	debug("Found package.json at: %s", nearestPackageJson);
 
 	// Check if this is a monorepo root
 	if (isMonorepoRoot(nearestPackageJson)) {
-		debug('This is a monorepo root');
+		debug("This is a monorepo root");
 		return {
 			root: immediateRoot,
 			isMonorepo: true,
@@ -133,11 +135,13 @@ export function findProjectRoot(startDir: string = process.cwd()): ProjectRootIn
 	// Check if we're in a workspace package
 	if (isWorkspacePackage(nearestPackageJson)) {
 		// Walk up to find the monorepo root
-		const workspaceRootPackageJson = findNearestPackageJson(join(immediateRoot, '..'));
+		const workspaceRootPackageJson = findNearestPackageJson(
+			join(immediateRoot, ".."),
+		);
 
 		if (workspaceRootPackageJson) {
 			const workspaceRoot = dirname(workspaceRootPackageJson);
-			debug('Found monorepo workspace root at: %s', workspaceRoot);
+			debug("Found monorepo workspace root at: %s", workspaceRoot);
 
 			return {
 				root: immediateRoot,
@@ -149,7 +153,7 @@ export function findProjectRoot(startDir: string = process.cwd()): ProjectRootIn
 	}
 
 	// Not a monorepo or couldn't find workspace root
-	debug('Not in a monorepo');
+	debug("Not in a monorepo");
 	return {
 		root: immediateRoot,
 		isMonorepo: false,
@@ -164,5 +168,5 @@ export function findProjectRoot(startDir: string = process.cwd()): ProjectRootIn
  */
 export function getKitsDirectory(startDir: string = process.cwd()): string {
 	const projectInfo = findProjectRoot(startDir);
-	return join(projectInfo.workspaceRoot, '.hyper', 'kits');
+	return join(projectInfo.workspaceRoot, ".hyper", "kits");
 }

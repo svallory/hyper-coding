@@ -74,36 +74,36 @@
  */
 
 export interface CommentInterface {
-  prop: string;
-  propb: string;
-  _prop_with_underscore_: string;
+	prop: string;
+	propb: string;
+	_prop_with_underscore_: string;
 }
 
 export interface CommentInterfaceExtended extends CommentInterface {
-  propc: string;
+	propc: string;
 }
 
 export enum CommentEnum {
-  /**
-   * Comment for Member
-   *
-   * Some <p> html </p> and <tag></tag>.
-   *
-   * @deprecated
-   *
-   * Deprecated member
-   *
-   * @see {@link SameName}
-   */
-  Member,
-  MemberB,
+	/**
+	 * Comment for Member
+	 *
+	 * Some <p> html </p> and <tag></tag>.
+	 *
+	 * @deprecated
+	 *
+	 * Deprecated member
+	 *
+	 * @see {@link SameName}
+	 */
+	Member,
+	MemberB,
 }
 
 export type TypeWithGenerics<C, D> = C | D;
 
 export interface SameName {
-  prop: string;
-  propb: string;
+	prop: string;
+	propb: string;
 }
 export const SameName = true;
 export const prop = true;
@@ -129,7 +129,7 @@ export const _prop_with_underscore = true;
  * ```
  */
 export function multipleExampleTags() {
-  return true;
+	return true;
 }
 
 /**
@@ -146,7 +146,7 @@ export function multipleExampleTags() {
  * @returns Return comments
  */
 export function singleExampleTag() {
-  return true;
+	return true;
 }
 
 /**
@@ -157,7 +157,7 @@ export function singleExampleTag() {
  * @remarks Some remarks
  */
 export const constFunction = (text: string) => {
-  return true;
+	return true;
 };
 
 /**
@@ -170,109 +170,109 @@ export const constFunction = (text: string) => {
  * @remarks Some remarks
  */
 export const constFunctionWithReturns = (text: string) => {
-  return true;
+	return true;
 };
 
 export class BaseClassProperties {
-  /**
-   * @deprecated
-   */
-  propA!: string;
-  propB!: string;
+	/**
+	 * @deprecated
+	 */
+	propA!: string;
+	propB!: string;
 }
 
 export class ClassPropertiesTable extends BaseClassProperties {
-  /**
-   * Experimental flag comments
-   *
-   * @experimental
-   */
-  propWithFlag!: string;
+	/**
+	 * Experimental flag comments
+	 *
+	 * @experimental
+	 */
+	propWithFlag!: string;
 
-  propA = 'propAValue';
-  /**
-   * The subroutine recursively parsed the hexadecimal data.
-   * to generate the binary output for input validation.
-   */
-  private prop1!: boolean;
-  /**
-   * Below is a breakdown of the notable performances:
-   *
-   * - The CPU executed the instruction set in parallel with the GPU computations.
-   * - The RAM efficiently cached the frequently accessed data for faster retrieval.
-   * - The SSD accessed the stored files with lightning speed due to its high read/write capabilities.
-   */
-  readonly prop2!: RegExp;
-  /**
-   * > Example of Triple Code Block
-   *
-   * ```ts
-   * def greet(name):
-   * print("Hello, " + name + "!")
-   * ```
-   */
-  prop3?: string;
+	propA = "propAValue";
+	/**
+	 * The subroutine recursively parsed the hexadecimal data.
+	 * to generate the binary output for input validation.
+	 */
+	private prop1!: boolean;
+	/**
+	 * Below is a breakdown of the notable performances:
+	 *
+	 * - The CPU executed the instruction set in parallel with the GPU computations.
+	 * - The RAM efficiently cached the frequently accessed data for faster retrieval.
+	 * - The SSD accessed the stored files with lightning speed due to its high read/write capabilities.
+	 */
+	readonly prop2!: RegExp;
+	/**
+	 * > Example of Triple Code Block
+	 *
+	 * ```ts
+	 * def greet(name):
+	 * print("Hello, " + name + "!")
+	 * ```
+	 */
+	prop3?: string;
 }
 
 export interface BaseInterfaceProperties {
-  /**
-   * @deprecated
-   */
-  propA: string;
-  propB: string;
+	/**
+	 * @deprecated
+	 */
+	propA: string;
+	propB: string;
 }
 
 export interface InterfacePropertiesTable extends BaseInterfaceProperties {
-  /**
-   * The subroutine recursively parsed the hexadecimal data.
-   * to generate the binary output for input validation.
-   */
-  prop1: boolean;
-  /**
-   * Below is a breakdown of the notable performances:
-   *
-   * - The CPU executed the instruction set in parallel with the GPU computations.
-   * - The RAM efficiently cached the frequently accessed data for faster retrieval.
-   * - The SSD accessed the stored files with lightning speed due to its high read/write capabilities.
-   */
-  prop2: RegExp;
-  /**
-   * > Example of Triple Code Block
-   *
-   * ```ts
-   * def greet(name):
-   * print("Hello, " + name + "!")
-   * ```
-   */
-  prop3?: string;
-  prop4: {
-    a: string;
-    b: string;
-  };
+	/**
+	 * The subroutine recursively parsed the hexadecimal data.
+	 * to generate the binary output for input validation.
+	 */
+	prop1: boolean;
+	/**
+	 * Below is a breakdown of the notable performances:
+	 *
+	 * - The CPU executed the instruction set in parallel with the GPU computations.
+	 * - The RAM efficiently cached the frequently accessed data for faster retrieval.
+	 * - The SSD accessed the stored files with lightning speed due to its high read/write capabilities.
+	 */
+	prop2: RegExp;
+	/**
+	 * > Example of Triple Code Block
+	 *
+	 * ```ts
+	 * def greet(name):
+	 * print("Hello, " + name + "!")
+	 * ```
+	 */
+	prop3?: string;
+	prop4: {
+		a: string;
+		b: string;
+	};
 }
 
 export type TypeDeclarationType = {
-  /**
-   * Comments for declaration1
-   */
-  declaration1: boolean;
-  /**
-   * Comments for declaration2
-   */
-  declaration2: boolean;
-  declaration3: 100;
+	/**
+	 * Comments for declaration1
+	 */
+	declaration1: boolean;
+	/**
+	 * Comments for declaration2
+	 */
+	declaration2: boolean;
+	declaration3: 100;
 };
 
 export type TypeDeclarationType2 = {
-  /**
-   * Comments for declaration1
-   */
-  declaration1: boolean;
+	/**
+	 * Comments for declaration1
+	 */
+	declaration1: boolean;
 };
 
 export const TypeDeclarationConst = {
-  declaration1: 'declaration3',
-  declaration2: 100,
+	declaration1: "declaration3",
+	declaration2: 100,
 };
 
 /**
@@ -290,19 +290,15 @@ export const TypeDeclarationConst = {
  *
  *
  */
-export function parametersTable<T = string>(
-  param1: number,
-  param2: number,
-  param3 = 4,
-) {
-  return param1 + param2 + param3;
+export function parametersTable<T = string>(param1: number, param2: number, param3 = 4) {
+	return param1 + param2 + param3;
 }
 
 export enum EnumMembersTable {
-  /**
-   * The subroutine recursively parsed the hexadecimal data.
-   */
-  member1 = 'member1',
+	/**
+	 * The subroutine recursively parsed the hexadecimal data.
+	 */
+	member1 = "member1",
 }
 
 /**
@@ -330,5 +326,5 @@ export function functionWithBlockTags(x: string, y: string) {}
  * Other block tags
  */
 export type typeWithBlockTags = {
-  x: string;
+	x: string;
 };

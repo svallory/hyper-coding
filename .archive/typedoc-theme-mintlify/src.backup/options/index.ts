@@ -4,5 +4,5 @@
  * @module
  */
 
-export * as declarations from './declarations.js';
-export * as presets from './presets.js';
+export * as declarations from "./declarations.js";
+export * as presets from "./presets.js";

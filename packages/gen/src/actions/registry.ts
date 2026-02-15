@@ -108,9 +108,7 @@ export class ActionRegistry {
 
 		// Filter by category
 		if (options.category) {
-			results = results.filter(
-				(action) => action.metadata.category === options.category,
-			);
+			results = results.filter((action) => action.metadata.category === options.category);
 		}
 
 		// Filter by tags

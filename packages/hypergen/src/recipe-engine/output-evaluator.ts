@@ -16,11 +16,11 @@
  * ```
  */
 
-import createDebug from 'debug'
-import { renderTemplate } from '#/template-engines/index'
-import type { StepContext } from '#/types.js'
+import createDebug from "debug";
+import { renderTemplate } from "#/template-engines/index";
+import type { StepContext } from "#/types.js";
 
-const debug = createDebug('hypergen:v8:recipe:output-evaluator')
+const debug = createDebug("hypergen:v8:recipe:output-evaluator");
 
 /**
  * Evaluate output expressions from a step's `output` field.
@@ -31,45 +31,49 @@ const debug = createDebug('hypergen:v8:recipe:output-evaluator')
  * @returns Map of variable name -> evaluated value
  */
 export async function evaluateStepOutputs(
-  outputExpressions: Record<string, string>,
-  toolResult: any,
-  context: StepContext
+	outputExpressions: Record<string, string>,
+	toolResult: any,
+	context: StepContext,
 ): Promise<Record<string, any>> {
-  const outputs: Record<string, any> = {}
+	const outputs: Record<string, any> = {};
 
-  // Build evaluation context
-  const evalContext: Record<string, any> = {
-    result: toolResult ?? {},
-    step: context.step?.name,
-    status: 'completed',
-    ...context.variables,
-  }
+	// Build evaluation context
+	const evalContext: Record<string, any> = {
+		result: toolResult ?? {},
+		step: context.step?.name,
+		status: "completed",
+		...context.variables,
+	};
 
-  for (const [varName, expression] of Object.entries(outputExpressions)) {
-    try {
-      debug('Evaluating output expression: %s = %s', varName, expression)
+	for (const [varName, expression] of Object.entries(outputExpressions)) {
+		try {
+			debug("Evaluating output expression: %s = %s", varName, expression);
 
-      // If the expression looks like a Jig template (contains {{ }}), render it
-      if (expression.includes('{{') || expression.includes('@')) {
-        const rendered = await renderTemplate(expression, evalContext)
-        // Trim whitespace that Jig may add
-        const trimmed = typeof rendered === 'string' ? rendered.trim() : rendered
-        outputs[varName] = trimmed
-      } else {
-        // Plain expression — evaluate as property access on the context
-        outputs[varName] = evaluateSimpleExpression(expression, evalContext)
-      }
+			// If the expression looks like a Jig template (contains {{ }}), render it
+			if (expression.includes("{{") || expression.includes("@")) {
+				const rendered = await renderTemplate(expression, evalContext);
+				// Trim whitespace that Jig may add
+				const trimmed = typeof rendered === "string" ? rendered.trim() : rendered;
+				outputs[varName] = trimmed;
+			} else {
+				// Plain expression — evaluate as property access on the context
+				outputs[varName] = evaluateSimpleExpression(expression, evalContext);
+			}
 
-      debug('Output evaluated: %s = %o', varName, outputs[varName])
-    } catch (error) {
-      debug('Output expression evaluation failed: %s = %s (%s)',
-        varName, expression, error instanceof Error ? error.message : String(error))
-      // Set to undefined on error rather than failing the whole step
-      outputs[varName] = undefined
-    }
-  }
+			debug("Output evaluated: %s = %o", varName, outputs[varName]);
+		} catch (error) {
+			debug(
+				"Output expression evaluation failed: %s = %s (%s)",
+				varName,
+				expression,
+				error instanceof Error ? error.message : String(error),
+			);
+			// Set to undefined on error rather than failing the whole step
+			outputs[varName] = undefined;
+		}
+	}
 
-  return outputs
+	return outputs;
 }
 
 /**
@@ -77,13 +81,13 @@ export async function evaluateStepOutputs(
  * e.g., "result.filesGenerated[0]" or "result.variables.name"
  */
 function evaluateSimpleExpression(expression: string, context: Record<string, any>): any {
-  try {
-    // Use Function constructor for safe(r) expression evaluation
-    const keys = Object.keys(context)
-    const values = Object.values(context)
-    const fn = new Function(...keys, `return ${expression}`)
-    return fn(...values)
-  } catch {
-    return undefined
-  }
+	try {
+		// Use Function constructor for safe(r) expression evaluation
+		const keys = Object.keys(context);
+		const values = Object.values(context);
+		const fn = new Function(...keys, `return ${expression}`);
+		return fn(...values);
+	} catch {
+		return undefined;
+	}
 }

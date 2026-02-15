@@ -8,9 +8,7 @@ describe("StdoutTransport", () => {
 		AiCollector.reset();
 	});
 
-	function makeContext(
-		overrides: Partial<TransportContext> = {},
-	): TransportContext {
+	function makeContext(overrides: Partial<TransportContext> = {}): TransportContext {
 		const collector = AiCollector.getInstance();
 		collector.collectMode = true;
 		collector.addEntry({
@@ -39,9 +37,7 @@ describe("StdoutTransport", () => {
 	});
 
 	it("returns deferred with exit code 2", async () => {
-		const writeSpy = vi
-			.spyOn(process.stdout, "write")
-			.mockImplementation(() => true);
+		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
 		const transport = new StdoutTransport();
 		const result = await transport.resolve(makeContext());
@@ -52,12 +48,10 @@ describe("StdoutTransport", () => {
 
 	it("writes assembled prompt to stdout", async () => {
 		const writtenChunks: string[] = [];
-		const writeSpy = vi
-			.spyOn(process.stdout, "write")
-			.mockImplementation((chunk: any) => {
-				writtenChunks.push(String(chunk));
-				return true;
-			});
+		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk: any) => {
+			writtenChunks.push(String(chunk));
+			return true;
+		});
 
 		const transport = new StdoutTransport();
 		await transport.resolve(makeContext());
@@ -72,17 +66,13 @@ describe("StdoutTransport", () => {
 	});
 
 	it("uses custom prompt template when provided", async () => {
-		const writeSpy = vi
-			.spyOn(process.stdout, "write")
-			.mockImplementation(() => true);
+		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
 		const transport = new StdoutTransport();
 
 		// Using a non-existent custom template should throw
 		await expect(
-			transport.resolve(
-				makeContext({ promptTemplate: "/nonexistent/template.jig" }),
-			),
+			transport.resolve(makeContext({ promptTemplate: "/nonexistent/template.jig" })),
 		).rejects.toThrow(/Custom prompt template not found/);
 
 		writeSpy.mockRestore();

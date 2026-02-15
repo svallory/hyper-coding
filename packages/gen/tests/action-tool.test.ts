@@ -5,22 +5,11 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
-import {
-	ActionTool,
-	ActionToolFactory,
-} from "#/recipe-engine/tools/action-tool";
+import { ActionTool, ActionToolFactory } from "#/recipe-engine/tools/action-tool";
 import { ActionRegistry } from "#/actions/registry";
 import { ActionExecutor } from "#/actions/executor";
-import type {
-	ActionStep,
-	StepContext,
-	StepExecutionOptions,
-} from "#/recipe-engine/types";
-import type {
-	ActionMetadata,
-	ActionContext,
-	ActionResult,
-} from "#/actions/types";
+import type { ActionStep, StepContext, StepExecutionOptions } from "#/recipe-engine/types";
+import type { ActionMetadata, ActionContext, ActionResult } from "#/actions/types";
 
 describe("ActionTool", () => {
 	let actionTool: ActionTool;
@@ -28,17 +17,15 @@ describe("ActionTool", () => {
 	let mockStepContext: StepContext;
 
 	// Mock action function
-	const mockActionFunction = vi.fn(
-		async (context: ActionContext): Promise<ActionResult> => {
-			return {
-				success: true,
-				message: `Test action executed with ${Object.keys(context.variables).length} parameters`,
-				filesCreated: ["test-file.txt"],
-				filesModified: [],
-				filesDeleted: [],
-			};
-		},
-	);
+	const mockActionFunction = vi.fn(async (context: ActionContext): Promise<ActionResult> => {
+		return {
+			success: true,
+			message: `Test action executed with ${Object.keys(context.variables).length} parameters`,
+			filesCreated: ["test-file.txt"],
+			filesModified: [],
+			filesDeleted: [],
+		};
+	});
 
 	// Mock action metadata
 	const mockActionMetadata: ActionMetadata = {
@@ -195,9 +182,7 @@ describe("ActionTool", () => {
 			const result = await actionTool.validate(invalidStep, mockStepContext);
 
 			expect(result.isValid).toBe(false);
-			expect(result.errors).toContain(
-				"Action 'nonexistent-action' not found in registry",
-			);
+			expect(result.errors).toContain("Action 'nonexistent-action' not found in registry");
 		});
 
 		test("should warn about missing required parameters", async () => {
@@ -212,12 +197,8 @@ describe("ActionTool", () => {
 
 			// Should be valid because parameters can be prompted interactively
 			expect(result.isValid).toBe(true);
-			expect(
-				result.warnings.some((w) => w.includes("Missing required parameters")),
-			).toBe(true);
-			expect(
-				result.suggestions.some((s) => s.includes("prompted interactively")),
-			).toBe(true);
+			expect(result.warnings.some((w) => w.includes("Missing required parameters"))).toBe(true);
+			expect(result.suggestions.some((s) => s.includes("prompted interactively"))).toBe(true);
 		});
 
 		test("should validate communication configuration", async () => {
@@ -262,18 +243,11 @@ describe("ActionTool", () => {
 				},
 			};
 
-			const result = await actionTool.validate(
-				stepWithInvalidComm,
-				mockStepContext,
-			);
+			const result = await actionTool.validate(stepWithInvalidComm, mockStepContext);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((e) => e.includes("actionId must be a string")),
-			).toBe(true);
-			expect(
-				result.errors.some((e) => e.includes("subscribeTo must be an array")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("actionId must be a string"))).toBe(true);
+			expect(result.errors.some((e) => e.includes("subscribeTo must be an array"))).toBe(true);
 		});
 	});
 
@@ -314,11 +288,7 @@ describe("ActionTool", () => {
 				dryRun: true,
 			};
 
-			const result = await actionTool.execute(
-				actionStep,
-				mockStepContext,
-				options,
-			);
+			const result = await actionTool.execute(actionStep, mockStepContext, options);
 
 			expect(result.status).toBe("completed");
 			expect(result.toolResult).toBeDefined();
@@ -514,26 +484,20 @@ describe("ActionTool", () => {
 		});
 
 		test("should validate action parameters", async () => {
-			const validationResult = await actionTool.validateActionParameters(
-				"test-action",
-				{
-					testParam: "valid-value",
-					optionalParam: false,
-				},
-			);
+			const validationResult = await actionTool.validateActionParameters("test-action", {
+				testParam: "valid-value",
+				optionalParam: false,
+			});
 
 			expect(validationResult.valid).toBe(true);
 			expect(validationResult.errors).toHaveLength(0);
 		});
 
 		test("should detect invalid action parameters", async () => {
-			const validationResult = await actionTool.validateActionParameters(
-				"test-action",
-				{
-					// Missing required testParam
-					optionalParam: false,
-				},
-			);
+			const validationResult = await actionTool.validateActionParameters("test-action", {
+				// Missing required testParam
+				optionalParam: false,
+			});
 
 			expect(validationResult.valid).toBe(false);
 			expect(validationResult.errors.length).toBeGreaterThan(0);

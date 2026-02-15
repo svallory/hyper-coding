@@ -29,10 +29,7 @@ import type {
  * Mock template tool for testing recipe execution without needing actual template processing
  */
 class MockTemplateTool extends Tool<TemplateStep> {
-	constructor(
-		name: string = "mock-template-tool",
-		options: Record<string, any> = {},
-	) {
+	constructor(name: string = "mock-template-tool", options: Record<string, any> = {}) {
 		super("template", name, options);
 	}
 
@@ -84,9 +81,7 @@ describe("RecipeTool Integration Tests", () => {
 
 	beforeEach(async () => {
 		// Create temporary directory for test files
-		tempDir = await fs.mkdtemp(
-			path.join(tmpdir(), "hypergen-recipe-tool-test-"),
-		);
+		tempDir = await fs.mkdtemp(path.join(tmpdir(), "hypergen-recipe-tool-test-"));
 
 		// Register mock template tool in the tool registry
 		const toolRegistry = getToolRegistry();
@@ -272,8 +267,7 @@ describe("RecipeTool Integration Tests", () => {
 			expect(validation.isValid).toBe(false);
 			expect(
 				validation.errors.some(
-					(e) =>
-						e.includes("Recipe resolution failed") || e.includes("not found"),
+					(e) => e.includes("Recipe resolution failed") || e.includes("not found"),
 				),
 			).toBe(true);
 		});
@@ -505,8 +499,7 @@ describe("RecipeTool Integration Tests", () => {
 			const toolRegistry = getToolRegistry();
 
 			// Save the original factory
-			const originalFactory =
-				toolRegistry["registrations"].get("template:default");
+			const originalFactory = toolRegistry["registrations"].get("template:default");
 
 			// Clear the cached instance of the default template tool
 			toolRegistry["removeCachedInstances"]("template", "default");
@@ -586,10 +579,7 @@ describe("RecipeTool Integration Tests", () => {
 
 		it("should handle malformed recipe file", async () => {
 			// Create malformed YAML
-			await fs.writeFile(
-				path.join(tempDir, "malformed.yml"),
-				"invalid: yaml: content: [unclosed",
-			);
+			await fs.writeFile(path.join(tempDir, "malformed.yml"), "invalid: yaml: content: [unclosed");
 
 			const step: RecipeStep = {
 				name: "test-malformed",

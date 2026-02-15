@@ -5,16 +5,9 @@
  */
 
 import createDebug from "debug";
-import type {
-	ActionMetadata,
-	ActionParameter,
-	ParameterType,
-} from "./types.js";
+import type { ActionMetadata, ActionParameter, ParameterType } from "./types.js";
 import { ActionParameterError } from "./types.js";
-import {
-	InteractivePrompter,
-	type PromptOptions,
-} from "#/prompts/interactive-prompts";
+import { InteractivePrompter, type PromptOptions } from "#/prompts/interactive-prompts";
 import { TemplateParser, type TemplateVariable } from "@hypercli/core";
 
 const debug = createDebug("hypergen:v8:action:parameters");
@@ -44,17 +37,8 @@ export class ActionParameterResolver {
 		// Step 1: Apply provided values and validate them
 		for (const param of metadata.parameters) {
 			if (resolved[param.name] !== undefined) {
-				this.validateParameterValue(
-					param.name,
-					resolved[param.name],
-					param,
-					resolved,
-				);
-				debug(
-					"Using provided value for %s: %o",
-					param.name,
-					resolved[param.name],
-				);
+				this.validateParameterValue(param.name, resolved[param.name], param, resolved);
+				debug("Using provided value for %s: %o", param.name, resolved[param.name]);
 			}
 		}
 
@@ -80,11 +64,7 @@ export class ActionParameterResolver {
 			}
 		}
 
-		debug(
-			"Parameters resolved for %s: %o",
-			metadata.name,
-			Object.keys(resolved),
-		);
+		debug("Parameters resolved for %s: %o", metadata.name, Object.keys(resolved));
 		return resolved;
 	}
 
@@ -121,17 +101,8 @@ export class ActionParameterResolver {
 		// Step 1: Apply provided values and validate them
 		for (const param of metadata.parameters) {
 			if (resolved[param.name] !== undefined) {
-				this.validateParameterValue(
-					param.name,
-					resolved[param.name],
-					param,
-					resolved,
-				);
-				debug(
-					"Using provided value for %s: %o",
-					param.name,
-					resolved[param.name],
-				);
+				this.validateParameterValue(param.name, resolved[param.name], param, resolved);
+				debug("Using provided value for %s: %o", param.name, resolved[param.name]);
 			}
 		}
 
@@ -178,23 +149,17 @@ export class ActionParameterResolver {
 				// We need to prompt for required parameters
 				const templateVariables: Record<string, TemplateVariable> = {};
 				for (const param of parametersNeedingValues) {
-					templateVariables[param.name] =
-						this.convertParameterToVariable(param);
+					templateVariables[param.name] = this.convertParameterToVariable(param);
 				}
 
 				const prompter = new InteractivePrompter();
-				const promptResult = await prompter.promptForParameters(
-					templateVariables,
-					resolved,
-					{
-						interactive: true,
-						skipOptional: options.skipOptional || false,
-						timeout: options.timeout,
-						intro:
-							options.intro || `🎯 Configure parameters for ${metadata.name}`,
-						outro: options.outro || "✅ Parameters configured!",
-					},
-				);
+				const promptResult = await prompter.promptForParameters(templateVariables, resolved, {
+					interactive: true,
+					skipOptional: options.skipOptional || false,
+					timeout: options.timeout,
+					intro: options.intro || `🎯 Configure parameters for ${metadata.name}`,
+					outro: options.outro || "✅ Parameters configured!",
+				});
 
 				if (promptResult.cancelled) {
 					throw new ActionParameterError(
@@ -227,23 +192,17 @@ export class ActionParameterResolver {
 
 					const templateVariables: Record<string, TemplateVariable> = {};
 					for (const param of parametersNeedingValues) {
-						templateVariables[param.name] =
-							this.convertParameterToVariable(param);
+						templateVariables[param.name] = this.convertParameterToVariable(param);
 					}
 
 					const prompter = new InteractivePrompter();
-					const promptResult = await prompter.promptForParameters(
-						templateVariables,
-						resolved,
-						{
-							interactive: true,
-							skipOptional: false,
-							timeout: options.timeout,
-							intro:
-								options.intro || `🎯 Configure parameters for ${metadata.name}`,
-							outro: options.outro || "✅ Parameters configured!",
-						},
-					);
+					const promptResult = await prompter.promptForParameters(templateVariables, resolved, {
+						interactive: true,
+						skipOptional: false,
+						timeout: options.timeout,
+						intro: options.intro || `🎯 Configure parameters for ${metadata.name}`,
+						outro: options.outro || "✅ Parameters configured!",
+					});
 
 					if (!promptResult.cancelled && promptResult.errors.length === 0) {
 						Object.assign(resolved, promptResult.values);
@@ -255,12 +214,7 @@ export class ActionParameterResolver {
 		// Step 5: Final validation - ensure all required parameters have values
 		for (const param of metadata.parameters) {
 			if (resolved[param.name] !== undefined) {
-				this.validateParameterValue(
-					param.name,
-					resolved[param.name],
-					param,
-					resolved,
-				);
+				this.validateParameterValue(param.name, resolved[param.name], param, resolved);
 			} else if (param.required) {
 				throw new ActionParameterError(
 					`Required parameter '${param.name}' not provided and no default available`,
@@ -271,11 +225,7 @@ export class ActionParameterResolver {
 			}
 		}
 
-		debug(
-			"Parameters resolved interactively for %s: %o",
-			metadata.name,
-			Object.keys(resolved),
-		);
+		debug("Parameters resolved interactively for %s: %o", metadata.name, Object.keys(resolved));
 		return resolved;
 	}
 
@@ -305,12 +255,7 @@ export class ActionParameterResolver {
 		param: ActionParameter,
 		allValues: Record<string, any>,
 	): void {
-		const validation = this.validateParameterType(
-			name,
-			value,
-			param,
-			allValues,
-		);
+		const validation = this.validateParameterType(name, value, param, allValues);
 
 		if (!validation.valid) {
 			throw new ActionParameterError(
@@ -379,9 +324,7 @@ export class ActionParameterResolver {
 			if (!regex.test(value)) {
 				return {
 					valid: false,
-					message:
-						param.validation?.message ||
-						`Value does not match pattern: ${param.pattern}`,
+					message: param.validation?.message || `Value does not match pattern: ${param.pattern}`,
 				};
 			}
 		}

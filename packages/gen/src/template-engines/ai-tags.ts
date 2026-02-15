@@ -76,11 +76,7 @@ function registerAiTag(edge: Edge): void {
 			const escapedFilename = JSON.stringify(token.filename || "unknown");
 
 			// --- Pass 1: collect mode — render children, collect data ---
-			buffer.writeStatement(
-				`if (state.__hypergenCollectMode) {`,
-				token.filename,
-				line,
-			);
+			buffer.writeStatement(`if (state.__hypergenCollectMode) {`, token.filename, line);
 
 			// Create the block data object that child tags will populate
 			buffer.writeStatement(
@@ -169,16 +165,8 @@ function registerContextTag(edge: Edge): void {
 			);
 
 			// Runtime: inside @ai or standalone?
-			buffer.writeStatement(
-				`if (typeof __aiBlock !== 'undefined') {`,
-				token.filename,
-				line,
-			);
-			buffer.writeStatement(
-				`  __aiBlock.contexts.push(${captureVar});`,
-				token.filename,
-				line,
-			);
+			buffer.writeStatement(`if (typeof __aiBlock !== 'undefined') {`, token.filename, line);
+			buffer.writeStatement(`  __aiBlock.contexts.push(${captureVar});`, token.filename, line);
 			buffer.writeStatement(`} else {`, token.filename, -1);
 			buffer.writeStatement(
 				`  state.__hypergenAddGlobalContext(${captureVar});`,
@@ -223,16 +211,8 @@ function registerPromptTag(edge: Edge): void {
 				line,
 			);
 
-			buffer.writeStatement(
-				`if (typeof __aiBlock !== 'undefined') {`,
-				token.filename,
-				line,
-			);
-			buffer.writeStatement(
-				`  __aiBlock.prompt = ${captureVar};`,
-				token.filename,
-				line,
-			);
+			buffer.writeStatement(`if (typeof __aiBlock !== 'undefined') {`, token.filename, line);
+			buffer.writeStatement(`  __aiBlock.prompt = ${captureVar};`, token.filename, line);
 			buffer.writeStatement(`}`, token.filename, -1);
 		},
 	});
@@ -275,18 +255,10 @@ function registerOutputTag(edge: Edge): void {
 				line,
 			);
 
-			buffer.writeStatement(
-				`if (typeof __aiBlock !== 'undefined') {`,
-				token.filename,
-				line,
-			);
+			buffer.writeStatement(`if (typeof __aiBlock !== 'undefined') {`, token.filename, line);
 
 			if (jsArg) {
-				buffer.writeStatement(
-					`  let __oArgs_${line} = ${jsArg};`,
-					token.filename,
-					line,
-				);
+				buffer.writeStatement(`  let __oArgs_${line} = ${jsArg};`, token.filename, line);
 				// Extract typeHint from argument object
 				buffer.writeStatement(
 					`  if (typeof __oArgs_${line} === 'object' && __oArgs_${line}.typeHint) { __aiBlock.typeHint = __oArgs_${line}.typeHint; }`,
@@ -295,11 +267,7 @@ function registerOutputTag(edge: Edge): void {
 				);
 			}
 
-			buffer.writeStatement(
-				`  __aiBlock.outputDesc = ${captureVar};`,
-				token.filename,
-				line,
-			);
+			buffer.writeStatement(`  __aiBlock.outputDesc = ${captureVar};`, token.filename, line);
 
 			buffer.writeStatement(`}`, token.filename, -1);
 		},
@@ -345,16 +313,8 @@ function registerExampleTag(edge: Edge): void {
 				line,
 			);
 
-			buffer.writeStatement(
-				`if (typeof __aiBlock !== 'undefined') {`,
-				token.filename,
-				line,
-			);
-			buffer.writeStatement(
-				`  __aiBlock.examples.push(${captureVar});`,
-				token.filename,
-				line,
-			);
+			buffer.writeStatement(`if (typeof __aiBlock !== 'undefined') {`, token.filename, line);
+			buffer.writeStatement(`  __aiBlock.examples.push(${captureVar});`, token.filename, line);
 			buffer.writeStatement(`}`, token.filename, -1);
 		},
 	});

@@ -48,16 +48,11 @@ export class ActionExecutor {
 		} = {},
 	): Promise<ActionResult> {
 		const actionId =
-			options.actionId ||
-			`action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			options.actionId || `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 		debug("Executing action: %s with actionId: %s", actionName, actionId);
 
 		try {
-			this.communicationManager.registerAction(
-				actionId,
-				actionName,
-				parameters,
-			);
+			this.communicationManager.registerAction(actionId, actionName, parameters);
 
 			const registry = ActionRegistry.getInstance();
 			const action = registry.get(actionName);
@@ -96,21 +91,13 @@ export class ActionExecutor {
 							timestamp: new Date(),
 						});
 					},
-					getSharedData: (key: string) =>
-						this.communicationManager.getSharedData(key),
+					getSharedData: (key: string) => this.communicationManager.getSharedData(key),
 					setSharedData: (key: string, value: any) =>
 						this.communicationManager.setSharedData(key, value, actionId),
 					waitForAction: (targetActionId: string, timeout?: number) =>
 						this.communicationManager.waitForAction(targetActionId, timeout),
-					subscribeToMessages: (
-						messageType: string,
-						handler: (message: any) => void,
-					) =>
-						this.communicationManager.subscribeToMessages(
-							actionId,
-							messageType,
-							handler,
-						),
+					subscribeToMessages: (messageType: string, handler: (message: any) => void) =>
+						this.communicationManager.subscribeToMessages(actionId, messageType, handler),
 				},
 			};
 
@@ -138,10 +125,7 @@ export class ActionExecutor {
 			return result;
 		} catch (error: any) {
 			debug("Action execution failed: %s", error.message);
-			this.communicationManager.failAction(
-				actionId,
-				error.message || "Action execution failed",
-			);
+			this.communicationManager.failAction(actionId, error.message || "Action execution failed");
 
 			if (error instanceof HypergenError) {
 				throw error;
@@ -171,24 +155,15 @@ export class ActionExecutor {
 			actionId?: string;
 		} = {},
 	): Promise<ActionResult> {
-		debug(
-			"Executing action interactively: %s with parameters: %o",
-			actionName,
-			parameters,
-		);
+		debug("Executing action interactively: %s with parameters: %o", actionName, parameters);
 
 		// Generate action ID for communication tracking
 		const actionId =
-			options.actionId ||
-			`action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			options.actionId || `action_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
 		try {
 			// Register action with communication manager
-			this.communicationManager.registerAction(
-				actionId,
-				actionName,
-				parameters,
-			);
+			this.communicationManager.registerAction(actionId, actionName, parameters);
 
 			// Get action from registry
 			const registry = ActionRegistry.getInstance();
@@ -201,12 +176,11 @@ export class ActionExecutor {
 			}
 
 			// Resolve parameters with interactive prompts
-			const resolvedParams =
-				await this.parameterResolver.resolveParametersInteractively(
-					action.metadata,
-					parameters,
-					options,
-				);
+			const resolvedParams = await this.parameterResolver.resolveParametersInteractively(
+				action.metadata,
+				parameters,
+				options,
+			);
 
 			// Update action state with resolved parameters
 			this.communicationManager.updateActionState(actionId, {
@@ -236,21 +210,13 @@ export class ActionExecutor {
 							timestamp: new Date(),
 						});
 					},
-					getSharedData: (key: string) =>
-						this.communicationManager.getSharedData(key),
+					getSharedData: (key: string) => this.communicationManager.getSharedData(key),
 					setSharedData: (key: string, value: any) =>
 						this.communicationManager.setSharedData(key, value, actionId),
 					waitForAction: (targetActionId: string, timeout?: number) =>
 						this.communicationManager.waitForAction(targetActionId, timeout),
-					subscribeToMessages: (
-						messageType: string,
-						handler: (message: any) => void,
-					) =>
-						this.communicationManager.subscribeToMessages(
-							actionId,
-							messageType,
-							handler,
-						),
+					subscribeToMessages: (messageType: string, handler: (message: any) => void) =>
+						this.communicationManager.subscribeToMessages(actionId, messageType, handler),
 				},
 			};
 
@@ -293,21 +259,16 @@ export class ActionExecutor {
 			debug("Action execution with prompts failed: %s", error.message);
 
 			// Fail action with communication manager
-			this.communicationManager.failAction(
-				actionId,
-				error.message || "Action execution failed",
-			);
+			this.communicationManager.failAction(actionId, error.message || "Action execution failed");
 
 			if (error instanceof HypergenError) {
 				throw error;
 			}
 
 			if (error instanceof ActionExecutionError) {
-				throw ErrorHandler.createError(
-					ErrorCode.ACTION_EXECUTION_FAILED,
-					error.message,
-					{ action: actionName },
-				);
+				throw ErrorHandler.createError(ErrorCode.ACTION_EXECUTION_FAILED, error.message, {
+					action: actionName,
+				});
 			}
 
 			throw ErrorHandler.createError(
@@ -336,10 +297,7 @@ export class ActionExecutor {
 				};
 			}
 
-			await this.parameterResolver.resolveParameters(
-				action.metadata,
-				parameters,
-			);
+			await this.parameterResolver.resolveParameters(action.metadata, parameters);
 
 			return { valid: true, errors: [] };
 		} catch (error: any) {
@@ -367,9 +325,7 @@ export class ActionExecutor {
 		}
 
 		const requiredParameters =
-			action.metadata.parameters
-				?.filter((p) => p.required)
-				.map((p) => p.name) || [];
+			action.metadata.parameters?.filter((p) => p.required).map((p) => p.name) || [];
 
 		return {
 			exists: true,

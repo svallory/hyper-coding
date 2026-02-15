@@ -458,14 +458,11 @@ export function checkRegistryHealth(): {
 	// Check memory usage
 	const totalMemory = stats.memory.registrySize + stats.memory.cacheSize;
 	if (totalMemory > TOOL_FRAMEWORK_CONSTANTS.MEMORY_WARNING_THRESHOLD) {
-		issues.push(
-			`High memory usage: ${Math.round(totalMemory / 1024 / 1024)}MB`,
-		);
+		issues.push(`High memory usage: ${Math.round(totalMemory / 1024 / 1024)}MB`);
 	}
 
 	// Check for excessive cached instances
-	const cacheRatio =
-		stats.cachedInstances / Math.max(stats.totalRegistrations, 1);
+	const cacheRatio = stats.cachedInstances / Math.max(stats.totalRegistrations, 1);
 	if (cacheRatio > 5) {
 		issues.push(
 			`Excessive cached instances: ${stats.cachedInstances} cached vs ${stats.totalRegistrations} registered`,
@@ -487,13 +484,9 @@ export const DevUtils = {
 	 * Enable debug logging for specific tool types
 	 */
 	enableDebugLogging: (toolTypes: ToolType[] = [...SUPPORTED_TOOL_TYPES]) => {
-		const categories = toolTypes.map(
-			(type) => `hypergen:v8:recipe:tool:${type}`,
-		);
+		const categories = toolTypes.map((type) => `hypergen:v8:recipe:tool:${type}`);
 		const existing = process.env.DEBUG || "";
-		process.env.DEBUG = existing
-			? `${existing},${categories.join(",")}`
-			: categories.join(",");
+		process.env.DEBUG = existing ? `${existing},${categories.join(",")}` : categories.join(",");
 	},
 
 	/**

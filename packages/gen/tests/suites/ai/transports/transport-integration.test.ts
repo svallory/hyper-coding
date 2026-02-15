@@ -47,9 +47,7 @@ describe("Transport Integration", () => {
 
 	it("full cycle: collect → stdout transport → deferred", async () => {
 		const collector = seedCollector();
-		const writeSpy = vi
-			.spyOn(process.stdout, "write")
-			.mockImplementation(() => true);
+		const writeSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
 		const transport = resolveTransport({ mode: "stdout" });
 		expect(transport).toBeInstanceOf(StdoutTransport);
@@ -81,8 +79,7 @@ describe("Transport Integration", () => {
 		const collector = seedCollector();
 
 		const mockAnswers = {
-			componentBody:
-				'<button className="btn" onClick={onClick}>{children}</button>',
+			componentBody: '<button className="btn" onClick={onClick}>{children}</button>',
 			testBody:
 				'it("renders", () => { render(<Button />); expect(screen.getByRole("button")).toBeDefined(); })',
 		};

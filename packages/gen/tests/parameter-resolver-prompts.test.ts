@@ -32,9 +32,7 @@ describe("Parameter Resolver with Prompts", () => {
 			expect(converted.pattern).toBe("^[A-Z][a-zA-Z0-9]*$");
 			expect(converted.min).toBe(3);
 			expect(converted.max).toBe(50);
-			expect(converted.validation?.message).toBe(
-				"Must be a valid component name",
-			);
+			expect(converted.validation?.message).toBe("Must be a valid component name");
 		});
 
 		it("should handle enum parameters with multi-select detection", () => {
@@ -82,13 +80,9 @@ describe("Parameter Resolver with Prompts", () => {
 				framework: "react",
 			};
 
-			const result = await resolver.resolveParametersInteractively(
-				metadata,
-				providedValues,
-				{
-					skipOptional: true, // No prompts needed
-				},
-			);
+			const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+				skipOptional: true, // No prompts needed
+			});
 
 			expect(result.name).toBe("TestComponent");
 			expect(result.framework).toBe("react");
@@ -126,13 +120,9 @@ describe("Parameter Resolver with Prompts", () => {
 				name: "TestComponent",
 			};
 
-			const result = await resolver.resolveParametersInteractively(
-				metadata,
-				providedValues,
-				{
-					useDefaults: true,
-				},
-			);
+			const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+				useDefaults: true,
+			});
 
 			expect(result.name).toBe("TestComponent");
 			expect(result.enabled).toBe(true);
@@ -252,11 +242,7 @@ describe("Parameter Resolver with Prompts", () => {
 				],
 			};
 
-			const result = await resolver.resolveParameters(
-				metadata,
-				{},
-				{ useDefaults: true },
-			);
+			const result = await resolver.resolveParameters(metadata, {}, { useDefaults: true });
 
 			expect(result.name).toBe("DefaultName");
 		});

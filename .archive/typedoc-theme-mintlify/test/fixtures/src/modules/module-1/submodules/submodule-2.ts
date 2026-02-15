@@ -1,6 +1,6 @@
 export interface InterfaceA {
-  propA: string;
-  propB: string;
+	propA: string;
+	propB: string;
 }
 export interface InterfaceB {}
 export enum EnumA {}

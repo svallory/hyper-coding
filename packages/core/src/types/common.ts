@@ -7,7 +7,7 @@
  * ExtendedLogger type interface is available from ../logger/types.js
  */
 
-import type { ExtendedLogger } from '#/logger/types.js';
+import type { ExtendedLogger } from "#/logger/types.js";
 
 export interface Prompter<Q, T> {
 	prompt: (arg0: Q) => Promise<T>;

@@ -114,10 +114,7 @@ describe("AiCollector", () => {
 			collector.addGlobalContext("PostgreSQL database");
 
 			const contexts = collector.getGlobalContexts();
-			expect(contexts).toEqual([
-				"TypeScript strict mode",
-				"PostgreSQL database",
-			]);
+			expect(contexts).toEqual(["TypeScript strict mode", "PostgreSQL database"]);
 		});
 
 		it("ignores empty/whitespace-only context", () => {

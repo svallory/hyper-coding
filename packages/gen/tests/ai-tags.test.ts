@@ -344,9 +344,7 @@ after`;
 			expect(entry.examples.length).toBe(2);
 			expect(entry.examples[0]).toContain('"Alice"');
 			expect(entry.examples[1]).toContain('"Bob"');
-			expect(entry.outputDescription).toContain(
-				"A JSON object with the following structure:",
-			);
+			expect(entry.outputDescription).toContain("A JSON object with the following structure:");
 		});
 
 		it("handles @output with description text and example", async () => {
@@ -372,9 +370,7 @@ after`;
 
 			const entry = collector.getEntries().get("withDesc")!;
 			expect(entry).toBeDefined();
-			expect(entry.outputDescription).toContain(
-				"Return an array of strings in JSON format.",
-			);
+			expect(entry.outputDescription).toContain("Return an array of strings in JSON format.");
 			expect(entry.examples.length).toBe(1);
 			expect(entry.examples[0]).toContain('["item1", "item2", "item3"]');
 		});

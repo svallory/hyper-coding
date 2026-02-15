@@ -1,5 +1,5 @@
 {
-  "entryPoints": ["./src/modules/module-1", "./src/modules/module-2"],
-  "entryPointStrategy": "expand",
-  "readme": "none"
+	"entryPoints": ["./src/modules/module-1", "./src/modules/module-2"],
+	"entryPointStrategy": "expand",
+	"readme": "none"
 }

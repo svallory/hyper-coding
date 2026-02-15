@@ -47,26 +47,15 @@ export class DefaultActionUtils implements ActionUtils {
 	}
 
 	globFiles(pattern: string, options: { cwd?: string } = {}): string[] {
-		debug(
-			"Globbing pattern: %s (cwd: %s)",
-			pattern,
-			options.cwd || process.cwd(),
-		);
+		debug("Globbing pattern: %s (cwd: %s)", pattern, options.cwd || process.cwd());
 		return glob.sync(pattern, {
 			cwd: options.cwd || process.cwd(),
 			absolute: false,
 		});
 	}
 
-	async installPackages(
-		packages: string[],
-		options: { dev?: boolean } = {},
-	): Promise<void> {
-		debug(
-			"Installing packages: %s (dev: %s)",
-			packages.join(", "),
-			options.dev || false,
-		);
+	async installPackages(packages: string[], options: { dev?: boolean } = {}): Promise<void> {
+		debug("Installing packages: %s (dev: %s)", packages.join(", "), options.dev || false);
 
 		// Detect package manager
 		const packageManager = await this.detectPackageManager();
@@ -101,15 +90,8 @@ export class DefaultActionUtils implements ActionUtils {
 		await this.runCommand(`${packageManager} ${args.join(" ")}`);
 	}
 
-	async runCommand(
-		command: string,
-		options: { cwd?: string } = {},
-	): Promise<string> {
-		debug(
-			"Running command: %s (cwd: %s)",
-			command,
-			options.cwd || process.cwd(),
-		);
+	async runCommand(command: string, options: { cwd?: string } = {}): Promise<string> {
+		debug("Running command: %s (cwd: %s)", command, options.cwd || process.cwd());
 
 		try {
 			const result = await execa(command, {

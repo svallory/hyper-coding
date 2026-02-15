@@ -5,11 +5,7 @@
  */
 
 import createDebug from "debug";
-import type {
-	ActionMetadata,
-	ActionFunction,
-	DecoratedAction,
-} from "./types.js";
+import type { ActionMetadata, ActionFunction, DecoratedAction } from "./types.js";
 import { ActionRegistry } from "./registry.js";
 
 const debug = createDebug("hypergen:v8:action:decorator");
@@ -51,11 +47,7 @@ export function action(metadata: ActionMetadata) {
 		const registry = ActionRegistry.getInstance();
 		registry.register(target, actionMetadata);
 
-		debug(
-			"Action registered: %s in category %s",
-			metadata.name,
-			actionMetadata.category,
-		);
+		debug("Action registered: %s in category %s", metadata.name, actionMetadata.category);
 
 		return target;
 	};
@@ -64,9 +56,7 @@ export function action(metadata: ActionMetadata) {
 /**
  * Extract action metadata from a decorated function
  */
-export function getActionMetadata(
-	fn: ActionFunction,
-): ActionMetadata | undefined {
+export function getActionMetadata(fn: ActionFunction): ActionMetadata | undefined {
 	return (fn as any)[ACTION_METADATA_SYMBOL];
 }
 
@@ -86,9 +76,7 @@ function validateActionMetadata(metadata: ActionMetadata): void {
 	}
 
 	if (!/^[a-z][a-z0-9-]*$/i.test(metadata.name)) {
-		throw new Error(
-			"Action name must be alphanumeric with hyphens (kebab-case recommended)",
-		);
+		throw new Error("Action name must be alphanumeric with hyphens (kebab-case recommended)");
 	}
 
 	if (metadata.parameters) {
@@ -128,34 +116,20 @@ function validateParameterDefinition(param: any): void {
 
 	// Validate enum parameters
 	if (param.type === "enum") {
-		if (
-			!param.values ||
-			!Array.isArray(param.values) ||
-			param.values.length === 0
-		) {
-			throw new Error(
-				`Enum parameter ${param.name} must have a non-empty values array`,
-			);
+		if (!param.values || !Array.isArray(param.values) || param.values.length === 0) {
+			throw new Error(`Enum parameter ${param.name} must have a non-empty values array`);
 		}
 	}
 
 	// Validate number constraints
 	if (param.type === "number") {
 		if (param.min !== undefined && typeof param.min !== "number") {
-			throw new Error(
-				`Parameter ${param.name} min constraint must be a number`,
-			);
+			throw new Error(`Parameter ${param.name} min constraint must be a number`);
 		}
 		if (param.max !== undefined && typeof param.max !== "number") {
-			throw new Error(
-				`Parameter ${param.name} max constraint must be a number`,
-			);
+			throw new Error(`Parameter ${param.name} max constraint must be a number`);
 		}
-		if (
-			param.min !== undefined &&
-			param.max !== undefined &&
-			param.min > param.max
-		) {
+		if (param.min !== undefined && param.max !== undefined && param.min > param.max) {
 			throw new Error(
 				`Parameter ${param.name} min (${param.min}) cannot be greater than max (${param.max})`,
 			);

@@ -1,18 +1,11 @@
 {
-  "name": "@hyper-kits/kit",
-  "version": "0.0.1",
-  "description": "Hypergen kit for developing Hypergen kits",
-  "license": "MIT",
-  "publishConfig": {
-    "access": "public"
-  },
-  "files": [
-    "recipe.yml",
-    "templates"
-  ],
-  "keywords": [
-    "hypergen",
-    "kit",
-    "scaffolding"
-  ]
+	"name": "@hyper-kits/kit",
+	"version": "0.0.1",
+	"description": "Hypergen kit for developing Hypergen kits",
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": ["recipe.yml", "templates"],
+	"keywords": ["hypergen", "kit", "scaffolding"]
 }

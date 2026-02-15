@@ -7,5 +7,5 @@ export class ClassB {}
 export interface InterfaceA {}
 
 export interface InterfaceB {
-  _prop_with_underscore_: string;
+	_prop_with_underscore_: string;
 }

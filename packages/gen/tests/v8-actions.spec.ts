@@ -14,11 +14,7 @@ import {
 	ConsoleActionLogger,
 	SilentActionLogger,
 } from "#/actions/index";
-import type {
-	ActionContext,
-	ActionResult,
-	ActionMetadata,
-} from "#/actions/index";
+import type { ActionContext, ActionResult, ActionMetadata } from "#/actions/index";
 
 // Helper function to create test actions
 function createTestAction(
@@ -168,9 +164,7 @@ describe("ActionRegistry", () => {
 		const dbActions = registry.getByCategory("database");
 		expect(dbActions).toHaveLength(2);
 		expect(dbActions.map((a) => a.metadata.name)).toContain("db-action");
-		expect(dbActions.map((a) => a.metadata.name)).toContain(
-			"another-db-action",
-		);
+		expect(dbActions.map((a) => a.metadata.name)).toContain("another-db-action");
 
 		const fileActions = registry.getByCategory("file");
 		expect(fileActions).toHaveLength(1);
@@ -360,9 +354,9 @@ describe("ActionParameterResolver", () => {
 		expect(valid.required).toBe("value");
 
 		// Missing required parameter
-		await expect(
-			resolver.resolveParameters(metadata, { optional: "value" }),
-		).rejects.toThrow("Required parameter 'required' not provided");
+		await expect(resolver.resolveParameters(metadata, { optional: "value" })).rejects.toThrow(
+			"Required parameter 'required' not provided",
+		);
 	});
 
 	it("should validate all parameter types", async () => {
@@ -503,10 +497,9 @@ describe("ActionExecutor", () => {
 			"Required parameter 'required' not provided and no default available",
 		);
 
-		const validValidation = await executor.validateParameters(
-			"validation-test",
-			{ required: "value" },
-		);
+		const validValidation = await executor.validateParameters("validation-test", {
+			required: "value",
+		});
 		expect(validValidation.valid).toBe(true);
 		expect(validValidation.errors).toHaveLength(0);
 	});

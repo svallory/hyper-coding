@@ -14,10 +14,7 @@ import os from "node:os";
 import { exec, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { withTempFixtures, fixture } from "#tests/util/fixtures.js";
-import {
-	RecipeEngine,
-	createRecipeEngine,
-} from "#/recipe-engine/recipe-engine";
+import { RecipeEngine, createRecipeEngine } from "#/recipe-engine/recipe-engine";
 import {
 	ToolRegistry,
 	getToolRegistry,
@@ -407,12 +404,7 @@ steps:
 			expect(result.variables.includeTests).toBe(true);
 
 			// Verify files were created
-			const componentPath = path.join(
-				tempDir,
-				"src",
-				"components",
-				"TestButton.ts",
-			);
+			const componentPath = path.join(tempDir, "src", "components", "TestButton.ts");
 			expect(await fs.pathExists(componentPath)).toBe(true);
 			const componentContent = await fs.readFile(componentPath, "utf-8");
 			expect(componentContent).toContain("TestButton");
@@ -446,12 +438,8 @@ steps:
 				expect(result.stepResults.length).toBeGreaterThan(0);
 
 				// Story step may fail but docs should be skipped due to condition
-				const storyStep = result.stepResults.find(
-					(s) => s.stepName === "create-story",
-				);
-				const docsStep = result.stepResults.find(
-					(s) => s.stepName === "create-docs",
-				);
+				const storyStep = result.stepResults.find((s) => s.stepName === "create-story");
+				const docsStep = result.stepResults.find((s) => s.stepName === "create-docs");
 
 				if (storyStep) {
 					// Step should have tried to execute (continueOnError: true in recipe)
@@ -520,12 +508,7 @@ steps:
 			expect(result.stepResults[0].status).toBe("completed");
 
 			// Verify file was created with correct name
-			const componentPath = path.join(
-				tempDir,
-				"src",
-				"components",
-				"TestButtonComponent.ts",
-			);
+			const componentPath = path.join(tempDir, "src", "components", "TestButtonComponent.ts");
 			expect(await fs.pathExists(componentPath)).toBe(true);
 			const content = await fs.readFile(componentPath, "utf-8");
 			expect(content).toContain("TestButtonComponent");
@@ -582,12 +565,8 @@ steps:
 
 			expect(result1).toBeDefined();
 			expect(result1.success).toBe(true);
-			const mainStep = result1.stepResults.find(
-				(s) => s.stepName === "create-main",
-			);
-			const testStep = result1.stepResults.find(
-				(s) => s.stepName === "create-test-only",
-			);
+			const mainStep = result1.stepResults.find((s) => s.stepName === "create-main");
+			const testStep = result1.stepResults.find((s) => s.stepName === "create-test-only");
 
 			// Main step should execute (condition evaluates to true)
 			expect(mainStep?.conditionResult).toBe(true);
@@ -606,12 +585,8 @@ steps:
 
 			expect(result2).toBeDefined();
 			expect(result2.success).toBe(true);
-			const mainStep2 = result2.stepResults.find(
-				(s) => s.stepName === "create-main",
-			);
-			const testStep2 = result2.stepResults.find(
-				(s) => s.stepName === "create-test-only",
-			);
+			const mainStep2 = result2.stepResults.find((s) => s.stepName === "create-main");
+			const testStep2 = result2.stepResults.find((s) => s.stepName === "create-test-only");
 
 			expect(mainStep2?.status).toBe("skipped");
 			// Test step should execute (condition evaluates to true)
@@ -689,12 +664,8 @@ steps:
 			expect(stepB!.startTime).toBeDefined();
 			expect(stepC!.startTime).toBeDefined();
 
-			expect(stepA!.startTime!.getTime()).toBeLessThan(
-				stepB!.startTime!.getTime(),
-			);
-			expect(stepB!.startTime!.getTime()).toBeLessThan(
-				stepC!.startTime!.getTime(),
-			);
+			expect(stepA!.startTime!.getTime()).toBeLessThan(stepB!.startTime!.getTime());
+			expect(stepB!.startTime!.getTime()).toBeLessThan(stepC!.startTime!.getTime());
 		});
 	});
 
@@ -780,9 +751,7 @@ steps:
 			} catch (error) {
 				// Engine may throw instead of returning failed result
 				expect(error).toBeDefined();
-				expect(error instanceof Error ? error.message : String(error)).toMatch(
-					/not found|failed/i,
-				);
+				expect(error instanceof Error ? error.message : String(error)).toMatch(/not found|failed/i);
 			}
 		});
 
@@ -903,9 +872,7 @@ steps:
 				child.stderr.on("data", (d: Buffer) => {
 					stderr += d.toString();
 				});
-				child.on("close", (code: number | null) =>
-					resolve({ stdout, stderr, code }),
-				);
+				child.on("close", (code: number | null) => resolve({ stdout, stderr, code }));
 				child.on("error", (err: Error) => reject(err));
 			});
 		}
@@ -930,12 +897,7 @@ steps:
 
 			expect(result.stdout).toContain("completed successfully");
 			// Verify the file was actually created
-			const generatedFile = path.join(
-				tempDir,
-				"src",
-				"components",
-				"TestButton.ts",
-			);
+			const generatedFile = path.join(tempDir, "src", "components", "TestButton.ts");
 			expect(fs.existsSync(generatedFile)).toBe(true);
 			const content = fs.readFileSync(generatedFile, "utf-8");
 			expect(content).toContain("TestButton");
@@ -954,13 +916,7 @@ steps:
 
 		it("should list available recipes through CLI", async () => {
 			const recipesDir = path.join(tempDir, "recipes");
-			const result = await runCli([
-				"recipe",
-				"list",
-				recipesDir,
-				`--cwd=${tempDir}`,
-				"--json",
-			]);
+			const result = await runCli(["recipe", "list", recipesDir, `--cwd=${tempDir}`, "--json"]);
 
 			const recipes = JSON.parse(result.stdout);
 			expect(recipes).toBeInstanceOf(Array);
@@ -984,24 +940,14 @@ steps:
 
 		it("should handle CLI error reporting", async () => {
 			// Non-existent recipe should fail
-			const result = await runCli([
-				"recipe",
-				"run",
-				"/nonexistent/recipe.yml",
-				`--cwd=${tempDir}`,
-			]);
+			const result = await runCli(["recipe", "run", "/nonexistent/recipe.yml", `--cwd=${tempDir}`]);
 			expect(result.code).not.toBe(0);
 			expect(result.stderr).toContain("Error");
 
 			// Invalid YAML should fail validation
 			const badRecipePath = path.join(tempDir, "bad-recipe.yml");
 			fs.writeFileSync(badRecipePath, "not: valid: recipe: {{{\n");
-			const result2 = await runCli([
-				"recipe",
-				"validate",
-				badRecipePath,
-				"--json",
-			]);
+			const result2 = await runCli(["recipe", "validate", badRecipePath, "--json"]);
 			const output = result2.stdout || result2.stderr;
 			expect(output).toBeDefined();
 			expect(output.length).toBeGreaterThan(0);
@@ -1029,15 +975,9 @@ steps:
 				expect(result).toBeDefined();
 				expect(result.stepResults.length).toBeGreaterThanOrEqual(2);
 
-				const validStep = result.stepResults.find(
-					(s) => s.stepName === "valid-step",
-				);
-				const failingStep = result.stepResults.find(
-					(s) => s.stepName === "failing-step",
-				);
-				const recoveryStep = result.stepResults.find(
-					(s) => s.stepName === "recovery-step",
-				);
+				const validStep = result.stepResults.find((s) => s.stepName === "valid-step");
+				const failingStep = result.stepResults.find((s) => s.stepName === "failing-step");
+				const recoveryStep = result.stepResults.find((s) => s.stepName === "recovery-step");
 
 				// Valid step should process
 				expect(validStep).toBeDefined();
@@ -1236,9 +1176,7 @@ steps:
 
 			const stepA = result.stepResults.find((s) => s.stepName === "create-a");
 			const stepB = result.stepResults.find((s) => s.stepName === "create-b");
-			const finalStep = result.stepResults.find(
-				(s) => s.stepName === "finalize",
-			);
+			const finalStep = result.stepResults.find((s) => s.stepName === "finalize");
 
 			expect(stepA).toBeDefined();
 			expect(stepB).toBeDefined();
@@ -1252,12 +1190,8 @@ steps:
 			expect(stepA!.endTime).toBeDefined();
 			expect(stepB!.endTime).toBeDefined();
 			expect(finalStep!.startTime).toBeDefined();
-			expect(finalStep!.startTime!.getTime()).toBeGreaterThanOrEqual(
-				stepA!.endTime!.getTime(),
-			);
-			expect(finalStep!.startTime!.getTime()).toBeGreaterThanOrEqual(
-				stepB!.endTime!.getTime(),
-			);
+			expect(finalStep!.startTime!.getTime()).toBeGreaterThanOrEqual(stepA!.endTime!.getTime());
+			expect(finalStep!.startTime!.getTime()).toBeGreaterThanOrEqual(stepB!.endTime!.getTime());
 		});
 	});
 
@@ -1353,9 +1287,7 @@ steps:
 
 			expect(result.success).toBe(true);
 			// Should reuse template tool instances
-			expect(finalStats.cachedInstances).toBeGreaterThan(
-				initialStats.cachedInstances,
-			);
+			expect(finalStats.cachedInstances).toBeGreaterThan(initialStats.cachedInstances);
 
 			expect(result.stepResults).toHaveLength(2);
 			result.stepResults.forEach((step) => {
@@ -1490,11 +1422,9 @@ steps:
 			expect(result.validation.isValid).toBe(false);
 			// Check that at least one error message mentions duplicates or uniqueness
 			const hasRelevantError = result.validation.errors.some((e) => {
-				const errorStr =
-					typeof e === "string" ? e : (e as any).message || String(e);
+				const errorStr = typeof e === "string" ? e : (e as any).message || String(e);
 				return (
-					errorStr.toLowerCase().includes("duplicate") ||
-					errorStr.toLowerCase().includes("unique")
+					errorStr.toLowerCase().includes("duplicate") || errorStr.toLowerCase().includes("unique")
 				);
 			});
 			expect(hasRelevantError).toBe(true);
@@ -1560,8 +1490,7 @@ steps:
 			} else {
 				// If validation fails, check it mentions circular dependencies
 				const hasRelevantError = result.validation.errors.some((e) => {
-					const errorStr =
-						typeof e === "string" ? e : (e as any).message || String(e);
+					const errorStr = typeof e === "string" ? e : (e as any).message || String(e);
 					return (
 						errorStr.toLowerCase().includes("circular") ||
 						errorStr.toLowerCase().includes("dependency")
@@ -1656,9 +1585,7 @@ steps:
 				expect(result.errors.length).toBeGreaterThan(0);
 
 				// Step-level errors have { message, code, stack, cause }
-				const failedStep = result.stepResults.find(
-					(s) => s.status === "failed",
-				);
+				const failedStep = result.stepResults.find((s) => s.status === "failed");
 				if (failedStep?.error) {
 					expect(failedStep.error.message).toBeDefined();
 					expect(typeof failedStep.error.message).toBe("string");

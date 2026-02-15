@@ -1,51 +1,49 @@
 {
-  "name": "typedoc-theme-mintlify",
-  "version": "0.1.0",
-  "description": "A TypeDoc plugin that generates Mintlify-compatible MDX documentation for TypeScript APIs with individual item icons.",
-  "exports": {
-    ".": "./dist/src/index.js"
-  },
-  "type": "module",
-  "files": [
-    "dist/"
-  ],
-  "bugs": {
-    "url": "https://github.com/hyperdev-org/hyperdev/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/hyperdev-org/hyperdev.git",
-    "directory": "packages/typedoc-theme-mintlify"
-  },
-  "homepage": "https://github.com/hyperdev-org/hyperdev/tree/main/packages/typedoc-theme-mintlify",
-  "author": "HyperDev Team",
-  "scripts": {
-    "lint": "eslint ./src",
-    "prepublishOnly": "bun run lint && bun run build",
-    "prebuild": "rm -rf dist",
-    "build": "tsc",
-    "test": "echo 'No tests yet'"
-  },
-  "peerDependencies": {
-    "typedoc": ">=0.28.0"
-  },
-  "engines": {
-    "node": ">= 18"
-  },
-  "license": "MIT",
-  "keywords": [
-    "mintlify",
-    "typedoc",
-    "documentation",
-    "mdx",
-    "typescript",
-    "api-docs",
-    "typedoc-plugin"
-  ],
-  "devDependencies": {
-    "typedoc": "^0.28.14",
-    "typedoc-plugin-markdown": "^4.9.0",
-    "@types/node": "^18.19.130",
-    "typescript": "^5.9.3"
-  }
+	"name": "typedoc-theme-mintlify",
+	"version": "0.1.0",
+	"description": "A TypeDoc plugin that generates Mintlify-compatible MDX documentation for TypeScript APIs with individual item icons.",
+	"exports": {
+		".": "./dist/src/index.js"
+	},
+	"type": "module",
+	"files": ["dist/"],
+	"bugs": {
+		"url": "https://github.com/hyperdev-org/hyperdev/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/hyperdev-org/hyperdev.git",
+		"directory": "packages/typedoc-theme-mintlify"
+	},
+	"homepage": "https://github.com/hyperdev-org/hyperdev/tree/main/packages/typedoc-theme-mintlify",
+	"author": "HyperDev Team",
+	"scripts": {
+		"lint": "eslint ./src",
+		"prepublishOnly": "bun run lint && bun run build",
+		"prebuild": "rm -rf dist",
+		"build": "tsc",
+		"test": "echo 'No tests yet'"
+	},
+	"peerDependencies": {
+		"typedoc": ">=0.28.0"
+	},
+	"engines": {
+		"node": ">= 18"
+	},
+	"license": "MIT",
+	"keywords": [
+		"mintlify",
+		"typedoc",
+		"documentation",
+		"mdx",
+		"typescript",
+		"api-docs",
+		"typedoc-plugin"
+	],
+	"devDependencies": {
+		"typedoc": "^0.28.14",
+		"typedoc-plugin-markdown": "^4.9.0",
+		"@types/node": "^18.19.130",
+		"typescript": "^5.9.3"
+	}
 }

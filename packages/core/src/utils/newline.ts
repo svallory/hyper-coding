@@ -1,4 +1,4 @@
-import { EOL } from 'node:os';
+import { EOL } from "node:os";
 const newline = (string: string): string => {
 	const newlines = string.match(/(?:\r?\n)/g) || [];
 
@@ -6,10 +6,10 @@ const newline = (string: string): string => {
 		return EOL;
 	}
 
-	const crlf = newlines.filter((newline: string) => newline === '\r\n').length;
+	const crlf = newlines.filter((newline: string) => newline === "\r\n").length;
 	const lf = newlines.length - crlf;
 
-	return crlf > lf ? '\r\n' : '\n';
+	return crlf > lf ? "\r\n" : "\n";
 };
 
 export default newline;

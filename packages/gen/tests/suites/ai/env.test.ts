@@ -23,9 +23,7 @@ describe("AI env utilities", () => {
 		});
 
 		it("maps google to GOOGLE_GENERATIVE_AI_API_KEY", () => {
-			expect(PROVIDER_API_KEY_ENV_VARS.google).toBe(
-				"GOOGLE_GENERATIVE_AI_API_KEY",
-			);
+			expect(PROVIDER_API_KEY_ENV_VARS.google).toBe("GOOGLE_GENERATIVE_AI_API_KEY");
 		});
 
 		it("maps mistral to MISTRAL_API_KEY", () => {
@@ -91,9 +89,7 @@ describe("AI env utilities", () => {
 		});
 
 		it("returns well-known name for known provider", () => {
-			expect(getExpectedEnvVar(undefined, "anthropic")).toBe(
-				"ANTHROPIC_API_KEY",
-			);
+			expect(getExpectedEnvVar(undefined, "anthropic")).toBe("ANTHROPIC_API_KEY");
 		});
 
 		it("generates uppercase name for unknown provider", () => {

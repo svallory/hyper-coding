@@ -29,11 +29,7 @@ describe("ContextCollector", () => {
 		it("collects explicit files", async () => {
 			fs.writeFileSync(path.join(tmpDir, "test.ts"), "const x = 1");
 
-			const bundle = await collector.collect(
-				{ include: ["test.ts"] },
-				tmpDir,
-				new Map(),
-			);
+			const bundle = await collector.collect({ include: ["test.ts"] }, tmpDir, new Map());
 
 			expect(bundle.files.size).toBe(1);
 			expect(bundle.files.get("test.ts")).toBe("const x = 1");
@@ -41,10 +37,7 @@ describe("ContextCollector", () => {
 
 		it("collects project config files", async () => {
 			fs.writeFileSync(path.join(tmpDir, "package.json"), '{"name":"test"}');
-			fs.writeFileSync(
-				path.join(tmpDir, "tsconfig.json"),
-				'{"compilerOptions":{}}',
-			);
+			fs.writeFileSync(path.join(tmpDir, "tsconfig.json"), '{"compilerOptions":{}}');
 
 			const bundle = await collector.collect(
 				{ projectConfig: ["package.json", "tsconfig"] },
@@ -60,11 +53,7 @@ describe("ContextCollector", () => {
 		it("collects with projectConfig: true", async () => {
 			fs.writeFileSync(path.join(tmpDir, "package.json"), '{"name":"test"}');
 
-			const bundle = await collector.collect(
-				{ projectConfig: true },
-				tmpDir,
-				new Map(),
-			);
+			const bundle = await collector.collect({ projectConfig: true }, tmpDir, new Map());
 
 			expect(bundle.configs.has("package.json")).toBe(true);
 		});
@@ -81,11 +70,7 @@ describe("ContextCollector", () => {
 				toolResult: { data: "some output" },
 			});
 
-			const bundle = await collector.collect(
-				{ fromSteps: ["step1"] },
-				tmpDir,
-				stepResults,
-			);
+			const bundle = await collector.collect({ fromSteps: ["step1"] }, tmpDir, stepResults);
 
 			expect(bundle.stepOutputs.size).toBe(1);
 			expect(bundle.stepOutputs.get("step1")).toContain("some output");
@@ -133,11 +118,7 @@ describe("ContextCollector", () => {
 		});
 
 		it("skips missing files gracefully", async () => {
-			const bundle = await collector.collect(
-				{ include: ["nonexistent.ts"] },
-				tmpDir,
-				new Map(),
-			);
+			const bundle = await collector.collect({ include: ["nonexistent.ts"] }, tmpDir, new Map());
 
 			expect(bundle.files.size).toBe(0);
 		});
@@ -147,11 +128,7 @@ describe("ContextCollector", () => {
 			fs.writeFileSync(path.join(tmpDir, "b.ts"), "const b = 2");
 			fs.writeFileSync(path.join(tmpDir, "c.js"), "const c = 3");
 
-			const bundle = await collector.collect(
-				{ files: ["*.ts"] },
-				tmpDir,
-				new Map(),
-			);
+			const bundle = await collector.collect({ files: ["*.ts"] }, tmpDir, new Map());
 
 			expect(bundle.files.size).toBe(2);
 		});

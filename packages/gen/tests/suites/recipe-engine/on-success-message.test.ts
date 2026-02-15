@@ -48,9 +48,7 @@ function writeRecipeFile(
 		name,
 		description: `Test recipe: ${name}`,
 		variables: config.variables ?? {},
-		steps: config.steps ?? [
-			{ name: "noop", tool: "shell", command: "echo ok" },
-		],
+		steps: config.steps ?? [{ name: "noop", tool: "shell", command: "echo ok" }],
 		...(config.onSuccess !== undefined ? { onSuccess: config.onSuccess } : {}),
 		...(config.onError !== undefined ? { onError: config.onError } : {}),
 	};
@@ -153,9 +151,7 @@ describe("Recipe onSuccess / onError messages", () => {
 			expect(result.success).toBe(true);
 
 			const lines = getPlainLogLines();
-			expect(
-				lines.some((l) => l.includes("Generated UserProfile successfully!")),
-			).toBe(true);
+			expect(lines.some((l) => l.includes("Generated UserProfile successfully!"))).toBe(true);
 		});
 
 		it("should render Jig filters and conditionals in onSuccess", async () => {
@@ -185,8 +181,7 @@ describe("Recipe onSuccess / onError messages", () => {
 			writeTemplate("hello.jig", "hello.txt", "Hello World");
 
 			const recipePath = writeRecipeFile("result-access", {
-				onSuccess:
-					"Success: {{ result.success }}, files: {{ result.filesCreated.length }}",
+				onSuccess: "Success: {{ result.success }}, files: {{ result.filesCreated.length }}",
 				steps: [{ name: "gen", tool: "template", template: "hello.jig" }],
 			});
 
@@ -210,9 +205,7 @@ describe("Recipe onSuccess / onError messages", () => {
 			expect(result.success).toBe(true);
 
 			const lines = getPlainLogLines();
-			expect(
-				lines.some((l) => l.includes('Recipe "recipe-meta-access" completed')),
-			).toBe(true);
+			expect(lines.some((l) => l.includes('Recipe "recipe-meta-access" completed'))).toBe(true);
 		});
 	});
 
@@ -229,9 +222,7 @@ describe("Recipe onSuccess / onError messages", () => {
 			expect(result.success).toBe(true);
 
 			const lines = getPlainLogLines();
-			expect(lines.some((l) => l.includes("Something went wrong!"))).toBe(
-				false,
-			);
+			expect(lines.some((l) => l.includes("Something went wrong!"))).toBe(false);
 			expect(lines.some((l) => l.includes("Yay!"))).toBe(true);
 		});
 	});
@@ -398,11 +389,7 @@ describe("Recipe onSuccess / onError messages", () => {
 
 	describe("onSuccess with template steps", () => {
 		it("should print onSuccess after template step generates files", async () => {
-			writeTemplate(
-				"component.jig",
-				"components/greeting.ts",
-				'export const greeting = "hello"',
-			);
+			writeTemplate("component.jig", "components/greeting.ts", 'export const greeting = "hello"');
 
 			const recipePath = writeRecipeFile("template-success", {
 				variables: {
@@ -418,9 +405,7 @@ describe("Recipe onSuccess / onError messages", () => {
 			expect(result.filesCreated.length).toBeGreaterThanOrEqual(1);
 
 			const lines = getPlainLogLines();
-			expect(
-				lines.some((l) => l.includes("Greeting component generated!")),
-			).toBe(true);
+			expect(lines.some((l) => l.includes("Greeting component generated!"))).toBe(true);
 		});
 	});
 });

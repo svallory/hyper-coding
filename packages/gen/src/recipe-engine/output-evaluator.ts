@@ -53,8 +53,7 @@ export async function evaluateStepOutputs(
 			if (expression.includes("{{") || expression.includes("@")) {
 				const rendered = await renderTemplate(expression, evalContext);
 				// Trim whitespace that Jig may add
-				const trimmed =
-					typeof rendered === "string" ? rendered.trim() : rendered;
+				const trimmed = typeof rendered === "string" ? rendered.trim() : rendered;
 				outputs[varName] = trimmed;
 			} else {
 				// Plain expression — evaluate as property access on the context
@@ -81,10 +80,7 @@ export async function evaluateStepOutputs(
  * Evaluate a simple dot-notation expression against a context.
  * e.g., "result.filesGenerated[0]" or "result.variables.name"
  */
-function evaluateSimpleExpression(
-	expression: string,
-	context: Record<string, any>,
-): any {
+function evaluateSimpleExpression(expression: string, context: Record<string, any>): any {
 	try {
 		// Use Function constructor for safe(r) expression evaluation
 		const keys = Object.keys(context);

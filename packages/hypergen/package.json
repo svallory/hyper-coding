@@ -2,14 +2,7 @@
 	"name": "hypergen",
 	"version": "8.0.0",
 	"description": "The scalable code generator that saves you time.",
-	"keywords": [
-		"template",
-		"generator",
-		"hypergen",
-		"boilerplate",
-		"redux",
-		"react"
-	],
+	"keywords": ["template", "generator", "hypergen", "boilerplate", "redux", "react"],
 	"author": {
 		"name": "Saulo Vallory",
 		"email": "saulo@toki.life",
@@ -45,9 +38,7 @@
 		"hooks": {
 			"command_not_found": "./dist/hooks/command-not-found"
 		},
-		"plugins": [
-			"@oclif/plugin-help"
-		],
+		"plugins": ["@oclif/plugin-help"],
 		"topics": {
 			"kit": {
 				"description": "Manage kits (installable bundles of cookbooks)"
@@ -67,11 +58,7 @@
 		},
 		"topicSeparator": " "
 	},
-	"files": [
-		"bin",
-		"dist",
-		"oclif.manifest.json"
-	],
+	"files": ["bin", "dist", "oclif.manifest.json"],
 	"scripts": {
 		"standalone": "rm -rf standalone; bun run build:lib && bun pkg package.json --out-path standalone && bun scripts/standalone.js",
 		"standalone:brew-sha": "shasum -a 256 standalone/*.macos.*.tar.gz",
@@ -151,21 +138,14 @@
 		"zeroconf-typescript-eslint": "^2.4.0"
 	},
 	"nodemonConfig": {
-		"ignore": [
-			"**/test/**",
-			"**/docs/**"
-		],
+		"ignore": ["**/test/**", "**/docs/**"],
 		"delay": 500
 	},
 	"pkg": {
 		"scripts": "dist/**/*.js",
 		"assets": "src/**/*",
 		"outPath": "standalone",
-		"targets": [
-			"node17-macos",
-			"node17-linux",
-			"node17-win"
-		]
+		"targets": ["node17-macos", "node17-linux", "node17-win"]
 	},
 	"peerDependencies": {
 		"@ai-sdk/anthropic": "^1.0.0",
@@ -187,9 +167,7 @@
 	},
 	"test": {
 		"coverage": {
-			"exclude": [
-				"dist/**"
-			]
+			"exclude": ["dist/**"]
 		}
 	}
 }

@@ -1,12 +1,12 @@
-import changeCase from 'change-case';
-import inflection from 'inflection';
+import changeCase from "change-case";
+import inflection from "inflection";
 
 // supports kebab-case to KebabCase
 const undasherize = (str: string): string =>
 	str
 		.split(/[-_]/)
 		.map((w: string) => w[0].toUpperCase() + w.slice(1).toLowerCase())
-		.join('');
+		.join("");
 
 const helpers = {
 	capitalize(str: any): string {

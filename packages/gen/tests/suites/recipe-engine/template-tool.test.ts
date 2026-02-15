@@ -116,11 +116,9 @@ describe("TemplateTool", () => {
 			const result = await tool.validate(invalidStep, stepContext);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((error) =>
-					error.includes("Template identifier is required"),
-				),
-			).toBe(true);
+			expect(result.errors.some((error) => error.includes("Template identifier is required"))).toBe(
+				true,
+			);
 		});
 
 		it("should provide execution time estimates", async () => {
@@ -214,10 +212,7 @@ describe("TemplateTool", () => {
 			});
 
 			if (result.status === "failed") {
-				console.log(
-					"Skip test failed (expected for integration test):",
-					result.error?.message,
-				);
+				console.log("Skip test failed (expected for integration test):", result.error?.message);
 				// Verify basic result structure
 				expect(result.toolType).toBe("template");
 				expect(result.stepName).toBe("test-template-step");
@@ -297,9 +292,7 @@ describe("TemplateToolFactory", () => {
 		const result = factory.validateConfig(invalidConfig);
 
 		expect(result.isValid).toBe(false);
-		expect(
-			result.errors.some((error) => error.includes("must be an object")),
-		).toBe(true);
+		expect(result.errors.some((error) => error.includes("must be an object"))).toBe(true);
 	});
 
 	it("should provide warnings for questionable config", () => {
@@ -309,11 +302,7 @@ describe("TemplateToolFactory", () => {
 
 		const result = factory.validateConfig(configWithWarning);
 
-		expect(
-			result.warnings.some((warning) =>
-				warning.includes("should be a boolean"),
-			),
-		).toBe(true);
+		expect(result.warnings.some((warning) => warning.includes("should be a boolean"))).toBe(true);
 	});
 });
 

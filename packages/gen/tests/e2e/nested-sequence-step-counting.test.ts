@@ -192,24 +192,12 @@ ${content}
 		expect(result.filesCreated.length).toBe(8);
 		expect(await fs.pathExists(path.join(tempDir, "package.json"))).toBe(true);
 		expect(await fs.pathExists(path.join(tempDir, "tsconfig.json"))).toBe(true);
-		expect(await fs.pathExists(path.join(tempDir, "next.config.ts"))).toBe(
-			true,
-		);
-		expect(await fs.pathExists(path.join(tempDir, "app", "globals.css"))).toBe(
-			true,
-		);
-		expect(await fs.pathExists(path.join(tempDir, "app", "layout.tsx"))).toBe(
-			true,
-		);
-		expect(await fs.pathExists(path.join(tempDir, "app", "page.tsx"))).toBe(
-			true,
-		);
-		expect(await fs.pathExists(path.join(tempDir, "public", "logo.svg"))).toBe(
-			true,
-		);
-		expect(await fs.pathExists(path.join(tempDir, "public", "icon.svg"))).toBe(
-			true,
-		);
+		expect(await fs.pathExists(path.join(tempDir, "next.config.ts"))).toBe(true);
+		expect(await fs.pathExists(path.join(tempDir, "app", "globals.css"))).toBe(true);
+		expect(await fs.pathExists(path.join(tempDir, "app", "layout.tsx"))).toBe(true);
+		expect(await fs.pathExists(path.join(tempDir, "app", "page.tsx"))).toBe(true);
+		expect(await fs.pathExists(path.join(tempDir, "public", "logo.svg"))).toBe(true);
+		expect(await fs.pathExists(path.join(tempDir, "public", "icon.svg"))).toBe(true);
 	});
 
 	it("should count deeply nested sequences correctly", async () => {
@@ -339,15 +327,9 @@ ${content}
 			createTemplate("single.txt", "Single"),
 		);
 
-		await fs.writeFile(
-			path.join(templatesDir, "seq1.jig"),
-			createTemplate("seq1.txt", "Seq 1"),
-		);
+		await fs.writeFile(path.join(templatesDir, "seq1.jig"), createTemplate("seq1.txt", "Seq 1"));
 
-		await fs.writeFile(
-			path.join(templatesDir, "seq2.jig"),
-			createTemplate("seq2.txt", "Seq 2"),
-		);
+		await fs.writeFile(path.join(templatesDir, "seq2.jig"), createTemplate("seq2.txt", "Seq 2"));
 
 		await fs.writeFile(
 			path.join(templatesDir, "another.jig"),
@@ -431,10 +413,7 @@ ${content}
 			);
 		}
 
-		await fs.writeFile(
-			path.join(templatesDir, "after.jig"),
-			createTemplate("after.txt", "After"),
-		);
+		await fs.writeFile(path.join(templatesDir, "after.jig"), createTemplate("after.txt", "After"));
 
 		const result = await recipeEngine.executeRecipe(
 			{ type: "file", path: recipePath },

@@ -1,1 +1,1 @@
-export * from './hypergen-errors.js';
+export * from "./hypergen-errors.js";

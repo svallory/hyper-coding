@@ -22,10 +22,7 @@ beforeAll(() => {
  *   - context.step?.name
  *   - context.variables
  */
-function makeContext(
-	vars: Record<string, any> = {},
-	stepName = "test-step",
-): StepContext {
+function makeContext(vars: Record<string, any> = {}, stepName = "test-step"): StepContext {
 	return {
 		step: { name: stepName, tool: "shell", command: "echo" } as any,
 		variables: vars,
@@ -249,30 +246,18 @@ describe("evaluateStepOutputs", () => {
 
 	describe("edge cases", () => {
 		it("returns empty object for empty expressions map", async () => {
-			const outputs = await evaluateStepOutputs(
-				{},
-				{ some: "data" },
-				makeContext(),
-			);
+			const outputs = await evaluateStepOutputs({}, { some: "data" }, makeContext());
 			expect(outputs).toEqual({});
 		});
 
 		it("treats null toolResult as empty object in context", async () => {
-			const outputs = await evaluateStepOutputs(
-				{ val: "result.foo" },
-				null,
-				makeContext(),
-			);
+			const outputs = await evaluateStepOutputs({ val: "result.foo" }, null, makeContext());
 			// result becomes {} so result.foo is undefined
 			expect(outputs.val).toBeUndefined();
 		});
 
 		it("treats undefined toolResult as empty object in context", async () => {
-			const outputs = await evaluateStepOutputs(
-				{ val: "result.foo" },
-				undefined,
-				makeContext(),
-			);
+			const outputs = await evaluateStepOutputs({ val: "result.foo" }, undefined, makeContext());
 			expect(outputs.val).toBeUndefined();
 		});
 
@@ -351,20 +336,12 @@ describe("evaluateStepOutputs", () => {
 		});
 
 		it('"status" is always "completed" in simple expressions', async () => {
-			const outputs = await evaluateStepOutputs(
-				{ s: "status" },
-				{},
-				makeContext(),
-			);
+			const outputs = await evaluateStepOutputs({ s: "status" }, {}, makeContext());
 			expect(outputs.s).toBe("completed");
 		});
 
 		it('"status" is always "completed" in Jig expressions', async () => {
-			const outputs = await evaluateStepOutputs(
-				{ s: "{{ status }}" },
-				{},
-				makeContext(),
-			);
+			const outputs = await evaluateStepOutputs({ s: "{{ status }}" }, {}, makeContext());
 			expect(outputs.s).toBe("completed");
 		});
 

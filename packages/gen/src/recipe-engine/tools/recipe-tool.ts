@@ -20,12 +20,7 @@ import fs from "fs-extra";
 import yaml from "js-yaml";
 import createDebug from "debug";
 import { Tool, type ToolValidationResult, type ToolResource } from "./base.js";
-import {
-	HypergenError,
-	ErrorCode,
-	ErrorHandler,
-	withErrorHandling,
-} from "@hypercli/core";
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
 import { StepExecutor } from "#/recipe-engine/step-executor";
 import {
 	type RecipeStep,
@@ -140,10 +135,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 				integrityCheck: true,
 			},
 			security: {
-				allowedDomains: options.allowedDomains || [
-					"github.com",
-					"raw.githubusercontent.com",
-				],
+				allowedDomains: options.allowedDomains || ["github.com", "raw.githubusercontent.com"],
 				requireHttps: options.requireHttps !== false,
 				maxFileSize: options.maxFileSize || 10 * 1024 * 1024, // 10MB
 			},
@@ -241,9 +233,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 
 		// Validate version constraint
 		if (step.version && !/^[\d\w.-]+$/.test(step.version)) {
-			warnings.push(
-				"Version constraint should follow semantic versioning format",
-			);
+			warnings.push("Version constraint should follow semantic versioning format");
 		}
 
 		// Validate variable overrides
@@ -256,10 +246,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 		// Validate recipe configuration options
 		const recipeConfig = step.recipeConfig;
 		if (recipeConfig) {
-			if (
-				recipeConfig.execution?.timeout &&
-				recipeConfig.execution.timeout <= 0
-			) {
+			if (recipeConfig.execution?.timeout && recipeConfig.execution.timeout <= 0) {
 				errors.push("Recipe execution timeout must be positive");
 			}
 
@@ -281,9 +268,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 
 		// Performance considerations
 		if (step.inheritVariables === false && !step.variableOverrides) {
-			suggestions.push(
-				"Consider providing variable overrides when disabling variable inheritance",
-			);
+			suggestions.push("Consider providing variable overrides when disabling variable inheritance");
 		}
 
 		// Estimate execution time
@@ -331,52 +316,32 @@ export class RecipeTool extends Tool<RecipeStep> {
 
 		try {
 			// Check for circular dependencies before execution
-			await this.detectCircularDependencies(
-				step.recipe,
-				context,
-				this.executionStack,
-			);
+			await this.detectCircularDependencies(step.recipe, context, this.executionStack);
 
 			// Add current recipe to execution stack
 			this.executionStack.push(step.recipe);
 
 			// Resolve recipe
 			const recipeResolution = await this.resolveRecipe(step.recipe, context);
-			this.debug(
-				"Recipe resolved: %s -> %s",
-				step.recipe,
-				recipeResolution.source,
-			);
+			this.debug("Recipe resolved: %s -> %s", step.recipe, recipeResolution.source);
 
 			// Build sub-recipe context
-			const subContext = this.buildSubRecipeContext(
-				step,
-				context,
-				recipeResolution,
-			);
+			const subContext = this.buildSubRecipeContext(step, context, recipeResolution);
 
 			// Execute sub-recipe steps
 			const recipe = recipeResolution.config;
 
-			this.debug(
-				"Executing %d steps in sub-recipe: %s",
-				recipe.steps.length,
-				recipe.name,
-			);
+			this.debug("Executing %d steps in sub-recipe: %s", recipe.steps.length, recipe.name);
 
 			// Execute sub-recipe steps using StepExecutor
 			const executor = new StepExecutor(undefined, {
 				continueOnError: options?.continueOnError,
 			});
 
-			const stepResults = await executor.executeSteps(
-				recipe.steps,
-				subContext,
-				{
-					...options,
-					timeout: subContext.isolation.timeout || options?.timeout,
-				},
-			);
+			const stepResults = await executor.executeSteps(recipe.steps, subContext, {
+				...options,
+				timeout: subContext.isolation.timeout || options?.timeout,
+			});
 
 			// Update files lists from results
 			for (const result of stepResults) {
@@ -400,9 +365,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 				recipePath: recipeResolution.source,
 				subSteps: stepResults,
 				totalDuration: duration,
-				inheritedVariables: subContext.inheritance.inherit
-					? context.variables
-					: {},
+				inheritedVariables: subContext.inheritance.inherit ? context.variables : {},
 			};
 
 			// Check for failures
@@ -436,14 +399,10 @@ export class RecipeTool extends Tool<RecipeStep> {
 				output: {
 					subRecipe: recipe.name,
 					totalSteps: recipe.steps.length,
-					completedSteps: stepResults.filter((r) => r.status === "completed")
-						.length,
+					completedSteps: stepResults.filter((r) => r.status === "completed").length,
 					failedSteps: stepResults.filter((r) => r.status === "failed").length,
-					skippedSteps: stepResults.filter((r) => r.status === "skipped")
-						.length,
-					inheritedVariables: Object.keys(
-						subContext.inheritance.inherit ? context.variables : {},
-					),
+					skippedSteps: stepResults.filter((r) => r.status === "skipped").length,
+					inheritedVariables: Object.keys(subContext.inheritance.inherit ? context.variables : {}),
 					variableOverrides: Object.keys(step.variableOverrides || {}),
 				},
 				metadata: {
@@ -481,10 +440,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 				filesDeleted,
 				error: {
 					message: error instanceof Error ? error.message : String(error),
-					code:
-						error instanceof HypergenError
-							? error.code
-							: "RECIPE_EXECUTION_ERROR",
+					code: error instanceof HypergenError ? error.code : "RECIPE_EXECUTION_ERROR",
 					stack: error instanceof Error ? error.stack : undefined,
 					cause: error,
 				},
@@ -507,10 +463,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 	/**
 	 * Resolve recipe identifier to configuration
 	 */
-	private async resolveRecipe(
-		recipeId: string,
-		context: StepContext,
-	): Promise<RecipeResolution> {
+	private async resolveRecipe(recipeId: string, context: StepContext): Promise<RecipeResolution> {
 		// Check cache first
 		const cacheKey = `${recipeId}:${context.projectRoot}`;
 		const cached = this.recipeCache.get(cacheKey);
@@ -527,29 +480,31 @@ export class RecipeTool extends Tool<RecipeStep> {
 		try {
 			// Try different resolution strategies
 			if (this.isLocalPath(recipeId)) {
-				({ source, config, metadata, workingDir } =
-					await this.resolveLocalRecipe(recipeId, context));
+				({ source, config, metadata, workingDir } = await this.resolveLocalRecipe(
+					recipeId,
+					context,
+				));
 			} else if (this.isURL(recipeId)) {
-				({ source, config, metadata, workingDir } = await this.resolveURLRecipe(
-					recipeId,
-					context,
-				));
+				({ source, config, metadata, workingDir } = await this.resolveURLRecipe(recipeId, context));
 			} else if (this.isNpmPackage(recipeId)) {
-				({ source, config, metadata, workingDir } = await this.resolveNpmRecipe(
+				({ source, config, metadata, workingDir } = await this.resolveNpmRecipe(recipeId, context));
+			} else if (this.isGitHubRepo(recipeId)) {
+				({ source, config, metadata, workingDir } = await this.resolveGitHubRecipe(
 					recipeId,
 					context,
 				));
-			} else if (this.isGitHubRepo(recipeId)) {
-				({ source, config, metadata, workingDir } =
-					await this.resolveGitHubRecipe(recipeId, context));
 			} else {
 				// Default: try local first, then treat as npm package
 				try {
-					({ source, config, metadata, workingDir } =
-						await this.resolveLocalRecipe(recipeId, context));
+					({ source, config, metadata, workingDir } = await this.resolveLocalRecipe(
+						recipeId,
+						context,
+					));
 				} catch {
-					({ source, config, metadata, workingDir } =
-						await this.resolveNpmRecipe(recipeId, context));
+					({ source, config, metadata, workingDir } = await this.resolveNpmRecipe(
+						recipeId,
+						context,
+					));
 				}
 			}
 
@@ -652,11 +607,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 	 * Resolve recipe from npm package
 	 */
 	private async resolveNpmRecipe(recipeId: string, context: StepContext) {
-		const packagePath = path.resolve(
-			context.projectRoot,
-			"node_modules",
-			recipeId,
-		);
+		const packagePath = path.resolve(context.projectRoot, "node_modules", recipeId);
 		const recipeFile = path.join(packagePath, "recipe.yml");
 
 		if (!(await fs.pathExists(recipeFile))) {
@@ -713,9 +664,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 		// Apply variable mapping
 		const mappedVariables: Record<string, any> = {};
 		if (inheritVariables) {
-			for (const [parentKey, parentValue] of Object.entries(
-				parentContext.variables,
-			)) {
+			for (const [parentKey, parentValue] of Object.entries(parentContext.variables)) {
 				const mappedKey = variableMapping[parentKey] || parentKey;
 				mappedVariables[mappedKey] = parentValue;
 			}
@@ -729,10 +678,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 
 		// Determine working directory
 		const workingDir = step.recipeConfig?.execution?.workingDir
-			? path.resolve(
-					parentContext.projectRoot,
-					step.recipeConfig.execution.workingDir,
-				)
+			? path.resolve(parentContext.projectRoot, step.recipeConfig.execution.workingDir)
 			: resolution.workingDir;
 
 		return {
@@ -951,10 +897,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 	 * Check if recipe identifier is a GitHub repository
 	 */
 	private isGitHubRepo(recipeId: string): boolean {
-		return (
-			recipeId.startsWith("github:") ||
-			/^[a-zA-Z0-9-_.]+\/[a-zA-Z0-9-_.]+$/.test(recipeId)
-		);
+		return recipeId.startsWith("github:") || /^[a-zA-Z0-9-_.]+\/[a-zA-Z0-9-_.]+$/.test(recipeId);
 	}
 
 	/**
@@ -969,10 +912,7 @@ export class RecipeTool extends Tool<RecipeStep> {
  * Recipe Tool Factory
  */
 export class RecipeToolFactory {
-	create(
-		name: string = "recipe-tool",
-		options: Record<string, any> = {},
-	): RecipeTool {
+	create(name: string = "recipe-tool", options: Record<string, any> = {}): RecipeTool {
 		return new RecipeTool(name, options);
 	}
 
@@ -986,10 +926,7 @@ export class RecipeToolFactory {
 		const suggestions: string[] = [];
 
 		// Validate cache settings
-		if (
-			config.cacheEnabled !== undefined &&
-			typeof config.cacheEnabled !== "boolean"
-		) {
+		if (config.cacheEnabled !== undefined && typeof config.cacheEnabled !== "boolean") {
 			warnings.push("cacheEnabled should be a boolean");
 		}
 
@@ -1001,10 +938,7 @@ export class RecipeToolFactory {
 		}
 
 		// Validate cache directory
-		if (
-			config.cacheDirectory !== undefined &&
-			typeof config.cacheDirectory !== "string"
-		) {
+		if (config.cacheDirectory !== undefined && typeof config.cacheDirectory !== "string") {
 			warnings.push("cacheDirectory should be a string");
 		}
 

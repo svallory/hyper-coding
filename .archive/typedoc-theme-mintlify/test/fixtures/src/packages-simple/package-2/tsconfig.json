@@ -1,7 +1,7 @@
 {
-  "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "node"
-  },
-  "include": ["**/*.ts"]
+	"compilerOptions": {
+		"module": "commonjs",
+		"moduleResolution": "node"
+	},
+	"include": ["**/*.ts"]
 }

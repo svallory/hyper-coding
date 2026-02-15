@@ -7,11 +7,7 @@
 
 import createDebug from "debug";
 import { ErrorHandler, ErrorCode } from "@hypercli/core";
-import type {
-	AIBudgetConfig,
-	AIModelPricing,
-	AICostSummary,
-} from "./ai-config.js";
+import type { AIBudgetConfig, AIModelPricing, AICostSummary } from "./ai-config.js";
 
 const debug = createDebug("hypergen:ai:cost-tracker");
 
@@ -54,11 +50,7 @@ export class CostTracker {
 	/**
 	 * Calculate cost for a given token usage
 	 */
-	calculateCost(
-		model: string,
-		inputTokens: number,
-		outputTokens: number,
-	): number {
+	calculateCost(model: string, inputTokens: number, outputTokens: number): number {
 		const pricing = this.costTable[model];
 		if (!pricing) {
 			debug("No pricing found for model %s, cost will be 0", model);
@@ -115,8 +107,7 @@ export class CostTracker {
 		// Check token limit
 		if (
 			this.budget.maxTotalTokens &&
-			this.totalInputTokens + this.totalOutputTokens >=
-				this.budget.maxTotalTokens
+			this.totalInputTokens + this.totalOutputTokens >= this.budget.maxTotalTokens
 		) {
 			this.budgetLimitHit = true;
 			throw ErrorHandler.createError(
@@ -127,10 +118,7 @@ export class CostTracker {
 		}
 
 		// Check cost limit
-		if (
-			this.budget.maxTotalCostUsd &&
-			this.totalCostUsd >= this.budget.maxTotalCostUsd
-		) {
+		if (this.budget.maxTotalCostUsd && this.totalCostUsd >= this.budget.maxTotalCostUsd) {
 			this.budgetLimitHit = true;
 			throw ErrorHandler.createError(
 				ErrorCode.AI_BUDGET_EXCEEDED,

@@ -1,5 +1,39 @@
 {
-	"linter": {
+	"files": {
+		"ignore": ["dist", "node_modules", ".moon"]
+	},
+	"formatter": {
 		"enabled": true
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"suspicious": {
+				"noExplicitAny": "off",
+				"noImplicitAnyLet": "off",
+				"noUnsafeDeclarationMerging": "off",
+				"noDoubleEquals": "off",
+				"noGlobalIsNan": "off",
+				"noAssignInExpressions": "off"
+			},
+			"complexity": {
+				"noBannedTypes": "off",
+				"noStaticOnlyClass": "off",
+				"noForEach": "off",
+				"useArrowFunction": "off",
+				"useOptionalChain": "off",
+				"useLiteralKeys": "off"
+			},
+			"style": {
+				"noNonNullAssertion": "off",
+				"useNodejsImportProtocol": "off",
+				"useNumberNamespace": "off",
+				"useExponentiationOperator": "off",
+				"useTemplate": "off",
+				"useImportType": "off",
+				"noUnusedTemplateLiteral": "off",
+				"noInferrableTypes": "off"
+			}
+		}
 	}
 }

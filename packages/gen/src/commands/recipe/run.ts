@@ -10,10 +10,7 @@ import { executionFlags, outputFlags } from "#/lib/flags";
 import { AiCollector } from "#/ai/ai-collector";
 import { resolveTransport } from "#/ai/transports/index";
 import type { AiServiceConfig } from "#/ai/ai-config";
-import type {
-	RecipeExecutionOptions,
-	RecipeExecutionResult,
-} from "#/recipe-engine/recipe-engine";
+import type { RecipeExecutionOptions, RecipeExecutionResult } from "#/recipe-engine/recipe-engine";
 
 export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 	static override description = "Execute a recipe to generate code";
@@ -41,10 +38,7 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 	// Allow pass-through for recipe variables
 	static override strict = false;
 
-	private reportResult(
-		result: RecipeExecutionResult,
-		flags: Record<string, any>,
-	): void {
+	private reportResult(result: RecipeExecutionResult, flags: Record<string, any>): void {
 		if (flags.json) {
 			this.log(
 				JSON.stringify(
@@ -65,9 +59,7 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 
 		if (result.success) {
 			const prefix = flags.dryRun ? "[DRY RUN] " : "";
-			this.log(
-				`${prefix}Recipe '${result.recipe.name}' completed successfully`,
-			);
+			this.log(`${prefix}Recipe '${result.recipe.name}' completed successfully`);
 
 			if (result.metadata.completedSteps > 0) {
 				this.log(`Steps executed: ${result.metadata.completedSteps}`);
@@ -137,9 +129,7 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 			if (collector.collectMode && collector.hasEntries()) {
 				// CLI flag overrides config
 				const aiConfig: AiServiceConfig = { ...this.hypergenConfig?.ai };
-				const aiModeFlag = flags["ai-mode"] as
-					| AiServiceConfig["mode"]
-					| undefined;
+				const aiModeFlag = flags["ai-mode"] as AiServiceConfig["mode"] | undefined;
 				if (aiModeFlag) aiConfig.mode = aiModeFlag;
 
 				const originalCommand = [
@@ -147,9 +137,7 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 					"recipe",
 					"run",
 					recipePath,
-					...process.argv
-						.slice(4)
-						.filter((a) => a !== "--answers" && !a.endsWith(".json")),
+					...process.argv.slice(4).filter((a) => a !== "--answers" && !a.endsWith(".json")),
 				].join(" ");
 
 				const transport = resolveTransport(aiConfig);

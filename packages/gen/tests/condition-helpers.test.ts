@@ -5,10 +5,7 @@ import { join } from "node:path";
 import { RecipeEngine } from "#/recipe-engine/recipe-engine";
 import { registerDefaultTools } from "#/recipe-engine/tools/index";
 import { ToolRegistry } from "#/recipe-engine/tools/registry";
-import type {
-	RecipeSource,
-	RecipeExecutionOptions,
-} from "#/recipe-engine/recipe-engine";
+import type { RecipeSource, RecipeExecutionOptions } from "#/recipe-engine/recipe-engine";
 
 describe("Condition Helpers (fileExists, dirExists)", () => {
 	let tempDir: string;
@@ -35,19 +32,14 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 	 * Helper: build a RecipeSource of type 'content' from a YAML string.
 	 * This avoids needing to write recipe files to disk.
 	 */
-	function recipeSource(
-		yamlContent: string,
-		name = "test-recipe",
-	): RecipeSource {
+	function recipeSource(yamlContent: string, name = "test-recipe"): RecipeSource {
 		return { type: "content", content: yamlContent, name };
 	}
 
 	/**
 	 * Helper: default execution options targeting the temp directory.
 	 */
-	function opts(
-		extra: Partial<RecipeExecutionOptions> = {},
-	): RecipeExecutionOptions {
+	function opts(extra: Partial<RecipeExecutionOptions> = {}): RecipeExecutionOptions {
 		return {
 			variables: {},
 			workingDir: tempDir,
@@ -103,9 +95,7 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 			writeFileSync(join(tempDir, "src", "config", "settings.json"), "{}");
 
 			const result = await engine.executeRecipe(
-				recipeSource(
-					recipeWithCondition("fileExists('src/config/settings.json')"),
-				),
+				recipeSource(recipeWithCondition("fileExists('src/config/settings.json')")),
 				opts(),
 			);
 
@@ -151,9 +141,7 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 			expect(r1.stepResults[0].status).not.toBe("skipped");
 
 			const r2 = await engine.executeRecipe(
-				recipeSource(
-					recipeWithCondition("fileExists('file_with_underscores.txt')"),
-				),
+				recipeSource(recipeWithCondition("fileExists('file_with_underscores.txt')")),
 				opts(),
 			);
 			expect(r2.stepResults[0].status).not.toBe("skipped");
@@ -370,9 +358,7 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 			mkdirSync(join(tempDir, "src"));
 
 			const result = await engine.executeRecipe(
-				recipeSource(
-					recipeWithCondition("fileExists('package.json') && dirExists('src')"),
-				),
+				recipeSource(recipeWithCondition("fileExists('package.json') && dirExists('src')")),
 				opts(),
 			);
 
@@ -384,9 +370,7 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 			// src directory intentionally NOT created
 
 			const result = await engine.executeRecipe(
-				recipeSource(
-					recipeWithCondition("fileExists('package.json') && dirExists('src')"),
-				),
+				recipeSource(recipeWithCondition("fileExists('package.json') && dirExists('src')")),
 				opts(),
 			);
 
@@ -397,11 +381,7 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 			writeFileSync(join(tempDir, "file1.txt"), "a");
 
 			const result = await engine.executeRecipe(
-				recipeSource(
-					recipeWithCondition(
-						"fileExists('file1.txt') || fileExists('file2.txt')",
-					),
-				),
+				recipeSource(recipeWithCondition("fileExists('file1.txt') || fileExists('file2.txt')")),
 				opts(),
 			);
 
@@ -410,9 +390,7 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 
 		it("should skip when both sides of OR are false", async () => {
 			const result = await engine.executeRecipe(
-				recipeSource(
-					recipeWithCondition("fileExists('a.txt') || fileExists('b.txt')"),
-				),
+				recipeSource(recipeWithCondition("fileExists('a.txt') || fileExists('b.txt')")),
 				opts(),
 			);
 
@@ -481,9 +459,7 @@ describe("Condition Helpers (fileExists, dirExists)", () => {
 
 			// Step results may arrive in a different order than declared
 			// (the executor may batch skipped vs executed steps), so look up by name.
-			const byName = Object.fromEntries(
-				result.stepResults.map((r) => [r.stepName, r]),
-			);
+			const byName = Object.fromEntries(result.stepResults.map((r) => [r.stepName, r]));
 
 			expect(result.stepResults).toHaveLength(4);
 			expect(byName["step1-should-run"].status).not.toBe("skipped");

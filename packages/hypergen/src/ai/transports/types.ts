@@ -5,38 +5,38 @@
  * Transports handle delivering the prompt to an AI and returning answers.
  */
 
-import type { AiCollector } from '#/ai-collector'
-import type { AiServiceConfig } from '#/ai-config'
+import type { AiCollector } from "#/ai-collector";
+import type { AiServiceConfig } from "#/ai-config";
 
 /**
  * Result of a transport resolution attempt.
  * Either answers are resolved inline (auto Pass 2), or deferred (user re-runs with --answers).
  */
 export type TransportResult =
-  | { status: 'resolved'; answers: Record<string, string> }
-  | { status: 'deferred'; exitCode: number }
+	| { status: "resolved"; answers: Record<string, string> }
+	| { status: "deferred"; exitCode: number };
 
 /**
  * Context passed to a transport's resolve method.
  */
 export interface TransportContext {
-  /** The collector with accumulated @ai block data */
-  collector: AiCollector
+	/** The collector with accumulated @ai block data */
+	collector: AiCollector;
 
-  /** AI configuration from hypergen.config.js */
-  config: AiServiceConfig
+	/** AI configuration from hypergen.config.js */
+	config: AiServiceConfig;
 
-  /** The original CLI command (for callback instructions) */
-  originalCommand: string
+	/** The original CLI command (for callback instructions) */
+	originalCommand: string;
 
-  /** Suggested path for the answers JSON file */
-  answersPath: string
+	/** Suggested path for the answers JSON file */
+	answersPath: string;
 
-  /** Project root directory */
-  projectRoot: string
+	/** Project root directory */
+	projectRoot: string;
 
-  /** Optional custom prompt template path */
-  promptTemplate?: string
+	/** Optional custom prompt template path */
+	promptTemplate?: string;
 }
 
 /**
@@ -51,6 +51,6 @@ export interface TransportContext {
  * - StdioTransport: persistent subprocess with JSON protocol
  */
 export interface AiTransport {
-  readonly name: string
-  resolve(ctx: TransportContext): Promise<TransportResult>
+	readonly name: string;
+	resolve(ctx: TransportContext): Promise<TransportResult>;
 }

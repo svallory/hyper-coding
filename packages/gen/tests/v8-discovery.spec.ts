@@ -110,9 +110,7 @@ describe("Generator Discovery Integration", () => {
 		const generators = await discovery.discoverAll();
 
 		// Verify that discovered generators have actions
-		const generatorsWithActions = generators.filter(
-			(g) => g.actions.length > 0,
-		);
+		const generatorsWithActions = generators.filter((g) => g.actions.length > 0);
 
 		// Each generator with actions should be available for execution
 		for (const generator of generatorsWithActions) {
@@ -127,9 +125,7 @@ describe("Generator Discovery Integration", () => {
 		});
 
 		const generators = await workspaceDiscovery.discoverAll();
-		const workspaceGenerators = generators.filter(
-			(g) => g.source === "workspace",
-		);
+		const workspaceGenerators = generators.filter((g) => g.source === "workspace");
 
 		// Workspace generators should have appropriate metadata
 		for (const generator of workspaceGenerators) {

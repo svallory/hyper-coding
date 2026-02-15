@@ -5,7 +5,7 @@
  */
 
 // Re-export ActionLogger from logger
-import type { ActionLogger } from '#/logger/types.js';
+import type { ActionLogger } from "#/logger/types.js";
 export type { ActionLogger };
 
 // Action decorator metadata
@@ -35,14 +35,14 @@ export interface ActionParameter {
 }
 
 export type ParameterType =
-	| 'string'
-	| 'boolean'
-	| 'number'
-	| 'enum'
-	| 'array'
-	| 'object'
-	| 'file'
-	| 'directory';
+	| "string"
+	| "boolean"
+	| "number"
+	| "enum"
+	| "array"
+	| "object"
+	| "file"
+	| "directory";
 
 export interface ParameterValidation {
 	required?: boolean;
@@ -70,7 +70,10 @@ export interface ActionCommunication {
 	getSharedData: (key: string) => any;
 	setSharedData: (key: string, value: any) => void;
 	waitForAction: (actionId: string, timeout?: number) => Promise<any>;
-	subscribeToMessages: (messageType: string, handler: (message: any) => void) => () => void;
+	subscribeToMessages: (
+		messageType: string,
+		handler: (message: any) => void,
+	) => () => void;
 }
 
 // Action execution result
@@ -123,7 +126,7 @@ export class ActionExecutionError extends Error {
 		public cause?: Error,
 	) {
 		super(message);
-		this.name = 'ActionExecutionError';
+		this.name = "ActionExecutionError";
 	}
 }
 
@@ -135,7 +138,7 @@ export class ActionParameterError extends Error {
 		public expectedType: ParameterType,
 	) {
 		super(message);
-		this.name = 'ActionParameterError';
+		this.name = "ActionParameterError";
 	}
 }
 

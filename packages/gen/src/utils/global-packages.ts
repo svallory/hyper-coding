@@ -33,9 +33,7 @@ async function getNpmGlobalPackages(): Promise<GlobalPackage[]> {
 		const globalRoot = rootStdout.trim();
 
 		// Get the list in JSON format
-		const { stdout: listStdout } = await execAsync(
-			"npm list -g --depth=0 --json",
-		);
+		const { stdout: listStdout } = await execAsync("npm list -g --depth=0 --json");
 		const list = JSON.parse(listStdout);
 
 		if (!list.dependencies) return [];

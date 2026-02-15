@@ -21,8 +21,8 @@
  * - {@link InterfaceB.propA}
  */
 export interface InterfaceA {
-  propA: string;
-  propB: string;
+	propA: string;
+	propB: string;
 }
 
 /**
@@ -31,8 +31,8 @@ export interface InterfaceA {
  * - {@link InterfaceA.propA}
  */
 export interface InterfaceB {
-  propA: string;
-  propB: string;
+	propA: string;
+	propB: string;
 }
 /**
  * EnumA function.
@@ -58,5 +58,5 @@ export type TypeB = { propA: string; propB?: number };
  * Comments for functionA
  */
 export function functionA() {}
-export const variableA = '';
-export const variableB = '';
+export const variableA = "";
+export const variableB = "";

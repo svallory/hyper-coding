@@ -6,26 +6,11 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import {
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-	readFileSync,
-	mkdirSync,
-	existsSync,
-} from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	PatchTool,
-	PatchToolFactory,
-	patchToolFactory,
-} from "#/recipe-engine/tools/patch-tool";
-import type {
-	PatchStep,
-	StepContext,
-	PatchExecutionResult,
-} from "#/recipe-engine/types";
+import { PatchTool, PatchToolFactory, patchToolFactory } from "#/recipe-engine/tools/patch-tool";
+import type { PatchStep, StepContext, PatchExecutionResult } from "#/recipe-engine/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,10 +19,7 @@ import type {
 /**
  * Create a minimal StepContext for testing
  */
-function createContext(
-	projectRoot: string,
-	overrides: Partial<StepContext> = {},
-): StepContext {
+function createContext(projectRoot: string, overrides: Partial<StepContext> = {}): StepContext {
 	return {
 		projectRoot,
 		step: {} as any,
@@ -155,9 +137,7 @@ describe("PatchTool", () => {
 			const result = await tool.validate(step, context);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((e) => e.includes("Cannot detect format")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("Cannot detect format"))).toBe(true);
 		});
 
 		it("should fail when format is unsupported", async () => {
@@ -171,9 +151,7 @@ describe("PatchTool", () => {
 			const result = await tool.validate(step, context);
 
 			expect(result.isValid).toBe(false);
-			expect(result.errors.some((e) => e.includes("Unsupported format"))).toBe(
-				true,
-			);
+			expect(result.errors.some((e) => e.includes("Unsupported format"))).toBe(true);
 		});
 
 		it("should pass with valid step", async () => {
@@ -236,10 +214,7 @@ describe("PatchTool", () => {
 	describe("JSON patching", () => {
 		it("should merge into existing JSON file", async () => {
 			const configPath = join(testDir, "config.json");
-			writeFileSync(
-				configPath,
-				JSON.stringify({ existing: "value", keep: true }, null, 2),
-			);
+			writeFileSync(configPath, JSON.stringify({ existing: "value", keep: true }, null, 2));
 
 			const step = createStep({
 				file: "config.json",
@@ -697,10 +672,7 @@ describe("PatchTool", () => {
 
 		it("should handle overwriting existing key with different type", async () => {
 			const configPath = join(testDir, "config.json");
-			writeFileSync(
-				configPath,
-				JSON.stringify({ key: { nested: "object" } }, null, 2),
-			);
+			writeFileSync(configPath, JSON.stringify({ key: { nested: "object" } }, null, 2));
 
 			const step = createStep({
 				file: "config.json",

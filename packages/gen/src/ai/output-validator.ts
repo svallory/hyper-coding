@@ -44,24 +44,15 @@ export async function validateOutput(
 	}
 
 	// Import validation
-	if (
-		guardrails.requireKnownImports ||
-		guardrails.allowedImports ||
-		guardrails.blockedImports
-	) {
+	if (guardrails.requireKnownImports || guardrails.allowedImports || guardrails.blockedImports) {
 		const importResult = validateImports(output, guardrails, projectRoot);
 		errors.push(...importResult.errors);
 		warnings.push(...importResult.warnings);
 	}
 
 	// Max output length
-	if (
-		guardrails.maxOutputLength &&
-		output.length > guardrails.maxOutputLength
-	) {
-		errors.push(
-			`Output length (${output.length}) exceeds maximum (${guardrails.maxOutputLength})`,
-		);
+	if (guardrails.maxOutputLength && output.length > guardrails.maxOutputLength) {
+		errors.push(`Output length (${output.length}) exceeds maximum (${guardrails.maxOutputLength})`);
 	}
 
 	// Empty/gibberish check
@@ -87,14 +78,7 @@ export async function validateOutput(
  */
 function validateSyntax(
 	output: string,
-	lang:
-		| boolean
-		| "typescript"
-		| "javascript"
-		| "json"
-		| "yaml"
-		| "css"
-		| "html",
+	lang: boolean | "typescript" | "javascript" | "json" | "yaml" | "css" | "html",
 ): ValidationResult {
 	const errors: string[] = [];
 	const warnings: string[] = [];
@@ -138,10 +122,7 @@ function validateSyntax(
 				// Check for syntax diagnostics
 				const diagnostics = sourceFile.parseDiagnostics || [];
 				for (const diag of diagnostics) {
-					const message = ts.flattenDiagnosticMessageText(
-						diag.messageText,
-						"\n",
-					);
+					const message = ts.flattenDiagnosticMessageText(diag.messageText, "\n");
 					const line =
 						diag.start !== undefined
 							? sourceFile.getLineAndCharacterOfPosition(diag.start).line + 1
@@ -152,9 +133,7 @@ function validateSyntax(
 				// If TypeScript is not available, fall back to basic check
 				if (e.code === "MODULE_NOT_FOUND") {
 					debug("TypeScript not available for syntax validation, skipping");
-					warnings.push(
-						"TypeScript compiler not available for syntax validation",
-					);
+					warnings.push("TypeScript compiler not available for syntax validation");
 				} else {
 					errors.push(`Syntax validation error: ${e.message}`);
 				}
@@ -237,9 +216,7 @@ function validateImports(
 		const packageJsonPath = path.resolve(projectRoot, "package.json");
 		if (fs.existsSync(packageJsonPath)) {
 			try {
-				const packageJson = JSON.parse(
-					fs.readFileSync(packageJsonPath, "utf-8"),
-				);
+				const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
 				const knownPackages = new Set<string>([
 					...Object.keys(packageJson.dependencies || {}),
 					...Object.keys(packageJson.devDependencies || {}),

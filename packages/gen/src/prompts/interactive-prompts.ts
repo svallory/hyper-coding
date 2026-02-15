@@ -99,11 +99,7 @@ export class InteractivePrompter {
 			p.intro(opts.intro || this.defaultOptions.intro!);
 
 			// Get missing parameters
-			const missingParams = this.getMissingParameters(
-				variables,
-				providedValues,
-				opts.skipOptional,
-			);
+			const missingParams = this.getMissingParameters(variables, providedValues, opts.skipOptional);
 
 			if (missingParams.length === 0) {
 				p.outro("All parameters already provided!");
@@ -122,10 +118,10 @@ export class InteractivePrompter {
 			const promptsPromise = this.createPrompts(missingParams, variables);
 
 			// Race between prompts and timeout
-			const promptResults = (await Promise.race([
-				promptsPromise,
-				timeoutPromise,
-			])) as Record<string, any>;
+			const promptResults = (await Promise.race([promptsPromise, timeoutPromise])) as Record<
+				string,
+				any
+			>;
 
 			// Handle cancellation
 			if (p.isCancel(promptResults)) {
@@ -178,10 +174,7 @@ export class InteractivePrompter {
 				providedValues[name] !== "";
 
 			if (!hasValue) {
-				if (
-					variable.required ||
-					(!skipOptional && variable.default === undefined)
-				) {
+				if (variable.required || (!skipOptional && variable.default === undefined)) {
 					missing.push(name);
 				}
 			}
@@ -218,10 +211,7 @@ export class InteractivePrompter {
 	/**
 	 * Create a prompt for a specific variable
 	 */
-	private async createPromptForVariable(
-		name: string,
-		variable: TemplateVariable,
-	): Promise<any> {
+	private async createPromptForVariable(name: string, variable: TemplateVariable): Promise<any> {
 		const message = variable.description || `Enter ${name}`;
 		const hint = this.getVariableHint(variable);
 
@@ -271,9 +261,7 @@ export class InteractivePrompter {
 					return p.multiselect({
 						message,
 						options,
-						initialValues: Array.isArray(variable.default)
-							? variable.default
-							: [],
+						initialValues: Array.isArray(variable.default) ? variable.default : [],
 						required: variable.required,
 					});
 				} else {
@@ -296,9 +284,7 @@ export class InteractivePrompter {
 					placeholder: Array.isArray(variable.default)
 						? variable.default.join(", ")
 						: "item1, item2, item3",
-					defaultValue: Array.isArray(variable.default)
-						? variable.default.join(", ")
-						: "",
+					defaultValue: Array.isArray(variable.default) ? variable.default.join(", ") : "",
 					validate: (value) => this.validateArrayInput(value, variable),
 				});
 
@@ -366,10 +352,7 @@ export class InteractivePrompter {
 	/**
 	 * Validate string input
 	 */
-	private validateStringInput(
-		value: string,
-		variable: TemplateVariable,
-	): string | undefined {
+	private validateStringInput(value: string, variable: TemplateVariable): string | undefined {
 		if (variable.required && (!value || value.trim() === "")) {
 			return "This field is required";
 		}
@@ -395,10 +378,7 @@ export class InteractivePrompter {
 	/**
 	 * Validate number input
 	 */
-	private validateNumberInput(
-		value: string,
-		variable: TemplateVariable,
-	): string | undefined {
+	private validateNumberInput(value: string, variable: TemplateVariable): string | undefined {
 		if (variable.required && (!value || value.trim() === "")) {
 			return "This field is required";
 		}
@@ -424,10 +404,7 @@ export class InteractivePrompter {
 	/**
 	 * Validate array input
 	 */
-	private validateArrayInput(
-		value: string,
-		variable: TemplateVariable,
-	): string | undefined {
+	private validateArrayInput(value: string, variable: TemplateVariable): string | undefined {
 		if (variable.required && (!value || value.trim() === "")) {
 			return "This field is required";
 		}
@@ -463,10 +440,7 @@ export class InteractivePrompter {
 			const value = values[name];
 
 			// Check required
-			if (
-				variable.required &&
-				(value === undefined || value === null || value === "")
-			) {
+			if (variable.required && (value === undefined || value === null || value === "")) {
 				errors.push(`${name} is required`);
 				continue;
 			}
@@ -513,20 +487,14 @@ export class InteractivePrompter {
 					if (variable.values) {
 						if (Array.isArray(value)) {
 							// Multi-select enum
-							const invalidValues = value.filter(
-								(v) => !variable.values!.includes(v),
-							);
+							const invalidValues = value.filter((v) => !variable.values!.includes(v));
 							if (invalidValues.length > 0) {
-								errors.push(
-									`${name} contains invalid values: ${invalidValues.join(", ")}`,
-								);
+								errors.push(`${name} contains invalid values: ${invalidValues.join(", ")}`);
 							}
 						} else {
 							// Single-select enum
 							if (!variable.values.includes(value)) {
-								errors.push(
-									`${name} must be one of: ${variable.values.join(", ")}`,
-								);
+								errors.push(`${name} must be one of: ${variable.values.join(", ")}`);
 							}
 						}
 					}
@@ -607,10 +575,7 @@ export class InteractivePrompter {
 	/**
 	 * Create a simple confirmation prompt
 	 */
-	static async confirm(
-		message: string,
-		initialValue: boolean = false,
-	): Promise<boolean> {
+	static async confirm(message: string, initialValue: boolean = false): Promise<boolean> {
 		const result = await p.confirm({
 			message,
 			initialValue,

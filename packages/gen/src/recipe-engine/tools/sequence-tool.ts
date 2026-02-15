@@ -21,10 +21,7 @@ import { ErrorHandler, ErrorCode } from "@hypercli/core";
 const debug = createDebug("hypergen:v8:recipe:tool:sequence");
 
 export class SequenceTool extends Tool<SequenceStep> {
-	constructor(
-		name: string = "sequence-tool",
-		options: Record<string, any> = {},
-	) {
+	constructor(name: string = "sequence-tool", options: Record<string, any> = {}) {
 		super("sequence", name, options);
 	}
 
@@ -59,11 +56,7 @@ export class SequenceTool extends Tool<SequenceStep> {
 		options?: StepExecutionOptions,
 	): Promise<StepResult> {
 		const startTime = new Date();
-		this.debug(
-			"Executing sequence step: %s with %d steps",
-			step.name,
-			step.steps.length,
-		);
+		this.debug("Executing sequence step: %s with %d steps", step.name, step.steps.length);
 
 		try {
 			const executor = new StepExecutor(undefined, {
@@ -75,11 +68,7 @@ export class SequenceTool extends Tool<SequenceStep> {
 
 			const failed = results.filter((r) => r.status === "failed");
 
-			if (
-				failed.length > 0 &&
-				!step.continueOnError &&
-				!options?.continueOnError
-			) {
+			if (failed.length > 0 && !step.continueOnError && !options?.continueOnError) {
 				throw ErrorHandler.createError(
 					ErrorCode.TEMPLATE_EXECUTION_ERROR,
 					`Sequence execution failed: ${failed.map((f) => f.stepName).join(", ")}`,
@@ -153,10 +142,7 @@ export class SequenceTool extends Tool<SequenceStep> {
 }
 
 export class SequenceToolFactory {
-	create(
-		name: string = "sequence-tool",
-		options: Record<string, any> = {},
-	): SequenceTool {
+	create(name: string = "sequence-tool", options: Record<string, any> = {}): SequenceTool {
 		return new SequenceTool(name, options);
 	}
 

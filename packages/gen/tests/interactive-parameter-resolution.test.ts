@@ -35,13 +35,9 @@ describe("Interactive Parameter Resolution", () => {
 				port: 8080,
 			};
 
-			const result = await resolver.resolveParametersInteractively(
-				metadata,
-				providedValues,
-				{
-					useDefaults: true, // Even with defaults enabled, provided values should take precedence
-				},
-			);
+			const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+				useDefaults: true, // Even with defaults enabled, provided values should take precedence
+			});
 
 			expect(result.name).toBe("ProvidedName");
 			expect(result.port).toBe(8080);
@@ -85,15 +81,14 @@ describe("Interactive Parameter Resolution", () => {
 			expect(resultWithDefaults.port).toBe(3000); // Default value used
 
 			// Without defaults enabled - should not use default for optional parameter
-			const resultWithoutDefaults =
-				await resolver.resolveParametersInteractively(
-					metadata,
-					providedValues,
-					{
-						useDefaults: false,
-						skipOptional: true, // Skip prompting for optional parameters
-					},
-				);
+			const resultWithoutDefaults = await resolver.resolveParametersInteractively(
+				metadata,
+				providedValues,
+				{
+					useDefaults: false,
+					skipOptional: true, // Skip prompting for optional parameters
+				},
+			);
 
 			expect(resultWithoutDefaults.name).toBe("ProvidedName");
 			expect(resultWithoutDefaults.port).toBeUndefined(); // No default, not prompted
@@ -125,9 +120,7 @@ describe("Interactive Parameter Resolution", () => {
 
 			// This should identify that framework needs to be prompted for
 			const parametersNeedingValues = metadata.parameters.filter((param) => {
-				const hasValue =
-					providedValues[param.name as keyof typeof providedValues] !==
-					undefined;
+				const hasValue = providedValues[param.name as keyof typeof providedValues] !== undefined;
 				const isRequired = param.required;
 				return !hasValue && isRequired;
 			});
@@ -219,14 +212,10 @@ describe("Interactive Parameter Resolution", () => {
 
 			const providedValues = {};
 
-			const result = await resolver.resolveParametersInteractively(
-				metadata,
-				providedValues,
-				{
-					useDefaults: true,
-					dryRun: true,
-				},
-			);
+			const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+				useDefaults: true,
+				dryRun: true,
+			});
 
 			expect(result.name).toBe("TestName");
 			// dryRun doesn't affect parameter resolution, just execution
@@ -248,14 +237,10 @@ describe("Interactive Parameter Resolution", () => {
 
 			const providedValues = {};
 
-			const result = await resolver.resolveParametersInteractively(
-				metadata,
-				providedValues,
-				{
-					useDefaults: true,
-					force: true,
-				},
-			);
+			const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+				useDefaults: true,
+				force: true,
+			});
 
 			expect(result.name).toBe("TestName");
 			// force doesn't affect parameter resolution, just execution
@@ -304,13 +289,9 @@ describe("Interactive Parameter Resolution", () => {
 
 			const providedValues = {};
 
-			const result = await resolver.resolveParametersInteractively(
-				metadata,
-				providedValues,
-				{
-					useDefaults: true,
-				},
-			);
+			const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+				useDefaults: true,
+			});
 
 			expect(result.name).toBe("TestName");
 			expect(result.enabled).toBe(true);
@@ -424,9 +405,7 @@ describe("Interactive Parameter Resolution", () => {
 						useDefaults: false,
 						skipOptional: true, // This won't help because name is required
 					}),
-				).rejects.toThrow(
-					"Required parameter 'name' not provided and no default available",
-				);
+				).rejects.toThrow("Required parameter 'name' not provided and no default available");
 			} finally {
 				process.env.NODE_ENV = oldEnv;
 			}
@@ -441,13 +420,9 @@ describe("Interactive Parameter Resolution", () => {
 
 			const providedValues = {};
 
-			const result = await resolver.resolveParametersInteractively(
-				metadata,
-				providedValues,
-				{
-					useDefaults: false,
-				},
-			);
+			const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+				useDefaults: false,
+			});
 
 			expect(result).toEqual({});
 		});
@@ -461,13 +436,9 @@ describe("Interactive Parameter Resolution", () => {
 
 			const providedValues = {};
 
-			const result = await resolver.resolveParametersInteractively(
-				metadata,
-				providedValues,
-				{
-					useDefaults: false,
-				},
-			);
+			const result = await resolver.resolveParametersInteractively(metadata, providedValues, {
+				useDefaults: false,
+			});
 
 			expect(result).toEqual({});
 		});

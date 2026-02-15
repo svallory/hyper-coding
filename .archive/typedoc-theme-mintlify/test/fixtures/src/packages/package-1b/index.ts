@@ -5,5 +5,5 @@
  */
 
 export interface PackageInterface {
-  prop: string;
+	prop: string;
 }

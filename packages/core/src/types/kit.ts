@@ -21,7 +21,13 @@ export interface VariableDefinition {
 	pattern?: string; // for string
 }
 
-export type VariableType = 'string' | 'boolean' | 'number' | 'enum' | 'array' | 'object';
+export type VariableType =
+	| "string"
+	| "boolean"
+	| "number"
+	| "enum"
+	| "array"
+	| "object";
 
 export interface VariableValidation {
 	required?: boolean;

@@ -46,9 +46,7 @@ describe("AiTool", () => {
 
 			const result = await tool.validate(step, makeContext());
 			expect(result.isValid).toBe(false);
-			expect(result.errors).toContain(
-				'AI step requires a non-empty "prompt" field',
-			);
+			expect(result.errors).toContain('AI step requires a non-empty "prompt" field');
 		});
 
 		it("requires output config", async () => {

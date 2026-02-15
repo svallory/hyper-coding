@@ -1,5 +1,5 @@
-import { Application } from 'typedoc';
-import { ClassWithTypeParameters } from './classes.js';
+import { Application } from "typedoc";
+import { ClassWithTypeParameters } from "./classes.js";
 
 /**
  * Comments for PrimitiveType
@@ -22,28 +22,28 @@ export type UnionType = string | boolean | { z: string };
  * @inline
  */
 export type UsefulUnionType =
-  /**
-   * Comments for string
-   */
-  | string
-  | boolean
-  | {
-      /**
-       * Comments for z
-       */
-      z: string;
-    };
+	/**
+	 * Comments for string
+	 */
+	| string
+	| boolean
+	| {
+			/**
+			 * Comments for z
+			 */
+			z: string;
+	  };
 
 /**
  * Comments for StringLiteralType
  */
 export type StringLiteralType =
-  | ' '
-  | 'string'
-  | 'string|with|pipes'
-  | 'string`with`backticks'
-  | '<foo>'
-  | '*';
+	| " "
+	| "string"
+	| "string|with|pipes"
+	| "string`with`backticks"
+	| "<foo>"
+	| "*";
 
 /**
  * Comments for TupleType
@@ -54,22 +54,22 @@ export type TupleType = [string, number];
  * Comments for IntersectionType
  */
 export type IntersectionType = TupleType &
-  ArrayType & {
-    bar: number;
-  };
+	ArrayType & {
+		bar: number;
+	};
 
 /**
  * Comments for ConditionalType
  */
 export type ConditionalType<T> = T extends string
-  ? 'string'
-  : T extends number
-    ? 'number'
-    : T extends boolean
-      ? 'boolean'
-      : T extends undefined
-        ? 'undefined'
-        : 'object';
+	? "string"
+	: T extends number
+		? "number"
+		: T extends boolean
+			? "boolean"
+			: T extends undefined
+				? "undefined"
+				: "object";
 
 /**
  * Comments for TypeWithTypeParams
@@ -80,28 +80,28 @@ export type TypeWithTypeParams<T, R> = [T, R];
  * Comments for ExternalReferenceType
  */
 export type ExternalReferenceType = ClassWithTypeParameters<
-  /**
-   * comments for x
-   */
-  'x',
-  /**
-   * Comments for y
-   */
-  'y'
+	/**
+	 * comments for x
+	 */
+	"x",
+	/**
+	 * Comments for y
+	 */
+	"y"
 >;
 
 /**
  * Comments for PartialMappedType
  */
 export type PartialMappedType<T> = {
-  [P in keyof T]?: T[P];
+	[P in keyof T]?: T[P];
 };
 
 /**
  * Comments for ReadonlyMapedType
  */
 export type ReadonlyMappedType<T> = {
-  readonly [P in keyof T]: T[P];
+	readonly [P in keyof T]: T[P];
 };
 
 /**
@@ -125,57 +125,57 @@ export type TypeWithExternalSymbolLinkMapping = Application;
  * Comments for LiteralType
  */
 export type LiteralType = {
-  /**
-   * comment for x
-   */
-  x?: string;
-  /**
-   * comment for y
-   */
-  y: {
-    /**
-     * comment for y.x
-     */
-    x: string;
-    /**
-     * comment for y.y
-     */
-    y?: boolean | string;
-    /**
-     * comment for y.z
-     */
-    z: (x: string) => string;
-  } /**
-   * comment for z
-   */;
-  z: (x: string) => string;
-  /**
-   * Comments for someFunction
-   * @param param
-   */
-  someFunction(param: string): Promise<any>;
-  /**
-   * Comments for someFunctionWithArrow
-   */
-  someFunctionWithArrow: () => string;
-  /**
-   * Comments for accessorA getter
-   */
-  get accessorA(): Promise<string>;
-  /**
-   * Comments for accessorA setter
-   */
-  set accessorA(x);
-  set accessorB(x: string);
-  get accessorB();
+	/**
+	 * comment for x
+	 */
+	x?: string;
+	/**
+	 * comment for y
+	 */
+	y: {
+		/**
+		 * comment for y.x
+		 */
+		x: string;
+		/**
+		 * comment for y.y
+		 */
+		y?: boolean | string;
+		/**
+		 * comment for y.z
+		 */
+		z: (x: string) => string;
+	} /**
+	 * comment for z
+	 */;
+	z: (x: string) => string;
+	/**
+	 * Comments for someFunction
+	 * @param param
+	 */
+	someFunction(param: string): Promise<any>;
+	/**
+	 * Comments for someFunctionWithArrow
+	 */
+	someFunctionWithArrow: () => string;
+	/**
+	 * Comments for accessorA getter
+	 */
+	get accessorA(): Promise<string>;
+	/**
+	 * Comments for accessorA setter
+	 */
+	set accessorA(x);
+	set accessorB(x: string);
+	get accessorB();
 };
 
 export type ArrayOfObjectsType = {
-  /**
-   * Comments for name
-   */
-  name: string;
-  age: number;
+	/**
+	 * Comments for name
+	 */
+	name: string;
+	age: number;
 }[];
 
 /**
@@ -187,10 +187,10 @@ export type IndexAccessType = ArrayOfObjectsType[number];
  * Comments for promise type returning object
  */
 export type PromiseTypeWithObject = Promise<{
-  /**
-   * comments for x
-   */
-  x: 1;
+	/**
+	 * comments for x
+	 */
+	x: 1;
 }>;
 
 /**
@@ -209,34 +209,34 @@ export type QueryType = typeof someQuery;
  * Union with template strings
  */
 export type UnionTypeWithTemplateStrings =
-  | `v${number}`
-  | `v${number}.${number}`
-  | `v${number}.${number}.${number}`;
+	| `v${number}`
+	| `v${number}.${number}`
+	| `v${number}.${number}.${number}`;
 
 /**
  * Comments for object with special characters
  */
 export type __TypeDeclarationWithSpecialCharacters_<T, U> = {
-  '?': T | U;
-  '<': '<';
-  '>': '>';
-  '\\n': '\\n';
-  '\\a': '\\a';
-  '\\': '\\';
-  '<foo>': '<foo>';
-  '*': '*';
-  '*foo*': '*foo*';
-  '**foo**': '**foo**';
-  _foo_: '_foo_';
-  _x: (_param: T) => U;
-  _: '_';
-  '|': '|';
-  '~': '~';
-  '`': '`';
-  '{prop-with-brackets}': '{prop-with-brackets}';
-  _prop_with_underscore_: '_prop_with_underscore_';
-  '|prop|with|pipes|': '|prop|with|pipes|';
-  '`prop`with`backticks`': '`prop`with`backticks`';
+	"?": T | U;
+	"<": "<";
+	">": ">";
+	"\\n": "\\n";
+	"\\a": "\\a";
+	"\\": "\\";
+	"<foo>": "<foo>";
+	"*": "*";
+	"*foo*": "*foo*";
+	"**foo**": "**foo**";
+	_foo_: "_foo_";
+	_x: (_param: T) => U;
+	_: "_";
+	"|": "|";
+	"~": "~";
+	"`": "`";
+	"{prop-with-brackets}": "{prop-with-brackets}";
+	_prop_with_underscore_: "_prop_with_underscore_";
+	"|prop|with|pipes|": "|prop|with|pipes|";
+	"`prop`with`backticks`": "`prop`with`backticks`";
 };
 
 /**
@@ -251,12 +251,12 @@ export type TypeWithReturns = string;
  * Comments for TypeWithIndexSignature
  */
 export type TypeWithIndexSignature = {
-  /**
-   * Comments for key
-   *
-   * @remarks
-   *
-   * Some remarks
-   */
-  [key: string]: string;
+	/**
+	 * Comments for key
+	 *
+	 * @remarks
+	 *
+	 * Some remarks
+	 */
+	[key: string]: string;
 };

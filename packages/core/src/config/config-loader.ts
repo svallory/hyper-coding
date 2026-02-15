@@ -4,16 +4,16 @@
  * Provides configuration loading and management for hypergen projects
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { cosmiconfig } from 'cosmiconfig';
-import { ErrorCode, ErrorHandler } from '#/errors/hypergen-errors.js';
-import { loadHelpers } from './load-helpers.js';
+import fs from "node:fs";
+import path from "node:path";
+import { cosmiconfig } from "cosmiconfig";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors.js";
+import { loadHelpers } from "./load-helpers.js";
 
-const DEFAULT_TEMPLATE_DIRECTORY = 'templates';
+const DEFAULT_TEMPLATE_DIRECTORY = "templates";
 
 export interface AiServiceConfig {
-	provider?: 'anthropic' | 'openai' | 'custom';
+	provider?: "anthropic" | "openai" | "custom";
 	apiKey?: string;
 	model?: string;
 	temperature?: number;
@@ -26,7 +26,7 @@ export interface HypergenConfig {
 
 	// Template discovery options
 	discovery?: {
-		sources?: ('local' | 'npm' | 'workspace' | 'github' | 'git')[];
+		sources?: ("local" | "npm" | "workspace" | "github" | "git")[];
 		directories?: string[];
 		exclude?: string[];
 	};
@@ -39,7 +39,7 @@ export interface HypergenConfig {
 
 	// Output options
 	output?: {
-		conflictStrategy?: 'fail' | 'overwrite' | 'skip' | 'merge';
+		conflictStrategy?: "fail" | "overwrite" | "skip" | "merge";
 		createDirectories?: boolean;
 		preserveTimestamps?: boolean;
 	};
@@ -85,7 +85,7 @@ export interface ResolvedConfig {
 	// All config properties (with defaults applied)
 	templates: string[];
 	discovery: {
-		sources?: ('local' | 'npm' | 'workspace' | 'github' | 'git')[];
+		sources?: ("local" | "npm" | "workspace" | "github" | "git")[];
 		directories?: string[];
 		exclude?: string[];
 	};
@@ -93,7 +93,7 @@ export interface ResolvedConfig {
 		cache?: boolean;
 	};
 	output: {
-		conflictStrategy?: 'fail' | 'overwrite' | 'skip' | 'merge';
+		conflictStrategy?: "fail" | "overwrite" | "skip" | "merge";
 		createDirectories?: boolean;
 		preserveTimestamps?: boolean;
 	};
@@ -125,15 +125,15 @@ export class HypergenConfigLoader {
 	private static readonly DEFAULT_CONFIG: HypergenConfig = {
 		templates: [DEFAULT_TEMPLATE_DIRECTORY],
 		discovery: {
-			sources: ['local', 'npm', 'workspace'],
-			directories: [DEFAULT_TEMPLATE_DIRECTORY, 'cookbooks'],
-			exclude: ['node_modules', '.git', 'dist', 'build'],
+			sources: ["local", "npm", "workspace"],
+			directories: [DEFAULT_TEMPLATE_DIRECTORY, "cookbooks"],
+			exclude: ["node_modules", ".git", "dist", "build"],
 		},
 		engine: {
 			cache: false,
 		},
 		output: {
-			conflictStrategy: 'fail',
+			conflictStrategy: "fail",
 			createDirectories: true,
 			preserveTimestamps: false,
 		},
@@ -144,7 +144,7 @@ export class HypergenConfigLoader {
 		},
 		cache: {
 			enabled: true,
-			directory: '.hypergen-cache',
+			directory: ".hypergen-cache",
 			ttl: 3600000, // 1 hour
 		},
 		plugins: [],
@@ -158,21 +158,21 @@ export class HypergenConfigLoader {
 	static async loadConfig(
 		configPath?: string,
 		projectRoot: string = process.cwd(),
-		environment: string = process.env.NODE_ENV || 'development',
+		environment: string = process.env.NODE_ENV || "development",
 		options?: ConfigLoaderOptions,
 	): Promise<ResolvedConfig> {
 		let config: HypergenConfig = {};
 		let actualConfigPath: string | null = null;
 
 		try {
-			const explorer = cosmiconfig('hypergen', {
+			const explorer = cosmiconfig("hypergen", {
 				searchPlaces: [
-					'hypergen.config.js',
-					'hypergen.config.mjs',
-					'hypergen.config.cjs',
-					'hypergen.config.json',
-					'.hypergenrc',
-					'.hypergenrc.json',
+					"hypergen.config.js",
+					"hypergen.config.mjs",
+					"hypergen.config.cjs",
+					"hypergen.config.json",
+					".hypergenrc",
+					".hypergenrc.json",
 				],
 				stopDir: path.dirname(projectRoot), // Stop searching at project root's parent
 			});
@@ -209,44 +209,60 @@ export class HypergenConfigLoader {
 			// Apply environment-specific settings
 			if (mergedConfig.environments?.[environment]) {
 				const envConfig = mergedConfig.environments[environment];
-				Object.assign(mergedConfig, HypergenConfigLoader.mergeConfig(mergedConfig, envConfig));
+				Object.assign(
+					mergedConfig,
+					HypergenConfigLoader.mergeConfig(mergedConfig, envConfig),
+				);
 			}
 
 			// Load helpers and invoke callback if provided
-			const loadedHelpers = await loadHelpers(mergedConfig.helpers, projectRoot);
+			const loadedHelpers = await loadHelpers(
+				mergedConfig.helpers,
+				projectRoot,
+			);
 			if (Object.keys(loadedHelpers).length > 0 && options?.onHelpersLoaded) {
-				options.onHelpersLoaded(loadedHelpers, 'config:hypergen.config');
+				options.onHelpersLoaded(loadedHelpers, "config:hypergen.config");
 			}
 
 			// Determine the base directory for resolving relative paths
 			// If config was found, use its directory; otherwise use projectRoot
-			const configDir = actualConfigPath ? path.dirname(actualConfigPath) : projectRoot;
+			const configDir = actualConfigPath
+				? path.dirname(actualConfigPath)
+				: projectRoot;
 
 			// Resolve paths
 			const resolvedConfig: ResolvedConfig = {
 				...mergedConfig,
-				configPath: actualConfigPath || 'default',
+				configPath: actualConfigPath || "default",
 				projectRoot,
 				environment,
 				loadedHelpers,
 			} as ResolvedConfig;
 
 			// Resolve template paths relative to config file directory
-			resolvedConfig.templates = resolvedConfig.templates.map((templatePath) => {
-				if (path.isAbsolute(templatePath)) {
-					return templatePath;
-				}
-				return path.resolve(configDir, templatePath);
-			});
+			resolvedConfig.templates = resolvedConfig.templates.map(
+				(templatePath) => {
+					if (path.isAbsolute(templatePath)) {
+						return templatePath;
+					}
+					return path.resolve(configDir, templatePath);
+				},
+			);
 
 			// Resolve cache directory relative to config file directory
-			if (resolvedConfig.cache.directory && !path.isAbsolute(resolvedConfig.cache.directory)) {
-				resolvedConfig.cache.directory = path.resolve(configDir, resolvedConfig.cache.directory);
+			if (
+				resolvedConfig.cache.directory &&
+				!path.isAbsolute(resolvedConfig.cache.directory)
+			) {
+				resolvedConfig.cache.directory = path.resolve(
+					configDir,
+					resolvedConfig.cache.directory,
+				);
 			}
 
 			return resolvedConfig;
 		} catch (error: any) {
-			if (error.code === 'ENOENT') {
+			if (error.code === "ENOENT") {
 				throw ErrorHandler.createError(
 					ErrorCode.CONFIG_FILE_NOT_FOUND,
 					`Configuration file not found: ${error.path}`,
@@ -254,11 +270,14 @@ export class HypergenConfigLoader {
 				);
 			}
 
-			if (error.name === 'SyntaxError' || error.message.includes('JSON Parse error')) {
+			if (
+				error.name === "SyntaxError" ||
+				error.message.includes("JSON Parse error")
+			) {
 				throw ErrorHandler.createError(
 					ErrorCode.CONFIG_INVALID_FORMAT,
 					`Invalid configuration file syntax: ${error.message}`,
-					{ file: actualConfigPath || 'unknown' },
+					{ file: actualConfigPath || "unknown" },
 				);
 			}
 
@@ -269,16 +288,23 @@ export class HypergenConfigLoader {
 	/**
 	 * Merge configuration objects
 	 */
-	private static mergeConfig(base: HypergenConfig, override: HypergenConfig): HypergenConfig {
+	private static mergeConfig(
+		base: HypergenConfig,
+		override: HypergenConfig,
+	): HypergenConfig {
 		const merged = { ...base };
 
 		for (const [key, value] of Object.entries(override)) {
 			if (value === undefined) continue;
 
-			if (key === 'templates' && Array.isArray(value)) {
+			if (key === "templates" && Array.isArray(value)) {
 				// Replace templates instead of merging
 				merged.templates = value;
-			} else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+			} else if (
+				typeof value === "object" &&
+				value !== null &&
+				!Array.isArray(value)
+			) {
 				merged[key as keyof HypergenConfig] = {
 					...(merged[key as keyof HypergenConfig] as any),
 					...value,
@@ -302,25 +328,27 @@ export class HypergenConfigLoader {
 
 		// Validate templates
 		if (config.templates && !Array.isArray(config.templates)) {
-			errors.push('templates must be an array of strings');
+			errors.push("templates must be an array of strings");
 		}
 
 		// Validate discovery sources
 		if (config.discovery?.sources) {
-			const validSources = ['local', 'npm', 'workspace', 'github', 'git'];
+			const validSources = ["local", "npm", "workspace", "github", "git"];
 			const invalidSources = config.discovery.sources.filter(
 				(source) => !validSources.includes(source),
 			);
 			if (invalidSources.length > 0) {
-				errors.push(`Invalid discovery sources: ${invalidSources.join(', ')}`);
+				errors.push(`Invalid discovery sources: ${invalidSources.join(", ")}`);
 			}
 		}
 
 		// Validate conflict strategy
 		if (config.output?.conflictStrategy) {
-			const validStrategies = ['fail', 'overwrite', 'skip', 'merge'];
+			const validStrategies = ["fail", "overwrite", "skip", "merge"];
 			if (!validStrategies.includes(config.output.conflictStrategy)) {
-				errors.push(`Invalid conflict strategy: ${config.output.conflictStrategy}`);
+				errors.push(
+					`Invalid conflict strategy: ${config.output.conflictStrategy}`,
+				);
 			}
 		}
 
@@ -333,8 +361,8 @@ export class HypergenConfigLoader {
 	/**
 	 * Generate default configuration file
 	 */
-	static generateDefaultConfig(format: 'js' | 'json' = 'js'): string {
-		if (format === 'json') {
+	static generateDefaultConfig(format: "js" | "json" = "js"): string {
+		if (format === "json") {
 			return JSON.stringify(HypergenConfigLoader.DEFAULT_CONFIG, null, 2);
 		}
 
@@ -410,9 +438,10 @@ export default {
  */
 export async function createConfigFile(
 	projectRoot: string,
-	format: 'js' | 'json' = 'js',
+	format: "js" | "json" = "js",
 ): Promise<string> {
-	const fileName = format === 'json' ? 'hypergen.config.json' : 'hypergen.config.js';
+	const fileName =
+		format === "json" ? "hypergen.config.json" : "hypergen.config.js";
 	const configPath = path.join(projectRoot, fileName);
 
 	if (fs.existsSync(configPath)) {
@@ -424,7 +453,7 @@ export async function createConfigFile(
 	}
 
 	const content = HypergenConfigLoader.generateDefaultConfig(format);
-	fs.writeFileSync(configPath, content, 'utf-8');
+	fs.writeFileSync(configPath, content, "utf-8");
 
 	return configPath;
 }

@@ -5,15 +5,15 @@
  * A kit is the top-level container that holds cookbooks and standalone recipes.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import createDebug from 'debug';
-import { glob } from 'glob';
-import yaml from 'js-yaml';
-import { loadHelpers } from '#/config/load-helpers.js';
-import type { KitConfig } from '#/types/kit.js';
+import fs from "node:fs";
+import path from "node:path";
+import createDebug from "debug";
+import { glob } from "glob";
+import yaml from "js-yaml";
+import { loadHelpers } from "#/config/load-helpers.js";
+import type { KitConfig } from "#/types/kit.js";
 
-const debug = createDebug('hypergen:config:kit-parser');
+const debug = createDebug("hypergen:config:kit-parser");
 
 export interface ParsedKit {
 	config: KitConfig;
@@ -30,7 +30,7 @@ export interface ParsedKit {
  */
 export async function parseKitFile(filePath: string): Promise<ParsedKit> {
 	const result: ParsedKit = {
-		config: { name: '' },
+		config: { name: "" },
 		filePath,
 		dirPath: path.dirname(filePath),
 		isValid: false,
@@ -44,11 +44,11 @@ export async function parseKitFile(filePath: string): Promise<ParsedKit> {
 			return result;
 		}
 
-		const content = fs.readFileSync(filePath, 'utf-8');
+		const content = fs.readFileSync(filePath, "utf-8");
 		const parsed = yaml.load(content) as any;
 
-		if (!parsed || typeof parsed !== 'object') {
-			result.errors.push('Invalid YAML format or empty file');
+		if (!parsed || typeof parsed !== "object") {
+			result.errors.push("Invalid YAML format or empty file");
 			return result;
 		}
 
@@ -58,7 +58,10 @@ export async function parseKitFile(filePath: string): Promise<ParsedKit> {
 		// Load helpers if configured (returned in result, not registered)
 		if (result.isValid && result.config.helpers) {
 			try {
-				result.loadedHelpers = await loadHelpers(result.config.helpers, result.dirPath);
+				result.loadedHelpers = await loadHelpers(
+					result.config.helpers,
+					result.dirPath,
+				);
 			} catch (error) {
 				result.warnings.push(
 					`Failed to load helpers: ${error instanceof Error ? error.message : String(error)}`,
@@ -81,12 +84,14 @@ export async function parseKitFile(filePath: string): Promise<ParsedKit> {
  * 2. `./node_modules/@kit/` (npm installed)
  * 3. Explicit additional directories
  */
-export async function discoverKits(searchDirs: string[]): Promise<Map<string, ParsedKit>> {
+export async function discoverKits(
+	searchDirs: string[],
+): Promise<Map<string, ParsedKit>> {
 	const kits = new Map<string, ParsedKit>();
 
 	for (const dir of searchDirs) {
 		if (!fs.existsSync(dir)) {
-			debug('Kit search directory does not exist: %s', dir);
+			debug("Kit search directory does not exist: %s", dir);
 			continue;
 		}
 
@@ -98,29 +103,33 @@ export async function discoverKits(searchDirs: string[]): Promise<Map<string, Pa
 			const stat = fs.statSync(entryPath);
 			if (!stat.isDirectory()) continue;
 
-			const kitYml = path.join(entryPath, 'kit.yml');
+			const kitYml = path.join(entryPath, "kit.yml");
 			if (fs.existsSync(kitYml)) {
 				const parsed = await parseKitFile(kitYml);
 				if (parsed.isValid) {
 					// Derive a short name for routing: strip scope prefix
 					const shortName = deriveShortName(parsed.config.name);
 					kits.set(shortName, parsed);
-					debug('Discovered kit: %s -> %s', shortName, kitYml);
+					debug("Discovered kit: %s -> %s", shortName, kitYml);
 				} else {
-					debug('Kit validation failed: %s (%s)', kitYml, parsed.errors.join(', '));
+					debug(
+						"Kit validation failed: %s (%s)",
+						kitYml,
+						parsed.errors.join(", "),
+					);
 				}
 			}
 		}
 
 		// Also check if the directory itself has a kit.yml (e.g., direct kit dir)
-		const directKitYml = path.join(dir, 'kit.yml');
+		const directKitYml = path.join(dir, "kit.yml");
 		if (fs.existsSync(directKitYml)) {
 			const parsed = await parseKitFile(directKitYml);
 			if (parsed.isValid) {
 				const shortName = deriveShortName(parsed.config.name);
 				if (!kits.has(shortName)) {
 					kits.set(shortName, parsed);
-					debug('Discovered kit (direct): %s -> %s', shortName, directKitYml);
+					debug("Discovered kit (direct): %s -> %s", shortName, directKitYml);
 				}
 			}
 		}
@@ -134,9 +143,9 @@ export async function discoverKits(searchDirs: string[]): Promise<Map<string, Pa
  */
 export function getDefaultKitSearchDirs(projectRoot: string): string[] {
 	return [
-		path.join(projectRoot, '.hyper', 'kits'),
-		path.join(projectRoot, 'kits'),
-		path.join(projectRoot, 'node_modules', '@kit'),
+		path.join(projectRoot, ".hyper", "kits"),
+		path.join(projectRoot, "kits"),
+		path.join(projectRoot, "node_modules", "@kit"),
 	];
 }
 
@@ -147,7 +156,7 @@ export function getDefaultKitSearchDirs(projectRoot: string): string[] {
  */
 export function deriveShortName(name: string): string {
 	// Strip npm scope
-	const withoutScope = name.replace(/^@[^/]+\//, '');
+	const withoutScope = name.replace(/^@[^/]+\//, "");
 	return withoutScope;
 }
 
@@ -177,62 +186,70 @@ export async function resolveKitCookbooks(
 
 // -- Validation helpers --
 
-function validateKitConfig(parsed: any, errors: string[], _warnings: string[]): KitConfig {
-	const config: KitConfig = { name: '' };
+function validateKitConfig(
+	parsed: any,
+	errors: string[],
+	_warnings: string[],
+): KitConfig {
+	const config: KitConfig = { name: "" };
 
-	if (!parsed.name || typeof parsed.name !== 'string') {
-		errors.push('Kit name is required and must be a string');
+	if (!parsed.name || typeof parsed.name !== "string") {
+		errors.push("Kit name is required and must be a string");
 	} else {
 		config.name = parsed.name;
 	}
 
-	if (parsed.description && typeof parsed.description === 'string') {
+	if (parsed.description && typeof parsed.description === "string") {
 		config.description = parsed.description;
 	}
 
-	if (parsed.version && typeof parsed.version === 'string') {
+	if (parsed.version && typeof parsed.version === "string") {
 		config.version = parsed.version;
 	}
 
-	if (parsed.author && typeof parsed.author === 'string') {
+	if (parsed.author && typeof parsed.author === "string") {
 		config.author = parsed.author;
 	}
 
-	if (parsed.license && typeof parsed.license === 'string') {
+	if (parsed.license && typeof parsed.license === "string") {
 		config.license = parsed.license;
 	}
 
 	if (parsed.keywords && Array.isArray(parsed.keywords)) {
-		config.keywords = parsed.keywords.filter((k: any) => typeof k === 'string');
+		config.keywords = parsed.keywords.filter((k: any) => typeof k === "string");
 	}
 
-	if (parsed.defaults && typeof parsed.defaults === 'object') {
+	if (parsed.defaults && typeof parsed.defaults === "object") {
 		config.defaults = {};
-		if (typeof parsed.defaults.cookbook === 'string') {
+		if (typeof parsed.defaults.cookbook === "string") {
 			config.defaults.cookbook = parsed.defaults.cookbook;
 		}
-		if (typeof parsed.defaults.recipe === 'string') {
+		if (typeof parsed.defaults.recipe === "string") {
 			config.defaults.recipe = parsed.defaults.recipe;
 		}
 	}
 
 	if (parsed.cookbooks && Array.isArray(parsed.cookbooks)) {
-		config.cookbooks = parsed.cookbooks.filter((c: any) => typeof c === 'string');
+		config.cookbooks = parsed.cookbooks.filter(
+			(c: any) => typeof c === "string",
+		);
 	}
 
 	if (parsed.recipes && Array.isArray(parsed.recipes)) {
-		config.recipes = parsed.recipes.filter((r: any) => typeof r === 'string');
+		config.recipes = parsed.recipes.filter((r: any) => typeof r === "string");
 	}
 
 	if (parsed.tags && Array.isArray(parsed.tags)) {
-		config.tags = parsed.tags.filter((t: any) => typeof t === 'string');
+		config.tags = parsed.tags.filter((t: any) => typeof t === "string");
 	}
 
 	if (parsed.categories && Array.isArray(parsed.categories)) {
-		config.categories = parsed.categories.filter((c: any) => typeof c === 'string');
+		config.categories = parsed.categories.filter(
+			(c: any) => typeof c === "string",
+		);
 	}
 
-	if (parsed.helpers && typeof parsed.helpers === 'string') {
+	if (parsed.helpers && typeof parsed.helpers === "string") {
 		config.helpers = parsed.helpers;
 	}
 

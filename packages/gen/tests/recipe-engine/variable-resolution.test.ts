@@ -5,15 +5,7 @@
  * Uses the RecipeEngine directly with mocked prompts and AI transport.
  */
 
-import {
-	describe,
-	it,
-	expect,
-	beforeEach,
-	afterEach,
-	mock,
-	spyOn,
-} from "vitest";
+import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from "vitest";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -28,9 +20,7 @@ import type { TemplateVariable } from "@hypercli/core";
 
 // Mock performInteractivePrompting to avoid actual terminal prompts
 const mockPrompt = mock((prompts: any[]) =>
-	Promise.resolve(
-		Object.fromEntries(prompts.map((p: any) => [p.name, `prompted-${p.name}`])),
-	),
+	Promise.resolve(Object.fromEntries(prompts.map((p: any) => [p.name, `prompted-${p.name}`]))),
 );
 
 mock.module("../../src/prompts/interactive-prompts", () => ({
@@ -111,11 +101,7 @@ beforeEach(() => {
 
 	// Default mocks
 	mockPrompt.mockImplementation((prompts: any[]) =>
-		Promise.resolve(
-			Object.fromEntries(
-				prompts.map((p: any) => [p.name, `prompted-${p.name}`]),
-			),
-		),
+		Promise.resolve(Object.fromEntries(prompts.map((p: any) => [p.name, `prompted-${p.name}`]))),
 	);
 });
 
@@ -144,11 +130,7 @@ describe("Variable Resolution Pipeline", () => {
 				color: { type: "string", default: "blue" },
 			});
 
-			const result = await runRecipe(
-				recipePath,
-				{ name: "MyApp" },
-				{ askMode: "me" },
-			);
+			const result = await runRecipe(recipePath, { name: "MyApp" }, { askMode: "me" });
 
 			expect(result.variables.name).toBe("MyApp");
 			expect(result.variables.color).toBe("blue");
@@ -190,9 +172,9 @@ describe("Variable Resolution Pipeline", () => {
 				color: { type: "string", default: "red" },
 			});
 
-			await expect(
-				runRecipe(recipePath, {}, { askMode: "nobody" }),
-			).rejects.toThrow(/Missing required variables.*name/);
+			await expect(runRecipe(recipePath, {}, { askMode: "nobody" })).rejects.toThrow(
+				/Missing required variables.*name/,
+			);
 		});
 
 		it("should succeed when all required vars are provided", async () => {
@@ -201,11 +183,7 @@ describe("Variable Resolution Pipeline", () => {
 				color: { type: "string", default: "red" },
 			});
 
-			const result = await runRecipe(
-				recipePath,
-				{ name: "Test" },
-				{ askMode: "nobody" },
-			);
+			const result = await runRecipe(recipePath, { name: "Test" }, { askMode: "nobody" });
 			expect(result.variables.name).toBe("Test");
 			expect(result.variables.color).toBe("red");
 		});
@@ -275,9 +253,7 @@ describe("Variable Resolution Pipeline", () => {
 
 			mockPrompt.mockImplementation((prompts: any[]) => {
 				return Promise.resolve(
-					Object.fromEntries(
-						prompts.map((p: any) => [p.name, `override-${p.name}`]),
-					),
+					Object.fromEntries(prompts.map((p: any) => [p.name, `override-${p.name}`])),
 				);
 			});
 
@@ -305,11 +281,7 @@ describe("Variable Resolution Pipeline", () => {
 				return Promise.resolve({ color: "red" });
 			});
 
-			const result = await runRecipe(
-				recipePath,
-				{},
-				{ askMode: "me", noDefaults: true },
-			);
+			const result = await runRecipe(recipePath, {}, { askMode: "me", noDefaults: true });
 
 			expect(result.variables.color).toBe("red");
 		});
@@ -342,10 +314,7 @@ describe("Variable Resolution Pipeline", () => {
 			const callArgs = mockResolveBatch.mock.calls[0];
 			const unresolvedVars = callArgs[0] as any[];
 			expect(unresolvedVars.length).toBe(2);
-			expect(unresolvedVars.map((v: any) => v.name).sort()).toEqual([
-				"color",
-				"name",
-			]);
+			expect(unresolvedVars.map((v: any) => v.name).sort()).toEqual(["color", "name"]);
 
 			expect(result.variables.name).toBe("AiName");
 			expect(result.variables.color).toBe("purple");
@@ -418,11 +387,7 @@ describe("Variable Resolution Pipeline", () => {
 				port: { type: "number", required: true },
 			});
 
-			const result = await runRecipe(
-				recipePath,
-				{ name: "App", port: 8080 },
-				{ askMode: "me" },
-			);
+			const result = await runRecipe(recipePath, { name: "App", port: 8080 }, { askMode: "me" });
 
 			expect(mockPrompt).not.toHaveBeenCalled();
 			expect(result.variables.name).toBe("App");

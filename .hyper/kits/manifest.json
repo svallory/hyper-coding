@@ -1,18 +1,18 @@
 {
-  "version": "1.0.0",
-  "kits": {
-    "nextjs": {
-      "name": "nextjs",
-      "source": "./hyper-kits/nextjs",
-      "type": "local",
-      "installedAt": "2026-02-14T02:35:04.401Z",
-      "version": "0.1.0"
-    },
-    "oss": {
-      "name": "oss",
-      "source": "./../../hyper-kits/oss",
-      "type": "local",
-      "installedAt": "2026-02-13T23:18:58.838Z"
-    }
-  }
+	"version": "1.0.0",
+	"kits": {
+		"nextjs": {
+			"name": "nextjs",
+			"source": "./hyper-kits/nextjs",
+			"type": "local",
+			"installedAt": "2026-02-14T02:35:04.401Z",
+			"version": "0.1.0"
+		},
+		"oss": {
+			"name": "oss",
+			"source": "./../../hyper-kits/oss",
+			"type": "local",
+			"installedAt": "2026-02-13T23:18:58.838Z"
+		}
+	}
 }

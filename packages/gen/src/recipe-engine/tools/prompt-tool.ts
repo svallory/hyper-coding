@@ -35,10 +35,7 @@ export class PromptTool extends Tool<PromptStep> {
 		}
 
 		if (step.promptType === "select" || step.promptType === "multiselect") {
-			if (
-				!step.options ||
-				(Array.isArray(step.options) && step.options.length === 0)
-			) {
+			if (!step.options || (Array.isArray(step.options) && step.options.length === 0)) {
 				errors.push(`Options are required for ${step.promptType} prompt`);
 			}
 		}
@@ -64,24 +61,13 @@ export class PromptTool extends Tool<PromptStep> {
 		options?: StepExecutionOptions,
 	): Promise<StepResult> {
 		const startTime = new Date();
-		this.debug(
-			"Executing prompt step: %s (variable: %s)",
-			step.name,
-			step.variable,
-		);
+		this.debug("Executing prompt step: %s (variable: %s)", step.name, step.variable);
 
 		try {
 			// In non-interactive mode or dry-run, use default value if available
-			if (
-				options?.dryRun ||
-				process.env.CI ||
-				process.env.INTERACTIVE === "false"
-			) {
+			if (options?.dryRun || process.env.CI || process.env.INTERACTIVE === "false") {
 				const value = step.default;
-				this.debug(
-					"Using default value in non-interactive/dry-run mode: %o",
-					value,
-				);
+				this.debug("Using default value in non-interactive/dry-run mode: %o", value);
 
 				// Update context variables
 				context.variables[step.variable] = value;
@@ -105,10 +91,7 @@ export class PromptTool extends Tool<PromptStep> {
 			const loggerAdapter = context.logger
 				? { log: (msg: string) => context.logger?.info(msg) }
 				: undefined;
-			const result = await performInteractivePrompting(
-				[promptConfig],
-				loggerAdapter,
-			);
+			const result = await performInteractivePrompting([promptConfig], loggerAdapter);
 			const value = result[step.variable];
 
 			this.debug("Prompt completed, value: %o", value);
@@ -178,22 +161,16 @@ export class PromptTool extends Tool<PromptStep> {
 		}
 	}
 
-	private mapOptions(
-		options?: Array<{ label: string; value: any }> | string[],
-	): any[] | undefined {
+	private mapOptions(options?: Array<{ label: string; value: any }> | string[]): any[] | undefined {
 		if (!options) return undefined;
 		if (Array.isArray(options) && typeof options[0] === "string") {
 			return options;
 		}
 		// Extract values if objects
-		return (options as Array<{ label: string; value: any }>).map(
-			(o) => o.value,
-		);
+		return (options as Array<{ label: string; value: any }>).map((o) => o.value);
 	}
 
-	private createValidator(
-		validate?: string,
-	): ((input: any) => boolean | string) | undefined {
+	private createValidator(validate?: string): ((input: any) => boolean | string) | undefined {
 		if (!validate) return undefined;
 
 		// Support regex pattern validation
@@ -208,10 +185,7 @@ export class PromptTool extends Tool<PromptStep> {
 }
 
 export class PromptToolFactory {
-	create(
-		name: string = "prompt-tool",
-		options: Record<string, any> = {},
-	): PromptTool {
+	create(name: string = "prompt-tool", options: Record<string, any> = {}): PromptTool {
 		return new PromptTool(name, options);
 	}
 

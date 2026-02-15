@@ -20,10 +20,7 @@ import type {
 const debug = createDebug("hypergen:v8:recipe:tool:ensure-dirs");
 
 export class EnsureDirsTool extends Tool<EnsureDirsStep> {
-	constructor(
-		name: string = "ensure-dirs-tool",
-		options: Record<string, any> = {},
-	) {
+	constructor(name: string = "ensure-dirs-tool", options: Record<string, any> = {}) {
 		super("ensure-dirs", name, options);
 	}
 
@@ -131,10 +128,7 @@ export class EnsureDirsTool extends Tool<EnsureDirsStep> {
 		}
 	}
 
-	private resolveVariables(
-		template: string,
-		variables: Record<string, any>,
-	): string {
+	private resolveVariables(template: string, variables: Record<string, any>): string {
 		return template.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, key) => {
 			const value = key
 				.trim()
@@ -146,10 +140,7 @@ export class EnsureDirsTool extends Tool<EnsureDirsStep> {
 }
 
 export class EnsureDirsToolFactory {
-	create(
-		name: string = "ensure-dirs-tool",
-		options: Record<string, any> = {},
-	): EnsureDirsTool {
+	create(name: string = "ensure-dirs-tool", options: Record<string, any> = {}): EnsureDirsTool {
 		return new EnsureDirsTool(name, options);
 	}
 

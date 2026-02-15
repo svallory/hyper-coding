@@ -1,4 +1,4 @@
 {
-  "entryPoints": ["./index.ts"],
-  "readme": "./README.md"
+	"entryPoints": ["./index.ts"],
+	"readme": "./README.md"
 }

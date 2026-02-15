@@ -4,10 +4,10 @@
 // This is critical for production to prevent loading .ts files when .js files exist
 // The global must be initialized as an object first, then the property set
 if (!globalThis.oclif) {
-  globalThis.oclif = {}
+	globalThis.oclif = {};
 }
-globalThis.oclif.enableAutoTranspile = false
+globalThis.oclif.enableAutoTranspile = false;
 
-import { execute } from '@oclif/core'
+import { execute } from "@oclif/core";
 
-await execute({ dir: import.meta.url })
+await execute({ dir: import.meta.url });

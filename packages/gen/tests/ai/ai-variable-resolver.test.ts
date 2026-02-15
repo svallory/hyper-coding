@@ -50,9 +50,7 @@ describe("AiVariableResolver", () => {
 		});
 
 		it("should not include Already Known Variables section when none resolved", () => {
-			const vars: UnresolvedVariable[] = [
-				{ name: "slug", config: { type: "string" } },
-			];
+			const vars: UnresolvedVariable[] = [{ name: "slug", config: { type: "string" } }];
 
 			const prompt = resolver.buildPrompt(vars, {}, recipeMeta);
 
@@ -111,9 +109,7 @@ describe("AiVariableResolver", () => {
 		});
 
 		it("should include project context when provided", () => {
-			const vars: UnresolvedVariable[] = [
-				{ name: "x", config: { type: "string" } },
-			];
+			const vars: UnresolvedVariable[] = [{ name: "x", config: { type: "string" } }];
 
 			const prompt = resolver.buildPrompt(
 				vars,
@@ -155,9 +151,7 @@ describe("AiVariableResolver", () => {
 		});
 
 		it("should include type coercion instructions", () => {
-			const vars: UnresolvedVariable[] = [
-				{ name: "x", config: { type: "string" } },
-			];
+			const vars: UnresolvedVariable[] = [{ name: "x", config: { type: "string" } }];
 
 			const system = resolver.buildSystemPrompt(vars);
 
@@ -213,26 +207,17 @@ describe("AiVariableResolver", () => {
 		});
 
 		it("should coerce number values from strings", () => {
-			const result = resolver.parseResponse(
-				'{"name": "X", "port": "8080", "verbose": true}',
-				vars,
-			);
+			const result = resolver.parseResponse('{"name": "X", "port": "8080", "verbose": true}', vars);
 			expect(result.port).toBe(8080);
 		});
 
 		it("should coerce boolean strings", () => {
-			const result = resolver.parseResponse(
-				'{"name": "X", "port": 80, "verbose": "true"}',
-				vars,
-			);
+			const result = resolver.parseResponse('{"name": "X", "port": 80, "verbose": "true"}', vars);
 			expect(result.verbose).toBe(true);
 		});
 
 		it("should reject invalid boolean strings", () => {
-			const result = resolver.parseResponse(
-				'{"name": "X", "port": 80, "verbose": "maybe"}',
-				vars,
-			);
+			const result = resolver.parseResponse('{"name": "X", "port": 80, "verbose": "maybe"}', vars);
 			expect(result).not.toHaveProperty("verbose");
 		});
 
@@ -263,10 +248,7 @@ describe("AiVariableResolver", () => {
 				},
 			];
 
-			const result = resolver.parseResponse(
-				'{"methods": ["GET", "POST"]}',
-				enumVars,
-			);
+			const result = resolver.parseResponse('{"methods": ["GET", "POST"]}', enumVars);
 			expect(result).toEqual({ methods: ["GET", "POST"] });
 		});
 
@@ -282,71 +264,45 @@ describe("AiVariableResolver", () => {
 				},
 			];
 
-			const result = resolver.parseResponse(
-				'{"methods": ["GET", "PATCH"]}',
-				enumVars,
-			);
+			const result = resolver.parseResponse('{"methods": ["GET", "PATCH"]}', enumVars);
 			expect(result).toEqual({ methods: ["GET"] });
 		});
 
 		it("should handle array type", () => {
-			const arrVars: UnresolvedVariable[] = [
-				{ name: "tags", config: { type: "array" } },
-			];
+			const arrVars: UnresolvedVariable[] = [{ name: "tags", config: { type: "array" } }];
 
-			const result = resolver.parseResponse(
-				'{"tags": ["alpha", "beta"]}',
-				arrVars,
-			);
+			const result = resolver.parseResponse('{"tags": ["alpha", "beta"]}', arrVars);
 			expect(result).toEqual({ tags: ["alpha", "beta"] });
 		});
 
 		it("should coerce comma-separated string to array", () => {
-			const arrVars: UnresolvedVariable[] = [
-				{ name: "tags", config: { type: "array" } },
-			];
+			const arrVars: UnresolvedVariable[] = [{ name: "tags", config: { type: "array" } }];
 
-			const result = resolver.parseResponse(
-				'{"tags": "alpha, beta, gamma"}',
-				arrVars,
-			);
+			const result = resolver.parseResponse('{"tags": "alpha, beta, gamma"}', arrVars);
 			expect(result).toEqual({ tags: ["alpha", "beta", "gamma"] });
 		});
 
 		it("should handle object type", () => {
-			const objVars: UnresolvedVariable[] = [
-				{ name: "config", config: { type: "object" } },
-			];
+			const objVars: UnresolvedVariable[] = [{ name: "config", config: { type: "object" } }];
 
-			const result = resolver.parseResponse(
-				'{"config": {"key": "val"}}',
-				objVars,
-			);
+			const result = resolver.parseResponse('{"config": {"key": "val"}}', objVars);
 			expect(result).toEqual({ config: { key: "val" } });
 		});
 
 		it("should reject array for object type", () => {
-			const objVars: UnresolvedVariable[] = [
-				{ name: "config", config: { type: "object" } },
-			];
+			const objVars: UnresolvedVariable[] = [{ name: "config", config: { type: "object" } }];
 
 			const result = resolver.parseResponse('{"config": [1, 2]}', objVars);
 			expect(result).toEqual({});
 		});
 
 		it("should coerce non-string to string for string type", () => {
-			const result = resolver.parseResponse(
-				'{"name": 42, "port": 80, "verbose": true}',
-				vars,
-			);
+			const result = resolver.parseResponse('{"name": 42, "port": 80, "verbose": true}', vars);
 			expect(result.name).toBe("42");
 		});
 
 		it("should skip null values", () => {
-			const result = resolver.parseResponse(
-				'{"name": null, "port": 80, "verbose": true}',
-				vars,
-			);
+			const result = resolver.parseResponse('{"name": null, "port": 80, "verbose": true}', vars);
 			expect(result).not.toHaveProperty("name");
 		});
 
@@ -364,14 +320,9 @@ describe("AiVariableResolver", () => {
 		});
 
 		it("should reject NaN for number type", () => {
-			const numVars: UnresolvedVariable[] = [
-				{ name: "count", config: { type: "number" } },
-			];
+			const numVars: UnresolvedVariable[] = [{ name: "count", config: { type: "number" } }];
 
-			const result = resolver.parseResponse(
-				'{"count": "not-a-number"}',
-				numVars,
-			);
+			const result = resolver.parseResponse('{"count": "not-a-number"}', numVars);
 			expect(result).toEqual({});
 		});
 	});

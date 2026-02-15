@@ -96,28 +96,20 @@ export class TemplateCompositionEngine {
 
 		try {
 			// Resolve parent template
-			const parentTemplate = await this.resolveTemplate(
-				context.baseTemplate.extends,
-				context,
-			);
+			const parentTemplate = await this.resolveTemplate(context.baseTemplate.extends, context);
 
 			// Apply inheritance - parent variables come first, child overrides
 			const inheritedVariables = { ...parentTemplate.variables };
 
 			// Merge variables with child taking precedence
-			for (const [name, variable] of Object.entries(
-				context.baseTemplate.variables,
-			)) {
+			for (const [name, variable] of Object.entries(context.baseTemplate.variables)) {
 				if (inheritedVariables[name]) {
 					// Handle variable conflict
 					const conflict = {
 						type: "variable" as const,
 						name,
 						sources: [context.baseTemplate.extends, context.baseTemplate.name],
-						resolution: this.getConflictResolution(
-							name,
-							context.baseTemplate.conflicts,
-						),
+						resolution: this.getConflictResolution(name, context.baseTemplate.conflicts),
 					};
 					result.conflicts.push(conflict);
 
@@ -126,16 +118,10 @@ export class TemplateCompositionEngine {
 							inheritedVariables[name] = variable;
 							break;
 						case "merge":
-							inheritedVariables[name] = this.mergeVariables(
-								inheritedVariables[name],
-								variable,
-							);
+							inheritedVariables[name] = this.mergeVariables(inheritedVariables[name], variable);
 							break;
 						case "extend":
-							inheritedVariables[name] = this.extendVariable(
-								inheritedVariables[name],
-								variable,
-							);
+							inheritedVariables[name] = this.extendVariable(inheritedVariables[name], variable);
 							break;
 						case "error":
 							throw ErrorHandler.createError(
@@ -162,16 +148,10 @@ export class TemplateCompositionEngine {
 				result.config.dependencies = [...parentDeps, ...childDeps] as any;
 			}
 
-			result.config.outputs = [
-				...(parentTemplate.outputs || []),
-				...(result.config.outputs || []),
-			];
+			result.config.outputs = [...(parentTemplate.outputs || []), ...(result.config.outputs || [])];
 
 			// Merge tags
-			result.config.tags = [
-				...(parentTemplate.tags || []),
-				...(result.config.tags || []),
-			];
+			result.config.tags = [...(parentTemplate.tags || []), ...(result.config.tags || [])];
 
 			debug(
 				"Inheritance resolved: %s -> %s",
@@ -199,19 +179,13 @@ export class TemplateCompositionEngine {
 	): Promise<void> {
 		if (!context.baseTemplate.includes) return;
 
-		debug(
-			"Resolving includes: %d templates",
-			context.baseTemplate.includes.length,
-		);
+		debug("Resolving includes: %d templates", context.baseTemplate.includes.length);
 
 		for (const include of context.baseTemplate.includes) {
 			try {
 				// Check condition - if condition exists but evaluates to false, skip include
 				if (include.condition !== undefined) {
-					const conditionResult = this.evaluateCondition(
-						include.condition,
-						context.variables,
-					);
+					const conditionResult = this.evaluateCondition(include.condition, context.variables);
 					if (!conditionResult) {
 						result.resolvedIncludes.push({
 							url: include.url,
@@ -224,11 +198,7 @@ export class TemplateCompositionEngine {
 				}
 
 				// Resolve included template
-				const includedTemplate = await this.resolveTemplate(
-					include.url,
-					context,
-					include.version,
-				);
+				const includedTemplate = await this.resolveTemplate(include.url, context, include.version);
 
 				// Apply variable overrides
 				const templateWithOverrides = this.applyVariableOverrides(
@@ -243,12 +213,7 @@ export class TemplateCompositionEngine {
 				});
 
 				// Merge included template variables
-				await this.mergeIncludedTemplate(
-					result,
-					templateWithOverrides,
-					include,
-					context,
-				);
+				await this.mergeIncludedTemplate(result, templateWithOverrides, include, context);
 
 				debug("Include resolved: %s", include.url);
 			} catch (error: any) {
@@ -283,11 +248,7 @@ export class TemplateCompositionEngine {
 					type: "variable" as const,
 					name,
 					sources: [context.baseTemplate.name, include.url],
-					resolution: this.getConflictResolution(
-						name,
-						context.baseTemplate.conflicts,
-						strategy,
-					),
+					resolution: this.getConflictResolution(name, context.baseTemplate.conflicts, strategy),
 				};
 				result.conflicts.push(conflict);
 
@@ -296,16 +257,10 @@ export class TemplateCompositionEngine {
 						result.variables[name] = variable;
 						break;
 					case "merge":
-						result.variables[name] = this.mergeVariables(
-							result.variables[name],
-							variable,
-						);
+						result.variables[name] = this.mergeVariables(result.variables[name], variable);
 						break;
 					case "extend":
-						result.variables[name] = this.extendVariable(
-							result.variables[name],
-							variable,
-						);
+						result.variables[name] = this.extendVariable(result.variables[name], variable);
 						break;
 					case "error":
 						throw ErrorHandler.createError(
@@ -326,18 +281,12 @@ export class TemplateCompositionEngine {
 		// Merge dependencies
 		if (includedTemplate.dependencies) {
 			const existingDeps = result.config.dependencies || [];
-			result.config.dependencies = [
-				...existingDeps,
-				...includedTemplate.dependencies,
-			] as any;
+			result.config.dependencies = [...existingDeps, ...includedTemplate.dependencies] as any;
 		}
 
 		// Merge outputs
 		if (includedTemplate.outputs) {
-			result.config.outputs = [
-				...(result.config.outputs || []),
-				...includedTemplate.outputs,
-			];
+			result.config.outputs = [...(result.config.outputs || []), ...includedTemplate.outputs];
 		}
 	}
 
@@ -351,14 +300,9 @@ export class TemplateCompositionEngine {
 		// Remove duplicate dependencies
 		if (result.config.dependencies) {
 			// Handle both string[] and TemplateDependency[] types
-			if (
-				Array.isArray(result.config.dependencies) &&
-				result.config.dependencies.length > 0
-			) {
+			if (Array.isArray(result.config.dependencies) && result.config.dependencies.length > 0) {
 				if (typeof result.config.dependencies[0] === "string") {
-					result.config.dependencies = [
-						...new Set(result.config.dependencies as string[]),
-					];
+					result.config.dependencies = [...new Set(result.config.dependencies as string[])];
 				} else {
 					// For object dependencies, deduplicate by name
 					const deps = result.config.dependencies as any[];
@@ -402,10 +346,7 @@ export class TemplateCompositionEngine {
 
 		try {
 			// Use URL manager to resolve template
-			const resolved = await this.urlManager.resolveURL(
-				url,
-				context.projectRoot,
-			);
+			const resolved = await this.urlManager.resolveURL(url, context.projectRoot);
 			const templatePath = resolved.basePath;
 
 			// Parse template
@@ -429,16 +370,9 @@ export class TemplateCompositionEngine {
 	/**
 	 * Evaluate a condition expression
 	 */
-	private evaluateCondition(
-		condition: string,
-		variables: Record<string, any>,
-	): boolean {
+	private evaluateCondition(condition: string, variables: Record<string, any>): boolean {
 		try {
-			debug(
-				"Evaluating condition: %s with variables: %o",
-				condition,
-				variables,
-			);
+			debug("Evaluating condition: %s with variables: %o", condition, variables);
 
 			// Enhanced expression evaluation with safety checks
 			let expression = condition.trim();
@@ -488,24 +422,17 @@ export class TemplateCompositionEngine {
 	/**
 	 * Evaluate simple variable checks without using eval
 	 */
-	private evaluateSimpleVariableCheck(
-		expression: string,
-		variables: Record<string, any>,
-	): boolean {
+	private evaluateSimpleVariableCheck(expression: string, variables: Record<string, any>): boolean {
 		const trimmed = expression.trim();
 
 		// Just variable name
 		if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(trimmed)) {
 			const value = variables[trimmed];
-			return (
-				value !== undefined && value !== null && value !== false && value !== ""
-			);
+			return value !== undefined && value !== null && value !== false && value !== "";
 		}
 
 		// Variable comparison
-		const match = trimmed.match(
-			/^([a-zA-Z_][a-zA-Z0-9_]*)\s*([!=]==?)\s*(.+)$/,
-		);
+		const match = trimmed.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s*([!=]==?)\s*(.+)$/);
 		if (match) {
 			const [, varName, operator, expectedValue] = match;
 			const actualValue = variables[varName];
@@ -561,16 +488,11 @@ export class TemplateCompositionEngine {
 	/**
 	 * Replace variable references in expression with their values
 	 */
-	private replaceVariableReferences(
-		expression: string,
-		variables: Record<string, any>,
-	): string {
+	private replaceVariableReferences(expression: string, variables: Record<string, any>): string {
 		let result = expression;
 
 		// Sort variables by name length (descending) to handle cases like "var" and "varName"
-		const sortedVars = Object.entries(variables).sort(
-			([a], [b]) => b.length - a.length,
-		);
+		const sortedVars = Object.entries(variables).sort(([a], [b]) => b.length - a.length);
 
 		for (const [name, value] of sortedVars) {
 			// Use word boundary to ensure we only replace complete variable names
@@ -687,18 +609,14 @@ export class TemplateCompositionEngine {
 	/**
 	 * Merge two variables
 	 */
-	private mergeVariables(
-		base: TemplateVariable,
-		override: TemplateVariable,
-	): TemplateVariable {
+	private mergeVariables(base: TemplateVariable, override: TemplateVariable): TemplateVariable {
 		const merged: TemplateVariable = { ...base };
 
 		// Override takes precedence for most fields
 		if (override.type !== undefined) merged.type = override.type;
 		if (override.required !== undefined) merged.required = override.required;
 		if (override.default !== undefined) merged.default = override.default;
-		if (override.description !== undefined)
-			merged.description = override.description;
+		if (override.description !== undefined) merged.description = override.description;
 		if (override.pattern !== undefined) merged.pattern = override.pattern;
 		if (override.min !== undefined) merged.min = override.min;
 		if (override.max !== undefined) merged.max = override.max;
@@ -715,10 +633,7 @@ export class TemplateCompositionEngine {
 	/**
 	 * Extend a variable (additive merge)
 	 */
-	private extendVariable(
-		base: TemplateVariable,
-		extension: TemplateVariable,
-	): TemplateVariable {
+	private extendVariable(base: TemplateVariable, extension: TemplateVariable): TemplateVariable {
 		const extended: TemplateVariable = { ...base };
 
 		// Extend arrays

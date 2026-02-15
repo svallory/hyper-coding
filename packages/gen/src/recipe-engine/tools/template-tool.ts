@@ -12,12 +12,7 @@ import fs from "fs-extra";
 import fm from "front-matter";
 import createDebug from "debug";
 import { Tool, type ToolValidationResult } from "./base.js";
-import {
-	HypergenError,
-	ErrorCode,
-	ErrorHandler,
-	withErrorHandling,
-} from "@hypercli/core";
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
 import {
 	type TemplateStep,
 	type StepContext,
@@ -26,10 +21,7 @@ import {
 	type TemplateExecutionResult,
 	isTemplateStep,
 } from "#/recipe-engine/types";
-import {
-	getJig,
-	renderTemplate as jigRenderTemplate,
-} from "#/template-engines/index";
+import { getJig, renderTemplate as jigRenderTemplate } from "#/template-engines/index";
 import addOp from "#/ops/add";
 import injectOp from "#/ops/inject";
 import type { RenderedAction, RunnerConfig } from "#/recipe-engine/types";
@@ -97,10 +89,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 	private templateEnginesInitialized = false;
 	private templateCache = new Map<string, TemplateResolution>();
 
-	constructor(
-		name: string = "template-tool",
-		options: Record<string, any> = {},
-	) {
+	constructor(name: string = "template-tool", options: Record<string, any> = {}) {
 		super("template", name, options);
 	}
 
@@ -180,9 +169,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 
 			const outputPath = path.resolve(context.projectRoot, step.outputDir);
 			if (!(await fs.pathExists(path.dirname(outputPath)))) {
-				warnings.push(
-					`Output directory parent does not exist: ${path.dirname(outputPath)}`,
-				);
+				warnings.push(`Output directory parent does not exist: ${path.dirname(outputPath)}`);
 			}
 		}
 
@@ -198,13 +185,9 @@ export class TemplateTool extends Tool<TemplateStep> {
 
 		// Validate template variables
 		if (step.templateConfig?.variables) {
-			for (const [key, variable] of Object.entries(
-				step.templateConfig.variables,
-			)) {
+			for (const [key, variable] of Object.entries(step.templateConfig.variables)) {
 				if (!variable.type) {
-					warnings.push(
-						`Template variable '${key}' is missing type definition`,
-					);
+					warnings.push(`Template variable '${key}' is missing type definition`);
 				}
 			}
 		}
@@ -214,9 +197,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 			step.templateConfig?.composition?.includes?.length &&
 			step.templateConfig.composition.includes.length > 10
 		) {
-			suggestions.push(
-				"Consider reducing template includes for better performance",
-			);
+			suggestions.push("Consider reducing template includes for better performance");
 		}
 
 		// Estimate execution time based on template complexity
@@ -267,15 +248,8 @@ export class TemplateTool extends Tool<TemplateStep> {
 			}
 
 			// Resolve template
-			const templateResolution = await this.resolveTemplate(
-				step.template,
-				context,
-			);
-			this.debug(
-				"Template resolved: %s -> %s",
-				step.template,
-				templateResolution.filePath,
-			);
+			const templateResolution = await this.resolveTemplate(step.template, context);
+			this.debug("Template resolved: %s -> %s", step.template, templateResolution.filePath);
 
 			// Process template composition if configured
 			const templateFiles = await this.processTemplateComposition(
@@ -288,11 +262,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 			// Render all template files
 			const renderedFiles: RenderedTemplateFile[] = [];
 			for (const templateFile of templateFiles) {
-				const rendered = await this.renderTemplateFile(
-					templateFile,
-					step,
-					context,
-				);
+				const rendered = await this.renderTemplateFile(templateFile, step, context);
 				renderedFiles.push(rendered);
 			}
 
@@ -339,12 +309,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 			// Generate files
 			for (const renderedFile of filesToGenerate) {
 				if (renderedFile.targetPath) {
-					const result = await this.generateFile(
-						renderedFile,
-						step,
-						context,
-						options,
-					);
+					const result = await this.generateFile(renderedFile, step, context, options);
 
 					if (result.status === "added" || result.status === "forced") {
 						filesCreated.push(renderedFile.targetPath);
@@ -425,10 +390,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 				filesDeleted,
 				error: {
 					message: error instanceof Error ? error.message : String(error),
-					code:
-						error instanceof HypergenError
-							? error.code
-							: "TEMPLATE_EXECUTION_ERROR",
+					code: error instanceof HypergenError ? error.code : "TEMPLATE_EXECUTION_ERROR",
 					stack: error instanceof Error ? error.stack : undefined,
 					cause: error,
 				},
@@ -469,9 +431,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 			// Relative to project root
 			path.resolve(context.projectRoot, templateId),
 			// Relative to template path if available (recipe directory)
-			context.templatePath
-				? path.resolve(context.templatePath, templateId)
-				: null,
+			context.templatePath ? path.resolve(context.templatePath, templateId) : null,
 			// With common extensions
 			path.resolve(context.projectRoot, `${templateId}.jig`),
 			path.resolve(context.projectRoot, `${templateId}.jig.t`),
@@ -545,18 +505,12 @@ export class TemplateTool extends Tool<TemplateStep> {
 		if (step.templateConfig?.composition?.includes) {
 			for (const include of step.templateConfig.composition.includes) {
 				// Evaluate condition if present
-				if (
-					include.condition &&
-					!context.evaluateCondition(include.condition, context.variables)
-				) {
+				if (include.condition && !context.evaluateCondition(include.condition, context.variables)) {
 					continue;
 				}
 
 				try {
-					const includeResolution = await this.resolveTemplate(
-						include.template,
-						context,
-					);
+					const includeResolution = await this.resolveTemplate(include.template, context);
 					templateFiles.push(includeResolution.filePath);
 				} catch (error) {
 					this.logger.warn(
@@ -591,11 +545,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 		// Render frontmatter attributes
 		const renderedAttributes: Record<string, any> = {};
 		for (const [key, value] of Object.entries(attributes)) {
-			renderedAttributes[key] = await this.renderTemplate(
-				value,
-				renderContext,
-				templatePath,
-			);
+			renderedAttributes[key] = await this.renderTemplate(value, renderContext, templatePath);
 		}
 
 		// Render template body
@@ -615,9 +565,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 		let targetPath: string | undefined;
 		if (renderedAttributes.to) {
 			targetPath = path.resolve(
-				step.outputDir
-					? path.resolve(context.projectRoot, step.outputDir)
-					: context.projectRoot,
+				step.outputDir ? path.resolve(context.projectRoot, step.outputDir) : context.projectRoot,
 				renderedAttributes.to,
 			);
 		}
@@ -682,9 +630,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 			// Utility functions
 			utils: context.utils,
 			// Step results for dependency access
-			stepResults: context.stepResults
-				? Object.fromEntries(context.stepResults)
-				: {},
+			stepResults: context.stepResults ? Object.fromEntries(context.stepResults) : {},
 			// 2-pass AI generation state
 			answers: context.answers,
 			__hypergenCollectMode: context.collectMode || false,
@@ -699,10 +645,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 	/**
 	 * Check if file should be skipped based on attributes
 	 */
-	private shouldSkipFile(
-		attributes: Record<string, any>,
-		context: Record<string, any>,
-	): boolean {
+	private shouldSkipFile(attributes: Record<string, any>, context: Record<string, any>): boolean {
 		// Check skip_if condition
 		if (attributes.skip_if) {
 			if (attributes.skip_if === true || attributes.skip_if === "true") {
@@ -710,10 +653,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 			}
 
 			// If it's an expression, it should have been evaluated during rendering
-			if (
-				typeof attributes.skip_if === "string" &&
-				attributes.skip_if !== "false"
-			) {
+			if (typeof attributes.skip_if === "string" && attributes.skip_if !== "false") {
 				// Try to evaluate as boolean
 				try {
 					return Boolean(attributes.skip_if);
@@ -725,10 +665,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 
 		// Check unless_exists condition
 		if (attributes.unless_exists && attributes.to) {
-			const targetPath = path.resolve(
-				context.projectRoot || process.cwd(),
-				attributes.to,
-			);
+			const targetPath = path.resolve(context.projectRoot || process.cwd(), attributes.to);
 			return fs.existsSync(targetPath);
 		}
 
@@ -738,10 +675,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 	/**
 	 * Get skip reason for debugging
 	 */
-	private getSkipReason(
-		attributes: Record<string, any>,
-		context: Record<string, any>,
-	): string {
+	private getSkipReason(attributes: Record<string, any>, context: Record<string, any>): string {
 		if (attributes.skip_if) {
 			return "skip_if condition evaluated to true";
 		}
@@ -781,9 +715,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 		// Create runner config for ops
 		const runnerConfig: RunnerConfig = {
 			logger: (context.logger as any) || console,
-			cwd: step.outputDir
-				? path.resolve(context.projectRoot, step.outputDir)
-				: context.projectRoot,
+			cwd: step.outputDir ? path.resolve(context.projectRoot, step.outputDir) : context.projectRoot,
 			createPrompter: () => ({
 				prompt: async (arg: any): Promise<any> => ({
 					overwrite: step.overwrite || false,
@@ -832,10 +764,7 @@ export class TemplateTool extends Tool<TemplateStep> {
  * Template Tool Factory
  */
 export class TemplateToolFactory {
-	create(
-		name: string = "template-tool",
-		options: Record<string, any> = {},
-	): TemplateTool {
+	create(name: string = "template-tool", options: Record<string, any> = {}): TemplateTool {
 		return new TemplateTool(name, options);
 	}
 
@@ -856,10 +785,7 @@ export class TemplateToolFactory {
 		}
 
 		// Validate cache settings
-		if (
-			config.cacheEnabled !== undefined &&
-			typeof config.cacheEnabled !== "boolean"
-		) {
+		if (config.cacheEnabled !== undefined && typeof config.cacheEnabled !== "boolean") {
 			warnings.push("cacheEnabled should be a boolean");
 		}
 

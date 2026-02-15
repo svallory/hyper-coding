@@ -37,10 +37,7 @@ function cleanupTempDir(dirPath: string): void {
 	}
 }
 
-function writeRecipeYml(
-	dirPath: string,
-	content: string = "name: test\nsteps: []\n",
-): void {
+function writeRecipeYml(dirPath: string, content: string = "name: test\nsteps: []\n"): void {
 	fs.mkdirSync(dirPath, { recursive: true });
 	fs.writeFileSync(path.join(dirPath, "recipe.yml"), content, "utf-8");
 }
@@ -92,10 +89,7 @@ function makeSuccessResult(
 	};
 }
 
-function makeFailResult(
-	recipeName: string,
-	errorMsg: string,
-): RecipeExecutionResult {
+function makeFailResult(recipeName: string, errorMsg: string): RecipeExecutionResult {
 	return {
 		executionId: `exec-${recipeName}`,
 		recipe: { name: recipeName, steps: [], variables: {} } as RecipeConfig,
@@ -136,16 +130,10 @@ function createMockRecipeEngine(
 	return {
 		loadRecipe: async (source: string | RecipeSource) => {
 			const normalized =
-				typeof source === "string"
-					? { type: "file" as const, path: source }
-					: source;
-			const entry = recipeEntries.find(
-				(e) => e.recipeYmlPath === (normalized as any).path,
-			);
+				typeof source === "string" ? { type: "file" as const, path: source } : source;
+			const entry = recipeEntries.find((e) => e.recipeYmlPath === (normalized as any).path);
 			return {
-				recipe:
-					entry?.config ||
-					({ name: "unknown", steps: [], variables: {} } as any),
+				recipe: entry?.config || ({ name: "unknown", steps: [], variables: {} } as any),
 				source: normalized,
 				validation: {
 					isValid: true,
@@ -159,10 +147,7 @@ function createMockRecipeEngine(
 		},
 		executeRecipe:
 			executeImpl ??
-			(async (
-				_source: string | RecipeSource,
-				options: RecipeExecutionOptions = {},
-			) => {
+			(async (_source: string | RecipeSource, options: RecipeExecutionOptions = {}) => {
 				return makeSuccessResult("test", options.variables || {});
 			}),
 	} as any;
@@ -193,14 +178,8 @@ describe("GroupExecutor", () => {
 		});
 
 		it("discovers immediate subdirectories with recipe.yml", async () => {
-			writeRecipeYml(
-				path.join(tempDir, "recipe-a"),
-				"name: recipe-a\nsteps: []\n",
-			);
-			writeRecipeYml(
-				path.join(tempDir, "recipe-b"),
-				"name: recipe-b\nsteps: []\n",
-			);
+			writeRecipeYml(path.join(tempDir, "recipe-a"), "name: recipe-a\nsteps: []\n");
+			writeRecipeYml(path.join(tempDir, "recipe-b"), "name: recipe-b\nsteps: []\n");
 
 			const group = await executor.discoverGroup(tempDir);
 
@@ -212,24 +191,16 @@ describe("GroupExecutor", () => {
 
 			// Verify recipeYmlPath is set correctly
 			for (const recipe of group.recipes) {
-				expect(recipe.recipeYmlPath).toBe(
-					path.join(tempDir, recipe.name, "recipe.yml"),
-				);
+				expect(recipe.recipeYmlPath).toBe(path.join(tempDir, recipe.name, "recipe.yml"));
 			}
 		});
 
 		it("recurses into directories without recipe.yml (subgroups)", async () => {
 			// subgroup/ has no recipe.yml, but subgroup/recipe-c/ does
-			writeRecipeYml(
-				path.join(tempDir, "recipe-a"),
-				"name: recipe-a\nsteps: []\n",
-			);
+			writeRecipeYml(path.join(tempDir, "recipe-a"), "name: recipe-a\nsteps: []\n");
 			const subgroupDir = path.join(tempDir, "subgroup");
 			fs.mkdirSync(subgroupDir, { recursive: true });
-			writeRecipeYml(
-				path.join(subgroupDir, "recipe-c"),
-				"name: recipe-c\nsteps: []\n",
-			);
+			writeRecipeYml(path.join(subgroupDir, "recipe-c"), "name: recipe-c\nsteps: []\n");
 
 			const group = await executor.discoverGroup(tempDir);
 
@@ -238,22 +209,13 @@ describe("GroupExecutor", () => {
 
 			// recipe-c should be found inside the subgroup
 			const recipeC = group.recipes.find((r) => r.name === "recipe-c")!;
-			expect(recipeC.recipeYmlPath).toBe(
-				path.join(subgroupDir, "recipe-c", "recipe.yml"),
-			);
+			expect(recipeC.recipeYmlPath).toBe(path.join(subgroupDir, "recipe-c", "recipe.yml"));
 		});
 
 		it("ignores non-directory entries", async () => {
-			writeRecipeYml(
-				path.join(tempDir, "recipe-a"),
-				"name: recipe-a\nsteps: []\n",
-			);
+			writeRecipeYml(path.join(tempDir, "recipe-a"), "name: recipe-a\nsteps: []\n");
 			// Create a plain file (not a directory) at the same level
-			fs.writeFileSync(
-				path.join(tempDir, "not-a-recipe"),
-				"just a file",
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(tempDir, "not-a-recipe"), "just a file", "utf-8");
 
 			const group = await executor.discoverGroup(tempDir);
 
@@ -268,9 +230,7 @@ describe("GroupExecutor", () => {
 		});
 
 		it("returns empty recipes list for a non-existent directory", async () => {
-			const group = await executor.discoverGroup(
-				path.join(tempDir, "does-not-exist"),
-			);
+			const group = await executor.discoverGroup(path.join(tempDir, "does-not-exist"));
 			expect(group.recipes).toEqual([]);
 		});
 	});
@@ -288,8 +248,7 @@ describe("GroupExecutor", () => {
 		it("creates empty dep sets when no provides and no dependencies", () => {
 			const entries = [makeEntry("alpha"), makeEntry("beta")];
 
-			const { depGraph, providesMap, errors } =
-				executor.buildDependencyGraph(entries);
+			const { depGraph, providesMap, errors } = executor.buildDependencyGraph(entries);
 
 			expect(errors).toHaveLength(0);
 			expect(depGraph.get("alpha")!.size).toBe(0);
@@ -305,8 +264,7 @@ describe("GroupExecutor", () => {
 				}),
 			];
 
-			const { depGraph, providesMap, errors } =
-				executor.buildDependencyGraph(entries);
+			const { depGraph, providesMap, errors } = executor.buildDependencyGraph(entries);
 
 			expect(errors).toHaveLength(0);
 			expect(providesMap.get("x")).toBe("recipe-a");
@@ -356,8 +314,7 @@ describe("GroupExecutor", () => {
 				}),
 			];
 
-			const { depGraph, providesMap, errors } =
-				executor.buildDependencyGraph(entries);
+			const { depGraph, providesMap, errors } = executor.buildDependencyGraph(entries);
 
 			expect(errors).toHaveLength(0);
 			expect(providesMap.get("x")).toBe("recipe-a");
@@ -492,9 +449,7 @@ describe("GroupExecutor", () => {
 			const { errors } = executor.buildDependencyGraph(entries);
 
 			expect(errors.length).toBeGreaterThanOrEqual(1);
-			const circularError = errors.find((e) =>
-				e.includes("Circular dependency"),
-			);
+			const circularError = errors.find((e) => e.includes("Circular dependency"));
 			expect(circularError).toBeDefined();
 		});
 
@@ -516,9 +471,7 @@ describe("GroupExecutor", () => {
 			const { errors } = executor.buildDependencyGraph(entries);
 
 			expect(errors.length).toBeGreaterThanOrEqual(1);
-			const circularError = errors.find((e) =>
-				e.includes("Circular dependency"),
-			);
+			const circularError = errors.find((e) => e.includes("Circular dependency"));
 			expect(circularError).toBeDefined();
 		});
 	});
@@ -546,17 +499,12 @@ describe("GroupExecutor", () => {
 
 			const executionOrder: string[] = [];
 
-			const mockEngine = createMockRecipeEngine(
-				entries,
-				async (source, options) => {
-					const src = source as { type: string; path: string };
-					const name =
-						entries.find((e) => e.recipeYmlPath === src.path)?.name ??
-						"unknown";
-					executionOrder.push(name);
-					return makeSuccessResult(name, options?.variables || {});
-				},
-			);
+			const mockEngine = createMockRecipeEngine(entries, async (source, options) => {
+				const src = source as { type: string; path: string };
+				const name = entries.find((e) => e.recipeYmlPath === src.path)?.name ?? "unknown";
+				executionOrder.push(name);
+				return makeSuccessResult(name, options?.variables || {});
+			});
 
 			const executor = new GroupExecutor(mockEngine);
 			const group: RecipeGroup = { dirPath: tempDir, recipes: entries };
@@ -569,11 +517,7 @@ describe("GroupExecutor", () => {
 			// All three executed
 			expect(executionOrder).toHaveLength(3);
 			// With no dependencies, all should be in one batch, sorted alphabetically
-			expect(executionOrder.sort()).toEqual([
-				"recipe-a",
-				"recipe-b",
-				"recipe-c",
-			]);
+			expect(executionOrder.sort()).toEqual(["recipe-a", "recipe-b", "recipe-c"]);
 		});
 
 		it("executes recipes in correct dependency order", async () => {
@@ -589,26 +533,17 @@ describe("GroupExecutor", () => {
 
 			const executionOrder: string[] = [];
 
-			const mockEngine = createMockRecipeEngine(
-				entries,
-				async (source, options) => {
-					const src = source as { type: string; path: string };
-					const name =
-						entries.find((e) => e.recipeYmlPath === src.path)?.name ??
-						"unknown";
-					executionOrder.push(name);
+			const mockEngine = createMockRecipeEngine(entries, async (source, options) => {
+				const src = source as { type: string; path: string };
+				const name = entries.find((e) => e.recipeYmlPath === src.path)?.name ?? "unknown";
+				executionOrder.push(name);
 
-					const providedValues: Record<string, any> = {};
-					if (name === "recipe-a") providedValues["x"] = "value-x";
-					if (name === "recipe-b") providedValues["y"] = "value-y";
+				const providedValues: Record<string, any> = {};
+				if (name === "recipe-a") providedValues["x"] = "value-x";
+				if (name === "recipe-b") providedValues["y"] = "value-y";
 
-					return makeSuccessResult(
-						name,
-						options?.variables || {},
-						providedValues,
-					);
-				},
-			);
+				return makeSuccessResult(name, options?.variables || {}, providedValues);
+			});
 
 			const executor = new GroupExecutor(mockEngine);
 			const group: RecipeGroup = { dirPath: tempDir, recipes: entries };
@@ -645,21 +580,16 @@ describe("GroupExecutor", () => {
 
 			const executionOrder: string[] = [];
 
-			const mockEngine = createMockRecipeEngine(
-				entries,
-				async (source, _options) => {
-					const src = source as { type: string; path: string };
-					const name =
-						entries.find((e) => e.recipeYmlPath === src.path)?.name ??
-						"unknown";
-					executionOrder.push(name);
+			const mockEngine = createMockRecipeEngine(entries, async (source, _options) => {
+				const src = source as { type: string; path: string };
+				const name = entries.find((e) => e.recipeYmlPath === src.path)?.name ?? "unknown";
+				executionOrder.push(name);
 
-					if (name === "recipe-a") {
-						return makeFailResult(name, "Intentional failure");
-					}
-					return makeSuccessResult(name);
-				},
-			);
+				if (name === "recipe-a") {
+					return makeFailResult(name, "Intentional failure");
+				}
+				return makeSuccessResult(name);
+			});
 
 			const executor = new GroupExecutor(mockEngine);
 			const group: RecipeGroup = { dirPath: tempDir, recipes: entries };
@@ -703,17 +633,12 @@ describe("GroupExecutor", () => {
 			];
 
 			const executionOrder: string[] = [];
-			const mockEngine = createMockRecipeEngine(
-				entries,
-				async (source, _options) => {
-					const src = source as { type: string; path: string };
-					const name =
-						entries.find((e) => e.recipeYmlPath === src.path)?.name ??
-						"unknown";
-					executionOrder.push(name);
-					return makeSuccessResult(name);
-				},
-			);
+			const mockEngine = createMockRecipeEngine(entries, async (source, _options) => {
+				const src = source as { type: string; path: string };
+				const name = entries.find((e) => e.recipeYmlPath === src.path)?.name ?? "unknown";
+				executionOrder.push(name);
+				return makeSuccessResult(name);
+			});
 
 			const executor = new GroupExecutor(mockEngine);
 			const group: RecipeGroup = { dirPath: tempDir, recipes: entries };
@@ -736,23 +661,18 @@ describe("GroupExecutor", () => {
 				}),
 			];
 
-			const mockEngine = createMockRecipeEngine(
-				entries,
-				async (source, _options) => {
-					const src = source as { type: string; path: string };
-					const name =
-						entries.find((e) => e.recipeYmlPath === src.path)?.name ??
-						"unknown";
+			const mockEngine = createMockRecipeEngine(entries, async (source, _options) => {
+				const src = source as { type: string; path: string };
+				const name = entries.find((e) => e.recipeYmlPath === src.path)?.name ?? "unknown";
 
-					if (name === "recipe-a") {
-						return makeSuccessResult(name, {}, { x: "from-a" });
-					}
-					if (name === "recipe-b") {
-						return makeSuccessResult(name, {}, { y: "from-b" });
-					}
-					return makeSuccessResult(name);
-				},
-			);
+				if (name === "recipe-a") {
+					return makeSuccessResult(name, {}, { x: "from-a" });
+				}
+				if (name === "recipe-b") {
+					return makeSuccessResult(name, {}, { y: "from-b" });
+				}
+				return makeSuccessResult(name);
+			});
 
 			const executor = new GroupExecutor(mockEngine);
 			const group: RecipeGroup = { dirPath: tempDir, recipes: entries };
@@ -780,21 +700,16 @@ describe("GroupExecutor", () => {
 
 			const receivedVariables: Record<string, Record<string, any>> = {};
 
-			const mockEngine = createMockRecipeEngine(
-				entries,
-				async (source, options) => {
-					const src = source as { type: string; path: string };
-					const name =
-						entries.find((e) => e.recipeYmlPath === src.path)?.name ??
-						"unknown";
-					receivedVariables[name] = { ...(options?.variables || {}) };
+			const mockEngine = createMockRecipeEngine(entries, async (source, options) => {
+				const src = source as { type: string; path: string };
+				const name = entries.find((e) => e.recipeYmlPath === src.path)?.name ?? "unknown";
+				receivedVariables[name] = { ...(options?.variables || {}) };
 
-					if (name === "recipe-a") {
-						return makeSuccessResult(name, {}, { x: "provided-by-a" });
-					}
-					return makeSuccessResult(name, options?.variables || {});
-				},
-			);
+				if (name === "recipe-a") {
+					return makeSuccessResult(name, {}, { x: "provided-by-a" });
+				}
+				return makeSuccessResult(name, options?.variables || {});
+			});
 
 			const executor = new GroupExecutor(mockEngine);
 			const group: RecipeGroup = { dirPath: tempDir, recipes: entries };
@@ -808,25 +723,17 @@ describe("GroupExecutor", () => {
 		});
 
 		it("handles recipe execution throwing an exception", async () => {
-			const entries: GroupRecipeEntry[] = [
-				makeEntry("recipe-a"),
-				makeEntry("recipe-b"),
-			];
+			const entries: GroupRecipeEntry[] = [makeEntry("recipe-a"), makeEntry("recipe-b")];
 
-			const mockEngine = createMockRecipeEngine(
-				entries,
-				async (source, _options) => {
-					const src = source as { type: string; path: string };
-					const name =
-						entries.find((e) => e.recipeYmlPath === src.path)?.name ??
-						"unknown";
+			const mockEngine = createMockRecipeEngine(entries, async (source, _options) => {
+				const src = source as { type: string; path: string };
+				const name = entries.find((e) => e.recipeYmlPath === src.path)?.name ?? "unknown";
 
-					if (name === "recipe-a") {
-						throw new Error("Unexpected crash in recipe-a");
-					}
-					return makeSuccessResult(name);
-				},
-			);
+				if (name === "recipe-a") {
+					throw new Error("Unexpected crash in recipe-a");
+				}
+				return makeSuccessResult(name);
+			});
 
 			const executor = new GroupExecutor(mockEngine);
 			const group: RecipeGroup = { dirPath: tempDir, recipes: entries };
@@ -834,13 +741,9 @@ describe("GroupExecutor", () => {
 			const result = await executor.executeGroup(group, {});
 
 			expect(result.success).toBe(false);
-			expect(
-				result.errors.some((e) => e.includes("Unexpected crash in recipe-a")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("Unexpected crash in recipe-a"))).toBe(true);
 			// Even though recipe-a throws, we should still get a result entry for it
-			const recipeAResult = result.recipeResults.find(
-				(r) => r.name === "recipe-a",
-			);
+			const recipeAResult = result.recipeResults.find((r) => r.name === "recipe-a");
 			expect(recipeAResult).toBeDefined();
 			expect(recipeAResult!.result.success).toBe(false);
 		});

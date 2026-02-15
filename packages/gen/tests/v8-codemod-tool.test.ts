@@ -9,10 +9,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "fs-extra";
 import path from "node:path";
 import os from "node:os";
-import {
-	CodeModTool,
-	CodeModToolFactory,
-} from "#/recipe-engine/tools/codemod-tool";
+import { CodeModTool, CodeModToolFactory } from "#/recipe-engine/tools/codemod-tool";
 import type { CodeModStep, StepContext } from "#/recipe-engine/types";
 
 describe("CodeModTool", () => {
@@ -22,9 +19,7 @@ describe("CodeModTool", () => {
 
 	beforeEach(async () => {
 		tool = new CodeModTool();
-		tempDir = await fs.mkdtemp(
-			path.join(os.tmpdir(), "hypergen-codemod-test-"),
-		);
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "hypergen-codemod-test-"));
 
 		// Create a basic StepContext for testing
 		testContext = {
@@ -112,9 +107,7 @@ describe("CodeModTool", () => {
 			const result = await tool.validate(step, testContext);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((e) => e.includes("Invalid CodeMod type")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("Invalid CodeMod type"))).toBe(true);
 		});
 
 		it("should validate add-import parameters", async () => {
@@ -133,9 +126,7 @@ describe("CodeModTool", () => {
 
 			expect(result.isValid).toBe(false);
 			expect(
-				result.errors.some((e) =>
-					e.includes('add-import requires "import" and "from" parameters'),
-				),
+				result.errors.some((e) => e.includes('add-import requires "import" and "from" parameters')),
 			).toBe(true);
 		});
 	});
@@ -284,17 +275,12 @@ function helper() {
 
 			// Check that backup was created
 			const backupFiles = await fs.readdir(tempDir);
-			const backupFile = backupFiles.find((f) =>
-				f.startsWith("backup-test.txt.backup."),
-			);
+			const backupFile = backupFiles.find((f) => f.startsWith("backup-test.txt.backup."));
 			expect(backupFile).toBeDefined();
 
 			// Verify backup content
 			if (backupFile) {
-				const backupContent = await fs.readFile(
-					path.join(tempDir, backupFile),
-					"utf8",
-				);
+				const backupContent = await fs.readFile(path.join(tempDir, backupFile), "utf8");
 				expect(backupContent).toBe("original content");
 			}
 		});

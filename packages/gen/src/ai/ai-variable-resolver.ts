@@ -54,18 +54,9 @@ export class AiVariableResolver {
 	): Promise<Record<string, any>> {
 		if (unresolvedVars.length === 0) return {};
 
-		debug(
-			"Resolving %d variables via AI for recipe: %s",
-			unresolvedVars.length,
-			recipeMeta.name,
-		);
+		debug("Resolving %d variables via AI for recipe: %s", unresolvedVars.length, recipeMeta.name);
 
-		const prompt = this.buildPrompt(
-			unresolvedVars,
-			resolvedVars,
-			recipeMeta,
-			projectContext,
-		);
+		const prompt = this.buildPrompt(unresolvedVars, resolvedVars, recipeMeta, projectContext);
 		const systemPrompt = this.buildSystemPrompt(unresolvedVars);
 
 		const aiService = AiService.getInstance(this.aiConfig);
@@ -83,10 +74,7 @@ export class AiVariableResolver {
 				stepName: "ai-variable-resolver",
 			});
 		} catch (error) {
-			debug(
-				"AI call failed: %s",
-				error instanceof Error ? error.message : String(error),
-			);
+			debug("AI call failed: %s", error instanceof Error ? error.message : String(error));
 			// Return empty — caller decides what to do with still-unresolved vars
 			return {};
 		}
@@ -144,20 +132,13 @@ export class AiVariableResolver {
 			lines.push(`### \`${name}\``);
 			lines.push(`- **Type:** ${config.type}`);
 			if (config.required) lines.push(`- **Required:** yes`);
-			if (config.description)
-				lines.push(`- **Description:** ${config.description}`);
+			if (config.description) lines.push(`- **Description:** ${config.description}`);
 			if (config.suggestion !== undefined)
-				lines.push(
-					`- **Suggestion:** \`${JSON.stringify(config.suggestion)}\``,
-				);
+				lines.push(`- **Suggestion:** \`${JSON.stringify(config.suggestion)}\``);
 			if (defaultValue !== undefined)
-				lines.push(
-					`- **Default (skipped):** \`${JSON.stringify(defaultValue)}\``,
-				);
+				lines.push(`- **Default (skipped):** \`${JSON.stringify(defaultValue)}\``);
 			if (config.values)
-				lines.push(
-					`- **Allowed values:** ${config.values.map((v) => `\`${v}\``).join(", ")}`,
-				);
+				lines.push(`- **Allowed values:** ${config.values.map((v) => `\`${v}\``).join(", ")}`);
 			if (config.pattern) lines.push(`- **Pattern:** \`${config.pattern}\``);
 			if (config.min !== undefined) lines.push(`- **Min:** ${config.min}`);
 			if (config.max !== undefined) lines.push(`- **Max:** ${config.max}`);
@@ -187,10 +168,7 @@ export class AiVariableResolver {
 	/**
 	 * Parse the AI's JSON response and coerce values to expected types.
 	 */
-	parseResponse(
-		raw: string,
-		unresolvedVars: UnresolvedVariable[],
-	): Record<string, any> {
+	parseResponse(raw: string, unresolvedVars: UnresolvedVariable[]): Record<string, any> {
 		let text = raw.trim();
 
 		// Strip markdown code fences
@@ -207,11 +185,7 @@ export class AiVariableResolver {
 			return {};
 		}
 
-		if (
-			typeof parsed !== "object" ||
-			parsed === null ||
-			Array.isArray(parsed)
-		) {
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
 			debug("AI response is not a JSON object");
 			return {};
 		}
@@ -277,9 +251,7 @@ export class AiVariableResolver {
 				}
 				// For multi-select enums
 				if (Array.isArray(value) && config.values) {
-					const filtered = value
-						.map(String)
-						.filter((v) => config.values!.includes(v));
+					const filtered = value.map(String).filter((v) => config.values!.includes(v));
 					return filtered.length > 0 ? filtered : undefined;
 				}
 				return undefined;

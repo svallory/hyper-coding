@@ -7,11 +7,7 @@ const projectRoot = path.resolve(__dirname, "../../..");
 describe("validateOutput", () => {
 	describe("without guardrails", () => {
 		it("passes any non-empty output", async () => {
-			const result = await validateOutput(
-				"some output",
-				undefined,
-				projectRoot,
-			);
+			const result = await validateOutput("some output", undefined, projectRoot);
 			expect(result.passed).toBe(true);
 			expect(result.errors).toHaveLength(0);
 		});
@@ -19,11 +15,7 @@ describe("validateOutput", () => {
 
 	describe("empty output detection", () => {
 		it("fails on empty output", async () => {
-			const result = await validateOutput(
-				"",
-				{ validateSyntax: false },
-				projectRoot,
-			);
+			const result = await validateOutput("", { validateSyntax: false }, projectRoot);
 			expect(result.passed).toBe(false);
 			expect(result.errors).toContain("AI returned empty output");
 		});
@@ -45,11 +37,7 @@ describe("validateOutput", () => {
 		});
 
 		it("fails invalid JSON", async () => {
-			const result = await validateOutput(
-				"{invalid}",
-				{ validateSyntax: "json" },
-				projectRoot,
-			);
+			const result = await validateOutput("{invalid}", { validateSyntax: "json" }, projectRoot);
 			expect(result.passed).toBe(false);
 			expect(result.errors[0]).toContain("JSON syntax error");
 		});
@@ -57,20 +45,12 @@ describe("validateOutput", () => {
 
 	describe("maxOutputLength", () => {
 		it("passes when under limit", async () => {
-			const result = await validateOutput(
-				"short",
-				{ maxOutputLength: 100 },
-				projectRoot,
-			);
+			const result = await validateOutput("short", { maxOutputLength: 100 }, projectRoot);
 			expect(result.passed).toBe(true);
 		});
 
 		it("fails when over limit", async () => {
-			const result = await validateOutput(
-				"a".repeat(200),
-				{ maxOutputLength: 100 },
-				projectRoot,
-			);
+			const result = await validateOutput("a".repeat(200), { maxOutputLength: 100 }, projectRoot);
 			expect(result.passed).toBe(false);
 			expect(result.errors[0]).toContain("exceeds maximum");
 		});
@@ -79,64 +59,38 @@ describe("validateOutput", () => {
 	describe("import validation", () => {
 		it("detects unknown imports when requireKnownImports is true", async () => {
 			const code = `import { foo } from 'nonexistent-package'`;
-			const result = await validateOutput(
-				code,
-				{ requireKnownImports: true },
-				projectRoot,
-			);
+			const result = await validateOutput(code, { requireKnownImports: true }, projectRoot);
 			expect(result.passed).toBe(false);
-			expect(result.errors.some((e) => e.includes("nonexistent-package"))).toBe(
-				true,
-			);
+			expect(result.errors.some((e) => e.includes("nonexistent-package"))).toBe(true);
 		});
 
 		it("ignores relative imports", async () => {
 			const code = `import { foo } from '#/local-file'`;
-			const result = await validateOutput(
-				code,
-				{ requireKnownImports: true },
-				projectRoot,
-			);
+			const result = await validateOutput(code, { requireKnownImports: true }, projectRoot);
 			expect(result.passed).toBe(true);
 		});
 
 		it("ignores node built-in imports", async () => {
 			const code = `import fs from 'fs'\nimport path from 'node:path'`;
-			const result = await validateOutput(
-				code,
-				{ requireKnownImports: true },
-				projectRoot,
-			);
+			const result = await validateOutput(code, { requireKnownImports: true }, projectRoot);
 			expect(result.passed).toBe(true);
 		});
 
 		it("respects allowedImports", async () => {
 			const code = `import { z } from 'zod'`;
-			const result = await validateOutput(
-				code,
-				{ allowedImports: ["zod"] },
-				projectRoot,
-			);
+			const result = await validateOutput(code, { allowedImports: ["zod"] }, projectRoot);
 			expect(result.passed).toBe(true);
 		});
 
 		it("rejects imports not in allowedImports", async () => {
 			const code = `import { z } from 'zod'`;
-			const result = await validateOutput(
-				code,
-				{ allowedImports: ["lodash"] },
-				projectRoot,
-			);
+			const result = await validateOutput(code, { allowedImports: ["lodash"] }, projectRoot);
 			expect(result.passed).toBe(false);
 		});
 
 		it("blocks blocked imports", async () => {
 			const code = `import { exec } from 'child_process'\nimport evil from 'evil-package'`;
-			const result = await validateOutput(
-				code,
-				{ blockedImports: ["evil-package"] },
-				projectRoot,
-			);
+			const result = await validateOutput(code, { blockedImports: ["evil-package"] }, projectRoot);
 			expect(result.passed).toBe(false);
 			expect(result.errors.some((e) => e.includes("evil-package"))).toBe(true);
 		});

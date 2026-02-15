@@ -1,11 +1,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import chalk from "chalk";
-import type {
-	ActionResult,
-	RenderedAction,
-	RunnerConfig,
-} from "@hypercli/core";
+import type { ActionResult, RenderedAction, RunnerConfig } from "@hypercli/core";
 import createResult from "./result.js";
 
 const add = async (
@@ -26,8 +22,7 @@ const add = async (
 	}
 
 	const absTo = path.resolve(cwd, to);
-	const shouldNotOverwrite =
-		!force && unless_exists !== undefined && unless_exists === true;
+	const shouldNotOverwrite = !force && unless_exists !== undefined && unless_exists === true;
 	const fileExists = await fs.pathExists(absTo);
 
 	if (shouldNotOverwrite && fileExists) {

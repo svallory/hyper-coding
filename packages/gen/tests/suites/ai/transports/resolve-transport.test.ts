@@ -70,9 +70,7 @@ describe("resolveTransport", () => {
 		});
 
 		it("throws for mode=command without ai.command", () => {
-			expect(() => resolveTransport({ mode: "command" })).toThrow(
-				/ai\.command/,
-			);
+			expect(() => resolveTransport({ mode: "command" })).toThrow(/ai\.command/);
 		});
 	});
 

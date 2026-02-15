@@ -15,7 +15,7 @@
  *```
  */
 export function some_prettier_function(param: string) {
-  return param;
+	return param;
 }
 
 export type SomePrettierTypeAlias = string | { x: 1 } | boolean | { y: 2 };

@@ -44,7 +44,7 @@ export interface AIBudgetConfig {
  */
 export interface AIOutputConfig {
 	/** Output destination type */
-	type: 'variable' | 'file' | 'inject' | 'stdout';
+	type: "variable" | "file" | "inject" | "stdout";
 	/** Variable name to store result (for type='variable') */
 	variable?: string;
 	/** File path to write (supports Liquid interpolation, for type='file') */
@@ -56,7 +56,7 @@ export interface AIOutputConfig {
 	/** Inject before this pattern */
 	before?: string;
 	/** Inject at start or end of file */
-	at?: 'start' | 'end';
+	at?: "start" | "end";
 	/** Zod-compatible JSON schema for structured output */
 	schema?: Record<string, any>;
 	/** Load schema from file */
@@ -72,13 +72,15 @@ export interface AIContextConfig {
 	/** Explicit file paths to include */
 	include?: string[];
 	/** Include project config files */
-	projectConfig?: boolean | ('tsconfig' | 'package.json' | 'eslint' | '.editorconfig')[];
+	projectConfig?:
+		| boolean
+		| ("tsconfig" | "package.json" | "eslint" | ".editorconfig")[];
 	/** Include output from previous recipe steps */
 	fromSteps?: string[];
 	/** Token budget for context (prevents blowup) */
 	maxContextTokens?: number;
 	/** What to do when context exceeds budget */
-	overflow?: 'truncate' | 'summarize' | 'error';
+	overflow?: "truncate" | "summarize" | "error";
 }
 
 /**
@@ -98,7 +100,9 @@ export interface AIExample {
  */
 export interface AIGuardrailConfig {
 	/** Syntax validation (language-specific) */
-	validateSyntax?: boolean | ('typescript' | 'javascript' | 'json' | 'yaml' | 'css' | 'html');
+	validateSyntax?:
+		| boolean
+		| ("typescript" | "javascript" | "json" | "yaml" | "css" | "html");
 	/** Only allow imports from these packages */
 	allowedImports?: string[];
 	/** Block specific imports */
@@ -112,7 +116,7 @@ export interface AIGuardrailConfig {
 	/** Retry attempts on validation failure */
 	retryOnFailure?: number;
 	/** What to do on failure */
-	onFailure?: 'error' | 'retry' | 'retry-with-feedback' | 'fallback';
+	onFailure?: "error" | "retry" | "retry-with-feedback" | "fallback";
 	/** Static fallback if all retries fail */
 	fallback?: string;
 }

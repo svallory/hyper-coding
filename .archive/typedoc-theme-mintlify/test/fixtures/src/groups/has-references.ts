@@ -4,10 +4,10 @@
  * @module
  */
 
-import { InterfaceA, InterfaceB } from './basic.js';
+import { InterfaceA, InterfaceB } from "./basic.js";
 
 export function defaultFunction() {
-  return '';
+	return "";
 }
 
 export { InterfaceA, InterfaceB as RenamedInterfaceB };

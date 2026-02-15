@@ -2,16 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	QueryTool,
-	QueryToolFactory,
-	queryToolFactory,
-} from "#/recipe-engine/tools/query-tool";
-import type {
-	QueryStep,
-	StepContext,
-	QueryExecutionResult,
-} from "#/recipe-engine/types";
+import { QueryTool, QueryToolFactory, queryToolFactory } from "#/recipe-engine/tools/query-tool";
+import type { QueryStep, StepContext, QueryExecutionResult } from "#/recipe-engine/types";
 
 describe("QueryTool", () => {
 	let tmpDir: string;
@@ -26,10 +18,7 @@ describe("QueryTool", () => {
 		}
 	});
 
-	function createContext(
-		projectRoot: string,
-		overrides: Partial<StepContext> = {},
-	): StepContext {
+	function createContext(projectRoot: string, overrides: Partial<StepContext> = {}): StepContext {
 		return {
 			projectRoot,
 			step: {} as any,
@@ -92,10 +81,7 @@ describe("QueryTool", () => {
 					typescript: "^5.0.0",
 				},
 			};
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -128,10 +114,7 @@ describe("QueryTool", () => {
 				name: "test-package",
 				dependencies: { react: "^18.0.0" },
 			};
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -150,10 +133,7 @@ describe("QueryTool", () => {
 
 		it("should check missing path — exists false, value undefined", async () => {
 			const packageJson = { name: "test-package", dependencies: {} };
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -178,10 +158,7 @@ describe("QueryTool", () => {
 					ssl: { enabled: true, cert: "/path/to/cert" },
 				},
 			};
-			writeFileSync(
-				join(tmpDir, "config.json"),
-				JSON.stringify(config, null, 2),
-			);
+			writeFileSync(join(tmpDir, "config.json"), JSON.stringify(config, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -203,10 +180,7 @@ describe("QueryTool", () => {
 
 		it("should export value via result.output", async () => {
 			const packageJson = { name: "test-package", version: "2.0.0" };
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -227,10 +201,7 @@ describe("QueryTool", () => {
 				dependencies: { react: "^18.0.0" },
 				devDependencies: {},
 			};
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -256,10 +227,7 @@ describe("QueryTool", () => {
 				author: "Test Author",
 				license: "MIT",
 			};
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -510,10 +478,7 @@ API_URL=https://api.example.com
 
 		it("should evaluate data.name", async () => {
 			const packageJson = { name: "test-package", version: "1.0.0" };
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -535,10 +500,7 @@ API_URL=https://api.example.com
 				name: "test-package",
 				dependencies: { react: "^18.0.0", vue: "^3.0.0" },
 			};
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -558,10 +520,7 @@ API_URL=https://api.example.com
 			const packageJson = {
 				dependencies: { react: "^18.0.0", vue: "^3.0.0" },
 			};
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -582,10 +541,7 @@ API_URL=https://api.example.com
 				name: "test-package",
 				dependencies: { react: "^18.0.0", vue: "^3.0.0", typescript: "^5.0.0" },
 			};
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -603,10 +559,7 @@ API_URL=https://api.example.com
 
 		it("should evaluate ternary expression: data.dependencies ? true : false", async () => {
 			const packageJson = { name: "test", dependencies: { react: "^18.0.0" } };
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -624,10 +577,7 @@ API_URL=https://api.example.com
 
 		it("should evaluate ternary with string comparison", async () => {
 			const config = { mode: "production" };
-			writeFileSync(
-				join(tmpDir, "config.json"),
-				JSON.stringify(config, null, 2),
-			);
+			writeFileSync(join(tmpDir, "config.json"), JSON.stringify(config, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -662,10 +612,7 @@ API_URL=https://api.example.com
 
 		it("should return status failed for expression that throws at runtime", async () => {
 			const packageJson = { name: "test" };
-			writeFileSync(
-				join(tmpDir, "package.json"),
-				JSON.stringify(packageJson, null, 2),
-			);
+			writeFileSync(join(tmpDir, "package.json"), JSON.stringify(packageJson, null, 2));
 
 			const step: QueryStep = {
 				tool: "query",
@@ -1170,9 +1117,7 @@ API_URL=https://api.example.com
 
 			const vr = await tool.validate(step, context);
 			expect(vr.isValid).toBe(false);
-			expect(vr.errors.some((e: string) => /checks.*expression/i.test(e))).toBe(
-				true,
-			);
+			expect(vr.errors.some((e: string) => /checks.*expression/i.test(e))).toBe(true);
 		});
 
 		it("should fail when a check has no path", async () => {
@@ -1185,9 +1130,7 @@ API_URL=https://api.example.com
 
 			const vr = await tool.validate(step, context);
 			expect(vr.isValid).toBe(false);
-			expect(vr.errors.some((e: string) => /must have.*path/i.test(e))).toBe(
-				true,
-			);
+			expect(vr.errors.some((e: string) => /must have.*path/i.test(e))).toBe(true);
 		});
 
 		it("should fail when format is unsupported", async () => {
@@ -1201,9 +1144,7 @@ API_URL=https://api.example.com
 
 			const vr = await tool.validate(step, context);
 			expect(vr.isValid).toBe(false);
-			expect(vr.errors.some((e: string) => /unsupported format/i.test(e))).toBe(
-				true,
-			);
+			expect(vr.errors.some((e: string) => /unsupported format/i.test(e))).toBe(true);
 		});
 
 		it("should warn when both checks and expression are provided", async () => {

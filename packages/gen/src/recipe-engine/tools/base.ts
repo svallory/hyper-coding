@@ -6,12 +6,7 @@
  */
 
 import createDebug from "debug";
-import {
-	HypergenError,
-	ErrorCode,
-	ErrorHandler,
-	withErrorHandling,
-} from "@hypercli/core";
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
 import { Logger } from "@hypercli/core";
 import type {
 	ToolType,
@@ -223,10 +218,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 	/**
 	 * Validate the step configuration and context
 	 */
-	async validate(
-		step: TStep,
-		context: StepContext,
-	): Promise<ToolValidationResult> {
+	async validate(step: TStep, context: StepContext): Promise<ToolValidationResult> {
 		this.debug("Validating step configuration");
 		const startTime = Date.now();
 
@@ -278,11 +270,10 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 		}
 
 		if (this._isExecuting) {
-			throw ErrorHandler.createError(
-				ErrorCode.INTERNAL_ERROR,
-				"Tool is already executing",
-				{ action: this.name, phase: "execute" },
-			);
+			throw ErrorHandler.createError(ErrorCode.INTERNAL_ERROR, "Tool is already executing", {
+				action: this.name,
+				phase: "execute",
+			});
 		}
 
 		this._isExecuting = true;
@@ -366,14 +357,10 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 			this.addLifecycleEvent("execute", false, {
 				duration: executionTime,
 				retryAttempts: this.metrics.retryAttempts,
-				error:
-					lastError instanceof Error ? lastError.message : String(lastError),
+				error: lastError instanceof Error ? lastError.message : String(lastError),
 			});
 
-			throw this.wrapError(
-				lastError,
-				`Tool execution failed after ${maxRetries + 1} attempts`,
-			);
+			throw this.wrapError(lastError, `Tool execution failed after ${maxRetries + 1} attempts`);
 		} finally {
 			this._isExecuting = false;
 		}
@@ -399,8 +386,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 					this.debug("Cleaning up resource: %s (%s)", id, resource.type);
 					await resource.cleanup();
 				} catch (error) {
-					const errorMessage =
-						error instanceof Error ? error.message : String(error);
+					const errorMessage = error instanceof Error ? error.message : String(error);
 					errors.push(`Failed to cleanup resource '${id}': ${errorMessage}`);
 					this.debug("Resource cleanup failed: %s - %s", id, errorMessage);
 				}
@@ -410,8 +396,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 			try {
 				await this.onCleanup();
 			} catch (error) {
-				const errorMessage =
-					error instanceof Error ? error.message : String(error);
+				const errorMessage = error instanceof Error ? error.message : String(error);
 				errors.push(`Tool cleanup failed: ${errorMessage}`);
 				this.debug("Tool cleanup failed: %s", errorMessage);
 			}
@@ -501,10 +486,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 
 		// Track peak memory usage
 		const memUsage = this.getMemoryUsage();
-		if (
-			!this.metrics.peakMemoryUsage ||
-			memUsage.used > this.metrics.peakMemoryUsage
-		) {
+		if (!this.metrics.peakMemoryUsage || memUsage.used > this.metrics.peakMemoryUsage) {
 			this.metrics.peakMemoryUsage = memUsage.used;
 		}
 	}
@@ -569,10 +551,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 	 * Tool-specific validation logic
 	 * Must be implemented by concrete tool classes
 	 */
-	protected abstract onValidate(
-		step: TStep,
-		context: StepContext,
-	): Promise<ToolValidationResult>;
+	protected abstract onValidate(step: TStep, context: StepContext): Promise<ToolValidationResult>;
 
 	/**
 	 * Tool-specific execution logic
@@ -616,9 +595,8 @@ export interface ToolFactory<TStep extends RecipeStepUnion = RecipeStepUnion> {
 /**
  * Abstract base class for tool factories
  */
-export abstract class BaseToolFactory<
-	TStep extends RecipeStepUnion = RecipeStepUnion,
-> implements ToolFactory<TStep>
+export abstract class BaseToolFactory<TStep extends RecipeStepUnion = RecipeStepUnion>
+	implements ToolFactory<TStep>
 {
 	constructor(protected readonly toolType: ToolType) {}
 

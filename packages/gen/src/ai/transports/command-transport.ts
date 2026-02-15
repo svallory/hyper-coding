@@ -16,11 +16,7 @@ import createDebug from "debug";
 import { PromptAssembler } from "#/ai/prompt-assembler";
 import { ErrorHandler, ErrorCode } from "@hypercli/core";
 import type { AiBlockEntry } from "../ai-collector.js";
-import type {
-	AiTransport,
-	TransportContext,
-	TransportResult,
-} from "./types.js";
+import type { AiTransport, TransportContext, TransportResult } from "./types.js";
 
 const debug = createDebug("hypergen:ai:transport:command");
 
@@ -124,10 +120,7 @@ export class CommandTransport implements AiTransport {
 /**
  * Execute a command, either by substituting {prompt} into args or piping via stdin.
  */
-function executeCommand(
-	commandTemplate: string,
-	prompt: string,
-): Promise<string> {
+function executeCommand(commandTemplate: string, prompt: string): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const usesSubstitution = commandTemplate.includes("{prompt}");
 
@@ -148,11 +141,7 @@ function executeCommand(
 			args = parts.slice(1);
 		}
 
-		debug(
-			"Executing: %s %s",
-			cmd,
-			usesSubstitution ? "(with substitution)" : "(with stdin pipe)",
-		);
+		debug("Executing: %s %s", cmd, usesSubstitution ? "(with substitution)" : "(with stdin pipe)");
 
 		// Strip CLAUDECODE to avoid "nested session" errors inside Claude Code
 		const { CLAUDECODE: _cc, ...cleanEnv } = process.env;
@@ -191,10 +180,7 @@ function executeCommand(
 /**
  * Parse a batched JSON response from a command.
  */
-function parseBatchedResponse(
-	raw: string,
-	expectedKeys: string[],
-): Record<string, string> {
+function parseBatchedResponse(raw: string, expectedKeys: string[]): Record<string, string> {
 	let text = raw.trim();
 
 	// Strip markdown code fences

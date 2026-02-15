@@ -4,10 +4,7 @@
 			"aliases": [],
 			"args": {},
 			"description": "Initialize Hypergen in the current project",
-			"examples": [
-				"<%= config.bin %> init",
-				"<%= config.bin %> init --kit @kit/starlight"
-			],
+			"examples": ["<%= config.bin %> init", "<%= config.bin %> init --kit @kit/starlight"],
 			"flags": {
 				"cwd": {
 					"description": "Working directory",
@@ -730,10 +727,7 @@
 				}
 			},
 			"description": "Update installed kits from their original source",
-			"examples": [
-				"<%= config.bin %> kit update nextjs",
-				"<%= config.bin %> kit update --all"
-			],
+			"examples": ["<%= config.bin %> kit update nextjs", "<%= config.bin %> kit update --all"],
 			"flags": {
 				"cwd": {
 					"description": "Working directory",

@@ -67,9 +67,7 @@ export interface RecipeEngineConfig {
 	stepExecutor?: Partial<import("./step-executor.js").StepExecutorConfig>;
 
 	/** Tool registry configuration */
-	toolRegistry?: Parameters<
-		typeof import("./tools/registry.js").ToolRegistry.getInstance
-	>[0];
+	toolRegistry?: Parameters<typeof import("./tools/registry.js").ToolRegistry.getInstance>[0];
 
 	/** Enable debug logging */
 	enableDebugLogging?: boolean;
@@ -210,9 +208,7 @@ export function checkRecipeEngineHealth(): {
 		stepExecutor: boolean;
 		toolRegistry: boolean;
 	};
-	toolRegistryHealth: ReturnType<
-		typeof import("./tools/index.js").checkRegistryHealth
-	>;
+	toolRegistryHealth: ReturnType<typeof import("./tools/index.js").checkRegistryHealth>;
 } {
 	const issues: string[] = [];
 	let stepExecutorHealthy = true;
@@ -239,9 +235,7 @@ export function checkRecipeEngineHealth(): {
 
 		if (!registryHealth.healthy) {
 			toolRegistryHealthy = false;
-			issues.push(
-				...registryHealth.issues.map((issue) => `Tool Registry: ${issue}`),
-			);
+			issues.push(...registryHealth.issues.map((issue) => `Tool Registry: ${issue}`));
 		}
 
 		return {

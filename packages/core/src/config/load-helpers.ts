@@ -5,9 +5,9 @@
  * Used by HypergenConfigLoader, kit-parser, and cookbook-parser.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * Load helpers from a file path, directory, or object.
@@ -20,9 +20,11 @@ export async function loadHelpers(
 ): Promise<Record<string, Function>> {
 	if (!helpers) return {};
 
-	if (typeof helpers === 'string') {
+	if (typeof helpers === "string") {
 		// Load helpers from file or directory
-		let helpersPath = path.isAbsolute(helpers) ? helpers : path.resolve(baseDir, helpers);
+		let helpersPath = path.isAbsolute(helpers)
+			? helpers
+			: path.resolve(baseDir, helpers);
 
 		try {
 			// Check if path is a directory
@@ -30,7 +32,7 @@ export async function loadHelpers(
 				const stats = fs.statSync(helpersPath);
 				if (stats.isDirectory()) {
 					// Try index.ts, index.js, index.mjs, index.cjs
-					const indexFiles = ['index.ts', 'index.js', 'index.mjs', 'index.cjs'];
+					const indexFiles = ["index.ts", "index.js", "index.mjs", "index.cjs"];
 					let found = false;
 					for (const indexFile of indexFiles) {
 						const indexPath = path.join(helpersPath, indexFile);
@@ -41,7 +43,9 @@ export async function loadHelpers(
 						}
 					}
 					if (!found) {
-						console.warn(`Warning: Could not find index file in helpers directory ${helpersPath}`);
+						console.warn(
+							`Warning: Could not find index file in helpers directory ${helpersPath}`,
+						);
 						return {};
 					}
 				}
@@ -49,7 +53,9 @@ export async function loadHelpers(
 
 			// Check if the resolved file exists
 			if (!fs.existsSync(helpersPath)) {
-				console.warn(`Warning: Could not load helpers from ${helpersPath} (file not found)`);
+				console.warn(
+					`Warning: Could not load helpers from ${helpersPath} (file not found)`,
+				);
 				return {};
 			}
 
@@ -61,10 +67,12 @@ export async function loadHelpers(
 			return { ...loaded };
 		} catch (error) {
 			console.warn(`Warning: Could not load helpers from ${helpersPath}`);
-			console.warn(`  Error: ${error instanceof Error ? error.message : String(error)}`);
+			console.warn(
+				`  Error: ${error instanceof Error ? error.message : String(error)}`,
+			);
 			return {};
 		}
-	} else if (typeof helpers === 'object') {
+	} else if (typeof helpers === "object") {
 		// Use provided helpers object
 		return helpers;
 	}

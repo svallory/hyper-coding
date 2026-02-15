@@ -1,5 +1,5 @@
-import chalk from 'chalk';
-import type { ExtendedLogger } from './types.js';
+import chalk from "chalk";
+import type { ExtendedLogger } from "./types.js";
 
 // chalk 4.1.2 doesn't type template property
 const { yellow, red, green, magenta, gray, blue, template }: any = chalk;

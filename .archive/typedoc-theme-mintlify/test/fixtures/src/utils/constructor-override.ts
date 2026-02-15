@@ -1,15 +1,11 @@
 class LRUCache<T, U, V> {
-  constructor() {}
+	constructor() {}
 }
 
 type CacheFetchContext = {};
 
-export class Cache extends LRUCache<
-  CacheFetchContext,
-  CacheFetchContext,
-  CacheFetchContext
-> {
-  constructor() {
-    super();
-  }
+export class Cache extends LRUCache<CacheFetchContext, CacheFetchContext, CacheFetchContext> {
+	constructor() {
+		super();
+	}
 }

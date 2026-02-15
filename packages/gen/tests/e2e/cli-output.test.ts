@@ -5,14 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execSync } from "child_process";
-import {
-	mkdtempSync,
-	rmSync,
-	writeFileSync,
-	readFileSync,
-	existsSync,
-	mkdirSync,
-} from "fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
@@ -39,10 +32,11 @@ describe.skip("CLI Output E2E — requires @hypercli/cli bin/run.js", () => {
 		let stdout: string;
 		let exitCode = 0;
 		try {
-			stdout = execSync(
-				`node ${CLI_PATH} run ${join(testDir, "test-recipe.yml")}`,
-				{ encoding: "utf8", cwd: testDir, stdio: "pipe" },
-			);
+			stdout = execSync(`node ${CLI_PATH} run ${join(testDir, "test-recipe.yml")}`, {
+				encoding: "utf8",
+				cwd: testDir,
+				stdio: "pipe",
+			});
 		} catch (error: any) {
 			stdout = error.stdout || "";
 			exitCode = error.status || 0;
@@ -66,10 +60,11 @@ describe.skip("CLI Output E2E — requires @hypercli/cli bin/run.js", () => {
 
 		let stdout: string;
 		try {
-			stdout = execSync(
-				`node ${CLI_PATH} run ${join(testDir, "ai-recipe.yml")}`,
-				{ encoding: "utf8", cwd: testDir, stdio: "pipe" },
-			);
+			stdout = execSync(`node ${CLI_PATH} run ${join(testDir, "ai-recipe.yml")}`, {
+				encoding: "utf8",
+				cwd: testDir,
+				stdio: "pipe",
+			});
 		} catch (error: any) {
 			stdout = error.stdout || "";
 		}
@@ -89,10 +84,10 @@ describe.skip("CLI Output E2E — requires @hypercli/cli bin/run.js", () => {
 	it("should not show debug logs in dry run mode", () => {
 		setupMinimalRecipe(testDir);
 
-		const stdout = execSync(
-			`node ${CLI_PATH} run ${join(testDir, "test-recipe.yml")} --dry`,
-			{ encoding: "utf8", cwd: testDir },
-		);
+		const stdout = execSync(`node ${CLI_PATH} run ${join(testDir, "test-recipe.yml")} --dry`, {
+			encoding: "utf8",
+			cwd: testDir,
+		});
 
 		expect(stdout).not.toContain("[CONTEXT]");
 		expect(stdout).not.toContain("[RECIPE-ENGINE]");

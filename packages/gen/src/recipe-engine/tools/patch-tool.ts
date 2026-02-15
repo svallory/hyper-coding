@@ -41,10 +41,7 @@ function detectFormat(filePath: string): PatchStep["format"] {
  * Deep merge source into target, mutating target.
  * Arrays are replaced, not concatenated.
  */
-function deepMerge(
-	target: Record<string, any>,
-	source: Record<string, any>,
-): Record<string, any> {
+function deepMerge(target: Record<string, any>, source: Record<string, any>): Record<string, any> {
 	for (const key of Object.keys(source)) {
 		const srcVal = source[key];
 		const tgtVal = target[key];
@@ -67,10 +64,7 @@ function deepMerge(
 /**
  * Parse file content based on format
  */
-async function parseFile(
-	content: string,
-	format: string,
-): Promise<Record<string, any>> {
+async function parseFile(content: string, format: string): Promise<Record<string, any>> {
 	switch (format) {
 		case "json":
 			return JSON.parse(content);
@@ -130,10 +124,7 @@ export class PatchTool extends Tool<PatchStep> {
 		super("patch", name, options);
 	}
 
-	protected async onValidate(
-		step: PatchStep,
-		context: StepContext,
-	): Promise<ToolValidationResult> {
+	protected async onValidate(step: PatchStep, context: StepContext): Promise<ToolValidationResult> {
 		const errors: string[] = [];
 		const warnings: string[] = [];
 		const suggestions: string[] = [];
@@ -142,26 +133,17 @@ export class PatchTool extends Tool<PatchStep> {
 			errors.push("File path is required");
 		}
 
-		if (
-			!step.merge ||
-			typeof step.merge !== "object" ||
-			Array.isArray(step.merge)
-		) {
+		if (!step.merge || typeof step.merge !== "object" || Array.isArray(step.merge)) {
 			errors.push('"merge" must be a non-null object');
 		}
 
-		const format =
-			step.format || (step.file ? detectFormat(step.file) : undefined);
+		const format = step.format || (step.file ? detectFormat(step.file) : undefined);
 		if (step.file && !format) {
-			errors.push(
-				`Cannot detect format for "${step.file}". Specify "format" explicitly.`,
-			);
+			errors.push(`Cannot detect format for "${step.file}". Specify "format" explicitly.`);
 		}
 
 		if (format && !["json", "yaml", "toml"].includes(format)) {
-			errors.push(
-				`Unsupported format: ${format}. Must be one of: json, yaml, toml`,
-			);
+			errors.push(`Unsupported format: ${format}. Must be one of: json, yaml, toml`);
 		}
 
 		return {
@@ -194,9 +176,7 @@ export class PatchTool extends Tool<PatchStep> {
 			const createIfMissing = step.createIfMissing ?? true;
 
 			if (!format) {
-				throw new Error(
-					`Cannot detect format for "${step.file}". Specify "format" explicitly.`,
-				);
+				throw new Error(`Cannot detect format for "${step.file}". Specify "format" explicitly.`);
 			}
 
 			let existing: Record<string, any> = {};
@@ -211,16 +191,11 @@ export class PatchTool extends Tool<PatchStep> {
 				const dir = path.dirname(filePath);
 				fs.mkdirSync(dir, { recursive: true });
 			} else {
-				throw new Error(
-					`File not found: ${step.file} (createIfMissing is false)`,
-				);
+				throw new Error(`File not found: ${step.file} (createIfMissing is false)`);
 			}
 
 			// Resolve variables in merge data
-			const resolvedMerge = this.resolveVariablesInObject(
-				step.merge,
-				context.variables,
-			);
+			const resolvedMerge = this.resolveVariablesInObject(step.merge, context.variables);
 
 			// Deep merge
 			const merged = deepMerge(existing, resolvedMerge);
@@ -273,16 +248,11 @@ export class PatchTool extends Tool<PatchStep> {
 		}
 	}
 
-	private resolveVariablesInObject(
-		obj: any,
-		variables: Record<string, any>,
-	): any {
+	private resolveVariablesInObject(obj: any, variables: Record<string, any>): any {
 		if (typeof obj === "string") {
 			return obj.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, key) => {
 				const trimmed = key.trim();
-				const value = trimmed
-					.split(".")
-					.reduce((o: any, k: string) => o?.[k], variables);
+				const value = trimmed.split(".").reduce((o: any, k: string) => o?.[k], variables);
 				return value !== undefined ? String(value) : `{{${trimmed}}}`;
 			});
 		}
@@ -301,10 +271,7 @@ export class PatchTool extends Tool<PatchStep> {
 }
 
 export class PatchToolFactory {
-	create(
-		name: string = "patch-tool",
-		options: Record<string, any> = {},
-	): PatchTool {
+	create(name: string = "patch-tool", options: Record<string, any> = {}): PatchTool {
 		return new PatchTool(name, options);
 	}
 

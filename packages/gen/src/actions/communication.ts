@@ -90,10 +90,7 @@ export class ActionCommunicationManager extends EventEmitter {
 		};
 
 		this.initializeChannels();
-		debug(
-			"Communication manager initialized with %d channels",
-			this.store.channels.size,
-		);
+		debug("Communication manager initialized with %d channels", this.store.channels.size);
 	}
 
 	/**
@@ -178,10 +175,7 @@ export class ActionCommunicationManager extends EventEmitter {
 	/**
 	 * Complete an action
 	 */
-	completeAction(
-		actionId: string,
-		result: { filesCreated?: string[]; message?: string },
-	): void {
+	completeAction(actionId: string, result: { filesCreated?: string[]; message?: string }): void {
 		debug("Completing action: %s", actionId);
 
 		const state = this.store.actionStates.get(actionId);
@@ -195,8 +189,7 @@ export class ActionCommunicationManager extends EventEmitter {
 
 		state.status = "completed";
 		state.metadata.endTime = new Date();
-		state.metadata.duration =
-			state.metadata.endTime.getTime() - state.metadata.startTime.getTime();
+		state.metadata.duration = state.metadata.endTime.getTime() - state.metadata.startTime.getTime();
 
 		if (result.filesCreated) {
 			state.metadata.filesCreated = result.filesCreated;
@@ -232,8 +225,7 @@ export class ActionCommunicationManager extends EventEmitter {
 		const errorMessage = error instanceof Error ? error.message : error;
 		state.status = "failed";
 		state.metadata.endTime = new Date();
-		state.metadata.duration =
-			state.metadata.endTime.getTime() - state.metadata.startTime.getTime();
+		state.metadata.duration = state.metadata.endTime.getTime() - state.metadata.startTime.getTime();
 		state.metadata.errors = state.metadata.errors || [];
 		state.metadata.errors.push(errorMessage);
 
@@ -387,9 +379,7 @@ export class ActionCommunicationManager extends EventEmitter {
 	 * Get actions by status
 	 */
 	getActionsByStatus(status: ActionState["status"]): ActionState[] {
-		return Array.from(this.store.actionStates.values()).filter(
-			(state) => state.status === status,
-		);
+		return Array.from(this.store.actionStates.values()).filter((state) => state.status === status);
 	}
 
 	/**
@@ -417,8 +407,7 @@ export class ActionCommunicationManager extends EventEmitter {
 			}) => {
 				if (
 					event.actionId === actionId &&
-					(event.state.status === "completed" ||
-						event.state.status === "failed")
+					(event.state.status === "completed" || event.state.status === "failed")
 				) {
 					if (timeoutId) clearTimeout(timeoutId);
 					this.off("action:state-updated", handleStateUpdate);
@@ -551,8 +540,7 @@ export class ActionCommunicationManager extends EventEmitter {
 				if (filter.type && msg.type !== filter.type) return false;
 				if (filter.source && msg.source !== filter.source) return false;
 				if (filter.target && msg.target !== filter.target) return false;
-				if (filter.correlationId && msg.correlationId !== filter.correlationId)
-					return false;
+				if (filter.correlationId && msg.correlationId !== filter.correlationId) return false;
 				if (filter.since && msg.timestamp < filter.since) return false;
 				return true;
 			});
@@ -592,9 +580,7 @@ export class ActionCommunicationManager extends EventEmitter {
 		const states = Array.from(this.store.actionStates.values());
 
 		return {
-			activeActions: states.filter(
-				(s) => s.status === "running" || s.status === "paused",
-			).length,
+			activeActions: states.filter((s) => s.status === "running" || s.status === "paused").length,
 			completedActions: states.filter((s) => s.status === "completed").length,
 			failedActions: states.filter((s) => s.status === "failed").length,
 			totalMessages: this.store.eventHistory.length,
@@ -660,9 +646,7 @@ export class ActionCommunicationManager extends EventEmitter {
 	 */
 	private trimEventHistory(): void {
 		if (this.store.eventHistory.length > this.config.maxMessageHistory) {
-			this.store.eventHistory = this.store.eventHistory.slice(
-				-this.config.maxMessageHistory,
-			);
+			this.store.eventHistory = this.store.eventHistory.slice(-this.config.maxMessageHistory);
 		}
 	}
 
@@ -709,9 +693,7 @@ export function getCommunicationManager(
 /**
  * Set the global communication manager
  */
-export function setCommunicationManager(
-	manager: ActionCommunicationManager,
-): void {
+export function setCommunicationManager(manager: ActionCommunicationManager): void {
 	globalCommunicationManager = manager;
 }
 

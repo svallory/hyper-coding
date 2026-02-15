@@ -1,7 +1,7 @@
 {
-  "mainFields": "[\"id\", \"name\", \"email\"]",
-  "fields": "id, name, email, createdAt",
-  "relations": "hasMany: [Post], belongsTo: [Organization]",
-  "repository": "class UserRepository {\n  async findById(id: string) { ... }\n}",
-  "migration": "CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL);"
+	"mainFields": "[\"id\", \"name\", \"email\"]",
+	"fields": "id, name, email, createdAt",
+	"relations": "hasMany: [Post], belongsTo: [Organization]",
+	"repository": "class UserRepository {\n  async findById(id: string) { ... }\n}",
+	"migration": "CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL);"
 }

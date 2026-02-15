@@ -14,11 +14,7 @@
 
 import createDebug from "debug";
 import { ContextCollector, type ContextBundle } from "./context-collector.js";
-import type {
-	AIContextConfig,
-	AIExample,
-	AIGuardrailConfig,
-} from "./ai-config.js";
+import type { AIContextConfig, AIExample, AIGuardrailConfig } from "./ai-config.js";
 import type { StepResult } from "#/recipe-engine/types";
 
 const debug = createDebug("hypergen:ai:prompt-pipeline");
@@ -87,8 +83,7 @@ export class PromptPipeline {
 		const system = this.assembleSystemPrompt(options);
 		const user = this.assembleUserPrompt(options, contextBundle);
 
-		const estimatedTokens =
-			Math.ceil(system.length / 4) + Math.ceil(user.length / 4);
+		const estimatedTokens = Math.ceil(system.length / 4) + Math.ceil(user.length / 4);
 		debug(
 			"Prompt assembled: system=%d chars, user=%d chars, ~%d tokens",
 			system.length,
@@ -99,10 +94,7 @@ export class PromptPipeline {
 		// Stage 5: Pre-flight check
 		// Context window limits are model-specific; we log a warning if suspiciously large
 		if (estimatedTokens > 100_000) {
-			debug(
-				"Warning: estimated prompt size (%d tokens) is very large",
-				estimatedTokens,
-			);
+			debug("Warning: estimated prompt size (%d tokens) is very large", estimatedTokens);
 		}
 
 		return { system, user, estimatedTokens, contextBundle };
@@ -132,18 +124,11 @@ export class PromptPipeline {
 		return parts.join("\n\n");
 	}
 
-	private assembleUserPrompt(
-		options: PromptPipelineOptions,
-		context: ContextBundle,
-	): string {
+	private assembleUserPrompt(options: PromptPipelineOptions, context: ContextBundle): string {
 		const parts: string[] = [];
 
 		// Context section
-		if (
-			context.configs.size > 0 ||
-			context.files.size > 0 ||
-			context.stepOutputs.size > 0
-		) {
+		if (context.configs.size > 0 || context.files.size > 0 || context.stepOutputs.size > 0) {
 			parts.push("## Context\n");
 
 			for (const [name, content] of context.configs) {
@@ -151,9 +136,7 @@ export class PromptPipeline {
 			}
 
 			for (const [name, content] of context.stepOutputs) {
-				parts.push(
-					`### Output from step "${name}"\n\`\`\`\n${content}\n\`\`\`\n`,
-				);
+				parts.push(`### Output from step "${name}"\n\`\`\`\n${content}\n\`\`\`\n`);
 			}
 
 			for (const [filePath, content] of context.files) {
@@ -185,16 +168,12 @@ export class PromptPipeline {
 		return parts.join("\n");
 	}
 
-	private buildGuardrailInstructions(
-		guardrails: AIGuardrailConfig,
-	): string | null {
+	private buildGuardrailInstructions(guardrails: AIGuardrailConfig): string | null {
 		const rules: string[] = [];
 
 		if (guardrails.validateSyntax) {
 			const lang =
-				guardrails.validateSyntax === true
-					? "the target language"
-					: guardrails.validateSyntax;
+				guardrails.validateSyntax === true ? "the target language" : guardrails.validateSyntax;
 			rules.push(`- Output MUST be valid ${lang} syntax.`);
 		}
 
@@ -205,21 +184,15 @@ export class PromptPipeline {
 		}
 
 		if (guardrails.blockedImports && guardrails.blockedImports.length > 0) {
-			rules.push(
-				`- Do NOT import from: ${guardrails.blockedImports.join(", ")}.`,
-			);
+			rules.push(`- Do NOT import from: ${guardrails.blockedImports.join(", ")}.`);
 		}
 
 		if (guardrails.requireKnownImports) {
-			rules.push(
-				"- Only import packages that exist in the project's package.json.",
-			);
+			rules.push("- Only import packages that exist in the project's package.json.");
 		}
 
 		if (guardrails.maxOutputLength) {
-			rules.push(
-				`- Output must be at most ${guardrails.maxOutputLength} characters.`,
-			);
+			rules.push(`- Output must be at most ${guardrails.maxOutputLength} characters.`);
 		}
 
 		if (rules.length === 0) return null;

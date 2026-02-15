@@ -3,11 +3,7 @@
 	"version": "0.0.0",
 	"type": "module",
 	"description": "HyperDev CLI",
-	"keywords": [
-		"hyperdev",
-		"hypergen",
-		"cli"
-	],
+	"keywords": ["hyperdev", "hypergen", "cli"],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"engines": {
@@ -30,12 +26,7 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": [
-		"dist",
-		"bin",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "bin", "README.md", "LICENSE"],
 	"scripts": {
 		"build": "tsup",
 		"test": "vitest run",

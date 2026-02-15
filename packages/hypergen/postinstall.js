@@ -4,9 +4,7 @@
 console.log("");
 console.log("\x1b[31m\x1b[1m⚠️  DEPRECATION NOTICE\x1b[0m");
 console.log("");
-console.log(
-	"The \x1b[36mhypergen\x1b[0m package has been deprecated and split into:",
-);
+console.log("The \x1b[36mhypergen\x1b[0m package has been deprecated and split into:");
 console.log("");
 console.log("  • \x1b[32m@hypercli/cli\x1b[0m - Main CLI (install this)");
 console.log("  • \x1b[33m@hypercli/core\x1b[0m - Core types and config");
@@ -23,9 +21,7 @@ console.log("");
 console.log("\x1b[36m  bun remove hypergen\x1b[0m");
 console.log("\x1b[32m  bun add -g @hypercli/cli\x1b[0m");
 console.log("");
-console.log(
-	"The new CLI uses \x1b[32mhyper\x1b[0m instead of \x1b[31mhypergen\x1b[0m:",
-);
+console.log("The new CLI uses \x1b[32mhyper\x1b[0m instead of \x1b[31mhypergen\x1b[0m:");
 console.log("");
 console.log(
 	"  \x1b[31mhypergen\x1b[0m run nextjs crud list  →  \x1b[32mhyper\x1b[0m run nextjs crud list",

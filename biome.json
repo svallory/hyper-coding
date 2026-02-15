@@ -1,21 +1,22 @@
 {
 	"files": {
-		"ignore": ["dist", "node_modules", ".moon"]
+		"ignore": ["packages/hypergen/scripts/standalone.js"]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 100
 	},
 	"linter": {
 		"enabled": true,
 		"rules": {
 			"suspicious": {
 				"noExplicitAny": "off",
-				"noImplicitAnyLet": "off",
-				"noUnsafeDeclarationMerging": "off"
+				"noImplicitAnyLet": "off"
 			},
 			"complexity": {
 				"noBannedTypes": "off",
 				"noStaticOnlyClass": "off"
-			},
-			"style": {
-				"noNonNullAssertion": "off"
 			}
 		}
 	}

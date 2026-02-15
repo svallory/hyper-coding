@@ -1,43 +1,43 @@
 // @ts-check
 
-const baseOptions = require('../typedoc.cjs');
+const baseOptions = require("../typedoc.cjs");
 
 const commonOptions = {
-  entryPoints: ['../src/entryfiles/*'],
-  plugin: ['../../../dist/index.js', '../custom-plugins/navigation-plugin.mjs'],
-  entryFileName: 'index.md',
-  entryModule: 'entry-module',
-  disableSources: true,
-  fileExtension: '.mdx',
-  name: '@scope/entryfile',
-  readme: 'none',
+	entryPoints: ["../src/entryfiles/*"],
+	plugin: ["../../../dist/index.js", "../custom-plugins/navigation-plugin.mjs"],
+	entryFileName: "index.md",
+	entryModule: "entry-module",
+	disableSources: true,
+	fileExtension: ".mdx",
+	name: "@scope/entryfile",
+	readme: "none",
 };
 
 const opts2 = {
-  excludeScopesInPaths: true,
-  githubPages: false,
+	excludeScopesInPaths: true,
+	githubPages: false,
 };
 
 /** @type {import('typedoc').TypeDocOptions} */
 module.exports = {
-  ...baseOptions,
-  ...commonOptions,
-  outputs: [
-    {
-      name: 'markdown',
-      path: '../out/md/entryfiles/members/opts-2',
-      options: {
-        ...opts2,
-      },
-    },
+	...baseOptions,
+	...commonOptions,
+	outputs: [
+		{
+			name: "markdown",
+			path: "../out/md/entryfiles/members/opts-2",
+			options: {
+				...opts2,
+			},
+		},
 
-    {
-      name: 'markdown',
-      path: '../out/md/entryfiles/modules/opts-2',
-      options: {
-        router: 'module',
-        ...opts2,
-      },
-    },
-  ],
+		{
+			name: "markdown",
+			path: "../out/md/entryfiles/modules/opts-2",
+			options: {
+				router: "module",
+				...opts2,
+			},
+		},
+	],
 };

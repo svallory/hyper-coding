@@ -20,10 +20,7 @@ import { ErrorHandler, ErrorCode } from "@hypercli/core";
 const debug = createDebug("hypergen:v8:recipe:tool:parallel");
 
 export class ParallelTool extends Tool<ParallelStep> {
-	constructor(
-		name: string = "parallel-tool",
-		options: Record<string, any> = {},
-	) {
+	constructor(name: string = "parallel-tool", options: Record<string, any> = {}) {
 		super("parallel", name, options);
 	}
 
@@ -62,11 +59,7 @@ export class ParallelTool extends Tool<ParallelStep> {
 		options?: StepExecutionOptions,
 	): Promise<StepResult> {
 		const startTime = new Date();
-		this.debug(
-			"Executing parallel step: %s with %d steps",
-			step.name,
-			step.steps.length,
-		);
+		this.debug("Executing parallel step: %s with %d steps", step.name, step.steps.length);
 
 		try {
 			const executor = new StepExecutor(undefined, {
@@ -86,11 +79,7 @@ export class ParallelTool extends Tool<ParallelStep> {
 				continueOnError: step.continueOnError ?? options?.continueOnError,
 			};
 
-			const results = await executor.executeSteps(
-				step.steps,
-				context,
-				executionOptions,
-			);
+			const results = await executor.executeSteps(step.steps, context, executionOptions);
 
 			const failed = results.filter((r) => r.status === "failed");
 
@@ -168,10 +157,7 @@ export class ParallelTool extends Tool<ParallelStep> {
 }
 
 export class ParallelToolFactory {
-	create(
-		name: string = "parallel-tool",
-		options: Record<string, any> = {},
-	): ParallelTool {
+	create(name: string = "parallel-tool", options: Record<string, any> = {}): ParallelTool {
 		return new ParallelTool(name, options);
 	}
 

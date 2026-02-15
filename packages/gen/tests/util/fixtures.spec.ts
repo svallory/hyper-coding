@@ -70,11 +70,9 @@ describe("fixture helpers", () => {
 
 	describe("withTempFixtures()", () => {
 		it("should create and cleanup temporary fixtures", async () => {
-			const { path: tempPath, cleanup } = await withTempFixtures(
-				async (dir) => {
-					await fs.writeFile(path.join(dir, "test.txt"), "hello");
-				},
-			);
+			const { path: tempPath, cleanup } = await withTempFixtures(async (dir) => {
+				await fs.writeFile(path.join(dir, "test.txt"), "hello");
+			});
 
 			// Verify temp directory exists and has our file
 			expect(fs.existsSync(tempPath)).toBe(true);
@@ -98,13 +96,11 @@ describe("fixture helpers", () => {
 
 	describe("copyFixture()", () => {
 		it("should copy fixtures to destination", async () => {
-			const { path: tempPath, cleanup } = await withTempFixtures(
-				async (dir) => {
-					await copyFixture("empty.jig.t", path.join(dir, "copied.jig.t"));
+			const { path: tempPath, cleanup } = await withTempFixtures(async (dir) => {
+				await copyFixture("empty.jig.t", path.join(dir, "copied.jig.t"));
 
-					expect(fs.existsSync(path.join(dir, "copied.jig.t"))).toBe(true);
-				},
-			);
+				expect(fs.existsSync(path.join(dir, "copied.jig.t"))).toBe(true);
+			});
 
 			cleanup();
 		});

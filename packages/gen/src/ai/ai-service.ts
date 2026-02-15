@@ -11,10 +11,7 @@ import createDebug from "debug";
 import { ErrorHandler, ErrorCode } from "@hypercli/core";
 import { ModelRouter } from "./model-router.js";
 import { CostTracker } from "./cost-tracker.js";
-import {
-	PromptPipeline,
-	type PromptPipelineOptions,
-} from "./prompt-pipeline.js";
+import { PromptPipeline, type PromptPipelineOptions } from "./prompt-pipeline.js";
 import { validateOutput, buildValidationFeedback } from "./output-validator.js";
 import type {
 	AiServiceConfig,
@@ -102,10 +99,7 @@ export class AiService {
 		this.costTracker.checkBudget();
 
 		// Resolve model
-		const resolved = await this.modelRouter.resolve(
-			options.provider,
-			options.model,
-		);
+		const resolved = await this.modelRouter.resolve(options.provider, options.model);
 
 		// Merge guardrails: config defaults + step overrides
 		const guardrails: AIGuardrailConfig = {
@@ -168,18 +162,10 @@ export class AiService {
 				totalInputTokens += inputTokens;
 				totalOutputTokens += outputTokens;
 
-				debug(
-					"AI response: %d input tokens, %d output tokens",
-					inputTokens,
-					outputTokens,
-				);
+				debug("AI response: %d input tokens, %d output tokens", inputTokens, outputTokens);
 
 				// Validate output
-				const validation = await validateOutput(
-					lastOutput,
-					guardrails,
-					options.projectRoot,
-				);
+				const validation = await validateOutput(lastOutput, guardrails, options.projectRoot);
 				lastValidation = validation;
 
 				if (validation.passed) {

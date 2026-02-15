@@ -57,8 +57,7 @@ export default class RecipeInfo extends BaseCommand<typeof RecipeInfo> {
 						const config = varConfig as unknown as Record<string, unknown>;
 						if (config.type) line += ` (${config.type})`;
 						if (config.required) line += " *required*";
-						if (config.default !== undefined)
-							line += ` [default: ${config.default}]`;
+						if (config.default !== undefined) line += ` [default: ${config.default}]`;
 						if (config.description) line += ` - ${config.description}`;
 					}
 					this.log(line);

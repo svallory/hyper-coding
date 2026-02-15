@@ -18,11 +18,7 @@ import {
 	InstallToolFactory,
 	installToolFactory,
 } from "#/recipe-engine/tools/install-tool";
-import type {
-	InstallStep,
-	StepContext,
-	InstallExecutionResult,
-} from "#/recipe-engine/types";
+import type { InstallStep, StepContext, InstallExecutionResult } from "#/recipe-engine/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,10 +27,7 @@ import type {
 /**
  * Create a minimal StepContext for testing
  */
-function createContext(
-	projectRoot: string,
-	overrides: Partial<StepContext> = {},
-): StepContext {
+function createContext(projectRoot: string, overrides: Partial<StepContext> = {}): StepContext {
 	return {
 		projectRoot,
 		step: {} as any,
@@ -141,9 +134,7 @@ describe("InstallTool", () => {
 			const result = await tool.validate(step, context);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((e) => e.includes("Invalid package name")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("Invalid package name"))).toBe(true);
 		});
 
 		it("should fail when a package name is whitespace only", async () => {
@@ -153,9 +144,7 @@ describe("InstallTool", () => {
 			const result = await tool.validate(step, context);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((e) => e.includes("Invalid package name")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("Invalid package name"))).toBe(true);
 		});
 
 		it("should fail when a package is not a string", async () => {
@@ -165,9 +154,7 @@ describe("InstallTool", () => {
 			const result = await tool.validate(step, context);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((e) => e.includes("Invalid package name")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("Invalid package name"))).toBe(true);
 		});
 
 		it("should fail when a package is null", async () => {
@@ -177,9 +164,7 @@ describe("InstallTool", () => {
 			const result = await tool.validate(step, context);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((e) => e.includes("Invalid package name")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("Invalid package name"))).toBe(true);
 		});
 
 		it("should pass with a single valid package", async () => {
@@ -503,9 +488,7 @@ describe("InstallTool", () => {
 			const result = await tool.execute(step, context, { dryRun: true });
 
 			const toolResult = result.toolResult as InstallExecutionResult;
-			expect(toolResult.command).toBe(
-				"bun add @tanstack/react-query @types/node",
-			);
+			expect(toolResult.command).toBe("bun add @tanstack/react-query @types/node");
 		});
 
 		it("should handle a single package", async () => {
@@ -621,9 +604,7 @@ describe("InstallTool", () => {
 			const result = await tool.execute(step, context, { dryRun: true });
 
 			const toolResult = result.toolResult as InstallExecutionResult;
-			expect(toolResult.command).toBe(
-				"bun add --dev vitest @types/node prettier",
-			);
+			expect(toolResult.command).toBe("bun add --dev vitest @types/node prettier");
 		});
 	});
 
@@ -859,9 +840,7 @@ describe("InstallTool", () => {
 			const result = await tool.execute(step, context, { dryRun: true });
 
 			const toolResult = result.toolResult as InstallExecutionResult;
-			expect(toolResult.command).toBe(
-				"bun add zod@3.22.0 react@^18.0.0 typescript@~5.3.0",
-			);
+			expect(toolResult.command).toBe("bun add zod@3.22.0 react@^18.0.0 typescript@~5.3.0");
 		});
 
 		it("should handle packages with tag specifiers", async () => {
@@ -874,9 +853,7 @@ describe("InstallTool", () => {
 			const result = await tool.execute(step, context, { dryRun: true });
 
 			const toolResult = result.toolResult as InstallExecutionResult;
-			expect(toolResult.command).toBe(
-				"pnpm add next@canary react@experimental",
-			);
+			expect(toolResult.command).toBe("pnpm add next@canary react@experimental");
 		});
 
 		it("should handle git URL packages", async () => {
@@ -924,9 +901,7 @@ describe("InstallTool", () => {
 			const result = await tool.execute(step, context, { dryRun: true });
 
 			const toolResult = result.toolResult as InstallExecutionResult;
-			expect(toolResult.command).toBe(
-				"npm install zod react @types/node typescript",
-			);
+			expect(toolResult.command).toBe("npm install zod react @types/node typescript");
 		});
 	});
 });

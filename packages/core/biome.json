@@ -1,5 +1,22 @@
 {
-  "linter": {
-    "enabled": true
-  }
+	"files": {
+		"ignore": ["dist", "node_modules", ".moon"]
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"suspicious": {
+				"noExplicitAny": "off",
+				"noImplicitAnyLet": "off",
+				"noUnsafeDeclarationMerging": "off"
+			},
+			"complexity": {
+				"noBannedTypes": "off",
+				"noStaticOnlyClass": "off"
+			},
+			"style": {
+				"noNonNullAssertion": "off"
+			}
+		}
+	}
 }

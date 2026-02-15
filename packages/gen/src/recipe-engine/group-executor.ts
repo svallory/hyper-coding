@@ -162,12 +162,7 @@ export class GroupExecutor {
 				const provider = providesMap.get(varName);
 				if (provider && provider !== entry.name) {
 					depGraph.get(entry.name)!.add(provider);
-					debug(
-						"Dependency: %s depends on %s (via %s)",
-						entry.name,
-						provider,
-						varName,
-					);
+					debug("Dependency: %s depends on %s (via %s)", entry.name, provider, varName);
 				}
 			}
 		}
@@ -237,11 +232,7 @@ export class GroupExecutor {
 		await this.loadGroupConfigs(group);
 
 		// Build dependency graph
-		const {
-			depGraph,
-			providesMap,
-			errors: graphErrors,
-		} = this.buildDependencyGraph(group.recipes);
+		const { depGraph, providesMap, errors: graphErrors } = this.buildDependencyGraph(group.recipes);
 		errors.push(...graphErrors);
 
 		if (graphErrors.length > 0) {
@@ -256,10 +247,7 @@ export class GroupExecutor {
 		}
 
 		// Compute external params (required by group but not provided by any sibling)
-		const externalParams = this.computeExternalParams(
-			group.recipes,
-			providesMap,
-		);
+		const externalParams = this.computeExternalParams(group.recipes, providesMap);
 
 		// Topological sort
 		const batches = this.topologicalSort(depGraph);
@@ -291,8 +279,7 @@ export class GroupExecutor {
 
 					return { name: recipeName, result };
 				} catch (error) {
-					const errorMsg =
-						error instanceof Error ? error.message : String(error);
+					const errorMsg = error instanceof Error ? error.message : String(error);
 					errors.push(`Recipe '${recipeName}' failed: ${errorMsg}`);
 					return {
 						name: recipeName,
@@ -337,8 +324,7 @@ export class GroupExecutor {
 		}
 
 		return {
-			success:
-				errors.length === 0 && recipeResults.every((r) => r.result.success),
+			success: errors.length === 0 && recipeResults.every((r) => r.result.success),
 			recipeResults,
 			providedValues: accumulatedVars,
 			duration: Date.now() - startTime,

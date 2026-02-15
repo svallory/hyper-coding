@@ -40,10 +40,10 @@ tasks:
     outputs:
       - "dist"
 
-  # Format with biome
+  # Format check with biome check
   format:
     description: Check code formatting with biome
-    command: "biome format . --check"
+    command: "biome check ."
     inputs:
       - "@globs(sources)"
       - "@globs(tests)"

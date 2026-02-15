@@ -334,10 +334,7 @@ describe("Cross-Action Communication", () => {
 
 			communicationManager.subscribeToChannel("test-notifications", "action-1");
 			communicationManager.subscribeToChannel("test-notifications", "action-2");
-			communicationManager.unsubscribeFromChannel(
-				"test-notifications",
-				"action-1",
-			);
+			communicationManager.unsubscribeFromChannel("test-notifications", "action-1");
 
 			// Should only have action-2 subscribed now
 			// This would require exposing channel state for verification
@@ -380,10 +377,7 @@ describe("Cross-Action Communication", () => {
 
 		it("should handle invalid channel operations", () => {
 			expect(() => {
-				communicationManager.subscribeToChannel(
-					"non-existent-channel",
-					"action-1",
-				);
+				communicationManager.subscribeToChannel("non-existent-channel", "action-1");
 			}).toThrow("Channel not found");
 		});
 	});
@@ -457,11 +451,7 @@ describe("Real-world Communication Scenarios", () => {
 		manager.registerAction("generate-component", "create-component", {
 			name: componentName,
 		});
-		manager.setSharedData(
-			"component-name",
-			componentName,
-			"generate-component",
-		);
+		manager.setSharedData("component-name", componentName, "generate-component");
 
 		// Simulate component generation
 		setTimeout(() => {
@@ -478,10 +468,7 @@ describe("Real-world Communication Scenarios", () => {
 		manager.registerAction("generate-test", "create-test", { componentName });
 
 		// Wait for component generation to complete
-		const componentState = await manager.waitForAction(
-			"generate-component",
-			1000,
-		);
+		const componentState = await manager.waitForAction("generate-component", 1000);
 		expect(componentState.status).toBe("completed");
 
 		// Now generate test

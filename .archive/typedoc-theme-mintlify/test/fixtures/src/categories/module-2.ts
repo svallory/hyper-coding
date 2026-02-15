@@ -29,10 +29,10 @@ export interface SomeInterface {}
  * @category Category 1
  */
 export namespace NamespaceCategoryOne {
-  /**
-   * @category NamespaceCategoryOne Category 1
-   */
-  export interface NamespaceInterface {}
+	/**
+	 * @category NamespaceCategoryOne Category 1
+	 */
+	export interface NamespaceInterface {}
 }
 
 /**
@@ -53,7 +53,7 @@ export interface SomeInterface2 {}
 export enum SomeEnum {}
 
 export namespace NamespaceNoCategory {
-  export interface NamespaceInterface {}
+	export interface NamespaceInterface {}
 }
 
 /**

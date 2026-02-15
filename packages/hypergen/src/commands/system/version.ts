@@ -2,39 +2,39 @@
  * System Version command - Show version information
  */
 
-import { BaseCommand } from '#/lib/base-command'
-import { outputFlags } from '#/lib/flags'
+import { BaseCommand } from "#/lib/base-command";
+import { outputFlags } from "#/lib/flags";
 
 export default class SystemVersion extends BaseCommand<typeof SystemVersion> {
-  static description = 'Show hypergen version information'
+	static description = "Show hypergen version information";
 
-  static examples = [
-    '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --json',
-  ]
+	static examples = [
+		"<%= config.bin %> <%= command.id %>",
+		"<%= config.bin %> <%= command.id %> --json",
+	];
 
-  static flags = {
-    ...outputFlags,
-  }
+	static flags = {
+		...outputFlags,
+	};
 
-  async run(): Promise<void> {
-    const { flags } = await this.parse(SystemVersion)
+	async run(): Promise<void> {
+		const { flags } = await this.parse(SystemVersion);
 
-    const versionInfo = {
-      name: 'hypergen',
-      version: this.config.version,
-      node: process.version,
-      platform: process.platform,
-      arch: process.arch,
-    }
+		const versionInfo = {
+			name: "hypergen",
+			version: this.config.version,
+			node: process.version,
+			platform: process.platform,
+			arch: process.arch,
+		};
 
-    if (flags.json) {
-      this.log(JSON.stringify(versionInfo, null, 2))
-      return
-    }
+		if (flags.json) {
+			this.log(JSON.stringify(versionInfo, null, 2));
+			return;
+		}
 
-    this.log(`hypergen v${versionInfo.version}`)
-    this.log(`Node.js ${versionInfo.node}`)
-    this.log(`${versionInfo.platform}-${versionInfo.arch}`)
-  }
+		this.log(`hypergen v${versionInfo.version}`);
+		this.log(`Node.js ${versionInfo.node}`);
+		this.log(`${versionInfo.platform}-${versionInfo.arch}`);
+	}
 }

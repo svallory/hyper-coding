@@ -19,10 +19,7 @@ import { renderTemplate as jigRenderTemplate } from "#/template-engines/jig-engi
 import { Logger } from "@hypercli/core";
 import { performInteractivePrompting } from "#/prompts/interactive-prompts";
 import { AiCollector } from "#/ai/ai-collector";
-import {
-	AiVariableResolver,
-	type UnresolvedVariable,
-} from "#/ai/ai-variable-resolver";
+import { AiVariableResolver, type UnresolvedVariable } from "#/ai/ai-variable-resolver";
 import { resolveTransport } from "#/ai/transports/resolve-transport";
 import type { AiServiceConfig } from "#/ai/ai-config";
 import type {
@@ -274,10 +271,7 @@ export class RecipeEngine extends EventEmitter {
 	private executionCounter = 0;
 
 	// Caching
-	private readonly recipeCache = new Map<
-		string,
-		{ recipe: RecipeConfig; timestamp: number }
-	>();
+	private readonly recipeCache = new Map<string, { recipe: RecipeConfig; timestamp: number }>();
 
 	// Timer for cache cleanup
 	private cleanupIntervalId: NodeJS.Timeout | null = null;
@@ -293,10 +287,7 @@ export class RecipeEngine extends EventEmitter {
 		this.toolRegistry = getToolRegistry();
 
 		// Initialize step executor
-		this.stepExecutor = new StepExecutor(
-			this.toolRegistry,
-			this.config.stepExecutor,
-		);
+		this.stepExecutor = new StepExecutor(this.toolRegistry, this.config.stepExecutor);
 
 		this.debug("Recipe engine initialized with config: %o", {
 			workingDir: this.config.workingDir,
@@ -312,30 +303,14 @@ export class RecipeEngine extends EventEmitter {
 		}
 
 		// Forward step executor events
-		this.stepExecutor.on("execution:started", (data) =>
-			this.emit("execution:started", data),
-		);
-		this.stepExecutor.on("execution:completed", (data) =>
-			this.emit("execution:completed", data),
-		);
-		this.stepExecutor.on("execution:failed", (data) =>
-			this.emit("execution:failed", data),
-		);
-		this.stepExecutor.on("step:started", (data) =>
-			this.emit("step:started", data),
-		);
-		this.stepExecutor.on("step:completed", (data) =>
-			this.emit("step:completed", data),
-		);
-		this.stepExecutor.on("step:failed", (data) =>
-			this.emit("step:failed", data),
-		);
-		this.stepExecutor.on("phase:started", (data) =>
-			this.emit("phase:started", data),
-		);
-		this.stepExecutor.on("phase:completed", (data) =>
-			this.emit("phase:completed", data),
-		);
+		this.stepExecutor.on("execution:started", (data) => this.emit("execution:started", data));
+		this.stepExecutor.on("execution:completed", (data) => this.emit("execution:completed", data));
+		this.stepExecutor.on("execution:failed", (data) => this.emit("execution:failed", data));
+		this.stepExecutor.on("step:started", (data) => this.emit("step:started", data));
+		this.stepExecutor.on("step:completed", (data) => this.emit("step:completed", data));
+		this.stepExecutor.on("step:failed", (data) => this.emit("step:failed", data));
+		this.stepExecutor.on("phase:started", (data) => this.emit("phase:started", data));
+		this.stepExecutor.on("phase:completed", (data) => this.emit("phase:completed", data));
 
 		// Start cache cleanup if enabled
 		if (this.config.cache.enabled) {
@@ -357,11 +332,7 @@ export class RecipeEngine extends EventEmitter {
 		const executionId = this.generateExecutionId();
 		const startTime = Date.now();
 
-		this.debug(
-			"Starting recipe execution [%s] from source: %o",
-			executionId,
-			source,
-		);
+		this.debug("Starting recipe execution [%s] from source: %o", executionId, source);
 		this.emit("recipe:started", { executionId, source });
 
 		try {
@@ -383,20 +354,15 @@ export class RecipeEngine extends EventEmitter {
 			this.debug("Recipe loaded and validated: %s", recipe.name);
 
 			// Determine effective ask mode (skipPrompts is legacy compat for --ask=nobody)
-			const effectiveAskMode =
-				options.askMode ?? (options.skipPrompts ? "nobody" : undefined);
+			const effectiveAskMode = options.askMode ?? (options.skipPrompts ? "nobody" : undefined);
 
 			// Resolve variables with user input if needed
-			const resolvedVariables = await this.resolveVariables(
-				recipe,
-				options.variables || {},
-				{
-					askMode: effectiveAskMode,
-					noDefaults: options.noDefaults || false,
-					aiConfig: options.aiConfig,
-					logger: options.logger,
-				},
-			);
+			const resolvedVariables = await this.resolveVariables(recipe, options.variables || {}, {
+				askMode: effectiveAskMode,
+				noDefaults: options.noDefaults || false,
+				aiConfig: options.aiConfig,
+				logger: options.logger,
+			});
 
 			this.debug("Variables resolved: %o", Object.keys(resolvedVariables));
 
@@ -412,19 +378,14 @@ export class RecipeEngine extends EventEmitter {
 			// Create step execution options
 			const stepOptions: StepExecutionOptions = {
 				timeout: options.stepOptions?.timeout || this.config.defaultTimeout,
-				continueOnError:
-					options.continueOnError || this.config.stepExecutor.continueOnError,
+				continueOnError: options.continueOnError || this.config.stepExecutor.continueOnError,
 				dryRun: options.dryRun || false,
 				...options.stepOptions,
 			};
 
 			// Execute steps through StepExecutor
 			this.debug("Starting step execution with %d steps", recipe.steps.length);
-			const stepResults = await this.stepExecutor.executeSteps(
-				recipe.steps,
-				context,
-				stepOptions,
-			);
+			const stepResults = await this.stepExecutor.executeSteps(recipe.steps, context, stepOptions);
 
 			// Aggregate results
 			const result = this.aggregateResults(
@@ -437,18 +398,9 @@ export class RecipeEngine extends EventEmitter {
 			);
 
 			// Render and print onSuccess/onError messages
-			await this.renderLifecycleMessage(
-				recipe,
-				result,
-				resolvedVariables,
-				options,
-			);
+			await this.renderLifecycleMessage(recipe, result, resolvedVariables, options);
 
-			this.debug(
-				"Recipe execution completed [%s] in %dms",
-				executionId,
-				result.duration,
-			);
+			this.debug("Recipe execution completed [%s] in %dms", executionId, result.duration);
 			this.emit("recipe:completed", { executionId, result });
 
 			return result;
@@ -574,34 +526,20 @@ export class RecipeEngine extends EventEmitter {
 		// Basic validation
 		if (!recipe.name || typeof recipe.name !== "string") {
 			errors.push(
-				new RecipeValidationError(
-					"Recipe name is required and must be a string",
-					"MISSING_NAME",
-				),
+				new RecipeValidationError("Recipe name is required and must be a string", "MISSING_NAME"),
 			);
 		}
 
 		if (!recipe.variables || typeof recipe.variables !== "object") {
 			errors.push(
-				new RecipeValidationError(
-					"Recipe variables section is required",
-					"MISSING_VARIABLES",
-				),
+				new RecipeValidationError("Recipe variables section is required", "MISSING_VARIABLES"),
 			);
-		} else if (
-			typeof recipe.variables === "object" &&
-			Object.keys(recipe.variables).length === 0
-		) {
+		} else if (typeof recipe.variables === "object" && Object.keys(recipe.variables).length === 0) {
 			// Allow empty variables object, don't treat as error
 		}
 
 		if (!Array.isArray(recipe.steps) || recipe.steps.length === 0) {
-			errors.push(
-				new RecipeValidationError(
-					"Recipe must have at least one step",
-					"MISSING_STEPS",
-				),
-			);
+			errors.push(new RecipeValidationError("Recipe must have at least one step", "MISSING_STEPS"));
 		}
 
 		// Validate variables
@@ -710,9 +648,7 @@ export class RecipeEngine extends EventEmitter {
 	async cancelAllExecutions(): Promise<void> {
 		this.debug("Cancelling all executions");
 
-		const promises = Array.from(this.activeExecutions.keys()).map((id) =>
-			this.cancelExecution(id),
-		);
+		const promises = Array.from(this.activeExecutions.keys()).map((id) => this.cancelExecution(id));
 
 		await Promise.allSettled(promises);
 	}
@@ -833,9 +769,7 @@ export class RecipeEngine extends EventEmitter {
 		// Check if URL is trusted
 		const isTrusted =
 			this.config.security.trustedSources.length === 0 ||
-			this.config.security.trustedSources.some((trusted) =>
-				url.startsWith(trusted),
-			);
+			this.config.security.trustedSources.some((trusted) => url.startsWith(trusted));
 
 		if (!isTrusted) {
 			throw ErrorHandler.createError(
@@ -872,10 +806,7 @@ export class RecipeEngine extends EventEmitter {
 		}
 	}
 
-	private async loadPackageContent(
-		packageName: string,
-		version?: string,
-	): Promise<string> {
+	private async loadPackageContent(packageName: string, version?: string): Promise<string> {
 		// For now, treat packages as npm packages with recipe.yml in root
 		// In a full implementation, this would use npm/yarn APIs
 		const packagePath = version
@@ -885,10 +816,7 @@ export class RecipeEngine extends EventEmitter {
 		return this.loadFileContent(packagePath);
 	}
 
-	private async parseRecipeContent(
-		content: string,
-		source: RecipeSource,
-	): Promise<RecipeConfig> {
+	private async parseRecipeContent(content: string, source: RecipeSource): Promise<RecipeConfig> {
 		try {
 			const parsed = yaml.load(content) as any;
 
@@ -938,11 +866,7 @@ export class RecipeEngine extends EventEmitter {
 		for (const item of raw) {
 			if (typeof item === "string") {
 				provides.push({ name: item });
-			} else if (
-				typeof item === "object" &&
-				item !== null &&
-				typeof item.name === "string"
-			) {
+			} else if (typeof item === "object" && item !== null && typeof item.name === "string") {
 				const entry: RecipeProvides = { name: item.name };
 				if (item.type && typeof item.type === "string") entry.type = item.type;
 				if (item.description && typeof item.description === "string")
@@ -1046,8 +970,7 @@ export class RecipeEngine extends EventEmitter {
 
 			// Step 3: If still unresolved, determine if we need to ask
 			if (value === undefined || value === null || value === "") {
-				const hint =
-					varConfig.suggestion ?? (noDefaults ? varConfig.default : undefined);
+				const hint = varConfig.suggestion ?? (noDefaults ? varConfig.default : undefined);
 				const shouldAsk = varConfig.required || noDefaults;
 
 				if (shouldAsk) {
@@ -1059,11 +982,7 @@ export class RecipeEngine extends EventEmitter {
 
 			// Step 4: If we have a value, validate it
 			if (value !== undefined) {
-				const validation = TemplateParser.validateVariableValue(
-					varName,
-					value,
-					varConfig,
-				);
+				const validation = TemplateParser.validateVariableValue(varName, value, varConfig);
 				if (!validation.isValid) {
 					throw ErrorHandler.createError(
 						ErrorCode.VALIDATION_ERROR,
@@ -1074,9 +993,7 @@ export class RecipeEngine extends EventEmitter {
 			}
 
 			resolved[varName] =
-				value !== undefined
-					? value
-					: TemplateParser.getResolvedValue(value, varConfig);
+				value !== undefined ? value : TemplateParser.getResolvedValue(value, varConfig);
 		}
 
 		// Phase 2: Resolve unresolved variables based on ask mode
@@ -1084,19 +1001,10 @@ export class RecipeEngine extends EventEmitter {
 			switch (askMode) {
 				case "me": {
 					for (const { varName, varConfig, hint } of toAsk) {
-						const configWithHint =
-							hint !== undefined ? { ...varConfig, default: hint } : varConfig;
-						const value = await this.promptForVariable(
-							varName,
-							configWithHint,
-							logger,
-						);
+						const configWithHint = hint !== undefined ? { ...varConfig, default: hint } : varConfig;
+						const value = await this.promptForVariable(varName, configWithHint, logger);
 
-						const validation = TemplateParser.validateVariableValue(
-							varName,
-							value,
-							varConfig,
-						);
+						const validation = TemplateParser.validateVariableValue(varName, value, varConfig);
 						if (!validation.isValid) {
 							throw ErrorHandler.createError(
 								ErrorCode.VALIDATION_ERROR,
@@ -1115,9 +1023,7 @@ export class RecipeEngine extends EventEmitter {
 					const transportName = transport?.name;
 
 					if (!transport || transportName === "stdout") {
-						this.debug(
-							"AI mode requires api or command transport, falling back to interactive",
-						);
+						this.debug("AI mode requires api or command transport, falling back to interactive");
 						console.warn(
 							"Warning: --ask=ai requires an API key or command transport configured. " +
 								"Falling back to interactive prompts.",
@@ -1125,14 +1031,8 @@ export class RecipeEngine extends EventEmitter {
 						// Fall through to interactive
 						for (const { varName, varConfig, hint } of toAsk) {
 							const configWithHint =
-								hint !== undefined
-									? { ...varConfig, default: hint }
-									: varConfig;
-							const value = await this.promptForVariable(
-								varName,
-								configWithHint,
-								logger,
-							);
+								hint !== undefined ? { ...varConfig, default: hint } : varConfig;
+							const value = await this.promptForVariable(varName, configWithHint, logger);
 							resolved[varName] = value;
 						}
 						break;
@@ -1148,27 +1048,18 @@ export class RecipeEngine extends EventEmitter {
 					);
 
 					const resolver = new AiVariableResolver(aiConfig!);
-					const aiAnswers = await resolver.resolveBatch(
-						unresolvedVars,
-						resolved,
-						{ name: recipe.name, description: recipe.description },
-					);
+					const aiAnswers = await resolver.resolveBatch(unresolvedVars, resolved, {
+						name: recipe.name,
+						description: recipe.description,
+					});
 
 					// Apply AI answers and validate
 					for (const { varName, varConfig } of toAsk) {
 						const value = aiAnswers[varName];
 						if (value !== undefined) {
-							const validation = TemplateParser.validateVariableValue(
-								varName,
-								value,
-								varConfig,
-							);
+							const validation = TemplateParser.validateVariableValue(varName, value, varConfig);
 							if (!validation.isValid) {
-								this.debug(
-									"AI value for %s failed validation: %s",
-									varName,
-									validation.error,
-								);
+								this.debug("AI value for %s failed validation: %s", varName, validation.error);
 								if (varConfig.required) {
 									missingRequired.push(varName);
 								}
@@ -1226,21 +1117,14 @@ export class RecipeEngine extends EventEmitter {
 				default: varConfig.default,
 				choices: varConfig.type === "enum" ? varConfig.values : undefined,
 				validate: (input: any) => {
-					const validation = TemplateParser.validateVariableValue(
-						varName,
-						input,
-						varConfig,
-					);
+					const validation = TemplateParser.validateVariableValue(varName, input, varConfig);
 					return validation.isValid || validation.error;
 				},
 			},
 		];
 
 		try {
-			const answers = await performInteractivePrompting(
-				prompts,
-				logger || this.logger,
-			);
+			const answers = await performInteractivePrompting(prompts, logger || this.logger);
 
 			return answers[varName];
 		} catch (error) {
@@ -1277,8 +1161,7 @@ export class RecipeEngine extends EventEmitter {
 		source?: string | RecipeSource,
 	): Promise<StepContext> {
 		// Determine collect mode: if no answers provided and AiCollector is in collect mode
-		const collectMode =
-			!options.answers && AiCollector.getInstance().collectMode;
+		const collectMode = !options.answers && AiCollector.getInstance().collectMode;
 
 		return {
 			step: {} as RecipeStepUnion, // Will be set by step executor
@@ -1312,8 +1195,7 @@ export class RecipeEngine extends EventEmitter {
 		return (expression: string, ctx: Record<string, any>) => {
 			try {
 				// Built-in helper functions available in condition expressions
-				const projectRoot =
-					ctx.projectRoot || this.config.workingDir || process.cwd();
+				const projectRoot = ctx.projectRoot || this.config.workingDir || process.cwd();
 				const builtinFunctions: Record<string, (...args: any[]) => any> = {
 					fileExists: (filePath: string) => {
 						const resolved = path.isAbsolute(filePath)
@@ -1392,9 +1274,7 @@ export class RecipeEngine extends EventEmitter {
 				]);
 
 				const argNames = Array.from(new Set(Object.keys(mergedContext))).filter(
-					(name) =>
-						!reservedKeywords.has(name) &&
-						/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name),
+					(name) => !reservedKeywords.has(name) && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name),
 				);
 
 				const argValues = argNames.map((name) => mergedContext[name]);
@@ -1425,8 +1305,7 @@ export class RecipeEngine extends EventEmitter {
 		for (const result of results) {
 			// For sequence/parallel tools, count only their nested steps (not the container itself)
 			// For all other tools, count the step if status matches or no filter
-			const isContainer =
-				result.toolType === "sequence" || result.toolType === "parallel";
+			const isContainer = result.toolType === "sequence" || result.toolType === "parallel";
 
 			if (!isContainer && (!status || result.status === status)) {
 				count++;
@@ -1437,19 +1316,13 @@ export class RecipeEngine extends EventEmitter {
 			// This is because the tool returns a StepResult with toolResult field, creating double nesting
 			if (isContainer && result.toolResult) {
 				const wrapped = result.toolResult as any;
-				const executionResult = wrapped.toolResult as
-					| { steps?: StepResult[] }
-					| undefined;
+				const executionResult = wrapped.toolResult as { steps?: StepResult[] } | undefined;
 				if (
 					executionResult?.steps &&
 					Array.isArray(executionResult.steps) &&
 					executionResult.steps.length > 0
 				) {
-					const nestedCount = this.countNestedSteps(
-						executionResult.steps,
-						status,
-						depth + 1,
-					);
+					const nestedCount = this.countNestedSteps(executionResult.steps, status, depth + 1);
 					count += nestedCount;
 				}
 			}
@@ -1585,9 +1458,7 @@ export class RecipeEngine extends EventEmitter {
 		}
 	}
 
-	private async loadDependencies(
-		recipe: RecipeConfig,
-	): Promise<RecipeConfig[]> {
+	private async loadDependencies(recipe: RecipeConfig): Promise<RecipeConfig[]> {
 		const dependencies: RecipeConfig[] = [];
 
 		if (!recipe.dependencies) {
@@ -1628,8 +1499,7 @@ export class RecipeEngine extends EventEmitter {
 
 	private dependencyToSource(dependency: any): RecipeSource {
 		const name = typeof dependency === "string" ? dependency : dependency.name;
-		const version =
-			typeof dependency === "object" ? dependency.version : undefined;
+		const version = typeof dependency === "object" ? dependency.version : undefined;
 		const type = typeof dependency === "object" ? dependency.type : "npm";
 		const url = typeof dependency === "object" ? dependency.url : undefined;
 
@@ -1637,8 +1507,7 @@ export class RecipeEngine extends EventEmitter {
 			case "github":
 				return {
 					type: "url",
-					url:
-						url || `https://raw.githubusercontent.com/${name}/main/recipe.yml`,
+					url: url || `https://raw.githubusercontent.com/${name}/main/recipe.yml`,
 					version,
 				};
 
@@ -1657,10 +1526,7 @@ export class RecipeEngine extends EventEmitter {
 		}
 	}
 
-	private validateVariable(
-		varName: string,
-		varConfig: TemplateVariable,
-	): { error?: string } {
+	private validateVariable(varName: string, varConfig: TemplateVariable): { error?: string } {
 		if (!varConfig || typeof varConfig !== "object") {
 			return { error: `Variable '${varName}' must be an object` };
 		}
@@ -1697,20 +1563,16 @@ export class RecipeEngine extends EventEmitter {
 
 		if (!step.name) {
 			errors.push(
-				new RecipeValidationError(
-					`Step ${index + 1} must have a name`,
-					"MISSING_STEP_NAME",
-					{ field: `steps[${index}].name` },
-				),
+				new RecipeValidationError(`Step ${index + 1} must have a name`, "MISSING_STEP_NAME", {
+					field: `steps[${index}].name`,
+				}),
 			);
 		} else {
 			if (stepNames.has(step.name)) {
 				errors.push(
-					new RecipeValidationError(
-						`Duplicate step name: ${step.name}`,
-						"DUPLICATE_STEP_NAME",
-						{ field: `steps[${index}].name` },
-					),
+					new RecipeValidationError(`Duplicate step name: ${step.name}`, "DUPLICATE_STEP_NAME", {
+						field: `steps[${index}].name`,
+					}),
 				);
 			}
 			stepNames.add(step.name);
@@ -1777,9 +1639,7 @@ export class RecipeEngine extends EventEmitter {
 		}
 	}
 
-	private async validateDependency(
-		dependency: any,
-	): Promise<{ isValid: boolean; error?: string }> {
+	private async validateDependency(dependency: any): Promise<{ isValid: boolean; error?: string }> {
 		const name = typeof dependency === "string" ? dependency : dependency.name;
 
 		if (!name) {
@@ -1810,10 +1670,7 @@ export class RecipeEngine extends EventEmitter {
 				keysToDelete.forEach((key) => this.recipeCache.delete(key));
 
 				if (keysToDelete.length > 0) {
-					this.debug(
-						"Cleaned up %d expired cache entries",
-						keysToDelete.length,
-					);
+					this.debug("Cleaned up %d expired cache entries", keysToDelete.length);
 				}
 			},
 			10 * 60 * 1000,

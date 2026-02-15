@@ -12,12 +12,7 @@ import createDebug from "debug";
 import * as ts from "typescript";
 import { glob } from "glob";
 import { Tool, type ToolValidationResult } from "./base.js";
-import {
-	HypergenError,
-	ErrorCode,
-	ErrorHandler,
-	withErrorHandling,
-} from "@hypercli/core";
+import { HypergenError, ErrorCode, ErrorHandler, withErrorHandling } from "@hypercli/core";
 import {
 	type CodeModStep,
 	type StepContext,
@@ -147,14 +142,9 @@ class CodeModTransformations {
 	/**
 	 * Add import statement to TypeScript/JavaScript file
 	 */
-	static addImport(
-		sourceFile: ts.SourceFile,
-		parameters: CodeModParameters,
-	): ts.SourceFile {
+	static addImport(sourceFile: ts.SourceFile, parameters: CodeModParameters): ts.SourceFile {
 		if (!parameters.import || !parameters.from) {
-			throw new Error(
-				"import and from parameters are required for add-import transformation",
-			);
+			throw new Error("import and from parameters are required for add-import transformation");
 		}
 
 		const factory = ts.factory;
@@ -182,9 +172,7 @@ class CodeModTransformations {
 						factory.createNamedImports([
 							factory.createImportSpecifier(
 								false,
-								parameters.alias
-									? factory.createIdentifier(parameters.import)
-									: undefined,
+								parameters.alias ? factory.createIdentifier(parameters.import) : undefined,
 								factory.createIdentifier(parameters.alias || parameters.import),
 							),
 						]),
@@ -248,14 +236,9 @@ class CodeModTransformations {
 	/**
 	 * Add export statement to TypeScript/JavaScript file
 	 */
-	static addExport(
-		sourceFile: ts.SourceFile,
-		parameters: CodeModParameters,
-	): ts.SourceFile {
+	static addExport(sourceFile: ts.SourceFile, parameters: CodeModParameters): ts.SourceFile {
 		if (!parameters.export) {
-			throw new Error(
-				"export parameter is required for add-export transformation",
-			);
+			throw new Error("export parameter is required for add-export transformation");
 		}
 
 		const factory = ts.factory;
@@ -289,10 +272,7 @@ class CodeModTransformations {
 	/**
 	 * Add property to class or object
 	 */
-	static addProperty(
-		sourceFile: ts.SourceFile,
-		parameters: CodeModParameters,
-	): ts.SourceFile {
+	static addProperty(sourceFile: ts.SourceFile, parameters: CodeModParameters): ts.SourceFile {
 		if (!parameters.propertyName || !parameters.propertyValue) {
 			throw new Error(
 				"propertyName and propertyValue are required for add-property transformation",
@@ -380,9 +360,7 @@ class CodeModTransformations {
 	 */
 	static replaceText(content: string, parameters: CodeModParameters): string {
 		if (parameters.find === undefined || parameters.replace === undefined) {
-			throw new Error(
-				"find and replace parameters are required for replace-text transformation",
-			);
+			throw new Error("find and replace parameters are required for replace-text transformation");
 		}
 
 		if (typeof parameters.find === "string") {
@@ -414,16 +392,10 @@ class CodeModTransformations {
  */
 export class CodeModTool extends Tool<CodeModStep> {
 	private tsConfigCache = new Map<string, ts.ParsedCommandLine>();
-	private transformationCache = new Map<
-		string,
-		ts.TransformerFactory<ts.SourceFile>
-	>();
+	private transformationCache = new Map<string, ts.TransformerFactory<ts.SourceFile>>();
 	private backupFiles = new Set<string>();
 
-	constructor(
-		name: string = "codemod-tool",
-		options: Record<string, any> = {},
-	) {
+	constructor(name: string = "codemod-tool", options: Record<string, any> = {}) {
 		super("codemod", name, options);
 	}
 
@@ -466,11 +438,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 									this.debug("Cleaned up backup file: %s", backupPath);
 								}
 							} catch (error) {
-								this.debug(
-									"Failed to cleanup backup file %s: %s",
-									backupPath,
-									error,
-								);
+								this.debug("Failed to cleanup backup file %s: %s", backupPath, error);
 							}
 						}
 					}
@@ -524,10 +492,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 			"replace-text",
 			"custom",
 		];
-		if (
-			step.codemod &&
-			!validCodeModTypes.includes(step.codemod as CodeModType)
-		) {
+		if (step.codemod && !validCodeModTypes.includes(step.codemod as CodeModType)) {
 			errors.push(
 				`Invalid CodeMod type: ${step.codemod}. Must be one of: ${validCodeModTypes.join(", ")}`,
 			);
@@ -552,10 +517,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 		}
 
 		// Validate parser setting
-		if (
-			step.parser &&
-			!["typescript", "javascript", "json", "auto"].includes(step.parser)
-		) {
+		if (step.parser && !["typescript", "javascript", "json", "auto"].includes(step.parser)) {
 			errors.push(
 				`Invalid parser: ${step.parser}. Must be 'typescript', 'javascript', 'json', or 'auto'`,
 			);
@@ -572,13 +534,9 @@ export class CodeModTool extends Tool<CodeModStep> {
 					}
 					if (
 						params.importType &&
-						!["default", "named", "namespace", "side-effect"].includes(
-							params.importType,
-						)
+						!["default", "named", "namespace", "side-effect"].includes(params.importType)
 					) {
-						errors.push(
-							"importType must be one of: default, named, namespace, side-effect",
-						);
+						errors.push("importType must be one of: default, named, namespace, side-effect");
 					}
 					break;
 
@@ -586,40 +544,29 @@ export class CodeModTool extends Tool<CodeModStep> {
 					if (!params.export) {
 						errors.push('add-export requires "export" parameter');
 					}
-					if (
-						params.exportType &&
-						!["default", "named"].includes(params.exportType)
-					) {
+					if (params.exportType && !["default", "named"].includes(params.exportType)) {
 						errors.push('exportType must be "default" or "named"');
 					}
 					break;
 
 				case "add-property":
 					if (!params.propertyName || !params.propertyValue) {
-						errors.push(
-							'add-property requires "propertyName" and "propertyValue" parameters',
-						);
+						errors.push('add-property requires "propertyName" and "propertyValue" parameters');
 					}
 					if (!params.className && !params.objectName) {
-						errors.push(
-							'add-property requires either "className" or "objectName" parameter',
-						);
+						errors.push('add-property requires either "className" or "objectName" parameter');
 					}
 					break;
 
 				case "replace-text":
 					if (params.find === undefined || params.replace === undefined) {
-						errors.push(
-							'replace-text requires "find" and "replace" parameters',
-						);
+						errors.push('replace-text requires "find" and "replace" parameters');
 					}
 					break;
 
 				case "custom":
 					if (!params.transformFunction) {
-						errors.push(
-							'custom CodeMod requires "transformFunction" parameter',
-						);
+						errors.push('custom CodeMod requires "transformFunction" parameter');
 					}
 					break;
 			}
@@ -628,17 +575,13 @@ export class CodeModTool extends Tool<CodeModStep> {
 		// Performance and complexity warnings
 		if (step.files && step.files.length > 50) {
 			warnings.push("Large number of file patterns may impact performance");
-			suggestions.push(
-				"Consider using more specific patterns or processing files in batches",
-			);
+			suggestions.push("Consider using more specific patterns or processing files in batches");
 		}
 
 		// Backup recommendations
 		if (step.backup === false) {
 			warnings.push("Backup is disabled - consider enabling for safety");
-			suggestions.push(
-				"Set backup: true to create backup files before transformation",
-			);
+			suggestions.push("Set backup: true to create backup files before transformation");
 		}
 
 		// Estimate execution time
@@ -685,10 +628,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 
 		try {
 			// Resolve all files matching the patterns
-			const filesToProcess = await this.resolveFiles(
-				step.files,
-				context.projectRoot,
-			);
+			const filesToProcess = await this.resolveFiles(step.files, context.projectRoot);
 			this.debug("Found %d files to process", filesToProcess.length);
 
 			if (filesToProcess.length === 0) {
@@ -698,12 +638,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 			// Process each file
 			for (const filePath of filesToProcess) {
 				try {
-					const result = await this.transformFile(
-						filePath,
-						step,
-						context,
-						options,
-					);
+					const result = await this.transformFile(filePath, step, context, options);
 					transformationResults.push(result);
 
 					if (result.modified) {
@@ -713,8 +648,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 					allErrors.push(...result.errors);
 					allWarnings.push(...result.warnings);
 				} catch (error) {
-					const errorMessage =
-						error instanceof Error ? error.message : String(error);
+					const errorMessage = error instanceof Error ? error.message : String(error);
 					this.debug("Failed to transform file %s: %s", filePath, errorMessage);
 					allErrors.push(`Failed to transform ${filePath}: ${errorMessage}`);
 				}
@@ -810,10 +744,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 				filesDeleted: [],
 				error: {
 					message: error instanceof Error ? error.message : String(error),
-					code:
-						error instanceof HypergenError
-							? error.code
-							: "CODEMOD_EXECUTION_ERROR",
+					code: error instanceof HypergenError ? error.code : "CODEMOD_EXECUTION_ERROR",
 					stack: error instanceof Error ? error.stack : undefined,
 					cause: error,
 				},
@@ -836,10 +767,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 	/**
 	 * Resolve file patterns to actual file paths
 	 */
-	private async resolveFiles(
-		patterns: string[],
-		projectRoot: string,
-	): Promise<string[]> {
+	private async resolveFiles(patterns: string[], projectRoot: string): Promise<string[]> {
 		const allFiles = new Set<string>();
 
 		for (const pattern of patterns) {
@@ -899,19 +827,12 @@ export class CodeModTool extends Tool<CodeModStep> {
 
 			// Apply transformation based on parser type and CodeMod type
 			if (parser === "typescript" || parser === "javascript") {
-				const result = await this.applyASTTransformation(
-					transformContext,
-					step,
-					parser,
-				);
+				const result = await this.applyASTTransformation(transformContext, step, parser);
 				transformedContent = result.content;
 				modified = result.modified;
 				transformations.push(...result.transformations);
 			} else {
-				const result = await this.applyTextTransformation(
-					transformContext,
-					step,
-				);
+				const result = await this.applyTextTransformation(transformContext, step);
 				transformedContent = result.content;
 				modified = result.modified;
 				transformations.push(...result.transformations);
@@ -942,8 +863,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 				transformations,
 			};
 		} catch (error) {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
+			const errorMessage = error instanceof Error ? error.message : String(error);
 			errors.push(`Transformation failed: ${errorMessage}`);
 
 			return {
@@ -977,9 +897,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 			const sourceFile = ts.createSourceFile(
 				context.filePath,
 				context.sourceCode,
-				parser === "typescript"
-					? ts.ScriptTarget.Latest
-					: ts.ScriptTarget.ES2015,
+				parser === "typescript" ? ts.ScriptTarget.Latest : ts.ScriptTarget.ES2015,
 				true,
 				parser === "typescript" ? ts.ScriptKind.TS : ts.ScriptKind.JS,
 			);
@@ -994,10 +912,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 				}
 
 				// Check for basic TypeScript/JavaScript syntax issues
-				if (
-					context.sourceCode.includes("{{{") ||
-					context.sourceCode.includes("}}}")
-				) {
+				if (context.sourceCode.includes("{{{") || context.sourceCode.includes("}}}")) {
 					throw new Error("Invalid brace syntax detected");
 				}
 			}
@@ -1008,10 +923,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 			// Apply built-in transformations
 			switch (step.codemod) {
 				case "add-import":
-					transformedFile = CodeModTransformations.addImport(
-						transformedFile,
-						context.parameters,
-					);
+					transformedFile = CodeModTransformations.addImport(transformedFile, context.parameters);
 					transformations.push({
 						type: "add-import",
 						description: `Added import ${context.parameters.import} from ${context.parameters.from}`,
@@ -1020,10 +932,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 					break;
 
 				case "add-export":
-					transformedFile = CodeModTransformations.addExport(
-						transformedFile,
-						context.parameters,
-					);
+					transformedFile = CodeModTransformations.addExport(transformedFile, context.parameters);
 					transformations.push({
 						type: "add-export",
 						description: `Added export ${context.parameters.export}`,
@@ -1032,10 +941,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 					break;
 
 				case "add-property":
-					transformedFile = CodeModTransformations.addProperty(
-						transformedFile,
-						context.parameters,
-					);
+					transformedFile = CodeModTransformations.addProperty(transformedFile, context.parameters);
 					transformations.push({
 						type: "add-property",
 						description: `Added property ${context.parameters.propertyName} to ${context.parameters.className || context.parameters.objectName}`,
@@ -1044,10 +950,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 
 				case "custom":
 					if (typeof context.parameters.transformFunction === "function") {
-						transformedFile = context.parameters.transformFunction(
-							transformedFile,
-							context,
-						);
+						transformedFile = context.parameters.transformFunction(transformedFile, context);
 						transformations.push({
 							type: "custom",
 							description: "Applied custom transformation function",
@@ -1066,9 +969,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 					break;
 
 				default:
-					throw new Error(
-						`Unsupported AST transformation type: ${step.codemod}`,
-					);
+					throw new Error(`Unsupported AST transformation type: ${step.codemod}`);
 			}
 
 			// Generate transformed content
@@ -1131,9 +1032,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 					break;
 
 				default:
-					throw new Error(
-						`Unsupported text transformation type: ${step.codemod}`,
-					);
+					throw new Error(`Unsupported text transformation type: ${step.codemod}`);
 			}
 
 			return {
@@ -1185,10 +1084,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 	/**
 	 * Create backup of file before transformation
 	 */
-	private async createBackup(
-		filePath: string,
-		content: string,
-	): Promise<string> {
+	private async createBackup(filePath: string, content: string): Promise<string> {
 		const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 		const backupPath = `${filePath}.backup.${timestamp}`;
 
@@ -1204,10 +1100,7 @@ export class CodeModTool extends Tool<CodeModStep> {
  * CodeMod Tool Factory
  */
 export class CodeModToolFactory {
-	create(
-		name: string = "codemod-tool",
-		options: Record<string, any> = {},
-	): CodeModTool {
+	create(name: string = "codemod-tool", options: Record<string, any> = {}): CodeModTool {
 		return new CodeModTool(name, options);
 	}
 
@@ -1221,18 +1114,12 @@ export class CodeModToolFactory {
 		const suggestions: string[] = [];
 
 		// Validate backup cleanup setting
-		if (
-			config.cleanupBackups !== undefined &&
-			typeof config.cleanupBackups !== "boolean"
-		) {
+		if (config.cleanupBackups !== undefined && typeof config.cleanupBackups !== "boolean") {
 			warnings.push("cleanupBackups should be a boolean");
 		}
 
 		// Validate cache settings
-		if (
-			config.enableCaching !== undefined &&
-			typeof config.enableCaching !== "boolean"
-		) {
+		if (config.enableCaching !== undefined && typeof config.enableCaching !== "boolean") {
 			warnings.push("enableCaching should be a boolean");
 		}
 
@@ -1244,9 +1131,7 @@ export class CodeModToolFactory {
 		}
 
 		if (config.cleanupBackups === undefined) {
-			suggestions.push(
-				"Consider setting cleanupBackups to control backup file cleanup behavior",
-			);
+			suggestions.push("Consider setting cleanupBackups to control backup file cleanup behavior");
 		}
 
 		return {

@@ -1,6 +1,6 @@
-import { spawn } from 'child_process';
-import { consola } from 'consola';
-import fs from 'fs-extra';
+import { spawn } from "child_process";
+import { consola } from "consola";
+import fs from "fs-extra";
 
 const timeStart = new Date().getTime();
 
@@ -10,39 +10,38 @@ consola.start(`Building test fixtures...`);
 fs.removeSync(`./test/out`);
 
 const fixtures = [
-  { options: 'typedoc.base.json', outDir: 'default' },
-  { options: 'typedoc.sidebar-options.json', outDir: 'sidebar-options' },
-  { options: 'typedoc.sidebar-options-2.json', outDir: 'sidebar-options-2' },
+	{ options: "typedoc.base.json", outDir: "default" },
+	{ options: "typedoc.sidebar-options.json", outDir: "sidebar-options" },
+	{ options: "typedoc.sidebar-options-2.json", outDir: "sidebar-options-2" },
 ];
 
 // write fixtures
 fixtures.forEach((fixture) => {
-  writeMarkdown(fixture);
+	writeMarkdown(fixture);
 });
 
 function writeMarkdown(fixture: any) {
-  spawn(
-    'typedoc',
-    [
-      ...[
-        '-options',
-        `./test/${fixture.options}`,
-        '-logLevel',
-        'Warn',
-        '-out',
-        `./test/out/${fixture.outDir}`,
-      ],
-    ],
-    {
-      stdio: 'inherit',
-    },
-  );
+	spawn(
+		"typedoc",
+		[
+			...[
+				"-options",
+				`./test/${fixture.options}`,
+				"-logLevel",
+				"Warn",
+				"-out",
+				`./test/out/${fixture.outDir}`,
+			],
+		],
+		{
+			stdio: "inherit",
+		},
+	);
 }
-process.on('exit', () => {
-  consola.success(
-    `Finished building fixtures in ${(
-      (new Date().getTime() - timeStart) /
-      1000
-    ).toFixed(2)} seconds`,
-  );
+process.on("exit", () => {
+	consola.success(
+		`Finished building fixtures in ${((new Date().getTime() - timeStart) / 1000).toFixed(
+			2,
+		)} seconds`,
+	);
 });

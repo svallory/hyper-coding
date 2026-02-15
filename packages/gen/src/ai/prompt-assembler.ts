@@ -60,20 +60,14 @@ export class PromptAssembler {
 		const schema: Record<string, string> = {};
 		for (const entry of entries) {
 			schema[entry.key] =
-				entry.hasOutputDesc || entry.hasExamples
-					? "<see format above>"
-					: "<your answer>";
+				entry.hasOutputDesc || entry.hasExamples ? "<see format above>" : "<your answer>";
 		}
 		const responseSchema = JSON.stringify(schema, null, 2);
 
-		const hasContext =
-			globalContexts.length > 0 || entries.some((e) => e.contexts.length > 0);
+		const hasContext = globalContexts.length > 0 || entries.some((e) => e.contexts.length > 0);
 
 		const templatePath = options.promptTemplate || DEFAULT_TEMPLATE_PATH;
-		const templateSource = this.loadTemplate(
-			templatePath,
-			!!options.promptTemplate,
-		);
+		const templateSource = this.loadTemplate(templatePath, !!options.promptTemplate);
 
 		const context = {
 			globalContexts,
@@ -86,11 +80,7 @@ export class PromptAssembler {
 
 		try {
 			const result = renderTemplateSync(templateSource, context);
-			debug(
-				"Assembled prompt (%d chars, %d entries)",
-				result.length,
-				entries.length,
-			);
+			debug("Assembled prompt (%d chars, %d entries)", result.length, entries.length);
 			return result;
 		} catch (error: any) {
 			throw new Error(`Failed to render prompt template: ${error.message}`);

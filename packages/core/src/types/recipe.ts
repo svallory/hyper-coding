@@ -5,7 +5,7 @@
  * that coordinates Template, Action, CodeMod, and Recipe tools through sequential steps.
  */
 
-import type { ActionLogger, ActionResult, ActionUtils } from './actions.js';
+import type { ActionLogger, ActionResult, ActionUtils } from "./actions.js";
 import type {
 	AIBudgetConfig,
 	AIContextConfig,
@@ -13,8 +13,8 @@ import type {
 	AIExecutionResult,
 	AIGuardrailConfig,
 	AIOutputConfig,
-} from './ai-config.js';
-import type { TemplateVariable } from './template.js';
+} from "./ai-config.js";
+import type { TemplateVariable } from "./template.js";
 
 /**
  * Declares a value that a recipe provides to its callers or sibling recipes
@@ -23,7 +23,7 @@ export interface RecipeProvides {
 	/** Name of the provided variable */
 	name: string;
 	/** Expected type of the provided value */
-	type?: 'string' | 'number' | 'boolean' | 'object' | 'array';
+	type?: "string" | "number" | "boolean" | "object" | "array";
 	/** Human-readable description */
 	description?: string;
 }
@@ -31,25 +31,31 @@ export interface RecipeProvides {
 /**
  * Core step execution status
  */
-export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'cancelled';
+export type StepStatus =
+	| "pending"
+	| "running"
+	| "completed"
+	| "failed"
+	| "skipped"
+	| "cancelled";
 
 /**
  * Tool types supported by the recipe system
  */
 export type ToolType =
-	| 'template'
-	| 'action'
-	| 'codemod'
-	| 'recipe'
-	| 'shell'
-	| 'prompt'
-	| 'sequence'
-	| 'parallel'
-	| 'ai'
-	| 'install'
-	| 'query'
-	| 'patch'
-	| 'ensure-dirs';
+	| "template"
+	| "action"
+	| "codemod"
+	| "recipe"
+	| "shell"
+	| "prompt"
+	| "sequence"
+	| "parallel"
+	| "ai"
+	| "install"
+	| "query"
+	| "patch"
+	| "ensure-dirs";
 
 /**
  * Base interface for all recipe steps
@@ -99,7 +105,7 @@ export interface BaseRecipeStep {
  * Executes a template to generate files
  */
 export interface TemplateStep extends BaseRecipeStep {
-	tool: 'template';
+	tool: "template";
 
 	/** Template identifier or path */
 	template: string;
@@ -135,7 +141,7 @@ export interface TemplateStep extends BaseRecipeStep {
  * Executes a V8 decorator-based action
  */
 export interface ActionStep extends BaseRecipeStep {
-	tool: 'action';
+	tool: "action";
 
 	/** Action name to execute */
 	action: string;
@@ -173,7 +179,7 @@ export interface ActionStep extends BaseRecipeStep {
  * Executes code transformations
  */
 export interface CodeModStep extends BaseRecipeStep {
-	tool: 'codemod';
+	tool: "codemod";
 
 	/** CodeMod identifier or path */
 	codemod: string;
@@ -185,7 +191,7 @@ export interface CodeModStep extends BaseRecipeStep {
 	backup?: boolean;
 
 	/** Parser to use for code analysis */
-	parser?: 'typescript' | 'javascript' | 'json' | 'auto';
+	parser?: "typescript" | "javascript" | "json" | "auto";
 
 	/** CodeMod parameters with validation */
 	parameters?: Record<string, any>;
@@ -223,7 +229,7 @@ export interface CodeModStep extends BaseRecipeStep {
  * Executes another recipe as a sub-recipe
  */
 export interface RecipeStep extends BaseRecipeStep {
-	tool: 'recipe';
+	tool: "recipe";
 
 	/** Recipe identifier or path */
 	recipe: string;
@@ -261,7 +267,7 @@ export interface RecipeStep extends BaseRecipeStep {
  * Executes a shell command
  */
 export interface ShellStep extends BaseRecipeStep {
-	tool: 'shell';
+	tool: "shell";
 
 	/** Command to execute */
 	command: string;
@@ -284,7 +290,7 @@ export interface ShellStep extends BaseRecipeStep {
  * Interactive prompt for user input
  */
 export interface PromptStep extends BaseRecipeStep {
-	tool: 'prompt';
+	tool: "prompt";
 
 	/** Prompt message */
 	message?: string;
@@ -293,7 +299,7 @@ export interface PromptStep extends BaseRecipeStep {
 	variable: string;
 
 	/** Prompt type */
-	promptType: 'text' | 'confirm' | 'select' | 'multiselect';
+	promptType: "text" | "confirm" | "select" | "multiselect";
 
 	/** Default value */
 	default?: any;
@@ -310,7 +316,7 @@ export interface PromptStep extends BaseRecipeStep {
  * Installs packages using the project's package manager
  */
 export interface InstallStep extends BaseRecipeStep {
-	tool: 'install';
+	tool: "install";
 
 	/** Packages to install */
 	packages: string[];
@@ -322,7 +328,7 @@ export interface InstallStep extends BaseRecipeStep {
 	optional?: boolean;
 
 	/** Package manager override (auto-detected from lockfiles if omitted) */
-	packageManager?: 'bun' | 'pnpm' | 'yarn' | 'npm';
+	packageManager?: "bun" | "pnpm" | "yarn" | "npm";
 }
 
 /**
@@ -331,13 +337,13 @@ export interface InstallStep extends BaseRecipeStep {
  * Supports JSON, YAML, TOML, and .env files.
  */
 export interface QueryStep extends BaseRecipeStep {
-	tool: 'query';
+	tool: "query";
 
 	/** Path to the file to query (relative to project root) */
 	file: string;
 
 	/** File format (auto-detected from extension if omitted) */
-	format?: 'json' | 'yaml' | 'toml' | 'env';
+	format?: "json" | "yaml" | "toml" | "env";
 
 	/**
 	 * Dot-path checks to evaluate.
@@ -366,13 +372,13 @@ export interface QueryStep extends BaseRecipeStep {
  * Creates the file if it doesn't exist.
  */
 export interface PatchStep extends BaseRecipeStep {
-	tool: 'patch';
+	tool: "patch";
 
 	/** Path to the file to patch (relative to project root) */
 	file: string;
 
 	/** File format (auto-detected from extension if omitted) */
-	format?: 'json' | 'yaml' | 'toml';
+	format?: "json" | "yaml" | "toml";
 
 	/** Data to deep-merge into the file */
 	merge: Record<string, any>;
@@ -389,7 +395,7 @@ export interface PatchStep extends BaseRecipeStep {
  * Creates directories (mkdir -p) for each path in the array.
  */
 export interface EnsureDirsStep extends BaseRecipeStep {
-	tool: 'ensure-dirs';
+	tool: "ensure-dirs";
 
 	/** Array of directory paths to create (relative to project root) */
 	paths: string[];
@@ -400,7 +406,7 @@ export interface EnsureDirsStep extends BaseRecipeStep {
  * Executes a list of steps sequentially
  */
 export interface SequenceStep extends BaseRecipeStep {
-	tool: 'sequence';
+	tool: "sequence";
 
 	/** Steps to execute in sequence */
 	steps: RecipeStepUnion[];
@@ -411,7 +417,7 @@ export interface SequenceStep extends BaseRecipeStep {
  * Executes a list of steps concurrently
  */
 export interface ParallelStep extends BaseRecipeStep {
-	tool: 'parallel';
+	tool: "parallel";
 
 	/** Steps to execute in parallel */
 	steps: RecipeStepUnion[];
@@ -425,7 +431,7 @@ export interface ParallelStep extends BaseRecipeStep {
  * Generates code or content using an LLM via Vercel AI SDK
  */
 export interface AIStep extends BaseRecipeStep {
-	tool: 'ai';
+	tool: "ai";
 
 	/** Prompt template (supports Liquid variable interpolation) */
 	prompt: string;
@@ -516,7 +522,10 @@ export interface StepContext {
 	stepData: Record<string, any>;
 
 	/** Condition evaluator */
-	evaluateCondition: (expression: string, context: Record<string, any>) => boolean;
+	evaluateCondition: (
+		expression: string,
+		context: Record<string, any>,
+	) => boolean;
 
 	/** AI answers for 2-pass generation (Pass 2) */
 	answers?: Record<string, any>;
@@ -840,13 +849,13 @@ export interface RecipeConfig {
 			version?: string;
 			variables?: Record<string, any>;
 			condition?: string;
-			strategy?: 'merge' | 'replace' | 'extend';
+			strategy?: "merge" | "replace" | "extend";
 		}>;
 
 		/** Conflict resolution strategy */
 		conflicts?: {
-			strategy: 'merge' | 'replace' | 'extend' | 'error';
-			rules?: Record<string, 'merge' | 'replace' | 'extend' | 'error'>;
+			strategy: "merge" | "replace" | "extend" | "error";
+			rules?: Record<string, "merge" | "replace" | "extend" | "error">;
 		};
 	};
 }
@@ -891,7 +900,15 @@ export interface RecipeDependency {
 	version?: string;
 
 	/** Dependency type */
-	type?: 'recipe' | 'template' | 'action' | 'codemod' | 'npm' | 'github' | 'local' | 'http';
+	type?:
+		| "recipe"
+		| "template"
+		| "action"
+		| "codemod"
+		| "npm"
+		| "github"
+		| "local"
+		| "http";
 
 	/** Source URL for external dependencies */
 	url?: string;
@@ -920,7 +937,7 @@ export interface RecipeExecution {
 	recipe: RecipeConfig;
 
 	/** Current execution status */
-	status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+	status: "pending" | "running" | "completed" | "failed" | "cancelled";
 
 	/** Execution start time */
 	startTime: Date;
@@ -1017,7 +1034,7 @@ export interface RecipeValidationResult {
 		validatorVersion: string;
 
 		/** Validation scope */
-		scope: 'syntax' | 'semantic' | 'full';
+		scope: "syntax" | "semantic" | "full";
 	};
 }
 
@@ -1047,7 +1064,7 @@ export interface RecipeValidationError {
 	};
 
 	/** Error severity */
-	severity: 'error' | 'critical';
+	severity: "error" | "critical";
 
 	/** Suggested fix */
 	suggestion?: string;
@@ -1079,7 +1096,7 @@ export interface RecipeValidationWarning {
 	};
 
 	/** Warning severity */
-	severity: 'warning' | 'info';
+	severity: "warning" | "info";
 
 	/** Suggested improvement */
 	suggestion?: string;
@@ -1197,7 +1214,7 @@ export interface RecipeEngineConfig {
 	/** Logging configuration */
 	logging?: {
 		/** Log level */
-		level: 'debug' | 'info' | 'warn' | 'error';
+		level: "debug" | "info" | "warn" | "error";
 
 		/** Log file path */
 		file?: string;
@@ -1223,69 +1240,69 @@ export interface RecipeEngineConfig {
  * Type guard functions for step types
  */
 export function isTemplateStep(step: RecipeStepUnion): step is TemplateStep {
-	return step.tool === 'template';
+	return step.tool === "template";
 }
 
 export function isActionStep(step: RecipeStepUnion): step is ActionStep {
-	return step.tool === 'action';
+	return step.tool === "action";
 }
 
 export function isCodeModStep(step: RecipeStepUnion): step is CodeModStep {
-	return step.tool === 'codemod';
+	return step.tool === "codemod";
 }
 
 export function isRecipeStep(step: RecipeStepUnion): step is RecipeStep {
-	return step.tool === 'recipe';
+	return step.tool === "recipe";
 }
 
 export function isShellStep(step: BaseRecipeStep): step is ShellStep {
-	return (step as ShellStep).tool === 'shell';
+	return (step as ShellStep).tool === "shell";
 }
 
 export function isPromptStep(step: BaseRecipeStep): step is PromptStep {
-	return (step as PromptStep).tool === 'prompt';
+	return (step as PromptStep).tool === "prompt";
 }
 
 export function isSequenceStep(step: BaseRecipeStep): step is SequenceStep {
-	return (step as SequenceStep).tool === 'sequence';
+	return (step as SequenceStep).tool === "sequence";
 }
 
 export function isParallelStep(step: BaseRecipeStep): step is ParallelStep {
-	return (step as ParallelStep).tool === 'parallel';
+	return (step as ParallelStep).tool === "parallel";
 }
 
 export function isAIStep(step: BaseRecipeStep): step is AIStep {
-	return (step as AIStep).tool === 'ai';
+	return (step as AIStep).tool === "ai";
 }
 
 export function isInstallStep(step: BaseRecipeStep): step is InstallStep {
-	return (step as InstallStep).tool === 'install';
+	return (step as InstallStep).tool === "install";
 }
 
 export function isQueryStep(step: BaseRecipeStep): step is QueryStep {
-	return (step as QueryStep).tool === 'query';
+	return (step as QueryStep).tool === "query";
 }
 
 export function isPatchStep(step: BaseRecipeStep): step is PatchStep {
-	return (step as PatchStep).tool === 'patch';
+	return (step as PatchStep).tool === "patch";
 }
 
 export function isEnsureDirsStep(step: BaseRecipeStep): step is EnsureDirsStep {
-	return (step as EnsureDirsStep).tool === 'ensure-dirs';
+	return (step as EnsureDirsStep).tool === "ensure-dirs";
 }
 
 /**
  * Utility type for extracting step types
  */
-export type StepByTool<T extends ToolType> = T extends 'template'
+export type StepByTool<T extends ToolType> = T extends "template"
 	? TemplateStep
-	: T extends 'action'
+	: T extends "action"
 		? ActionStep
-		: T extends 'codemod'
+		: T extends "codemod"
 			? CodeModStep
-			: T extends 'recipe'
+			: T extends "recipe"
 				? RecipeStep
-				: T extends 'ai'
+				: T extends "ai"
 					? AIStep
 					: never;
 
@@ -1304,7 +1321,7 @@ export class RecipeValidationError extends Error {
 		},
 	) {
 		super(message);
-		this.name = 'RecipeValidationError';
+		this.name = "RecipeValidationError";
 	}
 }
 
@@ -1316,7 +1333,7 @@ export class StepExecutionError extends Error {
 		public cause?: Error,
 	) {
 		super(message);
-		this.name = 'StepExecutionError';
+		this.name = "StepExecutionError";
 	}
 }
 
@@ -1327,7 +1344,7 @@ export class RecipeDependencyError extends Error {
 		public version?: string,
 	) {
 		super(message);
-		this.name = 'RecipeDependencyError';
+		this.name = "RecipeDependencyError";
 	}
 }
 
@@ -1337,6 +1354,6 @@ export class CircularDependencyError extends Error {
 		public cycle: string[],
 	) {
 		super(message);
-		this.name = 'CircularDependencyError';
+		this.name = "CircularDependencyError";
 	}
 }

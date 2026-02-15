@@ -1,227 +1,227 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://hypergen.dev/schemas/kit.json",
-  "title": "Kit Configuration",
-  "description": "Schema for Hypergen kit.yml configuration files",
-  "type": "object",
-  "required": ["name", "description", "version", "cookbooks"],
-  "additionalProperties": false,
-  "properties": {
-    "name": {
-      "type": "string",
-      "description": "Kit name (e.g., @hyper-kits/moon)",
-      "pattern": "^[a-z0-9-]+\\/[a-z0-9-]+$"
-    },
-    "description": {
-      "type": "string",
-      "description": "Kit description"
-    },
-    "version": {
-      "type": "string",
-      "description": "Semantic version",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9]+)?$"
-    },
-    "author": {
-      "type": "string",
-      "description": "Author information"
-    },
-    "homepage": {
-      "type": "string",
-      "description": "Homepage URL",
-      "format": "uri"
-    },
-    "repository": {
-      "type": "string",
-      "description": "Repository URL",
-      "format": "uri"
-    },
-    "keywords": {
-      "type": "array",
-      "description": "Keywords for discovery",
-      "items": {
-        "type": "string"
-      }
-    },
-    "license": {
-      "type": "string",
-      "description": "License identifier"
-    },
-    "defaults": {
-      "type": "object",
-      "description": "Default cookbook, recipe, or direct recipe configuration",
-      "additionalProperties": false,
-      "properties": {
-        "cookbook": {
-          "type": "string",
-          "description": "Default cookbook when none specified"
-        },
-        "recipe": {
-          "type": "string",
-          "description": "Default recipe when none specified (cookbook or direct)"
-        },
-        "cookbookDefaults": {
-          "type": "object",
-          "description": "Per-cookbook default recipes",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "directRecipe": {
-          "type": "string",
-          "description": "Default direct recipe when no cookbook specified"
-        }
-      }
-    },
-    "cookbooks": {
-      "oneOf": [
-        {
-          "type": "array",
-          "description": "Glob patterns for cookbook discovery",
-          "items": {
-            "type": "string"
-          }
-        },
-        {
-          "type": "array",
-          "description": "Explicit cookbook references",
-          "items": {
-            "type": "object",
-            "required": ["name", "description", "path"],
-            "additionalProperties": false,
-            "properties": {
-              "name": {
-                "type": "string",
-                "description": "Cookbook name",
-                "pattern": "^[a-z][a-z0-9-]*$"
-              },
-              "description": {
-                "type": "string",
-                "description": "Cookbook description"
-              },
-              "path": {
-                "type": "string",
-                "description": "Path to cookbook directory"
-              },
-              "defaultRecipe": {
-                "type": "string",
-                "description": "Default recipe for this cookbook"
-              }
-            }
-          }
-        }
-      ]
-    },
-    "variables": {
-      "$ref": "#/definitions/variables"
-    },
-    "tags": {
-      "type": "array",
-      "description": "Tags for categorization",
-      "items": {
-        "type": "string"
-      }
-    },
-    "categories": {
-      "type": "array",
-      "description": "Categories for organization",
-      "items": {
-        "type": "string"
-      }
-    },
-    "recipes": {
-      "type": "array",
-      "description": "Direct recipes that don't belong to a cookbook - glob patterns",
-      "items": {
-        "type": "string"
-      }
-    },
-    "shared": {
-      "type": "object",
-      "description": "Shared templates and partials",
-      "additionalProperties": false,
-      "properties": {
-        "templates": {
-          "type": "array",
-          "description": "Glob patterns for shared templates",
-          "items": {
-            "type": "string"
-          }
-        },
-        "partials": {
-          "type": "array",
-          "description": "Glob patterns for shared partials",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    }
-  },
-  "definitions": {
-    "variables": {
-      "type": "object",
-      "description": "Variable definitions",
-      "patternProperties": {
-        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
-          "$ref": "#/definitions/variableConfig"
-        }
-      }
-    },
-    "variableConfig": {
-      "type": "object",
-      "description": "Variable configuration",
-      "required": ["type"],
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": ["string", "number", "boolean", "enum", "array", "object", "file", "directory"]
-        },
-        "prompt": {
-          "type": "string",
-          "description": "Prompt text for interactive input"
-        },
-        "required": {
-          "type": "boolean",
-          "description": "Whether the variable is required"
-        },
-        "default": {},
-        "description": {
-          "type": "string",
-          "description": "Description for documentation"
-        },
-        "validate": {
-          "$ref": "#/definitions/validationConfig"
-        },
-        "values": {
-          "type": "array",
-          "description": "Available values (for enum type)",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "validationConfig": {
-      "type": "object",
-      "description": "Validation rules",
-      "properties": {
-        "pattern": {
-          "type": "string",
-          "description": "Regex pattern for string validation"
-        },
-        "message": {
-          "type": "string",
-          "description": "Error message for validation failure"
-        },
-        "min": {
-          "type": "number",
-          "description": "Minimum value/length"
-        },
-        "max": {
-          "type": "number",
-          "description": "Maximum value/length"
-        }
-      }
-    }
-  }
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://hypergen.dev/schemas/kit.json",
+	"title": "Kit Configuration",
+	"description": "Schema for Hypergen kit.yml configuration files",
+	"type": "object",
+	"required": ["name", "description", "version", "cookbooks"],
+	"additionalProperties": false,
+	"properties": {
+		"name": {
+			"type": "string",
+			"description": "Kit name (e.g., @hyper-kits/moon)",
+			"pattern": "^[a-z0-9-]+\\/[a-z0-9-]+$"
+		},
+		"description": {
+			"type": "string",
+			"description": "Kit description"
+		},
+		"version": {
+			"type": "string",
+			"description": "Semantic version",
+			"pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9]+)?$"
+		},
+		"author": {
+			"type": "string",
+			"description": "Author information"
+		},
+		"homepage": {
+			"type": "string",
+			"description": "Homepage URL",
+			"format": "uri"
+		},
+		"repository": {
+			"type": "string",
+			"description": "Repository URL",
+			"format": "uri"
+		},
+		"keywords": {
+			"type": "array",
+			"description": "Keywords for discovery",
+			"items": {
+				"type": "string"
+			}
+		},
+		"license": {
+			"type": "string",
+			"description": "License identifier"
+		},
+		"defaults": {
+			"type": "object",
+			"description": "Default cookbook, recipe, or direct recipe configuration",
+			"additionalProperties": false,
+			"properties": {
+				"cookbook": {
+					"type": "string",
+					"description": "Default cookbook when none specified"
+				},
+				"recipe": {
+					"type": "string",
+					"description": "Default recipe when none specified (cookbook or direct)"
+				},
+				"cookbookDefaults": {
+					"type": "object",
+					"description": "Per-cookbook default recipes",
+					"additionalProperties": {
+						"type": "string"
+					}
+				},
+				"directRecipe": {
+					"type": "string",
+					"description": "Default direct recipe when no cookbook specified"
+				}
+			}
+		},
+		"cookbooks": {
+			"oneOf": [
+				{
+					"type": "array",
+					"description": "Glob patterns for cookbook discovery",
+					"items": {
+						"type": "string"
+					}
+				},
+				{
+					"type": "array",
+					"description": "Explicit cookbook references",
+					"items": {
+						"type": "object",
+						"required": ["name", "description", "path"],
+						"additionalProperties": false,
+						"properties": {
+							"name": {
+								"type": "string",
+								"description": "Cookbook name",
+								"pattern": "^[a-z][a-z0-9-]*$"
+							},
+							"description": {
+								"type": "string",
+								"description": "Cookbook description"
+							},
+							"path": {
+								"type": "string",
+								"description": "Path to cookbook directory"
+							},
+							"defaultRecipe": {
+								"type": "string",
+								"description": "Default recipe for this cookbook"
+							}
+						}
+					}
+				}
+			]
+		},
+		"variables": {
+			"$ref": "#/definitions/variables"
+		},
+		"tags": {
+			"type": "array",
+			"description": "Tags for categorization",
+			"items": {
+				"type": "string"
+			}
+		},
+		"categories": {
+			"type": "array",
+			"description": "Categories for organization",
+			"items": {
+				"type": "string"
+			}
+		},
+		"recipes": {
+			"type": "array",
+			"description": "Direct recipes that don't belong to a cookbook - glob patterns",
+			"items": {
+				"type": "string"
+			}
+		},
+		"shared": {
+			"type": "object",
+			"description": "Shared templates and partials",
+			"additionalProperties": false,
+			"properties": {
+				"templates": {
+					"type": "array",
+					"description": "Glob patterns for shared templates",
+					"items": {
+						"type": "string"
+					}
+				},
+				"partials": {
+					"type": "array",
+					"description": "Glob patterns for shared partials",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		}
+	},
+	"definitions": {
+		"variables": {
+			"type": "object",
+			"description": "Variable definitions",
+			"patternProperties": {
+				"^[a-zA-Z_][a-zA-Z0-9_]*$": {
+					"$ref": "#/definitions/variableConfig"
+				}
+			}
+		},
+		"variableConfig": {
+			"type": "object",
+			"description": "Variable configuration",
+			"required": ["type"],
+			"properties": {
+				"type": {
+					"type": "string",
+					"enum": ["string", "number", "boolean", "enum", "array", "object", "file", "directory"]
+				},
+				"prompt": {
+					"type": "string",
+					"description": "Prompt text for interactive input"
+				},
+				"required": {
+					"type": "boolean",
+					"description": "Whether the variable is required"
+				},
+				"default": {},
+				"description": {
+					"type": "string",
+					"description": "Description for documentation"
+				},
+				"validate": {
+					"$ref": "#/definitions/validationConfig"
+				},
+				"values": {
+					"type": "array",
+					"description": "Available values (for enum type)",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"validationConfig": {
+			"type": "object",
+			"description": "Validation rules",
+			"properties": {
+				"pattern": {
+					"type": "string",
+					"description": "Regex pattern for string validation"
+				},
+				"message": {
+					"type": "string",
+					"description": "Error message for validation failure"
+				},
+				"min": {
+					"type": "number",
+					"description": "Minimum value/length"
+				},
+				"max": {
+					"type": "number",
+					"description": "Maximum value/length"
+				}
+			}
+		}
+	}
 }

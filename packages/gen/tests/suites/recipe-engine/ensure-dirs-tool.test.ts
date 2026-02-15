@@ -1,12 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import {
-	mkdtempSync,
-	rmSync,
-	existsSync,
-	statSync,
-	mkdirSync,
-	writeFileSync,
-} from "node:fs";
+import { mkdtempSync, rmSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -14,20 +7,13 @@ import {
 	EnsureDirsToolFactory,
 	ensureDirsToolFactory,
 } from "#/recipe-engine/tools/ensure-dirs-tool";
-import type {
-	EnsureDirsStep,
-	StepContext,
-	StepResult,
-} from "#/recipe-engine/types";
+import type { EnsureDirsStep, StepContext, StepResult } from "#/recipe-engine/types";
 import type { ToolValidationResult } from "#/recipe-engine/tools/base";
 
 /**
  * Build a minimal StepContext with the required fields.
  */
-function createContext(
-	projectRoot: string,
-	overrides: Partial<StepContext> = {},
-): StepContext {
+function createContext(projectRoot: string, overrides: Partial<StepContext> = {}): StepContext {
 	return {
 		projectRoot,
 		step: {} as any,
@@ -44,10 +30,7 @@ function createContext(
 /**
  * Build an EnsureDirsStep with sensible defaults.
  */
-function createStep(
-	paths: string[],
-	overrides: Partial<EnsureDirsStep> = {},
-): EnsureDirsStep {
+function createStep(paths: string[], overrides: Partial<EnsureDirsStep> = {}): EnsureDirsStep {
 	return {
 		tool: "ensure-dirs",
 		name: "test-ensure-dirs",
@@ -232,17 +215,9 @@ describe("EnsureDirsTool", () => {
 
 			expect(result.status).toBe("completed");
 			const toolResult = result.toolResult!;
-			expect(toolResult.paths).toEqual([
-				"existing1",
-				"new1",
-				"existing2",
-				"new2",
-			]);
+			expect(toolResult.paths).toEqual(["existing1", "new1", "existing2", "new2"]);
 			expect(toolResult.created.sort()).toEqual(["new1", "new2"]);
-			expect(toolResult.alreadyExisted.sort()).toEqual([
-				"existing1",
-				"existing2",
-			]);
+			expect(toolResult.alreadyExisted.sort()).toEqual(["existing1", "existing2"]);
 		});
 	});
 
@@ -292,19 +267,13 @@ describe("EnsureDirsTool", () => {
 					module: "dashboard",
 				},
 			});
-			const step = createStep([
-				"{{ org }}/{{ project }}/{{ module }}/components",
-			]);
+			const step = createStep(["{{ org }}/{{ project }}/{{ module }}/components"]);
 
 			const result = await tool.execute(step, context);
 
 			expect(result.status).toBe("completed");
-			expect(existsSync(join(testDir, "acme/web/dashboard/components"))).toBe(
-				true,
-			);
-			expect(result.toolResult!.created).toContain(
-				"acme/web/dashboard/components",
-			);
+			expect(existsSync(join(testDir, "acme/web/dashboard/components"))).toBe(true);
+			expect(result.toolResult!.created).toContain("acme/web/dashboard/components");
 		});
 
 		it("should leave unresolvable variables as-is", async () => {
@@ -428,9 +397,7 @@ describe("EnsureDirsTool", () => {
 
 			const validation = await tool.validate(step, context);
 			expect(validation.isValid).toBe(false);
-			expect(
-				validation.errors.some((e: string) => /at least one/i.test(e)),
-			).toBe(true);
+			expect(validation.errors.some((e: string) => /at least one/i.test(e))).toBe(true);
 		});
 
 		it("should fail if paths contains a non-string entry", async () => {
@@ -440,9 +407,7 @@ describe("EnsureDirsTool", () => {
 
 			const validation = await tool.validate(step, context);
 			expect(validation.isValid).toBe(false);
-			expect(validation.errors.some((e: string) => /index 1/i.test(e))).toBe(
-				true,
-			);
+			expect(validation.errors.some((e: string) => /index 1/i.test(e))).toBe(true);
 		});
 
 		it("should fail if paths contains an empty string entry", async () => {
@@ -452,9 +417,7 @@ describe("EnsureDirsTool", () => {
 
 			const validation = await tool.validate(step, context);
 			expect(validation.isValid).toBe(false);
-			expect(validation.errors.some((e: string) => /index 1/i.test(e))).toBe(
-				true,
-			);
+			expect(validation.errors.some((e: string) => /index 1/i.test(e))).toBe(true);
 		});
 
 		it("should report multiple invalid entries", async () => {

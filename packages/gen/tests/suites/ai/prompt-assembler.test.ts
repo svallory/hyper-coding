@@ -141,9 +141,7 @@ describe("PromptAssembler", () => {
 			answersPath: "./my-answers.json",
 		});
 
-		expect(result).toContain(
-			"hypergen run ./my-recipe --name=User --answers ./my-answers.json",
-		);
+		expect(result).toContain("hypergen run ./my-recipe --name=User --answers ./my-answers.json");
 	});
 
 	it("uses default answers path when not specified", () => {
@@ -218,9 +216,7 @@ describe("PromptAssembler", () => {
 				promptTemplate: customTemplatePath,
 			});
 
-			expect(result).toContain(
-				"CUSTOM: 1 entries, command=hypergen run custom",
-			);
+			expect(result).toContain("CUSTOM: 1 entries, command=hypergen run custom");
 			// Should NOT contain default template markers
 			expect(result).not.toContain("# Hypergen AI Generation Request");
 		});
@@ -317,9 +313,7 @@ describe("PromptAssembler", () => {
 			const lines = result.split("\n");
 			const handlerKeyIdx = lines.indexOf("ENTRY_KEY=handler");
 			const nextEntryOrEnd = lines.length;
-			const handlerBlock = lines
-				.slice(handlerKeyIdx, nextEntryOrEnd)
-				.join("\n");
+			const handlerBlock = lines.slice(handlerKeyIdx, nextEntryOrEnd).join("\n");
 			expect(handlerBlock).toContain("ENTRY_HAS_OUTPUT=false");
 			// The @if(entry.hasOutputDesc) guard should have prevented ENTRY_OUTPUT
 			// from appearing between handler's ENTRY_HAS_OUTPUT=false and the end
@@ -380,11 +374,7 @@ describe("PromptAssembler", () => {
 		const collector = AiCollector.getInstance();
 		collector.addEntry({
 			key: "schema",
-			contexts: [
-				"Database is PostgreSQL",
-				"ORM is Prisma",
-				"Schema uses UUID primary keys",
-			],
+			contexts: ["Database is PostgreSQL", "ORM is Prisma", "Schema uses UUID primary keys"],
 			prompt: "Define the user schema",
 			outputDescription: "",
 			examples: [],
@@ -479,11 +469,7 @@ describe("PromptAssembler", () => {
 
 	it("handles keys with dots, dashes, and underscores", () => {
 		const collector = AiCollector.getInstance();
-		const specialKeys = [
-			"my.dotted.key",
-			"my-dashed-key",
-			"my_underscored_key",
-		];
+		const specialKeys = ["my.dotted.key", "my-dashed-key", "my_underscored_key"];
 
 		for (const key of specialKeys) {
 			collector.addEntry({
@@ -511,8 +497,7 @@ describe("PromptAssembler", () => {
 
 	it("treats Jig-like syntax in prompt and context as literal text", () => {
 		const collector = AiCollector.getInstance();
-		const jigPrompt =
-			"Use @if(condition) to check and {{ variable }} for output";
+		const jigPrompt = "Use @if(condition) to check and {{ variable }} for output";
 		const jigContext = "@each(item in items) and @end are template directives";
 
 		collector.addGlobalContext(jigContext);

@@ -8,18 +8,21 @@
  * Algorithm: greedy path matching — longest filesystem match wins.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
-import createDebug from 'debug';
-import type { ParsedCookbook } from './cookbook-parser.js';
-import { discoverCookbooksInKit, discoverRecipesInCookbook } from './cookbook-parser.js';
-import type { ParsedKit } from './kit-parser.js';
+import fs from "node:fs";
+import path from "node:path";
+import createDebug from "debug";
+import type { ParsedCookbook } from "./cookbook-parser.js";
+import {
+	discoverCookbooksInKit,
+	discoverRecipesInCookbook,
+} from "./cookbook-parser.js";
+import type { ParsedKit } from "./kit-parser.js";
 
-const debug = createDebug('hypergen:config:path-resolver');
+const debug = createDebug("hypergen:config:path-resolver");
 
 export interface ResolvedPath {
 	/** Whether we resolved to a single recipe or a directory group */
-	type: 'recipe' | 'group';
+	type: "recipe" | "group";
 	/** Filesystem path to recipe.yml or directory */
 	fullPath: string;
 	/** Kit name (if matched) */
@@ -50,22 +53,22 @@ export class PathResolver {
 	async resolve(segments: string[]): Promise<ResolvedPath | null> {
 		if (segments.length === 0) return null;
 
-		debug('Resolving path segments: %o', segments);
+		debug("Resolving path segments: %o", segments);
 
 		// 1. Direct file path bypass
 		const first = segments[0];
 		if (
-			first.startsWith('./') ||
-			first.startsWith('../') ||
-			first.startsWith('/') ||
-			first.endsWith('.yml') ||
-			first.endsWith('.yaml')
+			first.startsWith("./") ||
+			first.startsWith("../") ||
+			first.startsWith("/") ||
+			first.endsWith(".yml") ||
+			first.endsWith(".yaml")
 		) {
 			const resolved = path.resolve(this.cwd, first);
 			if (fs.existsSync(resolved)) {
-				debug('Direct file path: %s', resolved);
+				debug("Direct file path: %s", resolved);
 				return {
-					type: 'recipe',
+					type: "recipe",
 					fullPath: resolved,
 					consumed: [first],
 					remaining: segments.slice(1),
@@ -83,25 +86,27 @@ export class PathResolver {
 		if (fallbackResult) return fallbackResult;
 
 		// 4. Try slash-separated single arg: "crud/edit-page" -> ["crud", "edit-page"]
-		if (segments.length === 1 && segments[0].includes('/')) {
-			const split = segments[0].split('/');
+		if (segments.length === 1 && segments[0].includes("/")) {
+			const split = segments[0].split("/");
 			const splitResult = await this.resolve(split);
 			if (splitResult) return splitResult;
 		}
 
-		debug('No resolution found for segments: %o', segments);
+		debug("No resolution found for segments: %o", segments);
 		return null;
 	}
 
 	/**
 	 * Try to resolve segments starting with a kit name.
 	 */
-	private async resolveViaKit(segments: string[]): Promise<ResolvedPath | null> {
+	private async resolveViaKit(
+		segments: string[],
+	): Promise<ResolvedPath | null> {
 		const kitName = segments[0];
 		const kit = this.kits.get(kitName);
 		if (!kit) return null;
 
-		debug('Matched kit: %s', kitName);
+		debug("Matched kit: %s", kitName);
 
 		const kitDir = kit.dirPath;
 		const remaining = segments.slice(1);
@@ -114,7 +119,7 @@ export class PathResolver {
 		// Discover cookbooks in this kit
 		const cookbooks = await discoverCookbooksInKit(
 			kitDir,
-			kit.config.cookbooks || ['./cookbooks/*/cookbook.yml'],
+			kit.config.cookbooks || ["./cookbooks/*/cookbook.yml"],
 		);
 
 		// Try to match a cookbook
@@ -132,16 +137,16 @@ export class PathResolver {
 			// Try to match a recipe within the cookbook
 			const recipes = await discoverRecipesInCookbook(
 				cookbook.dirPath,
-				cookbook.config.recipes || ['./*/recipe.yml'],
+				cookbook.config.recipes || ["./*/recipe.yml"],
 			);
 
 			const recipeName = afterCookbook[0];
 			const recipeYml = recipes.get(recipeName);
 
 			if (recipeYml) {
-				debug('Matched recipe: %s/%s/%s', kitName, cookbookName, recipeName);
+				debug("Matched recipe: %s/%s/%s", kitName, cookbookName, recipeName);
 				return {
-					type: 'recipe',
+					type: "recipe",
 					fullPath: recipeYml,
 					kit: kitName,
 					cookbook: cookbookName,
@@ -158,14 +163,14 @@ export class PathResolver {
 				const defaultRecipeYml = recipes.get(defaultRecipe);
 				if (defaultRecipeYml) {
 					debug(
-						'Cookbook default recipe: %s/%s/%s with positional args: %o',
+						"Cookbook default recipe: %s/%s/%s with positional args: %o",
 						kitName,
 						cookbookName,
 						defaultRecipe,
 						afterCookbook,
 					);
 					return {
-						type: 'recipe',
+						type: "recipe",
 						fullPath: defaultRecipeYml,
 						kit: kitName,
 						cookbook: cookbookName,
@@ -177,9 +182,9 @@ export class PathResolver {
 			}
 
 			// Treat as group execution
-			debug('Cookbook group execution: %s/%s', kitName, cookbookName);
+			debug("Cookbook group execution: %s/%s", kitName, cookbookName);
 			return {
-				type: 'group',
+				type: "group",
 				fullPath: cookbook.dirPath,
 				kit: kitName,
 				cookbook: cookbookName,
@@ -195,11 +200,18 @@ export class PathResolver {
 	/**
 	 * Resolve via search directories (backward-compatible fallback).
 	 */
-	private async resolveViaSearchDirs(segments: string[]): Promise<ResolvedPath | null> {
+	private async resolveViaSearchDirs(
+		segments: string[],
+	): Promise<ResolvedPath | null> {
 		for (const searchDir of this.searchDirs) {
 			if (!fs.existsSync(searchDir)) continue;
 
-			const result = await this.greedyResolve(searchDir, segments, [], undefined);
+			const result = await this.greedyResolve(
+				searchDir,
+				segments,
+				[],
+				undefined,
+			);
 			if (result) return result;
 		}
 		return null;
@@ -232,15 +244,16 @@ export class PathResolver {
 			const stat = fs.statSync(dirPath);
 			if (!stat.isDirectory()) continue;
 
-			const recipeYml = path.join(dirPath, 'recipe.yml');
+			const recipeYml = path.join(dirPath, "recipe.yml");
 			if (fs.existsSync(recipeYml)) {
-				debug('Greedy match (recipe): %s', recipeYml);
+				debug("Greedy match (recipe): %s", recipeYml);
 				return {
-					type: 'recipe',
+					type: "recipe",
 					fullPath: recipeYml,
 					kit: kitName,
 					cookbook: candidate[0],
-					recipe: candidate.length > 1 ? candidate[candidate.length - 1] : undefined,
+					recipe:
+						candidate.length > 1 ? candidate[candidate.length - 1] : undefined,
 					consumed: [...prefixConsumed, ...candidate],
 					remaining: segments.slice(len),
 				};
@@ -252,9 +265,9 @@ export class PathResolver {
 				// Check if there are recipes inside (it's a valid group)
 				const hasRecipes = this.dirContainsRecipes(dirPath);
 				if (hasRecipes) {
-					debug('Greedy match (group): %s', dirPath);
+					debug("Greedy match (group): %s", dirPath);
 					return {
-						type: 'group',
+						type: "group",
 						fullPath: dirPath,
 						kit: kitName,
 						cookbook: candidate[0],
@@ -276,7 +289,7 @@ export class PathResolver {
 			const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 			for (const entry of entries) {
 				if (entry.isDirectory()) {
-					const recipeYml = path.join(dirPath, entry.name, 'recipe.yml');
+					const recipeYml = path.join(dirPath, entry.name, "recipe.yml");
 					if (fs.existsSync(recipeYml)) return true;
 				}
 			}
@@ -289,21 +302,28 @@ export class PathResolver {
 	/**
 	 * Resolve kit default: use defaults.cookbook + defaults.recipe
 	 */
-	private async resolveKitDefault(kit: ParsedKit, kitName: string): Promise<ResolvedPath | null> {
+	private async resolveKitDefault(
+		kit: ParsedKit,
+		kitName: string,
+	): Promise<ResolvedPath | null> {
 		const defaults = kit.config.defaults;
 		if (!defaults?.cookbook) {
-			debug('Kit has no default cookbook: %s', kitName);
+			debug("Kit has no default cookbook: %s", kitName);
 			return null;
 		}
 
 		const cookbooks = await discoverCookbooksInKit(
 			kit.dirPath,
-			kit.config.cookbooks || ['./cookbooks/*/cookbook.yml'],
+			kit.config.cookbooks || ["./cookbooks/*/cookbook.yml"],
 		);
 
 		const cookbook = cookbooks.get(defaults.cookbook);
 		if (!cookbook) {
-			debug('Kit default cookbook not found: %s/%s', kitName, defaults.cookbook);
+			debug(
+				"Kit default cookbook not found: %s/%s",
+				kitName,
+				defaults.cookbook,
+			);
 			return null;
 		}
 
@@ -322,13 +342,18 @@ export class PathResolver {
 		if (defaultRecipe) {
 			const recipes = await discoverRecipesInCookbook(
 				cookbook.dirPath,
-				cookbook.config.recipes || ['./*/recipe.yml'],
+				cookbook.config.recipes || ["./*/recipe.yml"],
 			);
 			const recipeYml = recipes.get(defaultRecipe);
 			if (recipeYml) {
-				debug('Cookbook default recipe: %s/%s/%s', kitName, cookbookName, defaultRecipe);
+				debug(
+					"Cookbook default recipe: %s/%s/%s",
+					kitName,
+					cookbookName,
+					defaultRecipe,
+				);
 				return {
-					type: 'recipe',
+					type: "recipe",
 					fullPath: recipeYml,
 					kit: kitName,
 					cookbook: cookbookName,
@@ -340,9 +365,13 @@ export class PathResolver {
 		}
 
 		// No default recipe — treat as group
-		debug('Cookbook has no default recipe, treating as group: %s/%s', kitName, cookbookName);
+		debug(
+			"Cookbook has no default recipe, treating as group: %s/%s",
+			kitName,
+			cookbookName,
+		);
 		return {
-			type: 'group',
+			type: "group",
 			fullPath: cookbook.dirPath,
 			kit: kitName,
 			cookbook: cookbookName,

@@ -9,14 +9,14 @@
  * @document ../../docs/reflection/INTERFACE_DOC.md
  */
 export interface InterfaceWithDocuments {
-  prop: string;
+	prop: string;
 }
 
 /**
  * @document ../../docs/reflection/ENUM_DOC.md
  */
 export enum EnumWithDocuments {
-  EnumMember,
+	EnumMember,
 }
 
 /**
@@ -39,7 +39,7 @@ export function multipleFunctionWithDocuments(value: string): string;
  * @document ../../docs/reflection/FUNCTION_DOC_3.md
  */
 export function multipleFunctionWithDocuments() {
-  return '';
+	return "";
 }
 
 /**
@@ -48,7 +48,7 @@ export function multipleFunctionWithDocuments() {
  * @document ../../docs/reflection/FUNCTION_DOC_1.md
  */
 export function functionWithDocuments() {
-  return '';
+	return "";
 }
 
 /**
@@ -64,14 +64,14 @@ export const variableWithDocuments = 1;
 /**
  * @document ../../docs/reflection/TYPE_DOC.md
  */
-export type TypeWithDocuments = 'string';
+export type TypeWithDocuments = "string";
 
 /**
  * @document ../../docs/reflection/NAMESPACE_DOC.md
  */
 export namespace NamespaceWithDocuments {
-  /**
-   * @document ../../docs/reflection/CLASS_DOC.md
-   */
-  export class NamespaceClassWithDocuments {}
+	/**
+	 * @document ../../docs/reflection/CLASS_DOC.md
+	 */
+	export class NamespaceClassWithDocuments {}
 }

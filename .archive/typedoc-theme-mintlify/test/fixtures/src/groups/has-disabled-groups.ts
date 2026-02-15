@@ -10,16 +10,16 @@
  * Interface A
  */
 export interface InterfaceA {
-  propA: string;
-  propB: string;
+	propA: string;
+	propB: string;
 }
 
 /**
  * InterfaceB function.
  */
 export interface InterfaceB {
-  propA: string;
-  propB: string;
+	propA: string;
+	propB: string;
 }
 /**
  * EnumA function.
@@ -46,5 +46,5 @@ export function functionA() {}
 /**
  * Comments for variableA
  */
-export const variableA = '';
-export const variableB = '';
+export const variableA = "";
+export const variableB = "";

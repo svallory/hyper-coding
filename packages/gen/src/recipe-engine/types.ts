@@ -37,13 +37,7 @@ export interface RecipeProvides {
 /**
  * Core step execution status
  */
-export type StepStatus =
-	| "pending"
-	| "running"
-	| "completed"
-	| "failed"
-	| "skipped"
-	| "cancelled";
+export type StepStatus = "pending" | "running" | "completed" | "failed" | "skipped" | "cancelled";
 
 /**
  * Tool types supported by the recipe system
@@ -528,10 +522,7 @@ export interface StepContext {
 	stepData: Record<string, any>;
 
 	/** Condition evaluator */
-	evaluateCondition: (
-		expression: string,
-		context: Record<string, any>,
-	) => boolean;
+	evaluateCondition: (expression: string, context: Record<string, any>) => boolean;
 
 	/** AI answers for 2-pass generation (Pass 2) */
 	answers?: Record<string, any>;
@@ -906,15 +897,7 @@ export interface RecipeDependency {
 	version?: string;
 
 	/** Dependency type */
-	type?:
-		| "recipe"
-		| "template"
-		| "action"
-		| "codemod"
-		| "npm"
-		| "github"
-		| "local"
-		| "http";
+	type?: "recipe" | "template" | "action" | "codemod" | "npm" | "github" | "local" | "http";
 
 	/** Source URL for external dependencies */
 	url?: string;

@@ -208,10 +208,7 @@ export class StepExecutor extends EventEmitter {
 	private metrics?: StepExecutionMetrics;
 	private progress?: StepExecutionProgress;
 
-	constructor(
-		toolRegistry?: ToolRegistry,
-		config: Partial<StepExecutorConfig> = {},
-	) {
+	constructor(toolRegistry?: ToolRegistry, config: Partial<StepExecutorConfig> = {}) {
 		super();
 
 		this.toolRegistry = toolRegistry || getToolRegistry();
@@ -233,11 +230,7 @@ export class StepExecutor extends EventEmitter {
 		const executionId = this.generateExecutionId();
 		const startTime = Date.now();
 
-		this.debug(
-			"Starting step execution [%s] with %d steps",
-			executionId,
-			steps.length,
-		);
+		this.debug("Starting step execution [%s] with %d steps", executionId, steps.length);
 		this.emit("execution:started", { executionId, steps: steps.length });
 
 		try {
@@ -257,19 +250,11 @@ export class StepExecutor extends EventEmitter {
 			// Create execution plan with dependency resolution
 			const executionPlan = await this.createExecutionPlan(steps, context);
 
-			this.debug(
-				"Execution plan created: %d phases",
-				executionPlan.phases.length,
-			);
+			this.debug("Execution plan created: %d phases", executionPlan.phases.length);
 			this.emit("execution:plan-created", { executionId, plan: executionPlan });
 
 			// Execute phases sequentially, steps within phases potentially in parallel
-			const results = await this.executeExecutionPlan(
-				executionPlan,
-				context,
-				options,
-				executionId,
-			);
+			const results = await this.executeExecutionPlan(executionPlan, context, options, executionId);
 
 			// Finalize metrics
 			if (this.config.collectMetrics && this.metrics) {
@@ -277,11 +262,7 @@ export class StepExecutor extends EventEmitter {
 				this.finalizeMetrics();
 			}
 
-			this.debug(
-				"Step execution completed [%s] in %dms",
-				executionId,
-				Date.now() - startTime,
-			);
+			this.debug("Step execution completed [%s] in %dms", executionId, Date.now() - startTime);
 			this.emit("execution:completed", {
 				executionId,
 				results,
@@ -344,10 +325,7 @@ export class StepExecutor extends EventEmitter {
 
 			// Evaluate condition if present
 			if (step.when) {
-				stepResult.conditionResult = context.evaluateCondition(
-					step.when,
-					context.variables,
-				);
+				stepResult.conditionResult = context.evaluateCondition(step.when, context.variables);
 
 				if (!stepResult.conditionResult) {
 					this.debug("Step condition not met, skipping: %s", step.name);
@@ -369,11 +347,7 @@ export class StepExecutor extends EventEmitter {
 				step.tool !== "sequence" &&
 				step.tool !== "parallel"
 			) {
-				this.debug(
-					"Skipping non-template step in collect mode: %s (%s)",
-					step.name,
-					step.tool,
-				);
+				this.debug("Skipping non-template step in collect mode: %s (%s)", step.name, step.tool);
 				stepResult.status = "skipped";
 				stepResult.endTime = new Date();
 				stepResult.duration = Date.now() - stepStartTime;
@@ -383,8 +357,7 @@ export class StepExecutor extends EventEmitter {
 			}
 
 			// Execute step with retries
-			const maxRetries =
-				options.retries ?? step.retries ?? this.config.defaultRetries;
+			const maxRetries = options.retries ?? step.retries ?? this.config.defaultRetries;
 			let lastError: Error | undefined;
 
 			for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -392,21 +365,12 @@ export class StepExecutor extends EventEmitter {
 					stepResult.retryCount = attempt;
 
 					if (attempt > 0) {
-						this.debug(
-							"Retrying step: %s (attempt %d/%d)",
-							step.name,
-							attempt + 1,
-							maxRetries + 1,
-						);
+						this.debug("Retrying step: %s (attempt %d/%d)", step.name, attempt + 1, maxRetries + 1);
 						await this.delay(this.calculateRetryDelay(attempt));
 					}
 
 					// Route to appropriate tool and execute
-					const toolResult = await this.routeAndExecuteStep(
-						step,
-						context,
-						options,
-					);
+					const toolResult = await this.routeAndExecuteStep(step, context, options);
 
 					stepResult.toolResult = toolResult;
 
@@ -416,9 +380,7 @@ export class StepExecutor extends EventEmitter {
 						stepResult.error = toolResult.error;
 						stepResult.endTime = new Date();
 						stepResult.duration = Date.now() - stepStartTime;
-						throw new Error(
-							toolResult.error?.message || `Step '${step.name}' failed`,
-						);
+						throw new Error(toolResult.error?.message || `Step '${step.name}' failed`);
 					}
 
 					stepResult.status = "completed";
@@ -430,20 +392,12 @@ export class StepExecutor extends EventEmitter {
 
 					// Evaluate export expressions and inject into context.variables
 					if (step.exports && Object.keys(step.exports).length > 0) {
-						const outputs = await evaluateStepOutputs(
-							step.exports,
-							toolResult,
-							context,
-						);
+						const outputs = await evaluateStepOutputs(step.exports, toolResult, context);
 						stepResult.output = { ...stepResult.output, ...outputs };
 						Object.assign(context.variables, outputs);
 					}
 
-					this.debug(
-						"Step completed successfully: %s in %dms",
-						step.name,
-						stepResult.duration,
-					);
+					this.debug("Step completed successfully: %s in %dms", step.name, stepResult.duration);
 					this.emit("step:completed", {
 						step: step.name,
 						toolType: step.tool,
@@ -456,11 +410,7 @@ export class StepExecutor extends EventEmitter {
 					lastError = error instanceof Error ? error : new Error(String(error));
 
 					if (attempt < maxRetries) {
-						this.debug(
-							"Step failed, will retry: %s - %s",
-							step.name,
-							lastError.message,
-						);
+						this.debug("Step failed, will retry: %s - %s", step.name, lastError.message);
 						this.emit("step:retry", {
 							step: step.name,
 							attempt: attempt + 1,
@@ -480,11 +430,7 @@ export class StepExecutor extends EventEmitter {
 				cause: lastError,
 			};
 
-			this.debug(
-				"Step failed permanently: %s after %d retries",
-				step.name,
-				maxRetries,
-			);
+			this.debug("Step failed permanently: %s after %d retries", step.name, maxRetries);
 			this.emit("step:failed", {
 				step: step.name,
 				toolType: step.tool,
@@ -610,9 +556,7 @@ export class StepExecutor extends EventEmitter {
 		return plan;
 	}
 
-	private buildDependencyGraph(
-		steps: RecipeStepUnion[],
-	): Map<string, StepDependencyNode> {
+	private buildDependencyGraph(steps: RecipeStepUnion[]): Map<string, StepDependencyNode> {
 		const graph = new Map<string, StepDependencyNode>();
 
 		// If ANY step declares explicit dependsOn, assume the recipe author manages
@@ -620,9 +564,7 @@ export class StepExecutor extends EventEmitter {
 		// Otherwise, add implicit sequential deps so YAML order = execution order.
 		// This ensures that exports from earlier steps are available when later
 		// step conditions evaluate.
-		const hasExplicitDeps = steps.some(
-			(s) => s.dependsOn && s.dependsOn.length > 0,
-		);
+		const hasExplicitDeps = steps.some((s) => s.dependsOn && s.dependsOn.length > 0);
 
 		for (let i = 0; i < steps.length; i++) {
 			const step = steps[i];
@@ -694,9 +636,7 @@ export class StepExecutor extends EventEmitter {
 		}
 	}
 
-	private detectCircularDependencies(
-		graph: Map<string, StepDependencyNode>,
-	): void {
+	private detectCircularDependencies(graph: Map<string, StepDependencyNode>): void {
 		const visited = new Set<string>();
 		const visiting = new Set<string>();
 
@@ -745,9 +685,7 @@ export class StepExecutor extends EventEmitter {
 				if (assigned.has(stepName)) continue;
 
 				// Check if all dependencies are satisfied
-				const dependenciesSatisfied = node.dependencies.every((dep) =>
-					assigned.has(dep),
-				);
+				const dependenciesSatisfied = node.dependencies.every((dep) => assigned.has(dep));
 
 				if (dependenciesSatisfied) {
 					readySteps.push(stepName);
@@ -840,11 +778,7 @@ export class StepExecutor extends EventEmitter {
 
 			// Check if we should continue execution
 			const failed = phaseResults.filter((r) => r.status === "failed");
-			if (
-				failed.length > 0 &&
-				!options.continueOnError &&
-				!this.config.continueOnError
-			) {
+			if (failed.length > 0 && !options.continueOnError && !this.config.continueOnError) {
 				throw new StepExecutionError(
 					`Phase ${phase.phase} had failures: ${failed.map((r) => r.stepName).join(", ")}`,
 					failed[0].stepName,
@@ -891,9 +825,7 @@ export class StepExecutor extends EventEmitter {
 		const concurrency = Math.min(steps.length, this.config.maxConcurrency);
 		const results: StepResult[] = [];
 
-		const executeWithConcurrency = async (
-			stepList: RecipeStepUnion[],
-		): Promise<void> => {
+		const executeWithConcurrency = async (stepList: RecipeStepUnion[]): Promise<void> => {
 			const promises: Promise<void>[] = [];
 			let index = 0;
 
@@ -905,10 +837,7 @@ export class StepExecutor extends EventEmitter {
 
 				try {
 					// Track running step
-					const tool = await this.toolRegistry.resolve(
-						step.tool,
-						this.getToolName(step),
-					);
+					const tool = await this.toolRegistry.resolve(step.tool, this.getToolName(step));
 					this.runningSteps.set(stepKey, { step, startTime: new Date(), tool });
 
 					if (this.config.enableProgressTracking && this.progress) {
@@ -938,11 +867,7 @@ export class StepExecutor extends EventEmitter {
 					// Release tool before deleting from tracking map
 					const runningStep = this.runningSteps.get(stepKey);
 					if (runningStep) {
-						this.toolRegistry.release(
-							step.tool,
-							this.getToolName(step),
-							runningStep.tool,
-						);
+						this.toolRegistry.release(step.tool, this.getToolName(step), runningStep.tool);
 					}
 					this.runningSteps.delete(stepKey);
 				}
@@ -981,12 +906,7 @@ export class StepExecutor extends EventEmitter {
 		const toolName = this.getToolName(step);
 		const tool = await this.toolRegistry.resolve(step.tool, toolName);
 
-		this.debug(
-			"Routing step to tool: %s -> %s:%s",
-			step.name,
-			step.tool,
-			toolName,
-		);
+		this.debug("Routing step to tool: %s -> %s:%s", step.name, step.tool, toolName);
 
 		try {
 			// Initialize tool if needed
@@ -1048,10 +968,7 @@ export class StepExecutor extends EventEmitter {
 
 		// Fallback: check if the tool type is registered
 		const toolType = (step as any).tool as ToolType;
-		if (
-			typeof toolType === "string" &&
-			this.toolRegistry.isRegistered(toolType, "default")
-		) {
+		if (typeof toolType === "string" && this.toolRegistry.isRegistered(toolType, "default")) {
 			return "default";
 		}
 
@@ -1085,27 +1002,18 @@ export class StepExecutor extends EventEmitter {
 
 	private validateSteps(steps: RecipeStepUnion[]): void {
 		if (!Array.isArray(steps)) {
-			throw ErrorHandler.createError(
-				ErrorCode.VALIDATION_ERROR,
-				"Steps must be an array",
-			);
+			throw ErrorHandler.createError(ErrorCode.VALIDATION_ERROR, "Steps must be an array");
 		}
 
 		if (steps.length === 0) {
-			throw ErrorHandler.createError(
-				ErrorCode.VALIDATION_ERROR,
-				"At least one step is required",
-			);
+			throw ErrorHandler.createError(ErrorCode.VALIDATION_ERROR, "At least one step is required");
 		}
 
 		// Validate step names are unique
 		const stepNames = new Set<string>();
 		for (const step of steps) {
 			if (!step.name) {
-				throw ErrorHandler.createError(
-					ErrorCode.VALIDATION_ERROR,
-					"Step name is required",
-				);
+				throw ErrorHandler.createError(ErrorCode.VALIDATION_ERROR, "Step name is required");
 			}
 
 			if (stepNames.has(step.name)) {
@@ -1141,10 +1049,7 @@ export class StepExecutor extends EventEmitter {
 
 	private validateContext(context: StepContext): void {
 		if (!context) {
-			throw ErrorHandler.createError(
-				ErrorCode.VALIDATION_ERROR,
-				"Step context is required",
-			);
+			throw ErrorHandler.createError(ErrorCode.VALIDATION_ERROR, "Step context is required");
 		}
 
 		if (!context.evaluateCondition) {
@@ -1268,9 +1173,7 @@ export class StepExecutor extends EventEmitter {
 			this.progress.failedSteps.length +
 			this.progress.skippedSteps.length;
 
-		this.progress.progressPercentage = Math.round(
-			(completed / totalSteps) * 100,
-		);
+		this.progress.progressPercentage = Math.round((completed / totalSteps) * 100);
 	}
 
 	private finalizeMetrics(): void {

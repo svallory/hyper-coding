@@ -79,9 +79,7 @@ export class ContextCollector {
 		// 1. Project config files (highest priority — smallest, most relevant)
 		if (config.projectConfig) {
 			const configNames =
-				config.projectConfig === true
-					? ["tsconfig", "package.json"]
-					: config.projectConfig;
+				config.projectConfig === true ? ["tsconfig", "package.json"] : config.projectConfig;
 
 			for (const name of configNames) {
 				const candidates = CONFIG_FILE_MAP[name] || [name];
@@ -114,10 +112,7 @@ export class ContextCollector {
 					const tokens = estimateTokens(content);
 					if (currentTokens + tokens > maxTokens) {
 						bundle.truncated = true;
-						debug(
-							"Skipping step output %s: would exceed token budget",
-							stepName,
-						);
+						debug("Skipping step output %s: would exceed token budget", stepName);
 						continue;
 					}
 					bundle.stepOutputs.set(stepName, content);
@@ -138,10 +133,7 @@ export class ContextCollector {
 						if (config.overflow === "truncate") {
 							const remainingChars = (maxTokens - currentTokens) * 4;
 							if (remainingChars > 100) {
-								bundle.files.set(
-									filePath,
-									content.slice(0, remainingChars) + "\n... [truncated]",
-								);
+								bundle.files.set(filePath, content.slice(0, remainingChars) + "\n... [truncated]");
 								currentTokens = maxTokens;
 								bundle.truncated = true;
 								debug("Truncated file %s to fit budget", filePath);
@@ -175,8 +167,7 @@ export class ContextCollector {
 				for (const match of matches) {
 					if (bundle.files.has(match)) continue; // avoid duplicates
 					const resolved = path.resolve(projectRoot, match);
-					if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory())
-						continue;
+					if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) continue;
 
 					const content = fs.readFileSync(resolved, "utf-8");
 					const tokens = estimateTokens(content);
