@@ -9,8 +9,8 @@ min_version: 2.0.0
 pre-commit:
   parallel: true
   commands:
-    # Fix code quality (format + lint) on staged files
-    fix:
+    # Format code (format + lint) on staged files
+    format:
       glob: "*.{ts,tsx,js,jsx,json,md}"
       run: biome check --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true

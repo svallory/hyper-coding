@@ -42,10 +42,10 @@ tasks:
     outputs:
       - "dist"
 
-  # Fix code quality (format + lint with auto-fix)
-  # This is what you run locally: moon run :fix
-  fix:
-    description: Fix code quality (format + lint)
+  # Format code (runs biome check which does format + lint)
+  # This is what you run locally: moon run :format
+  format:
+    description: Format and lint code (auto-fix)
     command: "biome check . --write"
     inputs:
       - "@globs(sources)"
@@ -55,7 +55,14 @@ tasks:
     options:
       cache: local
 
-  # CI check (check only, no auto-fix)
+  # Check everything (currently just typecheck)
+  # Run before committing: moon run :check
+  check:
+    description: Run all checks (typecheck, etc)
+    deps:
+      - "typecheck"
+
+  # CI check (biome check only, no auto-fix)
   # This runs in CI pipelines: moon run :ci
   ci:
     description: Check code quality for CI (no fixes)
