@@ -14,12 +14,12 @@ import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
 import { Logger } from "@hypercli/core";
 import createDebug from "debug";
 import yaml from "js-yaml";
-import { AiCollector } from "#/ai/ai-collector";
-import type { AiServiceConfig } from "#/ai/ai-config";
-import { AiVariableResolver, type UnresolvedVariable } from "#/ai/ai-variable-resolver";
-import { resolveTransport } from "#/ai/transports/resolve-transport";
-import { performInteractivePrompting } from "#/prompts/interactive-prompts";
-import { renderTemplate as jigRenderTemplate } from "#/template-engines/jig-engine";
+import { AiCollector } from "#ai/ai-collector";
+import type { AiServiceConfig } from "#ai/ai-config";
+import { AiVariableResolver, type UnresolvedVariable } from "#ai/ai-variable-resolver";
+import { resolveTransport } from "#ai/transports/resolve-transport";
+import { performInteractivePrompting } from "#prompts/interactive-prompts";
+import { renderTemplate as jigRenderTemplate } from "#template-engines/jig-engine";
 import { StepExecutor, type StepExecutorConfig } from "./step-executor.js";
 import { type ToolRegistry, getToolRegistry } from "./tools/registry.js";
 import type {
@@ -33,8 +33,6 @@ import type {
 	StepResult,
 } from "./types.js";
 import { RecipeDependencyError, RecipeValidationError } from "./types.js";
-
-const debug = createDebug("hyper:recipe:engine");
 
 /**
  * Recipe source types for loading
@@ -376,30 +374,6 @@ export class RecipeEngine extends EventEmitter {
 				duration,
 				source: normalizedSource,
 			});
-
-			// Create error result
-			const errorResult: RecipeExecutionResult = {
-				executionId,
-				recipe: {} as RecipeConfig,
-				success: false,
-				stepResults: [],
-				duration,
-				filesCreated: [],
-				filesModified: [],
-				filesDeleted: [],
-				errors: [error instanceof Error ? error.message : String(error)],
-				warnings: [],
-				variables: options.variables || {},
-				metadata: {
-					startTime: new Date(startTime),
-					endTime: new Date(),
-					workingDir: options.workingDir || this.config.workingDir,
-					totalSteps: 0,
-					completedSteps: 0,
-					failedSteps: 0,
-					skippedSteps: 0,
-				},
-			};
 
 			if (error instanceof HypergenError) {
 				throw error;
@@ -1367,7 +1341,6 @@ export class RecipeEngine extends EventEmitter {
 
 	private dependencyToSource(dependency: any): RecipeSource {
 		const name = typeof dependency === "string" ? dependency : dependency.name;
-		const type = typeof dependency === "object" ? dependency.type : "local";
 
 		// Only local file dependencies supported
 		return { type: "file", path: name };

@@ -5,7 +5,6 @@
  * Uses the existing AiService/transport infrastructure for the actual LLM call.
  */
 
-import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import type { TemplateVariable } from "@hypercli/core";
 import createDebug from "debug";
 import type { AiServiceConfig } from "./ai-config.js";

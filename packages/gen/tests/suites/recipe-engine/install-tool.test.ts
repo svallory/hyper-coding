@@ -17,8 +17,8 @@ import {
 	InstallTool,
 	InstallToolFactory,
 	installToolFactory,
-} from "#/recipe-engine/tools/install-tool";
-import type { InstallExecutionResult, InstallStep, StepContext } from "#/recipe-engine/types";
+} from "#recipe-engine/tools/install-tool";
+import type { InstallExecutionResult, InstallStep, StepContext } from "#recipe-engine/types";
 
 // ---------------------------------------------------------------------------
 // Helpers

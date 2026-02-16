@@ -5,11 +5,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { ActionExecutor } from "#/actions/executor";
-import { ActionRegistry } from "#/actions/registry";
-import type { ActionContext, ActionMetadata, ActionResult } from "#/actions/types";
-import { ActionTool, ActionToolFactory } from "#/recipe-engine/tools/action-tool";
-import type { ActionStep, StepContext, StepExecutionOptions } from "#/recipe-engine/types";
+import { ActionExecutor } from "#actions/executor";
+import { ActionRegistry } from "#actions/registry";
+import type { ActionContext, ActionMetadata, ActionResult } from "#actions/types";
+import { ActionTool, ActionToolFactory } from "#recipe-engine/tools/action-tool";
+import type { ActionStep, StepContext, StepExecutionOptions } from "#recipe-engine/types";
 
 describe("ActionTool", () => {
 	let actionTool: ActionTool;

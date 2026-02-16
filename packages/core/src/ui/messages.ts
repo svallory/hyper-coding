@@ -3,14 +3,6 @@ import { symbols } from "./symbols.js";
 
 type ChalkFn = (text: string) => string;
 
-/**
- * Style a command or code snippet consistently with help theme
- * Uses the same hex color as cli-html theme for code: #4EC9B0
- */
-export function styleCommand(text: string): string {
-	return chalk.hex("4EC9B0")(text);
-}
-
 interface MessageType {
 	prefix: string;
 	icon: string;

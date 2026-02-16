@@ -13,8 +13,8 @@ import {
 	action,
 	getActionMetadata,
 	isActionFunction,
-} from "#/actions/index";
-import type { ActionContext, ActionMetadata, ActionResult } from "#/actions/index";
+} from "#actions/index";
+import type { ActionContext, ActionMetadata, ActionResult } from "#actions/index";
 
 // Helper function to create test actions
 function createTestAction(

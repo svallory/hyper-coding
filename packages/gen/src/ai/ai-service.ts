@@ -9,7 +9,7 @@
 
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import type { StepResult } from "#/recipe-engine/types";
+import type { StepResult } from "#recipe-engine/types";
 import type {
 	AICostSummary,
 	AIExecutionResult,

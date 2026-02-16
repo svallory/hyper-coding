@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { TemplateParser } from "#/parsers/template-parser";
+import { TemplateParser } from "#parsers/template-parser";
 
 describe("TemplateParser", () => {
 	let tempDir: string;
@@ -31,13 +31,13 @@ variables:
     required: true
     description: Component name
     pattern: "^[a-zA-Z][a-zA-Z0-9]*$"
-  
+
   type:
     type: enum
     values: [functional, class]
     default: functional
     description: Component type
-    
+
   withTests:
     type: boolean
     default: true

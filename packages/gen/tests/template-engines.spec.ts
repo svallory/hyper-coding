@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { getJig, initializeJig, renderFile, renderTemplate } from "#/template-engines/index";
+import { getJig, initializeJig, renderFile, renderTemplate } from "#template-engines/index";
 
 describe("Jig Template Engine", () => {
 	beforeEach(() => {

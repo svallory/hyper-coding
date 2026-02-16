@@ -16,10 +16,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import yaml from "js-yaml";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { registerDefaultTools } from "#/recipe-engine/tools/index";
-import { ToolRegistry } from "#/recipe-engine/tools/registry";
-import { initializeJig } from "#/template-engines/jig-engine";
+import { RecipeEngine } from "#recipe-engine/recipe-engine";
+import { registerDefaultTools } from "#recipe-engine/tools/index";
+import { ToolRegistry } from "#recipe-engine/tools/registry";
+import { initializeJig } from "#template-engines/jig-engine";
 
 // ---------------------------------------------------------------------------
 // Helpers

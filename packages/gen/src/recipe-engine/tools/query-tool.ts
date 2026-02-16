@@ -8,17 +8,14 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import createDebug from "debug";
 import type {
 	QueryExecutionResult,
 	QueryStep,
 	StepContext,
 	StepExecutionOptions,
 	StepResult,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:query");
 
 /**
  * Auto-detect file format from extension

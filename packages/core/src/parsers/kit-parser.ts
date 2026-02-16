@@ -10,8 +10,8 @@ import path from "node:path";
 import createDebug from "debug";
 import { glob } from "glob";
 import yaml from "js-yaml";
-import { loadHelpers } from "#/config/load-helpers";
-import type { KitConfig } from "#/types/kit";
+import { loadHelpers } from "#config/load-helpers";
+import type { KitConfig } from "#types/kit";
 
 const debug = createDebug("hypergen:config:kit-parser");
 

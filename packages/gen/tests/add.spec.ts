@@ -2,7 +2,7 @@ import path from "node:path";
 import { Logger } from "@hypercli/core";
 import fs from "fs-extra";
 import { describe, expect, it } from "vitest";
-import add from "#/ops/add";
+import add from "#ops/add";
 
 describe("add", () => {
 	const logger = new Logger(console.log);

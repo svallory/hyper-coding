@@ -9,13 +9,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import fs from "fs-extra";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Tool } from "#/recipe-engine/tools/base";
-import {
-	RecipeTool,
-	RecipeToolFactory,
-	recipeToolFactory,
-} from "#/recipe-engine/tools/recipe-tool";
-import { getToolRegistry } from "#/recipe-engine/tools/registry";
+import { Tool } from "#recipe-engine/tools/base";
+import { RecipeTool, RecipeToolFactory, recipeToolFactory } from "#recipe-engine/tools/recipe-tool";
+import { getToolRegistry } from "#recipe-engine/tools/registry";
 import type {
 	RecipeConfig,
 	RecipeStep,
@@ -23,7 +19,7 @@ import type {
 	StepExecutionOptions,
 	StepResult,
 	TemplateStep,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 
 /**
  * Mock template tool for testing recipe execution without needing actual template processing

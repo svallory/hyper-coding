@@ -14,13 +14,11 @@ import {
 	HypergenError,
 	type RenderedAction,
 	type RunnerConfig,
-	withErrorHandling,
 } from "@hypercli/core";
-import createDebug from "debug";
 import fm from "front-matter";
 import fs from "fs-extra";
-import addOp from "#/ops/add";
-import injectOp from "#/ops/inject";
+import addOp from "#ops/add";
+import injectOp from "#ops/inject";
 import {
 	type StepContext,
 	type StepExecutionOptions,
@@ -28,11 +26,9 @@ import {
 	type TemplateExecutionResult,
 	type TemplateStep,
 	isTemplateStep,
-} from "#/recipe-engine/types";
-import { getJig, renderTemplate as jigRenderTemplate } from "#/template-engines/index";
+} from "#recipe-engine/types";
+import { getJig, renderTemplate as jigRenderTemplate } from "#template-engines/index";
 import { Tool, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:template");
 
 /**
  * Template resolution result
@@ -102,7 +98,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 	/**
 	 * Initialize template engines and prepare tool for execution
 	 */
-	protected async onInitialize(): Promise<void> {
+	protected override async onInitialize(): Promise<void> {
 		this.debug("Initializing template engines");
 
 		try {
@@ -407,7 +403,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 	/**
 	 * Tool-specific cleanup logic
 	 */
-	protected async onCleanup(): Promise<void> {
+	protected override async onCleanup(): Promise<void> {
 		this.debug("Cleaning up template tool resources");
 		this.templateCache.clear();
 	}

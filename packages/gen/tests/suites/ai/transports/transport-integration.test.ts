@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AiCollector } from "#/ai/ai-collector";
-import type { AIExecutionResult } from "#/ai/ai-config";
-import { AiService } from "#/ai/ai-service";
-import { ApiTransport } from "#/ai/transports/api-transport";
-import { resolveTransport } from "#/ai/transports/resolve-transport";
-import { StdoutTransport } from "#/ai/transports/stdout-transport";
+import { AiCollector } from "#ai/ai-collector";
+import type { AIExecutionResult } from "#ai/ai-config";
+import { AiService } from "#ai/ai-service";
+import { ApiTransport } from "#ai/transports/api-transport";
+import { resolveTransport } from "#ai/transports/resolve-transport";
+import { StdoutTransport } from "#ai/transports/stdout-transport";
 
 describe("Transport Integration", () => {
 	const savedEnv = { ...process.env };

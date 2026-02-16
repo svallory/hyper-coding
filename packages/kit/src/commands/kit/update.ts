@@ -6,15 +6,15 @@ import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { Args, Flags } from "@oclif/core";
 import { downloadTemplate } from "giget";
-import { BaseCommand } from "#/base-command.js";
+import { BaseCommand } from "#base-command";
 import {
 	type KitManifestEntry,
 	addKitToManifest,
 	extractPackageVersion,
 	loadManifest,
-} from "#/manifest.js";
-import { resolveKitSource } from "#/source-resolver.js";
-import { findProjectRoot } from "#/utils/find-project-root.js";
+} from "#manifest";
+import { resolveKitSource } from "#source-resolver";
+import { findProjectRoot } from "#utils/find-project-root";
 
 export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 	static override description = "Update installed kits from their original source";

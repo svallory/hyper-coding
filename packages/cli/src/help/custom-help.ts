@@ -5,7 +5,7 @@ import { type Command, Help, type Interfaces } from "@oclif/core";
 import { helpTheme } from "./theme.js";
 
 export default class MarkdownHelp extends Help {
-	async showCommandHelp(command: Command.Loadable): Promise<void> {
+	override async showCommandHelp(command: Command.Loadable): Promise<void> {
 		const md = this.loadMarkdown(command);
 		if (md) {
 			this.log(renderMarkdown(md, helpTheme.theme));
@@ -15,7 +15,7 @@ export default class MarkdownHelp extends Help {
 		}
 	}
 
-	protected async showRootHelp(): Promise<void> {
+	protected override async showRootHelp(): Promise<void> {
 		const rootMd = this.loadRootMarkdown();
 		if (rootMd) {
 			this.log(renderMarkdown(rootMd, helpTheme.theme));
@@ -31,7 +31,7 @@ export default class MarkdownHelp extends Help {
 		}
 	}
 
-	protected async showTopicHelp(topic: Interfaces.Topic): Promise<void> {
+	protected override async showTopicHelp(topic: Interfaces.Topic): Promise<void> {
 		const md = this.loadTopicMarkdown(topic);
 		if (md) {
 			this.log(renderMarkdown(md, helpTheme.theme));

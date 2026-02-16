@@ -6,7 +6,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { KitSourceType } from "#/source-resolver.js";
+import type { KitSourceType } from "#source-resolver";
 
 /**
  * Individual kit entry in the manifest

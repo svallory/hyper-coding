@@ -16,16 +16,13 @@
  */
 
 import path from "node:path";
-import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
-import { TemplateParser } from "@hypercli/core";
-import createDebug from "debug";
+import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
 import fs from "fs-extra";
 import yaml from "js-yaml";
-import { StepExecutor } from "#/recipe-engine/step-executor";
+import { StepExecutor } from "#recipe-engine/step-executor";
 import {
 	type CircularDependencyError,
 	type RecipeConfig,
-	type RecipeDependencyError,
 	type RecipeExecutionResult,
 	type RecipeStep,
 	type RecipeStepUnion,
@@ -33,10 +30,8 @@ import {
 	type StepExecutionOptions,
 	type StepResult,
 	isRecipeStep,
-} from "#/recipe-engine/types";
-import { Tool, type ToolResource, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:recipe");
+} from "#recipe-engine/types";
+import { Tool, type ToolValidationResult } from "./base.js";
 
 /**
  * Recipe resolution result
@@ -92,15 +87,6 @@ interface SubRecipeContext extends StepContext {
 }
 
 /**
- * Recipe dependency node for circular dependency detection
- */
-interface RecipeDependencyNode {
-	id: string;
-	dependencies: Set<string>;
-	path: string[];
-}
-
-/**
  * Recipe Tool for processing recipe composition in the Recipe Step System
  *
  * This tool implements the core insight that composition is simpler than inheritance.
@@ -129,7 +115,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 	/**
 	 * Initialize the recipe tool
 	 */
-	protected async onInitialize(): Promise<void> {
+	protected override async onInitialize(): Promise<void> {
 		this.debug("Initializing recipe tool");
 
 		try {
@@ -428,7 +414,7 @@ export class RecipeTool extends Tool<RecipeStep> {
 	/**
 	 * Tool-specific cleanup logic
 	 */
-	protected async onCleanup(): Promise<void> {
+	protected override async onCleanup(): Promise<void> {
 		this.debug("Cleaning up recipe tool resources");
 		this.recipeCache.clear();
 		this.executionStack.length = 0;
@@ -632,69 +618,6 @@ export class RecipeTool extends Tool<RecipeStep> {
 				environment: step.environment,
 				timeout: step.recipeConfig?.execution?.timeout || step.timeout,
 			},
-		};
-	}
-
-	/**
-	 * Create step context for sub-recipe step execution
-	 */
-	private createStepContext(
-		subStep: any,
-		subContext: SubRecipeContext,
-		previousResults: StepResult[],
-	): StepContext {
-		// Build step results map
-		const stepResults = new Map<string, StepResult>();
-		for (const result of previousResults) {
-			stepResults.set(result.stepName, result);
-		}
-
-		return {
-			...subContext,
-			step: subStep,
-			stepResults,
-			variables: {
-				...subContext.variables,
-				...subStep.variables,
-			},
-		};
-	}
-
-	/**
-	 * Execute a sub-recipe step using the appropriate tool
-	 * This is a simplified version - in a complete implementation,
-	 * this would delegate to the actual tool registry
-	 */
-	private async executeSubStep(
-		subStep: any,
-		stepContext: StepContext,
-		options?: StepExecutionOptions,
-	): Promise<StepResult> {
-		// This is a placeholder implementation
-		// In the real system, this would:
-		// 1. Get the appropriate tool from a tool registry
-		// 2. Execute the tool with the step and context
-		// 3. Return the step result
-
-		this.debug("Executing sub-step: %s (%s)", subStep.name, subStep.tool);
-
-		// For now, return a mock successful result
-		const startTime = new Date();
-		await new Promise((resolve) => setTimeout(resolve, 50)); // Simulate work
-		const endTime = new Date();
-
-		return {
-			status: "completed",
-			stepName: subStep.name,
-			toolType: subStep.tool,
-			startTime,
-			endTime,
-			duration: endTime.getTime() - startTime.getTime(),
-			retryCount: 0,
-			dependenciesSatisfied: true,
-			filesCreated: [],
-			filesModified: [],
-			filesDeleted: [],
 		};
 	}
 

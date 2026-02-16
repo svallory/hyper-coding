@@ -3,8 +3,8 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { GeneratorDiscovery } from "#/discovery/index";
-import type { DiscoveredGenerator } from "#/discovery/index";
+import { GeneratorDiscovery } from "#discovery/index";
+import type { DiscoveredGenerator } from "#discovery/index";
 
 describe("GeneratorDiscovery", () => {
 	let discovery: GeneratorDiscovery;

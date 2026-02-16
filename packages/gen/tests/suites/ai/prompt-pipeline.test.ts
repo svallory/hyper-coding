@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { PromptPipeline } from "#/ai/prompt-pipeline";
-import type { StepResult } from "#/recipe-engine/types";
+import { PromptPipeline } from "#ai/prompt-pipeline";
+import type { StepResult } from "#recipe-engine/types";
 
 describe("PromptPipeline", () => {
 	let pipeline: PromptPipeline;

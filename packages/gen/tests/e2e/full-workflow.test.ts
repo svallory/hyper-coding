@@ -16,13 +16,13 @@ import path from "node:path";
 import fs from "fs-extra";
 import yaml from "js-yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AiCollector } from "#/ai/ai-collector";
-import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { recipeToolFactory } from "#/recipe-engine/tools/recipe-tool";
-import { ToolRegistry, getToolRegistry } from "#/recipe-engine/tools/registry";
-import { shellToolFactory } from "#/recipe-engine/tools/shell-tool";
-import { templateToolFactory } from "#/recipe-engine/tools/template-tool";
-import { getJig, initializeJig } from "#/template-engines/jig-engine";
+import { AiCollector } from "#ai/ai-collector";
+import { RecipeEngine } from "#recipe-engine/recipe-engine";
+import { recipeToolFactory } from "#recipe-engine/tools/recipe-tool";
+import { ToolRegistry, getToolRegistry } from "#recipe-engine/tools/registry";
+import { shellToolFactory } from "#recipe-engine/tools/shell-tool";
+import { templateToolFactory } from "#recipe-engine/tools/template-tool";
+import { getJig, initializeJig } from "#template-engines/jig-engine";
 import fixtureAnswers from "./fixtures/answers.json";
 
 // ─── Constants ──────────────────────────────────────────────────────

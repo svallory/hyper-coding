@@ -1,5 +1,10 @@
 {
 	"extends": "./tsconfig.options.json",
 	"files": [],
-	"references": []
+	"references": [
+		{ "path": "packages/core" },
+		{ "path": "packages/kit" },
+		{ "path": "packages/gen" },
+		{ "path": "packages/cli" }
+	]
 }

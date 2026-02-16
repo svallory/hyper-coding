@@ -9,8 +9,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { PatchTool, PatchToolFactory, patchToolFactory } from "#/recipe-engine/tools/patch-tool";
-import type { PatchExecutionResult, PatchStep, StepContext } from "#/recipe-engine/types";
+import { PatchTool, PatchToolFactory, patchToolFactory } from "#recipe-engine/tools/patch-tool";
+import type { PatchExecutionResult, PatchStep, StepContext } from "#recipe-engine/types";
 
 // ---------------------------------------------------------------------------
 // Helpers

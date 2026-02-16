@@ -12,7 +12,7 @@ import {
 	type CommunicationConfig,
 	clearCommunicationManager,
 	getCommunicationManager,
-} from "#/actions/communication";
+} from "#actions/communication";
 
 describe("Cross-Action Communication", () => {
 	let communicationManager: ActionCommunicationManager;

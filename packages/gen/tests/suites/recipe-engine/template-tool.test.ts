@@ -15,8 +15,8 @@ import {
 	TemplateTool,
 	TemplateToolFactory,
 	templateToolFactory,
-} from "#/recipe-engine/tools/template-tool";
-import type { StepContext, TemplateStep } from "#/recipe-engine/types";
+} from "#recipe-engine/tools/template-tool";
+import type { StepContext, TemplateStep } from "#recipe-engine/types";
 
 describe("TemplateTool", () => {
 	let tool: TemplateTool;

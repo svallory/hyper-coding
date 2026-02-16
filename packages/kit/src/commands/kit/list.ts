@@ -3,10 +3,10 @@
  */
 
 import { Flags } from "@oclif/core";
-import { BaseCommand } from "#/base-command.js";
+import { BaseCommand } from "#base-command";
 // TODO: colors and styles modules don't exist in kit yet - they may belong in cli
-// import { c } from "#/lib/colors";
-// import { s } from "#/lib/styles";
+// import { c } from "#lib/colors";
+// import { s } from "#lib/styles";
 
 export default class KitList extends BaseCommand<typeof KitList> {
 	static override description = "List installed kits";

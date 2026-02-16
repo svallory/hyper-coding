@@ -4,7 +4,7 @@ import {
 	AiVariableResolver,
 	type RecipeMetadata,
 	type UnresolvedVariable,
-} from "#/ai/ai-variable-resolver";
+} from "#ai/ai-variable-resolver";
 
 describe("AiVariableResolver", () => {
 	let resolver: AiVariableResolver;

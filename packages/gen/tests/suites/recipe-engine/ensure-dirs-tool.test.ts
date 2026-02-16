@@ -2,13 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { ToolValidationResult } from "#/recipe-engine/tools/base";
+import type { ToolValidationResult } from "#recipe-engine/tools/base";
 import {
 	EnsureDirsTool,
 	EnsureDirsToolFactory,
 	ensureDirsToolFactory,
-} from "#/recipe-engine/tools/ensure-dirs-tool";
-import type { EnsureDirsStep, StepContext, StepResult } from "#/recipe-engine/types";
+} from "#recipe-engine/tools/ensure-dirs-tool";
+import type { EnsureDirsStep, StepContext, StepResult } from "#recipe-engine/types";
 
 /**
  * Build a minimal StepContext with the required fields.

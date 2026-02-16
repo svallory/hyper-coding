@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import injector from "#/ops/injector";
+import injector from "#ops/injector";
 
 const gemfile = `
     source 'http://rubygems.org'

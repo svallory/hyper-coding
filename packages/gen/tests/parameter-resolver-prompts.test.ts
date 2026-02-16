@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { ActionParameterResolver } from "#/actions/parameter-resolver";
-import type { ActionMetadata, ActionParameter } from "#/actions/types";
+import { ActionParameterResolver } from "#actions/parameter-resolver";
+import type { ActionMetadata, ActionParameter } from "#actions/types";
 
 describe("Parameter Resolver with Prompts", () => {
 	let resolver: ActionParameterResolver;

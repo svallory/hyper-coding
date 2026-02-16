@@ -6,7 +6,7 @@
 
 import createDebug from "debug";
 import { ActionRegistry } from "./registry.js";
-import type { ActionFunction, ActionMetadata, DecoratedAction } from "./types.js";
+import type { ActionFunction, ActionMetadata } from "./types.js";
 
 const debug = createDebug("hyper:action:decorator");
 

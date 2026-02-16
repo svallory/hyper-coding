@@ -9,18 +9,16 @@ import { exec } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import createDebug from "debug";
 import type {
 	InstallExecutionResult,
 	InstallStep,
 	StepContext,
 	StepExecutionOptions,
 	StepResult,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
 const execAsync = promisify(exec);
-const debug = createDebug("hyper:recipe:tool:install");
 
 type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
 

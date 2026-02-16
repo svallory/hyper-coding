@@ -7,7 +7,6 @@
 import { setTimeout } from "node:timers/promises";
 import * as p from "@clack/prompts";
 import type { Option } from "@clack/prompts";
-import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import type { TemplateVariable } from "@hypercli/core";
 
 export interface PromptOptions {
@@ -213,7 +212,6 @@ export class InteractivePrompter {
 	 */
 	private async createPromptForVariable(name: string, variable: TemplateVariable): Promise<any> {
 		const message = variable.description || `Enter ${name}`;
-		const hint = this.getVariableHint(variable);
 
 		switch (variable.type) {
 			case "string":
@@ -295,31 +293,6 @@ export class InteractivePrompter {
 					defaultValue: variable.default?.toString(),
 				});
 		}
-	}
-
-	/**
-	 * Get hint text for a variable
-	 */
-	private getVariableHint(variable: TemplateVariable): string | undefined {
-		const hints: string[] = [];
-
-		if (variable.pattern) {
-			hints.push(`Pattern: ${variable.pattern}`);
-		}
-
-		if (variable.min !== undefined) {
-			hints.push(`Min: ${variable.min}`);
-		}
-
-		if (variable.max !== undefined) {
-			hints.push(`Max: ${variable.max}`);
-		}
-
-		if (variable.default !== undefined) {
-			hints.push(`Default: ${variable.default}`);
-		}
-
-		return hints.length > 0 ? hints.join(", ") : undefined;
 	}
 
 	/**

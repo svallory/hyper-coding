@@ -9,8 +9,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import yaml from "js-yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { TemplateParser } from "#/parsers/template-parser";
-import type { RecipeStepUnion } from "#/types/recipe";
+import { TemplateParser } from "#parsers/template-parser";
+import type { RecipeStepUnion } from "#types/recipe";
 
 describe("Recipe Step System Parser", () => {
 	let tempDir: string;

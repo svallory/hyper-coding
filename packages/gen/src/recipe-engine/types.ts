@@ -6,13 +6,7 @@
  */
 
 import type { TemplateVariable } from "@hypercli/core";
-import type {
-	ActionContext,
-	ActionLogger,
-	ActionParameter,
-	ActionResult,
-	ActionUtils,
-} from "#/actions/types";
+import type { ActionLogger, ActionResult, ActionUtils } from "#actions/types";
 import type {
 	AIBudgetConfig,
 	AIContextConfig,
@@ -20,7 +14,7 @@ import type {
 	AIExecutionResult,
 	AIGuardrailConfig,
 	AIOutputConfig,
-} from "#/ai/ai-config";
+} from "#ai/ai-config";
 
 /**
  * Declares a value that a recipe provides to its callers or sibling recipes
@@ -1287,7 +1281,7 @@ export class StepExecutionError extends Error {
 		message: string,
 		public stepName: string,
 		public toolType: ToolType,
-		public cause?: Error,
+		public override cause?: Error,
 	) {
 		super(message);
 		this.name = "StepExecutionError";

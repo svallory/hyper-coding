@@ -17,14 +17,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ---------------------------------------------------------------------------
 
 // Mock performInteractivePrompting to avoid actual terminal prompts
-vi.mock("#/prompts/interactive-prompts");
+vi.mock("#prompts/interactive-prompts");
 // Mock AiVariableResolver
-vi.mock("#/ai/ai-variable-resolver");
+vi.mock("#ai/ai-variable-resolver");
 
-import { AiVariableResolver } from "#/ai/ai-variable-resolver";
-import { performInteractivePrompting } from "#/prompts/interactive-prompts";
-import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { registerDefaultTools } from "#/recipe-engine/tools/index";
+import { AiVariableResolver } from "#ai/ai-variable-resolver";
+import { performInteractivePrompting } from "#prompts/interactive-prompts";
+import { RecipeEngine } from "#recipe-engine/recipe-engine";
+import { registerDefaultTools } from "#recipe-engine/tools/index";
 
 const mockPrompt = vi.mocked(performInteractivePrompting);
 // Get the mocked resolveBatch from a mocked instance

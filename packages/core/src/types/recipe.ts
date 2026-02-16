@@ -1313,7 +1313,7 @@ export class StepExecutionError extends Error {
 		message: string,
 		public stepName: string,
 		public toolType: ToolType,
-		public cause?: Error,
+		public override cause?: Error,
 	) {
 		super(message);
 		this.name = "StepExecutionError";

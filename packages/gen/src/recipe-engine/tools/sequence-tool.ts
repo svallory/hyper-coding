@@ -7,18 +7,15 @@
  */
 
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
-import createDebug from "debug";
-import { StepExecutor } from "#/recipe-engine/step-executor";
+import { StepExecutor } from "#recipe-engine/step-executor";
 import type {
 	SequenceExecutionResult,
 	SequenceStep,
 	StepContext,
 	StepExecutionOptions,
 	StepResult,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:sequence");
 
 export class SequenceTool extends Tool<SequenceStep> {
 	constructor(name = "sequence-tool", options: Record<string, any> = {}) {

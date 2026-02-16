@@ -5,19 +5,14 @@
  * It integrates with the existing shell operations in src/ops/shell.ts.
  */
 
-import { ErrorCode, ErrorHandler } from "@hypercli/core";
-import createDebug from "debug";
 import type {
-	BaseRecipeStep,
 	ShellStep,
 	StepContext,
 	StepExecutionOptions,
 	StepResult,
-} from "#/recipe-engine/types";
-import { renderTemplate } from "#/template-engines/jig-engine";
+} from "#recipe-engine/types";
+import { renderTemplate } from "#template-engines/jig-engine";
 import { Tool, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:shell");
 
 export class ShellTool extends Tool<ShellStep> {
 	constructor(name = "shell-tool", options: Record<string, any> = {}) {

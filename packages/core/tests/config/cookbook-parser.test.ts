@@ -8,7 +8,7 @@ import {
 	discoverCookbooksInKit,
 	discoverRecipesInCookbook,
 	parseCookbookFile,
-} from "#/parsers/cookbook-parser";
+} from "#parsers/cookbook-parser";
 
 /**
  * Helper to create a temporary directory prefixed for easy identification.

@@ -7,23 +7,20 @@
  * execution within the Recipe Step System.
  */
 
-import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
-import createDebug from "debug";
-import { ActionExecutor } from "#/actions/executor";
-import { ActionParameterResolver } from "#/actions/parameter-resolver";
-import { ActionRegistry } from "#/actions/registry";
-import type { ActionContext, ActionLogger, ActionResult, ActionUtils } from "#/actions/types";
-import { ConsoleActionLogger, DefaultActionUtils } from "#/actions/utils";
+import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
+import { ActionExecutor } from "#actions/executor";
+import { ActionParameterResolver } from "#actions/parameter-resolver";
+import { ActionRegistry } from "#actions/registry";
+import type { ActionContext, ActionLogger, ActionResult, ActionUtils } from "#actions/types";
+import { ConsoleActionLogger, DefaultActionUtils } from "#actions/utils";
 import {
 	type ActionStep,
 	type StepContext,
 	type StepExecutionOptions,
 	type StepResult,
 	isActionStep,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:action");
 
 /**
  * Action context preparation result
@@ -80,7 +77,7 @@ export class ActionTool extends Tool<ActionStep> {
 	/**
 	 * Initialize action tool and ensure action registry is populated
 	 */
-	protected async onInitialize(): Promise<void> {
+	protected override async onInitialize(): Promise<void> {
 		this.debug("Initializing action tool and action system");
 
 		try {
@@ -349,7 +346,7 @@ export class ActionTool extends Tool<ActionStep> {
 	/**
 	 * Tool-specific cleanup logic
 	 */
-	protected async onCleanup(): Promise<void> {
+	protected override async onCleanup(): Promise<void> {
 		this.debug("Cleaning up action tool resources");
 
 		// Clear any remaining communication state

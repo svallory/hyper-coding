@@ -6,18 +6,15 @@
  * and store it in execution context variables.
  */
 
-import createDebug from "debug";
-import { performInteractivePrompting } from "#/prompts/interactive-prompts";
+import { performInteractivePrompting } from "#prompts/interactive-prompts";
 import type {
 	PromptExecutionResult,
 	PromptStep,
 	StepContext,
 	StepExecutionOptions,
 	StepResult,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:prompt");
 
 export class PromptTool extends Tool<PromptStep> {
 	constructor(name = "prompt-tool", options: Record<string, any> = {}) {

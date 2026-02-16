@@ -23,13 +23,16 @@
 		"topicSeparator": " "
 	},
 	"imports": {
-		"#/*": "./src/*",
-		"#tests/*": "./tests/*",
-		"#fixtures/*": "./tests/fixtures/*",
-		"#helpers/*": "./tests/helpers/*"
+		"#types/*": "./dist/types/*.js",
+		"#utils/*": "./dist/utils/*.js",
+		"#commands/*": "./dist/commands/*.js",
+		"#tests/*": "./tests/*.ts",
+		"#fixtures/*": "./tests/fixtures/*.ts",
+		"#helpers/*": "./tests/helpers/*.ts",
+		"#*": "./dist/*.js"
 	},
 	"scripts": {
-		"build": "tsup",
+		"build": "tsc",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "biome check .",
@@ -47,7 +50,6 @@
 		"@types/node": "^20.0.0",
 		"@vitest/coverage-v8": "^1.0.0",
 		"fs-extra": "^11.3.3",
-		"tsup": "^8.0.0",
 		"typescript": "^5.4.0",
 		"vite-tsconfig-paths": "^6.1.1",
 		"vitest": "^1.0.0"

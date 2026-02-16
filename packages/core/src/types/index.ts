@@ -103,7 +103,7 @@ export type {
 	ActionUtils,
 	ActionQueryOptions,
 } from "./actions.js";
-export type { ActionLogger } from "#/logger/types";
+export type { ActionLogger } from "#logger/types";
 export { ActionExecutionError, ActionParameterError } from "./actions.js";
 
 // AI Configuration types (AiServiceConfig also available from ../config/index.js)
@@ -119,9 +119,9 @@ export type {
 	AICostSummary,
 } from "./ai-config.js";
 // Re-export AiServiceConfig from config
-export type { AiServiceConfig } from "#/config/index";
+export type { AiServiceConfig } from "#config/index";
 
 // Common types
-// Note: Logger is already exported as a class from '#/logger/index'
-// ExtendedLogger type interface is also available from '#/logger/types'
+// Note: Logger is already exported as a class from '#logger/index'
+// ExtendedLogger type interface is also available from '#logger/types'
 export type { Prompter, RenderedAction, RunnerConfig } from "./common.js";

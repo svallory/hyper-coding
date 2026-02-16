@@ -7,15 +7,15 @@ import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { Args, Flags } from "@oclif/core";
 import { downloadTemplate } from "giget";
-import { BaseCommand } from "#/base-command.js";
+import { BaseCommand } from "#base-command";
 import {
 	type KitManifestEntry,
 	addKitToManifest,
 	extractPackageVersion,
 	isKitInstalled,
-} from "#/manifest.js";
-import { buildInstallCommand, resolveKitSource } from "#/source-resolver.js";
-import { findProjectRoot } from "#/utils/find-project-root.js";
+} from "#manifest";
+import { buildInstallCommand, resolveKitSource } from "#source-resolver";
+import { findProjectRoot } from "#utils/find-project-root";
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {
 	static override description = "Install a kit from npm, JSR, GitHub, or local path";
@@ -359,7 +359,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 		}
 	}
 
-	protected detectPackageManager(): "bun" | "pnpm" | "yarn" | "npm" {
+	protected override detectPackageManager(): "bun" | "pnpm" | "yarn" | "npm" {
 		let dir = this.flags.cwd;
 
 		// Walk up the directory tree to find a lock file

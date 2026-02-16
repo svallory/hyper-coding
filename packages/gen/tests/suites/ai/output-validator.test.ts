@@ -1,6 +1,6 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildValidationFeedback, validateOutput } from "#/ai/output-validator";
+import { buildValidationFeedback, validateOutput } from "#ai/output-validator";
 
 const projectRoot = path.resolve(__dirname, "../../..");
 
@@ -65,7 +65,7 @@ describe("validateOutput", () => {
 		});
 
 		it("ignores relative imports", async () => {
-			const code = `import { foo } from '#/local-file'`;
+			const code = `import { foo } from '#local-file'`;
 			const result = await validateOutput(code, { requireKnownImports: true }, projectRoot);
 			expect(result.passed).toBe(true);
 		});

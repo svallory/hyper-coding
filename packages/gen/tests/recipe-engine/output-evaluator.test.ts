@@ -7,9 +7,9 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { evaluateStepOutputs } from "#/recipe-engine/output-evaluator";
-import type { StepContext } from "#/recipe-engine/types";
-import { initializeJig } from "#/template-engines/jig-engine";
+import { evaluateStepOutputs } from "#recipe-engine/output-evaluator";
+import type { StepContext } from "#recipe-engine/types";
+import { initializeJig } from "#template-engines/jig-engine";
 
 // Initialize the Jig template engine once before all tests
 beforeAll(() => {

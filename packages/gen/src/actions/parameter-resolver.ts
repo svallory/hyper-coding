@@ -4,10 +4,10 @@
  * Handles parameter validation and resolution for action execution
  */
 
-import { TemplateParser, type TemplateVariable } from "@hypercli/core";
+import type { TemplateVariable } from "@hypercli/core";
 import createDebug from "debug";
-import { InteractivePrompter, type PromptOptions } from "#/prompts/interactive-prompts";
-import type { ActionMetadata, ActionParameter, ParameterType } from "./types.js";
+import { InteractivePrompter } from "#prompts/interactive-prompts";
+import type { ActionMetadata, ActionParameter } from "./types.js";
 import { ActionParameterError } from "./types.js";
 
 const debug = createDebug("hyper:action:parameters");

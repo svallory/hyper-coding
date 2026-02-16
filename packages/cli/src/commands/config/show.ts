@@ -4,11 +4,14 @@ import { Command, Flags } from "@oclif/core";
 import chalk from "chalk";
 
 export default class ConfigShow extends Command {
-	static description = "Show the resolved Hypergen configuration";
+	static override description = "Show the resolved Hypergen configuration";
 
-	static examples = ["<%= config.bin %> config show", "<%= config.bin %> config show --json"];
+	static override examples = [
+		"<%= config.bin %> config show",
+		"<%= config.bin %> config show --json",
+	];
 
-	static flags = {
+	static override flags = {
 		json: Flags.boolean({
 			description: "Output raw JSON (no interactive viewer)",
 			default: false,

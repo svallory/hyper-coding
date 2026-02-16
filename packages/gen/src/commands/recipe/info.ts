@@ -3,23 +3,23 @@
  */
 
 import { Args } from "@oclif/core";
-import { BaseCommand } from "#/lib/base-command";
-import { outputFlags } from "#/lib/flags";
-import { loadRecipe } from "#/recipe-engine/recipe-engine";
+import { BaseCommand } from "#lib/base-command";
+import { outputFlags } from "#lib/flags";
+import { loadRecipe } from "#recipe-engine/recipe-engine";
 
 export default class RecipeInfo extends BaseCommand<typeof RecipeInfo> {
-	static description = "Show detailed recipe information";
+	static override description = "Show detailed recipe information";
 
-	static examples = [
+	static override examples = [
 		"<%= config.bin %> <%= command.id %> my-recipe.yml",
 		"<%= config.bin %> <%= command.id %> .hyper/kits/component.yml --json",
 	];
 
-	static flags = {
+	static override flags = {
 		...outputFlags,
 	};
 
-	static args = {
+	static override args = {
 		recipe: Args.string({
 			description: "Path to recipe file (.yml or .yaml)",
 			required: true,

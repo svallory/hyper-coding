@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { CostTracker } from "#/ai/cost-tracker";
+import { CostTracker } from "#ai/cost-tracker";
 
 describe("CostTracker", () => {
 	let tracker: CostTracker;

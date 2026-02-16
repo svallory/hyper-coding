@@ -5,12 +5,12 @@
 
 import fs from "node:fs";
 import { Args } from "@oclif/core";
-import { AiCollector } from "#/ai/ai-collector";
-import type { AiServiceConfig } from "#/ai/ai-config";
-import { resolveTransport } from "#/ai/transports/index";
-import { BaseCommand } from "#/lib/base-command";
-import { executionFlags, outputFlags } from "#/lib/flags";
-import type { RecipeExecutionOptions, RecipeExecutionResult } from "#/recipe-engine/recipe-engine";
+import { AiCollector } from "#ai/ai-collector";
+import type { AiServiceConfig } from "#ai/ai-config";
+import { resolveTransport } from "#ai/transports/index";
+import { BaseCommand } from "#lib/base-command";
+import { executionFlags, outputFlags } from "#lib/flags";
+import type { RecipeExecutionOptions, RecipeExecutionResult } from "#recipe-engine/recipe-engine";
 
 export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 	static override description = "Execute a recipe to generate code";

@@ -6,10 +6,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { Args, Flags } from "@oclif/core";
 import yaml from "js-yaml";
-import { BaseCommand } from "#/lib/base-command";
-import { c } from "#/lib/colors";
-import { outputFlags } from "#/lib/flags";
-import { s } from "#/lib/styles";
+import { BaseCommand } from "#lib/base-command";
+import { c } from "#lib/colors";
+import { outputFlags } from "#lib/flags";
+import { s } from "#lib/styles";
 
 interface RecipeInfo {
 	name: string;
@@ -22,15 +22,15 @@ interface RecipeInfo {
 }
 
 export default class RecipeList extends BaseCommand<typeof RecipeList> {
-	static description = "List available recipes from all discovered kits";
+	static override description = "List available recipes from all discovered kits";
 
-	static examples = [
+	static override examples = [
 		"<%= config.bin %> <%= command.id %>",
 		"<%= config.bin %> <%= command.id %> nextjs",
 		"<%= config.bin %> <%= command.id %> --json",
 	];
 
-	static flags = {
+	static override flags = {
 		...outputFlags,
 		kit: Flags.string({
 			char: "k",
@@ -42,7 +42,7 @@ export default class RecipeList extends BaseCommand<typeof RecipeList> {
 		}),
 	};
 
-	static args = {
+	static override args = {
 		kit: Args.string({
 			description: "Kit to list recipes from (optional, lists all if omitted)",
 			required: false,

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { HypergenConfigLoader, createConfigFile, getConfigInfo } from "#/config/config-loader";
+import { HypergenConfigLoader, createConfigFile, getConfigInfo } from "#config/config-loader";
 
 describe("Hypergen Configuration System", () => {
 	let tempDir: string;

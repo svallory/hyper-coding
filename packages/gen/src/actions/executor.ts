@@ -13,7 +13,7 @@ import {
 } from "./communication.js";
 import { ActionParameterResolver } from "./parameter-resolver.js";
 import { ActionRegistry } from "./registry.js";
-import type { ActionContext, ActionFunction, ActionResult } from "./types.js";
+import type { ActionContext, ActionResult } from "./types.js";
 import { ActionExecutionError } from "./types.js";
 import { ConsoleActionLogger, DefaultActionUtils } from "./utils.js";
 
@@ -33,7 +33,7 @@ export class ActionExecutor {
 	/**
 	 * Execute an action (internal method)
 	 */
-	private async execute(
+	public async execute(
 		actionName: string,
 		parameters: Record<string, any> = {},
 		context: Partial<ActionContext> = {},

@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import createDebug from "debug";
 import { glob } from "glob";
-import type { StepResult } from "#/recipe-engine/types";
+import type { StepResult } from "#recipe-engine/types";
 import type { AIContextConfig } from "./ai-config.js";
 
 const debug = createDebug("hypergen:ai:context-collector");

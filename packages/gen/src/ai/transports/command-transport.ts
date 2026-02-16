@@ -14,7 +14,7 @@
 import { execFile } from "node:child_process";
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import { PromptAssembler } from "#/ai/prompt-assembler";
+import { PromptAssembler } from "#ai/prompt-assembler";
 import type { AiBlockEntry } from "../ai-collector.js";
 import type { AiTransport, TransportContext, TransportResult } from "./types.js";
 

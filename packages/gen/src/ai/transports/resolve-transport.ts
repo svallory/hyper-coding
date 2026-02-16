@@ -7,7 +7,7 @@
 
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import { getExpectedEnvVar, hasApiKeyAvailable } from "#/ai/env";
+import { getExpectedEnvVar, hasApiKeyAvailable } from "#ai/env";
 import type { AiServiceConfig } from "../ai-config.js";
 import { ApiTransport } from "./api-transport.js";
 import { CommandTransport } from "./command-transport.js";

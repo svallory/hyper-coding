@@ -18,7 +18,6 @@ cjs/
 dist/
 dts/
 esm/
-lib/
 mjs/
 tmp/
 umd/

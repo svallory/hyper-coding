@@ -6,13 +6,10 @@
  */
 
 import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
-import { Logger } from "@hypercli/core";
 import createDebug from "debug";
-import type { RecipeStepUnion, ToolType } from "#/recipe-engine/types";
+import type { ToolType } from "#recipe-engine/types";
 import type { Tool } from "./base.js";
-import type { ToolFactory, ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:registry");
+import type { ToolFactory } from "./base.js";
 
 /**
  * Tool registration metadata
@@ -153,7 +150,6 @@ export class ToolRegistry {
 
 	private readonly registrations = new Map<string, ToolRegistration>();
 	private readonly instanceCache = new Map<string, ToolCacheEntry>();
-	private readonly logger: Logger;
 	private readonly debug: ReturnType<typeof createDebug>;
 
 	// Configuration
@@ -171,7 +167,6 @@ export class ToolRegistry {
 			enableInstanceReuse?: boolean;
 		} = {},
 	) {
-		this.logger = new Logger(console.log);
 		this.debug = createDebug("hyper:recipe:registry");
 
 		this.maxCacheSize = options.maxCacheSize || 100;

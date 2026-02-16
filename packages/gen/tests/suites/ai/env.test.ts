@@ -4,7 +4,7 @@ import {
 	getExpectedEnvVar,
 	hasApiKeyAvailable,
 	resolveApiKey,
-} from "#/ai/env";
+} from "#ai/env";
 
 describe("AI env utilities", () => {
 	const savedEnv = { ...process.env };

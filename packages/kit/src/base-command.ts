@@ -15,7 +15,7 @@ export type BaseArgs<T extends typeof Command> = Interfaces.InferredArgs<T["args
  * Abstract base command that all kit management commands extend
  */
 export abstract class BaseCommand<T extends typeof Command> extends Command {
-	static baseFlags = {
+	static override baseFlags = {
 		cwd: Flags.directory({
 			description: "Working directory",
 			default: process.cwd(),

@@ -19,11 +19,27 @@
 	"types": "./dist/index.d.ts",
 	"files": ["dist", "README.md", "LICENSE"],
 	"imports": {
-		"#/*": "./dist/*.js",
-		"#tests/*": "./tests/*.ts"
+		"#ui": "./dist/ui/index.js",
+		"#ui/*": "./dist/ui/*.js",
+		"#parsers": "./dist/parsers/index.js",
+		"#parsers/*": "./dist/parsers/*.js",
+		"#types": "./dist/types/index.js",
+		"#types/*": "./dist/types/*.js",
+		"#logger": "./dist/logger/index.js",
+		"#logger/*": "./dist/logger/*.js",
+		"#config": "./dist/config/index.js",
+		"#config/*": "./dist/config/*.js",
+		"#utils": "./dist/utils/index.js",
+		"#utils/*": "./dist/utils/*.js",
+		"#errors": "./dist/errors/index.js",
+		"#errors/*": "./dist/errors/*.js",
+		"#tests/*": "./tests/*.ts",
+		"#fixtures/*": "./tests/fixtures/*.ts",
+		"#helpers/*": "./tests/helpers/*.ts",
+		"#*": "./dist/*.js"
 	},
 	"scripts": {
-		"build": "tsup",
+		"build": "tsc",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "biome check .",
@@ -42,7 +58,6 @@
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
 		"@types/node": "^20.0.0",
-		"tsup": "^8.0.0",
 		"typescript": "^5.4.0",
 		"vitest": "^1.0.0"
 	},

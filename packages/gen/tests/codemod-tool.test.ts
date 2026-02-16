@@ -9,8 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import fs from "fs-extra";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CodeModTool, CodeModToolFactory } from "#/recipe-engine/tools/codemod-tool";
-import type { CodeModStep, StepContext } from "#/recipe-engine/types";
+import { CodeModTool, CodeModToolFactory } from "#recipe-engine/tools/codemod-tool";
+import type { CodeModStep, StepContext } from "#recipe-engine/types";
 
 describe("CodeModTool", () => {
 	let tool: CodeModTool;

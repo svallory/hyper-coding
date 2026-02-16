@@ -7,17 +7,14 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import createDebug from "debug";
 import type {
 	PatchExecutionResult,
 	PatchStep,
 	StepContext,
 	StepExecutionOptions,
 	StepResult,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:patch");
 
 /**
  * Auto-detect file format from extension

@@ -7,17 +7,14 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import createDebug from "debug";
 import type {
 	EnsureDirsExecutionResult,
 	EnsureDirsStep,
 	StepContext,
 	StepExecutionOptions,
 	StepResult,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
-
-const debug = createDebug("hyper:recipe:tool:ensure-dirs");
 
 export class EnsureDirsTool extends Tool<EnsureDirsStep> {
 	constructor(name = "ensure-dirs-tool", options: Record<string, any> = {}) {

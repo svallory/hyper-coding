@@ -13,7 +13,7 @@
  */
 
 import createDebug from "debug";
-import type { StepResult } from "#/recipe-engine/types";
+import type { StepResult } from "#recipe-engine/types";
 import type { AIContextConfig, AIExample, AIGuardrailConfig } from "./ai-config.js";
 import { type ContextBundle, ContextCollector } from "./context-collector.js";
 

@@ -3,11 +3,11 @@
  */
 
 import { Args, Flags } from "@oclif/core";
-import { BaseCommand } from "#/base-command.js";
+import { BaseCommand } from "#base-command";
 // TODO: These modules don't exist in kit yet - they may belong in cli or gen
-// import { discoverCookbooksInKit, discoverRecipesInCookbook } from "#/config/cookbook-parser";
-// import { c } from "#/lib/colors";
-// import { s } from "#/lib/styles";
+// import { discoverCookbooksInKit, discoverRecipesInCookbook } from "#config/cookbook-parser";
+// import { c } from "#lib/colors";
+// import { s } from "#lib/styles";
 
 export default class KitInfo extends BaseCommand<typeof KitInfo> {
 	static override description = "Show detailed information about a kit";

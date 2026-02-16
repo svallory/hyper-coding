@@ -7,7 +7,7 @@
  */
 
 import path from "node:path";
-import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
+import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
 import createDebug from "debug";
 import fs from "fs-extra";
 import { glob } from "glob";
@@ -19,7 +19,7 @@ import {
 	type StepExecutionOptions,
 	type StepResult,
 	isCodeModStep,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
 const debug = createDebug("hyper:recipe:tool:codemod");
@@ -404,7 +404,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 	/**
 	 * Initialize CodeMod tool
 	 */
-	protected async onInitialize(): Promise<void> {
+	protected override async onInitialize(): Promise<void> {
 		this.debug("Initializing CodeMod tool");
 
 		try {
@@ -761,7 +761,7 @@ export class CodeModTool extends Tool<CodeModStep> {
 	/**
 	 * Tool-specific cleanup logic
 	 */
-	protected async onCleanup(): Promise<void> {
+	protected override async onCleanup(): Promise<void> {
 		this.debug("Cleaning up CodeMod tool resources");
 		// Cleanup is handled by registered resources
 	}

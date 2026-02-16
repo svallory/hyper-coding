@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AiServiceConfig } from "#/ai/ai-config";
-import { ApiTransport } from "#/ai/transports/api-transport";
-import { CommandTransport } from "#/ai/transports/command-transport";
-import { resolveTransport } from "#/ai/transports/resolve-transport";
-import { StdoutTransport } from "#/ai/transports/stdout-transport";
+import type { AiServiceConfig } from "#ai/ai-config";
+import { ApiTransport } from "#ai/transports/api-transport";
+import { CommandTransport } from "#ai/transports/command-transport";
+import { resolveTransport } from "#ai/transports/resolve-transport";
+import { StdoutTransport } from "#ai/transports/stdout-transport";
 
 describe("resolveTransport", () => {
 	const savedEnv = { ...process.env };

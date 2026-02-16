@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { cosmiconfig } from "cosmiconfig";
-import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
+import { ErrorCode, ErrorHandler } from "#errors/hypergen-errors";
 import { loadHelpers } from "./load-helpers.js";
 
 const DEFAULT_TEMPLATE_DIRECTORY = "templates";

@@ -8,7 +8,7 @@ import {
 	getDefaultKitSearchDirs,
 	parseKitFile,
 	resolveKitCookbooks,
-} from "#/parsers/kit-parser";
+} from "#parsers/kit-parser";
 
 describe("KitParser", () => {
 	let tempDir: string;

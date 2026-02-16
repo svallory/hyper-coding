@@ -125,7 +125,7 @@ export class ActionExecutionError extends Error {
 		message: string,
 		public actionName: string,
 		public parameterErrors?: string[],
-		public cause?: Error,
+		public override cause?: Error,
 	) {
 		super(message);
 		this.name = "ActionExecutionError";

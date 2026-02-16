@@ -9,11 +9,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as fs from "fs-extra";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { ensureDirsToolFactory } from "#/recipe-engine/tools/ensure-dirs-tool";
-import { getToolRegistry } from "#/recipe-engine/tools/registry";
-import { sequenceToolFactory } from "#/recipe-engine/tools/sequence-tool";
-import { templateToolFactory } from "#/recipe-engine/tools/template-tool";
+import { RecipeEngine } from "#recipe-engine/recipe-engine";
+import { ensureDirsToolFactory } from "#recipe-engine/tools/ensure-dirs-tool";
+import { getToolRegistry } from "#recipe-engine/tools/registry";
+import { sequenceToolFactory } from "#recipe-engine/tools/sequence-tool";
+import { templateToolFactory } from "#recipe-engine/tools/template-tool";
 
 describe("E2E: Real Next.js Recipe", () => {
 	let tempDir: string;

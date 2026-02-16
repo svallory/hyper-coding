@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AiTool } from "#/recipe-engine/tools/ai-tool";
-import type { AIStep, StepContext, StepResult } from "#/recipe-engine/types";
+import { AiTool } from "#recipe-engine/tools/ai-tool";
+import type { AIStep, StepContext, StepResult } from "#recipe-engine/types";
 
 function makeContext(overrides: Partial<StepContext> = {}): StepContext {
 	return {

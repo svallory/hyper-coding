@@ -7,8 +7,8 @@
 
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import type { AIModelRef, AiServiceConfig } from "./ai-config.js";
-import { getExpectedEnvVar, resolveApiKey } from "./env.js";
+import type { AiServiceConfig } from "./ai-config.js";
+import { resolveApiKey } from "./env.js";
 
 const debug = createDebug("hypergen:ai:model-router");
 

@@ -8,25 +8,19 @@
 
 import { EventEmitter } from "node:events";
 import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
-import { Logger } from "@hypercli/core";
 import createDebug from "debug";
 import { evaluateStepOutputs } from "./output-evaluator.js";
 import type { Tool } from "./tools/base.js";
 import { type ToolRegistry, getToolRegistry } from "./tools/registry.js";
 import {
-	type ActionStep,
 	CircularDependencyError,
-	type CodeModStep,
 	type RecipeExecutionPlan,
-	type RecipeStep,
 	type RecipeStepUnion,
 	type StepContext,
 	type StepDependencyNode,
 	StepExecutionError,
 	type StepExecutionOptions,
 	type StepResult,
-	type StepStatus,
-	type TemplateStep,
 	type ToolType,
 	isAIStep,
 	isActionStep,
@@ -42,8 +36,6 @@ import {
 	isShellStep,
 	isTemplateStep,
 } from "./types.js";
-
-const debug = createDebug("hyper:recipe:step-executor");
 
 /**
  * Step execution metrics and progress tracking
@@ -192,7 +184,6 @@ const DEFAULT_CONFIG: StepExecutorConfig = {
  */
 export class StepExecutor extends EventEmitter {
 	private readonly toolRegistry: ToolRegistry;
-	private readonly logger: Logger;
 	private readonly debug: ReturnType<typeof createDebug>;
 	private readonly config: StepExecutorConfig;
 
@@ -212,7 +203,6 @@ export class StepExecutor extends EventEmitter {
 		super();
 
 		this.toolRegistry = toolRegistry || getToolRegistry();
-		this.logger = new Logger(console.log);
 		this.debug = createDebug("hyper:recipe:step-executor");
 		this.config = { ...DEFAULT_CONFIG, ...config };
 

@@ -2,8 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { QueryTool, QueryToolFactory, queryToolFactory } from "#/recipe-engine/tools/query-tool";
-import type { QueryExecutionResult, QueryStep, StepContext } from "#/recipe-engine/types";
+import { QueryTool, QueryToolFactory, queryToolFactory } from "#recipe-engine/tools/query-tool";
+import type { QueryExecutionResult, QueryStep, StepContext } from "#recipe-engine/types";
 
 describe("QueryTool", () => {
 	let tmpDir: string;

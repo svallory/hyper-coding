@@ -15,12 +15,12 @@ import path from "node:path";
 import fs from "fs-extra";
 import yaml from "js-yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AiCollector } from "#/ai/ai-collector";
-import { PromptAssembler } from "#/ai/prompt-assembler";
-import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { ToolRegistry, getToolRegistry } from "#/recipe-engine/tools/registry";
-import { templateToolFactory } from "#/recipe-engine/tools/template-tool";
-import { getJig, initializeJig } from "#/template-engines/jig-engine";
+import { AiCollector } from "#ai/ai-collector";
+import { PromptAssembler } from "#ai/prompt-assembler";
+import { RecipeEngine } from "#recipe-engine/recipe-engine";
+import { ToolRegistry, getToolRegistry } from "#recipe-engine/tools/registry";
+import { templateToolFactory } from "#recipe-engine/tools/template-tool";
+import { getJig, initializeJig } from "#template-engines/jig-engine";
 
 // ─── Constants ──────────────────────────────────────────────────────
 

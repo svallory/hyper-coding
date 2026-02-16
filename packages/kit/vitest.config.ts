@@ -11,12 +11,12 @@ export default defineConfig({
 		alias: {
 			"#": srcDir,
 			"#/": `${srcDir}/`,
-			"#/tests": testsDir,
-			"#/tests/": `${testsDir}/`,
-			"#/fixtures": path.resolve(testsDir, "fixtures"),
-			"#/fixtures/": path.resolve(testsDir, "fixtures/"),
-			"#/helpers": path.resolve(testsDir, "helpers"),
-			"#/helpers/": path.resolve(testsDir, "helpers/"),
+			"#tests": testsDir,
+			"#tests/": `${testsDir}/`,
+			"#fixtures": path.resolve(testsDir, "fixtures"),
+			"#fixtures/": path.resolve(testsDir, "fixtures/"),
+			"#helpers": path.resolve(testsDir, "helpers"),
+			"#helpers/": path.resolve(testsDir, "helpers/"),
 		},
 	},
 	test: {

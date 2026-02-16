@@ -3,24 +3,24 @@
  */
 
 import { Args } from "@oclif/core";
-import { BaseCommand } from "#/lib/base-command";
-import { outputFlags, validationFlags } from "#/lib/flags";
-import { loadRecipe } from "#/recipe-engine/recipe-engine";
+import { BaseCommand } from "#lib/base-command";
+import { outputFlags, validationFlags } from "#lib/flags";
+import { loadRecipe } from "#recipe-engine/recipe-engine";
 
 export default class RecipeValidate extends BaseCommand<typeof RecipeValidate> {
-	static description = "Validate a recipe file";
+	static override description = "Validate a recipe file";
 
-	static examples = [
+	static override examples = [
 		"<%= config.bin %> <%= command.id %> my-recipe.yml",
 		"<%= config.bin %> <%= command.id %> .hyper/kits/component.yml --strict",
 	];
 
-	static flags = {
+	static override flags = {
 		...outputFlags,
 		...validationFlags,
 	};
 
-	static args = {
+	static override args = {
 		recipe: Args.string({
 			description: "Path to recipe file (.yml or .yaml)",
 			required: true,

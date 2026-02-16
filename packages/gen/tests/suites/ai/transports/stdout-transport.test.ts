@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AiCollector } from "#/ai/ai-collector";
-import { StdoutTransport } from "#/ai/transports/stdout-transport";
-import type { TransportContext } from "#/ai/transports/types";
+import { AiCollector } from "#ai/ai-collector";
+import { StdoutTransport } from "#ai/transports/stdout-transport";
+import type { TransportContext } from "#ai/transports/types";
 
 describe("StdoutTransport", () => {
 	beforeEach(() => {

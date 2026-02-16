@@ -21,16 +21,34 @@
 	"oclif": {
 		"commands": "./dist/commands",
 		"hooks": {
-			"command_not_found": "./dist/hooks/command-not-found"
+			"command_not_found": "./dist/hooks/command-not-found.js"
 		},
 		"topicSeparator": " "
 	},
 	"imports": {
-		"#/*": "./dist/*.js",
-		"#tests/*": "./tests/*"
+		"#discovery": "./dist/discovery/index.js",
+		"#discovery/*": "./dist/discovery/*.js",
+		"#utils/*": "./dist/utils/*.js",
+		"#ai": "./dist/ai/index.js",
+		"#ai/*": "./dist/ai/*.js",
+		"#hooks/*": "./dist/hooks/*.js",
+		"#actions": "./dist/actions/index.js",
+		"#actions/*": "./dist/actions/*.js",
+		"#lib/*": "./dist/lib/*.js",
+		"#prompts/*": "./dist/prompts/*.js",
+		"#ops/*": "./dist/ops/*.js",
+		"#commands/*": "./dist/commands/*.js",
+		"#recipe-engine": "./dist/recipe-engine/index.js",
+		"#recipe-engine/*": "./dist/recipe-engine/*.js",
+		"#template-engines": "./dist/template-engines/index.js",
+		"#template-engines/*": "./dist/template-engines/*.js",
+		"#tests/*": "./tests/*.ts",
+		"#fixtures/*": "./tests/fixtures/*.ts",
+		"#helpers/*": "./tests/helpers/*.ts",
+		"#*": "./dist/*.js"
 	},
 	"scripts": {
-		"build": "tsup",
+		"build": "tsc",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "biome check .",
@@ -63,7 +81,6 @@
 		"@types/js-yaml": "^4.0.9",
 		"@types/node": "^20.0.0",
 		"typescript": "^5.4.0",
-		"tsup": "^8.0.0",
 		"vitest": "^1.0.0"
 	},
 	"publishConfig": {

@@ -8,14 +8,13 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { TemplateVariable } from "@hypercli/core";
 import createDebug from "debug";
 import type {
 	RecipeEngine,
 	RecipeExecutionOptions,
 	RecipeExecutionResult,
 } from "./recipe-engine.js";
-import type { RecipeConfig, RecipeProvides } from "./types.js";
+import type { RecipeConfig } from "./types.js";
 
 const debug = createDebug("hyper:recipe:group-executor");
 

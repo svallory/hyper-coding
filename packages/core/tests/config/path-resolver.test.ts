@@ -15,10 +15,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import fs from "fs-extra";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { parseKitFile } from "#/parsers/kit-parser";
-import type { ParsedKit } from "#/parsers/kit-parser";
-import { PathResolver } from "#/parsers/path-resolver";
-import type { ResolvedPath } from "#/parsers/path-resolver";
+import { parseKitFile } from "#parsers/kit-parser";
+import type { ParsedKit } from "#parsers/kit-parser";
+import { PathResolver } from "#parsers/path-resolver";
+import type { ResolvedPath } from "#parsers/path-resolver";
 
 // ---------------------------------------------------------------------------
 // Helpers to build the fixture directory tree

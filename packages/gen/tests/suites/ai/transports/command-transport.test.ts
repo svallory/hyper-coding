@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { AiCollector } from "#/ai/ai-collector";
-import { CommandTransport } from "#/ai/transports/command-transport";
-import type { TransportContext } from "#/ai/transports/types";
+import { AiCollector } from "#ai/ai-collector";
+import { CommandTransport } from "#ai/transports/command-transport";
+import type { TransportContext } from "#ai/transports/types";
 
 describe("CommandTransport", () => {
 	beforeEach(() => {

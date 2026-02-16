@@ -10,7 +10,7 @@
 import { helpers } from "@hypercli/core";
 import { Edge } from "@jig-lang/jig";
 import createDebug from "debug";
-import { AiCollector } from "#/ai/ai-collector";
+import { AiCollector } from "#ai/ai-collector";
 import { registerAiTags } from "./ai-tags.js";
 
 const debug = createDebug("hypergen:template:jig");

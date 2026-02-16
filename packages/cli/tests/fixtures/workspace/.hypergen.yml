@@ -1,0 +1,3 @@
+# Minimal Hypergen configuration for testing
+name: test-workspace
+version: 1.0.0

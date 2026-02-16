@@ -13,19 +13,19 @@ import path from "node:path";
 import { promisify } from "node:util";
 import fs from "fs-extra";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type RecipeEngine, createRecipeEngine } from "#/recipe-engine/recipe-engine";
+import { type RecipeEngine, createRecipeEngine } from "#recipe-engine/recipe-engine";
 import {
 	ToolRegistry,
 	getToolRegistry,
 	initializeToolsFramework,
 	registerDefaultTools,
-} from "#/recipe-engine/tools/index";
+} from "#recipe-engine/tools/index";
 import type {
 	RecipeConfig,
 	RecipeExecutionOptions,
 	RecipeSource,
 	StepResult,
-} from "#/recipe-engine/types";
+} from "#recipe-engine/types";
 import { fixture, withTempFixtures } from "#tests/util/fixtures.js";
 
 const execAsync = promisify(exec);
@@ -107,7 +107,7 @@ to: src/components/{{ name }}.test.ts
 skip_if: !withTests
 ---
 import { render } from '@testing-library/react';
-import { {{ name }} } from '#/{{ name }}';
+import { {{ name }} } from '#{{ name }}';
 
 describe('{{ name }}', () => {
   it('should render successfully', () => {

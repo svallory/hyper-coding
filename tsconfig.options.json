@@ -10,11 +10,11 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
-    "emitDeclarationOnly": true,
+    "emitDeclarationOnly": false,
     "incremental": true,
     "noEmit": false,
-    "noEmitOnError": true,
+    "noEmitOnError": false,
     "skipLibCheck": true,
-    "verbatimModuleSyntax": false
+    "verbatimModuleSyntax": true
   }
 }

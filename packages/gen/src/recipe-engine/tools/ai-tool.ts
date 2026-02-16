@@ -10,9 +10,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import type { AIExecutionResult } from "#/ai/ai-config";
-import { AiService } from "#/ai/ai-service";
-import type { AIStep, StepContext, StepExecutionOptions, StepResult } from "#/recipe-engine/types";
+import type { AIExecutionResult } from "#ai/ai-config";
+import { AiService } from "#ai/ai-service";
+import type { AIStep, StepContext, StepExecutionOptions, StepResult } from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
 const debug = createDebug("hyper:recipe:tool:ai");

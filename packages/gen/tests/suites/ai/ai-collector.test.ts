@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type AiBlockEntry, AiCollector } from "#/ai/ai-collector";
+import { type AiBlockEntry, AiCollector } from "#ai/ai-collector";
 
 describe("AiCollector", () => {
 	beforeEach(() => {

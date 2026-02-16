@@ -6,7 +6,7 @@
 
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { TemplateParser } from "#/parsers/template-parser";
+import { TemplateParser } from "#parsers/template-parser";
 
 describe("Example Recipe Parsing", () => {
 	it("should parse the recipe example correctly", async () => {

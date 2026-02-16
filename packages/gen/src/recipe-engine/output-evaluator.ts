@@ -17,7 +17,7 @@
  */
 
 import createDebug from "debug";
-import { renderTemplate } from "#/template-engines/index";
+import { renderTemplate } from "#template-engines/index";
 import type { StepContext } from "./types.js";
 
 const debug = createDebug("hyper:recipe:output-evaluator");

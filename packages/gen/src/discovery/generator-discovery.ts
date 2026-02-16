@@ -11,9 +11,8 @@ import { discoverCookbooksInKit } from "@hypercli/core";
 import createDebug from "debug";
 import fs from "fs-extra";
 import { glob } from "glob";
-import { isActionFunction } from "#/actions/decorator";
-import { ActionRegistry } from "#/actions/registry";
-import { getGlobalPackages } from "#/utils/global-packages";
+import { isActionFunction } from "#actions/decorator";
+import { getGlobalPackages } from "#utils/global-packages";
 
 const debug = createDebug("hypergen:discovery");
 

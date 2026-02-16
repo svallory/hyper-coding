@@ -14,9 +14,7 @@ import type {
 	StepExecutionOptions,
 	StepResult,
 	ToolType,
-} from "#/recipe-engine/types";
-
-const debug = createDebug("hyper:recipe:tool");
+} from "#recipe-engine/types";
 
 /**
  * Tool execution phase for lifecycle management

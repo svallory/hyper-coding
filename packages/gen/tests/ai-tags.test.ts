@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { AiCollector } from "#/ai/ai-collector";
-import { initializeJig, renderTemplate } from "#/template-engines/jig-engine";
+import { AiCollector } from "#ai/ai-collector";
+import { initializeJig, renderTemplate } from "#template-engines/jig-engine";
 
 describe("AI Tags (2-Pass)", () => {
 	beforeEach(() => {

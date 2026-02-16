@@ -13,13 +13,7 @@
  * Levenshtein distance.
  */
 
-import {
-	discoverKits,
-	error as formatError,
-	tip as formatTip,
-	getKitsDirectory,
-	styleCommand,
-} from "@hypercli/core";
+import { discoverKits, tip as formatTip, getKitsDirectory, styles as s } from "@hypercli/core";
 import type { Hook } from "@oclif/core";
 import { getSuggestions } from "./suggest.js";
 
@@ -150,22 +144,19 @@ async function showCommandNotFoundError(
 	// Combine candidates: command IDs + kit names
 	const candidates = [...allCommandIds, ...installedKits];
 
-	// Get suggestions using Levenshtein distance
-	const suggestions = getSuggestions(commandId, candidates);
-
 	// Build friendly error message
-	let errorMessage = `Uh oh! I couldn't find any command or hyper kit named ${styleCommand(commandId)}.`;
-	if (suggestions.length > 0) {
-		errorMessage += ` Did you mean ${styleCommand(suggestions[0])}?`;
-	}
+	const errorMessage = `Uh oh! I couldn't find any command or hyper kit named ${s.danger(commandId)}.`;
 
 	// Build tip body with available commands and kits
 	const tipBody: string[] = [];
 
+	// Get suggestions using Levenshtein distance
+	const suggestions = getSuggestions(commandId, candidates);
+
 	if (suggestions.length > 1) {
 		tipBody.push("Other suggestions:");
 		for (const suggestion of suggestions.slice(1, 4)) {
-			tipBody.push(`  ${styleCommand(suggestion)}`);
+			tipBody.push(`  ${s.command(suggestion)}`);
 		}
 		tipBody.push("");
 	}
@@ -174,24 +165,31 @@ async function showCommandNotFoundError(
 	const mainCommands = allCommandIds
 		.filter((id) => !id.includes(":"))
 		.sort()
-		.map(styleCommand);
+		.map(s.command);
 	tipBody.push(`  ${mainCommands.join(", ")}`);
 
 	if (installedKits.length > 0) {
 		tipBody.push("");
 		tipBody.push("Installed kits:");
-		const styledKits = installedKits.map(styleCommand);
+		const styledKits = installedKits.map(s.command);
 		tipBody.push(`  ${styledKits.join(", ")}`);
 	}
 
 	tipBody.push("");
-	tipBody.push(`Run ${styleCommand("hyper --help")} for usage.`);
+	tipBody.push(`Run ${s.command("hyper --help")} for usage.`);
+
+	let tipTitle =
+		installedKits.length === 0
+			? `Did you forget to ${s.command("kit install")}?`
+			: `Run ${s.command("hyper commands")} to see a cheat sheet`;
+
+	if (suggestions.length > 0) {
+		tipTitle = ` Did you mean ${s.command(suggestions[0])}?`;
+	}
 
 	// Show plain error message followed by tip
-	console.error(`\n${errorMessage}\n`);
-	console.error(
-		formatTip("Available commands and kits", "Here's what you can run", tipBody.join("\n")),
-	);
+	console.log(`\n${errorMessage}\n`);
+	console.log(formatTip(tipTitle, "Here's what you can run", tipBody.join("\n")));
 }
 
 export default hook;

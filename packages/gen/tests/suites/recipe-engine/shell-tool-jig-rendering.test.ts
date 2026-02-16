@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderTemplate } from "#/template-engines/jig-engine";
+import { renderTemplate } from "#template-engines/jig-engine";
 
 describe("Shell Tool - Jig Rendering", () => {
 	it("should render Jig @if/@elseif/@end tags in shell commands", async () => {

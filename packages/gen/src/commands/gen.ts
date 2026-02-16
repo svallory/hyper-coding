@@ -11,10 +11,10 @@ import { discoverKits, getDefaultKitSearchDirs } from "@hypercli/core";
 import type { TemplateVariable } from "@hypercli/core";
 import { findProjectRoot } from "@hypercli/core";
 import { Args, Flags } from "@oclif/core";
-import { AiCollector } from "#/ai/ai-collector";
-import { resolveTransport } from "#/ai/transports/resolve-transport";
-import { BaseCommand } from "#/lib/base-command";
-import { GroupExecutor } from "#/recipe-engine/group-executor";
+import { AiCollector } from "#ai/ai-collector";
+import { resolveTransport } from "#ai/transports/resolve-transport";
+import { BaseCommand } from "#lib/base-command";
+import { GroupExecutor } from "#recipe-engine/group-executor";
 
 export default class Gen extends BaseCommand<typeof Gen> {
 	static override description = "Execute a recipe to generate code";
@@ -70,7 +70,7 @@ export default class Gen extends BaseCommand<typeof Gen> {
 	static override strict = false;
 
 	async run(): Promise<void> {
-		const { args, flags, argv } = await this.parse(Gen);
+		const { flags, argv } = await this.parse(Gen);
 
 		// Collect all non-flag segments for path resolution
 		const segments = this.extractPathSegments(argv as string[]);

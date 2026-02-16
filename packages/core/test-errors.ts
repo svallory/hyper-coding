@@ -1,4 +1,4 @@
-import { ErrorCode, ErrorHandler, HypergenError } from "#/errors/hypergen-errors";
+import { ErrorCode, ErrorHandler, HypergenError } from "#errors/hypergen-errors";
 
 // Test that imports work
 console.log("ErrorCode:", Object.keys(ErrorCode).slice(0, 5));

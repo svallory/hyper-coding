@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AiCollector } from "#/ai/ai-collector";
-import { PromptAssembler } from "#/ai/prompt-assembler";
-import { initializeJig } from "#/template-engines/jig-engine";
+import { AiCollector } from "#ai/ai-collector";
+import { PromptAssembler } from "#ai/prompt-assembler";
+import { initializeJig } from "#template-engines/jig-engine";
 
 describe("PromptAssembler", () => {
 	let assembler: PromptAssembler;

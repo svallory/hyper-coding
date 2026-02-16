@@ -87,7 +87,7 @@ export {
 } from "./registry.js";
 
 // Import types and classes for internal use
-import type { RecipeStepUnion, ToolType } from "#/recipe-engine/types";
+import type { RecipeStepUnion, ToolType } from "#recipe-engine/types";
 import { actionToolFactory } from "./action-tool.js";
 import { aiToolFactory } from "./ai-tool.js";
 import type { ToolPhase, ToolValidationResult } from "./base.js";

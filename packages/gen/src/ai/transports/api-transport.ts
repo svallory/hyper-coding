@@ -7,8 +7,8 @@
 
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import { AiService } from "#/ai/ai-service";
-import { PromptAssembler } from "#/ai/prompt-assembler";
+import { AiService } from "#ai/ai-service";
+import { PromptAssembler } from "#ai/prompt-assembler";
 import type { AiTransport, TransportContext, TransportResult } from "./types.js";
 
 const debug = createDebug("hypergen:ai:transport:api");
