@@ -1,12 +1,8 @@
 // @hypercli/core - Core domain types, config, errors for HyperDev
 export const version = "0.0.0";
 
-// Export logger (Logger class from logger/logger.js to avoid conflict with types/index.js)
-export { default as Logger, renderMarkdown } from "#logger/logger";
-export type { HeadingStyle, Theme, HelpThemeConfig } from "#logger/logger";
-
-// Export UI utilities
-export * from "#ui/index";
+// Export logger (Logger class — used by recipe engine)
+export { default as Logger } from "#logger/logger";
 
 // Export all other modules
 export * from "#utils/index";

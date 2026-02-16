@@ -62,6 +62,7 @@
 		"@hypercli/core": "workspace:*",
 		"@hypercli/gen": "workspace:*",
 		"@hypercli/kit": "workspace:*",
+		"@hypercli/ui": "workspace:*",
 		"@oclif/core": "^4.8.0",
 		"@oclif/plugin-autocomplete": "^3.2.40",
 		"@oclif/plugin-commands": "^4.1.40",

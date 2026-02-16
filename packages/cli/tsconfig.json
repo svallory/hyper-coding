@@ -18,5 +18,10 @@
 	},
 	"include": ["src"],
 	"exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"],
-	"references": [{ "path": "../core" }, { "path": "../kit" }, { "path": "../gen" }]
+	"references": [
+		{ "path": "../core" },
+		{ "path": "../kit" },
+		{ "path": "../gen" },
+		{ "path": "../ui" }
+	]
 }

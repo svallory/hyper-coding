@@ -4,9 +4,8 @@
 
 import { Flags } from "@oclif/core";
 import { BaseCommand } from "#base-command";
-// TODO: colors and styles modules don't exist in kit yet - they may belong in cli
-// import { c } from "#lib/colors";
-// import { s } from "#lib/styles";
+// Colors and styles are available from @hypercli/ui when needed:
+// import { c, s } from "@hypercli/ui";
 
 export default class KitList extends BaseCommand<typeof KitList> {
 	static override description = "List installed kits";
@@ -34,9 +33,7 @@ export default class KitList extends BaseCommand<typeof KitList> {
 		await this.parse(KitList);
 
 		// TODO: Implement kit list command
-		// This command needs:
-		// - Kit discovery functionality (from @hypercli/gen or @hypercli/cli)
-		// - Color utilities and styles (from @hypercli/gen or shared lib)
+		// Colors and styles are now available via @hypercli/ui
 		this.error("The 'kit list' command is not yet implemented");
 	}
 }

@@ -3,10 +3,9 @@
  */
 
 import { discoverCookbooksInKit } from "@hypercli/core";
+import { c, s } from "@hypercli/ui";
 import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
-import { c } from "#lib/colors";
-import { s } from "#lib/styles";
 
 interface CookbookInfo {
 	name: string;

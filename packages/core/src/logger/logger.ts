@@ -1,9 +1,6 @@
 import chalk from "chalk";
 import { renderMarkdown } from "cli-html";
 
-export { renderMarkdown };
-export type { HeadingStyle, Theme, HelpThemeConfig } from "./cli-html-types.js";
-
 import type { ExtendedLogger } from "./types.js";
 
 // chalk 4.1.2 doesn't type template property

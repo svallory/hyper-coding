@@ -1,8 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { renderMarkdown } from "@hypercli/core";
+import { helpTheme, renderMarkdown } from "@hypercli/ui";
 import { type Command, Help, type Interfaces } from "@oclif/core";
-import { helpTheme } from "./theme.js";
 
 export default class MarkdownHelp extends Help {
 	override async showCommandHelp(command: Command.Loadable): Promise<void> {

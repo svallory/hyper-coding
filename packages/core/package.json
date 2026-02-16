@@ -19,8 +19,6 @@
 	"types": "./dist/index.d.ts",
 	"files": ["dist", "README.md", "LICENSE"],
 	"imports": {
-		"#ui": "./dist/ui/index.js",
-		"#ui/*": "./dist/ui/*.js",
 		"#parsers": "./dist/parsers/index.js",
 		"#parsers/*": "./dist/parsers/*.js",
 		"#types": "./dist/types/index.js",

@@ -13,7 +13,8 @@
  * Levenshtein distance.
  */
 
-import { discoverKits, tip as formatTip, getKitsDirectory, styles as s } from "@hypercli/core";
+import { discoverKits, getKitsDirectory } from "@hypercli/core";
+import { c, msg } from "@hypercli/ui";
 import type { Hook } from "@oclif/core";
 import { getSuggestions } from "./suggest.js";
 
@@ -145,7 +146,7 @@ async function showCommandNotFoundError(
 	const candidates = [...allCommandIds, ...installedKits];
 
 	// Build friendly error message
-	const errorMessage = `Uh oh! I couldn't find any command or hyper kit named ${s.danger(commandId)}.`;
+	const errorMessage = `Uh oh! I couldn't find any command or hyper kit named ${c.danger(commandId)}.`;
 
 	// Build tip body with available commands and kits
 	const tipBody: string[] = [];
@@ -156,7 +157,7 @@ async function showCommandNotFoundError(
 	if (suggestions.length > 1) {
 		tipBody.push("Other suggestions:");
 		for (const suggestion of suggestions.slice(1, 4)) {
-			tipBody.push(`  ${s.command(suggestion)}`);
+			tipBody.push(`  ${c.command(suggestion)}`);
 		}
 		tipBody.push("");
 	}
@@ -165,31 +166,33 @@ async function showCommandNotFoundError(
 	const mainCommands = allCommandIds
 		.filter((id) => !id.includes(":"))
 		.sort()
-		.map(s.command);
+		.map(c.command);
 	tipBody.push(`  ${mainCommands.join(", ")}`);
 
 	if (installedKits.length > 0) {
 		tipBody.push("");
 		tipBody.push("Installed kits:");
-		const styledKits = installedKits.map(s.command);
+		const styledKits = installedKits.map(c.command);
 		tipBody.push(`  ${styledKits.join(", ")}`);
 	}
 
 	tipBody.push("");
-	tipBody.push(`Run ${s.command("hyper --help")} for usage.`);
+	tipBody.push(`Run ${c.command("hyper --help")} for usage.`);
 
 	let tipTitle =
 		installedKits.length === 0
-			? `Did you forget to ${s.command("kit install")}?`
-			: `Run ${s.command("hyper commands")} to see a cheat sheet`;
+			? `Did you forget to ${c.command("kit install")}?`
+			: `Run ${c.command("hyper commands")} to see a cheat sheet`;
 
 	if (suggestions.length > 0) {
-		tipTitle = ` Did you mean ${s.command(suggestions[0])}?`;
+		tipTitle = ` Did you mean ${c.command(suggestions[0])}?`;
 	}
 
 	// Show plain error message followed by tip
 	console.log(`\n${errorMessage}\n`);
-	console.log(formatTip(tipTitle, "Here's what you can run", tipBody.join("\n")));
+	console.log(
+		msg.tip({ title: tipTitle, summary: "Here's what you can run", body: tipBody.join("\n") }),
+	);
 }
 
 export default hook;

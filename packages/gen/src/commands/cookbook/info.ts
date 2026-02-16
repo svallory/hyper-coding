@@ -3,10 +3,9 @@
  */
 
 import path from "node:path";
+import { c, s } from "@hypercli/ui";
 import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
-import { c } from "#lib/colors";
-import { s } from "#lib/styles";
 
 export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 	static override description = "Show detailed information about a cookbook";

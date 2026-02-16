@@ -42,6 +42,7 @@
 	},
 	"dependencies": {
 		"@hypercli/core": "workspace:*",
+		"@hypercli/ui": "workspace:*",
 		"giget": "^2.0.0"
 	},
 	"devDependencies": {
