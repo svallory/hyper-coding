@@ -1,0 +1,135 @@
+---
+title: "Publishing Packages"
+description: "How to publish new versions of @hypercli/* packages"
+icon: "package"
+---
+
+This guide explains how to publish new versions of the HyperDev packages to npm.
+
+## Prerequisites
+
+- Write access to the GitHub repository
+- The `NPM_TOKEN` secret must be configured in GitHub (already set up)
+- All changes to be published must be merged to `main`
+
+## How It Works
+
+We use [Changesets](https://github.com/changesets/changesets) to manage versioning and publishing. The workflow is:
+
+1. Contributors add changesets describing their changes
+2. When ready to release, the changesets are consumed to bump versions
+3. GitHub Actions automatically publishes to npm
+
+## Adding a Changeset
+
+Whenever you make changes that should be published, add a changeset:
+
+```bash
+bunx changeset
+```
+
+This will:
+1. Ask which packages have changed
+2. Ask for a summary of the changes
+3. Create a changeset file in `.changeset/`
+
+**When to add a changeset:**
+- New features (minor bump)
+- Bug fixes (patch bump)
+- Breaking changes (major bump)
+
+**When NOT to add a changeset:**
+- Documentation-only changes
+- Internal refactoring with no user-facing changes
+- Test-only changes
+
+## Version Bump Types
+
+| Type | When to use | Example |
+|------|-------------|---------|
+| `patch` | Bug fixes | Fixing a parser error |
+| `minor` | New features | Adding a new CLI command |
+| `major` | Breaking changes | Removing or changing existing API |
+
+## Publishing a Release
+
+### Step 1: Ensure all changesets are committed
+
+Check that all PRs with user-facing changes have added changesets:
+
+```bash
+ls .changeset/*.md
+```
+
+### Step 2: Create the release PR
+
+Push changes to `main` or merge a PR. The Release workflow will:
+1. Create a "Version Packages" PR automatically
+2. This PR bumps versions and updates changelogs
+
+### Step 3: Merge the release PR
+
+Once the "Version Packages" PR is created:
+1. Review the version bumps
+2. Merge the PR
+3. GitHub Actions will automatically publish to npm
+
+### Step 4: Verify the release
+
+Check that packages were published:
+
+```bash
+npm view @hypercli/cli version
+npm view @hypercli/core version
+npm view @hypercli/gen version
+npm view @hypercli/kit version
+```
+
+## Manual Publishing (Emergency Only)
+
+If you need to publish manually (not recommended):
+
+```bash
+# Build all packages in order
+cd packages/core && bun run build
+cd ../kit && bun run build
+cd ../gen && bun run build
+cd ../cli && bun run build
+
+# Publish each package
+cd packages/core && npm publish --access public
+cd packages/kit && npm publish --access public
+cd packages/gen && npm publish --access public
+cd packages/cli && npm publish --access public
+```
+
+## Package Dependencies
+
+Packages must be published in this order due to dependencies:
+
+1. `@hypercli/core` - No internal dependencies
+2. `@hypercli/kit` - Depends on `@hypercli/core`
+3. `@hypercli/gen` - Depends on `@hypercli/core` and `@hypercli/kit`
+4. `@hypercli/cli` - Depends on all three
+
+The Changesets GitHub Action handles this ordering automatically.
+
+## Troubleshooting
+
+### Release PR wasn't created
+
+- Check that `.changeset/config.json` exists and is valid
+- Verify the GitHub Actions workflow ran: `.github/workflows/release.yml`
+- Check the Actions tab in GitHub for errors
+
+### Publishing failed
+
+- Ensure `NPM_TOKEN` secret is set in GitHub repository settings
+- Check that all packages build successfully: `bun run build`
+- Verify versions are correct in each `package.json`
+
+### Package not found after publishing
+
+- npm may take a few minutes to propagate
+- Check the npm registry directly: `npm view @hypercli/<package>`
+- Verify the publishConfig in package.json has `"access": "public"`
