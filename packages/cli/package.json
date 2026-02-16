@@ -32,7 +32,18 @@
 		"dirname": "hyper",
 		"commands": "./dist/commands",
 		"helpClass": "./dist/help/custom-help",
-		"plugins": ["@hypercli/gen", "@hypercli/kit", "@oclif/plugin-help"],
+		"plugins": [
+			"@hypercli/gen",
+			"@hypercli/kit",
+			"@oclif/plugin-help",
+			"@oclif/plugin-autocomplete",
+			"@oclif/plugin-commands",
+			"@oclif/plugin-version",
+			"@oclif/plugin-warn-if-update-available"
+		],
+		"warn-if-update-available": {
+			"timeoutInDays": 7
+		},
 		"topicSeparator": " "
 	},
 	"scripts": {
@@ -50,7 +61,11 @@
 		"@hypercli/gen": "workspace:*",
 		"@hypercli/kit": "workspace:*",
 		"@oclif/core": "^4.8.0",
+		"@oclif/plugin-autocomplete": "^3.2.40",
+		"@oclif/plugin-commands": "^4.1.40",
 		"@oclif/plugin-help": "^6.2.37",
+		"@oclif/plugin-version": "^2.2.36",
+		"@oclif/plugin-warn-if-update-available": "^3.1.55",
 		"chalk": "^4.1.2",
 		"fx": "^39.2.0"
 	},
