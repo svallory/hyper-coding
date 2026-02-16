@@ -106,6 +106,31 @@ git commit -m "feat(core): add new parser for cookbook.yml"
 git commit -m "fix(gen): resolve template variable collision"
 ```
 
+## Error Messages & User Experience
+
+Use friendly, conversational language for error messages and user-facing output:
+
+**Good:**
+- "Uh oh! I couldn't find any command or hyper kit named `iniit`. Did you mean `init`?"
+- "Here are the available commands and kits"
+
+**Avoid:**
+- "Unknown command"
+- "Command not found"
+- Dry, technical jargon
+
+**Command Styling:**
+- Use `styleCommand()` from `@hypercli/core/ui` to highlight commands consistently
+- Commands are styled with hex color #4EC9B0 (matching the cli-html theme)
+- Examples: `styleCommand("hyper init")`, `styleCommand("nextjs")`
+
+**Message Types:**
+- Use `error()` for actual errors (things that went wrong)
+- Use `tip()` for helpful information (suggestions, available options)
+- Use `warning()` for cautions (things that might cause issues)
+- Use `success()` for confirmations (things that worked)
+- Use `info()` for neutral information
+
 ## Important Notes
 
 - `hyper-kits/nextjs/` is a **git submodule** — the only submodule in the repo
