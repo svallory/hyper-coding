@@ -43,3 +43,4 @@ sandbox/*
 
 # Hyper
 .hyper/kits/*/
+.worktrees/
