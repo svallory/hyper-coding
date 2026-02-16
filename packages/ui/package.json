@@ -1,0 +1,50 @@
+{
+	"name": "@hypercli/ui",
+	"version": "0.1.0",
+	"type": "module",
+	"description": "CLI design system for HyperDev — palette, colors, styles, messages, symbols, and help theme",
+	"keywords": ["hyperdev", "hypergen", "cli", "ui", "design-system"],
+	"author": "Saulo Vallory <saulo@toki.life>",
+	"license": "MIT",
+	"engines": {
+		"node": ">=20"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist", "README.md", "LICENSE"],
+	"imports": {
+		"#tests/*": "./tests/*.ts",
+		"#fixtures/*": "./tests/fixtures/*.ts",
+		"#helpers/*": "./tests/helpers/*.ts",
+		"#*": "./dist/*.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "biome check .",
+		"format": "biome format . --write",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "bun run build"
+	},
+	"dependencies": {
+		"chalk": "^4.1.2",
+		"cli-html": "^5.3.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.4.0",
+		"vitest": "^1.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	}
+}
