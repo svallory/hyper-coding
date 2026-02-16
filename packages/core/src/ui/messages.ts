@@ -25,7 +25,7 @@ const types: Record<string, MessageType> = {
 	warning: { prefix: "Warning:", icon: symbols.warning, color: chalk.yellow },
 	success: { prefix: "Success:", icon: symbols.success, color: chalk.green },
 	info: { prefix: "Info:", icon: symbols.info, color: chalk.blue },
-	tip: { prefix: "Tip:", icon: symbols.tip, color: chalk.cyan },
+	tip: { prefix: "Tip:", icon: symbols.tip, color: chalk.hex("7FB3D5") }, // Pastel blue that works on both themes
 };
 
 function formatMessage(
@@ -37,24 +37,28 @@ function formatMessage(
 	const { prefix, icon, color } = types[type];
 	const lines: string[] = [];
 
+	// Don't add leading indent for tip messages
+	const leadingIndent = type === "tip" ? "" : INDENT;
+	const contentIndent = type === "tip" ? INDENT : `${INDENT}${INDENT}`;
+
 	if (arg2 === undefined) {
 		// summary-only: just icon + summary
-		lines.push(`${INDENT}${color(icon)}${ICON_GAP}${arg1}`);
+		lines.push(`${leadingIndent}${color(icon)}${ICON_GAP}${arg1}`);
 	} else if (arg3 === undefined) {
 		// title + summary
-		lines.push(`${INDENT}${color(prefix)} ${arg1}`);
+		lines.push(`${leadingIndent}${color(prefix)} ${arg1}`);
 		lines.push("");
-		lines.push(`${INDENT}${INDENT}${color(icon)}${ICON_GAP}${arg2}`);
+		lines.push(`${contentIndent}${color(icon)}${ICON_GAP}${arg2}`);
 	} else {
 		// title + summary + body
 		const bodyLines = Array.isArray(arg3) ? arg3 : arg3.split("\n");
 
-		lines.push(`${INDENT}${color(prefix)} ${arg1}`);
+		lines.push(`${leadingIndent}${color(prefix)} ${arg1}`);
 		lines.push("");
-		lines.push(`${INDENT}${INDENT}${color(icon)}${ICON_GAP}${arg2}`);
-		lines.push(`${INDENT}${INDENT}${color(symbols.bar)}`);
+		lines.push(`${contentIndent}${color(icon)}${ICON_GAP}${arg2}`);
+		lines.push(`${contentIndent}${color(symbols.bar)}`);
 		for (const bodyLine of bodyLines) {
-			lines.push(`${INDENT}${INDENT}${color(symbols.bar)}${ICON_GAP}${chalk.dim(bodyLine)}`);
+			lines.push(`${contentIndent}${color(symbols.bar)}${ICON_GAP}${chalk.dim(bodyLine)}`);
 		}
 	}
 
