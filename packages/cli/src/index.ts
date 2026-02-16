@@ -1,2 +1,5 @@
 // @hypercli/cli - HyperDev CLI
-export const version = "0.0.0";
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json");
+export const version: string = pkg.version;

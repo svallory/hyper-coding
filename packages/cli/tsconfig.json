@@ -3,7 +3,7 @@
 		"target": "ES2022",
 		"module": "Node16",
 		"moduleResolution": "Node16",
-		"outDir": "../../.moon/cache/types/packages/cli",
+		"outDir": "./dist",
 		"rootDir": "./src",
 		"baseUrl": ".",
 		"declaration": true,
@@ -22,7 +22,7 @@
 		"paths": {
 			"#/*": ["src/*.ts"],
 			"#tests/*": ["tests/*.ts"],
-			"#fixtures/*": ["tests/fixtures/*.ts"],
+			"#fixtures/*": ["tests/fixtures/*"],
 			"#helpers/*": ["tests/helpers/*.ts"]
 		}
 	},

@@ -3,7 +3,7 @@
 		"target": "ES2022",
 		"module": "Node16",
 		"moduleResolution": "Node16",
-		"outDir": "../../.moon/cache/types/packages/core",
+		"outDir": "./dist",
 		"rootDir": "./src",
 		"baseUrl": ".",
 		"declaration": true,

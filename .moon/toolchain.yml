@@ -33,7 +33,10 @@ typescript:
 
   # Update a project's `tsconfig.json` to route the `outDir` compiler option
   # to moon's `.moon/cache` directory.
-  routeOutDirToCache: true
+  # Disabled: all packages use tsup for builds (ignores outDir) and tsc --noEmit
+  # for typechecking (ignores outDir). Keeping outDir as ./dist lets oclif's dev
+  # mode resolve TypeScript source files correctly.
+  routeOutDirToCache: false
 
   # Sync a project's dependencies as project references within the
   # project's `tsconfig.json` and the workspace root `tsconfig.json`.
