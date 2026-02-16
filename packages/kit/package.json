@@ -1,6 +1,6 @@
 {
 	"name": "@hypercli/kit",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"type": "module",
 	"description": "Kit lifecycle management for HyperDev",
 	"keywords": ["hyperdev", "hypergen", "kits"],
@@ -17,7 +17,11 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "README.md", "LICENSE"],
+	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
+	"oclif": {
+		"commands": "./dist/commands",
+		"topicSeparator": " "
+	},
 	"imports": {
 		"#/*": "./src/*",
 		"#tests/*": "./tests/*",
@@ -41,10 +45,15 @@
 		"@biomejs/biome": "^1.9.4",
 		"@types/fs-extra": "^11.0.4",
 		"@types/node": "^20.0.0",
+		"@vitest/coverage-v8": "^1.0.0",
 		"fs-extra": "^11.3.3",
 		"tsup": "^8.0.0",
 		"typescript": "^5.4.0",
 		"vite-tsconfig-paths": "^6.1.1",
 		"vitest": "^1.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
 	}
 }

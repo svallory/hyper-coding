@@ -1,6 +1,6 @@
 {
 	"name": "@hypercli/cli",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"type": "module",
 	"description": "HyperDev CLI",
 	"keywords": ["hyperdev", "hypergen", "cli"],
@@ -13,7 +13,10 @@
 		"hyper": "./bin/run.js"
 	},
 	"imports": {
-		"#/*": "./dist/*.js"
+		"#/*": "./dist/*.js",
+		"#tests/*": "./tests/*.ts",
+		"#helpers/*": "./tests/helpers/*.ts",
+		"#fixtures/*": "./tests/fixtures/*"
 	},
 	"exports": {
 		".": {
@@ -23,7 +26,15 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "bin", "README.md", "LICENSE"],
+	"files": ["dist", "bin", "help", "README.md", "LICENSE"],
+	"oclif": {
+		"bin": "hyper",
+		"dirname": "hyper",
+		"commands": "./dist/commands",
+		"helpClass": "./dist/help/custom-help",
+		"plugins": ["@hypercli/gen", "@hypercli/kit", "@oclif/plugin-help"],
+		"topicSeparator": " "
+	},
 	"scripts": {
 		"build": "tsup",
 		"test": "vitest run",
@@ -36,13 +47,25 @@
 	"dependencies": {
 		"@hypercli/core": "workspace:*",
 		"@hypercli/gen": "workspace:*",
-		"@hypercli/kit": "workspace:*"
+		"@hypercli/kit": "workspace:*",
+		"@oclif/core": "^4.8.0",
+		"@oclif/plugin-help": "^6.2.37",
+		"chalk": "^4.1.2",
+		"fx": "^39.2.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@types/fs-extra": "^11.0.4",
 		"@types/node": "^20.0.0",
-		"typescript": "^5.4.0",
+		"@vitest/coverage-v8": "1.6.1",
+		"execa": "^9.6.1",
+		"fs-extra": "^11.3.3",
 		"tsup": "^8.0.0",
+		"typescript": "^5.4.0",
 		"vitest": "^1.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
 	}
 }

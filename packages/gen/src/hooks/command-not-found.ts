@@ -38,9 +38,9 @@ const KNOWN_RUN_FLAGS = new Set([
 const hook: Hook.CommandNotFound = async (opts) => {
 	const commandId = opts.id;
 
-	// Don't intercept commands that look like they're trying to be actual CLI commands
-	// (help, version, etc.) or are empty
-	if (!commandId || commandId.startsWith("-")) {
+	// Don't intercept empty commands, flags, or built-in oclif commands
+	const BUILTIN_COMMANDS = new Set(["help", "version", "plugins", "which", "commands"]);
+	if (!commandId || commandId.startsWith("-") || BUILTIN_COMMANDS.has(commandId.split(":")[0])) {
 		return;
 	}
 
