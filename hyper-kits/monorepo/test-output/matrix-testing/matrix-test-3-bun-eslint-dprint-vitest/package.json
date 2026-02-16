@@ -1,0 +1,21 @@
+{
+	"name": "matrix-test-3-bun-eslint-dprint-vitest",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"build": "tsc --build",
+		"test": "vitest run",
+		"lint": "eslint src --ext .ts",
+		"format": "dprint fmt"
+	},
+	"devDependencies": {
+		"typescript": "^5.0.0",
+		"@types/node": "^20.0.0",
+		"eslint": "^8.0.0",
+		"@typescript-eslint/parser": "^6.0.0",
+		"@typescript-eslint/eslint-plugin": "^6.0.0",
+		"dprint": "^0.40.0",
+		"vitest": "^1.0.0"
+	},
+	"workspaces": ["packages/*"]
+}

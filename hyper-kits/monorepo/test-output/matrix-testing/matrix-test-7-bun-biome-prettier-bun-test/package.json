@@ -1,0 +1,18 @@
+{
+	"name": "matrix-test-7-bun-biome-prettier-bun-test",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"build": "tsc --build",
+		"test": "bun test",
+		"lint": "biome check src",
+		"format": "prettier --write src"
+	},
+	"devDependencies": {
+		"typescript": "^5.0.0",
+		"@types/node": "^20.0.0",
+		"@biomejs/biome": "^1.0.0",
+		"prettier": "^3.0.0"
+	},
+	"workspaces": ["packages/*"]
+}

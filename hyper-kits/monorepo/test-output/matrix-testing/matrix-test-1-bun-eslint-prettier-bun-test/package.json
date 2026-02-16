@@ -1,0 +1,20 @@
+{
+	"name": "matrix-test-1-bun-eslint-prettier-bun-test",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"build": "tsc --build",
+		"test": "bun test",
+		"lint": "eslint src --ext .ts",
+		"format": "prettier --write src"
+	},
+	"devDependencies": {
+		"typescript": "^5.0.0",
+		"@types/node": "^20.0.0",
+		"eslint": "^8.0.0",
+		"@typescript-eslint/parser": "^6.0.0",
+		"@typescript-eslint/eslint-plugin": "^6.0.0",
+		"prettier": "^3.0.0"
+	},
+	"workspaces": ["packages/*"]
+}

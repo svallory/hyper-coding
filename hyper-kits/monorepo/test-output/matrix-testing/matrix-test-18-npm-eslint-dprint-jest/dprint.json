@@ -1,0 +1,9 @@
+{
+	"typescript": {
+		"semiColons": "always",
+		"quoteStyle": "alwaysSingle",
+		"indentWidth": 2
+	},
+	"includes": ["**/*.{ts,js,tsx,jsx}"],
+	"excludes": ["node_modules", "lib"]
+}

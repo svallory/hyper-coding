@@ -1,0 +1,17 @@
+{
+	"name": "matrix-test-13-bun-biome-biome-integrated-bun-test",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"build": "tsc --build",
+		"test": "bun test",
+		"lint": "biome check src",
+		"format": "biome format src --write"
+	},
+	"devDependencies": {
+		"typescript": "^5.0.0",
+		"@types/node": "^20.0.0",
+		"@biomejs/biome": "^1.0.0"
+	},
+	"workspaces": ["packages/*"]
+}

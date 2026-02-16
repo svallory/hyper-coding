@@ -1,0 +1,18 @@
+{
+	"name": "matrix-test-23-npm-biome-biome-integrated-vitest",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"build": "tsc --build",
+		"test": "vitest run",
+		"lint": "biome check src",
+		"format": "biome format src --write"
+	},
+	"devDependencies": {
+		"typescript": "^5.0.0",
+		"@types/node": "^20.0.0",
+		"@biomejs/biome": "^1.0.0",
+		"vitest": "^1.0.0"
+	},
+	"workspaces": ["packages/*"]
+}

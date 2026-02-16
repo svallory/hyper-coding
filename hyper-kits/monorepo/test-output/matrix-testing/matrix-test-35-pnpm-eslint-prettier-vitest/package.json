@@ -1,0 +1,21 @@
+{
+	"name": "matrix-test-35-pnpm-eslint-prettier-vitest",
+	"version": "1.0.0",
+	"type": "module",
+	"scripts": {
+		"build": "tsc --build",
+		"test": "vitest run",
+		"lint": "eslint src --ext .ts",
+		"format": "prettier --write src"
+	},
+	"devDependencies": {
+		"typescript": "^5.0.0",
+		"@types/node": "^20.0.0",
+		"eslint": "^8.0.0",
+		"@typescript-eslint/parser": "^6.0.0",
+		"@typescript-eslint/eslint-plugin": "^6.0.0",
+		"prettier": "^3.0.0",
+		"vitest": "^1.0.0"
+	},
+	"workspaces": ["packages/*"]
+}

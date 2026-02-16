@@ -1,0 +1,12 @@
+{
+	"name": "sample-lib",
+	"version": "1.0.0",
+	"type": "module",
+	"main": "./lib/index.js",
+	"types": "./lib/index.d.ts",
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run",
+		"lint": "biome check src"
+	}
+}

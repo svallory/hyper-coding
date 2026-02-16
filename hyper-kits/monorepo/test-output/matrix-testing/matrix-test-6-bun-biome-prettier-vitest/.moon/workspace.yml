@@ -1,0 +1,18 @@
+extends: https://moonrepo.dev/schemas/workspace.json
+
+projects:
+  - 'packages/*'
+
+runner:
+  archivableTargets: ['build', 'test']
+  cacheLifetime: '7 days'
+  
+vcs:
+  manager: 'git'
+  defaultBranch: 'main'
+
+generator:
+  templates: []
+
+notifier:
+  webhookUrl: ''

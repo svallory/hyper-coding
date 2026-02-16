@@ -1,0 +1,23 @@
+type: library
+language: typescript
+platform: node
+
+tasks:
+  build:
+    command: tsc
+    inputs:
+      - src/**/*
+      - tsconfig.json
+    outputs:
+      - lib
+  
+  test:
+    command: bun test
+    inputs:
+      - src/**/*
+      - test/**/*
+    
+  lint:
+    command: eslint src --ext .ts
+    inputs:
+      - src/**/*
