@@ -36,7 +36,7 @@
 	"license": "MIT",
 	"private": true,
 	"scripts": {
-		"hyper": "bun run packages/cli/src/index.ts",
+		"hyper": "bun run packages/cli/bin/dev.js",
 		"moon": "moon --color --log trace",
 		"changeset": "changeset",
 		"release": "changeset publish"

@@ -37,6 +37,7 @@
 	},
 	"scripts": {
 		"build": "tsup",
+		"dev": "bun run bin/dev.js",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "biome check .",
