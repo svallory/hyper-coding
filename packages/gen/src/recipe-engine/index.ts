@@ -67,7 +67,6 @@ export const RECIPE_ENGINE_FEATURES = [
 	"progress-tracking",
 	"metrics-collection",
 	"tool-registry",
-	"template-composition",
 	"action-pipelines",
 	"codemod-transformations",
 	"sub-recipe-execution",
@@ -118,7 +117,7 @@ export function initializeRecipeEngine(config: RecipeEngineConfig = {}): {
 	// Enable additional debug logging if requested
 	if (config.enableDebugLogging) {
 		const existing = process.env.DEBUG || "";
-		const recipeDebug = "hypergen:v8:recipe:*";
+		const recipeDebug = "hyper:recipe:*";
 		process.env.DEBUG = existing ? `${existing},${recipeDebug}` : recipeDebug;
 	}
 

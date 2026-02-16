@@ -1,7 +1,7 @@
 /**
  * Recipe Engine - Main Orchestrator for Recipe Step System
  *
- * The RecipeEngine is the primary entry point for executing recipes in Hypergen V8.
+ * The RecipeEngine is the primary entry point for executing recipes in HyperDev.
  * It provides recipe discovery, loading, validation, variable resolution, and execution
  * coordination through the complete Recipe Step System.
  */
@@ -34,7 +34,7 @@ import type {
 } from "./types.js";
 import { RecipeDependencyError, RecipeValidationError } from "./types.js";
 
-const debug = createDebug("hypergen:v8:recipe:engine");
+const debug = createDebug("hyper:recipe:engine");
 
 /**
  * Recipe source types for loading
@@ -215,7 +215,7 @@ const DEFAULT_CONFIG: Required<RecipeEngineConfig> = {
 };
 
 /**
- * Main Recipe Engine for Hypergen V8
+ * Main Recipe Engine
  *
  * The RecipeEngine provides the primary API for executing recipes. It handles:
  * - Recipe discovery and loading from various sources
@@ -244,7 +244,7 @@ export class RecipeEngine extends EventEmitter {
 
 		this.config = { ...DEFAULT_CONFIG, ...config };
 		this.logger = new Logger(console.log);
-		this.debug = createDebug("hypergen:v8:recipe:engine");
+		this.debug = createDebug("hyper:recipe:engine");
 
 		// Initialize tool registry
 		this.toolRegistry = getToolRegistry();
@@ -259,7 +259,7 @@ export class RecipeEngine extends EventEmitter {
 		// Set up debug logging if enabled
 		if (this.config.enableDebugLogging) {
 			const existing = process.env.DEBUG || "";
-			const recipeDebug = "hypergen:v8:recipe:*";
+			const recipeDebug = "hyper:recipe:*";
 			process.env.DEBUG = existing ? `${existing},${recipeDebug}` : recipeDebug;
 		}
 

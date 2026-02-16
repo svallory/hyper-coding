@@ -1,5 +1,5 @@
 /**
- * V8 Discovery System
+ * Discovery System
  *
  * Generator and action auto-discovery functionality
  */

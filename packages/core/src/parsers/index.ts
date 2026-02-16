@@ -24,8 +24,8 @@ export {
 
 // Template Parser
 // Note: Template types (TemplateConfig, TemplateVariable, etc.) are exported from ../types
-// We only export the parser class here to avoid duplication
-export { TemplateParser } from "./template-parser.js";
+// We only export the parser class and ParsedTemplateConfig here to avoid duplication
+export { TemplateParser, type ParsedTemplateConfig } from "./template-parser.js";
 
 // Path Resolver
 export { PathResolver, type ResolvedPath } from "./path-resolver.js";

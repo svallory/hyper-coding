@@ -32,7 +32,7 @@ import {
 import { getJig, renderTemplate as jigRenderTemplate } from "#/template-engines/index";
 import { Tool, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:template");
+const debug = createDebug("hyper:recipe:tool:template");
 
 /**
  * Template resolution result

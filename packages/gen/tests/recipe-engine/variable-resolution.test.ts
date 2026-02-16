@@ -10,30 +10,32 @@ import os from "node:os";
 import path from "node:path";
 import type { TemplateVariable } from "@hypercli/core";
 import yaml from "js-yaml";
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "vitest";
-import { RecipeEngine } from "#/recipe-engine/recipe-engine";
-import { registerDefaultTools } from "#/recipe-engine/tools/index";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocking
 // ---------------------------------------------------------------------------
 
 // Mock performInteractivePrompting to avoid actual terminal prompts
-const mockPrompt = mock((prompts: any[]) =>
-	Promise.resolve(Object.fromEntries(prompts.map((p: any) => [p.name, `prompted-${p.name}`]))),
-);
-
-mock.module("../../src/prompts/interactive-prompts", () => ({
-	performInteractivePrompting: mockPrompt,
-}));
-
+vi.mock("#/prompts/interactive-prompts");
 // Mock AiVariableResolver
-const mockResolveBatch = mock(() => Promise.resolve({}));
-mock.module("../../src/ai/ai-variable-resolver", () => ({
-	AiVariableResolver: class {
-		resolveBatch = mockResolveBatch;
-	},
-}));
+vi.mock("#/ai/ai-variable-resolver");
+
+import { AiVariableResolver } from "#/ai/ai-variable-resolver";
+import { performInteractivePrompting } from "#/prompts/interactive-prompts";
+import { RecipeEngine } from "#/recipe-engine/recipe-engine";
+import { registerDefaultTools } from "#/recipe-engine/tools/index";
+
+const mockPrompt = vi.mocked(performInteractivePrompting);
+// Get the mocked resolveBatch from a mocked instance
+const mockResolveBatch = vi.fn(() => Promise.resolve({}));
+// Override the constructor to use our mock
+vi.mocked(AiVariableResolver).mockImplementation(
+	() =>
+		({
+			resolveBatch: mockResolveBatch,
+		}) as any,
+);
 
 // No mock for resolveTransport — we set ANTHROPIC_API_KEY so the real
 // resolveTransport returns ApiTransport for mode: 'api' tests, and

@@ -9,7 +9,7 @@ import { EventEmitter } from "node:events";
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
 
-const debug = createDebug("hypergen:v8:communication");
+const debug = createDebug("hyper:communication");
 
 export interface ActionMessage {
 	id: string;

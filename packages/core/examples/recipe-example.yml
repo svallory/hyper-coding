@@ -1,0 +1,96 @@
+name: react-component-recipe
+description: Generate a React component with optional tests and styles
+version: "1.0.0"
+
+variables:
+  componentName:
+    type: string
+    required: true
+    description: Name of the React component
+  includeTests:
+    type: boolean
+    default: true
+    description: Whether to generate test files
+  includeStyles:
+    type: boolean
+    default: false
+    description: Whether to generate style files
+
+steps:
+  - name: Generate component
+    tool: template
+    template: react-component.jig
+    description: Generate the main React component file
+
+  - name: Generate styles
+    tool: template
+    template: react-styles.jig
+    when: "{{ includeStyles }}"
+    parallel: true
+    dependsOn:
+      - Generate component
+
+  - name: Generate tests
+    tool: template
+    template: react-tests.jig
+    when: "{{ includeTests }}"
+    parallel: true
+    dependsOn:
+      - Generate component
+
+  - name: Generate index barrel
+    tool: template
+    template: react-index.jig
+    dependsOn:
+      - Generate component
+
+  - name: Generate storybook
+    tool: template
+    template: react-storybook.jig
+    dependsOn:
+      - Generate component
+
+  - name: Update parent index
+    tool: action
+    action: update-component-index
+    dependsOn:
+      - Generate index barrel
+
+  - name: Format code
+    tool: codemod
+    codemod: prettier-format
+    files:
+      - "src/components/{{ componentName }}/**/*.{ts,tsx}"
+    dependsOn:
+      - Generate component
+      - Generate styles
+      - Generate tests
+      - Generate index barrel
+      - Generate storybook
+      - Update parent index
+
+settings:
+  timeout: 120000
+  maxParallelSteps: 4
+
+examples:
+  - title: Basic functional component
+    description: Create a simple functional component
+    variables:
+      componentName: Button
+      includeTests: true
+      includeStyles: false
+
+  - title: Styled component with tests
+    description: Create a component with styles and tests
+    variables:
+      componentName: Card
+      includeTests: true
+      includeStyles: true
+
+  - title: Minimal component
+    description: Create a component without extras
+    variables:
+      componentName: Divider
+      includeTests: false
+      includeStyles: false

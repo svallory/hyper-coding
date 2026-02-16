@@ -118,7 +118,7 @@ describe('{{ name }}', () => {
 `,
 			);
 
-			// Create actions.ts for V8 integration
+			// Create actions.ts for integration
 			await fs.writeFile(
 				path.join(templatesDir, "actions.ts"),
 				`
@@ -839,8 +839,9 @@ steps:
 		});
 	});
 
-	describe.skip("CLI Integration Tests — requires @hypercli/cli bin/run.js", () => {
-		const cliBin = path.join(__dirname, "..", "bin", "run.js");
+	describe("CLI Integration Tests — requires @hypercli/cli bin/run.js", () => {
+		// Resolve CLI binary from workspace root (packages/cli/bin/run.js)
+		const cliBin = path.join(__dirname, "..", "..", "cli", "bin", "run.js");
 
 		/**
 		 * Helper to run CLI commands. Uses spawn + timeout to handle oclif
@@ -868,7 +869,14 @@ steps:
 			});
 		}
 
-		it("should execute recipe through CLI", async () => {
+		// TODO: This test fails because `recipe run` with temp fixtures triggers
+		// "Tool not found: default (template)" — the template tool isn't registered
+		// when the recipe engine runs through the CLI subprocess. The recipe engine
+		// needs the tools framework initialized, which happens in the test's beforeEach
+		// but not in the spawned CLI process for ad-hoc recipe files outside of kits.
+		// Fix: either fix the CLI's tool initialization for standalone recipes, or
+		// restructure the test to use a properly installed kit.
+		it.skip("should execute recipe through CLI", async () => {
 			const recipePath = path.join(tempDir, "recipes", "simple-component.yml");
 			// Provide empty answers file to run in pass 2 (normal execution mode)
 			// Without --answers, the CLI enters collect mode and skips file generation
@@ -905,7 +913,12 @@ steps:
 			expect(parsed.variables).toBeGreaterThan(0);
 		}, 15000);
 
-		it("should list available recipes through CLI", async () => {
+		// TODO: `recipe list` uses kit discovery (this.discovery.discoverAll()),
+		// not directory scanning. Passing a directory path as the first arg is
+		// interpreted as a kit name filter, which fails with "Kit not found".
+		// Fix: either update the test to install a proper kit, or add directory
+		// scanning support to `recipe list`.
+		it.skip("should list available recipes through CLI", async () => {
 			const recipesDir = path.join(tempDir, "recipes");
 			const result = await runCli(["recipe", "list", recipesDir, `--cwd=${tempDir}`, "--json"]);
 

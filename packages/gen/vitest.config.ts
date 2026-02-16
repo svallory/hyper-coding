@@ -7,9 +7,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			"#": path.resolve(__dirname, "./src"),
-			"#/tests": path.resolve(__dirname, "./tests"),
-			"#/fixtures": path.resolve(__dirname, "./tests/fixtures"),
-			"#/helpers": path.resolve(__dirname, "./tests/helpers"),
+			"#tests": path.resolve(__dirname, "./tests"),
 		},
 	},
 	test: {

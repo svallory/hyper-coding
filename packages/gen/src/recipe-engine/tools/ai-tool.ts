@@ -15,7 +15,7 @@ import { AiService } from "#/ai/ai-service";
 import type { AIStep, StepContext, StepExecutionOptions, StepResult } from "#/recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:ai");
+const debug = createDebug("hyper:recipe:tool:ai");
 
 export class AiTool extends Tool<AIStep> {
 	constructor(name = "ai-tool", options: Record<string, any> = {}) {

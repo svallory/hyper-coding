@@ -43,7 +43,7 @@ import {
 	isTemplateStep,
 } from "./types.js";
 
-const debug = createDebug("hypergen:v8:recipe:step-executor");
+const debug = createDebug("hyper:recipe:step-executor");
 
 /**
  * Step execution metrics and progress tracking
@@ -213,7 +213,7 @@ export class StepExecutor extends EventEmitter {
 
 		this.toolRegistry = toolRegistry || getToolRegistry();
 		this.logger = new Logger(console.log);
-		this.debug = createDebug("hypergen:v8:recipe:step-executor");
+		this.debug = createDebug("hyper:recipe:step-executor");
 		this.config = { ...DEFAULT_CONFIG, ...config };
 
 		this.debug("Step executor initialized with config: %o", this.config);

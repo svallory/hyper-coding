@@ -17,7 +17,7 @@ import type {
 import { renderTemplate } from "#/template-engines/jig-engine";
 import { Tool, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:shell");
+const debug = createDebug("hyper:recipe:tool:shell");
 
 export class ShellTool extends Tool<ShellStep> {
 	constructor(name = "shell-tool", options: Record<string, any> = {}) {

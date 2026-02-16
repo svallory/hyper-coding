@@ -17,7 +17,7 @@ import type {
 } from "#/recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:prompt");
+const debug = createDebug("hyper:recipe:tool:prompt");
 
 export class PromptTool extends Tool<PromptStep> {
 	constructor(name = "prompt-tool", options: Record<string, any> = {}) {

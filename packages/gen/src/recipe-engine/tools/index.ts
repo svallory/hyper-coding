@@ -171,8 +171,8 @@ export function initializeToolsFramework(options?: {
 	if (options?.enableDebugLogging) {
 		// Enable debug logging for the tools framework
 		process.env.DEBUG = process.env.DEBUG
-			? `${process.env.DEBUG},hypergen:v8:recipe:tool*,hypergen:v8:recipe:registry*`
-			: "hypergen:v8:recipe:tool*,hypergen:v8:recipe:registry*";
+			? `${process.env.DEBUG},hyper:recipe:tool*,hyper:recipe:registry*`
+			: "hyper:recipe:tool*,hyper:recipe:registry*";
 	}
 
 	return registry;
@@ -341,12 +341,12 @@ export const TOOL_FRAMEWORK_CONSTANTS = {
 
 	// Debug categories
 	DEBUG_CATEGORIES: [
-		"hypergen:v8:recipe:tool",
-		"hypergen:v8:recipe:tool:template",
-		"hypergen:v8:recipe:tool:action",
-		"hypergen:v8:recipe:tool:codemod",
-		"hypergen:v8:recipe:tool:recipe",
-		"hypergen:v8:recipe:registry",
+		"hyper:recipe:tool",
+		"hyper:recipe:tool:template",
+		"hyper:recipe:tool:action",
+		"hyper:recipe:tool:codemod",
+		"hyper:recipe:tool:recipe",
+		"hyper:recipe:registry",
 	],
 } as const;
 
@@ -433,7 +433,7 @@ export const DevUtils = {
 	 * Enable debug logging for specific tool types
 	 */
 	enableDebugLogging: (toolTypes: ToolType[] = [...SUPPORTED_TOOL_TYPES]) => {
-		const categories = toolTypes.map((type) => `hypergen:v8:recipe:tool:${type}`);
+		const categories = toolTypes.map((type) => `hyper:recipe:tool:${type}`);
 		const existing = process.env.DEBUG || "";
 		process.env.DEBUG = existing ? `${existing},${categories.join(",")}` : categories.join(",");
 	},

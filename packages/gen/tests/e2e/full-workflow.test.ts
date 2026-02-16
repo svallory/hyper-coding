@@ -27,7 +27,7 @@ import fixtureAnswers from "./fixtures/answers.json";
 
 // ─── Constants ──────────────────────────────────────────────────────
 
-const KIT_PATH = path.resolve(__dirname, "../../../../kit/nextjs");
+const KIT_PATH = path.resolve(__dirname, "../../../../hyper-kits/nextjs");
 
 // ─── Helpers ────────────────────────────────────────────────────────
 

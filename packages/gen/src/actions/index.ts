@@ -1,5 +1,5 @@
 /**
- * V8 Action System
+ * Action System
  *
  * Export point for the decorator-based action system
  */

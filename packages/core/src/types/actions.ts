@@ -1,5 +1,5 @@
 /**
- * V8 Action System Types
+ * Action System Types
  *
  * Type definitions for the decorator-based action system
  */

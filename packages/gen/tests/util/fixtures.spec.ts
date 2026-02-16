@@ -86,11 +86,11 @@ describe("fixture helpers", () => {
 		});
 
 		it("should handle errors during setup", async () => {
-			expect(async () => {
+			await expect(async () => {
 				await withTempFixtures(async () => {
 					throw new Error("Setup failed");
 				});
-			}).toThrow();
+			}).rejects.toThrow("Setup failed");
 		});
 	});
 

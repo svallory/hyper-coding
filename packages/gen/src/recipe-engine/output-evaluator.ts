@@ -20,7 +20,7 @@ import createDebug from "debug";
 import { renderTemplate } from "#/template-engines/index";
 import type { StepContext } from "./types.js";
 
-const debug = createDebug("hypergen:v8:recipe:output-evaluator");
+const debug = createDebug("hyper:recipe:output-evaluator");
 
 /**
  * Evaluate output expressions from a step's `output` field.

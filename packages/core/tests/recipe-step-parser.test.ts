@@ -1,7 +1,7 @@
 /**
  * Recipe Step System Parser Tests
  *
- * Tests for the updated template parser supporting V8 Recipe Step System
+ * Tests for the updated template parser supporting the Recipe Step System
  */
 
 import fs from "node:fs";
@@ -260,12 +260,7 @@ describe("Recipe Step System Parser", () => {
 						variables: { name: "TestComponent" },
 					},
 				],
-				dependencies: ["some-package"],
 				outputs: ["src/components/"],
-				engines: {
-					hypergen: "^8.0.0",
-					node: "^18.0.0",
-				},
 				settings: {
 					timeout: 30000,
 					retries: 2,
@@ -285,7 +280,6 @@ describe("Recipe Step System Parser", () => {
 			expect(recipeConfig?.description).toBe("Recipe for conversion");
 			expect(recipeConfig?.steps).toHaveLength(1);
 			expect(recipeConfig?.examples).toHaveLength(1);
-			expect(recipeConfig?.dependencies).toHaveLength(1);
 			expect(recipeConfig?.settings?.timeout).toBe(30000);
 		});
 

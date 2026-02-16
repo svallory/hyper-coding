@@ -17,7 +17,7 @@ import type {
 } from "#/recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:patch");
+const debug = createDebug("hyper:recipe:tool:patch");
 
 /**
  * Auto-detect file format from extension

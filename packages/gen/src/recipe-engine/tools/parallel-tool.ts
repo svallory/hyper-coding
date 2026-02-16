@@ -17,7 +17,7 @@ import type {
 } from "#/recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:parallel");
+const debug = createDebug("hyper:recipe:tool:parallel");
 
 export class ParallelTool extends Tool<ParallelStep> {
 	constructor(name = "parallel-tool", options: Record<string, any> = {}) {

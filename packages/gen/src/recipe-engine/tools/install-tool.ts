@@ -20,7 +20,7 @@ import type {
 import { Tool, type ToolValidationResult } from "./base.js";
 
 const execAsync = promisify(exec);
-const debug = createDebug("hypergen:v8:recipe:tool:install");
+const debug = createDebug("hyper:recipe:tool:install");
 
 type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
 

@@ -363,7 +363,7 @@ ${content}
 		expect(await fs.pathExists(path.join(tempDir, "another.txt"))).toBe(true);
 	});
 
-	it.skip("should handle parallel steps nested in sequences", async () => {
+	it("should handle parallel steps nested in sequences", async () => {
 		// Test sequences containing parallel steps
 		const recipePath = path.join(tempDir, "recipe.yml");
 		const recipeContent = `
@@ -424,20 +424,6 @@ ${content}
 				force: true,
 			},
 		);
-
-		// Debug
-		console.log("success:", result.success);
-		console.log("errors:", result.errors);
-		console.log("stepResults count:", result.stepResults.length);
-		console.log(
-			"First step:",
-			result.stepResults[0]?.stepName,
-			result.stepResults[0]?.toolType,
-			result.stepResults[0]?.status,
-		);
-		console.log("metadata.completedSteps:", result.metadata.completedSteps);
-		console.log("metadata.totalSteps:", result.metadata.totalSteps);
-		console.log("filesCreated:", result.filesCreated);
 
 		expect(result.success).toBe(true);
 

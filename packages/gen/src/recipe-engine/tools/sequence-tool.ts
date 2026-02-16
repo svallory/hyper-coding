@@ -18,7 +18,7 @@ import type {
 } from "#/recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:sequence");
+const debug = createDebug("hyper:recipe:tool:sequence");
 
 export class SequenceTool extends Tool<SequenceStep> {
 	constructor(name = "sequence-tool", options: Record<string, any> = {}) {

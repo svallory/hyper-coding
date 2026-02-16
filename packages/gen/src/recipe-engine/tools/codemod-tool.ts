@@ -22,7 +22,7 @@ import {
 } from "#/recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:codemod");
+const debug = createDebug("hyper:recipe:tool:codemod");
 
 /**
  * Supported CodeMod transformation types

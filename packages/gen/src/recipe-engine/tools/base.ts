@@ -16,7 +16,7 @@ import type {
 	ToolType,
 } from "#/recipe-engine/types";
 
-const debug = createDebug("hypergen:v8:recipe:tool");
+const debug = createDebug("hyper:recipe:tool");
 
 /**
  * Tool execution phase for lifecycle management
@@ -130,7 +130,7 @@ export abstract class Tool<TStep extends RecipeStepUnion = RecipeStepUnion> {
 		protected readonly options: Record<string, any> = {},
 	) {
 		this.logger = new Logger(console.log);
-		this.debug = createDebug(`hypergen:v8:recipe:tool:${toolType}:${name}`);
+		this.debug = createDebug(`hyper:recipe:tool:${toolType}:${name}`);
 
 		this.metrics = {
 			startTime: new Date(),

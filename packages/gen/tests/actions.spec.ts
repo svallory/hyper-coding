@@ -1,5 +1,5 @@
 /**
- * V8 Actions System Tests
+ * Actions System Tests
  */
 
 import { beforeEach, describe, expect, it } from "vitest";

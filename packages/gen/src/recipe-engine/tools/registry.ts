@@ -12,7 +12,7 @@ import type { RecipeStepUnion, ToolType } from "#/recipe-engine/types";
 import type { Tool } from "./base.js";
 import type { ToolFactory, ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:registry");
+const debug = createDebug("hyper:recipe:registry");
 
 /**
  * Tool registration metadata
@@ -172,7 +172,7 @@ export class ToolRegistry {
 		} = {},
 	) {
 		this.logger = new Logger(console.log);
-		this.debug = createDebug("hypergen:v8:recipe:registry");
+		this.debug = createDebug("hyper:recipe:registry");
 
 		this.maxCacheSize = options.maxCacheSize || 100;
 		this.cacheTimeoutMs = options.cacheTimeoutMs || 30 * 60 * 1000; // 30 minutes
@@ -207,6 +207,7 @@ export class ToolRegistry {
 	 */
 	static reset(): void {
 		if (ToolRegistry.instance) {
+			ToolRegistry.instance.stopCacheCleanup();
 			ToolRegistry.instance.clearCache();
 		}
 		ToolRegistry.instance = null;

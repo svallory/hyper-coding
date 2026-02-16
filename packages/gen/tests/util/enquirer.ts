@@ -1,5 +1,3 @@
-import { vi } from "bun:test";
-
 class MockEnquirer {
 	async prompt(questions) {
 		if (Array.isArray(questions)) {

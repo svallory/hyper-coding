@@ -21,8 +21,6 @@ export { TemplateConfigError } from "./kit.js";
 export type {
 	TemplateVariable,
 	TemplateExample,
-	TemplateInclude,
-	TemplateDependency,
 	TemplateConfig,
 } from "./template.js";
 

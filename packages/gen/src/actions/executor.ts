@@ -4,7 +4,6 @@
  * Handles action discovery, parameter resolution, and execution
  */
 
-import { TemplateParser } from "@hypercli/core";
 import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
 import createDebug from "debug";
 import {
@@ -14,18 +13,16 @@ import {
 } from "./communication.js";
 import { ActionParameterResolver } from "./parameter-resolver.js";
 import { ActionRegistry } from "./registry.js";
-import { TemplateCompositionEngine } from "./template-composition.js";
 import type { ActionContext, ActionFunction, ActionResult } from "./types.js";
 import { ActionExecutionError } from "./types.js";
 import { ConsoleActionLogger, DefaultActionUtils } from "./utils.js";
 
-const debug = createDebug("hypergen:v8:action:executor");
+const debug = createDebug("hyper:action:executor");
 
 export class ActionExecutor {
 	private parameterResolver = new ActionParameterResolver();
 	private defaultUtils = new DefaultActionUtils();
 	private defaultLogger = new ConsoleActionLogger();
-	private compositionEngine = new TemplateCompositionEngine();
 	private communicationManager: ActionCommunicationManager;
 
 	constructor(communicationConfig?: Partial<CommunicationConfig>) {
@@ -372,111 +369,6 @@ export class ActionExecutor {
 		const registry = ActionRegistry.getInstance();
 		const results = registry.query({ search: query });
 		return results.map((action) => action.metadata.name).sort();
-	}
-
-	/**
-	 * Execute a template with composition support
-	 */
-	async executeTemplate(
-		templatePath: string,
-		parameters: Record<string, any> = {},
-		options: {
-			useDefaults?: boolean;
-			dryRun?: boolean;
-			force?: boolean;
-			skipOptional?: boolean;
-			timeout?: number;
-		} = {},
-	): Promise<ActionResult> {
-		debug("Executing template with composition: %s", templatePath);
-
-		try {
-			// Parse template configuration
-			const parsed = await TemplateParser.parseTemplateFile(templatePath);
-			if (!parsed.isValid) {
-				throw ErrorHandler.createError(
-					ErrorCode.TEMPLATE_PARSING_ERROR,
-					`Invalid template configuration: ${parsed.errors.join(", ")}`,
-					{ templatePath, errors: parsed.errors },
-				);
-			}
-
-			// Compose template with inheritance and includes
-			const composed = await this.compositionEngine.compose(parsed.config, {
-				variables: parameters,
-				projectRoot: process.cwd(),
-			});
-
-			debug(
-				"Template composition complete: %s includes, %d conflicts",
-				composed.resolvedIncludes.length,
-				composed.conflicts.length,
-			);
-
-			// Log composition details
-			if (composed.resolvedIncludes.length > 0) {
-				debug(
-					"Template includes: %o",
-					composed.resolvedIncludes.map((inc) => ({
-						url: inc.url,
-						included: inc.included,
-						reason: inc.reason,
-					})),
-				);
-			}
-
-			if (composed.conflicts.length > 0) {
-				debug("Template conflicts resolved: %o", composed.conflicts);
-			}
-
-			// Create action context with composed template variables
-			const executionContext: ActionContext = {
-				variables: { ...parameters },
-				projectRoot: process.cwd(),
-				templatePath,
-				logger: this.defaultLogger,
-				utils: this.defaultUtils,
-				dryRun: options.dryRun || false,
-				force: options.force || false,
-			};
-
-			// Merge composed variables into context
-			for (const [name, variable] of Object.entries(composed.variables)) {
-				if (executionContext.variables[name] === undefined) {
-					executionContext.variables[name] = variable.default;
-				}
-			}
-
-			// For now, return a successful result indicating template composition
-			// In a full implementation, this would execute the template rendering
-			return {
-				success: true,
-				message: `Template '${parsed.config.name}' composed successfully with ${composed.resolvedIncludes.length} includes and ${composed.conflicts.length} conflicts resolved`,
-				filesCreated: [],
-				filesModified: [],
-				filesDeleted: [],
-				metadata: {
-					template: parsed.config,
-					composition: {
-						includes: composed.resolvedIncludes,
-						conflicts: composed.conflicts,
-						variables: Object.keys(composed.variables),
-					},
-				},
-			};
-		} catch (error: any) {
-			debug("Template execution failed: %s", error.message);
-
-			if (error instanceof HypergenError) {
-				throw error;
-			}
-
-			throw ErrorHandler.createError(
-				ErrorCode.TEMPLATE_EXECUTION_ERROR,
-				error.message || "Template execution failed",
-				{ templatePath },
-			);
-		}
 	}
 
 	/**

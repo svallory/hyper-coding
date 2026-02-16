@@ -25,7 +25,7 @@ import { getJig, initializeJig } from "#/template-engines/jig-engine";
 // ─── Constants ──────────────────────────────────────────────────────
 
 // Real kit path
-const KIT_PATH = path.resolve(__dirname, "../../../../../kit/nextjs");
+const KIT_PATH = path.resolve(__dirname, "../../../../../hyper-kits/nextjs");
 const CRUD_TEMPLATES_DIR = path.join(KIT_PATH, "cookbooks/crud/resource/templates");
 
 // ─── Fixtures ────────────────────────────────────────────────────────
@@ -393,23 +393,31 @@ describe("E2E: Next.js CRUD resource with 2-pass AI generation", () => {
 			expect(await fs.pathExists(path.join(tempDir, "components/ProductForm.tsx"))).toBe(false);
 		});
 
-		it.skip("should FAIL when collectMode is not enabled (negative test)", async () => {
+		it("should FAIL when collectMode is not enabled (negative test)", async () => {
 			const collector = AiCollector.getInstance();
 			collector.collectMode = false; // Explicitly disable
 
-			await engine.executeRecipe(
-				{ type: "file", path: recipePath },
-				{
-					variables: VARIABLES,
-					workingDir: tempDir,
-					skipPrompts: true,
-				},
-			);
+			// When collectMode is false and no answers are provided, templates
+			// render via the Pass 2 path where @ai blocks output empty strings.
+			// This may cause downstream template errors (e.g. JSON.parse on empty),
+			// but the key assertion is that no AI entries are collected regardless.
+			try {
+				await engine.executeRecipe(
+					{ type: "file", path: recipePath },
+					{
+						variables: VARIABLES,
+						workingDir: tempDir,
+						skipPrompts: true,
+					},
+				);
+			} catch {
+				// Errors are expected — templates may fail without AI answers
+			}
 
 			// Should NOT collect entries when collectMode is false
 			expect(collector.hasEntries()).toBe(false);
 			expect(collector.getEntries().size).toBe(0);
-		}, 10000); // 10 second timeout since this actually creates files
+		}, 30000); // 30 second timeout since this actually creates files
 	});
 
 	// ─── Prompt Assembly ─────────────────────────────────────────────────

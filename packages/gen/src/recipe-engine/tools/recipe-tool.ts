@@ -36,7 +36,7 @@ import {
 } from "#/recipe-engine/types";
 import { Tool, type ToolResource, type ToolValidationResult } from "./base.js";
 
-const debug = createDebug("hypergen:v8:recipe:tool:recipe");
+const debug = createDebug("hyper:recipe:tool:recipe");
 
 /**
  * Recipe resolution result

@@ -12,7 +12,7 @@ import type {
 	DecoratedAction,
 } from "./types.js";
 
-const debug = createDebug("hypergen:v8:action:registry");
+const debug = createDebug("hyper:action:registry");
 
 export class ActionRegistry {
 	private static instance: ActionRegistry;

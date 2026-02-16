@@ -8,7 +8,7 @@ import createDebug from "debug";
 import { ActionRegistry } from "./registry.js";
 import type { ActionFunction, ActionMetadata, DecoratedAction } from "./types.js";
 
-const debug = createDebug("hypergen:v8:action:decorator");
+const debug = createDebug("hyper:action:decorator");
 
 // Symbol to store metadata on functions
 const ACTION_METADATA_SYMBOL = Symbol("actionMetadata");

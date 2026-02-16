@@ -93,20 +93,20 @@ const hook: Hook.CommandNotFound = async (opts) => {
 		argv.push("--", ...recipeArgs);
 	}
 
-	// Import and run the Run command
+	// Import and run the Gen command
 	try {
-		// Construct path to run command that works in both dev and prod
-		// In dev: oclif loads src/hooks/command-not-found.ts, so we import src/commands/run.ts
-		// In prod: oclif loads dist/hooks/command-not-found.js, so we import dist/commands/run.js
+		// Construct path to gen command that works in both dev and prod
+		// In dev: oclif loads src/hooks/command-not-found.ts, so we import src/commands/gen.ts
+		// In prod: oclif loads dist/hooks/command-not-found.js, so we import dist/commands/gen.js
 		const currentFile = fileURLToPath(import.meta.url);
 		const currentDir = dirname(currentFile);
 
 		// Determine the correct extension based on current file
 		const ext = currentFile.endsWith(".ts") ? ".ts" : ".js";
-		const runCommandPath = join(currentDir, "..", "commands", `run${ext}`);
+		const genCommandPath = join(currentDir, "..", "commands", `gen${ext}`);
 
-		const RunCommand = (await import(runCommandPath)).default;
-		await RunCommand.run(argv);
+		const GenCommand = (await import(genCommandPath)).default;
+		await GenCommand.run(argv);
 	} catch (error: any) {
 		// If the run command also fails, let the original not-found error propagate
 		if (error?.code === "EEXIT") throw error;

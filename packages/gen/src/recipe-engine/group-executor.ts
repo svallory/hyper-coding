@@ -17,7 +17,7 @@ import type {
 } from "./recipe-engine.js";
 import type { RecipeConfig, RecipeProvides } from "./types.js";
 
-const debug = createDebug("hypergen:v8:recipe:group-executor");
+const debug = createDebug("hyper:recipe:group-executor");
 
 /**
  * A recipe discovered within a group directory

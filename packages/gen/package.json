@@ -1,6 +1,6 @@
 {
 	"name": "@hypercli/gen",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"type": "module",
 	"description": "Code generation engine for HyperDev",
 	"keywords": ["hyperdev", "hypergen", "code-generator"],
@@ -26,7 +26,8 @@
 		"topicSeparator": " "
 	},
 	"imports": {
-		"#/*": "./dist/*.js"
+		"#/*": "./dist/*.js",
+		"#tests/*": "./tests/*"
 	},
 	"scripts": {
 		"build": "tsup",
@@ -62,5 +63,9 @@
 		"typescript": "^5.4.0",
 		"tsup": "^8.0.0",
 		"vitest": "^1.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
 	}
 }

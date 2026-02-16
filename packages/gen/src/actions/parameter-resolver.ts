@@ -10,7 +10,7 @@ import { InteractivePrompter, type PromptOptions } from "#/prompts/interactive-p
 import type { ActionMetadata, ActionParameter, ParameterType } from "./types.js";
 import { ActionParameterError } from "./types.js";
 
-const debug = createDebug("hypergen:v8:action:parameters");
+const debug = createDebug("hyper:action:parameters");
 
 export class ActionParameterResolver {
 	/**

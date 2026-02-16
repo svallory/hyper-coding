@@ -1,5 +1,5 @@
 /**
- * V8 Discovery System Tests
+ * Discovery System Tests
  */
 
 import { beforeEach, describe, expect, it } from "vitest";

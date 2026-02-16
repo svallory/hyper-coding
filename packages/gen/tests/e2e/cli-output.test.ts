@@ -9,8 +9,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const CLI_PATH = join(__dirname, "../../bin/run.js");
+// Resolve CLI binary from workspace root (packages/cli/bin/run.js)
+const CLI_PATH = join(__dirname, "../../../../packages/cli/bin/run.js");
 
+// TODO: All tests in this suite fail because `hyper gen <recipe.yml>` with ad-hoc
+// recipe files fails with "Tool not found: default (template)". The recipe engine's
+// tool registry (template, action, shell, etc.) is not properly initialized when
+// running through the CLI subprocess with standalone recipe files outside of kits.
+// The path to the CLI binary has been fixed to packages/cli/bin/run.js, but the
+// underlying tool registration issue needs to be resolved first.
+// Additionally, the "clean output" test was passing vacuously (catching the error
+// and checking empty stdout for absence of debug logs).
 describe.skip("CLI Output E2E — requires @hypercli/cli bin/run.js", () => {
 	let testDir: string;
 
@@ -32,7 +41,7 @@ describe.skip("CLI Output E2E — requires @hypercli/cli bin/run.js", () => {
 		let stdout: string;
 		let exitCode = 0;
 		try {
-			stdout = execSync(`node ${CLI_PATH} run ${join(testDir, "test-recipe.yml")}`, {
+			stdout = execSync(`node ${CLI_PATH} gen ${join(testDir, "test-recipe.yml")}`, {
 				encoding: "utf8",
 				cwd: testDir,
 				stdio: "pipe",
@@ -60,7 +69,7 @@ describe.skip("CLI Output E2E — requires @hypercli/cli bin/run.js", () => {
 
 		let stdout: string;
 		try {
-			stdout = execSync(`node ${CLI_PATH} run ${join(testDir, "ai-recipe.yml")}`, {
+			stdout = execSync(`node ${CLI_PATH} gen ${join(testDir, "ai-recipe.yml")}`, {
 				encoding: "utf8",
 				cwd: testDir,
 				stdio: "pipe",
@@ -84,7 +93,7 @@ describe.skip("CLI Output E2E — requires @hypercli/cli bin/run.js", () => {
 	it("should not show debug logs in dry run mode", () => {
 		setupMinimalRecipe(testDir);
 
-		const stdout = execSync(`node ${CLI_PATH} run ${join(testDir, "test-recipe.yml")} --dry`, {
+		const stdout = execSync(`node ${CLI_PATH} gen ${join(testDir, "test-recipe.yml")} --dry`, {
 			encoding: "utf8",
 			cwd: testDir,
 		});

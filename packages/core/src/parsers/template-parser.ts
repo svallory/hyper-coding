@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
+import type { TemplateConfig, TemplateExample, TemplateVariable } from "../types/template.js";
 
 // Note: RecipeConfig and RecipeStepUnion would need to be imported from recipe-engine
 // For now, we'll use 'any' as placeholder - hypergen can provide proper types
@@ -40,80 +41,14 @@ export type ToolType =
 	| "parallel";
 export type RecipeStepUnion = any; // Placeholder
 
-export interface TemplateVariable {
-	type: "string" | "number" | "boolean" | "enum" | "array" | "object" | "file" | "directory";
-	required?: boolean;
-	multiple?: boolean;
-	default?: any;
-	/** Suggested value shown in prompts (interactive or AI). Never auto-applied. */
-	suggestion?: any;
-	description?: string;
-	pattern?: string;
-	values?: string[];
-	min?: number;
-	max?: number;
-	/** Positional argument index (0-based) for CLI mapping */
-	position?: number;
-	validation?: {
-		message?: string;
-	};
-}
-
-export interface TemplateExample {
-	title: string;
-	description?: string;
-	variables: Record<string, any>;
-}
-
-export interface TemplateInclude {
-	url: string;
-	version?: string;
-	variables?: Record<string, any>; // Variable overrides
-	condition?: string; // JavaScript expression for conditional inclusion
-	strategy?: "merge" | "replace" | "extend"; // Conflict resolution strategy
-}
-
-export interface TemplateDependency {
-	name: string;
-	version?: string;
-	type?: "npm" | "github" | "local" | "http";
-	url?: string;
-	optional?: boolean;
-	dev?: boolean;
-}
-
-export interface TemplateConfig {
-	name: string;
-	description?: string;
-	version?: string;
-	author?: string;
-	category?: string;
-	tags?: string[];
-	variables: Record<string, TemplateVariable>;
-	examples?: TemplateExample[];
-	dependencies?: string[] | TemplateDependency[]; // Support both string[] and full dependency objects
-	outputs?: string[];
-	// V8 Recipe Step System - New!
-	steps?: RecipeStepUnion[]; // Recipe steps for V8 system
-	// Advanced composition features
-	extends?: string; // Template inheritance
-	includes?: TemplateInclude[]; // Template composition
-	conflicts?: {
-		strategy: "merge" | "replace" | "extend" | "error";
-		rules?: Record<string, "merge" | "replace" | "extend" | "error">;
-	};
-	// Versioning and compatibility
-	engines?: {
-		hypergen?: string;
-		node?: string;
-	};
-	// Lifecycle hooks
-	hooks?: {
-		pre?: string[];
-		post?: string[];
-		error?: string[];
-	};
-	// V8 Recipe execution settings
+/**
+ * Extended template config used internally by the parser.
+ * Adds Recipe Step System fields that go beyond a plain template config.
+ */
+export interface ParsedTemplateConfig extends TemplateConfig {
+	// Recipe Step System
+	steps?: RecipeStepUnion[];
+	// Recipe execution settings
 	settings?: {
 		timeout?: number;
 		retries?: number;
@@ -124,7 +59,7 @@ export interface TemplateConfig {
 }
 
 export interface ParsedTemplate {
-	config: TemplateConfig;
+	config: ParsedTemplateConfig;
 	filePath: string;
 	isValid: boolean;
 	errors: string[];
@@ -223,8 +158,8 @@ export class TemplateParser {
 		parsed: any,
 		errors: string[],
 		warnings: string[],
-	): TemplateConfig {
-		const config: TemplateConfig = {
+	): ParsedTemplateConfig {
+		const config: ParsedTemplateConfig = {
 			name: "",
 			variables: {},
 		};
@@ -289,14 +224,6 @@ export class TemplateParser {
 			}
 		}
 
-		if (parsed.dependencies) {
-			if (Array.isArray(parsed.dependencies)) {
-				config.dependencies = TemplateParser.validateDependencies(parsed.dependencies, warnings);
-			} else {
-				warnings.push("Dependencies should be an array");
-			}
-		}
-
 		if (parsed.outputs) {
 			if (Array.isArray(parsed.outputs)) {
 				config.outputs = parsed.outputs.filter((output: any) => typeof output === "string");
@@ -305,17 +232,7 @@ export class TemplateParser {
 			}
 		}
 
-		// Validate engines
-		if (parsed.engines) {
-			config.engines = TemplateParser.validateEngines(parsed.engines, warnings);
-		}
-
-		// Validate hooks
-		if (parsed.hooks) {
-			config.hooks = TemplateParser.validateHooks(parsed.hooks, warnings);
-		}
-
-		// V8 Recipe Step System validation
+		// Recipe Step System validation
 		if (parsed.steps) {
 			if (Array.isArray(parsed.steps)) {
 				config.steps = TemplateParser.validateSteps(
@@ -329,7 +246,7 @@ export class TemplateParser {
 			}
 		}
 
-		// V8 Recipe settings validation
+		// Recipe settings validation
 		if (parsed.settings) {
 			config.settings = TemplateParser.validateSettings(parsed.settings, warnings);
 		}
@@ -660,146 +577,7 @@ export class TemplateParser {
 	}
 
 	/**
-	 * Validate dependencies array (supports both string[] and TemplateDependency[])
-	 */
-	private static validateDependencies(
-		dependencies: any[],
-		warnings: string[],
-	): string[] | TemplateDependency[] {
-		const result: TemplateDependency[] = [];
-
-		for (const [index, dep] of dependencies.entries()) {
-			if (typeof dep === "string") {
-				// Convert string to TemplateDependency
-				result.push({ name: dep, type: "npm" });
-			} else if (typeof dep === "object" && dep !== null) {
-				// Validate TemplateDependency object
-				const dependency = TemplateParser.validateDependency(dep, index, warnings);
-				if (dependency) {
-					result.push(dependency);
-				}
-			} else {
-				warnings.push(`Dependency ${index + 1} must be a string or object`);
-			}
-		}
-
-		return result;
-	}
-
-	/**
-	 * Validate individual dependency object
-	 */
-	private static validateDependency(
-		dep: any,
-		index: number,
-		warnings: string[],
-	): TemplateDependency | null {
-		if (!dep.name || typeof dep.name !== "string") {
-			warnings.push(`Dependency ${index + 1} must have a name`);
-			return null;
-		}
-
-		const dependency: TemplateDependency = {
-			name: dep.name,
-		};
-
-		if (dep.version && typeof dep.version === "string") {
-			dependency.version = dep.version;
-		}
-
-		if (dep.type && ["npm", "github", "local", "http"].includes(dep.type)) {
-			dependency.type = dep.type;
-		}
-
-		if (dep.url && typeof dep.url === "string") {
-			dependency.url = dep.url;
-		}
-
-		if (dep.optional !== undefined && typeof dep.optional === "boolean") {
-			dependency.optional = dep.optional;
-		}
-
-		if (dep.dev !== undefined && typeof dep.dev === "boolean") {
-			dependency.dev = dep.dev;
-		}
-
-		return dependency;
-	}
-
-	/**
-	 * Validate engines configuration
-	 */
-	private static validateEngines(engines: any, warnings: string[]): Record<string, string> {
-		const result: Record<string, string> = {};
-
-		if (typeof engines !== "object" || engines === null) {
-			warnings.push("Engines should be an object");
-			return result;
-		}
-
-		if (engines.hypergen && typeof engines.hypergen === "string") {
-			result.hypergen = engines.hypergen;
-		}
-
-		if (engines.node && typeof engines.node === "string") {
-			result.node = engines.node;
-		}
-
-		return result;
-	}
-
-	/**
-	 * Validate hooks configuration
-	 */
-	private static validateHooks(
-		hooks: any,
-		warnings: string[],
-	): { pre?: string[]; post?: string[]; error?: string[] } {
-		const result: { pre?: string[]; post?: string[]; error?: string[] } = {};
-
-		if (typeof hooks !== "object" || hooks === null) {
-			warnings.push("Hooks should be an object");
-			return result;
-		}
-
-		if (hooks.pre) {
-			if (Array.isArray(hooks.pre)) {
-				result.pre = hooks.pre.filter((hook: any) => typeof hook === "string");
-				if (result.pre && result.pre.length !== hooks.pre.length) {
-					warnings.push("Some pre hooks were ignored (must be strings)");
-				}
-			} else {
-				warnings.push("Pre hooks should be an array of strings");
-			}
-		}
-
-		if (hooks.post) {
-			if (Array.isArray(hooks.post)) {
-				result.post = hooks.post.filter((hook: any) => typeof hook === "string");
-				if (result.post && result.post.length !== hooks.post.length) {
-					warnings.push("Some post hooks were ignored (must be strings)");
-				}
-			} else {
-				warnings.push("Post hooks should be an array of strings");
-			}
-		}
-
-		if (hooks.error) {
-			if (Array.isArray(hooks.error)) {
-				result.error = hooks.error.filter((hook: any) => typeof hook === "string");
-				if (result.error && result.error.length !== hooks.error.length) {
-					warnings.push("Some error hooks were ignored (must be strings)");
-				}
-			} else {
-				warnings.push("Error hooks should be an array of strings");
-			}
-		}
-
-		return result;
-	}
-
-	/**
-	 * Validate recipe steps array (V8 Recipe Step System)
+	 * Validate recipe steps array (Recipe Step System)
 	 */
 	private static validateSteps(
 		steps: any[],
@@ -1292,35 +1070,18 @@ export class TemplateParser {
 	}
 
 	/**
-	 * Check if a template version is compatible with current engine
-	 */
-	static isVersionCompatible(templateEngines?: {
-		hypergen?: string;
-		node?: string;
-	}): boolean {
-		if (!templateEngines) {
-			return true; // No specific requirements
-		}
-
-		// For now, return true - in a real implementation, this would check:
-		// - Current Hypergen version against templateEngines.hypergen
-		// - Current Node.js version against templateEngines.node
-		return true;
-	}
-
-	/**
-	 * Check if this configuration uses V8 Recipe Step System
+	 * Check if this configuration uses the Recipe Step System
 	 */
 	static isRecipeConfig(
-		config: TemplateConfig,
-	): config is TemplateConfig & { steps: RecipeStepUnion[] } {
+		config: ParsedTemplateConfig,
+	): config is ParsedTemplateConfig & { steps: RecipeStepUnion[] } {
 		return Array.isArray(config.steps) && config.steps.length > 0;
 	}
 
 	/**
-	 * Convert a TemplateConfig to RecipeConfig (V8 Recipe Step System)
+	 * Convert a TemplateConfig to RecipeConfig (Recipe Step System)
 	 */
-	static toRecipeConfig(templateConfig: TemplateConfig): RecipeConfig | null {
+	static toRecipeConfig(templateConfig: ParsedTemplateConfig): RecipeConfig | null {
 		if (!TemplateParser.isRecipeConfig(templateConfig)) {
 			return null; // Not a recipe configuration
 		}
@@ -1338,7 +1099,6 @@ export class TemplateParser {
 		if (templateConfig.category) recipeConfig.category = templateConfig.category;
 		if (templateConfig.tags) recipeConfig.tags = templateConfig.tags;
 		if (templateConfig.outputs) recipeConfig.outputs = templateConfig.outputs;
-		if (templateConfig.engines) recipeConfig.engines = templateConfig.engines;
 
 		// Convert examples if present
 		if (templateConfig.examples) {
@@ -1349,61 +1109,9 @@ export class TemplateParser {
 			}));
 		}
 
-		// Convert dependencies if present
-		if (templateConfig.dependencies) {
-			recipeConfig.dependencies = templateConfig.dependencies.map((dep) => {
-				if (typeof dep === "string") {
-					return {
-						name: dep,
-						type: "npm" as const,
-					};
-				}
-				return {
-					name: dep.name,
-					version: dep.version,
-					type: (dep.type as any) || "npm",
-					url: dep.url,
-					optional: dep.optional,
-					dev: dep.dev,
-				};
-			});
-		}
-
-		// Convert hooks if present
-		if (templateConfig.hooks) {
-			recipeConfig.hooks = {
-				beforeRecipe: templateConfig.hooks.pre,
-				afterRecipe: templateConfig.hooks.post,
-				onError: templateConfig.hooks.error,
-			};
-		}
-
 		// Convert settings if present
 		if (templateConfig.settings) {
 			recipeConfig.settings = templateConfig.settings;
-		}
-
-		// Handle composition (extends/includes) - map to recipe composition
-		if (templateConfig.extends || templateConfig.includes) {
-			recipeConfig.composition = {};
-
-			if (templateConfig.extends) {
-				recipeConfig.composition.extends = templateConfig.extends;
-			}
-
-			if (templateConfig.includes) {
-				recipeConfig.composition.includes = templateConfig.includes.map((include) => ({
-					recipe: include.url, // Map URL to recipe identifier
-					version: include.version,
-					variables: include.variables,
-					condition: include.condition,
-					strategy: include.strategy,
-				}));
-			}
-
-			if (templateConfig.conflicts) {
-				recipeConfig.composition.conflicts = templateConfig.conflicts;
-			}
 		}
 
 		return recipeConfig;
@@ -1433,23 +1141,5 @@ export class TemplateParser {
 			default:
 				errors.push(`Unknown tool type: ${(step as any).tool}`);
 		}
-	}
-
-	/**
-	 * Compare two semantic versions
-	 */
-	static compareVersions(version1: string, version2: string): number {
-		const v1Parts = version1.split(".").map(Number);
-		const v2Parts = version2.split(".").map(Number);
-
-		for (let i = 0; i < Math.max(v1Parts.length, v2Parts.length); i++) {
-			const v1Part = v1Parts[i] || 0;
-			const v2Part = v2Parts[i] || 0;
-
-			if (v1Part > v2Part) return 1;
-			if (v1Part < v2Part) return -1;
-		}
-
-		return 0;
 	}
 }

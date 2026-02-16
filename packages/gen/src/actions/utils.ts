@@ -11,7 +11,7 @@ import fs from "fs-extra";
 import { glob } from "glob";
 import type { ActionLogger, ActionUtils } from "./types.js";
 
-const debug = createDebug("hypergen:v8:action:utils");
+const debug = createDebug("hyper:action:utils");
 
 export class DefaultActionUtils implements ActionUtils {
 	fileExists(filePath: string): boolean {

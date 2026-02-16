@@ -45,17 +45,17 @@ describe("E2E: Real Next.js Recipe", () => {
 	});
 
 	afterEach(async () => {
-		// Comment out cleanup to verify files are actually created
-		// await fs.remove(tempDir)
-		console.log("\n🗂️  Test output directory:", tempDir);
+		// Reset ToolRegistry to stop cleanup intervals and prevent leaks between tests
+		const { ToolRegistry } = await import("../../src/recipe-engine/tools/registry");
+		ToolRegistry.reset();
+
+		await fs.remove(tempDir);
 	});
 
-	// TODO: Fix test isolation — passes alone but fails in full suite due to ToolRegistry
-	// singleton state leakage. Run standalone: bun test tests/e2e/nextjs-recipe-real.test.ts
-	it.skip("should execute nextjs project create recipe with nested sequences", async () => {
+	it("should execute nextjs project create recipe with nested sequences", async () => {
 		const recipePath = path.resolve(
 			__dirname,
-			"../../../../kit/nextjs/cookbooks/project/create/recipe.yml",
+			"../../../../hyper-kits/nextjs/cookbooks/project/create/recipe.yml",
 		);
 
 		const result = await recipeEngine.executeRecipe(

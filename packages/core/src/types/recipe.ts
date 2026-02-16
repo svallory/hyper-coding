@@ -132,7 +132,7 @@ export interface TemplateStep extends BaseRecipeStep {
 
 /**
  * Action step configuration
- * Executes a V8 decorator-based action
+ * Executes a decorator-based action
  */
 export interface ActionStep extends BaseRecipeStep {
 	tool: "action";
@@ -739,7 +739,7 @@ export interface RecipeExecutionResult {
 }
 
 /**
- * Recipe configuration - replaces TemplateConfig for V8
+ * Recipe configuration - replaces TemplateConfig
  */
 export interface RecipeConfig {
 	/** Recipe name */
