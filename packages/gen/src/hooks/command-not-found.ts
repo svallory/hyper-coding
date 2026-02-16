@@ -187,9 +187,11 @@ async function showCommandNotFoundError(
 	tipBody.push("");
 	tipBody.push(`Run ${styleCommand("hyper --help")} for usage.`);
 
-	// Show error followed by tip
-	console.error(formatError(errorMessage));
-	console.error(formatTip("Here are the available commands and kits", tipBody.join("\n")));
+	// Show plain error message followed by tip
+	console.error(`\n${errorMessage}\n`);
+	console.error(
+		formatTip("Available commands and kits", "Here's what you can run", tipBody.join("\n")),
+	);
 }
 
 export default hook;
