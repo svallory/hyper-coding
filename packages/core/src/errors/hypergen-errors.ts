@@ -5,6 +5,8 @@
  * and actionable guidance for common issues
  */
 
+import { renderMarkdown } from "cli-html";
+
 export enum ErrorCode {
 	// Configuration errors
 	CONFIG_FILE_NOT_FOUND = "CONFIG_FILE_NOT_FOUND",
@@ -897,27 +899,28 @@ export class ErrorHandler {
 			lines.push(`   Received: ${error.context.received}`);
 		}
 
-		// Suggestions
+		// Suggestions — rendered as markdown for proper styling
 		if (error.suggestions.length > 0) {
-			lines.push("");
-			lines.push("💡 Suggestions:");
+			const md: string[] = ["", "**Suggestions:**", ""];
 
 			for (const [index, suggestion] of error.suggestions.entries()) {
-				lines.push(`   ${index + 1}. ${suggestion.title}`);
-				lines.push(`      ${suggestion.description}`);
+				md.push(`${index + 1}. **${suggestion.title}**`);
+				md.push(`   ${suggestion.description}`);
 
 				if (suggestion.command) {
-					lines.push(`      $ ${suggestion.command}`);
+					md.push(`   \`\`\`sh\n   $ ${suggestion.command}\n   \`\`\``);
 				}
 
 				if (suggestion.url) {
-					lines.push(`      📖 ${suggestion.url}`);
+					md.push(`   [Documentation](${suggestion.url})`);
 				}
 
 				if (index < error.suggestions.length - 1) {
-					lines.push("");
+					md.push("");
 				}
 			}
+
+			lines.push(renderMarkdown(md.join("\n")));
 		}
 
 		return lines.join("\n");

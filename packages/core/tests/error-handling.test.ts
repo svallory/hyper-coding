@@ -69,9 +69,9 @@ describe("Error Handling System", () => {
 			expect(formatted).toContain("❌ Action not found");
 			expect(formatted).toContain("Code: ACTION_NOT_FOUND");
 			expect(formatted).toContain("Action: test-action");
-			expect(formatted).toContain("💡 Suggestions:");
+			expect(formatted).toContain("Suggestions:");
 			expect(formatted).toContain("List available actions");
-			expect(formatted).toContain("$ hypergen list");
+			expect(formatted).toContain("hypergen list");
 		});
 
 		it("should handle unknown errors", () => {
@@ -79,7 +79,7 @@ describe("Error Handling System", () => {
 			const formatted = ErrorHandler.handleError(jsError);
 
 			expect(formatted).toContain("❌ JavaScript error");
-			expect(formatted).toContain("💡 Suggestions:");
+			expect(formatted).toContain("Suggestions:");
 		});
 
 		it("should handle file system errors", () => {
@@ -88,7 +88,7 @@ describe("Error Handling System", () => {
 
 			expect(formatted).toContain("❌");
 			expect(formatted).toContain("File: /path/to/file.txt");
-			expect(formatted).toContain("💡 Suggestions:");
+			expect(formatted).toContain("Suggestions:");
 		});
 
 		it("should handle permission errors", () => {
@@ -97,7 +97,7 @@ describe("Error Handling System", () => {
 
 			expect(formatted).toContain("❌");
 			expect(formatted).toContain("File: /protected/file.txt");
-			expect(formatted).toContain("💡 Suggestions:");
+			expect(formatted).toContain("Suggestions:");
 			expect(formatted).toContain("Check file permissions");
 		});
 	});
@@ -185,11 +185,11 @@ describe("Error Handling System", () => {
 			expect(formatted).toContain("Parameter: name");
 			expect(formatted).toContain("Expected: string");
 			expect(formatted).toContain("Received: number");
-			expect(formatted).toContain("💡 Suggestions:");
-			expect(formatted).toContain("1. Fix template syntax");
-			expect(formatted).toContain("$ hypergen template validate component.yml");
-			expect(formatted).toContain("2. Read documentation");
-			expect(formatted).toContain("📖 https://hypergen.dev/docs/templates");
+			expect(formatted).toContain("Suggestions:");
+			expect(formatted).toContain("Fix template syntax");
+			expect(formatted).toContain("hypergen template validate component.yml");
+			expect(formatted).toContain("Read documentation");
+			expect(formatted).toContain("https://hypergen.dev/docs/templates");
 		});
 
 		it("should format error without context", () => {
@@ -217,10 +217,10 @@ describe("Error Handling System", () => {
 			const formatted = ErrorHandler.formatError(error);
 
 			expect(formatted).toContain("❌ Something went wrong");
-			expect(formatted).toContain("💡 Suggestions:");
-			expect(formatted).toContain("1. Try again");
-			expect(formatted).not.toContain("$");
-			expect(formatted).not.toContain("📖");
+			expect(formatted).toContain("Suggestions:");
+			expect(formatted).toContain("Try again");
+			expect(formatted).not.toContain("```");
+			expect(formatted).not.toContain("Documentation");
 		});
 	});
 

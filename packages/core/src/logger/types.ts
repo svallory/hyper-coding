@@ -14,4 +14,5 @@ export interface ExtendedLogger extends ActionLogger {
 	notice: (msg: string) => void;
 	err: (msg: string) => void;
 	ok: (msg: string) => void;
+	markdown: (content: string) => void;
 }

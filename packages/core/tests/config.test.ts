@@ -10,7 +10,7 @@ describe("Hypergen Configuration System", () => {
 
 	beforeEach(() => {
 		tempDir = fs.mkdtempSync(path.join(tmpdir(), "hypergen-config-test-"));
-		configPath = path.join(tempDir, "hypergen.config.js");
+		configPath = path.join(tempDir, "hyper.config.js");
 	});
 
 	afterEach(() => {
@@ -37,7 +37,7 @@ describe("Hypergen Configuration System", () => {
 			};
 
 			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
+				path.join(tempDir, "hyper.config.json"),
 				JSON.stringify(testConfig, null, 2),
 			);
 
@@ -72,7 +72,7 @@ describe("Hypergen Configuration System", () => {
 			};
 
 			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
+				path.join(tempDir, "hyper.config.json"),
 				JSON.stringify(testConfig, null, 2),
 			);
 
@@ -88,7 +88,7 @@ describe("Hypergen Configuration System", () => {
 			};
 
 			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
+				path.join(tempDir, "hyper.config.json"),
 				JSON.stringify(testConfig, null, 2),
 			);
 
@@ -183,7 +183,7 @@ describe("Hypergen Configuration System", () => {
 		it("should create JavaScript configuration file", async () => {
 			const createdPath = await createConfigFile(tempDir, "js");
 
-			expect(createdPath).toBe(path.join(tempDir, "hypergen.config.js"));
+			expect(createdPath).toBe(path.join(tempDir, "hyper.config.js"));
 			expect(fs.existsSync(createdPath)).toBe(true);
 
 			const content = fs.readFileSync(createdPath, "utf-8");
@@ -194,7 +194,7 @@ describe("Hypergen Configuration System", () => {
 		it("should create JSON configuration file", async () => {
 			const createdPath = await createConfigFile(tempDir, "json");
 
-			expect(createdPath).toBe(path.join(tempDir, "hypergen.config.json"));
+			expect(createdPath).toBe(path.join(tempDir, "hyper.config.json"));
 			expect(fs.existsSync(createdPath)).toBe(true);
 
 			const content = fs.readFileSync(createdPath, "utf-8");
@@ -218,7 +218,7 @@ describe("Hypergen Configuration System", () => {
 			};
 
 			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
+				path.join(tempDir, "hyper.config.json"),
 				JSON.stringify(testConfig, null, 2),
 			);
 
@@ -228,7 +228,7 @@ describe("Hypergen Configuration System", () => {
 			expect(info.templates).toHaveLength(2);
 			expect(info.environment).toBe("development");
 			expect(info.pluginCount).toBe(2);
-			expect(info.source).toContain("hypergen.config.json");
+			expect(info.source).toContain("hyper.config.json");
 		});
 	});
 
@@ -239,7 +239,7 @@ describe("Hypergen Configuration System", () => {
 			};
 
 			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
+				path.join(tempDir, "hyper.config.json"),
 				JSON.stringify(testConfig, null, 2),
 			);
 
@@ -257,7 +257,7 @@ describe("Hypergen Configuration System", () => {
 			};
 
 			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
+				path.join(tempDir, "hyper.config.json"),
 				JSON.stringify(testConfig, null, 2),
 			);
 
@@ -270,7 +270,7 @@ describe("Hypergen Configuration System", () => {
 
 	describe("Error Handling", () => {
 		it("should handle syntax errors in JSON config", async () => {
-			fs.writeFileSync(path.join(tempDir, "hypergen.config.json"), "{ invalid json");
+			fs.writeFileSync(path.join(tempDir, "hyper.config.json"), "{ invalid json");
 
 			await expect(HypergenConfigLoader.loadConfig(undefined, tempDir)).rejects.toThrow();
 		});
@@ -291,7 +291,7 @@ describe("Hypergen Configuration System", () => {
 
 			const testConfig = { templates: ["parent-templates"] };
 			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
+				path.join(tempDir, "hyper.config.json"),
 				JSON.stringify(testConfig, null, 2),
 			);
 
@@ -308,14 +308,14 @@ describe("Hypergen Configuration System", () => {
 			// Parent config
 			const parentConfig = { templates: ["parent-templates"] };
 			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
+				path.join(tempDir, "hyper.config.json"),
 				JSON.stringify(parentConfig, null, 2),
 			);
 
 			// Project config
 			const projectConfig = { templates: ["project-templates"] };
 			fs.writeFileSync(
-				path.join(subDir, "hypergen.config.json"),
+				path.join(subDir, "hyper.config.json"),
 				JSON.stringify(projectConfig, null, 2),
 			);
 

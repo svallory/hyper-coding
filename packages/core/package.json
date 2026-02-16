@@ -1,6 +1,6 @@
 {
 	"name": "@hypercli/core",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"type": "module",
 	"description": "Core domain types, config, errors for HyperDev",
 	"keywords": ["hyperdev", "hypergen", "code-generator"],
@@ -19,7 +19,8 @@
 	"types": "./dist/index.d.ts",
 	"files": ["dist", "README.md", "LICENSE"],
 	"imports": {
-		"#/*": "./dist/*.js"
+		"#/*": "./dist/*.js",
+		"#tests/*": "./tests/*.ts"
 	},
 	"scripts": {
 		"build": "tsup",
@@ -32,10 +33,11 @@
 	},
 	"dependencies": {
 		"chalk": "^4.1.2",
-		"debug": "^4.3.4",
-		"inflection": "^3.0.2",
 		"change-case": "^3.1.0",
-		"cosmiconfig": "^9.0.0"
+		"cli-html": "^5.3.0",
+		"cosmiconfig": "^9.0.0",
+		"debug": "^4.3.4",
+		"inflection": "^3.0.2"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
@@ -43,5 +45,9 @@
 		"tsup": "^8.0.0",
 		"typescript": "^5.4.0",
 		"vitest": "^1.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
 	}
 }
