@@ -1,3 +1,4 @@
+import chalk from "chalk";
 import { describe, expect, it } from "vitest";
 import { error, info, success, tip, warning } from "../../src/ui/messages.js";
 import { symbols } from "../../src/ui/symbols.js";
@@ -55,6 +56,8 @@ describe("error", () => {
 	});
 
 	it("contains ANSI color codes (is colorized)", () => {
+		// Skip if chalk has no color support (e.g. non-TTY without FORCE_COLOR)
+		if (chalk.level === 0) return;
 		const raw = error("Something broke");
 		// Raw output should contain ANSI escape sequences
 		// biome-ignore lint/suspicious/noControlCharactersInRegex: checking for ANSI codes
