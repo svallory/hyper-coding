@@ -1,5 +1,5 @@
-export default (type, subject, start = new Date()) =>
-	(status, payload = null, end = new Date()) => ({
+export default (type: string, subject: string, start = new Date()) =>
+	(status: string, payload: any = null, end = new Date()) => ({
 		type,
 		subject,
 		status,

@@ -86,43 +86,6 @@ export {
 	type ToolResolutionOptions,
 } from "./registry.js";
 
-// Re-export types from recipe-engine types for convenience
-export type {
-	// Core types
-	ToolType,
-	StepStatus,
-	RecipeStepUnion,
-	BaseRecipeStep,
-	// Step types
-	TemplateStep,
-	ActionStep,
-	CodeModStep,
-	RecipeStep,
-	ShellStep,
-	AIStep,
-	InstallStep,
-	QueryStep,
-	PatchStep,
-	EnsureDirsStep,
-	// Context and execution
-	StepContext,
-	StepResult,
-	StepExecutionOptions,
-	// Results
-	TemplateExecutionResult,
-	CodeModExecutionResult,
-	RecipeExecutionResult,
-	// Configuration and validation
-	RecipeConfig,
-	RecipeValidationResult,
-	RecipeValidationError,
-	RecipeValidationWarning,
-	// Engine configuration
-	RecipeEngineConfig,
-	// Type guards
-	StepByTool,
-} from "#/recipe-engine/types";
-
 // Import types and classes for internal use
 import type { RecipeStepUnion, ToolType } from "#/recipe-engine/types";
 import { actionToolFactory } from "./action-tool.js";
@@ -146,22 +109,8 @@ import { sequenceToolFactory } from "./sequence-tool.js";
 import { shellToolFactory } from "./shell-tool.js";
 import { templateToolFactory } from "./template-tool.js";
 
-// Re-export type guard functions for convenience
-export {
-	isTemplateStep,
-	isActionStep,
-	isCodeModStep,
-	isRecipeStep,
-	isAIStep,
-	isInstallStep,
-	isQueryStep,
-	isPatchStep,
-	isEnsureDirsStep,
-	// Error classes
-	StepExecutionError,
-	RecipeDependencyError,
-	CircularDependencyError,
-} from "#/recipe-engine/types";
+// Type guards and error classes are exported from recipe-engine/index.ts
+// Do not re-export them here to avoid circular dependencies
 
 // Tool framework utilities and helpers
 

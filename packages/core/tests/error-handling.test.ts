@@ -1,17 +1,10 @@
 import { describe, expect, it } from "vitest";
-import {
-	ErrorCode,
-	ErrorHandler,
-	HypergenError,
-} from "#/errors/hypergen-errors";
+import { ErrorCode, ErrorHandler, HypergenError } from "#/errors/hypergen-errors";
 
 describe("Error Handling System", () => {
 	describe("ErrorHandler", () => {
 		it("should create basic error with code and message", () => {
-			const error = ErrorHandler.createError(
-				ErrorCode.ACTION_NOT_FOUND,
-				"Test action not found",
-			);
+			const error = ErrorHandler.createError(ErrorCode.ACTION_NOT_FOUND, "Test action not found");
 
 			expect(error).toBeInstanceOf(HypergenError);
 			expect(error.code).toBe(ErrorCode.ACTION_NOT_FOUND);
@@ -90,9 +83,7 @@ describe("Error Handling System", () => {
 		});
 
 		it("should handle file system errors", () => {
-			const enoentError = new Error(
-				"ENOENT: no such file or directory, open '/path/to/file.txt'",
-			);
+			const enoentError = new Error("ENOENT: no such file or directory, open '/path/to/file.txt'");
 			const formatted = ErrorHandler.handleError(enoentError);
 
 			expect(formatted).toContain("❌");
@@ -101,9 +92,7 @@ describe("Error Handling System", () => {
 		});
 
 		it("should handle permission errors", () => {
-			const eaccesError = new Error(
-				"EACCES: permission denied, open '/protected/file.txt'",
-			);
+			const eaccesError = new Error("EACCES: permission denied, open '/protected/file.txt'");
 			const formatted = ErrorHandler.handleError(eaccesError);
 
 			expect(formatted).toContain("❌");
@@ -121,9 +110,7 @@ describe("Error Handling System", () => {
 			expect(error.message).toContain("missing-action");
 			expect(error.context.action).toBe("missing-action");
 			expect(error.suggestions.length).toBeGreaterThan(0);
-			expect(error.suggestions.some((s) => s.command === "hypergen list")).toBe(
-				true,
-			);
+			expect(error.suggestions.some((s) => s.command === "hypergen list")).toBe(true);
 		});
 
 		it("should create parameter error", () => {
@@ -137,19 +124,12 @@ describe("Error Handling System", () => {
 			expect(error.code).toBe(ErrorCode.ACTION_INVALID_PARAM_VALUE);
 			expect(error.context.parameter).toBe("name");
 			expect(error.context.value).toBe("invalid-value");
-			expect(error.context.expected).toBe(
-				"string matching pattern ^[a-zA-Z]+$",
-			);
+			expect(error.context.expected).toBe("string matching pattern ^[a-zA-Z]+$");
 			expect(error.context.action).toBe("create-component");
 		});
 
 		it("should create template error", () => {
-			const error = ErrorHandler.createTemplateError(
-				"template.yml",
-				15,
-				20,
-				"Invalid YAML syntax",
-			);
+			const error = ErrorHandler.createTemplateError("template.yml", 15, 20, "Invalid YAML syntax");
 
 			expect(error.code).toBe(ErrorCode.TEMPLATE_INVALID_SYNTAX);
 			expect(error.context.file).toBe("template.yml");
@@ -159,11 +139,7 @@ describe("Error Handling System", () => {
 		});
 
 		it("should create file operation error", () => {
-			const error = ErrorHandler.createFileError(
-				"write",
-				"/path/to/file.txt",
-				"permission denied",
-			);
+			const error = ErrorHandler.createFileError("write", "/path/to/file.txt", "permission denied");
 
 			expect(error.code).toBe(ErrorCode.FILE_PERMISSION_DENIED);
 			expect(error.context.file).toBe("/path/to/file.txt");
@@ -231,17 +207,12 @@ describe("Error Handling System", () => {
 		});
 
 		it("should format error with minimal suggestions", () => {
-			const error = new HypergenError(
-				ErrorCode.UNKNOWN_ERROR,
-				"Something went wrong",
-				{},
-				[
-					{
-						title: "Try again",
-						description: "The operation might succeed on retry",
-					},
-				],
-			);
+			const error = new HypergenError(ErrorCode.UNKNOWN_ERROR, "Something went wrong", {}, [
+				{
+					title: "Try again",
+					description: "The operation might succeed on retry",
+				},
+			]);
 
 			const formatted = ErrorHandler.formatError(error);
 
@@ -255,27 +226,21 @@ describe("Error Handling System", () => {
 
 	describe("Error Context Extraction", () => {
 		it("should extract file path from ENOENT error", () => {
-			const error = new Error(
-				"ENOENT: no such file or directory, open '/home/user/file.txt'",
-			);
+			const error = new Error("ENOENT: no such file or directory, open '/home/user/file.txt'");
 			const formatted = ErrorHandler.handleError(error);
 
 			expect(formatted).toContain("File: /home/user/file.txt");
 		});
 
 		it("should extract file path from EACCES error", () => {
-			const error = new Error(
-				"EACCES: permission denied, access '/protected/file.txt'",
-			);
+			const error = new Error("EACCES: permission denied, access '/protected/file.txt'");
 			const formatted = ErrorHandler.handleError(error);
 
 			expect(formatted).toContain("File: /protected/file.txt");
 		});
 
 		it("should extract file path from stat error", () => {
-			const error = new Error(
-				"ENOENT: no such file or directory, stat '/missing/directory'",
-			);
+			const error = new Error("ENOENT: no such file or directory, stat '/missing/directory'");
 			const formatted = ErrorHandler.handleError(error);
 
 			expect(formatted).toContain("File: /missing/directory");

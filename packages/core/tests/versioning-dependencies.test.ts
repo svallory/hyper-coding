@@ -118,12 +118,8 @@ dependencies:
 		it("should validate version compatibility", () => {
 			// Test basic compatibility check
 			expect(TemplateParser.isVersionCompatible()).toBe(true);
-			expect(TemplateParser.isVersionCompatible({ hypergen: ">=8.0.0" })).toBe(
-				true,
-			);
-			expect(TemplateParser.isVersionCompatible({ node: ">=16.0.0" })).toBe(
-				true,
-			);
+			expect(TemplateParser.isVersionCompatible({ hypergen: ">=8.0.0" })).toBe(true);
+			expect(TemplateParser.isVersionCompatible({ node: ">=16.0.0" })).toBe(true);
 		});
 
 		it("should compare semantic versions correctly", () => {
@@ -150,10 +146,7 @@ dependencies:
 			const config = TemplateParser.validateAndBuildConfig(yamlData, [], []);
 
 			expect(config.hooks).toBeDefined();
-			expect(config.hooks?.pre).toEqual([
-				"validate-environment",
-				"check-dependencies",
-			]);
+			expect(config.hooks?.pre).toEqual(["validate-environment", "check-dependencies"]);
 			expect(config.hooks?.post).toEqual(["format-code", "run-tests"]);
 			expect(config.hooks?.error).toEqual(["cleanup-temp-files"]);
 		});
@@ -170,18 +163,12 @@ dependencies:
 			};
 
 			const warnings: string[] = [];
-			const config = TemplateParser.validateAndBuildConfig(
-				yamlData,
-				[],
-				warnings,
-			);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], warnings);
 
 			expect(config.hooks?.pre).toEqual(["valid-hook", "another-valid-hook"]);
 			expect(config.hooks?.post).toBeUndefined();
 			expect(config.hooks?.error).toEqual([]);
-			expect(warnings).toContain(
-				"Some pre hooks were ignored (must be strings)",
-			);
+			expect(warnings).toContain("Some pre hooks were ignored (must be strings)");
 			expect(warnings).toContain("Post hooks should be an array of strings");
 		});
 	});
@@ -358,11 +345,7 @@ dependencies:
 			};
 
 			const warnings: string[] = [];
-			const config = TemplateParser.validateAndBuildConfig(
-				yamlData,
-				[],
-				warnings,
-			);
+			const config = TemplateParser.validateAndBuildConfig(yamlData, [], warnings);
 
 			expect(config.dependencies).toHaveLength(1); // Only valid dep should remain
 			expect(warnings).toContain("Dependency 1 must have a name");

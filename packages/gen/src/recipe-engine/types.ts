@@ -1263,6 +1263,8 @@ export type StepByTool<T extends ToolType> = T extends "template"
  * Recipe engine error types
  */
 export class RecipeValidationError extends Error {
+	public severity: "error" | "critical";
+
 	constructor(
 		message: string,
 		public code: string,
@@ -1272,9 +1274,11 @@ export class RecipeValidationError extends Error {
 			line?: number;
 			column?: number;
 		},
+		severity: "error" | "critical" = "error",
 	) {
 		super(message);
 		this.name = "RecipeValidationError";
+		this.severity = severity;
 	}
 }
 

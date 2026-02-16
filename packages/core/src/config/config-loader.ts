@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { cosmiconfig } from "cosmiconfig";
-import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors.js";
+import { ErrorCode, ErrorHandler } from "#/errors/hypergen-errors";
 import { loadHelpers } from "./load-helpers.js";
 
 const DEFAULT_TEMPLATE_DIRECTORY = "templates";
@@ -192,26 +192,18 @@ export class HypergenConfigLoader {
 			// Apply environment-specific settings
 			if (mergedConfig.environments?.[environment]) {
 				const envConfig = mergedConfig.environments[environment];
-				Object.assign(
-					mergedConfig,
-					HypergenConfigLoader.mergeConfig(mergedConfig, envConfig),
-				);
+				Object.assign(mergedConfig, HypergenConfigLoader.mergeConfig(mergedConfig, envConfig));
 			}
 
 			// Load helpers and invoke callback if provided
-			const loadedHelpers = await loadHelpers(
-				mergedConfig.helpers,
-				projectRoot,
-			);
+			const loadedHelpers = await loadHelpers(mergedConfig.helpers, projectRoot);
 			if (Object.keys(loadedHelpers).length > 0 && options?.onHelpersLoaded) {
 				options.onHelpersLoaded(loadedHelpers, "config:hyper.config");
 			}
 
 			// Determine the base directory for resolving relative paths
 			// If config was found, use its directory; otherwise use projectRoot
-			const configDir = actualConfigPath
-				? path.dirname(actualConfigPath)
-				: projectRoot;
+			const configDir = actualConfigPath ? path.dirname(actualConfigPath) : projectRoot;
 
 			// Resolve paths
 			const resolvedConfig: ResolvedConfig = {
@@ -223,14 +215,12 @@ export class HypergenConfigLoader {
 			} as ResolvedConfig;
 
 			// Resolve template paths relative to config file directory
-			resolvedConfig.templates = resolvedConfig.templates.map(
-				(templatePath) => {
-					if (path.isAbsolute(templatePath)) {
-						return templatePath;
-					}
-					return path.resolve(configDir, templatePath);
-				},
-			);
+			resolvedConfig.templates = resolvedConfig.templates.map((templatePath) => {
+				if (path.isAbsolute(templatePath)) {
+					return templatePath;
+				}
+				return path.resolve(configDir, templatePath);
+			});
 
 			return resolvedConfig;
 		} catch (error: any) {
@@ -242,10 +232,7 @@ export class HypergenConfigLoader {
 				);
 			}
 
-			if (
-				error.name === "SyntaxError" ||
-				error.message.includes("JSON Parse error")
-			) {
+			if (error.name === "SyntaxError" || error.message.includes("JSON Parse error")) {
 				throw ErrorHandler.createError(
 					ErrorCode.CONFIG_INVALID_FORMAT,
 					`Invalid configuration file syntax: ${error.message}`,
@@ -260,10 +247,7 @@ export class HypergenConfigLoader {
 	/**
 	 * Merge configuration objects
 	 */
-	private static mergeConfig(
-		base: HypergenConfig,
-		override: HypergenConfig,
-	): HypergenConfig {
+	private static mergeConfig(base: HypergenConfig, override: HypergenConfig): HypergenConfig {
 		const merged = { ...base };
 
 		for (const [key, value] of Object.entries(override)) {
@@ -272,11 +256,7 @@ export class HypergenConfigLoader {
 			if (key === "templates" && Array.isArray(value)) {
 				// Replace templates instead of merging
 				merged.templates = value;
-			} else if (
-				typeof value === "object" &&
-				value !== null &&
-				!Array.isArray(value)
-			) {
+			} else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
 				merged[key as keyof HypergenConfig] = {
 					...(merged[key as keyof HypergenConfig] as any),
 					...value,
@@ -318,9 +298,7 @@ export class HypergenConfigLoader {
 		if (config.output?.conflictStrategy) {
 			const validStrategies = ["fail", "overwrite", "skip", "merge"];
 			if (!validStrategies.includes(config.output.conflictStrategy)) {
-				errors.push(
-					`Invalid conflict strategy: ${config.output.conflictStrategy}`,
-				);
+				errors.push(`Invalid conflict strategy: ${config.output.conflictStrategy}`);
 			}
 		}
 
@@ -399,8 +377,7 @@ export async function createConfigFile(
 	projectRoot: string,
 	format: "js" | "json" = "js",
 ): Promise<string> {
-	const fileName =
-		format === "json" ? "hyper.config.json" : "hyper.config.js";
+	const fileName = format === "json" ? "hyper.config.json" : "hyper.config.js";
 	const configPath = path.join(projectRoot, fileName);
 
 	if (fs.existsSync(configPath)) {

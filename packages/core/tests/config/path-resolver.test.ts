@@ -80,30 +80,14 @@ defaults:
 `,
 	);
 	writeYaml(
-		path.join(
-			root,
-			"kits",
-			"nextjs",
-			"cookbooks",
-			"component",
-			"add",
-			"recipe.yml",
-		),
+		path.join(root, "kits", "nextjs", "cookbooks", "component", "add", "recipe.yml"),
 		`\
 name: component-add
 steps: []
 `,
 	);
 	writeYaml(
-		path.join(
-			root,
-			"kits",
-			"nextjs",
-			"cookbooks",
-			"component",
-			"remove",
-			"recipe.yml",
-		),
+		path.join(root, "kits", "nextjs", "cookbooks", "component", "remove", "recipe.yml"),
 		`\
 name: component-remove
 steps: []
@@ -118,30 +102,14 @@ name: "crud"
 `,
 	);
 	writeYaml(
-		path.join(
-			root,
-			"kits",
-			"nextjs",
-			"cookbooks",
-			"crud",
-			"resource",
-			"recipe.yml",
-		),
+		path.join(root, "kits", "nextjs", "cookbooks", "crud", "resource", "recipe.yml"),
 		`\
 name: crud-resource
 steps: []
 `,
 	);
 	writeYaml(
-		path.join(
-			root,
-			"kits",
-			"nextjs",
-			"cookbooks",
-			"crud",
-			"list",
-			"recipe.yml",
-		),
+		path.join(root, "kits", "nextjs", "cookbooks", "crud", "list", "recipe.yml"),
 		`\
 name: crud-list
 steps: []
@@ -210,10 +178,7 @@ describe("PathResolver", () => {
 		// Register under the short name "nextjs" (mirrors deriveShortName("@kit/nextjs"))
 		kitMap.set("nextjs", parsedKit);
 
-		searchDirs = [
-			path.join(tempDir, "search"),
-			path.join(tempDir, "direct-recipes"),
-		];
+		searchDirs = [path.join(tempDir, "search"), path.join(tempDir, "direct-recipes")];
 	});
 
 	afterEach(() => {
@@ -300,9 +265,7 @@ describe("PathResolver", () => {
 
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe("recipe");
-			expect(result?.fullPath).toBe(
-				path.join(cwdDir, "subdir", "nested-recipe.yml"),
-			);
+			expect(result?.fullPath).toBe(path.join(cwdDir, "subdir", "nested-recipe.yml"));
 		});
 
 		it("returns null for a nonexistent absolute path", async () => {
@@ -314,12 +277,7 @@ describe("PathResolver", () => {
 
 		it("preserves multiple extra segments in remaining", async () => {
 			const resolver = new PathResolver(kitMap, searchDirs, cwdDir);
-			const result = await resolver.resolve([
-				"./local-recipe.yml",
-				"arg1",
-				"arg2",
-				"arg3",
-			]);
+			const result = await resolver.resolve(["./local-recipe.yml", "arg1", "arg2", "arg3"]);
 
 			expect(result).not.toBeNull();
 			expect(result?.remaining).toEqual(["arg1", "arg2", "arg3"]);
@@ -344,26 +302,13 @@ describe("PathResolver", () => {
 			expect(result?.remaining).toEqual([]);
 			// fullPath should point to the actual recipe.yml
 			expect(result?.fullPath).toBe(
-				path.join(
-					tempDir,
-					"kits",
-					"nextjs",
-					"cookbooks",
-					"component",
-					"add",
-					"recipe.yml",
-				),
+				path.join(tempDir, "kits", "nextjs", "cookbooks", "component", "add", "recipe.yml"),
 			);
 		});
 
 		it("puts extra segments after recipe into remaining", async () => {
 			const resolver = new PathResolver(kitMap, searchDirs, cwdDir);
-			const result = await resolver.resolve([
-				"nextjs",
-				"component",
-				"add",
-				"Button",
-			]);
+			const result = await resolver.resolve(["nextjs", "component", "add", "Button"]);
 
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe("recipe");
@@ -384,15 +329,7 @@ describe("PathResolver", () => {
 			expect(result?.cookbook).toBe("crud");
 			expect(result?.recipe).toBe("resource");
 			expect(result?.fullPath).toBe(
-				path.join(
-					tempDir,
-					"kits",
-					"nextjs",
-					"cookbooks",
-					"crud",
-					"resource",
-					"recipe.yml",
-				),
+				path.join(tempDir, "kits", "nextjs", "cookbooks", "crud", "resource", "recipe.yml"),
 			);
 			expect(result?.remaining).toEqual([]);
 		});
@@ -418,9 +355,7 @@ describe("PathResolver", () => {
 			expect(result?.type).toBe("group");
 			expect(result?.kit).toBe("nextjs");
 			expect(result?.cookbook).toBe("crud");
-			expect(result?.fullPath).toBe(
-				path.join(tempDir, "kits", "nextjs", "cookbooks", "crud"),
-			);
+			expect(result?.fullPath).toBe(path.join(tempDir, "kits", "nextjs", "cookbooks", "crud"));
 			expect(result?.consumed).toEqual(["nextjs", "crud"]);
 			expect(result?.remaining).toEqual([]);
 		});
@@ -456,15 +391,7 @@ describe("PathResolver", () => {
 			expect(result?.type).toBe("recipe");
 			expect(result?.recipe).toBe("remove");
 			expect(result?.fullPath).toBe(
-				path.join(
-					tempDir,
-					"kits",
-					"nextjs",
-					"cookbooks",
-					"component",
-					"remove",
-					"recipe.yml",
-				),
+				path.join(tempDir, "kits", "nextjs", "cookbooks", "component", "remove", "recipe.yml"),
 			);
 		});
 
@@ -507,13 +434,7 @@ describe("PathResolver", () => {
 
 		it("resolves multiple extra segments after a known recipe", async () => {
 			const resolver = new PathResolver(kitMap, searchDirs, cwdDir);
-			const result = await resolver.resolve([
-				"nextjs",
-				"crud",
-				"resource",
-				"Org",
-				"--force",
-			]);
+			const result = await resolver.resolve(["nextjs", "crud", "resource", "Org", "--force"]);
 
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe("recipe");
@@ -566,9 +487,7 @@ name: "bare-kit"
 
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe("recipe");
-			expect(result?.fullPath).toBe(
-				path.join(tempDir, "direct-recipes", "simple", "recipe.yml"),
-			);
+			expect(result?.fullPath).toBe(path.join(tempDir, "direct-recipes", "simple", "recipe.yml"));
 		});
 
 		it("tries the first search dir before the second", async () => {
@@ -587,9 +506,7 @@ name: "bare-kit"
 
 			expect(result).not.toBeNull();
 			// First search dir should win
-			expect(result?.fullPath).toBe(
-				path.join(tempDir, "search", "overlap", "recipe.yml"),
-			);
+			expect(result?.fullPath).toBe(path.join(tempDir, "search", "overlap", "recipe.yml"));
 		});
 
 		it("skips nonexistent search directories gracefully", async () => {
@@ -618,9 +535,7 @@ name: "bare-kit"
 
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe("group");
-			expect(result?.fullPath).toBe(
-				path.join(tempDir, "search", "my-cookbook"),
-			);
+			expect(result?.fullPath).toBe(path.join(tempDir, "search", "my-cookbook"));
 		});
 
 		it("uses greedy matching: prefers the longest segment match", async () => {
@@ -641,37 +556,26 @@ name: "bare-kit"
 
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe("recipe");
-			expect(result?.fullPath).toBe(
-				path.join(tempDir, "search", "deep", "nested", "recipe.yml"),
-			);
+			expect(result?.fullPath).toBe(path.join(tempDir, "search", "deep", "nested", "recipe.yml"));
 			expect(result?.remaining).toEqual([]);
 		});
 
 		it("falls back to shorter match when longer path does not exist", async () => {
 			// deep/recipe.yml exists but deep/nonexistent/ does not
-			writeYaml(
-				path.join(tempDir, "search", "deep2", "recipe.yml"),
-				"name: deep2\nsteps: []\n",
-			);
+			writeYaml(path.join(tempDir, "search", "deep2", "recipe.yml"), "name: deep2\nsteps: []\n");
 
 			const resolver = new PathResolver(kitMap, searchDirs, cwdDir);
 			const result = await resolver.resolve(["deep2", "extra-arg"]);
 
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe("recipe");
-			expect(result?.fullPath).toBe(
-				path.join(tempDir, "search", "deep2", "recipe.yml"),
-			);
+			expect(result?.fullPath).toBe(path.join(tempDir, "search", "deep2", "recipe.yml"));
 			expect(result?.remaining).toEqual(["extra-arg"]);
 		});
 
 		it("puts leftover segments into remaining after greedy match", async () => {
 			const resolver = new PathResolver(kitMap, searchDirs, cwdDir);
-			const result = await resolver.resolve([
-				"my-cookbook",
-				"my-recipe",
-				"positional-arg",
-			]);
+			const result = await resolver.resolve(["my-cookbook", "my-recipe", "positional-arg"]);
 
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe("recipe");
@@ -805,10 +709,7 @@ defaults:
 
 		it("does not confuse a file name segment with a kit name", async () => {
 			// If a segment matches a kit name but there is a direct-path indicator (.yml), direct takes priority
-			writeYaml(
-				path.join(cwdDir, "nextjs.yml"),
-				"name: nextjs-direct\nsteps: []\n",
-			);
+			writeYaml(path.join(cwdDir, "nextjs.yml"), "name: nextjs-direct\nsteps: []\n");
 
 			const resolver = new PathResolver(kitMap, searchDirs, cwdDir);
 			const result = await resolver.resolve(["nextjs.yml"]);
@@ -823,11 +724,7 @@ defaults:
 		it('the ResolvedPath type field is always "recipe" or "group"', async () => {
 			const resolver = new PathResolver(kitMap, searchDirs, cwdDir);
 
-			const recipeResult = await resolver.resolve([
-				"nextjs",
-				"component",
-				"add",
-			]);
+			const recipeResult = await resolver.resolve(["nextjs", "component", "add"]);
 			expect(recipeResult?.type).toBe("recipe");
 
 			const groupResult = await resolver.resolve(["nextjs", "crud"]);
@@ -874,11 +771,7 @@ steps: []
 			const resolver = new PathResolver(kitMap, searchDirs, cwdDir);
 
 			// Both kits should resolve independently
-			const nextjsResult = await resolver.resolve([
-				"nextjs",
-				"component",
-				"add",
-			]);
+			const nextjsResult = await resolver.resolve(["nextjs", "component", "add"]);
 			expect(nextjsResult).not.toBeNull();
 			expect(nextjsResult?.kit).toBe("nextjs");
 

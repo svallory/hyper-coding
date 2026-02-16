@@ -10,8 +10,8 @@ import path from "node:path";
 import createDebug from "debug";
 import { glob } from "glob";
 import yaml from "js-yaml";
-import { loadHelpers } from "#/config/load-helpers.js";
-import type { CookbookConfig } from "#/types/kit.js";
+import { loadHelpers } from "#/config/load-helpers";
+import type { CookbookConfig } from "#/types/kit";
 
 const debug = createDebug("hypergen:config:cookbook-parser");
 
@@ -28,9 +28,7 @@ export interface ParsedCookbook {
 /**
  * Parse a cookbook.yml file and return validated configuration
  */
-export async function parseCookbookFile(
-	filePath: string,
-): Promise<ParsedCookbook> {
+export async function parseCookbookFile(filePath: string): Promise<ParsedCookbook> {
 	const result: ParsedCookbook = {
 		config: { name: "" },
 		filePath,
@@ -54,20 +52,13 @@ export async function parseCookbookFile(
 			return result;
 		}
 
-		result.config = validateCookbookConfig(
-			parsed,
-			result.errors,
-			result.warnings,
-		);
+		result.config = validateCookbookConfig(parsed, result.errors, result.warnings);
 		result.isValid = result.errors.length === 0;
 
 		// Load helpers if configured (returned in result, not registered)
 		if (result.isValid && result.config.helpers) {
 			try {
-				result.loadedHelpers = await loadHelpers(
-					result.config.helpers,
-					result.dirPath,
-				);
+				result.loadedHelpers = await loadHelpers(result.config.helpers, result.dirPath);
 			} catch (error) {
 				result.warnings.push(
 					`Failed to load helpers: ${error instanceof Error ? error.message : String(error)}`,
@@ -115,11 +106,7 @@ export async function discoverCookbooksInKit(
 				cookbooks.set(parsed.config.name, parsed);
 				debug("Discovered cookbook: %s -> %s", parsed.config.name, cookbookYml);
 			} else {
-				debug(
-					"Cookbook validation failed: %s (%s)",
-					cookbookYml,
-					parsed.errors.join(", "),
-				);
+				debug("Cookbook validation failed: %s (%s)", cookbookYml, parsed.errors.join(", "));
 			}
 		}
 	}

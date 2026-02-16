@@ -5,7 +5,7 @@
  */
 
 // Re-export ActionLogger from logger
-import type { ActionLogger } from "#/logger/types.js";
+import type { ActionLogger } from "#/logger/types";
 export type { ActionLogger };
 
 // Action decorator metadata
@@ -70,10 +70,7 @@ export interface ActionCommunication {
 	getSharedData: (key: string) => any;
 	setSharedData: (key: string, value: any) => void;
 	waitForAction: (actionId: string, timeout?: number) => Promise<any>;
-	subscribeToMessages: (
-		messageType: string,
-		handler: (message: any) => void,
-	) => () => void;
+	subscribeToMessages: (messageType: string, handler: (message: any) => void) => () => void;
 }
 
 // Action execution result
@@ -85,6 +82,11 @@ export interface ActionResult {
 	filesDeleted?: string[];
 	data?: any;
 	metadata?: any;
+	status?: string; // Legacy ops return status
+	type?: string; // Legacy ops return type
+	subject?: string; // Legacy ops return subject
+	timing?: number; // Legacy ops return timing
+	payload?: any; // Legacy ops return payload
 }
 
 // Action function signature

@@ -986,7 +986,7 @@ export class RecipeEngine extends EventEmitter {
 				choices: varConfig.type === "enum" ? varConfig.values : undefined,
 				validate: (input: any) => {
 					const validation = TemplateParser.validateVariableValue(varName, input, varConfig);
-					return validation.isValid || validation.error;
+					return validation.isValid ? true : validation.error || false;
 				},
 			},
 		];
@@ -1145,7 +1145,7 @@ export class RecipeEngine extends EventEmitter {
 					(name) => !reservedKeywords.has(name) && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name),
 				);
 
-				const argValues = argNames.map((name) => mergedContext[name]);
+				const argValues = argNames.map((name) => (mergedContext as any)[name]);
 
 				const func = new Function(...argNames, `return ${expression}`);
 				return Boolean(func(...argValues));
@@ -1407,28 +1407,29 @@ export class RecipeEngine extends EventEmitter {
 		stepNames: Set<string>,
 	): RecipeValidationError[] {
 		const errors: RecipeValidationError[] = [];
+		const stepAny = step as any; // Type assertion for validation context
 
-		if (!step.name) {
+		if (!stepAny.name) {
 			errors.push(
 				new RecipeValidationError(`Step ${index + 1} must have a name`, "MISSING_STEP_NAME", {
 					field: `steps[${index}].name`,
 				}),
 			);
 		} else {
-			if (stepNames.has(step.name)) {
+			if (stepNames.has(stepAny.name)) {
 				errors.push(
-					new RecipeValidationError(`Duplicate step name: ${step.name}`, "DUPLICATE_STEP_NAME", {
+					new RecipeValidationError(`Duplicate step name: ${stepAny.name}`, "DUPLICATE_STEP_NAME", {
 						field: `steps[${index}].name`,
 					}),
 				);
 			}
-			stepNames.add(step.name);
+			stepNames.add(stepAny.name);
 		}
 
-		if (!step.tool) {
+		if (!stepAny.tool) {
 			errors.push(
 				new RecipeValidationError(
-					`Step ${step.name || index + 1} must specify a tool`,
+					`Step ${stepAny.name || index + 1} must specify a tool`,
 					"MISSING_TOOL",
 					{ field: `steps[${index}].tool` },
 				),

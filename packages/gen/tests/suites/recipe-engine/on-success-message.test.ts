@@ -111,7 +111,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	
 	rmSync(testDir, { recursive: true, force: true });
 	ToolRegistry.reset();
 	vi.restoreAllMocks();

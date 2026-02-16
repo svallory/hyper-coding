@@ -13,10 +13,7 @@ describe("findProjectRoot", () => {
 
 	beforeEach(() => {
 		// Create a unique temp directory for each test
-		testDir = join(
-			tmpdir(),
-			`hypergen-root-test-${Math.random().toString(36).slice(2)}`,
-		);
+		testDir = join(tmpdir(), `hypergen-root-test-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(testDir, { recursive: true });
 	});
 
@@ -29,10 +26,7 @@ describe("findProjectRoot", () => {
 
 	it("should find simple project root", () => {
 		// Create package.json in root
-		writeFileSync(
-			join(testDir, "package.json"),
-			JSON.stringify({ name: "test-project" }),
-		);
+		writeFileSync(join(testDir, "package.json"), JSON.stringify({ name: "test-project" }));
 
 		const result = findProjectRoot(testDir);
 
@@ -43,10 +37,7 @@ describe("findProjectRoot", () => {
 
 	it("should find project root from subdirectory", () => {
 		// Create package.json in root
-		writeFileSync(
-			join(testDir, "package.json"),
-			JSON.stringify({ name: "test-project" }),
-		);
+		writeFileSync(join(testDir, "package.json"), JSON.stringify({ name: "test-project" }));
 
 		// Create subdirectory
 		const subDir = join(testDir, "src", "components");
@@ -89,10 +80,7 @@ describe("findProjectRoot", () => {
 		// Create workspace package
 		const packageDir = join(testDir, "packages", "my-package");
 		mkdirSync(packageDir, { recursive: true });
-		writeFileSync(
-			join(packageDir, "package.json"),
-			JSON.stringify({ name: "my-package" }),
-		);
+		writeFileSync(join(packageDir, "package.json"), JSON.stringify({ name: "my-package" }));
 
 		// Search from inside the workspace package
 		const result = findProjectRoot(packageDir);
@@ -115,10 +103,7 @@ describe("findProjectRoot", () => {
 		// Create workspace package
 		const packageDir = join(testDir, "packages", "my-package");
 		mkdirSync(packageDir, { recursive: true });
-		writeFileSync(
-			join(packageDir, "package.json"),
-			JSON.stringify({ name: "my-package" }),
-		);
+		writeFileSync(join(packageDir, "package.json"), JSON.stringify({ name: "my-package" }));
 
 		// Create nested subdirectory
 		const nestedDir = join(packageDir, "src", "components", "ui");
@@ -134,14 +119,8 @@ describe("findProjectRoot", () => {
 
 	it("should detect pnpm workspace", () => {
 		// Create monorepo root with pnpm-workspace.yaml
-		writeFileSync(
-			join(testDir, "package.json"),
-			JSON.stringify({ name: "monorepo-root" }),
-		);
-		writeFileSync(
-			join(testDir, "pnpm-workspace.yaml"),
-			'packages:\n  - "packages/*"',
-		);
+		writeFileSync(join(testDir, "package.json"), JSON.stringify({ name: "monorepo-root" }));
+		writeFileSync(join(testDir, "pnpm-workspace.yaml"), 'packages:\n  - "packages/*"');
 
 		const result = findProjectRoot(testDir);
 
@@ -163,10 +142,7 @@ describe("getKitsDirectory", () => {
 	let testDir: string;
 
 	beforeEach(() => {
-		testDir = join(
-			tmpdir(),
-			`hypergen-kits-test-${Math.random().toString(36).slice(2)}`,
-		);
+		testDir = join(tmpdir(), `hypergen-kits-test-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(testDir, { recursive: true });
 	});
 
@@ -177,10 +153,7 @@ describe("getKitsDirectory", () => {
 	});
 
 	it("should return .hyper/kits in simple project", () => {
-		writeFileSync(
-			join(testDir, "package.json"),
-			JSON.stringify({ name: "test-project" }),
-		);
+		writeFileSync(join(testDir, "package.json"), JSON.stringify({ name: "test-project" }));
 
 		const kitsDir = getKitsDirectory(testDir);
 
@@ -200,10 +173,7 @@ describe("getKitsDirectory", () => {
 		// Create workspace package
 		const packageDir = join(testDir, "packages", "my-package");
 		mkdirSync(packageDir, { recursive: true });
-		writeFileSync(
-			join(packageDir, "package.json"),
-			JSON.stringify({ name: "my-package" }),
-		);
+		writeFileSync(join(packageDir, "package.json"), JSON.stringify({ name: "my-package" }));
 
 		// Get kits directory from workspace package
 		const kitsDir = getKitsDirectory(packageDir);

@@ -4,6 +4,7 @@
  * Handles template inheritance, composition, and conflict resolution
  */
 
+import path from "node:path";
 import {
 	type TemplateConfig,
 	type TemplateInclude,
@@ -12,7 +13,6 @@ import {
 } from "@hypercli/core";
 import { ErrorCode, ErrorHandler } from "@hypercli/core";
 import createDebug from "debug";
-import path from "node:path";
 
 const debug = createDebug("hypergen:v8:composition");
 
@@ -403,7 +403,8 @@ export class TemplateCompositionEngine {
 			debug("Condition evaluation result: %s -> %s", condition, boolResult);
 			return boolResult;
 		} catch (error) {
-			debug("Condition evaluation failed: %s - %s", condition, error.message);
+			const message = error instanceof Error ? error.message : String(error);
+			debug("Condition evaluation failed: %s - %s", condition, message);
 			return false;
 		}
 	}
@@ -557,7 +558,8 @@ export class TemplateCompositionEngine {
 			// Use Function constructor with no access to external scope
 			return new Function(`return ${expression}`)();
 		} catch (error) {
-			debug("Expression evaluation error: %s", error.message);
+			const message = error instanceof Error ? error.message : String(error);
+			debug("Expression evaluation error: %s", message);
 			return false;
 		}
 	}

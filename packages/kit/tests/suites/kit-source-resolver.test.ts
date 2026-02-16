@@ -188,9 +188,7 @@ describe("Kit Source Resolver", () => {
 
 	describe("HTTP(S) URLs", () => {
 		it("resolves tarball URL as url type", () => {
-			const result = resolveKitSource(
-				"https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz",
-			);
+			const result = resolveKitSource("https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz");
 			expect(result).toEqual({
 				type: "url",
 				source: "https://registry.npmjs.org/pkg/-/pkg-1.0.0.tgz",
@@ -399,23 +397,17 @@ describe("Kit Source Resolver", () => {
 
 		it("rejects shell injection characters", () => {
 			const resolved = resolveKitSource("kit; rm -rf /");
-			expect(() => buildInstallCommand(resolved, "bun", {})).toThrow(
-				"Invalid kit specifier",
-			);
+			expect(() => buildInstallCommand(resolved, "bun", {})).toThrow("Invalid kit specifier");
 		});
 
 		it("rejects pipe characters", () => {
 			const resolved = resolveKitSource("kit | cat");
-			expect(() => buildInstallCommand(resolved, "bun", {})).toThrow(
-				"Invalid kit specifier",
-			);
+			expect(() => buildInstallCommand(resolved, "bun", {})).toThrow("Invalid kit specifier");
 		});
 
 		it("rejects backticks", () => {
 			const resolved = resolveKitSource("kit`whoami`");
-			expect(() => buildInstallCommand(resolved, "bun", {})).toThrow(
-				"Invalid kit specifier",
-			);
+			expect(() => buildInstallCommand(resolved, "bun", {})).toThrow("Invalid kit specifier");
 		});
 	});
 });

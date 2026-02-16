@@ -255,9 +255,7 @@ describe("Kit Install Integration Tests", () => {
 		it("adds --dev flag correctly for all package managers", () => {
 			const resolved = resolveKitSource("@kit/nextjs");
 
-			expect(buildInstallCommand(resolved, "bun", { dev: true })).toBe(
-				"bun add -d '@kit/nextjs'",
-			);
+			expect(buildInstallCommand(resolved, "bun", { dev: true })).toBe("bun add -d '@kit/nextjs'");
 			expect(buildInstallCommand(resolved, "npm", { dev: true })).toBe(
 				"npm install -D '@kit/nextjs'",
 			);
@@ -298,18 +296,10 @@ describe("Kit Install Integration Tests", () => {
 			const resolved = resolveKitSource("kit/nextjs");
 
 			// All package managers should use github: prefix
-			expect(buildInstallCommand(resolved, "bun", {})).toBe(
-				"bun add 'github:kit/nextjs'",
-			);
-			expect(buildInstallCommand(resolved, "npm", {})).toBe(
-				"npm install 'github:kit/nextjs'",
-			);
-			expect(buildInstallCommand(resolved, "pnpm", {})).toBe(
-				"pnpm add 'github:kit/nextjs'",
-			);
-			expect(buildInstallCommand(resolved, "yarn", {})).toBe(
-				"yarn add 'github:kit/nextjs'",
-			);
+			expect(buildInstallCommand(resolved, "bun", {})).toBe("bun add 'github:kit/nextjs'");
+			expect(buildInstallCommand(resolved, "npm", {})).toBe("npm install 'github:kit/nextjs'");
+			expect(buildInstallCommand(resolved, "pnpm", {})).toBe("pnpm add 'github:kit/nextjs'");
+			expect(buildInstallCommand(resolved, "yarn", {})).toBe("yarn add 'github:kit/nextjs'");
 		});
 
 		it("does not confuse npm scoped packages with GitHub repos", () => {
@@ -359,9 +349,7 @@ describe("Kit Install Integration Tests", () => {
 
 			const tag = resolveKitSource("org/repo@v2.1.0");
 			expect(tag.type).toBe("github");
-			expect(buildInstallCommand(tag, "npm", {})).toBe(
-				"npm install 'github:org/repo@v2.1.0'",
-			);
+			expect(buildInstallCommand(tag, "npm", {})).toBe("npm install 'github:org/repo@v2.1.0'");
 		});
 
 		it("handles npm packages with complex version specifiers", () => {
@@ -378,41 +366,29 @@ describe("Kit Install Integration Tests", () => {
 		it("handles monorepo local paths", () => {
 			const relative = resolveKitSource("../../packages/my-kit");
 			expect(relative.type).toBe("local");
-			expect(buildInstallCommand(relative, "bun", {})).toBe(
-				"bun add '../../packages/my-kit'",
-			);
+			expect(buildInstallCommand(relative, "bun", {})).toBe("bun add '../../packages/my-kit'");
 		});
 
 		it("handles JSR packages for different package managers", () => {
 			const jsr = resolveKitSource("jsr:@std/path");
 
 			// Bun has native JSR support
-			expect(buildInstallCommand(jsr, "bun", {})).toBe(
-				"bun add 'jsr:@std/path'",
-			);
+			expect(buildInstallCommand(jsr, "bun", {})).toBe("bun add 'jsr:@std/path'");
 
 			// Others use npx jsr add
 			expect(buildInstallCommand(jsr, "npm", {})).toBe("npx jsr add @std/path");
-			expect(buildInstallCommand(jsr, "pnpm", {})).toBe(
-				"npx jsr add @std/path",
-			);
-			expect(buildInstallCommand(jsr, "yarn", {})).toBe(
-				"npx jsr add @std/path",
-			);
+			expect(buildInstallCommand(jsr, "pnpm", {})).toBe("npx jsr add @std/path");
+			expect(buildInstallCommand(jsr, "yarn", {})).toBe("npx jsr add @std/path");
 		});
 	});
 
 	describe("Error Cases", () => {
 		it("rejects shell injection attempts", () => {
 			const malicious = resolveKitSource("kit; rm -rf /");
-			expect(() => buildInstallCommand(malicious, "bun", {})).toThrow(
-				"Invalid kit specifier",
-			);
+			expect(() => buildInstallCommand(malicious, "bun", {})).toThrow("Invalid kit specifier");
 
 			const pipe = resolveKitSource("kit | cat /etc/passwd");
-			expect(() => buildInstallCommand(pipe, "npm", {})).toThrow(
-				"Invalid kit specifier",
-			);
+			expect(() => buildInstallCommand(pipe, "npm", {})).toThrow("Invalid kit specifier");
 		});
 
 		it("handles edge cases gracefully", () => {

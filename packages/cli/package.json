@@ -13,10 +13,7 @@
 		"hyper": "./bin/run.js"
 	},
 	"imports": {
-		"#/*": "./src/*",
-		"#tests/*": "./tests/*",
-		"#fixtures/*": "./tests/fixtures/*",
-		"#helpers/*": "./tests/helpers/*"
+		"#/*": "./dist/*.js"
 	},
 	"exports": {
 		".": {

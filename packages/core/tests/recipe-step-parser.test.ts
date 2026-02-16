@@ -199,9 +199,7 @@ describe("Recipe Step System Parser", () => {
 			const result = await TemplateParser.parseTemplateFile(filePath);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((error) => error.includes("Circular dependency")),
-			).toBe(true);
+			expect(result.errors.some((error) => error.includes("Circular dependency"))).toBe(true);
 		});
 
 		it("should validate duplicate step names", async () => {
@@ -230,9 +228,7 @@ describe("Recipe Step System Parser", () => {
 			const result = await TemplateParser.parseTemplateFile(filePath);
 
 			expect(result.isValid).toBe(false);
-			expect(
-				result.errors.some((error) => error.includes("Duplicate step name")),
-			).toBe(true);
+			expect(result.errors.some((error) => error.includes("Duplicate step name"))).toBe(true);
 		});
 	});
 

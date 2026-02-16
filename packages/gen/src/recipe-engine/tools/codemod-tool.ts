@@ -222,9 +222,13 @@ class CodeModTransformations {
 		}
 
 		// Add import at the top (after other imports)
-		const lastImportIndex = sourceFile.statements.findLastIndex((statement) =>
-			ts.isImportDeclaration(statement),
-		);
+		let lastImportIndex = -1;
+		for (let i = sourceFile.statements.length - 1; i >= 0; i--) {
+			if (ts.isImportDeclaration(sourceFile.statements[i])) {
+				lastImportIndex = i;
+				break;
+			}
+		}
 
 		const insertIndex = lastImportIndex >= 0 ? lastImportIndex + 1 : 0;
 		const newStatements = [...sourceFile.statements];

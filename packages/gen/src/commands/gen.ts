@@ -403,4 +403,29 @@ export default class Gen extends BaseCommand<typeof Gen> {
 			return {};
 		}
 	}
+
+	/**
+	 * Parse named parameters from argv (--key=value or --key value)
+	 */
+	private parseParameters(argv: string[]): Record<string, unknown> {
+		const params: Record<string, unknown> = {};
+		for (let i = 0; i < argv.length; i++) {
+			const arg = argv[i];
+			if (arg.startsWith("--")) {
+				const eqIndex = arg.indexOf("=");
+				if (eqIndex > 0) {
+					// --key=value format
+					const key = arg.slice(2, eqIndex);
+					const value = arg.slice(eqIndex + 1);
+					params[key] = value;
+				} else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
+					// --key value format
+					const key = arg.slice(2);
+					params[key] = argv[i + 1];
+					i++; // skip next
+				}
+			}
+		}
+		return params;
+	}
 }

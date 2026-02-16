@@ -14,19 +14,19 @@ import { evaluateStepOutputs } from "./output-evaluator.js";
 import type { Tool } from "./tools/base.js";
 import { type ToolRegistry, getToolRegistry } from "./tools/registry.js";
 import {
-	ActionStep,
+	type ActionStep,
 	CircularDependencyError,
-	CodeModStep,
+	type CodeModStep,
 	type RecipeExecutionPlan,
-	RecipeStep,
+	type RecipeStep,
 	type RecipeStepUnion,
 	type StepContext,
 	type StepDependencyNode,
 	StepExecutionError,
 	type StepExecutionOptions,
 	type StepResult,
-	StepStatus,
-	TemplateStep,
+	type StepStatus,
+	type TemplateStep,
 	type ToolType,
 	isAIStep,
 	isActionStep,
@@ -610,7 +610,7 @@ export class StepExecutor extends EventEmitter {
 
 		const calculatePriority = (stepName: string): number => {
 			if (visited.has(stepName)) {
-				return graph.get(stepName)?.priority;
+				return graph.get(stepName)?.priority ?? 0;
 			}
 
 			visited.add(stepName);
@@ -1036,10 +1036,10 @@ export class StepExecutor extends EventEmitter {
 			}
 			stepNames.add(step.name);
 
-			if (!step.tool) {
+			if (!(step as any).tool) {
 				throw ErrorHandler.createError(
 					ErrorCode.VALIDATION_ERROR,
-					`Step ${step.name} must specify a tool`,
+					`Step ${(step as any).name} must specify a tool`,
 				);
 			}
 		}

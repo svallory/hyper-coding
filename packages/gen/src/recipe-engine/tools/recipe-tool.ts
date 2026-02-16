@@ -257,7 +257,9 @@ export class RecipeTool extends Tool<RecipeStep> {
 		const resourceRequirements = {
 			memory: 50 * 1024 * 1024, // 50MB base memory for recipe execution
 			disk: 10 * 1024 * 1024, // 10MB estimated disk usage
-			network: this.isRemoteRecipe(step.recipe),
+			network:
+				typeof step.recipe === "string" &&
+				(step.recipe.startsWith("http://") || step.recipe.startsWith("https://")),
 			processes: 1,
 		};
 
@@ -780,11 +782,12 @@ export class RecipeTool extends Tool<RecipeStep> {
 		if (config.steps) {
 			for (let i = 0; i < config.steps.length; i++) {
 				const step = config.steps[i];
-				if (!step.name) {
+				const stepAny = step as any;
+				if (!stepAny.name) {
 					errors.push(`Step ${i + 1} must have a name`);
 				}
-				if (!step.tool) {
-					errors.push(`Step '${step.name}' must specify a tool`);
+				if (!stepAny.tool) {
+					errors.push(`Step '${stepAny.name}' must specify a tool`);
 				}
 			}
 		}
@@ -813,7 +816,6 @@ export class RecipeTool extends Tool<RecipeStep> {
 			/^[a-z0-9-~][a-z0-9-._~]*$/.test(recipeId)
 		);
 	}
-
 }
 
 /**

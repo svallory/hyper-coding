@@ -19,10 +19,7 @@
 	"types": "./dist/index.d.ts",
 	"files": ["dist", "README.md", "LICENSE"],
 	"imports": {
-		"#/*": "./src/*",
-		"#tests/*": "./tests/*",
-		"#fixtures/*": "./tests/fixtures/*",
-		"#helpers/*": "./tests/helpers/*"
+		"#/*": "./dist/*.js"
 	},
 	"scripts": {
 		"build": "tsup",

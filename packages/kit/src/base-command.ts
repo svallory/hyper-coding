@@ -9,9 +9,7 @@ import { Command, Flags, type Interfaces } from "@oclif/core";
 export type BaseFlags<T extends typeof Command> = Interfaces.InferredFlags<
 	(typeof BaseCommand)["baseFlags"] & T["flags"]
 >;
-export type BaseArgs<T extends typeof Command> = Interfaces.InferredArgs<
-	T["args"]
->;
+export type BaseArgs<T extends typeof Command> = Interfaces.InferredArgs<T["args"]>;
 
 /**
  * Abstract base command that all kit management commands extend

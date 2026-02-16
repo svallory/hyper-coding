@@ -170,15 +170,12 @@ export class ErrorHandler {
 	private static readonly ERROR_MESSAGES: Record<ErrorCode, string> = {
 		[ErrorCode.CONFIG_FILE_NOT_FOUND]: "Configuration file not found",
 		[ErrorCode.CONFIG_INVALID_FORMAT]: "Configuration file has invalid format",
-		[ErrorCode.CONFIG_MISSING_REQUIRED]:
-			"Configuration is missing required fields",
+		[ErrorCode.CONFIG_MISSING_REQUIRED]: "Configuration is missing required fields",
 
 		[ErrorCode.TEMPLATE_NOT_FOUND]: "Template file not found",
 		[ErrorCode.TEMPLATE_INVALID_SYNTAX]: "Template has invalid syntax",
-		[ErrorCode.TEMPLATE_MISSING_VARIABLES]:
-			"Template is missing required variables",
-		[ErrorCode.TEMPLATE_INVALID_FRONTMATTER]:
-			"Template has invalid frontmatter",
+		[ErrorCode.TEMPLATE_MISSING_VARIABLES]: "Template is missing required variables",
+		[ErrorCode.TEMPLATE_INVALID_FRONTMATTER]: "Template has invalid frontmatter",
 		[ErrorCode.TEMPLATE_PARSING_ERROR]: "Template parsing failed",
 		[ErrorCode.TEMPLATE_EXECUTION_ERROR]: "Template execution failed",
 		[ErrorCode.TEMPLATE_COMPOSITION_ERROR]: "Template composition failed",
@@ -187,11 +184,9 @@ export class ErrorHandler {
 		[ErrorCode.ACTION_NOT_FOUND]: "Action not found",
 		[ErrorCode.ACTION_EXECUTION_FAILED]: "Action execution failed",
 		[ErrorCode.ACTION_INVALID_PARAMETERS]: "Action has invalid parameters",
-		[ErrorCode.ACTION_MISSING_REQUIRED_PARAM]:
-			"Action is missing required parameter",
+		[ErrorCode.ACTION_MISSING_REQUIRED_PARAM]: "Action is missing required parameter",
 		[ErrorCode.ACTION_INVALID_PARAM_TYPE]: "Action parameter has invalid type",
-		[ErrorCode.ACTION_INVALID_PARAM_VALUE]:
-			"Action parameter has invalid value",
+		[ErrorCode.ACTION_INVALID_PARAM_VALUE]: "Action parameter has invalid value",
 
 		[ErrorCode.CODEMOD_NOT_FOUND]: "CodeMod not found",
 		[ErrorCode.CODEMOD_EXECUTION_FAILED]: "CodeMod execution failed",
@@ -226,11 +221,9 @@ export class ErrorHandler {
 		[ErrorCode.AI_PROVIDER_UNAVAILABLE]: "AI provider is unavailable",
 		[ErrorCode.AI_GENERATION_FAILED]: "AI code generation failed",
 		[ErrorCode.AI_BUDGET_EXCEEDED]: "AI cost budget exceeded",
-		[ErrorCode.AI_SCHEMA_VALIDATION_FAILED]:
-			"AI output failed schema validation",
+		[ErrorCode.AI_SCHEMA_VALIDATION_FAILED]: "AI output failed schema validation",
 		[ErrorCode.AI_SYNTAX_VALIDATION_FAILED]: "AI output has syntax errors",
-		[ErrorCode.AI_IMPORT_VALIDATION_FAILED]:
-			"AI output contains invalid imports",
+		[ErrorCode.AI_IMPORT_VALIDATION_FAILED]: "AI output contains invalid imports",
 		[ErrorCode.AI_RATE_LIMITED]: "AI provider rate limit exceeded",
 		[ErrorCode.AI_CONTEXT_TOO_LARGE]: "AI context exceeds token budget",
 		[ErrorCode.AI_TRANSPORT_FAILED]: "AI transport resolution failed",
@@ -240,10 +233,7 @@ export class ErrorHandler {
 		[ErrorCode.VALIDATION_ERROR]: "Validation error occurred",
 	};
 
-	private static readonly ERROR_SUGGESTIONS: Record<
-		ErrorCode,
-		ErrorSuggestion[]
-	> = {
+	private static readonly ERROR_SUGGESTIONS: Record<ErrorCode, ErrorSuggestion[]> = {
 		[ErrorCode.CONFIG_FILE_NOT_FOUND]: [
 			{
 				title: "Create configuration file",
@@ -323,8 +313,7 @@ export class ErrorHandler {
 			},
 			{
 				title: "Check file permissions",
-				description:
-					"Ensure you have write permissions to the target directory",
+				description: "Ensure you have write permissions to the target directory",
 			},
 		],
 
@@ -597,13 +586,11 @@ export class ErrorHandler {
 		[ErrorCode.FILE_PERMISSION_DENIED]: [
 			{
 				title: "Check file permissions",
-				description:
-					"Ensure you have write permissions to the target directory",
+				description: "Ensure you have write permissions to the target directory",
 			},
 			{
 				title: "Run with sudo",
-				description:
-					"Try running the command with elevated privileges (use caution)",
+				description: "Try running the command with elevated privileges (use caution)",
 			},
 		],
 
@@ -628,13 +615,11 @@ export class ErrorHandler {
 		[ErrorCode.URL_INVALID_FORMAT]: [
 			{
 				title: "Check URL format",
-				description:
-					"Ensure the URL follows the correct format (e.g., github:user/repo)",
+				description: "Ensure the URL follows the correct format (e.g., github:user/repo)",
 			},
 			{
 				title: "URL examples",
-				description:
-					"Valid formats: github:user/repo, npm:package-name, file:./path",
+				description: "Valid formats: github:user/repo, npm:package-name, file:./path",
 				url: "https://hypergen.dev/docs/url-templates",
 			},
 		],
@@ -646,8 +631,7 @@ export class ErrorHandler {
 			},
 			{
 				title: "Check proxy settings",
-				description:
-					"Verify proxy configuration if behind a corporate firewall",
+				description: "Verify proxy configuration if behind a corporate firewall",
 			},
 			{
 				title: "Try again later",
@@ -674,13 +658,11 @@ export class ErrorHandler {
 			},
 			{
 				title: "Validate parameters",
-				description:
-					"Check that all required parameters are provided and valid",
+				description: "Check that all required parameters are provided and valid",
 			},
 			{
 				title: "Enable backup",
-				description:
-					"Set backup: true to preserve original files before transformation",
+				description: "Set backup: true to preserve original files before transformation",
 			},
 		],
 
@@ -715,16 +697,14 @@ export class ErrorHandler {
 		[ErrorCode.CODEMOD_SYNTAX_ERROR]: [
 			{
 				title: "Fix syntax errors",
-				description:
-					"Resolve syntax errors in the target file before applying transformations",
+				description: "Resolve syntax errors in the target file before applying transformations",
 			},
 		],
 
 		[ErrorCode.CODEMOD_AST_PARSING_ERROR]: [
 			{
 				title: "Use correct parser",
-				description:
-					"Specify the correct parser for your file type (typescript, javascript, etc.)",
+				description: "Specify the correct parser for your file type (typescript, javascript, etc.)",
 			},
 			{
 				title: "Check file encoding",
@@ -750,8 +730,7 @@ export class ErrorHandler {
 			},
 			{
 				title: "Use absolute paths",
-				description:
-					"Consider using absolute paths or checking working directory",
+				description: "Consider using absolute paths or checking working directory",
 			},
 		],
 
@@ -763,13 +742,11 @@ export class ErrorHandler {
 			},
 			{
 				title: "Or set it as an environment variable",
-				description:
-					"Export the env var in your shell (e.g., export ANTHROPIC_API_KEY=sk-...)",
+				description: "Export the env var in your shell (e.g., export ANTHROPIC_API_KEY=sk-...)",
 			},
 			{
 				title: "Custom env var name",
-				description:
-					"Set ai.apiKeyEnvVar in hypergen.config.js to use a non-default env var name",
+				description: "Set ai.apiKeyEnvVar in hypergen.config.js to use a non-default env var name",
 			},
 		],
 
@@ -780,14 +757,12 @@ export class ErrorHandler {
 			},
 			{
 				title: "Install provider SDK",
-				description:
-					"Install the provider SDK package (e.g., bun add @ai-sdk/anthropic)",
+				description: "Install the provider SDK package (e.g., bun add @ai-sdk/anthropic)",
 				command: "bun add @ai-sdk/anthropic",
 			},
 			{
 				title: "Configure fallback models",
-				description:
-					"Add fallbackModels in hypergen.config.js ai configuration",
+				description: "Add fallbackModels in hypergen.config.js ai configuration",
 			},
 		],
 
@@ -813,8 +788,7 @@ export class ErrorHandler {
 			},
 			{
 				title: "Use a cheaper model",
-				description:
-					"Switch to a more cost-effective model for bulk operations",
+				description: "Switch to a more cost-effective model for bulk operations",
 			},
 			{
 				title: "Reduce context",
@@ -825,47 +799,40 @@ export class ErrorHandler {
 		[ErrorCode.AI_SCHEMA_VALIDATION_FAILED]: [
 			{
 				title: "Check schema definition",
-				description:
-					"Verify the output schema matches expected AI output format",
+				description: "Verify the output schema matches expected AI output format",
 			},
 			{
 				title: "Add examples",
-				description:
-					"Provide few-shot examples to guide the model output format",
+				description: "Provide few-shot examples to guide the model output format",
 			},
 		],
 
 		[ErrorCode.AI_SYNTAX_VALIDATION_FAILED]: [
 			{
 				title: "Enable retry-with-feedback",
-				description:
-					'Set guardrails.onFailure to "retry-with-feedback" for automatic correction',
+				description: 'Set guardrails.onFailure to "retry-with-feedback" for automatic correction',
 			},
 			{
 				title: "Lower temperature",
-				description:
-					"Lower temperature produces more deterministic, syntactically correct output",
+				description: "Lower temperature produces more deterministic, syntactically correct output",
 			},
 		],
 
 		[ErrorCode.AI_IMPORT_VALIDATION_FAILED]: [
 			{
 				title: "Enable requireKnownImports",
-				description:
-					"Set guardrails.requireKnownImports to validate imports against package.json",
+				description: "Set guardrails.requireKnownImports to validate imports against package.json",
 			},
 			{
 				title: "Specify allowedImports",
-				description:
-					"Explicitly list allowed packages in guardrails.allowedImports",
+				description: "Explicitly list allowed packages in guardrails.allowedImports",
 			},
 		],
 
 		[ErrorCode.AI_RATE_LIMITED]: [
 			{
 				title: "Wait and retry",
-				description:
-					"The rate limit will reset automatically. Hypergen retries with backoff.",
+				description: "The rate limit will reset automatically. Hypergen retries with backoff.",
 			},
 			{
 				title: "Configure fallback provider",
@@ -884,26 +851,22 @@ export class ErrorHandler {
 			},
 			{
 				title: "Use truncation",
-				description:
-					'Set context.overflow to "truncate" to automatically trim context',
+				description: 'Set context.overflow to "truncate" to automatically trim context',
 			},
 		],
 
 		[ErrorCode.AI_TRANSPORT_FAILED]: [
 			{
 				title: "Check AI mode configuration",
-				description:
-					"Verify ai.mode and related settings in hypergen.config.js",
+				description: "Verify ai.mode and related settings in hypergen.config.js",
 			},
 			{
 				title: "Use stdout mode",
-				description:
-					"Fall back to --ai-mode stdout to print the prompt and resolve manually",
+				description: "Fall back to --ai-mode stdout to print the prompt and resolve manually",
 			},
 			{
 				title: "Check command output",
-				description:
-					"If using command mode, verify the command returns valid JSON",
+				description: "If using command mode, verify the command returns valid JSON",
 			},
 		],
 	};
@@ -920,9 +883,7 @@ export class ErrorHandler {
 		const baseMessage = ErrorHandler.ERROR_MESSAGES[code] || "Unknown error";
 		const message = customMessage || baseMessage;
 		const suggestions =
-			customSuggestions.length > 0
-				? customSuggestions
-				: ErrorHandler.ERROR_SUGGESTIONS[code] || [];
+			customSuggestions.length > 0 ? customSuggestions : ErrorHandler.ERROR_SUGGESTIONS[code] || [];
 
 		return new HypergenError(code, message, context, suggestions);
 	}
@@ -1003,13 +964,9 @@ export class ErrorHandler {
 		if (error instanceof Error) {
 			// Try to categorize common Node.js errors
 			if (error.message.includes("ENOENT")) {
-				const hypergenError = ErrorHandler.createError(
-					ErrorCode.FILE_NOT_FOUND,
-					error.message,
-					{
-						file: ErrorHandler.extractFileFromError(error.message),
-					},
-				);
+				const hypergenError = ErrorHandler.createError(ErrorCode.FILE_NOT_FOUND, error.message, {
+					file: ErrorHandler.extractFileFromError(error.message),
+				});
 				return ErrorHandler.formatError(hypergenError);
 			}
 
@@ -1041,17 +998,12 @@ export class ErrorHandler {
 			}
 
 			// Generic error handling
-			const hypergenError = ErrorHandler.createError(
-				ErrorCode.UNKNOWN_ERROR,
-				error.message,
-				{},
-				[
-					{
-						title: "Check the error details",
-						description: "Review the error message for specific issues",
-					},
-				],
-			);
+			const hypergenError = ErrorHandler.createError(ErrorCode.UNKNOWN_ERROR, error.message, {}, [
+				{
+					title: "Check the error details",
+					description: "Review the error message for specific issues",
+				},
+			]);
 			return ErrorHandler.formatError(hypergenError);
 		}
 
@@ -1168,11 +1120,7 @@ export class ErrorHandler {
 	/**
 	 * Create file operation error
 	 */
-	static createFileError(
-		operation: string,
-		file: string,
-		reason: string,
-	): HypergenError {
+	static createFileError(operation: string, file: string, reason: string): HypergenError {
 		let code = ErrorCode.FILE_NOT_FOUND;
 
 		if (reason.includes("permission")) {
@@ -1181,13 +1129,9 @@ export class ErrorHandler {
 			code = ErrorCode.FILE_ALREADY_EXISTS;
 		}
 
-		return ErrorHandler.createError(
-			code,
-			`Failed to ${operation} file '${file}': ${reason}`,
-			{
-				file,
-			},
-		);
+		return ErrorHandler.createError(code, `Failed to ${operation} file '${file}': ${reason}`, {
+			file,
+		});
 	}
 }
 
@@ -1258,21 +1202,13 @@ export function validateParameter(
 		if (pattern && typeof value === "string") {
 			const regex = new RegExp(pattern);
 			if (!regex.test(value)) {
-				throw ErrorHandler.createParameterError(
-					name,
-					value,
-					`string matching pattern ${pattern}`,
-				);
+				throw ErrorHandler.createParameterError(name, value, `string matching pattern ${pattern}`);
 			}
 		}
 
 		// Allowed values validation
 		if (allowedValues && !allowedValues.includes(value)) {
-			throw ErrorHandler.createParameterError(
-				name,
-				value,
-				`one of: ${allowedValues.join(", ")}`,
-			);
+			throw ErrorHandler.createParameterError(name, value, `one of: ${allowedValues.join(", ")}`);
 		}
 	}
 }

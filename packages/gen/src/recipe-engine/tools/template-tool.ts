@@ -8,7 +8,14 @@
  */
 
 import path from "node:path";
-import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
+import {
+	ErrorCode,
+	ErrorHandler,
+	HypergenError,
+	type RenderedAction,
+	type RunnerConfig,
+	withErrorHandling,
+} from "@hypercli/core";
 import createDebug from "debug";
 import fm from "front-matter";
 import fs from "fs-extra";
@@ -22,7 +29,6 @@ import {
 	type TemplateStep,
 	isTemplateStep,
 } from "#/recipe-engine/types";
-import type { RenderedAction, RunnerConfig } from "#/recipe-engine/types";
 import { getJig, renderTemplate as jigRenderTemplate } from "#/template-engines/index";
 import { Tool, type ToolValidationResult } from "./base.js";
 
@@ -420,7 +426,7 @@ export class TemplateTool extends Tool<TemplateStep> {
 			return cached;
 		}
 
-		let filePath: string;
+		let filePath = "";
 		let exists = false;
 		let extension = "";
 

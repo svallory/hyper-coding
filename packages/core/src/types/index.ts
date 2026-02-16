@@ -17,6 +17,15 @@ export type {
 } from "./kit.js";
 export { TemplateConfigError } from "./kit.js";
 
+// Template types (used by recipe engine and actions)
+export type {
+	TemplateVariable,
+	TemplateExample,
+	TemplateInclude,
+	TemplateDependency,
+	TemplateConfig,
+} from "./template.js";
+
 // Recipe types
 // Note: RecipeConfig, RecipeStepUnion, and ToolType are already exported from ../parsers/index.js
 export type {
@@ -96,7 +105,7 @@ export type {
 	ActionUtils,
 	ActionQueryOptions,
 } from "./actions.js";
-export type { ActionLogger } from "#/logger/types.js";
+export type { ActionLogger } from "#/logger/types";
 export { ActionExecutionError, ActionParameterError } from "./actions.js";
 
 // AI Configuration types (AiServiceConfig also available from ../config/index.js)
@@ -112,7 +121,7 @@ export type {
 	AICostSummary,
 } from "./ai-config.js";
 // Re-export AiServiceConfig from config
-export type { AiServiceConfig } from "#/config/index.js";
+export type { AiServiceConfig } from "#/config/index";
 
 // Common types
 // Note: Logger is already exported as a class from '#/logger/index'

@@ -3,8 +3,12 @@ import { newline } from "@hypercli/core";
 
 const EOLRegex = /\r?\n/;
 
-const getPragmaticIndex = (pattern, lines, isBefore) => {
-	const oneLineMatchIndex = lines.findIndex((l) => l.match(pattern));
+const getPragmaticIndex = (
+	pattern: string | RegExp,
+	lines: string[],
+	isBefore: boolean,
+): number => {
+	const oneLineMatchIndex = lines.findIndex((l: string) => l.match(pattern));
 
 	// joins the text and looks for line number,
 	// we dont care about platform line-endings correctness other than joining/splitting
@@ -13,7 +17,7 @@ const getPragmaticIndex = (pattern, lines, isBefore) => {
 		const fullText = lines.join("\n");
 		const fullMatch = fullText.match(new RegExp(pattern, "m"));
 
-		if (fullMatch?.length) {
+		if (fullMatch?.length && fullMatch.index !== undefined) {
 			if (isBefore) {
 				const fullTextUntilMatchStart = fullText.substring(0, fullMatch.index);
 				return fullTextUntilMatchStart.split(EOLRegex).length - 1;
@@ -26,15 +30,15 @@ const getPragmaticIndex = (pattern, lines, isBefore) => {
 
 	return oneLineMatchIndex + (isBefore ? 0 : 1);
 };
-const locations = {
-	at_line: (_) => _,
-	prepend: (_) => 0,
-	append: (_, lines) => lines.length - 1,
-	before: (_, lines) => getPragmaticIndex(_, lines, true),
-	after: (_, lines) => getPragmaticIndex(_, lines, false),
+const locations: Record<string, (value: any, lines?: any) => number> = {
+	at_line: (_: any) => _,
+	prepend: (_: any) => 0,
+	append: (_: any, lines: any) => lines.length - 1,
+	before: (_: any, lines: any) => getPragmaticIndex(_, lines, true),
+	after: (_: any, lines: any) => getPragmaticIndex(_, lines, false),
 };
 const indexByLocation = (attributes: any, lines: string[]): number => {
-	const pair = Object.entries(attributes).find(([k, _]) => locations[k]);
+	const pair = Object.entries(attributes).find(([k]) => k in locations);
 	if (pair) {
 		const [k, v] = pair;
 		return locations[k](v, lines);

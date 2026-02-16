@@ -20,10 +20,7 @@ function makeTempDir(prefix = "cookbook-parser-test-"): string {
 /**
  * Helper to write a cookbook.yml file from a plain object.
  */
-function writeCookbookYml(
-	dir: string,
-	content: Record<string, unknown>,
-): string {
+function writeCookbookYml(dir: string, content: Record<string, unknown>): string {
 	const filePath = path.join(dir, "cookbook.yml");
 	fs.writeFileSync(filePath, yaml.dump(content), "utf-8");
 	return filePath;
@@ -212,22 +209,13 @@ describe("Cookbook Parser", () => {
 		it("should filter out non-string entries in recipes array", async () => {
 			const filePath = writeCookbookYml(tempDir, {
 				name: "mixed-recipes",
-				recipes: [
-					"./valid/recipe.yml",
-					42,
-					null,
-					"./also-valid/recipe.yml",
-					true,
-				],
+				recipes: ["./valid/recipe.yml", 42, null, "./also-valid/recipe.yml", true],
 			});
 
 			const result = await parseCookbookFile(filePath);
 
 			expect(result.isValid).toBe(true);
-			expect(result.config.recipes).toEqual([
-				"./valid/recipe.yml",
-				"./also-valid/recipe.yml",
-			]);
+			expect(result.config.recipes).toEqual(["./valid/recipe.yml", "./also-valid/recipe.yml"]);
 		});
 
 		it("should parse custom defaults.recipe", async () => {
@@ -301,9 +289,7 @@ describe("Cookbook Parser", () => {
 			fs.mkdirSync(crudDir, { recursive: true });
 			writeCookbookYml(crudDir, { name: "crud", description: "CRUD cookbook" });
 
-			const result = await discoverCookbooksInKit(tempDir, [
-				"cookbooks/*/cookbook.yml",
-			]);
+			const result = await discoverCookbooksInKit(tempDir, ["cookbooks/*/cookbook.yml"]);
 
 			expect(result.size).toBe(1);
 			expect(result.has("crud")).toBe(true);
@@ -351,9 +337,7 @@ describe("Cookbook Parser", () => {
 			fs.mkdirSync(invalidDir, { recursive: true });
 			writeCookbookYml(invalidDir, { description: "No name field" });
 
-			const result = await discoverCookbooksInKit(tempDir, [
-				"cookbooks/*/cookbook.yml",
-			]);
+			const result = await discoverCookbooksInKit(tempDir, ["cookbooks/*/cookbook.yml"]);
 
 			expect(result.size).toBe(0);
 		});
@@ -380,9 +364,7 @@ describe("Cookbook Parser", () => {
 		});
 
 		it("should return an empty map when no cookbooks are found", async () => {
-			const result = await discoverCookbooksInKit(tempDir, [
-				"nonexistent/*/cookbook.yml",
-			]);
+			const result = await discoverCookbooksInKit(tempDir, ["nonexistent/*/cookbook.yml"]);
 
 			expect(result.size).toBe(0);
 		});
@@ -440,9 +422,7 @@ describe("Cookbook Parser", () => {
 			writeRecipeYml(createDir, { name: "create", steps: [] });
 			writeRecipeYml(readDir, { name: "read", steps: [] });
 
-			const result = await discoverRecipesInCookbook(tempDir, [
-				"./*/recipe.yml",
-			]);
+			const result = await discoverRecipesInCookbook(tempDir, ["./*/recipe.yml"]);
 
 			expect(result.size).toBe(2);
 			expect(result.has("create")).toBe(true);
@@ -454,15 +434,11 @@ describe("Cookbook Parser", () => {
 			fs.mkdirSync(myRecipeDir, { recursive: true });
 			writeRecipeYml(myRecipeDir, { name: "ignored-name", steps: [] });
 
-			const result = await discoverRecipesInCookbook(tempDir, [
-				"./*/recipe.yml",
-			]);
+			const result = await discoverRecipesInCookbook(tempDir, ["./*/recipe.yml"]);
 
 			// The recipe name comes from the directory, not from the YAML content
 			expect(result.has("my-awesome-recipe")).toBe(true);
-			expect(result.get("my-awesome-recipe")).toBe(
-				path.join(myRecipeDir, "recipe.yml"),
-			);
+			expect(result.get("my-awesome-recipe")).toBe(path.join(myRecipeDir, "recipe.yml"));
 		});
 
 		it("should skip directories without recipe.yml", async () => {
@@ -486,9 +462,7 @@ describe("Cookbook Parser", () => {
 			const recipeFile = writeRecipeYml(addDir);
 
 			// Glob that matches the recipe.yml file itself
-			const result = await discoverRecipesInCookbook(tempDir, [
-				"./*/recipe.yml",
-			]);
+			const result = await discoverRecipesInCookbook(tempDir, ["./*/recipe.yml"]);
 
 			expect(result.size).toBe(1);
 			expect(result.has("add")).toBe(true);
@@ -519,9 +493,7 @@ describe("Cookbook Parser", () => {
 			writeRecipeYml(betaDir);
 			// gamma has no recipe.yml
 
-			const result = await discoverRecipesInCookbook(tempDir, [
-				"./*/recipe.yml",
-			]);
+			const result = await discoverRecipesInCookbook(tempDir, ["./*/recipe.yml"]);
 
 			expect(result.size).toBe(2);
 			expect(result.has("alpha")).toBe(true);
@@ -530,9 +502,7 @@ describe("Cookbook Parser", () => {
 		});
 
 		it("should return an empty map when no recipes are found", async () => {
-			const result = await discoverRecipesInCookbook(tempDir, [
-				"./*/recipe.yml",
-			]);
+			const result = await discoverRecipesInCookbook(tempDir, ["./*/recipe.yml"]);
 
 			expect(result.size).toBe(0);
 		});
@@ -570,9 +540,7 @@ describe("Cookbook Parser", () => {
 			fs.mkdirSync(updateDir, { recursive: true });
 			writeRecipeYml(updateDir);
 
-			const result = await discoverRecipesInCookbook(tempDir, [
-				"./*/recipe.yml",
-			]);
+			const result = await discoverRecipesInCookbook(tempDir, ["./*/recipe.yml"]);
 
 			// recipeName = path.basename(path.dirname(match)) when match is a file
 			expect(result.has("update")).toBe(true);

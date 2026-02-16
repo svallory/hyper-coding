@@ -10,10 +10,7 @@ import { TemplateParser } from "#/parsers/template-parser";
 
 describe.skip("Example Recipe Parsing", () => {
 	it("should parse the V8 recipe example correctly", async () => {
-		const examplePath = path.resolve(
-			process.cwd(),
-			"examples/v8-recipe-example.yml",
-		);
+		const examplePath = path.resolve(process.cwd(), "examples/v8-recipe-example.yml");
 
 		const result = await TemplateParser.parseTemplateFile(examplePath);
 
@@ -63,9 +60,7 @@ describe.skip("Example Recipe Parsing", () => {
 		// Check examples
 		expect(result.config.examples).toBeDefined();
 		expect(result.config.examples).toHaveLength(3);
-		expect(result.config.examples?.[0].title).toBe(
-			"Basic functional component",
-		);
+		expect(result.config.examples?.[0].title).toBe("Basic functional component");
 
 		// Verify it's recognized as a recipe config
 		expect(TemplateParser.isRecipeConfig(result.config)).toBe(true);
@@ -78,10 +73,7 @@ describe.skip("Example Recipe Parsing", () => {
 	});
 
 	it("should have no warnings for the example recipe", async () => {
-		const examplePath = path.resolve(
-			process.cwd(),
-			"examples/v8-recipe-example.yml",
-		);
+		const examplePath = path.resolve(process.cwd(), "examples/v8-recipe-example.yml");
 
 		const result = await TemplateParser.parseTemplateFile(examplePath);
 
@@ -95,10 +87,7 @@ describe.skip("Example Recipe Parsing", () => {
 	});
 
 	it("should validate step dependencies correctly", async () => {
-		const examplePath = path.resolve(
-			process.cwd(),
-			"examples/v8-recipe-example.yml",
-		);
+		const examplePath = path.resolve(process.cwd(), "examples/v8-recipe-example.yml");
 
 		const result = await TemplateParser.parseTemplateFile(examplePath);
 
@@ -119,10 +108,7 @@ describe.skip("Example Recipe Parsing", () => {
 	});
 
 	it("should validate parallel steps have proper dependencies", async () => {
-		const examplePath = path.resolve(
-			process.cwd(),
-			"examples/v8-recipe-example.yml",
-		);
+		const examplePath = path.resolve(process.cwd(), "examples/v8-recipe-example.yml");
 
 		const result = await TemplateParser.parseTemplateFile(examplePath);
 

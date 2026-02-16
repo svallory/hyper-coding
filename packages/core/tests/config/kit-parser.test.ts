@@ -109,11 +109,7 @@ categories:
 
 		it("reports error and isValid=false when name field is missing", async () => {
 			const kitYml = path.join(tempDir, "kit.yml");
-			fs.writeFileSync(
-				kitYml,
-				'description: "No name kit"\nversion: "0.1.0"\n',
-				"utf-8",
-			);
+			fs.writeFileSync(kitYml, 'description: "No name kit"\nversion: "0.1.0"\n', "utf-8");
 
 			const result = await parseKitFile(kitYml);
 
@@ -218,10 +214,7 @@ recipes:
 			const result = await parseKitFile(kitYml);
 
 			expect(result.isValid).toBe(true);
-			expect(result.config.keywords).toEqual([
-				"valid-keyword",
-				"another-keyword",
-			]);
+			expect(result.config.keywords).toEqual(["valid-keyword", "another-keyword"]);
 			expect(result.config.tags).toEqual(["real-tag"]);
 			expect(result.config.categories).toEqual(["legit"]);
 			expect(result.config.cookbooks).toEqual(["cookbooks/*/cookbook.yml"]);
@@ -451,16 +444,8 @@ keywords: "not-an-array"
 			fs.mkdirSync(kitA, { recursive: true });
 			fs.mkdirSync(kitB, { recursive: true });
 
-			fs.writeFileSync(
-				path.join(kitA, "kit.yml"),
-				'name: "alpha-kit"\n',
-				"utf-8",
-			);
-			fs.writeFileSync(
-				path.join(kitB, "kit.yml"),
-				'name: "@scope/beta-kit"\n',
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(kitA, "kit.yml"), 'name: "alpha-kit"\n', "utf-8");
+			fs.writeFileSync(path.join(kitB, "kit.yml"), 'name: "@scope/beta-kit"\n', "utf-8");
 
 			const result = await discoverKits([kitsDir]);
 
@@ -476,20 +461,12 @@ keywords: "not-an-array"
 			fs.mkdirSync(kitsDir, { recursive: true });
 
 			// Create a file (not a directory) named "not-a-dir"
-			fs.writeFileSync(
-				path.join(kitsDir, "not-a-dir"),
-				"just a file\n",
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(kitsDir, "not-a-dir"), "just a file\n", "utf-8");
 
 			// Create a valid kit directory
 			const realKit = path.join(kitsDir, "real-kit");
 			fs.mkdirSync(realKit, { recursive: true });
-			fs.writeFileSync(
-				path.join(realKit, "kit.yml"),
-				'name: "real-kit"\n',
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(realKit, "kit.yml"), 'name: "real-kit"\n', "utf-8");
 
 			const result = await discoverKits([kitsDir]);
 
@@ -504,16 +481,8 @@ keywords: "not-an-array"
 			fs.mkdirSync(invalidKit, { recursive: true });
 			fs.mkdirSync(validKit, { recursive: true });
 
-			fs.writeFileSync(
-				path.join(invalidKit, "kit.yml"),
-				'description: "no name here"\n',
-				"utf-8",
-			);
-			fs.writeFileSync(
-				path.join(validKit, "kit.yml"),
-				'name: "good-kit"\n',
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(invalidKit, "kit.yml"), 'description: "no name here"\n', "utf-8");
+			fs.writeFileSync(path.join(validKit, "kit.yml"), 'name: "good-kit"\n', "utf-8");
 
 			const result = await discoverKits([kitsDir]);
 
@@ -532,11 +501,7 @@ keywords: "not-an-array"
 		it("discovers a direct kit.yml at the search dir root", async () => {
 			const directKitDir = path.join(tempDir, "direct-kit");
 			fs.mkdirSync(directKitDir, { recursive: true });
-			fs.writeFileSync(
-				path.join(directKitDir, "kit.yml"),
-				'name: "direct-kit"\n',
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(directKitDir, "kit.yml"), 'name: "direct-kit"\n', "utf-8");
 
 			const result = await discoverKits([directKitDir]);
 
@@ -625,11 +590,7 @@ keywords: "not-an-array"
 			fs.mkdirSync(validSubdir, { recursive: true });
 
 			// No kit.yml in emptySubdir
-			fs.writeFileSync(
-				path.join(validSubdir, "kit.yml"),
-				'name: "has-kit"\n',
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(validSubdir, "kit.yml"), 'name: "has-kit"\n', "utf-8");
 
 			const result = await discoverKits([kitsDir]);
 
@@ -661,16 +622,10 @@ keywords: "not-an-array"
 			fs.mkdirSync(cb1, { recursive: true });
 			fs.mkdirSync(cb2, { recursive: true });
 
-			fs.writeFileSync(
-				path.join(cb1, "cookbook.yml"),
-				"name: component\n",
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(cb1, "cookbook.yml"), "name: component\n", "utf-8");
 			fs.writeFileSync(path.join(cb2, "cookbook.yml"), "name: page\n", "utf-8");
 
-			const result = await resolveKitCookbooks(kitDir, [
-				"cookbooks/*/cookbook.yml",
-			]);
+			const result = await resolveKitCookbooks(kitDir, ["cookbooks/*/cookbook.yml"]);
 
 			expect(result).toHaveLength(2);
 			expect(result).toContain(cb1);
@@ -682,11 +637,7 @@ keywords: "not-an-array"
 			const cbDir = path.join(kitDir, "cookbooks", "crud");
 			fs.mkdirSync(cbDir, { recursive: true });
 
-			fs.writeFileSync(
-				path.join(cbDir, "cookbook.yml"),
-				"name: crud\n",
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(cbDir, "cookbook.yml"), "name: crud\n", "utf-8");
 
 			// Both patterns will match the same directory
 			const result = await resolveKitCookbooks(kitDir, [
@@ -715,15 +666,9 @@ keywords: "not-an-array"
 			const cbDir = path.join(kitDir, "cookbooks", "form");
 			fs.mkdirSync(cbDir, { recursive: true });
 
-			fs.writeFileSync(
-				path.join(cbDir, "cookbook.yml"),
-				"name: form\n",
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(cbDir, "cookbook.yml"), "name: form\n", "utf-8");
 
-			const result = await resolveKitCookbooks(kitDir, [
-				"cookbooks/*/cookbook.yml",
-			]);
+			const result = await resolveKitCookbooks(kitDir, ["cookbooks/*/cookbook.yml"]);
 
 			expect(result).toHaveLength(1);
 			// The match is a file, so dirname is used
@@ -734,9 +679,7 @@ keywords: "not-an-array"
 			const kitDir = path.join(tempDir, "empty-kit");
 			fs.mkdirSync(kitDir, { recursive: true });
 
-			const result = await resolveKitCookbooks(kitDir, [
-				"nonexistent/*/cookbook.yml",
-			]);
+			const result = await resolveKitCookbooks(kitDir, ["nonexistent/*/cookbook.yml"]);
 
 			expect(result).toHaveLength(0);
 		});
@@ -749,11 +692,7 @@ keywords: "not-an-array"
 			fs.mkdirSync(cb1, { recursive: true });
 			fs.mkdirSync(rec1, { recursive: true });
 
-			fs.writeFileSync(
-				path.join(cb1, "cookbook.yml"),
-				"name: alpha\n",
-				"utf-8",
-			);
+			fs.writeFileSync(path.join(cb1, "cookbook.yml"), "name: alpha\n", "utf-8");
 			fs.writeFileSync(path.join(rec1, "recipe.yml"), "name: beta\n", "utf-8");
 
 			const result = await resolveKitCookbooks(kitDir, [
@@ -773,9 +712,7 @@ keywords: "not-an-array"
 
 			fs.writeFileSync(path.join(deepCb, "recipe.yml"), "name: add\n", "utf-8");
 
-			const result = await resolveKitCookbooks(kitDir, [
-				"cookbooks/**/recipe.yml",
-			]);
+			const result = await resolveKitCookbooks(kitDir, ["cookbooks/**/recipe.yml"]);
 
 			expect(result).toHaveLength(1);
 			expect(result[0]).toBe(deepCb);

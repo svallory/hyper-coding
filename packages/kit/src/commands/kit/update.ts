@@ -5,20 +5,19 @@
 import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { Args, Flags } from "@oclif/core";
-import tiged from "tiged";
+import { downloadTemplate } from "giget";
 import { BaseCommand } from "#/base-command.js";
 import {
 	type KitManifestEntry,
 	addKitToManifest,
 	extractPackageVersion,
 	loadManifest,
-} from "#/manifest";
-import { resolveKitSource } from "#/source-resolver";
-import { findProjectRoot } from "#/utils/find-project-root";
+} from "#/manifest.js";
+import { resolveKitSource } from "#/source-resolver.js";
+import { findProjectRoot } from "#/utils/find-project-root.js";
 
 export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
-	static override description =
-		"Update installed kits from their original source";
+	static override description = "Update installed kits from their original source";
 
 	static override examples = [
 		"<%= config.bin %> kit update nextjs",
@@ -56,9 +55,7 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 		const manifest = loadManifest(projectRoot);
 
 		if (Object.keys(manifest.kits).length === 0) {
-			this.log(
-				"No kits installed. Install one with: hypergen kit install <source>",
-			);
+			this.log("No kits installed. Install one with: hypergen kit install <source>");
 			return;
 		}
 
@@ -86,10 +83,7 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 
 			if (!entry) {
 				const available = Object.keys(manifest.kits).join(", ");
-				this.error(
-					`Kit not found: ${kitName}\n` +
-						`Installed kits: ${available || "(none)"}`,
-				);
+				this.error(`Kit not found: ${kitName}\n` + `Installed kits: ${available || "(none)"}`);
 			}
 
 			await this.updateKit(projectRoot, kitName, entry);
@@ -141,7 +135,7 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 			}
 
 			case "local": {
-				const { cpSync, mkdirSync } = await import("node:fs");
+				const { cpSync } = await import("node:fs");
 				const { basename, isAbsolute, resolve } = await import("node:path");
 
 				const absoluteSource = isAbsolute(resolved.source)
@@ -156,13 +150,7 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 					recursive: true,
 					filter: (source) => {
 						const name = basename(source);
-						return ![
-							"node_modules",
-							".git",
-							"dist",
-							"build",
-							".DS_Store",
-						].includes(name);
+						return !["node_modules", ".git", "dist", "build", ".DS_Store"].includes(name);
 					},
 				});
 				break;
@@ -173,16 +161,10 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 				const { execSync } = await import("node:child_process");
 
 				mkdirSync(targetDir, { recursive: true });
-				if (
-					resolved.source.endsWith(".tar.gz") ||
-					resolved.source.endsWith(".tgz")
-				) {
-					execSync(
-						`curl -L "${resolved.source}" | tar xz -C "${targetDir}" --strip-components=1`,
-						{
-							stdio: "inherit",
-						},
-					);
+				if (resolved.source.endsWith(".tar.gz") || resolved.source.endsWith(".tgz")) {
+					execSync(`curl -L "${resolved.source}" | tar xz -C "${targetDir}" --strip-components=1`, {
+						stdio: "inherit",
+					});
 				} else if (resolved.source.endsWith(".zip")) {
 					const tempZip = join(targetDir, "temp.zip");
 					execSync(
@@ -227,61 +209,40 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 		resolved: any,
 		targetDir: string,
 	): Promise<{ commit?: string; branch?: string; tag?: string }> {
-		let tigedSource = resolved.source;
 		let branch: string | undefined;
 		let tag: string | undefined;
 
-		const branchMatch = tigedSource.match(/#([^/]+)$/);
-		const tagMatch = tigedSource.match(/@([^/]+)$/);
+		const branchMatch = resolved.source.match(/#([^/]+)$/);
+		const tagMatch = resolved.source.match(/@([^/]+)$/);
 
 		if (branchMatch) {
 			branch = branchMatch[1];
 		} else if (tagMatch) {
 			tag = tagMatch[1];
-			tigedSource = tigedSource.replace(/@([^/]+)$/, "#$1");
 		}
 
-		const emitter = tiged(tigedSource, {
-			cache: false,
-			force: true,
-			verbose: this.flags.debug,
-		});
-
-		emitter.on("info", (info: any) => {
-			if (this.flags.debug) {
-				this.log(`  [tiged] ${info.message}`);
-			}
-		});
-
-		emitter.on("warn", (warning: any) => {
-			this.warn(`  [tiged] ${warning.message}`);
-		});
-
-		await emitter.clone(targetDir);
+		try {
+			await downloadTemplate(resolved.source, {
+				dir: targetDir,
+				force: true,
+				offline: false,
+			});
+		} catch (error: any) {
+			throw new Error(`Failed to download from git host: ${error.message}`);
+		}
 
 		return { branch, tag };
 	}
 
-	private async cloneFromGitUrl(
-		gitUrl: string,
-		targetDir: string,
-	): Promise<void> {
-		const emitter = tiged(gitUrl, {
-			cache: false,
-			force: true,
-			verbose: this.flags.debug,
-		});
-
-		emitter.on("info", (info: any) => {
-			if (this.flags.debug) {
-				this.log(`  [tiged] ${info.message}`);
-			}
-		});
-
-		emitter.on("warn", (warning: any) => {
-			this.warn(`  [tiged] ${warning.message}`);
-		});
-
-		await emitter.clone(targetDir);
+	private async cloneFromGitUrl(gitUrl: string, targetDir: string): Promise<void> {
+		try {
+			await downloadTemplate(gitUrl, {
+				dir: targetDir,
+				force: true,
+				offline: false,
+			});
+		} catch (error: any) {
+			throw new Error(`Failed to download from git URL: ${error.message}`);
+		}
 	}
 }

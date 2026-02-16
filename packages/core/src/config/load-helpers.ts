@@ -22,9 +22,7 @@ export async function loadHelpers(
 
 	if (typeof helpers === "string") {
 		// Load helpers from file or directory
-		let helpersPath = path.isAbsolute(helpers)
-			? helpers
-			: path.resolve(baseDir, helpers);
+		let helpersPath = path.isAbsolute(helpers) ? helpers : path.resolve(baseDir, helpers);
 
 		try {
 			// Check if path is a directory
@@ -43,9 +41,7 @@ export async function loadHelpers(
 						}
 					}
 					if (!found) {
-						console.warn(
-							`Warning: Could not find index file in helpers directory ${helpersPath}`,
-						);
+						console.warn(`Warning: Could not find index file in helpers directory ${helpersPath}`);
 						return {};
 					}
 				}
@@ -53,9 +49,7 @@ export async function loadHelpers(
 
 			// Check if the resolved file exists
 			if (!fs.existsSync(helpersPath)) {
-				console.warn(
-					`Warning: Could not load helpers from ${helpersPath} (file not found)`,
-				);
+				console.warn(`Warning: Could not load helpers from ${helpersPath} (file not found)`);
 				return {};
 			}
 
@@ -67,9 +61,7 @@ export async function loadHelpers(
 			return { ...loaded };
 		} catch (error) {
 			console.warn(`Warning: Could not load helpers from ${helpersPath}`);
-			console.warn(
-				`  Error: ${error instanceof Error ? error.message : String(error)}`,
-			);
+			console.warn(`  Error: ${error instanceof Error ? error.message : String(error)}`);
 			return {};
 		}
 	} else if (typeof helpers === "object") {

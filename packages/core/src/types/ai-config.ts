@@ -72,9 +72,7 @@ export interface AIContextConfig {
 	/** Explicit file paths to include */
 	include?: string[];
 	/** Include project config files */
-	projectConfig?:
-		| boolean
-		| ("tsconfig" | "package.json" | "eslint" | ".editorconfig")[];
+	projectConfig?: boolean | ("tsconfig" | "package.json" | "eslint" | ".editorconfig")[];
 	/** Include output from previous recipe steps */
 	fromSteps?: string[];
 	/** Token budget for context (prevents blowup) */
@@ -100,9 +98,7 @@ export interface AIExample {
  */
 export interface AIGuardrailConfig {
 	/** Syntax validation (language-specific) */
-	validateSyntax?:
-		| boolean
-		| ("typescript" | "javascript" | "json" | "yaml" | "css" | "html");
+	validateSyntax?: boolean | ("typescript" | "javascript" | "json" | "yaml" | "css" | "html");
 	/** Only allow imports from these packages */
 	allowedImports?: string[];
 	/** Block specific imports */

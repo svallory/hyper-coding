@@ -36,6 +36,22 @@ export * from "./tools/index.js";
 // Complete Type System
 export * from "./types.js";
 
+// Export type guards from types
+export {
+	isTemplateStep,
+	isActionStep,
+	isCodeModStep,
+	isRecipeStep,
+	isAIStep,
+	isInstallStep,
+	isQueryStep,
+	isPatchStep,
+	isEnsureDirsStep,
+	StepExecutionError,
+	RecipeDependencyError,
+	CircularDependencyError,
+} from "./types.js";
+
 // Recipe Engine Constants and Utilities
 export const RECIPE_ENGINE_VERSION = "8.0.0";
 
@@ -235,7 +251,7 @@ export function checkRecipeEngineHealth(): {
 
 		if (!registryHealth.healthy) {
 			toolRegistryHealthy = false;
-			issues.push(...registryHealth.issues.map((issue) => `Tool Registry: ${issue}`));
+			issues.push(...registryHealth.issues.map((issue: string) => `Tool Registry: ${issue}`));
 		}
 
 		return {

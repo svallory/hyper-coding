@@ -7,13 +7,13 @@ import createResult from "./result.js";
 const injectOp = async (
 	action: RenderedAction,
 	args: any,
-	{ logger, cwd }: RunnerConfig,
+	{ logger, cwd = process.cwd() }: RunnerConfig,
 ): Promise<ActionResult> => {
 	const {
 		attributes: { to, inject },
 	} = action;
 
-	const result = createResult("inject", to);
+	const result = createResult("inject", to ?? "unknown");
 
 	if (!(inject && to)) {
 		return result("ignored");
@@ -22,7 +22,7 @@ const injectOp = async (
 	const absTo = path.resolve(cwd, to);
 
 	if (!(await fs.exists(absTo))) {
-		logger.err(`Cannot inject to ${to}: doesn't exist.`);
+		logger?.err(`Cannot inject to ${to}: doesn't exist.`);
 		return result("error", {
 			error: `Cannot inject to ${to}: doesn't exist.`,
 		});
@@ -35,7 +35,7 @@ const injectOp = async (
 		await fs.writeFile(absTo, injectResult);
 	}
 	const pathToLog = process.env.HYPERGEN_OUTPUT_ABS_PATH ? absTo : to;
-	logger.notice(`      inject: ${pathToLog}`);
+	logger?.notice(`      inject: ${pathToLog}`);
 
 	return result("inject");
 };

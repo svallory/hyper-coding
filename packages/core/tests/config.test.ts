@@ -2,11 +2,7 @@ import fs from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-	HypergenConfigLoader,
-	createConfigFile,
-	getConfigInfo,
-} from "#/config/config-loader";
+import { HypergenConfigLoader, createConfigFile, getConfigInfo } from "#/config/config-loader";
 
 describe("Hypergen Configuration System", () => {
 	let tempDir: string;
@@ -25,11 +21,7 @@ describe("Hypergen Configuration System", () => {
 
 	describe("HypergenConfigLoader", () => {
 		it("should load default configuration when no config file exists", async () => {
-			const config = await HypergenConfigLoader.loadConfig(
-				undefined,
-				tempDir,
-				"development",
-			);
+			const config = await HypergenConfigLoader.loadConfig(undefined, tempDir, "development");
 
 			expect(config).toBeDefined();
 			expect(config.templates).toEqual([path.resolve(tempDir, "templates")]);
@@ -51,9 +43,7 @@ describe("Hypergen Configuration System", () => {
 
 			const config = await HypergenConfigLoader.loadConfig(undefined, tempDir);
 
-			expect(config.templates).toEqual([
-				path.resolve(tempDir, "custom-templates"),
-			]);
+			expect(config.templates).toEqual([path.resolve(tempDir, "custom-templates")]);
 		});
 
 		it("should load JavaScript configuration file", async () => {
@@ -86,11 +76,7 @@ describe("Hypergen Configuration System", () => {
 				JSON.stringify(testConfig, null, 2),
 			);
 
-			const config = await HypergenConfigLoader.loadConfig(
-				undefined,
-				tempDir,
-				"test",
-			);
+			const config = await HypergenConfigLoader.loadConfig(undefined, tempDir, "test");
 
 			expect(config.validation.strict).toBe(false);
 			expect(config.environment).toBe("test");
@@ -145,9 +131,7 @@ describe("Hypergen Configuration System", () => {
 			const result = HypergenConfigLoader.validateConfig(invalidConfig);
 
 			expect(result.valid).toBe(false);
-			expect(result.errors).toContain(
-				"Invalid discovery sources: invalid-source",
-			);
+			expect(result.errors).toContain("Invalid discovery sources: invalid-source");
 		});
 
 		it("should detect invalid engine type", () => {
@@ -169,9 +153,7 @@ describe("Hypergen Configuration System", () => {
 			const result = HypergenConfigLoader.validateConfig(invalidConfig);
 
 			expect(result.valid).toBe(false);
-			expect(result.errors).toContain(
-				"Invalid conflict strategy: invalid-strategy",
-			);
+			expect(result.errors).toContain("Invalid conflict strategy: invalid-strategy");
 		});
 
 		it("should detect invalid templates format", () => {
@@ -224,9 +206,7 @@ describe("Hypergen Configuration System", () => {
 			// Create file first
 			fs.writeFileSync(configPath, "existing content");
 
-			await expect(createConfigFile(tempDir, "js")).rejects.toThrow(
-				"already exists",
-			);
+			await expect(createConfigFile(tempDir, "js")).rejects.toThrow("already exists");
 		});
 	});
 
@@ -242,11 +222,7 @@ describe("Hypergen Configuration System", () => {
 				JSON.stringify(testConfig, null, 2),
 			);
 
-			const config = await HypergenConfigLoader.loadConfig(
-				undefined,
-				tempDir,
-				"development",
-			);
+			const config = await HypergenConfigLoader.loadConfig(undefined, tempDir, "development");
 			const info = getConfigInfo(config);
 
 			expect(info.templates).toHaveLength(2);
@@ -270,9 +246,7 @@ describe("Hypergen Configuration System", () => {
 			const config = await HypergenConfigLoader.loadConfig(undefined, tempDir);
 
 			// Should replace default templates, not merge
-			expect(config.templates).toEqual([
-				path.resolve(tempDir, "custom-templates"),
-			]);
+			expect(config.templates).toEqual([path.resolve(tempDir, "custom-templates")]);
 		});
 
 		it("should merge nested objects", async () => {
@@ -296,22 +270,17 @@ describe("Hypergen Configuration System", () => {
 
 	describe("Error Handling", () => {
 		it("should handle syntax errors in JSON config", async () => {
-			fs.writeFileSync(
-				path.join(tempDir, "hypergen.config.json"),
-				"{ invalid json",
-			);
+			fs.writeFileSync(path.join(tempDir, "hypergen.config.json"), "{ invalid json");
 
-			await expect(
-				HypergenConfigLoader.loadConfig(undefined, tempDir),
-			).rejects.toThrow();
+			await expect(HypergenConfigLoader.loadConfig(undefined, tempDir)).rejects.toThrow();
 		});
 
 		it("should handle missing config file when explicitly specified", async () => {
 			const nonExistentPath = path.join(tempDir, "non-existent.config.js");
 
-			await expect(
-				HypergenConfigLoader.loadConfig(nonExistentPath, tempDir),
-			).rejects.toThrow("Configuration file not found");
+			await expect(HypergenConfigLoader.loadConfig(nonExistentPath, tempDir)).rejects.toThrow(
+				"Configuration file not found",
+			);
 		});
 	});
 
@@ -329,9 +298,7 @@ describe("Hypergen Configuration System", () => {
 			const config = await HypergenConfigLoader.loadConfig(undefined, subDir);
 
 			// Paths should be resolved relative to the config file location (tempDir), not the search start (subDir)
-			expect(config.templates).toEqual([
-				path.resolve(tempDir, "parent-templates"),
-			]);
+			expect(config.templates).toEqual([path.resolve(tempDir, "parent-templates")]);
 		});
 
 		it("should prefer project-level config over parent config", async () => {
@@ -354,9 +321,7 @@ describe("Hypergen Configuration System", () => {
 
 			const config = await HypergenConfigLoader.loadConfig(undefined, subDir);
 
-			expect(config.templates).toEqual([
-				path.resolve(subDir, "project-templates"),
-			]);
+			expect(config.templates).toEqual([path.resolve(subDir, "project-templates")]);
 		});
 	});
 });

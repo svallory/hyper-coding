@@ -79,10 +79,7 @@ export function fixtureExists(
 /**
  * List all fixtures in a directory
  */
-export function listFixtures(
-	dir = "",
-	options: Pick<FixtureOptions, "base"> = {},
-): string[] {
+export function listFixtures(dir = "", options: Pick<FixtureOptions, "base"> = {}): string[] {
 	const fixturePath = fixture(dir, { ...options, read: false });
 	if (!fs.existsSync(fixturePath) || !fs.statSync(fixturePath).isDirectory()) {
 		return [];

@@ -41,15 +41,7 @@ export type ToolType =
 export type RecipeStepUnion = any; // Placeholder
 
 export interface TemplateVariable {
-	type:
-		| "string"
-		| "number"
-		| "boolean"
-		| "enum"
-		| "array"
-		| "object"
-		| "file"
-		| "directory";
+	type: "string" | "number" | "boolean" | "enum" | "array" | "object" | "file" | "directory";
 	required?: boolean;
 	multiple?: boolean;
 	default?: any;
@@ -188,11 +180,7 @@ export class TemplateParser {
 			}
 
 			// Validate and build config
-			result.config = TemplateParser.validateAndBuildConfig(
-				parsed,
-				result.errors,
-				result.warnings,
-			);
+			result.config = TemplateParser.validateAndBuildConfig(parsed, result.errors, result.warnings);
 			result.isValid = result.errors.length === 0;
 
 			return result;
@@ -205,9 +193,7 @@ export class TemplateParser {
 	/**
 	 * Parse all template.yml files in a directory
 	 */
-	static async parseTemplateDirectory(
-		dirPath: string,
-	): Promise<ParsedTemplate[]> {
+	static async parseTemplateDirectory(dirPath: string): Promise<ParsedTemplate[]> {
 		const results: ParsedTemplate[] = [];
 
 		try {
@@ -251,16 +237,9 @@ export class TemplateParser {
 		}
 
 		if (!parsed.variables || typeof parsed.variables !== "object") {
-			errors.push(
-				"Template variables section is required and must be an object",
-			);
+			errors.push("Template variables section is required and must be an object");
 		} else {
-			TemplateParser.validateVariables(
-				parsed.variables,
-				config,
-				errors,
-				warnings,
-			);
+			TemplateParser.validateVariables(parsed.variables, config, errors, warnings);
 		}
 
 		// Validate optional fields
@@ -312,10 +291,7 @@ export class TemplateParser {
 
 		if (parsed.dependencies) {
 			if (Array.isArray(parsed.dependencies)) {
-				config.dependencies = TemplateParser.validateDependencies(
-					parsed.dependencies,
-					warnings,
-				);
+				config.dependencies = TemplateParser.validateDependencies(parsed.dependencies, warnings);
 			} else {
 				warnings.push("Dependencies should be an array");
 			}
@@ -323,9 +299,7 @@ export class TemplateParser {
 
 		if (parsed.outputs) {
 			if (Array.isArray(parsed.outputs)) {
-				config.outputs = parsed.outputs.filter(
-					(output: any) => typeof output === "string",
-				);
+				config.outputs = parsed.outputs.filter((output: any) => typeof output === "string");
 			} else {
 				warnings.push("Outputs should be an array of strings");
 			}
@@ -357,10 +331,7 @@ export class TemplateParser {
 
 		// V8 Recipe settings validation
 		if (parsed.settings) {
-			config.settings = TemplateParser.validateSettings(
-				parsed.settings,
-				warnings,
-			);
+			config.settings = TemplateParser.validateSettings(parsed.settings, warnings);
 		}
 
 		return config;
@@ -381,12 +352,7 @@ export class TemplateParser {
 				continue;
 			}
 
-			const variable = TemplateParser.validateVariable(
-				varName,
-				varConfig as any,
-				errors,
-				warnings,
-			);
+			const variable = TemplateParser.validateVariable(varName, varConfig as any, errors, warnings);
 			if (variable) {
 				config.variables[varName] = variable;
 			}
@@ -431,15 +397,11 @@ export class TemplateParser {
 		// Validate default value
 		if (varConfig.default !== undefined) {
 			if (variable.required) {
-				errors.push(
-					`Variable '${varName}': 'default' and 'required' are mutually exclusive`,
-				);
+				errors.push(`Variable '${varName}': 'default' and 'required' are mutually exclusive`);
 				return null;
 			}
 			if (varConfig.suggestion !== undefined) {
-				errors.push(
-					`Variable '${varName}': 'default' and 'suggestion' are mutually exclusive`,
-				);
+				errors.push(`Variable '${varName}': 'default' and 'suggestion' are mutually exclusive`);
 				return null;
 			}
 			variable.default = varConfig.default;
@@ -462,9 +424,7 @@ export class TemplateParser {
 		// Validate pattern (for string types)
 		if (varConfig.pattern) {
 			if (variable.type !== "string") {
-				warnings.push(
-					`Variable '${varName}' pattern only applies to string types`,
-				);
+				warnings.push(`Variable '${varName}' pattern only applies to string types`);
 			} else if (typeof varConfig.pattern !== "string") {
 				warnings.push(`Variable '${varName}' pattern should be a string`);
 			} else {
@@ -472,9 +432,7 @@ export class TemplateParser {
 					new RegExp(varConfig.pattern);
 					variable.pattern = varConfig.pattern;
 				} catch (error) {
-					errors.push(
-						`Variable '${varName}' has invalid regex pattern: ${varConfig.pattern}`,
-					);
+					errors.push(`Variable '${varName}' has invalid regex pattern: ${varConfig.pattern}`);
 				}
 			}
 		}
@@ -486,13 +444,9 @@ export class TemplateParser {
 			} else if (!Array.isArray(varConfig.values)) {
 				errors.push(`Variable '${varName}' values must be an array`);
 			} else {
-				variable.values = varConfig.values.filter(
-					(val: any) => typeof val === "string",
-				);
+				variable.values = varConfig.values.filter((val: any) => typeof val === "string");
 				if (variable.values && variable.values.length === 0) {
-					errors.push(
-						`Variable '${varName}' enum must have at least one value`,
-					);
+					errors.push(`Variable '${varName}' enum must have at least one value`);
 				}
 			}
 		}
@@ -504,9 +458,7 @@ export class TemplateParser {
 				varConfig.position < 0 ||
 				!Number.isInteger(varConfig.position)
 			) {
-				warnings.push(
-					`Variable '${varName}' position should be a non-negative integer`,
-				);
+				warnings.push(`Variable '${varName}' position should be a non-negative integer`);
 			} else {
 				variable.position = varConfig.position;
 			}
@@ -574,9 +526,7 @@ export class TemplateParser {
 			// Validate example variables against template variables
 			for (const [varName, _varValue] of Object.entries(example.variables)) {
 				if (!variables[varName]) {
-					warnings.push(
-						`Example ${index + 1} references undefined variable: ${varName}`,
-					);
+					warnings.push(`Example ${index + 1} references undefined variable: ${varName}`);
 				}
 			}
 
@@ -595,10 +545,7 @@ export class TemplateParser {
 		variable: TemplateVariable,
 	): { isValid: boolean; error?: string } {
 		// Check required
-		if (
-			variable.required &&
-			(value === undefined || value === null || value === "")
-		) {
+		if (variable.required && (value === undefined || value === null || value === "")) {
 			return { isValid: false, error: `Variable '${varName}' is required` };
 		}
 
@@ -690,11 +637,7 @@ export class TemplateParser {
 				break;
 
 			case "object":
-				if (
-					typeof value !== "object" ||
-					value === null ||
-					Array.isArray(value)
-				) {
+				if (typeof value !== "object" || value === null || Array.isArray(value)) {
 					return {
 						isValid: false,
 						error: `Variable '${varName}' must be an object`,
@@ -731,11 +674,7 @@ export class TemplateParser {
 				result.push({ name: dep, type: "npm" });
 			} else if (typeof dep === "object" && dep !== null) {
 				// Validate TemplateDependency object
-				const dependency = TemplateParser.validateDependency(
-					dep,
-					index,
-					warnings,
-				);
+				const dependency = TemplateParser.validateDependency(dep, index, warnings);
 				if (dependency) {
 					result.push(dependency);
 				}
@@ -790,10 +729,7 @@ export class TemplateParser {
 	/**
 	 * Validate engines configuration
 	 */
-	private static validateEngines(
-		engines: any,
-		warnings: string[],
-	): Record<string, string> {
+	private static validateEngines(engines: any, warnings: string[]): Record<string, string> {
 		const result: Record<string, string> = {};
 
 		if (typeof engines !== "object" || engines === null) {
@@ -839,9 +775,7 @@ export class TemplateParser {
 
 		if (hooks.post) {
 			if (Array.isArray(hooks.post)) {
-				result.post = hooks.post.filter(
-					(hook: any) => typeof hook === "string",
-				);
+				result.post = hooks.post.filter((hook: any) => typeof hook === "string");
 				if (result.post && result.post.length !== hooks.post.length) {
 					warnings.push("Some post hooks were ignored (must be strings)");
 				}
@@ -852,9 +786,7 @@ export class TemplateParser {
 
 		if (hooks.error) {
 			if (Array.isArray(hooks.error)) {
-				result.error = hooks.error.filter(
-					(hook: any) => typeof hook === "string",
-				);
+				result.error = hooks.error.filter((hook: any) => typeof hook === "string");
 				if (result.error && result.error.length !== hooks.error.length) {
 					warnings.push("Some error hooks were ignored (must be strings)");
 				}
@@ -885,13 +817,7 @@ export class TemplateParser {
 				continue;
 			}
 
-			const validStep = TemplateParser.validateStep(
-				step,
-				index + 1,
-				variables,
-				errors,
-				warnings,
-			);
+			const validStep = TemplateParser.validateStep(step, index + 1, variables, errors, warnings);
 			if (validStep) {
 				// Check for duplicate step names
 				if (stepNames.has(validStep.name)) {
@@ -913,11 +839,7 @@ export class TemplateParser {
 		TemplateParser.validateStepDependencies(stepDependencies, errors);
 
 		// Validate step dependencies reference existing steps
-		TemplateParser.validateStepDependencyReferences(
-			stepDependencies,
-			stepNames,
-			warnings,
-		);
+		TemplateParser.validateStepDependencyReferences(stepDependencies, stepNames, warnings);
 
 		return validSteps;
 	}
@@ -977,29 +899,21 @@ export class TemplateParser {
 				(baseStep as any).when = step.when;
 			} else {
 				(baseStep as any).when = step.when;
-				warnings.push(
-					`Step '${step.name}' has potentially invalid condition expression`,
-				);
+				warnings.push(`Step '${step.name}' has potentially invalid condition expression`);
 			}
 		}
 
 		if (step.dependsOn) {
 			if (Array.isArray(step.dependsOn)) {
-				const validDeps = step.dependsOn.filter(
-					(dep: any) => typeof dep === "string",
-				);
+				const validDeps = step.dependsOn.filter((dep: any) => typeof dep === "string");
 				if (validDeps.length !== step.dependsOn.length) {
-					warnings.push(
-						`Step '${step.name}' has some invalid dependencies (must be strings)`,
-					);
+					warnings.push(`Step '${step.name}' has some invalid dependencies (must be strings)`);
 				}
 				if (validDeps.length > 0) {
 					(baseStep as any).dependsOn = validDeps;
 				}
 			} else {
-				warnings.push(
-					`Step '${step.name}' dependsOn should be an array of strings`,
-				);
+				warnings.push(`Step '${step.name}' dependsOn should be an array of strings`);
 			}
 		}
 
@@ -1007,26 +921,15 @@ export class TemplateParser {
 			(baseStep as any).parallel = step.parallel;
 		}
 
-		if (
-			step.continueOnError !== undefined &&
-			typeof step.continueOnError === "boolean"
-		) {
+		if (step.continueOnError !== undefined && typeof step.continueOnError === "boolean") {
 			(baseStep as any).continueOnError = step.continueOnError;
 		}
 
-		if (
-			step.timeout !== undefined &&
-			typeof step.timeout === "number" &&
-			step.timeout > 0
-		) {
+		if (step.timeout !== undefined && typeof step.timeout === "number" && step.timeout > 0) {
 			(baseStep as any).timeout = step.timeout;
 		}
 
-		if (
-			step.retries !== undefined &&
-			typeof step.retries === "number" &&
-			step.retries >= 0
-		) {
+		if (step.retries !== undefined && typeof step.retries === "number" && step.retries >= 0) {
 			(baseStep as any).retries = step.retries;
 		}
 
@@ -1037,56 +940,26 @@ export class TemplateParser {
 			}
 		}
 
-		if (
-			step.variables &&
-			typeof step.variables === "object" &&
-			step.variables !== null
-		) {
+		if (step.variables && typeof step.variables === "object" && step.variables !== null) {
 			(baseStep as any).variables = step.variables;
 		}
 
-		if (
-			step.environment &&
-			typeof step.environment === "object" &&
-			step.environment !== null
-		) {
+		if (step.environment && typeof step.environment === "object" && step.environment !== null) {
 			(baseStep as any).environment = step.environment;
 		}
 
 		// Tool-specific validation
 		switch (step.tool) {
 			case "template":
-				return TemplateParser.validateTemplateStep(
-					baseStep,
-					step,
-					errors,
-					warnings,
-				);
+				return TemplateParser.validateTemplateStep(baseStep, step, errors, warnings);
 			case "action":
-				return TemplateParser.validateActionStep(
-					baseStep,
-					step,
-					errors,
-					warnings,
-				);
+				return TemplateParser.validateActionStep(baseStep, step, errors, warnings);
 			case "codemod":
-				return TemplateParser.validateCodeModStep(
-					baseStep,
-					step,
-					errors,
-					warnings,
-				);
+				return TemplateParser.validateCodeModStep(baseStep, step, errors, warnings);
 			case "recipe":
-				return TemplateParser.validateRecipeStep(
-					baseStep,
-					step,
-					errors,
-					warnings,
-				);
+				return TemplateParser.validateRecipeStep(baseStep, step, errors, warnings);
 			default:
-				errors.push(
-					`Step '${step.name}' has unsupported tool type: ${step.tool}`,
-				);
+				errors.push(`Step '${step.name}' has unsupported tool type: ${step.tool}`);
 				return null;
 		}
 	}
@@ -1119,9 +992,7 @@ export class TemplateParser {
 		}
 
 		if (step.exclude && Array.isArray(step.exclude)) {
-			const validExcludes = step.exclude.filter(
-				(pattern) => typeof pattern === "string",
-			);
+			const validExcludes = step.exclude.filter((pattern) => typeof pattern === "string");
 			if (validExcludes.length > 0) {
 				templateStep.exclude = validExcludes;
 			}
@@ -1153,11 +1024,7 @@ export class TemplateParser {
 			action: step.action,
 		};
 
-		if (
-			step.parameters &&
-			typeof step.parameters === "object" &&
-			step.parameters !== null
-		) {
+		if (step.parameters && typeof step.parameters === "object" && step.parameters !== null) {
 			actionStep.parameters = step.parameters;
 		}
 
@@ -1191,23 +1058,17 @@ export class TemplateParser {
 		}
 
 		if (!step.files || !Array.isArray(step.files) || step.files.length === 0) {
-			errors.push(
-				`CodeMod step '${step.name}' must have a files array with at least one pattern`,
-			);
+			errors.push(`CodeMod step '${step.name}' must have a files array with at least one pattern`);
 			return null;
 		}
 
 		const validFiles = step.files.filter((file) => typeof file === "string");
 		if (validFiles.length !== step.files.length) {
-			warnings.push(
-				`CodeMod step '${step.name}' has some invalid file patterns (must be strings)`,
-			);
+			warnings.push(`CodeMod step '${step.name}' has some invalid file patterns (must be strings)`);
 		}
 
 		if (validFiles.length === 0) {
-			errors.push(
-				`CodeMod step '${step.name}' must have at least one valid file pattern`,
-			);
+			errors.push(`CodeMod step '${step.name}' must have at least one valid file pattern`);
 			return null;
 		}
 
@@ -1221,18 +1082,11 @@ export class TemplateParser {
 			codemodStep.backup = step.backup;
 		}
 
-		if (
-			step.parser &&
-			["typescript", "javascript", "json", "auto"].includes(step.parser)
-		) {
+		if (step.parser && ["typescript", "javascript", "json", "auto"].includes(step.parser)) {
 			codemodStep.parser = step.parser;
 		}
 
-		if (
-			step.parameters &&
-			typeof step.parameters === "object" &&
-			step.parameters !== null
-		) {
+		if (step.parameters && typeof step.parameters === "object" && step.parameters !== null) {
 			codemodStep.parameters = step.parameters;
 		}
 
@@ -1270,10 +1124,7 @@ export class TemplateParser {
 			recipeStep.version = step.version;
 		}
 
-		if (
-			step.inheritVariables !== undefined &&
-			typeof step.inheritVariables === "boolean"
-		) {
+		if (step.inheritVariables !== undefined && typeof step.inheritVariables === "boolean") {
 			recipeStep.inheritVariables = step.inheritVariables;
 		}
 
@@ -1351,9 +1202,7 @@ export class TemplateParser {
 		for (const [stepName, deps] of dependencies) {
 			for (const dep of deps) {
 				if (!stepNames.has(dep)) {
-					warnings.push(
-						`Step '${stepName}' depends on undefined step: '${dep}'`,
-					);
+					warnings.push(`Step '${stepName}' depends on undefined step: '${dep}'`);
 				}
 			}
 		}
@@ -1424,10 +1273,7 @@ export class TemplateParser {
 		}
 
 		if (settings.maxParallelSteps !== undefined) {
-			if (
-				typeof settings.maxParallelSteps === "number" &&
-				settings.maxParallelSteps > 0
-			) {
+			if (typeof settings.maxParallelSteps === "number" && settings.maxParallelSteps > 0) {
 				result.maxParallelSteps = settings.maxParallelSteps;
 			} else {
 				warnings.push("Settings maxParallelSteps should be a positive number");
@@ -1486,12 +1332,10 @@ export class TemplateParser {
 		};
 
 		// Copy optional fields
-		if (templateConfig.description)
-			recipeConfig.description = templateConfig.description;
+		if (templateConfig.description) recipeConfig.description = templateConfig.description;
 		if (templateConfig.version) recipeConfig.version = templateConfig.version;
 		if (templateConfig.author) recipeConfig.author = templateConfig.author;
-		if (templateConfig.category)
-			recipeConfig.category = templateConfig.category;
+		if (templateConfig.category) recipeConfig.category = templateConfig.category;
 		if (templateConfig.tags) recipeConfig.tags = templateConfig.tags;
 		if (templateConfig.outputs) recipeConfig.outputs = templateConfig.outputs;
 		if (templateConfig.engines) recipeConfig.engines = templateConfig.engines;
@@ -1548,15 +1392,13 @@ export class TemplateParser {
 			}
 
 			if (templateConfig.includes) {
-				recipeConfig.composition.includes = templateConfig.includes.map(
-					(include) => ({
-						recipe: include.url, // Map URL to recipe identifier
-						version: include.version,
-						variables: include.variables,
-						condition: include.condition,
-						strategy: include.strategy,
-					}),
-				);
+				recipeConfig.composition.includes = templateConfig.includes.map((include) => ({
+					recipe: include.url, // Map URL to recipe identifier
+					version: include.version,
+					variables: include.variables,
+					condition: include.condition,
+					strategy: include.strategy,
+				}));
 			}
 
 			if (templateConfig.conflicts) {

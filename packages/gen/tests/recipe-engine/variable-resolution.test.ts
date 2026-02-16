@@ -106,7 +106,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	
 	if (tempDir && fs.existsSync(tempDir)) {
 		fs.rmSync(tempDir, { recursive: true, force: true });
 	}

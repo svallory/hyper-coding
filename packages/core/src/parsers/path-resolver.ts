@@ -12,10 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import createDebug from "debug";
 import type { ParsedCookbook } from "./cookbook-parser.js";
-import {
-	discoverCookbooksInKit,
-	discoverRecipesInCookbook,
-} from "./cookbook-parser.js";
+import { discoverCookbooksInKit, discoverRecipesInCookbook } from "./cookbook-parser.js";
 import type { ParsedKit } from "./kit-parser.js";
 
 const debug = createDebug("hypergen:config:path-resolver");
@@ -99,9 +96,7 @@ export class PathResolver {
 	/**
 	 * Try to resolve segments starting with a kit name.
 	 */
-	private async resolveViaKit(
-		segments: string[],
-	): Promise<ResolvedPath | null> {
+	private async resolveViaKit(segments: string[]): Promise<ResolvedPath | null> {
 		const kitName = segments[0];
 		const kit = this.kits.get(kitName);
 		if (!kit) return null;
@@ -200,18 +195,11 @@ export class PathResolver {
 	/**
 	 * Resolve via search directories (backward-compatible fallback).
 	 */
-	private async resolveViaSearchDirs(
-		segments: string[],
-	): Promise<ResolvedPath | null> {
+	private async resolveViaSearchDirs(segments: string[]): Promise<ResolvedPath | null> {
 		for (const searchDir of this.searchDirs) {
 			if (!fs.existsSync(searchDir)) continue;
 
-			const result = await this.greedyResolve(
-				searchDir,
-				segments,
-				[],
-				undefined,
-			);
+			const result = await this.greedyResolve(searchDir, segments, [], undefined);
 			if (result) return result;
 		}
 		return null;
@@ -252,8 +240,7 @@ export class PathResolver {
 					fullPath: recipeYml,
 					kit: kitName,
 					cookbook: candidate[0],
-					recipe:
-						candidate.length > 1 ? candidate[candidate.length - 1] : undefined,
+					recipe: candidate.length > 1 ? candidate[candidate.length - 1] : undefined,
 					consumed: [...prefixConsumed, ...candidate],
 					remaining: segments.slice(len),
 				};
@@ -302,10 +289,7 @@ export class PathResolver {
 	/**
 	 * Resolve kit default: use defaults.cookbook + defaults.recipe
 	 */
-	private async resolveKitDefault(
-		kit: ParsedKit,
-		kitName: string,
-	): Promise<ResolvedPath | null> {
+	private async resolveKitDefault(kit: ParsedKit, kitName: string): Promise<ResolvedPath | null> {
 		const defaults = kit.config.defaults;
 		if (!defaults?.cookbook) {
 			debug("Kit has no default cookbook: %s", kitName);
@@ -319,11 +303,7 @@ export class PathResolver {
 
 		const cookbook = cookbooks.get(defaults.cookbook);
 		if (!cookbook) {
-			debug(
-				"Kit default cookbook not found: %s/%s",
-				kitName,
-				defaults.cookbook,
-			);
+			debug("Kit default cookbook not found: %s/%s", kitName, defaults.cookbook);
 			return null;
 		}
 
@@ -346,12 +326,7 @@ export class PathResolver {
 			);
 			const recipeYml = recipes.get(defaultRecipe);
 			if (recipeYml) {
-				debug(
-					"Cookbook default recipe: %s/%s/%s",
-					kitName,
-					cookbookName,
-					defaultRecipe,
-				);
+				debug("Cookbook default recipe: %s/%s/%s", kitName, cookbookName, defaultRecipe);
 				return {
 					type: "recipe",
 					fullPath: recipeYml,
@@ -365,11 +340,7 @@ export class PathResolver {
 		}
 
 		// No default recipe — treat as group
-		debug(
-			"Cookbook has no default recipe, treating as group: %s/%s",
-			kitName,
-			cookbookName,
-		);
+		debug("Cookbook has no default recipe, treating as group: %s/%s", kitName, cookbookName);
 		return {
 			type: "group",
 			fullPath: cookbook.dirPath,

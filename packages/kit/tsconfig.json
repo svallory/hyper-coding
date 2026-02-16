@@ -20,13 +20,9 @@
 		"noImplicitReturns": true,
 		"noFallthroughCasesInSwitch": true,
 		"paths": {
-			"#": ["src"],
 			"#/*": ["src/*"],
-			"#tests": ["tests"],
 			"#tests/*": ["tests/*"],
-			"#fixtures": ["tests/fixtures"],
 			"#fixtures/*": ["tests/fixtures/*"],
-			"#helpers": ["tests/helpers"],
 			"#helpers/*": ["tests/helpers/*"]
 		}
 	},

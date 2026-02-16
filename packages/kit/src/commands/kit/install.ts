@@ -6,20 +6,19 @@ import { execSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { Args, Flags } from "@oclif/core";
-import tiged from "tiged";
+import { downloadTemplate } from "giget";
 import { BaseCommand } from "#/base-command.js";
 import {
 	type KitManifestEntry,
 	addKitToManifest,
 	extractPackageVersion,
 	isKitInstalled,
-} from "#/manifest";
-import { buildInstallCommand, resolveKitSource } from "#/source-resolver";
-import { findProjectRoot } from "#/utils/find-project-root";
+} from "#/manifest.js";
+import { buildInstallCommand, resolveKitSource } from "#/source-resolver.js";
+import { findProjectRoot } from "#/utils/find-project-root.js";
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {
-	static override description =
-		"Install a kit from npm, JSR, GitHub, or local path";
+	static override description = "Install a kit from npm, JSR, GitHub, or local path";
 
 	static override examples = [
 		"<%= config.bin %> kit install @kit/nextjs",
@@ -38,21 +37,18 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 		}),
 		name: Flags.string({
 			char: "n",
-			description:
-				"Name to use for the kit directory (default: auto-detect from source)",
+			description: "Name to use for the kit directory (default: auto-detect from source)",
 		}),
 		force: Flags.boolean({
 			char: "f",
-			description:
-				"Replace existing kit even if already installed (allows changing source)",
+			description: "Replace existing kit even if already installed (allows changing source)",
 			default: false,
 		}),
 	};
 
 	static override args = {
 		kit: Args.string({
-			description:
-				"Kit to install (npm, JSR, GitHub shorthand, git URL, or local path)",
+			description: "Kit to install (npm, JSR, GitHub shorthand, git URL, or local path)",
 			required: true,
 		}),
 	};
@@ -129,9 +125,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 		const kitsDir = join(projectRoot, ".hyper", "kits");
 
 		if (projectInfo.isMonorepo) {
-			this.log(
-				`Detected monorepo, installing to workspace root: ${projectRoot}`,
-			);
+			this.log(`Detected monorepo, installing to workspace root: ${projectRoot}`);
 		}
 
 		// Ensure kits directory exists
@@ -178,10 +172,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 			}
 
 			case "git": {
-				const gitUrlInfo = await this.cloneFromGitUrl(
-					resolved.source,
-					targetDir,
-				);
+				const gitUrlInfo = await this.cloneFromGitUrl(resolved.source, targetDir);
 				commit = gitUrlInfo.commit;
 				break;
 			}
@@ -195,9 +186,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 				break;
 
 			default:
-				this.error(
-					`Unsupported source type for kit installation: ${resolved.type}`,
-				);
+				this.error(`Unsupported source type for kit installation: ${resolved.type}`);
 		}
 
 		// Extract version from package.json if available
@@ -220,84 +209,58 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 	}
 
 	/**
-	 * Download from GitHub/GitLab/Bitbucket using tiged
+	 * Download from GitHub/GitLab/Bitbucket using giget
 	 */
 	private async cloneFromGitHost(
 		resolved: any,
 		targetDir: string,
 	): Promise<{ commit?: string; branch?: string; tag?: string }> {
-		// Convert to tiged-compatible format
-		let tigedSource = resolved.source;
-
 		// Extract branch/tag information
 		let branch: string | undefined;
 		let tag: string | undefined;
 
 		// Check for branch (#) or tag (@) in source
-		const branchMatch = tigedSource.match(/#([^/]+)$/);
-		const tagMatch = tigedSource.match(/@([^/]+)$/);
+		const branchMatch = resolved.source.match(/#([^/]+)$/);
+		const tagMatch = resolved.source.match(/@([^/]+)$/);
 
 		if (branchMatch) {
 			branch = branchMatch[1];
 		} else if (tagMatch) {
 			tag = tagMatch[1];
-			// Convert @tag to #tag for tiged compatibility
-			tigedSource = tigedSource.replace(/@([^/]+)$/, "#$1");
 		}
 
-		this.log(`Downloading from: ${tigedSource}`);
+		this.log(`Downloading from: ${resolved.source}`);
 
-		const emitter = tiged(tigedSource, {
-			cache: false,
-			force: false,
-			verbose: this.flags.debug,
-		});
+		try {
+			await downloadTemplate(resolved.source, {
+				dir: targetDir,
+				force: false,
+				offline: false,
+			});
+		} catch (error: any) {
+			throw new Error(`Failed to download from git host: ${error.message}`);
+		}
 
-		// Handle tiged events
-		emitter.on("info", (info: any) => {
-			if (this.flags.debug) {
-				this.log(`[tiged] ${info.message}`);
-			}
-		});
-
-		emitter.on("warn", (warning: any) => {
-			this.warn(`[tiged] ${warning.message}`);
-		});
-
-		await emitter.clone(targetDir);
-
-		// Note: tiged doesn't provide commit hash, we'd need to get it from the repo
+		// Note: giget doesn't provide commit hash, we'd need to get it from the repo
 		// This is a limitation we accept for now
 		return { branch, tag };
 	}
 
 	/**
-	 * Download from Git URL using tiged
+	 * Download from Git URL using giget
 	 */
-	private async cloneFromGitUrl(
-		gitUrl: string,
-		targetDir: string,
-	): Promise<{ commit?: string }> {
+	private async cloneFromGitUrl(gitUrl: string, targetDir: string): Promise<{ commit?: string }> {
 		this.log(`Downloading from: ${gitUrl}`);
 
-		// tiged can handle Git URLs directly
-		const emitter = tiged(gitUrl, {
-			cache: false,
-			force: false,
-			verbose: this.flags.debug,
-		});
-
-		emitter.on("info", (info: any) => {
-			if (this.flags.debug) {
-				this.log(`[tiged] ${info.message}`);
-			}
-		});
-
-		emitter.on("warn", (warning: any) => {
-			this.warn(`[tiged] ${warning.message}`);
-		});
-
-		await emitter.clone(targetDir);
+		try {
+			await downloadTemplate(gitUrl, {
+				dir: targetDir,
+				force: false,
+				offline: false,
+			});
+		} catch (error: any) {
+			throw new Error(`Failed to download from git URL: ${error.message}`);
+		}
 
 		return {};
 	}
@@ -305,10 +268,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 	/**
 	 * Copy from local path
 	 */
-	private async copyFromLocal(
-		sourcePath: string,
-		targetDir: string,
-	): Promise<void> {
+	private async copyFromLocal(sourcePath: string, targetDir: string): Promise<void> {
 		// Resolve relative paths
 		const absoluteSource = isAbsolute(sourcePath)
 			? sourcePath
@@ -325,9 +285,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 			filter: (source) => {
 				// Skip common directories that shouldn't be copied
 				const name = basename(source);
-				return !["node_modules", ".git", "dist", "build", ".DS_Store"].includes(
-					name,
-				);
+				return !["node_modules", ".git", "dist", "build", ".DS_Store"].includes(name);
 			},
 		});
 	}
@@ -343,13 +301,10 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 
 		// Download and extract (assuming .tar.gz or .tgz)
 		if (url.endsWith(".tar.gz") || url.endsWith(".tgz")) {
-			execSync(
-				`curl -L "${url}" | tar xz -C "${targetDir}" --strip-components=1`,
-				{
-					cwd: this.flags.cwd,
-					stdio: "inherit",
-				},
-			);
+			execSync(`curl -L "${url}" | tar xz -C "${targetDir}" --strip-components=1`, {
+				cwd: this.flags.cwd,
+				stdio: "inherit",
+			});
 		} else if (url.endsWith(".zip")) {
 			// Download zip file then extract
 			const tempZip = join(targetDir, "temp.zip");
@@ -361,9 +316,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 				},
 			);
 		} else {
-			this.error(
-				"Unsupported archive format. Only .tar.gz, .tgz, and .zip are supported.",
-			);
+			this.error("Unsupported archive format. Only .tar.gz, .tgz, and .zip are supported.");
 		}
 	}
 
@@ -397,9 +350,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 
 			case "url": {
 				// Extract filename without extension
-				const match = resolved.source.match(
-					/\/([^/]+?)(?:\.(tar\.gz|tgz|zip))?$/,
-				);
+				const match = resolved.source.match(/\/([^/]+?)(?:\.(tar\.gz|tgz|zip))?$/);
 				return match ? match[1] : "kit";
 			}
 
@@ -408,16 +359,13 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 		}
 	}
 
-	private detectPackageManager(): "bun" | "pnpm" | "yarn" | "npm" {
+	protected detectPackageManager(): "bun" | "pnpm" | "yarn" | "npm" {
 		let dir = this.flags.cwd;
 
 		// Walk up the directory tree to find a lock file
 		while (dir !== "/" && dir !== ".") {
 			// Check for lock files in order of preference
-			if (
-				existsSync(join(dir, "bun.lockb")) ||
-				existsSync(join(dir, "bun.lock"))
-			) {
+			if (existsSync(join(dir, "bun.lockb")) || existsSync(join(dir, "bun.lock"))) {
 				return "bun";
 			}
 			if (existsSync(join(dir, "pnpm-lock.yaml"))) {

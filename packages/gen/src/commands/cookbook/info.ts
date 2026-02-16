@@ -64,9 +64,8 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 					// We need to re-parse the kit to get the cookbook globs and find the path
 					// (GeneratorDiscovery only gives us names)
 
-					// Import here to avoid circular dependencies if any, but standard import is fine
-					const { parseKitFile } = await import("../../config/kit-parser.js");
-					const { discoverCookbooksInKit } = await import("../../config/cookbook-parser.js");
+					// Import from @hypercli/core
+					const { parseKitFile, discoverCookbooksInKit } = await import("@hypercli/core");
 
 					const kitYmlPath = path.join(generator.path, "kit.yml");
 					const parsedKit = await parseKitFile(kitYmlPath);
@@ -99,7 +98,7 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 			}
 
 			// 3. Discover recipes in the cookbook
-			const { discoverRecipesInCookbook } = await import("../../config/cookbook-parser.js");
+			const { discoverRecipesInCookbook } = await import("@hypercli/core");
 			// Default recipe globs if not specified in cookbook config
 			const recipeGlobs = foundCookbook.config.recipes || ["./*/recipe.yml"];
 			const recipeMap = await discoverRecipesInCookbook(foundCookbook.cookbookPath, recipeGlobs);
@@ -227,8 +226,7 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 
 			// Try to get cookbook details
 			try {
-				const { parseKitFile } = await import("../../config/kit-parser.js");
-				const { discoverCookbooksInKit } = await import("../../config/cookbook-parser.js");
+				const { parseKitFile, discoverCookbooksInKit } = await import("@hypercli/core");
 
 				const kitYmlPath = path.join(generator.path, "kit.yml");
 				const parsedKit = await parseKitFile(kitYmlPath);

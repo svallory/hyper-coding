@@ -10,8 +10,8 @@ import path from "node:path";
 import createDebug from "debug";
 import { glob } from "glob";
 import yaml from "js-yaml";
-import { loadHelpers } from "#/config/load-helpers.js";
-import type { KitConfig } from "#/types/kit.js";
+import { loadHelpers } from "#/config/load-helpers";
+import type { KitConfig } from "#/types/kit";
 
 const debug = createDebug("hypergen:config:kit-parser");
 
@@ -58,10 +58,7 @@ export async function parseKitFile(filePath: string): Promise<ParsedKit> {
 		// Load helpers if configured (returned in result, not registered)
 		if (result.isValid && result.config.helpers) {
 			try {
-				result.loadedHelpers = await loadHelpers(
-					result.config.helpers,
-					result.dirPath,
-				);
+				result.loadedHelpers = await loadHelpers(result.config.helpers, result.dirPath);
 			} catch (error) {
 				result.warnings.push(
 					`Failed to load helpers: ${error instanceof Error ? error.message : String(error)}`,
@@ -84,9 +81,7 @@ export async function parseKitFile(filePath: string): Promise<ParsedKit> {
  * 2. `./node_modules/@kit/` (npm installed)
  * 3. Explicit additional directories
  */
-export async function discoverKits(
-	searchDirs: string[],
-): Promise<Map<string, ParsedKit>> {
+export async function discoverKits(searchDirs: string[]): Promise<Map<string, ParsedKit>> {
 	const kits = new Map<string, ParsedKit>();
 
 	for (const dir of searchDirs) {
@@ -112,11 +107,7 @@ export async function discoverKits(
 					kits.set(shortName, parsed);
 					debug("Discovered kit: %s -> %s", shortName, kitYml);
 				} else {
-					debug(
-						"Kit validation failed: %s (%s)",
-						kitYml,
-						parsed.errors.join(", "),
-					);
+					debug("Kit validation failed: %s (%s)", kitYml, parsed.errors.join(", "));
 				}
 			}
 		}
@@ -186,11 +177,7 @@ export async function resolveKitCookbooks(
 
 // -- Validation helpers --
 
-function validateKitConfig(
-	parsed: any,
-	errors: string[],
-	_warnings: string[],
-): KitConfig {
+function validateKitConfig(parsed: any, errors: string[], _warnings: string[]): KitConfig {
 	const config: KitConfig = { name: "" };
 
 	if (!parsed.name || typeof parsed.name !== "string") {
@@ -230,9 +217,7 @@ function validateKitConfig(
 	}
 
 	if (parsed.cookbooks && Array.isArray(parsed.cookbooks)) {
-		config.cookbooks = parsed.cookbooks.filter(
-			(c: any) => typeof c === "string",
-		);
+		config.cookbooks = parsed.cookbooks.filter((c: any) => typeof c === "string");
 	}
 
 	if (parsed.recipes && Array.isArray(parsed.recipes)) {
@@ -244,9 +229,7 @@ function validateKitConfig(
 	}
 
 	if (parsed.categories && Array.isArray(parsed.categories)) {
-		config.categories = parsed.categories.filter(
-			(c: any) => typeof c === "string",
-		);
+		config.categories = parsed.categories.filter((c: any) => typeof c === "string");
 	}
 
 	if (parsed.helpers && typeof parsed.helpers === "string") {

@@ -6,9 +6,7 @@ const srcDir = path.resolve(__dirname, "./src");
 const testsDir = path.resolve(__dirname, "./tests");
 
 export default defineConfig({
-	plugins: [
-		tsconfigPaths({ projects: [path.resolve(__dirname, "tsconfig.json")] }),
-	],
+	plugins: [tsconfigPaths({ projects: [path.resolve(__dirname, "tsconfig.json")] })],
 	resolve: {
 		alias: {
 			"#": srcDir,
@@ -27,13 +25,7 @@ export default defineConfig({
 		coverage: {
 			provider: "v8",
 			reporter: ["text", "json", "html"],
-			exclude: [
-				"node_modules/**",
-				"dist/**",
-				"**/*.d.ts",
-				"**/*.config.*",
-				"**/tests/**",
-			],
+			exclude: ["node_modules/**", "dist/**", "**/*.d.ts", "**/*.config.*", "**/tests/**"],
 		},
 		testTimeout: 10000,
 	},

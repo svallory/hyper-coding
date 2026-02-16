@@ -125,10 +125,7 @@ export function saveManifest(projectRoot: string, manifest: KitManifest): void {
 /**
  * Add or update a kit in the manifest
  */
-export function addKitToManifest(
-	projectRoot: string,
-	entry: KitManifestEntry,
-): void {
+export function addKitToManifest(projectRoot: string, entry: KitManifestEntry): void {
 	const manifest = loadManifest(projectRoot);
 	manifest.kits[entry.name] = entry;
 	saveManifest(projectRoot, manifest);
@@ -137,10 +134,7 @@ export function addKitToManifest(
 /**
  * Remove a kit from the manifest
  */
-export function removeKitFromManifest(
-	projectRoot: string,
-	kitName: string,
-): void {
+export function removeKitFromManifest(projectRoot: string, kitName: string): void {
 	const manifest = loadManifest(projectRoot);
 	delete manifest.kits[kitName];
 	saveManifest(projectRoot, manifest);
@@ -174,14 +168,14 @@ export function listInstalledKits(projectRoot: string): KitManifestEntry[] {
 }
 
 /**
- * Extract version/commit information from tiged result
- * Tiged doesn't provide this directly, so we'll need to get it from the downloaded files
+ * Extract version/commit information from giget result
+ * Giget doesn't provide this directly, so we'll need to get it from the downloaded files
  */
 export async function extractGitInfo(
-	kitDir: string,
+	_kitDir: string,
 ): Promise<{ commit?: string; branch?: string; tag?: string }> {
 	// For now, we can't reliably get commit info without .git directory
-	// Future enhancement: tiged could be modified to save this info
+	// Future enhancement: giget could be modified to save this info
 	return {};
 }
 

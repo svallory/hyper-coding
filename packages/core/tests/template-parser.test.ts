@@ -70,15 +70,10 @@ examples:
 			expect(Object.keys(result.config.variables)).toHaveLength(3);
 			expect(result.config.variables.name.type).toBe("string");
 			expect(result.config.variables.name.required).toBe(true);
-			expect(result.config.variables.name.pattern).toBe(
-				"^[a-zA-Z][a-zA-Z0-9]*$",
-			);
+			expect(result.config.variables.name.pattern).toBe("^[a-zA-Z][a-zA-Z0-9]*$");
 
 			expect(result.config.variables.type.type).toBe("enum");
-			expect(result.config.variables.type.values).toEqual([
-				"functional",
-				"class",
-			]);
+			expect(result.config.variables.type.values).toEqual(["functional", "class"]);
 			expect(result.config.variables.type.default).toBe("functional");
 
 			expect(result.config.variables.withTests.type).toBe("boolean");
@@ -107,16 +102,12 @@ variables:
 
 			expect(result.isValid).toBe(false);
 			expect(result.errors.length).toBeGreaterThan(0);
-			expect(
-				result.errors.some((e) => e.includes("Template name is required")),
-			).toBe(true);
+			expect(result.errors.some((e) => e.includes("Template name is required"))).toBe(true);
 			expect(result.errors.some((e) => e.includes("invalid type"))).toBe(true);
 		});
 
 		it("should return error for non-existent file", async () => {
-			const result = await TemplateParser.parseTemplateFile(
-				"/non/existent/file.yml",
-			);
+			const result = await TemplateParser.parseTemplateFile("/non/existent/file.yml");
 
 			expect(result.isValid).toBe(false);
 			expect(result.errors.some((e) => e.includes("not found"))).toBe(true);
@@ -150,14 +141,8 @@ variables:
     values: [a, b, c]
 `;
 
-			fs.writeFileSync(
-				path.join(template1Dir, "template.yml"),
-				template1Content,
-			);
-			fs.writeFileSync(
-				path.join(template2Dir, "template.yml"),
-				template2Content,
-			);
+			fs.writeFileSync(path.join(template1Dir, "template.yml"), template1Content);
+			fs.writeFileSync(path.join(template2Dir, "template.yml"), template2Content);
 
 			const results = await TemplateParser.parseTemplateDirectory(tempDir);
 
@@ -170,9 +155,7 @@ variables:
 		});
 
 		it("should return empty array for non-existent directory", async () => {
-			const results = await TemplateParser.parseTemplateDirectory(
-				"/non/existent/directory",
-			);
+			const results = await TemplateParser.parseTemplateDirectory("/non/existent/directory");
 			expect(results).toHaveLength(0);
 		});
 	});
@@ -185,18 +168,13 @@ variables:
 				pattern: "^[a-zA-Z]+$",
 			};
 
-			expect(
-				TemplateParser.validateVariableValue("test", "validName", variable)
-					.isValid,
-			).toBe(true);
-			expect(
-				TemplateParser.validateVariableValue("test", "invalid123", variable)
-					.isValid,
-			).toBe(false);
-			expect(
-				TemplateParser.validateVariableValue("test", undefined, variable)
-					.isValid,
-			).toBe(false);
+			expect(TemplateParser.validateVariableValue("test", "validName", variable).isValid).toBe(
+				true,
+			);
+			expect(TemplateParser.validateVariableValue("test", "invalid123", variable).isValid).toBe(
+				false,
+			);
+			expect(TemplateParser.validateVariableValue("test", undefined, variable).isValid).toBe(false);
 		});
 
 		it("should validate enum values", () => {
@@ -206,15 +184,9 @@ variables:
 				required: true,
 			};
 
-			expect(
-				TemplateParser.validateVariableValue("test", "a", variable).isValid,
-			).toBe(true);
-			expect(
-				TemplateParser.validateVariableValue("test", "b", variable).isValid,
-			).toBe(true);
-			expect(
-				TemplateParser.validateVariableValue("test", "d", variable).isValid,
-			).toBe(false);
+			expect(TemplateParser.validateVariableValue("test", "a", variable).isValid).toBe(true);
+			expect(TemplateParser.validateVariableValue("test", "b", variable).isValid).toBe(true);
+			expect(TemplateParser.validateVariableValue("test", "d", variable).isValid).toBe(false);
 		});
 
 		it("should validate boolean values", () => {
@@ -223,15 +195,9 @@ variables:
 				required: true,
 			};
 
-			expect(
-				TemplateParser.validateVariableValue("test", true, variable).isValid,
-			).toBe(true);
-			expect(
-				TemplateParser.validateVariableValue("test", false, variable).isValid,
-			).toBe(true);
-			expect(
-				TemplateParser.validateVariableValue("test", "true", variable).isValid,
-			).toBe(false);
+			expect(TemplateParser.validateVariableValue("test", true, variable).isValid).toBe(true);
+			expect(TemplateParser.validateVariableValue("test", false, variable).isValid).toBe(true);
+			expect(TemplateParser.validateVariableValue("test", "true", variable).isValid).toBe(false);
 		});
 
 		it("should validate number values with min/max", () => {
@@ -242,21 +208,11 @@ variables:
 				required: true,
 			};
 
-			expect(
-				TemplateParser.validateVariableValue("test", 5, variable).isValid,
-			).toBe(true);
-			expect(
-				TemplateParser.validateVariableValue("test", 1, variable).isValid,
-			).toBe(true);
-			expect(
-				TemplateParser.validateVariableValue("test", 10, variable).isValid,
-			).toBe(true);
-			expect(
-				TemplateParser.validateVariableValue("test", 0, variable).isValid,
-			).toBe(false);
-			expect(
-				TemplateParser.validateVariableValue("test", 11, variable).isValid,
-			).toBe(false);
+			expect(TemplateParser.validateVariableValue("test", 5, variable).isValid).toBe(true);
+			expect(TemplateParser.validateVariableValue("test", 1, variable).isValid).toBe(true);
+			expect(TemplateParser.validateVariableValue("test", 10, variable).isValid).toBe(true);
+			expect(TemplateParser.validateVariableValue("test", 0, variable).isValid).toBe(false);
+			expect(TemplateParser.validateVariableValue("test", 11, variable).isValid).toBe(false);
 		});
 
 		it("should handle optional values with defaults", () => {
@@ -266,16 +222,9 @@ variables:
 				default: "default-value",
 			};
 
-			expect(
-				TemplateParser.validateVariableValue("test", undefined, variable)
-					.isValid,
-			).toBe(true);
-			expect(TemplateParser.getResolvedValue(undefined, variable)).toBe(
-				"default-value",
-			);
-			expect(TemplateParser.getResolvedValue("custom", variable)).toBe(
-				"custom",
-			);
+			expect(TemplateParser.validateVariableValue("test", undefined, variable).isValid).toBe(true);
+			expect(TemplateParser.getResolvedValue(undefined, variable)).toBe("default-value");
+			expect(TemplateParser.getResolvedValue("custom", variable)).toBe("custom");
 		});
 	});
 
@@ -297,9 +246,7 @@ variables:
 			const result = await TemplateParser.parseTemplateFile(templatePath);
 
 			expect(result.isValid).toBe(false);
-			expect(result.errors.some((e) => e.includes("Failed to parse"))).toBe(
-				true,
-			);
+			expect(result.errors.some((e) => e.includes("Failed to parse"))).toBe(true);
 		});
 
 		it("should handle empty file", async () => {
@@ -309,9 +256,7 @@ variables:
 			const result = await TemplateParser.parseTemplateFile(templatePath);
 
 			expect(result.isValid).toBe(false);
-			expect(result.errors.some((e) => e.includes("Invalid YAML format"))).toBe(
-				true,
-			);
+			expect(result.errors.some((e) => e.includes("Invalid YAML format"))).toBe(true);
 		});
 	});
 });

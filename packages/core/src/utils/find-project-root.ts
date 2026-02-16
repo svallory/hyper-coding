@@ -100,9 +100,7 @@ function isWorkspacePackage(packageJsonPath: string): boolean {
  * @param startDir - Directory to start searching from (defaults to process.cwd())
  * @returns Project root information
  */
-export function findProjectRoot(
-	startDir: string = process.cwd(),
-): ProjectRootInfo {
+export function findProjectRoot(startDir: string = process.cwd()): ProjectRootInfo {
 	debug("Finding project root from: %s", startDir);
 
 	// Find nearest package.json
@@ -135,9 +133,7 @@ export function findProjectRoot(
 	// Check if we're in a workspace package
 	if (isWorkspacePackage(nearestPackageJson)) {
 		// Walk up to find the monorepo root
-		const workspaceRootPackageJson = findNearestPackageJson(
-			join(immediateRoot, ".."),
-		);
+		const workspaceRootPackageJson = findNearestPackageJson(join(immediateRoot, ".."));
 
 		if (workspaceRootPackageJson) {
 			const workspaceRoot = dirname(workspaceRootPackageJson);

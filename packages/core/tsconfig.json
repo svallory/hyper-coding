@@ -20,14 +20,10 @@
 		"noImplicitReturns": false,
 		"noFallthroughCasesInSwitch": true,
 		"paths": {
-			"#": ["src"],
-			"#/*": ["src/*"],
-			"#tests": ["tests"],
-			"#tests/*": ["tests/*"],
-			"#fixtures": ["tests/fixtures"],
-			"#fixtures/*": ["tests/fixtures/*"],
-			"#helpers": ["tests/helpers"],
-			"#helpers/*": ["tests/helpers/*"]
+			"#/*": ["src/*.ts"],
+			"#tests/*": ["tests/*.ts"],
+			"#fixtures/*": ["tests/fixtures/*.ts"],
+			"#helpers/*": ["tests/helpers/*.ts"]
 		}
 	},
 	"include": ["src"],

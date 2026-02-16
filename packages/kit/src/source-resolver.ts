@@ -136,8 +136,7 @@ export function resolveKitSource(input: string): ResolvedKitSource {
 	// 7. GitHub/GitLab/Bitbucket shorthand: user/repo
 	// Must not start with @ (that's npm scoped packages)
 	// Must have exactly one / (to avoid paths like ./foo/bar)
-	const shorthandPattern =
-		/^([a-zA-Z0-9][-a-zA-Z0-9_.]*)\/([a-zA-Z0-9][-a-zA-Z0-9_.]*)(@|#)?/;
+	const shorthandPattern = /^([a-zA-Z0-9][-a-zA-Z0-9_.]*)\/([a-zA-Z0-9][-a-zA-Z0-9_.]*)(@|#)?/;
 	if (!trimmed.startsWith("@") && shorthandPattern.test(trimmed)) {
 		// Default to GitHub for shorthand
 		return { type: "github", source: `github:${trimmed}`, original: input };
@@ -167,9 +166,7 @@ export function buildInstallCommand(
 			return buildStandardCommand(pm, resolved.source, flags);
 		}
 		// For npm/pnpm/yarn, use npx jsr add
-		const jsrPackage = resolved.source
-			.replace("jsr:", "")
-			.replace("@jsr/", "@");
+		const jsrPackage = resolved.source.replace("jsr:", "").replace("@jsr/", "@");
 		return `npx jsr add ${jsrPackage}`;
 	}
 

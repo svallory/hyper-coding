@@ -7,13 +7,13 @@ import createResult from "./result.js";
 const add = async (
 	action: RenderedAction,
 	args: Record<string, any>,
-	{ logger, cwd, createPrompter }: RunnerConfig,
+	{ logger, cwd = process.cwd(), createPrompter }: RunnerConfig,
 ): Promise<ActionResult> => {
 	const {
 		attributes: { to, inject, unless_exists, force, from, skip_if },
 	} = action;
-	const result = createResult("add", to);
-	const prompter = createPrompter();
+	const result = createResult("add", to ?? "unknown");
+	const prompter = createPrompter?.();
 	if (inject) {
 		return result("ignored");
 	}
@@ -26,10 +26,10 @@ const add = async (
 	const fileExists = await fs.pathExists(absTo);
 
 	if (shouldNotOverwrite && fileExists) {
-		logger.warn(`     skipped: ${to}`);
+		logger?.warn(`     skipped: ${to}`);
 		return result("skipped");
 	}
-	if (!process.env.HYPERGEN_OVERWRITE && fileExists && !force) {
+	if (!process.env.HYPERGEN_OVERWRITE && fileExists && !force && prompter) {
 		if (
 			!(await prompter
 				.prompt({
@@ -38,9 +38,9 @@ const add = async (
 					name: "overwrite",
 					message: chalk.red(`     exists: ${to}. Overwrite? (y/N): `),
 				})
-				.then(({ overwrite }) => overwrite))
+				.then((result: any) => result?.overwrite))
 		) {
-			logger.warn(`     skipped: ${to}`);
+			logger?.warn(`     skipped: ${to}`);
 			return result("skipped");
 		}
 	}
@@ -62,7 +62,7 @@ const add = async (
 		await fs.writeFile(absTo, action.body);
 	}
 	const pathToLog = process.env.HYPERGEN_OUTPUT_ABS_PATH ? absTo : to;
-	logger.ok(`       ${force ? "FORCED" : "added"}: ${pathToLog}`);
+	logger?.ok(`       ${force ? "FORCED" : "added"}: ${pathToLog}`);
 
 	return result("added");
 };

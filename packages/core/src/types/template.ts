@@ -5,15 +5,7 @@
  */
 
 export interface TemplateVariable {
-	type:
-		| "string"
-		| "number"
-		| "boolean"
-		| "enum"
-		| "array"
-		| "object"
-		| "file"
-		| "directory";
+	type: "string" | "number" | "boolean" | "enum" | "array" | "object" | "file" | "directory";
 	required?: boolean;
 	multiple?: boolean;
 	default?: any;

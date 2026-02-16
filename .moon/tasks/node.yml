@@ -1,4 +1,4 @@
-$schema: "https://moonrepo.dev/schemas/tasks.json"
+$schema: 'https://moonrepo.dev/schemas/tasks.json'
 
 # Removed implicitDeps: ["^:build"] because:
 # - Tests work on source files (via #/ aliases), not dist/
@@ -6,52 +6,52 @@ $schema: "https://moonrepo.dev/schemas/tasks.json"
 # - Only prepublishOnly needs build (handled in package.json)
 
 implicitInputs:
-  - "package.json"
-  - "tsconfig.json"
-  - "biome.json"
-  - ".biomerc*"
+  - 'package.json'
+  - 'tsconfig.json'
+  - 'biome.json'
+  - '.biomerc*'
 
 fileGroups:
   # Source files
   sources:
-    - "src/**/*"
-    - "types/**/*"
+    - 'src/**/*'
+    - 'types/**/*'
 
   # Test files
   tests:
-    - "tests/**/*.test.*"
-    - "tests/**/*.spec.*"
-    - "**/__tests__/**/*"
+    - 'tests/**/*.test.*'
+    - 'tests/**/*.spec.*'
+    - '**/__tests__/**/*'
 
   # Configuration files
   configs:
-    - "*.config.*"
-    - ".eslintrc.*"
-    - ".prettierrc*"
-    - "tsconfig*.json"
+    - '*.config.*'
+    - '.eslintrc.*'
+    - '.prettierrc*'
+    - 'tsconfig*.json'
 
 tasks:
   # Build with tsup
   build:
     description: Build library/package with tsup
-    command: "tsup"
+    command: 'tsup'
     inputs:
-      - "@globs(sources)"
-      - "@globs(configs)"
-      - "package.json"
+      - '@globs(sources)'
+      - '@globs(configs)'
+      - 'package.json'
     outputs:
-      - "dist"
+      - 'dist'
 
   # Format code (runs biome check which does format + lint)
   # This is what you run locally: moon run :format
   format:
     description: Format and lint code (auto-fix)
-    command: "biome check . --write"
+    command: 'biome check . --write'
     inputs:
-      - "@globs(sources)"
-      - "@globs(tests)"
-      - "@globs(configs)"
-      - "**/*.md"
+      - '@globs(sources)'
+      - '@globs(tests)'
+      - '@globs(configs)'
+      - '**/*.md'
     options:
       cache: local
 
@@ -59,41 +59,35 @@ tasks:
   # Run before committing: moon run :check
   check:
     description: Run all checks (typecheck, etc)
-    deps:
-      - "typecheck"
+    command: 'tsc --noEmit'
+    inputs:
+      - '@globs(sources)'
+      - '@globs(tests)'
+      - '@globs(configs)'
 
   # CI check (biome check only, no auto-fix)
   # This runs in CI pipelines: moon run :ci
   ci:
     description: Check code quality for CI (no fixes)
-    command: "biome ci ."
+    command: 'biome ci .'
     inputs:
-      - "@globs(sources)"
-      - "@globs(tests)"
-      - "@globs(configs)"
-      - "**/*.md"
+      - '@globs(sources)'
+      - '@globs(tests)'
+      - '@globs(configs)'
+      - '**/*.md'
 
   # Test with vitest
   test:
     description: Run tests with vitest
-    command: "vitest run"
+    command: 'vitest run'
     inputs:
-      - "@globs(sources)"
-      - "@globs(tests)"
-      - "vitest.config.*"
+      - '@globs(sources)'
+      - '@globs(tests)'
+      - 'vitest.config.*'
 
   # Watch tests with vitest
   test-watch:
     description: Run tests in watch mode with vitest
-    command: "vitest"
+    command: 'vitest'
     options:
       cache: local
-
-  # Typecheck with tsc
-  typecheck:
-    description: Check TypeScript types
-    command: "tsc --noEmit"
-    inputs:
-      - "@globs(sources)"
-      - "@globs(tests)"
-      - "@globs(configs)"
