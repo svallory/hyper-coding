@@ -6,7 +6,7 @@
  * - Step Executor (orchestration engine)
  * - Tool Framework (template, action, codemod, recipe tools)
  * - Type System (comprehensive TypeScript definitions)
- * - Registry System (tool management and caching)
+ * - Registry System (tool management)
  */
 
 // Main Recipe Engine
@@ -81,9 +81,6 @@ export interface RecipeEngineConfig {
 	/** Step executor configuration */
 	stepExecutor?: Partial<import("./step-executor.js").StepExecutorConfig>;
 
-	/** Tool registry configuration */
-	toolRegistry?: Parameters<typeof import("./tools/registry.js").ToolRegistry.getInstance>[0];
-
 	/** Enable debug logging */
 	enableDebugLogging?: boolean;
 
@@ -106,7 +103,6 @@ export function initializeRecipeEngine(config: RecipeEngineConfig = {}): {
 	// Initialize tools framework first
 	const { initializeToolsFramework } = require("./tools/index.js");
 	const toolRegistry = initializeToolsFramework({
-		registryConfig: config.toolRegistry,
 		enableDebugLogging: config.enableDebugLogging,
 	});
 
@@ -146,11 +142,6 @@ export const RecipeEnginePresets = {
 			enableProgressTracking: true,
 			continueOnError: true,
 		},
-		toolRegistry: {
-			maxCacheSize: 50,
-			cacheTimeoutMs: 10 * 60 * 1000, // 10 minutes
-			enableInstanceReuse: true,
-		},
 		enableDebugLogging: true,
 	}),
 
@@ -164,11 +155,6 @@ export const RecipeEnginePresets = {
 			collectMetrics: false,
 			enableProgressTracking: false,
 			continueOnError: false,
-		},
-		toolRegistry: {
-			maxCacheSize: 200,
-			cacheTimeoutMs: 60 * 60 * 1000, // 1 hour
-			enableInstanceReuse: true,
 		},
 		enableDebugLogging: false,
 	}),
@@ -184,11 +170,6 @@ export const RecipeEnginePresets = {
 			enableProgressTracking: true,
 			continueOnError: true,
 		},
-		toolRegistry: {
-			maxCacheSize: 10,
-			cacheTimeoutMs: 1 * 60 * 1000, // 1 minute
-			enableInstanceReuse: false, // Fresh instances for each test
-		},
 		enableDebugLogging: true,
 	}),
 
@@ -202,11 +183,6 @@ export const RecipeEnginePresets = {
 			collectMetrics: false,
 			enableProgressTracking: false,
 			continueOnError: false,
-		},
-		toolRegistry: {
-			maxCacheSize: 500,
-			cacheTimeoutMs: 2 * 60 * 60 * 1000, // 2 hours
-			enableInstanceReuse: true,
 		},
 		enableDebugLogging: false,
 	}),

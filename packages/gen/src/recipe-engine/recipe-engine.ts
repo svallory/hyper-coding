@@ -110,13 +110,6 @@ export interface RecipeEngineConfig {
 	/** Step executor configuration */
 	stepExecutor?: Partial<StepExecutorConfig>;
 
-	/** Tool registry configuration */
-	toolRegistry?: {
-		maxCacheSize?: number;
-		cacheTimeoutMs?: number;
-		enableInstanceReuse?: boolean;
-	};
-
 	/** Working directory for all operations */
 	workingDir?: string;
 
@@ -202,11 +195,6 @@ const DEFAULT_CONFIG: Required<RecipeEngineConfig> = {
 		enableProgressTracking: true,
 		memoryWarningThreshold: 1024,
 		timeoutSafetyFactor: 1.2,
-	},
-	toolRegistry: {
-		maxCacheSize: 100,
-		cacheTimeoutMs: 30 * 60 * 1000,
-		enableInstanceReuse: true,
 	},
 	workingDir: process.cwd(),
 	defaultTimeout: 60000,

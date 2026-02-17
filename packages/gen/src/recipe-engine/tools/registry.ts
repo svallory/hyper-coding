@@ -1,8 +1,9 @@
 /**
  * Tool Registry System
  *
- * Centralized registry for managing tool instances and factories.
- * Provides tool discovery, registration, and resolution capabilities.
+ * Centralized registry for managing tool factories and creating tool instances.
+ * Tools are created fresh for each use — no instance caching, since this is a
+ * short-lived CLI process where cache overhead exceeds any reuse benefit.
  */
 
 import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
@@ -47,56 +48,19 @@ export interface ToolRegistration {
 }
 
 /**
- * Tool instance cache entry
- */
-interface ToolCacheEntry {
-	/** Tool instance */
-	instance: Tool;
-
-	/** Creation timestamp */
-	createdAt: Date;
-
-	/** Last access timestamp */
-	lastAccessedAt: Date;
-
-	/** Access count */
-	accessCount: number;
-
-	/** Whether the instance is currently in use */
-	inUse: boolean;
-}
-
-/**
  * Tool registry statistics
  */
 export interface ToolRegistryStats {
 	/** Total number of registered tool types */
 	totalRegistrations: number;
 
-	/** Number of cached tool instances */
-	cachedInstances: number;
-
-	/** Number of active (in-use) tool instances */
-	activeInstances: number;
-
 	/** Registry statistics by tool type */
 	byType: Record<
 		ToolType,
 		{
 			registrations: number;
-			cachedInstances: number;
-			activeInstances: number;
 		}
 	>;
-
-	/** Memory usage statistics */
-	memory: {
-		/** Estimated registry memory usage in bytes */
-		registrySize: number;
-
-		/** Estimated cache memory usage in bytes */
-		cacheSize: number;
-	};
 }
 
 /**
@@ -126,73 +90,36 @@ export interface ToolSearchCriteria {
  * Tool resolution options
  */
 export interface ToolResolutionOptions {
-	/** Whether to create a new instance (default: use cached) */
-	forceNew?: boolean;
-
 	/** Tool instance options */
 	instanceOptions?: Record<string, any>;
 
 	/** Whether to validate the tool after creation */
 	validate?: boolean;
-
-	/** Cache the created instance */
-	cache?: boolean;
 }
 
 /**
- * Centralized registry for managing tool instances and factories
+ * Centralized registry for managing tool factories
  *
- * The ToolRegistry provides a singleton pattern for managing tool lifecycle,
- * including registration, discovery, caching, and cleanup.
+ * The ToolRegistry provides a singleton pattern for tool registration,
+ * discovery, and instance creation.
  */
 export class ToolRegistry {
 	private static instance: ToolRegistry | null = null;
 
 	private readonly registrations = new Map<string, ToolRegistration>();
-	private readonly instanceCache = new Map<string, ToolCacheEntry>();
 	private readonly debug: ReturnType<typeof createDebug>;
 
-	// Configuration
-	private readonly maxCacheSize: number;
-	private readonly cacheTimeoutMs: number;
-	private readonly enableInstanceReuse: boolean;
-
-	// Timer for cache cleanup
-	private cleanupIntervalId: NodeJS.Timeout | null = null;
-
-	private constructor(
-		options: {
-			maxCacheSize?: number;
-			cacheTimeoutMs?: number;
-			enableInstanceReuse?: boolean;
-		} = {},
-	) {
+	private constructor() {
 		this.debug = createDebug("hyper:recipe:registry");
-
-		this.maxCacheSize = options.maxCacheSize || 100;
-		this.cacheTimeoutMs = options.cacheTimeoutMs || 30 * 60 * 1000; // 30 minutes
-		this.enableInstanceReuse = options.enableInstanceReuse ?? true;
-
-		this.debug("Tool registry initialized with options: %o", {
-			maxCacheSize: this.maxCacheSize,
-			cacheTimeoutMs: this.cacheTimeoutMs,
-			enableInstanceReuse: this.enableInstanceReuse,
-		});
-
-		// Start cache cleanup timer
-		this.startCacheCleanup();
+		this.debug("Tool registry initialized");
 	}
 
 	/**
 	 * Get the singleton registry instance
 	 */
-	static getInstance(options?: {
-		maxCacheSize?: number;
-		cacheTimeoutMs?: number;
-		enableInstanceReuse?: boolean;
-	}): ToolRegistry {
+	static getInstance(): ToolRegistry {
 		if (!ToolRegistry.instance) {
-			ToolRegistry.instance = new ToolRegistry(options);
+			ToolRegistry.instance = new ToolRegistry();
 		}
 		return ToolRegistry.instance;
 	}
@@ -201,10 +128,6 @@ export class ToolRegistry {
 	 * Reset the singleton instance (primarily for testing)
 	 */
 	static reset(): void {
-		if (ToolRegistry.instance) {
-			ToolRegistry.instance.stopCacheCleanup();
-			ToolRegistry.instance.clearCache();
-		}
 		ToolRegistry.instance = null;
 	}
 
@@ -272,8 +195,6 @@ export class ToolRegistry {
 		const removed = this.registrations.delete(registrationKey);
 
 		if (removed) {
-			// Clean up any cached instances
-			this.removeCachedInstances(toolType, name);
 			this.debug("Tool unregistered: %s", registrationKey);
 		}
 
@@ -297,7 +218,7 @@ export class ToolRegistry {
 	}
 
 	/**
-	 * Resolve a tool instance by type and name
+	 * Create a tool instance by type and name
 	 */
 	async resolve(toolType: ToolType, name: string, options?: ToolResolutionOptions): Promise<Tool> {
 		const registrationKey = this.getRegistrationKey(toolType, name);
@@ -319,40 +240,10 @@ export class ToolRegistry {
 			);
 		}
 
-		// Check cache first (unless forced to create new)
-		if (this.enableInstanceReuse && !options?.forceNew) {
-			const cached = this.getCachedInstance(registrationKey);
-			if (cached && !cached.inUse) {
-				cached.lastAccessedAt = new Date();
-				cached.accessCount++;
-				cached.inUse = true;
-
-				this.debug(
-					"Resolved cached tool instance: %s (access count: %d)",
-					registrationKey,
-					cached.accessCount,
-				);
-				return cached.instance;
-			}
-		}
-
-		// Create new instance
-		this.debug("Creating new tool instance: %s", registrationKey);
+		this.debug("Creating tool instance: %s", registrationKey);
 
 		try {
 			const instance = registration.factory.create(name, options?.instanceOptions);
-
-			// Validate instance if requested
-			if (options?.validate) {
-				// Note: validation requires a step and context, which we don't have here
-				// This would need to be handled at execution time
-				this.debug("Tool validation skipped - requires execution context");
-			}
-
-			// Cache the instance if requested and caching is enabled
-			if (this.enableInstanceReuse && (options?.cache ?? true)) {
-				this.cacheInstance(registrationKey, instance);
-			}
 
 			this.debug("Tool instance created: %s", registrationKey);
 			return instance;
@@ -376,17 +267,10 @@ export class ToolRegistry {
 	}
 
 	/**
-	 * Release a tool instance (mark as not in use)
+	 * Release a tool instance (no-op — instances are not cached)
 	 */
-	release(toolType: ToolType, name: string, instance: Tool): void {
-		const registrationKey = this.getRegistrationKey(toolType, name);
-		const cached = this.instanceCache.get(registrationKey);
-
-		if (cached && cached.instance === instance) {
-			cached.inUse = false;
-			cached.lastAccessedAt = new Date();
-			this.debug("Tool instance released: %s", registrationKey);
-		}
+	release(_toolType: ToolType, _name: string, _instance: Tool): void {
+		// No-op: tools are created fresh each time, no cache to return to.
 	}
 
 	/**
@@ -401,7 +285,6 @@ export class ToolRegistry {
 			}
 		}
 
-		// Sort by name for consistent results
 		results.sort((a, b) => a.name.localeCompare(b.name));
 
 		this.debug("Tool search returned %d results for criteria: %o", results.length, criteria);
@@ -449,104 +332,18 @@ export class ToolRegistry {
 	getStats(): ToolRegistryStats {
 		const stats: ToolRegistryStats = {
 			totalRegistrations: this.registrations.size,
-			cachedInstances: this.instanceCache.size,
-			activeInstances: 0,
 			byType: {} as any,
-			memory: {
-				registrySize: 0,
-				cacheSize: 0,
-			},
 		};
 
-		// Calculate statistics by type
 		for (const registration of this.registrations.values()) {
 			const type = registration.toolType;
 			if (!stats.byType[type]) {
-				stats.byType[type] = {
-					registrations: 0,
-					cachedInstances: 0,
-					activeInstances: 0,
-				};
+				stats.byType[type] = { registrations: 0 };
 			}
 			stats.byType[type].registrations++;
 		}
 
-		// Count cached and active instances
-		for (const [key, cached] of this.instanceCache) {
-			const [toolType] = key.split(":") as [ToolType, string];
-
-			if (stats.byType[toolType]) {
-				stats.byType[toolType].cachedInstances++;
-				if (cached.inUse) {
-					stats.byType[toolType].activeInstances++;
-					stats.activeInstances++;
-				}
-			}
-		}
-
-		// Estimate memory usage (rough approximation)
-		stats.memory.registrySize = this.registrations.size * 512; // ~512 bytes per registration
-		stats.memory.cacheSize = this.instanceCache.size * 2048; // ~2KB per cached instance
-
 		return stats;
-	}
-
-	/**
-	 * Clear the instance cache
-	 */
-	clearCache(): void {
-		this.debug("Clearing tool instance cache (%d instances)", this.instanceCache.size);
-
-		// Clean up all cached instances
-		for (const [key, cached] of this.instanceCache) {
-			if (cached.instance.isInitialized() && !cached.instance.isCleanedUp()) {
-				cached.instance.cleanup().catch((error) => {
-					this.debug(
-						"Error cleaning up cached instance %s: %s",
-						key,
-						error instanceof Error ? error.message : String(error),
-					);
-				});
-			}
-		}
-
-		this.instanceCache.clear();
-	}
-
-	/**
-	 * Cleanup expired cached instances
-	 */
-	cleanupExpiredInstances(): number {
-		const now = Date.now();
-		let removed = 0;
-
-		for (const [key, cached] of this.instanceCache) {
-			const age = now - cached.lastAccessedAt.getTime();
-
-			if (!cached.inUse && age > this.cacheTimeoutMs) {
-				this.debug("Cleaning up expired instance: %s (age: %dms)", key, age);
-
-				// Clean up the tool instance
-				if (cached.instance.isInitialized() && !cached.instance.isCleanedUp()) {
-					cached.instance.cleanup().catch((error) => {
-						this.debug(
-							"Error cleaning up expired instance %s: %s",
-							key,
-							error instanceof Error ? error.message : String(error),
-						);
-					});
-				}
-
-				this.instanceCache.delete(key);
-				removed++;
-			}
-		}
-
-		if (removed > 0) {
-			this.debug("Cleaned up %d expired tool instances", removed);
-		}
-
-		return removed;
 	}
 
 	// Private helper methods
@@ -555,92 +352,15 @@ export class ToolRegistry {
 		return `${toolType}:${name}`;
 	}
 
-	private getCachedInstance(registrationKey: string): ToolCacheEntry | null {
-		return this.instanceCache.get(registrationKey) || null;
-	}
-
-	private cacheInstance(registrationKey: string, instance: Tool): void {
-		// Check cache size limit
-		if (this.instanceCache.size >= this.maxCacheSize) {
-			this.evictOldestCachedInstance();
-		}
-
-		const entry: ToolCacheEntry = {
-			instance,
-			createdAt: new Date(),
-			lastAccessedAt: new Date(),
-			accessCount: 1,
-			inUse: true,
-		};
-
-		this.instanceCache.set(registrationKey, entry);
-		this.debug("Tool instance cached: %s", registrationKey);
-	}
-
-	private evictOldestCachedInstance(): void {
-		let oldestKey: string | null = null;
-		let oldestTime = Date.now();
-
-		// Find the oldest non-active instance
-		for (const [key, cached] of this.instanceCache) {
-			if (!cached.inUse && cached.lastAccessedAt.getTime() < oldestTime) {
-				oldestKey = key;
-				oldestTime = cached.lastAccessedAt.getTime();
-			}
-		}
-
-		if (oldestKey) {
-			const cached = this.instanceCache.get(oldestKey)!;
-
-			// Clean up the evicted instance
-			if (cached.instance.isInitialized() && !cached.instance.isCleanedUp()) {
-				cached.instance.cleanup().catch((error) => {
-					this.debug(
-						"Error cleaning up evicted instance %s: %s",
-						oldestKey,
-						error instanceof Error ? error.message : String(error),
-					);
-				});
-			}
-
-			this.instanceCache.delete(oldestKey);
-			this.debug("Evicted cached instance to make room: %s", oldestKey);
-		}
-	}
-
-	private removeCachedInstances(toolType: ToolType, name: string): void {
-		const registrationKey = this.getRegistrationKey(toolType, name);
-		const cached = this.instanceCache.get(registrationKey);
-
-		if (cached) {
-			// Clean up the instance
-			if (cached.instance.isInitialized() && !cached.instance.isCleanedUp()) {
-				cached.instance.cleanup().catch((error) => {
-					this.debug(
-						"Error cleaning up removed instance %s: %s",
-						registrationKey,
-						error instanceof Error ? error.message : String(error),
-					);
-				});
-			}
-
-			this.instanceCache.delete(registrationKey);
-			this.debug("Removed cached instance: %s", registrationKey);
-		}
-	}
-
 	private matchesCriteria(registration: ToolRegistration, criteria: ToolSearchCriteria): boolean {
-		// Type filter
 		if (criteria.type && registration.toolType !== criteria.type) {
 			return false;
 		}
 
-		// Enabled filter
 		if (criteria.enabledOnly && !registration.enabled) {
 			return false;
 		}
 
-		// Name pattern filter
 		if (criteria.namePattern) {
 			const regex = new RegExp(criteria.namePattern, "i");
 			if (!regex.test(registration.name)) {
@@ -648,12 +368,10 @@ export class ToolRegistry {
 			}
 		}
 
-		// Category filter
 		if (criteria.category && registration.category !== criteria.category) {
 			return false;
 		}
 
-		// Tags filter (all must match)
 		if (criteria.tags && criteria.tags.length > 0) {
 			const registrationTags = registration.tags || [];
 			if (!criteria.tags.every((tag) => registrationTags.includes(tag))) {
@@ -661,7 +379,6 @@ export class ToolRegistry {
 			}
 		}
 
-		// Description search
 		if (criteria.description && registration.description) {
 			const regex = new RegExp(criteria.description, "i");
 			if (!regex.test(registration.description)) {
@@ -670,45 +387,6 @@ export class ToolRegistry {
 		}
 
 		return true;
-	}
-
-	private startCacheCleanup(): void {
-		// No-op: cache cleanup is unnecessary in a short-lived CLI process.
-		// The in-memory cache is discarded when the process exits.
-	}
-
-	/**
-	 * Stop the cache cleanup timer
-	 */
-	public stopCacheCleanup(): void {
-		if (this.cleanupIntervalId) {
-			clearInterval(this.cleanupIntervalId);
-			this.cleanupIntervalId = null;
-			this.debug("Cache cleanup timer stopped");
-		}
-	}
-
-	/**
-	 * Clean up the registry and all its resources
-	 */
-	public cleanup(): void {
-		this.stopCacheCleanup();
-
-		// Clear all cached instances
-		for (const [key, entry] of this.instanceCache.entries()) {
-			if (entry.instance?.cleanup) {
-				try {
-					entry.instance.cleanup();
-				} catch (error) {
-					this.debug("Error cleaning up tool instance %s: %o", key, error);
-				}
-			}
-		}
-
-		this.instanceCache.clear();
-		this.registrations.clear();
-
-		this.debug("Tool registry cleaned up");
 	}
 }
 
