@@ -1,0 +1,67 @@
+---
+to: "{{ projectFolder }}/src/content/docs/features/core.mdx"
+---
+---
+title: Core Features
+description: Essential features of {{ projectName }}
+---
+
+# Core Features
+
+{{ projectName }} comes with a powerful set of features to help you build great documentation.
+
+## Built-in Features
+
+### Starlight
+
+Powered by [Starlight](https://starlight.astro.build/), the all-in-one documentation framework built on Astro.
+
+### Markdown & MDX
+
+Write documentation in Markdown or MDX with full component support.
+
+### Syntax Highlighting
+
+Beautiful code blocks with expressive code themes.
+
+@if(typedoc)
+## TypeDoc Integration
+
+Automatic API documentation generation from TypeScript source code.
+@endif
+
+@if(openapi)
+## OpenAPI/Swagger
+
+Interactive API documentation with the OpenAPI integration.
+@endif
+
+@if(keyboard)
+## Keyboard Shortcuts
+
+Document keyboard shortcuts with the starlight-kbd plugin.
+@endif
+
+@if(autoSidebar)
+## Auto Sidebar
+
+Automatic sidebar generation based on your content structure.
+@endif
+
+@if(scrollToTop)
+## Scroll to Top
+
+Easy navigation with a scroll-to-top button.
+@endif
+
+@if(changelogs)
+## Changelogs
+
+Keep track of changes with integrated changelog support.
+@endif
+
+@if(obsidian)
+## Obsidian Integration
+
+Publish your Obsidian vault directly to your documentation site.
+@endif

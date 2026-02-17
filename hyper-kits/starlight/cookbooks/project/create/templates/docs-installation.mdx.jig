@@ -1,0 +1,50 @@
+---
+to: "{{ projectFolder }}/src/content/docs/installation.mdx"
+---
+---
+title: Installation
+description: How to install and set up {{ projectName }}
+---
+
+# Installation
+
+This guide will help you get {{ projectName }} up and running on your local machine.
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org/) 18+ or [Bun](https://bun.sh/) 1.0+
+- A code editor (we recommend [VS Code](https://code.visualstudio.com/))
+
+## Quick Start
+
+The fastest way to get started:
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd {{ projectFolder }}
+
+# Install dependencies
+bun install
+
+# Start the development server
+bun run dev
+```
+
+Your documentation site will be available at `http://localhost:4321`.
+
+## Manual Setup
+
+If you prefer to set things up manually:
+
+1. Create a new directory for your project
+2. Copy the necessary configuration files
+3. Install the dependencies listed in `package.json`
+4. Run the development server
+
+## Next Steps
+
+- Read the [Quick Start Guide](/quick-start/) for a hands-on tutorial
+- Explore the [Core Features](/features/core/) documentation
+@if(typedoc)- Check out the [API Reference](/api/)
+@endif

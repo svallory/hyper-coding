@@ -1,0 +1,38 @@
+---
+to: "{{ projectFolder }}/src/content/docs/quick-start.mdx"
+---
+---
+title: Quick Start
+description: Get up and running with {{ projectName }} in minutes
+---
+
+# Quick Start
+
+Get up and running with {{ projectName }} in just a few minutes.
+
+## Step 1: Install Dependencies
+
+```bash
+bun install
+```
+
+## Step 2: Start Development Server
+
+```bash
+bun run dev
+```
+
+## Step 3: Open Your Browser
+
+Navigate to `http://localhost:4321` to see your documentation site.
+
+## Step 4: Start Writing
+
+Edit the files in `src/content/docs/` to add your own documentation.
+
+## What's Next?
+
+- Learn about [Core Features](/features/core/)
+@if(typedoc)- Explore the [API Reference](/api/)
+@endif
+- Customize your [Astro configuration](https://docs.astro.build/)
