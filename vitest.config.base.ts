@@ -60,7 +60,15 @@ export function createVitestConfig(importMetaUrl: string): UserConfig {
 			coverage: {
 				provider: "v8",
 				reporter: ["text", "json", "html"],
-				exclude: ["node_modules/**", "dist/**", "**/*.d.ts", "**/*.config.*", "**/tests/**"],
+				exclude: [
+					"node_modules/**",
+					"dist/**",
+					"**/*.d.ts",
+					"**/*.config.*",
+					"**/tests/**",
+					"**/.archive/**",
+					"**/test-output/**",
+				],
 			},
 			testTimeout: 30000,
 		},
