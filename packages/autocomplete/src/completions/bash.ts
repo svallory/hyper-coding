@@ -59,6 +59,13 @@ _<CLI_BIN>_autocomplete()
 
       opts=$(printf "%s " "\${commands[@]}") # | grep -Eo '^[a-zA-Z0-9_-]+'
     fi
+
+    # Dynamic completions (kit/cookbook/recipe names)
+    local dynamic_opts
+    dynamic_opts=$(<CLI_BIN> autocomplete generate -- "\${COMP_WORDS[@]:1}" 2>/dev/null)
+    if [[ -n "$dynamic_opts" ]]; then
+      opts="$opts $dynamic_opts"
+    fi
   else
     # Flag
 
@@ -69,6 +76,13 @@ _<CLI_BIN>_autocomplete()
     # The line below finds the command in $commands using grep
     # Then, using sed, it removes everything from the found command before the --flags (e.g. "command:subcommand:subsubcom --flag1 --flag2" -> "--flag1 --flag2")
     opts=$(printf "%s " "\${commands[@]}" | grep "\${normalizedCommand}" | sed -n "s/^\${normalizedCommand} //p")
+
+    # Dynamic flag completions
+    local dynamic_flag_opts
+    dynamic_flag_opts=$(<CLI_BIN> autocomplete generate -- "\${COMP_WORDS[@]:1}" 2>/dev/null)
+    if [[ -n "$dynamic_flag_opts" ]]; then
+      opts="$opts $dynamic_flag_opts"
+    fi
   fi
 
   COMPREPLY=($(compgen -W "$opts" -- "\${cur}"))

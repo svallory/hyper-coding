@@ -75,12 +75,28 @@ export default class ZshCompWithSpaces {
 				}
 			}
 
+			caseBlock += `*)\n  _${this.config.bin}_dynamic \${words[@]:1}\n  ;;\n`;
 			caseBlock += "esac\n";
 			return caseBlock;
 		};
 
 		return `#compdef ${this.config.bin}
 ${this.config.binAliases?.map((a) => `compdef ${a}=${this.config.bin}`).join("\n") ?? ""}
+
+# Dynamic completion helper - calls ${this.config.bin} autocomplete generate for kit/cookbook/recipe completion
+_${this.config.bin}_dynamic() {
+  local -a dynamic_completions
+  local output
+  output=$(${this.config.bin} autocomplete generate -- "$@" 2>/dev/null)
+  if [[ -n "$output" ]]; then
+    while IFS= read -r line; do
+      [[ -n "$line" ]] && dynamic_completions+=("$line")
+    done <<< "$output"
+    compadd -a dynamic_completions
+    return 0
+  fi
+  return 1
+}
 
 ${this.topics.map((t) => this.genZshTopicCompFun(t.name)).join("\n")}
 
@@ -93,6 +109,7 @@ _${this.config.bin}() {
   case "$state" in
     cmds)
       ${this.genZshValuesBlock(firstArgs)}
+      _${this.config.bin}_dynamic \${words[@]:1}
     ;;
     args)
       ${mainArgsCaseBlock()}

@@ -159,6 +159,18 @@ $scriptblock = {
               "ParameterValue",
               "$($_.Value._summary ?? $_.Value._command.summary ?? " ")"
           }
+
+        # Dynamic completion for kit/cookbook/recipe names
+        $DynamicOutput = & ${this.config.bin} autocomplete generate -- $WordToComplete 2>$null
+        if ($DynamicOutput) {
+            $DynamicOutput | ForEach-Object {
+                New-Object -Type CompletionResult -ArgumentList \`
+                    $($Mode -eq "MenuComplete" ? "$_ " : "$_"),
+                    $_,
+                    "ParameterValue",
+                    " "
+            }
+        }
     } else {
       # Start completing command/topic/coTopic
 
@@ -231,6 +243,18 @@ $scriptblock = {
                   $_.Key,
                   "ParameterValue",
                   "$($NextArg[$_.Key]._summary ?? $NextArg[$_.Key]._command.summary ?? " ")"
+          }
+      }
+
+      # Dynamic completion fallback for kit/cookbook/recipe names
+      $DynamicOutput = & ${this.config.bin} autocomplete generate -- @($CurrentLine) $WordToComplete 2>$null
+      if ($DynamicOutput) {
+          $DynamicOutput | ForEach-Object {
+              New-Object -Type CompletionResult -ArgumentList \`
+                  $($Mode -eq "MenuComplete" ? "$_ " : "$_"),
+                  $_,
+                  "ParameterValue",
+                  " "
           }
       }
     }
