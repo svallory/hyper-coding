@@ -44,3 +44,6 @@ sandbox/*
 # Hyper
 .hyper/kits/*/
 .worktrees/
+
+# Vitest temp files (generated during test runs)
+*.timestamp-*.mjs
