@@ -1,0 +1,147 @@
+name: create
+description: |
+  Create a new Astro/Starlight documentation site with optional integrations.
+  Sets up the complete project structure with all selected features.
+version: "1.0.0"
+
+variables:
+  projectFolder:
+    type: string
+    description: Project folder name (where all files will be generated)
+    default: "my-docs-site"
+
+  projectName:
+    type: string
+    description: Project name for the documentation site
+    required: true
+
+  projectDescription:
+    type: string
+    description: Project description
+    required: true
+
+  siteUrl:
+    type: string
+    description: Site URL (e.g., https://example.com)
+    default: "https://localhost:4321"
+
+  githubRepo:
+    type: string
+    description: GitHub repository URL (optional)
+
+  typedoc:
+    type: boolean
+    description: Enable TypeDoc API documentation
+    default: true
+
+  entryPoint:
+    type: string
+    description: TypeScript entry point for API docs (e.g., src/index.ts)
+    default: "src/index.ts"
+
+  openapi:
+    type: boolean
+    description: Enable OpenAPI/Swagger documentation
+    default: false
+
+  keyboard:
+    type: boolean
+    description: Enable keyboard shortcuts documentation (starlight-kbd)
+    default: false
+
+  autoSidebar:
+    type: boolean
+    description: Enable automatic sidebar generation
+    default: false
+
+  scrollToTop:
+    type: boolean
+    description: Enable scroll-to-top button
+    default: true
+
+  changelogs:
+    type: boolean
+    description: Enable changelog documentation
+    default: false
+
+  obsidian:
+    type: boolean
+    description: Enable Obsidian vault integration
+    default: false
+
+steps:
+  - name: Generate project README
+    tool: template
+    template: templates/README.md.jig
+
+  - name: Generate package.json
+    tool: template
+    template: templates/package.json.jig
+
+  - name: Generate Astro config
+    tool: template
+    template: templates/astro.config.mjs.jig
+
+  - name: Generate docs config
+    tool: template
+    template: templates/docs-config.ts.jig
+
+  - name: Generate Tailwind config
+    tool: template
+    template: templates/tailwind.config.mjs.jig
+
+  - name: Generate main documentation index
+    tool: template
+    template: templates/docs-index.mdx.jig
+
+  - name: Generate introduction page
+    tool: template
+    template: templates/docs-introduction.mdx.jig
+
+  - name: Generate installation guide
+    tool: template
+    template: templates/docs-installation.mdx.jig
+
+  - name: Generate quick start guide
+    tool: template
+    template: templates/docs-quick-start.mdx.jig
+
+  - name: Generate core features documentation
+    tool: template
+    template: templates/docs-features-core.mdx.jig
+
+  - name: Generate OpenAPI spec
+    tool: template
+    template: templates/openapi.yaml.jig
+    when: "{{ openapi }}"
+
+  - name: Setup project structure
+    tool: shell
+    command: |
+      mkdir -p "{{ projectFolder }}/src/content/docs"
+      mkdir -p "{{ projectFolder }}/src/content/config.ts"
+      mkdir -p "{{ projectFolder }}/public"
+      mkdir -p "{{ projectFolder }}/astro"
+
+  - name: Create src/env.d.ts
+    tool: template
+    template: templates/env.d.ts.jig
+
+  - name: Create typedoc.json
+    tool: template
+    template: templates/typedoc.json.jig
+    when: "{{ typedoc }}"
+
+  - name: Create .gitignore
+    tool: template
+    template: templates/gitignore.jig
+
+onSuccess: |
+  ✅ Starlight project "{{ projectName }}" created successfully!
+
+  Next steps:
+    cd {{ projectFolder }}
+    bun install
+    bun run dev
+
+  Your documentation site will be available at http://localhost:4321
