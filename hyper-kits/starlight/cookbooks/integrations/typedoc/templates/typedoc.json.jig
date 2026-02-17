@@ -1,0 +1,11 @@
+---
+to: "{{ projectFolder }}/typedoc.json"
+---
+{
+  "entryPoints": ["{{ entryPoint }}"],
+  "out": "./src/content/docs/api",
+  "plugin": ["typedoc-plugin-markdown"],
+  "disableSources": true,
+  "hideBreadcrumbs": true,
+  "hideInPageTOC": true
+}
