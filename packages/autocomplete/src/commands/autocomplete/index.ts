@@ -1,5 +1,6 @@
-import { Args, Flags, ux } from "@oclif/core";
+import { Args, Flags } from "@oclif/core";
 
+import { indent, list } from "@hypercli/ui";
 import { c, msg } from "@hypercli/ui/shortcuts";
 
 import { AutocompleteBase } from "#base";
@@ -35,9 +36,7 @@ export default class Index extends AutocompleteBase {
 		const { args, flags } = await this.parse(Index);
 		const shell = args.shell ?? this.determineShell(this.config.shell);
 
-		ux.action.start(c.bold("Building the autocomplete cache"));
 		await Create.run([], this.config);
-		ux.action.stop();
 
 		if (!flags["refresh-cache"]) {
 			this.printShellInstructions(shell);
@@ -49,83 +48,48 @@ export default class Index extends AutocompleteBase {
 		const tabStr = shell === "bash" ? "<TAB><TAB>" : "<TAB>";
 		const scriptCommand = `${this.config.bin} autocomplete script ${shell}`;
 
-		this.log(
-			msg.info({
-				title: `Setup Instructions for ${this.config.bin.toUpperCase()} CLI Autocomplete`,
-				summary: "Follow the steps below to enable autocomplete for your shell.",
-				body: "",
-			}),
-		);
+		this.log("Follow the steps below to enable autocomplete for your shell.\n");
+
+		const steps: string[] = [];
 
 		switch (shell) {
 			case "bash": {
-				this.log(`
-1) Run this command in your terminal window:
-
-  ${c.command(`printf "$(${scriptCommand})" >> ~/.bashrc; source ~/.bashrc`)}
-
-  The previous command adds the ${c.command(setupEnvVar)} environment variable to your Bash config file and then sources the file.
-
-  ${c.bold("NOTE")}: If you've configured your terminal to start as a login shell, you may need to modify the command so it updates either the ~/.bash_profile or ~/.profile file. For example:
-
-  ${c.command(`printf "$(${scriptCommand})" >> ~/.bash_profile; source ~/.bash_profile`)}
-
-  Or:
-
-  ${c.command(`printf "$(${scriptCommand})" >> ~/.profile; source ~/.profile`)}
-
-2) Start using autocomplete:
-
-  ${c.command(`${this.config.bin} ${tabStr}`)}                  # Command completion
-  ${c.command(`${this.config.bin} command --${tabStr}`)}        # Flag completion
-`);
+				steps.push(
+					`Run this command in your terminal:\n\n${c.command(`printf "$(${scriptCommand})" >> ~/.bashrc; source ~/.bashrc`)}\n\nThis adds the ${c.command(setupEnvVar)} variable to your Bash config.\n\n${c.bold("NOTE")}: For login shells, use ${c.command("~/.bash_profile")} or ${c.command("~/.profile")} instead.`,
+				);
+				steps.push(
+					`Start using autocomplete:\n\n${c.command(`${this.config.bin} ${tabStr}`)}                  # Command completion\n${c.command(`${this.config.bin} command --${tabStr}`)}        # Flag completion`,
+				);
 				break;
 			}
 
 			case "powershell": {
-				this.log(`
-1) Run these two cmdlets in your PowerShell window in the order shown:
-
-  ${c.command(`New-Item -Type Directory -Path (Split-Path -Parent $PROFILE) -ErrorAction SilentlyContinue
-  Add-Content -Path $PROFILE -Value (Invoke-Expression -Command "${scriptCommand}"); .$PROFILE`)}
-
-2) (Optional) If you want matching completions printed below the command line, run this cmdlet:
-
-  ${c.command("Set-PSReadlineKeyHandler -Key Tab -Function MenuComplete")}
-
-3) Start using autocomplete:
-
-  ${c.command(`${this.config.bin} ${tabStr}`)}                  # Command completion
-  ${c.command(`${this.config.bin} command --${tabStr}`)}        # Flag completion
-`);
+				steps.push(
+					`Run these cmdlets in your PowerShell window:\n\n${c.command("New-Item -Type Directory -Path (Split-Path -Parent $PROFILE) -ErrorAction SilentlyContinue")}\n${c.command(`Add-Content -Path $PROFILE -Value (Invoke-Expression -Command "${scriptCommand}"); .$PROFILE`)}`,
+				);
+				steps.push(
+					`(Optional) Enable menu completion:\n\n${c.command("Set-PSReadlineKeyHandler -Key Tab -Function MenuComplete")}`,
+				);
+				steps.push(
+					`Start using autocomplete:\n\n${c.command(`${this.config.bin} ${tabStr}`)}                  # Command completion\n${c.command(`${this.config.bin} command --${tabStr}`)}        # Flag completion`,
+				);
 				break;
 			}
 
 			case "zsh": {
-				this.log(`
-1) Run this command in your terminal window:
-
-  ${c.command(`printf "$(${scriptCommand})" >> ~/.zshrc; source ~/.zshrc`)}
-
-  The previous command adds the ${c.command(setupEnvVar)} environment variable to your zsh config file and then sources the file.
-
-2) (Optional) Run this command to ensure that you have no permissions conflicts:
-
-  ${c.command("compaudit -D")}
-
-3) Start using autocomplete:
-
-  ${c.command(`${this.config.bin} ${tabStr}`)}                  # Command completion
-  ${c.command(`${this.config.bin} command --${tabStr}`)}        # Flag completion
-`);
+				steps.push(
+					`Run this command in your terminal:\n\n${c.command(`printf "$(${scriptCommand})" >> ~/.zshrc; source ~/.zshrc`)}\n\nThis adds the ${c.command(setupEnvVar)} variable to your zsh config.`,
+				);
+				steps.push(`(Optional) Check for permission conflicts:\n\n${c.command("compaudit -D")}`);
+				steps.push(
+					`Start using autocomplete:\n\n${c.command(`${this.config.bin} ${tabStr}`)}                  # Command completion\n${c.command(`${this.config.bin} command --${tabStr}`)}        # Flag completion`,
+				);
 				break;
 			}
 		}
 
-		this.log(
-			`  Every time you enter ${tabStr}, the autocomplete feature displays a list of commands (or flags if you type --), along with their summaries. Enter a letter and then ${tabStr} again to narrow down the list until you end up with the complete command that you want to execute.`,
-		);
+		this.log(indent(list(steps, { ordered: true })));
 		this.log("");
-		this.log(msg.success("Autocomplete is ready! Enjoy!"));
+		this.log(msg.success("Enjoy!"));
 	}
 }
