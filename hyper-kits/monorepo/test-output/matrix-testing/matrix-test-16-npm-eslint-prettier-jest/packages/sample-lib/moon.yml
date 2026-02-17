@@ -10,13 +10,13 @@ tasks:
       - tsconfig.json
     outputs:
       - lib
-  
+
   test:
     command: jest
     inputs:
       - src/**/*
       - test/**/*
-    
+
   lint:
     command: eslint src --ext .ts
     inputs:

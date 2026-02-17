@@ -6,7 +6,7 @@ projects:
 runner:
   archivableTargets: ['build', 'test']
   cacheLifetime: '7 days'
-  
+
 vcs:
   manager: 'git'
   defaultBranch: 'main'
