@@ -203,16 +203,13 @@ All aspects of `vitest.config.base.ts` have been verified against vitest v4 comp
 - ✅ Line 53: `environment: "node"` — v4-compatible
 - ✅ Lines 54-56: `env: { FORCE_COLOR: "true" }` — v4-compatible
 - ✅ Lines 57-61: Coverage configuration:
-  - ✅ `provider: "v8"` — Recommended for v4 (no removed options)
-  - ✅ NOT using `coverage.all` (removed in v4) ✓
+  - ✅ `provider: "v8"` — Recommended for v4
   - ✅ NOT using `coverage.ignoreEmptyLines` (removed in v4) ✓
   - ✅ Reporter array format is correct for v4
   - ✅ Exclude patterns use standard glob syntax
 - ✅ Line 62: `testTimeout: 30000` — v4-compatible
 
 **Breaking Changes Checklist:**
-- ✅ NOT using removed `poolOptions` option
-- ✅ NOT using removed `coverage.all` option
 - ✅ NOT using removed `coverage.ignoreEmptyLines` option
 - ✅ NOT using removed `basic` reporter
 - ✅ NOT using deprecated hook patterns
@@ -391,16 +388,21 @@ The following are ready for v4 migration:
 3. ✅ **Package configs** — Using recommended `createVitestConfig` pattern
 4. ✅ **Test infrastructure** — Built on vitest, not test framework specific
 
-### Pre-Migration Cleanup Needed
+### Pre-Migration Blockers & Cleanup
 
-Before bumping vitest versions in package.json:
+**BLOCKER: Coverage plugin version pinning conflict**
+- `@hypercli/cli` pins `@vitest/coverage-v8@1.6.1` exactly (will conflict with v4)
+- `@hypercli/kit` uses range `@vitest/coverage-v8@^1.0.0`
+- When bumping vitest to v4, the peer dependency will require `@vitest/coverage-v8@^4.0.0`
+- The exact pin `1.6.1` will cause a hard conflict and must be updated to `4.0.18` simultaneously
+
+**Cleanup needed before bumping vitest versions in package.json:**
 
 1. **Investigate gen package failures** — 45 tests failing in 215-test suite
 2. **Fix cli test failures** — 24 failing tests
 3. **Resolve import issues** — `Cannot find module '@hypercli/ui/help'` errors
-4. **Update coverage plugin versions** — Inconsistent versions (1.6.1 vs ^1.0.0)
 
-These issues should be resolved before updating package.json versions, to ensure clean migration and accurate baseline.
+These issues should be resolved before updating package.json versions, to ensure clean migration and accurate baseline. The coverage plugin blocker must be addressed in the same commit as vitest version bumps.
 
 ---
 
