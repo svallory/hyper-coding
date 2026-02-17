@@ -37,6 +37,10 @@ export default class KitList extends BaseCommand<typeof KitList> {
 			description: "Output as JSON",
 			default: false,
 		}),
+		verbose: Flags.boolean({
+			description: "Show detailed information for each kit",
+			default: false,
+		}),
 	};
 
 	async run(): Promise<void> {

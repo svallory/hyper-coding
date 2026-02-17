@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { type KitManifestEntry, loadManifest, saveManifest } from "../../../src/manifest.js";
+import { type KitManifestEntry, loadManifest, saveManifest } from "#manifest";
 import {
 	createKitDir,
 	createMonorepoProject,
@@ -34,7 +34,7 @@ vi.mock("giget", () => ({
 
 import * as giget from "giget";
 // Import command after mocks
-import KitUpdate from "../../../src/commands/kit/update.js";
+import KitUpdate from "#commands/kit/update";
 
 // Get reference to the mocked function for assertions
 const mockDownloadTemplate = giget.downloadTemplate as ReturnType<typeof vi.fn>;

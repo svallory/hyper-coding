@@ -4,7 +4,7 @@ import {
 	type TerminalCapabilities,
 	createCapabilities,
 	detectCapabilities,
-} from "../../src/capabilities/index.ts";
+} from "#capabilities/index";
 
 // ---------------------------------------------------------------------------
 // Helpers to save/restore process state
@@ -229,7 +229,8 @@ describe("detectCapabilities", () => {
 
 		test("NO_COLOR not set → noColor false", () => {
 			setTTY(true);
-			process.env.NO_COLOR = undefined;
+			// biome-ignore lint/performance/noDelete: setting to undefined doesn't remove the key from process.env
+			delete process.env.NO_COLOR;
 			expect(detectCapabilities().noColor).toBe(false);
 		});
 	});

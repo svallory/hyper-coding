@@ -1,6 +1,6 @@
 import { renderMarkdown } from "@hypercli/ui/help";
 import { describe, expect, it } from "vitest";
-import Logger from "../src/logger/logger.js";
+import Logger from "#logger/logger";
 
 // Helper to strip ANSI color codes
 function stripAnsi(str: string): string {

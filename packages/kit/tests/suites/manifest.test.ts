@@ -16,7 +16,7 @@ import {
 	loadManifest,
 	removeKitFromManifest,
 	saveManifest,
-} from "../../src/manifest.js";
+} from "#manifest";
 import {
 	CORRUPTED_JSON_STRING,
 	EMPTY_MANIFEST,

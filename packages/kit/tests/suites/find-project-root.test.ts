@@ -5,7 +5,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { findProjectRoot, getKitsDirectory } from "../../src/utils/find-project-root.js";
+import { findProjectRoot, getKitsDirectory } from "#utils/find-project-root";
 import { createMonorepoProject, createTempProject } from "../helpers/temp-project.js";
 
 describe("findProjectRoot", () => {

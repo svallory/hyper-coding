@@ -11,8 +11,8 @@ import {
 	stringWidth,
 	stripAnsi,
 	stripColor,
-} from "../../src/render/index.ts";
-import type { StyleSpec } from "../../src/render/index.ts";
+} from "#render/index";
+import type { StyleSpec } from "#render/index";
 
 // =============================================================================
 // SGR Tests

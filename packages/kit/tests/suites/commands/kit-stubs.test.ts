@@ -3,8 +3,8 @@
  */
 
 import { describe, expect, it } from "vitest";
-import KitInfo from "../../../src/commands/kit/info.js";
-import KitList from "../../../src/commands/kit/list.js";
+import KitInfo from "#commands/kit/info";
+import KitList from "#commands/kit/list";
 
 describe("KitList", () => {
 	it("has correct description", () => {

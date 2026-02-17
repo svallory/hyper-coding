@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { createCapabilities } from "../../src/theme/../capabilities/index.ts";
-import { defaultTokens } from "../../src/theme/../tokens/index.ts";
-import { builtinThemes } from "../../src/theme/builtins.ts";
-import { ThemeEngine } from "../../src/theme/engine.ts";
-import { deepMerge } from "../../src/theme/merge.ts";
-import type { Theme } from "../../src/theme/types.ts";
+import { createCapabilities } from "#capabilities/index";
+import { builtinThemes } from "#theme/builtins";
+import { ThemeEngine } from "#theme/engine";
+import { deepMerge } from "#theme/merge";
+import type { Theme } from "#theme/types";
+import { defaultTokens } from "#tokens/index";
 
 // ---------------------------------------------------------------------------
 // Helpers

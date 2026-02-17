@@ -4,7 +4,7 @@
 
 import { Command } from "@oclif/core";
 import { describe, expect, it } from "vitest";
-import { BaseCommand } from "../../src/base-command.js";
+import { BaseCommand } from "#base-command";
 import { createTempProject } from "../helpers/temp-project.js";
 
 // Create a concrete test command since BaseCommand is abstract

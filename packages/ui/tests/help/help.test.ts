@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { helpTheme, renderHelp, renderMarkdown } from "../../src/help.ts";
-import type { HelpThemeConfig, MarkdownTheme } from "../../src/help.ts";
-import { defaultMarkdownTheme } from "../../src/primitives/markdown.ts";
-import { stripAnsi } from "../../src/render/index.ts";
+import { helpTheme, renderHelp, renderMarkdown } from "#help";
+import type { HelpThemeConfig, MarkdownTheme } from "#help";
+import { defaultMarkdownTheme } from "#primitives/markdown";
+import { stripAnsi } from "#render/index";
 
 describe("help module", () => {
 	test("renderHelp renders markdown with default theme", () => {

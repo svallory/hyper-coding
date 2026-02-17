@@ -491,11 +491,8 @@ describe("RecipeTool Integration Tests", () => {
 			// Temporarily replace the default template tool with a failing one
 			const toolRegistry = getToolRegistry();
 
-			// Save the original factory
-			const originalFactory = toolRegistry.registrations.get("template:default");
-
-			// Clear the cached instance of the default template tool
-			toolRegistry.removeCachedInstances("template", "default");
+			// Save the original registration
+			const originalRegistration = toolRegistry.getRegistration("template", "default");
 
 			// Register the failing mock tool as 'default'
 			toolRegistry.register("template", "default", {
@@ -545,10 +542,9 @@ describe("RecipeTool Integration Tests", () => {
 			expect(result.error).toBeDefined();
 			expect(result.error?.message).toContain("failed");
 
-			// Restore the original factory and clear the cache
-			toolRegistry.removeCachedInstances("template", "default");
-			if (originalFactory) {
-				toolRegistry.registrations.set("template:default", originalFactory);
+			// Restore the original factory
+			if (originalRegistration) {
+				toolRegistry.register("template", "default", originalRegistration.factory);
 			}
 		});
 	});

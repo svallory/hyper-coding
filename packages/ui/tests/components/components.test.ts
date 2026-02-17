@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { createContext, setContext } from "../../src/components/../primitives/context.ts";
-import { stringWidth, stripAnsi } from "../../src/components/../render/index.ts";
-import { columns } from "../../src/components/columns.ts";
-import { diff } from "../../src/components/diff.ts";
-import { helpLayout } from "../../src/components/helpLayout.ts";
-import { keyValue } from "../../src/components/keyValue.ts";
-import { list } from "../../src/components/list.ts";
-import { message } from "../../src/components/message.ts";
-import { panel } from "../../src/components/panel.ts";
-import { section } from "../../src/components/section.ts";
-import { statusList } from "../../src/components/statusList.ts";
-import { table } from "../../src/components/table.ts";
-import { tree } from "../../src/components/tree.ts";
+import { columns } from "#components/columns";
+import { diff } from "#components/diff";
+import { helpLayout } from "#components/helpLayout";
+import { keyValue } from "#components/keyValue";
+import { list } from "#components/list";
+import { message } from "#components/message";
+import { panel } from "#components/panel";
+import { section } from "#components/section";
+import { statusList } from "#components/statusList";
+import { table } from "#components/table";
+import { tree } from "#components/tree";
+import { createContext, setContext } from "#primitives/context";
+import { stringWidth, stripAnsi } from "#render/index";
 
 // ---------------------------------------------------------------------------
 // Context fixtures
