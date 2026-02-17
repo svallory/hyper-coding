@@ -197,6 +197,79 @@ The `hashImportsPlugin` is designed correctly:
 
 **Status:** ✅ Plugin is correctly implemented for vitest v4
 
+---
+
+## Plugin Analysis
+
+### hashImportsPlugin v4 Compatibility Review
+
+The custom `hashImportsPlugin` defined in `vitest.config.base.ts` (lines 10-40) has been analyzed for vitest v4 compatibility.
+
+**Purpose & Implementation:**
+
+The plugin resolves `#` imports (e.g., `#src/utils`, `#tests/fixtures`) to absolute paths during vitest test execution. This allows tests to import from source code without coupling to build artifacts:
+
+- Intercepts imports starting with `#`
+- Resolves relative to package `src/`, `tests/`, or `fixtures/` directories
+- Returns absolute filesystem paths for vitest to load
+
+**Plugin API Used:**
+
+The plugin implements the standard Vite `resolveId()` hook:
+
+```typescript
+resolveId(id, importer) {
+  if (!id.startsWith("#")) return null;
+  // ... resolution logic ...
+  return addExt(path.resolve(pkgDir, "src", withoutHash));
+}
+```
+
+**Vite Compatibility:**
+
+- **Vite 5.x/6.x/7.x:** ✅ FULLY COMPATIBLE
+- **Hook signature:** `resolveId(source: string, importer: string | undefined, options: {...}): string | null`
+- **Return value:** Absolute filesystem path or null (unchanged from Vite 4.x)
+- **Status:** No breaking changes between Vite 4.x and 7.x (vitest v4.0.18 uses Vite 7.3.1)
+
+**Critical Detail: Extension Handling**
+
+The plugin's most important implementation detail is on line 29:
+
+```typescript
+const addExt = (p: string) => (path.extname(p) ? p : `${p}.ts`);
+```
+
+This ensures ALL paths returned from `resolveId()` include the `.ts` extension. This is critical for mock registration:
+
+1. **Mock Registration:** When `vi.mock('#src/utils')` is called during test setup:
+   - vitest's mock registry normalizes the path via `resolveId()`
+   - The plugin returns `/path/to/src/utils.ts`
+   - Mock registration keys the mock under this full path
+
+2. **Import Loading:** When imports are loaded:
+   - Vite calls `resolveId()` again
+   - The plugin returns the same path: `/path/to/src/utils.ts`
+
+3. **Path Matching:** Because both the mock registration and import resolution use the same plugin hook and get the same absolute path, the mock is correctly found and applied.
+
+**Without the `.ts` extension:** If `resolveId()` returned `/path/to/src/utils` (without extension), the path normalization could differ between the two contexts, causing the mock lookup to fail. By always including `.ts`, we ensure consistency.
+
+**v4 Compatibility Assessment: ✅ FULLY COMPATIBLE**
+
+No code changes required. The plugin:
+- Uses stable Vite API (`resolveId` hook)
+- Correctly implements the `.ts` extension handling
+- Will work identically with vitest v4 as with v1
+- Is already compatible with Vite 7.3.1 (installed dependency)
+
+**Evidence:**
+
+- Vitest v4.0.18 installed: ✅
+- Vite 7.3.1 (vitest dependency): ✅
+- `resolveId()` API unchanged from Vite 4.x → 7.x: ✅
+- Plugin extension handling correct: ✅
+
 ### Package-Level Configs
 
 All packages use:
