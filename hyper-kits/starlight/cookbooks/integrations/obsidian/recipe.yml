@@ -1,0 +1,18 @@
+name: obsidian
+description: Add Obsidian vault integration to your Starlight site
+version: "1.0.0"
+
+variables:
+  projectFolder:
+    type: string
+    description: Project folder path
+    default: "."
+
+steps:
+  - name: Install starlight-obsidian
+    tool: shell
+    command: |
+      cd "{{ projectFolder }}" && bun add starlight-obsidian
+
+onSuccess: |
+  ✅ Obsidian vault integration added!

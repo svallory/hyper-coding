@@ -1,0 +1,43 @@
+# Kit configuration for @hyper-kits/starlight
+name: "@hyper-kits/starlight"
+description: |
+  Astro/Starlight documentation site generator with TypeDoc integration.
+  Create beautiful documentation sites with optional OpenAPI, keyboard shortcuts,
+  auto-sidebar, scroll-to-top, changelogs, and Obsidian vault support.
+
+version: "3.0.0"
+author: "SubtleTools"
+license: "MIT"
+
+keywords:
+  - astro
+  - starlight
+  - documentation
+  - typedoc
+  - openapi
+  - docs-generator
+  - markdown
+  - mdx
+
+ai:
+  mode: auto
+  commandMode: batched
+
+defaults:
+  cookbook: "project"
+  recipe: "create"
+
+cookbooks:
+  - "./cookbooks/*/cookbook.yml"
+  - "./cookbooks/*/"
+
+tags:
+  - "astro"
+  - "starlight"
+  - "documentation"
+  - "typescript"
+  - "typedoc"
+
+categories:
+  - "Documentation"
+  - "Static Site Generators"

@@ -1,0 +1,42 @@
+---
+to: "{{ projectFolder }}/openapi.yaml"
+---
+openapi: 3.0.0
+info:
+  title: API
+  description: API Documentation
+  version: 1.0.0
+  contact:
+    name: API Support
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+  - url: http://localhost:3000/v1
+    description: Development server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Check if the API is running
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string

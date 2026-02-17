@@ -1,0 +1,41 @@
+---
+to: "{{ projectFolder }}/README.md"
+---
+# {{ projectName }} Documentation
+
+{{ projectDescription }}
+
+## 🚀 Getting Started
+
+```bash
+# Install dependencies
+bun install
+
+# Start development server
+bun run dev
+```
+
+Visit `http://localhost:4321` to view the documentation.
+
+## 📚 Documentation Structure
+
+- `src/content/docs/` - Documentation content (Markdown/MDX)
+- `src/content/config.ts` - Content collection configuration
+- `public/` - Static assets
+- `astro.config.mjs` - Astro configuration
+
+## 🛠️ Available Scripts
+
+- `bun run dev` - Start development server
+- `bun run build` - Build for production
+- `bun run preview` - Preview production build
+
+@if(githubRepo)
+## 🔗 Links
+
+- [GitHub Repository]({{ githubRepo }})
+@endif
+
+## 📄 License
+
+[MIT](LICENSE)

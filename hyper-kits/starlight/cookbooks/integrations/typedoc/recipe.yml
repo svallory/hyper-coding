@@ -1,0 +1,29 @@
+name: typedoc
+description: Add TypeDoc API documentation to your Starlight site
+version: "1.0.0"
+
+variables:
+  projectFolder:
+    type: string
+    description: Project folder path
+    default: "."
+
+  entryPoint:
+    type: string
+    description: TypeScript entry point for API docs
+    default: "src/index.ts"
+
+steps:
+  - name: Install TypeDoc dependencies
+    tool: shell
+    command: |
+      cd "{{ projectFolder }}" && bun add -d typedoc typedoc-plugin-markdown && bun add starlight-typedoc
+
+  - name: Create typedoc.json
+    tool: template
+    template: templates/typedoc.json.jig
+
+onSuccess: |
+  ✅ TypeDoc integration added!
+
+  API documentation will be generated from: {{ entryPoint }}

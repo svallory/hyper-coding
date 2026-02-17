@@ -1,0 +1,30 @@
+---
+to: "{{ projectFolder }}/src/content/docs/introduction.mdx"
+---
+---
+title: Introduction
+description: Welcome to {{ projectName }} documentation
+---
+
+# Welcome to {{ projectName }}
+
+{{ projectDescription }}
+
+## What is {{ projectName }}?
+
+This documentation site helps you understand and use {{ projectName }} effectively.
+
+## Key Features
+
+- 📚 **Comprehensive Documentation** - Detailed guides and tutorials
+@if(typedoc)- 🔧 **API Reference** - Complete TypeScript API documentation
+@endif
+@if(openapi)- 🌐 **OpenAPI/Swagger** - Interactive API documentation
+@endif
+- 💡 **Examples** - Real-world use cases and patterns
+
+## Getting Help
+
+@if(githubRepo)- [GitHub Repository]({{ githubRepo }}) - Source code and issues
+@endif
+- [Starlight Documentation](https://starlight.astro.build/) - Learn more about Starlight

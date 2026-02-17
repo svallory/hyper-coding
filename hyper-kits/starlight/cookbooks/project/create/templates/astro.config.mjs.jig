@@ -1,0 +1,131 @@
+---
+to: "{{ projectFolder }}/astro.config.mjs"
+---
+import { defineConfig } from 'astro/config';
+import starlight from '@astrojs/starlight';
+import starlightImageZoom from 'starlight-image-zoom';
+import starlightLinksValidator from 'starlight-links-validator';
+import starlightLLMsTxt from 'starlight-llms-txt';
+import starlightSidebarTopics from 'starlight-sidebar-topics';
+@if(typedoc)import starlightTypeDoc from 'starlight-typedoc';
+@endif
+@if(openapi)import starlightOpenAPI from 'starlight-openapi';
+@endif
+@if(keyboard)import starlightKbd from 'starlight-kbd';
+@endif
+@if(autoSidebar)import starlightAutoSidebar from 'starlight-auto-sidebar';
+@endif
+@if(scrollToTop)import starlightScrollToTop from 'starlight-scroll-to-top';
+@endif
+@if(changelogs)import starlightChangelogs from 'starlight-changelogs';
+@endif
+@if(obsidian)import starlightObsidian from 'starlight-obsidian';
+@endif
+import d2 from 'astro-d2';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// https://astro.build/config
+export default defineConfig({
+  srcDir: './src',
+  outDir: './dist-docs',
+  publicDir: './public',
+  site: '{{ siteUrl }}',
+  base: '/',
+  integrations: [
+    d2(),
+    starlight({
+      plugins: [
+        // Add image zoom functionality
+        starlightImageZoom({}),
+        // Validate internal links during build
+        starlightLinksValidator(),
+        // Generate LLMs.txt for AI consumption
+        starlightLLMsTxt(),
+        @if(scrollToTop)// Add scroll-to-top button
+        starlightScrollToTop(),
+        @endif
+        @if(keyboard)// Document keyboard shortcuts
+        starlightKbd(),
+        @endif
+        @if(autoSidebar)// Automatic sidebar generation
+        starlightAutoSidebar(),
+        @else// Organize sidebar with topics
+        starlightSidebarTopics([
+          {
+            label: 'Documentation',
+            link: '/introduction/',
+            icon: 'document',
+            items: [
+              {
+                label: 'Getting Started',
+                items: [
+                  { label: 'Introduction', link: '/introduction/' },
+                  { label: 'Installation', link: '/installation/' },
+                  { label: 'Quick Start', link: '/quick-start/' }
+                ]
+              },
+              {
+                label: 'Features',
+                items: [
+                  { label: 'Core Features', link: '/features/core/' }
+                ]
+              }
+            ],
+          },@if(typedoc)
+          {
+            label: 'API Reference',
+            link: '/api/readme/',
+            icon: 'seti:config',
+            items: [
+              { label: 'API Overview', link: '/api/readme/' }
+            ],
+          },@endif
+        ]),@endif
+        @if(openapi)// Generate OpenAPI/Swagger documentation
+        starlightOpenAPI([
+          {
+            base: '/api',
+            label: 'API',
+            schema: resolve(__dirname, 'openapi.yaml'),
+          },
+        ]),@endif
+        @if(changelogs)// Display project changelogs
+        starlightChangelogs({
+          title: 'Changelog',
+        }),@endif
+        @if(obsidian)// Publish Obsidian vaults
+        starlightObsidian(),@endif
+        @if(typedoc)// TypeDoc API documentation
+        starlightTypeDoc({
+          entryPoints: [resolve(__dirname, '{{ entryPoint }}')],
+          tsconfig: resolve(__dirname, 'tsconfig.json'),
+          output: 'api',
+          typeDoc: {
+            gitRevision: 'main',
+          },
+        }),@endif
+      ],
+      title: '{{ projectName }}',
+      description: '{{ projectDescription }}',
+      expressiveCode: {
+        themes: ['tokyo-night'],
+      },
+      @if(githubRepo)social: [
+        {
+          icon: 'github',
+          label: 'GitHub',
+          href: '{{ githubRepo }}',
+        },
+      ],
+      editLink: {
+        baseUrl: '{{ githubRepo }}/edit/main/',
+      },@endif
+      lastUpdated: true,
+      favicon: '/favicon.ico',
+    }),
+  ],
+});

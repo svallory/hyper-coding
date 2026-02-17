@@ -1,0 +1,6 @@
+---
+to: "{{ projectFolder }}/astro.config.mjs"
+inject: true
+after: "import starlight from '@astrojs/starlight';"
+---
+import starlightAutoSidebar from 'starlight-auto-sidebar';

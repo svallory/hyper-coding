@@ -1,0 +1,20 @@
+name: keyboard
+description: Add keyboard shortcuts documentation to your Starlight site
+version: "1.0.0"
+
+variables:
+  projectFolder:
+    type: string
+    description: Project folder path
+    default: "."
+
+steps:
+  - name: Install starlight-kbd
+    tool: shell
+    command: |
+      cd "{{ projectFolder }}" && bun add starlight-kbd
+
+onSuccess: |
+  ✅ Keyboard shortcuts integration added!
+
+  Use the <Kbd> component to document keyboard shortcuts in your MDX files.

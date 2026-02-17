@@ -1,0 +1,24 @@
+name: openapi
+description: Add OpenAPI/Swagger documentation to your Starlight site
+version: "1.0.0"
+
+variables:
+  projectFolder:
+    type: string
+    description: Project folder path
+    default: "."
+
+steps:
+  - name: Install starlight-openapi
+    tool: shell
+    command: |
+      cd "{{ projectFolder }}" && bun add starlight-openapi
+
+  - name: Create OpenAPI spec file
+    tool: template
+    template: templates/openapi.yaml.jig
+
+onSuccess: |
+  ✅ OpenAPI integration added!
+
+  Edit openapi.yaml to define your API specification.

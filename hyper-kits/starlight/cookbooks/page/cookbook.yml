@@ -1,0 +1,9 @@
+name: page
+description: Add documentation pages to your Starlight site
+version: 1.0.0
+
+defaults:
+  recipe: create
+
+recipes:
+  - "./*/recipe.yml"
