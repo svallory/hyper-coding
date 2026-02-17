@@ -193,6 +193,7 @@ _${this.config.bin}
 		}
 
 		const flagArgsTemplate = '        "%s")\n          %s\n        ;;\n';
+		const dynamicBin = `_${this.config.bin}_dynamic`;
 		const underscoreSepId = id.replaceAll(":", "_");
 		const depth = id.split(":").length;
 		const isCotopic = coTopics.includes(id);
@@ -225,6 +226,7 @@ _${this.config.bin}
 %s
       *)
         _${compFuncName}_flags
+        _${this.config.bin}_dynamic ${id.replaceAll(":", " ")} $line[1] \${words[CURRENT]}
       ;;
       esac
       ;;
@@ -258,7 +260,9 @@ _${this.config.bin}
 					id: subArg,
 					summary: c.summary,
 				});
-				argsBlock += format(flagArgsTemplate, subArg, this.genZshFlagArgumentsBlock(c.flags));
+				const flagsBlock = this.genZshFlagArgumentsBlock(c.flags);
+				const dynamicCall = `${dynamicBin} ${id.replaceAll(":", " ")} ${subArg} \${words[CURRENT]}`;
+				argsBlock += format(flagArgsTemplate, subArg, `${flagsBlock}\n          ${dynamicCall}`);
 			}
 
 			return format(coTopicCompFunc, this.genZshValuesBlock(subArgs), argsBlock);
@@ -287,7 +291,9 @@ _${this.config.bin}
 				id: subArg,
 				summary: c.summary,
 			});
-			argsBlock += format(flagArgsTemplate, subArg, this.genZshFlagArgumentsBlock(c.flags));
+			const flagsBlock = this.genZshFlagArgumentsBlock(c.flags);
+			const dynamicCall = `${dynamicBin} ${id.replaceAll(":", " ")} ${subArg} \${words[CURRENT]}`;
+			argsBlock += format(flagArgsTemplate, subArg, `${flagsBlock}\n          ${dynamicCall}`);
 		}
 
 		const topicCompFunc = `_${this.config.bin}_${underscoreSepId}() {
@@ -299,10 +305,14 @@ _${this.config.bin}
   case "$state" in
     cmds)
 %s
+      _${this.config.bin}_dynamic ${id.replaceAll(":", " ")} \${words[CURRENT]}
       ;;
     args)
       case $line[1] in
 %s
+      *)
+        _${this.config.bin}_dynamic ${id.replaceAll(":", " ")} $line[1] \${words[CURRENT]}
+      ;;
       esac
       ;;
   esac

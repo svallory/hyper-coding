@@ -37,16 +37,49 @@ export default class Generate extends AutocompleteBase {
 			return;
 		}
 
-		// Determine if we're in a "gen" command context
-		const isGenCommand = words[0] === "gen";
+		// Strip CLI routing prefixes before parsing context
+		// "gen <kit> <cookbook> ..." → strip "gen"
+		// "kit info <kit>" → strip "kit info", complete kit names
+		// "kit update <kit>" → strip "kit update", complete kit names
+		// "<kit> <cookbook> ..." → no stripping needed (natural syntax)
+		const stripped = this.stripRoutingPrefix(words);
 
-		const context = resolver.parseContext(words, isGenCommand);
+		const context = resolver.parseContext(stripped);
 		if (!context) return;
 
 		const completions = await resolver.complete(context);
 		for (const completion of completions) {
 			this.log(completion);
 		}
+	}
+
+	/**
+	 * Strip known CLI command routing prefixes from words so the resolver
+	 * sees only content-level tokens (kit/cookbook/recipe/variable).
+	 *
+	 * Examples:
+	 *   ["gen", "nextjs", "crud"] → ["nextjs", "crud"]
+	 *   ["kit", "info", "nextjs"] → ["nextjs"]
+	 *   ["kit", "install", "next"] → ["next"]
+	 *   ["kit", "update", "next"] → ["next"]
+	 *   ["nextjs", "crud"] → ["nextjs", "crud"]  (natural syntax, no prefix)
+	 */
+	private stripRoutingPrefix(words: string[]): string[] {
+		if (words.length === 0) return words;
+
+		if (words[0] === "gen") {
+			return words.slice(1);
+		}
+
+		// "kit <subcommand>" routes — the subcommand is routing, not content
+		if (words[0] === "kit" && words.length >= 2) {
+			const kitSubcommands = ["info", "install", "update", "list"];
+			if (kitSubcommands.includes(words[1])) {
+				return words.slice(2);
+			}
+		}
+
+		return words;
 	}
 
 	/**

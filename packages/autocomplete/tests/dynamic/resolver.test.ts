@@ -22,27 +22,27 @@ describe("CompletionResolver.parseContext", () => {
 	});
 
 	it("returns kit level with empty prefix for empty words", () => {
-		const ctx = resolver.parseContext([], false);
+		const ctx = resolver.parseContext([]);
 		expect(ctx).toEqual({ level: "kit", prefix: "" });
 	});
 
 	it("returns kit level with prefix for a single incomplete word", () => {
-		const ctx = resolver.parseContext(["ne"], false);
+		const ctx = resolver.parseContext(["ne"]);
 		expect(ctx).toEqual({ level: "kit", prefix: "ne" });
 	});
 
 	it("returns cookbook level when one complete word plus empty string", () => {
-		const ctx = resolver.parseContext(["nextjs", ""], false);
+		const ctx = resolver.parseContext(["nextjs", ""]);
 		expect(ctx).toEqual({ level: "cookbook", kit: "nextjs", prefix: "" });
 	});
 
 	it("returns cookbook level with prefix for one complete word plus partial", () => {
-		const ctx = resolver.parseContext(["nextjs", "cr"], false);
+		const ctx = resolver.parseContext(["nextjs", "cr"]);
 		expect(ctx).toEqual({ level: "cookbook", kit: "nextjs", prefix: "cr" });
 	});
 
 	it("returns recipe level for two complete words plus prefix", () => {
-		const ctx = resolver.parseContext(["nextjs", "crud", "re"], false);
+		const ctx = resolver.parseContext(["nextjs", "crud", "re"]);
 		expect(ctx).toEqual({
 			level: "recipe",
 			kit: "nextjs",
@@ -52,7 +52,7 @@ describe("CompletionResolver.parseContext", () => {
 	});
 
 	it("returns variable level for three complete words plus prefix", () => {
-		const ctx = resolver.parseContext(["nextjs", "crud", "resource", "--na"], false);
+		const ctx = resolver.parseContext(["nextjs", "crud", "resource", "--na"]);
 		expect(ctx).toEqual({
 			level: "variable",
 			kit: "nextjs",
@@ -63,7 +63,7 @@ describe("CompletionResolver.parseContext", () => {
 	});
 
 	it("returns variable level for three+ complete words plus empty prefix", () => {
-		const ctx = resolver.parseContext(["nextjs", "crud", "resource", ""], false);
+		const ctx = resolver.parseContext(["nextjs", "crud", "resource", ""]);
 		expect(ctx).toEqual({
 			level: "variable",
 			kit: "nextjs",
@@ -73,43 +73,35 @@ describe("CompletionResolver.parseContext", () => {
 		});
 	});
 
-	describe("isGenCommand handling", () => {
-		it("strips 'gen' from the front when isGenCommand is true", () => {
-			const ctx = resolver.parseContext(["gen", "nextjs", "cr"], true);
-			expect(ctx).toEqual({
-				level: "cookbook",
-				kit: "nextjs",
-				prefix: "cr",
-			});
-		});
-
-		it("returns kit level when isGenCommand with just 'gen'", () => {
-			const ctx = resolver.parseContext(["gen"], true);
-			expect(ctx).toEqual({ level: "kit", prefix: "" });
-		});
-
-		it("does not strip 'gen' when isGenCommand is false", () => {
-			const ctx = resolver.parseContext(["gen", "nextjs"], false);
-			// "gen" is treated as kit name, "nextjs" as prefix for cookbook level
+	describe("treats all words as content tokens (routing stripped upstream)", () => {
+		it("treats 'gen' as a kit name since routing is stripped by generate command", () => {
+			const ctx = resolver.parseContext(["gen", "nextjs"]);
+			// Without upstream stripping, "gen" is treated as kit name
 			expect(ctx).toEqual({ level: "cookbook", kit: "gen", prefix: "nextjs" });
 		});
 
-		it("does not strip 'gen' if it is not the first word", () => {
-			const ctx = resolver.parseContext(["nextjs", "gen"], true);
-			// "nextjs" stays, "gen" is prefix
-			expect(ctx).toEqual({ level: "cookbook", kit: "nextjs", prefix: "gen" });
+		it("treats 'kit' as a kit name since routing is stripped by generate command", () => {
+			const ctx = resolver.parseContext(["kit", "info"]);
+			expect(ctx).toEqual({ level: "cookbook", kit: "kit", prefix: "info" });
 		});
 
-		it("handles gen + single word as kit prefix", () => {
-			const ctx = resolver.parseContext(["gen", "ne"], true);
-			expect(ctx).toEqual({ level: "kit", prefix: "ne" });
+		it("handles already-stripped words from gen context", () => {
+			// generate.ts strips "gen" → passes ["nextjs", "cr"]
+			const ctx = resolver.parseContext(["nextjs", "cr"]);
+			expect(ctx).toEqual({ level: "cookbook", kit: "nextjs", prefix: "cr" });
+		});
+
+		it("handles already-stripped words from kit info context", () => {
+			// generate.ts strips "kit info" → passes ["nextjs"]
+			const ctx = resolver.parseContext(["nextjs"]);
+			expect(ctx).toEqual({ level: "kit", prefix: "nextjs" });
 		});
 	});
 
 	it("does not mutate the original words array", () => {
-		const words = ["gen", "nextjs", "crud"];
-		resolver.parseContext(words, true);
-		expect(words).toEqual(["gen", "nextjs", "crud"]);
+		const words = ["nextjs", "crud", "resource"];
+		resolver.parseContext(words);
+		expect(words).toEqual(["nextjs", "crud", "resource"]);
 	});
 });
 

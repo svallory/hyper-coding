@@ -42,16 +42,13 @@ export class CompletionResolver {
 	 * Parse the typed words into a CompletionContext that describes what level
 	 * the user is completing at.
 	 *
-	 * @param words - The non-flag tokens the user has typed so far
-	 * @param isGenCommand - Whether these words came after "gen" (strip it)
+	 * Words should already have CLI routing prefixes stripped (e.g. "gen", "kit info").
+	 * Only content-level tokens should remain: kit, cookbook, recipe, variable.
+	 *
+	 * @param words - Content-level tokens the user has typed so far
 	 */
-	parseContext(words: string[], isGenCommand: boolean): CompletionContext | null {
+	parseContext(words: string[]): CompletionContext | null {
 		const segments = [...words];
-
-		// Strip leading "gen" if this is a gen subcommand invocation
-		if (isGenCommand && segments.length > 0 && segments[0] === "gen") {
-			segments.shift();
-		}
 
 		if (segments.length === 0) {
 			return { level: "kit", prefix: "" };
