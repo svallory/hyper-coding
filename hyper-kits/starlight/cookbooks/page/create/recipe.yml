@@ -1,0 +1,40 @@
+name: create
+description: Add a new documentation page to your Starlight site
+version: "1.0.0"
+
+variables:
+  title:
+    type: string
+    description: Page title
+    required: true
+
+  slug:
+    type: string
+    description: Page URL slug (e.g., "api-reference" becomes /api-reference/)
+    required: true
+
+  description:
+    type: string
+    description: Page description for SEO
+    default: ""
+
+  dir:
+    type: string
+    description: Directory within src/content/docs/ where the page will be created
+    default: "."
+
+  template:
+    type: string
+    description: Page template type
+    default: "doc"
+    enum: ["doc", "splash"]
+
+steps:
+  - name: Create documentation page
+    tool: template
+    template: templates/page.mdx.jig
+
+onSuccess: |
+  ✅ Page "{{ title }}" created successfully!
+
+  File: src/content/docs/@if(dir != "."){{ dir }}/@endif{{ slug }}.mdx

@@ -1,0 +1,33 @@
+---
+to: "src/content/docs/@if(dir != "."){{ dir }}/@endif{{ slug }}.mdx"
+---
+---
+title: {{ title }}
+@if(description)description: {{ description }}
+@endif
+template: {{ template }}
+---
+
+# {{ title }}
+
+@if(description){{ description }}
+@else
+Add your content here.
+@endif
+
+## Overview
+
+Write your documentation content here using Markdown or MDX.
+
+## Examples
+
+```typescript
+// Add code examples
+const example = "Hello World";
+console.log(example);
+```
+
+## Next Steps
+
+- Link to related documentation
+- Add more sections as needed
