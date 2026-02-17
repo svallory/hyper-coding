@@ -47,7 +47,7 @@ export class CompletionResolver {
 	 *
 	 * @param words - Content-level tokens the user has typed so far
 	 */
-	parseContext(words: string[]): CompletionContext | null {
+	parseContext(words: string[]): CompletionContext {
 		const segments = [...words];
 
 		if (segments.length === 0) {
@@ -67,15 +67,20 @@ export class CompletionResolver {
 			case 2:
 				// kitName cookbookName <prefix> — completing recipe names
 				return { level: "recipe", kit: segments[0], cookbook: segments[1], prefix };
-			default:
-				// kitName cookbookName recipeName <prefix> — completing variables
+			default: {
+				// kitName cookbookName recipeName [args...] <prefix> — completing variables
+				// Count non-flag segments after recipe (index 3+) to compute positionalIndex
+				const argsAfterRecipe = segments.slice(3);
+				const positionalIndex = argsAfterRecipe.filter((s) => !s.startsWith("--")).length;
 				return {
 					level: "variable",
 					kit: segments[0],
 					cookbook: segments[1],
 					recipe: segments[2],
 					prefix,
+					positionalIndex,
 				};
+			}
 		}
 	}
 
@@ -107,7 +112,7 @@ export class CompletionResolver {
 				const variables = cache.variables[key];
 				if (!variables) return [];
 
-				// Only complete flag-style variables (--name)
+				// Complete flag-style variables (--name)
 				if (context.prefix.startsWith("--")) {
 					const flagPrefix = context.prefix.slice(2);
 					return variables
@@ -115,8 +120,18 @@ export class CompletionResolver {
 						.map((v) => (v.description ? `--${v.name}\t${v.description}` : `--${v.name}`));
 				}
 
-				// If no -- prefix, return positional variable descriptions as hints
-				// (most shells won't use this, but it's available)
+				// Positional completion: find the variable at the current positional index
+				const positionalVars = variables
+					.filter((v) => v.position !== undefined)
+					.sort((a, b) => a.position! - b.position!);
+
+				const positionalVar = positionalVars[context.positionalIndex];
+				if (positionalVar?.values) {
+					return positionalVar.values.filter((val) =>
+						val.toLowerCase().startsWith(context.prefix.toLowerCase()),
+					);
+				}
+
 				return [];
 			}
 		}

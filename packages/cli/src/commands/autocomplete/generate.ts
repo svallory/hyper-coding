@@ -1,10 +1,7 @@
-import { existsSync } from "node:fs";
-import { dirname, join, parse } from "node:path";
-
 import { Flags } from "@oclif/core";
 
-import { AutocompleteBase } from "#base";
-import { CompletionResolver } from "#dynamic/resolver";
+import { AutocompleteBase } from "#autocomplete/base";
+import { CompletionResolver } from "#autocomplete/dynamic/resolver";
 
 export default class Generate extends AutocompleteBase {
 	static override hidden = true;
@@ -38,15 +35,9 @@ export default class Generate extends AutocompleteBase {
 		}
 
 		// Strip CLI routing prefixes before parsing context
-		// "gen <kit> <cookbook> ..." → strip "gen"
-		// "kit info <kit>" → strip "kit info", complete kit names
-		// "kit update <kit>" → strip "kit update", complete kit names
-		// "<kit> <cookbook> ..." → no stripping needed (natural syntax)
 		const stripped = this.stripRoutingPrefix(words);
 
 		const context = resolver.parseContext(stripped);
-		if (!context) return;
-
 		const completions = await resolver.complete(context);
 		for (const completion of completions) {
 			this.log(completion);
@@ -56,13 +47,6 @@ export default class Generate extends AutocompleteBase {
 	/**
 	 * Strip known CLI command routing prefixes from words so the resolver
 	 * sees only content-level tokens (kit/cookbook/recipe/variable).
-	 *
-	 * Examples:
-	 *   ["gen", "nextjs", "crud"] → ["nextjs", "crud"]
-	 *   ["kit", "info", "nextjs"] → ["nextjs"]
-	 *   ["kit", "install", "next"] → ["next"]
-	 *   ["kit", "update", "next"] → ["next"]
-	 *   ["nextjs", "crud"] → ["nextjs", "crud"]  (natural syntax, no prefix)
 	 */
 	private stripRoutingPrefix(words: string[]): string[] {
 		if (words.length === 0) return words;
@@ -80,22 +64,5 @@ export default class Generate extends AutocompleteBase {
 		}
 
 		return words;
-	}
-
-	/**
-	 * Walk up from cwd to find a directory containing a `.hyper/` folder.
-	 * Returns the directory path, or null if none found.
-	 */
-	private findHyperRoot(): string | null {
-		let dir = process.cwd();
-		const { root } = parse(dir);
-
-		while (dir !== root) {
-			if (existsSync(join(dir, ".hyper"))) {
-				return dir;
-			}
-			dir = dirname(dir);
-		}
-		return null;
 	}
 }

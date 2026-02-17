@@ -1,4 +1,6 @@
+import { existsSync } from "node:fs";
 import { mkdirSync, openSync, writeSync } from "node:fs";
+import { dirname, join, parse } from "node:path";
 import path from "node:path";
 import { Command } from "@oclif/core";
 
@@ -27,6 +29,22 @@ export abstract class AutocompleteBase extends Command {
 		} else {
 			return shell;
 		}
+	}
+
+	/**
+	 * Walk up from cwd to find a directory containing a `.hyper/` folder.
+	 * Returns the directory path, or null if none found.
+	 */
+	findHyperRoot(): string | null {
+		let dir = process.cwd();
+		const { root } = parse(dir);
+		while (dir !== root) {
+			if (existsSync(join(dir, ".hyper"))) {
+				return dir;
+			}
+			dir = dirname(dir);
+		}
+		return null;
 	}
 
 	getSetupEnvVar(shell: string): string {

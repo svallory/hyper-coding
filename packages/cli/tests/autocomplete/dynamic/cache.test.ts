@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DynamicCacheManager } from "#dynamic/cache";
-import type { DynamicCache } from "#dynamic/types";
+import { DynamicCacheManager } from "#autocomplete/dynamic/cache";
+import type { DynamicCache } from "#autocomplete/dynamic/types";
 
 /**
  * Tests for DynamicCacheManager.load()
@@ -20,9 +20,18 @@ describe("DynamicCacheManager.load", () => {
 
 	const sampleCache: DynamicCache = {
 		builtAt: new Date().toISOString(),
-		kits: ["nextjs", "react"],
-		cookbooks: { nextjs: ["crud"], react: ["component"] },
-		recipes: { "nextjs:crud": ["resource"], "react:component": ["basic"] },
+		kits: [
+			{ name: "nextjs", description: "Next.js kit" },
+			{ name: "react", description: "React kit" },
+		],
+		cookbooks: {
+			nextjs: [{ name: "crud" }],
+			react: [{ name: "component" }],
+		},
+		recipes: {
+			"nextjs:crud": [{ name: "resource" }],
+			"react:component": [{ name: "basic" }],
+		},
 		variables: {
 			"nextjs:crud:resource": [{ name: "name", type: "string", position: 0 }],
 		},
@@ -60,8 +69,14 @@ describe("DynamicCacheManager.load", () => {
 		const result = manager.load();
 
 		expect(result).not.toBeNull();
-		expect(result!.kits).toEqual(["nextjs", "react"]);
-		expect(result!.cookbooks).toEqual({ nextjs: ["crud"], react: ["component"] });
+		expect(result!.kits).toEqual([
+			{ name: "nextjs", description: "Next.js kit" },
+			{ name: "react", description: "React kit" },
+		]);
+		expect(result!.cookbooks).toEqual({
+			nextjs: [{ name: "crud" }],
+			react: [{ name: "component" }],
+		});
 	});
 
 	it("returns cached data when cache is newer than manifest", () => {
@@ -69,9 +84,8 @@ describe("DynamicCacheManager.load", () => {
 		const manifestPath = path.join(projectRoot, ".hyper", "kits", "manifest.json");
 		fs.writeFileSync(manifestPath, JSON.stringify({ version: 1 }), "utf-8");
 
-		// Wait a tiny bit, then write cache (so cache is newer)
+		// Write cache
 		const cachePath = path.join(cacheDir, "dynamic-cache.json");
-		// Manually set mtimes to control ordering
 		fs.writeFileSync(cachePath, JSON.stringify(sampleCache, null, 2), "utf-8");
 
 		// Set manifest mtime to 10 seconds ago, cache to now
@@ -82,7 +96,10 @@ describe("DynamicCacheManager.load", () => {
 		const result = manager.load();
 
 		expect(result).not.toBeNull();
-		expect(result!.kits).toEqual(["nextjs", "react"]);
+		expect(result!.kits).toEqual([
+			{ name: "nextjs", description: "Next.js kit" },
+			{ name: "react", description: "React kit" },
+		]);
 	});
 
 	it("returns null when manifest is newer than cache (stale)", () => {

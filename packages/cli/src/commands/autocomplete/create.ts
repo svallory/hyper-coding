@@ -1,12 +1,11 @@
-import fs from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import makeDebug from "debug";
 
-import { AutocompleteBase } from "#base";
-import bashAutocompleteWithSpaces from "#completions/bash";
-import PowerShellComp from "#completions/powershell";
-import ZshCompWithSpaces from "#completions/zsh";
+import { AutocompleteBase } from "#autocomplete/base";
+import bashAutocompleteWithSpaces from "#autocomplete/completions/bash";
+import PowerShellComp from "#autocomplete/completions/powershell";
+import ZshCompWithSpaces from "#autocomplete/completions/zsh";
 
 const debug = makeDebug("autocomplete:create");
 
@@ -21,15 +20,10 @@ function sanitizeDescription(description: string | undefined): string {
 		return "";
 	}
 
-	return (
-		description
-			// backticks and double-quotes require triple-backslashes
-			.replaceAll(/(["`])/g, "\\\\\\$1")
-			// square brackets require double-backslashes
-			.replaceAll(/([[\]])/g, "\\\\$1")
-			// only use the first line
-			.split("\n")[0]
-	);
+	return description
+		.replaceAll(/(["`])/g, "\\\\\\$1")
+		.replaceAll(/([[\]])/g, "\\\\$1")
+		.split("\n")[0];
 }
 
 export default class Create extends AutocompleteBase {
@@ -136,12 +130,9 @@ export default class Create extends AutocompleteBase {
 	}
 
 	async run(): Promise<void> {
-		// Fix: parse args/flags to avoid the upstream oclif warning
 		await this.parse(Create);
 
-		// 1. ensure needed dirs
 		await this.ensureDirs();
-		// 2. save (generated) autocomplete files
 		await this.createFiles();
 	}
 
@@ -156,7 +147,7 @@ export default class Create extends AutocompleteBase {
 
 		// Also rebuild dynamic cache for kit/cookbook/recipe completions
 		try {
-			const { DynamicCacheManager } = await import("#dynamic/cache");
+			const { DynamicCacheManager } = await import("#autocomplete/dynamic/cache");
 			const projectRoot = this.findHyperRoot();
 			if (projectRoot) {
 				const cacheManager = new DynamicCacheManager(this.autocompleteCacheDir, projectRoot);
@@ -166,18 +157,6 @@ export default class Create extends AutocompleteBase {
 			debug("Failed to build dynamic cache: %s", error);
 			// Don't fail — dynamic cache is optional
 		}
-	}
-
-	private findHyperRoot(): string | null {
-		let dir = process.cwd();
-		const { root } = path.parse(dir);
-		while (dir !== root) {
-			if (fs.existsSync(path.join(dir, ".hyper"))) {
-				return dir;
-			}
-			dir = path.dirname(dir);
-		}
-		return null;
 	}
 
 	private async ensureDirs(): Promise<void> {

@@ -37,11 +37,14 @@
 			"@hypercli/gen",
 			"@hypercli/kit",
 			"@oclif/plugin-help",
-			"@hypercli/autocomplete",
 			"@oclif/plugin-commands",
 			"@oclif/plugin-version",
 			"@oclif/plugin-warn-if-update-available"
 		],
+		"hooks": {
+			"plugins:postinstall": "./dist/hooks/refresh-cache.js",
+			"plugins:postuninstall": "./dist/hooks/refresh-cache.js"
+		},
 		"warn-if-update-available": {
 			"timeoutInDays": 7
 		},
@@ -63,8 +66,9 @@
 		"@hypercli/kit": "workspace:*",
 		"@hypercli/ui": "workspace:*",
 		"@oclif/core": "^4.8.0",
-		"@hypercli/autocomplete": "workspace:*",
 		"@oclif/plugin-commands": "^4.1.40",
+		"debug": "^4.4.1",
+		"js-yaml": "^4.1.0",
 		"@oclif/plugin-help": "^6.2.37",
 		"@oclif/plugin-version": "^2.2.36",
 		"@oclif/plugin-warn-if-update-available": "^3.1.55",
@@ -73,7 +77,9 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@types/debug": "^4.1.12",
 		"@types/fs-extra": "^11.0.4",
+		"@types/js-yaml": "^4.0.9",
 		"@types/node": "^20.0.0",
 		"@vitest/coverage-v8": "^4.0.0",
 		"execa": "^9.6.1",
