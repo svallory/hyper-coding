@@ -183,6 +183,51 @@ export function createVitestConfig(importMetaUrl: string): UserConfig {
 
 **Status:** ✅ Configuration is v4-compatible. No changes needed.
 
+### Configuration Readiness for v4
+
+**Task 3 Verification Summary:**
+
+All aspects of `vitest.config.base.ts` have been verified against vitest v4 compatibility requirements:
+
+**Imports & API (lines 1-4):**
+- ✅ Line 4: `import { defineConfig } from "vitest/config"` — Correct v4 API
+- ✅ Uses `UserConfig` type from vite (standard Vite type, not vitest-specific)
+
+**Plugin System (lines 50):**
+- ✅ `plugins: [hashImportsPlugin(__dirname)]` — Array format correct for v4
+- ✅ Plugin uses standard Vite `resolveId()` hook (stable API across Vite versions)
+- ✅ Correctly returns absolute paths with `.ts` extensions (vitest mock registration requirement)
+
+**Test Configuration (lines 51-63):**
+- ✅ Line 52: `globals: true` — v4-compatible (correct at top level)
+- ✅ Line 53: `environment: "node"` — v4-compatible
+- ✅ Lines 54-56: `env: { FORCE_COLOR: "true" }` — v4-compatible
+- ✅ Lines 57-61: Coverage configuration:
+  - ✅ `provider: "v8"` — Recommended for v4 (no removed options)
+  - ✅ NOT using `coverage.all` (removed in v4) ✓
+  - ✅ NOT using `coverage.ignoreEmptyLines` (removed in v4) ✓
+  - ✅ Reporter array format is correct for v4
+  - ✅ Exclude patterns use standard glob syntax
+- ✅ Line 62: `testTimeout: 30000` — v4-compatible
+
+**Breaking Changes Checklist:**
+- ✅ NOT using removed `poolOptions` option
+- ✅ NOT using removed `coverage.all` option
+- ✅ NOT using removed `coverage.ignoreEmptyLines` option
+- ✅ NOT using removed `basic` reporter
+- ✅ NOT using deprecated hook patterns
+- ✅ Using top-level `globals: true` (correct position for v4)
+
+**Conclusion:**
+
+`vitest.config.base.ts` **requires ZERO changes** for vitest v4. The configuration:
+- Uses only stable, v4-compatible APIs
+- Implements the hashImportsPlugin with correct extension handling
+- Contains no options removed in v4
+- Is ready for immediate use with vitest v4.0.18 or later
+
+**No code modifications necessary.** All tests can run against v4 without config changes.
+
 ### Hash Imports Plugin Verification
 
 The `hashImportsPlugin` is designed correctly:
