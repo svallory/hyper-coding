@@ -283,9 +283,9 @@ describe("list", () => {
 	test("nested items are indented", () => {
 		const items = [{ text: "Parent", children: ["Child 1", "Child 2"] }];
 		const result = stripAnsi(list(items));
-		const lines = result.split("\n");
-		expect(lines[0]).toMatch(/^[•\u2022]/); // parent at start
-		expect(lines[1]).toMatch(/^\s+/); // child indented
+		const nonEmpty = result.split("\n").filter((l) => l.trim() !== "");
+		expect(nonEmpty[0]).toMatch(/^[•\u2022]/); // parent at start
+		expect(nonEmpty[1]).toMatch(/^\s+/); // child indented
 	});
 
 	test("nested ordered uses letters", () => {
@@ -303,11 +303,11 @@ describe("list", () => {
 			},
 		];
 		const result = stripAnsi(list(items));
-		const lines = result.split("\n");
+		const nonEmpty = result.split("\n").filter((l) => l.trim() !== "");
 		// Each level should have progressively more indentation
-		const indent0 = lines[0]!.search(/\S/);
-		const indent1 = lines[1]!.search(/\S/);
-		const indent2 = lines[2]!.search(/\S/);
+		const indent0 = nonEmpty[0]!.search(/\S/);
+		const indent1 = nonEmpty[1]!.search(/\S/);
+		const indent2 = nonEmpty[2]!.search(/\S/);
 		expect(indent1).toBeGreaterThan(indent0);
 		expect(indent2).toBeGreaterThan(indent1);
 	});
