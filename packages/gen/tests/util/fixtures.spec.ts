@@ -9,7 +9,7 @@ import {
 	listFixtures,
 	templateFixture,
 	withTempFixtures,
-} from "#tests/util/fixtures";
+} from "./fixtures";
 
 describe("fixture helpers", () => {
 	describe("fixture()", () => {

@@ -34,7 +34,7 @@ tasks:
   # Build with tsc
   build:
     description: Build library/package with tsc
-    command: 'tsc'
+    command: 'bun run build'
     deps:
       - '^:build'
     inputs:

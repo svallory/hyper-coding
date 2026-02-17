@@ -2,6 +2,7 @@
  * Actions System Tests
  */
 
+import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
 	ActionExecutor,
@@ -611,7 +612,9 @@ describe("ActionUtils", () => {
 
 	it("should handle glob patterns", () => {
 		// Test basic glob - should find test files
-		const files = utils.globFiles("*.spec.ts", { cwd: "./tests" });
+		// Use absolute path to handle tests run from different working directories
+		const testDir = path.join(__dirname, "../tests");
+		const files = utils.globFiles("*.spec.ts", { cwd: testDir });
 		expect(files.length).toBeGreaterThan(0);
 		expect(files.every((f) => f.endsWith(".spec.ts"))).toBe(true);
 	});

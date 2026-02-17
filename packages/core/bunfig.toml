@@ -1,0 +1,7 @@
+[test]
+# Preload .env.test to ensure FORCE_COLOR is set for colored output in tests
+# This is important for tests that validate markdown rendering with colors
+preload = []
+
+# Note: Environment variables should be loaded via .env.test file
+# Run tests with: bun test --env-file .env.test

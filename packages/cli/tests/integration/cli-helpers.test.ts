@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
-import { hasCommand, hasTopic, parseCommands, runCLI, runDevCLI } from "#helpers/cli";
+import { hasCommand, hasTopic, parseCommands, runCLI, runDevCLI } from "#tests/helpers/cli";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../../package.json");
@@ -13,10 +13,10 @@ describe("CLI Helpers", () => {
 			expect(result.stdout).toContain("@hypercli/cli");
 		});
 
-		it("should capture stderr on error", async () => {
+		it("should capture error output on invalid command", async () => {
 			const result = await runCLI(["invalid-command"]);
 			expect(result.exitCode).not.toBe(0);
-			expect(result.stderr.length).toBeGreaterThan(0);
+			expect(result.stdout.length).toBeGreaterThan(0);
 		});
 
 		it("should respect cwd option", async () => {
@@ -40,10 +40,10 @@ describe("CLI Helpers", () => {
 			expect(result.stdout).toContain("@hypercli/cli");
 		});
 
-		it("should capture stderr on error in dev mode", async () => {
+		it("should capture error output on invalid command in dev mode", async () => {
 			const result = await runDevCLI(["invalid-command"]);
 			expect(result.exitCode).not.toBe(0);
-			expect(result.stderr.length).toBeGreaterThan(0);
+			expect(result.stdout.length).toBeGreaterThan(0);
 		});
 	});
 

@@ -10,7 +10,7 @@ import { TemplateParser } from "#parsers/template-parser";
 
 describe("Example Recipe Parsing", () => {
 	it("should parse the recipe example correctly", async () => {
-		const examplePath = path.resolve(process.cwd(), "examples/recipe-example.yml");
+		const examplePath = path.resolve(__dirname, "../examples/recipe-example.yml");
 
 		const result = await TemplateParser.parseTemplateFile(examplePath);
 
@@ -73,7 +73,7 @@ describe("Example Recipe Parsing", () => {
 	});
 
 	it("should have no warnings for the example recipe", async () => {
-		const examplePath = path.resolve(process.cwd(), "examples/recipe-example.yml");
+		const examplePath = path.resolve(__dirname, "../examples/recipe-example.yml");
 
 		const result = await TemplateParser.parseTemplateFile(examplePath);
 
@@ -87,7 +87,7 @@ describe("Example Recipe Parsing", () => {
 	});
 
 	it("should validate step dependencies correctly", async () => {
-		const examplePath = path.resolve(process.cwd(), "examples/recipe-example.yml");
+		const examplePath = path.resolve(__dirname, "../examples/recipe-example.yml");
 
 		const result = await TemplateParser.parseTemplateFile(examplePath);
 
@@ -108,7 +108,7 @@ describe("Example Recipe Parsing", () => {
 	});
 
 	it("should validate parallel steps have proper dependencies", async () => {
-		const examplePath = path.resolve(process.cwd(), "examples/recipe-example.yml");
+		const examplePath = path.resolve(__dirname, "../examples/recipe-example.yml");
 
 		const result = await TemplateParser.parseTemplateFile(examplePath);
 

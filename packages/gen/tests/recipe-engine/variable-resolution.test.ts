@@ -16,26 +16,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mocking
 // ---------------------------------------------------------------------------
 
-// Mock performInteractivePrompting to avoid actual terminal prompts
-vi.mock("#prompts/interactive-prompts");
-// Mock AiVariableResolver
-vi.mock("#ai/ai-variable-resolver");
+// Use vi.hoisted to ensure these mocks are available during module hoisting
+const { mockPrompt, mockResolveBatch } = vi.hoisted(() => {
+	return {
+		mockPrompt: vi.fn((prompts: any[]) =>
+			Promise.resolve(Object.fromEntries(prompts.map((p: any) => [p.name, `prompted-${p.name}`]))),
+		),
+		mockResolveBatch: vi.fn(() => Promise.resolve({})),
+	};
+});
 
-import { AiVariableResolver } from "#ai/ai-variable-resolver";
-import { performInteractivePrompting } from "#prompts/interactive-prompts";
+// Mock performInteractivePrompting to avoid actual terminal prompts
+vi.mock("#prompts/interactive-prompts", () => ({
+	performInteractivePrompting: mockPrompt,
+}));
+
+// Mock AiVariableResolver
+vi.mock("#ai/ai-variable-resolver", () => ({
+	AiVariableResolver: vi.fn().mockImplementation(() => ({
+		resolveBatch: mockResolveBatch,
+	})),
+}));
+
 import { RecipeEngine } from "#recipe-engine/recipe-engine";
 import { registerDefaultTools } from "#recipe-engine/tools/index";
-
-const mockPrompt = vi.mocked(performInteractivePrompting);
-// Get the mocked resolveBatch from a mocked instance
-const mockResolveBatch = vi.fn(() => Promise.resolve({}));
-// Override the constructor to use our mock
-vi.mocked(AiVariableResolver).mockImplementation(
-	() =>
-		({
-			resolveBatch: mockResolveBatch,
-		}) as any,
-);
 
 // No mock for resolveTransport — we set ANTHROPIC_API_KEY so the real
 // resolveTransport returns ApiTransport for mode: 'api' tests, and
@@ -94,6 +98,8 @@ beforeEach(() => {
 	tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "hypergen-varres-test-"));
 	engine = new RecipeEngine({ workingDir: tempDir });
 	registerDefaultTools();
+
+	// Reset call history but restore default implementations
 	mockPrompt.mockReset();
 	mockResolveBatch.mockReset();
 
@@ -101,7 +107,7 @@ beforeEach(() => {
 	savedAnthropicKey = process.env.ANTHROPIC_API_KEY;
 	process.env.ANTHROPIC_API_KEY = "test-fake-key-for-variable-resolution";
 
-	// Default mocks
+	// Default mock implementation for performInteractivePrompting
 	mockPrompt.mockImplementation((prompts: any[]) =>
 		Promise.resolve(Object.fromEntries(prompts.map((p: any) => [p.name, `prompted-${p.name}`]))),
 	);

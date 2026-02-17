@@ -1,3 +1,4 @@
+import stripAnsi from "strip-ansi";
 import { describe, expect, it } from "vitest";
 import { msg } from "../src/messages.js";
 import { symbols } from "../src/symbols.js";
@@ -71,7 +72,7 @@ describe("msg (structured messages)", () => {
 	describe("tip messages have no leading indent", () => {
 		it("tip summary-only starts without indent", () => {
 			const result = msg.tip("Do this");
-			const firstLine = result.split("\n")[0];
+			const firstLine = stripAnsi(result.split("\n")[0]);
 			// Tip starts with the symbol directly (no leading spaces)
 			expect(
 				firstLine.startsWith(symbols.tip) || firstLine.trimStart().startsWith(symbols.tip),

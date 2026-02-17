@@ -24,8 +24,15 @@ export async function runCLI(args: string[], options: CLIOptions = {}): Promise<
 	const cliPath = path.join(__dirname, "../../bin/run.js");
 	const result = await execa("bun", [cliPath, ...args], {
 		cwd: options.cwd || process.cwd(),
-		env: { ...process.env, NODE_ENV: "test", ...options.env },
+		env: {
+			...process.env,
+			NODE_ENV: "test",
+			// Disable update check to prevent network timeouts in tests
+			OCLIF_SKIP_WARN_IF_UPDATE_AVAILABLE: "1",
+			...options.env,
+		},
 		reject: options.reject ?? false,
+		timeout: 25000, // 25s timeout to catch hangs before vitest 30s timeout
 	});
 
 	return {
@@ -43,8 +50,15 @@ export async function runDevCLI(args: string[], options: CLIOptions = {}): Promi
 	const cliPath = path.join(__dirname, "../../bin/dev.js");
 	const result = await execa("bun", [cliPath, ...args], {
 		cwd: options.cwd || process.cwd(),
-		env: { ...process.env, NODE_ENV: "test", ...options.env },
+		env: {
+			...process.env,
+			NODE_ENV: "test",
+			// Disable update check to prevent network timeouts in tests
+			OCLIF_SKIP_WARN_IF_UPDATE_AVAILABLE: "1",
+			...options.env,
+		},
 		reject: options.reject ?? false,
+		timeout: 25000, // 25s timeout to catch hangs before vitest 30s timeout
 	});
 
 	return {

@@ -1,6 +1,19 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionParameterResolver } from "#actions/parameter-resolver";
 import type { ActionMetadata } from "#actions/types";
+
+// Mock InteractivePrompter to prevent actual prompts during tests
+vi.mock("#prompts/interactive-prompts", () => ({
+	InteractivePrompter: vi.fn().mockImplementation(() => ({
+		promptForParameters: vi.fn().mockResolvedValue({
+			completed: true,
+			cancelled: false,
+			values: {},
+			errors: [],
+		}),
+	})),
+	performInteractivePrompting: vi.fn().mockResolvedValue({}),
+}));
 
 describe("Interactive Parameter Resolution", () => {
 	let resolver: ActionParameterResolver;

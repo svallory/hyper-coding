@@ -28,7 +28,6 @@
 		"#commands/*": "./dist/commands/*.js",
 		"#tests/*": "./tests/*.ts",
 		"#fixtures/*": "./tests/fixtures/*.ts",
-		"#helpers/*": "./tests/helpers/*.ts",
 		"#*": "./dist/*.js"
 	},
 	"scripts": {

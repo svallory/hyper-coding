@@ -44,11 +44,12 @@
 		"#template-engines/*": "./dist/template-engines/*.js",
 		"#tests/*": "./tests/*.ts",
 		"#fixtures/*": "./tests/fixtures/*.ts",
-		"#helpers/*": "./tests/helpers/*.ts",
 		"#*": "./dist/*.js"
 	},
 	"scripts": {
-		"build": "tsc",
+		"build": "tsc && bun run copy-assets",
+		"clean": "rm -rf dist tsconfig.tsbuildinfo",
+		"copy-assets": "mkdir -p dist/ai && cp src/ai/prompt-template.jig dist/ai/",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "biome check .",

@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { hasCommand, parseCommands, runCLI } from "#helpers/cli";
+import { hasCommand, parseCommands, runCLI } from "#tests/helpers/cli";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../../package.json");
@@ -51,12 +51,16 @@ describe("Plugin Loading", () => {
 			expect(result.stdout).toContain("COMMANDS");
 		});
 
-		it("should discover @hypercli/kit plugin commands", async () => {
-			const result = await runCLI(["--help"]);
-			expect(result.exitCode).toBe(0);
-			// The kit plugin should contribute the 'kit' topic
-			expect(result.stdout).toContain("kit");
-		});
+		it(
+			"should discover @hypercli/kit plugin commands",
+			async () => {
+				const result = await runCLI(["--help"]);
+				expect(result.exitCode).toBe(0);
+				// The kit plugin should contribute the 'kit' topic
+				expect(result.stdout).toContain("kit");
+			},
+			{ timeout: 30000 },
+		);
 
 		it("should show cookbook topic from gen plugin", async () => {
 			const result = await runCLI(["--help"]);
@@ -109,9 +113,9 @@ describe("Plugin Loading", () => {
 			const result = await runCLI(["nonexistent-command"]);
 			// Should fail with non-zero exit code
 			expect(result.exitCode).not.toBe(0);
-			// Should show error message (various formats depending on hook behavior)
-			expect(result.stderr).toMatch(
-				/(nonexistent-command|not found|unknown command|cannot find module|err_module_not_found)/i,
+			// Should show error message on stdout (command-not-found hook uses console.log)
+			expect(result.stdout).toMatch(
+				/(nonexistent-command|not found|unknown command|couldn't find)/i,
 			);
 		});
 
@@ -119,8 +123,10 @@ describe("Plugin Loading", () => {
 			const result = await runCLI(["runn"]);
 			// Should fail
 			expect(result.exitCode).not.toBe(0);
-			// Error output should exist
-			expect(result.stderr.length).toBeGreaterThan(0);
+			// Error output should exist on stdout (command-not-found hook uses console.log)
+			expect(result.stdout.length).toBeGreaterThan(0);
+			// Should contain suggestion or error about the command
+			expect(result.stdout).toMatch(/(runn|did you mean|couldn't find)/i);
 		});
 
 		it("should handle empty command", async () => {

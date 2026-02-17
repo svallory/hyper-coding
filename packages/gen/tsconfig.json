@@ -8,10 +8,10 @@
 		"noImplicitReturns": true,
 		"noFallthroughCasesInSwitch": true,
 		"paths": {
-			"#*": ["./src/*.ts"],
-			"#tests/*": ["./tests/*.ts"],
-			"#fixtures/*": ["./tests/fixtures/*.ts"],
-			"#helpers/*": ["./tests/helpers/*.ts"]
+			"#*": ["./src/*"],
+			"#tests/*": ["./tests/*"],
+			"#fixtures/*": ["./tests/fixtures/*"],
+			"#helpers/*": ["./tests/helpers/*"]
 		}
 	},
 	"include": ["src"],

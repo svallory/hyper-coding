@@ -17,7 +17,6 @@
 		"#help/*": "./dist/help/*.js",
 		"#tests/*": "./tests/*.ts",
 		"#fixtures/*": "./tests/fixtures/*.ts",
-		"#helpers/*": "./tests/helpers/*.ts",
 		"#*": "./dist/*.js"
 	},
 	"exports": {

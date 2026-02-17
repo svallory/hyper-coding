@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /**
- * Updates package.json `imports` field for each package under packages/.
+ * Updates package.json `imports` field and vitest.config.ts with custom plugin
+ * for each package under packages/.
  *
  * For each folder under src/, adds:
  *   "#<folder>":   "./dist/<folder>/index.js"  (if index.ts exists)
@@ -20,6 +21,11 @@ import { join } from "node:path";
 
 const PACKAGES_DIR = join(import.meta.dirname, "..", "packages");
 
+const VITEST_CONFIG_TEMPLATE = `import { createVitestConfig } from "../../vitest.config.base";
+
+export default createVitestConfig(import.meta.url);
+`;
+
 const packages = readdirSync(PACKAGES_DIR).filter((name) => {
 	const pkgJson = join(PACKAGES_DIR, name, "package.json");
 	return existsSync(pkgJson);
@@ -29,6 +35,7 @@ for (const pkg of packages) {
 	const pkgDir = join(PACKAGES_DIR, pkg);
 	const srcDir = join(pkgDir, "src");
 	const pkgJsonPath = join(pkgDir, "package.json");
+	const vitestConfigPath = join(pkgDir, "vitest.config.ts");
 
 	if (!existsSync(srcDir)) {
 		console.log(`Skipping ${pkg}: no src/ directory`);
@@ -56,18 +63,19 @@ for (const pkg of packages) {
 	// Test-related imports (ts extension)
 	imports["#tests/*"] = "./tests/*.ts";
 	imports["#fixtures/*"] = "./tests/fixtures/*.ts";
-	imports["#helpers/*"] = "./tests/helpers/*.ts";
 
 	// Catch-all for top-level files and anything else
 	imports["#*"] = "./dist/*.js";
 
+	// Update package.json
 	pkgJson.imports = imports;
+	writeFileSync(pkgJsonPath, `${JSON.stringify(pkgJson, null, "\t")}\n`);
 
-	writeFileSync(pkgJsonPath, `${JSON.stringify(pkgJson, null, "  ")}\n`);
+	console.log(`Updated ${pkg}/package.json with ${Object.keys(imports).length} import entries`);
 
-	console.log(`Updated ${pkg}/package.json with ${Object.keys(imports).length} import entries:`);
-	for (const [key, val] of Object.entries(imports)) {
-		console.log(`  ${key} -> ${val}`);
-	}
+	// Update or create vitest.config.ts
+	writeFileSync(vitestConfigPath, VITEST_CONFIG_TEMPLATE);
+	console.log(`Updated ${pkg}/vitest.config.ts with custom hash imports plugin`);
+
 	console.log();
 }

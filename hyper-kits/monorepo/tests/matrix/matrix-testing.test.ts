@@ -9,14 +9,14 @@
  * 5. CI/CD integration support
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import * as fs from "fs/promises";
-import * as path from "path";
 import { execSync } from "child_process";
-import { getValidToolCombinations } from "../../src/composition";
-import { validateToolCompatibility } from "../../src/validation";
-import { presets } from "../../src/presets";
+import * as path from "path";
+import * as fs from "fs/promises";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { MonorepoConfig, TemplateContext } from "../../src";
+import { getValidToolCombinations } from "../../src/composition";
+import { presets } from "../../src/presets";
+import { validateToolCompatibility } from "../../src/validation";
 
 /**
  * Test configuration
@@ -333,13 +333,13 @@ tasks:
       - tsconfig.json
     outputs:
       - lib
-  
+
   test:
     command: ${this.getTestCommand(config)}
     inputs:
       - src/**/*
       - test/**/*
-    
+
   lint:
     command: ${this.getLintCommand(config)}
     inputs:
@@ -354,7 +354,7 @@ tasks:
 	private getTestFileContent(config: MonorepoConfig, packageName: string): string {
 		const imports =
 			config.testFramework === "jest"
-				? `import { describe, it, expect } from '@jest/globals';`
+				? `import { describe, it, expect } from 'vitest';`
 				: `import { describe, it, expect } from 'vitest';`;
 
 		return `${imports}
@@ -625,7 +625,7 @@ projects:
 runner:
   archivableTargets: ['build', 'test']
   cacheLifetime: '7 days'
-  
+
 vcs:
   manager: 'git'
   defaultBranch: 'main'

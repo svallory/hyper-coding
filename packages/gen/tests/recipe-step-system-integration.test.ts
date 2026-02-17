@@ -26,7 +26,7 @@ import type {
 	RecipeSource,
 	StepResult,
 } from "#recipe-engine/types";
-import { fixture, withTempFixtures } from "#tests/util/fixtures.js";
+import { fixture, withTempFixtures } from "#tests/util/fixtures";
 
 const execAsync = promisify(exec);
 

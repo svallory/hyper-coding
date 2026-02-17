@@ -33,12 +33,12 @@
 		"#errors/*": "./dist/errors/*.js",
 		"#tests/*": "./tests/*.ts",
 		"#fixtures/*": "./tests/fixtures/*.ts",
-		"#helpers/*": "./tests/helpers/*.ts",
 		"#*": "./dist/*.js"
 	},
 	"scripts": {
 		"build": "tsc",
 		"test": "vitest run",
+		"test:bun": "bun test --env-file .env.test",
 		"test:watch": "vitest",
 		"lint": "biome check .",
 		"format": "biome format . --write",
