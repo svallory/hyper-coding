@@ -14,7 +14,6 @@ import {
 	loadManifest,
 } from "#manifest";
 import { resolveKitSource } from "#source-resolver";
-import { findProjectRoot } from "#utils/find-project-root";
 
 export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 	static override description = "Update installed kits from their original source";
@@ -41,6 +40,7 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(KitUpdate);
+		await this.resolveEffectiveCwd(flags);
 
 		if (!args.kit && !flags.all) {
 			this.error(
@@ -50,8 +50,7 @@ export default class KitUpdate extends BaseCommand<typeof KitUpdate> {
 			);
 		}
 
-		const projectInfo = findProjectRoot(flags.cwd);
-		const projectRoot = projectInfo.workspaceRoot;
+		const projectRoot = flags.cwd;
 		const manifest = loadManifest(projectRoot);
 
 		if (Object.keys(manifest.kits).length === 0) {

@@ -15,7 +15,6 @@ import {
 	isKitInstalled,
 } from "#manifest";
 import { buildInstallCommand, resolveKitSource } from "#source-resolver";
-import { findProjectRoot } from "#utils/find-project-root";
 
 export default class KitInstall extends BaseCommand<typeof KitInstall> {
 	static override description = "Install a kit from npm, JSR, GitHub, or local path";
@@ -55,6 +54,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(KitInstall);
+		await this.resolveEffectiveCwd(flags);
 
 		try {
 			// Resolve kit source to determine type and normalized source
@@ -119,14 +119,8 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 	 * Install kit to .hyper/kits/ directory (for GitHub, Git URLs, local paths, etc.)
 	 */
 	private async installToKitsDir(resolved: any, flags: any): Promise<void> {
-		// Find project root (with monorepo detection)
-		const projectInfo = findProjectRoot(flags.cwd);
-		const projectRoot = projectInfo.workspaceRoot; // Use workspace root for monorepos
+		const projectRoot = flags.cwd;
 		const kitsDir = join(projectRoot, ".hyper", "kits");
-
-		if (projectInfo.isMonorepo) {
-			this.log(`Detected monorepo, installing to workspace root: ${projectRoot}`);
-		}
 
 		// Ensure kits directory exists
 		if (!existsSync(kitsDir)) {

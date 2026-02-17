@@ -673,13 +673,8 @@ export class ToolRegistry {
 	}
 
 	private startCacheCleanup(): void {
-		// Run cleanup every 10 minutes
-		this.cleanupIntervalId = setInterval(
-			() => {
-				this.cleanupExpiredInstances();
-			},
-			10 * 60 * 1000,
-		);
+		// No-op: cache cleanup is unnecessary in a short-lived CLI process.
+		// The in-memory cache is discarded when the process exits.
 	}
 
 	/**

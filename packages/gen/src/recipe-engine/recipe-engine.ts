@@ -21,6 +21,7 @@ import { resolveTransport } from "#ai/transports/resolve-transport";
 import { performInteractivePrompting } from "#prompts/interactive-prompts";
 import { renderTemplate as jigRenderTemplate } from "#template-engines/jig-engine";
 import { StepExecutor, type StepExecutorConfig } from "./step-executor.js";
+import { registerDefaultTools } from "./tools/index.js";
 import { type ToolRegistry, getToolRegistry } from "./tools/registry.js";
 import type {
 	RecipeConfig,
@@ -244,8 +245,9 @@ export class RecipeEngine extends EventEmitter {
 		this.logger = new Logger(console.log);
 		this.debug = createDebug("hyper:recipe:engine");
 
-		// Initialize tool registry
+		// Initialize tool registry and register built-in tools
 		this.toolRegistry = getToolRegistry();
+		registerDefaultTools();
 
 		// Initialize step executor
 		this.stepExecutor = new StepExecutor(this.toolRegistry, this.config.stepExecutor);

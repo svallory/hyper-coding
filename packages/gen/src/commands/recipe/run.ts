@@ -85,6 +85,7 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 
 	async run(): Promise<void> {
 		const { args, argv, flags } = await this.parse(RecipeRun);
+		await this.resolveEffectiveCwd(flags);
 		const recipePath = args.recipe;
 
 		// Parse additional parameters

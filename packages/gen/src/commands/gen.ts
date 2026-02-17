@@ -9,7 +9,7 @@ import path from "node:path";
 import { PathResolver, type ResolvedPath } from "@hypercli/core";
 import { discoverKits, getDefaultKitSearchDirs } from "@hypercli/core";
 import type { TemplateVariable } from "@hypercli/core";
-import { findProjectRoot } from "@hypercli/core";
+
 import { Args, Flags } from "@oclif/core";
 import { AiCollector } from "#ai/ai-collector";
 import { resolveTransport } from "#ai/transports/resolve-transport";
@@ -71,6 +71,7 @@ export default class Gen extends BaseCommand<typeof Gen> {
 
 	async run(): Promise<void> {
 		const { flags, argv } = await this.parse(Gen);
+		await this.resolveEffectiveCwd(flags);
 
 		// Collect all non-flag segments for path resolution
 		const segments = this.extractPathSegments(argv as string[]);
@@ -339,11 +340,10 @@ export default class Gen extends BaseCommand<typeof Gen> {
 	private async resolveRecipePath(segments: string[], cwd: string): Promise<ResolvedPath | null> {
 		if (segments.length === 0) return null;
 
-		// Find project root with monorepo detection
-		const projectInfo = findProjectRoot(cwd);
-		const projectRoot = projectInfo.workspaceRoot;
+		// cwd is already resolved by resolveEffectiveCwd (hyper.config dir or monorepo root)
+		const projectRoot = cwd;
 
-		// Discover kits from workspace root
+		// Discover kits from project root
 		const kitSearchDirs = getDefaultKitSearchDirs(projectRoot);
 
 		// Also add configured search directories

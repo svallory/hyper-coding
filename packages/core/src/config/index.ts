@@ -14,6 +14,7 @@ export type {
 export {
 	HypergenConfigLoader,
 	createConfigFile,
+	findHyperConfigDir,
 	getConfigInfo,
 } from "./config-loader.js";
 

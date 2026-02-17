@@ -237,19 +237,19 @@ describe("KitInstall", () => {
 			project.cleanup();
 		});
 
-		it("detects monorepo and uses workspace root", async () => {
+		it("installs kits relative to resolved cwd (project root)", async () => {
 			const project = createMonorepoProject("npm");
-			const workspacePackageDir = join(project.root, "packages", "app");
 
-			const cmd = new KitInstall(["github:user/repo"], { cwd: workspacePackageDir } as any);
+			const cmd = new KitInstall(["github:user/repo"], { cwd: project.root } as any);
 			await cmd.init();
 
+			// resolveEffectiveCwd resolves cwd before installToKitsDir is called,
+			// so installToKitsDir receives the already-resolved project root
 			await (cmd as any).installToKitsDir(
 				{ type: "github", source: "github:user/repo", original: "user/repo" },
-				{ dev: false, name: undefined, force: false, cwd: workspacePackageDir, debug: false },
+				{ dev: false, name: undefined, force: false, cwd: project.root, debug: false },
 			);
 
-			// Kit should be installed at monorepo root, not workspace package
 			expect(existsSync(join(project.root, ".hyper", "kits", "repo"))).toBe(true);
 
 			project.cleanup();

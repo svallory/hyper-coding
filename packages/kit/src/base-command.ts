@@ -4,6 +4,8 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { findHyperConfigDir } from "@hypercli/core";
+import { findProjectRoot } from "@hypercli/core";
 import { Command, Flags, type Interfaces } from "@oclif/core";
 
 export type BaseFlags<T extends typeof Command> = Interfaces.InferredFlags<
@@ -30,6 +32,33 @@ export abstract class BaseCommand<T extends typeof Command> extends Command {
 
 	protected flags!: BaseFlags<T>;
 	protected args!: BaseArgs<T>;
+
+	/**
+	 * Resolve effective CWD for the parsed flags.
+	 *
+	 * Priority:
+	 * 1. Explicit --cwd flag (user passed it) — use as-is
+	 * 2. Nearest hyper.config.* walking up from process.cwd()
+	 * 3. Monorepo/workspace root
+	 * 4. process.cwd() (unchanged default)
+	 *
+	 * Call this after this.parse() to update flags.cwd.
+	 */
+	protected async resolveEffectiveCwd(flags: { cwd: string }): Promise<void> {
+		// If the user explicitly passed --cwd, respect it
+		if (flags.cwd !== process.cwd()) return;
+
+		// 1. Try to find a hyper config file walking upward
+		const configDir = await findHyperConfigDir(process.cwd());
+		if (configDir) {
+			flags.cwd = configDir;
+			return;
+		}
+
+		// 2. Fall back to monorepo root detection
+		const projectInfo = findProjectRoot(process.cwd());
+		flags.cwd = projectInfo.workspaceRoot;
+	}
 
 	/**
 	 * Detect the package manager being used in the project

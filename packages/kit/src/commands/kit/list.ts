@@ -14,7 +14,6 @@ import { c, indent, msg, s, table } from "@hypercli/ui";
 import { Flags } from "@oclif/core";
 import { BaseCommand } from "#base-command";
 import { type KitManifestEntry, listInstalledKits } from "#manifest";
-import { findProjectRoot } from "#utils/find-project-root";
 
 interface CookbookInfo {
 	name: string;
@@ -42,9 +41,9 @@ export default class KitList extends BaseCommand<typeof KitList> {
 
 	async run(): Promise<void> {
 		const { flags } = await this.parse(KitList);
+		await this.resolveEffectiveCwd(flags);
 
-		const projectInfo = findProjectRoot(flags.cwd);
-		const projectRoot = projectInfo.workspaceRoot;
+		const projectRoot = flags.cwd;
 		const entries = listInstalledKits(projectRoot);
 
 		if (entries.length === 0) {

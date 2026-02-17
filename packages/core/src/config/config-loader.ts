@@ -395,6 +395,26 @@ export async function createConfigFile(
 }
 
 /**
+ * Search upward from startDir for the nearest hyper config file.
+ * Returns the directory containing the config, or null if none found.
+ */
+export async function findHyperConfigDir(startDir: string = process.cwd()): Promise<string | null> {
+	const explorer = cosmiconfig("hyper", {
+		searchPlaces: [
+			"hyper.config.js",
+			"hyper.config.mjs",
+			"hyper.config.cjs",
+			"hyper.config.json",
+			".hyperrc",
+			".hyperrc.json",
+		],
+	});
+
+	const result = await explorer.search(startDir);
+	return result ? path.dirname(result.filepath) : null;
+}
+
+/**
  * Get configuration information
  */
 export function getConfigInfo(config: ResolvedConfig): {
