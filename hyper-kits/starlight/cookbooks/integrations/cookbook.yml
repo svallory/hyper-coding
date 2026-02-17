@@ -1,0 +1,6 @@
+name: integrations
+description: Third-party integrations for Starlight sites
+version: 1.0.0
+
+recipes:
+  - "./*/recipe.yml"
