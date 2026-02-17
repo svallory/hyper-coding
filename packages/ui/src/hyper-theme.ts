@@ -27,6 +27,6 @@ export const hyperTheme: Theme = {
 		tip: { unicode: "\u25c6", ascii: "[TIP]" },
 	},
 	space: {
-		iconGap: 2,
+		iconGap: 1,
 	},
 };
