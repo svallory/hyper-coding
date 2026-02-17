@@ -1,0 +1,24 @@
+name: sidebar
+description: Configure automatic sidebar generation for your Starlight site
+version: "1.0.0"
+
+variables:
+  projectFolder:
+    type: string
+    description: Project folder path
+    default: "."
+
+steps:
+  - name: Install starlight-auto-sidebar
+    tool: shell
+    command: |
+      cd "{{ projectFolder }}" && bun add starlight-auto-sidebar
+
+  - name: Update astro.config.mjs
+    tool: template
+    template: templates/astro-sidebar-update.jig
+
+onSuccess: |
+  ✅ Auto-sidebar configuration added!
+
+  The sidebar will now be automatically generated based on your content structure.
