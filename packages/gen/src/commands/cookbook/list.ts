@@ -2,7 +2,7 @@
  * List cookbooks in a kit or all installed cookbooks
  */
 
-import { discoverCookbooksInKit } from "@hypercli/core";
+import { discoverCookbooksInKit, discoverRecipesInCookbook } from "@hypercli/core";
 import { c, s } from "@hypercli/ui/shortcuts";
 import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
@@ -81,17 +81,19 @@ export default class CookbookList extends BaseCommand<typeof CookbookList> {
 					const discoveredCookbooks = await discoverCookbooksInKit(kitPath, cookbookGlobs);
 
 					for (const [cookbookName, cookbook] of discoveredCookbooks) {
-						// Get recipe names from the cookbook
-						const recipeNames: string[] = [];
-						if (cookbook.config.recipes) {
-							// Extract recipe names from glob patterns or use defaults
-							recipeNames.push(
-								...cookbook.config.recipes.map((r) => {
-									// Extract name from pattern like './*/recipe.yml' -> '*'
-									const match = r.match(/\*\/|\*$/);
-									return match ? "(varies)" : r;
-								}),
+						// Discover actual recipe names from the cookbook directory
+						const recipeGlobs = cookbook.config.recipes ?? ["./*/recipe.yml"];
+						let recipeNames: string[] | undefined;
+						try {
+							const discoveredRecipes = await discoverRecipesInCookbook(
+								cookbook.dirPath,
+								recipeGlobs,
 							);
+							if (discoveredRecipes.size > 0) {
+								recipeNames = Array.from(discoveredRecipes.keys()).sort();
+							}
+						} catch {
+							// If recipe discovery fails, omit the recipes list
 						}
 
 						cookbooks.push({
@@ -99,7 +101,7 @@ export default class CookbookList extends BaseCommand<typeof CookbookList> {
 							kit: kit.name,
 							description: cookbook.config.description,
 							version: cookbook.config.version,
-							recipes: recipeNames.length > 0 ? recipeNames : undefined,
+							recipes: recipeNames,
 							path: cookbook.dirPath,
 						});
 					}
@@ -115,6 +117,8 @@ export default class CookbookList extends BaseCommand<typeof CookbookList> {
 				`Failed to list cookbooks: ${error instanceof Error ? error.message : String(error)}`,
 			);
 		}
+
+		this.exit(0);
 	}
 
 	private displayCookbooks(cookbooks: CookbookInfo[], flags: { json?: boolean }): void {
@@ -144,18 +148,25 @@ export default class CookbookList extends BaseCommand<typeof CookbookList> {
 			this.log(c.kit(`${kitName}:`));
 
 			for (const cookbook of kitCookbooks) {
-				const versionStr = cookbook.version ? s.version(cookbook.version) : "";
+				const versionStr = cookbook.version ? ` ${s.version(cookbook.version)}` : "";
 				this.log(s.listItem(c.cookbook(cookbook.name) + versionStr));
 
+				const bodyLines: string[] = [];
+
 				if (cookbook.description) {
-					this.log(s.description(cookbook.description));
+					bodyLines.push(s.description(cookbook.description.trim()));
 				}
 
 				if (cookbook.recipes && cookbook.recipes.length > 0) {
-					this.log(s.description(`Recipes: ${cookbook.recipes.join(", ")}`));
+					const recipeList = cookbook.recipes.map((r) => c.recipe(r)).join(c.muted(", "));
+					if (bodyLines.length > 0) bodyLines.push("");
+					bodyLines.push(s.description("Recipes: ") + recipeList);
+				}
+
+				if (bodyLines.length > 0) {
+					this.log(s.listItemBody(...bodyLines));
 				}
 			}
-			this.log("");
 		}
 	}
 }

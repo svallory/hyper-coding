@@ -7,7 +7,13 @@
 
 import { message } from "./components/index.ts";
 import type { MessageOptions } from "./components/index.ts";
-import { divider, getContext, styledText, symbol } from "./primitives/index.ts";
+import {
+	divider,
+	getContext,
+	indent as indentPrimitive,
+	styledText,
+	symbol,
+} from "./primitives/index.ts";
 
 // ---------------------------------------------------------------------------
 // md — inline markdown → styled text
@@ -45,7 +51,7 @@ export const c = {
 
 	// CLI entity colors
 	kit: (text: string) => styledText(text, { color: "accent" }),
-	recipe: (text: string) => styledText(text, { color: "info", bold: true }),
+	recipe: (text: string) => styledText(text, { color: "code" }),
 	cookbook: (text: string) => styledText(text, { color: "accent", bold: true }),
 	helper: (text: string) => styledText(text, { color: "warning" }),
 
@@ -84,8 +90,14 @@ export const s = {
 		`${" ".repeat(indent)}${styledText(`${key}:`, { color: "info" })} ${value}`,
 	header: (text: string, count?: number) =>
 		styledText(count !== undefined ? `${text} (${count})` : text, { bold: true, color: "warning" }),
-	description: (text: string, indent = 0) => " ".repeat(indent) + styledText(text, { dim: true }),
+	description: (text: string, level = 2) => indentPrimitive(styledText(text, { dim: true }), level),
 	listItem: (text: string) => `  ${symbol("bullet")} ${text}`,
+	/**
+	 * Renders indented paragraph lines under a list item, followed by a blank line.
+	 * Use this when a list item has body content (description, sub-items, etc.).
+	 * Items without body content should NOT use this — they get no trailing blank line.
+	 */
+	listItemBody: (...lines: string[]) => `${lines.join("\n")}\n`,
 	indent: (text: string, spaces: number) => " ".repeat(spaces) + text,
 	path: (text: string) => styledText(text, { dim: true }),
 	version: (text: string) => styledText(text, { dim: true }),
