@@ -394,7 +394,7 @@ The following are ready for v4 migration:
 - `@hypercli/cli` pins `@vitest/coverage-v8@1.6.1` exactly (will conflict with v4)
 - `@hypercli/kit` uses range `@vitest/coverage-v8@^1.0.0`
 - When bumping vitest to v4, the peer dependency will require `@vitest/coverage-v8@^4.0.0`
-- The exact pin `1.6.1` will cause a hard conflict and must be updated to `4.0.18` simultaneously
+- The exact pin `1.6.1` will cause a hard conflict and must be updated to `^4.0.0` simultaneously
 
 **Cleanup needed before bumping vitest versions in package.json:**
 
