@@ -1,38 +1,10 @@
 import { EOL } from "node:os";
 import { format } from "node:util";
-import type { Config } from "@oclif/core";
 
-import type { CommandCompletion, FlagCompletion, TopicCompletion } from "./types.js";
+import { CompletionScriptBase } from "./shared.js";
+import type { CommandCompletion } from "./types.js";
 
-export default class PowerShellComp {
-	config: Config;
-	commands: CommandCompletion[];
-	topics: TopicCompletion[];
-
-	private _coTopics: string[] | undefined;
-
-	constructor(config: Config) {
-		this.config = config;
-		this.topics = this.getTopics();
-		this.commands = this.getCommands();
-	}
-
-	get coTopics(): string[] {
-		if (this._coTopics) return this._coTopics;
-
-		const coTopics: string[] = [];
-		for (const topic of this.topics) {
-			for (const cmd of this.commands) {
-				if (topic.name === cmd.id) {
-					coTopics.push(topic.name);
-				}
-			}
-		}
-
-		this._coTopics = coTopics;
-		return this._coTopics;
-	}
-
+export default class PowerShellComp extends CompletionScriptBase {
 	generate(): string {
 		const genNode = (partialId: string): Record<string, unknown> => {
 			const node: Record<string, unknown> = {};
@@ -77,7 +49,6 @@ export default class PowerShellComp {
 		const commandTree: Record<string, Record<string, unknown>> = {};
 		const topLevelArgs: string[] = [];
 
-		// Collect top-level topics and generate a cmd tree node for each one of them.
 		for (const t of this.topics) {
 			if (!t.name.includes(":")) {
 				commandTree[t.name] = this.coTopics.includes(t.name)
@@ -92,7 +63,6 @@ export default class PowerShellComp {
 			}
 		}
 
-		// Collect top-level commands and add a cmd tree node with the command ID.
 		for (const c of this.commands) {
 			if (!c.id.includes(":") && !this.coTopics.includes(c.id)) {
 				commandTree[c.id] = {
@@ -104,7 +74,6 @@ export default class PowerShellComp {
 
 		const hashtables: string[] = [];
 		for (const topLevelArg of topLevelArgs) {
-			// Generate all the hashtables for each child node of a top-level arg.
 			hashtables.push(this.genHashtable(topLevelArg, commandTree));
 		}
 
@@ -269,7 +238,6 @@ Register-ArgumentCompleter -Native -CommandName ${this.config.binAliases ? `@(${
 		const flaghHashtables: string[] = [];
 		const flagNames = Object.keys(cmd.flags);
 
-		// Add comp for the global `--help` flag.
 		if (!flagNames.includes("help")) {
 			flaghHashtables.push('    "help" = @{ "summary" = "Show help for command" }');
 		}
@@ -278,7 +246,6 @@ Register-ArgumentCompleter -Native -CommandName ${this.config.binAliases ? `@(${
 			for (const flagName of flagNames) {
 				const f = cmd.flags[flagName];
 
-				// skip hidden flags
 				if (f.hidden) continue;
 
 				const flagSummary = this.sanitizeSummary(f.summary ?? f.description);
@@ -317,7 +284,6 @@ ${flaghHashtables.join("\n")}
 
 		const nodeKeys = Object.keys(node[key]);
 
-		// this is a topic
 		if (nodeKeys.includes("_summary")) {
 			let childTpl = `"_summary" = "${node[key]._summary}"\n%s`;
 			const newKeys = nodeKeys.filter((k) => k !== "_summary");
@@ -334,7 +300,6 @@ ${flaghHashtables.join("\n")}
 				return format(leafTpl, childTpl);
 			}
 
-			// last node
 			return format(leafTpl, childTpl);
 		}
 
@@ -365,98 +330,15 @@ ${flaghHashtables.join("\n")}
 		return leafTpl;
 	}
 
-	getCommands(): CommandCompletion[] {
-		const cmds: CommandCompletion[] = [];
-
-		for (const p of this.config.getPluginsList()) {
-			for (const c of p.commands) {
-				if (c.hidden) continue;
-
-				const summary = this.sanitizeSummary(c.summary ?? c.description);
-				const { flags } = c;
-
-				cmds.push({
-					flags: flags as unknown as Record<string, FlagCompletion>,
-					id: c.id,
-					summary,
-				});
-
-				for (const a of c.aliases) {
-					cmds.push({
-						flags: flags as unknown as Record<string, FlagCompletion>,
-						id: a,
-						summary,
-					});
-
-					const split = a.split(":");
-					let topic = split[0];
-
-					// Completion funcs are generated from topics:
-					// `force` -> `force:org` -> `force:org:open|list`
-					//
-					// but aliases aren't guaranteed to follow the plugin command tree
-					// so we need to add any missing topic between the starting point and the alias.
-					for (let i = 0; i < split.length - 1; i++) {
-						if (!this.topics.some((t) => t.name === topic)) {
-							this.topics.push({
-								description: `${topic.replaceAll(":", " ")} commands`,
-								name: topic,
-							});
-						}
-
-						topic += `:${split[i + 1]}`;
-					}
-				}
-			}
-		}
-
-		return cmds;
-	}
-
-	getTopics(): TopicCompletion[] {
-		const topics = this.config.topics
-			.filter((topic) => {
-				// it is assumed a topic has a child if it has children
-				const hasChild = this.config.topics.some((subTopic) =>
-					subTopic.name.includes(`${topic.name}:`),
-				);
-				return hasChild;
-			})
-			.sort((a, b) => {
-				if (a.name < b.name) {
-					return -1;
-				}
-
-				if (a.name > b.name) {
-					return 1;
-				}
-
-				return 0;
-			})
-			.map((t) => {
-				const description = t.description
-					? this.sanitizeSummary(t.description)
-					: `${t.name.replaceAll(":", " ")} commands`;
-				return {
-					description,
-					name: t.name,
-				};
-			});
-
-		return topics;
-	}
-
 	sanitizeSummary(summary: string | undefined): string {
 		if (summary === undefined) {
-			// PowerShell:
-			// [System.Management.Automation.CompletionResult] will error out if you pass in an empty string for the summary.
 			return " ";
 		}
 
 		return summary
 			.replace(/<%= config\.bin %>/g, this.config.bin)
-			.replaceAll('"', '""') // escape double quotes.
-			.replaceAll("`", "``") // escape backticks.
-			.split(EOL)[0]; // only use the first line
+			.replaceAll('"', '""')
+			.replaceAll("`", "``")
+			.split(EOL)[0];
 	}
 }

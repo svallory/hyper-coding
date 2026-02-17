@@ -1,39 +1,11 @@
 import { format } from "node:util";
-import type { Config } from "@oclif/core";
 
-import type { CommandCompletion, FlagCompletion, TopicCompletion } from "./types.js";
+import { CompletionScriptBase } from "./shared.js";
+import type { FlagCompletion } from "./types.js";
 
 const argTemplate = '        "%s")\n          %s\n        ;;\n';
 
-export default class ZshCompWithSpaces {
-	config: Config;
-	commands: CommandCompletion[];
-	topics: TopicCompletion[];
-
-	private _coTopics: string[] | undefined;
-
-	constructor(config: Config) {
-		this.config = config;
-		this.topics = this.getTopics();
-		this.commands = this.getCommands();
-	}
-
-	get coTopics(): string[] {
-		if (this._coTopics) return this._coTopics;
-
-		const coTopics: string[] = [];
-		for (const topic of this.topics) {
-			for (const cmd of this.commands) {
-				if (topic.name === cmd.id) {
-					coTopics.push(topic.name);
-				}
-			}
-		}
-
-		this._coTopics = coTopics;
-		return this._coTopics;
-	}
-
+export default class ZshCompWithSpaces extends CompletionScriptBase {
 	generate(): string {
 		const firstArgs: { id: string; summary: string }[] = [];
 
@@ -58,18 +30,14 @@ export default class ZshCompWithSpaces {
 
 			for (const arg of firstArgs) {
 				if (this.coTopics.includes(arg.id)) {
-					// coTopics already have a completion function.
 					caseBlock += `${arg.id})\n  _${this.config.bin}_${arg.id}\n  ;;\n`;
 				} else {
 					const cmd = this.commands.find((c) => c.id === arg.id);
 					if (cmd) {
-						// if it's a command and has flags, inline flag completion statement.
-						// skip it from the args statement if it doesn't accept any flag.
 						if (Object.keys(cmd.flags).length > 0) {
 							caseBlock += `${arg.id})\n${this.genZshFlagArgumentsBlock(cmd.flags)} ;; \n`;
 						}
 					} else {
-						// it's a topic, redirect to its completion function.
 						caseBlock += `${arg.id})\n  _${this.config.bin}_${arg.id}\n  ;;\n`;
 					}
 				}
@@ -84,7 +52,7 @@ export default class ZshCompWithSpaces {
 ${this.config.binAliases?.map((a) => `compdef ${a}=${this.config.bin}`).join("\n") ?? ""}
 
 # Dynamic completion helper - calls ${this.config.bin} autocomplete generate for kit/cookbook/recipe completion
-# Output format: "name\\tdescription" or just "name" per line
+# Output format: "name\tdescription" or just "name" per line
 _${this.config.bin}_dynamic() {
   local -a completions
   local output
@@ -92,8 +60,8 @@ _${this.config.bin}_dynamic() {
   if [[ -n "$output" ]]; then
     while IFS= read -r line; do
       [[ -z "$line" ]] && continue
-      # Convert "name\\tdescription" to "name:description" for _describe
-      if [[ "$line" == *$'\\t'* ]]; then
+      # Convert "name\tdescription" to "name:description" for _describe
+      if [[ "$line" == *$'\t'* ]]; then
         local name="\${line%%	*}"
         local desc="\${line#*	}"
         completions+=("\${name}:\${desc}")
@@ -134,24 +102,17 @@ _${this.config.bin}
 		flags: Record<string, FlagCompletion> | undefined,
 		options?: { skipFiles?: boolean },
 	): string {
-		// if a command doesn't have flags make it only complete files
-		// also add comp for the global `--help` flag.
 		if (!flags) {
 			const filesSpec = options?.skipFiles ? "" : ' "*: :_files';
 			return `_arguments -S \\\n --help"[Show help for command]"${filesSpec}`;
 		}
 
 		const flagNames = Object.keys(flags);
-		// `-S`:
-		// Do not complete flags after a '--' appearing on the line, and ignore the '--'. For example, with -S, in the line:
-		// foobar -x -- -y
-		// the '-x' is considered a flag, the '-y' is considered an argument, and the '--' is considered to be neither.
 		let argumentsBlock = "_arguments -S \\\n";
 
 		for (const flagName of flagNames) {
 			const f = flags[flagName];
 
-			// skip hidden flags
 			if (f.hidden) continue;
 
 			const flagSummary = this.sanitizeSummary(f.summary ?? f.description);
@@ -160,7 +121,6 @@ _${this.config.bin}
 			if (f.type === "option") {
 				if (f.char) {
 					if (f.multiple) {
-						// this flag can be present multiple times on the line
 						flagSpec += `"*"{-${f.char},--${f.name}}`;
 					} else {
 						flagSpec += `"(-${f.char} --${f.name})"{-${f.char},--${f.name}}`;
@@ -170,7 +130,6 @@ _${this.config.bin}
 					flagSpec += f.options ? `:${f.name} options:(${f.options?.join(" ")})"` : ':file:_files"';
 				} else {
 					if (f.multiple) {
-						// this flag can be present multiple times on the line
 						flagSpec += '"*"';
 					}
 
@@ -178,10 +137,8 @@ _${this.config.bin}
 					flagSpec += f.options ? `${f.name} options:(${f.options.join(" ")})"` : 'file:_files"';
 				}
 			} else if (f.char) {
-				// Flag.Boolean
 				flagSpec += `"(-${f.char} --${f.name})"{-${f.char},--${f.name}}"[${flagSummary}]"`;
 			} else {
-				// Flag.Boolean
 				flagSpec += `--${f.name}"[${flagSummary}]"`;
 			}
 
@@ -189,10 +146,8 @@ _${this.config.bin}
 			argumentsBlock += flagSpec;
 		}
 
-		// add global `--help` flag
 		argumentsBlock += '--help"[Show help for command]"';
 		if (!options?.skipFiles) {
-			// complete files if `-` is not present on the current line
 			argumentsBlock += ' \\\n"*: :_files"';
 		}
 
@@ -348,87 +303,6 @@ _${this.config.bin}
 		return valuesBlock;
 	}
 
-	getCommands(): CommandCompletion[] {
-		const cmds: CommandCompletion[] = [];
-
-		for (const p of this.config.getPluginsList()) {
-			for (const c of p.commands) {
-				if (c.hidden) continue;
-
-				const summary = this.sanitizeSummary(c.summary ?? c.description);
-				const { flags } = c;
-
-				cmds.push({
-					flags: flags as unknown as Record<string, FlagCompletion>,
-					id: c.id,
-					summary,
-				});
-
-				for (const a of c.aliases) {
-					cmds.push({
-						flags: flags as unknown as Record<string, FlagCompletion>,
-						id: a,
-						summary,
-					});
-
-					const split = a.split(":");
-					let topic = split[0];
-
-					// Completion funcs are generated from topics:
-					// `force` -> `force:org` -> `force:org:open|list`
-					//
-					// but aliases aren't guaranteed to follow the plugin command tree
-					// so we need to add any missing topic between the starting point and the alias.
-					for (let i = 0; i < split.length - 1; i++) {
-						if (!this.topics.some((t) => t.name === topic)) {
-							this.topics.push({
-								description: `${topic.replaceAll(":", " ")} commands`,
-								name: topic,
-							});
-						}
-
-						topic += `:${split[i + 1]}`;
-					}
-				}
-			}
-		}
-
-		return cmds;
-	}
-
-	getTopics(): TopicCompletion[] {
-		const topics = this.config.topics
-			.filter((topic) => {
-				// it is assumed a topic has a child if it has children
-				const hasChild = this.config.topics.some((subTopic) =>
-					subTopic.name.includes(`${topic.name}:`),
-				);
-				return hasChild;
-			})
-			.sort((a, b) => {
-				if (a.name < b.name) {
-					return -1;
-				}
-
-				if (a.name > b.name) {
-					return 1;
-				}
-
-				return 0;
-			})
-			.map((t) => {
-				const description = t.description
-					? this.sanitizeSummary(t.description)
-					: `${t.name.replaceAll(":", " ")} commands`;
-				return {
-					description,
-					name: t.name,
-				};
-			});
-
-		return topics;
-	}
-
 	sanitizeSummary(summary: string | undefined): string {
 		if (summary === undefined) {
 			return "";
@@ -436,8 +310,8 @@ _${this.config.bin}
 
 		return summary
 			.replace(/<%= config\.bin %>/g, this.config.bin)
-			.replaceAll(/(["`])/g, "\\\\\\$1") // backticks and double-quotes require triple-backslashes
-			.replaceAll(/([[\]])/g, "\\\\$1") // square brackets require double-backslashes
-			.split("\n")[0]; // only use the first line
+			.replaceAll(/(["`])/g, "\\\\\\$1")
+			.replaceAll(/([[\]])/g, "\\\\$1")
+			.split("\n")[0];
 	}
 }

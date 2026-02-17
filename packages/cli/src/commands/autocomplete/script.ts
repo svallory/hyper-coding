@@ -1,7 +1,7 @@
 import path from "node:path";
 import { Args } from "@oclif/core";
 
-import { AutocompleteBase } from "#base";
+import { AutocompleteBase } from "#autocomplete/base";
 
 export default class Script extends AutocompleteBase {
 	static override args = {

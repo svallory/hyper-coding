@@ -3,7 +3,7 @@ import { Args, Flags } from "@oclif/core";
 import { indent, list } from "@hypercli/ui";
 import { c, msg } from "@hypercli/ui/shortcuts";
 
-import { AutocompleteBase } from "#base";
+import { AutocompleteBase } from "#autocomplete/base";
 import Create from "#commands/autocomplete/create";
 
 export default class Index extends AutocompleteBase {

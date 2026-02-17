@@ -107,7 +107,6 @@ export class DynamicCacheManager {
 
 				for (const [recipeName, recipeYmlPath] of recipesMap) {
 					const vars = this.extractVariables(recipeYmlPath);
-					// Use the recipe description from the YAML if available
 					const recipeDesc = this.extractRecipeDescription(recipeYmlPath);
 					cache.recipes[recipeKey].push({
 						name: recipeName,
@@ -171,7 +170,6 @@ export class DynamicCacheManager {
 				if (typeof def.description === "string") {
 					completion.description = def.description;
 				}
-				// Also check "prompt" as a fallback description
 				if (!completion.description && typeof def.prompt === "string") {
 					completion.description = def.prompt;
 				}

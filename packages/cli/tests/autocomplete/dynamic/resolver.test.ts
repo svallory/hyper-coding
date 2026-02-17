@@ -2,8 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CompletionResolver } from "#dynamic/resolver";
-import type { DynamicCache } from "#dynamic/types";
+import { CompletionResolver } from "#autocomplete/dynamic/resolver";
+import type { DynamicCache } from "#autocomplete/dynamic/types";
 
 /**
  * Tests for CompletionResolver
@@ -59,6 +59,7 @@ describe("CompletionResolver.parseContext", () => {
 			cookbook: "crud",
 			recipe: "resource",
 			prefix: "--na",
+			positionalIndex: 0,
 		});
 	});
 
@@ -70,6 +71,33 @@ describe("CompletionResolver.parseContext", () => {
 			cookbook: "crud",
 			recipe: "resource",
 			prefix: "",
+			positionalIndex: 0,
+		});
+	});
+
+	it("computes positionalIndex correctly for positional args after recipe", () => {
+		// "nextjs crud resource myModel " — one positional arg before current prefix
+		const ctx = resolver.parseContext(["nextjs", "crud", "resource", "myModel", ""]);
+		expect(ctx).toEqual({
+			level: "variable",
+			kit: "nextjs",
+			cookbook: "crud",
+			recipe: "resource",
+			prefix: "",
+			positionalIndex: 1,
+		});
+	});
+
+	it("skips flags when computing positionalIndex", () => {
+		// "nextjs crud resource --api-route myModel " — flag should not count
+		const ctx = resolver.parseContext(["nextjs", "crud", "resource", "--api-route", "myModel", ""]);
+		expect(ctx).toEqual({
+			level: "variable",
+			kit: "nextjs",
+			cookbook: "crud",
+			recipe: "resource",
+			prefix: "",
+			positionalIndex: 1,
 		});
 	});
 
@@ -126,13 +154,14 @@ describe("CompletionResolver.complete", () => {
 		},
 		variables: {
 			"nextjs:crud:resource": [
-				{ name: "name", type: "string", position: 0 },
+				{ name: "name", type: "string", position: 0, values: ["User", "Post", "Comment"] },
 				{
 					name: "pages",
 					type: "enum",
 					values: ["list", "detail", "create", "edit"],
 				},
 				{ name: "api-route", type: "boolean" },
+				{ name: "output", type: "string", position: 1, values: ["src", "lib", "app"] },
 			],
 			"react:component:basic": [{ name: "componentName", type: "string", position: 0 }],
 		},
@@ -237,7 +266,7 @@ describe("CompletionResolver.complete", () => {
 		expect(result).toEqual([]);
 	});
 
-	// --- Variable level ---
+	// --- Variable level (flags) ---
 
 	it("returns flag-style completions with -- prefix", async () => {
 		const result = await resolver.complete({
@@ -246,8 +275,9 @@ describe("CompletionResolver.complete", () => {
 			cookbook: "crud",
 			recipe: "resource",
 			prefix: "--",
+			positionalIndex: 0,
 		});
-		expect(result).toEqual(["--name", "--pages", "--api-route"]);
+		expect(result).toEqual(["--name", "--pages", "--api-route", "--output"]);
 	});
 
 	it("filters flags by prefix after --", async () => {
@@ -257,19 +287,9 @@ describe("CompletionResolver.complete", () => {
 			cookbook: "crud",
 			recipe: "resource",
 			prefix: "--pa",
+			positionalIndex: 0,
 		});
 		expect(result).toEqual(["--pages"]);
-	});
-
-	it("returns empty without -- prefix at variable level", async () => {
-		const result = await resolver.complete({
-			level: "variable",
-			kit: "nextjs",
-			cookbook: "crud",
-			recipe: "resource",
-			prefix: "na",
-		});
-		expect(result).toEqual([]);
 	});
 
 	it("returns empty for unknown recipe at variable level", async () => {
@@ -279,6 +299,70 @@ describe("CompletionResolver.complete", () => {
 			cookbook: "crud",
 			recipe: "unknown",
 			prefix: "--",
+			positionalIndex: 0,
+		});
+		expect(result).toEqual([]);
+	});
+
+	// --- Variable level (positional completion) ---
+
+	it("returns enum values for positional var at correct index", async () => {
+		const result = await resolver.complete({
+			level: "variable",
+			kit: "nextjs",
+			cookbook: "crud",
+			recipe: "resource",
+			prefix: "",
+			positionalIndex: 0,
+		});
+		expect(result).toEqual(["User", "Post", "Comment"]);
+	});
+
+	it("filters positional enum values by prefix", async () => {
+		const result = await resolver.complete({
+			level: "variable",
+			kit: "nextjs",
+			cookbook: "crud",
+			recipe: "resource",
+			prefix: "Po",
+			positionalIndex: 0,
+		});
+		expect(result).toEqual(["Post"]);
+	});
+
+	it("returns enum values for second positional var", async () => {
+		const result = await resolver.complete({
+			level: "variable",
+			kit: "nextjs",
+			cookbook: "crud",
+			recipe: "resource",
+			prefix: "",
+			positionalIndex: 1,
+		});
+		expect(result).toEqual(["src", "lib", "app"]);
+	});
+
+	it("returns [] when positional var has no enum values", async () => {
+		const result = await resolver.complete({
+			level: "variable",
+			kit: "react",
+			cookbook: "component",
+			recipe: "basic",
+			prefix: "",
+			positionalIndex: 0,
+		});
+		// componentName has no values array
+		expect(result).toEqual([]);
+	});
+
+	it("returns [] when positionalIndex exceeds available positional vars", async () => {
+		const result = await resolver.complete({
+			level: "variable",
+			kit: "nextjs",
+			cookbook: "crud",
+			recipe: "resource",
+			prefix: "",
+			positionalIndex: 99,
 		});
 		expect(result).toEqual([]);
 	});
