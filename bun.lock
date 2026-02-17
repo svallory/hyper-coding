@@ -42,10 +42,12 @@
         "@hypercli/ui": "workspace:*",
         "@oclif/core": "^4",
         "debug": "^4.4.1",
+        "js-yaml": "^4.1.0",
       },
       "devDependencies": {
         "@biomejs/biome": "^1.9.4",
         "@types/debug": "^4.1.12",
+        "@types/js-yaml": "^4.0.9",
         "@types/node": "^20.0.0",
         "typescript": "^5.4.0",
         "vitest": "^1.0.0",
