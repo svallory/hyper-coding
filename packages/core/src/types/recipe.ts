@@ -1182,18 +1182,6 @@ export interface RecipeEngineConfig {
 	/** Working directory */
 	workingDir?: string;
 
-	/** Cache configuration */
-	cache?: {
-		/** Whether to enable caching */
-		enabled: boolean;
-
-		/** Cache directory */
-		directory?: string;
-
-		/** Cache TTL in seconds */
-		ttl?: number;
-	};
-
 	/** Logging configuration */
 	logging?: {
 		/** Log level */

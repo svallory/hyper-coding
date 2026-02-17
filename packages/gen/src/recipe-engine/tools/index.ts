@@ -136,15 +136,6 @@ export const SUPPORTED_TOOL_TYPES: readonly ToolType[] = [
 ] as const;
 
 /**
- * Default tool registry configuration
- */
-export const DEFAULT_REGISTRY_CONFIG = {
-	maxCacheSize: 100,
-	cacheTimeoutMs: 30 * 60 * 1000, // 30 minutes
-	enableInstanceReuse: true,
-} as const;
-
-/**
  * Tool execution phases for lifecycle management
  */
 export const TOOL_EXECUTION_PHASES: readonly ToolPhase[] = [
@@ -160,13 +151,9 @@ export const TOOL_EXECUTION_PHASES: readonly ToolPhase[] = [
  * and can be called once during application startup.
  */
 export function initializeToolsFramework(options?: {
-	registryConfig?: Partial<typeof DEFAULT_REGISTRY_CONFIG>;
 	enableDebugLogging?: boolean;
 }): ToolRegistry {
-	const registry = ToolRegistry.getInstance({
-		...DEFAULT_REGISTRY_CONFIG,
-		...options?.registryConfig,
-	});
+	const registry = ToolRegistry.getInstance();
 
 	if (options?.enableDebugLogging) {
 		// Enable debug logging for the tools framework
@@ -331,14 +318,6 @@ export const TOOL_FRAMEWORK_CONSTANTS = {
 	MIN_RETRY_DELAY: 1000, // 1 second
 	MAX_RETRY_DELAY: 30000, // 30 seconds
 
-	// Memory thresholds
-	MEMORY_WARNING_THRESHOLD: 512 * 1024 * 1024, // 512MB
-	MEMORY_ERROR_THRESHOLD: 1024 * 1024 * 1024, // 1GB
-
-	// Cache configuration
-	CACHE_CLEANUP_INTERVAL: 10 * 60 * 1000, // 10 minutes
-	MAX_CACHE_AGE: 60 * 60 * 1000, // 1 hour
-
 	// Debug categories
 	DEBUG_CATEGORIES: [
 		"hyper:recipe:tool",
@@ -399,23 +378,8 @@ export function checkRegistryHealth(): {
 	const stats = registry.getStats();
 	const issues: string[] = [];
 
-	// Check if we have tools registered
 	if (stats.totalRegistrations === 0) {
 		issues.push("No tools registered in the registry");
-	}
-
-	// Check memory usage
-	const totalMemory = stats.memory.registrySize + stats.memory.cacheSize;
-	if (totalMemory > TOOL_FRAMEWORK_CONSTANTS.MEMORY_WARNING_THRESHOLD) {
-		issues.push(`High memory usage: ${Math.round(totalMemory / 1024 / 1024)}MB`);
-	}
-
-	// Check for excessive cached instances
-	const cacheRatio = stats.cachedInstances / Math.max(stats.totalRegistrations, 1);
-	if (cacheRatio > 5) {
-		issues.push(
-			`Excessive cached instances: ${stats.cachedInstances} cached vs ${stats.totalRegistrations} registered`,
-		);
 	}
 
 	return {
