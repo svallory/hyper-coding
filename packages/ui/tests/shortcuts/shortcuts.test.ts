@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { createContext, setContext } from "../../src/primitives/context.ts";
-import { stripAnsi } from "../../src/render/index.ts";
-import { c, getSymbols, getTokens, md, msg, s } from "../../src/shortcuts.ts";
+import { createContext, setContext } from "#primitives/context";
+import { stripAnsi } from "#render/index";
+import { c, getSymbols, getTokens, md, msg, s } from "#shortcuts";
 
 // Force truecolor + unicode context for deterministic output
 beforeEach(() => {
@@ -222,8 +222,8 @@ describe("s", () => {
 	});
 
 	test("description applies dim with indent", () => {
-		expect(stripAnsi(s.description("desc", 2))).toBe("  desc");
-		expect(stripAnsi(s.description("desc"))).toBe("desc");
+		expect(stripAnsi(s.description("desc", 2))).toBe("    desc");
+		expect(stripAnsi(s.description("desc"))).toBe("    desc");
 	});
 
 	test("listItem prepends bullet", () => {

@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
-import { version } from "../../src/index.js";
+import { version } from "#index";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../../package.json");

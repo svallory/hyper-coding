@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, test } from "vitest";
-import { stringWidth, stripAnsi } from "../../src/primitives/../render/index.ts";
-import { align } from "../../src/primitives/align.ts";
-import { badge } from "../../src/primitives/badge.ts";
-import { border } from "../../src/primitives/border.ts";
-import { createContext, setContext } from "../../src/primitives/context.ts";
-import { divider } from "../../src/primitives/divider.ts";
-import { indent } from "../../src/primitives/indent.ts";
-import { line } from "../../src/primitives/line.ts";
-import { pad } from "../../src/primitives/pad.ts";
-import { stack } from "../../src/primitives/stack.ts";
-import { styledText } from "../../src/primitives/styledText.ts";
-import { symbol } from "../../src/primitives/symbol.ts";
-import { truncate } from "../../src/primitives/truncate.ts";
-import { wrap } from "../../src/primitives/wrap.ts";
+import { align } from "#primitives/align";
+import { badge } from "#primitives/badge";
+import { border } from "#primitives/border";
+import { createContext, setContext } from "#primitives/context";
+import { divider } from "#primitives/divider";
+import { indent } from "#primitives/indent";
+import { line } from "#primitives/line";
+import { pad } from "#primitives/pad";
+import { stack } from "#primitives/stack";
+import { styledText } from "#primitives/styledText";
+import { symbol } from "#primitives/symbol";
+import { truncate } from "#primitives/truncate";
+import { wrap } from "#primitives/wrap";
+import { stringWidth, stripAnsi } from "#render/index";
 
 // ---------------------------------------------------------------------------
 // Context fixtures

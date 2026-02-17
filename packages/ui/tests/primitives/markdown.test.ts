@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
-import { defaultMarkdownTheme, markdown } from "../../src/primitives/markdown.ts";
-import type { MarkdownOptions, MarkdownTheme } from "../../src/primitives/markdown.ts";
-import { stripAnsi } from "../../src/render/index.ts";
+import { defaultMarkdownTheme, markdown } from "#primitives/markdown";
+import type { MarkdownOptions, MarkdownTheme } from "#primitives/markdown";
+import { stripAnsi } from "#render/index";
 
 describe("markdown primitive", () => {
 	test("renders a heading", () => {

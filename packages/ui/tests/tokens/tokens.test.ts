@@ -1,12 +1,7 @@
 import { describe, expect, test } from "vitest";
-import type { TerminalCapabilities } from "../../src/tokens/../capabilities/index.ts";
-import { defaultTokens } from "../../src/tokens/defaults.ts";
-import {
-	resolveColor,
-	resolveSpinner,
-	resolveSymbol,
-	resolveTokens,
-} from "../../src/tokens/resolver.ts";
+import type { TerminalCapabilities } from "#capabilities/index";
+import { defaultTokens } from "#tokens/defaults";
+import { resolveColor, resolveSpinner, resolveSymbol, resolveTokens } from "#tokens/resolver";
 import type {
 	BorderCharSet,
 	BorderStyleName,
@@ -15,7 +10,7 @@ import type {
 	SpinnerDefinition,
 	SymbolPair,
 	TokenSet,
-} from "../../src/tokens/types.ts";
+} from "#tokens/types";
 
 // ---------------------------------------------------------------------------
 // Helpers

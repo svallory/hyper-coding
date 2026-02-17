@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDiff } from "../../src/utils/diff.js";
+import { formatDiff } from "#utils/diff";
 
 describe("formatDiff", () => {
 	it("returns a string with ANSI codes for differing content", () => {

@@ -38,7 +38,7 @@ import {
 	symbol,
 	table,
 	tree,
-} from "../../src/index.ts";
+} from "#index";
 
 // ---------------------------------------------------------------------------
 // Helpers

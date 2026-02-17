@@ -3,10 +3,10 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { compareOutput } from "../../src/test/compare.ts";
-import { mockCapabilities, mockTheme, setupTestContext } from "../../src/test/mock.ts";
-import { render } from "../../src/test/render.ts";
-import { snapshot } from "../../src/test/snapshot.ts";
+import { compareOutput } from "#test/compare";
+import { mockCapabilities, mockTheme, setupTestContext } from "#test/mock";
+import { render } from "#test/render";
+import { snapshot } from "#test/snapshot";
 
 // ─── render() ────────────────────────────────────────────────────────────────
 

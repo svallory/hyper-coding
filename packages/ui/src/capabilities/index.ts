@@ -106,8 +106,8 @@ function detectColorDepth(
 		return forceColor;
 	}
 
-	// NO_COLOR set (any value including empty) → 'none'
-	if ("NO_COLOR" in env) {
+	// NO_COLOR set (any value including empty, but not undefined) → 'none'
+	if ("NO_COLOR" in env && env.NO_COLOR !== undefined) {
 		return "none";
 	}
 
@@ -179,7 +179,7 @@ function detectUnicode(env: Record<string, string | undefined>): boolean {
  * @returns `true` if a CI environment is detected.
  */
 function detectCI(env: Record<string, string | undefined>): boolean {
-	return CI_ENV_VARS.some((key) => key in env);
+	return CI_ENV_VARS.some((key) => key in env && env[key] !== undefined);
 }
 
 /**
@@ -196,7 +196,7 @@ export function detectCapabilities(): TerminalCapabilities {
 	const isTTY = !!process.stdout.isTTY;
 	const isStderrTTY = !!process.stderr.isTTY;
 	const forceColor = parseForceColor(env);
-	const noColor = "NO_COLOR" in env;
+	const noColor = "NO_COLOR" in env && env.NO_COLOR !== undefined;
 	const isDumb = env.TERM === "dumb";
 	const colorDepth = detectColorDepth(env, isTTY, forceColor);
 	const unicode = detectUnicode(env);

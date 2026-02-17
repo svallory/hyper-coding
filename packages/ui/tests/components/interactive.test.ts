@@ -7,27 +7,23 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createContext, getContext, setContext } from "../../src/components/../primitives/index.ts";
-import { stripAnsi } from "../../src/components/../render/index.ts";
+import { createContext, getContext, setContext } from "#primitives/index";
+import { stripAnsi } from "#render/index";
 
 import {
 	formatConfirmAnswer,
 	formatConfirmQuestion,
 	parseConfirmInput,
-} from "../../src/components/confirmPrompt.ts";
-import { progressBar } from "../../src/components/progressBar.ts";
-import {
-	formatSelectAnswer,
-	formatSelectQuestion,
-	renderOptions,
-} from "../../src/components/selectPrompt.ts";
+} from "#components/confirmPrompt";
+import { progressBar } from "#components/progressBar";
+import { formatSelectAnswer, formatSelectQuestion, renderOptions } from "#components/selectPrompt";
 // Components
-import { spinner } from "../../src/components/spinner.ts";
+import { spinner } from "#components/spinner";
 import {
 	formatTextAnswer,
 	formatTextQuestion,
 	formatValidationError,
-} from "../../src/components/textPrompt.ts";
+} from "#components/textPrompt";
 
 // ---------------------------------------------------------------------------
 // Mock stream helper
