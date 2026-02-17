@@ -5,7 +5,7 @@
  * and actionable guidance for common issues
  */
 
-import { renderMarkdown } from "cli-html";
+import { renderMarkdown } from "@hypercli/ui/help";
 
 export enum ErrorCode {
 	// Configuration errors

@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { c, s } from "@hypercli/ui";
+import { c, s } from "@hypercli/ui/shortcuts";
 import { Args, Flags } from "@oclif/core";
 import yaml from "js-yaml";
 import { BaseCommand } from "#lib/base-command";

@@ -1,10 +1,10 @@
-import { renderMarkdown } from "cli-html";
+import { renderMarkdown } from "@hypercli/ui/help";
 import { describe, expect, it } from "vitest";
 import Logger from "../src/logger/logger.js";
 
 // Helper to strip ANSI color codes
 function stripAnsi(str: string): string {
-	// eslint-disable-next-line no-control-regex
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape detection requires control characters
 	return str.replace(/\u001b\[\d+m/g, "");
 }
 
@@ -25,6 +25,7 @@ describe("renderMarkdown", () => {
 	it("renders code blocks with colors", () => {
 		const result = renderMarkdown("```ts\nconst x = 1;\n```");
 		// Verify ANSI color codes are present (confirms FORCE_COLOR is working)
+		// biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape detection requires control characters
 		expect(result).toMatch(/\u001b\[\d+m/);
 	});
 

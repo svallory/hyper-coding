@@ -1,13 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { helpTheme, renderMarkdown } from "@hypercli/ui";
+import { renderHelp } from "@hypercli/ui/help";
 import { type Command, Help, type Interfaces } from "@oclif/core";
 
 export default class MarkdownHelp extends Help {
 	override async showCommandHelp(command: Command.Loadable): Promise<void> {
 		const md = this.loadMarkdown(command);
 		if (md) {
-			this.log(renderMarkdown(md, helpTheme.theme));
+			this.log(renderHelp(md));
 			await this.showCommandSubInfo(command);
 		} else {
 			return super.showCommandHelp(command);
@@ -17,7 +17,7 @@ export default class MarkdownHelp extends Help {
 	protected override async showRootHelp(): Promise<void> {
 		const rootMd = this.loadRootMarkdown();
 		if (rootMd) {
-			this.log(renderMarkdown(rootMd, helpTheme.theme));
+			this.log(renderHelp(rootMd));
 			const topLevelTopics = this.sortedTopics.filter((t) => !t.name.includes(":"));
 			const topLevelCommands = this.sortedCommands.filter((c) => !c.id.includes(":"));
 			if (topLevelTopics.length > 0) this.log(this.formatTopics(topLevelTopics));
@@ -33,7 +33,7 @@ export default class MarkdownHelp extends Help {
 	protected override async showTopicHelp(topic: Interfaces.Topic): Promise<void> {
 		const md = this.loadTopicMarkdown(topic);
 		if (md) {
-			this.log(renderMarkdown(md, helpTheme.theme));
+			this.log(renderHelp(md));
 			const depth = topic.name.split(":").length;
 			const subTopics = this.sortedTopics.filter(
 				(t) => t.name.startsWith(`${topic.name}:`) && t.name.split(":").length === depth + 1,

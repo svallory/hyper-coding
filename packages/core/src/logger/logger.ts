@@ -1,5 +1,5 @@
+import { renderMarkdown } from "@hypercli/ui/help";
 import chalk from "chalk";
-import { renderMarkdown } from "cli-html";
 
 import type { ExtendedLogger } from "./types.js";
 

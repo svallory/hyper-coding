@@ -14,7 +14,7 @@
  */
 
 import { discoverKits, getKitsDirectory } from "@hypercli/core";
-import { c, msg } from "@hypercli/ui";
+import { c, msg } from "@hypercli/ui/shortcuts";
 import type { Hook } from "@oclif/core";
 import { getSuggestions } from "./suggest.js";
 
