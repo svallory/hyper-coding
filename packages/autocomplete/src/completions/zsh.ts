@@ -84,15 +84,24 @@ export default class ZshCompWithSpaces {
 ${this.config.binAliases?.map((a) => `compdef ${a}=${this.config.bin}`).join("\n") ?? ""}
 
 # Dynamic completion helper - calls ${this.config.bin} autocomplete generate for kit/cookbook/recipe completion
+# Output format: "name\\tdescription" or just "name" per line
 _${this.config.bin}_dynamic() {
-  local -a dynamic_completions
+  local -a completions
   local output
   output=$(${this.config.bin} autocomplete generate -- "$@" 2>/dev/null)
   if [[ -n "$output" ]]; then
     while IFS= read -r line; do
-      [[ -n "$line" ]] && dynamic_completions+=("$line")
+      [[ -z "$line" ]] && continue
+      # Convert "name\\tdescription" to "name:description" for _describe
+      if [[ "$line" == *$'\\t'* ]]; then
+        local name="\${line%%	*}"
+        local desc="\${line#*	}"
+        completions+=("\${name}:\${desc}")
+      else
+        completions+=("\${line}")
+      fi
     done <<< "$output"
-    compadd -a dynamic_completions
+    _describe "completions" completions
     return 0
   fi
   return 1
@@ -121,10 +130,16 @@ _${this.config.bin}
 `;
 	}
 
-	genZshFlagArgumentsBlock(flags: Record<string, FlagCompletion> | undefined): string {
+	genZshFlagArgumentsBlock(
+		flags: Record<string, FlagCompletion> | undefined,
+		options?: { skipFiles?: boolean },
+	): string {
 		// if a command doesn't have flags make it only complete files
 		// also add comp for the global `--help` flag.
-		if (!flags) return '_arguments -S \\\n --help"[Show help for command]" "*: :_files';
+		if (!flags) {
+			const filesSpec = options?.skipFiles ? "" : ' "*: :_files';
+			return `_arguments -S \\\n --help"[Show help for command]"${filesSpec}`;
+		}
 
 		const flagNames = Object.keys(flags);
 		// `-S`:
@@ -175,9 +190,11 @@ _${this.config.bin}
 		}
 
 		// add global `--help` flag
-		argumentsBlock += '--help"[Show help for command]" \\\n';
-		// complete files if `-` is not present on the current line
-		argumentsBlock += '"*: :_files"';
+		argumentsBlock += '--help"[Show help for command]"';
+		if (!options?.skipFiles) {
+			// complete files if `-` is not present on the current line
+			argumentsBlock += ' \\\n"*: :_files"';
+		}
 
 		return argumentsBlock;
 	}
@@ -260,7 +277,7 @@ _${this.config.bin}
 					id: subArg,
 					summary: c.summary,
 				});
-				const flagsBlock = this.genZshFlagArgumentsBlock(c.flags);
+				const flagsBlock = this.genZshFlagArgumentsBlock(c.flags, { skipFiles: true });
 				const dynamicCall = `${dynamicBin} ${id.replaceAll(":", " ")} ${subArg} \${words[CURRENT]}`;
 				argsBlock += format(flagArgsTemplate, subArg, `${flagsBlock}\n          ${dynamicCall}`);
 			}
@@ -291,7 +308,7 @@ _${this.config.bin}
 				id: subArg,
 				summary: c.summary,
 			});
-			const flagsBlock = this.genZshFlagArgumentsBlock(c.flags);
+			const flagsBlock = this.genZshFlagArgumentsBlock(c.flags, { skipFiles: true });
 			const dynamicCall = `${dynamicBin} ${id.replaceAll(":", " ")} ${subArg} \${words[CURRENT]}`;
 			argsBlock += format(flagArgsTemplate, subArg, `${flagsBlock}\n          ${dynamicCall}`);
 		}

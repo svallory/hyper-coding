@@ -111,15 +111,18 @@ describe("CompletionResolver.complete", () => {
 
 	const testCache: DynamicCache = {
 		builtAt: new Date().toISOString(),
-		kits: ["nextjs", "react"],
+		kits: [
+			{ name: "nextjs", description: "Next.js kit" },
+			{ name: "react", description: "React kit" },
+		],
 		cookbooks: {
-			nextjs: ["crud", "project"],
-			react: ["component"],
+			nextjs: [{ name: "crud" }, { name: "project" }],
+			react: [{ name: "component" }],
 		},
 		recipes: {
-			"nextjs:crud": ["resource", "list-page"],
-			"nextjs:project": ["create"],
-			"react:component": ["basic"],
+			"nextjs:crud": [{ name: "resource" }, { name: "list-page" }],
+			"nextjs:project": [{ name: "create" }],
+			"react:component": [{ name: "basic" }],
 		},
 		variables: {
 			"nextjs:crud:resource": [
@@ -155,12 +158,12 @@ describe("CompletionResolver.complete", () => {
 
 	it("returns all kits with empty prefix", async () => {
 		const result = await resolver.complete({ level: "kit", prefix: "" });
-		expect(result).toEqual(["nextjs", "react"]);
+		expect(result).toEqual(["nextjs\tNext.js kit", "react\tReact kit"]);
 	});
 
 	it("filters kits by prefix", async () => {
 		const result = await resolver.complete({ level: "kit", prefix: "ne" });
-		expect(result).toEqual(["nextjs"]);
+		expect(result).toEqual(["nextjs\tNext.js kit"]);
 	});
 
 	it("returns empty for non-matching kit prefix", async () => {
@@ -170,7 +173,7 @@ describe("CompletionResolver.complete", () => {
 
 	it("filters kits case-insensitively", async () => {
 		const result = await resolver.complete({ level: "kit", prefix: "NE" });
-		expect(result).toEqual(["nextjs"]);
+		expect(result).toEqual(["nextjs\tNext.js kit"]);
 	});
 
 	// --- Cookbook level ---
@@ -287,9 +290,9 @@ describe("CompletionResolver.getEnumValues", () => {
 
 	const testCache: DynamicCache = {
 		builtAt: new Date().toISOString(),
-		kits: ["nextjs"],
-		cookbooks: { nextjs: ["crud"] },
-		recipes: { "nextjs:crud": ["resource"] },
+		kits: [{ name: "nextjs" }],
+		cookbooks: { nextjs: [{ name: "crud" }] },
+		recipes: { "nextjs:crud": [{ name: "resource" }] },
 		variables: {
 			"nextjs:crud:resource": [
 				{ name: "name", type: "string", position: 0 },

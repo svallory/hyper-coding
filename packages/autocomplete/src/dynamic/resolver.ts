@@ -8,7 +8,7 @@
 
 import createDebug from "debug";
 import { DynamicCacheManager } from "./cache.js";
-import type { CompletionContext, DynamicCache } from "./types.js";
+import type { CompletionContext, CompletionEntry, DynamicCache } from "./types.js";
 
 const debug = createDebug("hypercli:autocomplete:resolver");
 
@@ -87,19 +87,19 @@ export class CompletionResolver {
 
 		switch (context.level) {
 			case "kit":
-				return filterByPrefix(cache.kits, context.prefix);
+				return formatEntries(filterByPrefix(cache.kits, context.prefix));
 
 			case "cookbook": {
 				const cookbooks = cache.cookbooks[context.kit];
 				if (!cookbooks) return [];
-				return filterByPrefix(cookbooks, context.prefix);
+				return formatEntries(filterByPrefix(cookbooks, context.prefix));
 			}
 
 			case "recipe": {
 				const key = `${context.kit}:${context.cookbook}`;
 				const recipes = cache.recipes[key];
 				if (!recipes) return [];
-				return filterByPrefix(recipes, context.prefix);
+				return formatEntries(filterByPrefix(recipes, context.prefix));
 			}
 
 			case "variable": {
@@ -111,8 +111,8 @@ export class CompletionResolver {
 				if (context.prefix.startsWith("--")) {
 					const flagPrefix = context.prefix.slice(2);
 					return variables
-						.map((v) => `--${v.name}`)
-						.filter((flag) => flag.slice(2).startsWith(flagPrefix));
+						.filter((v) => v.name.toLowerCase().startsWith(flagPrefix.toLowerCase()))
+						.map((v) => (v.description ? `--${v.name}\t${v.description}` : `--${v.name}`));
 				}
 
 				// If no -- prefix, return positional variable descriptions as hints
@@ -151,10 +151,23 @@ export class CompletionResolver {
 }
 
 /**
- * Filter a list of strings to those starting with the given prefix (case-insensitive).
+ * Filter entries by name prefix (case-insensitive).
  */
-function filterByPrefix(items: string[], prefix: string): string[] {
+function filterByPrefix(items: CompletionEntry[], prefix: string): CompletionEntry[] {
 	if (!prefix) return items;
 	const lower = prefix.toLowerCase();
-	return items.filter((item) => item.toLowerCase().startsWith(lower));
+	return items.filter((item) => item.name.toLowerCase().startsWith(lower));
+}
+
+/**
+ * Format entries as "name\tdescription" lines for shell consumption.
+ * The tab separator is recognized by zsh _describe and bash completion.
+ * Descriptions are truncated to the first sentence for readability.
+ */
+function formatEntries(entries: CompletionEntry[]): string[] {
+	return entries.map((e) => {
+		if (!e.description) return e.name;
+		const firstSentence = e.description.split(/\.(?:\s|$)|\n/)[0].trim();
+		return firstSentence ? `${e.name}\t${firstSentence}` : e.name;
+	});
 }

@@ -84,14 +84,20 @@ export class DynamicCacheManager {
 		};
 
 		for (const [kitName, parsedKit] of kitsMap) {
-			cache.kits.push(kitName);
+			cache.kits.push({
+				name: kitName,
+				description: parsedKit.config.description,
+			});
 			cache.cookbooks[kitName] = [];
 
 			const cookbookGlobs = parsedKit.config.cookbooks ?? ["./cookbooks/*/cookbook.yml"];
 			const cookbooksMap = await discoverCookbooksInKit(parsedKit.dirPath, cookbookGlobs);
 
 			for (const [cookbookName, parsedCookbook] of cookbooksMap) {
-				cache.cookbooks[kitName].push(cookbookName);
+				cache.cookbooks[kitName].push({
+					name: cookbookName,
+					description: parsedCookbook.config.description,
+				});
 
 				const recipeKey = `${kitName}:${cookbookName}`;
 				cache.recipes[recipeKey] = [];
@@ -100,10 +106,16 @@ export class DynamicCacheManager {
 				const recipesMap = await discoverRecipesInCookbook(parsedCookbook.dirPath, recipeGlobs);
 
 				for (const [recipeName, recipeYmlPath] of recipesMap) {
-					cache.recipes[recipeKey].push(recipeName);
+					const vars = this.extractVariables(recipeYmlPath);
+					// Use the recipe description from the YAML if available
+					const recipeDesc = this.extractRecipeDescription(recipeYmlPath);
+					cache.recipes[recipeKey].push({
+						name: recipeName,
+						description: recipeDesc,
+					});
 
 					const varKey = `${kitName}:${cookbookName}:${recipeName}`;
-					cache.variables[varKey] = this.extractVariables(recipeYmlPath);
+					cache.variables[varKey] = vars;
 				}
 			}
 		}
@@ -114,6 +126,22 @@ export class DynamicCacheManager {
 		debug("Cache rebuilt: %d kits, written to %s", cache.kits.length, this.cachePath);
 
 		return cache;
+	}
+
+	/**
+	 * Extract the description from a recipe.yml file.
+	 */
+	private extractRecipeDescription(recipeYmlPath: string): string | undefined {
+		try {
+			const content = fs.readFileSync(recipeYmlPath, "utf-8");
+			const parsed = yaml.load(content) as Record<string, unknown> | null;
+			if (parsed && typeof parsed === "object" && typeof parsed.description === "string") {
+				return parsed.description;
+			}
+		} catch {
+			// Ignore parse errors — some recipe files have Jig templates in YAML
+		}
+		return undefined;
 	}
 
 	/**

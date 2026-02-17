@@ -5,6 +5,12 @@
  * resolve kit/cookbook/recipe/variable completions at tab-completion time.
  */
 
+/** A completable entry with a name and optional description. */
+export interface CompletionEntry {
+	name: string;
+	description?: string;
+}
+
 /**
  * Cached representation of all installed kits, cookbooks, recipes, and their variables.
  * Serialized to disk as JSON to avoid rescanning on every tab completion.
@@ -12,12 +18,12 @@
 export interface DynamicCache {
 	/** ISO timestamp of when this cache was built */
 	builtAt: string;
-	/** List of installed kit short names */
-	kits: string[];
-	/** Map of kitName -> cookbook names */
-	cookbooks: Record<string, string[]>;
-	/** Map of "kitName:cookbookName" -> recipe names */
-	recipes: Record<string, string[]>;
+	/** List of installed kit entries (name + description) */
+	kits: CompletionEntry[];
+	/** Map of kitName -> cookbook entries */
+	cookbooks: Record<string, CompletionEntry[]>;
+	/** Map of "kitName:cookbookName" -> recipe entries */
+	recipes: Record<string, CompletionEntry[]>;
 	/** Map of "kitName:cookbookName:recipeName" -> variable definitions */
 	variables: Record<string, VariableCompletion[]>;
 }
