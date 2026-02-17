@@ -17,7 +17,11 @@
 	"files": ["dist", "oclif.manifest.json"],
 	"oclif": {
 		"commands": "./dist/commands",
-		"topicSeparator": " "
+		"topicSeparator": " ",
+		"hooks": {
+			"plugins:postinstall": "./dist/hooks/refresh-cache.js",
+			"plugins:postuninstall": "./dist/hooks/refresh-cache.js"
+		}
 	},
 	"imports": {
 		"#*": "./dist/*.js"

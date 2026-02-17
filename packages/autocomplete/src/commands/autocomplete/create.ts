@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import makeDebug from "debug";
@@ -152,6 +153,31 @@ export default class Create extends AutocompleteBase {
 			writeFile(this.zshCompletionFunctionPath, new ZshCompWithSpaces(this.config).generate()),
 			writeFile(this.pwshCompletionFunctionPath, new PowerShellComp(this.config).generate()),
 		]);
+
+		// Also rebuild dynamic cache for kit/cookbook/recipe completions
+		try {
+			const { DynamicCacheManager } = await import("#dynamic/cache");
+			const projectRoot = this.findHyperRoot();
+			if (projectRoot) {
+				const cacheManager = new DynamicCacheManager(this.autocompleteCacheDir, projectRoot);
+				await cacheManager.rebuild();
+			}
+		} catch (error) {
+			debug("Failed to build dynamic cache: %s", error);
+			// Don't fail — dynamic cache is optional
+		}
+	}
+
+	private findHyperRoot(): string | null {
+		let dir = process.cwd();
+		const { root } = path.parse(dir);
+		while (dir !== root) {
+			if (fs.existsSync(path.join(dir, ".hyper"))) {
+				return dir;
+			}
+			dir = path.dirname(dir);
+		}
+		return null;
 	}
 
 	private async ensureDirs(): Promise<void> {
