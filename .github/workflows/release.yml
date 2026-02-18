@@ -37,7 +37,7 @@ jobs:
         run: bun install
 
       - name: Build packages
-        run: moon run :build
+        run: bunx moon run :build
 
       - name: Create Release Pull Request or Publish
         id: changesets

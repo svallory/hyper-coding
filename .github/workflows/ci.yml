@@ -27,16 +27,16 @@ jobs:
         run: bun install
 
       - name: Build packages
-        run: moon run :build
+        run: bunx moon run :build
 
       - name: Type check
-        run: moon run :check
+        run: bunx moon run :check
 
       - name: Lint
-        run: moon run :ci
+        run: bunx moon run :ci
 
       - name: Test
-        run: moon run :test
+        run: bunx moon run :test
 
       - name: Verify CLI works
         run: cd packages/cli && ./bin/run.js --version
