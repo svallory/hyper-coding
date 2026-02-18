@@ -1,8 +1,0 @@
----
-to: templates/generator/help/index.jig
----
----
-message: |
-  hypergen {bold generator new} --name [NAME] --action [ACTION]
-  hypergen {bold generator with-prompt} --name [NAME] --action [ACTION]
----
