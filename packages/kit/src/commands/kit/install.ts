@@ -54,6 +54,8 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(KitInstall);
+		this.flags = flags;
+		this.args = args;
 		await this.resolveEffectiveCwd(flags);
 
 		try {
