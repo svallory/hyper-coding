@@ -4,7 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import { formatVariable } from "@hypercli/core";
-import { c, msg, s } from "@hypercli/ui";
+import { c, indent, markdown, msg, s } from "@hypercli/ui";
 import { Args } from "@oclif/core";
 import yaml from "js-yaml";
 import { BaseCommand } from "#base-command";
@@ -25,7 +25,7 @@ export default class RecipeInfo extends BaseCommand<typeof RecipeInfo> {
 		"<%= config.bin %> recipe info crud",
 		"<%= config.bin %> recipe info starlight crud",
 		"<%= config.bin %> recipe info starlight docs crud",
-		"<%= config.bin %> recipe info crud --variables --steps",
+		"<%= config.bin %> recipe info crud --steps",
 		"<%= config.bin %> recipe info crud --json",
 	];
 
@@ -114,31 +114,26 @@ export default class RecipeInfo extends BaseCommand<typeof RecipeInfo> {
 		const { kit, cookbook, recipe, parsed } = match;
 
 		this.log("");
-		this.log(s.title("Recipe", recipe.name));
-		this.log(s.hr());
+		this.log(markdown(`# Recipe: ${recipe.name}`));
 
-		this.log(s.keyValue("Kit", c.kit(kit.manifest.name), 2));
-		this.log(s.keyValue("Cookbook", c.cookbook(cookbook.name), 2));
-		if (parsed.version) this.log(s.keyValue("Version", c.version(parsed.version), 2));
-		if (parsed.description) this.log(s.keyValue("Description", parsed.description, 2));
-
-		// Variable count summary (always)
-		const variables = parsed.variables ? Object.entries(parsed.variables) : [];
-		if (variables.length > 0) {
-			const requiredCount = variables.filter(([, v]) => (v as any)?.required).length;
-			this.log(s.keyValue("Variables", `${variables.length} (${requiredCount} required)`, 2));
+		this.log(s.keyValue("kit", c.kit(kit.manifest.name), 2));
+		this.log(s.keyValue("cookbook", c.cookbook(cookbook.name), 2));
+		if (parsed.version) this.log(s.keyValue("version", c.version(parsed.version), 2));
+		if (parsed.description) {
+			this.log("");
+			this.log(indent(c.muted(parsed.description), 2));
 		}
 
 		// Source (additive)
 		if (flags.source) {
 			this.log("");
 			this.log(s.header("Source"));
-			this.log(s.keyValue("  Path", s.path(recipe.path)));
-			if (parsed.version) this.log(s.keyValue("  Version", parsed.version));
+			this.log(s.keyValue("  path", s.path(recipe.path)));
 		}
 
-		// Variables detail (additive)
-		if (flags.variables && variables.length > 0) {
+		// Variables — shown by default with full details
+		const variables = parsed.variables ? Object.entries(parsed.variables) : [];
+		if (variables.length > 0) {
 			this.log("");
 			this.log(s.header("Variables", variables.length));
 
@@ -152,13 +147,13 @@ export default class RecipeInfo extends BaseCommand<typeof RecipeInfo> {
 
 				if (v.description) this.log(s.description(v.description, 4));
 				if (v.enumValues) {
-					this.log(s.description(`Options: ${v.enumValues.join(", ")}`, 4));
+					this.log(s.description(`options: ${v.enumValues.join(", ")}`, 4));
 				}
 			}
 		}
 
-		// Steps (additive)
-		if (flags.steps && Array.isArray(parsed.steps)) {
+		// Steps — shown by default
+		if (Array.isArray(parsed.steps) && parsed.steps.length > 0) {
 			this.log("");
 			this.log(s.header("Steps", parsed.steps.length));
 

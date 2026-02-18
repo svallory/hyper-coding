@@ -2,10 +2,7 @@
  * Show detailed information about a kit
  */
 
-import { readFileSync } from "node:fs";
-import { truncateDescription } from "@hypercli/core";
-import { c, msg, tree as renderTree, s } from "@hypercli/ui";
-import type { TreeNode } from "@hypercli/ui";
+import { c, indent, markdown, msg, s, table } from "@hypercli/ui";
 import { Args } from "@oclif/core";
 import { BaseCommand } from "#base-command";
 import type { KitTree } from "#base-command";
@@ -89,13 +86,15 @@ export default class KitInfo extends BaseCommand<typeof KitInfo> {
 		const version = config?.version ?? kit.manifest.version;
 
 		this.log("");
-		this.log(s.title("Kit", kit.manifest.name));
-		this.log(s.hr());
+		this.log(markdown(`# Kit: ${kit.manifest.name}`));
 
 		// Key-value metadata
-		if (version) this.log(s.keyValue("Version", c.version(version), 2));
-		if (config?.description) this.log(s.keyValue("Description", config.description, 2));
-		if (config?.author) this.log(s.keyValue("Author", config.author, 2));
+		if (version) this.log(s.keyValue("version", c.version(version), 2));
+		if (config?.author) this.log(s.keyValue("author", config.author, 2));
+		if (config?.description) {
+			this.log("");
+			this.log(indent(c.muted(config.description), 2));
+		}
 
 		// Source info (additive flag)
 		if (flags.source) {
@@ -125,35 +124,24 @@ export default class KitInfo extends BaseCommand<typeof KitInfo> {
 			}
 		}
 
-		// Tree of cookbooks → recipes
+		// Cookbooks table (same format as kit list)
 		if (kit.cookbooks.length > 0) {
 			this.log("");
 			this.log(s.header("Cookbooks", kit.cookbooks.length));
+			this.log("");
 
-			const treeRoot: TreeNode = {
-				label: c.kit(kit.manifest.name),
-				children: kit.cookbooks.map((cb) => ({
-					label: c.cookbook(cb.name),
-					children: flags.recipes
-						? cb.recipes.map((r) => {
-								let label = c.recipe(r.name);
-								// Load recipe description if --recipes flag
-								try {
-									const content = readFileSync(r.path, "utf-8");
-									const match = content.match(/^description:\s*["']?(.+?)["']?\s*$/m);
-									if (match?.[1]) {
-										label += c.muted(` — ${truncateDescription(match[1])}`);
-									}
-								} catch {
-									// ignore
-								}
-								return { label };
-							})
-						: cb.recipes.map((r) => ({ label: c.recipe(r.name) })),
+			const tbl = table({
+				columns: [
+					{ key: "cookbook", header: "Cookbook" },
+					{ key: "recipes", header: "Recipes" },
+				],
+				data: kit.cookbooks.map((cb) => ({
+					cookbook: c.cookbook(cb.name),
+					recipes: cb.recipes.map((r) => c.recipe(r.name)).join(c.muted(", ")),
 				})),
-			};
-
-			this.log(renderTree(treeRoot, { showCounts: true }));
+				variant: "borderless",
+			});
+			this.log(indent(tbl, 2));
 		} else {
 			this.log("");
 			this.log(c.muted("  No cookbooks found."));

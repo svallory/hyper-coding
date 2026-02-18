@@ -4,7 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import { truncateDescription } from "@hypercli/core";
-import { c, msg, s } from "@hypercli/ui";
+import { c, indent, markdown, msg, s } from "@hypercli/ui";
 import { Args } from "@oclif/core";
 import yaml from "js-yaml";
 import { BaseCommand } from "#base-command";
@@ -108,15 +108,17 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 		const config = cookbook.config;
 
 		this.log("");
-		this.log(s.title("Cookbook", cookbook.name));
-		this.log(s.hr());
+		this.log(markdown(`# Cookbook: ${cookbook.name}`));
 
-		this.log(s.keyValue("Kit", c.kit(kit.manifest.name), 2));
-		if (config?.description) this.log(s.keyValue("Description", config.description, 2));
+		this.log(s.keyValue("kit", c.kit(kit.manifest.name), 2));
+		if (config?.description) {
+			this.log("");
+			this.log(indent(c.muted(config.description), 2));
+		}
 
 		// Source (additive)
 		if (flags.source) {
-			this.log(s.keyValue("Path", s.path(cookbook.path), 2));
+			this.log(s.keyValue("path", s.path(cookbook.path), 2));
 		}
 
 		// Variables (additive)
@@ -144,17 +146,15 @@ export default class CookbookInfo extends BaseCommand<typeof CookbookInfo> {
 			for (const recipe of cookbook.recipes) {
 				this.log(s.listItem(c.recipe(recipe.name)));
 
-				if (flags.recipes) {
-					// Load recipe description
-					try {
-						const content = readFileSync(recipe.path, "utf-8");
-						const parsed = yaml.load(content) as any;
-						if (parsed?.description) {
-							this.log(s.listItemBody(s.description(truncateDescription(parsed.description), 4)));
-						}
-					} catch {
-						// ignore
+				// Always show recipe descriptions (no flag needed)
+				try {
+					const content = readFileSync(recipe.path, "utf-8");
+					const parsed = yaml.load(content) as any;
+					if (parsed?.description) {
+						this.log(s.listItemBody(s.description(truncateDescription(parsed.description), 4)));
 					}
+				} catch {
+					// ignore
 				}
 			}
 		}
