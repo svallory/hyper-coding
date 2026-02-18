@@ -17,21 +17,3 @@ exports[`add > should overwrite an existing file when HYPERGEN_OVERWRITE is set 
   "type": "add",
 }
 `;
-
-exports[`add should add a new file 1`] = `
-{
-  "status": "added",
-  "subject": "app/hello.js",
-  "timing": Any<Number>,
-  "type": "add",
-}
-`;
-
-exports[`add should overwrite an existing file when HYPERGEN_OVERWRITE is set 1`] = `
-{
-  "status": "added",
-  "subject": "app/hello.js",
-  "timing": Any<Number>,
-  "type": "add",
-}
-`;
