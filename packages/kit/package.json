@@ -1,9 +1,13 @@
 {
 	"name": "@hypercli/kit",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"type": "module",
 	"description": "Kit lifecycle management for HyperDev",
-	"keywords": ["hyperdev", "hypergen", "kits"],
+	"keywords": [
+		"hyperdev",
+		"hypergen",
+		"kits"
+	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"engines": {
@@ -17,7 +21,13 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"help",
+		"oclif.manifest.json",
+		"README.md",
+		"LICENSE"
+	],
 	"oclif": {
 		"commands": "./dist/commands",
 		"topicSeparator": " "
