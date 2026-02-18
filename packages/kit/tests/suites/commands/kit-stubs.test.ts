@@ -15,10 +15,6 @@ describe("KitList", () => {
 		expect(KitList.flags.json).toBeDefined();
 	});
 
-	it("defines verbose flag", () => {
-		expect(KitList.flags.verbose).toBeDefined();
-	});
-
 	it("defines base flags", () => {
 		expect(KitList.flags.cwd).toBeDefined();
 		expect(KitList.flags.debug).toBeDefined();

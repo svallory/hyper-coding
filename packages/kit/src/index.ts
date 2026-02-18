@@ -2,7 +2,14 @@
 export const version = "0.0.0";
 
 // Base Command
-export { BaseCommand, type BaseFlags, type BaseArgs } from "#base-command";
+export {
+	BaseCommand,
+	type BaseFlags,
+	type BaseArgs,
+	type KitTree,
+	type CookbookTree,
+	type RecipeEntry,
+} from "#base-command";
 
 // Source resolution
 export {
