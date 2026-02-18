@@ -11,8 +11,8 @@ import {
 	parseKitFile,
 } from "@hypercli/core";
 import { c, indent, msg, s, table } from "@hypercli/ui";
-import { Flags } from "@oclif/core";
 import { BaseCommand } from "#base-command";
+import { outputFlags } from "#lib/flags";
 import { type KitManifestEntry, listInstalledKits } from "#manifest";
 
 interface CookbookInfo {
@@ -33,14 +33,7 @@ export default class KitList extends BaseCommand<typeof KitList> {
 
 	static override flags = {
 		...BaseCommand.baseFlags,
-		json: Flags.boolean({
-			description: "Output as JSON",
-			default: false,
-		}),
-		verbose: Flags.boolean({
-			description: "Show detailed information for each kit",
-			default: false,
-		}),
+		...outputFlags,
 	};
 
 	async run(): Promise<void> {

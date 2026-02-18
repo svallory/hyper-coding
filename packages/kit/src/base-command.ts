@@ -7,11 +7,31 @@ import { join } from "node:path";
 import { findHyperConfigDir } from "@hypercli/core";
 import { findProjectRoot } from "@hypercli/core";
 import { Command, Flags, type Interfaces } from "@oclif/core";
+import type { KitManifestEntry } from "#manifest";
 
 export type BaseFlags<T extends typeof Command> = Interfaces.InferredFlags<
 	(typeof BaseCommand)["baseFlags"] & T["flags"]
 >;
 export type BaseArgs<T extends typeof Command> = Interfaces.InferredArgs<T["args"]>;
+
+export interface RecipeEntry {
+	name: string;
+	path: string;
+}
+
+export interface CookbookTree {
+	name: string;
+	path: string;
+	config: any;
+	recipes: RecipeEntry[];
+}
+
+export interface KitTree {
+	manifest: KitManifestEntry;
+	config: any;
+	path: string;
+	cookbooks: CookbookTree[];
+}
 
 /**
  * Abstract base command that all kit management commands extend
@@ -95,5 +115,57 @@ export abstract class BaseCommand<T extends typeof Command> extends Command {
 
 		// Default to npm
 		return "npm";
+	}
+
+	/**
+	 * Discover all installed kits with their cookbook and recipe trees.
+	 * Uses core parsers directly — no GeneratorDiscovery dependency.
+	 */
+	protected async discoverKitTree(projectRoot: string): Promise<KitTree[]> {
+		const { existsSync } = await import("node:fs");
+		const { join } = await import("node:path");
+		const { parseKitFile, discoverCookbooksInKit, discoverRecipesInCookbook } = await import(
+			"@hypercli/core"
+		);
+		const { listInstalledKits } = await import("#manifest");
+
+		const entries = listInstalledKits(projectRoot);
+		const kitsDir = join(projectRoot, ".hyper", "kits");
+		const result: KitTree[] = [];
+
+		for (const entry of entries) {
+			const kitDir = join(kitsDir, entry.name);
+			const kitYml = join(kitDir, "kit.yml");
+			let config: any = undefined;
+			const cookbooks: CookbookTree[] = [];
+
+			if (existsSync(kitYml)) {
+				const parsed = await parseKitFile(kitYml);
+				if (parsed.isValid) {
+					config = parsed.config;
+					if (config.cookbooks?.length) {
+						const discovered = await discoverCookbooksInKit(kitDir, config.cookbooks);
+						for (const [cbName, cb] of discovered) {
+							const recipeGlobs = cb.config.recipes ?? ["./*/recipe.yml"];
+							const recipes = await discoverRecipesInCookbook(cb.dirPath, recipeGlobs);
+							const recipeList: RecipeEntry[] = [];
+							for (const [rName, rPath] of recipes) {
+								recipeList.push({ name: rName, path: rPath });
+							}
+							cookbooks.push({
+								name: cbName,
+								path: cb.dirPath,
+								config: cb.config,
+								recipes: recipeList,
+							});
+						}
+					}
+				}
+			}
+
+			result.push({ manifest: entry, config, path: kitDir, cookbooks });
+		}
+
+		return result;
 	}
 }
