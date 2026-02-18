@@ -1,22 +1,4 @@
-// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
-
-exports[`add > should add a new file 1`] = `
-{
-  "status": "added",
-  "subject": "app/hello.js",
-  "timing": Any<Number>,
-  "type": "add",
-}
-`;
-
-exports[`add > should overwrite an existing file when HYPERGEN_OVERWRITE is set 1`] = `
-{
-  "status": "added",
-  "subject": "app/hello.js",
-  "timing": Any<Number>,
-  "type": "add",
-}
-`;
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
 
 exports[`add should add a new file 1`] = `
 {
