@@ -1,9 +1,118 @@
-// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`injector before rails 1`] = `
+exports[`injector > after rails 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'rails'
+    gem 'kamikaze' # added by hypergen
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > append bottom of file 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'httparty'
+
+    gem 'kamikaze' # added by hypergen
+    "
+`;
+
+exports[`injector > at_index 2 (below "source") 1`] = `
 "
     source 'http://rubygems.org'
     gem 'kamikaze' # added by hypergen
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > before rails 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'kamikaze' # added by hypergen
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > correctly interpret multi-line after regex 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'kamikaze' # added by hypergen
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > correctly interpret multi-line before regex 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'kamikaze' # added by hypergen
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > correctly interpret multi-line skip_if regex 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > if eof_last is false remove empty line from the end of injection body 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'rails'
+    gem 'kamikaze' # added by hypergen
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > if eof_last is true insert empty line to injection body 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'rails'
+    gem 'kamikaze' # added by hypergen
+
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > prepend top of file 1`] = `
+"    gem 'kamikaze' # added by hypergen
+
+    source 'http://rubygems.org'
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector > skip_if "source" exists 1`] = `
+"
+    source 'http://rubygems.org'
     gem 'rails'
     gem 'nokogiri'
     gem 'httparty'
@@ -16,17 +125,6 @@ exports[`injector after rails 1`] = `
     source 'http://rubygems.org'
     gem 'rails'
     gem 'kamikaze' # added by hypergen
-    gem 'nokogiri'
-    gem 'httparty'
-
-    "
-`;
-
-exports[`injector prepend top of file 1`] = `
-"    gem 'kamikaze' # added by hypergen
-
-    source 'http://rubygems.org'
-    gem 'rails'
     gem 'nokogiri'
     gem 'httparty'
 
@@ -55,7 +153,40 @@ exports[`injector at_index 2 (below "source") 1`] = `
     "
 `;
 
-exports[`injector skip_if "source" exists 1`] = `
+exports[`injector before rails 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'kamikaze' # added by hypergen
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector correctly interpret multi-line after regex 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'kamikaze' # added by hypergen
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector correctly interpret multi-line before regex 1`] = `
+"
+    source 'http://rubygems.org'
+    gem 'kamikaze' # added by hypergen
+    gem 'rails'
+    gem 'nokogiri'
+    gem 'httparty'
+
+    "
+`;
+
+exports[`injector correctly interpret multi-line skip_if regex 1`] = `
 "
     source 'http://rubygems.org'
     gem 'rails'
@@ -88,21 +219,10 @@ exports[`injector if eof_last is true insert empty line to injection body 1`] = 
     "
 `;
 
-exports[`injector correctly interpret multi-line after regex 1`] = `
-"
-    source 'http://rubygems.org'
-    gem 'rails'
-    gem 'nokogiri'
-    gem 'kamikaze' # added by hypergen
-    gem 'httparty'
+exports[`injector prepend top of file 1`] = `
+"    gem 'kamikaze' # added by hypergen
 
-    "
-`;
-
-exports[`injector correctly interpret multi-line before regex 1`] = `
-"
     source 'http://rubygems.org'
-    gem 'kamikaze' # added by hypergen
     gem 'rails'
     gem 'nokogiri'
     gem 'httparty'
@@ -110,7 +230,7 @@ exports[`injector correctly interpret multi-line before regex 1`] = `
     "
 `;
 
-exports[`injector correctly interpret multi-line skip_if regex 1`] = `
+exports[`injector skip_if "source" exists 1`] = `
 "
     source 'http://rubygems.org'
     gem 'rails'
