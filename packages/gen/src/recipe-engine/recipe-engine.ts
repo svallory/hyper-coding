@@ -1244,6 +1244,10 @@ export class RecipeEngine extends EventEmitter {
 		variables: Record<string, any>,
 		options: RecipeExecutionOptions,
 	): Promise<void> {
+		// Don't print lifecycle messages during collect mode (Pass 1 of 2-pass AI generation)
+		// — only the AI prompt document should be printed to stdout
+		if (AiCollector.getInstance().collectMode) return;
+
 		const template = result.success ? recipe.onSuccess : recipe.onError;
 		if (!template) return;
 

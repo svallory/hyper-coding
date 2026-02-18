@@ -33,6 +33,13 @@ const add = async (
 
 	if (!process.env.HYPERGEN_OVERWRITE && fileExists && !force) {
 		const existingContent = await fs.readFile(absTo, "utf-8");
+
+		// If contents are identical, silently skip — no need to bother the user
+		if (existingContent === action.body) {
+			logger?.ok(`   unchanged: ${to}`);
+			return result("skipped");
+		}
+
 		const resolution = await promptFileConflict(to, existingContent, action.body);
 
 		if (resolution === "skip") {
@@ -40,7 +47,7 @@ const add = async (
 			return result("skipped");
 		}
 		if (resolution === "abort") {
-			return result("aborted");
+			throw new Error("Generation aborted by user.");
 		}
 		// resolution === "overwrite" — fall through to write
 	}
