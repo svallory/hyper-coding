@@ -36,12 +36,8 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Build packages in order
-        run: |
-          cd packages/core && bun run build
-          cd ../kit && bun run build
-          cd ../gen && bun run build
-          cd ../cli && bun run build
+      - name: Build packages
+        run: moon run :build
 
       - name: Create Release Pull Request or Publish
         id: changesets
