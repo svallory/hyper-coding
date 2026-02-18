@@ -22,6 +22,7 @@ export class StdoutTransport implements AiTransport {
 			originalCommand: ctx.originalCommand,
 			answersPath: ctx.answersPath,
 			promptTemplate: ctx.promptTemplate,
+			variables: ctx.variables,
 		});
 
 		debug("Writing prompt to stdout (%d chars)", prompt.length);

@@ -19,6 +19,30 @@ export type TransportResult =
 /**
  * Context passed to a transport's resolve method.
  */
+/**
+ * Describes a recipe variable for inclusion in the prompt document.
+ */
+export interface PromptVariable {
+	/** Variable name (JSON key in answers file) */
+	name: string;
+	/** Variable type */
+	type: string;
+	/** Whether a value is required */
+	required: boolean;
+	/** Default value, if any */
+	default?: unknown;
+	/** Prompt question for the variable */
+	prompt?: string;
+	/** Human-readable description */
+	description?: string;
+	/** Allowed values for enum types */
+	values?: string[];
+	/** Whether the user already provided a value */
+	provided: boolean;
+	/** The value the user provided (if any) */
+	providedValue?: unknown;
+}
+
 export interface TransportContext {
 	/** The collector with accumulated @ai block data */
 	collector: AiCollector;
@@ -37,6 +61,9 @@ export interface TransportContext {
 
 	/** Optional custom prompt template path */
 	promptTemplate?: string;
+
+	/** Recipe variables with their definitions and current values */
+	variables?: PromptVariable[];
 }
 
 /**

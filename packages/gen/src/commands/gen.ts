@@ -13,6 +13,7 @@ import type { TemplateVariable } from "@hypercli/core";
 import { Args, Flags } from "@oclif/core";
 import { AiCollector } from "#ai/ai-collector";
 import { resolveTransport } from "#ai/transports/resolve-transport";
+import type { PromptVariable } from "#ai/transports/types";
 import { BaseCommand } from "#lib/base-command";
 import { GroupExecutor } from "#recipe-engine/group-executor";
 
@@ -264,13 +265,46 @@ export default class Gen extends BaseCommand<typeof Gen> {
 			// Check if Pass 1 collected any AI entries
 			if (collector.collectMode && collector.hasEntries()) {
 				const transport = resolveTransport(aiConfig);
+				// Build the original command from consumed path segments, remaining positional args,
+				// and flags only. Do NOT include process.argv.slice(3) directly — it contains
+				// the consumed path segments which would be duplicated since resolved.consumed
+				// already has them.
+				const flagsOnly = process.argv
+					.slice(3)
+					.filter((a: string) => a.startsWith("-") && a !== "--answers" && !a.endsWith(".json"));
 				const originalCommand = [
 					"hyper",
 					"gen",
 					...resolved.consumed,
-					...process.argv.slice(3).filter((a) => a !== "--answers" && !a.endsWith(".json")),
+					...resolved.remaining,
+					...flagsOnly,
 				].join(" ");
 				const promptTemplatePath = flags["prompt-template"] || aiConfig?.promptTemplate;
+
+				// Build recipe variable descriptions for the prompt document
+				let promptVariables: PromptVariable[] | undefined;
+				try {
+					const loadResult = await this.recipeEngine.loadRecipe({
+						type: "file",
+						path: resolved.fullPath,
+					});
+					const varDefs = loadResult.recipe.variables;
+					if (varDefs && Object.keys(varDefs).length > 0) {
+						promptVariables = Object.entries(varDefs).map(([name, def]) => ({
+							name,
+							type: def.type,
+							required: def.required ?? false,
+							default: def.default,
+							prompt: def.prompt,
+							description: def.description,
+							values: def.values,
+							provided: params[name] !== undefined,
+							providedValue: params[name],
+						}));
+					}
+				} catch {
+					// Non-critical — prompt will just lack variable descriptions
+				}
 
 				const transportResult = await transport.resolve({
 					collector,
@@ -279,6 +313,7 @@ export default class Gen extends BaseCommand<typeof Gen> {
 					answersPath: "./ai-answers.json",
 					projectRoot: flags.cwd,
 					promptTemplate: promptTemplatePath,
+					variables: promptVariables,
 				});
 
 				if (transportResult.status === "deferred") {

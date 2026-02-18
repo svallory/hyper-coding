@@ -11,6 +11,8 @@ export interface TemplateVariable {
 	default?: any;
 	/** Suggested value shown in prompts (interactive or AI). Never auto-applied. */
 	suggestion?: any;
+	/** Prompt question displayed when asking for this variable's value */
+	prompt?: string;
 	description?: string;
 	pattern?: string;
 	values?: string[];

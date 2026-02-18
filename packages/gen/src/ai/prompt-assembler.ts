@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import createDebug from "debug";
 import { renderTemplateSync } from "#template-engines/jig-engine";
 import type { AiBlockEntry, AiCollector } from "./ai-collector.js";
+import type { PromptVariable } from "./transports/types.js";
 
 const debug = createDebug("hypergen:ai:prompt-assembler");
 
@@ -35,6 +36,9 @@ export interface AssemblerOptions {
 	 * When provided, this template is used instead of the built-in one.
 	 */
 	promptTemplate?: string;
+
+	/** Recipe variables with definitions and current values */
+	variables?: PromptVariable[];
 }
 
 export class PromptAssembler {
@@ -56,15 +60,33 @@ export class PromptAssembler {
 			});
 		}
 
+		// Separate variables into unprovided (need answers) and provided (for context)
+		const allVariables = options.variables || [];
+		const unprovidedVariables = allVariables
+			.filter((v) => !v.provided)
+			.map((v, i) => ({
+				...v,
+				index: i + 1,
+				prompt: v.prompt?.replace(/\n/g, " ").trim(),
+			}));
+		const providedVariables = allVariables.filter((v) => v.provided);
+
 		// Build the JSON response schema
 		const schema: Record<string, string> = {};
 		for (const entry of entries) {
 			schema[entry.key] =
 				entry.hasOutputDesc || entry.hasExamples ? "<see format above>" : "<your answer>";
 		}
+		for (const v of unprovidedVariables) {
+			schema[v.name] =
+				v.default !== undefined
+					? `<optional, default: ${JSON.stringify(v.default)}>`
+					: "<your answer>";
+		}
 		const responseSchema = JSON.stringify(schema, null, 2);
 
 		const hasContext = globalContexts.length > 0 || entries.some((e) => e.contexts.length > 0);
+		const hasVariables = unprovidedVariables.length > 0;
 
 		const templatePath = options.promptTemplate || DEFAULT_TEMPLATE_PATH;
 		const templateSource = this.loadTemplate(templatePath, !!options.promptTemplate);
@@ -74,6 +96,9 @@ export class PromptAssembler {
 			entries,
 			responseSchema,
 			hasContext,
+			hasVariables,
+			unprovidedVariables,
+			providedVariables,
 			originalCommand: options.originalCommand,
 			answersPath,
 		};

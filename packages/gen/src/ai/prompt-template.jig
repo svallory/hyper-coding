@@ -22,7 +22,32 @@
 @end
 @end
 
-## Prompts
+## Answer the following questions
+@if(hasVariables)
+@if(providedVariables.length > 0)
+
+The following values have already been provided (for reference, do NOT include in your response):
+@each(v in providedVariables)
+- `{{ v.name }}` = {{ JSON.stringify(v.providedValue) }}
+@end
+@end
+@each(v in unprovidedVariables)
+
+### {{ v.index }}. {{ v.prompt || v.name }}
+@if(v.description)
+{{ v.description }}
+@end
+- Type: {{ v.type }}
+- Required: {{ v.required ? 'yes' : 'no' }}
+@if(v.default !== undefined)
+- Default: `{{ JSON.stringify(v.default) }}` (omit from response to use default)
+@end
+@if(v.values && v.values.length > 0)
+- Allowed values: {{ v.values.map(val => '`' + val + '`').join(', ') }}
+@end
+- Response key: `{{ v.name }}`
+@end
+@end
 @each(entry in entries)
 
 ### `{{ entry.key }}`

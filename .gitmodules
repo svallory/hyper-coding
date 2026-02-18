@@ -1,3 +1,6 @@
 [submodule "hyper-kits/nextjs"]
 	path = hyper-kits/nextjs
 	url = git@github.com:hyper-kits/nextjs.git
+[submodule "hyper-kits/skills"]
+	path = hyper-kits/skills
+	url = git@github.com:hyper-kits/skills.git
