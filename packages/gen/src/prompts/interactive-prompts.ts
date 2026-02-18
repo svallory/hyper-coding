@@ -9,6 +9,9 @@ import * as p from "@clack/prompts";
 import type { Option } from "@clack/prompts";
 import type { TemplateVariable } from "@hypercli/core";
 
+const DEFAULT_INTRO = "⚙️  Let's customize this!";
+const DEFAULT_OUTRO = "✅ Configuration complete!";
+
 export interface PromptOptions {
 	/**
 	 * Whether to use interactive prompts
@@ -63,8 +66,8 @@ export class InteractivePrompter {
 		interactive: true,
 		skipOptional: false,
 		timeout: 300000, // 5 minutes
-		intro: "🎯 Let's configure your generator parameters",
-		outro: "✅ Configuration complete!",
+		intro: DEFAULT_INTRO,
+		outro: DEFAULT_OUTRO,
 	};
 
 	/**
@@ -655,7 +658,7 @@ export async function performInteractivePrompting(
 	const answers: Record<string, any> = {};
 
 	// Show intro message
-	p.intro("🎯 Interactive configuration");
+	p.intro(DEFAULT_INTRO);
 
 	try {
 		for (const prompt of prompts) {
@@ -735,7 +738,7 @@ export async function performInteractivePrompting(
 			answers[prompt.name] = result;
 		}
 
-		p.outro("✅ Configuration complete!");
+		p.outro(DEFAULT_OUTRO);
 		return answers;
 	} catch (error) {
 		if (error instanceof Error && error.message !== "User cancelled prompts") {

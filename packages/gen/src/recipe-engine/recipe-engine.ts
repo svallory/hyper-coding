@@ -832,10 +832,27 @@ export class RecipeEngine extends EventEmitter {
 		if (toAsk.length > 0) {
 			switch (askMode) {
 				case "me": {
-					for (const { varName, varConfig, hint } of toAsk) {
+					// Build all prompts and run them in a single session (one intro/outro)
+					const promptConfigs = toAsk.map(({ varName, varConfig, hint }) => {
 						const configWithHint = hint !== undefined ? { ...varConfig, default: hint } : varConfig;
-						const value = await this.promptForVariable(varName, configWithHint, logger);
+						return {
+							type: this.getPromptType(configWithHint),
+							name: varName,
+							message: configWithHint.description || `Enter value for ${varName}:`,
+							default: configWithHint.default,
+							choices: configWithHint.type === "enum" ? configWithHint.values : undefined,
+							validate: (input: any) => {
+								const validation = TemplateParser.validateVariableValue(varName, input, varConfig);
+								return validation.isValid ? true : validation.error || false;
+							},
+						};
+					});
 
+					const loggerAdapter = logger ? { log: (msg: string) => logger.info(msg) } : undefined;
+					const answers = await performInteractivePrompting(promptConfigs, loggerAdapter);
+
+					for (const { varName, varConfig } of toAsk) {
+						const value = answers[varName];
 						const validation = TemplateParser.validateVariableValue(varName, value, varConfig);
 						if (!validation.isValid) {
 							throw ErrorHandler.createError(
@@ -860,12 +877,22 @@ export class RecipeEngine extends EventEmitter {
 							"Warning: --ask=ai requires an API key or command transport configured. " +
 								"Falling back to interactive prompts.",
 						);
-						// Fall through to interactive
-						for (const { varName, varConfig, hint } of toAsk) {
+						// Fall through to interactive (batch all prompts into one session)
+						const fallbackConfigs = toAsk.map(({ varName, varConfig, hint }) => {
 							const configWithHint =
 								hint !== undefined ? { ...varConfig, default: hint } : varConfig;
-							const value = await this.promptForVariable(varName, configWithHint, logger);
-							resolved[varName] = value;
+							return {
+								type: this.getPromptType(configWithHint),
+								name: varName,
+								message: configWithHint.description || `Enter value for ${varName}:`,
+								default: configWithHint.default,
+								choices: configWithHint.type === "enum" ? configWithHint.values : undefined,
+							};
+						});
+						const fbLoggerAdapter = logger ? { log: (msg: string) => logger.info(msg) } : undefined;
+						const fbAnswers = await performInteractivePrompting(fallbackConfigs, fbLoggerAdapter);
+						for (const { varName } of toAsk) {
+							resolved[varName] = fbAnswers[varName];
 						}
 						break;
 					}
@@ -934,38 +961,6 @@ export class RecipeEngine extends EventEmitter {
 		this.debug("Variables resolved successfully: %o", Object.keys(resolved));
 
 		return resolved;
-	}
-
-	private async promptForVariable(
-		varName: string,
-		varConfig: TemplateVariable,
-		logger?: Logger,
-	): Promise<any> {
-		const prompts = [
-			{
-				type: this.getPromptType(varConfig),
-				name: varName,
-				message: varConfig.description || `Enter value for ${varName}:`,
-				default: varConfig.default,
-				choices: varConfig.type === "enum" ? varConfig.values : undefined,
-				validate: (input: any) => {
-					const validation = TemplateParser.validateVariableValue(varName, input, varConfig);
-					return validation.isValid ? true : validation.error || false;
-				},
-			},
-		];
-
-		try {
-			const answers = await performInteractivePrompting(prompts, logger || this.logger);
-
-			return answers[varName];
-		} catch (error) {
-			throw ErrorHandler.createError(
-				ErrorCode.INTERNAL_ERROR,
-				`Failed to prompt for variable ${varName}: ${error instanceof Error ? error.message : String(error)}`,
-				{ variable: varName },
-			);
-		}
 	}
 
 	private getPromptType(varConfig: TemplateVariable): string {

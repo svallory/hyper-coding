@@ -51,8 +51,9 @@ export default class Gen extends BaseCommand<typeof Gen> {
 			description: "Path to a custom Jig template for the AI prompt document",
 		}),
 		ask: Flags.string({
-			description: "Who resolves missing variables: me (interactive), ai, or nobody (error)",
-			options: ["me", "ai", "nobody"],
+			description:
+				"Who resolves missing variables: me (interactive), ai (use configured transport), stdout (print prompt doc to stdout), nobody (error)",
+			options: ["me", "ai", "stdout", "nobody"],
 		}),
 		"no-defaults": Flags.boolean({
 			description: "Don't use default values — ask about every variable",
@@ -104,16 +105,35 @@ export default class Gen extends BaseCommand<typeof Gen> {
 		}
 
 		// Determine effective ask mode
-		const askMode =
-			(flags.ask as "me" | "ai" | "nobody" | undefined) ?? (process.stdout.isTTY ? "me" : "nobody");
+		// --ask=stdout is sugar for --ask=ai with the stdout transport forced
+		const askFlag = flags.ask as "me" | "ai" | "stdout" | "nobody" | undefined;
+		const askMode: "me" | "ai" | "nobody" =
+			askFlag === "stdout" ? "ai" : (askFlag ?? (process.stdout.isTTY ? "me" : "nobody"));
+		const aiConfigOverride = askFlag === "stdout" ? { mode: "stdout" as const } : undefined;
 
 		const noDefaults = flags["no-defaults"] ?? false;
 
 		if (resolved.type === "group") {
-			return this.executeGroup(resolved, params, flags, answers, askMode, noDefaults);
+			return this.executeGroup(
+				resolved,
+				params,
+				flags,
+				answers,
+				askMode,
+				noDefaults,
+				aiConfigOverride,
+			);
 		}
 
-		return this.executeSingleRecipe(resolved, params, flags, answers, askMode, noDefaults);
+		return this.executeSingleRecipe(
+			resolved,
+			params,
+			flags,
+			answers,
+			askMode,
+			noDefaults,
+			aiConfigOverride,
+		);
 	}
 
 	/**
@@ -126,6 +146,7 @@ export default class Gen extends BaseCommand<typeof Gen> {
 		answers?: Record<string, any>,
 		askMode: "me" | "ai" | "nobody" = "me",
 		noDefaults = false,
+		aiConfigOverride?: Partial<import("#ai/ai-config").AiServiceConfig>,
 	): Promise<void> {
 		// Initialize AiCollector for Pass 1 if no answers provided
 		const collector = AiCollector.getInstance();
@@ -142,6 +163,10 @@ export default class Gen extends BaseCommand<typeof Gen> {
 			this.log("(dry run - no files will be written)");
 		}
 
+		const aiConfig = aiConfigOverride
+			? { ...this.hypergenConfig?.ai, ...aiConfigOverride }
+			: this.hypergenConfig?.ai;
+
 		try {
 			let result = await this.recipeEngine.executeRecipe(
 				{ type: "file", path: resolved.fullPath },
@@ -153,13 +178,12 @@ export default class Gen extends BaseCommand<typeof Gen> {
 					answers,
 					askMode,
 					noDefaults,
-					aiConfig: this.hypergenConfig?.ai,
+					aiConfig,
 				},
 			);
 
 			// Check if Pass 1 collected any AI entries
 			if (collector.collectMode && collector.hasEntries()) {
-				const aiConfig = this.hypergenConfig?.ai;
 				const transport = resolveTransport(aiConfig);
 				const originalCommand = [
 					"hyper",
@@ -217,7 +241,7 @@ export default class Gen extends BaseCommand<typeof Gen> {
 						answers,
 						askMode: "nobody", // Don't prompt again — variables already resolved
 						noDefaults,
-						aiConfig: this.hypergenConfig?.ai,
+						aiConfig,
 					},
 				);
 			} else {
@@ -256,6 +280,7 @@ export default class Gen extends BaseCommand<typeof Gen> {
 		answers?: Record<string, any>,
 		askMode: "me" | "ai" | "nobody" = "me",
 		noDefaults = false,
+		aiConfigOverride?: Partial<import("#ai/ai-config").AiServiceConfig>,
 	): Promise<void> {
 		const groupExecutor = new GroupExecutor(this.recipeEngine);
 
@@ -275,6 +300,10 @@ export default class Gen extends BaseCommand<typeof Gen> {
 				`Found ${group.recipes.length} recipes: ${group.recipes.map((r) => r.name).join(", ")}`,
 			);
 
+			const groupAiConfig = aiConfigOverride
+				? { ...this.hypergenConfig?.ai, ...aiConfigOverride }
+				: this.hypergenConfig?.ai;
+
 			const result = await groupExecutor.executeGroup(group, params as Record<string, any>, {
 				variables: params,
 				workingDir: flags.cwd,
@@ -284,7 +313,7 @@ export default class Gen extends BaseCommand<typeof Gen> {
 				continueOnError: false,
 				askMode,
 				noDefaults,
-				aiConfig: this.hypergenConfig?.ai,
+				aiConfig: groupAiConfig,
 			});
 
 			if (result.success) {
