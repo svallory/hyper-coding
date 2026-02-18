@@ -155,6 +155,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 		let commit: string | undefined;
 		let branch: string | undefined;
 		let tag: string | undefined;
+		let resolvedSource = resolved.original;
 
 		switch (resolved.type) {
 			case "github":
@@ -173,9 +174,14 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 				break;
 			}
 
-			case "local":
+			case "local": {
+				// Resolve to absolute path so the manifest always stores the full path
+				resolvedSource = isAbsolute(resolved.source)
+					? resolved.source
+					: resolve(flags.cwd, resolved.source);
 				await this.copyFromLocal(resolved.source, targetDir);
 				break;
+			}
 
 			case "url":
 				await this.downloadFromUrl(resolved.source, targetDir);
@@ -191,7 +197,7 @@ export default class KitInstall extends BaseCommand<typeof KitInstall> {
 		// Add to manifest
 		const manifestEntry: KitManifestEntry = {
 			name: kitName,
-			source: resolved.original,
+			source: resolvedSource,
 			type: resolved.type,
 			installedAt: new Date().toISOString(),
 			commit,

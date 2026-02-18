@@ -32,10 +32,13 @@ vi.mock("#prompts/interactive-prompts", () => ({
 }));
 
 // Mock AiVariableResolver - use vi.hoisted to ensure proper hoisting
-// Note: vitest v4 requires 'function' or 'class' syntax (not arrow functions)
-// for mocks that will be used as constructors with 'new'.
+// ⚠️  DO NOT change vi.fn(function(...)) to vi.fn(() => ...) — arrow functions
+//    CANNOT be used as constructors. The source code calls `new AiVariableResolver()`
+//    so this mock MUST use `function` syntax. This has regressed 3+ times already.
 const { MockAiVariableResolver } = vi.hoisted(() => ({
-	MockAiVariableResolver: vi.fn(() => ({ resolveBatch: mockResolveBatch })),
+	MockAiVariableResolver: vi.fn(function (this: any) {
+		this.resolveBatch = mockResolveBatch;
+	}),
 }));
 
 vi.mock("#ai/ai-variable-resolver", () => ({
