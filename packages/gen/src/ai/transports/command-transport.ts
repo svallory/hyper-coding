@@ -169,6 +169,9 @@ function executeCommand(commandTemplate: string, prompt: string): Promise<string
 
 		// Pipe prompt via stdin if no {prompt} substitution
 		if (!usesSubstitution && child.stdin) {
+			child.stdin.on("error", () => {
+				// Ignore EPIPE errors - the process may have already exited
+			});
 			child.stdin.write(prompt);
 			child.stdin.end();
 		}
