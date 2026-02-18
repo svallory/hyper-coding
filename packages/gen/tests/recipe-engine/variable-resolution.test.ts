@@ -31,11 +31,15 @@ vi.mock("#prompts/interactive-prompts", () => ({
 	performInteractivePrompting: mockPrompt,
 }));
 
-// Mock AiVariableResolver
-vi.mock("#ai/ai-variable-resolver", () => ({
-	AiVariableResolver: vi.fn().mockImplementation(() => ({
+// Mock AiVariableResolver - use vi.hoisted to ensure proper hoisting
+const { MockAiVariableResolver } = vi.hoisted(() => ({
+	MockAiVariableResolver: vi.fn(() => ({
 		resolveBatch: mockResolveBatch,
 	})),
+}));
+
+vi.mock("#ai/ai-variable-resolver", () => ({
+	AiVariableResolver: MockAiVariableResolver,
 }));
 
 import { RecipeEngine } from "#recipe-engine/recipe-engine";

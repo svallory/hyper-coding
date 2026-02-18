@@ -51,16 +51,12 @@ describe("Plugin Loading", () => {
 			expect(result.stdout).toContain("COMMANDS");
 		});
 
-		it(
-			"should discover @hypercli/kit plugin commands",
-			async () => {
-				const result = await runCLI(["--help"]);
-				expect(result.exitCode).toBe(0);
-				// The kit plugin should contribute the 'kit' topic
-				expect(result.stdout).toContain("kit");
-			},
-			{ timeout: 30000 },
-		);
+		it("should discover @hypercli/kit plugin commands", { timeout: 30000 }, async () => {
+			const result = await runCLI(["--help"]);
+			expect(result.exitCode).toBe(0);
+			// The kit plugin should contribute the 'kit' topic
+			expect(result.stdout).toContain("kit");
+		});
 
 		it("should show cookbook topic from gen plugin", async () => {
 			const result = await runCLI(["--help"]);
