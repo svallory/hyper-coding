@@ -15,32 +15,31 @@ case "$SHELL_NAME" in
   fish)
     FISH_DIR="$HOME/.config/fish"
     mkdir -p "$FISH_DIR/functions"
-    echo "function hyper; node $HYPER_BIN \$argv; end" > "$FISH_DIR/functions/hyper.fish"
+    printf 'function hyper\n  bun %s $argv\nend\n' "$HYPER_BIN" > "$FISH_DIR/functions/hyper.fish"
     echo "✓ Created fish function at $FISH_DIR/functions/hyper.fish"
     echo "  Restart your shell or run: source $FISH_DIR/functions/hyper.fish"
     exit 0
     ;;
   *)
     echo "Unsupported shell: $SHELL_NAME"
-    echo "Add this alias manually to your shell rc file:"
-    echo "  alias hyper='node $HYPER_BIN'"
+    echo "Add this function manually to your shell rc file:"
+    echo "  hyper() { bun $HYPER_BIN \"\$@\"; }"
     exit 1
     ;;
 esac
 
-ALIAS_LINE="alias hyper='node $HYPER_BIN'"
-MARKER="# hyper-dev alias"
+FUNC_LINE="hyper() { bun $HYPER_BIN \"\$@\"; }"
+MARKER="# hyper-dev function"
 
-# Remove existing alias block if present
+# Remove existing marker block if present (marker line + function line)
 if grep -q "$MARKER" "$RC_FILE" 2>/dev/null; then
-  # Use temp file for cross-platform sed compatibility
-  sed "/$MARKER/d" "$RC_FILE" > "$RC_FILE.tmp" && mv "$RC_FILE.tmp" "$RC_FILE"
+  sed -i.bak "/$MARKER/{N;d;}" "$RC_FILE" && rm -f "$RC_FILE.bak"
 fi
 
-# Add new alias block
+# Add new function
 echo "" >> "$RC_FILE"
 echo "$MARKER" >> "$RC_FILE"
-echo "$ALIAS_LINE" >> "$RC_FILE"
+echo "$FUNC_LINE" >> "$RC_FILE"
 
-echo "✓ Added hyper alias to $RC_FILE"
+echo "✓ Added hyper function to $RC_FILE"
 echo "  Restart your shell or run: source $RC_FILE"
