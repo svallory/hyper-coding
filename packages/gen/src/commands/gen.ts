@@ -70,8 +70,87 @@ export default class Gen extends BaseCommand<typeof Gen> {
 
 	static override strict = false;
 
+	/**
+	 * Names of all flags that are explicitly declared on this command (and its base).
+	 * Used to strip unknown --key=value recipe variables from argv before oclif
+	 * parses it — oclif v4 throws NonExistentFlagsError on unknown flags even when
+	 * `strict = false` (strict only affects extra positional args, not flags).
+	 */
+	private static get knownFlagNames(): Set<string> {
+		const names = new Set<string>();
+		const allFlags = { ...BaseCommand.baseFlags, ...Gen.flags };
+		for (const [name, def] of Object.entries(allFlags)) {
+			names.add(name);
+			// Also register any aliases declared on the flag
+			const flagDef = def as { aliases?: string[]; char?: string };
+			if (flagDef.aliases) {
+				for (const alias of flagDef.aliases) names.add(alias);
+			}
+		}
+		return names;
+	}
+
+	/**
+	 * Split argv into two arrays:
+	 * - safeArgv: only known flags + positional args (safe to pass to oclif)
+	 * - fullArgv: the original argv (used by parseParameters / extractPathSegments)
+	 */
+	private splitArgv(argv: string[]): { safeArgv: string[]; fullArgv: string[] } {
+		const known = Gen.knownFlagNames;
+		const safeArgv: string[] = [];
+		let i = 0;
+		while (i < argv.length) {
+			const arg = argv[i];
+			if (arg === "--") {
+				// Everything after `--` is safe to pass through as-is
+				safeArgv.push(...argv.slice(i));
+				break;
+			}
+			if (arg.startsWith("--")) {
+				const eqIdx = arg.indexOf("=");
+				const flagName = eqIdx > 0 ? arg.slice(2, eqIdx) : arg.slice(2);
+				if (known.has(flagName)) {
+					safeArgv.push(arg);
+					// If it's --flag value (no `=`), also carry forward the value token
+					if (eqIdx < 0 && i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
+						i++;
+						safeArgv.push(argv[i]);
+					}
+				}
+				// Unknown --key or --key=value: drop from safeArgv (oclif won't see it)
+			} else if (arg.startsWith("-") && arg.length === 2) {
+				// Short flag: keep only if it belongs to a known flag
+				const shortChar = arg.slice(1);
+				const isKnown = Object.values({ ...BaseCommand.baseFlags, ...Gen.flags }).some(
+					(f) => (f as { char?: string }).char === shortChar,
+				);
+				if (isKnown) {
+					safeArgv.push(arg);
+					// Carry the value token for -f value style
+					if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
+						i++;
+						safeArgv.push(argv[i]);
+					}
+				}
+			} else {
+				// Positional arg — always safe
+				safeArgv.push(arg);
+			}
+			i++;
+		}
+		return { safeArgv, fullArgv: argv };
+	}
+
 	async run(): Promise<void> {
-		const { flags, argv } = await this.parse(Gen);
+		// oclif v4 throws NonExistentFlagsError for unknown flags even with strict=false.
+		// Recipe variables like --name=Button are unknown to oclif but valid for us.
+		// Strip them from argv before parse(), then use the original argv for parseParameters().
+		const fullArgv = this.argv as string[];
+		const { safeArgv } = this.splitArgv(fullArgv);
+		this.argv = safeArgv;
+
+		const { flags } = await this.parse(Gen);
+		const argv = fullArgv; // use original argv for path/param extraction
 		await this.resolveEffectiveCwd(flags);
 
 		// Collect all non-flag segments for path resolution

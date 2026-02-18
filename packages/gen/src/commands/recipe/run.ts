@@ -38,6 +38,68 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 	// Allow pass-through for recipe variables
 	static override strict = false;
 
+	/**
+	 * Names of all flags declared on this command (and base).
+	 * Unknown flags are recipe variables — strip them before parse() to avoid
+	 * NonExistentFlagsError (oclif v4 throws this even when strict=false).
+	 */
+	private static get knownFlagNames(): Set<string> {
+		const names = new Set<string>();
+		const allFlags = { ...BaseCommand.baseFlags, ...RecipeRun.flags };
+		for (const [name, def] of Object.entries(allFlags)) {
+			names.add(name);
+			const flagDef = def as { aliases?: string[]; char?: string };
+			if (flagDef.aliases) {
+				for (const alias of flagDef.aliases) names.add(alias);
+			}
+		}
+		return names;
+	}
+
+	/**
+	 * Returns a sanitized argv with unknown --key / --key=value flags removed,
+	 * so oclif parse() does not throw NonExistentFlagsError.
+	 */
+	private stripUnknownFlags(argv: string[]): string[] {
+		const known = RecipeRun.knownFlagNames;
+		const safe: string[] = [];
+		let i = 0;
+		while (i < argv.length) {
+			const arg = argv[i];
+			if (arg === "--") {
+				safe.push(...argv.slice(i));
+				break;
+			}
+			if (arg.startsWith("--")) {
+				const eqIdx = arg.indexOf("=");
+				const flagName = eqIdx > 0 ? arg.slice(2, eqIdx) : arg.slice(2);
+				if (known.has(flagName)) {
+					safe.push(arg);
+					if (eqIdx < 0 && i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
+						i++;
+						safe.push(argv[i]);
+					}
+				}
+			} else if (arg.startsWith("-") && arg.length === 2) {
+				const shortChar = arg.slice(1);
+				const isKnown = Object.values({ ...BaseCommand.baseFlags, ...RecipeRun.flags }).some(
+					(f) => (f as { char?: string }).char === shortChar,
+				);
+				if (isKnown) {
+					safe.push(arg);
+					if (i + 1 < argv.length && !argv[i + 1].startsWith("-")) {
+						i++;
+						safe.push(argv[i]);
+					}
+				}
+			} else {
+				safe.push(arg);
+			}
+			i++;
+		}
+		return safe;
+	}
+
 	private reportResult(result: RecipeExecutionResult, flags: Record<string, any>): void {
 		if (flags.json) {
 			this.log(
@@ -84,12 +146,17 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 	}
 
 	async run(): Promise<void> {
-		const { args, argv, flags } = await this.parse(RecipeRun);
+		// oclif v4 throws NonExistentFlagsError on unknown flags even with strict=false.
+		// Save the full argv for variable extraction, then strip unknowns for oclif.
+		const fullArgv = this.argv as string[];
+		this.argv = this.stripUnknownFlags(fullArgv);
+
+		const { args, flags } = await this.parse(RecipeRun);
 		await this.resolveEffectiveCwd(flags);
 		const recipePath = args.recipe;
 
-		// Parse additional parameters
-		const remainingArgs = (argv as string[]).slice(1);
+		// Parse additional parameters from the original (unstripped) argv
+		const remainingArgs = fullArgv.slice(1);
 		const variables = this.parseParameters(remainingArgs);
 
 		// Load AI answers if provided (Pass 2)
