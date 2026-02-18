@@ -31,11 +31,15 @@ vi.mock("#prompts/interactive-prompts", () => ({
 	performInteractivePrompting: mockPrompt,
 }));
 
-// Mock AiVariableResolver
+// Mock AiVariableResolver - use vi.hoisted to ensure proper hoisting
+// Note: vitest v4 requires 'function' or 'class' syntax (not arrow functions)
+// for mocks that will be used as constructors with 'new'.
+const { MockAiVariableResolver } = vi.hoisted(() => ({
+	MockAiVariableResolver: vi.fn(() => ({ resolveBatch: mockResolveBatch })),
+}));
+
 vi.mock("#ai/ai-variable-resolver", () => ({
-	AiVariableResolver: vi.fn().mockImplementation(() => ({
-		resolveBatch: mockResolveBatch,
-	})),
+	AiVariableResolver: MockAiVariableResolver,
 }));
 
 import { RecipeEngine } from "#recipe-engine/recipe-engine";
