@@ -1,21 +1,22 @@
 ---
-to: "{{ projectFolder }}/src/content/docs/index.mdx"
+to: "{{ kebabCase :: name }}/src/content/docs/index.mdx"
 ---
 ---
-title: {{ projectName }}
-description: {{ projectDescription }}
+title: {{ name }}
+description: {{ description }}
 template: splash
 hero:
-  tagline: {{ projectDescription }}
+  tagline: {{ description }}
   actions:
     - text: Get Started
       link: /introduction/
       icon: right-arrow
       variant: primary
-    @if(githubRepo)- text: View on GitHub
+@if(githubRepo)
+    - text: View on GitHub
       link: {{ githubRepo }}
       icon: external
-    @endif
+@endif
 ---
 
 import { CardGrid, Card } from '@astrojs/starlight/components';
@@ -29,7 +30,8 @@ Get up and running quickly with our comprehensive setup guide and examples.
 Detailed guides, tutorials, and reference materials to help you make the most of this project.
 </Card>
 
-@if(typedoc)<Card title="🔧 API Reference" icon="setting">
+@if(typedoc)
+<Card title="🔧 API Reference" icon="setting">
 Complete API documentation generated from TypeScript source code.
 </Card>
 @endif

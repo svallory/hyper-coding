@@ -5,17 +5,12 @@ description: |
 version: "1.0.0"
 
 variables:
-  projectFolder:
-    type: string
-    description: Project folder name (where all files will be generated)
-    default: "my-docs-site"
-
-  projectName:
+  name:
     type: string
     description: Project name for the documentation site
     required: true
 
-  projectDescription:
+  description:
     type: string
     description: Project description
     required: true
@@ -118,10 +113,10 @@ steps:
   - name: Setup project structure
     tool: shell
     command: |
-      mkdir -p "{{ projectFolder }}/src/content/docs"
-      mkdir -p "{{ projectFolder }}/src/content/config.ts"
-      mkdir -p "{{ projectFolder }}/public"
-      mkdir -p "{{ projectFolder }}/astro"
+      mkdir -p "{{ kebabCase :: name }}/src/content/docs"
+      mkdir -p "{{ kebabCase :: name }}/src/content/config.ts"
+      mkdir -p "{{ kebabCase :: name }}/public"
+      mkdir -p "{{ kebabCase :: name }}/astro"
 
   - name: Create src/env.d.ts
     tool: template
@@ -137,10 +132,10 @@ steps:
     template: templates/gitignore.jig
 
 onSuccess: |
-  ✅ Starlight project "{{ projectName }}" created successfully!
+  ✅ Starlight project "{{ name }}" created successfully!
 
   Next steps:
-    cd {{ projectFolder }}
+    cd {{ kebabCase :: name }}
     bun install
     bun run dev
 

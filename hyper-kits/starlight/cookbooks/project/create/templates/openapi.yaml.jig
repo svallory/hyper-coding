@@ -1,15 +1,16 @@
 ---
-to: "{{ projectFolder }}/openapi.yaml"
+to: "{{ kebabCase :: name }}/openapi.yaml"
 ---
 openapi: 3.0.0
 info:
-  title: {{ projectName }} API
-  description: {{ projectDescription }}
+  title: {{ name }} API
+  description: {{ description }}
   version: 1.0.0
   contact:
     name: API Support
-    @if(githubRepo)url: {{ githubRepo }}/issues
-    @endif
+@if(githubRepo)
+    url: {{ githubRepo }}/issues
+@endif
 servers:
   - url: https://api.example.com/v1
     description: Production server

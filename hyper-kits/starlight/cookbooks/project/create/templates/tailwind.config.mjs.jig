@@ -1,5 +1,5 @@
 ---
-to: "{{ projectFolder }}/tailwind.config.mjs"
+to: "{{ kebabCase :: name }}/tailwind.config.mjs"
 ---
 /** @type {import('tailwindcss').Config} */
 export default {

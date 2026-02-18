@@ -1,14 +1,14 @@
 ---
-to: "{{ projectFolder }}/src/content/docs/installation.mdx"
+to: "{{ kebabCase :: name }}/src/content/docs/installation.mdx"
 ---
 ---
 title: Installation
-description: How to install and set up {{ projectName }}
+description: How to install and set up {{ name }}
 ---
 
 # Installation
 
-This guide will help you get {{ projectName }} up and running on your local machine.
+This guide will help you get {{ name }} up and running on your local machine.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ The fastest way to get started:
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd {{ projectFolder }}
+cd {{ kebabCase :: name }}
 
 # Install dependencies
 bun install
@@ -46,5 +46,6 @@ If you prefer to set things up manually:
 
 - Read the [Quick Start Guide](/quick-start/) for a hands-on tutorial
 - Explore the [Core Features](/features/core/) documentation
-@if(typedoc)- Check out the [API Reference](/api/)
+@if(typedoc)
+- Check out the [API Reference](/api/)
 @endif

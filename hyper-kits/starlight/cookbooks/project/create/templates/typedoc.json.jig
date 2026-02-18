@@ -1,5 +1,5 @@
 ---
-to: "{{ projectFolder }}/typedoc.json"
+to: "{{ kebabCase :: name }}/typedoc.json"
 ---
 {
   "entryPoints": ["{{ entryPoint }}"],

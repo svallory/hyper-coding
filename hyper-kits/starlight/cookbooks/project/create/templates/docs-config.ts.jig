@@ -1,5 +1,5 @@
 ---
-to: "{{ projectFolder }}/src/content/config.ts"
+to: "{{ kebabCase :: name }}/src/content/config.ts"
 ---
 import { defineCollection } from 'astro:content';
 import { docsSchema } from '@astrojs/starlight/schema';

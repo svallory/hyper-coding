@@ -1,9 +1,9 @@
 ---
-to: "{{ projectFolder }}/README.md"
+to: "{{ kebabCase :: name }}/README.md"
 ---
-# {{ projectName }} Documentation
+# {{ name }} Documentation
 
-{{ projectDescription }}
+{{ description }}
 
 ## 🚀 Getting Started
 

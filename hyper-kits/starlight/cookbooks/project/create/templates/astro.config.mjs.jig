@@ -1,5 +1,5 @@
 ---
-to: "{{ projectFolder }}/astro.config.mjs"
+to: "{{ kebabCase :: name }}/astro.config.mjs"
 ---
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
@@ -7,19 +7,26 @@ import starlightImageZoom from 'starlight-image-zoom';
 import starlightLinksValidator from 'starlight-links-validator';
 import starlightLLMsTxt from 'starlight-llms-txt';
 import starlightSidebarTopics from 'starlight-sidebar-topics';
-@if(typedoc)import starlightTypeDoc from 'starlight-typedoc';
+@if(typedoc)
+import starlightTypeDoc from 'starlight-typedoc';
 @endif
-@if(openapi)import starlightOpenAPI from 'starlight-openapi';
+@if(openapi)
+import starlightOpenAPI from 'starlight-openapi';
 @endif
-@if(keyboard)import starlightKbd from 'starlight-kbd';
+@if(keyboard)
+import starlightKbd from 'starlight-kbd';
 @endif
-@if(autoSidebar)import starlightAutoSidebar from 'starlight-auto-sidebar';
+@if(autoSidebar)
+import starlightAutoSidebar from 'starlight-auto-sidebar';
 @endif
-@if(scrollToTop)import starlightScrollToTop from 'starlight-scroll-to-top';
+@if(scrollToTop)
+import starlightScrollToTop from 'starlight-scroll-to-top';
 @endif
-@if(changelogs)import starlightChangelogs from 'starlight-changelogs';
+@if(changelogs)
+import starlightChangelogs from 'starlight-changelogs';
 @endif
-@if(obsidian)import starlightObsidian from 'starlight-obsidian';
+@if(obsidian)
+import starlightObsidian from 'starlight-obsidian';
 @endif
 import d2 from 'astro-d2';
 import { fileURLToPath } from 'url';
@@ -45,15 +52,19 @@ export default defineConfig({
         starlightLinksValidator(),
         // Generate LLMs.txt for AI consumption
         starlightLLMsTxt(),
-        @if(scrollToTop)// Add scroll-to-top button
+@if(scrollToTop)
+        // Add scroll-to-top button
         starlightScrollToTop(),
-        @endif
-        @if(keyboard)// Document keyboard shortcuts
+@endif
+@if(keyboard)
+        // Document keyboard shortcuts
         starlightKbd(),
-        @endif
-        @if(autoSidebar)// Automatic sidebar generation
+@endif
+@if(autoSidebar)
+        // Automatic sidebar generation
         starlightAutoSidebar(),
-        @else// Organize sidebar with topics
+@else
+        // Organize sidebar with topics
         starlightSidebarTopics([
           {
             label: 'Documentation',
@@ -75,7 +86,8 @@ export default defineConfig({
                 ]
               }
             ],
-          },@if(typedoc)
+          },
+@if(typedoc)
           {
             label: 'API Reference',
             link: '/api/readme/',
@@ -83,23 +95,32 @@ export default defineConfig({
             items: [
               { label: 'API Overview', link: '/api/readme/' }
             ],
-          },@endif
-        ]),@endif
-        @if(openapi)// Generate OpenAPI/Swagger documentation
+          },
+@endif
+        ]),
+@endif
+@if(openapi)
+        // Generate OpenAPI/Swagger documentation
         starlightOpenAPI([
           {
             base: '/api',
             label: 'API',
             schema: resolve(__dirname, 'openapi.yaml'),
           },
-        ]),@endif
-        @if(changelogs)// Display project changelogs
+        ]),
+@endif
+@if(changelogs)
+        // Display project changelogs
         starlightChangelogs({
           title: 'Changelog',
-        }),@endif
-        @if(obsidian)// Publish Obsidian vaults
-        starlightObsidian(),@endif
-        @if(typedoc)// TypeDoc API documentation
+        }),
+@endif
+@if(obsidian)
+        // Publish Obsidian vaults
+        starlightObsidian(),
+@endif
+@if(typedoc)
+        // TypeDoc API documentation
         starlightTypeDoc({
           entryPoints: [resolve(__dirname, '{{ entryPoint }}')],
           tsconfig: resolve(__dirname, 'tsconfig.json'),
@@ -107,14 +128,16 @@ export default defineConfig({
           typeDoc: {
             gitRevision: 'main',
           },
-        }),@endif
+        }),
+@endif
       ],
-      title: '{{ projectName }}',
-      description: '{{ projectDescription }}',
+      title: '{{ name }}',
+      description: '{{ description }}',
       expressiveCode: {
         themes: ['tokyo-night'],
       },
-      @if(githubRepo)social: [
+@if(githubRepo)
+      social: [
         {
           icon: 'github',
           label: 'GitHub',
@@ -123,7 +146,8 @@ export default defineConfig({
       ],
       editLink: {
         baseUrl: '{{ githubRepo }}/edit/main/',
-      },@endif
+      },
+@endif
       lastUpdated: true,
       favicon: '/favicon.ico',
     }),

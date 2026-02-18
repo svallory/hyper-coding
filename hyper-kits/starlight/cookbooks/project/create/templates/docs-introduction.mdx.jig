@@ -1,30 +1,33 @@
 ---
-to: "{{ projectFolder }}/src/content/docs/introduction.mdx"
+to: "{{ kebabCase :: name }}/src/content/docs/introduction.mdx"
 ---
 ---
 title: Introduction
-description: Welcome to {{ projectName }} documentation
+description: Welcome to {{ name }} documentation
 ---
 
-# Welcome to {{ projectName }}
+# Welcome to {{ name }}
 
-{{ projectDescription }}
+{{ description }}
 
-## What is {{ projectName }}?
+## What is {{ name }}?
 
-This documentation site helps you understand and use {{ projectName }} effectively.
+This documentation site helps you understand and use {{ name }} effectively.
 
 ## Key Features
 
 - 📚 **Comprehensive Documentation** - Detailed guides and tutorials
-@if(typedoc)- 🔧 **API Reference** - Complete TypeScript API documentation
+@if(typedoc)
+- 🔧 **API Reference** - Complete TypeScript API documentation
 @endif
-@if(openapi)- 🌐 **OpenAPI/Swagger** - Interactive API documentation
+@if(openapi)
+- 🌐 **OpenAPI/Swagger** - Interactive API documentation
 @endif
 - 💡 **Examples** - Real-world use cases and patterns
 
 ## Getting Help
 
-@if(githubRepo)- [GitHub Repository]({{ githubRepo }}) - Source code and issues
+@if(githubRepo)
+- [GitHub Repository]({{ githubRepo }}) - Source code and issues
 @endif
 - [Starlight Documentation](https://starlight.astro.build/) - Learn more about Starlight

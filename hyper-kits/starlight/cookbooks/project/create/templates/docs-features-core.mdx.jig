@@ -1,14 +1,14 @@
 ---
-to: "{{ projectFolder }}/src/content/docs/features/core.mdx"
+to: "{{ kebabCase :: name }}/src/content/docs/features/core.mdx"
 ---
 ---
 title: Core Features
-description: Essential features of {{ projectName }}
+description: Essential features of {{ name }}
 ---
 
 # Core Features
 
-{{ projectName }} comes with a powerful set of features to help you build great documentation.
+{{ name }} comes with a powerful set of features to help you build great documentation.
 
 ## Built-in Features
 

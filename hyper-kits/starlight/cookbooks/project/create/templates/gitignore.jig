@@ -1,5 +1,5 @@
 ---
-to: "{{ projectFolder }}/.gitignore"
+to: "{{ kebabCase :: name }}/.gitignore"
 ---
 # Dependencies
 node_modules/
