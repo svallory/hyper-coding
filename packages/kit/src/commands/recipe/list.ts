@@ -4,7 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import { truncateDescription } from "@hypercli/core";
-import { c, msg, s } from "@hypercli/ui";
+import { c, getContext, indent, keyValue, msg, renderMarkdown, s } from "@hypercli/ui";
 import { Args } from "@oclif/core";
 import yaml from "js-yaml";
 import { BaseCommand } from "#base-command";
@@ -90,8 +90,7 @@ export default class RecipeList extends BaseCommand<typeof RecipeList> {
 		}
 
 		this.log("");
-		this.log(s.header("Recipes", recipes.length));
-		this.log("");
+		this.log(renderMarkdown(`# ${recipes.length} Recipes Available`));
 
 		// Group by kit, then cookbook
 		const byKit = new Map<string, Map<string, RecipeInfo[]>>();
@@ -102,19 +101,31 @@ export default class RecipeList extends BaseCommand<typeof RecipeList> {
 			byCookbook.get(r.cookbook)!.push(r);
 		}
 
+		const ctx = getContext();
+		const termWidth = ctx.capabilities.columns;
+		const indentSize = ctx.tokens.space.indent;
+		const recipeIndent = 3; // indent levels for recipe table
+		const separator = "  ";
+
 		for (const [kitName, byCookbook] of byKit) {
-			this.log(`  ${c.kit(kitName)}:`);
+			this.log(renderMarkdown(`## kit: ${c.kit(kitName)}`));
 
 			for (const [cbName, cbRecipes] of byCookbook) {
-				for (const recipe of cbRecipes) {
-					this.log(`    ${c.cookbook(cbName)}/${c.recipe(recipe.name)}`);
-					if (recipe.description) {
-						this.log(s.description(truncateDescription(recipe.description), 6));
-					}
-				}
-			}
+				this.log(`    ${c.cookbook(cbName)}`);
 
-			this.log("");
+				const maxNameWidth = Math.max(...cbRecipes.map((r) => r.name.length));
+				const descWidth = termWidth - recipeIndent * indentSize - maxNameWidth - separator.length;
+
+				const recipeTable = keyValue(
+					cbRecipes.map((r) => ({
+						key: r.name,
+						value: r.description ? truncateDescription(r.description, descWidth) : undefined,
+					})),
+					{ keyStyle: { color: "code" }, separator, nullDisplay: "" },
+				);
+				this.log(indent(recipeTable, recipeIndent));
+				this.log("");
+			}
 		}
 	}
 }
