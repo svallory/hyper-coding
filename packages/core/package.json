@@ -1,9 +1,13 @@
 {
 	"name": "@hypercli/core",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"type": "module",
 	"description": "Core domain types, config, errors for HyperDev",
-	"keywords": ["hyperdev", "hypergen", "code-generator"],
+	"keywords": [
+		"hyperdev",
+		"hypergen",
+		"code-generator"
+	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"engines": {
@@ -17,7 +21,11 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
 	"imports": {
 		"#parsers": "./dist/parsers/index.js",
 		"#parsers/*": "./dist/parsers/*.js",
