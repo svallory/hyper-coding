@@ -65,8 +65,8 @@ interface RenderedTemplateFile {
 	/** Rendered template body */
 	body: string;
 
-	/** Target file path (from 'to' attribute) */
-	targetPath?: string;
+	/** Target file path (from 'to' attribute, or inferred from template relative path) */
+	targetPath: string;
 
 	/** Whether this file should be skipped */
 	shouldSkip: boolean;
@@ -310,14 +310,12 @@ export class TemplateTool extends Tool<TemplateStep> {
 
 			// Generate files
 			for (const renderedFile of filesToGenerate) {
-				if (renderedFile.targetPath) {
-					const result = await this.generateFile(renderedFile, step, context, options);
+				const result = await this.generateFile(renderedFile, step, context, options);
 
-					if (result.status === "added" || result.status === "forced") {
-						filesCreated.push(renderedFile.targetPath);
-					} else if (result.status === "injected") {
-						filesModified.push(renderedFile.targetPath);
-					}
+				if (result.status === "added" || result.status === "forced") {
+					filesCreated.push(renderedFile.targetPath);
+				} else if (result.status === "injected") {
+					filesModified.push(renderedFile.targetPath);
 				}
 			}
 
@@ -564,12 +562,23 @@ export class TemplateTool extends Tool<TemplateStep> {
 			: undefined;
 
 		// Resolve target path
-		let targetPath: string | undefined;
+		const outputRoot = step.outputDir
+			? path.resolve(context.projectRoot, step.outputDir)
+			: context.projectRoot;
+
+		let targetPath: string;
 		if (renderedAttributes.to) {
-			targetPath = path.resolve(
-				step.outputDir ? path.resolve(context.projectRoot, step.outputDir) : context.projectRoot,
-				renderedAttributes.to,
-			);
+			targetPath = path.resolve(outputRoot, renderedAttributes.to);
+		} else {
+			// Default: mirror the template's relative path from the templates directory,
+			// stripping the .jig extension. e.g. templates/.claude/skills/foo/SKILL.md.jig
+			// becomes .claude/skills/foo/SKILL.md in the output root.
+			const templatesDir = context.templatePath
+				? path.resolve(context.templatePath, "templates")
+				: path.dirname(templatePath);
+			const relativePath = path.relative(templatesDir, templatePath);
+			const outputFileName = relativePath.replace(/\.jig$/, "");
+			targetPath = path.resolve(outputRoot, outputFileName);
 		}
 
 		return {
@@ -705,10 +714,13 @@ export class TemplateTool extends Tool<TemplateStep> {
 		}
 
 		// Create rendered action for existing ops
+		// Ensure `to` attribute is set — it may have been inferred from the template's
+		// relative path rather than specified in frontmatter
 		const renderedAction: RenderedAction = {
 			file: renderedFile.templatePath,
 			attributes: {
 				...renderedFile.attributes,
+				to: renderedFile.attributes.to || renderedFile.targetPath,
 				force: step.overwrite || renderedFile.attributes.force || false,
 			},
 			body: renderedFile.body,
