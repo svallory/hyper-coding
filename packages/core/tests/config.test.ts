@@ -188,7 +188,7 @@ describe("Hypergen Configuration System", () => {
 
 			const content = fs.readFileSync(createdPath, "utf-8");
 			expect(content).toContain("export default {");
-			expect(content).toContain("templates: ['templates']");
+			expect(content).toContain("templates: ['.hyper/recipes']");
 		});
 
 		it("should create JSON configuration file", async () => {

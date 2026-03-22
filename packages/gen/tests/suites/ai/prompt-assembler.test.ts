@@ -32,7 +32,7 @@ describe("PromptAssembler", () => {
 
 		expect(result).toContain("# Hypergen AI Generation Request");
 		expect(result).toContain("## Context");
-		expect(result).toContain("## Prompts");
+		expect(result).toContain("## Answer the following questions");
 		expect(result).toContain("## Response Format");
 		expect(result).toContain("## Instructions");
 	});

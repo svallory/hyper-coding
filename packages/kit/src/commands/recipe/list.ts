@@ -4,7 +4,7 @@
 
 import { readFileSync } from "node:fs";
 import { truncateDescription } from "@hypercli/core";
-import { c, getContext, indent, keyValue, msg, renderMarkdown, s } from "@hypercli/ui";
+import { c, getContext, indent, keyValue, msg, renderMarkdown } from "@hypercli/ui";
 import { Args } from "@oclif/core";
 import yaml from "js-yaml";
 import { BaseCommand } from "#base-command";
