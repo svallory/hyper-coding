@@ -16,6 +16,7 @@ import { resolveTransport } from "#ai/transports/resolve-transport";
 import type { PromptVariable } from "#ai/transports/types";
 import { BaseCommand } from "#lib/base-command";
 import { GroupExecutor } from "#recipe-engine/group-executor";
+import { coerceValue } from "#utils/coerce-value";
 
 export default class Gen extends BaseCommand<typeof Gen> {
 	static override description = "Execute a recipe to generate code";
@@ -560,11 +561,11 @@ export default class Gen extends BaseCommand<typeof Gen> {
 					// --key=value format
 					const key = arg.slice(2, eqIndex);
 					const value = arg.slice(eqIndex + 1);
-					params[key] = value;
+					params[key] = coerceValue(value);
 				} else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
 					// --key value format
 					const key = arg.slice(2);
-					params[key] = argv[i + 1];
+					params[key] = coerceValue(argv[i + 1]);
 					i++; // skip next
 				}
 			}

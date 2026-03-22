@@ -11,6 +11,7 @@ import { resolveTransport } from "#ai/transports/index";
 import { BaseCommand } from "#lib/base-command";
 import { executionFlags, outputFlags } from "#lib/flags";
 import type { RecipeExecutionOptions, RecipeExecutionResult } from "#recipe-engine/recipe-engine";
+import { coerceValue } from "#utils/coerce-value";
 
 export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 	static override description = "Execute a recipe to generate code";
@@ -255,11 +256,11 @@ export default class RecipeRun extends BaseCommand<typeof RecipeRun> {
 					// --key=value format
 					const key = arg.slice(2, eqIndex);
 					const value = arg.slice(eqIndex + 1);
-					params[key] = value;
+					params[key] = coerceValue(value);
 				} else if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
 					// --key value format
 					const key = arg.slice(2);
-					params[key] = argv[i + 1];
+					params[key] = coerceValue(argv[i + 1]);
 					i++; // skip next
 				}
 			}
