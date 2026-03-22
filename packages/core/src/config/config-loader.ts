@@ -323,7 +323,7 @@ export class HypergenConfigLoader {
  */
 export default {
   // Template directories to search
-  templates: ['templates'],
+  templates: ['.hyper/recipes'],
 
   // Generator discovery options
   discovery: {
@@ -349,6 +349,22 @@ export default {
     strict: true,
     validateTemplates: true,
     validateVariables: true
+  },
+
+  // AI integration
+  ai: {
+    // stdout: prints prompt to stdout for AI agents (e.g. Claude Code) to resolve
+    mode: 'stdout',
+
+    // api: call LLM directly via Vercel AI SDK
+    // mode: 'api',
+    // provider: 'anthropic',
+    // model: 'claude-sonnet-4-5',
+    // apiKeyEnvVar: 'ANTHROPIC_API_KEY',
+
+    // command: pipe prompt to a CLI command
+    // mode: 'command',
+    // command: 'claude -p {prompt}',
   },
 
   // Plugins to load
