@@ -35,6 +35,7 @@
 		"helpClass": "./dist/help/custom-help",
 		"plugins": [
 			"@hypercli/gen",
+			"@hypercli/hq",
 			"@hypercli/kit",
 			"@oclif/plugin-help",
 			"@oclif/plugin-commands",
@@ -63,6 +64,7 @@
 	"dependencies": {
 		"@hypercli/core": "workspace:*",
 		"@hypercli/gen": "workspace:*",
+		"@hypercli/hq": "workspace:*",
 		"@hypercli/kit": "workspace:*",
 		"@hypercli/ui": "workspace:*",
 		"@oclif/core": "^4.8.0",

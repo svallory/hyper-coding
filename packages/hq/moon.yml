@@ -1,0 +1,19 @@
+type: library
+language: typescript
+platform: node
+stack: backend
+
+tags:
+  - typescript
+  - hyperdev
+  - session-management
+
+tasks:
+  test:
+    command: 'echo "No tests yet"'
+    inputs:
+      - '@globs(sources)'
+
+toolchain:
+  typescript:
+    syncProjectReferences: false
