@@ -1,6 +1,6 @@
 {
 	"name": "create-hyper-hq",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"type": "module",
 	"description": "Set up Hyper HQ — always-on Claude Code command center",
 	"author": "Saulo Vallory <saulo@toki.life>",

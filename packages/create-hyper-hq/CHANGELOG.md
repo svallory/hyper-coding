@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.4](https://github.com/svallory/hyper-coding/compare/v0.1.3...v0.1.4) (2026-03-23)
+
+
+### Features
+
+* **create-hyper-hq:** add phased wizard with step indicators ([461bfec](https://github.com/svallory/hyper-coding/commit/461bfec70431a17156f267a5cab1af28abfee9e9))
+* **create-hyper-hq:** check for outdated hyper and claude CLI versions ([a657763](https://github.com/svallory/hyper-coding/commit/a657763f4e5ffe66f98a23ad4199f91717f2e1f6))
+
+
+### Bug Fixes
+
+* **create-hyper-hq:** allow Enter to accept default values in prompts ([685cbae](https://github.com/svallory/hyper-coding/commit/685cbaef5272e6972593b9a062be6f6972a89517))
+* **create-hyper-hq:** change default projects root from ~/work to ~/projects ([0ba020a](https://github.com/svallory/hyper-coding/commit/0ba020a9e3530a46851d9fa6fdd674920ff596d2))
+* **create-hyper-hq:** restore placeholder+defaultValue, fix outro message ([7c91292](https://github.com/svallory/hyper-coding/commit/7c91292304ee639f71bf9e9ecbd31d4a266ddc62))
+
 ## [0.1.3](https://github.com/svallory/hyper-coding/compare/v0.1.2...v0.1.3) (2026-03-23)
 
 
