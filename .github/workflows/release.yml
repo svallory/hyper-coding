@@ -53,3 +53,5 @@ jobs:
 
       - name: Publish to npm with provenance
         run: bash scripts/release.sh --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
