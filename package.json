@@ -14,6 +14,7 @@
 		"@types/jest": "^29.5.12",
 		"@types/node": "^25.2.3",
 		"babel-preset-moon": "^2.0.14",
+		"conventional-changelog-conventionalcommits": "^9.3.0",
 		"diff": "^8.0.3",
 		"disparity": "^3.2.0",
 		"eslint": "^8.56.0",
@@ -46,8 +47,8 @@
 		"moon": "moon --color --log trace",
 		"release": "semantic-release",
 		"release:dry": "semantic-release --dry-run",
-		"publish:all": "bash scripts/publish.sh",
-		"publish:dry": "bash scripts/publish.sh --dry-run"
+		"publish:all": "bash scripts/release.sh",
+		"publish:dry": "bash scripts/release.sh --dry-run"
 	},
 	"workspaces": [
 		"apps/*",

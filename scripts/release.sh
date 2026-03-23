@@ -5,7 +5,7 @@ set -euo pipefail
 # bun publish resolves workspace:* to real version numbers before publishing.
 #
 # Called by semantic-release's publishCmd, or manually:
-#   ./scripts/publish.sh [--dry-run]
+#   ./scripts/release.sh [--dry-run]
 
 DRY_RUN=""
 if [[ "${1:-}" == "--dry-run" ]]; then

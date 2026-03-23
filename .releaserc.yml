@@ -42,7 +42,7 @@ plugins:
 
   # 5. Publish all packages to npm using bun publish (resolves workspace:*)
   - - "@semantic-release/exec"
-    - publishCmd: "bash scripts/publish.sh"
+    - publishCmd: "bash scripts/release.sh"
 
   # 6. Create GitHub release
   - "@semantic-release/github"
