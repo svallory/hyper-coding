@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.5](https://github.com/svallory/hyper-coding/compare/v0.1.4...v0.1.5) (2026-03-23)
+
+
+### Features
+
+* **create-hyper-hq:** show package version in intro banner ([661a29e](https://github.com/svallory/hyper-coding/commit/661a29e81204ecbe6b14925046f91d66a505c3d9))
+
 ## [0.1.4](https://github.com/svallory/hyper-coding/compare/v0.1.3...v0.1.4) (2026-03-23)
 
 

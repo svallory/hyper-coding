@@ -5,5 +5,5 @@
 	"packages/hq": "0.1.2",
 	"packages/gen": "0.1.1",
 	"packages/cli": "0.1.2",
-	"packages/create-hyper-hq": "0.1.4"
+	"packages/create-hyper-hq": "0.1.5"
 }
