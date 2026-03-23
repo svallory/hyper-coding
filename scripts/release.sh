@@ -34,13 +34,17 @@ node "$REPO_ROOT/scripts/bump-versions.mjs" "$VERSION"
 #   kit    → core, ui
 #   hq     → (no workspace deps, synced version)
 #   gen    → core, kit, ui
+#   create-hyper-hq → (no workspace deps, synced version)
 #   cli    → core, ui, gen, hq, kit
-PACKAGES=(ui core kit hq gen cli)
+PACKAGES=(ui core kit hq gen create-hyper-hq cli)
 
 publish_package() {
   local pkg=$1
-  if npm view "@hypercli/$pkg@$VERSION" version &>/dev/null; then
-    echo "@hypercli/$pkg@$VERSION already published, skipping"
+  local pkg_name
+  pkg_name=$(node -e "console.log(require('$REPO_ROOT/packages/$pkg/package.json').name)")
+
+  if npm view "$pkg_name@$VERSION" version &>/dev/null; then
+    echo "$pkg_name@$VERSION already published, skipping"
     return 0
   fi
 
@@ -54,7 +58,7 @@ publish_package() {
       sleep $delay
       delay=$((delay * 2))
     else
-      echo "Failed to publish @hypercli/$pkg after $retries attempts"
+      echo "Failed to publish $pkg_name after $retries attempts"
       return 1
     fi
   done

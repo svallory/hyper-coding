@@ -10,7 +10,7 @@
 		{
 			"type": "linked-versions",
 			"groupName": "hypercli",
-			"components": ["ui", "core", "kit", "hq", "gen", "cli"],
+			"components": ["ui", "core", "kit", "hq", "gen", "cli", "create-hyper-hq"],
 			"merge": true
 		}
 	],
@@ -20,6 +20,10 @@
 		"packages/kit": {},
 		"packages/hq": {},
 		"packages/gen": {},
-		"packages/cli": {}
+		"packages/cli": {},
+		"packages/create-hyper-hq": {
+			"package-name": "create-hyper-hq",
+			"component": "create-hyper-hq"
+		}
 	}
 }

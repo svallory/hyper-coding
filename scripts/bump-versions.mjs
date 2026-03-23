@@ -13,7 +13,7 @@ if (!version) {
 	process.exit(1);
 }
 
-const packages = ["ui", "core", "kit", "hq", "gen", "cli"];
+const packages = ["ui", "core", "kit", "hq", "gen", "cli", "create-hyper-hq"];
 const scope = "@hypercli/";
 const root = new URL("..", import.meta.url).pathname;
 
@@ -35,5 +35,5 @@ for (const pkg of packages) {
 	}
 
 	writeFileSync(pkgPath, JSON.stringify(json, null, "\t") + "\n");
-	console.log(`@hypercli/${pkg} → ${version}`);
+	console.log(`${json.name} → ${version}`);
 }
