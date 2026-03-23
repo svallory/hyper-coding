@@ -17,19 +17,104 @@ import { runConfigWizard } from "./setup/hq-config-wizard.js";
 import { isWorkspaceTrusted, trustWorkspace } from "./setup/workspace-trust.js";
 import { installOrWaitLoop } from "./ui/prompts.js";
 
+function phase(step: number, total: number, title: string): void {
+	p.log.step(pc.bold(`${step} of ${total}: ${title}`));
+}
+
+async function checkAndUpdateTool(
+	name: string,
+	npmPackage: string,
+	callingPm: string,
+): Promise<void> {
+	const rawVersion = getToolVersion(name);
+	const installed = rawVersion ? parseSemver(rawVersion) : null;
+	const latest = getLatestNpmVersion(npmPackage);
+
+	if (installed && latest && installed !== latest) {
+		p.log.warn(`${name} is installed (v${installed}), but v${latest} is available.`);
+
+		if (name === "claude") {
+			p.log.info("  Note: if you installed via the native installer (curl), it auto-updates.");
+		}
+
+		const updateChoice = await p.select({
+			message: "Would you like to update?",
+			options:
+				name === "claude"
+					? [
+							{
+								label: `Yes, update via npm  (npm install -g ${npmPackage})`,
+								value: "npm" as const,
+							},
+							{
+								label: "Yes, update via brew  (brew upgrade claude-code)",
+								value: "brew" as const,
+							},
+							{ label: "No, continue with current version", value: "skip" as const },
+							{ label: "Cancel", value: "cancel" as const },
+						]
+					: [
+							{
+								label: `Yes, update now  (${callingPm} install -g ${npmPackage})`,
+								value: "update" as const,
+							},
+							{ label: "No, continue with current version", value: "skip" as const },
+							{ label: "Cancel", value: "cancel" as const },
+						],
+		});
+
+		if (p.isCancel(updateChoice) || updateChoice === "cancel") {
+			p.cancel("Setup cancelled.");
+			process.exit(0);
+		}
+
+		if (updateChoice === "skip") {
+			p.log.info(`Continuing with ${name} v${installed}.`);
+			return;
+		}
+
+		let cmd: string;
+		let args: string[];
+		if (updateChoice === "brew") {
+			cmd = "brew";
+			args = ["upgrade", "claude-code"];
+		} else if (updateChoice === "npm") {
+			cmd = "npm";
+			args = ["install", "-g", npmPackage];
+		} else {
+			cmd = callingPm;
+			args = callingPm === "yarn" ? ["global", "add", npmPackage] : ["install", "-g", npmPackage];
+		}
+
+		const result = spawnSync(cmd, args, { stdio: "inherit", encoding: "utf-8" });
+		if (result.status === 0) {
+			p.log.success(`${name} updated to v${latest}`);
+		} else {
+			p.log.warn("Update failed. Continuing with the installed version.");
+		}
+	} else {
+		const v = installed ? ` (v${installed})` : "";
+		p.log.success(`${name} is installed${v}`);
+	}
+}
+
 async function main(): Promise<void> {
-	// Step 0: Welcome banner
+	const TOTAL_PHASES = 3;
+
+	// ─── Welcome ───
 	p.intro(pc.bold("create-hyper-hq"));
 
 	p.note(
 		"HQ is an always-on Claude Code command center that runs in a\n" +
 			"tmux session. Once started, you can control it from claude.ai,\n" +
 			"the Claude mobile app, or Telegram.\n\n" +
-			"Let's make sure you have everything you need.",
-		"Welcome to Hyper HQ Setup!",
+			"We'll get you set up in 3 quick steps.",
+		"Welcome to Hyper HQ!",
 	);
 
-	// Step 1: Detect environment
+	// ─── Phase 1: Dependency checks ───
+	phase(1, TOTAL_PHASES, "Making sure you have the essentials");
+
 	const platform = detectPlatform();
 	const systemPms = detectSystemPms();
 	const callingPm = detectCallingPm();
@@ -43,8 +128,8 @@ async function main(): Promise<void> {
 		isRoot: platform.isRoot,
 	};
 
-	// Step 2: Check hyper CLI
-	p.log.step("Checking for hyper CLI...");
+	// Check hyper CLI
+	p.log.message(`  ${pc.dim("hyper CLI")}`);
 	if (!isToolInstalled("hyper")) {
 		await installOrWaitLoop({
 			toolName: "hyper",
@@ -54,54 +139,11 @@ async function main(): Promise<void> {
 			checkFn: () => isToolInstalled("hyper"),
 		});
 	} else {
-		const hyperRawVersion = getToolVersion("hyper");
-		const hyperInstalled = hyperRawVersion ? parseSemver(hyperRawVersion) : null;
-		const hyperLatest = getLatestNpmVersion("@hypercli/cli");
-
-		if (hyperInstalled && hyperLatest && hyperInstalled !== hyperLatest) {
-			p.log.warn(`hyper is installed (v${hyperInstalled}), but v${hyperLatest} is available.`);
-			const updateChoice = await p.select<string>({
-				message: "Would you like to update?",
-				options: [
-					{
-						label: `Yes, update now  (${callingPm} install -g @hypercli/cli)`,
-						value: "update",
-					},
-					{ label: "No, continue with current version", value: "skip" },
-					{ label: "Cancel", value: "cancel" },
-				],
-			});
-
-			if (p.isCancel(updateChoice) || updateChoice === "cancel") {
-				p.cancel("Setup cancelled.");
-				process.exit(0);
-			}
-
-			if (updateChoice === "update") {
-				const updateArgs =
-					callingPm === "yarn"
-						? ["global", "add", "@hypercli/cli"]
-						: ["install", "-g", "@hypercli/cli"];
-				const updateResult = spawnSync(callingPm, updateArgs, {
-					stdio: "inherit",
-					encoding: "utf-8",
-				});
-				if (updateResult.status === 0) {
-					p.log.success(`hyper updated to v${hyperLatest}.`);
-				} else {
-					p.log.warn("Update failed. Continuing with the installed version.");
-				}
-			} else {
-				p.log.info(`Continuing with hyper v${hyperInstalled}.`);
-			}
-		} else {
-			const versionSuffix = hyperInstalled ? ` (v${hyperInstalled})` : "";
-			p.log.success(`hyper is installed${versionSuffix} ✓`);
-		}
+		await checkAndUpdateTool("hyper", "@hypercli/cli", callingPm);
 	}
 
-	// Step 3: Check claude CLI
-	p.log.step("Checking for Claude CLI...");
+	// Check Claude CLI
+	p.log.message(`  ${pc.dim("Claude Code CLI")}`);
 	if (!isToolInstalled("claude")) {
 		await installOrWaitLoop({
 			toolName: "claude",
@@ -111,84 +153,26 @@ async function main(): Promise<void> {
 			checkFn: () => isToolInstalled("claude"),
 		});
 	} else {
-		const claudeRawVersion = getToolVersion("claude");
-		const claudeInstalled = claudeRawVersion ? parseSemver(claudeRawVersion) : null;
-		const claudeLatest = getLatestNpmVersion("@anthropic-ai/claude-code");
-
-		if (claudeInstalled && claudeLatest && claudeInstalled !== claudeLatest) {
-			p.log.warn(
-				`Claude CLI is installed (v${claudeInstalled}), but v${claudeLatest} is available.`,
-			);
-			p.log.info(
-				"Note: if you installed Claude via the native installer (curl), it auto-updates automatically.",
-			);
-			const updateChoice = await p.select<string>({
-				message: "Would you like to update now?",
-				options: [
-					{
-						label: `Yes, update via npm  (npm install -g @anthropic-ai/claude-code)`,
-						value: "npm",
-					},
-					{ label: "Yes, update via brew  (brew upgrade claude-code)", value: "brew" },
-					{ label: "No, continue with current version", value: "skip" },
-					{ label: "Cancel", value: "cancel" },
-				],
-			});
-
-			if (p.isCancel(updateChoice) || updateChoice === "cancel") {
-				p.cancel("Setup cancelled.");
-				process.exit(0);
-			}
-
-			if (updateChoice === "npm") {
-				const updateResult = spawnSync("npm", ["install", "-g", "@anthropic-ai/claude-code"], {
-					stdio: "inherit",
-					encoding: "utf-8",
-				});
-				if (updateResult.status === 0) {
-					p.log.success(`Claude CLI updated to v${claudeLatest}.`);
-				} else {
-					p.log.warn("Update failed. Continuing with the installed version.");
-				}
-			} else if (updateChoice === "brew") {
-				const updateResult = spawnSync("brew", ["upgrade", "claude-code"], {
-					stdio: "inherit",
-					encoding: "utf-8",
-				});
-				if (updateResult.status === 0) {
-					p.log.success(`Claude CLI updated to v${claudeLatest}.`);
-				} else {
-					p.log.warn("Update failed. Continuing with the installed version.");
-				}
-			} else {
-				p.log.info(`Continuing with Claude CLI v${claudeInstalled}.`);
-			}
-		} else {
-			const versionSuffix = claudeInstalled ? ` (v${claudeInstalled})` : "";
-			p.log.success(`Claude CLI is installed${versionSuffix} ✓`);
-		}
+		await checkAndUpdateTool("claude", "@anthropic-ai/claude-code", callingPm);
 	}
 
-	// Step 4: Check tmux
-	p.log.step("Checking for tmux...");
+	// Check tmux
+	p.log.message(`  ${pc.dim("tmux")}`);
 	if (platform.os === "windows") {
 		p.log.warn("tmux is not available natively on Windows.");
 		p.note(
 			"tmux requires a Linux environment. HQ works inside WSL\n" +
 				"(Windows Subsystem for Linux).\n\n" +
-				"If you're running this from WSL, tmux can be installed with\n" +
-				"your Linux distro's package manager.\n\n" +
-				"If you're running this from Windows directly, please install\n" +
-				"WSL first: " +
+				"If you're running this from Windows directly, install WSL first:\n" +
 				pc.cyan("https://learn.microsoft.com/windows/wsl/install") +
 				"\nThen re-run this setup from inside WSL.",
 		);
 
-		const wslChoice = await p.select<string>({
+		const wslChoice = await p.select({
 			message: "What would you like to do?",
 			options: [
-				{ label: "I'm in WSL, continue", value: "wsl" },
-				{ label: "Cancel", value: "cancel" },
+				{ label: "I'm in WSL, continue", value: "wsl" as const },
+				{ label: "Cancel", value: "cancel" as const },
 			],
 		});
 
@@ -197,19 +181,13 @@ async function main(): Promise<void> {
 			process.exit(0);
 		}
 
-		// Re-detect as Linux
-		const wslContext = {
-			...installContext,
-			os: "linux" as const,
-		};
-
 		if (!isToolInstalled("tmux")) {
 			await installOrWaitLoop({
 				toolName: "tmux",
 				toolUrl: "https://github.com/tmux/tmux",
 				description:
-					"tmux is a terminal multiplexer that keeps HQ sessions running\nin the background, even after you close your terminal.",
-				options: getInstallOptions("tmux", wslContext),
+					"tmux keeps HQ sessions running in the background,\neven after you close your terminal.",
+				options: getInstallOptions("tmux", { ...installContext, os: "linux" }),
 				checkFn: () => isToolInstalled("tmux"),
 			});
 		}
@@ -218,30 +196,29 @@ async function main(): Promise<void> {
 			toolName: "tmux",
 			toolUrl: "https://github.com/tmux/tmux",
 			description:
-				"tmux is a terminal multiplexer that keeps HQ sessions running\nin the background, even after you close your terminal.",
+				"tmux keeps HQ sessions running in the background,\neven after you close your terminal.",
 			options: getInstallOptions("tmux", installContext),
 			checkFn: () => isToolInstalled("tmux"),
 		});
 	} else {
-		p.log.success("tmux is installed.");
+		p.log.success("tmux is installed");
 	}
 
-	// Step 5: Check claude authentication
-	p.log.step("Checking Claude authentication...");
+	// Check Claude auth
+	p.log.message(`  ${pc.dim("Claude authentication")}`);
 	if (!isClaudeAuthenticated()) {
-		p.log.warn("Not authenticated with Claude.");
-		p.log.message("  You need to log in to Claude to use HQ.");
-		p.log.step("Running `claude auth login`...");
+		p.log.warn("Not authenticated with Claude yet.");
+		p.log.step("Opening Claude login...");
 
 		const authSuccess = await runClaudeLogin();
 
 		if (!authSuccess) {
-			const retryOrSkip = await p.select<string>({
-				message: "Authentication failed or was cancelled. What would you like to do?",
+			const retryOrSkip = await p.select({
+				message: "Auth didn't go through. What now?",
 				options: [
-					{ label: "Retry", value: "retry" },
-					{ label: "Skip (HQ won't work without auth)", value: "skip" },
-					{ label: "Cancel", value: "cancel" },
+					{ label: "Try again", value: "retry" as const },
+					{ label: "Skip for now (HQ won't work without auth)", value: "skip" as const },
+					{ label: "Cancel", value: "cancel" as const },
 				],
 			});
 
@@ -251,57 +228,54 @@ async function main(): Promise<void> {
 			}
 
 			if (retryOrSkip === "retry") {
-				p.log.step("Running `claude auth login`...");
 				const retrySuccess = await runClaudeLogin();
-				if (!retrySuccess) {
-					p.log.warn(
-						"Authentication still failed. Continuing setup — you can run `claude auth login` manually.",
-					);
+				if (retrySuccess) {
+					p.log.success("Authenticated with Claude");
 				} else {
-					p.log.success("Claude authentication successful.");
+					p.log.warn("Still no luck. You can run `claude auth login` later.");
 				}
 			} else {
-				p.log.warn("Skipping authentication. HQ requires Claude auth to function properly.");
+				p.log.warn("Skipping auth — remember to run `claude auth login` before starting HQ.");
 			}
 		} else {
-			p.log.success("Claude authentication successful.");
+			p.log.success("Authenticated with Claude");
 		}
 	} else {
-		p.log.success("Claude is authenticated.");
+		p.log.success("Claude is authenticated");
 	}
 
-	// Step 6: Config wizard
-	p.log.step("Configuring HQ...");
+	// ─── Phase 2: Configuration ───
+	phase(2, TOTAL_PHASES, "Pick your settings");
+
 	const config = await runConfigWizard();
 
-	// Step 7: Trust workspaces + write CLAUDE.md
-	p.log.step("Trusting workspace directories...");
+	// ─── Phase 3: Finishing touches ───
+	phase(3, TOTAL_PHASES, "Setting everything up");
+
+	// Trust workspaces
 	for (const dir of [config.hqDir, config.projectsRoot]) {
 		if (!isWorkspaceTrusted(dir)) {
 			trustWorkspace(dir);
 			p.log.success(`Trusted ${dir}`);
-		} else {
-			p.log.info(`${dir} is already trusted`);
 		}
 	}
 
 	// Generate CLAUDE.md
-	p.log.step("Generating CLAUDE.md for HQ session...");
 	const claudeMdPath = `${config.hqDir}/CLAUDE.md`;
 	if (!existsSync(config.hqDir)) {
 		mkdirSync(config.hqDir, { recursive: true });
 	}
 	writeFileSync(claudeMdPath, generateHqClaudeMd(config.projectsRoot), "utf-8");
-	p.log.success(`${claudeMdPath} created`);
+	p.log.success(`Created ${claudeMdPath}`);
 
-	// Step 8: All set!
-	p.log.success("All set! HQ is ready to go.");
+	// ─── Done! ───
+	p.log.success(pc.green(pc.bold("All set! HQ is ready to go.")));
 
-	const startNow = await p.select<string>({
+	const startNow = await p.select({
 		message: "Start HQ now?",
 		options: [
-			{ label: "Yes, start HQ", value: "yes" },
-			{ label: "No, I'll start it later", value: "no" },
+			{ label: "Yes, let's go!", value: "yes" as const },
+			{ label: "Not right now", value: "no" as const },
 		],
 	});
 
@@ -310,7 +284,7 @@ async function main(): Promise<void> {
 		process.exit(0);
 	}
 
-	p.log.message(`  (You can always run ${pc.cyan("`hyper hq start`")} to launch HQ)`);
+	p.log.message(`  You can always run ${pc.cyan("hyper hq start")} to launch HQ.`);
 
 	if (startNow === "yes") {
 		p.log.step("Starting HQ...");
@@ -328,7 +302,7 @@ async function main(): Promise<void> {
 		});
 	}
 
-	p.outro(pc.green("Hyper HQ setup complete!"));
+	p.outro(pc.green("Happy hacking!"));
 }
 
 main().catch((err) => {
