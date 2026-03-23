@@ -1,0 +1,46 @@
+{
+	"name": "create-hyper-hq",
+	"version": "0.1.1",
+	"type": "module",
+	"description": "Set up Hyper HQ — always-on Claude Code command center",
+	"author": "Saulo Vallory <saulo@toki.life>",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/svallory/hyper-coding.git",
+		"directory": "packages/create-hyper-hq"
+	},
+	"homepage": "https://hyperdev.saulo.engineer",
+	"bugs": {
+		"url": "https://github.com/svallory/hyper-coding/issues"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"bin": {
+		"create-hyper-hq": "./dist/index.js"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	},
+	"scripts": {
+		"build": "tsc",
+		"postbuild": "echo '#!/usr/bin/env node' | cat - dist/index.js > dist/index.tmp && mv dist/index.tmp dist/index.js",
+		"dev": "tsc --watch",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@clack/prompts": "^1.1.0",
+		"picocolors": "^1.1.0"
+	},
+	"devDependencies": {
+		"typescript": "^5.4.0",
+		"@types/node": "^20.0.0"
+	}
+}
