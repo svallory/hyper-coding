@@ -5,6 +5,7 @@
 	"bump-patch-for-minor-pre-major": true,
 	"separate-pull-requests": false,
 	"include-component-in-tag": false,
+	"pull-request-title-pattern": "chore: release v${version}",
 	"plugins": [
 		"node-workspace",
 		{
