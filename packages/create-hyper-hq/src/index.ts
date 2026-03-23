@@ -302,7 +302,7 @@ async function main(): Promise<void> {
 		});
 	}
 
-	p.outro(pc.green("Happy hacking!"));
+	p.outro(pc.green("Hyper HQ setup complete!"));
 }
 
 main().catch((err) => {
