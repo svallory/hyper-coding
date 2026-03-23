@@ -22,10 +22,6 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 		message: "Where are your projects?",
 		placeholder: "~/work",
 		defaultValue: "~/work",
-		validate(value) {
-			if (!value?.trim()) return "Please enter a path";
-			return undefined;
-		},
 	});
 
 	if (p.isCancel(projectsRootRaw)) {
@@ -54,10 +50,6 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 		message: "HQ working directory (relative to projects root)?",
 		placeholder: "./hyper-hq",
 		defaultValue: "./hyper-hq",
-		validate(value) {
-			if (!value?.trim()) return "Please enter a path";
-			return undefined;
-		},
 	});
 
 	if (p.isCancel(hqDirRaw)) {
