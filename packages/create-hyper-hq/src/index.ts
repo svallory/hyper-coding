@@ -1,7 +1,13 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+
+const PKG_VERSION: string = JSON.parse(
+	readFileSync(resolve(import.meta.dirname, "..", "package.json"), "utf-8"),
+).version;
+
 import { isClaudeAuthenticated, runClaudeLogin } from "./checks/check-claude-auth.js";
 import {
 	getLatestNpmVersion,
@@ -102,7 +108,7 @@ async function main(): Promise<void> {
 	const TOTAL_PHASES = 3;
 
 	// ─── Welcome ───
-	p.intro(pc.bold("create-hyper-hq"));
+	p.intro(pc.bold(`create-hyper-hq`) + pc.dim(` v${PKG_VERSION}`));
 
 	p.note(
 		"HQ is an always-on Claude Code command center that runs in a\n" +
