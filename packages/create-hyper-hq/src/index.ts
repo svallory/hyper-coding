@@ -1,9 +1,14 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { isClaudeAuthenticated, runClaudeLogin } from "./checks/check-claude-auth.js";
-import { isToolInstalled } from "./checks/check-tool.js";
+import {
+	getLatestNpmVersion,
+	getToolVersion,
+	isToolInstalled,
+	parseSemver,
+} from "./checks/check-tool.js";
 import { detectPlatform, detectSystemPms } from "./checks/detect-os.js";
 import { detectAvailableNodePms, detectCallingPm } from "./checks/detect-pm.js";
 import { getInstallOptions } from "./install/install-options.js";
@@ -49,7 +54,50 @@ async function main(): Promise<void> {
 			checkFn: () => isToolInstalled("hyper"),
 		});
 	} else {
-		p.log.success("hyper is installed.");
+		const hyperRawVersion = getToolVersion("hyper");
+		const hyperInstalled = hyperRawVersion ? parseSemver(hyperRawVersion) : null;
+		const hyperLatest = getLatestNpmVersion("@hypercli/cli");
+
+		if (hyperInstalled && hyperLatest && hyperInstalled !== hyperLatest) {
+			p.log.warn(`hyper is installed (v${hyperInstalled}), but v${hyperLatest} is available.`);
+			const updateChoice = await p.select<string>({
+				message: "Would you like to update?",
+				options: [
+					{
+						label: `Yes, update now  (${callingPm} install -g @hypercli/cli)`,
+						value: "update",
+					},
+					{ label: "No, continue with current version", value: "skip" },
+					{ label: "Cancel", value: "cancel" },
+				],
+			});
+
+			if (p.isCancel(updateChoice) || updateChoice === "cancel") {
+				p.cancel("Setup cancelled.");
+				process.exit(0);
+			}
+
+			if (updateChoice === "update") {
+				const updateArgs =
+					callingPm === "yarn"
+						? ["global", "add", "@hypercli/cli"]
+						: ["install", "-g", "@hypercli/cli"];
+				const updateResult = spawnSync(callingPm, updateArgs, {
+					stdio: "inherit",
+					encoding: "utf-8",
+				});
+				if (updateResult.status === 0) {
+					p.log.success(`hyper updated to v${hyperLatest}.`);
+				} else {
+					p.log.warn("Update failed. Continuing with the installed version.");
+				}
+			} else {
+				p.log.info(`Continuing with hyper v${hyperInstalled}.`);
+			}
+		} else {
+			const versionSuffix = hyperInstalled ? ` (v${hyperInstalled})` : "";
+			p.log.success(`hyper is installed${versionSuffix} ✓`);
+		}
 	}
 
 	// Step 3: Check claude CLI
@@ -63,7 +111,62 @@ async function main(): Promise<void> {
 			checkFn: () => isToolInstalled("claude"),
 		});
 	} else {
-		p.log.success("Claude CLI is installed.");
+		const claudeRawVersion = getToolVersion("claude");
+		const claudeInstalled = claudeRawVersion ? parseSemver(claudeRawVersion) : null;
+		const claudeLatest = getLatestNpmVersion("@anthropic-ai/claude-code");
+
+		if (claudeInstalled && claudeLatest && claudeInstalled !== claudeLatest) {
+			p.log.warn(
+				`Claude CLI is installed (v${claudeInstalled}), but v${claudeLatest} is available.`,
+			);
+			p.log.info(
+				"Note: if you installed Claude via the native installer (curl), it auto-updates automatically.",
+			);
+			const updateChoice = await p.select<string>({
+				message: "Would you like to update now?",
+				options: [
+					{
+						label: `Yes, update via npm  (npm install -g @anthropic-ai/claude-code)`,
+						value: "npm",
+					},
+					{ label: "Yes, update via brew  (brew upgrade claude-code)", value: "brew" },
+					{ label: "No, continue with current version", value: "skip" },
+					{ label: "Cancel", value: "cancel" },
+				],
+			});
+
+			if (p.isCancel(updateChoice) || updateChoice === "cancel") {
+				p.cancel("Setup cancelled.");
+				process.exit(0);
+			}
+
+			if (updateChoice === "npm") {
+				const updateResult = spawnSync("npm", ["install", "-g", "@anthropic-ai/claude-code"], {
+					stdio: "inherit",
+					encoding: "utf-8",
+				});
+				if (updateResult.status === 0) {
+					p.log.success(`Claude CLI updated to v${claudeLatest}.`);
+				} else {
+					p.log.warn("Update failed. Continuing with the installed version.");
+				}
+			} else if (updateChoice === "brew") {
+				const updateResult = spawnSync("brew", ["upgrade", "claude-code"], {
+					stdio: "inherit",
+					encoding: "utf-8",
+				});
+				if (updateResult.status === 0) {
+					p.log.success(`Claude CLI updated to v${claudeLatest}.`);
+				} else {
+					p.log.warn("Update failed. Continuing with the installed version.");
+				}
+			} else {
+				p.log.info(`Continuing with Claude CLI v${claudeInstalled}.`);
+			}
+		} else {
+			const versionSuffix = claudeInstalled ? ` (v${claudeInstalled})` : "";
+			p.log.success(`Claude CLI is installed${versionSuffix} ✓`);
+		}
 	}
 
 	// Step 4: Check tmux

@@ -22,3 +22,26 @@ export function getToolVersion(name: string): string | null {
 	if (result.status !== 0) return null;
 	return result.stdout.trim() || null;
 }
+
+/**
+ * Extract a semver string (x.y.z) from arbitrary version output.
+ * Returns null if no semver is found.
+ */
+export function parseSemver(output: string): string | null {
+	const match = output.match(/(\d+\.\d+\.\d+)/);
+	return match ? (match[1] ?? null) : null;
+}
+
+/**
+ * Fetch the latest published version of an npm package.
+ * Uses `npm view` directly — npm is always available when invoked via `npm create`.
+ * Returns null on failure.
+ */
+export function getLatestNpmVersion(packageName: string): string | null {
+	const result = spawnSync("npm", ["view", packageName, "version"], {
+		encoding: "utf-8",
+		timeout: 10000,
+	});
+	if (result.status !== 0) return null;
+	return result.stdout.trim() || null;
+}
