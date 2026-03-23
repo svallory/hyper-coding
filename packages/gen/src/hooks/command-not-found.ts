@@ -48,6 +48,20 @@ const hook: Hook.CommandNotFound = async (opts) => {
 		return;
 	}
 
+	// Intercept "<topic>:help" pattern → show topic help
+	// e.g. "hyper hq help" parses as command "hq:help" due to topicSeparator: " "
+	if (commandId.endsWith(":help")) {
+		const topicName = commandId.slice(0, -5);
+		const topic = opts.config.findTopic(topicName);
+		if (topic) {
+			const { loadHelpClass } = await import("@oclif/core");
+			const Help = await loadHelpClass(opts.config);
+			const help = new Help(opts.config, { all: false });
+			await help.showHelp([topicName]);
+			return;
+		}
+	}
+
 	// oclif joins command hierarchies with colons (e.g., "nextjs:project:create")
 	// Split them into separate segments for our path resolver
 	const segments = commandId.split(":");
