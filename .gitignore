@@ -23,6 +23,10 @@ tmp/
 umd/
 node_modules/
 
+# AI agent working docs (plans, specs — ephemeral, not for git)
+docs/superpowers/
+agent/
+
 # Custom
 *.min.js
 *.map
