@@ -21,9 +21,6 @@ export default class MarkdownHelp extends Help {
 			const topLevelTopics = this.sortedTopics.filter((t) => !t.name.includes(":"));
 			const topLevelCommands = this.sortedCommands.filter((c) => !c.id.includes(":"));
 			if (topLevelTopics.length > 0) this.log(this.formatTopics(topLevelTopics));
-
-			this.log("");
-
 			if (topLevelCommands.length > 0) this.log(this.formatCommands(topLevelCommands));
 		} else {
 			return super.showRootHelp();
@@ -46,6 +43,35 @@ export default class MarkdownHelp extends Help {
 		} else {
 			return super.showTopicHelp(topic);
 		}
+	}
+
+	// --- Styled formatters ---
+
+	protected override formatTopics(topics: Interfaces.Topic[]): string {
+		const visible = topics.filter((t) => !t.hidden);
+		if (visible.length === 0) return "";
+		const rows = visible
+			.map((t) => {
+				const name = t.name.replaceAll(":", " ");
+				return `| \`${name}\` | ${t.description ?? ""} |`;
+			})
+			.join("\n");
+		return renderHelp(`## Topics\n\n| Topic | Description |\n|-------|-------------|\n${rows}`);
+	}
+
+	protected override formatCommands(commands: Command.Loadable[]): string {
+		const visible = commands.filter((c) => !c.hidden);
+		if (visible.length === 0) return "";
+		const rows = visible
+			.map((c) => {
+				const name = c.id.replaceAll(":", " ");
+				const desc = this.summary(c);
+				return `| \`${name}\` | ${desc} |`;
+			})
+			.join("\n");
+		return renderHelp(
+			`## Commands\n\n| Command | Description |\n|---------|-------------|\n${rows}`,
+		);
 	}
 
 	// --- Resolution helpers ---
@@ -88,7 +114,6 @@ export default class MarkdownHelp extends Help {
 			(c) => c.id.startsWith(`${name}:`) && c.id.split(":").length === depth + 1,
 		);
 		if (subTopics.length > 0) this.log(this.formatTopics(subTopics));
-		this.log("");
 		if (subCommands.length > 0) this.log(this.formatCommands(subCommands));
 	}
 }

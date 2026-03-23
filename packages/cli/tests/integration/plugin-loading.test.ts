@@ -48,7 +48,7 @@ describe("Plugin Loading", () => {
 			// The gen plugin should contribute the 'gen' command
 			// Check directly in stdout since parseCommands may have issues
 			expect(result.stdout).toContain("gen");
-			expect(result.stdout).toContain("COMMANDS");
+			expect(result.stdout).toContain("Commands");
 		});
 
 		it("should discover @hypercli/kit plugin commands", { timeout: 30000 }, async () => {
