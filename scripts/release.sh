@@ -6,8 +6,7 @@ set -euo pipefail
 # Before publishing, rewrites workspace:* references to real semver ranges
 # so the published package.json is valid for any npm client.
 #
-# Called by the publish workflow after release-please creates a release.
-# Can also be run manually: ./scripts/release.sh [--dry-run] [--provenance]
+# Usage: ./scripts/release.sh [--dry-run] [--provenance]
 
 PUBLISH_FLAGS="--access public"
 
@@ -38,10 +37,33 @@ node "$REPO_ROOT/scripts/bump-versions.mjs" "$VERSION"
 #   cli    → core, ui, gen, hq, kit
 PACKAGES=(ui core kit hq gen cli)
 
+publish_package() {
+  local pkg=$1
+  if npm view "@hypercli/$pkg@$VERSION" version &>/dev/null; then
+    echo "@hypercli/$pkg@$VERSION already published, skipping"
+    return 0
+  fi
+
+  local retries=3
+  local delay=15
+  for attempt in $(seq 1 $retries); do
+    if (cd "$REPO_ROOT/packages/$pkg" && npm publish $PUBLISH_FLAGS); then
+      return 0
+    elif [ $attempt -lt $retries ]; then
+      echo "Retrying in ${delay}s (attempt $((attempt+1))/$retries)..."
+      sleep $delay
+      delay=$((delay * 2))
+    else
+      echo "Failed to publish @hypercli/$pkg after $retries attempts"
+      return 1
+    fi
+  done
+}
+
 for pkg in "${PACKAGES[@]}"; do
   echo ""
   echo "Publishing @hypercli/$pkg..."
-  (cd "$REPO_ROOT/packages/$pkg" && npm publish $PUBLISH_FLAGS)
+  publish_package "$pkg"
   echo "@hypercli/$pkg done"
 done
 
