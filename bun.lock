@@ -124,8 +124,6 @@
       "version": "0.1.0",
       "dependencies": {
         "@clack/prompts": "^1.1.0",
-        "@hypercli/core": "workspace:*",
-        "@hypercli/ui": "workspace:*",
         "@oclif/core": "^4",
         "smol-toml": "^1",
       },
