@@ -1,0 +1,48 @@
+branches:
+  - main
+  - name: beta
+    prerelease: true
+
+tagFormat: "v${version}"
+
+plugins:
+  # 1. Determine version bump from conventional commits
+  - - "@semantic-release/commit-analyzer"
+    - preset: conventionalcommits
+      releaseRules:
+        - type: feat
+          release: minor
+        - type: fix
+          release: patch
+        - type: perf
+          release: patch
+        - type: refactor
+          release: patch
+        - breaking: true
+          release: major
+        - revert: true
+          release: patch
+
+  # 2. Generate release notes for GitHub release body
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+
+  # 3. Generate CHANGELOG.md with git-cliff and bump all package.json versions
+  - - "@semantic-release/exec"
+    - prepareCmd: >-
+        bunx git-cliff --tag "v${nextRelease.version}" -o CHANGELOG.md &&
+        node scripts/bump-versions.mjs "${nextRelease.version}"
+
+  # 4. Commit CHANGELOG.md + updated package.json files
+  - - "@semantic-release/git"
+    - assets:
+        - CHANGELOG.md
+        - packages/*/package.json
+      message: "chore(release): v${nextRelease.version} [skip ci]"
+
+  # 5. Publish all packages to npm using bun publish (resolves workspace:*)
+  - - "@semantic-release/exec"
+    - publishCmd: "bash scripts/publish.sh"
+
+  # 6. Create GitHub release
+  - "@semantic-release/github"

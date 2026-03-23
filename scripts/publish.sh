@@ -4,30 +4,31 @@ set -euo pipefail
 # Publish all @hypercli packages in dependency order using bun publish.
 # bun publish resolves workspace:* to real version numbers before publishing.
 #
-# Usage: ./scripts/publish.sh [--dry-run]
+# Called by semantic-release's publishCmd, or manually:
+#   ./scripts/publish.sh [--dry-run]
 
 DRY_RUN=""
 if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN="--dry-run"
-  echo "🔍 Dry run mode — no packages will be published"
+  echo "Dry run mode — no packages will be published"
 fi
 
-# Publishing order (respects dependency graph):
-#   1. ui     (no workspace deps)
-#   2. core   (depends on ui)
-#   3. kit    (depends on core, ui)
-#   4. hq     (no workspace deps, but synced version)
-#   5. gen    (depends on core, kit, ui)
-#   6. cli    (depends on all above)
-
+# Publishing order respects the dependency graph:
+#   ui     → (no workspace deps)
+#   core   → ui
+#   kit    → core, ui
+#   hq     → (no workspace deps, synced version)
+#   gen    → core, kit, ui
+#   cli    → core, ui, gen, hq, kit
 PACKAGES=(ui core kit hq gen cli)
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 for pkg in "${PACKAGES[@]}"; do
   echo ""
-  echo "📦 Publishing @hypercli/$pkg..."
-  (cd "packages/$pkg" && bun publish --access public $DRY_RUN)
-  echo "✅ @hypercli/$pkg published"
+  echo "Publishing @hypercli/$pkg..."
+  (cd "$REPO_ROOT/packages/$pkg" && bun publish --access public $DRY_RUN)
+  echo "@hypercli/$pkg done"
 done
 
 echo ""
-echo "🎉 All packages published successfully!"
+echo "All packages published."
