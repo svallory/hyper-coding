@@ -20,8 +20,8 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 	// Step 1: Projects root
 	const projectsRootRaw = await p.text({
 		message: "Where are your projects?",
-		placeholder: "~/work",
-		defaultValue: "~/work",
+		placeholder: "~/projects",
+		defaultValue: "~/projects",
 	});
 
 	if (p.isCancel(projectsRootRaw)) {
