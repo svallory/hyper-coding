@@ -11,8 +11,8 @@ function expandHome(path: string): string {
 	return path;
 }
 
-export async function runSetupIfNeeded(): Promise<HqConfig> {
-	if (configExists()) {
+export async function runSetup(force = false): Promise<HqConfig> {
+	if (!force && configExists()) {
 		return loadConfig();
 	}
 
@@ -183,7 +183,8 @@ export async function runSetupIfNeeded(): Promise<HqConfig> {
 		p.log.info("You can enable Telegram later by adding a bot token to your config file.");
 	}
 
-	p.outro("Setup complete! Starting HQ...");
-
 	return loadConfig();
 }
+
+// Backwards compat — start.ts calls this
+export const runSetupIfNeeded = () => runSetup(false);

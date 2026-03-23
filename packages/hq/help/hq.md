@@ -10,6 +10,7 @@ Always-on Claude Code command center. Manages persistent Claude sessions via tmu
 
 | Command | Description |
 |---------|-------------|
+| `hyper hq setup` | Check dependencies and configure HQ |
 | `hyper hq start` | Start the HQ command center session |
 | `hyper hq stop [session]` | Stop an HQ session |
 | `hyper hq stop-all` | Stop all HQ-managed sessions |
@@ -22,22 +23,25 @@ Always-on Claude Code command center. Manages persistent Claude sessions via tmu
 ## Quick Start
 
 ```sh
-# 1. Start the HQ command center
+# 1. Run setup (first time only)
+hyper hq setup
+
+# 2. Start the HQ command center
 hyper hq start
 
-# 2. Check what projects are available
+# 3. Check what projects are available
 hyper hq list
 
-# 3. Spawn a Claude session for a project
+# 4. Spawn a Claude session for a project
 hyper hq spawn my-project
 
-# 4. Check running sessions
+# 5. Check running sessions
 hyper hq status
 
-# 5. Attach to a session in your terminal
+# 6. Attach to a session in your terminal
 hyper hq attach my-project
 
-# 6. When done, stop everything
+# 7. When done, stop everything
 hyper hq stop-all
 ```
 
