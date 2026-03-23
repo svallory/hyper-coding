@@ -1,0 +1,8 @@
+{
+	"packages/ui": "0.1.0",
+	"packages/core": "0.1.0",
+	"packages/kit": "0.1.0",
+	"packages/hq": "0.1.0",
+	"packages/gen": "0.1.0",
+	"packages/cli": "0.1.0"
+}

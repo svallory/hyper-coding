@@ -1,0 +1,26 @@
+{
+	"$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+	"bootstrap-sha": "5319f4696ebfa3543145323ee2217c534d1b8a61",
+	"release-type": "node",
+	"bump-minor-pre-major": true,
+	"bump-patch-for-minor-pre-major": true,
+	"separate-pull-requests": false,
+	"include-component-in-tag": false,
+	"plugins": [
+		"node-workspace",
+		{
+			"type": "linked-versions",
+			"groupName": "hypercli",
+			"components": ["ui", "core", "kit", "hq", "gen", "cli"],
+			"merge": true
+		}
+	],
+	"packages": {
+		"packages/ui": {},
+		"packages/core": {},
+		"packages/kit": {},
+		"packages/hq": {},
+		"packages/gen": {},
+		"packages/cli": {}
+	}
+}

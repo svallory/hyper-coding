@@ -5,16 +5,10 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.15",
 		"@moonrepo/cli": "^1.20.1",
-		"@semantic-release/commit-analyzer": "^13.0.1",
-		"@semantic-release/exec": "^7.1.0",
-		"@semantic-release/git": "^10.0.1",
-		"@semantic-release/github": "^12.0.6",
-		"@semantic-release/release-notes-generator": "^14.1.0",
 		"@swc/core": "^1.3.107",
 		"@types/jest": "^29.5.12",
 		"@types/node": "^25.2.3",
 		"babel-preset-moon": "^2.0.14",
-		"conventional-changelog-conventionalcommits": "^9.3.0",
 		"diff": "^8.0.3",
 		"disparity": "^3.2.0",
 		"eslint": "^8.56.0",
@@ -31,7 +25,6 @@
 		"prettier": "^3.2.4",
 		"prettier-config-moon": "^1.1.2",
 		"prettier-plugin-svelte": "^3.1.2",
-		"semantic-release": "^25.0.3",
 		"tsconfig-moon": "^1.3.0",
 		"typescript": "^5.3.3"
 	},
@@ -45,8 +38,6 @@
 	"scripts": {
 		"hyper": "bun run packages/cli/bin/dev.js",
 		"moon": "moon --color --log trace",
-		"release": "semantic-release",
-		"release:dry": "semantic-release --dry-run",
 		"publish:all": "bash scripts/release.sh",
 		"publish:dry": "bash scripts/release.sh --dry-run"
 	},
