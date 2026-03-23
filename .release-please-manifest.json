@@ -2,8 +2,8 @@
 	"packages/ui": "0.1.1",
 	"packages/core": "0.1.1",
 	"packages/kit": "0.1.1",
-	"packages/hq": "0.1.1",
+	"packages/hq": "0.1.2",
 	"packages/gen": "0.1.1",
-	"packages/cli": "0.1.1",
-	"packages/create-hyper-hq": "0.1.1"
+	"packages/cli": "0.1.2",
+	"packages/create-hyper-hq": "0.1.2"
 }
