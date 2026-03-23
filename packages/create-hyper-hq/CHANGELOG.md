@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/svallory/hyper-coding/compare/v0.1.2...v0.1.3) (2026-03-23)
+
+
+### Bug Fixes
+
+* **create-hyper-hq:** fix broken bin entry — shebang and permissions ([3f92d31](https://github.com/svallory/hyper-coding/commit/3f92d315b7669bfcf7dd45b7fcd5a2eb1c6d9ed1))
+
 ## [0.1.2](https://github.com/svallory/hyper-coding/compare/v0.1.1...v0.1.2) (2026-03-23)
 
 
