@@ -1,0 +1,19 @@
+{
+	"extends": "../../tsconfig.options.json",
+	"compilerOptions": {
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"sourceMap": true,
+		"strict": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"paths": {
+			"#*": ["./src/*"],
+			"#tests/*": ["./tests/*"],
+			"#fixtures/*": ["./tests/fixtures/*"]
+		}
+	},
+	"include": ["src"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"],
+	"references": []
+}

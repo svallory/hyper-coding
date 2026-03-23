@@ -45,5 +45,8 @@ sandbox/*
 .hyper/kits/*/
 .worktrees/
 
+# oclif generated manifests
+oclif.manifest.json
+
 # Vitest temp files (generated during test runs)
 *.timestamp-*.mjs

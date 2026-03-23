@@ -1,0 +1,53 @@
+---
+title: "Worktrees"
+description: "Spawn Claude sessions on git worktrees with Worktrunk integration"
+icon: "git-branch"
+---
+
+# Working with Worktrees
+
+HQ has first-class support for git worktrees, integrating with [Worktrunk](https://github.com/max-sixty/worktrunk) (`wt`).
+
+## Listing Worktrees
+
+```bash
+hyper hq list
+```
+
+```
+Projects (/Users/you/work)
+──────────────────────────────────────────────────
+  my-api  (git, 3 worktrees)
+    ├─ main *     /Users/you/work/my-api
+    ├─ feat-auth  /Users/you/work/my-api.feat-auth
+    └─ fix-deploy /Users/you/work/my-api.fix-deploy
+  my-frontend  (git)
+```
+
+## Spawning on Worktrees
+
+### Existing worktree
+
+```bash
+hyper hq spawn my-api --worktree feat-auth
+```
+
+### New worktree
+
+```bash
+hyper hq spawn my-api --new-worktree feat-payments
+```
+
+This runs `wt switch -c feat-payments`, then starts a Claude session in the new directory.
+
+## How It Integrates
+
+| Operation | Tool used |
+|-----------|-----------|
+| List worktrees | `wt list --format=json` (fallback: `git worktree list --porcelain`) |
+| Create worktree | `wt switch -c <branch>` |
+| Path resolution | Respects Worktrunk's path template config |
+
+## Without Worktrunk
+
+If `wt` is not installed, HQ falls back to `git worktree list --porcelain` for listing. For creation, use `git worktree add` manually, then `--worktree` to spawn on it.

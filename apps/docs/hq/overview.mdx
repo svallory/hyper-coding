@@ -1,0 +1,53 @@
+---
+title: "Hyper HQ"
+description: "Always-on Claude Code command center — manage persistent sessions from anywhere"
+icon: "tower-control"
+---
+
+# Hyper HQ
+
+Hyper HQ turns Claude Code into an always-running command center. It manages persistent Claude sessions via tmux, controllable from anywhere through [Remote Control](https://code.claude.com/docs/en/remote-control) (claude.ai/code, mobile) and [Telegram Channels](https://code.claude.com/docs/en/channels).
+
+## What It Does
+
+- **Always-on HQ session** — A persistent Claude Code instance reachable from your phone, browser, or another terminal
+- **Spawn project sessions** — Start new Claude sessions for any project with `hyper hq spawn`
+- **Worktree-aware** — Integrates with Worktrunk (`wt`) for git worktree management
+- **Telegram integration** — Control HQ and receive updates via Telegram bots
+- **Multi-project coordination** — Manage sessions across all your projects from one place
+
+## How It Works
+
+```
+You (phone / browser / terminal)
+    |
+    +-- claude.ai/code --> Remote Control --> Claude session in tmux
+    |
+    +-- Telegram -------> Channel plugin --> Claude session in tmux
+                                               |
+                                               +-- Your project files
+                                               +-- MCP servers
+                                               +-- Full Claude Code toolset
+```
+
+Each session is a `claude remote-control` process inside a tmux session. HQ manages the lifecycle — creating, listing, and stopping sessions. The HQ session itself can spawn new sessions on demand, including via Telegram messages.
+
+## Quick Start
+
+<Steps>
+  <Step title="Install Hyper CLI">
+    ```bash
+    npm install -g @hypercli/cli
+    # or: bun install -g @hypercli/cli
+    ```
+  </Step>
+  <Step title="Start HQ">
+    ```bash
+    hyper hq start
+    ```
+    On first run, an interactive wizard guides you through configuration.
+  </Step>
+  <Step title="Connect">
+    Open the bridge URL shown in the welcome banner, or find **hyper-hq** at [claude.ai/code](https://claude.ai/code).
+  </Step>
+</Steps>

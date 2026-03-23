@@ -60,6 +60,17 @@
 						"pages": ["advanced/customize-setup"]
 					},
 					{
+						"group": "Hyper HQ",
+						"icon": "tower-control",
+						"pages": [
+							"hq/overview",
+							"hq/configuration",
+							"hq/commands",
+							"hq/telegram",
+							"hq/worktrees"
+						]
+					},
+					{
 						"group": "CLI",
 						"pages": [
 							"cli/overview",

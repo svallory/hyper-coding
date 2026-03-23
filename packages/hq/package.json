@@ -1,0 +1,60 @@
+{
+	"name": "@hypercli/hq",
+	"version": "0.1.0",
+	"type": "module",
+	"description": "Claude Code session management for HyperDev — always-on control plane",
+	"keywords": ["hyperdev", "claude-code", "remote-control", "session-management", "tmux"],
+	"author": "Saulo Vallory <saulo@toki.life>",
+	"license": "MIT",
+	"engines": {
+		"node": ">=20"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
+	"oclif": {
+		"commands": "./dist/commands",
+		"topicSeparator": " "
+	},
+	"imports": {
+		"#lib/*": "./dist/lib/*.js",
+		"#services/*": "./dist/services/*.js",
+		"#config/*": "./dist/config/*.js",
+		"#utils/*": "./dist/utils/*.js",
+		"#commands/*": "./dist/commands/*.js",
+		"#tests/*": "./tests/*.ts",
+		"#fixtures/*": "./tests/fixtures/*.ts",
+		"#*": "./dist/*.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"clean": "rm -rf dist tsconfig.tsbuildinfo",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "biome check .",
+		"format": "biome format . --write",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "bun run build"
+	},
+	"dependencies": {
+		"@clack/prompts": "^1.1.0",
+		"@oclif/core": "^4",
+		"smol-toml": "^1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.4.0",
+		"vitest": "4.0.18"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	}
+}
