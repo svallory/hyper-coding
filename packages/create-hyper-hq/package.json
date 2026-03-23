@@ -31,7 +31,8 @@
 	},
 	"scripts": {
 		"build": "tsc",
-		"postbuild": "echo '#!/usr/bin/env node' | cat - dist/index.js > dist/index.tmp && mv dist/index.tmp dist/index.js",
+		"postbuild": "bash scripts/postbuild.sh",
+		"test": "vitest run",
 		"dev": "tsc --watch",
 		"typecheck": "tsc --noEmit"
 	},
@@ -40,7 +41,8 @@
 		"picocolors": "^1.1.0"
 	},
 	"devDependencies": {
+		"@types/node": "^20.0.0",
 		"typescript": "^5.4.0",
-		"@types/node": "^20.0.0"
+		"vitest": "4.0.18"
 	}
 }
