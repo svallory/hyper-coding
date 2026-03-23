@@ -3,7 +3,11 @@
 	"version": "0.1.0",
 	"type": "module",
 	"description": "Code generation engine for HyperDev",
-	"keywords": ["hyperdev", "hypergen", "code-generator"],
+	"keywords": [
+		"hyperdev",
+		"hypergen",
+		"code-generator"
+	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"engines": {
@@ -17,11 +21,25 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"help",
+		"oclif.manifest.json",
+		"README.md",
+		"LICENSE"
+	],
 	"oclif": {
 		"commands": "./dist/commands",
 		"hooks": {
 			"command_not_found": "./dist/hooks/command-not-found.js"
+		},
+		"topics": {
+			"recipe": {
+				"description": "Browse and run code generation recipes"
+			},
+			"cookbook": {
+				"description": "Explore multi-step generation cookbooks"
+			}
 		},
 		"topicSeparator": " "
 	},
@@ -48,6 +66,7 @@
 	},
 	"scripts": {
 		"build": "tsc && bun run copy-assets",
+		"postbuild": "bunx oclif manifest",
 		"clean": "rm -rf dist tsconfig.tsbuildinfo",
 		"copy-assets": "mkdir -p dist/ai && cp src/ai/prompt-template.jig dist/ai/",
 		"test": "vitest run",

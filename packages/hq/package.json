@@ -3,7 +3,13 @@
 	"version": "0.1.0",
 	"type": "module",
 	"description": "Claude Code session management for HyperDev — always-on control plane",
-	"keywords": ["hyperdev", "claude-code", "remote-control", "session-management", "tmux"],
+	"keywords": [
+		"hyperdev",
+		"claude-code",
+		"remote-control",
+		"session-management",
+		"tmux"
+	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"engines": {
@@ -17,9 +23,20 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"help",
+		"oclif.manifest.json",
+		"README.md",
+		"LICENSE"
+	],
 	"oclif": {
 		"commands": "./dist/commands",
+		"topics": {
+			"hq": {
+				"description": "Manage Claude Code sessions with the always-on HQ control center"
+			}
+		},
 		"topicSeparator": " "
 	},
 	"imports": {
@@ -34,6 +51,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
+		"postbuild": "bunx oclif manifest",
 		"clean": "rm -rf dist tsconfig.tsbuildinfo",
 		"test": "vitest run",
 		"test:watch": "vitest",

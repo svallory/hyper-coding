@@ -3,7 +3,11 @@
 	"version": "0.1.0",
 	"type": "module",
 	"description": "HyperDev CLI",
-	"keywords": ["hyperdev", "hypergen", "cli"],
+	"keywords": [
+		"hyperdev",
+		"hypergen",
+		"cli"
+	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"engines": {
@@ -27,12 +31,27 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "bin", "help", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"bin",
+		"help",
+		"README.md",
+		"LICENSE"
+	],
 	"oclif": {
 		"bin": "hyper",
 		"dirname": "hyper",
 		"commands": "./dist/commands",
 		"helpClass": "./dist/help/custom-help",
+		"topics": {
+			"config": {
+				"description": "View and manage Hyper configuration"
+			},
+			"autocomplete": {
+				"description": "Set up shell tab completion",
+				"hidden": true
+			}
+		},
 		"plugins": [
 			"@hypercli/gen",
 			"@hypercli/hq",
@@ -53,6 +72,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
+		"postbuild": "bunx oclif manifest",
 		"dev": "bun run bin/dev.js",
 		"test": "vitest run",
 		"test:watch": "vitest",

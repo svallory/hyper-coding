@@ -3,7 +3,11 @@
 	"version": "0.1.0",
 	"type": "module",
 	"description": "Kit lifecycle management for HyperDev",
-	"keywords": ["hyperdev", "hypergen", "kits"],
+	"keywords": [
+		"hyperdev",
+		"hypergen",
+		"kits"
+	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"engines": {
@@ -17,9 +21,26 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"help",
+		"oclif.manifest.json",
+		"README.md",
+		"LICENSE"
+	],
 	"oclif": {
 		"commands": "./dist/commands",
+		"topics": {
+			"kit": {
+				"description": "Manage generator kits — install, update, and inspect"
+			},
+			"recipe": {
+				"description": "Browse and run code generation recipes"
+			},
+			"cookbook": {
+				"description": "Explore multi-step generation cookbooks"
+			}
+		},
 		"topicSeparator": " "
 	},
 	"imports": {
@@ -32,6 +53,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
+		"postbuild": "bunx oclif manifest",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "biome check .",
