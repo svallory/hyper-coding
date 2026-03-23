@@ -39,9 +39,15 @@
 		"hyper": "bun run packages/cli/bin/dev.js",
 		"moon": "moon --color --log trace",
 		"changeset": "changeset",
-		"release": "changeset publish"
+		"version": "changeset version",
+		"release": "./scripts/publish.sh"
 	},
-	"workspaces": ["apps/*", "libs/*", "packages/*", "devtools/*/*"],
+	"workspaces": [
+		"apps/*",
+		"libs/*",
+		"packages/*",
+		"devtools/*/*"
+	],
 	"dependencies": {
 		"tiged": "^2.12.7"
 	}

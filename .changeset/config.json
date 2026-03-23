@@ -2,7 +2,16 @@
 	"$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
 	"changelog": "@changesets/cli/changelog",
 	"commit": false,
-	"fixed": [],
+	"fixed": [
+		[
+			"@hypercli/core",
+			"@hypercli/ui",
+			"@hypercli/kit",
+			"@hypercli/gen",
+			"@hypercli/hq",
+			"@hypercli/cli"
+		]
+	],
 	"linked": [],
 	"access": "public",
 	"baseBranch": "main",
