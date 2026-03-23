@@ -7,13 +7,16 @@ set -euo pipefail
 # so the published package.json is valid for any npm client.
 #
 # Called by the publish workflow after release-please creates a release.
-# Can also be run manually: ./scripts/release.sh [--dry-run]
+# Can also be run manually: ./scripts/release.sh [--dry-run] [--provenance]
 
-DRY_RUN=""
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN="--dry-run"
-  echo "Dry run mode — no packages will be published"
-fi
+PUBLISH_FLAGS="--access public"
+
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)    PUBLISH_FLAGS="$PUBLISH_FLAGS --dry-run" ;;
+    --provenance) PUBLISH_FLAGS="$PUBLISH_FLAGS --provenance" ;;
+  esac
+done
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -38,7 +41,7 @@ PACKAGES=(ui core kit hq gen cli)
 for pkg in "${PACKAGES[@]}"; do
   echo ""
   echo "Publishing @hypercli/$pkg..."
-  (cd "$REPO_ROOT/packages/$pkg" && npm publish --access public $DRY_RUN)
+  (cd "$REPO_ROOT/packages/$pkg" && npm publish $PUBLISH_FLAGS)
   echo "@hypercli/$pkg done"
 done
 
