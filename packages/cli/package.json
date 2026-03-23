@@ -1,9 +1,13 @@
 {
 	"name": "@hypercli/cli",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"type": "module",
 	"description": "HyperDev CLI",
-	"keywords": ["hyperdev", "hypergen", "cli"],
+	"keywords": [
+		"hyperdev",
+		"hypergen",
+		"cli"
+	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"engines": {
@@ -27,7 +31,13 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "bin", "help", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"bin",
+		"help",
+		"README.md",
+		"LICENSE"
+	],
 	"oclif": {
 		"bin": "hyper",
 		"dirname": "hyper",
