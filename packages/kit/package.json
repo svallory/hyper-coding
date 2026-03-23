@@ -10,6 +10,15 @@
 	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/svallory/hyper-coding.git",
+		"directory": "packages/kit"
+	},
+	"homepage": "https://hyperdev.saulo.engineer",
+	"bugs": {
+		"url": "https://github.com/svallory/hyper-coding/issues"
+	},
 	"engines": {
 		"node": ">=20"
 	},

@@ -37,6 +37,35 @@
 		"typecheck": "tsc --noEmit",
 		"prepublishOnly": "bun run build"
 	},
+	"keywords": [
+		"hyperdev",
+		"cli",
+		"ui",
+		"terminal"
+	],
+	"author": "Saulo Vallory <saulo@toki.life>",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/svallory/hyper-coding.git",
+		"directory": "packages/ui"
+	},
+	"homepage": "https://hyperdev.saulo.engineer",
+	"bugs": {
+		"url": "https://github.com/svallory/hyper-coding/issues"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	},
 	"dependencies": {
 		"cli-html": "^5.3.0"
 	},
