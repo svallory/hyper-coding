@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.2](https://github.com/svallory/hyper-coding/compare/v0.2.1...v0.2.2) (2026-03-24)
+
+
+### Bug Fixes
+
+* **build:** add moon.yml for create-hyper-hq and tsconfig reference for build ordering ([1e9bfd7](https://github.com/svallory/hyper-coding/commit/1e9bfd7d64006539df86e5ee6a417d7a039266cd))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * create-hyper-hq bumped to 0.2.2
+
 ## [0.2.1](https://github.com/svallory/hyper-coding/compare/v0.2.0...v0.2.1) (2026-03-24)
 
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.2](https://github.com/svallory/hyper-coding/compare/v0.2.1...v0.2.2) (2026-03-24)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @hypercli/hq bumped to 0.2.2
+
 ## [0.2.1](https://github.com/svallory/hyper-coding/compare/v0.2.0...v0.2.1) (2026-03-24)
 
 
