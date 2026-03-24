@@ -95,6 +95,30 @@ export function listSessions(prefix = "clint"): TmuxSession[] {
 		});
 }
 
+/** List all HQ-managed tmux sessions (named "Hyper HQ", "hyper-hq", or "hq-*") */
+export function listHqSessions(): TmuxSession[] {
+	const format =
+		"#{session_name}\t#{session_created_string}\t#{session_windows}\t#{?session_attached,1,0}";
+	const result = run(["list-sessions", "-F", format]);
+	if (!result.ok) return [];
+
+	return result.stdout
+		.split("\n")
+		.filter((line) => {
+			const name = line.split("\t")[0] ?? "";
+			return name === "Hyper HQ" || name === "hyper-hq" || name.startsWith("hq-");
+		})
+		.map((line) => {
+			const [name, created, windows, attached] = line.split("\t");
+			return {
+				name: name!,
+				created: created!,
+				windows: Number.parseInt(windows!, 10),
+				attached: attached === "1",
+			};
+		});
+}
+
 export function disableRemainOnExit(name: string): void {
 	run(["set-option", "-t", name, "remain-on-exit", "off"]);
 }

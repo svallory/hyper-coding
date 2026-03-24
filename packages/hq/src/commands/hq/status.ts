@@ -14,7 +14,7 @@ export default class Status extends BaseCommand<typeof Status> {
 
 	async run(): Promise<void> {
 		const { flags } = await this.parse(Status);
-		const sessions = tmux.listSessions("hq");
+		const sessions = tmux.listHqSessions();
 
 		if (flags.json) {
 			this.log(JSON.stringify(sessions, null, 2));
@@ -32,7 +32,7 @@ export default class Status extends BaseCommand<typeof Status> {
 		}
 
 		for (const session of sessions) {
-			const isHq = session.name === "hyper-hq";
+			const isHq = session.name === "Hyper HQ" || session.name === "hyper-hq";
 			const status = session.attached ? "ATTACHED" : "ONLINE";
 			const tag = isHq ? "  (HQ)" : "";
 			this.log(`  ${session.name.padEnd(24)} ${status.padEnd(10)} ${session.created}${tag}`);

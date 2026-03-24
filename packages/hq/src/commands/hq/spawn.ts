@@ -5,9 +5,9 @@ import { loadConfig } from "#config/index";
 import { BaseCommand } from "#lib/base-command";
 import { buildClaudeCommand } from "#services/claude";
 import { createWorktree, findWorktreePath, resolveProjectDir } from "#services/projects";
-import { getProjectTelegramEnv } from "#services/telegram";
-import { sanitizeSessionName } from "#services/tmux";
+import { getProjectTelegramEnv, TELEGRAM_CHANNEL_PLUGIN } from "#services/telegram";
 import * as tmux from "#services/tmux";
+import { sanitizeSessionName } from "#services/tmux";
 import { log } from "#utils/log";
 import { LOG_DIR } from "#utils/paths";
 
@@ -19,6 +19,7 @@ export default class Spawn extends BaseCommand<typeof Spawn> {
 		"<%= config.bin %> hq spawn my-project --worktree feat-auth",
 		"<%= config.bin %> hq spawn my-project --new-worktree feat-login",
 		"<%= config.bin %> hq spawn /absolute/path/to/project",
+		"<%= config.bin %> hq spawn my-project -- --dangerously-skip-permissions",
 	];
 
 	static override args = {
@@ -27,6 +28,9 @@ export default class Spawn extends BaseCommand<typeof Spawn> {
 			required: true,
 		}),
 	};
+
+	// Allow extra args after -- to pass through to claude
+	static override strict = false;
 
 	static override flags = {
 		...BaseCommand.baseFlags,
@@ -37,11 +41,29 @@ export default class Spawn extends BaseCommand<typeof Spawn> {
 			options: ["default", "acceptEdits", "plan", "auto"],
 		}),
 		name: Flags.string({ description: "Custom session name" }),
+		resume: Flags.boolean({
+			description: "Resume the previous session for this project",
+			default: false,
+		}),
+		yolo: Flags.boolean({
+			description: "Skip all permission checks (alias for -- --dangerously-skip-permissions)",
+			default: false,
+		}),
+		telegram: Flags.boolean({
+			description: "Enable Telegram channel (enabled by default when configured)",
+			default: true,
+			allowNo: true,
+		}),
 	};
 
 	async run(): Promise<void> {
-		const { args, flags } = await this.parse(Spawn);
+		const { args, flags, argv } = await this.parse(Spawn);
+		const extraClaudeArgs = argv as string[];
 		const config = loadConfig();
+
+		if (flags.yolo) {
+			extraClaudeArgs.push("--dangerously-skip-permissions");
+		}
 
 		const projectDir = resolveProjectDir(args.project, config);
 		const projectName = args.project.startsWith("/") ? basename(args.project) : args.project;
@@ -78,15 +100,19 @@ export default class Spawn extends BaseCommand<typeof Spawn> {
 
 		mkdirSync(LOG_DIR, { recursive: true });
 
-		const telegramEnv = getProjectTelegramEnv(projectName, config);
+		const telegramEnv = flags.telegram ? getProjectTelegramEnv(projectName, config) : null;
+		const channels: string[] = [];
+		if (telegramEnv) channels.push(TELEGRAM_CHANNEL_PLUGIN);
+
 		const logFile = resolve(LOG_DIR, `${sessionName}.log`);
 
 		const command = buildClaudeCommand({
 			name: sessionName,
-			spawnMode: "same-dir",
+			resume: flags.resume,
 			permissionMode: flags["permission-mode"] ?? config.claude.permission_mode,
 			telegramBotToken: telegramEnv?.TELEGRAM_BOT_TOKEN,
-			telegramStateDir: telegramEnv?.TELEGRAM_STATE_DIR,
+			channels,
+			extraArgs: extraClaudeArgs,
 			logFile,
 		});
 
@@ -101,9 +127,9 @@ export default class Spawn extends BaseCommand<typeof Spawn> {
 Check the log for details: ${logFile}
 
 Common causes:
-  - Remote Control is not enabled on your account
   - Claude CLI is not authenticated (run: claude auth login)
-  - The claude command is not found (check your PATH)`,
+  - The claude command is not found (check your PATH)
+  - Telegram plugin not installed (run: claude plugin install telegram@claude-plugins-official)`,
 			);
 		}
 		tmux.disableRemainOnExit(sessionName);

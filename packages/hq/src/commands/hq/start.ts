@@ -3,19 +3,28 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { Flags } from "@oclif/core";
-import { runSetupIfNeeded } from "#config/setup";
+import { generateHqClaudeMd } from "create-hyper-hq/setup/claude-md";
+import { isWorkspaceTrusted, trustWorkspace } from "create-hyper-hq/setup/trust";
+import { runConfigWizard } from "create-hyper-hq/setup/wizard";
+import { configExists, loadConfig } from "#config/index";
+import type { HqConfig } from "#config/schema";
 import { BaseCommand } from "#lib/base-command";
 import { buildClaudeCommand } from "#services/claude";
-import { getHqTelegramEnv } from "#services/telegram";
+import { getHqTelegramEnv, TELEGRAM_CHANNEL_PLUGIN } from "#services/telegram";
 import * as tmux from "#services/tmux";
 import { renderBanner } from "#utils/banner";
 import { log } from "#utils/log";
 import { LOG_DIR } from "#utils/paths";
-import { isWorkspaceTrusted, trustWorkspace } from "#utils/trust";
 
 function isHyperOnPath(): boolean {
 	const result = spawnSync("which", ["hyper"], { encoding: "utf-8" });
 	return result.status === 0;
+}
+
+async function ensureConfig(): Promise<HqConfig> {
+	if (configExists()) return loadConfig();
+	await runConfigWizard();
+	return loadConfig();
 }
 
 export default class Start extends BaseCommand<typeof Start> {
@@ -23,42 +32,57 @@ export default class Start extends BaseCommand<typeof Start> {
 
 	static override examples = [
 		"<%= config.bin %> hq start",
-		"<%= config.bin %> hq start --spawn-mode worktree",
-		"<%= config.bin %> hq start --capacity 16",
+		"<%= config.bin %> hq start --yolo",
+		"<%= config.bin %> hq start --fresh",
+		"<%= config.bin %> hq start --no-telegram",
+		"<%= config.bin %> hq start -- --model opus",
 	];
+
+	// Allow extra args after -- to pass through to claude
+	static override strict = false;
 
 	static override flags = {
 		...BaseCommand.baseFlags,
 		name: Flags.string({ description: "Custom session name", default: undefined }),
-		"spawn-mode": Flags.string({
-			description: "How new sessions are created",
-			options: ["same-dir", "worktree", "session"],
-			default: undefined,
+		fresh: Flags.boolean({
+			description: "Start a new session instead of resuming the previous one",
+			default: false,
+		}),
+		yolo: Flags.boolean({
+			description: "Skip all permission checks (alias for -- --dangerously-skip-permissions)",
+			default: false,
 		}),
 		"permission-mode": Flags.string({
-			description: "Permission mode for sessions",
+			description: "Permission mode for the Claude session",
 			options: ["default", "acceptEdits", "plan", "auto"],
 			default: undefined,
 		}),
-		capacity: Flags.integer({ description: "Max concurrent sessions", default: undefined }),
+		telegram: Flags.boolean({
+			description: "Enable Telegram channel (enabled by default when configured)",
+			default: true,
+			allowNo: true,
+		}),
 	};
 
 	async run(): Promise<void> {
-		const { flags } = await this.parse(Start);
-		const config = await runSetupIfNeeded();
+		const { flags, argv } = await this.parse(Start);
+		const extraClaudeArgs = argv as string[];
+		const config = await ensureConfig();
 
 		const sessionName = flags.name ?? config.hq.name;
-		const spawnMode = flags["spawn-mode"] ?? config.hq.spawn_mode;
-		const capacity = flags.capacity ?? config.hq.capacity;
 		const permissionMode = flags["permission-mode"] ?? config.claude.permission_mode;
+
+		// --yolo injects --dangerously-skip-permissions
+		if (flags.yolo) {
+			extraClaudeArgs.push("--dangerously-skip-permissions");
+		}
 
 		// Suggest global install if not on PATH
 		if (!isHyperOnPath()) {
 			p.log.warning(
 				"Hyper CLI is not installed globally. The HQ session won't be able to run hyper commands.\n" +
 					"  Install globally:\n\n" +
-					"    npm install -g @hypercli/cli\n" +
-					"    # or: bun install -g @hypercli/cli\n",
+					"    bun install -g @hypercli/cli\n",
 			);
 		}
 
@@ -72,7 +96,7 @@ export default class Start extends BaseCommand<typeof Start> {
 		// Generate CLAUDE.md for the HQ session if not present
 		const claudeMdPath = resolve(hqDir, "CLAUDE.md");
 		if (!existsSync(claudeMdPath)) {
-			writeFileSync(claudeMdPath, generateHqClaudeMd(config.projects_root), "utf-8");
+			writeFileSync(claudeMdPath, generateHqClaudeMd(config.projects_root, sessionName), "utf-8");
 			log("Generated CLAUDE.md for HQ session.");
 		}
 
@@ -91,17 +115,21 @@ export default class Start extends BaseCommand<typeof Start> {
 
 		mkdirSync(LOG_DIR, { recursive: true });
 
-		const telegramEnv = config.telegram.hq_bot_token ? getHqTelegramEnv(config) : null;
+		// Enable Telegram channel if configured and not explicitly disabled
+		const telegramEnv =
+			flags.telegram && config.telegram.hq_bot_token ? getHqTelegramEnv(config) : null;
+		const channels: string[] = [];
+		if (telegramEnv) channels.push(TELEGRAM_CHANNEL_PLUGIN);
 
 		const logFile = resolve(LOG_DIR, `${sessionName}.log`);
 
 		const command = buildClaudeCommand({
 			name: sessionName,
-			spawnMode,
-			capacity,
+			resume: !flags.fresh,
 			permissionMode,
 			telegramBotToken: telegramEnv?.TELEGRAM_BOT_TOKEN,
-			telegramStateDir: telegramEnv?.TELEGRAM_STATE_DIR,
+			channels,
+			extraArgs: extraClaudeArgs,
 			logFile,
 		});
 
@@ -128,10 +156,10 @@ ${lastError}
 Full log: ${logFile}
 
 Common causes:
-  - Remote Control is not enabled on your account
   - Claude CLI is not authenticated (run: claude auth login)
   - Workspace not trusted (run: cd <dir> && claude)
-  - The claude command is not found (check your PATH)`,
+  - The claude command is not found (check your PATH)
+  - Telegram plugin not installed (run: claude plugin install telegram@claude-plugins-official)`,
 			);
 		}
 
@@ -141,63 +169,4 @@ Common causes:
 		// Show welcome banner
 		this.log(renderBanner({ config, sessionName, logFile }));
 	}
-}
-
-function generateHqClaudeMd(projectsRoot: string): string {
-	return `# Hyper HQ — Claude Code Command Center
-
-You are **Hyper HQ**, an always-running Claude Code instance that serves as a command center.
-Calm, decisive, and always in control.
-
-## Your Role
-
-You are a persistent Claude Code session running in remote-control server mode.
-Users connect to you from claude.ai/code, mobile apps, or via Telegram.
-
-## On Startup
-
-When this session first starts, immediately:
-1. If Telegram is available, use the \`reply\` tool to send: "Hyper HQ is online. Ready for orders."
-2. Run \`hyper hq list --json\` to get the current project inventory.
-
-## Capabilities
-
-1. **Spawn new Claude sessions** for any project using the \`hyper hq\` CLI
-2. **Receive and act on messages** via Telegram (if configured)
-3. **Manage running sessions** — start, stop, check status
-4. **Coordinate work** across multiple projects
-
-## Key Commands
-
-\`\`\`bash
-hyper hq spawn <project>                        # Spawn session for a project
-hyper hq spawn <project> --worktree <branch>    # Spawn on existing worktree
-hyper hq spawn <project> --new-worktree <branch> # Create worktree + spawn
-hyper hq status                                 # Check all running sessions
-hyper hq stop <project>                         # Stop a session
-hyper hq stop-all                               # Stop everything
-hyper hq list                                   # List all projects and worktrees
-hyper hq list --json                            # JSON output for parsing
-hyper hq config                                 # Show current configuration
-\`\`\`
-
-## Handling Requests
-
-When a user asks to open/start/spawn a session:
-
-1. Parse the request for: **project name** and optionally **worktree** (existing or new)
-2. Run \`hyper hq list --json\` to verify the project exists
-3. Run the appropriate spawn command
-4. Reply with confirmation, session name, and remind them to check **claude.ai/code**
-
-## Important Notes
-
-- Projects root: ${projectsRoot}
-- Logs: ~/.config/hyper/logs/
-- The \`wt\` (worktrunk) command manages worktrees
-- Config: ~/.config/hyper/hq.toml
-
-## Package Management
-- Use bun, never npm
-`;
 }

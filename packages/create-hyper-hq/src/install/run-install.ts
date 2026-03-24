@@ -13,7 +13,7 @@ export function runInstallCommand(option: InstallOption): InstallResult {
 
 	try {
 		const result = spawnSync(option.command, option.args, {
-			stdio: "inherit",
+			stdio: "pipe",
 			encoding: "utf-8",
 		});
 

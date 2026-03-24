@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as p from "@clack/prompts";
@@ -23,8 +23,9 @@ import { runConfigWizard } from "./setup/hq-config-wizard.js";
 import { isWorkspaceTrusted, trustWorkspace } from "./setup/workspace-trust.js";
 import { installOrWaitLoop } from "./ui/prompts.js";
 
-function phase(step: number, total: number, title: string): void {
-	p.log.step(pc.bold(`${step} of ${total}: ${title}`));
+function phase(step: number, total: number, title: string, prevOutro?: string): void {
+	if (prevOutro) p.outro(prevOutro);
+	p.intro(pc.bold(`${step} of ${total}: ${title}`));
 }
 
 async function checkAndUpdateTool(
@@ -92,11 +93,12 @@ async function checkAndUpdateTool(
 			args = callingPm === "yarn" ? ["global", "add", npmPackage] : ["install", "-g", npmPackage];
 		}
 
-		const result = spawnSync(cmd, args, { stdio: "inherit", encoding: "utf-8" });
+		const result = spawnSync(cmd, args, { stdio: "pipe", encoding: "utf-8" });
 		if (result.status === 0) {
 			p.log.success(`${name} updated to v${latest}`);
 		} else {
 			p.log.warn("Update failed. Continuing with the installed version.");
+			if (result.stderr) p.log.message(pc.dim(result.stderr.trim()));
 		}
 	} else {
 		const v = installed ? ` (v${installed})` : "";
@@ -251,12 +253,12 @@ async function main(): Promise<void> {
 	}
 
 	// ─── Phase 2: Configuration ───
-	phase(2, TOTAL_PHASES, "Pick your settings");
+	phase(2, TOTAL_PHASES, "Pick your settings", "You're all set on prerequisites!");
 
 	const config = await runConfigWizard();
 
 	// ─── Phase 3: Finishing touches ───
-	phase(3, TOTAL_PHASES, "Setting everything up");
+	phase(3, TOTAL_PHASES, "Setting everything up", "Settings saved!");
 
 	// Trust workspaces
 	for (const dir of [config.hqDir, config.projectsRoot]) {
@@ -274,41 +276,21 @@ async function main(): Promise<void> {
 	writeFileSync(claudeMdPath, generateHqClaudeMd(config.projectsRoot), "utf-8");
 	p.log.success(`Created ${claudeMdPath}`);
 
-	// ─── Done! ───
-	p.log.success(pc.green(pc.bold("All set! HQ is ready to go.")));
+	p.outro(pc.green("All set! HQ is ready to go."));
 
-	const startNow = await p.select({
-		message: "Start HQ now?",
-		options: [
-			{ label: "Yes, let's go!", value: "yes" as const },
-			{ label: "Not right now", value: "no" as const },
-		],
-	});
+	const nextSteps = [`Run ${pc.cyan("hyper hq start")} to launch HQ.`];
 
-	if (p.isCancel(startNow)) {
-		p.cancel("Setup cancelled.");
-		process.exit(0);
+	if (config.telegramToken) {
+		nextSteps.push(
+			"",
+			`${pc.bold("Telegram pairing")} — after HQ starts:`,
+			`  1. Message your bot on Telegram — it will reply with a pairing code`,
+			`  2. Connect to HQ via ${pc.cyan("claude.ai/code")} and tell it the code`,
+			`     HQ will handle the rest automatically`,
+		);
 	}
 
-	p.log.message(`  You can always run ${pc.cyan("hyper hq start")} to launch HQ.`);
-
-	if (startNow === "yes") {
-		p.log.step("Starting HQ...");
-		const child = spawn("hyper", ["hq", "start"], {
-			stdio: "inherit",
-			detached: false,
-		});
-
-		await new Promise<void>((resolve) => {
-			child.on("close", () => resolve());
-			child.on("error", (err) => {
-				p.log.error(`Failed to start HQ: ${err.message}`);
-				resolve();
-			});
-		});
-	}
-
-	p.outro(pc.green("Hyper HQ setup complete!"));
+	p.note(nextSteps.join("\n"), "Next steps");
 }
 
 main().catch((err) => {

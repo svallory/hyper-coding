@@ -10,10 +10,10 @@ This package is the `hyper hq` plugin for the HyperDev CLI. It manages persisten
 
 ## Key Services
 
-- `services/tmux.ts` — tmux session lifecycle
-- `services/claude.ts` — Builds `claude remote-control` command strings
+- `services/tmux.ts` — tmux session lifecycle (create, kill, list, verify)
+- `services/claude.ts` — Builds interactive `claude` command strings with `--continue`, `--channels`, and passthrough args
 - `services/projects.ts` — Project discovery + worktree detection (wt + git)
-- `services/telegram.ts` — Bot pool token management
+- `services/telegram.ts` — Telegram channel plugin integration (`plugin:telegram@claude-plugins-official`)
 
 ## Config
 
