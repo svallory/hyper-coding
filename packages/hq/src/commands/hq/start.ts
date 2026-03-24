@@ -8,6 +8,7 @@ import {
 	type TelegramState,
 	generateHqClaudeMd,
 	generateHqConfigSkill,
+	generateRenameSessionsSkill,
 } from "create-hyper-hq/setup/claude-md";
 import { isWorkspaceTrusted, trustWorkspace } from "create-hyper-hq/setup/trust";
 import { runConfigWizard } from "create-hyper-hq/setup/wizard";
@@ -129,6 +130,11 @@ export default class Start extends BaseCommand<typeof Start> {
 		const skillDir = resolve(hqDir, ".claude", "skills", "hq-config");
 		mkdirSync(skillDir, { recursive: true });
 		writeFileSync(resolve(skillDir, "SKILL.md"), generateHqConfigSkill(), "utf-8");
+
+		// Generate /hq:rename-sessions skill
+		const renameSkillDir = resolve(hqDir, ".claude", "skills", "hq-rename-sessions");
+		mkdirSync(renameSkillDir, { recursive: true });
+		writeFileSync(resolve(renameSkillDir, "SKILL.md"), generateRenameSessionsSkill(), "utf-8");
 
 		// Ensure workspace trust for both HQ dir and projects root
 		for (const dir of [hqDir, config.projects_root]) {

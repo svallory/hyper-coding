@@ -54,6 +54,33 @@ Tell the user Telegram is already configured and paired. Offer to:
 `;
 }
 
+export function generateRenameSessionsSkill(): string {
+	return `---
+name: hq:rename-sessions
+description: Rename active sessions with short descriptive names using AI
+disable-model-invocation: true
+allowed-tools: Bash(hyper:*), Bash(tmux:*)
+---
+
+# Rename Sessions
+
+Rename active HQ sessions that have default timestamp-based names to short, descriptive names.
+
+## Steps
+
+1. Run \`hyper hq status --json\` to get active sessions
+2. Read \`~/.config/hyper/hq/sessions.json\` for session metadata
+3. Filter to sessions whose names match the pattern \`hq-*-\\d{2}-\\d{2}-\\d{2}-\\d{2}\` (timestamp defaults)
+4. For each such session, note the project name and path from history
+5. Ask haiku (via a single prompt) to generate short 2-3 word kebab-case names for all sessions at once, given the project and path context. Format: \`hq-<short-name>\`
+6. Show the user the proposed renames and ask for confirmation
+7. For each confirmed rename:
+   a. Run \`tmux rename-session -t "<old-name>" "<new-name>"\`
+   b. Update the session record in \`~/.config/hyper/hq/sessions.json\` (change the \`sessionName\` field)
+8. Confirm all renames are complete
+`;
+}
+
 export interface HqClaudeMdOptions {
 	projectsRoot: string;
 	sessionName?: string;
