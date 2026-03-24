@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { parse as parseTOML } from "smol-toml";
@@ -73,6 +73,38 @@ export function loadConfig(): HqConfig {
 	}
 
 	return merged;
+}
+
+/**
+ * Update the telegram bot token in hq.toml without destroying comments.
+ * Uses regex replacement for surgical update.
+ */
+export function updateConfigTelegram(token: string): void {
+	if (!existsSync(CONFIG_PATH)) {
+		throw new Error("Config file not found. Run 'hyper hq setup' first.");
+	}
+
+	let content = readFileSync(CONFIG_PATH, "utf-8");
+
+	// Check if hq_bot_token line exists (commented or not)
+	const tokenRegex = /^[#\s]*hq_bot_token\s*=.*$/m;
+	const newLine = `hq_bot_token = "${token}"`;
+
+	if (tokenRegex.test(content)) {
+		// Replace existing line (even if commented out)
+		content = content.replace(tokenRegex, newLine);
+	} else {
+		// Insert after [telegram] section header
+		const telegramSection = /^\[telegram\]\s*$/m;
+		if (telegramSection.test(content)) {
+			content = content.replace(telegramSection, `[telegram]\n${newLine}`);
+		} else {
+			// Append telegram section
+			content += `\n[telegram]\n${newLine}\n`;
+		}
+	}
+
+	writeFileSync(CONFIG_PATH, content, { encoding: "utf-8", mode: 0o600 });
 }
 
 export { CONFIG_PATH };

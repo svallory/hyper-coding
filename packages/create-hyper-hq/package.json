@@ -20,6 +20,12 @@
 	"bin": {
 		"create-hyper-hq": "./dist/index.js"
 	},
+	"exports": {
+		"./setup/wizard": "./dist/setup/hq-config-wizard.js",
+		"./setup/trust": "./dist/setup/workspace-trust.js",
+		"./setup/claude-md": "./dist/setup/claude-md.js",
+		"./checks/plugins": "./dist/checks/check-claude-plugins.js"
+	},
 	"files": [
 		"dist",
 		"README.md",

@@ -19,7 +19,7 @@ const TELEGRAM_CHANNEL_DIR = resolve(HOME, ".claude", "channels", "telegram");
  * directory — unless a literal `~` folder exists in cwd, in which case
  * ask them to disambiguate.
  */
-async function resolveTilde(raw: string): Promise<string> {
+export async function resolveTilde(raw: string): Promise<string> {
 	if (!raw.startsWith("~/") && raw !== "~") return raw;
 
 	const expanded = resolve(HOME, raw.slice(2) || "");
@@ -49,21 +49,25 @@ async function resolveTilde(raw: string): Promise<string> {
  * Write the Telegram bot token to ~/.claude/channels/telegram/.env
  * This is what `/telegram:configure <token>` does internally.
  */
-function writeTelegramPluginConfig(token: string): void {
+export function writeTelegramPluginConfig(token: string): void {
 	mkdirSync(TELEGRAM_CHANNEL_DIR, { recursive: true });
 	const envPath = resolve(TELEGRAM_CHANNEL_DIR, ".env");
 	writeFileSync(envPath, `TELEGRAM_BOT_TOKEN=${token}\n`, { encoding: "utf-8", mode: 0o600 });
 	chmodSync(envPath, 0o600);
 }
 
-export async function runConfigWizard(): Promise<HqConfigResult> {
-	const defaultProjectsRoot = resolve(HOME, "projects");
+/**
+ * Prompt for and resolve the projects root directory.
+ * If opts.current is set, it is shown as the default with a "(current)" hint.
+ */
+export async function configureProjectsRoot(opts?: { current?: string }): Promise<string> {
+	const defaultValue = opts?.current ?? resolve(HOME, "projects");
+	const placeholder = opts?.current ? `${opts.current} (current)` : defaultValue;
 
-	// Step 1: Projects root
 	const projectsRootRaw = await p.text({
 		message: "Where are your projects?",
-		placeholder: defaultProjectsRoot,
-		defaultValue: defaultProjectsRoot,
+		placeholder,
+		defaultValue,
 	});
 
 	if (p.isCancel(projectsRootRaw)) {
@@ -87,11 +91,25 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 		p.log.success(`Created ${projectsRoot}`);
 	}
 
-	// Step 2: HQ working directory
+	return projectsRoot;
+}
+
+/**
+ * Prompt for and resolve the HQ working directory.
+ * Resolved relative to projectsRoot if not absolute.
+ * If opts.current is set, it is shown as the default.
+ */
+export async function configureHqDir(opts: {
+	projectsRoot: string;
+	current?: string;
+}): Promise<string> {
+	const defaultValue = opts.current ?? "./hyper-hq";
+	const placeholder = opts.current ? `${opts.current} (current)` : "./hyper-hq";
+
 	const hqDirRaw = await p.text({
 		message: "HQ working directory (relative to projects root)?",
-		placeholder: "./hyper-hq",
-		defaultValue: "./hyper-hq",
+		placeholder,
+		defaultValue,
 	});
 
 	if (p.isCancel(hqDirRaw)) {
@@ -100,14 +118,43 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 	}
 
 	const hqDirInput = await resolveTilde(hqDirRaw as string);
-	const hqDir = hqDirInput.startsWith("/") ? hqDirInput : resolve(projectsRoot, hqDirInput);
+	const hqDir = hqDirInput.startsWith("/") ? hqDirInput : resolve(opts.projectsRoot, hqDirInput);
 
 	if (!existsSync(hqDir)) {
 		mkdirSync(hqDir, { recursive: true });
 		p.log.success(`Created HQ directory: ${hqDir}`);
 	}
 
-	// Step 3: Telegram integration
+	return hqDir;
+}
+
+/**
+ * Configure Telegram integration.
+ * If opts.currentToken exists, asks the user whether to reconfigure.
+ * Returns the token if enabled, undefined if disabled.
+ */
+export async function configureTelegram(opts?: {
+	currentToken?: string;
+}): Promise<{ token?: string }> {
+	// If already configured, ask whether to reconfigure
+	if (opts?.currentToken) {
+		p.log.info("Telegram is currently configured.");
+
+		const reconfigure = await p.confirm({
+			message: "Do you want to reconfigure Telegram?",
+			initialValue: false,
+		});
+
+		if (p.isCancel(reconfigure)) {
+			p.cancel("Setup cancelled.");
+			process.exit(0);
+		}
+
+		if (!reconfigure) {
+			return { token: opts.currentToken };
+		}
+	}
+
 	const useTelegram = await p.confirm({
 		message: "Enable Telegram integration?",
 		initialValue: false,
@@ -118,79 +165,91 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 		process.exit(0);
 	}
 
-	let telegramToken: string | undefined;
+	if (!useTelegram) {
+		return { token: undefined };
+	}
 
-	if (useTelegram) {
-		const TELEGRAM_PLUGIN = "telegram@claude-plugins-official";
+	const TELEGRAM_PLUGIN = "telegram@claude-plugins-official";
 
-		// Check if the Telegram channel plugin is installed
-		const pluginInstalled = isPluginInstalled(TELEGRAM_PLUGIN);
+	// Check if the Telegram channel plugin is installed
+	const pluginInstalled = isPluginInstalled(TELEGRAM_PLUGIN);
 
-		if (!pluginInstalled) {
-			p.log.warn("The Telegram channel plugin is not installed in Claude Code.");
+	if (!pluginInstalled) {
+		p.log.warn("The Telegram channel plugin is not installed in Claude Code.");
 
-			const doInstall = await p.confirm({
-				message: "Install the Telegram plugin now?",
-				initialValue: true,
-			});
-
-			if (p.isCancel(doInstall)) {
-				p.cancel("Setup cancelled.");
-				process.exit(0);
-			}
-
-			if (doInstall) {
-				p.log.step("Installing Telegram plugin...");
-				const success = installPlugin(TELEGRAM_PLUGIN);
-				if (success) {
-					p.log.success("Telegram plugin installed");
-				} else {
-					p.log.warn(
-						"Plugin installation failed. You can install it later with:\n" +
-							"  claude plugin install telegram@claude-plugins-official",
-					);
-				}
-			} else {
-				p.log.info(
-					"You'll need to install the plugin before using Telegram:\n" +
-						"  claude plugin install telegram@claude-plugins-official",
-				);
-			}
-		} else {
-			p.log.success("Telegram channel plugin is installed");
-		}
-
-		p.note(
-			"1. Open Telegram and message @BotFather\n" +
-				"2. Send /newbot and follow the prompts\n" +
-				"3. Copy the token BotFather gives you",
-			"Create a Telegram bot",
-		);
-
-		const token = await p.text({
-			message: "Paste your Telegram bot token:",
-			placeholder: "your-bot-token-from-botfather",
-			validate(value) {
-				if (!value?.trim()) return "Please enter a token";
-				if (!value?.includes(":"))
-					return "That doesn't look like a bot token (should contain a colon)";
-				return undefined;
-			},
+		const doInstall = await p.confirm({
+			message: "Install the Telegram plugin now?",
+			initialValue: true,
 		});
 
-		if (p.isCancel(token)) {
+		if (p.isCancel(doInstall)) {
 			p.cancel("Setup cancelled.");
 			process.exit(0);
 		}
 
-		telegramToken = token as string;
-
-		// Write token to the plugin's config location
-		writeTelegramPluginConfig(telegramToken);
-		p.log.success("Bot token saved to Claude Code plugin config");
+		if (doInstall) {
+			p.log.step("Installing Telegram plugin...");
+			const success = installPlugin(TELEGRAM_PLUGIN);
+			if (success) {
+				p.log.success("Telegram plugin installed");
+			} else {
+				p.log.warn(
+					"Plugin installation failed. You can install it later with:\n" +
+						"  claude plugin install telegram@claude-plugins-official",
+				);
+			}
+		} else {
+			p.log.info(
+				"You'll need to install the plugin before using Telegram:\n" +
+					"  claude plugin install telegram@claude-plugins-official",
+			);
+		}
+	} else {
+		p.log.success("Telegram channel plugin is installed");
 	}
 
-	// Build TOML config (using expanded absolute paths)
+	p.note(
+		"1. Open Telegram and message @BotFather\n" +
+			"2. Send /newbot and follow the prompts\n" +
+			"3. Copy the token BotFather gives you",
+		"Create a Telegram bot",
+	);
+
+	const token = await p.text({
+		message: "Paste your Telegram bot token:",
+		placeholder: "your-bot-token-from-botfather",
+		validate(value) {
+			if (!value?.trim()) return "Please enter a token";
+			if (!value?.includes(":"))
+				return "That doesn't look like a bot token (should contain a colon)";
+			return undefined;
+		},
+	});
+
+	if (p.isCancel(token)) {
+		p.cancel("Setup cancelled.");
+		process.exit(0);
+	}
+
+	const telegramToken = token as string;
+
+	// Write token to the plugin's config location
+	writeTelegramPluginConfig(telegramToken);
+	p.log.success("Bot token saved to Claude Code plugin config");
+
+	return { token: telegramToken };
+}
+
+/**
+ * Generate TOML config and write to ~/.config/hyper/hq.toml with mode 0o600.
+ */
+export async function writeHqConfig(values: {
+	projectsRoot: string;
+	hqDir: string;
+	telegramToken?: string;
+}): Promise<void> {
+	const { projectsRoot, hqDir, telegramToken } = values;
+
 	const lines: string[] = [
 		"# Hyper HQ — Claude Code Command Center",
 		"",
@@ -238,6 +297,23 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 	chmodSync(CONFIG_PATH, 0o600);
 
 	p.log.success(`Config saved to ${CONFIG_PATH} (mode 0600)`);
+}
+
+/**
+ * Orchestrator: runs all configuration steps in sequence and writes the config file.
+ */
+export async function runConfigWizard(opts?: {
+	existing?: Partial<HqConfigResult>;
+}): Promise<HqConfigResult> {
+	const existing = opts?.existing;
+
+	const projectsRoot = await configureProjectsRoot({ current: existing?.projectsRoot });
+	const hqDir = await configureHqDir({ projectsRoot, current: existing?.hqDir });
+	const { token: telegramToken } = await configureTelegram({
+		currentToken: existing?.telegramToken,
+	});
+
+	await writeHqConfig({ projectsRoot, hqDir, telegramToken });
 
 	return { projectsRoot, hqDir, telegramToken };
 }

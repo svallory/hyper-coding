@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 const CLAUDE_JSON_PATH = resolve(homedir(), ".claude.json");
 
@@ -20,7 +20,13 @@ function writeClaudeJson(data: ClaudeJson): void {
 
 export function isWorkspaceTrusted(dir: string): boolean {
 	const data = readClaudeJson();
-	return data.projects?.[dir]?.hasTrustDialogAccepted === true;
+	if (!data.projects) return false;
+	let current = dir;
+	while (current !== "/") {
+		if (data.projects[current]?.hasTrustDialogAccepted === true) return true;
+		current = dirname(current);
+	}
+	return false;
 }
 
 export function trustWorkspace(dir: string): void {

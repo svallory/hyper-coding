@@ -1,44 +1,33 @@
-import { spawnSync } from "node:child_process";
-import { Command } from "@oclif/core";
-import { runSetup } from "../../config/setup.js";
+import * as p from "@clack/prompts";
+import { runConfigWizard } from "create-hyper-hq/setup/wizard";
+import { configExists, loadConfig } from "#config/index";
+import { BaseCommand } from "#lib/base-command";
 
-export default class Setup extends Command {
-	static override description = "Set up HQ — check dependencies and configure";
-	static override examples = ["<%= config.bin %> <%= command.id %>"];
+export default class Setup extends BaseCommand<typeof Setup> {
+	static override description = "Set up HQ — configure settings";
+	static override examples = ["<%= config.bin %> hq setup"];
 
 	async run(): Promise<void> {
-		// Check tmux
-		const tmux = spawnSync("which", ["tmux"], { encoding: "utf-8" });
-		if (tmux.status !== 0) {
-			this.warn("tmux is not installed. HQ requires tmux to manage sessions.");
-			this.log("  Install: https://github.com/tmux/tmux/wiki/Installing");
-		}
+		await this.parse(Setup);
 
-		// Check claude
-		const claude = spawnSync("which", ["claude"], { encoding: "utf-8" });
-		if (claude.status !== 0) {
-			this.warn("Claude CLI is not installed. HQ requires claude to run sessions.");
-			this.log("  Install: https://claude.ai/code");
-		}
+		// Pass existing config for re-run safety
+		const existing = configExists() ? loadConfig() : undefined;
 
-		// Check claude auth
-		if (claude.status === 0) {
-			const auth = spawnSync("claude", ["auth", "status"], {
-				encoding: "utf-8",
-			});
-			if (auth.status !== 0) {
-				this.log("\nClaude is not authenticated. Running 'claude auth login'...\n");
-				spawnSync("claude", ["auth", "login"], { stdio: "inherit" });
-			}
-		}
-
-		// Run config wizard (force mode — always run even if config exists)
-		await runSetup(true);
+		await runConfigWizard({
+			existing: existing
+				? {
+						projectsRoot: existing.projects_root,
+						hqDir: existing.hq.dir,
+						telegramToken: existing.telegram?.hq_bot_token,
+					}
+				: undefined,
+		});
 
 		// Offer to start HQ
-		const { confirm } = await import("@clack/prompts");
-		const startNow = await confirm({ message: "Start HQ now?" });
-		if (startNow === true) {
+		const startNow = await p.confirm({ message: "Start HQ now?" });
+		if (p.isCancel(startNow)) return;
+		if (startNow) {
+			const { spawnSync } = await import("node:child_process");
 			spawnSync("hyper", ["hq", "start"], { stdio: "inherit" });
 		} else {
 			this.log("\nRun 'hyper hq start' whenever you're ready.");
