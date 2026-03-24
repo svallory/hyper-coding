@@ -15,8 +15,9 @@ Always-on Claude Code command center. Manages persistent Claude sessions via tmu
 | `hyper hq stop [session]` | Stop an HQ session |
 | `hyper hq stop-all` | Stop all HQ-managed sessions |
 | `hyper hq attach [session]` | Attach to an HQ tmux session |
-| `hyper hq spawn <project>` | Spawn a Claude session for a project |
-| `hyper hq list` | List available projects and their worktrees |
+| `hyper hq launch [project] [path]` | Launch a Claude session for a project |
+| `hyper hq relaunch <session\|project>` | Relaunch a session with --continue |
+| `hyper hq list` | List available projects |
 | `hyper hq status` | Show running HQ sessions |
 | `hyper hq config` | Show HQ configuration |
 
@@ -32,8 +33,8 @@ hyper hq start
 # 3. Check what projects are available
 hyper hq list
 
-# 4. Spawn a Claude session for a project
-hyper hq spawn my-project
+# 4. Launch a Claude session for a project
+hyper hq launch my-project
 
 # 5. Check running sessions
 hyper hq status
@@ -47,6 +48,6 @@ hyper hq stop-all
 
 ## How It Works
 
-HQ runs a persistent Claude Code instance in a tmux session in remote-control server mode. Once started, you can connect to it from claude.ai/code, the Claude mobile app, or via Telegram. From there, you can ask HQ to spawn sessions for any of your projects.
+HQ runs a persistent Claude Code instance in a tmux session in remote-control server mode. Once started, you can connect to it from claude.ai/code, the Claude mobile app, or via Telegram. From there, you can ask HQ to launch sessions for any of your projects.
 
 Run `hyper hq <command> --help` for details on any command.

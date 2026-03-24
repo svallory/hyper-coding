@@ -9,7 +9,8 @@ Included automatically with `@hypercli/cli`. Can also be installed as a standalo
 ## Commands
 
 - `hyper hq start` — Start the always-on HQ control center
-- `hyper hq spawn <project>` — Spawn a Claude session for a project
+- `hyper hq launch [project] [path]` — Launch a Claude session for a project
+- `hyper hq relaunch <session|project>` — Relaunch a session with --continue
 - `hyper hq status` — Show running sessions
 - `hyper hq list` — List available projects
 - `hyper hq attach` — Attach to a tmux session

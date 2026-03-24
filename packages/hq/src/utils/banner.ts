@@ -52,7 +52,7 @@ export function renderBanner(opts: {
 		[
 			{ key: "hyper hq web", value: "Open HQ in claude.ai/code" },
 			{ key: "hyper hq list", value: "List projects" },
-			{ key: "hyper hq spawn <name>", value: "Start project session" },
+			{ key: "hyper hq launch <project>", value: "Launch project session" },
 			{ key: "hyper hq status", value: "Show running sessions" },
 			{ key: "hyper hq attach", value: "Attach to HQ terminal" },
 			{ key: "hyper hq config", value: "Show configuration" },
