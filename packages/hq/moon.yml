@@ -10,7 +10,7 @@ tags:
 
 tasks:
   test:
-    command: 'echo "No tests yet"'
+    command: 'bun test'
     inputs:
       - '@globs(sources)'
 
