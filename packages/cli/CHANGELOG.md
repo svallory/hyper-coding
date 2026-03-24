@@ -1,5 +1,7 @@
 # Changelog
 
+## [0.3.1](https://github.com/svallory/hyper-coding/compare/v0.2.3...v0.3.1) (2026-03-24)
+
 ## [0.2.3](https://github.com/svallory/hyper-coding/compare/v0.2.2...v0.2.3) (2026-03-24)
 
 

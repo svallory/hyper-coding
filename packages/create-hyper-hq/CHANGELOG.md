@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/svallory/hyper-coding/compare/v0.2.2...v0.3.0) (2026-03-24)
+
+
+### ⚠ BREAKING CHANGES
+
+* **hq:** hyper hq start now auto-attaches to the tmux session
+
+### Features
+
+* **hq:** overhaul start flow with auto-attach, remote-control, and telegram pairing ([e9c0288](https://github.com/svallory/hyper-coding/commit/e9c0288516d5d4659c167226adf8bd42a4eec9b6))
+
 ## [0.2.2](https://github.com/svallory/hyper-coding/compare/v0.2.1...v0.2.2) (2026-03-24)
 
 
