@@ -5,13 +5,12 @@
 		"useIgnoreFile": true
 	},
 	"files": {
-		"includes": [
-			"**",
-			"!**/dist",
-			"!**/node_modules",
-			"!**/.moon",
-			"!**/packages/hypergen",
-			"!**/tsconfig.options.json"
+		"ignore": [
+			"**/dist",
+			"**/node_modules",
+			"**/.moon",
+			"**/packages/hypergen",
+			"**/tsconfig.options.json"
 		]
 	},
 	"formatter": {

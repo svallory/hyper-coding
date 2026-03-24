@@ -49,6 +49,8 @@ export function buildClaudeCommand(opts: ClaudeCommandOpts): string {
 
 	parts.push("claude");
 
+	parts.push("--allow-dangerously-skip-permissions");
+
 	if (opts.resume) {
 		parts.push("--continue");
 	}
