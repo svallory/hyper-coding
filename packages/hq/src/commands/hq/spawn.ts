@@ -113,13 +113,12 @@ export default class Spawn extends BaseCommand<typeof Spawn> {
 			telegramBotToken: telegramEnv?.TELEGRAM_BOT_TOKEN,
 			channels,
 			extraArgs: extraClaudeArgs,
-			logFile,
 		});
 
 		log(`Spawning Claude session for: ${projectName}`);
 		log(`Working directory: ${workDir}`);
 
-		tmux.createSession({ name: sessionName, cwd: workDir, command });
+		tmux.createSession({ name: sessionName, cwd: workDir, command, logFile });
 
 		if (tmux.waitAndVerify(sessionName) === "dead") {
 			this.error(

@@ -1,9 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { Flags } from "@oclif/core";
-import { generateHqClaudeMd } from "create-hyper-hq/setup/claude-md";
+import {
+	generateHqClaudeMd,
+	generateHqConfigSkill,
+	type TelegramState,
+} from "create-hyper-hq/setup/claude-md";
 import { isWorkspaceTrusted, trustWorkspace } from "create-hyper-hq/setup/trust";
 import { runConfigWizard } from "create-hyper-hq/setup/wizard";
 import { configExists, loadConfig } from "#config/index";
@@ -16,6 +21,9 @@ import { renderBanner } from "#utils/banner";
 import { log } from "#utils/log";
 import { LOG_DIR } from "#utils/paths";
 
+const TELEGRAM_ENV_FILE = resolve(homedir(), ".claude", "channels", "telegram", ".env");
+const TELEGRAM_ACCESS_FILE = resolve(homedir(), ".claude", "channels", "telegram", "access.json");
+
 function isHyperOnPath(): boolean {
 	const result = spawnSync("which", ["hyper"], { encoding: "utf-8" });
 	return result.status === 0;
@@ -25,6 +33,19 @@ async function ensureConfig(): Promise<HqConfig> {
 	if (configExists()) return loadConfig();
 	await runConfigWizard();
 	return loadConfig();
+}
+
+function detectTelegramState(): TelegramState {
+	if (!existsSync(TELEGRAM_ENV_FILE)) return "not-configured";
+	if (!existsSync(TELEGRAM_ACCESS_FILE)) return "configured-unpaired";
+	try {
+		const access = JSON.parse(readFileSync(TELEGRAM_ACCESS_FILE, "utf-8"));
+		const hasUsers = (access.allowFrom ?? []).length > 0;
+		const hasGroups = Object.keys(access.groups ?? {}).length > 0;
+		return hasUsers || hasGroups ? "paired" : "configured-unpaired";
+	} catch {
+		return "configured-unpaired";
+	}
 }
 
 export default class Start extends BaseCommand<typeof Start> {
@@ -49,7 +70,7 @@ export default class Start extends BaseCommand<typeof Start> {
 			default: false,
 		}),
 		yolo: Flags.boolean({
-			description: "Skip all permission checks (alias for -- --dangerously-skip-permissions)",
+			description: "Skip permission checks — HQ runs autonomously on startup",
 			default: false,
 		}),
 		"permission-mode": Flags.string({
@@ -93,12 +114,24 @@ export default class Start extends BaseCommand<typeof Start> {
 			log(`Created HQ directory: ${hqDir}`);
 		}
 
-		// Generate CLAUDE.md for the HQ session if not present
+		// Always regenerate CLAUDE.md — content varies based on flags and detected state
 		const claudeMdPath = resolve(hqDir, "CLAUDE.md");
-		if (!existsSync(claudeMdPath)) {
-			writeFileSync(claudeMdPath, generateHqClaudeMd(config.projects_root, sessionName), "utf-8");
-			log("Generated CLAUDE.md for HQ session.");
-		}
+		const telegramState = detectTelegramState();
+		writeFileSync(
+			claudeMdPath,
+			generateHqClaudeMd({
+				projectsRoot: config.projects_root,
+				sessionName,
+				autonomous: flags.yolo,
+				telegramState,
+			}),
+			"utf-8",
+		);
+
+		// Generate /hq:config skill
+		const skillDir = resolve(hqDir, ".claude", "skills", "hq-config");
+		mkdirSync(skillDir, { recursive: true });
+		writeFileSync(resolve(skillDir, "SKILL.md"), generateHqConfigSkill(), "utf-8");
 
 		// Ensure workspace trust for both HQ dir and projects root
 		for (const dir of [hqDir, config.projects_root]) {
@@ -109,8 +142,8 @@ export default class Start extends BaseCommand<typeof Start> {
 		}
 
 		if (tmux.sessionExists(sessionName)) {
-			log(`Session '${sessionName}' is already running. Use 'hyper hq attach' to connect.`);
-			return;
+			log(`Session '${sessionName}' is already running. Attaching...`);
+			tmux.attachSession(sessionName);
 		}
 
 		mkdirSync(LOG_DIR, { recursive: true });
@@ -130,14 +163,13 @@ export default class Start extends BaseCommand<typeof Start> {
 			telegramBotToken: telegramEnv?.TELEGRAM_BOT_TOKEN,
 			channels,
 			extraArgs: extraClaudeArgs,
-			logFile,
 		});
 
 		const cwd = hqDir;
 
 		log(`Starting HQ session: ${sessionName}`);
 
-		tmux.createSession({ name: sessionName, cwd, command });
+		tmux.createSession({ name: sessionName, cwd, command, logFile });
 
 		// Verify the session actually survived startup
 		if (tmux.waitAndVerify(sessionName) === "dead") {
@@ -166,7 +198,20 @@ Common causes:
 		// Session survived — disable remain-on-exit so panes clean up normally
 		tmux.disableRemainOnExit(sessionName);
 
+		// Enable remote control before the startup prompt — /remote-control is a
+		// Claude Code slash command that Claude can't invoke programmatically.
+		tmux.sendKeys(sessionName, `/remote-control ${sessionName}`);
+
+		// Send initial prompt so Claude reads CLAUDE.md and runs startup steps
+		tmux.sendKeys(sessionName, "you are online, follow your On Startup instructions");
+
 		// Show welcome banner
 		this.log(renderBanner({ config, sessionName, logFile }));
+		this.log("Attaching to HQ session. To detach without stopping: Ctrl+B, then D\n");
+
+		// Auto-attach so the user lands inside the Claude session.
+		// Claude's CLAUDE.md has startup instructions tailored to the
+		// current state (Telegram pairing, --yolo mode, etc.)
+		tmux.attachSession(sessionName);
 	}
 }

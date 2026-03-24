@@ -50,6 +50,7 @@ export function renderBanner(opts: {
 
 	const commands = keyValue(
 		[
+			{ key: "hyper hq web", value: "Open HQ in claude.ai/code" },
 			{ key: "hyper hq list", value: "List projects" },
 			{ key: "hyper hq spawn <name>", value: "Start project session" },
 			{ key: "hyper hq status", value: "Show running sessions" },

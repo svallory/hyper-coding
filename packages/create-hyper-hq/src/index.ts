@@ -278,15 +278,17 @@ async function main(): Promise<void> {
 
 	p.outro(pc.green("All set! HQ is ready to go."));
 
-	const nextSteps = [`Run ${pc.cyan("hyper hq start")} to launch HQ.`];
+	const nextSteps = [
+		`Run ${pc.cyan("hyper hq start")} to launch HQ.`,
+		`Then ${pc.cyan("hyper hq web")} to open it in claude.ai/code.`,
+	];
 
 	if (config.telegramToken) {
 		nextSteps.push(
 			"",
-			`${pc.bold("Telegram pairing")} — after HQ starts:`,
+			`${pc.bold("Telegram pairing")} — once connected via claude.ai/code:`,
 			`  1. Message your bot on Telegram — it will reply with a pairing code`,
-			`  2. Connect to HQ via ${pc.cyan("claude.ai/code")} and tell it the code`,
-			`     HQ will handle the rest automatically`,
+			`  2. Tell HQ the code — it will handle the rest automatically`,
 		);
 	}
 

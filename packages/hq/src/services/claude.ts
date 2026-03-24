@@ -7,7 +7,6 @@ export interface ClaudeCommandOpts {
 	channels?: string[];
 	/** Extra args passed through to `claude` verbatim */
 	extraArgs?: string[];
-	logFile: string;
 }
 
 /** Escape a value for safe inclusion in a single-quoted shell string */
@@ -19,14 +18,23 @@ function shellEscape(value: string): string {
 /**
  * Build the command to start an interactive Claude session.
  *
- * Uses `claude` (interactive mode) instead of `claude remote-control` so that:
- * - Channels work (via --channels at launch)
- * - Remote control works (via /remote-control after launch)
- * - Session resume works (via --resume)
- * - Both channels and remote control coexist in the same session
+ * Architecture decision: we use `claude` (interactive mode) instead of
+ * `claude remote-control` (subcommand) because:
  *
- * The generated CLAUDE.md instructs the session to run `/remote-control <name>`
- * on startup to enable remote access.
+ * - `claude remote-control` is a standalone server that accepts sessions
+ *   from claude.ai/code, but it does NOT support --channels for Telegram.
+ * - `claude` (interactive) supports --channels AND the /remote-control
+ *   slash command, giving us BOTH Telegram and web access in one session.
+ *
+ * Flow:
+ * 1. Start `claude --channels plugin:telegram@... --continue`
+ * 2. The CLAUDE.md instructs Claude to run `/remote-control <name>`
+ *    on startup, which enables claude.ai/code access.
+ * 3. Result: one session with Telegram channels + web remote control.
+ *
+ * IMPORTANT: Do NOT pipe stdout (e.g. `| tee`). Claude interactive mode
+ * requires a TTY — piping strips it and the process dies immediately.
+ * Use tmux `pipe-pane` for logging instead (see tmux.createSession).
  */
 export function buildClaudeCommand(opts: ClaudeCommandOpts): string {
 	const parts: string[] = [];
@@ -63,9 +71,6 @@ export function buildClaudeCommand(opts: ClaudeCommandOpts): string {
 	if (opts.extraArgs && opts.extraArgs.length > 0) {
 		parts.push(...opts.extraArgs);
 	}
-
-	// Pipe to log file
-	parts.push(`2>&1 | tee -a '${shellEscape(opts.logFile)}'`);
 
 	return parts.join(" ");
 }

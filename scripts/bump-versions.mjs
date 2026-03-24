@@ -2,8 +2,12 @@
 // Bump version in all @hypercli/* package.json files and rewrite workspace:*
 // references to real semver ranges. Called before publishing.
 //
+// Also regenerates oclif manifests for packages that use oclif, so the
+// manifest version stays in sync with the bumped package.json version.
+//
 // Usage: node scripts/bump-versions.mjs <version>
 
+import { execSync } from "child_process";
 import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
@@ -14,8 +18,8 @@ if (!version) {
 }
 
 const packages = ["ui", "core", "kit", "hq", "gen", "cli", "create-hyper-hq"];
-const scope = "@hypercli/";
 const root = new URL("..", import.meta.url).pathname;
+const oclifPackages = [];
 
 for (const pkg of packages) {
 	const pkgPath = resolve(root, `packages/${pkg}/package.json`);
@@ -36,4 +40,22 @@ for (const pkg of packages) {
 
 	writeFileSync(pkgPath, JSON.stringify(json, null, "\t") + "\n");
 	console.log(`${json.name} → ${version}`);
+
+	if (json.oclif) {
+		oclifPackages.push(pkg);
+	}
+}
+
+// Regenerate oclif manifests so the embedded version matches
+if (oclifPackages.length > 0) {
+	console.log("\nRegenerating oclif manifests...");
+	for (const pkg of oclifPackages) {
+		const pkgDir = resolve(root, `packages/${pkg}`);
+		try {
+			execSync("bunx oclif manifest", { cwd: pkgDir, stdio: "pipe" });
+			console.log(`  ${pkg} ✓`);
+		} catch (err) {
+			console.error(`  ${pkg} ✗ — ${err.message}`);
+		}
+	}
 }

@@ -25,7 +25,12 @@ export function sessionExists(name: string): boolean {
 	return run(["has-session", "-t", name]).ok;
 }
 
-export function createSession(opts: { name: string; cwd: string; command: string }): void {
+export function createSession(opts: {
+	name: string;
+	cwd: string;
+	command: string;
+	logFile?: string;
+}): void {
 	// Use remain-on-exit so the pane stays around if the command fails,
 	// allowing us to read the exit status and show a useful error.
 	const result = run([
@@ -44,6 +49,11 @@ export function createSession(opts: { name: string; cwd: string; command: string
 	}
 	// Keep the pane alive after the command exits so we can detect failures
 	run(["set-option", "-t", opts.name, "remain-on-exit", "on"]);
+
+	// Use pipe-pane for logging — this preserves the TTY (unlike shell pipes)
+	if (opts.logFile) {
+		run(["pipe-pane", "-t", opts.name, "-o", `cat >> '${opts.logFile}'`]);
+	}
 }
 
 /**
@@ -126,4 +136,15 @@ export function disableRemainOnExit(name: string): void {
 export function attachSession(name: string): never {
 	execFileSync("tmux", ["attach", "-t", name], { stdio: "inherit" });
 	process.exit(0);
+}
+
+/** Capture the full scrollback + visible content of a tmux pane */
+export function capturePane(name: string): string | null {
+	const result = run(["capture-pane", "-t", name, "-p", "-S", "-"]);
+	return result.ok ? result.stdout : null;
+}
+
+/** Send keystrokes to a tmux pane (simulates typing + Enter) */
+export function sendKeys(name: string, text: string): void {
+	run(["send-keys", "-t", name, text, "Enter"]);
 }
