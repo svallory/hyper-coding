@@ -1,6 +1,7 @@
 import { Args } from "@oclif/core";
 import { configExists, loadConfig } from "#config/index";
 import { BaseCommand } from "#lib/base-command";
+import { recordStop } from "#services/sessions";
 import * as tmux from "#services/tmux";
 import { log } from "#utils/log";
 
@@ -27,6 +28,7 @@ export default class Stop extends BaseCommand<typeof Stop> {
 		}
 
 		if (tmux.killSession(target)) {
+			recordStop(target);
 			log(`Stopped session: ${target}`);
 		} else {
 			this.error(`Session '${target}' not found`);

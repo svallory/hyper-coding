@@ -1,4 +1,5 @@
 import { BaseCommand } from "#lib/base-command";
+import { recordStop } from "#services/sessions";
 import * as tmux from "#services/tmux";
 import { log } from "#utils/log";
 
@@ -18,6 +19,7 @@ export default class StopAll extends BaseCommand<typeof StopAll> {
 
 		for (const session of sessions) {
 			tmux.killSession(session.name);
+			recordStop(session.name);
 			log(`Stopped: ${session.name}`);
 		}
 	}
