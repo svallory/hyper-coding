@@ -6,7 +6,7 @@ export interface HqSessionConfig {
 }
 
 export interface ClaudeConfig {
-	permission_mode?: "default" | "acceptEdits" | "plan" | "auto";
+	permission_mode?: "default" | "acceptEdits" | "plan" | "bypassPermissions" | "auto";
 }
 
 export interface TelegramConfig {
