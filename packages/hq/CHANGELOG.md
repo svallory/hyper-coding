@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/svallory/hyper-coding/compare/v0.2.2...v0.2.3) (2026-03-24)
+
+
+### Bug Fixes
+
+* **hq:** enable real test runner in moon.yml and fix workspace:* in published package ([63625a3](https://github.com/svallory/hyper-coding/commit/63625a3f5414377e2d4b0ff724056b7714c297d1))
+
 ## [0.2.2](https://github.com/svallory/hyper-coding/compare/v0.2.1...v0.2.2) (2026-03-24)
 
 
