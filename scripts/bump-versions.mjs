@@ -28,7 +28,7 @@ for (const pkg of packages) {
 		const deps = json[depField];
 		if (!deps) continue;
 		for (const [name, value] of Object.entries(deps)) {
-			if (name.startsWith(scope) && value.startsWith("workspace:")) {
+			if (value.startsWith("workspace:")) {
 				deps[name] = `^${version}`;
 			}
 		}

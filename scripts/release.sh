@@ -29,14 +29,14 @@ echo "Resolving workspace:* references..."
 node "$REPO_ROOT/scripts/bump-versions.mjs" "$VERSION"
 
 # Publishing order respects the dependency graph:
-#   ui     → (no workspace deps)
-#   core   → ui
-#   kit    → core, ui
-#   hq     → (no workspace deps, synced version)
-#   gen    → core, kit, ui
+#   ui              → (no workspace deps)
+#   core            → ui
 #   create-hyper-hq → (no workspace deps, synced version)
-#   cli    → core, ui, gen, hq, kit
-PACKAGES=(ui core kit hq gen create-hyper-hq cli)
+#   kit             → core, ui
+#   hq              → create-hyper-hq, ui
+#   gen             → core, kit, ui
+#   cli             → core, ui, gen, hq, kit
+PACKAGES=(ui core create-hyper-hq kit hq gen cli)
 
 publish_package() {
   local pkg=$1
