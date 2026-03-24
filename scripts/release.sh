@@ -8,6 +8,13 @@ set -euo pipefail
 #
 # Usage: ./scripts/release.sh [--dry-run] [--provenance]
 
+# Find system npm — bun/proto add ./node_modules/.bin to PATH which may
+# resolve a broken npm shim. Use `which -a` to find the real system binary.
+NPM="$(which -a npm | grep -v node_modules | head -1)"
+if [ -z "$NPM" ]; then
+  echo "Error: npm not found on system PATH (outside node_modules)"
+  exit 1
+fi
 PUBLISH_FLAGS="--access public"
 
 for arg in "$@"; do
@@ -43,7 +50,7 @@ publish_package() {
   local pkg_name
   pkg_name=$(node -e "console.log(require('$REPO_ROOT/packages/$pkg/package.json').name)")
 
-  if npm view "$pkg_name@$VERSION" version &>/dev/null; then
+  if "$NPM" view "$pkg_name@$VERSION" version &>/dev/null; then
     echo "$pkg_name@$VERSION already published, skipping"
     return 0
   fi
@@ -51,7 +58,7 @@ publish_package() {
   local retries=3
   local delay=15
   for attempt in $(seq 1 $retries); do
-    if (cd "$REPO_ROOT/packages/$pkg" && npm publish $PUBLISH_FLAGS); then
+    if (cd "$REPO_ROOT/packages/$pkg" && "$NPM" publish $PUBLISH_FLAGS); then
       return 0
     elif [ $attempt -lt $retries ]; then
       echo "Retrying in ${delay}s (attempt $((attempt+1))/$retries)..."
