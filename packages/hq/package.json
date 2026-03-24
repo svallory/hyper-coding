@@ -1,6 +1,6 @@
 {
 	"name": "@hypercli/hq",
-	"version": "0.2.3",
+	"version": "0.3.0",
 	"type": "module",
 	"description": "Claude Code session management for HyperDev — always-on control plane",
 	"keywords": [
@@ -74,9 +74,9 @@
 	},
 	"dependencies": {
 		"@clack/prompts": "^1.1.0",
-		"@hypercli/ui": "workspace:*",
+		"@hypercli/ui": "^0.3.0",
 		"@oclif/core": "^4",
-		"create-hyper-hq": "workspace:*",
+		"create-hyper-hq": "^0.3.0",
 		"smol-toml": "^1"
 	},
 	"devDependencies": {

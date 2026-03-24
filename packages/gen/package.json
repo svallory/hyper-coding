@@ -1,6 +1,6 @@
 {
 	"name": "@hypercli/gen",
-	"version": "0.2.1",
+	"version": "0.3.0",
 	"type": "module",
 	"description": "Code generation engine for HyperDev",
 	"keywords": [
@@ -87,9 +87,9 @@
 	},
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",
-		"@hypercli/core": "workspace:*",
-		"@hypercli/kit": "workspace:*",
-		"@hypercli/ui": "workspace:*",
+		"@hypercli/core": "^0.3.0",
+		"@hypercli/kit": "^0.3.0",
+		"@hypercli/ui": "^0.3.0",
 		"@jig-lang/jig": "^1.0.1",
 		"@oclif/core": "^4",
 		"ai": "^4.0.0",

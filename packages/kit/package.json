@@ -1,6 +1,6 @@
 {
 	"name": "@hypercli/kit",
-	"version": "0.2.1",
+	"version": "0.3.0",
 	"type": "module",
 	"description": "Kit lifecycle management for HyperDev",
 	"keywords": [
@@ -71,8 +71,8 @@
 		"prepublishOnly": "bun run build"
 	},
 	"dependencies": {
-		"@hypercli/core": "workspace:*",
-		"@hypercli/ui": "workspace:*",
+		"@hypercli/core": "^0.3.0",
+		"@hypercli/ui": "^0.3.0",
 		"giget": "^2.0.0"
 	},
 	"devDependencies": {
