@@ -5,17 +5,16 @@ import { buildClaudeCommand } from "#services/claude";
 describe("buildClaudeCommand", () => {
 	const baseOpts: ClaudeCommandOpts = {
 		name: "test-session",
-		logFile: "/tmp/test.log",
 	};
 
 	describe("basic command structure", () => {
-		it("generates a command with just name and logFile", () => {
+		it("generates a command with just a name", () => {
 			const cmd = buildClaudeCommand(baseOpts);
 
 			expect(cmd).toContain("unset CLAUDE_CODE_OAUTH_TOKEN;");
 			expect(cmd).toContain("claude");
 			expect(cmd).toContain("--name 'test-session'");
-			expect(cmd).toContain("2>&1 | tee -a '/tmp/test.log'");
+			expect(cmd).toContain("--allow-dangerously-skip-permissions");
 		});
 
 		it("unsets CLAUDE_CODE_OAUTH_TOKEN at the start", () => {
@@ -23,9 +22,16 @@ describe("buildClaudeCommand", () => {
 			expect(cmd.startsWith("unset CLAUDE_CODE_OAUTH_TOKEN;")).toBe(true);
 		});
 
-		it("pipes output to tee at the end", () => {
+		it("always includes --allow-dangerously-skip-permissions", () => {
 			const cmd = buildClaudeCommand(baseOpts);
-			expect(cmd.endsWith("2>&1 | tee -a '/tmp/test.log'")).toBe(true);
+			expect(cmd).toContain("--allow-dangerously-skip-permissions");
+		});
+
+		it("places --allow-dangerously-skip-permissions right after claude", () => {
+			const cmd = buildClaudeCommand(baseOpts);
+			const parts = cmd.split(" ");
+			const claudeIdx = parts.indexOf("claude");
+			expect(parts[claudeIdx + 1]).toBe("--allow-dangerously-skip-permissions");
 		});
 	});
 
@@ -109,8 +115,8 @@ describe("buildClaudeCommand", () => {
 			// The command should just be the base command without extra stuff
 			const parts = cmd.split(" ");
 			const claudeIdx = parts.indexOf("claude");
-			// After claude should come --name, then the tee pipe
-			expect(parts[claudeIdx + 1]).toBe("--name");
+			// After claude should come --allow-dangerously-skip-permissions
+			expect(parts[claudeIdx + 1]).toBe("--allow-dangerously-skip-permissions");
 		});
 	});
 
@@ -154,14 +160,6 @@ describe("buildClaudeCommand", () => {
 			expect(cmd).toContain("TELEGRAM_BOT_TOKEN='token'\\''with'\\''quotes'");
 		});
 
-		it("escapes single quotes in logFile path", () => {
-			const cmd = buildClaudeCommand({
-				...baseOpts,
-				logFile: "/tmp/it's a log.txt",
-			});
-			expect(cmd).toContain("tee -a '/tmp/it'\\''s a log.txt'");
-		});
-
 		it("handles spaces in name without additional escaping", () => {
 			const cmd = buildClaudeCommand({
 				...baseOpts,
@@ -188,28 +186,27 @@ describe("buildClaudeCommand", () => {
 				telegramBotToken: "bot-token-123",
 				channels: ["plugin:telegram@claude-plugins-official"],
 				extraArgs: ["--verbose"],
-				logFile: "/var/log/claude.log",
 			});
 
-			// Verify order: unset, env var, claude, --continue, --name, --permission-mode, --channels, extra, tee
+			// Verify order: unset, env var, claude, --allow-dangerously-skip-permissions, --continue, --name, --permission-mode, --channels, extra
 			const unsetIdx = cmd.indexOf("unset CLAUDE_CODE_OAUTH_TOKEN;");
 			const envIdx = cmd.indexOf("TELEGRAM_BOT_TOKEN=");
 			const claudeIdx = cmd.indexOf(" claude ");
+			const skipPermsIdx = cmd.indexOf("--allow-dangerously-skip-permissions");
 			const continueIdx = cmd.indexOf("--continue");
 			const nameIdx = cmd.indexOf("--name");
 			const permIdx = cmd.indexOf("--permission-mode");
 			const channelsIdx = cmd.indexOf("--channels");
 			const verboseIdx = cmd.indexOf("--verbose");
-			const teeIdx = cmd.indexOf("2>&1 | tee");
 
 			expect(unsetIdx).toBeLessThan(envIdx);
 			expect(envIdx).toBeLessThan(claudeIdx);
-			expect(claudeIdx).toBeLessThan(continueIdx);
+			expect(claudeIdx).toBeLessThan(skipPermsIdx);
+			expect(skipPermsIdx).toBeLessThan(continueIdx);
 			expect(continueIdx).toBeLessThan(nameIdx);
 			expect(nameIdx).toBeLessThan(permIdx);
 			expect(permIdx).toBeLessThan(channelsIdx);
 			expect(channelsIdx).toBeLessThan(verboseIdx);
-			expect(verboseIdx).toBeLessThan(teeIdx);
 		});
 	});
 });
