@@ -78,7 +78,7 @@ export function generateHqClaudeMd(
 	const telegramWelcomeLine = (() => {
 		switch (telegramState) {
 			case "paired":
-				return `Telegram is paired and ready.`;
+				return "Telegram is paired and ready.";
 			case "configured-unpaired":
 				return `Telegram is set up but not paired yet. Run \`/hq:config telegram\` and I'll guide you.`;
 			default:
@@ -143,7 +143,7 @@ ${startupSection}
 
 ## Capabilities
 
-1. **Spawn new Claude sessions** for any project using the \`hyper hq\` CLI
+1. **Launch new Claude sessions** for any project using the \`hyper hq\` CLI
 2. **Receive and act on messages** via Telegram (if configured and paired)
 3. **Manage running sessions** — start, stop, check status
 4. **Coordinate work** across multiple projects
@@ -151,31 +151,30 @@ ${startupSection}
 ## Key Commands
 
 \`\`\`bash
-hyper hq spawn <project>                        # Spawn session for a project
-hyper hq spawn <project> --worktree <branch>    # Spawn on existing worktree
-hyper hq spawn <project> --new-worktree <branch> # Create worktree + spawn
-hyper hq status                                 # Check all running sessions
-hyper hq stop <project>                         # Stop a session
-hyper hq stop-all                               # Stop everything
-hyper hq list                                   # List all projects and worktrees
-hyper hq list --json                            # JSON output for parsing
-hyper hq config                                 # Show current configuration
+hyper hq launch <project>                        # Launch session for a project
+hyper hq launch <project> src/path               # Launch with subdirectory as cwd
+hyper hq relaunch <session-or-project>           # Relaunch with --continue
+hyper hq status                                  # Check all running sessions
+hyper hq stop <session>                          # Stop a session
+hyper hq stop-all                                # Stop everything
+hyper hq list                                    # List all projects
+hyper hq list --json                             # JSON output for parsing
+hyper hq config                                  # Show current configuration
 \`\`\`
 
 ## Handling Requests
 
-When a user asks to open/start/spawn a session:
+When a user asks to open/start/launch a session:
 
-1. Parse the request for: **project name** and optionally **worktree** (existing or new)
+1. Parse the request for: **project name** and optionally a **path** within the project
 2. Run \`hyper hq list --json\` to verify the project exists
-3. Run the appropriate spawn command
+3. Run the appropriate launch command
 4. Reply with confirmation, session name, and remind them to check **claude.ai/code**
 
 ## Important Notes
 
 - Projects root: ${opts.projectsRoot}
 - Logs: ~/.config/hyper/logs/
-- The \`wt\` (worktrunk) command manages worktrees
 - Config: ~/.config/hyper/hq.toml
 
 ## Package Management
