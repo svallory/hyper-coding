@@ -36,7 +36,7 @@
     },
     "packages/cli": {
       "name": "@hypercli/cli",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "bin": {
         "hyper": "./bin/run.js",
       },
@@ -71,7 +71,7 @@
     },
     "packages/core": {
       "name": "@hypercli/core",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "dependencies": {
         "@hypercli/ui": "workspace:*",
         "chalk": "^4.1.2",
@@ -89,7 +89,7 @@
     },
     "packages/create-hyper-hq": {
       "name": "create-hyper-hq",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "bin": {
         "create-hyper-hq": "./dist/index.js",
       },
@@ -105,7 +105,7 @@
     },
     "packages/gen": {
       "name": "@hypercli/gen",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "dependencies": {
         "@clack/prompts": "^0.11.0",
         "@hypercli/core": "workspace:*",
@@ -137,7 +137,7 @@
     },
     "packages/hq": {
       "name": "@hypercli/hq",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "dependencies": {
         "@clack/prompts": "^1.1.0",
         "@hypercli/ui": "workspace:*",
@@ -154,7 +154,7 @@
     },
     "packages/kit": {
       "name": "@hypercli/kit",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "dependencies": {
         "@hypercli/core": "workspace:*",
         "@hypercli/ui": "workspace:*",
@@ -173,7 +173,7 @@
     },
     "packages/ui": {
       "name": "@hypercli/ui",
-      "version": "0.2.0",
+      "version": "0.4.0",
       "dependencies": {
         "cli-html": "^5.3.0",
       },

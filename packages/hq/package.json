@@ -1,15 +1,9 @@
 {
 	"name": "@hypercli/hq",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"type": "module",
 	"description": "Claude Code session management for HyperDev — always-on control plane",
-	"keywords": [
-		"hyperdev",
-		"claude-code",
-		"remote-control",
-		"session-management",
-		"tmux"
-	],
+	"keywords": ["hyperdev", "claude-code", "remote-control", "session-management", "tmux"],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"repository": {
@@ -32,13 +26,7 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": [
-		"dist",
-		"help",
-		"oclif.manifest.json",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
 	"oclif": {
 		"commands": "./dist/commands",
 		"topics": {
@@ -74,9 +62,9 @@
 	},
 	"dependencies": {
 		"@clack/prompts": "^1.1.0",
-		"@hypercli/ui": "^0.3.0",
+		"@hypercli/ui": "workspace:*",
 		"@oclif/core": "^4",
-		"create-hyper-hq": "^0.3.0",
+		"create-hyper-hq": "workspace:*",
 		"smol-toml": "^1"
 	},
 	"devDependencies": {

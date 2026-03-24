@@ -1,13 +1,9 @@
 {
 	"name": "@hypercli/gen",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"type": "module",
 	"description": "Code generation engine for HyperDev",
-	"keywords": [
-		"hyperdev",
-		"hypergen",
-		"code-generator"
-	],
+	"keywords": ["hyperdev", "hypergen", "code-generator"],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"repository": {
@@ -30,13 +26,7 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": [
-		"dist",
-		"help",
-		"oclif.manifest.json",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
 	"oclif": {
 		"commands": "./dist/commands",
 		"hooks": {
@@ -87,9 +77,9 @@
 	},
 	"dependencies": {
 		"@clack/prompts": "^0.11.0",
-		"@hypercli/core": "^0.3.0",
-		"@hypercli/kit": "^0.3.0",
-		"@hypercli/ui": "^0.3.0",
+		"@hypercli/core": "workspace:*",
+		"@hypercli/kit": "workspace:*",
+		"@hypercli/ui": "workspace:*",
 		"@jig-lang/jig": "^1.0.1",
 		"@oclif/core": "^4",
 		"ai": "^4.0.0",

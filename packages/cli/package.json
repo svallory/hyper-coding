@@ -1,13 +1,9 @@
 {
 	"name": "@hypercli/cli",
-	"version": "0.3.0",
+	"version": "0.4.0",
 	"type": "module",
 	"description": "HyperDev CLI",
-	"keywords": [
-		"hyperdev",
-		"hypergen",
-		"cli"
-	],
+	"keywords": ["hyperdev", "hypergen", "cli"],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"repository": {
@@ -40,14 +36,7 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": [
-		"dist",
-		"bin/run.js",
-		"help",
-		"oclif.manifest.json",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "bin/run.js", "help", "oclif.manifest.json", "README.md", "LICENSE"],
 	"oclif": {
 		"bin": "hyper",
 		"dirname": "hyper",
@@ -92,11 +81,11 @@
 		"prepublishOnly": "bun run build"
 	},
 	"dependencies": {
-		"@hypercli/core": "^0.3.0",
-		"@hypercli/gen": "^0.3.0",
-		"@hypercli/hq": "^0.3.0",
-		"@hypercli/kit": "^0.3.0",
-		"@hypercli/ui": "^0.3.0",
+		"@hypercli/core": "workspace:*",
+		"@hypercli/gen": "workspace:*",
+		"@hypercli/hq": "workspace:*",
+		"@hypercli/kit": "workspace:*",
+		"@hypercli/ui": "workspace:*",
 		"@oclif/core": "^4.8.0",
 		"@oclif/plugin-commands": "^4.1.40",
 		"debug": "^4.4.1",
