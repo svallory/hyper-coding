@@ -29,7 +29,7 @@ export interface HqConfig {
 export const DEFAULT_CONFIG: HqConfig = {
 	projects_root: "~/work",
 	hq: {
-		name: "hyper-hq",
+		name: "Hyper HQ",
 		dir: "./hyper-hq",
 		spawn_mode: "same-dir",
 		capacity: 32,

@@ -1,17 +1,32 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
-const CLAUDE_PROJECTS_DIR = resolve(homedir(), ".claude", "projects");
+const CLAUDE_JSON_PATH = resolve(homedir(), ".claude.json");
 
-function encodePath(dir: string): string {
-	return dir.replace(/\//g, "-");
+interface ClaudeJson {
+	projects?: Record<string, { hasTrustDialogAccepted?: boolean; [key: string]: unknown }>;
+	[key: string]: unknown;
 }
 
-export function trustWorkspace(dir: string): void {
-	mkdirSync(resolve(CLAUDE_PROJECTS_DIR, encodePath(dir)), { recursive: true });
+function readClaudeJson(): ClaudeJson {
+	if (!existsSync(CLAUDE_JSON_PATH)) return {};
+	return JSON.parse(readFileSync(CLAUDE_JSON_PATH, "utf-8"));
+}
+
+function writeClaudeJson(data: ClaudeJson): void {
+	writeFileSync(CLAUDE_JSON_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
 export function isWorkspaceTrusted(dir: string): boolean {
-	return existsSync(resolve(CLAUDE_PROJECTS_DIR, encodePath(dir)));
+	const data = readClaudeJson();
+	return data.projects?.[dir]?.hasTrustDialogAccepted === true;
+}
+
+export function trustWorkspace(dir: string): void {
+	const data = readClaudeJson();
+	if (!data.projects) data.projects = {};
+	if (!data.projects[dir]) data.projects[dir] = {};
+	data.projects[dir].hasTrustDialogAccepted = true;
+	writeClaudeJson(data);
 }

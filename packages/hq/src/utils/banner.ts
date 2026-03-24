@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { keyValue, panel, styledText } from "@hypercli/ui";
 import { CONFIG_PATH } from "../config/index.js";
 import type { HqConfig } from "../config/schema.js";
 import { listProjects } from "../services/projects.js";
@@ -20,11 +21,6 @@ function extractBridgeUrl(logFile: string): string | null {
 	return null;
 }
 
-function pad(label: string, value: string, width: number): string {
-	const content = `	${label}${value}`;
-	return `║${content.padEnd(width)}║`;
-}
-
 export function renderBanner(opts: {
 	config: HqConfig;
 	sessionName: string;
@@ -39,54 +35,32 @@ export function renderBanner(opts: {
 		projectCount = 0;
 	}
 
-	const telegramStatus = config.telegram.hq_bot_token ? "enabled" : "disabled";
+	const telegramStatus = config.telegram.hq_bot_token ? "enabled (channel plugin)" : "disabled";
 	const bridgeUrl = extractBridgeUrl(logFile);
 	const connectValue = bridgeUrl ?? `claude.ai/code → ${sessionName}`;
 
-	// Build content rows to determine width
-	const rows: Array<[string, string] | null> = [
-		["Config:		", shorten(CONFIG_PATH)],
-		["Projects:	", `${shorten(config.projects_root)} (${projectCount} found)`],
-		["Telegram:	", telegramStatus],
-		null,
-		["Session:	 ", sessionName],
-		["Connect:	 ", connectValue],
-		null,
-		["Commands:", ""],
-		["	hyper hq list", "					List projects"],
-		["	hyper hq spawn <name>", "	Start project session"],
-		["	hyper hq status", "				Show running sessions"],
-		["	hyper hq attach", "				Attach to HQ terminal"],
-		["	hyper hq config", "				Show configuration"],
-		["	hyper hq stop-all", "			Stop everything"],
-	];
+	const info = keyValue([
+		{ key: "Config", value: shorten(CONFIG_PATH) },
+		{ key: "Projects", value: `${shorten(config.projects_root)} (${projectCount} found)` },
+		{ key: "Telegram", value: telegramStatus },
+		{ key: "", value: "" },
+		{ key: "Session", value: sessionName },
+		{ key: "Connect", value: connectValue },
+	]);
 
-	const title = "	Hyper HQ — Claude Code Command Center";
+	const commands = keyValue(
+		[
+			{ key: "hyper hq list", value: "List projects" },
+			{ key: "hyper hq spawn <name>", value: "Start project session" },
+			{ key: "hyper hq status", value: "Show running sessions" },
+			{ key: "hyper hq attach", value: "Attach to HQ terminal" },
+			{ key: "hyper hq config", value: "Show configuration" },
+			{ key: "hyper hq stop-all", value: "Stop everything" },
+		],
+		{ separator: "  ", keyStyle: { dim: true } },
+	);
 
-	// Calculate width: widest content + 2 for padding
-	let maxContent = title.length;
-	for (const row of rows) {
-		if (row) {
-			const len = `	${row[0]}${row[1]}`.length;
-			if (len > maxContent) maxContent = len;
-		}
-	}
+	const content = `${info}\n\n${styledText("Commands", { bold: true })}\n${commands}`;
 
-	const w = maxContent + 2; // inner width with padding
-	const bar = "═".repeat(w);
-	const empty = `║${" ".repeat(w)}║`;
-
-	const lines: string[] = ["", `╔${bar}╗`, `║${title.padEnd(w)}║`, `╠${bar}╣`, empty];
-
-	for (const row of rows) {
-		if (row === null) {
-			lines.push(empty);
-		} else {
-			lines.push(pad(row[0], row[1], w));
-		}
-	}
-
-	lines.push(empty, `╚${bar}╝`, "");
-
-	return lines.join("\n");
+	return `\n${panel(content, { title: "Hyper HQ — Claude Code Command Center", padding: 1 })}\n`;
 }

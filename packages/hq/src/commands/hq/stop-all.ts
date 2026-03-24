@@ -9,7 +9,7 @@ export default class StopAll extends BaseCommand<typeof StopAll> {
 
 	async run(): Promise<void> {
 		await this.parse(StopAll);
-		const sessions = tmux.listSessions("hq");
+		const sessions = tmux.listHqSessions();
 
 		if (sessions.length === 0) {
 			this.log("No HQ sessions running");

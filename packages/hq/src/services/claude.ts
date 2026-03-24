@@ -1,10 +1,12 @@
 export interface ClaudeCommandOpts {
 	name: string;
-	spawnMode?: string;
-	capacity?: number;
+	/** Resume the most recent session in the working directory */
+	resume?: boolean;
 	permissionMode?: string;
 	telegramBotToken?: string;
-	telegramStateDir?: string;
+	channels?: string[];
+	/** Extra args passed through to `claude` verbatim */
+	extraArgs?: string[];
 	logFile: string;
 }
 
@@ -14,6 +16,18 @@ function shellEscape(value: string): string {
 	return value.replace(/'/g, "'\\''");
 }
 
+/**
+ * Build the command to start an interactive Claude session.
+ *
+ * Uses `claude` (interactive mode) instead of `claude remote-control` so that:
+ * - Channels work (via --channels at launch)
+ * - Remote control works (via /remote-control after launch)
+ * - Session resume works (via --resume)
+ * - Both channels and remote control coexist in the same session
+ *
+ * The generated CLAUDE.md instructs the session to run `/remote-control <name>`
+ * on startup to enable remote access.
+ */
 export function buildClaudeCommand(opts: ClaudeCommandOpts): string {
 	const parts: string[] = [];
 
@@ -23,30 +37,31 @@ export function buildClaudeCommand(opts: ClaudeCommandOpts): string {
 	// Environment variables for Telegram
 	if (opts.telegramBotToken) {
 		parts.push(`TELEGRAM_BOT_TOKEN='${shellEscape(opts.telegramBotToken)}'`);
-		if (opts.telegramStateDir) {
-			parts.push(`TELEGRAM_STATE_DIR='${shellEscape(opts.telegramStateDir)}'`);
-		}
 	}
 
 	parts.push("claude");
-	parts.push("remote-control");
+
+	if (opts.resume) {
+		parts.push("--continue");
+	}
+
 	parts.push(`--name '${shellEscape(opts.name)}'`);
-
-	if (opts.spawnMode) {
-		parts.push(`--spawn ${shellEscape(opts.spawnMode)}`);
-	}
-
-	if (opts.capacity) {
-		parts.push(`--capacity ${opts.capacity}`);
-	}
 
 	if (opts.permissionMode) {
 		parts.push(`--permission-mode ${shellEscape(opts.permissionMode)}`);
 	}
 
-	// Add Telegram channel if bot token is configured
-	if (opts.telegramBotToken) {
-		parts.push("--channels plugin:telegram@claude-plugins-official");
+	// Channels (e.g. Telegram plugin)
+	if (opts.channels && opts.channels.length > 0) {
+		parts.push("--channels");
+		for (const channel of opts.channels) {
+			parts.push(`'${shellEscape(channel)}'`);
+		}
+	}
+
+	// Extra args passed through verbatim
+	if (opts.extraArgs && opts.extraArgs.length > 0) {
+		parts.push(...opts.extraArgs);
 	}
 
 	// Pipe to log file

@@ -36,7 +36,7 @@
     },
     "packages/cli": {
       "name": "@hypercli/cli",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "bin": {
         "hyper": "./bin/run.js",
       },
@@ -89,7 +89,7 @@
     },
     "packages/create-hyper-hq": {
       "name": "create-hyper-hq",
-      "version": "0.1.1",
+      "version": "0.1.7",
       "bin": {
         "create-hyper-hq": "./dist/index.js",
       },
@@ -100,6 +100,7 @@
       "devDependencies": {
         "@types/node": "^20.0.0",
         "typescript": "^5.4.0",
+        "vitest": "4.0.18",
       },
     },
     "packages/gen": {
@@ -136,9 +137,10 @@
     },
     "packages/hq": {
       "name": "@hypercli/hq",
-      "version": "0.1.1",
+      "version": "0.1.4",
       "dependencies": {
         "@clack/prompts": "^1.1.0",
+        "@hypercli/ui": "workspace:*",
         "@oclif/core": "^4",
         "smol-toml": "^1",
       },

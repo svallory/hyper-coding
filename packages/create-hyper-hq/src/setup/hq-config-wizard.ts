@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import * as p from "@clack/prompts";
+import { installPlugin, isPluginInstalled } from "../checks/check-claude-plugins.js";
 
 export interface HqConfigResult {
 	projectsRoot: string;
@@ -9,19 +10,60 @@ export interface HqConfigResult {
 	telegramToken?: string;
 }
 
-const CONFIG_PATH = resolve(homedir(), ".config", "hyper", "hq.toml");
+const HOME = homedir();
+const CONFIG_PATH = resolve(HOME, ".config", "hyper", "hq.toml");
+const TELEGRAM_CHANNEL_DIR = resolve(HOME, ".claude", "channels", "telegram");
 
-function expandHome(path: string): string {
-	if (path.startsWith("~/")) return resolve(homedir(), path.slice(2));
-	return path;
+/**
+ * If the user typed a path starting with `~/`, expand it to their home
+ * directory — unless a literal `~` folder exists in cwd, in which case
+ * ask them to disambiguate.
+ */
+async function resolveTilde(raw: string): Promise<string> {
+	if (!raw.startsWith("~/") && raw !== "~") return raw;
+
+	const expanded = resolve(HOME, raw.slice(2) || "");
+
+	// Only disambiguate if a literal `~` folder exists in cwd
+	if (!existsSync(resolve("~"))) return expanded;
+
+	const literal = resolve(raw);
+
+	const choice = await p.select({
+		message: `There's a folder named "~" in the current directory. Which path did you mean?`,
+		options: [
+			{ label: expanded, value: "expand" as const, hint: "home directory" },
+			{ label: literal, value: "literal" as const, hint: "literal ~ folder" },
+		],
+	});
+
+	if (p.isCancel(choice)) {
+		p.cancel("Setup cancelled.");
+		process.exit(0);
+	}
+
+	return choice === "expand" ? expanded : literal;
+}
+
+/**
+ * Write the Telegram bot token to ~/.claude/channels/telegram/.env
+ * This is what `/telegram:configure <token>` does internally.
+ */
+function writeTelegramPluginConfig(token: string): void {
+	mkdirSync(TELEGRAM_CHANNEL_DIR, { recursive: true });
+	const envPath = resolve(TELEGRAM_CHANNEL_DIR, ".env");
+	writeFileSync(envPath, `TELEGRAM_BOT_TOKEN=${token}\n`, { encoding: "utf-8", mode: 0o600 });
+	chmodSync(envPath, 0o600);
 }
 
 export async function runConfigWizard(): Promise<HqConfigResult> {
+	const defaultProjectsRoot = resolve(HOME, "projects");
+
 	// Step 1: Projects root
 	const projectsRootRaw = await p.text({
 		message: "Where are your projects?",
-		placeholder: "~/projects",
-		defaultValue: "~/projects",
+		placeholder: defaultProjectsRoot,
+		defaultValue: defaultProjectsRoot,
 	});
 
 	if (p.isCancel(projectsRootRaw)) {
@@ -29,7 +71,7 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 		process.exit(0);
 	}
 
-	const projectsRoot = expandHome(projectsRootRaw as string);
+	const projectsRoot = await resolveTilde(projectsRootRaw as string);
 
 	// Ensure directory exists
 	if (!existsSync(projectsRoot)) {
@@ -57,7 +99,7 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 		process.exit(0);
 	}
 
-	const hqDirInput = hqDirRaw as string;
+	const hqDirInput = await resolveTilde(hqDirRaw as string);
 	const hqDir = hqDirInput.startsWith("/") ? hqDirInput : resolve(projectsRoot, hqDirInput);
 
 	if (!existsSync(hqDir)) {
@@ -79,6 +121,45 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 	let telegramToken: string | undefined;
 
 	if (useTelegram) {
+		const TELEGRAM_PLUGIN = "telegram@claude-plugins-official";
+
+		// Check if the Telegram channel plugin is installed
+		const pluginInstalled = isPluginInstalled(TELEGRAM_PLUGIN);
+
+		if (!pluginInstalled) {
+			p.log.warn("The Telegram channel plugin is not installed in Claude Code.");
+
+			const doInstall = await p.confirm({
+				message: "Install the Telegram plugin now?",
+				initialValue: true,
+			});
+
+			if (p.isCancel(doInstall)) {
+				p.cancel("Setup cancelled.");
+				process.exit(0);
+			}
+
+			if (doInstall) {
+				p.log.step("Installing Telegram plugin...");
+				const success = installPlugin(TELEGRAM_PLUGIN);
+				if (success) {
+					p.log.success("Telegram plugin installed");
+				} else {
+					p.log.warn(
+						"Plugin installation failed. You can install it later with:\n" +
+							"  claude plugin install telegram@claude-plugins-official",
+					);
+				}
+			} else {
+				p.log.info(
+					"You'll need to install the plugin before using Telegram:\n" +
+						"  claude plugin install telegram@claude-plugins-official",
+				);
+			}
+		} else {
+			p.log.success("Telegram channel plugin is installed");
+		}
+
 		p.note(
 			"1. Open Telegram and message @BotFather\n" +
 				"2. Send /newbot and follow the prompts\n" +
@@ -103,6 +184,10 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 		}
 
 		telegramToken = token as string;
+
+		// Write token to the plugin's config location
+		writeTelegramPluginConfig(telegramToken);
+		p.log.success("Bot token saved to Claude Code plugin config");
 	}
 
 	// Build TOML config (using expanded absolute paths)
@@ -112,7 +197,7 @@ export async function runConfigWizard(): Promise<HqConfigResult> {
 		`projects_root = "${projectsRoot}"`,
 		"",
 		"[hq]",
-		'name = "hyper-hq"',
+		'name = "Hyper HQ"',
 		`dir = "${hqDir}"`,
 		'spawn_mode = "same-dir"',
 		"capacity = 32",
