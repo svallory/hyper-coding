@@ -98,6 +98,29 @@ Key features:
 - `onSuccess`/`onError` message templates
 - `install` tool auto-detects package manager
 
+## Releasing
+
+All packages share a single version (linked-versions via release-please).
+
+```bash
+# 1. Bump versions + regenerate oclif manifests
+node scripts/bump-versions.mjs <version>
+
+# 2. Update .release-please-manifest.json to match the new version
+
+# 3. Commit version bump
+git commit -m "chore: bump all packages to <version>"
+
+# 4. Tag and push
+git tag v<version> && git push && git push origin v<version>
+
+# 5. Publish to npm (dry-run first!)
+bash scripts/release.sh --dry-run
+bash scripts/release.sh
+```
+
+The `release.sh` script publishes packages in dependency order and skips already-published versions. Release-please also runs via CI on push to main, but manual releases follow the steps above.
+
 ## Git Conventions
 
 Commits follow conventional commit format:
