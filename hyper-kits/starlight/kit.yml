@@ -5,7 +5,7 @@ description: |
   Create beautiful documentation sites with optional OpenAPI, keyboard shortcuts,
   auto-sidebar, scroll-to-top, changelogs, and Obsidian vault support.
 
-version: "3.0.0"
+version: "4.0.0"
 author: "SubtleTools"
 license: "MIT"
 

@@ -12,47 +12,51 @@ to: "{{ kebabCase :: name }}/package.json"
     "preview": "astro preview",
     "astro": "astro"
   },
+  "packageManager": "bun",
   "dependencies": {
-    "astro-d2": "^0.8.0",
-    "starlight-image-zoom": "^0.13.0",
-    "starlight-links-validator": "^0.17.1",
-    "starlight-llms-txt": "^0.6.0"
+    "astro-d2": "^0.10.0",
+    "starlight-image-zoom": "^0.14.1",
+    "starlight-links-validator": "^0.21.0",
+    "starlight-llms-txt": "^0.8.0"
 @if(!autoSidebar)
-    ,"starlight-sidebar-topics": "^0.6.0"
+    ,"starlight-sidebar-topics": "^0.7.1"
 @endif
 @if(typedoc)
-    ,"starlight-typedoc": "^0.21.3"
+    ,"starlight-typedoc": "^0.21.5"
 @endif
 @if(openapi)
-    ,"starlight-openapi": "^0.12.0"
+    ,"starlight-openapi": "^0.24.0"
 @endif
 @if(keyboard)
-    ,"starlight-kbd": "^0.2.0"
+    ,"starlight-kbd": "^0.4.0"
 @endif
 @if(autoSidebar)
-    ,"starlight-auto-sidebar": "^0.3.0"
+    ,"starlight-auto-sidebar": "^0.2.0"
 @endif
 @if(scrollToTop)
-    ,"starlight-scroll-to-top": "^0.2.0"
+    ,"starlight-scroll-to-top": "^1.0.1"
 @endif
 @if(changelogs)
-    ,"starlight-changelogs": "^0.2.0"
+    ,"starlight-changelogs": "^0.5.0"
 @endif
 @if(obsidian)
-    ,"starlight-obsidian": "^0.5.0"
+    ,"starlight-obsidian": "^0.12.1"
 @endif
 @if(pageActions)
-    ,"starlight-page-actions": "^0.3.0"
+    ,"starlight-page-actions": "^0.5.0"
 @endif
   },
   "devDependencies": {
-    "@astrojs/starlight": "^0.35.2",
+    "@astrojs/starlight": "^0.38.2",
     "@astrojs/tailwind": "^6.0.2",
-    "astro": "^5.13.3",
-    "tailwindcss": "^4.1.12"
+    "astro": "^6.1.3",
+    "tailwindcss": "^4.2.2"
 @if(typedoc)
-    ,"typedoc": "^0.28.11",
-    "typedoc-plugin-markdown": "^4.8.1"
+    ,"typedoc": "^0.28.18",
+    "typedoc-plugin-markdown": "^4.11.0"
 @endif
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
