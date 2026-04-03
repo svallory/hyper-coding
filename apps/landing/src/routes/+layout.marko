@@ -1,0 +1,66 @@
+import ogImage from './img/og-image.png';
+import ogImageSquare from './img/og-image-square.png';
+
+static function fullUrl(path: string = "") {
+  return `https://hyper-coding.saulo.engineer/${path.replace(/^[\/]+/, '')}`;
+}
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Learn about Hyper Coding methodology and the HyperDev toolkit for AI-assisted development.">
+    <title>Hyper Coding & HyperDev Toolkit</title>
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="./img/favicon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="./img/favicon.png">
+
+    <!-- Open Graph / Facebook / LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content=fullUrl()>
+    <meta property="og:title" content="Hyper Coding & HyperDev Toolkit">
+    <meta property="og:description" content="Learn about Hyper Coding methodology and the HyperDev toolkit for AI-assisted development. Build faster, smarter, and more efficiently with AI-powered development tools.">
+    <meta property="og:image" content=fullUrl(ogImage)>
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Hyper Coding - A Methodology for reliable AI Driven Development">
+    <meta property="og:site_name" content="Hyper Coding">
+
+    <!-- Open Graph - Square image for mobile/messaging apps -->
+    <meta property="og:image" content=fullUrl(ogImageSquare)>
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="1200">
+    <meta property="og:image:alt" content="Hyper Coding - A Methodology for reliable AI Driven Development">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content=fullUrl()>
+    <meta name="twitter:title" content="Hyper Coding & HyperDev Toolkit">
+    <meta name="twitter:description" content="Learn about Hyper Coding methodology and the HyperDev toolkit for AI-assisted development. Build faster, smarter, and more efficiently with AI-powered development tools.">
+    <meta name="twitter:image" content=fullUrl(ogImage)>
+    <meta name="twitter:image:alt" content="Hyper Coding - A Methodology for reliable AI Driven Development">
+
+    <!-- Additional SEO -->
+    <meta name="keywords" content="hyper coding, hyperdev, AI development, AI-assisted development, code generation, developer tools, productivity">
+    <meta name="author" content="HyperDev Team">
+    <link rel="canonical" href=fullUrl()>
+
+    <style>
+      @import "../styles/index.scss";
+    </style>
+  </head>
+  <body>
+    <${input.content}/>
+
+    <html-script src="https://unpkg.com/lucide@latest"></html-script>
+    <html-script>
+      lucide.createIcons();
+
+      if (window.matchMedia("(max-width: 768px)").matches) {
+        document.body.classList.add("mobile");
+      }
+    </html-script>
+  </body>
+</html>

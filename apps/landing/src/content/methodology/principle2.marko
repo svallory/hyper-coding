@@ -1,0 +1,19 @@
+import Principle from "./principle.marko";
+import pathR1lL2Svg from "../../assets/paths/path-r1l-l2.svg";
+import pathL2bR2Svg from "../../assets/paths/path-l2b-r2.svg";
+
+<decorate id="principle2">
+    <@decoration class="path-in" side="top" src=pathR1lL2Svg />
+    <@decoration class="path-out" side="bottom" src=pathL2bR2Svg />
+    <Principle
+    number="02"
+    title="Tools Integration"
+    >
+    <@description>
+        Just as a human developer relies on an IDE, linters, and scanners, a core tenet of Hyper Coding is to give the AI Agent the same external advantages. The external tooling layer of Hyper Coding includes: <ul><li><strong>Integrated Linting and Formatting:</strong> Every generated code snippet is immediately validated against project-specific linting rules.</li><li><strong>Security Scanning Integration:</strong> Real-time security analysis runs on each generated piece of code.</li><li><strong>API Validation:</strong> Automatic verification that all referenced APIs and packages exist and are compatible.</li><li><strong>Architecture Compliance Checks:</strong> Generated code is validated against the project's established design patterns.</li></ul>
+    </@description>
+    <@statement>
+        Give your AI Agent the same external advantages you have.
+    </@statement>
+    </Principle>
+</decorate>

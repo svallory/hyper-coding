@@ -1,0 +1,114 @@
+import CommandSection from "./command.marko";
+import FeatureCard from "./feature-card.marko";
+
+<define/Cards>
+  <FeatureCard title="Define" icon="text-select">
+    <p class="workflow-description">
+      Translates high-level business goals into an executable product
+      definition, clearly outlining the what, the why (user journey), and
+      success metrics for the feature.
+    </p>
+  </FeatureCard>
+
+  <FeatureCard title="Design" icon="square-dot">
+    <p class="workflow-description">
+      Creates a detailed technical plan and architectural blueprint. This sets
+      the rules for the agents by specifying the stack, outlining architectural
+      constraints, and ensuring compliance with existing system standards before
+      any code is written.
+    </p>
+  </FeatureCard>
+
+  <FeatureCard title="Decompose" icon="layout-template">
+    <p class="workflow-description">
+      Break down the technical design into a list of small,
+      actionable work units (user stories or tasks), with dependencies
+      and acceptance criteria. This granular breakdown is crucial for
+      orchestrating multiple, parallel agents and enabling reliable, incremental
+      development.
+    </p>
+  </FeatureCard>
+
+  <FeatureCard title="Develop" icon="square-chevron-right">
+    <p class="workflow-description">
+      Orchestrates AI agents to execute the decomposed task list, generating
+      code, tests, and documentation task-by-task. It shifts review from large,
+      ambiguous code dumps to focused, targeted changes that are easily
+      validated against the initial definition.
+    </p>
+  </FeatureCard>
+</define>
+
+<decorate id="command3">
+  <CommandSection command="hyper plan" iconName="map">
+    <@description>
+      Every journey starts with${" "}
+      <br>
+      ${" "}deciding where to go.
+    </@description>
+
+    <div class="command-content">
+      <div class="command-intro">
+        <p class="command-intro">
+          Seeing Claude Code coordinate 12 parallel agents is marvelous! But to
+          actually achieve good results, you need a good plan. Also, how could
+          we "keep the agents on track", without defining where the track is.
+        </p>
+        <p class="command-intro">
+          There are several proposed ways for doing this. There's the
+          taskmaster.ai, Kiro, and Github's Spec-ify. But we are not about to
+          tell you that ours is better. Planning is hard and you'll probably be
+          more efficient using the structure that helps you create a mental
+          model of the problem you are trying to solve. The AI can adapt to it.
+        </p>
+        <p class="command-intro">
+          So instead the <code>hyper</code> tool lets you to pick any standard you want
+          and configure it, mapping your planning format to each of the 4 basic concepts below.
+          You can even use Github's Spec-ify, the TaskMaster's PRD, or Kiro's, and the commands
+          will follow the chosen format.
+
+          No matter your choice, we'll help you manage all the plans you make and keep up with their progress.
+        </p>
+      </div>
+
+      <grid cols=1 content=Cards.content class="desktop"/>
+      <div content=Cards.content class="mobile card-slider"/>
+    </div>
+  </CommandSection>
+</decorate>
+
+<style.scss>
+  .mobile #command3 {
+    .command-article {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .command-content {
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 1;
+      overflow-y: hidden;
+    }
+
+    div.command-intro {
+      display: flex;
+      flex-direction: column;
+      flex-basis: 50%;
+      flex-grow: 1;
+      flex-shrink: 1;
+      overflow-y: scroll;
+    }
+
+    div.card-slider {
+      display: flex;
+      flex-direction: row;
+      flex-basis: 50%;
+      flex-grow: 1;
+      flex-shrink: 1;
+      overflow-x: scroll;
+      overflow-y: none;
+    }
+  }
+</style>

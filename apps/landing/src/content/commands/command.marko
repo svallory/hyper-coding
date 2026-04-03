@@ -1,0 +1,139 @@
+static type DescriptionAttrTag = Marko.AttrTag<{
+    content: Marko.Body;
+}>;
+
+export type Input = {
+  iconName: string;
+  command: string;
+  content: Marko.Body;
+  style?: Marko.CSS.Properties;
+  description: string | DescriptionAttrTag;
+}
+
+<let/sectionStyle={
+  "background-color": "var(--color-background)",
+  ...(input.style ?? {})
+} as Marko.CSS.Properties />
+
+<article class="command-article dark tech" style=sectionStyle>
+  <div class="command-header">
+    <h2 class="command-title">
+      <icon class="command-icon" name=input.iconName/>
+      <code>${input.command}</code>
+    </h2>
+    <div class="command-description">
+      <p>
+        <if=typeof input.description === "string">
+          ${input.description}
+        </if>
+        <else>
+          <${input.description}/>
+        </else>
+      </p>
+    </div>
+  </div>
+  <${input.content}/>
+</article>
+
+<style>
+  .command-article {
+    overflow: hidden;
+    padding: 2rem;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    position: relative;
+    z-index: 2000;
+
+    .mobile & {
+      border-radius: 0;
+      padding: 0 1.5rem;
+    }
+  }
+
+  .command-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+
+    & * {
+      margin: 0;
+    }
+
+    .mobile & {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+      min-height: 136px;
+
+      h2 {
+        height: 85px;
+      }
+    }
+  }
+
+  .command-icon {
+    line-height: 100%;
+    flex-shrink: 0;
+    color: var(--color-primary);
+  }
+
+  .command-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem; /* Add some gap between icon and text */
+    font-size: 1.4em;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .command-description {
+    font-size: 1.125rem;
+    color: var(--color-text-secondary);
+
+    .mobile & {
+      margin-left: 56px;
+    }
+  }
+
+  /* Mobile */
+  @media (max-width: 1024px) {    
+    .command-article {
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100%;
+      padding: 2rem;
+      border-width: 0;
+    }
+
+    .command-description {
+      font-size: 1rem;
+      display: flex;
+      flex-basis: 50%;
+      flex-direction: column;
+      flex-grow: 1;
+      flex-shrink: 1;
+      overflow: scroll;
+    }
+
+    .principle-card {
+      padding: 1rem;
+      margin: 0;
+    }
+
+    .card-slider {
+      display: flex;
+      flex-direction: row;
+      overflow: scroll;
+      gap: 1rem;
+
+      > * {
+        flex-shrink: 0;
+        width: 70vw;
+      }
+    }
+  }
+</style>

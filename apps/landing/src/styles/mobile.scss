@@ -1,0 +1,71 @@
+@media (max-width: 768px) {
+  /* Hide decorative paths used for desktop layout */
+  .path-in, .path-out, .path-self {
+    display: none !important;
+  }
+
+  /* Main content container on mobile */
+  .content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  /* Reset original styles of the principle/command components */
+  decorate[id^="principle"],
+  decorate[id^="command"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    position: static !important;
+    width: 100% !important;
+    height: 100% !important;
+    border: none !important;
+    background-color: transparent !important;
+    display: block !important; /* Ensure it fills the card */
+  }
+
+  /* Flip Card styles */
+  .flip-card {
+    perspective: 1200px;
+    width: 100%;
+    min-height: 420px; /* Set a min-height for consistent card size */
+    position: relative;
+  }
+
+  .flip-card-inner {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    transition: transform 0.8s;
+    transform-style: preserve-3d;
+  }
+
+  /* A tap on mobile triggers the :hover state */
+  .flip-card:hover .flip-card-inner {
+    transform: rotateY(180deg);
+  }
+
+  .flip-card-front,
+  .flip-card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden; /* Safari */
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    overflow-y: auto; /* Add scroll for content that overflows */
+  }
+
+  .flip-card-front {
+    background-color: var(--color-light-bg);
+    z-index: 2;
+  }
+
+  .flip-card-back {
+    background-color: var(--color-card-background);
+    transform: rotateY(180deg);
+    z-index: 1;
+  }
+}

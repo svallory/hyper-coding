@@ -1,0 +1,265 @@
+import Problem from "../content/the-problem.marko";
+import Solution from "../content/the-solution.marko";
+import WaitlistForm from "../content/waitlist.marko";
+
+import AngleSvg from "../assets/paths/angle.marko";
+import pathR5bSvg from "../assets/paths/path-r5b.svg";
+import MethodAndCommands from "../content/method-and-commands.marko";
+
+<div#landing-intro.paper.light.prose>
+  <header#site-header>
+    <h2 class="title">What is <br.mobile> Hyper Coding?</h2>
+    <p class="subtitle">
+      Learn how Hyper Coding can improve your AI-assisted development, <br class="desktop" />
+      <strong>reduce tokens</strong> and <strong>ensure output quality</strong>.
+    </p>
+  </header>
+
+  <div#cool-explanation.tech.light.prose>
+    <h2>
+      <icon name="hand-metal"/> The Cool Explanation
+    </h2>
+    <p>
+      Hyper Coding is the evolution of Vibe Coding.
+      You'll still vibe it, but with a whole ecosystem ensuring your assistant stays on track.
+    </p>
+    <p>
+      In essence, <strong>Hyper Coding is</strong> the practice of <strong>Context Engineering automation</strong> to steer the AI Agent in the right direction, even when you are not looking.
+    </p>
+  </div>
+</div>
+
+<div id="header-ending" style="display: flex; position: relative; height: 50px; overflow: visible;">
+  <AngleSvg
+    style="position: absolute; bottom: -1px; left: -50px; transform: scaleX(-1); rotate: 180deg; z-index: 100"
+    width='50%'
+    height="140px"
+    corner="var(--color-dark-bg)" 
+    quarter="transparent" />
+  <AngleSvg
+    style="position: absolute; bottom: -1px; right: 0; rotate: 180deg; z-index: 1"
+    width='40%'
+    height="160px"
+    corner="var(--color-dark-bg)" 
+    quarter="transparent" />
+</div>
+
+<div id="the-problem" class="dark paper full-width-section">
+  <div class="prose">
+    <Problem />
+  </div>
+</div>
+
+<div id="solution-start" style="display: flex; position: relative; height: 0px; overflow: visible;">
+  <AngleSvg
+    style="position: absolute; top: -1px; left: 0px; scale: -1 -1; rotate: 180deg; z-index: 100"
+    width='160px'
+    height="140px"
+    corner="var(--color-dark-bg)" 
+    quarter="transparent" />
+</div>
+
+
+<Solution />
+
+<MethodAndCommands />
+
+<div id="page-footer">
+  <div id="footer-connector" style="position: relative; width: 100%; height: 270px; margin-bottom: -50px;">
+    // middle to left, bottom ./
+    <div style="height: 100%; width: 120px; position: absolute; top: 0; right: 50%; overflow: hidden">
+      <AngleSvg.left.bottom
+        style="scale: -1 -1; position: absolute; right: 0px; top: 0; "
+        width='250px'
+        height="285px"
+        corner="var(--color-dark-bg)" 
+        quarter="transparent" />
+    </div>
+    <div style="height: 100%; width: 50%; position: absolute; bottom: 0; left: 50%;">
+      <div.dark style="height: 90px; width: 100%; position: absolute;">
+        // top left ( 
+        <AngleSvg
+          style="position:absolute; top: 90px; left: -1px;"
+          width='120px'
+          height="90px"
+          corner="var(--color-dark-bg)" 
+          quarter="" />
+
+        // top right ./
+        <AngleSvg.yellow
+          style="scale: -1 -1; position: absolute; right: -2px; top: 0;"
+          width='90px'
+          height="90px"
+          corner="var(--color-light-bg)" 
+          quarter="" />
+      </div>
+
+      <AngleSvg
+        style="scale: 1 -1; position: absolute; bottom: 49px; left: -1px;"
+        width='42px'
+        height="42px"
+        corner="var(--color-dark-bg)" 
+        quarter="" />
+    </div>
+  </div>
+  <div#waitlistWrapper>
+    <decorate class="paper circle dark" style={display: "flex", "margin-top": "-1px" }>
+      <@decoration class="path-in" side="top" src=pathR5bSvg />
+      <WaitlistForm />
+    </decorate>
+  </div>
+</div>
+
+<style.scss>
+
+  .red { background-color: red; }
+  .green { background-color: green; }
+  .blue { background-color: blue; }
+  .violet { background-color: blueviolet; }
+
+  #landing-intro {
+    margin: 0px auto
+  }
+
+  #site-header {
+    margin: 1rem auto 2.5rem;
+    text-align: center;
+
+    /* Default/Paper Light Theme */
+    .title {
+      font-size: 2.5rem;
+      line-height: 120%;
+      font-weight: 900;
+      color: var(--color-text);
+      margin: 0 0 1rem;
+    }
+
+    .subtitle {
+      font-size: 1.4rem;
+      margin: 0 1.5rem;
+      color: var(--color-text-secondary);
+      line-height: 140%;
+    }
+  }
+
+  #cool-explanation {
+    position: relative;
+    z-index: 10000;
+    border-radius: 8px;
+    padding: 2rem 1.5rem;
+    margin: 0 2rem 0;
+    background-color: #f9f9f9;
+    border: 1px solid #fff;
+    box-shadow: rgba(14, 30, 37, 0.12) 0px 2px 4px 0px, rgba(14, 30, 37, 0.32) 0px 2px 16px 0px;
+
+    h2 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0;
+      margin-bottom: 1.5rem;
+      font-size: 1.2rem;
+      line-height: 125%;
+      color: var(--color-text);
+
+      .icon {
+        width: 24px;
+        height: auto;
+        stroke-width: 2px;
+      }
+    }
+
+    p {
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  @media(max-width: 1024px) {
+    #waitlistWrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      overflow: hidden;
+    }
+  }
+
+  #page-footer {
+    display: flex;
+    flex-direction: column;
+    align-content: center;
+    align-items: center;
+    justify-content: center;
+    margin: -20px auto 0;
+    width: 100%;
+    overflow: hidden;
+    
+    & .waitlist-section {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    & .path-in {
+      left: 50%;
+      top: 120px;
+      z-index: 1000;
+      /* debug */
+      // z-index: 2000;
+      // width: 8px;
+      // height: 8px;
+      // background-color: red;
+      
+      & > img {
+        left: -85px;
+      }
+    }
+  }
+
+  #hyper-coding-heading {
+    margin: 8rem 0 0 8rem;
+    text-align: left;
+  }
+
+
+  .split-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: 100vh;
+    position: relative;
+  }
+
+  @media (max-width: 1024px) {
+    .split-container {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (min-width: 1280px) {
+    .split-container > .side {
+      display: flex;
+    }
+    .split-container > .left.side {
+      justify-content: flex-end;
+    }
+    .split-container > .right.side {
+      justify-content: flex-start;
+    }
+    .split-container > .side > div {
+      max-width: 640px;
+      width: 100%;
+    }
+  }
+
+  .mobile-cards-container {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2rem;
+    padding: 2rem;
+  }
+</style>

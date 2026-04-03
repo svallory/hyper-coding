@@ -1,0 +1,57 @@
+/* Light Theme Variables */
+:root {
+  --page-width: 1280px;
+  --color-light-bg: #fdfdf7;
+  --color-dark-bg: rgb(11, 10, 11);
+}
+
+:root, .light {
+  --color-primary: #D0711F;
+  --color-background: var(--color-light-bg);
+  --color-border: #aaa;
+  --color-border-subtle: #ccc;
+
+  --color-text: #252525;
+  --color-text-secondary: #333;
+  --color-text-subtle: #ccc;
+  
+  --color-card-background: #rgba(f0 f8 ff/.5);
+  --color-card-primary-border: #d4a280;
+  
+  --color-code-background: rgb(0 0 0/.05);
+  
+  --color-quote-border: #ccc;
+  --color-quote-text: #333;
+
+  --color-note-background: #f0f8ff;
+  --color-note-border: #d4a280;
+
+  --border-radius: 8px;
+  --border-radius-sm: 0.5rem;
+}
+
+/* Dark Theme Variables */
+.dark {
+  --color-primary: #D0711F;
+  --color-background: var(--color-dark-bg);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-subtle: #ccc;
+
+  --color-text: #CFCFCF;
+  --color-text-secondary: #555;
+  --color-text-subtle: #ccc;
+
+  --color-card-background: rgb(11, 10, 11);
+  --color-card-border: hsla(34, 56%, 66%, 0.3);
+  
+  --color-code-background: rgb(255 255 255/.07);
+
+  --color-quote-border: hsla(34, 56%, 66%, 0.3);
+  --color-quote-text: #777;
+
+  --color-note-background: hsla(34, 56%, 66%, 0.1);
+  --color-note-border: #d4a280;
+
+  --border-radius: 8px;
+  --border-radius-sm: 0.5rem;
+}
