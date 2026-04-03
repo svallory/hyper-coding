@@ -64,6 +64,27 @@ variables:
     description: Enable Obsidian vault integration
     default: false
 
+  netlify:
+    type: boolean
+    description: Generate Netlify deployment config
+    default: true
+
+  accentColor:
+    type: string
+    description: "Primary accent color (CSS hex, e.g. #4EC9B0)"
+    default: "#4f46e5"
+
+  grayScale:
+    type: enum
+    description: "Gray color scale preset"
+    default: "slate"
+    values: ["slate", "gray", "zinc", "neutral", "stone"]
+
+  pageActions:
+    type: boolean
+    description: "Enable page actions (copy as markdown, open in AI, etc.)"
+    default: true
+
 steps:
   - name: Generate project README
     tool: template
@@ -84,6 +105,15 @@ steps:
   - name: Generate Tailwind config
     tool: template
     template: templates/tailwind.config.mjs.jig
+
+  - name: Generate TypeScript config
+    tool: template
+    template: templates/tsconfig.json.jig
+
+  - name: Generate Netlify config
+    tool: template
+    template: templates/netlify.toml.jig
+    when: "{{ netlify }}"
 
   - name: Generate main documentation index
     tool: template
@@ -110,13 +140,20 @@ steps:
     template: templates/openapi.yaml.jig
     when: "{{ openapi }}"
 
+  - name: Generate custom CSS
+    tool: template
+    template: templates/custom-css.jig
+
+  - name: Generate favicon
+    tool: template
+    template: templates/favicon.svg.jig
+
   - name: Setup project structure
     tool: shell
     command: |
-      mkdir -p "{{ kebabCase :: name }}/src/content/docs"
-      mkdir -p "{{ kebabCase :: name }}/src/content/config.ts"
+      mkdir -p "{{ kebabCase :: name }}/src/content/docs/features"
+      mkdir -p "{{ kebabCase :: name }}/src/styles"
       mkdir -p "{{ kebabCase :: name }}/public"
-      mkdir -p "{{ kebabCase :: name }}/astro"
 
   - name: Create src/env.d.ts
     tool: template

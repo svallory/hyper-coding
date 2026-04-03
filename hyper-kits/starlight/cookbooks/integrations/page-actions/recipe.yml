@@ -1,0 +1,22 @@
+name: page-actions
+description: |
+  Add page actions to Starlight (copy as markdown, open in Claude/ChatGPT).
+version: "1.0.0"
+
+variables:
+  projectFolder:
+    type: string
+    description: Path to the Starlight project
+    default: "."
+
+steps:
+  - name: Install starlight-page-actions
+    tool: shell
+    command: cd "{{ projectFolder }}" && bun add starlight-page-actions
+
+onSuccess: |
+  starlight-page-actions installed.
+  Add to your astro.config.mjs plugins array:
+    import starlightPageActions from 'starlight-page-actions';
+    // in plugins:
+    starlightPageActions(),

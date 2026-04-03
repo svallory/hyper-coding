@@ -28,6 +28,9 @@ import starlightChangelogs from 'starlight-changelogs';
 @if(obsidian)
 import starlightObsidian from 'starlight-obsidian';
 @endif
+@if(pageActions)
+import starlightPageActions from 'starlight-page-actions';
+@endif
 import d2 from 'astro-d2';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
@@ -52,6 +55,10 @@ export default defineConfig({
         starlightLinksValidator(),
         // Generate LLMs.txt for AI consumption
         starlightLLMsTxt(),
+@if(pageActions)
+        // Copy page as markdown, open in Claude/ChatGPT
+        starlightPageActions(),
+@endif
 @if(scrollToTop)
         // Add scroll-to-top button
         starlightScrollToTop(),
@@ -136,6 +143,9 @@ export default defineConfig({
       expressiveCode: {
         themes: ['tokyo-night'],
       },
+      customCss: [
+        './src/styles/custom.css',
+      ],
 @if(githubRepo)
       social: [
         {
@@ -149,7 +159,7 @@ export default defineConfig({
       },
 @endif
       lastUpdated: true,
-      favicon: '/favicon.ico',
+      favicon: '/favicon.svg',
     }),
   ],
 });

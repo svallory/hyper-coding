@@ -1,0 +1,16 @@
+---
+to: "{{ kebabCase :: name }}/src/styles/custom.css"
+---
+/* Custom theme overrides for {{ name }} */
+
+:root {
+  --sl-color-accent-low: color-mix(in srgb, {{ accentColor }} 15%, transparent);
+  --sl-color-accent: {{ accentColor }};
+  --sl-color-accent-high: color-mix(in srgb, {{ accentColor }}, white 25%);
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: color-mix(in srgb, {{ accentColor }} 20%, transparent);
+  --sl-color-accent: {{ accentColor }};
+  --sl-color-accent-high: color-mix(in srgb, {{ accentColor }}, white 30%);
+}

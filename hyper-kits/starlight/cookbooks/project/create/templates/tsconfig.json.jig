@@ -1,0 +1,12 @@
+---
+to: "{{ kebabCase :: name }}/tsconfig.json"
+---
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
+}
