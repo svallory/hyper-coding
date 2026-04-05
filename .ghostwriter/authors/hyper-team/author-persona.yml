@@ -1,0 +1,17 @@
+# Author Persona: Hyper Team
+# Referenced by publication configs via presets.
+
+author:
+  name: "Hyper Team"
+  personality:
+    - casual
+    - direct
+    - pragmatic
+
+  background:
+    profession: "Software engineering team"
+    industry: "Developer tools"
+    years_experience: 10
+
+  writing_background:
+    native_language: "English"
