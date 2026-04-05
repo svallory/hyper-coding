@@ -1,0 +1,124 @@
+---
+title: "Plugin Development"
+description: "Guide to building simple plugins and extensions for HyperDev"
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+# Plugin Development
+
+HyperDev is designed to be extended. If the built-in tools don't cover your workflow, you can add your own---template helpers, Claude Code integrations, quality gates, whatever fits your setup.
+
+## Plugin Basics
+
+### Simple Plugin Types
+
+HyperDev supports two main extension points:
+
+<CardGrid>
+  <Card title="Template Helpers" icon="file-code">
+    Add custom template functions
+    - String formatting helpers
+    - Date/time utilities
+    - Simple data transformations
+  </Card>
+
+  <Card title="Claude Code Integration" icon="puzzle-piece">
+    Claude Code Enhancements
+    - Git hooks integration
+    - Basic automation
+    - Claude hooks
+  </Card>
+</CardGrid>
+
+## Basic Plugin Development
+
+### Creating Simple Template Helpers
+
+You can add custom template functions with plain JavaScript---no framework needed.
+
+```javascript
+// helpers.js - Simple template helpers
+export const helpers = {
+  // String formatting
+  capitalize: (str) => str.charAt(0).toUpperCase() + str.slice(1),
+  
+  // Case conversion
+  kebabCase: (str) => str.replace(/\s+/g, '-').toLowerCase(),
+  
+  // Date utilities
+  currentDate: () => new Date().toISOString().split('T')[0],
+  
+  // Simple pluralization
+  pluralize: (word, count) => count === 1 ? word : word + 's'
+};
+```
+
+Once defined, use them directly in templates:
+
+```jig
+---
+to: components/{{ kebabCase :: name }}.tsx
+---
+// Generated on {{ currentDate }}
+export const {{ capitalize :: name }} = () => {
+  return <div>Hello World</div>;
+};
+```
+
+### Claude Code Integration
+
+Wire HyperDev into your Claude Code workflow via `hypergen.config.js`. Git hooks are a good starting point---they let you run validation or cleanup automatically without having to remember to do it manually.
+
+```javascript
+// hypergen.config.js - Claude Code integration
+export default {
+  sources: [
+    { name: 'local', path: './_templates' }
+  ],
+  
+  // Git hooks integration
+  hooks: {
+    'pre-commit': ['hyper gen validate'],
+    'post-commit': ['hyper gen cleanup']
+  }
+};
+```
+
+### Basic Plugin Configuration
+
+Here's a minimal config that enables local helpers, quality gates, and Claude Code integration:
+
+```javascript
+// hypergen.config.js
+export default {
+  // Local template helpers
+  helpers: './helpers.js',
+  
+  // Quality gates
+  quality: {
+    syntax_validation: true,
+    security_scanning: true
+  },
+  
+  // Simple integrations
+  integrations: {
+    claude_code: true
+  }
+};
+```
+
+## Related Commands
+
+For advanced plugin development and integrations:
+
+<CardGrid>
+  <Card title="hyper config hooks" href="/cli/commands/coding/hooks">
+    Setup git hooks integration
+  </Card>
+  <Card title="hyper config" href="/cli/commands/coding/config">
+    Configure IDE integrations
+  </Card>
+</CardGrid>
+
+That covers the basics. Start with a helper or two, wire up a hook, and build from there as your needs grow.

@@ -1,0 +1,149 @@
+---
+title: "HyperDev"
+description: "A toolkit for Hyper Coding — systematic, principle-driven AI-assisted development."
+slug: docs/index
+---
+
+import { Aside, Card, CardGrid, Steps } from '@astrojs/starlight/components';
+
+# HyperDev
+
+**HyperDev** is a CLI toolkit for **Hyper Coding** — a methodology that treats AI-assisted development as an engineering discipline, not a guessing game.
+
+Here's the actual problem: AI coding agents don't fail because the models are bad. They fail because the feedback loops are broken. Code gets generated without guardrails, context drifts, errors compound quietly, and nobody notices until the mess is too deep to untangle. Hyper Coding fixes that by automating the feedback loops that good engineers already run manually — just consistently, and without relying on memory.
+
+## The 5 Principles
+
+<CardGrid>
+  <Card title="Deterministic First" icon="lock">
+    Anything that can be done deterministically should not use an LLM. Templates, scaffolding, and known transformations are predictable — keep them that way.
+  </Card>
+  <Card title="Engineered Friction" icon="shield">
+    Intentionally increase the effort required for complex solutions. Make simplicity the path of least resistance by structuring planning workflows that force the right questions upfront.
+  </Card>
+  <Card title="Reactive Context" icon="bolt">
+    Automate context engineering. Provide the right context at the right time — watching file changes, tracking architecture state, and feeding it to the agent continuously.
+  </Card>
+  <Card title="Tools Integration" icon="wrench">
+    Give your AI agent the same external advantages you have. Linters, security scanners, architecture validators — agents should run these too, not just humans.
+  </Card>
+  <Card title="Real-time Feedback" icon="gauge">
+    Provide feedback as soon as possible. The longer an agent runs without feedback, the more compounding errors accumulate. Interrupt early, correct often.
+  </Card>
+</CardGrid>
+
+## Installation
+
+```bash
+bun add -g @hypercli/cli
+```
+
+Verify the install:
+
+```bash
+hyper --version
+```
+
+## The Toolkit
+
+Everything runs under the single `hyper` CLI. Each tool targets one of the five principles.
+
+  <details>
+<summary>hyper gen — Code Generation</summary>
+
+    **Principle: Deterministic First**
+
+    **Status: Available**
+
+    Generate code using kits, recipes, and [Jig](https://jig.saulo.engineer) templates. `hyper gen` keeps deterministic work deterministic — scaffolding runs from versioned templates, not ad-hoc LLM output.
+
+    - Install kits from any source: `hyper kit install <source>`
+    - Run a recipe: `hyper run <kit> <recipe>`
+    - Templates use Jig syntax (`.jig` files) with an optional `@ai` tag for the parts that genuinely need generation
+    - Recipes are composable YAML workflows with 13 tool types: template, action, shell, ai, patch, and more
+
+    <Card title="hyper gen docs" icon="arrow-right" href="/docs/tools/gen" />
+
+  </details>
+
+  <details>
+<summary>hyper plan — Define → Design → Decompose → Develop</summary>
+
+    **Principle: Engineered Friction**
+
+    A structured planning workflow that forces the right questions before you write a line of code. `hyper plan` walks through four stages — Define the problem, Design the solution, Decompose into tasks, then Develop — making it harder to skip steps and easier to stay on scope.
+
+    <Card title="hyper plan docs" icon="arrow-right" href="/tools/plan" />
+
+  </details>
+
+  <details>
+<summary>hyper watch — Always-on Agent Whisperer</summary>
+
+    **Principle: Reactive Context**
+
+    A background daemon that watches your codebase and injects the right context into your agent at the right moment. File changes, architecture violations, dependency updates — `hyper watch` catches them and surfaces them automatically, so you don't have to babysit the context window.
+
+    <Card title="hyper watch docs" icon="arrow-right" href="/tools/watch" />
+
+  </details>
+
+  <details>
+<summary>hyper tools — Swiss Army Knife</summary>
+
+    **Principle: Tools Integration**
+
+    Sets up and integrates the external tooling your agent needs: linters, security scanners, AI tools, architecture validators. Agents shouldn't be flying blind on code quality — `hyper tools` wires up the same feedback instruments you rely on.
+
+    <Card title="hyper tools docs" icon="arrow-right" href="/tools/tools" />
+
+  </details>
+
+  <details>
+<summary>hyper dash — Real-time Dashboard</summary>
+
+    **Principle: Real-time Feedback**
+
+    A monitoring dashboard for multi-agent workflows. See what's running, what's failing, and what needs intervention — in real time, not after the fact.
+
+    <Card title="hyper dash docs" icon="arrow-right" href="/docs/tools/dash" />
+
+  </details>
+
+<Aside type="note">
+  **hyper hq** is a bonus operational tool for managing Claude Code sessions via tmux and Telegram. It's not a Hyper Coding principle — it's session infrastructure. [Learn more →](/docs/tools/hq/overview)
+</Aside>
+
+## Quick Start
+
+<Steps>
+1. **Install**
+    ```bash
+    bun add -g @hypercli/cli
+    ```
+2. **Install a kit**
+    ```bash
+    hyper kit install nextjs
+    ```
+3. **Generate code**
+    ```bash
+    hyper run nextjs crud --name Post
+    ```
+</Steps>
+
+## Go Deeper
+
+<CardGrid>
+  <Card title="Quickstart" icon="play" href="/quickstart">
+    Get from install to your first generated file in under 10 minutes.
+  </Card>
+  <Card title="Hyper Coding Methodology" icon="brain" href="/methodology">
+    The full rationale behind the 5 principles and why feedback loops are the real problem.
+  </Card>
+  <Card title="Kits & Recipes" icon="puzzle-piece" href="/docs/tools/gen/kits">
+    How kits package templates and recipes, and how to build your own.
+  </Card>
+  <Card title="Jig Templates" icon="file-code" href="/docs/tools/gen/jig">
+    The Jig template engine — syntax, filters, the `@ai` tag, and frontmatter fields.
+  </Card>
+</CardGrid>

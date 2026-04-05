@@ -1,0 +1,1279 @@
+---
+title: "Troubleshooting Guide"
+description: "Comprehensive troubleshooting and error handling documentation to help you diagnose and resolve issues quickly when using HyperDev"
+---
+
+# Troubleshooting Guide
+
+Something broke. Start here.
+
+## Quick Diagnostic Commands
+
+Before digging into specifics, run these to get your bearings:
+
+```bash Basic Health Check
+# Check Hypergen installation
+hyper --version
+
+# Validate current project configuration
+hyper config show
+
+# List available generators and actions
+hyper list
+
+# Check generator discovery status
+hyper discover --dry-run
+```
+
+```bash Verbose Debugging
+# Enable debug logging
+DEBUG=hyperdev* hyper [command]
+
+# Run with maximum verbosity
+hyper [command] --verbose --debug
+
+# Validate specific recipe
+hyper recipe validate path/to/recipe.yml
+```
+
+```bash Environment Diagnostics
+# Check Node.js and package versions
+node --version && bun --version
+
+# Verify file permissions
+ls -la _templates/
+
+# Check current working directory
+pwd && ls -la
+```
+
+## Common Issues by Category
+
+### Installation Problems
+
+<details>
+<summary>Command not found: hyper</summary>
+
+**Symptoms:** `bash: hyper: command not found` or similar
+
+**Diagnosis:**
+```bash
+# Check if hyper is installed globally
+bun list -g | grep hyper
+# or
+which hyper
+```
+
+**Solutions:**
+
+1. **Install globally:**
+   ```bash
+   bun add -g hyper
+   ```
+
+2. **Use bunx for one-time execution:**
+   ```bash
+   bunx hyper [command]
+   ```
+
+3. **Add to PATH (if installed locally):**
+   ```bash
+   export PATH="$PATH:./node_modules/.bin"
+   ```
+
+4. **Check installation location:**
+   ```bash
+   bun bin -g
+   # Ensure this directory is in your PATH
+   ```
+
+</details>
+
+<details>
+<summary>Permission denied errors</summary>
+
+**Symptoms:** `EACCES: permission denied` when running commands
+
+**Diagnosis:**
+```bash
+# Check file permissions
+ls -la $(which hyper)
+
+# Check directory permissions
+ls -la _templates/
+```
+
+**Solutions:**
+
+1. **Fix file permissions:**
+   ```bash
+   chmod +x $(which hyper)
+   ```
+
+2. **Use appropriate user permissions:**
+   ```bash
+   # Don't use sudo with package managers
+   bun install --user hyper
+   ```
+
+3. **Fix template directory permissions:**
+   ```bash
+   chmod -R 755 _templates/
+   ```
+
+4. **Run with proper user context:**
+   ```bash
+   # Avoid running as root
+   whoami  # Should not be root
+   ```
+
+</details>
+
+<details>
+<summary>Version conflicts</summary>
+
+**Symptoms:** Unexpected behavior, features not working as documented
+
+**Diagnosis:**
+```bash
+# Check installed version
+hyper --version
+
+# Check for multiple installations
+which -a hyper
+
+# List all installed versions
+bun list hyper
+```
+
+**Solutions:**
+
+1. **Clean install:**
+   ```bash
+   bun uninstall -g hyper
+   bun add -g hyper@latest
+   ```
+
+2. **Remove conflicting installations:**
+   ```bash
+   # Remove local installation if using global
+   rm -rf node_modules/hyper
+   ```
+
+3. **Use specific version:**
+   ```bash
+   bunx hyper@latest [command]
+   ```
+
+</details>
+
+### Configuration Issues
+
+<details>
+<summary>Configuration file not found</summary>
+
+**Error Code:** `CONFIG_FILE_NOT_FOUND`
+
+**Symptoms:** 
+- `Configuration file not found`
+- Default behavior instead of expected customizations
+
+**Diagnosis:**
+```bash
+# Check for configuration files
+ls -la hypergen.config.js hypergen.config.json .hypergenrc
+
+# Verify current working directory
+pwd
+
+# Check configuration search paths
+DEBUG=hyperdev:config hyper list
+```
+
+**Solutions:**
+
+1. **Create configuration file:**
+   ```bash
+   hyper init workspace
+   ```
+
+2. **Create minimal configuration:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     templates: [
+       { name: 'local', path: './_templates' }
+     ]
+   }
+   ```
+
+3. **Specify configuration explicitly:**
+   ```bash
+   hyper --config path/to/config.js [command]
+   ```
+
+</details>
+
+<details>
+<summary>Invalid configuration format</summary>
+
+**Error Code:** `CONFIG_INVALID_FORMAT`
+
+**Symptoms:**
+- `Configuration file has invalid format`
+- Syntax errors in config file
+
+**Diagnosis:**
+```bash
+# Validate JSON syntax
+node -p "JSON.parse(require('fs').readFileSync('hypergen.config.json', 'utf8'))"
+
+# Check JavaScript syntax
+node -c hypergen.config.js
+```
+
+**Solutions:**
+
+1. **Fix JSON syntax:**
+   ```bash
+   # Use a JSON validator
+   cat hypergen.config.json | jq .
+   ```
+
+2. **Fix JavaScript syntax:**
+   ```bash
+   # Check for common issues
+   node --check hypergen.config.js
+   ```
+
+3. **Use configuration template:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     templates: [],
+     helpers: {},
+     prompts: {}
+   }
+   ```
+
+</details>
+
+<details>
+<summary>Missing required fields</summary>
+
+**Error Code:** `CONFIG_MISSING_REQUIRED`
+
+**Symptoms:** Configuration validation errors about missing fields
+
+**Solutions:**
+
+1. **Add required templates field:**
+   ```javascript
+   export default {
+     templates: [
+       { name: 'default', path: './_templates' }
+     ]
+   }
+   ```
+
+2. **Validate configuration:**
+   ```bash
+   hyper config validate
+   ```
+
+3. **See full configuration reference:**
+   ```bash
+   hyper config schema
+   ```
+
+</details>
+
+### Template Errors
+
+<details>
+<summary>Template not found</summary>
+
+**Error Code:** `TEMPLATE_NOT_FOUND`
+
+**Symptoms:**
+- `Template file not found`
+- `Generator not found`
+
+**Diagnosis:**
+```bash
+# List available generators
+hyper list
+
+# Check template structure
+find _templates -name "*.jig" -o -name "template.yml"
+
+# Verify template path
+ls -la _templates/[generator-name]/
+```
+
+**Solutions:**
+
+1. **Check template structure:**
+   ```
+   _templates/
+   ├── component/
+   │   ├── new/
+   │   │   ├── component.jig
+   │   │   └── index.jig
+   │   └── template.yml
+   ```
+
+2. **Run discovery:**
+   ```bash
+   hyper discover
+   ```
+
+3. **Create missing template:**
+   ```bash
+   hyper init generator --name=my-template
+   ```
+
+4. **Check case sensitivity:**
+   ```bash
+   # Generator names are case-sensitive
+   hyper gen component:New  # ❌ Wrong case
+   hyper gen component:new  # ✅ Correct
+   ```
+
+</details>
+
+<details>
+<summary>Template syntax errors</summary>
+
+**Error Code:** `TEMPLATE_INVALID_SYNTAX`
+
+**Symptoms:**
+- Jig template parsing errors
+- YAML frontmatter errors
+- Template compilation failures
+
+**Diagnosis:**
+```bash
+# Check frontmatter syntax
+head -20 _templates/component/new/component.jig
+```
+
+**Solutions:**
+
+1. **Fix Jig syntax:**
+   ```
+   {{-- Correct Jig syntax --}}
+   @if(name)
+   export const {{ name }} = () => {
+   @end
+   
+   {{-- Common mistakes to avoid --}}
+   {{-- Don't nest output tags --}}
+   {{ {{ name }} }}  {{-- WRONG --}}
+   {{ name }}        {{-- CORRECT --}}
+   ```
+
+2. **Fix YAML frontmatter:**
+   ```yaml
+   ---
+   to: src/components/{{ name }}.tsx
+   ---
+   ```
+
+3. **Test template rendering:**
+   ```bash
+   # Dry run to test rendering
+   hyper gen component:new --name=Test --dry-run
+   ```
+
+</details>
+
+<details>
+<summary>Missing template variables</summary>
+
+**Error Code:** `TEMPLATE_MISSING_VARIABLES`
+
+**Symptoms:**
+- `Template is missing required variables`
+- Undefined variable errors during rendering
+
+**Diagnosis:**
+```bash
+# Check template.yml for required variables
+cat _templates/component/template.yml
+
+# Run with debug to see variable context
+DEBUG=hyperdev* hyper gen component:new --name=Test
+```
+
+**Solutions:**
+
+1. **Define required variables in template.yml:**
+   ```yaml
+   # template.yml
+   prompts:
+     - name: name
+       type: input
+       message: Component name
+       required: true
+     - name: type
+       type: select
+       message: Component type
+       choices: ['functional', 'class']
+   ```
+
+2. **Provide variables via command line:**
+   ```bash
+   hyper gen component:new --name=MyComponent --type=functional
+   ```
+
+3. **Set default values:**
+   ```yaml
+   # template.yml
+   defaults:
+     type: functional
+     export: true
+   ```
+
+4. **Check variable names match:**
+   ```
+   {{-- In template file --}}
+   {{ name }}  {{-- Must match prompt name --}}
+   ```
+
+</details>
+
+<details>
+<summary>Template composition errors</summary>
+
+**Error Code:** `TEMPLATE_COMPOSITION_ERROR`
+
+**Symptoms:** Issues with template inheritance and extending
+
+**Solutions:**
+
+1. **Check parent template exists:**
+   ```yaml
+   # In child template.yml
+   extends: 'parent-template'  # Must exist
+   ```
+
+2. **Verify composition chain:**
+   ```bash
+   # Debug composition resolution
+   DEBUG=hyperdev:composition hyper [command]
+   ```
+
+3. **Fix circular dependencies:**
+   ```yaml
+   # template-a.yml
+   extends: template-b
+
+   # template-b.yml  
+   extends: template-a  # ❌ Creates circular dependency
+   ```
+
+</details>
+
+### Action and Recipe Errors
+
+<details>
+<summary>Action not found</summary>
+
+**Error Code:** `ACTION_NOT_FOUND`
+
+**Symptoms:** `Action '[name]' not found`
+
+**Diagnosis:**
+```bash
+# List available actions
+hyper list
+
+# Search for similar actions
+hyper list | grep -i [partial-name]
+
+# Check action discovery
+hyper discover --verbose
+```
+
+**Solutions:**
+
+1. **Run discovery:**
+   ```bash
+   hyper discover
+   ```
+
+2. **Check spelling and case:**
+   ```bash
+   # Actions are case-sensitive
+   hyper gen component:New  # ❌ Wrong case
+   hyper gen component:new  # ✅ Correct
+   ```
+
+3. **Create missing action:**
+   ```bash
+   hyper init generator --name=my-action
+   ```
+
+4. **Check action file structure:**
+   ```typescript
+   // actions.ts
+   export default {
+     'my-action': {
+       params: ['name'],
+       action: async (args, runner) => {
+         // action implementation
+       }
+     }
+   }
+   ```
+
+</details>
+
+<details>
+<summary>Invalid action parameters</summary>
+
+**Error Code:** `ACTION_INVALID_PARAMETERS`
+
+**Symptoms:** Parameter validation errors, type mismatches
+
+**Diagnosis:**
+```bash
+# Get action details and parameter requirements
+hyper info [action-name]
+
+# Run with debug to see parameter validation
+DEBUG=hyperdev:params hyper gen [action] --param=value
+```
+
+**Solutions:**
+
+1. **Check parameter types:**
+   ```bash
+   # String parameters
+   hyper gen --name="string value"
+
+   # Boolean parameters  
+   hyper gen --enabled=true
+
+   # Array parameters
+   hyper gen --items='["a","b","c"]'
+   ```
+
+2. **Provide required parameters:**
+   ```bash
+   # Check which parameters are required
+   hyper info component:new
+
+   # Provide all required parameters
+   hyper gen component:new --name=MyComponent --type=functional
+   ```
+
+3. **Fix parameter format:**
+   ```bash
+   # Use correct parameter names (check case)
+   hyper gen --fileName=test  # ❌ Wrong case
+   hyper gen --filename=test  # ✅ Correct
+   ```
+
+</details>
+
+<details>
+<summary>Recipe execution failures</summary>
+
+**Error Code:** `CODEMOD_EXECUTION_FAILED`
+
+**Symptoms:** Recipe steps fail during execution
+
+**Diagnosis:**
+```bash
+# Run recipe with verbose logging
+DEBUG=hyperdev:recipe hyper recipe run recipe.yml
+
+# Validate recipe syntax
+hyper recipe validate recipe.yml
+
+# Check file permissions for target files
+ls -la path/to/target/files
+```
+
+**Solutions:**
+
+1. **Fix recipe syntax:**
+   ```yaml
+   # recipe.yml
+   name: My Recipe
+   description: Recipe description
+   
+   steps:
+     - tool: template
+       name: create-component
+       config:
+         generator: component:new
+         args:
+           name: "{{ name }}"
+   ```
+
+2. **Ensure target files exist:**
+   ```bash
+   # Create target files if needed
+   touch src/components/index.ts
+   ```
+
+3. **Fix file permissions:**
+   ```bash
+   # Ensure write permissions
+   chmod 644 src/components/*.ts
+   ```
+
+4. **Use backup option:**
+   ```yaml
+   steps:
+     - tool: codemod
+       config:
+         backup: true  # Create backups before modification
+   ```
+
+</details>
+
+### File System Issues
+
+<details>
+<summary>Permission denied</summary>
+
+**Error Code:** `FILE_PERMISSION_DENIED`
+
+**Symptoms:** `EACCES: permission denied` errors
+
+**Diagnosis:**
+```bash
+# Check file and directory permissions
+ls -la target/directory/
+ls -la target/file.txt
+
+# Check if directory is writable
+test -w target/directory/ && echo "Writable" || echo "Not writable"
+```
+
+**Solutions:**
+
+1. **Fix directory permissions:**
+   ```bash
+   chmod 755 target/directory/
+   ```
+
+2. **Fix file permissions:**
+   ```bash
+   chmod 644 target/file.txt
+   ```
+
+3. **Change ownership (if needed):**
+   ```bash
+   sudo chown -R $USER:$USER target/directory/
+   ```
+
+4. **Use appropriate user context:**
+   ```bash
+   # Avoid running as root
+   whoami  # Should be your regular user
+   ```
+
+</details>
+
+<details>
+<summary>File already exists</summary>
+
+**Error Code:** `FILE_ALREADY_EXISTS`
+
+**Symptoms:** Hypergen refuses to overwrite existing files
+
+**Solutions:**
+
+1. **Use force option:**
+   ```bash
+   hyper gen component:new --name=Test --force
+   ```
+
+2. **Remove existing file:**
+   ```bash
+   rm target/file.txt
+   hyper gen component:new --name=Test
+   ```
+
+3. **Use different name:**
+   ```bash
+   hyper gen component:new --name=TestComponent2
+   ```
+
+4. **Configure overwrite behavior:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     helpers: {
+       overwrite: true  // Allow overwriting by default
+     }
+   }
+   ```
+
+</details>
+
+<details>
+<summary>Directory not found</summary>
+
+**Error Code:** `DIRECTORY_NOT_FOUND`
+
+**Symptoms:** Target directory doesn't exist
+
+**Solutions:**
+
+1. **Create directory structure:**
+   ```bash
+   mkdir -p src/components/ui/
+   ```
+
+2. **Use template with directory creation:**
+   ```yaml
+   ---
+   to: src/components/{{ name }}/{{ name }}.tsx
+   ---
+   ```
+
+3. **Enable directory creation in config:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     helpers: {
+       createDirs: true
+     }
+   }
+   ```
+
+</details>
+
+### Network and URL Issues
+
+<details>
+<summary>Failed to fetch remote templates</summary>
+
+**Error Code:** `URL_FETCH_FAILED`
+
+**Symptoms:** Cannot download templates from remote sources
+
+**Diagnosis:**
+```bash
+# Test internet connectivity
+ping github.com
+
+# Test URL accessibility
+curl -I https://github.com/user/repo
+
+# Check proxy settings
+echo $HTTP_PROXY $HTTPS_PROXY
+```
+
+**Solutions:**
+
+1. **Check internet connection:**
+   ```bash
+   # Test basic connectivity
+   curl -I https://api.github.com
+   ```
+
+2. **Configure proxy (if needed):**
+   ```bash
+   export HTTP_PROXY=http://proxy.company.com:8080
+   export HTTPS_PROXY=http://proxy.company.com:8080
+   ```
+
+3. **Use alternative URL format:**
+   ```bash
+   # Try different URL formats
+   hyper use github:user/repo
+   hyper use https://github.com/user/repo.git
+   hyper use git+ssh://git@github.com/user/repo.git
+   ```
+
+4. **Cache and retry:**
+   ```bash
+   # Clear URL cache and retry
+   rm -rf ~/.hyperdev/cache/
+   hyper use github:user/repo
+   ```
+
+</details>
+
+<details>
+<summary>Invalid URL format</summary>
+
+**Error Code:** `URL_INVALID_FORMAT`
+
+**Symptoms:** URL parsing errors
+
+**Solutions:**
+
+1. **Use correct URL formats:**
+   ```bash
+   # GitHub repositories
+   hyper use github:user/repo
+   hyper use github:user/repo#branch
+   
+   # NPM packages
+   hyper use npm:package-name
+   hyper use npm:@scope/package-name
+   
+   # Local paths
+   hyper use file:./path/to/templates
+   hyper use file:/absolute/path/to/templates
+   ```
+
+2. **Check URL encoding:**
+   ```bash
+   # URL encode special characters
+   hyper use github:user/repo-with%2Dspecial%2Dchars
+   ```
+
+</details>
+
+## Performance Issues
+
+### Slow Generation
+
+<details>
+<summary>Template rendering is slow</summary>
+
+**Symptoms:** Long delays during template processing
+
+**Diagnosis:**
+```bash
+# Profile template rendering
+time DEBUG=hyperdev* hyper gen component:new --name=Test
+
+# Check template complexity
+wc -l _templates/**/*.jig
+
+# Monitor resource usage
+top -p $(pgrep node)
+```
+
+**Solutions:**
+
+1. **Optimize template logic:**
+   ```
+   {{-- Iterate over pre-computed data --}}
+   @each(items as item)    {{-- ✅ Better --}}
+   @end
+   ```
+
+2. **Split large templates:**
+   Break large `.jig` files into smaller focused templates and compose them via recipe steps.
+
+3. **Cache template compilation:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     cache: {
+       templates: true
+     }
+   }
+   ```
+
+4. **Reduce template discovery:**
+   ```javascript
+   // Specify exact template paths
+   export default {
+     templates: [
+       { name: 'components', path: './_templates/components' }
+     ]
+   }
+   ```
+
+</details>
+
+<details>
+<summary>High memory usage</summary>
+
+**Symptoms:** System slowdown, out of memory errors
+
+**Solutions:**
+
+1. **Limit concurrent operations:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     concurrency: 2  // Reduce from default
+   }
+   ```
+
+2. **Avoid large inline data in templates:**
+   Process data before passing it to templates — keep template logic minimal.
+
+3. **Clear template cache:**
+   ```bash
+   rm -rf ~/.hyperdev/cache/
+   ```
+
+</details>
+
+### Discovery Performance
+
+<details>
+<summary>Slow generator discovery</summary>
+
+**Solutions:**
+
+1. **Limit discovery scope:**
+   ```javascript
+   // hypergen.config.js
+   export default {
+     discovery: {
+       directories: ['./_templates'],  // Don't scan entire filesystem
+       depth: 2  // Limit recursion depth
+     }
+   }
+   ```
+
+2. **Use explicit template configuration:**
+   ```javascript
+   // Skip discovery entirely
+   export default {
+     templates: [
+       { name: 'components', path: './_templates/components' },
+       { name: 'pages', path: './_templates/pages' }
+     ]
+   }
+   ```
+
+3. **Cache discovery results:**
+   ```bash
+   # Discovery results are cached automatically
+   # Clear cache if needed
+   rm -rf ~/.hyperdev/cache/discovery/
+   ```
+
+</details>
+
+## Integration Issues
+
+### IDE Integration
+
+<details>
+<summary>VS Code extension not working</summary>
+
+**Symptoms:** Hypergen commands not available in VS Code
+
+**Solutions:**
+
+1. **Install VS Code extension:**
+   ```bash
+   code --install-extension hyperdev.vscode-hyperdev
+   ```
+
+2. **Check extension settings:**
+   ```json
+   // settings.json
+   {
+     "hyperdev.executable": "hyper",
+     "hypergen.configPath": "./hypergen.config.js"
+   }
+   ```
+
+3. **Reload VS Code:**
+   ```
+   Ctrl+Shift+P → "Developer: Reload Window"
+   ```
+
+4. **Check extension logs:**
+   ```
+   View → Output → Select "Hypergen" from dropdown
+   ```
+
+</details>
+
+<details>
+<summary>IntelliSense not working for templates</summary>
+
+**Solutions:**
+
+1. **Configure TypeScript for EJS files:**
+   ```json
+   // .vscode/settings.json
+   {
+     "files.associations": {
+       "*.jig": "typescript"
+     }
+   }
+   ```
+
+2. **Add type definitions:**
+   ```typescript
+   // types/hyperdev.d.ts
+   declare const name: string
+   declare const type: string
+   // Add other template variables
+   ```
+
+</details>
+
+### CI/CD Integration
+
+<details>
+<summary>Hypergen fails in CI environment</summary>
+
+**Symptoms:** Works locally but fails in CI
+
+**Diagnosis:**
+```yaml
+# Add debugging to CI pipeline
+- name: Debug Hypergen
+  run: |
+    which hyper
+    hyper --version
+    DEBUG=hyperdev* hyper list
+```
+
+**Solutions:**
+
+1. **Install in CI:**
+   ```yaml
+   # GitHub Actions
+   - name: Install Hypergen
+     run: bun add -g hyper
+   
+   - name: Generate code
+     run: hyper gen component:new --name=CI-Test
+   ```
+
+2. **Use correct Node.js version:**
+   ```yaml
+   - uses: actions/setup-node@v3
+     with:
+       node-version: '18'  # Use compatible version
+   ```
+
+3. **Set environment variables:**
+   ```yaml
+   env:
+     NODE_ENV: production
+     DEBUG: hyperdev:*
+   ```
+
+4. **Handle file permissions:**
+   ```yaml
+   - name: Fix permissions
+     run: chmod -R 755 ./_templates/
+   ```
+
+</details>
+
+<details>
+<summary>Generated files not committed</summary>
+
+**Solutions:**
+
+1. **Check .gitignore:**
+   ```gitignore
+   # Don't ignore generated files
+   !src/components/generated/
+   ```
+
+2. **Add files explicitly:**
+   ```bash
+   git add -f src/components/*.tsx
+   ```
+
+3. **Configure CI to commit changes:**
+   ```yaml
+   - name: Commit generated files
+     run: |
+       git config user.name "CI Bot"
+       git config user.email "ci@example.com"
+       git add .
+       git commit -m "Generate code" || true
+       git push
+   ```
+
+</details>
+
+## Systematic Debugging Approach
+
+When you're stuck and the quick fixes above didn't help, work through this:
+
+### 1. Information Gathering
+
+```bash
+# Collect environment information
+cat > debug-info.txt << EOF
+Date: $(date)
+OS: $(uname -a)
+Node: $(node --version)
+Bun: $(bun --version)
+Hypergen: $(hyper --version)
+PWD: $(pwd)
+EOF
+
+# Add configuration info
+echo "Config:" >> debug-info.txt
+hyper config show >> debug-info.txt 2>&1 || echo "No config" >> debug-info.txt
+
+# Add template structure
+echo -e "\nTemplates:" >> debug-info.txt
+find _templates -type f -name "*.jig" -o -name "template.yml" >> debug-info.txt 2>&1 || echo "No templates" >> debug-info.txt
+```
+
+### 2. Minimal Reproduction
+
+Isolate the issue with the smallest possible example:
+
+```bash
+# Create test directory
+mkdir hyperdev-debug && cd hyperdev-debug
+
+# Initialize minimal configuration  
+cat > hypergen.config.js << EOF
+export default {
+  templates: [
+    { name: 'test', path: './_templates' }
+  ]
+}
+EOF
+
+# Create minimal template
+mkdir -p _templates/test/new
+cat > _templates/test/new/test.jig << EOF
+---
+to: test-{{ name }}.txt
+---
+Hello {{ name }}!
+EOF
+
+# Create template.yml
+cat > _templates/test/template.yml << EOF
+prompts:
+  - name: name
+    message: Test name
+    type: input
+EOF
+
+# Test
+hyper gen test:new --name=debug
+```
+
+### 3. Verbose Logging
+
+```bash
+# Maximum debugging
+DEBUG=hyperdev* hyper [command] --verbose --debug 2>&1 | tee debug.log
+
+# Focus on specific areas
+DEBUG=hyperdev:template,hyperdev:config hyper [command]
+
+# Log to file for analysis
+hyper [command] --verbose 2>&1 | tee -a debug.log
+```
+
+### 4. Isolation Testing
+
+Test pieces individually to narrow down what's broken:
+
+```bash
+# Test configuration loading
+hyper config show
+
+# Test discovery
+hyper discover --dry-run
+
+# Test without custom configuration
+mv hypergen.config.js hypergen.config.js.bak
+hyper [command]
+mv hypergen.config.js.bak hypergen.config.js
+```
+
+### 5. Binary Search Debugging
+
+For complex templates, comment out half the content, test, then narrow down from there.
+
+## Getting Help
+
+If you've worked through the above and still need help:
+
+### 1. Gather Diagnostic Information
+
+```bash
+# Create comprehensive debug package
+mkdir hyperdev-debug-$(date +%s)
+cd hyperdev-debug-*
+
+# Copy your configuration
+cp path/to/hypergen.config.js ./
+
+# Export minimal template that reproduces issue
+cp -r _templates/problematic-generator ./
+
+# Create issue report
+cat > ISSUE_REPORT.md << EOF
+# HyperDev Issue Report
+
+## Environment
+- OS: $(uname -a)
+- Node: $(node --version)  
+- Bun: $(bun --version)
+- Hypergen: $(hyper --version)
+
+## Issue Description
+[Describe the issue]
+
+## Expected Behavior
+[What should happen]
+
+## Actual Behavior
+[What actually happens]
+
+## Reproduction Steps
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+
+## Debug Output
+\`\`\`
+$(DEBUG=hyperdev* hyper [command] 2>&1)
+\`\`\`
+
+EOF
+```
+
+### 2. Community Resources
+
+- **GitHub Issues**: [github.com/svallory/hyperdev/issues](https://github.com/svallory/hyperdev/issues)
+- **Documentation**: [hyperdev.ai/docs](https://hyperdev.ai/docs)
+- **Discussions**: [github.com/svallory/hyperdev/discussions](https://github.com/svallory/hyperdev/discussions)
+
+### 3. Issue Reporting Guidelines
+
+A good bug report gets a faster fix. Include:
+
+1. **Use the issue template**
+2. **Provide a minimal reproduction case**  
+3. **Include debug output**
+4. **Describe expected vs actual behavior**
+5. **List troubleshooting steps you already tried**
+
+## Quick Reference
+
+### Common Error Codes
+
+| Code | Issue | Quick Fix |
+|------|-------|-----------|
+| `CONFIG_FILE_NOT_FOUND` | No config file | `hyper init workspace` |
+| `TEMPLATE_NOT_FOUND` | Missing template | Check `_templates/` structure |
+| `ACTION_NOT_FOUND` | Unknown action | `hyper list` to see available actions |
+| `FILE_PERMISSION_DENIED` | Permission error | `chmod 755 directory/` |
+| `TEMPLATE_INVALID_SYNTAX` | Template syntax error | Validate Jig and YAML syntax |
+
+### Essential Commands
+
+| Command | Purpose |
+|---------|---------|
+| `hyper --version` | Check installation |
+| `hyper list` | See available generators |  
+| `hyper discover` | Refresh generator list |
+| `DEBUG=hyperdev* hyper [cmd]` | Enable debug logging |

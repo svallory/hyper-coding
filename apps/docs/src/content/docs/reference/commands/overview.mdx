@@ -1,0 +1,516 @@
+---
+title: "Command Reference"
+description: "Complete reference for all hyper CLI commands — generation, session management, kit lifecycle, and configuration"
+---
+
+# Command Reference
+
+Everything goes through the `hyper` entry point. Under the hood, the CLI delegates to oclif plugins --- `@hypercli/gen`, `@hypercli/kit`, and `@hypercli/hq` --- though `config show` and `init` are handled directly by the shell package itself.
+
+## Generation
+
+### `hyper gen`
+
+This is the main one. It resolves the recipe argument against your installed kits and hands it off to the recipe engine.
+
+```bash
+hyper gen <recipe> [variables...]
+```
+
+**Arguments**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `recipe` | Yes | Path, package name, or `kit/cookbook/recipe` shorthand |
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--dry` | Show what would be generated without writing files |
+| `--force`, `-f` | Overwrite existing files |
+| `--yes`, `-y` | Skip confirmation prompts |
+| `--answers <path>` | Path to AI answers JSON file (2-pass generation) |
+| `--ask <me\|ai\|stdout\|nobody>` | Who resolves missing variables |
+| `--no-defaults` | Ask about every variable, even those with defaults |
+| `--prompt-template <path>` | Custom Jig template for the AI prompt document |
+| `--debug`, `-d` | Enable debug output |
+
+**Examples**
+
+```bash
+hyper gen ./my-recipe.yml
+hyper gen @kit/starlight/create
+hyper gen create-component --name=Button
+hyper gen crud edit-page --model=Organization
+hyper gen ./my-recipe --answers ./ai-answers.json
+
+# Shorthand — the command_not_found hook rewrites this to hyper gen nextjs/crud
+hyper nextjs crud update Organization
+```
+
+---
+
+### `hyper recipe run`
+
+Run a recipe from a local file path. Functionally equivalent to `hyper gen` for file-based recipes, but with a few extra flags that come in handy for scripting.
+
+```bash
+hyper recipe run <file.yml> [variables...]
+```
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--dry` / `--dryRun` | Dry run — preview without writing files |
+| `--force`, `-f` | Force overwrite |
+| `--answers <path>` | Path to AI answers JSON file |
+| `--skipPrompts` | Skip all prompts |
+| `--defaults` | Use default values for all variables |
+| `--continueOnError` | Continue recipe execution on step errors |
+| `--ai-mode <me\|ai\|nobody>` | AI mode for variable resolution |
+| `--verbose`, `-v` | Verbose output |
+| `--quiet`, `-q` | Quiet output |
+| `--debug`, `-d` | Enable debug output |
+
+**Examples**
+
+```bash
+hyper recipe run my-recipe.yml
+hyper recipe run recipe.yml --dry
+hyper recipe run recipe.yml --answers ./ai-answers.json
+hyper recipe run recipe.yml --ai-mode stdout
+```
+
+---
+
+### `hyper recipe list`
+
+List available recipes from installed kits.
+
+```bash
+hyper recipe list [kit]
+```
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--kit`, `-k <name>` | Filter by kit name |
+| `--cookbook`, `-c <name>` | Filter by cookbook name |
+| `--json` | Output as JSON |
+
+**Examples**
+
+```bash
+hyper recipe list
+hyper recipe list nextjs
+hyper recipe list --json
+```
+
+---
+
+### `hyper recipe info`
+
+Show details about a recipe --- variables, steps, and where it came from.
+
+```bash
+hyper recipe info <name>
+```
+
+The name can be just the recipe name, or you can prefix it with kit and/or cookbook: `hyper recipe info starlight docs crud`.
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--steps` | Show step list with tool types |
+| `--variables` | Show variable details |
+| `--source` | Show provenance info (path, URL, commit) |
+| `--json` | Output as JSON |
+
+---
+
+### `hyper recipe validate`
+
+Validate a recipe file for syntax and schema errors.
+
+```bash
+hyper recipe validate <file.yml>
+```
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--strict` | Strict validation mode |
+| `--json` | Output as JSON |
+
+---
+
+### `hyper cookbook list`
+
+List cookbooks from installed kits.
+
+```bash
+hyper cookbook list [kit]
+```
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output as JSON |
+
+---
+
+### `hyper cookbook info`
+
+Show details about a cookbook, including the recipes inside it.
+
+```bash
+hyper cookbook info <cookbook>
+```
+
+You can optionally prefix the cookbook name with a kit: `hyper cookbook info starlight docs`.
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--variables` | Show variable details |
+| `--recipes` | Expand recipes with descriptions |
+| `--source` | Show provenance info |
+| `--json` | Output as JSON |
+
+---
+
+## Kit Management
+
+Kits are packages of recipes and cookbooks. You can install them from npm, JSR, GitHub, or a local path.
+
+### `hyper kit install`
+
+Install a kit.
+
+```bash
+hyper kit install <source>
+```
+
+**Source formats**
+
+| Format | Example |
+|--------|---------|
+| npm package | `@kit/nextjs` |
+| GitHub shorthand | `svallory/hypergen-kit-nextjs` |
+| JSR | `jsr:@std/path` |
+| Local path | `./local-kit` |
+| Git URL | `https://github.com/user/repo.git` |
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--name`, `-n <name>` | Override the kit directory name |
+| `--force`, `-f` | Replace existing kit (allows changing source) |
+| `--dev` | Install as dev dependency (npm/JSR only) |
+
+---
+
+### `hyper kit list`
+
+List installed kits.
+
+```bash
+hyper kit list [--json]
+```
+
+---
+
+### `hyper kit info`
+
+Show details about an installed kit.
+
+```bash
+hyper kit info <kit>
+```
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--variables` | Show variable details |
+| `--recipes` | Expand recipes with descriptions |
+| `--source` | Show provenance info |
+| `--json` | Output as JSON |
+
+---
+
+### `hyper kit update`
+
+Update an installed kit from its original source.
+
+```bash
+hyper kit update [kit]
+hyper kit update --all
+```
+
+---
+
+### `hyper kit uninstall`
+
+Remove an installed kit. Alias: `hyper kit remove`.
+
+```bash
+hyper kit uninstall <kit> [--force]
+```
+
+---
+
+## Session Management
+
+`hyper hq` manages persistent Claude Code sessions via tmux. You can control sessions from the terminal, from claude.ai/code via Remote Control, or from Telegram.
+
+### `hyper hq start`
+
+Start the HQ session --- a persistent, always-on Claude Code command center.
+
+```bash
+hyper hq start [flags] [-- <claude-flags>]
+```
+
+On first run, Claude reads the HQ CLAUDE.md, enables Remote Control (`/remote-control`), and (if you've configured it) connects the Telegram channel. Detach with `Ctrl+B, D` to leave it running in the background.
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--fresh` | Start a new session instead of resuming the previous one |
+| `--yolo` | Skip permission checks (sets `bypassPermissions` mode) |
+| `--permission-mode <mode>` | `default`, `acceptEdits`, `plan`, `bypassPermissions`, or `auto` |
+| `--no-telegram` | Disable Telegram channel even if configured |
+| `--name <name>` | Custom session name |
+
+**Examples**
+
+```bash
+hyper hq start
+hyper hq start --yolo
+hyper hq start --fresh
+hyper hq start -- --model opus
+```
+
+---
+
+### `hyper hq launch`
+
+Launch a Claude Code session scoped to a specific project or worktree.
+
+```bash
+hyper hq launch [project] [path] [session-name]
+```
+
+**Arguments**
+
+| Argument | Description |
+|----------|-------------|
+| `project` | Project name (under projects root) or absolute path |
+| `path` | Relative path inside the project to use as working directory |
+| `session-name` | Custom session name (default: `hq-<project>-MM-DD-HH-mm`) |
+
+**Flags**
+
+| Flag | Description |
+|------|-------------|
+| `--yolo` | Skip all permission checks |
+| `--permission-mode <mode>` | Permission mode |
+| `--no-telegram` | Disable Telegram channel |
+
+**Examples**
+
+```bash
+hyper hq launch
+hyper hq launch my-project
+hyper hq launch my-project src/frontend
+hyper hq launch my-project src/frontend my-session
+hyper hq launch my-project --yolo
+```
+
+---
+
+### `hyper hq relaunch`
+
+Stop an existing session and relaunch it with `--continue`, keeping the conversation context intact.
+
+```bash
+hyper hq relaunch <target> [path]
+```
+
+`target` can be a session name (`hq-my-project-03-24-10-30`) or a project name.
+
+**Examples**
+
+```bash
+hyper hq relaunch hq-my-project-03-24-10-30
+hyper hq relaunch my-project
+hyper hq relaunch my-project src/frontend
+hyper hq relaunch hq-my-project-03-24-10-30 --yolo
+```
+
+---
+
+### `hyper hq status`
+
+Show all running HQ-managed tmux sessions.
+
+```bash
+hyper hq status [--json]
+```
+
+---
+
+### `hyper hq list`
+
+List available projects and their worktrees (from your configured projects root).
+
+```bash
+hyper hq list [--root <path>] [--json]
+```
+
+---
+
+### `hyper hq attach`
+
+Attach your terminal to an HQ tmux session.
+
+```bash
+hyper hq attach [session]
+```
+
+`session` defaults to the HQ session name from config. Pass a project name or session name to attach to a project session instead.
+
+---
+
+### `hyper hq stop`
+
+Stop an HQ session (kills the tmux session).
+
+```bash
+hyper hq stop [session]
+```
+
+---
+
+### `hyper hq stop-all`
+
+Stop all HQ-managed sessions at once.
+
+```bash
+hyper hq stop-all
+```
+
+---
+
+### `hyper hq web`
+
+Open the HQ session in claude.ai/code. Requires `/remote-control` to be active in the session.
+
+```bash
+hyper hq web
+```
+
+---
+
+### `hyper hq setup`
+
+Interactive setup wizard --- configure HQ settings including your projects root and session defaults.
+
+```bash
+hyper hq setup
+```
+
+---
+
+### `hyper hq config`
+
+Show the current HQ configuration (`~/.config/hyper/hq.toml`).
+
+```bash
+hyper hq config [--json] [--path]
+```
+
+`--path` prints just the config file path.
+
+---
+
+### `hyper hq configure telegram`
+
+Configure Telegram integration so you can receive notifications and send commands to HQ sessions from your phone.
+
+```bash
+hyper hq configure telegram
+```
+
+---
+
+## Configuration
+
+### `hyper config show`
+
+Show the resolved Hypergen configuration for the current project. This merges global and project-level config, so what you see is what Hyper actually uses.
+
+```bash
+hyper config show [--json] [--cwd <path>]
+```
+
+`--json` outputs raw JSON without the interactive viewer.
+
+---
+
+### `hyper init`
+
+Initialize Hyper in the current project --- creates the `.hyper/` workspace and a default config file.
+
+```bash
+hyper init [--force] [--cwd <path>]
+```
+
+`--force` overwrites an existing configuration.
+
+---
+
+### `hyper autocomplete`
+
+Display shell autocomplete installation instructions. Supports zsh, bash, and PowerShell.
+
+```bash
+hyper autocomplete [zsh|bash|powershell]
+hyper autocomplete --refresh-cache
+```
+
+---
+
+## Workflow
+
+These tools implement the Hyper Coding methodology --- run them alongside generation and session management.
+
+| Tool | Description |
+|------|-------------|
+| `hyper tools` | Set up and manage development tooling for your project |
+| `hyper plan` | Interactive planning — define features, decompose into tasks, generate specs |
+| `hyper watch` | Always-on agent whisperer — monitors your codebase and surfaces issues in real time |
+| `hyper dash` | Real-time dashboard for monitoring active sessions, progress, and agent activity |
+
+---
+
+## Common Flags
+
+These flags work across most commands:
+
+| Flag | Description |
+|------|-------------|
+| `--help` | Show command help |
+| `--debug`, `-d` | Enable debug output (`DEBUG` env var) |
+| `--cwd <path>` | Override working directory |
+| `--json` | Output as JSON (where supported) |

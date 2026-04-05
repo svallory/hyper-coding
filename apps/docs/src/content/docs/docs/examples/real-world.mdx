@@ -1,0 +1,118 @@
+---
+title: "Real-World Projects"
+description: "Complete project setups and workflows from starter apps to production systems"
+---
+
+# Real-World Projects
+
+Full project templates---not toy apps. These cover the setups we've actually had to build: SaaS applications, microservices, the works. Each one comes with a project structure, config files, and deployment setup so you're not starting from a blank slate.
+
+## Full-Stack Applications
+
+### Next.js SaaS Application
+
+Generates a full Next.js SaaS---auth, billing, admin dashboard. Pick your database, auth provider, and payment processor and it scaffolds the whole thing: Prisma schema with user/subscription models, auth setup wired to your chosen provider, Stripe checkout sessions and webhook handlers, an admin panel with user management, and environment config for all three stages.
+
+```bash
+hyper gen nextjs-saas
+# Prompts:
+# Project name: my-saas-app
+# Database type: PostgreSQL
+# Authentication provider: NextAuth.js
+# Payment provider: Stripe
+# UI Framework: Tailwind CSS + shadcn/ui
+# Include admin dashboard? Yes
+
+# Generated: Complete Next.js SaaS application with 50+ files
+```
+
+**Project Structure**
+```
+{{ projectName }}/
+├── app/
+│   ├── (auth)/
+│   │   ├── signin/
+│   │   └── signup/
+│   ├── (dashboard)/
+│   │   ├── dashboard/
+│   │   ├── settings/
+│   │   └── billing/
+│   ├── admin/
+│   │   ├── users/
+│   │   └── analytics/
+│   └── api/
+│       ├── auth/
+│       ├── billing/
+│       ├── webhooks/
+│       └── users/
+├── components/
+│   ├── ui/
+│   ├── auth/
+│   ├── dashboard/
+│   └── billing/
+├── lib/
+│   ├── auth.ts
+│   ├── db.ts
+│   ├── billing.ts
+│   └── validations.ts
+├── prisma/
+│   ├── schema.prisma
+│   └── migrations/
+└── .env.example
+```
+
+**Variables**: `projectName`, `databaseType` (postgres/mysql/sqlite), `authProvider` (nextauth/clerk/supabase), `paymentProvider` (stripe/lemonsqueezy/none), `uiFramework` (shadcn/headless/chakra), `includeAdmin` (boolean).
+
+---
+
+## Microservices Architecture
+
+### Node.js Microservice Template
+
+Generates a Node.js microservice with Docker, health checks, monitoring hooks, and a CI/CD pipeline. The stuff that usually takes a day to wire up. You get a production-grade Express setup with Prometheus metrics, OpenTelemetry tracing, Kubernetes manifests with liveness/readiness probes, and a GitHub Actions workflow that builds, scans, and deploys on merge to main.
+
+```bash
+hyper gen nodejs-microservice
+# Prompts:
+# Service name: user-service
+# Database type: PostgreSQL
+# Message queue: RabbitMQ
+# Include JWT authentication? Yes
+# Include Prometheus metrics? Yes
+# Include distributed tracing? Yes
+
+# Generated: Complete microservice with 40+ files
+```
+
+**Project Structure**
+```
+{{ serviceName }}/
+├── src/
+│   ├── controllers/
+│   ├── services/
+│   ├── repositories/
+│   ├── middleware/
+│   ├── routes/
+│   └── app.ts
+├── tests/
+├── docker/
+│   └── docker-entrypoint.sh
+├── k8s/
+│   ├── deployment.yaml
+│   └── service.yaml
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+└── Dockerfile
+```
+
+**Variables**: `serviceName`, `databaseType` (postgres/mongo/redis/none), `messageQueue` (rabbitmq/kafka/redis-pubsub/none), `includeAuth` (boolean), `includeMetrics` (boolean), `includeTracing` (boolean).
+
+---
+
+## What's Next?
+
+These cover the big-picture scenarios. For more targeted stuff:
+
+- **[Advanced Patterns](/docs/examples/advanced-patterns)** - Complex template compositions and enterprise patterns
+- **[Framework Integration](/docs/examples/frameworks)** - Framework-specific optimizations and patterns

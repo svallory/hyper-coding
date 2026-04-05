@@ -1,0 +1,29 @@
+---
+title: "Architecture"
+description: "Internal design, config schemas, and implementation details for HyperDev contributors."
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+# Architecture
+
+Technical internals for contributors and advanced users. Config schemas, algorithms, and implementation details that don't belong in the user-facing docs.
+
+<CardGrid>
+  <Card title="Methodology" icon="open-book">
+    The Hyper Coding methodology — phases, metrics, and tool mappings.
+    [Methodology →](/arch/methodology/)
+  </Card>
+  <Card title="Gen Internals" icon="rocket">
+    How the code generation engine works — template resolution, trust scoring, AI augmentation.
+    [Gen internals →](/arch/gen-internals/)
+  </Card>
+  <Card title="Command Internals" icon="terminal">
+    Detailed schemas and algorithms for each CLI command.
+    [Command internals →](/arch/commands/search/)
+  </Card>
+  <Card title="Configuration" icon="setting">
+    Full config file schemas, resolution order, and plugin API.
+    [Config reference →](/arch/config/configuration/)
+  </Card>
+</CardGrid>

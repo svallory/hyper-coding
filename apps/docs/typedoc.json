@@ -1,0 +1,7 @@
+{
+	"entryPoints": ["../../packages/gen/src/index.ts"],
+	"out": "./src/content/docs/api",
+	"plugin": ["typedoc-plugin-markdown"],
+	"disableSources": true,
+	"hideBreadcrumbs": true
+}

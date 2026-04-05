@@ -1,0 +1,121 @@
+---
+title: "hyper search"
+description: "Search across kits, cookbooks, and templates in the HyperDev ecosystem"
+---
+
+import { Aside, CardGrid, Card } from '@astrojs/starlight/components';
+
+# hyper search
+
+Find kits, templates, and cookbooks when you know roughly what you need but not exactly what it's called.
+
+## Syntax
+
+```bash
+hyper search <query> [options]
+```
+
+## Overview
+
+`hyper search` looks across the HyperDev ecosystem and surfaces the most relevant resources for your query. It reads your current project's stack and weights results toward what's compatible with what you're already using.
+
+```bash
+# Find a starting point
+hyper search "nextjs api route"
+
+# Look up a pattern
+hyper search "drizzle postgres migrations"
+
+# Explore what exists
+hyper search "react form validation"
+```
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--type <type>` | Filter by resource type: `kits`, `templates`, `cookbooks` | `all` |
+| `--language <lang>` | Filter by language | — |
+| `--framework <name>` | Filter by framework | — |
+| `--official-only` | Only official HyperDev resources | `false` |
+| `--limit <n>` | Max results to show | `20` |
+| `--json` | Machine-readable output | `false` |
+
+## Examples
+
+```bash
+# Templates only
+hyper search "nextjs" --type templates
+
+# Official resources only
+hyper search "database migration" --official-only
+
+# TypeScript-focused results
+hyper search "form validation" --language typescript
+
+# React ecosystem
+hyper search "state management" --framework react
+
+# JSON output for scripting
+hyper search "api template" --json
+```
+
+## What you'll see
+
+Results show the resource name, type, a short description, and a quick-action command you can copy directly:
+
+```
+Search results for "nextjs api route"
+
+  {name}          kit       {one-line description}
+  {name}          template  {one-line description}
+  {name}          cookbook  {one-line description}
+
+To use a result:
+  hyper gen {name}
+  hyper kit install {name}
+```
+
+Results are ranked by relevance to your query plus compatibility with your current stack.
+
+<Aside type="tip">
+  Search is fuzzy — typos and partial terms work fine. "recat compnent" still finds React component templates.
+</Aside>
+
+## Context awareness
+
+HyperDev detects your stack from `package.json` and project files. A search for "authentication" in a Next.js project surfaces Next.js-compatible auth solutions before generic ones.
+
+## From search to generation
+
+```bash
+# 1. Find what you want
+hyper search "react hook form"
+
+# 2. Generate from the result
+hyper gen {template-name}
+
+# Or search interactively during generation
+hyper gen --search "react form"
+```
+
+## Configuration
+
+Search behavior is configurable in `hypergen.config.js`. See the [search configuration reference](/reference/configuration) for available options.
+
+## Related commands
+
+<CardGrid>
+  <Card title="hyper list" href="/reference/commands/list">
+    Browse all available resources by category
+  </Card>
+  <Card title="hyper gen" href="/reference/commands/gen">
+    Generate code from a template or kit
+  </Card>
+  <Card title="hyper plan" href="/reference/commands/plan">
+    Plan features and find relevant patterns
+  </Card>
+  <Card title="hyper kit install" href="/cli/commands/kit/install">
+    Install a kit into your project
+  </Card>
+</CardGrid>

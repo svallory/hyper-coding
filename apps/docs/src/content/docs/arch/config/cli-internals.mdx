@@ -1,0 +1,405 @@
+---
+title: "CLI Internals Architecture"
+description: "Technical reference for the HyperDev CLI — output format specs, error code listings, parameter type tables, recipe system, and step execution internals"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  This is an architecture reference. For the user-facing CLI reference, see [CLI Reference](/reference/cli).
+</Aside>
+
+## Global Options
+
+These options apply to all commands:
+
+| Flag | Description |
+|------|-------------|
+| `--debug` | Enable debug logging |
+| `--verbose` | Enable verbose output |
+| `--config=<path>` | Use specific config file |
+
+## Parameter Types
+
+| Type | Description | CLI Format |
+|------|-------------|-----------|
+| `string` | Plain string | `--name=MyComponent` |
+| `boolean` | True/false | `--typescript=true`, `--tests=false` |
+| `JSON string` | Complex objects | `--config='{"strict":true}'` |
+| `JSON array` | Array values | `--options='["async","export"]'` |
+| `@file` | File-based input | `--config=@schema.json` |
+
+Alternate space-separated format is also accepted: `hyper gen create-api --name UserAPI --method GET`
+
+## Action Resolution Order
+
+When `hyper gen <name>` is invoked:
+
+1. Registered action by exact name
+2. Recipe file with that name (`.yml` extension added if missing)
+3. Auto-discovery: searches `.hyper/kits/<name>.yml`
+
+## Recipe Execute Output Format
+
+Real-time progress during recipe execution:
+
+```
+📈 setup-database: initializing (10%)
+✅ Step: setup-database (1250ms)
+📈 create-api: generating (45%)
+✅ Step: create-api (2100ms)
+📈 create-frontend: processing (78%)
+✅ Step: create-frontend (1800ms)
+```
+
+Completion summary:
+
+```
+✅ Recipe 'Fullstack App' completed successfully
+
+Execution Summary:
+  Duration: 4250ms
+  Steps completed: 5/5
+  Failed steps: 0
+  Skipped steps: 0
+
+Files created: src/api/users.js, src/components/UserList.jsx, tests/api.test.js
+Files modified: package.json, src/index.js
+Files deleted: (none)
+```
+
+## Recipe Validate Output Format
+
+Successful validation:
+
+```
+✅ Recipe validation successful: Fullstack App
+Description: Creates a complete fullstack application
+Version: 1.2.0
+Category: fullstack
+Variables: 8
+Steps: 5
+Examples: 2
+
+⚠️  Warnings:
+  • Variable 'database' has no default value
+  • Step 'deploy' depends on external service availability
+```
+
+Failed validation:
+
+```
+❌ Recipe validation failed: my-recipe.yml
+
+Validation errors:
+  • Missing required field: name
+  • Invalid variable type: config.timeout (expected: number)
+  • Step dependency not found: non-existent-step
+  • Template file not found: missing-template.ejs
+
+Warnings:
+  • Variable 'optional-param' has no description
+```
+
+## Recipe Validation Checks
+
+- YAML syntax correctness
+- Required fields presence (`name`, `steps`, `variables`)
+- Variable type definitions and constraints
+- Step dependency validity and circular references
+- Tool availability and configuration
+- Template file references
+- Sub-recipe existence
+
+## hyper recipe info Output Format
+
+```
+📋 Recipe: Fullstack Application
+Description: Creates a complete React + Node.js application
+Version: 2.1.0
+Author: Development Team
+Category: fullstack
+Tags: react, nodejs, postgresql, docker
+
+Variables (6):
+  • name (string) *required* - Application name
+  • database (string) [default: postgresql] - Database type
+  • typescript (boolean) [default: true] - Use TypeScript
+  • auth (boolean) [default: false] - Include authentication
+  • docker (boolean) [default: true] - Include Docker configuration
+  • api-version (string) [default: v1] - API version prefix
+
+Steps (8):
+  1. setup-project-structure (template)
+     Description: Create basic project directories
+
+  2. generate-api-server (action)
+     Description: Generate Express.js API server
+     Action: express-api-generator
+     Depends on: setup-project-structure
+
+  3. generate-database-schema (template)
+     Description: Create database migration files
+     Template: database/postgresql-schema.sql.ejs
+     Condition: database === 'postgresql'
+
+  4. generate-frontend-app (recipe)
+     Description: Generate React frontend application
+     Sub-recipe: react-app.yml
+     Depends on: generate-api-server
+
+Examples (3):
+  • Basic Application
+    Variables: name, database=mysql, typescript=false
+
+  • Production Setup
+    Variables: name, auth=true, docker=true, database=postgresql
+```
+
+## hyper step list Output Format
+
+```
+📋 Steps in recipe: Fullstack App (8)
+
+1. validate-inputs
+   Tool: action
+   Action: input-validator
+   Continue on error: false
+
+2. setup-project-structure
+   Tool: template
+   Template: project/structure.ejs
+   Depends on: validate-inputs
+
+3. generate-database-schema
+   Tool: template
+   Template: database/postgresql-schema.sql.ejs
+   Condition: database === 'postgresql'
+   Depends on: setup-project-structure
+   Continue on error: true
+
+4. generate-api-server
+   Tool: action
+   Action: express-generator
+   Depends on: generate-database-schema
+```
+
+## hyper step execute Output Format
+
+```
+✅ Step 'generate-api-server' completed successfully
+  Duration: 2100ms
+  Files created: src/api/server.js, src/api/routes/users.js
+  Files modified: package.json
+
+# Dry run:
+🔍 [DRY RUN] Step 'generate-api-server' would complete successfully
+  Duration: 1200ms (estimated)
+  Files would be created: src/api/server.js, src/api/routes/users.js
+  Files would be modified: package.json
+```
+
+Dependency error format:
+
+```
+❌ Step execution failed: generate-frontend-app
+  Missing dependency: generate-api-server must be completed first
+
+💡 Suggestion: Execute the full recipe or run dependency steps first:
+  $ hyper step execute fullstack-app.yml generate-api-server
+  $ hyper step execute fullstack-app.yml generate-frontend-app
+```
+
+## hyper list Output Format
+
+```
+📝 Available actions:
+
+  • create-component - Generate React components (requires: name)
+  • create-api - Generate API endpoints (requires: name, method)
+  • create-util - Generate utility functions (requires: name)
+
+📂 Categories: component, api, utility, test
+Use "hyper list <category>" to filter by category
+```
+
+## hyper info Output Format
+
+```
+📋 Action: create-component
+Description: Generate a React component with TypeScript support
+Category: component
+Tags: react, typescript, component
+
+Parameters (3):
+  • name (string) *required* - Component name
+  • path (string) [default: src/components] - Output directory
+  • typescript (boolean) [default: true] - Use TypeScript
+
+Examples:
+  Basic component:
+    hyper gen create-component --name=Button
+
+  Component with custom path:
+    hyper gen create-component --name=Header --path=src/layout
+```
+
+## hyper discover Output Format
+
+```
+🔍 Discovery complete: found 12 generators
+
+Generators found:
+  📦 react-component (local)
+     Path: recipes/react-component
+     Actions: create, update, test
+     Description: React component generator with TypeScript
+
+  📦 express-api (npm)
+     Path: node_modules/@hyperdev/express-api
+     Actions: create-endpoint, create-middleware
+     Description: Express.js API generator
+```
+
+## hyper system status Output Format
+
+```
+📊 HyperDev Status
+
+Generators: 8
+  • Local: 3
+  • NPM: 2
+  • Workspace: 3
+
+Actions: 15
+Categories: 5
+
+URL Cache:
+  • Entries: 12
+  • Size: 2.4 MB
+
+Project: /Users/dev/my-project
+```
+
+## hyper config show Output Format
+
+```
+📝 Configuration (hyperdev.config.js):
+
+Templates: recipes/, generators/
+Environment: development
+Engine: ejs
+Conflict Strategy: prompt
+Cache Enabled: true
+Validation: strict
+Discovery Sources: local, npm
+Plugins: @hyperdev/react-plugin
+Helpers: camelCase, pascalCase, kebabCase
+```
+
+## Error Message Format
+
+```
+❌ Action name required
+   Code: ACTION_INVALID_PARAMETERS
+
+💡 Suggestions:
+   1. Provide action name
+      Specify the action you want to execute
+      $ hyper gen <action-name> [parameters...]
+
+   2. List available actions
+      See all available actions
+      $ hyper list
+```
+
+## Environment Variables Reference
+
+```bash
+# Configuration
+HYPERGEN_CONFIG=/path/to/config.js    # Custom config file
+HYPERGEN_CACHE_DIR=/path/to/cache     # Cache directory
+HYPERGEN_TEMPLATES=/path/to/templates  # Template directories
+
+# Behavior
+DEBUG=hyperdev*                        # Debug logging (glob pattern)
+HYPERGEN_DISABLE_CACHE=true           # Disable caching
+HYPERGEN_DEFAULT_FRAMEWORK=react      # Default framework
+```
+
+## Debug Mode
+
+```bash
+# Global debug
+export DEBUG=hyperdev*
+hyper gen create-component --name=Test
+
+# Command-specific
+hyper --debug gen create-api --name=Users
+
+# Verbose output
+hyper --verbose recipe execute complex-recipe.yml
+```
+
+## CI/CD Integration
+
+```yaml
+# .github/workflows/validate-templates.yml
+name: Validate Templates
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: oven-sh/setup-bun@v1
+
+      - name: Install HyperDev
+        run: bun install -g hyper
+
+      - name: Validate Templates
+        run: |
+          find recipes/ -name "template.yml" -exec hyper template validate {} \;
+
+      - name: Validate Recipes
+        run: |
+          find recipes/ -name "*.yml" -path "*/recipes/*" -exec hyper recipe validate {} \;
+```
+
+## package.json Script Integration
+
+```json
+{
+  "scripts": {
+    "gen:component": "hyper gen create-component",
+    "gen:api": "hyper gen create-api-endpoint",
+    "gen:test": "hyper gen create-test",
+    "setup:project": "hyper recipe execute project-setup.yml",
+    "validate:templates": "find recipes/ -name 'template.yml' -exec hyper template validate {} \\;"
+  }
+}
+```
+
+## Template Organization Conventions
+
+```
+recipes/
+├── components/
+│   ├── react-component/
+│   │   ├── template.yml
+│   │   └── templates/
+│   └── vue-component/
+├── api/
+│   ├── express-endpoint/
+│   └── fastapi-endpoint/
+└── recipes/
+    ├── fullstack-app.yml
+    └── microservice.yml
+```
+
+Naming conventions:
+- **Actions**: `verb-noun` (e.g., `create-component`, `update-schema`)
+- **Templates**: `technology-type` (e.g., `react-component`, `express-api`)
+- **Recipes**: descriptive name (e.g., `fullstack-app`, `microservice-setup`)
+- **Parameters**: `camelCase` (e.g., `componentName`, `apiEndpoint`)

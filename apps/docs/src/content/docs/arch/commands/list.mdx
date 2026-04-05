@@ -1,0 +1,166 @@
+---
+title: "List Command Architecture"
+description: "Technical reference for hyper list — filter syntax, JSON output schema, sorting options, and configuration block"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  This is an architecture reference. For usage docs, see [hyper list](/reference/commands/list).
+</Aside>
+
+## Filter Syntax
+
+The `--filter` flag accepts:
+
+```bash
+# Simple text filter (matches name and tags)
+hyper list templates --filter "react"
+
+# Multiple criteria (comma-separated = AND)
+hyper list templates --filter "react,typescript"
+
+# Comparison operators
+hyper list templates --filter "trust>8"
+hyper list templates --filter "downloads>1000"
+hyper list templates --filter "updated<30d"
+
+# Complex boolean expressions
+hyper list templates --filter "trust>8 AND category=frontend"
+```
+
+**Filterable fields:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `trust` | number | Score 1–10 |
+| `downloads` | number | Total download count |
+| `stars` | number | GitHub stars |
+| `updated` | duration | Time suffixes: `d`, `w`, `m` |
+| `category` | string | `frontend`, `backend`, `fullstack`, `devops`, `mobile` |
+| `technology` | string | Technology stack tag |
+| `author` | string | Author or organization name |
+| `official` | boolean | `true`/`false` |
+
+## Sorting Options
+
+```bash
+hyper list templates --sort name        # Alphabetical (default)
+hyper list templates --sort trust       # Trust score descending
+hyper list templates --sort popularity  # Downloads + stars combined
+hyper list templates --sort updated     # Most recently updated first
+hyper list templates --sort relevance   # Context relevance score
+```
+
+## JSON Output Schema
+
+```bash
+hyper list templates --json
+```
+
+```json
+{
+  "resource_type": "templates",
+  "total_count": 127,
+  "categories": {
+    "frontend": 45,
+    "backend": 38,
+    "fullstack": 25,
+    "devops": 19
+  },
+  "results": [
+    {
+      "id": "react-component-library",
+      "name": "React Component Library",
+      "description": "Production-ready React component library",
+      "category": "frontend",
+      "trust_score": 9.5,
+      "popularity": {
+        "downloads": 25300,
+        "stars": 1200,
+        "forks": 180
+      },
+      "technologies": ["react", "typescript", "storybook"],
+      "author": {
+        "name": "HyperDev Official",
+        "verified": true
+      },
+      "updated": "2024-01-13T10:30:00Z",
+      "quick_actions": [
+        "hyper generate react-component-library"
+      ]
+    }
+  ]
+}
+```
+
+## Cache Management
+
+```bash
+hyper list --cached             # List cached resources
+hyper list --cache-stats        # Show cache statistics
+hyper list templates --refresh  # Refresh cache and list
+```
+
+## Bookmarking
+
+```bash
+hyper list templates --bookmark react-component    # Add bookmark
+hyper list --bookmarked                            # List bookmarked
+hyper list --bookmarks --remove react-component   # Remove bookmark
+```
+
+## Comparison
+
+```bash
+hyper list templates --compare react-component,vue-component
+hyper list templates --diff template-a template-b
+```
+
+## Configuration Block
+
+```javascript
+// hypergen.config.js
+export default {
+  list: {
+    default_view: 'summary',        // 'summary' | 'detailed' | 'compact'
+    show_trust_scores: true,
+    show_popularity: true,
+    show_last_updated: true,
+
+    default_limit: 50,
+    max_limit: 200,
+
+    default_sort: 'relevance',      // 'name' | 'trust' | 'popularity' | 'updated'
+
+    default_trust_level: 6,
+    include_experimental: false,
+
+    categories: [
+      'frontend',
+      'backend',
+      'fullstack',
+      'devops',
+      'mobile'
+    ]
+  },
+
+  team_list: {
+    preferred_categories: ['frontend', 'backend'],
+    technology_filter: ['react', 'typescript', 'node.js'],
+
+    team_sort_priority: [
+      'internal_resources',
+      'trust_score',
+      'team_usage',
+      'popularity'
+    ],
+
+    team_bookmarks: [
+      'react-component-library',
+      'express-api-template',
+      'docker-deployment'
+    ]
+  }
+}
+```

@@ -1,0 +1,235 @@
+---
+title: "Installation"
+description: "Install and configure the HyperDev CLI for local code generation and development"
+---
+
+import { Aside, Card, CardGrid, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Installation
+
+> Get the HyperDev CLI installed and start generating code locally
+
+Install the `hyper` CLI and you're good to go — no cloud services, no authentication, no account setup. It runs entirely on your machine.
+
+<Aside type="note">
+  **Prerequisites**: Before you begin, ensure you have [Node.js v18+](https://nodejs.org/) and [Bun](https://bun.sh/) installed on your system.
+</Aside>
+
+## System Requirements
+
+<Card title="Operating System Support" icon="desktop">
+  **Supported Platforms:**
+  - macOS 10.15 (Catalina) or later
+  - Ubuntu 20.04+ or equivalent Linux distribution
+  - Windows 11 with WSL2 (recommended) or Windows 10 build 19041+
+</Card>
+
+<Card title="Runtime Requirements" icon="cog">
+  **Required Software:**
+  - **Node.js**: Version 18.0.0 or higher
+  - **Package Manager**: Bun (recommended) or npm/yarn
+  - **Git**: Latest stable version
+  - **Terminal**: Modern terminal with Unicode support
+</Card>
+
+## Installation
+
+Install HyperDev using your preferred package manager:
+
+```bash title="Bun (Recommended)"
+  bun add -g @hypercli/cli
+```
+
+```bash title="yarn"
+  yarn global add @hypercli/cli
+```
+
+This installs the `hyper` command globally on your system.
+
+## Verification & Testing
+
+<Steps>
+1. **Confirm the CLI is installed**
+    ```bash
+    hyper --version
+    ```
+  
+2. **Initialize your workspace**
+    ```bash
+    hyper init
+    ```
+
+3. **Try generating something**
+    ```bash
+    hyper gen component --name TestComponent
+    ```
+</Steps>
+
+  <img src="/images/doctor-output.png" alt="HyperDev Doctor Output" />
+
+## Configuration
+
+Initialize your development workspace:
+
+```bash
+hyper init
+```
+
+## IDE Integration
+
+<Tabs>
+  <TabItem label="VS Code">
+    Install the HyperDev extension from the VS Code marketplace or via command line:
+    ```bash
+    code --install-extension hyperdev.hyperdev-vscode
+    ```
+  </TabItem>
+
+  <TabItem label="Cursor">
+    Setup Cursor integration:
+    ```bash
+    hyper config set default-ide cursor
+    ```
+  </TabItem>
+
+  <TabItem label="JetBrains">
+    Supports IntelliJ IDEA, WebStorm, PyCharm, and other JetBrains IDEs.
+    
+    ```bash
+    hyper config set default-ide jetbrains
+    ```
+  </TabItem>
+
+  <TabItem label="Vim/Neovim">
+    Install via your preferred plugin manager:
+    
+    ```lua title="lazy.nvim"
+      {
+        "hyperdev-ai/hyperdev.nvim",
+        config = function()
+          require("hyper").setup()
+        end
+      }
+```
+
+```vim title="vim-plug"
+      Plug 'hyperdev-ai/hyperdev.vim'
+```
+  </TabItem>
+</Tabs>
+
+## Troubleshooting
+
+  <details>
+<summary>Permission errors on macOS/Linux</summary>
+
+    Fix file permissions for HyperDev configuration:
+    
+    ```bash
+    sudo chown -R $(whoami) ~/.hyperdev
+    chmod -R 755 ~/.hyperdev
+    ```
+    
+    Or install without sudo:
+    ```bash
+    npm config set prefix '~/.local'
+    echo 'export PATH=$HOME/.local/bin:$PATH' >> ~/.bashrc
+    ```
+
+  </details>
+
+  <details>
+<summary>Node.js version conflicts</summary>
+
+    Use a Node.js version manager to handle multiple versions:
+    
+    ```bash title="nvm"
+      nvm install 18
+      nvm use 18
+      nvm alias default 18
+```
+
+```bash title="fnm (faster alternative)"
+      fnm install 18
+      fnm use 18
+      fnm default 18
+```
+
+  </details>
+
+  <details>
+<summary>Installation hanging or failing</summary>
+
+    Try these solutions in order:
+    
+    1. **Clear package cache:**
+       ```bash
+       bun cache clear
+       npm cache clean --force
+       ```
+    
+    2. **Use different registry:**
+       ```bash
+       bun add -g @hypercli/cli --registry https://registry.npmjs.org/
+       ```
+    
+    3. **Install with verbose logging:**
+       ```bash
+       bun add -g @hypercli/cli --verbose
+       ```
+
+  </details>
+
+  <details>
+<summary>Windows WSL2 specific issues</summary>
+
+    Common Windows/WSL2 solutions:
+    
+    1. **Update WSL2:**
+       ```bash
+       wsl --update
+       ```
+    
+    2. **Fix line ending issues:**
+       ```bash
+       git config --global core.autocrlf false
+       ```
+    
+    3. **Set proper WSL2 path:**
+       ```bash
+       echo 'export PATH="/usr/local/bin:$PATH"' >> ~/.bashrc
+       ```
+
+  </details>
+
+## Getting Help
+
+<CardGrid>
+  <Card title="Documentation" icon="book" href="/docs/guides/reference/troubleshooting">
+    Comprehensive troubleshooting guide with common solutions
+  </Card>
+  <Card title="GitHub Issues" icon="github" href="https://github.com/hyperdev-ai/hyperdev/issues">
+    Search existing issues or report new problems
+  </Card>
+</CardGrid>
+
+## Next Steps
+
+<Card title="Continue with Quickstart" icon="rocket" href="/quickstart" horizontal>
+  Now that HyperDev is installed, follow our quickstart guide to create your first project and experience the complete workflow.
+</Card>
+
+## Updating HyperDev
+
+```bash title="Update CLI"
+  bun update -g @hypercli/cli
+```
+
+```bash title="Check Current Version"
+  hyper --version
+```
+
+The update process handles:
+- CLI binary updates
+- Configuration migration
+- Template cache cleanup

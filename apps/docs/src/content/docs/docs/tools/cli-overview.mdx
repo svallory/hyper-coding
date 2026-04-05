@@ -1,0 +1,137 @@
+---
+title: "CLI Overview"
+description: "The hyper command — a unified CLI for AI-augmented development across code generation, session management, and beyond"
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+# Hyper CLI
+
+`hyper` is the single command you run for everything HyperDev. It's built on an oclif plugin architecture, so instead of juggling separate tools, you get one entry point for code generation, session management, and the rest of what the Hyper Coding methodology covers.
+
+## The Six Tools
+
+The CLI surface breaks down into six top-level tools, each handling a distinct phase of the workflow:
+
+| Tool | Status | Purpose |
+|------|--------|---------|
+| `hyper gen` | Available | Code generation — run recipes, manage kits |
+| `hyper hq` | Available | Session management — persistent Claude Code sessions via tmux |
+| `hyper tools` | Coming soon | Tooling setup — configure and install development tooling |
+| `hyper plan` | Coming soon | Define, design, decompose, and develop features |
+| `hyper watch` | Coming soon | Always-on agent whisperer for continuous oversight |
+| `hyper dash` | Coming soon | Real-time monitoring dashboard |
+
+## Plugin Architecture
+
+The `hyper` binary is a thin oclif shell. It loads `@hypercli/gen`, `@hypercli/kit`, and `@hypercli/hq` as plugins and delegates everything to them; there's no generation or session logic in the CLI package itself.
+
+```
+hyper (shell)
+├── @hypercli/gen  — gen, recipe *, cookbook *
+├── @hypercli/kit  — kit *, recipe *, cookbook * (discovery layer)
+└── @hypercli/hq   — hq *
+```
+
+`config show` and `init` are handled directly by the CLI package.
+
+### BaseCommand hierarchy
+
+```
+oclif Command (@oclif/core)
+  └── CoreBaseCommand (@hypercli/cli)
+        ├── GenBaseCommand (@hypercli/gen)  — recipe engine, Jig, AI
+        └── KitBaseCommand (@hypercli/kit)  — kit manifest, source resolution
+```
+
+## Command Routing and Shorthands
+
+oclif routes commands by matching the first token. The `command_not_found` hook in `@hypercli/gen` rewrites unrecognized top-level tokens into `hyper gen`:
+
+```bash
+hyper nextjs crud list
+# → internally becomes: hyper gen nextjs/crud list
+```
+
+Once you know what you want, you can skip the `gen` prefix entirely and just type the kit and recipe name directly.
+
+The formal equivalent uses `hyper recipe run` for local file paths or `hyper gen` for named recipes:
+
+```bash
+hyper recipe run ./my-recipe.yml     # run a local recipe file
+hyper gen nextjs/crud list           # run a named recipe from an installed kit
+hyper nextjs crud list               # shorthand — same as above
+```
+
+## Quick Reference
+
+All currently available commands:
+
+### Generation
+
+| Command | Description |
+|---------|-------------|
+| `hyper gen <recipe>` | Execute a recipe (path, package, or `kit/recipe`) |
+| `hyper recipe run <file.yml>` | Run a recipe from a file path |
+| `hyper recipe list [kit]` | List available recipes |
+| `hyper recipe info <name>` | Show recipe details |
+| `hyper recipe validate <file.yml>` | Validate a recipe file |
+| `hyper cookbook list [kit]` | List cookbooks from installed kits |
+| `hyper cookbook info <cookbook>` | Show cookbook details |
+
+### Kit Management
+
+| Command | Description |
+|---------|-------------|
+| `hyper kit install <source>` | Install a kit from npm, JSR, GitHub, or local path |
+| `hyper kit list` | List installed kits |
+| `hyper kit info <kit>` | Show kit details |
+| `hyper kit update [kit]` | Update a kit (or all with `--all`) |
+| `hyper kit uninstall <kit>` | Remove a kit (alias: `kit remove`) |
+
+### Session Management
+
+| Command | Description |
+|---------|-------------|
+| `hyper hq start` | Start the HQ session (always-on Claude Code) |
+| `hyper hq launch [project]` | Launch a Claude session for a project |
+| `hyper hq relaunch <target>` | Stop and relaunch a session with `--continue` |
+| `hyper hq status` | Show running HQ sessions |
+| `hyper hq list` | List available projects and worktrees |
+| `hyper hq attach [session]` | Attach to an HQ tmux session |
+| `hyper hq stop [session]` | Stop an HQ session |
+| `hyper hq stop-all` | Stop all HQ-managed sessions |
+| `hyper hq web` | Open the HQ session in claude.ai/code |
+| `hyper hq setup` | Configure HQ settings |
+| `hyper hq config` | Show HQ configuration |
+| `hyper hq configure telegram` | Configure Telegram integration |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `hyper config show` | Show the resolved Hypergen configuration |
+| `hyper init` | Initialize Hyper in the current project |
+| `hyper autocomplete` | Display autocomplete installation instructions |
+
+## Getting Help
+
+oclif's help system is available at every level:
+
+```bash
+hyper --help                  # all commands
+hyper gen --help              # gen command flags and examples
+hyper kit install --help      # install flag reference
+hyper hq --help               # all hq subcommands
+```
+
+## Next Steps
+
+<CardGrid>
+  <Card title="Commands Reference" icon="list" href="/reference/commands/overview">
+    Full reference for every command, flag, and example
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/docs/get-started/cli-quickstart">
+    From install to your first generated file in 5 minutes
+  </Card>
+</CardGrid>

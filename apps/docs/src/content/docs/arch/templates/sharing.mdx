@@ -1,0 +1,493 @@
+---
+title: "Template Sharing Architecture"
+description: "Technical reference for template distribution — hyperdev-package.config.js schema, package.json integration fields, template discovery config, and enterprise governance"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  This is an architecture reference. For usage docs, see [Sharing Templates](/docs/kits/sharing).
+</Aside>
+
+## Package Structure
+
+```
+my-template-package/
+├── package.json
+├── hyperdev-package.config.js
+├── README.md
+├── CHANGELOG.md
+├── LICENSE
+├── templates/
+│   ├── component/
+│   │   ├── template.yml
+│   │   └── *.ejs.t
+│   ├── service/
+│   │   ├── template.yml
+│   │   └── *.ejs.t
+│   └── workflow/
+├── actions/
+│   ├── validation.ts
+│   └── utilities.ts
+├── docs/
+│   ├── guides/
+│   └── examples/
+└── tests/
+    ├── component.test.ts
+    └── integration.test.ts
+```
+
+## hyperdev-package.config.js Schema
+
+```javascript
+// hyperdev-package.config.js
+module.exports = {
+  name: '@myorg/react-templates',
+  description: 'Professional React component templates',
+  version: '2.1.0',
+  author: 'Your Organization <dev@yourorg.com>',
+
+  // Template registry — maps names to directories
+  templates: {
+    'component': './templates/component',
+    'hook': './templates/hook',
+    'service': './templates/service',
+    'page': './templates/page',
+    'workflow': './templates/workflow'
+  },
+
+  // Dependencies required by generated code
+  peerDependencies: {
+    'react': '^18.0.0',
+    'typescript': '^4.9.0',
+    '@types/react': '^18.0.0'
+  },
+
+  devDependencies: {
+    '@hyperdev/action-system': '^2.0.0',
+    'jest': '^29.0.0'
+  },
+
+  keywords: ['react', 'typescript', 'components', 'hooks'],
+  category: 'frontend',
+  license: 'MIT',
+  homepage: 'https://github.com/myorg/react-templates',
+
+  publishConfig: {
+    registry: 'https://registry.npmjs.org',
+    access: 'public'
+  },
+
+  engines: {
+    node: '>=16.0.0',
+    hyperdev: '^8.0.0'
+  },
+
+  trusted: true,
+  maintainers: [
+    'dev@yourorg.com',
+    'security@yourorg.com'
+  ]
+};
+```
+
+## package.json Integration Fields
+
+The `hyperdev` key in `package.json` signals that this package contains HyperDev templates:
+
+```json
+{
+  "name": "@myorg/react-templates",
+  "version": "2.1.0",
+  "main": "index.js",
+  "files": [
+    "templates/**/*",
+    "actions/**/*",
+    "docs/**/*",
+    "hyperdev-package.config.js",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "keywords": ["hyperdev", "template", "react", "typescript", "generator"],
+  "hyperdev": {
+    "packageType": "templates",
+    "version": "^8.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "typescript": "^4.9.0"
+  },
+  "scripts": {
+    "test": "jest",
+    "validate": "hyper validate-package",
+    "build": "hyper build-package",
+    "prepublishOnly": "bun run validate && bun test"
+  }
+}
+```
+
+## Repository-Level Discovery Config
+
+```yaml
+# .hyperdev/config.yml
+repository:
+  type: "template-collection"
+  version: "2.1.0"
+
+templates:
+  discoveryPaths:
+    - "templates/**"
+
+  metadata:
+    category: "react"
+    maintainer: "dev@myorg.com"
+    license: "MIT"
+
+distribution:
+  allowDirectInstall: true
+  requireAuthentication: false
+  trustLevel: "verified"
+
+quality:
+  requireTests: true
+  enforceStandards: true
+  minimumCoverage: 80
+
+automation:
+  validateOnPush: true
+  autoRelease: true
+  releasePattern: "v*"
+```
+
+## Workspace Template Discovery Config
+
+```yaml
+# .hyperdev/workspace.yml
+workspace:
+  name: "MyTeam Development Templates"
+  version: "1.0.0"
+
+templates:
+  localPaths:
+    - "tools/templates"
+    - "packages/*/templates"
+
+  sharedActions: "tools/templates/shared/actions"
+
+  discovery:
+    autoScan: true
+    includePaths:
+      - "tools/templates/**"
+      - "packages/*/generators/**"
+
+standards:
+  enforceNaming: true
+  requireDocumentation: true
+  mandatoryTests: true
+
+access:
+  allowExternal: false
+  requireApproval: true
+  maintainers:
+    - "tech-leads@company.com"
+```
+
+## Template Composition and Dependencies
+
+```yaml
+# Complex template dependency declaration
+name: "enterprise-application"
+version: "3.0.0"
+
+dependencies:
+  templates:
+    - "@company/base-structure@^2.0.0"
+    - "@company/user-system@^1.5.0"
+    - "@company/monitoring@^1.2.0"
+
+  optional:
+    - "@company/analytics@^1.0.0"
+    - "@company/feature-flags@^2.1.0"
+
+composition:
+  strategy: "layered"
+  order:
+    - base-structure
+    - user-system
+    - monitoring
+    - analytics
+    - feature-flags
+
+conflicts:
+  - templates: ["@company/user-basic", "@company/user-system"]
+    resolution: "prefer-latest"
+```
+
+## Enterprise Registry Configuration
+
+```yaml
+registry:
+  name: "Company Template Registry"
+  url: "https://templates.company.com"
+
+  storage:
+    backend: "s3"
+    bucket: "company-templates"
+    region: "us-east-1"
+
+  security:
+    scanning: true
+    signatureVerification: true
+    vulnerabilityThreshold: "medium"
+
+  governance:
+    approvalWorkflow: true
+    reviewers: ["architecture-team", "security-team"]
+    retentionPolicy: "2-years"
+```
+
+## Enterprise Access Control Policies
+
+```javascript
+// Enterprise access control
+module.exports = {
+  organizations: {
+    'engineering': {
+      read: ['public', 'internal'],
+      write: ['internal'],
+      admin: false
+    },
+    'architecture': {
+      read: ['public', 'internal', 'confidential'],
+      write: ['public', 'internal', 'confidential'],
+      admin: true
+    }
+  },
+
+  teams: {
+    'frontend-team': {
+      templates: ['@company/react-*', '@company/vue-*'],
+      actions: ['create', 'update']
+    },
+    'backend-team': {
+      templates: ['@company/node-*', '@company/api-*'],
+      actions: ['create', 'update', 'delete']
+    }
+  },
+
+  projects: {
+    'customer-portal': {
+      allowedTemplates: ['@company/customer-*'],
+      requiredApproval: true
+    }
+  }
+};
+```
+
+## Governance TypeScript Interface
+
+```typescript
+// tools/templates/shared/governance.ts
+interface TemplateGovernance {
+  requiresReview: boolean;
+  approvers: string[];
+
+  qualityChecks: {
+    linting: boolean;
+    testing: boolean;
+    documentation: boolean;
+    security: boolean;
+  };
+
+  allowPublicSharing: boolean;
+  requiresLegal: boolean;
+}
+
+export const teamGovernance: TemplateGovernance = {
+  requiresReview: true,
+  approvers: ['tech-lead@company.com', 'senior-dev@company.com'],
+  qualityChecks: {
+    linting: true,
+    testing: true,
+    documentation: true,
+    security: true
+  },
+  allowPublicSharing: false,
+  requiresLegal: true
+};
+```
+
+## Enterprise Approval Workflow
+
+```yaml
+workflows:
+  template-publishing:
+    triggers:
+      - pull_request
+      - version_bump
+
+    stages:
+      - name: "automated-validation"
+        checks:
+          - security_scan
+          - quality_gates
+          - license_check
+          - dependency_audit
+
+      - name: "architecture-review"
+        reviewers:
+          - architecture-team
+        conditions:
+          - breaking_changes
+          - new_template
+
+      - name: "security-review"
+        reviewers:
+          - security-team
+        conditions:
+          - external_dependencies
+          - network_access
+
+      - name: "legal-review"
+        reviewers:
+          - legal-team
+        conditions:
+          - license_changes
+          - third_party_code
+
+  template-usage:
+    approval_required:
+      - confidential_templates
+      - experimental_templates
+    auto_approved:
+      - public_templates
+      - team_templates
+```
+
+## Template Audit Log Interface
+
+```typescript
+interface TemplateAuditLog {
+  timestamp: Date;
+  user: {
+    id: string;
+    email: string;
+    team: string;
+    role: string;
+  };
+  action: 'install' | 'generate' | 'update' | 'remove';
+  template: {
+    id: string;
+    version: string;
+    source: string;
+  };
+  project: {
+    id: string;
+    name: string;
+    classification: string;
+  };
+  metadata: {
+    generatedFiles: string[];
+    parameters: Record<string, any>;
+    duration: number;
+    success: boolean;
+  };
+}
+```
+
+## Community Quality Standards
+
+```yaml
+# template-standards.yml
+quality:
+  documentation:
+    required: true
+    includes: ["README.md", "CHANGELOG.md", "examples/"]
+
+  testing:
+    coverage: ">= 80%"
+    types: ["unit", "integration", "generation"]
+
+  security:
+    scanning: true
+    dependencies: "current"
+    vulnerabilities: "none-high"
+
+  performance:
+    generationTime: "< 5s"
+    memoryUsage: "< 100MB"
+
+community:
+  responsiveness: "< 48h"
+  maintenance: "active"
+  breaking-changes: "documented"
+```
+
+## Multi-Environment Distribution
+
+```javascript
+module.exports = {
+  environments: {
+    development: {
+      registry: "https://dev-templates.company.com",
+      allowExperimental: true,
+      autoUpdate: true
+    },
+    staging: {
+      registry: "https://staging-templates.company.com",
+      allowExperimental: false,
+      requireApproval: false
+    },
+    production: {
+      registry: "https://templates.company.com",
+      allowExperimental: false,
+      requireApproval: true,
+      onlyStableVersions: true
+    }
+  },
+
+  promotion: {
+    dev_to_staging: {
+      trigger: "tag",
+      pattern: "v*-rc*",
+      automated: true
+    },
+    staging_to_production: {
+      trigger: "release",
+      pattern: "v*",
+      requiresApproval: true,
+      approvers: ["release-team"]
+    }
+  }
+};
+```
+
+## Automated Publishing Workflow
+
+```yaml
+# .github/workflows/release.yml
+name: Release Templates
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+      - run: bun install
+      - run: bunx hyper validate-package
+      - run: bun test
+
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+      - name: Configure NPM
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+      - run: bun publish
+```

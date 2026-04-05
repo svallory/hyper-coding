@@ -1,0 +1,374 @@
+---
+title: "Creating Templates"
+description: "Complete guide to writing Jig templates — frontmatter, variable interpolation, pipe filters, directives, and the @ai tag"
+---
+
+import { Aside, Card } from '@astrojs/starlight/components';
+
+# Creating Templates
+
+Hyper templates use **Jig** — an Edge.js fork — with the `.jig` file extension. Templates are plain text files (TypeScript, JSON, YAML, MDX, whatever you need) with a YAML frontmatter block at the top and Jig directives mixed into the body.
+
+<Aside type="note">
+  Full Jig language reference: [jig.saulo.engineer](https://jig.saulo.engineer)
+</Aside>
+
+---
+
+## File Extension and Location
+
+Template files use the `.jig` extension. A template that generates `package.json` is named `package.json.jig`. One that generates `Button.tsx` is named `Button.tsx.jig` (or more commonly uses a dynamic `to:` path — see below).
+
+Templates live alongside the recipe that references them, typically in a `templates/` subdirectory:
+
+```
+my-cookbook/
+├── recipe.yml
+└── templates/
+    ├── component.tsx.jig
+    ├── component.test.tsx.jig
+    └── index.ts.jig
+```
+
+---
+
+## YAML Frontmatter
+
+Every template starts with a YAML frontmatter block delimited by `---`. This is where you tell Hyper *where* to write the file, *whether* to write it, and *how* to inject into existing files.
+
+```jig
+---
+to: "src/components/{{ pascalCase :: name }}.tsx"
+when: "type === 'component'"
+inject: false
+after: "// auto-generated exports"
+---
+```
+
+### `to:` — Output path
+
+The destination file path. Supports Jig expressions.
+
+```jig
+---
+to: "{{ name }}/package.json"
+---
+```
+
+```jig
+---
+to: "{{ name }}/{{ useSrcDir ? 'src/' : '' }}app/layout.tsx"
+---
+```
+
+```jig
+---
+to: "{{ kebabCase :: name }}/src/content/docs/introduction.mdx"
+---
+```
+
+### `when:` — Conditional generation
+
+Skip the template entirely when this JavaScript expression is falsy. The expression has access to all recipe variables.
+
+```jig
+---
+to: "{{ name }}/eslint.config.mjs"
+when: "linter === 'eslint'"
+---
+```
+
+### `inject:` and `after:` — Inject into existing files
+
+Set `inject: true` to append content into an existing file instead of creating a new one. Combine with `after:` to insert at a specific line rather than at the end.
+
+```jig
+---
+to: "src/router.ts"
+inject: true
+after: "// routes"
+---
+import { {{ pascalCase :: name }}Page } from "./pages/{{ pascalCase :: name }}Page";
+```
+
+When `after:` is set, Hyper finds the first line in the file that contains that string and inserts your content immediately after it.
+
+---
+
+## Variable Interpolation
+
+Use `{{ variableName }}` to output the value of a variable:
+
+```jig
+export const metadata = {
+  title: "{{ name }}",
+  description: "{{ description }}",
+};
+```
+
+You can use any JavaScript expression inside `{{ }}`:
+
+```jig
+to: "{{ name }}/{{ useSrcDir ? 'src/' : '' }}app/layout.tsx"
+```
+
+```jig
+import { {{ name.charAt(0).toUpperCase() + name.slice(1) }} } from "./{{ name }}";
+```
+
+---
+
+## Pipe Filters
+
+Apply a named transformation with `{{ filter :: variable }}`:
+
+```jig
+export function {{ pascalCase :: name }}() { ... }
+```
+
+Hyper ships these built-in filters:
+
+| Filter | Input | Output |
+|--------|-------|--------|
+| `camelCase` | `my-button` | `myButton` |
+| `pascalCase` | `my-button` | `MyButton` |
+| `snakeCase` | `my-button` | `my_button` |
+| `kebabCase` | `MyButton` | `my-button` |
+| `capitalize` | `my-button` | `My-button` |
+| `upperCase` | `my-button` | `MY-BUTTON` |
+| `lowerCase` | `MyButton` | `mybutton` |
+| `pluralize` | `component` | `components` |
+| `singularize` | `components` | `component` |
+
+Filters compose left-to-right with multiple `::` separators:
+
+```jig
+{{ pluralize :: kebabCase :: name }}
+```
+
+---
+
+## Directives
+
+### `@if` / `@elseif` / `@else` / `@end`
+
+```jig
+@if(linter == "eslint")
+    "lint": "next lint"
+@elseif(linter == "biome")
+    "lint": "biome check .",
+    "lint:fix": "biome check --fix ."
+@else
+    "typecheck": "tsc --noEmit"
+@end
+```
+
+<Aside type="note">
+  Some templates use `@endif` as the closing tag. Both `@end` and `@endif` are valid.
+</Aside>
+
+### `@each` / `@end`
+
+Iterate over an array variable:
+
+```jig
+@each(features)
+- {{ $value }}
+@end
+```
+
+Access the current item with `$value` and its index with `$i`:
+
+```jig
+@each(dependencies)
+    "{{ $value.name }}": "{{ $value.version }}"@if($i < dependencies.length - 1),@endif
+@end
+```
+
+### `@let`
+
+Declare a local variable for use later in the template:
+
+```jig
+@let(componentName = pascalCase(name))
+
+export function {{ componentName }}() {
+  return <div className="{{ kebabCase(name) }}" />;
+}
+```
+
+---
+
+## The `@ai` Tag
+
+The `@ai` tag marks a value for AI-assisted generation. Hyper runs templates in two passes: the first pass collects all `@ai` annotations, sends them to your configured AI provider, and the second pass renders the template with the generated values filled in.
+
+```jig
+export const description = "@ai(Write a one-sentence description for a {{ name }} component)"
+```
+
+```jig
+/**
+ * @ai(Write a JSDoc comment for this function. It takes {{ params }} and returns {{ returnType }}.)
+ */
+export function {{ camelCase :: name }}({{ params }}): {{ returnType }} {
+  @ai(Implement the function body)
+}
+```
+
+<Card title="@ai tag reference" icon="sparkles" href="/docs/kits/ai-decisions-tag">
+  Full documentation for the @ai tag: configuration, transports, prompt templates, and the two-pass system
+</Card>
+
+---
+
+## Complete Example: React Component
+
+Here is a full `.jig` template that generates a typed React component with optional label support, drawing on several Jig features at once.
+
+**`templates/component.tsx.jig`:**
+
+```jig
+---
+to: "src/components/{{ pascalCase :: name }}/{{ pascalCase :: name }}.tsx"
+when: "type !== 'page'"
+---
+import React from "react";
+import styles from "./{{ pascalCase :: name }}.module.css";
+
+@let(ComponentName = pascalCase(name))
+
+interface {{ ComponentName }}Props {
+  @if(withLabel)
+  /** Label displayed above the content */
+  label: string;
+  @endif
+  @if(withChildren)
+  children?: React.ReactNode;
+  @endif
+  className?: string;
+}
+
+/**
+ * {{ ComponentName }} component
+ * @ai(Write a one-sentence description of what this component does based on its name: {{ name }})
+ */
+export function {{ ComponentName }}({
+  @if(withLabel)
+  label,
+  @endif
+  @if(withChildren)
+  children,
+  @endif
+  className,
+}: {{ ComponentName }}Props) {
+  return (
+    <div className={[styles.root, className].filter(Boolean).join(" ")}>
+      @if(withLabel)
+      <span className={styles.label}>{label}</span>
+      @endif
+      @if(withChildren)
+      <div className={styles.content}>{children}</div>
+      @endif
+    </div>
+  );
+}
+```
+
+This template:
+1. Uses `to:` with `pascalCase` to derive a directory and file name from the `name` variable.
+2. Skips generation entirely when `type === 'page'` via `when:`.
+3. Uses `@let` to avoid repeating the `pascalCase(name)` call.
+4. Conditionally includes `label` and `children` props with `@if`.
+5. Uses `@ai` to generate the JSDoc description automatically.
+
+---
+
+## Real Examples from the Next.js Kit
+
+### `templates/app/layout.tsx.jig`
+
+```jig
+---
+to: "{{ name }}/{{ useSrcDir ? 'src/' : '' }}app/layout.tsx"
+---
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "{{ capitalize :: name }}",
+  description: "{{ description }}",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
+  return (
+    <html lang="en">
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+### `templates/package.json.jig` (conditional linter scripts)
+
+```jig
+---
+to: "{{ name }}/package.json"
+---
+{
+  "name": "{{ name }}",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    @if(linter == "eslint")
+    "lint": "next lint"
+    @elseif(linter == "biome")
+    "lint": "biome check .",
+    "lint:fix": "biome check --fix ."
+    @else
+    "typecheck": "tsc --noEmit"
+    @end
+  }
+}
+```
+
+### From the Starlight Kit — `templates/docs-introduction.mdx.jig`
+
+```jig
+---
+to: "{{ kebabCase :: name }}/src/content/docs/introduction.mdx"
+---
+---
+title: Introduction
+description: Welcome to {{ name }} documentation
+---
+
+# Welcome to {{ name }}
+
+{{ description }}
+
+## Key Features
+
+- Comprehensive Documentation
+@if(typedoc)
+- API Reference — complete TypeScript API docs
+@endif
+@if(openapi)
+- OpenAPI/Swagger — interactive API documentation
+@endif
+
+@if(githubRepo)
+- [GitHub Repository]({{ githubRepo }})
+@endif
+```
+
+---
+
+## Tips
+
+- **Always use `to:` with Jig expressions** when the output path should reflect the input variables. Hard-coded paths cause collisions when a recipe generates multiple files.
+- **Prefer `@if` over inline ternaries** for multi-line conditional blocks. Use inline `{{ expr ? a : b }}` only for short expressions in a single location.
+- **Use `@let` at the top** when you reference the same expression more than twice. It keeps the template readable and avoids inconsistencies.
+- **Test with `--dry`** before running a new recipe: `hyper gen ./recipe.yml MyName --dry`.

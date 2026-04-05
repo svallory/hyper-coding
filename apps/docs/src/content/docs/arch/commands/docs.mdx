@@ -1,0 +1,227 @@
+---
+title: "Docs Command Architecture"
+description: "Technical reference for hyper docs — full subcommand listing, metadata schema, quality metrics, and publishing config"
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+<Aside type="note">
+  This is an architecture reference. For usage docs, see [hyper docs](/reference/commands/docs).
+</Aside>
+
+## Full Subcommand Reference
+
+| Action | Description |
+|--------|-------------|
+| `list` | List all documentation |
+| `create` | Create new documentation |
+| `edit` | Edit existing documentation |
+| `generate` | AI-generate documentation |
+| `organize` | Organize documentation structure |
+| `search` | Search documentation content |
+| `validate` | Validate documentation quality |
+| `export` | Export documentation |
+| `serve` | Serve documentation site |
+| `improve` | AI-improve existing documentation |
+| `review` | Submit or approve documentation for review |
+| `crossref` | Manage cross-references |
+| `toc` | Generate table of contents |
+| `index` | Generate documentation index |
+| `coverage` | Documentation coverage report |
+| `readability` | Readability analysis |
+| `health` | Documentation health score |
+| `templates` | List or manage doc templates |
+| `epic` | Epic documentation commands |
+| `extract` | Extract docs from code comments |
+| `sync` | Sync docs with code changes |
+| `link` | Link docs to code references |
+| `version` | Tag documentation versions |
+| `history` | Show documentation history |
+| `diff` | Compare documentation versions |
+| `build` | Generate static documentation site |
+| `deploy` | Deploy documentation |
+
+## Documentation Type Reference
+
+| Type | Description | Use Case |
+|------|-------------|----------|
+| `technical-spec` | Technical specifications and architecture | System design, technical decisions |
+| `user-guide` | End-user documentation and tutorials | User onboarding, feature guides |
+| `api-reference` | API documentation and examples | Developer integration guides |
+| `process` | Team processes and workflows | Development workflow, deployment |
+| `troubleshooting` | Problem-solving guides | Common issues, debugging |
+| `architecture` | System architecture documentation | High-level system design |
+| `security` | Security documentation and guidelines | Security policies, compliance |
+| `deployment` | Deployment and infrastructure guides | DevOps, environment setup |
+| `testing` | Testing strategies and guides | QA processes, test documentation |
+| `onboarding` | New team member guides | Developer onboarding, setup |
+
+## Documentation Metadata Schema
+
+```yaml
+# docs/technical-specs/authentication-architecture.md
+---
+title: "Authentication Architecture"
+type: "technical-spec"
+epic: "user-auth"
+version: "1.2"
+created: "2024-01-15"
+updated: "2024-01-25"
+authors: ["alice@company.com"]
+reviewers: ["bob@company.com", "carol@company.com"]
+status: "approved"
+tags: ["authentication", "security", "architecture"]
+
+related_docs:
+  - "api-reference/authentication.md"
+  - "user-guides/login-guide.md"
+
+related_tasks:
+  - "AUTH-001"
+  - "AUTH-002"
+---
+```
+
+## Custom Doc Template Schema
+
+```yaml
+# .hyper/doc-templates/my-api-template.yml
+name: "API Endpoint Documentation"
+type: "api-reference"
+sections:
+  - title: "Overview"
+    required: true
+  - title: "Authentication"
+    required: true
+  - title: "Endpoints"
+    required: true
+    subsections:
+      - "Request Format"
+      - "Response Format"
+      - "Examples"
+      - "Error Codes"
+  - title: "Rate Limiting"
+    required: false
+  - title: "SDK Examples"
+    required: false
+
+frontmatter:
+  - field: "api_version"
+    required: true
+  - field: "last_updated"
+    auto_generate: true
+
+examples:
+  required: true
+  languages: ["curl", "javascript", "python"]
+```
+
+## Project Documentation Directory Layout
+
+```
+docs/
+├── README.md
+├── getting-started/
+│   ├── installation.md
+│   ├── quick-start.md
+│   └── configuration.md
+├── technical-specs/
+│   ├── architecture.md
+│   ├── database-design.md
+│   └── api-architecture.md
+├── user-guides/
+│   ├── user-manual.md
+│   ├── admin-guide.md
+│   └── troubleshooting.md
+├── api-reference/
+│   ├── authentication.md
+│   ├── endpoints.md
+│   └── examples.md
+├── processes/
+│   ├── development-workflow.md
+│   ├── code-review.md
+│   └── deployment.md
+└── assets/
+    ├── images/
+    ├── diagrams/
+    └── videos/
+```
+
+## Quality Metrics
+
+The `hyper docs health --detailed` report includes:
+
+- **Completeness** — percentage of required docs present
+- **Freshness** — percentage updated within the configured max age
+- **Quality Score** — readability and structure score (0–10)
+- **Cross-references** — percentage of valid internal links
+
+Coverage is tracked per epic:
+
+```bash
+hyper docs coverage --by-epic
+```
+
+Minimum thresholds are configurable in the `quality` block (see Configuration below).
+
+## Publishing Configuration
+
+```bash
+# Static site generation
+hyper docs build --site
+hyper docs serve --port 3001
+hyper docs build --production --output ./dist
+
+# Export formats
+hyper docs export --format pdf --output docs.pdf
+hyper docs export --format html --theme corporate
+
+# Deployment
+hyper docs deploy --github-pages
+hyper docs deploy --netlify
+hyper docs export --static --optimize
+```
+
+## Configuration Block
+
+```javascript
+// hypergen.config.js
+export default {
+  docs: {
+    docs_dir: 'docs/',
+
+    defaults: {
+      format: 'markdown',
+      template: 'standard',
+      ai_assist: false
+    },
+
+    ai: {
+      enabled: true,
+      provider: 'openai',
+      model: 'gpt-4',
+      features: ['generation', 'improvement', 'review']
+    },
+
+    quality: {
+      min_readability_score: 7.0,
+      max_age_days: 90,
+      require_examples: true,
+      require_reviews: true
+    },
+
+    publishing: {
+      site_generator: 'mintlify',
+      theme: 'default',
+      auto_deploy: true,
+      export_formats: ['pdf', 'html']
+    },
+
+    integration: {
+      sync_with_code: true,
+      link_to_epics: true,
+      auto_update_on_changes: true
+    }
+  }
+}
+```

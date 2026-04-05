@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.output/
+
+# Generated files
+.astro/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# macOS-specific files
+.DS_Store
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# TypeDoc output (at root of this project only)
+/docs/
+
+# Starlight build output
+dist-docs/

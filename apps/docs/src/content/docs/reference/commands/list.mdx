@@ -1,0 +1,110 @@
+---
+title: "hyper list"
+description: "Browse available kits, templates, and cookbooks with filtering and sorting"
+---
+
+import { CardGrid, Card } from '@astrojs/starlight/components';
+
+# hyper list
+
+Browse what's available in the HyperDev ecosystem before you search or generate.
+
+## Syntax
+
+```bash
+hyper list [resource] [options]
+```
+
+## Overview
+
+`hyper list` gives you a categorized view of available kits, templates, and cookbooks. Use it when you want to explore what exists rather than search for something specific.
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--filter <text>` | Filter results by name or tag | — |
+| `--sort <field>` | Sort by `name`, `updated`, or `popularity` | `name` |
+| `--official-only` | Only official HyperDev resources | `false` |
+| `--json` | Machine-readable output | `false` |
+| `--limit <n>` | Max results per category | `50` |
+
+## Listing kits
+
+```bash
+hyper list kits
+```
+
+Shows all installable kits organized by category (frontend, backend, fullstack, mobile).
+
+```bash
+# Filter to a specific stack
+hyper list kits --filter nextjs
+
+# Official kits only
+hyper list kits --official-only
+```
+
+## Listing templates
+
+```bash
+hyper list templates
+```
+
+Shows all templates you can generate from, grouped by type.
+
+```bash
+# Filter by framework
+hyper list templates --filter react
+
+# Sort by most recently updated
+hyper list templates --sort updated
+```
+
+## Listing cookbooks
+
+Cookbooks are multi-step recipes — they generate multiple files and wire things together.
+
+```bash
+hyper list cookbooks
+
+# Filter to auth-related cookbooks
+hyper list cookbooks --filter auth
+```
+
+## Listing project resources
+
+See what your current project has installed:
+
+```bash
+# Kits installed in this project
+hyper list --project kits
+
+# Templates available from installed kits
+hyper list --project templates
+```
+
+## JSON output
+
+```bash
+hyper list templates --json
+```
+
+Returns structured JSON — useful for scripting or editor integrations.
+
+## Related commands
+
+<CardGrid>
+  <Card title="hyper search" href="/reference/commands/search">
+    Search for a specific resource by query
+  </Card>
+  <Card title="hyper gen" href="/reference/commands/gen">
+    Generate from a template in the list
+  </Card>
+  <Card title="hyper kit install" href="/cli/commands/kit/install">
+    Install a kit from the list
+  </Card>
+  <Card title="hyper plan" href="/reference/commands/plan">
+    Plan features and browse epic templates
+  </Card>
+</CardGrid>

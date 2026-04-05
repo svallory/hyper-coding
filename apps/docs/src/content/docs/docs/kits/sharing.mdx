@@ -1,0 +1,1160 @@
+---
+title: "Sharing Templates"
+---
+
+import { Aside, Card, CardGrid, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+# Sharing Templates
+
+You've built some templates that work well for your team. Now you want to share them. This page covers the main distribution options — from a quick GitHub share to a proper npm package.
+
+## Distribution Options
+
+<CardGrid>
+  <Card title="Package Registries" icon="box" >
+    NPM, private registries, and enterprise package management
+  </Card>
+  <Card title="Version Control" icon="git-alt">
+    GitHub, GitLab, and direct git repository sharing
+  </Card>
+  <Card title="Local Collections" icon="folder">
+    Team workspaces and monorepo template libraries
+  </Card>
+  <Card title="Marketplace" icon="store">
+    Community-driven template discovery and curation
+  </Card>
+</CardGrid>
+
+---
+
+## Template Packaging
+
+### Package Structure
+
+A distributable template package looks like this:
+
+```
+my-template-package/
+├── package.json                 # Package metadata and dependencies
+├── hyperdev-package.config.js   # HyperDev package configuration
+├── README.md                    # Usage documentation
+├── CHANGELOG.md                 # Version history
+├── LICENSE                      # Legal terms
+├── templates/                   # Template collection
+│   ├── component/
+│   │   ├── template.yml
+│   │   └── *.jig
+│   ├── service/
+│   │   ├── template.yml
+│   │   └── *.jig
+│   └── workflow/
+├── actions/                     # Shared TypeScript actions
+│   ├── validation.ts
+│   └── utilities.ts
+├── docs/                        # Template documentation
+│   ├── guides/
+│   └── examples/
+└── tests/                       # Template validation tests
+    ├── component.test.ts
+    └── integration.test.ts
+```
+
+### Package Configuration
+
+```javascript
+// hyperdev-package.config.js
+module.exports = {
+  name: '@myorg/react-templates',
+  version: '1.0.0',
+  author: 'Your Organization <dev@yourorg.com>',
+  
+  // Template registry - maps names to directories
+  templates: {
+    'component': './templates/component',
+    'hook': './templates/hook', 
+    'service': './templates/service',
+  },
+  
+  // Dependencies required by generated code
+  peerDependencies: {
+    'react': '^18.0.0',
+    'typescript': '^5.0.0',
+  },
+  
+  keywords: ['react', 'typescript', 'components'],
+  category: 'frontend',
+  license: 'MIT',
+  
+  engines: {
+    node: '>=20.0.0',
+  },
+};
+```
+
+### Package.json Integration
+
+```json
+{
+  "name": "@myorg/react-templates",
+  "version": "2.1.0",
+  "description": "Professional React component templates",
+  "main": "index.js",
+  "files": [
+    "templates/**/*",
+    "actions/**/*", 
+    "docs/**/*",
+    "hyperdev-package.config.js",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "hyper",
+    "template",
+    "react",
+    "typescript",
+    "generator"
+  ],
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@hypercli/testing": "^1.0.0"
+  },
+  "scripts": {
+    "test": "jest",
+    "validate": "bun run lint && bun test",
+    "build": "hyper build-package",
+    "prepublishOnly": "bun run validate && bun run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/myorg/react-templates.git"
+  },
+  "license": "MIT"
+}
+```
+
+---
+
+## Publishing to NPM
+
+<Steps>
+1. **Prepare Package**
+    Validate and prepare your template package:
+    
+    ```bash
+    # Validate package structure and metadata
+    bun run lint && bun test
+    
+    # Test all templates
+    bun run test
+    
+    # Build optimized package
+    bun run build
+    ```
+  
+2. **Version Management**
+    Use semantic versioning for clear upgrade paths:
+    
+    ```bash
+    # Patch release (bug fixes)
+    bun version patch
+    
+    # Minor release (new features)
+    bun version minor
+    
+    # Major release (breaking changes)
+    bun version major
+    ```
+  
+3. **Publish**
+    Publish to NPM registry:
+    
+    ```bash
+    # Public package
+    bun publish
+    
+    # Scoped package
+    bun publish --access public
+    
+    # With distribution tag
+    bun publish --tag beta
+    ```
+</Steps>
+
+### Private Registry Setup
+
+```bash
+# Configure private registry
+bunx hyper config set registry https://npm.company.com
+
+
+# Publish to private registry  
+bun publish --registry https://npm.company.com
+```
+
+```javascript
+// .npmrc for team configuration
+registry=https://npm.company.com
+@company:registry=https://npm.company.com
+```
+
+### Distribution Channels Comparison
+
+<Tabs>
+  <TabItem label="NPM Public">
+    **Best for**: Open source templates, community sharing
+    
+    **Pros**:
+    - Maximum discoverability
+    - Automatic versioning
+    - CDN distribution
+    - Statistics and analytics
+    
+    **Usage**:
+    ```bash
+    # Install templates
+    bunx hyper add @myorg/react-templates
+    
+    # Use templates  
+    bunx hyper gen component MyComponent --from @myorg/react-templates
+    ```
+  </TabItem>
+  
+  <TabItem label="Private Registry">
+    **Best for**: Enterprise templates, proprietary patterns
+    
+    **Pros**:
+    - Complete access control
+    - Private template libraries
+    - Enterprise governance
+    - Custom policies
+    
+    **Usage**:
+    ```bash
+    # Install private templates
+    bunx hyper add @company/enterprise-templates
+    ```
+  </TabItem>
+  
+  <TabItem label="GitHub Packages">
+    **Best for**: GitHub-integrated workflows, organization templates
+    
+    **Pros**:
+    - Tight GitHub integration
+    - Organization access control
+    - Automated publishing
+    - Issue tracking
+    
+    **Usage**:
+    ```bash
+    # Install from GitHub Packages
+    bunx hyper add @myorg/templates --registry https://npm.pkg.github.com
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## Git-Based Distribution
+
+### Direct Repository Sharing
+
+```bash
+# Install from GitHub repository
+bunx hyper add github:myorg/react-templates
+
+# Install specific branch or tag
+bunx hyper add github:myorg/react-templates#v2.1.0
+bunx hyper add github:myorg/react-templates#develop
+
+# Install from private repository
+bunx hyper add git+ssh://git@github.com/myorg/private-templates.git
+
+# Use templates from repository
+bunx hyper gen component --from github:myorg/react-templates
+```
+
+### Repository Structure for Sharing
+
+```
+template-repository/
+├── .hyperdev/                  # Repository configuration
+│   └── config.yml
+├── README.md                   # Repository documentation
+├── templates/                  # Template collection
+│   ├── component/
+│   ├── service/
+│   └── workflow/
+├── examples/                   # Usage examples
+│   ├── basic-usage/
+│   └── advanced-patterns/
+├── docs/                       # Template documentation
+├── .github/                    # GitHub automation
+│   ├── workflows/
+│   │   ├── validate-templates.yml
+│   │   └── release.yml
+│   └── ISSUE_TEMPLATE/
+└── tests/                      # Template validation
+```
+
+Repository configuration:
+
+```yaml
+# .hyperdev/config.yml
+repository:
+  type: "template-collection"
+  version: "2.1.0"
+  
+templates:
+  discoveryPaths:
+    - "templates/**"
+  
+  metadata:
+    category: "react"
+    maintainer: "dev@myorg.com"
+    license: "MIT"
+    
+distribution:
+  allowDirectInstall: true
+  requireAuthentication: false
+  trustLevel: "verified"
+  
+quality:
+  requireTests: true
+  enforceStandards: true
+  minimumCoverage: 80
+
+automation:
+  validateOnPush: true
+  autoRelease: true
+  releasePattern: "v*"
+```
+
+### Automated Publishing with GitHub Actions
+
+```yaml
+# .github/workflows/release.yml
+name: Release Templates
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+      
+      - name: Install dependencies
+        run: bun install
+        
+      - name: Validate templates
+        run: bun run lint && bun test
+        
+      - name: Run tests
+        run: bun test
+        
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+      
+      - name: Configure NPM
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          
+      - name: Publish to NPM
+        run: bun publish
+        
+        
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+```
+
+---
+
+## Team and Workspace Sharing
+
+### Monorepo Template Libraries
+
+```
+my-monorepo/
+├── packages/
+│   ├── frontend/
+│   └── backend/
+├── tools/
+│   └── templates/              # Team template library
+│       ├── component/
+│       ├── service/
+│       ├── workflow/
+│       └── shared/
+│           ├── actions/
+│           └── helpers/
+├── .hyperdev/
+│   └── workspace.yml
+└── README.md
+```
+
+Workspace configuration:
+
+```yaml
+# .hyperdev/workspace.yml
+workspace:
+  name: "MyTeam Development Templates"
+  version: "1.0.0"
+  
+templates:
+  localPaths:
+    - "tools/templates"
+    - "packages/*/templates"
+    
+  sharedActions: "tools/templates/shared/actions"
+  
+  discovery:
+    autoScan: true
+    includePaths:
+      - "tools/templates/**"
+      - "packages/*/generators/**"
+    
+standards:
+  enforceNaming: true
+  requireDocumentation: true
+  mandatoryTests: true
+  
+access:
+  allowExternal: false
+  requireApproval: true
+  maintainers:
+    - "tech-leads@company.com"
+```
+
+### Team Discovery and Usage
+
+```bash
+# Discover team templates
+bunx hyper list --source workspace
+
+# Use workspace templates
+bunx hyper gen component --workspace
+
+# Add external templates to workspace
+bunx hyper templates add @company/design-system
+
+# Update all workspace templates
+bunx hyper templates update
+```
+
+### Access Control
+
+```typescript
+// tools/templates/shared/governance.ts
+interface TemplateGovernance {
+  // Review requirements
+  requiresReview: boolean;
+  approvers: string[];
+  
+  // Quality standards
+  qualityChecks: {
+    linting: boolean;
+    testing: boolean;
+    documentation: boolean;
+    security: boolean;
+  };
+  
+  // Distribution policies
+  allowPublicSharing: boolean;
+  requiresLegal: boolean;
+}
+
+export const teamGovernance: TemplateGovernance = {
+  requiresReview: true,
+  approvers: [
+    'tech-lead@company.com',
+    'senior-dev@company.com'
+  ],
+  
+  qualityChecks: {
+    linting: true,
+    testing: true,
+    documentation: true,
+    security: true
+  },
+  
+  allowPublicSharing: false,
+  requiresLegal: true
+};
+```
+
+---
+
+## Template Discovery and Installation
+
+### Discovery Commands
+
+```bash
+# Search all sources
+bunx hyper search "react component"
+
+# Search specific source
+bunx hyper search "react" --source npm
+bunx hyper search "service" --source workspace
+bunx hyper search "workflow" --source github
+
+# Advanced filtering
+bunx hyper search --category frontend --language typescript
+bunx hyper search --tags "testing,storybook" --author myorg
+
+# List installed templates
+bunx hyper list
+
+# List available templates
+bunx hyper list --available --source all
+```
+
+### Installation Workflows
+
+<Tabs>
+  <TabItem label="NPM Package">
+    ```bash
+    # Install latest version
+    bunx hyper add @myorg/react-templates
+    
+    # Install specific version
+    bunx hyper add @myorg/react-templates@2.1.0
+    
+    # Install with alias
+    bunx hyper add @myorg/react-templates --as react-pro
+    
+    # Install globally
+    bunx hyper add @myorg/react-templates --global
+    ```
+  </TabItem>
+  
+  <TabItem label="Git Repository">
+    ```bash
+    # Install from GitHub
+    bunx hyper add github:myorg/react-templates
+    
+    # Install specific branch
+    bunx hyper add github:myorg/react-templates#develop
+    
+    # Install with custom name
+    bunx hyper add github:myorg/react-templates --as team-react
+    
+    # Install private repository
+    bunx hyper add git+ssh://git@github.com/myorg/private.git
+    ```
+  </TabItem>
+  
+  <TabItem label="Local Path">
+    ```bash
+    # Install from local directory
+    bunx hyper add ./my-templates
+    
+    # Install with symlink (development)
+    bunx hyper add ./my-templates --link
+    
+    # Install to workspace
+    bunx hyper add ./my-templates --workspace
+    ```
+  </TabItem>
+</Tabs>
+
+### Version Management
+
+```bash
+# Check template versions
+bunx hyper list --versions
+
+# Update to latest
+bunx hyper update @myorg/react-templates
+
+# Update all templates
+bunx hyper update --all
+
+# Pin to specific version
+bunx hyper pin @myorg/react-templates 2.1.0
+
+# Check for updates
+bunx hyper outdated
+
+# Remove old versions
+bunx hyper clean
+```
+
+---
+
+## Community Features and Marketplace
+
+### Template Marketplace
+
+Community features include:
+
+<CardGrid>
+  <Card title="Discovery Engine" icon="magnifying-glass">
+    Advanced search with filtering by framework, language, use case, and quality metrics
+  </Card>
+  <Card title="Quality Ratings" icon="star">
+    Community-driven ratings and reviews with usage statistics and success metrics
+  </Card>
+  <Card title="Curated Collections" icon="layer-group">
+    Expert-curated template sets for specific use cases and development patterns
+  </Card>
+  <Card title="Contribution System" icon="git-pull-request">
+    Easy contribution workflow for improving existing templates and adding new ones
+  </Card>
+</CardGrid>
+
+### Community Standards
+
+#### Template Quality Checklist
+
+- [ ] Comprehensive documentation with examples
+- [ ] Automated tests for all template variations
+- [ ] TypeScript definitions and type safety
+- [ ] Cross-platform compatibility testing
+- [ ] Security vulnerability scanning
+- [ ] Performance benchmarking
+- [ ] Accessibility compliance (for UI templates)
+- [ ] License compatibility verification
+
+#### Community Guidelines
+
+```yaml
+# template-standards.yml
+quality:
+  documentation:
+    required: true
+    includes: ["README.md", "CHANGELOG.md", "examples/"]
+    
+  testing:
+    coverage: ">= 80%"
+    types: ["unit", "integration", "generation"]
+    
+  security:
+    scanning: true
+    dependencies: "current"
+    vulnerabilities: "none-high"
+    
+  performance:
+    generationTime: "< 5s"
+    memoryUsage: "< 100MB"
+    
+community:
+  responsiveness: "< 48h"
+  maintenance: "active"
+  breaking-changes: "documented"
+```
+
+### Template Reviews and Ratings
+
+Future review system for community quality assurance:
+
+```typescript
+// Future: Community review system
+interface TemplateReview {
+  templateId: string;
+  version: string;
+  rating: number; // 1-5 stars
+  review: {
+    title: string;
+    content: string;
+    pros: string[];
+    cons: string[];
+  };
+  usage: {
+    useCase: string;
+    projectSize: 'small' | 'medium' | 'large';
+    teamSize: number;
+  };
+  reviewer: {
+    verified: boolean;
+    experience: 'beginner' | 'intermediate' | 'expert';
+  };
+}
+```
+
+---
+
+## Enterprise Distribution
+
+### Private Template Registries
+
+#### Registry Infrastructure
+
+```yaml
+# Enterprise registry configuration
+registry:
+  name: "Company Template Registry"
+  url: "https://templates.company.com"
+  
+    
+  storage:
+    backend: "s3"
+    bucket: "company-templates"
+    region: "us-east-1"
+    
+  security:
+    scanning: true
+    signatureVerification: true
+    vulnerabilityThreshold: "medium"
+    
+  governance:
+    approvalWorkflow: true
+    reviewers: ["architecture-team", "security-team"]
+    retentionPolicy: "2-years"
+```
+
+#### Access Control Policies
+
+```javascript
+// Enterprise access control
+module.exports = {
+  // Organization-based access
+  organizations: {
+    'engineering': {
+      read: ['public', 'internal'],
+      write: ['internal'],
+      admin: false
+    },
+    'architecture': {
+      read: ['public', 'internal', 'confidential'],
+      write: ['public', 'internal', 'confidential'],
+      admin: true
+    }
+  },
+  
+  // Team-based permissions
+  teams: {
+    'frontend-team': {
+      templates: ['@company/react-*', '@company/vue-*'],
+      actions: ['create', 'update']
+    },
+    'backend-team': {
+      templates: ['@company/node-*', '@company/api-*'],
+      actions: ['create', 'update', 'delete']
+    }
+  },
+  
+  // Project-specific access
+  projects: {
+    'customer-portal': {
+      allowedTemplates: ['@company/customer-*'],
+      requiredApproval: true
+    }
+  }
+};
+```
+
+### Enterprise Governance
+
+#### Quality Gates
+
+```typescript
+// Enterprise quality gates
+interface EnterpriseQualityGates {
+  // Security requirements
+  security: {
+    vulnerabilityScan: boolean;
+    licenseCompliance: boolean;
+    secretDetection: boolean;
+    dependencyAudit: boolean;
+  };
+  
+  // Code quality standards
+  quality: {
+    testCoverage: number;
+    codeComplexity: number;
+    documentationScore: number;
+    performanceBenchmark: boolean;
+  };
+  
+  // Architectural compliance
+  architecture: {
+    patternCompliance: boolean;
+    dependencyRestrictions: string[];
+    platformCompatibility: string[];
+  };
+  
+  // Legal and compliance
+  compliance: {
+    dataPrivacy: boolean;
+    exportControl: boolean;
+    industryStandards: string[];
+  };
+}
+```
+
+#### Approval Workflows
+
+```yaml
+# Enterprise approval workflow
+workflows:
+  template-publishing:
+    triggers:
+      - pull_request
+      - version_bump
+      
+    stages:
+      - name: "automated-validation"
+        checks:
+          - security_scan
+          - quality_gates
+          - license_check
+          - dependency_audit
+          
+      - name: "architecture-review"
+        reviewers:
+          - architecture-team
+        conditions:
+          - breaking_changes
+          - new_template
+          
+      - name: "security-review"
+        reviewers:
+          - security-team
+        conditions:
+          - external_dependencies
+          - network_access
+          
+      - name: "legal-review"
+        reviewers:
+          - legal-team
+        conditions:
+          - license_changes
+          - third_party_code
+          
+  template-usage:
+    approval_required:
+      - confidential_templates
+      - experimental_templates
+    auto_approved:
+      - public_templates
+      - team_templates
+```
+
+### Audit and Compliance
+
+```typescript
+// Template usage auditing
+interface TemplateAuditLog {
+  timestamp: Date;
+  user: {
+    id: string;
+    email: string;
+    team: string;
+    role: string;
+  };
+  action: 'install' | 'generate' | 'update' | 'remove';
+  template: {
+    id: string;
+    version: string;
+    source: string;
+  };
+  project: {
+    id: string;
+    name: string;
+    classification: string;
+  };
+  metadata: {
+    generatedFiles: string[];
+    parameters: Record<string, any>;
+    duration: number;
+    success: boolean;
+  };
+}
+```
+
+---
+
+## Advanced Distribution Patterns
+
+### Template Composition and Dependencies
+
+```yaml
+# Complex template dependencies
+name: "enterprise-application"
+version: "3.0.0"
+
+dependencies:
+  templates:
+    - "@company/base-structure@^2.0.0"
+    - "@company/user-system@^1.5.0"
+    - "@company/monitoring@^1.2.0"
+  
+  optional:
+    - "@company/analytics@^1.0.0"
+    - "@company/feature-flags@^2.1.0"
+
+composition:
+  strategy: "layered"
+  order:
+    - base-structure
+    - user-system
+    - monitoring
+    - analytics
+    - feature-flags
+    
+conflicts:
+  - templates: ["@company/user-basic", "@company/user-system"]
+    resolution: "prefer-latest"
+```
+
+### Multi-Environment Distribution
+
+```javascript
+// Multi-environment configuration
+module.exports = {
+  environments: {
+    development: {
+      registry: "https://dev-templates.company.com",
+      allowExperimental: true,
+      autoUpdate: true
+    },
+    
+    staging: {
+      registry: "https://staging-templates.company.com", 
+      allowExperimental: false,
+      requireApproval: false
+    },
+    
+    production: {
+      registry: "https://templates.company.com",
+      allowExperimental: false,
+      requireApproval: true,
+      onlyStableVersions: true
+    }
+  },
+  
+  promotion: {
+    dev_to_staging: {
+      trigger: "tag",
+      pattern: "v*-rc*",
+      automated: true
+    },
+    
+    staging_to_production: {
+      trigger: "release",
+      pattern: "v*",
+      requiresApproval: true,
+      approvers: ["release-team"]
+    }
+  }
+};
+```
+
+### Performance Optimization
+
+```typescript
+// Distribution performance optimization
+interface DistributionOptimization {
+  // Caching strategies
+  caching: {
+    templateCache: boolean;
+    actionCache: boolean;
+    metadataCache: boolean;
+    ttl: number;
+  };
+  
+  // CDN integration
+  cdn: {
+    enabled: boolean;
+    provider: 'cloudflare' | 'aws' | 'azure';
+    regions: string[];
+    caching: {
+      templates: string;
+      assets: string;
+    };
+  };
+  
+  // Compression and bundling
+  optimization: {
+    compression: 'gzip' | 'brotli';
+    bundling: boolean;
+    treeShaking: boolean;
+    minification: boolean;
+  };
+  
+  // Parallel processing
+  parallelization: {
+    downloads: number;
+    generation: number;
+    validation: number;
+  };
+}
+```
+
+---
+
+## Troubleshooting Distribution Issues
+
+  <details>
+<summary>Template not found after installation</summary>
+
+    **Symptoms**: `hyper gen` reports template not found despite successful installation
+    
+    **Solutions**:
+    ```bash
+    # Refresh template cache
+    bunx hyper config clear-cache clear
+    
+    # Verify installation
+    bunx hyper list --verbose
+    
+    # Check discovery paths
+    bunx hyper config get discovery.paths
+    
+    # Force re-discovery
+    bunx hyper refresh --all
+    ```
+
+  </details>
+
+  <details>
+<summary>Version conflicts between templates</summary>
+
+    **Symptoms**: Conflicting dependencies or incompatible template versions
+    
+    **Solutions**:
+    ```bash
+    # Check dependency tree
+    bunx hyper deps --tree
+    
+    # Resolve conflicts
+    bunx hyper resolve-conflicts
+    
+    # Pin specific versions
+    bunx hyper pin @org/template 1.2.3
+    
+    # Use resolution overrides
+    bunx hyper config set resolutions.@org/template "1.2.3"
+    ```
+
+  </details>
+
+  <details>
+<summary>Private registry access issues</summary>
+
+    **Symptoms**: Access failures when connecting to private registries
+    
+    **Solutions**:
+    ```bash
+    # Check registry configuration
+    bunx hyper config get registry
+    
+    # Verify network connectivity
+    curl -I https://private-registry.com
+    
+    # Reset registry configuration
+    bunx hyper config unset registry
+    ```
+
+  </details>
+
+### Distribution Health Monitoring
+
+```typescript
+// Distribution health metrics
+interface DistributionMetrics {
+  // Usage statistics
+  usage: {
+    totalDownloads: number;
+    uniqueUsers: number;
+    popularTemplates: string[];
+    generationSuccess: number;
+  };
+  
+  // Performance metrics
+  performance: {
+    averageDownloadTime: number;
+    averageGenerationTime: number;
+    cacheHitRate: number;
+    errorRate: number;
+  };
+  
+  // Quality indicators
+  quality: {
+    userRatings: number;
+    issueCount: number;
+    updateFrequency: number;
+    maintenanceScore: number;
+  };
+}
+```
+
+---
+
+## Best Practices
+
+### Distribution Strategy
+
+<CardGrid>
+  <Card title="Version Management" icon="tags">
+    Use semantic versioning, maintain backwards compatibility, and provide clear upgrade paths
+  </Card>
+  <Card title="Documentation" icon="book">
+    Include examples, migration guides, and troubleshooting — the more concrete the better
+  </Card>
+  <Card title="Quality Assurance" icon="shield-check">
+    Automated testing, security scanning, and performance validation before publishing
+  </Card>
+  <Card title="Community Building" icon="users">
+    Responsive support, contribution guidelines, and active community engagement
+  </Card>
+</CardGrid>
+
+### Security Considerations
+
+<Aside type="caution">
+**Template Security Guidelines**
+
+- Validate all external template sources before installation
+- Use template signing and verification for enterprise distribution
+- Regular security audits of template dependencies
+- Implement access controls for sensitive template repositories
+- Monitor template usage for compliance and audit requirements
+</Aside>
+
+### Success Metrics
+
+Track distribution success with key metrics:
+
+- **Adoption Rate**: Template installation and usage growth
+- **User Satisfaction**: Community ratings and feedback scores  
+- **Quality Score**: Error rates and generation success rates
+- **Community Health**: Contribution activity and maintenance responsiveness
+- **Security Posture**: Vulnerability detection and resolution speed
+
+---
+
+## What's Next?
+
+<CardGrid>
+  <Card title="Template Creation Guide" icon="hammer" href="/docs/kits/creating-templates">
+    Learn to build high-quality templates ready for distribution
+  </Card>
+  <Card title="Community Marketplace" icon="store" href="/docs/community/overview">
+    Discover and contribute to the growing template ecosystem
+  </Card>
+  <Card title="Enterprise Features" icon="building" href="/docs/guides/enterprise-integration">
+    Implement enterprise-grade template governance and distribution
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/hyperdev">
+    Deep dive into programmatic template management APIs
+  </Card>
+</CardGrid>
+
+---
+
+**Ready to share your templates?** Start with our [Template Creation Guide](/docs/kits/creating-templates) to build distribution-ready templates, or explore the [Community](/docs/community/overview) to discover what others are building.

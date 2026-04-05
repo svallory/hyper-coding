@@ -1,0 +1,375 @@
+---
+title: "Framework Integration"
+description: "Framework-specific templates and patterns for React, Vue, Angular, Node.js, Python, and other popular frameworks"
+---
+
+# Framework Integration
+
+Templates built around how specific frameworks actually work---not generic boilerplate you'd need to reshape anyway. Each one follows the conventions of its ecosystem so the generated code fits naturally into your project.
+
+## React Ecosystem
+
+### React + TypeScript + Tailwind Component Library
+
+Sets up a full React component library: TypeScript, your choice of styling, Vite or Rollup, Storybook, tests, changesets. The whole thing. Generated components follow the compound-component pattern with proper forwardRef support, variant props, and loading states wired up from the start.
+
+```yaml title="template.yml"
+name: react-component-library
+description: Complete React component library with TypeScript and modern tooling
+variables:
+  - name: libraryName
+    message: Library name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: uiFramework
+    message: UI Framework
+    type: list
+    choices:
+      - name: Tailwind CSS
+        value: tailwind
+      - name: Styled Components
+        value: styled-components
+      - name: Emotion
+        value: emotion
+      - name: CSS Modules
+        value: css-modules
+  - name: buildTool
+    message: Build tool
+    type: list
+    choices:
+      - name: Vite
+        value: vite
+      - name: Rollup
+        value: rollup
+  - name: includeStorybook
+    message: Include Storybook?
+    type: confirm
+    default: true
+  - name: includeTesting
+    message: Include testing setup?
+    type: confirm
+    default: true
+  - name: includeChangesets
+    message: Include changesets for versioning?
+    type: confirm
+    default: true
+```
+
+**Package Configuration** (`templates/package.json.jig`)
+```json
+---
+to: package.json
+---
+{
+  "name": "@{{ h.getPackageScope() }}/{{ libraryName }}",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --emitDeclarationOnly",
+    "dev": "vite build --watch",
+    "test": "vitest",
+    "storybook": "storybook dev -p 6006"
+  }
+}
+```
+
+**Modern Component Template** (`templates/Button.tsx.jig`)
+```tsx
+---
+to: src/components/Button/Button.tsx
+---
+import React, { forwardRef } from 'react';
+import { cn } from '../../utils/cn';
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
+  size?: 'sm' | 'md' | 'lg';
+  loading?: boolean;
+  startIcon?: React.ReactNode;
+  endIcon?: React.ReactNode;
+  fullWidth?: boolean;
+}
+
+@if(uiFramework === 'tailwind')const buttonVariants = {
+  primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+  secondary: 'bg-gray-600 hover:bg-gray-700 text-white',
+  outline: 'border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white',
+  ghost: 'text-blue-600 hover:bg-blue-50',
+  destructive: 'bg-red-600 hover:bg-red-700 text-white',
+};
+
+const buttonSizes = {
+  sm: 'px-3 py-1.5 text-sm',
+  md: 'px-4 py-2 text-base',
+  lg: 'px-6 py-3 text-lg',
+};
+@end
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
+  variant = 'primary',
+  size = 'md',
+  loading = false,
+  startIcon,
+  endIcon,
+  fullWidth = false,
+  className,
+  disabled,
+  children,
+  ...props
+}, ref) => {
+  return (
+    <button
+      ref={ref}
+      className={cn(
+        'inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors',
+        buttonVariants[variant],
+        buttonSizes[size],
+        fullWidth && 'w-full',
+        loading && 'pointer-events-none opacity-60',
+        className
+      )}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {loading && <LoadingSpinner size={size} />}
+      {!loading && startIcon}
+      {children}
+      {!loading && endIcon}
+    </button>
+  );
+});
+
+Button.displayName = 'Button';
+```
+
+### Usage Example
+```bash
+hyper gen react-component-library
+# Prompts:
+# Library name: design-system
+# UI Framework: Tailwind CSS
+# Build tool: Vite
+# Include Storybook? Yes
+# Include testing setup? Yes
+# Include changesets for versioning? Yes
+
+# Generated: Complete React component library with modern tooling
+```
+
+---
+
+## Vue.js Ecosystem
+
+### Vue 3 + TypeScript + Pinia Store Generator
+
+Vue 3 with Composition API, TypeScript, and Pinia. Picks your preferred router and UI framework, then wires it all together. The generated store uses the setup-function style for better TypeScript inference, and the component template adapts to Vuetify or plain Tailwind based on your selection.
+
+```yaml title="template.yml"
+name: vue3-typescript-app
+description: Vue 3 application with TypeScript and modern tooling
+variables:
+  - name: projectName
+    message: Project name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: stateManagement
+    message: State management
+    type: list
+    choices:
+      - name: Pinia (recommended)
+        value: pinia
+      - name: Vuex 4
+        value: vuex
+      - name: None
+        value: none
+  - name: uiFramework
+    message: UI Framework
+    type: list
+    choices:
+      - name: Vuetify 3
+        value: vuetify
+      - name: Tailwind CSS
+        value: tailwind
+      - name: None
+        value: none
+  - name: features
+    message: Additional features
+    type: checkbox
+    choices:
+      - name: PWA Support
+        value: pwa
+      - name: Internationalization (vue-i18n)
+        value: i18n
+      - name: Testing (Vitest + Vue Test Utils)
+        value: testing
+```
+
+**Pinia Store Template** (`templates/store.ts.jig`)
+```typescript
+---
+to: src/stores/user.ts
+condition: {{ stateManagement === 'pinia' }}
+---
+import { defineStore } from 'pinia';
+import { ref, computed, readonly } from 'vue';
+import type { User, LoginCredentials, UserPreferences } from '@/types/user';
+import { authApi } from '@/api/auth';
+
+export const useUserStore = defineStore('user', () => {
+  const user = ref<User | null>(null);
+  const isLoading = ref(false);
+  const error = ref<string | null>(null);
+
+  const isAuthenticated = computed(() => !!user.value);
+  const userName = computed(() => user.value?.name || 'Anonymous');
+
+  const login = async (credentials: LoginCredentials) => {
+    isLoading.value = true;
+    error.value = null;
+    try {
+      const response = await authApi.login(credentials);
+      user.value = response.user;
+      localStorage.setItem('auth_token', response.token);
+      return response;
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Login failed';
+      throw err;
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } finally {
+      user.value = null;
+      localStorage.removeItem('auth_token');
+    }
+  };
+
+  return {
+    user: readonly(user),
+    isLoading: readonly(isLoading),
+    error: readonly(error),
+    isAuthenticated,
+    userName,
+    login,
+    logout,
+  };
+});
+```
+
+### Usage Example
+```bash
+hyper gen vue3-typescript-app
+# Prompts:
+# Project name: vue-dashboard
+# State management: Pinia (recommended)
+# UI Framework: Vuetify 3
+# Features: [x] Testing
+
+# Generated: Complete Vue 3 application with modern tooling
+```
+
+---
+
+## Node.js Backend Templates
+
+### Express + TypeScript API with Clean Architecture
+
+A Node.js API structured for scale---clean architecture layers, TypeScript, proper dependency injection. Not just an Express boilerplate. The generated service layer is properly decoupled from the HTTP layer, so you can test business logic without spinning up the server.
+
+```yaml title="template.yml" 
+name: node-clean-api
+description: Node.js API with Clean Architecture and TypeScript
+variables:
+  - name: apiName
+    message: API name (kebab-case)
+    validate: /^[a-z][a-z0-9\-]*$/
+  - name: database
+    message: Database
+    type: list
+    choices:
+      - name: PostgreSQL + Prisma
+        value: postgres-prisma
+      - name: MongoDB + Mongoose
+        value: mongodb-mongoose
+      - name: MySQL + TypeORM
+        value: mysql-typeorm
+  - name: authentication
+    message: Authentication strategy
+    type: list
+    choices:
+      - name: JWT + Passport
+        value: jwt-passport
+      - name: OAuth 2.0
+        value: oauth2
+      - name: None
+        value: none
+  - name: documentation
+    message: API Documentation
+    type: list
+    choices:
+      - name: OpenAPI/Swagger
+        value: openapi
+      - name: GraphQL + Apollo
+        value: graphql
+```
+
+**Application Setup** (`templates/app.ts.jig`)
+```typescript
+---
+to: src/app.ts
+---
+import express from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
+import { requestLogger } from './middleware/logger';
+import { errorHandler } from './middleware/errorHandler';
+import { healthRoutes } from './routes/health';
+@if(authentication !== 'none')import { authRoutes } from './routes/auth';@end
+import { apiRoutes } from './routes/api';
+import { config } from './config';
+
+const app = express();
+
+app.use(helmet());
+app.use(cors({ origin: config.CORS_ORIGINS.split(','), credentials: true }));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: config.RATE_LIMIT_MAX }));
+app.use(express.json({ limit: config.MAX_REQUEST_SIZE }));
+app.use(compression());
+app.use(requestLogger);
+
+app.use('/health', healthRoutes);
+@if(authentication !== 'none')app.use('/auth', authRoutes);@end
+app.use('/api/v1', apiRoutes);
+
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Not Found', message: `${req.method} ${req.originalUrl} not found` });
+});
+app.use(errorHandler);
+
+export { app };
+```
+
+### Usage Example
+```bash
+hyper gen node-clean-api
+# Prompts:
+# API name: user-service
+# Database: PostgreSQL + Prisma
+# Authentication: JWT + Passport
+# Documentation: OpenAPI/Swagger
+
+# Generated: Complete Node.js API with clean architecture
+```

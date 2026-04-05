@@ -1,0 +1,94 @@
+---
+title: "hyper watch"
+description: "Always-on agent context monitor. Watches your codebase in real time, captures learnings, and keeps AI agents focused across sessions."
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+# hyper watch: Always-On Agent Context Monitor
+
+`hyper watch` runs in the background and keeps your AI agent grounded. It watches what's happening in your codebase, captures everything the agent learns from your interactions, and feeds that context back so the agent stays focused — even across sessions.
+
+## Quick Start
+
+```bash
+# Start watching the current project
+hyper watch
+
+# Watch with focus on a specific area
+hyper watch --focus src/auth
+
+# Watch scoped to an active plan
+hyper watch --plan payment-integration
+```
+
+## What It Watches
+
+`hyper watch` monitors several streams simultaneously:
+
+- **File changes** — tracks which files are being written, modified, or deleted by the agent
+- **Agent session activity** — observes what the agent is generating and what decisions it's making
+- **Architectural drift** — flags when generated code diverges from established patterns
+- **Context staleness** — detects when the agent's working context is out of date
+
+None of this leaves your machine. Learnings are stored in a local, versioned vector database under `.hyper/watch/`.
+
+## Reactive Context
+
+The core value of `hyper watch` is reactive context: as your project evolves, the agent's context evolves with it — automatically.
+
+When a file changes, `hyper watch` re-evaluates what context is relevant and updates what the agent sees. When the agent makes a decision that contradicts a pattern it learned earlier, `hyper watch` surfaces that contradiction. When you correct the agent, that correction gets stored and applied to future sessions.
+
+This is what "persistent context across sessions" actually means in practice: the agent that resumes tomorrow knows what the agent from today learned.
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--focus <path>` | Narrow monitoring to a specific directory or glob pattern |
+| `--plan <name>` | Scope context to a specific plan's objectives and tasks |
+| `--task <id>` | Focus context on a single task's acceptance criteria |
+| `--quiet` | Suppress activity output; only surface alerts |
+| `--verbose` | Show all context update events |
+
+## How It Feeds Back to the Agent
+
+`hyper watch` writes to `.hyper/watch/context.md` — a living document that your AI agent reads at the start of each session and checks periodically during long sessions. This file contains:
+
+- **Current objectives** — what the active plan or task is trying to achieve
+- **Recent learnings** — corrections, patterns, and decisions from prior sessions
+- **Drift alerts** — any architectural or scope issues flagged since last session
+- **Hot files** — files the agent should be aware of given current activity
+
+You don't manage this file manually. `hyper watch` keeps it current.
+
+## Integration
+
+`hyper watch` runs alongside the rest of the workflow:
+
+```bash
+# Typical session setup
+hyper watch --plan my-feature &   # Start watching in background
+hyper gen auth-middleware          # Generate code — watch captures the output
+# Agent reads context, stays on track
+hyper dash                         # Check overall progress
+```
+
+The watch process feeds data into `hyper dash` — so the activity you see in the dashboard comes from what `hyper watch` has observed.
+
+## Related Commands
+
+<CardGrid>
+  <Card title="hyper plan" href="/docs/tools/plan">
+    Define objectives that hyper watch tracks against
+  </Card>
+  <Card title="hyper gen" href="/docs/tools/gen">
+    Code generation that watch monitors and contextualizes
+  </Card>
+  <Card title="hyper dash" href="/docs/tools/dash">
+    Dashboard fed by watch's real-time observations
+  </Card>
+  <Card title="hyper tools" href="/docs/tools/overview">
+    Set up the linters and scanners watch integrates with
+  </Card>
+</CardGrid>

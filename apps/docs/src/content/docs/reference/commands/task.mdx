@@ -1,0 +1,506 @@
+---
+title: "hyper task"
+description: "Manage individual tasks, subtasks, and development work items with progress tracking and team coordination"
+---
+
+import { Aside, CardGrid, Card } from '@astrojs/starlight/components';
+
+# hyper task
+
+Create, update, assign, and track individual development tasks—whether they live inside an epic or stand alone.
+
+## Syntax
+
+```bash
+hyper task [action] [options]
+```
+
+## Overview
+
+`hyper task` handles the full task lifecycle:
+
+- **Task creation**: Create tasks with descriptions, requirements, and acceptance criteria
+- **Progress tracking**: Monitor task status, time estimates, and completion
+- **Team coordination**: Assign tasks, track dependencies, and manage workload
+- **Epic integration**: Connect tasks to epics and keep things aligned
+- **Subtask management**: Break complex tasks into smaller pieces
+- **Time tracking**: Estimate, track, and analyze time spent
+
+<Aside type="note">
+  Tasks represent individual development work items that can typically be completed within a sprint.
+  Use `hyper task` to manage the tactical level of your development work.
+</Aside>
+
+## Actions
+
+| Action | Description | Example |
+|--------|-------------|---------|
+| `list` | List tasks | `hyper task list` |
+| `create` | Create new task | `hyper task create "Login API"` |
+| `show` | Show task details | `hyper task show AUTH-001` |
+| `update` | Update task information | `hyper task update AUTH-001` |
+| `assign` | Assign task to team member | `hyper task assign AUTH-001 alice` |
+| `start` | Start working on task | `hyper task start AUTH-001` |
+| `complete` | Mark task complete | `hyper task complete AUTH-001` |
+| `block` | Block task with reason | `hyper task block AUTH-001` |
+| `subtask` | Manage subtasks | `hyper task subtask AUTH-001` |
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--epic <name>` | Associate with epic | - | `--epic user-auth` |
+| `--priority <level>` | Task priority | `medium` | `--priority high` |
+| `--estimate <time>` | Time estimate | - | `--estimate "4h"` |
+| `--assignee <user>` | Assign to user | - | `--assignee alice` |
+| `--due <date>` | Due date | - | `--due "2024-02-15"` |
+| `--status <status>` | Task status | `todo` | `--status in-progress` |
+| `--tags <tags>` | Task tags | - | `--tags "api,backend"` |
+| `--depends-on <task>` | Task dependencies | - | `--depends-on AUTH-001` |
+
+## Examples
+
+### Basic Task Management
+
+```bash
+# List all tasks
+hyper task list
+
+# List tasks by status
+hyper task list --status in-progress
+
+# List tasks for a specific epic
+hyper task list --epic payment-flow
+
+# Create a simple task
+hyper task create "Add Stripe webhook handler"
+```
+
+### Task Creation with Details
+
+```bash
+# Create task with full details
+hyper task create "Payment webhook handler" \
+  --epic payment-flow \
+  --priority high \
+  --estimate "4h" \
+  --assignee alice \
+  --due "2024-03-01" \
+  --tags "api,payments,backend"
+
+# Create a frontend task with dependencies
+hyper task create "Checkout UI component" \
+  --depends-on PAY-001,PAY-002 \
+  --assignee bob \
+  --estimate "6h"
+
+# Interactive task creation
+hyper task create --interactive
+```
+
+### Task Progress Management
+
+```bash
+# Start working on task
+hyper task start AUTH-001
+
+# Update task progress
+hyper task update AUTH-001 --progress 50
+
+# Add task comment
+hyper task comment AUTH-001 "API endpoint completed, working on validation"
+
+# Complete task
+hyper task complete AUTH-001
+
+# Block task with reason
+hyper task block AUTH-002 --reason "Waiting for database schema approval"
+```
+
+## Task Status Lifecycle
+
+### Status Flow
+
+```
+todo → in-progress → review → done
+  ↓        ↓          ↓       ↑
+blocked  cancelled   failed  ↑
+  ↓        ↓          ↓       ↑
+todo ← cancelled ← todo → done
+```
+
+### Status Management
+
+```bash
+# Start task (todo → in-progress)
+hyper task start AUTH-001
+
+# Submit for review (in-progress → review)
+hyper task review AUTH-001
+
+# Mark as done (review → done)
+hyper task done AUTH-001
+
+# Block task with reason
+hyper task block AUTH-001 --reason "Blocked by AUTH-000"
+
+# Reopen completed task
+hyper task reopen AUTH-001 --reason "Found regression issue"
+```
+
+## Task Structure
+
+### Task Information
+
+```yaml
+# .hyper/tasks/PAY-001.yml
+id: "PAY-001"
+title: "Payment webhook handler"
+epic: "payment-flow"
+status: "in-progress"
+priority: "high"
+assignee: "alice@company.com"
+estimate: "4h"
+dependencies:
+  - "PAY-000"  # Stripe account setup
+acceptance_criteria:
+  - POST /api/webhooks/stripe validates signature
+  - Handles charge.succeeded and payment_intent.failed events
+```
+
+## Subtask Management
+
+### Creating Subtasks
+
+```bash
+# Add subtasks to existing task
+hyper task subtask AUTH-001 add "Input validation schema"
+hyper task subtask AUTH-001 add "Password hashing" --estimate "2h"
+hyper task subtask AUTH-001 add "Email verification" --assignee bob
+
+# Create task with subtasks
+hyper task create "User profile API" \
+  --subtasks "Get profile,Update profile,Delete profile"
+
+# List subtasks
+hyper task subtask AUTH-001 list
+
+# Update subtask status
+hyper task subtask AUTH-001.1 complete
+```
+
+### Subtask Progress
+
+```bash
+# Subtask progress affects parent task
+hyper task show AUTH-001
+# Shows: Progress: 66% (2/3 subtasks completed)
+
+# Auto-complete parent when all subtasks done
+hyper task subtask AUTH-001.3 complete
+# Parent AUTH-001 automatically moves to review
+```
+
+## Task Dependencies
+
+### Dependency Management
+
+```bash
+# Add dependency
+hyper task depends AUTH-002 --on AUTH-001
+
+# Remove dependency
+hyper task depends AUTH-002 --remove AUTH-001
+
+# Show dependency chain
+hyper task deps AUTH-002 --chain
+
+# Check for circular dependencies
+hyper task deps --validate
+```
+
+### Dependency Visualization
+
+```bash
+# Show task dependency graph
+hyper task deps --graph --format mermaid
+
+# Example output:
+# graph TD
+#   AUTH-000[Database Setup] --> AUTH-001[Registration API]
+#   AUTH-000 --> AUTH-002[Login API] 
+#   AUTH-001 --> AUTH-003[Registration UI]
+#   AUTH-002 --> AUTH-004[Login UI]
+```
+
+## Time Tracking
+
+### Time Management
+
+```bash
+# Add time estimate
+hyper task estimate AUTH-001 "6h"
+
+# Start time tracking
+hyper task start AUTH-001
+
+# Log time spent
+hyper task log AUTH-001 --time "2h" --comment "Implemented validation"
+
+# Stop time tracking
+hyper task stop AUTH-001
+
+# Time report
+hyper task time AUTH-001 --report
+```
+
+### Time Analysis
+
+```bash
+# Task time breakdown
+hyper task time AUTH-001 --breakdown
+
+# Team time tracking
+hyper task time --team --period 1w
+
+# Epic time rollup
+hyper task time --epic user-auth --rollup
+```
+
+## Task Filtering and Search
+
+### Advanced Filtering
+
+```bash
+# Filter by multiple criteria
+hyper task list \
+  --status in-progress,review \
+  --assignee alice,bob \
+  --priority high \
+  --epic user-auth
+
+# Search by text
+hyper task search "registration"
+
+# Filter by tags
+hyper task list --tags "api,backend"
+
+# Filter by date range
+hyper task list --created-after "2024-01-01" --due-before "2024-02-01"
+```
+
+### Saved Filters
+
+```bash
+# Save commonly used filters
+hyper task filter save "my-tasks" \
+  --assignee alice \
+  --status in-progress,review
+
+# Use saved filter
+hyper task list --filter my-tasks
+
+# List saved filters
+hyper task filter list
+```
+
+## Task Templates
+
+### Using Templates
+
+```bash
+# List available task templates
+hyper task templates
+
+# Create task from template
+hyper task create --template api-endpoint "User login API"
+
+# Show template structure
+hyper task template show api-endpoint
+```
+
+**Built-in Templates**:
+- `api-endpoint` - REST API endpoint development
+- `ui-component` - Frontend component development  
+- `database-migration` - Database schema changes
+- `bug-fix` - Bug investigation and resolution
+- `documentation` - Documentation writing tasks
+- `testing` - Test suite development
+- `security-review` - Security audit tasks
+- `performance-optimization` - Performance improvement tasks
+
+### Custom Templates
+
+```bash
+# Create custom template
+hyper task template create my-api-template \
+  --subtasks "Design API,Implement,Write tests,Documentation" \
+  --tags "api,backend" \
+  --estimate-default "4h"
+
+# Use custom template
+hyper task create --template my-api-template "Payment API"
+```
+
+## Team Coordination
+
+### Task Assignment
+
+```bash
+# Assign task to team member
+hyper task assign AUTH-001 alice
+
+# Reassign task
+hyper task assign AUTH-001 bob --from alice
+
+# Auto-assign based on workload
+hyper task assign AUTH-001 --auto
+
+# Bulk assignment
+hyper task assign --epic user-auth --distribute --team alice,bob,carol
+```
+
+### Workload Management
+
+```bash
+# Check team workload
+hyper task workload --team
+
+# Individual workload
+hyper task workload alice
+
+# Rebalance tasks
+hyper task rebalance --epic user-auth
+```
+
+## Task Reporting
+
+### Progress Reports
+
+```bash
+# Task progress summary
+hyper task report --epic user-auth
+
+# Individual performance
+hyper task report --assignee alice --period 1w
+
+# Task completion trends
+hyper task trends --period 1m --format chart
+```
+
+### Task Metrics
+
+```bash
+# Task velocity
+hyper task velocity --team --period 1w
+
+# Task completion rate
+hyper task completion --epic user-auth
+
+# Average task cycle time
+hyper task cycle-time --period 1m
+```
+
+## Integration with Development Workflow
+
+### Code Integration
+
+```bash
+# Link commits to tasks
+git commit -m "AUTH-001: Add password validation"
+
+# Generate code for task
+hyper gen api --task AUTH-001
+
+# Task-aware context monitoring
+hyper watch --task PAY-001
+```
+
+### Pull Request Integration
+
+```bash
+# Create PR for task
+hyper task pr AUTH-001 --create
+
+# Link task to existing PR
+hyper task pr AUTH-001 --link 123
+
+# Auto-transition task when PR merged
+# AUTH-001 automatically moves to done when PR #123 is merged
+```
+
+## Configuration
+
+### Task Settings
+
+```javascript
+// hypergen.config.js
+export default {
+  tasks: {
+    // Task ID format
+    id_format: 'PROJ-{number}',
+    
+    // Default task settings
+    defaults: {
+      status: 'todo',
+      priority: 'medium',
+      auto_assign_creator: false
+    },
+    
+    // Status workflow
+    workflow: {
+      statuses: ['todo', 'in-progress', 'review', 'done'],
+      transitions: {
+        'todo': ['in-progress', 'blocked'],
+        'in-progress': ['review', 'blocked', 'done'],
+        'review': ['done', 'in-progress'],
+        'done': ['in-progress']  // Allow reopening
+      }
+    },
+    
+    // Time tracking
+    time_tracking: {
+      enabled: true,
+      auto_start_on_assign: true,
+      auto_stop_on_complete: true,
+      round_to_minutes: 15
+    },
+    
+    // Integrations
+    integrations: {
+      git: {
+        auto_link_commits: true,
+        commit_message_format: '{task_id}: {message}'
+      },
+      slack: {
+        notify_on_status_change: true,
+        channel: '#dev-tasks'
+      }
+    }
+  }
+};
+```
+
+## Related Commands
+
+<CardGrid>
+  <Card title="hyper epic" href="/cli/commands/resources/epic">
+    Manage epics that contain multiple tasks
+  </Card>
+  <Card title="hyper dash" href="/reference/commands/dash">
+    Monitor task progress and project activity
+  </Card>
+  <Card title="hyper watch" href="/docs/tools/watch">
+    Always-on context monitor for active tasks
+  </Card>
+  <Card title="hyper gen" href="/reference/commands/gen">
+    Generate code within task context
+  </Card>
+</CardGrid>
+
+## See Also
+
+- [Task Management Workflow](/reference/commands/task)
+- [Team Coordination](/docs/guides/best-practices)
+- [Epic-Driven Development](/docs/tools/plan)
+- [Time Tracking Configuration](/reference/configuration)

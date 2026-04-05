@@ -1,0 +1,13 @@
+/* Custom theme overrides for HyperDev Docs */
+
+:root {
+  --sl-color-accent-low: color-mix(in srgb, #4EC9B0 15%, transparent);
+  --sl-color-accent: #4EC9B0;
+  --sl-color-accent-high: color-mix(in srgb, #4EC9B0, white 25%);
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: color-mix(in srgb, #4EC9B0 20%, transparent);
+  --sl-color-accent: #4EC9B0;
+  --sl-color-accent-high: color-mix(in srgb, #4EC9B0, white 30%);
+}

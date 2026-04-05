@@ -1,0 +1,343 @@
+---
+title: "hyper init"
+description: "Initialize new projects with optimal setup and AI-augmented development configuration"
+---
+
+import { Aside, Steps, CardGrid, Card } from '@astrojs/starlight/components';
+
+# hyper init
+
+Set up a new HyperDev project from scratch.
+
+## Syntax
+
+```bash
+hyper init [options]
+```
+
+## Overview
+
+`hyper init` gets your project off the ground with everything wired up for AI-augmented development:
+
+- Project structure optimized for your stack
+- Development environment configuration
+- AI provider integration  
+- Template system setup
+- Quality gates and monitoring
+- Team collaboration features
+
+<Aside type="note">
+  `hyper init` sets up your project workspace and wires it up for the full HyperDev workflow.
+</Aside>
+
+## Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--dry-run` | Preview what would be created | `false` | `--dry-run` |
+| `--force` | Overwrite existing files | `false` | `--force` |
+| `--verbose` | Detailed output | `false` | `--verbose` |
+
+## Examples
+
+### Basic Initialization
+
+```bash
+# Interactive setup (default)
+hyper init
+
+# Quick setup with defaults
+hyper init --no-interactive
+```
+
+The interactive setup walks you through:
+1. Development environment setup
+2. Basic configuration options
+
+
+
+## What Gets Created
+
+### Project Structure
+
+```
+my-project/
+├── hypergen.config.js      # Project configuration
+├── .hyper/                 # HyperDev workspace
+│   ├── templates/          # Local templates
+│   ├── cache/              # Template cache
+│   ├── epics/              # Project epics
+│   └── reports/            # Generated reports
+├── package.json            # Dependencies
+├── tsconfig.json           # TypeScript config
+├── .gitignore              # Git ignore rules
+├── README.md               # Project documentation
+└── src/                    # Source code
+    ├── components/         # Reusable components
+    ├── pages/              # Application pages
+    ├── api/                # API routes
+    ├── lib/                # Utility libraries
+    └── tests/              # Test files
+```
+
+### Configuration Files
+
+**hypergen.config.js**
+```javascript
+export default {
+  // AI Configuration
+  aiProvider: 'openai',
+  aiModel: 'gpt-4',
+  
+  // Template Configuration
+  templateSources: [
+    'official',
+    'community',
+    './local-templates'
+  ],
+  trustThreshold: 8.0,
+  
+  // Development Configuration
+  qualityGates: {
+    security: 'strict',
+    performance: 'standard',
+    testing: 'required'
+  },
+  
+  // IDE Integration
+  ide: {
+    primary: 'cursor',
+    extensions: ['hyperdev', 'copilot'],
+    settings: {
+      aiAssistance: true,
+      codeGeneration: true
+    }
+  }
+};
+```
+
+### Development Environment
+
+The init command sets up:
+
+1. **Package Management**: Configures bun/npm with optimal settings
+2. **TypeScript**: Full type safety with strict configuration  
+3. **Linting & Formatting**: ESLint, Prettier, and Biome
+4. **Testing**: Vitest or Jest with coverage reporting
+5. **Git Hooks**: Pre-commit hooks for quality checks
+6. **CI/CD**: GitHub Actions or similar workflows
+7. **Documentation**: Auto-generated docs and README
+
+## Advanced Usage
+
+### Custom Templates
+
+```bash
+# Use local template
+hyper init --template ./my-custom-template
+
+# Use remote template
+hyper init --template github:username/repo-template
+
+# Use npm template
+hyper init --template @company/project-template
+```
+
+### Environment-Specific Setup
+
+```bash
+# Development environment
+hyper init --template saas-app --env development
+
+# Production-ready setup
+hyper init --template saas-app --env production --team-config prod.json
+
+# Staging environment
+hyper init --template saas-app --env staging
+```
+
+### Monorepo Initialization
+
+```bash
+# Initialize monorepo structure
+hyper init --template monorepo-base
+
+# Add workspace packages
+hyper init --template api-package --workspace packages/api
+hyper init --template ui-package --workspace packages/ui
+```
+
+## Integration with HyperDev Workflow
+
+### Next Steps After Init
+
+`hyper init` gets your project ready for the full HyperDev workflow:
+
+<Steps>
+1. **Plan Your Features**: `hyper plan` — Start strategic planning
+2. **Generate Code**: `hyper gen component` — Generate your first component
+3. **Start Monitoring**: `hyper watch` — Begin development monitoring
+</Steps>
+
+### Integration Commands
+
+```bash
+# Complete project setup flow
+hyper init --template fullstack-saas
+hyper plan create --name "User Authentication"
+hyper gen auth-system --epic "User Authentication"
+hyper watch --focus auth
+```
+
+## Configuration
+
+`hyper init` respects HyperDev's configuration hierarchy, applying settings in priority order:
+
+### Configuration Priority (Highest to Lowest)
+
+Command-line flags → `HYPERDEV_*` env vars → project config → user defaults → system defaults.
+
+### Setting Init Defaults
+
+```bash
+# Set user-level defaults (affects all new projects)
+hyper config set default-template fullstack-saas
+hyper config set default-ide cursor  
+hyper config set ai-provider openai
+
+# Set environment-specific defaults
+export HYPERDEV_DEFAULT_TEMPLATE=minimal
+export HYPERDEV_DEFAULT_IDE=vscode
+
+# Command-line flags override all other settings
+hyper init --template react-lib --ide cursor --ai-provider anthropic
+```
+
+### Configuration Examples
+
+```bash User Defaults
+# These settings apply to all new projects
+~/.hypergenrc.js:
+{
+  defaults: {
+    template: "fullstack-saas",
+    ide: "cursor",
+    aiProvider: "openai"
+  }
+}
+```
+
+```bash Environment Override
+# Override user defaults with environment variables
+export HYPERDEV_DEFAULT_TEMPLATE=minimal
+export HYPERDEV_AI_PROVIDER=anthropic
+hyper init  # Uses environment settings
+```
+
+```bash Command Override
+# Command flags have highest priority
+hyper init --template react-lib --ide vscode
+# Ignores both user defaults and environment variables
+```
+
+<Aside type="tip">
+**Configuration Tip**: Run `hyper config show` before `hyper init` to see your resolved configuration.
+</Aside>
+
+## Troubleshooting
+
+<details>
+<summary>Template not found</summary>
+
+  **Problem**: `Template 'my-template' not found`
+  
+  **Solutions**:
+  ```bash
+  # List available templates
+  hyper list templates
+  
+  # Search for similar templates
+  hyper search "my-template"
+  
+  # Update template cache
+  hyper config clear-cache clear && hyper init
+  ```
+
+</details>
+
+<details>
+<summary>Permission errors during setup</summary>
+
+  **Problem**: Permission denied when creating files
+  
+  **Solutions**:
+  ```bash
+  # Check directory permissions
+  ls -la
+  
+  # Use different directory
+  mkdir ~/my-project && cd ~/my-project && hyper init
+  
+  ```
+
+</details>
+
+<details>
+<summary>AI provider not configured</summary>
+
+  **Problem**: AI functionality not working after init
+  
+  **Solutions**:
+  ```bash
+  # Configure AI provider
+  export OPENAI_API_KEY="your-key"
+  hyper config set ai-provider openai
+  
+  # Test AI connection
+  hyper gen --test-ai-connection
+  ```
+
+</details>
+
+<details>
+<summary>IDE integration failing</summary>
+
+  **Problem**: IDE features not working correctly
+  
+  **Solutions**:
+  ```bash
+  # Reconfigure IDE
+  hyper config --ide cursor
+  
+  # Check IDE configuration
+  hyper config list | grep ide
+  
+  # Reset IDE settings
+  hyper config set default-ide cursor --force
+  ```
+
+</details>
+
+## Related Commands
+
+<CardGrid>
+  <Card title="hyper gen" href="/reference/commands/overview">
+    Generate code after project initialization
+  </Card>
+  <Card title="hyper plan" href="/docs/tools/plan">
+    Plan your project architecture and features
+  </Card>
+  <Card title="hyper watch" href="/docs/tools/watch">
+    Always-on agent context monitor
+  </Card>
+  <Card title="hyper config show" href="/reference/commands/overview">
+    View resolved project configuration
+  </Card>
+</CardGrid>
+
+## See Also
+
+- [Project Initialization Workflow](/docs/get-started/quickstart)
+- [Global Configuration](/reference/configuration)
+- [Template System](/reference/configuration)
+- [IDE Integration](/reference/configuration)

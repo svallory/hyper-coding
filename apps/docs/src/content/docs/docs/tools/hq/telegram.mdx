@@ -1,0 +1,65 @@
+---
+title: "Telegram Setup"
+description: "Control Hyper HQ via Telegram — bot creation, pairing, per-project chats"
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+# Telegram Setup
+
+HQ uses Claude Code's [Channels](https://code.claude.com/docs/en/channels) to wire up Telegram. Each session can have its own dedicated bot and chat.
+
+<Aside type="note">Telegram is optional. HQ works fine with Remote Control alone (claude.ai/code + mobile).</Aside>
+
+## Create a Bot
+
+1. Open Telegram and message [@BotFather](https://t.me/botfather)
+2. Send `/newbot` and follow the prompts
+3. Copy the token
+
+## Configure
+
+Drop the token into `~/.config/hyper/hq.toml`:
+
+```toml
+[telegram]
+hq_bot_token = "<YOUR_BOT_TOKEN>"
+```
+
+## Pair Your Account
+
+<Steps>
+1. **Start HQ**
+    ```bash
+    hyper hq start
+    ```
+2. **Message Your Bot**
+    Send any message to your bot on Telegram. It'll reply with a pairing code.
+3. **Pair in Session**
+    In the HQ session (via `hyper hq attach` or claude.ai/code):
+    ```
+    /telegram:access pair YOUR_CODE
+    /telegram:access policy allowlist
+    ```
+</Steps>
+
+## Per-Project Bots
+
+Want separate chats per project? Create extra bots and add them to your config:
+
+```toml
+[telegram.project_bots]
+my-api = "<YOUR_API_BOT_TOKEN>"
+my-frontend = "<YOUR_FRONTEND_BOT_TOKEN>"
+```
+
+When you launch a session for that project, HQ automatically picks up the right bot.
+
+## Controlling HQ via Telegram
+
+Once paired, just message your HQ bot in plain language:
+
+- "Start a session for my-api"
+- "Open my-frontend on worktree feat-redesign"
+- "What sessions are running?"
+- "Stop the my-frontend session"

@@ -1,0 +1,355 @@
+---
+title: "Migration Guide"
+description: "Migrate from Hygen, Plop, Yeoman, or custom scripts to HyperDev recipes and Jig templates"
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+# Migration Guide
+
+Moving from another code generation tool to HyperDev means translating two things: the template syntax and the workflow definition. This guide covers the main migration paths with concrete before/after examples.
+
+## What changes conceptually
+
+The key mental shift: HyperDev separates **what to generate** (`.jig` templates) from **how to orchestrate generation** (recipe YAML). In tools like Hygen or Plop, these are often mixed in a single JS file. Splitting them out makes each part easier to read, test, and reuse.
+
+Template syntax also changes. HyperDev uses **Jig** (an Edge.js fork) — not EJS, not Handlebars. The delimiter is `{{ }}`, not `<%= %>` or `{{{}}}`.
+
+<CardGrid>
+  <Card title="From Hygen" icon="arrow-right" color="blue">
+    Direct migration: template files stay `.jig`, prompts become recipe variables, actions become recipe steps
+  </Card>
+  <Card title="From Plop" icon="arrow-right" color="green">
+    `plopfile.js` generators become `recipe.yml` files, Handlebars templates become `.jig` files
+  </Card>
+  <Card title="From Yeoman" icon="arrow-right" color="purple">
+    Generator classes become recipes, `this.prompt()` calls become variable definitions
+  </Card>
+  <Card title="From custom scripts" icon="arrow-right" color="orange">
+    Shell scripts become recipe `shell` steps, heredoc templates become `.jig` files
+  </Card>
+</CardGrid>
+
+## Hygen to HyperDev
+
+### Template syntax
+
+The biggest change is the template engine. Hygen uses EJS (`<%= %>`); HyperDev uses Jig (`{{ }}`).
+
+```javascript title="Before (Hygen — EJS)"
+---
+to: src/components/<%= name %>/<%= name %>.tsx
+---
+import React from 'react';
+
+const <%= name %>: React.FC = () => {
+  return <div><%= name %> Component</div>;
+};
+
+export default <%= name %>;
+```
+
+```javascript title="After (HyperDev — Jig)"
+---
+to: "src/components/{{ name }}/{{ name }}.tsx"
+---
+import React from 'react';
+
+const {{ name }}: React.FC = () => {
+  return <div>{{ name }} Component</div>;
+};
+
+export default {{ name }};
+```
+
+Jig filter syntax: `{{ camelCase :: name }}`, `{{ pascalCase :: name }}`, etc. These replace Hygen's `h.changeCase` helpers.
+
+### Prompt definitions
+
+Hygen puts prompts in a JS file. HyperDev puts them in `recipe.yml`.
+
+```javascript title="Before (Hygen — index.js)"
+module.exports = {
+  prompt: ({ inquirer }) => {
+    return inquirer.prompt([
+      { type: 'input', name: 'name', message: 'Component name?' },
+      { type: 'confirm', name: 'withTests', default: true }
+    ]);
+  }
+};
+```
+
+```yaml title="After (HyperDev — recipe.yml)"
+name: react-component
+variables:
+  name:
+    type: string
+    required: true
+    description: Component name (PascalCase)
+  withTests:
+    type: boolean
+    default: true
+    description: Generate a test file
+
+steps:
+  - name: component
+    tool: template
+    template: component.tsx.jig
+  - name: test
+    tool: template
+    template: component.test.tsx.jig
+    when: "{{ withTests }}"
+```
+
+### Directory structure
+
+```
+Before (Hygen)                After (HyperDev)
+_templates/                   recipes/
+  component/                    react-component/
+    new/                          recipe.yml
+      index.js        →           component.tsx.jig
+      component.ejs.t →           component.test.tsx.jig
+```
+
+### Running the migration
+
+```bash
+# Install HyperDev
+bun add -g @hypercli/cli
+
+# Migrate templates (converts EJS syntax to Jig)
+hyper migrate hygen \
+  --source="./_templates" \
+  --output="./recipes"
+
+# Validate migrated templates
+hyper config validate
+hyper plan react-component --name=Button
+```
+
+## Plop to HyperDev
+
+### Generator definition
+
+```javascript title="Before (Plop — plopfile.js)"
+module.exports = function (plop) {
+  plop.setGenerator('component', {
+    description: 'React component',
+    prompts: [{
+      type: 'input',
+      name: 'name',
+      message: 'Component name?'
+    }],
+    actions: [{
+      type: 'add',
+      path: 'src/components/{{pascalCase name}}/{{pascalCase name}}.tsx',
+      templateFile: 'plop-templates/component.hbs'
+    }]
+  });
+};
+```
+
+```yaml title="After (HyperDev — recipe.yml)"
+name: react-component
+variables:
+  name:
+    type: string
+    required: true
+    description: Component name
+
+steps:
+  - name: component
+    tool: template
+    template: component.tsx.jig
+    with:
+      name: "{{ pascalCase :: name }}"
+```
+
+### Template syntax
+
+Plop uses Handlebars. Jig syntax is similar but different:
+
+| Plop (Handlebars) | HyperDev (Jig) |
+|---|---|
+| `{{name}}` | `{{ name }}` |
+| `{{pascalCase name}}` | `{{ pascalCase :: name }}` |
+| `{{#if condition}}` | `@if(condition)` |
+| `{{/if}}` | `@end` |
+| `{{#each items}}` | `@each(item in items)` |
+
+### Migration command
+
+```bash
+hyper migrate plop \
+  --source="./plopfile.js" \
+  --templates="./plop-templates" \
+  --output="./recipes"
+```
+
+## Yeoman to HyperDev
+
+### Generator to recipe
+
+```javascript title="Before (Yeoman — generators/app/index.js)"
+const Generator = require('yeoman-generator');
+
+module.exports = class extends Generator {
+  async prompting() {
+    this.answers = await this.prompt([
+      { type: 'input', name: 'name', message: 'Project name' },
+      { type: 'list', name: 'framework', choices: ['react', 'vue'], default: 'react' }
+    ]);
+  }
+
+  writing() {
+    this.fs.copyTpl(
+      this.templatePath('index.ts.ejs'),
+      this.destinationPath('src/index.ts'),
+      this.answers
+    );
+  }
+};
+```
+
+```yaml title="After (HyperDev — recipe.yml)"
+name: new-app
+variables:
+  name:
+    type: string
+    required: true
+    description: Project name
+  framework:
+    type: enum
+    values: ['react', 'vue']
+    default: 'react'
+
+steps:
+  - name: index
+    tool: template
+    template: index.ts.jig
+    with:
+      name: "{{ name }}"
+      framework: "{{ framework }}"
+```
+
+Yeoman's `this.fs.copyTpl` with EJS templates maps directly to a `template` step with a `.jig` file. The `this.prompt()` calls become `variables:` in the recipe.
+
+## Custom Scripts to HyperDev
+
+Shell scripts that generate files by echoing content become a `.jig` template plus a recipe.
+
+```bash title="Before (shell script)"
+#!/bin/bash
+NAME=$1
+mkdir -p "src/components/$NAME"
+cat > "src/components/$NAME/$NAME.tsx" << EOF
+import React from 'react';
+const $NAME: React.FC = () => <div>$NAME</div>;
+export default $NAME;
+EOF
+echo "Created $NAME"
+```
+
+```yaml title="After (recipe.yml + component.tsx.jig)"
+# recipe.yml
+name: react-component
+variables:
+  name:
+    type: string
+    required: true
+
+steps:
+  - name: ensure-dir
+    tool: ensure-dirs
+    dirs: ["src/components/{{ name }}"]
+  - name: component
+    tool: template
+    template: component.tsx.jig
+    with:
+      name: "{{ name }}"
+```
+
+```javascript title="component.tsx.jig"
+---
+to: "src/components/{{ name }}/{{ name }}.tsx"
+---
+import React from 'react';
+
+const {{ name }}: React.FC = () => <div>{{ name }}</div>;
+
+export default {{ name }};
+```
+
+## Pre-Migration Checklist
+
+  <details>
+<summary>Before you start</summary>
+
+    - [ ] Backup existing templates/generators
+    - [ ] Install HyperDev CLI: `bun add -g @hypercli/cli`
+    - [ ] List all template entry points and their prompt variables
+    - [ ] Identify any custom helpers — these need to be ported to Jig filters
+    - [ ] Note any post-generation steps (installs, file injections) — these become recipe steps
+
+  </details>
+
+  <details>
+<summary>During migration</summary>
+
+    - [ ] Convert EJS/Handlebars syntax to Jig in each template file
+    - [ ] Rename template files from `.ejs`/`.hbs` to `.jig`
+    - [ ] Create `recipe.yml` for each generator, defining variables and steps
+    - [ ] Run `hyper plan <recipe>` on each migrated recipe to validate before generating
+    - [ ] Test each recipe against a scratch directory
+
+  </details>
+
+  <details>
+<summary>After migration</summary>
+
+    - [ ] Run `hyper config validate` on your config
+    - [ ] Delete old template directories once you've verified the migrated recipes work
+    - [ ] Update any scripts or CI steps that called the old tool
+    - [ ] Document any custom filters or helpers you added
+
+  </details>
+
+## Troubleshooting
+
+<CardGrid>
+  <Card title="Template syntax errors" icon="exclamation-triangle">
+    **Symptom**: Jig parse error on a migrated template
+
+    Check for leftover EJS (`<%= %>`) or Handlebars (`{{{{}}}}`) syntax. Jig uses `{{ }}` only.
+  </Card>
+
+  <Card title="Missing variables" icon="gear">
+    **Symptom**: `{{ name }}` renders as empty string
+
+    Make sure the variable is defined in `recipe.yml` under `variables:` and passed in the `with:` block of the step that uses it.
+  </Card>
+
+  <Card title="File not generated" icon="cog">
+    **Symptom**: Step runs but no file appears
+
+    Check the `to:` frontmatter in the `.jig` file. The path must be a valid relative path. Run `hyper plan` to preview what path would be resolved.
+  </Card>
+
+  <Card title="Prompt not showing" icon="question">
+    **Symptom**: Recipe runs without asking questions
+
+    Variables with `required: true` and no `default:` will prompt interactively. If you're passing `--name=X` on the CLI, interactive prompts are skipped.
+  </Card>
+</CardGrid>
+
+```bash
+# Validate migrated templates without running them
+hyper config validate
+
+# Preview what a recipe will generate
+hyper plan <recipe-name> --name=Test
+
+# Get migration help
+hyper migrate help
+```

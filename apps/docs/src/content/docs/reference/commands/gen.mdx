@@ -1,0 +1,181 @@
+---
+title: "hyper gen"
+description: "Execute a recipe to generate code from templates, with optional AI 2-pass generation"
+---
+
+import { CardGrid, Card } from '@astrojs/starlight/components';
+
+# hyper gen
+
+Execute a recipe by path, kit reference, or cookbook shorthand.
+
+## Syntax
+
+```bash
+hyper gen <recipe> [variables] [flags]
+
+# Shorthand — kit name resolves via command_not_found hook
+hyper <kit> <cookbook> <recipe>
+```
+
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `recipe` | Recipe to execute. Accepts a file path, a package reference (`@kit/starlight/create`), or a space-separated kit/cookbook/recipe path resolved from installed kits. |
+
+The recipe argument uses **greedy matching**: all non-flag tokens after `hyper gen` are treated as path segments and matched against installed kits in order. The first unambiguous match wins. Any remaining tokens are mapped to positional variables declared in the recipe.
+
+For example, `hyper gen nextjs project create` resolves to the `project/create` recipe in the `nextjs` kit, with no remaining positional args. `hyper gen crud edit-page Organization` resolves `crud edit-page` as the recipe path and maps `Organization` to the first positional variable.
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--dry` | | Show what would be generated without writing any files | `false` |
+| `--force` | `-f` | Overwrite existing files | `false` |
+| `--yes` | `-y` | Skip confirmation prompts | `false` |
+| `--answers <file>` | | Path to a JSON answers file (Pass 2 of AI 2-pass generation) | — |
+| `--ask <mode>` | | How missing variables are resolved: `me`, `ai`, `stdout`, `nobody` | `me` (TTY) / `nobody` (non-TTY) |
+| `--no-defaults` | | Ignore default values — prompt for every variable | `false` |
+| `--prompt-template <file>` | | Path to a custom Jig template used to render the AI prompt document | — |
+
+## Passing variables
+
+Recipe variables are passed as `--key=value` flags. These are distinct from the command's own flags --- any `--flag` not in the known flag list is treated as a recipe variable.
+
+```bash
+# Named flags
+hyper gen create-component --name=Button --variant=outlined
+
+# Equivalent — space-separated value
+hyper gen create-component --name Button
+
+# Positional (if the recipe declares position on variables)
+hyper gen crud edit-page Organization
+```
+
+Values are coerced: `true`/`false` become booleans, numeric strings become numbers, everything else stays a string.
+
+## Recipe resolution
+
+Hypergen searches for recipes in this order:
+
+1. **Installed kits** — discovered from kit search directories (`.hypergen/kits/`, `hyper-kits/`, etc.)
+2. **Local cookbook directories** — `.hypergen/cookbooks/` and `cookbooks/` relative to the project root
+3. **Configured search dirs** — any paths listed under `discovery.directories` in `hyper.config.*`
+4. **File path** — resolved relative to `--cwd` if the segment looks like a path
+
+Path segments are matched greedily left-to-right against the kit's cookbook/recipe tree. The `--cwd` flag (inherited from base) controls which directory is treated as the project root for kit and config discovery.
+
+## Ask modes
+
+The `--ask` flag controls what happens when the recipe needs a variable value that wasn't provided:
+
+| Mode | Behavior |
+|------|----------|
+| `me` | Prompt interactively (default when stdin is a TTY) |
+| `ai` | Send the prompt document to the configured AI transport and use returned answers |
+| `stdout` | Print the prompt document to stdout and exit (useful for piping to an AI tool) |
+| `nobody` | Error immediately on any missing required variable (default in CI / non-TTY) |
+
+## Examples
+
+```bash
+# Run a recipe by kit path
+hyper gen nextjs project create --name=my-app
+
+# Shorthand — resolved by the command_not_found hook
+hyper nextjs crud update Organization
+
+# Dry run — preview files without writing
+hyper gen nextjs project create --name=my-app --dry
+
+# Force overwrite existing files
+hyper gen create-component --name=Header --force
+
+# Skip all confirmation prompts
+hyper gen nextjs project create --name=my-app --yes
+
+# Provide a JSON answers file (AI 2-pass, Pass 2)
+hyper gen nextjs project create --answers ./ai-answers.json
+
+# Print the AI prompt document to stdout (pipe to your AI tool)
+hyper gen nextjs project create --ask=stdout > prompt.md
+
+# Run AI resolution non-interactively
+hyper gen nextjs project create --ask=ai
+
+# Prompt for every variable, even those with defaults
+hyper gen nextjs project create --no-defaults
+
+# Use a custom prompt template
+hyper gen nextjs project create --prompt-template ./my-prompt.jig
+
+# Run recipe from a local file path
+hyper gen ./my-recipes/scaffold --name=feature-x
+
+# Run a recipe group (directory of recipes)
+hyper gen ./my-recipes/feature-bundle --name=payments
+```
+
+## AI 2-pass generation
+
+When a recipe's Jig templates contain `@ai(...)` tags, `hyper gen` runs a two-pass process:
+
+**Pass 1 — Collect**
+
+The recipe executes in collect mode. Templates are rendered but no files are written. Every `@ai(prompt)` tag is intercepted and its prompt is recorded.
+
+**AI resolution**
+
+Collected prompts are assembled into a prompt document (rendered from a Jig template). The document is sent to the configured AI transport (or printed to stdout, depending on `--ask`):
+
+- `--ask=ai` — calls the AI transport inline and proceeds immediately with answers
+- `--ask=stdout` — prints the prompt doc and exits with code 0; re-run with `--answers` after you collect the responses
+- `--answers <file>` — skip Pass 1 entirely; use this JSON file as the AI answers
+
+**Pass 2 — Render**
+
+The recipe runs again with AI answers injected. Files are written with the AI-filled values.
+
+```bash
+# One-shot with AI transport configured
+hyper gen my-recipe --ask=ai
+
+# Manual two-pass workflow
+hyper gen my-recipe --ask=stdout > prompt.md
+# ... send prompt.md to your AI, save answers as ai-answers.json ...
+hyper gen my-recipe --answers ai-answers.json
+```
+
+The `--prompt-template` flag lets you supply a custom Jig template for the prompt document if the default format doesn't match your AI tool's expected input shape.
+
+## Output
+
+On success:
+
+```
+✓ Recipe completed successfully
+  Steps completed: 9
+  Files created: 12
+```
+
+On dry run, each step logs what it would do without touching the filesystem.
+
+## Related
+
+<CardGrid>
+  <Card title="hyper recipe list" href="/cli/commands/discovery/recipe-list">
+    See all available recipes from installed kits
+  </Card>
+  <Card title="hyper kit install" href="/cli/commands/kit/install">
+    Install kits to make their recipes available
+  </Card>
+  <Card title="Recipe format" href="/docs/guides/recipes">
+    YAML recipe syntax, step types, and variable definitions
+  </Card>
+  <Card title="Template syntax" href="/docs/guides/templates">
+    Jig template syntax and the @ai tag
+  </Card>
+</CardGrid>

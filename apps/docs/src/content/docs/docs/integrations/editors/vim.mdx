@@ -1,0 +1,135 @@
+---
+title: "Vim / Neovim"
+description: "Configure Vim and Neovim to work seamlessly with HyperDev through plugins, key mappings, and autocomplete."
+---
+
+# Vim/Neovim Integration
+
+If you live in Vim or Neovim, you don't want to drop to a terminal every time you need to run a generator. Here's how to wire HyperDev directly into your editor with key mappings and autocomplete.
+
+## Vim Plugin Configuration
+
+Start with a simple Lua module that wraps the HyperDev CLI:
+
+```lua
+-- ~/.config/nvim/lua/hyperdev.lua
+local M = {}
+
+-- HyperDev command integration
+function M.generate_component()
+  local component_name = vim.fn.input('Component name: ')
+  if component_name ~= '' then
+    vim.cmd('!hyper gen component ' .. component_name)
+    vim.cmd('edit')
+  end
+end
+
+function M.start_watch()
+  vim.cmd('terminal hyper watch')
+end
+
+-- Key mappings
+vim.keymap.set('n', '<leader>hc', M.generate_component, { desc = 'HyperDev: Generate Component' })
+vim.keymap.set('n', '<leader>hd', M.start_watch, { desc = 'HyperDev: Watch' })
+
+return M
+```
+
+## Autocomplete Integration
+
+If you use nvim-cmp, you can register HyperDev templates as a completion source:
+
+```lua
+-- ~/.config/nvim/lua/hyperdev-cmp.lua
+local cmp = require('cmp')
+
+-- HyperDev template autocomplete source
+local source = {}
+
+function source:complete(request, callback)
+  local templates = vim.fn.systemlist('hyper list --format json')
+  local items = {}
+  
+  for _, template in ipairs(templates) do
+    table.insert(items, {
+      label = template.name,
+      kind = cmp.lsp.CompletionItemKind.Snippet,
+      detail = template.description,
+      insertText = 'hyper gen ' .. template.name .. ' ${1:name}'
+    })
+  end
+  
+  callback({ items = items })
+end
+
+cmp.register_source('hyperdev', source)
+```
+
+## Custom Commands
+
+Prefer Vimscript? These commands work in both Vim and Neovim:
+
+```vim
+" ~/.vimrc or ~/.config/nvim/init.vim
+command! -nargs=1 HyperDevGen execute '!hyper gen component ' . <q-args>
+command! HyperDevList execute '!hyper recipe list'
+command! HyperDevWatch execute '!hyper watch'
+
+" Quick mappings
+nnoremap <leader>hg :HyperDevGen 
+nnoremap <leader>hl :HyperDevList<CR>
+nnoremap <leader>hd :HyperDevWatch<CR>
+```
+
+## Template File Detection
+
+Tell Vim what to do with HyperDev template files so syntax highlighting works:
+
+```vim
+" ~/.vimrc or ~/.config/nvim/init.vim
+augroup HyperDevFiles
+  autocmd!
+  autocmd BufNewFile,BufRead *.jig set filetype=javascript
+  autocmd BufNewFile,BufRead *.template.yml set filetype=yaml
+  autocmd BufNewFile,BufRead hypergen.config.js set filetype=javascript
+augroup END
+```
+
+## Status Line Integration
+
+Add a static HyperDev indicator to lualine so you know the kit is active:
+
+```lua
+-- Example for lualine.nvim
+require('lualine').setup {
+  sections = {
+    lualine_x = {
+      -- Simple static indicator — avoids spawning a subprocess on every refresh
+      function() return 'hyper' end
+    }
+  }
+}
+```
+
+## Neovim Configuration Example
+
+Here's a complete Neovim config that pulls it all together:
+
+```lua
+-- ~/.config/nvim/lua/config/hyperdev.lua
+local M = {}
+
+function M.setup()
+  -- Load HyperDev functions
+  require('hyperdev')
+  
+  -- Set up keymaps
+  local opts = { noremap = true, silent = true }
+  vim.keymap.set('n', '<leader>hc', '<cmd>lua require("hyper").generate_component()<CR>', opts)
+  vim.keymap.set('n', '<leader>hd', '<cmd>lua require("hyper").start_watch()<CR>', opts)
+end
+
+return M
+```
+
+With this in place, HyperDev fits naturally into a Vim/Neovim workflow --- no terminal switching required.
