@@ -1,0 +1,7 @@
+{
+	"file": "cli/commands/resources/docs.mdx",
+	"classification": "likely_ai",
+	"human_confidence": 24,
+	"ai_signal_score": 0.76,
+	"assessment": "578-line document with unrealistic feature scope. Nested subsections and mechanical table repetition suggest template-driven generation."
+}

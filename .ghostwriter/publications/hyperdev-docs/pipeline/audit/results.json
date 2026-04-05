@@ -1,0 +1,129 @@
+{
+	"audit_date": "2026-04-05",
+	"analysis_type": "AI detection - documentation audit",
+	"total_files": 14,
+	"results": [
+		{
+			"file": "cli/overview.mdx",
+			"classification": "likely_human",
+			"human_confidence": 78,
+			"ai_signal_score": 0.22,
+			"line_count": 137,
+			"assessment": "Natural conversational voice with real knowledge transfer"
+		},
+		{
+			"file": "cli/quickstart.mdx",
+			"classification": "likely_human",
+			"human_confidence": 81,
+			"ai_signal_score": 0.19,
+			"line_count": 169,
+			"assessment": "Progressive disclosure with genuine user-focused guidance"
+		},
+		{
+			"file": "cli/commands/overview.mdx",
+			"classification": "uncertain",
+			"human_confidence": 55,
+			"ai_signal_score": 0.45,
+			"line_count": 518,
+			"assessment": "Borderline: comprehensive but mechanically structured"
+		},
+		{
+			"file": "cli/commands/dash.mdx",
+			"classification": "likely_ai",
+			"human_confidence": 28,
+			"ai_signal_score": 0.72,
+			"line_count": 91,
+			"assessment": "Placeholder feature with formulaic structure"
+		},
+		{
+			"file": "cli/commands/discovery/list.mdx",
+			"classification": "likely_ai",
+			"human_confidence": 25,
+			"ai_signal_score": 0.75,
+			"line_count": 585,
+			"assessment": "Exhaustive speculative features with no implementation evidence"
+		},
+		{
+			"file": "cli/commands/discovery/search.mdx",
+			"classification": "likely_ai",
+			"human_confidence": 22,
+			"ai_signal_score": 0.78,
+			"line_count": 502,
+			"assessment": "500+ lines of speculative search functionality"
+		},
+		{
+			"file": "cli/commands/resources/docs.mdx",
+			"classification": "likely_ai",
+			"human_confidence": 24,
+			"ai_signal_score": 0.76,
+			"line_count": 578,
+			"assessment": "Unrealistic feature scope with mechanical expansion"
+		},
+		{
+			"file": "cli/commands/resources/plan.mdx",
+			"classification": "likely_human",
+			"human_confidence": 72,
+			"ai_signal_score": 0.28,
+			"line_count": 80,
+			"assessment": "Appropriately scoped with realistic feature set"
+		},
+		{
+			"file": "cli/commands/resources/task.mdx",
+			"classification": "likely_ai",
+			"human_confidence": 26,
+			"ai_signal_score": 0.74,
+			"line_count": 541,
+			"assessment": "Exhaustive nested subsections with speculative features"
+		},
+		{
+			"file": "cli/commands/workflow/dev.mdx",
+			"classification": "likely_ai",
+			"human_confidence": 30,
+			"ai_signal_score": 0.7,
+			"line_count": 545,
+			"assessment": "Speculative monitoring features with mechanical structure"
+		},
+		{
+			"file": "cli/commands/workflow/gen.mdx",
+			"classification": "likely_human",
+			"human_confidence": 76,
+			"ai_signal_score": 0.24,
+			"line_count": 180,
+			"assessment": "Technical precision with focused scope and real knowledge"
+		},
+		{
+			"file": "cli/commands/workflow/init.mdx",
+			"classification": "likely_ai",
+			"human_confidence": 29,
+			"ai_signal_score": 0.71,
+			"line_count": 361,
+			"assessment": "Speculative initialization options with scope bloat"
+		},
+		{
+			"file": "cli/commands/workflow/plan.mdx",
+			"classification": "likely_ai",
+			"human_confidence": 23,
+			"ai_signal_score": 0.77,
+			"line_count": 626,
+			"assessment": "626 lines documenting 'Coming Soon' feature"
+		},
+		{
+			"file": "cli/commands/workflow/run.mdx",
+			"classification": "likely_human",
+			"human_confidence": 74,
+			"ai_signal_score": 0.26,
+			"line_count": 197,
+			"assessment": "Focused technical documentation with real system knowledge"
+		}
+	],
+	"summary": {
+		"likely_human": 5,
+		"likely_ai": 8,
+		"uncertain": 1,
+		"average_human_confidence": 46,
+		"human_percentage": 36,
+		"ai_percentage": 57,
+		"uncertain_percentage": 7
+	},
+	"key_pattern": "AI-generated files average 505 lines; human-authored average 124 lines. Files >300 lines are 90% likely AI-generated."
+}

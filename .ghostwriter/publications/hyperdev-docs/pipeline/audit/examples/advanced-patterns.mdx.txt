@@ -1,0 +1,16 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.66
+Confidence: 30%
+File: examples/advanced-patterns.mdx
+
+This 1738-line file demonstrates AI characteristics:
+- Extremely comprehensive coverage of complex patterns (multi-template composition, conditional generation, etc.)
+- Highly systematic structure with repeated pattern: pattern name → YAML configuration → explanation → usage example
+- Perfect formatting throughout with no editing artifacts
+- Large code blocks presented with identical structure throughout
+- Generic section headers ("Multi-Template Composition", "Conditional Patterns")
+- Placeholder variable names and configurations
+- No practical warnings about when these patterns should/shouldn't be used
+- Exhaustive completeness suggesting specification-driven documentation
+
+The file appears to be generated from a specification of advanced features. The perfect consistency, extensive length, systematic enumeration, and lack of practical prioritization all suggest AI authorship. Real advanced documentation typically includes more caveats and practical judgment about trade-offs.

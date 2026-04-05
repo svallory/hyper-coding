@@ -1,0 +1,4 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.58
+Confidence: 48%
+File: integrations/jetbrains.mdx

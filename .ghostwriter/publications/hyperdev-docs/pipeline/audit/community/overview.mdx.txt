@@ -1,0 +1,16 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.65
+Confidence: 28%
+File: community/overview.mdx
+
+This file shows moderate-to-high AI characteristics. It's a catalog-style overview with:
+- Extremely high density of Card/Columns components (16 Card elements structured identically)
+- Repetitive pattern: title, icon, href, description across all cards
+- Perfect markdown formatting with no editing artifacts
+- Generic category organization without prioritization ("Community Channels", "Contributing to HyperDev", "Community Programs")
+- Placeholder metrics ("50,000+ Developers", "1,000+ Templates", "95% Security Score") that read as aspirational
+- Smooth, uniform tone throughout with no contradictions
+- No practical difficulties, no "here's what actually works" warnings
+- Highly modular content structure (all similar sections follow identical patterns)
+
+The file feels templated—likely generated from a specification or outline rather than written from experience. The comprehensiveness without depth suggests AI authorship.

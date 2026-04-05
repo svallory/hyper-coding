@@ -1,0 +1,4 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.18
+Confidence: 81%
+File: hq/telegram.mdx

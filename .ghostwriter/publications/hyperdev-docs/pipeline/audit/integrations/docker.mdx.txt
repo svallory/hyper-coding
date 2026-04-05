@@ -1,0 +1,4 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.62
+Confidence: 45%
+File: integrations/docker.mdx

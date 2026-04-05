@@ -1,0 +1,20 @@
+{
+	"filepath": "/work/hyper/apps/docs-bkp/get-started/quickstart.mdx",
+	"heuristics_score": 0.418,
+	"classification": "uncertain",
+	"human_confidence": 50,
+	"signals": {
+		"ai_vocab_count": 0,
+		"hedging_count": 0,
+		"contractions": 8,
+		"questions": 1,
+		"personal_pronouns": 9,
+		"exclamations": 0,
+		"em_dashes": 26
+	},
+	"metrics": {
+		"word_count": 613,
+		"sentence_count": 59,
+		"paragraph_count": 26
+	}
+}

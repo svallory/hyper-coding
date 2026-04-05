@@ -1,0 +1,4 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.32
+Confidence: 78%
+File: integrations/user-analytics-scenario.mdx

@@ -1,0 +1,4 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.68
+Confidence: 32%
+File: integrations/package-scripts.mdx

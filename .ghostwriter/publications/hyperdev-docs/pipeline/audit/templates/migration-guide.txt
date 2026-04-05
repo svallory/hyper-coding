@@ -1,0 +1,4 @@
+Classification: uncertain
+AI Signal Score (0.0-1.0): 0.48
+Confidence: 62%
+File: templates/migration-guide.mdx

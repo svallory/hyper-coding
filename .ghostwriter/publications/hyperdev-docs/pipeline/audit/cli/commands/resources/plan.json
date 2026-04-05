@@ -1,0 +1,7 @@
+{
+	"file": "cli/commands/resources/plan.mdx",
+	"classification": "likely_human",
+	"human_confidence": 72,
+	"ai_signal_score": 0.28,
+	"assessment": "Appropriately scoped at 80 lines. Realistic feature set and concrete examples indicate human authorship."
+}

@@ -1,0 +1,20 @@
+{
+	"filepath": "/work/hyper/apps/docs-bkp/advanced/customize-setup.mdx",
+	"heuristics_score": 0.495,
+	"classification": "uncertain",
+	"human_confidence": 50,
+	"signals": {
+		"ai_vocab_count": 0,
+		"hedging_count": 0,
+		"contractions": 6,
+		"questions": 0,
+		"personal_pronouns": 6,
+		"exclamations": 0,
+		"em_dashes": 5
+	},
+	"metrics": {
+		"word_count": 309,
+		"sentence_count": 12,
+		"paragraph_count": 23
+	}
+}

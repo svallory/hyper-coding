@@ -1,6 +1,7 @@
 {
 	"name": "@hypercli/core",
 	"version": "0.4.0",
+	"packageManager": "bun@1.3.11",
 	"type": "module",
 	"description": "Core domain types, config, errors for HyperDev",
 	"keywords": ["hyperdev", "hypergen", "code-generator"],
@@ -16,7 +17,7 @@
 		"url": "https://github.com/svallory/hyper-coding/issues"
 	},
 	"engines": {
-		"node": ">=20"
+		"bun": ">=1.3.0"
 	},
 	"exports": {
 		".": {

@@ -1,0 +1,17 @@
+{
+	"filepath": "advanced/customize-setup.mdx",
+	"heuristics_score": 0.28,
+	"classification": "likely_human",
+	"human_confidence": 76,
+	"evidence": {
+		"human_signals": [
+			"Direct casual language ('The coding tool wires up your dev environment')",
+			"Conversational explanation ('so you're not doing it by hand')",
+			"Simple, direct phrasing",
+			"Questions that prompt reader thinking",
+			"Contractions throughout"
+		],
+		"ai_signals": ["Structured command sections", "Bullet-point lists (typical documentation)"]
+	},
+	"notes": "Casual, friendly tone ('not doing it by hand', 'is the most useful command') indicates human author. Short, punchy sentences are characteristic of developer documentation written by developers, not AI templates."
+}

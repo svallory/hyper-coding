@@ -1,0 +1,16 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.42
+Confidence: 65%
+File: workflow/workflow-overview.mdx
+
+This file shows human authorship characteristics:
+- Conversational, engaging opening ("HyperDev gives you six tools...")
+- Clear prioritization and real-world focus (practical mapping of principles to tools)
+- Genuine explanation of why things matter ("Each tool implements a specific Hyper Coding principle")
+- Real understanding of workflow sequencing (gen → tools → plan → watch → dash → hq)
+- Practical candor about process ("Watching Claude Code coordinate 12 parallel agents is impressive — but...")
+- Varied sentence structures and natural flow
+- Real context about how tools work together in practice
+- Authentic voice and personality throughout
+
+The file reads like it was written by someone who designed this system and understands both its capabilities and limitations. The clear thinking about tool relationships, the practical framing, and the conversational honesty all indicate human authorship.

@@ -1,0 +1,17 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.70
+Confidence: 27%
+File: workflow/dev.mdx
+
+This file shows substantial AI characteristics:
+- Extremely comprehensive feature catalog (577 lines) covering extensive theoretical system
+- Highly systematic organization with multiple identical subsections
+- Repetitive patterns: section title → description → code blocks → configurations
+- Multiple YAML configuration examples showing theoretical ideal states
+- Generic, aspirational language ("Intelligent context management", "Real-time AI monitoring")
+- Placeholder feature descriptions and example metrics
+- Perfect formatting throughout
+- Emphasis on completeness over pragmatism ("Dashboard Components", "Real-time Alerts", "Validation Pipeline")
+- Theoretical frameworks presented as implemented features (marked "Coming Soon" but documented as functional)
+
+The file reads as specification documentation generated from product requirements rather than practical guidance. The comprehensiveness, the perfect formatting, the theoretical rather than pragmatic framing, and the consistent pattern repetition all suggest AI authorship.

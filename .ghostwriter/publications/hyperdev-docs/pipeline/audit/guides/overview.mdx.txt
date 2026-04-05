@@ -1,0 +1,17 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.70
+Confidence: 26%
+File: guides/overview.mdx
+
+This file displays clear AI authorship patterns:
+- Extremely high density of Card components (16 cards across 4 sections)
+- Perfect repetitive structure: each card has title, icon, href, description
+- Highly systematic categorization ("By Experience Level", "By Use Case", "By Technology Stack")
+- Comprehensive but generic content organization
+- Placeholder links and icons suggesting templated generation (href="/guides/quickstart", href="/guides/context-engineering")
+- Smooth, uniform transitions between sections
+- No practical warnings, tradeoffs, or contextual friction
+- Marketing-style language ("Scale HyperDev methodology across development teams effectively")
+- Aspirational descriptions for non-existent pages (marked "Coming Soon" in other files)
+
+The file is essentially a navigation hub generated from a content specification. The perfect consistency of all cards, the absence of prioritization, and the systematic categorization all suggest AI-assisted generation or full AI authorship.

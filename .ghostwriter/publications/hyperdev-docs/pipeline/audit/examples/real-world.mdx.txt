@@ -1,0 +1,16 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.68
+Confidence: 29%
+File: examples/real-world.mdx
+
+This 1401-line file displays AI authorship characteristics:
+- Extremely comprehensive case studies and scenarios (startup, enterprise, SaaS, etc.)
+- Highly systematic structure with repeated pattern: scenario name → recipe/template → explanation
+- Perfect formatting throughout
+- Multiple large code blocks and YAML configurations
+- Generic section headers and categorical organization
+- Aspirational project descriptions and metrics
+- No practical warnings about complexity, implementation time, or common pitfalls
+- Exhaustive completeness suggesting specification-driven content
+
+The file appears to catalog possible "real-world" scenarios generated from a feature specification rather than documented from actual projects. The perfect formatting, systematic enumeration, placeholder project details, and lack of practical lessons learned all suggest AI authorship.

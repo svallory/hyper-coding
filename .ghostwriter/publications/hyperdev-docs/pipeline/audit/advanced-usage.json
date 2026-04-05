@@ -1,0 +1,21 @@
+{
+	"filepath": "advanced-usage.mdx",
+	"heuristics_score": 0.35,
+	"classification": "likely_human",
+	"human_confidence": 72,
+	"evidence": {
+		"human_signals": [
+			"Contractions (\"isn't\", \"you're\", \"don't\")",
+			"Conversational asides ('For example')",
+			"Question-based transitions",
+			"Direct address to reader",
+			"Code examples integrated naturally with explanation"
+		],
+		"ai_signals": [
+			"High density of code blocks (27+ code samples)",
+			"Structured sections with consistent formatting",
+			"Some repetitive introductory phrases"
+		]
+	},
+	"notes": "Documentation style leans heavily toward instructional content with code, which could be either human or AI-written. However, conversational elements and natural code integration suggest human authorship. The casual language ('You can wire multiple templates together') is distinctly human."
+}

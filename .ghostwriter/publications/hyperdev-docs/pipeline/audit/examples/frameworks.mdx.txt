@@ -1,0 +1,16 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.70
+Confidence: 25%
+File: examples/frameworks.mdx
+
+This 2011-line file shows strong AI characteristics:
+- Extremely comprehensive framework coverage (React, Vue, Angular, Node.js, Python, Django, Flask, Go, Rust)
+- Highly systematic structure with identical patterns for each framework section
+- Perfect formatting throughout with no human editing artifacts
+- Repetitive code examples showing template patterns for each technology
+- Generic section organization ("Frontend Frameworks", "Backend Frameworks", "Full-Stack Frameworks")
+- Placeholder project names and configuration examples
+- No practical guidance about which framework patterns are most commonly needed
+- Exhaustive enumeration suggesting template-based generation
+
+The file reads as framework documentation generated from a specification. The perfect consistency across 8+ framework sections, the identical structure for each, and the lack of prioritization (all frameworks treated equally) strongly suggest AI authorship or automated template generation from a specification.

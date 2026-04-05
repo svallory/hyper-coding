@@ -1,0 +1,4 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.64
+Confidence: 39%
+File: integrations/webpack.mdx

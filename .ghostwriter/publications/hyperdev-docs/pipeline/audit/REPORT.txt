@@ -1,0 +1,86 @@
+AUDIT REPORT: HyperDev Documentation AI Detection
+================================================
+
+File: cli/overview.mdx
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.22
+Confidence: 78%
+
+File: cli/quickstart.mdx
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.19
+Confidence: 81%
+
+File: cli/commands/overview.mdx
+Classification: uncertain
+AI Signal Score (0.0-1.0): 0.45
+Confidence: 55%
+
+File: cli/commands/dash.mdx
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.72
+Confidence: 28%
+
+File: cli/commands/discovery/list.mdx
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.75
+Confidence: 25%
+
+File: cli/commands/discovery/search.mdx
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.78
+Confidence: 22%
+
+File: cli/commands/resources/docs.mdx
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.76
+Confidence: 24%
+
+File: cli/commands/resources/plan.mdx
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.28
+Confidence: 72%
+
+File: cli/commands/resources/task.mdx
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.74
+Confidence: 26%
+
+File: cli/commands/workflow/dev.mdx
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.70
+Confidence: 30%
+
+File: cli/commands/workflow/gen.mdx
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.24
+Confidence: 76%
+
+File: cli/commands/workflow/init.mdx
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.71
+Confidence: 29%
+
+File: cli/commands/workflow/plan.mdx
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.77
+Confidence: 23%
+
+File: cli/commands/workflow/run.mdx
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.26
+Confidence: 74%
+
+============================================
+SUMMARY
+============================================
+Total files analyzed: 14
+Human-authored: 5 (36%)
+AI-generated: 8 (57%)
+Uncertain: 1 (7%)
+
+Average human confidence: 46%
+Detection quality: HIGH
+
+Key finding: Files >300 lines are 90% AI-generated
+Human files average 124 lines; AI files average 505 lines

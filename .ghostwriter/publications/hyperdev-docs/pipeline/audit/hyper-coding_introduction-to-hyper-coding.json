@@ -1,0 +1,23 @@
+{
+	"filepath": "hyper-coding/introduction-to-hyper-coding.mdx",
+	"heuristics_score": 0.41,
+	"classification": "uncertain",
+	"human_confidence": 62,
+	"evidence": {
+		"human_signals": [
+			"Direct opinion opening: 'Hyper Coding is a process-driven approach'",
+			"Clear statement of stakes: 'The AI generates; you stay responsible.'",
+			"Practical perspective on problems"
+		],
+		"ai_signals": [
+			"Very systematic 5-principles framework",
+			"Extensive bullet-point lists (30+)",
+			"Perfect four-phase process structure",
+			"Multiple formatted tables",
+			"Repeated section pattern (numbered phases with subsections)",
+			"Comprehensive metrics list",
+			"Formulaic tool-to-methodology mapping"
+		]
+	},
+	"notes": "Borderline. While initial framing is human, the extreme systematization—five principles, four phases each with subsections, metrics sections, implementation guidelines—suggests either very disciplined human writing or AI generation. The perfect structural consistency leans toward AI involvement."
+}

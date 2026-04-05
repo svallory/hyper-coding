@@ -1,0 +1,7 @@
+{
+	"file": "cli/commands/workflow/init.mdx",
+	"classification": "likely_ai",
+	"human_confidence": 29,
+	"ai_signal_score": 0.71,
+	"assessment": "361-line document with speculative features and scope bloat. Configuration section describes 20+ settings for simple command."
+}

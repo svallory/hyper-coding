@@ -1,0 +1,18 @@
+{
+	"filepath": "get-started/tutorial.mdx",
+	"heuristics_score": 0.27,
+	"classification": "likely_human",
+	"human_confidence": 75,
+	"evidence": {
+		"human_signals": [
+			"Personal, goal-oriented framing: 'From zero to your first custom template in about 30 minutes'",
+			"Conversational transitions and asides",
+			"Direct reader engagement ('Let's read the recipe')",
+			"Natural teaching progression",
+			"Contractions and casual phrasing",
+			"Explanatory comments that clarify thinking"
+		],
+		"ai_signals": ["Part-based structure", "Code examples with explanations"]
+	},
+	"notes": "Strong human teaching voice. The progression 'Let's read', 'Now look at', 'Create a new directory', 'Run it again' shows natural tutoring flow. Author clearly understands the subject and explains it conversationally."
+}

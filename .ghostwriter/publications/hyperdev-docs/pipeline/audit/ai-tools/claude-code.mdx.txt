@@ -1,0 +1,6 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.28
+Confidence: 78%
+File: ai-tools/claude-code.mdx
+
+This file demonstrates strong human characteristics. It's a straightforward setup guide with a clear, conversational structure. The language is direct and procedural without excessive hedging. The CLAUDE.md template embedded in the content shows genuine project-specific context (Mintlify documentation, MDX files, YAML frontmatter) that reflects actual team knowledge, not generic AI output. Human writers typically produce more varied sentence structures and include real implementation details like "NEVER use --no-verify" which reflects hard-earned experience. The document lacks the uniformity and over-explanation typical of AI writing.

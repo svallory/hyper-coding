@@ -1,0 +1,23 @@
+{
+	"filepath": "hyper-coding/hyper-vs-vibe.mdx",
+	"heuristics_score": 0.45,
+	"classification": "uncertain",
+	"human_confidence": 58,
+	"evidence": {
+		"human_signals": [
+			"Strong opening opinion: 'Both approaches use AI to generate code. That's where the similarity ends.'",
+			"Direct perspective: 'One treats AI output as a starting point you still have to own'",
+			"Conversational framing of trade-offs",
+			"Personal voice in risk assessment"
+		],
+		"ai_signals": [
+			"Multiple comparison tables with consistent formatting",
+			"Very comprehensive coverage (200 lines)",
+			"Repeated structured sections",
+			"Long lists of examples (success stories, failures, etc.)",
+			"Formulaic 'Expert Perspectives' section",
+			"Decision framework with structured lists"
+		]
+	},
+	"notes": "Mixed signals. Opening and core argument are human, but the systematic comparison tables, extensive structured lists, and perfect categorization suggest AI generation or heavy refinement. The breadth of examples and structured presentation pattern is characteristic of AI work."
+}

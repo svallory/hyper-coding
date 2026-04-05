@@ -1,0 +1,15 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.72
+Confidence: 22%
+File: ai-tools/cursor.mdx
+
+This file shows strong AI characteristics. It contains 422 lines of extremely structured, enumerated documentation presenting Mintlify components. The writing demonstrates:
+- Excessive comprehensiveness and "completeness" markers (e.g., "## Required page structure", "### API documentation requirements")
+- Highly repetitive patterns of component documentation: title, description, example code block, parameter table
+- Uniform bullet-point density throughout with no variation
+- Generic educational tone ("Learn how to...", "Ensure proper...")
+- Placeholder examples with artificial names ("John Doe", "example.com")
+- Perfect markdown formatting without any quirks or human editing artifacts
+- No contradictions, edge cases, or practical warnings typical of human-written docs
+
+The density and uniformity of this encyclopedic reference suggests template-based generation or AI authorship rather than human writing.

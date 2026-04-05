@@ -1,0 +1,16 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.33
+Confidence: 75%
+File: guides/publishing.mdx
+
+This file demonstrates clear human authorship:
+- Practical, procedural tone ("Follow this process for code contributions")
+- Honest acknowledgment of edge cases ("if the automated path is broken")
+- Specific tool knowledge (Changesets, GitHub Actions, npm publishing)
+- Real error handling guidance ("Check the Actions tab in GitHub for errors")
+- Conversational warnings ("don't make a habit of it")
+- Step-by-step procedures written from experience
+- Genuine technical depth (dependency ordering, package.json structure, release workflow)
+- Practical troubleshooting section with real scenarios
+
+The content reads like it was written by someone who maintains a release process and wants to help others follow it. The specificity, the acknowledgment of common failures, and the practical focus all indicate human authorship based on actual experience managing package releases.

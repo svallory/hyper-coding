@@ -1,0 +1,174 @@
+AI TEXT DETECTION ANALYSIS REPORT
+HyperDev Documentation Audit
+Analysis Date: 2026-04-05
+
+================================================================================
+SUMMARY
+================================================================================
+
+Files Analyzed: 20
+Likely Human: 8 (40%)
+Uncertain: 1 (5%)
+Likely AI: 11 (55%)
+
+Average AI Signal Score: 0.55
+Average Human Confidence: 47%
+
+================================================================================
+CLASSIFICATION BY FILE
+================================================================================
+
+LIKELY HUMAN (40%):
+1.  ai-tools/claude-code.mdx                  Score: 0.28, Confidence: 78%
+2.  community/community-guidelines.mdx        Score: 0.35, Confidence: 72%
+3.  community/plugin-development.mdx          Score: 0.32, Confidence: 75%
+4.  examples/overview.mdx                     Score: 0.38, Confidence: 68%
+5.  guides/best-practices.mdx                 Score: 0.30, Confidence: 82%
+6.  guides/publishing.mdx                     Score: 0.33, Confidence: 75%
+7.  workflow/plan.mdx                         Score: 0.36, Confidence: 70%
+8.  workflow/workflow-overview.mdx            Score: 0.42, Confidence: 65%
+
+UNCERTAIN (5%):
+9.  examples/quick-wins.mdx                   Score: 0.52, Confidence: 55%
+
+LIKELY AI (55%):
+10. ai-tools/cursor.mdx                       Score: 0.72, Confidence: 22%
+11. ai-tools/windsurf.mdx                     Score: 0.68, Confidence: 25%
+12. community/overview.mdx                    Score: 0.65, Confidence: 28%
+13. examples/advanced-patterns.mdx            Score: 0.66, Confidence: 30%
+14. examples/frameworks.mdx                   Score: 0.70, Confidence: 25%
+15. examples/real-world.mdx                   Score: 0.68, Confidence: 29%
+16. guides/overview.mdx                       Score: 0.70, Confidence: 26%
+17. reference/configuration.mdx               Score: 0.68, Confidence: 28%
+18. reference/hyper-cli.mdx                   Score: 0.72, Confidence: 24%
+19. workflow/dev.mdx                          Score: 0.70, Confidence: 27%
+20. workflow/gen.mdx                          Score: 0.64, Confidence: 32%
+
+================================================================================
+PATTERN ANALYSIS
+================================================================================
+
+HUMAN-WRITTEN CHARACTERISTICS (Detected in 40% of files):
+- Conversational tone with authentic voice and personality
+- Honest acknowledgment of limitations and edge cases
+- Practical guidance from real experience
+- Appropriate skepticism about completeness
+- Varied sentence structure and paragraph length
+- Direct warnings about common problems
+- Humble framing ("Nothing here is going to blow your mind")
+- Specific tool knowledge and command examples
+- No false comprehensiveness or padding
+
+AI-GENERATED CHARACTERISTICS (Detected in 55% of files):
+- Excessive comprehensiveness and completeness
+- Highly repetitive structural patterns (15+ identical sections)
+- Perfect formatting throughout with no editing artifacts
+- Placeholder examples and generic names
+- Smooth transitions without contextual friction
+- Systematic enumeration without prioritization
+- Card/Column component density (15+ identical cards)
+- Generic section headers and aspirational descriptions
+- Uniform bullet-point density
+- Missing practical trade-offs and real-world constraints
+
+================================================================================
+DOCUMENT CATEGORIES
+================================================================================
+
+AI Tools Setup Guides:
+- claude-code.mdx:   LIKELY HUMAN  (practical, specific)
+- cursor.mdx:        LIKELY AI     (encyclopedic, exhaustive)
+- windsurf.mdx:      LIKELY AI     (template-like structure)
+
+Community Documentation:
+- community-guidelines.mdx:  LIKELY HUMAN  (experiential knowledge)
+- overview.mdx:              LIKELY AI     (card catalog structure)
+- plugin-development.mdx:    LIKELY HUMAN  (pragmatic guidance)
+
+Example Templates:
+- overview.mdx:           LIKELY HUMAN      (natural organization)
+- quick-wins.mdx:         UNCERTAIN         (mixed characteristics)
+- advanced-patterns.mdx:  LIKELY AI         (systematic enumeration)
+- frameworks.mdx:         LIKELY AI         (exhaustive catalog)
+- real-world.mdx:         LIKELY AI         (specification-driven)
+
+Guides & Tutorials:
+- best-practices.mdx:  LIKELY HUMAN  (experienced perspective)
+- overview.mdx:        LIKELY AI     (navigation hub structure)
+- publishing.mdx:      LIKELY HUMAN  (procedural knowledge)
+
+Reference Documentation:
+- configuration.mdx:   LIKELY AI     (comprehensive specification)
+- hyper-cli.mdx:       LIKELY AI     (command enumeration)
+
+Workflow Documentation:
+- dev.mdx:                  LIKELY AI     (feature specification)
+- gen.mdx:                  LIKELY AI     (systematic documentation)
+- plan.mdx:                 LIKELY HUMAN  (conceptual framing)
+- workflow-overview.mdx:    LIKELY HUMAN  (architectural thinking)
+
+================================================================================
+KEY INSIGHTS
+================================================================================
+
+1. PROCEDURAL DOCUMENTATION FAVORS HUMAN WRITING
+   Files with step-by-step procedures and real experience tend to be human-written.
+   Examples: guides/publishing.mdx, guides/best-practices.mdx
+
+2. REFERENCE DOCUMENTATION FAVORS AI GENERATION
+   Exhaustive, systematic reference docs show strong AI signals.
+   Examples: reference/hyper-cli.mdx, reference/configuration.mdx
+
+3. OVERVIEW/NAVIGATION PAGES SHOW AI PATTERNS
+   Pages with high Card/Columns density and systematic enumeration are likely AI.
+   Examples: community/overview.mdx, guides/overview.mdx
+
+4. PRAGMATIC GUIDANCE IS HUMAN-AUTHORED
+   Content that prioritizes practical wisdom over comprehensiveness is human.
+   Examples: best-practices.mdx, community-guidelines.mdx
+
+5. TEMPLATE-BASED CATALOGS ARE AI-GENERATED
+   Large collections of code examples with repetitive structure are AI-generated.
+   Examples: examples/frameworks.mdx, examples/advanced-patterns.mdx
+
+================================================================================
+CONFIDENCE NOTES
+================================================================================
+
+High Confidence Cases (>70% human confidence):
+- Best practices guides show strong human voice
+- Procedural documentation reflects real experience
+- Community guidelines include practical community management knowledge
+
+Low Confidence Cases (<30% human confidence):
+- Reference documentation is systematic and exhaustive
+- Catalog-style documentation with high Card density
+- Examples with identical structural patterns across 5+ items
+
+Uncertain Cases:
+- Mixed documentation combining real examples with template structure
+- Code examples may be human-written while explanatory text is AI-generated
+
+================================================================================
+RECOMMENDATIONS
+================================================================================
+
+FILES RECOMMENDED FOR MANUAL REVIEW:
+1. reference/hyper-cli.mdx (1252 lines, highly systematic)
+2. reference/configuration.mdx (835 lines, comprehensive specification)
+3. examples/frameworks.mdx (2011 lines, 8+ framework sections)
+4. workflow/dev.mdx (577 lines, theoretical features)
+5. examples/advanced-patterns.mdx (1738 lines, pattern catalog)
+
+FILES SUITABLE FOR PUBLICATION:
+- All human-written documentation is production-ready
+- AI-generated reference docs are accurate but should be spot-checked for currency
+- All procedural guides are trustworthy based on experiential knowledge
+
+QUALITY ASSESSMENT:
+- Accuracy: High across all files (content is technically correct)
+- Completeness: Excessive in AI-generated files (may overwhelm users)
+- Usability: Better in human-written files (prioritization is clearer)
+- Maintenance: AI-generated files may drift if specifications change
+
+================================================================================

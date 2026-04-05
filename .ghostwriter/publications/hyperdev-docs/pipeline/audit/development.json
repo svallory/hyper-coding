@@ -1,0 +1,17 @@
+{
+	"filepath": "development.mdx",
+	"heuristics_score": 0.32,
+	"classification": "likely_human",
+	"human_confidence": 74,
+	"evidence": {
+		"human_signals": [
+			"Contractions ('You'll', \"it's\")",
+			"Casual verb forms ('get installed', 'run the following')",
+			"Direct reader address",
+			"Questions in content ('what changed')",
+			"Personal reference to common pain point"
+		],
+		"ai_signals": ["Step-by-step structure (could be either)", "Code blocks with language labels"]
+	},
+	"notes": "Despite structured format, human voice evident in conversational transitions and direct reader engagement. Note reference to 'Curious about what changed' - natural human curiosity phrasing."
+}

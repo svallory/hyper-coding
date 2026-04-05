@@ -1,6 +1,7 @@
 {
 	"name": "@hypercli/kit",
 	"version": "0.4.0",
+	"packageManager": "bun@1.3.11",
 	"type": "module",
 	"description": "Kit lifecycle management for HyperDev",
 	"keywords": ["hyperdev", "hypergen", "kits"],
@@ -16,7 +17,7 @@
 		"url": "https://github.com/svallory/hyper-coding/issues"
 	},
 	"engines": {
-		"node": ">=20"
+		"bun": ">=1.3.0"
 	},
 	"exports": {
 		".": {

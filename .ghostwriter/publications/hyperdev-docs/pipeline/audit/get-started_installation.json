@@ -1,0 +1,22 @@
+{
+	"filepath": "get-started/installation.mdx",
+	"heuristics_score": 0.36,
+	"classification": "uncertain",
+	"human_confidence": 65,
+	"evidence": {
+		"human_signals": [
+			"Conversational opening about no setup required",
+			"Casual phrasing ('you're good to go')",
+			"Direct reader address",
+			"Contractions"
+		],
+		"ai_signals": [
+			"Highly structured with consistent sections",
+			"Many code blocks (8+) with language labels",
+			"Repetitive structure (Tab groups with identical format)",
+			"Comprehensive coverage pattern",
+			"Formulaic troubleshooting accordions"
+		]
+	},
+	"notes": "Borderline. While conversational elements exist, the extremely systematic structure, repetitive Tab patterns, and comprehensive formatting suggest possible AI generation or heavy AI-assisted refinement."
+}

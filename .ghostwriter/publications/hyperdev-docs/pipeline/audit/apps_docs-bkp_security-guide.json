@@ -1,0 +1,20 @@
+{
+	"filepath": "/work/hyper/apps/docs-bkp/security-guide.mdx",
+	"heuristics_score": 0.428,
+	"classification": "uncertain",
+	"human_confidence": 50,
+	"signals": {
+		"ai_vocab_count": 0,
+		"hedging_count": 0,
+		"contractions": 3,
+		"questions": 0,
+		"personal_pronouns": 8,
+		"exclamations": 0,
+		"em_dashes": 6
+	},
+	"metrics": {
+		"word_count": 367,
+		"sentence_count": 7,
+		"paragraph_count": 21
+	}
+}

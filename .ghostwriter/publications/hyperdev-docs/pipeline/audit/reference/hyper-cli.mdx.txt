@@ -1,0 +1,17 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.72
+Confidence: 24%
+File: reference/hyper-cli.mdx
+
+This file demonstrates strong AI authorship patterns:
+- Extremely comprehensive reference (1252 lines) covering exhaustive command enumeration
+- Perfect command structure consistency: command name → syntax → options → examples → output format
+- Highly repetitive patterns repeated 15+ times (each command follows identical template)
+- Multiple example tabs for each command with no practical prioritization
+- Generic category headers ("Core Commands", "Advanced Usage Patterns", "Integration Examples")
+- Perfect formatting throughout with no human editing artifacts
+- Placeholder examples and generic error messages
+- Exhaustive but non-prioritized content (treats rarely-used options same as common ones)
+- No context about which commands are actually used most frequently
+
+The file is essentially a systematic enumeration of a specification. The perfect consistency, the exhaustive completeness, the identical template structure for 15+ command examples, and the lack of practical guidance about what matters suggest AI generation from a specification or automated command documentation generation.

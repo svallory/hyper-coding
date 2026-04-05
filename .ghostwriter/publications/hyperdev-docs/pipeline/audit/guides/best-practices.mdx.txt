@@ -1,0 +1,16 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.30
+Confidence: 82%
+File: guides/best-practices.mdx
+
+This file shows strong human authorship characteristics:
+- Humble opening ("Nothing here is going to blow your mind")
+- Conversational, self-aware tone ("these are just the habits...")
+- Practical wisdom from experience ("Big projects have a way of turning slow templates into very slow templates")
+- Brief and focused (97 lines) - no padding or false comprehensiveness
+- Direct advice without unnecessary explanation
+- Acknowledges limitations ("None of this is complicated; it just takes a little discipline")
+- Real understanding of performance issues (template complexity, file paths, disk space)
+- Mix of categories and tips that shows organic prioritization, not systematic enumeration
+
+The brevity and clarity suggest this was written by someone who has dealt with actual performance problems and wants to help others avoid them. The lack of exhaustive documentation and the honest, understated tone are hallmarks of human technical writing.

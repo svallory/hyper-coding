@@ -1,0 +1,4 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.25
+Confidence: 77%
+File: templates/recipe-authoring.mdx

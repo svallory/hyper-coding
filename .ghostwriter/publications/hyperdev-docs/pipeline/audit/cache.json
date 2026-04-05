@@ -1,0 +1,560 @@
+{
+	"publication": "hyperdev-docs",
+	"scanned_at": "2026-04-05T14:02:26.856741",
+	"threshold": 30,
+	"content_root": "/work/hyper/apps/docs-bkp",
+	"files": {
+		"cli/overview.mdx": {
+			"score": 0.22,
+			"confidence": 78,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:11:33.468430",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/quickstart.mdx": {
+			"score": 0.19,
+			"confidence": 81,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:11:56.676846",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/dash.mdx": {
+			"score": 0.72,
+			"confidence": 28,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:10:49.216584",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/overview.mdx": {
+			"score": 0.45,
+			"confidence": 55,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:11:42.961947",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/resources/plan.mdx": {
+			"score": 0.28,
+			"confidence": 72,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:04.861632",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/resources/docs.mdx": {
+			"score": 0.76,
+			"confidence": 24,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:11:53.316275",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/resources/task.mdx": {
+			"score": 0.74,
+			"confidence": 26,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:12:55.947548",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/discovery/search.mdx": {
+			"score": 0.78,
+			"confidence": 22,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:11:42.475544",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/discovery/list.mdx": {
+			"score": 0.75,
+			"confidence": 25,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:11:39.420008",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/workflow/plan.mdx": {
+			"score": 0.77,
+			"confidence": 23,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:14:21.522103",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/workflow/dev.mdx": {
+			"score": 0.7,
+			"confidence": 30,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:12:04.142903",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/workflow/init.mdx": {
+			"score": 0.71,
+			"confidence": 29,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:20.964017",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/workflow/run.mdx": {
+			"score": 0.26,
+			"confidence": 74,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:14:55.403914",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"cli/commands/workflow/gen.mdx": {
+			"score": 0.24,
+			"confidence": 76,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:43.895125",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"development.mdx": {
+			"score": 0.32,
+			"confidence": 74,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:46.807673",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"get-started/quickstart.mdx": {
+			"score": 0.42,
+			"confidence": 50,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:12:15.289335",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"hyper-coding/introduction-to-hyper-coding.mdx": {
+			"score": 0.54,
+			"confidence": 50,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:13:00.423820",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"troubleshooting.mdx": {
+			"score": 0.54,
+			"confidence": 50,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:19:10.914526",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"security-guide.mdx": {
+			"score": 0.43,
+			"confidence": 50,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:17:27.282805",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"hyper-coding/hyper-vs-vibe.mdx": {
+			"score": 0.45,
+			"confidence": 58,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:12:16.547574",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"advanced/customize-setup.mdx": {
+			"score": 0.28,
+			"confidence": 76,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:10:20.663275",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"get-started/tutorial.mdx": {
+			"score": 0.27,
+			"confidence": 75,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:13:03.792142",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"get-started/installation.mdx": {
+			"score": 0.36,
+			"confidence": 65,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:11:47.910413",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"index.mdx": {
+			"score": 0.22,
+			"confidence": 78,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:10:42.907726",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"advanced-usage.mdx": {
+			"score": 0.35,
+			"confidence": 72,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:11:02.651899",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"hq/overview.mdx": {
+			"score": 0.19,
+			"confidence": 82,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:10.921515",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"hq/worktrees.mdx": {
+			"score": 0.2,
+			"confidence": 80,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:32.931336",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"hq/configuration.mdx": {
+			"score": 0.21,
+			"confidence": 79,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:11:57.092999",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"hq/telegram.mdx": {
+			"score": 0.18,
+			"confidence": 81,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:22.488364",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"hq/commands.mdx": {
+			"score": 0.2,
+			"confidence": 80,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:11:45.070098",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/package-scripts.mdx": {
+			"score": 0.68,
+			"confidence": 32,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:12:06.418879",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/vim.mdx": {
+			"score": 0.59,
+			"confidence": 47,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:27.968624",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/vite.mdx": {
+			"score": 0.61,
+			"confidence": 46,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:47.350773",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/docker.mdx": {
+			"score": 0.62,
+			"confidence": 45,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:43.909352",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/git-hooks.mdx": {
+			"score": 0.35,
+			"confidence": 76,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:14:11.434481",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/webpack.mdx": {
+			"score": 0.64,
+			"confidence": 39,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:14:31.276769",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/jetbrains.mdx": {
+			"score": 0.58,
+			"confidence": 48,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:14:53.688652",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/vscode.mdx": {
+			"score": 0.63,
+			"confidence": 41,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:14:07.541491",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/user-analytics-scenario.mdx": {
+			"score": 0.32,
+			"confidence": 78,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:13:05.585895",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/github-actions.mdx": {
+			"score": 0.55,
+			"confidence": 52,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:14:35.433492",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/claude-code-hooks.mdx": {
+			"score": 0.28,
+			"confidence": 82,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:13:13.744659",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"integrations/nextjs.mdx": {
+			"score": 0.38,
+			"confidence": 72,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:15:13.622446",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"ai-tools/cursor.mdx": {
+			"score": 0.72,
+			"confidence": 22,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:15:52.348123",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"ai-tools/claude-code.mdx": {
+			"score": 0.28,
+			"confidence": 78,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:15:03.879458",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"ai-tools/windsurf.mdx": {
+			"score": 0.68,
+			"confidence": 25,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:16:07.236723",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"guides/publishing.mdx": {
+			"score": 0.33,
+			"confidence": 75,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:28.757108",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"guides/best-practices.mdx": {
+			"score": 0.3,
+			"confidence": 82,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:11:35.275793",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"guides/overview.mdx": {
+			"score": 0.7,
+			"confidence": 26,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:12:08.882425",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"examples/quick-wins.mdx": {
+			"score": 0.52,
+			"confidence": 55,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:12:31.609720",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"examples/frameworks.mdx": {
+			"score": 0.7,
+			"confidence": 25,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:02.665564",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"examples/real-world.mdx": {
+			"score": 0.68,
+			"confidence": 29,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:15.405998",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"examples/advanced-patterns.mdx": {
+			"score": 0.66,
+			"confidence": 30,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:12:46.599077",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"examples/overview.mdx": {
+			"score": 0.38,
+			"confidence": 68,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:12.693207",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"workflow/plan.mdx": {
+			"score": 0.36,
+			"confidence": 70,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:14:10.299833",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"workflow/dev.mdx": {
+			"score": 0.7,
+			"confidence": 27,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:12:54.426527",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"workflow/workflow-overview.mdx": {
+			"score": 0.42,
+			"confidence": 65,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:14:41.071602",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"workflow/gen.mdx": {
+			"score": 0.64,
+			"confidence": 32,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:52.758825",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"templates/sharing-templates.mdx": {
+			"score": 0.52,
+			"confidence": 65,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:19:13.506617",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"templates/kit-installation.mdx": {
+			"score": 0.28,
+			"confidence": 76,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:15:07.048476",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"templates/creating-templates.mdx": {
+			"score": 0.24,
+			"confidence": 78,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:14:10.482046",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"templates/migration-guide.mdx": {
+			"score": 0.48,
+			"confidence": 62,
+			"classification": "uncertain",
+			"modified_at": "2026-04-05T02:16:12.284080",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"templates/ai-decisions-tag.mdx": {
+			"score": 0.22,
+			"confidence": 80,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:45.988207",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"templates/ai-prompt-helper.mdx": {
+			"score": 0.26,
+			"confidence": 75,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:13:23.528276",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"templates/recipe-authoring.mdx": {
+			"score": 0.25,
+			"confidence": 77,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:17:29.749179",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"community/plugin-development.mdx": {
+			"score": 0.32,
+			"confidence": 75,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:13:28.199357",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"community/community-guidelines.mdx": {
+			"score": 0.35,
+			"confidence": 72,
+			"classification": "likely_human",
+			"modified_at": "2026-04-05T02:12:32.260664",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"community/overview.mdx": {
+			"score": 0.65,
+			"confidence": 28,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:10.913483",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"reference/configuration.mdx": {
+			"score": 0.68,
+			"confidence": 28,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:13:08.086267",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		},
+		"reference/hyper-cli.mdx": {
+			"score": 0.72,
+			"confidence": 24,
+			"classification": "likely_ai",
+			"modified_at": "2026-04-05T02:17:09.101611",
+			"scanned_at": "2026-04-05T14:02:26.856741",
+			"top_signal": ""
+		}
+	}
+}

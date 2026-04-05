@@ -1,0 +1,17 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.36
+Confidence: 70%
+File: workflow/plan.mdx
+
+This file demonstrates human authorship despite being brief:
+- Honest about development status ("Coming Soon" marker shows transparency)
+- Practical, conversational tone ("Every journey starts with deciding where to go")
+- Real-world understanding of workflow ("Watching Claude Code coordinate 12 parallel agents is impressive...")
+- Specific, actionable phases (Define → Design → Decompose → Develop)
+- Genuine insight into planning philosophy ("good results require a good plan")
+- Brief, focused content (84 lines) without padding
+- Human-readable explanation of complex process
+- Pragmatic best practices list
+- Direct language ("Vague requirements produce vague code")
+
+The brevity and focus suggest this was written by someone who understands strategic planning but hasn't yet fully documented this tool. The conversational tone, honest acknowledgment of limitations, and practical framing indicate human authorship.

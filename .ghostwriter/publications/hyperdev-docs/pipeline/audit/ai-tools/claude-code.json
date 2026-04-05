@@ -1,0 +1,84 @@
+{
+  "heuristicsScore": 0.351,
+  "classification": "uncertain",
+  "confidence": 0.5,
+  "config": {
+    "media": "technical",
+    "author": "Hyper Team",
+    "style": {
+      "tone": "casual",
+      "formality": "informal",
+      "voice": "second-person"
+    }
+  },
+  "toolResults": {
+    "vocabulary": {
+      "score": 0.24,
+      "classification": "likely_human",
+      "confidence": 0.65,
+      "weight": 0.15,
+      "weightedContribution": 0.036,
+      "signals": [],
+      "executionTimeMs": 37.457625
+    },
+    "punctuation": {
+      "score": 0.24,
+      "classification": "likely_human",
+      "confidence": 0.65,
+      "weight": 0.05,
+      "weightedContribution": 0.012,
+      "signals": [],
+      "executionTimeMs": 51.624916
+    },
+    "structure": {
+      "score": 0.5,
+      "classification": "uncertain",
+      "confidence": 0.5,
+      "weight": 0.05,
+      "weightedContribution": 0.025,
+      "signals": [],
+      "executionTimeMs": 61.667
+    },
+    "burstiness": {
+      "score": 0.5,
+      "classification": "error",
+      "confidence": 0,
+      "weight": 0,
+      "weightedContribution": 0,
+      "signals": [],
+      "error": "[burstiness] Process failed (code 1): {\"error\": \"numpy not installed. Install with: pip install nltk numpy\"}
+"
+    },
+    "ngram": {
+      "score": 0.5,
+      "classification": "uncertain",
+      "confidence": 0.4,
+      "weight": 0.1,
+      "weightedContribution": 0.05,
+      "signals": [],
+      "executionTimeMs": 252.18791699999997
+    },
+    "content": {
+      "score": 0.5,
+      "classification": "error",
+      "confidence": 0,
+      "weight": 0,
+      "weightedContribution": 0,
+      "signals": [],
+      "error": "[content] Process failed (code 1): {\"error\": \"spacy not installed. Install with: pip install spacy\"}
+"
+    },
+    "syntactic": {
+      "score": 0.5,
+      "classification": "error",
+      "confidence": 0,
+      "weight": 0,
+      "weightedContribution": 0,
+      "signals": [],
+      "error": "[syntactic] Process failed (code 1): {\"error\": \"spacy not installed. Install with: pip install spacy\"}
+"
+    }
+  },
+  "topSignals": [],
+  "summary": "Heuristics analysis complete (4 tools, context: technical). Score: 35.1%. Classification: uncertain (confidence: 50%). 0 tools detected AI signals, 2 detected human signals."
+}

@@ -1,0 +1,17 @@
+{
+	"filepath": "security-guide.mdx",
+	"heuristics_score": 0.26,
+	"classification": "likely_human",
+	"human_confidence": 78,
+	"evidence": {
+		"human_signals": [
+			"Opening casual statement: 'A few things worth knowing'",
+			"Conversational tone throughout ('Not all template sources are equal')",
+			"Personal security advice phrasing",
+			"Contractions and colloquialisms",
+			"Humorous ending: 'That's the gist. Most of this is just standard dev hygiene'"
+		],
+		"ai_signals": ["Organized checklist structure", "Code config examples"]
+	},
+	"notes": "Strong human voice, especially closing: 'That's the gist. Most of this is just standard dev hygiene applied to code generation.' This is distinctly human perspective and tone. Security advice written conversationally by someone with genuine experience."
+}

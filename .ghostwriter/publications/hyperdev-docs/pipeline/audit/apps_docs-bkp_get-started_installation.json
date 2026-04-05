@@ -1,0 +1,20 @@
+{
+	"filepath": "/work/hyper/apps/docs-bkp/get-started/installation.mdx",
+	"heuristics_score": 0.578,
+	"classification": "uncertain",
+	"human_confidence": 50,
+	"signals": {
+		"ai_vocab_count": 1,
+		"hedging_count": 0,
+		"contractions": 2,
+		"questions": 0,
+		"personal_pronouns": 5,
+		"exclamations": 0,
+		"em_dashes": 14
+	},
+	"metrics": {
+		"word_count": 715,
+		"sentence_count": 41,
+		"paragraph_count": 42
+	}
+}

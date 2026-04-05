@@ -1,0 +1,22 @@
+Classification: uncertain
+AI Signal Score (0.0-1.0): 0.52
+Confidence: 55%
+File: examples/quick-wins.mdx
+
+This file is genuinely ambiguous, showing mixed characteristics:
+
+HUMAN signals:
+- Authentic voice in intro ("templates you actually reach for every week")
+- Real code examples that work and could be tested
+- Practical explanations of template logic (Conditional rendering, Variable interpolation)
+- Honest about trade-offs and complexity
+
+AI signals:
+- Extremely high structural consistency across 5 major template examples
+- Perfect markdown formatting with no editing artifacts
+- Repetitive pattern: template.yml → code example → usage example → explanation accordion
+- Some code appears slightly templated (placeholder values like "TestContent", "custom-class")
+- Excessive comprehensiveness (covers React, Express, TypeScript, Prisma, Jest all in one doc)
+- No failed examples or troubleshooting scenarios
+
+This appears to be a human-written outline that was then expanded (possibly with AI assistance) into full code examples. The mixture of genuine voice and templated structure suggests hybrid authorship or significant AI-assisted expansion of human-written content.

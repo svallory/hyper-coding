@@ -1,0 +1,4 @@
+Classification: uncertain
+AI Signal Score (0.0-1.0): 0.52
+Confidence: 65%
+File: templates/sharing-templates.mdx

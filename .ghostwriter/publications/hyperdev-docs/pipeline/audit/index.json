@@ -1,0 +1,22 @@
+{
+	"filepath": "index.mdx",
+	"heuristics_score": 0.22,
+	"classification": "likely_human",
+	"human_confidence": 78,
+	"evidence": {
+		"human_signals": [
+			"Direct second-person address ('Here's the actual problem')",
+			"Conversational phrasing ('The AI coding agents don't fail because...')",
+			"Contractions (\"don't\", \"It's\")",
+			"Casual punctuation with dashes",
+			"Personal perspective ('That's the real problem')",
+			"Exclamation marks indicating enthusiasm"
+		],
+		"ai_signals": [
+			"Some structured bullet-point list formatting",
+			"5 principles section somewhat formulaic",
+			"Relatively consistent paragraph lengths"
+		]
+	},
+	"notes": "Strong human voice throughout. The conversational tone about problem-solving ('Here's the actual problem:') and use of contractions are very human. Clear opinion and perspective drive the narrative."
+}

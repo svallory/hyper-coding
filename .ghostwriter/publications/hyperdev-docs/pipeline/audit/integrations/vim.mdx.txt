@@ -1,0 +1,4 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.59
+Confidence: 47%
+File: integrations/vim.mdx

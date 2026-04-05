@@ -1,0 +1,23 @@
+{
+	"filepath": "troubleshooting.mdx",
+	"heuristics_score": 0.38,
+	"classification": "uncertain",
+	"human_confidence": 60,
+	"evidence": {
+		"human_signals": [
+			"Conversational opening: 'Something broke. Start here.'",
+			"Direct casual language ('When you're stuck')",
+			"Personal advice ('where you can't tell what')",
+			"Contractions throughout"
+		],
+		"ai_signals": [
+			"Extremely comprehensive (1300+ lines)",
+			"Highly structured accordion groups",
+			"Extensive formatted code examples (50+)",
+			"Very systematic error categorization",
+			"Consistent template structure across sections",
+			"Formulaic 'Symptoms', 'Diagnosis', 'Solutions' pattern"
+		]
+	},
+	"notes": "Mixed signals. Opening and conversational elements are human, but the sheer exhaustiveness, perfect systematization, and repetitive structure across 14+ accordion sections suggest possible AI assistance. Could be human-written and refined, but heavy AI involvement is plausible."
+}

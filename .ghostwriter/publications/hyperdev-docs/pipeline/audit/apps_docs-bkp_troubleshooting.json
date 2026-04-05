@@ -1,0 +1,20 @@
+{
+	"filepath": "/work/hyper/apps/docs-bkp/troubleshooting.mdx",
+	"heuristics_score": 0.544,
+	"classification": "uncertain",
+	"human_confidence": 50,
+	"signals": {
+		"ai_vocab_count": 1,
+		"hedging_count": 0,
+		"contractions": 10,
+		"questions": 0,
+		"personal_pronouns": 9,
+		"exclamations": 8,
+		"em_dashes": 85
+	},
+	"metrics": {
+		"word_count": 3136,
+		"sentence_count": 269,
+		"paragraph_count": 289
+	}
+}

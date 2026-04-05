@@ -1,0 +1,16 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.32
+Confidence: 75%
+File: community/plugin-development.mdx
+
+This file shows strong human characteristics. At 126 lines, it's a pragmatic guide that:
+- Opens with genuine use case clarity ("If the built-in tools don't cover your workflow...")
+- Provides real, functional code examples (JavaScript helpers with actual utility functions)
+- Uses conversational language ("Wire HyperDev into your Claude Code workflow...")
+- Includes practical trade-offs ("Start with a helper or two, wire up a hook, and build from there")
+- Avoids false comprehensiveness (acknowledges "That covers the basics")
+- No excessive decoration or component usage
+- Direct, minimal prose style
+- Specific configuration examples showing real-world thinking (Git hooks integration, quality gates)
+
+The document reads like it was written by someone who actually maintains this system and understands what developers need. The brevity and focus suggest human authorship optimized for practical value over completeness.

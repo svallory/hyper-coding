@@ -1,0 +1,14 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.68
+Confidence: 25%
+File: ai-tools/windsurf.mdx
+
+This file shows significant AI characteristics. At 99 lines, it's a condensed version of similar content (cursor.mdx) but maintains AI patterns:
+- Highly organized categorical structure with consistent heading hierarchy
+- Repetitive patterns of component documentation (Callouts, Code examples, Procedures, Content organization)
+- Uniform list density and bullet-point formatting throughout
+- No practical gotchas, edge cases, or human anecdotes
+- Smooth transitions between sections with no friction or personality
+- Generic instructional language ("Create workspace rules that give Windsurf the context...")
+
+The file appears to be either a truncated/summarized version of AI-generated content or refined from an AI-generated template. The content is accurate but lacks the contextual specificity or experiential depth of human documentation.

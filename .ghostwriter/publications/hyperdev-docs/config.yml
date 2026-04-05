@@ -13,8 +13,8 @@ presets:
 
 publication:
   name: "HyperDev Docs"
-  media: docs
-  audience: "Software developers using AI-assisted development tools"
+  media: technical
+  audience: expert
 
 content:
   root: "../../../apps/docs-bkp"
@@ -22,8 +22,8 @@ content:
 
 writing_style:
   tone: casual
-  formality: low
-  voice: active
+  formality: informal
+  voice: second-person
 
 # Detection Rules
 # Uncomment and modify to override preset defaults.

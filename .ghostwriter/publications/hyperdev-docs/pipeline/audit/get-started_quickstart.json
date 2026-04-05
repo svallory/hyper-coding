@@ -1,0 +1,17 @@
+{
+	"filepath": "get-started/quickstart.mdx",
+	"heuristics_score": 0.25,
+	"classification": "likely_human",
+	"human_confidence": 77,
+	"evidence": {
+		"human_signals": [
+			"Casual, goal-oriented opening: 'Go from zero to a generated Next.js project in under 5 minutes'",
+			"Natural conversational transitions ('This guide walks you through')",
+			"Personal perspective on what's happening ('Hypergen will:')",
+			"Excited tone with clear enthusiasm",
+			"Contractions throughout"
+		],
+		"ai_signals": ["Step structure (standard docs format)", "Table format"]
+	},
+	"notes": "Human voice is clear and consistent. Opening is goal-focused and personal ('walk you through'), not templated. The 5-minute promise and casual explanations suggest human author with practical experience."
+}

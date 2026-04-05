@@ -1,0 +1,7 @@
+{
+	"file": "cli/commands/overview.mdx",
+	"classification": "uncertain",
+	"human_confidence": 55,
+	"ai_signal_score": 0.45,
+	"assessment": "Borderline case. Comprehensive coverage and table parallelism suggest AI involvement, but conversational intro and decision-making feel human-authored."
+}

@@ -1,0 +1,16 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.35
+Confidence: 72%
+File: community/community-guidelines.mdx
+
+This file demonstrates strong human authorship despite being comprehensive. Evidence:
+- Conversational voice with personality ("HyperDev only gets better when people contribute")
+- Specific, experiential guidance ("we'll ask you to fix things that don't pass")
+- Real-world context and assumptions (mentions actual npm commands, specific tools like ESLint)
+- Direct address of pain points ("Troubleshooting section---people will hit issues")
+- Honest tone about requirements ("Every community template needs tests. No exceptions.")
+- Complex nested logic with genuine trade-offs, not simplistic lists
+- Varied sentence structures and paragraph lengths
+- Contextual humor and personality ("not just demos", "not a design award")
+
+The document shows the kind of institutional knowledge and practical judgment that comes from actual community management experience, not AI generation.

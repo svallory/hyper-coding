@@ -1,0 +1,15 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.38
+Confidence: 68%
+File: examples/overview.mdx
+
+This file demonstrates human authorship with organizational depth:
+- Genuine pragmatic voice ("These are templates you actually reach for every week")
+- Honest about priorities ("not to win a design award")
+- Real-world categorization that reflects how developers actually work (By Complexity Level, By Use Case, By Industry & Domain)
+- Specific examples with personality ("Think of it like...")
+- Conversational instructions ("Don't overthink it---most of what you're looking for is probably in Quick Wins")
+- Acknowledges contribution culture ("Got a template worth sharing? We'd love to have it")
+- Practical testing guidance ("Test Locally" section with actual commands)
+
+The file has the voice of someone who has managed developer communities and knows what actually gets used. The structure is organic rather than template-driven, and the language varies naturally between sections.

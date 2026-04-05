@@ -1,0 +1,17 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.68
+Confidence: 28%
+File: reference/configuration.mdx
+
+This file shows significant AI characteristics despite containing accurate technical content:
+- Extremely comprehensive (835 lines) attempting to cover every configuration possibility
+- Highly systematized structure with multiple identical code example blocks
+- Perfect formatting of all YAML/JavaScript/JSON examples
+- Repetitive patterns: configuration block → explanation → example variations
+- Multiple parallel examples (hypergen.config.js vs hypergen.config.json) for each concept
+- Exhaustive categorization ("Configuration Hierarchy", "File Locations", "Environment Configuration", "Advanced Configuration Features")
+- Generic section headers ("Best Practices", "Configuration Management Tools")
+- No practical warnings about what configurations actually get used vs theoretical possibilities
+- Comprehensive but abstract guidance that reads as specification documentation
+
+The file has the feel of being generated from a schema specification. The completeness without prioritization, the perfect formatting, and the systematic enumeration all suggest AI authorship or template-based generation.

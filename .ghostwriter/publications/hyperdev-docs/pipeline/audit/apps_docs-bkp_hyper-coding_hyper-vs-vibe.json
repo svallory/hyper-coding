@@ -1,0 +1,20 @@
+{
+	"filepath": "/work/hyper/apps/docs-bkp/hyper-coding/hyper-vs-vibe.mdx",
+	"heuristics_score": 0.391,
+	"classification": "uncertain",
+	"human_confidence": 50,
+	"signals": {
+		"ai_vocab_count": 0,
+		"hedging_count": 1,
+		"contractions": 15,
+		"questions": 1,
+		"personal_pronouns": 9,
+		"exclamations": 0,
+		"em_dashes": 55
+	},
+	"metrics": {
+		"word_count": 1301,
+		"sentence_count": 42,
+		"paragraph_count": 45
+	}
+}

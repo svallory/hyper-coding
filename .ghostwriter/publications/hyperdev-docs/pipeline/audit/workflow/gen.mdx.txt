@@ -1,0 +1,17 @@
+Classification: likely_ai
+AI Signal Score (0.0-1.0): 0.64
+Confidence: 32%
+File: workflow/gen.mdx
+
+This file displays moderate-to-high AI characteristics:
+- Comprehensive documentation (434 lines) with extensive feature enumeration
+- Highly systematic structure with parallel sections for each feature area
+- Repetitive patterns: feature name → description → code example → explanation
+- Multiple YAML/code examples showing theoretical configurations
+- Generic section headers and feature categorization
+- Perfect markdown formatting throughout
+- Aspirational feature descriptions ("AI-Enhanced Generation", "Security & Trust")
+- Emphasis on completeness and theoretical coverage over practical guidance
+- Multiple cross-references to other documentation creating a comprehensiveness effect
+
+However, some sections show practical understanding (e.g., "Basic Generation" examples actually work). The file appears to be AI-generated documentation with human-written code examples inserted. The systematic comprehensiveness combined with perfect formatting and consistent sectioning suggests AI authorship of the structural/explanatory portions.

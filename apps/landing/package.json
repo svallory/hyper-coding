@@ -2,6 +2,7 @@
 	"name": "landing",
 	"description": "The default Marko starter app with TypeScript",
 	"version": "1.0.0",
+	"packageManager": "bun@1.3.11",
 	"type": "module",
 	"dependencies": {
 		"@marko/run-adapter-netlify": "^3.0.1",
@@ -19,5 +20,8 @@
 		"build": "marko-run build",
 		"preview": "marko-run preview",
 		"start": "node --enable-source-maps ./dist/index.mjs"
+	},
+	"engines": {
+		"bun": ">=1.3.0"
 	}
 }

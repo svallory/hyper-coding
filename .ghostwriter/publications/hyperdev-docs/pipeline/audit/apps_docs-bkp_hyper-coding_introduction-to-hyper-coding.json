@@ -1,0 +1,20 @@
+{
+	"filepath": "/work/hyper/apps/docs-bkp/hyper-coding/introduction-to-hyper-coding.mdx",
+	"heuristics_score": 0.535,
+	"classification": "uncertain",
+	"human_confidence": 50,
+	"signals": {
+		"ai_vocab_count": 2,
+		"hedging_count": 0,
+		"contractions": 4,
+		"questions": 1,
+		"personal_pronouns": 4,
+		"exclamations": 0,
+		"em_dashes": 7
+	},
+	"metrics": {
+		"word_count": 1153,
+		"sentence_count": 22,
+		"paragraph_count": 49
+	}
+}

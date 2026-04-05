@@ -1,0 +1,4 @@
+Classification: likely_human
+AI Signal Score (0.0-1.0): 0.22
+Confidence: 80%
+File: templates/ai-decisions-tag.mdx
