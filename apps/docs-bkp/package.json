@@ -1,0 +1,12 @@
+{
+	"name": "hyperdev-docs",
+	"packageManager": "bun@1.3.11",
+	"private": true,
+	"scripts": {
+		"dev": "bunx mintlify@latest dev",
+		"build": "bunx mintlify@latest build"
+	},
+	"engines": {
+		"bun": ">=1.3.0"
+	}
+}

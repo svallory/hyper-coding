@@ -1,0 +1,104 @@
+---
+title: "StepExecutionProgress"
+description: "Step execution progress information"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / StepExecutionProgress
+
+Defined in: [recipe-engine/step-executor.ts:96](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L96)
+
+Step execution progress information
+
+## Properties
+
+### currentPhase
+
+> **currentPhase**: `number`
+
+Defined in: [recipe-engine/step-executor.ts:98](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L98)
+
+Current phase being executed
+
+***
+
+### totalPhases
+
+> **totalPhases**: `number`
+
+Defined in: [recipe-engine/step-executor.ts:101](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L101)
+
+Total number of phases
+
+***
+
+### runningSteps
+
+> **runningSteps**: `string`[]
+
+Defined in: [recipe-engine/step-executor.ts:104](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L104)
+
+Steps currently running
+
+***
+
+### completedSteps
+
+> **completedSteps**: `string`[]
+
+Defined in: [recipe-engine/step-executor.ts:107](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L107)
+
+Steps completed successfully
+
+***
+
+### failedSteps
+
+> **failedSteps**: `string`[]
+
+Defined in: [recipe-engine/step-executor.ts:110](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L110)
+
+Steps that failed
+
+***
+
+### skippedSteps
+
+> **skippedSteps**: `string`[]
+
+Defined in: [recipe-engine/step-executor.ts:113](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L113)
+
+Steps that were skipped
+
+***
+
+### progressPercentage
+
+> **progressPercentage**: `number`
+
+Defined in: [recipe-engine/step-executor.ts:116](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L116)
+
+Overall progress percentage (0-100)
+
+***
+
+### phaseDescription
+
+> **phaseDescription**: `string`
+
+Defined in: [recipe-engine/step-executor.ts:119](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L119)
+
+Current execution phase description
+
+***
+
+### estimatedRemainingTime?
+
+> `optional` **estimatedRemainingTime**: `number`
+
+Defined in: [recipe-engine/step-executor.ts:122](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L122)
+
+Estimated remaining time in milliseconds

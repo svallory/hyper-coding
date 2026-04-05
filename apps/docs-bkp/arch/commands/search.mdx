@@ -1,0 +1,164 @@
+---
+title: "Search Command Architecture"
+description: "Technical reference for hyper search — trust score system, ranking algorithm, JSON output schema, and configuration block"
+---
+
+<Info>
+  This is an architecture reference. For usage docs, see [hyper search](/cli/commands/discovery/search).
+</Info>
+
+## Trust Score System
+
+Trust levels are numeric scores assigned to each resource:
+
+| Score | Label | Source |
+|-------|-------|--------|
+| 10 | Official | HyperDev official resources |
+| 9 | Verified | Verified community leaders and companies |
+| 8 | Well-tested | Well-tested community resources |
+| 7 | Popular | Popular community resources |
+| 6 | Standard | Standard community resources (default minimum) |
+| ≤5 | Experimental | Experimental or newer resources |
+
+The `--trust-level <min>` flag sets the minimum score. Default is `6`.
+
+## Result Ranking Algorithm
+
+Results are ranked by a weighted combination of:
+
+1. **Relevance Score** — query match quality and semantic similarity
+2. **Trust Level** — resource reliability and quality assessment
+3. **Popularity** — community adoption and usage metrics (download count, stars)
+4. **Freshness** — last update date and active maintenance signal
+5. **Context Fit** — compatibility with the detected project stack
+6. **User Behavior** — previous successful usage by similar projects
+
+## JSON Output Schema
+
+```bash
+hyper search "api template" --json
+```
+
+```json
+{
+  "query": "api template",
+  "results": [
+    {
+      "id": "express-api-template",
+      "name": "Express API Template",
+      "description": "Production-ready Express.js API template",
+      "type": "template",
+      "trustScore": 9.2,
+      "popularity": 15200,
+      "lastUpdated": "2024-01-10",
+      "author": {
+        "name": "HyperDev Official",
+        "verified": true
+      },
+      "technologies": ["node.js", "express", "typescript"],
+      "quickActions": [
+        "hyper generate express-api-template"
+      ]
+    }
+  ],
+  "metadata": {
+    "totalResults": 12,
+    "searchTime": "0.234s",
+    "filters": {
+      "type": "all",
+      "trustLevel": 6
+    }
+  }
+}
+```
+
+## Filter Syntax
+
+The `--type` option accepts: `kits`, `templates`, `cookbooks`, `patterns`, `solutions`, `docs`, `epic-templates`.
+
+The `--scope` option accepts: `frontend`, `backend`, `devops`, `fullstack`.
+
+Combining filters:
+
+```bash
+hyper search "fullstack" --language typescript --framework next --scope fullstack --trust-level 8
+```
+
+## Saved Searches
+
+```bash
+# Save a search
+hyper search "react components" --save "my-react-search"
+
+# Load a saved search
+hyper search --load "my-react-search"
+
+# List all saved searches
+hyper search --saved --list
+```
+
+## Configuration Block
+
+```javascript
+// hypergen.config.js
+export default {
+  search: {
+    // Default search behavior
+    default_trust_level: 7,
+    max_results: 20,
+    include_experimental: false,
+
+    // Search sources
+    sources: [
+      'official',        // Official HyperDev resources
+      'community',       // Community templates and patterns
+      'github',          // GitHub repositories
+      'npm',             // NPM packages
+      'documentation'    // Documentation and guides
+    ],
+
+    // Personalization
+    personalization: {
+      enabled: true,
+      learn_preferences: true,
+      boost_used_technologies: true,
+      boost_team_resources: true
+    },
+
+    // Output preferences
+    output: {
+      show_trust_scores: true,
+      show_popularity: true,
+      show_quick_actions: true,
+      color_output: true
+    }
+  },
+
+  team_search: {
+    preferred_sources: ['official', 'internal'],
+
+    tech_stack: {
+      frontend: ['react', 'typescript', 'tailwind'],
+      backend: ['node.js', 'express', 'postgresql'],
+      mobile: ['react-native', 'expo'],
+      devops: ['docker', 'kubernetes', 'github-actions']
+    },
+
+    // Custom search aliases expand to full flag strings
+    aliases: {
+      'components': 'react typescript components --trust-level 8',
+      'api': 'express typescript api --official-only',
+      'mobile': 'react native --type templates'
+    }
+  }
+}
+```
+
+## Context Detection
+
+The context-aware ranking reads from `package.json` and project files to detect:
+
+- **Current tech stack** — frameworks, languages, major dependencies
+- **Project type** — web app, mobile app, API service, library
+- **Team preferences** — previously used templates and patterns
+- **Active epic** — current epic context influences search weights

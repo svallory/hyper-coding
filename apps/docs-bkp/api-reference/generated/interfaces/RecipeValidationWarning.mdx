@@ -1,0 +1,88 @@
+---
+title: "RecipeValidationWarning"
+description: "Recipe validation warning"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeValidationWarning
+
+Defined in: [recipe-engine/types.ts:694](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L694)
+
+Recipe validation warning
+
+## Properties
+
+### code
+
+> **code**: `string`
+
+Defined in: [recipe-engine/types.ts:696](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L696)
+
+Warning code
+
+***
+
+### message
+
+> **message**: `string`
+
+Defined in: [recipe-engine/types.ts:699](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L699)
+
+Warning message
+
+***
+
+### location?
+
+> `optional` **location**: `object`
+
+Defined in: [recipe-engine/types.ts:702](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L702)
+
+Location of warning
+
+#### step?
+
+> `optional` **step**: `string`
+
+Step name (if applicable)
+
+#### field?
+
+> `optional` **field**: `string`
+
+Field path
+
+#### line?
+
+> `optional` **line**: `number`
+
+Line number (if applicable)
+
+#### column?
+
+> `optional` **column**: `number`
+
+Column number (if applicable)
+
+***
+
+### severity
+
+> **severity**: `"warning"` \| `"info"`
+
+Defined in: [recipe-engine/types.ts:717](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L717)
+
+Warning severity
+
+***
+
+### suggestion?
+
+> `optional` **suggestion**: `string`
+
+Defined in: [recipe-engine/types.ts:720](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L720)
+
+Suggested improvement

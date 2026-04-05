@@ -1,0 +1,90 @@
+---
+title: "DevUtils"
+description: "Development and debugging utilities"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / DevUtils
+
+> `const` **DevUtils**: `object`
+
+Defined in: [recipe-engine/tools/index.ts:303](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/index.ts#L303)
+
+Development and debugging utilities
+
+## Type Declaration
+
+### enableDebugLogging()
+
+> `readonly` **enableDebugLogging**: (`toolTypes`) => `void`
+
+Enable debug logging for specific tool types
+
+#### Parameters
+
+##### toolTypes
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)[] = `...`
+
+#### Returns
+
+`void`
+
+### getRegistryDebugInfo()
+
+> `readonly` **getRegistryDebugInfo**: () => `object`
+
+Get detailed registry information for debugging
+
+#### Returns
+
+`object`
+
+##### version
+
+> **version**: `string` = `TOOL_FRAMEWORK_VERSION`
+
+##### supportedTypes
+
+> **supportedTypes**: readonly [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)[] = `SUPPORTED_TOOL_TYPES`
+
+##### registryStats
+
+> **registryStats**: [`ToolRegistryStats`](/api-reference/generated/interfaces/ToolRegistryStats.mdx) = `stats`
+
+##### healthCheck
+
+> **healthCheck**: `object` = `health`
+
+###### healthCheck.healthy
+
+> **healthy**: `boolean`
+
+###### healthCheck.issues
+
+> **issues**: `string`[]
+
+###### healthCheck.stats
+
+> **stats**: [`ToolRegistryStats`](/api-reference/generated/interfaces/ToolRegistryStats.mdx)
+
+##### registeredTypes
+
+> **registeredTypes**: [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)[]
+
+##### categories
+
+> **categories**: `string`[]
+
+### resetRegistry()
+
+> `readonly` **resetRegistry**: () => `void`
+
+Reset the tool registry (useful for testing)
+
+#### Returns
+
+`void`

@@ -1,0 +1,99 @@
+---
+title: "Community"
+description: "GitHub, Discord, contributing templates and code, and community guidelines for HyperDev."
+icon: "users"
+og:title: "Community"
+og:description: "GitHub, Discord, contributing templates and code, and community guidelines for HyperDev."
+---
+
+# Community
+
+HyperDev is open source and built in the open. If you're using it, finding bugs, or building templates worth sharing, here's where to connect.
+
+## Where to find us
+
+<CardGroup cols={2}>
+  <Card
+    title="GitHub"
+    icon="github"
+    href="https://github.com/hyperdev-ai/hyperdev"
+  >
+    Source code, issues, and pull requests. Open an issue if something's broken or missing.
+  </Card>
+  <Card
+    title="Discord"
+    icon="discord"
+    href="https://discord.gg/hyperdev"
+  >
+    Real-time chat for questions, sharing what you're building, and getting quick help.
+  </Card>
+  <Card
+    title="GitHub Discussions"
+    icon="message-square"
+    href="https://github.com/hyperdev-ai/hyperdev/discussions"
+  >
+    Feature requests, long-form questions, and design discussions.
+  </Card>
+  <Card
+    title="Template Gallery"
+    icon="layout-grid"
+    href="/community/templates"
+  >
+    Community-contributed recipes and templates. Browse, install, or submit your own.
+  </Card>
+</CardGroup>
+
+## Contributing
+
+<CardGroup cols={2}>
+  <Card
+    title="Contribute code"
+    icon="code"
+    href="/community/contribute-code"
+  >
+    Fix bugs, add features, improve the CLI. Start with issues tagged `good first issue`.
+  </Card>
+  <Card
+    title="Contribute templates"
+    icon="puzzle-piece"
+    href="/community/contribute-templates"
+  >
+    Share recipes and Jig templates for your stack. The registry accepts community submissions.
+  </Card>
+  <Card
+    title="Improve docs"
+    icon="book"
+    href="/community/contribute-docs"
+  >
+    Fix errors, add examples, or fill in missing pages. Docs live in `apps/docs/` in the main repo.
+  </Card>
+  <Card
+    title="Report bugs"
+    icon="bug"
+    href="https://github.com/hyperdev-ai/hyperdev/issues/new"
+  >
+    Found something broken? Open an issue with a reproduction case.
+  </Card>
+</CardGroup>
+
+## Code of Conduct
+
+A few basic rules that keep the community useful:
+
+- **Be direct, not harsh.** Feedback should help, not score points.
+- **Welcome beginners.** Everyone was new once.
+- **Stay on topic.** This is a developer tools community — keep discussions relevant.
+- **Ship complete work.** Half-finished PRs and templates waste reviewers' time.
+- **Document what you build.** Code without docs is harder to use.
+
+If someone's being a problem, report it via GitHub or DM a maintainer on Discord.
+
+## Contribution standards
+
+Code and template contributions go through PR review. The short version of what reviewers look for:
+
+- Tests for new behavior
+- No regressions on existing tests (`bun test`)
+- Jig syntax in templates (not EJS)
+- Conventional commit messages (`feat(gen): ...`, `fix(core): ...`)
+- A brief description in the PR of what changed and why

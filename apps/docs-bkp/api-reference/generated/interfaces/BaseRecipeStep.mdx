@@ -1,0 +1,131 @@
+---
+title: "BaseRecipeStep"
+description: "Base interface for all recipe steps"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / BaseRecipeStep
+
+Defined in: [recipe-engine/types.ts:24](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L24)
+
+Base interface for all recipe steps
+
+## Extended by
+
+- [`TemplateStep`](/api-reference/generated/interfaces/TemplateStep.mdx)
+- [`ActionStep`](/api-reference/generated/interfaces/ActionStep.mdx)
+- [`CodeModStep`](/api-reference/generated/interfaces/CodeModStep.mdx)
+- [`RecipeStep`](/api-reference/generated/interfaces/RecipeStep.mdx)
+
+## Properties
+
+### name
+
+> **name**: `string`
+
+Defined in: [recipe-engine/types.ts:26](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L26)
+
+Unique identifier for this step
+
+***
+
+### description?
+
+> `optional` **description**: `string`
+
+Defined in: [recipe-engine/types.ts:29](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L29)
+
+Human-readable description of what this step does
+
+***
+
+### when?
+
+> `optional` **when**: `string`
+
+Defined in: [recipe-engine/types.ts:32](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L32)
+
+Conditional expression that determines if this step should execute
+
+***
+
+### dependsOn?
+
+> `optional` **dependsOn**: `string`[]
+
+Defined in: [recipe-engine/types.ts:35](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L35)
+
+Steps that must complete successfully before this step can run
+
+***
+
+### parallel?
+
+> `optional` **parallel**: `boolean`
+
+Defined in: [recipe-engine/types.ts:38](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L38)
+
+Whether this step can run in parallel with other steps
+
+***
+
+### continueOnError?
+
+> `optional` **continueOnError**: `boolean`
+
+Defined in: [recipe-engine/types.ts:41](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L41)
+
+Whether to continue recipe execution if this step fails
+
+***
+
+### timeout?
+
+> `optional` **timeout**: `number`
+
+Defined in: [recipe-engine/types.ts:44](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L44)
+
+Timeout in milliseconds for step execution
+
+***
+
+### retries?
+
+> `optional` **retries**: `number`
+
+Defined in: [recipe-engine/types.ts:47](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L47)
+
+Number of retry attempts on failure
+
+***
+
+### tags?
+
+> `optional` **tags**: `string`[]
+
+Defined in: [recipe-engine/types.ts:50](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L50)
+
+Tags for categorization and filtering
+
+***
+
+### variables?
+
+> `optional` **variables**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/types.ts:53](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L53)
+
+Variables to pass to the tool (merged with recipe-level variables)
+
+***
+
+### environment?
+
+> `optional` **environment**: `Record`\<`string`, `string`\>
+
+Defined in: [recipe-engine/types.ts:56](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L56)
+
+Environment variables specific to this step

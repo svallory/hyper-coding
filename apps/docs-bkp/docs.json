@@ -1,0 +1,280 @@
+{
+	"$schema": "https://www.mintlify.com/docs.json",
+	"name": "HyperDev",
+	"theme": "aspen",
+	"styling": {
+		"eyebrows": "breadcrumbs"
+	},
+	"icons": {
+		"library": "lucide"
+	},
+	"logo": {
+		"dark": "/logo/logo.png",
+		"light": "/logo/logo.png"
+	},
+	"favicon": "/favicon.svg",
+	"colors": {
+		"primary": "#252525",
+		"light": "#d4a280",
+		"dark": "#252525"
+	},
+	"background": {
+		"color": {
+			"light": "#fdfdf7",
+			"dark": "#0b0a0b"
+		}
+	},
+	"navigation": {
+		"global": {
+			"anchors": [
+				{
+					"anchor": "GitHub",
+					"icon": "github",
+					"href": "https://github.com/svallory/hyper-coding"
+				}
+			]
+		},
+		"tabs": [
+			{
+				"tab": "Documentation",
+				"groups": [
+					{
+						"group": "Get Started",
+						"pages": [
+							"docs/index",
+							"docs/get-started/installation",
+							"docs/get-started/quickstart",
+							"docs/get-started/tutorial"
+						]
+					},
+					{
+						"group": "Concepts",
+						"pages": ["docs/concepts/introduction", "docs/concepts/hyper-vs-vibe"]
+					},
+					{
+						"group": "Tools",
+						"pages": [
+							"docs/tools/overview",
+							"docs/tools/gen",
+							"docs/tools/tools",
+							"docs/tools/plan",
+							"docs/tools/watch",
+							"docs/tools/dash",
+							"docs/tools/cli-overview",
+							{
+								"group": "Hyper HQ",
+								"icon": "tower-control",
+								"pages": [
+									"docs/tools/hq/overview",
+									"docs/tools/hq/configuration",
+									"docs/tools/hq/commands",
+									"docs/tools/hq/telegram",
+									"docs/tools/hq/worktrees"
+								]
+							}
+						]
+					},
+					{
+						"group": "Kits & Templates",
+						"pages": [
+							"docs/kits/installation",
+							"docs/kits/creating-templates",
+							"docs/kits/recipe-authoring",
+							"docs/kits/ai-decisions-tag",
+							"docs/kits/ai-prompt-helper",
+							"docs/kits/sharing",
+							"docs/kits/migration-guide"
+						]
+					},
+					{
+						"group": "Integrations",
+						"pages": [
+							"docs/integrations/claude-code-hooks",
+							"docs/integrations/user-analytics-scenario",
+							{
+								"group": "AI Tools",
+								"icon": "bot",
+								"pages": [
+									"docs/integrations/ai-tools/claude-code",
+									"docs/integrations/ai-tools/cursor",
+									"docs/integrations/ai-tools/windsurf"
+								]
+							},
+							{
+								"group": "Editors",
+								"icon": "code",
+								"pages": [
+									"docs/integrations/editors/vscode",
+									"docs/integrations/editors/jetbrains",
+									"docs/integrations/editors/vim"
+								]
+							},
+							{
+								"group": "Build Tools",
+								"icon": "hammer",
+								"pages": [
+									"docs/integrations/build-tools/vite",
+									"docs/integrations/build-tools/webpack",
+									"docs/integrations/build-tools/nextjs"
+								]
+							},
+							{
+								"group": "CI/CD",
+								"icon": "rotate",
+								"pages": [
+									"docs/integrations/ci-cd/github-actions",
+									"docs/integrations/ci-cd/docker",
+									"docs/integrations/ci-cd/git-hooks",
+									"docs/integrations/ci-cd/package-scripts"
+								]
+							}
+						]
+					},
+					{
+						"group": "Guides",
+						"pages": [
+							"docs/guides/overview",
+							"docs/guides/best-practices",
+							"docs/guides/security",
+							"docs/guides/advanced-usage",
+							"docs/guides/customize-setup",
+							"docs/guides/publishing"
+						]
+					},
+					{
+						"group": "Examples",
+						"pages": [
+							"docs/examples/overview",
+							"docs/examples/quick-wins",
+							"docs/examples/real-world",
+							"docs/examples/advanced-patterns",
+							"docs/examples/frameworks"
+						]
+					},
+					{
+						"group": "Community",
+						"icon": "users",
+						"pages": [
+							"docs/community/overview",
+							"docs/community/community-guidelines",
+							"docs/community/plugin-development"
+						]
+					}
+				]
+			},
+			{
+				"tab": "References",
+				"groups": [
+					{
+						"group": "CLI Reference",
+						"pages": ["reference/cli", "reference/configuration", "reference/troubleshooting"]
+					},
+					{
+						"group": "Commands",
+						"icon": "terminal",
+						"pages": [
+							"reference/commands/overview",
+							"reference/commands/gen",
+							"reference/commands/run",
+							"reference/commands/init",
+							"reference/commands/plan",
+							"reference/commands/tools",
+							"reference/commands/watch",
+							"reference/commands/dash",
+							"reference/commands/search",
+							"reference/commands/list",
+							"reference/commands/docs",
+							"reference/commands/plan-resources",
+							"reference/commands/task",
+							"reference/commands/hq"
+						]
+					}
+				]
+			},
+			{
+				"tab": "Architecture",
+				"groups": [
+					{
+						"group": "Overview",
+						"pages": [
+							"arch/methodology",
+							"arch/migration-strategy",
+							"arch/gen-internals",
+							"arch/advanced"
+						]
+					},
+					{
+						"group": "Command Internals",
+						"icon": "terminal",
+						"pages": [
+							"arch/commands/search",
+							"arch/commands/list",
+							"arch/commands/docs",
+							"arch/commands/task",
+							"arch/commands/plan",
+							"arch/commands/tools",
+							"arch/commands/init"
+						]
+					},
+					{
+						"group": "Configuration",
+						"icon": "cog",
+						"pages": ["arch/config/configuration", "arch/config/cli-internals"]
+					},
+					{
+						"group": "Templates & Kits",
+						"icon": "puzzle",
+						"pages": ["arch/templates/sharing", "arch/templates/migration"]
+					},
+					{
+						"group": "Integrations",
+						"icon": "plug",
+						"pages": [
+							"arch/integrations/vite",
+							"arch/integrations/webpack",
+							"arch/integrations/nextjs"
+						]
+					}
+				]
+			}
+		]
+	},
+	"feedback": {
+		"thumbsRating": true,
+		"suggestEdit": true,
+		"raiseIssue": true
+	},
+	"search": {
+		"prompt": "Search HyperDev docs..."
+	},
+	"modeToggle": {
+		"default": "light",
+		"isHidden": false
+	},
+	"topbarLinks": [],
+	"topbarCtaButton": {
+		"name": "GitHub",
+		"url": "https://github.com/svallory/hyper-coding",
+		"style": "roundedFull"
+	},
+	"seo": {
+		"indexHiddenPages": false
+	},
+	"redirects": [
+		{
+			"source": "/docs",
+			"destination": "/"
+		},
+		{
+			"source": "/getting-started",
+			"destination": "/docs/get-started/quickstart"
+		}
+	],
+	"openGraph": {
+		"enabled": true,
+		"logo": "/logo/logo.png"
+	},
+	"footerSocials": {
+		"github": "https://github.com/svallory/hyper-coding"
+	}
+}

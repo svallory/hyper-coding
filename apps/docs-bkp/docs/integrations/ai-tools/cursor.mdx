@@ -1,0 +1,95 @@
+---
+title: "Cursor setup"
+description: "Configure Cursor to work with Jig templates, recipe YAML, and the hyper CLI"
+icon: "mouse-pointer-2"
+og:title: "Cursor setup"
+og:description: "Configure Cursor to work with Jig templates, recipe YAML, and the hyper CLI"
+---
+
+Configure Cursor to understand HyperDev's file formats and give you useful completions and explanations when working with `.jig` templates and recipe YAML.
+
+## Prerequisites
+
+- Cursor editor installed
+- HyperDev repo cloned locally (`bun install` to set up dependencies)
+
+## Associate .jig with a language
+
+Cursor treats `.jig` files as plain text by default. Tell it they're TypeScript/TSX with template expressions so syntax highlighting works:
+
+In Cursor settings (`Cmd+,`), add to `files.associations`:
+
+```json settings.json
+{
+  "files.associations": {
+    "*.jig": "html"
+  }
+}
+```
+
+HTML mode gives you reasonable highlighting for the `{{ }}` delimiters and the `@if`, `@each`, `@let` block tags.
+
+## Project rules
+
+Create `.cursor/rules.md` in the repo root so Cursor's AI understands how HyperDev works:
+
+```markdown .cursor/rules.md
+# HyperDev project rules
+
+## Template engine
+- Template files use the `.jig` extension (Jig engine, an Edge.js fork)
+- Syntax: `{{ variable }}`, `{{ camelCase :: name }}` for filters
+- Block tags: `@if(condition)/@end`, `@each(item in list)/@end`, `@let(x = expr)`
+- The `@ai` tag triggers a second AI generation pass for that block
+- YAML frontmatter controls output path and injection: `to:`, `inject:`, `when:`, `after:`
+- Do NOT use EJS syntax (`<%= %>`) — this codebase uses Jig only
+
+## Recipe YAML
+- Recipes live in `recipes/` or `cookbooks/` directories
+- A recipe is a YAML file with a `steps:` array
+- Step tools: template, action, recipe, shell, prompt, ai, install, query, patch, ensure-dirs, sequence, parallel, conditional
+- Steps can declare `depends_on:` for ordering and `exports:` to pipe outputs to later steps
+- `when:` on any step is a Jig expression evaluated at runtime
+
+## CLI commands
+- `hyper gen <recipe> [--name=X]` — run a recipe
+- `hyper tools` — list available tools/step types
+- `hyper plan <recipe>` — show what a recipe will do without running it
+- `hyper watch <recipe>` — re-run recipe on file changes
+- `hyper dash` — project dashboard
+- `hyper hq` — HyperDev HQ (kit management, registry)
+
+## Package structure
+- `@hypercli/core` — types, errors, parsers (no runtime deps)
+- `@hypercli/kit` — kit lifecycle, source resolution
+- `@hypercli/gen` — recipe engine, Jig templates, AI pass
+- `@hypercli/cli` — thin oclif shell, provides `hyper` binary
+- Dependencies flow left-to-right only; no circular deps
+
+## Package manager
+- Always use `bun`, never npm or yarn
+- `bun test` for tests, `bun run build` for builds
+```
+
+## Recommended Cursor rules (`.cursorrules`)
+
+For root-level autocomplete guidance, also create `.cursorrules`:
+
+```text .cursorrules
+This is a TypeScript monorepo using bun workspaces and Moon.
+Template files end in .jig and use Jig syntax ({{ }}, @if/@end, @each/@end).
+Recipe files are YAML with a steps array.
+Never suggest EJS syntax (<%= %>) — use Jig ({{ }}) instead.
+Use bun for all package management and script running.
+```
+
+## Useful Cursor commands for HyperDev
+
+With these rules in place, you can ask Cursor things like:
+
+- "Write a recipe that generates a Prisma model and its CRUD service"
+- "Add an `@ai` block to this `.jig` template that generates prop types"
+- "Explain what this recipe step does"
+- "Convert this shell script to a `shell` step in a recipe"
+
+Cursor will use the project rules to answer in terms of actual HyperDev constructs rather than generic code generation advice.

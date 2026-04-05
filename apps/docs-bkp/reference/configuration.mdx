@@ -1,0 +1,300 @@
+---
+title: "Configuration Reference"
+description: "Complete reference for hypergen.config.js, template variables, environment overrides, and workspace settings"
+icon: "document-text"
+og:title: "Configuration Reference"
+og:description: "Complete reference for hypergen.config.js, template variables, environment overrides, and workspace settings"
+---
+
+# Configuration Reference
+
+HyperDev resolves settings from highest to lowest priority: runtime flags beat project config, project config beats user config, user config beats built-in defaults. This means you can always override anything without touching checked-in files.
+
+## Configuration Hierarchy
+
+<Steps>
+  <Step title="Runtime & Environment">
+    Environment variables and command-line flags. Always win.
+  </Step>
+  <Step title="Project Configuration">
+    `hypergen.config.js` in your project root (or a parent directory).
+  </Step>
+  <Step title="Workspace Configuration">
+    Moon workspace settings for monorepo setups.
+  </Step>
+  <Step title="User Configuration">
+    `~/.hypergenrc.js` — your personal defaults, applied across all projects.
+  </Step>
+  <Step title="System Defaults">
+    Built-in fallbacks when nothing else is specified.
+  </Step>
+</Steps>
+
+## Project Configuration
+
+### hypergen.config.js
+
+This is the main config file. Place it at your project root.
+
+```javascript hypergen.config.js
+/** @type {import('@hypercli/core').HypergenConfig} */
+export default {
+  // Where hyper looks for recipes and templates.
+  // Add more directories if you have templates in multiple places.
+  templates: ['recipes', 'cookbooks'],
+
+  discovery: {
+    sources: ['local', 'npm', 'workspace'],
+    directories: ['recipes', 'cookbooks', '_templates'],
+    exclude: ['node_modules', '.git', 'dist', 'build']
+  },
+
+  // Jig is the template engine. You do not need to configure this
+  // unless you need a custom delimiter (rare).
+  engine: {
+    type: 'jig',
+  },
+
+  // Controls what happens when a generated file already exists.
+  // 'fail' is safest for production; 'overwrite' is handy in dev.
+  output: {
+    conflictStrategy: 'fail', // fail | overwrite | skip | merge
+    createDirectories: true,
+  },
+
+  // Validation catches bad variable values before generation runs.
+  validation: {
+    strict: true,
+    validateTemplates: true,
+    validateVariables: true,
+  },
+
+  // Template output caching. Speeds up repeated runs on large projects.
+  cache: {
+    enabled: true,
+    directory: '.hyperdev-cache',
+    ttl: 3600000, // 1 hour in ms
+  },
+
+  // Per-environment overrides. Active environment is read from NODE_ENV.
+  environments: {
+    development: {
+      validation: { strict: false },
+      output: { conflictStrategy: 'overwrite' },
+    },
+    production: {
+      validation: { strict: true },
+      output: { conflictStrategy: 'fail' },
+    },
+  },
+}
+```
+
+### Config File Locations
+
+HyperDev searches these paths in order:
+
+<Accordion title="Search order">
+  1. `--config path/to/config.js` (explicit flag)
+  2. `HYPERDEV_CONFIG=path/to/config.js` (env var)
+  3. Current directory: `hypergen.config.js`, `hypergen.config.mjs`, `hypergen.config.cjs`, `hypergen.config.json`, `.hypergenrc`
+  4. Parent directories (walks up the tree)
+  5. Home directory: `~/.hypergenrc.js` or `~/.config/hypergen.config.js`
+</Accordion>
+
+## Template Configuration
+
+Each recipe or template can have its own `recipe.yml` that defines variables, output paths, and conditions.
+
+```yaml recipe.yml
+name: react-component
+description: Generate a React component with optional tests and stories
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    required: true
+    description: Component name in PascalCase
+    pattern: '^[A-Z][a-zA-Z0-9]*$'
+
+  withTests:
+    type: boolean
+    default: true
+    description: Generate a Vitest test file alongside the component
+
+  styling:
+    type: enum
+    values: ['css-modules', 'tailwind', 'styled-components']
+    default: 'css-modules'
+    description: Styling approach
+
+steps:
+  - name: component
+    tool: template
+    template: component.tsx.jig
+
+  - name: test
+    tool: template
+    template: component.test.tsx.jig
+    when: "{{ withTests }}"
+
+  - name: install-deps
+    tool: install
+    when: "{{ styling === 'styled-components' }}"
+    packages: ['styled-components']
+```
+
+### Variable Types
+
+| Type | Description |
+|------|-------------|
+| `string` | Free text input |
+| `boolean` | true/false, renders as a checkbox prompt |
+| `enum` | One of a fixed set of values |
+| `array` | List of values |
+
+### Conditional Fields
+
+Use `when:` on any step to skip it based on variable values. The expression is a Jig expression evaluated at runtime.
+
+```yaml
+- name: stories
+  tool: template
+  template: component.stories.tsx.jig
+  when: "{{ withStories === true }}"
+```
+
+## Environment Variables
+
+Any config option can be overridden with an environment variable. The naming convention is `HYPERDEV_` followed by the nested key path in `SCREAMING_SNAKE_CASE`.
+
+```bash
+# Discovery
+export HYPERDEV_TEMPLATES="./my-recipes,./shared-recipes"
+export HYPERDEV_DISCOVERY_SOURCES="local,npm"
+
+# Output behavior
+export HYPERDEV_CONFLICT_STRATEGY="merge"
+
+# Caching
+export HYPERDEV_CACHE_ENABLED="true"
+export HYPERDEV_CACHE_TTL="7200000"
+
+# Debug output
+export HYPERDEV_DEBUG="true"
+export NODE_ENV="development"
+```
+
+Environment variables are useful in CI or when you want to override config without editing files.
+
+## User Configuration
+
+Personal defaults that apply across all your projects. Good for author metadata, preferred UI settings, and AI provider credentials.
+
+```javascript ~/.hypergenrc.js
+export default {
+  discovery: {
+    directories: ['~/templates', '~/.hyperdev/templates']
+  },
+
+  defaults: {
+    author: 'Your Name',
+    email: 'you@example.com',
+    license: 'MIT'
+  },
+
+  ui: {
+    interactive: true,
+    confirmOverwrites: true,
+  },
+
+  // AI provider for @ai template blocks
+  ai: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-5',
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  },
+}
+```
+
+## Workspace Configuration (Monorepo)
+
+For monorepos using Moon, add a `hyperdev` section to `.moon/workspace.yml`:
+
+```yaml .moon/workspace.yml
+projects:
+  - 'packages/*'
+  - 'apps/*'
+
+hyperdev:
+  discovery:
+    workspaceRoot: true
+    projectTemplates: true
+  sharedTemplates: '.hyperdev/shared'
+```
+
+And a task definition so you can run generation via Moon:
+
+```yaml .moon/tasks/hyperdev.yml
+tasks:
+  generate:
+    command: 'hyper'
+    inputs:
+      - 'recipes/**/*'
+      - 'hypergen.config.js'
+    outputs:
+      - 'src/**/*'
+    options:
+      cache: false
+```
+
+## Configuration Management
+
+```bash
+# Show the fully resolved configuration (after all merges)
+hyper config show
+
+# Validate configuration without running anything
+hyper config validate
+
+# Interactive setup wizard for new projects
+hyper init --interactive
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Config not found">
+    HyperDev can't find your config file.
+
+    - Check the filename is exactly `hypergen.config.js` (not `.ts`)
+    - Make sure it's in the project root or a parent directory
+    - Pass an explicit path with `--config ./path/to/config.js`
+    - Run `hyper config show` to see what path was resolved
+  </Accordion>
+
+  <Accordion title="Environment override not applying">
+    Variable names are case-sensitive and require the `HYPERDEV_` prefix.
+
+    - Use `HYPERDEV_CACHE_ENABLED`, not `CACHE_ENABLED`
+    - Confirm `NODE_ENV` is set correctly for environment-specific blocks
+    - Run `hyper config show --verbose` to see the merged result
+  </Accordion>
+
+  <Accordion title="Conflict on existing files">
+    Generation fails because a file already exists.
+
+    - Set `conflictStrategy: 'overwrite'` in dev
+    - Use `--force` flag for a one-off override
+    - Use `conflictStrategy: 'skip'` if you want to preserve existing files and only generate missing ones
+  </Accordion>
+</AccordionGroup>
+
+```bash
+# Debug configuration loading
+DEBUG=hyperdev:config hyper gen
+
+# Validate with strict checks
+hyper config validate --strict
+```

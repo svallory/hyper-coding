@@ -1,0 +1,147 @@
+---
+title: "hyper tools"
+description: "Set up and manage linters, scanners, MCP servers, and architecture tools for your project"
+icon: "wrench"
+og:title: "hyper tools"
+og:description: "Set up and manage linters, scanners, MCP servers, and architecture tools for your project"
+---
+
+# hyper tools
+
+Set up and manage the tooling layer for your project — linters, security scanners, AI integrations, and architecture tools.
+
+## Syntax
+
+```bash
+hyper tools [action] [options]
+```
+
+## Overview
+
+`hyper tools` handles the parts of your project setup that aren't your code: the scanners, formatters, MCP servers, and analysis tools that run alongside it. Run it once when setting up a project to walk through a guided configuration, or use subcommands to manage individual tool categories.
+
+```bash
+# Interactive setup — walks you through each category
+hyper tools setup
+
+# See what's configured
+hyper tools status
+
+# Add a specific tool
+hyper tools add biome
+hyper tools add snyk
+hyper tools add claude-code
+```
+
+## Tool categories
+
+`hyper tools` organizes tooling into four categories:
+
+### AI tools
+
+Configure MCP servers and AI assistant integrations for your project.
+
+```bash
+hyper tools setup --category ai
+```
+
+Sets up things like Claude Code's MCP server, project-level context files (`.cursorrules`, `CLAUDE.md`), and any AI-adjacent tooling your kit recommends.
+
+### Security tools
+
+Scanners and audit hooks that run against your code and dependencies.
+
+```bash
+hyper tools setup --category security
+```
+
+Covers dependency auditing, secret scanning, SAST integration, and pre-commit hooks that block known-bad patterns.
+
+### Code quality tools
+
+Formatters, linters, and type checkers wired into your workflow.
+
+```bash
+hyper tools setup --category code
+```
+
+Installs and configures tools like Biome, ESLint, or tsc depending on your stack. Adds them to your lint-staged / pre-commit setup if you have one.
+
+### Architecture tools
+
+Static analysis and dependency graph tools that help you understand what you've built.
+
+```bash
+hyper tools setup --category architecture
+```
+
+Dependency graph visualization, circular dependency detection, and module boundary enforcement.
+
+## Guided setup
+
+Running `hyper tools setup` without flags walks you through all four categories interactively:
+
+```
+$ hyper tools setup
+
+  Setting up tooling for your project.
+
+  AI tools ──────────────────────────────────────────
+  ? Add Claude Code MCP server config?  Yes
+  ? Add .cursorrules?  Yes
+  ? Windsurf integration?  No
+
+  Security ──────────────────────────────────────────
+  ? Enable dependency auditing?  Yes
+  ? Secret scanning (pre-commit)?  Yes
+
+  Code quality ───────────────────────────────────────
+  ? Formatter: Biome / ESLint+Prettier / Skip
+  > Biome
+  ? Add lint-staged config?  Yes
+
+  Architecture ───────────────────────────────────────
+  ? Add dependency graph tooling?  Yes
+
+  Done. 6 tools configured. See .hyper/tools.yml for settings.
+```
+
+## After setup
+
+Your project gets a `.hyper/tools.yml` that records what's installed and how it's configured. You can edit this directly or re-run `hyper tools setup` to change anything.
+
+```bash
+# Review current tool config
+hyper tools status
+
+# Update a tool's config
+hyper tools configure biome
+
+# Remove a tool
+hyper tools remove snyk
+```
+
+<Info>
+  `hyper tools` sets things up. For watching your project in real-time as you develop, see [`hyper watch`](/cli/commands/workflow/watch).
+</Info>
+
+## Configuration reference
+
+Tool configuration lives in `.hyper/tools.yml`. See the [tools configuration reference](/cli/configuration/tools-config) for the full schema.
+
+## Related commands
+
+<CardGroup cols={2}>
+  <Card title="hyper watch" href="/cli/commands/workflow/watch">
+    Real-time monitoring while you develop
+  </Card>
+  <Card title="hyper gen" href="/cli/commands/workflow/gen">
+    Generate code with your tools already wired in
+  </Card>
+  <Card title="hyper hq" href="/cli/commands/hq">
+    Dashboard view of project health
+  </Card>
+  <Card title="hyper kit install" href="/cli/commands/kit/install">
+    Install a kit that includes recommended tooling
+  </Card>
+</CardGroup>

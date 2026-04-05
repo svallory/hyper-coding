@@ -1,0 +1,56 @@
+---
+title: "ToolResource"
+description: "Tool resource management interface"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / ToolResource
+
+Defined in: [recipe-engine/tools/base.ts:29](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L29)
+
+Tool resource management interface
+
+## Properties
+
+### id
+
+> **id**: `string`
+
+Defined in: [recipe-engine/tools/base.ts:31](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L31)
+
+Resource identifier
+
+***
+
+### type
+
+> **type**: `"cache"` \| `"file"` \| `"process"` \| `"network"` \| `"memory"`
+
+Defined in: [recipe-engine/tools/base.ts:34](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L34)
+
+Resource type
+
+***
+
+### cleanup()
+
+> **cleanup**: () => `void` \| `Promise`\<`void`\>
+
+Defined in: [recipe-engine/tools/base.ts:37](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L37)
+
+Resource cleanup function
+
+**Returns:** `void` \| `Promise`\<`void`\>
+
+***
+
+### metadata?
+
+> `optional` **metadata**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/tools/base.ts:40](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L40)
+
+Resource metadata

@@ -1,0 +1,74 @@
+---
+title: "ToolFactory"
+description: "Tool factory interface for creating tool instances"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / ToolFactory
+
+Defined in: [recipe-engine/tools/base.ts:553](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L553)
+
+Tool factory interface for creating tool instances
+
+## Type Parameters
+
+### TStep
+
+`TStep` *extends* [`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx) = [`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)
+
+## Methods
+
+### create()
+
+> **create**(`name`, `options?`): [`Tool`](/api-reference/generated/classes/Tool.mdx)\<`TStep`\>
+
+Defined in: [recipe-engine/tools/base.ts:557](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L557)
+
+Create a new tool instance
+
+#### Parameters
+
+**`name`** `string`
+
+##### options?
+
+`Record`\<`string`, `any`\>
+
+#### Returns
+
+[`Tool`](/api-reference/generated/classes/Tool.mdx)\<`TStep`\>
+
+***
+
+### getToolType()
+
+> **getToolType**(): [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:562](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L562)
+
+Get the tool type this factory creates
+
+#### Returns
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+***
+
+### validateConfig()
+
+> **validateConfig**(`config`): [`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:567](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L567)
+
+Validate tool configuration before creation
+
+#### Parameters
+
+**`config`** `Record`\<`string`, `any`\>
+
+#### Returns
+
+[`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)

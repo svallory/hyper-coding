@@ -1,0 +1,68 @@
+---
+title: "RecipeToolFactory"
+description: "Recipe Tool Factory"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeToolFactory
+
+Defined in: [recipe-engine/tools/recipe-tool.ts:872](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/recipe-tool.ts#L872)
+
+Recipe Tool Factory
+
+## Constructors
+
+### Constructor
+
+> **new RecipeToolFactory**(): `RecipeToolFactory`
+
+#### Returns
+
+`RecipeToolFactory`
+
+## Methods
+
+### create()
+
+> **create**(`name`, `options`): [`RecipeTool`](/api-reference/generated/classes/RecipeTool.mdx)
+
+Defined in: [recipe-engine/tools/recipe-tool.ts:873](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/recipe-tool.ts#L873)
+
+#### Parameters
+
+**`name`** `string` = `'recipe-tool'`
+
+**`options`** `Record`\<`string`, `any`\> = `{}`
+
+#### Returns
+
+[`RecipeTool`](/api-reference/generated/classes/RecipeTool.mdx)
+
+***
+
+### getToolType()
+
+> **getToolType**(): `"recipe"`
+
+Defined in: [recipe-engine/tools/recipe-tool.ts:877](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/recipe-tool.ts#L877)
+
+**Returns:** `"recipe"`
+
+***
+
+### validateConfig()
+
+> **validateConfig**(`config`): [`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)
+
+Defined in: [recipe-engine/tools/recipe-tool.ts:881](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/recipe-tool.ts#L881)
+
+#### Parameters
+
+**`config`** `Record`\<`string`, `any`\>
+
+#### Returns
+
+[`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)

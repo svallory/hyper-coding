@@ -1,0 +1,76 @@
+---
+title: "ToolRegistryStats"
+description: "Tool registry statistics"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / ToolRegistryStats
+
+Defined in: [recipe-engine/tools/registry.ts:75](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L75)
+
+Tool registry statistics
+
+## Properties
+
+### totalRegistrations
+
+> **totalRegistrations**: `number`
+
+Defined in: [recipe-engine/tools/registry.ts:77](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L77)
+
+Total number of registered tool types
+
+***
+
+### cachedInstances
+
+> **cachedInstances**: `number`
+
+Defined in: [recipe-engine/tools/registry.ts:80](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L80)
+
+Number of cached tool instances
+
+***
+
+### activeInstances
+
+> **activeInstances**: `number`
+
+Defined in: [recipe-engine/tools/registry.ts:83](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L83)
+
+Number of active (in-use) tool instances
+
+***
+
+### byType
+
+> **byType**: `Record`\<[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx), \{ `registrations`: `number`; `cachedInstances`: `number`; `activeInstances`: `number`; \}\>
+
+Defined in: [recipe-engine/tools/registry.ts:86](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L86)
+
+Registry statistics by tool type
+
+***
+
+### memory
+
+> **memory**: `object`
+
+Defined in: [recipe-engine/tools/registry.ts:93](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/registry.ts#L93)
+
+Memory usage statistics
+
+#### registrySize
+
+> **registrySize**: `number`
+
+Estimated registry memory usage in bytes
+
+#### cacheSize
+
+> **cacheSize**: `number`
+
+Estimated cache memory usage in bytes

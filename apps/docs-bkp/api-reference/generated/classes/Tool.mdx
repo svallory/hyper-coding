@@ -1,0 +1,404 @@
+---
+title: "Tool"
+description: "Abstract base class for all Recipe Step System tools  This class provides common functionality for Template, Action, CodeMod, and Recipe tools. Each tool type e"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / Tool
+
+Defined in: [recipe-engine/tools/base.ts:118](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L118)
+
+Abstract base class for all Recipe Step System tools
+
+This class provides common functionality for Template, Action, CodeMod, and Recipe tools.
+Each tool type extends this class to implement specific execution logic.
+
+## Extended by
+
+- [`TemplateTool`](/api-reference/generated/classes/TemplateTool.mdx)
+- [`ActionTool`](/api-reference/generated/classes/ActionTool.mdx)
+- [`RecipeTool`](/api-reference/generated/classes/RecipeTool.mdx)
+
+## Type Parameters
+
+### TStep
+
+`TStep` *extends* [`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx) = [`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)
+
+## Constructors
+
+### Constructor
+
+> **new Tool**\<`TStep`\>(`toolType`, `name`, `options`): `Tool`\<`TStep`\>
+
+Defined in: [recipe-engine/tools/base.ts:127](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L127)
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+##### name
+
+`string`
+
+##### options
+
+`Record`\<`string`, `any`\> = `{}`
+
+#### Returns
+
+`Tool`\<`TStep`\>
+
+## Properties
+
+### logger
+
+> `protected` `readonly` **logger**: [`Logger`](/api-reference/generated/classes/Logger.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:119](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L119)
+
+***
+
+### debug
+
+> `protected` `readonly` **debug**: `Debugger`
+
+Defined in: [recipe-engine/tools/base.ts:120](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L120)
+
+***
+
+### resources
+
+> `protected` `readonly` **resources**: `Map`\<`string`, [`ToolResource`](/api-reference/generated/interfaces/ToolResource.mdx)\>
+
+Defined in: [recipe-engine/tools/base.ts:121](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L121)
+
+***
+
+### metrics
+
+> `protected` `readonly` **metrics**: [`ToolLifecycleMetrics`](/api-reference/generated/interfaces/ToolLifecycleMetrics.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:122](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L122)
+
+***
+
+### \_isInitialized
+
+> `protected` **\_isInitialized**: `boolean` = `false`
+
+Defined in: [recipe-engine/tools/base.ts:123](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L123)
+
+***
+
+### \_isExecuting
+
+> `protected` **\_isExecuting**: `boolean` = `false`
+
+Defined in: [recipe-engine/tools/base.ts:124](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L124)
+
+***
+
+### \_isCleanedUp
+
+> `protected` **\_isCleanedUp**: `boolean` = `false`
+
+Defined in: [recipe-engine/tools/base.ts:125](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L125)
+
+***
+
+### toolType
+
+> `readonly` **toolType**: [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:128](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L128)
+
+***
+
+### name
+
+> `readonly` **name**: `string`
+
+Defined in: [recipe-engine/tools/base.ts:129](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L129)
+
+***
+
+### options
+
+> `protected` `readonly` **options**: `Record`\<`string`, `any`\> = `{}`
+
+Defined in: [recipe-engine/tools/base.ts:130](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L130)
+
+## Methods
+
+### getToolType()
+
+> **getToolType**(): [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:148](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L148)
+
+Get tool type
+
+#### Returns
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+***
+
+### getName()
+
+> **getName**(): `string`
+
+Defined in: [recipe-engine/tools/base.ts:155](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L155)
+
+Get tool name
+
+**Returns:** `string`
+
+***
+
+### isInitialized()
+
+> **isInitialized**(): `boolean`
+
+Defined in: [recipe-engine/tools/base.ts:162](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L162)
+
+Check if tool is initialized
+
+**Returns:** `boolean`
+
+***
+
+### isExecuting()
+
+> **isExecuting**(): `boolean`
+
+Defined in: [recipe-engine/tools/base.ts:169](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L169)
+
+Check if tool is currently executing
+
+**Returns:** `boolean`
+
+***
+
+### isCleanedUp()
+
+> **isCleanedUp**(): `boolean`
+
+Defined in: [recipe-engine/tools/base.ts:176](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L176)
+
+Check if tool has been cleaned up
+
+**Returns:** `boolean`
+
+***
+
+### getMetrics()
+
+> **getMetrics**(): `Readonly`\<[`ToolLifecycleMetrics`](/api-reference/generated/interfaces/ToolLifecycleMetrics.mdx)\>
+
+Defined in: [recipe-engine/tools/base.ts:183](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L183)
+
+Get tool lifecycle metrics
+
+**Returns:** `Readonly`\<[`ToolLifecycleMetrics`](/api-reference/generated/interfaces/ToolLifecycleMetrics.mdx)\>
+
+***
+
+### initialize()
+
+> **initialize**(): `Promise`\<`void`\>
+
+Defined in: [recipe-engine/tools/base.ts:191](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L191)
+
+Initialize the tool with configuration
+Called once before any execution
+
+**Returns:** `Promise`\<`void`\>
+
+***
+
+### validate()
+
+> **validate**(`step`, `context`): `Promise`\<[`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)\>
+
+Defined in: [recipe-engine/tools/base.ts:218](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L218)
+
+Validate the step configuration and context
+
+#### Parameters
+
+**`step`** `TStep`
+
+##### context
+
+[`StepContext`](/api-reference/generated/interfaces/StepContext.mdx)
+
+**Returns:** `Promise`\<[`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)\>
+
+***
+
+### execute()
+
+> **execute**(`step`, `context`, `options?`): `Promise`\<[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)\>
+
+Defined in: [recipe-engine/tools/base.ts:255](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L255)
+
+Execute the tool with the given step configuration and context
+
+#### Parameters
+
+**`step`** `TStep`
+
+##### context
+
+[`StepContext`](/api-reference/generated/interfaces/StepContext.mdx)
+
+##### options?
+
+[`StepExecutionOptions`](/api-reference/generated/interfaces/StepExecutionOptions.mdx)
+
+**Returns:** `Promise`\<[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)\>
+
+***
+
+### cleanup()
+
+> **cleanup**(): `Promise`\<`void`\>
+
+Defined in: [recipe-engine/tools/base.ts:351](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L351)
+
+Clean up resources used by the tool
+
+**Returns:** `Promise`\<`void`\>
+
+***
+
+### registerResource()
+
+> `protected` **registerResource**(`resource`): `void`
+
+Defined in: [recipe-engine/tools/base.ts:419](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L419)
+
+Register a resource for cleanup
+
+#### Parameters
+
+##### resource
+
+[`ToolResource`](/api-reference/generated/interfaces/ToolResource.mdx)
+
+**Returns:** `void`
+
+***
+
+### unregisterResource()
+
+> `protected` **unregisterResource**(`resourceId`): `void`
+
+Defined in: [recipe-engine/tools/base.ts:431](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L431)
+
+Unregister a resource (useful for early cleanup)
+
+#### Parameters
+
+**`resourceId`** `string`
+
+**Returns:** `void`
+
+***
+
+### getMemoryUsage()
+
+> `protected` **getMemoryUsage**(): `object`
+
+Defined in: [recipe-engine/tools/base.ts:442](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L442)
+
+Get memory usage statistics
+
+**Returns:** `object`
+
+##### used
+
+> **used**: `number`
+
+##### total
+
+> **total**: `number`
+
+***
+
+### onInitialize()
+
+> `protected` **onInitialize**(): `Promise`\<`void`\>
+
+Defined in: [recipe-engine/tools/base.ts:521](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L521)
+
+Tool-specific initialization logic
+Override this method to perform any setup required before execution
+
+**Returns:** `Promise`\<`void`\>
+
+***
+
+### onValidate()
+
+> `abstract` `protected` **onValidate**(`step`, `context`): `Promise`\<[`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)\>
+
+Defined in: [recipe-engine/tools/base.ts:529](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L529)
+
+Tool-specific validation logic
+Must be implemented by concrete tool classes
+
+#### Parameters
+
+**`step`** `TStep`
+
+##### context
+
+[`StepContext`](/api-reference/generated/interfaces/StepContext.mdx)
+
+**Returns:** `Promise`\<[`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)\>
+
+***
+
+### onExecute()
+
+> `abstract` `protected` **onExecute**(`step`, `context`, `options?`): `Promise`\<[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)\>
+
+Defined in: [recipe-engine/tools/base.ts:535](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L535)
+
+Tool-specific execution logic
+Must be implemented by concrete tool classes
+
+#### Parameters
+
+**`step`** `TStep`
+
+##### context
+
+[`StepContext`](/api-reference/generated/interfaces/StepContext.mdx)
+
+##### options?
+
+[`StepExecutionOptions`](/api-reference/generated/interfaces/StepExecutionOptions.mdx)
+
+**Returns:** `Promise`\<[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)\>
+
+***
+
+### onCleanup()
+
+> `protected` **onCleanup**(): `Promise`\<`void`\>
+
+Defined in: [recipe-engine/tools/base.ts:545](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L545)
+
+Tool-specific cleanup logic
+Override this method to perform any cleanup required after execution
+
+**Returns:** `Promise`\<`void`\>

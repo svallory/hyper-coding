@@ -1,0 +1,160 @@
+---
+title: "StepExecutor"
+description: "Step Executor for orchestrating recipe step execution  The StepExecutor is responsible for: - Managing step dependencies and execution order - Coordinating para"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / StepExecutor
+
+Defined in: [recipe-engine/step-executor.ts:183](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L183)
+
+Step Executor for orchestrating recipe step execution
+
+The StepExecutor is responsible for:
+- Managing step dependencies and execution order
+- Coordinating parallel step execution
+- Evaluating conditional expressions
+- Routing steps to appropriate tools
+- Handling errors and retries
+- Tracking execution progress and metrics
+
+## Extends
+
+- `EventEmitter`
+
+## Constructors
+
+### Constructor
+
+> **new StepExecutor**(`toolRegistry?`, `config?`): `StepExecutor`
+
+Defined in: [recipe-engine/step-executor.ts:198](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L198)
+
+#### Parameters
+
+##### toolRegistry?
+
+[`ToolRegistry`](/api-reference/generated/classes/ToolRegistry.mdx)
+
+##### config?
+
+`Partial`\<[`StepExecutorConfig`](/api-reference/generated/interfaces/StepExecutorConfig.mdx)\> = `{}`
+
+#### Returns
+
+`StepExecutor`
+
+#### Overrides
+
+`EventEmitter.constructor`
+
+## Methods
+
+### executeSteps()
+
+> **executeSteps**(`steps`, `context`, `options`): `Promise`\<[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)[]\>
+
+Defined in: [recipe-engine/step-executor.ts:215](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L215)
+
+Execute a list of recipe steps with dependency management and parallel execution
+
+#### Parameters
+
+##### steps
+
+[`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)[]
+
+##### context
+
+[`StepContext`](/api-reference/generated/interfaces/StepContext.mdx)
+
+##### options
+
+[`StepExecutionOptions`](/api-reference/generated/interfaces/StepExecutionOptions.mdx) = `{}`
+
+**Returns:** `Promise`\<[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)[]\>
+
+***
+
+### executeStep()
+
+> **executeStep**(`step`, `context`, `options`): `Promise`\<[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)\>
+
+Defined in: [recipe-engine/step-executor.ts:293](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L293)
+
+Execute a single step with proper tool routing
+
+#### Parameters
+
+##### step
+
+[`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)
+
+##### context
+
+[`StepContext`](/api-reference/generated/interfaces/StepContext.mdx)
+
+##### options
+
+[`StepExecutionOptions`](/api-reference/generated/interfaces/StepExecutionOptions.mdx) = `{}`
+
+**Returns:** `Promise`\<[`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)\>
+
+***
+
+### getMetrics()
+
+> **getMetrics**(): [`StepExecutionMetrics`](/api-reference/generated/interfaces/StepExecutionMetrics.mdx)
+
+Defined in: [recipe-engine/step-executor.ts:418](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L418)
+
+Get current execution metrics
+
+#### Returns
+
+[`StepExecutionMetrics`](/api-reference/generated/interfaces/StepExecutionMetrics.mdx)
+
+***
+
+### getProgress()
+
+> **getProgress**(): [`StepExecutionProgress`](/api-reference/generated/interfaces/StepExecutionProgress.mdx)
+
+Defined in: [recipe-engine/step-executor.ts:425](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L425)
+
+Get current execution progress
+
+#### Returns
+
+[`StepExecutionProgress`](/api-reference/generated/interfaces/StepExecutionProgress.mdx)
+
+***
+
+### cancelAllExecutions()
+
+> **cancelAllExecutions**(): `Promise`\<`void`\>
+
+Defined in: [recipe-engine/step-executor.ts:432](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L432)
+
+Cancel all running executions
+
+**Returns:** `Promise`\<`void`\>
+
+***
+
+### cancelExecution()
+
+> **cancelExecution**(`executionId`): `Promise`\<`void`\>
+
+Defined in: [recipe-engine/step-executor.ts:447](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/step-executor.ts#L447)
+
+Cancel a specific execution
+
+#### Parameters
+
+**`executionId`** `string`
+
+**Returns:** `Promise`\<`void`\>

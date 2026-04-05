@@ -1,0 +1,86 @@
+---
+title: "Customize Setup"
+description: "IDE integration, git hooks setup, and development environment automation for optimal developer productivity."
+icon: "cog"
+og:title: "hyper coding"
+og:description: "IDE integration, git hooks setup, and development environment automation for optimal developer productivity."
+---
+
+# coding: Dev Environment Setup
+
+The **coding** tool wires up your dev environment so you're not doing it by hand every time you clone a repo.
+
+## Commands
+
+### `hyper config hooks`
+Sets up git hooks for quality checks and automation.
+
+```bash
+# Setup pre-commit hooks
+hyper config hooks
+
+# Configure specific hook types
+hyper config hooks --pre-commit --pre-push
+```
+
+### `hyper config`
+Configures IDE integrations and dev tooling.
+
+```bash
+# Configure development environment
+hyper config
+
+# Setup for specific IDE
+hyper config --ide cursor
+```
+
+### `hyper config doctor`
+Checks whether your environment is actually set up correctly (not just "probably fine").
+
+```bash
+# Check environment health
+hyper config doctor
+
+# Detailed diagnostic output
+hyper config doctor --verbose
+```
+
+## Features
+
+### Git Hooks
+
+Hooks run before commits and pushes, so broken code doesn't make it into your history. You get formatting, linting, and security checks without thinking about them.
+
+- Pre-commit validation
+- Quality checks before push
+- Automated formatting and linting
+- Security scanning
+
+### IDE Configuration
+
+Right now the main IDE support is Claude Code; more are coming. The goal is consistent tooling across the team so you're not debugging "works on my machine" issues.
+
+- Claude Code integration
+- Dev environment standardization
+- Quality gate setup
+- Workflow automation
+
+### Environment Checks
+
+`doctor` is the most useful command when something feels off but you can't tell what. It validates your config, checks tool versions, and tells you what's actually broken vs. what's just a warning.
+
+- Tool coordination and version checks
+- Configuration validation
+- Troubleshooting diagnostics
+
+## Integration
+
+The coding tool hooks into:
+- Claude Code hooks system
+- Git workflow automation
+- Quality assurance pipelines
+- Dev monitoring tools
+
+---
+
+If your team has a shared setup, `hyper config` makes it easy to enforce that without a long onboarding doc nobody reads.

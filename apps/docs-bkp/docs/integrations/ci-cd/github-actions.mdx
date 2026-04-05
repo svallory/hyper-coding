@@ -1,0 +1,219 @@
+---
+title: "GitHub Actions"
+description: "Integrate HyperDev with GitHub Actions for automated template validation, testing, and deployment."
+icon: "github"
+og:title: "GitHub Actions Integration"
+og:description: "Integrate HyperDev with GitHub Actions for automated template validation, testing, and deployment."
+---
+
+# GitHub Actions Integration
+
+Here are ready-to-use workflow files for running HyperDev in CI — template validation, quality gates, deployment, and automated template updates.
+
+## Template Validation Workflow
+
+Create a workflow to validate HyperDev templates:
+
+```yaml
+# .github/workflows/hyperdev-validation.yml
+name: HyperDev Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '.hyperdev/**'
+      - '**/templates/**'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install HyperDev
+        run: |
+          bun add -g @hypercli/cli
+          hyper --version
+          
+      - name: Test Template Generation
+        run: |
+          # Test critical templates
+          hyper gen component TestComponent --dry-run
+          hyper gen api-route test-route --dry-run
+          hyper gen page test-page --dry-run
+```
+
+## Quality Gates Workflow
+
+Implement quality gates in your CI/CD pipeline:
+
+```yaml
+# .github/workflows/quality-gates.yml
+name: HyperDev Quality Gates
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install Dependencies
+        run: |
+          bun add -g @hypercli/cli
+          bun install
+          
+      - name: Lint and Test
+        run: |
+          bun run lint && bun test
+```
+
+## Deployment Workflow
+
+Deploy applications with HyperDev validation:
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy with HyperDev
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install Dependencies
+        run: |
+          bun add -g @hypercli/cli
+          bun install
+          
+      - name: Generate Production Code
+        run: |
+          hyper gen --all --env production --optimize
+          
+      - name: Build Application
+        run: |
+          bun run build
+          
+      - name: Deploy to Production
+        run: |
+          # Your deployment commands here
+          echo "Deploying to production..."
+```
+
+## Template Update Workflow
+
+Automate template updates:
+
+```yaml
+# .github/workflows/template-updates.yml
+name: Template Updates
+
+on:
+  schedule:
+    - cron: '0 2 * * 1' # Weekly on Monday at 2 AM
+  workflow_dispatch:
+
+jobs:
+  update-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Update HyperDev CLI
+        run: |
+          bun add -g @hypercli/cli
+          # Note: automated kit update checking is a planned feature.
+          # For now, update kits manually via: hyper kit install <name>@latest
+          
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          title: 'chore: update HyperDev templates'
+          body: |
+            Automated template updates from HyperDev registry.
+            
+            Changes:
+            - Updated template dependencies
+            - Applied security patches
+            - Enhanced template features
+            
+            Validation: ✅ All templates validated successfully
+          branch: hyperdev/template-updates
+          commit-message: 'chore: update HyperDev templates'
+```
+
+## Integration Testing
+
+Test template generation across multiple environments:
+
+```yaml
+# .github/workflows/integration-test.yml
+name: HyperDev Integration Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20]
+        template: [component, api-route, page]
+        
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          
+      - name: Install HyperDev
+        run: |
+          bun add -g @hypercli/cli
+          
+      - name: Test Template Generation
+        run: |
+          hyper gen ${{ matrix.template }} test-${{ matrix.template }} --output temp/
+          
+      - name: Validate Generated Code
+        run: |
+          cd temp/
+          bun install
+          bun run lint || true
+          bun run type-check || true
+```
+
+Drop these into `.github/workflows/` and you've got validation, quality gates, and automated template updates running on every push and PR.

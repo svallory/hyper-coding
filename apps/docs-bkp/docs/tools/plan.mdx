@@ -1,0 +1,86 @@
+---
+title: "plan"
+description: "Product requirements management, architecture design, and strategic task planning with AI-assisted documentation."
+icon: "map"
+og:title: "plan: Strategic Planning"
+og:description: "Product requirements management, architecture design, and strategic task planning with AI-assisted documentation."
+---
+
+# plan: Strategic Planning & Architecture
+
+The **plan** tool gives you structured planning for development projects. Create documentation, break down complex features, and keep business objectives and technical implementation actually aligned — not just nominally so.
+
+## Core Features
+
+### Document Templates
+- **technical-prd** - Full PRD with technical details
+- **business-prd** - Business-focused PRD format  
+- **feature-spec** - Lightweight feature specification
+- **architecture-doc** - System architecture documentation
+- **minimal-plan** - Basic planning structure for when you need something fast
+- **enterprise-prd** - Enterprise-grade PRD with compliance
+
+## Commands
+
+### `hyper plan [plan-title]`
+Start an interactive planning session or work on a specific plan.
+
+```bash
+# Start new planning session
+hyper plan
+
+# Work on specific plan
+hyper plan "User Authentication System"
+
+# Create plan with template
+hyper plan --template technical-prd
+
+# Initialize from existing document
+hyper plan --from requirements.md
+```
+
+## File Structure
+
+Plans live in `.hyper/plans/<plan-title>/` with organized documentation:
+
+```
+.hyper/plans/user-auth/
+├── plan.yaml           # Plan metadata
+├── prd.md             # Product requirements
+├── architecture.md    # Technical architecture
+├── tasks.yaml         # Task breakdown
+└── progress.md        # Implementation progress
+```
+
+## Integration
+
+Here's how a plan flows into actual code generation:
+
+```bash
+# 1. Start a planning session and decompose a feature
+hyper plan "Payment Integration"
+# → creates .hyper/plans/payment-integration/tasks.yaml
+
+# 2. Generate code scoped to that plan's task breakdown
+hyper gen stripe-webhook --task PAY-001
+
+# 3. Monitor agent activity against the plan's objectives
+hyper watch --plan payment-integration
+
+# 4. Check progress across all tasks in the plan
+hyper dash
+```
+
+The plan's `tasks.yaml` feeds directly into `hyper gen` — variable defaults, acceptance criteria, and architectural constraints carry through automatically.
+
+## Best Practices
+
+1. **Start with Templates** - Pick the template that fits your context; don't build from scratch
+2. **Clear Requirements** - Vague requirements produce vague code; define specific, measurable objectives
+3. **Iterative Planning** - Refine plans based on feedback as you go
+4. **Track Progress** - Check implementation against requirements regularly, not just at the end
+5. **Team Collaboration** - Share plans early; misalignment caught at planning time is cheap
+
+---
+
+The **plan** tool turns ad-hoc development into systematic, requirement-driven implementation — with clear documentation and progress tracking you'll actually use.

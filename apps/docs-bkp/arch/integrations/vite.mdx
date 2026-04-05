@@ -1,0 +1,181 @@
+---
+title: "Vite Integration Architecture"
+description: "Technical reference for HyperDev Vite integration — Rollup plugin internals, HMR config, TypeScript type generation plugin, and proxy config"
+---
+
+<Info>
+  This is an architecture reference. For usage docs, see [Vite Integration](/integrations/vite).
+</Info>
+
+## Full Vite Plugin Configuration
+
+```javascript
+// vite.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+import { hyperdevPlugin } from '@hyperdev/vite-plugin'
+
+export default defineConfig({
+  plugins: [
+    react(),
+    hyperdevPlugin({
+      // Auto-generate types on schema changes
+      autoGenerateTypes: true,
+      // Watch template changes in development
+      watchTemplates: true,
+      // Template directories to watch
+      templateDirs: ['./.hyperdev/templates'],
+      // Quality gates integration
+      qualityGates: {
+        enabled: true,
+        failOnError: process.env.NODE_ENV === 'production',
+        rules: ['typescript', 'eslint', 'security']
+      },
+      // Development features
+      dev: {
+        enableHMR: true,
+        templateReload: true
+      }
+    })
+  ],
+  // Expose HyperDev config to client
+  define: {
+    __HYPERDEV_TEMPLATES__: JSON.stringify(process.env.HYPERDEV_TEMPLATES)
+  }
+})
+```
+
+## Dev Server Proxy Config
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  server: {
+    proxy: {
+      '/hyperdev-dashboard': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/hyperdev-dashboard/, '')
+      }
+    }
+  },
+  plugins: [
+    hyperdevPlugin({
+      dev: {
+        liveReload: true,
+        watchConfig: true,
+        validateOnChange: true
+      }
+    })
+  ]
+})
+```
+
+## Rollup Pre-Build Validation Plugin
+
+```javascript
+// vite.config.js — build section
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      plugins: [
+        {
+          name: 'hyperdev-pre-build',
+          buildStart() {
+            const { execSync } = require('child_process')
+            try {
+              execSync('hyperdev validate --all', { stdio: 'inherit' })
+            } catch (error) {
+              throw new Error('HyperDev validation failed')
+            }
+          }
+        }
+      ]
+    }
+  }
+})
+```
+
+## TypeScript Type Generation Plugin
+
+```javascript
+// vite.config.js — TypeScript integration
+export default defineConfig({
+  plugins: [
+    hyperdevPlugin({
+      typescript: {
+        // Auto-generate types from templates
+        generateTypes: true,
+        // Output directory for generated types
+        typesOutput: './src/types/generated',
+        // Watch schema files for changes
+        watchSchemas: true,
+        // Include in TypeScript compilation
+        include: true
+      }
+    })
+  ]
+})
+```
+
+## HMR Configuration
+
+```javascript
+// vite.config.js — Hot Module Replacement
+export default defineConfig({
+  plugins: [
+    hyperdevPlugin({
+      hmr: {
+        // Enable template hot reload
+        templates: true,
+        // Reload on config changes
+        config: true,
+        // Update types on schema changes
+        types: true
+      }
+    })
+  ]
+})
+```
+
+## Environment-Specific Plugin Config
+
+```javascript
+// vite.config.js — environment-specific template behavior
+export default defineConfig({
+  define: {
+    __HYPERDEV_CONFIG__: JSON.stringify({
+      templates: process.env.HYPERDEV_TEMPLATES,
+      environment: process.env.NODE_ENV
+    })
+  },
+  plugins: [
+    hyperdevPlugin({
+      templates: {
+        development: {
+          includeDebugInfo: true,
+          verbose: true
+        },
+        production: {
+          optimize: true,
+          stripComments: true
+        }
+      }
+    })
+  ]
+})
+```
+
+## package.json Scripts
+
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"hyperdev dev --watch\" \"vite\"",
+    "build": "hyperdev validate --all && vite build",
+    "preview": "vite preview",
+    "hyperdev:gen": "hyperdev gen",
+    "hyperdev:validate": "hyperdev validate --all"
+  }
+}
+```

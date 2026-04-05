@@ -1,0 +1,136 @@
+---
+title: "Intro to Hyper Coding"
+description: "A systematic approach to AI-assisted development with engineered safeguards, quality controls, and continuous validation loops."
+icon: "book-open"
+og:title: "Introduction to Hyper Coding"
+og:description: "A systematic approach to AI-assisted development with engineered safeguards, quality controls, and continuous validation loops."
+---
+
+# Hyper Coding Methodology
+
+**Hyper Coding** is a process-driven approach to AI-assisted development that keeps you in control: you engineer the context, run quality gates, and verify scope at every step. The AI generates; you stay responsible. The goal is correctness, security, and architectural integrity---without giving up the speed benefits.
+
+## The Problem: Uncontrolled AI Generation
+
+AI coding tools are genuinely powerful, and genuinely risky when used without guardrails.
+
+### Security Vulnerabilities
+- **40-45% of AI-generated code contains exploitable security flaws**
+- SQL injection, XSS vulnerabilities, hardcoded credentials
+- Missing authentication and authorization checks
+
+### Technical Debt Accumulation
+- Inconsistent code patterns and over-engineering
+- Poor documentation and error handling
+- Mixed coding styles across codebases
+
+### Context Drift and Scope Creep
+- AI loses track of original objectives
+- Solutions diverge from established patterns
+- Architectural violations emerge over time
+
+### Hallucination Failures
+- **20% of recommendations reference non-existent packages**
+- **44% of function-level completions contain API hallucinations**
+- Repeated hallucinations become attack vectors
+
+## The Solution: Hyper Coding Framework
+
+Hyper Coding turns AI from an unpredictable generator into a controlled development accelerator. Five principles make that work:
+
+### 1. Context Engineering
+Build and maintain the context AI works from---don't leave it to guess:
+- **Architecture Context Injection**: Give the model real system knowledge
+- **Security Context Establishment**: Embed security requirements into every request
+- **Quality Standards Integration**: Ensure consistent patterns and practices
+
+### 2. Continuous Verification
+Validate as you go, not just at the end:
+- **Real-time Security Scanning**: Catch vulnerabilities immediately
+- **Syntax and Style Validation**: Code quality enforcement
+- **API Verification**: Ensure all references exist and are current
+
+### 3. Layered Quality Gates
+Multiple independent checks so errors don't compound:
+- **Pre-generation Validation**: Context and objective verification
+- **Generation Monitoring**: Real-time quality assessment
+- **Post-generation Audits**: Security and compliance checks
+
+### 4. Focus Enforcement
+Strict scope boundaries keep AI---and the team---on track:
+- **Micro-task Decomposition**: Break work into verifiable units
+- **Objective Tracking**: Continuous alignment with defined goals
+- **Scope Boundary Validation**: Prevent unauthorized expansion
+
+### 5. Security-First Design
+Security validation is built in, not bolted on:
+- **OWASP Top 10 Integration**: Systematic vulnerability prevention
+- **Threat Model Awareness**: Context-specific security considerations
+- **Automated Security Testing**: Continuous security validation
+
+## Hyper Coding in Practice
+
+Start by planning. `hyper plan` walks you through defining your feature — what it needs to do, what the architecture looks like, and how it breaks into small, bounded tasks. That plan becomes the source of truth for everything that follows: acceptance criteria, variable defaults, architectural constraints.
+
+From there, `hyper gen` uses that plan context to generate code that already knows your patterns. Linters and type checkers configured by `hyper tools` validate the output immediately — security issues surface before the file hits version control, not after. As you work, `hyper watch` tracks what the agent is doing and updates its context automatically, so the next session picks up where this one left off without losing the thread.
+
+The result: AI does the heavy lifting, but you're never flying blind. Each `hyper gen` run is scoped, validated, and traceable back to a specific plan and task. That's the difference between using AI as a controlled development accelerator and hoping it doesn't burn the house down.
+
+```bash
+# A typical Hyper Coding session
+hyper plan "Payments integration"         # Define → Design → Decompose
+hyper tools init --security --code        # Set up linters and scanners
+hyper watch --plan payments-integration & # Start reactive context monitor
+hyper gen stripe-webhook --task PAY-001   # Generate scoped to task
+bun test                                  # Validate immediately
+hyper dash                                # Check progress across all tasks
+```
+
+## HyperDev Tools Implementation
+
+The HyperDev toolkit puts this methodology into practice---quality controls, security validation, and architectural compliance are automated so they don't rely on remembering to do them manually.
+
+### Tool-to-Methodology Mapping
+
+<CardGroup cols={2}>
+  <Card title="gen: Context Engineering" icon="code" href="/tools/gen">
+    **Template-based generation** implements systematic context construction with AI-augmented quality enhancement
+  </Card>
+  <Card title="watch: Continuous Verification" icon="shield-check" href="/tools/watch">
+    **Real-time monitoring** provides continuous validation and quality gate enforcement
+  </Card>
+  <Card title="plan: Focus Enforcement" icon="target" href="/workflow/plan">
+    **Strategic planning** maintains objective focus and prevents scope drift
+  </Card>
+  <Card title="tools: Layered Quality Gates" icon="layers" href="/tools">
+    **Developer tooling** ensures quality standards and consistent workflows at every layer
+  </Card>
+  <Card title="hq: Session Management" icon="terminal" href="/hq">
+    **HQ command center** manages persistent Claude Code sessions across projects
+  </Card>
+  <Card title="dash: Security-First Monitoring" icon="chart-line" href="/tools/dash">
+    **Analytics and monitoring** provides security oversight and compliance tracking
+  </Card>
+</CardGroup>
+
+### Methodology in Practice
+
+Ready to put Hyper Coding to work? Start with these practical workflows:
+
+- **[Project Initialization](/cli/workflows/project-initialization)** - Set up quality gates from day one
+- **[Epic-driven Development](/cli/workflows/epic-driven-development)** - Focus enforcement through strategic planning
+- **[AI-Augmented Generation](/cli/workflows/ai-generation)** - Context engineering in practice
+- **[Continuous Validation](/cli/workflows/quality-assurance)** - Automated quality and security gates
+
+<Card
+  title="Quick Start Tutorial"
+  icon="rocket"
+  href="/quickstart"
+  horizontal
+>
+  Experience Hyper Coding methodology in a hands-on tutorial with real examples.
+</Card>
+
+---
+
+Hyper Coding is the difference between using AI as a tool and being used by it. Engineering context, running continuous validation, and enforcing quality gates at every step---that's what lets teams move fast with AI without creating a maintenance disaster six months later.

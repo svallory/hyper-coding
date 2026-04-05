@@ -1,0 +1,151 @@
+---
+title: "Quickstart"
+description: "Go from zero to a generated Next.js project in under 5 minutes"
+icon: "rocket"
+---
+
+# Quickstart
+
+This guide walks you through installing Hypergen, grabbing a kit, and running your first recipe to generate a real Next.js project — start to finish in about 5 minutes.
+
+## Prerequisites
+
+- [Bun](https://bun.sh) installed (`curl -fsSL https://bun.sh/install | bash`)
+- Node.js 20+
+
+<Steps>
+  <Step title="Install Hypergen">
+    Install the `hyper` CLI globally:
+
+    ```bash
+    bun add -g @hypercli/cli
+    ```
+
+    Verify it's working:
+
+    ```bash
+    hyper --version
+    ```
+
+    You should see something like `@hypercli/cli/0.4.0`.
+  </Step>
+
+  <Step title="Install a kit">
+    Kits are collections of cookbooks and recipes. Install the Next.js kit:
+
+    ```bash
+    hyper kit install nextjs
+    ```
+
+    This downloads the `hyper-kits/nextjs` kit and registers it locally. Check what's available:
+
+    ```bash
+    hyper recipe list
+    ```
+
+    You'll see recipes like `nextjs/project/create`, `nextjs/crud/list`, and others.
+  </Step>
+
+  <Step title="Generate a Next.js project">
+    Run the `project create` recipe from the `nextjs` kit:
+
+    ```bash
+    hyper gen nextjs project create --name=my-app
+    ```
+
+    Hypergen will:
+
+    1. Resolve `nextjs project create` to the kit's `project/create` recipe
+    2. Prompt for any missing variables (or use `--yes` to accept defaults)
+    3. Execute the recipe steps in order
+
+    <Tabs>
+      <Tab title="With defaults">
+        ```bash
+        hyper gen nextjs project create --name=my-app --yes
+        ```
+        Accepts all defaults: ESLint, no `src/` directory, standard app structure.
+      </Tab>
+      <Tab title="Interactive">
+        ```bash
+        hyper gen nextjs project create --name=my-app
+        ```
+        Prompts you for `description`, `useSrcDir`, and `linter` choice.
+      </Tab>
+      <Tab title="Fully specified">
+        ```bash
+        hyper gen nextjs project create \
+          --name=my-app \
+          --description="My SaaS product" \
+          --useSrcDir=true \
+          --linter=biome
+        ```
+        No prompts — all variables provided upfront.
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Explore what was generated">
+    The recipe executed these steps in order:
+
+    | Step | What it did |
+    |------|-------------|
+    | `ensure-dirs` | Created `my-app/public/` and `my-app/app/` |
+    | `package.json.jig` | Rendered `package.json` with your project name and Next.js dependencies |
+    | `tsconfig.json.jig` | Generated TypeScript config |
+    | `next.config.ts.jig` | Generated Next.js config |
+    | `postcss.config.mjs.jig` | Tailwind CSS PostCSS setup |
+    | `eslint.config.mjs.jig` | ESLint config (or Biome, if you chose that) |
+    | `app/layout.tsx.jig` | Root layout with Tailwind globals |
+    | `app/page.tsx.jig` | Home page component |
+    | `public/*.svg.jig` | Next.js default static assets |
+    | `shell: hyper kit install` | Ran `hyper kit install nextjs` inside the new project so the kit is available there too |
+
+    Browse the result:
+
+    ```bash
+    ls my-app/
+    cd my-app && bun install && bun dev
+    ```
+
+    Your Next.js app is running at `http://localhost:3000`.
+  </Step>
+
+  <Step title="Try dry-run mode">
+    Before running a recipe for real, preview what it would do without writing any files:
+
+    ```bash
+    hyper gen nextjs project create --name=my-app --dry
+    ```
+
+    You'll see each step logged with the files it would create — nothing gets written. Handy when you're exploring an unfamiliar recipe or testing variable combinations.
+  </Step>
+</Steps>
+
+## What just happened?
+
+Hypergen resolves recipe paths using a greedy matching algorithm against installed kits — it consumes as many path segments as possible when looking for a match, so `nextjs project create` matches the `project/create` recipe inside the `nextjs` kit rather than a hypothetical shorter path. When you ran `hyper gen nextjs project create`, it:
+
+1. Discovered the `nextjs` kit in your local kit search paths
+2. Matched `project/create` to a `recipe.yml` inside the kit's cookbooks
+3. Read the recipe's `variables` block and either prompted you or used provided flags
+4. Executed each step — template rendering, directory creation, shell commands — in sequence
+
+Template files (`.jig`) use the Jig template engine (an Edge.js fork). Variables are interpolated with `{{ name }}` syntax and filters like `{{ camelCase :: name }}`.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="hyper gen reference" icon="terminal" href="/cli/commands/workflow/gen">
+    All flags, variable passing, AI 2-pass mode, and recipe resolution details
+  </Card>
+  <Card title="Explore the kit" icon="box" href="/kits/nextjs">
+    See every cookbook and recipe in the Next.js kit
+  </Card>
+  <Card title="Write your own recipe" icon="pen" href="/guides/recipes">
+    Learn the recipe format and build your own generators
+  </Card>
+  <Card title="Template syntax" icon="code" href="/guides/templates">
+    Jig template syntax, filters, frontmatter fields, and the @ai tag
+  </Card>
+</CardGroup>

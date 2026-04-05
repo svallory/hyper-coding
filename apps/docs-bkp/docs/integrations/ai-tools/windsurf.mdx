@@ -1,0 +1,60 @@
+---
+title: "Windsurf setup"
+description: "Configure Windsurf's Cascade for Jig templates, recipe YAML, and the hyper CLI"
+icon: "water"
+og:title: "Windsurf setup"
+og:description: "Configure Windsurf's Cascade for Jig templates, recipe YAML, and the hyper CLI"
+---
+
+Configure Windsurf's Cascade AI to understand HyperDev's file formats so it gives useful help when you're writing `.jig` templates and recipe YAML.
+
+## Prerequisites
+
+- Windsurf editor installed
+- HyperDev repo cloned locally
+
+## Associate .jig with a language
+
+Add to your Windsurf settings to get reasonable syntax highlighting on `.jig` files:
+
+```json settings.json
+{
+  "files.associations": {
+    "*.jig": "html"
+  }
+}
+```
+
+## Workspace rules
+
+Create `.windsurf/rules.md` in the project root:
+
+```markdown .windsurf/rules.md
+# HyperDev workspace rules
+
+## Template engine: Jig
+- Template files use the `.jig` extension
+- Syntax: `{{ variable }}`, `{{ filterName :: variable }}` for filters
+- Block tags: `@if(cond)/@end`, `@each(item in list)/@end`, `@let(x = expr)`
+- The `@ai` tag generates that block with a second AI pass at runtime
+- YAML frontmatter in `.jig` files: `to:` (output path), `inject:`, `when:`, `after:`
+- Never suggest EJS syntax — Jig only
+
+## Recipes
+- YAML files with a `steps:` array
+- Step tools: template, action, recipe, shell, install, query, patch, parallel, conditional
+- `depends_on:` for step ordering; `exports:` to pass values to later steps
+- `when:` is a Jig expression evaluated at runtime
+
+## CLI
+- `hyper gen <recipe>` — run a recipe
+- `hyper plan <recipe>` — dry run, shows what will be generated
+- `hyper watch <recipe>` — watch mode
+- `hyper tools` — list step types
+- `hyper dash` / `hyper hq` — dashboards
+
+## Package manager
+- Always bun, never npm
+```
+
+With these rules, Cascade answers questions about HyperDev in terms of actual recipes, Jig syntax, and `hyper` commands rather than generic scaffolding tools.

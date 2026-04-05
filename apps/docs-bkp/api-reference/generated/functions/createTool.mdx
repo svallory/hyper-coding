@@ -1,0 +1,42 @@
+---
+title: "createTool"
+description: "createTool function documentation and examples"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / createTool
+
+> **createTool**\<`T`\>(`toolType`, `name`, `options?`): `Promise`\<[`Tool`](/api-reference/generated/classes/Tool.mdx)\<`T`\>\>
+
+Defined in: [recipe-engine/tools/index.ts:232](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/index.ts#L232)
+
+Type-safe tool creation helper
+
+Provides a type-safe way to create tools with proper type checking
+
+## Type Parameters
+
+### T
+
+`T` *extends* [`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)
+
+## Parameters
+
+### toolType
+
+`T`\[`"tool"`\]
+
+### name
+
+`string`
+
+### options?
+
+[`ToolResolutionOptions`](/api-reference/generated/interfaces/ToolResolutionOptions.mdx)
+
+## Returns
+
+`Promise`\<[`Tool`](/api-reference/generated/classes/Tool.mdx)\<`T`\>\>

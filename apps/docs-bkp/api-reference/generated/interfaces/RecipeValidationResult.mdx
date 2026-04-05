@@ -1,0 +1,82 @@
+---
+title: "RecipeValidationResult"
+description: "Recipe validation result"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeValidationResult
+
+Defined in: [recipe-engine/types.ts:633](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L633)
+
+Recipe validation result
+
+## Properties
+
+### isValid
+
+> **isValid**: `boolean`
+
+Defined in: [recipe-engine/types.ts:635](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L635)
+
+Whether the recipe is valid
+
+***
+
+### errors
+
+> **errors**: [`RecipeValidationError`](/api-reference/generated/interfaces/RecipeValidationError.mdx)[]
+
+Defined in: [recipe-engine/types.ts:638](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L638)
+
+Validation errors
+
+***
+
+### warnings
+
+> **warnings**: [`RecipeValidationWarning`](/api-reference/generated/interfaces/RecipeValidationWarning.mdx)[]
+
+Defined in: [recipe-engine/types.ts:641](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L641)
+
+Validation warnings
+
+***
+
+### recipe
+
+> **recipe**: [`RecipeConfig`](/api-reference/generated/interfaces/RecipeConfig.mdx)
+
+Defined in: [recipe-engine/types.ts:644](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L644)
+
+Recipe being validated
+
+***
+
+### context
+
+> **context**: `object`
+
+Defined in: [recipe-engine/types.ts:647](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L647)
+
+Validation context
+
+#### timestamp
+
+> **timestamp**: `Date`
+
+Validation timestamp
+
+#### validatorVersion
+
+> **validatorVersion**: `string`
+
+Validator version
+
+#### scope
+
+> **scope**: `"syntax"` \| `"semantic"` \| `"full"`
+
+Validation scope

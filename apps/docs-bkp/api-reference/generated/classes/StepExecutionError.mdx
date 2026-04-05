@@ -1,0 +1,78 @@
+---
+title: "StepExecutionError"
+description: "StepExecutionError class reference and API documentation"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / StepExecutionError
+
+Defined in: [recipe-engine/types.ts:900](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L900)
+
+## Extends
+
+- `Error`
+
+## Constructors
+
+### Constructor
+
+> **new StepExecutionError**(`message`, `stepName`, `toolType`, `cause?`): `StepExecutionError`
+
+Defined in: [recipe-engine/types.ts:901](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L901)
+
+#### Parameters
+
+##### message
+
+`string`
+
+##### stepName
+
+`string`
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+##### cause?
+
+`Error`
+
+#### Returns
+
+`StepExecutionError`
+
+#### Overrides
+
+`Error.constructor`
+
+## Properties
+
+### stepName
+
+> **stepName**: `string`
+
+Defined in: [recipe-engine/types.ts:903](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L903)
+
+***
+
+### toolType
+
+> **toolType**: [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+Defined in: [recipe-engine/types.ts:904](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L904)
+
+***
+
+### cause?
+
+> `optional` **cause**: `Error`
+
+Defined in: [recipe-engine/types.ts:905](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L905)
+
+#### Inherited from
+
+`Error.cause`

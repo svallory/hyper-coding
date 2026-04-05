@@ -1,0 +1,22 @@
+---
+title: "StepByTool"
+description: "Utility type for extracting step types"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / StepByTool
+
+> **StepByTool**\<`T`\> = `T` *extends* `"template"` ? [`TemplateStep`](/api-reference/generated/interfaces/TemplateStep.mdx) : `T` *extends* `"action"` ? [`ActionStep`](/api-reference/generated/interfaces/ActionStep.mdx) : `T` *extends* `"codemod"` ? [`CodeModStep`](/api-reference/generated/interfaces/CodeModStep.mdx) : `T` *extends* `"recipe"` ? [`RecipeStep`](/api-reference/generated/interfaces/RecipeStep.mdx) : `never`
+
+Defined in: [recipe-engine/types.ts:879](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L879)
+
+Utility type for extracting step types
+
+## Type Parameters
+
+### T
+
+`T` *extends* [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)

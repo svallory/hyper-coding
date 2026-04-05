@@ -1,0 +1,162 @@
+---
+title: "RecipeExecutionResult"
+description: "Recipe execution result"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeExecutionResult
+
+Defined in: [recipe-engine/recipe-engine.ts:136](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L136)
+
+Recipe execution result
+
+## Properties
+
+### executionId
+
+> **executionId**: `string`
+
+Defined in: [recipe-engine/recipe-engine.ts:138](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L138)
+
+Execution ID
+
+***
+
+### recipe
+
+> **recipe**: [`RecipeConfig`](/api-reference/generated/interfaces/RecipeConfig.mdx)
+
+Defined in: [recipe-engine/recipe-engine.ts:141](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L141)
+
+Recipe that was executed
+
+***
+
+### success
+
+> **success**: `boolean`
+
+Defined in: [recipe-engine/recipe-engine.ts:144](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L144)
+
+Overall execution status
+
+***
+
+### stepResults
+
+> **stepResults**: [`StepResult`](/api-reference/generated/interfaces/StepResult.mdx)[]
+
+Defined in: [recipe-engine/recipe-engine.ts:147](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L147)
+
+Step execution results
+
+***
+
+### duration
+
+> **duration**: `number`
+
+Defined in: [recipe-engine/recipe-engine.ts:150](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L150)
+
+Total execution time in milliseconds
+
+***
+
+### filesCreated
+
+> **filesCreated**: `string`[]
+
+Defined in: [recipe-engine/recipe-engine.ts:153](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L153)
+
+Files created during execution
+
+***
+
+### filesModified
+
+> **filesModified**: `string`[]
+
+Defined in: [recipe-engine/recipe-engine.ts:156](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L156)
+
+Files modified during execution
+
+***
+
+### filesDeleted
+
+> **filesDeleted**: `string`[]
+
+Defined in: [recipe-engine/recipe-engine.ts:159](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L159)
+
+Files deleted during execution
+
+***
+
+### errors
+
+> **errors**: `string`[]
+
+Defined in: [recipe-engine/recipe-engine.ts:162](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L162)
+
+Execution errors
+
+***
+
+### warnings
+
+> **warnings**: `string`[]
+
+Defined in: [recipe-engine/recipe-engine.ts:165](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L165)
+
+Execution warnings
+
+***
+
+### variables
+
+> **variables**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/recipe-engine.ts:168](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L168)
+
+Final resolved variables
+
+***
+
+### metadata
+
+> **metadata**: `object`
+
+Defined in: [recipe-engine/recipe-engine.ts:171](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/recipe-engine.ts#L171)
+
+Execution metadata
+
+#### startTime
+
+> **startTime**: `Date`
+
+#### endTime
+
+> **endTime**: `Date`
+
+#### workingDir
+
+> **workingDir**: `string`
+
+#### totalSteps
+
+> **totalSteps**: `number`
+
+#### completedSteps
+
+> **completedSteps**: `number`
+
+#### failedSteps
+
+> **failedSteps**: `number`
+
+#### skippedSteps
+
+> **skippedSteps**: `number`

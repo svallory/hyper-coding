@@ -1,0 +1,199 @@
+---
+title: "Advanced Patterns"
+description: "Composing recipes, conditional generation, parallel steps, and multi-template workflows"
+icon: "code"
+og:title: "Advanced Patterns"
+og:description: "Composing recipes, conditional generation, parallel steps, and multi-template workflows"
+---
+
+# Advanced Patterns
+
+These are the patterns you reach for when a single template isn't enough. Each one leads with what you run and what you get.
+
+## Multi-Template Recipes
+
+A recipe ties multiple templates together in a single workflow. Steps can depend on each other and share outputs.
+
+```bash
+hyper gen fullstack-feature --name=UserProfile
+```
+
+```yaml title="recipes/fullstack-feature/recipe.yml"
+name: fullstack-feature
+description: Generate an API route, React component, and test in one shot
+
+steps:
+  - name: api-route
+    tool: template
+    template: express-route
+    with:
+      name: "{{ name }}"
+      method: GET
+
+  - name: ui-component
+    tool: template
+    template: react-component
+    depends_on: [api-route]
+    with:
+      name: "{{ name | pascalCase }}"
+      endpoint: "{{ steps.api-route.exports.path }}"
+
+  - name: integration-test
+    tool: template
+    template: vitest-integration
+    depends_on: [api-route, ui-component]
+    with:
+      name: "{{ name }}"
+```
+
+The recipe engine resolves `depends_on` into a topological sort and runs independent steps in parallel.
+
+## Conditional File Generation
+
+Use `when:` in template frontmatter to skip files based on variables.
+
+```bash
+hyper gen component --name=DataTable --with-tests --with-stories
+```
+
+```yaml title="templates/component/recipe.yml"
+name: component
+variables:
+  name:
+    type: string
+    required: true
+  withTests:
+    type: boolean
+    default: true
+  withStories:
+    type: boolean
+    default: false
+
+steps:
+  - name: component-file
+    tool: template
+    template: component.tsx.jig
+    with:
+      name: "{{ name }}"
+
+  - name: test-file
+    tool: template
+    template: component.test.tsx.jig
+    when: "{{ withTests }}"
+    with:
+      name: "{{ name }}"
+
+  - name: story-file
+    tool: template
+    template: component.stories.tsx.jig
+    when: "{{ withStories }}"
+    with:
+      name: "{{ name }}"
+```
+
+## Parallel Execution
+
+Wrap independent steps in a `parallel` tool to run them concurrently.
+
+```yaml title="recipes/setup-monorepo-pkg/recipe.yml"
+steps:
+  - name: scaffold-sources
+    tool: parallel
+    steps:
+      - name: src-index
+        tool: template
+        template: pkg-index.ts.jig
+      - name: pkg-json
+        tool: template
+        template: package.json.jig
+      - name: tsconfig
+        tool: template
+        template: tsconfig.json.jig
+
+  - name: install-deps
+    tool: install
+    depends_on: [scaffold-sources]
+    packages: [typescript, tsup]
+    dev: true
+```
+
+## Step Output Piping
+
+Steps export values that downstream steps can reference.
+
+```yaml title="recipes/gen-and-register/recipe.yml"
+steps:
+  - name: gen-model
+    tool: template
+    template: prisma-model.jig
+    with:
+      name: "{{ name }}"
+    exports:
+      modelPath: "{{ output.path }}"
+
+  - name: register-model
+    tool: template
+    template: prisma-schema-append.jig
+    depends_on: [gen-model]
+    with:
+      modelPath: "{{ steps.gen-model.exports.modelPath }}"
+```
+
+## AI-Assisted Generation
+
+Use the `@ai` tag inside `.jig` templates to fill in context-sensitive content at generation time.
+
+```jig title="templates/api-route/route.ts.jig"
+---
+to: "src/routes/{{ name | kebabCase }}.ts"
+---
+import { Router } from 'express';
+
+const router = Router();
+
+@ai("Generate CRUD route handlers for a {{ name }} resource. Use async/await. Include error handling.")
+
+export default router;
+```
+
+Run with:
+
+```bash
+hyper gen api-route --name=Order
+```
+
+The engine does a first pass expanding Jig variables, then a second AI pass for the `@ai` blocks.
+
+## Watch Mode
+
+Run a recipe automatically whenever source files change:
+
+```bash
+hyper watch recipes/component --on-change=src/models/**/*.ts
+```
+
+Every time a model file changes, the recipe re-runs with the changed file's name as context. Good for keeping generated code in sync with your data layer.
+
+## Composing Kits
+
+A kit can expose its own recipes that other kits call:
+
+```yaml title="hyper-kits/nextjs/recipes/page/recipe.yml"
+name: page
+steps:
+  - name: page-file
+    tool: template
+    template: page.tsx.jig
+  - name: route-types
+    tool: recipe
+    recipe: "@hypercli/nextjs/route-types"
+    with:
+      page: "{{ name }}"
+```
+
+Install the kit, then run its recipes directly:
+
+```bash
+hyper kit install nextjs
+hyper nextjs page --name=Dashboard
+```

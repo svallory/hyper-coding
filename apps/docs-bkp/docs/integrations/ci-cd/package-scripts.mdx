@@ -1,0 +1,94 @@
+---
+title: "Package.json Scripts"
+description: "Wire HyperDev commands into your package.json scripts for a consistent team workflow."
+icon: "package"
+og:title: "Package.json Scripts Integration"
+og:description: "Wire HyperDev commands into your package.json scripts for a consistent team workflow."
+---
+
+# Package.json Scripts Integration
+
+The easiest way to standardize HyperDev in your project is through `package.json` scripts. Your team already knows how to run `bun run build` — no extra onboarding needed.
+
+## Basic integration
+
+A minimal starting point:
+
+```json
+{
+  "scripts": {
+    "gen": "hyper gen",
+    "gen:component": "hyper gen component",
+    "gen:page": "hyper gen page",
+    "gen:api": "hyper gen api-route",
+    "templates:list": "hyper list templates",
+    "templates:search": "hyper search"
+  }
+}
+```
+
+These are the commands your team will use daily. Keep it short — don't add scripts for things you won't actually run.
+
+## Development workflow
+
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"hyper watch\" \"next dev\"",
+    "build": "bun test && next build",
+    "lint": "biome check ./src",
+    "lint:fix": "biome check --write ./src",
+    "typecheck": "tsc --noEmit"
+  }
+}
+```
+
+<Info>
+  Note `hyper watch`, not `hyper tools --watch`. `hyper watch` is real-time monitoring. `hyper tools` is one-time setup.
+</Info>
+
+## Generation scripts
+
+Scripts for the generation tasks you run most often:
+
+```json
+{
+  "scripts": {
+    "gen:component": "hyper gen component",
+    "gen:page": "hyper gen page",
+    "gen:api": "hyper gen api-route",
+    "gen:dry-run": "hyper gen --dry-run"
+  }
+}
+```
+
+## Release prep
+
+Wire generation into your release workflow:
+
+```json
+{
+  "scripts": {
+    "release:prepare": "bun test && bun run build",
+    "prepublishOnly": "bun run release:prepare"
+  }
+}
+```
+
+## Onboarding
+
+A single script new team members can run to get set up:
+
+```json
+{
+  "scripts": {
+    "setup": "hyper tools setup && bun install"
+  }
+}
+```
+
+This runs the guided `hyper tools setup` flow (linters, MCP servers, etc.) and installs dependencies. One command to go from a fresh clone to a working dev environment.
+
+---
+
+Once these scripts are in place, HyperDev is just part of the normal `bun run` repertoire. Nobody needs to remember flags.

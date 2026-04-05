@@ -1,0 +1,405 @@
+---
+title: "Tutorial"
+description: "Hands-on tutorial: install Hyper, generate a Next.js project, explore recipes and Jig templates, then build your own"
+icon: "graduation-cap"
+og:title: "Hyper Tutorial"
+og:description: "Hands-on tutorial: install Hyper, generate a Next.js project, explore recipes and Jig templates, then build your own"
+---
+
+# Getting Started Tutorial
+
+> **From zero to your first custom template in about 30 minutes.**
+
+You'll install the Hyper CLI, generate a real Next.js project scaffold, read the recipe and templates that produced it, then write your own recipe and Jig template and run it.
+
+<Info>
+  **Prerequisites:** Node.js 20+, [Bun](https://bun.sh/docs/installation), Git.
+</Info>
+
+---
+
+## Part 1: Install the CLI
+
+Install the `@hypercli/cli` package globally with Bun:
+
+```bash
+bun add -g @hypercli/cli
+```
+
+Verify it works:
+
+```bash
+hyper --version
+```
+
+You should see a version string like `0.4.0`.
+
+---
+
+## Part 2: Install a Kit
+
+Kits are collections of recipes and templates. The `nextjs` kit ships recipes for scaffolding Next.js projects, pages, components, API routes, and more.
+
+Install it into your project (or a new directory you'll use for this tutorial):
+
+```bash
+mkdir hyper-tutorial && cd hyper-tutorial
+hyper kit install hyper-kits/nextjs
+```
+
+Confirm it's registered:
+
+```bash
+hyper kit list
+```
+
+---
+
+## Part 3: Generate a Next.js Project
+
+Run the `nextjs project create` recipe:
+
+```bash
+hyper gen nextjs project create --name my-app
+```
+
+Hyper will prompt for any variables not supplied on the command line (description, src directory layout, linter choice). Accept the defaults for now.
+
+When it finishes you'll have a `my-app/` directory ready to install and run:
+
+```bash
+cd my-app
+bun install
+bun run dev
+```
+
+Open `http://localhost:3000` to see your new project.
+
+---
+
+## Part 4: Explore the Recipe
+
+Let's read the recipe that just ran. Open the file from your installed kit:
+
+```
+hyper-kits/nextjs/cookbooks/project/create/recipe.yml
+```
+
+Here is the real recipe:
+
+```yaml
+name: create
+description: Create the Next.js project file structure with Tailwind CSS and TypeScript
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    required: true
+    position: 1
+  description:
+    type: string
+    default: "A Next.js application"
+  useSrcDir:
+    type: boolean
+    default: false
+  linter:
+    type: enum
+    values: [eslint, biome, none]
+    default: eslint
+
+steps:
+  - name: Create directory structure (with src)
+    tool: ensure-dirs
+    when: "useSrcDir === true"
+    paths:
+      - "{{ name }}/public"
+      - "{{ name }}/src/app"
+
+  - name: Create directory structure (without src)
+    tool: ensure-dirs
+    when: "useSrcDir === false"
+    paths:
+      - "{{ name }}/public"
+      - "{{ name }}/app"
+
+  - name: Generate project files
+    sequence:
+      - name: Generate package.json
+        template: templates/package.json.jig
+      - name: Generate tsconfig.json
+        template: templates/tsconfig.json.jig
+      - name: Generate next.config.ts
+        template: templates/next.config.ts.jig
+      - name: Generate ESLint config
+        template: templates/eslint.config.mjs.jig
+        when: "linter === 'eslint'"
+      - name: Generate Biome config
+        template: templates/biome.json.jig
+        when: "linter === 'biome'"
+
+  - name: Generate app files
+    sequence:
+      - name: Generate globals.css
+        template: templates/app/globals.css.jig
+      - name: Generate layout.tsx
+        template: templates/app/layout.tsx.jig
+      - name: Generate page.tsx
+        template: templates/app/page.tsx.jig
+
+  - name: Install nextjs kit in the new project
+    tool: shell
+    command: "cd {{ name }} && hyper kit install hyper-kits/nextjs"
+```
+
+A few things to notice:
+
+- **`variables`** — named inputs with types, defaults, and optional `position` for positional CLI args.
+- **`tool: ensure-dirs`** — creates the directory structure before writing files.
+- **`when:`** — conditional logic using plain JavaScript expressions. Steps are skipped when the expression is falsy.
+- **`sequence:`** — a group of steps executed in order.
+- **`tool: shell`** — runs an arbitrary shell command. Here it installs the kit inside the generated project.
+- **`template:`** — each entry points to a `.jig` template file relative to the recipe.
+
+<Note>
+  Hyper supports 13 tool types in recipe steps: `template`, `action`, `recipe`, `shell`, `prompt`, `ai`, `install`, `query`, `patch`, `ensure-dirs`, `sequence`, `parallel`, and `conditional`.
+</Note>
+
+---
+
+## Part 5: Explore a Jig Template
+
+Now look at one of the templates the recipe used.
+
+**`templates/app/layout.tsx.jig`:**
+
+```jig
+---
+to: "{{ name }}/{{ useSrcDir ? 'src/' : '' }}app/layout.tsx"
+---
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "{{ capitalize :: name }}",
+  description: "{{ description }}",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" className="h-full">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-full flex flex-col`}
+      >
+        {children}
+      </body>
+    </html>
+  );
+}
+```
+
+And **`templates/package.json.jig`** — which shows conditional blocks:
+
+```jig
+---
+to: "{{ name }}/package.json"
+---
+{
+  "name": "{{ name }}",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    @if(linter == "eslint")
+    "lint": "next lint"
+    @elseif(linter == "biome")
+    "lint": "biome check .",
+    "lint:fix": "biome check --fix ."
+    @else
+    "typecheck": "tsc --noEmit"
+    @end
+  },
+  "dependencies": {
+    "next": "^16.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}
+```
+
+### Jig syntax at a glance
+
+| Syntax | Description |
+|--------|-------------|
+| `{{ variable }}` | Output a variable |
+| `{{ camelCase :: name }}` | Apply a pipe filter to a variable |
+| `{{ useSrcDir ? 'src/' : '' }}` | Inline JavaScript expression |
+| `@if(expr) ... @elseif(expr) ... @else ... @end` | Conditional block |
+| `@each(items) ... @end` | Loop over an array |
+| `@let(x = expr)` | Declare a local variable |
+
+**YAML frontmatter fields:**
+
+| Field | Description |
+|-------|-------------|
+| `to:` | Output file path — supports Jig expressions |
+| `inject:` | Set to `true` to inject into an existing file instead of creating one |
+| `when:` | Skip the template unless this expression is truthy |
+| `after:` | Injection point — insert content after the first line matching this string |
+
+<Info>
+  Jig is an Edge.js fork. Full language reference: [jig.saulo.engineer](https://jig.saulo.engineer)
+</Info>
+
+---
+
+## Part 6: Write Your Own Jig Template
+
+Create a new directory for your recipe and a template inside it:
+
+```bash
+mkdir -p my-recipe/templates
+```
+
+**`my-recipe/templates/component.tsx.jig`:**
+
+```jig
+---
+to: "src/components/{{ pascalCase :: name }}/{{ pascalCase :: name }}.tsx"
+---
+import React from "react";
+
+interface {{ pascalCase :: name }}Props {
+  @if(withLabel)
+  label: string;
+  @endif
+  children?: React.ReactNode;
+}
+
+export function {{ pascalCase :: name }}({
+  @if(withLabel)
+  label,
+  @endif
+  children,
+}: {{ pascalCase :: name }}Props) {
+  return (
+    <div className="{{ kebabCase :: name }}">
+      @if(withLabel)
+      <span className="{{ kebabCase :: name }}__label">{label}</span>
+      @endif
+      {children}
+    </div>
+  );
+}
+```
+
+What this template demonstrates:
+
+- **`{{ pascalCase :: name }}`** — transforms `my-button` into `MyButton` anywhere in the output.
+- **`{{ kebabCase :: name }}`** — transforms it into `my-button` for CSS class names.
+- **`@if(withLabel) ... @endif`** — conditionally includes props and JSX when `withLabel` is truthy.
+- **`to:`** — the output path is itself a Jig expression, so `--name my-button` writes to `src/components/MyButton/MyButton.tsx`.
+
+---
+
+## Part 7: Write Your Own Recipe
+
+Create **`my-recipe/recipe.yml`**:
+
+```yaml
+name: component
+description: Generate a React component
+version: 1.0.0
+
+variables:
+  name:
+    type: string
+    required: true
+    position: 1
+    description: Component name (e.g. my-button)
+  withLabel:
+    type: boolean
+    default: false
+    description: Include a label prop
+
+steps:
+  - name: Generate component
+    template: templates/component.tsx.jig
+```
+
+The recipe declares two variables:
+- `name` at `position: 1` so it can be passed as a positional argument after the recipe path.
+- `withLabel` with a default of `false`, overridable with `--withLabel`.
+
+---
+
+## Part 8: Run Your Recipe
+
+From the `hyper-tutorial/` directory:
+
+```bash
+hyper gen ./my-recipe/recipe.yml MyButton --withLabel
+```
+
+You should see:
+
+```
+✓ Recipe completed successfully
+  Steps completed: 1
+  Files created: 1
+```
+
+Check the output:
+
+```bash
+cat src/components/MyButton/MyButton.tsx
+```
+
+Run it again without the flag to see the conditional output difference:
+
+```bash
+hyper gen ./my-recipe/recipe.yml MyButton --force
+```
+
+<Tip>
+  Use `--dry` to preview what would be generated without writing any files.
+  Use `--force` to overwrite existing files.
+</Tip>
+
+---
+
+## What's Next?
+
+You now know the full cycle: install a kit, run a recipe, read the recipe and templates that drove it, and write your own.
+
+<CardGroup cols={2}>
+  <Card title="Jig Template Reference" icon="code" href="https://jig.saulo.engineer">
+    Full Jig language docs: all syntax, filters, and directives
+  </Card>
+  <Card title="Creating Templates" icon="file-code" href="/templates/creating-templates">
+    Deep dive into Jig templates — frontmatter fields, all filters, the @ai tag, and complete examples
+  </Card>
+  <Card title="Recipe Reference" icon="list-check" href="/recipes/reference">
+    All 13 recipe tool types with full option reference
+  </Card>
+  <Card title="Kit Management" icon="box" href="/kits/managing-kits">
+    Install, update, and create your own kits
+  </Card>
+</CardGroup>

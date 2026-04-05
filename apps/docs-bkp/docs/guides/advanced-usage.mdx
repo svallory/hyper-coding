@@ -1,0 +1,225 @@
+---
+title: "Advanced Usage"
+description: "Template composition, batch generation, watch mode, debugging, and configuration for complex workflows"
+icon: "document-text"
+og:title: "Advanced Usage"
+og:description: "Template composition, batch generation, watch mode, debugging, and configuration for complex workflows"
+---
+
+# Advanced Usage
+
+Once you're past the basics, here's what HyperDev can do when you push it harder.
+
+## Multi-Step Recipe Composition
+
+When one template isn't enough, wire multiple templates into a recipe with dependencies. This generates a full-stack feature — API route, frontend component, and integration test — in the right order:
+
+```yaml recipes/fullstack-feature/recipe.yml
+name: fullstack-feature
+description: Generate backend route, React component, and integration test together
+
+steps:
+  - name: api-route
+    tool: template
+    template: express-route
+    with:
+      name: "{{ name }}"
+      method: GET
+
+  - name: ui-component
+    tool: template
+    template: react-component
+    depends_on: [api-route]
+    with:
+      name: "{{ name | pascalCase }}"
+      endpoint: "{{ steps.api-route.exports.path }}"
+
+  - name: tests
+    tool: template
+    template: vitest-integration
+    depends_on: [api-route, ui-component]
+    with:
+      name: "{{ name }}"
+```
+
+```bash
+hyper gen fullstack-feature --name=UserProfile
+```
+
+Steps with no dependencies run in parallel automatically. The recipe engine uses topological sort to figure out the execution order.
+
+## Template Inheritance
+
+Define a base recipe with shared variables and steps, then extend it in more specific recipes:
+
+```yaml recipes/base-component/recipe.yml
+name: base-component
+variables:
+  name:
+    type: string
+    required: true
+  styling:
+    type: enum
+    values: ['css-modules', 'tailwind']
+    default: 'css-modules'
+```
+
+```yaml recipes/react-component/recipe.yml
+extends: base-component
+name: react-component
+
+variables:
+  withTests:
+    type: boolean
+    default: true
+
+steps:
+  - name: component
+    tool: template
+    template: component.tsx.jig
+  - name: test
+    tool: template
+    template: component.test.tsx.jig
+    when: "{{ withTests }}"
+```
+
+## Batch Generation
+
+Generate multiple items at once by scripting `hyper gen` in a loop:
+
+```bash
+for name in UserCard ProfileCard SettingsCard; do
+  hyper gen react-component --name=$name --output=./src/components/
+done
+```
+
+Or pass a data file and use a shell step in your recipe:
+
+```yaml
+steps:
+  - name: gen-models
+    tool: shell
+    command: |
+      for model in $(cat models.txt); do
+        hyper gen prisma-model --name=$model
+      done
+```
+
+## Watch Mode
+
+Re-run a recipe automatically when source files change:
+
+```bash
+hyper watch recipes/api-route --on-change=src/models/**/*.ts
+```
+
+Useful when you have generated code that should stay in sync with a source file (e.g., regenerate API types whenever your Prisma schema changes).
+
+## hyper plan
+
+Before running a recipe, see exactly what it will generate:
+
+```bash
+hyper plan fullstack-feature --name=Invoice
+```
+
+Shows each step, the files it would write, and whether any already exist. Nothing is written. Good habit before running a recipe in an unfamiliar project.
+
+## Configuration
+
+### Source discovery
+
+Point HyperDev at your template directories and trusted remote sources:
+
+```javascript hypergen.config.js
+export default {
+  templates: ['recipes', 'cookbooks'],
+  discovery: {
+    sources: ['local', 'npm', 'workspace'],
+    directories: ['recipes', 'cookbooks', '_templates'],
+    exclude: ['node_modules', '.git', 'dist'],
+  },
+}
+```
+
+### Conflict strategy
+
+Controls what happens when a generated file already exists:
+
+```javascript hypergen.config.js
+export default {
+  output: {
+    conflictStrategy: 'fail', // fail | overwrite | skip | merge
+  },
+  environments: {
+    development: {
+      output: { conflictStrategy: 'overwrite' },
+    },
+  },
+}
+```
+
+`fail` is the safe default — you won't accidentally clobber a file you've edited by hand. Switch to `overwrite` in dev when you're iterating on the template itself.
+
+## Template Testing
+
+Templates are code; they should have tests. Generate and validate output with a test recipe:
+
+```yaml recipes/test-react-component/recipe.yml
+name: test-react-component
+steps:
+  - name: generate
+    tool: recipe
+    recipe: react-component
+    with:
+      name: TestWidget
+      withTests: true
+
+  - name: validate
+    tool: shell
+    command: bun run tsc --noEmit && bun test src/components/TestWidget
+    depends_on: [generate]
+```
+
+Run it in CI to confirm template output compiles and passes tests before merging template changes.
+
+## Debugging
+
+### Show resolved config
+
+```bash
+hyper config show --verbose
+```
+
+### Debug recipe execution
+
+```bash
+DEBUG=hyperdev:* hyper gen react-component --name=Debug
+```
+
+### Profile slow generation
+
+```bash
+HYPERDEV_PROFILE=true hyper gen complex-recipe --name=Foo \
+  --profile-output=./profiles/trace.json
+```
+
+Load `trace.json` in Chrome DevTools Performance tab to see where time is going.
+
+## hyper dash
+
+An interactive dashboard showing all available recipes, recent generation history, and kit status:
+
+```bash
+hyper dash
+```
+
+## hyper hq
+
+Kit registry and management — install, update, and inspect the kits available in your project:
+
+```bash
+hyper hq
+hyper kit install nextjs
+hyper kit list
+```

@@ -1,0 +1,228 @@
+---
+title: "Webpack Integration Architecture"
+description: "Technical reference for HyperDev Webpack integration — custom loader implementation, plugin configuration options table, and dev/prod split configs"
+---
+
+<Info>
+  This is an architecture reference. For usage docs, see [Webpack Integration](/integrations/webpack).
+</Info>
+
+## Full Webpack Plugin Configuration
+
+```javascript
+// webpack.config.js
+const HyperDevPlugin = require('@hyperdev/webpack-plugin')
+const path = require('path')
+
+module.exports = {
+  plugins: [
+    new HyperDevPlugin({
+      // Template validation during build
+      validateTemplates: true,
+
+      // Auto-generate files based on templates
+      autoGenerate: {
+        enabled: true,
+        patterns: ['src/**/*.template.yml'],
+        outputDir: 'src/generated'
+      },
+
+      // Quality gates integration
+      qualityGates: {
+        enabled: process.env.NODE_ENV === 'production',
+        failOnError: true,
+        rules: ['typescript', 'eslint', 'security', 'performance']
+      },
+
+      // Template hot reload in development
+      hotReload: process.env.NODE_ENV === 'development'
+    })
+  ],
+  module: {
+    rules: [
+      {
+        test: /\.ejs\.t$/,
+        use: '@hyperdev/template-loader',
+        exclude: /node_modules/
+      }
+    ]
+  }
+}
+```
+
+## Plugin Configuration Options Table
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `validateTemplates` | boolean | Validate templates on each build | `false` |
+| `autoGenerate.enabled` | boolean | Auto-generate from template files | `false` |
+| `autoGenerate.patterns` | string[] | Glob patterns for template files | `['src/**/*.template.yml']` |
+| `autoGenerate.outputDir` | string | Output directory for generated files | `'src/generated'` |
+| `qualityGates.enabled` | boolean | Enable quality gates | `false` |
+| `qualityGates.failOnError` | boolean | Fail build on quality gate failure | `true` |
+| `qualityGates.rules` | string[] | Quality gate rule set | `['typescript', 'eslint']` |
+| `hotReload` | boolean | Enable hot reload for templates | `false` |
+| `templates.patterns` | string[] | File patterns to watch | `['**/*.template.yml']` |
+| `templates.compile.sourceMap` | boolean | Include source maps | `false` |
+| `templates.compile.minify` | boolean | Minify template output | `false` |
+| `validation.onBuild` | boolean | Validate every build | `true` |
+| `validation.onWatch` | boolean | Validate on file change | `true` |
+| `build.manifest` | boolean | Generate manifest file | `false` |
+| `build.metadata` | boolean | Include metadata in output | `false` |
+| `build.clean` | boolean | Clean generated files before build | `false` |
+
+## Template Loader Configuration
+
+```javascript
+// webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.ejs\.t$/,
+        use: {
+          loader: '@hyperdev/template-loader',
+          options: {
+            cache: true,
+            validate: true,
+            sourceMap: process.env.NODE_ENV === 'development'
+          }
+        }
+      },
+      {
+        test: /\.template\.yml$/,
+        use: {
+          loader: '@hyperdev/config-loader',
+          options: {
+            validate: true,
+            track: true    // Include in Webpack dependency graph
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+## Custom Loader Implementation
+
+```javascript
+// loaders/hyperdev-schema-loader.js
+module.exports = function(source) {
+  const callback = this.async()
+  const hyperdev = require('@hyperdev/core')
+
+  hyperdev.processSchema(source)
+    .then(result => {
+      callback(null, result)
+    })
+    .catch(error => {
+      callback(error)
+    })
+}
+```
+
+## Development Config
+
+```javascript
+// webpack.dev.js
+const { merge } = require('webpack-merge')
+const common = require('./webpack.common.js')
+const HyperDevPlugin = require('@hyperdev/webpack-plugin')
+
+module.exports = merge(common, {
+  mode: 'development',
+  devServer: {
+    hot: true,
+    proxy: {
+      '/hyperdev': {
+        target: 'http://localhost:4000',
+        changeOrigin: true
+      }
+    }
+  },
+  plugins: [
+    new HyperDevPlugin({
+      dev: {
+        hotReload: true,
+        watchTemplates: true,
+        liveValidation: true
+      }
+    })
+  ]
+})
+```
+
+## Production Config
+
+```javascript
+// webpack.prod.js
+const { merge } = require('webpack-merge')
+const common = require('./webpack.common.js')
+const HyperDevPlugin = require('@hyperdev/webpack-plugin')
+
+module.exports = merge(common, {
+  mode: 'production',
+  plugins: [
+    new HyperDevPlugin({
+      production: {
+        strictValidation: true,
+        optimizeOutput: true,
+        failOnQualityGate: true,
+        generateReport: true
+      },
+      qualityGates: {
+        enabled: true,
+        strict: true,
+        rules: ['typescript', 'eslint', 'security', 'performance', 'accessibility']
+      }
+    })
+  ]
+})
+```
+
+## Advanced Plugin Configuration
+
+```javascript
+// webpack.config.js — full advanced options
+new HyperDevPlugin({
+  templates: {
+    patterns: ['src/**/*.template.yml', 'templates/**/*.ejs.t'],
+    outputDir: 'src/generated',
+    compile: {
+      sourceMap: true,
+      minify: process.env.NODE_ENV === 'production'
+    }
+  },
+
+  validation: {
+    onBuild: true,
+    onWatch: true,
+    rules: {
+      syntax: true,
+      security: true,
+      performance: true
+    }
+  },
+
+  build: {
+    manifest: true,
+    metadata: true,
+    clean: true
+  }
+})
+```
+
+## package.json Scripts
+
+```json
+{
+  "scripts": {
+    "dev": "concurrently \"hyperdev dev --watch\" \"webpack serve --config webpack.dev.js\"",
+    "build": "hyperdev validate --all && webpack --config webpack.prod.js",
+    "build:analyze": "webpack-bundle-analyzer dist/stats.json",
+    "hyperdev:validate": "hyperdev validate --all",
+    "hyperdev:gen": "hyperdev gen"
+  }
+}
+```

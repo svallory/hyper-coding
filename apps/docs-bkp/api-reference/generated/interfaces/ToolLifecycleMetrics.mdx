@@ -1,0 +1,134 @@
+---
+title: "ToolLifecycleMetrics"
+description: "Tool lifecycle metrics"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / ToolLifecycleMetrics
+
+Defined in: [recipe-engine/tools/base.ts:46](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L46)
+
+Tool lifecycle metrics
+
+## Properties
+
+### startTime
+
+> **startTime**: `Date`
+
+Defined in: [recipe-engine/tools/base.ts:48](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L48)
+
+Tool execution start time
+
+***
+
+### endTime?
+
+> `optional` **endTime**: `Date`
+
+Defined in: [recipe-engine/tools/base.ts:51](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L51)
+
+Tool execution end time
+
+***
+
+### duration?
+
+> `optional` **duration**: `number`
+
+Defined in: [recipe-engine/tools/base.ts:54](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L54)
+
+Total execution duration in milliseconds
+
+***
+
+### validationDuration?
+
+> `optional` **validationDuration**: `number`
+
+Defined in: [recipe-engine/tools/base.ts:57](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L57)
+
+Validation duration in milliseconds
+
+***
+
+### executionDuration?
+
+> `optional` **executionDuration**: `number`
+
+Defined in: [recipe-engine/tools/base.ts:60](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L60)
+
+Execution duration in milliseconds
+
+***
+
+### cleanupDuration?
+
+> `optional` **cleanupDuration**: `number`
+
+Defined in: [recipe-engine/tools/base.ts:63](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L63)
+
+Cleanup duration in milliseconds
+
+***
+
+### peakMemoryUsage?
+
+> `optional` **peakMemoryUsage**: `number`
+
+Defined in: [recipe-engine/tools/base.ts:66](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L66)
+
+Peak memory usage during execution
+
+***
+
+### retryAttempts
+
+> **retryAttempts**: `number`
+
+Defined in: [recipe-engine/tools/base.ts:69](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L69)
+
+Number of retry attempts
+
+***
+
+### cleanupCompleted
+
+> **cleanupCompleted**: `boolean`
+
+Defined in: [recipe-engine/tools/base.ts:72](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L72)
+
+Whether cleanup was completed successfully
+
+***
+
+### events
+
+> **events**: `object`[]
+
+Defined in: [recipe-engine/tools/base.ts:75](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L75)
+
+Lifecycle events log
+
+#### phase
+
+> **phase**: [`ToolPhase`](/api-reference/generated/type-aliases/ToolPhase.mdx)
+
+#### timestamp
+
+> **timestamp**: `Date`
+
+#### success
+
+> **success**: `boolean`
+
+#### error?
+
+> `optional` **error**: `string`
+
+#### metadata?
+
+> `optional` **metadata**: `Record`\<`string`, `any`\>

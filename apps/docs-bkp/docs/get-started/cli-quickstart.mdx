@@ -1,0 +1,168 @@
+---
+title: "Quickstart"
+description: "Get started with HyperDev CLI in 5 minutes - from installation to your first AI-generated code"
+icon: "rocket"
+og:title: "Hyperdev CLI Quickstart"
+og:description: "Get started with HyperDev CLI in 5 minutes - from installation to your first AI-generated code"
+---
+
+# 5-Minute CLI Quickstart
+
+Here's the short version: install the CLI, grab a kit, run a recipe, get code. That's the loop. Everything else builds on top of it.
+
+## Prerequisites
+
+- Node.js 18+ or Bun installed
+- An Anthropic or OpenAI API key
+- A project to generate code into
+
+## Step 1: Install the CLI
+
+<CodeGroup>
+```bash bun (Recommended)
+bun add -g @hypercli/cli
+```
+
+```bash npm
+npm install -g @hypercli/cli
+```
+</CodeGroup>
+
+Verify it landed:
+```bash
+hyper --version
+```
+
+## Step 2: Initialize Your Project
+
+Run this from the root of your project:
+
+```bash
+hyper init
+```
+
+That sets up Hyper's config in the current directory. It won't overwrite anything you already have.
+
+## Step 3: Install a Kit
+
+Kits are collections of recipes --- the actual generation logic. Install one from npm, GitHub, or a local path:
+
+```bash
+# Install from npm
+hyper kit install @hypercli/kit-nextjs
+
+# Or from GitHub
+hyper kit install github:your-org/your-kit
+
+# See what you've got
+hyper kit list
+```
+
+## Step 4: Run a Recipe
+
+With a kit installed, run one of its recipes:
+
+```bash
+# Run a named recipe from a kit
+hyper gen nextjs/crud list
+
+# Same thing, shorthand (no 'gen' prefix needed)
+hyper nextjs crud list
+
+# Run a local recipe file
+hyper recipe run ./my-recipe.yml
+```
+
+Not sure what recipes a kit has? Check:
+
+```bash
+hyper recipe list nextjs
+hyper recipe info nextjs/crud
+```
+
+## Step 5: Manage Sessions with HQ
+
+`hyper hq` handles persistent Claude Code sessions via tmux; it's how you keep long-running AI work going across terminal windows.
+
+```bash
+# Start the always-on HQ session
+hyper hq start
+
+# Launch a Claude session for your current project
+hyper hq launch
+
+# See what's running
+hyper hq status
+
+# Attach to a session
+hyper hq attach
+```
+
+<Tip>
+  HQ requires tmux. If you don't have it, `brew install tmux` on macOS or check your distro's package manager.
+</Tip>
+
+## What's Coming
+
+Several tools are still in development --- `hyper plan`, `hyper watch`, and `hyper dash` aren't available yet. The [CLI overview](/cli/overview) tracks current status for each.
+
+## Next Steps
+
+<Steps>
+  <Step title="Learn the Commands">
+    The [commands reference](/cli/commands/overview) covers every flag and option
+  </Step>
+  <Step title="Browse Available Kits">
+    Find kits to install and recipes to run
+  </Step>
+  <Step title="Build Your Own Kit">
+    Write custom recipes for your team's specific workflows
+  </Step>
+</Steps>
+
+## Quick Reference
+
+```bash
+hyper init                        # Initialize Hyper in your project
+hyper kit install <source>        # Install a kit
+hyper kit list                    # List installed kits
+hyper gen <kit/recipe>            # Run a recipe
+hyper recipe list [kit]           # Browse available recipes
+hyper hq start                    # Start HQ session manager
+hyper hq status                   # Check running sessions
+hyper --help                      # Help at any level
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="'hyper' command not found after install">
+    Make sure your global bin directory is on your PATH. With bun:
+    ```bash
+    export PATH="$HOME/.bun/bin:$PATH"
+    ```
+    Add that to your `.bashrc` or `.zshrc` so it persists.
+  </Accordion>
+
+  <Accordion title="Recipe fails with missing kit error">
+    The kit might not be installed, or the name is wrong. Check:
+    ```bash
+    hyper kit list
+    hyper recipe list
+    ```
+    Kit names are case-sensitive.
+  </Accordion>
+
+  <Accordion title="HQ session won't start">
+    HQ needs tmux running. Verify with `tmux -V`. If it's not installed, install it first, then retry `hyper hq start`.
+  </Accordion>
+</AccordionGroup>
+
+<CardGroup cols={2}>
+  <Card title="Commands Reference" icon="terminal" href="/cli/commands/overview">
+    Every command, flag, and example in one place
+  </Card>
+  <Card title="CLI Overview" icon="map" href="/cli/overview">
+    Understand the architecture before going deeper
+  </Card>
+</CardGroup>

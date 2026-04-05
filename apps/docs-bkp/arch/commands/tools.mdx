@@ -1,0 +1,215 @@
+---
+title: "Dev/Tools Command Architecture"
+description: "Technical reference for hyper dev — quality gate config YAML, session config YAML, validation pipeline YAML, monitoring dashboard YAML, and alert config YAML"
+---
+
+<Info>
+  This is an architecture reference. For usage docs, see [hyper tools](/cli/commands/workflow/dev).
+</Info>
+
+## Quality Gate Configuration YAML
+
+```yaml
+# dev-rules.yml
+quality_gates:
+  security:
+    level: "strict"
+    block_on: ["high", "critical"]
+    auto_fix: true
+
+  performance:
+    level: "standard"
+    thresholds:
+      bundle_size: "500kb"
+      first_load: "3s"
+
+  testing:
+    required: true
+    coverage_threshold: 80
+
+  documentation:
+    required_for: ["public_apis", "components"]
+
+  accessibility:
+    level: "wcag_aa"
+    auto_check: true
+```
+
+Apply a custom rules file:
+
+```bash
+hyper dev --watch --quality-gates custom --rules ./dev-rules.yml
+```
+
+## Session Configuration YAML
+
+```javascript
+// hyperdev.config.js — development block
+export default {
+  development: {
+    monitoring: {
+      enabled: true,
+      interval: 1000,         // Check interval in ms
+      debounce: 300,          // Wait after changes in ms
+      focus_areas: ['src', 'lib', 'api']
+    },
+
+    ai: {
+      provider: 'openai',
+      model: 'gpt-4',
+      suggestions: {
+        enabled: true,
+        frequency: 'on_save',  // 'on_save' | 'on_request' | 'continuous'
+        types: ['security', 'performance', 'best_practices']
+      }
+    },
+
+    quality_gates: {
+      security: {
+        level: 'strict',
+        auto_fix: true,
+        block_on: ['critical', 'high']
+      },
+      performance: {
+        bundle_size_limit: '500kb',
+        render_time_limit: '100ms'
+      },
+      testing: {
+        coverage_threshold: 80,
+        required_for_commit: true
+      }
+    },
+
+    notifications: {
+      desktop: true,
+      slack: {
+        webhook: process.env.SLACK_WEBHOOK,
+        channel: '#dev-alerts'
+      }
+    }
+  }
+}
+```
+
+## Validation Pipeline
+
+The validation pipeline runs in layers on every file change:
+
+1. **Syntax** — immediate parse errors and type errors
+2. **Security** — CVE scanning, secret detection, injection patterns
+3. **Performance** — bundle size delta, render timing, memory profile
+4. **Quality** — complexity score, coverage threshold, lint rules
+
+Auto-fixable categories:
+
+```bash
+# Enable all auto-fixes
+hyper dev --watch --auto-fix
+
+# Selective auto-fixing
+hyper dev --watch --auto-fix formatting,imports,types
+```
+
+| Category | Auto-fixable |
+|----------|-------------|
+| Code formatting | Yes (Prettier, ESLint) |
+| Import organization | Yes (sort and clean) |
+| Missing TypeScript types | Yes |
+| Security patches (safe) | Yes |
+| Performance optimizations | Yes (safe subset) |
+| Business logic issues | No |
+
+## Security Alert Schema
+
+Runtime alerts follow this structure in verbose/JSON output:
+
+```json
+{
+  "level": "HIGH",
+  "type": "sql_injection",
+  "file": "src/api/users.ts",
+  "line": 34,
+  "message": "Raw SQL query with user input",
+  "suggestion": "Use parameterized queries or ORM"
+}
+```
+
+Severity levels: `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`.
+
+## Monitoring Dashboard YAML
+
+The dev dashboard config (applies to `hyper dev --dashboard`):
+
+```yaml
+# .hyper/dashboard.yml
+dashboard:
+  panels:
+    - type: code_quality
+      metrics: [complexity, coverage, lint_score]
+      refresh: 5s
+
+    - type: security
+      metrics: [vulnerabilities, secrets, dependency_issues]
+      alert_on: [critical, high]
+      refresh: 10s
+
+    - type: performance
+      metrics: [bundle_size, render_time, memory_usage]
+      thresholds:
+        bundle_size_delta: "+5%"
+      refresh: 30s
+
+    - type: epic_progress
+      epic: current
+      metrics: [task_completion, test_coverage, code_quality]
+      refresh: 60s
+```
+
+## Focus Area Mapping
+
+The `--focus` flag maps to file path patterns:
+
+| Focus value | Watched paths |
+|-------------|--------------|
+| `auth` | `**/auth/**`, `**/authentication/**` |
+| `api` | `**/api/**`, `**/routes/**`, `**/endpoints/**` |
+| `components` | `**/components/**`, `**/ui/**` |
+| `database` | `**/db/**`, `**/models/**`, `**/migrations/**` |
+| Custom string | Glob pattern pass-through |
+
+## Alert Configuration YAML
+
+```yaml
+# .hyper/alerts.yml
+alerts:
+  channels:
+    - type: desktop
+      enabled: true
+
+    - type: slack
+      enabled: true
+      webhook: "${SLACK_WEBHOOK}"
+      channel: "#dev-alerts"
+      levels: [critical, high]
+
+    - type: email
+      enabled: false
+      recipients: ["team@company.com"]
+      levels: [critical]
+
+  rules:
+    - name: bundle_size_spike
+      condition: "bundle_size_delta > 10%"
+      level: medium
+      message: "Bundle size increased by {delta}%"
+
+    - name: coverage_drop
+      condition: "test_coverage < 80"
+      level: high
+      message: "Test coverage dropped to {coverage}%"
+
+    - name: security_vulnerability
+      condition: "vulnerability.level in [critical, high]"
+      level: critical
+      message: "Security vulnerability detected: {vulnerability.message}"
+```

@@ -1,0 +1,69 @@
+---
+title: "Configuration"
+description: "Configure Hyper HQ — projects root, Telegram, and session defaults"
+icon: "gear"
+---
+
+# Configuration
+
+HQ keeps its config in a TOML file at `~/.config/hyper/hq.toml`. The first time you run `hyper hq start`, an interactive wizard walks you through creating it.
+
+Need to check what's currently set? There are a few ways:
+
+```bash
+hyper hq config              # Summary view
+hyper hq config --json       # JSON output
+hyper hq config --path       # Just the file path
+```
+
+## Full Config Example
+
+```toml
+projects_root = "~/work"
+
+[hq]
+name = "hyper-hq"
+spawn_mode = "same-dir"    # same-dir | worktree | session
+capacity = 32
+
+[claude]
+permission_mode = "default" # default | acceptEdits | plan | auto
+
+[telegram]
+hq_bot_token = "<YOUR_BOT_TOKEN>"
+
+[telegram.project_bots]
+my-api = "<YOUR_PROJECT_BOT_TOKEN>"
+
+[projects.my-org]
+type = "group"   # Treat subfolders as separate projects
+```
+
+## Options
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `projects_root` | string | `~/work` | Root directory for project discovery |
+| `hq.name` | string | `hyper-hq` | tmux session name for HQ |
+| `hq.spawn_mode` | string | `same-dir` | How Remote Control spawns sessions |
+| `hq.capacity` | integer | `32` | Max concurrent sessions |
+| `claude.permission_mode` | string | `default` | Permission mode for Claude sessions |
+| `telegram.hq_bot_token` | string | — | Telegram bot token for HQ (optional) |
+
+## Environment Variable Overrides
+
+| Env Var | Overrides |
+|---------|-----------|
+| `HYPER_HQ_PROJECTS_ROOT` | `projects_root` |
+| `HYPER_HQ_BOT_TOKEN` | `telegram.hq_bot_token` |
+
+## Project Groups
+
+Got a directory full of separate repos? Mark it as a "group" and HQ will treat each subfolder as its own project:
+
+```toml
+[projects.my-org]
+type = "group"
+```
+
+After this, `hyper hq list` shows `my-org/repo-a`, `my-org/repo-b`, and so on instead of just `my-org`.

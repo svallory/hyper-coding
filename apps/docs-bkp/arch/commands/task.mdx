@@ -1,0 +1,179 @@
+---
+title: "Task Command Architecture"
+description: "Technical reference for hyper task — YAML task file schema, status transition table, velocity and metrics commands, and configuration block"
+---
+
+<Info>
+  This is an architecture reference. For usage docs, see [hyper task](/cli/commands/resources/task).
+</Info>
+
+## YAML Task File Schema
+
+Tasks are stored as YAML files in `.hyper/tasks/`:
+
+```yaml
+# .hyper/tasks/AUTH-001.yml
+id: "AUTH-001"
+title: "Implement user registration API"
+description: |
+  Create REST API endpoint for user registration with email/password.
+  Include input validation, password hashing, and email verification.
+
+epic: "user-auth"
+status: "in-progress"
+priority: "high"
+created: "2024-01-15"
+updated: "2024-01-20"
+due_date: "2024-02-10"
+
+assignee: "alice@company.com"
+reporter: "carol@company.com"
+estimate: "6h"
+time_spent: "4h"
+
+tags: ["api", "backend", "registration"]
+labels: ["sprint-1", "security"]
+
+dependencies:
+  - "AUTH-000"  # Database schema setup
+
+acceptance_criteria:
+  - POST /api/auth/register endpoint accepts email/password
+  - Input validation with proper error messages
+  - Password hashed with bcrypt (min 12 rounds)
+  - Email verification token generated and sent
+  - Returns user object without password field
+  - Rate limiting applied (5 requests per minute)
+
+subtasks:
+  - "AUTH-001.1": "Input validation schema"
+  - "AUTH-001.2": "Password hashing implementation"
+  - "AUTH-001.3": "Email verification system"
+  - "AUTH-001.4": "API endpoint integration tests"
+
+comments:
+  - timestamp: "2024-01-18T10:30:00Z"
+    author: "alice@company.com"
+    text: "Started implementation, created validation schemas"
+```
+
+## Status Transition Table
+
+```
+todo → in-progress → review → done
+  ↓        ↓          ↓       ↑
+blocked  cancelled   failed  ↑
+  ↓        ↓          ↓       ↑
+todo ← cancelled ← todo → done
+```
+
+Valid transitions per status:
+
+| From | To (allowed) |
+|------|-------------|
+| `todo` | `in-progress`, `blocked` |
+| `in-progress` | `review`, `blocked`, `done` |
+| `review` | `done`, `in-progress` |
+| `done` | `in-progress` (reopen) |
+| `blocked` | `todo`, `in-progress` |
+
+## Velocity and Metrics Commands
+
+```bash
+# Task velocity (tasks completed per time period)
+hyper task velocity --team --period 1w
+
+# Task completion rate for an epic
+hyper task completion --epic user-auth
+
+# Average cycle time (todo → done)
+hyper task cycle-time --period 1m
+
+# Task time breakdown for a specific task
+hyper task time AUTH-001 --breakdown
+
+# Team time tracking
+hyper task time --team --period 1w
+
+# Epic time rollup
+hyper task time --epic user-auth --rollup
+
+# Individual performance report
+hyper task report --assignee alice --period 1w
+
+# Workload management
+hyper task workload --team
+hyper task workload alice
+hyper task rebalance --epic user-auth
+```
+
+## Saved Filters
+
+```bash
+hyper task filter save "my-tasks" \
+  --assignee alice \
+  --status in-progress,review
+
+hyper task list --filter my-tasks
+hyper task filter list
+```
+
+## Built-in Task Templates
+
+| Template | Description |
+|----------|-------------|
+| `api-endpoint` | REST API endpoint development |
+| `ui-component` | Frontend component development |
+| `database-migration` | Database schema changes |
+| `bug-fix` | Bug investigation and resolution |
+| `documentation` | Documentation writing tasks |
+| `testing` | Test suite development |
+| `security-review` | Security audit tasks |
+| `performance-optimization` | Performance improvement tasks |
+
+## Configuration Block
+
+```javascript
+// hypergen.config.js
+export default {
+  tasks: {
+    // Task ID format
+    id_format: 'PROJ-{number}',
+
+    defaults: {
+      status: 'todo',
+      priority: 'medium',
+      auto_assign_creator: false
+    },
+
+    // Status workflow definition
+    workflow: {
+      statuses: ['todo', 'in-progress', 'review', 'done'],
+      transitions: {
+        'todo': ['in-progress', 'blocked'],
+        'in-progress': ['review', 'blocked', 'done'],
+        'review': ['done', 'in-progress'],
+        'done': ['in-progress']   // Allow reopening
+      }
+    },
+
+    time_tracking: {
+      enabled: true,
+      auto_start_on_assign: true,
+      auto_stop_on_complete: true,
+      round_to_minutes: 15
+    },
+
+    integrations: {
+      git: {
+        auto_link_commits: true,
+        commit_message_format: '{task_id}: {message}'
+      },
+      slack: {
+        notify_on_status_change: true,
+        channel: '#dev-tasks'
+      }
+    }
+  }
+}
+```

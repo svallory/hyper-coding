@@ -1,0 +1,86 @@
+---
+title: "hyper dash"
+description: "Launch basic monitoring dashboard"
+icon: "chart-mixed"
+og:title: "hyper dash"
+og:description: "Launch basic monitoring dashboard"
+---
+
+# hyper dash
+
+Launches a simple monitoring dashboard so you can see what's going on in your project at a glance.
+
+## Syntax
+
+```bash
+hyper dash [options]
+```
+
+## Overview
+
+`hyper dash` gives you a quick read on your project without digging through files or running a bunch of status commands:
+
+- **Simple monitoring**: Current project status and progress, all in one place
+- **Plan progress**: See how far along each plan is
+- **Development status**: Watch build and activity state as you work
+
+<Info>
+  The dashboard is a lightweight overview — it's not a full observability suite, just the basics you actually need day-to-day.
+</Info>
+
+## Basic Views
+
+| View | Description |
+|------|-------------|
+| `overview` | Project overview and status |
+| `plans` | Plan progress tracking |
+
+## Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--refresh <seconds>` | Auto-refresh interval | `30` |
+
+## Examples
+
+### Basic Usage
+
+```bash
+# Launch dashboard
+hyper dash
+
+# Launch with custom refresh rate  
+hyper dash --refresh 10
+```
+
+## Simple Dashboard View
+
+Here's what it looks like when it's running:
+
+```
+┌─ HyperDev Dashboard ─────────────── [o] Overview ─┐
+│ Project: My Project        Last Update: 14:32     │
+├──────────────────────────────────────────────────┤
+│ 📋 ACTIVE PLANS                                   │
+│ ├─ User Auth Plan (89% complete)                  │
+│ ├─ Payment Integration (45% complete)             │
+│ └─ Dashboard UI (23% complete)                    │
+├──────────────────────────────────────────────────┤
+│ 🔧 STATUS                                         │
+│ ├─ Build: Passing                                 │
+│ ├─ Recent activity: 3 updates today               │
+│ └─ Next deadline: Mar 15                          │
+└──────────────────────────────────────────────────┘
+ [r] Refresh  [q] Quit
+```
+
+## Related Commands
+
+<CardGroup cols={2}>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Manage project plans
+  </Card>
+  <Card title="hyper tools" href="/cli/commands/workflow/dev">
+    Development monitoring
+  </Card>
+</CardGroup>

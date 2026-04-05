@@ -1,0 +1,93 @@
+---
+title: "Security Best Practices"
+description: "Basic security considerations when using HyperDev"
+icon: "shield-check"
+og:title: "Security Best Practices"
+og:description: "Basic security considerations when using HyperDev"
+---
+
+# Security Best Practices
+
+A few things worth knowing before you start pulling in templates from random places.
+
+## Basic Security Guidelines
+
+### Template Sources
+
+Not all template sources are equal. Treat remote templates like you'd treat any third-party code---review before you run:
+
+```javascript
+// hypergen.config.js - Basic trust configuration
+export default {
+  // Trust local and verified sources
+  // "high" trust: templates can run shell steps and write to arbitrary paths
+  // "low" trust (default): shell steps are blocked and path writes are sandboxed
+  trust: {
+    'github:company/*': 'high',
+    '@company/cookbook-*': 'high'
+  }
+};
+```
+
+### What HyperDev Does for You
+
+HyperDev includes some built-in protection out of the box:
+- Templates are validated before use
+- File paths are checked for safety
+- Basic secret detection runs on generated output
+
+That said, none of this replaces actually looking at what a template does.
+
+## Safe Template Practices
+
+### Template Development
+
+When you're writing templates:
+
+<CardGroup cols={2}>
+  <Card title="Input Validation" icon="check-circle">
+    - Validate user inputs
+    - Use safe file paths
+    - Avoid dynamic code execution
+    - Test templates thoroughly
+  </Card>
+
+  <Card title="File Safety" icon="folder-open">
+    - Check output paths
+    - Avoid overwriting system files
+    - Use relative paths when possible
+    - Validate file extensions
+  </Card>
+</CardGroup>
+
+### Before You Use a Template
+
+Run through this quick checklist:
+
+- ✅ Review the template source and author
+- ✅ Test with `--dry-run` before writing anything
+- ✅ Check the generated output before committing it
+- ✅ Keep templates updated---stale templates can have stale vulnerabilities
+- ✅ Stick to trusted sources when you can
+- ✅ Be skeptical of templates that ask for elevated permissions
+
+### A Few Common-Sense Tips
+
+**On Template Sources:**
+- Official and community-verified sources are a safer starting point
+- Read through a template before running it the first time
+- Unknown sources deserve extra scrutiny---not a blanket ban, just eyes-on review
+
+**On Generated Files:**
+- Always review what was generated before pushing it
+- Spot-check file paths; a misconfigured template can write to unexpected places
+- Use version control so you can diff what changed
+
+**On Your Workflow:**
+- Test new templates in an isolated environment first
+- `--dry-run` exists for a reason---use it
+- Keep backups of anything important before running a template that modifies existing files
+
+That's the gist. Most of this is just standard dev hygiene applied to code generation.
+
+For the full set of security configuration options, see the [configuration reference](/reference/configuration).

@@ -1,0 +1,283 @@
+---
+title: "Gen Internals Architecture"
+description: "Technical reference for the gen tool — template architecture directory trees, trust system scoring, security pipeline YAML, AI augmentation YAML, template composition commands, and custom Actions TypeScript"
+---
+
+<Info>
+  This is an architecture reference. For usage docs, see [Generate](/workflow/gen).
+</Info>
+
+## Template Architecture Directory Trees
+
+### Single Template Structure
+
+```
+my-template/
+├── template.yml              # Template metadata and configuration
+├── _templates/               # Template files directory
+│   ├── component.tsx.ejs.t   # EJS template file
+│   ├── test.spec.ts.ejs.t    # Test template
+│   └── styles.css.ejs.t      # Style template
+└── action.ts                 # Optional: Custom generation actions (V8)
+```
+
+### Multi-Template Structure
+
+```
+template-collection/
+├── template.yml              # Collection metadata
+├── templates/                # Multiple template definitions
+│   ├── component/
+│   │   ├── template.yml
+│   │   └── _templates/
+│   └── service/
+│       ├── template.yml
+│       └── _templates/
+└── shared/                   # Shared template assets
+```
+
+## Template Configuration Schema (template.yml)
+
+```yaml
+name: "React Component Template"
+description: "Generate React components with TypeScript and tests"
+version: "1.0.0"
+trust_score: 9.2
+
+# AI Enhancement Context
+ai_context:
+  framework: "React 18"
+  language: "TypeScript"
+  patterns: ["hooks", "functional-components"]
+
+variables:
+  - name: "componentName"
+    type: "string"
+    required: true
+    description: "Name of the React component"
+  - name: "withTests"
+    type: "boolean"
+    default: true
+    description: "Include test files"
+
+# Security Configuration
+security:
+  trusted_sources: ["npm:@company/*", "github:org/*"]
+  scan_generated: true
+  validate_dependencies: true
+
+# Quality Controls
+quality:
+  enforce_patterns: true
+  validate_syntax: true
+  check_best_practices: true
+```
+
+## Trust System Scoring
+
+Trust scores are composite values (0.0–10.0) calculated from:
+
+| Factor | Score Range | Weight |
+|--------|-------------|--------|
+| Source Reputation | 8.0–10.0 | High |
+| Security Validation | 7.0–9.0 | High |
+| Community Usage | 6.0–8.0 | Medium |
+| Code Quality | 7.0–9.0 | Medium |
+| Maintenance Activity | 6.0–8.0 | Low |
+
+Trust level thresholds:
+
+| Score | Label | Description |
+|-------|-------|-------------|
+| 10.0 | Verified | HyperDev official templates |
+| 8.0–9.9 | Trusted | Well-established community templates |
+| 6.0–7.9 | Reviewed | Community templates with basic validation |
+| 4.0–5.9 | Caution | Use with additional review |
+| 0.0–3.9 | Untrusted | Requires manual security validation |
+
+## Security Validation Pipeline
+
+```yaml
+security_pipeline:
+  static_analysis:
+    - tool: semgrep
+      rules: owasp-top-10
+    - tool: bandit
+      config: strict
+
+  dependency_analysis:
+    - tool: npm-audit
+    - tool: snyk
+
+  secrets_detection:
+    - tool: truffleHog
+    - tool: detect-secrets
+
+  template_validation:
+    - check: no_hardcoded_secrets
+    - check: safe_file_operations
+    - check: input_sanitization
+```
+
+## AI Augmentation YAML
+
+Context engineering configuration for AI generation passes:
+
+```yaml
+ai_context:
+  project_info:
+    language: "TypeScript"
+    framework: "React"
+    architecture: "clean-architecture"
+    patterns: ["hooks", "context", "custom-hooks"]
+
+  security_requirements:
+    input_validation: required
+    output_encoding: required
+    authentication: "jwt-bearer"
+
+  quality_standards:
+    test_coverage: 90
+    code_style: "prettier + eslint"
+    documentation: "tsdoc"
+```
+
+Dynamic template adaptation — the AI adjusts output based on:
+- **Naming Conventions** — matches existing project naming patterns
+- **Import Statements** — uses existing project dependencies
+- **Code Patterns** — follows established architectural patterns
+- **Test Structure** — matches existing test organization
+
+## Template Composition Commands
+
+```bash
+# Compose API and frontend templates
+hyperdev gen compose api-backend+react-frontend
+
+# Layer templates with inheritance
+hyperdev gen base-template --extend=auth-layer,api-layer
+
+# Generate from npm package
+hyper gen npm:@company/api-template
+
+# Generate from GitHub repository
+hyper gen github:username/template-repo
+
+# Generate with AI context
+hyper gen api-endpoint --ai-context="REST API for user management"
+```
+
+## Template Inheritance Schema
+
+```yaml
+# templates/base/component.yml
+name: "Base Component"
+variables:
+  name:
+    type: string
+    required: true
+  styling:
+    type: select
+    options: ["styled-components", "emotion", "css-modules"]
+    default: "styled-components"
+
+hooks:
+  pre_generate:
+    - action: "validate_component_name"
+    - action: "check_dependencies"
+```
+
+```yaml
+# templates/react/component.yml — extends base
+extends: "base/component"
+name: "React Component"
+
+variables:
+  typescript:
+    type: boolean
+    default: true
+  testing_library:
+    type: select
+    options: ["jest", "vitest"]
+    default: "vitest"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "src/components/{{ name }}/{{ name }}.tsx"
+```
+
+## Custom Actions (V8) TypeScript API
+
+```typescript
+// action.ts
+import { Action, ActionContext, validate } from '@hyperdev/hyperdev';
+
+export class ComponentAction {
+  @validate({ required: true })
+  async generateComponent(context: ActionContext) {
+    const aiResponse = await this.aiService.enhance(context);
+    return this.renderWithAI(aiResponse);
+  }
+}
+```
+
+Full example with hooks and validation:
+
+```typescript
+// templates/component/actions/component.ts
+import { Action, ActionContext } from '@hyperdev/hyperdev';
+
+@Action('generate-component')
+export class GenerateComponentAction {
+  async execute(context: ActionContext) {
+    const { name, typescript } = context.parameters;
+
+    if (!name.match(/^[A-Z][A-Za-z0-9]*$/)) {
+      throw new Error('Component name must be PascalCase');
+    }
+
+    await context.generateFile('component.tsx.ejs', {
+      to: `src/components/${name}/${name}.tsx`,
+      parameters: { name, typescript }
+    });
+
+    if (context.config.include_tests) {
+      await context.generateFile('component.test.tsx.ejs', {
+        to: `src/components/${name}/${name}.test.tsx`,
+        parameters: { name }
+      });
+    }
+
+    await context.injectIntoFile('src/components/index.ts', {
+      pattern: /export \* from/,
+      template: `export * from './${name}/${name}';`
+    });
+  }
+}
+```
+
+## Performance Architecture
+
+- **Lazy Loading** — templates load on-demand for faster startup
+- **Multi-Level Caching** — memory → disk cache for template discovery and generation
+- **Parallel Processing** — concurrent template processing for complex compositions
+- **Hash-Based Storage** — efficient template indexing and retrieval
+
+## Debug Commands
+
+```bash
+# Enable verbose logging
+hyperdev gen --verbose template-name
+
+# Trace template resolution process
+hyperdev gen --trace-resolution template-name
+
+# Validate template without generation
+hyperdev gen --dry-run template-name
+
+# Full debug environment
+DEBUG=hyperdev:* HYPERDEV_PROFILE=true \
+  hyper gen action MyComponent \
+    --name="UserProfile" \
+    --profile-output=./profiles/user-profile-generation.json
+```

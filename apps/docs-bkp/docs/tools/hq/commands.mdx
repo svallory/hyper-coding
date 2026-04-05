@@ -1,0 +1,152 @@
+---
+title: "Commands"
+description: "All hyper hq commands — session management, project discovery, configuration"
+icon: "terminal"
+---
+
+# Command Reference
+
+## `hyper hq start`
+
+Kick off the HQ session — your always-on Claude Code command center.
+
+```bash
+hyper hq start
+hyper hq start --spawn-mode worktree
+hyper hq start --capacity 16
+```
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--name` | Custom session name | `hyper-hq` |
+| `--spawn-mode` | `same-dir`, `worktree`, `session` | `same-dir` |
+| `--permission-mode` | `default`, `acceptEdits`, `plan`, `auto` | `default` |
+| `--capacity` | Max concurrent sessions | `32` |
+
+First run drops you into an interactive setup wizard. Once done, you'll see a welcome banner with your config summary, bridge URL, and the commands you'll actually use.
+
+---
+
+## `hyper hq launch`
+
+Spin up a new Claude session for a project.
+
+```bash
+hyper hq launch my-project
+hyper hq launch my-project --worktree feat-auth
+hyper hq launch my-project --new-worktree feat-login
+hyper hq launch /absolute/path/to/project
+```
+
+| Arg/Flag | Description |
+|----------|-------------|
+| `PROJECT` | Project name or absolute path (required) |
+| `--worktree` | Use an existing worktree |
+| `--new-worktree` | Create a new worktree via `wt switch -c` |
+| `--permission-mode` | Permission mode for the session |
+| `--name` | Custom session name |
+
+---
+
+## `hyper hq list`
+
+See all your available projects and their worktrees.
+
+```bash
+hyper hq list
+hyper hq list --json
+hyper hq list --root /other/path
+```
+
+---
+
+## `hyper hq status`
+
+Check which HQ sessions are currently running.
+
+```bash
+hyper hq status
+hyper hq status --json
+```
+
+---
+
+## `hyper hq config`
+
+Peek at your current configuration.
+
+```bash
+hyper hq config              # Summary view
+hyper hq config --json       # JSON output
+hyper hq config --path       # File path only
+$EDITOR $(hyper hq config --path)  # Open in editor
+```
+
+---
+
+## `hyper hq stop`
+
+Stop a session. Defaults to the HQ session if you don't specify one.
+
+```bash
+hyper hq stop              # Stop hyper-hq
+hyper hq stop my-project   # Stop hq-my-project
+```
+
+---
+
+## `hyper hq stop-all`
+
+Tear down everything — all HQ-managed sessions, including HQ itself.
+
+```bash
+hyper hq stop-all
+```
+
+---
+
+## `hyper hq attach`
+
+Drop into a tmux session directly. Handy for grabbing the QR code or poking around when something's off.
+
+```bash
+hyper hq attach              # Attach to HQ
+hyper hq attach my-project   # Attach to project session
+```
+
+Hit `Ctrl+B, D` to detach without killing the session.
+
+---
+
+## `hyper hq relaunch`
+
+Stop a session and bring it back up with `--continue` so Claude picks up right where it left off.
+
+```bash
+hyper hq relaunch hq-my-project-03-24-10-30
+hyper hq relaunch my-project
+hyper hq relaunch my-project src/frontend
+hyper hq relaunch my-project --yolo
+```
+
+| Arg/Flag | Description |
+|----------|-------------|
+| `TARGET` | Session name or project name (required) |
+| `PATH` | Relative path inside the project (when target is a project name) |
+| `--permission-mode` | `default`, `acceptEdits`, `plan`, `bypassPermissions`, `auto` |
+| `--yolo` | Skip all permission checks (`bypassPermissions` mode) |
+| `--no-telegram` | Disable Telegram channel for the relaunched session |
+
+It finds the most recent session matching your target, stops it, then starts fresh with `--continue` so the conversation history carries over. The new session gets a clean timestamped name.
+
+---
+
+## `hyper hq web`
+
+Open the HQ session in `claude.ai/code` (requires `/remote-control` to be active first).
+
+```bash
+hyper hq web
+```
+
+Pulls the bridge URL from the running HQ tmux session (or its log file) and opens it in your default browser. Errors if HQ isn't running or if you haven't activated `/remote-control` yet.

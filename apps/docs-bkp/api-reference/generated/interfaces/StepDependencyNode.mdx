@@ -1,0 +1,64 @@
+---
+title: "StepDependencyNode"
+description: "Step dependency graph node"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / StepDependencyNode
+
+Defined in: [recipe-engine/types.ts:726](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L726)
+
+Step dependency graph node
+
+## Properties
+
+### stepName
+
+> **stepName**: `string`
+
+Defined in: [recipe-engine/types.ts:728](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L728)
+
+Step name
+
+***
+
+### dependencies
+
+> **dependencies**: `string`[]
+
+Defined in: [recipe-engine/types.ts:731](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L731)
+
+Dependencies (steps that must complete first)
+
+***
+
+### dependents
+
+> **dependents**: `string`[]
+
+Defined in: [recipe-engine/types.ts:734](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L734)
+
+Dependents (steps that depend on this one)
+
+***
+
+### priority
+
+> **priority**: `number`
+
+Defined in: [recipe-engine/types.ts:737](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L737)
+
+Execution order priority
+
+***
+
+### parallelizable
+
+> **parallelizable**: `boolean`
+
+Defined in: [recipe-engine/types.ts:740](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L740)
+
+Whether this step can run in parallel

@@ -1,0 +1,116 @@
+---
+title: "BaseToolFactory"
+description: "Abstract base class for tool factories"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / BaseToolFactory
+
+Defined in: [recipe-engine/tools/base.ts:573](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L573)
+
+Abstract base class for tool factories
+
+## Type Parameters
+
+### TStep
+
+`TStep` *extends* [`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx) = [`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)
+
+## Implements
+
+- [`ToolFactory`](/api-reference/generated/interfaces/ToolFactory.mdx)\<`TStep`\>
+
+## Constructors
+
+### Constructor
+
+> **new BaseToolFactory**\<`TStep`\>(`toolType`): `BaseToolFactory`\<`TStep`\>
+
+Defined in: [recipe-engine/tools/base.ts:576](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L576)
+
+#### Parameters
+
+##### toolType
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+#### Returns
+
+`BaseToolFactory`\<`TStep`\>
+
+## Properties
+
+### toolType
+
+> `protected` `readonly` **toolType**: [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:576](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L576)
+
+## Methods
+
+### getToolType()
+
+> **getToolType**(): [`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:578](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L578)
+
+Get the tool type this factory creates
+
+#### Returns
+
+[`ToolType`](/api-reference/generated/type-aliases/ToolType.mdx)
+
+#### Implementation of
+
+[`ToolFactory`](/api-reference/generated/interfaces/ToolFactory.mdx).[`getToolType`](/api-reference/generated/interfaces/ToolFactory.mdx#gettooltype)
+
+***
+
+### create()
+
+> `abstract` **create**(`name`, `options?`): [`Tool`](/api-reference/generated/classes/Tool.mdx)\<`TStep`\>
+
+Defined in: [recipe-engine/tools/base.ts:582](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L582)
+
+Create a new tool instance
+
+#### Parameters
+
+**`name`** `string`
+
+##### options?
+
+`Record`\<`string`, `any`\>
+
+#### Returns
+
+[`Tool`](/api-reference/generated/classes/Tool.mdx)\<`TStep`\>
+
+#### Implementation of
+
+[`ToolFactory`](/api-reference/generated/interfaces/ToolFactory.mdx).[`create`](/api-reference/generated/interfaces/ToolFactory.mdx#create)
+
+***
+
+### validateConfig()
+
+> **validateConfig**(`config`): [`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)
+
+Defined in: [recipe-engine/tools/base.ts:584](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L584)
+
+Validate tool configuration before creation
+
+#### Parameters
+
+**`config`** `Record`\<`string`, `any`\>
+
+#### Returns
+
+[`ToolValidationResult`](/api-reference/generated/interfaces/ToolValidationResult.mdx)
+
+#### Implementation of
+
+[`ToolFactory`](/api-reference/generated/interfaces/ToolFactory.mdx).[`validateConfig`](/api-reference/generated/interfaces/ToolFactory.mdx#validateconfig)

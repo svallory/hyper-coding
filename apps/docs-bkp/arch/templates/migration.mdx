@@ -1,0 +1,406 @@
+---
+title: "Template Migration Architecture"
+description: "Technical reference for migrating to HyperDev — before/after code comparisons showing internals, TypeScript decorator patterns, and config migration details"
+---
+
+<Info>
+  This is an architecture reference. For high-level migration guidance, see the [Migration Guide](/templates/migration-guide).
+</Info>
+
+## Hygen Migration: Template Structure
+
+**Before (Hygen):**
+
+```javascript
+// _templates/component/new/index.js
+module.exports = {
+  prompt: ({ inquirer }) => {
+    const questions = [
+      {
+        type: 'input',
+        name: 'name',
+        message: 'Component name?'
+      }
+    ];
+    return inquirer.prompt(questions);
+  }
+};
+```
+
+**After (HyperDev):**
+
+```yaml
+# templates/component/template.yml
+name: "React Component"
+version: "1.0.0"
+description: "Generate React component with TypeScript"
+
+variables:
+  name:
+    type: string
+    required: true
+    prompt: "Component name?"
+    validation: /^[A-Z][A-Za-z0-9]*$/
+
+  typescript:
+    type: boolean
+    default: true
+    prompt: "Use TypeScript?"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "src/components/{{ name }}/{{ name }}.tsx"
+    condition: "typescript === true"
+```
+
+## Hygen Migration: Action System Upgrade
+
+**Before (Hygen EJS template with frontmatter):**
+
+```javascript
+// _templates/component/new/component.ejs.t
+---
+to: src/components/<%= name %>/<%= name %>.tsx
+---
+import React from 'react';
+
+const <%= name %>: React.FC = () => {
+  return <div><%= name %> Component</div>;
+};
+
+export default <%= name %>;
+```
+
+**After (HyperDev TypeScript Action with decorators):**
+
+```typescript
+// templates/component/actions/component.ts
+import { Action, ActionContext } from '@hyperdev/hyperdev';
+
+@Action('generate-component')
+export class GenerateComponentAction {
+  async execute(context: ActionContext) {
+    const { name, typescript } = context.parameters;
+
+    // Enhanced validation
+    if (!name.match(/^[A-Z][A-Za-z0-9]*$/)) {
+      throw new Error('Component name must be PascalCase');
+    }
+
+    // Generate files with enhanced logic
+    await context.generateFile('component.tsx.ejs', {
+      to: `src/components/${name}/${name}.tsx`,
+      parameters: { name, typescript }
+    });
+
+    // Generate tests automatically
+    if (context.config.include_tests) {
+      await context.generateFile('component.test.tsx.ejs', {
+        to: `src/components/${name}/${name}.test.tsx`,
+        parameters: { name }
+      });
+    }
+
+    // Update barrel index
+    await context.injectIntoFile('src/components/index.ts', {
+      pattern: /export \* from/,
+      template: `export * from './${name}/${name}';`
+    });
+  }
+}
+```
+
+## Hygen Migration: Configuration File
+
+```javascript
+// hyperdev.config.js (migrated from .hygen.js)
+export default {
+  template_dirs: ['./templates'],
+
+  generator: {
+    hygen_compatibility: true,
+    typescript_actions: true,
+    recipe_system: true,
+    multi_template_support: true
+  },
+
+  migration: {
+    source: 'hygen',
+    preserve_file_structure: true,
+    upgrade_actions: true,
+
+    action_mappings: {
+      'add': 'generate_file',
+      'inject': 'inject_into_file',
+      'append': 'append_to_file'
+    }
+  },
+
+  validation: {
+    strict_mode: true,
+    require_typescript: true,
+    security_scan: true
+  }
+};
+```
+
+## Yeoman Migration: Prompt System
+
+**Before (Yeoman):**
+
+```javascript
+// generators/app/index.js
+const Generator = require('yeoman-generator');
+
+module.exports = class extends Generator {
+  async prompting() {
+    this.answers = await this.prompt([
+      {
+        type: 'input',
+        name: 'name',
+        message: 'Your project name',
+        default: this.appname
+      },
+      {
+        type: 'list',
+        name: 'framework',
+        message: 'Which framework?',
+        choices: ['React', 'Vue', 'Angular'],
+        default: 'React'
+      }
+    ]);
+  }
+};
+```
+
+**After (HyperDev):**
+
+```yaml
+# templates/app/template.yml
+name: "Full-Stack Application"
+version: "2.0.0"
+
+variables:
+  name:
+    type: string
+    required: true
+    prompt: "Your project name"
+    default: "{{ cwd | basename }}"
+    validation: /^[a-z][a-z0-9-]*$/
+
+  framework:
+    type: select
+    prompt: "Which framework?"
+    options:
+      - value: "react"
+        label: "React"
+        description: "React with TypeScript and Vite"
+      - value: "vue"
+        label: "Vue"
+        description: "Vue 3 with TypeScript and Vite"
+      - value: "angular"
+        label: "Angular"
+        description: "Angular with TypeScript and Angular CLI"
+    default: "react"
+
+  features:
+    type: multiselect
+    prompt: "Additional features?"
+    options: ["testing", "storybook", "docker", "ci-cd"]
+    default: ["testing"]
+```
+
+## Plop Migration: Configuration Conversion
+
+**Before (Plop plopfile.js):**
+
+```javascript
+module.exports = function (plop) {
+  plop.setGenerator('component', {
+    description: 'React component generator',
+    prompts: [{
+      type: 'input',
+      name: 'name',
+      message: 'Component name?'
+    }],
+    actions: [{
+      type: 'add',
+      path: 'src/components/{{pascalCase name}}/{{pascalCase name}}.tsx',
+      templateFile: 'plop-templates/component.hbs'
+    }]
+  });
+};
+```
+
+**After (HyperDev template.yml):**
+
+```yaml
+# templates/component/template.yml
+name: "React Component"
+version: "1.0.0"
+description: "React component generator (migrated from Plop)"
+
+variables:
+  name:
+    type: string
+    required: true
+    prompt: "Component name?"
+    validation: /^[a-zA-Z][a-zA-Z0-9]*$/
+
+computed_values:
+  pascal_name: "{{ name | pascalCase }}"
+  kebab_name: "{{ name | kebabCase }}"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "src/components/{{ computed_values.pascal_name }}/{{ computed_values.pascal_name }}.tsx"
+
+  # Additional files not in original Plop generator
+  - from: "component.test.tsx.ejs"
+    to: "src/components/{{ computed_values.pascal_name }}/{{ computed_values.pascal_name }}.test.tsx"
+    condition: "include_tests !== false"
+
+  - from: "index.ts.ejs"
+    to: "src/components/{{ computed_values.pascal_name }}/index.ts"
+
+actions:
+  post_generate:
+    - action: "update_component_index"
+      parameters:
+        component_name: "{{ computed_values.pascal_name }}"
+```
+
+## Custom Script Migration
+
+**Before (bash script):**
+
+```bash
+#!/bin/bash
+# scripts/create-component.sh
+COMPONENT_NAME=$1
+COMPONENT_DIR="src/components/$COMPONENT_NAME"
+mkdir -p "$COMPONENT_DIR"
+
+cat > "$COMPONENT_DIR/$COMPONENT_NAME.tsx" << EOF
+import React from 'react';
+
+interface ${COMPONENT_NAME}Props {}
+
+const $COMPONENT_NAME: React.FC<${COMPONENT_NAME}Props> = () => {
+  return <div>$COMPONENT_NAME Component</div>;
+};
+
+export default $COMPONENT_NAME;
+EOF
+```
+
+**After (HyperDev template — generated from script analysis):**
+
+```yaml
+# templates/component/template.yml
+name: "React Component"
+version: "1.0.0"
+description: "Generate React component (migrated from create-component.sh)"
+
+variables:
+  name:
+    type: string
+    required: true
+    prompt: "Component name?"
+    validation: /^[A-Z][A-Za-z0-9]*$/
+
+computed_values:
+  component_dir: "src/components/{{ name }}"
+  props_interface: "{{ name }}Props"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "{{ computed_values.component_dir }}/{{ name }}.tsx"
+    create_dirs: true
+
+actions:
+  post_generate:
+    - action: "log_success"
+      message: "Component {{ name }} created successfully!"
+```
+
+## Migration CLI Commands
+
+```bash
+# Hygen migration
+hyper migrate hygen \
+  --source="./_templates" \
+  --output="./templates" \
+  --config-output="./hyperdev.config.js" \
+  --preserve-structure \
+  --upgrade-actions
+
+# Yeoman migration
+hyper migrate yeoman \
+  --source="./generator-myapp" \
+  --output="./templates" \
+  --preserve-prompts \
+  --upgrade-features
+
+# Plop migration
+hyper migrate plop \
+  --source="./plopfile.js" \
+  --output="./templates"
+
+# Handlebars to EJS conversion
+hyper migrate templates \
+  --source="./plop-templates" \
+  --from="handlebars" \
+  --to="ejs" \
+  --output="./templates" \
+  --preserve-logic \
+  --upgrade-helpers
+
+# Custom script analysis
+hyper analyze scripts \
+  --source="./scripts/generate" \
+  --recursive \
+  --output-report="./script-analysis.json" \
+  --detect-patterns
+
+hyper migrate scripts \
+  --source="./scripts/generate" \
+  --output="./templates" \
+  --create-recipes
+
+# Post-migration validation
+hyper validate ./templates --strict
+hyper migrate validate --source="hygen" --templates="./templates" --detailed-report
+
+# Rollback
+hyper migrate rollback --backup="./migration-backup" --restore-config --verify
+```
+
+## Post-Migration Enhancement Config
+
+```javascript
+// hyperdev.config.js — post-migration optimizations
+export default {
+  enhancement: {
+    v8_features: {
+      typescript_actions: true,
+      recipe_system: true,
+      advanced_validation: true,
+      security_scanning: true
+    },
+
+    performance: {
+      template_caching: true,
+      parallel_generation: true,
+      incremental_updates: true
+    },
+
+    developer_experience: {
+      ide_integration: true,
+      auto_completion: true,
+      error_recovery: true,
+      debugging_support: true
+    }
+  }
+};
+```

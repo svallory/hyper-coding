@@ -1,0 +1,264 @@
+---
+title: "RecipeConfig"
+description: "Recipe configuration - replaces TemplateConfig for V8"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeConfig
+
+Defined in: [recipe-engine/types.ts:388](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L388)
+
+Recipe configuration - replaces TemplateConfig for V8
+
+## Properties
+
+### name
+
+> **name**: `string`
+
+Defined in: [recipe-engine/types.ts:390](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L390)
+
+Recipe name
+
+***
+
+### description?
+
+> `optional` **description**: `string`
+
+Defined in: [recipe-engine/types.ts:393](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L393)
+
+Recipe description
+
+***
+
+### version?
+
+> `optional` **version**: `string`
+
+Defined in: [recipe-engine/types.ts:396](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L396)
+
+Recipe version
+
+***
+
+### author?
+
+> `optional` **author**: `string`
+
+Defined in: [recipe-engine/types.ts:399](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L399)
+
+Recipe author
+
+***
+
+### category?
+
+> `optional` **category**: `string`
+
+Defined in: [recipe-engine/types.ts:402](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L402)
+
+Recipe category for organization
+
+***
+
+### tags?
+
+> `optional` **tags**: `string`[]
+
+Defined in: [recipe-engine/types.ts:405](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L405)
+
+Tags for searchability
+
+***
+
+### variables
+
+> **variables**: `Record`\<`string`, `TemplateVariable`\>
+
+Defined in: [recipe-engine/types.ts:408](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L408)
+
+Recipe variables with type definitions and validation
+
+***
+
+### steps
+
+> **steps**: [`RecipeStepUnion`](/api-reference/generated/type-aliases/RecipeStepUnion.mdx)[]
+
+Defined in: [recipe-engine/types.ts:411](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L411)
+
+Recipe execution steps
+
+***
+
+### examples?
+
+> `optional` **examples**: [`RecipeExample`](/api-reference/generated/interfaces/RecipeExample.mdx)[]
+
+Defined in: [recipe-engine/types.ts:414](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L414)
+
+Example configurations
+
+***
+
+### dependencies?
+
+> `optional` **dependencies**: [`RecipeDependency`](/api-reference/generated/interfaces/RecipeDependency.mdx)[]
+
+Defined in: [recipe-engine/types.ts:417](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L417)
+
+Recipe dependencies
+
+***
+
+### outputs?
+
+> `optional` **outputs**: `string`[]
+
+Defined in: [recipe-engine/types.ts:420](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L420)
+
+Expected outputs
+
+***
+
+### engines?
+
+> `optional` **engines**: `object`
+
+Defined in: [recipe-engine/types.ts:423](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L423)
+
+Engine version requirements
+
+#### hypergen?
+
+> `optional` **hypergen**: `string`
+
+#### node?
+
+> `optional` **node**: `string`
+
+***
+
+### hooks?
+
+> `optional` **hooks**: `object`
+
+Defined in: [recipe-engine/types.ts:429](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L429)
+
+Lifecycle hooks
+
+#### beforeRecipe?
+
+> `optional` **beforeRecipe**: `string`[]
+
+Before recipe starts
+
+#### afterRecipe?
+
+> `optional` **afterRecipe**: `string`[]
+
+After recipe completes
+
+#### beforeStep?
+
+> `optional` **beforeStep**: `string`[]
+
+Before each step
+
+#### afterStep?
+
+> `optional` **afterStep**: `string`[]
+
+After each step
+
+#### onError?
+
+> `optional` **onError**: `string`[]
+
+On recipe error
+
+#### onStepError?
+
+> `optional` **onStepError**: `string`[]
+
+On step error
+
+***
+
+### settings?
+
+> `optional` **settings**: `object`
+
+Defined in: [recipe-engine/types.ts:450](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L450)
+
+Recipe execution settings
+
+#### timeout?
+
+> `optional` **timeout**: `number`
+
+Default timeout for all steps
+
+#### retries?
+
+> `optional` **retries**: `number`
+
+Default retry count
+
+#### continueOnError?
+
+> `optional` **continueOnError**: `boolean`
+
+Whether to continue on step failures
+
+#### maxParallelSteps?
+
+> `optional` **maxParallelSteps**: `number`
+
+Maximum number of parallel steps
+
+#### workingDir?
+
+> `optional` **workingDir**: `string`
+
+Working directory
+
+***
+
+### composition?
+
+> `optional` **composition**: `object`
+
+Defined in: [recipe-engine/types.ts:468](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L468)
+
+Advanced composition features
+
+#### extends?
+
+> `optional` **extends**: `string`
+
+Base recipe to extend
+
+#### includes?
+
+> `optional` **includes**: `object`[]
+
+Recipes to include
+
+#### conflicts?
+
+> `optional` **conflicts**: `object`
+
+Conflict resolution strategy
+
+##### conflicts.strategy
+
+> **strategy**: `"merge"` \| `"replace"` \| `"extend"` \| `"error"`
+
+##### conflicts.rules?
+
+> `optional` **rules**: `Record`\<`string`, `"merge"` \| `"replace"` \| `"extend"` \| `"error"`\>

@@ -1,0 +1,323 @@
+---
+title: "Advanced Usage Architecture"
+description: "Technical reference for advanced HyperDev usage — plugin development TypeScript classes, multi-tenant template manager, template test suite, governance config, and deployment config"
+---
+
+<Info>
+  This is an architecture reference. For usage docs, see [Advanced Usage](/advanced-usage).
+</Info>
+
+## Multi-Template Orchestration Schema
+
+Full recipe YAML for coordinating multiple templates with dependencies:
+
+```yaml
+# hyperdev.recipe.yml
+name: "Full-Stack Component"
+description: "Generate complete full-stack feature with frontend, backend, and tests"
+
+steps:
+  - name: "backend-api"
+    template: "express-api"
+    config:
+      endpoint: "{{ feature.name }}"
+      model: "{{ feature.model }}"
+
+  - name: "frontend-component"
+    template: "react-component"
+    depends_on: ["backend-api"]
+    config:
+      name: "{{ feature.name | capitalize }}"
+      api_endpoint: "{{ steps.backend-api.output.endpoint }}"
+
+  - name: "integration-tests"
+    template: "playwright-tests"
+    depends_on: ["backend-api", "frontend-component"]
+    config:
+      test_target: "{{ feature.name }}"
+```
+
+## Template Inheritance YAML
+
+```yaml
+# templates/base/component.yml
+name: "Base Component"
+variables:
+  name:
+    type: string
+    required: true
+  styling:
+    type: select
+    options: ["styled-components", "emotion", "css-modules"]
+    default: "styled-components"
+
+hooks:
+  pre_generate:
+    - action: "validate_component_name"
+    - action: "check_dependencies"
+```
+
+```yaml
+# templates/react/component.yml
+extends: "base/component"
+name: "React Component"
+
+variables:
+  typescript:
+    type: boolean
+    default: true
+  testing_library:
+    type: select
+    options: ["jest", "vitest"]
+    default: "vitest"
+
+files:
+  - from: "component.tsx.ejs"
+    to: "src/components/{{ name }}/{{ name }}.tsx"
+```
+
+## Plugin Development TypeScript API
+
+```typescript
+// plugins/enterprise-security/index.ts
+import { HyperdevPlugin, PluginContext, GenerationContext } from '@hyperdev/hyperdev';
+
+export class EnterpriseSecurityPlugin implements HypergenPlugin {
+  name = 'enterprise-security';
+  version = '1.2.0';
+
+  async initialize(context: PluginContext) {
+    context.registerHook('pre_generation', this.validateSecurity.bind(this));
+    context.registerHook('post_generation', this.scanGenerated.bind(this));
+    context.registerAction('security_scan', this.performSecurityScan.bind(this));
+    context.registerValidator('pii_check', this.validatePII.bind(this));
+  }
+
+  async validateSecurity(context: GenerationContext) {
+    const trustLevel = await this.assessTemplateTrust(context.template);
+    if (trustLevel < context.config.security.min_trust_level) {
+      throw new SecurityValidationError(
+        `Template trust level ${trustLevel} below required ${context.config.security.min_trust_level}`
+      );
+    }
+
+    await this.scanParametersForSensitiveData(context.parameters);
+  }
+
+  async performSecurityScan(files: GeneratedFile[]) {
+    const results = await Promise.all([
+      this.scanForSecrets(files),
+      this.scanForVulnerabilities(files),
+      this.checkCompliance(files),
+      this.validateDataClassification(files)
+    ]);
+
+    return this.consolidateSecurityResults(results);
+  }
+}
+```
+
+## Template Test Suite
+
+```typescript
+// testing/template-test-framework.ts
+export class TemplateTestSuite {
+  constructor(private engine: HypergenEngine) {}
+
+  async runComprehensiveTests(templatePath: string) {
+    const results = await Promise.all([
+      this.testSyntaxValidation(templatePath),
+      this.testVariableValidation(templatePath),
+      this.testOutputValidation(templatePath),
+      this.testPerformanceBenchmarks(templatePath),
+      this.testSecurityCompliance(templatePath),
+      this.testCrossEnvironmentCompatibility(templatePath)
+    ]);
+
+    return this.generateTestReport(results);
+  }
+
+  async testOutputValidation(templatePath: string) {
+    const testCases = await this.loadTestCases(templatePath);
+
+    for (const testCase of testCases) {
+      const result = await this.engine.generateFromTemplate(
+        templatePath,
+        testCase.parameters
+      );
+
+      // Validate structure
+      await this.validateFileStructure(result.files, testCase.expected.structure);
+
+      // Validate content
+      await this.validateContent(result.files, testCase.expected.content);
+
+      // Validate compilation
+      if (testCase.compile_test) {
+        await this.validateCompilation(result.files, testCase.compile_test);
+      }
+    }
+  }
+}
+```
+
+## Multi-Tenant Template Manager
+
+```typescript
+// enterprise/multi-tenant-manager.ts
+export class MultiTenantTemplateManager {
+  constructor(private config: EnterpriseConfig) {}
+
+  async resolveTemplate(templateName: string, context: RequestContext) {
+    const tenant = await this.identifyTenant(context);
+    const permissions = await this.getPermissions(tenant, templateName);
+
+    this.validateAccess(permissions, context.operation);
+
+    const template = await this.loadTemplate(templateName, {
+      tenant_overrides: tenant.template_overrides,
+      compliance_rules: tenant.compliance_requirements,
+      custom_variables: tenant.default_variables
+    });
+
+    return this.applyTenantPolicies(template, tenant);
+  }
+
+  async trackUsage(tenant: string, template: string, context: GenerationContext) {
+    await this.analytics.record({
+      event: 'template_generation',
+      tenant,
+      template,
+      user: context.user.id,
+      timestamp: new Date(),
+      parameters: this.sanitizeForAudit(context.parameters),
+      output_files: context.result.files.length,
+      generation_time: context.performance.total_time,
+      compliance_tags: context.template.compliance_tags
+    });
+  }
+}
+```
+
+## Governance Configuration YAML
+
+```yaml
+# .hyperdev/governance.yml
+governance:
+  approval_workflows:
+    template_publication:
+      required: true
+      approvers: ["@platform-team", "@security-team"]
+      checks: ["security-scan", "performance-test", "documentation-complete"]
+
+    production_deployment:
+      required: true
+      approvers: ["@tech-leads"]
+      requirements:
+        - template_version: "stable"
+        - security_clearance: "high"
+        - test_coverage: "> 90%"
+
+  compliance:
+    frameworks: ["SOC2", "GDPR", "HIPAA"]
+    data_classification:
+      enabled: true
+      levels: ["public", "internal", "confidential", "restricted"]
+      default_level: "internal"
+
+    audit_trail:
+      enabled: true
+      retention_period: "7 years"
+      events: ["template_usage", "parameter_access", "file_generation"]
+
+  template_standards:
+    required_metadata:
+      - description
+      - version
+      - maintainer
+      - security_classification
+      - compliance_tags
+
+    quality_gates:
+      - name: "security-scan"
+        provider: "veracode"
+        fail_on: ["high", "critical"]
+      - name: "performance-test"
+        provider: "internal"
+        max_generation_time: "30s"
+```
+
+## Deployment Configuration YAML
+
+```yaml
+# .hyperdev/deployment.yml
+environments:
+  development:
+    sources:
+      - "github:company/dev-cookbooks"
+    validation: false
+
+  staging:
+    sources:
+      - "github:company/cookbooks#v2.1.0"
+    validation: true
+
+  production:
+    sources:
+      - "@company/production-cookbooks@2.1.0"
+    validation: true
+    approval_required: true
+
+monitoring:
+  metrics: ["generation_time", "error_rate", "cookbook_usage"]
+```
+
+## Advanced Profiling
+
+```typescript
+// Advanced debugging with custom instrumentation
+import { HyperdevProfiler, PerformanceMonitor } from '@hyperdev/hyperdev';
+
+const profiler = new HypergenProfiler({
+  track_memory: true,
+  track_cpu: true,
+  track_io: true,
+  sample_rate: 100,           // microseconds
+  output_format: 'chromium-trace'
+});
+
+await profiler.profile(async () => {
+  await engine.generateFromTemplate('complex-template', parameters);
+}, {
+  output_file: './profiles/generation-trace.json',
+  metadata: {
+    template: 'complex-template',
+    parameters_hash: hashParameters(parameters),
+    environment: process.env.NODE_ENV
+  }
+});
+```
+
+Load `generation-trace.json` in Chrome DevTools Performance tab.
+
+## Hyperdev.config.js — Quality Configuration
+
+```javascript
+// hyperdev.config.js
+export default {
+  sources: [
+    { name: 'local', path: './_templates' },
+    { name: 'shared', path: 'https://github.com/company/cookbooks.git' }
+  ],
+
+  quality: {
+    syntax_validation: true,
+    security_scanning: true
+  },
+
+  trust: {
+    'github:company/*': 'high',
+    '@company/cookbook-*': 'high'
+  }
+};
+```

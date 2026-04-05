@@ -1,0 +1,101 @@
+---
+title: "hyper docs"
+description: "Generate and manage project documentation from code, epics, and AI assistance"
+icon: "book"
+og:title: "hyper docs"
+og:description: "Generate and manage project documentation from code, epics, and AI assistance"
+---
+
+# hyper docs
+
+Generate and manage documentation for your project — API references, technical specs, guides — without writing everything from scratch.
+
+## Syntax
+
+```bash
+hyper docs [action] [options]
+```
+
+## Overview
+
+The main value of `hyper docs` is getting documentation into a usable state fast. Point it at your source code or an epic and it generates structured docs you can edit, not a blank page you fill from scratch.
+
+```bash
+# Generate API docs from source
+hyper docs generate --type api-reference --source ./src/api
+
+# Create a technical spec for an epic
+hyper docs generate --type technical-spec --epic user-auth
+
+# List what documentation exists
+hyper docs list
+
+# Serve docs locally
+hyper docs serve
+```
+
+## Key subcommands
+
+### `hyper docs generate`
+
+AI-generates documentation from your code or epic context.
+
+```bash
+# From source code
+hyper docs generate --type api-reference --source ./src/api --title "Auth API"
+
+# From an epic
+hyper docs generate --type technical-spec --epic user-auth
+
+# Interactive, AI-assisted creation
+hyper docs create "User Onboarding Guide" --ai-assist
+```
+
+Supported `--type` values: `api-reference`, `technical-spec`, `user-guide`, `troubleshooting`, `architecture`, `process`.
+
+### `hyper docs list`
+
+```bash
+hyper docs list
+hyper docs list --type api-reference
+hyper docs list --epic user-auth
+```
+
+### `hyper docs serve`
+
+Spins up a local documentation site so you can review before publishing.
+
+```bash
+hyper docs serve
+hyper docs serve --port 3001
+```
+
+### `hyper docs validate`
+
+Checks for broken internal links and missing required sections.
+
+```bash
+hyper docs validate
+hyper docs validate --check-links
+```
+
+## Documentation structure
+
+`hyper docs` expects (and creates) a `docs/` directory in your project root. See the [documentation structure reference](/cli/configuration/doc-templates) for the expected layout and frontmatter schema.
+
+## Related commands
+
+<CardGroup cols={2}>
+  <Card title="hyper plan" href="/cli/commands/workflow/plan">
+    Plan epics that link to documentation
+  </Card>
+  <Card title="hyper search" href="/cli/commands/discovery/search">
+    Search across your project documentation
+  </Card>
+  <Card title="hyper gen" href="/cli/commands/workflow/gen">
+    Generate code alongside documentation
+  </Card>
+  <Card title="hyper hq" href="/cli/commands/hq">
+    Dashboard view of project health including docs
+  </Card>
+</CardGroup>

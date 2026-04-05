@@ -1,0 +1,80 @@
+---
+title: "RecipeExample"
+description: "Recipe example configuration"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeExample
+
+Defined in: [recipe-engine/types.ts:492](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L492)
+
+Recipe example configuration
+
+## Properties
+
+### title
+
+> **title**: `string`
+
+Defined in: [recipe-engine/types.ts:494](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L494)
+
+Example title
+
+***
+
+### description?
+
+> `optional` **description**: `string`
+
+Defined in: [recipe-engine/types.ts:497](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L497)
+
+Example description
+
+***
+
+### variables
+
+> **variables**: `Record`\<`string`, `any`\>
+
+Defined in: [recipe-engine/types.ts:500](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L500)
+
+Example variables
+
+***
+
+### expectedResult?
+
+> `optional` **expectedResult**: `object`
+
+Defined in: [recipe-engine/types.ts:503](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L503)
+
+Expected execution result
+
+#### totalSteps?
+
+> `optional` **totalSteps**: `number`
+
+Expected number of steps
+
+#### filesCreated?
+
+> `optional` **filesCreated**: `string`[]
+
+Expected files to be created
+
+#### executionTime?
+
+> `optional` **executionTime**: `object`
+
+Expected execution time range
+
+##### executionTime.min?
+
+> `optional` **min**: `number`
+
+##### executionTime.max?
+
+> `optional` **max**: `number`

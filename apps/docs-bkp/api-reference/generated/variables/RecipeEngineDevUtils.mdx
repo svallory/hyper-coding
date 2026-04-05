@@ -1,0 +1,114 @@
+---
+title: "RecipeEngineDevUtils"
+description: "Development utilities for Recipe Engine"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeEngineDevUtils
+
+> `const` **RecipeEngineDevUtils**: `object`
+
+Defined in: [recipe-engine/index.ts:275](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/index.ts#L275)
+
+Development utilities for Recipe Engine
+
+## Type Declaration
+
+### createTestStepExecutor()
+
+> `readonly` **createTestStepExecutor**: (`config`) => `any`
+
+Create a minimal step executor for testing
+
+#### Parameters
+
+##### config
+
+`Partial`\<[`StepExecutorConfig`](/api-reference/generated/interfaces/StepExecutorConfig.mdx)\> = `{}`
+
+#### Returns
+
+`any`
+
+### resetForTesting()
+
+> `readonly` **resetForTesting**: () => `void`
+
+Reset all Recipe Engine components for testing
+
+#### Returns
+
+`void`
+
+### getDebugInfo()
+
+> `readonly` **getDebugInfo**: () => `object`
+
+Get comprehensive debug information
+
+#### Returns
+
+`object`
+
+##### engine
+
+> **engine**: `object`
+
+###### engine.version
+
+> **version**: `string` = `RECIPE_ENGINE_VERSION`
+
+###### engine.features
+
+> **features**: readonly \[`"step-orchestration"`, `"dependency-management"`, `"parallel-execution"`, `"conditional-logic"`, `"error-handling"`, `"progress-tracking"`, `"metrics-collection"`, `"tool-registry"`, `"template-composition"`, `"action-pipelines"`, `"codemod-transformations"`, `"sub-recipe-execution"`\] = `RECIPE_ENGINE_FEATURES`
+
+###### engine.health
+
+> **health**: `object`
+
+###### engine.health.healthy
+
+> **healthy**: `boolean`
+
+###### engine.health.version
+
+> **version**: `string`
+
+###### engine.health.issues
+
+> **issues**: `string`[]
+
+###### engine.health.components
+
+> **components**: `object`
+
+###### engine.health.components.stepExecutor
+
+> **stepExecutor**: `boolean`
+
+###### engine.health.components.toolRegistry
+
+> **toolRegistry**: `boolean`
+
+###### engine.health.toolRegistryHealth
+
+> **toolRegistryHealth**: `object`
+
+###### engine.health.toolRegistryHealth.healthy
+
+> **healthy**: `boolean`
+
+###### engine.health.toolRegistryHealth.issues
+
+> **issues**: `string`[]
+
+###### engine.health.toolRegistryHealth.stats
+
+> **stats**: [`ToolRegistryStats`](/api-reference/generated/interfaces/ToolRegistryStats.mdx)
+
+##### toolFramework
+
+> **toolFramework**: `any` = `registryInfo`

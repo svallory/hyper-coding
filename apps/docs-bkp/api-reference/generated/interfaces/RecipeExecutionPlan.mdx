@@ -1,0 +1,100 @@
+---
+title: "RecipeExecutionPlan"
+description: "Recipe execution plan"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeExecutionPlan
+
+Defined in: [recipe-engine/types.ts:746](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L746)
+
+Recipe execution plan
+
+## Properties
+
+### recipe
+
+> **recipe**: [`RecipeConfig`](/api-reference/generated/interfaces/RecipeConfig.mdx)
+
+Defined in: [recipe-engine/types.ts:748](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L748)
+
+Recipe being executed
+
+***
+
+### phases
+
+> **phases**: `object`[]
+
+Defined in: [recipe-engine/types.ts:751](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L751)
+
+Execution order phases
+
+#### phase
+
+> **phase**: `number`
+
+Phase number
+
+#### steps
+
+> **steps**: `string`[]
+
+Steps to execute in this phase
+
+#### parallel
+
+> **parallel**: `boolean`
+
+Whether steps in this phase can run in parallel
+
+***
+
+### dependencyGraph
+
+> **dependencyGraph**: `Map`\<`string`, [`StepDependencyNode`](/api-reference/generated/interfaces/StepDependencyNode.mdx)\>
+
+Defined in: [recipe-engine/types.ts:763](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L763)
+
+Dependency graph
+
+***
+
+### estimatedDuration?
+
+> `optional` **estimatedDuration**: `number`
+
+Defined in: [recipe-engine/types.ts:766](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L766)
+
+Estimated execution time
+
+***
+
+### resources?
+
+> `optional` **resources**: `object`
+
+Defined in: [recipe-engine/types.ts:769](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L769)
+
+Resource requirements
+
+#### memory?
+
+> `optional` **memory**: `number`
+
+Memory requirements (MB)
+
+#### cpu?
+
+> `optional` **cpu**: `number`
+
+CPU requirements
+
+#### disk?
+
+> `optional` **disk**: `number`
+
+Disk space requirements (MB)

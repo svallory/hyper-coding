@@ -1,0 +1,92 @@
+---
+title: "RecipeValidationError"
+description: "Recipe validation error"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / RecipeValidationError
+
+Defined in: [recipe-engine/types.ts:662](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L662)
+
+Recipe validation error
+
+## Extends
+
+- `Error`
+
+## Properties
+
+### code
+
+> **code**: `string`
+
+Defined in: [recipe-engine/types.ts:664](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L664)
+
+Error code
+
+***
+
+### message
+
+> **message**: `string`
+
+Defined in: [recipe-engine/types.ts:667](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L667)
+
+Error message
+
+***
+
+### location?
+
+> `optional` **location**: `object`
+
+Defined in: [recipe-engine/types.ts:670](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L670)
+
+Location of error
+
+#### step?
+
+> `optional` **step**: `string`
+
+Step name (if applicable)
+
+#### field?
+
+> `optional` **field**: `string`
+
+Field path
+
+#### line?
+
+> `optional` **line**: `number`
+
+Line number (if applicable)
+
+#### column?
+
+> `optional` **column**: `number`
+
+Column number (if applicable)
+
+***
+
+### severity
+
+> **severity**: `"error"` \| `"critical"`
+
+Defined in: [recipe-engine/types.ts:685](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L685)
+
+Error severity
+
+***
+
+### suggestion?
+
+> `optional` **suggestion**: `string`
+
+Defined in: [recipe-engine/types.ts:688](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/types.ts#L688)
+
+Suggested fix

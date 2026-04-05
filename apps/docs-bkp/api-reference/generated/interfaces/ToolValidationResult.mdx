@@ -1,0 +1,90 @@
+---
+title: "ToolValidationResult"
+description: "Tool validation result"
+---
+
+[**hypergen**](../README.mdx)
+
+***
+
+[hypergen](/api-reference/generated/README.mdx) / ToolValidationResult
+
+Defined in: [recipe-engine/tools/base.ts:87](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L87)
+
+Tool validation result
+
+## Properties
+
+### isValid
+
+> **isValid**: `boolean`
+
+Defined in: [recipe-engine/tools/base.ts:89](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L89)
+
+Whether the tool configuration is valid
+
+***
+
+### errors
+
+> **errors**: `string`[]
+
+Defined in: [recipe-engine/tools/base.ts:92](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L92)
+
+Validation errors
+
+***
+
+### warnings
+
+> **warnings**: `string`[]
+
+Defined in: [recipe-engine/tools/base.ts:95](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L95)
+
+Validation warnings
+
+***
+
+### suggestions
+
+> **suggestions**: `string`[]
+
+Defined in: [recipe-engine/tools/base.ts:98](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L98)
+
+Validation suggestions
+
+***
+
+### estimatedExecutionTime?
+
+> `optional` **estimatedExecutionTime**: `number`
+
+Defined in: [recipe-engine/tools/base.ts:101](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L101)
+
+Estimated execution time in milliseconds
+
+***
+
+### resourceRequirements?
+
+> `optional` **resourceRequirements**: `object`
+
+Defined in: [recipe-engine/tools/base.ts:104](https://github.com/hyperdev-official/hypergen/blob/828b5ae65936e3539f9520285f34e032b419fbfc/packages/hypergen/src/recipe-engine/tools/base.ts#L104)
+
+Resource requirements
+
+#### memory?
+
+> `optional` **memory**: `number`
+
+#### disk?
+
+> `optional` **disk**: `number`
+
+#### network?
+
+> `optional` **network**: `boolean`
+
+#### processes?
+
+> `optional` **processes**: `number`
