@@ -1,0 +1,52 @@
+name: agent-plugin
+
+# Self-contained checks for the hyper agent plugin (bash + node only —
+# deliberately no moon/bun involvement: the plugin has no build step and its
+# test harness needs nothing from the monorepo toolchain).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agent-plugin/**"
+      - ".github/workflows/agent-plugin.yml"
+  pull_request:
+    paths:
+      - "agent-plugin/**"
+      - ".github/workflows/agent-plugin.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax-check every shell script
+        run: |
+          set -euo pipefail
+          bash -n agent-plugin/scripts/*.sh
+          bash -n agent-plugin/stacks/*/detect.sh
+          bash -n agent-plugin/tests/*.sh
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          shellcheck --version
+          shellcheck --severity=warning -x \
+            agent-plugin/scripts/*.sh \
+            agent-plugin/stacks/*/detect.sh \
+            agent-plugin/tests/*.sh
+
+      - name: Run the plugin test suite
+        run: bash agent-plugin/tests/run.sh
+
+      - name: Validate every JSON file in the plugin
+        run: |
+          set -euo pipefail
+          find agent-plugin -name '*.json' -type f -print0 \
+            | xargs -0 -n1 node -e '
+                const f = process.argv[1];
+                try { JSON.parse(require("fs").readFileSync(f, "utf8")); }
+                catch (e) { console.error(`invalid JSON: ${f}: ${e.message}`); process.exit(1); }
+                console.log(`ok ${f}`);
+              '
