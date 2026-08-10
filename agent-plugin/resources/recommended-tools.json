@@ -1,0 +1,671 @@
+{
+	"$comment": "Curated tool catalog for /hyper:tools recommendations. Schema per tool: id, name, description, docs, repo, stacks[] (node|go|rust|python|any), aspects[] (lint|format|typecheck|test|security|ci|complexity|deps|docs|hooks|release), detect {config: [globs], bin} (both optional; absence means presence cannot be verified), notes (optional; conflicts and replacements). Read by scripts/hyper-recommend.sh.",
+	"tools": [
+		{
+			"id": "biome",
+			"name": "Biome",
+			"description": "Fast formatter + linter for JS/TS/JSON/CSS",
+			"docs": "https://biomejs.dev",
+			"repo": "https://github.com/biomejs/biome",
+			"stacks": ["node"],
+			"aspects": ["lint", "format"],
+			"detect": { "config": ["biome.json", "biome.jsonc"], "bin": "biome" },
+			"notes": "replaces eslint+prettier; do not recommend alongside them"
+		},
+		{
+			"id": "eslint",
+			"name": "ESLint",
+			"description": "Pluggable JS/TS linter, the ecosystem default",
+			"docs": "https://eslint.org",
+			"repo": "https://github.com/eslint/eslint",
+			"stacks": ["node"],
+			"aspects": ["lint"],
+			"detect": { "config": ["eslint.config.*", ".eslintrc*"], "bin": "eslint" },
+			"notes": "conflicts with biome and oxlint as the primary linter; pick one"
+		},
+		{
+			"id": "prettier",
+			"name": "Prettier",
+			"description": "Opinionated code formatter for JS/TS/CSS/Markdown and more",
+			"docs": "https://prettier.io",
+			"repo": "https://github.com/prettier/prettier",
+			"stacks": ["node"],
+			"aspects": ["format"],
+			"detect": { "config": [".prettierrc*", "prettier.config.*"], "bin": "prettier" },
+			"notes": "biome and dprint cover the same job; do not run two formatters on the same files"
+		},
+		{
+			"id": "oxlint",
+			"name": "Oxlint",
+			"description": "Very fast Rust-based JS/TS linter from the oxc project",
+			"docs": "https://oxc.rs",
+			"repo": "https://github.com/oxc-project/oxc",
+			"stacks": ["node"],
+			"aspects": ["lint"],
+			"detect": { "config": [".oxlintrc*"], "bin": "oxlint" },
+			"notes": "alternative to eslint (fewer rules, much faster); do not recommend alongside it"
+		},
+		{
+			"id": "vitest",
+			"name": "Vitest",
+			"description": "Vite-native test runner with Jest-compatible API",
+			"docs": "https://vitest.dev",
+			"repo": "https://github.com/vitest-dev/vitest",
+			"stacks": ["node"],
+			"aspects": ["test"],
+			"detect": { "config": ["vitest.config.*", "vitest.workspace.*"], "bin": "vitest" },
+			"notes": "jest is the incumbent alternative; one unit test runner per project"
+		},
+		{
+			"id": "knip",
+			"name": "Knip",
+			"description": "Finds unused files, dependencies, and exports in JS/TS projects",
+			"docs": "https://knip.dev",
+			"repo": "https://github.com/webpro-nl/knip",
+			"stacks": ["node"],
+			"aspects": ["deps", "lint"],
+			"detect": { "config": ["knip.json", "knip.jsonc", "knip.config.*"], "bin": "knip" }
+		},
+		{
+			"id": "jest",
+			"name": "Jest",
+			"description": "Widely used JS/TS test framework with snapshots and mocking built in",
+			"docs": "https://jestjs.io",
+			"repo": "https://github.com/jestjs/jest",
+			"stacks": ["node"],
+			"aspects": ["test"],
+			"detect": { "config": ["jest.config.*"], "bin": "jest" },
+			"notes": "vitest is the faster alternative with a compatible API; one unit test runner per project"
+		},
+		{
+			"id": "playwright",
+			"name": "Playwright",
+			"description": "Browser end-to-end testing across Chromium, Firefox, and WebKit",
+			"docs": "https://playwright.dev",
+			"repo": "https://github.com/microsoft/playwright",
+			"stacks": ["node"],
+			"aspects": ["test"],
+			"detect": { "config": ["playwright.config.*"], "bin": "playwright" }
+		},
+		{
+			"id": "husky",
+			"name": "Husky",
+			"description": "Minimal git hooks manager for npm projects",
+			"docs": "https://typicode.github.io/husky/",
+			"repo": "https://github.com/typicode/husky",
+			"stacks": ["node"],
+			"aspects": ["hooks"],
+			"detect": { "config": [".husky"], "bin": "husky" },
+			"notes": "lefthook and pre-commit fill the same role; pick one hooks manager"
+		},
+		{
+			"id": "commitlint",
+			"name": "commitlint",
+			"description": "Lints commit messages against conventional-commit rules",
+			"docs": "https://commitlint.js.org",
+			"repo": "https://github.com/conventional-changelog/commitlint",
+			"stacks": ["node"],
+			"aspects": ["lint", "hooks"],
+			"detect": { "config": [".commitlintrc*", "commitlint.config.*"], "bin": "commitlint" },
+			"notes": "pairs with a hooks manager (husky/lefthook) and conventional-commit release tooling"
+		},
+		{
+			"id": "changesets",
+			"name": "Changesets",
+			"description": "Versioning and changelog workflow for npm packages and monorepos",
+			"docs": "https://github.com/changesets/changesets",
+			"repo": "https://github.com/changesets/changesets",
+			"stacks": ["node"],
+			"aspects": ["release"],
+			"detect": { "config": [".changeset/config.json"], "bin": "changeset" },
+			"notes": "release-please covers the same job driven by commit messages instead of changeset files; pick one"
+		},
+		{
+			"id": "syncpack",
+			"name": "Syncpack",
+			"description": "Keeps dependency versions consistent across monorepo package.json files",
+			"docs": "https://jamiemason.github.io/syncpack/",
+			"repo": "https://github.com/JamieMason/syncpack",
+			"stacks": ["node"],
+			"aspects": ["deps"],
+			"detect": { "config": [".syncpackrc*", "syncpack.config.*"], "bin": "syncpack" }
+		},
+		{
+			"id": "madge",
+			"name": "Madge",
+			"description": "Visualizes module dependency graphs and finds circular imports in JS/TS",
+			"docs": "https://github.com/pahen/madge",
+			"repo": "https://github.com/pahen/madge",
+			"stacks": ["node"],
+			"aspects": ["deps", "complexity"],
+			"detect": { "config": [".madgerc"], "bin": "madge" },
+			"notes": "complements knip: knip finds unused code, madge maps import structure"
+		},
+		{
+			"id": "publint",
+			"name": "publint",
+			"description": "Lints npm package publishing config (exports, types, ESM/CJS fields)",
+			"docs": "https://publint.dev",
+			"repo": "https://github.com/publint/publint",
+			"stacks": ["node"],
+			"aspects": ["lint", "release"],
+			"detect": { "bin": "publint" }
+		},
+		{
+			"id": "attw",
+			"name": "Are the Types Wrong?",
+			"description": "Checks published npm packages for TypeScript resolution problems",
+			"docs": "https://arethetypeswrong.github.io",
+			"repo": "https://github.com/arethetypeswrong/arethetypeswrong.github.io",
+			"stacks": ["node"],
+			"aspects": ["typecheck", "release"],
+			"detect": { "bin": "attw" },
+			"notes": "complements publint: publint checks package fields, attw checks how consumers resolve the types"
+		},
+		{
+			"id": "typedoc",
+			"name": "TypeDoc",
+			"description": "API documentation generator for TypeScript from source and comments",
+			"docs": "https://typedoc.org",
+			"repo": "https://github.com/TypeStrong/typedoc",
+			"stacks": ["node"],
+			"aspects": ["docs"],
+			"detect": { "config": ["typedoc.json", "typedoc.config.*"], "bin": "typedoc" }
+		},
+		{
+			"id": "golangci-lint",
+			"name": "golangci-lint",
+			"description": "Aggregated Go linter runner (staticcheck, govet, and dozens more)",
+			"docs": "https://golangci-lint.run",
+			"repo": "https://github.com/golangci/golangci-lint",
+			"stacks": ["go"],
+			"aspects": ["lint"],
+			"detect": {
+				"config": [".golangci.yml", ".golangci.yaml", ".golangci.toml", ".golangci.json"],
+				"bin": "golangci-lint"
+			},
+			"notes": "bundles staticcheck; running both separately is redundant"
+		},
+		{
+			"id": "staticcheck",
+			"name": "Staticcheck",
+			"description": "Advanced Go static analysis (correctness, simplification, style)",
+			"docs": "https://staticcheck.dev",
+			"repo": "https://github.com/dominikh/go-tools",
+			"stacks": ["go"],
+			"aspects": ["lint"],
+			"detect": { "config": ["staticcheck.conf"], "bin": "staticcheck" },
+			"notes": "already included in golangci-lint; standalone use only makes sense without it"
+		},
+		{
+			"id": "gofumpt",
+			"name": "gofumpt",
+			"description": "Stricter drop-in replacement for gofmt",
+			"docs": "https://github.com/mvdan/gofumpt",
+			"repo": "https://github.com/mvdan/gofumpt",
+			"stacks": ["go"],
+			"aspects": ["format"],
+			"detect": { "bin": "gofumpt" }
+		},
+		{
+			"id": "govulncheck",
+			"name": "govulncheck",
+			"description": "Official Go vulnerability scanner (reports only reachable vulns)",
+			"docs": "https://github.com/golang/vuln",
+			"repo": "https://github.com/golang/vuln",
+			"stacks": ["go"],
+			"aspects": ["security"],
+			"detect": { "bin": "govulncheck" }
+		},
+		{
+			"id": "revive",
+			"name": "revive",
+			"description": "Fast, configurable Go linter, drop-in replacement for golint",
+			"docs": "https://revive.run",
+			"repo": "https://github.com/mgechev/revive",
+			"stacks": ["go"],
+			"aspects": ["lint"],
+			"detect": { "config": ["revive.toml"], "bin": "revive" },
+			"notes": "available as a golangci-lint linter; standalone use only makes sense without it"
+		},
+		{
+			"id": "gosec",
+			"name": "gosec",
+			"description": "Scans Go AST for common security problems (SAST)",
+			"docs": "https://github.com/securego/gosec",
+			"repo": "https://github.com/securego/gosec",
+			"stacks": ["go"],
+			"aspects": ["security"],
+			"detect": { "bin": "gosec" },
+			"notes": "bundled in golangci-lint as the gosec linter; running both separately is redundant"
+		},
+		{
+			"id": "gotestsum",
+			"name": "gotestsum",
+			"description": "Wraps go test with readable output, JUnit XML, and rerun-failures",
+			"docs": "https://github.com/gotestyourself/gotestsum",
+			"repo": "https://github.com/gotestyourself/gotestsum",
+			"stacks": ["go"],
+			"aspects": ["test"],
+			"detect": { "bin": "gotestsum" }
+		},
+		{
+			"id": "mockery",
+			"name": "Mockery",
+			"description": "Generates type-safe mocks for Go interfaces",
+			"docs": "https://vektra.github.io/mockery/",
+			"repo": "https://github.com/vektra/mockery",
+			"stacks": ["go"],
+			"aspects": ["test"],
+			"detect": { "config": [".mockery.yml", ".mockery.yaml"], "bin": "mockery" }
+		},
+		{
+			"id": "clippy",
+			"name": "Clippy",
+			"description": "Official Rust linter with hundreds of correctness and style lints",
+			"docs": "https://doc.rust-lang.org/clippy/",
+			"repo": "https://github.com/rust-lang/rust-clippy",
+			"stacks": ["rust"],
+			"aspects": ["lint"],
+			"detect": { "config": ["clippy.toml", ".clippy.toml"], "bin": "clippy-driver" }
+		},
+		{
+			"id": "rustfmt",
+			"name": "rustfmt",
+			"description": "Official Rust code formatter",
+			"docs": "https://github.com/rust-lang/rustfmt",
+			"repo": "https://github.com/rust-lang/rustfmt",
+			"stacks": ["rust"],
+			"aspects": ["format"],
+			"detect": { "config": ["rustfmt.toml", ".rustfmt.toml"], "bin": "rustfmt" }
+		},
+		{
+			"id": "cargo-audit",
+			"name": "cargo-audit",
+			"description": "Audits Cargo.lock against the RustSec advisory database",
+			"docs": "https://github.com/rustsec/rustsec",
+			"repo": "https://github.com/rustsec/rustsec",
+			"stacks": ["rust"],
+			"aspects": ["security"],
+			"detect": { "bin": "cargo-audit" },
+			"notes": "cargo-deny includes the same advisory check plus license/source policy"
+		},
+		{
+			"id": "cargo-deny",
+			"name": "cargo-deny",
+			"description": "Lints Cargo dependencies: advisories, licenses, bans, sources",
+			"docs": "https://embarkstudios.github.io/cargo-deny/",
+			"repo": "https://github.com/EmbarkStudios/cargo-deny",
+			"stacks": ["rust"],
+			"aspects": ["security", "deps"],
+			"detect": { "config": ["deny.toml"], "bin": "cargo-deny" },
+			"notes": "superset of cargo-audit; running both is redundant"
+		},
+		{
+			"id": "cargo-nextest",
+			"name": "cargo-nextest",
+			"description": "Faster Rust test runner with better output and flaky-test handling",
+			"docs": "https://nexte.st",
+			"repo": "https://github.com/nextest-rs/nextest",
+			"stacks": ["rust"],
+			"aspects": ["test"],
+			"detect": { "config": [".config/nextest.toml"], "bin": "cargo-nextest" }
+		},
+		{
+			"id": "ruff",
+			"name": "Ruff",
+			"description": "Extremely fast Python linter and formatter in one tool",
+			"docs": "https://docs.astral.sh/ruff/",
+			"repo": "https://github.com/astral-sh/ruff",
+			"stacks": ["python"],
+			"aspects": ["lint", "format"],
+			"detect": { "config": ["ruff.toml", ".ruff.toml"], "bin": "ruff" },
+			"notes": "covers what black+flake8+isort did; do not recommend those alongside it"
+		},
+		{
+			"id": "mypy",
+			"name": "mypy",
+			"description": "The reference Python static type checker",
+			"docs": "https://mypy-lang.org",
+			"repo": "https://github.com/python/mypy",
+			"stacks": ["python"],
+			"aspects": ["typecheck"],
+			"detect": { "config": ["mypy.ini", ".mypy.ini"], "bin": "mypy" },
+			"notes": "pick one of mypy/pyright; two type checkers disagree more than they help"
+		},
+		{
+			"id": "pyright",
+			"name": "Pyright",
+			"description": "Fast Python type checker from Microsoft (powers Pylance)",
+			"docs": "https://microsoft.github.io/pyright/",
+			"repo": "https://github.com/microsoft/pyright",
+			"stacks": ["python"],
+			"aspects": ["typecheck"],
+			"detect": { "config": ["pyrightconfig.json"], "bin": "pyright" },
+			"notes": "pick one of mypy/pyright; two type checkers disagree more than they help"
+		},
+		{
+			"id": "pytest",
+			"name": "pytest",
+			"description": "De-facto standard Python test framework",
+			"docs": "https://docs.pytest.org",
+			"repo": "https://github.com/pytest-dev/pytest",
+			"stacks": ["python"],
+			"aspects": ["test"],
+			"detect": { "config": ["pytest.ini", "conftest.py"], "bin": "pytest" }
+		},
+		{
+			"id": "bandit",
+			"name": "Bandit",
+			"description": "Finds common security issues in Python code (SAST)",
+			"docs": "https://bandit.readthedocs.io",
+			"repo": "https://github.com/PyCQA/bandit",
+			"stacks": ["python"],
+			"aspects": ["security"],
+			"detect": { "config": [".bandit", "bandit.yaml"], "bin": "bandit" }
+		},
+		{
+			"id": "uv",
+			"name": "uv",
+			"description": "Fast Python package and project manager (lockfiles, venvs, tool runs)",
+			"docs": "https://docs.astral.sh/uv/",
+			"repo": "https://github.com/astral-sh/uv",
+			"stacks": ["python"],
+			"aspects": ["deps"],
+			"detect": { "config": ["uv.lock"], "bin": "uv" },
+			"notes": "poetry occupies the same role; one package manager per project"
+		},
+		{
+			"id": "poetry",
+			"name": "Poetry",
+			"description": "Python dependency management and packaging with lockfiles",
+			"docs": "https://python-poetry.org",
+			"repo": "https://github.com/python-poetry/poetry",
+			"stacks": ["python"],
+			"aspects": ["deps"],
+			"detect": { "config": ["poetry.lock"], "bin": "poetry" },
+			"notes": "uv is the faster alternative; one package manager per project"
+		},
+		{
+			"id": "pip-audit",
+			"name": "pip-audit",
+			"description": "PyPA tool that audits Python environments for known vulnerabilities",
+			"docs": "https://github.com/pypa/pip-audit",
+			"repo": "https://github.com/pypa/pip-audit",
+			"stacks": ["python"],
+			"aspects": ["security"],
+			"detect": { "bin": "pip-audit" }
+		},
+		{
+			"id": "black",
+			"name": "Black",
+			"description": "The uncompromising Python code formatter",
+			"docs": "https://black.readthedocs.io",
+			"repo": "https://github.com/psf/black",
+			"stacks": ["python"],
+			"aspects": ["format"],
+			"detect": { "bin": "black" },
+			"notes": "ruff format is a drop-in replacement; do not run both"
+		},
+		{
+			"id": "pylint",
+			"name": "Pylint",
+			"description": "Thorough Python linter with deeper inference than most alternatives",
+			"docs": "https://pylint.readthedocs.io",
+			"repo": "https://github.com/pylint-dev/pylint",
+			"stacks": ["python"],
+			"aspects": ["lint"],
+			"detect": { "config": [".pylintrc*", "pylintrc"], "bin": "pylint" },
+			"notes": "ruff reimplements many pylint rules and is far faster; prefer ruff unless pylint-only checks are needed"
+		},
+		{
+			"id": "hypothesis",
+			"name": "Hypothesis",
+			"description": "Property-based testing library for Python",
+			"docs": "https://hypothesis.readthedocs.io",
+			"repo": "https://github.com/HypothesisWorks/hypothesis",
+			"stacks": ["python"],
+			"aspects": ["test"],
+			"notes": "complements pytest rather than replacing it"
+		},
+		{
+			"id": "pytest-cov",
+			"name": "pytest-cov",
+			"description": "Coverage reporting plugin for pytest (wraps coverage.py)",
+			"docs": "https://pytest-cov.readthedocs.io",
+			"repo": "https://github.com/pytest-dev/pytest-cov",
+			"stacks": ["python"],
+			"aspects": ["test"],
+			"detect": { "config": [".coveragerc"] }
+		},
+		{
+			"id": "tox",
+			"name": "tox",
+			"description": "Runs Python test suites across multiple environments and versions",
+			"docs": "https://tox.wiki",
+			"repo": "https://github.com/tox-dev/tox",
+			"stacks": ["python"],
+			"aspects": ["test", "ci"],
+			"detect": { "config": ["tox.ini", "tox.toml"], "bin": "tox" },
+			"notes": "nox is the python-configured alternative; pick one env matrix runner"
+		},
+		{
+			"id": "pdoc",
+			"name": "pdoc",
+			"description": "Zero-config API documentation generator for Python from docstrings",
+			"docs": "https://pdoc.dev",
+			"repo": "https://github.com/mitmproxy/pdoc",
+			"stacks": ["python"],
+			"aspects": ["docs"],
+			"detect": { "bin": "pdoc" }
+		},
+		{
+			"id": "gitleaks",
+			"name": "Gitleaks",
+			"description": "Scans repos and history for hardcoded secrets",
+			"docs": "https://github.com/gitleaks/gitleaks",
+			"repo": "https://github.com/gitleaks/gitleaks",
+			"stacks": ["any"],
+			"aspects": ["security"],
+			"detect": { "config": [".gitleaks.toml"], "bin": "gitleaks" }
+		},
+		{
+			"id": "semgrep",
+			"name": "Semgrep",
+			"description": "Multi-language SAST with a large open rule registry",
+			"docs": "https://semgrep.dev",
+			"repo": "https://github.com/semgrep/semgrep",
+			"stacks": ["any"],
+			"aspects": ["security"],
+			"detect": { "config": [".semgrep.yml", ".semgrep.yaml"], "bin": "semgrep" }
+		},
+		{
+			"id": "osv-scanner",
+			"name": "OSV-Scanner",
+			"description": "Scans lockfiles across ecosystems against the OSV vulnerability database",
+			"docs": "https://google.github.io/osv-scanner/",
+			"repo": "https://github.com/google/osv-scanner",
+			"stacks": ["any"],
+			"aspects": ["security"],
+			"detect": { "config": ["osv-scanner.toml"], "bin": "osv-scanner" }
+		},
+		{
+			"id": "trivy",
+			"name": "Trivy",
+			"description": "Scanner for dependencies, container images, IaC, and secrets",
+			"docs": "https://github.com/aquasecurity/trivy",
+			"repo": "https://github.com/aquasecurity/trivy",
+			"stacks": ["any"],
+			"aspects": ["security"],
+			"detect": { "config": ["trivy.yaml"], "bin": "trivy" }
+		},
+		{
+			"id": "renovate",
+			"name": "Renovate",
+			"description": "Automated dependency update PRs across ecosystems",
+			"docs": "https://docs.renovatebot.com",
+			"repo": "https://github.com/renovatebot/renovate",
+			"stacks": ["any"],
+			"aspects": ["deps"],
+			"detect": {
+				"config": [
+					"renovate.json",
+					"renovate.json5",
+					".github/renovate.json",
+					".github/renovate.json5",
+					".renovaterc*"
+				]
+			}
+		},
+		{
+			"id": "lefthook",
+			"name": "Lefthook",
+			"description": "Fast, language-agnostic git hooks manager",
+			"docs": "https://github.com/evilmartians/lefthook",
+			"repo": "https://github.com/evilmartians/lefthook",
+			"stacks": ["any"],
+			"aspects": ["hooks"],
+			"detect": {
+				"config": ["lefthook.yml", "lefthook.yaml", ".lefthook.yml", "lefthook.toml"],
+				"bin": "lefthook"
+			},
+			"notes": "husky and pre-commit fill the same role; pick one hooks manager"
+		},
+		{
+			"id": "actionlint",
+			"name": "actionlint",
+			"description": "Static checker for GitHub Actions workflow files",
+			"docs": "https://rhysd.github.io/actionlint/",
+			"repo": "https://github.com/rhysd/actionlint",
+			"stacks": ["any"],
+			"aspects": ["ci"],
+			"detect": {
+				"config": [".github/actionlint.yml", ".github/actionlint.yaml"],
+				"bin": "actionlint"
+			}
+		},
+		{
+			"id": "typos",
+			"name": "typos",
+			"description": "Fast source-code spell checker with a low false-positive rate",
+			"docs": "https://github.com/crate-ci/typos",
+			"repo": "https://github.com/crate-ci/typos",
+			"stacks": ["any"],
+			"aspects": ["lint"],
+			"detect": { "config": ["typos.toml", "_typos.toml", ".typos.toml"], "bin": "typos" },
+			"notes": "cspell covers the same job with bigger dictionaries but more noise; one spell checker is enough"
+		},
+		{
+			"id": "dprint",
+			"name": "dprint",
+			"description": "Pluggable multi-language code formatter (TS/JSON/Markdown/TOML and more)",
+			"docs": "https://dprint.dev",
+			"repo": "https://github.com/dprint/dprint",
+			"stacks": ["any"],
+			"aspects": ["format"],
+			"detect": {
+				"config": ["dprint.json", ".dprint.json", "dprint.jsonc", ".dprint.jsonc"],
+				"bin": "dprint"
+			},
+			"notes": "overlaps prettier and biome formatting; one formatter per file type"
+		},
+		{
+			"id": "release-please",
+			"name": "release-please",
+			"description": "Automated release PRs and changelogs from conventional commits",
+			"docs": "https://github.com/googleapis/release-please",
+			"repo": "https://github.com/googleapis/release-please",
+			"stacks": ["any"],
+			"aspects": ["release"],
+			"detect": { "config": ["release-please-config.json", ".release-please-manifest.json"] },
+			"notes": "changesets covers the same job for npm monorepos via changeset files; pick one"
+		},
+		{
+			"id": "shellcheck",
+			"name": "ShellCheck",
+			"description": "Static analysis for shell scripts, catches quoting and portability bugs",
+			"docs": "https://www.shellcheck.net",
+			"repo": "https://github.com/koalaman/shellcheck",
+			"stacks": ["any"],
+			"aspects": ["lint"],
+			"detect": { "config": [".shellcheckrc"], "bin": "shellcheck" }
+		},
+		{
+			"id": "hadolint",
+			"name": "Hadolint",
+			"description": "Dockerfile linter that also runs ShellCheck on RUN instructions",
+			"docs": "https://github.com/hadolint/hadolint",
+			"repo": "https://github.com/hadolint/hadolint",
+			"stacks": ["any"],
+			"aspects": ["lint"],
+			"detect": { "config": [".hadolint.yaml", ".hadolint.yml"], "bin": "hadolint" }
+		},
+		{
+			"id": "yamllint",
+			"name": "yamllint",
+			"description": "Linter for YAML syntax, key repetition, and cosmetic problems",
+			"docs": "https://yamllint.readthedocs.io",
+			"repo": "https://github.com/adrienverge/yamllint",
+			"stacks": ["any"],
+			"aspects": ["lint"],
+			"detect": { "config": [".yamllint", ".yamllint.yaml", ".yamllint.yml"], "bin": "yamllint" }
+		},
+		{
+			"id": "markdownlint-cli2",
+			"name": "markdownlint-cli2",
+			"description": "Style and consistency linter for Markdown files",
+			"docs": "https://github.com/DavidAnson/markdownlint-cli2",
+			"repo": "https://github.com/DavidAnson/markdownlint-cli2",
+			"stacks": ["any"],
+			"aspects": ["lint"],
+			"detect": {
+				"config": [".markdownlint-cli2.*", ".markdownlint.*"],
+				"bin": "markdownlint-cli2"
+			}
+		},
+		{
+			"id": "cspell",
+			"name": "CSpell",
+			"description": "Dictionary-based spell checker for code with per-language dictionaries",
+			"docs": "https://cspell.org",
+			"repo": "https://github.com/streetsidesoftware/cspell",
+			"stacks": ["any"],
+			"aspects": ["lint"],
+			"detect": { "config": ["cspell.json", ".cspell.json", "cspell.config.*"], "bin": "cspell" },
+			"notes": "typos covers the same job with lower noise but smaller coverage; one spell checker is enough"
+		},
+		{
+			"id": "zizmor",
+			"name": "zizmor",
+			"description": "Static analysis for GitHub Actions security (injection, pwn requests, pinning)",
+			"docs": "https://docs.zizmor.sh",
+			"repo": "https://github.com/zizmorcore/zizmor",
+			"stacks": ["any"],
+			"aspects": ["security", "ci"],
+			"detect": { "config": ["zizmor.yml", ".github/zizmor.yml"], "bin": "zizmor" },
+			"notes": "complements actionlint: actionlint checks workflow correctness, zizmor checks security"
+		},
+		{
+			"id": "pre-commit",
+			"name": "pre-commit",
+			"description": "Git hooks framework with a large registry of ready-made hooks",
+			"docs": "https://pre-commit.com",
+			"repo": "https://github.com/pre-commit/pre-commit",
+			"stacks": ["any"],
+			"aspects": ["hooks"],
+			"detect": { "config": [".pre-commit-config.yaml"], "bin": "pre-commit" },
+			"notes": "python-born but manages hooks for any language; lefthook and husky fill the same role, pick one"
+		},
+		{
+			"id": "lizard",
+			"name": "Lizard",
+			"description": "Cyclomatic complexity analyzer for many languages (JS/TS, Go, Python, C, more)",
+			"docs": "https://github.com/terryyin/lizard",
+			"repo": "https://github.com/terryyin/lizard",
+			"stacks": ["any"],
+			"aspects": ["complexity"],
+			"detect": { "bin": "lizard" },
+			"notes": "golangci-lint bundles gocyclo/gocognit for Go; ruff bundles mccabe for Python"
+		}
+	]
+}
