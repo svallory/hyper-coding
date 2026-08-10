@@ -28,7 +28,7 @@ for Claude Code. Two ideas:
 
 | Command | What it does |
 |---|---|
-| `/hyper:init <repo-url>` | create a new space from a remote |
+| `/hyper:init <repo-url>` | create a new space from a remote — or `--new <name>` from nothing |
 | `/hyper:adopt [path]` | bring an existing repo into the layout — scaffolds a bare repo, **converts** an ordinary checkout (dry run first, four data-safety guarantees) |
 | `/hyper:tools` | detect the project's toolchain, wire the per-edit check hook, recommend new tools by aspect |
 | `/hyper:audit` | read-only health report: drift, debris, stale branches, secrets |
@@ -54,7 +54,7 @@ For an existing project:
 4. `/hyper:plan` when starting a feature; `/hyper:gen` when the team
    has patterns worth templating.
 
-For a brand-new setup: `/hyper:init <repo-url>` instead of step 1.
+For a brand-new setup: `/hyper:init <repo-url>` instead of step 1 — or `/hyper:init --new <name>` when no repo exists yet.
 
 ## If the user asks for more
 
