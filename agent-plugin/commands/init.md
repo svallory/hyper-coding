@@ -1,7 +1,7 @@
 ---
 name: init
 description: Create a new project space — bare repo, worktrees, and local-only directories
-argument-hint: <repo-url> [space-name] [--default-branch <name>]
+argument-hint: "<repo-url> [space-name] | --new <space-name> [--default-branch <name>]"
 ---
 
 # Init
@@ -15,6 +15,7 @@ which can never be committed.
 ```
 /hyper:init git@github.com:org/repo.git
 /hyper:init git@github.com:org/repo.git myname --default-branch develop
+/hyper:init --new myproject                  # no repo yet — start from nothing
 ```
 
 ## What it does
@@ -23,12 +24,19 @@ Run the script from the directory that should hold the space:
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/hyper-init.sh" <repo-url> [name] [--default-branch <b>]
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/hyper-init.sh" --new <name> [--default-branch <b>]
 ```
 
 It will:
 
 1. `git clone --bare` into `<name>/.git`, then set the standard remote fetch
    refspec and fetch — a bare clone has no remote-tracking branches otherwise.
+   With `--new` there is no remote: it runs `git init --bare` instead and
+   seeds an empty initial commit (a worktree cannot exist without one), so
+   the space works immediately; the closing output shows how to attach an
+   `origin` later. `--new` refuses up front when `git config user.name` /
+   `user.email` are unset — committing needs an identity, and failing later
+   would leave a half-built space.
 2. Record `worktrunk.default-branch` and `worktrunk.history` in the repo config.
 3. Create `worktrees/ data/ notes/ scratch/ bin/`, each with a
    `.what-goes-here` note.
