@@ -1,8 +1,25 @@
 ---
-title: "hyper watch Reference"
+title: "hyper watch"
 description: "Complete command reference for hyper watch"
 ---
 
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
 # hyper watch
 
-_Detailed command reference coming soon. See [user docs](/docs/tools/watch) for usage guide._
+Always-on agent context monitor. Watches your codebase in real time, captures learnings, and keeps AI agents focused across sessions.
+
+```bash
+hyper watch                          # Start watching the current project
+hyper watch --focus src/auth         # Watch a specific directory
+hyper watch --plan payment-integration  # Scope to an active plan
+hyper watch --task 42                # Focus on a single task
+hyper watch --quiet                  # Suppress activity output
+hyper watch --verbose                # Show all context update events
+```
+
+<CardGrid>
+  <Card title="Full Documentation" href="/docs/tools/watch">
+    Complete guide covering reactive context, integration with other commands, and how watch feeds back to the agent.
+  </Card>
+</CardGrid>

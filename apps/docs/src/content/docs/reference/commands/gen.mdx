@@ -3,9 +3,13 @@ title: "hyper gen"
 description: "Execute a recipe to generate code from templates, with optional AI 2-pass generation"
 ---
 
-import { CardGrid, Card } from '@astrojs/starlight/components';
+import { Aside, CardGrid, Card } from '@astrojs/starlight/components';
 
 # hyper gen
+
+<Aside type="note">
+`hyper gen` and [`hyper run`](/reference/commands/run) are aliases. This page covers command syntax and recipe resolution. For detailed variable resolution mechanics (`--ask`, `--no-defaults`), see [hyper run](/reference/commands/run).
+</Aside>
 
 Execute a recipe by path, kit reference, or cookbook shorthand.
 

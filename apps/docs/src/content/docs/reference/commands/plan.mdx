@@ -1,13 +1,17 @@
 ---
 title: "hyper plan"
-description: "Strategic planning and architecture design with AI-powered plans and technical specifications"
+description: "Create and manage project plans with templates, documentation, and AI-powered architecture design"
 ---
 
-import { CardGrid, Card } from '@astrojs/starlight/components';
+import { Aside, CardGrid, Card } from '@astrojs/starlight/components';
+
+<Aside type="caution" title="Spec Document — Coming Soon">
+This page describes both **currently available** functionality and **planned features** that haven't been implemented yet. The spec sections serve as a living specification under [Docs-Driven Development](https://github.com/svallory/hyper-coding/discussions). Feedback welcome!
+</Aside>
 
 # hyper plan
 
-Break down complex features into concrete, implementable plans --- with AI-generated technical specs and architecture guidance baked in.
+Create and manage project plans for feature development. Simple, documentation-focused planning with templates.
 
 ## Syntax
 
@@ -17,16 +21,11 @@ hyper plan [plan-title] [options]
 
 ## Overview
 
-When you run `hyper plan`, you get an interactive session that walks you through scoping a feature or epic. It asks about your goals, stack, constraints, and timeline, then generates a structured set of artifacts: a PRD, a technical spec, a database/API design, and a task breakdown ready to hand off to `hyper gen`. You can stop at any layer---just need the task list? Exit after the breakdown. Want the full architecture? Keep going.
+`hyper plan` covers basic plan management:
 
-The session is conversational but structured. You're not free-forming a chat; you're filling in a plan template with AI help. That keeps the output consistent and makes it composable with the rest of the toolchain.
-
-Key capabilities:
-
-- **Architecture design**: Generate technical specifications and system diagrams
-- **Task breakdown**: Break complex features into implementable tasks
-- **Technical documentation**: Auto-generate PRDs, architecture docs, and specs
-- **AI-powered insights**: Get architectural guidance and best practice recommendations
+- **Plan creation**: Create new plans with document templates
+- **Documentation**: Generate plan documentation
+- **Template support**: Use predefined document templates
 
 ## Options
 
@@ -37,7 +36,73 @@ Key capabilities:
 
 ## Examples
 
-### Basic Planning
+### Basic Plan Management
+
+```bash
+# Create new plan
+hyper plan "User Authentication System"
+
+# Create plan with template
+hyper plan "API Service" --template technical-prd
+
+# Initialize from existing document
+hyper plan "Migration" --from existing-spec.md
+```
+
+## Plan Document Templates
+
+**Available Templates**:
+- `technical-prd` - Comprehensive PRD with technical details
+- `business-prd` - Business-focused PRD format
+- `feature-spec` - Lightweight feature specification
+- `architecture-doc` - System architecture documentation
+- `minimal-plan` - Basic planning structure
+
+## Plan Structure
+
+Plans are stored in `.hyper/plans/<plan-title>/` with organized documentation:
+
+```
+.hyper/plans/user-auth/
+├── plan.yaml           # Plan metadata
+├── prd.md             # Product requirements
+├── architecture.md    # Technical architecture
+└── tasks.yaml         # Task breakdown
+```
+
+## Related Commands
+
+<CardGrid>
+  <Card title="hyper list" href="/reference/commands/list">
+    List available plans and resources
+  </Card>
+  <Card title="hyper dash" href="/reference/commands/dash">
+    Monitor plan progress in real time
+  </Card>
+</CardGrid>
+
+---
+
+## Planned: AI-Powered Strategic Planning
+
+The following sections describe the full vision for `hyper plan` — an interactive, AI-driven planning experience with architecture design, task breakdown, and project management integration.
+
+### Interactive Planning Sessions
+
+When the full experience ships, running `hyper plan` will give you an interactive session that walks you through scoping a feature or epic. It asks about your goals, stack, constraints, and timeline, then generates a structured set of artifacts: a PRD, a technical spec, a database/API design, and a task breakdown ready to hand off to `hyper gen`. You can stop at any layer — just need the task list? Exit after the breakdown. Want the full architecture? Keep going.
+
+The session is conversational but structured. You're not free-forming a chat; you're filling in a plan template with AI help. That keeps the output consistent and makes it composable with the rest of the toolchain.
+
+Key capabilities:
+
+- **Architecture design**: Generate technical specifications and system diagrams
+- **Task breakdown**: Break complex features into implementable tasks
+- **Technical documentation**: Auto-generate PRDs, architecture docs, and specs
+- **AI-powered insights**: Get architectural guidance and best practice recommendations
+
+### Planned Examples
+
+#### Interactive Planning
 
 ```bash
 # Start interactive planning session
@@ -50,7 +115,7 @@ hyper plan --dashboard
 hyper plan user-authentication
 ```
 
-### Create New Epic
+#### Create New Epic
 
 ```bash
 # Create epic with wizard
@@ -63,7 +128,7 @@ hyper plan create --name "Payment System" --template saas-feature
 hyper plan create --name "Real-time Chat" --context "websocket-based messaging system"
 ```
 
-### Architecture Design
+#### Architecture Design
 
 ```bash
 # Launch architecture tools
@@ -76,7 +141,7 @@ hyper plan auth-system --arch --diagram system
 hyper plan auth-system --arch --export pdf
 ```
 
-### Task Management
+#### Task Management
 
 ```bash
 # Manage epic tasks
@@ -89,9 +154,9 @@ hyper plan user-auth --tasks --breakdown
 hyper plan user-auth --tasks --roadmap
 ```
 
-## Epic Creation
+### Epic Creation
 
-### Epic Templates
+#### Epic Templates
 
 Choose from pre-built epic templates:
 
@@ -111,7 +176,7 @@ Choose from pre-built epic templates:
 
 </details>
 
-### Epic Structure
+#### Epic Structure
 
 When you create an epic, HyperDev generates:
 
@@ -135,7 +200,7 @@ When you create an epic, HyperDev generates:
     └── developer-guide.md     # Developer documentation
 ```
 
-### Epic Configuration
+#### Epic Configuration
 
 **epic.yml**
 ```yaml
@@ -181,9 +246,9 @@ architecture:
   integrations: ["SendGrid", "Twilio"]
 ```
 
-## Architecture Design
+### Architecture Design
 
-### System Diagrams
+#### System Diagrams
 
 ```bash
 # Generate system architecture diagram
@@ -212,7 +277,7 @@ graph TB
     end
 ```
 
-### Technical Specifications
+#### Technical Specifications
 
 HyperDev generates technical specifications covering everything you need to start building:
 
@@ -248,9 +313,9 @@ HyperDev generates technical specifications covering everything you need to star
 
 </details>
 
-## Task Management
+### Task Management
 
-### Task Breakdown
+#### Task Breakdown
 
 ```bash
 # Auto-generate tasks from epic
@@ -289,7 +354,7 @@ tasks:
     dependencies: ["AUTH-001", "AUTH-002"]
 ```
 
-### Implementation Roadmap
+#### Implementation Roadmap
 
 HyperDev generates visual roadmaps showing:
 - Task dependencies and critical path
@@ -297,9 +362,9 @@ HyperDev generates visual roadmaps showing:
 - Resource allocation
 - Risk assessment and mitigation
 
-## PRD Management
+### PRD Management
 
-### Auto-Generated PRDs
+#### Auto-Generated PRDs
 
 ```bash
 # Generate Product Requirements Document
@@ -338,9 +403,9 @@ immediate confirmation.
 - Phase 3 (3 weeks): Subscription billing, analytics
 ```
 
-## Planning Dashboard
+### Planning Dashboard
 
-### Interactive Dashboard
+#### Interactive Dashboard
 
 ```bash
 # Launch planning dashboard
@@ -356,7 +421,7 @@ The dashboard gives you:
 5. **Documentation Hub**: Centralized docs and specs
 6. **Collaboration Tools**: Comments, reviews, and approvals
 
-### Dashboard Features
+#### Dashboard Features
 
 - **Real-time collaboration**: Multiple team members can plan together
 - **AI assistance**: Get architectural suggestions and best practices
@@ -364,9 +429,9 @@ The dashboard gives you:
 - **Visual design**: Drag-and-drop diagram creation
 - **Code generation**: Direct integration with `hyper gen`
 
-## Integration with Development Workflow
+### Integration with Development Workflow
 
-### From Planning to Implementation
+#### From Planning to Implementation
 
 ```bash
 # Plan the feature
@@ -382,7 +447,7 @@ hyper watch --epic "User Profile System"
 hyper dash
 ```
 
-### Epic-Driven Development
+#### Epic-Driven Development
 
 Once you have an active epic, other commands become epic-aware:
 
@@ -395,9 +460,9 @@ hyper gen payment-form  # Automatically uses epic context
 hyper watch --epic-mode    # Focus on current epic only
 ```
 
-## Advanced Features
+### Advanced Features
 
-### AI-Powered Architecture Review
+#### AI-Powered Architecture Review
 
 ```bash
 # Get AI architecture recommendations
@@ -411,7 +476,7 @@ hyper plan auth-system --review --ai
 # - Technology choices
 ```
 
-### Multi-Epic Planning
+#### Multi-Epic Planning
 
 ```bash
 # Plan dependencies between epics
@@ -424,9 +489,9 @@ hyper plan --dependencies --visualize
 hyper plan --program-roadmap --export gantt
 ```
 
-## Export and Integration
+### Export and Integration
 
-### Documentation Export
+#### Documentation Export
 
 ```bash
 # Export complete epic documentation
@@ -438,7 +503,7 @@ hyper plan auth-system --export architecture --format png
 hyper plan auth-system --export tasks --format csv
 ```
 
-### Project Management Integration
+#### Project Management Integration
 
 ```bash
 # Export to Jira
@@ -451,9 +516,9 @@ hyper plan auth-system --export linear --team engineering
 hyper plan auth-system --export github --repo company/product
 ```
 
-## Configuration
+### Configuration
 
-### Planning Settings
+#### Planning Settings
 
 ```javascript
 // hypergen.config.js
@@ -492,26 +557,19 @@ export default {
 };
 ```
 
-## Related Commands
+## See Also
 
 <CardGrid>
   <Card title="hyper gen" href="/reference/commands/generate">
     Generate code from epic specifications
   </Card>
-  <Card title="hyper watch" href="/reference/commands/toolselop">
+  <Card title="hyper watch" href="/reference/commands/watch">
     Monitor epic implementation progress
   </Card>
   <Card title="hyper dash" href="/reference/commands/dash">
     Monitor plan progress in real time
   </Card>
-  <Card title="hyper plan" href="/cli/commands/docs/tools/plan">
-    Advanced epic management features
-  </Card>
 </CardGrid>
 
-## See Also
-
-- [Strategic Planning Workflow](/docs/tools/plan)
 - [Epic Templates](/reference/configuration)
-- [Epics Tool Documentation](/docs/tools/plan)
 - [Planning Examples](/docs/examples/overview)

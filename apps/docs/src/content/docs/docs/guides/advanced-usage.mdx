@@ -5,101 +5,30 @@ description: "Template composition, batch generation, watch mode, debugging, and
 
 # Advanced Usage
 
-Once you're past the basics, here's what HyperDev can do when you push it harder.
+Once you're past the basics, here's what HyperDev can do when you push it harder. This guide explains when and why to reach for each advanced feature. For full working examples with code, see [Advanced Patterns](/docs/examples/advanced-patterns).
 
 ## Multi-Step Recipe Composition
 
-When one template isn't enough, wire multiple templates into a recipe with dependencies. This generates a full-stack feature — API route, frontend component, and integration test — in the right order:
+A single template generates a single file. When a feature spans multiple files — an API route, a React component, and their tests — you need a recipe that wires them together with `depends_on` and shared outputs.
 
-```yaml recipes/fullstack-feature/recipe.yml
-name: fullstack-feature
-description: Generate backend route, React component, and integration test together
+Use multi-step recipes when the generated files have real dependencies between them (e.g., the component needs the API route's path). If the files are independent, batch generation (below) is simpler. The recipe engine resolves dependencies via topological sort and runs independent steps in parallel automatically.
 
-steps:
-  - name: api-route
-    tool: template
-    template: express-route
-    with:
-      name: "{{ name }}"
-      method: GET
-
-  - name: ui-component
-    tool: template
-    template: react-component
-    depends_on: [api-route]
-    with:
-      name: "{{ name | pascalCase }}"
-      endpoint: "{{ steps.api-route.exports.path }}"
-
-  - name: tests
-    tool: template
-    template: vitest-integration
-    depends_on: [api-route, ui-component]
-    with:
-      name: "{{ name }}"
-```
-
-```bash
-hyper gen fullstack-feature --name=UserProfile
-```
-
-Steps with no dependencies run in parallel automatically. The recipe engine uses topological sort to figure out the execution order.
+See [Advanced Patterns — Multi-Template Recipes](/docs/examples/advanced-patterns#multi-template-recipes) for a complete recipe example.
 
 ## Template Inheritance
 
-Define a base recipe with shared variables and steps, then extend it in more specific recipes:
+Define a base recipe with shared variables and steps, then `extends:` it in specialized recipes. This keeps your variable definitions DRY when you have a family of related generators (e.g., several component types that all need `name` and `styling` variables but differ in their steps).
 
-```yaml recipes/base-component/recipe.yml
-name: base-component
-variables:
-  name:
-    type: string
-    required: true
-  styling:
-    type: enum
-    values: ['css-modules', 'tailwind']
-    default: 'css-modules'
-```
-
-```yaml recipes/react-component/recipe.yml
-extends: base-component
-name: react-component
-
-variables:
-  withTests:
-    type: boolean
-    default: true
-
-steps:
-  - name: component
-    tool: template
-    template: component.tsx.jig
-  - name: test
-    tool: template
-    template: component.test.tsx.jig
-    when: "{{ withTests }}"
-```
+Inheritance is worth introducing when you notice two or more recipes duplicating the same variable block. Until then, keep things flat.
 
 ## Batch Generation
 
-Generate multiple items at once by scripting `hyper gen` in a loop:
+Generate multiple items at once by looping over `hyper gen` in a shell script, or use a `shell` step inside a recipe to iterate over a data file. This is the right approach when you need to generate the same kind of artifact for a list of names — models, components, routes — without dependencies between them.
 
 ```bash
 for name in UserCard ProfileCard SettingsCard; do
   hyper gen react-component --name=$name --output=./src/components/
 done
-```
-
-Or pass a data file and use a shell step in your recipe:
-
-```yaml
-steps:
-  - name: gen-models
-    tool: shell
-    command: |
-      for model in $(cat models.txt); do
-        hyper gen prisma-model --name=$model
-      done
 ```
 
 ## Watch Mode
@@ -110,17 +39,17 @@ Re-run a recipe automatically when source files change:
 hyper watch recipes/api-route --on-change=src/models/**/*.ts
 ```
 
-Useful when you have generated code that should stay in sync with a source file (e.g., regenerate API types whenever your Prisma schema changes).
+Use watch mode when you have generated code that must stay in sync with a source file — for example, regenerating API types whenever your Prisma schema changes. See [Advanced Patterns — Watch Mode](/docs/examples/advanced-patterns#watch-mode) for more detail.
 
-## hyper plan
+## Dry Run with `hyper plan`
 
-Before running a recipe, see exactly what it will generate:
+Before running a recipe, preview exactly what it will generate:
 
 ```bash
 hyper plan fullstack-feature --name=Invoice
 ```
 
-Shows each step, the files it would write, and whether any already exist. Nothing is written. Good habit before running a recipe in an unfamiliar project.
+Shows each step, the files it would write, and whether any already exist. Nothing is written to disk. Good habit before running a recipe in an unfamiliar project or after editing a template.
 
 ## Configuration
 
@@ -160,25 +89,7 @@ export default {
 
 ## Template Testing
 
-Templates are code; they should have tests. Generate and validate output with a test recipe:
-
-```yaml recipes/test-react-component/recipe.yml
-name: test-react-component
-steps:
-  - name: generate
-    tool: recipe
-    recipe: react-component
-    with:
-      name: TestWidget
-      withTests: true
-
-  - name: validate
-    tool: shell
-    command: bun run tsc --noEmit && bun test src/components/TestWidget
-    depends_on: [generate]
-```
-
-Run it in CI to confirm template output compiles and passes tests before merging template changes.
+Templates are code; they should have tests. Create a test recipe that generates output and then runs the compiler and test suite against it. Run it in CI to catch template regressions before they merge.
 
 ## Debugging
 

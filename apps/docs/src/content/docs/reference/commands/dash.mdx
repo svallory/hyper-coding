@@ -1,8 +1,21 @@
 ---
-title: "hyper dash Reference"
+title: "hyper dash"
 description: "Complete command reference for hyper dash"
 ---
 
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
 # hyper dash
 
-_Detailed command reference coming soon. See [user docs](/docs/tools/dash) for usage guide._
+Launch a simple monitoring dashboard to see project status, plan progress, and development activity at a glance.
+
+```bash
+hyper dash                           # Launch dashboard
+hyper dash --refresh 10              # Custom auto-refresh interval (seconds)
+```
+
+<CardGrid>
+  <Card title="Full Documentation" href="/docs/tools/dash">
+    Complete guide with dashboard views, configuration options, and integration details.
+  </Card>
+</CardGrid>

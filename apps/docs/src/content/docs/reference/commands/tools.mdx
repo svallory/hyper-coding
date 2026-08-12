@@ -1,8 +1,25 @@
 ---
-title: "hyper tools Reference"
+title: "hyper tools"
 description: "Complete command reference for hyper tools"
 ---
 
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
 # hyper tools
 
-_Detailed command reference coming soon. See [user docs](/docs/tools/tools) for usage guide._
+Set up and manage linters, scanners, MCP servers, and architecture tools for your project.
+
+```bash
+hyper tools setup                    # Interactive guided setup
+hyper tools setup --category ai      # Setup only AI tools
+hyper tools status                   # Show current tool configuration
+hyper tools add biome                # Add a specific tool
+hyper tools remove snyk              # Remove a configured tool
+hyper tools configure biome          # Update a tool's config
+```
+
+<CardGrid>
+  <Card title="Full Documentation" href="/docs/tools/tools">
+    Complete guide with tool categories, guided setup walkthrough, configuration reference, and examples.
+  </Card>
+</CardGrid>

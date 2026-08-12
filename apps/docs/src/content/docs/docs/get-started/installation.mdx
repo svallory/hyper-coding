@@ -61,7 +61,7 @@ This installs the `hyper` command globally on your system.
 
 3. **Try generating something**
     ```bash
-    hyper gen component --name TestComponent
+    hyper --help
     ```
 </Steps>
 
@@ -86,18 +86,16 @@ hyper init
   </TabItem>
 
   <TabItem label="Cursor">
-    Setup Cursor integration:
+    Cursor works with the same VS Code extension. Install it via:
     ```bash
-    hyper config set default-ide cursor
+    code --install-extension hyperdev.hyperdev-vscode
     ```
   </TabItem>
 
   <TabItem label="JetBrains">
     Supports IntelliJ IDEA, WebStorm, PyCharm, and other JetBrains IDEs.
     
-    ```bash
-    hyper config set default-ide jetbrains
-    ```
+    Install the HyperDev plugin from the JetBrains Marketplace.
   </TabItem>
 
   <TabItem label="Vim/Neovim">

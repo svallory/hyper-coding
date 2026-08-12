@@ -1,0 +1,36 @@
+---
+title: "Releasing"
+description: "How HyperDev packages are versioned, tagged, and published to npm"
+---
+
+All packages in the monorepo share a single version (linked-versions via release-please).
+
+## Release process
+
+```bash
+# 1. Bump versions + regenerate oclif manifests
+node scripts/bump-versions.mjs <version>
+
+# 2. Update .release-please-manifest.json to match the new version
+
+# 3. Commit version bump
+git commit -m "chore: bump all packages to <version>"
+
+# 4. Tag and push
+git tag v<version> && git push && git push origin v<version>
+
+# 5. Publish to npm (dry-run first!)
+bash scripts/release.sh --dry-run
+bash scripts/release.sh
+```
+
+## How it works
+
+- `scripts/bump-versions.mjs` updates every package's `package.json` version and regenerates the oclif manifests so command metadata stays in sync.
+- `scripts/release.sh` publishes packages in dependency order (`@hypercli/core` → `@hypercli/kit` → `@hypercli/gen` → `@hypercli/cli`) and skips versions already published to npm, so a partially failed release can be safely re-run.
+- Release-please also runs via CI on push to `main`; manual releases follow the steps above.
+
+## Versioning policy
+
+- Conventional commits drive release-please changelog generation (`feat:`, `fix:`, `chore:` …).
+- All `@hypercli/*` packages move together — there is no per-package versioning.

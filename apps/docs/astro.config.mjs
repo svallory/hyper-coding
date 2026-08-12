@@ -90,15 +90,14 @@ export default defineConfig({
                   { slug: 'docs/kits/recipe-authoring' },
                   { slug: 'docs/kits/ai-decisions-tag' },
                   { slug: 'docs/kits/ai-prompt-helper' },
-                  { slug: 'docs/kits/sharing' },
+                  { slug: 'docs/kits/sharing', badge: { text: 'Spec', variant: 'caution' } },
                   { slug: 'docs/kits/migration-guide' },
                 ],
               },
               {
                 label: 'Integrations',
                 items: [
-                  { slug: 'docs/integrations/claude-code-hooks' },
-                  { slug: 'docs/integrations/user-analytics-scenario' },
+                  { slug: 'docs/integrations/claude-code-hooks', badge: { text: 'Spec', variant: 'caution' } },
                   {
                     label: 'AI Tools',
                     items: [
@@ -110,17 +109,17 @@ export default defineConfig({
                   {
                     label: 'Editors',
                     items: [
-                      { slug: 'docs/integrations/editors/vscode' },
-                      { slug: 'docs/integrations/editors/jetbrains' },
+                      { slug: 'docs/integrations/editors/vscode', badge: { text: 'Spec', variant: 'caution' } },
+                      { slug: 'docs/integrations/editors/jetbrains', badge: { text: 'Spec', variant: 'caution' } },
                       { slug: 'docs/integrations/editors/vim' },
                     ],
                   },
                   {
                     label: 'Build Tools',
                     items: [
-                      { slug: 'docs/integrations/build-tools/vite' },
-                      { slug: 'docs/integrations/build-tools/webpack' },
-                      { slug: 'docs/integrations/build-tools/nextjs' },
+                      { slug: 'docs/integrations/build-tools/vite', badge: { text: 'Spec', variant: 'caution' } },
+                      { slug: 'docs/integrations/build-tools/webpack', badge: { text: 'Spec', variant: 'caution' } },
+                      { slug: 'docs/integrations/build-tools/nextjs', badge: { text: 'Spec', variant: 'caution' } },
                     ],
                   },
                   {
@@ -128,7 +127,7 @@ export default defineConfig({
                     items: [
                       { slug: 'docs/integrations/ci-cd/github-actions' },
                       { slug: 'docs/integrations/ci-cd/docker' },
-                      { slug: 'docs/integrations/ci-cd/git-hooks' },
+                      { slug: 'docs/integrations/ci-cd/git-hooks', badge: { text: 'Spec', variant: 'caution' } },
                       { slug: 'docs/integrations/ci-cd/package-scripts' },
                     ],
                   },
@@ -142,7 +141,6 @@ export default defineConfig({
                   { slug: 'docs/guides/security' },
                   { slug: 'docs/guides/advanced-usage' },
                   { slug: 'docs/guides/customize-setup' },
-                  { slug: 'docs/guides/publishing' },
                 ],
               },
               {
@@ -153,13 +151,14 @@ export default defineConfig({
                   { slug: 'docs/examples/real-world' },
                   { slug: 'docs/examples/advanced-patterns' },
                   { slug: 'docs/examples/frameworks' },
+                  { slug: 'docs/examples/user-analytics-scenario', badge: { text: 'Spec', variant: 'caution' } },
                 ],
               },
               {
                 label: 'Community',
                 items: [
                   { slug: 'docs/community/overview' },
-                  { slug: 'docs/community/community-guidelines' },
+                  { slug: 'docs/community/community-guidelines', badge: { text: 'Spec', variant: 'caution' } },
                   { slug: 'docs/community/plugin-development' },
                 ],
               },
@@ -174,7 +173,7 @@ export default defineConfig({
               {
                 label: 'CLI Reference',
                 items: [
-                  { slug: 'reference/cli' },
+                  { slug: 'reference/cli', badge: { text: 'Legacy', variant: 'danger' } },
                   { slug: 'reference/configuration' },
                   { slug: 'reference/troubleshooting' },
                 ],
@@ -185,16 +184,15 @@ export default defineConfig({
                   { slug: 'reference/commands/overview' },
                   { slug: 'reference/commands/gen' },
                   { slug: 'reference/commands/run' },
-                  { slug: 'reference/commands/init' },
-                  { slug: 'reference/commands/plan' },
+                  { slug: 'reference/commands/init', badge: { text: 'Spec', variant: 'caution' } },
+                  { slug: 'reference/commands/plan', badge: { text: 'Spec', variant: 'caution' } },
                   { slug: 'reference/commands/tools' },
                   { slug: 'reference/commands/watch' },
                   { slug: 'reference/commands/dash' },
                   { slug: 'reference/commands/search' },
                   { slug: 'reference/commands/list' },
                   { slug: 'reference/commands/docs' },
-                  { slug: 'reference/commands/plan-resources' },
-                  { slug: 'reference/commands/task' },
+                  { slug: 'reference/commands/task', badge: { text: 'Spec', variant: 'caution' } },
                   { slug: 'reference/commands/hq' },
                 ],
               },
@@ -218,12 +216,12 @@ export default defineConfig({
               {
                 label: 'Command Internals',
                 items: [
-                  { slug: 'arch/commands/search' },
-                  { slug: 'arch/commands/list' },
-                  { slug: 'arch/commands/docs' },
+                  { slug: 'arch/commands/search', badge: { text: 'Spec', variant: 'caution' } },
+                  { slug: 'arch/commands/list', badge: { text: 'Spec', variant: 'caution' } },
+                  { slug: 'arch/commands/docs', badge: { text: 'Spec', variant: 'caution' } },
                   { slug: 'arch/commands/task' },
                   { slug: 'arch/commands/plan' },
-                  { slug: 'arch/commands/tools' },
+                  { slug: 'arch/commands/tools', badge: { text: 'Spec', variant: 'caution' } },
                   { slug: 'arch/commands/init' },
                 ],
               },
@@ -232,13 +230,14 @@ export default defineConfig({
                 items: [
                   { slug: 'arch/config/configuration' },
                   { slug: 'arch/config/cli-internals' },
+                  { slug: 'arch/releasing' },
                 ],
               },
               {
                 label: 'Templates & Kits',
                 items: [
                   { slug: 'arch/templates/sharing' },
-                  { slug: 'arch/templates/migration' },
+                  { slug: 'arch/templates/migration', badge: { text: 'Spec', variant: 'caution' } },
                 ],
               },
               {

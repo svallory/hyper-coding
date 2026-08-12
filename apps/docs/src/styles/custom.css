@@ -11,3 +11,17 @@
   --sl-color-accent: #4EC9B0;
   --sl-color-accent-high: color-mix(in srgb, #4EC9B0, white 30%);
 }
+
+/* Spec badge in sidebar — italic to distinguish from regular badges */
+.sidebar-content .sl-badge.caution {
+  font-style: italic;
+  font-size: 0.65em;
+  opacity: 0.85;
+}
+
+/* Legacy badge in sidebar */
+.sidebar-content .sl-badge.danger {
+  font-style: italic;
+  font-size: 0.65em;
+  opacity: 0.85;
+}

@@ -1,8 +1,32 @@
 ---
-title: "hyper hq Reference"
+title: "hyper hq"
 description: "Complete command reference for hyper hq subcommands"
 ---
 
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
 # hyper hq
 
-_Detailed command reference coming soon. See [user docs](/docs/tools/hq/overview) for usage guide._
+Always-on Claude Code command center. Manage persistent sessions via tmux, controllable from anywhere through Remote Control and Telegram.
+
+```bash
+hyper hq start                       # Start the HQ session
+hyper hq launch my-project           # Spin up a session for a project
+hyper hq list                        # List available projects
+hyper hq status                      # Check running sessions
+hyper hq stop                        # Stop the HQ session
+hyper hq stop-all                    # Tear down all sessions
+hyper hq attach                      # Drop into the tmux session
+hyper hq relaunch my-project         # Restart a session with --continue
+hyper hq web                         # Open HQ in claude.ai/code
+hyper hq config                      # View current configuration
+```
+
+<CardGrid>
+  <Card title="Overview" href="/docs/tools/hq/overview">
+    What HQ does, how it works, and how to get started.
+  </Card>
+  <Card title="Command Reference" href="/docs/tools/hq/commands">
+    Full reference for every hyper hq subcommand with flags and examples.
+  </Card>
+</CardGrid>

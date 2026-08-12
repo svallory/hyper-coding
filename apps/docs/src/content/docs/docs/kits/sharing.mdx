@@ -4,6 +4,10 @@ title: "Sharing Templates"
 
 import { Aside, Card, CardGrid, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
+<Aside type="caution" title="Spec Document — Coming Soon">
+This page describes a **planned feature** that hasn't been implemented yet. It serves as a living specification under [Docs-Driven Development](https://github.com/svallory/hyper-coding/discussions). Feedback welcome!
+</Aside>
+
 # Sharing Templates
 
 You've built some templates that work well for your team. Now you want to share them. This page covers the main distribution options — from a quick GitHub share to a proper npm package.
@@ -187,7 +191,7 @@ module.exports = {
 
 ```bash
 # Configure private registry
-bunx hyper config set registry https://npm.company.com
+hyper config set registry https://npm.company.com
 
 
 # Publish to private registry  
@@ -215,10 +219,10 @@ registry=https://npm.company.com
     **Usage**:
     ```bash
     # Install templates
-    bunx hyper add @myorg/react-templates
+    hyper add @myorg/react-templates
     
     # Use templates  
-    bunx hyper gen component MyComponent --from @myorg/react-templates
+    hyper gen component MyComponent --from @myorg/react-templates
     ```
   </TabItem>
   
@@ -234,7 +238,7 @@ registry=https://npm.company.com
     **Usage**:
     ```bash
     # Install private templates
-    bunx hyper add @company/enterprise-templates
+    hyper add @company/enterprise-templates
     ```
   </TabItem>
   
@@ -250,7 +254,7 @@ registry=https://npm.company.com
     **Usage**:
     ```bash
     # Install from GitHub Packages
-    bunx hyper add @myorg/templates --registry https://npm.pkg.github.com
+    hyper add @myorg/templates --registry https://npm.pkg.github.com
     ```
   </TabItem>
 </Tabs>
@@ -263,17 +267,17 @@ registry=https://npm.company.com
 
 ```bash
 # Install from GitHub repository
-bunx hyper add github:myorg/react-templates
+hyper add github:myorg/react-templates
 
 # Install specific branch or tag
-bunx hyper add github:myorg/react-templates#v2.1.0
-bunx hyper add github:myorg/react-templates#develop
+hyper add github:myorg/react-templates#v2.1.0
+hyper add github:myorg/react-templates#develop
 
 # Install from private repository
-bunx hyper add git+ssh://git@github.com/myorg/private-templates.git
+hyper add git+ssh://git@github.com/myorg/private-templates.git
 
 # Use templates from repository
-bunx hyper gen component --from github:myorg/react-templates
+hyper gen component --from github:myorg/react-templates
 ```
 
 ### Repository Structure for Sharing
@@ -443,16 +447,16 @@ access:
 
 ```bash
 # Discover team templates
-bunx hyper list --source workspace
+hyper list --source workspace
 
 # Use workspace templates
-bunx hyper gen component --workspace
+hyper gen component --workspace
 
 # Add external templates to workspace
-bunx hyper templates add @company/design-system
+hyper templates add @company/design-system
 
 # Update all workspace templates
-bunx hyper templates update
+hyper templates update
 ```
 
 ### Access Control
@@ -504,22 +508,22 @@ export const teamGovernance: TemplateGovernance = {
 
 ```bash
 # Search all sources
-bunx hyper search "react component"
+hyper search "react component"
 
 # Search specific source
-bunx hyper search "react" --source npm
-bunx hyper search "service" --source workspace
-bunx hyper search "workflow" --source github
+hyper search "react" --source npm
+hyper search "service" --source workspace
+hyper search "workflow" --source github
 
 # Advanced filtering
-bunx hyper search --category frontend --language typescript
-bunx hyper search --tags "testing,storybook" --author myorg
+hyper search --category frontend --language typescript
+hyper search --tags "testing,storybook" --author myorg
 
 # List installed templates
-bunx hyper list
+hyper list
 
 # List available templates
-bunx hyper list --available --source all
+hyper list --available --source all
 ```
 
 ### Installation Workflows
@@ -528,45 +532,45 @@ bunx hyper list --available --source all
   <TabItem label="NPM Package">
     ```bash
     # Install latest version
-    bunx hyper add @myorg/react-templates
+    hyper add @myorg/react-templates
     
     # Install specific version
-    bunx hyper add @myorg/react-templates@2.1.0
+    hyper add @myorg/react-templates@2.1.0
     
     # Install with alias
-    bunx hyper add @myorg/react-templates --as react-pro
+    hyper add @myorg/react-templates --as react-pro
     
     # Install globally
-    bunx hyper add @myorg/react-templates --global
+    hyper add @myorg/react-templates --global
     ```
   </TabItem>
   
   <TabItem label="Git Repository">
     ```bash
     # Install from GitHub
-    bunx hyper add github:myorg/react-templates
+    hyper add github:myorg/react-templates
     
     # Install specific branch
-    bunx hyper add github:myorg/react-templates#develop
+    hyper add github:myorg/react-templates#develop
     
     # Install with custom name
-    bunx hyper add github:myorg/react-templates --as team-react
+    hyper add github:myorg/react-templates --as team-react
     
     # Install private repository
-    bunx hyper add git+ssh://git@github.com/myorg/private.git
+    hyper add git+ssh://git@github.com/myorg/private.git
     ```
   </TabItem>
   
   <TabItem label="Local Path">
     ```bash
     # Install from local directory
-    bunx hyper add ./my-templates
+    hyper add ./my-templates
     
     # Install with symlink (development)
-    bunx hyper add ./my-templates --link
+    hyper add ./my-templates --link
     
     # Install to workspace
-    bunx hyper add ./my-templates --workspace
+    hyper add ./my-templates --workspace
     ```
   </TabItem>
 </Tabs>
@@ -575,22 +579,22 @@ bunx hyper list --available --source all
 
 ```bash
 # Check template versions
-bunx hyper list --versions
+hyper list --versions
 
 # Update to latest
-bunx hyper update @myorg/react-templates
+hyper update @myorg/react-templates
 
 # Update all templates
-bunx hyper update --all
+hyper update --all
 
 # Pin to specific version
-bunx hyper pin @myorg/react-templates 2.1.0
+hyper pin @myorg/react-templates 2.1.0
 
 # Check for updates
-bunx hyper outdated
+hyper outdated
 
 # Remove old versions
-bunx hyper clean
+hyper clean
 ```
 
 ---
@@ -1007,16 +1011,16 @@ interface DistributionOptimization {
     **Solutions**:
     ```bash
     # Refresh template cache
-    bunx hyper config clear-cache clear
+    hyper config clear-cache clear
     
     # Verify installation
-    bunx hyper list --verbose
+    hyper list --verbose
     
     # Check discovery paths
-    bunx hyper config get discovery.paths
+    hyper config get discovery.paths
     
     # Force re-discovery
-    bunx hyper refresh --all
+    hyper refresh --all
     ```
 
   </details>
@@ -1029,16 +1033,16 @@ interface DistributionOptimization {
     **Solutions**:
     ```bash
     # Check dependency tree
-    bunx hyper deps --tree
+    hyper deps --tree
     
     # Resolve conflicts
-    bunx hyper resolve-conflicts
+    hyper resolve-conflicts
     
     # Pin specific versions
-    bunx hyper pin @org/template 1.2.3
+    hyper pin @org/template 1.2.3
     
     # Use resolution overrides
-    bunx hyper config set resolutions.@org/template "1.2.3"
+    hyper config set resolutions.@org/template "1.2.3"
     ```
 
   </details>
@@ -1051,13 +1055,13 @@ interface DistributionOptimization {
     **Solutions**:
     ```bash
     # Check registry configuration
-    bunx hyper config get registry
+    hyper config get registry
     
     # Verify network connectivity
     curl -I https://private-registry.com
     
     # Reset registry configuration
-    bunx hyper config unset registry
+    hyper config unset registry
     ```
 
   </details>

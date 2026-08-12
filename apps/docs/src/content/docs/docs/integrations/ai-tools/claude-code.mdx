@@ -1,75 +1,102 @@
 ---
 title: "Claude Code setup"
-description: "Configure Claude Code for your documentation workflow"
+description: "Configure Claude Code to work with Jig templates, recipe YAML, and the hyper CLI"
 ---
 
-Claude Code is Anthropic's official CLI tool. This guide walks you through setting up Claude Code to help you write and maintain your documentation.
+Configure Claude Code to understand HyperDev's file formats and give you useful completions and explanations when working with `.jig` templates and recipe YAML.
 
 ## Prerequisites
 
-- Active Claude subscription (Pro, Max, or API access)
+- Claude Code installed (`npm install -g @anthropic-ai/claude-code` or via Homebrew)
+- HyperDev repo cloned locally (`bun install` to set up dependencies)
 
-## Setup
+## Associate .jig with a language
 
-1. Install Claude Code globally:
+Claude Code inherits VS Code's file associations. Add this to your editor settings so `.jig` files get reasonable syntax highlighting:
 
-  ```bash
-  npm install -g @anthropic-ai/claude-code
+```json settings.json
+{
+  "files.associations": {
+    "*.jig": "html"
+  }
+}
 ```
 
-2. Navigate to your docs directory.
-3. (Optional) Add the `CLAUDE.md` file below to your project.
-4. Run `claude` to start.
+HTML mode highlights the `{{ }}` delimiters and `@if`, `@each`, `@let` block tags well enough to be useful.
 
-## Create `CLAUDE.md`
+## CLAUDE.md configuration
 
-Create a `CLAUDE.md` file at the root of your documentation repository to train Claude Code on your specific documentation standards:
+Create a `CLAUDE.md` file at the repo root so Claude Code understands HyperDev's conventions from the start of every session:
 
-````markdown
-# Mintlify documentation
+```markdown CLAUDE.md
+# HyperDev project
 
-## Working relationship
-- You can push back on ideas-this can lead to better documentation. Cite sources and explain your reasoning when you do so
-- ALWAYS ask for clarification rather than making assumptions
-- NEVER lie, guess, or make up information
+## Template engine: Jig
+- Template files use the `.jig` extension (Jig engine, an Edge.js fork)
+- Syntax: `{{ variable }}`, `{{ camelCase :: name }}` for filters
+- Block tags: `@if(condition)/@end`, `@each(item in list)/@end`, `@let(x = expr)`
+- The `@ai` tag triggers a second AI generation pass for that block at runtime
+- YAML frontmatter controls output: `to:` (output path), `inject:`, `when:`, `after:`
+- NEVER suggest EJS syntax (`<%= %>`) — this codebase uses Jig only
 
-## Project context
-- Format: MDX files with YAML frontmatter
-- Config: docs.json for navigation, theme, settings
-- Components: Mintlify components
+## Recipe YAML
+- Recipes live in `recipes/` or inside kit directories
+- A recipe is a YAML file with a `steps:` array
+- Step tools: template, action, recipe, shell, prompt, ai, install, query, patch,
+  ensure-dirs, sequence, parallel, conditional
+- Steps can declare `depends_on:` for ordering and `exports:` to pipe outputs to later steps
+- `when:` on any step is a Jig expression evaluated at runtime
 
-## Content strategy
-- Document just enough for user success - not too much, not too little
-- Prioritize accuracy and usability of information
-- Make content evergreen when possible
-- Search for existing information before adding new content. Avoid duplication unless it is done for a strategic reason
-- Check existing patterns for consistency
-- Start by making the smallest reasonable changes
+## CLI commands
+- `hyper gen <recipe> [--name=X]` — run a recipe
+- `hyper run <kit> <recipe>` — run a recipe from an installed kit
+- `hyper tools` — list available step types
+- `hyper plan <recipe>` — dry run, shows what will be generated
+- `hyper watch <recipe>` — re-run recipe on file changes
+- `hyper kit install <source>` — install a kit from a local path or registry
 
-## Frontmatter requirements for pages
-- title: Clear, descriptive page title
-- description: Concise summary for SEO/navigation
+## Trust system
+- Recipes and kits can request permissions (file writes, shell commands, network access)
+- Flag any recipe step that uses `shell:` with elevated privileges
+- Never auto-approve shell steps that write outside the project root
 
-## Writing standards
-- Second-person voice ("you")
-- Prerequisites at start of procedural content
-- Test all code examples before publishing
-- Match style and formatting of existing pages
-- Include both basic and advanced use cases
-- Language tags on all code blocks
-- Alt text on all images
-- Relative paths for internal links
+## Package structure
+- `@hypercli/core` — types, errors, parsers (no runtime deps on other packages)
+- `@hypercli/kit` — kit lifecycle, source resolution
+- `@hypercli/gen` — recipe engine, Jig templates, AI 2-pass
+- `@hypercli/cli` — thin oclif shell, provides `hyper` binary
+- Dependencies flow left-to-right only; no circular deps
 
-## Git workflow
-- NEVER use --no-verify when committing
-- Ask how to handle uncommitted changes before starting
-- Create a new branch when no clear branch exists for changes
-- Commit frequently throughout development
-- NEVER skip or disable pre-commit hooks
+## Package manager
+- Always use `bun`, never npm or yarn
+- `bun test` for tests, `bun run build` for builds
+- `moon run <package>:<task>` to run tasks across the monorepo
+```
 
-## Do not
-- Skip frontmatter on any MDX file
-- Use absolute URLs for internal links
-- Include untested code examples
-- Make assumptions - always ask for clarification
-````
+## Useful Claude Code prompts for HyperDev
+
+With `CLAUDE.md` in place, Claude Code understands the project context. Try prompts like:
+
+- "Write a recipe that generates a Prisma model and its CRUD service"
+- "Add an `@ai` block to this `.jig` template that infers prop types from the component name"
+- "Explain what this recipe step does and whether it has any side effects"
+- "Convert this shell script into a `shell` step inside a recipe"
+- "This `.jig` file has an error — what's wrong with the frontmatter?"
+- "What `exports:` would I need to pipe this step's output to the next template step?"
+
+Claude Code will answer using actual HyperDev constructs rather than generic scaffolding advice.
+
+import { CardGrid, Card } from '@astrojs/starlight/components';
+
+## Related
+
+<CardGrid>
+  <Card title="Cursor setup" icon="open-book">
+    Project rules and `.cursorrules` for Cursor users.
+    [Go to Cursor setup →](/docs/integrations/ai-tools/cursor)
+  </Card>
+  <Card title="Windsurf setup" icon="open-book">
+    Cascade workspace rules for Windsurf users.
+    [Go to Windsurf setup →](/docs/integrations/ai-tools/windsurf)
+  </Card>
+</CardGrid>

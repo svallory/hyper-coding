@@ -39,44 +39,9 @@ steps:
       test_target: "{{ feature.name }}"
 ```
 
-## Template Inheritance YAML
+## Template Inheritance
 
-```yaml
-# templates/base/component.yml
-name: "Base Component"
-variables:
-  name:
-    type: string
-    required: true
-  styling:
-    type: select
-    options: ["styled-components", "emotion", "css-modules"]
-    default: "styled-components"
-
-hooks:
-  pre_generate:
-    - action: "validate_component_name"
-    - action: "check_dependencies"
-```
-
-```yaml
-# templates/react/component.yml
-extends: "base/component"
-name: "React Component"
-
-variables:
-  typescript:
-    type: boolean
-    default: true
-  testing_library:
-    type: select
-    options: ["jest", "vitest"]
-    default: "vitest"
-
-files:
-  - from: "component.tsx.ejs"
-    to: "src/components/{{ name }}/{{ name }}.tsx"
-```
+See [Gen Internals Architecture — Template Inheritance](/arch/gen-internals#template-inheritance-schema) for the template inheritance system, including base/extended template YAML schemas.
 
 ## Plugin Development TypeScript API
 
