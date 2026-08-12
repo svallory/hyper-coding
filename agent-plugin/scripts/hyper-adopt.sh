@@ -278,6 +278,9 @@ migrate_legacy_names() {
 
 scaffold_space() {
   local r="$1" n="$2"
+  local branch
+  branch="$(git --git-dir="$r/.git" symbolic-ref --short HEAD 2>/dev/null || echo main)"
+  ensure_worktrunk_config "$r/.git" "$branch"
   echo "Directories:"
   scaffold_dirs "$r"
   mkdir -p "$r/.claude"
@@ -667,6 +670,7 @@ if git -C "$root" config --get remote.origin.url >/dev/null 2>&1; then
     git -C "$root" config --add remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
   fi
 fi
+ensure_worktrunk_config "$root/.git" "$branch"
 
 # Step 6: register the main worktree. --no-checkout because the files arrive
 # by move in step 7 — a checkout here would collide with them.

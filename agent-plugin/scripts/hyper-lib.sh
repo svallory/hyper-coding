@@ -218,6 +218,24 @@ EOF
   printf -- '- [Space layout](hyper-layout.md) — worktrees/, local-only dirs, root is never committed\n' >> "$index"
 }
 
+# Point worktrunk at the space's default branch, and make bare-repo worktrees
+# resolve hooks correctly. Idempotent and non-destructive: an explicit
+# existing worktrunk.default-branch is never overwritten, since the caller
+# may have set it deliberately (e.g. a branch other than HEAD's symbolic ref).
+#
+# ensure_worktrunk_config <git-dir> <default-branch>
+ensure_worktrunk_config() {
+  local gitdir="$1" branch="$2"
+  if [[ -z "$(git --git-dir="$gitdir" config --get worktrunk.default-branch 2>/dev/null)" ]]; then
+    git --git-dir="$gitdir" config worktrunk.default-branch "$branch"
+    git --git-dir="$gitdir" config worktrunk.history "$branch"
+    echo "  set      worktrunk.default-branch=$branch"
+  fi
+  # Worktrees created from a bare repo get a .git *file*, so core.hooksPath
+  # resolution differs; point it at the shared hooks dir explicitly.
+  git --git-dir="$gitdir" config core.hooksPath "$gitdir/hooks"
+}
+
 # Create the directory set. Idempotent: reports created vs already-present.
 scaffold_dirs() {
   local root="$1" d
