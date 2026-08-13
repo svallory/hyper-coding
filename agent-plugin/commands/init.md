@@ -1,14 +1,15 @@
 ---
 name: init
-description: Create a new project space — bare repo, worktrees, and local-only directories
-argument-hint: "<repo-url> [space-name] | --new <space-name> [--default-branch <name>]"
+description: Create a new project space, or adopt the repo already at cwd — bare repo, worktrees, and local-only directories
+argument-hint: "<repo-url> [space-name] | --new <space-name> [--default-branch <name>] | [--apply]"
 ---
 
 # Init
 
-Creates a project space from a git remote: bare clone at `<name>/.git`, no
-code at the root, checkouts in `worktrees/`. Local-only dirs sit at the root,
-which can never be committed.
+Creates a project space, or brings the repo already at the current directory
+into the space layout. A space has exactly one shape — bare `.git` at the
+root, no code there, checkouts in `worktrees/`. Local-only dirs sit at the
+root, which can never be committed.
 
 ## Usage
 
@@ -16,18 +17,31 @@ which can never be committed.
 /hyper:init git@github.com:org/repo.git
 /hyper:init git@github.com:org/repo.git myname --default-branch develop
 /hyper:init --new myproject                  # no repo yet — start from nothing
+/hyper:init                                  # cwd is already a repo — adopt it
+/hyper:init --apply                          # same, applied (not just a dry run)
 ```
 
 ## What it does
 
-Run the script from the directory that should hold the space:
+Run the script from the directory that should hold (or already holds) the
+space:
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/hyper-init.sh" <repo-url> [name] [--default-branch <b>]
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/hyper-init.sh" --new <name> [--default-branch <b>]
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/hyper-init.sh" [--apply]
 ```
 
-It will:
+With no `<repo-url>`, no `[space-name]`, and no `--new`, init checks whether
+cwd is already a git repository (`git rev-parse --git-dir`). If it is, this
+is the adopt path (see [`/hyper:adopt`](adopt.md) for full behavior and
+agent instructions — same script, same dry-run-by-default contract,
+same data-safety guarantees for a checkout conversion): it delegates to
+`hyper-adopt.sh`, dry run unless `--apply` is passed. If cwd is not a repo,
+it prints usage and exits — there is nothing to adopt and no `<repo-url>` to
+clone.
+
+Otherwise (a `<repo-url>` or `--new` was given), it creates a new space:
 
 1. `git clone --bare` into `<name>/.git`, then set the standard remote fetch
    refspec and fetch — a bare clone has no remote-tracking branches otherwise.
@@ -58,10 +72,17 @@ settings take effect only after the workspace trust dialog is accepted.
 
 ## Notes
 
-- Refuses to overwrite an existing path.
-- There is no `--layout` flag: spaces have exactly one shape. To bring an
-  existing checkout into it, use `/hyper:adopt`, which converts the repo
-  rather than cloning it again.
+- Refuses to overwrite an existing path (new-space modes only).
+- There is no `--layout` flag: spaces have exactly one shape. Bringing an
+  existing checkout into that shape is a conversion, not a clone — run
+  `/hyper:init` with no arguments from inside it (or `/hyper:adopt` directly;
+  same script).
+- Adopting a checkout is a **conversion** with real preflight refusals
+  (detached HEAD, submodules, in-progress rebase/merge, etc.) and
+  data-safety guarantees verified after `--apply`. Always show the dry-run
+  plan and get explicit confirmation before passing `--apply` — see
+  [`/hyper:adopt`](adopt.md#agent-instructions-for-a-conversion) for the
+  full checklist.
 - Worktree placement comes from the user's worktrunk config
   (`worktree-path = "{{ repo_path }}/../worktrees/..."`), which is why the
   script invokes `wt -C <space>` so that template resolves inside it.

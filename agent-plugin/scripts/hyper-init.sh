@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
-# Create a new project space — from a git remote, or from nothing.
+# Create a new project space — from a git remote, from nothing, or by
+# adopting the repo already at cwd.
 # Usage: hyper-init.sh <repo-url> [space-name] [--default-branch <name>]
 #        hyper-init.sh --new <space-name>  [--default-branch <name>]
+#        hyper-init.sh [--apply]
 
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/hyper-lib.sh"
+here="$(dirname "${BASH_SOURCE[0]}")"
+source "$here/hyper-lib.sh"
 
 repo_url=""
 name=""
 default_branch=""
 new_mode=0
+apply=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --default-branch) default_branch="$2"; shift 2 ;;
     --new) new_mode=1; shift ;;
+    --apply) apply=1; shift ;;
     --layout)
       echo "--layout was removed: spaces are always bare; adopt converts an existing checkout" >&2
       exit 2 ;;
@@ -27,6 +32,42 @@ while [[ $# -gt 0 ]]; do
       shift ;;
   esac
 done
+
+# No repo/name given at all: cwd itself may already be a repo (bare space or
+# an ordinary checkout) that the user meant to bring into the layout, rather
+# than a brand-new space to create beneath it. Delegate to adopt, which
+# already does this safely (dry run by default, verified conversion). --apply
+# only makes sense in this branch — it is adopt's flag, not clone/--new's.
+if [[ $new_mode -eq 0 && -z "$repo_url" && -z "$name" ]]; then
+  if git rev-parse --git-dir >/dev/null 2>&1; then
+    if [[ "$(git config --get core.bare 2>/dev/null)" == "true" ]]; then
+      # Bare: cwd is already the space (or a plain bare repo opting in) —
+      # adopt's case A does not move anything, so no need to leave it.
+      target="$PWD"
+    else
+      # An ordinary checkout: conversion moves everything under cwd into
+      # worktrees/<branch>/, which a live shell sitting inside it would not
+      # survive. Resolve the target before leaving it, then cd out so
+      # adopt's own preflight (which refuses cwd-inside-target) passes.
+      target="$(git rev-parse --show-toplevel)"
+      cd ..
+    fi
+    if [[ $apply -eq 1 ]]; then
+      exec bash "$here/hyper-adopt.sh" "$target" --apply
+    else
+      exec bash "$here/hyper-adopt.sh" "$target"
+    fi
+  fi
+  echo "usage: hyper-init.sh <repo-url> [space-name] [--default-branch <name>]" >&2
+  echo "       hyper-init.sh --new <space-name>  [--default-branch <name>]" >&2
+  echo "       hyper-init.sh [--apply]           # adopt the repo at cwd" >&2
+  exit 2
+fi
+
+if [[ $apply -eq 1 ]]; then
+  echo "--apply only applies with no other arguments (adopting cwd)" >&2
+  exit 2
+fi
 
 if [[ $new_mode -eq 1 ]]; then
   # --new takes a name, not a url. The positional slot is shared, so a second
@@ -97,8 +138,7 @@ else
     default_branch="$(git --git-dir="$root/.git" symbolic-ref --short HEAD 2>/dev/null || echo main)"
   fi
 fi
-git --git-dir="$root/.git" config worktrunk.default-branch "$default_branch"
-git --git-dir="$root/.git" config worktrunk.history "$default_branch"
+ensure_worktrunk_config "$root/.git" "$default_branch"
 
 echo "Scaffolding directories..."
 mkdir -p "$root/.claude"
@@ -119,10 +159,6 @@ if command -v wt >/dev/null 2>&1; then
 else
   git --git-dir="$root/.git" worktree add "$root/worktrees/$default_branch" "$default_branch"
 fi
-
-# Worktrees created from a bare repo get a .git *file*, so core.hooksPath
-# resolution differs. Match the user's existing post-start fix.
-git --git-dir="$root/.git" config core.hooksPath "$root/.git/hooks"
 
 # Settings resolve per project root, so the worktree needs its own pointer at
 # the space memory. Guarded: wt may have placed the worktree elsewhere, and a
