@@ -109,30 +109,24 @@ nothing here is committed. The worktrees live in \`worktrees/\`.
 - \`scratch/\` is disposable. Anything you would miss belongs in \`data/\` or \`notes/\`.
 - Files here never reach the remote. Secrets are local-only by construction,
   but that also means nothing here is backed up.
+- Space memory lives in \`.hyper/memory/\`; \`MEMORY.md\` there is the index.
+  Tools without automatic memory loading should read it at session start.
 EOF
 }
 
-# The agent-facing space instructions, appended to a fresh AGENTS.md and to
-# any pre-existing AGENTS.md / CLAUDE.md that does not mention HYPER.md yet.
-# Deliberately a summary plus pointers: HYPER.md stays the infra marker and
-# full reference, the agent files stay the user's place for project-specific
-# instructions.
+# The agent-facing pointer, appended to a fresh AGENTS.md and to any
+# pre-existing AGENTS.md / CLAUDE.md that does not mention HYPER.md yet.
+# Deliberately a bare directive, not a summary: an unexplained "you must
+# read" reliably makes an agent open the file, while an inlined summary
+# invites skipping the source and drifts from it over time. HYPER.md stays
+# the single source of the rules.
 agent_docs_section() {
   cat <<'EOF'
 
-## Hyper space
+## Repo context
 
-This directory is a hyper project space: the `.git` here is bare, the project
-lives in `worktrees/<branch>`, and nothing at this root is ever committed.
-See `HYPER.md` for the full layout and rules.
-
-- Do not commit from the space root; `cd` into a worktree first.
-- Create worktrees with `wt switch <branch>`, never `git worktree add` by hand.
-- Local-only files go in `data/` (dumps, fixtures), `notes/` (briefs, docs),
-  `scratch/` (disposable), or `bin/` (helper scripts) — not loose at the root.
-
-Space memory lives in `.hyper/memory/`; `MEMORY.md` there is the index.
-Tools without automatic memory loading should read it at session start.
+This directory is the root of a hyper space. Before doing anything here, you
+must read `HYPER.md` — all the rules for working in this directory live there.
 EOF
 }
 
