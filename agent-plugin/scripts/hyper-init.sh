@@ -145,6 +145,7 @@ mkdir -p "$root/.claude"
 scaffold_dirs "$root"
 
 write_hyper_md "$root" "$name"
+ensure_agent_docs "$root" "$name"
 write_memory_seed "$root" "$name"
 
 echo "Creating worktree for $default_branch..."

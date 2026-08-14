@@ -292,6 +292,7 @@ scaffold_space() {
     write_hyper_md "$r" "$n"
     echo "  wrote    HYPER.md"
   fi
+  ensure_agent_docs "$r" "$n"
   if [[ -f "$r/.hyper/memory/hyper-layout.md" ]]; then
     echo "  exists   .hyper/memory/hyper-layout.md (left untouched)"
   else
@@ -330,6 +331,19 @@ if [[ "$(git --git-dir="$root/.git" config --get core.bare 2>/dev/null)" == "tru
     else
       echo "  would create  HYPER.md"
     fi
+    for agent_doc in AGENTS.md CLAUDE.md; do
+      if [[ -L "$root/$agent_doc" ]]; then
+        echo "  exists   $agent_doc (symlink)"
+      elif [[ -f "$root/$agent_doc" ]]; then
+        if grep -q 'HYPER\.md' "$root/$agent_doc" 2>/dev/null; then
+          echo "  exists   $agent_doc (already references HYPER.md)"
+        else
+          echo "  would update  $agent_doc (append hyper space section)"
+        fi
+      else
+        echo "  would create  $agent_doc (symlink)"
+      fi
+    done
     if [[ -d "$root/.hyperdev" ]]; then
       if [[ -d "$root/.hyper" ]]; then
         echo "  warning  both .hyper/ and legacy .hyperdev/ exist — --apply touches neither; merge them yourself"
@@ -774,6 +788,7 @@ echo "Directories:"
 scaffold_dirs "$root"
 write_hyper_md "$root" "$name"
 echo "  wrote    HYPER.md (regenerated for the bare layout)"
+ensure_agent_docs "$root" "$name"
 write_memory_seed "$root" "$name"
 echo "  wrote    .hyper/memory/hyper-layout.md (regenerated)"
 

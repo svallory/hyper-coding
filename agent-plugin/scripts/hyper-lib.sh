@@ -112,6 +112,73 @@ nothing here is committed. The worktrees live in \`worktrees/\`.
 EOF
 }
 
+# The agent-facing space instructions, appended to a fresh AGENTS.md and to
+# any pre-existing AGENTS.md / CLAUDE.md that does not mention HYPER.md yet.
+# Deliberately a summary plus pointers: HYPER.md stays the infra marker and
+# full reference, the agent files stay the user's place for project-specific
+# instructions.
+agent_docs_section() {
+  cat <<'EOF'
+
+## Hyper space
+
+This directory is a hyper project space: the `.git` here is bare, the project
+lives in `worktrees/<branch>`, and nothing at this root is ever committed.
+See `HYPER.md` for the full layout and rules.
+
+- Do not commit from the space root; `cd` into a worktree first.
+- Create worktrees with `wt switch <branch>`, never `git worktree add` by hand.
+- Local-only files go in `data/` (dumps, fixtures), `notes/` (briefs, docs),
+  `scratch/` (disposable), or `bin/` (helper scripts) — not loose at the root.
+
+Space memory lives in `.hyper/memory/`; `MEMORY.md` there is the index.
+Tools without automatic memory loading should read it at session start.
+EOF
+}
+
+# ensure_agent_docs <root> <name> — give coding agents their standard entry
+# points at the space root, without mixing concerns: HYPER.md remains the
+# plugin-owned marker and full reference; AGENTS.md is a real, user-editable
+# file carrying the agent instructions (Codex and friends read it too);
+# CLAUDE.md is a symlink to AGENTS.md so Claude reads the same source.
+# Pre-existing regular files are the user's — never replaced; the hyper
+# section is appended to each once (idempotent: skipped when the file already
+# mentions HYPER.md). Existing symlinks are left untouched.
+ensure_agent_docs() {
+  local root="$1" name="$2"
+
+  if [[ -L "$root/AGENTS.md" ]]; then
+    echo "  exists   AGENTS.md (symlink, left untouched)"
+  elif [[ -f "$root/AGENTS.md" ]]; then
+    if grep -q 'HYPER\.md' "$root/AGENTS.md" 2>/dev/null; then
+      echo "  exists   AGENTS.md (already references HYPER.md)"
+    else
+      agent_docs_section >> "$root/AGENTS.md"
+      echo "  updated  AGENTS.md (appended hyper space section)"
+    fi
+  else
+    {
+      printf '# %s — agent instructions\n' "$name"
+      agent_docs_section
+    } > "$root/AGENTS.md"
+    echo "  wrote    AGENTS.md"
+  fi
+
+  if [[ -L "$root/CLAUDE.md" ]]; then
+    echo "  exists   CLAUDE.md (symlink, left untouched)"
+  elif [[ -f "$root/CLAUDE.md" ]]; then
+    if grep -q 'HYPER\.md' "$root/CLAUDE.md" 2>/dev/null; then
+      echo "  exists   CLAUDE.md (already references HYPER.md)"
+    else
+      agent_docs_section >> "$root/CLAUDE.md"
+      echo "  updated  CLAUDE.md (appended hyper space section)"
+    fi
+  else
+    ln -s AGENTS.md "$root/CLAUDE.md"
+    echo "  wrote    CLAUDE.md (symlink → AGENTS.md)"
+  fi
+}
+
 # ensure_auto_memory <settings-file> <memory-dir> <label> — make the settings
 # file point autoMemoryDirectory at the space memory, creating it if absent.
 # An existing file is merged, never clobbered: only that one key is set, via
