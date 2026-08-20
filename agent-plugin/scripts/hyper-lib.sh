@@ -111,6 +111,12 @@ nothing here is committed. The worktrees live in \`worktrees/\`.
   but that also means nothing here is backed up.
 - Space memory lives in \`.hyper/memory/\`; \`MEMORY.md\` there is the index.
   Tools without automatic memory loading should read it at session start.
+
+## Naming convention
+
+When the user says "hyper X" or "space X" (e.g. "hyper notes", "space data"),
+they mean the \`X/\` directory at the space root — never a same-named
+directory inside a worktree, even if one exists there too.
 EOF
 }
 

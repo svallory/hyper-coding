@@ -78,6 +78,11 @@ exactly one disk.
 When unsure between `notes/` and `scratch/`: if losing it would cost you more
 than ten minutes, it is not scratch.
 
+**"hyper X" / "space X" means the space root's `X/`.** When the user says
+"hyper notes", "space data", etc., they mean the directory at the space
+root — never a same-named directory inside a worktree, even if one exists
+there too.
+
 ## Rules
 
 - **Never commit from the space root.** The bare repo has no index in the
