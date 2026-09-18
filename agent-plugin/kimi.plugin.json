@@ -1,0 +1,32 @@
+{
+  "name": "hyper",
+  "version": "0.3.1",
+  "description": "Hyper workflow support: project spaces (a bare repo wrapping all of a project's worktrees plus local-only dirs) and per-edit integration with the linters and typecheckers a project already uses.",
+  "author": "Saulo Vallory",
+  "keywords": ["hyper", "workspaces", "lint", "typecheck"],
+  "commands": "./commands/",
+  "skills": "./skills/",
+  "hooks": [
+    {
+      "event": "SessionStart",
+      "command": "bash \"./scripts/hyper-context.sh\"",
+      "timeout": 5
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write|NotebookEdit",
+      "command": "bash \"./scripts/hyper-check.sh\"",
+      "timeout": 90
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write",
+      "command": "bash \"./scripts/hyper-deps.sh\"",
+      "timeout": 10
+    }
+  ],
+  "interface": {
+    "displayName": "Hyper",
+    "shortDescription": "Hyper spaces and per-edit lint/typecheck integration"
+  }
+}
