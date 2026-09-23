@@ -4,7 +4,13 @@
 	"packageManager": "bun@1.3.11",
 	"type": "module",
 	"description": "Claude Code session management for HyperDev — always-on control plane",
-	"keywords": ["hyperdev", "claude-code", "remote-control", "session-management", "tmux"],
+	"keywords": [
+		"hyperdev",
+		"claude-code",
+		"remote-control",
+		"session-management",
+		"tmux"
+	],
 	"author": "Saulo Vallory <saulo@toki.life>",
 	"license": "MIT",
 	"repository": {
@@ -27,7 +33,13 @@
 	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
-	"files": ["dist", "help", "oclif.manifest.json", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"help",
+		"oclif.manifest.json",
+		"README.md",
+		"LICENSE"
+	],
 	"oclif": {
 		"commands": "./dist/commands",
 		"topics": {
@@ -69,7 +81,7 @@
 		"smol-toml": "^1"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^1.9.4",
+		"@biomejs/biome": "^2.5.14",
 		"@types/node": "^20.0.0",
 		"typescript": "^5.4.0",
 		"vitest": "4.0.18"

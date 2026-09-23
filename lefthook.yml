@@ -12,7 +12,7 @@ pre-commit:
     # Format code (format + lint) on staged files
     format:
       glob: "*.{ts,tsx,js,jsx,json,md}"
-      run: biome check --write --no-errors-on-unmatched {staged_files}
+      run: bunx biome check --write --no-errors-on-unmatched {staged_files}
       stage_fixed: true
       skip:
         - merge
