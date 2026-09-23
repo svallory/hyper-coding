@@ -60,7 +60,7 @@ linked worktrees are brought in via `git worktree move`. Commits and stashes
 live in `.git`, which the conversion never rewrites; uncommitted changes and
 untracked files are verified by comparing `git status` before and after, with
 a loud warning on any mismatch. It refuses to run mid-rebase/merge/cherry-pick,
-on a detached HEAD, or with submodules present, and nothing is ever deleted,
+on a detached HEAD, or with initialized submodules (deinit them first), and nothing is ever deleted,
 in any mode, on any path.
 
 ## Install

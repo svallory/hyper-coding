@@ -111,8 +111,10 @@ when any of these hold:
 
 - detached HEAD
 - rebase, merge, or cherry-pick in progress
-- `.gitmodules` present — submodule gitdir pointers do not survive the depth
-  change; deinit submodules first
+- initialized submodules — their gitdir pointers do not survive the depth
+  change; run `git submodule deinit --all` first, then
+  `git submodule update --init` in the new worktree (`.gitmodules` itself is
+  fine — it is a tracked file and moves with the tree)
 - the current directory is inside the repo being converted
 - a leftover `.hyper-convert/` staging dir from an unfinished conversion
 - `worktrees/<branch>` already exists

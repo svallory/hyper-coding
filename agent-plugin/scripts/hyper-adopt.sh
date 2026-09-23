@@ -486,8 +486,18 @@ g="$root/.git"
 # Submodule gitdir pointers are written relative to the superproject's .git
 # and do not survive the depth change to worktrees/<branch>/. Converting
 # would leave every submodule pointing at a path that no longer resolves.
-[[ -e "$root/.gitmodules" ]] \
-  && refusals+=(".gitmodules present — submodule gitdir pointers do not survive the depth change; deinit submodules first")
+# Only populated submodules carry those pointers: a deinit'd submodule is an
+# empty directory, and .gitmodules itself is an ordinary tracked file that
+# moves with the tree. So refuse on populated gitlinks, not on .gitmodules.
+populated_submodules=()
+while IFS= read -r -d '' _entry; do
+  _mode="${_entry%% *}"
+  [[ "$_mode" == 160000 ]] || continue
+  _path="${_entry#*$'\t'}"
+  [[ -e "$root/$_path/.git" ]] && populated_submodules+=("$_path")
+done < <(git -C "$root" ls-files -s -z 2>/dev/null)
+((${#populated_submodules[@]})) \
+  && refusals+=("initialized submodules (${populated_submodules[*]}) — gitdir pointers do not survive the depth change; run 'git submodule deinit --all' first, then 'git submodule update --init' in the new worktree")
 
 case "$PWD" in
   "$root"|"$root"/*)

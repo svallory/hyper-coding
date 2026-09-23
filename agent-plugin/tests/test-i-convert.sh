@@ -172,10 +172,33 @@ git -C "$d" merge -q --no-commit --no-ff side >/dev/null 2>&1
 assert_ok "fixture sanity: MERGE_HEAD exists" test -e "$d/.git/MERGE_HEAD"
 refuse_case "$d" "merge in progress" "merge in progress"
 
-# .gitmodules present
+# populated submodule refuses; the same repo converts once deinit'd, because
+# .gitmodules is an ordinary tracked file and an empty gitlink dir has no
+# pointers to break.
+sub="$FIX/i5-subsrc"; make_checkout "$sub"
 d="$FIX/i5-submodule"; make_checkout "$d"
-printf '[submodule "x"]\n\tpath = x\n\turl = ../x\n' > "$d/.gitmodules"
-refuse_case "$d" "submodules" ".gitmodules present"
+git -C "$d" -c protocol.file.allow=always submodule add -q "$sub" "vendor/sub dir" >/dev/null 2>&1
+git -C "$d" commit -qm add-submodule
+assert_ok "fixture sanity: submodule populated" test -e "$d/vendor/sub dir/.git"
+refuse_case "$d" "populated submodule" "initialized submodules (vendor/sub dir)"
+
+git -C "$d" submodule deinit -q --all
+assert_ok "fixture sanity: .gitmodules still tracked after deinit" test -f "$d/.gitmodules"
+pre_status="$(git -C "$d" status --porcelain=v1)"
+out="$(bash "$ADOPT" "$d" --apply 2>&1)"
+assert_eq "deinit'd submodule: convert exits 0" 0 "$?"
+assert_not_contains "deinit'd submodule: no submodule refusal" "$out" "initialized submodules"
+assert_ok "deinit'd submodule: .gitmodules moved into the worktree" \
+  test -f "$d/worktrees/main/.gitmodules"
+assert_eq "deinit'd submodule: gitlink still in the index" "160000" \
+  "$(git -C "$d/worktrees/main" ls-files -s -- "vendor/sub dir" | cut -d' ' -f1)"
+assert_eq "deinit'd submodule: status parity" "$pre_status" \
+  "$(git -C "$d/worktrees/main" status --porcelain=v1)"
+git -C "$d/worktrees/main" -c protocol.file.allow=always submodule update -q --init >/dev/null 2>&1
+assert_ok "deinit'd submodule: re-inits inside the new worktree" \
+  git -C "$d/worktrees/main/vendor/sub dir" rev-parse HEAD
+assert_eq "deinit'd submodule: clean after re-init" "" \
+  "$(git -C "$d/worktrees/main" status --porcelain=v1)"
 
 # conflicted index, from a real merge conflict
 d="$FIX/i5-conflict"; make_checkout "$d"
