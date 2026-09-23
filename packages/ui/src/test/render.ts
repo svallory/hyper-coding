@@ -4,8 +4,7 @@
  * Captures rendered output and provides assertions for ANSI-styled strings.
  */
 
-import { stripAnsi } from "../render/index.ts";
-import { stringWidth } from "../render/index.ts";
+import { stringWidth, stripAnsi } from "../render/index.ts";
 
 export type RenderedOutput = {
 	/** The raw string with ANSI codes */

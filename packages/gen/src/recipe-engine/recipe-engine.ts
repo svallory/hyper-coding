@@ -9,9 +9,14 @@
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
-import { TemplateParser, type TemplateVariable } from "@hypercli/core";
-import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
-import { Logger } from "@hypercli/core";
+import {
+	ErrorCode,
+	ErrorHandler,
+	HypergenError,
+	Logger,
+	TemplateParser,
+	type TemplateVariable,
+} from "@hypercli/core";
 import createDebug from "debug";
 import yaml from "js-yaml";
 import { AiCollector } from "#ai/ai-collector";
@@ -22,7 +27,7 @@ import { performInteractivePrompting } from "#prompts/interactive-prompts";
 import { renderTemplate as jigRenderTemplate } from "#template-engines/jig-engine";
 import { StepExecutor, type StepExecutorConfig } from "./step-executor.js";
 import { registerDefaultTools } from "./tools/index.js";
-import { type ToolRegistry, getToolRegistry } from "./tools/registry.js";
+import { getToolRegistry, type ToolRegistry } from "./tools/registry.js";
 import type {
 	RecipeConfig,
 	RecipeExecution,
@@ -90,11 +95,7 @@ export interface RecipeExecutionOptions {
 	logger?: Logger;
 
 	/** Progress callback */
-	onProgress?: (progress: {
-		step: string;
-		phase: string;
-		percentage: number;
-	}) => void;
+	onProgress?: (progress: { step: string; phase: string; percentage: number }) => void;
 
 	/** Step completion callback */
 	onStepComplete?: (result: StepResult) => void;
@@ -1183,13 +1184,13 @@ export class RecipeEngine extends EventEmitter {
 
 		for (const result of stepResults) {
 			if (result.filesCreated) {
-				result.filesCreated.forEach((file) => filesCreated.add(file));
+				for (const file of result.filesCreated) filesCreated.add(file);
 			}
 			if (result.filesModified) {
-				result.filesModified.forEach((file) => filesModified.add(file));
+				for (const file of result.filesModified) filesModified.add(file);
 			}
 			if (result.filesDeleted) {
-				result.filesDeleted.forEach((file) => filesDeleted.add(file));
+				for (const file of result.filesDeleted) filesDeleted.add(file);
 			}
 			if (result.error) {
 				errors.push(`${result.stepName}: ${result.error.message}`);

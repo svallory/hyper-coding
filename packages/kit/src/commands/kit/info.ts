@@ -4,8 +4,8 @@
 
 import { c, indent, markdown, msg, s, table } from "@hypercli/ui";
 import { Args } from "@oclif/core";
-import { BaseCommand } from "#base-command";
 import type { KitTree } from "#base-command";
+import { BaseCommand } from "#base-command";
 import { infoFlags } from "#lib/flags";
 import { getKitFromManifest } from "#manifest";
 

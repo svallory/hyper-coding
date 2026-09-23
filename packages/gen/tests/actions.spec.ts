@@ -4,18 +4,18 @@
 
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import type { ActionContext, ActionMetadata, ActionResult } from "#actions/index";
 import {
 	ActionExecutor,
 	ActionParameterResolver,
 	ActionRegistry,
+	action,
 	ConsoleActionLogger,
 	DefaultActionUtils,
-	SilentActionLogger,
-	action,
 	getActionMetadata,
 	isActionFunction,
+	SilentActionLogger,
 } from "#actions/index";
-import type { ActionContext, ActionMetadata, ActionResult } from "#actions/index";
 
 // Helper function to create test actions
 function createTestAction(

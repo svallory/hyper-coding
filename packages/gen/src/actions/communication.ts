@@ -401,10 +401,7 @@ export class ActionCommunicationManager extends EventEmitter {
 
 			let timeoutId: NodeJS.Timeout | undefined;
 
-			const handleStateUpdate = (event: {
-				actionId: string;
-				state: ActionState;
-			}) => {
+			const handleStateUpdate = (event: { actionId: string; state: ActionState }) => {
 				if (
 					event.actionId === actionId &&
 					(event.state.status === "completed" || event.state.status === "failed")
@@ -417,10 +414,7 @@ export class ActionCommunicationManager extends EventEmitter {
 				}
 			};
 
-			const handleCompleted = (event: {
-				actionId: string;
-				state: ActionState;
-			}) => {
+			const handleCompleted = (event: { actionId: string; state: ActionState }) => {
 				if (event.actionId === actionId) {
 					if (timeoutId) clearTimeout(timeoutId);
 					this.off("action:state-updated", handleStateUpdate);
@@ -430,10 +424,7 @@ export class ActionCommunicationManager extends EventEmitter {
 				}
 			};
 
-			const handleFailed = (event: {
-				actionId: string;
-				state: ActionState;
-			}) => {
+			const handleFailed = (event: { actionId: string; state: ActionState }) => {
 				if (event.actionId === actionId) {
 					if (timeoutId) clearTimeout(timeoutId);
 					this.off("action:state-updated", handleStateUpdate);

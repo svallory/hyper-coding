@@ -11,19 +11,11 @@ import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
 import createDebug from "debug";
 import { evaluateStepOutputs } from "./output-evaluator.js";
 import type { Tool } from "./tools/base.js";
-import { type ToolRegistry, getToolRegistry } from "./tools/registry.js";
+import { getToolRegistry, type ToolRegistry } from "./tools/registry.js";
 import {
 	CircularDependencyError,
-	type RecipeExecutionPlan,
-	type RecipeStepUnion,
-	type StepContext,
-	type StepDependencyNode,
-	StepExecutionError,
-	type StepExecutionOptions,
-	type StepResult,
-	type ToolType,
-	isAIStep,
 	isActionStep,
+	isAIStep,
 	isCodeModStep,
 	isEnsureDirsStep,
 	isInstallStep,
@@ -35,6 +27,14 @@ import {
 	isSequenceStep,
 	isShellStep,
 	isTemplateStep,
+	type RecipeExecutionPlan,
+	type RecipeStepUnion,
+	type StepContext,
+	type StepDependencyNode,
+	StepExecutionError,
+	type StepExecutionOptions,
+	type StepResult,
+	type ToolType,
 } from "./types.js";
 
 /**
@@ -706,7 +706,7 @@ export class StepExecutor extends EventEmitter {
 			});
 
 			// Mark steps as assigned
-			readySteps.forEach((stepName) => assigned.add(stepName));
+			for (const stepName of readySteps) assigned.add(stepName);
 		}
 
 		return phases;

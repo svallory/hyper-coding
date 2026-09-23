@@ -6,6 +6,7 @@
 
 // Re-export ActionLogger from logger
 import type { ActionLogger } from "#logger/types";
+
 export type { ActionLogger };
 
 // Action decorator metadata

@@ -10,30 +10,8 @@
 // Core factory
 // ---------------------------------------------------------------------------
 
-import { createCapabilities, detectCapabilities } from "./capabilities/index.ts";
 import type { TerminalCapabilities } from "./capabilities/index.ts";
-import { setContext } from "./primitives/context.ts";
-import type { SystemContext } from "./primitives/context.ts";
-import { ThemeEngine } from "./theme/index.ts";
-import type { Theme, ThemeInput } from "./theme/index.ts";
-import type { ResolvedTokens } from "./tokens/index.ts";
-
-// Import all primitives for binding onto the system object
-import {
-	align,
-	badge,
-	border,
-	divider,
-	indent,
-	line,
-	pad,
-	stack,
-	styledText,
-	symbol,
-	truncate,
-	wrap,
-} from "./primitives/index.ts";
-
+import { createCapabilities, detectCapabilities } from "./capabilities/index.ts";
 // Import all components for binding onto the system object
 import {
 	columns,
@@ -53,6 +31,26 @@ import {
 	textPrompt,
 	tree,
 } from "./components/index.ts";
+import type { SystemContext } from "./primitives/context.ts";
+import { setContext } from "./primitives/context.ts";
+// Import all primitives for binding onto the system object
+import {
+	align,
+	badge,
+	border,
+	divider,
+	indent,
+	line,
+	pad,
+	stack,
+	styledText,
+	symbol,
+	truncate,
+	wrap,
+} from "./primitives/index.ts";
+import type { Theme, ThemeInput } from "./theme/index.ts";
+import { ThemeEngine } from "./theme/index.ts";
+import type { ResolvedTokens } from "./tokens/index.ts";
 
 /** Configuration options for {@link createSystem}. */
 export type SystemOptions = {
@@ -202,18 +200,18 @@ export function createSystem(options?: SystemOptions): DesignSystem {
 // ---------------------------------------------------------------------------
 
 export {
-	styledText,
-	symbol,
-	pad,
-	truncate,
 	align,
-	line,
-	stack,
-	indent,
-	wrap,
+	badge,
 	border,
 	divider,
-	badge,
+	indent,
+	line,
+	pad,
+	stack,
+	styledText,
+	symbol,
+	truncate,
+	wrap,
 } from "./primitives/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -221,17 +219,17 @@ export {
 // ---------------------------------------------------------------------------
 
 export {
+	columns,
+	diff,
+	helpLayout,
+	keyValue,
+	list,
 	message,
+	panel,
+	section,
 	statusList,
 	table,
-	list,
 	tree,
-	keyValue,
-	diff,
-	panel,
-	columns,
-	section,
-	helpLayout,
 } from "./components/index.ts";
 
 // ---------------------------------------------------------------------------
@@ -239,24 +237,24 @@ export {
 // ---------------------------------------------------------------------------
 
 export {
-	spinner,
-	progressBar,
-	textPrompt,
 	confirmPrompt,
+	progressBar,
 	selectPrompt,
+	spinner,
+	textPrompt,
 } from "./components/index.ts";
 
 // ---------------------------------------------------------------------------
 // Type re-exports — capabilities
 // ---------------------------------------------------------------------------
 
-export type { TerminalCapabilities, ColorDepth } from "./capabilities/index.ts";
+export type { ColorDepth, TerminalCapabilities } from "./capabilities/index.ts";
 
 // ---------------------------------------------------------------------------
 // Type re-exports — theme
 // ---------------------------------------------------------------------------
 
-export type { Theme, ThemeInput, BuiltinThemeName } from "./theme/index.ts";
+export type { BuiltinThemeName, Theme, ThemeInput } from "./theme/index.ts";
 
 // ---------------------------------------------------------------------------
 // Type re-exports — tokens
@@ -274,48 +272,62 @@ export type { StyleSpec } from "./render/index.ts";
 // Type re-exports — component options
 // ---------------------------------------------------------------------------
 
-export type { MessageOptions } from "./components/index.ts";
-export type { StatusListItem } from "./components/index.ts";
-export type { TableColumn, TableOptions } from "./components/index.ts";
-export type { ListItem, ListOptions } from "./components/index.ts";
-export type { TreeNode, TreeOptions } from "./components/index.ts";
-export type { KeyValueEntry, KeyValueOptions } from "./components/index.ts";
-export type { DiffLine, DiffHunk, DiffOptions } from "./components/index.ts";
-export type { PanelOptions } from "./components/index.ts";
-export type { ColumnDef, ColumnsOptions } from "./components/index.ts";
-export type { SectionOptions } from "./components/index.ts";
-export type { HelpLayoutOptions } from "./components/index.ts";
-export type { SpinnerOptions, SpinnerHandle } from "./components/index.ts";
-export type { ProgressBarOptions, ProgressBarHandle } from "./components/index.ts";
-export type { TextPromptOptions } from "./components/index.ts";
-export type { ConfirmPromptOptions } from "./components/index.ts";
-export type { SelectOption, SelectPromptOptions } from "./components/index.ts";
+export type {
+	ColumnDef,
+	ColumnsOptions,
+	ConfirmPromptOptions,
+	DiffHunk,
+	DiffLine,
+	DiffOptions,
+	HelpLayoutOptions,
+	KeyValueEntry,
+	KeyValueOptions,
+	ListItem,
+	ListOptions,
+	MessageOptions,
+	PanelOptions,
+	ProgressBarHandle,
+	ProgressBarOptions,
+	SectionOptions,
+	SelectOption,
+	SelectPromptOptions,
+	SpinnerHandle,
+	SpinnerOptions,
+	StatusListItem,
+	TableColumn,
+	TableOptions,
+	TextPromptOptions,
+	TreeNode,
+	TreeOptions,
+} from "./components/index.ts";
 
 // ---------------------------------------------------------------------------
 // Type re-exports — primitive options
 // ---------------------------------------------------------------------------
 
-export type { StyledTextOptions } from "./primitives/index.ts";
-export type { PadOptions } from "./primitives/index.ts";
-export type { TruncateOptions } from "./primitives/index.ts";
-export type { AlignOptions } from "./primitives/index.ts";
-export type { LinePart } from "./primitives/index.ts";
-export type { StackOptions } from "./primitives/index.ts";
-export type { WrapOptions } from "./primitives/index.ts";
-export type { BorderOptions } from "./primitives/index.ts";
-export type { DividerOptions } from "./primitives/index.ts";
-export type { BadgeOptions } from "./primitives/index.ts";
+export type {
+	AlignOptions,
+	BadgeOptions,
+	BorderOptions,
+	DividerOptions,
+	LinePart,
+	PadOptions,
+	StackOptions,
+	StyledTextOptions,
+	TruncateOptions,
+	WrapOptions,
+} from "./primitives/index.ts";
 
 // ---------------------------------------------------------------------------
 // Utility re-exports
 // ---------------------------------------------------------------------------
 
-export { stripAnsi, stringWidth } from "./render/index.ts";
 export { createCapabilities } from "./capabilities/index.ts";
+export { stringWidth, stripAnsi } from "./render/index.ts";
 
 // ---------------------------------------------------------------------------
 // Context re-exports (for advanced usage)
 // ---------------------------------------------------------------------------
 
-export { getContext, setContext, createContext } from "./primitives/index.ts";
 export type { SystemContext } from "./primitives/index.ts";
+export { createContext, getContext, setContext } from "./primitives/index.ts";

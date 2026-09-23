@@ -11,23 +11,23 @@
 
 // Main Recipe Engine
 export {
-	RecipeEngine,
 	createRecipeEngine,
 	executeRecipe,
 	loadRecipe,
-	validateRecipe,
-	type RecipeSource,
+	RecipeEngine,
 	type RecipeExecutionOptions,
 	type RecipeExecutionResult,
 	type RecipeLoadResult,
+	type RecipeSource,
+	validateRecipe,
 } from "./recipe-engine.js";
 
 // Step Execution Engine
 export {
-	StepExecutor,
-	type StepExecutorConfig,
 	type StepExecutionMetrics,
 	type StepExecutionProgress,
+	StepExecutor,
+	type StepExecutorConfig,
 } from "./step-executor.js";
 
 // Complete Tool Framework
@@ -38,18 +38,18 @@ export * from "./types.js";
 
 // Export type guards from types
 export {
-	isTemplateStep,
-	isActionStep,
-	isCodeModStep,
-	isRecipeStep,
-	isAIStep,
-	isInstallStep,
-	isQueryStep,
-	isPatchStep,
-	isEnsureDirsStep,
-	StepExecutionError,
-	RecipeDependencyError,
 	CircularDependencyError,
+	isActionStep,
+	isAIStep,
+	isCodeModStep,
+	isEnsureDirsStep,
+	isInstallStep,
+	isPatchStep,
+	isQueryStep,
+	isRecipeStep,
+	isTemplateStep,
+	RecipeDependencyError,
+	StepExecutionError,
 } from "./types.js";
 
 // Recipe Engine Constants and Utilities

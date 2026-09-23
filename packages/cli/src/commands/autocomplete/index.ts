@@ -1,7 +1,6 @@
-import { Args, Flags } from "@oclif/core";
-
 import { indent, list } from "@hypercli/ui";
 import { c, msg } from "@hypercli/ui/shortcuts";
+import { Args, Flags } from "@oclif/core";
 
 import { AutocompleteBase } from "#autocomplete/base";
 import Create from "#commands/autocomplete/create";

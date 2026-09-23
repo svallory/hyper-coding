@@ -5,7 +5,7 @@ import yaml from "js-yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AiCollector } from "#ai/ai-collector";
 import { RecipeEngine } from "#recipe-engine/recipe-engine";
-import { ToolRegistry, getToolRegistry } from "#recipe-engine/tools/registry";
+import { getToolRegistry, ToolRegistry } from "#recipe-engine/tools/registry";
 import { templateToolFactory } from "#recipe-engine/tools/template-tool";
 import type { Recipe } from "#recipe-engine/types";
 import { getJig, initializeJig } from "#template-engines/jig-engine";

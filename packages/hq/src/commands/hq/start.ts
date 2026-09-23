@@ -5,10 +5,10 @@ import { resolve } from "node:path";
 import * as p from "@clack/prompts";
 import { Flags } from "@oclif/core";
 import {
-	type TelegramState,
 	generateHqClaudeMd,
 	generateHqConfigSkill,
 	generateRenameSessionsSkill,
+	type TelegramState,
 } from "create-hyper-hq/setup/claude-md";
 import { isWorkspaceTrusted, trustWorkspace } from "create-hyper-hq/setup/trust";
 import { runConfigWizard } from "create-hyper-hq/setup/wizard";
@@ -16,7 +16,7 @@ import { configExists, loadConfig } from "#config/index";
 import type { HqConfig } from "#config/schema";
 import { BaseCommand } from "#lib/base-command";
 import { buildClaudeCommand } from "#services/claude";
-import { TELEGRAM_CHANNEL_PLUGIN, getHqTelegramEnv } from "#services/telegram";
+import { getHqTelegramEnv, TELEGRAM_CHANNEL_PLUGIN } from "#services/telegram";
 import * as tmux from "#services/tmux";
 import { renderBanner } from "#utils/banner";
 import { log } from "#utils/log";

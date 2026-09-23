@@ -9,8 +9,7 @@
 import { ErrorCode, ErrorHandler, HypergenError } from "@hypercli/core";
 import createDebug from "debug";
 import type { ToolType } from "#recipe-engine/types";
-import type { Tool } from "./base.js";
-import type { ToolFactory } from "./base.js";
+import type { Tool, ToolFactory } from "./base.js";
 
 /**
  * Tool registration metadata

@@ -5,8 +5,8 @@
  * md (inline markdown), symbols, and tokens as convenient shortcuts.
  */
 
-import { message } from "./components/index.ts";
 import type { MessageOptions } from "./components/index.ts";
+import { message } from "./components/index.ts";
 import {
 	divider,
 	getContext,

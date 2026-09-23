@@ -173,7 +173,7 @@ describe("table", () => {
 		expect(lines[0]).toContain("Name");
 		expect(lines[0]).toContain("Value");
 		// Second line is divider
-		expect(lines[1]).toMatch(/[─\-]+/);
+		expect(lines[1]).toMatch(/[─-]+/);
 		// Data rows
 		expect(lines[2]).toContain("alpha");
 		expect(lines[3]).toContain("beta");
@@ -693,7 +693,7 @@ describe("section", () => {
 		const lines = result.split("\n");
 		expect(lines[0]).toBe("Title");
 		// Line 1 should be a divider (─ chars)
-		expect(lines[1]).toMatch(/[─\-]+/);
+		expect(lines[1]).toMatch(/[─-]+/);
 		// Line 2 should be blank
 		expect(lines[2]).toBe("");
 		// Line 3 is content
@@ -720,7 +720,7 @@ describe("section", () => {
 		const result = stripAnsi(section({ title: "Default", content: "Body" }));
 		const lines = result.split("\n");
 		// Should have divider (level 1 behavior)
-		expect(lines[1]).toMatch(/[─\-]+/);
+		expect(lines[1]).toMatch(/[─-]+/);
 	});
 
 	test("content as array", () => {

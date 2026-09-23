@@ -4,9 +4,9 @@ import path from "node:path";
 import yaml from "js-yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-	type ParsedCookbook,
 	discoverCookbooksInKit,
 	discoverRecipesInCookbook,
+	type ParsedCookbook,
 	parseCookbookFile,
 } from "#parsers/cookbook-parser";
 

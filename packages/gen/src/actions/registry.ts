@@ -91,7 +91,7 @@ export class ActionRegistry {
 		for (const tag of tags) {
 			const actionNames = this.tagsIndex.get(tag);
 			if (actionNames) {
-				actionNames.forEach((name) => matchingActionNames.add(name));
+				for (const name of actionNames) matchingActionNames.add(name);
 			}
 		}
 

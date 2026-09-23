@@ -6,10 +6,10 @@
  * as parameters on every call.
  */
 
-import { createCapabilities, detectCapabilities } from "../capabilities/index.ts";
 import type { TerminalCapabilities } from "../capabilities/index.ts";
-import { ThemeEngine } from "../theme/index.ts";
+import { createCapabilities, detectCapabilities } from "../capabilities/index.ts";
 import type { ThemeInput } from "../theme/index.ts";
+import { ThemeEngine } from "../theme/index.ts";
 import type { ResolvedTokens } from "../tokens/index.ts";
 
 /** Shared state holding the active theme engine, terminal capabilities, and resolved tokens. */

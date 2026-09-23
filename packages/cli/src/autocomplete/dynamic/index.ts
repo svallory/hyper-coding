@@ -5,6 +5,6 @@
  * kit/cookbook/recipe/variable tab completions.
  */
 
-export type { DynamicCache, VariableCompletion, CompletionContext } from "./types.js";
 export { DynamicCacheManager } from "./cache.js";
 export { CompletionResolver } from "./resolver.js";
+export type { CompletionContext, DynamicCache, VariableCompletion } from "./types.js";

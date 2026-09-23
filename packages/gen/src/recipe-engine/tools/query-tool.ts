@@ -95,7 +95,7 @@ async function parseFile(content: string, format: string): Promise<any> {
 		case "toml": {
 			// Use a dynamic import; TOML parsing is optional
 			try {
-				// @ts-ignore -- optional dependency, only needed for TOML files
+				// @ts-expect-error -- optional dependency, only needed for TOML files
 				const { parse } = await import("smol-toml");
 				return parse(content);
 			} catch {

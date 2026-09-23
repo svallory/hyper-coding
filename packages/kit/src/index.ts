@@ -3,18 +3,18 @@ export const version = "0.0.0";
 
 // Base Command
 export {
+	type BaseArgs,
 	BaseCommand,
 	type BaseFlags,
-	type BaseArgs,
-	type KitTree,
 	type CookbookTree,
+	type KitTree,
 	type RecipeEntry,
 } from "#base-command";
 
 // Source resolution
 export {
-	resolveKitSource,
 	buildInstallCommand,
 	type KitSourceType,
 	type ResolvedKitSource,
+	resolveKitSource,
 } from "#source-resolver";

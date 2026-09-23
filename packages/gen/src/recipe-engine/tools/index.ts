@@ -5,55 +5,38 @@
  * Provides access to base classes, registry, and all tool-related functionality.
  */
 
-// Base tool framework
-export {
-	Tool,
-	BaseToolFactory,
-} from "./base.js";
-
-// Concrete tool implementations
-export {
-	TemplateTool,
-	TemplateToolFactory,
-	templateToolFactory,
-} from "./template-tool.js";
-
 export {
 	ActionTool,
 	ActionToolFactory,
 	actionToolFactory,
 } from "./action-tool.js";
-
-export {
-	RecipeTool,
-	RecipeToolFactory,
-	recipeToolFactory,
-} from "./recipe-tool.js";
-
-export {
-	ShellTool,
-	ShellToolFactory,
-	shellToolFactory,
-} from "./shell-tool.js";
-
 export {
 	AiTool,
 	AiToolFactory,
 	aiToolFactory,
 } from "./ai-tool.js";
-
+export type {
+	ToolFactory,
+	ToolLifecycleMetrics,
+	ToolPhase,
+	ToolResource,
+	ToolValidationResult,
+} from "./base.js";
+// Base tool framework
+export {
+	BaseToolFactory,
+	Tool,
+} from "./base.js";
+export {
+	EnsureDirsTool,
+	EnsureDirsToolFactory,
+	ensureDirsToolFactory,
+} from "./ensure-dirs-tool.js";
 export {
 	InstallTool,
 	InstallToolFactory,
 	installToolFactory,
 } from "./install-tool.js";
-
-export {
-	QueryTool,
-	QueryToolFactory,
-	queryToolFactory,
-} from "./query-tool.js";
-
 export {
 	PatchTool,
 	PatchToolFactory,
@@ -61,37 +44,43 @@ export {
 } from "./patch-tool.js";
 
 export {
-	EnsureDirsTool,
-	EnsureDirsToolFactory,
-	ensureDirsToolFactory,
-} from "./ensure-dirs-tool.js";
-
-export type {
-	ToolFactory,
-	ToolPhase,
-	ToolResource,
-	ToolLifecycleMetrics,
-	ToolValidationResult,
-} from "./base.js";
-
+	QueryTool,
+	QueryToolFactory,
+	queryToolFactory,
+} from "./query-tool.js";
+export {
+	RecipeTool,
+	RecipeToolFactory,
+	recipeToolFactory,
+} from "./recipe-tool.js";
 // Tool registry system
 export {
-	ToolRegistry,
 	getToolRegistry,
 	registerTool,
 	resolveTool,
 	type ToolRegistration,
+	ToolRegistry,
 	type ToolRegistryStats,
-	type ToolSearchCriteria,
 	type ToolResolutionOptions,
+	type ToolSearchCriteria,
 } from "./registry.js";
+export {
+	ShellTool,
+	ShellToolFactory,
+	shellToolFactory,
+} from "./shell-tool.js";
+// Concrete tool implementations
+export {
+	TemplateTool,
+	TemplateToolFactory,
+	templateToolFactory,
+} from "./template-tool.js";
 
 // Import types and classes for internal use
 import type { RecipeStepUnion, ToolType } from "#recipe-engine/types";
 import { actionToolFactory } from "./action-tool.js";
 import { aiToolFactory } from "./ai-tool.js";
-import type { ToolPhase, ToolValidationResult } from "./base.js";
-import type { Tool } from "./base.js";
+import type { Tool, ToolPhase, ToolValidationResult } from "./base.js";
 import { ensureDirsToolFactory } from "./ensure-dirs-tool.js";
 import { installToolFactory } from "./install-tool.js";
 import { parallelToolFactory } from "./parallel-tool.js";
@@ -100,10 +89,10 @@ import { promptToolFactory } from "./prompt-tool.js";
 import { queryToolFactory } from "./query-tool.js";
 import { recipeToolFactory } from "./recipe-tool.js";
 import {
+	getToolRegistry,
 	ToolRegistry,
 	type ToolRegistryStats,
 	type ToolResolutionOptions,
-	getToolRegistry,
 } from "./registry.js";
 import { sequenceToolFactory } from "./sequence-tool.js";
 import { shellToolFactory } from "./shell-tool.js";
@@ -150,9 +139,7 @@ export const TOOL_EXECUTION_PHASES: readonly ToolPhase[] = [
  * This function sets up the tool registry with sensible defaults
  * and can be called once during application startup.
  */
-export function initializeToolsFramework(options?: {
-	enableDebugLogging?: boolean;
-}): ToolRegistry {
+export function initializeToolsFramework(options?: { enableDebugLogging?: boolean }): ToolRegistry {
 	const registry = ToolRegistry.getInstance();
 
 	if (options?.enableDebugLogging) {

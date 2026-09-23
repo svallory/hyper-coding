@@ -6,122 +6,117 @@
  * already exported from ../parsers/index.js and should be imported from there.
  */
 
-// Kit types (these are specific to kit.yml and not in parsers)
-export type {
-	VariableDefinition,
-	VariableType,
-	VariableValidation,
-	KitConfig,
-	CookbookConfig,
-	ValidationError,
-} from "./kit.js";
-export { TemplateConfigError } from "./kit.js";
-
-// Template types (used by recipe engine and actions)
-export type {
-	TemplateVariable,
-	TemplateExample,
-	TemplateConfig,
-} from "./template.js";
-
-// Recipe types
-// Note: RecipeConfig, RecipeStepUnion, and ToolType are already exported from ../parsers/index.js
-export type {
-	RecipeProvides,
-	StepStatus,
-	BaseRecipeStep,
-	TemplateStep,
-	ActionStep,
-	CodeModStep,
-	RecipeStep,
-	ShellStep,
-	PromptStep,
-	InstallStep,
-	QueryStep,
-	PatchStep,
-	EnsureDirsStep,
-	SequenceStep,
-	ParallelStep,
-	AIStep,
-	StepContext,
-	StepResult,
-	TemplateExecutionResult,
-	CodeModExecutionResult,
-	ShellExecutionResult,
-	PromptExecutionResult,
-	SequenceExecutionResult,
-	ParallelExecutionResult,
-	InstallExecutionResult,
-	QueryExecutionResult,
-	PatchExecutionResult,
-	EnsureDirsExecutionResult,
-	RecipeExecutionResult,
-	RecipeExample,
-	RecipeDependency,
-	RecipeExecution,
-	RecipeValidationResult,
-	RecipeValidationError,
-	RecipeValidationWarning,
-	StepDependencyNode,
-	RecipeExecutionPlan,
-	StepExecutionOptions,
-	RecipeEngineConfig,
-	StepByTool,
-} from "./recipe.js";
-export {
-	isTemplateStep,
-	isActionStep,
-	isCodeModStep,
-	isRecipeStep,
-	isShellStep,
-	isPromptStep,
-	isSequenceStep,
-	isParallelStep,
-	isAIStep,
-	isInstallStep,
-	isQueryStep,
-	isPatchStep,
-	isEnsureDirsStep,
-	RecipeValidationError as RecipeValidationErrorClass,
-	StepExecutionError,
-	RecipeDependencyError,
-	CircularDependencyError,
-} from "./recipe.js";
-
-// Action types (ActionLogger re-exported from ./actions.js which imports from ../logger/types.js)
-export type {
-	ActionMetadata,
-	ActionParameter,
-	ParameterType,
-	ParameterValidation,
-	ActionContext,
-	ActionCommunication,
-	ActionResult,
-	ActionFunction,
-	DecoratedAction,
-	ActionExample,
-	ActionUtils,
-	ActionQueryOptions,
-} from "./actions.js";
-export type { ActionLogger } from "#logger/types";
-export { ActionExecutionError, ActionParameterError } from "./actions.js";
-
-// AI Configuration types (AiServiceConfig also available from ../config/index.js)
-export type {
-	AIModelRef,
-	AIModelPricing,
-	AIBudgetConfig,
-	AIOutputConfig,
-	AIContextConfig,
-	AIExample,
-	AIGuardrailConfig,
-	AIExecutionResult,
-	AICostSummary,
-} from "./ai-config.js";
 // Re-export AiServiceConfig from config
 export type { AiServiceConfig } from "#config/index";
-
+export type { ActionLogger } from "#logger/types";
+// Action types (ActionLogger re-exported from ./actions.js which imports from ../logger/types.js)
+export type {
+	ActionCommunication,
+	ActionContext,
+	ActionExample,
+	ActionFunction,
+	ActionMetadata,
+	ActionParameter,
+	ActionQueryOptions,
+	ActionResult,
+	ActionUtils,
+	DecoratedAction,
+	ParameterType,
+	ParameterValidation,
+} from "./actions.js";
+export { ActionExecutionError, ActionParameterError } from "./actions.js";
+// AI Configuration types (AiServiceConfig also available from ../config/index.js)
+export type {
+	AIBudgetConfig,
+	AIContextConfig,
+	AICostSummary,
+	AIExample,
+	AIExecutionResult,
+	AIGuardrailConfig,
+	AIModelPricing,
+	AIModelRef,
+	AIOutputConfig,
+} from "./ai-config.js";
 // Common types
 // Note: Logger is already exported as a class from '#logger/index'
 // ExtendedLogger type interface is also available from '#logger/types'
 export type { Prompter, RenderedAction, RunnerConfig } from "./common.js";
+// Kit types (these are specific to kit.yml and not in parsers)
+export type {
+	CookbookConfig,
+	KitConfig,
+	ValidationError,
+	VariableDefinition,
+	VariableType,
+	VariableValidation,
+} from "./kit.js";
+export { TemplateConfigError } from "./kit.js";
+// Recipe types
+// Note: RecipeConfig, RecipeStepUnion, and ToolType are already exported from ../parsers/index.js
+export type {
+	ActionStep,
+	AIStep,
+	BaseRecipeStep,
+	CodeModExecutionResult,
+	CodeModStep,
+	EnsureDirsExecutionResult,
+	EnsureDirsStep,
+	InstallExecutionResult,
+	InstallStep,
+	ParallelExecutionResult,
+	ParallelStep,
+	PatchExecutionResult,
+	PatchStep,
+	PromptExecutionResult,
+	PromptStep,
+	QueryExecutionResult,
+	QueryStep,
+	RecipeDependency,
+	RecipeEngineConfig,
+	RecipeExample,
+	RecipeExecution,
+	RecipeExecutionPlan,
+	RecipeExecutionResult,
+	RecipeProvides,
+	RecipeStep,
+	RecipeValidationError,
+	RecipeValidationResult,
+	RecipeValidationWarning,
+	SequenceExecutionResult,
+	SequenceStep,
+	ShellExecutionResult,
+	ShellStep,
+	StepByTool,
+	StepContext,
+	StepDependencyNode,
+	StepExecutionOptions,
+	StepResult,
+	StepStatus,
+	TemplateExecutionResult,
+	TemplateStep,
+} from "./recipe.js";
+export {
+	CircularDependencyError,
+	isActionStep,
+	isAIStep,
+	isCodeModStep,
+	isEnsureDirsStep,
+	isInstallStep,
+	isParallelStep,
+	isPatchStep,
+	isPromptStep,
+	isQueryStep,
+	isRecipeStep,
+	isSequenceStep,
+	isShellStep,
+	isTemplateStep,
+	RecipeDependencyError,
+	RecipeValidationError as RecipeValidationErrorClass,
+	StepExecutionError,
+} from "./recipe.js";
+// Template types (used by recipe engine and actions)
+export type {
+	TemplateConfig,
+	TemplateExample,
+	TemplateVariable,
+} from "./template.js";

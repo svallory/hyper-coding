@@ -6,14 +6,14 @@
  * No third-party types are exposed — everything is defined by the DS.
  */
 
-import { defaultMarkdownTheme, markdown } from "./primitives/markdown.ts";
 import type { HeadingStyle, MarkdownOptions, MarkdownTheme } from "./primitives/markdown.ts";
+import { defaultMarkdownTheme, markdown } from "./primitives/markdown.ts";
 
 // ---------------------------------------------------------------------------
 // Re-export types
 // ---------------------------------------------------------------------------
 
-export type { MarkdownTheme, MarkdownOptions, HeadingStyle };
+export type { HeadingStyle, MarkdownOptions, MarkdownTheme };
 
 /** @deprecated Use MarkdownTheme instead. */
 export type HelpTheme = MarkdownTheme;

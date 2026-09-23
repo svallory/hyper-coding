@@ -7,7 +7,7 @@ import { BaseCommand } from "#lib/base-command";
 import { buildClaudeCommand } from "#services/claude";
 import { listProjects, resolveProjectDir } from "#services/projects";
 import { recordLaunch } from "#services/sessions";
-import { TELEGRAM_CHANNEL_PLUGIN, getProjectTelegramEnv } from "#services/telegram";
+import { getProjectTelegramEnv, TELEGRAM_CHANNEL_PLUGIN } from "#services/telegram";
 import * as tmux from "#services/tmux";
 import { sanitizeSessionName } from "#services/tmux";
 import { log } from "#utils/log";

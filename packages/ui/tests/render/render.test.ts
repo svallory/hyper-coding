@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { StyleSpec } from "#render/index";
 import {
 	ansiPad,
 	ansiSlice,
@@ -12,7 +13,6 @@ import {
 	stripAnsi,
 	stripColor,
 } from "#render/index";
-import type { StyleSpec } from "#render/index";
 
 // =============================================================================
 // SGR Tests

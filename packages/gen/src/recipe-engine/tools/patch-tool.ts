@@ -71,7 +71,7 @@ async function parseFile(content: string, format: string): Promise<Record<string
 		}
 		case "toml": {
 			try {
-				// @ts-ignore -- optional dependency, only needed for TOML files
+				// @ts-expect-error -- optional dependency, only needed for TOML files
 				const { parse } = await import("smol-toml");
 				return parse(content) as Record<string, any>;
 			} catch {
@@ -102,7 +102,7 @@ async function serializeFile(
 		}
 		case "toml": {
 			try {
-				// @ts-ignore -- optional dependency, only needed for TOML files
+				// @ts-expect-error -- optional dependency, only needed for TOML files
 				const { stringify } = await import("smol-toml");
 				return `${stringify(data)}\n`;
 			} catch {

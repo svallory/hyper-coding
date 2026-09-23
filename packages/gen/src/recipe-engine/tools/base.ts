@@ -5,8 +5,7 @@
  * Provides common lifecycle management, error handling, and resource management.
  */
 
-import { ErrorCode, ErrorHandler, HypergenError, withErrorHandling } from "@hypercli/core";
-import { Logger } from "@hypercli/core";
+import { ErrorCode, ErrorHandler, HypergenError, Logger, withErrorHandling } from "@hypercli/core";
 import createDebug from "debug";
 import type {
 	RecipeStepUnion,

@@ -5,17 +5,17 @@
  */
 
 export type {
-	HypergenConfig,
-	ResolvedConfig,
 	AiServiceConfig,
 	ConfigLoaderOptions,
+	HypergenConfig,
+	ResolvedConfig,
 } from "./config-loader.js";
 
 export {
-	HypergenConfigLoader,
 	createConfigFile,
 	findHyperConfigDir,
 	getConfigInfo,
+	HypergenConfigLoader,
 } from "./config-loader.js";
 
 export { loadHelpers } from "./load-helpers.js";

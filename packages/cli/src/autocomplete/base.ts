@@ -1,7 +1,5 @@
-import { existsSync } from "node:fs";
-import { mkdirSync, openSync, writeSync } from "node:fs";
-import { dirname, join, parse } from "node:path";
-import path from "node:path";
+import { existsSync, mkdirSync, openSync, writeSync } from "node:fs";
+import path, { dirname, join, parse } from "node:path";
 import { Command } from "@oclif/core";
 
 export abstract class AutocompleteBase extends Command {

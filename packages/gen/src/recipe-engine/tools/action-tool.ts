@@ -15,10 +15,10 @@ import type { ActionContext, ActionLogger, ActionResult, ActionUtils } from "#ac
 import { ConsoleActionLogger, DefaultActionUtils } from "#actions/utils";
 import {
 	type ActionStep,
+	isActionStep,
 	type StepContext,
 	type StepExecutionOptions,
 	type StepResult,
-	isActionStep,
 } from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 

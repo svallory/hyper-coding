@@ -20,12 +20,12 @@ import fs from "fs-extra";
 import addOp from "#ops/add";
 import injectOp from "#ops/inject";
 import {
+	isTemplateStep,
 	type StepContext,
 	type StepExecutionOptions,
 	type StepResult,
 	type TemplateExecutionResult,
 	type TemplateStep,
-	isTemplateStep,
 } from "#recipe-engine/types";
 import { getJig, renderTemplate as jigRenderTemplate } from "#template-engines/index";
 import { Tool, type ToolValidationResult } from "./base.js";

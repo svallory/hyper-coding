@@ -21,106 +21,106 @@ createSystem({ theme: hyperTheme });
 // Re-export everything from the DS core
 // ---------------------------------------------------------------------------
 
-// Core factory
-export { createSystem } from "./ds-index.ts";
-export type { SystemOptions, DesignSystem } from "./ds-index.ts";
-
-// Primitives
-export {
-	styledText,
-	symbol,
-	pad,
-	truncate,
-	align,
-	line,
-	stack,
-	indent,
-	wrap,
-	border,
-	divider,
-	badge,
-	markdown,
-	defaultMarkdownTheme,
-} from "./primitives/index.ts";
-
-// Components (static) — excluding prompt components
-export {
-	message,
-	statusList,
-	table,
-	list,
-	tree,
-	keyValue,
-	diff,
-	panel,
-	columns,
-	section,
-	helpLayout,
+// Capabilities
+export type { ColorDepth, TerminalCapabilities } from "./capabilities/index.ts";
+export { createCapabilities } from "./capabilities/index.ts";
+// Component option types
+export type {
+	ColumnDef,
+	ColumnsOptions,
+	DiffHunk,
+	DiffLine,
+	DiffOptions,
+	HelpLayoutOptions,
+	KeyValueEntry,
+	KeyValueOptions,
+	ListItem,
+	ListOptions,
+	MessageOptions,
+	PanelOptions,
+	ProgressBarHandle,
+	ProgressBarOptions,
+	SectionOptions,
+	SpinnerHandle,
+	SpinnerOptions,
+	StatusListItem,
+	TableColumn,
+	TableOptions,
+	TreeNode,
+	TreeOptions,
 } from "./components/index.ts";
-
+// Components (static) — excluding prompt components
 // Interactive components (excluding prompts — those stay with clack)
 export {
-	spinner,
+	columns,
+	diff,
+	helpLayout,
+	keyValue,
+	list,
+	message,
+	panel,
 	progressBar,
+	section,
+	spinner,
+	statusList,
+	table,
+	tree,
 } from "./components/index.ts";
-
-// Capabilities
-export type { TerminalCapabilities, ColorDepth } from "./capabilities/index.ts";
-export { createCapabilities } from "./capabilities/index.ts";
-
-// Theme
-export type { Theme, ThemeInput, BuiltinThemeName } from "./theme/index.ts";
-
-// Tokens
-export type { ResolvedTokens } from "./tokens/index.ts";
-
+export type { DesignSystem, SystemOptions } from "./ds-index.ts";
+// Core factory
+export { createSystem } from "./ds-index.ts";
+// Primitive option types
+export type {
+	AlignOptions,
+	BadgeOptions,
+	BorderOptions,
+	DividerOptions,
+	LinePart,
+	PadOptions,
+	StackOptions,
+	StyledTextOptions,
+	SystemContext,
+	TruncateOptions,
+	WrapOptions,
+} from "./primitives/index.ts";
+// Primitives
+// Context
+export {
+	align,
+	badge,
+	border,
+	createContext,
+	defaultMarkdownTheme,
+	divider,
+	getContext,
+	indent,
+	line,
+	markdown,
+	pad,
+	setContext,
+	stack,
+	styledText,
+	symbol,
+	truncate,
+	wrap,
+} from "./primitives/index.ts";
 // Render
 export type { StyleSpec } from "./render/index.ts";
-export { stripAnsi, stringWidth } from "./render/index.ts";
-
-// Context
-export { getContext, setContext, createContext } from "./primitives/index.ts";
-export type { SystemContext } from "./primitives/index.ts";
-
-// Component option types
-export type { MessageOptions } from "./components/index.ts";
-export type { StatusListItem } from "./components/index.ts";
-export type { TableColumn, TableOptions } from "./components/index.ts";
-export type { ListItem, ListOptions } from "./components/index.ts";
-export type { TreeNode, TreeOptions } from "./components/index.ts";
-export type { KeyValueEntry, KeyValueOptions } from "./components/index.ts";
-export type { DiffLine, DiffHunk, DiffOptions } from "./components/index.ts";
-export type { PanelOptions } from "./components/index.ts";
-export type { ColumnDef, ColumnsOptions } from "./components/index.ts";
-export type { SectionOptions } from "./components/index.ts";
-export type { HelpLayoutOptions } from "./components/index.ts";
-export type { SpinnerOptions, SpinnerHandle } from "./components/index.ts";
-export type { ProgressBarOptions, ProgressBarHandle } from "./components/index.ts";
-
-// Primitive option types
-export type { StyledTextOptions } from "./primitives/index.ts";
-export type { PadOptions } from "./primitives/index.ts";
-export type { TruncateOptions } from "./primitives/index.ts";
-export type { AlignOptions } from "./primitives/index.ts";
-export type { LinePart } from "./primitives/index.ts";
-export type { StackOptions } from "./primitives/index.ts";
-export type { WrapOptions } from "./primitives/index.ts";
-export type { BorderOptions } from "./primitives/index.ts";
-export type { DividerOptions } from "./primitives/index.ts";
-export type { BadgeOptions } from "./primitives/index.ts";
+export { stringWidth, stripAnsi } from "./render/index.ts";
+// Theme
+export type { BuiltinThemeName, Theme, ThemeInput } from "./theme/index.ts";
+// Tokens
+export type { ResolvedTokens } from "./tokens/index.ts";
 
 // ---------------------------------------------------------------------------
 // Hyper-specific exports
 // ---------------------------------------------------------------------------
 
-export { hyperTheme } from "./hyper-theme.ts";
-
-// Convenience: re-export shortcuts at top level for backwards compat
-export { c, s, msg, md } from "./shortcuts.ts";
-
-// Markdown primitive types
-export type { MarkdownTheme, MarkdownOptions, HeadingStyle } from "./primitives/index.ts";
-
-// Help system (convenience re-exports)
-export { renderHelp, renderMarkdown, helpTheme } from "./help.ts";
 export type { HelpThemeConfig } from "./help.ts";
+// Help system (convenience re-exports)
+export { helpTheme, renderHelp, renderMarkdown } from "./help.ts";
+export { hyperTheme } from "./hyper-theme.ts";
+// Markdown primitive types
+export type { HeadingStyle, MarkdownOptions, MarkdownTheme } from "./primitives/index.ts";
+// Convenience: re-export shortcuts at top level for backwards compat
+export { c, md, msg, s } from "./shortcuts.ts";

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-	PROVIDER_API_KEY_ENV_VARS,
 	getExpectedEnvVar,
 	hasApiKeyAvailable,
+	PROVIDER_API_KEY_ENV_VARS,
 	resolveApiKey,
 } from "#ai/env";
 

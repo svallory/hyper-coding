@@ -998,7 +998,7 @@ export class TemplateParser {
 
 		// Check for obviously invalid patterns
 		const invalidPatterns = [
-			/^[{}()\[\].,;]*$/, // Only punctuation
+			/^[{}()[\].,;]*$/, // Only punctuation
 			/^\d+$/, // Only numbers
 			/^[a-zA-Z_$][a-zA-Z0-9_$]*\s*$/, // Only a single identifier
 		];

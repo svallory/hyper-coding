@@ -22,6 +22,7 @@ import yaml from "js-yaml";
 import { StepExecutor } from "#recipe-engine/step-executor";
 import {
 	type CircularDependencyError,
+	isRecipeStep,
 	type RecipeConfig,
 	type RecipeExecutionResult,
 	type RecipeStep,
@@ -29,7 +30,6 @@ import {
 	type StepContext,
 	type StepExecutionOptions,
 	type StepResult,
-	isRecipeStep,
 } from "#recipe-engine/types";
 import { Tool, type ToolValidationResult } from "./base.js";
 

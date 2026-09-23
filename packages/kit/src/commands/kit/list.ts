@@ -5,9 +5,9 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
-	type ParsedKit,
 	discoverCookbooksInKit,
 	discoverRecipesInCookbook,
+	type ParsedKit,
 	parseKitFile,
 } from "@hypercli/core";
 import { c, indent, msg, s, table } from "@hypercli/ui";

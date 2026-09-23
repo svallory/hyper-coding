@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { defaultMarkdownTheme, markdown } from "#primitives/markdown";
 import type { MarkdownOptions, MarkdownTheme } from "#primitives/markdown";
+import { defaultMarkdownTheme, markdown } from "#primitives/markdown";
 import { stripAnsi } from "#render/index";
 
 describe("markdown primitive", () => {

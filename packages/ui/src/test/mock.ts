@@ -6,8 +6,8 @@
 
 import type { ColorDepth, TerminalCapabilities } from "../capabilities/index.ts";
 import { createCapabilities } from "../capabilities/index.ts";
-import { createContext, setContext } from "../primitives/index.ts";
 import type { SystemContext } from "../primitives/index.ts";
+import { createContext, setContext } from "../primitives/index.ts";
 import type { Theme, ThemeInput } from "../theme/index.ts";
 
 /**

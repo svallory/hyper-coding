@@ -5,8 +5,8 @@
  */
 
 import { setTimeout } from "node:timers/promises";
-import * as p from "@clack/prompts";
 import type { Option } from "@clack/prompts";
+import * as p from "@clack/prompts";
 import type { TemplateVariable } from "@hypercli/core";
 
 const DEFAULT_INTRO = "⚙️  Let's customize this!";

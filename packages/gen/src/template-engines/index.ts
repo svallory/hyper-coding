@@ -6,11 +6,11 @@
  */
 
 export {
-	initializeJig,
 	getJig,
+	initializeJig,
+	type JigConfig,
+	mountDirectory,
+	renderFile,
 	renderTemplate,
 	renderTemplateSync,
-	renderFile,
-	mountDirectory,
-	type JigConfig,
 } from "./jig-engine.js";

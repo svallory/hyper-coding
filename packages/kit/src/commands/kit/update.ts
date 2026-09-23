@@ -8,9 +8,9 @@ import { Args, Flags } from "@oclif/core";
 import { downloadTemplate } from "giget";
 import { BaseCommand } from "#base-command";
 import {
-	type KitManifestEntry,
 	addKitToManifest,
 	extractPackageVersion,
+	type KitManifestEntry,
 	loadManifest,
 } from "#manifest";
 import { resolveKitSource } from "#source-resolver";

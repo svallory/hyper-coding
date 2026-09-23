@@ -4,28 +4,25 @@
  * Kit, Cookbook, Template, and Path parsing utilities
  */
 
-// Kit Parser
-export {
-	parseKitFile,
-	discoverKits,
-	getDefaultKitSearchDirs,
-	deriveShortName,
-	resolveKitCookbooks,
-	type ParsedKit,
-} from "./kit-parser.js";
-
 // Cookbook Parser
 export {
-	parseCookbookFile,
 	discoverCookbooksInKit,
 	discoverRecipesInCookbook,
 	type ParsedCookbook,
+	parseCookbookFile,
 } from "./cookbook-parser.js";
-
+// Kit Parser
+export {
+	deriveShortName,
+	discoverKits,
+	getDefaultKitSearchDirs,
+	type ParsedKit,
+	parseKitFile,
+	resolveKitCookbooks,
+} from "./kit-parser.js";
+// Path Resolver
+export { PathResolver, type ResolvedPath } from "./path-resolver.js";
 // Template Parser
 // Note: Template types (TemplateConfig, TemplateVariable, etc.) are exported from ../types
 // We only export the parser class and ParsedTemplateConfig here to avoid duplication
-export { TemplateParser, type ParsedTemplateConfig } from "./template-parser.js";
-
-// Path Resolver
-export { PathResolver, type ResolvedPath } from "./path-resolver.js";
+export { type ParsedTemplateConfig, TemplateParser } from "./template-parser.js";

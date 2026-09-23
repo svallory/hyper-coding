@@ -4,8 +4,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { findHyperConfigDir } from "@hypercli/core";
-import { findProjectRoot } from "@hypercli/core";
+import { findHyperConfigDir, findProjectRoot } from "@hypercli/core";
 import { Command, Flags, type Interfaces } from "@oclif/core";
 import type { KitManifestEntry } from "#manifest";
 
@@ -136,7 +135,7 @@ export abstract class BaseCommand<T extends typeof Command> extends Command {
 		for (const entry of entries) {
 			const kitDir = join(kitsDir, entry.name);
 			const kitYml = join(kitDir, "kit.yml");
-			let config: any = undefined;
+			let config: any;
 			const cookbooks: CookbookTree[] = [];
 
 			if (existsSync(kitYml)) {

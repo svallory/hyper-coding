@@ -7,9 +7,6 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createContext, getContext, setContext } from "#primitives/index";
-import { stripAnsi } from "#render/index";
-
 import {
 	formatConfirmAnswer,
 	formatConfirmQuestion,
@@ -24,6 +21,8 @@ import {
 	formatTextQuestion,
 	formatValidationError,
 } from "#components/textPrompt";
+import { createContext, getContext, setContext } from "#primitives/index";
+import { stripAnsi } from "#render/index";
 
 // ---------------------------------------------------------------------------
 // Mock stream helper

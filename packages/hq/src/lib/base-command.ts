@@ -21,6 +21,6 @@ export abstract class BaseCommand<T extends typeof Command> extends Command {
 		}),
 	};
 
-	protected declare flags: BaseFlags<T>;
-	protected declare args: BaseArgs<T>;
+	declare protected flags: BaseFlags<T>;
+	declare protected args: BaseArgs<T>;
 }

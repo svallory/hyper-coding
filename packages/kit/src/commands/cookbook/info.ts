@@ -7,8 +7,8 @@ import { truncateDescription } from "@hypercli/core";
 import { c, indent, markdown, msg, s } from "@hypercli/ui";
 import { Args } from "@oclif/core";
 import yaml from "js-yaml";
-import { BaseCommand } from "#base-command";
 import type { CookbookTree, KitTree } from "#base-command";
+import { BaseCommand } from "#base-command";
 import { infoFlags } from "#lib/flags";
 
 interface FoundCookbook {

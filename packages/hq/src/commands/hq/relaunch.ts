@@ -5,7 +5,7 @@ import { loadConfig } from "#config/index";
 import { BaseCommand } from "#lib/base-command";
 import { buildClaudeCommand } from "#services/claude";
 import { findLatestSession, findSession, recordLaunch, recordStop } from "#services/sessions";
-import { TELEGRAM_CHANNEL_PLUGIN, getProjectTelegramEnv } from "#services/telegram";
+import { getProjectTelegramEnv, TELEGRAM_CHANNEL_PLUGIN } from "#services/telegram";
 import * as tmux from "#services/tmux";
 import { sanitizeSessionName } from "#services/tmux";
 import { log } from "#utils/log";

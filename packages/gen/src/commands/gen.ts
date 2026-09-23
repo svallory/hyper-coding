@@ -6,9 +6,13 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { PathResolver, type ResolvedPath } from "@hypercli/core";
-import { discoverKits, getDefaultKitSearchDirs } from "@hypercli/core";
 import type { TemplateVariable } from "@hypercli/core";
+import {
+	discoverKits,
+	getDefaultKitSearchDirs,
+	PathResolver,
+	type ResolvedPath,
+} from "@hypercli/core";
 
 import { Args, Flags } from "@oclif/core";
 import { AiCollector } from "#ai/ai-collector";

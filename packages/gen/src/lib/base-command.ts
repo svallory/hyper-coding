@@ -20,8 +20,8 @@ export abstract class BaseCommand<T extends typeof Command> extends KitBaseComma
 		...KitBaseCommand.baseFlags,
 	};
 
-	protected declare flags: BaseFlags<T>;
-	protected declare args: BaseArgs<T>;
+	declare protected flags: BaseFlags<T>;
+	declare protected args: BaseArgs<T>;
 	protected discovery!: GeneratorDiscovery;
 	protected recipeEngine!: RecipeEngine;
 	protected hypergenConfig: any = {}; // TODO: Add proper type

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
 	type ColorDepth,
-	type TerminalCapabilities,
 	createCapabilities,
 	detectCapabilities,
+	type TerminalCapabilities,
 } from "#capabilities/index";
 
 // ---------------------------------------------------------------------------

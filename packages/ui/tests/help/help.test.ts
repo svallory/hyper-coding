@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { helpTheme, renderHelp, renderMarkdown } from "#help";
 import type { HelpThemeConfig, MarkdownTheme } from "#help";
+import { helpTheme, renderHelp, renderMarkdown } from "#help";
 import { defaultMarkdownTheme } from "#primitives/markdown";
 import { stripAnsi } from "#render/index";
 
