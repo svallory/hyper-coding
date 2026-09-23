@@ -38,3 +38,5 @@ coverage/
 # Temporary files
 .temp/
 .tmp/
+# Generated test output
+test-output/
