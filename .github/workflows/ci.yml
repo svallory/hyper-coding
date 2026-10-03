@@ -31,6 +31,15 @@ jobs:
       - name: Build packages
         run: bunx moon run :build
 
+      # gen's e2e recipe tests shell out to a bare `hyper` CLI, which is not on
+      # PATH on the runner. Expose the workspace CLI so those steps can run.
+      - name: Expose hyper CLI on PATH
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$PWD/packages/cli/bin/run.js" "$HOME/.local/bin/hyper"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/hyper" --version
+
       - name: Type check
         run: bunx moon run :check
 
