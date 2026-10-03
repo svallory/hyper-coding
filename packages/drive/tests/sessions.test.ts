@@ -404,6 +404,19 @@ describe("stopSession", () => {
 		}
 	});
 
+	it("refuses a file that carries no procStart, failing closed", async () => {
+		const sleeper = startSleeper();
+		try {
+			// Without a procStart there is nothing to compare the pid against, so
+			// the file cannot prove it still describes this process.
+			writeSessionFile(fixture.home, { pid: sleeper.pid, sessionId: "session-a", cwd });
+			expect(await stopSession(sleeper.pid, { cwd, sessionId: "session-a" })).toBe("mismatch");
+			expect(isAlive(sleeper.pid)).toBe(true);
+		} finally {
+			sleeper.kill();
+		}
+	});
+
 	it("reports a pid that is already gone without signalling it", async () => {
 		const pid = deadPid();
 		writeSessionFile(fixture.home, {

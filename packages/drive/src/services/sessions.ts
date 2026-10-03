@@ -116,6 +116,11 @@ export interface TranscriptRef {
  * CLAUDE-INTERNAL (verified 2.1.288): a project folder holds one
  * `<sessionId>.jsonl` per session; nothing else with a `.jsonl` suffix is
  * treated as a transcript (e.g. this module's own `<id>.warp.json` marker).
+ *
+ * Known gap for T-12: the folder name is not reversible, so two directories
+ * whose encodings collide share one folder (`foo_bar` and `foo-bar` both encode
+ * to `foo-bar`) and their transcripts land side by side. Nothing here tells them
+ * apart; a caller that needs to cannot rely on the folder name alone.
  */
 export function listTranscripts(cwd: string): TranscriptRef[] {
 	const dir = projectDir(cwd);
@@ -257,6 +262,12 @@ export function readOwner(cwd: string, id: string): OwnerState {
 	try {
 		raw = readFileSync(path, "utf-8");
 	} catch (error) {
+		// A marker that vanished between the check and the read is gone, not
+		// corrupt: Mutagen moving a file mid-sync is normal, and the session is
+		// unowned rather than unclaimable.
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			return { state: "unowned", path };
+		}
 		return { state: "malformed", path, reason: describeError(error, path) };
 	}
 	let parsed: unknown;
@@ -339,8 +350,18 @@ export type StopOutcome =
  * - a dead pid is reported `"gone"` without being signalled;
  * - the file must carry a `sessionId`, and it must equal the requested one — a
  *   file without one is refused as `"mismatch"`;
- * - the file's `procStart` must equal what `ps` reports for that pid, so a stale
- *   file whose pid has been recycled is refused (`"mismatch"`).
+ * - the file must carry a `procStart`, and it must equal what `ps` reports for
+ *   that pid, so a stale file whose pid has been recycled is refused
+ *   (`"mismatch"`). Both identity fields are required: a file that carries
+ *   neither cannot be proven to be the process that was asked for, and failing
+ *   closed is the safe answer.
+ *
+ * `cwd` here is the **process** working directory recorded in the sessions file
+ * — take it from the {@link LiveSession} that {@link liveSessionsFor} returned,
+ * not from warp's own cwd. The two differ in practice: on this machine session
+ * `3d9c77a6-6975-4381-b884-214b3ca452d8` (pid 27145) registers cwd
+ * `/Users/svallory/work` while its transcript sits in
+ * `~/.claude/projects/-Users-svallory-work-saulo-tech/`.
  *
  * `procStart` is not `ps -o lstart=` in the ambient locale: Claude Code runs
  * `LC_ALL=C TZ=UTC ps -o lstart= -p <pid>` and stores that, i.e. the start time
@@ -364,7 +385,10 @@ export async function stopSession(
 	// A file with no sessionId cannot be proven to be the process we were asked
 	// to stop, so it is a mismatch, not a licence to signal.
 	if (claimed.sessionId === undefined || claimed.sessionId !== sessionId) return "mismatch";
-	if (claimed.procStart !== undefined) {
+	// Fail closed: without a procStart there is nothing to compare the pid
+	// against, so the file cannot prove it still describes this process.
+	if (claimed.procStart === undefined) return "mismatch";
+	{
 		const actual = currentProcStart(pid);
 		// An empty answer means the pid vanished between the check above and
 		// now; there is nothing left to signal.
@@ -552,12 +576,16 @@ function tailLines(path: string, size: number): TailWindow {
 	try {
 		const buffer = Buffer.allocUnsafe(length + (offset > 0 ? 1 : 0));
 		const fd = openSync(path, "r");
+		let read = 0;
 		try {
-			readSync(fd, buffer, 0, buffer.length, offset > 0 ? offset - 1 : 0);
+			read = readSync(fd, buffer, 0, buffer.length, offset > 0 ? offset - 1 : 0);
 		} finally {
 			closeSync(fd);
 		}
-		text = buffer.toString("utf-8");
+		// Decode only what was read: a file truncated mid-read (a transcript
+		// being written, or a Mutagen sync landing) leaves the rest of the
+		// buffer uninitialised, and allocUnsafe does not clear it.
+		text = buffer.toString("utf-8", 0, Math.max(read, 0));
 	} catch {
 		return { lines: [], truncatedStart: false };
 	}
