@@ -58,7 +58,7 @@ bun run test                        # Run tests
 
 ```bash
 # Example, from the repo root
-flock /tmp/hyper-heavy.lock -c 'cd packages/drive && bun run build && bun run test'
+flock /tmp/hyper-heavy2.lock -c 'cd packages/drive && bun run build && bun run test'
 ```
 
 ### Machine setup test safety
