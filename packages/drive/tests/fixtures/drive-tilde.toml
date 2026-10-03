@@ -1,4 +1,6 @@
-# Leading ~/ in self.home and in machines.*.home must expand to os.homedir().
+# Leading ~/ in self.home expands against os.homedir() — this machine's home.
+# In machines.*.home it stays literal: the machine is remote, and its `~` is
+# the remote user's home, which ssh/rsync expand on the target.
 [self]
 home = "~/self"
 

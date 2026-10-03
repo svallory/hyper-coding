@@ -95,17 +95,19 @@ describe("loadConfig", () => {
 		});
 	});
 
-	it("expands a leading ~/ in self.home and machines.*.home", () => {
+	it("expands a leading ~/ in self.home but leaves machines.*.home alone", () => {
 		process.env.HYPER_DRIVE_CONFIG = fixture("drive-tilde.toml");
 		const config = loadConfig();
 
 		expect(config.self.home).toBe(resolve(homedir(), "self"));
-		expect(config.machines.spare?.home).toBe(resolve(homedir(), "spare"));
+		// A machine's home is on that machine: expanding `~` here would bake the
+		// local user's home into a remote path. ssh/rsync expand it on the target.
+		expect(config.machines.spare?.home).toBe("~/spare");
 	});
 
-	it("expands a bare ~ to the home dir", () => {
+	it("keeps a bare ~ as-is for a remote machine's home", () => {
 		process.env.HYPER_DRIVE_CONFIG = fixture("drive-tilde.toml");
-		expect(loadConfig().machines.bare?.home).toBe(homedir());
+		expect(loadConfig().machines.bare?.home).toBe("~");
 	});
 
 	it("falls back to homedir() when self.home is empty", () => {

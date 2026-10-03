@@ -55,6 +55,18 @@ function fakeHerdrOnPath(json: string, { exitCode = 0, stderr = "" } = {}): stri
 	return dir;
 }
 
+/** A `herdr` that exists on PATH but can't be run (mode 0 → EACCES). */
+function nonExecutableHerdrOnPath(): string {
+	const dir = track(mkdtempSync(join(tmpdir(), "drive-herdr-eacces-")));
+	const script = join(dir, "herdr");
+	writeFileSync(script, "#!/bin/sh\nexit 0\n", "utf-8");
+	chmodSync(script, 0o000);
+	// PATH is REPLACED, not prepended: execvp skips an EACCES and would find the
+	// real herdr further down PATH, which would make this test pass vacuously.
+	process.env.PATH = dir;
+	return dir;
+}
+
 /** A PATH with no herdr at all. */
 function pathWithoutHerdr(): string {
 	const dir = track(mkdtempSync(join(tmpdir(), "drive-nopath-")));
@@ -164,6 +176,34 @@ describe("listMachines", () => {
 			// Herdr is installed here; only ENOENT means "not installed".
 			expect(message).not.toMatch(/doesn't seem to be installed/);
 		}
+	});
+
+	it("reports a herdr that can't be run, without blaming a missing install", () => {
+		nonExecutableHerdrOnPath();
+		withTempConfig(FIXTURE);
+
+		try {
+			resolveMachine("netcup");
+			expect.unreachable("resolveMachine should have thrown");
+		} catch (err) {
+			const message = (err as Error).message;
+			expect(message).toMatch(/Herdr couldn't be run/);
+			expect(message).not.toMatch(/doesn't seem to be installed/);
+		}
+	});
+
+	it("refuses two Herdr machines with the same label", () => {
+		fakeHerdrOnPath(
+			JSON.stringify([
+				{ label: "netcup", target: "agent@netcup.example.com", enabled: true },
+				{ label: "netcup", target: "agent@other.example.com", enabled: true },
+			]),
+		);
+		withTempConfig(FIXTURE);
+
+		// A duplicate label makes `herdr --machine netcup` ambiguous, so guessing
+		// is not an option.
+		expect(() => listMachines()).toThrow(/two machines called "netcup"/);
 	});
 });
 
