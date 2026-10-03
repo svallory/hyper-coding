@@ -106,7 +106,11 @@ function localCount(root: string): number {
 
 /** `hyper.tracked` in the space's own git dir — the list, read as hyper wrote it. */
 function localTracked(root: string): string[] {
-	const out = git(
+	// Not the shared `git()` helper: it throws on any non-zero exit, and git
+	// exits 1 for "key not found" — which is a space that tracks nothing, and
+	// exactly what several of these tests are asserting.
+	const result = spawnSync(
+		"git",
 		[
 			"--git-dir",
 			join(root, ".hyper", "space.git"),
@@ -115,12 +119,21 @@ function localTracked(root: string): string[] {
 			"--get-all",
 			"hyper.tracked",
 		],
-		root,
+		{ encoding: "utf8", cwd: root },
 	);
-	return out
+	if (result.status !== 0) return [];
+	return (result.stdout ?? "")
 		.split("\n")
 		.map((line) => line.trim())
 		.filter((line) => line !== "");
+}
+
+/** `hyper.cadence` in the space's own git dir — the cadence the space runs on. */
+function cadenceIn(root: string): string {
+	return git(
+		["--git-dir", join(root, ".hyper", "space.git"), "config", "--local", "--get", "hyper.cadence"],
+		root,
+	).trim();
 }
 
 /**
@@ -663,7 +676,16 @@ describe("a push that failed is published by the next refresh", () => {
 		const before = readFileSync(join(root, ".gitignore"), "utf-8");
 		const failed = spawnCli(["space", "init", root, "--refresh", "--tracked", "later"], fixture);
 		expect(failed.status).not.toBe(0);
-		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
+		// This run COMMITTED (the commit is what the refused push was carrying),
+		// so it keeps what it wrote: the file exists, and the work tree agrees
+		// with the HEAD that expects the new render. "Unchanged" is the wrong
+		// expectation here — the round-3 N2 test covers the two branches of that
+		// rule, and this one covers the commit branch.
+		expect(existsSync(join(root, ".gitignore"))).toBe(true);
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).not.toBe(before);
+		expect(
+			git(["--git-dir", join(root, ".hyper", "space.git"), "status", "--porcelain"], root).trim(),
+		).not.toContain(".gitignore");
 		// The commit is kept locally: losing it would make the next refresh
 		// unable to publish anything.
 		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
@@ -858,17 +880,28 @@ describe("a failed run puts the space back", () => {
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
 		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
 
-		// Repro B: the same, with a push the hyperdrive refuses.
+		// Repro B: the same, with a push the hyperdrive refuses. The new file
+		// has to be ALLOWLISTED (`notes/`, not `extra/`): after Repro A's
+		// rollback `extra` is no longer tracked, so a file under it is ignored,
+		// nothing is committed, and the push is a no-op git happily accepts —
+		// which would test nothing about a refused push.
 		rmSync(join(root, "extra", ".env"), { force: true });
 		rejectSpacePushes(true);
-		writeFileSync(join(root, "extra", "note.md"), "extra\n");
+		writeFileSync(join(root, "notes", "new.md"), "new\n");
+		writeFileSync(join(root, "extra", "note.md"), "still ignored\n");
 		const pushRefused = spawnCli(["space", "init", root, "--refresh"], fixture);
 		expect(pushRefused.status).not.toBe(0);
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
 		// And the space is still safe to re-run: the worktrees are still ignored.
+		// Checked per PATH, not against a literal element: `not.toContain(
+		// "worktrees/")` compares whole elements and could never fail, because
+		// no element of a tree listing IS "worktrees/".
 		rejectSpacePushes(false);
 		expect(spawnCli(["space", "init", root, "--refresh"], fixture).status).toBe(0);
-		expect(remoteTree("space/restore-allowlist")).not.toContain("worktrees/");
+		const tree = remoteTree("space/restore-allowlist");
+		expect(tree.some((path) => path.startsWith("worktrees/"))).toBe(false);
+		expect(tree.some((path) => path.startsWith("scratch/"))).toBe(false);
+		expect(tree.some((path) => path.includes(".env"))).toBe(false);
 	});
 
 	it("MAJOR 2: --tracked survives a refused push and a failed manifest write", (ctx) => {
@@ -1085,5 +1118,170 @@ describe("tracked entries are normalised", () => {
 		).toBe(0);
 		expect(localTracked(root)).toEqual(["extra", "more"]);
 		expect(manifestFromCheckout("normalised")?.tracked).toEqual(["extra", "more"]);
+	});
+});
+
+/**
+ * Round-3 review. The three reproductions N1/N2/K3 and the two state rules, each
+ * written so it fails against the round-2 code.
+ */
+describe("a refusal changes nothing at all", () => {
+	it("N1: a refused refresh leaves an UNCHANGED allowlist in place", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("unchanged-allowlist");
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		const before = readFileSync(join(root, ".gitignore"), "utf-8");
+
+		// No --tracked, so the render does not change at all: this is the case
+		// where "the file equals the render" and "the file is gone" looked the
+		// same to the rollback.
+		writeFileSync(join(root, "notes", ".env"), "TOKEN=secret\n");
+		const refused = spawnCli(["space", "init", root, "--refresh"], fixture);
+		expect(refused.status).not.toBe(0);
+		expect(existsSync(join(root, ".gitignore"))).toBe(true);
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
+	});
+
+	it("N2: a refused push after a commit leaves the allowlist HEAD expects", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("commit-keeps-render");
+		mkdirSync(join(root, "extra"), { recursive: true });
+		writeFileSync(join(root, "extra", "e.md"), "extra\n");
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		const before = readFileSync(join(root, ".gitignore"), "utf-8");
+
+		// A run that COMMITS and then finds the push refused keeps everything it
+		// wrote: HEAD holds the new render, so restoring the old one would leave
+		// `git status` dirty against its own history.
+		rejectSpacePushes(true);
+		writeFileSync(join(root, "extra", "later.md"), "later\n");
+		const refused = spawnCli(["space", "init", root, "--refresh", "--tracked", "more"], fixture);
+		expect(refused.status).not.toBe(0);
+		expect(localCount(root)).toBe(2);
+		const status = git(
+			["--git-dir", join(root, ".hyper", "space.git"), "status", "--porcelain"],
+			root,
+		);
+		expect(status.trim()).not.toContain(".gitignore");
+		expect(status.trim()).not.toContain("M ");
+		// Whatever the outcome, the file exists and is one of the two renders —
+		// never missing.
+		expect(existsSync(join(root, ".gitignore"))).toBe(true);
+		expect([before, readFileSync(join(root, ".gitignore"), "utf-8")]).toContain(
+			readFileSync(join(root, ".gitignore"), "utf-8"),
+		);
+	});
+
+	it("K3: a rolled-back first init leaves neither .gitignore nor an empty .hyper/", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		// A hyper-written allowlist that is already exactly what this init would
+		// render: the foreign-file refusal must not fire, and the refusal that
+		// follows must not delete a file this run never wrote.
+		const root = makeSpace("identical-allowlist");
+		const first = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		expect(first.status, flat(first.stderr)).toBe(0);
+		const allowlist = readFileSync(join(root, ".gitignore"), "utf-8");
+		rmSync(join(root, ".hyper"), { recursive: true, force: true });
+		rejectSpacePushes(true);
+		writeFileSync(join(root, "notes", "b.md"), "more\n");
+
+		const refused = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		expect(refused.status).not.toBe(0);
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(allowlist);
+		// Small one: an empty `.hyper/` is hyper's own directory and it held
+		// nothing else, so it goes with the git dir it was created for.
+		expect(existsSync(join(root, ".hyper"))).toBe(false);
+	});
+});
+
+describe("state a refusal must not leave behind", () => {
+	it("a refused --tracked is rolled back, so a later refresh works", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("rollback-tracked");
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		const before = readFileSync(join(root, ".gitignore"), "utf-8");
+
+		// `--tracked extra` where the directory holds a secret: refused BEFORE the
+		// commit, so `hyper.tracked` must not keep `extra` — otherwise every
+		// later plain `--refresh` fails the same way with nothing to remove it.
+		mkdirSync(join(root, "extra"), { recursive: true });
+		writeFileSync(join(root, "extra", ".env"), "TOKEN=secret\n");
+		const refused = spawnCli(["space", "init", root, "--refresh", "--tracked", "extra"], fixture);
+		expect(refused.status).not.toBe(0);
+		expect(localTracked(root)).toEqual([]);
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
+
+		// Remove the secret and a plain refresh succeeds with the OLD list.
+		rmSync(join(root, "extra", ".env"), { force: true });
+		const recovered = spawnCli(["space", "init", root, "--refresh"], fixture);
+		expect(recovered.status, flat(recovered.stderr)).toBe(0);
+		expect(localTracked(root)).toEqual([]);
+		expect(manifestFromCheckout("rollback-tracked")?.tracked).toEqual([]);
+	});
+
+	it("a refused --cadence is rolled back too", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("rollback-cadence");
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		writeFileSync(join(root, "notes", ".env"), "TOKEN=secret\n");
+		const refused = spawnCli(
+			["space", "init", root, "--refresh", "--cadence", "session-end+push"],
+			fixture,
+		);
+		expect(refused.status).not.toBe(0);
+		expect(cadenceIn(root)).toBe("manual");
+	});
+});
+
+describe("a push the hyperdrive declines", () => {
+	it("says the hyperdrive refused it, and quotes the hook's reason", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("declined");
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+
+		// A hook that DECLINES with a reason, and that can still take `main` so
+		// the manifest checkout is unaffected.
+		const hook = join(fixture.remote, "hooks", "pre-receive");
+		writeFileSync(
+			hook,
+			'#!/bin/sh\nwhile read o n r; do\n\tcase "$r" in refs/heads/space/*) echo "spaces are closed for maintenance"; exit 1;; esac\ndone\nexit 0\n',
+			{ mode: 0o755 },
+		);
+		writeFileSync(join(root, "notes", "blocked.md"), "blocked\n");
+		const result = spawnCli(["space", "init", root, "--refresh"], fixture);
+
+		const err = flat(result.stderr);
+		expect(result.status).not.toBe(0);
+		// Reached and refused is not unreachable.
+		expect(err).not.toContain("couldn't reach your hyperdrive");
+		expect(err).toContain("refused to take space/declined");
+		expect(err).toContain("spaces are closed for maintenance");
+		rmSync(hook, { force: true });
+	});
+
+	it("says 'without --group' when the other space has no group", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const first = makeSpace("plain");
+		expect(spawnCli(["space", "init", first, "--cadence", "manual"], fixture).status).toBe(0);
+		const clash = makeSpace("grouped");
+		// The SAME name as the first space: names are unique across groups, so
+		// this is the collision the advice is written for.
+		const result = spawnCli(
+			["space", "init", clash, "--name", "plain", "--group", "somewhere", "--cadence", "manual"],
+			fixture,
+		);
+		expect(result.status).not.toBe(0);
+		const err = flat(result.stderr);
+		// The advice must not print an empty `--group `; it says "without
+		// `--group`" for a space that has no group of its own.
+		expect(err).toContain("without `--group`");
+		expect(err).not.toContain("--group somewhere");
 	});
 });

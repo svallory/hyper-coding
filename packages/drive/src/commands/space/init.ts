@@ -24,6 +24,7 @@ import {
 } from "#services/manifest";
 import { detectSpace } from "#services/space";
 import {
+	clearCadence,
 	hasSpaceGit,
 	initSpaceGitDir,
 	projectRepoInfo,
@@ -168,6 +169,12 @@ function assertExistingSpaceMatches(root: string, branch: string, remote: string
 	}
 }
 
+/** What a call to `writeAllowlist` did, so a later rollback knows what to undo. */
+type AllowlistWrite =
+	| { state: "created" }
+	| { state: "replaced"; previous: string }
+	| { state: "untouched" };
+
 /**
  * Render the tracked `.gitignore`, writing it only when it differs: a
  * `--refresh` of an unchanged space must leave the file alone, or "nothing
@@ -182,18 +189,20 @@ function assertExistingSpaceMatches(root: string, branch: string, remote: string
  * would call foreign. A refresh re-renders by definition — at that point the
  * file is hyper's.
  *
- * Returns the contents this call REPLACED, or null when the file did not exist,
- * so a refusal later can put back exactly what was there.
+ * The THREE-WAY result is what makes the rollback safe. `untouched` and
+ * `created` both used to answer "null" — and a rollback that reads null as
+ * "delete it" then removed a file it had never written, so a refused run could
+ * delete an allowlist it never touched. `untouched` must stay distinct.
  */
-function writeAllowlist(root: string, tracked: string[], refreshed: boolean): string | null {
+function writeAllowlist(root: string, tracked: string[], refreshed: boolean): AllowlistWrite {
 	const gitignore = renderGitignore(tracked);
 	const path = join(root, ".gitignore");
 	if (!existsSync(path)) {
 		writeFileSync(path, gitignore, "utf-8");
-		return null;
+		return { state: "created" };
 	}
 	const current = readFileSync(path, "utf-8");
-	if (current === gitignore) return null;
+	if (current === gitignore) return { state: "untouched" };
 	if (!refreshed && !isHyperAllowlist(current)) {
 		// Both paths absolute and inside the space, so the suggested command
 		// works from wherever the reader happens to be standing.
@@ -206,7 +215,14 @@ function writeAllowlist(root: string, tracked: string[], refreshed: boolean): st
 		);
 	}
 	writeFileSync(path, gitignore, "utf-8");
-	return current;
+	return { state: "replaced", previous: current };
+}
+
+/** Undo a `writeAllowlist`, and only what it actually did. */
+function restoreAllowlist(root: string, wrote: AllowlistWrite): void {
+	const path = join(root, ".gitignore");
+	if (wrote.state === "created") rmSync(path, { force: true });
+	else if (wrote.state === "replaced") writeFileSync(path, wrote.previous, "utf-8");
 }
 
 /**
@@ -251,13 +267,20 @@ function resolveTracked(
  * way to run it. `ensureDriveCheckout` already wraps its own `ls-remote` probe
  * this way; this is the space-side twin.
  */
-function spaceGitRemote(root: string, remote: string, args: readonly string[], what: string): void {
+function spaceGitRemote(
+	root: string,
+	remote: string,
+	args: readonly string[],
+	branch: string,
+): void {
 	const result = spaceGit(root, [...args], { allowFailure: true });
 	if (result.status === 0) return;
 	const detail = (result.stderr || result.stdout).trim();
-	// "The hyperdrive is unreachable" and "the hyperdrive moved" are different
-	// problems with different next steps, so git's own markers tell them apart
-	// rather than lumping both into "it didn't work".
+	const what = `push ${branch}`;
+	// "The hyperdrive is unreachable", "the hyperdrive moved" and "the
+	// hyperdrive refused" are three different problems with three different next
+	// steps, so git's own markers tell them apart rather than lumping all of
+	// them into "it didn't work".
 	if (/(fetch first|non-fast-forward|stale info|behind its remote)/i.test(detail)) {
 		// git's own detail is deliberately NOT quoted here. Its hint says to run
 		// `git pull`, which is advice for an ordinary repo and not for a space
@@ -270,9 +293,34 @@ function spaceGitRemote(root: string, remote: string, args: readonly string[], w
 				`if you need to carry on under a name of its own.`,
 		);
 	}
+	// Reached-and-refused is NOT unreachable: a server-side hook said no, and
+	// "I couldn't reach your hyperdrive" sends someone after the network instead
+	// of after their own hook.
+	if (/\[remote rejected\]|hook declined/i.test(detail)) {
+		const reason = hookReason(detail);
+		throw new SpaceGitError(
+			`the hyperdrive at ${remote} refused to take ${branch}: a server-side hook declined the push. ` +
+				`Nothing was overwritten, and retrying will not help until that hook allows it.` +
+				(reason === "" ? "" : ` It said: ${reason}`),
+		);
+	}
 	throw new SpaceGitError(
 		`I couldn't reach your hyperdrive at ${remote} to ${what}: ${detail || `git ${args[0]} failed`}`,
 	);
+}
+
+/**
+ * The server hook's own reason line, if it sent one.
+ *
+ * A rejecting hook prints `remote: <why>` before git's `! [remote rejected]`
+ * summary, and that line is the only thing that says WHY — it is what the
+ * person who wrote the hook wants read, so it is quoted where git's hint is not.
+ */
+function hookReason(detail: string): string {
+	for (const line of detail.split("\n")) {
+		if (line.startsWith("remote:")) return line.slice("remote:".length).trim();
+	}
+	return "";
 }
 
 /**
@@ -495,8 +543,10 @@ export default class Init extends BaseCommand<typeof Init> {
 			throw new Error(
 				`your hyperdrive already has a space called ${JSON.stringify(name)}, on branch ` +
 					`${registered.branch}. Space names are unique across groups, so this one would take ` +
-					`that space's place in the manifest. Pass \`--name\` with a name of its own, or ` +
-					`\`--group ${registered.group ?? ""}\` to re-initialise ${registered.branch} itself.`,
+					`that space's place in the manifest. Pass \`--name\` with a name of its own` +
+					(registered.group === null
+						? `, or run this again without \`--group\` to re-initialise ${registered.branch} itself.`
+						: `, or pass \`--group ${registered.group}\` to re-initialise ${registered.branch} itself.`),
 			);
 		}
 
@@ -514,16 +564,29 @@ export default class Init extends BaseCommand<typeof Init> {
 
 		// Everything from the git dir onwards shares ONE cleanup, because every
 		// step of it writes something: a refusal must not leave a staged secret,
-		// a rewritten allowlist, or a git dir that makes the next plain `init`
-		// answer "already a hyper space".
-		let previousAllowlist: string | null = null;
-		let wroteAllowlist = false;
+		// a rewritten allowlist, a half-applied `--tracked` or `--cadence`, or a
+		// git dir that makes the next plain `init` answer "already a hyper space".
+		//
+		// The three pieces of state this run may change are SNAPSHOTTED first,
+		// because "put it back" is only meaningful against what was there. The
+		// rule for using them is the commit: a run that committed keeps them (the
+		// work tree must agree with HEAD, which now holds the new allowlist), and
+		// a run that did not commit restores all three.
+		//
+		// Read AFTER `initSpaceGitDir`, which is where they live: on a first init
+		// the dir does not exist yet, and a config read against nothing is an
+		// error rather than an empty answer. A dir that was just created holds no
+		// `hyper.tracked` and no `hyper.cadence`, so "just created" and "had
+		// neither" are the same snapshot — which is what this needs.
+		const created = initSpaceGitDir(root, { branch, remote });
+		const beforeTracked = readTracked(root);
+		const beforeCadence = readCadence(root);
+		let allowlist: AllowlistWrite = { state: "untouched" };
 		let tracked: string[] = [];
 		let manifestEntry: SpaceEntry;
 		let committed = 0;
 		let unborn = false;
 		let upToDate = false;
-		const created = initSpaceGitDir(root, { branch, remote });
 		try {
 			// The clash probe guards CREATING a ref. A space whose branch is not
 			// on the remote yet is about to create one — a first init, a space
@@ -538,13 +601,14 @@ export default class Init extends BaseCommand<typeof Init> {
 			// and the manifest is the copy that travels. A refused push or an
 			// unwritable manifest leaves the two out of step, so the union is
 			// what converges them again.
-			tracked = resolveTracked(flags.tracked, readTracked(root), registered);
+			tracked = resolveTracked(flags.tracked, beforeTracked, registered);
 			writeTracked(root, tracked);
-			previousAllowlist = writeAllowlist(root, tracked, refreshed);
-			wroteAllowlist = true;
+			allowlist = writeAllowlist(root, tracked, refreshed);
 			writeCadence(root, cadence);
 
-			const staged = this.firstCommit(root, name, branch, remote);
+			const staged = this.firstCommit(root, name, branch, remote, (files) => {
+				committed = files;
+			});
 			committed = staged.committed;
 			unborn = staged.unborn;
 			upToDate = staged.upToDate;
@@ -565,15 +629,26 @@ export default class Init extends BaseCommand<typeof Init> {
 			// Unstage first: `initSpaceGitDir` is a no-op on a second run, so a
 			// secret refusal on a refresh must not leave the index full of it.
 			spaceGit(root, ["reset", "--quiet"], { allowFailure: true });
-			// Put the allowlist back the way this run found it: a file it created
-			// is removed, and a file it replaced — a refresh re-rendering it — is
-			// restored to its previous contents. Deleting the latter leaves the
-			// space with nothing ignoring `worktrees/`, and the next `add -A`
-			// stages the worktrees into the space's history.
-			if (previousAllowlist === null) {
-				if (wroteAllowlist) rmSync(join(root, ".gitignore"), { force: true });
-			} else {
-				writeFileSync(join(root, ".gitignore"), previousAllowlist, "utf-8");
+			// Before a surviving commit, EVERYTHING this run wrote goes back: the
+			// allowlist it created or replaced, a `--tracked` that was refused by
+			// the secret guard (left in the config it fails every later refresh
+			// in the same way, with nothing to remove it), and a `--cadence`
+			// nobody asked for after the fact.
+			//
+			// After a commit that SURVIVES, nothing goes back: HEAD already holds
+			// the new allowlist, so restoring the old one would leave the work
+			// tree disagreeing with its own history (`git status` showing
+			// ` M .gitignore` next to a commit that expects the new render).
+			//
+			// "Survives" is the whole test, and it excludes the first init whose
+			// push was refused: there the git dir is about to be removed below,
+			// taking the commit with it, so nothing this run wrote may stay.
+			const keepsCommit = committed > 0 && !created.created;
+			if (!keepsCommit) {
+				restoreAllowlist(root, allowlist);
+				writeTracked(root, beforeTracked);
+				if (beforeCadence === "") clearCadence(root);
+				else writeCadence(root, beforeCadence);
 			}
 			// Only a git dir THIS RUN created: on a refresh the dir holds the
 			// space's history, including a commit whose push failed — removing
@@ -642,6 +717,7 @@ export default class Init extends BaseCommand<typeof Init> {
 		name: string,
 		branch: string,
 		remote: string,
+		onCommitted: (files: number) => void,
 	): {
 		committed: number;
 		unborn: boolean;
@@ -675,6 +751,11 @@ export default class Init extends BaseCommand<typeof Init> {
 				"-m",
 				`space: init ${name}`,
 			]);
+			// Told to the caller IMMEDIATELY, before the push. A refused push is
+			// the case that matters: the rollback keeps what this run wrote
+			// exactly when a commit exists, and it cannot know that if the push
+			// is what threw before anyone was told.
+			onCommitted(staged.length);
 		} else if (unborn) {
 			process.stderr.write(
 				`warning: the allowlist matched no files in ${root}, so there is nothing to commit and no branch to push.\n`,
@@ -690,7 +771,7 @@ export default class Init extends BaseCommand<typeof Init> {
 		const publishedBefore = remoteSha(root, remote, branch);
 		// A plain push, never force: `--force-with-lease` is what would be able
 		// to rewrite a space another machine has already pushed.
-		spaceGitRemote(root, remote, ["push", "-u", "origin", branch], `push ${branch}`);
+		spaceGitRemote(root, remote, ["push", "-u", "origin", branch], branch);
 		return {
 			committed: staged.length,
 			unborn: false,
