@@ -149,3 +149,30 @@ export function makeBareSpaceWithWorktree(dir: string, branch: string): string {
 	git(["--git-dir", join(dir, ".git"), "worktree", "add", "-q", wt, "-b", branch]);
 	return wt;
 }
+
+/**
+ * Make git ignore the user's global and system config, and return a function
+ * that puts the environment back.
+ *
+ * A space git dir's config is read with `git config --local`, which is exactly
+ * the point: nothing outside the space should be able to answer for it. That
+ * only stays honest if the tests are hermetic too — a stray `hyper.cadence` or
+ * `core.worktree` in the developer's `~/.gitconfig` must not be able to make
+ * these suites pass or fail. `/dev/null` rather than an empty file: git reads
+ * it, finds nothing, and moves on, and there is nothing there to go stale.
+ */
+export function isolateGitConfig(): () => void {
+	const saved: Record<string, string | undefined> = {
+		GIT_CONFIG_GLOBAL: process.env.GIT_CONFIG_GLOBAL,
+		GIT_CONFIG_NOSYSTEM: process.env.GIT_CONFIG_NOSYSTEM,
+	};
+	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
+	process.env.GIT_CONFIG_NOSYSTEM = "1";
+
+	return () => {
+		for (const [key, value] of Object.entries(saved)) {
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
+	};
+}

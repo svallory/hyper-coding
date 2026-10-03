@@ -18,6 +18,14 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { SyncCadence } from "#config/schema";
 
+/**
+ * The cadence values the space git dir may hold. Mirrors the union in
+ * config/schema.ts (and the check in config/index.ts) — kept here so the git
+ * dir's config can be validated where it is read, without pulling the whole
+ * user config into this module.
+ */
+const ALLOWED_CADENCES: readonly SyncCadence[] = ["", "manual", "session-end", "session-end+push"];
+
 /** Where a space's own git dir lives. */
 export function spaceGitDir(spaceRoot: string): string {
 	return join(spaceRoot, ".hyper", "space.git");
@@ -78,6 +86,23 @@ export function cleanGitEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.Pro
 }
 
 /**
+ * Read one key from the space git dir's OWN config.
+ *
+ * `--local` is not optional: a plain `git config --get` also reads the user's
+ * global and system config, so a stray `hyper.cadence` in `~/.gitconfig` would
+ * answer for a space, and a global `core.worktree` would make an empty
+ * `.hyper/space.git` look like an initialised one. Returns `null` when the key
+ * is unset.
+ */
+function spaceConfigGet(spaceRoot: string, key: string): string | null {
+	const { status, stdout } = spaceGit(spaceRoot, ["config", "--local", "--get", key], {
+		allowFailure: true,
+	});
+	if (status !== 0) return null;
+	return stdout.trim();
+}
+
+/**
  * A git failure, friendly: the message is git's own stderr, trimmed — the
  * thing a user can act on — never a Node stack dump.
  */
@@ -93,10 +118,9 @@ export class SpaceGitError extends Error {
 /**
  * Run `git --git-dir <space git dir> --work-tree <space root> ...args`.
  *
- * `GIT_TERMINAL_PROMPT=0` keeps git from blocking on a credential prompt
- * forever, and `GIT_DIR`/`GIT_WORK_TREE` are stripped from the child
- * environment so an outer git context (a hook, an embedding repo) cannot
- * leak in and redirect the command.
+ * The child environment comes from `cleanGitEnv()`: prompts disabled, and
+ * every repo-local `GIT_*` variable stripped, so an outer git context (a
+ * hook, an embedding repo) cannot leak in and redirect the command.
  *
  * Throws `SpaceGitError` on non-zero exit unless `allowFailure` is set.
  */
@@ -175,17 +199,15 @@ export function initSpaceGitDir(
 		// leave the space permanently without history. The value matters as
 		// much as the key — a `core.worktree` pointing anywhere but the space
 		// root is somebody else's git dir, not ours.
-		const worktree = spaceGit(spaceRoot, ["config", "--get", "core.worktree"], {
-			allowFailure: true,
-		});
-		if (worktree.status !== 0) {
+		const worktree = spaceConfigGet(spaceRoot, "core.worktree");
+		if (worktree === null) {
 			throw new SpaceGitError(
 				`There's a git dir at ${gitDir}, but it isn't a hyper space git dir — it has no core.worktree. Move it aside and try again.`,
 			);
 		}
-		if (worktree.stdout.trim() !== "../..") {
+		if (worktree !== "../..") {
 			throw new SpaceGitError(
-				`There's a git dir at ${gitDir}, but it isn't a hyper space git dir — its core.worktree points at ${worktree.stdout.trim()}, not at this space. Move it aside and try again.`,
+				`There's a git dir at ${gitDir}, but it isn't a hyper space git dir — its core.worktree points at ${worktree}, not at this space. Move it aside and try again.`,
 			);
 		}
 		return { created: false };
@@ -205,19 +227,22 @@ export function initSpaceGitDir(
 			throw new SpaceGitError((init.stderr ?? "").trim() || `git init --bare failed for ${gitDir}`);
 		}
 
-		spaceGit(spaceRoot, ["config", "core.bare", "false"]);
-		spaceGit(spaceRoot, ["config", "core.worktree", "../.."]);
+		spaceGit(spaceRoot, ["config", "--local", "core.bare", "false"]);
+		spaceGit(spaceRoot, ["config", "--local", "core.worktree", "../.."]);
 		// Point HEAD at the orphan branch without creating it: the branch must not
 		// exist as a commit yet — the first space commit is made by `space commit`.
 		spaceGit(spaceRoot, ["symbolic-ref", "HEAD", `refs/heads/${branch}`]);
 
 		if (remote !== undefined) {
-			spaceGit(spaceRoot, ["config", "remote.origin.url", remote]);
-			spaceGit(spaceRoot, ["config", `branch.${branch}.remote`, "origin"]);
-			spaceGit(spaceRoot, ["config", `branch.${branch}.merge`, `refs/heads/${branch}`]);
+			spaceGit(spaceRoot, ["config", "--local", "remote.origin.url", remote]);
+			spaceGit(spaceRoot, ["config", "--local", `branch.${branch}.remote`, "origin"]);
+			spaceGit(spaceRoot, ["config", "--local", `branch.${branch}.merge`, `refs/heads/${branch}`]);
 		}
 	} catch (err) {
 		rmSync(gitDir, { recursive: true, force: true });
+		if (err instanceof SpaceGitError) {
+			throw new SpaceGitError(`while setting up the space git dir: ${err.message}`);
+		}
 		throw err;
 	}
 
@@ -231,17 +256,28 @@ export function hasSpaceGit(spaceRoot: string): boolean {
 
 /**
  * The space's sync cadence (C-11: `hyper.cadence` in the space git dir's
- * config is the truth). An unset key reads as `""`.
+ * config is the truth). An unset key reads as `""`. A value outside the union
+ * is refused rather than passed on: it can only come from a hand-edit or a
+ * stale writer, and quietly scheduling syncs from it would be worse than a
+ * clear complaint.
  */
 export function readCadence(spaceRoot: string): SyncCadence {
-	const { status, stdout } = spaceGit(spaceRoot, ["config", "--get", "hyper.cadence"], {
-		allowFailure: true,
-	});
-	if (status !== 0) return "";
-	return stdout.trim() as SyncCadence;
+	const value = spaceConfigGet(spaceRoot, "hyper.cadence");
+	if (value === null) return "";
+	if (!ALLOWED_CADENCES.includes(value as SyncCadence)) {
+		throw new SpaceGitError(
+			`The space git dir at ${spaceGitDir(spaceRoot)} says its cadence is ${JSON.stringify(value)}, which isn't one of "manual", "session-end", "session-end+push". Fix it with \`git config --file <git dir>/config hyper.cadence <value>\`.`,
+		);
+	}
+	return value as SyncCadence;
 }
 
 /** Write `hyper.cadence` into the space git dir's config. */
 export function writeCadence(spaceRoot: string, cadence: SyncCadence): void {
-	spaceGit(spaceRoot, ["config", "hyper.cadence", cadence]);
+	if (!ALLOWED_CADENCES.includes(cadence)) {
+		throw new SpaceGitError(
+			`${JSON.stringify(cadence)} isn't a cadence I know — use "manual", "session-end" or "session-end+push".`,
+		);
+	}
+	spaceGit(spaceRoot, ["config", "--local", "hyper.cadence", cadence]);
 }
