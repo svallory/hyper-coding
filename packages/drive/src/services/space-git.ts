@@ -680,3 +680,57 @@ export function writeTracked(spaceRoot: string, tracked: readonly string[]): voi
 		spaceGit(spaceRoot, ["config", "--local", "--add", "hyper.tracked", entry]);
 	}
 }
+
+/** Fetch only this space's branch (and no tags), ready for a guarded checkout. */
+export function fetchSpaceClone(spaceRoot: string, branch: string): void {
+	const refspec = `refs/heads/${branch}:refs/remotes/origin/${branch}`;
+	spaceGit(spaceRoot, ["config", "--local", "remote.origin.fetch", refspec]);
+	const result = spaceGit(spaceRoot, ["fetch", "--no-tags", "origin", refspec], {
+		allowFailure: true,
+	});
+	if (result.status !== 0) {
+		const detail = (result.stderr || result.stdout).trim();
+		throw new SpaceGitError(
+			/couldn't find remote ref|remote ref does not exist/i.test(detail)
+				? `The manifest names ${branch}, but that branch is missing from your hyperdrive. Publish it from the original machine, then try again.`
+				: `I couldn't fetch ${branch} from your hyperdrive. Check the remote URL, access and network, then try again. ${detail}`,
+		);
+	}
+}
+
+/**
+ * Clone-time ONLY project provisioning. These are project git operations, not
+ * space history operations: an explicit project git-dir, never the space's.
+ * No later space operation may call this to alter an existing project (C-3).
+ */
+export function cloneProjectRepoBare(gitDir: string, url: string, defaultBranch: string): void {
+	if (existsSync(gitDir)) {
+		throw new SpaceGitError(
+			`A project repository already exists at ${gitDir}. Choose an empty clone target.`,
+		);
+	}
+	const run = (args: string[]): void => {
+		const result = spawnSync("git", args, { encoding: "utf8", env: cleanGitEnv() });
+		if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
+			throw new SpaceGitInterruptedError(result.signal);
+		}
+		if (result.error || result.status !== 0) {
+			throw new SpaceGitError(
+				`I couldn't recreate the project repository at ${gitDir}. Check its URL, access and default branch, then retry the clone. ${result.error?.message ?? result.stderr.trim()}`,
+			);
+		}
+	};
+	// -- separates the remote from options (a manifest URL is untrusted data).
+	run(["clone", "--bare", "--", url, gitDir]);
+	run([
+		"--git-dir",
+		gitDir,
+		"config",
+		"--local",
+		"remote.origin.fetch",
+		"+refs/heads/*:refs/remotes/origin/*",
+	]);
+	run(["--git-dir", gitDir, "fetch", "origin"]);
+	run(["--git-dir", gitDir, "check-ref-format", `refs/heads/${defaultBranch}`]);
+	run(["--git-dir", gitDir, "symbolic-ref", "HEAD", `refs/heads/${defaultBranch}`]);
+}
