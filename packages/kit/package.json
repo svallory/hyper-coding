@@ -74,11 +74,17 @@
 	"dependencies": {
 		"@hypercli/core": "workspace:*",
 		"@hypercli/ui": "workspace:*",
-		"giget": "^2.0.0"
+		"@clack/prompts": "^0.11.0",
+		"@oclif/core": "^4",
+		"debug": "^4.4.3",
+		"giget": "^2.0.0",
+		"js-yaml": "^4.1.0"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.14",
+		"@types/debug": "^4.1.13",
 		"@types/fs-extra": "^11.0.4",
+		"@types/js-yaml": "^4.0.9",
 		"@types/node": "^20.0.0",
 		"@vitest/coverage-v8": "^4.0.0",
 		"fs-extra": "^11.3.3",
