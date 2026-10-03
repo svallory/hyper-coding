@@ -274,7 +274,10 @@ for round in 1 2 3 4; do
 done
 [ "${settled:-0}" = 1 ] || {
   echo "# setup never settled. What each round said it still needed:"
-  grep -h -E "still need root|how do you want|agent-user\.[a-z]+:|root steps" "$work_real"/setup-*.log | tail -20
+  grep -h -E "still need root|how do you want|agent-user\.[a-z]+:|root steps|not settled|readable by" "$work_real"/setup-*.log | tail -20
+  # The facts, not a verdict: which ACL is actually on disk is what tells us why.
+  echo "# --- ACLs as they are on the machine ---" >&2
+  ssh_t16 "for p in /home/$primary /home/$primary/work /home/$primary/.claude /home/$primary/.claude/skills /home/$primary/.claude/settings.json; do echo \"## \$p\"; getfacl -p \$p 2>&1 | grep -vE '^# (file|owner|group)'; done" >&2 || true
   die "setup never settled into \"Nothing needed\""
 }
 
@@ -361,17 +364,51 @@ pass "2 - a 0644 top-level file created AFTER setup is unreadable (inherited def
 
 # 3. The classic write pattern: write a temp file, then rename it over the
 #    target. The new inode is a different object with different ACLs.
-ssh_t16 "printf 'new bashrc\n' > /home/$primary/.bashrc.new && mv /home/$primary/.bashrc.new /home/$primary/.bashrc"
+ssh_t16 "printf '# replaced by the harness\n' > /home/$primary/.bashrc.new && mv /home/$primary/.bashrc.new /home/$primary/.bashrc"
 [ "$(denied "/home/$primary/.bashrc")" = "no" ] || die "the agent can read .bashrc after it was replaced by rename"
 pass "3 - ~/.bashrc replaced by temp-file-and-rename is unreadable"
 
-# 4. Widening the mode cannot reopen what the deny closed.
+# 4. Widening the mode cannot reopen what the deny closed...
 ssh_t16 "printf 'chmodtest\n' > /home/$primary/chmodtest.txt && chmod 0644 /home/$primary/chmodtest.txt"
 for mode in 644 g+r 777; do
   ssh_t16 "chmod $mode /home/$primary/chmodtest.txt" || true
   [ "$(denied "/home/$primary/chmodtest.txt")" = "no" ] \
     || die "the agent can read chmodtest.txt after \`chmod $mode\`"
 done
+
+# 4b. ...and neither can ZEROING THE GROUP BITS. This is the kernel condition:
+# with an ACL present the mode's group bits are the mask, and the kernel only
+# consults the ACL when those bits are non-zero — so 604/704 make the file
+# readable through "other" even though getfacl still shows the deny. The
+# watcher has to notice the attribute change and strip the other bits.
+for mode in 604 704; do
+  ssh_t16 "chmod $mode /home/$primary/chmodtest.txt" || true
+  healed=no
+  for _ in $(seq 1 5); do
+    [ "$(denied "/home/$primary/chmodtest.txt")" = "no" ] && healed=yes && break
+    sleep 1
+  done
+  [ "$healed" = "yes" ] || die "the watcher did not re-protect the file after \`chmod $mode\` (still readable after 5s)"
+  [ "$(ssh_t16 "stat -c %a /home/$primary/chmodtest.txt" | sed 's/^.//')" != "04" ] \
+    || die "the other bits were not stripped after \`chmod $mode\`"
+  pass "4b - chmod $mode is re-protected within 5s (watcher strips the other bits)"
+done
+
+# ...and the next setup run must also repair it, not only the watcher.
+ssh_t16 "chmod 604 /home/$primary/chmodtest.txt" || true
+set +e
+run_hyper > "$work_real/setup-chmod.log" 2>&1
+set -e
+[ "$(denied "/home/$primary/chmodtest.txt")" = "no" ] \
+  || die "a plain setup run did not repair an entry left in the 604 state"
+pass "4c - the next setup run repairs an entry left in the 604 state"
+
+# 4d. A file CREATED with a bad mode after setup is unreadable immediately, with
+# no watcher reaction needed: the inherited default carries o::---.
+ssh_t16 "printf 'made604\n' > /home/$primary/made604.txt && chmod 604 /home/$primary/made604.txt"
+[ "$(denied "/home/$primary/made604.txt")" = "no" ] \
+  || die "a file created with mode 604 after setup is readable by the agent"
+pass "4d - a file created with mode 604 after setup is unreadable immediately"
 pass "4 - still unreadable after chmod 644, chmod g+r and chmod 777"
 
 # 5. The config dir: denied by default, shared entries readable, and the two
@@ -406,11 +443,14 @@ done
 pass "5c - a settings.json replaced by rename is readable again within 5s"
 
 # 6. The shared dirs must still work — the deny must not cost the agent its work.
-as_agent "mkdir -p /home/$primary/work/agent-dir && printf 'from the agent\n' > /home/$primary/work/agent-dir/f.txt" \
+# One `bash -c` for each: `sudo -u agent A && B` runs only A as the agent, and B
+# would silently run as the primary — which is how the first version of this
+# assertion passed a write that had nothing to do with the agent.
+as_agent "bash -c \"mkdir -p /home/$primary/work/agent-dir && printf 'from the agent\\n' > /home/$primary/work/agent-dir/f.txt\"" \
   || die "the agent cannot write in the work dir"
 as_agent "cat /home/$primary/work/agent-dir/f.txt" >/dev/null 2>&1 \
   || die "the agent cannot read back what it wrote in the work dir"
-ssh_t16 "printf 'from the agent\n' > /home/$primary/.claude/projects/x/agent-wrote.jsonl" \
+as_agent "bash -c \"printf 'from the agent\\n' > /home/$primary/.claude/projects/x/agent-wrote.jsonl\"" \
   || die "the agent cannot write into projects/"
 as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>&1 \
   || die "the agent cannot read what it wrote into projects/"
@@ -475,7 +515,24 @@ pass "the as-agent helper runs a command as $agent"
 
 # 8a. Take the deny off one top-level file. The next setup must NOTICE and put
 #     it back — otherwise the machine slowly drifts open and nothing says so.
+# The watcher is stopped for this one. Removing the deny is an ATTRIB event, so
+# with the watcher running it puts the deny straight back and setup never sees
+# drift to report — which is the system working, not the check failing. Stopping
+# it is what makes this exercise the CHECK path the ruling asks for; 8b below is
+# the watcher path.
+# Stopping must be VERIFIED. The unit is Restart=always, so a stop that did not
+# take leaves the watcher re-applying the deny before setup's check ever runs —
+# which looks exactly like "the check does not detect drift".
+ssh_t16 "systemctl --user stop claude-share-watch.service" >/dev/null 2>&1 || true
+for _ in $(seq 1 5); do
+  [ "$(ssh_t16 "systemctl --user is-active claude-share-watch.service 2>/dev/null" || true)" = "active" ] || break
+  sleep 1
+done
+[ "$(ssh_t16 "systemctl --user is-active claude-share-watch.service 2>/dev/null" || true)" != "active" ] \
+  || die "could not stop the watcher; assertion 8a would test nothing"
 ssh_t16 "setfacl -x g:collab /home/$primary/late.txt"
+[ "$(denied "/home/$primary/late.txt")" = "yes" ] \
+  || die "removing the deny did not make the file readable — the fixture is wrong"
 set +e
 run_hyper > "$work_real/setup-drift.log" 2>&1
 drift_code=$?
@@ -486,6 +543,7 @@ fi
 if ! grep -q "late.txt" "$work_real/setup-drift.log"; then
   die "setup did not NAME the entry whose deny was missing"
 fi
+ssh_t16 "systemctl --user start claude-share-watch.service" >/dev/null 2>&1 || true
 pass "8a - removing a deny makes setup name the file and restore it"
 
 # 8b. A file moved in from elsewhere on the same filesystem keeps the ACLs it

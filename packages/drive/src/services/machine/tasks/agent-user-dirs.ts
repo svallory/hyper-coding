@@ -110,6 +110,62 @@ const BASHRC_LINES = ["umask 002", "set -o physical"] as const;
  * caller's constants rather than written out, so a rename cannot leave a literal
  * behind.
  */
+/**
+ * The shell helpers the deny needs, in one place.
+ *
+ * All of it exists because of ONE kernel condition (`acl_permission_check` in
+ * fs/namei.c): for a non-owner the ACL is consulted only when
+ * `IS_POSIXACL(inode) && (mode & S_IRWXG)`. With an ACL present the mode's group
+ * bits ARE the mask, so a file whose mask is `---` has its ACL skipped entirely
+ * and the plain `other` bits decide. Inside `posix_acl_permission` the deny does
+ * hold — that code is simply never reached.
+ *
+ * So `g:collab:---` denies exactly while the file's GROUP bits are non-zero. A
+ * file in the state "group bits == 0 AND other bits != 0" (604, 704, 705, 701…)
+ * is readable through `other` even though `getfacl` still shows the deny. The
+ * invariant `protect` enforces is therefore two parts, not one: the named entry
+ * AND never that state.
+ *
+ * Injected into every snippet that needs it rather than repeated, because these
+ * two rules drifting apart is exactly the bug this whole design exists to avoid.
+ */
+export function badStateShell(): string {
+	return `
+mode3() {
+  m=$(stat -c %a "$1" 2>/dev/null) || return 1
+  while [ \${#m} -gt 3 ]; do m=\${m#?}; done
+  printf "%s" "$m"
+}
+group_digit() { printf "%s" "$1" | cut -c2; }
+other_digit() { printf "%s" "$1" | cut -c3; }
+# True when the entry is readable THROUGH other: group bits zero, other bits not.
+bad_state() {
+  m=$(mode3 "$1") || return 1
+  [ "$(group_digit "$m")" = 0 ] && [ "$(other_digit "$m")" != 0 ]
+}`;
+}
+
+/** The above plus the tightening step, for the paths that WRITE. */
+export function aclShell(): string {
+	return `${badStateShell()}
+perms_of() {
+  case "$1" in
+    0) printf "%s" "---" ;; 1) printf "%s" "--x" ;; 2) printf "%s" "-w-" ;; 3) printf "%s" "-wx" ;;
+    4) printf "%s" "r--" ;; 5) printf "%s" "r-x" ;; 6) printf "%s" "rw-" ;; 7) printf "%s" "rwx" ;;
+    *) printf "%s" "---" ;;
+  esac
+}
+# The invariant, applied to one path. Tightening only: chmod o-rwx can take
+# access away, and nothing here can give any.
+protect() {
+  p="$1"
+  getfacl -c -p "$p" 2>/dev/null | grep -q "^group:${COLLAB_GROUP}:---$" \
+    || setfacl -m g:${COLLAB_GROUP}:--- "$p" 2>/dev/null || return 0
+  bad_state "$p" && chmod o-rwx "$p"
+  return 0
+}`;
+}
+
 function unprotectedUnder(dir: string, allowed: readonly string[]): string {
 	const q = shellQuote;
 	// ANDed, never `-o`. In find, `-o` binds looser than the implicit `-a`, so
@@ -117,7 +173,11 @@ function unprotectedUnder(dir: string, allowed: readonly string[]): string {
 	// .claude" — which would deny the config dir itself, exactly the entry the
 	// exclusion exists to protect. Every exclusion here is conjunctive.
 	const skip = allowed.map((name) => `! -name ${q(name)}`).join(" ");
-	return `$(find ${q(dir)} -mindepth 1 -maxdepth 1 ! -type l ${skip} -exec sh -c 'for p do getfacl -c -p "$p" 2>/dev/null | grep -q "^group:collab:---$" || printf "%s," "$p"; done' _ {} + 2>/dev/null || true)`;
+	// "Unprotected" is TWO failures, not one: no named entry at all, OR the named
+	// entry present but the file in the state where the kernel skips the ACL. The
+	// second is the one that lies — getfacl shows the deny and the agent reads the
+	// file — so the check must never trust the ACL line on its own.
+	return `$(find ${q(dir)} -mindepth 1 -maxdepth 1 ! -type l ${skip} -exec sh -c '${badStateShell()}\nfor p; do if ! getfacl -c -p "$p" 2>/dev/null | grep -q "^group:${COLLAB_GROUP}:---$" || bad_state "$p"; then printf "%s," "$p"; fi; done' _ {} + 2>/dev/null || true)`;
 }
 
 /**
@@ -139,7 +199,7 @@ function denyDirectChildren(dir: string, allowed: readonly string[]): string {
 	// Best-effort (one unwritable entry must not abort the rest) but NOT silent:
 	// an entry this cannot deny is one the agent can read, and swallowing the
 	// error turned that into "setup never settles" with nothing to act on.
-	return `find ${q(dir)} -mindepth 1 -maxdepth 1 ! -type l ${skip} -exec setfacl -m g:${COLLAB_GROUP}:--- {} + 2>&1 || true`;
+	return `find ${q(dir)} -mindepth 1 -maxdepth 1 ! -type l ${skip} -exec sh -c '${aclShell()}\nfor p; do protect "$p" || true; done' _ {} + 2>&1 || true`;
 }
 
 /**
@@ -251,11 +311,19 @@ export const agentUserDirs: Task = {
 	async check(ctx: TaskContext): Promise<boolean> {
 		const agentUser = await agentUserOf(ctx);
 		const paths = await resolvePaths(ctx, agentUser);
+		// A check that can only say "no" makes a machine that never settles
+		// impossible to diagnose — from the outside or the inside. So every refusal
+		// below says WHICH fact was not true, and the first one is enough to act on.
+		const no = (why: string): false => {
+			ctx.log(`agent-user.dirs: not settled — ${why}`);
+			return false;
+		};
 		const result = await runScript(ctx, probe(paths, agentUser));
-		if (result.code !== 0) return false;
+		if (result.code !== 0) return no("the probe itself failed");
 		const answer = answers(result.stdout);
 		// Sanity: if we probed the wrong user, nothing below means anything.
-		if (answer.get("agent_user") !== agentUser) return false;
+		if (answer.get("agent_user") !== agentUser)
+			return no("the probe answered for a different agent user");
 		// Refuse a filesystem that does not do the kernel ACL check this design
 		// rests on, BEFORE anything is changed — a deny that is silently ignored
 		// is worse than no deny, because the check would go on calling the machine
@@ -267,14 +335,17 @@ export const agentUserDirs: Task = {
 			);
 		}
 
-		if (answer.get("work_group") !== COLLAB_GROUP) return false;
-		if (!flag(answer, "work_setgid")) return false;
-		if (!present(answer, "work_acl") || !present(answer, "work_default_acl")) return false;
-		if (!present(answer, "home_acl")) return false;
+		if (answer.get("work_group") !== COLLAB_GROUP)
+			return no("the work dir is not owned by the collab group");
+		if (!flag(answer, "work_setgid")) return no("the work dir is not setgid");
+		if (!present(answer, "work_acl") || !present(answer, "work_default_acl"))
+			return no("the work dir has no collab ACL or default ACL");
+		if (!present(answer, "home_acl")) return no("the home has no collab traverse");
 		// An INHERITED deny on the home, plus the two kernel settings the deny
 		// design leans on.
-		if (!present(answer, "home_default_deny")) return false;
-		if (answer.get("hardlinks") !== "1" || answer.get("tiocsti") !== "0") return false;
+		if (!present(answer, "home_default_deny")) return no("the home has no inherited default deny");
+		if (answer.get("hardlinks") !== "1" || answer.get("tiocsti") !== "0")
+			return no("fs.protected_hardlinks or dev.tty.legacy_tiocsti is not in effect");
 		// Every top-level entry outside the allowed set must carry the deny, and
 		// every direct child of the config dir too. The probe NAMES the ones that
 		// do not, so a machine that has drifted reports what drifted.
@@ -293,24 +364,29 @@ export const agentUserDirs: Task = {
 			return false;
 		}
 		// Traverse on the config dir, plus the inherited deny there too.
-		if (!present(answer, "claude_acl")) return false;
-		if (!present(answer, "claude_default_deny")) return false;
+		if (!present(answer, "claude_acl")) return no("the config dir has no collab traverse");
+		if (!present(answer, "claude_default_deny"))
+			return no("the config dir has no inherited default deny");
 		for (const name of READABLE_FILES) {
-			if (!present(answer, `read_${name}`)) return false;
+			if (!present(answer, `read_${name}`)) return no(`${name} has no collab read`);
 		}
 		for (const name of READABLE_DIRS) {
-			if (!present(answer, `read_${name}`)) return false;
+			if (!present(answer, `read_${name}`)) return no(`${name}/ has no collab read`);
 		}
-		if (answer.get("projects_group") !== COLLAB_GROUP) return false;
-		if (!flag(answer, "projects_setgid")) return false;
-		if (!present(answer, "projects_acl")) return false;
+		if (answer.get("projects_group") !== COLLAB_GROUP)
+			return no("projects/ is not owned by the collab group");
+		if (!flag(answer, "projects_setgid")) return no("projects/ is not setgid");
+		if (!present(answer, "projects_acl")) return no("projects/ has no collab ACL");
 		for (const entry of SYMLINKS) {
 			const target = answer.get(`link_${entry.name}`);
-			if (target === undefined || target === "missing" || target === "") return false;
-			if (target !== expectedTarget(paths, entry.name)) return false;
+			if (target === undefined || target === "missing" || target === "")
+				return no(`~${agentUser}/.claude/${entry.name} is not a symlink`);
+			if (target !== expectedTarget(paths, entry.name))
+				return no(`~${agentUser}/.claude/${entry.name} points at ${target}`);
 		}
-		if (!flag(answer, "as_agent")) return false;
-		return present(answer, "bashrc_umask") && present(answer, "bashrc_physical");
+		if (!flag(answer, "as_agent")) return no("the as-agent helper is missing or not executable");
+		if (!present(answer, "bashrc_umask")) return no("your .bashrc has no `umask 002`");
+		return present(answer, "bashrc_physical") ? true : no("your .bashrc has no `set -o physical`");
 	},
 
 	async apply(ctx: TaskContext): Promise<void> {
@@ -369,13 +445,24 @@ export const agentUserDirs: Task = {
 		// can guess. The kernel resolves a matching named-group entry before ever
 		// considering `other`, so `g:collab:---` denies the agent whatever the
 		// file's own mode says, and chmod cannot reopen it.
+		//
+		// The default is set as a COMPLETE entry set rather than as a single added
+		// entry. `setfacl -d -m g:collab:---` on its own copies the directory's own
+		// group entry into `default:group::`, so a 0700 home yields
+		// `default:group::---` — and then every file created under it inherits a
+		// zero group class, `setfacl` computes a `---` mask the moment the deny is
+		// added, and the kernel stops consulting the ACL at all. Setting u::, g::,
+		// g:collab: and o:: explicitly, with `o::---`, makes the bad state
+		// unreachable for anything created later, whatever mode asks to be written.
 		await runOrFail(
 			ctx,
 			"protect the home with a deny for the shared group",
 			[
+				aclShell(),
+				`hm=$(mode3 ${shellQuote(paths.home)})`,
 				`setfacl -m g:${COLLAB_GROUP}:--x ${shellQuote(paths.home)}`,
-				`setfacl -d -m g:${COLLAB_GROUP}:--- ${shellQuote(paths.home)}`,
-			].join("; "),
+				`setfacl -d -m "u::rwx,g::$(perms_of "$(group_digit "$hm")"),g:${COLLAB_GROUP}:---,o::---" ${shellQuote(paths.home)}`,
+			].join("\n"),
 		);
 
 		// The entries that exist NOW, one level down. Non-recursive: the work dir
@@ -398,10 +485,12 @@ export const agentUserDirs: Task = {
 			ctx,
 			"protect the config dir",
 			[
+				aclShell(),
+				`cm=$(mode3 ${shellQuote(paths.claude)})`,
 				`setfacl -k ${shellQuote(paths.claude)}`,
 				`setfacl -m g:${COLLAB_GROUP}:--x ${shellQuote(paths.claude)}`,
-				`setfacl -d -m g:${COLLAB_GROUP}:--- ${shellQuote(paths.claude)}`,
-			].join("; "),
+				`setfacl -d -m "u::rwx,g::$(perms_of "$(group_digit "$cm")"),g:${COLLAB_GROUP}:---,o::---" ${shellQuote(paths.claude)}`,
+			].join("\n"),
 		);
 		const claudeDenied = await runOrFail(
 			ctx,
@@ -419,10 +508,18 @@ export const agentUserDirs: Task = {
 			ctx,
 			"grant the agent read access to the shared config entries",
 			[
-				...READABLE_FILES.map(
-					(name) =>
-						`[ -e ${shellQuote(`${paths.claude}/${name}`)} ] && setfacl -m g:${COLLAB_GROUP}:r-- ${shellQuote(`${paths.claude}/${name}`)} || true`,
-				),
+				...READABLE_FILES.map((name) => {
+					const file = `${paths.claude}/${name}`;
+					return [
+						`[ -e ${shellQuote(file)} ] || true`,
+						// `m::r--` is not optional here. These files inherit the config
+						// dir's default, whose mask is `---` (it carries the deny), so
+						// setting only the named entry leaves it effective-nothing —
+						// getfacl prints `group:collab:r--  #effective:---` and the
+						// grant is a lie. The mask is widened to make it real.
+						`[ -e ${shellQuote(file)} ] && setfacl -m g:${COLLAB_GROUP}:r-- -m m::r-- ${shellQuote(file)} || true`,
+					].join("; ");
+				}),
 				...READABLE_DIRS.map((name) => {
 					const dir = `${paths.claude}/${name}`;
 					return [
@@ -432,8 +529,12 @@ export const agentUserDirs: Task = {
 						// mkdir this task could never settle on a machine that has no
 						// skills/ or agents/ yet.
 						`mkdir -p ${shellQuote(dir)}`,
-						`setfacl -R -m g:${COLLAB_GROUP}:rX ${shellQuote(dir)}`,
-						`setfacl -d -m g:${COLLAB_GROUP}:rX ${shellQuote(dir)}`,
+						// Same reason as the files: the mask must be widened or the
+						// named entry is effective-nothing.
+						`setfacl -R -m g:${COLLAB_GROUP}:rX -m m::rX ${shellQuote(dir)}`,
+						// …and the DEFAULT here must not carry the deny it inherited,
+						// or every file created in it later is unreadable to the agent.
+						`setfacl -d -m u::rwx,g::r-x,g:${COLLAB_GROUP}:r-x,o::--- ${shellQuote(dir)}`,
 					].join("; ");
 				}),
 			].join("\n"),

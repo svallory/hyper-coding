@@ -559,6 +559,104 @@ describe("agent-user.create", () => {
 	});
 });
 
+describe("the kernel condition behind the invariant", () => {
+	// fs/namei.c `acl_permission_check`: a non-owner gets the ACL consulted only
+	// when `IS_POSIXACL(inode) && (mode & S_IRWXG)`. With an ACL present the mode's
+	// group bits ARE the mask, so mask `---` means the ACL is skipped and `other`
+	// decides. The deny holds INSIDE posix_acl_permission — that code is never
+	// reached. So the invariant is two parts: the named entry, AND never the
+	// (group bits == 0 AND other bits != 0) state.
+	it("detects the state by the mode's digits, not the ACL line", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.apply?.(ctxFor(runner));
+		const joined = runner.joined;
+		// The mode is reduced to its last three octal digits (a setgid dir is 2770)
+		// and the group and other digits read separately.
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: SHELL text, expanded by sh
+		expect(joined).toContain("while [ ${#m} -gt 3 ]; do m=${m#?}; done");
+		expect(joined).toContain("group_digit() { printf");
+		expect(joined).toContain("other_digit() { printf");
+		expect(joined).toContain('[ "$(group_digit "$m")" = 0 ] && [ "$(other_digit "$m")" != 0 ]');
+	});
+
+	it("embeds no single quotes, so the sh -c quoting it is embedded in survives", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.apply?.(ctxFor(runner));
+		// The helper is injected INTO a `sh -c '...'` block. A single quote of its own
+		// terminates that block, and the snippet becomes garbage that fails silently
+		// — the check just returns false with nothing to show for it.
+		for (const snippet of runner.snippets) {
+			const helper = snippet.slice(snippet.indexOf("mode3() {"), snippet.indexOf("protect()"));
+			if (helper === "") continue;
+			expect(helper.includes("printf '%s'"), "single-quoted printf inside the helper").toBe(false);
+			expect(helper.includes("'---'"), "single-quoted literal inside the helper").toBe(false);
+		}
+	});
+
+	it("strips the other bits, which is tightening and never widening", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.apply?.(ctxFor(runner));
+		expect(runner.joined).toContain('bad_state "$p" && chmod o-rwx "$p"');
+		// Nothing in the whole task may ADD permission.
+		expect(runner.joined).not.toContain("chmod o+");
+		expect(runner.joined).not.toContain("chmod g+w");
+	});
+
+	it("sets the default ACLs completely, with other::---", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.apply?.(ctxFor(runner));
+		// A single added entry would make setfacl copy the directory's own group
+		// entry into default:group:: — a 0700 home gives `---`, and then every file
+		// created under it inherits a zero group class and the ACL is skipped.
+		for (const [dir, varName] of [
+			[HOME, "hm"],
+			[`${HOME}/.claude`, "cm"],
+		] as const) {
+			// u::, g:: (read from the directory's own group bits), the deny, o::---.
+			expect(runner.joined, `no full default for ${dir}`).toContain(
+				`setfacl -d -m "u::rwx,g::$(perms_of "$(group_digit "$${varName}")"),g:collab:---,o::---" ${dir}`,
+			);
+		}
+	});
+
+	it("reports an entry as unprotected when it carries the deny but sits in the bad state", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.check(ctxFor(runner));
+		// The check must never trust the ACL line alone — that is the whole point.
+		expect(runner.joined).toContain(
+			'if ! getfacl -c -p "$p" 2>/dev/null | grep -q "^group:collab:---$" || bad_state "$p"',
+		);
+	});
+
+	it("the watcher denies NOTHING in the shared config-dir entries", () => {
+		// The bug this exists for: the config-dir handler special-cased only the two
+		// readable files and denied everything else, so when the dirs task created
+		// skills/ (or projects/) the watcher stamped the deny straight back on it and
+		// the check reported it unprotected for ever.
+		const script = watcherScript(`${HOME}/.claude/projects`, HOME);
+		expect(script).toContain("projects|settings.json|CLAUDE.md|skills|commands|agents) : ;;");
+		// The deny still applies to everything that is NOT shared.
+		expect(script).toContain('*) protect "$p" ;;');
+	});
+
+	it("the watcher watches attrib, because a chmod IS an attribute change", () => {
+		const script = watcherScript(`${HOME}/.claude/projects`, HOME);
+		expect(script).toContain("inotifywait -m -q -e create -e moved_to -e attrib");
+		// And it applies the same invariant, not just the named entry.
+		expect(script).toContain("bad_state");
+		expect(script).toContain("chmod o-rwx");
+		// The replaced shared files get their grant re-applied, and the same
+		// invariant: a readable-by-grant file in the bad state is still readable.
+		expect(script).toContain("protect_shared()");
+		expect(script).toContain('setfacl -m "g:$deny_group:r--" -m m::r-- "$1"');
+	});
+});
+
 describe("agent-user.dirs — the credential boundary", () => {
 	it("never applies a recursive ACL over the Claude config dir", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
@@ -582,7 +680,7 @@ describe("agent-user.dirs — the credential boundary", () => {
 		// `-k` REMOVES the default ACL an earlier version of this task set there
 		// (it was `g:collab:rX`), and it is replaced by an inherited DENY.
 		expect(runner.joined).toContain(`setfacl -k ${HOME}/.claude`);
-		expect(runner.joined).toContain(`setfacl -d -m g:collab:--- ${HOME}/.claude`);
+		expect(runner.joined).toContain(`g:collab:---,o::---" ${HOME}/.claude`);
 		// The config dir root is never given a default that GRANTS anything.
 		const commandLines = runner.snippets
 			.join("\n")
@@ -606,7 +704,9 @@ describe("agent-user.dirs — the credential boundary", () => {
 		}
 		// And they must be created BEFORE the grant, or the grant lands on nothing.
 		const created = runner.joined.indexOf(`mkdir -p ${HOME}/.claude/skills`);
-		const granted = runner.joined.indexOf(`setfacl -R -m g:collab:rX ${HOME}/.claude/skills`);
+		const granted = runner.joined.indexOf(
+			`setfacl -R -m g:collab:rX -m m::rX ${HOME}/.claude/skills`,
+		);
 		expect(created).toBeGreaterThan(-1);
 		expect(granted).toBeGreaterThan(created);
 	});
@@ -616,12 +716,16 @@ describe("agent-user.dirs — the credential boundary", () => {
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
 		for (const name of ["settings.json", "CLAUDE.md"]) {
-			expect(runner.joined).toContain(`setfacl -m g:collab:r-- ${HOME}/.claude/${name}`);
+			expect(runner.joined).toContain(`setfacl -m g:collab:r-- -m m::r-- ${HOME}/.claude/${name}`);
 		}
 		for (const name of ["skills", "commands", "agents"]) {
 			const dir = `${HOME}/.claude/${name}`;
-			expect(runner.joined).toContain(`setfacl -R -m g:collab:rX ${dir}`);
-			expect(runner.joined).toContain(`setfacl -d -m g:collab:rX ${dir}`);
+			// The mask travels with the grant: while it is restrictive the named
+			// entry is effective-nothing and getfacl prints `#effective:---`.
+			expect(runner.joined).toContain(`setfacl -R -m g:collab:rX -m m::rX ${dir}`);
+			// And the default here must not keep the deny it inherited, or every
+			// file created in the dir later is unreadable to the agent.
+			expect(runner.joined).toContain(`setfacl -d -m u::rwx,g::r-x,g:collab:r-x,o::--- ${dir}`);
 		}
 	});
 
@@ -634,15 +738,20 @@ describe("agent-user.dirs — the credential boundary", () => {
 			.split("\n")
 			.map((line) => line.trim())
 			.filter((line) => line.startsWith("setfacl -R -d ") || line.startsWith("setfacl -d "));
-		const allowed = ["work", "projects", "skills", "commands", "agents"];
+		// The home and the config dir carry a DENY default with o::---; the shared
+		// dirs carry rX; the work dir carries rwX. Nothing else may have a default.
+		const allowed = [
+			HOME,
+			`${HOME}/.claude`,
+			`${HOME}/work`,
+			`${HOME}/.claude/projects`,
+			`${HOME}/.claude/skills`,
+			`${HOME}/.claude/commands`,
+			`${HOME}/.claude/agents`,
+		];
 		for (const line of defaults) {
 			const target = line.split(" ").pop() ?? "";
-			expect(
-				allowed.some(
-					(name) => target === `${HOME}/.claude/${name}` || target === `${HOME}/${name}`,
-				),
-				`unexpected default ACL on ${target}`,
-			).toBe(true);
+			expect(allowed.includes(target), `unexpected default ACL on ${target}`).toBe(true);
 		}
 	});
 
@@ -653,7 +762,7 @@ describe("agent-user.dirs — the credential boundary", () => {
 		// `--x`: reach work/, but not list the home.
 		expect(runner.joined).toContain(`setfacl -m g:collab:--x ${HOME}`);
 		// The deny: everything created under the home from now on.
-		expect(runner.joined).toContain(`setfacl -d -m g:collab:--- ${HOME}`);
+		expect(runner.joined).toContain(`g:collab:---,o::---" ${HOME}`);
 	});
 
 	it("denies the shared group every top-level entry except work and .claude", async () => {
@@ -952,7 +1061,12 @@ describe("agent-user.watcher", () => {
 		expect(script).toContain("settings.json|CLAUDE.md");
 		expect(script).toContain("inotifywait -m -q -e create -e moved_to");
 		// …re-granting read on the two shared files when they are replaced.
-		expect(script).toContain('setfacl -m "g:$deny_group:r--" "$p"');
+		// …and re-grants read when the file is replaced, since the inherited
+		// default now denies it. The grant lives in protect_shared, so it is
+		// applied with that function's own parameter.
+		expect(script).toContain("protect_shared()");
+		expect(script).toContain('grep -q "^group:$deny_group:r--$"');
+		expect(script).toContain('setfacl -m "g:$deny_group:r--" -m m::r-- "$1"');
 	});
 
 	it("reports a settled machine as needing nothing (C-15)", async () => {
