@@ -243,9 +243,11 @@ function initialiseMain(dir: string, remote: string): void {
 	}
 	const push = driveGit(["push", "-u", "origin", BRANCH], dir);
 	if (!push.ok) {
+		const failure = classifyPushFailure(push);
+		if (failure === "hook-rejected") throw hookRejection(dir, push, "the initial push");
 		warn(
-			`the hyperdrive is initialised locally but I couldn't push it to ${remote} (offline?) — ` +
-				`the next manifest write will try again. git said: ${push.stderr.trim()}`,
+			`the hyperdrive is initialised locally but I couldn't push it to ${remote} — ` +
+				`the next manifest write will try again. git said: ${push.stderr.trim() || push.stdout.trim()}`,
 		);
 	}
 }
@@ -690,6 +692,32 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 		const fetched = driveGit(["fetch", "origin", BRANCH], dir);
 
 		if (!fetched.ok) {
+			// `git fetch origin main` exits 128 ("couldn't find remote ref
+			// main") BOTH when the remote is unreachable AND when it is
+			// reachable but simply has no `main` yet — the exit code alone
+			// cannot tell those apart, and guessing "offline" here stranded
+			// machines whose first push had been refused. Probe with ls-remote
+			// before believing the network is down.
+			const probe = driveGit(["ls-remote", "--heads", "origin", BRANCH], dir);
+			if (probe.ok && probe.stdout.trim() === "") {
+				// Reachable, empty: publish our history as the remote's first
+				// `main` rather than waiting for some future change to carry it.
+				commitReplay(dir, readManifestAt(dir, "HEAD"), pending);
+				const push = driveGit(["push", "-u", "origin", BRANCH], dir);
+				if (push.ok) {
+					clearPendingLog(dir);
+					return;
+				}
+				const failure = classifyPushFailure(push);
+				if (failure === "hook-rejected") {
+					throw hookRejection(dir, push, `the first push of ${BRANCH}`);
+				}
+				warn(
+					`the hyperdrive has no ${BRANCH} yet and I couldn't create it; the local copy is kept — ` +
+						`git said: ${push.stderr.trim() || push.stdout.trim()}`,
+				);
+				return;
+			}
 			// No remote to reconcile with: keep the entries locally, stacked on
 			// HEAD, and let the next run publish them.
 			const base = readManifestAt(dir, "HEAD");
