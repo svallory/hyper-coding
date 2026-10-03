@@ -354,22 +354,56 @@ describe("commands (spawned against the real CLI)", () => {
 	const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
 
 	/**
+	 * Run the CLI with colour forced OFF. Two reasons, both observed:
+	 *
+	 * 1. vitest's config sets FORCE_COLOR=true in the test env, and the spread
+	 *    of process.env below would leak it into the child. On a wide terminal
+	 *    that is harmless — nothing wraps — but CI runners both force colour
+	 *    AND are narrow, so the error arrives as
+	 *    "…\u001b[31m›\u001b[39m is\n\u001b[31m›\u001b[39m   not inside a hyper space",
+	 *    which breaks every assertion about the rendered text.
+	 * 2. The point of these assertions is what the command *says*, not how it
+	 *    is styled; pinning the style off keeps that assertion immune to both.
+	 *
+	 * The flat() normalisation below still strips ANSI codes too, so the test
+	 * survives even if some future oclif version colours output anyway.
+	 */
+	const spawnCli = (args: string[]): SpawnSyncReturns<string> =>
+		spawnSync(process.execPath, [cli, ...args], {
+			encoding: "utf8",
+			env: {
+				...process.env,
+				AI_AGENT: undefined,
+				CLAUDECODE: undefined,
+				NO_COLOR: "1",
+				FORCE_COLOR: "0",
+			},
+		});
+
+	/**
 	 * Reconstruct the CLI's human-facing sentence from oclif's rendered error.
 	 *
 	 * oclif renders errors through prettyPrint, which wraps to the width of
-	 * whatever runs it and prefixes EVERY continuation line with its gutter
-	 * (" ›   "). On this machine that is wide enough to leave the sentence
-	 * intact, so a local run passes; a narrow CI runner splits it into
-	 * "... is ›   not inside a hyper space" and the check fails.
+	 * whatever runs it, prefixes EVERY continuation line with its gutter
+	 * (" ›   "), and colours that gutter — so on a runner the line actually
+	 * begins "\u001b[31m›\u001b[39m   ", not " › ". On this machine the terminal
+	 * is wide enough to leave the sentence intact, so a local run passes;
+	 * a narrow CI runner splits it and the check fails.
 	 *
-	 * Collapsing whitespace alone is not enough, and neither is matching
-	 * /\s+/ — the gutter is a non-whitespace character sitting *inside* the
-	 * sentence, so "is not inside a hyper space" is broken by " › " no matter
-	 * how many spaces you allow between words. Strip the per-line gutter
-	 * first, then collapse: that puts the words back in order.
+	 * The order of operations matters:
+	 *   1. strip ANSI escapes — without this the gutter regex sees
+	 *      "\u001b[31m›" and never matches, and the gutter ends up embedded
+	 *      inside the sentence,
+	 *   2. strip the per-line gutter — "is not inside a hyper space" is broken
+	 *      by " › " however many spaces a /\s+/ match allows,
+	 *   3. then collapse whitespace.
 	 */
+	// 27 is ESC. Written via fromCharCode so the regex literal never contains a
+	// control character, which biome (rightly) refuses to compile silently.
+	const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+	const stripAnsi = (s: string): string => s.replace(ANSI_RE, "");
 	const flat = (s: string): string =>
-		s
+		stripAnsi(s)
 			.replace(/^\s*›\s*/gm, " ")
 			.replace(/\s+/g, " ")
 			.trim();
@@ -387,10 +421,7 @@ describe("commands (spawned against the real CLI)", () => {
 
 	it("`space lib-path` prints exactly one line, and that path exists", () => {
 		if (skipIfUnbuilt()) return;
-		const r = spawnSync(process.execPath, [cli, "space", "lib-path"], {
-			encoding: "utf8",
-			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
-		});
+		const r = spawnCli(["space", "lib-path"]);
 		expect(r.status).toBe(0);
 		// Exactly one trailing newline and nothing after it: a second line
 		// would be sourced as a command by every plugin script.
@@ -411,17 +442,17 @@ describe("commands (spawned against the real CLI)", () => {
 		// reason.
 		const plain = fixturePath("detect-plain-cli-with-a-very-long-name-so-the-error-message-wraps");
 		mkdirSync(plain, { recursive: true });
-		const r = spawnSync(process.execPath, [cli, "space", "detect", plain], {
-			encoding: "utf8",
-			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
-		});
+		const r = spawnCli(["space", "detect", plain]);
 		expect(r.status).toBe(1);
 		const err = flat(r.stderr);
 		// Prove the wrap really happened, so this test cannot quietly stop
 		// exercising the normalisation it exists for. Counting is stronger than
 		// toContain: one gutter line is just oclif's "Error:" prefix, two or more
-		// proves a continuation line was actually wrapped.
-		const gutterLines = r.stderr.split("\n").filter((l) => /^\s*›/.test(l));
+		// proves a continuation line was actually wrapped. Strip ANSI first — a
+		// coloured gutter never matches the /^\s*›/ check.
+		const gutterLines = stripAnsi(r.stderr)
+			.split("\n")
+			.filter((l) => /^\s*›/.test(l));
 		expect(gutterLines.length).toBeGreaterThanOrEqual(2);
 		expect(err).toContain("is not inside a hyper space");
 		// Friendly means no stack trace: the oclif error frame, not JS frames.
@@ -435,10 +466,7 @@ describe("commands (spawned against the real CLI)", () => {
 		if (skipIfUnbuilt()) return;
 		const d = fixturePath("detect-bare-cli");
 		makeBareSpace(d);
-		const r = spawnSync(process.execPath, [cli, "space", "detect", d, "--json"], {
-			encoding: "utf8",
-			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
-		});
+		const r = spawnCli(["space", "detect", d, "--json"]);
 		expect(r.status).toBe(0);
 		expect(JSON.parse(r.stdout)).toEqual({
 			root: d,
@@ -453,10 +481,7 @@ describe("commands (spawned against the real CLI)", () => {
 		if (skipIfUnbuilt()) return;
 		const plain = fixturePath("detect-plain-json-cli");
 		mkdirSync(plain, { recursive: true });
-		const r = spawnSync(process.execPath, [cli, "space", "detect", plain, "--json"], {
-			encoding: "utf8",
-			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
-		});
+		const r = spawnCli(["space", "detect", plain, "--json"]);
 		// Still a failure, so anything branching on the status is unaffected.
 		expect(r.status).toBe(1);
 		// But a machine caller gets JSON to read rather than an empty stream:
