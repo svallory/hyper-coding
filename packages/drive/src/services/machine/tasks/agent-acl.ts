@@ -52,6 +52,8 @@ entry_kind() {
 }
 mode3() {
   m=$(stat -c %a "$1") || return 1
+  # GNU stat omits leading zeroes: 0004 is printed as 4, not 004.
+  m=00$m
   while [ \${#m} -gt 3 ]; do m=\${m#?}; done
   printf '%s' "$m"
 }
@@ -62,7 +64,7 @@ bad_state() {
   [ "$(group_digit "$m")" = 0 ] && [ "$(other_digit "$m")" != 0 ]
 }
 acl_has() { getfacl -c -p "$1" | grep -qxF "$2"; }
-legacy_group() { getfacl -c -p "$1" | grep -q '^group:${COLLAB_GROUP}:'; }
+legacy_group() { getfacl -c -p "$1" | grep -qE '^(default:)?group:${COLLAB_GROUP}:'; }
 unprotected() {
   ! acl_has "$1" "user:$agent_user:---" || bad_state "$1"
 }
@@ -101,18 +103,23 @@ export function accessRepairShell(): string {
 }
 protect() {
   acl_has "$1" "user:$agent_user:---" || setfacl -m "u:$agent_user:---" "$1" || return 1
-  if legacy_group "$1"; then setfacl -x g:${COLLAB_GROUP} "$1" || return 1; fi
+  if legacy_group "$1"; then
+    setfacl -x g:${COLLAB_GROUP} "$1" || return 1
+    # A moved directory retains its old defaults. Clean only this directory;
+    # its named-user deny blocks traversal regardless of its children's ACLs.
+    if [ -d "$1" ]; then setfacl -x d:g:${COLLAB_GROUP} "$1" || return 1; fi
+  fi
   if bad_state "$1"; then chmod o-rwx "$1" || return 1; fi
 }
 grant_shared() {
   access=$(shared_access "$1") || return 1
   if [ "$(entry_kind "$1")" = read_dir ]; then
-    setfacl -R -P -m "u:$agent_user:$access,m::$access" "$1" || return 1
+    setfacl -R -P -m "u:$agent_user:$access" "$1" || return 1
     setfacl -R -P -x g:${COLLAB_GROUP} "$1" || return 1
     find "$1" -type d -exec setfacl -x d:g:${COLLAB_GROUP} {} + || return 1
     find "$1" -type d -exec setfacl -d -m "$(shared_default "$1")" {} + || return 1
   else
-    setfacl -m "u:$agent_user:$access,m::$access" "$1" || return 1
+    setfacl -m "u:$agent_user:$access" "$1" || return 1
     if legacy_group "$1"; then setfacl -x g:${COLLAB_GROUP} "$1" || return 1; fi
   fi
 }
