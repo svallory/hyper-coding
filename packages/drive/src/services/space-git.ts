@@ -14,7 +14,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { SyncCadence } from "#config/schema";
 
@@ -263,6 +263,10 @@ export function hasSpaceGit(spaceRoot: string): boolean {
  * safety: a directory that is not a hyper space git dir (someone else's, or a
  * space initialised elsewhere) is left exactly where it is.
  *
+ * An EMPTY `.hyper/` goes with it: it is hyper's directory, it held nothing
+ * else, and leaving it behind means the next plain `init` finds a space that
+ * looks half-set-up.
+ *
  * Returns true when a git dir was removed.
  */
 export function removeSpaceGitDir(spaceRoot: string): boolean {
@@ -270,6 +274,15 @@ export function removeSpaceGitDir(spaceRoot: string): boolean {
 	if (!existsSync(gitDir)) return false;
 	if (readSpaceConfig(spaceRoot, "core.worktree") !== "../..") return false;
 	rmSync(gitDir, { recursive: true, force: true });
+	try {
+		// Only when nothing else of the space's lives there (`.hyper/memory`,
+		// say), which is the point: this is not ours to tidy otherwise.
+		if (readdirSync(join(spaceRoot, ".hyper")).length === 0) {
+			rmdirSync(join(spaceRoot, ".hyper"));
+		}
+	} catch {
+		// No `.hyper`, or not empty, or not removable. Nothing to do about it.
+	}
 	return true;
 }
 
@@ -346,6 +359,16 @@ export function writeCadence(spaceRoot: string, cadence: SyncCadence): void {
 }
 
 /**
+ * Remove `hyper.cadence` entirely — the state `readCadence` reports as `""`.
+ *
+ * Needed to put a space back the way a run found it: a space that had no
+ * cadence must not inherit one from a refused run.
+ */
+export function clearCadence(spaceRoot: string): void {
+	spaceGit(spaceRoot, ["config", "--local", "--unset", "hyper.cadence"], { allowFailure: true });
+}
+
+/**
  * The space's tracked directories, as recorded in its OWN git dir
  * (`hyper.tracked`, one value per directory) — C-11's rule applied to the
  * allowlist: the git config is the truth, not a copy of it in the manifest.
@@ -354,14 +377,24 @@ export function writeCadence(spaceRoot: string, cadence: SyncCadence): void {
  * user's global config can never answer for a space.
  */
 export function readTracked(spaceRoot: string): string[] {
-	const { status, stdout } = spaceGit(
+	const { status, stdout, stderr } = spaceGit(
 		spaceRoot,
 		["config", "--local", "--get-all", "hyper.tracked"],
 		{
 			allowFailure: true,
 		},
 	);
-	if (status !== 0) return [];
+	// git exits 1 for "key not found", which is a space that tracks nothing.
+	// Anything else (128 and friends) is a broken git dir, and answering "no
+	// entries" to it would silently drop the space's tracked directories — the
+	// one thing a refresh must never do.
+	if (status === 1) return [];
+	if (status !== 0) {
+		throw new SpaceGitError(
+			`I couldn't read the space's tracked directories from ${spaceGitDir(spaceRoot)}: ` +
+				`${stderr.trim() || stdout.trim() || `git config exited ${status}`}`,
+		);
+	}
 	return stdout
 		.split("\n")
 		.map((line) => line.trim())
