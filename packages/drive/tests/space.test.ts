@@ -353,6 +353,27 @@ describe("commands (spawned against the real CLI)", () => {
 	// non-zero exit rather than a stack trace for a plain directory.
 	const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
 
+	/**
+	 * Reconstruct the CLI's human-facing sentence from oclif's rendered error.
+	 *
+	 * oclif renders errors through prettyPrint, which wraps to the width of
+	 * whatever runs it and prefixes EVERY continuation line with its gutter
+	 * (" ›   "). On this machine that is wide enough to leave the sentence
+	 * intact, so a local run passes; a narrow CI runner splits it into
+	 * "... is ›   not inside a hyper space" and the check fails.
+	 *
+	 * Collapsing whitespace alone is not enough, and neither is matching
+	 * /\s+/ — the gutter is a non-whitespace character sitting *inside* the
+	 * sentence, so "is not inside a hyper space" is broken by " › " no matter
+	 * how many spaces you allow between words. Strip the per-line gutter
+	 * first, then collapse: that puts the words back in order.
+	 */
+	const flat = (s: string): string =>
+		s
+			.replace(/^\s*›\s*/gm, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+
 	const skipIfUnbuilt = (): boolean => {
 		if (
 			existsSync(cli) &&
@@ -383,14 +404,22 @@ describe("commands (spawned against the real CLI)", () => {
 
 	it("`space detect` exits 1 with a friendly message in a plain directory", () => {
 		if (skipIfUnbuilt()) return;
-		const plain = fixturePath("detect-plain-cli");
+		// A deliberately long directory name, so the error wraps whatever width
+		// the runner has. Without this the wrap only happens on a narrow
+		// terminal and the test silently stops covering the case it was
+		// written for — it passed locally and failed in CI for exactly that
+		// reason.
+		const plain = fixturePath("detect-plain-cli-with-a-very-long-name-so-the-error-message-wraps");
 		mkdirSync(plain, { recursive: true });
 		const r = spawnSync(process.execPath, [cli, "space", "detect", plain], {
 			encoding: "utf8",
 			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
 		});
 		expect(r.status).toBe(1);
-		const err = r.stderr;
+		const err = flat(r.stderr);
+		// Prove the wrap really happened, so this test cannot quietly stop
+		// exercising the normalisation it exists for.
+		expect(r.stderr).toContain("›");
 		expect(err).toContain("is not inside a hyper space");
 		// Friendly means no stack trace: the oclif error frame, not JS frames.
 		expect(err).not.toContain("at Detect.run");
