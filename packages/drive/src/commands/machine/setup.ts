@@ -13,6 +13,8 @@ import { Args, Flags } from "@oclif/core";
 import { ConfigError, loadConfig } from "#config/index";
 import { BaseCommand } from "#lib/base-command";
 import { MachineError, type MachineInfo, resolveMachine, runnerFor } from "#services/machine";
+import { type HookScan, scanHooks } from "#services/machine/hooks-scan";
+import { parityTable, renderParity } from "#services/machine/parity";
 import {
 	type RootChoice,
 	type RootQuestion,
@@ -21,6 +23,7 @@ import {
 	type SetupReport,
 } from "#services/machine/runner";
 import { allTasks } from "#services/machine/tasks/index";
+import { rsyncSpec, rsyncTask, type Versioned } from "#services/machine/tasks/tools-rsync";
 import {
 	FEATURE_LIST,
 	type Feature,
@@ -28,6 +31,8 @@ import {
 	type TaskContext,
 	TaskError,
 } from "#services/machine/tasks/types";
+import { findTool, TOOLS } from "#services/machine/tools";
+import { LocalMachine } from "#services/remote";
 import { findSpaceRoot } from "#services/space";
 
 /** `--features a,b` split into real feature names, or a friendly error naming the valid ones. */
@@ -55,6 +60,70 @@ function preselected(machine: MachineInfo | null): Feature[] {
 	return FEATURE_LIST.map((entry) => entry.feature).filter((feature) =>
 		configured.includes(feature),
 	);
+}
+
+/**
+ * `--tools a,b` split into real tool ids, or a friendly error naming the valid ones.
+ *
+ * `all` is a real answer here — "everything in the registry" — and it is what
+ * `--features tools` on its own means when there are no hooks to narrow it.
+ */
+export function parseTools(raw: string): string[] {
+	const wanted = raw
+		.split(",")
+		.map((part) => part.trim())
+		.filter((part) => part !== "");
+	const unknown = wanted.filter((part) => part !== "all" && findTool(part) === undefined);
+	if (unknown.length > 0) {
+		throw new MachineError(
+			`Unknown tool${unknown.length > 1 ? "s" : ""}: ${unknown.join(", ")}. The tools are: ${TOOLS.map((tool) => tool.id).join(", ")} (or "all").`,
+		);
+	}
+	return wanted.length === 0 ? ["all"] : wanted;
+}
+
+/**
+ * Which tools the user's own Claude hooks imply.
+ *
+ * A hook scan that found nothing is not a reason to install nothing: a machine
+ * whose hooks aren't synced yet still wants the CLIs. So an empty scan falls
+ * back to the whole registry rather than silently doing no work.
+ */
+export function toolsFromScan(scan: HookScan): string[] {
+	const known = scan.preselect.filter((id) => findTool(id) !== undefined);
+	return known.length > 0 ? known : ["all"];
+}
+
+/** Ask which tools to put there, with the hook scan's answers already ticked. */
+async function askTools(preselected: readonly string[]): Promise<string[] | symbol> {
+	return multiselect({
+		message: "Which tools? (ticked: your Claude hooks call them)",
+		options: TOOLS.map((tool) => ({
+			value: tool.id,
+			label: tool.id,
+			hint: tool.notes ?? tool.title,
+			initialValue: preselected.includes(tool.id),
+		})),
+		required: false,
+	});
+}
+
+/** Where this machine keeps its Claude Code config. */
+function claudeHome(): string {
+	const override = process.env.CLAUDE_CONFIG_DIR;
+	if (override !== undefined && override !== "") return override;
+	return join(homedir(), ".claude");
+}
+
+/** Every wanted tool's version on one machine, null where it isn't installed. */
+async function versionsFor(
+	specs: readonly Versioned[],
+	ctx: TaskContext,
+): Promise<Record<string, string | null>> {
+	const entries = await Promise.all(
+		specs.map(async (spec): Promise<[string, string | null]> => [spec.id, await spec.detect(ctx)]),
+	);
+	return Object.fromEntries(entries);
 }
 
 /** Where the root script goes: inside the space when there is one, else in the user's cache. */
@@ -197,6 +266,7 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		"<%= config.bin %> machine setup netcup --features tools,agent-user",
 		// --yes with no machine means `tools`: the local default.
 		"<%= config.bin %> machine setup --features tools --yes",
+		"<%= config.bin %> machine setup --features tools --tools jq,wt --yes",
 		"<%= config.bin %> machine setup --yes",
 	];
 
@@ -204,6 +274,9 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		...BaseCommand.baseFlags,
 		features: Flags.string({
 			description: "Comma-separated features to set up, skipping the prompt",
+		}),
+		tools: Flags.string({
+			description: `Comma-separated tools to install, skipping the tool prompt ("all" for every one). One of: ${TOOLS.map((tool) => tool.id).join(", ")}`,
 		}),
 		yes: Flags.boolean({
 			description:
@@ -270,10 +343,49 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			return;
 		}
 
+		const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;
+
+		// Which tools, and what the user's own hooks say about it. The scan reads
+		// this machine's Claude config, which is where the evidence lives; it is
+		// read-only and its findings are only ever a default, never an action.
+		let tools: string[] = ["all"];
+		if (features.includes("tools")) {
+			const scan = await scanHooks(claudeHome());
+			const suggested = toolsFromScan(scan);
+			try {
+				if (flags.tools !== undefined) {
+					tools = parseTools(flags.tools);
+				} else if (flags.yes || !interactive) {
+					// Same reasoning as `--yes` for the features: nobody can answer
+					// here, and the hook scan is a good enough answer to act on.
+					tools = suggested;
+				} else {
+					const answer = await askTools(suggested);
+					if (isCancel(answer)) {
+						return this.fail("Cancelled — nothing was changed.", flags.debug);
+					}
+					tools = answer as string[];
+				}
+			} catch (err) {
+				if (!(err instanceof MachineError)) throw err;
+				return this.fail(err.message, flags.debug);
+			}
+			// Say what the scan found, so "why only these four?" has an answer on
+			// screen rather than in the source.
+			if (scan.resolvesAfterClone.length > 0) {
+				this.log(
+					`Hooks point at ${scan.resolvesAfterClone.length} path${scan.resolvesAfterClone.length === 1 ? "" : "s"} in your home — those resolve once the space is cloned here.`,
+				);
+			}
+			if (scan.unknown.length > 0) {
+				this.log(`Hooks also call tools this registry doesn't know: ${scan.unknown.join(", ")}.`);
+			}
+			if (flags.debug) for (const file of scan.files) this.log(`  read ${file}`);
+		}
+
 		// Set when the root prompt had to answer for itself, so the run can report
 		// unfinished root work instead of exiting 0 on a half-prepared machine.
 		let unattendedRootPath: string | null = null;
-		const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;
 		const prompt = rootPrompt(interactive, (path) => {
 			unattendedRootPath = path;
 			this.log(
@@ -292,7 +404,10 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		try {
 			report = await runSetup(ctx, {
 				features,
-				tasks: allTasks(),
+				// rsync is a root task, not a registry entry: a remote machine needs
+				// it for warp and for every file transfer, whether or not anything
+				// asked for it by name.
+				tasks: machine === null ? allTasks({ tools }) : [...allTasks({ tools }), rsyncTask],
 				prompt,
 				scratchDir: scratchDir(),
 			});
@@ -311,6 +426,39 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		}
 
 		for (const line of renderReport(report, machine?.name ?? "this machine")) this.log(line);
+
+		// Design step 5: the parity table. The local column is detected on the
+		// machine the user is sitting at, the other column on the machine that was
+		// just set up — for a local run they're the same machine, which is exactly
+		// what a local run should show.
+		if (features.includes("tools")) {
+			const wanted: Versioned[] = TOOLS.filter(
+				(tool) => tools.includes("all") || tools.includes(tool.id),
+			);
+			if (machine !== null) wanted.push(rsyncSpec);
+			if (wanted.length > 0) {
+				const here: TaskContext = {
+					machine: null,
+					runner: new LocalMachine(),
+					config,
+					log: () => {},
+				};
+				const [local, remote] = await Promise.all([
+					versionsFor(wanted, here),
+					versionsFor(wanted, ctx),
+				]);
+				const table = renderParity(parityTable(local, remote));
+				if (table.length > 0) {
+					this.log("");
+					this.log(
+						machine === null
+							? "Tool versions on this machine:"
+							: `Tool parity (this machine vs ${machine.name}):`,
+					);
+					for (const line of table) this.log(`  ${line}`);
+				}
+			}
+		}
 
 		// Unattended with root work still to do is not a successful setup. Say so
 		// loudly and with a code CI can branch on.
