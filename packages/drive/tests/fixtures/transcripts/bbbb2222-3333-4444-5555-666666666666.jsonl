@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u2","parentUuid":null,"sessionId":"fixture-b","cwd":"/tmp/drive-fixture-space","version":"2.1.288","timestamp":"2026-10-03T06:00:00.000Z","message":{"role":"user","content":"ok"}}
+{"type":"assistant","uuid":"a6","parentUuid":"u2","sessionId":"fixture-b","cwd":"/tmp/drive-fixture-space","version":"2.1.288","timestamp":"2026-10-03T06:00:01.000Z","requestId":"req_03","message":{"id":"msg_04","type":"message","role":"assistant","content":[{"type":"text","text":"newer transcript"}]}}

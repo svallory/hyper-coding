@@ -1,7 +1,7 @@
 {
 	"pid": 999999,
 	"sessionId": "11111111-2222-3333-4444-555555555555",
-	"cwd": "/Users/svallory/work/hyper/hyper",
+	"cwd": "/tmp/drive-fixture-space",
 	"startedAt": 1791000000000,
 	"procStart": "Sat Oct  3 02:00:26 2026",
 	"version": "2.1.288",
