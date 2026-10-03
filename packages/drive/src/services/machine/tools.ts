@@ -272,7 +272,7 @@ ${installerScript("https://mise.run", "sh")}`,
  * A tool installed with `mise use -g <tool>@latest`.
  *
  * mise puts the binary in its own store rather than on PATH, so after installing
- * we ask `mise which` where it landed and link it into `~/.local/bin`. That
+ * we link its executable shim into `~/.local/bin`, respecting its data directory. That
  * link is what makes the tool usable from a plain non-login shell, and it is
  * idempotent (`ln -sf`), so a second setup run doesn't fail on it.
  */
@@ -316,7 +316,9 @@ mkdir -p "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 mise use -g ${miseName}@latest
 mise reshim
-ln -sf "$HOME/.local/share/mise/shims/${id}" "$HOME/.local/bin/${id}"`,
+shim="\${MISE_DATA_DIR:-\${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims/${id}"
+[ -x "$shim" ] || { echo "mise installed ${miseName} but its shim is missing or not executable: $shim. Run mise reshim, then retry." >&2; exit 1; }
+ln -sf "$shim" "$HOME/.local/bin/${id}"`,
 			);
 		},
 	};
@@ -393,7 +395,7 @@ export const TOOLS: readonly ToolSpec[] = [
 				ctx,
 				"pi",
 				`mkdir -p "$HOME/.local/bin"
-export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.local/bin:$HOME/.pi/agent/bin:$PATH"
 (
 ${installerScript("https://pi.dev/install.sh", "sh")}
 ) || {
