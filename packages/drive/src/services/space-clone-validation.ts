@@ -5,7 +5,13 @@ import { checkProjectBranchName } from "#services/space-git";
 
 /** Never print embedded credentials from untrusted manifest data. */
 export function redactCloneUrl(value: string): string {
-	return value.replace(/(\w+:\/\/)[^/\s]*@/g, "$1[redacted]@");
+	const at = value.lastIndexOf("@");
+	if (at < 0) return value;
+	const scheme = value.indexOf("://");
+	const prefix = scheme >= 0 && scheme < at ? value.slice(0, scheme + 3) : "";
+	// Mask conservatively even when whitespace or malformed userinfo makes
+	// URL parsing fail. Diagnostics need not preserve an invalid authority.
+	return `${prefix}[redacted]@${value.slice(at + 1)}`;
 }
 
 /** Local test/development drives may reference local projects; hosted drives may not. */

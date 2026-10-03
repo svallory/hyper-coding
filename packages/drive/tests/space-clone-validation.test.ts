@@ -96,6 +96,8 @@ describe("selected manifest entry validation", () => {
 	it.each([
 		"https://user:password-value@example.invalid/project",
 		"https://user:prefix@password-value@example.invalid/project",
+		"https://user:password-value with spaces@example.invalid/project",
+		"user:password-value@example.invalid:project",
 	])("redacts all credentials in validation errors: %s", (url) => {
 		const value = entry();
 		value.repos[0].url = url;
