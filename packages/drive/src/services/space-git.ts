@@ -94,7 +94,7 @@ export function cleanGitEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.Pro
  * `.hyper/space.git` look like an initialised one. Returns `null` when the key
  * is unset.
  */
-function spaceConfigGet(spaceRoot: string, key: string): string | null {
+export function readSpaceConfig(spaceRoot: string, key: string): string | null {
 	const { status, stdout } = spaceGit(spaceRoot, ["config", "--local", "--get", key], {
 		allowFailure: true,
 	});
@@ -199,7 +199,7 @@ export function initSpaceGitDir(
 		// leave the space permanently without history. The value matters as
 		// much as the key — a `core.worktree` pointing anywhere but the space
 		// root is somebody else's git dir, not ours.
-		const worktree = spaceConfigGet(spaceRoot, "core.worktree");
+		const worktree = readSpaceConfig(spaceRoot, "core.worktree");
 		if (worktree === null) {
 			throw new SpaceGitError(
 				`There's a git dir at ${gitDir}, but it isn't a hyper space git dir — it has no core.worktree. Move it aside and try again.`,
@@ -255,6 +255,69 @@ export function hasSpaceGit(spaceRoot: string): boolean {
 }
 
 /**
+ * Remove the space's git dir — only ever one THIS MODULE created.
+ *
+ * `hyper space init` creates the git dir before its ref-clash and secret
+ * checks, because both have to run through it (C-2), and a refusal must not
+ * leave a half-registered space behind. The `core.worktree` guard is the
+ * safety: a directory that is not a hyper space git dir (someone else's, or a
+ * space initialised elsewhere) is left exactly where it is.
+ *
+ * Returns true when a git dir was removed.
+ */
+export function removeSpaceGitDir(spaceRoot: string): boolean {
+	const gitDir = spaceGitDir(spaceRoot);
+	if (!existsSync(gitDir)) return false;
+	if (readSpaceConfig(spaceRoot, "core.worktree") !== "../..") return false;
+	rmSync(gitDir, { recursive: true, force: true });
+	return true;
+}
+
+/** What a project repository of a space calls itself, for the manifest. */
+export interface ProjectRepoInfo {
+	/** `remote.origin.url` of the repository's own git dir. */
+	url: string;
+	/** Its default branch, best effort: origin/HEAD, then `init.defaultBranch`, then `main`. */
+	defaultBranch: string;
+}
+
+/**
+ * Read a space's PROJECT repository (the bare `.git` at a bare space's root,
+ * or `<root>/code/<slug>/.git` in a multi space) so the manifest can record
+ * where its code came from.
+ *
+ * Lives here because C-2 makes this the only file allowed to spawn git for
+ * anything space-shaped, and it is deliberately a plain `git --git-dir <dir>`
+ * call: `--work-tree` would be a lie for these repos (their work trees are the
+ * `worktrees/<branch>` checkouts), and every call is a read — nothing here can
+ * write inside the project's own repo (C-3).
+ *
+ * `null` when the git dir is missing or names no `origin`: a repo seeded from
+ * a local path has nothing to record, and inventing a URL for it would be a
+ * lie in the manifest.
+ */
+export function projectRepoInfo(gitDir: string): ProjectRepoInfo | null {
+	if (!existsSync(gitDir)) return null;
+	const read = (args: string[]): string | null => {
+		const result = spawnSync("git", ["--git-dir", gitDir, ...args], {
+			encoding: "utf8",
+			env: cleanGitEnv(),
+		});
+		if (result.status !== 0) return null;
+		const value = (result.stdout ?? "").trim();
+		return value === "" ? null : value;
+	};
+
+	const url = read(["config", "--get", "remote.origin.url"]);
+	if (url === null) return null;
+
+	const originHead = read(["symbolic-ref", "-q", "refs/remotes/origin/HEAD"]);
+	const fromOrigin = originHead?.replace(/^refs\/remotes\/origin\//, "") ?? "";
+	const defaultBranch = fromOrigin || read(["config", "--get", "init.defaultBranch"]) || "main";
+	return { url, defaultBranch };
+}
+
+/**
  * The space's sync cadence (C-11: `hyper.cadence` in the space git dir's
  * config is the truth). An unset key reads as `""`. A value outside the union
  * is refused rather than passed on: it can only come from a hand-edit or a
@@ -262,7 +325,7 @@ export function hasSpaceGit(spaceRoot: string): boolean {
  * clear complaint.
  */
 export function readCadence(spaceRoot: string): SyncCadence {
-	const value = spaceConfigGet(spaceRoot, "hyper.cadence");
+	const value = readSpaceConfig(spaceRoot, "hyper.cadence");
 	if (value === null) return "";
 	if (!ALLOWED_CADENCES.includes(value as SyncCadence)) {
 		throw new SpaceGitError(
