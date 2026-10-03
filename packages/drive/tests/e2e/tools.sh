@@ -1,19 +1,16 @@
 #!/usr/bin/env bash
 # e2e: the tool registry, against a throwaway HOME.
 #
-# NOT over a loopback ssh hop: ssh cannot change the remote HOME (OpenSSH's
-# AcceptEnv covers locale and a handful of LANG-ish variables, never HOME), so a
-# loopback run would install into the operator's real ~/.local/bin and their
-# shell rc files — which this script must never do. Closing that gap means giving
-# MachineRunner a way to set the remote environment, which it does not have
-# (SshOptions.env is local-only, and says so). Until then this runs locally with a
-# PATH that hides the operator's own tools, so the recipes have to really download.
+# This runs LOCALLY, in a throwaway HOME, and must stay that way: ssh cannot
+# change the remote HOME (OpenSSH's AcceptEnv covers locale and a few LANG-ish
+# variables, never HOME, and SshOptions.env is local-only by design), so a
+# loopback run would install into a real home. A real ssh e2e belongs against a
+# disposable container — that is a follow-up task, not this script.
 #
-# Runs `hyper machine setup --features tools --tools wt,rg --yes` against a fake
-# machine that Herdr maps to `localhost`, with HOME pointed at a throwaway
-# directory whose PATH excludes the operator's own tool directories — so the
-# recipes have to really download and really install, over ssh, on the other
-# side of a connection. It asserts:
+# Runs `hyper machine setup --features tools --tools wt,rg --yes` with HOME
+# pointed at a throwaway directory whose PATH excludes the operator's own tool
+# directories — so the recipes have to really download and really install. It
+# asserts:
 #   1. the temp HOME's ~/.local/bin really was empty before the run
 #   2. both tools were installed there, and answer --version from there
 #   3. the parity table printed by the command lists them with a version
@@ -27,7 +24,7 @@
 #         or their mise install: HOME is a temp dir for the whole run, and the
 #         trap deletes it. Nothing is ever installed with root.
 #
-# Requirements: drive and cli built (`bun run build` in both).
+# Requirements: drive and cli built (`bun run build` in both). Local only.
 #
 # Note jq is not in the list: macOS ships /usr/bin/jq, so `detect` finds it
 # there and correctly installs nothing. rg is the mise path, absent from macOS,
@@ -43,12 +40,10 @@ cli="$here/../../../cli/bin/run.js"
 step=0
 pass() { step=$((step + 1)); printf 'ok %d - %s\n' "$step" "$1"; }
 die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
-# The whole test is "can we reach ourselves over ssh?". Without that there is no
-# loopback to test, and saying so is better than a confusing failure.
+
 work="$(mktemp -d "${TMPDIR:-/tmp}/hyperdrive-e2e-tools.XXXXXX")"
 home="$work/home"
-remote_home="$work/remote"
-mkdir -p "$home/.local/bin" "$remote_home/.local/bin"
+mkdir -p "$home/.local/bin"
 cleanup() {
   if [ "$?" -eq 0 ]; then
     echo "# cleaning up $work"
@@ -59,33 +54,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# drive.toml has to be where the config loader reads it (XDG_CONFIG_HOME), and the
-# machine entry is what makes `localhost` a machine rather than a guess.
+# drive.toml has to be where the config loader reads it (XDG_CONFIG_HOME). The
+# local run needs no machine entry at all.
 export XDG_CONFIG_HOME="$work/config"
 mkdir -p "$XDG_CONFIG_HOME/hyper"
 cat >"$XDG_CONFIG_HOME/hyper/drive.toml" <<EOF
 remote = "git@example:x.git"
-
-[machines.loop]
-home = "$remote_home"
-features = ["tools"]
 EOF
 
-# A fake herdr on PATH, so `resolveMachine` sees the host the way T-14's tests
-# do. Without it the machine comes from drive.toml alone, which is enough.
 fakebin="$work/bin"
 mkdir -p "$fakebin"
-cat >"$fakebin/herdr" <<EOF
-#!/usr/bin/env bash
-[ "\$1 \$2" = "machine list" ] && echo '[{"label":"loop","target":"localhost","enabled":true}]'
-exit 0
-EOF
-chmod +x "$fakebin/herdr"
 
-# The temp HOME, on both sides. `ssh localhost` runs a login shell as the
-# operator, so the recipe has to install into the temp HOME the *command* sees —
-# which it does, because every command goes through the runner and inherits this
-# process's HOME.
+# The temp HOME, for this process and every command the runner spawns from it.
 export HOME="$home"
 export XDG_DATA_HOME="$home/.local/share"
 export XDG_CACHE_HOME="$home/.cache"
@@ -100,7 +80,7 @@ for tool in node bun curl tar sed grep cat uname install find head env sh bash; 
   path="$(command -v "$tool" || true)"
   [ -n "$path" ] && ln -sf "$path" "$stubs/$tool"
 done
-export PATH="$fakebin:$stubs:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="$stubs:/usr/bin:/bin:/usr/sbin:/sbin"
 
 echo "# HOME=$HOME  ~/.local/bin=$(ls -A "$home/.local/bin" | wc -l | tr -d ' ') entries"
 [ -z "$(ls -A "$home/.local/bin")" ] || die "the temp ~/.local/bin was not empty to begin with"
