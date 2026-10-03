@@ -710,21 +710,27 @@ describe("runSetup — failures", () => {
 		expect(after.checkCalls).toBe(0);
 	});
 
-	it("names the task when apply throws, and doesn't re-check it", async () => {
+	it("names the task when apply throws, and keeps going (T-15/M1)", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const task = fakeTask({ id: "tools.mise", checks: [false], throwInApply: true });
+		const after = fakeTask({ id: "tools.jq", checks: [false, true] });
 
-		await expect(
-			runSetup(localCtx(fakeRunner(), []), {
-				features: ["tools"],
-				tasks: [task],
-				prompt: scriptedPrompt([]),
-				scratchDir: scratch(),
-			}),
-		).rejects.toThrow(/tools\.mise/);
+		const report = await runSetup(localCtx(fakeRunner(), []), {
+			features: ["tools"],
+			tasks: [task, after],
+			prompt: scriptedPrompt([]),
+			scratchDir: scratch(),
+		});
 
-		// Exactly one check: the one that found the work to do. Re-checking after a
-		// failed apply would report on a state nobody reached.
+		// The reason names the task, and the run does not stop: one tool that
+		// 404s must not cost the user the rest.
+		expect(report.failed).toEqual([
+			{ id: "tools.mise", reason: expect.stringContaining("tools.mise") },
+		]);
+		expect(report.applied).toEqual(["tools.jq"]);
+
+		// Exactly one check on the failed task: the one that found the work to do.
+		// Re-checking after a failed apply would report on a state nobody reached.
 		expect(task.checkCalls).toBe(1);
 		expect(task.applies).toBe(1);
 	});

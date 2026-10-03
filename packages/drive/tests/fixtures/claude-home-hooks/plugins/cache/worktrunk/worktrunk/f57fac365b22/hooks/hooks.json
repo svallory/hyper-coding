@@ -1,0 +1,24 @@
+{
+	"hooks": {
+		"SessionStart": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/wt.sh\" config state marker set ok || true"
+					}
+				]
+			}
+		],
+		"Stop": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bash \"$CLAUDE_PLUGIN_ROOT/hooks/wt.sh\" config state marker set done || true"
+					}
+				]
+			}
+		]
+	}
+}
