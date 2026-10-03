@@ -1,0 +1,17 @@
+{
+	"permissions": { "allow": [] },
+	"hooks": {
+		"SessionEnd": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": "jq -r '.session.id' | tee -a /dev/null >/dev/null",
+						"timeout": 10
+					},
+					{ "type": "command", "command": "orbita sync 2>/dev/null || true" }
+				]
+			}
+		]
+	}
+}
