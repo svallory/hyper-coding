@@ -1,7 +1,7 @@
 import { Flags } from "@oclif/core";
 import { ConfigError } from "#config/index";
 import { BaseCommand } from "#lib/base-command";
-import { listMachines, type MachineInfo } from "#services/machine";
+import { addHint, listMachines, type MachineInfo } from "#services/machine";
 
 /** Render rows as a left-aligned table, like `hq status`. */
 function renderTable(rows: MachineInfo[]): string[] {
@@ -59,7 +59,7 @@ export default class MachineList extends BaseCommand<typeof MachineList> {
 		if (machines.length === 0) {
 			this.log("No machines yet.");
 			this.log(
-				"Add one with `herdr machine add <name>`, or run `hyper drive init` to set up this one.",
+				`Add one with \`${addHint("<name>")}\`, or run \`hyper drive init\` to set up this one.`,
 			);
 			return;
 		}

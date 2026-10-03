@@ -17,7 +17,7 @@ export type MachineSource = "herdr" | "config" | "both";
 export interface MachineInfo {
 	/** Name used on the command line, matching `drive.toml` and the Herdr label. */
 	name: string;
-	/** SSH host from Herdr. Undefined until Herdr knows the machine. */
+	/** SSH target from Herdr. Undefined until Herdr knows the machine. */
 	host?: string;
 	/** Home dir from `drive.toml`. Undefined for a Herdr-only machine. */
 	home?: string;
@@ -59,6 +59,17 @@ function pickString(entry: Record<string, unknown>, keys: readonly string[]): st
 	return undefined;
 }
 
+/**
+ * Herdr's `machine list --json` entry shape.
+ *
+ * HERDR-INTERNAL (unverified against a saved machine, 0.9.3): the help text for
+ * `herdr machine` lists "label, SSH target, explicit Herdr session, enabled
+ * state", and the 0.9.3 binary carries those strings, so `label`/`target` are
+ * the primary keys here. The older spellings stay as fallbacks so an older or
+ * newer Herdr still lists something, and a disabled machine is skipped —
+ * hyperdrive can't route to one, and `herdr machine enable <label>` is what
+ * brings it back.
+ */
 function parseHerdrJson(stdout: string): HerdrMachine[] {
 	let parsed: unknown;
 	try {
@@ -79,12 +90,13 @@ function parseHerdrJson(stdout: string): HerdrMachine[] {
 	for (const item of list) {
 		if (typeof item !== "object" || item === null) continue;
 		const entry = item as Record<string, unknown>;
+		if (entry.enabled === false) continue;
 		const host = pickString(entry, [
+			"target",
 			"host",
+			"sshTarget",
 			"sshHost",
 			"ssh_host",
-			"target",
-			"sshTarget",
 			"address",
 		]);
 		if (!host) continue;
@@ -95,8 +107,12 @@ function parseHerdrJson(stdout: string): HerdrMachine[] {
 }
 
 interface HerdrListing {
-	available: boolean;
+	/** False only when there is no `herdr` binary on PATH. */
+	installed: boolean;
+	/** Saved machines Herdr can actually reach (disabled ones are left out). */
 	machines: HerdrMachine[];
+	/** Plain-language note about why the listing is short, for error messages. */
+	problem?: string;
 }
 
 /**
@@ -106,9 +122,37 @@ interface HerdrListing {
  */
 export function listHerdrMachines(): HerdrListing {
 	const result = spawnSync("herdr", ["machine", "list", "--json"], { encoding: "utf-8" });
-	if (result.error || result.status !== 0) return { available: false, machines: [] };
-	const machines = parseHerdrJson(result.stdout ?? "");
-	return { available: true, machines };
+	if (result.error) {
+		const code = (result.error as NodeJS.ErrnoException).code;
+		// Only ENOENT means "Herdr isn't installed". Anything else (a crash, a
+		// permissions problem) is a different problem and must not be reported as
+		// a missing install.
+		if (code === "ENOENT") {
+			return {
+				installed: false,
+				machines: [],
+				problem: "Herdr doesn't seem to be installed — I couldn't find `herdr` on your PATH.",
+			};
+		}
+		return {
+			installed: true,
+			machines: [],
+			problem: `Herdr couldn't be run: ${friendlyError(result.error)}`,
+		};
+	}
+	if (result.status !== 0) {
+		const detail = (result.stderr ?? "").trim();
+		return {
+			installed: true,
+			machines: [],
+			problem: `\`herdr machine list --json\` failed${detail ? `: ${detail}` : ` (exit ${result.status})`}.`,
+		};
+	}
+	return { installed: true, machines: parseHerdrJson(result.stdout ?? "") };
+}
+
+function friendlyError(err: unknown): string {
+	return err instanceof Error ? err.message : String(err);
 }
 
 function merged(
@@ -146,6 +190,15 @@ export function listMachines(): MachineInfo[] {
 	return machines;
 }
 
+/**
+ * How to save a machine in Herdr. Real usage is
+ * `herdr machine add <ssh-target> [--label <label>]` — the label is optional and
+ * defaults to the host, so both parts are spelled out here.
+ */
+export function addHint(name: string): string {
+	return `herdr machine add <user@host> --label ${name}`;
+}
+
 function knownNames(): string {
 	const names = listMachines().map((m) => m.name);
 	return names.length > 0 ? names.join(", ") : "none yet";
@@ -173,11 +226,9 @@ export function resolveMachine(name: string): MachineInfo {
 	}
 
 	if (configEntry && !herdr) {
-		const herdrMissing = listing.available
-			? ""
-			: "\nHerdr doesn't seem to be installed — I couldn't find `herdr` on your PATH.";
+		const note = listing.problem ? `\n${listing.problem}` : "";
 		throw new MachineError(
-			`The "${name}" machine is in your hyperdrive config, but Herdr doesn't know it yet, so there's nothing to connect to. Run \`herdr machine add ${name}\` first.${herdrMissing}`,
+			`The "${name}" machine is in your hyperdrive config, but Herdr doesn't know it yet, so there's nothing to connect to. Run \`${addHint(name)}\` first.${note}`,
 		);
 	}
 
@@ -201,11 +252,14 @@ export function self(): { name: string; home: string } {
  */
 export function runnerFor(name?: string): MachineRunner {
 	if (name === undefined) return new LocalMachine();
-	if (name === self().name) return new LocalMachine();
+	// Read self.name straight from the config rather than through self(): an unset
+	// self.name is `self()`'s friendly error, but asking for another machine is a
+	// perfectly reasonable thing to do before `hyper drive init` has ever run.
+	if (name === loadConfig().self.name) return new LocalMachine();
 	const machine = resolveMachine(name);
 	if (!machine.host) {
 		throw new MachineError(
-			`I don't know how to reach the "${machine.name}" machine — Herdr has no host for it yet. Run \`herdr machine add ${machine.name}\`.`,
+			`I don't know how to reach the "${machine.name}" machine — Herdr has no target for it yet. Run \`${addHint(machine.name)}\`.`,
 		);
 	}
 	return new RemoteMachine(machine.host);
