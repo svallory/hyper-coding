@@ -22,6 +22,11 @@ FIX="$(cd "$FIX" && pwd -P)"
 export HOME="$FIX/home"
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL="$HOME/.gitconfig"
+# The plugin scripts source hyper-lib.sh out of the CLI (C-5), so the suite
+# needs a `hyper` on PATH. The shim next to this file execs the workspace CLI;
+# prepend it so tests that deliberately strip PATH (test-m-init.sh's clean_path)
+# can still re-add just this directory. Requires drive and cli to be built.
+export PATH="$TESTS_DIR:$PATH"
 mkdir -p "$HOME"
 git config --global user.email hyper-test@example.invalid
 git config --global user.name  "hyper test"

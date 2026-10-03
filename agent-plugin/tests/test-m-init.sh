@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2154  # hyper_lib is assigned by hyper_require_lib in hyper-require-lib.sh (a sourced helper shellcheck cannot follow)
 # Row M — init. The --new path builds a space from nothing: empty bare repo,
 # seeded initial commit, default-branch worktree, full scaffold. The clone
 # path is exercised implicitly by the conversion suite's fixtures; this file
 # pins the from-scratch path and its refusals.
 
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
+# hyper-init.sh sources hyper-lib.sh out of the CLI (C-5), so the space-layout
+# assertions below resolve the same library the scripts under test use.
+source "$SCRIPTS_DIR/hyper-require-lib.sh"
+hyper_require_lib
 
 INIT="$SCRIPTS_DIR/hyper-init.sh"
 
@@ -14,6 +19,10 @@ INIT="$SCRIPTS_DIR/hyper-init.sh"
 clean_path="$(dirname "$(command -v git)"):/usr/bin:/bin"
 node_dir="$(command -v node >/dev/null 2>&1 && dirname "$(command -v node)" || true)"
 [[ -n "$node_dir" ]] && clean_path="$clean_path:$node_dir"
+# …and so must `hyper`: these runs deliberately rebuild PATH from scratch, and
+# hyper-init.sh cannot find hyper-lib.sh without the CLI. TESTS_DIR holds the
+# shim from helpers.sh.
+clean_path="$TESTS_DIR:$clean_path"
 
 # M1: --new builds a working space from nothing
 out="$( (cd "$FIX" && PATH="$clean_path" bash "$INIT" --new proj) 2>&1 )"
@@ -40,7 +49,7 @@ assert_contains "next steps mention adding a remote later" "$out" "remote add or
 
 # M2: a space is detected as such, and adopt on it is a case-A no-op
 assert_eq "space_layout accepts the new space" "bare" \
-  "$(bash -c "source '$SCRIPTS_DIR/hyper-lib.sh'; space_layout '$d'")"
+  "$(bash -c "source \"$hyper_lib\"; space_layout '$d'")"
 out="$(bash "$SCRIPTS_DIR/hyper-adopt.sh" "$d" --apply 2>&1)"
 assert_eq "adopt on the new space exits 0" 0 "$?"
 assert_not_contains "adopt does not try to convert it" "$out" "Converting"
@@ -94,7 +103,7 @@ out="$( (cd "$fr" && PATH="$clean_path" bash "$INIT" --new solo --slug solo) 2>&
 assert_eq "first --slug from a fresh --multi space's root exits 0" 0 "$?"
 assert_ok "code/solo created as the space's first repo" test -d "$fr/code/solo"
 assert_eq "space_layout recognizes it as multi once populated" "multi" \
-  "$(bash -c "source '$SCRIPTS_DIR/hyper-lib.sh'; space_layout '$fr'")"
+  "$(bash -c "source \"$hyper_lib\"; space_layout '$fr'")"
 
 # M6c: same, but the very first --slug is run from a local-only dir (notes/)
 # rather than the space root, before any repo exists anywhere in the space.
@@ -113,7 +122,7 @@ assert_eq "code/alpha is bare" "true" \
   "$(git --git-dir="$md/code/alpha/.git" config --get core.bare)"
 assert_ok "code/alpha worktree created" test -d "$md/code/alpha/worktrees/main"
 assert_eq "space_layout now says multi" "multi" \
-  "$(bash -c "source '$SCRIPTS_DIR/hyper-lib.sh'; space_layout '$md'")"
+  "$(bash -c "source \"$hyper_lib\"; space_layout '$md'")"
 hyper_md="$(cat "$md/HYPER.md")"
 assert_contains "HYPER.md gained an alpha row" "$hyper_md" '`alpha`'
 

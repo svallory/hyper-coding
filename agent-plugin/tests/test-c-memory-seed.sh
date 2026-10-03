@@ -6,7 +6,13 @@
 # autoMemoryDirectory and merges into a pre-existing settings.json.
 
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
-source "$SCRIPTS_DIR/hyper-lib.sh"
+# The library lives in the CLI now (C-5); hyper-require-lib.sh locates it.
+source "$SCRIPTS_DIR/hyper-require-lib.sh"
+hyper_require_lib
+# shellcheck source=hyper-require-lib.sh
+# hyper_lib is assigned by hyper_require_lib / hyper_soft_lib in that helper.
+# shellcheck disable=SC1090,SC2154  # hyper_lib is set by the helper above
+source "$hyper_lib"
 set +eu
 set +o pipefail
 
@@ -38,7 +44,8 @@ assert_eq "no .tmp litter left behind" \
 printf -- '- [Space layout](hyper-layout.md) — old entry\n' > "$idx"
 (
   set -euo pipefail
-  source "$SCRIPTS_DIR/hyper-lib.sh"
+  # shellcheck disable=SC1090  # hyper_lib is set by hyper_require_lib above
+  source "$hyper_lib"
   write_memory_seed "$d" proj
 )
 rc=$?
