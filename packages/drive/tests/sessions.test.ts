@@ -44,6 +44,8 @@ import {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OLD_ID = "aaaa1111-2222-3333-4444-555555555555";
 const NEW_ID = "bbbb2222-3333-4444-5555-666666666666";
+/** The only process we know ignores SIGTERM; see the SIGKILL test below. */
+const PERL = "/usr/bin/perl";
 
 let fixture: ClaudeHome;
 let previousHome: string | undefined;
@@ -424,10 +426,16 @@ describe("stopSession", () => {
 		expect(await stopSession(deadPid(), { cwd, sessionId: "session-a" })).toBeNull();
 	});
 
-	it("SIGKILLs a process that ignores SIGTERM, and confirms it died", async () => {
+	it("SIGKILLs a process that ignores SIGTERM, and confirms it died", async (ctx) => {
 		// `/bin/sh` on this machine dies on SIGTERM even with `trap ''`, so the
-		// stubborn process is perl, which really does ignore it.
-		const child = spawn("/usr/bin/perl", ["-e", '$SIG{TERM} = "IGNORE"; sleep 30'], {
+		// stubborn process is perl, which really does ignore it. Where perl is
+		// missing there is no portable way to make a process ignore SIGTERM, so
+		// the case is skipped loudly instead of passing for the wrong reason.
+		if (!existsSync(PERL)) {
+			console.info(`skipping: ${PERL} is not on this machine`);
+			ctx.skip();
+		}
+		const child = spawn(PERL, ["-e", '$SIG{TERM} = "IGNORE"; sleep 30'], {
 			stdio: "ignore",
 		});
 		const pid = child.pid;
