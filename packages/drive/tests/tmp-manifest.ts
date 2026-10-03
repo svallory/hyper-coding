@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect } from "vitest";
+import { shellJoin, shellQuote } from "#services/remote";
 
 export interface ManifestFixture {
 	root: string;
@@ -38,7 +39,10 @@ export function withManifestFixture(): ManifestFixture {
 		home,
 		hyperHome,
 		configFile,
-		cleanup: () => rmSync(root, { recursive: true, force: true }),
+		// Retries matter: a git or CLI process can still be flushing an index
+		// lock when the test ends, and one failed rmdir otherwise fails the
+		// suite on a temporary directory the test does not even own.
+		cleanup: () => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
 	};
 }
 
@@ -102,11 +106,18 @@ export function spawnCliOnTty(
 	// previous prompt, and the run then waits forever for an answer that was
 	// already sent.
 	const feeder = answers.map((answer) => `printf '${answer}\\r'; sleep 2`).join("; ");
-	const command = [
-		`(sleep 2; ${feeder}; sleep 3)`,
-		"| script -q /dev/null",
-		[process.execPath, cli, ...args].map((part) => `'${part}'`).join(" "),
-	].join(" ");
+	const child = shellJoin([process.execPath, cli, ...args]);
+	// `script` is two different programs. BSD/macOS takes the command as
+	// trailing arguments:  script -q /dev/null <cmd…>
+	// util-linux (Debian/Ubuntu, i.e. the GitHub runner) takes it as ONE
+	// -c string:                script -q -c "<cmd…>" /dev/null
+	// Passing the macOS form on Linux fails with
+	// "script: unexpected number of arguments".
+	const script =
+		process.platform === "darwin"
+			? `script -q /dev/null ${child}`
+			: `script -q -c ${shellQuote(child)} /dev/null`;
+	const command = `(sleep 2; ${feeder}; sleep 3) | ${script}`;
 	return spawnSync("/bin/sh", ["-c", command], {
 		encoding: "utf8",
 		// A prompt test must never be able to wedge the whole suite: if the CLI
@@ -123,6 +134,18 @@ export function spawnCliOnTty(
 			FORCE_COLOR: "0",
 		},
 	});
+}
+
+/**
+ * Skip a test that needs `script` when the machine has none, with a reason a
+ * reader can act on. Both platforms here ship it; this keeps a slim container
+ * from failing for a missing tool instead of a broken test.
+ */
+export function skipWithoutScript(): boolean {
+	const found = spawnSync("/bin/sh", ["-c", "command -v script"], { encoding: "utf8" });
+	if (found.status === 0) return false;
+	expect.skip("`script` is not installed, so no pseudo-terminal is available for the prompt test");
+	return true;
 }
 
 export function skipIfUnbuilt(): boolean {
