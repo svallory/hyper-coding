@@ -1,8 +1,15 @@
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { listMachines, MachineError, resolveMachine, runnerFor, self } from "#services/machine";
+import {
+	addHint,
+	listMachines,
+	MachineError,
+	resolveMachine,
+	runnerFor,
+	self,
+} from "#services/machine";
 import { LocalMachine, RemoteMachine } from "#services/remote";
 import { withTempConfig } from "#tests/tmp-config";
 
@@ -23,11 +30,26 @@ agent_user = "agent"
 home = "/home/spare"
 `;
 
-/** Put a fake `herdr` on PATH that prints this JSON for `machine list --json`. */
-function fakeHerdrOnPath(json: string): string {
-	const dir = mkdtempSync(join(tmpdir(), "drive-herdr-"));
+/** Temp dirs (fake herdr scripts, isolated PATHs) to remove afterwards. */
+const tmpDirs: string[] = [];
+function track(dir: string): string {
+	tmpDirs.push(dir);
+	return dir;
+}
+
+/**
+ * Put a fake `herdr` on PATH that prints this JSON for `machine list --json`.
+ * The body is the shape `herdr machine` documents for a saved machine: label,
+ * SSH target, explicit session, enabled state.
+ */
+function fakeHerdrOnPath(json: string, { exitCode = 0, stderr = "" } = {}): string {
+	const dir = track(mkdtempSync(join(tmpdir(), "drive-herdr-")));
 	const script = join(dir, "herdr");
-	writeFileSync(script, `#!/bin/sh\ncat <<'JSON'\n${json}\nJSON\n`, "utf-8");
+	writeFileSync(
+		script,
+		`#!/bin/sh\ncat <<'JSON'\n${json}\nJSON\n[ -n "${stderr}" ] && cat >&2 <<'ERR'\n${stderr}\nERR\n\nexit ${exitCode}\n`,
+		"utf-8",
+	);
 	chmodSync(script, 0o755);
 	process.env.PATH = `${dir}:${process.env.PATH ?? ""}`;
 	return dir;
@@ -35,7 +57,7 @@ function fakeHerdrOnPath(json: string): string {
 
 /** A PATH with no herdr at all. */
 function pathWithoutHerdr(): string {
-	const dir = mkdtempSync(join(tmpdir(), "drive-nopath-"));
+	const dir = track(mkdtempSync(join(tmpdir(), "drive-nopath-")));
 	process.env.PATH = dir;
 	return dir;
 }
@@ -47,14 +69,18 @@ afterEach(() => {
 	else process.env.PATH = saved.path;
 	if (saved.config === undefined) delete process.env.HYPER_DRIVE_CONFIG;
 	else process.env.HYPER_DRIVE_CONFIG = saved.config;
+	while (tmpDirs.length > 0) {
+		const dir = tmpDirs.pop();
+		if (dir) rmSync(dir, { recursive: true, force: true });
+	}
 });
 
 describe("listMachines", () => {
 	it("merges Herdr's machines with drive.toml", () => {
 		fakeHerdrOnPath(
 			JSON.stringify([
-				{ label: "netcup", host: "netcup.example.com" },
-				{ label: "workbox", host: "workbox.example.com" },
+				{ label: "netcup", target: "agent@netcup.example.com", enabled: true },
+				{ label: "workbox", target: "agent@workbox.example.com", enabled: true },
 			]),
 		);
 		withTempConfig(FIXTURE);
@@ -65,7 +91,7 @@ describe("listMachines", () => {
 
 		const netcup = machines.find((m) => m.name === "netcup");
 		expect(netcup).toMatchObject({
-			host: "netcup.example.com",
+			host: "agent@netcup.example.com",
 			home: "/home/svallory",
 			features: ["docker", "mutagen"],
 			agentUser: "agent",
@@ -83,13 +109,27 @@ describe("listMachines", () => {
 
 		// Herdr-only: reachable, but no hyperdrive details.
 		expect(machines.find((m) => m.name === "workbox")).toMatchObject({
-			host: "workbox.example.com",
+			host: "agent@workbox.example.com",
 			home: undefined,
 			features: [],
 			agentUser: "agent",
 			source: "herdr",
 			herdr: true,
 		});
+	});
+
+	it("leaves out machines Herdr has disabled", () => {
+		fakeHerdrOnPath(
+			JSON.stringify([
+				{ label: "netcup", target: "agent@netcup.example.com", enabled: true },
+				{ label: "retired", target: "agent@retired.example.com", enabled: false },
+			]),
+		);
+		withTempConfig(FIXTURE);
+
+		// Disabled means Herdr won't route to it; `herdr machine enable retired`
+		// brings it back. A config-only entry still shows up.
+		expect(listMachines().map((m) => m.name)).toEqual(["netcup", "spare"]);
 	});
 
 	it("returns only config entries when Herdr isn't installed", () => {
@@ -108,27 +148,49 @@ describe("listMachines", () => {
 
 		expect(listMachines().map((m) => m.name)).toEqual(["netcup", "spare"]);
 	});
+
+	it("survives Herdr failing, and doesn't blame a missing install", () => {
+		fakeHerdrOnPath("[]", { exitCode: 3, stderr: "machine store is locked" });
+		withTempConfig(FIXTURE);
+
+		expect(listMachines().map((m) => m.name)).toEqual(["netcup", "spare"]);
+
+		try {
+			resolveMachine("netcup");
+			expect.unreachable("resolveMachine should have thrown");
+		} catch (err) {
+			const message = (err as Error).message;
+			expect(message).toMatch(/machine store is locked/);
+			// Herdr is installed here; only ENOENT means "not installed".
+			expect(message).not.toMatch(/doesn't seem to be installed/);
+		}
+	});
 });
 
 describe("resolveMachine", () => {
 	it("returns a Herdr-only machine without a home dir", () => {
-		fakeHerdrOnPath(JSON.stringify([{ label: "workbox", host: "workbox.example.com" }]));
+		fakeHerdrOnPath(JSON.stringify([{ label: "workbox", target: "agent@workbox.example.com" }]));
 		withTempConfig(FIXTURE);
 
 		expect(resolveMachine("workbox")).toMatchObject({
 			name: "workbox",
-			host: "workbox.example.com",
+			host: "agent@workbox.example.com",
 			home: undefined,
 			source: "herdr",
 		});
 	});
 
 	it("tells the user how to add a config-only machine to Herdr", () => {
-		fakeHerdrOnPath(JSON.stringify([{ label: "netcup", host: "netcup.example.com" }]));
+		fakeHerdrOnPath(JSON.stringify([{ label: "netcup", target: "agent@netcup.example.com" }]));
 		withTempConfig(FIXTURE);
 
 		expect(() => resolveMachine("spare")).toThrow(MachineError);
-		expect(() => resolveMachine("spare")).toThrow(/herdr machine add spare/);
+		// Real usage is `herdr machine add <ssh-target> --label <label>`.
+		expect(() => resolveMachine("spare")).toThrow(/herdr machine add <user@host> --label spare/);
+	});
+
+	it("spells the add hint the way Herdr's own help does", () => {
+		expect(addHint("spare")).toBe("herdr machine add <user@host> --label spare");
 	});
 
 	it("says so when Herdr isn't installed at all", () => {
@@ -140,13 +202,13 @@ describe("resolveMachine", () => {
 			expect.unreachable("resolveMachine should have thrown");
 		} catch (err) {
 			expect(err).toBeInstanceOf(MachineError);
-			expect((err as Error).message).toMatch(/herdr machine add netcup/);
+			expect((err as Error).message).toMatch(/herdr machine add <user@host> --label netcup/);
 			expect((err as Error).message).toMatch(/doesn't seem to be installed/);
 		}
 	});
 
 	it("lists the known machines for an unknown name", () => {
-		fakeHerdrOnPath(JSON.stringify([{ label: "netcup", host: "netcup.example.com" }]));
+		fakeHerdrOnPath(JSON.stringify([{ label: "netcup", target: "agent@netcup.example.com" }]));
 		withTempConfig(FIXTURE);
 
 		try {
@@ -192,11 +254,22 @@ describe("runnerFor", () => {
 	});
 
 	it("is a remote runner for another machine", () => {
-		fakeHerdrOnPath(JSON.stringify([{ label: "netcup", host: "netcup.example.com" }]));
+		fakeHerdrOnPath(JSON.stringify([{ label: "netcup", target: "agent@netcup.example.com" }]));
 		withTempConfig(FIXTURE);
 
 		const runner = runnerFor("netcup");
 		expect(runner).toBeInstanceOf(RemoteMachine);
-		expect((runner as RemoteMachine).host).toBe("netcup.example.com");
+		expect((runner as RemoteMachine).host).toBe("agent@netcup.example.com");
+	});
+
+	it("works for another machine even when self.name is unset", () => {
+		fakeHerdrOnPath(JSON.stringify([{ label: "netcup", target: "agent@netcup.example.com" }]));
+		// No [self] section: `hyper drive init` hasn't run here yet.
+		withTempConfig('[machines.netcup]\nhome = "/home/svallory"\n');
+
+		// self() is the right place to complain about an unset self.name —
+		// asking for a remote machine is not.
+		expect(() => self()).toThrow(/hyper drive init/);
+		expect(runnerFor("netcup")).toBeInstanceOf(RemoteMachine);
 	});
 });
