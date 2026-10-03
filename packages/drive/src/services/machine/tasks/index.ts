@@ -10,9 +10,14 @@
  * `noop.check` stays, so the report and the "nothing needed" path keep working
  * before any real tool is selected — and so a machine that has every tool still
  * proves the no-op path.
+ *
+ * Agent-user order: user and group, shared dirs, then their watcher.
  */
 
 import { TOOLS, type ToolSpec } from "../tools.js";
+import { agentUserCreate } from "./agent-user-create.js";
+import { agentUserDirs } from "./agent-user-dirs.js";
+import { agentUserWatcher } from "./agent-user-watcher.js";
 import { pathTask } from "./tools-path.js";
 import { rsyncTask } from "./tools-rsync.js";
 import type { Task, TaskContext } from "./types.js";
@@ -65,7 +70,7 @@ export function infrastructureTasks(): Task[] {
 /** Every task the CLI knows how to run, in a stable order. */
 export function allTasks(options: { tools?: readonly string[] } = {}): Task[] {
 	const tools = selectedToolTasks(options.tools);
-	return [noop, ...(tools.length > 0 ? [pathTask] : []), rsyncTask, ...tools];
+	return [noop, ...(tools.length > 0 ? [pathTask] : []), rsyncTask, ...tools, agentUserCreate, agentUserDirs, agentUserWatcher];
 }
 
 /**
@@ -83,3 +88,4 @@ export function selectedToolTasks(ids?: readonly string[]): Task[] {
 
 export * from "../tools.js";
 export * from "./types.js";
+export { agentUserCreate, agentUserDirs, agentUserWatcher };
