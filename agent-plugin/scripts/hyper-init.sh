@@ -11,11 +11,10 @@
 
 set -euo pipefail
 here="$(dirname "${BASH_SOURCE[0]}")"
+# shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
 source "$here/hyper-require-lib.sh"
 hyper_require_lib
-# shellcheck source=hyper-require-lib.sh
-# hyper_lib is assigned by hyper_require_lib / hyper_soft_lib in that helper.
-# shellcheck disable=SC1090,SC2154  # hyper_lib is set by the helper above
+# shellcheck disable=SC1090  # hyper_lib is assigned by the sourced helper
 source "$hyper_lib"
 
 repo_url=""

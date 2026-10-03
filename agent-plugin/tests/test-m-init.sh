@@ -8,6 +8,7 @@
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 # hyper-init.sh sources hyper-lib.sh out of the CLI (C-5), so the space-layout
 # assertions below resolve the same library the scripts under test use.
+# shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
 source "$SCRIPTS_DIR/hyper-require-lib.sh"
 hyper_require_lib
 
