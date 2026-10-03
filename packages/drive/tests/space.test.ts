@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 
 import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, type TestContext } from "vitest";
 import {
 	detectSpace,
 	findSpaceRoot,
@@ -49,15 +49,18 @@ describe("libPath", () => {
 		expect(libPath().endsWith("/packages/drive/scripts/hyper-lib.sh")).toBe(true);
 	});
 
-	it("resolves to the same file from src/ and from dist/ (installed)", async () => {
+	it("resolves to the same file from src/ and from dist/ (installed)", async (ctx) => {
 		// The whole claim of `libPath()` is that one relative specifier works
 		// from both trees. Asserting the *shape* of the path proves nothing,
 		// so load the built module and compare what it actually resolves to.
 		// Skipped with a clear message when dist/ has not been built, which is
-		// the normal state when vitest runs on its own.
+		// the normal state when vitest runs on its own. `ctx.skip()`, not
+		// `expect.skip()`: the latter is not a vitest API and throws, so this
+		// path used to fail the very test it was meant to skip.
 		const built = join(import.meta.dirname, "..", "dist", "services", "space.js");
 		if (!existsSync(built)) {
-			return expect.skip("dist/services/space.js not built (run `bun run build` first)");
+			ctx.skip("dist/services/space.js not built (run `bun run build` first)");
+			return;
 		}
 		const distLib = (await import(built)).libPath();
 		expect(distLib).toBe(libPath());
@@ -408,19 +411,21 @@ describe("commands (spawned against the real CLI)", () => {
 			.replace(/\s+/g, " ")
 			.trim();
 
-	const skipIfUnbuilt = (): boolean => {
+	const skipIfUnbuilt = (ctx: TestContext): boolean => {
 		if (
 			existsSync(cli) &&
 			existsSync(join(import.meta.dirname, "..", "dist", "services", "space.js"))
 		) {
 			return false;
 		}
-		expect.skip("cli/drive not built (run `bun run build` in drive and cli first)");
+		// `ctx.skip()` rather than `expect.skip()`: the latter does not exist in
+		// vitest and throws, turning every skip into a failure.
+		ctx.skip("cli/drive not built (run `bun run build` in drive and cli first)");
 		return true;
 	};
 
-	it("`space lib-path` prints exactly one line, and that path exists", () => {
-		if (skipIfUnbuilt()) return;
+	it("`space lib-path` prints exactly one line, and that path exists", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		const r = spawnCli(["space", "lib-path"]);
 		expect(r.status).toBe(0);
 		// Exactly one trailing newline and nothing after it: a second line
@@ -433,8 +438,8 @@ describe("commands (spawned against the real CLI)", () => {
 		expect(statSync(printed).isFile()).toBe(true);
 	});
 
-	it("`space detect` exits 1 with a friendly message in a plain directory", () => {
-		if (skipIfUnbuilt()) return;
+	it("`space detect` exits 1 with a friendly message in a plain directory", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		// A deliberately long directory name, so the error wraps whatever width
 		// the runner has. Without this the wrap only happens on a narrow
 		// terminal and the test silently stops covering the case it was
@@ -462,8 +467,8 @@ describe("commands (spawned against the real CLI)", () => {
 		expect(r.stdout.trimEnd()).toBe("");
 	});
 
-	it("`space detect --json` answers in a bare space", () => {
-		if (skipIfUnbuilt()) return;
+	it("`space detect --json` answers in a bare space", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		const d = fixturePath("detect-bare-cli");
 		makeBareSpace(d);
 		const r = spawnCli(["space", "detect", d, "--json"]);
@@ -477,8 +482,8 @@ describe("commands (spawned against the real CLI)", () => {
 		});
 	});
 
-	it("`space detect --json` still prints JSON when it exits 1 outside a space", () => {
-		if (skipIfUnbuilt()) return;
+	it("`space detect --json` still prints JSON when it exits 1 outside a space", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		const plain = fixturePath("detect-plain-json-cli");
 		mkdirSync(plain, { recursive: true });
 		const r = spawnCli(["space", "detect", plain, "--json"]);

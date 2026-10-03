@@ -238,9 +238,11 @@ describe("concurrency between processes", () => {
 		).then(() => undefined);
 	}
 
-	it("serialises two processes so both keep all of their entries", async () => {
+	it("serialises two processes so both keep all of their entries", async (ctx) => {
 		if (!existsSync(distService)) {
-			expect.skip("dist/services/manifest.js not built (run `bun run build` first)");
+			// `ctx.skip()`, not `expect.skip()`: the latter is not a vitest API
+			// and throws, so this path failed the test it meant to skip.
+			ctx.skip("dist/services/manifest.js not built (run `bun run build` first)");
 			return;
 		}
 		ensureDriveCheckout(fixture.remote);

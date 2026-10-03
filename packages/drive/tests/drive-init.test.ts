@@ -27,8 +27,8 @@ afterEach(() => {
 });
 
 describe("hyper drive init", () => {
-	it("asks for every value on a TTY and accepts each default with Enter", () => {
-		if (skipIfUnbuilt() || skipWithoutScript()) return;
+	it("asks for every value on a TTY and accepts each default with Enter", (ctx) => {
+		if (skipIfUnbuilt(ctx) || skipWithoutScript(ctx)) return;
 		// The interactive path, end to end: a pipe has no isTTY, so a piped spawn
 		// would skip every prompt and prove nothing. Answer the remote (it has no
 		// default) and press Enter for the machine name and home, which must take
@@ -50,8 +50,8 @@ describe("hyper drive init", () => {
 		expect(existsSync(join(fixture.hyperHome, "drive", ".git"))).toBe(true);
 	});
 
-	it("writes config and creates main on a bare remote; a second run is idempotent", () => {
-		if (skipIfUnbuilt()) return;
+	it("writes config and creates main on a bare remote; a second run is idempotent", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		const args = ["drive", "init", "--remote", fixture.remote, "--name", "mac", "--home", "/tmp/h"];
 		const first = spawnCli(args, fixture);
 		expect(first.status, flat(first.stderr)).toBe(0);
@@ -72,8 +72,8 @@ describe("hyper drive init", () => {
 		).toBe("1");
 	});
 
-	it("preserves unknown existing TOML keys and sections", () => {
-		if (skipIfUnbuilt()) return;
+	it("preserves unknown existing TOML keys and sections", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		mkdirSync(dirname(fixture.configFile), { recursive: true });
 		writeFileSync(
 			fixture.configFile,
@@ -90,8 +90,8 @@ describe("hyper drive init", () => {
 		expect(parseTOML(raw).remote).toBe(fixture.remote);
 	});
 
-	it("leaves no config behind when the remote cannot be reached", () => {
-		if (skipIfUnbuilt()) return;
+	it("leaves no config behind when the remote cannot be reached", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		// The config must not point at a hyperdrive that was never connected.
 		const missing = join(fixture.root, "missing.git");
 		const result = spawnCli(["drive", "init", "--remote", missing], fixture);
@@ -102,8 +102,8 @@ describe("hyper drive init", () => {
 		expect(existsSync(fixture.configFile)).toBe(false);
 	});
 
-	it("reports the missing --remote flag without a TTY", () => {
-		if (skipIfUnbuilt()) return;
+	it("reports the missing --remote flag without a TTY", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		const result = spawnCli(["drive", "init", "--name", "mac", "--home", "/tmp/h"], fixture);
 		expect(result.status).not.toBe(0);
 		expect(flat(result.stderr)).toContain("--remote");

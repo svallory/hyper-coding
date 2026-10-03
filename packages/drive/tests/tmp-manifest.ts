@@ -2,7 +2,7 @@ import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect } from "vitest";
+import type { TestContext } from "vitest";
 import { shellJoin, shellQuote } from "#services/remote";
 
 export interface ManifestFixture {
@@ -167,21 +167,35 @@ export function spawnCliOnTty(
  * Skip a test that needs `script` when the machine has none, with a reason a
  * reader can act on. Both platforms here ship it; this keeps a slim container
  * from failing for a missing tool instead of a broken test.
+ *
+ * `ctx.skip()`, not `expect.skip()`: vitest's expect is Chai's plus a few
+ * Jest-shaped additions, and `expect.skip` is NOT one of them — calling it
+ * throws `expect.skip is not a function`, so every "skip when the tool is
+ * missing" path used to fail the test it was meant to skip. The context is
+ * the only supported way to skip from inside a running test.
  */
-export function skipWithoutScript(): boolean {
+export function skipWithoutScript(ctx: TestContext): boolean {
 	const found = spawnSync("/bin/sh", ["-c", "command -v script"], { encoding: "utf8" });
 	if (found.status === 0) return false;
-	expect.skip("`script` is not installed, so no pseudo-terminal is available for the prompt test");
+	ctx.skip("`script` is not installed, so no pseudo-terminal is available for the prompt test");
 	return true;
 }
 
-export function skipIfUnbuilt(): boolean {
+/**
+ * Skip a CLI-spawn test when the dists it spawns are missing.
+ *
+ * These tests run `packages/cli/bin/run.js`, which loads `dist/` — vitest's
+ * own `#services/*` imports resolve to source, so an unbuilt package fails
+ * here and nowhere else. Skipped through the test context for the reason
+ * documented on {@link skipWithoutScript}.
+ */
+export function skipIfUnbuilt(ctx: TestContext): boolean {
 	if (
 		existsSync(cli) &&
 		existsSync(join(import.meta.dirname, "..", "dist", "services", "manifest.js"))
 	) {
 		return false;
 	}
-	expect.skip("cli/drive not built (run `bun run build` in drive and cli first)");
+	ctx.skip("cli/drive not built (run `bun run build` in drive and cli first)");
 	return true;
 }
