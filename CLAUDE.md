@@ -8,19 +8,17 @@ HyperDev is a monorepo for **Hypergen** — a modern, scalable code generator wi
 
 ## Package Architecture
 
-```
-@hypercli/cli  ──→  @hypercli/gen  ──→  @hypercli/kit  ──→  @hypercli/core
-```
+The CLI is a thin oclif host. `drive`, `gen`, `kit`, and `hq` are plugins; `core` and `ui` are shared packages. Dependencies flow strictly left-to-right within that chain — `gen` → `kit` → `core` — and a plugin must not depend on the CLI host, because the CLI depends on the plugins (that would be circular).
 
 | Package | Folder | Purpose |
 |---------|--------|---------|
-| `@hypercli/core` | `packages/core/` | Types, config, errors, parsers, utils. No runtime deps on other packages. |
+| `@hypercli/core` | `packages/core/` | Shared types, config, errors, parsers, utils. |
+| `@hypercli/ui` | `packages/ui/` | Shared CLI presentation. |
 | `@hypercli/kit` | `packages/kit/` | Kit lifecycle, source resolution. oclif plugin. |
 | `@hypercli/gen` | `packages/gen/` | Recipe engine, Jig templates, AI 2-pass, actions. oclif plugin. |
+| `@hypercli/drive` | `packages/drive/` | Hyperdrive spaces, manifest, warp, machine sync. oclif plugin. |
+| `@hypercli/hq` | `packages/hq/` | HQ commands. oclif plugin. |
 | `@hypercli/cli` | `packages/cli/` | Thin shell, plugin host. Provides `hyper` binary. |
-| `hypergen` | `packages/hypergen/` | **DEPRECATED** — being replaced by the packages above. |
-
-Dependencies flow strictly left-to-right. No circular deps.
 
 ## Monorepo Structure
 
@@ -31,10 +29,12 @@ hyperdev/
 │   └── docs/                 # Mintlify documentation site
 ├── packages/
 │   ├── core/                 # @hypercli/core
+│   ├── ui/                   # @hypercli/ui
 │   ├── kit/                  # @hypercli/kit
 │   ├── gen/                  # @hypercli/gen
+│   ├── drive/                # @hypercli/drive
+│   ├── hq/                   # @hypercli/hq
 │   ├── cli/                  # @hypercli/cli
-│   └── hypergen/             # DEPRECATED
 ├── hyper-kits/
 │   └── nextjs/               # Next.js kit (git submodule)
 ├── agent/reports/            # AI agent work reports
@@ -49,32 +49,37 @@ hyperdev/
 
 ### Building & Testing
 ```bash
-# Moon (all projects)
-moon check --all                    # Build, lint, test, format, typecheck
-moon run :build                     # Build all
-moon run :test                      # Test all
-moon run <project>:<task>           # e.g. moon run core:test
-
 # Per-package (from package dir)
-bun run build                       # Build with tsup
-bun test                            # Run tests
-bun test --watch                    # Watch mode
+bun run build                       # Build with the package's configured builder
+bun run typecheck                   # Type-check
+bun run lint                        # Biome
+bun run test                        # Run tests
+```
+
+On this machine, do **not** run `moon run` in a hyperdrive worktree: it has been observed to rewrite the root `package.json`. Use package-local `bun run` commands instead. Serialize heavy builds/tests with `flock /tmp/hyper-heavy.lock`.
+
+```bash
+# Example, from the repo root
+flock /tmp/hyper-heavy.lock -c 'cd packages/drive && bun run build && bun run test'
 ```
 
 ### Key Technologies
 - **Template engine**: Jig (Edge.js fork) — `.jig` files, NOT EJS
 - **CLI framework**: oclif with plugin architecture
-- **Build**: tsup (ESM, node20 target)
+- **Build**: per-package (tsc for drive/cli; check each `package.json`)
 - **Test**: vitest (compatible with bun test)
 - **Monorepo**: bun workspaces + moon
 
 ## How the CLI Works
 
-CLI is a thin oclif shell that loads gen and kit as plugins:
+CLI is a thin oclif shell that loads drive, gen, hq, and kit as plugins:
+- `hyper drive init` / `hyper space list` → routed to @hypercli/drive
 - `hyper kit install` → routed to @hypercli/kit
 - `hyper run nextjs crud` → routed to @hypercli/gen
 - `hyper nextjs crud list` → gen's `command_not_found` hook rewrites to `hyper run`
 - `hyper config show` → handled by @hypercli/cli directly
+
+Hyperdrive's user config is read/written only through `packages/drive/src/config/index.ts`. The `main` manifest checkout is an ordinary clone at `~/.hyper/drive/` (path built only by `services/manifest.ts`); space branch git operations go through `services/space-git.ts` with explicit git-dir/work-tree.
 
 **BaseCommand hierarchy**: oclif Command → CoreBaseCommand (cli) → GenBaseCommand (gen)
 
