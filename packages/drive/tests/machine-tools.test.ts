@@ -10,7 +10,18 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, readlink, rm, stat, writeFile } from "node:fs/promises";
+import {
+	lstat,
+	mkdir,
+	mkdtemp,
+	readdir,
+	readFile,
+	readlink,
+	rm,
+	stat,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -21,7 +32,13 @@ import { allTasks, selectedToolTasks, toolTask } from "#services/machine/tasks/i
 import { PATH_LINE, pathTask } from "#services/machine/tasks/tools-path";
 import { rsyncRootScript, rsyncSpec, rsyncTask } from "#services/machine/tasks/tools-rsync";
 import type { TaskContext } from "#services/machine/tasks/types";
-import { detectPlatform, findTool, normaliseVersion, TOOLS } from "#services/machine/tools";
+import {
+	detectPlatform,
+	findTool,
+	InstallError,
+	normaliseVersion,
+	TOOLS,
+} from "#services/machine/tools";
 import type { MachineRunner, RsyncOptions, RunResult, SshOptions } from "#services/remote";
 
 /** The fixture `~/.prototools` pins node for; the value never reaches a command. */
@@ -161,7 +178,9 @@ describe("the tool registry", () => {
 			const runner = new RecordingRunner();
 			await findTool(id)?.install(ctxWith(runner));
 			expect(runner.all, id).toContain("mise use -g ");
-			expect(runner.all, id).toContain(`ln -sf "$HOME/.local/share/mise/shims/${id}"`);
+			expect(runner.all, id).toContain(`}/shims/${id}"`);
+			expect(runner.all, id).toContain('[ -x "$shim" ]');
+			expect(runner.all, id).toContain(`ln -sf "$shim" "$HOME/.local/bin/${id}"`);
 			expect(runner.all, id).not.toContain("mise which ");
 		}
 		// ripgrep's registry name isn't its binary name; the recipe has to use both.
@@ -620,6 +639,125 @@ describe("rendered recipes, offline (N1, N2, M1)", () => {
 		}
 	});
 
+	it.each(["default", "xdg", "mise"])(
+		"uses an executable shim from the %s data directory (N14)",
+		async (location) => {
+			const home = await mkdtemp(join(tmpdir(), "hyper-mise-datadir-"));
+			try {
+				await mkdir(join(home, ".local/bin"), { recursive: true });
+				await mkdir(join(home, "empty-claude"));
+				const data =
+					location === "mise"
+						? join(home, "custom mise")
+						: location === "xdg"
+							? join(home, "custom xdg/mise")
+							: join(home, ".local/share/mise");
+				const shim = join(data, "shims/rg");
+				await writeFile(
+					join(home, ".local/bin/mise"),
+					'#!/bin/sh\nmkdir -p "$(dirname "$TEST_SHIM")"\nprintf "#!/bin/sh\\necho 1.2.3\\n" > "$TEST_SHIM"\nchmod +x "$TEST_SHIM"\n',
+					{ mode: 0o755 },
+				);
+				const env = {
+					HOME: home,
+					CLAUDE_CONFIG_DIR: join(home, "empty-claude"),
+					PATH: "/usr/bin:/bin",
+					TEST_SHIM: shim,
+					...(location === "default" ? {} : { XDG_DATA_HOME: join(home, "custom xdg") }),
+					...(location === "mise" ? { MISE_DATA_DIR: data } : {}),
+				};
+				const runner = new RecordingRunner();
+				runner.ssh = async (cmd) => {
+					const result = spawnSync(cmd[0], cmd.slice(1), { env, encoding: "utf8" });
+					return {
+						code: result.status ?? 1,
+						stdout: result.stdout ?? "",
+						stderr: result.stderr ?? "",
+					};
+				};
+				await findTool("rg")?.install(ctxWith(runner));
+				expect(await readlink(join(home, ".local/bin/rg"))).toBe(shim);
+			} finally {
+				await rm(home, { recursive: true, force: true });
+			}
+		},
+	);
+
+	it.each(["missing", "not executable"])(
+		"reports an InstallError when the mise shim is %s (N14)",
+		async (state) => {
+			const home = await mkdtemp(join(tmpdir(), "hyper-mise-bad-shim-"));
+			try {
+				await mkdir(join(home, ".local/bin"), { recursive: true });
+				await mkdir(join(home, "empty-claude"));
+				await mkdir(join(home, ".local/share/mise/shims"), { recursive: true });
+				await writeFile(join(home, ".local/bin/mise"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+				if (state === "not executable")
+					await writeFile(join(home, ".local/share/mise/shims/rg"), "not executable", {
+						mode: 0o644,
+					});
+				const env = {
+					HOME: home,
+					CLAUDE_CONFIG_DIR: join(home, "empty-claude"),
+					PATH: "/usr/bin:/bin",
+				};
+				const runner = new RecordingRunner();
+				runner.ssh = async (cmd) => {
+					const result = spawnSync(cmd[0], cmd.slice(1), { env, encoding: "utf8" });
+					return {
+						code: result.status ?? 1,
+						stdout: result.stdout ?? "",
+						stderr: result.stderr ?? "",
+					};
+				};
+				await expect(findTool("rg")?.install(ctxWith(runner))).rejects.toBeInstanceOf(InstallError);
+				expect(await fileExists(join(home, ".local/bin/rg"))).toBe(false);
+			} finally {
+				await rm(home, { recursive: true, force: true });
+			}
+		},
+	);
+
+	it("finds pi after a successful official install under .pi/agent/bin (N15)", async () => {
+		const home = await mkdtemp(join(tmpdir(), "hyper-pi-success-"));
+		try {
+			const bin = join(home, "fake-bin");
+			await mkdir(bin);
+			await mkdir(join(home, "empty-claude"));
+			await writeFile(
+				join(home, "installer.sh"),
+				'#!/bin/sh\nmkdir -p "$HOME/.pi/agent/bin"\nprintf "#!/bin/sh\\necho 1.0.0\\n" > "$HOME/.pi/agent/bin/pi"\nchmod +x "$HOME/.pi/agent/bin/pi"\n',
+			);
+			await writeFile(
+				join(bin, "curl"),
+				'#!/bin/sh\nwhile [ "$1" != -o ]; do shift; done\ncp "$HOME/installer.sh" "$2"\n',
+				{ mode: 0o755 },
+			);
+			await writeFile(join(bin, "npm"), '#!/bin/sh\ntouch "$HOME/npm-was-called"\nexit 99\n', {
+				mode: 0o755,
+			});
+			const env = {
+				HOME: home,
+				CLAUDE_CONFIG_DIR: join(home, "empty-claude"),
+				PATH: `${bin}:/usr/bin:/bin`,
+			};
+			const runner = new RecordingRunner();
+			runner.ssh = async (cmd) => {
+				const result = spawnSync(cmd[0], cmd.slice(1), { env, encoding: "utf8" });
+				return {
+					code: result.status ?? 1,
+					stdout: result.stdout ?? "",
+					stderr: result.stderr ?? "",
+				};
+			};
+			await findTool("pi")?.install(ctxWith(runner));
+			expect(await findTool("pi")?.detect(ctxWith(runner))).toBe("1.0.0");
+			expect(await fileExists(join(home, "npm-was-called"))).toBe(false);
+		} finally {
+			await rm(home, { recursive: true, force: true });
+		}
+	});
+
 	it("pi reaches npm fallback after an installer failure", async () => {
 		const home = await mkdtemp(join(tmpdir(), "hyper-pi-offline-"));
 		try {
@@ -663,6 +801,79 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 describe("the PATH task (m4)", () => {
+	it.each(["relative", "absolute", "chain"])(
+		"preserves a %s symlinked rc file and edits the real file (N11)",
+		async (kind) => {
+			const home = await mkdtemp(join(tmpdir(), "hyper-symlink-rc-"));
+			dirs.push(home);
+			await mkdir(join(home, "dotfiles"));
+			const real = join(home, "dotfiles/bashrc");
+			await writeFile(real, "# dotfiles configuration\n", { mode: 0o640 });
+			if (kind === "chain") await symlink("dotfiles/bashrc", join(home, "intermediate"));
+			const target =
+				kind === "absolute" ? real : kind === "chain" ? "intermediate" : "dotfiles/bashrc";
+			await symlink(target, join(home, ".bashrc"));
+			await pathTask.apply?.(ctxWith(homeRunner(home)));
+			expect((await lstat(join(home, ".bashrc"))).isSymbolicLink()).toBe(true);
+			expect(await readlink(join(home, ".bashrc"))).toBe(target);
+			expect(await readFile(real, "utf8")).toBe(`${PATH_LINE}\n# dotfiles configuration\n`);
+			expect((await stat(real)).mode & 0o777).toBe(0o640);
+			expect(await readdir(join(home, "dotfiles"))).toEqual(["bashrc"]);
+		},
+	);
+
+	it("updates a symlinked bash_profile that doesn't source bashrc and passes the login check (N12)", async () => {
+		const home = await mkdtemp(join(tmpdir(), "hyper-bash-profile-"));
+		dirs.push(home);
+		await mkdir(join(home, "dotfiles"));
+		const real = join(home, "dotfiles/profile");
+		await writeFile(real, '# source "$HOME/.bashrc" (not active)\nexport KEEP_ME=yes\n');
+		await symlink("dotfiles/profile", join(home, ".bash_profile"));
+		const context = ctxWith(homeRunner(home));
+		await pathTask.apply?.(context);
+		await pathTask.apply?.(context);
+		expect((await lstat(join(home, ".bash_profile"))).isSymbolicLink()).toBe(true);
+		const text = await readFile(real, "utf8");
+		expect(text.startsWith(`${PATH_LINE}\n`)).toBe(true);
+		expect(text.split(PATH_LINE)).toHaveLength(2);
+		expect(text).toContain("KEEP_ME=yes");
+		expect(await pathTask.check(context)).toBe(true);
+	});
+
+	it.each(['. "$HOME/.bashrc"', "source ~/.bashrc", "if [ -f ~/.bashrc ]; then . ~/.bashrc; fi"])(
+		"does not rewrite a bash_profile already sourcing bashrc: %s",
+		async (line) => {
+			const home = await mkdtemp(join(tmpdir(), "hyper-bash-sources-"));
+			dirs.push(home);
+			await writeFile(join(home, ".bash_profile"), `${line}\n`);
+			await pathTask.apply?.(ctxWith(homeRunner(home)));
+			expect(await readFile(join(home, ".bash_profile"), "utf8")).toBe(`${line}\n`);
+		},
+	);
+
+	it("explains once when another shell does not read the updated profile (N12)", async () => {
+		const home = await mkdtemp(join(tmpdir(), "hyper-other-shell-"));
+		dirs.push(home);
+		const shell = join(home, "fish");
+		await writeFile(shell, '#!/bin/sh\nPATH=/usr/bin:/bin; export PATH\nexec /bin/sh -c "$2"\n', {
+			mode: 0o755,
+		});
+		const logs: string[] = [];
+		const report = await runSetup(
+			{ ...ctxWith(homeRunner(home, shell)), log: (line) => logs.push(line) },
+			{
+				features: ["tools"],
+				tasks: [pathTask],
+				prompt: { rootChoice: async () => "skip" },
+				scratchDir: home,
+			},
+		);
+		expect(report.skipped).toEqual(["tools.path"]);
+		expect(logs.filter((line) => line.includes("did not load ~/.local/bin"))).toHaveLength(1);
+		expect(logs.join("\n")).toContain("configure PATH in that shell's startup file");
+		expect(logs.join("\n")).not.toContain("still not right");
+	});
+
 	it("is selected only when tools are selected, including already-present tools", () => {
 		expect(allTasks({ tools: [] }).map((t) => t.id)).toEqual(["noop.check", "tools.rsync"]);
 		expect(allTasks({ tools: ["jq"] }).map((t) => t.id)).toContain("tools.path");
