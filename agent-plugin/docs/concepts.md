@@ -14,8 +14,10 @@ repository (or, in a [multi-repo space](#repo-slug-and-multi-repo-space),
 several repositories), every worktree of it, and a small set of local-only
 directories, all under one root.
 
-A directory is a space when `space_layout` (in `scripts/hyper-lib.sh`)
-classifies it — that function is the single authority. There are two
+A directory is a space when `space_layout` (in `hyper-lib.sh`, which ships inside
+the hyper CLI at `packages/drive/scripts/hyper-lib.sh` — the plugin sources it
+through `hyper space lib-path`) classifies it — that function is the single
+authority. There are two
 layouts, single-repo and multi-repo (see [Layout](#layout)); their shared
 invariants:
 
@@ -166,7 +168,8 @@ path, which is why moving a space calls for a re-run of
 
 ## Local-only directories
 
-`SPACE_DIRS=(worktrees data notes scratch bin)` in `hyper-lib.sh` is the
+`SPACE_DIRS=(worktrees data notes scratch bin)` in `hyper-lib.sh` (inside
+`@hypercli/drive`) is the
 single source of truth for the set. The four non-worktree members:
 
 | Dir | Purpose | Loss tolerance |
