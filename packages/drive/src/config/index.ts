@@ -53,26 +53,48 @@ export function configExists(): boolean {
 	return existsSync(configPath());
 }
 
-function configProblem(path: string, detail: string): Error {
-	return new Error(`There's a problem with your hyperdrive config at ${path}: ${detail}`);
+export class ConfigError extends Error {
+	constructor(path: string, detail: string) {
+		super(`There's a problem with your hyperdrive config at ${path}: ${detail}`);
+		this.name = "ConfigError";
+	}
 }
 
+function configProblem(path: string, detail: string): ConfigError {
+	return new ConfigError(path, detail);
+}
+
+/**
+ * True only for TOML tables. smol-toml yields `Date` for bare dates, so a plain
+ * prototype check is needed on top of the typeof/array guards.
+ */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		Object.getPrototypeOf(value) === Object.prototype
+	);
 }
 
 function describe(value: unknown): string {
 	if (Array.isArray(value)) return "a list";
 	if (value === null) return "nothing";
+	if (value instanceof Date) return "a date";
 	return `a ${typeof value}`;
 }
 
+function isStringList(value: unknown): value is string[] {
+	return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+}
+
 const TABLE_KEYS = ["self", "defaults", "warp", "sync", "machines"] as const;
+const SYNC_TARGETS = ["claude", "pi"] as const;
 
 /**
  * Validate the raw parsed TOML before it reaches deepMerge, so a scalar where
- * a table is expected (e.g. `self = "x"`) is reported friendlyly instead of
- * blowing up on a later property write.
+ * a table is expected (e.g. `self = "x"`) is reported in a friendly way instead
+ * of blowing up on a later property write.
  */
 function validateShape(path: string, raw: Record<string, unknown>): void {
 	for (const key of TABLE_KEYS) {
@@ -82,8 +104,40 @@ function validateShape(path: string, raw: Record<string, unknown>): void {
 		}
 	}
 
+	if ("self" in raw) {
+		// SAFETY: validated as a table just above.
+		const self = raw.self as Record<string, unknown>;
+		for (const field of ["name", "home"] as const) {
+			if (field in self && typeof self[field] !== "string") {
+				throw configProblem(
+					path,
+					`\`self.${field}\` must be a string, but it is ${describe(self[field])}.`,
+				);
+			}
+		}
+	}
+
+	if ("sync" in raw) {
+		// SAFETY: validated as a table by the TABLE_KEYS loop above.
+		const sync = raw.sync as Record<string, unknown>;
+		for (const target of SYNC_TARGETS) {
+			if (!(target in sync)) continue;
+			if (!isPlainObject(sync[target])) {
+				throw configProblem(
+					path,
+					`\`sync.${target}\` must be a section, but it is ${describe(sync[target])}.`,
+				);
+			}
+			// SAFETY: validated as a table just above.
+			const entry = sync[target] as Record<string, unknown>;
+			if ("ignore" in entry && !isStringList(entry.ignore)) {
+				throw configProblem(path, `\`sync.${target}.ignore\` must be a list of strings.`);
+			}
+		}
+	}
+
 	if ("machines" in raw) {
-		// SAFETY: validated as a plain object just above.
+		// SAFETY: validated as a table by the TABLE_KEYS loop above.
 		const machines = raw.machines as Record<string, unknown>;
 		for (const [name, machine] of Object.entries(machines)) {
 			if (!isPlainObject(machine)) {
@@ -96,17 +150,19 @@ function validateShape(path: string, raw: Record<string, unknown>): void {
 				throw configProblem(path, `\`machines.${name}.features\` must be a list of strings.`);
 			}
 			if ("agent_user" in machine && typeof machine.agent_user !== "string") {
-				throw configProblem(path, `\`machines.${name}.agent_user\` must be a string.`);
+				throw configProblem(
+					path,
+					`\`machines.${name}.agent_user\` must be a string, but it is ${describe(machine.agent_user)}.`,
+				);
 			}
 			if ("home" in machine && typeof machine.home !== "string") {
-				throw configProblem(path, `\`machines.${name}.home\` must be a string.`);
+				throw configProblem(
+					path,
+					`\`machines.${name}.home\` must be a string, but it is ${describe(machine.home)}.`,
+				);
 			}
 		}
 	}
-}
-
-function isStringList(value: unknown): value is string[] {
-	return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
 function readAndParse(path: string): Record<string, unknown> {
@@ -164,10 +220,11 @@ export function loadConfig(): DriveConfig {
 		fileConfig,
 	) as unknown as DriveConfig;
 
-	// Fill per-machine defaults (deepMerge can't, since `machines` starts empty)
+	// Fill per-machine defaults (deepMerge can't, since `machines` starts empty).
+	// Clone so machines that omit `features` don't share one array instance.
 	for (const [name, machine] of Object.entries(merged.machines)) {
 		merged.machines[name] = {
-			...DEFAULT_MACHINE,
+			...structuredClone(DEFAULT_MACHINE),
 			...machine,
 			home: machine.home ? expandHome(machine.home) : DEFAULT_MACHINE.home,
 		};
