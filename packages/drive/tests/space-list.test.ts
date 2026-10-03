@@ -49,8 +49,8 @@ const entry: SpaceEntry = {
 };
 
 describe("hyper space list", () => {
-	it("prints an entry in a table and as parseable JSON", () => {
-		if (skipIfUnbuilt()) return;
+	it("prints an entry in a table and as parseable JSON", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		init();
 		process.env.HYPER_HOME = fixture.hyperHome;
 		upsertSpace(entry);
@@ -68,16 +68,16 @@ describe("hyper space list", () => {
 		expect(JSON.parse(json.stdout)).toEqual({ spaces: [entry] });
 	});
 
-	it("prints 'no spaces yet' for an empty manifest", () => {
-		if (skipIfUnbuilt()) return;
+	it("prints 'no spaces yet' for an empty manifest", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		init();
 		const result = spawnCli(["space", "list"], fixture);
 		expect(result.status, flat(result.stderr)).toBe(0);
 		expect(result.stdout).toContain("no spaces yet");
 	});
 
-	it("errors when the checkout's origin does not match the config", () => {
-		if (skipIfUnbuilt()) return;
+	it("errors when the checkout's origin does not match the config", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		init();
 		// Point the config at a DIFFERENT hyperdrive: listing the old checkout
 		// while the config names a new remote is how a half-finished
@@ -92,15 +92,15 @@ describe("hyper space list", () => {
 		expect(flat(result.stderr)).toContain("hyper drive init");
 	});
 
-	it("points to hyper drive init when remote is absent", () => {
-		if (skipIfUnbuilt()) return;
+	it("points to hyper drive init when remote is absent", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		const result = spawnCli(["space", "list"], fixture);
 		expect(result.status).not.toBe(0);
 		expect(flat(result.stderr)).toContain("hyper drive init");
 	});
 
-	it("points to hyper drive init when the checkout is absent", () => {
-		if (skipIfUnbuilt()) return;
+	it("points to hyper drive init when the checkout is absent", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		mkdirSync(dirname(fixture.configFile), { recursive: true });
 		writeFileSync(fixture.configFile, `remote = ${JSON.stringify(fixture.remote)}\n`);
 		const result = spawnCli(["space", "list"], fixture);
