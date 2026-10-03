@@ -2,6 +2,9 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { parse as parseTOML, stringify as stringifyTOML } from "smol-toml";
+// The engine owns the rules for what an ignore pattern can be (C-8): the
+// config loader asks, rather than duplicating them.
+import { ignorePatternProblem } from "#services/sync/mutagen";
 import { DEFAULT_CONFIG, DEFAULT_MACHINE, type DriveConfig, type SyncCadence } from "./schema.js";
 
 /**
@@ -58,37 +61,6 @@ export class ConfigError extends Error {
 		super(`There's a problem with your hyperdrive config at ${path}: ${detail}`);
 		this.name = "ConfigError";
 	}
-}
-
-/**
- * Characters Mutagen's `--ignore` cannot carry.
- *
- * MUTAGEN-INTERNAL (verified 0.18.1): `--ignore` is a pflag *string slice*, and
- * pflag parses string slices as CSV. So one `--ignore` flag per pattern does NOT
- * stop a comma splitting it — `*.{json,bak}` is read as two patterns and the
- * engine fails with "unable to parse pattern: syntax error in pattern", and a
- * `"` fails outright with `bare " in non-quoted-field`. Neither is something we
- * can work around at the call site: the value has to be rejected before it is
- * ever passed, because by then the engine has already misread it.
- */
-const IGNORE_UNSUPPORTED = /[,"]/;
-
-/**
- * Reject an ignore pattern the engine could not have meant.
- *
- * `!` is rejected too: Mutagen treats a leading `!` as negating (un-ignoring)
- * an earlier pattern, so `!/.credentials.json` would silently put credentials
- * back into sync — the one failure mode here with real consequences off-machine.
- */
-function ignorePatternProblem(pattern: string): string | null {
-	if (pattern === "") return "an ignore pattern can't be empty";
-	if (IGNORE_UNSUPPORTED.test(pattern)) {
-		return `\`${pattern}\` can't be used as an ignore pattern: mutagen reads --ignore as comma-separated, so \`,\` and \`"\` split or break the pattern. Rewrite it without them.`;
-	}
-	if (pattern.startsWith("!")) {
-		return `\`${pattern}\` can't be used as an ignore pattern: a leading \`!\` un-ignores a path, which would put files back into sync.`;
-	}
-	return null;
 }
 
 export function configProblem(path: string, detail: string): ConfigError {
@@ -168,7 +140,9 @@ function validateShape(path: string, raw: Record<string, unknown>): void {
 			if ("ignore" in entry && isStringList(entry.ignore)) {
 				for (const pattern of entry.ignore) {
 					const problem = ignorePatternProblem(pattern);
-					if (problem) throw configProblem(path, `\`sync.${target}.ignore\`: ${problem}`);
+					if (problem) {
+						throw configProblem(path, `\`sync.${target}.ignore\`: ${problem}`);
+					}
 				}
 			}
 		}
