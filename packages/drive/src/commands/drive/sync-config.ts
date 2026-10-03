@@ -223,10 +223,6 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 		try {
 			config = loadConfig();
 			const machine = resolveMachine(machineName);
-			const nameProblem = engine.validateSessionName(machine.name);
-			if (nameProblem) {
-				throw new MachineError(`${nameProblem}. Rename the machine in Herdr.`);
-			}
 			if (!machine.home) {
 				throw new MachineError(
 					`The "${machine.name}" machine has no home dir in your hyperdrive config, so hyperdrive doesn't know where its ${"~/.claude"} lives. Add \`home = "…"\` under \`[machines.${machine.name}]\` in your drive.toml.`,
@@ -245,6 +241,14 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 			rows = [];
 			for (const plan of PLANS) {
 				const name = sessionName(plan, machine.name);
+				// Validate the SESSION name, not the machine name: it is always
+				// `hyper-<target>-<machine>`, so it starts with a letter even when
+				// the machine doesn't — a machine called `1box` yields the perfectly
+				// valid `hyper-claude-1box`.
+				const nameProblem = engine.validateSessionName(name);
+				if (nameProblem) {
+					throw new MachineError(`${nameProblem}. Rename the machine in Herdr.`);
+				}
 				const alpha = alphaUrl(local, plan);
 				const beta = betaUrl(machine.host as string, machine.home as string, plan);
 				const want = {
