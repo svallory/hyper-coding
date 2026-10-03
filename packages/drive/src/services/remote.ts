@@ -10,8 +10,10 @@
  * - {@link LocalMachine} — runs commands on this machine and copies files with
  *   the Node filesystem API. This is what every command gets when there is no
  *   target ("no target means local").
- * - {@link RemoteMachine} — runs commands over SSH, quoting the remote argv so
- *   the remote shell sees exactly the arguments we passed.
+ * - {@link RemoteMachine} — runs commands over SSH. Command argv is quoted for
+ *   the remote shell (`shellQuote`); the *path* half of rsync/scp targets is
+ *   not quoted (no spelling is safe across openrsync, old rsync, new rsync and
+ *   scp) — it is validated against a strict charset instead.
  */
 
 import { spawn } from "node:child_process";
@@ -27,11 +29,19 @@ export interface RunResult {
 }
 
 export interface SshOptions {
-	/** Written to the command's stdin, then stdin is closed. */
+	/** Written to the command's stdin, then stdin is closed. Mutually exclusive with `tty`. */
 	stdin?: string;
-	/** Attach the terminal. Output is not captured (it goes straight to the user). */
+	/**
+	 * Attach the terminal. Output is not captured (it goes straight to the
+	 * user). On a remote machine this adds `-t`; combined with `stdin` it is
+	 * rejected — a pty would echo input and mix it into the terminal.
+	 */
 	tty?: boolean;
-	/** Directory to run the command in, on the machine that runs it. */
+	/**
+	 * Directory to run the command in, on the machine that runs it. Must be
+	 * absolute on a remote machine (it becomes `cd -- <cwd>`; a `~/x` would be
+	 * quoted away from the remote shell).
+	 */
 	cwd?: string;
 }
 
@@ -124,7 +134,12 @@ const spawnProcess: Spawner = (request) =>
 
 /**
  * Characters a remote path may contain. Hyperdrive builds these paths itself
- * (a machine's home, a space name), so a strict allowlist costs nothing.
+ * (a machine's home, a space name), so a strict allowlist costs nothing. `~` is
+ * allowed because the remote ssh/scp/rscp expands it.
+ *
+ * Two shape caveats callers need to know (they're why this is a charset, not a
+ * sanitizer): an SFTP-mode `~/path` needs OpenSSH >= 8.7 on the server (Debian
+ * 12+), and an IPv6 host needs brackets in the `host:path` form.
  */
 const SAFE_REMOTE_PATH = /^[A-Za-z0-9._/~+-]+$/;
 
@@ -136,6 +151,34 @@ export class RemotePathError extends Error {
 		);
 		this.name = "RemotePathError";
 	}
+}
+
+/** A machine name or cwd we refuse to use. */
+export class RemoteError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "RemoteError";
+	}
+}
+
+/** Reject a host that ssh/scp/rsync would read as an option. */
+function safeHost(host: string): string {
+	if (host.startsWith("-")) {
+		throw new RemoteError(
+			`"${host}" isn't a host hyperdrive can reach: machine names can't start with "-".`,
+		);
+	}
+	return host;
+}
+
+/** A remote cwd must be absolute, or `cd -- <cwd>` would break on a `~`. */
+function absoluteCwd(host: string, cwd: string): string {
+	if (!cwd.startsWith("/")) {
+		throw new RemoteError(
+			`"${cwd}" isn't a directory hyperdrive can cd to on ${host}: remote working directories must be absolute (start with /), not "~" or a relative path.`,
+		);
+	}
+	return cwd;
 }
 
 /**
@@ -153,7 +196,7 @@ export class RemotePathError extends Error {
  */
 export function remoteSpec(host: string, path: string): string {
 	if (!SAFE_REMOTE_PATH.test(path)) throw new RemotePathError(host, path);
-	return `${host}:${path}`;
+	return `${safeHost(host)}:${path}`;
 }
 
 /**
@@ -161,7 +204,8 @@ export function remoteSpec(host: string, path: string): string {
  *
  * `--info=stats1` is rsync 3.1+; this Mac ships openrsync ("2.6.9 compatible"),
  * which rejects it outright, so every transfer from the Mac would fail. `-a`,
- * `--stats`, `--exclude` and `--` work everywhere.
+ * `--stats`, `--exclude` and `--` work everywhere. `--mkpath` (rsync 3.2.3+)
+ * does *not*, so missing destination parents are created over ssh beforehand.
  */
 function rsyncArgs(src: string, dst: string, opts?: RsyncOptions): string[] {
 	const args = ["-a", "--stats", "-e", "ssh"];
@@ -215,26 +259,51 @@ function globToRegExp(glob: string): RegExp {
 /**
  * rsync-style exclude matching: a pattern without a slash matches any path
  * component, a pattern with one is anchored at the transfer root. A pattern
- * ending in `/` matches directories only, and a leading `/` just anchors it.
+ * ending in `/` matches directories only. A leading `/` anchors the pattern at
+ * the transfer root — unlike a plain relative pattern, it does not match
+ * `src/build`.
  */
 export function isExcluded(
 	relPath: string,
 	patterns: readonly string[],
 	isDirectory = false,
 ): boolean {
-	for (const raw of patterns) {
-		if (raw.endsWith("/") && !isDirectory) continue;
-		const pattern = raw.replace(/^\.\//, "").replace(/^\/+/, "").replace(/\/+$/, "");
-		if (pattern === "") continue;
-		const matcher = globToRegExp(pattern);
-		if (pattern.includes("/")) {
-			if (matcher.test(relPath)) return true;
-			if (relPath.startsWith(`${pattern}/`)) return true;
-		} else if (relPath.split("/").some((part) => matcher.test(part))) {
-			return true;
-		}
-	}
-	return false;
+	return compileExcludes(patterns).some((pattern) => pattern.matches(relPath, isDirectory));
+}
+
+interface CompiledExclude {
+	/** Match `relPath` (slash-separated, relative to the transfer root). */
+	matches(relPath: string, isDirectory: boolean): boolean;
+}
+
+/**
+ * Compile exclude patterns once per transfer, so a tree walk doesn't build a
+ * RegExp per path × pattern.
+ */
+function compileExcludes(patterns: readonly string[]): CompiledExclude[] {
+	return patterns
+		.map((raw) => compileExclude(raw))
+		.filter((pattern): pattern is CompiledExclude => pattern !== null);
+}
+
+function compileExclude(raw: string): CompiledExclude | null {
+	const dirOnly = raw.endsWith("/");
+	const anchored = raw.startsWith("/");
+	const body = raw.replace(/^\.\//, "").replace(/^\/+/, "").replace(/\/+$/, "");
+	if (body === "") return null;
+	const matcher = globToRegExp(body);
+	const hasSlash = body.includes("/");
+
+	return {
+		matches(relPath, isDirectory) {
+			if (dirOnly && !isDirectory) return false;
+			if (anchored || hasSlash) {
+				if (matcher.test(relPath)) return true;
+				return relPath.startsWith(`${body}/`);
+			}
+			return relPath.split("/").some((part) => matcher.test(part));
+		},
+	};
 }
 
 /** lstat-based: a dangling symlink exists, even though access() says otherwise. */
@@ -264,6 +333,21 @@ function friendlyError(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
 }
 
+/** Remove a destination that would make a copy land somewhere wrong. */
+async function removeObstacle(to: string, wantDirectory: boolean): Promise<void> {
+	try {
+		const stat = await lstat(to);
+		// A symlink always goes, whatever the source is: following it could write
+		// outside the destination (rsync -a replaces the link). A type mismatch
+		// (file where a dir belongs, or the reverse) goes too.
+		if (stat.isSymbolicLink() || stat.isDirectory() !== wantDirectory) {
+			await rm(to, { recursive: true, force: true });
+		}
+	} catch {
+		// Nothing there.
+	}
+}
+
 /**
  * Copy the contents of `src` into `dst` the way `rsync -a src/ dst` would:
  * recurse, preserve the relative layout, keep symlinks as symlinks, honour
@@ -276,16 +360,18 @@ async function copyTree(
 	excludes: readonly string[],
 	deleteExtraneous: boolean,
 	root = src,
+	compiled = compileExcludes(excludes),
 ): Promise<void> {
 	const entries = await readdir(src, { withFileTypes: true });
+	await removeObstacle(dst, true);
 	await mkdir(dst, { recursive: true });
 	for (const entry of entries) {
 		const from = join(src, entry.name);
 		const to = join(dst, entry.name);
 		const relPath = toPosix(relative(root, from));
-		if (isExcluded(relPath, excludes, entry.isDirectory())) continue;
+		if (compiled.some((pattern) => pattern.matches(relPath, entry.isDirectory()))) continue;
 		if (entry.isDirectory()) {
-			await copyTree(from, to, excludes, deleteExtraneous, root);
+			await copyTree(from, to, excludes, deleteExtraneous, root, compiled);
 			continue;
 		}
 		if (entry.isSymbolicLink()) {
@@ -295,6 +381,7 @@ async function copyTree(
 			await symlink(target, to);
 			continue;
 		}
+		await removeObstacle(to, false);
 		await copyFile(from, to);
 	}
 
@@ -304,10 +391,28 @@ async function copyTree(
 	if (!(await isDirectory(dst))) return;
 	for (const entry of await readdir(dst, { withFileTypes: true })) {
 		const relPath = toPosix(relative(root, join(dst, entry.name)));
-		if (isExcluded(relPath, excludes, entry.isDirectory())) continue;
+		if (compiled.some((pattern) => pattern.matches(relPath, entry.isDirectory()))) continue;
 		if (await pathExists(join(src, entry.name))) continue;
 		await rm(join(dst, entry.name), { recursive: true, force: true });
 	}
+}
+
+/**
+ * Copy one file the way rsync does when the destination is a directory:
+ * `rsync -a src dst/` puts the file *inside* dst. A non-directory dst is the
+ * file's new path. A symlink source is copied as the link itself (`fs.cp`
+ * would follow it); `-L` is what follows links, and we don't pass it.
+ */
+async function copyFileAsRsync(src: string, dst: string): Promise<void> {
+	const to = (await isDirectory(dst)) ? join(dst, src.split("/").pop() ?? "") : dst;
+	await removeObstacle(to, false);
+	if (!(await isDirectory(dst))) await mkdir(dirname(to), { recursive: true });
+	const sourceStat = await lstat(src);
+	if (sourceStat.isSymbolicLink()) {
+		await symlink(await readlink(src), to);
+		return;
+	}
+	await cp(src, to, { recursive: true });
 }
 
 /** Commands on this machine, and file copies through the Node filesystem API. */
@@ -338,8 +443,7 @@ export class LocalMachine implements MachineRunner {
 		}
 		try {
 			if (!(await isDirectory(src))) {
-				await mkdir(dirname(dst), { recursive: true });
-				await copyFile(src, dst);
+				await copyFileAsRsync(src, dst);
 				return { code: 0, stdout: `copied ${src} to ${dst}`, stderr: "" };
 			}
 			// Like `rsync -a src/ dst`: the contents of src land inside dst.
@@ -382,35 +486,69 @@ export class RemoteMachine implements MachineRunner {
 	private readonly spawner: Spawner;
 
 	constructor(host: string, spawner: Spawner = spawnProcess) {
-		this.host = host;
+		this.host = safeHost(host);
 		this.spawner = spawner;
 	}
 
 	async ssh(cmd: string[], opts?: SshOptions): Promise<RunResult> {
+		if (opts?.tty && opts?.stdin !== undefined) {
+			throw new RemoteError(
+				"tty and stdin don't mix: a terminal would echo the input and mix it into the output. Use one or the other.",
+			);
+		}
 		// One command string, each word quoted: ssh hands it to the remote shell,
 		// which reproduces exactly the argv we passed. A remote `cwd` has to be a
 		// `cd` in that string — it does not exist on this machine, so it can never
-		// be the local child's cwd (that would fail with ENOENT).
-		const command = opts?.cwd ? `cd ${shellQuote(opts.cwd)} && ${shellJoin(cmd)}` : shellJoin(cmd);
+		// be the local child's cwd (that would fail with ENOENT) — and it must be
+		// absolute, or the quoting would stop the remote shell from expanding `~`.
+		const command = opts?.cwd
+			? `cd -- ${shellQuote(absoluteCwd(this.host, opts.cwd))} && ${shellJoin(cmd)}`
+			: shellJoin(cmd);
 		return this.spawner({
 			file: "ssh",
-			args: [this.host, "--", command],
+			// `-t` asks for a pty; without it an interactive remote command
+			// (herdr/tmux attach, a prompt) dies with "not a terminal".
+			args: [...(opts?.tty ? ["-t"] : []), this.host, "--", command],
 			stdin: opts?.stdin,
 			tty: opts?.tty,
 		});
 	}
 
+	/**
+	 * rsync and scp don't create missing destination parents on the old rsync
+	 * this Mac ships (`--mkpath` is rsync 3.2.3+), so the parent is made over
+	 * ssh first, exactly like LocalMachine's `mkdir` does locally. A parent that
+	 * already exists costs one extra round trip and nothing else.
+	 */
+	private async ensureParent(dst: string): Promise<void> {
+		const parent = dst.split("/").slice(0, -1).join("/") || "/";
+		// Validated by the same charset as the transfer itself, and quoted for
+		// the remote shell on top of it.
+		if (!SAFE_REMOTE_PATH.test(parent)) throw new RemotePathError(this.host, parent);
+		await this.ssh(["mkdir", "-p", "--", parent]);
+	}
+
 	async rsync(src: string, dst: string, opts?: RsyncOptions): Promise<RunResult> {
+		// Validate the target first, so a bad path never spawns the mkdir.
+		const target = remoteSpec(this.host, dst);
 		// Only a local directory can be stat'ed; a remote source spec (`host:path`)
 		// falls through as-is.
 		const source = (await isDirectory(src)) ? withDirectorySlash(src) : src;
+		await this.ensureParent(dst);
 		return this.spawner({
 			file: "rsync",
-			args: rsyncArgs(source, remoteSpec(this.host, dst), opts),
+			args: rsyncArgs(source, target, opts),
 		});
 	}
 
 	async scp(src: string, dst: string): Promise<RunResult> {
-		return this.spawner({ file: "scp", args: [src, remoteSpec(this.host, dst)] });
+		const target = remoteSpec(this.host, dst);
+		await this.ensureParent(dst);
+		// `-r` matches LocalMachine.scp, which copies directories; `--` ends the
+		// options so a source starting with `-` is still a path.
+		return this.spawner({
+			file: "scp",
+			args: ["-r", "--", src, target],
+		});
 	}
 }

@@ -226,7 +226,10 @@ export function loadConfig(): DriveConfig {
 		merged.machines[name] = {
 			...structuredClone(DEFAULT_MACHINE),
 			...machine,
-			home: machine.home ? expandHome(machine.home) : DEFAULT_MACHINE.home,
+			// A remote machine's home is on that machine, not here: a `~/` would
+			// expand to the wrong user's home. `~` expansion is therefore done only
+			// for `self.home` below; ssh/rsync resolve a leading `~` on the target.
+			home: machine.home || DEFAULT_MACHINE.home,
 		};
 	}
 

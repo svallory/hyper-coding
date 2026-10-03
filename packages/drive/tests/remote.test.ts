@@ -143,6 +143,10 @@ describe("isExcluded", () => {
 	it("treats a leading slash as anchoring, not as part of the name", () => {
 		expect(isExcluded("build/out.js", ["/build/**"])).toBe(true);
 		expect(isExcluded("src/build/out.js", ["/build/**"])).toBe(false);
+		// The anchor survives the slash being stripped: /build is NOT "build"
+		// at any depth.
+		expect(isExcluded("build", ["/build"])).toBe(true);
+		expect(isExcluded("src/build", ["/build"])).toBe(false);
 	});
 
 	it("applies a trailing-slash pattern to directories only", () => {
@@ -227,6 +231,66 @@ describe("LocalMachine", () => {
 		expect(lstatSync(join(dst, "dangling")).isSymbolicLink()).toBe(true);
 		expect(readlinkSync(join(dst, "dangling"))).toBe("nowhere.txt");
 		expect(lstatSync(join(dst, "link-to-dir")).isSymbolicLink()).toBe(true);
+	});
+
+	it("a symlink at the destination never redirects a write outside it", async () => {
+		const src = tempDir();
+		const dst = tempDir();
+		const outside = tempDir();
+		writeFile(join(src, "config"), "new");
+		// dst/config -> <outside>/target : without the fix the write would
+		// follow the link and land outside the destination tree.
+		symlinkSync(join(outside, "target"), join(dst, "config"));
+
+		await new LocalMachine(recordingSpawner().spawner).rsync(src, dst);
+
+		expect(lstatSync(join(dst, "config")).isSymbolicLink()).toBe(false);
+		expect(readFileSync(join(dst, "config"), "utf-8")).toBe("new");
+		expect(existsSync(join(outside, "target"))).toBe(false);
+	});
+
+	it("a destination directory where a source file belongs is replaced", async () => {
+		const src = tempDir();
+		const dst = tempDir();
+		writeFile(join(src, "data.txt"), "file");
+		mkdirSync(join(dst, "data.txt", "inside"), { recursive: true });
+
+		await new LocalMachine(recordingSpawner().spawner).rsync(src, dst);
+
+		expect(lstatSync(join(dst, "data.txt")).isDirectory()).toBe(false);
+		expect(readFileSync(join(dst, "data.txt"), "utf-8")).toBe("file");
+	});
+
+	it("copies a symlink source as the link itself, not the file it points to", async () => {
+		const src = tempDir();
+		const dst = tempDir();
+		writeFile(join(src, "real.txt"), "real");
+		symlinkSync("real.txt", join(src, "link.txt"));
+
+		// rsync -a keeps the link; only `-L` would follow it.
+		await new LocalMachine(recordingSpawner().spawner).rsync(
+			join(src, "link.txt"),
+			join(dst, "link.txt"),
+		);
+
+		expect(lstatSync(join(dst, "link.txt")).isSymbolicLink()).toBe(true);
+		expect(readlinkSync(join(dst, "link.txt"))).toBe("real.txt");
+	});
+
+	it("puts a file inside the destination when the destination is a directory", async () => {
+		const src = tempDir();
+		const dst = tempDir();
+		writeFile(join(src, "data.txt"), "data");
+
+		// `rsync -a src dst` with an existing directory dst creates dst/data.txt;
+		// without that, a file copy onto a directory fails with EISDIR.
+		const result = await new LocalMachine(recordingSpawner().spawner).rsync(
+			join(src, "data.txt"),
+			dst,
+		);
+
+		expect(result.code).toBe(0);
+		expect(readFileSync(join(dst, "data.txt"), "utf-8")).toBe("data");
 	});
 
 	it("excludes a symlink like any other entry", async () => {
@@ -319,6 +383,23 @@ describe("RemoteMachine", () => {
 		]);
 	});
 
+	it("asks for a pty when tty is set, so interactive commands work", async () => {
+		const { calls, spawner } = recordingSpawner();
+		await new RemoteMachine("netcup", spawner).ssh(["tmux", "attach"], { tty: true });
+
+		// Without `-t` the remote command dies with "not a terminal".
+		expect(calls[0].args).toEqual(["-t", "netcup", "--", "tmux attach"]);
+		expect(calls[0].tty).toBe(true);
+	});
+
+	it("rejects tty and stdin together", async () => {
+		const { calls, spawner } = recordingSpawner();
+		const machine = new RemoteMachine("netcup", spawner);
+
+		await expect(machine.ssh(["ls"], { tty: true, stdin: "x" })).rejects.toThrow(/tty and stdin/);
+		expect(calls).toEqual([]);
+	});
+
 	it("quotes words that would otherwise break in the remote shell", async () => {
 		const { calls, spawner } = recordingSpawner();
 		await new RemoteMachine("netcup", spawner).ssh(["sh", "-c", "echo $HOME && ls '/tmp/a b'"]);
@@ -334,10 +415,33 @@ describe("RemoteMachine", () => {
 		const { calls, spawner } = recordingSpawner();
 		await new RemoteMachine("netcup", spawner).ssh(["ls"], { cwd: "/srv/hyper drive" });
 
-		expect(calls[0].args).toEqual(["netcup", "--", "cd '/srv/hyper drive' && ls"]);
+		expect(calls[0].args).toEqual(["netcup", "--", "cd -- '/srv/hyper drive' && ls"]);
 		// The local spawn must not get a cwd: that directory exists only remotely,
 		// and passing it would fail locally with ENOENT before ssh ever started.
 		expect(calls[0].cwd).toBeUndefined();
+	});
+
+	it("requires an absolute remote cwd", async () => {
+		const { calls, spawner } = recordingSpawner();
+		const machine = new RemoteMachine("netcup", spawner);
+
+		await expect(machine.ssh(["ls"], { cwd: "~/x" })).rejects.toThrow(/absolute/);
+		await expect(machine.ssh(["ls"], { cwd: "relative/dir" })).rejects.toThrow(/absolute/);
+		expect(calls).toEqual([]);
+	});
+
+	it("creates the destination parent over ssh before an rsync", async () => {
+		const { calls, spawner } = recordingSpawner();
+		const machine = new RemoteMachine("netcup", spawner);
+
+		await machine.rsync("/srv/hyperdrive", "/home/svallory/hyperdrive");
+
+		// `--mkpath` is rsync 3.2.3+; openrsync and rsync 3.2.3 don't have it, so
+		// the parent is made over ssh first, like LocalMachine's mkdir.
+		expect(calls).toHaveLength(2);
+		expect(calls[0].file).toBe("ssh");
+		expect(calls[0].args).toEqual(["netcup", "--", "mkdir -p -- /home/svallory"]);
+		expect(calls[1].file).toBe("rsync");
 	});
 
 	it("builds portable rsync args with no version-specific flags", async () => {
@@ -348,8 +452,7 @@ describe("RemoteMachine", () => {
 			excludes: ["node_modules", "*.log"],
 		});
 
-		expect(calls[0].file).toBe("rsync");
-		expect(calls[0].args).toEqual([
+		expect(calls[1].args).toEqual([
 			"-a",
 			"--stats",
 			"-e",
@@ -361,25 +464,25 @@ describe("RemoteMachine", () => {
 			"netcup:/home/svallory/hyperdrive",
 		]);
 		// --info=stats1 is rsync 3.1+; this Mac has openrsync and rejects it.
-		expect(calls[0].args.join(" ")).not.toContain("--info=");
-		expect(calls[0].args).not.toContain("--delete");
+		expect(calls[1].args.join(" ")).not.toContain("--info=");
+		expect(calls[1].args).not.toContain("--delete");
 	});
 
 	it("passes --delete only when explicitly asked", async () => {
 		const { calls, spawner } = recordingSpawner();
 		await new RemoteMachine("netcup", spawner).rsync("/a", "/b", { delete: true });
 
-		expect(calls[0].args).toContain("--delete");
+		expect(calls[1].args).toContain("--delete");
 		// It must come before the `--` that ends the options.
-		expect(calls[0].args.indexOf("--delete")).toBeLessThan(calls[0].args.indexOf("--"));
+		expect(calls[1].args.indexOf("--delete")).toBeLessThan(calls[1].args.indexOf("--"));
 	});
 
 	it("ends options with -- so a leading dash in a path is still a path", async () => {
 		const { calls, spawner } = recordingSpawner();
 		await new RemoteMachine("netcup", spawner).rsync("-weird", "/home/agent/x");
 
-		const sep = calls[0].args.indexOf("--");
-		expect(calls[0].args.slice(sep + 1)).toEqual(["-weird", "netcup:/home/agent/x"]);
+		const sep = calls[1].args.indexOf("--");
+		expect(calls[1].args.slice(sep + 1)).toEqual(["-weird", "netcup:/home/agent/x"]);
 	});
 
 	it("adds a trailing slash for a directory source so contents land in dst", async () => {
@@ -391,8 +494,8 @@ describe("RemoteMachine", () => {
 
 		// `rsync -a src dst` without the slash would create dst/<basename>/… and
 		// disagree with LocalMachine, which copies contents.
-		expect(calls[0].args).toContain(`${src}/`);
-		expect(calls[0].args.at(-2)).toBe(`${src}/`);
+		expect(calls[1].args).toContain(`${src}/`);
+		expect(calls[1].args.at(-2)).toBe(`${src}/`);
 	});
 
 	it("rejects a remote path it cannot send safely", async () => {
@@ -408,12 +511,14 @@ describe("RemoteMachine", () => {
 		expect(calls).toEqual([]);
 	});
 
-	it("builds scp args with the remote path raw", async () => {
+	it("builds scp args with -r, -- and the remote path raw", async () => {
 		const { calls, spawner } = recordingSpawner();
 		await new RemoteMachine("netcup", spawner).scp("/tmp/a.txt", "/home/svallory/hyperdrive");
 
-		expect(calls[0].file).toBe("scp");
-		expect(calls[0].args).toEqual(["/tmp/a.txt", "netcup:/home/svallory/hyperdrive"]);
+		// calls[0] is the ssh mkdir for the destination parent; the scp itself
+		// follows with the same `-r --` shape rsync gets.
+		expect(calls[1].file).toBe("scp");
+		expect(calls[1].args).toEqual(["-r", "--", "/tmp/a.txt", "netcup:/home/svallory/hyperdrive"]);
 	});
 
 	it("rejects an scp path with a space instead of quoting it", async () => {
@@ -422,6 +527,14 @@ describe("RemoteMachine", () => {
 		await expect(
 			new RemoteMachine("netcup", spawner).scp("/tmp/a.txt", "/home/svallory/my file.txt"),
 		).rejects.toThrow(/my file\.txt/);
+		expect(calls).toEqual([]);
+	});
+
+	it("rejects a host that starts with a dash, so it can't be an option", () => {
+		const { calls, spawner } = recordingSpawner();
+
+		// The constructor refuses, so nothing can ever be spawned for it.
+		expect(() => new RemoteMachine("-evil", spawner)).toThrow(/machine names can't start with/);
 		expect(calls).toEqual([]);
 	});
 

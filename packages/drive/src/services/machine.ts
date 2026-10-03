@@ -101,6 +101,13 @@ function parseHerdrJson(stdout: string): HerdrMachine[] {
 		]);
 		if (!host) continue;
 		const name = pickString(entry, ["label", "name", "profileId", "profile_id", "id"]) ?? host;
+		// Two saved machines with the same label make `herdr --machine <label>`
+		// ambiguous; the registry can't guess, so it refuses and says so.
+		if (machines.some((machine) => machine.name === name)) {
+			throw new MachineError(
+				`Herdr has two machines called "${name}". That's ambiguous — rename one with \`herdr machine rename\`.`,
+			);
+		}
 		machines.push({ name, host });
 	}
 	return machines;
@@ -121,17 +128,28 @@ interface HerdrListing {
  * still work with only a `drive.toml`.
  */
 export function listHerdrMachines(): HerdrListing {
-	const result = spawnSync("herdr", ["machine", "list", "--json"], { encoding: "utf-8" });
+	const result = spawnSync("herdr", ["machine", "list", "--json"], {
+		encoding: "utf-8",
+		timeout: 10_000,
+	});
 	if (result.error) {
 		const code = (result.error as NodeJS.ErrnoException).code;
 		// Only ENOENT means "Herdr isn't installed". Anything else (a crash, a
-		// permissions problem) is a different problem and must not be reported as
-		// a missing install.
+		// permissions problem, a timeout) is a different problem and must not be
+		// reported as a missing install.
 		if (code === "ENOENT") {
 			return {
 				installed: false,
 				machines: [],
 				problem: "Herdr doesn't seem to be installed — I couldn't find `herdr` on your PATH.",
+			};
+		}
+		if (code === "ETIMEDOUT") {
+			return {
+				installed: true,
+				machines: [],
+				problem:
+					"`herdr machine list` didn't answer within 10 seconds — Herdr may be stuck. Try `herdr machine list` yourself.",
 			};
 		}
 		return {
@@ -183,7 +201,7 @@ export function listMachines(): MachineInfo[] {
 		...Object.keys(config.machines),
 	]);
 	const machines: MachineInfo[] = [];
-	for (const name of [...names].sort()) {
+	for (const name of [...names].sort((a, b) => (a < b ? -1 : 1))) {
 		const herdr = listing.machines.find((m) => m.name === name);
 		machines.push(merged(name, herdr, config.machines[name]));
 	}
@@ -199,11 +217,6 @@ export function addHint(name: string): string {
 	return `herdr machine add <user@host> --label ${name}`;
 }
 
-function knownNames(): string {
-	const names = listMachines().map((m) => m.name);
-	return names.length > 0 ? names.join(", ") : "none yet";
-}
-
 /**
  * Look up one machine by name.
  *
@@ -216,8 +229,16 @@ function knownNames(): string {
 export function resolveMachine(name: string): MachineInfo {
 	const config = loadConfig();
 	const configEntry = config.machines[name];
+	// Herdr is asked exactly once: the listing feeds both the match and the
+	// known-names list in the error messages.
 	const listing = listHerdrMachines();
 	const herdr = listing.machines.find((m) => m.name === name);
+	const knownNames = (): string => {
+		const names = [
+			...new Set([...listing.machines.map((m) => m.name), ...Object.keys(config.machines)]),
+		].sort((a, b) => (a < b ? -1 : 1));
+		return names.length > 0 ? names.join(", ") : "none yet";
+	};
 
 	if (!configEntry && !herdr) {
 		throw new MachineError(
