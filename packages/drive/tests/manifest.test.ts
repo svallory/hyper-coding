@@ -1,9 +1,12 @@
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parse as parseYaml } from "yaml";
 import type { SpaceEntry } from "#config/schema";
+import { ManifestError } from "#config/schema";
 import {
+	classifyPushFailure,
 	driveCheckoutDir,
 	ensureDriveCheckout,
 	readManifest,
@@ -147,15 +150,15 @@ describe("ensureDriveCheckout", () => {
 		expect(readManifest()).toEqual({ spaces: [] });
 
 		process.env.HYPER_HOME = fixture.hyperHome;
-		upsertSpace(sample("fromA"));
+		upsertSpace(sample("from-a"));
 
 		process.env.HYPER_HOME = bHome;
-		upsertSpace(sample("fromB"));
-		upsertSpace(sample("fromB2"));
+		upsertSpace(sample("from-b"));
+		upsertSpace(sample("from-b2"));
 
 		// The REMOTE is the thing that matters: every entry has to be in it.
-		expect(remoteNames()).toEqual(["fromA", "fromB", "fromB2"]);
-		expect(namesIn(bHome)).toEqual(["fromA", "fromB", "fromB2"]);
+		expect(remoteNames()).toEqual(["from-a", "from-b", "from-b2"]);
+		expect(namesIn(bHome)).toEqual(["from-a", "from-b", "from-b2"]);
 	});
 
 	it("recovers from an offline write that later meets a moving remote", () => {
@@ -171,16 +174,16 @@ describe("ensureDriveCheckout", () => {
 
 		const hidden = join(fixture.root, "remote-hidden.git");
 		renameSync(fixture.remote, hidden);
-		upsertSpace(sample("offB"));
+		upsertSpace(sample("off-b"));
 		renameSync(hidden, fixture.remote);
 
 		process.env.HYPER_HOME = fixture.hyperHome;
-		upsertSpace(sample("onA"));
+		upsertSpace(sample("on-a"));
 
 		process.env.HYPER_HOME = bHome;
-		upsertSpace(sample("laterB"));
+		upsertSpace(sample("later-b"));
 
-		expect(remoteNames()).toEqual(["laterB", "offB", "onA"]);
+		expect(remoteNames()).toEqual(["later-b", "off-b", "on-a"]);
 		// B is on its branch again, not stranded mid-rebase.
 		expect(git(["symbolic-ref", "--short", "HEAD"], driveCheckoutDir()).trim()).toBe("main");
 		expect(existsSync(join(driveCheckoutDir(), ".git", "rebase-merge"))).toBe(false);
@@ -192,6 +195,167 @@ describe("ensureDriveCheckout", () => {
 	it("names an unreachable remote in its friendly error", () => {
 		const missing = join(fixture.root, "missing.git");
 		expect(() => ensureDriveCheckout(missing)).toThrow(missing);
+	});
+});
+
+describe("concurrency between processes", () => {
+	const distService = join(import.meta.dirname, "..", "dist", "services", "manifest.js");
+
+	/** Run one upsertSpace per child, several children at once, like two hooks hitting one checkout. */
+	function runChildren(entries: SpaceEntry[]): Promise<void> {
+		const dist = existsSync(distService);
+		return Promise.all(
+			entries.map(
+				(entry) =>
+					new Promise<void>((resolve, reject) => {
+						const child = spawn(
+							process.execPath,
+							[
+								"-e",
+								`import(${JSON.stringify(distService)}).then((m) => m.upsertSpace(${JSON.stringify(entry)}))`,
+							],
+							{
+								env: {
+									...process.env,
+									HYPER_HOME: fixture.hyperHome,
+									GIT_CONFIG_GLOBAL: "/dev/null",
+									GIT_CONFIG_NOSYSTEM: "1",
+								},
+								stdio: "pipe",
+							},
+						);
+						let err = "";
+						child.stderr.on("data", (chunk) => {
+							err += chunk;
+						});
+						child.on("close", (code) => {
+							if (code === 0 && dist) resolve();
+							else reject(new Error(`child exited ${code}: ${err}`));
+						});
+						child.on("error", reject);
+					}),
+			),
+		).then(() => undefined);
+	}
+
+	it("serialises two processes so both keep all of their entries", async () => {
+		if (!existsSync(distService)) {
+			expect.skip("dist/services/manifest.js not built (run `bun run build` first)");
+			return;
+		}
+		ensureDriveCheckout(fixture.remote);
+		const entries = Array.from({ length: 8 }, (_, i) => sample(`p-${i}`));
+		await runChildren(entries);
+		expect(remoteNames().sort()).toEqual(entries.map((entry) => entry.name).sort());
+		// Nothing stranded locally.
+		expect(existsSync(join(driveCheckoutDir(), ".hyper-pending.jsonl"))).toBe(false);
+		expect(existsSync(join(driveCheckoutDir(), ".git", "hyper-manifest.lock"))).toBe(false);
+	});
+});
+
+describe("crash recovery", () => {
+	it("publishes entries the pending log records but HEAD lacks", () => {
+		// The kill-between-commit-and-push case, reproduced deterministically:
+		// the log says a change happened, but HEAD was never moved to carry it
+		// (a crash between recording and the final commit). Clearing the log on
+		// a successful push here would drop `ghost` forever.
+		ensureDriveCheckout(fixture.remote);
+		upsertSpace(sample("alpha"));
+		// Simulate the crash: record `ghost` in the log, but reset HEAD so it
+		// has never contained the entry.
+		writeFileSync(
+			join(driveCheckoutDir(), ".hyper-pending.jsonl"),
+			`${JSON.stringify({ name: "ghost", entry: sample("ghost") })}\n`,
+		);
+		git(["reset", "--hard", "origin/main"], driveCheckoutDir());
+		expect(namesIn(fixture.hyperHome)).toEqual(["alpha"]);
+
+		upsertSpace(sample("other"));
+
+		expect(remoteNames().sort()).toEqual(["alpha", "ghost", "other"].sort());
+		expect(existsSync(join(driveCheckoutDir(), ".hyper-pending.jsonl"))).toBe(false);
+	});
+
+	it("rolls back an interrupted rebase and returns to main before writing", () => {
+		ensureDriveCheckout(fixture.remote);
+		upsertSpace(sample("alpha"));
+		// A real rebase-merge dir, as left by `git rebase` dying mid-way.
+		mkdirSync(join(driveCheckoutDir(), ".git", "rebase-merge"), { recursive: true });
+		writeFileSync(
+			join(driveCheckoutDir(), ".git", "rebase-merge", "head-name"),
+			"refs/heads/main\n",
+		);
+		upsertSpace(sample("beta"));
+		expect(remoteNames().sort()).toEqual(["alpha", "beta"].sort());
+		expect(existsSync(join(driveCheckoutDir(), ".git", "rebase-merge"))).toBe(false);
+		expect(git(["symbolic-ref", "--short", "HEAD"], driveCheckoutDir()).trim()).toBe("main");
+	});
+
+	it("returns to main from a detached HEAD before writing", () => {
+		ensureDriveCheckout(fixture.remote);
+		upsertSpace(sample("alpha"));
+		git(["checkout", "--detach"], driveCheckoutDir());
+		upsertSpace(sample("beta"));
+		expect(remoteNames().sort()).toEqual(["alpha", "beta"].sort());
+		expect(git(["symbolic-ref", "--short", "HEAD"], driveCheckoutDir()).trim()).toBe("main");
+	});
+});
+
+describe("push failure classification", () => {
+	it("distinguishes contention, a declined hook, and an unreachable remote", () => {
+		expect(
+			classifyPushFailure({
+				ok: false,
+				stdout: "",
+				stderr: "! [rejected]  main -> main (non-fast-forward, fetch first)",
+			}),
+		).toBe("contention");
+		expect(
+			classifyPushFailure({
+				ok: false,
+				stdout: "",
+				stderr: "! [rejected]  main -> main (stale info)",
+			}),
+		).toBe("contention");
+		expect(
+			classifyPushFailure({
+				ok: false,
+				stdout: "",
+				stderr: "! [remote rejected]  main -> main (pre-receive hook declined)",
+			}),
+		).toBe("hook-rejected");
+		expect(
+			classifyPushFailure({
+				ok: false,
+				stdout: "",
+				stderr: "fatal: '/nope.git' does not appear to be a git repository",
+			}),
+		).toBe("unreachable");
+	});
+
+	it("surfaces a declined server hook as an error quoting git, without retrying", () => {
+		ensureDriveCheckout(fixture.remote);
+		const hook = join(fixture.remote, "hooks", "pre-receive");
+		writeFileSync(hook, "#!/bin/sh\necho 'no manifest for you' >&2\nexit 1\n", {
+			mode: 0o755,
+		});
+		try {
+			expect(() => upsertSpace(sample("nope"))).toThrow(/no manifest for you/);
+		} finally {
+			writeFileSync(hook, "");
+		}
+		// And the entry is still recorded locally, not lost.
+		expect(namesIn(fixture.hyperHome)).toEqual(["nope"]);
+		expect(existsSync(join(driveCheckoutDir(), ".hyper-pending.jsonl"))).toBe(true);
+	});
+});
+
+describe("space name validation", () => {
+	it("rejects names that could escape into paths or refs", () => {
+		ensureDriveCheckout(fixture.remote);
+		for (const bad of ["", "../../etc", "a/b", "-rf", "line1\nline2", "UPPER", ".."]) {
+			expect(() => upsertSpace(sample(bad)), `name ${JSON.stringify(bad)}`).toThrow(ManifestError);
+		}
 	});
 });
 
@@ -301,33 +465,33 @@ describe("manifest writes", () => {
 		ensureDriveCheckout(fixture.remote);
 		const hidden = join(fixture.root, "remote-hidden.git");
 		renameSync(fixture.remote, hidden);
-		upsertSpace(sample("offB"));
-		upsertSpace(sample("offB2"));
+		upsertSpace(sample("off-b"));
+		upsertSpace(sample("off-b2"));
 		renameSync(hidden, fixture.remote);
 
 		process.env.HYPER_HOME = fixture.hyperHome;
-		upsertSpace(sample("onA"));
+		upsertSpace(sample("on-a"));
 		process.env.HYPER_HOME = bHome;
-		upsertSpace(sample("laterB"));
+		upsertSpace(sample("later-b"));
 
 		const remoteLog = git(
 			["--git-dir", fixture.remote, "log", "main", "--format=%s"],
 			fixture.root,
 		);
 		for (const message of [
-			"manifest: add offB",
-			"manifest: add offB2",
-			"manifest: add onA",
-			"manifest: add laterB",
+			"manifest: add off-b",
+			"manifest: add off-b2",
+			"manifest: add on-a",
+			"manifest: add later-b",
 		]) {
 			expect(remoteLog).toContain(message);
 		}
-		expect(remoteNames()).toEqual(["laterB", "offB", "offB2", "onA"]);
+		expect(remoteNames()).toEqual(["later-b", "off-b", "off-b2", "on-a"]);
 	});
 
 	it("round-trips every field, including group and repo slug", () => {
 		const entry: SpaceEntry = {
-			...sample("team/docs"),
+			...sample("docs"),
 			branch: "space/team/docs",
 			group: "team",
 			layout: "multi",

@@ -1,10 +1,12 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SpaceEntry } from "#config/schema";
 import { upsertSpace } from "#services/manifest";
 import {
 	flat,
+	git,
+	isolateGitConfig,
 	type ManifestFixture,
 	skipIfUnbuilt,
 	spawnCli,
@@ -15,6 +17,7 @@ let fixture: ManifestFixture;
 let previousHyperHome: string | undefined;
 
 beforeEach(() => {
+	isolateGitConfig();
 	fixture = withManifestFixture();
 	previousHyperHome = process.env.HYPER_HOME;
 });
@@ -71,6 +74,22 @@ describe("hyper space list", () => {
 		const result = spawnCli(["space", "list"], fixture);
 		expect(result.status, flat(result.stderr)).toBe(0);
 		expect(result.stdout).toContain("no spaces yet");
+	});
+
+	it("errors when the checkout's origin does not match the config", () => {
+		if (skipIfUnbuilt()) return;
+		init();
+		// Point the config at a DIFFERENT hyperdrive: listing the old checkout
+		// while the config names a new remote is how a half-finished
+		// `drive init` used to look like a working setup.
+		const other = join(fixture.root, "other.git");
+		mkdirSync(dirname(other), { recursive: true });
+		git(["init", "--bare", other], fixture.root);
+		mkdirSync(dirname(fixture.configFile), { recursive: true });
+		writeFileSync(fixture.configFile, `remote = ${JSON.stringify(other)}\n`);
+		const result = spawnCli(["space", "list"], fixture);
+		expect(result.status).not.toBe(0);
+		expect(flat(result.stderr)).toContain("hyper drive init");
 	});
 
 	it("points to hyper drive init when remote is absent", () => {

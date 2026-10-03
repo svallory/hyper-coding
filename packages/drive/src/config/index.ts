@@ -256,7 +256,8 @@ export function readRawConfig(): Record<string, unknown> | null {
  * it knows nothing about. Creates the config directory when missing, and
  * leaves the file untouched when the patch changes nothing.
  */
-export function writeConfig(patch: Record<string, unknown>, path = configPath()): string {
+export function writeConfig(patch: Record<string, unknown>): string {
+	const path = configPath();
 	let existing: Record<string, unknown> = {};
 	if (existsSync(path)) {
 		existing = readAndParse(path);

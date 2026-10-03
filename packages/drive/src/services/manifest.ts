@@ -19,18 +19,30 @@
  * records `manifest.ts` as the second allowed git-runner match.
  *
  * Manifest commits are generated bookkeeping, not authored history, so they
- * run with `commit.gpgsign=false`: a signer that is unavailable to the CLI
- * must not be able to strand the manifest mid-write. Commits to a space
- * branch are the user's own work and do respect their signing config.
+ * run with `commit.gpgsign=false` and `core.hooksPath=/dev/null`: a signer
+ * or a user hook that is unavailable to (or hostile to) the CLI must not be
+ * able to strand the manifest mid-write. Commits to a space branch are the
+ * user's own work and do respect their signing config and hooks.
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	closeSync,
+	existsSync,
+	mkdirSync,
+	openSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+	writeSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
 	EMPTY_MANIFEST,
+	isValidSpaceName,
 	type Manifest,
 	ManifestError,
 	type SpaceEntry,
@@ -40,8 +52,12 @@ import {
 const MANIFEST_FILE = "spaces.yaml";
 const BRANCH = "main";
 
-/** Bookkeeping commits are never signed; see the module comment. */
-const NO_SIGN = ["-c", "commit.gpgsign=false"];
+/**
+ * Flags for generated manifest commits: never signed, and user hooks must
+ * not run on bookkeeping commits. A pre-commit hook that rewrites or rejects
+ * those would strand the manifest just as surely as a signer.
+ */
+const BOOKKEEPING = ["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"];
 
 const README_TEXT = `# Hyperdrive
 
@@ -108,11 +124,27 @@ function warn(message: string): void {
 	process.stderr.write(`warning: ${message}\n`);
 }
 
-/** git's own words for "someone else pushed first", as opposed to "no network". */
-function isRejected(result: GitResult): boolean {
-	return /non-fast-forward|rejected|fetch first|behind its remote/i.test(
-		`${result.stderr}\n${result.stdout}`,
-	);
+/** Why a push failed. These are three different problems, not one. */
+export type PushFailure = "contention" | "hook-rejected" | "unreachable";
+
+/**
+ * Classify a failed push from git's own words.
+ *
+ * Only `! [rejected] … (fetch first)` / `non-fast-forward` is CONTENTION —
+ * another machine pushed first, and retrying against a fresh fetch is the
+ * right response. `! [remote rejected] … (pre-receive hook declined)` looks
+ * similar but means a server-side hook refused the push, which no amount of
+ * retrying will fix, and treating it as contention used to produce three
+ * pointless retries followed by "the hyperdrive kept moving".
+ */
+export function classifyPushFailure(result: GitResult): PushFailure {
+	const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+	if (/\[remote rejected\]/i.test(text)) return "hook-rejected";
+	if (/\[rejected\]/i.test(text) && /(fetch first|non-fast-forward|stale info)/i.test(text)) {
+		return "contention";
+	}
+	if (/non-fast-forward|fetch first|behind its remote/i.test(text)) return "contention";
+	return "unreachable";
 }
 
 /**
@@ -133,15 +165,24 @@ function hasCommits(dir: string): boolean {
 	return driveGit(["rev-parse", "--verify", "HEAD"], dir).ok;
 }
 
+/** True when the remote branch ref is known locally, i.e. the remote HAS a main. */
+function remoteMainExists(dir: string): boolean {
+	return driveGit(["rev-parse", "--verify", `origin/${BRANCH}`], dir).ok;
+}
+
 /**
- * True when the checkout holds commits the remote has not seen. An unborn
- * `origin/main` (fresh clone of an empty remote, or an init that never
- * pushed) is not "ahead" — there is nothing to push yet.
+ * True when the checkout holds commits the remote has not seen.
+ *
+ * A reachable remote that simply has no `main` yet (a failed first push, a
+ * brand-new hyperdrive) counts as "ahead" whenever we have commits: those
+ * commits ARE the missing `main`. Treating it as "not ahead" made every later
+ * write believe there was nothing to publish, so the hyperdrive stayed
+ * without a `main` forever.
  */
 function isAhead(dir: string): boolean {
-	const base = driveGit(["rev-parse", "--verify", "origin/main"], dir);
-	if (!base.ok || !hasCommits(dir)) return false;
-	const count = driveGit(["rev-list", "--count", "origin/main..HEAD"], dir);
+	if (!hasCommits(dir)) return false;
+	if (!remoteMainExists(dir)) return true;
+	const count = driveGit(["rev-list", "--count", `origin/${BRANCH}..HEAD`], dir);
 	return count.ok && count.stdout.trim() !== "0";
 }
 
@@ -155,7 +196,9 @@ function isAhead(dir: string): boolean {
 function pushMain(dir: string, what: string): boolean {
 	const push = driveGit(["push", "origin", BRANCH], dir);
 	if (push.ok) return true;
-	if (isRejected(push)) {
+	const failure = classifyPushFailure(push);
+	if (failure === "hook-rejected") throw hookRejection(dir, push, what);
+	if (failure === "contention") {
 		warn(
 			`the hyperdrive moved while I was pushing ${what}; ` +
 				"the local change is recorded and a manifest write will republish it.",
@@ -167,6 +210,15 @@ function pushMain(dir: string, what: string): boolean {
 			`the next manifest write will try again. git said: ${push.stderr.trim() || push.stdout.trim()}`,
 	);
 	return false;
+}
+
+/** A server-side hook refused the push; retrying cannot help, so say so. */
+function hookRejection(dir: string, push: GitResult, what: string): ManifestError {
+	return new ManifestError(
+		dir,
+		`the hyperdrive server refused ${what}. This is not a conflict — a hook on the remote declined ` +
+			`it, so retrying will not help. git said: ${push.stderr.trim() || push.stdout.trim()}`,
+	);
 }
 
 /**
@@ -185,7 +237,7 @@ function initialiseMain(dir: string, remote: string): void {
 		"utf-8",
 	);
 	driveGit(["add", "README.md", MANIFEST_FILE], dir);
-	const commit = driveGit([...NO_SIGN, "commit", "-m", "manifest: initialise hyperdrive"], dir);
+	const commit = driveGit([...BOOKKEEPING, "commit", "-m", "manifest: initialise hyperdrive"], dir);
 	if (!commit.ok) {
 		throw new ManifestError(dir, `the initial commit failed: ${commit.stderr.trim()}`);
 	}
@@ -242,11 +294,18 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
 					`${pull.stderr.trim() || pull.stdout.trim()}`,
 			);
 		}
-		// An init whose push failed leaves the commit here and nothing
-		// upstream, so hand it over whenever local is ahead — not only after a
-		// new write. A successful push means the recorded mutations are on the
-		// remote and the pending log can go.
-		if (isAhead(dir) && pushMain(dir, "the pending hyperdrive init")) clearPendingLog(dir);
+		// Publish anything local that the remote has not seen. A non-empty
+		// pending log is NOT safe to clear after a plain push of HEAD: a crash
+		// between recording and committing leaves the log holding entries HEAD
+		// has never contained, and clearing there would lose them. Reconcile
+		// (replay onto the fetched base and push) instead — and do it under
+		// the manifest lock, because this path and `applyMutation` must not
+		// interleave.
+		if (isAhead(dir) || loadPending(dir).length > 0) {
+			withManifestLock(dir, "reconcile the pending manifest changes", () => {
+				applyMutation(dir);
+			});
+		}
 		return { dir, created: false };
 	}
 
@@ -342,10 +401,89 @@ export function readManifest(): Manifest {
 	return validateManifest(path, raw);
 }
 
+/* ------------------------------------------------------------------------- */
+/* Serialisation between processes                                          */
+/* ------------------------------------------------------------------------- */
+
+const LOCK_FILE = "hyper-manifest.lock";
+const LOCK_ATTEMPTS = 50;
+const LOCK_RETRY_MS = 100;
+
+/** Is a pid still running? EPERM means it exists but belongs to someone else. */
+function isProcessAlive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (err) {
+		return (err as NodeJS.ErrnoException).code === "EPERM";
+	}
+}
+
+function sleepSync(ms: number): void {
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function lockPath(dir: string): string {
+	return join(dir, ".git", LOCK_FILE);
+}
+
+/** The pid recorded in a lock file, or null when it holds none. */
+function lockOwner(path: string): number | null {
+	try {
+		const pid = Number.parseInt(readFileSync(path, "utf-8").trim(), 10);
+		return Number.isInteger(pid) && pid > 0 ? pid : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Hold an exclusive lock on the manifest for the duration of `fn`.
+ *
+ * Two processes writing the same checkout — a SessionEnd hook and a parallel
+ * agent are the realistic case — used to interleave read/replay/write/push
+ * and silently drop each other's entries while both reported success. The
+ * lock file carries the owning pid so a process killed mid-write does not
+ * wedge the checkout forever: a lock whose owner is gone is reclaimed.
+ */
+function withManifestLock<T>(dir: string, what: string, fn: () => T): T {
+	const path = lockPath(dir);
+	mkdirSync(join(dir, ".git"), { recursive: true });
+	for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt++) {
+		try {
+			const fd = openSync(path, "wx");
+			try {
+				writeSync(fd, `${process.pid}\n`);
+			} finally {
+				closeSync(fd);
+			}
+			try {
+				return fn();
+			} finally {
+				rmSync(path, { force: true });
+			}
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+			const owner = lockOwner(path);
+			if (owner !== null && !isProcessAlive(owner)) {
+				// The owner died holding it: reclaim rather than wait forever.
+				rmSync(path, { force: true });
+				continue;
+			}
+			sleepSync(LOCK_RETRY_MS);
+		}
+	}
+	throw new ManifestError(
+		dir,
+		`another hyperdrive write has held ${path} for too long, so I stopped rather than ` +
+			`${what} over it. If no process is still running, delete that file and try again.`,
+	);
+}
+
 /** One intended change, recorded until it has been pushed. */
-type Mutation =
-	| { verb: "add" | "update"; name: string; entry: SpaceEntry }
-	| { verb: "remove"; name: string };
+type Mutation = { name: string; entry?: SpaceEntry; verb?: "add" | "update" | "remove" };
+// `entry` set: upsert this space under that name. `entry` absent: remove it.
+// `verb` is bookkeeping for the commit message, derived at replay time.
 
 /**
  * Local mutations waiting to reach the remote, one JSON object per line.
@@ -383,6 +521,14 @@ function excludePendingFile(dir: string): void {
 	}
 }
 
+function isMutation(value: unknown): value is Mutation {
+	if (typeof value !== "object" || value === null) return false;
+	const mutation = value as Record<string, unknown>;
+	if (typeof mutation.name !== "string" || mutation.name === "") return false;
+	if (mutation.entry === undefined) return true;
+	return typeof mutation.entry === "object" && mutation.entry !== null;
+}
+
 function loadPending(dir: string): Mutation[] {
 	const path = pendingPath(dir);
 	if (!existsSync(path)) return [];
@@ -391,24 +537,30 @@ function loadPending(dir: string): Mutation[] {
 		.filter((line) => line.trim() !== "")
 		.flatMap((line) => {
 			try {
-				return [JSON.parse(line) as Mutation];
+				const parsed = JSON.parse(line) as unknown;
+				if (isMutation(parsed)) return [parsed];
+				warn(`dropping a malformed line from ${path}: ${line.trim()}`);
+				return [];
 			} catch {
 				// A truncated last line from a killed process must not wedge
-				// every later write; drop it rather than refuse to work.
+				// every later write; drop it, loudly.
+				warn(`dropping an unreadable line from ${path}: ${line.trim()}`);
 				return [];
 			}
 		});
 }
 
 function savePending(dir: string, pending: Mutation[]): void {
+	const path = pendingPath(dir);
 	if (pending.length === 0) {
-		rmSync(pendingPath(dir), { force: true });
+		rmSync(path, { force: true });
 		return;
 	}
-	writeFileSync(
-		pendingPath(dir),
-		`${pending.map((mutation) => JSON.stringify(mutation)).join("\n")}\n`,
-	);
+	// Temp + rename so a reader never sees a half-written log.
+	const tmp = `${path}.tmp-${process.pid}`;
+	writeFileSync(tmp, `${pending.map((mutation) => JSON.stringify(mutation)).join("\n")}\n`);
+	rmSync(path, { force: true });
+	renameSync(tmp, path);
 }
 
 function clearPendingLog(dir: string): void {
@@ -419,7 +571,7 @@ function clearPendingLog(dir: string): void {
 function replay(base: SpaceEntry[], mutations: readonly Mutation[]): SpaceEntry[] {
 	const byName = new Map(base.map((space) => [space.name, space]));
 	for (const mutation of mutations) {
-		if (mutation.verb === "remove") byName.delete(mutation.name);
+		if (mutation.entry === undefined) byName.delete(mutation.name);
 		else byName.set(mutation.name, mutation.entry);
 	}
 	return [...byName.values()];
@@ -451,11 +603,21 @@ function recoverCheckout(dir: string): void {
 		existsSync(join(gitDir, "rebase-merge")) || existsSync(join(gitDir, "rebase-apply"));
 	if (inRebase) {
 		const abort = driveGit(["rebase", "--abort"], dir);
-		warn(
-			abort.ok
-				? "an interrupted rebase was rolled back before writing the manifest."
-				: `I couldn't roll back an interrupted rebase (${abort.stderr.trim()}); continuing anyway.`,
-		);
+		if (abort.ok) {
+			warn("an interrupted rebase was rolled back before writing the manifest.");
+		} else {
+			// A crash mid-rebase can leave an INCOMPLETE state dir that `git
+			// rebase --abort` refuses to read. That state is bookkeeping only,
+			// and rolling it back is exactly what abort would have done; the
+			// write below resets to the remote anyway, so remove it rather than
+			// wedge every later manifest command.
+			rmSync(join(gitDir, "rebase-merge"), { recursive: true, force: true });
+			rmSync(join(gitDir, "rebase-apply"), { recursive: true, force: true });
+			warn(
+				`git couldn't roll back an interrupted rebase (${abort.stderr.trim()}), so I removed the ` +
+					"state git left behind and continued from the remote.",
+			);
+		}
 	}
 	const head = driveGit(["symbolic-ref", "-q", "HEAD"], dir);
 	if (!head.ok) {
@@ -470,21 +632,35 @@ function recoverCheckout(dir: string): void {
 }
 
 /**
- * Record one mutation and get it onto the remote.
+ * Record one mutation and get it onto the remote. LOCKED: callers hold the
+ * manifest lock (see `withManifestLock`); `ensureDriveCheckout` reconciles
+ * through here so its push path is serialised too.
+ *
+ * With no new mutation this is a pure reconcile: it publishes what the
+ * pending log already records. `ensureDriveCheckout` uses that to recover
+ * from a crash between recording and committing, instead of clearing the
+ * log on a push whose HEAD had never contained those entries.
  *
  * The sequence deliberately never lets git merge `spaces.yaml`: it fetches,
  * reads the BASE manifest from `origin/main` (or from local HEAD when the
- * remote is unreachable), replays every mutation recorded so far — including
- * this one — onto that base by space name, resets hard onto the remote so the
- * commits are clean children of it, then writes, commits and pushes. A
- * rejected push repeats the whole sequence from a fresh fetch, at most
- * {@link MAX_PUSH_ATTEMPTS} times.
+ * remote has no `main` or is unreachable), replays every recorded mutation
+ * onto that base by name, and either commits and pushes, or just pushes when
+ * the remote lacks a `main` yet. A rejected push repeats from a fresh fetch,
+ * at most {@link MAX_PUSH_ATTEMPTS} times.
+ *
+ * A reachable remote with NO `main` is not "offline": it is a first push
+ * that has not landed, and this write publishes it with `push -u` instead of
+ * waiting for a future change to carry it. git's words for the push are
+ * classified — contention retries, a server hook declines with an error,
+ * and only a genuinely unreachable remote warns and keeps things local.
  *
  * Each replayed mutation gets its OWN commit, so the remote's history shows
  * what actually happened (`manifest: add offB`, `manifest: update research`)
  * instead of one commit labelled with whichever write happened to carry it.
- * A mutation that changes nothing is skipped entirely — no commit, and no
- * line in the pending log.
+ * The verb is decided against the base being replayed onto, so an offline
+ * machine's "add" becomes an "update" in history when the space already
+ * exists remotely. A mutation that changes nothing is skipped entirely — no
+ * commit, no line in the pending log.
  *
  * **Last writer wins, by name.** Replaying a pending mutation re-asserts that
  * space's entry even if another machine has since removed it: a machine that
@@ -494,36 +670,59 @@ function recoverCheckout(dir: string): void {
  * design exists to prevent — and it resolves on the next write from the
  * machine that actually removed the space.
  */
-function applyMutation(mutation: Mutation): void {
-	const dir = driveCheckoutDir();
+function applyMutation(dir: string, mutation?: Mutation): void {
 	recoverCheckout(dir);
 	excludePendingFile(dir);
 
 	// Held in memory and only written to disk just before a commit: a
 	// no-op must not leave a junk line behind for the next run to replay.
-	const pending = [...loadPending(dir), mutation];
+	const pending = mutation === undefined ? loadPending(dir) : [...loadPending(dir), mutation];
+	if (mutation === undefined && pending.length === 0) {
+		// Nothing recorded; but HEAD may still be ahead of a remote that has
+		// never seen a main — a first push is a publish, not a reconcile.
+		if (isAhead(dir)) {
+			if (pushMain(dir, "the pending hyperdrive init")) clearPendingLog(dir);
+		}
+		return;
+	}
 
 	for (let attempt = 1; attempt <= MAX_PUSH_ATTEMPTS; attempt++) {
 		const fetched = driveGit(["fetch", "origin", BRANCH], dir);
-		const base = fetched.ok ? readManifestAt(dir, `origin/${BRANCH}`) : readManifestAt(dir, "HEAD");
 
 		if (!fetched.ok) {
 			// No remote to reconcile with: keep the entries locally, stacked on
 			// HEAD, and let the next run publish them.
+			const base = readManifestAt(dir, "HEAD");
 			if (commitReplay(dir, base, pending)) {
 				warn(
-					`the hyperdrive is unreachable, so ${mutation.name} is recorded locally only — ` +
-						"the next write will publish it.",
+					`the hyperdrive is unreachable, so ${mutation?.name ?? "the recorded changes"} is recorded ` +
+						"locally only — the next write will publish it.",
 				);
 				return;
 			}
+			warn(`the hyperdrive is unreachable and everything is already recorded — nothing to commit.`);
+			return;
+		}
+
+		// The remote answered but has no `main` ref yet (or a first push that
+		// never landed): local HEAD is the only history, and publishing it is
+		// a push, not a reconcile.
+		if (!remoteMainExists(dir)) {
+			const push = driveGit(["push", "-u", "origin", BRANCH], dir);
+			if (push.ok) {
+				clearPendingLog(dir);
+				return;
+			}
+			const failure = classifyPushFailure(push);
+			if (failure === "hook-rejected") throw hookRejection(dir, push, "the first push");
 			warn(
-				`the hyperdrive is unreachable and ${mutation.name} is already recorded — ` +
-					"nothing to commit.",
+				`the hyperdrive answered but couldn't take ${BRANCH}; the local copy is kept — ` +
+					`git said: ${push.stderr.trim() || push.stdout.trim()}`,
 			);
 			return;
 		}
 
+		const base = readManifestAt(dir, `origin/${BRANCH}`);
 		const reset = driveGit(["reset", "--hard", `origin/${BRANCH}`], dir);
 		if (!reset.ok) {
 			throw new ManifestError(
@@ -543,23 +742,28 @@ function applyMutation(mutation: Mutation): void {
 			clearPendingLog(dir);
 			return;
 		}
-		if (isRejected(push)) {
+		const failure = classifyPushFailure(push);
+		if (failure === "hook-rejected") {
+			throw hookRejection(dir, push, mutation?.name ?? "the recorded changes");
+		}
+		if (failure === "contention") {
 			warn(
-				`the hyperdrive moved while I was pushing ${mutation.name}; ` +
+				`the hyperdrive moved while I was pushing ${mutation?.name ?? "the recorded changes"}; ` +
 					`retrying against the current remote (attempt ${attempt} of ${MAX_PUSH_ATTEMPTS}).`,
 			);
 			continue;
 		}
 		warn(
-			`${mutation.name} is recorded locally but I couldn't push it (the hyperdrive is unreachable) — ` +
-				"the next manifest write will try again.",
+			`${mutation?.name ?? "the recorded changes"} is recorded locally but I couldn't push it ` +
+				"(the hyperdrive is unreachable) — the next manifest write will try again.",
 		);
 		return;
 	}
 
 	warn(
-		`I couldn't publish ${mutation.name} after ${MAX_PUSH_ATTEMPTS} attempts because the hyperdrive kept ` +
-			"moving. The change is recorded locally and no entry was lost; run any manifest command again to retry.",
+		`I couldn't publish ${mutation?.name ?? "the recorded changes"} after ${MAX_PUSH_ATTEMPTS} attempts ` +
+			"because the hyperdrive kept moving. The change is recorded locally and no entry was lost; " +
+			"run any manifest command again to retry.",
 	);
 }
 
@@ -571,18 +775,27 @@ function applyMutation(mutation: Mutation): void {
  * The steps are computed before anything is touched, so a no-op leaves no
  * trace, and the pending log is written BEFORE the first commit: a crash
  * between the commit and its push must never leave a change committed with
- * nothing left to replay it.
+ * nothing left to replay it. The verb in each message is derived from the
+ * base at that step (add when the name is new there, update when it already
+ * exists).
  */
 function commitReplay(dir: string, base: SpaceEntry[], pending: readonly Mutation[]): boolean {
 	const steps: Array<{ mutation: Mutation; content: string }> = [];
 	let spaces = base;
 	let previous = serializeManifest({ spaces });
 	for (const mutation of pending) {
+		const existed = spaces.some((space) => space.name === mutation.name);
 		spaces = replay(spaces, [mutation]);
 		const content = serializeManifest({ spaces });
 		if (content === previous) continue;
 		previous = content;
-		steps.push({ mutation, content });
+		steps.push({
+			mutation: {
+				...mutation,
+				verb: mutation.entry === undefined ? "remove" : existed ? "update" : "add",
+			} as Mutation,
+			content,
+		});
 	}
 	if (steps.length === 0) return false;
 
@@ -600,8 +813,9 @@ function writeSpacesYaml(dir: string, content: string): void {
 }
 
 function commitManifest(dir: string, mutation: Mutation): void {
+	const verb = mutation.verb ?? (mutation.entry === undefined ? "remove" : "update");
 	const commit = driveGit(
-		[...NO_SIGN, "commit", "-m", `manifest: ${mutation.verb} ${mutation.name}`],
+		[...BOOKKEEPING, "commit", "-m", `manifest: ${verb} ${mutation.name}`],
 		dir,
 	);
 	if (!commit.ok) {
@@ -613,22 +827,57 @@ function commitManifest(dir: string, mutation: Mutation): void {
 }
 
 /**
+ * Reject a space whose name or branch could escape the manifest's world:
+ * `space/../../etc` or `-rf` as a name/branch would be dangerous as a path
+ * segment or ref. The name shape is re-checked here because an upserted entry
+ * need never have been read back, and the branch is checked by git itself,
+ * the same way T-5 will create it.
+ */
+function validateSpaceName(entry: SpaceEntry): void {
+	if (!isValidSpaceName(entry.name)) {
+		throw new ManifestError(
+			join(driveCheckoutDir(), MANIFEST_FILE),
+			`\`${entry.name}\` is not a valid space name: it must be lowercase letters, digits, dots, ` +
+				`underscores and dashes, no "..". Names double as path segments and half a branch name, so ` +
+				"they have to be boring by construction.",
+		);
+	}
+	const dir = driveCheckoutDir();
+	if (existsSync(join(dir, ".git"))) {
+		const check = driveGit(["check-ref-format", "--branch", entry.branch], dir);
+		if (!check.ok) {
+			throw new ManifestError(
+				join(dir, MANIFEST_FILE),
+				`\`${entry.branch}\` is not a valid branch name for space ${JSON.stringify(entry.name)} ` +
+					`(git said: ${check.stderr.trim() || check.stdout.trim()}).`,
+			);
+		}
+	}
+}
+
+/**
  * Add a space to the manifest, or replace the entry of the same name. The
  * write is replayed by name onto the remote, so two machines adding spaces at
  * the same time both keep theirs.
  */
+/**
+ * Add a space to the manifest, or replace the entry of the same name. Runs
+ * under the manifest lock so a parallel agent or hook cannot interleave its
+ * write with this one — that is exactly how two processes used to drop each
+ * other's entries while both reported success.
+ */
 export function upsertSpace(entry: SpaceEntry): void {
-	const manifest = readManifest();
-	const existing = manifest.spaces.find((space) => space.name === entry.name);
-	applyMutation({
-		verb: existing === undefined ? "add" : "update",
-		name: entry.name,
-		entry,
+	const dir = driveCheckoutDir();
+	withManifestLock(dir, `upsert ${entry.name}`, () => {
+		validateSpaceName(entry);
+		applyMutation(dir, { name: entry.name, entry });
 	});
 }
 
 /** Remove a space from the manifest. */
 export function removeSpace(name: string): void {
-	readManifest();
-	applyMutation({ verb: "remove", name });
+	const dir = driveCheckoutDir();
+	withManifestLock(dir, `remove ${name}`, () => {
+		applyMutation(dir, { name });
+	});
 }
