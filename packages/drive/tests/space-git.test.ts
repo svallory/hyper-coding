@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { SyncCadence } from "#config/schema";
 import {
 	cleanGitEnv,
 	hasSpaceGit,
@@ -13,7 +14,13 @@ import {
 	spaceGitDir,
 	writeCadence,
 } from "#services/space-git";
-import { fixturePath, initBare, setupSpaceFixtures, teardownSpaceFixtures } from "#tests/tmp-space";
+import {
+	fixturePath,
+	initBare,
+	isolateGitConfig,
+	setupSpaceFixtures,
+	teardownSpaceFixtures,
+} from "#tests/tmp-space";
 
 /**
  * The space git runner: create the git dir, never touch the space's own
@@ -46,11 +53,15 @@ function walk(dir: string): string[] {
 	return out.sort();
 }
 
+let restoreGitConfig: () => void = () => {};
+
 beforeAll(() => {
 	setupSpaceFixtures();
+	restoreGitConfig = isolateGitConfig();
 });
 
 afterAll(() => {
+	restoreGitConfig();
 	teardownSpaceFixtures();
 });
 
@@ -141,6 +152,9 @@ describe("initSpaceGitDir", () => {
 		// A newline is not a legal ref name, so `symbolic-ref HEAD` fails after
 		// the dir and its config are already written.
 		expect(() => initSpaceGitDir(root, { branch: "space/bad\nname" })).toThrow(SpaceGitError);
+		expect(() => initSpaceGitDir(root, { branch: "space/bad\nname" })).toThrow(
+			/while setting up the space git dir/,
+		);
 		expect(existsSync(spaceGitDir(root))).toBe(false);
 
 		// And a retry on the clean root succeeds — nothing is left to trip on.
@@ -155,6 +169,17 @@ describe("initSpaceGitDir", () => {
 
 		expect(() => initSpaceGitDir(root, { branch: BRANCH })).toThrow(/isn't a hyper space git dir/);
 		expect(existsSync(join(foreign, "HEAD"))).toBe(true);
+	});
+
+	it("refuses a bare-initialised dir that was never set up as a space's", () => {
+		const root = fixturePath("space-bare-only");
+		const foreign = spaceGitDir(root);
+		// A real `git init --bare`, stopped before the flips: it has a config and
+		// a HEAD, but no core.worktree pointing at the space.
+		initBare(foreign);
+
+		expect(() => initSpaceGitDir(root, { branch: BRANCH })).toThrow(/move it aside/i);
+		expect(existsSync(join(foreign, "config"))).toBe(true);
 	});
 
 	it("refuses a git dir whose worktree points somewhere else", () => {
@@ -269,5 +294,67 @@ describe("cadence", () => {
 		expect(readCadence(root)).toBe("session-end");
 		writeCadence(root, "session-end+push");
 		expect(readCadence(root)).toBe("session-end+push");
+		writeCadence(root, "manual");
+		expect(readCadence(root)).toBe("manual");
+	});
+
+	it("refuses a value that isn't a cadence", () => {
+		const root = makeSpace();
+		// Written with raw git: a hand-edit, or a stale writer from another tool.
+		spaceGit(root, ["config", "--local", "hyper.cadence", "bogus"]);
+		expect(() => readCadence(root)).toThrow(SpaceGitError);
+		expect(() => readCadence(root)).toThrow(/isn't one of/);
+	});
+
+	it("refuses to write a value that isn't a cadence", () => {
+		const root = makeSpace();
+		expect(() => writeCadence(root, "hourly" as SyncCadence)).toThrow(/isn't a cadence I know/);
+		expect(readCadence(root)).toBe("");
+	});
+});
+
+describe("the space config is read with --local only", () => {
+	// The probe behind this: a global `hyper.cadence = bogus` answered
+	// readCadence, and a global `core.worktree = ../..` made an EMPTY
+	// .hyper/space.git look initialised, so initSpaceGitDir adopted it. Both
+	// reads must consult the space's own config and nothing else.
+	const HOSTILE_GLOBAL = ["[hyper]", "\tcadence = bogus", "[core]", "\tworktree = ../..", ""].join(
+		"\n",
+	);
+
+	function withHostileGlobal(fn: () => void): void {
+		const file = join(fixturePath("hostile-gitconfig"), "global");
+		mkdirSync(dirname(file), { recursive: true });
+		writeFileSync(file, HOSTILE_GLOBAL);
+		const saved = process.env.GIT_CONFIG_GLOBAL;
+		process.env.GIT_CONFIG_GLOBAL = file;
+		try {
+			fn();
+		} finally {
+			if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+			else process.env.GIT_CONFIG_GLOBAL = saved;
+		}
+	}
+
+	it("ignores a hostile global cadence", () => {
+		withHostileGlobal(() => {
+			const root = makeSpace();
+			expect(readCadence(root)).toBe("");
+
+			spaceGit(root, ["config", "--local", "hyper.cadence", "session-end"]);
+			expect(readCadence(root)).toBe("session-end");
+		});
+	});
+
+	it("does not let a hostile global worktree adopt an empty dir", () => {
+		withHostileGlobal(() => {
+			const root = fixturePath("space-hostile-adopt");
+			const dir = spaceGitDir(root);
+			mkdirSync(dir, { recursive: true });
+
+			// Without --local this returned { created: false }: the global
+			// core.worktree stood in for the missing one.
+			expect(() => initSpaceGitDir(root, { branch: BRANCH })).toThrow(/move it aside/i);
+		});
 	});
 });
