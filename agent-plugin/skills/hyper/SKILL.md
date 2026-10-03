@@ -68,10 +68,12 @@ anything.
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/hyper-stack.sh" detect   # toolchain
 ```
 
-For the layout, `hyper-lib.sh` exposes `space_layout <dir>` (prints `bare`,
-`multi`, or nothing) and `worktrees_dir <dir> [slug]` (the `slug` is required
-in a multi-repo space — there is no single answer without one). Rules of
-thumb:
+For the layout, `hyper space detect <dir> --json` reports it directly
+(`layout` is `bare`, `multi`, or absent when the directory is not in a
+space). Underneath, `hyper-lib.sh` — which ships inside the hyper CLI, not in
+this plugin — exposes `space_layout <dir>` and
+`worktrees_dir <dir> [slug]` (the `slug` is required in a multi-repo space —
+there is no single answer without one). Rules of thumb:
 
 - `.git` is a **directory** with `core.bare=true`, with a `worktrees/` dir or
   `HYPER.md` beside it → a single-repo space. A bare repo with *neither* is a

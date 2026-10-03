@@ -2,16 +2,42 @@
 
 The plugin in this directory ships to users through the `svallory-plugins`
 Claude Code marketplace (a `git-subdir` pointer at this path on `main`).
-It is bash + markdown with its own test suite and CI — the monorepo's
-moon/bun toolchain is not involved.
+It is bash + markdown with its own test suite and CI. The suite is pure
+bash, but it now needs the **hyper CLI on PATH**, because the space-detection
+library (`hyper-lib.sh`) lives inside `@hypercli/drive` rather than here —
+there is exactly one copy of it, and the scripts source it through
+`hyper space lib-path`.
 
 ## Hard rules
 
 - **Never develop in `~/.claude/plugins/marketplaces/`.** That clone
   auto-updates and will discard uncommitted work. Develop here, commit, push.
-- **Run `agent-plugin/tests/run.sh` before committing.** 487 assertions;
+- **Run `agent-plugin/tests/run.sh` before committing.** 496 assertions;
   `.github/workflows/agent-plugin.yml` enforces the same suite plus
   `bash -n` and `shellcheck --severity=warning` in CI.
+- **The CLI must be built before the suite runs**, in dependency order
+  (`ui core create-hyper-hq kit hq gen drive cli` — the CLI resolves each
+  plugin's `dist/`, and `hq` needs `create-hyper-hq` first):
+
+  ```bash
+  bun install
+  for pkg in ui core create-hyper-hq kit hq gen drive cli; do
+    (cd "packages/$pkg" && bun run build)
+  done
+  bash agent-plugin/tests/run.sh
+  ```
+
+  `tests/helpers.sh` prepends `tests/` to `PATH`; `tests/hyper` is a shim
+  that execs `packages/cli/bin/run.js`, so no symlink is needed locally.
+  It **must be executable** (`chmod +x`) — as a non-executable file it fails
+  with "Permission denied", every script then reports the CLI as missing,
+  and the suite fails with hundreds of confusing assertion errors rather
+  than one clear one.
+- **Never re-add a copy of `hyper-lib.sh` here.** Detection logic belongs in
+  `packages/drive`; the plugin shells out to `hyper` (C-1, C-5). To reach a
+  library function from a script, source `scripts/hyper-require-lib.sh` and
+  call `hyper_require_lib` (or `hyper_soft_lib` in a hook that must stay
+  silent when `hyper` is absent).
 - **Test hooks by piping real hook JSON into the script** — never by running
   the command in your shell, which has an environment hooks don't inherit
   (proto/mise/nvm shims, homebrew PATH):
