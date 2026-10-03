@@ -24,6 +24,7 @@ import {
 	ROOT_CHOICE_OPTIONS,
 	rootPrompt,
 } from "#commands/machine/setup";
+import { blockInstallers } from "#tests/offline-installers";
 import { withTempConfig } from "#tests/tmp-config";
 
 const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
@@ -35,6 +36,7 @@ const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
  */
 const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncReturns<string> => {
 	const bin = scratchDir();
+	blockInstallers(bin);
 	// The no-op test must not depend on a system copy tool or produce root work.
 	writeFileSync(join(bin, "rsync"), "#!/bin/sh\necho 'rsync version 99.0.0'\n", { mode: 0o755 });
 	return spawnSync(process.execPath, [cli, ...args], {

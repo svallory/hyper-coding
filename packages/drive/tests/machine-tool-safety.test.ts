@@ -1,13 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { exitCodeFor, renderReport } from "#commands/machine/setup";
+import { exitCodeFor, parityVersions, renderReport } from "#commands/machine/setup";
 import { runSetup } from "#services/machine/runner";
+import { toolTask } from "#services/machine/tasks/index";
 import type { TaskContext } from "#services/machine/tasks/types";
-import { findTool } from "#services/machine/tools";
+import { findTool, type ToolSpec } from "#services/machine/tools";
 import type { MachineRunner, RunResult } from "#services/remote";
+import { blockInstallers } from "#tests/offline-installers";
 
 function context(ssh: MachineRunner["ssh"]): TaskContext {
 	const unused = async (): Promise<RunResult> => {
@@ -22,6 +24,101 @@ function context(ssh: MachineRunner["ssh"]): TaskContext {
 }
 
 describe("PR33 safety regressions", () => {
+	it.each(["local", "remote"])(
+		"uses the real reference PATH but a strict %s target/check",
+		async (destination) => {
+			const scripts: string[] = [];
+			const here = context(async (cmd) => {
+				scripts.push(cmd[2]);
+				const reference = cmd[2].includes('PATH="$PATH:');
+				return { code: reference ? 0 : 1, stdout: reference ? "2.0.0" : "", stderr: "" };
+			});
+			const target = {
+				...here,
+				machine: destination === "local" ? null : ({ name: "remote" } as TaskContext["machine"]),
+			};
+			const spec = findTool("pi") as ToolSpec;
+			const [reference, other] = await parityVersions([spec], here, target);
+			expect(reference.pi).toBe("2.0.0");
+			expect(other.pi).toBeNull();
+			expect(await toolTask(spec).check(target)).toBe(false);
+			expect(
+				scripts.filter((s) => s.includes('PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"')),
+			).toHaveLength(2);
+			expect(scripts[0]).toContain(".pi/agent");
+		},
+	);
+
+	it.each([
+		"project PATH",
+		"relative PATH",
+		"project symlink",
+		"temporary symlink",
+		"temporary mise override",
+	])("never links a transient binary: %s", async (kind) => {
+		const root = await mkdtemp(join(tmpdir(), "hyper-link-safety-"));
+		try {
+			const home = join(root, "home");
+			const project = join(root, "project");
+			const privateBin = join(home, ".pi/agent/bin");
+			const transient = kind.startsWith("temporary")
+				? join(root, "transient/shims")
+				: kind === "relative PATH"
+					? project
+					: join(project, "node_modules/.bin");
+			await mkdir(privateBin, { recursive: true });
+			await mkdir(project, { recursive: true });
+			await mkdir(transient, { recursive: true });
+			await mkdir(join(root, "claude"));
+			await writeFile(join(transient, "pi"), "#!/bin/sh\necho 99.98.97\n", { mode: 0o755 });
+			if (kind.endsWith("symlink")) await symlink(join(transient, "pi"), join(privateBin, "pi"));
+			const ctx = context(async (cmd) => {
+				if (cmd[2].includes("installer=") || cmd[2].includes("mise use"))
+					throw new Error("blocked installer");
+				const r = spawnSync("sh", ["-c", cmd[2]], {
+					encoding: "utf8",
+					cwd: project,
+					env: {
+						HOME: home,
+						CLAUDE_CONFIG_DIR: join(root, "claude"),
+						TMPDIR: root,
+						PATH: `${kind === "relative PATH" ? "." : transient}:/usr/bin:/bin`,
+						...(kind === "temporary mise override"
+							? { MISE_DATA_DIR: join(root, "transient") }
+							: {}),
+					},
+				});
+				return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
+			});
+			await expect(findTool("pi")?.install(ctx)).rejects.toThrow("blocked installer");
+			await expect(lstat(join(home, ".local/bin/pi"))).rejects.toThrow();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("offline CLI blockers fail loudly before reaching any real installer", async () => {
+		const home = await mkdtemp(join(tmpdir(), "hyper-installer-blockers-"));
+		try {
+			await mkdir(join(home, "claude"));
+			blockInstallers(home);
+			for (const tool of ["curl", "mise"]) {
+				const result = spawnSync("sh", ["-c", `${tool} --version`], {
+					encoding: "utf8",
+					env: {
+						HOME: home,
+						CLAUDE_CONFIG_DIR: join(home, "claude"),
+						PATH: `${home}:/usr/bin:/bin`,
+					},
+				});
+				expect(result.status).toBe(99);
+				expect(result.stderr).toContain(`BLOCKED unexpected ${tool}`);
+			}
+		} finally {
+			await rm(home, { recursive: true, force: true });
+		}
+	});
+
 	it("preserves curl's archive error and resolves latest via Location without the API", async () => {
 		const home = await mkdtemp(join(tmpdir(), "hyper-curl-failure-"));
 		try {

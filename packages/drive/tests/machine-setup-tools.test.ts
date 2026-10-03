@@ -29,12 +29,15 @@ import type { Versioned } from "#services/machine/tasks/tools-rsync";
 import type { TaskContext } from "#services/machine/tasks/types";
 import { TOOLS } from "#services/machine/tools";
 import type { MachineRunner, RunResult } from "#services/remote";
+import { blockInstallers } from "#tests/offline-installers";
 import { withTempConfig } from "#tests/tmp-config";
 
 const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
 
-const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncReturns<string> =>
-	spawnSync(process.execPath, [cli, ...args], {
+const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncReturns<string> => {
+	const bin = scratchDir();
+	blockInstallers(bin);
+	return spawnSync(process.execPath, [cli, ...args], {
 		encoding: "utf8",
 		env: {
 			...process.env,
@@ -45,8 +48,10 @@ const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncRe
 			...env,
 			HOME: scratchDir(),
 			CLAUDE_CONFIG_DIR: scratchDir(),
+			PATH: `${bin}:${env.PATH ?? process.env.PATH ?? "/usr/bin:/bin"}`,
 		},
 	});
+};
 
 const tempDirs: string[] = [];
 function scratchDir(): string {
@@ -212,12 +217,12 @@ describe("detecting versions (M5)", () => {
 		detect: tool.detect,
 	}));
 
-	it("detects a local target once and reuses its versions", async () => {
+	it("probes both reference and target even when the target is local", async () => {
 		const runner = new CountingRunner();
 		const ctx = { machine: null, runner, config: {}, log: () => {} } as TaskContext;
 		const [local, remote] = await parityVersions(specs, ctx, ctx);
-		expect(local).toBe(remote);
-		expect(runner.calls).toBe(specs.length);
+		expect(local).not.toBe(remote);
+		expect(runner.calls).toBe(specs.length * 2);
 	});
 
 	it("turns a rejected detection into null plus a warning, without losing other versions", async () => {
