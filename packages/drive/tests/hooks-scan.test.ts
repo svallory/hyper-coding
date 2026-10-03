@@ -14,10 +14,10 @@
  * rather than guessed at.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
 	type Candidate,
 	candidateWords,
@@ -30,7 +30,19 @@ import {
 
 /** The operator's home, which is what the fixture's absolute paths are under. */
 const HOME = "/Users/svallory";
-const FIXTURE = join(import.meta.dirname, "fixtures", "claude-home-hooks");
+const FIXTURE_SOURCE = join(import.meta.dirname, "fixtures", "claude-home-hooks");
+let FIXTURE: string;
+beforeAll(async () => {
+	FIXTURE = await mkdtemp(join(tmpdir(), "hyper-relocated-hooks-"));
+	temps.push(FIXTURE);
+	await cp(FIXTURE_SOURCE, FIXTURE, { recursive: true });
+	const registryPath = join(FIXTURE, "plugins", "installed_plugins.json");
+	const registry = JSON.parse(await readFile(registryPath, "utf8"));
+	for (const entries of Object.values(registry.plugins) as { installPath: string }[][]) {
+		for (const entry of entries) entry.installPath = join(FIXTURE, entry.installPath);
+	}
+	await writeFile(registryPath, JSON.stringify(registry));
+});
 
 const temps: string[] = [];
 afterAll(async () => {
@@ -187,6 +199,18 @@ describe("scanHooks", () => {
 
 /** The table the review fixes: each input, and the words it must yield. */
 describe("splitting a hook command", () => {
+	it.each([
+		["jq . 2>&1 | gh api", ["gh", "jq"]],
+		["jq .>out && fd x", ["fd", "jq"]],
+		["cmd > /tmp/o; rg z", ["rg"]],
+		["if command -v rtk >/dev/null; then rtk x; fi", ["rtk"]],
+		['case "$1" in start|stop) rtk x;; esac', ["rtk"]],
+	])("round 2: %s", (command, expected) => {
+		const result = classify(candidateWords(command), HOME);
+		expect(result.preselect).toEqual(expected);
+		expect(result.unknown).toEqual(command.startsWith("cmd ") ? ["cmd"] : []);
+	});
+
 	it.each([
 		["echo $X | jq -r .foo", ["echo", "jq"]],
 		["cat f | rg foo", ["cat", "rg"]],

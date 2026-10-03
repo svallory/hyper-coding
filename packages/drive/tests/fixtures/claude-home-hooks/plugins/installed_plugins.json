@@ -4,14 +4,14 @@
 		"worktrunk@worktrunk": [
 			{
 				"scope": "user",
-				"installPath": "/Users/svallory/work/hyper/hyper/worktrees/hyperdrive-15-tools/packages/drive/tests/fixtures/claude-home-hooks/plugins/cache/worktrunk/worktrunk/f57fac365b22",
+				"installPath": "plugins/cache/worktrunk/worktrunk/f57fac365b22",
 				"version": "f57fac"
 			}
 		],
 		"superpowers@claude-plugins-official": [
 			{
 				"scope": "user",
-				"installPath": "/Users/svallory/work/hyper/hyper/worktrees/hyperdrive-15-tools/packages/drive/tests/fixtures/claude-home-hooks/plugins/cache/other-market/gone-plugin/9.9.9",
+				"installPath": "plugins/cache/other-market/gone-plugin/9.9.9",
 				"version": "6.4.1"
 			}
 		]

@@ -13,6 +13,7 @@ import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { renderReport } from "#commands/machine/setup";
 import { loadConfig } from "#config/index";
 import type { MachineInfo } from "#services/machine";
 import {
@@ -28,6 +29,7 @@ import {
 	type TaskContext,
 	TaskError,
 } from "#services/machine/tasks/types";
+import { InstallError } from "#services/machine/tools";
 import {
 	LocalMachine,
 	type MachineRunner,
@@ -62,6 +64,7 @@ interface FakeTaskSpec {
 	applyMakesCheckPass?: boolean;
 	throwInCheck?: boolean;
 	throwInApply?: boolean;
+	installFailure?: boolean;
 	throwInRootScript?: boolean;
 }
 
@@ -91,7 +94,8 @@ function fakeTask(spec: FakeTaskSpec): FakeTask {
 		},
 		apply: async () => {
 			task.applies += 1;
-			if (spec.throwInApply === true) throw new Error("install failed halfway");
+			if (spec.throwInApply === true) throw new TypeError("programming bug");
+			if (spec.installFailure) throw new InstallError(`Installing ${spec.id} failed: HTTP 404`);
 			if (spec.applyMakesCheckPass !== false && checks[0] === false) checks[0] = true;
 		},
 		...(spec.needsRoot === true
@@ -710,9 +714,9 @@ describe("runSetup — failures", () => {
 		expect(after.checkCalls).toBe(0);
 	});
 
-	it("names the task when apply throws, and keeps going (T-15/M1)", async () => {
+	it("names an InstallError and keeps going (N6), without listing it as skipped (N9)", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		const task = fakeTask({ id: "tools.mise", checks: [false], throwInApply: true });
+		const task = fakeTask({ id: "tools.mise", checks: [false], installFailure: true });
 		const after = fakeTask({ id: "tools.jq", checks: [false, true] });
 
 		const report = await runSetup(localCtx(fakeRunner(), []), {
@@ -728,11 +732,30 @@ describe("runSetup — failures", () => {
 			{ id: "tools.mise", reason: expect.stringContaining("tools.mise") },
 		]);
 		expect(report.applied).toEqual(["tools.jq"]);
+		expect(report.skipped).not.toContain("tools.mise");
+		expect(renderReport(report, "test").filter((line) => line.includes("tools.mise"))).toHaveLength(
+			1,
+		);
 
 		// Exactly one check on the failed task: the one that found the work to do.
 		// Re-checking after a failed apply would report on a state nobody reached.
 		expect(task.checkCalls).toBe(1);
 		expect(task.applies).toBe(1);
+	});
+
+	it("keeps programming errors as TaskError rather than a failed tool (N6)", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const task = fakeTask({ id: "tools.mise", checks: [false], throwInApply: true });
+		const after = fakeTask({ id: "tools.jq" });
+		await expect(
+			runSetup(localCtx(fakeRunner(), []), {
+				features: ["tools"],
+				tasks: [task, after],
+				prompt: scriptedPrompt([]),
+				scratchDir: scratch(),
+			}),
+		).rejects.toThrow(TaskError);
+		expect(after.checkCalls).toBe(0);
 	});
 
 	it("names the task when its rootScript throws", async () => {
