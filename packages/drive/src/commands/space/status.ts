@@ -19,7 +19,7 @@ export default class Status extends SpaceCommand<typeof Status> {
 	};
 	async run(): Promise<void> {
 		const { flags } = await this.parse(Status);
-		const result = this.inSpace(flags.debug, ({ root, branch }) => {
+		const result = await this.inSpace(flags.debug, ({ root, branch }) => {
 			if (flags.fetch) fetchSpace(root, branch);
 			return spaceStatus(root, branch);
 		});

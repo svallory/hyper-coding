@@ -20,10 +20,15 @@ export default class Commit extends SpaceCommand<typeof Commit> {
 	};
 	async run(): Promise<void> {
 		const { flags } = await this.parse(Commit);
-		const result = this.inSpace(flags.debug, ({ root, branch }) => ({
-			branch,
-			...commitSpace(root, branch, flags.message, flags["allow-secret"] ?? []),
-		}));
+		const result = await this.inSpace(flags.debug, async ({ root, branch }) => {
+			const { unborn: _unborn, ...committed } = await commitSpace(
+				root,
+				branch,
+				flags.message,
+				flags["allow-secret"] ?? [],
+			);
+			return { branch, ...committed };
+		});
 		if (flags.json) this.log(JSON.stringify(result, null, 2));
 		else
 			this.log(

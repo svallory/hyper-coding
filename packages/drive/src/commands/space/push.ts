@@ -10,7 +10,7 @@ export default class Push extends SpaceCommand<typeof Push> {
 	];
 	async run(): Promise<void> {
 		const { flags } = await this.parse(Push);
-		const branch = this.inSpace(flags.debug, ({ root, branch }) => {
+		const branch = await this.inSpace(flags.debug, ({ root, branch }) => {
 			pushSpace(root, spaceRemote(root), branch);
 			return branch;
 		});

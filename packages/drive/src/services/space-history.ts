@@ -4,10 +4,14 @@ import {
 	hasSpaceGit,
 	readCadence,
 	readSpaceConfig,
+	readTracked,
 	SpaceGitError,
 	SpaceGitInterruptedError,
 	spaceGit,
+	writeTracked,
 } from "#services/space-git";
+
+import { validateIncomingSpace } from "#services/space-incoming";
 
 export interface InitializedSpace {
 	root: string;
@@ -46,7 +50,12 @@ export function requireInitializedSpace(dir = process.cwd()): InitializedSpace {
 			`This space is not on its space branch. Restore its original space/<name> branch before trying again.`,
 		);
 	}
-	return { root, branch: ref.slice("refs/heads/".length) };
+	const branch = ref.slice("refs/heads/".length);
+	if (readSpaceConfig(root, `branch.${branch}.merge`) !== ref)
+		throw new SpaceGitError(
+			`HEAD is not this space's recorded branch. Restore its original branch and upstream before trying again.`,
+		);
+	return { root, branch };
 }
 
 export function spaceRemote(root: string): string {
@@ -59,20 +68,15 @@ export function spaceRemote(root: string): string {
 }
 
 /** Keep Node alive for process-group signals so the git child's signal yields exit 130. */
-export function withSpaceSignals<T>(action: () => T): T {
-	let pending: "SIGINT" | "SIGTERM" | null = null;
-	const onInt = () => {
-		pending = "SIGINT";
-	};
-	const onTerm = () => {
-		pending = "SIGTERM";
-	};
+export async function withSpaceSignals<T>(action: () => T | Promise<T>): Promise<T> {
+	// Synchronous children block callbacks: only the child's signal is reliable.
+	// Keep listeners scoped across asynchronous batch readers as well.
+	const onInt = () => {};
+	const onTerm = () => {};
 	process.on("SIGINT", onInt);
 	process.on("SIGTERM", onTerm);
 	try {
-		const result = action();
-		if (pending !== null) throw new SpaceGitInterruptedError(pending);
-		return result;
+		return await action();
 	} catch (error) {
 		if (error instanceof SpaceGitInterruptedError) {
 			throw new SpaceGitInterruptedError(
@@ -101,7 +105,7 @@ export function fetchSpace(root: string, branch: string): void {
 			"--no-tags",
 			"--no-recurse-submodules",
 			"origin",
-			`refs/heads/${branch}:${trackingRef(branch)}`,
+			`+refs/heads/${branch}:${trackingRef(branch)}`,
 		],
 		{ allowFailure: true },
 	);
@@ -118,7 +122,7 @@ export function fetchSpace(root: string, branch: string): void {
 }
 
 /** Fast-forward only: never merge or rebase divergent histories. */
-export function pullSpace(root: string, branch: string): { updated: boolean } {
+export async function pullSpace(root: string, branch: string): Promise<{ updated: boolean }> {
 	fetchSpace(root, branch);
 	const target = spaceGit(root, [
 		"rev-parse",
@@ -141,22 +145,34 @@ export function pullSpace(root: string, branch: string): { updated: boolean } {
 			`The local and remote histories of ${branch} have diverged. Nothing was merged or rebased; your local history and files were kept. Inspect \`hyper space log\` and reconcile the histories manually before retrying.`,
 		);
 	}
+	const incoming = await validateIncomingSpace(root, target, before);
 	const result = spaceGit(
 		root,
-		["-c", "core.hooksPath=/dev/null", "merge", "--ff-only", "--no-autostash", target],
+		[
+			"-c",
+			"merge.verifySignatures=false",
+			"-c",
+			"submodule.recurse=false",
+			"merge",
+			"--ff-only",
+			"--no-overwrite-ignore",
+			"--no-autostash",
+			incoming.tip,
+		],
 		{ allowFailure: true },
 	);
 	if (result.status !== 0) {
 		const detail = (result.stderr || result.stdout).trim();
 		if (/would be overwritten|not uptodate|local changes|untracked working tree/i.test(detail)) {
 			throw new SpaceGitError(
-				`Local changes would be overwritten by the fast-forward of ${branch}. Commit them with \`hyper space commit\` or move them aside, then retry. git said: ${detail}`,
+				`Local changes would be overwritten by the fast-forward of ${branch}. Move those files aside or back them up before retrying; ignored paths cannot be saved by \`hyper space commit\`. git said: ${detail}`,
 			);
 		}
 		throw new SpaceGitError(
 			`I couldn't fast-forward ${branch}; no merge or rebase was requested. Inspect \`hyper space status\` before retrying. git said: ${detail}`,
 		);
 	}
+	writeTracked(root, [...new Set([...readTracked(root), ...incoming.tracked])]);
 	return { updated: true };
 }
 
@@ -214,6 +230,7 @@ export function logSpace(root: string, branch: string, args: readonly string[]):
 		"--walk-reflogs",
 		"--stdin",
 		"--alternate-refs",
+		"--bisect",
 	]);
 	for (const arg of options) {
 		if (expanding.has(arg.split("=")[0]))
@@ -231,5 +248,6 @@ export function logSpace(root: string, branch: string, args: readonly string[]):
 	const forwarded = [...args];
 	if (!hasRevision)
 		forwarded.splice(separator < 0 ? forwarded.length : separator, 0, `refs/heads/${branch}`);
-	return spaceGit(root, ["log", ...forwarded], { allowFailure: true, inheritStdio: true }).status;
+	const result = spaceGit(root, ["log", ...forwarded], { allowFailure: true, inheritStdio: true });
+	return result.signal === "SIGPIPE" ? 0 : result.status;
 }

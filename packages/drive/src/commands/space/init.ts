@@ -619,7 +619,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			allowlist = writeAllowlist(root, tracked);
 			writeCadence(root, cadence);
 
-			const staged = commitAndPushSpace(
+			const staged = await commitAndPushSpace(
 				root,
 				name,
 				branch,

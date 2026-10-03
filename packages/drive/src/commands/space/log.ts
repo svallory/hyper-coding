@@ -17,7 +17,7 @@ export default class Log extends SpaceCommand<typeof Log> {
 		// Mark arguments as passthrough for oclif while preserving Git's exact argv.
 		// Without parse(), development builds emit an UnparsedCommand warning.
 		await this.parse(Log, ["--", ...args]);
-		const code = this.inSpace(false, ({ root, branch }) => logSpace(root, branch, args));
+		const code = await this.inSpace(false, ({ root, branch }) => logSpace(root, branch, args));
 		if (code !== 0) this.exit(code);
 	}
 }

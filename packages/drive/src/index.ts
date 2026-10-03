@@ -34,6 +34,7 @@ export {
 	findSecretPaths,
 	isHyperAllowlist,
 	normaliseTrackedEntry,
+	RESERVED_PATHS,
 	renderGitignore,
 	SECRET_PATTERNS,
 } from "#services/allowlist";
