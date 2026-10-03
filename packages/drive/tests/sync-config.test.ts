@@ -254,10 +254,13 @@ function session(name: string, alpha: string, beta: string, target: "claude" | "
 			host: "localhost",
 			path: beta.slice("localhost:".length),
 			connected: true,
+			permissions: { defaultFileMode: "0660", defaultDirectoryMode: "0770" },
 		},
 		status: "watching",
 		mode: "two-way-resolved",
 		ignore: { paths: wantIgnore(target) },
+		symlink: { mode: "posix-raw" },
+		permissions: {},
 		paused: false,
 	};
 }
@@ -284,11 +287,11 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config <machine> (create)", ()
 		expect(claude).toContain("--symlink-mode=posix-raw");
 		expect(claude).toContain("--default-file-mode-beta=0660");
 		expect(claude).toContain("--default-directory-mode-beta=0770");
-		expect(claude).toContain("--ignore .credentials.json");
+		expect(claude).toContain("--ignore /.credentials.json");
 		expect(claude).toContain(`${fixture.alphaHome}/.claude localhost:${fixture.betaHome}/.claude`);
 
 		expect(pi).toContain("--name hyper-pi-loop");
-		expect(pi).toContain("--ignore auth.json");
+		expect(pi).toContain("--ignore /auth.json");
 		expect(pi).toContain(`${fixture.alphaHome}/.pi/agent localhost:${fixture.betaHome}/.pi/agent`);
 	});
 
@@ -407,3 +410,101 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config without the engine bina
 		expect(err).not.toContain("at MutagenSyncEngine");
 	});
 });
+
+describe.skipIf(skipWithoutCli)("hyper drive sync-config collision guard (MUST 2)", () => {
+	/**
+	 * Sessions are matched by name, but the danger is an EXISTING session under
+	 * any name over the same directory pair: two two-way-resolved sessions on
+	 * one alpha/beta fight over every conflicting write. The operator's live
+	 * hand-made `claude-config` is exactly this shape.
+	 */
+	it("refuses to create beside the live claude-config session", () => {
+		if (!cliBuilt) return;
+		const fixture = setupFixture([]);
+		const alpha = `${fixture.alphaHome}/.claude`;
+		// A pre-existing session under a DIFFERENT name, same alpha+beta.
+		writeFileSync(
+			fixture.sessions,
+			JSON.stringify([
+				{
+					name: "claude-config",
+					alpha: { protocol: "local", path: alpha, connected: true },
+					beta: {
+						protocol: "ssh",
+						host: "localhost",
+						path: `${fixture.betaHome}/.claude`,
+						connected: true,
+						permissions: { defaultFileMode: "0660", defaultDirectoryMode: "0770" },
+					},
+					status: "watching",
+					mode: "two-way-resolved",
+					ignore: { paths: [] },
+					symlink: { mode: "posix-raw" },
+					paused: false,
+				},
+			]),
+			"utf-8",
+		);
+
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop"]);
+		const out = flat(result.stdout ?? "");
+
+		expect(result.status).not.toBe(0);
+		expect(out).toContain("claude-config");
+		expect(out).toContain("would fight");
+		// The colliding pair was NOT created. The pi pair doesn't collide (it is
+		// a different alpha and beta), so it is still created — the guard is per
+		// directory pair, which is the right granularity: refusing it would
+		// block an unrelated, perfectly safe session.
+		const creates = calls(fixture).filter((l) => l.startsWith("sync create"));
+		expect(creates.filter((l) => l.includes("--name hyper-claude-loop"))).toHaveLength(0);
+		expect(creates.filter((l) => l.includes("--name hyper-pi-loop"))).toHaveLength(1);
+	});
+});
+
+describe.skipIf(skipWithoutCli)(
+	"hyper drive sync-config symlink/permission mismatch (MUST 4)",
+	() => {
+		function withBroken(over: (s: Record<string, unknown>) => void) {
+			const fixture = setupFixture([]);
+			const claude = session(
+				"hyper-claude-loop",
+				`${fixture.alphaHome}/.claude`,
+				`localhost:${fixture.betaHome}/.claude`,
+				"claude",
+			);
+			const pi = session(
+				"hyper-pi-loop",
+				`${fixture.alphaHome}/.pi/agent`,
+				`localhost:${fixture.betaHome}/.pi/agent`,
+				"pi",
+			);
+			over(claude);
+			writeFileSync(fixture.sessions, JSON.stringify([claude, pi]), "utf-8");
+			return fixture;
+		}
+
+		it("rejects a session with portable symlinks", () => {
+			if (!cliBuilt) return;
+			const fixture = withBroken((s) => {
+				s.symlink = { mode: "portable" };
+			});
+			const result = spawnCli(fixture, ["drive", "sync-config", "loop", "--check"]);
+			expect(result.status).toBe(1);
+			expect(flat(result.stdout ?? "")).toContain("symlink mode is portable");
+		});
+
+		it("rejects a session with the wrong beta file mode", () => {
+			if (!cliBuilt) return;
+			const fixture = withBroken((s) => {
+				(s.beta as Record<string, unknown>).permissions = {
+					defaultFileMode: "0644",
+					defaultDirectoryMode: "0770",
+				};
+			});
+			const result = spawnCli(fixture, ["drive", "sync-config", "loop", "--check"]);
+			expect(result.status).toBe(1);
+			expect(flat(result.stdout ?? "")).toContain("beta file mode is 0644");
+		});
+	},
+);

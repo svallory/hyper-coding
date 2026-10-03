@@ -318,7 +318,11 @@ describe("daemonReady", () => {
 
 	it("reports not-running and no sessions when the daemon is down", async () => {
 		const { spawner } = fakeSpawner({
-			"mutagen sync list": { code: 1, stdout: "", stderr: "unable to autostart daemon" },
+			"mutagen sync list": {
+				code: 1,
+				stdout: "",
+				stderr: "unable to autostart daemon: connection refused",
+			},
 		});
 		const probe = await new MutagenSyncEngine(spawner).probe();
 		expect(probe.daemon.running).toBe(false);
@@ -364,9 +368,13 @@ describe("daemonReady", () => {
 		expect(typeof state.registered).toBe("boolean");
 	});
 
-	it("is not running when `sync list` fails", async () => {
+	it("is not running when the daemon is genuinely unreachable", async () => {
 		const { spawner } = fakeSpawner({
-			"mutagen sync list": { code: 1, stdout: "", stderr: "daemon not running" },
+			"mutagen sync list": {
+				code: 1,
+				stdout: "",
+				stderr: "unable to autostart daemon: connection refused",
+			},
 		});
 		const state = await new MutagenSyncEngine(spawner).daemonReady();
 		expect(state.running).toBe(false);
@@ -451,54 +459,34 @@ describe("missing binary", () => {
 });
 
 describe("syncIgnoreFor", () => {
-	it("pins the packaged claude list, in order, at 31 patterns", () => {
-		// The order is what reaches the engine, and the contents are what keeps
-		// credentials and caches off the other machine — so both are pinned
-		// literally rather than checked for membership.
-		expect(CLAUDE_SYNC_IGNORE).toEqual([
-			".credentials.json",
-			".claude.json*",
-			"sessions",
-			"state",
-			"cache",
-			"debug",
-			"telemetry",
-			"daemon",
-			"daemon.log",
-			"ide",
-			"backups",
-			"shell-snapshots",
-			"statusline*.sh",
-			"stats-cache.json",
-			"policy-limits.json*",
-			"remote-settings.json",
-			".last-*",
-			"gh-pr-status-cache.json",
-			"mcp-needs-auth-cache.json",
-			".DS_Store",
-			"usage-data",
-			"jobs",
-			"channels",
-			"chrome",
-			"feedback",
-			".caveman-active",
-			"downloads",
-			"settings.json.bak*",
-			".anthropic",
-			"plugins/.trash",
-			"security/agent-sdk-venv",
-		]);
+	it("matches the ignore list the LIVE sessions store, exactly", async () => {
+		// Read from the capture rather than a second copy of it: if the packaged
+		// list and the engine's own storage ever diverge, this fails. The leading
+		// `/` is part of the pattern (it anchors to the sync root), so an
+		// unanchored `sessions` would also swallow `skills/debug/` and friends.
+		const stdout = readFileSync(
+			join(import.meta.dirname, "fixtures", "mutagen-sync-list.json"),
+			"utf-8",
+		);
+		const [claude, pi] = parseSessionList(stdout);
+		expect(CLAUDE_SYNC_IGNORE).toEqual(claude.ignore);
+		expect(PI_SYNC_IGNORE).toEqual(pi.ignore);
+		expect(CLAUDE_SYNC_IGNORE).toHaveLength(31);
+		expect(PI_SYNC_IGNORE).toHaveLength(4);
 	});
 
-	it("carries no machine-local junk into the pi list", () => {
-		expect(PI_SYNC_IGNORE).toEqual(["auth.json", "install/", "bin/"]);
+	it("anchors every packaged pattern at the sync root but .DS_Store", () => {
+		// `.DS_Store` is the one deliberately unanchored entry — it matches the
+		// live session, and the OS drops it at every level.
+		const bare = [...CLAUDE_SYNC_IGNORE, ...PI_SYNC_IGNORE].filter((p) => !p.startsWith("/"));
+		expect(bare).toEqual([".DS_Store", ".DS_Store"]);
 	});
 
 	it("returns the packaged list when the user adds nothing", () => {
 		const ignore = syncIgnoreFor("claude", configWithUser([]));
-		expect(ignore).toContain(".credentials.json");
-		expect(ignore).toContain("sessions");
-		expect(ignore).not.toContain("auth.json");
+		expect(ignore).toContain("/.credentials.json");
+		expect(ignore).toContain("/sessions");
+		expect(ignore).not.toContain("/auth.json");
 	});
 
 	it("appends the user's patterns after the packaged ones", () => {
@@ -513,7 +501,11 @@ describe("syncIgnoreFor", () => {
 	});
 
 	it("has a distinct, credential-safe packaged list for pi", () => {
-		const ignore = syncIgnoreFor("pi", configWithUser([]));
-		expect(ignore).toEqual(["auth.json", "install/", "bin/"]);
+		expect(syncIgnoreFor("pi", configWithUser([]))).toEqual([
+			"/auth.json",
+			"/install",
+			"/bin",
+			".DS_Store",
+		]);
 	});
 });

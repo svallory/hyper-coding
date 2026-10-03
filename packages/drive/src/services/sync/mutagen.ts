@@ -44,16 +44,23 @@ function friendlyError(err: unknown): string {
 }
 
 /**
- * Did this failure mean "the daemon didn't answer"?
+ * What a stopped daemon looks like on stderr.
  *
  * MUTAGEN-INTERNAL (verified 0.18.1): with `MUTAGEN_DISABLE_AUTOSTART=1`, a
  * stopped daemon fails with "unable to autostart daemon" / "unable to connect
  * to the agent". That specific shape is the ONLY thing we may soften into
  * `running: no`; everything else is a fault the user needs to see.
+ *
+ * Anchored on purpose. A loose /daemon|agent/ also matches an ordinary failure
+ * whose stderr merely mentions a path like `~/.pi/agent`, turning a real fault
+ * into "the daemon is down, run `mutagen daemon start`" — advice that cannot
+ * work, delivered with a cheerful exit 0.
  */
+const DAEMON_UNREACHABLE = /unable to (autostart|connect to) (the )?(daemon|agent)/i;
+
 function daemonUnreachable(err: unknown): boolean {
 	if (!(err instanceof SyncEngineError) || err.code !== "DAEMON_UNREACHABLE") return false;
-	return /daemon|agent/i.test(err.message);
+	return DAEMON_UNREACHABLE.test(err.message);
 }
 
 /**
@@ -127,6 +134,10 @@ export function parseSessionList(stdout: string): SyncSession[] {
 		const ignore = entry.ignore as { paths?: unknown } | undefined;
 		const alpha = entry.alpha as Record<string, unknown> | undefined;
 		const beta = entry.beta as Record<string, unknown> | undefined;
+		const symlink = entry.symlink as { mode?: unknown } | undefined;
+		const betaPermissions = beta?.permissions as
+			| { defaultFileMode?: unknown; defaultDirectoryMode?: unknown }
+			| undefined;
 		return {
 			name: typeof entry.name === "string" ? entry.name : "",
 			alpha: endpointUrl(alpha),
@@ -137,6 +148,16 @@ export function parseSessionList(stdout: string): SyncSession[] {
 				? ignore.paths.filter((p): p is string => typeof p === "string")
 				: [],
 			paused: bool(entry.paused),
+			// The symlink mode and beta permissions are part of what makes a
+			// session correct: a session created with `portable` symlinks, or with
+			// beta files at 0644, must not report as ready.
+			symlinkMode: typeof symlink?.mode === "string" ? symlink.mode : "",
+			betaFileMode:
+				typeof betaPermissions?.defaultFileMode === "string" ? betaPermissions.defaultFileMode : "",
+			betaDirMode:
+				typeof betaPermissions?.defaultDirectoryMode === "string"
+					? betaPermissions.defaultDirectoryMode
+					: "",
 			alphaConnected: bool(alpha?.connected),
 			betaConnected: bool(beta?.connected),
 		};
@@ -147,8 +168,10 @@ export function parseSessionList(stdout: string): SyncSession[] {
  * The exact argv for a session create.
  *
  * Exported so the flags are asserted directly, without a spawner in the way.
- * `--ignore` takes one pattern per flag (in list order) rather than a
- * comma-joined value, so a pattern containing a comma can't be split.
+ * `--ignore` takes one pattern per flag, in list order. That is tidier, but it
+ * is NOT what stops a comma being read as a separator: pflag parses --ignore as
+ * a CSV string slice (verified 0.18.1 — `*.{json,bak}` fails with a pattern
+ * parse error), so a comma is rejected in the config loader instead.
  */
 export function createArgs(
 	name: string,
@@ -219,7 +242,7 @@ export class MutagenSyncEngine implements SyncEngine {
 			const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
 			// Tagged so probe() can tell "the daemon is down" — a state worth
 			// reporting — from every other non-zero exit, which is a fault.
-			const code = /daemon|agent/i.test(detail) ? "DAEMON_UNREACHABLE" : undefined;
+			const code = DAEMON_UNREACHABLE.test(detail) ? "DAEMON_UNREACHABLE" : undefined;
 			throw new SyncEngineError(`\`${BIN} ${args.join(" ")}\` failed: ${detail}`, code);
 		}
 		return result.stdout;

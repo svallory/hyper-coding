@@ -251,5 +251,39 @@ describe("loadConfig", () => {
 			withTempConfig('[sync.pi]\nignore = "nope"\n');
 			expect(() => loadConfig()).toThrowError(/`sync\.pi\.ignore` must be a list of strings/);
 		});
+
+		describe("ignore pattern validation (MUST 3)", () => {
+			afterEach(() => delete process.env.HYPER_DRIVE_CONFIG);
+
+			it("rejects a comma in a pattern (mutagen reads --ignore as CSV)", () => {
+				// Verified 0.18.1: `*.{json,bak}` becomes two patterns and the
+				// engine fails with a pattern syntax error, so the config must not
+				// let it through.
+				withTempConfig('[sync.claude]\nignore = ["*.{json,bak}"]\n');
+				expect(() => loadConfig()).toThrowError(/comma-separated/);
+			});
+
+			it("rejects a double quote in a pattern", () => {
+				withTempConfig("[sync.claude]\nignore = ['a\"b']\n");
+				expect(() => loadConfig()).toThrowError(/comma-separated/);
+			});
+
+			it("rejects an empty pattern", () => {
+				withTempConfig('[sync.claude]\nignore = [""]\n');
+				expect(() => loadConfig()).toThrowError(/can't be empty/);
+			});
+
+			it("rejects a negating pattern that would un-ignore a packaged entry", () => {
+				// `!/.credentials.json` puts credentials back into sync — the one
+				// failure mode here with consequences off-machine.
+				withTempConfig('[sync.claude]\nignore = ["!/.credentials.json"]\n');
+				expect(() => loadConfig()).toThrowError(/un-ignores/);
+			});
+
+			it("accepts a normal root-anchored pattern", () => {
+				withTempConfig('[sync.claude]\nignore = ["/my-scratch"]\n');
+				expect(loadConfig().sync.claude.ignore).toEqual(["/my-scratch"]);
+			});
+		});
 	});
 });
