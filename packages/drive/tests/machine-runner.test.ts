@@ -67,6 +67,8 @@ interface FakeTaskSpec {
 
 interface FakeTask extends Task {
 	checks: number[];
+	/** How many times check() was actually called — an assertion target. */
+	checkCalls: number;
 	applies: number;
 	rootScriptCalls: number;
 }
@@ -79,9 +81,11 @@ function fakeTask(spec: FakeTaskSpec): FakeTask {
 		needsRoot: spec.needsRoot ?? false,
 		title: spec.title ?? spec.id,
 		checks,
+		checkCalls: 0,
 		applies: 0,
 		rootScriptCalls: 0,
 		async check(): Promise<boolean> {
+			task.checkCalls += 1;
 			if (spec.throwInCheck === true) throw new Error("disk is on fire");
 			return checks.length > 1 ? (checks.shift() as boolean) : (checks[0] ?? true);
 		},
@@ -386,10 +390,13 @@ describe("runSetup — the root script", () => {
 		expect(report.skipped).toEqual([]);
 	});
 
-	it("offers exactly the three answers, with 'I've run it' as the default", async () => {
+	it("asks once, with only the still-failing task ids", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		// The prompt object itself is the seam; what matters here is that the
-		// runner only ever asks rootChoice, and passes the failing ids.
+		// The labels and the default are asserted in machine-setup.test.ts, against
+		// the exported option list. What the runner owns is what it asks and with
+		// what: the question it hands the prompt has to name the machine and every
+		// task still outstanding, so "run it for me" can't cover a task that
+		// already passed.
 		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
 		const prompt = scriptedPrompt(["skip"]);
 		await runSetup(remoteCtx(fakeRunner(), []), {
@@ -494,6 +501,53 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 		]);
 		// Without a tty sudo fails with "no tty present" instead of prompting.
 		expect(privileged[0].opts).toEqual({ tty: true });
+	});
+
+	it("remote: a failed copy stops the run and never runs anything privileged", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const runner = fakeRunner();
+		// scp failed: the script is not on the other machine, so the privileged
+		// command would fail with a confusing "No such file" instead of saying the
+		// transfer broke.
+		runner.scp = async () => ({ code: 255, stdout: "", stderr: "Permission denied" });
+
+		await expect(
+			runSetup(remoteCtx(runner, []), {
+				features: ["tools"],
+				tasks: [task],
+				prompt: scriptedPrompt(["run-for-me"]),
+				scratchDir: scratch(),
+			}),
+		).rejects.toThrow(/Permission denied/);
+
+		expect(runner.sshCalls.some((call) => call.cmd[0] === "sudo")).toBe(false);
+	});
+
+	it("remote: an unanswerable $HOME probe fails with a way out, not a stray path", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const task = fakeTask({
+			id: "home-path.create",
+			feature: "home-path",
+			needsRoot: true,
+			checks: [false],
+		});
+		const runner = fakeRunner();
+		// Empty stdout and non-zero: guessing here would put the script somewhere
+		// the privileged command can't reach it.
+		runner.ssh = async () => ({ code: 255, stdout: "\n", stderr: "connection closed" });
+
+		await expect(
+			runSetup(remoteCtx(runner, []), {
+				features: ["home-path"],
+				tasks: [task],
+				prompt: scriptedPrompt(["run-for-me"]),
+				scratchDir: scratch(),
+			}),
+		).rejects.toThrow(/home directory/);
+
+		expect(runner.scpCalls).toHaveLength(0);
+		expect(runner.sshCalls.some((call) => call.cmd[0] === "sudo")).toBe(false);
 	});
 
 	it("remote: asks the machine for its home when drive.toml doesn't know it", async () => {
@@ -609,9 +663,11 @@ describe("runSetup — failures", () => {
 			}),
 		).rejects.toThrow(/tools\.fd/);
 
-		// The task after the broken one must not have run at all.
+		// The task after the broken one must not have run at all — not even a
+		// check. `checks` holding its answer says nothing about whether check()
+		// was called, which is what this is about.
 		expect(after.applies).toBe(0);
-		expect(after.checks).toHaveLength(1);
+		expect(after.checkCalls).toBe(0);
 	});
 
 	it("names the task when apply throws, and doesn't re-check it", async () => {
@@ -626,6 +682,11 @@ describe("runSetup — failures", () => {
 				scratchDir: scratch(),
 			}),
 		).rejects.toThrow(/tools\.mise/);
+
+		// Exactly one check: the one that found the work to do. Re-checking after a
+		// failed apply would report on a state nobody reached.
+		expect(task.checkCalls).toBe(1);
+		expect(task.applies).toBe(1);
 	});
 
 	it("names the task when its rootScript throws", async () => {

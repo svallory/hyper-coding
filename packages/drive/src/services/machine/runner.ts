@@ -25,6 +25,7 @@ import { join } from "node:path";
 import type { RunResult } from "#services/remote";
 import {
 	assembleRootScript,
+	privilegedArgv,
 	type RootScriptEntry,
 	remoteScriptPath,
 	rootSteps,
@@ -164,11 +165,10 @@ async function remoteHome(ctx: TaskContext): Promise<string> {
  * askpass program specified" instead of asking.
  */
 async function runRootScript(ctx: TaskContext, localPath: string): Promise<RunResult> {
-	const argv = ["sudo", "bash", localPath];
 	if (ctx.machine === null) {
 		// Local: tty:true is what makes the terminal (and the user's typing) reach
 		// sudo. The runner's spawner inherits stdio for it.
-		return ctx.runner.ssh(argv, { tty: true });
+		return ctx.runner.ssh(privilegedArgv(localPath), { tty: true });
 	}
 	const target = remoteScriptPath(await remoteHome(ctx));
 	const copied = await ctx.runner.scp(localPath, target);
@@ -177,17 +177,8 @@ async function runRootScript(ctx: TaskContext, localPath: string): Promise<RunRe
 			`I couldn't copy the root script to ${where(ctx)}: ${copied.stderr.trim() || `exit ${copied.code}`}`,
 		);
 	}
-	return ctx.runner.ssh(["sudo", "bash", target], { tty: true });
+	return ctx.runner.ssh(privilegedArgv(target), { tty: true });
 }
-
-/**
- * What "I've run it" means for this target, spelled out.
- *
- * The script is written here, on the machine hyper is running on. For a remote
- * target it has to be copied before it can be run, and a user who was told
- * nothing but the local path would be running a file that doesn't exist on the
- * other end. The recipe itself lives in root-script.ts (C-6).
- */
 
 /**
  * Run the selected tasks against one machine.
