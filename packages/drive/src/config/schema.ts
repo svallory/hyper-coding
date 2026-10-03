@@ -23,6 +23,59 @@ export interface MachineConfig {
 	agent_user: string;
 }
 
+/**
+ * What an agent user name may look like.
+ *
+ * This name ends up INSIDE A ROOT SCRIPT: as `useradd`'s argument, in the
+ * `gpasswd` line that removes a group membership, as the path of a file that
+ * gets deleted, and in text the user pastes into their shell. A value carrying
+ * shell syntax would therefore run as root, and one like `..` or `*` would turn
+ * the drop-in deletion into "delete something else". So the name is restricted
+ * to what a POSIX user name can actually be: lower case, starting with a letter
+ * or underscore, no dots, no slashes, no shell metacharacters.
+ *
+ * Deliberately not `^\w+$`: `\w` is Unicode-aware in JavaScript's regex
+ * flavour, and this name has to be safe to hand to a shell on any machine, not
+ * only one whose locale can represent it.
+ */
+export const AGENT_USER_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
+
+/**
+ * The reserved name `agent_user` may never take.
+ *
+ * `root` is uid 0 on every machine, and the agent user's entire purpose is to
+ * be the user with NO privileges. Naming it `root` would make `rm -f <drop-in>`
+ * delete the root user's own drop-in and the `gpasswd` line strip root's group
+ * memberships — which is precisely the damage this check exists to prevent.
+ */
+export const FORBIDDEN_AGENT_USER = "root";
+
+/**
+ * Is this a name the agent user is allowed to have?
+ *
+ * Shared by config validation, the machine tasks and the generated root script
+ * so the three cannot disagree about what is legal. A root script generated
+ * from a name this rejects would be a script that does something other than
+ * what it says it does.
+ */
+export function isValidAgentUser(name: unknown): name is string {
+	return typeof name === "string" && AGENT_USER_PATTERN.test(name) && name !== FORBIDDEN_AGENT_USER;
+}
+
+/** Why a name was refused, in a sentence that names what is wrong. */
+export function agentUserProblem(name: unknown): string {
+	if (typeof name !== "string") return `it is ${typeof name}, not a name`;
+	if (name === FORBIDDEN_AGENT_USER) {
+		return `\`${FORBIDDEN_AGENT_USER}\` is the one account that cannot be the unattended agent`;
+	}
+	if (name === "") return "it is empty";
+	if (name !== name.trim()) return "it has leading or trailing whitespace";
+	if (!AGENT_USER_PATTERN.test(name)) {
+		return "it must be lower case, start with a letter or underscore, and contain only letters, digits, underscores and dashes (up to 32 characters)";
+	}
+	return "it is not a usable user name";
+}
+
 export interface WarpConfig {
 	/** Directory names excluded when warping a session between machines. */
 	exclude: string[];

@@ -17,6 +17,7 @@
  * says what the machine says.
  */
 
+import { AGENT_USER_PATTERN, agentUserProblem, isValidAgentUser } from "#config/schema";
 import { shellQuote } from "#services/remote";
 import { runScript } from "./shell.js";
 import type { TaskContext } from "./types.js";
@@ -58,17 +59,60 @@ export async function agentUserOf(ctx: TaskContext): Promise<string> {
 }
 
 /**
+ * Refuse to go any further with an agent user name that is not usable.
+ *
+ * Called before a root script is rendered, so a bad name is a message rather
+ * than a script. Three things are refused, and the third can only be answered by
+ * asking the machine:
+ *
+ * - a name that is not shaped like a user name at all (shell syntax in it would
+ *   be executed as root by the script it is interpolated into);
+ * - `root`, which is uid 0 on every machine;
+ * - a name that is the PRIMARY user — `agent_user` pointing at the operator's
+ *   own account would remove the operator's own group memberships and delete the
+ *   operator's own privilege drop-in;
+ * - any name that already exists as uid 0 on the machine, whatever it is called
+ *   (a machine with a second uid-0 alias would otherwise be set up so that
+ *   "the unprivileged agent" is root).
+ */
+export async function assertAgentUserIsSafe(ctx: TaskContext, agentUser: string): Promise<void> {
+	const refuse = (why: string): never => {
+		throw new Error(
+			`I won't set up the unattended agent user as ${JSON.stringify(agentUser)} on ${ctx.machine?.name ?? "this machine"}: ${why}. Fix \`agent_user\` in your hyperdrive config (\`hyper machine add ${ctx.machine?.name ?? "<machine>"} --agent-user <name>\` sets it).`,
+		);
+	};
+	if (!isValidAgentUser(agentUser)) refuse(agentUserProblem(agentUser));
+
+	const primaryUser = await primaryUserOf(ctx);
+	if (agentUser === primaryUser) {
+		refuse(
+			`that is the primary user on this machine — the whole point of a second user is that it has none of your privileges, and this one would have yours`,
+		);
+	}
+	const uid = await runScript(ctx, `id -u ${shellQuote(agentUser)} 2>/dev/null || true`);
+	const resolved = uid.stdout.trim();
+	if (resolved === "0") {
+		refuse(`${agentUser} is uid 0 (root) on this machine`);
+	}
+}
+
+/**
  * The primary user's login name on the target.
  *
  * `machine.host` is an ssh target, so `user@host` names the login — but a host
  * with no user part (`netcup`) or a Herdr-only machine has none, and `id -un` on
  * the target is the one thing that can't be wrong. The ssh target is only a
  * fallback for a runner that can't answer a probe.
+ *
+ * The probe is accepted only if it matches the SAME pattern as the agent user
+ * (and strictly, without the `i` flag this used to carry). The name becomes a
+ * `usermod` argument and a `setfacl` ACL entry in a root script, so a runner
+ * answering with anything else must not have its answer interpolated.
  */
 export async function primaryUserOf(ctx: TaskContext): Promise<string> {
 	const probed = await runScript(ctx, "id -un");
 	const name = probed.stdout.trim();
-	if (probed.code === 0 && /^[a-z_][a-z0-9_-]*$/i.test(name)) return name;
+	if (probed.code === 0 && AGENT_USER_PATTERN.test(name) && name !== "") return name;
 	const fromHost = ctx.machine?.host?.split("@")[0]?.trim() ?? "";
 	return fromHost !== "" ? fromHost : ctx.config.self.name;
 }

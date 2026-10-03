@@ -69,12 +69,14 @@ echo "$image $digest"
 # The stock debian:13 image ships NO /sbin/init — systemd-sysv is a separate
 # package — so `--systemd=always … /sbin/init` cannot work on it directly, and
 # it cannot be installed inside the container either (nothing is running yet).
-# So the packages go into a throwaway image derived from it, built once here.
-# The base digest is printed above so the derivation is traceable.
-derived="hyper-t16-e2e:local"
-if ! podman image exists "$derived"; then
-  echo "# building $derived from $image (systemd + sshd + the acl/inotify packages)"
-  cat > "$work_real/Containerfile" <<CONTAINERFILE
+# So the packages go into a throwaway image derived from it. The base digest is
+# printed above so the derivation is traceable.
+#
+# The tag carries a hash of the Containerfile: editing it must produce a NEW
+# image rather than silently reusing the old one, which is how a stale tag turns
+# a fixed harness back into a failing one.
+containerfile="$work_real/Containerfile"
+cat > "$containerfile" <<CONTAINERFILE
 FROM $image
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \\
@@ -83,9 +85,20 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \\
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
 CONTAINERFILE
-  podman build --tag "$derived" --file "$work_real/Containerfile" "$work_real" >/dev/null \
+
+recipe="$(shasum -a 256 "$containerfile" | cut -c1-12)"
+derived="hyper-t16-e2e:$recipe"
+if ! podman image exists "$derived"; then
+  echo "# building $derived from $image (systemd + sshd + the acl/inotify packages)"
+  podman build --tag "$derived" --file "$containerfile" "$work_real" >/dev/null \
     || die "could not build the container image"
 fi
+# Drop superseded tags of the same harness: they are this script's own byproducts
+# and nothing else refers to them.
+for stale in $(podman images --format '{{.Repository}}:{{.Tag}}' | grep '^hyper-t16-e2e:' || true); do
+  [ "$stale" = "$derived" ] && continue
+  podman rmi -f "$stale" >/dev/null 2>&1 || true
+done
 
 # --------------------------------------------------------------------------
 # The machine
@@ -296,6 +309,44 @@ as_agent "cat /home/$agent/.claude/CLAUDE.md" >/dev/null 2>&1 \
   || die "the agent could not read its CLAUDE.md"
 pass "the agent can read its own CLAUDE.md"
 
+# The config dir carries TRAVERSE only, so the agent can reach the entries it
+# was given and nothing else. `ls` is what proves the difference: the entries
+# exist, the listing does not.
+if as_agent "ls /home/$primary/.claude" >/dev/null 2>&1; then
+  die "the agent can LIST the primary's config dir — traverse-only is not in place"
+fi
+pass "the agent cannot list the primary's config dir (traverse only)"
+
+# No DEFAULT ACL on the config dir: a default entry is inherited by every file
+# created there afterwards, which is what would hand the agent read on all of them
+# (history, debug logs, shell snapshots, a future credential). Asserted on the
+# ACL itself, which is the property that holds regardless of file modes.
+claude_defaults="$(ssh_t16 "getfacl -c -p /home/$primary/.claude 2>/dev/null | grep -c '^default:' || true")"
+[ "${claude_defaults:-0}" = "0" ] || die "there are $claude_defaults default ACL entries on ~/.claude"
+pass "there is no default ACL on ~/.claude (nothing is inherited there)"
+
+# A file the writer marks PRIVATE stays private. This is the real protection and
+# it is about the writer's own mode: 0600 has no `other` bits, so with no default
+# ACL to widen them the agent cannot read it.
+#
+# Note on what this does and does not prove: a 0644 file is world-readable BY
+# DEFINITION of its mode — no ACL arrangement can make it otherwise, and with the
+# shared umask (002) files the primary writes are group/other-readable anyway.
+# What removing the default ACL buys is that nothing is INHERITED, so a private
+# file stays private instead of being widened by a rule on the directory.
+ssh_t16 "printf 'private\n' > /home/$primary/.claude/private.json && chmod 0600 /home/$primary/.claude/private.json"
+if as_agent "cat /home/$primary/.claude/private.json" >/dev/null 2>&1; then
+  die "a 0600 file in the config dir is readable by the agent"
+fi
+pass "a 0600 file created in ~/.claude later is NOT readable as $agent"
+
+# skills/, commands/ and agents/ DO carry a default entry, so a new file there is
+# readable — that is the deliberate contrast with the config dir root.
+ssh_t16 "mkdir -p /home/$primary/.claude/skills && printf 'skill\n' > /home/$primary/.claude/skills/new.md"
+as_agent "cat /home/$primary/.claude/skills/new.md" >/dev/null 2>&1 \
+  || die "a new file under skills/ is not readable as $agent"
+pass "a new file under skills/ IS readable as $agent"
+
 if as_agent "cat /home/$primary/.claude/.credentials.json" >/dev/null 2>&1; then
   die "the agent CAN read .credentials.json — the recursive-ACL rule was broken"
 fi
@@ -344,6 +395,56 @@ if ! printf '%s' "$as_agent_out" | grep -qx "$agent"; then
   die "as-agent printed $(printf '%q' "$as_agent_out"), expected exactly '$agent'"
 fi
 pass "the as-agent helper runs a command as $agent"
+
+# --------------------------------------------------------------------------
+# Running the root script a second time changes nothing (C-15)
+# --------------------------------------------------------------------------
+# Compared as ACLs and modes rather than "the script exited 0": every step is
+# guarded, so a second run must leave both homes' metadata byte-identical.
+snapshot() {
+  ssh_t16 "getfacl -p /home/$primary /home/$primary/.claude /home/$primary/work /home/$agent 2>/dev/null; stat -c '%n %a %U %G' /home/$primary /home/$primary/.claude /home/$primary/work /home/$agent /home/$agent/.claude 2>/dev/null"
+}
+before="$(snapshot)"
+ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1 \
+  || die "the root script failed on its SECOND run — it is not idempotent"
+after="$(snapshot)"
+if [ "$before" != "$after" ]; then
+  diff <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -20
+  die "the root script changed the machine on its second run"
+fi
+pass "running the root script twice is a no-op (C-15)"
+
+# --------------------------------------------------------------------------
+# Root must not follow a symlink the agent planted in its own home
+# --------------------------------------------------------------------------
+# The agent owns everything under ~agent. If root did `chown`/`chmod` on
+# $agent_home/.claude without asking whether it is a symlink, the agent could
+# point that at any file on the machine and have root rewrite it. So: plant a
+# symlink at a root-owned canary, re-run the script, and require the canary to
+# come out untouched.
+canary="/etc/hyper-t16-canary"
+ssh_t16 "sudo sh -c 'printf CANARY > $canary && chown root:root $canary && chmod 0600 $canary'"
+before_canary="$(ssh_t16 "sudo stat -c '%U %a %s' $canary && sudo cat $canary")"
+# The agent replaces its own config dir with a symlink to the canary.
+# Both steps run inside ONE `bash -c`, because `as_agent` expands to
+# `sudo -u agent <cmd>` and that applies only to the FIRST word of an `&&` list —
+# the second would silently run as the primary user instead.
+as_agent "bash -c 'rm -rf /home/$agent/.claude && ln -s $canary /home/$agent/.claude'" \
+  || die "could not plant the symlink as the agent"
+# The script is EXPECTED to fail or to refuse here: a hostile layout should not
+# be quietly accepted. Either is fine; following the link is not.
+ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1 || true
+after_canary="$(ssh_t16 "sudo stat -c '%U %a %s' $canary && sudo cat $canary")"
+if [ "$before_canary" != "$after_canary" ]; then
+  die "root followed the agent's planted symlink: canary changed from '$before_canary' to '$after_canary'"
+fi
+pass "root did not follow a symlink the agent planted at ~$agent/.claude"
+# And it must not have become a directory either — that would mean root created
+# something through the link.
+if [ "$(ssh_t16 "sudo stat -c %F $canary")" != "regular file" ]; then
+  die "the canary is no longer a regular file: root created something through the link"
+fi
+pass "the canary is still a regular file with the same owner, mode and content"
 
 # The container must not survive the script.
 echo "# container is removed by the trap"
