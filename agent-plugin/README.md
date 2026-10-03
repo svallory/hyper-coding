@@ -69,6 +69,30 @@ in any mode, on any path.
 /plugin install hyper@svallory-plugins
 ```
 
+### The hyper CLI is also required
+
+This plugin keeps **no copy** of its space-detection library. That library
+(`hyper-lib.sh`) lives inside the hyper CLI, in the `@hypercli/drive` package,
+and the plugin's scripts reach it through `hyper space lib-path`. Installing
+the plugin alone is therefore not enough — you need a `hyper` that ships
+`@hypercli/drive`:
+
+```bash
+npm install -g @hypercli/cli
+hyper space lib-path    # must print a path that exists
+```
+
+If `hyper space lib-path` errors, your CLI is older than this plugin needs:
+update `@hypercli/cli`.
+
+Without the CLI:
+
+- `/hyper:init`, `/hyper:adopt`, `/hyper:audit` and `/hyper:cleanup` exit 2 with
+  an install message rather than half-running.
+- The **SessionStart** hook stays quiet in unrelated projects. If you *are* in a
+  space, it prints one line naming the CLI — otherwise nothing in the session
+  would explain why every `/hyper:` command fails.
+
 ## Commands
 
 | Command | What it does |
