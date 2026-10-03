@@ -23,7 +23,7 @@ if ! hyper_soft_lib; then
   d="$PWD"
   while [[ "$d" != "/" ]]; do
     if [[ -f "$d/HYPER.md" || -f "$d/HYPERDEV.md" ]]; then
-      echo "This is a hyper space, but the hyper CLI is not installed — install @hypercli/cli to get space context and the /hyper: commands."
+      echo "This is a hyper space, but the hyper CLI is missing or outdated — install or update @hypercli/cli to get space context and the /hyper: commands."
       break
     fi
     d="$(dirname "$d")"
