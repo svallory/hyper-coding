@@ -7,7 +7,12 @@ export default class LibPath extends BaseCommand<typeof LibPath> {
 
 	static override examples = [
 		"<%= config.bin %> space lib-path",
-		'source "$(hyper space lib-path)"',
+		// `| tail -n 1` is not decoration: toolchain shims (proto/mise/nvm)
+		// print a one-off notice to STDOUT on first run under a new HOME, and
+		// the plugin's scripts source this from a fresh environment. Copying
+		// the bare form is the idiom that broke 51 assertions — take the last
+		// line, which is the only one this command writes.
+		'source "$(hyper space lib-path | tail -n 1)"',
 	];
 
 	static override flags = {
@@ -17,8 +22,9 @@ export default class LibPath extends BaseCommand<typeof LibPath> {
 	async run(): Promise<void> {
 		await this.parse(LibPath);
 		// Exactly one line and nothing else: the agent-plugin's scripts do
-		// `source "$(hyper space lib-path)"`, so any extra output would end up
-		// in a shell parse error. Keep it silent.
+		// `source "$(hyper space lib-path | tail -n 1)"`, so any extra output
+		// from this command would end up in a shell parse error. Noise from a
+		// shim *above* it is the shim's to fix; callers defend with `tail -n 1`.
 		this.log(libPath());
 	}
 }
