@@ -3,6 +3,12 @@ export { ConfigError, configExists, configPath, loadConfig } from "#config/index
 export { DEFAULT_CONFIG, DEFAULT_MACHINE, type DriveConfig } from "#config/schema";
 export { type BaseArgs, BaseCommand, type BaseFlags } from "#lib/base-command";
 export {
+	AllowlistError,
+	findSecretPaths,
+	renderGitignore,
+	SECRET_PATTERNS,
+} from "#services/allowlist";
+export {
 	addHint,
 	listHerdrMachines,
 	listMachines,
