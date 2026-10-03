@@ -25,3 +25,15 @@ export {
 	VERIFIED_CLAUDE_VERSION,
 	writeOwner,
 } from "#services/sessions";
+export {
+	detectSpace,
+	findSpaceRoot,
+	isSpace,
+	libPath,
+	repoSlugOf,
+	type SpaceInfo,
+	type SpaceLayout,
+	spaceLayout,
+	spaceRepos,
+	worktreesDir,
+} from "#services/space";
