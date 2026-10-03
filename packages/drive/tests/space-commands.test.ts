@@ -412,6 +412,7 @@ describe("space status and log", () => {
 		);
 		const log = run(root, "log", "--oneline", "-n", "5");
 		expect(log.status, flat(log.stderr)).toBe(0);
+		expect(log.stderr).not.toContain("UnparsedCommand");
 		expect(log.stdout).toContain("space: init daily");
 		expect(log.stdout).not.toContain("only other");
 		for (const args of [
