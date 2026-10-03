@@ -69,9 +69,11 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/hyper-stack.sh" detect   # toolchain
 ```
 
 For the layout, `hyper space detect <dir> --json` reports it directly
-(`layout` is `bare`, `multi`, or absent when the directory is not in a
-space). Underneath, `hyper-lib.sh` — which ships inside the hyper CLI, not in
-this plugin — exposes `space_layout <dir>` and
+(`layout` is `bare` or `multi`). Note it **exits 1 with an error** when the
+directory is not in a space — it does not print JSON with `layout` absent, so
+branch on the exit code rather than looking for a missing key. Underneath,
+`hyper-lib.sh` — which ships inside the hyper CLI, not in this plugin —
+exposes `space_layout <dir>` and
 `worktrees_dir <dir> [slug]` (the `slug` is required in a multi-repo space —
 there is no single answer without one). Rules of thumb:
 
