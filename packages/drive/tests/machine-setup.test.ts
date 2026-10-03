@@ -12,7 +12,7 @@
  */
 
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -33,8 +33,11 @@ const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
  * and CI runners are narrow, so a coloured gutter lands inside the sentence
  * every assertion here is about.
  */
-const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncReturns<string> =>
-	spawnSync(process.execPath, [cli, ...args], {
+const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncReturns<string> => {
+	const bin = scratchDir();
+	// The no-op test must not depend on a system copy tool or produce root work.
+	writeFileSync(join(bin, "rsync"), "#!/bin/sh\necho 'rsync version 99.0.0'\n", { mode: 0o755 });
+	return spawnSync(process.execPath, [cli, ...args], {
 		encoding: "utf8",
 		env: {
 			...process.env,
@@ -46,8 +49,10 @@ const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncRe
 			// Never let a setup subprocess inspect hooks or install into the real home.
 			HOME: scratchDir(),
 			CLAUDE_CONFIG_DIR: scratchDir(),
+			PATH: `${bin}:${env.PATH ?? process.env.PATH ?? "/usr/bin:/bin"}`,
 		},
 	});
+};
 
 // 27 is ESC, built via fromCharCode so the regex holds no literal control char.
 const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
@@ -97,6 +102,7 @@ describe("machine setup", () => {
 		expect(flat(r.stdout)).toContain("no hooks found");
 		expect(flat(r.stdout)).not.toContain("doing it now");
 		expect(flat(r.stdout)).not.toContain("tools.path");
+		expect(flat(r.stdout)).toContain("99.0.0"); // the stub, never the host binary
 		// The empty isolated hooks select no tool tasks, so nothing was written.
 		expect(existsSync(join(scratch, "hyper-machine-root.sh"))).toBe(false);
 	});
