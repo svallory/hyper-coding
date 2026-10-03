@@ -13,7 +13,7 @@
  * string, so a path with spaces or quotes cannot be re-parsed.
  */
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { SyncCadence } from "#config/schema";
@@ -32,6 +32,7 @@ export function spaceGitDir(spaceRoot: string): string {
 }
 
 export interface SpaceGitResult {
+	signal?: NodeJS.Signals | null;
 	status: number;
 	stdout: string;
 	stderr: string;
@@ -46,6 +47,9 @@ export interface SpaceGitOptions {
 	allowFailure?: boolean;
 	/** Inherit git's streams and pager for interactive passthrough commands. */
 	inheritStdio?: boolean;
+	/** Mark a read command so Git does not refresh/write optional index locks. */
+	readOnly?: boolean;
+	maxBuffer?: number;
 }
 
 /**
@@ -142,17 +146,14 @@ export function spaceGit(
 	args: string[],
 	opts: SpaceGitOptions = {},
 ): SpaceGitResult {
-	const result = spawnSync(
-		"git",
-		["--git-dir", spaceGitDir(spaceRoot), "--work-tree", spaceRoot, ...args],
-		{
-			cwd: opts.cwd ?? spaceRoot,
-			input: opts.input,
-			stdio: opts.inheritStdio ? "inherit" : "pipe",
-			encoding: "utf8",
-			env: cleanGitEnv(),
-		},
-	);
+	const result = spawnSync("git", spaceGitArguments(spaceRoot, args, opts.readOnly), {
+		cwd: opts.cwd ?? spaceRoot,
+		input: opts.input,
+		stdio: opts.inheritStdio ? "inherit" : "pipe",
+		encoding: "utf8",
+		maxBuffer: opts.maxBuffer ?? 16 * 1024 * 1024,
+		env: cleanGitEnv(),
+	});
 
 	// spawnSync blocks JS signal handlers. Terminal process-group signals are
 	// observable through the child; a signal to Node alone while git runs is
@@ -178,7 +179,7 @@ export function spaceGit(
 				: detail,
 		);
 	}
-	return { status, stdout, stderr };
+	return { status, stdout, stderr, signal: result.signal };
 }
 
 /**
@@ -190,7 +191,11 @@ export function readStagedBlobPrefix(spaceRoot: string, path: string): string {
 	const limit = 4096;
 	const result = spawnSync(
 		"git",
-		["--git-dir", spaceGitDir(spaceRoot), "--work-tree", spaceRoot, "show", `:${path}`],
+		spaceGitArguments(
+			spaceRoot,
+			["cat-file", "blob", spaceGit(spaceRoot, ["rev-parse", `:${path}`]).stdout.trim()],
+			true,
+		),
 		{
 			cwd: spaceRoot,
 			env: cleanGitEnv(),
@@ -207,6 +212,168 @@ export function readStagedBlobPrefix(spaceRoot: string, path: string): string {
 		);
 	}
 	return (result.stdout ?? Buffer.alloc(0)).subarray(0, limit).toString("utf8");
+}
+
+/** Harden every space operation independently of mutable local or global config. */
+function spaceGitArguments(root: string, args: string[], readOnly?: boolean): string[] {
+	const command = args.find(
+		(arg, index) => !arg.startsWith("-") && (index === 0 || args[index - 1] !== "-c"),
+	);
+	const reads = new Set([
+		"status",
+		"log",
+		"diff",
+		"ls-files",
+		"ls-tree",
+		"rev-parse",
+		"rev-list",
+		"merge-base",
+		"cat-file",
+		"ls-remote",
+		"show-ref",
+		"for-each-ref",
+		"check-ref-format",
+	]);
+	return [
+		"--git-dir",
+		spaceGitDir(root),
+		"--work-tree",
+		root,
+		...(readOnly ||
+		reads.has(command ?? "") ||
+		(command === "config" && args.some((arg) => ["--get", "--get-all", "--list"].includes(arg))) ||
+		(command === "symbolic-ref" && args.includes("-q"))
+			? ["--no-optional-locks"]
+			: []),
+		"-c",
+		"core.fsmonitor=false",
+		"-c",
+		"core.hooksPath=/dev/null",
+		...args,
+	];
+}
+
+export interface SpaceBlobPrefix {
+	size: number;
+	prefix: Buffer;
+}
+
+/**
+ * One batch-check and one streaming batch reader, regardless of path count. Blob IDs
+ * come from the index/tree, never from filenames interpreted as revisions. Large
+ * blobs are drained without retaining their bodies; even they get a prefix check.
+ */
+export async function readSpaceBlobPrefixes(
+	root: string,
+	hashes: readonly string[],
+	limit = 4096,
+): Promise<Map<string, SpaceBlobPrefix>> {
+	const unique = [...new Set(hashes)];
+	const result = new Map<string, SpaceBlobPrefix>();
+	if (unique.length === 0) return result;
+	if (
+		!Number.isSafeInteger(limit) ||
+		limit < 1 ||
+		limit > 1024 * 1024 ||
+		unique.some((hash) => !/^[0-9a-f]{40,64}$/.test(hash))
+	)
+		throw new SpaceGitError(
+			"Invalid blob inspection request; inspect the space index before retrying.",
+		);
+	const input = `${unique.join("\n")}\n`;
+	const checked = spaceGit(root, ["cat-file", "--batch-check"], {
+		input,
+		readOnly: true,
+		maxBuffer: Math.max(1024 * 1024, unique.length * 128),
+	});
+	for (const line of checked.stdout.trimEnd().split("\n")) {
+		const [hash, type, rawSize] = line.split(" ");
+		const size = Number(rawSize);
+		if (type !== "blob" || !Number.isSafeInteger(size) || size < 0)
+			throw new SpaceGitError(
+				`Cannot inspect blob ${hash}; repair the space history before retrying.`,
+			);
+		result.set(hash, { size, prefix: Buffer.alloc(Math.min(limit, size)) });
+	}
+	const child = spawn("git", spaceGitArguments(root, ["cat-file", "--batch"], true), {
+		cwd: root,
+		env: cleanGitEnv(),
+		stdio: ["pipe", "pipe", "pipe"],
+	});
+	let stderr = "";
+	child.stderr.on("data", (chunk: Buffer) => {
+		if (stderr.length < 4096) stderr += chunk.toString("utf8").slice(0, 4096 - stderr.length);
+	});
+	let spawnError: Error | undefined;
+	const closed = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+		child.on("error", (error) => {
+			spawnError = error;
+		});
+		child.on("close", (code, signal) => resolve({ code, signal }));
+	});
+	child.stdin.on("error", () => {
+		/* A killed reader closes stdin; close/signal below owns the error. */
+	});
+	child.stdin.end(input);
+	let header = Buffer.alloc(0);
+	let current: SpaceBlobPrefix | undefined;
+	let consumed = 0;
+	let separator = false;
+	let index = 0;
+	let failure: unknown;
+	try {
+		for await (const raw of child.stdout) {
+			const chunk = raw as Buffer;
+			let offset = 0;
+			while (offset < chunk.length) {
+				if (separator) {
+					if (chunk[offset++] !== 10) throw new Error("Invalid batch blob delimiter");
+					separator = false;
+					current = undefined;
+					index++;
+				} else if (current) {
+					const length = Math.min(chunk.length - offset, current.size - consumed);
+					const keep = Math.min(length, Math.max(0, current.prefix.length - consumed));
+					if (keep > 0) chunk.copy(current.prefix, consumed, offset, offset + keep);
+					consumed += length;
+					offset += length;
+					if (consumed === current.size) separator = true;
+				} else {
+					const newline = chunk.indexOf(10, offset);
+					const end = newline < 0 ? chunk.length : newline;
+					header = Buffer.concat([header, chunk.subarray(offset, end)]);
+					if (header.length > 200) throw new Error("Invalid batch blob header");
+					offset = end;
+					if (newline < 0) continue;
+					offset++;
+					const hash = unique[index];
+					current = result.get(hash);
+					if (!current || header.toString("ascii") !== `${hash} blob ${current.size}`)
+						throw new Error("Unexpected batch blob");
+					header = Buffer.alloc(0);
+					consumed = 0;
+					if (current.size === 0) separator = true;
+				}
+			}
+		}
+	} catch (error) {
+		failure = error;
+		child.kill("SIGKILL");
+	}
+	const terminal = await closed;
+	if (terminal.signal === "SIGINT" || terminal.signal === "SIGTERM")
+		throw new SpaceGitInterruptedError(terminal.signal);
+	if (
+		spawnError ||
+		failure ||
+		terminal.code !== 0 ||
+		index !== unique.length ||
+		header.length !== 0
+	)
+		throw new SpaceGitError(
+			`I couldn't inspect space blobs. Retry after inspecting the index: ${spawnError?.message || (failure instanceof Error ? failure.message : stderr) || "incomplete Git batch output"}`,
+		);
+	return result;
 }
 
 export interface InitSpaceGitOptions {
@@ -267,10 +434,14 @@ export function initSpaceGitDir(
 		// into a non-bare repo whose work tree is the space root. Plain
 		// spawnSync here (not spaceGit): --work-tree against a half-configured
 		// bare dir makes some git builds grumpy before core.bare is false.
-		const init = spawnSync("git", ["init", "--bare", gitDir], {
-			encoding: "utf8",
-			env: cleanGitEnv(),
-		});
+		const init = spawnSync(
+			"git",
+			["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "init", "--bare", gitDir],
+			{
+				encoding: "utf8",
+				env: cleanGitEnv(),
+			},
+		);
 		if (init.signal === "SIGINT" || init.signal === "SIGTERM") {
 			throw new SpaceGitInterruptedError(init.signal);
 		}
@@ -377,10 +548,23 @@ export interface ProjectRepoInfo {
 export function projectRepoInfo(gitDir: string): ProjectRepoInfo | null {
 	if (!existsSync(gitDir)) return null;
 	const read = (args: string[]): string | null => {
-		const result = spawnSync("git", ["--git-dir", gitDir, ...args], {
-			encoding: "utf8",
-			env: cleanGitEnv(),
-		});
+		const result = spawnSync(
+			"git",
+			[
+				"--git-dir",
+				gitDir,
+				"--no-optional-locks",
+				"-c",
+				"core.fsmonitor=false",
+				"-c",
+				"core.hooksPath=/dev/null",
+				...args,
+			],
+			{
+				encoding: "utf8",
+				env: cleanGitEnv(),
+			},
+		);
 		if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
 			throw new SpaceGitInterruptedError(result.signal);
 		}

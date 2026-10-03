@@ -140,10 +140,12 @@ export {
 	type ProjectRepoInfo,
 	projectRepoInfo,
 	readCadence,
+	readSpaceBlobPrefixes,
 	readSpaceConfig,
 	readStagedBlobPrefix,
 	readTracked,
 	removeSpaceGitDir,
+	type SpaceBlobPrefix,
 	SpaceGitError,
 	SpaceGitInterruptedError,
 	type SpaceGitOptions,
@@ -164,6 +166,11 @@ export {
 	spaceStatus,
 	withSpaceSignals,
 } from "#services/space-history";
+export {
+	type IncomingSpaceValidation,
+	SpaceIncomingError,
+	validateIncomingSpace,
+} from "#services/space-incoming";
 export {
 	commitAndPushSpace,
 	commitSpace,
