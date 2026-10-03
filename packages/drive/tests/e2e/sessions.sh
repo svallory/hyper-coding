@@ -117,6 +117,8 @@ pass "liveSession procStart matches LC_ALL=C TZ=UTC ps -o lstart= ($live_proc_st
 
 # --- wait for it to finish --------------------------------------------------
 wait "$claude_pid" || die "claude -p exited non-zero (see $work/stderr.txt)"
+# The pid is gone and could be recycled; the trap must never signal it again.
+unset claude_pid
 echo "# claude -p exited: $(cat "$work/stdout.txt")"
 
 # --- the transcript ---------------------------------------------------------

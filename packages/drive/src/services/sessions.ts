@@ -346,7 +346,8 @@ export type StopOutcome =
  * `LC_ALL=C TZ=UTC ps -o lstart= -p <pid>` and stores that, i.e. the start time
  * in **UTC** (`Fri Oct  2 22:38:35 2026` for a pid whose local `ps` says
  * `19:38:35` on this machine). The same comparison is therefore done with
- * `LC_ALL=C TZ=UTC`; Linux procps prints the same UTC form under `LC_ALL=C`.
+ * `LC_ALL=C TZ=UTC`. Linux procps is expected to print the same UTC form under
+ * `LC_ALL=C` — inferred, not verified here; T-19 verifies it on Linux.
  *
  * Async on purpose: a blocking poll would freeze the event loop, and a process
  * that is a child of this one only stops answering `kill(pid, 0)` once the OS
@@ -434,15 +435,16 @@ export function transcriptLineCount(path: string): number {
  * A line without `message.id` is treated as a reply of its own, so an unusual
  * line never merges with the reply before it and never hides one.
  *
- * Only the tail of the file is read (512 KB, widening when it holds no assistant
- * line at all), because transcripts here reach 66 MB. Lines with unknown shapes
- * are skipped, never thrown on: one transcript file holds 8 different line
- * types and that set grows between versions.
+ * Only the tail of the file is read (512 KB, widening to 8 MB and then the whole
+ * file when the window cannot hold the last reply in full), because transcripts
+ * here reach 66 MB. Lines with unknown shapes are skipped, never thrown on: one
+ * transcript file holds 8 different line types and that set grows between
+ * versions.
  */
 export function lastAssistantText(path: string): string | null {
 	for (const size of [512 * 1024, 8 * 1024 * 1024, Number.POSITIVE_INFINITY]) {
-		const lines = tailLines(path, size);
-		const found = lastReplyText(lines);
+		const window = tailLines(path, size);
+		const found = lastReplyText(window.lines, window.truncatedStart);
 		if (found !== undefined) return found;
 	}
 	return null;
@@ -450,9 +452,15 @@ export function lastAssistantText(path: string): string | null {
 
 /**
  * The text of the last reply in `lines` (oldest first), or undefined when these
- * lines hold no assistant line at all.
+ * lines cannot answer the question: no assistant line at all, or a reply whose
+ * earlier lines may be in the unread part of the file.
+ *
+ * `truncatedStart` says the window begins mid-file. When the walk back over a
+ * reply's lines runs out of window without meeting a different reply, the answer
+ * may be cut short, so the caller reads a bigger window rather than return half
+ * a reply.
  */
-function lastReplyText(lines: string[]): string | null | undefined {
+function lastReplyText(lines: string[], truncatedStart: boolean): string | null | undefined {
 	for (let index = lines.length - 1; index >= 0; index--) {
 		const blocks = assistantBlocks(lines[index] ?? "");
 		if (!blocks) continue;
@@ -462,13 +470,24 @@ function lastReplyText(lines: string[]): string | null | undefined {
 			// No message id: this line is a reply on its own.
 			return joinTexts(blocks.texts);
 		}
-		// Walk back over the other lines of the same reply.
+		// Walk back over the other lines of the same reply. Non-assistant lines
+		// are stepped over, not treated as the end: a reply interleaves
+		// `attachment`, `user` and `system` lines while its tools run, and that
+		// is exactly the state warp stops a session in.
 		const texts = [...blocks.texts];
+		let reachedStart = true;
 		for (let back = index - 1; back >= 0; back--) {
 			const earlier = assistantBlocks(lines[back] ?? "");
-			if (!earlier || earlier.id !== id) break;
+			if (!earlier) continue;
+			if (earlier.id !== id) {
+				reachedStart = false;
+				break;
+			}
 			texts.unshift(...earlier.texts);
 		}
+		// The reply may continue before the window: read more rather than answer
+		// with a fragment.
+		if (truncatedStart && reachedStart) return undefined;
 		return joinTexts(texts);
 	}
 	return undefined;
@@ -502,30 +521,56 @@ function assistantBlocks(line: string): { id: string | undefined; texts: string[
 	return { id, texts };
 }
 
+/** A window of the end of a transcript, ready to be walked backwards. */
+interface TailWindow {
+	/** Complete, non-empty lines, oldest first. */
+	lines: string[];
+	/** True when the window starts mid-line, so a reply may continue before it. */
+	truncatedStart: boolean;
+}
+
 /**
- * The last `size` bytes of a file, split into lines. The first line is dropped
- * when it is a fragment of a longer line. Empty input yields no lines.
+ * The last `size` bytes of a file as complete lines.
+ *
+ * One byte before the window is read to see whether it begins on a line
+ * boundary: a window that holds the whole file (or lands exactly after a
+ * newline) keeps its first line, and only a window that truly starts mid-line
+ * drops the fragment — which also means the answer there may be incomplete.
  */
-function tailLines(path: string, size: number): string[] {
-	let raw: string;
+function tailLines(path: string, size: number): TailWindow {
+	let stats: ReturnType<typeof statSync>;
 	try {
-		const stats = statSync(path);
-		const length = Math.min(stats.size, size);
-		if (length <= 0) return [];
-		const buffer = Buffer.allocUnsafe(length);
+		stats = statSync(path);
+	} catch {
+		return { lines: [], truncatedStart: false };
+	}
+	const length = Math.min(stats.size, size);
+	if (length <= 0) return { lines: [], truncatedStart: false };
+	const offset = stats.size - length;
+
+	let text: string;
+	try {
+		const buffer = Buffer.allocUnsafe(length + (offset > 0 ? 1 : 0));
 		const fd = openSync(path, "r");
 		try {
-			readSync(fd, buffer, 0, length, stats.size - length);
+			readSync(fd, buffer, 0, buffer.length, offset > 0 ? offset - 1 : 0);
 		} finally {
 			closeSync(fd);
 		}
-		raw = buffer.toString("utf-8");
+		text = buffer.toString("utf-8");
 	} catch {
-		return [];
+		return { lines: [], truncatedStart: false };
 	}
-	const lines = raw.split("\n");
-	if (raw.length > 0 && size < Number.POSITIVE_INFINITY) lines.shift(); // partial head
-	return lines.filter((line) => line.trim() !== "");
+
+	let truncatedStart = false;
+	if (offset > 0) {
+		truncatedStart = text[0] !== "\n";
+		text = text.slice(1);
+	}
+	return {
+		lines: text.split("\n").filter((line) => line.trim() !== ""),
+		truncatedStart,
+	};
 }
 
 /** Feed a file to `visit` in 256 KB chunks, never holding it all in memory. */
@@ -648,8 +693,9 @@ function isAlive(pid: number): boolean {
  * e.g. `Fri Oct  2 22:38:35 2026`. Claude Code reads the start time in UTC and
  * stores that string; the same invocation is used here, because a plain
  * `ps -o lstart=` in this machine's local zone prints `19:38:35` for the very
- * same pid and would never match. Linux procps prints the same UTC form under
- * `LC_ALL=C`.
+ * same pid and would never match. Linux procps is expected to print the same
+ * UTC form under `LC_ALL=C` — inferred from the format, not verified here;
+ * T-19 verifies it on Linux.
  */
 function currentProcStart(pid: number): string | undefined {
 	const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {

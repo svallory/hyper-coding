@@ -375,10 +375,12 @@ describe("stopSession", () => {
 				cwd,
 				procStart: utc,
 			});
-			// On a machine whose local zone is not UTC the two really differ,
-			// which is what made the old comparison fail for every real session.
+			// The old comparison only failed where the local zone is not UTC, so
+			// assert the premise before asserting the outcome: on a UTC machine
+			// this test would pass for the wrong reason.
+			expect(local).not.toBe(utc);
 			expect(await stopSession(sleeper.pid, { cwd, sessionId: "session-a", graceMs: 5_000 })).toBe(
-				local === utc ? "terminated" : "terminated",
+				"terminated",
 			);
 		} finally {
 			sleeper.kill();
@@ -609,13 +611,74 @@ describe("transcript reading", () => {
 		expect(lastAssistantText(path)).toBe("all blocks");
 	});
 
+	it("keeps every line of a file that fits in the tail window", () => {
+		const path = scratchPath(fixture, "drive-small.jsonl");
+		writeFileSync(
+			path,
+			[
+				JSON.stringify({
+					type: "assistant",
+					message: { id: "m1", content: [{ type: "text", text: "Hello " }] },
+				}),
+				JSON.stringify({
+					type: "assistant",
+					message: { id: "m1", content: [{ type: "text", text: "world" }] },
+				}),
+			].join("\n"),
+			"utf-8",
+		);
+		// Two lines, one reply: dropping the head of the window (the old
+		// behaviour when the window held the whole file) answered "world".
+		expect(lastAssistantText(path)).toBe("Hello world");
+	});
+
+	it("walks back over the lines of a reply that straddles the tail window", () => {
+		const path = scratchPath(fixture, "drive-straddle.jsonl");
+		const filler = `${JSON.stringify({ type: "attachment", attachment: { blob: "x".repeat(900) } })}\n`;
+		// ~600 KB of attachments, then one reply of three lines whose first line
+		// is before the 512 KB window and whose last line is inside it.
+		const head = new Array(680).fill(filler).join("");
+		const reply = [" START", " MIDDLE", " END"].map((text, index) =>
+			JSON.stringify({
+				type: "assistant",
+				message: { id: "m9", content: [{ type: "text", text }] },
+				uuid: `u${index}`,
+			}),
+		);
+		writeFileSync(path, `${head}${reply.join("\n")}\n`, "utf-8");
+		expect(statSync(path).size).toBeGreaterThan(512 * 1024);
+		expect(lastAssistantText(path)).toBe(" START MIDDLE END");
+	});
+
+	it("steps over the non-assistant lines interleaved inside one reply", () => {
+		const path = scratchPath(fixture, "drive-interleaved.jsonl");
+		writeFileSync(
+			path,
+			[
+				JSON.stringify({
+					type: "assistant",
+					message: { id: "m1", content: [{ type: "text", text: "before " }] },
+				}),
+				JSON.stringify({ type: "attachment", attachment: { type: "tool_use", name: "Read" } }),
+				JSON.stringify({ type: "user", message: { role: "user", content: "tool result" } }),
+				JSON.stringify({ type: "system", subtype: "stop_hook_summary" }),
+				JSON.stringify({
+					type: "assistant",
+					message: { id: "m1", content: [{ type: "text", text: "after" }] },
+				}),
+			].join("\n"),
+			"utf-8",
+		);
+		// A reply interleaves attachment/user/system lines while its tools run:
+		// that is the state warp stops a session in, and stopping at the first
+		// non-assistant line lost the earlier text.
+		expect(lastAssistantText(path)).toBe("before after");
+	});
+
 	it("reads the last reply from a file bigger than the tail window", () => {
 		const path = scratchPath(fixture, "drive-big.jsonl");
-		const filler = `${JSON.stringify({ type: "attachment", attachment: { blob: "x".repeat(900) } })}\n`;
-		const with_ = writeFileSync;
-		void with_;
 		// ~1.5 MB of attachments, then one assistant line at the very end.
-		// biome-ignore format: fixtures are generated, not hand-formatted.
+		const filler = `${JSON.stringify({ type: "attachment", attachment: { blob: "x".repeat(900) } })}\n`;
 		const head = new Array(1700).fill(filler).join("");
 		const reply = `${JSON.stringify({
 			type: "assistant",
