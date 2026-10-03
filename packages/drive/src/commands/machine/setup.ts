@@ -23,7 +23,7 @@ import {
 	type SetupReport,
 } from "#services/machine/runner";
 import { allTasks } from "#services/machine/tasks/index";
-import { rsyncSpec, rsyncTask, type Versioned } from "#services/machine/tasks/tools-rsync";
+import { rsyncSpec, type Versioned } from "#services/machine/tasks/tools-rsync";
 import {
 	FEATURE_LIST,
 	type Feature,
@@ -85,27 +85,50 @@ export function parseTools(raw: string): string[] {
 /**
  * Which tools the user's own Claude hooks imply.
  *
- * A hook scan that found nothing is not a reason to install nothing: a machine
- * whose hooks aren't synced yet still wants the CLIs. So an empty scan falls
- * back to the whole registry rather than silently doing no work.
+ * An empty scan means an empty selection, and that is the honest answer: the
+ * evidence says this machine's hooks call no tool in the registry, and
+ * installing fifteen CLIs on the strength of a file that wasn't there is not what
+ * `--yes` should do. The caller says so and points at `--tools`.
  */
 export function toolsFromScan(scan: HookScan): string[] {
-	const known = scan.preselect.filter((id) => findTool(id) !== undefined);
-	return known.length > 0 ? known : ["all"];
+	return scan.preselect.filter((id) => findTool(id) !== undefined);
 }
 
-/** Ask which tools to put there, with the hook scan's answers already ticked. */
-async function askTools(preselected: readonly string[]): Promise<string[] | symbol> {
+/**
+ * Ask which tools to put there, with the hook scan's answers already ticked.
+ *
+ * The ticks go in the option's own `initialValues` list, not in each option's
+ * `initialValue`: `multiselect` reads the top-level array only, so an
+ * `initialValue` per option pre-ticks nothing and the preselection the hook
+ * scan just did silently disappears.
+ */
+export async function askTools(preselected: readonly string[]): Promise<string[] | symbol> {
 	return multiselect({
 		message: "Which tools? (ticked: your Claude hooks call them)",
+		...toolPromptOptions(preselected),
+		required: false,
+	});
+}
+
+/**
+ * The tool multiselect's options and its ticks, apart from the question itself.
+ *
+ * Split out because the tick is the part that was wrong and is invisible from
+ * the call: `multiselect` reads the top-level `initialValues` and ignores an
+ * `initialValue` on any single option.
+ */
+export function toolPromptOptions(preselected: readonly string[]): {
+	options: { value: string; label: string; hint: string }[];
+	initialValues: string[];
+} {
+	return {
 		options: TOOLS.map((tool) => ({
 			value: tool.id,
 			label: tool.id,
 			hint: tool.notes ?? tool.title,
-			initialValue: preselected.includes(tool.id),
 		})),
-		required: false,
-	});
+		initialValues: TOOLS.map((tool) => tool.id).filter((id) => preselected.includes(id)),
+	};
 }
 
 /** Where this machine keeps its Claude Code config. */
@@ -115,15 +138,31 @@ function claudeHome(): string {
 	return join(homedir(), ".claude");
 }
 
-/** Every wanted tool's version on one machine, null where it isn't installed. */
-async function versionsFor(
+/**
+ * Every wanted tool's version on one machine.
+ *
+ * Four at a time, not all of them: sixteen simultaneous ssh connections is past
+ * sshd's default `MaxStartups 10`, and the connections it refuses come back as
+ * failures — which the table would report as "missing" on a machine that has
+ * every tool. Detecting the local machine needs no ssh at all, so it is asked
+ * once and reused.
+ */
+const DETECT_CONCURRENCY = 4;
+
+export async function versionsFor(
 	specs: readonly Versioned[],
 	ctx: TaskContext,
 ): Promise<Record<string, string | null>> {
-	const entries = await Promise.all(
-		specs.map(async (spec): Promise<[string, string | null]> => [spec.id, await spec.detect(ctx)]),
-	);
-	return Object.fromEntries(entries);
+	const out: Record<string, string | null> = {};
+	let next = 0;
+	const worker = async (): Promise<void> => {
+		while (next < specs.length) {
+			const spec = specs[next++];
+			out[spec.id] = await spec.detect(ctx);
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(DETECT_CONCURRENCY, specs.length) }, worker));
+	return out;
 }
 
 /** Where the root script goes: inside the space when there is one, else in the user's cache. */
@@ -140,18 +179,36 @@ function scratchDir(): string {
 		: join(home, ".cache", "hyper", "machine");
 }
 
-/** Ask which features to set up. Never called when --features was given. */
-async function askFeatures(initial: Feature[]): Promise<Feature[] | symbol> {
+/**
+ * Ask which features to set up. Never called when --features was given.
+ *
+ * Ticks go in the top-level `initialValues` for the same reason as `askTools`:
+ * `multiselect` ignores a per-option `initialValue`, so a machine registered
+ * with `features = ["tools"]` was asked about `tools` again.
+ */
+export async function askFeatures(initial: Feature[]): Promise<Feature[] | symbol> {
 	return multiselect({
 		message: "What should this machine have?",
+		...featurePromptOptions(initial),
+		required: false,
+	});
+}
+
+/** The feature multiselect's options and its ticks. See {@link toolPromptOptions}. */
+export function featurePromptOptions(initial: readonly Feature[]): {
+	options: { value: Feature; label: string; hint: string }[];
+	initialValues: Feature[];
+} {
+	return {
 		options: FEATURE_LIST.map((entry) => ({
 			value: entry.feature,
 			label: entry.label,
 			hint: entry.hint,
-			initialValue: initial.includes(entry.feature),
 		})),
-		required: false,
-	});
+		initialValues: FEATURE_LIST.map((entry) => entry.feature).filter((feature) =>
+			initial.includes(feature),
+		),
+	};
 }
 
 /**
@@ -233,6 +290,8 @@ function renderReport(report: SetupReport, target: string): string[] {
 	if (report.alreadyOk.length > 0) lines.push(`  already fine: ${report.alreadyOk.join(", ")}`);
 	for (const id of report.applied) lines.push(`  set up:        ${id}`);
 	for (const id of report.skipped) lines.push(`  skipped:       ${id}`);
+	for (const failure of report.failed)
+		lines.push(`  FAILED:        ${failure.id} — ${failure.reason}`);
 	if (total === 0) lines.push("  (no tasks for the features you picked yet)");
 	return lines;
 }
@@ -308,6 +367,15 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			return this.fail(err.message, flags.debug);
 		}
 
+		// `--tools` without the tools feature would install nothing and look like
+		// it worked. Saying so is cheaper than a silent no-op.
+		if (flags.tools !== undefined && flags.features === undefined && !flags.yes) {
+			return this.fail(
+				"`--tools` needs `--features tools`: nothing else installs tools. Run `machine setup --features tools --tools a,b`, or drop `--features` to be asked which features to set up.",
+				flags.debug,
+			);
+		}
+
 		let features: Feature[];
 		try {
 			if (flags.features !== undefined) {
@@ -348,10 +416,12 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		// Which tools, and what the user's own hooks say about it. The scan reads
 		// this machine's Claude config, which is where the evidence lives; it is
 		// read-only and its findings are only ever a default, never an action.
-		let tools: string[] = ["all"];
+		let tools: string[] = [];
 		if (features.includes("tools")) {
-			const scan = await scanHooks(claudeHome());
-			const suggested = toolsFromScan(scan);
+			// `--tools` is the answer already: scanning first would cost a read of
+			// the user's config to compute a value nobody uses.
+			const scan = flags.tools === undefined ? await scanHooks(claudeHome()) : null;
+			const suggested = scan === null ? [] : toolsFromScan(scan);
 			try {
 				if (flags.tools !== undefined) {
 					tools = parseTools(flags.tools);
@@ -370,17 +440,30 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 				if (!(err instanceof MachineError)) throw err;
 				return this.fail(err.message, flags.debug);
 			}
+			if (suggested.length === 0 && flags.tools === undefined) {
+				this.log(
+					"No Claude hooks call a tool in this registry, so I have nothing to preselect. Pass `--tools all` for every tool, or `--tools jq,rg` for a few.",
+				);
+			}
 			// Say what the scan found, so "why only these four?" has an answer on
 			// screen rather than in the source.
-			if (scan.resolvesAfterClone.length > 0) {
+			if (scan !== null && scan.configSync.length > 0) {
+				this.log(
+					`${scan.configSync.length} hook${scan.configSync.length === 1 ? "" : "s"} under ~/.claude/hooks need a config sync to be here.`,
+				);
+			}
+			if (scan !== null && scan.resolvesAfterClone.length > 0) {
 				this.log(
 					`Hooks point at ${scan.resolvesAfterClone.length} path${scan.resolvesAfterClone.length === 1 ? "" : "s"} in your home — those resolve once the space is cloned here.`,
 				);
 			}
-			if (scan.unknown.length > 0) {
+			if (scan !== null && scan.unknown.length > 0) {
 				this.log(`Hooks also call tools this registry doesn't know: ${scan.unknown.join(", ")}.`);
 			}
-			if (flags.debug) for (const file of scan.files) this.log(`  read ${file}`);
+			if (flags.debug && scan !== null) {
+				for (const file of scan.files) this.log(`  read ${file}`);
+				for (const warning of scan.warnings) this.log(`  warning: ${warning}`);
+			}
 		}
 
 		// Set when the root prompt had to answer for itself, so the run can report
@@ -407,7 +490,9 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 				// rsync is a root task, not a registry entry: a remote machine needs
 				// it for warp and for every file transfer, whether or not anything
 				// asked for it by name.
-				tasks: machine === null ? allTasks({ tools }) : [...allTasks({ tools }), rsyncTask],
+				// The PATH line and rsync are in `allTasks` already: both are needed
+				// on every machine, local or remote.
+				tasks: allTasks({ tools }),
 				prompt,
 				scratchDir: scratchDir(),
 			});
@@ -435,7 +520,10 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			const wanted: Versioned[] = TOOLS.filter(
 				(tool) => tools.includes("all") || tools.includes(tool.id),
 			);
-			if (machine !== null) wanted.push(rsyncSpec);
+			// rsync gets a row on every target, local included: it is what `hyper
+			// space` copies over, and a local machine without it breaks the same
+			// transfers a remote one would.
+			wanted.push(rsyncSpec);
 			if (wanted.length > 0) {
 				const here: TaskContext = {
 					machine: null,
@@ -443,11 +531,17 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 					config,
 					log: () => {},
 				};
-				const [local, remote] = await Promise.all([
+				// A local run is comparing the machine with itself, and the target
+				// column would be sixteen more local processes: detect once.
+				const remote = machine === null ? here : ctx;
+				const [local, other] = await Promise.all([
 					versionsFor(wanted, here),
-					versionsFor(wanted, ctx),
+					versionsFor(wanted, remote),
 				]);
-				const table = renderParity(parityTable(local, remote));
+				const table =
+					machine === null
+						? renderParity(parityTable(local, local))
+						: renderParity(parityTable(local, other));
 				if (table.length > 0) {
 					this.log("");
 					this.log(
@@ -458,6 +552,15 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 					for (const line of table) this.log(`  ${line}`);
 				}
 			}
+		}
+
+		// A tool that failed to install is not a successful setup, whatever else
+		// went right — and the report and the table above have already said so.
+		if (report.failed.length > 0) {
+			this.error(
+				`${report.failed.length} tool${report.failed.length === 1 ? "" : "s"} could not be installed: ${report.failed.map((failure) => `${failure.id} (${failure.reason})`).join("; ")}`,
+				{ exit: 1 },
+			);
 		}
 
 		// Unattended with root work still to do is not a successful setup. Say so

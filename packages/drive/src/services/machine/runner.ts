@@ -62,6 +62,11 @@ export interface SetupReport {
 	alreadyOk: string[];
 	/** Tasks not carried out: skipped by the user, or a fix that didn't take. */
 	skipped: string[];
+	/**
+	 * Tasks whose install threw, with the reason. The run continues past them —
+	 * one tool that 404s must not cost the user the other fourteen.
+	 */
+	failed: { id: string; reason: string }[];
 	/** Where the root script was written, when one was. */
 	rootScriptPath?: string;
 }
@@ -195,6 +200,7 @@ export async function runSetup(
 	const applied: string[] = [];
 	const alreadyOk: string[] = [];
 	const skipped: string[] = [];
+	const failed: { id: string; reason: string }[] = [];
 	const needsRoot: Task[] = [];
 
 	for (const task of selected) {
@@ -214,7 +220,18 @@ export async function runSetup(
 			continue;
 		}
 		ctx.log(`${task.id}: doing it now.`);
-		await applyTask(task, ctx);
+		try {
+			await applyTask(task, ctx);
+		} catch (err) {
+			// One tool failing is information, not a stop. A recipe that cannot
+			// download its release says so, and the rest still get installed —
+			// otherwise one 404 costs the user every tool they asked for.
+			const reason = detail(err);
+			ctx.log(`${task.id}: failed — ${reason}`);
+			failed.push({ id: task.id, reason });
+			skipped.push(task.id);
+			continue;
+		}
 		if (await checkTask(task, ctx)) applied.push(task.id);
 		else {
 			ctx.log(`${task.id}: still not right after doing it — skipping.`);
@@ -222,7 +239,7 @@ export async function runSetup(
 		}
 	}
 
-	if (needsRoot.length === 0) return { applied, alreadyOk, skipped };
+	if (needsRoot.length === 0) return { applied, alreadyOk, skipped, failed };
 
 	const entries: RootScriptEntry[] = needsRoot.map((task) => ({
 		task,
@@ -277,5 +294,5 @@ export async function runSetup(
 		ctx.log(`Still to do: ${remaining.map((task) => task.id).join(", ")}.`);
 	}
 
-	return { applied, alreadyOk, skipped, rootScriptPath: path };
+	return { applied, alreadyOk, skipped, failed, rootScriptPath: path };
 }
