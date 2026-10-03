@@ -20,8 +20,13 @@ on:
   pull_request:
     paths:
       - "agent-plugin/**"
-      - "packages/drive/**"
-      - "packages/cli/**"
+      # The job builds the CLI and the CLI loads every plugin at startup, so a
+      # change anywhere in the workspace can break the bash suite — not just a
+      # change in the plugin. `bun.lock` and the root `package.json` decide
+      # what gets built at all.
+      - "packages/**"
+      - "bun.lock"
+      - "package.json"
       - ".github/workflows/agent-plugin.yml"
 
 jobs:
