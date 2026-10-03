@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
-import { parse as parseTOML } from "smol-toml";
+import { dirname, resolve } from "node:path";
+import { parse as parseTOML, stringify as stringifyTOML } from "smol-toml";
 import { DEFAULT_CONFIG, DEFAULT_MACHINE, type DriveConfig, type SyncCadence } from "./schema.js";
 
 /**
@@ -239,4 +239,34 @@ export function loadConfig(): DriveConfig {
 	validate(path, merged);
 
 	return merged;
+}
+
+/** The parsed file exactly as the user wrote it, or null when there is none. */
+export function readRawConfig(): Record<string, unknown> | null {
+	const path = configPath();
+	if (!existsSync(path)) return null;
+	return readAndParse(path);
+}
+
+/**
+ * Patch `drive.toml` with the given values and write it back atomically
+ * (temp file + rename). Unknown keys and sections already in the file are
+ * preserved: the existing TOML is parsed and the patch deep-merged over it,
+ * so `hyper drive init` never discards a `[machines.*]` or `[sync.*]` table
+ * it knows nothing about. Creates the config directory when missing, and
+ * leaves the file untouched when the patch changes nothing.
+ */
+export function writeConfig(patch: Record<string, unknown>, path = configPath()): string {
+	let existing: Record<string, unknown> = {};
+	if (existsSync(path)) {
+		existing = readAndParse(path);
+		validateShape(path, existing);
+	}
+	const next = stringifyTOML(deepMerge(existing, patch));
+	if (existsSync(path) && readFileSync(path, "utf-8") === next) return path;
+	mkdirSync(dirname(path), { recursive: true });
+	const tmp = `${path}.tmp-${process.pid}`;
+	writeFileSync(tmp, next, "utf-8");
+	renameSync(tmp, path);
+	return path;
 }
