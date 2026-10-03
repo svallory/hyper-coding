@@ -2,25 +2,27 @@
  * `agent-user.dirs` — what the two users share.
  *
  * Runs as the primary user, with no root anywhere in it. Everything it needs was
- * made possible by `agent-user.create`: the `collab` group both users are in, and
- * an agent config dir that is group-writable.
+ * made possible by `agent-user.create`: the `collab` group both users are in,
+ * and an agent config dir the agent owns.
  *
  * THE RULE THIS TASK EXISTS TO KEEP: ACLs over the Claude config dir are never
  * applied recursively. `.credentials.json` is 0600 and must stay unreadable to
  * the second user — a named-group ACL on it would *grant* read, which is the
- * opposite of what a "shared config" task should do. So the config dir itself
- * gets one non-recursive entry (`g:collab:rX`: traverse it, read its listing)
- * and only `projects/` — which holds transcripts and nothing else — is walked.
+ * opposite of what a "shared config" task should do. So only `projects/` — which
+ * holds transcripts and nothing else — is walked.
  *
- * A second, quieter rule: default ACLs on a directory are inherited by
- * everything created inside it later, so the default entry on the config dir is
- * `rX` and the one on `projects/` is `rwX`. Getting those two backwards would
- * either break the agent's writes or hand out more than intended.
+ * AND THERE IS NO DEFAULT ACL ON THE CONFIG DIR. A default entry is inherited by
+ * everything created there afterwards, so one on the config dir would hand the
+ * agent read on every file Claude Code writes into it from then on: history,
+ * debug logs, shell snapshots, lock files, and whatever credential file comes
+ * next. The kernel also ignores umask once a default ACL exists, so the mode
+ * would not even save us. Access is therefore granted per entry instead:
+ * traverse on the dir itself, read on the two files worth sharing, and a default
+ * entry only on skills/, commands/ and agents/, which hold no secrets.
  *
- * Claude Code writes session files 0600 and rewrites `settings.json` on every
- * change, which masks whatever ACL a file happens to carry. That is what
- * `agent-user.watcher` is for; this task sets up the directories, and the
- * default ACLs are the first line of defence for anything created afterwards.
+ * The symlinks into the agent's config dir are NOT made here. They live inside a
+ * directory the agent controls, so they are made BY THE AGENT, from the root
+ * script (`agent-user.create`). This task only verifies them.
  */
 
 import { asAgentScript } from "#services/machine/root-script";
@@ -34,22 +36,33 @@ const COLLAB_GROUP = "collab";
 
 /**
  * The entries in the agent's config dir that are symlinks into the primary
- * user's, and whether they are writable.
+ * user's, verified (not created) here.
  *
  * `projects` is the writable one — it is the shared transcripts dir, and it is a
- * real directory on the primary side, not a file. Everything else is read-only
- * BY DESIGN: sharing the config dir wholesale was rejected because
- * `.claude.json` holds MCP server commands (writable by both = an escalation
- * path) and because hooks, plugins and skills are the primary user's to change.
+ * real directory on the primary side, not a file. Everything else is read-only BY
+ * DESIGN: sharing the config dir wholesale was rejected because `.claude.json`
+ * holds MCP server commands (writable by both = an escalation path) and because
+ * hooks, plugins and skills are the primary user's to change.
  */
-const SYMLINKS: readonly { name: string; mode: "link" }[] = [
-	{ name: "projects", mode: "link" },
-	{ name: "settings.json", mode: "link" },
-	{ name: "CLAUDE.md", mode: "link" },
-	{ name: "skills", mode: "link" },
-	{ name: "commands", mode: "link" },
-	{ name: "agents", mode: "link" },
+const SYMLINKS: readonly { name: string }[] = [
+	{ name: "projects" },
+	{ name: "settings.json" },
+	{ name: "CLAUDE.md" },
+	{ name: "skills" },
+	{ name: "commands" },
+	{ name: "agents" },
 ];
+
+/**
+ * The entries in the PRIMARY user's config dir the agent may read, and how.
+ *
+ * `r--` on the two files: they are the settings the agent should honour and the
+ * instructions it should follow. Recursive `rX` plus a default `rX` on the three
+ * directories: they hold skills, commands and subagent definitions — the
+ * operator's instructions for the agent — and no secrets.
+ */
+const READABLE_FILES = ["settings.json", "CLAUDE.md"] as const;
+const READABLE_DIRS = ["skills", "commands", "agents"] as const;
 
 /** The two lines every user's shell gets, so shared files are group-accessible from birth. */
 const BASHRC_LINES = ["umask 002", "set -o physical"] as const;
@@ -72,9 +85,21 @@ function probe(paths: AgentPaths, agentUser: string): string {
 		`printf 'work_default_acl=%s\\n' "$(getfacl -c -p ${q(paths.work)} 2>/dev/null | grep -c '^default:group:collab:rwx' || echo 0)"`,
 		// The home: traversable by the group, so the agent can reach work/.
 		`printf 'home_acl=%s\\n' "$(getfacl -c -p ${q(paths.home)} 2>/dev/null | grep -c '^group:collab:--x' || echo 0)"`,
-		// The config dir: read+traverse, no write. Exactly one entry, non-recursive.
-		`printf 'claude_acl=%s\\n' "$(getfacl -c -p ${q(paths.claude)} 2>/dev/null | grep -c '^group:collab:r-x' || echo 0)"`,
-		`printf 'claude_default_acl=%s\\n' "$(getfacl -c -p ${q(paths.claude)} 2>/dev/null | grep -c '^default:group:collab:r-x' || echo 0)"`,
+		// The config dir: TRAVERSE ONLY. No listing, and — the part that matters —
+		// NO default entries. A default here is inherited by every file created in
+		// the dir later, which would make the agent able to read all of them.
+		`printf 'claude_acl=%s\\n' "$(getfacl -c -p ${q(paths.claude)} 2>/dev/null | grep -c '^group:collab:--x' || echo 0)"`,
+		`printf 'claude_default_acl=%s\\n' "$(getfacl -c -p ${q(paths.claude)} 2>/dev/null | grep -c '^default:' || echo 0)"`,
+		// Read access to the two shared files, and to the three shared dirs (which
+		// also carry a default entry, so new files in them are readable).
+		...READABLE_FILES.map(
+			(name) =>
+				`printf 'read_${name}=%s\\n' "$(getfacl -c -p ${q(`${paths.claude}/${name}`)} 2>/dev/null | grep -c '^group:collab:r--' || echo 0)"`,
+		),
+		...READABLE_DIRS.map(
+			(name) =>
+				`printf 'read_${name}=%s\\n' "$(getfacl -c -p ${q(`${paths.claude}/${name}`)} 2>/dev/null | grep -c '^group:collab:r-x' || echo 0)"`,
+		),
 		// projects/: group-writable and setgid.
 		`printf 'projects_group=%s\\n' "$(stat -c %G ${q(paths.projects)} 2>/dev/null || echo missing)"`,
 		`printf 'projects_setgid=%s\\n' "$(test -g ${q(paths.projects)} && echo yes || echo no)"`,
@@ -132,7 +157,16 @@ export const agentUserDirs: Task = {
 		if (!flag(answer, "work_setgid")) return false;
 		if (!present(answer, "work_acl") || !present(answer, "work_default_acl")) return false;
 		if (!present(answer, "home_acl")) return false;
-		if (!present(answer, "claude_acl") || !present(answer, "claude_default_acl")) return false;
+		// Traverse on the config dir, and NO default entries on it at all: a
+		// default ACL there is inherited by every file created in it from now on.
+		if (!present(answer, "claude_acl")) return false;
+		if (present(answer, "claude_default_acl")) return false;
+		for (const name of READABLE_FILES) {
+			if (!present(answer, `read_${name}`)) return false;
+		}
+		for (const name of READABLE_DIRS) {
+			if (!present(answer, `read_${name}`)) return false;
+		}
 		if (answer.get("projects_group") !== COLLAB_GROUP) return false;
 		if (!flag(answer, "projects_setgid")) return false;
 		if (!present(answer, "projects_acl")) return false;
@@ -149,24 +183,26 @@ export const agentUserDirs: Task = {
 		const agentUser = await agentUserOf(ctx);
 		const paths = await resolvePaths(ctx, agentUser);
 
-		// The agent's config dir has to exist AND be writable by us before any
-		// symlink can go in it, and only `agent-user.create` can make that so.
-		// On a machine where that step hasn't run yet — which is exactly the
-		// first run of this feature, since the user is about to be handed a root
-		// script and has not run it — this task cannot do its work.
+		// The agent's config dir must exist before its symlinks can be verified.
+		// Only `agent-user.create` makes it, from the root script, and on a clean
+		// machine the user has not run that yet — which is exactly the first run of
+		// this feature.
 		//
 		// It must NOT throw here. The runner treats a throwing apply as a bug and
 		// exits 1, which would mean the very first `machine setup --features
 		// agent-user` on a clean machine dies instead of printing the root script.
 		// So: say what is missing and return, leaving the check to fail; the next
 		// run (after the user has run the script) does the work.
+		//
+		// Note this is now a READ check. This task no longer writes anything inside
+		// the agent's home — the symlinks are made by the agent, in the root script.
 		const ready = await runScript(
 			ctx,
-			`test -d ${shellQuote(paths.agentClaude)} && test -w ${shellQuote(paths.agentClaude)}`,
+			`test -d ${shellQuote(paths.agentClaude)} && test -r ${shellQuote(paths.agentClaude)}`,
 		);
 		if (ready.code !== 0) {
 			ctx.log(
-				`agent-user.dirs: ${paths.agentClaude} doesn't exist or isn't yours to write yet — that comes from the agent-user.create root script, so I'll finish this once you've run it.`,
+				`agent-user.dirs: ${paths.agentClaude} isn't there yet — that's the agent-user.create root script, so I'll finish this once you've run it.`,
 			);
 			return;
 		}
@@ -198,14 +234,39 @@ export const agentUserDirs: Task = {
 			`setfacl -m g:${COLLAB_GROUP}:x ${shellQuote(paths.home)}`,
 		);
 
-		// The config dir: traverse and read its listing, nothing more. NOT
-		// recursive — see the file header. `.credentials.json` stays 0600.
+		// The config dir: TRAVERSE ONLY, and no default entries.
+		//
+		// `-k` first: it REMOVES the default ACL. That is not tidiness — an
+		// earlier version of this task set `g:collab:rX` as a default here, and on
+		// a machine that ran it, that entry is inherited by every file created in
+		// the dir from then on (history, debug logs, shell snapshots, lock files,
+		// any future credential). The kernel ignores umask when a default ACL
+		// exists, so the file's own mode would not save it. This removes it.
+		await runOrFail(
+			ctx,
+			"grant the agent traverse on the config dir",
+			[
+				`setfacl -k ${shellQuote(paths.claude)}`,
+				`setfacl -m g:${COLLAB_GROUP}:x ${shellQuote(paths.claude)}`,
+			].join("; "),
+		);
+
+		// Per-entry read access, the only way in. Two files, three directories.
 		await runOrFail(
 			ctx,
 			"grant the agent read access to the shared config entries",
 			[
-				`setfacl -m g:${COLLAB_GROUP}:rX ${shellQuote(paths.claude)}`,
-				`setfacl -d -m g:${COLLAB_GROUP}:rX ${shellQuote(paths.claude)}`,
+				...READABLE_FILES.map(
+					(name) => `setfacl -m g:${COLLAB_GROUP}:r-- ${shellQuote(`${paths.claude}/${name}`)}`,
+				),
+				...READABLE_DIRS.map((name) => {
+					const dir = `${paths.claude}/${name}`;
+					return [
+						`mkdir -p ${shellQuote(dir)}`,
+						`setfacl -R -m g:${COLLAB_GROUP}:rX ${shellQuote(dir)}`,
+						`setfacl -d -m g:${COLLAB_GROUP}:rX ${shellQuote(dir)}`,
+					].join("; ");
+				}),
 			].join("; "),
 		);
 
@@ -223,25 +284,6 @@ export const agentUserDirs: Task = {
 			].join("; "),
 		);
 
-		// The symlinks into the agent's config dir. Group-writable on the
-		// directory (from agent-user.create), so these are created as you.
-		for (const entry of SYMLINKS) {
-			const link = `${paths.agentClaude}/${entry.name}`;
-			const target = expectedTarget(paths, entry.name);
-			await runOrFail(
-				ctx,
-				`point ${entry.name} at your own copy`,
-				[
-					`mkdir -p ${shellQuote(paths.agentClaude)}`,
-					// Replace whatever is there when it isn't already this symlink.
-					// `test -L` first so a real directory is never `rm -rf`'d: if
-					// the agent has real projects there, that is their state.
-					`if [ -L ${shellQuote(link)} ]; then [ "$(readlink ${shellQuote(link)})" = ${shellQuote(target)} ] || ln -sfn ${shellQuote(target)} ${shellQuote(link)}; fi`,
-					`test -L ${shellQuote(link)} || ln -sfn ${shellQuote(target)} ${shellQuote(link)}`,
-				].join("; "),
-			);
-		}
-
 		// The as-agent helper: the one place the user types a privileged command
 		// themselves. hyper writes the file; it never runs it (C-6).
 		await runOrFail(
@@ -256,8 +298,10 @@ export const agentUserDirs: Task = {
 			].join("\n"),
 		);
 
-		// The shell lines, appended once each. Grep-guarded so a second run adds
-		// nothing (C-15) and so a line the user already added is not duplicated.
+		// The shell lines for the PRIMARY user, appended once each. Grep-guarded so
+		// a second run adds nothing (C-15) and so a line the user already added is
+		// not duplicated. (The agent's own .bashrc is done by the agent, in the
+		// root script.)
 		for (const line of BASHRC_LINES) {
 			await runOrFail(
 				ctx,

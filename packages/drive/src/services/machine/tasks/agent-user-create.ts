@@ -13,45 +13,88 @@
  * outright; a check that only asked "does the user exist and is it in collab"
  * would call that machine finished.
  *
- * Every step in `rootScript` is guarded, so running it twice changes nothing
- * (C-15) — and hyper never runs it (C-6).
+ * TWO RULES SHAPE THE SCRIPT, and both came out of a security review:
+ *
+ * 1. **The agent user name is never trusted.** It comes from a config file on
+ *    one machine and becomes the argument to `useradd`, a path in an `rm -f`, and
+ *    a user to become — all as root. So it is validated three times: when the
+ *    config is read, again here before anything else happens, and again at the
+ *    top of the generated script itself (`rootScriptGuards`), because the config
+ *    may have been edited since the script was written. Every interpolation is
+ *    quoted as well, so the validation failing is a second line of defence
+ *    rather than the only one.
+ *
+ * 2. **Root never touches a path inside the agent's home.** The agent controls
+ *    everything there and can plant symlinks; root following one is root
+ *    writing wherever it points. So the config dir, the symlinks and the
+ *    .bashrc lines are all done by `runuser -u <agent>`, as the agent. Root's
+ *    only business in there is metadata: the dir's owner and mode, and a
+ *    named-user ACL so the primary user can read it for the checks and no more.
+ *
+ * Every step is guarded, so running the script twice changes nothing (C-15) —
+ * and hyper never runs it (C-6).
  */
 
-import { DOCKER_GROUP, PRIVILEGED_GROUP, SUDOERS_DIR } from "#services/machine/root-script";
+import {
+	DOCKER_GROUP,
+	GPASSWD,
+	PRIVILEGED_GROUP,
+	rootScriptGuards,
+	SUDOERS_DIR,
+} from "#services/machine/root-script";
 import { shellQuote } from "#services/remote";
-import { agentHomeOf, agentUserOf, primaryUserLines, primaryUserOf } from "./agent-context.js";
+import {
+	agentHomeOf,
+	agentUserOf,
+	assertAgentUserIsSafe,
+	homeOf,
+	primaryUserOf,
+} from "./agent-context.js";
 import { runScript } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
 /** The group both users share. Not `users`: nothing else on the machine should be in it. */
 const COLLAB_GROUP = "collab";
 
+/** The entries symlinked into the agent's own config dir, by name. */
+const SHARED_ENTRIES = ["projects", "settings.json", "CLAUDE.md", "skills", "commands", "agents"];
+
 /**
  * Read-only answers, one `key=value` line each.
  *
  * Labelled rather than positional: the group lists are variable-length, and a
- * positional reader that is one line out reads a wrong answer as a right one —
- * which for this task means calling a machine with a privilege drop-in "done".
+ * positional reader that is one line out reads a wrong answer as a right one.
+ *
+ * This probe covers ONLY what this task owns. Whether the primary user can read
+ * the agent's config dir is a consequence of the ACLs set here, but the two
+ * facts that actually have to hold are that the dir exists and that it belongs
+ * to the agent — the primary gets no write there at all.
  */
 function probe(agentUser: string, primaryUser: string, agentHome: string): string {
 	const q = shellQuote;
 	return [
-		// The agent user exists (its uid, blank when there is no such user).
 		`printf 'agent_uid=%s\\n' "$(id -u ${q(agentUser)} 2>/dev/null || true)"`,
 		`printf 'collab_group=%s\\n' "$(getent group ${COLLAB_GROUP} >/dev/null 2>&1 && echo yes || echo no)"`,
-		// Both users' supplementary groups, comma-joined on one line each.
 		`printf 'agent_groups=%s\\n' "$(id -nG ${q(agentUser)} 2>/dev/null | tr ' ' ',' || true)"`,
 		`printf 'primary_groups=%s\\n' "$(id -nG ${q(primaryUser)} 2>/dev/null | tr ' ' ',' || true)"`,
-		// A privilege drop-in named after the agent.
 		`printf 'dropin_entry=%s\\n' "$(test -e ${SUDOERS_DIR}/${q(agentUser)} && echo yes || echo no)"`,
-		// The agent's config dir exists and the primary user may write in it.
-		`printf 'agent_config_writable=%s\\n' "$(test -d ${q(agentHome)}/.claude && test -w ${q(agentHome)}/.claude && echo yes || echo no)"`,
-		// Asked as the primary user, not read off the mode: Debian's HOME_MODE is
-		// 0700, so the agent's home needs a traverse ACL of its own or this is
-		// false however permissive the config dir inside it is.
-		`printf 'agent_home_traversable=%s\\n' "$(test -x ${q(agentHome)} && echo yes || echo no)"`,
-		// Linger: the agent's own systemd --user units outlive a logout.
+		`printf 'agent_config_dir=%s\\n' "$(test -d ${q(agentHome)}/.claude && echo yes || echo no)"`,
+		`printf 'agent_config_owner=%s\\n' "$(stat -c %U ${q(agentHome)}/.claude 2>/dev/null || echo missing)"`,
+		// Each shared entry, as the symlink it should be pointing where it should.
+		...SHARED_ENTRIES.map(
+			(name) =>
+				`printf 'link_${name}=%s\\n' "$(readlink ${q(`${agentHome}/.claude/${name}`)} 2>/dev/null || echo missing)"`,
+		),
+		`printf 'agent_bashrc_umask=%s\\n' "$(grep -c '^umask 002$' ${q(agentHome)}/.bashrc 2>/dev/null || echo 0)"`,
+		`printf 'agent_bashrc_physical=%s\\n' "$(grep -c '^set -o physical$' ${q(agentHome)}/.bashrc 2>/dev/null || echo 0)"`,
+		// The packages the unprivileged tasks need: a machine missing them is
+		// "not yet", not mysteriously failing.
+		`printf 'acl_tool=%s\\n' "$(command -v setfacl >/dev/null 2>&1 && echo yes || echo no)"`,
+		`printf 'inotify_tool=%s\\n' "$(command -v inotifywait >/dev/null 2>&1 && echo yes || echo no)"`,
 		`printf 'linger=%s\\n' "$(loginctl show-user ${q(agentUser)} --property=Linger --value 2>/dev/null || true)"`,
+		// The primary user's LOGIN group: with the shared umask, that group
+		// receives everything the primary creates.
+		`printf 'primary_login_group=%s\\n' "$(id -gn ${q(primaryUser)} 2>/dev/null || echo unknown)"`,
 	].join("; ");
 }
 
@@ -62,34 +105,65 @@ interface Probe {
 	agentGroups: string[];
 	primaryGroups: string[];
 	dropInEntry: boolean;
-	agentConfigWritable: boolean;
-	agentHomeTraversable: boolean;
+	agentConfigDir: boolean;
+	agentConfigOwner: string;
+	links: Map<string, string>;
+	agentBashrcUmask: boolean;
+	agentBashrcPhysical: boolean;
+	hasSetfacl: boolean;
+	hasInotify: boolean;
 	linger: boolean;
+	primaryLoginGroup: string;
 }
 
 function parseProbe(stdout: string): Probe {
 	const answers = new Map<string, string>();
 	for (const line of stdout.split("\n")) {
+		// Values may contain `=` (a readlink target could), so the FIRST one
+		// separates key from value.
 		const at = line.indexOf("=");
-		if (at <= 0) continue;
-		answers.set(line.slice(0, at).trim(), line.slice(at + 1).trim());
+		if (at > 0) answers.set(line.slice(0, at).trim(), line.slice(at + 1).trim());
 	}
 	const yes = (key: string): boolean => answers.get(key) === "yes";
+	const count = (key: string): boolean => Number.parseInt(answers.get(key) ?? "0", 10) > 0;
 	const groups = (key: string): string[] =>
 		(answers.get(key) ?? "")
 			.split(",")
 			.map((group) => group.trim())
 			.filter((group) => group !== "");
+	const links = new Map<string, string>();
+	for (const name of SHARED_ENTRIES) {
+		links.set(name, answers.get(`link_${name}`) ?? "missing");
+	}
 	return {
 		agentExists: /^\d+$/.test(answers.get("agent_uid") ?? ""),
 		collabGroup: yes("collab_group"),
 		agentGroups: groups("agent_groups"),
 		primaryGroups: groups("primary_groups"),
 		dropInEntry: yes("dropin_entry"),
-		agentConfigWritable: yes("agent_config_writable"),
-		agentHomeTraversable: yes("agent_home_traversable"),
+		agentConfigDir: yes("agent_config_dir"),
+		agentConfigOwner: answers.get("agent_config_owner") ?? "missing",
+		links,
+		agentBashrcUmask: count("agent_bashrc_umask"),
+		agentBashrcPhysical: count("agent_bashrc_physical"),
+		hasSetfacl: yes("acl_tool"),
+		hasInotify: yes("inotify_tool"),
 		linger: yes("linger"),
+		primaryLoginGroup: answers.get("primary_login_group") ?? "unknown",
 	};
+}
+
+/**
+ * Refuse when the primary user's login group is the shared group.
+ *
+ * `umask 002` — which both users get — means every file the primary creates is
+ * group-accessible by the primary's effective group. If that group is `collab`,
+ * the agent gets read and write on everything the primary makes, including the
+ * things the rest of this task exists to keep private. The fix is a login group
+ * of the primary's own, not giving up the shared umask.
+ */
+export function refusesCollabLoginGroup(group: string): boolean {
+	return group === COLLAB_GROUP;
 }
 
 export const agentUserCreate: Task = {
@@ -100,13 +174,19 @@ export const agentUserCreate: Task = {
 
 	async check(ctx: TaskContext): Promise<boolean> {
 		const agentUser = await agentUserOf(ctx);
+		// Refuse before probing anything, so a hostile name is a message rather
+		// than a probe full of interpolated values.
+		await assertAgentUserIsSafe(ctx, agentUser);
 		const primaryUser = await primaryUserOf(ctx);
 		const agentHome = await agentHomeOf(ctx, agentUser);
 		const result = await runScript(ctx, probe(agentUser, primaryUser, agentHome));
 		if (result.code !== 0) return false;
 		const parsed = parseProbe(result.stdout);
+		// The same resolution `agent-user.dirs` uses, so the two agree on what the
+		// symlinks are supposed to point at.
+		const primaryHome = await homeOf(ctx);
 
-		// Both users must be in the group, or nothing downstream can be shared.
+		if (!parsed.hasSetfacl || !parsed.hasInotify) return false;
 		if (!parsed.agentExists || !parsed.collabGroup) return false;
 		if (!parsed.agentGroups.includes(COLLAB_GROUP)) return false;
 		if (!parsed.primaryGroups.includes(COLLAB_GROUP)) return false;
@@ -114,33 +194,52 @@ export const agentUserCreate: Task = {
 		if (parsed.dropInEntry) return false;
 		if (parsed.agentGroups.includes(PRIVILEGED_GROUP)) return false;
 		if (parsed.agentGroups.includes(DOCKER_GROUP)) return false;
-		// The agent's config dir must be creatable and writable by the primary
-		// user, or `agent-user.dirs` cannot install its symlinks and would have
-		// to keep asking for root.
-		if (!parsed.agentConfigWritable) return false;
-		// …which needs the agent's home itself to be traversable.
-		if (!parsed.agentHomeTraversable) return false;
-		// Linger is what lets the agent's own `systemd --user` unit keep running
+		// The agent's config dir exists and belongs to the agent.
+		if (!parsed.agentConfigDir || parsed.agentConfigOwner !== agentUser) return false;
+		for (const [name, target] of parsed.links) {
+			if (target === "missing" || target !== `${primaryHome}/.claude/${name}`) return false;
+		}
+		if (!parsed.agentBashrcUmask || !parsed.agentBashrcPhysical) return false;
+		// Linger is what lets the agent's own systemd --user unit keep running
 		// with no session of its own — the watcher depends on it.
-		return parsed.linger;
+		if (!parsed.linger) return false;
+		// A collab login group is a REFUSAL, not a "needs doing" state: nothing
+		// here can fix it, and setting up anyway would hand the agent everything
+		// the primary writes.
+		return !refusesCollabLoginGroup(parsed.primaryLoginGroup);
 	},
 
 	rootScript(ctx: TaskContext): string {
 		const agentUser =
 			ctx.machine?.agentUser ?? ctx.config.machines[ctx.config.self.name]?.agent_user ?? "agent";
-		const primaryUser = primaryUserLines(ctx);
-		const agentUserQ = shellQuote(agentUser);
 		return `# The unattended agent user.
 #
 # Adds a second Linux user for agents to run as, in a group you both belong to.
 # The agent shares your work dir and your Claude transcripts through that group,
 # and holds none of your credentials: no privileged group, no docker group, no
-# privilege drop-in. Each step below is guarded, so running this twice changes
-# nothing.
+# privilege drop-in.
+#
+# Everything INSIDE the agent's own home is done by the agent itself, through
+# runuser: that account can plant symlinks there, and root following one is root
+# writing wherever it points. Root's only business in there is the directory's
+# owner and mode, and a read-only ACL for you.
+#
+# Every step is guarded, so running this twice changes nothing.
+
+${rootScriptGuards(agentUser)}
+# Refuse rather than proceed if your login group is the shared group: the shared
+# umask would then hand the agent read and write on everything you create.
+primary_login_group="$(id -gn "$primary_user" || echo unknown)"
+if [ "$primary_login_group" = "${COLLAB_GROUP}" ]; then
+  echo "hyper: your login group is ${COLLAB_GROUP}, and with umask 002 that would give" >&2
+  echo "       the agent user read and write on every file you create. Give yourself" >&2
+  echo "       a login group of your own (usermod -g <you> <you>) and re-run. Stopping." >&2
+  exit 1
+fi
 
 # Packages the unprivileged tasks need: ACLs for the shared dirs, inotifywait
-# for the watcher. Guarded, because they are usually already there and because
-# hyper itself never installs anything (C-6) — this script is yours.
+# for the watcher. Guarded, and here because this script is the user's to run —
+# hyper itself never installs anything (C-6).
 if ! command -v setfacl >/dev/null 2>&1; then
   apt-get install -y acl
 fi
@@ -148,72 +247,107 @@ if ! command -v inotifywait >/dev/null 2>&1; then
   apt-get install -y inotify-tools
 fi
 
-# Who you are: the user who ran this with their password, which is the login
-# that invoked the script. Resolved HERE rather than baked in, because the ssh
-# target's user part is only a username when the target is written as one — an
-# ssh alias or a bare hostname has none, and \`usermod\` handed an alias would
-# abort the whole script.
-${primaryUser}
-
 # The shared group.
 getent group ${COLLAB_GROUP} >/dev/null 2>&1 || groupadd ${COLLAB_GROUP}
 
-# The agent user itself. -m gives it a home (its own config dir lives there);
-# bash because everything an agent runs is a shell pipeline.
-id -u ${agentUserQ} >/dev/null 2>&1 || useradd -m -s /bin/bash -G ${COLLAB_GROUP} ${agentUserQ}
+# The agent user itself. -m gives it a home; bash because everything an agent
+# runs is a shell pipeline.
+id -u "$agent_user" >/dev/null 2>&1 || useradd -m -s /bin/bash -G ${COLLAB_GROUP} "$agent_user"
 
 # You, in the same group, so the shared dirs are reachable from both sides.
 usermod -aG ${COLLAB_GROUP} "$primary_user"
 
-# The absences, in order of how much they matter. gpasswd -d removes a
-# supplementary membership; it fails harmlessly when there is none, so each is
+# The absences, in order of how much they matter. The -d form removes a
+# supplementary membership and fails harmlessly when there is none, so each is
 # guarded on the membership existing first.
-id -nG ${agentUser} 2>/dev/null | tr ' ' '\\n' | grep -qx ${PRIVILEGED_GROUP} && \\
-  gpasswd -d ${agentUser} ${PRIVILEGED_GROUP} || true
-id -nG ${agentUser} 2>/dev/null | tr ' ' '\\n' | grep -qx ${DOCKER_GROUP} && \\
-  gpasswd -d ${agentUser} ${DOCKER_GROUP} || true
-rm -f ${SUDOERS_DIR}/${agentUser}
+id -nG "$agent_user" 2>/dev/null | tr ' ' '\\n' | grep -qx ${PRIVILEGED_GROUP} && \\
+  ${GPASSWD} -d "$agent_user" ${PRIVILEGED_GROUP} || true
+id -nG "$agent_user" 2>/dev/null | tr ' ' '\\n' | grep -qx ${DOCKER_GROUP} && \\
+  ${GPASSWD} -d "$agent_user" ${DOCKER_GROUP} || true
+rm -f ${SUDOERS_DIR}/"$agent_user"
 
-# The agent's home. Debian's HOME_MODE is 0700, so this is a private directory
-# until we say otherwise below.
-agent_home="$(getent passwd ${agentUser} | cut -d: -f6)"
+agent_home="$(getent passwd "$agent_user" | cut -d: -f6)"
+if [ -z "$agent_home" ]; then
+  echo "hyper: I can't find the home directory of '$agent_user'." >&2
+  exit 1
+fi
 
-# The agent's own config dir, group-writable so the entries \`agent-user.dirs\`
-# symlinks into it can be created by you without root. This is the ONLY thing
-# that task needs from root; without it every symlink it wants would be a root
-# step. install(1) ignores setgid bits in -m, so it is set explicitly.
-install -d -o ${agentUser} -g ${COLLAB_GROUP} -m 2770 "\${agent_home}/.claude"
-chmod 2770 "\${agent_home}/.claude"
+# Ownership of the agent's config dir. It is CREATED BY THE AGENT below, because
+# everything inside that home is the agent's to create; root sets only its owner
+# and mode, which is metadata. Every step is skipped when the path is a symlink:
+# the agent controls this directory, so setting metadata on it would apply to
+# whatever it points at.
+if [ ! -L "$agent_home/.claude" ] && [ ! -e "$agent_home/.claude" ]; then
+  runuser -u "$agent_user" -- mkdir -p "$agent_home/.claude"
+fi
+if [ ! -L "$agent_home/.claude" ]; then
+  chown "$agent_user:$agent_user" "$agent_home/.claude"
+  chmod 0750 "$agent_home/.claude"
+else
+  echo "hyper: $agent_home/.claude is a symlink; leaving it alone." >&2
+fi
 
-# Let you path INTO the agent's home, so you can write those symlinks — and
-# nothing else: \`x\` alone is traverse, not list. A named-user ACL rather than
-# \`chmod o+x\`, so no other account on this machine gains anything from it.
-setfacl -m "u:$primary_user:x" "\${agent_home}"
+${agentOwnedBlock()}
 
-# Keep a collaborative default umask and real-path cd in the agent's shell, so
-# files it writes are group-accessible by creation rather than by the watcher.
-touch "\${agent_home}/.bashrc"
-grep -q 'umask 002' "\${agent_home}/.bashrc" || \\
-  printf '\\n# hyper: files here are shared with the primary user\\numask 002\\n' >> "\${agent_home}/.bashrc"
+# Let you READ (not write) the agent's config dir, so the checks above can see
+# it. A named-user ACL rather than opening the directory to everyone else, so no
+# other account on this machine gains anything.
+if [ ! -L "$agent_home" ]; then
+  setfacl -m "u:$primary_user:x" "$agent_home"
+fi
+if [ ! -L "$agent_home/.claude" ]; then
+  setfacl -m "u:$primary_user:r-x" "$agent_home/.claude"
+fi
 
 # Linger, so the agent's own systemd --user units (the transcript watcher) keep
 # running with no session of its own.
-loginctl enable-linger ${agentUser}
+loginctl enable-linger "$agent_user"
 `;
 	},
 };
 
 /**
- * The primary user's name for the script.
+ * The part of the script the AGENT runs: the shared symlinks and the .bashrc
+ * lines, both inside the agent's own home.
  *
- * The primary user, as a FALLBACK for the script to use when it can't work the
- * name out itself.
+ * One `runuser` with a single `sh -c`, because the point is that root is not the
+ * one doing this. Every path here belongs to the agent, so a symlink there can
+ * only ever be followed by the agent — which is exactly the privilege root must
+ * not lend it. The names arrive as positional parameters so the block never
+ * depends on root's variables being right.
  *
- * `rootScript` is synchronous and the real answer is a question only the machine
- * can answer, which is why the generated script prefers `$SUDO_USER` at run
- * time and uses this only if that is unset. Baking the guess in unconditionally
- * is wrong more often than it is right: an ssh target's `user@` part is only a
- * user when the target is written as one, and an ssh alias (`Host t16` →
- * `t16box`) or a bare hostname has no user part at all — so `usermod` would be
- * handed an alias as a username and the script would stop on `set -e`.
+ * The symlinks are created even when their targets do not exist yet: a dangling
+ * symlink is fine, and the primary side is set up by the unprivileged task in
+ * the same run. `ln -sfn` is guarded on the existing entry being a symlink, so a
+ * real directory the agent may have made is never replaced.
  */
+function agentOwnedBlock(): string {
+	const links = SHARED_ENTRIES.map(
+		(name) =>
+			`    link="$home/.claude/${name}"\n` +
+			`    target="$primary_claude/${name}"\n` +
+			`    if [ -L "$link" ]; then\n` +
+			`      [ "$(readlink "$link")" = "$target" ] || ln -sfn "$target" "$link"\n` +
+			`    elif [ ! -e "$link" ]; then\n` +
+			`      ln -sfn "$target" "$link"\n` +
+			`    fi`,
+	).join("\n");
+	return `runuser -u "$agent_user" -- sh -c '
+set -eu
+home="$(getent passwd "$1" | cut -d: -f6)"
+primary_home="$(getent passwd "$2" | cut -d: -f6)"
+primary_claude="$primary_home/.claude"
+mkdir -p "$home/.claude"
+chmod 0750 "$home/.claude"
+
+# The shared entries. A symlink is only a pointer, so this needs no access to
+# the target at all — only to the directory being linked from.
+${links}
+
+# A collaborative umask and real-path cd in the agent shell, so what it writes
+# is group-accessible from birth rather than by the watcher having to widen it.
+touch "$home/.bashrc"
+grep -q "umask 002" "$home/.bashrc" || printf "\\n# hyper: files here are shared with the primary user\\numask 002\\n" >> "$home/.bashrc"
+grep -q "^set -o physical$" "$home/.bashrc" || printf "set -o physical\\n" >> "$home/.bashrc"
+' _ "$agent_user" "$primary_user"`;
+}

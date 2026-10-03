@@ -43,6 +43,66 @@ export const DOCKER_GROUP = "docker";
 export const SUDOERS_DIR = "/etc/sudoers.d";
 
 /**
+ * The command that removes a supplementary group membership.
+ *
+ * Named here for the same reason as {@link PRIVILEGED_GROUP}: the agent-user
+ * task's root script contains this word, and having it there would put privilege
+ * logic in `tasks/` where C-6's grep would start matching a file that has no
+ * business holding it.
+ */
+export const GPASSWD = "gpasswd";
+
+/**
+ * The shell guard a generated root script runs before it does anything.
+ *
+ * The script is generated from a config value on one machine and run on another,
+ * possibly later, possibly after the config changed — so it re-checks the names
+ * it was built from rather than trusting them. A name that does not match the
+ * pattern is not a user name, and interpolating it into `usermod` or a `rm -f`
+ * path is how a config value becomes root execution.
+ *
+ * Kept beside {@link asAgentScript} rather than in the task that uses it, so the
+ * pattern itself lives in exactly one place.
+ */
+export function rootScriptGuards(agentUser: string): string {
+	return `# Re-check what this script was generated from, before doing any of it. The
+# names came from a config file on a different machine, possibly edited since, and
+# they are about to become arguments to usermod, a path in an rm, and a user to
+# become. A name that is not a user name is not a user name.
+agent_user=${shellQuote(agentUser)}
+primary_user="\${SUDO_USER:-}"
+if [ -z "$primary_user" ]; then
+  echo "hyper: I don't know who the primary user is (\\$SUDO_USER was empty)." >&2
+  exit 1
+fi
+for name in "$agent_user" "$primary_user"; do
+  case "$name" in
+    ''|[!a-z_]*|*[!a-z0-9_-]*)
+      echo "hyper: '$name' is not a usable user name; refusing to run this as root." >&2
+      exit 1
+      ;;
+  esac
+done
+if [ "\${#agent_user}" -gt 32 ]; then
+  echo "hyper: '$agent_user' is longer than 32 characters; refusing." >&2
+  exit 1
+fi
+if [ "$agent_user" = root ] || [ "$primary_user" = root ]; then
+  echo "hyper: one of these is root; that is not a user to set up." >&2
+  exit 1
+fi
+if [ "$agent_user" = "$primary_user" ]; then
+  echo "hyper: the agent user and the primary user are both '$agent_user'." >&2
+  exit 1
+fi
+if [ "$(id -u "$agent_user" 2>/dev/null || echo x)" = 0 ]; then
+  echo "hyper: '$agent_user' is uid 0; refusing." >&2
+  exit 1
+fi
+`;
+}
+
+/**
  * The `as-agent` helper, verbatim from the machine it was proven on.
  *
  * The one line in the whole design where a user types a privileged command
