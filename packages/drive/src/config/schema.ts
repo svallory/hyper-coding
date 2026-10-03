@@ -281,7 +281,8 @@ function validateRepo(path: string, index: number, raw: unknown): SpaceRepo {
 	}
 	warnUnknown(path, `repos[${index}].`, raw, SPACE_REPO_KEYS);
 	const repo: SpaceRepo = {
-		url: needString(path, `repos[${index}].url`, raw.url),
+		// A local-only repository has no URL to clone; clone reports it as skipped.
+		url: raw.url === undefined ? "" : needString(path, `repos[${index}].url`, raw.url),
 		default_branch: needString(path, `repos[${index}].default_branch`, raw.default_branch),
 	};
 	if (raw.slug !== undefined) {
