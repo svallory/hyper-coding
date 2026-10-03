@@ -39,6 +39,14 @@ export default class Detect extends BaseCommand<typeof Detect> {
 
 		const info = detectSpace(dir);
 		if (info.root === null || info.layout === null) {
+			// Machine callers asked for JSON, so give them JSON on stdout even in
+			// the failure case — otherwise `hyper space detect --json | jq` dies on
+			// an empty stream instead of reading nulls. The prose stays on stderr
+			// (oclif's error channel) and the exit code is still 1, so nothing
+			// that branches on the status changes.
+			if (flags.json) {
+				this.log(JSON.stringify({ root: null, layout: null }, null, 2));
+			}
 			// One clear sentence beats printing nulls: the answer itself is the
 			// useful part, and scripts branch on the exit code.
 			this.error(
