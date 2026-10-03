@@ -64,6 +64,7 @@
 			}
 		},
 		"plugins": [
+			"@hypercli/drive",
 			"@hypercli/gen",
 			"@hypercli/hq",
 			"@hypercli/kit",
@@ -94,6 +95,7 @@
 	},
 	"dependencies": {
 		"@hypercli/core": "workspace:*",
+		"@hypercli/drive": "workspace:*",
 		"@hypercli/gen": "workspace:*",
 		"@hypercli/hq": "workspace:*",
 		"@hypercli/kit": "workspace:*",
