@@ -21,14 +21,14 @@ export {
 	RemoteError,
 	RemoteMachine,
 	RemotePathError,
-	remoteSpec,
 	type RsyncOptions,
 	type RunResult,
-	shellJoin,
-	shellQuote,
+	remoteSpec,
 	type Spawner,
 	type SpawnRequest,
 	type SshOptions,
+	shellJoin,
+	shellQuote,
 } from "#services/remote";
 export {
 	claudeHome,
