@@ -91,6 +91,8 @@ CLI is a thin oclif shell that loads drive, gen, hq, and kit as plugins:
 
 Hyperdrive's user config is read/written only through `packages/drive/src/config/index.ts`. The `main` manifest checkout is an ordinary clone at `~/.hyper/drive/` (path built only by `services/manifest.ts`); space branch git operations go through `services/space-git.ts` with explicit git-dir/work-tree.
 
+Space init and daily commits share `services/space-sync.ts`: keep staging, gitlink exclusion, staged-blob secret checks and push classification there. Both generated commit paths are unsigned and hook-free. The secret-content check reads at most the first 4 KB of the index blob, not the work-tree file. `space-history.ts` owns daily detection/fetch/pull/status/log; fetch only the current space branch, including for legacy git dirs with missing or broad fetch refspecs. Status is offline unless `--fetch` and compares the remote-tracking ref from the last contact (push counts too). Log passes through Git arguments and streams, except ref-expanding switches; do not replace that with a display-option allowlist.
+
 **BaseCommand hierarchy**: oclif Command → CoreBaseCommand (cli) → GenBaseCommand (gen)
 
 ## Template System
