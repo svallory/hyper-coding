@@ -115,6 +115,17 @@ export class SpaceGitError extends Error {
 	}
 }
 
+/** A child interrupted by the terminal, even when ordinary failures are allowed. */
+export class SpaceGitInterruptedError extends SpaceGitError {
+	constructor(
+		readonly signal: "SIGINT" | "SIGTERM",
+		detail = "interrupted: nothing was changed. Run the command again when ready.",
+	) {
+		super(detail);
+		this.name = "SpaceGitInterruptedError";
+	}
+}
+
 /**
  * Run `git --git-dir <space git dir> --work-tree <space root> ...args`.
  *
@@ -140,6 +151,12 @@ export function spaceGit(
 		},
 	);
 
+	// spawnSync blocks JS signal handlers. Terminal process-group signals are
+	// observable through the child; a signal to Node alone while git runs is
+	// not reliably recoverable with synchronous spawns. Do not claim otherwise.
+	if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
+		throw new SpaceGitInterruptedError(result.signal);
+	}
 	if (result.error) {
 		throw new SpaceGitError(
 			`I couldn't run git: ${result.error.message}. Is git installed and on your PATH?`,
