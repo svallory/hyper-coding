@@ -1,4 +1,4 @@
-import { configExists, configPath, loadConfig } from "#config/index";
+import { ConfigError, configExists, configPath, loadConfig } from "#config/index";
 import { BaseCommand } from "#lib/base-command";
 
 export default class Status extends BaseCommand<typeof Status> {
@@ -14,20 +14,22 @@ export default class Status extends BaseCommand<typeof Status> {
 	};
 
 	async run(): Promise<void> {
-		await this.parse(Status);
+		const { flags } = await this.parse(Status);
 
 		const path = configPath();
 		let config: ReturnType<typeof loadConfig>;
 		try {
 			config = loadConfig();
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			// A bad config is a user error, not a crash. In debug/dev mode oclif's
-			// prettyPrint() returns `error.stack` verbatim (see @oclif/core
-			// lib/errors/pretty-print.js), so the JS frames would be dumped on top of
-			// the friendly message. Hand it a stack that carries only the message.
-			const problem = new Error(message);
-			problem.stack = message;
+			// Only a ConfigError is a user error. Anything else is a real bug and
+			// must keep its stack so it can be diagnosed, so rethrow it untouched.
+			if (!(err instanceof ConfigError)) throw err;
+			// In debug/dev mode oclif's prettyPrint() returns `error.stack` verbatim
+			// (see @oclif/core lib/errors/pretty-print.js), which would dump the JS
+			// frames on top of the friendly message. Hand it a message-only stack —
+			// unless the user asked for --debug, where the frames are the point.
+			const problem = new Error(err.message);
+			problem.stack = flags.debug ? (err.stack ?? err.message) : err.message;
 			this.error(problem, { exit: 2 });
 		}
 

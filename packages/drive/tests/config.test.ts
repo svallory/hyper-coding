@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { configExists, configPath, loadConfig } from "#config/index";
 import { DEFAULT_CONFIG, DEFAULT_MACHINE } from "#config/schema";
+import { withTempConfig } from "#tests/tmp-config";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = resolve(__dirname, "fixtures/drive.toml");
@@ -112,17 +113,37 @@ describe("loadConfig", () => {
 		expect(loadConfig().self.home).toBe(homedir());
 	});
 
-	it("does not mutate DEFAULT_CONFIG across loads", () => {
-		process.env.HYPER_DRIVE_CONFIG = fixture("drive-empty-home.toml");
-		const first = loadConfig();
-		// A second, partially-specified load must not see the first one's values
-		process.env.HYPER_DRIVE_CONFIG = PARTIAL;
-		const second = loadConfig();
+	it("does not alias or mutate DEFAULT_CONFIG when the file omits tables", () => {
+		// No [self] and no [warp] in the file: these keys must come from a clone,
+		// not by reference to the module defaults.
+		withTempConfig('remote = "git@github.com:example/omitted.git"\n');
+		const config = loadConfig();
 
-		expect(second.self.name).toBe("partial-machine");
-		expect(second.self.home).toBe(homedir());
-		expect(DEFAULT_CONFIG.self.name).toBe("");
-		expect(first.self.name).toBe("");
+		expect(config.self).not.toBe(DEFAULT_CONFIG.self);
+		expect(config.warp.exclude).not.toBe(DEFAULT_CONFIG.warp.exclude);
+		expect(config.sync.claude.ignore).not.toBe(DEFAULT_CONFIG.sync.claude.ignore);
+
+		// Writing through the result must not reach the defaults
+		config.self.home = "/tmp/mutated";
+		config.warp.exclude.push("mutated");
+		config.sync.claude.ignore.push("mutated");
+
+		expect(DEFAULT_CONFIG.self.home).not.toBe("/tmp/mutated");
+		expect(DEFAULT_CONFIG.warp.exclude).toHaveLength(8);
+		expect(DEFAULT_CONFIG.sync.claude.ignore).toEqual([]);
+	});
+
+	it("does not share one features array between machines", () => {
+		withTempConfig('[machines.a]\nhome = "/a"\n\n[machines.b]\nhome = "/b"\n');
+		const config = loadConfig();
+
+		expect(config.machines.a.features).toEqual(DEFAULT_MACHINE.features);
+		expect(config.machines.b.features).toEqual(DEFAULT_MACHINE.features);
+		expect(config.machines.a.features).not.toBe(config.machines.b.features);
+
+		config.machines.a.features.push("docker");
+		expect(config.machines.b.features).toEqual([]);
+		expect(DEFAULT_MACHINE.features).toEqual([]);
 	});
 
 	it("throws a friendly error when a section is a scalar", () => {
@@ -177,5 +198,56 @@ describe("loadConfig", () => {
 	it("throws a friendly error when warp.exclude is not a string list", () => {
 		process.env.HYPER_DRIVE_CONFIG = fixture("drive-bad-exclude.toml");
 		expect(() => loadConfig()).toThrowError(/warp\.exclude.*list of strings/);
+	});
+
+	describe("type errors", () => {
+		it("rejects a non-string self.home", () => {
+			withTempConfig("[self]\nhome = 5\n");
+			expect(() => loadConfig()).toThrowError(/`self\.home` must be a string, but it is a number/);
+		});
+
+		it("rejects a boolean self.home instead of silently using homedir()", () => {
+			withTempConfig("[self]\nhome = false\n");
+			expect(() => loadConfig()).toThrowError(/`self\.home` must be a string, but it is a boolean/);
+		});
+
+		it("rejects a list self.home before expandHome crashes", () => {
+			withTempConfig('[self]\nhome = ["a"]\n');
+			expect(() => loadConfig()).toThrowError(/`self\.home` must be a string, but it is a list/);
+		});
+
+		it("rejects a non-string self.name", () => {
+			withTempConfig("[self]\nname = 5\n");
+			expect(() => loadConfig()).toThrowError(/`self\.name` must be a string/);
+		});
+
+		it("rejects a non-string machine agent_user", () => {
+			withTempConfig("[machines.x]\nagent_user = 5\n");
+			expect(() => loadConfig()).toThrowError(
+				/`machines\.x\.agent_user` must be a string, but it is a number/,
+			);
+		});
+
+		it("rejects a non-string machine home", () => {
+			withTempConfig("[machines.x]\nhome = 5\n");
+			expect(() => loadConfig()).toThrowError(
+				/`machines\.x\.home` must be a string, but it is a number/,
+			);
+		});
+
+		it("rejects a date where a section is expected", () => {
+			withTempConfig("self = 1979-05-27\n");
+			expect(() => loadConfig()).toThrowError(/`self` must be a section, but it is a date/);
+		});
+
+		it("rejects a scalar sync target", () => {
+			withTempConfig('[sync]\nclaude = "x"\n');
+			expect(() => loadConfig()).toThrowError(/`sync\.claude` must be a section/);
+		});
+
+		it("rejects a non-string sync.pi.ignore list", () => {
+			withTempConfig('[sync.pi]\nignore = "nope"\n');
+			expect(() => loadConfig()).toThrowError(/`sync\.pi\.ignore` must be a list of strings/);
+		});
 	});
 });
