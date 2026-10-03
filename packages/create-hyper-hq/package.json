@@ -27,7 +27,11 @@
 		"./setup/claude-md": "./dist/setup/claude-md.js",
 		"./checks/plugins": "./dist/checks/check-claude-plugins.js"
 	},
-	"files": ["dist", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
 	"publishConfig": {
 		"access": "public",
 		"registry": "https://registry.npmjs.org/"
