@@ -23,6 +23,7 @@
 import { shellQuote } from "#services/remote";
 import { homeOf, primaryUserLines, primaryUserOf } from "./agent-context.js";
 import {
+	aclShell,
 	CLAUDE_CHILDREN_ALLOWED,
 	COLLAB_GROUP,
 	READABLE_FILES,
@@ -52,6 +53,8 @@ export function watcherScript(projectsDir: string, home: string): string {
 	// here rather than inline in the script, so a rename cannot leave the watcher
 	// disagreeing with the ACLs.
 	const sharedFilesPattern = READABLE_FILES.join("|");
+	// All six shared config-dir entries, not just the readable files.
+	const claudeChildrenPattern = CLAUDE_CHILDREN_ALLOWED.join("|");
 	const homeAllowedPattern = TOP_LEVEL_ALLOWED.join("|");
 	// The same exclusions for the startup sweep's `find`, which walks one level
 	// and must skip exactly what the `case` statements above skip.
@@ -72,6 +75,22 @@ export function watcherScript(projectsDir: string, home: string): string {
 #
 # Runs unprivileged: it can only touch files its own user owns, which is why
 # there is one instance per user rather than one privileged watcher.
+${aclShell()}
+
+# The two files Claude Code replaces by rename: the inherited default denies
+# them, so the grant has to be re-applied when they come back.
+protect_shared() {
+  [ -f "$1" ] || return 0
+  # The mask too: a replaced file inherits the config dir's default, whose mask
+  # is ---, so setting only the named entry would leave the grant
+  # effective-nothing and the agent unable to read a file it is meant to have.
+  getfacl -c -p "$1" 2>/dev/null | grep -q "^group:$deny_group:r--$" \
+    || setfacl -m "g:$deny_group:r--" -m m::r-- "$1" 2>/dev/null || true
+  # Even readable-by-grant, it must not sit in the state where the ACL is skipped.
+  bad_state "$1" && chmod o-rwx "$1"
+  return 0
+}
+
 projects=${shellQuote(projectsDir)}
 home=${shellQuote(home)}
 claude=${shellQuote(claude)}
@@ -83,15 +102,22 @@ on_new() {
   [ -L "$p" ] && return 0
   case "$(dirname "$p")" in
     "$claude")
+      # EVERY shared entry is skipped, not just the two files. The deny applies to
+      # the config dir's own children that the agent has no business reading;
+      # projects/, skills/, commands/ and agents/ are the shared ones and carry
+      # their own grants. Denying them here stomped the grant the dirs task had
+      # just applied, and the check then correctly reported them as unprotected
+      # for ever.
       case "$(basename "$p")" in
-        ${sharedFilesPattern}) setfacl -m "g:$deny_group:r--" "$p" 2>/dev/null || true ;;
-        *) setfacl -m "g:$deny_group:---" "$p" 2>/dev/null || true ;;
+        ${sharedFilesPattern}) protect_shared "$p" ;;
+        ${claudeChildrenPattern}) : ;;
+        *) protect "$p" ;;
       esac
       ;;
     "$home")
       case "$(basename "$p")" in
         ${homeAllowedPattern}) : ;;   # the shared ones carry their own ACLs
-        *) setfacl -m "g:$deny_group:---" "$p" 2>/dev/null || true ;;
+        *) protect "$p" ;;
       esac
       ;;
   esac
@@ -115,8 +141,11 @@ sweep() {
 }
 sweep
 
+# attrib is watched as well as create/moved-to, and that is not belt-and-braces:
+# a chmod IS an attribute change, and a chmod that zeroes the group bits is exactly
+# what turns the deny into a no-op (the kernel then skips the ACL entirely).
 watch_dir() {
-  inotifywait -m -q -e create -e moved_to --format '%w%f' "$1" 2>/dev/null |
+  inotifywait -m -q -e create -e moved_to -e attrib --format '%w%f' "$1" 2>/dev/null |
     while IFS= read -r p; do on_new "$p"; done
 }
 watch_projects() {
