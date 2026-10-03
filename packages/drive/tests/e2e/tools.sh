@@ -70,7 +70,8 @@ export HOME="$home"
 export XDG_DATA_HOME="$home/.local/share"
 export XDG_CACHE_HOME="$home/.cache"
 export HYPER_MACHINE_SCRATCH="$work/scratch"
-unset CLAUDE_CONFIG_DIR || true
+export CLAUDE_CONFIG_DIR="$work/claude"
+mkdir -p "$CLAUDE_CONFIG_DIR" "$work/tmp"
 
 # A PATH without the operator's own tool directories: a homebrew jq on the
 # inherited PATH would satisfy `detect` and the recipes would never run.
@@ -87,7 +88,12 @@ echo "# HOME=$HOME  ~/.local/bin=$(ls -A "$home/.local/bin" | wc -l | tr -d ' ')
 pass "the temp ~/.local/bin starts empty"
 
 run_setup() {
-  "$cli" machine setup --features tools --tools wt,rg --yes 2>&1 | tee "$work/out-$1.txt"
+  env -i HOME="$home" CLAUDE_CONFIG_DIR="$CLAUDE_CONFIG_DIR" \
+    PATH="$PATH" SHELL=/bin/bash LANG=C NO_COLOR=1 \
+    XDG_CONFIG_HOME="$XDG_CONFIG_HOME" XDG_DATA_HOME="$XDG_DATA_HOME" \
+    XDG_CACHE_HOME="$XDG_CACHE_HOME" HYPER_MACHINE_SCRATCH="$HYPER_MACHINE_SCRATCH" \
+    TMPDIR="$work/tmp" \
+    "$cli" machine setup --features tools --tools wt,rg --yes 2>&1 | tee "$work/out-$1.txt"
 }
 
 echo "# first run: installs both tools"

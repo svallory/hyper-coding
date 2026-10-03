@@ -14,9 +14,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
+	emptySelectionMessage,
 	featurePromptOptions,
 	parityVersions,
 	parseTools,
+	printableHookWord,
 	toolPromptOptions,
 	toolsFromScan,
 	versionsFor,
@@ -72,6 +74,7 @@ const CONFIG = 'remote = "git@example:x.git"\n';
 /** An empty scan, as a machine whose hooks aren't synced yet would produce. */
 function scan(over: Partial<HookScan> = {}): HookScan {
 	return {
+		commandCount: 0,
 		preselect: [],
 		unknown: [],
 		resolvesAfterClone: [],
@@ -83,10 +86,25 @@ function scan(over: Partial<HookScan> = {}): HookScan {
 }
 
 describe("which tools a run picks (m3)", () => {
+	it.each(["", ",", " , "])("rejects an empty explicit tool list %j (H5)", (value) => {
+		expect(() => parseTools(value)).toThrow(/pass `--tools all` explicitly/);
+		if (skipIfUnbuilt()) return;
+		withTempConfig(CONFIG);
+		const r = spawnCli(["machine", "setup", "--features", "tools", "--tools", value, "--yes"]);
+		expect(r.status).toBe(2);
+		expect(r.stderr.replace(/\s+/g, " ")).toContain("pass `--tools all` explicitly");
+	});
+
+	it("distinguishes empty hooks from unmapped hooks and strips terminal controls", () => {
+		expect(emptySelectionMessage(scan())).toContain("no hooks found");
+		expect(emptySelectionMessage(scan({ commandCount: 1 }))).toContain("hooks found, none maps");
+		expect(printableHookWord("\u001b[2Junknown\n\u0007\u009bword")).toBe("[2Junknownword");
+	});
+
 	it("`--tools` names real tools, and `all` means all of them", () => {
 		expect(parseTools("jq,wt")).toEqual(["jq", "wt"]);
 		expect(parseTools(" all ")).toEqual(["all"]);
-		expect(parseTools("")).toEqual(["all"]);
+		expect(() => parseTools("")).toThrow(/pass `--tools all` explicitly/);
 	});
 
 	it("names the valid tools when it is given one that doesn't exist", () => {
