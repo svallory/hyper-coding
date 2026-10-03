@@ -1,7 +1,8 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
-	cpSync,
+	copyFileSync,
 	mkdirSync,
+	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	rmSync,
@@ -11,46 +12,66 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { encodeProjectDir } from "#services/sessions";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURE_HOME = resolve(__dirname, "fixtures/claude-home");
-const PROJECT_CWD = "/Users/svallory/work/hyper/hyper";
+const FIXTURES = resolve(__dirname, "fixtures");
+
+/** A fake Claude home plus the working directory its fixtures describe. */
+export interface ClaudeHome {
+	/** Temp `~/.claude` (pointed at by `CLAUDE_CONFIG_DIR`). */
+	home: string;
+	/** A temp working directory inside the temp home, never a real one. */
+	cwd: string;
+	/** Absolute path of the temp home. */
+	scratch: string;
+}
 
 /**
- * Copy the fake `~/.claude` fixture tree to a temp dir, point
- * `CLAUDE_CONFIG_DIR` at it and give the transcripts deterministic mtimes so
- * newest-first ordering is asserted, not hoped for. The real `~/.claude` is
- * never touched.
+ * Build a throwaway `~/.claude` tree in a temp dir and point
+ * `CLAUDE_CONFIG_DIR` at it.
+ *
+ * The working directory is a temp path too: nothing in the fixtures refers to
+ * the operator's real directories. Transcripts get deterministic mtimes so
+ * newest-first ordering is asserted rather than hoped for. The real `~/.claude`
+ * is never read or written.
  */
-export function withClaudeHome(): string {
-	const home = resolve(
-		tmpdir(),
-		`drive-claude-home-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-	);
-	cpSync(FIXTURE_HOME, home, { recursive: true });
+export function withClaudeHome(): ClaudeHome {
+	const scratch = mkdtempSync(join(tmpdir(), "drive-claude-home-"));
+	const home = join(scratch, "claude");
+	const cwd = join(scratch, "workspace");
+	const projects = join(home, "projects", encodeProjectDir(cwd));
+	mkdirSync(projects, { recursive: true });
+	mkdirSync(join(home, "sessions"), { recursive: true });
 
-	const projects = join(home, "projects");
-	for (const [, dir] of listDirs(projects)) {
-		const entries = readdirSync(dir).sort();
-		entries.forEach((entry, index) => {
-			// Oldest first by name, so the ordering assertion is about mtime and
-			// not about which file the test happened to create first.
-			const when = new Date(Date.UTC(2026, 0, 1) + index * 3_600_000);
-			utimesSync(join(dir, entry), when, when);
-		});
-	}
+	const transcripts = readdirSync(join(FIXTURES, "transcripts")).sort();
+	transcripts.forEach((entry, index) => {
+		copyFileSync(join(FIXTURES, "transcripts", entry), join(projects, entry));
+		// Oldest first by name, so the ordering assertion is about mtime and not
+		// about which file the fixture happened to list first.
+		const when = new Date(Date.UTC(2026, 0, 1) + index * 3_600_000);
+		utimesSync(join(projects, entry), when, when);
+	});
+
+	// The fixture's pid is a placeholder; a real, definitely-dead pid is what
+	// makes "stale sessions file" a fact rather than an assumption.
+	const stale = JSON.parse(
+		readFileSync(join(FIXTURES, "sessions", "999999.json"), "utf-8"),
+	) as Record<string, unknown>;
+	stale.pid = deadPid();
+	stale.cwd = cwd;
+	writeFileSync(join(home, "sessions", `${stale.pid}.json`), `${JSON.stringify(stale, null, 2)}\n`);
 
 	process.env.CLAUDE_CONFIG_DIR = home;
-	return home;
+	return { home, cwd, scratch };
 }
 
-export function removeClaudeHome(home: string): void {
-	if (process.env.CLAUDE_CONFIG_DIR === home) delete process.env.CLAUDE_CONFIG_DIR;
-	rmSync(home, { recursive: true, force: true });
+/** Remove the temp home and restore whatever `CLAUDE_CONFIG_DIR` was before. */
+export function removeClaudeHome(claudeHome: ClaudeHome, previous: string | undefined): void {
+	if (previous === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+	else process.env.CLAUDE_CONFIG_DIR = previous;
+	rmSync(claudeHome.scratch, { recursive: true, force: true });
 }
-
-/** The working directory the fixture tree describes. */
-export const FIXTURE_CWD = PROJECT_CWD;
 
 /** Add a `<pid>.json` sessions file to the fake home. */
 export function writeSessionFile(home: string, file: Record<string, unknown>): string {
@@ -58,6 +79,16 @@ export function writeSessionFile(home: string, file: Record<string, unknown>): s
 	mkdirSync(dir, { recursive: true });
 	const path = join(dir, `${file.pid}.json`);
 	writeFileSync(path, `${JSON.stringify(file, null, 2)}\n`, "utf-8");
+	return path;
+}
+
+/** Write a sessions file whose JSON is not usable (for the malformed cases). */
+export function writeRawSessionFile(home: string, file: string, pid?: number): string {
+	const dir = join(home, "sessions");
+	mkdirSync(dir, { recursive: true });
+	const name = pid === undefined ? `broken-${Date.now()}.json` : `${pid}.json`;
+	const path = join(dir, name);
+	writeFileSync(path, file, "utf-8");
 	return path;
 }
 
@@ -76,12 +107,22 @@ export function startSleeper(seconds = 30): { pid: number; kill: () => void } {
 	return { pid, kill: () => child.kill("SIGKILL") };
 }
 
-export { readFileSync as readFixtureFile };
+/**
+ * `LC_ALL=C TZ=UTC ps -o lstart=` of a live pid.
+ *
+ * Claude Code stores exactly this string in its sessions files (verified
+ * 2.1.288), so a helper that used the ambient locale would agree with a buggy
+ * comparison instead of catching it.
+ */
+export function procStartOf(pid: number): string {
+	const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {
+		encoding: "utf-8",
+		env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
+	});
+	return result.stdout.trim();
+}
 
-function listDirs(root: string): [string, string][] {
-	const out: [string, string][] = [];
-	for (const entry of readdirSync(root, { withFileTypes: true })) {
-		if (entry.isDirectory()) out.push([entry.name, join(root, entry.name)]);
-	}
-	return out;
+/** Path for a scratch file that a test writes (inside the temp fixture tree). */
+export function scratchPath(claudeHome: ClaudeHome, name: string): string {
+	return join(claudeHome.scratch, name);
 }
