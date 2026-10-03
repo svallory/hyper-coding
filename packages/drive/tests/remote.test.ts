@@ -19,6 +19,7 @@ import {
 	isExcluded,
 	LocalMachine,
 	RemoteMachine,
+	RemotePathError,
 	type RunResult,
 	remoteSpec,
 	type SpawnRequest,
@@ -96,12 +97,27 @@ describe("shellQuote", () => {
 	it("quotes every word of an argv array", () => {
 		expect(shellJoin(["echo", "hello world"])).toBe("echo 'hello world'");
 	});
+});
 
-	it("keeps a hostile remote path inert", () => {
-		// The remote side runs this through a shell, so the quotes must survive.
-		expect(remoteSpec("netcup", "/srv/$(rm -rf ~)/x")).toBe(`netcup:'/srv/$(rm -rf ~)/x'`);
-		expect(remoteSpec("netcup", "/home/a b")).toBe("netcup:'/home/a b'");
-		expect(remoteSpec("netcup", "/home/agent")).toBe("netcup:/home/agent");
+describe("remoteSpec", () => {
+	it("passes a safe path through raw", () => {
+		expect(remoteSpec("netcup", "/home/agent/hyperdrive")).toBe("netcup:/home/agent/hyperdrive");
+		expect(remoteSpec("netcup", "~/hyperdrive")).toBe("netcup:~/hyperdrive");
+		expect(remoteSpec("netcup", "/srv/a-b_c.1/+dir")).toBe("netcup:/srv/a-b_c.1/+dir");
+	});
+
+	it("refuses a path it cannot send safely, naming the path", () => {
+		// Quoting is not an option here: OpenSSH 10.2's scp (SFTP mode) writes the
+		// quotes into the filename, and rsync >= 3.2.4 escapes them itself.
+		for (const bad of ["/home/agent/my drive", "/home/$(whoami)", "/home/a`b`", "/home/a'b", ""]) {
+			expect(() => remoteSpec("netcup", bad)).toThrow(RemotePathError);
+			try {
+				remoteSpec("netcup", bad);
+			} catch (err) {
+				expect((err as Error).message).toContain(bad);
+				expect((err as Error).message).toContain("netcup");
+			}
+		}
 	});
 });
 
@@ -213,16 +229,16 @@ describe("LocalMachine", () => {
 		expect(lstatSync(join(dst, "link-to-dir")).isSymbolicLink()).toBe(true);
 	});
 
-	it("excludes a symlink pointing at an excluded directory", async () => {
+	it("excludes a symlink like any other entry", async () => {
 		const src = tempDir();
 		const dst = tempDir();
 		writeFile(join(src, "keep.txt"), "keep");
-		symlinkSync("/etc", join(src, "etc"));
+		symlinkSync("keep.txt", join(src, "skip.txt"));
 
-		await new LocalMachine(recordingSpawner().spawner).rsync(src, dst, { excludes: ["etc"] });
+		await new LocalMachine(recordingSpawner().spawner).rsync(src, dst, { excludes: ["skip.txt"] });
 
 		expect(existsSync(join(dst, "keep.txt"))).toBe(true);
-		expect(existsSync(join(dst, "etc"))).toBe(false);
+		expect(existsSync(join(dst, "skip.txt"))).toBe(false);
 	});
 
 	it("runs commands locally without ssh", async () => {
@@ -379,19 +395,34 @@ describe("RemoteMachine", () => {
 		expect(calls[0].args.at(-2)).toBe(`${src}/`);
 	});
 
-	it("quotes the remote path so the remote shell can't split or run it", async () => {
+	it("rejects a remote path it cannot send safely", async () => {
 		const { calls, spawner } = recordingSpawner();
-		await new RemoteMachine("netcup", spawner).rsync("/a", "/home/agent/my drive/$(id)");
 
-		expect(calls[0].args.at(-1)).toBe(`netcup:'/home/agent/my drive/$(id)'`);
+		await expect(
+			new RemoteMachine("netcup", spawner).rsync("/a", "/home/agent/my drive"),
+		).rejects.toThrow(/my drive/);
+		await expect(new RemoteMachine("netcup", spawner).rsync("/a", "/home/$(id)")).rejects.toThrow(
+			RemotePathError,
+		);
+		// Nothing was spawned: the path never reaches a process.
+		expect(calls).toEqual([]);
 	});
 
-	it("builds scp args with a quoted remote path", async () => {
+	it("builds scp args with the remote path raw", async () => {
 		const { calls, spawner } = recordingSpawner();
-		await new RemoteMachine("netcup", spawner).scp("/tmp/a.txt", "/home/svallory/my file.txt");
+		await new RemoteMachine("netcup", spawner).scp("/tmp/a.txt", "/home/svallory/hyperdrive");
 
 		expect(calls[0].file).toBe("scp");
-		expect(calls[0].args).toEqual(["/tmp/a.txt", "netcup:'/home/svallory/my file.txt'"]);
+		expect(calls[0].args).toEqual(["/tmp/a.txt", "netcup:/home/svallory/hyperdrive"]);
+	});
+
+	it("rejects an scp path with a space instead of quoting it", async () => {
+		const { calls, spawner } = recordingSpawner();
+
+		await expect(
+			new RemoteMachine("netcup", spawner).scp("/tmp/a.txt", "/home/svallory/my file.txt"),
+		).rejects.toThrow(/my file\.txt/);
+		expect(calls).toEqual([]);
 	});
 
 	it("exposes the host it was built with", () => {
