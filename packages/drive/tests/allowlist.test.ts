@@ -328,6 +328,14 @@ describe("findSecretPaths", () => {
 	const PATHS = [
 		".env", // depth 0: `**/` must match zero directories too
 		"credentials.json",
+		"id_rsa", // depth 0 private key, no extension
+		"server.key", // depth 0 `.key`
+		"secrets/x", // depth 0 `secrets/`
+		"ID_RSA", // case variant: a case-insensitive filesystem hands these back
+		"Credentials.json",
+		"a/b.PEM",
+		"x/id_ed2551919",
+		"x/id_ecdsa",
 		"notes/env.md", // not a secret: `env.md` has no dot before `env`
 		"notes/environment.md", // nor does `environment.md`
 		"src/keys.ts", // `.key` is the pattern; `keys.ts` is a source file
@@ -346,6 +354,14 @@ describe("findSecretPaths", () => {
 		expect(findSecretPaths(PATHS)).toEqual([
 			".env",
 			"credentials.json",
+			"id_rsa",
+			"server.key",
+			"secrets/x",
+			"ID_RSA",
+			"Credentials.json",
+			"a/b.PEM",
+			"x/id_ed2551919",
+			"x/id_ecdsa",
 			"notes/.env",
 			"notes/.env.local",
 			"bin/credentials.json",
@@ -356,6 +372,19 @@ describe("findSecretPaths", () => {
 		]);
 	});
 
+	it("matches case variants and more SSH key types", () => {
+		expect(findSecretPaths(["ID_RSA", "Id_Rsa.PUB", "Credentials.json", "a/b.PEM"])).toEqual([
+			"ID_RSA",
+			"Id_Rsa.PUB",
+			"Credentials.json",
+			"a/b.PEM",
+		]);
+		expect(findSecretPaths(["x/id_ed25519", "x/id_ecdsa.pem"])).toEqual([
+			"x/id_ed25519",
+			"x/id_ecdsa.pem",
+		]);
+	});
+
 	it("keeps input order", () => {
 		const reversed = [...PATHS].reverse();
 		expect(findSecretPaths(reversed)).toEqual(findSecretPaths(PATHS).reverse());
@@ -363,7 +392,7 @@ describe("findSecretPaths", () => {
 
 	it("skips exactly the paths in `allow`", () => {
 		expect(findSecretPaths(PATHS, ["notes/.env"])).not.toContain("notes/.env");
-		expect(findSecretPaths(PATHS, ["notes/.env"])).toHaveLength(8);
+		expect(findSecretPaths(PATHS, ["notes/.env"])).toHaveLength(16);
 		expect(findSecretPaths(PATHS, PATHS)).toEqual([]);
 	});
 
@@ -374,6 +403,8 @@ describe("findSecretPaths", () => {
 			"**/*.pem",
 			"**/*.key",
 			"**/id_rsa*",
+			"**/id_ed25519*",
+			"**/id_ecdsa*",
 			"**/secrets/**",
 		]);
 	});

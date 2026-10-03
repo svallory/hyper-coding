@@ -73,7 +73,13 @@ const RESERVED_PATHS: readonly string[] = [
 
 /**
  * Gitignore-style globs that should never reach a space's history. `**`
- * crosses directories, so these match at any depth.
+ * crosses directories, so these match at any depth. Matching is
+ * case-insensitive, because a checkout from a case-insensitive filesystem
+ * (macOS's default) can turn `id_rsa` into `ID_RSA` on its own.
+ *
+ * `id_ed25519*` and `id_ecdsa*` are additions to design.md's list of six —
+ * the same keys in different shapes, which the guard exists to keep out of
+ * history; recorded in notes/specs/hyperdrive/deviations.md.
  */
 export const SECRET_PATTERNS: readonly string[] = [
 	"**/.env*",
@@ -81,13 +87,15 @@ export const SECRET_PATTERNS: readonly string[] = [
 	"**/*.pem",
 	"**/*.key",
 	"**/id_rsa*",
+	"**/id_ed25519*",
+	"**/id_ecdsa*",
 	"**/secrets/**",
 ];
 
 /**
  * A `tracked` entry that cannot be rendered safely. Friendly, like
  * `SpaceGitError`: the message is the whole story and a stack would only
- * bury it.
+ * bury it. (T-9: `ConfigError` does not do this — worth aligning there.)
  */
 export class AllowlistError extends Error {
 	constructor(detail: string) {
