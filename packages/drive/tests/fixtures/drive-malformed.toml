@@ -1,0 +1,3 @@
+# Malformed fixture — the unterminated `remote = ` must produce a friendly
+# error that names this file, not a raw smol-toml stack trace.
+remote =

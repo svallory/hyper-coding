@@ -1,0 +1,3 @@
+# Fixture with a non-string entry in warp.exclude.
+[warp]
+exclude = ["node_modules", 42]

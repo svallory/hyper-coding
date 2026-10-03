@@ -17,9 +17,16 @@ export default class Status extends BaseCommand<typeof Status> {
 		await this.parse(Status);
 
 		const path = configPath();
+		let config: ReturnType<typeof loadConfig>;
+		try {
+			config = loadConfig();
+		} catch (err) {
+			this.error(err instanceof Error ? err.message : String(err));
+		}
+
 		this.log(`Config file: ${path}`);
 		this.log(`Exists: ${configExists() ? "yes" : "no (using defaults)"}`);
 		this.log("Effective config:");
-		this.log(JSON.stringify(loadConfig(), null, 2));
+		this.log(JSON.stringify(config, null, 2));
 	}
 }

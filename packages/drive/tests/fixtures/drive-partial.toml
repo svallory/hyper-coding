@@ -1,0 +1,6 @@
+# Partial fixture — only remote and [self] name are set; everything else
+# must come back as defaults from loadConfig().
+remote = "git@github.com:example/partial-drive.git"
+
+[self]
+name = "partial-machine"
