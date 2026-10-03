@@ -3,6 +3,7 @@
 	"packages/core": "0.4.0",
 	"packages/kit": "0.4.0",
 	"packages/hq": "0.4.0",
+	"packages/drive": "0.4.0",
 	"packages/gen": "0.4.0",
 	"packages/cli": "0.4.0",
 	"packages/create-hyper-hq": "0.4.0"

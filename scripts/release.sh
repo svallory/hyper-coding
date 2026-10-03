@@ -41,9 +41,10 @@ node "$REPO_ROOT/scripts/bump-versions.mjs" "$VERSION"
 #   create-hyper-hq → (no workspace deps, synced version)
 #   kit             → core, ui
 #   hq              → create-hyper-hq, ui
+#   drive           → (no workspace deps)
 #   gen             → core, kit, ui
 #   cli             → core, ui, gen, hq, kit
-PACKAGES=(ui core create-hyper-hq kit hq gen cli)
+PACKAGES=(ui core create-hyper-hq kit hq drive gen cli)
 
 publish_package() {
   local pkg=$1
