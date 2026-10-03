@@ -363,7 +363,10 @@ async function copyTree(
 	compiled = compileExcludes(excludes),
 ): Promise<void> {
 	const entries = await readdir(src, { withFileTypes: true });
-	await removeObstacle(dst, true);
+	// Below the root, a symlink or type mismatch at the destination is replaced
+	// before writing (rsync -a replaces the link). At the root, rsync FOLLOWS a
+	// destination symlink, so a symlinked dst keeps its identity.
+	if (src !== root) await removeObstacle(dst, true);
 	await mkdir(dst, { recursive: true });
 	for (const entry of entries) {
 		const from = join(src, entry.name);
@@ -518,14 +521,23 @@ export class RemoteMachine implements MachineRunner {
 	 * rsync and scp don't create missing destination parents on the old rsync
 	 * this Mac ships (`--mkpath` is rsync 3.2.3+), so the parent is made over
 	 * ssh first, exactly like LocalMachine's `mkdir` does locally. A parent that
-	 * already exists costs one extra round trip and nothing else.
+	 * already exists costs one extra round trip and nothing else. Returns the
+	 * mkdir's result when it failed, so the transfer is never attempted anyway.
 	 */
-	private async ensureParent(dst: string): Promise<void> {
-		const parent = dst.split("/").slice(0, -1).join("/") || "/";
-		// Validated by the same charset as the transfer itself, and quoted for
-		// the remote shell on top of it.
+	private async ensureParent(dst: string): Promise<RunResult | null> {
+		const parent = dst.split("/").slice(0, -1).join("/");
+		// Nothing to create: `~` and `~/x` land in the remote home, an absolute
+		// path at the root lands in `/`, and a bare filename lands in the cwd.
+		if (parent === "" || parent === "/" || parent === "~") return null;
 		if (!SAFE_REMOTE_PATH.test(parent)) throw new RemotePathError(this.host, parent);
-		await this.ssh(["mkdir", "-p", "--", parent]);
+		// A leading `~` must reach the remote shell UNQUOTED — only it can expand
+		// it into the remote user's home. Quoting it (the round-3 bug) created a
+		// literal directory named `~` under $HOME. The rest is quoted as usual.
+		const quoted = parent.startsWith("~/")
+			? `~/${shellQuote(parent.slice(2))}`
+			: shellQuote(parent);
+		const result = await this.ssh(["sh", "-c", `mkdir -p -- ${quoted}`]);
+		return result.code === 0 ? null : result;
 	}
 
 	async rsync(src: string, dst: string, opts?: RsyncOptions): Promise<RunResult> {
@@ -534,7 +546,8 @@ export class RemoteMachine implements MachineRunner {
 		// Only a local directory can be stat'ed; a remote source spec (`host:path`)
 		// falls through as-is.
 		const source = (await isDirectory(src)) ? withDirectorySlash(src) : src;
-		await this.ensureParent(dst);
+		const mkdirFailed = await this.ensureParent(dst);
+		if (mkdirFailed) return mkdirFailed;
 		return this.spawner({
 			file: "rsync",
 			args: rsyncArgs(source, target, opts),
@@ -543,7 +556,8 @@ export class RemoteMachine implements MachineRunner {
 
 	async scp(src: string, dst: string): Promise<RunResult> {
 		const target = remoteSpec(this.host, dst);
-		await this.ensureParent(dst);
+		const mkdirFailed = await this.ensureParent(dst);
+		if (mkdirFailed) return mkdirFailed;
 		// `-r` matches LocalMachine.scp, which copies directories; `--` ends the
 		// options so a source starting with `-` is still a path.
 		return this.spawner({
