@@ -33,6 +33,92 @@ export interface SyncTargetConfig {
 	ignore: string[];
 }
 
+/** The two config dirs hyperdrive keeps in sync. */
+export type SyncTarget = keyof SyncConfig;
+
+/**
+ * Paths under `~/.claude` that must never be synced (packaged defaults; the
+ * user's `[sync.claude] ignore` is appended to these).
+ *
+ * Verbatim from the working hand-run sessions on the operator's machines, in
+ * the order they are passed to the engine, and kept as a constant rather than
+ * a config file because it is a product decision, not a setting (C-14).
+ *
+ * The split: machine-local runtime state (sessions, caches, logs, daemons),
+ * anything holding credentials or tokens, editor/OS noise, and mutable
+ * per-machine settings whose last-writer-wins resolution would make two machines
+ * fight. Everything else (skills, commands, agents, CLAUDE.md) is meant to be
+ * shared, so it is deliberately NOT here.
+ */
+export const CLAUDE_SYNC_IGNORE: readonly string[] = [
+	".credentials.json",
+	".claude.json*",
+	"sessions",
+	"state",
+	"cache",
+	"debug",
+	"telemetry",
+	"daemon",
+	"daemon.log",
+	"ide",
+	"backups",
+	"shell-snapshots",
+	"statusline*.sh",
+	"stats-cache.json",
+	"policy-limits.json*",
+	"remote-settings.json",
+	".last-*",
+	"gh-pr-status-cache.json",
+	"mcp-needs-auth-cache.json",
+	".DS_Store",
+	"usage-data",
+	"jobs",
+	"channels",
+	"chrome",
+	"feedback",
+	".caveman-active",
+	"downloads",
+	"settings.json.bak*",
+	".anthropic",
+	"plugins/.trash",
+	"security/agent-sdk-venv",
+];
+
+/**
+ * Paths under `~/.pi/agent` that must never be synced.
+ *
+ * Short on purpose: pi's dir is mostly portable content. `auth.json` is a
+ * credential, and `install/` + `bin/` are machine-local (a binary built or
+ * downloaded for one machine's Node/OS must not replace another's).
+ */
+export const PI_SYNC_IGNORE: readonly string[] = ["auth.json", "install/", "bin/"];
+
+/** The packaged ignore list for a target. */
+export function packagedSyncIgnore(target: SyncTarget): readonly string[] {
+	return target === "pi" ? PI_SYNC_IGNORE : CLAUDE_SYNC_IGNORE;
+}
+
+/**
+ * The ignore list to hand the sync engine: packaged patterns first, then the
+ * user's own, de-duplicated with the first occurrence winning.
+ *
+ * Order matters — the engine receives patterns in this order — so appending is
+ * the only merge that makes sense. A user pattern that repeats a packaged one is
+ * dropped rather than passed twice: the engine would accept it, but the session
+ * it stores would then differ from the list `sync-config` prints, and the
+ * mismatch check would report a session hyperdrive had just created itself.
+ */
+export function syncIgnoreFor(target: SyncTarget, config: DriveConfig): string[] {
+	const user = config.sync?.[target]?.ignore ?? [];
+	const merged: string[] = [];
+	for (const pattern of [...packagedSyncIgnore(target), ...user]) {
+		const trimmed = pattern.trim();
+		if (trimmed === "" || merged.includes(trimmed)) continue;
+		merged.push(trimmed);
+	}
+	return merged;
+}
+
 export interface SyncConfig {
 	claude: SyncTargetConfig;
 	pi: SyncTargetConfig;
