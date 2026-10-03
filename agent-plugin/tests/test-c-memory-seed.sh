@@ -10,8 +10,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 # shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
 source "$SCRIPTS_DIR/hyper-require-lib.sh"
 hyper_require_lib
-# shellcheck disable=SC1090  # hyper_lib is assigned by the sourced helper
-source "$hyper_lib"
 set +eu
 set +o pipefail
 
@@ -43,8 +41,6 @@ assert_eq "no .tmp litter left behind" \
 printf -- '- [Space layout](hyper-layout.md) — old entry\n' > "$idx"
 (
   set -euo pipefail
-  # shellcheck disable=SC1090  # hyper_lib is set by hyper_require_lib above
-  source "$hyper_lib"
   write_memory_seed "$d" proj
 )
 rc=$?

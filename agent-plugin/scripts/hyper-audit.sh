@@ -7,8 +7,6 @@ set -euo pipefail
 # shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/hyper-require-lib.sh"
 hyper_require_lib
-# shellcheck disable=SC1090  # hyper_lib is assigned by the sourced helper
-source "$hyper_lib"
 
 root="${1:-}"
 if [[ -z "$root" ]]; then
