@@ -10,6 +10,7 @@ const FIXTURE = resolve(__dirname, "fixtures/drive.toml");
 const PARTIAL = resolve(__dirname, "fixtures/drive-partial.toml");
 const MALFORMED = resolve(__dirname, "fixtures/drive-malformed.toml");
 const MISSING = resolve(__dirname, "fixtures/does-not-exist.toml");
+const fixture = (name: string) => resolve(__dirname, "fixtures", name);
 
 afterEach(() => {
 	delete process.env.HYPER_DRIVE_CONFIG;
@@ -94,11 +95,54 @@ describe("loadConfig", () => {
 	});
 
 	it("expands a leading ~/ in self.home and machines.*.home", () => {
-		process.env.HYPER_DRIVE_CONFIG = FIXTURE;
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-tilde.toml");
 		const config = loadConfig();
 
-		// [machines.laptop] in the fixture uses "~/"
-		expect(config.machines.laptop?.home).toBe(resolve(homedir(), "alice"));
+		expect(config.self.home).toBe(resolve(homedir(), "self"));
+		expect(config.machines.spare?.home).toBe(resolve(homedir(), "spare"));
+	});
+
+	it("expands a bare ~ to the home dir", () => {
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-tilde.toml");
+		expect(loadConfig().machines.bare?.home).toBe(homedir());
+	});
+
+	it("falls back to homedir() when self.home is empty", () => {
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-empty-home.toml");
+		expect(loadConfig().self.home).toBe(homedir());
+	});
+
+	it("does not mutate DEFAULT_CONFIG across loads", () => {
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-empty-home.toml");
+		const first = loadConfig();
+		// A second, partially-specified load must not see the first one's values
+		process.env.HYPER_DRIVE_CONFIG = PARTIAL;
+		const second = loadConfig();
+
+		expect(second.self.name).toBe("partial-machine");
+		expect(second.self.home).toBe(homedir());
+		expect(DEFAULT_CONFIG.self.name).toBe("");
+		expect(first.self.name).toBe("");
+	});
+
+	it("throws a friendly error when a section is a scalar", () => {
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-bad-table.toml");
+		expect(() => loadConfig()).toThrowError(/`self` must be a section/);
+	});
+
+	it("throws a friendly error when remote is not a string", () => {
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-bad-remote.toml");
+		expect(() => loadConfig()).toThrowError(/`remote` must be a string/);
+	});
+
+	it("throws a friendly error when a machine entry is a scalar", () => {
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-bad-machine.toml");
+		expect(() => loadConfig()).toThrowError(/`machines.x` must be a section/);
+	});
+
+	it("throws a friendly error when machine features is not a string list", () => {
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-bad-features.toml");
+		expect(() => loadConfig()).toThrowError(/`machines\.x\.features` must be a list of strings/);
 	});
 
 	it("throws a friendly error naming the file on malformed TOML", () => {
@@ -112,8 +156,10 @@ describe("loadConfig", () => {
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			expect(message).toContain("TOML");
-			// Friendly error: the smol-toml message (with line/column) is embedded,
-			// not thrown raw as the top-level message
+			// The smol-toml code frame (source line + caret) must survive into the message
+			expect(message).toMatch(/\d+:\s+remote =/);
+			expect(message).toContain("^");
+			// Friendly error, not a raw thrown TomlError
 			expect(message.startsWith("There's a problem")).toBe(true);
 		}
 	});
@@ -124,12 +170,12 @@ describe("loadConfig", () => {
 	});
 
 	it("throws a friendly error on an invalid cadence", () => {
-		process.env.HYPER_DRIVE_CONFIG = resolve(__dirname, "fixtures/drive-bad-cadence.toml");
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-bad-cadence.toml");
 		expect(() => loadConfig()).toThrowError(/defaults\.cadence must be one of/);
 	});
 
 	it("throws a friendly error when warp.exclude is not a string list", () => {
-		process.env.HYPER_DRIVE_CONFIG = resolve(__dirname, "fixtures/drive-bad-exclude.toml");
+		process.env.HYPER_DRIVE_CONFIG = fixture("drive-bad-exclude.toml");
 		expect(() => loadConfig()).toThrowError(/warp\.exclude.*list of strings/);
 	});
 });

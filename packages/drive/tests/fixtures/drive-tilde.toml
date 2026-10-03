@@ -1,0 +1,9 @@
+# Leading ~/ in self.home and in machines.*.home must expand to os.homedir().
+[self]
+home = "~/self"
+
+[machines.spare]
+home = "~/spare"
+
+[machines.bare]
+home = "~"

@@ -1,0 +1,5 @@
+# [self] home set to the empty string must fall back to os.homedir().
+remote = "git@github.com:example/home.toml"
+
+[self]
+home = ""

@@ -1,0 +1,3 @@
+# machines.<name>.features must be a list of strings.
+[machines.x]
+features = "docker"
