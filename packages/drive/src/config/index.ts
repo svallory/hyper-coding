@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { parse as parseTOML, stringify as stringifyTOML } from "smol-toml";
@@ -261,6 +261,33 @@ export function readRawConfig(): Record<string, unknown> | null {
 	return readAndParse(path);
 }
 
+/** Recursive partial, so one section can be patched without the whole config. */
+export type DeepPartial<T> = {
+	[K in keyof T]?: T[K] extends readonly unknown[]
+		? T[K]
+		: T[K] extends object
+			? DeepPartial<T[K]>
+			: T[K];
+};
+
+/**
+ * Every value the patch produced, checked as a complete config.
+ *
+ * The merge is over the file alone, so a partial file has no `remote` or
+ * `self.name` and `validate` would reject it for missing keys it never
+ * claimed. Filling the defaults first is what makes the check about the
+ * *values* — a `home = 5` merged in by a patch is still caught.
+ */
+function validateComplete(path: string, raw: Record<string, unknown>): void {
+	// SAFETY: the defaults make every DriveConfig key present, so the merged view
+	// is a complete DriveConfig; validate() is what actually enforces that.
+	const complete = deepMerge(
+		structuredClone(DEFAULT_CONFIG) as unknown as Record<string, unknown>,
+		raw,
+	) as unknown as DriveConfig;
+	validate(path, complete);
+}
+
 /**
  * Patch `drive.toml` with the given values and write it back atomically
  * (temp file + rename). Unknown keys and sections already in the file are
@@ -268,19 +295,58 @@ export function readRawConfig(): Record<string, unknown> | null {
  * so `hyper drive init` never discards a `[machines.*]` or `[sync.*]` table
  * it knows nothing about. Creates the config directory when missing, and
  * leaves the file untouched when the patch changes nothing.
+ *
+ * Merge semantics: nested tables merge key by key, so patching one field of a
+ * `[machines.*]` table leaves its other fields alone. **Arrays are replaced,
+ * not appended** — `features = ["tools"]` is what the caller says the machine
+ * has, and merging lists would make the second write a lie.
+ *
+ * Nothing is written that could not be read back. The existing file's *shape*
+ * is validated before it is used as a base (so a `sync = 3` sitting in the
+ * file is reported rather than merged into), and both the merged values and
+ * the serialized text are validated before the rename — a patch that would
+ * produce an unusable config leaves the old file byte-for-byte intact, and a
+ * failed write removes its temp file rather than leaving it behind.
+ *
+ * Two things a write does *not* preserve, deliberately:
+ * - **Comments and formatting.** smol-toml serializes values, not the
+ *   document, so `# notes` above a key do not survive. Don't put anything in a
+ *   comment that the file can't also say structurally.
+ * - **The file's inode.** `rename` replaces whatever sits at the path: a
+ *   symlinked `drive.toml` becomes a regular file and the mode resets to the
+ *   process umask. The *contents* are protected; the path's own identity is
+ *   not a guarantee we make.
  */
 export function writeConfig(patch: Record<string, unknown>): string {
 	const path = configPath();
 	let existing: Record<string, unknown> = {};
 	if (existsSync(path)) {
 		existing = readAndParse(path);
+		// Shape first, before this becomes the base: a table where a scalar
+		// belongs merges into a complete-looking config and only fails later, in
+		// whichever command reads the file next.
 		validateShape(path, existing);
 	}
-	const next = stringifyTOML(deepMerge(existing, patch));
+	const merged = deepMerge(existing, patch);
+	validateComplete(path, merged);
+
+	const next = stringifyTOML(merged);
 	if (existsSync(path) && readFileSync(path, "utf-8") === next) return path;
+
+	// And the text itself: stringifyTOML has to produce something loadConfig can
+	// actually read, which the merge check above cannot see.
+	const roundTripped = parseTOML(next) as Record<string, unknown>;
+	validateShape(path, roundTripped);
+	validateComplete(path, roundTripped);
+
 	mkdirSync(dirname(path), { recursive: true });
 	const tmp = `${path}.tmp-${process.pid}`;
-	writeFileSync(tmp, next, "utf-8");
-	renameSync(tmp, path);
+	try {
+		writeFileSync(tmp, next, "utf-8");
+		renameSync(tmp, path);
+	} catch (err) {
+		rmSync(tmp, { force: true });
+		throw err;
+	}
 	return path;
 }
