@@ -25,7 +25,12 @@ export async function runOrFail(
 	what: string,
 	script: string,
 ): Promise<RunResult> {
-	const result = await runScript(ctx, script);
+	// `set -e` first, always. Snippets here are several commands joined with `;`,
+	// and without it ONLY THE LAST COMMAND'S exit code is the snippet's — so a
+	// `setfacl` that failed on a missing file was invisible, and the task then
+	// failed its check forever with nothing to show for it. Every mutating
+	// snippet goes through here, so this is the one place that has to be right.
+	const result = await runScript(ctx, `set -e\n${script}`);
 	if (result.code !== 0) {
 		const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
 		throw new Error(`I couldn't ${what} on ${ctx.machine?.name ?? "this machine"}: ${detail}`);

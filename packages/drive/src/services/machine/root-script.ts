@@ -122,7 +122,7 @@ export function asAgentScript(agentUser: string): string {
 # With no arguments it runs: claude --resume
 dir=$(pwd -P)
 [ $# -eq 0 ] && set -- claude --resume
-exec ${PRIVILEGED_GROUP} -H -u ${agentUser} bash -lic 'cd "$1" && eval "$2"' _ "$dir" "$*"
+exec ${PRIVILEGED_GROUP} -H -u ${shellQuote(agentUser)} bash -lic 'cd "$1" && eval "$2"' _ "$dir" "$*"
 `;
 }
 

@@ -52,6 +52,8 @@ import {
 } from "./agent-context.js";
 import { runScript } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
+// TaskError is a class, so it is imported as a value; the rest are types.
+import { TaskError } from "./types.js";
 
 /** The group both users share. Not `users`: nothing else on the machine should be in it. */
 const COLLAB_GROUP = "collab";
@@ -205,8 +207,16 @@ export const agentUserCreate: Task = {
 		if (!parsed.linger) return false;
 		// A collab login group is a REFUSAL, not a "needs doing" state: nothing
 		// here can fix it, and setting up anyway would hand the agent everything
-		// the primary writes.
-		return !refusesCollabLoginGroup(parsed.primaryLoginGroup);
+		// the primary writes. It throws rather than returning false, because a
+		// plain false would leave the runner assembling a root script the user is
+		// being told to run — which would then refuse again, in a different place.
+		if (refusesCollabLoginGroup(parsed.primaryLoginGroup)) {
+			throw new TaskError(
+				"agent-user.create",
+				`Your login group on ${ctx.machine?.name ?? "this machine"} is \`${COLLAB_GROUP}\`. With the shared umask (002) that would hand the agent user read and write on every file you create, including the ones this setup keeps private. Give yourself a login group of your own (\`usermod -g <you> <you>\`) and re-run — I've changed nothing.`,
+			);
+		}
+		return true;
 	},
 
 	rootScript(ctx: TaskContext): string {
@@ -257,6 +267,12 @@ id -u "$agent_user" >/dev/null 2>&1 || useradd -m -s /bin/bash -G ${COLLAB_GROUP
 # You, in the same group, so the shared dirs are reachable from both sides.
 usermod -aG ${COLLAB_GROUP} "$primary_user"
 
+# The agent's group membership too — UNCONDITIONALLY. useradd below only runs
+# for a user that does not exist yet, so on a machine that already had this
+# account without the group, nothing would ever add it and the task could not
+# settle.
+usermod -aG ${COLLAB_GROUP} "$agent_user"
+
 # The absences, in order of how much they matter. The -d form removes a
 # supplementary membership and fails harmlessly when there is none, so each is
 # guarded on the membership existing first.
@@ -272,31 +288,35 @@ if [ -z "$agent_home" ]; then
   exit 1
 fi
 
-# Ownership of the agent's config dir. It is CREATED BY THE AGENT below, because
-# everything inside that home is the agent's to create; root sets only its owner
-# and mode, which is metadata. Every step is skipped when the path is a symlink:
-# the agent controls this directory, so setting metadata on it would apply to
-# whatever it points at.
-if [ ! -L "$agent_home/.claude" ] && [ ! -e "$agent_home/.claude" ]; then
-  runuser -u "$agent_user" -- mkdir -p "$agent_home/.claude"
-fi
-if [ ! -L "$agent_home/.claude" ]; then
-  chown "$agent_user:$agent_user" "$agent_home/.claude"
-  chmod 0750 "$agent_home/.claude"
-else
-  echo "hyper: $agent_home/.claude is a symlink; leaving it alone." >&2
-fi
+# Everything inside the agent's home — the config dir, its mode, the shared
+# symlinks, the .bashrc lines, and the ACLs that let you read the config dir for
+# the checks — is done by the AGENT, in the runuser block below. There is
+# deliberately NO root command here that names a path under that home: a not-a-symlink
+# test is not a guard, because the agent's lingering processes can swap the
+# directory between the test and the use, and a root chown/chmod/setfacl on a path
+# the agent controls is root writing wherever the agent points it.
 
 ${agentOwnedBlock()}
 
-# Let you READ (not write) the agent's config dir, so the checks above can see
-# it. A named-user ACL rather than opening the directory to everyone else, so no
-# other account on this machine gains anything.
-if [ ! -L "$agent_home" ]; then
-  setfacl -m "u:$primary_user:x" "$agent_home"
-fi
-if [ ! -L "$agent_home/.claude" ]; then
-  setfacl -m "u:$primary_user:r-x" "$agent_home/.claude"
+# Two kernel settings, written only if they are not already in effect.
+#
+# protected_hardlinks: stops the agent hard-linking to a file the primary owns
+# but cannot read (and the reverse), which is otherwise a way around a mode.
+# legacy_tiocsti=0: stops TIOCSTI injection into the primary's terminal.
+#
+# A CONFINED sysctl, not a mount option: /proc is deliberately NOT remounted.
+sysctl_file=/etc/sysctl.d/60-hyper-agent-user.conf
+want_hardlinks=0
+[ "$(cat /proc/sys/fs/protected_hardlinks 2>/dev/null || echo 0)" = "1" ] && want_hardlinks=1
+want_tiocsti=0
+[ "$(cat /proc/sys/dev/tty/legacy_tiocsti 2>/dev/null || echo 1)" = "0" ] && want_tiocsti=1
+if [ "$want_hardlinks" != "1" ] || [ "$want_tiocsti" != "1" ]; then
+  {
+    echo "# Written by 'hyper machine setup --features agent-user'. Remove to undo."
+    [ "$want_hardlinks" != "1" ] && echo "fs.protected_hardlinks = 1"
+    [ "$want_tiocsti" != "1" ] && echo "dev.tty.legacy_tiocsti = 0"
+  } > "$sysctl_file"
+  sysctl --system >/dev/null 2>&1 || sysctl -q -p "$sysctl_file" || true
 fi
 
 # Linger, so the agent's own systemd --user units (the transcript watcher) keep
@@ -339,6 +359,15 @@ primary_home="$(getent passwd "$2" | cut -d: -f6)"
 primary_claude="$primary_home/.claude"
 mkdir -p "$home/.claude"
 chmod 0750 "$home/.claude"
+
+# The ACLs that let the PRIMARY user read this config dir for its checks, and
+# nothing more. Set by the AGENT on its own files: root setting metadata inside
+# this home is exactly what this design refuses to do.
+# The names come in as POSITIONAL parameters ($1 agent, $2 primary) rather than
+# as inherited shell variables: the parent never exports them, and the block runs
+# under strict mode, which would abort on the first reference.
+setfacl -m "u:$2:x" "$home"
+setfacl -m "u:$2:r-x" "$home/.claude"
 
 # The shared entries. A symlink is only a pointer, so this needs no access to
 # the target at all — only to the directory being linked from.

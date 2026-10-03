@@ -22,6 +22,12 @@
 
 import { shellQuote } from "#services/remote";
 import { homeOf, primaryUserLines, primaryUserOf } from "./agent-context.js";
+import {
+	CLAUDE_CHILDREN_ALLOWED,
+	COLLAB_GROUP,
+	READABLE_FILES,
+	TOP_LEVEL_ALLOWED,
+} from "./agent-user-dirs.js";
 import { runOrFail, runScript } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
@@ -39,23 +45,89 @@ export const WATCHER_UNIT = "claude-share-watch.service";
  * and can't be pointed at somebody else's data. The `-perm -g=` guards make it
  * idempotent and cheap — only files that actually need it are touched.
  */
-export function watcherScript(projectsDir: string): string {
+export function watcherScript(projectsDir: string, home: string): string {
+	const claude = `${home}/.claude`;
+	const denyGroup = shellQuote(COLLAB_GROUP);
+	// `case` patterns, built from the same names the ACLs use. Written out once
+	// here rather than inline in the script, so a rename cannot leave the watcher
+	// disagreeing with the ACLs.
+	const sharedFilesPattern = READABLE_FILES.join("|");
+	const homeAllowedPattern = TOP_LEVEL_ALLOWED.join("|");
+	// The same exclusions for the startup sweep's `find`, which walks one level
+	// and must skip exactly what the `case` statements above skip.
+	const skipNames = [...TOP_LEVEL_ALLOWED, ...CLAUDE_CHILDREN_ALLOWED]
+		.map((name) => `! -name ${shellQuote(name)}`)
+		.join(" ");
 	return `#!/usr/bin/env bash
-# Claude Code creates session files owner-only (0600). This keeps the files
-# the current user owns under the shared projects dir group-accessible, so the
-# primary user and the agent user (both in the collab group) can resume each
-# other's sessions.
-# Runs unprivileged, once per user; it can only touch files that user owns.
-dir=${shellQuote(projectsDir)}
+# Two jobs, one unprivileged process per user.
+#
+# 1. SHARED TRANSCRIPTS: Claude Code creates session files 0600 and replaces
+#    settings.json by writing a new file, so the group ACLs are masked every
+#    time. Widen what this user owns back to group-accessible.
+# 2. DENY NEW ENTRIES: the primary's home and config dir deny the shared group,
+#    and inherit that deny — but a file that arrives by \`mv\` keeps the ACLs it
+#    came with, and a tool that copies ACLs can bring its own. Re-assert the
+#    deny on anything new, and re-grant read on the two shared files when they
+#    are replaced (the inherited default denies them otherwise).
+#
+# Runs unprivileged: it can only touch files its own user owns, which is why
+# there is one instance per user rather than one privileged watcher.
+projects=${shellQuote(projectsDir)}
+home=${shellQuote(home)}
+claude=${shellQuote(claude)}
+deny_group=${denyGroup}
 me=$(id -u)
-fix() {
-  find "$1" -xdev -user "$me" \\
+
+on_new() {
+  p="$1"
+  [ -L "$p" ] && return 0
+  case "$(dirname "$p")" in
+    "$claude")
+      case "$(basename "$p")" in
+        ${sharedFilesPattern}) setfacl -m "g:$deny_group:r--" "$p" 2>/dev/null || true ;;
+        *) setfacl -m "g:$deny_group:---" "$p" 2>/dev/null || true ;;
+      esac
+      ;;
+    "$home")
+      case "$(basename "$p")" in
+        ${homeAllowedPattern}) : ;;   # the shared ones carry their own ACLs
+        *) setfacl -m "g:$deny_group:---" "$p" 2>/dev/null || true ;;
+      esac
+      ;;
+  esac
+}
+
+widen() {
+  [ -f "$1" ] || return 0
+  [ "$(stat -c %u "$1" 2>/dev/null || echo x)" = "$me" ] || return 0
+  chmod g+rw "$1" 2>/dev/null || true
+}
+
+# Sweeps, run once at startup so a restart re-asserts everything.
+sweep() {
+  for d in "$home" "$claude"; do
+    find "$d" -mindepth 1 -maxdepth 1 ! -type l ${skipNames} -exec sh -c \\
+      'for p; do getfacl -c -p "$p" 2>/dev/null | grep -q "^group:$deny_group:---$" || setfacl -m "g:$deny_group:---" "$p"; done' _ {} + 2>/dev/null
+  done
+  find "$projects" -xdev -user "$me" \\
     \\( -type f ! -perm -g=rw -exec chmod g+rw {} + \\) -o \\
     \\( -type d ! -perm -g=rwx -exec chmod g+rwx {} + \\) 2>/dev/null
 }
-fix "$dir"
-inotifywait -m -r -q -e create -e moved_to -e attrib --format '%w%f' "$dir" |
-  while IFS= read -r f; do fix "$f"; done
+sweep
+
+watch_dir() {
+  inotifywait -m -q -e create -e moved_to --format '%w%f' "$1" 2>/dev/null |
+    while IFS= read -r p; do on_new "$p"; done
+}
+watch_projects() {
+  inotifywait -m -r -q -e create -e moved_to -e attrib --format '%w%f' "$projects" 2>/dev/null |
+    while IFS= read -r p; do widen "$p"; done
+}
+
+watch_dir "$home" &
+watch_dir "$claude" &
+watch_projects &
+wait
 `;
 }
 
@@ -145,7 +217,7 @@ export const agentUserWatcher: Task = {
 			[
 				`mkdir -p ${shellQuote(`${home}/.local/bin`)}`,
 				`cat > ${shellQuote(bin)} <<'HYPER_SHARE_WATCH_EOF'`,
-				watcherScript(`${home}/.claude/projects`).trimEnd(),
+				watcherScript(`${home}/.claude/projects`, home).trimEnd(),
 				"HYPER_SHARE_WATCH_EOF",
 				`chmod 0755 ${shellQuote(bin)}`,
 			].join("\n"),
