@@ -10,8 +10,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 # shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
 source "$SCRIPTS_DIR/hyper-require-lib.sh"
 hyper_require_lib
-# shellcheck disable=SC1090  # hyper_lib is assigned by the sourced helper
-source "$hyper_lib"
 set +eu
 set +o pipefail
 

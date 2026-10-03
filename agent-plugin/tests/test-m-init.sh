@@ -11,6 +11,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 # shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
 source "$SCRIPTS_DIR/hyper-require-lib.sh"
 hyper_require_lib
+# hyper-require-lib.sh now sources hyper-lib.sh in-process, and that library
+# turns on `set -euo pipefail`. The harness must not abort on the first
+# non-zero command — M4 below deliberately captures a failing invocation into a
+# command substitution, which `set -e` treats as fatal — so switch it back off,
+# exactly as test-a/c/l do.
+set +eu
+set +o pipefail
 
 INIT="$SCRIPTS_DIR/hyper-init.sh"
 

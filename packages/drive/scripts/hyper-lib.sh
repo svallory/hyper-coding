@@ -2,6 +2,18 @@
 # Shared helpers for space init/adopt/audit.
 # Sourced, not executed directly.
 
+# Version of the plugin↔library contract. Bump when a plugin script starts
+# depending on a library function or variable that did not exist before.
+#
+# The plugin sources this file out of the installed hyper CLI
+# (`hyper space lib-path`), so the plugin on disk and the library it gets
+# can be arbitrarily far apart in age — a new plugin against an old CLI is
+# the normal case right after a plugin update. Without this, that mismatch
+# surfaces mid-script as `space_layout: command not found`, halfway
+# through a conversion, which is the worst possible moment to find out.
+# hyper_require_lib checks it and says "update @hypercli/cli" instead.
+HYPER_LIB_VERSION=1
+
 set -euo pipefail
 
 # The scaffolded directories and what each is for. Order matters for display.

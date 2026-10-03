@@ -14,8 +14,6 @@ here="$(dirname "${BASH_SOURCE[0]}")"
 # shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
 source "$here/hyper-require-lib.sh"
 hyper_require_lib
-# shellcheck disable=SC1090  # hyper_lib is assigned by the sourced helper
-source "$hyper_lib"
 
 repo_url=""
 name=""
