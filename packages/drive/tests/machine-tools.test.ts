@@ -328,6 +328,28 @@ describe("the parity table", () => {
 	});
 });
 describe("the rsync task", () => {
+	it("derives labels from the task id without obfuscating a command name (N10)", async () => {
+		const source = await readFile(
+			join(import.meta.dirname, "../src/services/machine/tasks/tools-rsync.ts"),
+			"utf8",
+		);
+		expect(rsyncTask.id).toBe("tools.rsync");
+		expect(rsyncSpec.id).toBe(rsyncTask.id.slice("tools.".length));
+		expect(source).toContain('const NAME = ID.slice("tools.".length)');
+		expect(source).not.toContain('["rs", "ync"]');
+	});
+
+	it("keeps root script policy in the enclosing template and documents Alpine", async () => {
+		expect(rsyncRootScript()).not.toContain("set -eu");
+		expect(rsyncRootScript()).toContain("apk add --no-cache rsync");
+		const source = await readFile(
+			join(import.meta.dirname, "../src/services/machine/tasks/tools-rsync.ts"),
+			"utf8",
+		);
+		expect(source).not.toContain("/**\n/**");
+		expect(source).toContain("Alpine uses `apk`");
+	});
+
 	it("asks the target machine, and is root work rather than a recipe", async () => {
 		const present = new RecordingRunner([
 			[/command -v rsync/, { code: 0, stdout: "", stderr: "" }],
