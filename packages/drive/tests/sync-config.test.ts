@@ -650,3 +650,85 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config partial create", () => 
 		expect(out).toContain("1 of 1");
 	});
 });
+
+describe.skipIf(skipWithoutCli)("hyper drive sync-config session naming", () => {
+	/**
+	 * The session name is always `hyper-<target>-<machine>`, so it starts with
+	 * a letter even when the machine name doesn't. A machine called `1box`
+	 * yields the valid `hyper-claude-1box`; validating the machine name instead
+	 * would have wrongly refused it.
+	 */
+	it("accepts a machine whose name starts with a digit", () => {
+		if (!cliBuilt) return;
+		const binDir = tmp("drive-sync-digit-");
+		const alphaHome = tmp("drive-sync-alpha-");
+		const betaHome = tmp("drive-sync-beta-");
+		const log = join(binDir, "argv.log");
+		const sessionsFile = join(binDir, "sessions.json");
+		script(
+			binDir,
+			"herdr",
+			`cat <<'JSON'
+[{"label":"1box","target":"localhost","enabled":true}]
+JSON`,
+		);
+		script(
+			binDir,
+			"mutagen",
+			[
+				'printf "%s\n" "$*" >> "$MUTAGEN_LOG"',
+				'case "$1 $2" in',
+				`  "sync list") cat "$MUTAGEN_SESSIONS" ;;`,
+				"esac",
+			].join("\n"),
+		);
+		writeFileSync(sessionsFile, "[]", "utf-8");
+		const config = join(binDir, "drive.toml");
+		writeFileSync(
+			config,
+			[
+				"[self]",
+				'name = "host"',
+				`home = "${alphaHome}"`,
+				"",
+				"[machines.1box]",
+				`home = "${betaHome}"`,
+				"",
+			].join("\n"),
+			"utf-8",
+		);
+		const saved = process.env.HYPER_DRIVE_CONFIG;
+		process.env.HYPER_DRIVE_CONFIG = config;
+		try {
+			const result = spawnSync(
+				process.execPath,
+				[
+					join(import.meta.dirname, "..", "..", "cli", "bin", "run.js"),
+					"drive",
+					"sync-config",
+					"1box",
+				],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						NO_COLOR: "1",
+						FORCE_COLOR: "0",
+						HYPER_DRIVE_CONFIG: config,
+						MUTAGEN_LOG: log,
+						MUTAGEN_SESSIONS: sessionsFile,
+						PATH: [binDir, "/usr/bin", "/bin"].join(":"),
+					},
+				},
+			);
+			expect(result.status).toBe(0);
+			const creates = readFileSync(log, "utf-8")
+				.split("\n")
+				.filter((l) => l.includes("sync create"));
+			expect(creates.filter((l) => l.includes("--name hyper-claude-1box"))).toHaveLength(1);
+		} finally {
+			if (saved === undefined) delete process.env.HYPER_DRIVE_CONFIG;
+			else process.env.HYPER_DRIVE_CONFIG = saved;
+		}
+	});
+});

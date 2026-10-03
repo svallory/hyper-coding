@@ -3,8 +3,9 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { parse as parseTOML, stringify as stringifyTOML } from "smol-toml";
 // The engine owns the rules for what an ignore pattern can be (C-8): the
-// config loader asks, rather than duplicating them.
-import { ignorePatternProblem } from "#services/sync/mutagen";
+// config loader asks through the engine module rather than importing the
+// implementation directly.
+import { ignorePatternProblem } from "#services/sync/engine";
 import { DEFAULT_CONFIG, DEFAULT_MACHINE, type DriveConfig, type SyncCadence } from "./schema.js";
 
 /**

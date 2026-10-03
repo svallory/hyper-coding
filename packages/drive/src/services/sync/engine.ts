@@ -11,6 +11,11 @@
  * pairing. Mutagen calls them that, but so does every other rsync-shaped tool.
  */
 
+// The engine owns the rules for what an ignore pattern can be (C-8): the
+// config loader asks through the engine module rather than importing the
+// implementation directly.
+export { ignorePatternProblem, sessionNameProblem } from "#services/sync/mutagen";
+
 import { MutagenSyncEngine } from "#services/sync/mutagen";
 
 /** The only sync semantics hyperdrive configures. */
