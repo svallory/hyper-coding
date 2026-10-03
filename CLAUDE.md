@@ -61,6 +61,12 @@ bun run test                        # Run tests
 flock /tmp/hyper-heavy.lock -c 'cd packages/drive && bun run build && bun run test'
 ```
 
+### Machine setup test safety
+
+- Any test or experiment that can reach `hyper machine setup` or an installer must use a temporary `HOME` and a separate, empty temporary `CLAUDE_CONFIG_DIR`. Never inherit the operator's home or hook selection.
+- Render recipes for syntax checks; exercise their file operations offline with fake downloaders. A setup test must not download tools or edit the operator's rc files.
+- Do not use loopback SSH to test provisioning: SSH restores the real account's home. Remote provisioning e2e belongs in a disposable container/account, not the operator's login.
+
 ### Key Technologies
 - **Template engine**: Jig (Edge.js fork) — `.jig` files, NOT EJS
 - **CLI framework**: oclif with plugin architecture
