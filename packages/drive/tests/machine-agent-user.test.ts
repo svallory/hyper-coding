@@ -48,7 +48,12 @@ import {
 	unprotectedEntriesShell,
 } from "#services/machine/tasks/agent-acl";
 import { agentPaths } from "#services/machine/tasks/agent-context";
-import { repairSharedTree, unsettledSharedTree } from "#services/machine/tasks/agent-shared-tree";
+import {
+	repairSharedTree,
+	sharedTreePolicyShell,
+	sharedTreeRepairShell,
+	unsettledSharedTree,
+} from "#services/machine/tasks/agent-shared-tree";
 import {
 	WATCHER_BIN,
 	WATCHER_UNIT,
@@ -621,7 +626,15 @@ describe("the kernel condition behind the invariant", () => {
 		const check = recordingRunner();
 		await agentUserDirs.check(ctxFor(check));
 		expect(check.joined).toContain(policy);
-		expect(watcherScript(`${HOME}/.claude/projects`, HOME)).toContain(policy);
+		const watcher = watcherScript(`${HOME}/.claude/projects`, HOME);
+		expect(watcher).toContain(policy);
+		const treePolicy = sharedTreePolicyShell();
+		const treeRepair = sharedTreeRepairShell();
+		// Nested sh -c bodies are shell-escaped; compare that exact encoding.
+		for (const consumer of [runner.joined, check.joined])
+			expect(consumer).toContain(shellQuote(treePolicy).slice(1, -1));
+		expect(runner.joined).toContain(shellQuote(treeRepair).slice(1, -1));
+		expect(watcher).toContain(treeRepair);
 	});
 
 	it("strips the other bits, which is tightening and never widening", async () => {
@@ -682,7 +695,8 @@ describe("the kernel condition behind the invariant", () => {
 		// The replaced shared files get their grant re-applied, and the same
 		// invariant: a readable-by-grant file in the bad state is still readable.
 		expect(script).toContain("grant_shared()");
-		expect(script).toContain('setfacl -m "u:$agent_user:$access,m::$access" "$1"');
+		expect(script).toContain('setfacl -m "u:$agent_user:$access" "$1"');
+		expect(accessRepairShell()).not.toContain("m::$access");
 	});
 });
 
@@ -775,10 +789,17 @@ describe("agent-user.dirs — the credential boundary", () => {
 			`${HOME}/.claude/commands`,
 			`${HOME}/.claude/agents`,
 		];
+		const trees = runner.snippets.filter((snippet) =>
+			snippet.includes("# BEGIN hyper shared tree policy"),
+		);
+		expect(trees).toHaveLength(2);
+		for (const dir of [`${HOME}/work`, `${HOME}/.claude/projects`])
+			expect(trees.some((snippet) => snippet.includes(repairSharedTree(dir)))).toBe(true);
 		for (const line of defaults) {
 			const target = line.split(" ").pop() ?? "";
-			if (line.includes('"$(shared_default "$1")"')) {
-				expect(line).toBe('setfacl -d -m "$(shared_default "$1")" "$1" || return 1');
+			if (line.includes('"$1"')) {
+				// This function body is used only by the two bounded traversals above.
+				expect(line).toBe('setfacl -d -m g:collab:rwX "$1" || return 1');
 			} else {
 				expect(allowed.includes(target), `unexpected default ACL on ${target}`).toBe(true);
 			}
@@ -1077,7 +1098,7 @@ describe("agent-user.watcher", () => {
 		// applied with that function's own parameter.
 		expect(script).toContain("grant_shared()");
 		expect(script).toContain('acl_has "$1" "user:$agent_user:$access"');
-		expect(script).toContain('setfacl -m "u:$agent_user:$access,m::$access" "$1"');
+		expect(script).toContain('setfacl -m "u:$agent_user:$access" "$1"');
 	});
 
 	it("reports a settled machine as needing nothing (C-15)", async () => {
@@ -1498,19 +1519,55 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		}
 	});
 
-	it.each(["604", "704", "2704", "701"])("reports a deny with kernel-bypass mode %s", (mode) => {
+	it.each(["604", "704", "2704", "701", "1", "2", "3", "5", "6"])(
+		"reports a deny with kernel-bypass mode %s",
+		(mode) => {
+			const home = isolatedHome();
+			try {
+				writeFileSync(join(home, "late.txt"), "fixture");
+				const result = shell(
+					`getfacl() { printf 'user:agent:---\\n'; }\n${statFixture(mode)}\n${accessPolicyShell(agentPaths(home, "/home/agent"))}\n${unprotectedEntriesShell(home)}`,
+					home,
+				);
+				expect(result.status, result.stderr).toBe(0);
+				expect(result.stdout).toBe(`${home}/late.txt,`);
+			} finally {
+				rmSync(join(home, ".."), { recursive: true, force: true });
+			}
+		},
+	);
+
+	it.each([
+		["4", true],
+		["04", true],
+		["004", true],
+		["0004", true],
+		["40", false],
+		["604", true],
+		["2770", false],
+		["1777", false],
+		["7", true],
+		["70", false],
+		["700", false],
+	] as const)("normalizes mode %s before the kernel-bypass predicate", (mode, bad) => {
 		const home = isolatedHome();
 		try {
-			writeFileSync(join(home, "late.txt"), "fixture");
 			const result = shell(
-				`getfacl() { printf 'user:agent:---\\n'; }\n${statFixture(mode)}\n${accessPolicyShell(agentPaths(home, "/home/agent"))}\n${unprotectedEntriesShell(home)}`,
+				`${statFixture(mode)}\n${accessPolicyShell(agentPaths(home, "/home/agent"))}\nmode3 ignored; printf '\\n'; if bad_state ignored; then echo bad; else echo safe; fi`,
 				home,
 			);
 			expect(result.status, result.stderr).toBe(0);
-			expect(result.stdout).toBe(`${home}/late.txt,`);
+			expect(result.stdout).toBe(`${mode.padStart(3, "0").slice(-3)}\n${bad ? "bad" : "safe"}\n`);
 		} finally {
 			rmSync(join(home, ".."), { recursive: true, force: true });
 		}
+	});
+
+	it("cleans both legacy ACL namespaces without capping unrelated grants", () => {
+		const repair = accessRepairShell();
+		expect(repair).toContain('setfacl -x d:g:collab "$1"');
+		expect(repair).not.toContain("m::$access");
+		expect(repair).toContain('setfacl -R -P -m "u:$agent_user:$access"');
 	});
 
 	it("protects shared-looking names in HOME but skips real shared config entries and symlinks", () => {
@@ -1788,12 +1845,17 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 	});
 
 	it("filters ALL shared-tree mutations by primary ownership and excludes symlinks", () => {
-		for (const line of repairSharedTree("/home/primary/work").split("\n")) {
-			expect(line).toContain('-user "$(id -u)"');
-			expect(line).toMatch(/! -type l|-type d/);
-			expect(line).not.toContain(" -R ");
-			if (line.includes("chgrp")) expect(line).toContain("chgrp -h collab");
-		}
+		const script = repairSharedTree("/home/primary/work");
+		expect(script).toContain('find /home/primary/work ! -type l -user "$(id -u)" -exec');
+		expect(script).not.toContain(" -R ");
+		const repair = sharedTreeRepairShell();
+		const mutation = repair.indexOf('setfacl -x "u:$tree_agent"');
+		expect(repair.indexOf('[ -L "$1" ] && return 0')).toBeLessThan(mutation);
+		expect(repair.indexOf('[ "$(stat -c %u "$1")" = "$(id -u)" ] || return 0')).toBeLessThan(
+			mutation,
+		);
+		expect(repair).toContain('chgrp -h collab "$1"');
+		expect(repair).toContain('if shared_tree_ok "$1"; then return 0; fi');
 	});
 
 	it("refuses unsupported filesystems even when repairable drift exists", async () => {

@@ -9,7 +9,8 @@
 # and then asserts the properties that make the layout safe:
 #
 #   1. `sudo -n true` fails as the agent            (no privileged group)
-#   2. `docker ps` fails or docker is absent        (that group is root here)
+#   Docker daemon access is not tested (no daemon/socket fixture). Unit tests
+#   check that setup removes the agent from the privileged docker group.
 #   3. the agent can create a file in the shared work dir
 #   4. the agent can read ~agent/.claude/settings.json
 #   5. the agent CANNOT read the primary's .credentials.json
@@ -94,9 +95,9 @@ if ! podman image exists "$derived"; then
 fi
 # Drop superseded tags of the same harness: they are this script's own byproducts
 # and nothing else refers to them.
-for stale in $(podman images --format '{{.Repository}}:{{.Tag}}' | grep '^hyper-t16-e2e:' || true); do
-  [ "$stale" = "$derived" ] && continue
-  podman rmi -f "$stale" >/dev/null 2>&1 || true
+for stale in $(podman images --format '{{.Repository}}:{{.Tag}}' | grep -E '^(localhost/)?hyper-t16-e2e:' || true); do
+  [ "${stale#localhost/}" = "$derived" ] && continue
+  podman rmi "$stale" >/dev/null 2>&1 || true
 done
 
 # --------------------------------------------------------------------------
@@ -152,7 +153,7 @@ ssh_t16() {
     "$primary@localhost" "$@"
 }
 
-for i in $(seq 1 30); do
+for _ in $(seq 1 30); do
   ssh_t16 true >/dev/null 2>&1 && break
   sleep 1
 done
@@ -170,7 +171,7 @@ ssh_t16 "chmod 0755 /home/$primary/.config"
 ssh_t16 "printf 'top-level-secret\n' > /home/$primary/topsecret.txt && chmod 0644 /home/$primary/topsecret.txt"
 ssh_t16 "printf '{\"history\":\"before\"}\n' > /home/$primary/.claude/history.jsonl && chmod 0644 /home/$primary/.claude/history.jsonl"
 ssh_t16 "printf '{\"token\":\"secret\"}' > /home/$primary/.claude/.credentials.json"
-ssh_t16 "chmod 0600 /home/$primary/.claude/.credentials.json"
+ssh_t16 "chmod 0644 /home/$primary/.claude/.credentials.json"
 # Leave both optional shared files absent until setup settles; missing files
 # must not cause endless repair attempts or masked setfacl errors.
 
@@ -336,10 +337,9 @@ if as_agent true && as_agent "sudo -n true" >/dev/null 2>&1; then
 fi
 pass "sudo -n true fails as $agent"
 
-if as_agent "docker ps" >/dev/null 2>&1; then
-  die "the agent could talk to docker — that group is root on this host"
-fi
-pass "docker ps fails as $agent"
+# No docker CLI/daemon exists in this image: a failing `docker ps` would be
+# vacuous, so deliberately do not count it as a security assertion.
+echo '# Docker socket access is not covered by this fixture (no daemon/socket).'
 
 as_agent "bash -c \"mkdir -p /home/$primary/work && printf 'from the agent\\n' > /home/$primary/work/from-agent.txt\"" \
   || die "the agent could not create a file in the shared work dir"
@@ -434,7 +434,7 @@ done
 # consults the ACL when those bits are non-zero — so 604/704 make the file
 # readable through "other" even though getfacl still shows the deny. The
 # watcher has to notice the attribute change and strip the other bits.
-for mode in 604 704; do
+for mode in 604 704 004; do
   ssh_t16 "chmod $mode /home/$primary/chmodtest.txt"
   healed=no
   for _ in $(seq 1 5); do
@@ -449,12 +449,14 @@ done
 
 # ...and the next setup run must also repair it, not only the watcher.
 stop_watcher
-ssh_t16 "chmod 604 /home/$primary/chmodtest.txt"
-[ "$(denied "/home/$primary/chmodtest.txt")" = "yes" ] || die '604 fixture is not exposed'
-run_dirs > "$work_real/setup-chmod.log" 2>&1 || { cat "$work_real/setup-chmod.log"; die 'dirs repair failed'; }
-[ "$(denied "/home/$primary/chmodtest.txt")" = "no" ] \
-  || die "setup did not repair an entry left in the 604 state"
-pass "4c - setup repairs the 604 state with the watcher stopped"
+for mode in 604 004; do
+  ssh_t16 "chmod $mode /home/$primary/chmodtest.txt"
+  [ "$(denied "/home/$primary/chmodtest.txt")" = yes ] || die "$mode fixture is not exposed"
+  run_dirs > "$work_real/setup-chmod-$mode.log" 2>&1 || { cat "$work_real/setup-chmod-$mode.log"; die 'dirs repair failed'; }
+  [ "$(denied "/home/$primary/chmodtest.txt")" = no ] || die "setup did not repair mode $mode"
+  [ "$(ssh_t16 'systemctl --user is-active claude-share-watch.service' || true)" = inactive ] || die 'watcher masked short-mode repair'
+  pass "4c - setup repairs the $mode state with the watcher stopped and exit 0"
+done
 start_watcher
 
 # 4d. A file CREATED with a bad mode after setup is unreadable immediately, with
@@ -470,9 +472,7 @@ pass "4 - still unreadable after chmod 644, chmod g+r and chmod 777"
 
 # 5. The config dir: denied by default, shared entries readable, and the two
 #    shared FILES re-granted after Claude Code replaces them by rename.
-for f in "/home/$primary/.claude/history.jsonl"; do
-  [ "$(denied "$f")" = "no" ] || die "the agent can read the pre-existing $f"
-done
+[ "$(denied "/home/$primary/.claude/history.jsonl")" = no ] || die 'the agent can read pre-existing history.jsonl'
 stop_watcher
 ssh_t16 "printf '{\"h\":1}\n' > /home/$primary/.claude/late.jsonl && chmod 0644 /home/$primary/.claude/late.jsonl"
 [ "$(denied "/home/$primary/.claude/late.jsonl")" = "no" ] \
@@ -488,6 +488,15 @@ ssh_t16 "mkdir -p /home/$primary/.claude/skills && printf 'skill\n' > /home/$pri
 [ "$(denied "/home/$primary/.claude/skills/new.md")" = "yes" ] \
   || die "a new file under skills/ is not readable as $agent"
 pass "5b - settings.json, CLAUDE.md and a new file under skills/ are readable"
+
+# Granting agent read must not cap an unrelated user's existing write grant.
+stop_watcher
+ssh_t16 "setfacl -m u:nobody:rw- /home/$primary/.claude/settings.json; setfacl -x u:$agent /home/$primary/.claude/settings.json"
+run_dirs > "$work_real/setup-readonly-migration.log" 2>&1 || { cat "$work_real/setup-readonly-migration.log"; die 'readonly migration failed'; }
+ssh_t16 "getfacl -c -p /home/$primary/.claude/settings.json | grep -qx 'user:nobody:rw-'" || die 'readonly migration capped unrelated grant'
+as_agent "test -w /home/$primary/.claude/settings.json" && die 'agent readonly grant allows writing'
+pass 'readonly migration preserves unrelated grants without granting agent write'
+start_watcher
 
 # Claude Code rewrites settings.json by writing a new file and renaming it, so
 # the replacement arrives with the inherited DENY and no access entry. The
@@ -532,7 +541,7 @@ pass "7 - a fresh key and a renamed authorized_keys still let the primary ssh in
 if as_agent "cat /home/$primary/.claude/.credentials.json" >/dev/null 2>&1; then
   die "the agent CAN read .credentials.json"
 fi
-pass ".credentials.json is NOT readable as $agent"
+pass "0644 .credentials.json is NOT readable as $agent (ACL, not owner-only mode)"
 
 
 as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>&1 \
@@ -648,12 +657,12 @@ pass "8b - a 0644 file moved into the home is denied within 5s (the watcher)"
 
 # Move a whole collab-owned directory: denying its top level must also block
 # full-path reads below it, without recursively rewriting its children.
-ssh_t16 "mkdir /home/$primary/work/moved-dir; printf nested > /home/$primary/work/moved-dir/inside; setfacl -R -b /home/$primary/work/moved-dir; chmod 0755 /home/$primary/work/moved-dir; chmod 0644 /home/$primary/work/moved-dir/inside"
+ssh_t16 "mkdir /home/$primary/work/moved-dir; printf nested > /home/$primary/work/moved-dir/inside; chmod 0755 /home/$primary/work/moved-dir; chmod 0644 /home/$primary/work/moved-dir/inside"
 [ "$(denied "/home/$primary/work/moved-dir/inside")" = yes ] || die 'directory move fixture is not readable'
 ssh_t16 "mv /home/$primary/work/moved-dir /home/$primary/moved-dir"
 healed=no
 for _ in $(seq 1 5); do
-  if [ "$(denied "/home/$primary/moved-dir/inside")" = no ] && ! as_agent "ls /home/$primary/moved-dir" >/dev/null 2>&1; then healed=yes; break; fi
+  if [ "$(denied "/home/$primary/moved-dir/inside")" = no ] && ! as_agent "ls /home/$primary/moved-dir" >/dev/null 2>&1 && ssh_t16 "! getfacl -c -p /home/$primary/moved-dir | grep -E '^(default:)?group:collab:'"; then healed=yes; break; fi
   sleep 1
 done
 [ "$healed" = yes ] || die 'moved directory remains listable or traversable after 5s'
@@ -661,7 +670,8 @@ pass '8b-directory - watcher protects a collab-owned moved directory and full-pa
 
 # The same moves with the watcher stopped must remain exposed UNTIL setup.
 stop_watcher
-ssh_t16 "printf stopped > /home/$primary/work/stopped-file; mkdir /home/$primary/work/stopped-dir; printf nested > /home/$primary/work/stopped-dir/inside; setfacl -R -b /home/$primary/work/stopped-file /home/$primary/work/stopped-dir; chmod 0644 /home/$primary/work/stopped-file /home/$primary/work/stopped-dir/inside; chmod 0755 /home/$primary/work/stopped-dir; mv /home/$primary/work/stopped-file /home/$primary/stopped-file; mv /home/$primary/work/stopped-dir /home/$primary/stopped-dir"
+ssh_t16 "printf stopped > /home/$primary/work/stopped-file; mkdir /home/$primary/work/stopped-dir; printf nested > /home/$primary/work/stopped-dir/inside; chmod 0644 /home/$primary/work/stopped-file /home/$primary/work/stopped-dir/inside; chmod 0755 /home/$primary/work/stopped-dir; mv /home/$primary/work/stopped-file /home/$primary/stopped-file; mv /home/$primary/work/stopped-dir /home/$primary/stopped-dir"
+ssh_t16 "getfacl -c -p /home/$primary/stopped-file | grep -q '^group:collab:' && ! getfacl -c -p /home/$primary/stopped-file | grep -q 'user:$agent:'" || die 'rename fixture did not retain its shared ACL'
 [ "$(denied "/home/$primary/stopped-file")" = yes ] || die 'stopped file move was not exposed'
 [ "$(denied "/home/$primary/stopped-dir/inside")" = yes ] || die 'stopped directory move was not exposed'
 as_agent "ls /home/$primary/stopped-dir" >/dev/null 2>&1 || die 'stopped directory cannot be listed before repair'
@@ -671,7 +681,10 @@ grep -q stopped-file "$work_real/setup-moved.log" && grep -q stopped-dir "$work_
 [ "$(denied "/home/$primary/stopped-dir/inside")" = no ] || die 'setup did not protect moved directory traversal'
 as_agent "ls /home/$primary/stopped-dir" >/dev/null 2>&1 && die 'setup did not protect moved directory listing'
 [ "$(ssh_t16 'systemctl --user is-active claude-share-watch.service' || true)" = inactive ] || die 'watcher masked moved-entry repair'
-pass '8c - setup protects moved file and directory with exit 0 BEFORE watcher restart'
+ssh_t16 "! getfacl -c -p /home/$primary/stopped-dir | grep -E '^(default:)?group:collab:'" || die 'protected directory kept legacy default collab ACL'
+ssh_t16 "getfacl -c -p /home/$primary/stopped-dir/inside | grep -q '^group:collab:'" || die 'protected directory cleanup unexpectedly recursed'
+pass '8c - retained shared ACL is exposed after rename until exit-0 setup, BEFORE watcher restart'
+pass '8c-defaults - protected directory loses collab defaults without rewriting children'
 start_watcher
 ssh_t16 "printf regrouped > /home/$primary/regrouped; chmod 0644 /home/$primary/regrouped; chgrp collab /home/$primary/regrouped"
 healed=no

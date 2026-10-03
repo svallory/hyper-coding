@@ -9,6 +9,7 @@ import {
 	primaryUserLines,
 	primaryUserOf,
 } from "./agent-context.js";
+import { sharedTreeRepairShell } from "./agent-shared-tree.js";
 import { runOrFail, runScript } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
@@ -21,6 +22,7 @@ export function watcherScript(projectsDir: string, home: string, agentUser = "ag
 # One policy for the startup sweep, live events, setup and the read-only check.
 ${accessPolicyShell(paths, agentUser)}
 ${accessRepairShell()}
+${sharedTreeRepairShell(agentUser)}
 projects=${shellQuote(projectsDir)}
 me=$(id -u)
 
@@ -28,26 +30,7 @@ on_new() {
   repair_entry "$1" || printf 'hyper: could not protect %s\\n' "$1" >&2
 }
 widen() {
-  [ -L "$1" ] && return 0
-  [ -f "$1" ] || [ -d "$1" ] || return 0
-  [ "$(stat -c %u "$1" 2>/dev/null || echo x)" = "$me" ] || return 0
-  # A transcript moved from the home may carry the private named-user deny.
-  # The shared tree is group-based: drop that override before widening its mask.
-  if getfacl -c -p "$1" | grep -q "^user:$agent_user:"; then
-    setfacl -x "u:$agent_user" "$1" || return 1
-  fi
-  if [ -d "$1" ]; then
-    if getfacl -c -p "$1" | grep -q "^default:user:$agent_user:"; then
-      setfacl -x "d:u:$agent_user" "$1" || return 1
-    fi
-    acl_has "$1" 'default:group:collab:rwx' || setfacl -d -m g:collab:rwx "$1" || return 1
-    case "$(group_digit "$(mode3 "$1")")" in 7) return 0 ;; esac
-    chmod g+rwx "$1"
-  else
-    # Avoid an attrib feedback loop: only change masks that lack rw.
-    case "$(group_digit "$(mode3 "$1")")" in 6|7) return 0 ;; esac
-    chmod g+rw "$1"
-  fi
+  shared_tree_repair "$1" || printf 'hyper: could not share %s\\n' "$1" >&2
 }
 sweep() {
 ${directEntriesShell(paths.home, '  on_new "$entry"')}
