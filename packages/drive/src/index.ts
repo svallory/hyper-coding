@@ -8,15 +8,20 @@ export {
 	writeConfig,
 } from "#config/index";
 export {
+	CLAUDE_SYNC_IGNORE,
 	DEFAULT_CONFIG,
 	DEFAULT_MACHINE,
 	type DriveConfig,
 	EMPTY_MANIFEST,
 	type Manifest,
 	ManifestError,
+	PI_SYNC_IGNORE,
+	packagedSyncIgnore,
 	type SpaceEntry,
 	type SpaceRepo,
 	type SyncCadence,
+	type SyncTarget,
+	syncIgnoreFor,
 	validateManifest,
 } from "#config/schema";
 export { type BaseArgs, BaseCommand, type BaseFlags } from "#lib/base-command";
@@ -110,3 +115,20 @@ export {
 	spaceGitDir,
 	writeCadence,
 } from "#services/space-git";
+export {
+	getEngine,
+	type SyncCreateOptions,
+	type SyncDaemonState,
+	type SyncEngine,
+	SyncEngineError,
+	type SyncEngineName,
+	type SyncMode,
+	type SyncSession,
+	type SyncSymlinkMode,
+} from "#services/sync/engine";
+export {
+	createArgs,
+	daemonRegistered,
+	MutagenSyncEngine,
+	parseSessionList,
+} from "#services/sync/mutagen";
