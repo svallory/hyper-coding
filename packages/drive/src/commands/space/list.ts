@@ -38,6 +38,14 @@ export default class List extends BaseCommand<typeof List> {
 				);
 			}
 			const manifest = readManifest();
+			for (const space of manifest.spaces) {
+				for (const repo of space.repos) {
+					if (!repo.url.trim())
+						this.warn(
+							`${space.name}/${repo.slug ?? "project"} has no project URL; space clone will skip it. Add its origin on the original machine and run hyper space init --refresh.`,
+						);
+				}
+			}
 			if (flags.json) {
 				this.log(JSON.stringify(manifest, null, 2));
 				return;
