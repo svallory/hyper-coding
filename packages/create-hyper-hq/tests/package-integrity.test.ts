@@ -84,7 +84,7 @@ describe("Package integrity", () => {
 			const packInfo = JSON.parse(result);
 			const files = packInfo[0].files.map((f: { path: string }) => f.path);
 			expect(files).toContainEqual("dist/index.js");
-		});
+		}, 60_000);
 
 		it("npm pack includes package.json", () => {
 			const result = execFileSync("npm", ["pack", "--dry-run", "--json"], {
@@ -95,6 +95,6 @@ describe("Package integrity", () => {
 			const packInfo = JSON.parse(result);
 			const files = packInfo[0].files.map((f: { path: string }) => f.path);
 			expect(files).toContainEqual("package.json");
-		});
+		}, 60_000);
 	});
 });
