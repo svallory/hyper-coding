@@ -14,7 +14,8 @@
  * rather than guessed at.
  */
 
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -60,6 +61,31 @@ function classified(command: string): string[] {
 }
 
 describe("scanHooks", () => {
+	it.each(["large", "directory", "symlink", "fifo"])(
+		"does not read a %s plugin hook file",
+		async (kind) => {
+			const dir = await mkdtemp(join(tmpdir(), "hyper-hook-type-"));
+			temps.push(dir);
+			const plugin = join(dir, "plugins/cache/test");
+			await mkdir(join(plugin, "hooks"), { recursive: true });
+			const file = join(plugin, "hooks/hooks.json");
+			if (kind === "large") await writeFile(file, " ".repeat(1024 * 1024 + 1));
+			if (kind === "directory") await mkdir(file);
+			if (kind === "symlink") {
+				await writeFile(join(dir, "target.json"), "{}");
+				await symlink(join(dir, "target.json"), file);
+			}
+			if (kind === "fifo") expect(spawnSync("mkfifo", [file]).status).toBe(0);
+			await writeFile(
+				join(dir, "plugins/installed_plugins.json"),
+				JSON.stringify({ plugins: { test: [{ installPath: plugin }] } }),
+			);
+			const result = await scanHooks(dir, HOME);
+			expect(result.files).not.toContain(file);
+			expect(result.warnings.join("\n")).toContain("regular file no larger than 1 MB");
+		},
+	);
+
 	it("preselects the tools the operator's hooks call", async () => {
 		const scan = await scanHooks(FIXTURE, HOME);
 		expect(scan.preselect).toEqual(["bd", "bun", "herdr", "jq", "rtk"]);
@@ -199,6 +225,20 @@ describe("scanHooks", () => {
 
 /** The table the review fixes: each input, and the words it must yield. */
 describe("splitting a hook command", () => {
+	it.each([
+		["bash -c 'wt list | jq .'", ["jq", "wt"]],
+		['sh -c "jq ."', ["jq"]],
+		["/bin/zsh -lc 'wt list'", ["wt"]],
+		[`bash -c 'sh -c "jq ."'`, ["jq"]],
+	])("reads inline shell commands: %s", (input, expected) => {
+		expect(classified(input)).toEqual(expected);
+	});
+	it("bounds inline-shell recursion", () => {
+		let input = "jq .";
+		for (let i = 0; i < 12; i++) input = `sh -c ${JSON.stringify(input)}`;
+		expect(classified(input)).toEqual([]);
+	});
+
 	it.each([
 		["jq . 2>&1 | gh api", ["gh", "jq"]],
 		["jq .>out && fd x", ["fd", "jq"]],

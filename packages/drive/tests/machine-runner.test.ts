@@ -254,7 +254,7 @@ describe("runSetup — tasks it can do itself", () => {
 		expect(report.rootScriptPath).toBeUndefined();
 	});
 
-	it("reports a task whose apply didn't take as skipped, not applied", async () => {
+	it("reports a task whose fix did not take as failed, never skipped (H4)", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		// apply runs but check stays false: claiming it worked would be a lie.
 		const task = fakeTask({ id: "tools.fzf", checks: [false], applyMakesCheckPass: false });
@@ -266,7 +266,13 @@ describe("runSetup — tasks it can do itself", () => {
 		});
 		expect(task.applies).toBe(1);
 		expect(report.applied).toEqual([]);
-		expect(report.skipped).toEqual(["tools.fzf"]);
+		expect(report.skipped).toEqual([]);
+		expect(report.failed).toEqual([
+			{ id: "tools.fzf", reason: expect.stringContaining("fix did not take") },
+		]);
+		expect(renderReport(report, "test").filter((line) => line.includes("tools.fzf"))).toHaveLength(
+			1,
+		);
 	});
 
 	it("never calls apply on a task that needs root", async () => {

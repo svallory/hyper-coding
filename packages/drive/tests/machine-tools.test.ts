@@ -25,6 +25,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { renderReport } from "#commands/machine/setup";
 import type { DriveConfig } from "#config/schema";
 import { compareVersions, parityTable, renderParity, statusFor } from "#services/machine/parity";
 import { runSetup } from "#services/machine/runner";
@@ -173,8 +174,8 @@ describe("the tool registry", () => {
 		expect(linux.all).toContain("mutagen_linux_amd64_@TAG@.tar.gz");
 	});
 
-	it("puts the five mise-managed tools through mise", async () => {
-		for (const id of ["gh", "jq", "fzf", "rg", "fd"]) {
+	it("puts all eight mise-managed tools through mise", async () => {
+		for (const id of ["gh", "jq", "fzf", "rg", "fd", "claude", "pi", "bun"]) {
 			const runner = new RecordingRunner();
 			await findTool(id)?.install(ctxWith(runner));
 			expect(runner.all, id).toContain("mise use -g ");
@@ -190,11 +191,12 @@ describe("the tool registry", () => {
 	});
 
 	it("installs mise before the tools that need it", async () => {
-		const runner = new RecordingRunner([
-			[/command -v mise/, { code: 1, stdout: "", stderr: "not installed" }],
-		]);
+		const runner = new RecordingRunner();
 		await findTool("jq")?.install(ctxWith(runner));
 		expect(runner.all).toContain("https://mise.run");
+		expect(runner.all.indexOf("https://mise.run")).toBeLessThan(
+			runner.all.indexOf("mise use -g jq"),
+		);
 	});
 
 	it("normalises every tool's version output to a bare semver", () => {
@@ -254,7 +256,7 @@ describe("the tool tasks", () => {
 		const record = runner.ssh.bind(runner);
 		runner.ssh = async (cmd) => {
 			await record(cmd);
-			if (cmd[2]?.includes('"$p" --version')) {
+			if (cmd[2]?.includes("jq --version")) {
 				detects++;
 				return {
 					code: detects === 1 ? 127 : 0,
@@ -488,10 +490,21 @@ describe("release assets (B1)", () => {
 });
 
 describe("installer scripts (B2, M1)", () => {
+	it.each([
+		["bun", "mise use -g bun@latest"],
+		["claude", "mise use -g claude@latest"],
+		["pi", "mise use -g pi@latest"],
+		["but", "export GITBUTLER_NONINTERACTIVE=1"],
+		["herdr", 'export HERDR_INSTALL_DIR="$HOME/.local/bin"'],
+		["mise", 'export MISE_INSTALL_PATH="$HOME/.local/bin/mise" MISE_INSTALL_HELP=0'],
+	])("%s avoids vendor-managed rc edits (H1)", async (id, policy) => {
+		const runner = new RecordingRunner();
+		await findTool(id)?.install(ctxWith(runner));
+		expect(runner.all).toContain(policy);
+		expect(runner.all).not.toMatch(/bun.sh\/install|claude.ai\/install.sh|pi.dev\/install.sh/);
+	});
 	it("runs a bash installer with bash, and an sh installer with sh", async () => {
 		for (const [id, shell] of [
-			["claude", "bash"],
-			["bun", "bash"],
 			["herdr", "sh"],
 			["but", "sh"],
 			["mise", "sh"],
@@ -506,7 +519,7 @@ describe("installer scripts (B2, M1)", () => {
 
 	it("downloads to a file first, with a timeout, and says so when curl is missing", async () => {
 		const runner = new RecordingRunner();
-		await findTool("claude")?.install(ctxWith(runner));
+		await findTool("herdr")?.install(ctxWith(runner));
 		expect(runner.all).toContain("curl -fsSL --max-time 300");
 		expect(runner.all).toContain('-o "$installer"');
 		expect(runner.all).toContain("curl isn't installed");
@@ -518,23 +531,18 @@ describe("installer scripts (B2, M1)", () => {
 		const runner = new RecordingRunner([
 			[/mkdir -p/, { code: 22, stdout: "", stderr: "HTTP 404" }],
 		]);
-		await expect(findTool("claude")?.install(ctxWith(runner))).rejects.toThrow(/claude/);
+		await expect(findTool("herdr")?.install(ctxWith(runner))).rejects.toThrow(/HTTP 404/);
 	});
 });
 
-describe("mise tools (m1, m8)", () => {
-	it("detects through the mise store when the tool is not on PATH", async () => {
-		const runner = new RecordingRunner([
-			[
-				/mise which/,
-				{ code: 0, stdout: "/home/u/.local/share/mise/installs/ripgrep/15.2.0/rg\n", stderr: "" },
-			],
-		]);
-		expect(await findTool("rg")?.detect(ctxWith(runner))).toBe("15.2.0");
-		// The version must come from the binary mise pointed at, not from `rg`
-		// being (possibly) absent from PATH.
-		expect(runner.all).toContain('"$p" --version');
-		expect(runner.all).not.toMatch(/ripgrep --version/);
+describe("supported detection PATH (H2)", () => {
+	it("every check uses only the supported target PATH", async () => {
+		for (const tool of TOOLS) {
+			const runner = new RecordingRunner();
+			await tool.detect(ctxWith(runner));
+			expect(runner.all).toContain('PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"');
+			expect(runner.all).not.toMatch(/\.bun\/bin|\.pi\/agent|\/shims|mise which/);
+		}
 	});
 });
 
@@ -548,7 +556,11 @@ describe("rendered recipes, offline (N1, N2, M1)", () => {
 			const runner = onPlatform(os, arch);
 			await tool.install(ctxWith(runner));
 			for (const cmd of runner.commands) {
-				for (const shell of ["sh", "bash"]) {
+				for (const shell of [
+					"sh",
+					"bash",
+					...(spawnSync("dash", ["-c", "true"]).status === 0 ? ["dash"] : []),
+				]) {
 					const parsed = spawnSync(shell, ["-n"], { input: cmd[2], encoding: "utf8" });
 					expect(parsed.status, `${tool.id}: ${parsed.stderr}`).toBe(0);
 				}
@@ -556,6 +568,7 @@ describe("rendered recipes, offline (N1, N2, M1)", () => {
 					.split("\n")
 					.filter((l) => /curl -fsSL/.test(l) && !l.trim().startsWith("echo"))) {
 					expect(line).toContain("--max-time 300");
+					expect(line).toContain("--proto '=https' --proto-redir '=https'");
 				}
 			}
 		}
@@ -579,7 +592,7 @@ describe("rendered recipes, offline (N1, N2, M1)", () => {
 			// A fake curl serves a local tarball; no process here can download anything.
 			await writeFile(
 				join(bin, "curl"),
-				`#!/bin/sh\ncase "$*" in *api.github.com*) echo '{"tag_name":"v0.18.1"}'; exit 0;; esac\nwhile [ "$1" != -o ]; do shift; done\ncp "$HOME/platform.tar.gz" "$2"\n`,
+				`#!/bin/sh\ncase "$*" in */releases/latest*) echo 'Location: https://github.com/mutagen-io/mutagen/releases/tag/v0.18.1'; exit 0;; esac\nwhile [ "$1" != -o ]; do shift; done\ncp "$HOME/platform.tar.gz" "$2"\n`,
 				{ mode: 0o755 },
 			);
 			const runner = onPlatform("Linux", "x86_64");
@@ -613,7 +626,7 @@ describe("rendered recipes, offline (N1, N2, M1)", () => {
 			await mkdir(join(home, "empty-claude"));
 			await writeFile(
 				join(home, ".local/bin/mise"),
-				`#!/bin/sh\nmkdir -p "$HOME/.local/share/mise/shims"\nprintf '#!/bin/sh\\necho shim-version\\n' > "$HOME/.local/share/mise/shims/rg"\nchmod +x "$HOME/.local/share/mise/shims/rg"\n`,
+				`#!/bin/sh\nif [ "$1" = --version ]; then echo 'mise 2026.1.0'; exit 0; fi\nmkdir -p "$HOME/.local/share/mise/shims"\nprintf '#!/bin/sh\\necho shim-version\\n' > "$HOME/.local/share/mise/shims/rg"\nchmod +x "$HOME/.local/share/mise/shims/rg"\n`,
 				{ mode: 0o755 },
 			);
 			const runner = new RecordingRunner([
@@ -654,8 +667,13 @@ describe("rendered recipes, offline (N1, N2, M1)", () => {
 							: join(home, ".local/share/mise");
 				const shim = join(data, "shims/rg");
 				await writeFile(
+					join(home, ".local/bin/curl"),
+					'#!/bin/sh\necho "unexpected download" >&2\nexit 99\n',
+					{ mode: 0o755 },
+				);
+				await writeFile(
 					join(home, ".local/bin/mise"),
-					'#!/bin/sh\nmkdir -p "$(dirname "$TEST_SHIM")"\nprintf "#!/bin/sh\\necho 1.2.3\\n" > "$TEST_SHIM"\nchmod +x "$TEST_SHIM"\n',
+					'#!/bin/sh\nif [ "$1" = --version ]; then echo "mise 2026.1.0"; exit 0; fi\nmkdir -p "$(dirname "$TEST_SHIM")"\nprintf "#!/bin/sh\\necho 1.2.3\\n" > "$TEST_SHIM"\nchmod +x "$TEST_SHIM"\n',
 					{ mode: 0o755 },
 				);
 				const env = {
@@ -691,7 +709,16 @@ describe("rendered recipes, offline (N1, N2, M1)", () => {
 				await mkdir(join(home, ".local/bin"), { recursive: true });
 				await mkdir(join(home, "empty-claude"));
 				await mkdir(join(home, ".local/share/mise/shims"), { recursive: true });
-				await writeFile(join(home, ".local/bin/mise"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+				await writeFile(
+					join(home, ".local/bin/mise"),
+					'#!/bin/sh\nif [ "$1" = --version ]; then echo "mise 2026.1.0"; fi\nexit 0\n',
+					{ mode: 0o755 },
+				);
+				await writeFile(
+					join(home, ".local/bin/curl"),
+					'#!/bin/sh\necho "unexpected download" >&2\nexit 99\n',
+					{ mode: 0o755 },
+				);
 				if (state === "not executable")
 					await writeFile(join(home, ".local/share/mise/shims/rg"), "not executable", {
 						mode: 0o644,
@@ -718,72 +745,31 @@ describe("rendered recipes, offline (N1, N2, M1)", () => {
 		},
 	);
 
-	it("finds pi after a successful official install under .pi/agent/bin (N15)", async () => {
-		const home = await mkdtemp(join(tmpdir(), "hyper-pi-success-"));
+	it.each([
+		["pi", ".pi/agent/bin"],
+		["bun", ".bun/bin"],
+		["rg", ".local/share/mise/shims"],
+	])("links an existing private %s without reinstalling (H2)", async (id, directory) => {
+		const home = await mkdtemp(join(tmpdir(), "hyper-private-bin-"));
 		try {
-			const bin = join(home, "fake-bin");
-			await mkdir(bin);
+			await mkdir(join(home, directory), { recursive: true });
 			await mkdir(join(home, "empty-claude"));
-			await writeFile(
-				join(home, "installer.sh"),
-				'#!/bin/sh\nmkdir -p "$HOME/.pi/agent/bin"\nprintf "#!/bin/sh\\necho 1.0.0\\n" > "$HOME/.pi/agent/bin/pi"\nchmod +x "$HOME/.pi/agent/bin/pi"\n',
-			);
-			await writeFile(
-				join(bin, "curl"),
-				'#!/bin/sh\nwhile [ "$1" != -o ]; do shift; done\ncp "$HOME/installer.sh" "$2"\n',
-				{ mode: 0o755 },
-			);
-			await writeFile(join(bin, "npm"), '#!/bin/sh\ntouch "$HOME/npm-was-called"\nexit 99\n', {
-				mode: 0o755,
-			});
-			const env = {
-				HOME: home,
-				CLAUDE_CONFIG_DIR: join(home, "empty-claude"),
-				PATH: `${bin}:/usr/bin:/bin`,
-			};
+			await writeFile(join(home, directory, id), "#!/bin/sh\necho 99.98.97\n", { mode: 0o755 });
 			const runner = new RecordingRunner();
 			runner.ssh = async (cmd) => {
-				const result = spawnSync(cmd[0], cmd.slice(1), { env, encoding: "utf8" });
-				return {
-					code: result.status ?? 1,
-					stdout: result.stdout ?? "",
-					stderr: result.stderr ?? "",
-				};
+				runner.scripts.push(cmd[2]);
+				// Refuse to execute any unexpected installer: this test is strictly offline.
+				if (/curl|mise use/.test(cmd[2])) throw new Error("unexpected reinstall");
+				const r = spawnSync(cmd[0], cmd.slice(1), {
+					encoding: "utf8",
+					env: { HOME: home, CLAUDE_CONFIG_DIR: join(home, "empty-claude"), PATH: "/usr/bin:/bin" },
+				});
+				return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
 			};
-			await findTool("pi")?.install(ctxWith(runner));
-			expect(await findTool("pi")?.detect(ctxWith(runner))).toBe("1.0.0");
-			expect(await fileExists(join(home, "npm-was-called"))).toBe(false);
-		} finally {
-			await rm(home, { recursive: true, force: true });
-		}
-	});
-
-	it("pi reaches npm fallback after an installer failure", async () => {
-		const home = await mkdtemp(join(tmpdir(), "hyper-pi-offline-"));
-		try {
-			const bin = join(home, "fake-bin");
-			await mkdir(bin);
-			await mkdir(join(home, "empty-claude"));
-			await writeFile(join(bin, "curl"), "#!/bin/sh\nexit 22\n", { mode: 0o755 });
-			await writeFile(
-				join(bin, "npm"),
-				`#!/bin/sh\nprintf '%s\\n' "$*" > "$HOME/npm-args"\nprintf '#!/bin/sh\\nexit 0\\n' > "$HOME/.local/bin/pi"\nchmod +x "$HOME/.local/bin/pi"\n`,
-				{ mode: 0o755 },
-			);
-			const runner = new RecordingRunner();
-			await findTool("pi")?.install(ctxWith(runner));
-			const result = spawnSync("sh", ["-c", runner.commands[0][2]], {
-				encoding: "utf8",
-				env: {
-					HOME: home,
-					CLAUDE_CONFIG_DIR: join(home, "empty-claude"),
-					PATH: `${bin}:/usr/bin:/bin`,
-				},
-			});
-			expect(result.status, result.stderr).toBe(0);
-			expect(await readFile(join(home, "npm-args"), "utf8")).toContain(
-				"install -g --ignore-scripts @earendil-works/pi-coding-agent",
-			);
+			expect(await findTool(id)?.detect(ctxWith(runner))).not.toBe("99.98.97");
+			await findTool(id)?.install(ctxWith(runner));
+			expect(await readlink(join(home, ".local/bin", id))).toBe(join(home, directory, id));
+			expect(await findTool(id)?.detect(ctxWith(runner))).toBe("99.98.97");
 		} finally {
 			await rm(home, { recursive: true, force: true });
 		}
@@ -801,6 +787,34 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 describe("the PATH task (m4)", () => {
+	it.each(["bash", ...(spawnSync("dash", ["-c", "true"]).status === 0 ? ["dash"] : [])])(
+		"refuses a read-only rc file under %s without replacing it (H3)",
+		async (shell) => {
+			const home = await mkdtemp(join(tmpdir(), "hyper-readonly-rc-"));
+			dirs.push(home);
+			await mkdir(join(home, "empty-claude"));
+			await writeFile(join(home, ".bashrc"), "readonly content\n", { mode: 0o444 });
+			const runner = new RecordingRunner();
+			runner.ssh = async (cmd) => {
+				const r = spawnSync(shell, ["-c", cmd[2]], {
+					encoding: "utf8",
+					env: {
+						HOME: home,
+						CLAUDE_CONFIG_DIR: join(home, "empty-claude"),
+						SHELL: "/bin/bash",
+						PATH: "/usr/bin:/bin",
+					},
+				});
+				return { code: r.status ?? 1, stdout: r.stdout, stderr: r.stderr };
+			};
+			await expect(pathTask.apply?.(ctxWith(runner))).rejects.toThrow(
+				/rc file is not writable: .*\/\.bashrc/,
+			);
+			expect(await readFile(join(home, ".bashrc"), "utf8")).toBe("readonly content\n");
+			expect((await readdir(home)).some((f) => f.includes(".hyper."))).toBe(false);
+		},
+	);
+
 	it.each(["relative", "absolute", "chain"])(
 		"preserves a %s symlinked rc file and edits the real file (N11)",
 		async (kind) => {
@@ -868,10 +882,14 @@ describe("the PATH task (m4)", () => {
 				scratchDir: home,
 			},
 		);
-		expect(report.skipped).toEqual(["tools.path"]);
-		expect(logs.filter((line) => line.includes("did not load ~/.local/bin"))).toHaveLength(1);
-		expect(logs.join("\n")).toContain("configure PATH in that shell's startup file");
-		expect(logs.join("\n")).not.toContain("still not right");
+		expect(report.failed).toEqual([
+			{ id: "tools.path", reason: expect.stringContaining(`Shell ${shell} is not supported`) },
+		]);
+		expect(report.skipped).toEqual([]);
+		const output = renderReport(report, "test").join("\n");
+		expect(output.split("is not supported")).toHaveLength(2);
+		expect(output).toContain(PATH_LINE);
+		expect(await fileExists(join(home, ".profile"))).toBe(false);
 	});
 
 	it("is selected only when tools are selected, including already-present tools", () => {
@@ -890,7 +908,7 @@ describe("the PATH task (m4)", () => {
 		expect(await readFile(join(home, rc), "utf8")).toBe(`${PATH_LINE}\n`);
 		expect(await fileExists(join(home, ".local/bin"))).toBe(true);
 		expect(await fileExists(join(home, ".zshrc"))).toBe(false);
-		expect(await fileExists(join(home, ".profile"))).toBe(false);
+		expect(await fileExists(join(home, ".profile"))).toBe(shell.endsWith("bash"));
 		if (shell.endsWith("zsh"))
 			expect(await readFile(join(home, ".bashrc"), "utf8")).toBe("stray bash config\n");
 	});
@@ -1007,14 +1025,15 @@ describe("the PATH task (m4)", () => {
 		expect(written).toContain("alias ll="); // the user's own lines survive
 	});
 
-	it("uses .profile for other shells when no rc files exist", async () => {
+	it("refuses other shells instead of writing .profile", async () => {
 		const home = await mkdtemp(join(tmpdir(), "hyper-path-bare-"));
 		dirs.push(home);
 		await mkdir(join(home, ".local", "bin"), { recursive: true });
-		await pathTask.apply?.(ctxWith(homeRunner(home, "/bin/sh")));
+		await expect(pathTask.apply?.(ctxWith(homeRunner(home, "/bin/sh")))).rejects.toThrow(
+			/Shell \/bin\/sh is not supported/,
+		);
 		expect(await fileExists(join(home, ".bashrc"))).toBe(false);
-		expect(await fileExists(join(home, ".profile"))).toBe(true);
-		expect(await readFile(join(home, ".profile"), "utf-8")).toContain(PATH_LINE);
+		expect(await fileExists(join(home, ".profile"))).toBe(false);
 	});
 
 	it("is unsatisfied when ~/.local/bin does not exist yet", async () => {
