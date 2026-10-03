@@ -24,6 +24,9 @@ function git(args: string[]): void {
 
 let fix: string | null = null;
 
+/** The git environment this module overwrites, so teardown can put it back. */
+const SAVED_ENV: Record<string, string | undefined> = {};
+
 /**
  * Create the throwaway fixture root and isolate git inside it, mirroring the
  * bash harness: HOME points into the fixture, system and global config are
@@ -35,13 +38,23 @@ export function setupSpaceFixtures(): string {
 	const home = join(fix, "home");
 	mkdirSync(home, { recursive: true });
 
-	process.env.HOME = home;
-	process.env.GIT_CONFIG_NOSYSTEM = "1";
-	process.env.GIT_CONFIG_GLOBAL = join(home, ".gitconfig");
-	process.env.GIT_AUTHOR_NAME = "hyper test";
-	process.env.GIT_AUTHOR_EMAIL = "hyper-test@example.invalid";
-	process.env.GIT_COMMITTER_NAME = "hyper test";
-	process.env.GIT_COMMITTER_EMAIL = "hyper-test@example.invalid";
+	const overrides: Record<string, string> = {
+		HOME: home,
+		GIT_CONFIG_NOSYSTEM: "1",
+		GIT_CONFIG_GLOBAL: join(home, ".gitconfig"),
+		GIT_AUTHOR_NAME: "hyper test",
+		GIT_AUTHOR_EMAIL: "hyper-test@example.invalid",
+		GIT_COMMITTER_NAME: "hyper test",
+		GIT_COMMITTER_EMAIL: "hyper-test@example.invalid",
+	};
+	// Save whatever was there first: these tests run in the same process as
+	// anything else vitest loads, and silently leaving HOME pointed at a
+	// deleted temp dir would break every later file in the run.
+	for (const [key, value] of Object.entries(overrides)) {
+		SAVED_ENV[key] = process.env[key];
+		process.env[key] = value;
+	}
+
 	git(["config", "--global", "user.email", "hyper-test@example.invalid"]);
 	git(["config", "--global", "user.name", "hyper test"]);
 	git(["config", "--global", "init.defaultBranch", "main"]);
@@ -55,9 +68,10 @@ export function teardownSpaceFixtures(): void {
 	if (fix === null) return;
 	rmSync(fix, { recursive: true, force: true });
 	fix = null;
-	delete process.env.HOME;
-	delete process.env.GIT_CONFIG_NOSYSTEM;
-	delete process.env.GIT_CONFIG_GLOBAL;
+	for (const [key, saved] of Object.entries(SAVED_ENV)) {
+		if (saved === undefined) delete process.env[key];
+		else process.env[key] = saved;
+	}
 }
 
 /** A path inside the fixture root (the same `$FIX` the bash harness uses). */
@@ -119,18 +133,19 @@ export function makeMultiSpace(root: string, slugs: string[] = ["alpha", "beta"]
 /**
  * A linked worktree inside a bare space.
  *
- * A freshly created bare space has no commits, so there is no ref to check out
- * and `git worktree add` fails — exactly as it does in the bash harness, where
- * the `2>/dev/null ||` fallback fails too. The caller creates the directory it
- * needs afterwards; the point of the case is a `.git` *file* inside a space.
+ * On git 2.55 `worktree add -b <branch>` succeeds even against a bare repo
+ * with no commits, and creates the worktree with a `.git` *file* pointing at
+ * the bare repo — which is exactly the shape this fixture exists to produce
+ * (a `.git` file, not a directory, is how `space_layout` tells a worktree
+ * apart from a space root).
  */
 export function makeBareSpaceWithWorktree(dir: string, branch: string): string {
 	makeBareSpace(dir);
 	const wt = join(dir, "worktrees", branch);
-	try {
-		git(["--git-dir", join(dir, ".git"), "worktree", "add", "-q", wt, "-b", branch]);
-	} catch {
-		// No commit to check out yet; leave the (uncreated) path to the caller.
-	}
+	// Deliberately not wrapped in a try/catch. An older git that refuses this
+	// should fail the test loudly, naming the cause — swallowing it produced an
+	// empty catch that let the A7 assertions pass against a directory that was
+	// never a worktree at all. The caller asserts the `.git` file anyway.
+	git(["--git-dir", join(dir, ".git"), "worktree", "add", "-q", wt, "-b", branch]);
 	return wt;
 }
