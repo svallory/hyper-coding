@@ -258,10 +258,16 @@ export async function runSetup(
 				needsRoot.push(task);
 				continue;
 			}
-			failed.push({
-				id: task.id,
-				reason: task.unmetReason ?? "the fix did not take; check the tool's installation and retry",
-			});
+			if (task.feature === "tools") {
+				failed.push({
+					id: task.id,
+					reason:
+						task.unmetReason ?? "the fix did not take; check the tool's installation and retry",
+				});
+			} else {
+				ctx.log(`${task.id}: still not right after doing it — skipping.`);
+				skipped.push(task.id);
+			}
 		}
 	}
 

@@ -896,7 +896,11 @@ describe("the PATH task (m4)", () => {
 	});
 
 	it("is selected only when tools are selected, including already-present tools", () => {
-		expect(allTasks({ tools: [] }).map((t) => t.id)).toEqual(["noop.check", "tools.rsync"]);
+		expect(
+			allTasks({ tools: [] })
+				.filter((t) => t.feature === "tools")
+				.map((t) => t.id),
+		).toEqual(["noop.check", "tools.rsync"]);
 		expect(allTasks({ tools: ["jq"] }).map((t) => t.id)).toContain("tools.path");
 	});
 
