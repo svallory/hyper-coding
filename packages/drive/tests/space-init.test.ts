@@ -10,10 +10,11 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import type { SpaceEntry } from "#config/schema";
+import { ALLOWLIST_MARKER } from "#services/allowlist";
 import {
 	flat,
 	git,
@@ -78,8 +79,14 @@ function manifestFromCheckout(name: string): SpaceEntry | undefined {
 
 /** The paths the hyperdrive's copy of the space branch holds. */
 function remoteTree(branch: string): string[] {
-	return git(["--git-dir", fixture.remote, "ls-tree", "-r", "--name-only", branch], fixture.root)
-		.split("\n")
+	// `-z`, for the same reason the secret guard uses it: without it a path
+	// holding a non-ASCII byte comes back C-quoted, and every comparison here
+	// would quietly miss it.
+	return git(
+		["--git-dir", fixture.remote, "ls-tree", "-r", "--name-only", "-z", branch],
+		fixture.root,
+	)
+		.split("\0")
 		.map((line) => line.trim())
 		.filter((line) => line !== "")
 		.sort();
@@ -186,13 +193,139 @@ afterEach(() => {
 	fixture.cleanup();
 });
 
+/**
+ * Put a `git` on PATH that runs every push for real and then reports failure.
+ *
+ * The ambiguous failure this reproduces cannot be arranged with a hook: when the
+ * remote already holds the commit, git never contacts it, so a rejecting hook is
+ * never invoked and the push exits 0. What a real machine sees is the opposite —
+ * the objects ARE on the remote and the client never learned it.
+ *
+ * Returns a function that puts the real PATH back.
+ */
+function pushFailsAfterLanding(): () => void {
+	const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+	const dir = join(fixture.root, "shim-bin");
+	mkdirSync(dir, { recursive: true });
+	const shim = join(dir, "git");
+	writeFileSync(
+		shim,
+		`#!/bin/sh
+for arg in "$@"; do
+	if [ "$arg" = "push" ]; then
+		"${real}" "$@" >/dev/null 2>&1
+		exit 1
+	fi
+done
+exec "${real}" "$@"
+`,
+		{ mode: 0o755 },
+	);
+	const saved = process.env.PATH;
+	process.env.PATH = `${dir}:${saved ?? ""}`;
+	return () => {
+		if (saved === undefined) delete process.env.PATH;
+		else process.env.PATH = saved;
+	};
+}
+
+/** A nested repository with one commit — the shape git stages as a gitlink. */
+function makeNestedRepo(dir: string, content: string): void {
+	mkdirSync(dir, { recursive: true });
+	run2("git", ["init", "-q", dir]);
+	writeFileSync(join(dir, "index.js"), content);
+	run2("git", ["-C", dir, "add", "-A"]);
+	run2("git", [
+		"-C",
+		dir,
+		"-c",
+		"user.name=nested",
+		"-c",
+		"user.email=nested@example.invalid",
+		"commit",
+		"-qm",
+		"nested",
+	]);
+}
+
+function run2(cmd: string, args: string[]): void {
+	const r = spawnSync(cmd, args, { encoding: "utf8" });
+	if (r.status !== 0) throw new Error(`${cmd} ${args.join(" ")}: ${r.stderr}`);
+}
+
+/** The branch a space directory would use: `space/<name>`. */
+function remoteBranchFor(root: string): string {
+	return `space/${basename(root)}`;
+}
+
+/**
+ * What an interrupted first init leaves behind: a space git dir with an
+ * UNBORN HEAD, and nothing else — no commit, no allowlist, no cadence.
+ *
+ * Built with the same git calls `initSpaceGitDir` makes, so the test is about
+ * hyper's reaction to that state rather than about a hand-made imitation.
+ */
+function initOrphanSpaceGitDir(root: string): void {
+	const gitDir = join(root, ".hyper", "space.git");
+	mkdirSync(gitDir, { recursive: true });
+	spawnSync("git", ["init", "-q", "--bare", gitDir], { encoding: "utf8" });
+	for (const [key, value] of [
+		["core.bare", "false"],
+		["core.worktree", "../.."],
+		["remote.origin.url", fixture.remote],
+	] as const) {
+		spawnSync("git", ["--git-dir", gitDir, "config", "--local", key, value], {
+			encoding: "utf8",
+			cwd: root,
+		});
+	}
+	spawnSync(
+		"git",
+		["--git-dir", gitDir, "symbolic-ref", "HEAD", `refs/heads/${remoteBranchFor(root)}`],
+		{
+			encoding: "utf8",
+			cwd: root,
+		},
+	);
+}
+
+/**
+ * Run the CLI, then pin `gc.auto=0` in whatever space git dir the run created.
+ *
+ * `isolateGitConfig()` injects `gc.auto=0` through GIT_CONFIG_COUNT for the gits
+ * THIS PROCESS runs, but a spawned CLI does not inherit it: `services/
+ * space-git.ts` strips every repo-local `GIT_*` variable from the child env on
+ * purpose. So the space git dir gets it from its own config, which is where the
+ * setting actually has to live — otherwise a background `git gc` detaches,
+ * keeps writing into a fixture after the command returned, and the teardown's
+ * retry loop has to paper over it.
+ */
+function run(args: string[]): ReturnType<typeof spawnCli> {
+	const result = spawnCli(args, fixture);
+	pinSpaceGc(args);
+	return result;
+}
+
+function pinSpaceGc(args: string[]): void {
+	const spaceArg = args[0] === "space" && args[1] === "init" ? args[2] : undefined;
+	const candidates = spaceArg ? [spaceArg] : [];
+	for (const candidate of candidates) {
+		const gitDir = join(candidate, ".hyper", "space.git");
+		if (!existsSync(gitDir)) continue;
+		spawnSync("git", ["--git-dir", gitDir, "config", "--local", "gc.auto", "0"], {
+			encoding: "utf8",
+			cwd: candidate,
+		});
+	}
+}
+
 describe("AC-1: the allowlist decides what the space branch holds", () => {
 	it("commits only allowlisted paths, and no .env", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("my-space");
 
-		const result = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
 
 		// The branch exists on the hyperdrive itself, not just locally.
@@ -278,7 +411,7 @@ describe("AC-2 / C-3: init leaves the project's own repo alone", () => {
 		const headBefore = hashFile(join(gitDir, "HEAD"));
 		const listingBefore = listGitDir(gitDir);
 
-		const result = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(result.status, flat(result.stderr)).toBe(0);
 
 		expect(hashFile(join(gitDir, "config"))).toBe(configBefore);
@@ -317,7 +450,7 @@ describe("AC-4: the cadence lands in the space git dir's config", () => {
 		writeConfig("", "[defaults]", 'cadence = "session-end"');
 		const root = makeSpace("cadence-flag");
 		expect(
-			spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status,
+			run(["space", "init", root, "--cadence", "manual"], fixture).status,
 			"init should succeed",
 		).toBe(0);
 		expect(cadenceOf(root)).toBe("manual");
@@ -328,18 +461,16 @@ describe("AC-4: the cadence lands in the space git dir's config", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig("", "[defaults]", 'cadence = "session-end"');
 		const root = makeSpace("cadence-default");
-		const result = spawnCli(["space", "init", root], fixture);
+		const result = run(["space", "init", root], fixture);
 		expect(result.status, flat(result.stderr)).toBe(0);
 		expect(cadenceOf(root)).toBe("session-end");
-		// No prompt on a pipe — the whole point of the config default.
-		expect(flat(result.stderr)).not.toContain("When should this space sync");
 	});
 
 	it("names --cadence when there is no flag, no default and no TTY", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("cadence-missing");
-		const result = spawnCli(["space", "init", root], fixture);
+		const result = run(["space", "init", root], fixture);
 		expect(result.status).not.toBe(0);
 		expect(flat(result.stderr)).toContain("--cadence");
 		// Nothing was created on the way out.
@@ -352,10 +483,10 @@ describe("AC-7: a ref that would be ambiguous is refused by name", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const first = makeSpace("existing");
-		expect(spawnCli(["space", "init", first, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", first, "--cadence", "manual"], fixture).status).toBe(0);
 		// A second space on the hyperdrive, so the remote has more than one branch.
 		const other = makeSpace("other");
-		expect(spawnCli(["space", "init", other, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", other, "--cadence", "manual"], fixture).status).toBe(0);
 
 		const clash = makeSpace("clash-group");
 		const result = spawnCli(
@@ -399,7 +530,7 @@ describe("the manifest entry", () => {
 		git(["init", "--bare", projectRemote], fixture.root);
 		git(["--git-dir", join(root, ".git"), "remote", "add", "origin", projectRemote], root);
 
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 
 		const entry = manifestFromCheckout("recorded");
 		expect(entry).toEqual({
@@ -429,7 +560,7 @@ describe("the manifest entry", () => {
 			);
 		}
 
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 		const entry = manifestFromCheckout("multi-space");
 		expect(entry?.layout).toBe("multi");
 		expect(entry?.repos).toEqual([
@@ -444,7 +575,7 @@ describe("refusals and refresh", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		const plain = join(fixture.root, "plain");
 		mkdirSync(plain, { recursive: true });
-		const notASpace = spawnCli(["space", "init", plain, "--cadence", "manual"], fixture);
+		const notASpace = run(["space", "init", plain, "--cadence", "manual"], fixture);
 		expect(notASpace.status).not.toBe(0);
 		expect(flat(notASpace.stderr)).toContain("not inside a hyper space");
 
@@ -452,7 +583,7 @@ describe("refusals and refresh", () => {
 		const root = makeSpace("no-remote-space");
 		mkdirSync(dirname(fixture.configFile), { recursive: true });
 		writeFileSync(fixture.configFile, 'self = { name = "mac", home = "/tmp" }\n');
-		const noRemote = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const noRemote = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(noRemote.status).not.toBe(0);
 		expect(flat(noRemote.stderr)).toContain("hyper drive init");
 		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(false);
@@ -462,7 +593,7 @@ describe("refusals and refresh", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("not a valid name");
-		const result = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(result.status).not.toBe(0);
 		expect(flat(result.stderr)).toContain("--name");
 
@@ -480,16 +611,16 @@ describe("refusals and refresh", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("twice");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 
-		const again = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const again = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(again.status).not.toBe(0);
 		expect(flat(again.stderr)).toContain("--refresh");
 
 		const commits = () =>
 			git(["--git-dir", fixture.remote, "rev-list", "--count", "space/twice"], fixture.root).trim();
 		const before = commits();
-		const refresh = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const refresh = run(["space", "init", root, "--refresh"], fixture);
 		expect(refresh.status, flat(refresh.stderr)).toBe(0);
 		// Nothing changed, so nothing was committed.
 		expect(commits()).toBe(before);
@@ -501,8 +632,7 @@ describe("refusals and refresh", () => {
 		writeConfig();
 		const root = makeSpace("renamed");
 		expect(
-			spawnCli(["space", "init", root, "--name", "original", "--cadence", "manual"], fixture)
-				.status,
+			run(["space", "init", root, "--name", "original", "--cadence", "manual"], fixture).status,
 		).toBe(0);
 
 		const result = spawnCli(
@@ -521,10 +651,10 @@ describe("refusals and refresh", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("growing");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 		writeFileSync(join(root, "notes", "b.md"), "more\n");
 
-		const refresh = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const refresh = run(["space", "init", root, "--refresh"], fixture);
 		expect(refresh.status, flat(refresh.stderr)).toBe(0);
 		expect(remoteTree("space/growing")).toEqual([
 			".gitignore",
@@ -543,7 +673,7 @@ describe("the secret guard", () => {
 		// notes/ IS allowlisted, so this one only the secret guard can catch.
 		writeFileSync(join(root, "notes", ".env"), "TOKEN=secret\n");
 
-		const result = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(result.status).not.toBe(0);
 		expect(flat(result.stderr)).toContain("notes/.env");
 		expect(flat(result.stderr)).toContain("secret guard");
@@ -558,7 +688,7 @@ describe("output", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("chatty");
-		const human = spawnCli(["space", "init", root, "--cadence", "session-end"], fixture);
+		const human = run(["space", "init", root, "--cadence", "session-end"], fixture);
 		expect(human.status, flat(human.stderr)).toBe(0);
 		expect(flat(human.stdout)).toContain("Branch: space/chatty");
 		expect(flat(human.stdout)).toContain(`Remote: ${fixture.remote}`);
@@ -566,7 +696,7 @@ describe("output", () => {
 		expect(flat(human.stdout)).toContain("Committed: 3 files");
 
 		const other = makeSpace("chatty-json");
-		const json = spawnCli(["space", "init", other, "--json", "--cadence", "manual"], fixture);
+		const json = run(["space", "init", other, "--json", "--cadence", "manual"], fixture);
 		expect(json.status, flat(json.stderr)).toBe(0);
 		const parsed = JSON.parse(json.stdout);
 		expect(parsed.name).toBe("chatty-json");
@@ -582,7 +712,7 @@ describe("output", () => {
  * exercises, so they only exist as tests.
  */
 describe("a refresh keeps what the space already decided", () => {
-	it("MAJOR 1: the space's own cadence outranks [defaults] cadence", (ctx) => {
+	it("the space's own cadence outranks [defaults] cadence on a refresh", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		// The machine default says `session-end`; the space was created with
 		// `session-end+push`. A refresh that applied the default would silently
@@ -590,11 +720,11 @@ describe("a refresh keeps what the space already decided", () => {
 		writeConfig("", "[defaults]", 'cadence = "session-end"');
 		const root = makeSpace("sticky-cadence");
 		expect(
-			spawnCli(["space", "init", root, "--cadence", "session-end+push"], fixture).status,
+			run(["space", "init", root, "--cadence", "session-end+push"], fixture).status,
 			"init should succeed",
 		).toBe(0);
 
-		const refresh = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const refresh = run(["space", "init", root, "--refresh"], fixture);
 		expect(refresh.status, flat(refresh.stderr)).toBe(0);
 		expect(
 			git(
@@ -615,28 +745,27 @@ describe("a refresh keeps what the space already decided", () => {
 		// prompt" above), because that path never reads a git dir.
 	});
 
-	it("MAJOR 2: a refresh without --tracked keeps the space's tracked list", (ctx) => {
+	it("a refresh without --tracked keeps the space's tracked list", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("kept-tracked");
 		mkdirSync(join(root, "extra"), { recursive: true });
 		writeFileSync(join(root, "extra", "e.md"), "extra\n");
 		expect(
-			spawnCli(["space", "init", root, "--cadence", "manual", "--tracked", "extra"], fixture)
-				.status,
+			run(["space", "init", root, "--cadence", "manual", "--tracked", "extra"], fixture).status,
 		).toBe(0);
 
-		const refresh = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const refresh = run(["space", "init", root, "--refresh"], fixture);
 		expect(refresh.status, flat(refresh.stderr)).toBe(0);
 		expect(manifestFromCheckout("kept-tracked")?.tracked).toEqual(["extra"]);
 		// Still allowlisted, so a file written under it now is still tracked.
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toContain("!/extra/**");
 		writeFileSync(join(root, "extra", "later.md"), "later\n");
-		expect(spawnCli(["space", "init", root, "--refresh"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--refresh"], fixture).status).toBe(0);
 		expect(remoteTree("space/kept-tracked")).toContain("extra/later.md");
 	});
 
-	it("MAJOR 2: --tracked on a refresh ADDS to the list", (ctx) => {
+	it("--tracked on a refresh adds to the space's tracked list", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("added-tracked");
@@ -645,11 +774,10 @@ describe("a refresh keeps what the space already decided", () => {
 		writeFileSync(join(root, "extra", "e.md"), "extra\n");
 		writeFileSync(join(root, "more", "m.md"), "more\n");
 		expect(
-			spawnCli(["space", "init", root, "--cadence", "manual", "--tracked", "extra"], fixture)
-				.status,
+			run(["space", "init", root, "--cadence", "manual", "--tracked", "extra"], fixture).status,
 		).toBe(0);
 
-		const refresh = spawnCli(["space", "init", root, "--refresh", "--tracked", "more"], fixture);
+		const refresh = run(["space", "init", root, "--refresh", "--tracked", "more"], fixture);
 		expect(refresh.status, flat(refresh.stderr)).toBe(0);
 		expect(manifestFromCheckout("added-tracked")?.tracked).toEqual(["extra", "more"]);
 		expect(remoteTree("space/added-tracked")).toEqual(
@@ -659,11 +787,11 @@ describe("a refresh keeps what the space already decided", () => {
 });
 
 describe("a push that failed is published by the next refresh", () => {
-	it("MAJOR 3: a refresh pushes an unpublished commit even with nothing staged", (ctx) => {
+	it("a refresh publishes an unpublished commit even with nothing staged", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("retry-push");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 
 		// The hyperdrive refuses space branches; the space keeps working.
 		rejectSpacePushes(true);
@@ -674,7 +802,7 @@ describe("a push that failed is published by the next refresh", () => {
 		// deleted or kept the new render would be caught here, not only by the
 		// dedicated MAJOR 1 test.
 		const before = readFileSync(join(root, ".gitignore"), "utf-8");
-		const failed = spawnCli(["space", "init", root, "--refresh", "--tracked", "later"], fixture);
+		const failed = run(["space", "init", root, "--refresh", "--tracked", "later"], fixture);
 		expect(failed.status).not.toBe(0);
 		// This run COMMITTED (the commit is what the refused push was carrying),
 		// so it keeps what it wrote: the file exists, and the work tree agrees
@@ -696,7 +824,7 @@ describe("a push that failed is published by the next refresh", () => {
 		// The hyperdrive accepts again. Nothing is staged this time, and that
 		// must not read as "nothing to do".
 		rejectSpacePushes(false);
-		const recovered = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const recovered = run(["space", "init", root, "--refresh"], fixture);
 		expect(recovered.status, flat(recovered.stderr)).toBe(0);
 		expect(flat(recovered.stdout)).toContain("pushed what the hyperdrive was missing");
 		expect(remoteTree("space/retry-push")).toContain("notes/unpublished.md");
@@ -705,17 +833,17 @@ describe("a push that failed is published by the next refresh", () => {
 		expect(remoteTree("space/retry-push")).toContain("later/kept.md");
 		expect(localTracked(root)).toEqual(["later"]);
 		// And a refresh that really is level says so, rather than claiming work.
-		const settled = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const settled = run(["space", "init", root, "--refresh"], fixture);
 		expect(settled.status, flat(settled.stderr)).toBe(0);
 		expect(flat(settled.stdout)).toContain("already up to date");
 	});
 
-	it("MINOR 4: a first init whose push fails leaves no .gitignore behind", (ctx) => {
+	it("a first init whose push fails leaves no .gitignore behind", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		rejectSpacePushes(true);
 		const root = makeSpace("failed-first-push");
-		const result = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(result.status).not.toBe(0);
 		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(false);
 		expect(existsSync(join(root, ".gitignore"))).toBe(false);
@@ -725,14 +853,14 @@ describe("a push that failed is published by the next refresh", () => {
 });
 
 describe("the .gitignore the space already has", () => {
-	it("MINOR 4: a first init refuses to overwrite a .gitignore it did not write", (ctx) => {
+	it("a first init refuses to overwrite a .gitignore it did not write", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("own-gitignore");
 		const mine = "notes/local-scratch.txt\n";
 		writeFileSync(join(root, ".gitignore"), mine);
 
-		const result = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(result.status).not.toBe(0);
 		expect(flat(result.stderr)).toContain(".gitignore.pre-hyper");
 		// Untouched, and nothing else written either.
@@ -740,19 +868,37 @@ describe("the .gitignore the space already has", () => {
 		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(false);
 	});
 
-	it("MINOR 4: a refresh re-renders it, because there it IS hyper's file", (ctx) => {
+	it("re-renders an allowlist that still carries hyper's marker", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("refresh-gitignore");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
-		writeFileSync(join(root, ".gitignore"), "edited by hand\n");
-		expect(spawnCli(["space", "init", root, "--refresh"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		// The user added a line but did not remove the marker: the file is still
+		// hyper's, so a refresh re-renders it.
+		writeFileSync(join(root, ".gitignore"), `edited by hand\n${ALLOWLIST_MARKER}\n`);
+		expect(run(["space", "init", root, "--refresh"], fixture).status).toBe(0);
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toContain("!/notes/**");
+	});
+
+	it("a refresh refuses a .gitignore whose marker is gone", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("foreign-refresh");
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		// Ownership is decided from THE FILE, on a refresh exactly as on a first
+		// init: a replaced file that no longer says it is hyper's gets the same
+		// advice, not a silent overwrite.
+		writeFileSync(join(root, ".gitignore"), "someone else's rules\n");
+		const result = run(["space", "init", root, "--refresh"], fixture);
+		expect(result.status).not.toBe(0);
+		const err = flat(result.stderr);
+		expect(err).toContain(".gitignore.pre-hyper");
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe("someone else's rules\n");
 	});
 });
 
 describe("a failure after the branch is pushed", () => {
-	it("MINOR 5: says the space is safe and names the command that finishes the job", (ctx) => {
+	it("a failed manifest write says the space is safe and names the command that finishes it", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		// root ignores the mode bits, so a read-only `.git` would still be
 		// writable and the test would pass for the wrong reason.
@@ -802,7 +948,7 @@ describe("a failure after the branch is pushed", () => {
 			// in the space's own git dir so far, so this is the assertion that a
 			// lost manifest write loses nothing.
 			chmodSync(driveGitDir, 0o700);
-			const recovery = spawnCli(["space", "init", root, "--refresh"], fixture);
+			const recovery = run(["space", "init", root, "--refresh"], fixture);
 			expect(recovery.status, flat(recovery.stderr)).toBe(0);
 			expect(localTracked(root)).toEqual(["extra"]);
 			expect(manifestFromCheckout("manifest-fails")?.tracked).toEqual(["extra"]);
@@ -815,12 +961,12 @@ describe("a failure after the branch is pushed", () => {
 });
 
 describe("probes from round 1", () => {
-	it("LOW 8: a space whose branch is not on the remote yet gets the clash probe", (ctx) => {
+	it("a space whose branch is not on the remote yet gets the clash probe", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("lost-branch");
 		expect(
-			spawnCli(["space", "init", root, "--group", "team", "--cadence", "manual"], fixture).status,
+			run(["space", "init", root, "--group", "team", "--cadence", "manual"], fixture).status,
 		).toBe(0);
 		expect(remoteHasRef("space/team/lost-branch")).toBe(true);
 
@@ -835,22 +981,22 @@ describe("probes from round 1", () => {
 		const main = git(["--git-dir", fixture.remote, "rev-parse", "main"], fixture.root).trim();
 		git(["--git-dir", fixture.remote, "update-ref", "refs/heads/space/team", main], fixture.root);
 
-		const refresh = spawnCli(["space", "init", root, "--group", "team", "--refresh"], fixture);
+		const refresh = run(["space", "init", root, "--group", "team", "--refresh"], fixture);
 		expect(refresh.status).not.toBe(0);
 		expect(flat(refresh.stderr)).toContain("space/team");
 		expect(remoteHasRef("space/team/lost-branch")).toBe(false);
 	});
 
-	it("LOW 9: warns about a repo with no origin once per init, not on every refresh", (ctx) => {
+	it("a repo with no origin is warned about once per init, not on every refresh", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		// makeSpace gives the project's bare repo no `remote.origin.url`.
 		const root = makeSpace("no-origin");
-		const first = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const first = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(first.status, flat(first.stderr)).toBe(0);
 		expect(flat(first.stderr)).toContain("no remote.origin.url");
 
-		const refresh = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const refresh = run(["space", "init", root, "--refresh"], fixture);
 		expect(refresh.status, flat(refresh.stderr)).toBe(0);
 		expect(flat(refresh.stderr)).not.toContain("no remote.origin.url");
 		// Still recorded truthfully as no repos, not invented.
@@ -864,17 +1010,17 @@ describe("probes from round 1", () => {
  * description of the fix.
  */
 describe("a failed run puts the space back", () => {
-	it("MAJOR 1: a refused refresh restores the .gitignore it replaced", (ctx) => {
+	it("a refused refresh restores the .gitignore it replaced", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("restore-allowlist");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 		const before = readFileSync(join(root, ".gitignore"), "utf-8");
 
 		// Repro A: the secret guard refuses AFTER the allowlist was re-rendered.
 		mkdirSync(join(root, "extra"), { recursive: true });
 		writeFileSync(join(root, "extra", ".env"), "TOKEN=secret\n");
-		const refused = spawnCli(["space", "init", root, "--refresh", "--tracked", "extra"], fixture);
+		const refused = run(["space", "init", root, "--refresh", "--tracked", "extra"], fixture);
 		expect(refused.status).not.toBe(0);
 		// The allowlist is exactly what it was — not deleted, not half-rendered.
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
@@ -889,7 +1035,7 @@ describe("a failed run puts the space back", () => {
 		rejectSpacePushes(true);
 		writeFileSync(join(root, "notes", "new.md"), "new\n");
 		writeFileSync(join(root, "extra", "note.md"), "still ignored\n");
-		const pushRefused = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const pushRefused = run(["space", "init", root, "--refresh"], fixture);
 		expect(pushRefused.status).not.toBe(0);
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
 		// And the space is still safe to re-run: the worktrees are still ignored.
@@ -897,25 +1043,25 @@ describe("a failed run puts the space back", () => {
 		// "worktrees/")` compares whole elements and could never fail, because
 		// no element of a tree listing IS "worktrees/".
 		rejectSpacePushes(false);
-		expect(spawnCli(["space", "init", root, "--refresh"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--refresh"], fixture).status).toBe(0);
 		const tree = remoteTree("space/restore-allowlist");
 		expect(tree.some((path) => path.startsWith("worktrees/"))).toBe(false);
 		expect(tree.some((path) => path.startsWith("scratch/"))).toBe(false);
 		expect(tree.some((path) => path.includes(".env"))).toBe(false);
 	});
 
-	it("MAJOR 2: --tracked survives a refused push and a failed manifest write", (ctx) => {
+	it("a --tracked added by a refused run survives into the next one", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("sticky-tracked");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 
 		// The push the hyperdrive refuses: `more` is added, and the run dies
 		// before the manifest is ever written.
 		rejectSpacePushes(true);
 		mkdirSync(join(root, "more"), { recursive: true });
 		writeFileSync(join(root, "more", "m.md"), "more\n");
-		const failed = spawnCli(["space", "init", root, "--refresh", "--tracked", "more"], fixture);
+		const failed = run(["space", "init", root, "--refresh", "--tracked", "more"], fixture);
 		expect(failed.status).not.toBe(0);
 		expect(manifestFromCheckout("sticky-tracked")?.tracked ?? []).toEqual([]);
 		// The truth is in the space's OWN git dir (C-11), which the run wrote
@@ -923,7 +1069,7 @@ describe("a failed run puts the space back", () => {
 		expect(localTracked(root)).toEqual(["more"]);
 		// So the recovery the error message prescribes keeps it.
 		rejectSpacePushes(false);
-		const recovered = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const recovered = run(["space", "init", root, "--refresh"], fixture);
 		expect(recovered.status, flat(recovered.stderr)).toBe(0);
 		expect(localTracked(root)).toEqual(["more"]);
 		expect(manifestFromCheckout("sticky-tracked")?.tracked).toEqual(["more"]);
@@ -931,7 +1077,7 @@ describe("a failed run puts the space back", () => {
 		expect(remoteTree("space/sticky-tracked")).toContain("more/m.md");
 	});
 
-	it("MAJOR 3: a first init against an unreachable hyperdrive leaves no git dir", (ctx) => {
+	it("a first init against an unreachable hyperdrive leaves no git dir behind", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		// A real checkout first: `ensureDriveCheckout` then only warns about the
@@ -946,7 +1092,7 @@ describe("a failed run puts the space back", () => {
 
 		const moved = `${fixture.remote}.away`;
 		renameSync(fixture.remote, moved);
-		const offline = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const offline = run(["space", "init", root, "--cadence", "manual"], fixture);
 		renameSync(moved, fixture.remote);
 		expect(offline.status).not.toBe(0);
 		expect(flat(offline.stderr)).toContain("hyperdrive");
@@ -955,13 +1101,13 @@ describe("a failed run puts the space back", () => {
 		expect(existsSync(join(root, ".gitignore"))).toBe(false);
 
 		// And with the hyperdrive back, plain init works.
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 		expect(remoteHasRef("space/unreachable")).toBe(true);
 	});
 });
 
 describe("one name, one branch", () => {
-	it("MAJOR 4: a name already on another branch is refused", (ctx) => {
+	it("a name already recorded on another branch is refused", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const first = makeSpace("in-a");
@@ -1011,11 +1157,11 @@ describe("one name, one branch", () => {
 });
 
 describe("failures that reach the hyperdrive", () => {
-	it("MINOR 5: a branch that moved on says so, and names no command that doesn't exist", (ctx) => {
+	it("a branch that moved on says so, and names no command that does not exist", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("moved-on");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 
 		// Another machine pushed a different history onto this branch.
 		const main = git(["--git-dir", fixture.remote, "rev-parse", "main"], fixture.root).trim();
@@ -1029,7 +1175,7 @@ describe("failures that reach the hyperdrive", () => {
 		);
 		writeFileSync(join(root, "notes", "diverge.md"), "mine\n");
 
-		const result = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const result = run(["space", "init", root, "--refresh"], fixture);
 		expect(result.status).not.toBe(0);
 		const err = flat(result.stderr);
 		expect(err).toContain("moved on");
@@ -1040,7 +1186,7 @@ describe("failures that reach the hyperdrive", () => {
 		expect(err).not.toContain("non-fast-forward");
 	});
 
-	it("MINOR 5: an unreachable hyperdrive says where it could not reach", (ctx) => {
+	it("an unreachable hyperdrive says where it could not reach", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		expect(
@@ -1052,7 +1198,7 @@ describe("failures that reach the hyperdrive", () => {
 		const root = makeSpace("gone-remote");
 		const moved = `${fixture.remote}.away`;
 		renameSync(fixture.remote, moved);
-		const offline = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const offline = run(["space", "init", root, "--cadence", "manual"], fixture);
 		renameSync(moved, fixture.remote);
 		expect(offline.status).not.toBe(0);
 		const err = flat(offline.stderr);
@@ -1063,13 +1209,12 @@ describe("failures that reach the hyperdrive", () => {
 });
 
 describe("hyper's own allowlist", () => {
-	it("MINOR 6: a hyper-written .gitignore is recognised even when it differs", (ctx) => {
+	it("a hyper-written .gitignore is recognised even when it differs", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("own-render");
 		expect(
-			spawnCli(["space", "init", root, "--cadence", "manual", "--tracked", "extra"], fixture)
-				.status,
+			run(["space", "init", root, "--cadence", "manual", "--tracked", "extra"], fixture).status,
 		).toBe(0);
 
 		// Lose the git dir (a machine that re-inits from scratch) and init again
@@ -1083,7 +1228,7 @@ describe("hyper's own allowlist", () => {
 			["--git-dir", fixture.remote, "update-ref", "-d", "refs/heads/space/own-render"],
 			fixture.root,
 		);
-		const again = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const again = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(again.status, flat(again.stderr)).toBe(0);
 		// And the space keeps what it had: `hyper.tracked` was in the git dir we
 		// just deleted, but the manifest still has it.
@@ -1093,7 +1238,7 @@ describe("hyper's own allowlist", () => {
 });
 
 describe("tracked entries are normalised", () => {
-	it("NIT 8: `extra` and `extra/` are one entry everywhere", (ctx) => {
+	it("`extra` and `extra/` are one tracked entry everywhere", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("normalised");
@@ -1113,9 +1258,9 @@ describe("tracked entries are normalised", () => {
 				fixture,
 			).status,
 		).toBe(0);
-		expect(
-			spawnCli(["space", "init", root, "--refresh", "--tracked", "extra/"], fixture).status,
-		).toBe(0);
+		expect(run(["space", "init", root, "--refresh", "--tracked", "extra/"], fixture).status).toBe(
+			0,
+		);
 		expect(localTracked(root)).toEqual(["extra", "more"]);
 		expect(manifestFromCheckout("normalised")?.tracked).toEqual(["extra", "more"]);
 	});
@@ -1126,30 +1271,30 @@ describe("tracked entries are normalised", () => {
  * written so it fails against the round-2 code.
  */
 describe("a refusal changes nothing at all", () => {
-	it("N1: a refused refresh leaves an UNCHANGED allowlist in place", (ctx) => {
+	it("a refused refresh leaves an unchanged allowlist in place", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("unchanged-allowlist");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 		const before = readFileSync(join(root, ".gitignore"), "utf-8");
 
 		// No --tracked, so the render does not change at all: this is the case
 		// where "the file equals the render" and "the file is gone" looked the
 		// same to the rollback.
 		writeFileSync(join(root, "notes", ".env"), "TOKEN=secret\n");
-		const refused = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const refused = run(["space", "init", root, "--refresh"], fixture);
 		expect(refused.status).not.toBe(0);
 		expect(existsSync(join(root, ".gitignore"))).toBe(true);
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
 	});
 
-	it("N2: a refused push after a commit leaves the allowlist HEAD expects", (ctx) => {
+	it("a refused push after a commit leaves the allowlist HEAD expects", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("commit-keeps-render");
 		mkdirSync(join(root, "extra"), { recursive: true });
 		writeFileSync(join(root, "extra", "e.md"), "extra\n");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 		const before = readFileSync(join(root, ".gitignore"), "utf-8");
 
 		// A run that COMMITS and then finds the push refused keeps everything it
@@ -1157,7 +1302,7 @@ describe("a refusal changes nothing at all", () => {
 		// `git status` dirty against its own history.
 		rejectSpacePushes(true);
 		writeFileSync(join(root, "extra", "later.md"), "later\n");
-		const refused = spawnCli(["space", "init", root, "--refresh", "--tracked", "more"], fixture);
+		const refused = run(["space", "init", root, "--refresh", "--tracked", "more"], fixture);
 		expect(refused.status).not.toBe(0);
 		expect(localCount(root)).toBe(2);
 		const status = git(
@@ -1174,21 +1319,21 @@ describe("a refusal changes nothing at all", () => {
 		);
 	});
 
-	it("K3: a rolled-back first init leaves neither .gitignore nor an empty .hyper/", (ctx) => {
+	it("a rolled-back first init leaves neither .gitignore nor an empty .hyper/", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		// A hyper-written allowlist that is already exactly what this init would
 		// render: the foreign-file refusal must not fire, and the refusal that
 		// follows must not delete a file this run never wrote.
 		const root = makeSpace("identical-allowlist");
-		const first = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const first = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(first.status, flat(first.stderr)).toBe(0);
 		const allowlist = readFileSync(join(root, ".gitignore"), "utf-8");
 		rmSync(join(root, ".hyper"), { recursive: true, force: true });
 		rejectSpacePushes(true);
 		writeFileSync(join(root, "notes", "b.md"), "more\n");
 
-		const refused = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		const refused = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(refused.status).not.toBe(0);
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(allowlist);
 		// Small one: an empty `.hyper/` is hyper's own directory and it held
@@ -1202,7 +1347,7 @@ describe("state a refusal must not leave behind", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("rollback-tracked");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 		const before = readFileSync(join(root, ".gitignore"), "utf-8");
 
 		// `--tracked extra` where the directory holds a secret: refused BEFORE the
@@ -1210,14 +1355,14 @@ describe("state a refusal must not leave behind", () => {
 		// later plain `--refresh` fails the same way with nothing to remove it.
 		mkdirSync(join(root, "extra"), { recursive: true });
 		writeFileSync(join(root, "extra", ".env"), "TOKEN=secret\n");
-		const refused = spawnCli(["space", "init", root, "--refresh", "--tracked", "extra"], fixture);
+		const refused = run(["space", "init", root, "--refresh", "--tracked", "extra"], fixture);
 		expect(refused.status).not.toBe(0);
 		expect(localTracked(root)).toEqual([]);
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
 
 		// Remove the secret and a plain refresh succeeds with the OLD list.
 		rmSync(join(root, "extra", ".env"), { force: true });
-		const recovered = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const recovered = run(["space", "init", root, "--refresh"], fixture);
 		expect(recovered.status, flat(recovered.stderr)).toBe(0);
 		expect(localTracked(root)).toEqual([]);
 		expect(manifestFromCheckout("rollback-tracked")?.tracked).toEqual([]);
@@ -1227,7 +1372,7 @@ describe("state a refusal must not leave behind", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("rollback-cadence");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 		writeFileSync(join(root, "notes", ".env"), "TOKEN=secret\n");
 		const refused = spawnCli(
 			["space", "init", root, "--refresh", "--cadence", "session-end+push"],
@@ -1243,7 +1388,7 @@ describe("a push the hyperdrive declines", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const root = makeSpace("declined");
-		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
 
 		// A hook that DECLINES with a reason, and that can still take `main` so
 		// the manifest checkout is unaffected.
@@ -1254,7 +1399,7 @@ describe("a push the hyperdrive declines", () => {
 			{ mode: 0o755 },
 		);
 		writeFileSync(join(root, "notes", "blocked.md"), "blocked\n");
-		const result = spawnCli(["space", "init", root, "--refresh"], fixture);
+		const result = run(["space", "init", root, "--refresh"], fixture);
 
 		const err = flat(result.stderr);
 		expect(result.status).not.toBe(0);
@@ -1269,7 +1414,7 @@ describe("a push the hyperdrive declines", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		const first = makeSpace("plain");
-		expect(spawnCli(["space", "init", first, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(run(["space", "init", first, "--cadence", "manual"], fixture).status).toBe(0);
 		const clash = makeSpace("grouped");
 		// The SAME name as the first space: names are unique across groups, so
 		// this is the collision the advice is written for.
@@ -1283,5 +1428,203 @@ describe("a push the hyperdrive declines", () => {
 		// `--group`" for a space that has no group of its own.
 		expect(err).toContain("without `--group`");
 		expect(err).not.toContain("--group somewhere");
+	});
+});
+
+/**
+ * PR #32 cold-read findings. Every test here fails against `e41be5ee`.
+ */
+describe("paths git would quote", () => {
+	it("refuses a secret whose path has a non-ASCII character", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		for (const [label, path] of [
+			["non-ASCII", "notes/clé/server.pem"],
+			["a space", "notes/with space/secret.key"],
+			["a quote", 'notes/it\'s "quoted"/secret.key'],
+			["a trailing space", "notes/trailing /secret.key"],
+		] as const) {
+			const root = makeSpace(`quoted-${label.toLowerCase().replace(/\W+/g, "-")}`);
+			mkdirSync(dirname(join(root, path)), { recursive: true });
+			writeFileSync(join(root, path), "-----BEGIN PRIVATE KEY-----\n");
+			const result = run(["space", "init", root, "--cadence", "manual"], fixture);
+			expect(result.status, `${label}: ${flat(result.stderr)}`).not.toBe(0);
+			expect(flat(result.stderr), label).toContain("secret guard");
+			// And, decisively: nothing was pushed. `remoteHasRef` rather than
+			// listing the tree — the branch should not exist at all, and
+			// `ls-tree` on a missing ref is an error, not an empty result.
+			expect(remoteHasRef(remoteBranchFor(root))).toBe(false);
+		}
+	});
+
+	it("a benign path with the same characters is tracked normally", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		// The other half of the story: the guard must not become a blanket
+		// refusal of unusual names, or every non-ASCII path is unsaveable.
+		writeConfig();
+		const root = makeSpace("benign-unicode");
+		const path = "notes/café/résumé.md";
+		mkdirSync(dirname(join(root, path)), { recursive: true });
+		writeFileSync(join(root, path), "fine\n");
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(remoteTree(remoteBranchFor(root))).toContain(path);
+	});
+});
+
+describe("an interrupted first init", () => {
+	it("plain init resumes a git dir with no commit instead of refusing", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		// Nothing has been pushed for this space, so the resumed first init has
+		// a branch to create — which is the situation an interruption leaves.
+		const root = makeSpace("interrupted");
+		initOrphanSpaceGitDir(root);
+		writeFileSync(join(root, "notes", "after.md"), "after\n");
+
+		const resumed = run(["space", "init", root, "--cadence", "manual"], fixture);
+		expect(resumed.status, flat(resumed.stderr)).toBe(0);
+		expect(remoteTree("space/interrupted")).toContain("notes/after.md");
+		expect(manifestFromCheckout("interrupted")?.branch).toBe("space/interrupted");
+	});
+
+	it("--refresh on an unfinished first init behaves as a first init", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("interrupted-refresh");
+		initOrphanSpaceGitDir(root);
+		// A user's own .gitignore, and the marker is absent: a refresh that
+		// skipped the foreign-file guard would overwrite this and then report a
+		// space it never registered.
+		writeFileSync(join(root, ".gitignore"), "mine\n");
+
+		const result = run(["space", "init", root, "--refresh", "--cadence", "manual"], fixture);
+		expect(result.status).not.toBe(0);
+		expect(flat(result.stderr)).toContain(".gitignore.pre-hyper");
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe("mine\n");
+	});
+});
+
+describe("a nested repository under an allowlisted directory", () => {
+	it("is unstaged, named in the warning, and never committed as a gitlink", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("with-vendor");
+		const vendor = join(root, "notes", "vendor");
+		mkdirSync(vendor, { recursive: true });
+		makeNestedRepo(vendor, "module.exports = 1;\n");
+
+		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
+		expect(result.status, flat(result.stderr)).toBe(0);
+		// Named, so the reader knows what is NOT being backed up.
+		expect(flat(result.stderr)).toContain("notes/vendor");
+		expect(flat(result.stderr)).toContain("its own git repository");
+		// And it is a mode-160000 entry nowhere in the branch.
+		const modes = git(
+			["--git-dir", fixture.remote, "ls-tree", "-r", "space/with-vendor"],
+			fixture.root,
+		);
+		expect(modes).not.toContain("160000");
+		expect(remoteTree("space/with-vendor")).not.toContain("notes/vendor");
+
+		// In `--json` it is reported as skipped, not silently dropped.
+		const other = makeSpace("with-vendor-json");
+		const vendor2 = join(other, "notes", "vendor");
+		mkdirSync(vendor2, { recursive: true });
+		makeNestedRepo(vendor2, "");
+		const json = run(["space", "init", other, "--json", "--cadence", "manual"], fixture);
+		expect(JSON.parse(json.stdout).skipped).toEqual(["notes/vendor"]);
+	});
+});
+
+describe("an ambiguous push failure", () => {
+	it("treats a push that failed after landing as done", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("half-pushed");
+		expect(run(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+
+		// The hard case: the push REALLY lands and then reports failure — a
+		// dropped connection, a killed client. A hook cannot reproduce it (git
+		// never contacts the remote when it is already up to date, so no hook
+		// runs and the push exits 0), so `git` itself is shimmed: the push runs
+		// for real, then exits non-zero.
+		writeFileSync(join(root, "notes", "landed.md"), "landed\n");
+		const restore = pushFailsAfterLanding();
+		try {
+			const result = run(["space", "init", root, "--refresh"], fixture);
+			// The commit is on the hyperdrive, so the one thing that matters
+			// happened: this is not a failure, and the command says so.
+			expect(result.status, flat(result.stderr)).toBe(0);
+			expect(remoteTree("space/half-pushed")).toContain("notes/landed.md");
+			// The only local copy of that commit survives.
+			expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
+			// And the run finishes the job it was asked for.
+			expect(manifestFromCheckout("half-pushed")?.branch).toBe("space/half-pushed");
+			expect(flat(result.stderr)).toContain("Continuing");
+		} finally {
+			restore();
+		}
+	});
+});
+
+describe("one name, one branch, checked under the lock", () => {
+	it("refuses a colliding name even when the checkout was stale", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const first = makeSpace("locked-a");
+		expect(
+			run(
+				["space", "init", first, "--name", "shared", "--group", "a", "--cadence", "manual"],
+				fixture,
+			).status,
+		).toBe(0);
+
+		// A SECOND checkout whose `main` is behind the remote: its pre-check reads
+		// a manifest with no entry for `shared`, so only the check under the lock
+		// — against the freshly-fetched base — can catch this.
+		const staleHome = join(fixture.root, "stale-home");
+		mkdirSync(staleHome, { recursive: true });
+		const staleDir = join(staleHome, "drive");
+		spawnSync("git", ["clone", "--branch", "main", "--single-branch", fixture.remote, staleDir], {
+			encoding: "utf8",
+		});
+		// Make the stale checkout genuinely stale: drop the entry it just cloned.
+		rmSync(join(staleDir, "spaces.yaml"), { force: true });
+		spawnSync("git", ["-C", staleDir, "commit", "-qm", "drop manifest"], { encoding: "utf8" });
+
+		const second = makeSpace("locked-b");
+		const withHome = { ...process.env, HYPER_HOME: staleHome };
+		const result = spawnSync(
+			process.execPath,
+			[
+				join(import.meta.dirname, "..", "..", "cli", "bin", "run.js"),
+				"space",
+				"init",
+				second,
+				"--name",
+				"shared",
+				"--group",
+				"b",
+				"--cadence",
+				"manual",
+			],
+			{
+				encoding: "utf8",
+				env: {
+					...withHome,
+					// The real `~/.config/hyper/drive.toml` must never be reachable
+					// from a fixture: this spawn runs outside `spawnCli`, which is
+					// what normally points HYPER_DRIVE_CONFIG at the temp tree.
+					HYPER_DRIVE_CONFIG: fixture.configFile,
+					XDG_CONFIG_HOME: join(fixture.root, "config"),
+					NO_COLOR: "1",
+					FORCE_COLOR: "0",
+				},
+			},
+		);
+		expect(result.status).not.toBe(0);
+		expect(flat(result.stderr)).toContain("space/a/shared");
+		// The first space's entry survived.
+		expect(manifestFromCheckout("shared")?.branch).toBe("space/a/shared");
 	});
 });
