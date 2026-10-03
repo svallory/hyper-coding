@@ -1,0 +1,3 @@
+# Each machine entry must be a section, not a scalar.
+[machines]
+x = "str"

@@ -21,7 +21,14 @@ export default class Status extends BaseCommand<typeof Status> {
 		try {
 			config = loadConfig();
 		} catch (err) {
-			this.error(err instanceof Error ? err.message : String(err));
+			const message = err instanceof Error ? err.message : String(err);
+			// A bad config is a user error, not a crash. In debug/dev mode oclif's
+			// prettyPrint() returns `error.stack` verbatim (see @oclif/core
+			// lib/errors/pretty-print.js), so the JS frames would be dumped on top of
+			// the friendly message. Hand it a stack that carries only the message.
+			const problem = new Error(message);
+			problem.stack = message;
+			this.error(problem, { exit: 2 });
 		}
 
 		this.log(`Config file: ${path}`);

@@ -1,0 +1,2 @@
+# self must be a section, not a scalar.
+self = "x"
