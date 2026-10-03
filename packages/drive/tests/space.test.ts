@@ -1,7 +1,10 @@
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+
+import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+	detectSpace,
 	findSpaceRoot,
 	isSpace,
 	libPath,
@@ -46,11 +49,19 @@ describe("libPath", () => {
 		expect(libPath().endsWith("/packages/drive/scripts/hyper-lib.sh")).toBe(true);
 	});
 
-	it("resolves from src/ (tests) and dist/ (installed) alike", () => {
-		// Two directories below the package root either way, so the same
-		// relative specifier works for both. Guard against someone "fixing" it
-		// for dist and breaking the other.
-		expect(libPath()).toMatch(/\/scripts\/hyper-lib\.sh$/);
+	it("resolves to the same file from src/ and from dist/ (installed)", async () => {
+		// The whole claim of `libPath()` is that one relative specifier works
+		// from both trees. Asserting the *shape* of the path proves nothing,
+		// so load the built module and compare what it actually resolves to.
+		// Skipped with a clear message when dist/ has not been built, which is
+		// the normal state when vitest runs on its own.
+		const built = join(import.meta.dirname, "..", "dist", "services", "space.js");
+		if (!existsSync(built)) {
+			return expect.skip("dist/services/space.js not built (run `bun run build` first)");
+		}
+		const distLib = (await import(built)).libPath();
+		expect(distLib).toBe(libPath());
+		expect(existsSync(distLib)).toBe(true);
 	});
 });
 
@@ -103,11 +114,14 @@ describe("bare layout", () => {
 
 	it("A7: a linked worktree is rejected, and the walk reaches the bare root", () => {
 		const d = fixturePath("a7");
-		// A bare space has no commits, so the worktree add cannot succeed — the
-		// same "no ref to check out" situation the bash harness runs into.
 		const wt = makeBareSpaceWithWorktree(d, "feat");
-		// Put a marker in the worktree: it must still not make a space.
-		mkdirSync(wt, { recursive: true });
+		// The case is about a `.git` FILE (a linked worktree), not a directory.
+		// git 2.55 creates it even against a commitless bare repo, but older git
+		// does not — and a silently-missing worktree would make this test pass
+		// for the wrong reason, so assert the fixture is real before relying on it.
+		expect(existsSync(join(wt, ".git"))).toBe(true);
+		expect(statSync(join(wt, ".git")).isFile()).toBe(true);
+		// A marker inside the worktree must still not make a space.
 		writeFileSync(join(wt, "HYPER.md"), "");
 		expect(spaceLayout(wt)).toBeNull();
 		expect(isSpace(wt)).toBe(false);
@@ -235,5 +249,171 @@ describe("multi layout", () => {
 		expect(findSpaceRoot(thing)).toBe(thing);
 		expect(isSpace(join(a19, "some", "unrelated"))).toBe(false);
 		expect(spaceLayout(join(a19, "some", "unrelated"))).toBeNull();
+	});
+});
+
+/**
+ * Not ported, on purpose: test-a's A12 (`at_space_root`) and A17/A17b/A17c/A17d
+ * (`write_hyper_md`, `scaffold_dirs`). Those exercise lib functions that write
+ * files and shape a space; they are still bash-only by design (C-1 keeps the
+ * plugin shelling out, C-5 keeps one library), and this suite covers the
+ * detection surface only. If a future task wraps them in TS, this is where
+ * its cases belong.
+ */
+
+describe("detectSpace", () => {
+	it("reports a bare space from inside a worktree", () => {
+		const d = fixturePath("detect-bare");
+		makeBareSpace(d);
+		const wt = makeBareSpaceWithWorktree(d, "main");
+		expect(existsSync(join(wt, ".git"))).toBe(true);
+		expect(detectSpace(wt)).toEqual({
+			root: d,
+			layout: "bare",
+			repos: [],
+			slug: null,
+			worktreesDir: join(d, "worktrees"),
+		});
+	});
+
+	it("reports a multi space and its repos from the root", () => {
+		const d = fixturePath("detect-multi");
+		makeMultiSpace(d, ["alpha", "beta"]);
+		expect(detectSpace(d)).toEqual({
+			root: d,
+			layout: "multi",
+			repos: ["alpha", "beta"],
+			slug: null,
+			// No slug at the multi root: the lib refuses rather than guess.
+			worktreesDir: null,
+		});
+	});
+
+	it("reports a multi space from inside a repo dir, with slug and worktrees", () => {
+		// Its own fixture: sharing the previous test's directory made this pass
+		// or fail on that test's ordering rather than on its own setup.
+		const d = fixturePath("detect-multi-inrepo");
+		makeMultiSpace(d, ["alpha", "beta"]);
+		const repo = join(d, "code", "alpha");
+		expect(detectSpace(repo)).toEqual({
+			root: d,
+			layout: "multi",
+			repos: ["alpha", "beta"],
+			slug: "alpha",
+			worktreesDir: join(d, "code", "alpha", "worktrees"),
+		});
+	});
+
+	it("reports all-nulls for a plain directory (the case `space detect` exits 1 on)", () => {
+		const d = fixturePath("detect-plain");
+		mkdirSync(d, { recursive: true });
+		expect(detectSpace(d)).toEqual({
+			root: null,
+			layout: null,
+			repos: [],
+			slug: null,
+			worktreesDir: null,
+		});
+	});
+});
+
+describe("paths containing spaces", () => {
+	// The reason every call passes paths as argv ("$@" inside bash -c) rather
+	// than interpolating them into the script string. Under interpolation this
+	// whole fixture would silently truncate at the first space.
+	it("detects a bare space, and a multi space, under a path with spaces", () => {
+		const root = fixturePath("a dir with spaces");
+		const bare = join(root, "my space");
+		makeBareSpace(bare);
+		expect(spaceLayout(bare)).toBe("bare");
+		expect(findSpaceRoot(bare)).toBe(bare);
+		expect(worktreesDir(bare)).toBe(join(bare, "worktrees"));
+
+		const multi = join(root, "multi space");
+		makeMultiSpace(multi, ["alpha"]);
+		expect(spaceLayout(multi)).toBe("multi");
+		expect(spaceRepos(multi)).toEqual(["alpha"]);
+		expect(repoSlugOf(multi, join(multi, "code", "alpha"))).toBe("alpha");
+		expect(findSpaceRoot(join(multi, "code", "alpha"))).toBe(multi);
+	});
+
+	it("survives a directory name with a quote and a dollar sign", () => {
+		const nasty = fixturePath(`qu'ote $var`);
+		makeBareSpace(nasty);
+		expect(spaceLayout(nasty)).toBe("bare");
+		expect(findSpaceRoot(nasty)).toBe(nasty);
+	});
+});
+
+describe("commands (spawned against the real CLI)", () => {
+	// The service tests above exercise the library; these two run the built
+	// entrypoint end to end, which is the only place the *contract with the
+	// agent-plugin* is visible: one line out of `space lib-path` (a plugin does
+	// `source "$(hyper space lib-path | tail -n 1)"` on it), and a friendly
+	// non-zero exit rather than a stack trace for a plain directory.
+	const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
+
+	const skipIfUnbuilt = (): boolean => {
+		if (
+			existsSync(cli) &&
+			existsSync(join(import.meta.dirname, "..", "dist", "services", "space.js"))
+		) {
+			return false;
+		}
+		expect.skip("cli/drive not built (run `bun run build` in drive and cli first)");
+		return true;
+	};
+
+	it("`space lib-path` prints exactly one line, and that path exists", () => {
+		if (skipIfUnbuilt()) return;
+		const r = spawnSync(process.execPath, [cli, "space", "lib-path"], {
+			encoding: "utf8",
+			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
+		});
+		expect(r.status).toBe(0);
+		// Exactly one trailing newline and nothing after it: a second line
+		// would be sourced as a command by every plugin script.
+		expect(r.stdout.endsWith("\n")).toBe(true);
+		expect(r.stdout.trimEnd().split("\n")).toHaveLength(1);
+		const printed = r.stdout.trimEnd();
+		expect(printed).toBe(libPath());
+		expect(existsSync(printed)).toBe(true);
+		expect(statSync(printed).isFile()).toBe(true);
+	});
+
+	it("`space detect` exits 1 with a friendly message in a plain directory", () => {
+		if (skipIfUnbuilt()) return;
+		const plain = fixturePath("detect-plain-cli");
+		mkdirSync(plain, { recursive: true });
+		const r = spawnSync(process.execPath, [cli, "space", "detect", plain], {
+			encoding: "utf8",
+			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
+		});
+		expect(r.status).toBe(1);
+		const err = r.stderr;
+		expect(err).toContain("is not inside a hyper space");
+		// Friendly means no stack trace: the oclif error frame, not JS frames.
+		expect(err).not.toContain("at Detect.run");
+		expect(err).not.toContain("node:internal");
+		// And nothing on stdout, so a `$(...)` capture stays clean.
+		expect(r.stdout.trimEnd()).toBe("");
+	});
+
+	it("`space detect --json` answers in a bare space", () => {
+		if (skipIfUnbuilt()) return;
+		const d = fixturePath("detect-bare-cli");
+		makeBareSpace(d);
+		const r = spawnSync(process.execPath, [cli, "space", "detect", d, "--json"], {
+			encoding: "utf8",
+			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
+		});
+		expect(r.status).toBe(0);
+		expect(JSON.parse(r.stdout)).toEqual({
+			root: d,
+			layout: "bare",
+			repos: [],
+			slug: null,
+			worktreesDir: join(d, "worktrees"),
+		});
 	});
 });
