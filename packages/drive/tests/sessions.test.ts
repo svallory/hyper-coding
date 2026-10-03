@@ -1,4 +1,4 @@
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -9,8 +9,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	claudeHome,
@@ -32,6 +31,7 @@ import {
 import {
 	type ClaudeHome,
 	deadPid,
+	procStartIn,
 	procStartOf,
 	removeClaudeHome,
 	scratchPath,
@@ -41,7 +41,6 @@ import {
 	writeSessionFile,
 } from "#tests/tmp-claude-home";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
 const OLD_ID = "aaaa1111-2222-3333-4444-555555555555";
 const NEW_ID = "bbbb2222-3333-4444-5555-666666666666";
 /** The only process we know ignores SIGTERM; see the SIGKILL test below. */
@@ -363,13 +362,14 @@ describe("stopSession", () => {
 
 	it("terminates a process whose file holds a UTC/C-locale procStart", async () => {
 		// The bug this guards: comparing the file's UTC start time against a
-		// local-locale `ps` answer makes every real session look like a
-		// mismatch, so `--stop` never stops anything.
+		// `ps` answer in another zone makes every real session look like a
+		// mismatch, so `--stop` never stops anything. The "other zone" is named
+		// explicitly rather than taken from the machine, so the test means the
+		// same thing on a UTC runner (where CI first caught the premise
+		// assertion failing) and on this UTC-3 box.
 		const sleeper = startSleeper();
 		const utc = procStartOf(sleeper.pid);
-		const local = spawnSync("ps", ["-o", "lstart=", "-p", String(sleeper.pid)], {
-			encoding: "utf-8",
-		}).stdout.trim();
+		const other = procStartIn(sleeper.pid, "America/Sao_Paulo");
 		try {
 			writeSessionFile(fixture.home, {
 				pid: sleeper.pid,
@@ -377,10 +377,10 @@ describe("stopSession", () => {
 				cwd,
 				procStart: utc,
 			});
-			// The old comparison only failed where the local zone is not UTC, so
-			// assert the premise before asserting the outcome: on a UTC machine
-			// this test would pass for the wrong reason.
-			expect(local).not.toBe(utc);
+			// Premise first: if the two zones ever printed the same string there
+			// would be nothing to distinguish, and the assertion below would be
+			// passing for the wrong reason.
+			expect(other).not.toBe(utc);
 			expect(await stopSession(sleeper.pid, { cwd, sessionId: "session-a", graceMs: 5_000 })).toBe(
 				"terminated",
 			);
