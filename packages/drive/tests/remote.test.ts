@@ -261,6 +261,21 @@ describe("LocalMachine", () => {
 		expect(readFileSync(join(dst, "data.txt"), "utf-8")).toBe("file");
 	});
 
+	it("follows a top-level destination symlink, like rsync", async () => {
+		const src = tempDir();
+		const dst = join(tempDir(), "link");
+		const realDst = tempDir();
+		writeFile(join(src, "file.txt"), "through");
+		symlinkSync(realDst, dst);
+
+		const result = await new LocalMachine(recordingSpawner().spawner).rsync(src, dst);
+
+		expect(result.code).toBe(0);
+		// The link stays a link; the file lands through it.
+		expect(lstatSync(dst).isSymbolicLink()).toBe(true);
+		expect(readFileSync(join(realDst, "file.txt"), "utf-8")).toBe("through");
+	});
+
 	it("copies a symlink source as the link itself, not the file it points to", async () => {
 		const src = tempDir();
 		const dst = tempDir();
@@ -440,8 +455,49 @@ describe("RemoteMachine", () => {
 		// the parent is made over ssh first, like LocalMachine's mkdir.
 		expect(calls).toHaveLength(2);
 		expect(calls[0].file).toBe("ssh");
-		expect(calls[0].args).toEqual(["netcup", "--", "mkdir -p -- /home/svallory"]);
+		expect(calls[0].args).toEqual([
+			"netcup",
+			"--",
+			`sh -c ${shellQuote("mkdir -p -- /home/svallory")}`,
+		]);
 		expect(calls[1].file).toBe("rsync");
+	});
+
+	it("expands a leading ~ on the remote, never quoting it", async () => {
+		const { calls, spawner } = recordingSpawner();
+		const machine = new RemoteMachine("netcup", spawner);
+
+		await machine.rsync("/srv/hyperdrive", "~/spaces/foo");
+
+		// Quoting the ~ would create a literal `~` directory under $HOME.
+		expect(calls[0].args).toEqual(["netcup", "--", `sh -c ${shellQuote("mkdir -p -- ~/spaces")}`]);
+		expect(calls[0].args[2]).toContain("~/");
+		expect(calls[0].args[2]).not.toContain("'~/");
+	});
+
+	it("skips the mkdir when there is no parent to create", async () => {
+		const { calls, spawner } = recordingSpawner();
+		const machine = new RemoteMachine("netcup", spawner);
+
+		// `~` and `~/x` land in the remote home; `/a.txt` in `/`; `file.txt` in cwd.
+		for (const dst of ["~", "~/x", "/a.txt", "file.txt"]) {
+			await machine.scp("/tmp/a.txt", dst);
+		}
+
+		expect(calls.every((c) => c.file === "scp")).toBe(true);
+		expect(calls).toHaveLength(4);
+	});
+
+	it("stops the transfer when the parent mkdir fails", async () => {
+		const { calls, spawner } = recordingSpawner({ code: 1, stderr: "disk full" });
+		const machine = new RemoteMachine("netcup", spawner);
+
+		const result = await machine.rsync("/a", "/home/agent/b");
+
+		expect(result.code).toBe(1);
+		expect(result.stderr).toBe("disk full");
+		expect(calls).toHaveLength(1);
+		expect(calls[0].file).toBe("ssh");
 	});
 
 	it("builds portable rsync args with no version-specific flags", async () => {
@@ -470,7 +526,7 @@ describe("RemoteMachine", () => {
 
 	it("passes --delete only when explicitly asked", async () => {
 		const { calls, spawner } = recordingSpawner();
-		await new RemoteMachine("netcup", spawner).rsync("/a", "/b", { delete: true });
+		await new RemoteMachine("netcup", spawner).rsync("/a", "/home/agent/b", { delete: true });
 
 		expect(calls[1].args).toContain("--delete");
 		// It must come before the `--` that ends the options.
