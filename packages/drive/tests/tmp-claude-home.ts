@@ -115,9 +115,14 @@ export function startSleeper(seconds = 30): { pid: number; kill: () => void } {
  * comparison instead of catching it.
  */
 export function procStartOf(pid: number): string {
+	return procStartIn(pid, "UTC");
+}
+
+/** `LC_ALL=C TZ=<zone> ps -o lstart=`, for zones other than the one Claude stores. */
+export function procStartIn(pid: number, zone: string): string {
 	const result = spawnSync("ps", ["-o", "lstart=", "-p", String(pid)], {
 		encoding: "utf-8",
-		env: { ...process.env, LC_ALL: "C", TZ: "UTC" },
+		env: { ...process.env, LC_ALL: "C", TZ: zone },
 	});
 	return result.stdout.trim();
 }
