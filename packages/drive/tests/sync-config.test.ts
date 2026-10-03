@@ -451,7 +451,10 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config collision guard (MUST 2
 
 		expect(result.status).not.toBe(0);
 		expect(out).toContain("claude-config");
-		expect(out).toContain("would fight");
+		expect(out).toContain("already syncs");
+		// The fix hint is engine-provided (C-8): the command never hardcodes
+		// the engine's name itself.
+		expect(out).not.toMatch(/Terminate it first \(`mutagen/);
 		// The colliding pair was NOT created. The pi pair doesn't collide (it is
 		// a different alpha and beta), so it is still created — the guard is per
 		// directory pair, which is the right granularity: refusing it would
@@ -508,3 +511,142 @@ describe.skipIf(skipWithoutCli)(
 		});
 	},
 );
+
+describe.skipIf(skipWithoutCli)("hyper drive sync-config hub topology (star)", () => {
+	/**
+	 * A hyper-* session sharing ONLY the alpha is the star (hub) topology and
+	 * must work: this Mac syncing ~/.claude to netcup and to a second machine
+	 * at once. Sessions are keyed by name, so a second machine just yields
+	 * different session names over the same local alpha.
+	 */
+	function foreignSession(name: string, alpha: string, betaPath: string) {
+		return {
+			name,
+			alpha: { protocol: "local", path: alpha, connected: true },
+			beta: {
+				protocol: "ssh",
+				host: "netcup",
+				path: betaPath,
+				connected: true,
+				permissions: { defaultFileMode: "0660", defaultDirectoryMode: "0770" },
+			},
+			status: "watching",
+			mode: "two-way-resolved",
+			ignore: { paths: [] },
+			symlink: { mode: "posix-raw" },
+			paused: false,
+		};
+	}
+
+	it("creates next to another hyper-* session over the same alpha (star)", () => {
+		if (!cliBuilt) return;
+		const fixture = setupFixture([]);
+		const alpha = `${fixture.alphaHome}/.claude`;
+		// Another managed session for a DIFFERENT machine, same local alpha.
+		writeFileSync(
+			fixture.sessions,
+			JSON.stringify([foreignSession("hyper-claude-netcup", alpha, "/home/svallory/.claude")]),
+			"utf-8",
+		);
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop"]);
+		expect(result.status).toBe(0);
+		const creates = calls(fixture).filter((l) => l.startsWith("sync create"));
+		expect(creates.filter((l) => l.includes("--name hyper-claude-loop"))).toHaveLength(1);
+	});
+
+	it("refuses a foreign session sharing the same alpha", () => {
+		if (!cliBuilt) return;
+		const fixture = setupFixture([]);
+		const alpha = `${fixture.alphaHome}/.claude`;
+		writeFileSync(
+			fixture.sessions,
+			JSON.stringify([foreignSession("claude-config", alpha, "/home/svallory/.claude")]),
+			"utf-8",
+		);
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop"]);
+		expect(result.status).not.toBe(0);
+		expect(flat(result.stdout ?? "")).toContain("claude-config");
+		expect(calls(fixture).filter((l) => l.includes("--name hyper-claude-loop"))).toHaveLength(0);
+	});
+
+	it("refuses a session over the exact same pair even when it is hyper-*", () => {
+		if (!cliBuilt) return;
+		const fixture = setupFixture([]);
+		const alpha = `${fixture.alphaHome}/.claude`;
+		const betaPath = `${fixture.betaHome}/.claude`;
+		writeFileSync(
+			fixture.sessions,
+			JSON.stringify(
+				[
+					foreignSession("hyper-claude-oldname", alpha, betaPath).beta && {
+						name: "hyper-claude-oldname",
+						alpha: { protocol: "local", path: alpha, connected: true },
+						beta: {
+							protocol: "ssh",
+							host: "localhost",
+							path: betaPath,
+							connected: true,
+							permissions: { defaultFileMode: "0660", defaultDirectoryMode: "0770" },
+						},
+						status: "watching",
+						mode: "two-way-resolved",
+						ignore: { paths: [] },
+						symlink: { mode: "posix-raw" },
+						paused: false,
+					},
+				].filter(Boolean),
+			),
+			"utf-8",
+		);
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop"]);
+		expect(result.status).not.toBe(0);
+		expect(flat(result.stdout ?? "")).toContain("hyper-claude-oldname");
+		expect(calls(fixture).filter((l) => l.includes("--name hyper-claude-loop"))).toHaveLength(0);
+	});
+});
+
+describe.skipIf(skipWithoutCli)("hyper drive sync-config partial create", () => {
+	/**
+	 * When the create of one session fails, the command must still report the
+	 * rows it decided, exit 2, and print the REAL count — a "0 of 1 missing"
+	 * message after a failure would be worse than none.
+	 */
+	it("keeps decided rows, exits 2, and reports the real count on a create failure", () => {
+		if (!cliBuilt) return;
+		const fixture = setupFixture([]);
+		// Make ONLY the claude create fail: the fake mutagen fails when the
+		// session name is the claude one.
+		const dir = fixture.binDir;
+		writeFileSync(
+			join(dir, "mutagen"),
+			[
+				"#!/bin/sh",
+				'printf "%s\\n" "$*" >> "$MUTAGEN_LOG"',
+				'case "$1 $2" in',
+				'  "sync list") cat "$MUTAGEN_SESSIONS" ;;',
+				'  "sync create")',
+				"    while [ $# -gt 0 ]; do",
+				'      if [ "$1" = "--name" ] && [ "$2" = "hyper-claude-loop" ]; then',
+				'        echo "boom" >&2; exit 1',
+				"      fi",
+				"      shift",
+				"    done",
+				'    printf "[]" > "$MUTAGEN_SESSIONS" ;;',
+				"esac",
+			].join("\n"),
+			"utf-8",
+		);
+		chmodSync(join(dir, "mutagen"), 0o755);
+
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop"]);
+		const out = flat(`${result.stdout ?? ""} ${result.stderr ?? ""}`);
+
+		expect(result.status).toBe(2);
+		// The failed row is reported with its detail...
+		expect(out).toContain("hyper-claude-loop");
+		expect(out).toContain("could not create");
+		// ...and the count reflects what was actually decided (1 row), not a
+		// stale zero — the round-4 bug this test pins.
+		expect(out).toContain("1 of 1");
+	});
+});

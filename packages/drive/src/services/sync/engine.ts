@@ -101,6 +101,10 @@ export interface SyncEngine {
 	fixHints(state: SyncDaemonState): string[];
 	/** How to replace a session that no longer matches, naming the machine. */
 	terminateHint(name: string, machine: string): string;
+	/** Why this name can't be a session name, or null if it's fine. */
+	validateSessionName(name: string): string | null;
+	/** Why this ignore pattern is unusable, or null if it's fine. */
+	validateIgnore(pattern: string): string | null;
 }
 
 /**

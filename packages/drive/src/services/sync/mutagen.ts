@@ -31,6 +31,60 @@ const BIN = "mutagen";
 /** The template that turns `sync list` into machine-readable JSON. */
 const LIST_TEMPLATE = "{{json .}}";
 
+/**
+ * The engine's session-name rule, checked up front so a bad name fails with a
+ * message naming the machine rather than deep inside `--name`.
+ *
+ * MUTAGEN-INTERNAL (verified 0.18.1, probed with throwaway sessions): a name
+ * must start with a Unicode letter, and after that may contain only Unicode
+ * letters, digits and `-`. Digits, `_`, `.`, spaces and `!` are rejected as
+ * the FIRST character; `_` and `.` are rejected anywhere.
+ */
+const SESSION_NAME_OK = /^\p{L}[\p{L}\p{N}-]*$/u;
+
+/**
+ * Does this name satisfy the engine's session-name rule? Engine-neutral
+ * message (C-8): the caller must never have to know what the engine is.
+ */
+export function sessionNameProblem(name: string): string | null {
+	if (SESSION_NAME_OK.test(name)) return null;
+	if (name === "") return "a sync session name can't be empty";
+	return `\`${name}\` can't be part of a sync session name: it must start with a letter and contain only letters, digits and dashes`;
+}
+
+/**
+ * Characters the engine's `--ignore` cannot carry.
+ *
+ * MUTAGEN-INTERNAL (verified 0.18.1): `--ignore` is a pflag *string slice*,
+ * and pflag parses string slices as CSV. So one `--ignore` flag per pattern
+ * does NOT stop a comma splitting it — `*.{json,bak}` is read as two patterns
+ * and the engine fails with "unable to parse pattern: syntax error in
+ * pattern", and a `"` fails outright with `bare " in non-quoted-field`.
+ * Neither can be worked around at the call site, so the value is rejected
+ * before it is ever passed.
+ */
+const IGNORE_UNSUPPORTED = /[,"]/;
+
+/**
+ * Reject an ignore pattern the engine could not have meant. Engine-neutral
+ * wording (C-8).
+ *
+ * `!` is rejected too: the engine treats a leading `!` as negating
+ * (un-ignoring) an earlier pattern, so `!/.credentials.json` would silently
+ * put credentials back into sync — the one failure mode here with real
+ * consequences off-machine.
+ */
+export function ignorePatternProblem(pattern: string): string | null {
+	if (pattern === "") return "an ignore pattern can't be empty";
+	if (IGNORE_UNSUPPORTED.test(pattern)) {
+		return `\`${pattern}\` can't be used as an ignore pattern: the engine reads ignore patterns as a comma-separated list, so a \`,\` or \`"\` splits or breaks it. Rewrite it without them.`;
+	}
+	if (pattern.startsWith("!")) {
+		return `\`${pattern}\` can't be used as an ignore pattern: a leading \`!\` un-ignores a path, which would put files back into sync.`;
+	}
+	return null;
+}
+
 /** What the user gets told when the binary isn't there. */
 function missingBinary(): SyncEngineError {
 	return new SyncEngineError(
@@ -330,5 +384,13 @@ export class MutagenSyncEngine implements SyncEngine {
 
 	terminateHint(name: string, machine: string): string {
 		return `run \`hyper drive sync-config ${machine}\` after \`${BIN} sync terminate ${name}\``;
+	}
+
+	validateSessionName(name: string): string | null {
+		return sessionNameProblem(name);
+	}
+
+	validateIgnore(pattern: string): string | null {
+		return ignorePatternProblem(pattern);
 	}
 }

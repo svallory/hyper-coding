@@ -15,6 +15,7 @@ import {
 	daemonRegistered,
 	MutagenSyncEngine,
 	parseSessionList,
+	sessionNameProblem,
 } from "#services/sync/mutagen";
 
 /**
@@ -507,5 +508,35 @@ describe("syncIgnoreFor", () => {
 			"/bin",
 			".DS_Store",
 		]);
+	});
+});
+
+describe("session name rule (verified against mutagen 0.18.1)", () => {
+	// Probed with throwaway sessions: first char must be a Unicode letter;
+	// after that, letters, digits and `-` only. Digits/`_`/`.`/space are
+	// rejected as the first char; `_` and `.` are rejected anywhere.
+	it("accepts the shapes mutagen accepts", () => {
+		for (const ok of ["a", "loop", "netcup", "a-b", "a9", "a--b", "éx", "A-9"]) {
+			expect(sessionNameProblem(ok), ok).toBeNull();
+		}
+	});
+
+	it("rejects the shapes mutagen rejects", () => {
+		for (const bad of [
+			"",
+			"9abc",
+			"-a",
+			"_a",
+			".a",
+			"a b",
+			"a:b",
+			"a/b",
+			"a_b",
+			"a.b",
+			"name!",
+			"a,b",
+		]) {
+			expect(sessionNameProblem(bad), bad).not.toBeNull();
+		}
 	});
 });

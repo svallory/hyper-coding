@@ -44,8 +44,8 @@ export type SyncTarget = keyof SyncConfig;
  * live `claude-config` session — same list, same order, same spelling.
  *
  * THE LEADING SLASH IS PART OF THE PATTERN and is not cosmetic: it anchors the
- * pattern to the root of the synced directory. Unanchored, `/sessions` becomes
- * `sessions`, which in Mutagen matches a directory of that name at ANY depth —
+ * pattern to the root of the synced directory. Unanchored, a root entry like
+ * `sessions` also matches a directory of that name at ANY depth —
  * `skills/debug/`, `plugins/.trash/stuff/cache/` — so the entries below are
  * stored exactly as written. `.DS_Store` is the one unanchored entry, matching
  * the live session: the OS puts it at every level and it is cheap to ignore

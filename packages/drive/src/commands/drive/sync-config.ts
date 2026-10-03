@@ -29,16 +29,6 @@ const BETA_FILE_MODE = "0660";
 const BETA_DIR_MODE = "0770";
 
 /**
- * Mutagen's session-name rule, checked up front.
- *
- * MUTAGEN-INTERNAL (verified 0.18.1): session names must start with an
- * alphanumeric and may then contain alphanumerics, `.`, `_` and `-`. A machine
- * name outside that would produce a session the engine refuses to create, with
- * an error from deep inside `--name` rather than anything naming the machine.
- */
-const SESSION_NAME_OK = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-
-/**
  * The alpha URL for a plan: this machine's own config dir, taken from
  * `self.home` in the config so a non-default home is honoured.
  */
@@ -135,12 +125,15 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 	 * verbatim in dev mode — prints the sentence and not the JS frames. --debug
 	 * keeps the frames, because there the frames are the point.
 	 */
-	/** Rows decided before a create failed, so a partial run still reports. */
-	private partial: Row[] | null = null;
-
 	/** Print the table (or JSON) and exit `code` if anything went wrong. */
-	private finish(machineName: string, check: boolean, json: boolean, code: number): void {
-		const rows = this.partial ?? [];
+	private finish(
+		machineName: string,
+		check: boolean,
+		json: boolean,
+		rows: Row[],
+		failures: number,
+		code: number,
+	): void {
 		if (json) {
 			this.log(JSON.stringify({ machine: machineName, check, sessions: rows }, null, 2));
 		} else {
@@ -155,14 +148,11 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 		}
 		if (code !== 0) {
 			this.error(
-				`${this.failureCount} of ${rows.length} config sync session(s) for "${machineName}" are missing or don't match what hyperdrive expects.`,
+				`${failures} of ${rows.length} config sync session(s) for "${machineName}" are missing or don't match what hyperdrive expects.`,
 				{ exit: code },
 			);
 		}
 	}
-
-	/** How many rows are not `ready`/`created`. */
-	private failureCount = 0;
 
 	private fail(err: unknown, debug: boolean): never {
 		if (err instanceof SyncEngineError || err instanceof MachineError) {
@@ -233,10 +223,9 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 		try {
 			config = loadConfig();
 			const machine = resolveMachine(machineName);
-			if (!SESSION_NAME_OK.test(machine.name)) {
-				throw new MachineError(
-					`"${machine.name}" can't be part of a sync session name: mutagen wants a name starting with a letter or digit and containing only letters, digits, dots, dashes and underscores. Rename the machine in Herdr.`,
-				);
+			const nameProblem = engine.validateSessionName(machine.name);
+			if (nameProblem) {
+				throw new MachineError(`${nameProblem}. Rename the machine in Herdr.`);
 			}
 			if (!machine.home) {
 				throw new MachineError(
@@ -266,24 +255,39 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 				};
 				const current = existing.find((session) => session.name === name);
 
-				// MUST create only when NOTHING at all already syncs this pair.
-				// Matching on name alone would let `sync-config netcup` build
-				// hyper-claude-netcup right next to the operator's hand-made
-				// claude-config on the SAME alpha and beta: two two-way-resolved
-				// sessions over one directory pair, each resolving conflicts the
-				// other just wrote.
-				const collision = existing.find(
-					(session) => session.name !== name && (session.alpha === alpha || session.beta === beta),
-				);
-				if (collision) {
+				// Create only when nothing already syncs this pair in a way that
+				// would fight. The cases, all verified against the live sessions:
+				//
+				//  - any session (any name) over the SAME alpha AND beta pair:
+				//    two two-way-resolved sessions over one pair resolve each
+				//    other's conflicts forever;
+				//  - a session NOT named hyper-* sharing the alpha or the beta:
+				//    the operator's hand-made claude-config / pi-config are
+				//    exactly this, and a managed session next to them would
+				//    race them;
+				//  - ANOTHER hyper-* session sharing ONLY the alpha: fine. That
+				//    is the star (hub) topology — this Mac syncing ~/.claude to
+				//    netcup and to a second machine at once — which must work.
+				const conflict = existing.find((session) => {
+					if (session.name === name) return false;
+					const samePair = session.alpha === alpha && session.beta === beta;
+					const sharesPath = session.alpha === alpha || session.beta === beta;
+					const foreign = !session.name.startsWith(SESSION_PREFIX);
+					return samePair || (foreign && sharesPath);
+				});
+				if (conflict) {
 					rows.push({
 						name,
 						state: "mismatch",
 						alpha,
 						beta,
-						detail: `a session called "${collision.name}" already syncs ${
-							collision.alpha === alpha ? "this alpha" : "this beta"
-						} — two two-way sessions over one directory pair would fight. Terminate it first (\`mutagen sync terminate ${collision.name}\`), then rerun.`,
+						detail: `a session called "${conflict.name}" already syncs ${
+							conflict.alpha === alpha && conflict.beta === beta
+								? "this exact pair"
+								: conflict.alpha === alpha
+									? "this alpha"
+									: "this beta"
+						} — ${engine.terminateHint(conflict.name, machine.name)}`,
 					});
 					failures++;
 					continue;
@@ -318,8 +322,10 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 							detail: `could not create: ${err instanceof Error ? err.message : String(err)}`,
 						});
 						failures++;
-						this.partial = rows;
-						return this.finish(machineName, check, json, 2);
+						// Partial create: report what was decided and exit 2, with
+						// the REAL count — saying "0 of 1 missing" after a failure
+						// would be worse than no message.
+						return this.finish(machineName, check, json, rows, failures, 2);
 					}
 					rows.push({ name, state: "created", alpha, beta, detail: `${alpha} → ${beta}` });
 					continue;
@@ -343,11 +349,9 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 			this.fail(err, debug);
 		}
 
-		this.partial = rows;
-		this.failureCount = failures;
 		// A mismatch is a failure whether or not --check was asked for: the user
 		// ran a command that did not fully succeed, and exit 0 would say it did.
-		this.finish(machineName, check, json, failures > 0 ? 1 : 0);
+		this.finish(machineName, check, json, rows, failures, failures > 0 ? 1 : 0);
 	}
 
 	/** Why an existing session can't be used, or "" when it matches. */
