@@ -54,13 +54,20 @@ const SYMLINKS: readonly { name: string; mode: "link" }[] = [
 /** The two lines every user's shell gets, so shared files are group-accessible from birth. */
 const BASHRC_LINES = ["umask 002", "set -o physical"] as const;
 
-/** Everything the check asks the machine, as labelled `key=value` lines. */
+/**
+ * Everything the check asks the machine, as labelled `key=value` lines.
+ *
+ * The setgid questions use `test -g`, which tests the bit. They deliberately do
+ * NOT parse `stat -c %a`: a setgid directory reports `2770`, so the setgid digit
+ * is the FIRST of four — and the obvious "does the last digit end in 2367" test
+ * reports every correctly set-up directory as NOT setgid.
+ */
 function probe(paths: AgentPaths, agentUser: string): string {
 	const q = shellQuote;
 	return [
 		// The shared work dir: group, setgid, and the group entry.
 		`printf 'work_group=%s\\n' "$(stat -c %G ${q(paths.work)} 2>/dev/null || echo missing)"`,
-		`printf 'work_setgid=%s\\n' "$(stat -c %a ${q(paths.work)} 2>/dev/null | grep -q '[2367]$' && echo yes || echo no)"`,
+		`printf 'work_setgid=%s\\n' "$(test -g ${q(paths.work)} && echo yes || echo no)"`,
 		`printf 'work_acl=%s\\n' "$(getfacl -c -p ${q(paths.work)} 2>/dev/null | grep -c '^group:collab:rwx' || echo 0)"`,
 		`printf 'work_default_acl=%s\\n' "$(getfacl -c -p ${q(paths.work)} 2>/dev/null | grep -c '^default:group:collab:rwx' || echo 0)"`,
 		// The home: traversable by the group, so the agent can reach work/.
@@ -70,7 +77,7 @@ function probe(paths: AgentPaths, agentUser: string): string {
 		`printf 'claude_default_acl=%s\\n' "$(getfacl -c -p ${q(paths.claude)} 2>/dev/null | grep -c '^default:group:collab:r-x' || echo 0)"`,
 		// projects/: group-writable and setgid.
 		`printf 'projects_group=%s\\n' "$(stat -c %G ${q(paths.projects)} 2>/dev/null || echo missing)"`,
-		`printf 'projects_setgid=%s\\n' "$(stat -c %a ${q(paths.projects)} 2>/dev/null | grep -q '[2367]$' && echo yes || echo no)"`,
+		`printf 'projects_setgid=%s\\n' "$(test -g ${q(paths.projects)} && echo yes || echo no)"`,
 		`printf 'projects_acl=%s\\n' "$(getfacl -c -p ${q(paths.projects)} 2>/dev/null | grep -c '^group:collab:rwx' || echo 0)"`,
 		// The agent's config dir, and each symlink's target.
 		...SYMLINKS.map(
@@ -141,6 +148,28 @@ export const agentUserDirs: Task = {
 	async apply(ctx: TaskContext): Promise<void> {
 		const agentUser = await agentUserOf(ctx);
 		const paths = await resolvePaths(ctx, agentUser);
+
+		// The agent's config dir has to exist AND be writable by us before any
+		// symlink can go in it, and only `agent-user.create` can make that so.
+		// On a machine where that step hasn't run yet — which is exactly the
+		// first run of this feature, since the user is about to be handed a root
+		// script and has not run it — this task cannot do its work.
+		//
+		// It must NOT throw here. The runner treats a throwing apply as a bug and
+		// exits 1, which would mean the very first `machine setup --features
+		// agent-user` on a clean machine dies instead of printing the root script.
+		// So: say what is missing and return, leaving the check to fail; the next
+		// run (after the user has run the script) does the work.
+		const ready = await runScript(
+			ctx,
+			`test -d ${shellQuote(paths.agentClaude)} && test -w ${shellQuote(paths.agentClaude)}`,
+		);
+		if (ready.code !== 0) {
+			ctx.log(
+				`agent-user.dirs: ${paths.agentClaude} doesn't exist or isn't yours to write yet — that comes from the agent-user.create root script, so I'll finish this once you've run it.`,
+			);
+			return;
+		}
 
 		// The shared work dir. chgrp/chmod first so the recursive ACL has a group
 		// to name, and the setgid pass after so the mode change above can't strip
