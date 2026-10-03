@@ -116,7 +116,10 @@ describe("space commit", () => {
 		const root = makeSpace();
 		mkdirSync(join(root, "notes", "clé"));
 		for (const file of ["notes/.env", "notes/clé/server.pem", "notes/readme.txt"])
-			writeFileSync(join(root, file), "-----BEGIN RSA PRIVATE KEY-----\n");
+			writeFileSync(
+				join(root, file),
+				file === "notes/readme.txt" ? "-----BEGIN RSA PRIVATE KEY-----\n" : "benign fixture\n",
+			);
 		const refused = run(root, "commit", "--allow-secret", "notes/readme.txt");
 		expect(refused.status).toBe(2);
 		expect(flat(refused.stderr)).toContain("notes/.env");
@@ -134,23 +137,23 @@ describe("space commit", () => {
 		expect(flat(allowed.stderr)).toContain("notes/readme.txt");
 		expect(count(root)).toBe(2);
 	});
-	it("inspects staged bytes, not changed disk content, within a 4 KB cap", () => {
+	it("inspects staged bytes, not changed disk content, within a 4 KB cap", async () => {
 		const root = makeSpace();
 		const path = "notes/readme.txt";
 		writeFileSync(join(root, path), "-----BEGIN OPENSSH PRIVATE KEY-----\n");
 		spaceGit(root, ["add", path]);
 		writeFileSync(join(root, path), "safe on disk\n");
-		expect(inspectStagedFiles(root, [path]).secrets).toEqual([path]);
+		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([path]);
 		spaceGit(root, ["add", path]);
 		writeFileSync(join(root, path), "-----BEGIN PRIVATE KEY-----\n");
-		expect(inspectStagedFiles(root, [path]).secrets).toEqual([]);
+		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([]);
 		writeFileSync(join(root, path), `${"a".repeat(4096)}-----BEGIN PRIVATE KEY-----\n`);
 		spaceGit(root, ["add", path]);
 		expect(readStagedBlobPrefix(root, path)).toHaveLength(4096);
-		expect(inspectStagedFiles(root, [path]).secrets).toEqual([]);
+		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([]);
 		writeFileSync(join(root, path), "-----BEGIN RSA\n PRIVATE KEY-----\n");
 		spaceGit(root, ["add", path]);
-		expect(inspectStagedFiles(root, [path]).secrets).toEqual([]);
+		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([]);
 	});
 	it("matches backup suffixes and trailing dots/spaces without widening exact overrides", () => {
 		const paths = [
