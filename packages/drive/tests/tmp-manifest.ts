@@ -49,9 +49,13 @@ export function withManifestFixture(): ManifestFixture {
  * and a real `user.email` would be recorded in test fixtures. Both are read
  * with the suite's own config, so the tests describe a fresh machine.
  *
- * `gc.auto=0` is injected through GIT_CONFIG_COUNT so every git in the test —
- * including the ones a spawned CLI runs — skips the background `git gc`, which
- * otherwise detaches and keeps writing into `.git` after the command returned.
+ * `gc.auto=0` is injected through GIT_CONFIG_COUNT for the gits THIS PROCESS
+ * runs. It does NOT reach a spawned CLI: `services/space-git.ts` strips
+ * `GIT_CONFIG_COUNT` (and every other repo-local variable) from the child env
+ * on purpose, so a background `git gc` in a fixture's space git dir is
+ * prevented where it actually happens — `tests/space-init.test.ts` writing
+ * `gc.auto=0` into the space git dir's own config after creating it — rather
+ * than by a retry loop that papers over the symptom.
  */
 export function isolateGitConfig(): void {
 	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
@@ -192,7 +196,11 @@ export function skipWithoutScript(ctx: TestContext): boolean {
 export function skipIfUnbuilt(ctx: TestContext): boolean {
 	if (
 		existsSync(cli) &&
-		existsSync(join(import.meta.dirname, "..", "dist", "services", "manifest.js"))
+		// The space commands themselves, not just a service: a stale `dist` can
+		// hold `services/manifest.js` from an earlier build while every command
+		// under it is missing, and these tests spawn the CLI.
+		existsSync(join(import.meta.dirname, "..", "dist", "services", "manifest.js")) &&
+		existsSync(join(import.meta.dirname, "..", "dist", "commands", "space", "init.js"))
 	) {
 		return false;
 	}

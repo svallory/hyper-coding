@@ -675,6 +675,28 @@ function recoverCheckout(dir: string): void {
  * design exists to prevent — and it resolves on the next write from the
  * machine that actually removed the space.
  */
+/**
+ * Refuse an upsert whose name is already on a DIFFERENT branch, judged against
+ * the manifest base being replayed onto.
+ *
+ * The manifest is keyed by name, so a name can only ever mean one space. The
+ * command checks this before it starts writing, but that check reads a
+ * checkout that another machine may have written to since — so the decision is
+ * made again here, on the freshly-fetched base, inside the lock. A same-branch
+ * entry is an update and passes.
+ */
+function assertNameFreeOnBase(base: readonly SpaceEntry[], entry: SpaceEntry | undefined): void {
+	if (entry === undefined) return;
+	const existing = base.find((space) => space.name === entry.name);
+	if (existing === undefined || existing.branch === entry.branch) return;
+	throw new ManifestError(
+		join(driveCheckoutDir(), MANIFEST_FILE),
+		`the space called ${JSON.stringify(entry.name)} is on branch ${existing.branch} on the ` +
+			`hyperdrive, and this run would put ${entry.branch} in its place. Space names are unique ` +
+			`across groups, so two spaces cannot share one name — pass a name of its own.`,
+	);
+}
+
 function applyMutation(dir: string, mutation?: Mutation): void {
 	recoverCheckout(dir);
 	excludePendingFile(dir);
@@ -754,6 +776,14 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 		}
 
 		const base = readManifestAt(dir, `origin/${BRANCH}`);
+		// Name uniqueness is re-checked HERE, under the lock, against the base
+		// just read from the remote — not against whatever the command saw in a
+		// checkout that may be minutes stale. Two machines can legitimately both
+		// pass a pre-check (each read a manifest without the other's space), and
+		// then `replay()` replaces by name with no branch comparison: `x` as
+		// `space/x` and `x` as `space/g/x` would silently become one entry. The
+		// same branch still replaces — that is the update path.
+		assertNameFreeOnBase(base, mutation?.entry);
 		const reset = driveGit(["reset", "--hard", `origin/${BRANCH}`], dir);
 		if (!reset.ok) {
 			throw new ManifestError(

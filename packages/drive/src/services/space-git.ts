@@ -230,7 +230,8 @@ export function initSpaceGitDir(
 		spaceGit(spaceRoot, ["config", "--local", "core.bare", "false"]);
 		spaceGit(spaceRoot, ["config", "--local", "core.worktree", "../.."]);
 		// Point HEAD at the orphan branch without creating it: the branch must not
-		// exist as a commit yet — the first space commit is made by `space commit`.
+		// exist as a commit yet — the first space commit is made by
+		// `hyper space init`, and every commit after that by `hyper space commit`.
 		spaceGit(spaceRoot, ["symbolic-ref", "HEAD", `refs/heads/${branch}`]);
 
 		if (remote !== undefined) {
