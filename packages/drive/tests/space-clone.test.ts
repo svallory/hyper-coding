@@ -163,12 +163,14 @@ describe("round 1 clone security", () => {
 		updateEntry({ path: "/home/old/alias/sample" });
 		useMachine("second");
 		const protectedRoot = join(fixture.home, directory);
-		mkdirSync(protectedRoot);
+		mkdirSync(protectedRoot, { recursive: true });
+		writeFileSync(join(protectedRoot, "keep"), "untouched");
 		symlinkSync(protectedRoot, join(fixture.home, "alias"));
 		const response = run(["sample", "--yes"]);
 		expect(response.status).toBe(2);
 		expect(flat(response.stderr)).toContain("protected HOME path");
-		expect(readdirSync(protectedRoot)).toEqual([]);
+		expect(existsSync(join(protectedRoot, "sample"))).toBe(false);
+		expect(readFileSync(join(protectedRoot, "keep"), "utf8")).toBe("untouched");
 	});
 	it("requires --yes for a noninteractive manifest-derived target", () => {
 		seed();
