@@ -1,12 +1,18 @@
 /**
  * The task registry.
  *
- * `allTasks()` is what `hyper machine setup` runs; T-15 adds the tool tasks,
- * T-16 the agent-user and home-path ones, T-17 docker and config sync. Until
- * then this ships exactly one task, so the runner's apply / check / root-script
- * paths are exercised end to end by the command and its tests.
+ * `allTasks()` is what `hyper machine setup` runs. The tools feature is one
+ * `tools.<id>` task per registry entry, so the runner's apply / check contract
+ * is what makes an install idempotent (C-15): the runner asks `check` (which is
+ * `detect`) and only calls `apply` (which is `install`) when the tool isn't
+ * there. No task keeps state of its own.
+ *
+ * `noop.check` stays, so the report and the "nothing needed" path keep working
+ * before any real tool is selected — and so a machine that has every tool still
+ * proves the no-op path.
  */
 
+import { findTool, TOOLS, type ToolSpec } from "../tools.js";
 import type { Task, TaskContext } from "./types.js";
 
 /**
@@ -26,9 +32,47 @@ const noop: Task = {
 	},
 };
 
-/** Every task the CLI knows how to run, in a stable order. */
-export function allTasks(): Task[] {
-	return [noop];
+/** One `tools.<id>` task for a registry entry. */
+export function toolTask(spec: ToolSpec): Task {
+	return {
+		id: `tools.${spec.id}`,
+		feature: "tools",
+		// Nothing in the registry needs root, and that is the assertion: a tool
+		// that did would have to go through the root script instead (C-6).
+		needsRoot: false,
+		title: spec.title,
+		async check(ctx) {
+			return (await spec.detect(ctx)) !== null;
+		},
+		async apply(ctx) {
+			await spec.install(ctx);
+		},
+	};
 }
 
+/** Every task the CLI knows how to run, in a stable order. */
+export function allTasks(options: { tools?: readonly string[] } = {}): Task[] {
+	return [noop, ...selectedToolTasks(options.tools)];
+}
+
+/**
+ * The tool tasks for the given registry ids, in registry order.
+ *
+ * Ids that aren't in the registry are dropped rather than fatal: they come from
+ * `--tools` and from a hook scan, and neither should be able to crash setup for
+ * a name that has since been retired. `all` (or nothing) means every tool.
+ */
+export function selectedToolTasks(ids?: readonly string[]): Task[] {
+	if (ids === undefined || ids.includes("all")) return TOOLS.map(toolTask);
+	const wanted = new Set(ids);
+	return TOOLS.filter((spec) => wanted.has(spec.id)).map(toolTask);
+}
+
+/** The task for a registry id, or undefined when the id isn't one. */
+export function toolTaskFor(id: string): Task | undefined {
+	const spec = findTool(id);
+	return spec === undefined ? undefined : toolTask(spec);
+}
+
+export * from "../tools.js";
 export * from "./types.js";
