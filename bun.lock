@@ -171,11 +171,13 @@
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.14",
+        "@types/debug": "^4.1.13",
         "@types/fs-extra": "^11.0.0",
         "@types/js-yaml": "^4.0.9",
         "@types/node": "^20.0.0",
         "typescript": "^5.4.0",
         "vitest": "4.0.18",
+        "yaml": "^2.4.2",
       },
     },
     "packages/hq": {
@@ -199,13 +201,19 @@
       "name": "@hypercli/kit",
       "version": "0.4.0",
       "dependencies": {
+        "@clack/prompts": "^0.11.0",
         "@hypercli/core": "workspace:*",
         "@hypercli/ui": "workspace:*",
+        "@oclif/core": "^4",
+        "debug": "^4.4.3",
         "giget": "^2.0.0",
+        "js-yaml": "^4.1.0",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.5.14",
+        "@types/debug": "^4.1.13",
         "@types/fs-extra": "^11.0.4",
+        "@types/js-yaml": "^4.0.9",
         "@types/node": "^20.0.0",
         "@vitest/coverage-v8": "^4.0.0",
         "fs-extra": "^11.3.3",
