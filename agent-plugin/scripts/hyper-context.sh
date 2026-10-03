@@ -2,6 +2,12 @@
 # SessionStart hook: if this session is inside a space, tell Claude how the
 # layout works. Silent (exit 0, no output) when not in a space, so the hook
 # costs nothing in unrelated projects.
+#
+# One deliberate exception to that silence: when the CLI is missing but this
+# session IS inside a space, one line points at the CLI. Otherwise a user in a
+# real space with no CLI installed gets a hook that says nothing at all, and
+# every /hyper: command then fails with "the hyper CLI is required" while
+# nothing in the session ever mentioned it.
 
 set -uo pipefail
 # Silent when the hyper CLI is missing: this hook runs on every SessionStart
@@ -9,9 +15,21 @@ set -uo pipefail
 # non-zero instead of exiting, so the hook keeps deciding for itself.
 # shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/hyper-require-lib.sh" 2>/dev/null || exit 0
-hyper_soft_lib || exit 0
-# shellcheck disable=SC1090  # hyper_lib is assigned by the sourced helper
-source "$hyper_lib"
+if ! hyper_soft_lib; then
+  # No library, so the real detector is unavailable. A marker file above $PWD is
+  # enough to tell "definitely in a space" from "unrelated project", and this
+  # deliberately does not re-implement space_layout to decide more than that
+  # (C-1/C-5: the library is the authority on layout, not this hook).
+  d="$PWD"
+  while [[ "$d" != "/" ]]; do
+    if [[ -f "$d/HYPER.md" || -f "$d/HYPERDEV.md" ]]; then
+      echo "This is a hyper space, but the hyper CLI is not installed — install @hypercli/cli to get space context and the /hyper: commands."
+      break
+    fi
+    d="$(dirname "$d")"
+  done
+  exit 0
+fi
 
 root="$(find_space_root "$PWD")" || exit 0
 name="$(basename "$root")"
