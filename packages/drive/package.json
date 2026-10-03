@@ -36,6 +36,7 @@
 	"files": [
 		"dist",
 		"help",
+		"scripts",
 		"oclif.manifest.json",
 		"README.md",
 		"LICENSE"
