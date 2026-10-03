@@ -21,8 +21,11 @@
  * Manifest commits are generated bookkeeping, not authored history, so they
  * run with `commit.gpgsign=false` and `core.hooksPath=/dev/null`: a signer
  * or a user hook that is unavailable to (or hostile to) the CLI must not be
- * able to strand the manifest mid-write. Commits to a space branch are the
- * user's own work and do respect their signing config and hooks.
+ * able to strand the manifest mid-write. Commits on a space branch are the
+ * user's own work and do respect their signing config and hooks — with one
+ * exception: the `space: init <name>` commit `hyper space init` makes while
+ * standing a space up is CLI-generated bookkeeping of the same kind, and runs
+ * unsigned and hook-free too. Every commit after it is the user's own.
  */
 
 import { spawnSync } from "node:child_process";
