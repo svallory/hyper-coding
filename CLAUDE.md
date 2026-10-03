@@ -56,8 +56,6 @@ bun run lint                        # Biome
 bun run test                        # Run tests
 ```
 
-On this machine, do **not** run `moon run` in a hyperdrive worktree: it has been observed to rewrite the root `package.json`. Use package-local `bun run` commands instead. Serialize heavy builds/tests with `flock /tmp/hyper-heavy.lock`.
-
 ```bash
 # Example, from the repo root
 flock /tmp/hyper-heavy.lock -c 'cd packages/drive && bun run build && bun run test'

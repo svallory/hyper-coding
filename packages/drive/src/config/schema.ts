@@ -94,6 +94,19 @@ const SPACE_LAYOUTS: readonly SpaceEntry["layout"][] = ["bare", "multi"];
 // stays import-free (index.ts already imports the types from here).
 const MANIFEST_CADENCES: readonly SyncCadence[] = ["", "manual", "session-end", "session-end+push"];
 
+/**
+ * The shape a space name (and a group) may take: starts with a letter or
+ * digit, then lowercase letters, digits, dots, underscores and dashes, and
+ * never `..`. It doubles as a path segment and half of a branch name, so it
+ * must be boring by construction — `/`, `\` and control characters can never
+ * reach the filesystem or `git check-ref-format`.
+ */
+export const SPACE_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
+
+export function isValidSpaceName(name: string): boolean {
+	return SPACE_NAME_PATTERN.test(name) && !name.includes("..");
+}
+
 /** Keys a SpaceEntry is allowed to carry, in the order they are written. */
 export const SPACE_ENTRY_KEYS = [
 	"name",
@@ -191,8 +204,21 @@ function validateSpace(path: string, raw: unknown): SpaceEntry {
 	warnUnknown(path, "", raw, SPACE_ENTRY_KEYS);
 
 	const name = needString(path, "name", raw.name);
+	if (!isValidSpaceName(name)) {
+		throw manifestProblem(
+			path,
+			`\`name\` must be a space name — lowercase letters, digits, dots, underscores and ` +
+				`dashes, no "..", and the manifest entry for ${JSON.stringify(name)} breaks that.`,
+		);
+	}
 	const key = (field: string) => `spaces entry ${JSON.stringify(name)}: \`${field}\``;
 
+	if (typeof raw.group === "string" && !isValidSpaceName(raw.group)) {
+		throw manifestProblem(
+			path,
+			`\`group\` must be a space name (same shape as \`name\`), but it is ${JSON.stringify(raw.group)}.`,
+		);
+	}
 	if (raw.group !== null && typeof raw.group !== "string") {
 		throw manifestProblem(
 			path,
