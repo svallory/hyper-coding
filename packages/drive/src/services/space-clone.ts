@@ -1,20 +1,27 @@
 import { spawnSync } from "node:child_process";
 import {
+	closeSync,
+	linkSync,
 	lstatSync,
 	mkdirSync,
+	mkdtempSync,
+	openSync,
 	readdirSync,
 	readFileSync,
+	readlinkSync,
 	realpathSync,
 	rmdirSync,
 	rmSync,
+	symlinkSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { ConfigError, configPath, loadConfig } from "#config/index";
-import { isValidSpaceName, type SpaceEntry } from "#config/schema";
-import { isHyperAllowlist, normaliseTrackedEntry } from "#services/allowlist";
+import type { SpaceEntry } from "#config/schema";
+import { isHyperAllowlist } from "#services/allowlist";
 import { ensureDriveCheckout, readManifest } from "#services/manifest";
 import { libPath } from "#services/space";
+import { isLocalDriveRemote, validateCloneEntry } from "#services/space-clone-validation";
 import {
 	cleanGitEnv,
 	cloneProjectRepoBare,
@@ -58,6 +65,12 @@ export function cloneTargetPath(recorded: string, explicit?: string, home = home
 	}
 	const inside = relative(currentHome, target);
 	if (!inside || inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside)) refuse();
+	const segments = inside.split(sep);
+	if (
+		segments.some((segment) => segment.startsWith(".")) ||
+		segments[0].toLowerCase() === "library"
+	)
+		refuse();
 	return target;
 }
 
@@ -71,6 +84,15 @@ function assertPhysicalHome(target: string): void {
 	if (!inside || inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
 		throw new Error(
 			`The recorded destination resolves outside HOME through a symlink. Pass an explicit path to hyper space clone instead: ${target}`,
+		);
+	}
+	const segments = inside.split(sep);
+	if (
+		segments.some((segment) => segment.startsWith(".")) ||
+		segments[0].toLowerCase() === "library"
+	) {
+		throw new Error(
+			`The recorded destination resolves into a protected HOME path through a symlink (${physical}). Pass an explicit path to hyper space clone instead.`,
 		);
 	}
 }
@@ -130,10 +152,20 @@ export interface CloneSpaceResult {
 	worktrees: string[];
 	libraryWrites: string[];
 	warnings: string[];
+	untrustedConfiguration: string[];
+}
+
+export interface CloneSpaceOptions {
+	yes?: boolean;
+	confirmTarget?: (target: string, recorded: string) => Promise<boolean>;
 }
 
 /** Recreate a manifest space; on failure undo only this invocation's target. */
-export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResult {
+export async function cloneSpace(
+	name: string,
+	explicitPath?: string,
+	options: CloneSpaceOptions = {},
+): Promise<CloneSpaceResult> {
 	// Scoped guards cover manifest children as well as space/project children.
 	let pendingSignal: "SIGINT" | "SIGTERM" | null = null;
 	const onInt = (): void => {
@@ -151,13 +183,16 @@ export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResul
 	let ownsTarget = false;
 	let createdTarget = false;
 	const createdParents: string[] = [];
-	const ownedFiles = new Set<string>();
+	const ownedFiles = new Map<string, { dev: number; ino: number }>();
 	const ownedDirectories = new Set<string>();
 	const ownedGitDirs = new Set<string>();
 	const markFile = (path: string): void => {
-		ownedFiles.add(path);
-		for (let parent = dirname(path); parent !== root; parent = dirname(parent))
-			ownedDirectories.add(parent);
+		if (!root) throw new Error("Clone target is not ready.");
+		const inside = relative(root, path);
+		if (!inside || inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside))
+			throw new Error("Refusing to record a path outside the clone target.");
+		const stat = lstatSync(path);
+		ownedFiles.set(path, { dev: stat.dev, ino: stat.ino });
 	};
 	try {
 		const config = loadConfig();
@@ -173,31 +208,28 @@ export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResul
 			throw new Error(
 				`No space named ${JSON.stringify(name)} is registered. Known spaces: ${spaces.map((space) => space.name).join(", ") || "none yet"}. Use one of those names, or run hyper space init on the original machine.`,
 			);
-		const expectedBranch =
-			entry.group === null ? `space/${entry.name}` : `space/${entry.group}/${entry.name}`;
-		if (entry.branch !== expectedBranch)
-			throw new Error(
-				`The manifest branch for ${name} is not ${expectedBranch}. Repair the manifest before cloning.`,
-			);
-		// Validation is complete before making directories. Slugs are remote data,
-		// not filesystem paths, and duplicate repos must never overwrite each other.
-		if (entry.layout === "bare" && entry.repos.length > 1)
-			throw new Error(
-				"A bare space can hold only one project repository. Repair the manifest before cloning.",
-			);
-		const slugs = new Set<string>();
-		for (const repo of entry.repos) {
-			if (entry.layout === "multi") {
-				if (!repo.slug || !isValidSpaceName(repo.slug) || slugs.has(repo.slug.toLowerCase()))
-					throw new Error(
-						`The manifest has a missing, unsafe or duplicate repo slug ${JSON.stringify(repo.slug)}. Repair it before cloning.`,
-					);
-				slugs.add(repo.slug.toLowerCase());
-			}
-		}
-		entry.tracked.forEach(normaliseTrackedEntry);
+		validateCloneEntry(entry, config.remote);
 		root = cloneTargetPath(entry.path, explicitPath);
-		if (explicitPath === undefined) assertPhysicalHome(root);
+		const warnings: string[] = [];
+		if (explicitPath === undefined) {
+			assertPhysicalHome(root);
+			if (!options.yes) {
+				if (!options.confirmTarget)
+					throw new Error(
+						`The manifest proposes ${root} (recorded as ${JSON.stringify(entry.path)}). Review that target and pass --yes, or provide an explicit path.`,
+					);
+				if (!(await options.confirmTarget(root, entry.path)))
+					throw new Error("Clone cancelled; no target was created.");
+			}
+		} else {
+			let parent = dirname(root);
+			while (!lstatSync(parent, { throwIfNoEntry: false })) parent = dirname(parent);
+			const physical = resolve(realpathSync(parent), relative(parent, root));
+			if (physical !== root)
+				warnings.push(
+					`The explicit target ${root} has a symlinked parent; its physical destination is ${physical}.`,
+				);
+		}
 		const before = lstatSync(root, { throwIfNoEntry: false });
 		if (
 			before &&
@@ -222,13 +254,26 @@ export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResul
 			createdTarget = true;
 		}
 		ownsTarget = true;
-		ownedGitDirs.add(join(root, ".hyper", "space.git"));
+		mkdirSync(join(root, ".hyper"));
 		ownedDirectories.add(join(root, ".hyper"));
 		initSpaceGitDir(root, { branch: entry.branch, remote: config.remote });
+		ownedGitDirs.add(join(root, ".hyper", "space.git"));
 		fetchSpaceClone(root, entry.branch);
-		for (const path of checkCloneTree(root, entry.branch)) markFile(join(root, path));
-		spaceGit(root, ["checkout", "-B", entry.branch, `refs/remotes/origin/${entry.branch}`, "--"]);
-		const ignore = join(root, ".gitignore");
+		const incomingPaths = checkCloneTree(root, entry.branch);
+		// Checkout privately, then publish files with exclusive creation. A
+		// raced-in user file cannot be overwritten or mistaken for our output.
+		const staging = mkdtempSync(join(root, ".hyper", "clone-"));
+		ownedGitDirs.add(staging);
+		spaceGit(root, [
+			"--work-tree",
+			staging,
+			"checkout",
+			"-B",
+			entry.branch,
+			`refs/remotes/origin/${entry.branch}`,
+			"--",
+		]);
+		const ignore = join(staging, ".gitignore");
 		if (
 			!lstatSync(ignore, { throwIfNoEntry: false })?.isFile() ||
 			!isHyperAllowlist(readFileSync(ignore, "utf8"))
@@ -236,6 +281,29 @@ export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResul
 			throw new Error(
 				"The checked-out .gitignore is not a hyper allowlist. Repair it on the original machine with hyper space init --refresh, then retry.",
 			);
+		for (const path of incomingPaths) {
+			const destination = resolve(root, path);
+			const inside = relative(root, destination);
+			if (!inside || inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside))
+				throw new Error("Incoming path escapes the clone target.");
+			const missing: string[] = [];
+			for (
+				let parent = dirname(destination);
+				parent !== root && !ownedDirectories.has(parent);
+				parent = dirname(parent)
+			)
+				missing.push(parent);
+			for (const directory of missing.reverse()) {
+				mkdirSync(directory);
+				ownedDirectories.add(directory);
+			}
+			const source = join(staging, path);
+			if (lstatSync(source).isSymbolicLink()) symlinkSync(readlinkSync(source), destination);
+			else linkSync(source, destination);
+			markFile(destination);
+		}
+		rmSync(staging, { recursive: true, force: true });
+		ownedGitDirs.delete(staging);
 		writeCadence(root, entry.cadence);
 		writeTracked(root, entry.tracked);
 		const result: CloneSpaceResult = {
@@ -249,8 +317,16 @@ export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResul
 			reposCloned: [],
 			worktrees: [],
 			libraryWrites: [],
-			warnings: [],
+			warnings,
+			untrustedConfiguration: incomingPaths.filter(
+				(path) =>
+					path === ".claude/settings.json" || path.startsWith("bin/") || path === ".config/wt.toml",
+			),
 		};
+		if (result.untrustedConfiguration.length)
+			result.warnings.push(
+				`${result.untrustedConfiguration.map((path) => JSON.stringify(path)).join(", ")}: these came from the hyperdrive; review before trusting this space.`,
+			);
 		if (entry.layout === "bare") {
 			mkdirSync(join(root, "worktrees"));
 			ownedDirectories.add(join(root, "worktrees"));
@@ -268,11 +344,15 @@ export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResul
 				continue;
 			}
 			const repoRoot: string = entry.layout === "bare" ? root : join(root, "code", repo.slug!);
-			mkdirSync(repoRoot, { recursive: true });
-			if (repoRoot !== root) ownedDirectories.add(repoRoot);
+			if (repoRoot !== root) {
+				mkdirSync(repoRoot);
+				ownedDirectories.add(repoRoot);
+			}
 			const gitDir = join(repoRoot, ".git");
+			cloneProjectRepoBare(gitDir, repo.url, repo.default_branch, {
+				allowLocal: isLocalDriveRemote(config.remote),
+			});
 			ownedGitDirs.add(gitDir);
-			cloneProjectRepoBare(gitDir, repo.url, repo.default_branch);
 			cloneLibrary("ensure_worktrunk_config", [gitDir, repo.default_branch]);
 			result.libraryWrites.push(join(gitDir, "config"));
 			if (entry.layout === "multi") {
@@ -287,6 +367,7 @@ export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResul
 		// A tracked marker, including a symlink, belongs to the user. Never
 		// regenerate it just because this machine's paths differ.
 		if (!lstatSync(join(root, "HYPER.md"), { throwIfNoEntry: false })) {
+			closeSync(openSync(join(root, "HYPER.md"), "wx"));
 			markFile(join(root, "HYPER.md"));
 			cloneLibrary(entry.layout === "bare" ? "write_hyper_md_bare" : "write_hyper_md_multi", [
 				root,
@@ -305,7 +386,11 @@ export function cloneSpace(name: string, explicitPath?: string): CloneSpaceResul
 					// The directory belonged to the user: never sweep unrelated
 					// files another process may have added while the network ran.
 					for (const path of ownedGitDirs) rmSync(path, { recursive: true, force: true });
-					for (const path of ownedFiles) rmSync(path, { force: true });
+					for (const [path, identity] of ownedFiles) {
+						const current = lstatSync(path, { throwIfNoEntry: false });
+						if (current?.dev === identity.dev && current.ino === identity.ino)
+							rmSync(path, { force: true });
+					}
 					for (const path of [...ownedDirectories].sort((a, b) => b.length - a.length)) {
 						try {
 							rmdirSync(path);

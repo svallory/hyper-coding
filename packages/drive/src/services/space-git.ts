@@ -703,34 +703,79 @@ export function fetchSpaceClone(spaceRoot: string, branch: string): void {
  * space history operations: an explicit project git-dir, never the space's.
  * No later space operation may call this to alter an existing project (C-3).
  */
-export function cloneProjectRepoBare(gitDir: string, url: string, defaultBranch: string): void {
-	if (existsSync(gitDir)) {
+export function cloneProjectRepoBare(
+	gitDir: string,
+	url: string,
+	defaultBranch: string,
+	options: { allowLocal: boolean; interactive?: boolean } = { allowLocal: false },
+): void {
+	if (!checkProjectBranchName(defaultBranch))
+		throw new SpaceGitError("Invalid project default branch; repair the manifest before cloning.");
+	if (existsSync(gitDir))
 		throw new SpaceGitError(
 			`A project repository already exists at ${gitDir}. Choose an empty clone target.`,
 		);
-	}
+	const interactive = options.interactive ?? !!(process.stdin.isTTY && process.stderr.isTTY);
+	const env = cleanGitEnv();
+	env.GIT_TERMINAL_PROMPT = interactive ? "1" : "0";
+	// Also defeat inherited protocol.<helper>.allow and URL rewrite settings.
+	env.GIT_ALLOW_PROTOCOL = options.allowLocal ? "https:ssh:file" : "https:ssh";
+	if (!interactive)
+		env.GIT_SSH_COMMAND = env.GIT_SSH_COMMAND
+			? `${env.GIT_SSH_COMMAND} -o BatchMode=yes`
+			: "ssh -o BatchMode=yes";
+	const protocols = [
+		"-c",
+		"protocol.allow=never",
+		"-c",
+		"protocol.https.allow=always",
+		"-c",
+		"protocol.ssh.allow=always",
+		...(options.allowLocal ? ["-c", "protocol.file.allow=always"] : []),
+	];
 	const run = (args: string[]): void => {
-		const result = spawnSync("git", args, { encoding: "utf8", env: cleanGitEnv() });
+		const result = spawnSync("git", [...protocols, ...args], {
+			encoding: "utf8",
+			env,
+			stdio: [interactive ? "inherit" : "ignore", "pipe", interactive ? "inherit" : "pipe"],
+		});
 		if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
 			throw new SpaceGitInterruptedError(result.signal);
 		}
 		if (result.error || result.status !== 0) {
 			throw new SpaceGitError(
-				`I couldn't recreate the project repository at ${gitDir}. Check its URL, access and default branch, then retry the clone. ${result.error?.message ?? result.stderr.trim()}`,
+				`I couldn't recreate the project repository at ${gitDir}. Check its URL, access and default branch, then retry the clone. ${interactive ? "See git's output above." : "Credential prompts are disabled; configure noninteractive credentials first."}`,
 			);
 		}
 	};
-	// -- separates the remote from options (a manifest URL is untrusted data).
-	run(["clone", "--bare", "--", url, gitDir]);
-	run([
-		"--git-dir",
-		gitDir,
-		"config",
-		"--local",
-		"remote.origin.fetch",
-		"+refs/heads/*:refs/remotes/origin/*",
-	]);
-	run(["--git-dir", gitDir, "fetch", "origin"]);
-	run(["--git-dir", gitDir, "check-ref-format", `refs/heads/${defaultBranch}`]);
-	run(["--git-dir", gitDir, "symbolic-ref", "HEAD", `refs/heads/${defaultBranch}`]);
+	// Reserve ownership atomically; a raced-in user directory is never removed.
+	mkdirSync(gitDir);
+	try {
+		run(["clone", "--bare", ...(interactive ? ["--progress"] : []), "--", url, gitDir]);
+		run([
+			"--git-dir",
+			gitDir,
+			"config",
+			"--local",
+			"remote.origin.fetch",
+			"+refs/heads/*:refs/remotes/origin/*",
+		]);
+		run(["--git-dir", gitDir, "fetch", ...(interactive ? ["--progress"] : []), "origin"]);
+		run(["--git-dir", gitDir, "symbolic-ref", "HEAD", `refs/heads/${defaultBranch}`]);
+	} catch (error) {
+		rmSync(gitDir, { recursive: true, force: true });
+		throw error;
+	}
+}
+
+/** Pure validation: no repository or network access, and no directory creation. */
+export function checkProjectBranchName(branch: string): boolean {
+	if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(branch) || branch.includes("..")) return false;
+	const result = spawnSync("git", ["check-ref-format", "--branch", branch], {
+		encoding: "utf8",
+		env: cleanGitEnv(),
+	});
+	if (result.signal === "SIGINT" || result.signal === "SIGTERM")
+		throw new SpaceGitInterruptedError(result.signal);
+	return result.status === 0;
 }

@@ -20,7 +20,9 @@ import {
 	flat,
 	git,
 	type ManifestFixture,
+	skipWithoutScript,
 	spawnCli,
+	spawnCliOnTty,
 	withManifestFixture,
 } from "#tests/tmp-manifest";
 import { makeCheckout } from "#tests/tmp-space";
@@ -143,6 +145,122 @@ function publishChange(source: string, path: string, contents: string): void {
 	spaceGit(source, ["push", "origin", "HEAD"]);
 }
 
+describe("round 1 clone security", () => {
+	it.each([
+		"/Users/old/.config/git",
+		"/home/old/work/.hidden/space",
+		"/Users/old/Library/LaunchAgents",
+	])("refuses sensitive implicit destination %s even with --yes", (path) => {
+		seed();
+		updateEntry({ path });
+		useMachine("second");
+		const response = run(["sample", "--yes"]);
+		expect(response.status).toBe(2);
+		expect(flat(response.stderr)).toContain("explicit path");
+	});
+	it.each([".config", "Library"])("refuses implicit symlink parents entering %s", (directory) => {
+		seed();
+		updateEntry({ path: "/home/old/alias/sample" });
+		useMachine("second");
+		const protectedRoot = join(fixture.home, directory);
+		mkdirSync(protectedRoot);
+		symlinkSync(protectedRoot, join(fixture.home, "alias"));
+		const response = run(["sample", "--yes"]);
+		expect(response.status).toBe(2);
+		expect(flat(response.stderr)).toContain("protected HOME path");
+		expect(readdirSync(protectedRoot)).toEqual([]);
+	});
+	it("requires --yes for a noninteractive manifest-derived target", () => {
+		seed();
+		updateEntry({ path: "/Users/old/work/sample" });
+		useMachine("second");
+		const response = run(["sample"]);
+		expect(response.status).toBe(2);
+		expect(flat(response.stderr)).toContain("--yes");
+		expect(existsSync(join(fixture.home, "work", "sample"))).toBe(false);
+	});
+	it.each(["y", "n"])("confirms a manifest target on a TTY: %s", (answer, ctx) => {
+		if (skipWithoutScript(ctx)) return;
+		seed();
+		updateEntry({ path: "/Users/old/work/sample" });
+		useMachine("second");
+		const response = spawnCliOnTty(["space", "clone", "sample"], fixture, [answer]);
+		expect(flat(response.stdout + response.stderr)).toContain("Clone here?");
+		expect(existsSync(join(fixture.home, "work", "sample"))).toBe(answer === "y");
+	});
+	it.each([
+		{ field: "url", value: "evil-helper::payload" },
+		{ field: "url", value: "ftp://example.invalid/repo" },
+		{ field: "url", value: "https://user:secret-password@example.invalid/repo" },
+		{ field: "default_branch", value: "$(x)" },
+		{ field: "default_branch", value: "main;touch-x" },
+		{ field: "default_branch", value: "a..b" },
+	])("rejects hostile manifest $field before space git activity: $value", ({ field, value }) => {
+		seed();
+		const entry = readManifest().spaces[0];
+		updateEntry({ repos: [{ ...entry.repos[0], [field]: value }] });
+		useMachine("second");
+		const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+		const shim = join(fixture.root, "security-shim");
+		mkdirSync(shim);
+		const touched = join(fixture.root, "space-git-ran");
+		writeFileSync(
+			join(shim, "git"),
+			`#!/bin/sh\ncase "$*" in *space.git*|*"clone --bare"*) touch ${shellQuote(touched)}; exit 77;; esac\nexec ${shellQuote(real)} "$@"\n`,
+			{ mode: 0o755 },
+		);
+		vi.stubEnv("PATH", `${shim}:${process.env.PATH}`);
+		const target = join(fixture.home, "destination");
+		const response = run(["sample", target]);
+		expect(response.status).toBe(2);
+		expect(existsSync(touched)).toBe(false);
+		expect(existsSync(target)).toBe(false);
+		expect(flat(response.stderr)).toContain(`repos[0].${field}`);
+		expect(response.stderr).not.toContain("secret-password");
+	});
+	it("reports explicitly chosen symlinked parents and executable configuration", () => {
+		const source = seed();
+		mkdirSync(join(source, "bin"));
+		mkdirSync(join(source, ".claude"), { recursive: true });
+		publishChange(source, "bin/run.sh", "#!/bin/sh\\necho test\\n");
+		publishChange(source, ".claude/settings.json", "{}");
+		useMachine("second");
+		const parent = join(fixture.home, "physical");
+		mkdirSync(parent);
+		const alias = join(fixture.home, "alias");
+		symlinkSync(parent, alias);
+		const response = run(["sample", join(alias, "destination"), "--json"]);
+		success(response);
+		const result = JSON.parse(response.stdout);
+		expect(result.untrustedConfiguration.sort()).toEqual([
+			".claude/settings.json",
+			".config/wt.toml",
+			"bin/run.sh",
+		]);
+		expect(result.warnings.join(" ")).toContain("symlinked parent");
+		expect(result.warnings.join(" ")).toContain("review before trusting this space");
+	});
+	it("does not delete a user file at an incoming pathname after a checkout race", () => {
+		seed();
+		useMachine("second");
+		const target = join(fixture.home, "empty");
+		mkdirSync(target);
+		const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+		const shim = join(fixture.root, "race-shim");
+		mkdirSync(shim);
+		writeFileSync(
+			join(shim, "git"),
+			`#!/bin/sh\ncase "$*" in *space.git*checkout*) printf 'USER FILE' > ${shellQuote(join(target, "HYPER.md"))}; echo 'injected failure' >&2; exit 1;; esac\nexec ${shellQuote(real)} "$@"\n`,
+			{ mode: 0o755 },
+		);
+		vi.stubEnv("PATH", `${shim}:${process.env.PATH}`);
+		const response = run(["sample", target]);
+		expect(response.status).toBe(2);
+		expect(readFileSync(join(target, "HYPER.md"), "utf8")).toBe("USER FILE");
+		expect(readdirSync(target)).toEqual(["HYPER.md"]);
+	});
+});
+
 describe("manifest path remapping", () => {
 	it.each(["/Users/alice/work/sample", "/home/alice/work/sample", "/root/work/sample"])(
 		"maps %s into the current HOME",
@@ -236,7 +354,11 @@ describe("space clone", () => {
 		const target = join(fixture.home, "destination");
 		const response = run(["sample", target, "--json"]);
 		success(response);
-		expect(JSON.parse(response.stdout).warnings).toEqual([]);
+		expect(
+			JSON.parse(response.stdout).warnings.filter(
+				(warning: string) => !warning.includes("came from the hyperdrive"),
+			),
+		).toEqual([]);
 		expect(readFileSync(config, "utf8")).toBe(configText);
 		const switched = spawnSync("wt", ["switch", "main"], {
 			cwd: target,
@@ -265,7 +387,9 @@ describe("space clone", () => {
 			const target = join(fixture.home, "destination");
 			const response = run(["sample", target, "--json"]);
 			success(response);
-			const warnings: string[] = JSON.parse(response.stdout).warnings;
+			const warnings: string[] = JSON.parse(response.stdout).warnings.filter(
+				(warning: string) => !warning.includes("came from the hyperdrive"),
+			);
 			expect(warnings).toHaveLength(1);
 			const actual = perProject ? join(target, "custom", "main") : join(target, ".git.main");
 			expect(warnings[0]).toContain(actual);
@@ -327,7 +451,7 @@ describe("space clone", () => {
 		seed();
 		updateEntry({ path: "/Users/previous/work/sample" });
 		useMachine("second");
-		const response = run(["sample"]);
+		const response = run(["sample", "--yes"]);
 		success(response);
 		expect(response.stdout).toContain(join(fixture.home, "work", "sample"));
 		expect(response.stdout).toContain("/Users/previous/work/sample");
@@ -384,6 +508,9 @@ describe("space clone", () => {
 		const missing = { ...entry.repos[1] };
 		Reflect.deleteProperty(missing, "url");
 		updateEntry({ repos: [entry.repos[0], missing] });
+		const listed = spawnCli(["space", "list", "--json"], fixture);
+		success(listed);
+		expect(flat(listed.stderr)).toContain("has no project URL");
 		useMachine("second");
 		const target = join(fixture.home, "destination");
 		const response = run(["sample", target, "--json"]);
@@ -495,9 +622,11 @@ describe("space clone", () => {
 		expect(existsSync(target)).toBe(false);
 	});
 
-	it("removes scoped signal listeners on a refusal", () => {
+	it("removes scoped signal listeners on a refusal", async () => {
 		const before = [process.listenerCount("SIGINT"), process.listenerCount("SIGTERM")];
-		expect(() => cloneSpace("missing", join(fixture.home, "target"))).toThrow("Known spaces");
+		await expect(cloneSpace("missing", join(fixture.home, "target"))).rejects.toThrow(
+			"Known spaces",
+		);
 		expect([process.listenerCount("SIGINT"), process.listenerCount("SIGTERM")]).toEqual(before);
 	});
 });
