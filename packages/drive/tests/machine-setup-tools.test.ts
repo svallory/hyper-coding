@@ -9,12 +9,13 @@
  */
 
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import {
 	featurePromptOptions,
+	parityVersions,
 	parseTools,
 	toolPromptOptions,
 	toolsFromScan,
@@ -40,6 +41,8 @@ const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncRe
 			NO_COLOR: "1",
 			FORCE_COLOR: "0",
 			...env,
+			HOME: scratchDir(),
+			CLAUDE_CONFIG_DIR: scratchDir(),
 		},
 	});
 
@@ -105,7 +108,31 @@ describe("which tools a run picks (m3)", () => {
 			HYPER_MACHINE_SCRATCH: scratchDir(),
 		});
 		expect(result.status).toBe(2);
-		expect(result.stderr).toMatch(/--features tools/);
+		expect(result.stderr).toMatch(/--features/);
+	});
+});
+
+describe("resolved feature selection", () => {
+	it.each([
+		["--features", "config-sync", "--tools", "jq"],
+		["--features", "", "--tools", "jq"],
+		["configured", "--yes", "--tools", "jq"],
+	])("rejects --tools after resolving %j", (...args) => {
+		if (skipIfUnbuilt()) return;
+		withTempConfig(
+			`${CONFIG}\n[machines.configured]\nfeatures = ["config-sync"]\nhome = "/home/test"\n`,
+		);
+		const bin = scratchDir();
+		writeFileSync(
+			join(bin, "herdr"),
+			`#!/bin/sh\nprintf '%s\\n' '[{"label":"configured","target":"test@fake","enabled":true}]'\n`,
+			{ mode: 0o755 },
+		);
+		// Fail closed even if a regression reaches a remote command.
+		writeFileSync(join(bin, "ssh"), "#!/bin/sh\nexit 99\n", { mode: 0o755 });
+		const r = spawnCli(["machine", "setup", ...args], { PATH: `${bin}:${process.env.PATH}` });
+		expect(r.status).toBe(2);
+		expect(r.stderr).toMatch(/--features tools/);
 	});
 });
 
@@ -166,6 +193,38 @@ describe("detecting versions (M5)", () => {
 		id: tool.id,
 		detect: tool.detect,
 	}));
+
+	it("detects a local target once and reuses its versions", async () => {
+		const runner = new CountingRunner();
+		const ctx = { machine: null, runner, config: {}, log: () => {} } as TaskContext;
+		const [local, remote] = await parityVersions(specs, ctx, ctx);
+		expect(local).toBe(remote);
+		expect(runner.calls).toBe(specs.length);
+	});
+
+	it("turns a rejected detection into null plus a warning, without losing other versions", async () => {
+		const warnings: string[] = [];
+		const ctx = {
+			machine: null,
+			runner: new CountingRunner(),
+			config: {},
+			log: (line: string) => warnings.push(line),
+		} as TaskContext;
+		const result = await versionsFor(
+			[
+				{
+					id: "broken",
+					detect: async () => {
+						throw new Error("connection refused");
+					},
+				},
+				{ id: "fine", detect: async () => "1.2.3" },
+			],
+			ctx,
+		);
+		expect(result).toEqual({ broken: null, fine: "1.2.3" });
+		expect(warnings.join("\n")).toMatch(/warning.*broken.*connection refused/);
+	});
 
 	it("never opens more than four connections at once", async () => {
 		const runner = new CountingRunner();

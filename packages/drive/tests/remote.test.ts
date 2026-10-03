@@ -157,6 +157,19 @@ describe("isExcluded", () => {
 	});
 });
 
+describe("bounded probes", () => {
+	it("forwards timeouts to local and remote spawners without running SSH", async () => {
+		const { calls, spawner } = recordingSpawner();
+		await new LocalMachine(spawner).ssh(["true"], { timeoutMs: 5000 });
+		await new RemoteMachine("fake", spawner).ssh(["true"], { timeoutMs: 5000 });
+		expect(calls.map((call) => call.timeoutMs)).toEqual([5000, 5000]);
+	});
+	it("kills an overdue local probe and reports nonzero", async () => {
+		const result = await new LocalMachine().ssh(["/bin/sleep", "10"], { timeoutMs: 20 });
+		expect(result.code).toBe(137);
+	});
+});
+
 describe("exitCodeForSignal", () => {
 	it("uses the shell's 128 + signal convention", () => {
 		expect(exitCodeForSignal("SIGTERM")).toBe(143);

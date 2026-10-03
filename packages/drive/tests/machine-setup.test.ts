@@ -43,6 +43,9 @@ const spawnCli = (args: string[], env: Record<string, string> = {}): SpawnSyncRe
 			NO_COLOR: "1",
 			FORCE_COLOR: "0",
 			...env,
+			// Never let a setup subprocess inspect hooks or install into the real home.
+			HOME: scratchDir(),
+			CLAUDE_CONFIG_DIR: scratchDir(),
 		},
 	});
 
@@ -91,7 +94,10 @@ describe("machine setup", () => {
 
 		expect(r.status).toBe(0);
 		expect(flat(r.stdout)).toContain("Nothing needed");
-		// The one shipped task is already satisfied, so nothing was written.
+		expect(flat(r.stdout)).toContain("no hooks found");
+		expect(flat(r.stdout)).not.toContain("doing it now");
+		expect(flat(r.stdout)).not.toContain("tools.path");
+		// The empty isolated hooks select no tool tasks, so nothing was written.
 		expect(existsSync(join(scratch, "hyper-machine-root.sh"))).toBe(false);
 	});
 
@@ -120,8 +126,20 @@ describe("machine setup", () => {
 
 		expect(r.status).toBe(0);
 		expect(flat(r.stdout)).toContain("Nothing needed");
+		expect(flat(r.stdout)).toContain("no hooks found");
+		expect(flat(r.stdout)).not.toContain("doing it now");
+		expect(flat(r.stdout)).not.toContain("tools.path");
 		// Locally the default is `tools`, which is why the noop task was checked.
 		expect(flat(r.stdout)).toContain("noop.check");
+	});
+
+	it.each([
+		[null, 0, null],
+		["/tmp/root.sh", 0, 3],
+		[null, 1, 4],
+		["/tmp/root.sh", 1, 4],
+	] as const)("exit precedence: pending=%s failures=%s -> %s", (pending, failed, expected) => {
+		expect(exitCodeFor(pending, failed)).toBe(expected);
 	});
 
 	it("the root prompt offers exactly three answers, defaulting to 'I've run it'", () => {
