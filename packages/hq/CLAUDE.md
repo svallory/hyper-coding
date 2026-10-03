@@ -5,7 +5,7 @@ This package is the `hyper hq` plugin for the HyperDev CLI. It manages persisten
 ## Architecture
 
 - **Plugin type:** oclif plugin registered in `@hypercli/cli`
-- **Base command:** Extends `BaseCommand` from `@hypercli/kit`
+- **Base command:** Extends `Command` from `@oclif/core` directly (own `BaseCommand` in `src/lib/base-command.ts`). Plugins must NOT depend on `@hypercli/cli` — dependencies flow `cli → gen → kit → core`, so a plugin depending on the CLI host would be circular.
 - **Commands:** All under `hyper hq <command>`
 - **Setup logic lives in `create-hyper-hq`** — hq depends on it, not the reverse
 
