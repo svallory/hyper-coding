@@ -685,16 +685,27 @@ function recoverCheckout(dir: string): void {
  * made again here, on the freshly-fetched base, inside the lock. A same-branch
  * entry is an update and passes.
  */
+export class SpaceNameConflictError extends ManifestError {
+	constructor(
+		name: string,
+		branch: string,
+		readonly existingBranch: string,
+	) {
+		super(
+			join(driveCheckoutDir(), MANIFEST_FILE),
+			`the space called ${JSON.stringify(name)} is on branch ${existingBranch} on the ` +
+				`hyperdrive, and this run would put ${branch} in its place. Space names are unique ` +
+				`across groups, so two spaces cannot share one name — pass a name of its own.`,
+		);
+		this.name = "SpaceNameConflictError";
+	}
+}
+
 function assertNameFreeOnBase(base: readonly SpaceEntry[], entry: SpaceEntry | undefined): void {
 	if (entry === undefined) return;
 	const existing = base.find((space) => space.name === entry.name);
 	if (existing === undefined || existing.branch === entry.branch) return;
-	throw new ManifestError(
-		join(driveCheckoutDir(), MANIFEST_FILE),
-		`the space called ${JSON.stringify(entry.name)} is on branch ${existing.branch} on the ` +
-			`hyperdrive, and this run would put ${entry.branch} in its place. Space names are unique ` +
-			`across groups, so two spaces cannot share one name — pass a name of its own.`,
-	);
+	throw new SpaceNameConflictError(entry.name, entry.branch, existing.branch);
 }
 
 function applyMutation(dir: string, mutation?: Mutation): void {

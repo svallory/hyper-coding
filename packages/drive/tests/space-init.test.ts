@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
 	chmodSync,
@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import type { SpaceEntry } from "#config/schema";
 import { ALLOWLIST_MARKER } from "#services/allowlist";
+import { shellQuote } from "#services/remote";
 import {
 	flat,
 	git,
@@ -300,7 +301,7 @@ function initOrphanSpaceGitDir(root: string): void {
  * keeps writing into a fixture after the command returned, and the teardown's
  * retry loop has to paper over it.
  */
-function run(args: string[]): ReturnType<typeof spawnCli> {
+function run(args: string[], _fixture = fixture): ReturnType<typeof spawnCli> {
 	const result = spawnCli(args, fixture);
 	pinSpaceGc(args);
 	return result;
@@ -838,15 +839,17 @@ describe("a push that failed is published by the next refresh", () => {
 		expect(flat(settled.stdout)).toContain("already up to date");
 	});
 
-	it("a first init whose push fails leaves no .gitignore behind", (ctx) => {
+	it("a first init whose push fails keeps its commit and matching allowlist for refresh", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		rejectSpacePushes(true);
 		const root = makeSpace("failed-first-push");
 		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(result.status).not.toBe(0);
-		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(false);
-		expect(existsSync(join(root, ".gitignore"))).toBe(false);
+		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
+		expect(existsSync(join(root, ".gitignore"))).toBe(true);
+		expect(localCount(root)).toBe(1);
+		expect(flat(result.stderr)).toContain("hyper space init --refresh");
 		expect(remoteHasRef("space/failed-first-push")).toBe(false);
 		expect(manifestFromCheckout("failed-first-push")).toBeUndefined();
 	});
@@ -1319,7 +1322,7 @@ describe("a refusal changes nothing at all", () => {
 		);
 	});
 
-	it("a rolled-back first init leaves neither .gitignore nor an empty .hyper/", (ctx) => {
+	it("a refused first-init push keeps an unchanged allowlist and its new commit", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		// A hyper-written allowlist that is already exactly what this init would
@@ -1336,9 +1339,14 @@ describe("a refusal changes nothing at all", () => {
 		const refused = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(refused.status).not.toBe(0);
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(allowlist);
-		// Small one: an empty `.hyper/` is hyper's own directory and it held
-		// nothing else, so it goes with the git dir it was created for.
-		expect(existsSync(join(root, ".hyper"))).toBe(false);
+		// Round-5 item 1 supersedes the old delete-on-unconfirmed-push rule:
+		// even a different remote SHA keeps the local commit for --refresh.
+		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
+		expect(localCount(root)).toBe(1);
+		expect(flat(refused.stderr)).toContain("hyper space init --refresh");
+		expect(
+			git(["--git-dir", join(root, ".hyper", "space.git"), "show", "HEAD:.gitignore"], root),
+		).toBe(allowlist);
 	});
 });
 
@@ -1499,6 +1507,9 @@ describe("an interrupted first init", () => {
 
 		const result = run(["space", "init", root, "--refresh", "--cadence", "manual"], fixture);
 		expect(result.status).not.toBe(0);
+		expect(result.stderr).toContain(
+			`warning: ${join(root, ".hyper", "space.git")} has no commit yet`,
+		);
 		expect(flat(result.stderr)).toContain(".gitignore.pre-hyper");
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe("mine\n");
 	});
@@ -1612,6 +1623,7 @@ describe("one name, one branch, checked under the lock", () => {
 				encoding: "utf8",
 				env: {
 					...withHome,
+					HOME: fixture.home,
 					// The real `~/.config/hyper/drive.toml` must never be reachable
 					// from a fixture: this spawn runs outside `spawnCli`, which is
 					// what normally points HYPER_DRIVE_CONFIG at the temp tree.
@@ -1627,4 +1639,363 @@ describe("one name, one branch, checked under the lock", () => {
 		// The first space's entry survived.
 		expect(manifestFromCheckout("shared")?.branch).toBe("space/a/shared");
 	});
+});
+
+/** Private PATH shim; only space-git calls enter the injected script. */
+function spaceGitShim(script: string): () => void {
+	const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+	const dir = join(fixture.root, "r5-shim");
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(
+		join(dir, "git"),
+		`#!/bin/sh\nREAL=${shellQuote(real)}\ncase "$*" in\n  *space.git*)\n${script}\n;;\nesac\nexec "$REAL" "$@"\n`,
+		{ mode: 0o755 },
+	);
+	const saved = process.env.PATH;
+	process.env.PATH = `${dir}:${saved ?? ""}`;
+	return () => {
+		if (saved === undefined) delete process.env.PATH;
+		else process.env.PATH = saved;
+	};
+}
+
+function initialiseDrive(): void {
+	expect(
+		spawnCli(
+			["drive", "init", "--remote", fixture.remote, "--name", "m", "--home", fixture.home],
+			fixture,
+		).status,
+	).toBe(0);
+}
+
+/** Ready-to-push competing manifest, created without publishing it yet. */
+function prepareNameRace(): string {
+	initialiseDrive();
+	const other = join(fixture.root, "racer");
+	git(["clone", "--branch", "main", fixture.remote, other], fixture.root);
+	const entry: SpaceEntry = {
+		name: "raced",
+		branch: "space/winner/raced",
+		group: "winner",
+		path: "/other/machine",
+		layout: "bare",
+		repos: [],
+		cadence: "manual",
+		tracked: [],
+		public: [],
+	};
+	// JSON is valid YAML, and the fixture's schema is exactly a manifest's.
+	writeFileSync(join(other, "spaces.yaml"), JSON.stringify({ spaces: [entry] }));
+	git(["add", "spaces.yaml"], other);
+	git(["commit", "-qm", "register the competing space"], other);
+	return other;
+}
+
+// These tests reproduce failures through the built CLI, not a mocked command.
+describe("space init recovery regressions", () => {
+	it.for(["unreachable", "different-sha"])(
+		"does not register an unconfirmed push: %s",
+		(mode, ctx) => {
+			if (skipIfUnbuilt(ctx)) return;
+			writeConfig();
+			initialiseDrive();
+			const root = makeSpace("unconfirmed");
+			const failed = join(fixture.root, "push-failed");
+			const restore = spaceGitShim(`
+case " $* " in
+  *" push "*) touch ${shellQuote(failed)}; echo 'Could not resolve host' >&2; exit 1;;
+  *" ls-remote "*)
+    if [ -f ${shellQuote(failed)} ]; then
+      ${mode === "unreachable" ? "echo 'Could not resolve host' >&2; exit 1" : "printf '1111111111111111111111111111111111111111\\trefs/heads/space/unconfirmed\\n'; exit 0"}
+    fi;;
+esac`);
+			try {
+				const result = run(["space", "init", root, "--cadence", "manual"]);
+				expect(result.status, flat(result.stderr)).not.toBe(0);
+				expect(flat(result.stderr)).toContain("couldn't confirm the push");
+				expect(flat(result.stderr)).toContain("commit is kept locally");
+				expect(flat(result.stderr)).toContain("hyper space init --refresh");
+				expect(result.stdout).not.toContain("Manifest:");
+				expect(localCount(root)).toBe(1);
+				expect(remoteHasRef("space/unconfirmed")).toBe(false);
+				expect(manifestFromCheckout("unconfirmed")).toBeUndefined();
+				expect(manifestEntry("unconfirmed")).toBeUndefined();
+			} finally {
+				restore();
+			}
+			const retry = run(["space", "init", root, "--refresh"]);
+			expect(retry.status, flat(retry.stderr)).toBe(0);
+			expect(localCount(root)).toBe(1);
+			expect(manifestEntry("unconfirmed")?.branch).toBe("space/unconfirmed");
+		},
+	);
+
+	it("resumes an unborn space with this run's name, not the abandoned branch", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("abandoned");
+		initOrphanSpaceGitDir(root);
+		const result = run(["space", "init", root, "--name", "renamed", "--cadence", "manual"]);
+		expect(result.status, flat(result.stderr)).toBe(0);
+		expect(remoteHasRef("space/abandoned")).toBe(false);
+		expect(remoteTree("space/renamed")).toContain("notes/a.md");
+		expect(manifestEntry("renamed")?.branch).toBe("space/renamed");
+	});
+
+	it.for(["other-history", "broken-head"])(
+		"does not recreate an unreadable HEAD with %s",
+		(kind, ctx) => {
+			if (skipIfUnbuilt(ctx)) return;
+			writeConfig();
+			const root = makeSpace("keep-history");
+			expect(run(["space", "init", root, "--cadence", "manual"]).status).toBe(0);
+			const gitDir = join(root, ".hyper", "space.git");
+			const before = git(["--git-dir", gitDir, "rev-parse", "refs/heads/space/keep-history"], root);
+			if (kind === "other-history")
+				git(["--git-dir", gitDir, "symbolic-ref", "HEAD", "refs/heads/unfinished"], root);
+			else writeFileSync(join(gitDir, "HEAD"), "not a valid ref\n");
+			const head = readFileSync(join(gitDir, "HEAD"), "utf8");
+			const config = readFileSync(join(gitDir, "config"), "utf8");
+			const result = spawnCli(
+				["space", "init", root, "--name", "another", "--cadence", "manual"],
+				fixture,
+			);
+			expect(result.status).not.toBe(0);
+			expect(flat(result.stderr)).toContain("left untouched");
+			expect(readFileSync(join(gitDir, "HEAD"), "utf8")).toBe(head);
+			expect(readFileSync(join(gitDir, "config"), "utf8")).toBe(config);
+			// Read the ref file directly: Git rejects the deliberately malformed HEAD.
+			expect(readFileSync(join(gitDir, "refs", "heads", "space", "keep-history"), "utf8")).toBe(
+				before,
+			);
+			expect(remoteHasRef("space/another")).toBe(false);
+		},
+	);
+
+	it("resumes an unborn space on the newly configured hyperdrive", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("new-remote");
+		initOrphanSpaceGitDir(root);
+		const oldRemote = fixture.remote;
+		const newRemote = join(fixture.root, "new-remote.git");
+		git(["init", "--bare", newRemote], fixture.root);
+		fixture.remote = newRemote;
+		writeConfig();
+		const result = run(["space", "init", root, "--cadence", "manual"]);
+		expect(result.status, flat(result.stderr)).toBe(0);
+		expect(git(["--git-dir", oldRemote, "for-each-ref", "refs/heads/space"], fixture.root)).toBe(
+			"",
+		);
+		expect(remoteTree("space/new-remote")).toContain("notes/a.md");
+		expect(manifestEntry("new-remote")?.branch).toBe("space/new-remote");
+	});
+
+	it.for(["before", "after"])("handles a name race %s the space push", (when, ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const racer = prepareNameRace();
+		const root = makeSpace("loser");
+		const restore = spaceGitShim(`
+case " $* " in
+  *" ${when === "before" ? "commit" : "push"} "*)
+    "$REAL" "$@" || exit $?
+    "$REAL" -C ${shellQuote(racer)} push origin main >/dev/null 2>&1 || exit $?
+    exit 0;;
+esac`);
+		try {
+			const result = run([
+				"space",
+				"init",
+				root,
+				"--name",
+				"raced",
+				"--group",
+				"loser",
+				"--cadence",
+				"manual",
+			]);
+			expect(result.status).not.toBe(0);
+			const err = flat(result.stderr);
+			expect(err).toContain("space/winner/raced");
+			expect(manifestEntry("raced")?.branch).toBe("space/winner/raced");
+			expect(remoteHasRef("space/loser/raced")).toBe(when === "after");
+			if (when === "after") {
+				expect(err).toContain("space/loser/raced was pushed");
+				expect(err).toContain('name "raced" now belongs to space/winner/raced');
+				// oclif inserts whitespace even INSIDE long path tokens. Compare
+				// every non-whitespace byte of the full path and deletion command.
+				const unwrapped = err.replace(/\s/g, "");
+				expect(unwrapped).toContain(join(root, ".hyper", "space.git").replace(/\s/g, ""));
+				expect(err).toContain("hyper space init --name <another>");
+				expect(unwrapped).toContain(
+					`git push ${shellQuote(fixture.remote)} --delete space/loser/raced`.replace(/\s/g, ""),
+				);
+				expect(err).not.toContain("--refresh");
+				expect(localCount(root)).toBe(1);
+			}
+		} finally {
+			restore();
+		}
+		if (when === "after") {
+			// Follow the actual recovery; hyper must not remove the old remote ref.
+			rmSync(join(root, ".hyper", "space.git"), { recursive: true });
+			const retry = run(["space", "init", root, "--name", "another", "--cadence", "manual"]);
+			expect(retry.status, flat(retry.stderr)).toBe(0);
+			expect(manifestEntry("another")?.branch).toBe("space/another");
+			expect(remoteHasRef("space/loser/raced")).toBe(true);
+		}
+	});
+
+	it("skips unborn nested repositories, including empty and unusual paths", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("unborn-vendor");
+		const paths = ["notes/vendor", "notes/empty", "extra/deep/a [vendor]\n"];
+		for (const path of paths) {
+			git(["init", "-q", join(root, path)], root);
+			if (path !== "notes/empty") writeFileSync(join(root, path, "local.txt"), "keep locally\n");
+		}
+		const result = run([
+			"space",
+			"init",
+			root,
+			"--tracked",
+			"extra",
+			"--cadence",
+			"manual",
+			"--json",
+		]);
+		expect(result.status, flat(result.stderr)).toBe(0);
+		expect(JSON.parse(result.stdout).skipped.sort()).toEqual(paths.sort());
+		for (const path of paths) expect(result.stderr).toContain(path);
+		expect(result.stderr).toContain("its files are not saved in the space");
+		expect(result.stderr).not.toContain("does not have a commit checked out");
+		expect(remoteTree("space/unborn-vendor")).toEqual([".gitignore", "data/d.json", "notes/a.md"]);
+		for (const path of paths) expect(existsSync(join(root, path, ".git"))).toBe(true);
+	});
+
+	it.for([
+		{ signal: "SIGINT", phase: "ls-remote", refresh: false },
+		{ signal: "SIGTERM", phase: "ls-remote", refresh: false },
+		{ signal: "SIGINT", phase: "push", refresh: false },
+		{ signal: "SIGTERM", phase: "push", refresh: false },
+		{ signal: "SIGINT", phase: "add", refresh: true },
+		{ signal: "SIGTERM", phase: "add", refresh: true },
+	] as const)(
+		"handles a process-group $signal during $phase (refresh=$refresh)",
+		async ({ signal, phase, refresh }, ctx) => {
+			if (skipIfUnbuilt(ctx)) return;
+			if (process.platform === "win32") return ctx.skip("POSIX process-group signals required");
+			writeConfig();
+			initialiseDrive();
+			const root = makeSpace("interrupted-group");
+			if (refresh) expect(run(["space", "init", root, "--cadence", "manual"]).status).toBe(0);
+			const before = refresh ? readFileSync(join(root, ".gitignore"), "utf8") : "";
+			mkdirSync(join(root, "extra"));
+			writeFileSync(join(root, "extra", "kept.md"), "local file\n");
+			const ready = join(fixture.root, "git-ready");
+			const blocker = join(fixture.root, "block.cjs");
+			writeFileSync(
+				blocker,
+				`require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`,
+			);
+			const restore = spaceGitShim(`
+case " $* " in
+  *" ${phase} "*) exec ${shellQuote(process.execPath)} ${shellQuote(blocker)};;
+esac`);
+			const child = spawn(
+				process.execPath,
+				[
+					join(import.meta.dirname, "..", "..", "cli", "bin", "run.js"),
+					"space",
+					"init",
+					root,
+					"--cadence",
+					"session-end",
+					"--tracked",
+					"extra",
+					...(refresh ? ["--refresh"] : []),
+				],
+				{
+					detached: true,
+					stdio: ["ignore", "pipe", "pipe"],
+					env: {
+						...process.env,
+						HOME: fixture.home,
+						HYPER_HOME: fixture.hyperHome,
+						HYPER_DRIVE_CONFIG: fixture.configFile,
+						XDG_CONFIG_HOME: join(fixture.root, "config"),
+						NO_COLOR: "1",
+						FORCE_COLOR: "0",
+						AI_AGENT: undefined,
+						CLAUDECODE: undefined,
+					},
+				},
+			);
+			let stderr = "";
+			child.stderr.on("data", (chunk) => {
+				stderr += chunk;
+			});
+			const closed = new Promise<{ code: number | null; signal: string | null }>(
+				(resolve, reject) => {
+					child.on("error", reject);
+					child.on("close", (code, signal) => resolve({ code, signal }));
+				},
+			);
+			try {
+				await expect.poll(() => existsSync(ready), { timeout: 10_000 }).toBe(true);
+				process.kill(-child.pid!, signal);
+				const result = await Promise.race([
+					closed,
+					new Promise<never>((_, reject) => {
+						const timer = setTimeout(
+							() => reject(new Error("interrupted CLI did not exit")),
+							10_000,
+						);
+						timer.unref();
+					}),
+				]);
+				expect(result, flat(stderr)).toEqual({ code: 130, signal: null });
+				expect(flat(stderr)).not.toContain("couldn't reach");
+				if (phase === "push") {
+					expect(flat(stderr)).toContain("interrupted: your commit is kept locally");
+					expect(flat(stderr)).toContain("hyper space init --refresh");
+					expect(localCount(root)).toBe(1);
+					expect(localTracked(root)).toEqual(["extra"]);
+					expect(cadenceIn(root)).toBe("session-end");
+					expect(readFileSync(join(root, ".gitignore"), "utf8")).toContain("!/extra/");
+				} else {
+					expect(flat(stderr)).toContain("interrupted: nothing was changed");
+					if (refresh) {
+						expect(localCount(root)).toBe(1);
+						expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(before);
+						expect(localTracked(root)).toEqual([]);
+						expect(cadenceIn(root)).toBe("manual");
+					} else {
+						expect(existsSync(join(root, ".hyper"))).toBe(false);
+						expect(existsSync(join(root, ".gitignore"))).toBe(false);
+					}
+				}
+				expect(remoteHasRef("space/interrupted-group")).toBe(refresh);
+				if (refresh) expect(manifestEntry("interrupted-group")?.cadence).toBe("manual");
+				else expect(manifestEntry("interrupted-group")).toBeUndefined();
+			} finally {
+				try {
+					process.kill(-child.pid!, "SIGKILL");
+				} catch {
+					/* Already exited. */
+				}
+				await closed;
+				restore();
+			}
+			if (phase === "push") {
+				const retry = run(["space", "init", root, "--refresh"]);
+				expect(retry.status, flat(retry.stderr)).toBe(0);
+				expect(localCount(root)).toBe(1);
+				expect(remoteTree("space/interrupted-group")).toContain("extra/kept.md");
+			}
+		},
+		25_000,
+	);
 });

@@ -20,8 +20,10 @@ import {
 	driveCheckoutDir,
 	ensureDriveCheckout,
 	readManifest,
+	SpaceNameConflictError,
 	upsertSpace,
 } from "#services/manifest";
+import { shellQuote } from "#services/remote";
 import { detectSpace } from "#services/space";
 import {
 	clearCadence,
@@ -33,6 +35,7 @@ import {
 	readTracked,
 	removeSpaceGitDir,
 	SpaceGitError,
+	SpaceGitInterruptedError,
 	spaceGit,
 	spaceGitDir,
 	writeCadence,
@@ -509,7 +512,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			if (!(err instanceof Error)) throw err;
 			const problem = new Error(err.message);
 			problem.stack = flags.debug ? (err.stack ?? err.message) : err.message;
-			this.error(problem, { exit: 2 });
+			this.error(problem, { exit: err instanceof SpaceGitInterruptedError ? 130 : 2 });
 		}
 	}
 
@@ -586,6 +589,25 @@ export default class Init extends BaseCommand<typeof Init> {
 		const unfinished =
 			hasGitDir &&
 			spaceGit(root, ["rev-parse", "--verify", "HEAD"], { allowFailure: true }).status !== 0;
+		if (unfinished) {
+			// A failed HEAD read alone could also mean damaged history. Only a
+			// symbolic HEAD with no ref and no committed refs is safe to recreate.
+			const symbolic = spaceGit(root, ["symbolic-ref", "-q", "HEAD"], { allowFailure: true });
+			const missing =
+				symbolic.status === 0 &&
+				spaceGit(root, ["show-ref", "--verify", "--quiet", symbolic.stdout.trim()], {
+					allowFailure: true,
+				}).status === 1;
+			const history = spaceGit(root, ["rev-list", "--all", "--max-count=1"], {
+				allowFailure: true,
+			});
+			if (!missing || history.status !== 0 || history.stdout.trim() !== "") {
+				throw new SpaceGitError(
+					`${spaceGitDir(root)} has an unreadable HEAD or other committed history, not an unfinished first init. ` +
+						`It was left untouched; repair its HEAD or move the git dir aside before trying again.`,
+				);
+			}
+		}
 		const refreshed = hasGitDir && !unfinished;
 		if (refreshed && !flags.refresh) {
 			throw new Error(
@@ -598,15 +620,15 @@ export default class Init extends BaseCommand<typeof Init> {
 			// different word on it. Treating it as a refresh is what let the
 			// foreign-file guard be skipped over a space that had never
 			// registered anything.
-			this.warn(
-				`${spaceGitDir(root)} has no commit yet, so this space's first init never finished; ` +
-					`continuing it as a first init.`,
+			process.stderr.write(
+				`warning: ${spaceGitDir(root)} has no commit yet, so this space's first init never finished; ` +
+					`continuing it as a first init.\n`,
 			);
 		}
 		// `initSpaceGitDir` is a silent no-op when the git dir is already there,
 		// so a space whose branch or remote differs from this run would be
 		// reported as initialised while sitting on the old answer. An unfinished
-		// init is excluded: it is resumed, not compared against.
+		// init is recreated below, using THIS run's branch and remote.
 		if (refreshed) assertExistingSpaceMatches(root, branch, remote);
 
 		// The space's manifest entry, which a refresh converges with rather than
@@ -657,6 +679,13 @@ export default class Init extends BaseCommand<typeof Init> {
 		// error rather than an empty answer. A dir that was just created holds no
 		// `hyper.tracked` and no `hyper.cadence`, so "just created" and "had
 		// neither" are the same snapshot — which is what this needs.
+		// An unborn git dir holds no history. Recreate it rather than retaining
+		// an interrupted run's branch, remote or config. Never remove a commit.
+		if (unfinished && !removeSpaceGitDir(root)) {
+			throw new SpaceGitError(
+				`I couldn't reset the unfinished git dir at ${spaceGitDir(root)}. Move it aside and try again.`,
+			);
+		}
 		const created = initSpaceGitDir(root, { branch, remote });
 		const beforeTracked = readTracked(root);
 		const beforeCadence = readCadence(root);
@@ -667,54 +696,41 @@ export default class Init extends BaseCommand<typeof Init> {
 		let unborn = false;
 		let upToDate = false;
 		let skipped: string[] = [];
+		let pushAttempted = false;
 
-		// One rollback, two callers: a thrown error and Ctrl-C. An interrupted
-		// first init used to leave a git dir with no commit behind it — the
-		// window between creating the dir and the first commit holds two network
-		// round-trips — and then plain `init` refused the space as "already a
-		// hyper space" while `--refresh` took a first-init path over it. A signal
-		// is just another way for this run to end, so it runs exactly the same
-		// cleanup and then exits 130, like any interrupted command.
-		// Returns whether the hyperdrive ended up holding this run's commit —
-		// NOT merely whether the state was kept. The caller swallows the error
-		// only on that: a refresh that was refused must still report failure
-		// even though keeping its commit is right.
-		const rollback = (): boolean => {
-			// A commit the hyperdrive actually holds is not rolled back, even if
-			// the push reported failure: see `remoteHasCommit`.
-			const remoteHasCommit =
-				committed > 0 &&
-				((): boolean => {
-					const head = spaceGit(root, ["rev-parse", "HEAD"], { allowFailure: true }).stdout.trim();
-					if (head === "") return false;
-					try {
-						return remoteSha(root, remote, branch) === head;
-					} catch {
-						// The probe itself failed. Assume the push landed: deleting
-						// a git dir that is the only local copy of a commit the
-						// remote may hold is the one mistake with no undo, and a
-						// rerun resumes a git dir that has no commit.
-						return true;
-					}
-				})();
-			const keepsCommit = (committed > 0 && !created.created) || remoteHasCommit;
-			if (!keepsCommit) {
-				restoreAllowlist(root, allowlist);
-				writeTracked(root, beforeTracked);
-				if (beforeCadence === "") clearCadence(root);
-				else writeCadence(root, beforeCadence);
-				if (created.created) removeSpaceGitDir(root);
-			}
-			return remoteHasCommit;
+		// Both ordinary failures and child interruptions use this rollback.
+		// Keeping local history is NOT proof it was published. A failed push
+		// keeps its commit even when the remote cannot confirm it; recovery then
+		// needs --refresh (plain init refuses a git dir that holds a commit).
+		const rollback = (): void => {
+			restoreAllowlist(root, allowlist);
+			writeTracked(root, beforeTracked);
+			if (beforeCadence === "") clearCadence(root);
+			else writeCadence(root, beforeCadence);
+			if (created.created) removeSpaceGitDir(root);
 		};
-		const onSignal = (): void => {
-			rollback();
-			process.exit(130);
-		};
-		process.on("SIGINT", onSignal);
-		process.on("SIGTERM", onSignal);
 
+		// These listeners suppress Node's default process-group termination so
+		// spaceGit can inspect the CHILD's signal and the catch can roll back.
+		// They cannot fire while spawnSync blocks and perform no rollback.
+		// A Node-only signal during a git child is not acted on until that child
+		// returns, and then only if the child also died from it. If the event
+		// loop does turn and a listener runs, remember it for the next safe point;
+		// otherwise a Node-only signal may go unobserved (documented limitation).
+		let pendingSignal: "SIGINT" | "SIGTERM" | null = null;
+		const onInt = (): void => {
+			pendingSignal = "SIGINT";
+		};
+		const onTerm = (): void => {
+			pendingSignal = "SIGTERM";
+		};
+		const checkSignal = (): void => {
+			if (pendingSignal !== null) throw new SpaceGitInterruptedError(pendingSignal);
+		};
+		process.on("SIGINT", onInt);
+		process.on("SIGTERM", onTerm);
 		try {
+			checkSignal();
 			// The clash probe guards CREATING a ref. A space whose branch is not
 			// on the remote yet is about to create one — a first init, a space
 			// whose first push failed, or one whose allowlist was empty until
@@ -733,9 +749,27 @@ export default class Init extends BaseCommand<typeof Init> {
 			allowlist = writeAllowlist(root, tracked);
 			writeCadence(root, cadence);
 
-			const staged = this.firstCommit(root, name, branch, remote, (files) => {
-				committed = files;
-			});
+			const staged = this.firstCommit(
+				root,
+				name,
+				branch,
+				remote,
+				(files) => {
+					committed = files;
+				},
+				() => {
+					checkSignal();
+					// Narrow (not eliminate) the race: fetch the latest manifest just
+					// before publishing. The locked upsert remains the final check.
+					ensureDriveCheckout(remote);
+					const latest = this.registeredEntry(name);
+					if (latest !== null && latest.branch !== branch) {
+						throw new SpaceNameConflictError(name, branch, latest.branch);
+					}
+					pushAttempted = true;
+				},
+			);
+			checkSignal();
 			committed = staged.committed;
 			unborn = staged.unborn;
 			upToDate = staged.upToDate;
@@ -756,7 +790,38 @@ export default class Init extends BaseCommand<typeof Init> {
 			// Unstage first: `initSpaceGitDir` is a no-op on a second run, so a
 			// secret refusal on a refresh must not leave the index full of it.
 			spaceGit(root, ["reset", "--quiet"], { allowFailure: true });
-			if (!rollback()) throw err;
+			let failure = err;
+			let confirmed = false;
+			if (pushAttempted && !(err instanceof SpaceGitInterruptedError)) {
+				try {
+					const head = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+					confirmed = head !== "" && remoteSha(root, remote, branch) === head;
+				} catch (probeError) {
+					// Unknown is not success. Also preserve a re-probe interruption
+					// as an interruption, never an ordinary network failure.
+					if (probeError instanceof SpaceGitInterruptedError) failure = probeError;
+				}
+			}
+			const interrupted = failure instanceof SpaceGitInterruptedError;
+			const keepsCommit = committed > 0 && (!created.created || pushAttempted || interrupted);
+			if (!keepsCommit) rollback();
+			if (failure instanceof SpaceGitInterruptedError) {
+				throw new SpaceGitInterruptedError(
+					failure.signal,
+					keepsCommit || pushAttempted
+						? `interrupted: your commit is kept locally with its allowlist, tracked paths and cadence; publication was not confirmed. Run \`hyper space init --refresh\` to publish it.`
+						: `interrupted: nothing was changed in the space. Run the command again when ready.`,
+				);
+			}
+			if (!confirmed) {
+				if (pushAttempted) {
+					throw new SpaceGitError(
+						`${err instanceof Error ? err.message : String(err)} I couldn't confirm the push of ${branch} ` +
+							`to ${remote}; your commit is kept locally. Run \`hyper space init --refresh\` to publish it.`,
+					);
+				}
+				throw err;
+			}
 			// The push reported failure but the hyperdrive holds this commit
 			// anyway — an ambiguous failure (a dropped connection, a killed
 			// client) where the one thing that matters did happen. Deleting the
@@ -778,8 +843,8 @@ export default class Init extends BaseCommand<typeof Init> {
 				`warning: the push reported a failure, but ${branch} is on ${remote}. Continuing.\n`,
 			);
 		} finally {
-			process.off("SIGINT", onSignal);
-			process.off("SIGTERM", onSignal);
+			process.off("SIGINT", onInt);
+			process.off("SIGTERM", onTerm);
 		}
 
 		// The manifest write is DELIBERATELY outside the rollback above. By now
@@ -789,6 +854,14 @@ export default class Init extends BaseCommand<typeof Init> {
 		try {
 			upsertSpace(manifestEntry);
 		} catch (err) {
+			if (err instanceof SpaceNameConflictError) {
+				throw new Error(
+					`${branch} was pushed to ${remote}, but the name ${JSON.stringify(name)} now belongs to ${err.existingBranch}. ` +
+						`Remove ${spaceGitDir(root)} and run \`hyper space init --name <another>\`. ` +
+						`The pushed branch stays on the hyperdrive until removed by hand; hyper never deletes remote refs. ` +
+						`To remove it yourself, run:\n\n  git push ${shellQuote(remote)} --delete ${shellQuote(branch)}\n`,
+				);
+			}
 			throw new Error(
 				`${branch} was committed and pushed to ${remote}, but writing the hyperdrive manifest ` +
 					`failed — the space itself is fine: ${err instanceof Error ? err.message : String(err)} ` +
@@ -875,13 +948,28 @@ export default class Init extends BaseCommand<typeof Init> {
 		branch: string,
 		remote: string,
 		onCommitted: (files: number) => void,
+		beforePush: () => void,
 	): {
 		committed: number;
 		unborn: boolean;
 		upToDate: boolean;
 		skipped: string[];
 	} {
-		spaceGit(root, ["add", "-A"]);
+		// Git reports nested repos as directory entries, even with an unborn
+		// HEAD or no files. Exclude those BEFORE add, which otherwise refuses
+		// an unborn repo with raw stderr. -z and literal pathspecs preserve odd
+		// filenames without treating their brackets or stars as patterns.
+		const excluded = spaceGit(root, ["ls-files", "--others", "--exclude-standard", "-z"])
+			.stdout.split("\0")
+			.filter((path) => path.endsWith("/") && existsSync(join(root, path, ".git")))
+			.map((path) => path.slice(0, -1));
+		spaceGit(root, [
+			"add",
+			"-A",
+			"--",
+			".",
+			...excluded.map((path) => `:(top,exclude,literal)${path}`),
+		]);
 		const staged = stagedPaths(root);
 
 		// A nested repository under an allowlisted directory is staged as a
@@ -889,11 +977,14 @@ export default class Init extends BaseCommand<typeof Init> {
 		// own. Committing one would silently put a pointer to something the
 		// hyperdrive does not hold into the space's history. Unstage each one
 		// and say so by name — its files stay on disk, unsaved by the space.
-		const nested = stagedGitlinks(root);
-		for (const path of nested) {
+		const gitlinks = stagedGitlinks(root);
+		const nested = [...new Set([...excluded, ...gitlinks])];
+		for (const path of gitlinks) {
 			// `-f`: git refuses to unstage a gitlink whose staged content differs
 			// from both the work tree and HEAD — which is exactly this case.
-			spaceGit(root, ["rm", "--cached", "-q", "-f", "--", path]);
+			spaceGit(root, ["rm", "--cached", "-q", "-f", "--", `:(literal)${path}`]);
+		}
+		for (const path of nested) {
 			process.stderr.write(
 				`warning: ${path} contains its own git repository; its files are not saved in the space.\n`,
 			);
@@ -962,6 +1053,7 @@ export default class Init extends BaseCommand<typeof Init> {
 		const publishedBefore = remoteSha(root, remote, branch);
 		// A plain push, never force: `--force-with-lease` is what would be able
 		// to rewrite a space another machine has already pushed.
+		beforePush();
 		spaceGitRemote(root, remote, ["push", "-u", "origin", branch], branch);
 		return {
 			committed: staged.length,
