@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0](https://github.com/svallory/hyper-coding/compare/v0.4.0...v0.5.0) (2026-10-03)
+
+
+### Miscellaneous Chores
+
+* release 0.5.0 ([f36dadf](https://github.com/svallory/hyper-coding/commit/f36dadf9f7e0ddfa3ef7d58464cb1e0dfd7e47b2))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @hypercli/ui bumped to 0.5.0
+    * create-hyper-hq bumped to 0.5.0
+
 ## [0.2.3](https://github.com/svallory/hyper-coding/compare/v0.2.2...v0.2.3) (2026-03-24)
 
 

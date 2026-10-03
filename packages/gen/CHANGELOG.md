@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.5.0](https://github.com/svallory/hyper-coding/compare/v0.4.0...v0.5.0) (2026-10-03)
+
+
+### Bug Fixes
+
+* **gen:** declare yaml dependency and @types/debug ([d7cf619](https://github.com/svallory/hyper-coding/commit/d7cf6194bb823ed50e44303ef8997057219e800e))
+* **gen:** move yaml to runtime dependencies ([932f429](https://github.com/svallory/hyper-coding/commit/932f4290f130e7fff0919badf644f5475a568bf3))
+
+
+### Miscellaneous Chores
+
+* release 0.5.0 ([f36dadf](https://github.com/svallory/hyper-coding/commit/f36dadf9f7e0ddfa3ef7d58464cb1e0dfd7e47b2))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @hypercli/core bumped to 0.5.0
+    * @hypercli/kit bumped to 0.5.0
+    * @hypercli/ui bumped to 0.5.0
+
 ## [0.2.1](https://github.com/svallory/hyper-coding/compare/v0.2.0...v0.2.1) (2026-03-24)
 
 

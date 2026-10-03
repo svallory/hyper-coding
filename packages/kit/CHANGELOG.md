@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/svallory/hyper-coding/compare/v0.4.0...v0.5.0) (2026-10-03)
+
+
+### Bug Fixes
+
+* **kit:** declare @oclif/core, js-yaml, debug and @clack/prompts ([4cd0891](https://github.com/svallory/hyper-coding/commit/4cd0891d3e920443d8ff5570144291778e0bb7ca))
+
+
+### Miscellaneous Chores
+
+* release 0.5.0 ([f36dadf](https://github.com/svallory/hyper-coding/commit/f36dadf9f7e0ddfa3ef7d58464cb1e0dfd7e47b2))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @hypercli/core bumped to 0.5.0
+    * @hypercli/ui bumped to 0.5.0
+
 ## [0.2.1](https://github.com/svallory/hyper-coding/compare/v0.2.0...v0.2.1) (2026-03-24)
 
 

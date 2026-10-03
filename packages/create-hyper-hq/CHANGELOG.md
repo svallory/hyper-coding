@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/svallory/hyper-coding/compare/v0.4.0...v0.5.0) (2026-10-03)
+
+
+### Bug Fixes
+
+* **create-hyper-hq:** raise timeout on npm pack simulation tests ([8264637](https://github.com/svallory/hyper-coding/commit/8264637d826b9313445112cc05b6150994b8a232))
+
+
+### Miscellaneous Chores
+
+* release 0.5.0 ([f36dadf](https://github.com/svallory/hyper-coding/commit/f36dadf9f7e0ddfa3ef7d58464cb1e0dfd7e47b2))
+
 ## [0.2.2](https://github.com/svallory/hyper-coding/compare/v0.2.1...v0.2.2) (2026-03-24)
 
 
