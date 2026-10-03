@@ -17,8 +17,38 @@
  * says what the machine says.
  */
 
+import { shellQuote } from "#services/remote";
 import { runScript } from "./shell.js";
 import type { TaskContext } from "./types.js";
+
+/**
+ * The lines a generated root script uses to work out the primary user.
+ *
+ * Shared by `agent-user.create` and the watcher's root fallback so the two
+ * cannot drift — and they did drift once, which is how this was found: the
+ * create script resolved `$SUDO_USER` and the fallback baked in the ssh target,
+ * so on a machine reached through an ssh alias the fallback said
+ * `enable-linger t16box` and `set -e` aborted the whole assembled script after
+ * its good steps had already run.
+ *
+ * `$SUDO_USER` is whoever typed the password, which is the primary user in both
+ * the local and the remote case. The baked value is a fallback for a
+ * passwordless run with no environment, and it is deliberately EMPTY when the
+ * ssh target names no user (an alias or a bare hostname), so the failure mode of
+ * guessing wrong is a clear "no such user" rather than quietly changing the wrong
+ * user's ACLs.
+ */
+export function primaryUserLines(ctx: TaskContext): string {
+	const host = ctx.machine?.host ?? "";
+	const at = host.indexOf("@");
+	const named = at > 0 ? host.slice(0, at).trim() : "";
+	return [
+		`primary_user="\${SUDO_USER:-}"`,
+		`if [ -z "$primary_user" ] || ! id -u "$primary_user" >/dev/null 2>&1; then`,
+		`  primary_user=${named === "" ? "" : shellQuote(named)}`,
+		`fi`,
+	].join("\n");
+}
 
 /** The user agents run as on this machine. */
 export async function agentUserOf(ctx: TaskContext): Promise<string> {

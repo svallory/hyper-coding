@@ -21,7 +21,7 @@
  */
 
 import { shellQuote } from "#services/remote";
-import { homeOf, primaryUserOf } from "./agent-context.js";
+import { homeOf, primaryUserLines, primaryUserOf } from "./agent-context.js";
 import { runOrFail, runScript } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
@@ -179,11 +179,11 @@ export const agentUserWatcher: Task = {
 	 * Idempotent: `enable-linger` on a user that already lingers is a no-op.
 	 */
 	rootFallback(ctx: TaskContext): string {
-		const primaryUser = ctx.machine?.host?.split("@")[0]?.trim() || ctx.config.self.name;
 		return `# Keep your own systemd --user units (the transcript watcher) alive
 # after you log out. Stock polkit allows this without a password; on a machine
 # whose rules don't, this is the step that has to be root.
-loginctl enable-linger ${shellQuote(primaryUser)}
+${primaryUserLines(ctx)}
+loginctl enable-linger "$primary_user"
 `;
 	},
 };

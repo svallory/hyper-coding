@@ -155,6 +155,7 @@ const SETTLED_CREATE = [
 	"primary_groups=svallory,sudo,collab",
 	"dropin_entry=no",
 	"agent_config_writable=yes",
+	"agent_home_traversable=yes",
 	"linger=yes",
 ].join("\n");
 
@@ -295,6 +296,22 @@ describe("agent-user.create", () => {
 		expect(await agentUserCreate.check(ctxFor(runner))).toBe(false);
 	});
 
+	it("fails when the primary user cannot traverse into the agent's home", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		// Debian's HOME_MODE is 0700, so without a traverse ACL on /home/agent the
+		// primary user cannot reach the config dir inside it — and `agent-user.dirs`
+		// could then never create a single symlink, no matter how often it ran.
+		const runner = recordingRunner([
+			{
+				match: /printf 'agent_uid=/,
+				result: {
+					stdout: SETTLED_CREATE.replace("agent_home_traversable=yes", "agent_home_traversable=no"),
+				},
+			},
+		]);
+		expect(await agentUserCreate.check(ctxFor(runner))).toBe(false);
+	});
+
 	it("issues only read-only commands", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner();
@@ -314,7 +331,7 @@ describe("agent-user.create", () => {
 		expect(script).toContain(
 			"id -u agent >/dev/null 2>&1 || useradd -m -s /bin/bash -G collab agent",
 		);
-		expect(script).toContain("usermod -aG collab svallory");
+		expect(script).toContain('usermod -aG collab "$primary_user"');
 		expect(script).toContain("gpasswd -d agent sudo");
 		expect(script).toContain("gpasswd -d agent docker");
 		expect(script).toContain("rm -f /etc/sudoers.d/agent");
@@ -324,6 +341,21 @@ describe("agent-user.create", () => {
 		expect(script).toContain("apt-get install -y inotify-tools");
 		// The agent's config dir, group-writable, so dirs can symlink into it.
 		expect(script).toContain("install -d -o agent -g collab -m 2770");
+		// install(1) ignores setgid bits in -m, so it is set explicitly.
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: SHELL text, expanded by bash
+		expect(script).toContain('chmod 2770 "${agent_home}/.claude"');
+		// And the agent's home has to be traversable for that to be reachable:
+		// traverse only, granted to one named user rather than to `other`.
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: SHELL text, expanded by bash
+		expect(script).toContain('setfacl -m "u:$primary_user:x" "${agent_home}"');
+		// Not `chmod o+x`: that would hand traverse to every account on the
+		// machine. Comment lines are stripped first — the script explains what it
+		// is not doing, and that text must not read as doing it.
+		const commands = script
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line !== "" && !line.startsWith("#"));
+		expect(commands.some((line) => line.includes("chmod o+x"))).toBe(false);
 	});
 
 	it("guards every step, so running the script twice changes nothing (C-15)", () => {
@@ -344,6 +376,49 @@ describe("agent-user.create", () => {
 		// failure is swallowed — removing an absent membership is not an error.
 		expect(script).toContain("grep -qx sudo && \\");
 		expect(script).toContain("|| true");
+	});
+
+	it("resolves the primary user at run time, not from the ssh target", () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const script = agentUserCreate.rootScript?.(ctxFor(recordingRunner())) ?? "";
+		// An ssh alias or a bare hostname has no user part, so baking the target's
+		// user in would hand `usermod` an alias and abort the script on `set -e`.
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: SHELL text, expanded by bash
+		expect(script).toContain('primary_user="${SUDO_USER:-}"');
+		expect(script).toContain('usermod -aG collab "$primary_user"');
+	});
+
+	it("ignores an ssh target that names no user", () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const ctx = { ...ctxFor(recordingRunner()), machine: { ...MACHINE, host: "t16box" } };
+		const script = agentUserCreate.rootScript?.(ctx) ?? "";
+		// `t16box` is an alias, not a username, so it must not become the fallback.
+		expect(script).not.toContain("primary_user=t16box");
+		expect(script).not.toContain("usermod -aG collab t16box");
+	});
+
+	it("resolves the primary user the same way in the watcher's root fallback", () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		// The regression this exists for: create resolved $SUDO_USER and the
+		// fallback baked in the ssh target, so on an aliased machine the fallback
+		// said `enable-linger t16box` and `set -e` killed the assembled script
+		// after its good steps had run.
+		const ctx = { ...ctxFor(recordingRunner()), machine: { ...MACHINE, host: "t16box" } };
+		const create = agentUserCreate.rootScript?.(ctx) ?? "";
+		const fallback = agentUserWatcher.rootFallback?.(ctx) ?? "";
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: SHELL text, expanded by bash
+		expect(fallback).toContain('primary_user="${SUDO_USER:-}"');
+		expect(fallback).toContain('loginctl enable-linger "$primary_user"');
+		expect(fallback).not.toContain("t16box");
+		// Same resolution lines, in the same wording, in both scripts. (Only the
+		// resolution itself is compared — each script uses $primary_user for its
+		// own different step.)
+		const resolution = create
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line.startsWith("primary_user=") || line.includes('id -u "$primary_user"'));
+		expect(resolution.length).toBeGreaterThan(0);
+		for (const line of resolution) expect(fallback).toContain(line);
 	});
 
 	it("produces byte-identical scripts on two runs with the same input", () => {
@@ -478,6 +553,18 @@ describe("agent-user.dirs — the shared dirs", () => {
 		expect(await agentUserDirs.check(ctxFor(runner))).toBe(false);
 	});
 
+	it("asks for setgid with `test -g`, which tests the bit", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.check(ctxFor(runner));
+		// `stat -c %a` reports 2770 for a setgid directory, so any test that looks
+		// at the digits reports a correctly-set-up dir as NOT setgid and the task
+		// can never settle.
+		expect(runner.joined).toContain(`test -g ${HOME}/work`);
+		expect(runner.joined).toContain(`test -g ${HOME}/.claude/projects`);
+		expect(runner.joined).not.toMatch(/stat -c %a[^\n]*grep -q/);
+	});
+
 	it("fails when the work dir is not setgid", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner([
@@ -500,6 +587,27 @@ describe("agent-user.dirs — the shared dirs", () => {
 				expect(snippet).not.toContain(verb);
 			}
 		}
+	});
+
+	it("stands down (without throwing) when the agent's config dir is not there yet", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		// This is the FIRST run of the feature on a clean machine: agent-user.create
+		// has handed the user a root script that hasn't been run, so the agent's
+		// config dir does not exist. Throwing here would make the runner exit 1 and
+		// the user would never see the root script at all.
+		const logs: string[] = [];
+		const runner = recordingRunner([
+			{ match: /printf 'agent_uid=/, result: { stdout: SETTLED_CREATE } },
+			{ match: /test -d \/home\/agent\/\.claude/, result: { code: 1, stderr: "nope" } },
+		]);
+		const ctx = { ...ctxFor(runner), log: (line: string) => logs.push(line) };
+		await expect(agentUserDirs.apply?.(ctx)).resolves.toBeUndefined();
+		// It says what it is waiting for rather than failing silently.
+		expect(logs.join("\n")).toContain("agent-user.dirs");
+		expect(logs.join("\n")).toContain("root script");
+		// And it did not attempt any of the work it cannot do.
+		expect(runner.joined).not.toContain("setfacl");
+		expect(runner.joined).not.toContain("ln -sfn");
 	});
 });
 
@@ -623,7 +731,7 @@ describe("the polkit-denied path becomes a root fallback, not a failure", () => 
 		expect(report.rootScriptPath).toBeDefined();
 		const script = readFileSync(report.rootScriptPath as string, "utf-8");
 		expect(script).toContain("# --- agent-user.watcher ---");
-		expect(script).toContain("loginctl enable-linger svallory");
+		expect(script).toContain('loginctl enable-linger "$primary_user"');
 		// The banner has to say this is a fallback, so a user reading the file
 		// knows why a task that ran fine unprivileged is in a root script.
 		expect(script).toContain("root fallback");

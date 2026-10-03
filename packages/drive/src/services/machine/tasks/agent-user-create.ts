@@ -19,7 +19,7 @@
 
 import { DOCKER_GROUP, PRIVILEGED_GROUP, SUDOERS_DIR } from "#services/machine/root-script";
 import { shellQuote } from "#services/remote";
-import { agentHomeOf, agentUserOf, primaryUserOf } from "./agent-context.js";
+import { agentHomeOf, agentUserOf, primaryUserLines, primaryUserOf } from "./agent-context.js";
 import { runScript } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
@@ -46,6 +46,10 @@ function probe(agentUser: string, primaryUser: string, agentHome: string): strin
 		`printf 'dropin_entry=%s\\n' "$(test -e ${SUDOERS_DIR}/${q(agentUser)} && echo yes || echo no)"`,
 		// The agent's config dir exists and the primary user may write in it.
 		`printf 'agent_config_writable=%s\\n' "$(test -d ${q(agentHome)}/.claude && test -w ${q(agentHome)}/.claude && echo yes || echo no)"`,
+		// Asked as the primary user, not read off the mode: Debian's HOME_MODE is
+		// 0700, so the agent's home needs a traverse ACL of its own or this is
+		// false however permissive the config dir inside it is.
+		`printf 'agent_home_traversable=%s\\n' "$(test -x ${q(agentHome)} && echo yes || echo no)"`,
 		// Linger: the agent's own systemd --user units outlive a logout.
 		`printf 'linger=%s\\n' "$(loginctl show-user ${q(agentUser)} --property=Linger --value 2>/dev/null || true)"`,
 	].join("; ");
@@ -59,6 +63,7 @@ interface Probe {
 	primaryGroups: string[];
 	dropInEntry: boolean;
 	agentConfigWritable: boolean;
+	agentHomeTraversable: boolean;
 	linger: boolean;
 }
 
@@ -82,6 +87,7 @@ function parseProbe(stdout: string): Probe {
 		primaryGroups: groups("primary_groups"),
 		dropInEntry: yes("dropin_entry"),
 		agentConfigWritable: yes("agent_config_writable"),
+		agentHomeTraversable: yes("agent_home_traversable"),
 		linger: yes("linger"),
 	};
 }
@@ -112,6 +118,8 @@ export const agentUserCreate: Task = {
 		// user, or `agent-user.dirs` cannot install its symlinks and would have
 		// to keep asking for root.
 		if (!parsed.agentConfigWritable) return false;
+		// …which needs the agent's home itself to be traversable.
+		if (!parsed.agentHomeTraversable) return false;
 		// Linger is what lets the agent's own `systemd --user` unit keep running
 		// with no session of its own — the watcher depends on it.
 		return parsed.linger;
@@ -120,7 +128,7 @@ export const agentUserCreate: Task = {
 	rootScript(ctx: TaskContext): string {
 		const agentUser =
 			ctx.machine?.agentUser ?? ctx.config.machines[ctx.config.self.name]?.agent_user ?? "agent";
-		const primaryUser = primaryUserNameForScript(ctx);
+		const primaryUser = primaryUserLines(ctx);
 		const agentUserQ = shellQuote(agentUser);
 		return `# The unattended agent user.
 #
@@ -140,6 +148,13 @@ if ! command -v inotifywait >/dev/null 2>&1; then
   apt-get install -y inotify-tools
 fi
 
+# Who you are: the user who ran this with their password, which is the login
+# that invoked the script. Resolved HERE rather than baked in, because the ssh
+# target's user part is only a username when the target is written as one — an
+# ssh alias or a bare hostname has none, and \`usermod\` handed an alias would
+# abort the whole script.
+${primaryUser}
+
 # The shared group.
 getent group ${COLLAB_GROUP} >/dev/null 2>&1 || groupadd ${COLLAB_GROUP}
 
@@ -148,7 +163,7 @@ getent group ${COLLAB_GROUP} >/dev/null 2>&1 || groupadd ${COLLAB_GROUP}
 id -u ${agentUserQ} >/dev/null 2>&1 || useradd -m -s /bin/bash -G ${COLLAB_GROUP} ${agentUserQ}
 
 # You, in the same group, so the shared dirs are reachable from both sides.
-usermod -aG ${COLLAB_GROUP} ${primaryUser}
+usermod -aG ${COLLAB_GROUP} "$primary_user"
 
 # The absences, in order of how much they matter. gpasswd -d removes a
 # supplementary membership; it fails harmlessly when there is none, so each is
@@ -159,15 +174,24 @@ id -nG ${agentUser} 2>/dev/null | tr ' ' '\\n' | grep -qx ${DOCKER_GROUP} && \\
   gpasswd -d ${agentUser} ${DOCKER_GROUP} || true
 rm -f ${SUDOERS_DIR}/${agentUser}
 
-# The agent's own config dir, group-writable and setgid so the entries
-# \`agent-user.dirs\` symlinks into it are created with your group, not the
-# agent's. This is the ONLY thing that task needs from root; without it, every
-# symlink it wants to create would be a root step.
-install -d -o ${agentUser} -g ${COLLAB_GROUP} -m 2770 "$(getent passwd ${agentUser} | cut -d: -f6)/.claude"
+# The agent's home. Debian's HOME_MODE is 0700, so this is a private directory
+# until we say otherwise below.
+agent_home="$(getent passwd ${agentUser} | cut -d: -f6)"
+
+# The agent's own config dir, group-writable so the entries \`agent-user.dirs\`
+# symlinks into it can be created by you without root. This is the ONLY thing
+# that task needs from root; without it every symlink it wants would be a root
+# step. install(1) ignores setgid bits in -m, so it is set explicitly.
+install -d -o ${agentUser} -g ${COLLAB_GROUP} -m 2770 "\${agent_home}/.claude"
+chmod 2770 "\${agent_home}/.claude"
+
+# Let you path INTO the agent's home, so you can write those symlinks — and
+# nothing else: \`x\` alone is traverse, not list. A named-user ACL rather than
+# \`chmod o+x\`, so no other account on this machine gains anything from it.
+setfacl -m "u:$primary_user:x" "\${agent_home}"
 
 # Keep a collaborative default umask and real-path cd in the agent's shell, so
 # files it writes are group-accessible by creation rather than by the watcher.
-agent_home="$(getent passwd ${agentUser} | cut -d: -f6)"
 touch "\${agent_home}/.bashrc"
 grep -q 'umask 002' "\${agent_home}/.bashrc" || \\
   printf '\\n# hyper: files here are shared with the primary user\\numask 002\\n' >> "\${agent_home}/.bashrc"
@@ -182,14 +206,14 @@ loginctl enable-linger ${agentUser}
 /**
  * The primary user's name for the script.
  *
- * `rootScript` is synchronous and this is a question only the machine can
- * answer, so the synchronous path takes the name it already has: the ssh login
- * when the machine is remote, the config's own name locally. The check resolves
- * it properly, so a machine where this guess is wrong is detected and reported
- * as a still-failing task rather than quietly set up wrong.
+ * The primary user, as a FALLBACK for the script to use when it can't work the
+ * name out itself.
+ *
+ * `rootScript` is synchronous and the real answer is a question only the machine
+ * can answer, which is why the generated script prefers `$SUDO_USER` at run
+ * time and uses this only if that is unset. Baking the guess in unconditionally
+ * is wrong more often than it is right: an ssh target's `user@` part is only a
+ * user when the target is written as one, and an ssh alias (`Host t16` →
+ * `t16box`) or a bare hostname has no user part at all — so `usermod` would be
+ * handed an alias as a username and the script would stop on `set -e`.
  */
-function primaryUserNameForScript(ctx: TaskContext): string {
-	const fromHost = ctx.machine?.host?.split("@")[0]?.trim() ?? "";
-	if (fromHost !== "") return shellQuote(fromHost);
-	return shellQuote(ctx.config.self.name);
-}

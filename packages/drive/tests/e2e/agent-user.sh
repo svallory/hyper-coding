@@ -48,7 +48,12 @@ key="$work_real/id"
 cleanup() {
   echo "# tearing down $container"
   podman rm -f "$container" >/dev/null 2>&1 || true
-  rm -rf "$work_real"
+  # KEEP=1 leaves the logs behind for debugging a failing run.
+  if [ "${KEEP:-0}" = "1" ]; then
+    echo "# KEEP=1 — logs left in $work_real"
+  else
+    rm -rf "$work_real"
+  fi
 }
 trap cleanup EXIT
 
@@ -57,6 +62,30 @@ podman --version
 echo "# image digest"
 digest="$(podman image inspect "$image" --format '{{.Digest}}')"
 echo "$image $digest"
+
+# --------------------------------------------------------------------------
+# The image
+# --------------------------------------------------------------------------
+# The stock debian:13 image ships NO /sbin/init — systemd-sysv is a separate
+# package — so `--systemd=always … /sbin/init` cannot work on it directly, and
+# it cannot be installed inside the container either (nothing is running yet).
+# So the packages go into a throwaway image derived from it, built once here.
+# The base digest is printed above so the derivation is traceable.
+derived="hyper-t16-e2e:local"
+if ! podman image exists "$derived"; then
+  echo "# building $derived from $image (systemd + sshd + the acl/inotify packages)"
+  cat > "$work_real/Containerfile" <<CONTAINERFILE
+FROM $image
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends \\
+      systemd-sysv openssh-server sudo acl inotify-tools polkitd procps \\
+    && rm -rf /var/lib/apt/lists/*
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
+CONTAINERFILE
+  podman build --tag "$derived" --file "$work_real/Containerfile" "$work_real" >/dev/null \
+    || die "could not build the container image"
+fi
 
 # --------------------------------------------------------------------------
 # The machine
@@ -69,7 +98,7 @@ fi
 # The trap removes it, but a leftover from a killed run would make `run` fail on
 # the name — so clear it before starting. Only ever this exact name.
 podman rm -f "$container" >/dev/null 2>&1 || true
-podman run -d --name "$container" --systemd=always -p "$port":22 "$image" /sbin/init >/dev/null
+podman run -d --name "$container" --systemd=always -p "$port":22 "$derived" /sbin/init >/dev/null
 echo "# started $container"
 
 pexec() { podman exec "$container" sh -c "$1"; }
@@ -81,8 +110,8 @@ pexec 'for i in $(seq 1 90); do systemctl is-system-running >/dev/null 2>&1 && e
 # polkitd is what allows `loginctl enable-linger` on yourself WITHOUT a password.
 # Stock Debian has it; without it the watcher task would (correctly) fall back
 # to the root script and this e2e would be testing the fallback, not the task.
-pexec 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq openssh-server sudo acl inotify-tools systemd-sysv procps polkitd' \
-  || die "could not install the container's packages"
+pexec 'command -v polkitd >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq polkitd; }' \
+  || die "could not install polkitd"
 
 # The primary user, playing the human: passwordless sudo, so the harness can
 # run the root script the way the user would type it.
@@ -100,7 +129,7 @@ pexec '/usr/sbin/sshd'
 echo "# sshd started"
 
 ssh_t16() {
-  ssh -i "$key" -p "$port" \
+  /usr/bin/ssh -i "$key" -p "$port" \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -o LogLevel=ERROR -o ConnectTimeout=10 \
     "$primary@localhost" "$@"
@@ -129,18 +158,56 @@ mkdir -p "$work_real/bin"
 cat > "$work_real/bin/herdr" <<JSON
 #!/bin/sh
 cat <<'HERDR'
-[{"label": "t16", "target": "$primary@localhost:$port", "enabled": true}]
+[{"label": "t16", "target": "t16box", "enabled": true}]
 HERDR
 exit 0
 JSON
 chmod +x "$work_real/bin/herdr"
+
+# The ssh target is an ALIAS, not a `host:port` pair. `RemoteMachine` passes
+# Herdr's target straight to `ssh` as one argument, and ssh has no host:port form
+# — that spelling is scp/rsync's. (The brief assumed T-10's grammar supported a
+# port; it doesn't, so a non-default ssh port is unreachable today. Flagged to
+# the lead; out of scope here.) The alias carries the port and the user in an
+# ssh config of our own, reached by pointing HOME at a scratch dir — the
+# operator's real ~/.ssh is never touched.
+ssh_home="$work_real/sshhome"
+mkdir -p "$ssh_home/.ssh"
+cat > "$ssh_home/.ssh/config" <<SSHCFG
+Host t16box
+  HostName localhost
+  Port $port
+  User $primary
+  IdentityFile $key
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  LogLevel ERROR
+SSHCFG
+chmod 700 "$ssh_home/.ssh"
+chmod 600 "$ssh_home/.ssh/config"
+
+# …and ssh has to be TOLD to read it. OpenSSH expands `~/.ssh/config` through the
+# passwd database's home, not $HOME, so pointing HOME at a scratch dir does not
+# work (verified on this Mac). A wrapper `ssh` earlier on PATH carries the -F:
+# that is the harness standing in for the ssh config a real operator would have.
+# The wrapper is what the CLI spawns; the harness's own calls use /usr/bin/ssh.
+cat > "$work_real/bin/ssh" <<WRAPPER
+#!/bin/sh
+exec /usr/bin/ssh -F "$work_real/sshhome/.ssh/config" "\$@"
+WRAPPER
+chmod +x "$work_real/bin/ssh"
+
+# bun wants a ~/.bun; point it at the real one rather than re-resolving.
+[ -d "$HOME/.bun" ] && ln -sfn "$HOME/.bun" "$ssh_home/.bun"
+# Keep the CLI's own args off the container's locale warnings.
+export LC_ALL=C LANG=C
 
 cat > "$work_real/drive.toml" <<TOML
 remote = "git@example.invalid:hyperdrive.git"
 
 [self]
 name = "mac"
-home = "$HOME"
+home = "/Users/nobody"
 
 [machines.t16]
 home = "/home/$primary"
@@ -150,7 +217,7 @@ TOML
 
 run_hyper() {
   PATH="$work_real/bin:$PATH" HYPER_DRIVE_CONFIG="$work_real/drive.toml" \
-    NO_COLOR=1 bun "$cli" machine setup t16 --features agent-user --yes
+    HOME="$ssh_home" NO_COLOR=1 bun "$cli" machine setup t16 --features agent-user --yes
 }
 
 # --------------------------------------------------------------------------
@@ -165,10 +232,9 @@ for round in 1 2 3 4; do
   code=$?
   set -e
   tail -3 "$work_real/setup-$round.log"
-
   # The pending-root exit code is 3: root work outstanding, nothing run.
   if [ "$code" = 3 ]; then
-    root_script="$(grep -o "$work_real/scratch/[^ ]*hyper-machine-root.sh" "$work_real/setup-$round.log" | head -1)"
+    root_script="$(grep -o "[^ ]*hyper-machine-root\.sh" "$work_real/setup-$round.log" | head -1)"
     [ -n "$root_script" ] || die "run $round said root work was pending but named no script"
     echo "# the harness runs the root script itself, over ssh, with sudo"
     scp -q -i "$key" -P "$port" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
@@ -183,7 +249,11 @@ for round in 1 2 3 4; do
     break
   fi
 done
-[ "${settled:-0}" = 1 ] || die "setup never settled into \"Nothing needed\""
+[ "${settled:-0}" = 1 ] || {
+  echo "# setup never settled. What each round said it still needed:"
+  grep -h -E "still need root|how do you want|agent-user\.[a-z]+:|root steps" "$work_real"/setup-*.log | tail -20
+  die "setup never settled into \"Nothing needed\""
+}
 
 grep -q "Nothing needed" "$work_real/setup-$round.log" \
   && pass "a re-run after the root script reports nothing needed (C-15)"
@@ -235,10 +305,20 @@ as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>
   && pass "the agent can read the primary's transcripts"
 
 # The watcher: a 0600 file, written by its owner, becomes group-readable.
-ssh_t16 "printf '{\"session\":\"abc\"}\n' > /home/$primary/.claude/projects/x/live.jsonl"
-ssh_t16 "chmod 0600 /home/$primary/.claude/projects/x/live.jsonl"
-mode_before="$(ssh_t16 "stat -c %a /home/$primary/.claude/projects/x/live.jsonl")"
+#
+# The file is made in /tmp — NOT in projects/ — and asserted there, then moved
+# into the watched dir. Two reasons, both about not writing a flaky test:
+#   - the default ACL on projects/ would hand a newly created file group-read
+#     anyway, so creating it there would not prove the watcher did anything;
+#   - asserting "it is still 0600" AFTER moving it in would race the very
+#     process under test, which typically wins within a second.
+# A file MOVED in keeps the mode it was created with — default ACLs apply at
+# creation, to the directory being created in — so after the move the only
+# thing that can widen it is the watcher.
+ssh_t16 "printf '{\"session\":\"abc\"}\n' > /tmp/live.jsonl && chmod 0600 /tmp/live.jsonl"
+mode_before="$(ssh_t16 'stat -c %a /tmp/live.jsonl')"
 [ "$mode_before" = "600" ] || die "the fixture file is $mode_before, expected 600"
+ssh_t16 "mv /tmp/live.jsonl /home/$primary/.claude/projects/x/live.jsonl"
 
 shared=0
 for _ in $(seq 1 5); do
@@ -249,12 +329,20 @@ for _ in $(seq 1 5); do
   sleep 1
 done
 [ "$shared" = 1 ] || die "the watcher did not make a 0600 file group-readable within 5s"
-pass "a 0600 file under projects/ becomes group-readable within 5s (the watcher)"
+pass "a 0600 file moved under projects/ becomes group-readable within 5s (the watcher)"
+# …and the watcher widened it rather than the file arriving permissive.
+mode_after="$(ssh_t16 "stat -c %a /home/$primary/.claude/projects/x/live.jsonl")"
+[ "$mode_after" = "660" ] || die "after the watcher, the file is $mode_after, expected 660"
+pass "the watcher widened 600 to 660 ($mode_before -> $mode_after)"
 
-# The helper the user installs and types themselves.
-ssh_t16 "grep -q 'eval' /home/$primary/.local/bin/as-agent" || die "as-agent is not installed"
-ssh_t16 "cd /home/$primary/work && ./\.local/bin/as-agent 'echo \$USER'" 2>/dev/null | grep -qx "$agent" \
-  || die "as-agent did not run as $agent"
+# The helper the user installs and types themselves. It runs the command through
+# the agent's LOGIN shell with the args joined and eval'd, which is what makes
+# `as-agent 'echo $USER'` behave like `ssh 'echo $USER'`.
+ssh_t16 "grep -q eval /home/$primary/.local/bin/as-agent" || die "as-agent is not installed"
+as_agent_out="$(ssh_t16 "cd /home/$primary/work && /home/$primary/.local/bin/as-agent 'echo \$USER'" 2>/dev/null || true)"
+if ! printf '%s' "$as_agent_out" | grep -qx "$agent"; then
+  die "as-agent printed $(printf '%q' "$as_agent_out"), expected exactly '$agent'"
+fi
 pass "the as-agent helper runs a command as $agent"
 
 # The container must not survive the script.
