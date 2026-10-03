@@ -2,3 +2,22 @@
 export { ConfigError, configExists, configPath, loadConfig } from "#config/index";
 export { DEFAULT_CONFIG, DEFAULT_MACHINE, type DriveConfig } from "#config/schema";
 export { type BaseArgs, BaseCommand, type BaseFlags } from "#lib/base-command";
+export {
+	claudeHome,
+	encodeProjectDir,
+	type LiveSession,
+	lastAssistantText,
+	latestTranscript,
+	listTranscripts,
+	liveSession,
+	type OwnerMarker,
+	ownerPath,
+	projectDir,
+	readOwner,
+	type StopOutcome,
+	stopSession,
+	type TranscriptRef,
+	transcriptLineCount,
+	VERIFIED_CLAUDE_VERSION,
+	writeOwner,
+} from "#services/sessions";
