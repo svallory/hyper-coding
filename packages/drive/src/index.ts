@@ -3,6 +3,7 @@ export {
 	ConfigError,
 	configExists,
 	configPath,
+	type DeepPartial,
 	loadConfig,
 	readRawConfig,
 	writeConfig,
@@ -42,6 +43,30 @@ export {
 	runnerFor,
 	self,
 } from "#services/machine";
+export {
+	assembleRootScript,
+	type RootScriptEntry,
+	RootScriptError,
+	remoteScriptPath,
+} from "#services/machine/root-script";
+export {
+	ROOT_SCRIPT_NAME,
+	type RootChoice,
+	type RootQuestion,
+	type RunSetupOptions,
+	runSetup,
+	type SetupPrompt,
+	type SetupReport,
+} from "#services/machine/runner";
+export {
+	FEATURE_LIST,
+	FEATURES,
+	type Feature,
+	isFeature,
+	type Task,
+	type TaskContext,
+	TaskError,
+} from "#services/machine/tasks/types";
 export {
 	driveCheckoutDir,
 	driveCheckoutOrigin,
