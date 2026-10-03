@@ -163,13 +163,16 @@ function claudeHome(): string {
  * sshd's default `MaxStartups 10`, and the connections it refuses come back as
  * failures — which the table would report as "missing" on a machine that has
  * every tool. Detecting the local machine needs no ssh at all, so it is asked
- * once and reused.
+ * separately for the reference PATH and the strict target PATH.
  */
 const DETECT_CONCURRENCY = 4;
 
+type ParitySpec = Versioned & { detectReference?: (ctx: TaskContext) => Promise<string | null> };
+
 export async function versionsFor(
-	specs: readonly Versioned[],
+	specs: readonly ParitySpec[],
 	ctx: TaskContext,
+	reference = false,
 ): Promise<Record<string, string | null>> {
 	const out: Record<string, string | null> = {};
 	let next = 0;
@@ -177,7 +180,7 @@ export async function versionsFor(
 		while (next < specs.length) {
 			const spec = specs[next++];
 			try {
-				out[spec.id] = await spec.detect(ctx);
+				out[spec.id] = await (reference ? (spec.detectReference ?? spec.detect) : spec.detect)(ctx);
 			} catch (err) {
 				out[spec.id] = null;
 				ctx.log(
@@ -190,17 +193,13 @@ export async function versionsFor(
 	return out;
 }
 
-/** Compare once for a local target, or once on each distinct machine. */
+/** The reference uses the operator's PATH; even a local target stays strict. */
 export async function parityVersions(
-	specs: readonly Versioned[],
+	specs: readonly ParitySpec[],
 	here: TaskContext,
 	target: TaskContext,
 ): Promise<[Record<string, string | null>, Record<string, string | null>]> {
-	if (target.machine === null) {
-		const local = await versionsFor(specs, here);
-		return [local, local];
-	}
-	return Promise.all([versionsFor(specs, here), versionsFor(specs, target)]);
+	return Promise.all([versionsFor(specs, here, true), versionsFor(specs, target)]);
 }
 
 /** Where the root script goes: inside the space when there is one, else in the user's cache. */
@@ -570,13 +569,9 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 					config,
 					log: (line) => this.log(line),
 				};
-				// A local run is comparing the machine with itself, and the target
-				// column would be sixteen more local processes: detect once.
+				// A local target still has a distinct strict-PATH readiness column.
 				const [local, other] = await parityVersions(wanted, here, ctx);
-				const table =
-					machine === null
-						? renderParity(parityTable(local, local))
-						: renderParity(parityTable(local, other));
+				const table = renderParity(parityTable(local, other));
 				if (table.length > 0) {
 					this.log("");
 					this.log(
