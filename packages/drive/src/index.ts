@@ -65,3 +65,16 @@ export {
 	spaceRepos,
 	worktreesDir,
 } from "#services/space";
+export {
+	hasSpaceGit,
+	type InitSpaceGitOptions,
+	type InitSpaceGitResult,
+	initSpaceGitDir,
+	readCadence,
+	SpaceGitError,
+	type SpaceGitOptions,
+	type SpaceGitResult,
+	spaceGit,
+	spaceGitDir,
+	writeCadence,
+} from "#services/space-git";
