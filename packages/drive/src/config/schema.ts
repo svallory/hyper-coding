@@ -40,58 +40,68 @@ export type SyncTarget = keyof SyncConfig;
  * Paths under `~/.claude` that must never be synced (packaged defaults; the
  * user's `[sync.claude] ignore` is appended to these).
  *
- * Verbatim from the working hand-run sessions on the operator's machines, in
- * the order they are passed to the engine, and kept as a constant rather than
- * a config file because it is a product decision, not a setting (C-14).
+ * Taken verbatim from the `ignore.paths` the engine stores for the operator's
+ * live `claude-config` session — same list, same order, same spelling.
  *
- * The split: machine-local runtime state (sessions, caches, logs, daemons),
- * anything holding credentials or tokens, editor/OS noise, and mutable
+ * THE LEADING SLASH IS PART OF THE PATTERN and is not cosmetic: it anchors the
+ * pattern to the root of the synced directory. Unanchored, `/sessions` becomes
+ * `sessions`, which in Mutagen matches a directory of that name at ANY depth —
+ * `skills/debug/`, `plugins/.trash/stuff/cache/` — so the entries below are
+ * stored exactly as written. `.DS_Store` is the one unanchored entry, matching
+ * the live session: the OS puts it at every level and it is cheap to ignore
+ * everywhere.
+ *
+ * What the list covers: machine-local runtime state (sessions, caches, logs,
+ * daemons), anything holding credentials or tokens, editor/OS noise, and mutable
  * per-machine settings whose last-writer-wins resolution would make two machines
  * fight. Everything else (skills, commands, agents, CLAUDE.md) is meant to be
  * shared, so it is deliberately NOT here.
+ *
+ * A constant rather than a config file because it is a product decision, not a
+ * setting (C-14).
  */
 export const CLAUDE_SYNC_IGNORE: readonly string[] = [
-	".credentials.json",
-	".claude.json*",
-	"sessions",
-	"state",
-	"cache",
-	"debug",
-	"telemetry",
-	"daemon",
-	"daemon.log",
-	"ide",
-	"backups",
-	"shell-snapshots",
-	"statusline*.sh",
-	"stats-cache.json",
-	"policy-limits.json*",
-	"remote-settings.json",
-	".last-*",
-	"gh-pr-status-cache.json",
-	"mcp-needs-auth-cache.json",
+	"/.credentials.json",
+	"/.claude.json*",
+	"/sessions",
+	"/state",
+	"/cache",
+	"/debug",
+	"/telemetry",
+	"/daemon",
+	"/daemon.log",
+	"/ide",
+	"/backups",
+	"/shell-snapshots",
+	"/statusline*.sh",
+	"/stats-cache.json",
+	"/policy-limits.json*",
+	"/remote-settings.json",
+	"/.last-*",
+	"/gh-pr-status-cache.json",
+	"/mcp-needs-auth-cache.json",
 	".DS_Store",
-	"usage-data",
-	"jobs",
-	"channels",
-	"chrome",
-	"feedback",
-	".caveman-active",
-	"downloads",
-	"settings.json.bak*",
-	".anthropic",
-	"plugins/.trash",
-	"security/agent-sdk-venv",
+	"/usage-data",
+	"/jobs",
+	"/channels",
+	"/chrome",
+	"/feedback",
+	"/.caveman-active",
+	"/downloads",
+	"/settings.json.bak*",
+	"/.anthropic",
+	"/plugins/.trash",
+	"/security/agent-sdk-venv",
 ];
 
 /**
- * Paths under `~/.pi/agent` that must never be synced.
+ * Paths under `~/.pi/agent` that must never be synced, verbatim from the live
+ * `pi-config` session.
  *
- * Short on purpose: pi's dir is mostly portable content. `auth.json` is a
- * credential, and `install/` + `bin/` are machine-local (a binary built or
- * downloaded for one machine's Node/OS must not replace another's).
+ * `/install` and `/bin` are root-anchored WITHOUT a trailing slash: they are
+ * the entries, not "a directory with this name".
  */
-export const PI_SYNC_IGNORE: readonly string[] = ["auth.json", "install/", "bin/"];
+export const PI_SYNC_IGNORE: readonly string[] = ["/auth.json", "/install", "/bin", ".DS_Store"];
 
 /** The packaged ignore list for a target. */
 export function packagedSyncIgnore(target: SyncTarget): readonly string[] {

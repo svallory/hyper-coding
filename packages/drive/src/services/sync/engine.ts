@@ -35,6 +35,12 @@ export interface SyncSession {
 	ignore: string[];
 	/** True when the session is paused. */
 	paused: boolean;
+	/** How symlinks are reproduced on beta ("posix-raw"), as the engine stores it. */
+	symlinkMode: string;
+	/** Default file mode created on beta, as the engine stores it ("0660"). */
+	betaFileMode: string;
+	/** Default directory mode created on beta, as the engine stores it ("0770"). */
+	betaDirMode: string;
 	/** Whether each side answered on the last poll. */
 	alphaConnected: boolean;
 	betaConnected: boolean;

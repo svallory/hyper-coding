@@ -22,6 +22,22 @@ const PLANS: readonly SyncPlan[] = [
 /** Every session hyperdrive owns starts with this. */
 const SESSION_PREFIX = "hyper-";
 
+/** The session semantics hyperdrive always asks for. */
+const SYNC_MODE = "two-way-resolved" as const;
+const SYMLINK_MODE = "posix-raw" as const;
+const BETA_FILE_MODE = "0660";
+const BETA_DIR_MODE = "0770";
+
+/**
+ * Mutagen's session-name rule, checked up front.
+ *
+ * MUTAGEN-INTERNAL (verified 0.18.1): session names must start with an
+ * alphanumeric and may then contain alphanumerics, `.`, `_` and `-`. A machine
+ * name outside that would produce a session the engine refuses to create, with
+ * an error from deep inside `--name` rather than anything naming the machine.
+ */
+const SESSION_NAME_OK = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
 /**
  * The alpha URL for a plan: this machine's own config dir, taken from
  * `self.home` in the config so a non-default home is honoured.
@@ -53,17 +69,17 @@ function sessionName(plan: SyncPlan, machine: string): string {
 }
 
 /**
- * Compare a session's ignore list with what hyperdrive would create today.
+ * Which patterns hyperdrive would add that the session does not have.
  *
- * The engine normalizes patterns on the way in (root-anchored with a leading
- * `/`) and adds `.DS_Store` itself, so an exact array compare would call every
- * healthy session a mismatch. Compare as sets of slash-normalized patterns, and
- * report only what hyperdrive would add — a pattern the user added by hand in
- * the engine is not a problem we should nag about.
+ * Compared EXACTLY, including the leading `/`. That slash is the anchor: an
+ * unanchored `sessions` matches a directory of that name at any depth, so
+ * treating `/sessions` and `sessions` as the same pattern would let a session
+ * that ignores the wrong things report as ready. A pattern the user added by
+ * hand in the engine is not reported — only what we would add is.
  */
 function missingPatterns(want: string[], have: string[]): string[] {
-	const normalized = new Set(have.map((pattern) => pattern.replace(/^\/+/, "")));
-	return want.filter((pattern) => !normalized.has(pattern.replace(/^\/+/, "")));
+	const present = new Set(have);
+	return want.filter((pattern) => !present.has(pattern));
 }
 
 type Row = {
@@ -119,6 +135,35 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 	 * verbatim in dev mode — prints the sentence and not the JS frames. --debug
 	 * keeps the frames, because there the frames are the point.
 	 */
+	/** Rows decided before a create failed, so a partial run still reports. */
+	private partial: Row[] | null = null;
+
+	/** Print the table (or JSON) and exit `code` if anything went wrong. */
+	private finish(machineName: string, check: boolean, json: boolean, code: number): void {
+		const rows = this.partial ?? [];
+		if (json) {
+			this.log(JSON.stringify({ machine: machineName, check, sessions: rows }, null, 2));
+		} else {
+			this.table(
+				rows.map((row) => ({
+					name: row.name,
+					alpha: row.alpha,
+					beta: row.beta,
+					status: `${row.state}: ${row.detail}`,
+				})),
+			);
+		}
+		if (code !== 0) {
+			this.error(
+				`${this.failureCount} of ${rows.length} config sync session(s) for "${machineName}" are missing or don't match what hyperdrive expects.`,
+				{ exit: code },
+			);
+		}
+	}
+
+	/** How many rows are not `ready`/`created`. */
+	private failureCount = 0;
+
 	private fail(err: unknown, debug: boolean): never {
 		if (err instanceof SyncEngineError || err instanceof MachineError) {
 			const problem = new Error(err.message);
@@ -188,6 +233,11 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 		try {
 			config = loadConfig();
 			const machine = resolveMachine(machineName);
+			if (!SESSION_NAME_OK.test(machine.name)) {
+				throw new MachineError(
+					`"${machine.name}" can't be part of a sync session name: mutagen wants a name starting with a letter or digit and containing only letters, digits, dots, dashes and underscores. Rename the machine in Herdr.`,
+				);
+			}
 			if (!machine.home) {
 				throw new MachineError(
 					`The "${machine.name}" machine has no home dir in your hyperdrive config, so hyperdrive doesn't know where its ${"~/.claude"} lives. Add \`home = "…"\` under \`[machines.${machine.name}]\` in your drive.toml.`,
@@ -208,7 +258,37 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 				const name = sessionName(plan, machine.name);
 				const alpha = alphaUrl(local, plan);
 				const beta = betaUrl(machine.host as string, machine.home as string, plan);
+				const want = {
+					symlinkMode: SYMLINK_MODE,
+					betaFileMode: BETA_FILE_MODE,
+					betaDirMode: BETA_DIR_MODE,
+					mode: SYNC_MODE,
+				};
 				const current = existing.find((session) => session.name === name);
+
+				// MUST create only when NOTHING at all already syncs this pair.
+				// Matching on name alone would let `sync-config netcup` build
+				// hyper-claude-netcup right next to the operator's hand-made
+				// claude-config on the SAME alpha and beta: two two-way-resolved
+				// sessions over one directory pair, each resolving conflicts the
+				// other just wrote.
+				const collision = existing.find(
+					(session) => session.name !== name && (session.alpha === alpha || session.beta === beta),
+				);
+				if (collision) {
+					rows.push({
+						name,
+						state: "mismatch",
+						alpha,
+						beta,
+						detail: `a session called "${collision.name}" already syncs ${
+							collision.alpha === alpha ? "this alpha" : "this beta"
+						} — two two-way sessions over one directory pair would fight. Terminate it first (\`mutagen sync terminate ${collision.name}\`), then rerun.`,
+					});
+					failures++;
+					continue;
+				}
+
 				if (!current) {
 					if (check) {
 						rows.push({
@@ -221,13 +301,26 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 						failures++;
 						continue;
 					}
-					await engine.create(name, alpha, beta, {
-						ignore: syncIgnoreFor(plan.target, config),
-						symlinkMode: "posix-raw",
-						betaFileMode: "0660",
-						betaDirMode: "0770",
-						mode: "two-way-resolved",
-					});
+					// SHOULD: keep the rows already decided. A partial create is
+					// still useful information — the caller can see which half
+					// landed before deciding what to do about the rest.
+					try {
+						await engine.create(name, alpha, beta, {
+							ignore: syncIgnoreFor(plan.target, config),
+							...want,
+						});
+					} catch (err) {
+						rows.push({
+							name,
+							state: "mismatch",
+							alpha,
+							beta,
+							detail: `could not create: ${err instanceof Error ? err.message : String(err)}`,
+						});
+						failures++;
+						this.partial = rows;
+						return this.finish(machineName, check, json, 2);
+					}
 					rows.push({ name, state: "created", alpha, beta, detail: `${alpha} → ${beta}` });
 					continue;
 				}
@@ -236,6 +329,7 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 					alpha,
 					beta,
 					syncIgnoreFor(plan.target, config),
+					want,
 					engine.terminateHint(name, machine.name),
 				);
 				if (problem) {
@@ -249,26 +343,11 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 			this.fail(err, debug);
 		}
 
-		if (json) {
-			this.log(JSON.stringify({ machine: machineName, check, sessions: rows }, null, 2));
-		} else {
-			this.table(
-				rows.map((row) => ({
-					name: row.name,
-					alpha: row.alpha,
-					beta: row.beta,
-					status: `${row.state}: ${row.detail}`,
-				})),
-			);
-		}
+		this.partial = rows;
+		this.failureCount = failures;
 		// A mismatch is a failure whether or not --check was asked for: the user
 		// ran a command that did not fully succeed, and exit 0 would say it did.
-		if (failures > 0) {
-			this.error(
-				`${failures} of ${rows.length} config sync session(s) for "${machineName}" are missing or don't match what hyperdrive expects.`,
-				{ exit: 1 },
-			);
-		}
+		this.finish(machineName, check, json, failures > 0 ? 1 : 0);
 	}
 
 	/** Why an existing session can't be used, or "" when it matches. */
@@ -277,12 +356,25 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 		alpha: string,
 		beta: string,
 		wantIgnore: string[],
+		want: { symlinkMode: string; betaFileMode: string; betaDirMode: string },
 		fix: string,
 	): string {
 		if (current.alpha !== alpha) return `alpha is ${current.alpha}, expected ${alpha} — ${fix}`;
 		if (current.beta !== beta) return `beta is ${current.beta}, expected ${beta} — ${fix}`;
 		if (current.mode !== "two-way-resolved") {
 			return `mode is ${current.mode || "unset"}, expected two-way-resolved — ${fix}`;
+		}
+		// A session that resolves symlinks `portable`, or creates beta files at
+		// 0644, is not the session we mean even though its paths line up — it
+		// would land files on the other machine that hyperdrive never intended.
+		if (current.symlinkMode !== want.symlinkMode) {
+			return `symlink mode is ${current.symlinkMode || "unset"}, expected ${want.symlinkMode} — ${fix}`;
+		}
+		if (current.betaFileMode !== want.betaFileMode) {
+			return `beta file mode is ${current.betaFileMode || "unset"}, expected ${want.betaFileMode} — ${fix}`;
+		}
+		if (current.betaDirMode !== want.betaDirMode) {
+			return `beta directory mode is ${current.betaDirMode || "unset"}, expected ${want.betaDirMode} — ${fix}`;
 		}
 		const missing = missingPatterns(wantIgnore, current.ignore);
 		if (missing.length > 0) {
