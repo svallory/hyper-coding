@@ -137,7 +137,7 @@ export async function homeOf(ctx: TaskContext): Promise<string> {
 
 /** The agent user's home, from the password database — not assumed to be /home/<name>. */
 export async function agentHomeOf(ctx: TaskContext, agentUser: string): Promise<string> {
-	const probed = await runScript(ctx, `getent passwd ${agentUser} | cut -d: -f6`);
+	const probed = await runScript(ctx, `getent passwd ${shellQuote(agentUser)} | cut -d: -f6`);
 	const home = probed.stdout.trim();
 	if (probed.code === 0 && home.startsWith("/")) return home.replace(/\/+$/, "");
 	return `/home/${agentUser}`;
