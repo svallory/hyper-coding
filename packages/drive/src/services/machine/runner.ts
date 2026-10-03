@@ -32,6 +32,7 @@ import {
 	scriptFor,
 } from "./root-script.js";
 import { type Feature, type Task, type TaskContext, TaskError } from "./tasks/types.js";
+import { InstallError } from "./tools.js";
 
 /** What the user chose to do with the assembled root script. */
 export type RootChoice = "ran" | "run-for-me" | "skip";
@@ -122,6 +123,7 @@ async function applyTask(task: Task, ctx: TaskContext): Promise<void> {
 	try {
 		await task.apply(ctx);
 	} catch (err) {
+		if (err instanceof InstallError) throw err;
 		throw new TaskError(
 			task.id,
 			`I couldn't apply "${task.id}" (${task.title}) on ${where(ctx)}: ${detail(err)}`,
@@ -223,13 +225,13 @@ export async function runSetup(
 		try {
 			await applyTask(task, ctx);
 		} catch (err) {
+			if (!(err instanceof InstallError)) throw err;
 			// One tool failing is information, not a stop. A recipe that cannot
 			// download its release says so, and the rest still get installed —
 			// otherwise one 404 costs the user every tool they asked for.
 			const reason = detail(err);
 			ctx.log(`${task.id}: failed — ${reason}`);
 			failed.push({ id: task.id, reason });
-			skipped.push(task.id);
 			continue;
 		}
 		if (await checkTask(task, ctx)) applied.push(task.id);
