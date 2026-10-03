@@ -95,6 +95,10 @@ Space init and daily commits share `services/space-sync.ts`: keep staging, gitli
 
 Incoming history is untrusted. Pull and clone must await `validateIncomingSpace(root, tip, base?)` from `services/space-incoming.ts` before materialization, then use the returned immutable tip. It requires a byte-identical canonical incoming allowlist, validates entire trees and incoming history, rejects reserved paths from `RESERVED_PATHS`, `.git` components, gitlinks, `.gitmodules`, `.gitattributes`, and escaping/reserved symlink chains. `.hyper/memory` is legitimate space material; `.hyper/space.git` never is. Fast-forward uses `--no-overwrite-ignore`; merge disables signature verification and submodule recursion via config (`git merge` does not accept `--no-recurse-submodules`). The shared runner disables hooks/fsmonitor, and read-only calls disable optional index locks. Successful pushes explicitly update their remote-tracking ref, even without a fetch refspec.
 
+`space clone` treats manifest paths as untrusted: defaults may remap `/Users/<user>/`, `/home/<user>/` or `/root/` into the current HOME, but must remain inside HOME (including symlink resolution); other destinations require an explicit path argument. Tracked files win byte-for-byte over generated scaffolding: call the packaged bash `write_hyper_md_*` only for an absent HYPER.md, and never regenerate tracked worktrunk configuration. Project git-dir writes are permitted only during clone provisioning; later space operations leave project repositories alone.
+
+Worktree placement still requires the user's worktrunk setting `worktree-path = "{{ repo_path }}/../worktrees/{{ branch | sanitize }}"` (globally or per project). Clone checks placement through read-only `wt config show` / `wt step eval` and warns with the actual destination and suggested setting; it never edits user config or runs worktree hooks. Fresh-HOME tests must distinguish the configured strict-layout case from the unconfigured warning case.
+
 **BaseCommand hierarchy**: oclif Command → CoreBaseCommand (cli) → GenBaseCommand (gen)
 
 ## Template System
