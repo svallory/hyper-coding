@@ -136,18 +136,18 @@ describe("machine add", () => {
 		expect(second).toContain('agent_user = "bob"');
 	});
 
-	it("writes every key of the config, defaults included", () => {
+	it("keeps the file to what was there plus the machine", () => {
 		if (skipIfUnbuilt()) return;
 		fakeHerdr();
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 
 		expect(spawnCli(["machine", "add", "netcup", "--home", "/home/svallory"]).status).toBe(0);
 		const written = readFileSync(configPath, "utf-8");
-		// The file is a complete config a human can read, not a diff needing the
-		// code that wrote it.
 		expect(written).toContain("remote");
-		expect(written).toContain("[warp]");
 		expect(written).toContain("[machines.netcup]");
+		// The write merges into the file on disk; it doesn't lay down every schema
+		// default, so adding a machine doesn't rewrite the rest of the config.
+		expect(written).not.toContain("[warp]");
 	});
 
 	it("a second --features replaces the list rather than adding to it", () => {

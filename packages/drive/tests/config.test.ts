@@ -316,15 +316,19 @@ describe("writeConfig", () => {
 		expect(bytes(path)).not.toContain("config-sync");
 	});
 
-	it("writes every key of the config, defaults included", () => {
+	it("writes the file plus the patch, and invents no sections", () => {
 		const path = withTempConfig(BASE);
 		writeConfig({ machines: { netcup: { home: "/home/svallory" } } });
 
 		const written = bytes(path);
-		expect(written).toContain("[warp]");
 		expect(written).toContain("[machines.netcup]");
-		// Readable on its own: loadConfig would fill these in anyway.
-		expect(loadConfig().remote).toBe("git@example:x.git");
+		// What was already there survives.
+		expect(written).toContain("git@example:x.git");
+		// What wasn't, is not invented: the merge is over the file on disk, not
+		// over the schema defaults, so a config never grows sections nobody asked
+		// for. loadConfig fills those in at read time.
+		expect(written).not.toContain("[warp]");
+		expect(loadConfig().machines.netcup.home).toBe("/home/svallory");
 	});
 
 	it("keeps keys it doesn't know about", () => {
