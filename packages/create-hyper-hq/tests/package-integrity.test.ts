@@ -36,9 +36,18 @@ describe("Package integrity", () => {
 			// We send EOF immediately via stdin to avoid interactive prompts
 			const result = spawnSync("node", [DIST_INDEX], {
 				input: "",
-				timeout: 5000,
+				// Same 30 s budget as the sibling spawns in this file. At 5 s
+				// this timed out on a loaded CI runner (3 consecutive failures on
+				// PR #29): the wizard is slower than 5 s under load, and a
+				// timeout gives `result.status === null`, so the assertion below
+				// threw a TypeError instead of saying what went wrong.
+				timeout: 30000,
 				encoding: "utf-8",
 			});
+			// A timeout (or any spawn failure) has `status === null`, which would
+			// reach toBeLessThanOrEqual as a TypeError on null. Assert the
+			// failure mode first so the test reports the real cause.
+			expect(result.error, result.error?.message).toBeUndefined();
 			// The wizard will exit when stdin closes, but it shouldn't crash
 			// Exit code 0 or 1 (cancelled) is fine — anything else is a crash
 			expect(result.status).toBeLessThanOrEqual(1);
