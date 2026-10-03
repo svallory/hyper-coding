@@ -39,10 +39,7 @@ export function withManifestFixture(): ManifestFixture {
 		home,
 		hyperHome,
 		configFile,
-		// Retries matter: a git or CLI process can still be flushing an index
-		// lock when the test ends, and one failed rmdir otherwise fails the
-		// suite on a temporary directory the test does not even own.
-		cleanup: () => rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+		cleanup: () => removeTree(root),
 	};
 }
 
@@ -51,10 +48,40 @@ export function withManifestFixture(): ManifestFixture {
  * `commit.gpgsign=true` with an unreachable signer would fail commits here,
  * and a real `user.email` would be recorded in test fixtures. Both are read
  * with the suite's own config, so the tests describe a fresh machine.
+ *
+ * `gc.auto=0` is injected through GIT_CONFIG_COUNT so every git in the test —
+ * including the ones a spawned CLI runs — skips the background `git gc`, which
+ * otherwise detaches and keeps writing into `.git` after the command returned.
  */
 export function isolateGitConfig(): void {
 	process.env.GIT_CONFIG_GLOBAL = "/dev/null";
 	process.env.GIT_CONFIG_NOSYSTEM = "1";
+	process.env.GIT_CONFIG_COUNT = "1";
+	process.env.GIT_CONFIG_KEY_0 = "gc.auto";
+	process.env.GIT_CONFIG_VALUE_0 = "0";
+}
+
+/** Synchronous pause, for the retry loop below. */
+function pause(ms: number): void {
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/**
+ * Remove a fixture tree, tolerating a git process that is still writing into
+ * it. A background `gc` or a closing hook can recreate a file between the
+ * directory scan and the unlink, which is `ENOTEMPTY`; that is a fact about
+ * the temp directory, not a reason to fail the test that used it.
+ */
+function removeTree(root: string): void {
+	for (let attempt = 0; attempt < 5; attempt++) {
+		try {
+			rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+			if (!existsSync(root)) return;
+		} catch {
+			// Retry below; a leftover temp dir must never fail a test.
+		}
+		pause(200);
+	}
 }
 
 const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
