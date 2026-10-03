@@ -123,13 +123,37 @@ const spawnProcess: Spawner = (request) =>
 	});
 
 /**
- * `host:path` for rsync/scp. The path is quoted because the remote side runs it
- * through a shell: an unquoted `$(…)`, backtick or space in a path would split
- * or execute there. Safe paths come back unquoted, so the common case is
- * unchanged.
+ * Characters a remote path may contain. Hyperdrive builds these paths itself
+ * (a machine's home, a space name), so a strict allowlist costs nothing.
+ */
+const SAFE_REMOTE_PATH = /^[A-Za-z0-9._/~+-]+$/;
+
+/** A remote path we refuse to send, because it can't be sent safely. */
+export class RemotePathError extends Error {
+	constructor(host: string, path: string) {
+		super(
+			`"${path}" isn't a path hyperdrive can use on ${host}: remote paths may only contain letters, digits and . _ / ~ + - (no spaces, quotes or shell characters).`,
+		);
+		this.name = "RemotePathError";
+	}
+}
+
+/**
+ * `host:path` for rsync and scp, passed through raw.
+ *
+ * Quoting the path looks safer but is wrong on the toolchains we actually run
+ * against, and each breaks in its own way:
+ * - OpenSSH 10.2's `scp` uses SFTP mode by default and passes the path through
+ *   untouched, so `h:'a b'` creates a file literally named `'a b'`.
+ * - GNU rsync >= 3.2.4 (the Debian server, Homebrew rsync) backslash-escapes
+ *   remote arguments itself, so pre-quoted paths arrive with literal quotes.
+ * Older rsync and openrsync, in turn, run the path through the remote shell and
+ * need the quoting. There is no spelling that is safe on all four, so instead
+ * of guessing we reject paths outside {@link SAFE_REMOTE_PATH}.
  */
 export function remoteSpec(host: string, path: string): string {
-	return `${host}:${shellQuote(path)}`;
+	if (!SAFE_REMOTE_PATH.test(path)) throw new RemotePathError(host, path);
+	return `${host}:${path}`;
 }
 
 /**
