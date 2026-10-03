@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.5.0](https://github.com/svallory/hyper-coding/compare/v0.4.0...v0.5.0) (2026-10-03)
+
+
+### Features
+
+* **drive:** scaffold @hypercli/drive oclif plugin ([89b9636](https://github.com/svallory/hyper-coding/commit/89b963624a49fab43a735a8ab933258b154a2ebe))
+
+
+### Bug Fixes
+
+* **cli:** make bin/dev.js executable ([9dc919c](https://github.com/svallory/hyper-coding/commit/9dc919cdb378d27c46aa09a09363da86ef1306ab))
+
+
+### Miscellaneous Chores
+
+* release 0.5.0 ([f36dadf](https://github.com/svallory/hyper-coding/commit/f36dadf9f7e0ddfa3ef7d58464cb1e0dfd7e47b2))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @hypercli/core bumped to 0.5.0
+    * @hypercli/drive bumped to 0.5.0
+    * @hypercli/gen bumped to 0.5.0
+    * @hypercli/hq bumped to 0.5.0
+    * @hypercli/kit bumped to 0.5.0
+    * @hypercli/ui bumped to 0.5.0
+
 ## [0.2.3](https://github.com/svallory/hyper-coding/compare/v0.2.2...v0.2.3) (2026-03-24)
 
 

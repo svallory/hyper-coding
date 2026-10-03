@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/svallory/hyper-coding/compare/v0.4.0...v0.5.0) (2026-10-03)
+
+
+### Bug Fixes
+
+* **core:** align fs-extra ranges with kit and cli ([0241996](https://github.com/svallory/hyper-coding/commit/0241996b38a0e0c81d30cd2787da488b937e5ae2))
+* **core:** declare glob and js-yaml dependencies ([eba9ec9](https://github.com/svallory/hyper-coding/commit/eba9ec9b282c8def2922413b5de2c36f0cf950c6))
+
+
+### Miscellaneous Chores
+
+* release 0.5.0 ([f36dadf](https://github.com/svallory/hyper-coding/commit/f36dadf9f7e0ddfa3ef7d58464cb1e0dfd7e47b2))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @hypercli/ui bumped to 0.5.0
+
 ## [0.2.1](https://github.com/svallory/hyper-coding/compare/v0.2.0...v0.2.1) (2026-03-24)
 
 
