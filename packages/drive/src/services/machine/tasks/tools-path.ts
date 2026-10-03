@@ -31,6 +31,7 @@ export const pathTask: Task = {
 			`set -eu
 case "\${SHELL:-/bin/sh}" in
   */bash|*/zsh) ;;
+  */fish) printf 'Shell %s is not supported; run fish_add_path ~/.local/bin, then retry.\\n' "$SHELL" >&2; exit 1 ;;
   *) printf 'Shell %s is not supported; add %s to its startup configuration, then retry.\\n' "\${SHELL:-/bin/sh}" ${shellQuote(PATH_LINE)} >&2; exit 1 ;;
 esac
 mkdir -p "$HOME/.local/bin"
@@ -82,7 +83,8 @@ esac
 		]);
 		if (result.code !== 0) {
 			throw new InstallError(
-				`I couldn't add the PATH line: ${result.stderr.trim() || `exit ${result.code}`}. Check your shell rc file permissions and retry.`,
+				result.stderr.trim() ||
+					`I couldn't add the PATH line (exit ${result.code}); check your shell rc file permissions and retry.`,
 			);
 		}
 	},

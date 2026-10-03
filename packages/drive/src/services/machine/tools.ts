@@ -42,6 +42,8 @@ export interface ToolSpec {
 	notes?: string;
 	/** The installed version as a bare semver, or null when it isn't installed. */
 	detect(ctx: TaskContext): Promise<string | null>;
+	/** Reference-only probe, using the operator's PATH plus private discovery dirs. */
+	detectReference(ctx: TaskContext): Promise<string | null>;
 	/** Put it there. Only called after `detect` said null (C-15). */
 	install(ctx: TaskContext): Promise<void>;
 }
@@ -72,21 +74,53 @@ export interface Platform {
 }
 
 /**
- * Discovery/install PATH only: locate older private installs for linking.
- * All version checks instead use CHECK_PATH, the supported target PATH.
+ * Reference/install PATH. Target checks always use CHECK_PATH; link discovery
+ * separately enumerates durable private locations and never searches inherited PATH.
  */
-const PRELUDE = `PATH="$HOME/.local/bin:\${MISE_DATA_DIR:-\${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims:$HOME/.bun/bin:\${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin:$PATH"; export PATH;`;
+const MISE_SHIMS = `\${MISE_DATA_DIR:-\${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims`;
+const PRELUDE = `PATH="$PATH:$HOME/.local/bin:${MISE_SHIMS}:$HOME/.bun/bin:\${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin"; export PATH;`;
 const CHECK_PATH = 'PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"; export PATH;';
 const CURL = "curl -fsSL --max-time 300 --proto '=https' --proto-redir '=https'";
 
 /** Locate an existing private install only to expose it through the supported PATH. */
 function linkScript(id: string): string {
-	return `${PRELUDE}
-p="$(command -v ${id})" || exit 1
-[ -f "$p" ] && [ -x "$p" ] || exit 1
-mkdir -p "$HOME/.local/bin"
-if [ "$p" != "$HOME/.local/bin/${id}" ]; then ln -sf "$p" "$HOME/.local/bin/${id}" || exit 1; fi
-printf 'linked'`;
+	return `
+resolve_path() (
+  p="$1"; links=0
+  while [ -L "$p" ]; do
+    links=$((links + 1)); [ "$links" -le 40 ] || exit 1
+    link="$(readlink "$p")" || exit 1
+    case "$link" in /*) p="$link" ;; *) p="$(dirname "$p")/$link" ;; esac
+  done
+  dir="$(CDPATH= cd -P "$(dirname "$p")" && pwd)" || exit 1
+  printf '%s/%s' "$dir" "$(basename "$p")"
+)
+home="$(CDPATH= cd -P "$HOME" && pwd)" || exit 1
+cwd="$(pwd -P)"
+temp="$(CDPATH= cd -P "\${TMPDIR:-/tmp}" && pwd)" || exit 1
+set -- "$HOME/.local/bin" "$HOME/.bun/bin" "\${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin" "${MISE_SHIMS}" "$HOME/.local/libexec/${id}"
+for dir do
+  p="$dir/${id}"
+  [ -f "$p" ] && [ -x "$p" ] || continue
+  resolved="$(resolve_path "$p")" || continue
+  # Do not turn a project-local or temporary binary into a persistent install.
+  if [ "$cwd" != "$home" ]; then case "$resolved" in "$cwd"/*) continue ;; esac; fi
+  case "$resolved" in
+    "$home"/*) ;; # Managed locations in isolated test homes are valid too.
+    /tmp/*|/private/tmp/*|/var/tmp/*|/private/var/tmp/*|/var/folders/*|/private/var/folders/*|"$temp"/*) continue ;;
+  esac
+  allowed=no
+  for root do
+    [ -d "$root" ] || continue
+    realroot="$(CDPATH= cd -P "$root" && pwd)" || continue
+    case "$resolved" in "$realroot"/*) allowed=yes ;; esac
+  done
+  [ "$allowed" = yes ] || continue
+  mkdir -p "$HOME/.local/bin" || exit 1
+  if [ "$p" != "$HOME/.local/bin/${id}" ]; then ln -sf "$p" "$HOME/.local/bin/${id}" || exit 1; fi
+  printf 'linked'; exit 0
+done
+exit 1`;
 }
 
 function reachableTool(spec: ToolSpec): ToolSpec {
@@ -154,8 +188,8 @@ async function must(ctx: TaskContext, id: string, script: string): Promise<RunRe
  * Never throws and never sets `-e`: `detect` answering "not installed" is a
  * normal answer, and a check that threw would fail the whole run.
  */
-async function ask(ctx: TaskContext, cmdline: string): Promise<string | null> {
-	const result = await sh(ctx, `${CHECK_PATH}\n${cmdline}`);
+async function ask(ctx: TaskContext, cmdline: string, reference = false): Promise<string | null> {
+	const result = await sh(ctx, `${reference ? PRELUDE : CHECK_PATH}\n${cmdline}`);
 	if (result.code !== 0) return null;
 	const out = result.stdout.trim();
 	return out === "" ? null : out;
@@ -176,8 +210,8 @@ export function normaliseVersion(raw: string | null): string | null {
 }
 
 /** `<tool> --version`, parsed. Null when the tool isn't there. */
-function versionOf(ctx: TaskContext, cmdline: string): Promise<string | null> {
-	return ask(ctx, cmdline).then(normaliseVersion);
+function versionOf(ctx: TaskContext, cmdline: string, reference = false): Promise<string | null> {
+	return ask(ctx, cmdline, reference).then(normaliseVersion);
 }
 
 /**
@@ -309,6 +343,7 @@ function miseTool(
 		title,
 		...(notes === undefined ? {} : { notes }),
 		detect: (ctx) => versionOf(ctx, versionCmd),
+		detectReference: (ctx) => versionOf(ctx, versionCmd, true),
 		async install(ctx) {
 			await ensureMise(ctx);
 			await must(
@@ -316,10 +351,10 @@ function miseTool(
 				id,
 				`set -eu
 mkdir -p "$HOME/.local/bin"
-export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
+export PATH="$HOME/.local/bin:${MISE_SHIMS}:$PATH"
 mise use -g ${miseName}@latest
 mise reshim
-shim="\${MISE_DATA_DIR:-\${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims/${id}"
+shim="${MISE_SHIMS}/${id}"
 [ -x "$shim" ] || { echo "mise installed ${miseName} but its shim is missing or not executable: $shim. Run mise reshim, then retry." >&2; exit 1; }
 ln -sf "$shim" "$HOME/.local/bin/${id}"`,
 			);
@@ -330,7 +365,7 @@ ln -sf "$shim" "$HOME/.local/bin/${id}"`,
 /**
  * A tool with an official user-level install script.
  *
- * These installers put the binary in `~/.local/bin` (or `~/.bun/bin`) and are
+ * These installers are configured to put the binary in `~/.local/bin` and are
  * idempotent themselves — re-running them updates rather than duplicating —
  * which is all C-15 needs of them.
  */
@@ -349,6 +384,7 @@ function scriptTool(
 		title,
 		...(notes === undefined ? {} : { notes }),
 		detect: (ctx) => versionOf(ctx, versionCmd),
+		detectReference: (ctx) => versionOf(ctx, versionCmd, true),
 		async install(ctx) {
 			await must(
 				ctx,
@@ -379,6 +415,7 @@ export const TOOLS: readonly ToolSpec[] = (
 			id: "rtk",
 			title: "rtk",
 			detect: (ctx) => versionOf(ctx, "rtk --version"),
+			detectReference: (ctx) => versionOf(ctx, "rtk --version", true),
 			async install(ctx) {
 				const platform = await detectPlatform(ctx);
 				// Rust target triples: the release assets are named after them, and the
@@ -396,6 +433,7 @@ export const TOOLS: readonly ToolSpec[] = (
 			id: "bd",
 			title: "bd (beads)",
 			detect: (ctx) => versionOf(ctx, "bd --version"),
+			detectReference: (ctx) => versionOf(ctx, "bd --version", true),
 			async install(ctx) {
 				const platform = await detectPlatform(ctx);
 				const os = platform.os === "Darwin" ? "darwin" : "linux";
@@ -430,6 +468,7 @@ export const TOOLS: readonly ToolSpec[] = (
 			id: "wt",
 			title: "wt (worktrunk)",
 			detect: (ctx) => versionOf(ctx, "wt --version"),
+			detectReference: (ctx) => versionOf(ctx, "wt --version", true),
 			async install(ctx) {
 				const platform = await detectPlatform(ctx);
 				const triple = rustTriple("max-sixty/worktrunk", platform);
@@ -459,6 +498,7 @@ export const TOOLS: readonly ToolSpec[] = (
 			id: "mutagen",
 			title: "mutagen",
 			detect: (ctx) => versionOf(ctx, "mutagen version"),
+			detectReference: (ctx) => versionOf(ctx, "mutagen version", true),
 			async install(ctx) {
 				const platform = await detectPlatform(ctx);
 				const os = platform.os === "Darwin" ? "darwin" : "linux";
