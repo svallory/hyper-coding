@@ -888,7 +888,10 @@ describe("the PATH task (m4)", () => {
 		expect(report.skipped).toEqual([]);
 		const output = renderReport(report, "test").join("\n");
 		expect(output.split("is not supported")).toHaveLength(2);
-		expect(output).toContain(PATH_LINE);
+		expect(output).toContain("fish_add_path ~/.local/bin");
+		expect(output).not.toContain(PATH_LINE);
+		expect(output).not.toContain("permissions");
+		expect(output).not.toContain("retry..");
 		expect(await fileExists(join(home, ".profile"))).toBe(false);
 	});
 
