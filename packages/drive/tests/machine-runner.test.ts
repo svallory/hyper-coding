@@ -448,6 +448,46 @@ describe("runSetup — the root script", () => {
 		expect(out).not.toContain("scp ");
 	});
 
+	it("prints a local recipe with a space in the path as one command", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const dir = mkdtempSync(join(tmpdir(), "drive setup ")); // the space is the point
+		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const logs: string[] = [];
+
+		await runSetup(localCtx(fakeRunner(), logs), {
+			features: ["tools"],
+			tasks: [task],
+			prompt: scriptedPrompt(["skip"]),
+			scratchDir: dir,
+		});
+
+		const out = logs.join("\n");
+		// Unquoted, `sudo bash /tmp/drive setup …/hyper-machine-root.sh` runs the
+		// first word as root and passes the second as $0. Every word is quoted.
+		expect(out).toContain(`sudo bash '${join(dir, ROOT_SCRIPT_NAME)}'`);
+		expect(out).not.toContain(`sudo bash ${join(dir, ROOT_SCRIPT_NAME)}`);
+	});
+
+	it("prints a remote recipe with a space in the path as one scp source", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const dir = mkdtempSync(join(tmpdir(), "drive setup "));
+		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const logs: string[] = [];
+
+		await runSetup(remoteCtx(fakeRunner(), logs), {
+			features: ["tools"],
+			tasks: [task],
+			prompt: scriptedPrompt(["skip"]),
+			scratchDir: dir,
+		});
+
+		const out = logs.join("\n");
+		expect(out).toContain(`scp '${join(dir, ROOT_SCRIPT_NAME)}' user@host:`);
+		// The remote half keeps its ~ unquoted: the whole line is single-quoted so
+		// the remote shell expands it. Quoting it here would break that.
+		expect(out).toContain("ssh -t user@host 'sudo bash ~/.hyper/hyper-machine-root.sh'");
+	});
+
 	it("an unattended skip leaves the root task in `skipped`, with the script written", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
