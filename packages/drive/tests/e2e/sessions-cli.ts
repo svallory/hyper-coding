@@ -2,14 +2,19 @@
  * Tiny CLI over `src/services/sessions.ts` so tests/e2e/sessions.sh can assert
  * against the module without a test runner. Usage:
  *
- *   bun run tests/e2e/sessions-cli.ts <subcommand> [args]
+ *   bun tests/e2e/sessions-cli.ts <subcommand> [args]
  *
- * Subcommands: encoded <cwd> | live <cwd> | latest <cwd> | lines <path> |
- * last <path> | owner-path <cwd> <id> | read-owner <cwd> <id> |
- * write-owner <cwd> <id> <machine>
+ * Subcommands: encoded <cwd> | live <cwd> | live-for <sessionId> |
+ * latest <cwd> | lines <path> | last <path> | owner-path <cwd> <id> |
+ * read-owner <cwd> <id> | write-owner <cwd> <id> <machine>
  *
- * Every failure prints a line naming the Claude Code field or file it relied
- * on (C-18: a broken assumption must be loud, not silently skipped).
+ * Contract: exactly one JSON object on the LAST line of stdout, nothing else.
+ * Something else on this machine (a proto shim under a fresh HOME) has been
+ * known to prepend an NDJSON line, so callers must read the last line and
+ * validate it rather than trusting the whole stream.
+ *
+ * Every failure prints a line naming the Claude Code field or file it relied on
+ * (C-18: a broken assumption must be loud, not silently skipped).
  */
 
 import { basename } from "node:path";
@@ -18,6 +23,8 @@ import {
 	lastAssistantText,
 	latestTranscript,
 	liveSession,
+	liveSessions,
+	liveSessionsFor,
 	ownerPath,
 	readOwner,
 	transcriptLineCount,
@@ -27,7 +34,7 @@ import {
 const [command, ...args] = process.argv.slice(2);
 
 function fail(reason: string): never {
-	console.error(`FAIL: ${reason}`);
+	process.stderr.write(`FAIL: ${reason}\n`);
 	process.exit(1);
 }
 
@@ -36,55 +43,71 @@ function requireArg(name: string, value: string | undefined): string {
 	return value;
 }
 
+function emit(value: unknown): void {
+	process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
 switch (command) {
 	case "encoded": {
-		const cwd = requireArg("cwd", args[0]);
-		console.log(encodeProjectDir(cwd));
+		emit({ encoded: encodeProjectDir(requireArg("cwd", args[0])) });
 		break;
 	}
 	case "live": {
 		const cwd = requireArg("cwd", args[0]);
-		const session = liveSession(cwd);
-		if (!session) {
-			console.log("none");
+		const sessions = liveSessions(cwd);
+		const newest = liveSession(cwd);
+		if (!newest) {
+			emit({ live: null });
 			break;
 		}
 		// C-18: name every field a caller could depend on.
-		for (const field of ["pid", "cwd", "startedAt"] as const) {
-			if (session[field] === undefined) fail(`sessions file field '${field}' is missing`);
+		for (const field of ["pid", "cwd", "startedAt", "sessionId", "procStart"] as const) {
+			if (newest[field] === undefined) {
+				fail(`sessions file field '${field}' is missing for cwd ${cwd}`);
+			}
 		}
-		console.log(
-			JSON.stringify({
-				pid: session.pid,
-				sessionId: session.sessionId ?? null,
-				startedAt: session.startedAt ?? null,
-				cwd: session.cwd,
-				name: session.name ?? null,
-			}),
-		);
+		emit({
+			live: {
+				pid: newest.pid,
+				sessionId: newest.sessionId ?? null,
+				startedAt: newest.startedAt ?? null,
+				cwd: newest.cwd,
+				procStart: newest.procStart ?? null,
+				entrypoint: newest.entrypoint ?? null,
+				version: newest.version ?? null,
+				name: newest.name ?? null,
+			},
+			count: sessions.length,
+			pids: sessions.map((session) => session.pid),
+		});
+		break;
+	}
+	case "live-for": {
+		const sessionId = requireArg("sessionId", args[0]);
+		emit({ live: liveSessionsFor(sessionId).map((session) => session.pid) });
 		break;
 	}
 	case "latest": {
 		const cwd = requireArg("cwd", args[0]);
 		const transcript = latestTranscript(cwd);
 		if (!transcript) {
-			console.log("none");
+			emit({ latest: null });
 			break;
 		}
-		console.log(
-			JSON.stringify({
+		emit({
+			latest: {
 				id: transcript.id,
 				path: transcript.path,
 				basename: basename(transcript.path),
-			}),
-		);
+			},
+		});
 		break;
 	}
 	case "lines": {
 		const path = requireArg("path", args[0]);
 		const count = transcriptLineCount(path);
 		if (count === 0) fail(`transcript ${path} has no readable lines`);
-		console.log(String(count));
+		emit({ lines: count });
 		break;
 	}
 	case "last": {
@@ -92,14 +115,14 @@ switch (command) {
 		const text = lastAssistantText(path);
 		if (text === null) {
 			fail(
-				`no assistant text in ${path}: no line with type 'assistant' and message.content[] of type 'text'`,
+				`no assistant text in ${path}: no line with type 'assistant' whose message.content[] holds a block of type 'text' for the last message.id`,
 			);
 		}
-		console.log(text);
+		emit({ text });
 		break;
 	}
 	case "owner-path": {
-		console.log(ownerPath(requireArg("cwd", args[0]), requireArg("id", args[1])));
+		emit({ path: ownerPath(requireArg("cwd", args[0]), requireArg("id", args[1])) });
 		break;
 	}
 	case "write-owner": {
@@ -108,19 +131,20 @@ switch (command) {
 			requireArg("id", args[1]),
 			requireArg("machine", args[2]),
 		);
-		console.log(JSON.stringify(marker));
+		emit({ marker });
 		break;
 	}
 	case "read-owner": {
-		const marker = readOwner(requireArg("cwd", args[0]), requireArg("id", args[1]));
-		if (!marker) {
-			fail(`ownership marker missing or malformed: ${ownerPath(args[0] ?? "", args[1] ?? "")}`);
+		const state = readOwner(requireArg("cwd", args[0]), requireArg("id", args[1]));
+		if (state.state === "malformed") {
+			fail(`ownership marker is malformed (${state.path}): ${state.reason}`);
 		}
-		console.log(JSON.stringify(marker));
+		if (state.state === "unowned") fail(`no ownership marker at ${state.path}`);
+		emit({ marker: state.marker, path: state.path });
 		break;
 	}
 	default:
 		fail(
-			`unknown subcommand '${command ?? ""}' (expected encoded|live|latest|lines|last|owner-path|write-owner|read-owner)`,
+			`unknown subcommand '${command ?? ""}' (expected encoded|live|live-for|latest|lines|last|owner-path|write-owner|read-owner)`,
 		);
 }
