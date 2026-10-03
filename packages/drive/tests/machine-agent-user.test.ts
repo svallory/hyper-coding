@@ -1326,9 +1326,9 @@ describe("blocker 2 — root never touches a path inside the agent's home", () =
 		withTempConfig('remote = "git@example:x.git"\n');
 		const script = agentUserCreate.rootScript?.(ctxFor(recordingRunner())) ?? "";
 		// The agent controls every path under its home and can plant a symlink
-		// there; root following one is root writing wherever it points. So the only
-		// things root may do with an agent-home path are set metadata on the config
-		// dir itself — guarded on it not being a symlink — and read-only ACLs.
+		// there; root following one is root writing wherever it points. Root must
+		// perform NO path or metadata operations there, even after a symlink test.
+		// Only the unprivileged agent may set its own modes and ACLs.
 		// Cut out the runuser block: inside it, the agent is the one doing the work,
 		// which is the whole point. What is left is what ROOT would do.
 		const start = script.indexOf('runuser -u "$agent_user" -- sh -c');
