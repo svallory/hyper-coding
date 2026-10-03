@@ -62,6 +62,7 @@
 	"imports": {
 		"#lib/*": "./dist/lib/*.js",
 		"#services/*": "./dist/services/*.js",
+		"#services/machine/*": "./dist/services/machine/*.js",
 		"#config/*": "./dist/config/*.js",
 		"#utils/*": "./dist/utils/*.js",
 		"#commands/*": "./dist/commands/*.js",
