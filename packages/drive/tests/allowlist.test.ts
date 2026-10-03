@@ -8,7 +8,13 @@ import {
 	SECRET_PATTERNS,
 } from "#services/allowlist";
 import { initSpaceGitDir, spaceGit } from "#services/space-git";
-import { fixturePath, initBare, setupSpaceFixtures, teardownSpaceFixtures } from "#tests/tmp-space";
+import {
+	fixturePath,
+	initBare,
+	isolateGitConfig,
+	setupSpaceFixtures,
+	teardownSpaceFixtures,
+} from "#tests/tmp-space";
 
 /**
  * The space allowlist, proved against git itself (C-4): a real space with the
@@ -77,11 +83,15 @@ function isIgnored(root: string, path: string): boolean {
 	return spaceGit(root, ["check-ignore", "-q", path], { allowFailure: true }).status === 0;
 }
 
+let restoreGitConfig: () => void = () => {};
+
 beforeAll(() => {
 	setupSpaceFixtures();
+	restoreGitConfig = isolateGitConfig();
 });
 
 afterAll(() => {
+	restoreGitConfig();
 	teardownSpaceFixtures();
 });
 
@@ -113,12 +123,21 @@ describe("renderGitignore", () => {
 
 	it("adds one ! pair per tracked entry, normalised and deduplicated", () => {
 		const rendered = renderGitignore(["extra/", "./deep/thing"]);
-		expect(rendered.endsWith("!/extra/\n!/extra/**\n!/deep/thing/\n!/deep/thing/**\n")).toBe(true);
+		// The pairs come last-before the safety tail, so assert their order
+		// rather than the end of the string.
+		const lines = rendered.split("\n");
+		const first = lines.indexOf("!/extra/");
+		expect(lines.slice(first, first + 4)).toEqual([
+			"!/extra/",
+			"!/extra/**",
+			"!/deep/thing/",
+			"!/deep/thing/**",
+		]);
 
 		// Normalisation collapses variants; duplicates render once.
-		const lines = renderGitignore(["extra/", "extra", "./extra"]).split("\n");
-		expect(lines.filter((line) => line === "!/extra/")).toHaveLength(1);
-		expect(lines.filter((line) => line === "!/extra/**")).toHaveLength(1);
+		const deduped = renderGitignore(["extra/", "extra", "./extra"]).split("\n");
+		expect(deduped.filter((line) => line === "!/extra/")).toHaveLength(1);
+		expect(deduped.filter((line) => line === "!/extra/**")).toHaveLength(1);
 	});
 
 	it("refuses absolute paths, `..` escapes and empty entries", () => {
@@ -145,7 +164,9 @@ describe("renderGitignore", () => {
 
 	it("still accepts the plain forms of those paths", () => {
 		const rendered = renderGitignore(["./a/b", "c/"]);
-		expect(rendered.endsWith("!/a/b/\n!/a/b/**\n!/c/\n!/c/**\n")).toBe(true);
+		const lines = rendered.split("\n");
+		const first = lines.indexOf("!/a/b/");
+		expect(lines.slice(first, first + 4)).toEqual(["!/a/b/", "!/a/b/**", "!/c/", "!/c/**"]);
 	});
 
 	// A `tracked` entry lands in the rendered .gitignore verbatim, so anything
@@ -175,6 +196,89 @@ describe("renderGitignore", () => {
 		expect(() => renderGitignore(["good", "bad\n!/scratch/**", "alsogood"])).toThrow(
 			AllowlistError,
 		);
+	});
+
+	it("refuses reserved paths, however they are spelled", () => {
+		const reserved = [
+			".hyper/space.git",
+			".hyper/space.git/",
+			".hyper/space.git/hooks",
+			".git",
+			".git/refs",
+			"worktrees",
+			"worktrees/",
+			"code",
+			"scratch",
+			".claude/settings.local.json",
+			// a case-insensitive filesystem hands back either spelling
+			"Worktrees",
+			".GIT",
+		];
+
+		for (const entry of reserved) {
+			expect(() => renderGitignore([entry]), entry).toThrow(AllowlistError);
+			expect(() => renderGitignore([entry]), entry).toThrow(/is reserved/);
+		}
+	});
+
+	it("still allows a legit entry that merely sits near a reserved one", () => {
+		const rendered = renderGitignore(["extra/", ".hyper/notes", "code-notes"]);
+		expect(rendered).toContain("!/extra/\n!/extra/**\n");
+		expect(rendered).toContain("!/.hyper/notes/\n!/.hyper/notes/**\n");
+		expect(rendered).toContain("!/code-notes/\n!/code-notes/**\n");
+	});
+});
+
+describe("reserved paths stay ignored whatever tracked says", () => {
+	// The probe behind this: `tracked: [".hyper/space.git"]` staged the whole
+	// git dir (config with the remote URL, hooks, index), because the `!` pair
+	// lands after `/.hyper/space.git/` and gitignore is last-match-wins. The
+	// refusal above stops that entry; this proves the other half — the safety
+	// tail re-emits the re-ignores after every pair, so the invariant holds
+	// even for a reserved path that slipped through.
+	const RESERVED_PATHS = [
+		".hyper/space.git/HEAD",
+		".hyper/space.git/config",
+		"worktrees/m/x",
+		"code/a/x",
+		"scratch/x",
+		".claude/settings.local.json",
+		".git/HEAD",
+	];
+
+	it("re-emits the base re-ignores after the tracked pairs", () => {
+		const lines = renderGitignore(["extra/"]).split("\n");
+		const lastTracked = lines.lastIndexOf("!/extra/**");
+		expect(lastTracked).toBeGreaterThan(lines.indexOf("!/.hyper/**"));
+		for (const tail of ["/.hyper/space.git/", "/.claude/settings.local.json"]) {
+			// lastIndexOf: the line is in the base list too; the re-emission is
+			// the point, and it has to be the one after the pairs.
+			expect(
+				lines.lastIndexOf(tail),
+				`${tail} should be re-emitted after the pairs`,
+			).toBeGreaterThan(lastTracked);
+		}
+	});
+
+	it("a tracked pair does not un-ignore a reserved path (git decides)", () => {
+		const root = makeSpace(["extra/"]);
+		mkdirSync(join(root, "extra"), { recursive: true });
+		writeFileSync(join(root, "extra", "f"), "extra/f\n");
+		for (const path of RESERVED_PATHS) {
+			expect(isIgnored(root, path), `${path} must stay ignored`).toBe(true);
+		}
+
+		spaceGit(root, ["add", "-A"]);
+		const staged = spaceGit(root, ["ls-files"])
+			.stdout.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line !== "");
+		expect(staged).toContain("extra/f");
+		for (const path of RESERVED_PATHS) {
+			expect(staged, `${path} must never be staged`).not.toContain(path);
+		}
+		// Nothing from the space's own git dir may leak into the index.
+		expect(staged.filter((path) => path.startsWith(".hyper/space.git/"))).toEqual([]);
 	});
 });
 

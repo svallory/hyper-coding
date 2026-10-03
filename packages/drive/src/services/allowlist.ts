@@ -44,6 +44,34 @@ const BASE_ALLOWLIST: readonly string[] = [
 ];
 
 /**
+ * The rules that must hold whatever a `tracked` entry says, re-emitted after
+ * every `!` pair. They are in the base list too, but a tracked pair lands
+ * after it and gitignore is last-match-wins: without this tail, `tracked:
+ * ["extra"]` alone would be harmless, but the pair ordering that makes the
+ * base list work would be one `!` away from re-including the space's own git
+ * dir. Repeating the lines costs nothing (git ignores duplicates) and keeps
+ * the invariant true by construction rather than by the refusal below.
+ */
+const SAFETY_TAIL: readonly string[] = ["/.hyper/space.git/", "/.claude/settings.local.json"];
+
+/**
+ * Paths a `tracked` entry may never name — the space's own git dir, the
+ * project's repo, and the trees the allowlist exists to keep out of history.
+ * Refused even though the safety tail would win the match: a silent override
+ * is exactly the foot-gun this list prevents, and `hyper space init` should
+ * tell the operator their `tracked` list is wrong instead of quietly ignoring
+ * it.
+ */
+const RESERVED_PATHS: readonly string[] = [
+	".hyper/space.git", // the space's own git dir: its config holds the remote URL
+	".git", // the project's repo
+	"worktrees", // the project's worktrees (C-4)
+	"code", // a multi-repo space's repos (C-4)
+	"scratch", // throwaway by definition
+	".claude/settings.local.json", // per-machine settings, not space material
+];
+
+/**
  * Gitignore-style globs that should never reach a space's history. `**`
  * crosses directories, so these match at any depth.
  */
@@ -58,7 +86,8 @@ export const SECRET_PATTERNS: readonly string[] = [
 
 /**
  * A `tracked` entry that cannot be rendered safely. Friendly, like
- * `ConfigError`: the message is the whole story and the stack adds nothing.
+ * `SpaceGitError`: the message is the whole story and a stack would only
+ * bury it.
  */
 export class AllowlistError extends Error {
 	constructor(detail: string) {
@@ -138,6 +167,17 @@ function normalizeTrackedEntry(raw: string): string {
 			)}.`,
 		);
 	}
+	// Reserved: equal to one of them, or inside one of them (`.hyper/space.git/hooks`
+	// is as revealing as the git dir itself). Case-insensitively, because a
+	// case-insensitive filesystem would hand back either spelling.
+	const lowered = entry.toLowerCase();
+	for (const reserved of RESERVED_PATHS) {
+		if (lowered === reserved || lowered.startsWith(`${reserved}/`)) {
+			throw new AllowlistError(
+				`${JSON.stringify(raw)} is reserved — a space never tracks ${reserved} or anything under it. Remove it from the space's tracked list.`,
+			);
+		}
+	}
 	return entry;
 }
 
@@ -148,7 +188,9 @@ function normalizeTrackedEntry(raw: string): string {
  * segments, surrounding spaces, globs, comment or negation characters,
  * newlines and empty entries are refused — a `tracked` entry is a plain
  * directory name, and anything else could rewrite the allowlist or render a
- * rule that matches nothing. Deterministic, trailing newline, no duplicates.
+ * rule that matches nothing. Deterministic, trailing newline, and free of
+ * duplicates apart from the safety tail, which is deliberately re-emitted
+ * after the tracked pairs (see SAFETY_TAIL).
  */
 export function renderGitignore(tracked: string[] = []): string {
 	const lines: string[] = [...BASE_ALLOWLIST];
@@ -161,6 +203,10 @@ export function renderGitignore(tracked: string[] = []): string {
 			lines.push(line);
 		}
 	}
+	// Only when a tracked pair could shadow them: with no tracked entries the
+	// base list is already verbatim (and C-4 checks it line for line), so the
+	// tail would add nothing but noise.
+	if (tracked.length > 0) lines.push(...SAFETY_TAIL);
 	return `${lines.join("\n")}\n`;
 }
 
@@ -170,7 +216,11 @@ export function renderGitignore(tracked: string[] = []): string {
  */
 export function findSecretPaths(paths: string[], allow: string[] = []): string[] {
 	const allowed = new Set(allow);
-	// dot: globs like `**/*credentials*` must also reach dot-directories.
-	const matchers = SECRET_PATTERNS.map((pattern) => picomatch(pattern, { dot: true }));
+	// dot: `**` must reach dot-directories (`.config/.env`). nocase: a
+	// checkout from a case-insensitive filesystem (macOS by default) can hand
+	// back `ID_RSA` or `Credentials.json` for a lowercase name on disk.
+	const matchers = SECRET_PATTERNS.map((pattern) =>
+		picomatch(pattern, { dot: true, nocase: true }),
+	);
 	return paths.filter((path) => !allowed.has(path) && matchers.some((match) => match(path)));
 }
