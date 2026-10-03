@@ -3,26 +3,28 @@
  *
  * A user's `settings.json` is the best evidence of which CLIs their agent work
  * actually depends on: the hooks call `bd`, `rtk`, `jq` and `bun` by name, and
- * nothing else on the machine records that. So setup reads those files — the
- * settings, the local overrides, and every installed plugin's `hooks/hooks.json`
- * — and preselects what they mention.
+ * nothing else on the machine records that. So setup reads those files and
+ * preselects what they mention.
  *
- * Three buckets, because the three mean different things to the user:
+ * Three questions, answered separately, because the three mean different things
+ * to the user:
  *
- * - `preselect` — a tool in the registry. `rtk-rewrite.sh` means `rtk` is
- *   needed, even though the first word of that command is a path.
- * - `resolvesAfterClone` — an absolute path inside the user's home that isn't a
- *   hook of ours (tempad's `w5-stop.sh`, for one). The file exists once the
- *   space is cloned there; it is not something setup can install, and calling it
- *   missing would be wrong.
- * - `unknown` — a bare word that is neither. The user decides; setup says what
- *   it saw and nothing more.
+ * - `preselect` — a tool in the registry. `rtk-rewrite.sh` means `rtk` is needed,
+ *   even though the first word of that command is a path.
+ * - `configSync` — a hook under `~/.claude/hooks/`. It isn't missing: it arrives
+ *   when `~/.claude` is synced, so setup says "sync config" rather than
+ *   "clone".
+ * - `resolvesAfterClone` — some other path inside the user's home (tempad's
+ *   `w5-stop.sh`), which exists once the space is cloned on this machine.
+ * - `unknown` — a bare word that is none of the above. The user decides; setup
+ *   says what it saw and nothing more.
  *
- * Everything here is read-only. The files are the user's, and setup never edits
- * a Claude config (C-6 is about root, but the same discipline applies).
+ * Everything here is read-only: these files are the user's, and setup never
+ * edits a Claude config.
  */
 
-import { readdir, readFile } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { findTool } from "./tools.js";
 
@@ -32,92 +34,218 @@ export interface HookScan {
 	preselect: string[];
 	/** Bare words that aren't in the registry. */
 	unknown: string[];
-	/** Absolute paths under the user's home that will exist after a clone. */
+	/** Paths under the user's home that will exist after the space is cloned. */
 	resolvesAfterClone: string[];
+	/** Hooks under `~/.claude/hooks/` — they arrive with a config sync. */
+	configSync: string[];
 	/** The files that were read, for the report and for debugging a wrong scan. */
 	files: string[];
+	/** Things that could not be read, said rather than swallowed. */
+	warnings: string[];
 }
 
 /**
- * Shell words we never treat as a missing tool: the shell's own words, plus the
- * runtimes. `bash`/`sh` run the hook and tell us nothing; `node` is not in the
- * registry and a user who runs a Node hook on every event already has it;
- * `bun` is in the registry and does get preselected.
+ * Words that are never a missing tool: shell syntax and the shell's own words.
+ *
+ * `bash`/`sh`/`node` run the hook and tell us nothing; `cd`, `printf` and `[`
+ * are syntax. `bun` is in the registry and does get preselected. This list is
+ * the difference between a scan that says "unknown: `[`" and one that says
+ * nothing.
  */
 const IGNORED = new Set([
-	"bash",
-	"sh",
-	"zsh",
-	"dash",
-	"node",
-	"python",
-	"python3",
-	"perl",
-	"ruby",
-	"eval",
-	"exec",
-	"source",
-	".",
-	":",
-	"true",
-	"false",
+	// Keywords and control flow.
 	"if",
 	"then",
 	"else",
 	"elif",
 	"fi",
-	"for",
-	"while",
-	"do",
-	"done",
 	"case",
 	"esac",
+	"for",
+	"while",
+	"until",
+	"do",
+	"done",
 	"in",
 	"function",
+	"select",
+	"time",
 	"return",
+	"break",
+	"continue",
 	"local",
+	"declare",
+	"typeset",
 	"export",
-	"read",
+	"readonly",
+	"set",
+	"unset",
+	"shift",
+	"trap",
+	"source",
+	"eval",
+	"exec",
+	"exit",
+	"return",
+	// Builtins.
+	"[",
+	"]",
+	"[[",
+	"]]",
+	"test",
 	"echo",
 	"printf",
-	"cat",
+	"cd",
+	"pwd",
+	"read",
+	"let",
+	"true",
+	"false",
+	":",
+	".",
 	"command",
 	"type",
 	"which",
-	"set",
-	"unset",
-	"test",
-	"[",
-	"[[",
-	"]]",
-	"exec",
+	"alias",
+	"umask",
+	"wait",
+	"kill",
+	"getopts",
+	"hash",
+	"help",
+	"history",
+	"jobs",
+	"bg",
+	"fg",
+	// Runtimes: they run the hook, they are not what the hook needs.
+	"bash",
+	"sh",
+	"zsh",
+	"dash",
+	"ksh",
+	"fish",
+	"node",
+	"deno",
+	"python",
+	"python3",
+	"perl",
+	"ruby",
+	"php",
+	"osascript",
+	"powershell",
+	"pwsh",
+	"cmd",
 	"env",
 	"nohup",
+	"nice",
 	"timeout",
+	"xargs",
+	"stdbuf",
+	"script",
+	// The shell's own plumbing: a hook that pipes through these is not asking
+	// for a tool hyper could install.
+	"cat",
+	"tee",
+	"head",
+	"tail",
+	"sed",
+	"awk",
+	"tr",
+	"sort",
+	"wc",
+	"date",
+	"id",
+	"whoami",
+	"uname",
+	"sleep",
+	"dirname",
+	"basename",
+	"mktemp",
 ]);
 
 /**
- * Split a shell command into words the way a shell does: a quoted run stays one
- * word, with the quotes removed and nothing inside it expanded. `&&`, `||`, `;`
- * and a lone `&` come back as the word `"\n"`, so a caller can tell one command
- * from the next.
+ * Words that run something else, and whose first path argument is that
+ * something: `bash <script>` calls the script. `cd /x` does not — its argument
+ * is a directory it changes to, and a scanner that reported `/x` as a missing
+ * tool would be reporting the shell's plumbing as a gap.
+ */
+const RUNTIMES = new Set([
+	"bash",
+	"sh",
+	"zsh",
+	"dash",
+	"ksh",
+	"env",
+	"node",
+	"deno",
+	"python",
+	"python3",
+	"perl",
+	"ruby",
+	"osascript",
+	"pwsh",
+	"powershell",
+	"cmd",
+	"xargs",
+	"nohup",
+	"timeout",
+	"script",
+	"stdbuf",
+	"nice",
+	"watch",
+]);
+
+/** A path whose basename is one of these is a runtime being named, not a tool. */
+const RUNTIME_BASENAMES = new Set([
+	"sh",
+	"bash",
+	"zsh",
+	"dash",
+	"ksh",
+	"node",
+	"deno",
+	"python",
+	"python3",
+	"perl",
+	"ruby",
+	"env",
+]);
+
+/**
+ * Split a shell command the way a shell reads it.
+ *
+ * A quoted run stays one word (quotes removed, nothing inside expanded), and the
+ * operators that end a command come back as the word `"\n"`, so a caller can
+ * tell one command from the next. `)` emits two of them, which drops whatever
+ * came before it — that is how a `case` pattern list (`msys*|cygwin*)`) is kept
+ * out of the answers.
  */
 export function splitWords(command: string): string[] {
 	const words: string[] = [];
 	let current = "";
 	let started = false;
 	let quote: '"' | "'" | null = null;
+
+	const end = (): void => {
+		if (started) words.push(current);
+		current = "";
+		started = false;
+	};
+	const boundary = (times = 1): void => {
+		end();
+		for (let i = 0; i < times; i++) words.push("\n");
+	};
+
 	for (let i = 0; i < command.length; i++) {
 		const char = command[i];
+
 		if (quote !== null) {
-			if (char === quote) {
-				quote = null;
-				// `started` is deliberately not reset: `TEMPAD_BIN="bun /x/cli.ts"`
-				// is ONE shell word, and losing the distinction is how the second
-				// word of a value starts looking like the next command.
-			} else if (char !== "\\") {
-				current += char;
-			}
+			// A backslash escapes the next character inside double quotes, and is
+			// literal inside single quotes — which is what `FOO="a\"b"` needs.
+			if (char === quote) quote = null;
+			else if (char === "\\" && quote === '"' && i + 1 < command.length) current += command[++i];
+			else current += char;
+			started = true;
 			continue;
 		}
 		if (char === '"' || char === "'") {
@@ -126,45 +254,258 @@ export function splitWords(command: string): string[] {
 			continue;
 		}
 		if (char === "\\" && i + 1 < command.length) {
-			current += command[i + 1];
-			i++;
+			current += command[++i];
 			started = true;
 			continue;
 		}
-		if (char === " " || char === "\t" || char === "\n") {
-			if (started) words.push(current);
-			current = "";
-			started = false;
+		if (char === "\n") {
+			// A newline ends a command exactly like `;` does.
+			boundary();
 			continue;
 		}
-		// `&&`, `||`, `;` and `|` end a command; a lone `&` and a redirection
-		// don't, and neither needs to be understood to find the first word.
-		if (
-			(char === "&" || char === "|" || char === ";") &&
-			(command[i + 1] === char || char === ";")
-		) {
-			if (char !== ";" || command[i + 1] !== ";") i++;
-			if (started) words.push(current);
+		if (char === " " || char === "\t" || char === "\r") {
+			end();
+			continue;
+		}
+		// A redirection is one token and its operand is not a command: `> /dev/null`
+		// mentions no tool.
+		if (char === ">" || char === "<") {
+			started = true;
+			while (i < command.length && !/\s/.test(command[i])) current += command[i++];
+			words.push(`>${current}`);
 			current = "";
 			started = false;
-			words.push("\n");
+			// `> /dev/null` has a space before its operand, and the operand is a
+			// file, not a command.
+			if (i < command.length && /\s/.test(command[i])) {
+				while (i < command.length && /\s/.test(command[i])) i++;
+				while (i < command.length && !/\s/.test(command[i])) current += command[i++];
+				words.push(`>${current}`);
+				current = "";
+				i--;
+			} else {
+				i--;
+			}
+			continue;
+		}
+		// `${HOME}` is one word — there are no commands inside a parameter
+		// expansion. `$(` and a backtick are the opposite: they run something, so
+		// they open a new command and are read like any other boundary.
+		if (char === "$" && command[i + 1] === "{") {
+			started = true;
+			current += "${";
+			// i is on the `$`; step past both it and the `{` the loop below reads.
+			i += 2;
+			let depth = 1;
+			while (i < command.length && depth > 0) {
+				const inner = command[i];
+				if (inner === "{") depth++;
+				else if (inner === "}") depth--;
+				current += inner;
+				i++;
+			}
+			i--;
+			continue;
+		}
+		if (char === "$" && command[i + 1] === "(") {
+			i++;
+			boundary();
+			continue;
+		}
+		if (char === "`") {
+			boundary();
+			continue;
+		}
+		// Operators that end a command. A lone `&` (background) counts too, which
+		// is why this is a character set rather than a list of two-character pairs.
+		if (
+			char === "|" ||
+			char === "&" ||
+			char === ";" ||
+			char === "(" ||
+			char === "{" ||
+			char === "}"
+		) {
+			boundary();
+			continue;
+		}
+		if (char === ")") {
+			// A `case` pattern list, or the end of a subshell: the words before it
+			// were patterns, not commands, so they go.
+			boundary(2);
 			continue;
 		}
 		current += char;
 		started = true;
 	}
-	if (started) words.push(current);
+	end();
 	return words;
 }
 
+/** One candidate: the first word of one command in one hook file. */
+export interface Candidate {
+	word: string;
+	/** The command it came from, for the report. */
+	command: string;
+}
+
+/** Could this word be a hook calling something? Anything else is a flag or a setting. */
+function isInteresting(word: string): boolean {
+	return (
+		word.startsWith("/") ||
+		word.startsWith("$") ||
+		word === "~" ||
+		word.startsWith("~/") ||
+		IGNORED.has(word) ||
+		findTool(word) !== undefined
+	);
+}
+
 /**
- * The commands a hook file runs, whatever shape the file is in.
+ * The first word of every command in a hook command line.
  *
- * Claude Code's schema is `{hooks: {<event>: [{matcher?, hooks: [{command}]}]}}`,
- * and both settings files and plugin files use it. Anything that doesn't match
- * contributes nothing: a hook file we can't read the shape of is a file to ask
- * about, not a file to fail setup over.
+ * Leading `env` and `VAR=value` are peeled off first, and an assignment's value
+ * contributes its first word too — that is where the operator's `bun` lives
+ * (`TEMPAD_BIN="bun /…/cli.ts" bash /…/w5-stop.sh`). After the command word, a
+ * runtime's first path argument is a candidate as well: `bash <script>` runs the
+ * script, which is how `herdr-agent-state.sh` is seen at all.
  */
+export function candidateWords(command: string): Candidate[] {
+	const out: Candidate[] = [];
+	let words = splitWords(command);
+	while (words.length > 0) {
+		if (words[0] === "\n") {
+			words = words.slice(1);
+			continue;
+		}
+		while (words.length > 0) {
+			const first = words[0];
+			if (first === "env") {
+				words = words.slice(1);
+				continue;
+			}
+			if (first.startsWith(">")) {
+				words = words.slice(1);
+				continue;
+			}
+			const eq = first.indexOf("=");
+			if (eq > 0 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(first.slice(0, eq))) {
+				// The name is a variable, not a command. The value's first word is a
+				// candidate when it is something a hook could be calling — `FOO=1`
+				// and `LANG=C` are settings, and treating them as unknown tools
+				// would bury the real answer under every variable a hook sets.
+				const head = splitWords(first.slice(eq + 1))[0];
+				if (head !== undefined && isInteresting(head)) out.push({ word: head, command });
+				words = words.slice(1);
+				continue;
+			}
+			break;
+		}
+		if (words.length === 0) break;
+		if (words[0] !== "\n") {
+			out.push({ word: words[0], command });
+			if (RUNTIMES.has(words[0])) {
+				for (let i = 1; i < words.length; i++) {
+					if (words[i] === "\n") break;
+					if (words[i].startsWith("/") || words[i].startsWith("~/")) {
+						out.push({ word: words[i], command });
+						break;
+					}
+				}
+			}
+		}
+		while (words.length > 0 && words[0] !== "\n") words = words.slice(1);
+	}
+	return out;
+}
+
+/**
+ * The tool a hook script's *name* implies.
+ *
+ * Only the first segment of the basename, and only an id of three characters or
+ * more: `rtk-rewrite.sh` means `rtk`, `block-schedulewakeup.sh` means nothing
+ * (`block` is two characters and `schedulewakeup` is not a tool), and
+ * `fd-extra.sh` would otherwise mean `fd` for any file that starts with it.
+ * An exact stem match counts too, for a script named just `wt`.
+ */
+function toolFromScriptName(path: string): string | undefined {
+	const stem = basename(path).replace(/\.(sh|bash|js|mjs|ts|py)$/, "");
+	const exact = findTool(stem);
+	if (exact !== undefined) return exact.id;
+	const first = stem.split(/[-_.]/)[0];
+	if (first.length < 3) return undefined;
+	return findTool(first)?.id;
+}
+
+/** The three buckets, sorted, from a set of candidates. */
+export interface Classified {
+	preselect: string[];
+	unknown: string[];
+	resolvesAfterClone: string[];
+	configSync: string[];
+}
+
+/**
+ * Sort candidates into their buckets.
+ *
+ * `home` is the user's home directory, which is what makes "a path in your
+ * home" answerable at all.
+ */
+export function classify(candidates: readonly Candidate[], home: string): Classified {
+	const preselect = new Set<string>();
+	const unknown = new Set<string>();
+	const afterClone = new Set<string>();
+	const configSync = new Set<string>();
+
+	for (const { word } of candidates) {
+		if (word === "" || IGNORED.has(word)) continue;
+		if (word.startsWith(">")) continue;
+		// A glob is a `case` pattern, not a command: `*&*`, `cygwin*`, `*)*`.
+		if (word.includes("*") || word.includes("?")) continue;
+		// A path the plugin or the tool expands itself
+		// (`${CLAUDE_PLUGIN_ROOT}/hooks/wt.sh`) ships with the plugin: hyper can't
+		// install it and shouldn't call it missing. `${HOME-}` is the shell's own
+		// "if HOME is unset" idiom and names the home, so it is not skipped.
+		if (word.startsWith("$") && !/^\$\{?HOME-?\}?(?=\/|$)/.test(word)) continue;
+
+		// `~` and `$HOME` are not expanded — this is not a shell — but they name the
+		// user's home, and a hook written that way is a home path.
+		const path = word.replace(/^~(?=\/|$)/, home).replace(/^\$\{?HOME-?\}?(?=\/|$)/, home);
+
+		if (findTool(word) !== undefined) {
+			preselect.add(word);
+			continue;
+		}
+		if (path.startsWith("/")) {
+			// A named runtime is not a tool we are missing.
+			if (RUNTIME_BASENAMES.has(basename(path))) continue;
+			// Only in the user's own hooks directory: a hook named after a tool
+			// is a hook *for* that tool, and `.orca/agent-hooks/claude-hook.sh`
+			// belongs to another agent's harness, not to the claude CLI.
+			const named = path.startsWith(`${join(home, ".claude", "hooks")}/`)
+				? toolFromScriptName(path)
+				: undefined;
+			// A hook named after a tool still says the path matters: it is listed in
+			// its own bucket as well as preselecting the tool.
+			if (named !== undefined) preselect.add(named);
+			if (path.startsWith(`${join(home, ".claude", "hooks")}/`)) configSync.add(path);
+			else if (home !== "" && path.startsWith(`${home}/`)) afterClone.add(path);
+			else unknown.add(word);
+			continue;
+		}
+		unknown.add(word);
+	}
+
+	const sorted = (set: Set<string>): string[] => [...set].sort();
+	return {
+		preselect: sorted(preselect),
+		unknown: sorted(unknown),
+		resolvesAfterClone: sorted(afterClone),
+		configSync: sorted(configSync),
+	};
+}
+
+/** The hook commands in any Claude JSON file, whatever its shape. */
 export function commandsFrom(json: unknown): string[] {
 	if (typeof json !== "object" || json === null) return [];
 	const hooks = (json as { hooks?: unknown }).hooks;
@@ -186,209 +527,123 @@ export function commandsFrom(json: unknown): string[] {
 	return out;
 }
 
-/**
- * The tool a hook script's *name* implies: `rtk-rewrite.sh` → `rtk`,
- * `herdr-agent-state.sh` → `herdr`, `w5-stop.sh` → nothing.
- *
- * This is why the scan can see `rtk` and `herdr` at all: the operator's hooks for
- * both are shell scripts under `~/.claude/hooks`, so no hook command has `rtk`
- * or `herdr` as its first word. A script named after a tool is that tool's hook.
- */
-function toolFromScriptName(path: string): string | undefined {
-	const stem = basename(path).replace(/\.(sh|bash|js|mjs|ts|py)$/, "");
-	for (const part of stem.split(/[-_.]/)) {
-		if (findTool(part) !== undefined) return part;
+/** Read one JSON file, or null with the reason it could not be read. */
+async function readJson(file: string, warnings: string[]): Promise<Record<string, unknown> | null> {
+	try {
+		return JSON.parse(await readFile(file, "utf-8")) as Record<string, unknown>;
+	} catch (err) {
+		warnings.push(`${file}: ${err instanceof Error ? err.message : String(err)}`);
+		return null;
 	}
-	return undefined;
 }
 
-/** One candidate: the first word of one command in one hook file. */
-export interface Candidate {
-	word: string;
-	/** The command it came from, for the report. */
-	command: string;
-}
-
-/**
- * Every first word in a command line.
- *
- * A hook command is a shell fragment, not one command: the operator's are
- * `TEMPAD_BIN="bun /…/cli.ts" bash /…/w5-stop.sh` and
- * `[ -n "$X" ] && [ -x "$X/notify.sh" ] && "$X/notify.sh" || true`. Taking the
- * first word of the whole line would find `bash` and stop, which is exactly the
- * tool the user has least trouble with. So the line is split on its shell
- * operators, each piece has its leading `env` and `VAR=value` assignments
- * stripped, and the first word of what remains is a candidate — including the
- * first word of an assignment's *value*, which is where `bun` actually lives.
- */
-export function candidateWords(command: string): Candidate[] {
-	const out: Candidate[] = [];
-	// splitWords already reduced the line to words, with "\n" standing in for
-	// every shell operator that ended a command.
-	let words = splitWords(command);
-	while (words.length > 0) {
-		if (words[0] === "\n") {
-			words = words.slice(1);
-			continue;
-		}
-		// Leading assignments, and a leading `env`, carry no invocation of their own.
-		while (words.length > 0) {
-			const first = words[0];
-			if (first === "env") {
-				words = words.slice(1);
-				continue;
-			}
-			const eq = first.indexOf("=");
-			if (eq > 0 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(first.slice(0, eq))) {
-				// `TEMPAD_BIN=bun` is one word whose value is what runs; the *name* is
-				// a variable, not a command. Only the value's first word is a
-				// candidate, and only when it is something a hook could be calling —
-				// `FOO=1` and `LANG=C` are settings, not tools, and treating them as
-				// unknown tools would bury the real answer under every variable a
-				// hook command sets.
-				const head = splitWords(first.slice(eq + 1))[0];
-				if (head !== undefined && isInteresting(head)) out.push({ word: head, command });
-				words = words.slice(1);
-				continue;
-			}
-			break;
-		}
-		if (words.length === 0) break;
-		if (words[0] !== "\n") out.push({ word: words[0], command });
-		// `bash /path/to/hook.sh` calls the script, so the script is a candidate
-		// too — that is how `herdr-agent-state.sh` shows up when the command is
-		// `bash '<that path>'`. Arguments of anything else (`jq -r .x`) are flags
-		// and data, not tools, so they are left alone.
-		if (IGNORED.has(words[0])) {
-			for (let i = 1; i < words.length; i++) {
-				if (words[i] === "\n") break;
-				if (words[i].startsWith("/")) {
-					out.push({ word: words[i], command });
-					break;
-				}
-			}
-		}
-		// The rest of this command is its arguments: the next candidate is the
-		// first word of the *next* command.
-		while (words.length > 0 && words[0] !== "\n") words = words.slice(1);
+/** Plugin names enabled in a settings file, as `<plugin>@<marketplace>`. */
+export function enabledPlugins(settings: Record<string, unknown>): Set<string> | null {
+	const raw = settings.enabledPlugins;
+	if (raw === undefined) return null;
+	if (Array.isArray(raw)) {
+		return new Set(raw.filter((name): name is string => typeof name === "string"));
 	}
-	return out;
-}
-
-/** Could this word be a hook calling something? Anything else is a variable or a flag. */
-function isInteresting(word: string): boolean {
-	return (
-		word.startsWith("/") ||
-		word.startsWith("$") ||
-		IGNORED.has(word) ||
-		findTool(word) !== undefined
+	if (typeof raw !== "object" || raw === null) return null;
+	// `{ "name@market": true }` — a plugin switched off is not one we read hooks for.
+	return new Set(
+		Object.entries(raw as Record<string, unknown>)
+			.filter(([, on]) => on !== false)
+			.map(([name]) => name),
 	);
 }
 
 /**
- * Sort a set of words into the three buckets.
+ * The hook files of the plugins that are actually installed and switched on.
  *
- * `home` is the user's home directory (the parent of the Claude home), which is
- * what makes "absolute path under your home" answerable at all.
+ * Walking `plugins/` for every `hooks.json` reads all of them: every version of
+ * a plugin ever installed, every marketplace's examples, other agents' hook
+ * directories — 28 files on the operator's home, of which 4 are live. The
+ * registry that Claude Code maintains (`plugins/installed_plugins.json`) says
+ * which are installed, and `enabledPlugins` in the settings says which are on.
  */
-export function classify(
-	candidates: readonly Candidate[],
-	home: string,
-): { preselect: string[]; unknown: string[]; resolvesAfterClone: string[] } {
-	const preselect = new Set<string>();
-	const unknown = new Set<string>();
-	const afterClone = new Set<string>();
-
-	for (const { word } of candidates) {
-		if (word === "") continue;
-		// A path the plugin expands itself (`${CLAUDE_PLUGIN_ROOT}/hooks/wt.sh`)
-		// ships with the plugin: hyper can't install it and shouldn't say it's
-		// missing.
-		if (word.startsWith("$")) continue;
-		if (IGNORED.has(word)) continue;
-		if (findTool(word) !== undefined) {
-			preselect.add(word);
-			continue;
-		}
-		if (word.startsWith("/")) {
-			const named = toolFromScriptName(word);
-			if (named !== undefined) {
-				preselect.add(named);
-				continue;
-			}
-			// Under the user's home: it is their own script and it will be there
-			// once the space is cloned. Outside it, we have no idea whose it is.
-			if (home !== "" && (word === home || word.startsWith(`${home}/`))) {
-				afterClone.add(word);
-				continue;
-			}
-			unknown.add(word);
-			continue;
-		}
-		unknown.add(word);
+export async function pluginHookFiles(
+	claudeHome: string,
+	enabled: Set<string> | null,
+	warnings: string[],
+): Promise<string[]> {
+	const registry = join(claudeHome, "plugins", "installed_plugins.json");
+	const json = await readJson(registry, warnings);
+	const installed = json?.plugins;
+	if (typeof installed !== "object" || installed === null) {
+		warnings.push(`${registry}: no plugin list; only the settings files were read`);
+		return [];
 	}
-
-	return {
-		preselect: [...preselect].sort(),
-		unknown: [...unknown].sort(),
-		resolvesAfterClone: [...afterClone].sort(),
-	};
-}
-
-/** Every hook file under a Claude home: the two settings files and the plugins' `hooks.json`. */
-async function hookFiles(claudeHome: string): Promise<string[]> {
-	const files = [join(claudeHome, "settings.json"), join(claudeHome, "settings.local.json")];
-	// Plugins are cached per marketplace/version, at whatever depth the marketplace
-	// nests them, so the search is for the file name rather than a fixed path.
-	// `.git` directories are skipped: a plugin repo's own hooks are not ours.
-	const stack = [join(claudeHome, "plugins")];
-	let scanned = 0;
-	while (stack.length > 0 && scanned < 500) {
-		const dir = stack.pop() as string;
-		let entries;
-		try {
-			entries = await readdir(dir, { withFileTypes: true });
-		} catch {
-			continue; // No plugins, or not readable. Neither is an error.
-		}
+	const files: string[] = [];
+	for (const [name, entries] of Object.entries(installed as Record<string, unknown>)) {
+		if (enabled !== null && !enabled.has(name)) continue;
+		if (!Array.isArray(entries)) continue;
 		for (const entry of entries) {
-			const path = join(dir, entry.name);
-			if (entry.isDirectory()) {
-				if (entry.name === ".git" || entry.name === "node_modules") continue;
-				stack.push(path);
+			if (typeof entry !== "object" || entry === null) continue;
+			const raw = (entry as { installPath?: unknown }).installPath;
+			if (typeof raw !== "string" || raw === "") continue;
+			let dir = raw;
+			try {
+				// A marketplace can be a symlink; read what it points at.
+				dir = await realpath(raw);
+				if (!(await stat(dir)).isDirectory()) continue;
+			} catch (err) {
+				warnings.push(`${raw}: ${err instanceof Error ? err.message : String(err)}`);
 				continue;
 			}
-			if (entry.name !== "hooks.json") continue;
-			files.push(path);
-			scanned++;
+			const hooksJson = join(dir, "hooks", "hooks.json");
+			if (await exists(hooksJson)) files.push(hooksJson);
+			// A plugin can carry its hooks inline in its manifest instead.
+			const manifest = join(dir, ".claude-plugin", "plugin.json");
+			if (await exists(manifest)) files.push(manifest);
 		}
 	}
 	return files;
+}
+
+async function exists(path: string): Promise<boolean> {
+	try {
+		await stat(path);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**
  * Read the user's Claude config and work out which tools their hooks need.
  *
  * Missing files are normal — a machine that has never run Claude Code has no
- * settings.json — so they are skipped, and the file list in the result says
- * what was actually read.
+ * settings.json — so they are skipped. Files that exist but cannot be read are
+ * listed in `warnings`: silently scanning half a config would be a lie about
+ * what was seen.
  */
 export async function scanHooks(claudeHome: string, home?: string): Promise<HookScan> {
-	const resolvedHome = home ?? join(claudeHome, "..");
+	const resolvedHome = home ?? homedir();
+	const warnings: string[] = [];
 	const files: string[] = [];
 	const candidates: Candidate[] = [];
-	for (const file of await hookFiles(claudeHome)) {
-		let json: unknown;
-		try {
-			json = JSON.parse(await readFile(file, "utf-8"));
-		} catch {
-			continue;
-		}
-		const commands = commandsFrom(json);
-		if (commands.length === 0) continue;
+
+	const settingsFiles = [
+		join(claudeHome, "settings.json"),
+		join(claudeHome, "settings.local.json"),
+	];
+	let enabled: Set<string> | null = null;
+	for (const file of settingsFiles) {
+		const json = await readJson(file, warnings);
+		if (json === null) continue;
 		files.push(file);
-		for (const command of commands) candidates.push(...candidateWords(command));
+		for (const command of commandsFrom(json)) candidates.push(...candidateWords(command));
+		const here = enabledPlugins(json);
+		if (here !== null) enabled = enabled === null ? here : new Set([...enabled, ...here]);
 	}
-	const buckets = classify(candidates, resolvedHome);
-	return { ...buckets, files };
+
+	for (const file of await pluginHookFiles(claudeHome, enabled, warnings)) {
+		const json = await readJson(file, warnings);
+		if (json === null) continue;
+		files.push(file);
+		for (const command of commandsFrom(json)) candidates.push(...candidateWords(command));
+	}
+
+	return { ...classify(candidates, resolvedHome), files, warnings };
 }

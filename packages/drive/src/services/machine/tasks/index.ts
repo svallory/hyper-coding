@@ -13,6 +13,8 @@
  */
 
 import { findTool, TOOLS, type ToolSpec } from "../tools.js";
+import { pathTask } from "./tools-path.js";
+import { rsyncTask } from "./tools-rsync.js";
 import type { Task, TaskContext } from "./types.js";
 
 /**
@@ -50,9 +52,20 @@ export function toolTask(spec: ToolSpec): Task {
 	};
 }
 
+/**
+ * The tasks that are not registry entries: the PATH line, and rsync.
+ *
+ * Both are always offered. The PATH line is what makes the registry's installs
+ * usable at all, and rsync is what `hyper space` and warp copy over — a machine
+ * without it looks fine until the first transfer.
+ */
+export function infrastructureTasks(): Task[] {
+	return [pathTask, rsyncTask];
+}
+
 /** Every task the CLI knows how to run, in a stable order. */
 export function allTasks(options: { tools?: readonly string[] } = {}): Task[] {
-	return [noop, ...selectedToolTasks(options.tools)];
+	return [noop, ...infrastructureTasks(), ...selectedToolTasks(options.tools)];
 }
 
 /**
