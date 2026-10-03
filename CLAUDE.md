@@ -74,6 +74,12 @@ flock /tmp/hyper-heavy2.lock -c 'cd packages/drive && bun run build && bun run t
 - **Test**: vitest (compatible with bun test). vitest has NO `expect.skip()`: to skip a test from inside it, take the context (`it("…", (ctx) => ctx.skip("why"))`). An `expect.skip(...)` call throws `expect.skip is not a function` and fails the very test it meant to skip.
 - **Monorepo**: bun workspaces + moon
 
+### Hyperdrive test safety
+
+- CLI-spawn tests execute built `dist/`, not the source Vitest imports. After drive changes, build `packages/drive` then `packages/cli` before running those tests.
+- Every hyperdrive test or probe must use temporary spaces, local bare remotes, `HOME`, `HYPER_HOME`, `HYPER_DRIVE_CONFIG` and `XDG_CONFIG_HOME`. Never point tests at the operator's real home/config or hyperdrive. Keep git fault-injection shims on a fixture-private PATH and restore it in `finally`.
+- Test terminal interruption with a detached process group and signals to the whole group, not only Node. `spawnSync` blocks JS signal callbacks: space init's scoped listeners prevent default parent termination; child `result.signal` drives rollback. Node-only signals during a synchronous child are not reliably observed.
+
 ## How the CLI Works
 
 CLI is a thin oclif shell that loads drive, gen, hq, and kit as plugins:
