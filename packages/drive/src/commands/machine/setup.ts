@@ -158,11 +158,31 @@ export async function versionsFor(
 	const worker = async (): Promise<void> => {
 		while (next < specs.length) {
 			const spec = specs[next++];
-			out[spec.id] = await spec.detect(ctx);
+			try {
+				out[spec.id] = await spec.detect(ctx);
+			} catch (err) {
+				out[spec.id] = null;
+				ctx.log(
+					`warning: couldn't detect ${spec.id}: ${err instanceof Error ? err.message : String(err)}`,
+				);
+			}
 		}
 	};
 	await Promise.all(Array.from({ length: Math.min(DETECT_CONCURRENCY, specs.length) }, worker));
 	return out;
+}
+
+/** Compare once for a local target, or once on each distinct machine. */
+export async function parityVersions(
+	specs: readonly Versioned[],
+	here: TaskContext,
+	target: TaskContext,
+): Promise<[Record<string, string | null>, Record<string, string | null>]> {
+	if (target.machine === null) {
+		const local = await versionsFor(specs, here);
+		return [local, local];
+	}
+	return Promise.all([versionsFor(specs, here), versionsFor(specs, target)]);
 }
 
 /** Where the root script goes: inside the space when there is one, else in the user's cache. */
@@ -276,15 +296,17 @@ export function rootPrompt(
  * The exit code for a finished run: 3 when root work is still pending because
  * nobody could answer, otherwise null — the run exits as it otherwise would.
  */
-export function exitCodeFor(pendingRootPath: string | null): number | null {
+export function exitCodeFor(pendingRootPath: string | null, failedCount = 0): number | null {
+	if (failedCount > 0) return FAILED_TOOLS_EXIT;
 	return pendingRootPath === null ? null : PENDING_ROOT_EXIT;
 }
 
 /** Render the report the way the machine list renders a table: plainly. */
-function renderReport(report: SetupReport, target: string): string[] {
+export function renderReport(report: SetupReport, target: string): string[] {
 	const lines: string[] = [];
-	const total = report.applied.length + report.alreadyOk.length + report.skipped.length;
-	if (report.applied.length === 0 && report.skipped.length === 0) {
+	const total =
+		report.applied.length + report.alreadyOk.length + report.skipped.length + report.failed.length;
+	if (report.applied.length === 0 && report.skipped.length === 0 && report.failed.length === 0) {
 		lines.push(`Nothing needed — ${target} was already set up for everything you picked.`);
 	}
 	if (report.alreadyOk.length > 0) lines.push(`  already fine: ${report.alreadyOk.join(", ")}`);
@@ -305,6 +327,7 @@ function renderReport(report: SetupReport, target: string): string[] {
  * report a half-prepared machine as ready.
  */
 export const PENDING_ROOT_EXIT = 3;
+export const FAILED_TOOLS_EXIT = 4;
 
 /**
  * What to tell the user when root work is still pending after an unattended run.
@@ -318,7 +341,7 @@ export function pendingRootMessage(target: string, path: string): string {
 
 export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 	static override description =
-		"Set up a machine for hyper work (tools, config sync, agent user, …)";
+		"Set up a machine for hyper work (tools, config sync, agent user, …)\n\nExit codes: 0 success; 1 bug in a task; 2 usage error; 3 unattended root steps pending; 4 tool installation failed (also when root steps are pending).";
 
 	static override examples = [
 		"<%= config.bin %> machine setup",
@@ -367,15 +390,6 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			return this.fail(err.message, flags.debug);
 		}
 
-		// `--tools` without the tools feature would install nothing and look like
-		// it worked. Saying so is cheaper than a silent no-op.
-		if (flags.tools !== undefined && flags.features === undefined && !flags.yes) {
-			return this.fail(
-				"`--tools` needs `--features tools`: nothing else installs tools. Run `machine setup --features tools --tools a,b`, or drop `--features` to be asked which features to set up.",
-				flags.debug,
-			);
-		}
-
 		let features: Feature[];
 		try {
 			if (flags.features !== undefined) {
@@ -404,6 +418,13 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		} catch (err) {
 			if (!(err instanceof MachineError)) throw err;
 			return this.fail(err.message, flags.debug);
+		}
+
+		if (flags.tools !== undefined && !features.includes("tools")) {
+			return this.fail(
+				"`--tools` needs `--features tools`. Add the tools feature or drop `--tools`.",
+				flags.debug,
+			);
 		}
 
 		if (features.length === 0) {
@@ -441,9 +462,7 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 				return this.fail(err.message, flags.debug);
 			}
 			if (suggested.length === 0 && flags.tools === undefined) {
-				this.log(
-					"No Claude hooks call a tool in this registry, so I have nothing to preselect. Pass `--tools all` for every tool, or `--tools jq,rg` for a few.",
-				);
+				this.log("no hooks found: pass `--tools all` or `--tools a,b` to select tools explicitly.");
 			}
 			// Say what the scan found, so "why only these four?" has an answer on
 			// screen rather than in the source.
@@ -529,15 +548,11 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 					machine: null,
 					runner: new LocalMachine(),
 					config,
-					log: () => {},
+					log: (line) => this.log(line),
 				};
 				// A local run is comparing the machine with itself, and the target
 				// column would be sixteen more local processes: detect once.
-				const remote = machine === null ? here : ctx;
-				const [local, other] = await Promise.all([
-					versionsFor(wanted, here),
-					versionsFor(wanted, remote),
-				]);
+				const [local, other] = await parityVersions(wanted, here, ctx);
 				const table =
 					machine === null
 						? renderParity(parityTable(local, local))
@@ -554,23 +569,17 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			}
 		}
 
-		// A tool that failed to install is not a successful setup, whatever else
-		// went right — and the report and the table above have already said so.
-		if (report.failed.length > 0) {
-			this.error(
-				`${report.failed.length} tool${report.failed.length === 1 ? "" : "s"} could not be installed: ${report.failed.map((failure) => `${failure.id} (${failure.reason})`).join("; ")}`,
-				{ exit: 1 },
+		// Print both diagnoses before choosing the exit code: failed tools take
+		// precedence, but must never hide the pending root steps.
+		const messages: string[] = [];
+		if (unattendedRootPath !== null)
+			messages.push(pendingRootMessage(machine?.name ?? "this machine", unattendedRootPath));
+		if (report.failed.length > 0)
+			messages.push(
+				`${report.failed.length} tool(s) could not be installed. Fix the failures above and re-run setup.`,
 			);
-		}
-
-		// Unattended with root work still to do is not a successful setup. Say so
-		// loudly and with a code CI can branch on.
-		const pendingExit = exitCodeFor(unattendedRootPath);
-		if (pendingExit !== null && unattendedRootPath !== null) {
-			this.error(pendingRootMessage(machine?.name ?? "this machine", unattendedRootPath), {
-				exit: pendingExit,
-			});
-		}
+		const exit = exitCodeFor(unattendedRootPath, report.failed.length);
+		if (exit !== null) this.error(messages.join("\n"), { exit });
 	}
 
 	/** Report a user error the way `machine list` does: message, exit 2, no stack unless --debug. */

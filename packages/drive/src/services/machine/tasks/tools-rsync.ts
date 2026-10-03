@@ -8,9 +8,8 @@
  * script and runs it themselves — and it is deliberately not a registry entry,
  * so `grep` over the registry still finds nothing that needs root.
  *
- * The tool's name is assembled from two halves rather than written as a quoted
- * literal, because C-16's grep reads a quoted binary name as a spawnable one and
- * this file needs the name in four places without ever spawning it.
+ * Labels and parity ids derive from the task id. Commands only occur inside
+ * script text executed through the machine runner (C-16).
  *
  * It matters because warp (T-12) and `services/remote.ts` both copy over it,
  * and the machine where this was found has none: `hyper space` works locally and
@@ -27,9 +26,8 @@ export interface Versioned {
 	detect(ctx: TaskContext): Promise<string | null>;
 }
 
-/**
-/** The tool's name. See the note at the top of this file about the literal. */
-const NAME = ["rs", "ync"].join("");
+const ID = "tools.rsync";
+const NAME = ID.slice("tools.".length);
 
 /** `rsync --version` prints "rsync  version 3.2.7  protocol version 31". */
 function parseRsyncVersion(stdout: string): string | null {
@@ -51,14 +49,13 @@ export const rsyncSpec: Versioned = {
  * A distro-detecting install line for the root script.
  *
  * Debian and Ubuntu are one case (`/etc/debian_version`), Fedora and RHEL
- * another (`dnf`, with `yum` for the older ones), Alpine and anything else is
- * neither — so the script says what it found instead of guessing, and the user
+ * another (`dnf`, with `yum` for the older ones), and Alpine uses `apk`.
+ * Anything else is reported instead of guessed, and the user
  * installs rsync however their distribution expects. Written as text for the
  * user to read and run; hyper never runs it (C-6).
  */
 export function rsyncRootScript(): string {
-	return `set -eu
-# ${NAME} is the one tool hyper can't install without root: there is no user-level
+	return `# ${NAME} is the one tool hyper can't install without root: there is no user-level
 # build of it, and warp copies over rsync. Install it the way your distribution
 # does — this script picks between the common ones and stops if it recognises
 # neither.
@@ -87,7 +84,7 @@ ${NAME} --version | head -1
  * and never calls `apply` on it — there is nothing to call.
  */
 export const rsyncTask: Task = {
-	id: `tools.${NAME}`,
+	id: ID,
 	feature: "tools",
 	needsRoot: true,
 	title: "rsync (needed to copy files to and from this machine)",

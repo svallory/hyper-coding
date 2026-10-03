@@ -29,6 +29,8 @@ export interface RunResult {
 }
 
 export interface SshOptions {
+	/** Bound a probe's lifetime; the spawned command is killed when this expires. */
+	timeoutMs?: number;
 	/** Written to the command's stdin, then stdin is closed. Mutually exclusive with `tty`. */
 	stdin?: string;
 	/**
@@ -67,6 +69,7 @@ export interface MachineRunner {
 
 /** One spawned process, described so a fake spawner can assert on it. */
 export interface SpawnRequest {
+	timeoutMs?: number;
 	file: string;
 	args: string[];
 	stdin?: string;
@@ -113,6 +116,8 @@ const spawnProcess: Spawner = (request) =>
 	new Promise((resolvePromise, rejectPromise) => {
 		const child = spawn(request.file, request.args, {
 			cwd: request.cwd,
+			timeout: request.timeoutMs,
+			killSignal: "SIGKILL",
 			stdio: request.tty ? "inherit" : ["pipe", "pipe", "pipe"],
 			...(request.env ? { env: { ...process.env, ...request.env } } : {}),
 		});
@@ -447,6 +452,7 @@ export class LocalMachine implements MachineRunner {
 			cwd: opts?.cwd,
 			tty: opts?.tty,
 			env: opts?.env,
+			...(opts?.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
 		});
 	}
 
@@ -522,6 +528,7 @@ export class RemoteMachine implements MachineRunner {
 			// `-t` asks for a pty; without it an interactive remote command
 			// (herdr/tmux attach, a prompt) dies with "not a terminal".
 			args: [...(opts?.tty ? ["-t"] : []), this.host, "--", command],
+			...(opts?.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
 			stdin: opts?.stdin,
 			tty: opts?.tty,
 		});

@@ -26,6 +26,11 @@
 import type { RunResult } from "#services/remote";
 import type { TaskContext } from "./tasks/types.js";
 
+/** An expected installation failure, not a bug in a task. */
+export class InstallError extends Error {
+	override name = "InstallError";
+}
+
 /** One tool, and the only two things setup needs to know about it. */
 export interface ToolSpec {
 	/** Stable id, e.g. "rg". Also the task id suffix (`tools.rg`). */
@@ -48,12 +53,12 @@ export interface ToolSpec {
  */
 function assertSupported(platform: Platform, tool: string, resolved: string | null): void {
 	if (platform.os !== "Darwin" && platform.os !== "Linux") {
-		throw new Error(
+		throw new InstallError(
 			`${tool} has no install recipe for ${platform.os} ${platform.arch}: this registry covers macOS and Linux only.`,
 		);
 	}
 	if (resolved === null) {
-		throw new Error(`${tool} publishes no release for ${platform.os} ${platform.arch}.`);
+		throw new InstallError(`${tool} publishes no release for ${platform.os} ${platform.arch}.`);
 	}
 }
 
@@ -64,24 +69,6 @@ export interface Platform {
 	/** `arm64` or `x86_64`, from `uname -m`, normalised. */
 	arch: string;
 }
-
-/**
- * `export PATH="$HOME/.local/bin:$PATH"`, appended to a shell rc file only when
- * that exact line isn't in it already.
- *
- * Idempotent by grep, not by rewriting the file: a user's `.bashrc` is theirs,
- * and the only thing hyper adds is this line, at most once per file.
- */
-export const PATH_LINE = 'export PATH="$HOME/.local/bin:$PATH"';
-
-const PATH_RC = `
-for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-  [ -e "$rc" ] || touch "$rc"
-  grep -qF '${PATH_LINE}' "$rc" || {
-    printf '\\n# added by hyper machine setup: user-level tools live here\\n${PATH_LINE}\\n' >> "$rc"
-  }
-done
-`;
 
 /**
  * Where user-level tools put themselves, prepended to every command's PATH.
@@ -121,7 +108,7 @@ command -v ${run} >/dev/null 2>&1 || {
 }
 installer="$(mktemp)"
 trap 'rm -f "$installer"' EXIT
-curl -fsSL --max-time 300 ${JSON.stringify(url)} -o "$installer"
+curl -fsSL --max-time 300 ${JSON.stringify(url)} -o "$installer" || exit 1
 [ -s "$installer" ] || { echo "the download from ${url} was empty." >&2; exit 1; }
 ${run} "$installer"
 `;
@@ -132,7 +119,7 @@ async function must(ctx: TaskContext, id: string, script: string): Promise<RunRe
 	const result = await sh(ctx, script);
 	if (result.code === 0) return result;
 	const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
-	throw new Error(`Installing ${id} failed: ${detail}`);
+	throw new InstallError(`Installing ${id} failed: ${detail}`);
 }
 
 /**
@@ -208,8 +195,8 @@ async function installRelease(
 		 * binary from there. For a tool that loads data relative to its own path.
 		 */
 		directory?: string;
-		/** Further archives from the same release, unpacked into `directory`. */
-		extra?: { asset: string; binary: string }[];
+		/** Data files inside the platform archive, preserved beside the binary. */
+		companions?: string[];
 		/** Unpack command. `.tar.xz` needs `tar -xJf`, everything else `tar -xzf`. */
 		unpack?: "tar -xzf" | "tar -xJf";
 	},
@@ -221,7 +208,7 @@ async function installRelease(
 		installAs = binary,
 		unpack = "tar -xzf",
 		directory = "$HOME/.local/bin",
-		extra = [],
+		companions = [],
 	} = spec;
 	// `@TAG@`/`@TAGV@` are literal here on purpose: they are substituted by `sed`
 	// on the machine, from the tag that machine resolved for itself. `@TAGV@` is
@@ -238,7 +225,7 @@ export PATH="$HOME/.local/bin:$PATH"
 # \`grep -m1\` closes the pipe as soon as it has the line, and curl reports that
 # as "Failure writing output to destination" — a message about the tag, not about
 # the tool, that reads like a failure in any output a user sees.
-tag="$(curl -fsSL https://api.github.com/repos/${repo}/releases/latest | grep -m1 '"tag_name"' | sed -e 's/.*"tag_name": *"//' -e 's/".*//' -e 's/[^A-Za-z0-9._-]//g' || true)"
+tag="$(curl -fsSL --max-time 300 https://api.github.com/repos/${repo}/releases/latest | grep -m1 '"tag_name"' | sed -e 's/.*"tag_name": *"//' -e 's/".*//' -e 's/[^A-Za-z0-9._-]//g' || true)"
 [ -n "$tag" ] || { echo "couldn't work out the latest ${repo} release" >&2; exit 1; }
 tagv="$(printf '%s' "$tag" | sed -e 's/^v//')"
 asset="$(printf '%s' ${JSON.stringify(asset)} | sed -e "s/@TAGV@/$tagv/g" -e "s/@TAG@/$tag/g")"
@@ -256,26 +243,12 @@ unpack_one() {
   mkdir -p "$into"
   install -m 0755 "$found" "$into/$want"
 }
-${
-	extra.length === 0
-		? ""
-		: `for extra_asset in ${JSON.stringify(extra.map((entry) => entry.asset))}; do
-  curl -fsSL "https://github.com/${repo}/releases/download/$tag/$extra_asset" -o "$tmp/extra"
-  for extra_binary in ${JSON.stringify(extra.map((entry) => entry.binary))}; do
-    unpack_one "$tmp/extra" "$extra_binary" ${directory}
-  done
-done`
-}
-curl -fsSL "https://github.com/${repo}/releases/download/$tag/$asset" -o "$tmp/archive"
-unpack_one "$tmp/archive" ${JSON.stringify(binary)} ${directory}
-# \`install\` refuses to copy a file onto itself, and most tools install straight
-# into ~/.local/bin, so the copy only happens when they differ.
-if [ ${directory}/${JSON.stringify(binary)} != "$HOME/.local/bin/${installAs}" ]; then
-  install -m 0755 ${directory}/${JSON.stringify(binary)} "$HOME/.local/bin/${installAs}"
-else
-  chmod 0755 ${directory}/${JSON.stringify(binary)}
-fi
-${PATH_RC}`,
+curl -fsSL --max-time 300 "https://github.com/${repo}/releases/download/$tag/$asset" -o "$tmp/archive"
+unpack_one "$tmp/archive" ${JSON.stringify(binary)} "${directory}"
+${companions.map((file) => `install -m 0644 "$dir/${file}" "${directory}/${file}"`).join("\n")}
+if [ "${directory}/${binary}" != "$HOME/.local/bin/${installAs}" ]; then
+  ln -sf "${directory}/${binary}" "$HOME/.local/bin/${installAs}"
+fi`,
 	);
 }
 
@@ -291,7 +264,7 @@ async function ensureMise(ctx: TaskContext): Promise<void> {
 		ctx,
 		"mise",
 		`mkdir -p "$HOME/.local/bin"
-${installerScript("https://mise.run", "sh")}${PATH_RC}`,
+${installerScript("https://mise.run", "sh")}`,
 	);
 }
 
@@ -321,8 +294,7 @@ function miseTool(
 	// The shim, not the install path: `mise which` answers with the versioned
 	// file (…/installs/ripgrep/15.2.0/rg), which stops being right the moment a
 	// later version is installed. mise's own shims follow whatever is current.
-	const shim = `mise which ${id} 2>/dev/null || mise which ${miseName} 2>/dev/null`;
-	const which = shim;
+	const which = `mise which ${id} 2>/dev/null || mise which ${miseName} 2>/dev/null`;
 	const where = `command -v ${id} 2>/dev/null || (command -v mise >/dev/null 2>&1 && ${which})`;
 	return {
 		id,
@@ -343,10 +315,8 @@ function miseTool(
 mkdir -p "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$PATH"
 mise use -g ${miseName}@latest
-p="$(${which})"
-[ -n "$p" ] || { echo "mise installed ${miseName} but mise which can't find it" >&2; exit 1; }
-ln -sf "$p" "$HOME/.local/bin/${id}"
-${PATH_RC}`,
+mise reshim
+ln -sf "$HOME/.local/share/mise/shims/${id}" "$HOME/.local/bin/${id}"`,
 			);
 		},
 	};
@@ -391,8 +361,7 @@ function scriptTool(
 				id,
 				`mkdir -p "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$PATH"
-${installerScript(url, shell)}
-${PATH_RC}`,
+${installerScript(url, shell)}`,
 			);
 		},
 	};
@@ -425,17 +394,18 @@ export const TOOLS: readonly ToolSpec[] = [
 				"pi",
 				`mkdir -p "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$PATH"
-${installerScript("https://pi.dev/install.sh", "sh")} || true
-if ! command -v pi >/dev/null 2>&1; then
+(
+${installerScript("https://pi.dev/install.sh", "sh")}
+) || {
   if command -v npm >/dev/null 2>&1; then
-    NPM_CONFIG_PREFIX="$HOME/.local" npm install -g --ignore-scripts @earendil-works/pi-coding-agent || true
+    NPM_CONFIG_PREFIX="$HOME/.local" npm install -g --ignore-scripts @earendil-works/pi-coding-agent || exit 1
   fi
-fi
+}
 command -v pi >/dev/null 2>&1 || {
   echo "pi is still missing. Run this yourself in a terminal: curl -fsSL https://pi.dev/install.sh | sh" >&2
   exit 1
 }
-${PATH_RC}`,
+`,
 			);
 		},
 	},
@@ -463,9 +433,7 @@ ${PATH_RC}`,
 		async install(ctx) {
 			const platform = await detectPlatform(ctx);
 			const os = platform.os === "Darwin" ? "darwin" : "linux";
-			if (platform.arch !== "arm64" && platform.arch !== "x86_64") {
-				throw new Error(`bd has no release for ${platform.os} ${platform.arch}`);
-			}
+			assertSupported(platform, "bd", ["arm64", "x86_64"].includes(platform.arch) ? os : null);
 			const arch = platform.arch === "arm64" ? "arm64" : "amd64";
 			// beads' assets carry the version *without* the leading `v` the tag has.
 			await installRelease(ctx, {
@@ -514,26 +482,16 @@ ${PATH_RC}`,
 			const platform = await detectPlatform(ctx);
 			const os = platform.os === "Darwin" ? "darwin" : "linux";
 			const arch = platform.arch === "arm64" ? "arm64" : "amd64";
-			if (platform.arch !== "arm64" && platform.arch !== "x86_64") {
-				throw new Error(`mutagen has no release for ${platform.os} ${platform.arch}`);
-			}
-			// mutagen's agent bundle ships in the same release but is a separate
-			// archive, and the CLI looks for it next to its own binary when it
-			// connects to another host. Without it, `hyper drive sync-config`
-			// installs fine and then fails on the first connection — so both go
-			// into one directory, with the binary linked into ~/.local/bin.
+			assertSupported(platform, "mutagen", ["arm64", "x86_64"].includes(platform.arch) ? os : null);
+			// The platform archive contains both the CLI and its agent bundle.
+			// Preserve the bundle FILE beside the real binary; never unpack it.
 			await installRelease(ctx, {
 				repo: "mutagen-io/mutagen",
 				asset: `mutagen_${os}_${arch}_@TAG@.tar.gz`,
 				binary: "mutagen",
 				installAs: "mutagen",
 				directory: "$HOME/.local/libexec/mutagen",
-				extra: [
-					{
-						asset: `mutagen-agents.tar.gz`,
-						binary: "mutagen-agent",
-					},
-				],
+				companions: ["mutagen-agents.tar.gz"],
 			});
 		},
 	},

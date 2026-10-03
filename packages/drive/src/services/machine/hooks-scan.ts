@@ -52,6 +52,21 @@ export interface HookScan {
  * the difference between a scan that says "unknown: `[`" and one that says
  * nothing.
  */
+const TRANSPARENT = new Set([
+	"if",
+	"then",
+	"elif",
+	"else",
+	"fi",
+	"do",
+	"done",
+	"while",
+	"until",
+	"!",
+	"command",
+	"exec",
+]);
+
 const IGNORED = new Set([
 	// Keywords and control flow.
 	"if",
@@ -134,7 +149,6 @@ const IGNORED = new Set([
 	"osascript",
 	"powershell",
 	"pwsh",
-	"cmd",
 	"env",
 	"nohup",
 	"nice",
@@ -185,7 +199,6 @@ const RUNTIMES = new Set([
 	"osascript",
 	"pwsh",
 	"powershell",
-	"cmd",
 	"xargs",
 	"nohup",
 	"timeout",
@@ -216,9 +229,8 @@ const RUNTIME_BASENAMES = new Set([
  *
  * A quoted run stays one word (quotes removed, nothing inside expanded), and the
  * operators that end a command come back as the word `"\n"`, so a caller can
- * tell one command from the next. `)` emits two of them, which drops whatever
- * came before it — that is how a `case` pattern list (`msys*|cygwin*)`) is kept
- * out of the answers.
+ * tell one command from the next. `)` is also retained as a marker so the
+ * candidate reader can skip a `case` subject and its entire pattern list.
  */
 export function splitWords(command: string): string[] {
 	const words: string[] = [];
@@ -267,25 +279,28 @@ export function splitWords(command: string): string[] {
 			end();
 			continue;
 		}
-		// A redirection is one token and its operand is not a command: `> /dev/null`
-		// mentions no tool.
+		// Consume exactly one redirect operand, never the following command or
+		// boundary. Attached arguments (`.>out`) still finish the preceding word.
 		if (char === ">" || char === "<") {
-			started = true;
-			while (i < command.length && !/\s/.test(command[i])) current += command[i++];
-			words.push(`>${current}`);
-			current = "";
-			started = false;
-			// `> /dev/null` has a space before its operand, and the operand is a
-			// file, not a command.
-			if (i < command.length && /\s/.test(command[i])) {
-				while (i < command.length && /\s/.test(command[i])) i++;
-				while (i < command.length && !/\s/.test(command[i])) current += command[i++];
-				words.push(`>${current}`);
+			if (/^\d+$/.test(current)) {
 				current = "";
-				i--;
-			} else {
-				i--;
+				started = false;
+			} else end();
+			while (command[i + 1] === char) i++;
+			if (command[i + 1] === "&" || command[i + 1] === "|") i++;
+			i++;
+			while (command[i] === " " || command[i] === "\t") i++;
+			let operandQuote: string | null = null;
+			for (; i < command.length; i++) {
+				const c = command[i];
+				if (operandQuote !== null) {
+					if (c === operandQuote) operandQuote = null;
+					else if (c === "\\" && operandQuote === '"') i++;
+				} else if (c === "'" || c === '"') operandQuote = c;
+				else if (c === "\\") i++;
+				else if (/[\s|&;(){}<>]/.test(c)) break;
 			}
+			i--;
 			continue;
 		}
 		// `${HOME}` is one word — there are no commands inside a parameter
@@ -330,9 +345,9 @@ export function splitWords(command: string): string[] {
 			continue;
 		}
 		if (char === ")") {
-			// A `case` pattern list, or the end of a subshell: the words before it
-			// were patterns, not commands, so they go.
-			boundary(2);
+			// Keep the delimiter for the candidate reader's case-pattern handling.
+			boundary();
+			words.push(")", "\n");
 			continue;
 		}
 		current += char;
@@ -374,13 +389,19 @@ export function candidateWords(command: string): Candidate[] {
 	const out: Candidate[] = [];
 	let words = splitWords(command);
 	while (words.length > 0) {
-		if (words[0] === "\n") {
+		if (words[0] === "\n" || words[0] === ")") {
 			words = words.slice(1);
 			continue;
 		}
 		while (words.length > 0) {
 			const first = words[0];
-			if (first === "env") {
+			if (first === "case") {
+				// The subject and every alternative before ')' are syntax, not commands.
+				const close = words.indexOf(")");
+				words = close === -1 ? [] : words.slice(close + 1);
+				continue;
+			}
+			if (first === "env" || TRANSPARENT.has(first) || first.startsWith("-")) {
 				words = words.slice(1);
 				continue;
 			}
