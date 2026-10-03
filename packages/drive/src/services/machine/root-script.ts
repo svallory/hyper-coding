@@ -101,14 +101,23 @@ export function privilegedArgv(path: string): string[] {
  * older ssh, and a recipe that fails halfway is worse than one extra line.
  */
 export function rootSteps(machine: MachineInfo | null, path: string): string[] {
-	const local = shellQuote(path);
-	if (machine === null) return [privilegedArgv(path).join(" ")];
+	if (machine === null) {
+		// Every word, not just the path: an unquoted path under a scratch dir or a
+		// home with a space in it splits into two arguments, and this recipe runs as
+		// root.
+		return [privilegedArgv(path).map(shellQuote).join(" ")];
+	}
 	const host = shellQuote(machine.host ?? machine.name);
 	const remote = remoteScriptPath("~");
 	return [
 		`ssh ${host} 'mkdir -p ~/.hyper'`,
-		`scp ${local} ${host}:${remote}`,
-		`ssh -t ${host} 'sudo bash ${remote}'`,
+		// scp's source is local, so the user's shell has to see it as one word; its
+		// target half is never quoted, for the reasons remote.ts documents.
+		`scp ${shellQuote(path)} ${host}:${remote}`,
+		// Built from privilegedArgv too, but deliberately unquoted: the whole line is
+		// single-quoted so the *remote* shell expands the leading ~. Quoting it here
+		// would defeat that.
+		`ssh -t ${host} '${privilegedArgv(remote).join(" ")}'`,
 	];
 }
 
