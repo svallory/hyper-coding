@@ -240,6 +240,9 @@ export function initSpaceGitDir(
 			encoding: "utf8",
 			env: cleanGitEnv(),
 		});
+		if (init.signal === "SIGINT" || init.signal === "SIGTERM") {
+			throw new SpaceGitInterruptedError(init.signal);
+		}
 		if (init.error || init.status !== 0) {
 			throw new SpaceGitError((init.stderr ?? "").trim() || `git init --bare failed for ${gitDir}`);
 		}
@@ -258,6 +261,8 @@ export function initSpaceGitDir(
 		}
 	} catch (err) {
 		rmSync(gitDir, { recursive: true, force: true });
+		removeEmptyHyperDir(spaceRoot);
+		if (err instanceof SpaceGitInterruptedError) throw err;
 		if (err instanceof SpaceGitError) {
 			throw new SpaceGitError(`while setting up the space git dir: ${err.message}`);
 		}
@@ -292,6 +297,12 @@ export function removeSpaceGitDir(spaceRoot: string): boolean {
 	if (!existsSync(gitDir)) return false;
 	if (readSpaceConfig(spaceRoot, "core.worktree") !== "../..") return false;
 	rmSync(gitDir, { recursive: true, force: true });
+	removeEmptyHyperDir(spaceRoot);
+	return true;
+}
+
+/** Remove only an empty metadata directory, without spawning git during cleanup. */
+function removeEmptyHyperDir(spaceRoot: string): void {
 	try {
 		// Only when nothing else of the space's lives there (`.hyper/memory`,
 		// say), which is the point: this is not ours to tidy otherwise.
@@ -301,7 +312,6 @@ export function removeSpaceGitDir(spaceRoot: string): boolean {
 	} catch {
 		// No `.hyper`, or not empty, or not removable. Nothing to do about it.
 	}
-	return true;
 }
 
 /** What a project repository of a space calls itself, for the manifest. */
@@ -334,6 +344,9 @@ export function projectRepoInfo(gitDir: string): ProjectRepoInfo | null {
 			encoding: "utf8",
 			env: cleanGitEnv(),
 		});
+		if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
+			throw new SpaceGitInterruptedError(result.signal);
+		}
 		if (result.status !== 0) return null;
 		const value = (result.stdout ?? "").trim();
 		return value === "" ? null : value;

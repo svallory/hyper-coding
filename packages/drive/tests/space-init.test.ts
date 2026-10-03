@@ -839,17 +839,16 @@ describe("a push that failed is published by the next refresh", () => {
 		expect(flat(settled.stdout)).toContain("already up to date");
 	});
 
-	it("a first init whose push fails keeps its commit and matching allowlist for refresh", (ctx) => {
+	it("a first init whose push is definitely refused restores its original state", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		rejectSpacePushes(true);
 		const root = makeSpace("failed-first-push");
 		const result = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(result.status).not.toBe(0);
-		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
-		expect(existsSync(join(root, ".gitignore"))).toBe(true);
-		expect(localCount(root)).toBe(1);
-		expect(flat(result.stderr)).toContain("hyper space init --refresh");
+		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(false);
+		expect(existsSync(join(root, ".gitignore"))).toBe(false);
+		expect(flat(result.stderr)).not.toContain("--refresh");
 		expect(remoteHasRef("space/failed-first-push")).toBe(false);
 		expect(manifestFromCheckout("failed-first-push")).toBeUndefined();
 	});
@@ -1322,7 +1321,7 @@ describe("a refusal changes nothing at all", () => {
 		);
 	});
 
-	it("a refused first-init push keeps an unchanged allowlist and its new commit", (ctx) => {
+	it("a definitely refused first-init push preserves the existing allowlist but removes its git dir", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		writeConfig();
 		// A hyper-written allowlist that is already exactly what this init would
@@ -1339,14 +1338,10 @@ describe("a refusal changes nothing at all", () => {
 		const refused = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(refused.status).not.toBe(0);
 		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(allowlist);
-		// Round-5 item 1 supersedes the old delete-on-unconfirmed-push rule:
-		// even a different remote SHA keeps the local commit for --refresh.
-		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
-		expect(localCount(root)).toBe(1);
-		expect(flat(refused.stderr)).toContain("hyper space init --refresh");
-		expect(
-			git(["--git-dir", join(root, ".hyper", "space.git"), "show", "HEAD:.gitignore"], root),
-		).toBe(allowlist);
+		// The final ruling distinguishes a definite refusal from an unknown
+		// push outcome: first-init refusals remove new history, not this file.
+		expect(existsSync(join(root, ".hyper"))).toBe(false);
+		expect(flat(refused.stderr)).not.toContain("--refresh");
 	});
 });
 
@@ -1642,13 +1637,13 @@ describe("one name, one branch, checked under the lock", () => {
 });
 
 /** Private PATH shim; only space-git calls enter the injected script. */
-function spaceGitShim(script: string): () => void {
+function spaceGitShim(script: string, spaceOnly = true): () => void {
 	const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
 	const dir = join(fixture.root, "r5-shim");
 	mkdirSync(dir, { recursive: true });
 	writeFileSync(
 		join(dir, "git"),
-		`#!/bin/sh\nREAL=${shellQuote(real)}\ncase "$*" in\n  *space.git*)\n${script}\n;;\nesac\nexec "$REAL" "$@"\n`,
+		`#!/bin/sh\nREAL=${shellQuote(real)}\ncase "$*" in\n  ${spaceOnly ? "*space.git*" : "*"})\n${script}\n;;\nesac\nexec "$REAL" "$@"\n`,
 		{ mode: 0o755 },
 	);
 	const saved = process.env.PATH;
@@ -1726,6 +1721,7 @@ esac`);
 			const retry = run(["space", "init", root, "--refresh"]);
 			expect(retry.status, flat(retry.stderr)).toBe(0);
 			expect(localCount(root)).toBe(1);
+			expect(flat(retry.stdout)).toContain("Manifest: registered");
 			expect(manifestEntry("unconfirmed")?.branch).toBe("space/unconfirmed");
 		},
 	);
@@ -1876,6 +1872,18 @@ esac`);
 	});
 
 	it.for([
+		{ signal: "SIGINT", phase: "init", refresh: false },
+		{ signal: "SIGTERM", phase: "init", refresh: false },
+		{ signal: "SIGINT", phase: "setup", refresh: false },
+		{ signal: "SIGTERM", phase: "setup", refresh: false },
+		{ signal: "SIGINT", phase: "recreate", refresh: false },
+		{ signal: "SIGTERM", phase: "recreate", refresh: false },
+		{ signal: "SIGINT", phase: "manifest-pull", refresh: false },
+		{ signal: "SIGTERM", phase: "manifest-pull", refresh: false },
+		{ signal: "SIGINT", phase: "cleanup", refresh: false },
+		{ signal: "SIGTERM", phase: "cleanup", refresh: false },
+		{ signal: "SIGINT", phase: "cleanup", refresh: true },
+		{ signal: "SIGTERM", phase: "cleanup", refresh: true },
 		{ signal: "SIGINT", phase: "ls-remote", refresh: false },
 		{ signal: "SIGTERM", phase: "ls-remote", refresh: false },
 		{ signal: "SIGINT", phase: "push", refresh: false },
@@ -1892,6 +1900,7 @@ esac`);
 			const root = makeSpace("interrupted-group");
 			if (refresh) expect(run(["space", "init", root, "--cadence", "manual"]).status).toBe(0);
 			const before = refresh ? readFileSync(join(root, ".gitignore"), "utf8") : "";
+			if (phase === "recreate") initOrphanSpaceGitDir(root);
 			mkdirSync(join(root, "extra"));
 			writeFileSync(join(root, "extra", "kept.md"), "local file\n");
 			const ready = join(fixture.root, "git-ready");
@@ -1900,10 +1909,42 @@ esac`);
 				blocker,
 				`require('node:fs').writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`,
 			);
-			const restore = spaceGitShim(`
+			const cleanupReady = join(fixture.root, "cleanup-ready");
+			const cleanupBlocker = join(fixture.root, "cleanup-block.cjs");
+			writeFileSync(
+				cleanupBlocker,
+				`require('node:fs').writeFileSync(${JSON.stringify(cleanupReady)}, 'ready'); setInterval(() => {}, 1000);`,
+			);
+			const command =
+				phase === "setup"
+					? "config --local core.bare"
+					: phase === "recreate"
+						? "config --local --get core.worktree"
+						: phase === "manifest-pull"
+							? "pull"
+							: phase === "cleanup"
+								? refresh
+									? "add"
+									: "ls-remote"
+								: phase;
+			const restore = spaceGitShim(
+				`
+${
+	phase === "cleanup"
+		? `if [ -f ${shellQuote(ready)} ]; then
+  case " $* " in
+    *" ${refresh ? "config --local --unset-all hyper.tracked" : "reset"} "*) exec ${shellQuote(process.execPath)} ${shellQuote(cleanupBlocker)};;
+  esac
+fi`
+		: ""
+}
 case " $* " in
-  *" ${phase} "*) exec ${shellQuote(process.execPath)} ${shellQuote(blocker)};;
-esac`);
+  *" ${command} "*)
+    ${phase === "manifest-pull" ? `[ -d ${shellQuote(join(root, ".hyper", "space.git"))} ] || exec "$REAL" "$@"` : ""}
+    exec ${shellQuote(process.execPath)} ${shellQuote(blocker)};;
+esac`,
+				phase !== "manifest-pull",
+			);
 			const child = spawn(
 				process.execPath,
 				[
@@ -1946,6 +1987,10 @@ esac`);
 			try {
 				await expect.poll(() => existsSync(ready), { timeout: 10_000 }).toBe(true);
 				process.kill(-child.pid!, signal);
+				if (phase === "cleanup") {
+					await expect.poll(() => existsSync(cleanupReady), { timeout: 10_000 }).toBe(true);
+					process.kill(-child.pid!, signal);
+				}
 				const result = await Promise.race([
 					closed,
 					new Promise<never>((_, reject) => {
@@ -1958,13 +2003,26 @@ esac`);
 				]);
 				expect(result, flat(stderr)).toEqual({ code: 130, signal: null });
 				expect(flat(stderr)).not.toContain("couldn't reach");
-				if (phase === "push") {
+				if (phase === "push" || phase === "manifest-pull") {
 					expect(flat(stderr)).toContain("interrupted: your commit is kept locally");
 					expect(flat(stderr)).toContain("hyper space init --refresh");
 					expect(localCount(root)).toBe(1);
 					expect(localTracked(root)).toEqual(["extra"]);
 					expect(cadenceIn(root)).toBe("session-end");
 					expect(readFileSync(join(root, ".gitignore"), "utf8")).toContain("!/extra/");
+				} else if (phase === "cleanup") {
+					expect(flat(stderr)).toContain("interrupted during cleanup:");
+					expect(flat(stderr)).not.toContain("nothing was changed");
+					if (refresh) {
+						expect(flat(stderr)).toContain("hyper.tracked may not be restored");
+						expect(localTracked(root)).toEqual(["extra"]);
+						expect(cadenceIn(root)).toBe("manual");
+						expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(before);
+					} else {
+						expect(flat(stderr)).toContain("no space git dir remains");
+						expect(existsSync(join(root, ".hyper"))).toBe(false);
+						expect(existsSync(join(root, ".gitignore"))).toBe(false);
+					}
 				} else {
 					expect(flat(stderr)).toContain("interrupted: nothing was changed");
 					if (refresh) {
@@ -1973,10 +2031,11 @@ esac`);
 						expect(localTracked(root)).toEqual([]);
 						expect(cadenceIn(root)).toBe("manual");
 					} else {
-						expect(existsSync(join(root, ".hyper"))).toBe(false);
+						expect(existsSync(join(root, ".hyper"))).toBe(phase === "recreate");
 						expect(existsSync(join(root, ".gitignore"))).toBe(false);
 					}
 				}
+				expect(flat(stderr)).not.toContain("couldn't fast-forward");
 				expect(remoteHasRef("space/interrupted-group")).toBe(refresh);
 				if (refresh) expect(manifestEntry("interrupted-group")?.cadence).toBe("manual");
 				else expect(manifestEntry("interrupted-group")).toBeUndefined();
@@ -1989,7 +2048,7 @@ esac`);
 				await closed;
 				restore();
 			}
-			if (phase === "push") {
+			if (phase === "push" || phase === "manifest-pull") {
 				const retry = run(["space", "init", root, "--refresh"]);
 				expect(retry.status, flat(retry.stderr)).toBe(0);
 				expect(localCount(root)).toBe(1);
@@ -1997,5 +2056,92 @@ esac`);
 			}
 		},
 		25_000,
+	);
+});
+
+describe("definite push refusals", () => {
+	it.for([
+		{ reason: "ahead", refresh: false },
+		{ reason: "hook", refresh: false },
+		{ reason: "ref-conflict", refresh: false },
+		{ reason: "ahead", refresh: true },
+		{ reason: "hook", refresh: true },
+		{ reason: "ref-conflict", refresh: true },
+	] as const)(
+		"handles $reason (refresh=$refresh) without uncertain-push advice",
+		({ reason, refresh }, ctx) => {
+			if (skipIfUnbuilt(ctx)) return;
+			writeConfig();
+			initialiseDrive();
+			const root = makeSpace("refusal");
+			if (refresh) expect(run(["space", "init", root, "--cadence", "manual"]).status).toBe(0);
+			if (reason === "ahead") {
+				const seed = join(fixture.root, "other-machine");
+				if (refresh)
+					git(["clone", "--branch", "space/refusal", fixture.remote, seed], fixture.root);
+				else makeCheckout(seed);
+				mkdirSync(join(seed, "notes"), { recursive: true });
+				writeFileSync(join(seed, "notes", "remote.md"), "from another machine\n");
+				git(["add", "notes/remote.md"], seed);
+				git(["commit", "-qm", "other machine pushed first"], seed);
+				git(["push", fixture.remote, "HEAD:refs/heads/space/refusal"], seed);
+			}
+			if (reason === "hook") rejectSpacePushes(true);
+			mkdirSync(join(root, "extra"));
+			writeFileSync(join(root, "extra", "kept.md"), "local work\n");
+			const restore =
+				reason === "ref-conflict"
+					? spaceGitShim(`
+case " $* " in
+  *" push "*) echo 'remote: error: cannot lock ref: refname conflict' >&2; exit 1;;
+esac`)
+					: () => {};
+			try {
+				const result = run([
+					"space",
+					"init",
+					root,
+					"--cadence",
+					"session-end",
+					"--tracked",
+					"extra",
+					...(refresh ? ["--refresh"] : []),
+				]);
+				expect(result.status).toBe(2);
+				const err = flat(result.stderr);
+				expect(err).not.toContain("--refresh");
+				expect(err).not.toContain("couldn't confirm the push");
+				expect(err).toContain(
+					reason === "ahead"
+						? "another machine pushed"
+						: reason === "hook"
+							? "hook declined"
+							: "collides with",
+				);
+				if (refresh) {
+					expect(err).not.toContain("--name");
+					expect(err).toContain("local history was kept");
+					expect(localCount(root)).toBe(2);
+					expect(localTracked(root)).toEqual(["extra"]);
+					expect(cadenceIn(root)).toBe("session-end");
+					expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(
+						git(["--git-dir", join(root, ".hyper", "space.git"), "show", "HEAD:.gitignore"], root),
+					);
+					expect(manifestEntry("refusal")?.cadence).toBe("manual");
+				} else {
+					expect(existsSync(join(root, ".hyper"))).toBe(false);
+					expect(existsSync(join(root, ".gitignore"))).toBe(false);
+					expect(manifestEntry("refusal")).toBeUndefined();
+				}
+			} finally {
+				restore();
+				rejectSpacePushes(false);
+			}
+			if (!refresh) {
+				const retry = run(["space", "init", root, "--name", "other", "--cadence", "manual"]);
+				expect(retry.status, flat(retry.stderr)).toBe(0);
+				expect(manifestEntry("other")?.branch).toBe("space/other");
+			}
+		},
 	);
 });
