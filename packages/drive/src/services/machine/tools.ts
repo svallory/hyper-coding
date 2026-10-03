@@ -8,10 +8,11 @@
  *
  * Three rules hold for every entry, and the tests assert them:
  *
- * 1. **No root.** No root: nothing here calls a system package manager or
- *    escalates privilege. Tools go to `~/.local/bin`, to `~/.bun/bin`, or through
- *    mise; the only line we ever add to a user's shell rc file is a PATH export,
- *    and only when it isn't there (that line itself is its own task, `tools.path`).
+ * 1. **No root.** Nothing here calls a system package manager or escalates
+ *    privilege. Tools are exposed through `~/.local/bin`. Bun, Claude and pi
+ *    use mise rather than profile-editing bootstraps. The remaining audited
+ *    installers either do not edit rc files or have shell setup disabled;
+ *    only `tools.path` manages shell startup files.
  * 2. **Idempotent** (C-15). `detect` is asked first, and `install` writes through
  *    `install -m` / `ln -sf` / an installer that is itself idempotent. Running
  *    setup twice must not download anything the second time — the runner's
@@ -71,14 +72,39 @@ export interface Platform {
 }
 
 /**
- * Where user-level tools put themselves, prepended to every command's PATH.
- *
- * `~/.local/bin` is the convention and the one thing we add to an rc file;
- * `~/.bun/bin` (bun's own installer), `~/.local/share/mise/shims` (mise) and
- * `~/.pi/agent/bin` (pi's own installer) are PATH entries those tools manage
- * themselves, and a non-login shell doesn't have them yet.
+ * Discovery/install PATH only: locate older private installs for linking.
+ * All version checks instead use CHECK_PATH, the supported target PATH.
  */
-const PRELUDE = `PATH="$HOME/.local/bin:$HOME/.local/share/mise/shims:$HOME/.bun/bin:$HOME/.pi/agent/bin:$PATH"; export PATH;`;
+const PRELUDE = `PATH="$HOME/.local/bin:\${MISE_DATA_DIR:-\${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims:$HOME/.bun/bin:\${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/bin:$PATH"; export PATH;`;
+const CHECK_PATH = 'PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"; export PATH;';
+const CURL = "curl -fsSL --max-time 300 --proto '=https' --proto-redir '=https'";
+
+/** Locate an existing private install only to expose it through the supported PATH. */
+function linkScript(id: string): string {
+	return `${PRELUDE}
+p="$(command -v ${id})" || exit 1
+[ -f "$p" ] && [ -x "$p" ] || exit 1
+mkdir -p "$HOME/.local/bin"
+if [ "$p" != "$HOME/.local/bin/${id}" ]; then ln -sf "$p" "$HOME/.local/bin/${id}" || exit 1; fi
+printf 'linked'`;
+}
+
+function reachableTool(spec: ToolSpec): ToolSpec {
+	return {
+		...spec,
+		async install(ctx) {
+			const linked = await sh(ctx, linkScript(spec.id));
+			if (
+				linked.code === 0 &&
+				linked.stdout.trim() === "linked" &&
+				(await spec.detect(ctx)) !== null
+			)
+				return;
+			await spec.install(ctx);
+			await must(ctx, spec.id, linkScript(spec.id));
+		},
+	};
+}
 
 /** Run a script on the target and hand back the result, never throwing. */
 async function sh(ctx: TaskContext, script: string): Promise<RunResult> {
@@ -108,7 +134,7 @@ command -v ${run} >/dev/null 2>&1 || {
 }
 installer="$(mktemp)"
 trap 'rm -f "$installer"' EXIT
-curl -fsSL --max-time 300 ${JSON.stringify(url)} -o "$installer" || exit 1
+${CURL} ${JSON.stringify(url)} -o "$installer" || exit 1
 [ -s "$installer" ] || { echo "the download from ${url} was empty." >&2; exit 1; }
 ${run} "$installer"
 `;
@@ -129,7 +155,7 @@ async function must(ctx: TaskContext, id: string, script: string): Promise<RunRe
  * normal answer, and a check that threw would fail the whole run.
  */
 async function ask(ctx: TaskContext, cmdline: string): Promise<string | null> {
-	const result = await sh(ctx, `${PRELUDE}\n${cmdline}`);
+	const result = await sh(ctx, `${CHECK_PATH}\n${cmdline}`);
 	if (result.code !== 0) return null;
 	const out = result.stdout.trim();
 	return out === "" ? null : out;
@@ -176,8 +202,7 @@ export async function detectPlatform(ctx: TaskContext): Promise<Platform> {
  * machine's OS and arch, unpack, install one file. The asset name is computed
  * here in TypeScript from {@link detectPlatform} so the choice is visible in the
  * source rather than hidden in shell, and the tag is resolved on the machine
- * being set up (one API call, no JSON parser needed — the tag is the first
- * `"tag_name"` line).
+ * being set up via GitHub's latest-release redirect (no API rate-limit budget).
  */
 async function installRelease(
 	ctx: TaskContext,
@@ -220,12 +245,10 @@ async function installRelease(
 command -v curl >/dev/null 2>&1 || { echo "curl isn't installed, so I can't download the ${repo} release." >&2; exit 1; }
 mkdir -p "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$PATH"
-# m7: a tag is substituted into a sed expression and a URL, so anything that
-# is not a tag character is dropped rather than allowed to act as syntax.
-# \`grep -m1\` closes the pipe as soon as it has the line, and curl reports that
-# as "Failure writing output to destination" — a message about the tag, not about
-# the tool, that reads like a failure in any output a user sees.
-tag="$(curl -fsSL --max-time 300 https://api.github.com/repos/${repo}/releases/latest | grep -m1 '"tag_name"' | sed -e 's/.*"tag_name": *"//' -e 's/".*//' -e 's/[^A-Za-z0-9._-]//g' || true)"
+# Keep curl outside a pipeline so its error and exit status survive.
+headers="$(${CURL} -I https://github.com/${repo}/releases/latest)" || exit 1
+tag="$(printf '%s\\n' "$headers" | tr -d '\\r' | sed -n 's|^[Ll][Oo][Cc][Aa][Tt][Ii][Oo][Nn]: *https://github.com/${repo}/releases/tag/||p' | head -1)"
+case "$tag" in *[!A-Za-z0-9._-]*) echo "invalid release tag: $tag" >&2; exit 1 ;; esac
 [ -n "$tag" ] || { echo "couldn't work out the latest ${repo} release" >&2; exit 1; }
 tagv="$(printf '%s' "$tag" | sed -e 's/^v//')"
 asset="$(printf '%s' ${JSON.stringify(asset)} | sed -e "s/@TAGV@/$tagv/g" -e "s/@TAG@/$tag/g")"
@@ -243,7 +266,7 @@ unpack_one() {
   mkdir -p "$into"
   install -m 0755 "$found" "$into/$want"
 }
-curl -fsSL --max-time 300 "https://github.com/${repo}/releases/download/$tag/$asset" -o "$tmp/archive"
+${CURL} "https://github.com/${repo}/releases/download/$tag/$asset" -o "$tmp/archive" || exit 1
 unpack_one "$tmp/archive" ${JSON.stringify(binary)} "${directory}"
 ${companions.map((file) => `install -m 0644 "$dir/${file}" "${directory}/${file}"`).join("\n")}
 if [ "${directory}/${binary}" != "$HOME/.local/bin/${installAs}" ]; then
@@ -255,17 +278,13 @@ fi`,
 /**
  * Is mise on this machine, and if not, its own installer.
  *
- * Five of the registry's tools come through mise, so it is a dependency of
+ * Eight of the registry's tools come through mise, so it is a dependency of
  * theirs rather than a separate concern — installing one installs it.
  */
 async function ensureMise(ctx: TaskContext): Promise<void> {
-	if ((await ask(ctx, "command -v mise >/dev/null 2>&1 && echo yes")) !== null) return;
-	await must(
-		ctx,
-		"mise",
-		`mkdir -p "$HOME/.local/bin"
-${installerScript("https://mise.run", "sh")}`,
-	);
+	// Also expose an existing mise binary on the supported PATH: its shims
+	// cannot run if mise itself is only on the installer's broader PATH.
+	await findTool("mise")?.install(ctx);
 }
 
 /**
@@ -285,27 +304,11 @@ function miseTool(
 	versionCmd: string,
 	notes?: string,
 ): ToolSpec {
-	// `mise which` is asked first, then `command -v`: on a machine where mise
-	// shims are on PATH the plain command works and costs nothing, and on one
-	// where they aren't, the store path does.
-	// The binary is usually named after the tool id and not after the registry
-	// name (`rg`, not `ripgrep`), so both are tried — mise reports "no executable
-	// found" rather than a wrong answer when asked for the wrong one.
-	// The shim, not the install path: `mise which` answers with the versioned
-	// file (…/installs/ripgrep/15.2.0/rg), which stops being right the moment a
-	// later version is installed. mise's own shims follow whatever is current.
-	const which = `mise which ${id} 2>/dev/null || mise which ${miseName} 2>/dev/null`;
-	const where = `command -v ${id} 2>/dev/null || (command -v mise >/dev/null 2>&1 && ${which})`;
 	return {
 		id,
 		title,
 		...(notes === undefined ? {} : { notes }),
-		async detect(ctx) {
-			return versionOf(
-				ctx,
-				`p="$(${where})" && [ -n "$p" ] && ${versionViaStore(versionCmd, id)} 2>/dev/null`,
-			);
-		},
+		detect: (ctx) => versionOf(ctx, versionCmd),
 		async install(ctx) {
 			await ensureMise(ctx);
 			await must(
@@ -325,18 +328,6 @@ ln -sf "$shim" "$HOME/.local/bin/${id}"`,
 }
 
 /**
- * Point a version command at the binary mise reported.
- *
- * It is matched on the *binary* name (the command's own first word), not on the
- * registry name: looking for `ripgrep` inside `rg --version` finds nothing, and
- * a detect that silently kept running `rg` from PATH meant the mise-only path
- * was never exercised at all.
- */
-function versionViaStore(versionCmd: string, binary: string): string {
-	return versionCmd.replace(new RegExp(`(^|\\s)${binary}\\b`), '$1"$p"');
-}
-
-/**
  * A tool with an official user-level install script.
  *
  * These installers put the binary in `~/.local/bin` (or `~/.bun/bin`) and are
@@ -350,6 +341,7 @@ function scriptTool(
 	versionCmd: string,
 	/** The shell the script is written for. Checked by reading its shebang. */
 	shell: "sh" | "bash",
+	environment = "",
 	notes?: string,
 ): ToolSpec {
 	return {
@@ -363,6 +355,7 @@ function scriptTool(
 				id,
 				`mkdir -p "$HOME/.local/bin"
 export PATH="$HOME/.local/bin:$PATH"
+${environment}
 ${installerScript(url, shell)}`,
 			);
 		},
@@ -376,130 +369,120 @@ ${installerScript(url, shell)}`,
  * the CLIs the hooks call, then the general-purpose ones, then the tools the
  * others are built on (`mise`) and the sync engine (`mutagen`).
  */
-export const TOOLS: readonly ToolSpec[] = [
-	// claude.ai/install.sh is bash: it uses `[[` and `set -o pipefail`, which dash
-	// (Debian's /bin/sh) rejects.
-	scriptTool("claude", "Claude Code", "https://claude.ai/install.sh", "claude --version", "bash"),
-	{
-		id: "pi",
-		title: "pi",
-		notes:
-			"The official installer draws a TUI and needs a terminal, so setup closes its stdin — which makes it abort. The npm fallback below is the headless path (same version); run the installer by hand if you want the managed install.",
-		detect: (ctx) => versionOf(ctx, "pi --version"),
-		async install(ctx) {
-			// Installer first, per the vendor's own instructions. With stdin closed
-			// it aborts rather than hanging (it needs a terminal), and we fall
-			// through to npm. `--ignore-scripts` because pi's postinstall is what
-			// wants a TTY; the prefix is the user's own, so no root is involved.
-			await must(
-				ctx,
-				"pi",
-				`mkdir -p "$HOME/.local/bin"
-export PATH="$HOME/.local/bin:$HOME/.pi/agent/bin:$PATH"
-(
-${installerScript("https://pi.dev/install.sh", "sh")}
-) || {
-  if command -v npm >/dev/null 2>&1; then
-    NPM_CONFIG_PREFIX="$HOME/.local" npm install -g --ignore-scripts @earendil-works/pi-coding-agent || exit 1
-  fi
-}
-command -v pi >/dev/null 2>&1 || {
-  echo "pi is still missing. Run this yourself in a terminal: curl -fsSL https://pi.dev/install.sh | sh" >&2
-  exit 1
-}
-`,
-			);
+export const TOOLS: readonly ToolSpec[] = (
+	[
+		// These mise registry entries download binaries without running the vendors'
+		// profile-editing bootstrap programs (audited 2026-10-03).
+		miseTool("claude", "Claude Code", "claude", "claude --version"),
+		miseTool("pi", "pi", "pi", "pi --version"),
+		{
+			id: "rtk",
+			title: "rtk",
+			detect: (ctx) => versionOf(ctx, "rtk --version"),
+			async install(ctx) {
+				const platform = await detectPlatform(ctx);
+				// Rust target triples: the release assets are named after them, and the
+				// Linux one differs by arch (see LINUX_ABI).
+				const triple = rustTriple("rtk-ai/rtk", platform);
+				assertSupported(platform, "rtk", triple);
+				await installRelease(ctx, {
+					repo: "rtk-ai/rtk",
+					asset: `rtk-${triple}.tar.gz`,
+					binary: "rtk",
+				});
+			},
 		},
-	},
-	{
-		id: "rtk",
-		title: "rtk",
-		detect: (ctx) => versionOf(ctx, "rtk --version"),
-		async install(ctx) {
-			const platform = await detectPlatform(ctx);
-			// Rust target triples: the release assets are named after them, and the
-			// Linux one differs by arch (see LINUX_ABI).
-			const triple = rustTriple("rtk-ai/rtk", platform);
-			assertSupported(platform, "rtk", triple);
-			await installRelease(ctx, {
-				repo: "rtk-ai/rtk",
-				asset: `rtk-${triple}.tar.gz`,
-				binary: "rtk",
-			});
+		{
+			id: "bd",
+			title: "bd (beads)",
+			detect: (ctx) => versionOf(ctx, "bd --version"),
+			async install(ctx) {
+				const platform = await detectPlatform(ctx);
+				const os = platform.os === "Darwin" ? "darwin" : "linux";
+				assertSupported(platform, "bd", ["arm64", "x86_64"].includes(platform.arch) ? os : null);
+				const arch = platform.arch === "arm64" ? "arm64" : "amd64";
+				// beads' assets carry the version *without* the leading `v` the tag has.
+				await installRelease(ctx, {
+					repo: "steveyegge/beads",
+					asset: `beads_@TAGV@_${os}_${arch}.tar.gz`,
+					binary: "bd",
+				});
+			},
 		},
-	},
-	{
-		id: "bd",
-		title: "bd (beads)",
-		detect: (ctx) => versionOf(ctx, "bd --version"),
-		async install(ctx) {
-			const platform = await detectPlatform(ctx);
-			const os = platform.os === "Darwin" ? "darwin" : "linux";
-			assertSupported(platform, "bd", ["arm64", "x86_64"].includes(platform.arch) ? os : null);
-			const arch = platform.arch === "arm64" ? "arm64" : "amd64";
-			// beads' assets carry the version *without* the leading `v` the tag has.
-			await installRelease(ctx, {
-				repo: "steveyegge/beads",
-				asset: `beads_@TAGV@_${os}_${arch}.tar.gz`,
-				binary: "bd",
-			});
+		scriptTool(
+			"herdr",
+			"herdr",
+			"https://herdr.dev/install.sh",
+			"herdr --version",
+			"sh",
+			'export HERDR_INSTALL_DIR="$HOME/.local/bin"',
+		),
+		// The GitButler bootstrap declares `#!/bin/sh`.
+		scriptTool(
+			"but",
+			"but (GitButler CLI)",
+			"https://gitbutler.com/install.sh",
+			"but --version",
+			"sh",
+			"export GITBUTLER_NONINTERACTIVE=1",
+		),
+		{
+			id: "wt",
+			title: "wt (worktrunk)",
+			detect: (ctx) => versionOf(ctx, "wt --version"),
+			async install(ctx) {
+				const platform = await detectPlatform(ctx);
+				const triple = rustTriple("max-sixty/worktrunk", platform);
+				assertSupported(platform, "wt", triple);
+				await installRelease(ctx, {
+					repo: "max-sixty/worktrunk",
+					asset: `worktrunk-${triple}.tar.xz`,
+					binary: "wt",
+					unpack: "tar -xJf",
+				});
+			},
 		},
-	},
-	scriptTool("herdr", "herdr", "https://herdr.dev/install.sh", "herdr --version", "sh"),
-	// The GitButler bootstrap declares `#!/bin/sh`.
-	scriptTool(
-		"but",
-		"but (GitButler CLI)",
-		"https://gitbutler.com/install.sh",
-		"but --version",
-		"sh",
-	),
-	{
-		id: "wt",
-		title: "wt (worktrunk)",
-		detect: (ctx) => versionOf(ctx, "wt --version"),
-		async install(ctx) {
-			const platform = await detectPlatform(ctx);
-			const triple = rustTriple("max-sixty/worktrunk", platform);
-			assertSupported(platform, "wt", triple);
-			await installRelease(ctx, {
-				repo: "max-sixty/worktrunk",
-				asset: `worktrunk-${triple}.tar.xz`,
-				binary: "wt",
-				unpack: "tar -xJf",
-			});
+		miseTool("gh", "gh (GitHub CLI)", "gh", "gh --version"),
+		miseTool("jq", "jq", "jq", "jq --version"),
+		miseTool("fzf", "fzf", "fzf", "fzf --version"),
+		miseTool("rg", "rg (ripgrep)", "ripgrep", "rg --version"),
+		miseTool("fd", "fd", "fd", "fd --version"),
+		scriptTool(
+			"mise",
+			"mise",
+			"https://mise.run",
+			"mise --version",
+			"sh",
+			'export MISE_INSTALL_PATH="$HOME/.local/bin/mise" MISE_INSTALL_HELP=0',
+		),
+		{
+			id: "mutagen",
+			title: "mutagen",
+			detect: (ctx) => versionOf(ctx, "mutagen version"),
+			async install(ctx) {
+				const platform = await detectPlatform(ctx);
+				const os = platform.os === "Darwin" ? "darwin" : "linux";
+				const arch = platform.arch === "arm64" ? "arm64" : "amd64";
+				assertSupported(
+					platform,
+					"mutagen",
+					["arm64", "x86_64"].includes(platform.arch) ? os : null,
+				);
+				// The platform archive contains both the CLI and its agent bundle.
+				// Preserve the bundle FILE beside the real binary; never unpack it.
+				await installRelease(ctx, {
+					repo: "mutagen-io/mutagen",
+					asset: `mutagen_${os}_${arch}_@TAG@.tar.gz`,
+					binary: "mutagen",
+					installAs: "mutagen",
+					directory: "$HOME/.local/libexec/mutagen",
+					companions: ["mutagen-agents.tar.gz"],
+				});
+			},
 		},
-	},
-	miseTool("gh", "gh (GitHub CLI)", "gh", "gh --version"),
-	miseTool("jq", "jq", "jq", "jq --version"),
-	miseTool("fzf", "fzf", "fzf", "fzf --version"),
-	miseTool("rg", "rg (ripgrep)", "ripgrep", "rg --version"),
-	miseTool("fd", "fd", "fd", "fd --version"),
-	scriptTool("mise", "mise", "https://mise.run", "mise --version", "sh"),
-	{
-		id: "mutagen",
-		title: "mutagen",
-		detect: (ctx) => versionOf(ctx, "mutagen version"),
-		async install(ctx) {
-			const platform = await detectPlatform(ctx);
-			const os = platform.os === "Darwin" ? "darwin" : "linux";
-			const arch = platform.arch === "arm64" ? "arm64" : "amd64";
-			assertSupported(platform, "mutagen", ["arm64", "x86_64"].includes(platform.arch) ? os : null);
-			// The platform archive contains both the CLI and its agent bundle.
-			// Preserve the bundle FILE beside the real binary; never unpack it.
-			await installRelease(ctx, {
-				repo: "mutagen-io/mutagen",
-				asset: `mutagen_${os}_${arch}_@TAG@.tar.gz`,
-				binary: "mutagen",
-				installAs: "mutagen",
-				directory: "$HOME/.local/libexec/mutagen",
-				companions: ["mutagen-agents.tar.gz"],
-			});
-		},
-	},
-	// bun.sh/install is bash as well.
-	scriptTool("bun", "bun", "https://bun.sh/install", "bun --version", "bash"),
-];
+		miseTool("bun", "bun", "bun", "bun --version"),
+	] satisfies ToolSpec[]
+).map(reachableTool);
 
 /**
  * The Rust target triple for a platform, or null when we ship none.
@@ -535,11 +518,4 @@ function rustTriple(repo: string, platform: Platform): string | null {
 /** The registry entry for an id, or undefined. */
 export function findTool(id: string): ToolSpec | undefined {
 	return TOOLS.find((tool) => tool.id === id);
-}
-
-/** Registry ids, in registry order. Unknown ids are dropped, not fatal. */
-export function toolIds(ids?: readonly string[]): string[] {
-	if (ids === undefined) return TOOLS.map((tool) => tool.id);
-	const wanted = new Set(ids);
-	return TOOLS.map((tool) => tool.id).filter((id) => wanted.has(id));
 }

@@ -79,7 +79,25 @@ export function parseTools(raw: string): string[] {
 			`Unknown tool${unknown.length > 1 ? "s" : ""}: ${unknown.join(", ")}. The tools are: ${TOOLS.map((tool) => tool.id).join(", ")} (or "all").`,
 		);
 	}
-	return wanted.length === 0 ? ["all"] : wanted;
+	if (wanted.length === 0)
+		throw new MachineError(
+			"No tools selected: pass `--tools all` explicitly, or name tools such as `--tools jq,wt`.",
+		);
+	return wanted;
+}
+
+/** Strip terminal control characters from untrusted hook text before display. */
+export function printableHookWord(word: string): string {
+	return Array.from(word)
+		.filter((char) => {
+			const code = char.codePointAt(0) ?? 0;
+			return code >= 32 && !(code >= 127 && code <= 159);
+		})
+		.join("");
+}
+
+export function emptySelectionMessage(scan: HookScan): string {
+	return `${scan.commandCount === 0 ? "no hooks found" : "hooks found, none maps to a registry tool"}: pass \`--tools all\` or \`--tools a,b\` to select tools explicitly.`;
 }
 
 /**
@@ -341,7 +359,7 @@ export function pendingRootMessage(target: string, path: string): string {
 
 export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 	static override description =
-		"Set up a machine for hyper work (tools, config sync, agent user, …)\n\nExit codes: 0 success; 1 bug in a task; 2 usage error; 3 unattended root steps pending; 4 tool installation failed (also when root steps are pending).";
+		"Set up a machine for hyper work (tools, config sync, agent user, …)\n\nExit codes: 0 success; 1 bug in a task; 2 usage error; 3 unattended root steps pending; 4 tool installation failed or the fix did not take (also when root steps are pending).";
 
 	static override examples = [
 		"<%= config.bin %> machine setup",
@@ -461,8 +479,8 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 				if (!(err instanceof MachineError)) throw err;
 				return this.fail(err.message, flags.debug);
 			}
-			if (suggested.length === 0 && flags.tools === undefined) {
-				this.log("no hooks found: pass `--tools all` or `--tools a,b` to select tools explicitly.");
+			if (suggested.length === 0 && scan !== null) {
+				this.log(emptySelectionMessage(scan));
 			}
 			// Say what the scan found, so "why only these four?" has an answer on
 			// screen rather than in the source.
@@ -477,7 +495,9 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 				);
 			}
 			if (scan !== null && scan.unknown.length > 0) {
-				this.log(`Hooks also call tools this registry doesn't know: ${scan.unknown.join(", ")}.`);
+				this.log(
+					`Hooks also call tools this registry doesn't know: ${scan.unknown.map(printableHookWord).join(", ")}.`,
+				);
 			}
 			if (flags.debug && scan !== null) {
 				for (const file of scan.files) this.log(`  read ${file}`);
