@@ -88,12 +88,33 @@ assert_contains "…and still names the package" "$out" "@hypercli/cli"
 # The library the plugin gets can be older than the plugin expects. Without the
 # check that mismatch surfaces mid-script as "space_layout: command not found",
 # halfway through a conversion. Assert we get the install/update message first.
+#
+# The assertion must be on text only the outdated branch prints:
+# "update @hypercli/cli" also appears in the generic "install or update"
+# message, so matching on that would keep passing even if the outdated branch
+# were deleted entirely. "needs hyper-lib.sh v" is the branch's marker.
 old_lib="$FIX/old-lib"; mkdir -p "$old_lib"
 printf '#!/usr/bin/env bash\nHYPER_LIB_VERSION=0\n' > "$old_lib/hyper-lib.sh"
 fake="$(fake_hyper_dir "$FIX/o5-bin" "echo '$old_lib/hyper-lib.sh'")"
 out="$(PATH="$fake:$NO_HYPER_PATH" bash -c "source '$REQUIRE_LIB'; hyper_require_lib" 2>&1)"; rc=$?
 assert_eq "too-old library exits 2 rather than dying later" 2 "$rc"
-assert_contains "…and says to update, not install" "$out" "update @hypercli/cli"
+assert_contains "…and takes the update branch, not the generic one" "$out" "needs hyper-lib.sh v"
+
+# A library found and sourced but stamped with NO version at all is an older
+# one — the stamp arrived with the contract — and must route to the same
+# "outdated" message, not the generic "the CLI is required" one.
+no_lib_ver="$FIX/no-ver-lib"; mkdir -p "$no_lib_ver"
+printf '#!/usr/bin/env bash\n# no HYPER_LIB_VERSION stamp\n' > "$no_lib_ver/hyper-lib.sh"
+fake="$(fake_hyper_dir "$FIX/o6-bin" "echo '$no_lib_ver/hyper-lib.sh'")"
+out="$(PATH="$fake:$NO_HYPER_PATH" bash -c "source '$REQUIRE_LIB'; hyper_require_lib" 2>&1)"; rc=$?
+assert_eq "unstamped library also exits 2" 2 "$rc"
+assert_contains "unstamped library takes the update branch too" "$out" "needs hyper-lib.sh v"
+
+# Sourcing the helper twice must not crash: the readonly guard exists because
+# `readonly X=1` on a second source exits 1 under set -e.
+out="$(bash -c "source '$REQUIRE_LIB'; set -e; source '$REQUIRE_LIB'; echo STILL-HERE" 2>&1)"; rc=$?
+assert_eq "sourcing the helper twice does not abort under set -e" 0 "$rc"
+assert_contains "…and the second source ran" "$out" "STILL-HERE"
 
 # The real library satisfies the contract.
 out="$(bash -c "source '$REQUIRE_LIB'; hyper_require_lib && echo OK" 2>&1)"; rc=$?
