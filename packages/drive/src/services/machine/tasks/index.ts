@@ -12,7 +12,7 @@
  * proves the no-op path.
  */
 
-import { findTool, TOOLS, type ToolSpec } from "../tools.js";
+import { TOOLS, type ToolSpec } from "../tools.js";
 import { pathTask } from "./tools-path.js";
 import { rsyncTask } from "./tools-rsync.js";
 import type { Task, TaskContext } from "./types.js";
@@ -55,9 +55,8 @@ export function toolTask(spec: ToolSpec): Task {
 /**
  * The tasks that are not registry entries: the PATH line, and rsync.
  *
- * Both are always offered. The PATH line is what makes the registry's installs
- * usable at all, and rsync is what `hyper space` and warp copy over — a machine
- * without it looks fine until the first transfer.
+ * These are the available infrastructure tasks. `allTasks` offers PATH work
+ * only when registry tools are selected; rsync is checked on every target.
  */
 export function infrastructureTasks(): Task[] {
 	return [pathTask, rsyncTask];
@@ -80,12 +79,6 @@ export function selectedToolTasks(ids?: readonly string[]): Task[] {
 	if (ids === undefined || ids.includes("all")) return TOOLS.map(toolTask);
 	const wanted = new Set(ids);
 	return TOOLS.filter((spec) => wanted.has(spec.id)).map(toolTask);
-}
-
-/** The task for a registry id, or undefined when the id isn't one. */
-export function toolTaskFor(id: string): Task | undefined {
-	const spec = findTool(id);
-	return spec === undefined ? undefined : toolTask(spec);
 }
 
 export * from "../tools.js";

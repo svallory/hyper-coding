@@ -6,7 +6,7 @@
  * nothing else on the machine records that. So setup reads those files and
  * preselects what they mention.
  *
- * Three questions, answered separately, because the three mean different things
+ * Four questions, answered separately, because they mean different things
  * to the user:
  *
  * - `preselect` — a tool in the registry. `rtk-rewrite.sh` means `rtk` is needed,
@@ -23,13 +23,15 @@
  * edits a Claude config.
  */
 
-import { readFile, realpath, stat } from "node:fs/promises";
+import { lstat, readFile, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { findTool } from "./tools.js";
 
 /** What a scan found. */
 export interface HookScan {
+	/** Number of hook commands found, even when none names a registry tool. */
+	commandCount: number;
 	/** Registry ids the hooks imply. */
 	preselect: string[];
 	/** Bare words that aren't in the registry. */
@@ -101,7 +103,6 @@ const IGNORED = new Set([
 	"eval",
 	"exec",
 	"exit",
-	"return",
 	// Builtins.
 	"[",
 	"]",
@@ -385,7 +386,8 @@ function isInteresting(word: string): boolean {
  * runtime's first path argument is a candidate as well: `bash <script>` runs the
  * script, which is how `herdr-agent-state.sh` is seen at all.
  */
-export function candidateWords(command: string): Candidate[] {
+export function candidateWords(command: string, depth = 0): Candidate[] {
+	if (depth >= 8) return [];
 	const out: Candidate[] = [];
 	let words = splitWords(command);
 	while (words.length > 0) {
@@ -425,7 +427,17 @@ export function candidateWords(command: string): Candidate[] {
 		if (words.length === 0) break;
 		if (words[0] !== "\n") {
 			out.push({ word: words[0], command });
-			if (RUNTIMES.has(words[0])) {
+			let inline = false;
+			if (["sh", "bash", "zsh"].includes(basename(words[0]))) {
+				for (let i = 1; i < words.length && words[i].startsWith("-"); i++) {
+					if (/^-[^-]*c/.test(words[i]) && words[i + 1] !== undefined && words[i + 1] !== "\n") {
+						out.push(...candidateWords(words[i + 1], depth + 1));
+						inline = true;
+						break;
+					}
+				}
+			}
+			if (!inline && RUNTIMES.has(words[0])) {
 				for (let i = 1; i < words.length; i++) {
 					if (words[i] === "\n") break;
 					if (words[i].startsWith("/") || words[i].startsWith("~/")) {
@@ -549,8 +561,19 @@ export function commandsFrom(json: unknown): string[] {
 }
 
 /** Read one JSON file, or null with the reason it could not be read. */
-async function readJson(file: string, warnings: string[]): Promise<Record<string, unknown> | null> {
+async function readJson(
+	file: string,
+	warnings: string[],
+	hookFile = false,
+): Promise<Record<string, unknown> | null> {
 	try {
+		if (hookFile) {
+			const info = await lstat(file);
+			if (!info.isFile() || info.size > 1024 * 1024) {
+				warnings.push(`${file}: hook file must be a regular file no larger than 1 MB`);
+				return null;
+			}
+		}
 		return JSON.parse(await readFile(file, "utf-8")) as Record<string, unknown>;
 	} catch (err) {
 		warnings.push(`${file}: ${err instanceof Error ? err.message : String(err)}`);
@@ -644,6 +667,7 @@ export async function scanHooks(claudeHome: string, home?: string): Promise<Hook
 	const warnings: string[] = [];
 	const files: string[] = [];
 	const candidates: Candidate[] = [];
+	let commandCount = 0;
 
 	const settingsFiles = [
 		join(claudeHome, "settings.json"),
@@ -654,17 +678,21 @@ export async function scanHooks(claudeHome: string, home?: string): Promise<Hook
 		const json = await readJson(file, warnings);
 		if (json === null) continue;
 		files.push(file);
-		for (const command of commandsFrom(json)) candidates.push(...candidateWords(command));
+		const commands = commandsFrom(json);
+		commandCount += commands.length;
+		for (const command of commands) candidates.push(...candidateWords(command));
 		const here = enabledPlugins(json);
 		if (here !== null) enabled = enabled === null ? here : new Set([...enabled, ...here]);
 	}
 
 	for (const file of await pluginHookFiles(claudeHome, enabled, warnings)) {
-		const json = await readJson(file, warnings);
+		const json = await readJson(file, warnings, true);
 		if (json === null) continue;
 		files.push(file);
-		for (const command of commandsFrom(json)) candidates.push(...candidateWords(command));
+		const commands = commandsFrom(json);
+		commandCount += commands.length;
+		for (const command of commands) candidates.push(...candidateWords(command));
 	}
 
-	return { ...classify(candidates, resolvedHome), files, warnings };
+	return { ...classify(candidates, resolvedHome), commandCount, files, warnings };
 }

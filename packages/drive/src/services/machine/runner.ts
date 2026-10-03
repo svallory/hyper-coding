@@ -230,14 +230,15 @@ export async function runSetup(
 			// download its release says so, and the rest still get installed —
 			// otherwise one 404 costs the user every tool they asked for.
 			const reason = detail(err);
-			ctx.log(`${task.id}: failed — ${reason}`);
 			failed.push({ id: task.id, reason });
 			continue;
 		}
 		if (await checkTask(task, ctx)) applied.push(task.id);
 		else {
-			ctx.log(`${task.id}: ${task.unmetReason ?? "still not right after doing it"} — skipping.`);
-			skipped.push(task.id);
+			failed.push({
+				id: task.id,
+				reason: task.unmetReason ?? "the fix did not take; check the tool's installation and retry",
+			});
 		}
 	}
 

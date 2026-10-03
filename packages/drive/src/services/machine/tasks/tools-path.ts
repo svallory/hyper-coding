@@ -29,6 +29,10 @@ export const pathTask: Task = {
 			"sh",
 			"-c",
 			`set -eu
+case "\${SHELL:-/bin/sh}" in
+  */bash|*/zsh) ;;
+  *) printf 'Shell %s is not supported; add %s to its startup configuration, then retry.\\n' "\${SHELL:-/bin/sh}" ${shellQuote(PATH_LINE)} >&2; exit 1 ;;
+esac
 mkdir -p "$HOME/.local/bin"
 prepend_path() (
   target="$1"
@@ -46,6 +50,11 @@ prepend_path() (
   done
   directory="$(CDPATH= cd -P "$(dirname "$target")" && pwd)"
   target="$directory/$(basename "$target")"
+  if [ -e "$target" ]; then
+    if ! [ -w "$target" ] || ! LC_ALL=C ls -ld "$target" | cut -c 1-10 | grep -q w; then
+      echo "rc file is not writable: $target" >&2; exit 1
+    fi
+  fi
   # A legacy bottom export does not count: it may be below Debian's guard.
   if [ -f "$target" ] && [ "$(head -n 1 "$target")" = ${shellQuote(PATH_LINE)} ]; then exit 0; fi
   tmp="$(mktemp "$target.hyper.XXXXXX")"
@@ -54,7 +63,7 @@ prepend_path() (
   {
     printf '%s\\n' ${shellQuote(PATH_LINE)}
     if [ -e "$target" ]; then grep -vxF ${shellQuote(PATH_LINE)} "$target" || [ "$?" -eq 1 ]; fi
-  } > "$tmp"
+  } > "$tmp" || exit 1
   mv -f "$tmp" "$target"
 )
 case "\${SHELL:-/bin/sh}" in
@@ -65,9 +74,9 @@ case "\${SHELL:-/bin/sh}" in
     if [ -f "$HOME/.bash_profile" ] && ! sed 's/#.*//' "$HOME/.bash_profile" | grep -Eq '(^|;|&&|[|][|])[[:space:]]*(then[[:space:]]+)?([.]|source)[[:space:]]+[^;]*[.]bashrc'; then
       prepend_path "$HOME/.bash_profile"
     fi
+    ${ctx.machine === null ? 'if [ ! -e "$HOME/.bash_profile" ] && [ ! -e "$HOME/.profile" ]; then prepend_path "$HOME/.profile"; fi' : ""}
     ;;
   */zsh) prepend_path "$HOME/.zshenv" ;;
-  *) prepend_path "$HOME/.profile" ;;
 esac
 `,
 		]);
