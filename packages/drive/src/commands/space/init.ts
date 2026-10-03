@@ -10,12 +10,7 @@ import {
 	type SyncCadence,
 } from "#config/schema";
 import { BaseCommand, type BaseFlags } from "#lib/base-command";
-import {
-	findSecretPaths,
-	isHyperAllowlist,
-	normaliseTrackedEntry,
-	renderGitignore,
-} from "#services/allowlist";
+import { isHyperAllowlist, normaliseTrackedEntry, renderGitignore } from "#services/allowlist";
 import {
 	driveCheckoutDir,
 	ensureDriveCheckout,
@@ -41,6 +36,13 @@ import {
 	writeCadence,
 	writeTracked,
 } from "#services/space-git";
+
+import {
+	commitAndPushSpace,
+	remoteRef,
+	remoteSha,
+	SpacePushRefusedError,
+} from "#services/space-sync";
 
 /**
  * `hyper space init` — put a hyper space under the hyperdrive.
@@ -78,28 +80,6 @@ function nameProblem(value: string, flag: "--name" | "--group"): Error {
 			`Names are also path segments and half a branch name, so they have to be boring by ` +
 			`construction. Pass a different ${flag}.`,
 	);
-}
-
-/**
- * The first ref on the remote matching one `ls-remote` pattern, or null.
- *
- * Runs through the space's own git dir (C-2) — `git ls-remote` against the
- * remote URL needs no work tree, so the dir it runs through does not matter
- * for correctness, only for keeping every space-shaped git call in one module.
- */
-function remoteRef(root: string, remote: string, pattern: string): string | null {
-	const result = spaceGit(root, ["ls-remote", "--heads", remote, pattern], { allowFailure: true });
-	if (result.status !== 0) {
-		throw new SpaceGitError(
-			`I couldn't reach your hyperdrive at ${remote} to look at its branches: ` +
-				`${(result.stderr || result.stdout).trim() || "git ls-remote said nothing"}`,
-		);
-	}
-	for (const line of result.stdout.split("\n")) {
-		const ref = line.split("\t")[1]?.trim();
-		if (ref !== undefined && ref !== "") return ref;
-	}
-	return null;
 }
 
 /**
@@ -259,160 +239,6 @@ function resolveTracked(
 		if (!merged.includes(entry)) merged.push(entry);
 	}
 	return merged;
-}
-
-/** Git definitely refused this ref; it is not an uncertain network failure. */
-class SpacePushRefusedError extends SpaceGitError {
-	constructor(
-		message: string,
-		readonly firstInitAdvice = "",
-	) {
-		super(message);
-		this.name = "SpacePushRefusedError";
-	}
-}
-
-/**
- * Run a space git command that reaches the hyperdrive, turning git's own words
- * into something a user can act on.
- *
- * Raw stderr is not an answer. `git push` against an unreachable remote prints a
- * "fatal: unable to access … Could not resolve host", and one refused by a
- * server prints a non-fast-forward with a `git pull` hint — a command that does
- * not exist yet (`hyper space pull` is T-7), suggested to someone who has no
- * way to run it. `ensureDriveCheckout` already wraps its own `ls-remote` probe
- * this way; this is the space-side twin.
- */
-function spaceGitRemote(
-	root: string,
-	remote: string,
-	args: readonly string[],
-	branch: string,
-): void {
-	const result = spaceGit(root, [...args], { allowFailure: true });
-	if (result.status === 0) return;
-	const detail = (result.stderr || result.stdout).trim();
-	const what = `push ${branch}`;
-	// "The hyperdrive is unreachable", "the hyperdrive moved" and "the
-	// hyperdrive refused" are three different problems with three different next
-	// steps, so git's own markers tell them apart rather than lumping all of
-	// them into "it didn't work".
-	if (/(fetch first|non-fast-forward|stale info|behind its remote)/i.test(detail)) {
-		// git's own detail is deliberately NOT quoted here. Its hint says to run
-		// `git pull`, which is advice for an ordinary repo and not for a space
-		// branch on the hyperdrive — nobody can pull that until T-7 exists, and
-		// sending them after it is worse than not mentioning the cause.
-		throw new SpacePushRefusedError(
-			`${what} was refused: ${remote} has moved on, so another machine pushed this space's branch ` +
-				`first. Nothing was overwritten — hyper never rewrites a space's history. Syncing a space ` +
-				`from another machine is not available yet.`,
-			` Pass \`--name\` with a different name to initialise a new space.`,
-		);
-	}
-	// Reached-and-refused is NOT unreachable: a server-side hook said no, and
-	// "I couldn't reach your hyperdrive" sends someone after the network instead
-	// of after their own hook. A ref NAME conflict is a third thing again — it is
-	// this space's name colliding with a group or a prefix on the hyperdrive —
-	// and lumping it in with "a hook declined" would send the reader looking in
-	// a place where nothing is wrong.
-	if (/refname conflict|cannot lock ref/i.test(detail)) {
-		throw new SpacePushRefusedError(
-			`the hyperdrive at ${remote} already has a ref that ${branch} collides with, so it cannot ` +
-				`take this branch. That is the same ambiguity the ref-clash check looks for, seen by the ` +
-				`server instead: \`space/x\` cannot be both a space and the group holding \`space/x/y\`.`,
-			` Pass \`--name\` or \`--group\` to pick a name that does not collide.`,
-		);
-	}
-	if (/\[remote rejected\]|hook declined/i.test(detail)) {
-		const reason = hookReason(detail);
-		throw new SpacePushRefusedError(
-			`the hyperdrive at ${remote} refused to take ${branch}: a server-side hook declined the push. ` +
-				`Nothing was overwritten, and retrying will not help until that hook allows it.` +
-				(reason === "" ? "" : ` It said: ${reason}`),
-		);
-	}
-	throw new SpaceGitError(
-		`I couldn't reach your hyperdrive at ${remote} to ${what}: ${detail || `git ${args[0]} failed`}`,
-	);
-}
-
-/**
- * The server hook's own reason line, if it sent one.
- *
- * A rejecting hook prints `remote: <why>` before git's `! [remote rejected]`
- * summary, and that line is the only thing that says WHY — it is what the
- * person who wrote the hook wants read, so it is quoted where git's hint is not.
- */
-function hookReason(detail: string): string {
-	for (const line of detail.split("\n")) {
-		const trimmed = line.trim();
-		if (trimmed.startsWith("remote:")) {
-			const reason = trimmed.slice("remote:".length).trim();
-			// A hook may print a blank `remote:` line before its real reason;
-			// stopping at the first one would quote nothing at all.
-			if (reason !== "") return reason;
-		}
-	}
-	return "";
-}
-
-/**
- * The paths currently staged in the space's git dir, exactly as git spelled
- * them.
- *
- * `-z` and a split on NUL, never `split("\n")` and never a `.trim()`: with the
- * default `core.quotePath=true`, git C-quotes any path holding a non-ASCII
- * byte, a quote, a backslash or a control character — and a quoted
- * `"notes/cl\303\251/server.pem"` no longer matches the `*.pem` rule, which is
- * how a key file got committed and pushed by a guard that was looking straight
- * at it. NUL-separated output is neither quoted nor escaped, and a path may
- * legally contain spaces, newlines and trailing spaces that a line split
- * destroys.
- */
-function stagedPaths(root: string): string[] {
-	return spaceGit(root, ["diff", "--cached", "--name-only", "-z"])
-		.stdout.split("\0")
-		.filter((path) => path !== "");
-}
-
-/**
- * Staged entries that are gitlinks (mode `160000`) — a nested repository,
- * staged as a pointer to a commit rather than as files.
- *
- * `ls-files -s -z` prints `<mode> <sha> <stage>\t<path>` per entry, NUL
- * separated, so the mode is readable and the path is neither quoted nor
- * mangled. git warns about these on `add`; hyper never commits one, because a
- * pointer into a repository the hyperdrive does not hold backs up nothing.
- */
-function stagedGitlinks(root: string): string[] {
-	return spaceGit(root, ["ls-files", "-s", "-z"])
-		.stdout.split("\0")
-		.filter((entry) => entry.startsWith("160000 "))
-		.map((entry) => entry.slice(entry.indexOf("\t") + 1))
-		.filter((path) => path !== "");
-}
-
-/**
- * The commit a remote ref points at, or null when the ref is not there.
- *
- * Read from the remote itself, NOT from `refs/remotes/origin/…`: a space git
- * dir is built by hand (`git init --bare` plus config flips) and never fetches,
- * so its remote-tracking ref can be missing even straight after a successful
- * push. Asking the remote is one `ls-remote` more and it is the only answer to
- * "what does the hyperdrive actually have".
- */
-function remoteSha(root: string, remote: string, branch: string): string | null {
-	const result = spaceGit(root, ["ls-remote", remote, `refs/heads/${branch}`], {
-		allowFailure: true,
-	});
-	if (result.status !== 0) {
-		throw new SpaceGitError(
-			`I couldn't reach your hyperdrive at ${remote} to look for ${branch}: ` +
-				`${(result.stderr || result.stdout).trim() || "git ls-remote said nothing"}`,
-		);
-	}
-	const first = result.stdout.split("\n")[0] ?? "";
-	return first.trim() === "" ? null : (first.split("\t")[0] ?? "").trim();
 }
 
 /** The project repositories of a space, as the manifest records them. */
@@ -793,7 +619,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			allowlist = writeAllowlist(root, tracked);
 			writeCadence(root, cadence);
 
-			const staged = this.firstCommit(
+			const staged = commitAndPushSpace(
 				root,
 				name,
 				branch,
@@ -984,153 +810,6 @@ export default class Init extends BaseCommand<typeof Init> {
 	 */
 	private registeredEntry(name: string): SpaceEntry | null {
 		return readManifest().spaces.find((space) => space.name === name) ?? null;
-	}
-
-	/**
-	 * Stage the allowlisted files, refuse anything the secret guard matches,
-	 * commit `space: init <name>` and push the branch.
-	 *
-	 * The commit runs unsigned and with hooks off, like the manifest's
-	 * bookkeeping commits: this commit is written by the CLI on the user's
-	 * behalf, and a signer or a hook that is unavailable to (or hostile to)
-	 * the CLI would otherwise strand the space between its git dir and the
-	 * hyperdrive. Everything the user authors later (`hyper space commit`) is
-	 * their own work and does respect their config.
-	 *
-	 * Returns how many files the commit carried, whether the space still has no
-	 * commit at all, and whether the hyperdrive ended up exactly level with it.
-	 *
-	 * The push runs whenever HEAD exists, NOT only when this run committed
-	 * something: a push that failed once (an offline moment, a remote hook that
-	 * said no) leaves the commit sitting locally forever, because the next
-	 * refresh sees an empty index and would call the space up to date. "Nothing
-	 * staged" is not evidence that the hyperdrive has the space's history.
-	 *
-	 * An empty index is likewise not one thing: on a `--refresh` with nothing
-	 * changed it means "already up to date", while on a space whose first run
-	 * had nothing allowlisted it means there is no branch to push at all — and
-	 * telling a user their space is empty when it is merely unchanged sends
-	 * them looking for the wrong problem.
-	 */
-	private firstCommit(
-		root: string,
-		name: string,
-		branch: string,
-		remote: string,
-		onCommitted: (files: number) => void,
-		beforePush: () => void,
-	): {
-		committed: number;
-		unborn: boolean;
-		upToDate: boolean;
-		skipped: string[];
-	} {
-		// Git reports nested repos as directory entries, even with an unborn
-		// HEAD or no files. Exclude those BEFORE add, which otherwise refuses
-		// an unborn repo with raw stderr. -z and literal pathspecs preserve odd
-		// filenames without treating their brackets or stars as patterns.
-		const excluded = spaceGit(root, ["ls-files", "--others", "--exclude-standard", "-z"])
-			.stdout.split("\0")
-			.filter((path) => path.endsWith("/") && existsSync(join(root, path, ".git")))
-			.map((path) => path.slice(0, -1));
-		spaceGit(root, [
-			"add",
-			"-A",
-			"--",
-			".",
-			...excluded.map((path) => `:(top,exclude,literal)${path}`),
-		]);
-		const staged = stagedPaths(root);
-
-		// A nested repository under an allowlisted directory is staged as a
-		// GITLINK (mode 160000): a reference to a commit, with no content of its
-		// own. Committing one would silently put a pointer to something the
-		// hyperdrive does not hold into the space's history. Unstage each one
-		// and say so by name — its files stay on disk, unsaved by the space.
-		const gitlinks = stagedGitlinks(root);
-		const nested = [...new Set([...excluded, ...gitlinks])];
-		for (const path of gitlinks) {
-			// `-f`: git refuses to unstage a gitlink whose staged content differs
-			// from both the work tree and HEAD — which is exactly this case.
-			spaceGit(root, ["rm", "--cached", "-q", "-f", "--", `:(literal)${path}`]);
-		}
-		for (const path of nested) {
-			process.stderr.write(
-				`warning: ${path} contains its own git repository; its files are not saved in the space.\n`,
-			);
-		}
-		if (nested.length > 0) {
-			// Re-read: the paths just unstaged must not be counted, let alone
-			// committed, and the secret guard must see what is really staged.
-			staged.splice(0, staged.length, ...stagedPaths(root));
-		}
-
-		const secrets = findSecretPaths(staged);
-		if (secrets.length > 0) {
-			throw new Error(
-				`refusing to commit ${branch}: ${secrets.join(", ")} ` +
-					`${secrets.length === 1 ? "matches" : "match"} the secret guard (a .env, a key, a ` +
-					`credentials file). Move ${secrets.length === 1 ? "it" : "them"} out of the space, or ` +
-					`keep ${secrets.length === 1 ? "it" : "them"} out of the allowlist.`,
-			);
-		}
-
-		const unborn =
-			spaceGit(root, ["rev-parse", "--verify", "HEAD"], { allowFailure: true }).status !== 0;
-		if (staged.length > 0) {
-			// git's own "Please tell me who you are" is a question, not an
-			// instruction, and it is the one commit failure hyper causes on a
-			// machine that never configured git. Say what to set.
-			const commit = spaceGit(
-				root,
-				[
-					"-c",
-					"commit.gpgsign=false",
-					"-c",
-					"core.hooksPath=/dev/null",
-					"commit",
-					"-m",
-					`space: init ${name}`,
-				],
-				{ allowFailure: true },
-			);
-			if (commit.status !== 0) {
-				const detail = (commit.stderr || commit.stdout).trim();
-				throw new Error(
-					/please tell me who you are|no name was given|empty ident/i.test(detail)
-						? `git has no identity to commit ${branch} with. Set one and run this again: ` +
-								`\n\n  git config --global user.name "Your Name"\n  git config --global user.email "you@example.com"\n`
-						: `the first commit of ${branch} failed: ${detail}`,
-				);
-			}
-			// Told to the caller IMMEDIATELY, before the push. A refused push is
-			// the case that matters: the rollback keeps what this run wrote
-			// exactly when a commit exists, and it cannot know that if the push
-			// is what threw before anyone was told.
-			onCommitted(staged.length);
-		} else if (unborn) {
-			process.stderr.write(
-				`warning: the allowlist matched no files in ${root}, so there is nothing to commit and no branch to push.\n`,
-			);
-			return { committed: 0, unborn: true, upToDate: true, skipped: nested };
-		}
-
-		// What the hyperdrive had BEFORE this push, which is the only thing that
-		// can tell "nothing to publish" from "published what was missing". Asked
-		// after the push it would always answer "level" — that is what the push
-		// just made true — and a refused push would read as success.
-		const head = spaceGit(root, ["rev-parse", "HEAD"], { allowFailure: true }).stdout.trim();
-		const publishedBefore = remoteSha(root, remote, branch);
-		// A plain push, never force: `--force-with-lease` is what would be able
-		// to rewrite a space another machine has already pushed.
-		beforePush();
-		spaceGitRemote(root, remote, ["push", "-u", "origin", branch], branch);
-		return {
-			committed: staged.length,
-			unborn: false,
-			upToDate: head !== "" && head === publishedBefore,
-			skipped: nested,
-		};
 	}
 
 	/**
