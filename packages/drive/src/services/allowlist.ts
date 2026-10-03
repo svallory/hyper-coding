@@ -86,6 +86,10 @@ export const SECRET_PATTERNS: readonly string[] = [
 	"**/*credentials*",
 	"**/*.pem",
 	"**/*.key",
+	"**/*.pem~",
+	"**/*.key~",
+	"**/*.pem.*",
+	"**/*.key.*",
 	"**/id_rsa*",
 	"**/id_ed25519*",
 	"**/id_ecdsa*",
@@ -265,5 +269,12 @@ export function findSecretPaths(paths: string[], allow: string[] = []): string[]
 	const matchers = SECRET_PATTERNS.map((pattern) =>
 		picomatch(pattern, { dot: true, nocase: true }),
 	);
-	return paths.filter((path) => !allowed.has(path) && matchers.some((match) => match(path)));
+	return paths.filter((path) => {
+		// Match portable filename semantics, but retain the original exact override/path.
+		const normalised = path
+			.split("/")
+			.map((part) => part.replace(/[ .]+$/, ""))
+			.join("/");
+		return !allowed.has(path) && matchers.some((match) => match(normalised));
+	});
 }

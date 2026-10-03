@@ -44,6 +44,8 @@ export interface SpaceGitOptions {
 	input?: string;
 	/** Return non-zero results instead of throwing a SpaceGitError. */
 	allowFailure?: boolean;
+	/** Inherit git's streams and pager for interactive passthrough commands. */
+	inheritStdio?: boolean;
 }
 
 /**
@@ -146,6 +148,7 @@ export function spaceGit(
 		{
 			cwd: opts.cwd ?? spaceRoot,
 			input: opts.input,
+			stdio: opts.inheritStdio ? "inherit" : "pipe",
 			encoding: "utf8",
 			env: cleanGitEnv(),
 		},
@@ -176,6 +179,34 @@ export function spaceGit(
 		);
 	}
 	return { status, stdout, stderr };
+}
+
+/**
+ * Read only a bounded prefix of a staged blob, never the work-tree file. Git has no
+ * prefix-read mode: maxBuffer bounds capture and kills the reader on overflow.
+ * SIGKILL is reserved for this cap; terminal SIGINT/SIGTERM still propagate.
+ */
+export function readStagedBlobPrefix(spaceRoot: string, path: string): string {
+	const limit = 4096;
+	const result = spawnSync(
+		"git",
+		["--git-dir", spaceGitDir(spaceRoot), "--work-tree", spaceRoot, "show", `:${path}`],
+		{
+			cwd: spaceRoot,
+			env: cleanGitEnv(),
+			maxBuffer: limit,
+			killSignal: "SIGKILL",
+		},
+	);
+	if (result.signal === "SIGINT" || result.signal === "SIGTERM")
+		throw new SpaceGitInterruptedError(result.signal);
+	const capped = (result.error as NodeJS.ErrnoException | undefined)?.code === "ENOBUFS";
+	if ((!capped && result.error) || (!capped && result.status !== 0)) {
+		throw new SpaceGitError(
+			`I couldn't inspect the staged content of ${JSON.stringify(path)} for secrets. Inspect the index and retry: ${result.error?.message || result.stderr?.toString().trim() || "git show failed"}`,
+		);
+	}
+	return (result.stdout ?? Buffer.alloc(0)).subarray(0, limit).toString("utf8");
 }
 
 export interface InitSpaceGitOptions {
@@ -256,6 +287,12 @@ export function initSpaceGitDir(
 
 		if (remote !== undefined) {
 			spaceGit(spaceRoot, ["config", "--local", "remote.origin.url", remote]);
+			spaceGit(spaceRoot, [
+				"config",
+				"--local",
+				"remote.origin.fetch",
+				`refs/heads/${branch}:refs/remotes/origin/${branch}`,
+			]);
 			spaceGit(spaceRoot, ["config", "--local", `branch.${branch}.remote`, "origin"]);
 			spaceGit(spaceRoot, ["config", "--local", `branch.${branch}.merge`, `refs/heads/${branch}`]);
 		}

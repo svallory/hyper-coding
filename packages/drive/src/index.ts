@@ -141,9 +141,11 @@ export {
 	projectRepoInfo,
 	readCadence,
 	readSpaceConfig,
+	readStagedBlobPrefix,
 	readTracked,
 	removeSpaceGitDir,
 	SpaceGitError,
+	SpaceGitInterruptedError,
 	type SpaceGitOptions,
 	type SpaceGitResult,
 	spaceGit,
@@ -151,6 +153,31 @@ export {
 	writeCadence,
 	writeTracked,
 } from "#services/space-git";
+export {
+	fetchSpace,
+	type InitializedSpace,
+	logSpace,
+	pullSpace,
+	requireInitializedSpace,
+	type SpaceStatusEntry,
+	spaceRemote,
+	spaceStatus,
+	withSpaceSignals,
+} from "#services/space-history";
+export {
+	commitAndPushSpace,
+	commitSpace,
+	hookReason,
+	inspectStagedFiles,
+	pushSpace,
+	remoteRef,
+	remoteSha,
+	type SpaceCommitResult,
+	SpacePushRefusedError,
+	spaceGitRemote,
+	stagedGitlinks,
+	stagedPaths,
+} from "#services/space-sync";
 export {
 	getEngine,
 	type SyncCreateOptions,
