@@ -15,7 +15,7 @@ import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, type TestContext } from "vitest";
 import {
 	DEFAULT_ROOT_CHOICE,
 	exitCodeFor,
@@ -65,14 +65,16 @@ const flat = (s: string): string =>
 		.replace(/\s+/g, " ")
 		.trim();
 
-function skipIfUnbuilt(): boolean {
+function skipIfUnbuilt(ctx: TestContext): boolean {
 	if (
 		existsSync(cli) &&
 		existsSync(join(import.meta.dirname, "..", "dist", "services", "machine", "runner.js"))
 	) {
 		return false;
 	}
-	expect.skip("cli/drive not built (run `bun run build` in drive and cli first)");
+	// `ctx.skip()`, not `expect.skip()`: the latter is not a vitest API and
+	// throws, failing the very test it was meant to skip.
+	ctx.skip("cli/drive not built (run `bun run build` in drive and cli first)");
 	return true;
 }
 
@@ -91,8 +93,8 @@ afterAll(() => {
 });
 
 describe("machine setup", () => {
-	it("`setup --features tools --yes` on a machine that needs nothing: exit 0 and says so (C-15)", () => {
-		if (skipIfUnbuilt()) return;
+	it("`setup --features tools --yes` on a machine that needs nothing: exit 0 and says so (C-15)", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		withTempConfig(CONFIG);
 		const scratch = scratchDir();
 		const r = spawnCli(["machine", "setup", "--features", "tools", "--yes"], {
@@ -109,8 +111,8 @@ describe("machine setup", () => {
 		expect(existsSync(join(scratch, "hyper-machine-root.sh"))).toBe(false);
 	});
 
-	it("without --features and no TTY: a friendly error naming the flag, not a stack", () => {
-		if (skipIfUnbuilt()) return;
+	it("without --features and no TTY: a friendly error naming the flag, not a stack", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		withTempConfig(CONFIG);
 		// stdin/stdout are pipes here, which is exactly what CI and a pipe give us.
 		const r = spawnCli(["machine", "setup"]);
@@ -124,8 +126,8 @@ describe("machine setup", () => {
 		expect(flat(r.stderr)).not.toContain("--yes");
 	});
 
-	it("`setup --yes` works without a terminal: that's the case it exists for", () => {
-		if (skipIfUnbuilt()) return;
+	it("`setup --yes` works without a terminal: that's the case it exists for", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		withTempConfig(CONFIG);
 		// Pipes for stdin/stdout, exactly as CI sees it. --yes picks the defaults
 		// (`tools` locally) without asking, so gating it on a TTY made the one
@@ -194,8 +196,8 @@ describe("machine setup", () => {
 		expect(message).toContain("Nothing was run");
 	});
 
-	it("an unknown feature is rejected by name", () => {
-		if (skipIfUnbuilt()) return;
+	it("an unknown feature is rejected by name", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		withTempConfig(CONFIG);
 		const r = spawnCli(["machine", "setup", "--features", "nope"]);
 
@@ -205,8 +207,8 @@ describe("machine setup", () => {
 		expect(flat(r.stderr)).toContain("docker-rootless");
 	});
 
-	it("an unknown machine names the machines that do exist", () => {
-		if (skipIfUnbuilt()) return;
+	it("an unknown machine names the machines that do exist", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		withTempConfig(`${CONFIG}\n[machines.netcup]\nhome = "/home/svallory"\n`);
 		const r = spawnCli(["machine", "setup", "nope", "--features", "tools"]);
 
