@@ -24,17 +24,24 @@
 # Used by hyper-context.sh, which runs on every SessionStart and must stay
 # silent and exit 0 when the CLI is not installed.
 hyper_soft_lib() {
-  hyper_lib="$(command -v hyper >/dev/null 2>&1 && hyper space lib-path 2>/dev/null)" || hyper_lib=""
+  hyper_lib="$(command -v hyper >/dev/null 2>&1 && hyper space lib-path 2>/dev/null | tail -n 1)" || hyper_lib=""
+  # `tail -n 1` is not cosmetic. Toolchain shims (mise/proto/nvm) print a
+  # one-off "Detected an AI agent environment" notice to STDOUT on their first
+  # run under a new HOME, and the bash suite gives every test file a fresh HOME.
+  # Taking the whole stdout would then make the "path" two lines, -f fails, and
+  # the suite reports hundreds of assertion failures that have nothing to do
+  # with spaces. The real path is always last; an empty result still fails -f.
   [[ -n "$hyper_lib" && -f "$hyper_lib" ]]
 }
 
-# hyper_require_lib — the same, but a missing CLI is a real user error: the
-# script cannot do its job without the library, and it should say exactly which
-# package to install rather than failing later with "space_layout: not found".
+# hyper_require_lib — the same, but a missing or too-old CLI is a real user
+# error: the script cannot do its job without the library, and it should say
+# which package to install or update rather than failing later with
+# "space_layout: not found".
 hyper_require_lib() {
   if ! hyper_soft_lib; then
     hyper_lib=""
-    echo "hyper: the hyper CLI is required (install @hypercli/cli), and provides hyper-lib.sh" >&2
+    echo "hyper: the hyper CLI is required, and provides hyper-lib.sh — install or update @hypercli/cli (needs 'hyper space lib-path')" >&2
     exit 2
   fi
 }
