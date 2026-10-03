@@ -3,6 +3,34 @@ export { ConfigError, configExists, configPath, loadConfig } from "#config/index
 export { DEFAULT_CONFIG, DEFAULT_MACHINE, type DriveConfig } from "#config/schema";
 export { type BaseArgs, BaseCommand, type BaseFlags } from "#lib/base-command";
 export {
+	addHint,
+	listHerdrMachines,
+	listMachines,
+	MachineError,
+	type MachineInfo,
+	type MachineSource,
+	resolveMachine,
+	runnerFor,
+	self,
+} from "#services/machine";
+export {
+	exitCodeForSignal,
+	isExcluded,
+	LocalMachine,
+	type MachineRunner,
+	RemoteError,
+	RemoteMachine,
+	RemotePathError,
+	remoteSpec,
+	type RsyncOptions,
+	type RunResult,
+	shellJoin,
+	shellQuote,
+	type Spawner,
+	type SpawnRequest,
+	type SshOptions,
+} from "#services/remote";
+export {
 	claudeHome,
 	encodeProjectDir,
 	type LiveOptions,
