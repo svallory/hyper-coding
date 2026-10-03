@@ -1,0 +1,19 @@
+type: library
+language: typescript
+platform: node
+stack: backend
+
+tags:
+  - typescript
+  - hyperdev
+  - hyperdrive
+
+tasks:
+  test:
+    command: 'bun test'
+    inputs:
+      - '@globs(sources)'
+
+toolchain:
+  typescript:
+    syncProjectReferences: false

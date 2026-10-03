@@ -1,0 +1,23 @@
+# Fixture for tests/config.test.ts — loaded via HYPER_DRIVE_CONFIG.
+remote = "git@github.com:example/hyperdrive.git"
+
+[self]
+name = "test-machine"
+home = "/home/tester"
+
+[defaults]
+cadence = "session-end"
+
+[machines.netcup]
+home = "/home/svallory"
+features = ["docker", "mutagen"]
+agent_user = "agent"
+
+[warp]
+exclude = ["node_modules", "dist"]
+
+[sync.claude]
+ignore = ["projects/**/*.log"]
+
+[sync.pi]
+ignore = ["sessions/**"]

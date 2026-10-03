@@ -82,6 +82,7 @@
       },
       "dependencies": {
         "@hypercli/core": "workspace:*",
+        "@hypercli/drive": "workspace:*",
         "@hypercli/gen": "workspace:*",
         "@hypercli/hq": "workspace:*",
         "@hypercli/kit": "workspace:*",
@@ -143,6 +144,20 @@
         "picocolors": "^1.1.0",
       },
       "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.4.0",
+        "vitest": "4.0.18",
+      },
+    },
+    "packages/drive": {
+      "name": "@hypercli/drive",
+      "version": "0.4.0",
+      "dependencies": {
+        "@oclif/core": "^4",
+        "smol-toml": "^1",
+      },
+      "devDependencies": {
+        "@biomejs/biome": "^2.5.14",
         "@types/node": "^20.0.0",
         "typescript": "^5.4.0",
         "vitest": "4.0.18",
@@ -670,6 +685,8 @@
     "@hypercli/cli": ["@hypercli/cli@workspace:packages/cli"],
 
     "@hypercli/core": ["@hypercli/core@workspace:packages/core"],
+
+    "@hypercli/drive": ["@hypercli/drive@workspace:packages/drive"],
 
     "@hypercli/gen": ["@hypercli/gen@workspace:packages/gen"],
 
@@ -3779,6 +3796,8 @@
 
     "@hypercli/core/@types/node": ["@types/node@20.19.39", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-orrrD74MBUyK8jOAD/r0+lfa1I2MO6I+vAkmAWzMYbCcgrN4lCrmK52gRFQq/JRxfYPfonkr4b0jcY7Olqdqbw=="],
 
+    "@hypercli/drive/@types/node": ["@types/node@20.19.39", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-orrrD74MBUyK8jOAD/r0+lfa1I2MO6I+vAkmAWzMYbCcgrN4lCrmK52gRFQq/JRxfYPfonkr4b0jcY7Olqdqbw=="],
+
     "@hypercli/gen/@types/node": ["@types/node@20.19.39", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-orrrD74MBUyK8jOAD/r0+lfa1I2MO6I+vAkmAWzMYbCcgrN4lCrmK52gRFQq/JRxfYPfonkr4b0jcY7Olqdqbw=="],
 
     "@hypercli/gen/execa": ["execa@5.1.1", "", { "dependencies": { "cross-spawn": "^7.0.3", "get-stream": "^6.0.0", "human-signals": "^2.1.0", "is-stream": "^2.0.0", "merge-stream": "^2.0.0", "npm-run-path": "^4.0.1", "onetime": "^5.1.2", "signal-exit": "^3.0.3", "strip-final-newline": "^2.0.0" } }, "sha512-8uSpZZocAZRBAPIEINJj3Lo9HyGitllczc27Eh5YYojjMFMn8yHMDMaUHE2Jqfq05D/wucwI4JGURyXt1vchyg=="],
@@ -4592,6 +4611,8 @@
     "@hypercli/cli/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 
     "@hypercli/core/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
+
+    "@hypercli/drive/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 
     "@hypercli/gen/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 

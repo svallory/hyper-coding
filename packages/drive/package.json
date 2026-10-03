@@ -1,0 +1,96 @@
+{
+	"name": "@hypercli/drive",
+	"version": "0.4.0",
+	"packageManager": "bun@1.3.11",
+	"type": "module",
+	"description": "Hyperdrive — one private repo holding every space, machine sync, and session warp for the hyper CLI",
+	"keywords": [
+		"hyperdev",
+		"hyperdrive",
+		"space-history",
+		"warp",
+		"machine-sync"
+	],
+	"author": "Saulo Vallory <saulo@toki.life>",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/svallory/hyper-coding.git",
+		"directory": "packages/drive"
+	},
+	"homepage": "https://hyperdev.saulo.engineer",
+	"bugs": {
+		"url": "https://github.com/svallory/hyper-coding/issues"
+	},
+	"engines": {
+		"bun": ">=1.3.0"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"help",
+		"oclif.manifest.json",
+		"README.md",
+		"LICENSE"
+	],
+	"oclif": {
+		"commands": "./dist/commands",
+		"topics": {
+			"space": {
+				"description": "A space's own history on your hyperdrive"
+			},
+			"warp": {
+				"description": "Move a session to another machine"
+			},
+			"drive": {
+				"description": "Your hyperdrive repository and config sync"
+			},
+			"machine": {
+				"description": "Set up and list machines"
+			}
+		},
+		"topicSeparator": " "
+	},
+	"imports": {
+		"#lib/*": "./dist/lib/*.js",
+		"#services/*": "./dist/services/*.js",
+		"#config/*": "./dist/config/*.js",
+		"#utils/*": "./dist/utils/*.js",
+		"#commands/*": "./dist/commands/*.js",
+		"#tests/*": "./tests/*.ts",
+		"#fixtures/*": "./tests/fixtures/*.ts",
+		"#*": "./dist/*.js"
+	},
+	"scripts": {
+		"build": "tsc",
+		"postbuild": "bunx oclif manifest",
+		"clean": "rm -rf dist tsconfig.tsbuildinfo",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "biome check .",
+		"format": "biome format . --write",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "bun run build"
+	},
+	"dependencies": {
+		"@oclif/core": "^4",
+		"smol-toml": "^1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.14",
+		"@types/node": "^20.0.0",
+		"typescript": "^5.4.0",
+		"vitest": "4.0.18"
+	},
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	}
+}
