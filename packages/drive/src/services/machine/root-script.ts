@@ -9,6 +9,7 @@
  */
 
 import type { MachineInfo } from "#services/machine";
+import { shellQuote } from "#services/remote";
 import type { Task, TaskContext } from "./tasks/types.js";
 
 /** One task's contribution to the script. */
@@ -75,29 +76,38 @@ export function remoteScriptPath(home: string): string {
 }
 
 /**
- * The commands that get the script onto a machine and run it there.
+ * The argv that runs the script as root.
  *
- * Kept next to {@link remoteScriptPath} rather than in the runner because this
- * is the second of exactly two files allowed to name the privileged command
- * (C-6), and because the runner's own run-for-me path builds its argv from the
- * same helper — so what the user is told to type and what hyper would have done
- * cannot drift apart.
+ * This and the recipe below are the only places in the CLI that name the
+ * privileged command (C-6). Both the runner's run-for-me branch and the text the
+ * user is asked to run come from here, so the printed recipe and the automated
+ * path cannot drift apart — and a future change to one cannot silently skip C-6.
+ */
+export function privilegedArgv(path: string): string[] {
+	return ["sudo", "bash", path];
+}
+
+/**
+ * The commands that get the script onto a machine and run it there.
  *
  * The remote half is quoted on purpose: an unquoted `~/` would be expanded by
  * the shell the user is standing in, not by the one on the other end, and would
- * point at their own home directory. scp's target half is never quoted, for the
- * reasons remote.ts documents.
+ * point at their own home directory. The local path is quoted for the opposite
+ * reason — a scratch dir under /tmp or a home with a space in it is not rare,
+ * and an unquoted one would run whatever word followed it. scp's target half is
+ * never quoted, for the reasons remote.ts documents.
  *
  * The mkdir is printed rather than assumed: scp won't create `~/.hyper` on an
  * older ssh, and a recipe that fails halfway is worse than one extra line.
  */
 export function rootSteps(machine: MachineInfo | null, path: string): string[] {
-	if (machine === null) return [`sudo bash ${path}`];
-	const host = machine.host ?? machine.name;
+	const local = shellQuote(path);
+	if (machine === null) return [privilegedArgv(path).join(" ")];
+	const host = shellQuote(machine.host ?? machine.name);
 	const remote = remoteScriptPath("~");
 	return [
 		`ssh ${host} 'mkdir -p ~/.hyper'`,
-		`scp ${path} ${host}:${remote}`,
+		`scp ${local} ${host}:${remote}`,
 		`ssh -t ${host} 'sudo bash ${remote}'`,
 	];
 }
