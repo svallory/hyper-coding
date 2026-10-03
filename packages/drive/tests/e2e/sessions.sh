@@ -108,7 +108,7 @@ pass "liveSession reports sessionId ($live_session_id)"
 # ps -o lstart= -p <pid>`. Compare against the same invocation, or the check
 # that stops a stale pid would never match a real session.
 live_proc_start="$(field "$live_json" live.procStart)"
-expected_proc_start="$(LC_ALL=C TZ=UTC ps -o lstart= -p "$(field "$live_json" live.pid)" | tr -d '[:space:]')"
+expected_proc_start="$(LC_ALL=C TZ=UTC ps -o lstart= -p "$(field "$live_json" live.pid)" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 [ -n "$live_proc_start" ] && [ "$live_proc_start" != "None" ] ||
   die "liveSession did not report 'procStart' (Claude Code sessions file field 'procStart')"
 [ "$live_proc_start" = "$expected_proc_start" ] ||
