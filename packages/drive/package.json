@@ -83,7 +83,8 @@
 	"dependencies": {
 		"@oclif/core": "^4",
 		"picomatch": "^4.0.3",
-		"smol-toml": "^1"
+		"smol-toml": "^1",
+		"yaml": "^2.4.2"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.14",

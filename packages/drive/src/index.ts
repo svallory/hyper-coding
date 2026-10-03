@@ -1,6 +1,24 @@
 // @hypercli/drive - Hyperdrive: spaces, warp, and machine sync for the hyper CLI
-export { ConfigError, configExists, configPath, loadConfig } from "#config/index";
-export { DEFAULT_CONFIG, DEFAULT_MACHINE, type DriveConfig } from "#config/schema";
+export {
+	ConfigError,
+	configExists,
+	configPath,
+	loadConfig,
+	readRawConfig,
+	writeConfig,
+} from "#config/index";
+export {
+	DEFAULT_CONFIG,
+	DEFAULT_MACHINE,
+	type DriveConfig,
+	EMPTY_MANIFEST,
+	type Manifest,
+	ManifestError,
+	type SpaceEntry,
+	type SpaceRepo,
+	type SyncCadence,
+	validateManifest,
+} from "#config/schema";
 export { type BaseArgs, BaseCommand, type BaseFlags } from "#lib/base-command";
 export {
 	AllowlistError,
@@ -19,6 +37,14 @@ export {
 	runnerFor,
 	self,
 } from "#services/machine";
+export {
+	driveCheckoutDir,
+	driveCheckoutOrigin,
+	ensureDriveCheckout,
+	readManifest,
+	removeSpace,
+	upsertSpace,
+} from "#services/manifest";
 export {
 	exitCodeForSignal,
 	isExcluded,
