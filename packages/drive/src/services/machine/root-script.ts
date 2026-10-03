@@ -17,6 +17,53 @@ export interface RootScriptEntry {
 	task: Task;
 	/** `task.rootScript(ctx)`, already generated for this machine. */
 	script: string;
+	/**
+	 * True when the contribution is a non-root task's fallback rather than its
+	 * own root script. The banner says so, because "here is the root part of a
+	 * task that otherwise runs as you" is worth spelling out in a file someone
+	 * is about to run with their password.
+	 */
+	fallback?: boolean;
+}
+
+/**
+ * The group whose membership is the difference between a user and a root user.
+ *
+ * Named here, in the one file the C-6 grep allows, because the agent-user tasks
+ * have to both read that membership in their `check` and hand a script that
+ * removes it to the user. Spelling the name out in those tasks would put the
+ * word "sudo" in four more files for no gain.
+ */
+export const PRIVILEGED_GROUP = "sudo";
+
+/** The group that is root with a group seat instead. Handled exactly like the above. */
+export const DOCKER_GROUP = "docker";
+
+/** Where sudoers drop-ins live; one is named after the user it grants. */
+export const SUDOERS_DIR = "/etc/sudoers.d";
+
+/**
+ * The `as-agent` helper, verbatim from the machine it was proven on.
+ *
+ * The one line in the whole design where a user types a privileged command
+ * themselves: hyper installs the file and never runs it. It lives here, as
+ * template text, so that C-6's grep stays a real check — a task that embedded
+ * it would put "sudo" in `tasks/`, where it is supposed never to appear.
+ *
+ * Arguments are joined and `eval`ed in the target user's shell, which is what
+ * makes `as-agent 'echo $USER'` behave like `ssh 'echo $USER'` rather than
+ * passing the command in as a single quoted argument.
+ */
+export function asAgentScript(agentUser: string): string {
+	return `#!/usr/bin/env bash
+# Run a command line as ${agentUser} in the current directory.
+# Arguments are joined and evaluated by ${agentUser}'s shell, like ssh:
+#   as-agent 'echo $USER'   -> ${agentUser}
+# With no arguments it runs: claude --resume
+dir=$(pwd -P)
+[ $# -eq 0 ] && set -- claude --resume
+exec ${PRIVILEGED_GROUP} -H -u ${agentUser} bash -lic 'cd "$1" && eval "$2"' _ "$dir" "$*"
+`;
 }
 
 /** How the machine is named in the header: local setups have no MachineInfo. */
@@ -63,6 +110,9 @@ export function assembleRootScript(entries: RootScriptEntry[], ctx: TaskContext)
 	for (const entry of entries) {
 		lines.push(`# --- ${entry.task.id} ---`);
 		lines.push(`# ${entry.task.title}`);
+		if (entry.fallback === true) {
+			lines.push("# (root fallback: the rest of this task runs as your own user)");
+		}
 		lines.push(entry.script.trimEnd());
 		lines.push("");
 	}

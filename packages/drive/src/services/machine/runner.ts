@@ -144,6 +144,19 @@ function rootScriptFor(task: Task, ctx: TaskContext): string {
 	}
 }
 
+/** A non-root task's own root fallback, or null when it has none or it's absent. */
+function rootFallbackFor(task: Task, ctx: TaskContext): string | null {
+	if (task.needsRoot || typeof task.rootFallback !== "function") return null;
+	try {
+		return task.rootFallback(ctx).trim();
+	} catch (err) {
+		throw new TaskError(
+			task.id,
+			`I couldn't write the root fallback for "${task.id}" (${task.title}) on ${where(ctx)}: ${detail(err)}`,
+		);
+	}
+}
+
 /**
  * The remote machine's home, for the copied script.
  *
@@ -204,6 +217,8 @@ export async function runSetup(
 	const skipped: string[] = [];
 	const failed: { id: string; reason: string }[] = [];
 	const needsRoot: Task[] = [];
+	/** Non-root tasks whose apply didn't take and that offer a root fallback. */
+	const fallbacks: { task: Task; script: string }[] = [];
 
 	for (const task of selected) {
 		if (await checkTask(task, ctx)) {
@@ -235,6 +250,14 @@ export async function runSetup(
 		}
 		if (await checkTask(task, ctx)) applied.push(task.id);
 		else {
+			// A non-root task may need one privileged fallback (such as linger).
+			// Keep T-15's failure reporting when there is no such fallback.
+			const fallback = rootFallbackFor(task, ctx);
+			if (fallback !== null) {
+				fallbacks.push({ task, script: fallback });
+				needsRoot.push(task);
+				continue;
+			}
 			failed.push({
 				id: task.id,
 				reason: task.unmetReason ?? "the fix did not take; check the tool's installation and retry",
@@ -244,10 +267,18 @@ export async function runSetup(
 
 	if (needsRoot.length === 0) return { applied, alreadyOk, skipped, failed };
 
-	const entries: RootScriptEntry[] = needsRoot.map((task) => ({
-		task,
-		script: rootScriptFor(task, ctx),
-	}));
+	// A task appears once, with whichever of the two texts applies to it: its own
+	// root script, or — when it is a non-root task whose apply didn't take — the
+	// fallback it offered. A task can be in `needsRoot` and `fallbacks` at once
+	// only if it is both, which the type forbids; the map below is keyed to keep
+	// the pairing obvious.
+	const fallbackScript = new Map(fallbacks.map((entry) => [entry.task.id, entry.script]));
+	const entries: RootScriptEntry[] = needsRoot.map((task) => {
+		const fallback = fallbackScript.get(task.id);
+		return fallback === undefined
+			? { task, script: rootScriptFor(task, ctx) }
+			: { task, script: fallback, fallback: true };
+	});
 	const script = assembleRootScript(entries, ctx);
 	const path = join(scratchDir, ROOT_SCRIPT_NAME);
 	await mkdir(scratchDir, { recursive: true });

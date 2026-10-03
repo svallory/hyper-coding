@@ -99,6 +99,20 @@ export interface Task {
 	unmetReason?: string;
 	/** The root fix, as bash. Only ever called when `needsRoot` is true. */
 	rootScript?(ctx: TaskContext): string;
+	/**
+	 * A root step for a task that otherwise runs unprivileged.
+	 *
+	 * Some work is genuinely the user's to run and only becomes reachable from
+	 * root in specific situations — `loginctl enable-linger` on yourself is
+	 * allowed by stock polkit and denied by a machine whose polkit rules say
+	 * otherwise. Rather than making the whole task a root task (which would put
+	 * its everyday work behind a password), it stays `needsRoot: false` and
+	 * offers this: the runner collects it into the same assembled script the
+	 * user reads before typing their password, banner-marked as a fallback.
+	 *
+	 * The runner only asks for it after `apply` ran and the task still fails.
+	 */
+	rootFallback?(ctx: TaskContext): string;
 }
 
 /**
