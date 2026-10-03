@@ -135,7 +135,10 @@ pexec 'chmod 0440 /etc/sudoers.d/svallory'
 # A throwaway key: the real operator's key never goes near this container.
 ssh-keygen -q -t ed25519 -N '' -f "$key" <<<y >/dev/null 2>&1 || ssh-keygen -q -t ed25519 -N '' -f "$key"
 podman cp "$key.pub" "$container:/tmp/key.pub"
-pexec "mkdir -p /home/$primary/.ssh && install -m 0600 -o $primary /tmp/key.pub /home/$primary/.ssh/authorized_keys && rm -f /tmp/key.pub"
+# `chown` the directory too, not just the file: ssh-keygen creates it as the
+# user, and a root-owned ~/.ssh makes `setfacl` fail for the primary — which
+# would be a harness artifact masquerading as a product bug.
+pexec "mkdir -p /home/$primary/.ssh && chown $primary:$primary /home/$primary/.ssh && chmod 0700 /home/$primary/.ssh && install -m 0600 -o $primary /tmp/key.pub /home/$primary/.ssh/authorized_keys && rm -f /tmp/key.pub"
 
 pexec 'ssh-keygen -A >/dev/null && mkdir -p /run/sshd'
 pexec '/usr/sbin/sshd'
@@ -154,10 +157,17 @@ for i in $(seq 1 30); do
 done
 ssh_t16 true >/dev/null 2>&1 || die "could not ssh into the container as $primary"
 
-# The credential the whole ACL design protects. Created BEFORE setup and left
-# 0600, so a recursive ACL anywhere in setup would show up as the agent being
-# able to read it.
-ssh_t16 "mkdir -p /home/$primary/.claude/projects/x"
+# The credential the whole ACL design protects, plus the fixtures that must exist
+# BEFORE setup: the deny is applied to entries that are already there, and a file
+# created afterwards relies on the inherited default instead. Both paths need
+# proving, so both are set up here.
+ssh_t16 "mkdir -p /home/$primary/.claude/projects/x /home/$primary/.config/gh"
+# The world-readable token case from the reference machine: a mode that says
+# "everyone can read", inside a directory the agent can traverse.
+ssh_t16 "printf 'gh-token\n' > /home/$primary/.config/gh/hosts.yml && chmod 0644 /home/$primary/.config/gh/hosts.yml"
+ssh_t16 "chmod 0755 /home/$primary/.config"
+ssh_t16 "printf 'top-level-secret\n' > /home/$primary/topsecret.txt && chmod 0644 /home/$primary/topsecret.txt"
+ssh_t16 "printf '{\"history\":\"before\"}\n' > /home/$primary/.claude/history.jsonl && chmod 0644 /home/$primary/.claude/history.jsonl"
 ssh_t16 "printf '{\"token\":\"secret\"}' > /home/$primary/.claude/.credentials.json"
 ssh_t16 "chmod 0600 /home/$primary/.claude/.credentials.json"
 ssh_t16 "printf '{\"model\":\"claude\"}' > /home/$primary/.claude/settings.json"
@@ -317,40 +327,107 @@ if as_agent "ls /home/$primary/.claude" >/dev/null 2>&1; then
 fi
 pass "the agent cannot list the primary's config dir (traverse only)"
 
-# No DEFAULT ACL on the config dir: a default entry is inherited by every file
-# created there afterwards, which is what would hand the agent read on all of them
-# (history, debug logs, shell snapshots, a future credential). Asserted on the
-# ACL itself, which is the property that holds regardless of file modes.
-claude_defaults="$(ssh_t16 "getfacl -c -p /home/$primary/.claude 2>/dev/null | grep -c '^default:' || true")"
-[ "${claude_defaults:-0}" = "0" ] || die "there are $claude_defaults default ACL entries on ~/.claude"
-pass "there is no default ACL on ~/.claude (nothing is inherited there)"
+# --------------------------------------------------------------------------
+# Part B: the deny. A named-group entry that matches decides access outright, so
+# `g:collab:---` denies the agent whatever the file's own mode says.
+# --------------------------------------------------------------------------
+denied() {
+  # Readable by the agent? 0 = no (good), anything else = yes (bad).
+  as_agent "cat '$1'" >/dev/null 2>&1 && echo yes || echo no
+}
 
-# A file the writer marks PRIVATE stays private. This is the real protection and
-# it is about the writer's own mode: 0600 has no `other` bits, so with no default
-# ACL to widen them the agent cannot read it.
-#
-# Note on what this does and does not prove: a 0644 file is world-readable BY
-# DEFINITION of its mode — no ACL arrangement can make it otherwise, and with the
-# shared umask (002) files the primary writes are group/other-readable anyway.
-# What removing the default ACL buys is that nothing is INHERITED, so a private
-# file stays private instead of being widened by a rule on the directory.
-ssh_t16 "printf 'private\n' > /home/$primary/.claude/private.json && chmod 0600 /home/$primary/.claude/private.json"
-if as_agent "cat /home/$primary/.claude/private.json" >/dev/null 2>&1; then
-  die "a 0600 file in the config dir is readable by the agent"
-fi
-pass "a 0600 file created in ~/.claude later is NOT readable as $agent"
+# 1. Entries that existed BEFORE setup: a 0644 top-level file, and a 0755
+#    directory holding a 0644 gh token file — the case from the reference server.
+for f in "/home/$primary/topsecret.txt" "/home/$primary/.config/gh/hosts.yml"; do
+  if [ "$(denied "$f")" = "yes" ]; then
+    # Evidence, not just a verdict: this is the assertion the whole deny rests on,
+    # so a failure has to be reportable rather than merely red.
+    echo "# --- WHY $f is readable ---" >&2
+    echo "# getfacl:" >&2
+    ssh_t16 "getfacl -p $f" >&2 || true
+    echo "# stat: $(ssh_t16 "stat -c '%A %U %G %a' $f")" >&2
+    echo "# agent groups: $(as_agent 'id' 2>&1)" >&2
+    echo "# cat as agent:" >&2
+    as_agent "cat '$f'" >&2 || true
+    die "the agent can read the pre-existing $f"
+  fi
+done
+pass "1 - a pre-existing 0644 file, and a 0644 gh token under ~/.config, are unreadable"
 
-# skills/, commands/ and agents/ DO carry a default entry, so a new file there is
-# readable — that is the deliberate contrast with the config dir root.
+# 2. A file created AFTER setup, relying on the inherited default.
+ssh_t16 "printf 'after\n' > /home/$primary/late.txt && chmod 0644 /home/$primary/late.txt"
+[ "$(denied "/home/$primary/late.txt")" = "no" ] || die "the agent can read a 0644 file created after setup"
+pass "2 - a 0644 top-level file created AFTER setup is unreadable (inherited default)"
+
+# 3. The classic write pattern: write a temp file, then rename it over the
+#    target. The new inode is a different object with different ACLs.
+ssh_t16 "printf 'new bashrc\n' > /home/$primary/.bashrc.new && mv /home/$primary/.bashrc.new /home/$primary/.bashrc"
+[ "$(denied "/home/$primary/.bashrc")" = "no" ] || die "the agent can read .bashrc after it was replaced by rename"
+pass "3 - ~/.bashrc replaced by temp-file-and-rename is unreadable"
+
+# 4. Widening the mode cannot reopen what the deny closed.
+ssh_t16 "printf 'chmodtest\n' > /home/$primary/chmodtest.txt && chmod 0644 /home/$primary/chmodtest.txt"
+for mode in 644 g+r 777; do
+  ssh_t16 "chmod $mode /home/$primary/chmodtest.txt" || true
+  [ "$(denied "/home/$primary/chmodtest.txt")" = "no" ] \
+    || die "the agent can read chmodtest.txt after \`chmod $mode\`"
+done
+pass "4 - still unreadable after chmod 644, chmod g+r and chmod 777"
+
+# 5. The config dir: denied by default, shared entries readable, and the two
+#    shared FILES re-granted after Claude Code replaces them by rename.
+for f in "/home/$primary/.claude/history.jsonl"; do
+  [ "$(denied "$f")" = "no" ] || die "the agent can read the pre-existing $f"
+done
+ssh_t16 "printf '{\"h\":1}\n' > /home/$primary/.claude/late.jsonl && chmod 0644 /home/$primary/.claude/late.jsonl"
+[ "$(denied "/home/$primary/.claude/late.jsonl")" = "no" ] \
+  || die "the agent can read a 0644 file created in ~/.claude after setup"
+pass "5a - pre-existing and new 0644 files in ~/.claude are both unreadable"
+
+[ "$(denied "/home/$primary/.claude/settings.json")" = "yes" ] \
+  || die "the agent cannot read settings.json"
+[ "$(denied "/home/$primary/.claude/CLAUDE.md")" = "yes" ] \
+  || die "the agent cannot read CLAUDE.md"
 ssh_t16 "mkdir -p /home/$primary/.claude/skills && printf 'skill\n' > /home/$primary/.claude/skills/new.md"
-as_agent "cat /home/$primary/.claude/skills/new.md" >/dev/null 2>&1 \
+[ "$(denied "/home/$primary/.claude/skills/new.md")" = "yes" ] \
   || die "a new file under skills/ is not readable as $agent"
-pass "a new file under skills/ IS readable as $agent"
+pass "5b - settings.json, CLAUDE.md and a new file under skills/ are readable"
+
+# Claude Code rewrites settings.json by writing a new file and renaming it, so
+# the replacement arrives with the inherited DENY and no access entry. The
+# watcher has to put the grant back.
+ssh_t16 "printf '{\"model\":\"claude\"}\n' > /home/$primary/.claude/settings.json.new && mv /home/$primary/.claude/settings.json.new /home/$primary/.claude/settings.json"
+regranted=no
+for _ in $(seq 1 5); do
+  [ "$(denied "/home/$primary/.claude/settings.json")" = "yes" ] && regranted=yes && break
+  sleep 1
+done
+[ "$regranted" = "yes" ] || die "settings.json did not become readable again within 5s of being replaced"
+pass "5c - a settings.json replaced by rename is readable again within 5s"
+
+# 6. The shared dirs must still work — the deny must not cost the agent its work.
+as_agent "mkdir -p /home/$primary/work/agent-dir && printf 'from the agent\n' > /home/$primary/work/agent-dir/f.txt" \
+  || die "the agent cannot write in the work dir"
+as_agent "cat /home/$primary/work/agent-dir/f.txt" >/dev/null 2>&1 \
+  || die "the agent cannot read back what it wrote in the work dir"
+ssh_t16 "printf 'from the agent\n' > /home/$primary/.claude/projects/x/agent-wrote.jsonl" \
+  || die "the agent cannot write into projects/"
+as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>&1 \
+  || die "the agent cannot read what it wrote into projects/"
+pass "6 - the agent still reads and writes the work dir and projects/"
+
+# 7. ssh must keep working for the PRIMARY after the deny lands on ~/.ssh: the
+#    deny is on the shared group, and sshd logs in as the owner.
+ssh_t16 "ssh-keygen -q -t ed25519 -N '' -f /home/$primary/.ssh/after-setup <<<y" >/dev/null 2>&1
+ssh_t16 "cp /home/$primary/.ssh/after-setup.pub /home/$primary/.ssh/authorized_keys.new && mv /home/$primary/.ssh/authorized_keys.new /home/$primary/.ssh/authorized_keys"
+ssh_t16 true >/dev/null 2>&1 || die "ssh stopped working for the primary after the deny (StrictModes)"
+pass "7 - a fresh key and a renamed authorized_keys still let the primary ssh in"
 
 if as_agent "cat /home/$primary/.claude/.credentials.json" >/dev/null 2>&1; then
-  die "the agent CAN read .credentials.json — the recursive-ACL rule was broken"
+  die "the agent CAN read .credentials.json"
 fi
 pass ".credentials.json is NOT readable as $agent"
+
 
 as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>&1 \
   && pass "the agent can read the primary's transcripts"
@@ -396,13 +473,42 @@ if ! printf '%s' "$as_agent_out" | grep -qx "$agent"; then
 fi
 pass "the as-agent helper runs a command as $agent"
 
+# 8a. Take the deny off one top-level file. The next setup must NOTICE and put
+#     it back — otherwise the machine slowly drifts open and nothing says so.
+ssh_t16 "setfacl -x g:collab /home/$primary/late.txt"
+set +e
+run_hyper > "$work_real/setup-drift.log" 2>&1
+drift_code=$?
+set -e
+if [ "$drift_code" = 0 ] && ! grep -q "Nothing needed" "$work_real/setup-drift.log"; then
+  die "setup neither restored the deny nor reported the drift"
+fi
+if ! grep -q "late.txt" "$work_real/setup-drift.log"; then
+  die "setup did not NAME the entry whose deny was missing"
+fi
+pass "8a - removing a deny makes setup name the file and restore it"
+
+# 8b. A file moved in from elsewhere on the same filesystem keeps the ACLs it
+#     came with — the case the watcher exists to close.
+ssh_t16 "printf 'moved in\n' > /tmp/moved-in.txt && chmod 0644 /tmp/moved-in.txt && mv /tmp/moved-in.txt /home/$primary/moved-in.txt"
+moved_denied=no
+for _ in $(seq 1 5); do
+  [ "$(denied "/home/$primary/moved-in.txt")" = "no" ] && moved_denied=yes && break
+  sleep 1
+done
+[ "$moved_denied" = "yes" ] || die "a file moved into the home was not denied within 5s"
+pass "8b - a 0644 file moved into the home is denied within 5s (the watcher)"
+
 # --------------------------------------------------------------------------
 # Running the root script a second time changes nothing (C-15)
 # --------------------------------------------------------------------------
 # Compared as ACLs and modes rather than "the script exited 0": every step is
 # guarded, so a second run must leave both homes' metadata byte-identical.
 snapshot() {
-  ssh_t16 "getfacl -p /home/$primary /home/$primary/.claude /home/$primary/work /home/$agent 2>/dev/null; stat -c '%n %a %U %G' /home/$primary /home/$primary/.claude /home/$primary/work /home/$agent /home/$agent/.claude 2>/dev/null"
+  # The agent's own config dir and .bashrc too: those are the paths the script
+  # touches as the AGENT, and a second run that rewrote either would be just as
+  # much a change as one that rewrote the primary's.
+  ssh_t16 "getfacl -p /home/$primary /home/$primary/.claude /home/$primary/work /home/$agent /home/$agent/.claude 2>/dev/null; stat -c '%n %a %U %G' /home/$primary /home/$primary/.claude /home/$primary/work /home/$agent /home/$agent/.claude 2>/dev/null; cat /home/$agent/.bashrc 2>/dev/null | md5sum"
 }
 before="$(snapshot)"
 ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1 \
@@ -423,28 +529,35 @@ pass "running the root script twice is a no-op (C-15)"
 # symlink at a root-owned canary, re-run the script, and require the canary to
 # come out untouched.
 canary="/etc/hyper-t16-canary"
-ssh_t16 "sudo sh -c 'printf CANARY > $canary && chown root:root $canary && chmod 0600 $canary'"
-before_canary="$(ssh_t16 "sudo stat -c '%U %a %s' $canary && sudo cat $canary")"
+# A DIRECTORY, and one the agent can actually write to. Pointed at a FILE, mkdir
+# aborts on the old code and the new code alike, so the assertion proved nothing;
+# pointed at a writable root-owned directory, root chown/chmod/setfacl on the
+# path would change it and that is what we are testing for.
+ssh_t16 "sudo sh -c 'rm -rf $canary && mkdir -p $canary && chown root:root $canary && chmod 0755 $canary && printf CANARY > $canary/inside'"
+before_canary="$(ssh_t16 "sudo stat -c '%U %G %a' $canary && sudo getfacl -c -p $canary | sort")"
 # The agent replaces its own config dir with a symlink to the canary.
 # Both steps run inside ONE `bash -c`, because `as_agent` expands to
 # `sudo -u agent <cmd>` and that applies only to the FIRST word of an `&&` list —
 # the second would silently run as the primary user instead.
 as_agent "bash -c 'rm -rf /home/$agent/.claude && ln -s $canary /home/$agent/.claude'" \
   || die "could not plant the symlink as the agent"
-# The script is EXPECTED to fail or to refuse here: a hostile layout should not
-# be quietly accepted. Either is fine; following the link is not.
-ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1 || true
-after_canary="$(ssh_t16 "sudo stat -c '%U %a %s' $canary && sudo cat $canary")"
+# The script must FINISH: refusing the hostile layout is fine, following the link
+# is not, and an abort on the planted dir would hide which of the two happened.
+if ! ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1; then
+  die "the root script did not finish with the planted symlink in place"
+fi
+after_canary="$(ssh_t16 "sudo stat -c '%U %G %a' $canary && sudo getfacl -c -p $canary | sort")"
 if [ "$before_canary" != "$after_canary" ]; then
   die "root followed the agent's planted symlink: canary changed from '$before_canary' to '$after_canary'"
 fi
 pass "root did not follow a symlink the agent planted at ~$agent/.claude"
-# And it must not have become a directory either — that would mean root created
-# something through the link.
-if [ "$(ssh_t16 "sudo stat -c %F $canary")" != "regular file" ]; then
-  die "the canary is no longer a regular file: root created something through the link"
+# Owner, group, mode AND the full ACL must be identical: root chowning or
+# chmodding through the link would show up in any of them.
+if [ "$before_canary" != "$after_canary" ]; then
+  diff <(printf '%s\n' "$before_canary") <(printf '%s\n' "$after_canary") | head -20
+  die "root changed the canary through the agent's planted symlink"
 fi
-pass "the canary is still a regular file with the same owner, mode and content"
+pass "the canary keeps its owner, group, mode and full ACL across the re-run"
 
 # The container must not survive the script.
 echo "# container is removed by the trap"

@@ -183,7 +183,13 @@ function settledDirs(overrides: Record<string, string> = {}): string {
 		work_default_acl: "1",
 		home_acl: "1",
 		claude_acl: "1",
-		claude_default_acl: "0",
+		claude_default_deny: "1",
+		home_default_deny: "1",
+		home_fs: "ext4",
+		hardlinks: "1",
+		tiocsti: "0",
+		unprotected_top: "",
+		unprotected_claude: "",
 		"read_settings.json": "1",
 		"read_CLAUDE.md": "1",
 		read_skills: "1",
@@ -374,12 +380,13 @@ describe("agent-user.create", () => {
 		}
 	});
 
-	it("fails when the primary user's login group is the shared group", async () => {
+	it("throws when the primary user's login group is the shared group", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		// umask 002 hands everything the primary creates to their effective group.
 		// If that group is `collab`, the agent gets read AND WRITE on all of it,
-		// which defeats every other precaution here. There is no automatic fix,
-		// so this is a refusal rather than a "needs doing" state.
+		// which defeats every other precaution here. There is no automatic fix, and
+		// a plain `false` would leave the runner assembling a root script that then
+		// refuses again somewhere else — so it throws, naming what to do.
 		const runner = recordingRunner([
 			{
 				match: /printf 'agent_uid=/,
@@ -391,7 +398,7 @@ describe("agent-user.create", () => {
 				},
 			},
 		]);
-		expect(await agentUserCreate.check(ctxFor(runner))).toBe(false);
+		await expect(agentUserCreate.check(ctxFor(runner))).rejects.toThrow(/login group/);
 	});
 
 	it("issues only read-only commands", async () => {
@@ -424,15 +431,20 @@ describe("agent-user.create", () => {
 		// The package installs the unprivileged tasks depend on.
 		expect(script).toContain("apt-get install -y acl");
 		expect(script).toContain("apt-get install -y inotify-tools");
-		// The agent's config dir is created BY THE AGENT and only its metadata is
-		// set by root — see the blocker-2 tests for why.
-		expect(script).toContain('runuser -u "$agent_user" -- mkdir -p "$agent_home/.claude"');
-		expect(script).toContain('chown "$agent_user:$agent_user" "$agent_home/.claude"');
-		expect(script).toContain('chmod 0750 "$agent_home/.claude"');
-		// The agent's home has to be traversable and its config dir readable for the
-		// checks to work: a named user, never everyone.
-		expect(script).toContain('setfacl -m "u:$primary_user:x" "$agent_home"');
-		expect(script).toContain('setfacl -m "u:$primary_user:r-x" "$agent_home/.claude"');
+		// The agent's config dir is created BY THE AGENT, in its own block, and root
+		// sets nothing inside that home at all — see the blocker-2 tests.
+		expect(script).toContain('runuser -u "$agent_user" -- sh -c');
+		expect(script).toContain('mkdir -p "$home/.claude"');
+		expect(script).toContain('chmod 0750 "$home/.claude"');
+		// The ACLs that let the primary read the agent's config dir for its checks
+		// are set by the AGENT, on its own files.
+		// Positional, not inherited: the parent never exports the names and the
+		// block runs under strict mode.
+		expect(script).toContain('setfacl -m "u:$2:x" "$home"');
+		expect(script).toContain('setfacl -m "u:$2:r-x" "$home/.claude"');
+		// …and root does no chown/chmod/setfacl anywhere under that home.
+		expect(script).not.toContain('chown "$agent_user');
+		expect(script).not.toContain('setfacl -m "u:$primary_user:x" "$agent_home"');
 		// Not `chmod o+x`: that would hand traverse to every account on the
 		// machine. Comment lines are stripped first — the script explains what it
 		// is not doing, and that text must not read as doing it.
@@ -566,14 +578,12 @@ describe("agent-user.dirs — the credential boundary", () => {
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
 		// Traverse, not read: the agent must not be able to LIST the config dir.
-		expect(runner.joined).toContain(`setfacl -m g:collab:x ${HOME}/.claude`);
-		// `-k` REMOVES the default ACL an earlier version of this task set there.
-		// A default entry is inherited by every file created in the dir later, so
-		// leaving it would make the agent able to read all of them.
+		expect(runner.joined).toContain(`setfacl -m g:collab:--x ${HOME}/.claude`);
+		// `-k` REMOVES the default ACL an earlier version of this task set there
+		// (it was `g:collab:rX`), and it is replaced by an inherited DENY.
 		expect(runner.joined).toContain(`setfacl -k ${HOME}/.claude`);
-		// And this task must never ADD one back on the config dir itself. The check
-		// is per LINE, because the three shared subdirectories legitimately get a
-		// default entry and their paths begin with the config dir's.
+		expect(runner.joined).toContain(`setfacl -d -m g:collab:--- ${HOME}/.claude`);
+		// The config dir root is never given a default that GRANTS anything.
 		const commandLines = runner.snippets
 			.join("\n")
 			.split("\n")
@@ -581,8 +591,24 @@ describe("agent-user.dirs — the credential boundary", () => {
 		expect(
 			commandLines.filter((line) => line === `setfacl -d -m g:collab:rX ${HOME}/.claude`),
 		).toEqual([]);
-		// No write on the config dir itself.
 		expect(runner.joined).not.toContain(`setfacl -m g:collab:rwX ${HOME}/.claude`);
+	});
+
+	it("creates skills/, commands/ and agents/ before granting on them", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.apply?.(ctxFor(runner));
+		// A directory that does not exist cannot carry an ACL, and the check demands
+		// the ACL — so without the mkdir, a machine with no skills/ or agents/ yet
+		// could never settle.
+		for (const name of ["skills", "commands", "agents"]) {
+			expect(runner.joined, `not created: ${name}`).toContain(`mkdir -p ${HOME}/.claude/${name}`);
+		}
+		// And they must be created BEFORE the grant, or the grant lands on nothing.
+		const created = runner.joined.indexOf(`mkdir -p ${HOME}/.claude/skills`);
+		const granted = runner.joined.indexOf(`setfacl -R -m g:collab:rX ${HOME}/.claude/skills`);
+		expect(created).toBeGreaterThan(-1);
+		expect(granted).toBeGreaterThan(created);
 	});
 
 	it("grants read per entry: the two files, and the three shared dirs", async () => {
@@ -620,11 +646,123 @@ describe("agent-user.dirs — the credential boundary", () => {
 		}
 	});
 
-	it("gives the home traverse only, so the agent cannot list it", async () => {
+	it("gives the home traverse and an inherited deny", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
-		expect(runner.joined).toContain(`setfacl -m g:collab:x ${HOME}`);
+		// `--x`: reach work/, but not list the home.
+		expect(runner.joined).toContain(`setfacl -m g:collab:--x ${HOME}`);
+		// The deny: everything created under the home from now on.
+		expect(runner.joined).toContain(`setfacl -d -m g:collab:--- ${HOME}`);
+	});
+
+	it("denies the shared group every top-level entry except work and .claude", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.apply?.(ctxFor(runner));
+		const deny = runner.snippets.filter(
+			(line) => line.includes("g:collab:---") && line.includes("find"),
+		);
+		expect(deny.length).toBeGreaterThan(0);
+		const top = deny[0];
+		// ONE level only, never through a symlink, and the shared names excluded.
+		expect(top).toContain("-mindepth 1 -maxdepth 1");
+		expect(top).toContain("! -type l");
+		// The exclusions come from the constants, quoted for the shell.
+		expect(top).toContain("! -name work");
+		expect(top).toContain("! -name .claude");
+		// Never recursive over the home: that would hit every file inside work/.
+		expect(top).not.toContain("-R");
+	});
+
+	it("denies the config dir's children except the shared ones", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.apply?.(ctxFor(runner));
+		const deny = runner.snippets.filter(
+			(line) => line.includes("g:collab:---") && line.includes(HOME) && line.includes("find"),
+		);
+		// Matched on the find TARGET, not on ".claude" appearing anywhere: the
+		// home's own deny also contains that string, as an exclusion.
+		// `contains` rather than `startsWith`: runOrFail prefixes the snippet with
+		// `set -e`, so the find is not the first word on the line.
+		const claudeDeny = deny.find((line) => line.includes(`find ${HOME}/.claude `));
+		expect(claudeDeny).toBeDefined();
+		for (const name of ["projects", "settings.json", "CLAUDE.md", "skills", "commands", "agents"]) {
+			expect(claudeDeny, `not excluded: ${name}`).toContain(`! -name ${name}`);
+		}
+		expect(claudeDeny).toContain("-maxdepth 1");
+		expect(claudeDeny).not.toContain("-R ");
+	});
+
+	it("refuses a home on a filesystem that does not do the kernel ACL check", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		for (const fs of ["nfs4", "cifs", "fuseblk"]) {
+			const runner = recordingRunner([
+				{ match: /printf 'agent_uid=/, result: { stdout: SETTLED_CREATE } },
+				{
+					match: /printf 'work_group=/,
+					result: { stdout: settledDirs({ home_fs: fs }) },
+				},
+			]);
+			await expect(agentUserDirs.check(ctxFor(runner)), fs).rejects.toThrow(
+				/does not apply POSIX ACLs/,
+			);
+		}
+		// A local filesystem is fine.
+		const ok = recordingRunner([
+			{ match: /printf 'agent_uid=/, result: { stdout: SETTLED_CREATE } },
+			{ match: /printf 'work_group=/, result: { stdout: settledDirs() } },
+		]);
+		expect(await agentUserDirs.check(ctxFor(ok))).toBe(true);
+	});
+
+	it("reports the entries that are not denied, by name", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const logs: string[] = [];
+		const runner = recordingRunner([
+			{ match: /printf 'agent_uid=/, result: { stdout: SETTLED_CREATE } },
+			{
+				match: /printf 'work_group=/,
+				result: {
+					stdout: settledDirs({
+						unprotected_top: `${HOME}/.netrc,${HOME}/.config,`,
+					}),
+				},
+			},
+		]);
+		const ctx = { ...ctxFor(runner), log: (line: string) => logs.push(line) };
+		expect(await agentUserDirs.check(ctx)).toBe(false);
+		// It NAMES them, so "not fine" is actionable rather than mysterious.
+		expect(logs.join("\n")).toContain(".netrc");
+		expect(logs.join("\n")).toContain(".config");
+	});
+
+	it("fails when a kernel setting the deny relies on is off", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		for (const broken of [{ hardlinks: "0" }, { tiocsti: "1" }]) {
+			const runner = recordingRunner([
+				{ match: /printf 'agent_uid=/, result: { stdout: SETTLED_CREATE } },
+				{ match: /printf 'work_group=/, result: { stdout: settledDirs(broken) } },
+			]);
+			expect(await agentUserDirs.check(ctxFor(runner)), JSON.stringify(broken)).toBe(false);
+		}
+	});
+
+	it("writes both sysctls into a confined sysctl.d file, never /proc", () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const script = agentUserCreate.rootScript?.(ctxFor(recordingRunner())) ?? "";
+		expect(script).toContain("/etc/sysctl.d/60-hyper-agent-user.conf");
+		expect(script).toContain("fs.protected_hardlinks = 1");
+		expect(script).toContain("dev.tty.legacy_tiocsti = 0");
+		expect(script).toContain("sysctl --system");
+		// Reading /proc/sys to see what is ALREADY in effect is how it decides
+		// whether to write the file at all. What the ruling forbids is touching
+		// /proc — and /proc mount options specifically.
+		expect(script).toContain("cat /proc/sys/fs/protected_hardlinks");
+		expect(script).not.toContain("mount -o remount");
+		expect(script).not.toContain("/proc/sys/fs/protected_hardlinks =");
+		expect(script).not.toContain("sysctl -w /proc");
 	});
 });
 
@@ -800,13 +938,21 @@ describe("agent-user.watcher", () => {
 	});
 
 	it("emits the netcup watcher verbatim, with this machine's projects dir", () => {
-		const script = watcherScript(`${HOME}/.claude/projects`);
+		const script = watcherScript(`${HOME}/.claude/projects`, HOME);
 		expect(script).toContain("inotifywait -m -r -q -e create -e moved_to -e attrib");
-		expect(script).toContain(`dir=${HOME}/.claude/projects`);
+		expect(script).toContain(`projects=${HOME}/.claude/projects`);
+		expect(script).toContain(`home=${HOME}`);
+		expect(script).toContain(`claude=${HOME}/.claude`);
 		// `find -user "$me"` is the property that lets this run unprivileged: it
 		// can only widen permissions on files its own user owns.
 		expect(script).toContain('-user "$me"');
 		expect(script).toContain("chmod g+rw");
+		// The deny work: new entries in the home and the config dir.
+		expect(script).toContain('setfacl -m "g:$deny_group:---" "$p"');
+		expect(script).toContain("settings.json|CLAUDE.md");
+		expect(script).toContain("inotifywait -m -q -e create -e moved_to");
+		// …re-granting read on the two shared files when they are replaced.
+		expect(script).toContain('setfacl -m "g:$deny_group:r--" "$p"');
 	});
 
 	it("reports a settled machine as needing nothing (C-15)", async () => {
@@ -1065,22 +1211,32 @@ describe("blocker 2 — root never touches a path inside the agent's home", () =
 			.map((line) => line.trim())
 			.filter((line) => /\$(agent_home|home)\//.test(line))
 			.filter((line) => /\b(chmod|chown|touch)\b|>>/.test(line));
-		// Root sets the config dir's owner and mode, and nothing else. No chown,
-		// chmod, touch or append reaches anything else under that home.
-		expect(offending).toEqual([
-			'chown "$agent_user:$agent_user" "$agent_home/.claude"',
-			'chmod 0750 "$agent_home/.claude"',
-		]);
+		// A1: root does NOTHING under that home. Not even metadata, and not even
+		// behind a not-a-symlink test — the agent's lingering processes can swap the
+		// directory between the test and the use. The agent sets its own mode and
+		// its own ACLs inside the runuser block.
+		expect(offending).toEqual([]);
+		const asRootLines = asRoot
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line !== "" && !line.startsWith("#"));
+		for (const verb of ["chown", "chmod", "setfacl", "touch", "mkdir"]) {
+			// `command -v setfacl` asks whether the tool exists; it names no path.
+			const hits = asRootLines.filter(
+				(line) => line.includes(verb) && !line.includes("command -v"),
+			);
+			expect(hits, `root runs ${verb} outside the runuser block`).toEqual([]);
+		}
 	});
 
-	it("guards every agent-home metadata step on the path not being a symlink", () => {
+	it("has no not-a-symlink guard left, because there is nothing left to guard", () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const script = agentUserCreate.rootScript?.(ctxFor(recordingRunner())) ?? "";
-		// chown/chmod/setfacl are all skipped when the path is a symlink, so a
-		// planted link is never followed by root.
-		expect(script).toContain('if [ ! -L "$agent_home/.claude" ]; then');
-		expect(script).toContain('if [ ! -L "$agent_home" ]; then');
-		expect(script).toContain("is a symlink; leaving it alone");
+		// The guards were deleted along with the steps they guarded: a `[ ! -L ]`
+		// test is not a guard against a swap between the test and the use, so
+		// keeping it would be the appearance of a guard with none of the effect.
+		expect(script).not.toContain("[ ! -L ");
+		expect(script).not.toContain("is a symlink; leaving it alone");
 	});
 
 	it("gives the primary user NO write on the agent's home or config dir", () => {

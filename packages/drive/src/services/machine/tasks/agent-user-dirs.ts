@@ -32,7 +32,7 @@ import { runOrFail, runScript, succeeds } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
 /** The group both users share (must match `agent-user.create`). */
-const COLLAB_GROUP = "collab";
+export const COLLAB_GROUP = "collab";
 
 /**
  * The entries in the agent's config dir that are symlinks into the primary
@@ -61,11 +61,102 @@ const SYMLINKS: readonly { name: string }[] = [
  * directories: they hold skills, commands and subagent definitions — the
  * operator's instructions for the agent — and no secrets.
  */
-const READABLE_FILES = ["settings.json", "CLAUDE.md"] as const;
-const READABLE_DIRS = ["skills", "commands", "agents"] as const;
+export const READABLE_FILES = ["settings.json", "CLAUDE.md"] as const;
+export const READABLE_DIRS = ["skills", "commands", "agents"] as const;
+
+/**
+ * Top-level home entries the deny must NOT touch.
+ *
+ * The work dir (group-writable, it is the shared one) and the config dir (which
+ * carries its own, finer-grained set of entries). Symlinks are excluded by TYPE
+ * rather than by name — a top-level symlink is the one entry whose target is
+ * outside the home, and setting an ACL on it would apply to that target.
+ */
+export const TOP_LEVEL_ALLOWED = ["work", ".claude"] as const;
+
+/** Direct children of the config dir the deny must NOT touch, and why. */
+export const CLAUDE_CHILDREN_ALLOWED = [
+	"projects",
+	"settings.json",
+	"CLAUDE.md",
+	"skills",
+	"commands",
+	"agents",
+] as const;
+
+/**
+ * Filesystems that do not use the kernel's POSIX ACL check.
+ *
+ * The whole design rests on one kernel fact: when a process's group matches a
+ * named group entry, access is decided there and never falls through to `other`.
+ * NFSv4 with `acl`/`nolacl` differences, CIFS with its own ACL model, and FUSE
+ * mounts can all silently not apply it — and a deny that is silently ignored is
+ * worse than no deny, because the check would go on reporting the machine as
+ * protected. So refuse these before changing anything.
+ */
+const UNSUPPORTED_FS = new Set(["nfs", "nfs4", "cifs", "smb3", "fuse", "fuseblk", "fuse.sshfs"]);
 
 /** The two lines every user's shell gets, so shared files are group-accessible from birth. */
 const BASHRC_LINES = ["umask 002", "set -o physical"] as const;
+
+/**
+ * The shell that lists, comma-separated, the direct children of `dir` that
+ * should be denied to the shared group and are not.
+ *
+ * Symlinks are skipped by TYPE: an ACL on a symlink applies to its target, and
+ * for a top-level symlink that target is outside the home, so denying there
+ * would change something that is not the home's. The named exclusions are the
+ * work dir and the shared entries, which carry their own grants — built from the
+ * caller's constants rather than written out, so a rename cannot leave a literal
+ * behind.
+ */
+function unprotectedUnder(dir: string, allowed: readonly string[]): string {
+	const q = shellQuote;
+	// ANDed, never `-o`. In find, `-o` binds looser than the implicit `-a`, so
+	// `! -type l ! -name work -o ! -name .claude` means "(!symlink AND !work) OR
+	// .claude" — which would deny the config dir itself, exactly the entry the
+	// exclusion exists to protect. Every exclusion here is conjunctive.
+	const skip = allowed.map((name) => `! -name ${q(name)}`).join(" ");
+	return `$(find ${q(dir)} -mindepth 1 -maxdepth 1 ! -type l ${skip} -exec sh -c 'for p do getfacl -c -p "$p" 2>/dev/null | grep -q "^group:collab:---$" || printf "%s," "$p"; done' _ {} + 2>/dev/null || true)`;
+}
+
+/**
+ * Deny the shared group access to every direct child of `dir` except the named
+ * ones — one level only, never through a symlink.
+ *
+ * The same `find` the check uses to find what is unprotected, so "what setup
+ * applies" and "what the check demands" cannot drift apart; only the action
+ * differs. `! -type l` is not tidiness: an ACL on a symlink applies to its
+ * target, and for a top-level symlink that target is outside the home.
+ */
+function denyDirectChildren(dir: string, allowed: readonly string[]): string {
+	const q = shellQuote;
+	// ANDed, never `-o`. In find, `-o` binds looser than the implicit `-a`, so
+	// `! -type l ! -name work -o ! -name .claude` means "(!symlink AND !work) OR
+	// .claude" — which would deny the config dir itself, exactly the entry the
+	// exclusion exists to protect. Every exclusion here is conjunctive.
+	const skip = allowed.map((name) => `! -name ${q(name)}`).join(" ");
+	// Best-effort (one unwritable entry must not abort the rest) but NOT silent:
+	// an entry this cannot deny is one the agent can read, and swallowing the
+	// error turned that into "setup never settles" with nothing to act on.
+	return `find ${q(dir)} -mindepth 1 -maxdepth 1 ! -type l ${skip} -exec setfacl -m g:${COLLAB_GROUP}:--- {} + 2>&1 || true`;
+}
+
+/**
+ * Say out loud whatever the deny could not do.
+ *
+ * A denial that silently failed is the worst outcome here: the check keeps
+ * reporting the machine as unfinished, the user re-runs, and nothing ever says
+ * why. So the raw error is printed with the place it came from, which is almost
+ * always "you don't own this one" — and that is actionable.
+ */
+function reportDenyFailures(ctx: TaskContext, where: string, result: { stdout: string }): void {
+	const detail = (result.stdout ?? "").trim();
+	if (detail === "") return;
+	ctx.log(
+		`agent-user.dirs: I could not deny everything under ${where}, so the agent may still be able to read some of it. What the system said: ${detail.split("\n").slice(0, 3).join(" | ")}`,
+	);
+}
 
 /**
  * Everything the check asks the machine, as labelled `key=value` lines.
@@ -83,13 +174,26 @@ function probe(paths: AgentPaths, agentUser: string): string {
 		`printf 'work_setgid=%s\\n' "$(test -g ${q(paths.work)} && echo yes || echo no)"`,
 		`printf 'work_acl=%s\\n' "$(getfacl -c -p ${q(paths.work)} 2>/dev/null | grep -c '^group:collab:rwx' || echo 0)"`,
 		`printf 'work_default_acl=%s\\n' "$(getfacl -c -p ${q(paths.work)} 2>/dev/null | grep -c '^default:group:collab:rwx' || echo 0)"`,
-		// The home: traversable by the group, so the agent can reach work/.
+		// The home: traversable by the group (the agent must reach work/), and an
+		// inherited DENY for everything created under it from now on.
 		`printf 'home_acl=%s\\n' "$(getfacl -c -p ${q(paths.home)} 2>/dev/null | grep -c '^group:collab:--x' || echo 0)"`,
-		// The config dir: TRAVERSE ONLY. No listing, and — the part that matters —
-		// NO default entries. A default here is inherited by every file created in
-		// the dir later, which would make the agent able to read all of them.
+		`printf 'home_default_deny=%s\\n' "$(getfacl -c -p ${q(paths.home)} 2>/dev/null | grep -c '^default:group:collab:---' || echo 0)"`,
+		// Which filesystem the home is on. The deny rests on the kernel's POSIX ACL
+		// check, and NFS/CIFS/FUSE can silently not apply it — in which case a deny
+		// that "passes" protects nothing.
+		`printf 'home_fs=%s\\n' "$(stat -f -c %T ${q(paths.home)} 2>/dev/null || echo unknown)"`,
+		// The two kernel settings: hardlink protection (so the agent cannot
+		// hard-link to a file the primary owns but the agent may not read) and
+		// TIOCSTI (so the agent cannot inject into the primary's terminal).
+		`printf 'hardlinks=%s\\n' "$(cat /proc/sys/fs/protected_hardlinks 2>/dev/null || echo 0)"`,
+		`printf 'tiocsti=%s\\n' "$(cat /proc/sys/dev/tty/legacy_tiocsti 2>/dev/null || echo 1)"`,
+		// Every top-level entry that should be denied and is not, by name.
+		`printf 'unprotected_top=%s\\n' "${unprotectedUnder(paths.home, TOP_LEVEL_ALLOWED)}"`,
+		// …and the same for the config dir's direct children.
+		`printf 'unprotected_claude=%s\\n' "${unprotectedUnder(paths.claude, CLAUDE_CHILDREN_ALLOWED)}"`,
+		// The config dir: TRAVERSE ONLY, plus an inherited deny.
 		`printf 'claude_acl=%s\\n' "$(getfacl -c -p ${q(paths.claude)} 2>/dev/null | grep -c '^group:collab:--x' || echo 0)"`,
-		`printf 'claude_default_acl=%s\\n' "$(getfacl -c -p ${q(paths.claude)} 2>/dev/null | grep -c '^default:' || echo 0)"`,
+		`printf 'claude_default_deny=%s\\n' "$(getfacl -c -p ${q(paths.claude)} 2>/dev/null | grep -c '^default:group:collab:---' || echo 0)"`,
 		// Read access to the two shared files, and to the three shared dirs (which
 		// also carry a default entry, so new files in them are readable).
 		...READABLE_FILES.map(
@@ -152,15 +256,45 @@ export const agentUserDirs: Task = {
 		const answer = answers(result.stdout);
 		// Sanity: if we probed the wrong user, nothing below means anything.
 		if (answer.get("agent_user") !== agentUser) return false;
+		// Refuse a filesystem that does not do the kernel ACL check this design
+		// rests on, BEFORE anything is changed — a deny that is silently ignored
+		// is worse than no deny, because the check would go on calling the machine
+		// protected.
+		const fs = answer.get("home_fs") ?? "unknown";
+		if (fs === "unknown" || UNSUPPORTED_FS.has(fs)) {
+			throw new Error(
+				`Your home is on a ${fs} filesystem, which does not apply POSIX ACLs the way this setup needs (fs type: ${fs}). The deny that keeps the agent user out of your files would silently do nothing, so I've changed nothing. Set up the agent user on a local filesystem, or on a home mount that supports ACLs.`,
+			);
+		}
 
 		if (answer.get("work_group") !== COLLAB_GROUP) return false;
 		if (!flag(answer, "work_setgid")) return false;
 		if (!present(answer, "work_acl") || !present(answer, "work_default_acl")) return false;
 		if (!present(answer, "home_acl")) return false;
-		// Traverse on the config dir, and NO default entries on it at all: a
-		// default ACL there is inherited by every file created in it from now on.
+		// An INHERITED deny on the home, plus the two kernel settings the deny
+		// design leans on.
+		if (!present(answer, "home_default_deny")) return false;
+		if (answer.get("hardlinks") !== "1" || answer.get("tiocsti") !== "0") return false;
+		// Every top-level entry outside the allowed set must carry the deny, and
+		// every direct child of the config dir too. The probe NAMES the ones that
+		// do not, so a machine that has drifted reports what drifted.
+		const unprotectedTop = answer.get("unprotected_top") ?? "";
+		if (unprotectedTop !== "") {
+			ctx.log(
+				`agent-user.dirs: these are readable by $agentUser and should not be: ${unprotectedTop.replace(/,$/, "")}. Running setup again denies them.`,
+			);
+			return false;
+		}
+		const unprotectedClaude = answer.get("unprotected_claude") ?? "";
+		if (unprotectedClaude !== "") {
+			ctx.log(
+				`agent-user.dirs: these in ${paths.claude} are readable by $agentUser and should not be: ${unprotectedClaude.replace(/,$/, "")}. Running setup again denies them.`,
+			);
+			return false;
+		}
+		// Traverse on the config dir, plus the inherited deny there too.
 		if (!present(answer, "claude_acl")) return false;
-		if (present(answer, "claude_default_acl")) return false;
+		if (!present(answer, "claude_default_deny")) return false;
 		for (const name of READABLE_FILES) {
 			if (!present(answer, `read_${name}`)) return false;
 		}
@@ -226,48 +360,83 @@ export const agentUserDirs: Task = {
 			].join("; "),
 		);
 
-		// Traverse on the home. `--x` and not `r-x`: the agent must be able to
-		// path through the home to reach work/, and must not be able to list it.
-		await runOrFail(
-			ctx,
-			"let the agent traverse the home",
-			`setfacl -m g:${COLLAB_GROUP}:x ${shellQuote(paths.home)}`,
-		);
-
-		// The config dir: TRAVERSE ONLY, and no default entries.
+		// Traverse on the home for the shared group, and an inherited DENY for
+		// everything created under it from now on.
 		//
-		// `-k` first: it REMOVES the default ACL. That is not tidiness — an
-		// earlier version of this task set `g:collab:rX` as a default here, and on
-		// a machine that ran it, that entry is inherited by every file created in
-		// the dir from then on (history, debug logs, shell snapshots, lock files,
-		// any future credential). The kernel ignores umask when a default ACL
-		// exists, so the file's own mode would not save it. This removes it.
+		// The deny is the point of the whole design. `collab` has to be able to
+		// traverse the home (otherwise the agent cannot reach work/), and that
+		// traverse would otherwise expose every world-readable file whose path it
+		// can guess. The kernel resolves a matching named-group entry before ever
+		// considering `other`, so `g:collab:---` denies the agent whatever the
+		// file's own mode says, and chmod cannot reopen it.
 		await runOrFail(
 			ctx,
-			"grant the agent traverse on the config dir",
+			"protect the home with a deny for the shared group",
 			[
-				`setfacl -k ${shellQuote(paths.claude)}`,
-				`setfacl -m g:${COLLAB_GROUP}:x ${shellQuote(paths.claude)}`,
+				`setfacl -m g:${COLLAB_GROUP}:--x ${shellQuote(paths.home)}`,
+				`setfacl -d -m g:${COLLAB_GROUP}:--- ${shellQuote(paths.home)}`,
 			].join("; "),
 		);
 
-		// Per-entry read access, the only way in. Two files, three directories.
+		// The entries that exist NOW, one level down. Non-recursive: the work dir
+		// and the config dir carry their own, finer-grained entries, and a
+		// recursive deny would hit every file in them.
+		const topDenied = await runOrFail(
+			ctx,
+			"deny the shared group access to your other top-level entries",
+			denyDirectChildren(paths.home, TOP_LEVEL_ALLOWED),
+		);
+		reportDenyFailures(ctx, "your home", topDenied);
+
+		// The config dir: traverse plus an inherited deny, then the same one-level
+		// deny on its children except the shared ones.
+		//
+		// `-k` first: it removes the DEFAULT ACL, which an earlier version of this
+		// task set to `g:collab:rX`. That default would be inherited by every file
+		// created in the dir afterwards — history, debug logs, a future credential.
+		await runOrFail(
+			ctx,
+			"protect the config dir",
+			[
+				`setfacl -k ${shellQuote(paths.claude)}`,
+				`setfacl -m g:${COLLAB_GROUP}:--x ${shellQuote(paths.claude)}`,
+				`setfacl -d -m g:${COLLAB_GROUP}:--- ${shellQuote(paths.claude)}`,
+			].join("; "),
+		);
+		const claudeDenied = await runOrFail(
+			ctx,
+			"deny the shared group access to the rest of your config dir",
+			denyDirectChildren(paths.claude, CLAUDE_CHILDREN_ALLOWED),
+		);
+		reportDenyFailures(ctx, paths.claude, claudeDenied);
+
+		// The shared entries, re-granted AFTER the deny: settings.json and
+		// CLAUDE.md are rewritten by rename by Claude Code, so a replaced file
+		// arrives with the inherited default and no access entry. Guarded on
+		// existence, because `setfacl` on a missing file fails and `set -e` would
+		// stop the whole task on a machine that simply has no CLAUDE.md yet.
 		await runOrFail(
 			ctx,
 			"grant the agent read access to the shared config entries",
 			[
 				...READABLE_FILES.map(
-					(name) => `setfacl -m g:${COLLAB_GROUP}:r-- ${shellQuote(`${paths.claude}/${name}`)}`,
+					(name) =>
+						`[ -e ${shellQuote(`${paths.claude}/${name}`)} ] && setfacl -m g:${COLLAB_GROUP}:r-- ${shellQuote(`${paths.claude}/${name}`)} || true`,
 				),
 				...READABLE_DIRS.map((name) => {
 					const dir = `${paths.claude}/${name}`;
 					return [
+						// Created here, in the PRIMARY's own config dir, because the
+						// grants below are on them and the check demands the grants: a
+						// dir that does not exist cannot carry an ACL, so without the
+						// mkdir this task could never settle on a machine that has no
+						// skills/ or agents/ yet.
 						`mkdir -p ${shellQuote(dir)}`,
 						`setfacl -R -m g:${COLLAB_GROUP}:rX ${shellQuote(dir)}`,
 						`setfacl -d -m g:${COLLAB_GROUP}:rX ${shellQuote(dir)}`,
 					].join("; ");
 				}),
-			].join("; "),
+			].join("\n"),
 		);
 
 		// projects/ is the shared transcripts dir: the only tree that is walked.
