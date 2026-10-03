@@ -29,8 +29,11 @@ export {
 } from "#config/schema";
 export { type BaseArgs, BaseCommand, type BaseFlags } from "#lib/base-command";
 export {
+	ALLOWLIST_MARKER,
 	AllowlistError,
 	findSecretPaths,
+	isHyperAllowlist,
+	normaliseTrackedEntry,
 	renderGitignore,
 	SECRET_PATTERNS,
 } from "#services/allowlist";
@@ -138,6 +141,7 @@ export {
 	projectRepoInfo,
 	readCadence,
 	readSpaceConfig,
+	readTracked,
 	removeSpaceGitDir,
 	SpaceGitError,
 	type SpaceGitOptions,
@@ -145,6 +149,7 @@ export {
 	spaceGit,
 	spaceGitDir,
 	writeCadence,
+	writeTracked,
 } from "#services/space-git";
 export {
 	getEngine,

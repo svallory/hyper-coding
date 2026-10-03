@@ -2,8 +2,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+	ALLOWLIST_MARKER,
 	AllowlistError,
 	findSecretPaths,
+	isHyperAllowlist,
+	normaliseTrackedEntry,
 	renderGitignore,
 	SECRET_PATTERNS,
 } from "#services/allowlist";
@@ -116,9 +119,27 @@ describe("renderGitignore", () => {
 				"!/.claude/",
 				"!/.claude/**",
 				"/.claude/settings.local.json",
+				// The marker comes last so the design's rules keep the file's
+				// first line and their exact order (C-4 is checked against
+				// them); it is what tells `hyper space init` this file is its own
+				// render rather than the user's.
+				ALLOWLIST_MARKER,
 				"",
 			].join("\n"),
 		);
+	});
+
+	it("marks its render, so a space can recognise a hyper-written .gitignore", () => {
+		// Not byte equality: a space initialised with `--tracked extra` holds a
+		// valid render that differs from today's, and it is still hyper's.
+		const rendered = renderGitignore(["extra"]);
+		expect(isHyperAllowlist(rendered)).toBe(true);
+		expect(isHyperAllowlist(renderGitignore())).toBe(true);
+		// A user's own file, and a render with its marker cut off.
+		expect(isHyperAllowlist("node_modules\n")).toBe(false);
+		expect(
+			isHyperAllowlist(`${ALLOWLIST_MARKER}\n`.replace("hyper space allowlist", "user rules")),
+		).toBe(false);
 	});
 
 	it("adds one ! pair per tracked entry, normalised and deduplicated", () => {
@@ -138,6 +159,17 @@ describe("renderGitignore", () => {
 		const deduped = renderGitignore(["extra/", "extra", "./extra"]).split("\n");
 		expect(deduped.filter((line) => line === "!/extra/")).toHaveLength(1);
 		expect(deduped.filter((line) => line === "!/extra/**")).toHaveLength(1);
+	});
+
+	it("normalises an entry to its plain directory name", () => {
+		// Callers merge lists (`hyper space init` unions three sources), so
+		// `extra`, `extra/` and `./extra` have to be one entry, not three.
+		expect(normaliseTrackedEntry("extra")).toBe("extra");
+		expect(normaliseTrackedEntry("extra/")).toBe("extra");
+		expect(normaliseTrackedEntry("./extra/")).toBe("extra");
+		expect(normaliseTrackedEntry("./a/b/")).toBe("a/b");
+		expect(() => normaliseTrackedEntry("/etc")).toThrow(/absolute/);
+		expect(() => normaliseTrackedEntry("../out")).toThrow(/escape/);
 	});
 
 	it("refuses absolute paths, `..` escapes and empty entries", () => {

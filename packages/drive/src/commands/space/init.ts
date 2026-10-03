@@ -5,13 +5,17 @@ import { Args, Flags } from "@oclif/core";
 import { ConfigError, configPath, loadConfig } from "#config/index";
 import {
 	isValidSpaceName,
-	ManifestError,
 	type SpaceEntry,
 	type SpaceRepo,
 	type SyncCadence,
 } from "#config/schema";
 import { BaseCommand, type BaseFlags } from "#lib/base-command";
-import { findSecretPaths, renderGitignore } from "#services/allowlist";
+import {
+	findSecretPaths,
+	isHyperAllowlist,
+	normaliseTrackedEntry,
+	renderGitignore,
+} from "#services/allowlist";
 import {
 	driveCheckoutDir,
 	ensureDriveCheckout,
@@ -25,11 +29,13 @@ import {
 	projectRepoInfo,
 	readCadence,
 	readSpaceConfig,
+	readTracked,
 	removeSpaceGitDir,
 	SpaceGitError,
 	spaceGit,
 	spaceGitDir,
 	writeCadence,
+	writeTracked,
 } from "#services/space-git";
 
 /**
@@ -78,8 +84,14 @@ function nameProblem(value: string, flag: "--name" | "--group"): Error {
  * for correctness, only for keeping every space-shaped git call in one module.
  */
 function remoteRef(root: string, remote: string, pattern: string): string | null {
-	const { stdout } = spaceGit(root, ["ls-remote", "--heads", remote, pattern]);
-	for (const line of stdout.split("\n")) {
+	const result = spaceGit(root, ["ls-remote", "--heads", remote, pattern], { allowFailure: true });
+	if (result.status !== 0) {
+		throw new SpaceGitError(
+			`I couldn't reach your hyperdrive at ${remote} to look at its branches: ` +
+				`${(result.stderr || result.stdout).trim() || "git ls-remote said nothing"}`,
+		);
+	}
+	for (const line of result.stdout.split("\n")) {
 		const ref = line.split("\t")[1]?.trim();
 		if (ref !== undefined && ref !== "") return ref;
 	}
@@ -161,54 +173,106 @@ function assertExistingSpaceMatches(root: string, branch: string, remote: string
  * `--refresh` of an unchanged space must leave the file alone, or "nothing
  * changed" could never be true and every refresh would look like an edit.
  *
- * A `.gitignore` that is already there and differs is refused on a FIRST init
- * and overwritten on a refresh. The first case is a user's own ignore file —
- * silently replacing it would change what a tool they configured ignores,
- * including what hyper would stage; a refresh is by definition hyper
- * re-rendering its own allowlist, and the file at that point is hyper's.
+ * A `.gitignore` that is already there and is NOT hyper's is refused on a
+ * FIRST init and overwritten on a refresh. The first case is a user's own
+ * ignore file — silently replacing it would change what a tool they configured
+ * ignores, including what hyper would stage. "Not hyper's" means the marker
+ * line is absent, NOT that today's render differs: a space initialised with
+ * `--tracked extra` holds a perfectly good hyper render that a byte comparison
+ * would call foreign. A refresh re-renders by definition — at that point the
+ * file is hyper's.
  *
- * Returns whether this call wrote the file, so a later refusal can take it back
- * off disk.
+ * Returns the contents this call REPLACED, or null when the file did not exist,
+ * so a refusal later can put back exactly what was there.
  */
-function writeAllowlist(root: string, tracked: string[], refreshed: boolean): boolean {
+function writeAllowlist(root: string, tracked: string[], refreshed: boolean): string | null {
 	const gitignore = renderGitignore(tracked);
 	const path = join(root, ".gitignore");
 	if (!existsSync(path)) {
 		writeFileSync(path, gitignore, "utf-8");
-		return true;
+		return null;
 	}
 	const current = readFileSync(path, "utf-8");
-	if (current === gitignore) return false;
-	if (!refreshed) {
+	if (current === gitignore) return null;
+	if (!refreshed && !isHyperAllowlist(current)) {
+		// Both paths absolute and inside the space, so the suggested command
+		// works from wherever the reader happens to be standing.
+		const backup = join(root, ".gitignore.pre-hyper");
 		throw new Error(
-			`${path} already exists and isn't the allowlist hyper would write for this space. It is ` +
-				`a tracked file, so hyper cannot commit its own version without either replacing yours or ` +
-				`leaving the space's history and its ignore rules disagreeing. Move yours aside ` +
-				`(e.g. \`mv ${path} .gitignore.pre-hyper\`), or delete it, and run this again.`,
+			`${path} already exists and hyper did not write it. It is a tracked file, so hyper cannot ` +
+				`commit its own allowlist without either replacing yours or leaving the space's history ` +
+				`and its ignore rules disagreeing. Move yours aside and run this again:` +
+				`\n\n  mv ${path} ${backup}\n`,
 		);
 	}
 	writeFileSync(path, gitignore, "utf-8");
-	return true;
+	return current;
 }
 
 /**
- * What `--tracked` means for this run, against the space's registered list.
+ * What `--tracked` means for this run, against the space's recorded list and
+ * the manifest's copy.
  *
- * A refresh with no `--tracked` KEEPS the manifest's list: re-rendering the
- * allowlist from an empty list would drop every tracked directory the space
- * was registered with, and the next file written under one of them would be
- * silently ignored. `--tracked` on a refresh ADDS to that list rather than
- * replacing it, because "track one more directory" is what a user passing it a
- * second time means, and replacing would need a flag to undo.
+ * A refresh with no `--tracked` KEEPS the list: re-rendering the allowlist from
+ * an empty list would drop every tracked directory the space has, and the next
+ * file written under one of them would be silently ignored. `--tracked` on a
+ * refresh ADDS rather than replacing, because "track one more directory" is what
+ * a user passing it a second time means, and replacing would need a flag to
+ * undo.
  *
- * On a first init there is no entry to keep, so the flag is the whole list.
+ * The union is taken from BOTH places it is recorded — `hyper.tracked` in the
+ * space's own git dir and the manifest entry — because neither write always
+ * happens: a push the hyperdrive refuses, or a manifest that cannot be written,
+ * leaves the two out of step, and the next run has to converge them rather than
+ * pick a loser. Entries are normalised first, so `extra` and `extra/` are one
+ * directory and not two.
  */
-function resolveTracked(flags: string[] | undefined, registered: SpaceEntry | null): string[] {
-	const fromFlags = flags ?? [];
-	if (registered === null) return [...new Set(fromFlags)];
-	const merged = [...registered.tracked];
-	for (const entry of fromFlags) if (!merged.includes(entry)) merged.push(entry);
+function resolveTracked(
+	flags: string[] | undefined,
+	inGitDir: string[],
+	registered: SpaceEntry | null,
+): string[] {
+	const merged: string[] = [];
+	for (const raw of [...inGitDir, ...(registered?.tracked ?? []), ...(flags ?? [])]) {
+		const entry = normaliseTrackedEntry(raw);
+		if (!merged.includes(entry)) merged.push(entry);
+	}
 	return merged;
+}
+
+/**
+ * Run a space git command that reaches the hyperdrive, turning git's own words
+ * into something a user can act on.
+ *
+ * Raw stderr is not an answer. `git push` against an unreachable remote prints a
+ * "fatal: unable to access … Could not resolve host", and one refused by a
+ * server prints a non-fast-forward with a `git pull` hint — a command that does
+ * not exist yet (`hyper space pull` is T-7), suggested to someone who has no
+ * way to run it. `ensureDriveCheckout` already wraps its own `ls-remote` probe
+ * this way; this is the space-side twin.
+ */
+function spaceGitRemote(root: string, remote: string, args: readonly string[], what: string): void {
+	const result = spaceGit(root, [...args], { allowFailure: true });
+	if (result.status === 0) return;
+	const detail = (result.stderr || result.stdout).trim();
+	// "The hyperdrive is unreachable" and "the hyperdrive moved" are different
+	// problems with different next steps, so git's own markers tell them apart
+	// rather than lumping both into "it didn't work".
+	if (/(fetch first|non-fast-forward|stale info|behind its remote)/i.test(detail)) {
+		// git's own detail is deliberately NOT quoted here. Its hint says to run
+		// `git pull`, which is advice for an ordinary repo and not for a space
+		// branch on the hyperdrive — nobody can pull that until T-7 exists, and
+		// sending them after it is worse than not mentioning the cause.
+		throw new SpaceGitError(
+			`${what} was refused: ${remote} has moved on, so another machine pushed this space's branch ` +
+				`first. Nothing was overwritten — hyper never rewrites a space's history. Syncing a space ` +
+				`from another machine is not available yet, so this one stays where it is; pass \`--name\` ` +
+				`if you need to carry on under a name of its own.`,
+		);
+	}
+	throw new SpaceGitError(
+		`I couldn't reach your hyperdrive at ${remote} to ${what}: ${detail || `git ${args[0]} failed`}`,
+	);
 }
 
 /**
@@ -221,8 +285,16 @@ function resolveTracked(flags: string[] | undefined, registered: SpaceEntry | nu
  * "what does the hyperdrive actually have".
  */
 function remoteSha(root: string, remote: string, branch: string): string | null {
-	const { stdout } = spaceGit(root, ["ls-remote", remote, `refs/heads/${branch}`]);
-	const first = stdout.split("\n")[0] ?? "";
+	const result = spaceGit(root, ["ls-remote", remote, `refs/heads/${branch}`], {
+		allowFailure: true,
+	});
+	if (result.status !== 0) {
+		throw new SpaceGitError(
+			`I couldn't reach your hyperdrive at ${remote} to look for ${branch}: ` +
+				`${(result.stderr || result.stdout).trim() || "git ls-remote said nothing"}`,
+		);
+	}
+	const first = result.stdout.split("\n")[0] ?? "";
 	return first.trim() === "" ? null : (first.split("\t")[0] ?? "").trim();
 }
 
@@ -410,11 +482,23 @@ export default class Init extends BaseCommand<typeof Init> {
 		// reported as initialised while sitting on the old answer.
 		if (refreshed) assertExistingSpaceMatches(root, branch, remote);
 
-		// The space's registered entry, which a refresh keeps rather than
-		// replaces: the cadence it already has, and the tracked list it was
-		// registered with. Read after the branch/remote comparison above, so
-		// the entry looked up is this space's and not another one's.
-		const registered = refreshed ? this.registeredEntry(name) : null;
+		// The space's manifest entry, which a refresh converges with rather than
+		// replaces. Read after the branch/remote comparison above, so the entry
+		// looked up is this space's and not another one's.
+		const registered = this.registeredEntry(name);
+		// Names are unique across the whole manifest (T-4 keys it by name), so a
+		// name already recorded on a DIFFERENT branch is somebody else's space.
+		// Never compared by path: the same space lives at different paths on
+		// different machines, and refusing that would break the fleet this
+		// exists for.
+		if (registered !== null && registered.branch !== branch) {
+			throw new Error(
+				`your hyperdrive already has a space called ${JSON.stringify(name)}, on branch ` +
+					`${registered.branch}. Space names are unique across groups, so this one would take ` +
+					`that space's place in the manifest. Pass \`--name\` with a name of its own, or ` +
+					`\`--group ${registered.group ?? ""}\` to re-initialise ${registered.branch} itself.`,
+			);
+		}
 
 		// Resolved BEFORE the git dir is created: with no flag, no default and
 		// no TTY this refuses, and a refusal must not leave a space that looks
@@ -428,53 +512,69 @@ export default class Init extends BaseCommand<typeof Init> {
 			refreshed,
 		);
 
-		// Created BEFORE the checks below, because both the ref-clash probe and
-		// the secret guard have to run through it (C-2). A refusal removes the
-		// dir it just created, so a failed init leaves the space exactly as it
-		// found it.
-		const created = initSpaceGitDir(root, { branch, remote });
-		// The clash probe guards CREATING a ref. A space whose branch is not on
-		// the remote yet is about to create one — a first init, a space whose
-		// first push failed, or one whose allowlist was empty until now — so it
-		// gets the probe too, not just a first init.
-		if (remoteSha(root, remote, branch) === null) {
-			try {
-				const clash = refClash(root, remote, name, group);
-				if (clash !== null) throw clashError(clash, name, group);
-			} catch (err) {
-				if (created.created) removeSpaceGitDir(root);
-				throw err;
-			}
-		}
-
-		const tracked = resolveTracked(flags.tracked, registered);
-
-		// Everything from here on writes, so everything from here on shares one
-		// cleanup: a refusal never leaves a staged secret, a half-written
-		// allowlist or an unregistered git dir behind.
-		let wroteGitignore = false;
+		// Everything from the git dir onwards shares ONE cleanup, because every
+		// step of it writes something: a refusal must not leave a staged secret,
+		// a rewritten allowlist, or a git dir that makes the next plain `init`
+		// answer "already a hyper space".
+		let previousAllowlist: string | null = null;
+		let wroteAllowlist = false;
+		let tracked: string[] = [];
+		let manifestEntry: SpaceEntry;
 		let committed = 0;
 		let unborn = false;
 		let upToDate = false;
+		const created = initSpaceGitDir(root, { branch, remote });
 		try {
-			wroteGitignore = writeAllowlist(root, tracked, refreshed);
+			// The clash probe guards CREATING a ref. A space whose branch is not
+			// on the remote yet is about to create one — a first init, a space
+			// whose first push failed, or one whose allowlist was empty until
+			// now — so it gets the probe too, not just a first init.
+			if (remoteSha(root, remote, branch) === null) {
+				const clash = refClash(root, remote, name, group);
+				if (clash !== null) throw clashError(clash, name, group);
+			}
 
-			// C-11: the git dir's config is the truth, so it is written before
-			// the first commit — a branch pushed without its cadence would leave
-			// the manifest recording a cadence nothing on the remote knows.
+			// C-11: the space's own git dir is the truth for the tracked list
+			// and the manifest is the copy that travels. A refused push or an
+			// unwritable manifest leaves the two out of step, so the union is
+			// what converges them again.
+			tracked = resolveTracked(flags.tracked, readTracked(root), registered);
+			writeTracked(root, tracked);
+			previousAllowlist = writeAllowlist(root, tracked, refreshed);
+			wroteAllowlist = true;
 			writeCadence(root, cadence);
 
 			const staged = this.firstCommit(root, name, branch, remote);
 			committed = staged.committed;
 			unborn = staged.unborn;
 			upToDate = staged.upToDate;
+
+			const entry: SpaceEntry = {
+				name,
+				branch,
+				group,
+				path: realpathSync(root),
+				layout: info.layout,
+				repos: spaceReposOf(root, info.layout, info.repos, !refreshed),
+				cadence,
+				tracked,
+				public: [],
+			};
+			manifestEntry = entry;
 		} catch (err) {
 			// Unstage first: `initSpaceGitDir` is a no-op on a second run, so a
 			// secret refusal on a refresh must not leave the index full of it.
 			spaceGit(root, ["reset", "--quiet"], { allowFailure: true });
-			// Only an allowlist THIS RUN created: on a refresh the file was
-			// hyper's already, and a refusal to rewrite it changes nothing.
-			if (wroteGitignore) rmSync(join(root, ".gitignore"), { force: true });
+			// Put the allowlist back the way this run found it: a file it created
+			// is removed, and a file it replaced — a refresh re-rendering it — is
+			// restored to its previous contents. Deleting the latter leaves the
+			// space with nothing ignoring `worktrees/`, and the next `add -A`
+			// stages the worktrees into the space's history.
+			if (previousAllowlist === null) {
+				if (wroteAllowlist) rmSync(join(root, ".gitignore"), { force: true });
+			} else {
+				writeFileSync(join(root, ".gitignore"), previousAllowlist, "utf-8");
+			}
 			// Only a git dir THIS RUN created: on a refresh the dir holds the
 			// space's history, including a commit whose push failed — removing
 			// it would throw away the very commit the next refresh must publish.
@@ -482,32 +582,20 @@ export default class Init extends BaseCommand<typeof Init> {
 			throw err;
 		}
 
-		const entry: SpaceEntry = {
-			name,
-			branch,
-			group,
-			path: realpathSync(root),
-			layout: info.layout,
-			repos: spaceReposOf(root, info.layout, info.repos, !refreshed),
-			cadence,
-			tracked,
-			public: [],
-		};
+		// The manifest write is DELIBERATELY outside the rollback above. By now
+		// the branch is committed and pushed and the tracked list is in the
+		// space's own git dir, so undoing anything here would destroy a space
+		// that exists — and the message below promises the reader the opposite.
 		try {
-			upsertSpace(entry);
+			upsertSpace(manifestEntry);
 		} catch (err) {
-			// The branch is already on the hyperdrive at this point, so saying
-			// only "the manifest write failed" leaves the user thinking the space
-			// was lost. It is not: the history is pushed, and a refresh is all
-			// that is missing.
-			throw new ManifestError(
-				branch,
-				`${branch} was committed and pushed to ${remote}, but registering it in the manifest ` +
-					`failed: ${err instanceof Error ? err.message : String(err)} — the space itself is fine. ` +
+			throw new Error(
+				`${branch} was committed and pushed to ${remote}, but writing the hyperdrive manifest ` +
+					`failed — the space itself is fine: ${err instanceof Error ? err.message : String(err)} ` +
 					`Rerun \`hyper space init --refresh\` once the manifest can be written.`,
 			);
 		}
-		return { ...entry, committed, refreshed, remote, unborn, upToDate };
+		return { ...manifestEntry, committed, refreshed, remote, unborn, upToDate };
 	}
 
 	/**
@@ -602,7 +690,7 @@ export default class Init extends BaseCommand<typeof Init> {
 		const publishedBefore = remoteSha(root, remote, branch);
 		// A plain push, never force: `--force-with-lease` is what would be able
 		// to rewrite a space another machine has already pushed.
-		spaceGit(root, ["push", "-u", "origin", branch]);
+		spaceGitRemote(root, remote, ["push", "-u", "origin", branch], `push ${branch}`);
 		return {
 			committed: staged.length,
 			unborn: false,
