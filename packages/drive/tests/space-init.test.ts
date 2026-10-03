@@ -6,6 +6,7 @@ import {
 	mkdirSync,
 	readdirSync,
 	readFileSync,
+	renameSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
@@ -103,6 +104,25 @@ function localCount(root: string): number {
 	);
 }
 
+/** `hyper.tracked` in the space's own git dir — the list, read as hyper wrote it. */
+function localTracked(root: string): string[] {
+	const out = git(
+		[
+			"--git-dir",
+			join(root, ".hyper", "space.git"),
+			"config",
+			"--local",
+			"--get-all",
+			"hyper.tracked",
+		],
+		root,
+	);
+	return out
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line !== "");
+}
+
 /**
  * Make the hyperdrive accept its `main` and refuse every `space/*` branch,
  * the way a server-side hook would.
@@ -193,9 +213,10 @@ describe("AC-1: the allowlist decides what the space branch holds", () => {
 		const ignore = readFileSync(join(root, ".gitignore"), "utf-8");
 		expect(ignore).toContain("!/extra/");
 		expect(ignore).toContain("!/extra/**");
-		// The manifest keeps what the user typed (`extra/`); the renderer is
-		// what normalises it, and re-rendering that value is idempotent.
-		expect(manifestFromCheckout("tracked-space")?.tracked).toEqual(["extra/"]);
+		// The manifest stores the NORMALISED entry (`extra`, not the `extra/`
+		// that was typed): a list that keeps `extra` and `extra/` as two entries
+		// would render one directory twice and merge wrongly later.
+		expect(manifestFromCheckout("tracked-space")?.tracked).toEqual(["extra"]);
 	});
 });
 
@@ -633,9 +654,16 @@ describe("a push that failed is published by the next refresh", () => {
 
 		// The hyperdrive refuses space branches; the space keeps working.
 		rejectSpacePushes(true);
+		mkdirSync(join(root, "later"), { recursive: true });
+		writeFileSync(join(root, "later", "kept.md"), "written offline\n");
 		writeFileSync(join(root, "notes", "unpublished.md"), "written offline\n");
-		const failed = spawnCli(["space", "init", root, "--refresh"], fixture);
+		// `--tracked` so this run ALSO re-renders the allowlist: a refusal that
+		// deleted or kept the new render would be caught here, not only by the
+		// dedicated MAJOR 1 test.
+		const before = readFileSync(join(root, ".gitignore"), "utf-8");
+		const failed = spawnCli(["space", "init", root, "--refresh", "--tracked", "later"], fixture);
 		expect(failed.status).not.toBe(0);
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
 		// The commit is kept locally: losing it would make the next refresh
 		// unable to publish anything.
 		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
@@ -650,6 +678,10 @@ describe("a push that failed is published by the next refresh", () => {
 		expect(recovered.status, flat(recovered.stderr)).toBe(0);
 		expect(flat(recovered.stdout)).toContain("pushed what the hyperdrive was missing");
 		expect(remoteTree("space/retry-push")).toContain("notes/unpublished.md");
+		// `later` was tracked by a run that never reached the manifest, and the
+		// recovery still has it.
+		expect(remoteTree("space/retry-push")).toContain("later/kept.md");
+		expect(localTracked(root)).toEqual(["later"]);
 		// And a refresh that really is level says so, rather than claiming work.
 		const settled = spawnCli(["space", "init", root, "--refresh"], fixture);
 		expect(settled.status, flat(settled.stderr)).toBe(0);
@@ -700,8 +732,16 @@ describe("the .gitignore the space already has", () => {
 describe("a failure after the branch is pushed", () => {
 	it("MINOR 5: says the space is safe and names the command that finishes the job", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
+		// root ignores the mode bits, so a read-only `.git` would still be
+		// writable and the test would pass for the wrong reason.
+		if (process.getuid?.() === 0) {
+			ctx.skip("running as root: a read-only .git is still writable");
+			return;
+		}
 		writeConfig();
 		const root = makeSpace("manifest-fails");
+		mkdirSync(join(root, "extra"), { recursive: true });
+		writeFileSync(join(root, "extra", "e.md"), "extra\n");
 		// A real checkout first, then take away its ability to write: every step
 		// before the manifest write then succeeds, which is the whole point —
 		// the branch is already on the hyperdrive when the write fails.
@@ -714,19 +754,41 @@ describe("a failure after the branch is pushed", () => {
 		// Read-only `.git`, so the manifest LOCK cannot be taken. (Replacing
 		// spaces.yaml with a directory does not work: the manifest's replay
 		// path runs `git reset --hard`, which puts the file straight back.)
+		const driveGitDir = join(fixture.hyperHome, "drive", ".git");
+		chmodSync(driveGitDir, 0o500);
 
-		chmodSync(join(fixture.hyperHome, "drive", ".git"), 0o500);
+		try {
+			const result = spawnCli(
+				["space", "init", root, "--cadence", "manual", "--tracked", "extra"],
+				fixture,
+			);
+			expect(result.status).not.toBe(0);
+			const err = flat(result.stderr);
+			expect(err).toContain("space/manifest-fails");
+			expect(err).toContain("--refresh");
+			expect(err).not.toContain("at Init.run");
+			// The truth of the claim: the branch IS on the hyperdrive, and it
+			// carries the tracked directory the manifest never got to record.
+			expect(remoteTree("space/manifest-fails")).toEqual([
+				".gitignore",
+				"data/d.json",
+				"extra/e.md",
+				"notes/a.md",
+			]);
 
-		const result = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
-		expect(result.status).not.toBe(0);
-		const err = flat(result.stderr);
-		expect(err).toContain("space/manifest-fails");
-		expect(err).toContain("--refresh");
-		expect(err).not.toContain("at Init.run");
-		// The truth of the claim: the branch IS on the hyperdrive.
-		expect(remoteTree("space/manifest-fails")).toEqual([".gitignore", "data/d.json", "notes/a.md"]);
-		// Restored so the fixture's cleanup is not fighting a read-only dir.
-		chmodSync(join(fixture.hyperHome, "drive", ".git"), 0o700);
+			// NIT 9: run the recovery the message prescribes. `extra` exists only
+			// in the space's own git dir so far, so this is the assertion that a
+			// lost manifest write loses nothing.
+			chmodSync(driveGitDir, 0o700);
+			const recovery = spawnCli(["space", "init", root, "--refresh"], fixture);
+			expect(recovery.status, flat(recovery.stderr)).toBe(0);
+			expect(localTracked(root)).toEqual(["extra"]);
+			expect(manifestFromCheckout("manifest-fails")?.tracked).toEqual(["extra"]);
+		} finally {
+			// Restored even when an assertion above throws, so the fixture's
+			// cleanup is not left fighting a read-only directory.
+			chmodSync(driveGitDir, 0o700);
+		}
 	});
 });
 
@@ -771,5 +833,257 @@ describe("probes from round 1", () => {
 		expect(flat(refresh.stderr)).not.toContain("no remote.origin.url");
 		// Still recorded truthfully as no repos, not invented.
 		expect(manifestFromCheckout("no-origin")?.repos).toEqual([]);
+	});
+});
+
+/**
+ * Round-2 review. Every one of these fails against the round-1 code, which is
+ * the point: they are written as the reviewer's reproductions, not as a
+ * description of the fix.
+ */
+describe("a failed run puts the space back", () => {
+	it("MAJOR 1: a refused refresh restores the .gitignore it replaced", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("restore-allowlist");
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		const before = readFileSync(join(root, ".gitignore"), "utf-8");
+
+		// Repro A: the secret guard refuses AFTER the allowlist was re-rendered.
+		mkdirSync(join(root, "extra"), { recursive: true });
+		writeFileSync(join(root, "extra", ".env"), "TOKEN=secret\n");
+		const refused = spawnCli(["space", "init", root, "--refresh", "--tracked", "extra"], fixture);
+		expect(refused.status).not.toBe(0);
+		// The allowlist is exactly what it was — not deleted, not half-rendered.
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
+		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(true);
+
+		// Repro B: the same, with a push the hyperdrive refuses.
+		rmSync(join(root, "extra", ".env"), { force: true });
+		rejectSpacePushes(true);
+		writeFileSync(join(root, "extra", "note.md"), "extra\n");
+		const pushRefused = spawnCli(["space", "init", root, "--refresh"], fixture);
+		expect(pushRefused.status).not.toBe(0);
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toBe(before);
+		// And the space is still safe to re-run: the worktrees are still ignored.
+		rejectSpacePushes(false);
+		expect(spawnCli(["space", "init", root, "--refresh"], fixture).status).toBe(0);
+		expect(remoteTree("space/restore-allowlist")).not.toContain("worktrees/");
+	});
+
+	it("MAJOR 2: --tracked survives a refused push and a failed manifest write", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("sticky-tracked");
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+
+		// The push the hyperdrive refuses: `more` is added, and the run dies
+		// before the manifest is ever written.
+		rejectSpacePushes(true);
+		mkdirSync(join(root, "more"), { recursive: true });
+		writeFileSync(join(root, "more", "m.md"), "more\n");
+		const failed = spawnCli(["space", "init", root, "--refresh", "--tracked", "more"], fixture);
+		expect(failed.status).not.toBe(0);
+		expect(manifestFromCheckout("sticky-tracked")?.tracked ?? []).toEqual([]);
+		// The truth is in the space's OWN git dir (C-11), which the run wrote
+		// before the commit.
+		expect(localTracked(root)).toEqual(["more"]);
+		// So the recovery the error message prescribes keeps it.
+		rejectSpacePushes(false);
+		const recovered = spawnCli(["space", "init", root, "--refresh"], fixture);
+		expect(recovered.status, flat(recovered.stderr)).toBe(0);
+		expect(localTracked(root)).toEqual(["more"]);
+		expect(manifestFromCheckout("sticky-tracked")?.tracked).toEqual(["more"]);
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toContain("!/more/**");
+		expect(remoteTree("space/sticky-tracked")).toContain("more/m.md");
+	});
+
+	it("MAJOR 3: a first init against an unreachable hyperdrive leaves no git dir", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		// A real checkout first: `ensureDriveCheckout` then only warns about the
+		// missing remote, and the failure has to happen further in.
+		expect(
+			spawnCli(
+				["drive", "init", "--remote", fixture.remote, "--name", "m", "--home", "/tmp"],
+				fixture,
+			).status,
+		).toBe(0);
+		const root = makeSpace("unreachable");
+
+		const moved = `${fixture.remote}.away`;
+		renameSync(fixture.remote, moved);
+		const offline = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		renameSync(moved, fixture.remote);
+		expect(offline.status).not.toBe(0);
+		expect(flat(offline.stderr)).toContain("hyperdrive");
+		// The whole point: nothing was left for the next run to trip over.
+		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(false);
+		expect(existsSync(join(root, ".gitignore"))).toBe(false);
+
+		// And with the hyperdrive back, plain init works.
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+		expect(remoteHasRef("space/unreachable")).toBe(true);
+	});
+});
+
+describe("one name, one branch", () => {
+	it("MAJOR 4: a name already on another branch is refused", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const first = makeSpace("in-a");
+		expect(
+			spawnCli(
+				["space", "init", first, "--name", "shared", "--group", "a", "--cadence", "manual"],
+				fixture,
+			).status,
+		).toBe(0);
+
+		// A different directory, the same name, a different group.
+		const second = makeSpace("in-b");
+		const clash = spawnCli(
+			["space", "init", second, "--name", "shared", "--group", "b", "--cadence", "manual"],
+			fixture,
+		);
+		expect(clash.status).not.toBe(0);
+		const err = flat(clash.stderr);
+		expect(err).toContain("space/a/shared");
+		expect(err).toContain("--name");
+		// The first space's entry is untouched — not overwritten by the second.
+		expect(manifestFromCheckout("shared")?.branch).toBe("space/a/shared");
+		expect(existsSync(join(second, ".hyper", "space.git"))).toBe(false);
+
+		// And refreshing the first keeps ITS OWN tracked list, not the other's.
+		mkdirSync(join(first, "only-a"), { recursive: true });
+		expect(
+			spawnCli(
+				[
+					"space",
+					"init",
+					first,
+					"--group",
+					"a",
+					"--name",
+					"shared",
+					"--refresh",
+					"--tracked",
+					"only-a",
+				],
+				fixture,
+			).status,
+		).toBe(0);
+		expect(manifestFromCheckout("shared")?.tracked).toEqual(["only-a"]);
+		expect(localTracked(first)).toEqual(["only-a"]);
+	});
+});
+
+describe("failures that reach the hyperdrive", () => {
+	it("MINOR 5: a branch that moved on says so, and names no command that doesn't exist", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("moved-on");
+		expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+
+		// Another machine pushed a different history onto this branch.
+		const main = git(["--git-dir", fixture.remote, "rev-parse", "main"], fixture.root).trim();
+		git(
+			["--git-dir", fixture.remote, "update-ref", "refs/heads/space/moved-on", main],
+			fixture.root,
+		);
+		git(
+			["--git-dir", fixture.remote, "update-ref", "refs/remotes/origin/space/moved-on", main],
+			fixture.root,
+		);
+		writeFileSync(join(root, "notes", "diverge.md"), "mine\n");
+
+		const result = spawnCli(["space", "init", root, "--refresh"], fixture);
+		expect(result.status).not.toBe(0);
+		const err = flat(result.stderr);
+		expect(err).toContain("moved on");
+		expect(err).toContain("another machine");
+		// git's own hint names `git pull`, which for a space branch is not a
+		// thing anyone should be told to type.
+		expect(err).not.toContain("git pull");
+		expect(err).not.toContain("non-fast-forward");
+	});
+
+	it("MINOR 5: an unreachable hyperdrive says where it could not reach", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		expect(
+			spawnCli(
+				["drive", "init", "--remote", fixture.remote, "--name", "m", "--home", "/tmp"],
+				fixture,
+			).status,
+		).toBe(0);
+		const root = makeSpace("gone-remote");
+		const moved = `${fixture.remote}.away`;
+		renameSync(fixture.remote, moved);
+		const offline = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		renameSync(moved, fixture.remote);
+		expect(offline.status).not.toBe(0);
+		const err = flat(offline.stderr);
+		expect(err).toContain("couldn't reach your hyperdrive");
+		expect(err).toContain(fixture.remote);
+		expect(err).not.toContain("No such file or directory");
+	});
+});
+
+describe("hyper's own allowlist", () => {
+	it("MINOR 6: a hyper-written .gitignore is recognised even when it differs", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("own-render");
+		expect(
+			spawnCli(["space", "init", root, "--cadence", "manual", "--tracked", "extra"], fixture)
+				.status,
+		).toBe(0);
+
+		// Lose the git dir (a machine that re-inits from scratch) and init again
+		// with no --tracked: today's render differs from the file on disk, and
+		// the marker says the file is still hyper's.
+		rmSync(join(root, ".hyper", "space.git"), { recursive: true, force: true });
+		// The branch goes with it: a space re-initialised from nothing has no
+		// history to push over the one already there, and that is a different
+		// story (T-7's) than the one this test is about.
+		git(
+			["--git-dir", fixture.remote, "update-ref", "-d", "refs/heads/space/own-render"],
+			fixture.root,
+		);
+		const again = spawnCli(["space", "init", root, "--cadence", "manual"], fixture);
+		expect(again.status, flat(again.stderr)).toBe(0);
+		// And the space keeps what it had: `hyper.tracked` was in the git dir we
+		// just deleted, but the manifest still has it.
+		expect(manifestFromCheckout("own-render")?.tracked).toEqual(["extra"]);
+		expect(readFileSync(join(root, ".gitignore"), "utf-8")).toContain("!/extra/**");
+	});
+});
+
+describe("tracked entries are normalised", () => {
+	it("NIT 8: `extra` and `extra/` are one entry everywhere", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		writeConfig();
+		const root = makeSpace("normalised");
+		expect(
+			spawnCli(
+				[
+					"space",
+					"init",
+					root,
+					"--cadence",
+					"manual",
+					"--tracked",
+					"extra",
+					"--tracked",
+					"./more/",
+				],
+				fixture,
+			).status,
+		).toBe(0);
+		expect(
+			spawnCli(["space", "init", root, "--refresh", "--tracked", "extra/"], fixture).status,
+		).toBe(0);
+		expect(localTracked(root)).toEqual(["extra", "more"]);
+		expect(manifestFromCheckout("normalised")?.tracked).toEqual(["extra", "more"]);
 	});
 });

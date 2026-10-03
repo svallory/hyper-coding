@@ -344,3 +344,42 @@ export function writeCadence(spaceRoot: string, cadence: SyncCadence): void {
 	}
 	spaceGit(spaceRoot, ["config", "--local", "hyper.cadence", cadence]);
 }
+
+/**
+ * The space's tracked directories, as recorded in its OWN git dir
+ * (`hyper.tracked`, one value per directory) — C-11's rule applied to the
+ * allowlist: the git config is the truth, not a copy of it in the manifest.
+ *
+ * Read with `--get-all` through `config --local`, so a `hyper.tracked` in a
+ * user's global config can never answer for a space.
+ */
+export function readTracked(spaceRoot: string): string[] {
+	const { status, stdout } = spaceGit(
+		spaceRoot,
+		["config", "--local", "--get-all", "hyper.tracked"],
+		{
+			allowFailure: true,
+		},
+	);
+	if (status !== 0) return [];
+	return stdout
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line !== "");
+}
+
+/**
+ * Replace the space's tracked directories with `tracked`.
+ *
+ * `--unset-all` first rather than `--replace-all`: `replace-all` edits the
+ * first line in place and leaves any further lines as they were, which would
+ * resurrect a removed entry on the next read.
+ */
+export function writeTracked(spaceRoot: string, tracked: readonly string[]): void {
+	spaceGit(spaceRoot, ["config", "--local", "--unset-all", "hyper.tracked"], {
+		allowFailure: true,
+	});
+	for (const entry of tracked) {
+		spaceGit(spaceRoot, ["config", "--local", "--add", "hyper.tracked", entry]);
+	}
+}

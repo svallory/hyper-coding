@@ -124,7 +124,17 @@ const FORBIDDEN_IN_ENTRY: ReadonlyArray<readonly [string, string]> = [
 	["\\", "`\\` (it escapes the next character)"],
 ];
 
-function normalizeTrackedEntry(raw: string): string {
+/**
+ * Reduce one `tracked` entry to the plain relative directory name the
+ * allowlist renders (`./extra/` → `extra`), refusing anything that could change
+ * the meaning of the rendered rules.
+ *
+ * Exported because callers keep a LIST: `hyper space init` merges the entry's
+ * `--tracked` flags with what the space already has, and `extra` and `extra/`
+ * have to collapse to one entry or the same directory gets rendered (and, once
+ * stored, published) twice.
+ */
+export function normaliseTrackedEntry(raw: string): string {
 	if (raw.trim() === "") {
 		throw new AllowlistError(
 			`A tracked entry can't be empty or just spaces, but I got ${JSON.stringify(raw)}.`,
@@ -190,21 +200,45 @@ function normalizeTrackedEntry(raw: string): string {
 }
 
 /**
+ * The line that marks a `.gitignore` as hyper's own render of the allowlist.
+ *
+ * It is a trailing comment so the design's rules keep the file's first line and
+ * their order exactly as design.md writes them (C-4 is checked against them),
+ * and it is what `hyper space init` recognises instead of comparing bytes: a
+ * space that was initialised with `--tracked extra` holds a legitimate render
+ * that differs from today's, and that is not a user's file.
+ */
+export const ALLOWLIST_MARKER =
+	"# hyper space allowlist — written by `hyper space init`, re-rendered by --refresh";
+
+/**
+ * Does this `.gitignore` hold hyper's marker line?
+ *
+ * The test `hyper space init` uses to tell "hyper wrote this" from "the user
+ * wrote this", so it answers YES for a render that differs from what today's
+ * `--tracked` would produce — which is the whole point.
+ */
+export function isHyperAllowlist(contents: string): boolean {
+	return contents.split("\n").some((line) => line.trim() === ALLOWLIST_MARKER);
+}
+
+/**
  * Render the space's tracked `.gitignore`: the base allowlist plus one
- * `!/<entry>` + `!/<entry>/**` pair per extra `tracked` entry. Entries are
- * normalised (`./x/` → `x`); absolute paths, `..` escapes, empty or `.`
- * segments, surrounding spaces, globs, comment or negation characters,
- * newlines and empty entries are refused — a `tracked` entry is a plain
- * directory name, and anything else could rewrite the allowlist or render a
- * rule that matches nothing. Deterministic, trailing newline, and free of
- * duplicates apart from the safety tail, which is deliberately re-emitted
- * after the tracked pairs (see SAFETY_TAIL).
+ * `!/<entry>` + `!/<entry>/**` pair per extra `tracked` entry, the safety tail
+ * when a tracked pair could shadow it, and the marker line last. Entries are
+ * normalised (`./x/` → `x`) by {@link normaliseTrackedEntry}; absolute paths,
+ * `..` escapes, empty or `.` segments, surrounding spaces, globs, comment or
+ * negation characters, newlines and empty entries are refused — a `tracked`
+ * entry is a plain directory name, and anything else could rewrite the
+ * allowlist or render a rule that matches nothing. Deterministic, trailing
+ * newline, and free of duplicates apart from the safety tail, which is
+ * deliberately re-emitted after the tracked pairs (see SAFETY_TAIL).
  */
 export function renderGitignore(tracked: string[] = []): string {
 	const lines: string[] = [...BASE_ALLOWLIST];
 	const seen = new Set(lines);
 	for (const raw of tracked) {
-		const entry = normalizeTrackedEntry(raw);
+		const entry = normaliseTrackedEntry(raw);
 		for (const line of [`!/${entry}/`, `!/${entry}/**`]) {
 			if (seen.has(line)) continue;
 			seen.add(line);
@@ -215,6 +249,7 @@ export function renderGitignore(tracked: string[] = []): string {
 	// base list is already verbatim (and C-4 checks it line for line), so the
 	// tail would add nothing but noise.
 	if (tracked.length > 0) lines.push(...SAFETY_TAIL);
+	lines.push(ALLOWLIST_MARKER);
 	return `${lines.join("\n")}\n`;
 }
 
