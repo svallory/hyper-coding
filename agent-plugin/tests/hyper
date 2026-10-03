@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Test shim: make `hyper` resolvable on PATH for the plugin's bash suite.
+#
+# The plugin scripts no longer ship hyper-lib.sh (C-5) — they source the one
+# inside the @hypercli/drive package, located via `hyper space lib-path`. So the
+# suite now needs a real `hyper` on PATH. This shim points at the workspace CLI,
+# exactly the way ci.yml and agent-plugin.yml expose it.
+#
+# The CLI must be built before running the suite:
+#
+#   bun install
+#   cd packages/drive && bun run build     # must build first — CLI plugin host
+#   cd packages/cli   && bun run build
+#   bash agent-plugin/tests/run.sh
+#
+# Not a mock: it execs the real entrypoint, so the suite exercises the same
+# path resolution an installed user would hit.
+
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/packages/cli/bin/run.js" "$@"

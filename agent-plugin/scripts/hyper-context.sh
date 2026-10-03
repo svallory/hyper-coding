@@ -4,7 +4,15 @@
 # costs nothing in unrelated projects.
 
 set -uo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/hyper-lib.sh" 2>/dev/null || exit 0
+# Silent when the hyper CLI is missing: this hook runs on every SessionStart
+# and must not fail a session in an unrelated project. hyper_soft_lib returns
+# non-zero instead of exiting, so the hook keeps deciding for itself.
+source "$(dirname "${BASH_SOURCE[0]}")/hyper-require-lib.sh" 2>/dev/null || exit 0
+hyper_soft_lib || exit 0
+# shellcheck source=hyper-require-lib.sh
+# hyper_lib is assigned by hyper_require_lib / hyper_soft_lib in that helper.
+# shellcheck disable=SC1090,SC2154  # hyper_lib is set by the helper above
+source "$hyper_lib"
 
 root="$(find_space_root "$PWD")" || exit 0
 name="$(basename "$root")"

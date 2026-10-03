@@ -5,8 +5,14 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 # hyper-lib.sh turns on strict mode when sourced; the harness must not
-# abort on the first failing assertion, so switch it back off.
-source "$SCRIPTS_DIR/hyper-lib.sh"
+# abort on the first failing assertion, so switch it back off. It lives in the
+# CLI now (C-5); helpers.sh puts a `hyper` shim on PATH, and this resolves it.
+source "$SCRIPTS_DIR/hyper-require-lib.sh"
+hyper_require_lib
+# shellcheck source=hyper-require-lib.sh
+# hyper_lib is assigned by hyper_require_lib / hyper_soft_lib in that helper.
+# shellcheck disable=SC1090,SC2154  # hyper_lib is set by the helper above
+source "$hyper_lib"
 set +eu
 set +o pipefail
 

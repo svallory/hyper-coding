@@ -18,7 +18,12 @@
 # Nothing is ever deleted, in any mode, on any path.
 
 set -euo pipefail
-source "$(dirname "${BASH_SOURCE[0]}")/hyper-lib.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/hyper-require-lib.sh"
+hyper_require_lib
+# shellcheck source=hyper-require-lib.sh
+# hyper_lib is assigned by hyper_require_lib / hyper_soft_lib in that helper.
+# shellcheck disable=SC1090,SC2154  # hyper_lib is set by the helper above
+source "$hyper_lib"
 
 root=""
 apply=0
