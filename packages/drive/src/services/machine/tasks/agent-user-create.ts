@@ -27,9 +27,8 @@
  * 2. **Root never touches a path inside the agent's home.** The agent controls
  *    everything there and can plant symlinks; root following one is root
  *    writing wherever it points. So the config dir, the symlinks and the
- *    .bashrc lines are all done by `runuser -u <agent>`, as the agent. Root's
- *    only business in there is metadata: the dir's owner and mode, and a
- *    named-user ACL so the primary user can read it for the checks and no more.
+ *    .bashrc lines and all metadata/ACLs are done by `runuser -u <agent>`.
+ *    Root has no business touching any path under that home.
  *
  * Every step is guarded, so running the script twice changes nothing (C-15) —
  * and hyper never runs it (C-6).
@@ -43,6 +42,7 @@ import {
 	SUDOERS_DIR,
 } from "#services/machine/root-script";
 import { shellQuote } from "#services/remote";
+import { COLLAB_GROUP, SHARED_ENTRIES } from "./agent-acl.js";
 import {
 	agentHomeOf,
 	agentUserOf,
@@ -50,16 +50,10 @@ import {
 	homeOf,
 	primaryUserOf,
 } from "./agent-context.js";
-import { runScript } from "./shell.js";
+import { runScript, shellCommand } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 // TaskError is a class, so it is imported as a value; the rest are types.
 import { TaskError } from "./types.js";
-
-/** The group both users share. Not `users`: nothing else on the machine should be in it. */
-const COLLAB_GROUP = "collab";
-
-/** The entries symlinked into the agent's own config dir, by name. */
-const SHARED_ENTRIES = ["projects", "settings.json", "CLAUDE.md", "skills", "commands", "agents"];
 
 /**
  * Read-only answers, one `key=value` line each.
@@ -175,6 +169,10 @@ export const agentUserCreate: Task = {
 	title: "the user agents run as, and the group it shares with you",
 
 	async check(ctx: TaskContext): Promise<boolean> {
+		const no = (why: string): false => {
+			ctx.log(`agent-user.create: not settled — ${why}. Run the root script, then re-run setup.`);
+			return false;
+		};
 		const agentUser = await agentUserOf(ctx);
 		// Refuse before probing anything, so a hostile name is a message rather
 		// than a probe full of interpolated values.
@@ -182,40 +180,38 @@ export const agentUserCreate: Task = {
 		const primaryUser = await primaryUserOf(ctx);
 		const agentHome = await agentHomeOf(ctx, agentUser);
 		const result = await runScript(ctx, probe(agentUser, primaryUser, agentHome));
-		if (result.code !== 0) return false;
+		if (result.code !== 0) return no(`the probe failed: ${result.stderr.trim() || result.code}`);
 		const parsed = parseProbe(result.stdout);
 		// The same resolution `agent-user.dirs` uses, so the two agree on what the
 		// symlinks are supposed to point at.
 		const primaryHome = await homeOf(ctx);
 
-		if (!parsed.hasSetfacl || !parsed.hasInotify) return false;
-		if (!parsed.agentExists || !parsed.collabGroup) return false;
-		if (!parsed.agentGroups.includes(COLLAB_GROUP)) return false;
-		if (!parsed.primaryGroups.includes(COLLAB_GROUP)) return false;
-		// The three absences.
-		if (parsed.dropInEntry) return false;
-		if (parsed.agentGroups.includes(PRIVILEGED_GROUP)) return false;
-		if (parsed.agentGroups.includes(DOCKER_GROUP)) return false;
-		// The agent's config dir exists and belongs to the agent.
-		if (!parsed.agentConfigDir || parsed.agentConfigOwner !== agentUser) return false;
-		for (const [name, target] of parsed.links) {
-			if (target === "missing" || target !== `${primaryHome}/.claude/${name}`) return false;
-		}
-		if (!parsed.agentBashrcUmask || !parsed.agentBashrcPhysical) return false;
-		// Linger is what lets the agent's own systemd --user unit keep running
-		// with no session of its own — the watcher depends on it.
-		if (!parsed.linger) return false;
-		// A collab login group is a REFUSAL, not a "needs doing" state: nothing
-		// here can fix it, and setting up anyway would hand the agent everything
-		// the primary writes. It throws rather than returning false, because a
-		// plain false would leave the runner assembling a root script the user is
-		// being told to run — which would then refuse again, in a different place.
+		// Refuse before any repairable missing fact can send the runner to apply.
 		if (refusesCollabLoginGroup(parsed.primaryLoginGroup)) {
 			throw new TaskError(
 				"agent-user.create",
 				`Your login group on ${ctx.machine?.name ?? "this machine"} is \`${COLLAB_GROUP}\`. With the shared umask (002) that would hand the agent user read and write on every file you create, including the ones this setup keeps private. Give yourself a login group of your own (\`usermod -g <you> <you>\`) and re-run — I've changed nothing.`,
 			);
 		}
+		if (!parsed.hasSetfacl || !parsed.hasInotify) return no("acl or inotify-tools is missing");
+		if (!parsed.agentExists || !parsed.collabGroup)
+			return no("the agent user or collab group is missing");
+		if (!parsed.agentGroups.includes(COLLAB_GROUP)) return no("the agent is not in collab");
+		if (!parsed.primaryGroups.includes(COLLAB_GROUP))
+			return no("the primary user is not in collab");
+		if (parsed.dropInEntry) return no("the agent has a privilege drop-in");
+		if (parsed.agentGroups.includes(PRIVILEGED_GROUP))
+			return no("the agent is in the privileged group");
+		if (parsed.agentGroups.includes(DOCKER_GROUP)) return no("the agent is in the docker group");
+		if (!parsed.agentConfigDir || parsed.agentConfigOwner !== agentUser)
+			return no("the agent config directory is missing or has the wrong owner");
+		for (const [name, target] of parsed.links) {
+			if (target !== `${primaryHome}/.claude/${name}`)
+				return no(`the agent's ${name} link points at ${target}`);
+		}
+		if (!parsed.agentBashrcUmask || !parsed.agentBashrcPhysical)
+			return no("the agent's .bashrc lacks umask or physical-cd settings");
+		if (!parsed.linger) return no("linger is disabled for the agent");
 		return true;
 	},
 
@@ -231,8 +227,7 @@ export const agentUserCreate: Task = {
 #
 # Everything INSIDE the agent's own home is done by the agent itself, through
 # runuser: that account can plant symlinks there, and root following one is root
-# writing wherever it points. Root's only business in there is the directory's
-# owner and mode, and a read-only ACL for you.
+# writing wherever it points. All metadata and ACLs there are the agent's work.
 #
 # Every step is guarded, so running this twice changes nothing.
 
@@ -352,11 +347,18 @@ function agentOwnedBlock(): string {
 			`      ln -sfn "$target" "$link"\n` +
 			`    fi`,
 	).join("\n");
-	return `runuser -u "$agent_user" -- sh -c '
-set -eu
+	const body = `set -eu
 home="$(getent passwd "$1" | cut -d: -f6)"
 primary_home="$(getent passwd "$2" | cut -d: -f6)"
 primary_claude="$primary_home/.claude"
+# Refuse every symlink we would create through or change, before any mutation.
+# This refusal runs as the AGENT; root still touches no agent-controlled path.
+for path in "$home" "$home/.claude" "$home/.bashrc"; do
+  if [ -L "$path" ]; then
+    echo "hyper: $path is a symlink; refusing agent home setup" >&2
+    exit 1
+  fi
+done
 mkdir -p "$home/.claude"
 chmod 0750 "$home/.claude"
 
@@ -378,5 +380,6 @@ ${links}
 touch "$home/.bashrc"
 grep -q "umask 002" "$home/.bashrc" || printf "\\n# hyper: files here are shared with the primary user\\numask 002\\n" >> "$home/.bashrc"
 grep -q "^set -o physical$" "$home/.bashrc" || printf "set -o physical\\n" >> "$home/.bashrc"
-' _ "$agent_user" "$primary_user"`;
+`;
+	return `runuser -u "$agent_user" -- ${shellCommand(body)} "$agent_user" "$primary_user"`;
 }

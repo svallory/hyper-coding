@@ -46,12 +46,11 @@ work_real="$(cd "$work" && pwd -P)"
 key="$work_real/id"
 
 cleanup() {
-  echo "# tearing down $container"
-  podman rm -f "$container" >/dev/null 2>&1 || true
-  # KEEP=1 leaves the logs behind for debugging a failing run.
   if [ "${KEEP:-0}" = "1" ]; then
-    echo "# KEEP=1 — logs left in $work_real"
+    echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
   else
+    echo "# tearing down $container"
+    podman rm -f "$container" >/dev/null 2>&1 || true
     rm -rf "$work_real"
   fi
 }
@@ -115,6 +114,8 @@ podman run -d --name "$container" --systemd=always -p "$port":22 "$derived" /sbi
 echo "# started $container"
 
 pexec() { podman exec "$container" sh -c "$1"; }
+fixture_token="$(basename "$work_real")"
+pexec "printf '%s' '$fixture_token' > /run/hyper-t16-fixture"
 
 # systemd has to be up before anything else works (loginctl, user units).
 pexec 'for i in $(seq 1 90); do systemctl is-system-running >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1' \
@@ -145,7 +146,7 @@ pexec '/usr/sbin/sshd'
 echo "# sshd started"
 
 ssh_t16() {
-  /usr/bin/ssh -i "$key" -p "$port" \
+  /usr/bin/ssh -F /dev/null -o ControlMaster=no -o ControlPath=none -i "$key" -p "$port" \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -o LogLevel=ERROR -o ConnectTimeout=10 \
     "$primary@localhost" "$@"
@@ -170,8 +171,8 @@ ssh_t16 "printf 'top-level-secret\n' > /home/$primary/topsecret.txt && chmod 064
 ssh_t16 "printf '{\"history\":\"before\"}\n' > /home/$primary/.claude/history.jsonl && chmod 0644 /home/$primary/.claude/history.jsonl"
 ssh_t16 "printf '{\"token\":\"secret\"}' > /home/$primary/.claude/.credentials.json"
 ssh_t16 "chmod 0600 /home/$primary/.claude/.credentials.json"
-ssh_t16 "printf '{\"model\":\"claude\"}' > /home/$primary/.claude/settings.json"
-ssh_t16 "printf '# shared\n' > /home/$primary/.claude/CLAUDE.md"
+# Leave both optional shared files absent until setup settles; missing files
+# must not cause endless repair attempts or masked setfacl errors.
 
 # --------------------------------------------------------------------------
 # hyper's view of the machine: a temp config and a fake herdr (T-10's grammar,
@@ -195,7 +196,7 @@ chmod +x "$work_real/bin/herdr"
 # ssh config of our own, reached by pointing HOME at a scratch dir — the
 # operator's real ~/.ssh is never touched.
 ssh_home="$work_real/sshhome"
-mkdir -p "$ssh_home/.ssh"
+mkdir -p "$ssh_home/.ssh" "$work_real/claude-empty"
 cat > "$ssh_home/.ssh/config" <<SSHCFG
 Host t16box
   HostName localhost
@@ -238,9 +239,24 @@ features = ["agent-user"]
 agent_user = "$agent"
 TOML
 
-run_hyper() {
+run_isolated() {
   PATH="$work_real/bin:$PATH" HYPER_DRIVE_CONFIG="$work_real/drive.toml" \
-    HOME="$ssh_home" NO_COLOR=1 bun "$cli" machine setup t16 --features agent-user --yes
+    HOME="$ssh_home" CLAUDE_CONFIG_DIR="$work_real/claude-empty" HYPER_MACHINE_SCRATCH="$work_real/scratch" \
+    HYPER_T16_CONTAINER_TEST=1 HYPER_T16_TOKEN="$fixture_token" NO_COLOR=1 bun "$@"
+}
+run_hyper() { run_isolated "$cli" machine setup t16 --features agent-user --yes; }
+run_dirs() { run_isolated "$here/run-agent-user-dirs.ts"; }
+stop_watcher() {
+  ssh_t16 'systemctl --user stop claude-share-watch.service' || die 'could not stop watcher'
+  [ "$(ssh_t16 'systemctl --user is-active claude-share-watch.service' || true)" = inactive ] \
+    || die 'watcher is not stopped'
+}
+start_watcher() {
+  # This harness deliberately toggles the service more than systemd's burst
+  # limit. Reset that counter, not product policy or test outcomes.
+  ssh_t16 'systemctl --user reset-failed claude-share-watch.service && systemctl --user start claude-share-watch.service' || die 'could not start watcher'
+  # Active != watching: wait until all three inotify descriptors have watches.
+  ssh_t16 'for _ in $(seq 1 50); do n=0; for p in $(pgrep -u "$(id -u)" -x inotifywait); do if grep -qs "^inotify" /proc/$p/fdinfo/*; then n=$((n + 1)); fi; done; [ "$n" = 3 ] && exit 0; sleep 0.1; done; exit 1' || die 'watcher never became ready'
 }
 
 # --------------------------------------------------------------------------
@@ -260,9 +276,16 @@ for round in 1 2 3 4; do
     root_script="$(grep -o "[^ ]*hyper-machine-root\.sh" "$work_real/setup-$round.log" | head -1)"
     [ -n "$root_script" ] || die "run $round said root work was pending but named no script"
     echo "# the harness runs the root script itself, over ssh, with sudo"
-    scp -q -i "$key" -P "$port" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    scp -F /dev/null -o ControlMaster=no -o ControlPath=none -q -i "$key" -P "$port" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
       -o LogLevel=ERROR "$root_script" "$primary@localhost:/tmp/hyper-machine-root.sh"
     ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" || die "the root script failed on round $round"
+    if [ "$round" = 1 ]; then
+      # Seed the old reference layout AND owning-collab roots. Named-user
+      # traverse must win over the owning group's read access; no group-write
+      # on the home, which would violate sshd StrictModes.
+      ssh_t16 "chgrp collab /home/$primary /home/$primary/.claude; setfacl -m g::r-x,g:collab:--x /home/$primary /home/$primary/.claude; setfacl -d -m g:collab:r-x /home/$primary /home/$primary/.claude"
+      ssh_t16 "sudo usermod -aG collab nobody; sudo sh -c 'printf foreign > /home/$primary/root-owned.txt; setfacl -b /home/$primary/root-owned.txt; chmod 0644 /home/$primary/root-owned.txt'"
+    fi
     continue
   fi
   [ "$code" = 0 ] || { cat "$work_real/setup-$round.log"; die "setup exited $code on round $round"; }
@@ -285,15 +308,28 @@ grep -q "Nothing needed" "$work_real/setup-$round.log" \
   && pass "a re-run after the root script reports nothing needed (C-15)"
 grep -q "already fine: agent-user.create" "$work_real/setup-$round.log" \
   && pass "agent-user.create is satisfied after the root script ran"
-grep -q "already fine: agent-user.dirs" "$work_real/setup-$round.log" \
+grep -q "already fine: .*agent-user.dirs" "$work_real/setup-$round.log" \
   && pass "agent-user.dirs is satisfied after its own apply"
-grep -q "already fine: agent-user.watcher" "$work_real/setup-$round.log" \
+grep -q "already fine: .*agent-user.watcher" "$work_real/setup-$round.log" \
   && pass "agent-user.watcher is enabled, active and lingering"
 
 # --------------------------------------------------------------------------
 # The assertions
 # --------------------------------------------------------------------------
 as_agent() { ssh_t16 "sudo -u $agent $*"; }
+pass 'setup settles with settings.json and CLAUDE.md both missing'
+grep -q "cannot protect, not owned by $primary: 1 entries; /home/$primary/root-owned.txt" "$work_real/setup-$round.log" || die 'missing unowned-entry warning'
+grep -q "other members of collab.*nobody" "$work_real/setup-$round.log" || die 'missing extra collab member warning'
+ssh_t16 "test \"\$(stat -c %U /home/$primary/root-owned.txt)\" = root && ! getfacl -c -p /home/$primary/root-owned.txt | grep -q 'user:$agent:'" || die 'unowned entry was modified'
+pass 'unowned entries and extra collab members warn without making setup unsettled'
+ssh_t16 "! getfacl -c -p /home/$primary /home/$primary/.claude | grep -E '^(default:)?group:collab:'" || die 'legacy root collab ACL remains'
+pass 'setup migrates the old reference root ACLs to named-user entries'
+start_watcher
+ssh_t16 "printf '{\"model\":\"claude\"}' > /home/$primary/.claude/settings.json; printf '# shared\n' > /home/$primary/.claude/CLAUDE.md"
+for _ in $(seq 1 5); do
+  as_agent "cat /home/$primary/.claude/settings.json /home/$primary/.claude/CLAUDE.md" >/dev/null 2>&1 && break
+  sleep 1
+done
 
 if as_agent true && as_agent "sudo -n true" >/dev/null 2>&1; then
   die "the agent could run a privileged command — the layout is not safe"
@@ -305,7 +341,7 @@ if as_agent "docker ps" >/dev/null 2>&1; then
 fi
 pass "docker ps fails as $agent"
 
-as_agent "mkdir -p /home/$primary/work && printf 'from the agent\n' > /home/$primary/work/from-agent.txt" \
+as_agent "bash -c \"mkdir -p /home/$primary/work && printf 'from the agent\\n' > /home/$primary/work/from-agent.txt\"" \
   || die "the agent could not create a file in the shared work dir"
 pass "the agent can create a file in /home/$primary/work"
 
@@ -328,16 +364,31 @@ pass "the agent can read its own CLAUDE.md"
 if as_agent "ls /home/$primary/.claude" >/dev/null 2>&1; then
   die "the agent can LIST the primary's config dir — traverse-only is not in place"
 fi
-pass "the agent cannot list the primary's config dir (traverse only)"
+as_agent "ls /home/$primary" >/dev/null 2>&1 && die 'the agent can list the collab-owned home'
+pass "the agent cannot list collab-owned home/config roots (named-user traverse only)"
 
 # --------------------------------------------------------------------------
-# Part B: the deny. A named-group entry that matches decides access outright, so
-# `g:collab:---` denies the agent whatever the file's own mode says.
+# Part B: a named-user entry is decisive BEFORE all group-class matches.
+# user:<agent>:--- still needs the mask-zero/other-bit guard below.
 # --------------------------------------------------------------------------
 denied() {
   # Readable by the agent? 0 = no (good), anything else = yes (bad).
   as_agent "cat '$1'" >/dev/null 2>&1 && echo yes || echo no
 }
+
+# Kernel premise: named-user denial wins over owning AND named group grants.
+# No watcher or setup runs during these three probes.
+stop_watcher
+ssh_t16 "printf a > /home/$primary/probe-a; printf b > /home/$primary/probe-b; mkdir /home/$primary/probe-dir; printf inside > /home/$primary/probe-dir/inside; setfacl -b /home/$primary/probe-a /home/$primary/probe-b /home/$primary/probe-dir; chgrp collab /home/$primary/probe-a /home/$primary/probe-dir; sudo chgrp $agent /home/$primary/probe-b; chmod 0644 /home/$primary/probe-a; chmod 0640 /home/$primary/probe-b; chmod 0755 /home/$primary/probe-dir; setfacl -m u:$agent:--- /home/$primary/probe-a /home/$primary/probe-b /home/$primary/probe-dir; setfacl -m g:collab:r-- /home/$primary/probe-b"
+ssh_t16 "getfacl -p /home/$primary/probe-a /home/$primary/probe-b /home/$primary/probe-dir"
+[ "$(denied "/home/$primary/probe-a")" = no ] || die 'named-user deny lost to owning collab'
+pass 'named-user premise a: collab-owned 0644 file is denied'
+[ "$(denied "/home/$primary/probe-b")" = no ] || die 'named-user deny lost to another matching group'
+pass 'named-user premise b: another owning group and named collab grant cannot override denial'
+[ "$(denied "/home/$primary/probe-dir/inside")" = no ] || die 'named-user directory deny allows traversal'
+as_agent "ls /home/$primary/probe-dir" >/dev/null 2>&1 && die 'named-user directory deny allows listing'
+pass 'named-user premise c: collab-owned directory cannot be listed or traversed'
+start_watcher
 
 # 1. Entries that existed BEFORE setup: a 0644 top-level file, and a 0755
 #    directory holding a 0644 gh token file — the case from the reference server.
@@ -358,9 +409,11 @@ done
 pass "1 - a pre-existing 0644 file, and a 0644 gh token under ~/.config, are unreadable"
 
 # 2. A file created AFTER setup, relying on the inherited default.
+stop_watcher
 ssh_t16 "printf 'after\n' > /home/$primary/late.txt && chmod 0644 /home/$primary/late.txt"
 [ "$(denied "/home/$primary/late.txt")" = "no" ] || die "the agent can read a 0644 file created after setup"
 pass "2 - a 0644 top-level file created AFTER setup is unreadable (inherited default)"
+start_watcher
 
 # 3. The classic write pattern: write a temp file, then rename it over the
 #    target. The new inode is a different object with different ACLs.
@@ -371,7 +424,7 @@ pass "3 - ~/.bashrc replaced by temp-file-and-rename is unreadable"
 # 4. Widening the mode cannot reopen what the deny closed...
 ssh_t16 "printf 'chmodtest\n' > /home/$primary/chmodtest.txt && chmod 0644 /home/$primary/chmodtest.txt"
 for mode in 644 g+r 777; do
-  ssh_t16 "chmod $mode /home/$primary/chmodtest.txt" || true
+  ssh_t16 "chmod $mode /home/$primary/chmodtest.txt"
   [ "$(denied "/home/$primary/chmodtest.txt")" = "no" ] \
     || die "the agent can read chmodtest.txt after \`chmod $mode\`"
 done
@@ -382,7 +435,7 @@ done
 # readable through "other" even though getfacl still shows the deny. The
 # watcher has to notice the attribute change and strip the other bits.
 for mode in 604 704; do
-  ssh_t16 "chmod $mode /home/$primary/chmodtest.txt" || true
+  ssh_t16 "chmod $mode /home/$primary/chmodtest.txt"
   healed=no
   for _ in $(seq 1 5); do
     [ "$(denied "/home/$primary/chmodtest.txt")" = "no" ] && healed=yes && break
@@ -395,20 +448,24 @@ for mode in 604 704; do
 done
 
 # ...and the next setup run must also repair it, not only the watcher.
-ssh_t16 "chmod 604 /home/$primary/chmodtest.txt" || true
-set +e
-run_hyper > "$work_real/setup-chmod.log" 2>&1
-set -e
+stop_watcher
+ssh_t16 "chmod 604 /home/$primary/chmodtest.txt"
+[ "$(denied "/home/$primary/chmodtest.txt")" = "yes" ] || die '604 fixture is not exposed'
+run_dirs > "$work_real/setup-chmod.log" 2>&1 || { cat "$work_real/setup-chmod.log"; die 'dirs repair failed'; }
 [ "$(denied "/home/$primary/chmodtest.txt")" = "no" ] \
-  || die "a plain setup run did not repair an entry left in the 604 state"
-pass "4c - the next setup run repairs an entry left in the 604 state"
+  || die "setup did not repair an entry left in the 604 state"
+pass "4c - setup repairs the 604 state with the watcher stopped"
+start_watcher
 
 # 4d. A file CREATED with a bad mode after setup is unreadable immediately, with
 # no watcher reaction needed: the inherited default carries o::---.
-ssh_t16 "printf 'made604\n' > /home/$primary/made604.txt && chmod 604 /home/$primary/made604.txt"
+stop_watcher
+# open(O_CREAT, 0604), not chmod after creation (which bypasses inheritance).
+ssh_t16 "perl -e 'sysopen(my \$f, \"/home/$primary/made604.txt\", 193, 0604) or die \$!; print \$f \"made604\\n\";'"
 [ "$(denied "/home/$primary/made604.txt")" = "no" ] \
   || die "a file created with mode 604 after setup is readable by the agent"
 pass "4d - a file created with mode 604 after setup is unreadable immediately"
+start_watcher
 pass "4 - still unreadable after chmod 644, chmod g+r and chmod 777"
 
 # 5. The config dir: denied by default, shared entries readable, and the two
@@ -416,10 +473,12 @@ pass "4 - still unreadable after chmod 644, chmod g+r and chmod 777"
 for f in "/home/$primary/.claude/history.jsonl"; do
   [ "$(denied "$f")" = "no" ] || die "the agent can read the pre-existing $f"
 done
+stop_watcher
 ssh_t16 "printf '{\"h\":1}\n' > /home/$primary/.claude/late.jsonl && chmod 0644 /home/$primary/.claude/late.jsonl"
 [ "$(denied "/home/$primary/.claude/late.jsonl")" = "no" ] \
   || die "the agent can read a 0644 file created in ~/.claude after setup"
 pass "5a - pre-existing and new 0644 files in ~/.claude are both unreadable"
+start_watcher
 
 [ "$(denied "/home/$primary/.claude/settings.json")" = "yes" ] \
   || die "the agent cannot read settings.json"
@@ -455,11 +514,18 @@ as_agent "bash -c \"printf 'from the agent\\n' > /home/$primary/.claude/projects
 as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>&1 \
   || die "the agent cannot read what it wrote into projects/"
 pass "6 - the agent still reads and writes the work dir and projects/"
+# Agent-owned drift cannot be repaired by the primary; it must warn without
+# preventing a later privacy repair. A work-tree symlink must not be followed.
+as_agent "chgrp agent /home/$primary/work/agent-dir/f.txt"
+as_agent "ln -s /home/$primary/topsecret.txt /home/$primary/work/agent-link"
 
 # 7. ssh must keep working for the PRIMARY after the deny lands on ~/.ssh: the
-#    deny is on the shared group, and sshd logs in as the owner.
+#    deny names the agent user; sshd logs in as the owner.
 ssh_t16 "ssh-keygen -q -t ed25519 -N '' -f /home/$primary/.ssh/after-setup <<<y" >/dev/null 2>&1
-ssh_t16 "cp /home/$primary/.ssh/after-setup.pub /home/$primary/.ssh/authorized_keys.new && mv /home/$primary/.ssh/authorized_keys.new /home/$primary/.ssh/authorized_keys"
+# Preserve the harness key and prove the fresh key separately, with multiplexing off.
+ssh_t16 "cat /home/$primary/.ssh/authorized_keys /home/$primary/.ssh/after-setup.pub > /home/$primary/.ssh/authorized_keys.new && mv /home/$primary/.ssh/authorized_keys.new /home/$primary/.ssh/authorized_keys"
+ssh_t16 "ssh -F /dev/null -o ControlMaster=no -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i /home/$primary/.ssh/after-setup $primary@localhost true" \
+  || die "the primary could not log in with its fresh key"
 ssh_t16 true >/dev/null 2>&1 || die "ssh stopped working for the primary after the deny (StrictModes)"
 pass "7 - a fresh key and a renamed authorized_keys still let the primary ssh in"
 
@@ -474,7 +540,7 @@ as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>
 
 # The watcher: a 0600 file, written by its owner, becomes group-readable.
 #
-# The file is made in /tmp — NOT in projects/ — and asserted there, then moved
+# The file is made in work/ — NOT in projects/ — and asserted there, then moved
 # into the watched dir. Two reasons, both about not writing a flaky test:
 #   - the default ACL on projects/ would hand a newly created file group-read
 #     anyway, so creating it there would not prove the watcher did anything;
@@ -483,10 +549,11 @@ as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>
 # A file MOVED in keeps the mode it was created with — default ACLs apply at
 # creation, to the directory being created in — so after the move the only
 # thing that can widen it is the watcher.
-ssh_t16 "printf '{\"session\":\"abc\"}\n' > /tmp/live.jsonl && chmod 0600 /tmp/live.jsonl"
-mode_before="$(ssh_t16 'stat -c %a /tmp/live.jsonl')"
+ssh_t16 "printf '{\"session\":\"abc\"}\n' > /home/$primary/work/live.jsonl && chmod 0600 /home/$primary/work/live.jsonl"
+mode_before="$(ssh_t16 "stat -c %a /home/$primary/work/live.jsonl")"
 [ "$mode_before" = "600" ] || die "the fixture file is $mode_before, expected 600"
-ssh_t16 "mv /tmp/live.jsonl /home/$primary/.claude/projects/x/live.jsonl"
+[ "$(ssh_t16 "stat -c %d /home/$primary/work/live.jsonl")" = "$(ssh_t16 "stat -c %d /home/$primary/.claude/projects/x")" ] || die 'transcript move is not on one filesystem'
+ssh_t16 "mv /home/$primary/work/live.jsonl /home/$primary/.claude/projects/x/live.jsonl"
 
 shared=0
 for _ in $(seq 1 5); do
@@ -523,32 +590,54 @@ pass "the as-agent helper runs a command as $agent"
 # Stopping must be VERIFIED. The unit is Restart=always, so a stop that did not
 # take leaves the watcher re-applying the deny before setup's check ever runs —
 # which looks exactly like "the check does not detect drift".
-ssh_t16 "systemctl --user stop claude-share-watch.service" >/dev/null 2>&1 || true
-for _ in $(seq 1 5); do
-  [ "$(ssh_t16 "systemctl --user is-active claude-share-watch.service 2>/dev/null" || true)" = "active" ] || break
-  sleep 1
-done
-[ "$(ssh_t16 "systemctl --user is-active claude-share-watch.service 2>/dev/null" || true)" != "active" ] \
-  || die "could not stop the watcher; assertion 8a would test nothing"
-ssh_t16 "setfacl -x g:collab /home/$primary/late.txt"
+stop_watcher
+ssh_t16 "setfacl -x u:$agent /home/$primary/late.txt"
 [ "$(denied "/home/$primary/late.txt")" = "yes" ] \
   || die "removing the deny did not make the file readable — the fixture is wrong"
+echo '# drift getfacl before setup'
+ssh_t16 "getfacl -c -p /home/$primary/late.txt; stat -c '%a %U %G' /home/$primary/late.txt"
+# Render the REAL check through a recording runner; execute it only in this container.
+bun "$here/render-agent-user-probe.ts" "$work_real/dirs-probe.sh"
+podman cp "$work_real/dirs-probe.sh" "$container:/tmp/dirs-probe.sh"
+echo '# drift check probe before setup'
+podman exec "$container" runuser -u "$primary" -- sh /tmp/dirs-probe.sh
 set +e
-run_hyper > "$work_real/setup-drift.log" 2>&1
+run_dirs > "$work_real/setup-drift.log" 2>&1
 drift_code=$?
 set -e
-if [ "$drift_code" = 0 ] && ! grep -q "Nothing needed" "$work_real/setup-drift.log"; then
-  die "setup neither restored the deny nor reported the drift"
-fi
+[ "$drift_code" = 0 ] || { cat "$work_real/setup-drift.log"; die "dirs repair exited $drift_code"; }
+grep -q '"applied":\["agent-user.dirs"\]' "$work_real/setup-drift.log" || die 'dirs was not applied'
 if ! grep -q "late.txt" "$work_real/setup-drift.log"; then
   die "setup did not NAME the entry whose deny was missing"
 fi
-ssh_t16 "systemctl --user start claude-share-watch.service" >/dev/null 2>&1 || true
-pass "8a - removing a deny makes setup name the file and restore it"
+ssh_t16 "getfacl -c -p /home/$primary/late.txt | grep -qx 'user:$agent:---'" || die 'deny not restored'
+mode="$(ssh_t16 "stat -c %a /home/$primary/late.txt")"
+case "$mode" in *[0-7]0[1-7]) die 'late.txt is still in the bad state' ;; esac
+[ "$(denied "/home/$primary/late.txt")" = no ] || die 'late.txt remains readable after dirs repair'
+[ "$(ssh_t16 'systemctl --user is-active claude-share-watch.service' || true)" = inactive ] || die 'watcher masked the repair'
+grep -q '1 agent-owned work entries have the wrong group' "$work_real/setup-drift.log" || die 'missing agent-owned drift warning'
+[ "$(denied "/home/$primary/topsecret.txt")" = no ] || die 'shared-tree repair followed a symlink'
+[ "$(ssh_t16 "stat -c %G /home/$primary/work/agent-dir/f.txt")" = agent ] || die 'primary rewrote agent-owned metadata'
+pass "8a - setup names and repairs the removed deny BEFORE watcher restart"
+pass '8a-ownership - warns on agent-owned drift and skips shared-tree symlinks'
+# Also cover an inode with NO extended ACL at all, not just a removed named entry.
+ssh_t16 "setfacl -b /home/$primary/late.txt && chmod 0644 /home/$primary/late.txt"
+[ "$(denied "/home/$primary/late.txt")" = yes ] || die 'no-ACL fixture is not exposed'
+run_dirs > "$work_real/setup-no-acl.log" 2>&1 || { cat "$work_real/setup-no-acl.log"; die 'no-ACL repair failed'; }
+grep -q late.txt "$work_real/setup-no-acl.log" || die 'no-ACL repair did not name the file'
+[ "$(denied "/home/$primary/late.txt")" = no ] || die 'no-ACL file was not reprotected'
+pass '8a-no-acl - setup repairs an inode with no extended ACL while watcher is stopped'
+start_watcher
+run_hyper > "$work_real/setup-after-drift.log" 2>&1 || { cat "$work_real/setup-after-drift.log"; die 'full CLI setup failed'; }
+[ "$(denied "/home/$primary/late.txt")" = no ] || die 'full CLI left late.txt readable'
+pass '8a-full - the full CLI also leaves late.txt protected'
 
 # 8b. A file moved in from elsewhere on the same filesystem keeps the ACLs it
 #     came with — the case the watcher exists to close.
-ssh_t16 "printf 'moved in\n' > /tmp/moved-in.txt && chmod 0644 /tmp/moved-in.txt && mv /tmp/moved-in.txt /home/$primary/moved-in.txt"
+ssh_t16 "printf 'moved in\n' > /home/$primary/work/moved-in.txt && setfacl -b /home/$primary/work/moved-in.txt && chmod 0644 /home/$primary/work/moved-in.txt"
+[ "$(ssh_t16 "stat -c %d /home/$primary/work/moved-in.txt")" = "$(ssh_t16 "stat -c %d /home/$primary")" ] || die 'home move is not on one filesystem'
+[ "$(denied "/home/$primary/work/moved-in.txt")" = yes ] || die 'move fixture must be readable before moving'
+ssh_t16 "mv /home/$primary/work/moved-in.txt /home/$primary/moved-in.txt"
 moved_denied=no
 for _ in $(seq 1 5); do
   [ "$(denied "/home/$primary/moved-in.txt")" = "no" ] && moved_denied=yes && break
@@ -556,6 +645,39 @@ for _ in $(seq 1 5); do
 done
 [ "$moved_denied" = "yes" ] || die "a file moved into the home was not denied within 5s"
 pass "8b - a 0644 file moved into the home is denied within 5s (the watcher)"
+
+# Move a whole collab-owned directory: denying its top level must also block
+# full-path reads below it, without recursively rewriting its children.
+ssh_t16 "mkdir /home/$primary/work/moved-dir; printf nested > /home/$primary/work/moved-dir/inside; setfacl -R -b /home/$primary/work/moved-dir; chmod 0755 /home/$primary/work/moved-dir; chmod 0644 /home/$primary/work/moved-dir/inside"
+[ "$(denied "/home/$primary/work/moved-dir/inside")" = yes ] || die 'directory move fixture is not readable'
+ssh_t16 "mv /home/$primary/work/moved-dir /home/$primary/moved-dir"
+healed=no
+for _ in $(seq 1 5); do
+  if [ "$(denied "/home/$primary/moved-dir/inside")" = no ] && ! as_agent "ls /home/$primary/moved-dir" >/dev/null 2>&1; then healed=yes; break; fi
+  sleep 1
+done
+[ "$healed" = yes ] || die 'moved directory remains listable or traversable after 5s'
+pass '8b-directory - watcher protects a collab-owned moved directory and full-path reads below it'
+
+# The same moves with the watcher stopped must remain exposed UNTIL setup.
+stop_watcher
+ssh_t16 "printf stopped > /home/$primary/work/stopped-file; mkdir /home/$primary/work/stopped-dir; printf nested > /home/$primary/work/stopped-dir/inside; setfacl -R -b /home/$primary/work/stopped-file /home/$primary/work/stopped-dir; chmod 0644 /home/$primary/work/stopped-file /home/$primary/work/stopped-dir/inside; chmod 0755 /home/$primary/work/stopped-dir; mv /home/$primary/work/stopped-file /home/$primary/stopped-file; mv /home/$primary/work/stopped-dir /home/$primary/stopped-dir"
+[ "$(denied "/home/$primary/stopped-file")" = yes ] || die 'stopped file move was not exposed'
+[ "$(denied "/home/$primary/stopped-dir/inside")" = yes ] || die 'stopped directory move was not exposed'
+as_agent "ls /home/$primary/stopped-dir" >/dev/null 2>&1 || die 'stopped directory cannot be listed before repair'
+run_dirs > "$work_real/setup-moved.log" 2>&1 || { cat "$work_real/setup-moved.log"; die 'setup failed on moved collab-owned entries'; }
+grep -q stopped-file "$work_real/setup-moved.log" && grep -q stopped-dir "$work_real/setup-moved.log" || die 'setup did not name moved entries'
+[ "$(denied "/home/$primary/stopped-file")" = no ] || die 'setup did not protect moved file'
+[ "$(denied "/home/$primary/stopped-dir/inside")" = no ] || die 'setup did not protect moved directory traversal'
+as_agent "ls /home/$primary/stopped-dir" >/dev/null 2>&1 && die 'setup did not protect moved directory listing'
+[ "$(ssh_t16 'systemctl --user is-active claude-share-watch.service' || true)" = inactive ] || die 'watcher masked moved-entry repair'
+pass '8c - setup protects moved file and directory with exit 0 BEFORE watcher restart'
+start_watcher
+ssh_t16 "printf regrouped > /home/$primary/regrouped; chmod 0644 /home/$primary/regrouped; chgrp collab /home/$primary/regrouped"
+healed=no
+for _ in $(seq 1 5); do [ "$(denied "/home/$primary/regrouped")" = no ] && healed=yes && break; sleep 1; done
+[ "$healed" = yes ] || die 'chgrp collab exposed a protected entry'
+pass '8d - chgrp collab cannot bypass the named-user deny on a home-created file'
 
 # --------------------------------------------------------------------------
 # Running the root script a second time changes nothing (C-15)
@@ -587,9 +709,9 @@ pass "running the root script twice is a no-op (C-15)"
 # symlink at a root-owned canary, re-run the script, and require the canary to
 # come out untouched.
 canary="/etc/hyper-t16-canary"
-# A DIRECTORY, and one the agent can actually write to. Pointed at a FILE, mkdir
+# A root-owned DIRECTORY, not writable by the agent. Pointed at a FILE, mkdir
 # aborts on the old code and the new code alike, so the assertion proved nothing;
-# pointed at a writable root-owned directory, root chown/chmod/setfacl on the
+# pointed at a root-owned directory, root chown/chmod/setfacl on the
 # path would change it and that is what we are testing for.
 ssh_t16 "sudo sh -c 'rm -rf $canary && mkdir -p $canary && chown root:root $canary && chmod 0755 $canary && printf CANARY > $canary/inside'"
 before_canary="$(ssh_t16 "sudo stat -c '%U %G %a' $canary && sudo getfacl -c -p $canary | sort")"
@@ -599,11 +721,12 @@ before_canary="$(ssh_t16 "sudo stat -c '%U %G %a' $canary && sudo getfacl -c -p 
 # the second would silently run as the primary user instead.
 as_agent "bash -c 'rm -rf /home/$agent/.claude && ln -s $canary /home/$agent/.claude'" \
   || die "could not plant the symlink as the agent"
-# The script must FINISH: refusing the hostile layout is fine, following the link
-# is not, and an abort on the planted dir would hide which of the two happened.
-if ! ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1; then
-  die "the root script did not finish with the planted symlink in place"
+# Lead r3 ruling: explicit refusal BEFORE mutation, not success or a chmod error.
+if ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" > "$work_real/canary.log" 2>&1; then
+  die "the root script silently accepted the planted symlink"
 fi
+grep -q '/home/agent/.claude is a symlink; refusing agent home setup' "$work_real/canary.log" \
+  || { cat "$work_real/canary.log"; die 'missing explicit symlink refusal'; }
 after_canary="$(ssh_t16 "sudo stat -c '%U %G %a' $canary && sudo getfacl -c -p $canary | sort")"
 if [ "$before_canary" != "$after_canary" ]; then
   die "root followed the agent's planted symlink: canary changed from '$before_canary' to '$after_canary'"

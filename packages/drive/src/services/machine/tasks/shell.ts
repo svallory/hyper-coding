@@ -11,8 +11,13 @@
  * quotes the whole snippet, so its spaces survive.
  */
 
-import type { RunResult } from "#services/remote";
+import { type RunResult, shellJoin } from "#services/remote";
 import type { TaskContext } from "./types.js";
+
+/** Embed a shell program as one argument, never by hand-written quote delimiters. */
+export function shellCommand(script: string): string {
+	return shellJoin(["sh", "-c", script, "_"]);
+}
 
 /** Run one snippet on the target. Never throws on a non-zero exit — checks test the code. */
 export async function runScript(ctx: TaskContext, script: string): Promise<RunResult> {

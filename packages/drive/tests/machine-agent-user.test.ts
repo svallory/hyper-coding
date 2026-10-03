@@ -18,7 +18,17 @@
  *    script the user reads.
  */
 
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -32,6 +42,14 @@ import {
 } from "#services/machine/root-script";
 import { type RootChoice, runSetup, type SetupPrompt } from "#services/machine/runner";
 import {
+	accessPolicyShell,
+	accessRepairShell,
+	unownedEntriesShell,
+	unprotectedEntriesShell,
+} from "#services/machine/tasks/agent-acl";
+import { agentPaths } from "#services/machine/tasks/agent-context";
+import { repairSharedTree, unsettledSharedTree } from "#services/machine/tasks/agent-shared-tree";
+import {
 	WATCHER_BIN,
 	WATCHER_UNIT,
 	watcherScript,
@@ -43,8 +61,9 @@ import {
 	agentUserWatcher,
 	allTasks,
 } from "#services/machine/tasks/index";
+import { runOrFail, shellCommand } from "#services/machine/tasks/shell";
 import type { TaskContext } from "#services/machine/tasks/types";
-import type { MachineRunner, RunResult } from "#services/remote";
+import { type MachineRunner, type RunResult, shellQuote } from "#services/remote";
 import { withTempConfig } from "#tests/tmp-config";
 
 const saved = process.env.HYPER_DRIVE_CONFIG;
@@ -177,6 +196,18 @@ const SETTLED_CREATE = [
 /** The answers a correctly set-up machine gives {@link agentUserDirs}' probe. */
 function settledDirs(overrides: Record<string, string> = {}): string {
 	const answers: Record<string, string> = {
+		primary_user: "svallory",
+		collab_members: "svallory,agent,",
+		unowned_top: "",
+		unowned_claude: "",
+		home_legacy_group: "0",
+		claude_legacy_group: "0",
+		work_unsettled: "",
+		projects_unsettled: "",
+		work_agent_wrong_group: "",
+		projects_agent_wrong_group: "",
+		home_default_other: "1",
+		claude_default_other: "1",
 		work_group: "collab",
 		work_setgid: "yes",
 		work_acl: "1",
@@ -219,6 +250,7 @@ function settledDirs(overrides: Record<string, string> = {}): string {
 /** The answers a correctly set-up machine gives {@link agentUserWatcher}'s probe. */
 function settledWatcher(overrides: Record<string, string> = {}): string {
 	const answers: Record<string, string> = {
+		watcher_content: "yes",
 		watcher: "yes",
 		unit: "yes",
 		enabled: "enabled",
@@ -580,26 +612,23 @@ describe("the kernel condition behind the invariant", () => {
 		expect(joined).toContain('[ "$(group_digit "$m")" = 0 ] && [ "$(other_digit "$m")" != 0 ]');
 	});
 
-	it("embeds no single quotes, so the sh -c quoting it is embedded in survives", async () => {
+	it("uses the same read-only policy in apply, check and watcher", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
-		// The helper is injected INTO a `sh -c '...'` block. A single quote of its own
-		// terminates that block, and the snippet becomes garbage that fails silently
-		// — the check just returns false with nothing to show for it.
-		for (const snippet of runner.snippets) {
-			const helper = snippet.slice(snippet.indexOf("mode3() {"), snippet.indexOf("protect()"));
-			if (helper === "") continue;
-			expect(helper.includes("printf '%s'"), "single-quoted printf inside the helper").toBe(false);
-			expect(helper.includes("'---'"), "single-quoted literal inside the helper").toBe(false);
-		}
+		const policy = accessPolicyShell(agentPaths(HOME, "/home/agent"));
+		expect(runner.joined).toContain(policy);
+		const check = recordingRunner();
+		await agentUserDirs.check(ctxFor(check));
+		expect(check.joined).toContain(policy);
+		expect(watcherScript(`${HOME}/.claude/projects`, HOME)).toContain(policy);
 	});
 
 	it("strips the other bits, which is tightening and never widening", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
-		expect(runner.joined).toContain('bad_state "$p" && chmod o-rwx "$p"');
+		expect(runner.joined).toContain('if bad_state "$1"; then chmod o-rwx "$1" || return 1; fi');
 		// Nothing in the whole task may ADD permission.
 		expect(runner.joined).not.toContain("chmod o+");
 		expect(runner.joined).not.toContain("chmod g+w");
@@ -612,13 +641,11 @@ describe("the kernel condition behind the invariant", () => {
 		// A single added entry would make setfacl copy the directory's own group
 		// entry into default:group:: — a 0700 home gives `---`, and then every file
 		// created under it inherits a zero group class and the ACL is skipped.
-		for (const [dir, varName] of [
-			[HOME, "hm"],
-			[`${HOME}/.claude`, "cm"],
-		] as const) {
+		for (const dir of [HOME, `${HOME}/.claude`]) {
+			const varName = "mode";
 			// u::, g:: (read from the directory's own group bits), the deny, o::---.
 			expect(runner.joined, `no full default for ${dir}`).toContain(
-				`setfacl -d -m "u::rwx,g::$(perms_of "$(group_digit "$${varName}")"),g:collab:---,o::---" ${dir}`,
+				`setfacl -d -m "u::rwx,u:$agent_user:---,g::$(perms_of "$(group_digit "$${varName}")"),o::---" ${dir}`,
 			);
 		}
 	});
@@ -628,9 +655,7 @@ describe("the kernel condition behind the invariant", () => {
 		const runner = recordingRunner();
 		await agentUserDirs.check(ctxFor(runner));
 		// The check must never trust the ACL line alone — that is the whole point.
-		expect(runner.joined).toContain(
-			'if ! getfacl -c -p "$p" 2>/dev/null | grep -q "^group:collab:---$" || bad_state "$p"',
-		);
+		expect(runner.joined).toContain('! acl_has "$1" "user:$agent_user:---" || bad_state "$1"');
 	});
 
 	it("the watcher denies NOTHING in the shared config-dir entries", () => {
@@ -639,9 +664,13 @@ describe("the kernel condition behind the invariant", () => {
 		// skills/ (or projects/) the watcher stamped the deny straight back on it and
 		// the check reported it unprotected for ever.
 		const script = watcherScript(`${HOME}/.claude/projects`, HOME);
-		expect(script).toContain("projects|settings.json|CLAUDE.md|skills|commands|agents) : ;;");
+		expect(script).toContain("projects) echo skip ;;");
+		expect(script).toContain("settings.json|CLAUDE.md) echo read_file ;;");
+		expect(script).toContain("skills|commands|agents) echo read_dir ;;");
 		// The deny still applies to everything that is NOT shared.
-		expect(script).toContain('*) protect "$p" ;;');
+		expect(script).toContain(
+			'deny) if unprotected "$1" || legacy_group "$1"; then protect "$1"; fi ;;',
+		);
 	});
 
 	it("the watcher watches attrib, because a chmod IS an attribute change", () => {
@@ -652,8 +681,8 @@ describe("the kernel condition behind the invariant", () => {
 		expect(script).toContain("chmod o-rwx");
 		// The replaced shared files get their grant re-applied, and the same
 		// invariant: a readable-by-grant file in the bad state is still readable.
-		expect(script).toContain("protect_shared()");
-		expect(script).toContain('setfacl -m "g:$deny_group:r--" -m m::r-- "$1"');
+		expect(script).toContain("grant_shared()");
+		expect(script).toContain('setfacl -m "u:$agent_user:$access,m::$access" "$1"');
 	});
 });
 
@@ -668,7 +697,7 @@ describe("agent-user.dirs — the credential boundary", () => {
 			expect(snippet).not.toMatch(/setfacl\s+-R[^;]*\s\/home\/[^/]+\/\.claude(?![/.])/);
 		}
 		// …while the shared transcripts dir IS walked, which is the point of it.
-		expect(runner.joined).toContain(`setfacl -R -m g:collab:rwX ${HOME}/.claude/projects`);
+		expect(runner.joined).toContain(repairSharedTree(`${HOME}/.claude/projects`));
 	});
 
 	it("gives the config dir traverse only, and no default ACL", async () => {
@@ -676,11 +705,13 @@ describe("agent-user.dirs — the credential boundary", () => {
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
 		// Traverse, not read: the agent must not be able to LIST the config dir.
-		expect(runner.joined).toContain(`setfacl -m g:collab:--x ${HOME}/.claude`);
+		expect(runner.joined).toContain(`setfacl -m u:agent:--x ${HOME}/.claude`);
 		// `-k` REMOVES the default ACL an earlier version of this task set there
 		// (it was `g:collab:rX`), and it is replaced by an inherited DENY.
 		expect(runner.joined).toContain(`setfacl -k ${HOME}/.claude`);
-		expect(runner.joined).toContain(`g:collab:---,o::---" ${HOME}/.claude`);
+		expect(runner.joined).toContain(
+			`u:$agent_user:---,g::$(perms_of "$(group_digit "$mode")"),o::---" ${HOME}/.claude`,
+		);
 		// The config dir root is never given a default that GRANTS anything.
 		const commandLines = runner.snippets
 			.join("\n")
@@ -704,9 +735,7 @@ describe("agent-user.dirs — the credential boundary", () => {
 		}
 		// And they must be created BEFORE the grant, or the grant lands on nothing.
 		const created = runner.joined.indexOf(`mkdir -p ${HOME}/.claude/skills`);
-		const granted = runner.joined.indexOf(
-			`setfacl -R -m g:collab:rX -m m::rX ${HOME}/.claude/skills`,
-		);
+		const granted = runner.joined.indexOf('read_file|read_dir) grant_shared "$entry"');
 		expect(created).toBeGreaterThan(-1);
 		expect(granted).toBeGreaterThan(created);
 	});
@@ -715,18 +744,15 @@ describe("agent-user.dirs — the credential boundary", () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
-		for (const name of ["settings.json", "CLAUDE.md"]) {
-			expect(runner.joined).toContain(`setfacl -m g:collab:r-- -m m::r-- ${HOME}/.claude/${name}`);
-		}
-		for (const name of ["skills", "commands", "agents"]) {
-			const dir = `${HOME}/.claude/${name}`;
-			// The mask travels with the grant: while it is restrictive the named
-			// entry is effective-nothing and getfacl prints `#effective:---`.
-			expect(runner.joined).toContain(`setfacl -R -m g:collab:rX -m m::rX ${dir}`);
-			// And the default here must not keep the deny it inherited, or every
-			// file created in the dir later is unreadable to the agent.
-			expect(runner.joined).toContain(`setfacl -d -m u::rwx,g::r-x,g:collab:r-x,o::--- ${dir}`);
-		}
+		expect(runner.joined).toContain(accessRepairShell());
+		expect(runner.joined).toContain("read_file) echo r--");
+		expect(runner.joined).toContain("read_dir) echo r-X");
+		expect(runner.joined).toContain(
+			'find "$1" -type d -exec setfacl -d -m "$(shared_default "$1")" {} +',
+		);
+		expect(runner.joined).toContain(
+			'case "$(entry_kind "$entry")" in read_file|read_dir) grant_shared "$entry"',
+		);
 	});
 
 	it("never applies a default ACL anywhere but projects/, skills, commands and agents", async () => {
@@ -751,7 +777,11 @@ describe("agent-user.dirs — the credential boundary", () => {
 		];
 		for (const line of defaults) {
 			const target = line.split(" ").pop() ?? "";
-			expect(allowed.includes(target), `unexpected default ACL on ${target}`).toBe(true);
+			if (line.includes('"$(shared_default "$1")"')) {
+				expect(line).toBe('setfacl -d -m "$(shared_default "$1")" "$1" || return 1');
+			} else {
+				expect(allowed.includes(target), `unexpected default ACL on ${target}`).toBe(true);
+			}
 		}
 	});
 
@@ -760,48 +790,35 @@ describe("agent-user.dirs — the credential boundary", () => {
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
 		// `--x`: reach work/, but not list the home.
-		expect(runner.joined).toContain(`setfacl -m g:collab:--x ${HOME}`);
+		expect(runner.joined).toContain(`setfacl -m u:agent:--x ${HOME}`);
 		// The deny: everything created under the home from now on.
-		expect(runner.joined).toContain(`g:collab:---,o::---" ${HOME}`);
+		expect(runner.joined).toContain(
+			`u:$agent_user:---,g::$(perms_of "$(group_digit "$mode")"),o::---" ${HOME}`,
+		);
 	});
 
 	it("denies the shared group every top-level entry except work and .claude", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
-		const deny = runner.snippets.filter(
-			(line) => line.includes("g:collab:---") && line.includes("find"),
+		expect(runner.joined).toContain(`for entry in ${HOME}/* ${HOME}/.[!.]* ${HOME}/..?*`);
+		expect(runner.joined).toContain(`    ${HOME}/work|${HOME}/.claude) echo skip; return ;;`);
+		expect(runner.joined).toContain('[ -L "$1" ] || [ ! -e "$1" ]');
+		expect(runner.joined).toContain(
+			'if [ "$(entry_kind "$entry")" = deny ]; then protect "$entry"; fi',
 		);
-		expect(deny.length).toBeGreaterThan(0);
-		const top = deny[0];
-		// ONE level only, never through a symlink, and the shared names excluded.
-		expect(top).toContain("-mindepth 1 -maxdepth 1");
-		expect(top).toContain("! -type l");
-		// The exclusions come from the constants, quoted for the shell.
-		expect(top).toContain("! -name work");
-		expect(top).toContain("! -name .claude");
-		// Never recursive over the home: that would hit every file inside work/.
-		expect(top).not.toContain("-R");
 	});
 
 	it("denies the config dir's children except the shared ones", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
-		const deny = runner.snippets.filter(
-			(line) => line.includes("g:collab:---") && line.includes(HOME) && line.includes("find"),
+		expect(runner.joined).toContain(
+			`for entry in ${HOME}/.claude/* ${HOME}/.claude/.[!.]* ${HOME}/.claude/..?*`,
 		);
-		// Matched on the find TARGET, not on ".claude" appearing anywhere: the
-		// home's own deny also contains that string, as an exclusion.
-		// `contains` rather than `startsWith`: runOrFail prefixes the snippet with
-		// `set -e`, so the find is not the first word on the line.
-		const claudeDeny = deny.find((line) => line.includes(`find ${HOME}/.claude `));
-		expect(claudeDeny).toBeDefined();
-		for (const name of ["projects", "settings.json", "CLAUDE.md", "skills", "commands", "agents"]) {
-			expect(claudeDeny, `not excluded: ${name}`).toContain(`! -name ${name}`);
-		}
-		expect(claudeDeny).toContain("-maxdepth 1");
-		expect(claudeDeny).not.toContain("-R ");
+		expect(runner.joined).toContain("settings.json|CLAUDE.md) echo read_file ;;");
+		expect(runner.joined).toContain("skills|commands|agents) echo read_dir ;;");
+		expect(runner.joined).toContain("projects) echo skip ;;");
 	});
 
 	it("refuses a home on a filesystem that does not do the kernel ACL check", async () => {
@@ -849,7 +866,8 @@ describe("agent-user.dirs — the credential boundary", () => {
 
 	it("fails when a kernel setting the deny relies on is off", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		for (const broken of [{ hardlinks: "0" }, { tiocsti: "1" }]) {
+		const cases: Record<string, string>[] = [{ hardlinks: "0" }, { tiocsti: "1" }];
+		for (const broken of cases) {
 			const runner = recordingRunner([
 				{ match: /printf 'agent_uid=/, result: { stdout: SETTLED_CREATE } },
 				{ match: /printf 'work_group=/, result: { stdout: settledDirs(broken) } },
@@ -880,14 +898,7 @@ describe("agent-user.dirs — the shared dirs", () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const runner = recordingRunner();
 		await agentUserDirs.apply?.(ctxFor(runner));
-		const sequence = [
-			`mkdir -p ${HOME}/work`,
-			`chgrp -R collab ${HOME}/work`,
-			`chmod -R g+rwx ${HOME}/work`,
-			`find ${HOME}/work -type d -exec chmod g+s {} +`,
-			`setfacl -R -d -m g:collab:rwX ${HOME}/work`,
-			`setfacl -R -m g:collab:rwX ${HOME}/work`,
-		];
+		const sequence = [`mkdir -p ${HOME}/work`, ...repairSharedTree(`${HOME}/work`).split("\n")];
 		let at = -1;
 		for (const step of sequence) {
 			const found = runner.joined.indexOf(step, at + 1);
@@ -1046,27 +1057,27 @@ describe("agent-user.watcher", () => {
 		expect(WATCHER_BIN).toBe("claude-share-watch");
 	});
 
-	it("emits the netcup watcher verbatim, with this machine's projects dir", () => {
+	it("emits the shared policy watcher with this machine's paths", () => {
 		const script = watcherScript(`${HOME}/.claude/projects`, HOME);
 		expect(script).toContain("inotifywait -m -r -q -e create -e moved_to -e attrib");
 		expect(script).toContain(`projects=${HOME}/.claude/projects`);
-		expect(script).toContain(`home=${HOME}`);
-		expect(script).toContain(`claude=${HOME}/.claude`);
+		expect(script).toContain(`watch_dir ${HOME} &`);
+		expect(script).toContain(`watch_dir ${HOME}/.claude &`);
 		// `find -user "$me"` is the property that lets this run unprivileged: it
 		// can only widen permissions on files its own user owns.
 		expect(script).toContain('-user "$me"');
 		expect(script).toContain("chmod g+rw");
 		// The deny work: new entries in the home and the config dir.
-		expect(script).toContain('setfacl -m "g:$deny_group:---" "$p"');
+		expect(script).toContain('setfacl -m "u:$agent_user:---" "$1"');
 		expect(script).toContain("settings.json|CLAUDE.md");
 		expect(script).toContain("inotifywait -m -q -e create -e moved_to");
 		// …re-granting read on the two shared files when they are replaced.
 		// …and re-grants read when the file is replaced, since the inherited
 		// default now denies it. The grant lives in protect_shared, so it is
 		// applied with that function's own parameter.
-		expect(script).toContain("protect_shared()");
-		expect(script).toContain('grep -q "^group:$deny_group:r--$"');
-		expect(script).toContain('setfacl -m "g:$deny_group:r--" -m m::r-- "$1"');
+		expect(script).toContain("grant_shared()");
+		expect(script).toContain('acl_has "$1" "user:$agent_user:$access"');
+		expect(script).toContain('setfacl -m "u:$agent_user:$access,m::$access" "$1"');
 	});
 
 	it("reports a settled machine as needing nothing (C-15)", async () => {
@@ -1080,7 +1091,12 @@ describe("agent-user.watcher", () => {
 
 	it("fails when the unit is not enabled, active, or lingering", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		for (const broken of [{ enabled: "disabled" }, { active: "inactive" }, { linger: "no" }]) {
+		const cases: Record<string, string>[] = [
+			{ enabled: "disabled" },
+			{ active: "inactive" },
+			{ linger: "no" },
+		];
+		for (const broken of cases) {
 			const runner = recordingRunner([
 				{ match: /printf 'agent_uid=/, result: { stdout: SETTLED_CREATE } },
 				{ match: /printf 'watcher=/, result: { stdout: settledWatcher(broken) } },
@@ -1323,8 +1339,8 @@ describe("blocker 2 — root never touches a path inside the agent's home", () =
 		const offending = asRoot
 			.split("\n")
 			.map((line) => line.trim())
-			.filter((line) => /\$(agent_home|home)\//.test(line))
-			.filter((line) => /\b(chmod|chown|touch)\b|>>/.test(line));
+			.filter((line) => !line.startsWith("#"))
+			.filter((line) => /\$(agent_home|home)\//.test(line));
 		// A1: root does NOTHING under that home. Not even metadata, and not even
 		// behind a not-a-symlink test — the agent's lingering processes can swap the
 		// directory between the test and the use. The agent sets its own mode and
@@ -1441,6 +1457,408 @@ describe("C-6 — the privileged helper text", () => {
 			"utf-8",
 		);
 		expect(source).toContain("export function asAgentScript");
+	});
+});
+
+describe("r3 — real shell probes, diagnostics and quoting", () => {
+	function isolatedHome(): string {
+		const dir = mkdtempSync(join(tmpdir(), "t16-probe-"));
+		const home = join(dir, "home with ' quote");
+		mkdirSync(join(home, ".claude"), { recursive: true });
+		return home;
+	}
+	function statFixture(mode = "644"): string {
+		return `stat() { case "$2" in %u) command id -u ;; *) echo ${mode} ;; esac; }`;
+	}
+	function shell(script: string, home: string) {
+		return spawnSync("sh", ["-c", script], {
+			encoding: "utf8",
+			env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: join(home, "empty-claude") },
+		});
+	}
+
+	it("reports a real top-level file with NO extended ACL (including quoted home paths)", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const home = isolatedHome();
+		try {
+			writeFileSync(join(home, "late.txt"), "fixture");
+			const runner = recordingRunner();
+			await agentUserDirs.check({ ...ctxFor(runner), machine: { ...MACHINE, home } });
+			const probe = runner.snippets.find((s) => s.includes("unprotected_top="))!;
+			// Only the read-only REAL probe executes. getfacl/stat are fixture
+			// functions; no ACL or setup command ever runs on the test host.
+			const result = shell(
+				`getfacl() { printf 'user::rw-\\ngroup::r--\\nother::r--\\n'; }\n${statFixture()}\n${probe}`,
+				home,
+			);
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toContain(`unprotected_top=${home}/late.txt,\n`);
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it.each(["604", "704", "2704", "701"])("reports a deny with kernel-bypass mode %s", (mode) => {
+		const home = isolatedHome();
+		try {
+			writeFileSync(join(home, "late.txt"), "fixture");
+			const result = shell(
+				`getfacl() { printf 'user:agent:---\\n'; }\n${statFixture(mode)}\n${accessPolicyShell(agentPaths(home, "/home/agent"))}\n${unprotectedEntriesShell(home)}`,
+				home,
+			);
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toBe(`${home}/late.txt,`);
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("protects shared-looking names in HOME but skips real shared config entries and symlinks", () => {
+		const home = isolatedHome();
+		try {
+			for (const name of ["skills", "settings.json", ".private", "..private"])
+				writeFileSync(join(home, name), "fixture");
+			for (const name of ["skills", "projects", "commands", "agents"])
+				mkdirSync(join(home, ".claude", name));
+			for (const name of ["settings.json", "CLAUDE.md", "history.jsonl"])
+				writeFileSync(join(home, ".claude", name), "fixture");
+			mkdirSync(join(home, "work"));
+			symlinkSync(join(home, "skills"), join(home, "link"));
+			const result = shell(
+				`getfacl() { printf 'user::rw-\\n'; }\n${statFixture()}\n${accessPolicyShell(agentPaths(home, "/home/agent"))}\n${unprotectedEntriesShell(home)}\n${unprotectedEntriesShell(`${home}/.claude`)}`,
+				home,
+			);
+			expect(result.status, result.stderr).toBe(0);
+			const paths = result.stdout.split(",").filter(Boolean).sort();
+			expect(paths).toEqual(
+				["skills", "settings.json", ".private", "..private", ".claude/history.jsonl"]
+					.map((name) => join(home, name))
+					.sort(),
+			);
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("checks shared grants in getfacl's three-character format, including masks", () => {
+		const home = isolatedHome();
+		try {
+			mkdirSync(join(home, ".claude", "skills"));
+			writeFileSync(join(home, ".claude", "settings.json"), "fixture");
+			const policy = accessPolicyShell(agentPaths(home, "/home/agent"));
+			const directory = shell(
+				`getfacl() { printf 'user:agent:r-x\\ndefault:user:agent:r-x\\ndefault:other::---\\n'; }\n${policy}\nshared_ok ${shellQuote(join(home, ".claude", "skills"))}`,
+				home,
+			);
+			expect(directory.status, directory.stderr).toBe(0);
+			const masked = shell(
+				`getfacl() { printf 'user:agent:r--\\t#effective:---\\n'; }\n${policy}\nshared_ok ${shellQuote(join(home, ".claude", "settings.json"))}`,
+				home,
+			);
+			expect(masked.status).toBe(1);
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("skips watched-root attrib events with a trailing slash", () => {
+		const home = isolatedHome();
+		try {
+			mkdirSync(join(home, "work"));
+			const result = shell(
+				`${accessPolicyShell(agentPaths(home, "/home/agent"))}\nentry_kind ${shellQuote(`${home}/.claude/`)}\nentry_kind ${shellQuote(`${home}/work/`)}\nentry_kind ${shellQuote(`${home}/`)}`,
+				home,
+			);
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toBe("skip\nskip\nskip\n");
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("embeds arbitrary quotes with one sh -c helper", () => {
+		const home = isolatedHome();
+		try {
+			const result = shell(`${shellCommand("printf '%s' \"$1\"")} ${shellQuote(home)}`, home);
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toBe(home);
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("syntax-checks every rendered mutation without executing it, including a quoted home", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		const ctx = { ...ctxFor(runner), machine: { ...MACHINE, home: "/home/a space's" } };
+		await agentUserDirs.apply?.(ctx);
+		await agentUserWatcher.apply?.(ctx);
+		const scripts = [...runner.snippets, agentUserCreate.rootScript!(ctx)];
+		for (const script of scripts) {
+			const result = spawnSync("sh", ["-n"], { input: script, encoding: "utf8" });
+			expect(result.status, result.stderr).toBe(0);
+		}
+	});
+
+	it("joined mutations fail on the first error, with its reason", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const home = isolatedHome();
+		try {
+			let output = "";
+			const runner = {
+				...recordingRunner(),
+				async ssh(argv: string[]) {
+					const result = shell(argv[2], home);
+					output = result.stdout;
+					return { code: result.status ?? 1, stdout: result.stdout, stderr: result.stderr };
+				},
+			};
+			await expect(
+				runOrFail(ctxFor(runner), "test the first error", "false; printf unexpected"),
+			).rejects.toThrow("test the first error");
+			expect(output).toBe("");
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("does not call missing optional settings files unshared", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const home = isolatedHome();
+		try {
+			const runner = recordingRunner();
+			await agentUserDirs.check({ ...ctxFor(runner), machine: { ...MACHINE, home } });
+			const probe = runner.snippets.find((s) => s.includes("unprotected_top="))!;
+			const result = shell(`getfacl() { return 1; }\n${statFixture()}\n${probe}`, home);
+			expect(result.stdout).toContain("read_settings.json=1\n");
+			expect(result.stdout).toContain("read_CLAUDE.md=1\n");
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("always adds an EXISTING agent to collab, not only in useradd", () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const script = agentUserCreate.rootScript!(ctxFor(recordingRunner()));
+		expect(script.split("\n")).toContain('usermod -aG collab "$agent_user"');
+	});
+
+	it("warns rather than failing on agent-owned wrong-group entries", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const logs: string[] = [];
+		const runner = recordingRunner([
+			{
+				match: "unprotected_top=",
+				result: {
+					stdout: settledDirs({ work_agent_wrong_group: "/home/svallory/work/agent-file," }),
+				},
+			},
+		]);
+		expect(await agentUserDirs.check({ ...ctxFor(runner), log: (s) => logs.push(s) })).toBe(true);
+		expect(logs.join("\n")).toContain("1 agent-owned work entries");
+		expect(logs.join("\n")).toContain("agent-file");
+	});
+
+	it("names privacy drift even when a shared tree also needs repair", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const logs: string[] = [];
+		const runner = recordingRunner([
+			{
+				match: "unprotected_top=",
+				result: {
+					stdout: settledDirs({
+						unprotected_top: `${HOME}/late.txt,`,
+						projects_unsettled: `${HOME}/.claude/projects/x/live.jsonl,`,
+					}),
+				},
+			},
+		]);
+		expect(await agentUserDirs.check({ ...ctxFor(runner), log: (line) => logs.push(line) })).toBe(
+			false,
+		);
+		expect(logs.join("\n")).toContain("late.txt");
+	});
+
+	it.each([
+		["rw-", false],
+		["r--", true],
+		["---", true],
+	] as const)("interprets effective shared-file access %s", (effective, missing) => {
+		const home = isolatedHome();
+		try {
+			const dir = join(home, "work");
+			const bin = join(home, "bin");
+			mkdirSync(dir);
+			mkdirSync(bin);
+			const file = join(dir, "shared.txt");
+			writeFileSync(file, "fixture");
+			writeFileSync(join(bin, "stat"), "#!/bin/sh\nprintf 'collab\\n'\n", { mode: 0o755 });
+			writeFileSync(
+				join(bin, "getfacl"),
+				`#!/bin/sh\nif [ -d "$3" ]; then printf 'group:collab:rwx\\ndefault:group:collab:rwx\\n'; else printf 'group:collab:rwx\\t#effective:${effective}\\n'; fi\n`,
+				{ mode: 0o755 },
+			);
+			const result = shell(
+				`PATH=${shellQuote(bin)}:$PATH\nexport PATH\n${unsettledSharedTree(dir)}`,
+				home,
+			);
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout.includes(`${file},`)).toBe(missing);
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("classifies unowned protected entries for warnings, never repair", () => {
+		const home = isolatedHome();
+		try {
+			const file = join(home, "foreign");
+			writeFileSync(file, "fixture");
+			const result = shell(
+				`stat() { echo -1; }\n${accessPolicyShell(agentPaths(home, "/home/agent"))}\nentry_kind ${shellQuote(file)}\n${unprotectedEntriesShell(home)}\n${unownedEntriesShell(home)}`,
+				home,
+			);
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout).toBe(`unowned\n${file},`);
+		} finally {
+			rmSync(join(home, ".."), { recursive: true, force: true });
+		}
+	});
+
+	it("warns without failing for unowned protected entries and other collab members", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const logs: string[] = [];
+		const runner = recordingRunner([
+			{
+				match: "unprotected_top=",
+				result: {
+					stdout: settledDirs({
+						unowned_top: `${HOME}/root-owned,`,
+						collab_members: "svallory,agent,nobody,",
+					}),
+				},
+			},
+		]);
+		expect(await agentUserDirs.check({ ...ctxFor(runner), log: (line) => logs.push(line) })).toBe(
+			true,
+		);
+		expect(logs.join("\n")).toContain(
+			`cannot protect, not owned by svallory: 1 entries; ${HOME}/root-owned`,
+		);
+		expect(logs.join("\n")).toContain(
+			"other members of collab are outside this layout's protection: nobody",
+		);
+	});
+
+	it("requires migration of legacy root group ACLs", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const logs: string[] = [];
+		const runner = recordingRunner([
+			{ match: "unprotected_top=", result: { stdout: settledDirs({ home_legacy_group: "2" }) } },
+		]);
+		expect(await agentUserDirs.check({ ...ctxFor(runner), log: (line) => logs.push(line) })).toBe(
+			false,
+		);
+		expect(logs.join("\n")).toContain("legacy collab ACL");
+	});
+
+	it("replaces an active watcher when its policy content is old", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const logs: string[] = [];
+		const runner = recordingRunner([
+			{ match: "watcher=", result: { stdout: settledWatcher({ watcher_content: "no" }) } },
+		]);
+		expect(
+			await agentUserWatcher.check({ ...ctxFor(runner), log: (line) => logs.push(line) }),
+		).toBe(false);
+		expect(logs.join("\n")).toContain("installed watcher is out of date");
+	});
+
+	it("fails and names primary-owned shared entries that can be repaired", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const logs: string[] = [];
+		const runner = recordingRunner([
+			{
+				match: "unprotected_top=",
+				result: { stdout: settledDirs({ work_unsettled: "/home/svallory/work/primary-file," }) },
+			},
+		]);
+		expect(await agentUserDirs.check({ ...ctxFor(runner), log: (s) => logs.push(s) })).toBe(false);
+		expect(logs.join("\n")).toContain("primary-file");
+	});
+
+	it("filters ALL shared-tree mutations by primary ownership and excludes symlinks", () => {
+		for (const line of repairSharedTree("/home/primary/work").split("\n")) {
+			expect(line).toContain('-user "$(id -u)"');
+			expect(line).toMatch(/! -type l|-type d/);
+			expect(line).not.toContain(" -R ");
+			if (line.includes("chgrp")) expect(line).toContain("chgrp -h collab");
+		}
+	});
+
+	it("refuses unsupported filesystems even when repairable drift exists", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner([
+			{
+				match: "unprotected_top=",
+				result: {
+					stdout: settledDirs({ home_fs: "nfs4", work_unsettled: "/home/svallory/work/x," }),
+				},
+			},
+		]);
+		await expect(agentUserDirs.check(ctxFor(runner))).rejects.toThrow("does not apply POSIX ACLs");
+	});
+
+	it("refuses a collab login group even on an otherwise incomplete machine", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner([
+			{
+				match: "printf 'agent_uid=",
+				result: {
+					stdout: SETTLED_CREATE.replace(
+						"primary_login_group=svallory",
+						"primary_login_group=collab",
+					).replace("acl_tool=yes", "acl_tool=no"),
+				},
+			},
+		]);
+		await expect(agentUserCreate.check(ctxFor(runner))).rejects.toThrow("login group");
+	});
+
+	it("refuses agent-home symlinks before any mutation inside runuser", () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const script = agentUserCreate.rootScript!(ctxFor(recordingRunner()));
+		const start = script.indexOf('runuser -u "$agent_user" -- sh -c');
+		const refusal = script.indexOf("is a symlink; refusing agent home setup", start);
+		expect(refusal).toBeGreaterThan(start);
+		expect(script.indexOf('mkdir -p "$home/.claude"', start)).toBeGreaterThan(refusal);
+		expect(script).toContain('for path in "$home" "$home/.claude" "$home/.bashrc"');
+		expect(script.slice(refusal, script.indexOf('mkdir -p "$home/.claude"', start))).toContain(
+			"exit 1",
+		);
+	});
+
+	it("every unmet create, dirs and watcher fact logs a reason", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		for (const [task, settled, match] of [
+			[agentUserCreate, SETTLED_CREATE, "printf 'agent_uid="],
+			[agentUserDirs, settledDirs(), "unprotected_top="],
+			[agentUserWatcher, settledWatcher(), "printf 'watcher="],
+		] as const) {
+			for (const line of settled.split("\n")) {
+				const [key] = line.split("=");
+				const logs: string[] = [];
+				const runner = recordingRunner([
+					{ match, result: { stdout: settled.replace(line, `${key}=BROKEN`) } },
+				]);
+				const result = await task.check({ ...ctxFor(runner), log: (s) => logs.push(s) });
+				if (!result) expect(logs.join("\n"), `${task.id} ${key}`).toContain("not settled —");
+			}
+			const logs: string[] = [];
+			const runner = recordingRunner([{ match, result: { code: 1, stderr: "probe failed" } }]);
+			expect(await task.check({ ...ctxFor(runner), log: (s) => logs.push(s) })).toBe(false);
+			expect(logs.join("\n")).toContain("probe");
+		}
 	});
 });
 
