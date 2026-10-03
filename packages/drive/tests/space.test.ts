@@ -418,8 +418,11 @@ describe("commands (spawned against the real CLI)", () => {
 		expect(r.status).toBe(1);
 		const err = flat(r.stderr);
 		// Prove the wrap really happened, so this test cannot quietly stop
-		// exercising the normalisation it exists for.
-		expect(r.stderr).toContain("›");
+		// exercising the normalisation it exists for. Counting is stronger than
+		// toContain: one gutter line is just oclif's "Error:" prefix, two or more
+		// proves a continuation line was actually wrapped.
+		const gutterLines = r.stderr.split("\n").filter((l) => /^\s*›/.test(l));
+		expect(gutterLines.length).toBeGreaterThanOrEqual(2);
 		expect(err).toContain("is not inside a hyper space");
 		// Friendly means no stack trace: the oclif error frame, not JS frames.
 		expect(err).not.toContain("at Detect.run");
@@ -444,5 +447,22 @@ describe("commands (spawned against the real CLI)", () => {
 			slug: null,
 			worktreesDir: join(d, "worktrees"),
 		});
+	});
+
+	it("`space detect --json` still prints JSON when it exits 1 outside a space", () => {
+		if (skipIfUnbuilt()) return;
+		const plain = fixturePath("detect-plain-json-cli");
+		mkdirSync(plain, { recursive: true });
+		const r = spawnSync(process.execPath, [cli, "space", "detect", plain, "--json"], {
+			encoding: "utf8",
+			env: { ...process.env, AI_AGENT: undefined, CLAUDECODE: undefined },
+		});
+		// Still a failure, so anything branching on the status is unaffected.
+		expect(r.status).toBe(1);
+		// But a machine caller gets JSON to read rather than an empty stream:
+		// `hyper space detect --json | jq` should see nulls, not die.
+		expect(JSON.parse(r.stdout)).toEqual({ root: null, layout: null });
+		// Prose stays on stderr; it is not mixed into the JSON.
+		expect(flat(r.stderr)).toContain("is not inside a hyper space");
 	});
 });
