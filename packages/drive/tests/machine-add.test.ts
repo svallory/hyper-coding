@@ -12,7 +12,7 @@ import { type SpawnSyncReturns, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, type TestContext } from "vitest";
 import { withTempConfig } from "#tests/tmp-config";
 
 const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
@@ -63,20 +63,22 @@ const flat = (s: string): string =>
 		.replace(/\s+/g, " ")
 		.trim();
 
-function skipIfUnbuilt(): boolean {
+function skipIfUnbuilt(ctx: TestContext): boolean {
 	if (
 		existsSync(cli) &&
 		existsSync(join(import.meta.dirname, "..", "dist", "commands", "machine", "add.js"))
 	) {
 		return false;
 	}
-	expect.skip("cli/drive not built (run `bun run build` in drive and cli first)");
+	// `ctx.skip()`, not `expect.skip()`: the latter is not a vitest API and
+	// throws, failing the very test it was meant to skip.
+	ctx.skip("cli/drive not built (run `bun run build` in drive and cli first)");
 	return true;
 }
 
 describe("machine add", () => {
-	it("writes [machines.<name>] for a machine Herdr knows", () => {
-		if (skipIfUnbuilt()) return;
+	it("writes [machines.<name>] for a machine Herdr knows", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 		const before = readFileSync(configPath, "utf-8");
@@ -103,8 +105,8 @@ describe("machine add", () => {
 		expect(flat(r.stdout)).toContain("netcup");
 	});
 
-	it("records the agent user, defaulting to `agent`", () => {
-		if (skipIfUnbuilt()) return;
+	it("records the agent user, defaulting to `agent`", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 
@@ -115,8 +117,8 @@ describe("machine add", () => {
 		expect(readFileSync(configPath, "utf-8")).toContain('agent_user = "bot"');
 	});
 
-	it("re-running add with one flag changes only that field", () => {
-		if (skipIfUnbuilt()) return;
+	it("re-running add with one flag changes only that field", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 
@@ -136,8 +138,8 @@ describe("machine add", () => {
 		expect(second).toContain('agent_user = "bob"');
 	});
 
-	it("keeps the file to what was there plus the machine", () => {
-		if (skipIfUnbuilt()) return;
+	it("keeps the file to what was there plus the machine", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 
@@ -150,8 +152,8 @@ describe("machine add", () => {
 		expect(written).not.toContain("[warp]");
 	});
 
-	it("a second --features replaces the list rather than adding to it", () => {
-		if (skipIfUnbuilt()) return;
+	it("a second --features replaces the list rather than adding to it", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 
@@ -165,8 +167,8 @@ describe("machine add", () => {
 		expect(written).not.toContain('"tools"');
 	});
 
-	it("rejects a feature that isn't one", () => {
-		if (skipIfUnbuilt()) return;
+	it("rejects a feature that isn't one", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 
@@ -182,8 +184,8 @@ describe("machine add", () => {
 		expect(readFileSync(configPath, "utf-8")).not.toContain("bogus");
 	});
 
-	it("creates the config when there isn't one yet", () => {
-		if (skipIfUnbuilt()) return;
+	it("creates the config when there isn't one yet", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		// A path that does not exist: no drive.toml at all, so the write has to
 		// start from the schema defaults and create every parent it needs.
@@ -198,8 +200,8 @@ describe("machine add", () => {
 		);
 	});
 
-	it("keeps keys this version doesn't know about", () => {
-		if (skipIfUnbuilt()) return;
+	it("keeps keys this version doesn't know about", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		const configPath = withTempConfig(
 			'remote = "git@example:x.git"\n\n[experimental]\nsparkle = true\n',
@@ -211,8 +213,8 @@ describe("machine add", () => {
 		expect(written).toContain("[machines.netcup]");
 	});
 
-	it("an unknown name fails with addHint and writes nothing", () => {
-		if (skipIfUnbuilt()) return;
+	it("an unknown name fails with addHint and writes nothing", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		fakeHerdr();
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 
@@ -227,8 +229,8 @@ describe("machine add", () => {
 		expect(readFileSync(configPath, "utf-8")).not.toContain("nosuch");
 	});
 
-	it("says so plainly when Herdr isn't installed", () => {
-		if (skipIfUnbuilt()) return;
+	it("says so plainly when Herdr isn't installed", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
 		// PATH with no herdr on it at all: execvp fails rather than finding the
 		// real one further down PATH.
 		process.env.PATH = mkdtempSync(join(tmpdir(), "drive-nopath-"));
