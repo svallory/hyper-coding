@@ -9,9 +9,12 @@ import {
 
 /** Shared detection, scoped interruption handling and friendly command errors. */
 export abstract class SpaceCommand<T extends typeof Command> extends BaseCommand<T> {
-	protected inSpace<Result>(debug: boolean, action: (space: InitializedSpace) => Result): Result {
+	protected async inSpace<Result>(
+		debug: boolean,
+		action: (space: InitializedSpace) => Result | Promise<Result>,
+	): Promise<Result> {
 		try {
-			return withSpaceSignals(() => action(requireInitializedSpace()));
+			return await withSpaceSignals(() => action(requireInitializedSpace()));
 		} catch (error) {
 			if (!(error instanceof Error)) throw error;
 			const problem = new Error(error.message);

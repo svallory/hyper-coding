@@ -2,7 +2,12 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { findSecretPaths } from "#services/allowlist";
-import { readStagedBlobPrefix, SpaceGitError, spaceGit } from "#services/space-git";
+import {
+	readSpaceBlobPrefixes,
+	SpaceGitError,
+	SpaceGitInterruptedError,
+	spaceGit,
+} from "#services/space-git";
 
 /** The first matching branch on the remote, or null. */
 export function remoteRef(root: string, remote: string, pattern: string): string | null {
@@ -64,13 +69,21 @@ export function spaceGitRemote(
 	remote: string,
 	args: readonly string[],
 	branch: string,
+	caller: "init" | "daily" = "daily",
 ): void {
 	const result = spaceGit(root, [...args], { allowFailure: true });
 	if (result.status === 0) return;
 	const detail = (result.stderr || result.stdout).trim();
 	const what = `push ${branch}`;
+	// Ref conflicts also carry [remote rejected], but are not hook failures.
+	if (/refname conflict|cannot lock ref/i.test(detail)) {
+		throw new SpacePushRefusedError(
+			`the hyperdrive at ${remote} already has a ref that ${branch} collides with, so it cannot take this branch. Pick a space name that does not collide.`,
+			` Pass \`--name\` or \`--group\` to pick a name that does not collide.`,
+		);
+	}
 	// A hook may itself say "fetch first"; its explicit refusal takes precedence.
-	if (/\[remote rejected\]|hook declined/i.test(detail)) {
+	if (/\((?:pre-receive |update )?hook declined\)/i.test(detail)) {
 		const reason = hookReason(detail);
 		throw new SpacePushRefusedError(
 			`the hyperdrive at ${remote} refused to take ${branch}: a server-side hook declined the push. ` +
@@ -81,17 +94,11 @@ export function spaceGitRemote(
 	if (/(fetch first|non-fast-forward|stale info|behind its remote)/i.test(detail)) {
 		throw new SpacePushRefusedError(
 			`${what} was refused: ${remote} has moved on, so another machine pushed this space's branch ` +
-				`first. Nothing was overwritten — hyper never rewrites a space's history. Run ` +
-				`\`hyper space pull\` to fast-forward if possible; divergent histories need manual reconciliation.`,
+				`first. Nothing was overwritten — hyper never rewrites a space's history. ` +
+				(caller === "init"
+					? "Use a different name to initialise a new space, or reconcile the existing history manually."
+					: "Run `hyper space pull` to fast-forward if possible; divergent histories need manual reconciliation."),
 			` Pass \`--name\` with a different name to initialise a new space.`,
-		);
-	}
-	if (/refname conflict|cannot lock ref/i.test(detail)) {
-		throw new SpacePushRefusedError(
-			`the hyperdrive at ${remote} already has a ref that ${branch} collides with, so it cannot ` +
-				`take this branch. That is the same ambiguity the ref-clash check looks for, seen by the ` +
-				`server instead: \`space/x\` cannot be both a space and the group holding \`space/x/y\`.`,
-			` Pass \`--name\` or \`--group\` to pick a name that does not collide.`,
 		);
 	}
 	throw new SpaceGitError(
@@ -99,7 +106,10 @@ export function spaceGitRemote(
 	);
 }
 
-/** NUL-delimited paths preserve Unicode, whitespace and literal glob characters. */
+/**
+ * -z bypasses core.quotePath: line listings C-quote Unicode and control bytes,
+ * hiding e.g. a non-ASCII directory's .pem from the name guard. Never trim paths.
+ */
 export function stagedPaths(root: string): string[] {
 	return spaceGit(root, ["diff", "--cached", "--name-only", "-z"])
 		.stdout.split("\0")
@@ -116,11 +126,11 @@ export function stagedGitlinks(root: string): string[] {
 }
 
 /** Inspect the index, not disk: deletions are safe and exact overrides never act as globs. */
-export function inspectStagedFiles(
+export async function inspectStagedFiles(
 	root: string,
 	paths: string[],
 	allow: string[] = [],
-): { secrets: string[]; allowedSecrets: string[]; largeFiles: string[] } {
+): Promise<{ secrets: string[]; allowedSecrets: string[]; largeFiles: string[] }> {
 	const entries = new Map<string, string>();
 	for (const entry of spaceGit(root, ["ls-files", "-s", "-z"]).stdout.split("\0")) {
 		if (!entry) continue;
@@ -131,15 +141,19 @@ export function inspectStagedFiles(
 	const secrets: string[] = [];
 	const allowedSecrets: string[] = [];
 	const largeFiles: string[] = [];
+	const blobs = await readSpaceBlobPrefixes(
+		root,
+		paths.flatMap((path) => (entries.has(path) ? [entries.get(path)!] : [])),
+	);
 	for (const path of paths) {
 		const hash = entries.get(path);
 		if (!hash) continue; // Deleted paths have no staged blob to leak.
-		const size = Number(spaceGit(root, ["cat-file", "-s", hash]).stdout.trim());
-		if (size > 50 * 1024 * 1024) largeFiles.push(path);
-		const prefix = readStagedBlobPrefix(root, path);
+		const blob = blobs.get(hash)!;
+		if (blob.size > 50 * 1024 * 1024) largeFiles.push(path);
+		const prefix = blob.prefix.toString("utf8");
 		const secret =
 			findSecretPaths([path]).length > 0 ||
-			/-----BEGIN (?:[^\r\n]* )?PRIVATE KEY-----/.test(prefix);
+			/-----BEGIN (?:[^\r\n]* )?PRIVATE KEY(?: BLOCK)?-----/.test(prefix);
 		if (secret) (allow.includes(path) ? allowedSecrets : secrets).push(path);
 	}
 	return { secrets, allowedSecrets, largeFiles };
@@ -154,107 +168,142 @@ export interface SpaceCommitResult {
 }
 
 /** Stage the allowlist, remove gitlinks, guard secrets and commit without hooks/signing. */
-export function commitSpace(
+export async function commitSpace(
 	root: string,
 	branch: string,
 	message: string,
 	allowSecrets: string[] = [],
-): SpaceCommitResult {
-	const excluded = spaceGit(root, ["ls-files", "--others", "--exclude-standard", "-z"])
-		.stdout.split("\0")
-		.filter((path) => path.endsWith("/") && existsSync(join(root, path, ".git")))
-		.map((path) => path.slice(0, -1));
-	spaceGit(root, [
-		"add",
-		"-A",
-		"--",
-		".",
-		...excluded.map((path) => `:(top,exclude,literal)${path}`),
-	]);
-	const staged = stagedPaths(root);
-	const gitlinks = stagedGitlinks(root);
-	const nested = [...new Set([...excluded, ...gitlinks])];
-	for (const path of gitlinks) {
-		spaceGit(root, ["rm", "--cached", "-q", "-f", "--", `:(literal)${path}`]);
-	}
-	for (const path of nested) {
-		process.stderr.write(
-			`warning: ${path} contains its own git repository; its files are not saved in the space.\n`,
+	caller: "init" | "daily" = "daily",
+): Promise<SpaceCommitResult> {
+	if (message.trim() === "")
+		throw new SpaceGitError(
+			"A commit message cannot be empty. Pass a non-empty `-m` message before trying again.",
 		);
-	}
-	if (nested.length > 0) staged.splice(0, staged.length, ...stagedPaths(root));
-	const inspection = inspectStagedFiles(root, staged, allowSecrets);
-	const { secrets, allowedSecrets, largeFiles } = inspection;
-	for (const path of allowedSecrets)
-		process.stderr.write(
-			`warning: allowing secret path ${JSON.stringify(path)} as explicitly requested.\n`,
-		);
-	for (const path of largeFiles)
-		process.stderr.write(
-			`warning: ${JSON.stringify(path)} is above 50 MB; committing it will make this space's history larger.\n`,
-		);
-	if (secrets.length > 0) {
-		throw new Error(
-			`refusing to commit ${branch}: ${secrets.join(", ")} ` +
-				`${secrets.length === 1 ? "matches" : "match"} the secret guard (a .env, a key, a ` +
-				`credentials file). Move ${secrets.length === 1 ? "it" : "them"} out of the space, or ` +
-				`keep ${secrets.length === 1 ? "it" : "them"} out of the allowlist. For an intentional exception, use ` +
-				`\`hyper space commit --allow-secret <exact-path>\`.`,
-		);
-	}
-	const unborn =
-		spaceGit(root, ["rev-parse", "--verify", "HEAD"], { allowFailure: true }).status !== 0;
-	if (staged.length > 0) {
-		const commit = spaceGit(
-			root,
-			["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "-m", message],
-			{ allowFailure: true },
-		);
-		if (commit.status !== 0) {
-			const detail = (commit.stderr || commit.stdout).trim();
-			throw new Error(
-				/please tell me who you are|no (?:name|email) was given|empty ident|unable to auto-detect email|identity unknown/i.test(
-					detail,
-				)
-					? `git has no identity to commit ${branch} with. Set one and run this again: ` +
-							`\n\n  git config --global user.name "Your Name"\n  git config --global user.email "you@example.com"\n`
-					: `the commit of ${branch} failed. Inspect \`hyper space status\` and retry: ${detail}`,
+	try {
+		const excluded = spaceGit(root, ["ls-files", "--others", "--exclude-standard", "-z"])
+			.stdout.split("\0")
+			.filter((path) => path.endsWith("/") && existsSync(join(root, path, ".git")))
+			.map((path) => path.slice(0, -1));
+		spaceGit(root, [
+			"add",
+			"-A",
+			"--",
+			".",
+			...excluded.map((path) => `:(top,exclude,literal)${path}`),
+		]);
+		const staged = stagedPaths(root);
+		const gitlinks = stagedGitlinks(root);
+		const nested = [...new Set([...excluded, ...gitlinks])];
+		for (const path of gitlinks) {
+			// -f is only for removing an index gitlink differing from disk and HEAD;
+			// it never deletes work-tree files and is never used for publication.
+			spaceGit(root, ["rm", "--cached", "-q", "-f", "--", `:(literal)${path}`]);
+		}
+		for (const path of nested) {
+			process.stderr.write(
+				`warning: ${path} contains its own git repository; its files are not saved in the space.\n`,
 			);
 		}
-	} else if (unborn) {
-		process.stderr.write(
-			`warning: the allowlist matched no files in ${root}, so there is nothing to commit and no branch to push.\n`,
-		);
+		if (nested.length > 0) staged.splice(0, staged.length, ...stagedPaths(root));
+		const inspection = await inspectStagedFiles(root, staged, allowSecrets);
+		const { secrets, allowedSecrets, largeFiles } = inspection;
+		for (const path of allowedSecrets)
+			process.stderr.write(
+				`warning: allowing secret path ${JSON.stringify(path)} as explicitly requested.\n`,
+			);
+		for (const path of largeFiles)
+			process.stderr.write(
+				`warning: ${JSON.stringify(path)} is above 50 MB; committing it will make this space's history larger.\n`,
+			);
+		if (secrets.length > 0) {
+			throw new Error(
+				`refusing to commit ${branch}: ${secrets.join(", ")} ` +
+					`${secrets.length === 1 ? "matches" : "match"} the secret guard (a .env, a key, a ` +
+					`credentials file). Move ${secrets.length === 1 ? "it" : "them"} out of the space, or ` +
+					`keep ${secrets.length === 1 ? "it" : "them"} out of the allowlist.` +
+					(caller === "init"
+						? " Then rerun `hyper space init`."
+						: " For an intentional exception, use `hyper space commit --allow-secret <exact-path>`."),
+			);
+		}
+		const unborn =
+			spaceGit(root, ["rev-parse", "--verify", "HEAD"], { allowFailure: true }).status !== 0;
+		if (staged.length > 0) {
+			const commit = spaceGit(
+				root,
+				["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", "commit", "-m", message],
+				{ allowFailure: true },
+			);
+			if (commit.status !== 0) {
+				const detail = (commit.stderr || commit.stdout).trim();
+				throw new Error(
+					/please tell me who you are|no (?:name|email) was given|empty ident|unable to auto-detect email|identity unknown/i.test(
+						detail,
+					)
+						? `git has no identity to commit ${branch} with. Set one and run this again: ` +
+								`\n\n  git config --global user.name "Your Name"\n  git config --global user.email "you@example.com"\n`
+						: `the commit of ${branch} failed. ${caller === "init" ? "Fix the cause and rerun `hyper space init`" : "Inspect `hyper space status` and retry"}: ${detail}`,
+				);
+			}
+		} else if (unborn) {
+			process.stderr.write(
+				`warning: the allowlist matched no files in ${root}, so there is nothing to commit and no branch to push.\n`,
+			);
+		}
+		return {
+			committed: staged.length,
+			unborn: unborn && staged.length === 0,
+			skipped: nested,
+			allowedSecrets,
+			largeFiles,
+		};
+	} catch (error) {
+		// Init owns interruption rollback, including repeated signals during cleanup.
+		if (caller === "init" && error instanceof SpaceGitInterruptedError) throw error;
+		// Refusal must not leave staged secrets behind. Keep work-tree files intact.
+		try {
+			spaceGit(root, ["reset", "--quiet"]);
+		} catch (cleanup) {
+			throw new SpaceGitError(
+				`The commit was refused, but the index could not be cleared. Inspect it before retrying: ${cleanup instanceof Error ? cleanup.message : String(cleanup)}`,
+			);
+		}
+		throw error;
 	}
-	return {
-		committed: staged.length,
-		unborn: unborn && staged.length === 0,
-		skipped: nested,
-		allowedSecrets,
-		largeFiles,
-	};
 }
 
 /** A plain, explicit branch push; never rewrites remote history. */
-export function pushSpace(root: string, remote: string, branch: string): void {
-	spaceGitRemote(root, remote, ["push", "-u", "origin", branch], branch);
+export function pushSpace(
+	root: string,
+	remote: string,
+	branch: string,
+	caller: "init" | "daily" = "daily",
+): void {
+	const sha = spaceGit(root, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
+	spaceGitRemote(root, remote, ["push", "origin", `${sha}:refs/heads/${branch}`], branch, caller);
+	// Legacy init wrote no fetch refspec: Git cannot update a tracking ref for it.
+	// Record exactly the immutable SHA handed to the successful push, even there.
+	spaceGit(root, ["update-ref", `refs/remotes/origin/${branch}`, sha]);
 }
 
 /** Init/refresh publication, with callbacks preserving the caller's rollback boundary. */
-export function commitAndPushSpace(
+export async function commitAndPushSpace(
 	root: string,
 	name: string,
 	branch: string,
 	remote: string,
 	onCommitted: (files: number) => void,
 	beforePush: () => void,
-): SpaceCommitResult & { upToDate: boolean } {
-	const result = commitSpace(root, branch, `space: init ${name}`);
+): Promise<SpaceCommitResult & { upToDate: boolean }> {
+	const result = await commitSpace(root, branch, `space: init ${name}`, [], "init");
+	// Tell rollback a commit exists before anything can fail during publication.
 	if (result.committed > 0) onCommitted(result.committed);
 	if (result.unborn) return { ...result, upToDate: true };
 	const head = spaceGit(root, ["rev-parse", "HEAD"], { allowFailure: true }).stdout.trim();
 	const publishedBefore = remoteSha(root, remote, branch);
 	beforePush();
-	pushSpace(root, remote, branch);
+	// Publish whenever HEAD exists, even with an empty index: a previous push may
+	// have failed after committing, and an unchanged refresh must still retry it.
+	pushSpace(root, remote, branch, "init");
 	return { ...result, upToDate: head !== "" && head === publishedBefore };
 }

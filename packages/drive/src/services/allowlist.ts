@@ -62,7 +62,7 @@ const SAFETY_TAIL: readonly string[] = ["/.hyper/space.git/", "/.claude/settings
  * tell the operator their `tracked` list is wrong instead of quietly ignoring
  * it.
  */
-const RESERVED_PATHS: readonly string[] = [
+export const RESERVED_PATHS: readonly string[] = [
 	".hyper/space.git", // the space's own git dir: its config holds the remote URL
 	".git", // the project's repo
 	"worktrees", // the project's worktrees (C-4)
@@ -192,7 +192,7 @@ export function normaliseTrackedEntry(raw: string): string {
 	// Reserved: equal to one of them, or inside one of them (`.hyper/space.git/hooks`
 	// is as revealing as the git dir itself). Case-insensitively, because a
 	// case-insensitive filesystem would hand back either spelling.
-	const lowered = entry.toLowerCase();
+	const lowered = entry.normalize("NFC").toLowerCase();
 	for (const reserved of RESERVED_PATHS) {
 		if (lowered === reserved || lowered.startsWith(`${reserved}/`)) {
 			throw new AllowlistError(

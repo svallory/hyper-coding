@@ -9,9 +9,9 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 	];
 	async run(): Promise<void> {
 		const { flags } = await this.parse(Pull);
-		const result = this.inSpace(flags.debug, ({ root, branch }) => ({
+		const result = await this.inSpace(flags.debug, async ({ root, branch }) => ({
 			branch,
-			...pullSpace(root, branch),
+			...(await pullSpace(root, branch)),
 		}));
 		this.log(
 			result.updated

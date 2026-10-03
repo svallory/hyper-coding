@@ -208,7 +208,7 @@ export function readStagedBlobPrefix(spaceRoot: string, path: string): string {
 	const capped = (result.error as NodeJS.ErrnoException | undefined)?.code === "ENOBUFS";
 	if ((!capped && result.error) || (!capped && result.status !== 0)) {
 		throw new SpaceGitError(
-			`I couldn't inspect the staged content of ${JSON.stringify(path)} for secrets. Inspect the index and retry: ${result.error?.message || result.stderr?.toString().trim() || "git show failed"}`,
+			`I couldn't inspect the staged content of ${JSON.stringify(path)} for secrets. Inspect the index and retry: ${result.error?.message || result.stderr?.toString().trim() || "git cat-file failed"}`,
 		);
 	}
 	return (result.stdout ?? Buffer.alloc(0)).subarray(0, limit).toString("utf8");
@@ -300,6 +300,16 @@ export async function readSpaceBlobPrefixes(
 		env: cleanGitEnv(),
 		stdio: ["pipe", "pipe", "pipe"],
 	});
+	// The batch reader yields to the event loop, unlike spawnSync: forward a
+	// signal addressed only to this process rather than silently swallowing it.
+	const onInt = () => {
+		child.kill("SIGINT");
+	};
+	const onTerm = () => {
+		child.kill("SIGTERM");
+	};
+	process.on("SIGINT", onInt);
+	process.on("SIGTERM", onTerm);
 	let stderr = "";
 	child.stderr.on("data", (chunk: Buffer) => {
 		if (stderr.length < 4096) stderr += chunk.toString("utf8").slice(0, 4096 - stderr.length);
@@ -361,6 +371,8 @@ export async function readSpaceBlobPrefixes(
 		child.kill("SIGKILL");
 	}
 	const terminal = await closed;
+	process.off("SIGINT", onInt);
+	process.off("SIGTERM", onTerm);
 	if (terminal.signal === "SIGINT" || terminal.signal === "SIGTERM")
 		throw new SpaceGitInterruptedError(terminal.signal);
 	if (

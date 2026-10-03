@@ -1,6 +1,12 @@
 /** Incoming space history is untrusted: inspect objects before any checkout or fast-forward. */
-import { posix } from "node:path";
-import { isHyperAllowlist, normaliseTrackedEntry, renderGitignore } from "#services/allowlist";
+import { existsSync, realpathSync } from "node:fs";
+import { join, posix, relative, sep } from "node:path";
+import {
+	isHyperAllowlist,
+	normaliseTrackedEntry,
+	RESERVED_PATHS,
+	renderGitignore,
+} from "#services/allowlist";
 import { readSpaceBlobPrefixes, SpaceGitError, spaceGit } from "#services/space-git";
 
 export interface IncomingSpaceValidation {
@@ -23,6 +29,7 @@ function refuse(path: string, reason: string): never {
 
 /** Parse only the renderer's allowlist grammar, never arbitrary user-controlled ignore rules. */
 function incomingTrackedEntries(contents: string): string[] {
+	if (contents.includes("\0")) refuse(".gitignore", "contains a NUL byte");
 	if (!isHyperAllowlist(contents)) refuse(".gitignore", "is not hyper's allowlist");
 	const base = new Set(renderGitignore().trimEnd().split("\n"));
 	const tracked: string[] = [];
@@ -57,13 +64,62 @@ function incomingTrackedEntries(contents: string): string[] {
 }
 
 function unsafePath(path: string): boolean {
-	const parts = path.split("/").map((part) => part.toLowerCase().replace(/[ .]+$/, ""));
+	const parts = path.split("/").map((part) =>
+		part
+			.normalize("NFC")
+			.toLowerCase()
+			.replace(/[ .]+$/, ""),
+	);
 	if (parts.some((part) => part === ".git" || part === ".gitmodules" || part === ".gitattributes"))
 		return true;
-	return (
-		[".hyper", ".git", "worktrees", "code", "scratch"].includes(parts[0]) ||
-		(parts[0] === ".claude" && parts[1] === "settings.local.json")
+	const normalised = parts.join("/");
+	return RESERVED_PATHS.some(
+		(reserved) => normalised === reserved || normalised.startsWith(`${reserved}/`),
 	);
+}
+
+/** Resolve incoming link chains before normalising .., and check existing local ancestors. */
+function validateSymlinkResolution(
+	root: string,
+	path: string,
+	target: string,
+	links: Map<string, string>,
+): void {
+	let remaining = [...posix.dirname(path).split("/"), ...target.split("/")];
+	const parts: string[] = [];
+	let expansions = 0;
+	while (remaining.length > 0) {
+		const next = remaining.shift()!;
+		if (next === "." || next === "") continue;
+		if (next === "..") {
+			if (parts.length === 0) refuse(path, "has a symlink chain escaping the space");
+			parts.pop();
+			continue;
+		}
+		parts.push(next);
+		if (unsafePath(parts.join("/"))) refuse(path, "has a symlink chain into a reserved location");
+		const link = links.get(parts.join("/"));
+		if (link !== undefined) {
+			if (
+				++expansions > 40 ||
+				posix.isAbsolute(link) ||
+				/^[a-z]:/i.test(link) ||
+				link.includes("\\")
+			)
+				refuse(path, "has an unsafe or cyclic symlink chain");
+			parts.pop();
+			remaining = [...link.split("/"), ...remaining];
+		} else {
+			const candidate = join(root, ...parts);
+			if (existsSync(candidate)) {
+				const physical = relative(realpathSync(root), realpathSync(candidate));
+				if (unsafePath(physical.split(sep).join("/")))
+					refuse(path, "resolves through a local symlink into a reserved location");
+				if (physical === ".." || physical.startsWith(`..${sep}`))
+					refuse(path, "resolves through a local symlink outside the space");
+			}
+		}
+	}
 }
 
 interface TreeEntry {
@@ -113,8 +169,7 @@ export async function validateIncomingSpace(
 				refuse(entry.path, "has an unsupported tree mode");
 		}
 		const ignore = entries.find((entry) => entry.path === ".gitignore");
-		if (!ignore || ignore.mode !== "100644")
-			refuse(".gitignore", "must be a regular hyper allowlist file");
+		if (ignore?.mode !== "100644") refuse(".gitignore", "must be a regular hyper allowlist file");
 		const inspect = [ignore, ...entries.filter((entry) => entry.mode === "120000")];
 		const blobs = await readSpaceBlobPrefixes(
 			root,
@@ -124,12 +179,22 @@ export async function validateIncomingSpace(
 		const ignoreBlob = blobs.get(ignore.hash)!;
 		if (ignoreBlob.size > ignoreBlob.prefix.length)
 			refuse(".gitignore", "exceeds the 64 KiB allowlist limit");
-		tracked = incomingTrackedEntries(ignoreBlob.prefix.toString("utf8"));
-		const directories = ["notes", "data", "bin", ".claude", ...tracked];
+		const contents = ignoreBlob.prefix.toString("utf8");
+		if (!Buffer.from(contents, "utf8").equals(ignoreBlob.prefix))
+			refuse(".gitignore", "is not valid UTF-8");
+		tracked = incomingTrackedEntries(contents);
+		const links = new Map(
+			entries
+				.filter((entry) => entry.mode === "120000")
+				.map((entry) => [entry.path, blobs.get(entry.hash)!.prefix.toString("utf8")]),
+		);
+		const directories = ["notes", "data", "bin", ".hyper", ".claude", ...tracked];
 		const markers = new Set([".gitignore", "HYPER.md", "AGENTS.md", "CLAUDE.md"]);
 		for (const entry of entries) {
 			if (!markers.has(entry.path) && !directories.some((dir) => entry.path.startsWith(`${dir}/`)))
 				refuse(entry.path, "is outside the incoming allowlist");
+			// Regular files can also traverse a local or incoming symlink ancestor.
+			validateSymlinkResolution(root, entry.path, posix.basename(entry.path), links);
 			if (entry.mode !== "120000") continue;
 			const blob = blobs.get(entry.hash)!;
 			const target = blob.prefix.toString("utf8");
@@ -144,6 +209,7 @@ export async function validateIncomingSpace(
 				resolvedTarget.startsWith("../")
 			)
 				refuse(entry.path, "has a symlink target that is absolute or escapes the space");
+			validateSymlinkResolution(root, entry.path, target, links);
 		}
 	}
 	return { tip: resolved, tracked };
