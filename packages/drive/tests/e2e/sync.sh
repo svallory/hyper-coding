@@ -112,8 +112,17 @@ done
 
 trap cleanup EXIT
 
+# SHOULD: the create step must be able to FAIL LOUDLY. Previously `out=$(...)`
+# under `set -e` aborted the script on a non-zero exit with no `not ok` line at
+# all, so a broken create looked like a silent, truncated run.
+set +e
 out="$(run_cli drive sync-config loop)"
+create_rc=$?
+set -e
 echo "$out"
+if [ "$create_rc" != 0 ]; then
+  die "sync-config loop exited $create_rc; got: $out"
+fi
 if ! printf '%s' "$out" | grep -q "$claude_session"; then
   die "expected the claude session to be created; got: $out"
 fi
