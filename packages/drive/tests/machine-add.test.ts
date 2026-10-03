@@ -150,6 +150,21 @@ describe("machine add", () => {
 		expect(written).toContain("[machines.netcup]");
 	});
 
+	it("a second --features replaces the list rather than adding to it", () => {
+		if (skipIfUnbuilt()) return;
+		fakeHerdr();
+		const configPath = withTempConfig('remote = "git@example:x.git"\n');
+
+		expect(spawnCli(["machine", "add", "netcup", "--features", "tools"]).status).toBe(0);
+		expect(spawnCli(["machine", "add", "netcup", "--features", "docker-rootless"]).status).toBe(0);
+
+		// Appending would leave the file claiming the machine has a feature the
+		// user just removed.
+		const written = readFileSync(configPath, "utf-8");
+		expect(written).toContain("docker-rootless");
+		expect(written).not.toContain('"tools"');
+	});
+
 	it("rejects a feature that isn't one", () => {
 		if (skipIfUnbuilt()) return;
 		fakeHerdr();

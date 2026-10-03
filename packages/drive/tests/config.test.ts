@@ -1,8 +1,9 @@
-import { homedir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { configExists, configPath, loadConfig } from "#config/index";
+import { configExists, configPath, loadConfig, writeConfig } from "#config/index";
 import { DEFAULT_CONFIG, DEFAULT_MACHINE } from "#config/schema";
 import { withTempConfig } from "#tests/tmp-config";
 
@@ -285,5 +286,102 @@ describe("loadConfig", () => {
 				expect(loadConfig().sync.claude.ignore).toEqual(["/my-scratch"]);
 			});
 		});
+	});
+});
+
+describe("writeConfig", () => {
+	const BASE = 'remote = "git@example:x.git"\n';
+
+	/** The bytes of the config file, for the byte-identical assertions. */
+	const bytes = (path: string): string => readFileSync(path, "utf-8");
+
+	it("deep-merges: one machine's field changes, the others survive", () => {
+		const path = withTempConfig(`${BASE}\n[machines.netcup]\nhome = "/home/svallory"\n`);
+		writeConfig({ machines: { netcup: { agent_user: "bot" } } });
+
+		const written = bytes(path);
+		expect(written).toContain("/home/svallory");
+		expect(written).toContain('agent_user = "bot"');
+	});
+
+	it("replaces arrays rather than merging them", () => {
+		const path = withTempConfig(
+			`${BASE}\n[machines.netcup]\nfeatures = ["tools", "config-sync"]\n`,
+		);
+		writeConfig({ machines: { netcup: { features: ["tools"] } } });
+
+		const config = loadConfig();
+		// Appending would make the file claim a machine has features it doesn't.
+		expect(config.machines.netcup.features).toEqual(["tools"]);
+		expect(bytes(path)).not.toContain("config-sync");
+	});
+
+	it("writes every key of the config, defaults included", () => {
+		const path = withTempConfig(BASE);
+		writeConfig({ machines: { netcup: { home: "/home/svallory" } } });
+
+		const written = bytes(path);
+		expect(written).toContain("[warp]");
+		expect(written).toContain("[machines.netcup]");
+		// Readable on its own: loadConfig would fill these in anyway.
+		expect(loadConfig().remote).toBe("git@example:x.git");
+	});
+
+	it("keeps keys it doesn't know about", () => {
+		const path = withTempConfig(`${BASE}\n[experimental]\nsparkle = true\n`);
+		writeConfig({ machines: { netcup: { home: "/home/svallory" } } });
+
+		expect(bytes(path)).toContain("sparkle");
+		expect(loadConfig().machines.netcup.home).toBe("/home/svallory");
+	});
+
+	it("refuses a merge that would produce an invalid config, leaving the file untouched", () => {
+		const original = `${BASE}\n[machines.old]\nhome = "/home/old"\n`;
+		const path = withTempConfig(original);
+
+		// home must be a string; merging a number in would only fail later, in
+		// whichever command read the file next.
+		expect(() => writeConfig({ machines: { old: { home: 5 as never } } })).toThrow();
+		expect(bytes(path)).toBe(original);
+		expect(loadConfig().machines.old.home).toBe("/home/old");
+	});
+
+	it("refuses a base file whose shape is wrong, rather than merging into it", () => {
+		const original = `${BASE}\n[machines.old]\nhome = 5\n`;
+		const path = withTempConfig(original);
+
+		// The bad shape is in the file being read, not in the update.
+		expect(() => writeConfig({ machines: { netcup: { home: "/home/s" } } })).toThrow(
+			/`machines\.old\.home` must be a string/,
+		);
+		expect(bytes(path)).toBe(original);
+	});
+
+	it("refuses a base file where a section should be", () => {
+		const original = `${BASE}\nsync = 3\n`;
+		const path = withTempConfig(original);
+
+		expect(() => writeConfig({ machines: { netcup: { home: "/home/s" } } })).toThrow(
+			/`sync` must be a section/,
+		);
+		expect(bytes(path)).toBe(original);
+	});
+
+	it("leaves no temp file behind when the write is refused", () => {
+		const path = withTempConfig(BASE);
+		expect(() => writeConfig({ self: { name: 5 as never } })).toThrow();
+
+		const strays = readdirSync(dirname(path)).filter((name) => name.includes(".tmp"));
+		expect(strays).toEqual([]);
+	});
+
+	it("creates the file (and its parents) when there isn't one", () => {
+		const dir = mkdtempSync(join(tmpdir(), "drive-write-"));
+		process.env.HYPER_DRIVE_CONFIG = join(dir, "nested", "drive.toml");
+
+		const written = writeConfig({ machines: { netcup: { home: "/home/svallory" } } });
+
+		expect(written).toBe(process.env.HYPER_DRIVE_CONFIG);
+		expect(loadConfig().machines.netcup.home).toBe("/home/svallory");
 	});
 });
