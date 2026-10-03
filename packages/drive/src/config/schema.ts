@@ -48,6 +48,12 @@ export interface DriveConfig {
 	sync: SyncConfig;
 }
 
+export const DEFAULT_MACHINE: MachineConfig = {
+	home: "",
+	features: [],
+	agent_user: "agent",
+};
+
 export const DEFAULT_CONFIG: DriveConfig = {
 	remote: "",
 	self: {

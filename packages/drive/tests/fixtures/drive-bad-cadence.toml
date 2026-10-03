@@ -1,0 +1,3 @@
+# Fixture with an invalid cadence value.
+[defaults]
+cadence = "hourly"

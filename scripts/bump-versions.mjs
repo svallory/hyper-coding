@@ -17,7 +17,7 @@ if (!version) {
 	process.exit(1);
 }
 
-const packages = ["ui", "core", "kit", "hq", "gen", "cli", "create-hyper-hq"];
+const packages = ["ui", "core", "kit", "hq", "drive", "gen", "cli", "create-hyper-hq"];
 const root = new URL("..", import.meta.url).pathname;
 const oclifPackages = [];
 
