@@ -16,7 +16,14 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { PENDING_ROOT_EXIT, pendingRootMessage } from "#commands/machine/setup";
+import {
+	DEFAULT_ROOT_CHOICE,
+	exitCodeFor,
+	PENDING_ROOT_EXIT,
+	pendingRootMessage,
+	ROOT_CHOICE_OPTIONS,
+	rootPrompt,
+} from "#commands/machine/setup";
 import { withTempConfig } from "#tests/tmp-config";
 
 const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
@@ -103,22 +110,57 @@ describe("machine setup", () => {
 		expect(flat(r.stderr)).not.toContain("--yes");
 	});
 
-	it("`setup --yes` locally still needs --features, and says why", () => {
+	it("`setup --yes` works without a terminal: that's the case it exists for", () => {
 		if (skipIfUnbuilt()) return;
 		withTempConfig(CONFIG);
+		// Pipes for stdin/stdout, exactly as CI sees it. --yes picks the defaults
+		// (`tools` locally) without asking, so gating it on a TTY made the one
+		// invocation that matters — the unattended one — the one that failed.
 		const r = spawnCli(["machine", "setup", "--yes"]);
 
-		expect(r.status).not.toBe(0);
-		expect(flat(r.stderr)).toContain("--features");
+		expect(r.status).toBe(0);
+		expect(flat(r.stdout)).toContain("Nothing needed");
+		// Locally the default is `tools`, which is why the noop task was checked.
+		expect(flat(r.stdout)).toContain("noop.check");
 	});
 
-	it("unattended root work: exit 3 and a message naming the script", () => {
-		if (skipIfUnbuilt()) return;
-		withTempConfig(CONFIG);
-		// No root task ships yet, so the command can't reach this path end to end
-		// from the CLI alone — which is exactly why these two are pinned directly.
-		// The end-to-end version arrives with T-16's real root tasks.
+	it("the root prompt offers exactly three answers, defaulting to 'I've run it'", () => {
+		// Asserted against the exported list rather than by driving the prompt: the
+		// order and the initial value are the C-6 guarantee that pressing enter
+		// never asks for a password, and that is invisible from running the command.
+		expect(ROOT_CHOICE_OPTIONS.map((option) => option.value)).toEqual([
+			"ran",
+			"run-for-me",
+			"skip",
+		]);
+		expect(ROOT_CHOICE_OPTIONS.map((option) => option.label)).toEqual([
+			"I've run it",
+			"Run it for me (asks for your password)",
+			"Skip",
+		]);
+		expect(DEFAULT_ROOT_CHOICE).toBe("ran");
+		expect(DEFAULT_ROOT_CHOICE).toBe(ROOT_CHOICE_OPTIONS[0].value);
+	});
+
+	it("without a terminal the root prompt skips, reports the path, and exits 3", async () => {
+		// The decision extracted into rootPrompt()/exitCodeFor(), tested directly:
+		// no shipped task needs root yet, so the spawned CLI cannot reach this end
+		// to end. This is the branch that used to hang, so it matters most.
+		const seen: string[] = [];
+		const prompt = rootPrompt(false, (path) => seen.push(path));
+		const answer = await prompt.rootChoice({
+			machine: "netcup",
+			path: "/tmp/hyper-machine-root.sh",
+			tasks: ["agent-user.create"],
+		});
+
+		expect(answer).toBe("skip");
+		expect(seen).toEqual(["/tmp/hyper-machine-root.sh"]);
+		expect(exitCodeFor("/tmp/hyper-machine-root.sh")).toBe(PENDING_ROOT_EXIT);
 		expect(PENDING_ROOT_EXIT).toBe(3);
+		// And a run that left nothing pending is not an error at all.
+		expect(exitCodeFor(null)).toBeNull();
+
 		const message = pendingRootMessage("netcup", "/tmp/hyper-machine-root.sh");
 		expect(message).toContain("netcup");
 		expect(message).toContain("/tmp/hyper-machine-root.sh");
@@ -131,7 +173,8 @@ describe("machine setup", () => {
 		withTempConfig(CONFIG);
 		const r = spawnCli(["machine", "setup", "--features", "nope"]);
 
-		expect(r.status).not.toBe(0);
+		// 2, not just non-zero: this is a user error the caller can fix.
+		expect(r.status).toBe(2);
 		expect(flat(r.stderr)).toContain("nope");
 		expect(flat(r.stderr)).toContain("docker-rootless");
 	});

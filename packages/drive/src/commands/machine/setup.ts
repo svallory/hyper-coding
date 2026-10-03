@@ -26,6 +26,7 @@ import {
 	type Feature,
 	isFeature,
 	type TaskContext,
+	TaskError,
 } from "#services/machine/tasks/types";
 import { findSpaceRoot } from "#services/space";
 
@@ -88,20 +89,69 @@ async function askFeatures(initial: Feature[]): Promise<Feature[] | symbol> {
  * The root prompt. Three answers, in the order the brief fixes them, and
  * "I've run it" is the default — pressing enter must never ask for a password.
  */
+/**
+ * The three answers, in order.
+ *
+ * Exported so the order and the default can be asserted directly: "I've run it"
+ * being first *and* the initial value is the C-6 guarantee that pressing enter
+ * never asks for a password — and that is not visible from running the command.
+ */
+export const ROOT_CHOICE_OPTIONS = [
+	{ value: "ran", label: "I've run it", hint: "you ran the script yourself" },
+	{
+		value: "run-for-me",
+		label: "Run it for me (asks for your password)",
+		hint: "hyper runs the script; you type your password",
+	},
+	{ value: "skip", label: "Skip", hint: "leave those steps for later" },
+] as const;
+
+/** The answer a bare Enter gets. */
+export const DEFAULT_ROOT_CHOICE = "ran";
+
 async function askRootChoice(question: RootQuestion): Promise<RootChoice | symbol> {
 	return select({
 		message: `How do you want to handle the root steps on ${question.machine} (${question.tasks.join(", ")})?`,
-		options: [
-			{ value: "ran", label: "I've run it", hint: "you ran the script yourself" },
-			{
-				value: "run-for-me",
-				label: "Run it for me (asks for your password)",
-				hint: "hyper runs the script; you type your password",
-			},
-			{ value: "skip", label: "Skip", hint: "leave those steps for later" },
-		],
-		initialValue: "ran",
+		options: ROOT_CHOICE_OPTIONS.map((option) => ({ ...option })),
+		initialValue: DEFAULT_ROOT_CHOICE,
 	});
+}
+
+/**
+ * The prompt the runner uses, and the one place the "is there a terminal?"
+ * decision is made.
+ *
+ * Without a terminal clack's select waits forever — it renders to a TTY, and
+ * reading from a pipe never yields an answer — so the question cannot be asked
+ * and the only safe answer to give is "skip", reported through `onUnattended` so
+ * the run can exit 3 instead of claiming a machine is ready.
+ *
+ * Exported so the unattended branch is testable without a terminal and without a
+ * root task: it is the dangerous branch, and it was the untested one.
+ */
+export function rootPrompt(
+	interactive: boolean,
+	onUnattended: (path: string) => void,
+): SetupPrompt {
+	return {
+		async rootChoice(question: RootQuestion): Promise<RootChoice> {
+			if (!interactive) {
+				onUnattended(question.path);
+				return "skip";
+			}
+			const answer = await askRootChoice(question);
+			// Cancelling the root prompt is a skip, never a surprise password prompt.
+			return isCancel(answer) ? "skip" : (answer as RootChoice);
+		},
+	};
+}
+
+/**
+ * The exit code for a finished run: 3 when root work is still pending because
+ * nobody could answer, otherwise null — the run exits as it otherwise would.
+ */
+export function exitCodeFor(pendingRootPath: string | null): number | null {
+	return pendingRootPath === null ? null : PENDING_ROOT_EXIT;
 }
 
 /** Render the report the way the machine list renders a table: plainly. */
@@ -189,20 +239,18 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		try {
 			if (flags.features !== undefined) {
 				features = parseFeatures(flags.features);
+			} else if (flags.yes) {
+				// Checked before the terminal, not after: --yes exists precisely for
+				// the unattended case, and it needs no terminal because the defaults
+				// are known without asking (a named machine's features from
+				// drive.toml, or `tools` locally, where there is no entry to read).
+				// Gating it on a TTY made it fail in the one place it matters.
+				features = name === undefined ? ["tools"] : preselected(machine);
 			} else if (!process.stdin.isTTY || !process.stdout.isTTY) {
-				// --yes can't help here: it picks defaults, and the only way to learn
-				// the defaults on a machine with no [machines.<name>] entry is to
-				// ask. Suggesting it would be suggesting a second dead end.
 				return this.fail(
 					"I need to ask which features to set up, but this isn't an interactive terminal. Pass them yourself with `--features tools,config-sync`.",
 					flags.debug,
 				);
-			} else if (flags.yes) {
-				// A local machine has no [machines.<local>] entry to read a
-				// preselection from, so "the defaults" has to mean something. It
-				// means `tools`: the only feature worth assuming before anyone has
-				// said otherwise.
-				features = name === undefined ? ["tools"] : preselected(machine);
 			} else {
 				const answer = await askFeatures(preselected(machine));
 				if (isCancel(answer)) {
@@ -222,28 +270,16 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			return;
 		}
 
-		const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;
 		// Set when the root prompt had to answer for itself, so the run can report
 		// unfinished root work instead of exiting 0 on a half-prepared machine.
 		let unattendedRootPath: string | null = null;
-		const prompt: SetupPrompt = {
-			rootChoice: async (question) => {
-				// Without a terminal the prompt would wait forever: clack renders to
-				// a TTY and reading from a pipe never yields an answer. Skipping is
-				// the only safe answer we can give unattended — and the script is
-				// already written, so nothing is lost but the automation.
-				if (!interactive) {
-					this.log(
-						`This isn't an interactive terminal, so I'm leaving the root steps for you: ${question.path}`,
-					);
-					unattendedRootPath = question.path;
-					return "skip";
-				}
-				const answer = await askRootChoice(question);
-				// Cancelling the root prompt is a skip, never a surprise password prompt.
-				return isCancel(answer) ? "skip" : (answer as RootChoice);
-			},
-		};
+		const interactive = process.stdin.isTTY === true && process.stdout.isTTY === true;
+		const prompt = rootPrompt(interactive, (path) => {
+			unattendedRootPath = path;
+			this.log(
+				`This isn't an interactive terminal, so I'm leaving the root steps for you: ${path}`,
+			);
+		});
 
 		const ctx: TaskContext = {
 			machine,
@@ -261,10 +297,16 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 				scratchDir: scratchDir(),
 			});
 		} catch (err) {
+			// A TaskError is a bug in a task we wrote, not something the user can
+			// fix by retyping something — so it exits 1 (crash) rather than 2
+			// (user error). The two codes mean different things to a caller, and
+			// telling someone their command was wrong when our task threw would send
+			// them looking in the wrong place.
 			return this.fail(
 				err instanceof Error ? err.message : String(err),
 				flags.debug,
 				err instanceof Error ? err.stack : undefined,
+				err instanceof TaskError ? 1 : 2,
 			);
 		}
 
@@ -272,17 +314,18 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 
 		// Unattended with root work still to do is not a successful setup. Say so
 		// loudly and with a code CI can branch on.
-		if (unattendedRootPath !== null) {
+		const pendingExit = exitCodeFor(unattendedRootPath);
+		if (pendingExit !== null && unattendedRootPath !== null) {
 			this.error(pendingRootMessage(machine?.name ?? "this machine", unattendedRootPath), {
-				exit: PENDING_ROOT_EXIT,
+				exit: pendingExit,
 			});
 		}
 	}
 
 	/** Report a user error the way `machine list` does: message, exit 2, no stack unless --debug. */
-	private fail(message: string, debug: boolean, stack?: string): void {
+	private fail(message: string, debug: boolean, stack?: string, exit = 2): void {
 		const problem = new Error(message);
 		problem.stack = debug ? (stack ?? message) : message;
-		this.error(problem, { exit: 2 });
+		this.error(problem, { exit });
 	}
 }
