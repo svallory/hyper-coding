@@ -350,6 +350,51 @@ describe("push failure classification", () => {
 	});
 });
 
+describe("a reachable remote with no main", () => {
+	it("publishes main on the next write after a refused first push", () => {
+		// The probe: a pre-receive hook refuses the very first push
+		// (initialiseMain), then the hook is removed. `git fetch origin main`
+		// exits 128 with "couldn't find remote ref main" on the now-reachable,
+		// still-empty remote, which used to be misread as "unreachable" — every
+		// later write warned offline and the remote never got a main.
+		const hook = join(fixture.remote, "hooks", "pre-receive");
+		writeFileSync(hook, "#!/bin/sh\necho 'not yet' >&2\nexit 1\n", { mode: 0o755 });
+		expect(() => ensureDriveCheckout(fixture.remote)).toThrow(/not yet/);
+		writeFileSync(hook, "", { mode: 0o755 });
+
+		// `drive init`'s second run goes through ensureDriveCheckout's
+		// reconcile path and must create main on the remote.
+		const second = ensureDriveCheckout(fixture.remote);
+		expect(second.created).toBe(false);
+		expect(git(["ls-remote", "--heads", fixture.remote, "main"], fixture.root).trim()).toContain(
+			"refs/heads/main",
+		);
+		expect(
+			git(["--git-dir", fixture.remote, "log", "main", "--format=%s"], fixture.root),
+		).toContain("manifest: initialise hyperdrive");
+
+		// And the next write works on top of it.
+		upsertSpace(sample("alpha"));
+		expect(remoteNames()).toEqual(["alpha"]);
+	});
+
+	it("a direct upsertSpace recovers from a refused first push", () => {
+		// Same probe, but entering through a plain write rather than
+		// `ensureDriveCheckout`: the init's push was refused, and the FIRST
+		// successful write must create main on the remote.
+		const hook = join(fixture.remote, "hooks", "pre-receive");
+		writeFileSync(hook, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+		expect(() => ensureDriveCheckout(fixture.remote)).toThrow();
+		writeFileSync(hook, "", { mode: 0o755 });
+
+		upsertSpace(sample("alpha"));
+		expect(git(["ls-remote", "--heads", fixture.remote, "main"], fixture.root).trim()).toContain(
+			"refs/heads/main",
+		);
+		expect(remoteNames()).toEqual(["alpha"]);
+	});
+});
+
 describe("space name validation", () => {
 	it("rejects names that could escape into paths or refs", () => {
 		ensureDriveCheckout(fixture.remote);
