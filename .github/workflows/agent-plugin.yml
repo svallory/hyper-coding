@@ -1,18 +1,27 @@
 name: agent-plugin
 
-# Self-contained checks for the hyper agent plugin (bash + node only —
-# deliberately no moon/bun involvement: the plugin has no build step and its
-# test harness needs nothing from the monorepo toolchain).
+# Checks for the hyper agent plugin: bash -n, shellcheck, the bash suite, and
+# JSON validation.
+#
+# The plugin has no build step of its own, but since T-2 it does have a runtime
+# dependency: its scripts source hyper-lib.sh out of the installed CLI via
+# `hyper space lib-path` (C-5 — one copy of the library, inside
+# @hypercli/drive). So this workflow now builds the CLI and puts `hyper` on
+# PATH before running the bash suite, exactly like ci.yml does.
 
 on:
   push:
     branches: [main]
     paths:
       - "agent-plugin/**"
+      - "packages/drive/**"
+      - "packages/cli/**"
       - ".github/workflows/agent-plugin.yml"
   pull_request:
     paths:
       - "agent-plugin/**"
+      - "packages/drive/**"
+      - "packages/cli/**"
       - ".github/workflows/agent-plugin.yml"
 
 jobs:
@@ -20,6 +29,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      # The plugin scripts locate hyper-lib.sh through the CLI, so the CLI must
+      # exist before the suite runs. Build in dependency order: the oclif plugin
+      # host (cli) resolves each plugin's dist/, and hq depends on
+      # create-hyper-hq, so a partial build leaves @hypercli/* unresolvable.
+      - name: Build the packages the plugin needs
+        run: |
+          set -euo pipefail
+          for pkg in ui core create-hyper-hq kit hq gen drive cli; do
+            echo "::group::build $pkg"
+            (cd "packages/$pkg" && bun run build)
+            echo "::endgroup::"
+          done
+
+      # Same exposure as ci.yml: a symlink to the workspace entrypoint, on PATH.
+      - name: Expose hyper CLI on PATH
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$PWD/packages/cli/bin/run.js" "$HOME/.local/bin/hyper"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/hyper" space lib-path
 
       - name: Syntax-check every shell script
         run: |
@@ -47,6 +86,9 @@ jobs:
             | xargs -0 -n1 node -e '
                 const f = process.argv[1];
                 try { JSON.parse(require("fs").readFileSync(f, "utf8")); }
-                catch (e) { console.error(`invalid JSON: ${f}: ${e.message}`); process.exit(1); }
+                catch (e) {
+                  console.error(`invalid JSON: ${f}: ${e.message}`);
+                  process.exit(1);
+                }
                 console.log(`ok ${f}`);
               '
