@@ -11,6 +11,8 @@ export const pathTask: Task = {
 	feature: "tools",
 	needsRoot: false,
 	title: "~/.local/bin on PATH",
+	unmetReason:
+		"the target shell did not load ~/.local/bin from its startup files; configure PATH in that shell's startup file and re-run setup",
 	async check(ctx) {
 		// A plain remote command sees exactly the non-interactive target PATH.
 		// Locally, ask the user's login shell; hyper may have widened its own PATH.
@@ -28,22 +30,45 @@ export const pathTask: Task = {
 			"-c",
 			`set -eu
 mkdir -p "$HOME/.local/bin"
+prepend_path() (
+  target="$1"
+  # Preserve dotfile-manager links, including relative links and link chains.
+  # Resolve each link relative to its own directory, never to the process cwd.
+  links=0
+  while [ -L "$target" ]; do
+    links=$((links + 1))
+    [ "$links" -le 40 ] || { echo "too many symlinks resolving $1" >&2; exit 1; }
+    link="$(readlink "$target")"
+    case "$link" in
+      /*) target="$link" ;;
+      *) target="$(dirname "$target")/$link" ;;
+    esac
+  done
+  directory="$(CDPATH= cd -P "$(dirname "$target")" && pwd)"
+  target="$directory/$(basename "$target")"
+  # A legacy bottom export does not count: it may be below Debian's guard.
+  if [ -f "$target" ] && [ "$(head -n 1 "$target")" = ${shellQuote(PATH_LINE)} ]; then exit 0; fi
+  tmp="$(mktemp "$target.hyper.XXXXXX")"
+  trap 'rm -f "$tmp"' EXIT HUP INT TERM
+  if [ -e "$target" ]; then cp -p "$target" "$tmp"; fi
+  {
+    printf '%s\\n' ${shellQuote(PATH_LINE)}
+    if [ -e "$target" ]; then grep -vxF ${shellQuote(PATH_LINE)} "$target" || [ "$?" -eq 1 ]; fi
+  } > "$tmp"
+  mv -f "$tmp" "$target"
+)
 case "\${SHELL:-/bin/sh}" in
-  */bash) target="$HOME/.bashrc" ;;
-  */zsh) target="$HOME/.zshenv" ;;
-  *) target="$HOME/.profile" ;;
+  */bash)
+    prepend_path "$HOME/.bashrc"
+    # An existing bash_profile masks .profile. Leave profiles that already
+    # source .bashrc alone; otherwise the login-shell check cannot see the fix.
+    if [ -f "$HOME/.bash_profile" ] && ! sed 's/#.*//' "$HOME/.bash_profile" | grep -Eq '(^|;|&&|[|][|])[[:space:]]*(then[[:space:]]+)?([.]|source)[[:space:]]+[^;]*[.]bashrc'; then
+      prepend_path "$HOME/.bash_profile"
+    fi
+    ;;
+  */zsh) prepend_path "$HOME/.zshenv" ;;
+  *) prepend_path "$HOME/.profile" ;;
 esac
-# The first line must work even above Debian's non-interactive return guard.
-# An old bottom-appended line is not evidence that this shell can see it.
-if [ -f "$target" ] && [ "$(head -n 1 "$target")" = ${shellQuote(PATH_LINE)} ]; then exit 0; fi
-tmp="$(mktemp "$target.hyper.XXXXXX")"
-trap 'rm -f "$tmp"' EXIT HUP INT TERM
-if [ -e "$target" ]; then cp -p "$target" "$tmp"; fi
-{
-  printf '%s\\n' ${shellQuote(PATH_LINE)}
-  if [ -e "$target" ]; then grep -vxF ${shellQuote(PATH_LINE)} "$target" || [ "$?" -eq 1 ]; fi
-} > "$tmp"
-mv -f "$tmp" "$target"
 `,
 		]);
 		if (result.code !== 0) {

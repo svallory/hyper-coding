@@ -236,7 +236,7 @@ export async function runSetup(
 		}
 		if (await checkTask(task, ctx)) applied.push(task.id);
 		else {
-			ctx.log(`${task.id}: still not right after doing it — skipping.`);
+			ctx.log(`${task.id}: ${task.unmetReason ?? "still not right after doing it"} — skipping.`);
 			skipped.push(task.id);
 		}
 	}

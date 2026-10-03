@@ -95,6 +95,8 @@ export interface Task {
 	check(ctx: TaskContext): Promise<boolean>;
 	/** Fix it without root. Only ever called when `needsRoot` is false. */
 	apply?(ctx: TaskContext): Promise<void>;
+	/** Actionable explanation printed once if the check still fails after apply. */
+	unmetReason?: string;
 	/** The root fix, as bash. Only ever called when `needsRoot` is true. */
 	rootScript?(ctx: TaskContext): string;
 }
