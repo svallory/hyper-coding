@@ -9,6 +9,7 @@ import {
 	isolateGitConfig,
 	type ManifestFixture,
 	skipIfUnbuilt,
+	skipWithoutScript,
 	spawnCli,
 	spawnCliOnTty,
 	withManifestFixture,
@@ -27,7 +28,7 @@ afterEach(() => {
 
 describe("hyper drive init", () => {
 	it("asks for every value on a TTY and accepts each default with Enter", () => {
-		if (skipIfUnbuilt()) return;
+		if (skipIfUnbuilt() || skipWithoutScript()) return;
 		// The interactive path, end to end: a pipe has no isTTY, so a piped spawn
 		// would skip every prompt and prove nothing. Answer the remote (it has no
 		// default) and press Enter for the machine name and home, which must take
