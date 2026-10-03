@@ -51,6 +51,7 @@ import {
 	type SpaceEntry,
 	validateManifest,
 } from "#config/schema";
+import { SpaceGitInterruptedError } from "#services/space-git";
 
 const MANIFEST_FILE = "spaces.yaml";
 const BRANCH = "main";
@@ -110,6 +111,9 @@ function driveGit(args: readonly string[], cwd: string): GitResult {
 	delete env.GIT_DIR;
 	delete env.GIT_WORK_TREE;
 	const result = spawnSync("git", [...args], { cwd, env, encoding: "utf8" });
+	if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
+		throw new SpaceGitInterruptedError(result.signal);
+	}
 	if (result.error) {
 		throw new ManifestError(
 			"git",
