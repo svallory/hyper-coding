@@ -70,7 +70,15 @@ export function infrastructureTasks(): Task[] {
 /** Every task the CLI knows how to run, in a stable order. */
 export function allTasks(options: { tools?: readonly string[] } = {}): Task[] {
 	const tools = selectedToolTasks(options.tools);
-	return [noop, ...(tools.length > 0 ? [pathTask] : []), rsyncTask, ...tools, agentUserCreate, agentUserDirs, agentUserWatcher];
+	return [
+		noop,
+		...(tools.length > 0 ? [pathTask] : []),
+		rsyncTask,
+		...tools,
+		agentUserCreate,
+		agentUserDirs,
+		agentUserWatcher,
+	];
 }
 
 /**
