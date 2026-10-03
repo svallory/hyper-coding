@@ -71,7 +71,7 @@ flock /tmp/hyper-heavy2.lock -c 'cd packages/drive && bun run build && bun run t
 - **Template engine**: Jig (Edge.js fork) — `.jig` files, NOT EJS
 - **CLI framework**: oclif with plugin architecture
 - **Build**: per-package (tsc for drive/cli; check each `package.json`)
-- **Test**: vitest (compatible with bun test)
+- **Test**: vitest (compatible with bun test). vitest has NO `expect.skip()`: to skip a test from inside it, take the context (`it("…", (ctx) => ctx.skip("why"))`). An `expect.skip(...)` call throws `expect.skip is not a function` and fails the very test it meant to skip.
 - **Monorepo**: bun workspaces + moon
 
 ## How the CLI Works
