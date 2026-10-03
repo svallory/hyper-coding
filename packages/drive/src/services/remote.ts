@@ -32,6 +32,12 @@ export interface SshOptions {
 	/** Written to the command's stdin, then stdin is closed. Mutually exclusive with `tty`. */
 	stdin?: string;
 	/**
+	 * Extra environment variables for a LOCAL command (merged over
+	 * `process.env`). Ignored for a remote command, where the environment is
+	 * the remote shell's business, not ours.
+	 */
+	env?: Record<string, string>;
+	/**
 	 * Attach the terminal. Output is not captured (it goes straight to the
 	 * user). On a remote machine this adds `-t`; combined with `stdin` it is
 	 * rejected — a pty would echo input and mix it into the terminal.
@@ -66,6 +72,8 @@ export interface SpawnRequest {
 	stdin?: string;
 	cwd?: string;
 	tty?: boolean;
+	/** Extra env vars, merged over process.env when spawning. */
+	env?: Record<string, string>;
 }
 
 /** Injection seam for tests: replaces the real child_process spawn. */
@@ -106,6 +114,7 @@ const spawnProcess: Spawner = (request) =>
 		const child = spawn(request.file, request.args, {
 			cwd: request.cwd,
 			stdio: request.tty ? "inherit" : ["pipe", "pipe", "pipe"],
+			...(request.env ? { env: { ...process.env, ...request.env } } : {}),
 		});
 
 		let stdout = "";
@@ -437,6 +446,7 @@ export class LocalMachine implements MachineRunner {
 			stdin: opts?.stdin,
 			cwd: opts?.cwd,
 			tty: opts?.tty,
+			env: opts?.env,
 		});
 	}
 
