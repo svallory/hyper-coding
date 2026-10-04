@@ -197,34 +197,57 @@ write_hyper_md() {
   write_hyper_md_bare "$1" "$2"
 }
 
-# hyper_md_backup_rule <root> <bare|multi> — the one Rules bullet about
-# backups, written to match the space's state at write time. Once the space
-# has a branch (`.hyper/space.git` exists), the allowlisted directories are
-# backed up to the user's hyperdrive; before `hyper space init` (or after a
-# clone that has not created it yet), nothing at the root is backed up. The
-# writers run at scaffold/clone time only — a space initialised later keeps
-# the no-branch sentence until the next rewrite, so the bullet always ends
-# by pointing at `hyper space status` for the live answer.
+# hyper_md_backup_rule <root> <bare|multi> — the Rules bullets about what
+# the space root's files are committed to and when they reach the
+# hyperdrive, written to match the space's state at write time. A space with
+# a branch (`.hyper/space.git` exists) commits its allowlisted directories to
+# that branch on the configured cadence; they only reach the hyperdrive when
+# pushed (`session-end+push`, or `hyper space push`). Without a branch
+# nothing at the root is committed anywhere. The writers run at
+# scaffold/clone time only — `hyper space init` does not re-render
+# HYPER.md — so BOTH bullets end by naming `hyper space status` as the live
+# answer, and the no-branch one says the sentence stops being true once the
+# space is initialised.
 hyper_md_backup_rule() {
-  local root="$1" layout="$2" excluded="worktrees"
-  [[ "$layout" == multi ]] && excluded="code"
+  local root="$1" layout="$2" excluded="worktrees" where="Files here"
+  [[ "$layout" == multi ]] && { excluded="code"; where="Files at the space root"; }
   if [[ -d "$root/.hyper/space.git" ]]; then
     cat <<EOF
-- This space has a hyperdrive branch: \`notes/\`, \`data/\`, \`bin/\`, \`.hyper/\`,
-  \`.claude/\` and the root marker files are backed up to it (\`hyper space status\`
-  shows the cadence). \`scratch/\`, \`$excluded/\` and loose root files are not —
-  they still live on exactly one disk.
+- This space has a hyperdrive branch: \`notes/\`, \`data/\`, \`bin/\`, \`.hyper/\`
+  and \`.claude/\` except \`.claude/settings.local.json\`, plus the root marker
+  files, are committed to it on your cadence, and reach your hyperdrive when
+  pushed (\`session-end+push\`, or \`hyper space push\`).
+- \`scratch/\`, \`$excluded/\` and loose root files are never committed: they
+  live on exactly one disk. \`hyper space status\` is the live answer — the
+  cadence, the last push, and whether the last session-end commit worked.
 EOF
   elif [[ "$layout" == multi ]]; then
-    cat <<'EOF'
-- Files at the space root never reach the remote. Secrets are local-only by
-  construction, but that also means nothing here is backed up.
+    cat <<EOF
+- $where never reach the project's remote. Secrets are local-only by
+  construction, and nothing here is committed or backed up until you run
+  \`hyper space init\` — which commits the allowlisted dirs to the space's
+  branch, to be published by \`hyper space push\`.
+  \`hyper space status\` is the live answer.
 EOF
   else
-    cat <<'EOF'
-- Files here never reach the remote. Secrets are local-only by construction,
-  but that also means nothing here is backed up.
+    cat <<EOF
+- $where never reach the project's remote. Secrets are local-only by
+  construction, and nothing here is committed or backed up until you run
+  \`hyper space init\` — which commits the allowlisted dirs to the space's
+  branch, to be published by \`hyper space push\`.
+  \`hyper space status\` is the live answer.
 EOF
+  fi
+}
+
+# hyper_md_root_line <root> — the intro's "nothing here is committed" clause.
+# It stops being literally true once a space branch exists, because the
+# allowlisted directories are committed to that branch.
+hyper_md_root_line() {
+  if [[ -d "$1/.hyper/space.git" ]]; then
+    printf '%s' "nothing here is committed to the project"
+  else
+    printf '%s' "nothing here is committed"
   fi
 }
 
@@ -234,7 +257,7 @@ write_hyper_md_bare() {
 # $name
 
 Project **space**, bare layout. This directory is not a git worktree —
-nothing here is committed. The worktrees live in \`worktrees/\`.
+$(hyper_md_root_line "$root"). The worktrees live in \`worktrees/\`.
 
 ## Layout
 
@@ -294,8 +317,9 @@ write_hyper_md_multi() {
 # $name
 
 Project **space**, multi-repo layout. The space root itself is not a git
-repository — nothing here is committed. Each tracked repository lives under
-\`code/<repo-slug>/\`, with its own bare \`.git\` and its own \`worktrees/\`.
+repository — $(hyper_md_root_line "$root").
+Each tracked repository lives under \`code/<repo-slug>/\`, with its own bare
+\`.git\` and its own \`worktrees/\`.
 
 ## Layout
 
@@ -522,9 +546,9 @@ the worktrees are in \`worktrees/<branch>\`, created via \`wt switch\`.
 Local-only directories at the space root: \`data/\` (dumps, fixtures),
 \`notes/\` (briefs, handoffs), \`scratch/\` (disposable), \`bin/\` (helper scripts).
 $(if [[ -d "$root/.hyper/space.git" ]]; then
-  printf '%s' 'The allowlisted ones (`notes/`, `data/`, `bin/`) are backed up to the hyperdrive on this space'"'"'s branch; `scratch/` is not.'
+  printf '%s' 'The allowlisted ones (`notes/`, `data/`, `bin/`) are committed to this space'"'"'s branch on your cadence, and reach your hyperdrive when pushed (`session-end+push`, or `hyper space push`); `scratch/` is never committed.'
 else
-  printf '%s' 'None of it is committed or backed up.'
+  printf '%s' 'None of it is committed or backed up — not even to the hyperdrive — until `hyper space init`.'
 fi)
 
 **Why:** keeps a single object store across branches and gives local-only files a
