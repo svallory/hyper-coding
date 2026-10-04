@@ -44,7 +44,18 @@ export interface SessionEndInput {
 	transcript_path?: string;
 	/** Why the session ended (`clear`, `resume`, `logout`, `prompt_input_exit`, `other`). */
 	reason?: string;
+	/**
+	 * Summary a harness computed itself (pi's extension). Untrusted text: cleaned
+	 * by the same `sessionEndLine` as a transcript summary, so the cap and the
+	 * character handling are the CLI's, never the sender's.
+	 */
+	summary?: string;
+	/** Which agent ended the session. Only `"pi"` changes the commit trailer. */
+	harness?: string;
 }
+
+/** The only harness that names itself in the commit trailer. */
+export const PI_HARNESS = "pi";
 
 /**
  * Reasons that do not end the work: `/clear` and a resume start over in the
@@ -102,11 +113,29 @@ export async function readSessionEndInput(input: Readable): Promise<SessionEndIn
 		throw new Error(
 			"SessionEnd transcript_path must be a string. Check the hook payload; nothing was committed.",
 		);
+	// `summary` and `harness` are optional and forgiving on purpose: a harness
+	// that cannot produce a summary, or names itself wrongly, must still get its
+	// session saved rather than a refusal. A Claude payload carries neither, and
+	// this returns exactly what it did before.
+	const summary = cleanPayloadSummary(record.summary);
 	return {
 		session_id: record.session_id,
 		transcript_path: record.transcript_path as string | undefined,
 		...(typeof record.reason === "string" ? { reason: record.reason } : {}),
+		...(summary ? { summary } : {}),
+		...(record.harness === PI_HARNESS ? { harness: record.harness as string } : {}),
 	};
+}
+
+/**
+ * Clean a harness-supplied summary the same way a transcript summary is cleaned
+ * and cap it here, not in the sender. Anything that is not a non-empty string
+ * once cleaned is absent.
+ */
+function cleanPayloadSummary(value: unknown): string | undefined {
+	if (typeof value !== "string") return undefined;
+	const cleaned = sessionEndLine(value);
+	return cleaned || undefined;
 }
 
 /**
@@ -147,7 +176,8 @@ export async function lastSessionSummary(path: string | undefined): Promise<stri
 }
 
 export async function sessionEndMessage(input: SessionEndInput): Promise<string> {
-	const summary = await lastSessionSummary(input.transcript_path);
+	const summary = input.summary ?? (await lastSessionSummary(input.transcript_path));
 	const subject = summary ? `session: ${summary}` : `session ${input.session_id} ended`;
-	return `${subject}\n\nClaude-Session: ${input.session_id}`;
+	const trailer = input.harness === PI_HARNESS ? "Pi-Session" : "Claude-Session";
+	return `${subject}\n\n${trailer}: ${input.session_id}`;
 }

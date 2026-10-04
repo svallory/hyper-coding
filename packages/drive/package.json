@@ -36,6 +36,7 @@
 	"files": [
 		"dist",
 		"help",
+		"pi",
 		"scripts",
 		"oclif.manifest.json",
 		"README.md",
@@ -78,7 +79,7 @@
 		"test:watch": "vitest",
 		"lint": "biome check .",
 		"format": "biome format . --write",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p pi/tsconfig.json",
 		"prepublishOnly": "bun run build"
 	},
 	"dependencies": {
