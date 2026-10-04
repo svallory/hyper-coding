@@ -7,6 +7,7 @@
  */
 
 import { Command, Flags, type Interfaces } from "@oclif/core";
+import { keepAbsolutePathEntries } from "#lib/safe-path";
 
 export type BaseFlags<T extends typeof Command> = Interfaces.InferredFlags<
 	(typeof BaseCommand)["baseFlags"] & T["flags"]
@@ -24,4 +25,13 @@ export abstract class BaseCommand<T extends typeof Command> extends Command {
 
 	declare protected flags: BaseFlags<T>;
 	declare protected args: BaseArgs<T>;
+
+	/**
+	 * Before anything else a drive command does: no relative PATH entry may
+	 * pick a `bash` or `git` out of the working directory (lib/safe-path.ts).
+	 */
+	public override async init(): Promise<void> {
+		keepAbsolutePathEntries();
+		await super.init();
+	}
 }

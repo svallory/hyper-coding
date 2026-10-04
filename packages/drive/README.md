@@ -264,6 +264,12 @@ tooling).
   `hyper space commit` by hand for now.
 - **Incoming `tracked` entries widen what this machine uploads** — that is
   why pull asks instead of adopting them.
+- **Drive commands ignore relative PATH entries.** Every `hyper space`,
+  `drive`, `warp` and `machine` command keeps only the absolute entries of
+  PATH before it runs, so `./bin`, `.` or `./node_modules/.bin` can never
+  make it run a space's own `bin/bash` or `bin/git`; a tool reachable only
+  through a relative entry is not found. Other `hyper` topics (kits,
+  recipes) are not covered by this.
 - **Linux logout can cut a session-end save short.** With systemd-logind's
   `KillUserProcesses=yes`, logout kills every process of the login session,
   the detached session-end worker included (`setsid` does not leave the
