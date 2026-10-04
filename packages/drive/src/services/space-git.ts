@@ -1606,19 +1606,42 @@ export function targetStatusCheck(worktree: string, options: { force?: boolean }
 }
 
 /**
- * A read-only script for the target: every untracked OR ignored path of the
- * repository at `worktree`, NUL-separated (`git ls-files --others
- * --directory`: no exclude rules, so ignored files are listed too; a
- * directory whose whole content is untracked is listed once, with a trailing
- * `/`). Prints nothing when there is no `.git` there. Exit 3 when git failed.
+ * A read-only script for the target: what of the repository at `worktree` the
+ * collision check must look at, NUL-separated. Prints nothing when there is no
+ * `.git` there. Exit 3 when git failed.
+ *
+ *  - Every untracked OR ignored path (`git ls-files --others --directory`: no
+ *    exclude rules, so ignored files are listed too; a directory whose whole
+ *    content is untracked is listed once, with a trailing `/`).
+ *  - Then, each prefixed with `/` (no path git prints starts with one), the
+ *    directories the target TRACKS: the parent directory of every index entry
+ *    (consecutive duplicates dropped), and every index entry that is a real
+ *    directory on disk there (`ls-files --modified`, then `-d` and not `-L`:
+ *    a target left half-way, its index already this machine's, the directory
+ *    still on disk). A file here at one of those paths can't be copied over
+ *    it, so it is a type-change collision.
  */
 export function targetUntrackedPaths(worktree: string): string[] {
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const parents = [
+		'l=""; for p in "$@"; do case "$p" in */*)',
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
+		'  d=${p%/*}; if [ "$d" != "$l" ]; then printf \'/%s\\000\' "$d"; l=$d; fi ;;',
+		"esac; done",
+	].join("\n");
+	const directories = [
+		'for p in "$@"; do',
+		'  if [ -d "./$p" ] && [ ! -L "./$p" ]; then printf \'/%s\\000\' "$p"; fi',
+		"done",
+	].join("\n");
 	const script = [
 		`w=${quote(worktree)}`,
 		'[ -e "$w/.git" ] || exit 0',
+		'cd "$w" || exit 3',
 		TARGET_READ_ONLY_GIT,
 		"g ls-files -z --others --directory || exit 3",
+		`g ls-files -z | xargs -0 sh -c ${quote(parents)} sh || exit 3`,
+		`g ls-files -z --modified | xargs -0 sh -c ${quote(directories)} sh || exit 3`,
 	].join("\n");
 	return ["sh", "-c", script];
 }
@@ -1634,7 +1657,9 @@ export function targetUntrackedPaths(worktree: string): string[] {
  * copy can't overwrite). Only once EVERY entry is copied are the `R` entries
  * removed (`rm -rf` on the entry itself: a symlink is removed, never
  * followed). Prints the backup directory. Fails (non-zero) when the directory
- * already exists, or any entry can't be copied or removed.
+ * already exists, or any entry can't be copied or removed; exits 7, before
+ * copying or removing anything, when an entry is empty, absolute or has a
+ * `..` component.
  */
 export function targetBackupCopy(worktree: string, id: string): string[] {
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
@@ -1643,6 +1668,16 @@ export function targetBackupCopy(worktree: string, id: string): string[] {
 		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
 		'  p=${e#?}; d=$(dirname "./$p")',
 		'  mkdir -p "$b/$d" && cp -pPR "./$p" "$b/$p" || exit 255',
+		"done",
+	].join("\n");
+	// Every entry is checked before anything is copied or removed: a path
+	// from git or this machine's walk never has these, but the removal must
+	// never reach outside the repository whatever it is given.
+	const checkEach = [
+		'for e in "$@"; do',
+		'  case "$e" in K?*|R?*) ;; *) printf \'refusing the backup entry "%s"\\n\' "$e" >&2; exit 255 ;; esac',
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
+		'  case "/${e#?}/" in */../*|//*) printf \'refusing the path "%s": absolute or with a .. component\\n\' "${e#?}" >&2; exit 255 ;; esac',
 		"done",
 	].join("\n");
 	const removeEach = [
@@ -1660,10 +1695,11 @@ export function targetBackupCopy(worktree: string, id: string): string[] {
 		"umask 077",
 		'mkdir -p "$gd/hyper-warp-backup" && chmod 700 "$gd/hyper-warp-backup" || exit 4',
 		'b="$gd/hyper-warp-backup/$id"',
-		'mkdir "$b" || exit 4',
 		'list="$b.list"',
 		`trap 'rm -f "$list"' EXIT`,
 		'cat > "$list" || exit 4',
+		`xargs -0 sh -c ${quote(checkEach)} sh < "$list" || exit 7`,
+		'mkdir "$b" || exit 4',
 		`xargs -0 sh -c ${quote(copyEach)} sh "$b" < "$list" || exit 5`,
 		`xargs -0 sh -c ${quote(removeEach)} sh < "$list" || exit 6`,
 		`printf '%s\\n' "$b"`,
@@ -1675,10 +1711,21 @@ export function targetBackupCopy(worktree: string, id: string): string[] {
 export const WARP_REF_BACKUP = "refs/hyper-warp-backup";
 
 /**
+ * Exit code of {@link targetRefs}: the target's repository keeps its refs in
+ * the reftable format (`extensions.refStorage=reftable`). A plain-repo warp
+ * replaces `.git/config` with this machine's, which drops that setting, so
+ * every ref there (a saved one too) would vanish from git's view.
+ */
+export const TARGET_REFTABLE = 29;
+
+/**
  * A read-only script for the target: the refs of the repository at
- * `worktree`, one `<object> <refname>` line each, and `<commit> HEAD` when
- * HEAD is detached. Refs under {@link WARP_REF_BACKUP} (earlier warps'
- * backups) are left out. Prints nothing when there is no `.git` there.
+ * `worktree`, one `<object> <refname> <peeled>` line each (`<peeled>` is the
+ * commit an annotated tag points at, empty otherwise), and `<commit> HEAD`
+ * when HEAD is detached. Refs under {@link WARP_REF_BACKUP} (earlier warps'
+ * backups) are left out. Prints nothing when there is no `.git` there. Exits
+ * {@link TARGET_REFTABLE} when the repository's config sets
+ * `extensions.refStorage` to `reftable`, before listing anything.
  */
 export function targetRefs(worktree: string): string[] {
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
@@ -1686,11 +1733,50 @@ export function targetRefs(worktree: string): string[] {
 		`w=${quote(worktree)}`,
 		'[ -e "$w/.git" ] || exit 0',
 		TARGET_READ_ONLY_GIT,
-		`r=$(g for-each-ref --format='%(objectname) %(refname)') || exit 3`,
+		"f=$(g config --get extensions.refStorage)",
+		`case "$f" in [Rr][Ee][Ff][Tt][Aa][Bb][Ll][Ee]) echo "extensions.refStorage=$f"; exit ${TARGET_REFTABLE} ;; esac`,
+		`r=$(g for-each-ref --format='%(objectname) %(refname) %(*objectname)') || exit 3`,
 		`printf '%s\\n' "$r" | grep -v ' ${WARP_REF_BACKUP}/' || true`,
 		"if ! g symbolic-ref -q HEAD >/dev/null; then",
 		`  h=$(g rev-parse -q --verify HEAD) && printf '%s HEAD\\n' "$h"`,
 		"fi",
+		"exit 0",
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/**
+ * A script for the target that keeps earlier warps' saved refs across a
+ * plain-repo copy. The copy replaces `.git/packed-refs` with this machine's
+ * and leaves `.git/refs/hyper-warp-backup/` alone, so a saved ref survives
+ * only as a LOOSE ref; a `git pack-refs` (or `gc`) on the target since it was
+ * saved moved it into `packed-refs`. Each ref under {@link WARP_REF_BACKUP}
+ * with no loose file is written back as one, the way git writes a loose ref
+ * (`<ref>.lock` created exclusively, then renamed), and read back with
+ * `rev-parse`. Its packed entry is left as it is (a loose ref wins). Prints
+ * how many it wrote, when it wrote any. Prints nothing when there is no
+ * `.git` there.
+ */
+export function targetRefBackupsLoose(worktree: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const script = [
+		`w=${quote(worktree)}`,
+		'[ -e "$w/.git" ] || exit 0',
+		TARGET_READ_ONLY_GIT,
+		"gd=$(g rev-parse --git-common-dir) || exit 3",
+		'case "$gd" in /*) ;; *) gd="$w/$gd" ;; esac',
+		`r=$(g for-each-ref --format='%(objectname) %(refname)' ${WARP_REF_BACKUP}/) || exit 3`,
+		"out=$(printf '%s\\n' \"$r\" | while read -r s ref; do",
+		'  [ -n "$ref" ] || continue',
+		'  f="$gd/$ref"',
+		'  [ -f "$f" ] && continue',
+		'  mkdir -p "$(dirname "$f")" || exit 1',
+		'  ( set -C; printf \'%s\\n\' "$s" > "$f.lock" ) || exit 1',
+		'  mv "$f.lock" "$f" || { rm -f "$f.lock"; exit 1; }',
+		'  [ "$(g rev-parse -q --verify "$ref")" = "$s" ] || exit 1',
+		"  echo x",
+		"done) || exit 1",
+		"[ -n \"$out\" ] && printf '%s\\n' \"$out\" | wc -l | tr -d ' '",
 		"exit 0",
 	].join("\n");
 	return ["sh", "-c", script];
@@ -1732,43 +1818,68 @@ export interface UncoveredRef {
 
 /**
  * Which of `refs` (the target's, from {@link targetRefs}) this machine's
- * repository at `worktree` does NOT cover: covered means a ref of the same
- * name here (HEAD: this machine's HEAD) at the same object, or at a commit
- * the target's is an ancestor of. Read-only: `for-each-ref`, `rev-parse` and
- * `merge-base --is-ancestor`, no optional locks, no fsmonitor.
+ * repository at `worktree` does NOT cover. A ref is covered when a ref of the
+ * same name here (HEAD: this machine's HEAD) points at the same object, or
+ * when the commit it points at (an annotated tag: the commit it tags, `peeled`
+ * as the target read it, so a tag object only the target has counts) exists
+ * here and is reachable from one of this machine's refs or HEAD, whatever
+ * their names: after the copy those refs are the target's, so the commit stays
+ * reachable there. Uncovered: an object this machine doesn't have, a commit
+ * here that none of its refs reach, or anything that is not a commit at all
+ * and differs. Read-only: `for-each-ref`, `rev-parse`, `cat-file
+ * --batch-check` and `rev-list --not --all`, no optional locks, no fsmonitor.
  */
 export function refsNotCoveredHere(
 	worktree: string,
-	refs: { object: string; name: string }[],
+	refs: { object: string; name: string; peeled?: string }[],
 ): UncoveredRef[] {
 	if (refs.length === 0) return [];
-	const run = (...args: string[]) =>
+	const run = (args: string[], input?: string) =>
 		spawnSync(
 			"git",
 			["-C", worktree, "--no-optional-locks", "-c", "core.fsmonitor=false", ...args],
-			{ encoding: "utf8", env: cleanGitEnv() },
+			{ encoding: "utf8", env: cleanGitEnv(), maxBuffer: 256 * 1024 * 1024, input },
 		);
 	const local = new Map<string, string>();
-	const listed = run("for-each-ref", "--format=%(objectname) %(refname)");
+	const listed = run(["for-each-ref", "--format=%(objectname) %(refname)"]);
 	for (const line of (listed.stdout ?? "").split("\n")) {
 		const [object, name] = line.split(" ");
 		if (object && name) local.set(name, object);
 	}
-	const head = run("rev-parse", "-q", "--verify", "HEAD");
+	const head = run(["rev-parse", "-q", "--verify", "HEAD"]);
 	if (head.status === 0) local.set("HEAD", (head.stdout ?? "").trim());
-	const uncovered: UncoveredRef[] = [];
-	for (const ref of refs) {
-		const mine = local.get(ref.name);
-		if (mine === undefined) {
-			uncovered.push({ name: ref.name, reason: "only there" });
-		} else if (mine !== ref.object) {
-			const ancestor = run("merge-base", "--is-ancestor", ref.object, mine);
-			if (ancestor.status !== 0) {
-				uncovered.push({ name: ref.name, reason: "has commits this machine doesn't" });
-			}
+	const pending = refs.filter((ref) => local.get(ref.name) !== ref.object);
+	// The commit each pending ref stands for, when this machine has it.
+	const peeled = run(
+		["cat-file", "--batch-check=%(objectname) %(objecttype)"],
+		pending.map((ref) => `${ref.peeled || ref.object}^{commit}\n`).join(""),
+	);
+	const commits = (peeled.stdout ?? "").split("\n").slice(0, pending.length);
+	const commitOf = (index: number): string | undefined => {
+		const [object, type] = (commits[index] ?? "").split(" ");
+		return peeled.status === 0 && type === "commit" ? object : undefined;
+	};
+	const tips = [...new Set(pending.map((_, index) => commitOf(index)).filter(Boolean))];
+	// Of those commits, the ones none of this machine's refs (or HEAD) reach.
+	const unreached = new Set<string>();
+	if (tips.length > 0) {
+		const walked = run(["rev-list", "--stdin", "--not", "--all"], `${tips.join("\n")}\n`);
+		if (walked.status === 0) {
+			for (const line of (walked.stdout ?? "").split("\n")) if (line) unreached.add(line);
+		} else {
+			for (const tip of tips) unreached.add(tip as string);
 		}
 	}
-	return uncovered;
+	return pending.flatMap((ref, index): UncoveredRef[] => {
+		const commit = commitOf(index);
+		if (commit !== undefined && !unreached.has(commit)) return [];
+		return [
+			{
+				name: ref.name,
+				reason: local.has(ref.name) ? "has commits this machine doesn't" : "only there",
+			},
+		];
+	});
 }
 
 /**
