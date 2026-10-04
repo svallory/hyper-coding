@@ -105,8 +105,12 @@ export function splitSshTarget(target: string): SshTarget {
 	const trimmed = target.trim();
 	if (trimmed === "") throw new SshTargetError(target, "it is empty");
 
-	// Bracketed IPv6 with an optional port: `[::1]` or `[::1]:2222`.
-	if (trimmed.startsWith("[")) {
+	// Bracketed IPv6 with an optional port: `[::1]`, `[::1]:2222`, and the same
+	// with a `user@` in front (`me@[::1]:2222`). The user part is kept on the
+	// host, exactly like `me@box`; only the brackets decide where the port is.
+	const at = trimmed.indexOf("@");
+	const bracket = trimmed.indexOf("[");
+	if (bracket === 0 || (bracket > 0 && at === bracket - 1)) {
 		const close = trimmed.indexOf("]");
 		if (close < 0) throw new SshTargetError(target, "the '[' has no matching ']'");
 		const host = trimmed.slice(0, close + 1);
@@ -159,7 +163,10 @@ export function sshUrl(target: SshTarget, path: string): string {
 	if (!path.startsWith("/")) {
 		throw new RemotePathError(target.host, `${path} (an ssh:// URL needs an absolute path)`);
 	}
-	const authority = target.port === undefined ? target.host : `${target.host}:${target.port}`;
+	// A bare IPv6 literal (`fe80::1`, `me@::1`) has to be bracketed in a URL,
+	// or git reads its last group as a port: `ssh://fe80::1/x` is not a URL.
+	const host = bracketIpv6(target.host);
+	const authority = target.port === undefined ? host : `${host}:${target.port}`;
 	return `ssh://${authority}${path}`;
 }
 
@@ -1014,3 +1021,43 @@ export function sshCommandWithConnectTimeout(
 	if (basename(program) !== SSH_CLIENT || /connecttimeout/i.test(trimmed)) return command;
 	return `${program} -o ConnectTimeout=${seconds}${trimmed.slice(program.length)}`;
 }
+
+/** `fe80::1` -> `[fe80::1]`, `me@::1` -> `me@[::1]`; anything else unchanged. */
+function bracketIpv6(host: string): string {
+	const at = host.lastIndexOf("@");
+	const user = at < 0 ? "" : host.slice(0, at + 1);
+	const address = at < 0 ? host : host.slice(at + 1);
+	if (!address.includes(":") || address.startsWith("[")) return host;
+	return `${user}[${address}]`;
+}
+
+/**
+ * True when `host` (with or without `user@`, bracketed or not) is an IPv6
+ * literal.
+ *
+ * Callers that hand a host to rsync's `host:path` grammar need to know: an
+ * unbracketed `fe80::1:/path` is ambiguous there, and a bracketed one is not
+ * something ssh itself accepts as a destination. Warp refuses such targets
+ * with a clear message instead of failing halfway (see services/warp.ts).
+ */
+export function isIpv6Literal(host: string): boolean {
+	const at = host.lastIndexOf("@");
+	const address = at < 0 ? host : host.slice(at + 1);
+	return address.startsWith("[") || address.includes(":");
+}
+
+/**
+ * The same rule {@link remoteSpec} and `RemoteMachine` enforce on a remote
+ * path, exported so a planner can refuse a path BEFORE it runs anything.
+ *
+ * Warp checks its working directory and transcript folder with this at
+ * planning time: otherwise a path with a space passes `--dry-run`, writes the
+ * marker and copies the transcript, and only then fails at the working
+ * directory copy.
+ */
+export function isSafeRemotePath(path: string): boolean {
+	return SAFE_REMOTE_PATH.test(path);
+}
+
+/** The characters {@link isSafeRemotePath} allows, for error messages. */
+export const SAFE_REMOTE_PATH_DESCRIPTION = "letters, digits and . _ / ~ + -";

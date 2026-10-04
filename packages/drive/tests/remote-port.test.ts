@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { listMachines, MachineError, resolveMachine, targetFor } from "#services/machine";
 import {
+	isIpv6Literal,
+	isSafeRemotePath,
 	RemoteError,
 	RemoteMachine,
 	RemotePathError,
@@ -90,6 +92,41 @@ describe("splitSshTarget", () => {
 
 	it("refuses an unclosed bracket", () => {
 		expect(() => splitSshTarget("[::1")).toThrow(/matching/);
+	});
+});
+
+describe("IPv6 targets with a user", () => {
+	it("splits user@[v6]:port, keeping the user on the host", () => {
+		expect(splitSshTarget("me@[::1]:2222")).toEqual({ host: "me@[::1]", port: 2222 });
+		expect(splitSshTarget("me@[fe80::1]")).toEqual({ host: "me@[fe80::1]" });
+	});
+
+	it("still refuses junk after the closing bracket", () => {
+		expect(() => splitSshTarget("me@[::1]x")).toThrow(/must end at its/);
+	});
+
+	it("recognises every IPv6 literal spelling, and nothing else", () => {
+		for (const host of ["::1", "fe80::1", "me@::1", "[::1]", "me@[::1]"]) {
+			expect(isIpv6Literal(host), host).toBe(true);
+		}
+		for (const host of ["box", "me@box", "10.0.0.1", "me@box.example"]) {
+			expect(isIpv6Literal(host), host).toBe(false);
+		}
+	});
+
+	it("brackets a bare IPv6 host in an ssh:// URL", () => {
+		expect(sshUrl({ host: "fe80::1" }, "/sp.git")).toBe("ssh://[fe80::1]/sp.git");
+		expect(sshUrl({ host: "me@::1", port: 22 }, "/sp.git")).toBe("ssh://me@[::1]:22/sp.git");
+	});
+});
+
+describe("isSafeRemotePath", () => {
+	it("is the rule the copy itself enforces", () => {
+		expect(isSafeRemotePath("/Users/me/work/proj")).toBe(true);
+		expect(isSafeRemotePath("/Users/me/.claude/projects/-Users-me-work")).toBe(true);
+		for (const bad of ["/a b", "/it's", "/a@b", "/$(id)", "/a\nb"]) {
+			expect(isSafeRemotePath(bad), bad).toBe(false);
+		}
 	});
 });
 
