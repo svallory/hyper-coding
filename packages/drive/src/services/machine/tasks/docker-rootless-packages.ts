@@ -181,6 +181,12 @@ have_package() {
 # the repository is not configured yet. Debian 12+ ships /etc/apt/keyrings.
 if ! have_package docker-ce-rootless-extras; then
   if [ ! -f ${DOCKER_REPO_LIST} ]; then
+    # The documented prerequisites for fetching the key: a minimal Debian has
+    # neither.
+    if ! command -v curl >/dev/null 2>&1 || ! have_package ca-certificates; then
+      apt-get update -qq
+      DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl
+    fi
     install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/debian/gpg -o ${DOCKER_KEYRING}
     chmod a+r ${DOCKER_KEYRING}
@@ -197,23 +203,36 @@ fi
 # that runs a daemon. uidmap gives newuidmap/newgidmap, dbus-user-session the
 # user bus, slirp4netns the network namespace.
 export DEBIAN_FRONTEND=noninteractive
+had_docker_ce=0
+have_package docker-ce && had_docker_ce=1
 missing_packages=""
 for package in ${ROOTLESS_PACKAGES.join(" ")}; do
   have_package "$package" || missing_packages="$missing_packages $package"
 done
 [ -z "$missing_packages" ] || apt-get install -y $missing_packages
 
+# docker-ce is here for its binaries, not for the system-wide daemon its
+# package enables and starts. When THIS script brought docker-ce in, that root
+# daemon is stopped and disabled again, as docs.docker.com's rootless page
+# recommends — this machine did not have one before. A docker-ce that was
+# already installed is someone's own rootful Docker and is left alone.
+if [ "$had_docker_ce" = 0 ] && have_package docker-ce; then
+  systemctl disable --now docker.service docker.socket >/dev/null 2>&1 || true
+  echo "hyper: stopped and disabled the system-wide Docker daemon docker-ce installs; the agent runs its own."
+fi
+
 # A subuid/subgid range for the agent: the user namespace maps the container's
 # uids onto a range of host uids, and without one the daemon starts and then
 # refuses to run anything. Guarded on the entry existing, so a range that is
 # already there is left exactly as it is.
-for file in /etc/subuid /etc/subgid; do
-  if ! grep -q "^$agent_user:" "$file" 2>/dev/null; then
-    usermod --add-subuids ${SUBID_RANGE} --add-subgids ${SUBID_RANGE} "$agent_user" 2>/dev/null || {
-      printf '%s:${SUBID_RANGE_START}:${SUBID_RANGE_COUNT}\\n' "$agent_user" >> "$file"
-    }
-  fi
-done
+# Each file on its own: a user with a subuid range and no subgid range gets only
+# the missing one, never a second copy of the one it has.
+if ! grep -q "^$agent_user:" /etc/subuid 2>/dev/null; then
+  usermod --add-subuids ${SUBID_RANGE} "$agent_user"
+fi
+if ! grep -q "^$agent_user:" /etc/subgid 2>/dev/null; then
+  usermod --add-subgids ${SUBID_RANGE} "$agent_user"
+fi
 
 # Linger, so the agent's systemd --user units — including the rootless Docker
 # daemon — keep running with no session of its own. Idempotent.
@@ -252,7 +271,3 @@ chmod 0600 "$home/.ssh/authorized_keys"
 grep -qxF "$key" "$home/.ssh/authorized_keys" || printf '%s\\n' "$key" >> "$home/.ssh/authorized_keys"`;
 	return `runuser -u "$agent_user" -- ${shellCommand(body)} "$agent_user" ${shellQuote(key)}`;
 }
-
-/** `100000-165535` as the two numbers the fallback line needs. */
-export const SUBID_RANGE_START = "100000";
-export const SUBID_RANGE_COUNT = "65536";
