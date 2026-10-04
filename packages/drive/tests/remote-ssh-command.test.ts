@@ -34,9 +34,24 @@ describe("sshCommandWithBatchMode", () => {
 		// Leading environment assignments, the way a shell reads them.
 		["FOO=1 ssh -i /k", "FOO=1 ssh -o BatchMode=yes -i /k"],
 		["A=1 B=2 ssh", "A=1 B=2 ssh -o BatchMode=yes"],
-		// A quoted program path, which a shell would run as one word.
-		['"/path with space/ssh" -i /k', "/path with space/ssh -o BatchMode=yes -i /k"],
-		["'/opt/ssh' -i /k", "/opt/ssh -o BatchMode=yes -i /k"],
+		// A quoted program path, which a shell would run as one word. The quotes
+		// stay exactly as written: git hands this string to a shell, and an
+		// unquoted space would split the program path in two.
+		['"/path with space/ssh" -i /k', '"/path with space/ssh" -o BatchMode=yes -i /k'],
+		["'/opt/ssh' -i /k", "'/opt/ssh' -o BatchMode=yes -i /k"],
+		['"/p/with \\"quote\\"/ssh" -i /k', '"/p/with \\"quote\\"/ssh" -o BatchMode=yes -i /k'],
+		["/p/with\\ space/ssh -i /k", "/p/with\\ space/ssh -o BatchMode=yes -i /k"],
+		// The program word is found by position, never by searching for "ssh":
+		// an assignment whose VALUE is ssh is still an assignment.
+		["X=ssh ssh -i /k", "X=ssh ssh -o BatchMode=yes -i /k"],
+		['VAR="a b" ssh -i /k', 'VAR="a b" ssh -o BatchMode=yes -i /k'],
+		["VAR='a b' C=\\ d ssh", "VAR='a b' C=\\ d ssh -o BatchMode=yes"],
+		// `env` followed by assignments is read like assignments.
+		["env FOO=1 ssh -i /k", "env FOO=1 ssh -o BatchMode=yes -i /k"],
+		["/usr/bin/env FOO=1 BAR=2 ssh", "/usr/bin/env FOO=1 BAR=2 ssh -o BatchMode=yes"],
+		["env ssh -p 22", "env ssh -o BatchMode=yes -p 22"],
+		// Redirections after the program are the shell's business, not ours.
+		["ssh -i /k 2>/dev/null", "ssh -o BatchMode=yes -i /k 2>/dev/null"],
 		// A case-insensitive filesystem will happily run `SSH`.
 		["SSH -i /k", "SSH -o BatchMode=yes -i /k"],
 		["Ssh -o BatchMode=no", "Ssh -o BatchMode=yes -o BatchMode=no"],
@@ -49,14 +64,37 @@ describe("sshCommandWithBatchMode", () => {
 		"sshpass -p password-value ssh -i /k",
 		"/opt/myssh -i /k",
 		"company-ssh-wrapper",
+		// Anything the scanner cannot read with confidence is left exactly as
+		// the user wrote it, rather than guessed at.
+		'"/opt/ssh -i /k',
+		"'/opt/ssh -i /k",
+		"ssh -i /k \\",
+		"$(which ssh) -i /k",
+		'"$(which ssh)" -i /k',
+		"`which ssh` -i /k",
+		"ssh -i /k | tee /tmp/log",
+		"ssh -i /k; echo done",
+		"ssh -i /k && true",
+		"(ssh -i /k)",
+		"ssh -i /k\nssh",
+		// `env` options change what follows; not guessed at.
+		"env -i ssh",
+		"env -u FOO ssh",
+		// Only assignments: there is no program word at all.
+		"FOO=1",
+		// A quoted NAME is not an assignment to a shell, so it is the program.
+		'"A"=1 ssh',
 	])("leaves %s alone", (command) => {
 		expect(sshCommandWithBatchMode(command)).toBe(command);
 	});
-	it("trims the ends without rewriting the command's own spacing", () => {
+	it("keeps every byte of the command, its own spacing included", () => {
 		// Only the inserted option is new; the user's own words pass through as
 		// written, so a command they have already tested keeps behaving the same.
 		expect(sshCommandWithBatchMode("  ssh  -i /tmp/key  ")).toBe(
-			"ssh -o BatchMode=yes  -i /tmp/key",
+			"  ssh -o BatchMode=yes  -i /tmp/key  ",
+		);
+		expect(sshCommandWithBatchMode("\tFOO=1\tssh\t-i /k")).toBe(
+			"\tFOO=1\tssh -o BatchMode=yes\t-i /k",
 		);
 	});
 	it("never invents an option for a bare program word", () => {

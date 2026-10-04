@@ -13,11 +13,14 @@ import { git } from "#tests/tmp-manifest";
  */
 let root: string;
 let recorder: string;
+/** What the fake ssh saw of `$FOO` and `$VAR`, one `FOO|VAR` line per run. */
+let environmentLog: string;
 
 /** Clone something only reachable over ssh; the fake always refuses. */
 function cloneThroughFakeSsh(): string {
 	rmSync(join(root, "project.git"), { recursive: true, force: true });
 	rmSync(recorder, { force: true });
+	rmSync(environmentLog, { force: true });
 	try {
 		cloneProjectRepoBare(join(root, "project.git"), "ssh://git@example.invalid/project", "main", {
 			allowLocal: false,
@@ -40,16 +43,24 @@ function exists(path: string): boolean {
 beforeEach(() => {
 	root = mkdtempSync(join(tmpdir(), "hyper-clone-ssh-"));
 	recorder = join(root, "ssh.log");
+	environmentLog = join(root, "ssh-env.log");
 	const bin = join(root, "bin");
 	mkdirSync(bin, { recursive: true });
 	mkdirSync(join(root, "home"));
 	// `ssh` on PATH and an absolute wrapper both record, so every case routes
 	// through something this test controls — no real ssh, no network.
-	for (const name of ["ssh", "recording-ssh"]) {
-		const script = join(bin, name);
+	// A directory with a space in its name holds a third one: a quoted program
+	// path must reach the shell still quoted, or it splits in two.
+	mkdirSync(join(root, "with space"));
+	for (const script of [
+		join(bin, "ssh"),
+		join(bin, "recording-ssh"),
+		join(root, "with space", "ssh"),
+	]) {
 		writeFileSync(
 			script,
-			`#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(recorder)}\nexit 1\n`,
+			`#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(recorder)}\n` +
+				`printf '%s|%s\\n' "$FOO" "$VAR" >> ${JSON.stringify(environmentLog)}\nexit 1\n`,
 			{ mode: 0o755 },
 		);
 		chmodSync(script, 0o755);
@@ -141,5 +152,32 @@ describe("the user's own ssh command, against real git", () => {
 		const logged = cloneThroughFakeSsh();
 		expect(logged).toContain("-o BatchMode=yes");
 		expect(logged.indexOf("-o BatchMode=yes")).toBeLessThan(logged.indexOf("-o BatchMode=no"));
+	});
+	it("keeps a quoted program path with a space quoted, and still adds BatchMode", () => {
+		// The shell must see ONE word. Unquoting it (the round-3 regression)
+		// made git run `/…/with` and the clone failed before ssh was reached.
+		vi.stubEnv("GIT_SSH_COMMAND", `"${join(root, "with space", "ssh")}" -i /tmp/key`);
+		const logged = cloneThroughFakeSsh();
+		expect(logged).not.toBe("");
+		expect(logged.startsWith("-o BatchMode=yes -i /tmp/key")).toBe(true);
+	});
+	it("finds the program after an assignment whose value is ssh", () => {
+		// `indexOf("ssh")` used to land inside `X=ssh` and put `-o` in front of
+		// the program, which the shell then ran as a command.
+		vi.stubEnv("GIT_SSH_COMMAND", "X=ssh ssh -i /tmp/key");
+		const logged = cloneThroughFakeSsh();
+		expect(logged.startsWith("-o BatchMode=yes -i /tmp/key")).toBe(true);
+	});
+	it("reads `env FOO=1 ssh` like an assignment and keeps the variable", () => {
+		vi.stubEnv("GIT_SSH_COMMAND", "env FOO=1 ssh -i /tmp/key");
+		const logged = cloneThroughFakeSsh();
+		expect(logged.startsWith("-o BatchMode=yes -i /tmp/key")).toBe(true);
+		expect(readFileSync(environmentLog, "utf8").split("\n")[0]).toBe("1|");
+	});
+	it("keeps a quoted assignment value whole", () => {
+		vi.stubEnv("GIT_SSH_COMMAND", 'VAR="a b" ssh -i /tmp/key');
+		const logged = cloneThroughFakeSsh();
+		expect(logged.startsWith("-o BatchMode=yes -i /tmp/key")).toBe(true);
+		expect(readFileSync(environmentLog, "utf8").split("\n")[0]).toBe("|a b");
 	});
 });
