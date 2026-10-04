@@ -1,9 +1,11 @@
 /** Day-to-day space history. No manifest writes and no implicit network reads. */
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { renderGitignore } from "#services/allowlist";
 import { detectSpace } from "#services/space";
 import {
+	gitSaid,
 	hasSpaceGit,
 	readCadence,
 	readSpaceConfig,
@@ -14,7 +16,6 @@ import {
 	spaceGit,
 	writeTracked,
 } from "#services/space-git";
-
 import { incomingReviewPaths, validateIncomingSpace } from "#services/space-incoming";
 
 export interface InitializedSpace {
@@ -27,13 +28,13 @@ export function requireInitializedSpace(dir = process.cwd()): InitializedSpace {
 	const info = detectSpace(dir);
 	if (info.root === null || info.layout === null) {
 		throw new SpaceGitError(
-			`${dir} is not inside a hyper space. Change to a space directory, then run \`hyper space init\`.`,
+			`${escapeControlCharacters(dir)} is not inside a hyper space. Change to a space directory, then run \`hyper space init\`.`,
 		);
 	}
 	const root = info.root;
 	if (!hasSpaceGit(root))
 		throw new SpaceGitError(
-			`${root} is not initialised for hyperdrive. Run \`hyper space init\` first.`,
+			`${escapeControlCharacters(root)} is not initialised for hyperdrive. Run \`hyper space init\` first.`,
 		);
 	if (readSpaceConfig(root, "core.worktree") !== "../..") {
 		throw new SpaceGitError(
@@ -117,11 +118,11 @@ export function fetchSpace(root: string, branch: string): void {
 		const detail = (result.stderr || result.stdout).trim();
 		if (/couldn't find remote ref/i.test(detail))
 			throw new SpaceGitError(
-				`Your hyperdrive has no ${branch} to fetch. Run \`hyper space push\` to publish the local branch.`,
+				`Your hyperdrive has no ${escapeControlCharacters(branch)} to fetch. Run \`hyper space push\` to publish the local branch.`,
 			);
 		throw new SpaceRefusedError(
 			"unreachable",
-			`I couldn't reach your hyperdrive at ${remote} to fetch ${branch}. Check the remote and your network, then retry. git said: ${detail}`,
+			`I couldn't reach your hyperdrive at ${escapeControlCharacters(remote)} to fetch ${escapeControlCharacters(branch)}. Check the remote and your network, then retry. git said: ${gitSaid(detail)}`,
 		);
 	}
 }
@@ -147,7 +148,7 @@ function clearRefusal(root: string): void {
 			allowFailure: true,
 		});
 		if (result.status !== 0 && result.status !== 5)
-			throw new SpaceGitError(`Could not clear the last pull refusal: ${result.stderr.trim()}`);
+			throw new SpaceGitError(`Could not clear the last pull refusal: ${gitSaid(result.stderr)}`);
 	}
 }
 
@@ -179,7 +180,7 @@ export async function pullSpace(
 			const result = spaceGit(root, ["merge-base", "--is-ancestor", a, b], { allowFailure: true });
 			if (result.status > 1)
 				throw new SpaceGitError(
-					`I couldn't compare this space's histories. Inspect \`hyper space log\` before retrying. ${result.stderr.trim()}`,
+					`I couldn't compare this space's histories. Inspect \`hyper space log\` before retrying. ${gitSaid(result.stderr)}`,
 				);
 			return result.status === 0;
 		};
@@ -187,7 +188,7 @@ export async function pullSpace(
 		if (!isAncestor(before, target)) {
 			throw new SpaceRefusedError(
 				"diverged",
-				`The local and remote histories of ${branch} have diverged. Nothing was merged or rebased; your local history and files were kept. Inspect \`hyper space log\` and reconcile the histories manually before retrying.`,
+				`The local and remote histories of ${escapeControlCharacters(branch)} have diverged. Nothing was merged or rebased; your local history and files were kept. Inspect \`hyper space log\` and reconcile the histories manually before retrying.`,
 			);
 		}
 		const incoming = await validateIncomingSpace(root, target, before);
@@ -219,7 +220,7 @@ export async function pullSpace(
 		) {
 			throw new SpaceRefusedError(
 				"consent-required",
-				`Incoming tracked entries would broaden what this machine uploads:\n${addedTracked.map((entry) => `  ${JSON.stringify(entry.path)}: ${entry.localFiles} local files would become eligible for commit`).join("\n")}\nNothing was merged. Review these paths, then run \`hyper space pull --accept-tracked\` to consent.`,
+				`Incoming tracked entries would broaden what this machine uploads:\n${addedTracked.map((entry) => `  ${quoteForTerminal(entry.path)}: ${entry.localFiles} local files would become eligible for commit`).join("\n")}\nNothing was merged. Review these paths, then run \`hyper space pull --accept-tracked\` to consent.`,
 			);
 		}
 		const retained = local.filter((entry) => !incoming.tracked.includes(entry));
@@ -258,11 +259,11 @@ export async function pullSpace(
 			) {
 				throw new SpaceRefusedError(
 					"local-changes",
-					`Local changes would be overwritten by the fast-forward of ${branch}. Move those files aside or back them up before retrying; ignored paths cannot be saved by \`hyper space commit\`. git said: ${detail}`,
+					`Local changes would be overwritten by the fast-forward of ${escapeControlCharacters(branch)}. Move those files aside or back them up before retrying; ignored paths cannot be saved by \`hyper space commit\`. git said: ${gitSaid(detail)}`,
 				);
 			}
 			throw new SpaceGitError(
-				`I couldn't fast-forward ${branch}; no merge or rebase was requested. Inspect \`hyper space status\` before retrying. git said: ${detail}`,
+				`I couldn't fast-forward ${escapeControlCharacters(branch)}; no merge or rebase was requested. Inspect \`hyper space status\` before retrying. git said: ${gitSaid(detail)}`,
 			);
 		}
 		writeTracked(root, union);
@@ -354,7 +355,7 @@ export function logSpace(root: string, branch: string, args: readonly string[]):
 	for (const arg of options) {
 		if (expanding.has(arg.split("=")[0]))
 			throw new SpaceGitError(
-				`${arg} expands beyond this space's branch; omit it from \`hyper space log\`.`,
+				`${escapeControlCharacters(arg)} expands beyond this space's branch; omit it from \`hyper space log\`.`,
 			);
 	}
 	// Let git recognise positional revisions, including ranges and exclusions.

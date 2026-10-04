@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { parse as parseTOML, stringify as stringifyTOML } from "smol-toml";
+import { quoteForTerminal } from "#lib/terminal-text";
 // The engine owns the rules for what an ignore pattern can be (C-8): the
 // config loader asks through the engine module rather than importing the
 // implementation directly.
@@ -224,7 +225,7 @@ function validate(path: string, config: DriveConfig): void {
 	if (!ALLOWED_CADENCES.includes(config.defaults.cadence)) {
 		throw configProblem(
 			path,
-			`defaults.cadence must be one of "manual", "session-end", "session-end+push" (or empty) — got ${JSON.stringify(config.defaults.cadence)}.`,
+			`defaults.cadence must be one of "manual", "session-end", "session-end+push" (or empty) — got ${quoteForTerminal(String(config.defaults.cadence))}.`,
 		);
 	}
 

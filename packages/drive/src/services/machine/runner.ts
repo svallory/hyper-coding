@@ -22,6 +22,7 @@
 
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { quoteForTerminal } from "#lib/terminal-text";
 import type { RunResult } from "#services/remote";
 import {
 	assembleRootScript,
@@ -171,7 +172,7 @@ async function remoteHome(ctx: TaskContext): Promise<string> {
 	const home = result.stdout.trim();
 	if (result.code === 0 && home.startsWith("/")) return home;
 	throw new Error(
-		`I couldn't work out the home directory on ${where(ctx)} (asked it, got ${JSON.stringify(result.stdout.trim()) || "nothing"}). Set \`home\` for this machine in your hyperdrive config, or run the script there yourself and pick "I've run it".`,
+		`I couldn't work out the home directory on ${where(ctx)} (asked it, got ${result.stdout.trim() === "" ? "nothing" : quoteForTerminal(result.stdout.trim())}). Set \`home\` for this machine in your hyperdrive config, or run the script there yourself and pick "I've run it".`,
 	);
 }
 

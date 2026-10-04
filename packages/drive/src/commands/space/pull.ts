@@ -1,6 +1,7 @@
 import * as p from "@clack/prompts";
 import { Flags } from "@oclif/core";
 import { SpaceCommand } from "#lib/space-command";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { REVIEW_PATHS_SHOWN } from "#services/space-git";
 import { pullSpace } from "#services/space-history";
 
@@ -33,7 +34,7 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 						? async (entries) => {
 								for (const entry of entries)
 									this.log(
-										`${JSON.stringify(entry.path)}: ${entry.localFiles} local files would become eligible for commit`,
+										`${quoteForTerminal(entry.path)}: ${entry.localFiles} local files would become eligible for commit`,
 									);
 								const answer = await p.confirm({
 									message: "Accept these incoming tracked directories on this machine?",
@@ -50,12 +51,12 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 		}
 		this.log(
 			result.updated
-				? `Fast-forwarded ${result.branch}.`
-				: `${result.branch} is already up to date.`,
+				? `Fast-forwarded ${escapeControlCharacters(result.branch)}.`
+				: `${escapeControlCharacters(result.branch)} is already up to date.`,
 		);
 		for (const entry of result.addedTracked)
 			this.log(
-				`Accepted ${JSON.stringify(entry.path)}: ${entry.localFiles} local files are now eligible for commit.`,
+				`Accepted ${quoteForTerminal(entry.path)}: ${entry.localFiles} local files are now eligible for commit.`,
 			);
 		if (result.allowlistRestored)
 			this.log(
@@ -64,7 +65,7 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 		if (result.reviewPaths.length > 0) {
 			this.log("These can run commands or instruct agents; review them:");
 			for (const path of result.reviewPaths.slice(0, REVIEW_PATHS_SHOWN))
-				this.log(`  ${JSON.stringify(path)}`);
+				this.log(`  ${quoteForTerminal(path)}`);
 			const hidden = result.reviewPaths.length - REVIEW_PATHS_SHOWN;
 			if (hidden > 0) this.log(`  … ${hidden} more; run with --json to see them all`);
 		}

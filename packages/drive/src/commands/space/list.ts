@@ -2,6 +2,7 @@ import { Flags } from "@oclif/core";
 import { ConfigError, configPath, loadConfig } from "#config/index";
 import { ManifestError } from "#config/schema";
 import { BaseCommand } from "#lib/base-command";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { driveCheckoutOrigin, readManifest } from "#services/manifest";
 
 export default class List extends BaseCommand<typeof List> {
@@ -33,8 +34,8 @@ export default class List extends BaseCommand<typeof List> {
 			if (origin !== null && origin !== config.remote) {
 				throw new ManifestError(
 					origin,
-					`the hyperdrive checkout is a clone of ${JSON.stringify(origin)}, ` +
-						`but your config points at ${JSON.stringify(config.remote)} — run \`hyper drive init\`.`,
+					`the hyperdrive checkout is a clone of ${quoteForTerminal(origin)}, ` +
+						`but your config points at ${quoteForTerminal(config.remote)} — run \`hyper drive init\`.`,
 				);
 			}
 			const manifest = readManifest();
@@ -42,7 +43,7 @@ export default class List extends BaseCommand<typeof List> {
 				for (const repo of space.repos) {
 					if (!repo.url.trim())
 						this.warn(
-							`${space.name}/${repo.slug ?? "project"} has no project URL; space clone will skip it. Add its origin on the original machine and run hyper space init --refresh.`,
+							`${escapeControlCharacters(space.name)}/${escapeControlCharacters(repo.slug ?? "project")} has no project URL; space clone will skip it. Add its origin on the original machine and run hyper space init --refresh.`,
 						);
 				}
 			}
@@ -56,13 +57,13 @@ export default class List extends BaseCommand<typeof List> {
 			}
 			const rows = [
 				["NAME", "BRANCH", "LAYOUT", "PATH", "CADENCE"],
-				...manifest.spaces.map((space) => [
-					space.name,
-					space.branch,
-					space.layout,
-					space.path,
-					space.cadence || "-",
-				]),
+				// Manifest data, so escaped for the terminal; `--json` above
+				// prints the same values raw.
+				...manifest.spaces.map((space) =>
+					[space.name, space.branch, space.layout, space.path, space.cadence || "-"].map((cell) =>
+						escapeControlCharacters(String(cell)),
+					),
+				),
 			];
 			const widths = rows[0].map((_, i) => Math.max(...rows.map((row) => row[i].length)));
 			for (const row of rows) {

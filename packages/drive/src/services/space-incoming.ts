@@ -1,6 +1,7 @@
 /** Incoming space history is untrusted: inspect objects before any checkout or fast-forward. */
 import { existsSync, realpathSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
+import { quoteForTerminal } from "#lib/terminal-text";
 import {
 	isHyperAllowlist,
 	normaliseTrackedEntry,
@@ -19,7 +20,9 @@ export class SpaceIncomingError extends SpaceGitError {
 	readonly reason = "incoming-history-refused";
 	constructor(path: string, reason: string) {
 		super(
-			`Refusing incoming space history: ${JSON.stringify(path)} ${reason}. Local history and files were not changed; repair the remote history before retrying.`,
+			// The path is remote data, and the very message naming a hostile
+			// name must not print it raw: `JSON.stringify` escapes C0 only.
+			`Refusing incoming space history: ${quoteForTerminal(path)} ${reason}. Local history and files were not changed; repair the remote history before retrying.`,
 		);
 		this.name = "SpaceIncomingError";
 	}
@@ -39,7 +42,7 @@ function incomingTrackedEntries(contents: string): string[] {
 		if (base.has(line)) continue;
 		const match = /^!\/(.+)\/(?:\*\*)?$/.exec(line);
 		if (!match)
-			refuse(".gitignore", `contains an unsupported allowlist rule ${JSON.stringify(line)}`);
+			refuse(".gitignore", `contains an unsupported allowlist rule ${quoteForTerminal(line)}`);
 		let entry: string;
 		try {
 			entry = normaliseTrackedEntry(match[1]);
@@ -49,7 +52,8 @@ function incomingTrackedEntries(contents: string): string[] {
 				`has an invalid tracked entry: ${error instanceof Error ? error.message : String(error)}`,
 			);
 		}
-		if (unsafePath(entry)) refuse(".gitignore", `tracks a protected path ${JSON.stringify(entry)}`);
+		if (unsafePath(entry))
+			refuse(".gitignore", `tracks a protected path ${quoteForTerminal(entry)}`);
 		if (!tracked.includes(entry)) tracked.push(entry);
 	}
 	// Merely retaining the marker is not authority to add negations or reorder safety rules.

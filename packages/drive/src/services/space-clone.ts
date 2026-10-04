@@ -17,6 +17,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { ConfigError, configPath, loadConfig } from "#config/index";
 import type { SpaceEntry } from "#config/schema";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { normaliseTrackedEntry } from "#services/allowlist";
 import { ensureDriveCheckout, readManifest } from "#services/manifest";
 import { libPath } from "#services/space";
@@ -25,11 +26,11 @@ import {
 	cleanGitEnv,
 	cloneProjectRepoBare,
 	describeReviewPaths,
-	escapeControlCharacters,
 	fetchSpaceClone,
 	initSpaceGitDir,
 	SpaceGitError,
 	SpaceGitInterruptedError,
+	sanitizeForTerminal,
 	spaceGit,
 	writeCadence,
 	writeTracked,
@@ -50,7 +51,7 @@ export function cloneTargetPath(recorded: string, explicit?: string, home = home
 	if (explicit !== undefined) return resolve(explicit);
 	const refuse = (): never => {
 		throw new Error(
-			`The manifest path ${JSON.stringify(escapeControlCharacters(recorded))} isn't a safe home-relative destination on this machine. Pass an explicit path: hyper space clone <name> <path>.`,
+			`The manifest path ${quoteForTerminal(recorded)} isn't a safe home-relative destination on this machine. Pass an explicit path: hyper space clone <name> <path>.`,
 		);
 	};
 	if (
@@ -89,7 +90,7 @@ function assertPhysicalHome(target: string): void {
 	const inside = relative(home, physical);
 	if (!inside || inside === ".." || inside.startsWith(`..${sep}`) || isAbsolute(inside)) {
 		throw new Error(
-			`The recorded destination resolves outside HOME through a symlink. Pass an explicit path to hyper space clone instead: ${target}`,
+			`The recorded destination resolves outside HOME through a symlink. Pass an explicit path to hyper space clone instead: ${escapeControlCharacters(target)}`,
 		);
 	}
 	const segments = inside.split(sep);
@@ -98,7 +99,7 @@ function assertPhysicalHome(target: string): void {
 		segments[0].toLowerCase() === "library"
 	) {
 		throw new Error(
-			`The recorded destination resolves into a protected HOME path through a symlink (${physical}). Pass an explicit path to hyper space clone instead.`,
+			`The recorded destination resolves into a protected HOME path through a symlink (${escapeControlCharacters(physical)}). Pass an explicit path to hyper space clone instead.`,
 		);
 	}
 }
@@ -109,16 +110,16 @@ function assertPhysicalHome(target: string): void {
  * what this branch would bring in, and the target has been put back.
  *
  * Names are remote data: a format character (bidi, ZWJ) is legitimate in a
- * real filename, so it is kept and always escaped on the way out.
+ * real filename, so it is returned raw and escaped only in text output.
  */
 async function reviewPathsOrFail(root: string, tip: string): Promise<string[]> {
 	try {
-		return (await incomingReviewPaths(root, tip)).map(escapeControlCharacters);
+		return await incomingReviewPaths(root, tip);
 	} catch (error) {
 		const detail = error instanceof Error ? error.message : String(error);
 		throw new SpaceGitError(
 			`I couldn't finish the review of what this space would bring in: ${detail} ` +
-				`Nothing was checked out and the target was restored. Retry the clone, or inspect ${root} yourself if it keeps failing.`,
+				`Nothing was checked out and the target was restored. Retry the clone, or inspect ${escapeControlCharacters(root)} yourself if it keeps failing.`,
 		);
 	}
 }
@@ -136,7 +137,7 @@ function cloneLibrary(
 		throw new SpaceGitInterruptedError(result.signal);
 	if (result.error || result.status !== 0) {
 		throw new Error(
-			`I couldn't finish the space layout with ${fn}. Check bash and filesystem permissions, then retry. ${result.error?.message ?? result.stderr.trim()}`,
+			`I couldn't finish the space layout with ${fn}. Check bash and filesystem permissions, then retry. ${result.error?.message ?? sanitizeForTerminal(result.stderr.trim())}`,
 		);
 	}
 }
@@ -216,7 +217,7 @@ export async function cloneSpace(
 		const entry = spaces.find((space) => space.name === name);
 		if (!entry)
 			throw new Error(
-				`No space named ${JSON.stringify(name)} is registered. Known spaces: ${spaces.map((space) => escapeControlCharacters(space.name)).join(", ") || "none yet"}. Use one of those names, or run hyper space init on the original machine.`,
+				`No space named ${quoteForTerminal(name)} is registered. Known spaces: ${spaces.map((space) => escapeControlCharacters(space.name)).join(", ") || "none yet"}. Use one of those names, or run hyper space init on the original machine.`,
 			);
 		validateCloneEntry(entry, config.remote);
 		root = cloneTargetPath(entry.path, explicitPath);
@@ -226,7 +227,7 @@ export async function cloneSpace(
 			if (!options.yes) {
 				if (!options.confirmTarget)
 					throw new Error(
-						`The manifest proposes ${root} (recorded as ${JSON.stringify(escapeControlCharacters(entry.path))}). Review that target and pass --yes, or provide an explicit path.`,
+						`The manifest proposes ${escapeControlCharacters(root)} (recorded as ${quoteForTerminal(entry.path)}). Review that target and pass --yes, or provide an explicit path.`,
 					);
 				if (!(await options.confirmTarget(root, entry.path)))
 					throw new CloneCancelledError("Clone cancelled; no target was created.");
@@ -237,7 +238,7 @@ export async function cloneSpace(
 			const physical = resolve(realpathSync(parent), relative(parent, root));
 			if (physical !== root)
 				warnings.push(
-					`The explicit target ${root} has a symlinked parent; its physical destination is ${physical}.`,
+					`The explicit target ${escapeControlCharacters(root)} has a symlinked parent; its physical destination is ${escapeControlCharacters(physical)}.`,
 				);
 		}
 		const before = lstatSync(root, { throwIfNoEntry: false });
@@ -246,7 +247,7 @@ export async function cloneSpace(
 			(!before.isDirectory() || before.isSymbolicLink() || readdirSync(root).length > 0)
 		)
 			throw new Error(
-				`The target ${root} already exists and isn't an empty directory. Choose a new path or an empty directory; nothing there was changed.`,
+				`The target ${escapeControlCharacters(root)} already exists and isn't an empty directory. Choose a new path or an empty directory; nothing there was changed.`,
 			);
 		checkSignal();
 		if (!before) {
@@ -280,7 +281,7 @@ export async function cloneSpace(
 			.filter((path) => !allowedTracked.has(path));
 		if (extraManifestTracked.length)
 			warnings.push(
-				`Manifest tracked entries ${extraManifestTracked.map((path) => JSON.stringify(escapeControlCharacters(path))).join(", ")} are not in the incoming allowlist; trusting the allowlist instead.`,
+				`Manifest tracked entries ${extraManifestTracked.map((path) => quoteForTerminal(path)).join(", ")} are not in the incoming allowlist; trusting the allowlist instead.`,
 			);
 		// Checkout privately, then publish files with exclusive creation. A
 		// raced-in user file cannot be overwritten or mistaken for our output.
@@ -329,9 +330,9 @@ export async function cloneSpace(
 			worktrees: [],
 			libraryWrites: [],
 			warnings,
-			// Names from the shared review step are remote data: a format
-			// character is legitimate in a real filename, so it is kept here and
-			// always escaped on the way out.
+			// Raw, like every `--json` value: a format character is legitimate
+			// in a real filename, and JSON serialisation is the consumer's
+			// escaping. The text warning below escapes each name.
 			untrustedConfiguration: await reviewPathsOrFail(root, incoming.tip),
 		};
 		if (result.untrustedConfiguration.length)
@@ -348,7 +349,7 @@ export async function cloneSpace(
 			checkSignal();
 			if (!repo.url.trim()) {
 				result.warnings.push(
-					`Skipping ${repo.slug ?? name}: no project URL in the manifest. Add its origin on the original machine and run hyper space init --refresh.`,
+					`Skipping ${escapeControlCharacters(repo.slug ?? name)}: no project URL in the manifest. Add its origin on the original machine and run hyper space init --refresh.`,
 				);
 				continue;
 			}
@@ -365,7 +366,7 @@ export async function cloneSpace(
 			ownedGitDirs.add(gitDir);
 			if (cloned.fellBack)
 				result.warnings.push(
-					`The manifest names ${JSON.stringify(cloned.requestedBranch)} as ${repo.slug ?? name}'s default branch, but that branch is not on the remote; using its HEAD branch ${JSON.stringify(cloned.branch)} instead. Fix the branch on the original machine and run hyper space init --refresh.`,
+					`The manifest names ${quoteForTerminal(cloned.requestedBranch)} as ${escapeControlCharacters(repo.slug ?? name)}'s default branch, but that branch is not on the remote; using its HEAD branch ${quoteForTerminal(cloned.branch)} instead. Fix the branch on the original machine and run hyper space init --refresh.`,
 				);
 			cloneLibrary("ensure_worktrunk_config", [gitDir, cloned.branch]);
 			result.libraryWrites.push(join(gitDir, "config"));
@@ -431,7 +432,7 @@ export async function cloneSpace(
 					? error.message
 					: String(error);
 		const cleanup = failures.length
-			? ` Cleanup is incomplete at ${failures.join(", ")}; inspect it before retrying.`
+			? ` Cleanup is incomplete at ${escapeControlCharacters(failures.join(", "))}; inspect it before retrying.`
 			: "";
 		if (error instanceof SpaceGitInterruptedError)
 			throw new SpaceGitInterruptedError(
@@ -440,7 +441,7 @@ export async function cloneSpace(
 			);
 		if (error instanceof CloneCancelledError) throw error;
 		throw new SpaceGitError(
-			`I couldn't clone ${JSON.stringify(name)}: ${detail}${cleanup} Once the problem is fixed, run hyper space clone again.`,
+			`I couldn't clone ${quoteForTerminal(name)}: ${detail}${cleanup} Once the problem is fixed, run hyper space clone again.`,
 		);
 	} finally {
 		process.off("SIGINT", onInt);

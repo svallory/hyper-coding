@@ -17,9 +17,13 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { SyncCadence } from "#config/schema";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 // C-16: only services/remote.ts may name an SSH program, so the command-shape
 // knowledge lives there and is imported, not re-spelled here.
 import { sshCommandWithBatchMode } from "#services/remote";
+
+// Re-exported: callers already import the escape from here.
+export { escapeControlCharacters, quoteForTerminal };
 
 /**
  * The cadence values the space git dir may hold. Mirrors the union in
@@ -203,7 +207,7 @@ export function spaceGit(
 		throw new SpaceGitError(
 			detail === ""
 				? `git ${args[0] ?? ""} failed with exit code ${status} and said nothing.`
-				: detail,
+				: gitSaid(detail),
 		);
 	}
 	return { status, stdout, stderr, signal: result.signal };
@@ -424,12 +428,12 @@ export function initSpaceGitDir(
 		const worktree = readSpaceConfig(spaceRoot, "core.worktree");
 		if (worktree === null) {
 			throw new SpaceGitError(
-				`There's a git dir at ${gitDir}, but it isn't a hyper space git dir — it has no core.worktree. Move it aside and try again.`,
+				`There's a git dir at ${escapeControlCharacters(gitDir)}, but it isn't a hyper space git dir — it has no core.worktree. Move it aside and try again.`,
 			);
 		}
 		if (worktree !== "../..") {
 			throw new SpaceGitError(
-				`There's a git dir at ${gitDir}, but it isn't a hyper space git dir — its core.worktree points at ${worktree}, not at this space. Move it aside and try again.`,
+				`There's a git dir at ${escapeControlCharacters(gitDir)}, but it isn't a hyper space git dir — its core.worktree points at ${escapeControlCharacters(worktree)}, not at this space. Move it aside and try again.`,
 			);
 		}
 		return { created: false };
@@ -453,7 +457,10 @@ export function initSpaceGitDir(
 			throw new SpaceGitInterruptedError(init.signal);
 		}
 		if (init.error || init.status !== 0) {
-			throw new SpaceGitError((init.stderr ?? "").trim() || `git init --bare failed for ${gitDir}`);
+			throw new SpaceGitError(
+				gitSaid(init.stderr ?? "") ||
+					`git init --bare failed for ${escapeControlCharacters(gitDir)}`,
+			);
 		}
 
 		spaceGit(spaceRoot, ["config", "--local", "core.bare", "false"]);
@@ -601,7 +608,7 @@ export function readCadence(spaceRoot: string): SyncCadence {
 	if (value === null) return "";
 	if (!ALLOWED_CADENCES.includes(value as SyncCadence)) {
 		throw new SpaceGitError(
-			`The space git dir at ${spaceGitDir(spaceRoot)} says its cadence is ${JSON.stringify(value)}, which isn't one of "manual", "session-end", "session-end+push". Fix it with \`git config --file <git dir>/config hyper.cadence <value>\`.`,
+			`The space git dir at ${escapeControlCharacters(spaceGitDir(spaceRoot))} says its cadence is ${quoteForTerminal(value)}, which isn't one of "manual", "session-end", "session-end+push". Fix it with \`git config --file <git dir>/config hyper.cadence <value>\`.`,
 		);
 	}
 	return value as SyncCadence;
@@ -611,7 +618,7 @@ export function readCadence(spaceRoot: string): SyncCadence {
 export function writeCadence(spaceRoot: string, cadence: SyncCadence): void {
 	if (!ALLOWED_CADENCES.includes(cadence)) {
 		throw new SpaceGitError(
-			`${JSON.stringify(cadence)} isn't a cadence I know — use "manual", "session-end" or "session-end+push".`,
+			`${quoteForTerminal(cadence)} isn't a cadence I know — use "manual", "session-end" or "session-end+push".`,
 		);
 	}
 	spaceGit(spaceRoot, ["config", "--local", "hyper.cadence", cadence]);
@@ -650,8 +657,8 @@ export function readTracked(spaceRoot: string): string[] {
 	if (status === 1) return [];
 	if (status !== 0) {
 		throw new SpaceGitError(
-			`I couldn't read the space's tracked directories from ${spaceGitDir(spaceRoot)}: ` +
-				`${stderr.trim() || stdout.trim() || `git config exited ${status}`}`,
+			`I couldn't read the space's tracked directories from ${escapeControlCharacters(spaceGitDir(spaceRoot))}: ` +
+				`${gitSaid(stderr) || gitSaid(stdout) || `git config exited ${status}`}`,
 		);
 	}
 	return stdout
@@ -687,14 +694,14 @@ export function fetchSpaceClone(spaceRoot: string, branch: string): void {
 		const detail = (result.stderr || result.stdout).trim();
 		throw new SpaceGitError(
 			/couldn't find remote ref|remote ref does not exist/i.test(detail)
-				? `The manifest names ${branch}, but that branch is missing from your hyperdrive. Publish it from the original machine, then try again.`
-				: `I couldn't fetch ${branch} from your hyperdrive. Check the remote URL, access and network, then try again. ${detail}`,
+				? `The manifest names ${escapeControlCharacters(branch)}, but that branch is missing from your hyperdrive. Publish it from the original machine, then try again.`
+				: `I couldn't fetch ${escapeControlCharacters(branch)} from your hyperdrive. Check the remote URL, access and network, then try again. ${gitSaid(detail)}`,
 		);
 	}
 }
 
-/** C0, C1 and DEL are never printed, whatever their source. */
-const CONTROL_CHARACTERS = /[\p{Cc}\p{Cf}]/gu;
+/** C0, C1, DEL, format characters and line separators are never printed raw. */
+const CONTROL_CHARACTERS = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
 
 /**
  * Anything echoed to a terminal comes from a machine we may not trust: git
@@ -707,20 +714,9 @@ export function sanitizeForTerminal(value: string): string {
 	);
 }
 
-/**
- * Render every control and format character as `\uXXXX` instead of dropping
- * it. Dropping is right for a child's output; this is for values hyper echoes
- * back — a refused URL, a manifest key, a path — where the reader must still
- * see what they are looking at, and where `JSON.stringify` is not enough:
- * it escapes C0 but prints U+009B, U+202E and DEL raw.
- */
-export function escapeControlCharacters(value: string): string {
-	// eslint-disable-next-line no-control-regex
-	return value.replace(
-		// eslint-disable-next-line no-control-regex
-		/[\p{Cc}\p{Cf}]/gu,
-		(character) => `\\u${character.codePointAt(0)!.toString(16).padStart(4, "0")}`,
-	);
+/** git's own words inline in a sentence: no credentials, no control characters. */
+export function gitSaid(text: string): string {
+	return sanitizeForTerminal(redactGitSecrets(text.trim()));
 }
 
 /** Prefix every line of quoted child output, so a hostile server cannot print
@@ -729,11 +725,14 @@ export function quoteChildOutput(value: string, prefix = "git: "): string {
 	return sanitizeForTerminal(value)
 		.split("\n")
 		.filter((line, index, lines) => line !== "" || index < lines.length - 1)
-		.map((line) =>
-			line.length > QUOTED_LINE_CAP
-				? `${prefix}${line.slice(0, QUOTED_LINE_CAP)}… [truncated]`
-				: `${prefix}${line}`,
-		)
+		.map((line) => {
+			// Cut on code points, never inside a surrogate pair: half a pair is
+			// not a character any terminal can show.
+			const points = Array.from(line);
+			return points.length > QUOTED_LINE_CAP
+				? `${prefix}${points.slice(0, QUOTED_LINE_CAP).join("")}… [truncated]`
+				: `${prefix}${line}`;
+		})
 		.join("\n");
 }
 
@@ -756,7 +755,7 @@ export const REVIEW_PATHS_SHOWN = 20;
  * for the terminal only.
  */
 export function describeReviewPaths(paths: readonly string[]): string {
-	const shown = paths.slice(0, REVIEW_PATHS_SHOWN).map((path) => JSON.stringify(path));
+	const shown = paths.slice(0, REVIEW_PATHS_SHOWN).map((path) => quoteForTerminal(path));
 	const hidden = paths.length - shown.length;
 	const list = shown.join(", ");
 	return hidden > 0
@@ -810,9 +809,9 @@ export function cloneProjectRepoBare(
 		throw new SpaceGitError("Invalid project default branch; repair the manifest before cloning.");
 	if (existsSync(gitDir))
 		throw new SpaceGitError(
-			`A project repository already exists at ${gitDir}. Choose an empty clone target.`,
+			`A project repository already exists at ${escapeControlCharacters(gitDir)}. Choose an empty clone target.`,
 		);
-	const label = options.label ? `${options.label}: ` : "";
+	const label = options.label ? `${escapeControlCharacters(options.label)}: ` : "";
 	const safeUrl = redactGitSecrets(url);
 	const interactive = options.interactive ?? !!(process.stdin.isTTY && process.stderr.isTTY);
 	const env = cleanGitEnv();
@@ -854,7 +853,7 @@ export function cloneProjectRepoBare(
 		if (result.error || result.status !== 0) {
 			const detail = redactGitSecrets((result.stderr || result.stdout || "").trim());
 			throw new SpaceGitError(
-				`I couldn't recreate the project repository for ${label}${escapeControlCharacters(safeUrl)} at ${gitDir}. ` +
+				`I couldn't recreate the project repository for ${label}${escapeControlCharacters(safeUrl)} at ${escapeControlCharacters(gitDir)}. ` +
 					`Check its URL, access and default branch, then retry the clone. ` +
 					(interactive
 						? "See git's output above."
@@ -965,7 +964,7 @@ function resolveCloneBranch(
 	if (head !== undefined && checkProjectBranchName(head) && exists(head)) return head;
 	if (head !== undefined && !checkProjectBranchName(head)) {
 		throw new SpaceGitError(
-			`The remote ${label}${escapeControlCharacters(safeUrl)} points HEAD at a branch name hyper cannot use (${JSON.stringify(escapeControlCharacters(head))}). ` +
+			`The remote ${label}${escapeControlCharacters(safeUrl)} points HEAD at a branch name hyper cannot use (${quoteForTerminal(head)}). ` +
 				`Fix the project's default branch on the original machine, then retry the clone.`,
 		);
 	}
@@ -976,7 +975,7 @@ function resolveCloneBranch(
 		);
 	}
 	throw new SpaceGitError(
-		`The manifest names ${JSON.stringify(escapeControlCharacters(requested))} as the default branch for ${label}${escapeControlCharacters(safeUrl)}, but the remote has no such branch and no usable HEAD either. ` +
+		`The manifest names ${quoteForTerminal(requested)} as the default branch for ${label}${escapeControlCharacters(safeUrl)}, but the remote has no such branch and no usable HEAD either. ` +
 			`Fix the project's default branch or its manifest entry, then retry the clone.`,
 	);
 }

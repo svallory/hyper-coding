@@ -16,6 +16,7 @@
  */
 
 import picomatch from "picomatch";
+import { quoteForTerminal } from "#lib/terminal-text";
 
 /**
  * The base allowlist, verbatim from design.md. Order matters: gitignore
@@ -141,20 +142,20 @@ const FORBIDDEN_IN_ENTRY: ReadonlyArray<readonly [string, string]> = [
 export function normaliseTrackedEntry(raw: string): string {
 	if (raw.trim() === "") {
 		throw new AllowlistError(
-			`A tracked entry can't be empty or just spaces, but I got ${JSON.stringify(raw)}.`,
+			`A tracked entry can't be empty or just spaces, but I got ${quoteForTerminal(raw)}.`,
 		);
 	}
 	if (raw !== raw.trim()) {
 		// A leading or trailing space is invisible in the rendered file and
 		// would never match a real path, so the entry would silently do nothing.
 		throw new AllowlistError(
-			`A tracked entry can't start or end with spaces, but ${JSON.stringify(raw)} does. Give me the plain directory name.`,
+			`A tracked entry can't start or end with spaces, but ${quoteForTerminal(raw)} does. Give me the plain directory name.`,
 		);
 	}
 	for (const [char, why] of FORBIDDEN_IN_ENTRY) {
 		if (raw.includes(char)) {
 			throw new AllowlistError(
-				`A tracked entry can't contain ${why}, but ${JSON.stringify(raw)} does. Give me a plain directory name instead.`,
+				`A tracked entry can't contain ${why}, but ${quoteForTerminal(raw)} does. Give me a plain directory name instead.`,
 			);
 		}
 	}
@@ -163,25 +164,25 @@ export function normaliseTrackedEntry(raw: string): string {
 	while (entry.startsWith("./")) entry = entry.slice(2);
 	if (entry.startsWith("/")) {
 		throw new AllowlistError(
-			`A tracked entry must be relative to the space root, but ${JSON.stringify(raw)} is absolute.`,
+			`A tracked entry must be relative to the space root, but ${quoteForTerminal(raw)} is absolute.`,
 		);
 	}
 	while (entry.endsWith("/")) entry = entry.slice(0, -1);
 	if (entry === "" || entry === ".") {
 		throw new AllowlistError(
-			`A tracked entry must name a directory inside the space, but I got ${JSON.stringify(raw)}.`,
+			`A tracked entry must name a directory inside the space, but I got ${quoteForTerminal(raw)}.`,
 		);
 	}
 	if (entry.split("/").includes("..")) {
 		throw new AllowlistError(
-			`A tracked entry can't escape the space root, but ${JSON.stringify(raw)} contains "..".`,
+			`A tracked entry can't escape the space root, but ${quoteForTerminal(raw)} contains "..".`,
 		);
 	}
 	// `a/./b` and `a//b` are the same paths to a filesystem and would render as
 	// rules that match nothing — an entry that looks tracked but isn't.
 	if (entry.split("/").some((segment) => segment === "" || segment === ".")) {
 		throw new AllowlistError(
-			`A tracked entry can't contain an empty or \`.\` segment, but ${JSON.stringify(raw)} does. Write the path plainly, e.g. ${JSON.stringify(
+			`A tracked entry can't contain an empty or \`.\` segment, but ${quoteForTerminal(raw)} does. Write the path plainly, e.g. ${quoteForTerminal(
 				entry
 					.split("/")
 					.filter((s) => s !== "" && s !== ".")
@@ -196,7 +197,7 @@ export function normaliseTrackedEntry(raw: string): string {
 	for (const reserved of RESERVED_PATHS) {
 		if (lowered === reserved || lowered.startsWith(`${reserved}/`)) {
 			throw new AllowlistError(
-				`${JSON.stringify(raw)} is reserved — a space never tracks ${reserved} or anything under it. Remove it from the space's tracked list.`,
+				`${quoteForTerminal(raw)} is reserved — a space never tracks ${reserved} or anything under it. Remove it from the space's tracked list.`,
 			);
 		}
 	}

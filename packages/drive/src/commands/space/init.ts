@@ -10,6 +10,7 @@ import {
 	type SyncCadence,
 } from "#config/schema";
 import { BaseCommand, type BaseFlags } from "#lib/base-command";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { isHyperAllowlist, normaliseTrackedEntry, renderGitignore } from "#services/allowlist";
 import {
 	driveCheckoutDir,
@@ -36,7 +37,6 @@ import {
 	writeCadence,
 	writeTracked,
 } from "#services/space-git";
-
 import {
 	commitAndPushSpace,
 	remoteRef,
@@ -75,7 +75,7 @@ const CADENCES = ["manual", "session-end", "session-end+push"] as const;
 
 function nameProblem(value: string, flag: "--name" | "--group"): Error {
 	return new Error(
-		`${JSON.stringify(value)} isn't a space name: a name is lowercase letters, digits, dots, ` +
+		`${quoteForTerminal(value)} isn't a space name: a name is lowercase letters, digits, dots, ` +
 			`underscores and dashes, starting with a letter or digit, and never containing "..". ` +
 			`Names are also path segments and half a branch name, so they have to be boring by ` +
 			`construction. Pass a different ${flag}.`,
@@ -114,13 +114,13 @@ function refClash(root: string, remote: string, name: string, group: string | nu
 function clashError(clash: string, name: string, group: string | null): SpaceGitError {
 	if (group === null) {
 		return new SpaceGitError(
-			`your hyperdrive already has ${clash}. A space called ${JSON.stringify(name)} cannot ` +
+			`your hyperdrive already has ${clash}. A space called ${quoteForTerminal(name)} cannot ` +
 				`also be the group that holds other spaces — pass \`--group\` to place this space under ` +
 				`one, or \`--name\` to give it its own.`,
 		);
 	}
 	return new SpaceGitError(
-		`your hyperdrive already has ${clash}, which is a space called ${JSON.stringify(group)}. A ` +
+		`your hyperdrive already has ${clash}, which is a space called ${quoteForTerminal(group)}. A ` +
 			`space cannot live under another space — pass \`--group\` with a different group, or ` +
 			`\`--name\` to rename this space.`,
 	);
@@ -137,8 +137,8 @@ function assertExistingSpaceMatches(root: string, branch: string, remote: string
 	const head = status === 0 ? stdout.trim() : "";
 	if (head !== `refs/heads/${branch}`) {
 		throw new SpaceGitError(
-			`${spaceGitDir(root)} is on ${head === "" ? "a detached HEAD" : head}, but this run would ` +
-				`use ${branch}. A space keeps one branch for its life, and moving a space between hyperdrives is ` +
+			`${escapeControlCharacters(spaceGitDir(root))} is on ${head === "" ? "a detached HEAD" : escapeControlCharacters(head)}, but this run would ` +
+				`use ${escapeControlCharacters(branch)}. A space keeps one branch for its life, and moving a space between hyperdrives is ` +
 				`not available yet — the branch is this space's identity, so renaming it now is the only ` +
 				`way forward.`,
 		);
@@ -146,8 +146,8 @@ function assertExistingSpaceMatches(root: string, branch: string, remote: string
 	const origin = readSpaceConfig(root, "remote.origin.url");
 	if (origin !== remote) {
 		throw new SpaceGitError(
-			`${spaceGitDir(root)} is a clone of ${JSON.stringify(origin)}, but your drive.toml points at ` +
-				`${JSON.stringify(remote)}. A space's history lives on one hyperdrive — fix \`remote\`, or ` +
+			`${escapeControlCharacters(spaceGitDir(root))} is a clone of ${origin === null ? "no remote at all" : quoteForTerminal(origin)}, but your drive.toml points at ` +
+				`${quoteForTerminal(remote)}. A space's history lives on one hyperdrive — fix \`remote\`, or ` +
 				`init this space as a new one under a name of its own. Moving an existing space to ` +
 				`another hyperdrive is not available yet.`,
 		);
@@ -193,10 +193,10 @@ function writeAllowlist(root: string, tracked: string[]): AllowlistWrite {
 		// works from wherever the reader happens to be standing.
 		const backup = join(root, ".gitignore.pre-hyper");
 		throw new Error(
-			`${path} already exists and hyper did not write it. It is a tracked file, so hyper cannot ` +
+			`${escapeControlCharacters(path)} already exists and hyper did not write it. It is a tracked file, so hyper cannot ` +
 				`commit its own allowlist without either replacing yours or leaving the space's history ` +
 				`and its ignore rules disagreeing. Move yours aside and run this again:` +
-				`\n\n  mv ${path} ${backup}\n`,
+				`\n\n  mv ${escapeControlCharacters(path)} ${escapeControlCharacters(backup)}\n`,
 		);
 	}
 	writeFileSync(path, gitignore, "utf-8");
@@ -271,7 +271,7 @@ function spaceReposOf(
 	// and a line on stderr of every command makes the real warnings unreadable.
 	if (missing.length > 0 && warn) {
 		process.stderr.write(
-			`warning: no remote.origin.url for ${missing.join(", ")} — not recorded in the manifest.\n`,
+			`warning: no remote.origin.url for ${escapeControlCharacters(missing.join(", "))} — not recorded in the manifest.\n`,
 		);
 	}
 	return repos;
@@ -326,8 +326,8 @@ export default class Init extends BaseCommand<typeof Init> {
 				`Space:    ${result.name}${result.group === null ? "" : ` (group ${result.group})`}`,
 			);
 			this.log(`Layout:   ${result.layout}`);
-			this.log(`Branch:   ${result.branch}`);
-			this.log(`Remote:   ${result.remote}`);
+			this.log(`Branch:   ${escapeControlCharacters(result.branch)}`);
+			this.log(`Remote:   ${escapeControlCharacters(result.remote)}`);
 			this.log(`Cadence:  ${result.cadence}`);
 			this.log(
 				result.unborn
@@ -339,7 +339,7 @@ export default class Init extends BaseCommand<typeof Init> {
 							: "Committed: nothing new — pushed what the hyperdrive was missing",
 			);
 			this.log(
-				`Manifest: ${result.refreshed ? "refreshed" : "registered"} (in ${driveCheckoutDir()})`,
+				`Manifest: ${result.refreshed ? "refreshed" : "registered"} (in ${escapeControlCharacters(driveCheckoutDir())})`,
 			);
 		} catch (err) {
 			// Everything this command throws is a message meant for a person
@@ -373,13 +373,13 @@ export default class Init extends BaseCommand<typeof Init> {
 	> {
 		const dir = resolve(dirArg ?? process.cwd());
 		if (!statSync(dir, { throwIfNoEntry: false })?.isDirectory()) {
-			throw new Error(`There's no directory at ${dir}.`);
+			throw new Error(`There's no directory at ${escapeControlCharacters(dir)}.`);
 		}
 
 		const info = detectSpace(dir);
 		if (info.root === null || info.layout === null) {
 			throw new Error(
-				`${dir} is not inside a hyper space — no bare or multi-repo space root above it. ` +
+				`${escapeControlCharacters(dir)} is not inside a hyper space — no bare or multi-repo space root above it. ` +
 					`A space is a bare repo at its root with worktrees/, or a HYPER.md marker with bare repos under code/.`,
 			);
 		}
@@ -390,7 +390,7 @@ export default class Init extends BaseCommand<typeof Init> {
 		if (!isValidSpaceName(name)) {
 			throw flags.name === undefined
 				? new Error(
-						`The space directory is called ${JSON.stringify(defaultName)}, which isn't a valid ` +
+						`The space directory is called ${quoteForTerminal(defaultName)}, which isn't a valid ` +
 							`space name. A name is lowercase letters, digits, dots, underscores and dashes, ` +
 							`starting with a letter or digit, and never containing "..". Pass \`--name\` with a ` +
 							`name of your own.`,
@@ -440,7 +440,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			});
 			if (!missing || history.status !== 0 || history.stdout.trim() !== "") {
 				throw new SpaceGitError(
-					`${spaceGitDir(root)} has an unreadable HEAD or other committed history, not an unfinished first init. ` +
+					`${escapeControlCharacters(spaceGitDir(root))} has an unreadable HEAD or other committed history, not an unfinished first init. ` +
 						`It was left untouched; repair its HEAD or move the git dir aside before trying again.`,
 				);
 			}
@@ -448,7 +448,7 @@ export default class Init extends BaseCommand<typeof Init> {
 		const refreshed = hasGitDir && !unfinished;
 		if (refreshed && !flags.refresh) {
 			throw new Error(
-				`${root} is already a hyper space — its history is at ${spaceGitDir(root)}. ` +
+				`${escapeControlCharacters(root)} is already a hyper space — its history is at ${escapeControlCharacters(spaceGitDir(root))}. ` +
 					`Pass \`--refresh\` to re-render its allowlist, re-apply its cadence and re-register it.`,
 			);
 		}
@@ -458,7 +458,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			// foreign-file guard be skipped over a space that had never
 			// registered anything.
 			process.stderr.write(
-				`warning: ${spaceGitDir(root)} has no commit yet, so this space's first init never finished; ` +
+				`warning: ${escapeControlCharacters(spaceGitDir(root))} has no commit yet, so this space's first init never finished; ` +
 					`continuing it as a first init.\n`,
 			);
 		}
@@ -479,12 +479,12 @@ export default class Init extends BaseCommand<typeof Init> {
 		// exists for.
 		if (registered !== null && registered.branch !== branch) {
 			throw new Error(
-				`your hyperdrive already has a space called ${JSON.stringify(name)}, on branch ` +
-					`${registered.branch}. Space names are unique across groups, so this one would take ` +
+				`your hyperdrive already has a space called ${quoteForTerminal(name)}, on branch ` +
+					`${escapeControlCharacters(registered.branch)}. Space names are unique across groups, so this one would take ` +
 					`that space's place in the manifest. Pass \`--name\` with a name of its own` +
 					(registered.group === null
-						? `, or run this again without \`--group\` to re-initialise ${registered.branch} itself.`
-						: `, or pass \`--group ${registered.group}\` to re-initialise ${registered.branch} itself.`),
+						? `, or run this again without \`--group\` to re-initialise ${escapeControlCharacters(registered.branch)} itself.`
+						: `, or pass \`--group ${escapeControlCharacters(registered.group)}\` to re-initialise ${escapeControlCharacters(registered.branch)} itself.`),
 			);
 		}
 
@@ -593,7 +593,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			// children can be interrupted too, including before core.worktree exists.
 			if (unfinished && !removeSpaceGitDir(root)) {
 				throw new SpaceGitError(
-					`I couldn't reset the unfinished git dir at ${spaceGitDir(root)}. Move it aside and try again.`,
+					`I couldn't reset the unfinished git dir at ${escapeControlCharacters(spaceGitDir(root))}. Move it aside and try again.`,
 				);
 			}
 			created = initSpaceGitDir(root, { branch, remote }).created;
@@ -679,7 +679,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			const cleanup = rollback(keepsCommit);
 			if (cleanup.failures.length > 0) {
 				const remains = hasSpaceGit(root)
-					? `${spaceGitDir(root)} remains; ${cleanup.failures.join("; ")}. Inspect it before retrying.`
+					? `${escapeControlCharacters(spaceGitDir(root))} remains; ${cleanup.failures.join("; ")}. Inspect it before retrying.`
 					: `no space git dir remains; ${cleanup.failures.includes(".gitignore may not be restored") ? ".gitignore may not be restored — inspect it before retrying" : ".gitignore was restored; run the command again when ready"}.`;
 				const signal =
 					cleanup.signal ?? (failure instanceof SpaceGitInterruptedError ? failure.signal : null);
@@ -705,8 +705,8 @@ export default class Init extends BaseCommand<typeof Init> {
 			if (!confirmed) {
 				if (pushAttempted) {
 					throw new SpaceGitError(
-						`${err instanceof Error ? err.message : String(err)} I couldn't confirm the push of ${branch} ` +
-							`to ${remote}; your commit is kept locally. Run \`hyper space init --refresh\` to publish it.`,
+						`${err instanceof Error ? err.message : String(err)} I couldn't confirm the push of ${escapeControlCharacters(branch)} ` +
+							`to ${escapeControlCharacters(remote)}; your commit is kept locally. Run \`hyper space init --refresh\` to publish it.`,
 					);
 				}
 				throw err;
@@ -729,7 +729,7 @@ export default class Init extends BaseCommand<typeof Init> {
 				refreshed,
 			);
 			process.stderr.write(
-				`warning: the push reported a failure, but ${branch} is on ${remote}. Continuing.\n`,
+				`warning: the push reported a failure, but ${escapeControlCharacters(branch)} is on ${escapeControlCharacters(remote)}. Continuing.\n`,
 			);
 		} finally {
 			process.off("SIGINT", onInt);
@@ -745,14 +745,14 @@ export default class Init extends BaseCommand<typeof Init> {
 		} catch (err) {
 			if (err instanceof SpaceNameConflictError) {
 				throw new Error(
-					`${branch} was pushed to ${remote}, but the name ${JSON.stringify(name)} now belongs to ${err.existingBranch}. ` +
-						`Remove ${spaceGitDir(root)} and run \`hyper space init --name <another>\`. ` +
+					`${escapeControlCharacters(branch)} was pushed to ${escapeControlCharacters(remote)}, but the name ${quoteForTerminal(name)} now belongs to ${escapeControlCharacters(err.existingBranch)}. ` +
+						`Remove ${escapeControlCharacters(spaceGitDir(root))} and run \`hyper space init --name <another>\`. ` +
 						`The pushed branch stays on the hyperdrive until removed by hand; hyper never deletes remote refs. ` +
 						`To remove it yourself, run:\n\n  git push ${shellQuote(remote)} --delete ${shellQuote(branch)}\n`,
 				);
 			}
 			throw new Error(
-				`${branch} was committed and pushed to ${remote}, but writing the hyperdrive manifest ` +
+				`${escapeControlCharacters(branch)} was committed and pushed to ${escapeControlCharacters(remote)}, but writing the hyperdrive manifest ` +
 					`failed — the space itself is fine: ${err instanceof Error ? err.message : String(err)} ` +
 					`Rerun \`hyper space init --refresh\` once the manifest can be written.`,
 			);

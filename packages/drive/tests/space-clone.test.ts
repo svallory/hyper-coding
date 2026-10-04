@@ -370,6 +370,14 @@ describe("untrusted clone branch", () => {
 		const response = run(["sample", target]);
 		expect(response.status).toBe(2);
 		expect(flat(response.stderr)).toContain("control character");
+		// The refusal names the path and must not print it raw: as raw bytes,
+		// no ESC, no DEL, no C1 (the CSI used to clear the very line naming it).
+		for (const stream of [response.stdout, response.stderr])
+			expect(
+				/[\p{Cc}\p{Cf}]/u.test(stream.replace(/[\n\t]/g, "")),
+				"raw control or format character",
+			).toBe(false);
+		expect(flat(response.stderr)).toContain('"bin/a\\u009b[2Jgnp.sh"');
 		expect(existsSync(target)).toBe(false);
 	});
 	it("keeps an incoming format-character name but always prints it escaped", () => {
@@ -388,10 +396,15 @@ describe("untrusted clone branch", () => {
 		const target = join(fixture.home, "destination");
 		const response = run(["sample", target, "--json"]);
 		success(response);
-		// A bidi character is legitimate in a real filename, so the file is kept;
-		// it just never reaches a terminal as itself.
-		expect(JSON.parse(response.stdout).untrustedConfiguration).toContain("bin/safe\\u202egnp.sh");
-		expect(flat(response.stdout)).not.toContain("safe\u202egnp.sh");
+		// A bidi character is legitimate in a real filename, so the file is kept.
+		// `--json` carries the RAW name: JSON serialisation is the consumer's
+		// escaping. (The previous round pre-escaped it inside the JSON, so a real
+		// file named `safe\u202egnp.sh` with a literal backslash was
+		// indistinguishable; that assertion is deliberately reversed here.) The
+		// TEXT warning, on stderr, escapes it.
+		expect(JSON.parse(response.stdout).untrustedConfiguration).toContain("bin/safe\u202egnp.sh");
+		expect(response.stderr).not.toContain("\u202e");
+		expect(flat(response.stderr)).toContain('"bin/safe\\u202egnp.sh"');
 		expect(existsSync(join(target, "bin", "safe\u202egnp.sh"))).toBe(true);
 	});
 	it("quotes a hostile child's stderr without letting it impersonate hyper", () => {
