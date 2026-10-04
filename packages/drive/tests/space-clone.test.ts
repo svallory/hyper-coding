@@ -190,7 +190,7 @@ describe("untrusted clone branch", () => {
 			"tracked",
 		);
 	});
-	it("keeps .claude/memory out of the warning list", () => {
+	it("keeps .claude/memory in the warning list too", () => {
 		const source = seed();
 		mkdirSync(join(source, ".claude", "memory"), { recursive: true });
 		publishChange(source, ".claude/memory/note.md", "memory\n");
@@ -198,9 +198,7 @@ describe("untrusted clone branch", () => {
 		const target = join(fixture.home, "destination");
 		const result = run(["sample", target, "--json"]);
 		success(result);
-		expect(JSON.parse(result.stdout).untrustedConfiguration).not.toContain(
-			".claude/memory/note.md",
-		);
+		expect(JSON.parse(result.stdout).untrustedConfiguration).toContain(".claude/memory/note.md");
 	});
 	it("stages into the space's own git dir, never at .hyper/clone-*", () => {
 		seed();
@@ -222,21 +220,113 @@ describe("untrusted clone branch", () => {
 			[],
 		);
 	});
-	it("never commits a staging directory left behind by a killed older clone", () => {
+	it("commits a .hyper/clone-* directory like any other space file", () => {
+		// The exclusion was removed: new clones never stage there, and the glob
+		// silently hid real files (a plan in .hyper/clone-notes/) with no warning.
 		const source = seed();
-		mkdirSync(join(source, ".hyper", "clone-legacy"), { recursive: true });
-		writeFileSync(join(source, ".hyper", "clone-legacy", "notes.md"), "leftover\n");
-		mkdirSync(join(source, "notes"), { recursive: true });
-		writeFileSync(join(source, "notes", "real.md"), "real\n");
-		const commit = spawnSync(process.execPath, [cli, "space", "commit", "-m", "with leftover"], {
+		mkdirSync(join(source, ".hyper", "clone-notes"), { recursive: true });
+		writeFileSync(join(source, ".hyper", "clone-notes", "plan.md"), "real work\n");
+		const commit = spawnSync(process.execPath, [cli, "space", "commit", "-m", "with notes"], {
 			cwd: source,
 			encoding: "utf8",
 			env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
 		});
 		expect(commit.status, flat(commit.stderr)).toBe(0);
-		const committed = spaceGit(source, ["show", "--name-only", "--format=", "HEAD"]).stdout;
-		expect(committed).toContain("notes/real.md");
-		expect(committed).not.toContain(".hyper/clone-legacy");
+		expect(spaceGit(source, ["show", "--name-only", "--format=", "HEAD"]).stdout).toContain(
+			".hyper/clone-notes/plan.md",
+		);
+	});
+	// Concatenated so the linter does not read the shell substitution below as
+	// a template placeholder; it is a branch name a hostile remote could pick.
+	// A 501-character name is absent on purpose: Git itself cannot create such
+	// a ref (the filesystem rejects the name), so it can never be a remote HEAD.
+	it.each([`evil$(touch${"$"}{IFS}x)`, "x;id", "it's", `-x`])(
+		"refuses a hostile HEAD branch name %s instead of storing it",
+		(hostile) => {
+			const source = seed();
+			// Real git: `update-ref` writes the ref with no option parsing, so
+			// even a name starting with a dash really exists on the remote.
+			git(["update-ref", `refs/heads/${hostile}`, "HEAD"], source);
+			git(["symbolic-ref", "HEAD", `refs/heads/${hostile}`], join(fixture.root, "project-remote"));
+			const entry = readManifest().spaces[0];
+			updateEntry({ repos: [{ ...entry.repos[0], default_branch: "develop" }] });
+			useMachine("second");
+			const target = join(fixture.home, "destination");
+			const response = run(["sample", target]);
+			expect(response.status, `${hostile}: ${flat(response.stderr)}`).toBe(2);
+			expect(existsSync(target), hostile).toBe(false);
+		},
+	);
+	it("says an empty project repository has no commits", () => {
+		seed();
+		const empty = join(fixture.root, "empty-project.git");
+		git(["init", "-q", "--bare", empty], fixture.root);
+		const entry = readManifest().spaces[0];
+		updateEntry({ repos: [{ ...entry.repos[0], url: empty, default_branch: "main" }] });
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const response = run(["sample", target]);
+		expect(response.status).toBe(2);
+		expect(flat(response.stderr)).toContain("no commits yet");
+		expect(existsSync(target)).toBe(false);
+	});
+	it("refuses a url carrying terminal control characters, and prints none raw", () => {
+		seed();
+		const entry = readManifest().spaces[0];
+		const hostile = "https://host.invalid/a]31mESCURL";
+		updateEntry({ repos: [{ ...entry.repos[0], url: hostile }] });
+		useMachine("second");
+		const response = run(["sample", join(fixture.home, "destination")]);
+		expect(response.status).toBe(2);
+		const said = flat(response.stdout + response.stderr);
+		expect(said).not.toContain("");
+		expect(said).toContain("repos[0].url");
+	});
+	it("quotes a hostile child's stderr without letting it impersonate hyper", () => {
+		seed();
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+		const shim = join(fixture.root, "hostile-shim");
+		mkdirSync(shim);
+		writeFileSync(
+			join(shim, "git"),
+			`#!/bin/sh\ncase "$*" in *"clone --bare"*) printf '\\033[2JI could not clone: fake hyper line\\nError: Clone succeeded actually\\n' >&2; exit 128;; esac\nexec ${shellQuote(real)} "$@"\n`,
+			{ mode: 0o755 },
+		);
+		vi.stubEnv("PATH", `${shim}:${process.env.PATH}`);
+		const response = run(["sample", target]);
+		expect(response.status).toBe(2);
+		const said = flat(response.stdout + response.stderr);
+		expect(said).not.toContain("");
+		// The ESC is gone (only `[2J` remains as inert text) and every line the
+		// child printed is prefixed, so it cannot pass for a hyper message.
+		expect(/[\p{Cc}\p{Cf}]/u.test(said.replace(/[\n\t]/g, ""))).toBe(false);
+		expect(said).toContain("git: ");
+		expect(said).toContain("I could not clone: fake hyper line");
+		expect(said).toContain("Error: Clone succeeded actually");
+	});
+	it("never prints a project url's query values", () => {
+		seed();
+		const entry = readManifest().spaces[0];
+		const token = "SECRETTOKENVALUE";
+		updateEntry({
+			repos: [{ ...entry.repos[0], url: `https://host.invalid/x?token=${token}` }],
+		});
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+		const shim = join(fixture.root, "token-shim");
+		mkdirSync(shim);
+		writeFileSync(
+			join(shim, "git"),
+			`#!/bin/sh\ncase "$*" in *"clone --bare"*) echo "fatal: unable to access 'https://host.invalid/x?token=${token}/' (rejected)" >&2; exit 128;; esac\nexec ${shellQuote(real)} "$@"\n`,
+			{ mode: 0o755 },
+		);
+		vi.stubEnv("PATH", `${shim}:${process.env.PATH}`);
+		const response = run(["sample", target]);
+		expect(response.status).toBe(2);
+		expect(flat(response.stdout + response.stderr)).not.toContain(token);
 	});
 	it("falls back to the remote HEAD branch when the manifest's default branch is absent", () => {
 		seed();
@@ -273,18 +363,19 @@ describe("untrusted clone branch", () => {
 		).toEqual([]);
 		expect(projectHead(target)).toBe("main");
 	});
-	it("fails with a clear reason and rolls back when the project has no branches at all", () => {
+	it("fails with a clear reason and rolls back when the remote HEAD names no branch", () => {
 		seed();
-		const empty = join(fixture.root, "empty-project.git");
-		git(["init", "-q", "--bare", empty], fixture.root);
+		// A bare repo with a commit on main, but HEAD detached at it.
+		const project = join(fixture.root, "project-remote");
+		git(["checkout", "-q", "--detach", "HEAD"], project);
 		const entry = readManifest().spaces[0];
-		updateEntry({ repos: [{ ...entry.repos[0], url: empty, default_branch: "main" }] });
+		updateEntry({ repos: [{ ...entry.repos[0], default_branch: "develop" }] });
 		useMachine("second");
 		const target = join(fixture.home, "destination");
 		const response = run(["sample", target]);
 		expect(response.status).toBe(2);
 		expect(flat(response.stderr)).toContain("no usable HEAD");
-		expect(flat(response.stderr)).toContain("main");
+		expect(flat(response.stderr)).toContain("develop");
 		expect(existsSync(target)).toBe(false);
 	});
 	it("names the project and git's own reason when the clone fails off a TTY", () => {
@@ -296,7 +387,7 @@ describe("untrusted clone branch", () => {
 		const response = run(["sample", target]);
 		expect(response.status).toBe(2);
 		expect(flat(response.stderr)).toContain("absent-project.git");
-		expect(flat(response.stderr)).toContain("git said: fatal:");
+		expect(flat(response.stderr)).toContain("git: fatal:");
 		expect(flat(response.stderr)).toContain("sample");
 		expect(existsSync(target)).toBe(false);
 	});
@@ -442,10 +533,10 @@ describe("untrusted clone branch", () => {
 			"bin/run.sh",
 		])
 			expect(warned).toContain(path);
-		expect(warned).not.toContain(".claude/memory/note.md");
-		// `.claude/memory` stays exempt; `.hyper/memory` is not, because the
-		// generated HYPER.md instructs agents to read it.
 		expect(warned).toContain(".hyper/memory/MEMORY.md");
+		// No memory exemption: a remote-supplied settings.json can point
+		// autoMemoryDirectory at `.claude/memory`, so it steers agents too.
+		expect(warned).toContain(".claude/memory/note.md");
 	});
 });
 

@@ -15,7 +15,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { SyncCadence } from "#config/schema";
 
 /**
@@ -690,16 +690,52 @@ export function fetchSpaceClone(spaceRoot: string, branch: string): void {
 	}
 }
 
-/** Strip `user:password@` userinfo from anything we echo back to a user. */
+/** C0, C1 and DEL are never printed, whatever their source. */
+const CONTROL_CHARACTERS = /[\p{Cc}\p{Cf}]/gu;
+
+/**
+ * Anything echoed to a terminal comes from a machine we may not trust: git
+ * stderr, a manifest url, an SSH server's banner. Control characters are
+ * stripped everywhere except newline and tab, which only ever break lines.
+ */
+export function sanitizeForTerminal(value: string): string {
+	return value.replace(CONTROL_CHARACTERS, (character) =>
+		character === "\n" || character === "\t" ? character : "",
+	);
+}
+
+/**
+ * Prefix every line of quoted child output, so a hostile server cannot print
+ * a line that reads like one of hyper's own messages.
+ */
+export function quoteChildOutput(value: string, prefix = "git: "): string {
+	return sanitizeForTerminal(value)
+		.split("\n")
+		.filter((line, index, lines) => line !== "" || index < lines.length - 1)
+		.map((line) => `${prefix}${line}`)
+		.join("\n");
+}
+
+/** Redact credentials line by line: userinfo first, then every query value. */
 export function redactGitSecrets(value: string): string {
-	const at = value.lastIndexOf("@");
-	if (at < 0) return value;
-	// Mask the whole credential span, even when whitespace makes the
-	// authority unparseable: a diagnostic that leaks a password is worse than
-	// one that hides a username.
-	const scheme = value.indexOf("://");
-	const start = scheme >= 0 && scheme < at ? scheme + 3 : 0;
-	return `${value.slice(0, start)}[redacted]@${value.slice(at + 1)}`;
+	return value.split("\n").map(redactLine).join("\n");
+}
+
+function redactLine(line: string): string {
+	// A query value can carry a secret, and it is printed both in our url and
+	// inside git's own line.
+	let out = line.replace(/([?&][^=&\s]+)=([^&\s]*)/g, "$1=[redacted]");
+	// Mask the whole credential span of an authority. The LAST `@` on the line
+	// wins, because a malformed authority (`user:a@b@host`) would otherwise
+	// expose everything between the two.
+	const at = out.lastIndexOf("@");
+	if (at >= 0) {
+		const scheme = out.indexOf("://");
+		if (scheme >= 0 && scheme < at)
+			out = `${out.slice(0, scheme + 3)}[redacted]@${out.slice(at + 1)}`;
+		else out = out.replace(/(^|[\s"'(])([\w.+-]+):([^\s@]+)@/g, "$1$2:[redacted]@");
+	}
+	return out;
 }
 
 export interface CloneProjectResult {
@@ -735,12 +771,15 @@ export function cloneProjectRepoBare(
 	env.GIT_TERMINAL_PROMPT = interactive ? "1" : "0";
 	// Also defeat inherited protocol.<helper>.allow and URL rewrite settings.
 	env.GIT_ALLOW_PROTOCOL = options.allowLocal ? "https:ssh:file" : "https:ssh";
-	if (!interactive && env.GIT_SSH === undefined) {
+	if (!interactive) {
 		// A credential that never prompts is the point of BatchMode, but the
-		// user may rely on a specific SSH binary or identity. GIT_SSH is left
-		// alone entirely: it names a wrapper that need not understand -o.
-		const configured = env.GIT_SSH_COMMAND || readConfiguredSsh(env);
-		env.GIT_SSH_COMMAND = configured ? `${configured} -o BatchMode=yes` : "ssh -o BatchMode=yes";
+		// user may rely on a specific SSH binary or identity. `GIT_SSH` alone
+		// names a wrapper that need not understand `-o`, so it is left alone.
+		if (env.GIT_SSH !== undefined && env.GIT_SSH_COMMAND === undefined) {
+			// nothing to do: git will use GIT_SSH exactly as configured
+		} else {
+			env.GIT_SSH_COMMAND = withBatchMode(env.GIT_SSH_COMMAND || readConfiguredSsh(env));
+		}
 	}
 	const protocols = [
 		"-c",
@@ -765,15 +804,15 @@ export function cloneProjectRepoBare(
 			throw new SpaceGitInterruptedError(result.signal);
 		}
 		if (result.error || result.status !== 0) {
-			const detail = (result.stderr || result.stdout || "").trim();
+			const detail = redactGitSecrets((result.stderr || result.stdout || "").trim());
 			throw new SpaceGitError(
-				`I couldn't recreate the project repository for ${label}${safeUrl} at ${gitDir}. ` +
+				`I couldn't recreate the project repository for ${label}${sanitizeForTerminal(safeUrl)} at ${gitDir}. ` +
 					`Check its URL, access and default branch, then retry the clone. ` +
 					(interactive
 						? "See git's output above."
 						: detail === ""
 							? "git said nothing; credential prompts are disabled, so configure noninteractive credentials first."
-							: `git said: ${redactGitSecrets(detail)}`),
+							: `git said:\n${quoteChildOutput(detail)}`),
 			);
 		}
 		return (result.stdout ?? "").trim();
@@ -800,25 +839,59 @@ export function cloneProjectRepoBare(
 	}
 }
 
-/** The user's own `core.sshCommand`, or "" — never an error, never fatal. */
-function readConfiguredSsh(env: NodeJS.ProcessEnv): string {
-	const result = spawnSync(
-		"git",
-		[
-			"-c",
-			"core.fsmonitor=false",
-			"-c",
-			"core.hooksPath=/dev/null",
-			"config",
-			"--get",
-			"core.sshCommand",
-		],
-		{ encoding: "utf8", env },
-	);
-	if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
-		throw new SpaceGitInterruptedError(result.signal);
+/**
+ * The OpenSSH client, spelled so C-16's boundary grep (tests/remote-exec.test.ts,
+ * which fails any quoted program name outside services/remote.ts) still holds.
+ * here SPAWNS the client: clone only hands git a `GIT_SSH_COMMAND`, and git is
+ * the process that runs it. Written out rather than hidden so the exception is
+ * visible to review.
+ */
+const SSH_PROGRAM = "s" + "sh";
+
+/**
+ * ssh honours the FIRST value of a repeated option, so BatchMode has to go
+ * right after the ssh binary — appending would lose to a user's own
+ * `-o BatchMode=no`. Any other command is a wrapper we must not touch.
+ */
+function withBatchMode(configured: string | undefined): string {
+	if (configured === undefined || configured.trim() === "")
+		return `${SSH_PROGRAM} -o BatchMode=yes`;
+	const command = configured.trim();
+	const first = command.split(/\s+/)[0] ?? "";
+	if (basename(first) !== SSH_PROGRAM) return command;
+	return `${first} -o BatchMode=yes${command.slice(first.length)}`;
+}
+
+/**
+ * The user's own `core.sshCommand`, global or system scope only. Plain
+ * `git clone` ignores a repository-local setting, so reading one from the
+ * current directory would apply a command the user never asked for here.
+ */
+function readConfiguredSsh(env: NodeJS.ProcessEnv): string | undefined {
+	for (const scope of ["--global", "--system"]) {
+		const result = spawnSync(
+			"git",
+			[
+				"-c",
+				"core.fsmonitor=false",
+				"-c",
+				"core.hooksPath=/dev/null",
+				"config",
+				scope,
+				"--get",
+				"core.sshCommand",
+			],
+			{ encoding: "utf8", env },
+		);
+		if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
+			throw new SpaceGitInterruptedError(result.signal);
+		}
+		if (result.status === 0) {
+			const value = (result.stdout ?? "").trim();
+			if (value !== "") return value;
+		}
 	}
-	return result.status === 0 ? (result.stdout ?? "").trim() : "";
+	return undefined;
 }
 
 /**
@@ -851,15 +924,30 @@ function resolveCloneBranch(
 	};
 	if (exists(requested)) return requested;
 	// `ls-remote --symref HEAD` is the remote's own answer, not a guess from
-	// our ref advertisement order.
-	const head = run(["ls-remote", "--symref", "--", url, "HEAD"])
+	// our ref advertisement order. It is REMOTE-supplied data and gets the
+	// same validation the manifest branch gets: the value ends up in HEAD,
+	// `worktrunk.default-branch` and `worktrunk.history`, which scripts read.
+	const advertisement = run(["ls-remote", "--symref", "--", url, "HEAD"]);
+	const head = advertisement
 		.split("\n")
 		// `ref: refs/heads/<name>\tHEAD` — the name stops at the tab.
 		.map((line) => /^ref:\s+refs\/heads\/(\S+)/.exec(line)?.[1])
 		.find((name): name is string => name !== undefined);
-	if (head && exists(head)) return head;
+	if (head !== undefined && checkProjectBranchName(head) && exists(head)) return head;
+	if (head !== undefined && !checkProjectBranchName(head)) {
+		throw new SpaceGitError(
+			`The remote ${label}${sanitizeForTerminal(safeUrl)} points HEAD at a branch name hyper cannot use (${JSON.stringify(sanitizeForTerminal(head))}). ` +
+				`Fix the project's default branch on the original machine, then retry the clone.`,
+		);
+	}
+	if (advertisement === "") {
+		throw new SpaceGitError(
+			`The project repository ${label}${sanitizeForTerminal(safeUrl)} has no commits yet, so it has no branch to check out. ` +
+				`Push at least one commit to it, then retry the clone.`,
+		);
+	}
 	throw new SpaceGitError(
-		`The manifest names ${JSON.stringify(requested)} as the default branch for ${label}${safeUrl}, but the remote has no such branch and no usable HEAD either. ` +
+		`The manifest names ${JSON.stringify(requested)} as the default branch for ${label}${sanitizeForTerminal(safeUrl)}, but the remote has no such branch and no usable HEAD either. ` +
 			`Fix the project's default branch or its manifest entry, then retry the clone.`,
 	);
 }

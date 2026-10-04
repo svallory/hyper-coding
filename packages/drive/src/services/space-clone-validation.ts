@@ -23,8 +23,18 @@ export function isLocalDriveRemote(remote: string): boolean {
 	);
 }
 
+/**
+ * Every one of these strings is printed back to a terminal — in an error, a
+ * warning or the clone summary. C0, C1 and DEL would let a manifest colour the
+ * screen, move the cursor, or set the window title.
+ */
+export function hasControlCharacters(value: string): boolean {
+	// eslint-disable-next-line no-control-regex
+	return /[\p{Cc}\p{Cf}]/u.test(value);
+}
+
 export function isAllowedProjectUrl(value: string, allowLocal: boolean): boolean {
-	if (!value || value !== value.trim() || /[\0\r\n]/.test(value) || value.startsWith("-"))
+	if (!value || value !== value.trim() || hasControlCharacters(value) || value.startsWith("-"))
 		return false;
 	if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(value)) {
 		try {
@@ -62,6 +72,17 @@ export function validateCloneEntry(entry: SpaceEntry, remote: string): void {
 		fail("name", "expected a safe space name");
 	if (entry.group !== null && (typeof entry.group !== "string" || !isValidSpaceName(entry.group)))
 		fail("group", "expected null or a safe group name");
+	// Names, groups, paths, slugs, branches and tracked entries are all echoed
+	// to the user; none may carry terminal control characters.
+	for (const [field, value] of [
+		["name", entry.name],
+		["group", entry.group],
+		["branch", entry.branch],
+		["path", entry.path],
+	] as const) {
+		if (typeof value === "string" && hasControlCharacters(value))
+			fail(field, "contains terminal control characters");
+	}
 	const branch =
 		entry.group === null ? `space/${entry.name}` : `space/${entry.group}/${entry.name}`;
 	if (entry.branch !== branch) fail("branch", `expected ${branch}`);
@@ -80,6 +101,7 @@ export function validateCloneEntry(entry: SpaceEntry, remote: string): void {
 	for (const [index, value] of entry.tracked.entries()) {
 		try {
 			if (typeof value !== "string") throw new Error("expected a directory name");
+			if (hasControlCharacters(value)) throw new Error("contains terminal control characters");
 			normaliseTrackedEntry(value);
 		} catch (error) {
 			fail(`tracked[${index}]`, error instanceof Error ? error.message : "invalid directory");
@@ -87,7 +109,7 @@ export function validateCloneEntry(entry: SpaceEntry, remote: string): void {
 	}
 	if (
 		!Array.isArray(entry.public) ||
-		entry.public.some((value) => typeof value !== "string" || /[\0\r\n]/.test(value))
+		entry.public.some((value) => typeof value !== "string" || hasControlCharacters(value))
 	)
 		fail("public", "expected a list of paths without control characters");
 	if (!Array.isArray(entry.repos) || (entry.layout === "bare" && entry.repos.length > 1))
@@ -99,6 +121,7 @@ export function validateCloneEntry(entry: SpaceEntry, remote: string): void {
 			if (
 				typeof repo.slug !== "string" ||
 				!isValidSpaceName(repo.slug) ||
+				hasControlCharacters(repo.slug) ||
 				slugs.has(repo.slug.toLowerCase())
 			)
 				fail(`repos[${index}].slug`, "missing, unsafe or duplicate slug");
