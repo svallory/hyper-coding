@@ -66,16 +66,21 @@ function peerFile(path: string, content = "remote\n"): void {
 	writeFileSync(join(peer, path), content);
 	git(["add", "-f", "--", path], peer);
 }
-function expectRefused(path: string): void {
+function configWithoutRefusal(): string[] {
+	return spaceGit(root, ["config", "--local", "--list", "-z"])
+		.stdout.split("\0")
+		.filter((record) => !/^hyper\.refused(?:tip|reason)\n/i.test(record));
+}
+function expectRefused(path: string, ...args: string[]): void {
 	const head = spaceGit(root, ["rev-parse", "HEAD"]).stdout;
 	const index = readFileSync(join(root, ".hyper", "space.git", "index"));
-	const config = readFileSync(join(root, ".hyper", "space.git", "config"));
-	const result = run("pull");
+	const config = configWithoutRefusal();
+	const result = run("pull", ...args);
 	expect(result.status, flat(result.stderr)).toBe(2);
 	expect(flat(result.stderr)).toContain(path);
 	expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(head);
 	expect(readFileSync(join(root, ".hyper", "space.git", "index"))).toEqual(index);
-	expect(readFileSync(join(root, ".hyper", "space.git", "config"))).toEqual(config);
+	expect(configWithoutRefusal()).toEqual(config);
 }
 
 describe("untrusted incoming history", () => {
@@ -104,7 +109,7 @@ describe("untrusted incoming history", () => {
 		writeFileSync(join(peer, ".gitignore"), renderGitignore(["extra"]));
 		peerFile("extra/local.txt");
 		publish();
-		expectRefused("overwritten");
+		expectRefused("overwritten", "--accept-tracked");
 		expect(readFileSync(join(root, "extra", "local.txt"), "utf8")).toBe("irreplaceable\n");
 	});
 	it("refuses live Git config replacement and never invokes injected fsmonitor", () => {
@@ -159,11 +164,16 @@ describe("untrusted incoming history", () => {
 		publish();
 		spaceGit(root, ["config", "merge.verifySignatures", "true"]);
 		spaceGit(root, ["config", "--add", "hyper.tracked", "existing"]);
-		const result = run("pull");
+		const result = run("pull", "--accept-tracked");
 		expect(result.status, flat(result.stderr)).toBe(0);
 		expect(
 			spaceGit(root, ["config", "--get-all", "hyper.tracked"]).stdout.trim().split("\n"),
-		).toEqual(["existing", "extra"]);
+		).toEqual(["extra", "existing"]);
+		expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(
+			renderGitignore(["extra", "existing"]),
+		);
+		expect(spaceGit(root, ["diff", "--name-only"]).stdout).toContain(".gitignore");
+		expect(result.stdout).toContain("local modification");
 		expect(readFileSync(join(root, "notes", "link"), "utf8")).toBe("remote\n");
 	});
 	it("refuses gitlinks", () => {
@@ -224,12 +234,14 @@ describe("untrusted incoming history", () => {
 		publish();
 		expectRefused("notes/escape");
 	});
-	it("checks unsafe paths in intermediate incoming commits even if removed at the tip", () => {
+	it("accepts bad historical paths removed at the tip without materializing them", () => {
 		peerFile("notes/.gitattributes", "* filter=evil\n");
 		publish();
 		git(["rm", "notes/.gitattributes"], peer);
 		publish();
-		expectRefused("notes/.gitattributes");
+		const result = run("pull");
+		expect(result.status, flat(result.stderr)).toBe(0);
+		expect(existsSync(join(root, "notes", ".gitattributes"))).toBe(false);
 	});
 	it("validates an un-checked-out commit for clone", async () => {
 		const destination = join(fixture.root, "clone");

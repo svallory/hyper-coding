@@ -1,4 +1,7 @@
 /** Day-to-day space history. No manifest writes and no implicit network reads. */
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { renderGitignore } from "#services/allowlist";
 import { detectSpace } from "#services/space";
 import {
 	hasSpaceGit,
@@ -11,7 +14,7 @@ import {
 	writeTracked,
 } from "#services/space-git";
 
-import { validateIncomingSpace } from "#services/space-incoming";
+import { incomingReviewPaths, validateIncomingSpace } from "#services/space-incoming";
 
 export interface InitializedSpace {
 	root: string;
@@ -121,59 +124,152 @@ export function fetchSpace(root: string, branch: string): void {
 	}
 }
 
-/** Fast-forward only: never merge or rebase divergent histories. */
-export async function pullSpace(root: string, branch: string): Promise<{ updated: boolean }> {
+export interface IncomingTrackedEntry {
+	path: string;
+	localFiles: number;
+}
+export interface SpacePullOptions {
+	acceptTracked?: boolean;
+	confirmTracked?: (entries: IncomingTrackedEntry[]) => Promise<boolean>;
+}
+export interface SpacePullResult {
+	updated: boolean;
+	reviewPaths: string[];
+	addedTracked: IncomingTrackedEntry[];
+	allowlistRestored: boolean;
+}
+
+function clearRefusal(root: string): void {
+	for (const key of ["hyper.refusedTip", "hyper.refusedReason"]) {
+		const result = spaceGit(root, ["config", "--local", "--unset-all", key], {
+			allowFailure: true,
+		});
+		if (result.status !== 0 && result.status !== 5)
+			throw new SpaceGitError(`Could not clear the last pull refusal: ${result.stderr.trim()}`);
+	}
+}
+
+/** Fast-forward only. The tracking ref means last SEEN, not last accepted. */
+export async function pullSpace(
+	root: string,
+	branch: string,
+	options: SpacePullOptions = {},
+): Promise<SpacePullResult> {
+	clearRefusal(root);
 	fetchSpace(root, branch);
 	const target = spaceGit(root, [
 		"rev-parse",
 		"--verify",
 		`${trackingRef(branch)}^{commit}`,
 	]).stdout.trim();
-	const before = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
-	if (before === target) return { updated: false };
-	const isAncestor = (a: string, b: string): boolean => {
-		const result = spaceGit(root, ["merge-base", "--is-ancestor", a, b], { allowFailure: true });
-		if (result.status > 1)
-			throw new SpaceGitError(
-				`I couldn't compare this space's histories. Inspect \`hyper space log\` before retrying. ${result.stderr.trim()}`,
-			);
-		return result.status === 0;
+	const unchanged: SpacePullResult = {
+		updated: false,
+		reviewPaths: [],
+		addedTracked: [],
+		allowlistRestored: false,
 	};
-	if (isAncestor(target, before)) return { updated: false };
-	if (!isAncestor(before, target)) {
-		throw new SpaceGitError(
-			`The local and remote histories of ${branch} have diverged. Nothing was merged or rebased; your local history and files were kept. Inspect \`hyper space log\` and reconcile the histories manually before retrying.`,
-		);
-	}
-	const incoming = await validateIncomingSpace(root, target, before);
-	const result = spaceGit(
-		root,
-		[
-			"-c",
-			"merge.verifySignatures=false",
-			"-c",
-			"submodule.recurse=false",
-			"merge",
-			"--ff-only",
-			"--no-overwrite-ignore",
-			"--no-autostash",
-			incoming.tip,
-		],
-		{ allowFailure: true },
-	);
-	if (result.status !== 0) {
-		const detail = (result.stderr || result.stdout).trim();
-		if (/would be overwritten|not uptodate|local changes|untracked working tree/i.test(detail)) {
+	try {
+		const before = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+		if (before === target) return unchanged;
+		const isAncestor = (a: string, b: string): boolean => {
+			const result = spaceGit(root, ["merge-base", "--is-ancestor", a, b], { allowFailure: true });
+			if (result.status > 1)
+				throw new SpaceGitError(
+					`I couldn't compare this space's histories. Inspect \`hyper space log\` before retrying. ${result.stderr.trim()}`,
+				);
+			return result.status === 0;
+		};
+		if (isAncestor(target, before)) return unchanged;
+		if (!isAncestor(before, target)) {
 			throw new SpaceGitError(
-				`Local changes would be overwritten by the fast-forward of ${branch}. Move those files aside or back them up before retrying; ignored paths cannot be saved by \`hyper space commit\`. git said: ${detail}`,
+				`The local and remote histories of ${branch} have diverged. Nothing was merged or rebased; your local history and files were kept. Inspect \`hyper space log\` and reconcile the histories manually before retrying.`,
 			);
 		}
-		throw new SpaceGitError(
-			`I couldn't fast-forward ${branch}; no merge or rebase was requested. Inspect \`hyper space status\` before retrying. git said: ${detail}`,
+		const incoming = await validateIncomingSpace(root, target, before);
+		const local = readTracked(root);
+		const added = incoming.tracked.filter((entry) => !local.includes(entry));
+		const ignored =
+			added.length === 0
+				? []
+				: spaceGit(root, [
+						"--literal-pathspecs",
+						"ls-files",
+						"--others",
+						"--ignored",
+						"--exclude-standard",
+						"-z",
+						"--",
+						...added,
+					])
+						.stdout.split("\0")
+						.filter((path) => path && !path.endsWith("/"));
+		const addedTracked = added.map((path) => ({
+			path,
+			localFiles: ignored.filter((file) => file.startsWith(`${path}/`)).length,
+		}));
+		if (
+			addedTracked.length > 0 &&
+			!options.acceptTracked &&
+			!(await options.confirmTracked?.(addedTracked))
+		) {
+			throw new SpaceGitError(
+				`Incoming tracked entries would broaden what this machine uploads:\n${addedTracked.map((entry) => `  ${JSON.stringify(entry.path)}: ${entry.localFiles} local files would become eligible for commit`).join("\n")}\nNothing was merged. Review these paths, then run \`hyper space pull --accept-tracked\` to consent.`,
+			);
+		}
+		const retained = local.filter((entry) => !incoming.tracked.includes(entry));
+		const union = [...incoming.tracked, ...retained];
+		const rendered = renderGitignore(union);
+		if (
+			retained.length > 0 &&
+			spaceGit(root, ["diff", "--quiet", "HEAD", "--", ".gitignore"], { allowFailure: true })
+				.status !== 0
+		)
+			throw new SpaceGitError(
+				"Local .gitignore changes would be overwritten while preserving this machine's tracked entries. Save those changes before retrying.",
+			);
+		const reviewPaths = incomingReviewPaths(root, incoming.tip, before);
+		const result = spaceGit(
+			root,
+			[
+				"-c",
+				"merge.verifySignatures=false",
+				"-c",
+				"submodule.recurse=false",
+				"merge",
+				"--ff-only",
+				"--no-overwrite-ignore",
+				"--no-autostash",
+				incoming.tip,
+			],
+			{ allowFailure: true },
 		);
+		if (result.status !== 0) {
+			const detail = (result.stderr || result.stdout).trim();
+			if (
+				/would be overwritten|would lose untracked files|not uptodate|local changes|untracked working tree/i.test(
+					detail,
+				)
+			) {
+				throw new SpaceGitError(
+					`Local changes would be overwritten by the fast-forward of ${branch}. Move those files aside or back them up before retrying; ignored paths cannot be saved by \`hyper space commit\`. git said: ${detail}`,
+				);
+			}
+			throw new SpaceGitError(
+				`I couldn't fast-forward ${branch}; no merge or rebase was requested. Inspect \`hyper space status\` before retrying. git said: ${detail}`,
+			);
+		}
+		writeTracked(root, union);
+		if (retained.length > 0) writeFileSync(join(root, ".gitignore"), rendered);
+		return { updated: true, reviewPaths, addedTracked, allowlistRestored: retained.length > 0 };
+	} catch (error) {
+		const reason = (error instanceof Error ? error.message : String(error))
+			.replace(/\p{Cc}/gu, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+		spaceGit(root, ["config", "--local", "hyper.refusedTip", target]);
+		spaceGit(root, ["config", "--local", "hyper.refusedReason", reason]);
+		throw error;
 	}
-	writeTracked(root, [...new Set([...readTracked(root), ...incoming.tracked])]);
-	return { updated: true };
 }
 
 export interface SpaceStatusEntry {
@@ -199,9 +295,16 @@ export function spaceStatus(root: string, branch: string) {
 		status.push(entry);
 	}
 	const ref = trackingRef(branch);
-	const upstreamKnown =
-		spaceGit(root, ["rev-parse", "--verify", `${ref}^{commit}`], { allowFailure: true }).status ===
-		0;
+	const tracking = spaceGit(root, ["rev-parse", "--verify", `${ref}^{commit}`], {
+		allowFailure: true,
+	});
+	const upstreamKnown = tracking.status === 0;
+	const refusedTip = readSpaceConfig(root, "hyper.refusedTip");
+	const refusedReason = readSpaceConfig(root, "hyper.refusedReason");
+	const refused =
+		upstreamKnown && tracking.stdout.trim() === refusedTip && refusedReason !== null
+			? { tip: refusedTip, reason: refusedReason }
+			: null;
 	let ahead: number | null = null;
 	let behind: number | null = null;
 	if (upstreamKnown) {
@@ -211,7 +314,16 @@ export function spaceStatus(root: string, branch: string) {
 			.map(Number);
 		[ahead, behind] = counts as [number, number];
 	}
-	return { root, branch, cadence: readCadence(root), upstreamKnown, ahead, behind, status };
+	return {
+		root,
+		branch,
+		cadence: readCadence(root),
+		upstreamKnown,
+		ahead,
+		behind,
+		status,
+		refused,
+	};
 }
 
 /** Pass through git-log arguments/streams; only ref-expanding options are refused. */

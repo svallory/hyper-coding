@@ -638,6 +638,7 @@ export default class Init extends BaseCommand<typeof Init> {
 					}
 					pushAttempted = true;
 				},
+				refreshed ? "daily" : "init",
 			);
 			checkSignal();
 			committed = staged.committed;

@@ -151,10 +151,20 @@ export function spaceGit(
 		input: opts.input,
 		stdio: opts.inheritStdio ? "inherit" : "pipe",
 		encoding: "utf8",
-		maxBuffer: opts.maxBuffer ?? 16 * 1024 * 1024,
+		maxBuffer:
+			opts.maxBuffer ??
+			(args.some((arg) => ["ls-tree", "ls-files", "status", "diff"].includes(arg)) ? 128 : 16) *
+				1024 *
+				1024,
 		env: cleanGitEnv(),
 	});
 
+	// Buffer exhaustion also kills the child with SIGTERM; it is not Ctrl-C.
+	if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOBUFS") {
+		throw new SpaceGitError(
+			"Git's output exceeded the safe capture limit for this space. No complete listing was available; reduce the requested output or inspect this large tree with Git directly before retrying.",
+		);
+	}
 	// spawnSync blocks JS signal handlers. Terminal process-group signals are
 	// observable through the child; a signal to Node alone while git runs is
 	// not reliably recoverable with synchronous spawns. Do not claim otherwise.
@@ -180,38 +190,6 @@ export function spaceGit(
 		);
 	}
 	return { status, stdout, stderr, signal: result.signal };
-}
-
-/**
- * Read only a bounded prefix of a staged blob, never the work-tree file. Git has no
- * prefix-read mode: maxBuffer bounds capture and kills the reader on overflow.
- * SIGKILL is reserved for this cap; terminal SIGINT/SIGTERM still propagate.
- */
-export function readStagedBlobPrefix(spaceRoot: string, path: string): string {
-	const limit = 4096;
-	const result = spawnSync(
-		"git",
-		spaceGitArguments(
-			spaceRoot,
-			["cat-file", "blob", spaceGit(spaceRoot, ["rev-parse", `:${path}`]).stdout.trim()],
-			true,
-		),
-		{
-			cwd: spaceRoot,
-			env: cleanGitEnv(),
-			maxBuffer: limit,
-			killSignal: "SIGKILL",
-		},
-	);
-	if (result.signal === "SIGINT" || result.signal === "SIGTERM")
-		throw new SpaceGitInterruptedError(result.signal);
-	const capped = (result.error as NodeJS.ErrnoException | undefined)?.code === "ENOBUFS";
-	if ((!capped && result.error) || (!capped && result.status !== 0)) {
-		throw new SpaceGitError(
-			`I couldn't inspect the staged content of ${JSON.stringify(path)} for secrets. Inspect the index and retry: ${result.error?.message || result.stderr?.toString().trim() || "git cat-file failed"}`,
-		);
-	}
-	return (result.stdout ?? Buffer.alloc(0)).subarray(0, limit).toString("utf8");
 }
 
 /** Harden every space operation independently of mutable local or global config. */
