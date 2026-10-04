@@ -9,8 +9,9 @@
  * worker, so pi's exit is never held by a commit or a push. Failures land in
  * `.hyper/space.git/session-end.log` and surface in `hyper space status`.
  *
- * What the commit subject carries for pi is the session name, or the first
- * line of the first prompt — prompt text lands in the space's history.
+ * Only `quit` saves. `/new`, `/resume`, `/fork` and `/reload` start over in
+ * the same place, exactly like Claude's `/clear` and resume, so they save
+ * nothing.
  *
  * The whole handler is wrapped: pi awaits `session_shutdown` with no timeout,
  * so it must return in milliseconds and must never throw into pi.
@@ -39,14 +40,19 @@ function factsFrom(ctx: ExtensionContext): SessionFacts {
 
 /**
  * `deps` exists for the tests: pi calls this factory with the API alone and
- * always gets the real filesystem and the real detached spawn.
+ * always gets the real filesystem, the real CLI probe and the real detached
+ * spawn.
  */
 export default function hyperdrive(pi: ExtensionAPI, deps: SessionEndDeps = realDeps): void {
-	pi.on("session_shutdown", async (_event, ctx) => {
+	pi.on("session_shutdown", async (event, ctx) => {
 		try {
+			// `/new`, `/resume`, `/fork` and `/reload` are session replacement,
+			// not session end: they start over in the same place and committing
+			// on each would be noise. Only `quit` saves.
+			if (event.reason !== "quit") return;
 			const facts = factsFrom(ctx);
 			if (!facts.sessionId) return;
-			saveSessionEnd(facts, withNotify(deps, ctx));
+			await saveSessionEnd(facts, withNotify(deps, ctx));
 		} catch {
 			// Never throw into pi, and never print more than the one line the
 			// dependencies already printed.
@@ -55,7 +61,7 @@ export default function hyperdrive(pi: ExtensionAPI, deps: SessionEndDeps = real
 }
 
 /** In TUI and RPC modes the line is a notification; print and JSON modes get stderr. */
-function withNotify(deps: typeof realDeps, ctx: ExtensionContext): typeof realDeps {
+function withNotify(deps: SessionEndDeps, ctx: ExtensionContext): SessionEndDeps {
 	if (!ctx.hasUI) return deps;
 	return {
 		...deps,

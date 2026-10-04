@@ -313,7 +313,7 @@ describe("a harness that sends summary and harness (pi)", () => {
 			.split("\n");
 		expect(lines[0].split("\t").slice(1, 3)).toEqual([id, "committed"]);
 	});
-	it("two shutdowns with nothing changed commit once", async () => {
+	it("two session-end saves with nothing changed create no commit at all", async () => {
 		const { root } = await makeSpace();
 		const gitDir = join(root, ".hyper/space.git");
 		const outcomes: string[] = [];

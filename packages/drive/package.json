@@ -36,7 +36,10 @@
 	"files": [
 		"dist",
 		"help",
-		"pi",
+		"pi/hyperdrive.ts",
+		"pi/session-end.ts",
+		"pi/package.json",
+		"pi/README.md",
 		"scripts",
 		"oclif.manifest.json",
 		"README.md",
