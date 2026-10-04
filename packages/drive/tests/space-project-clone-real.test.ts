@@ -95,6 +95,18 @@ describe("the user's own ssh command, against real git", () => {
 		expect(logged).toContain("-i /tmp/global-key");
 		expect(logged).toContain("-o BatchMode=yes");
 	});
+	it("honours a core.sshCommand that lives in an INCLUDED config file", () => {
+		// `git config --global --get` ignores `[include]` unless `--includes` is
+		// passed, so without it a perfectly ordinary dotfile setup loses its
+		// identity and hyper's default silently overrides it.
+		const included = join(root, "included.cfg");
+		writeFileSync(included, "[core]\n\tsshCommand = ssh -o FromInclude=1\n");
+		writeFileSync(process.env.GIT_CONFIG_GLOBAL!, `[include]\n\tpath = ${included}\n`);
+		const logged = cloneThroughFakeSsh();
+		expect(logged).toContain("-o FromInclude=1");
+		expect(logged).toContain("-o BatchMode=yes");
+		expect(logged.indexOf("-o BatchMode=yes")).toBeLessThan(logged.indexOf("-o FromInclude=1"));
+	});
 	it("ignores a core.sshCommand set in the repository we happen to run inside", () => {
 		const elsewhere = join(root, "elsewhere");
 		git(["init", "-q", elsewhere], root);

@@ -172,6 +172,14 @@ export async function validateIncomingSpace(
 	const resolved = spaceGit(root, ["rev-parse", "--verify", `${tip}^{commit}`]).stdout.trim();
 	const entries = treeEntries(root, resolved);
 	for (const entry of entries) {
+		// A control character in a path would be echoed back in refusals and
+		// warnings, so the very message naming it could colour the screen or
+		// reorder it. Format characters (bidi, ZWJ) are legitimate in real
+		// filenames and are accepted — they are escaped wherever they are
+		// printed, by the callers.
+		// eslint-disable-next-line no-control-regex
+		if (/[\p{Cc}]/u.test(entry.path))
+			refuse(entry.path, "contains a terminal control character in its name");
 		if (unsafePath(entry.path))
 			refuse(
 				entry.path,

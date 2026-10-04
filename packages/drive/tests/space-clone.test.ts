@@ -18,7 +18,7 @@ import { renderGitignore } from "#services/allowlist";
 import { driveCheckoutDir, readManifest, upsertSpace } from "#services/manifest";
 import { shellQuote } from "#services/remote";
 import { cloneSpace, cloneTargetPath } from "#services/space-clone";
-import { readCadence, readTracked, spaceGit } from "#services/space-git";
+import { REVIEW_PATHS_SHOWN, readCadence, readTracked, spaceGit } from "#services/space-git";
 import {
 	flat,
 	git,
@@ -100,7 +100,10 @@ function seed(layout: "bare" | "multi" = "bare", marker = true): string {
 	if (marker || layout === "multi")
 		writeFileSync(join(source, "HYPER.md"), "# Custom instructions — keep byte-for-byte\n");
 	for (const path of [
-		"notes/café/line\nbreak.md",
+		// Unicode and combining marks stay covered; a literal newline does NOT,
+		// because incoming names with control characters are now refused (see
+		// the round-3 note in the report: that is a behaviour change to ratify).
+		"notes/café/line‍break.md",
 		"data/test.json",
 		"extra/read me.md",
 		".hyper/memory/MEMORY.md",
@@ -306,17 +309,90 @@ describe("untrusted clone branch", () => {
 		expect(flat(response.stderr)).toContain("no commits yet");
 		expect(existsSync(target)).toBe(false);
 	});
-	it("refuses a url carrying terminal control characters, and prints none raw", () => {
+	it.each([
+		["C1 CSI", "https://host.invalid/a\u009b[31mESCURL"],
+		["bidi override", "https://host.invalid/a\u202egnp"],
+		["DEL", "https://host.invalid/a\u007fb"],
+		["ESC", "https://host.invalid/a\u001b]0;TITLE\u001b\\b"],
+	])("refuses a url with %s and prints none of it raw", (name, hostile) => {
 		seed();
 		const entry = readManifest().spaces[0];
-		const hostile = "https://host.invalid/a]31mESCURL";
 		updateEntry({ repos: [{ ...entry.repos[0], url: hostile }] });
 		useMachine("second");
 		const response = run(["sample", join(fixture.home, "destination")]);
+		expect(response.status, name).toBe(2);
+		// Both streams, and as raw bytes: `JSON.stringify` escapes C0 only, so
+		// U+009B, U+202E and DEL used to be echoed verbatim.
+		for (const stream of [response.stdout, response.stderr]) {
+			expect(/[\p{Cc}\p{Cf}]/u.test(stream.replace(/[\n\t]/g, "")), name).toBe(false);
+		}
+		expect(flat(response.stderr), name).toContain("repos[0].url");
+	});
+	it("escapes an unknown manifest key instead of printing it raw", () => {
+		seed();
+		// An unknown key is manifest data: it runs through `warnUnknown`, which
+		// both `space list` and `space clone` reach. It has to reach the other
+		// machine through the drive remote, not by editing a local checkout.
+		const checkout = driveCheckoutDir();
+		const manifest = join(checkout, "spaces.yaml");
+		writeFileSync(manifest, `${readFileSync(manifest, "utf8")}evil\u001b[]0;PWNED\u0007key: 1\n`);
+		git(["add", "spaces.yaml"], checkout);
+		git(["commit", "-qm", "unknown key"], checkout);
+		git(["push", "origin", "HEAD:main"], checkout);
+		useMachine("second");
+		for (const args of [
+			["space", "clone", "sample", join(fixture.home, "destination")],
+			["space", "list"],
+		]) {
+			// ONE spawn: two would clone into the same target twice and mix streams.
+			const response = spawnCli(args, fixture);
+			const stream = flat(response.stdout + response.stderr);
+			expect(stream, args.join(" ")).toContain("unknown key");
+			expect(stream, args.join(" ")).not.toContain("evil\u001b[]0;PWNED\u0007key");
+			expect(/[\p{Cc}\p{Cf}]/u.test(stream.replace(/[\n\t]/g, "")), args.join(" ")).toBe(false);
+		}
+	});
+	it("refuses an incoming path containing a control character", () => {
+		seed();
+		const peer = join(fixture.root, "names-peer");
+		git(
+			["clone", "--single-branch", "--branch", "space/team/sample", fixture.remote, peer],
+			fixture.root,
+		);
+		mkdirSync(join(peer, "bin"), { recursive: true });
+		// The filename-spoofing trick, inside the tree we are about to warn about.
+		writeFileSync(join(peer, "bin", "a\u009b[2Jgnp.sh"), "#!/bin/sh\ntouch pwned\n");
+		git(["add", "-f", "bin"], peer);
+		git(["commit", "-qm", "hostile name"], peer);
+		git(["push", "origin", "HEAD"], peer);
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const response = run(["sample", target]);
 		expect(response.status).toBe(2);
-		const said = flat(response.stdout + response.stderr);
-		expect(said).not.toContain("");
-		expect(said).toContain("repos[0].url");
+		expect(flat(response.stderr)).toContain("control character");
+		expect(existsSync(target)).toBe(false);
+	});
+	it("keeps an incoming format-character name but always prints it escaped", () => {
+		seed();
+		const peer = join(fixture.root, "bidi-peer");
+		git(
+			["clone", "--single-branch", "--branch", "space/team/sample", fixture.remote, peer],
+			fixture.root,
+		);
+		mkdirSync(join(peer, "bin"), { recursive: true });
+		writeFileSync(join(peer, "bin", "safe\u202egnp.sh"), "#!/bin/sh\n");
+		git(["add", "-f", "bin"], peer);
+		git(["commit", "-qm", "bidi name"], peer);
+		git(["push", "origin", "HEAD"], peer);
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const response = run(["sample", target, "--json"]);
+		success(response);
+		// A bidi character is legitimate in a real filename, so the file is kept;
+		// it just never reaches a terminal as itself.
+		expect(JSON.parse(response.stdout).untrustedConfiguration).toContain("bin/safe\\u202egnp.sh");
+		expect(flat(response.stdout)).not.toContain("safe\u202egnp.sh");
+		expect(existsSync(join(target, "bin", "safe\u202egnp.sh"))).toBe(true);
 	});
 	it("quotes a hostile child's stderr without letting it impersonate hyper", () => {
 		seed();
@@ -341,6 +417,63 @@ describe("untrusted clone branch", () => {
 		expect(said).toContain("git: ");
 		expect(said).toContain("I could not clone: fake hyper line");
 		expect(said).toContain("Error: Clone succeeded actually");
+	});
+	it("says in a sentence that the review step failed, and restores the target", () => {
+		seed();
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+		const shim = join(fixture.root, "review-fail-shim");
+		mkdirSync(shim);
+		// Validation reads the tree first, the review step second: fail only the
+		// second read, so the refusal comes from the review and not from the
+		// validator. The refusal must not be raw git stderr the user cannot act
+		// on, and the target must be gone afterwards.
+		const counter = join(fixture.root, "ls-tree-count");
+		writeFileSync(
+			join(shim, "git"),
+			`#!/bin/sh\ncase "$*" in\n *"ls-tree -r -z "*)\n   n=$(cat ${shellQuote(counter)} 2>/dev/null || echo 0); n=$((n+1)); printf '%s' "$n" > ${shellQuote(counter)};\n   if [ "$n" -ge 2 ]; then echo 'fatal: ambiguous argument' >&2; exit 128; fi;;\nesac\nexec ${shellQuote(real)} "$@"\n`,
+			{ mode: 0o755 },
+		);
+		vi.stubEnv("PATH", `${shim}:${process.env.PATH}`);
+		const response = run(["sample", target]);
+		expect(response.status).toBe(2);
+		const said = flat(response.stderr);
+		expect(said).toContain("couldn't finish the review");
+		expect(said).toContain("the target was restored");
+		expect(existsSync(target)).toBe(false);
+	});
+	it("bounds the review list in text while --json stays complete", () => {
+		const source = seed();
+		for (let index = 0; index < 25; index += 1) {
+			mkdirSync(join(source, "bin"), { recursive: true });
+			publishChange(source, `bin/tool-${index}.sh`, "#!/bin/sh\n");
+		}
+		useMachine("second");
+		// `--json` first: it is the complete list, so the text run can be
+		// checked against it rather than against an assumed order.
+		const jsonTarget = join(fixture.home, "destination-2");
+		const json = run(["sample", jsonTarget, "--json"]);
+		success(json);
+		const listed: string[] = JSON.parse(json.stdout).untrustedConfiguration;
+		expect(listed.length).toBeGreaterThan(25);
+		expect(listed).toContain("bin/tool-24.sh");
+
+		const text = run(["sample", join(fixture.home, "destination")]);
+		success(text);
+		const line =
+			flat(text.stderr)
+				.split("\n")
+				.find((value) => value.includes("came from the hyperdrive")) ?? "";
+		// The list is sorted, so which names land past the limit is not something
+		// this test should assume. What matters: exactly REVIEW_PATHS_SHOWN of
+		// them are named, and the rest are counted, not silently dropped.
+		const named = (line.match(/"[^"]+"/g) ?? [])
+			.map((quoted) => JSON.parse(quoted))
+			.filter((name) => listed.includes(name));
+		expect(named).toHaveLength(REVIEW_PATHS_SHOWN);
+		expect(line).toContain(`${listed.length - REVIEW_PATHS_SHOWN} more`);
+		expect(line).toContain("--json");
 	});
 	it("never prints a project url's query values", () => {
 		seed();

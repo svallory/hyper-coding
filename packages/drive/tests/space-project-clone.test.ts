@@ -3,7 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cloneProjectRepoBare, redactGitSecrets, sanitizeForTerminal } from "#services/space-git";
+import {
+	cloneProjectRepoBare,
+	describeReviewPaths,
+	escapeControlCharacters,
+	quoteChildOutput,
+	redactGitSecrets,
+	sanitizeForTerminal,
+} from "#services/space-git";
 
 vi.mock("node:child_process", () => ({ spawnSync: vi.fn() }));
 const mocked = vi.mocked(spawnSync);
@@ -260,10 +267,18 @@ describe("project transport and terminal policy", () => {
 		["https://user:password-value@example.invalid/project", "password-value"],
 		["https://host.invalid/x?token=SECRETTOKEN", "SECRETTOKEN"],
 		["https://host.invalid/x?a=1&sig=SECRETSIG", "SECRETSIG"],
-		["git@host.invalid:x", "git@host.invalid"],
+		["https://user:hunter2@example.invalid/repo", "hunter2"],
 	])("redacts %s", (value, secret) => {
-		const redacted = redactGitSecrets(value);
-		if (secret !== "git@host.invalid") expect(redacted).not.toContain(secret);
+		expect(redactGitSecrets(value)).not.toContain(secret);
+	});
+	it.each([
+		// An `@` in the PATH is not userinfo: masking it would invent a host
+		// the user never configured and hide where they were actually cloning.
+		["https://host.invalid/a@b/c", "https://host.invalid/a@b/c"],
+		["git@host.invalid:x", "git@host.invalid:x"],
+		["no credentials here at all", "no credentials here at all"],
+	])("leaves %s exactly as written", (value, expected) => {
+		expect(redactGitSecrets(value)).toBe(expected);
 	});
 	it("redacts per line, so a later @ cannot mask or expose another line", () => {
 		const text = "fatal: user:pass1@host one\nunrelated mention of a@b here";
@@ -277,13 +292,68 @@ describe("project transport and terminal policy", () => {
 		const cleaned = sanitizeForTerminal("a\u001b]2Jb\tc\nd\u007fe\u009bf");
 		expect(cleaned).toBe("a]2Jb\tc\ndef");
 	});
+	it.each([
+		["C1 CSI", "[2J"],
+		["bidi override", "a‮gnp.sh"],
+		["DEL", "ab"],
+		["ESC", "ab"],
+		["zero-width joiner", "a‍b"],
+	])("escapes %s rather than printing it", (_name, raw) => {
+		// `JSON.stringify` escapes C0 only, which is precisely why this
+		// function exists: these bytes used to reach the terminal raw.
+		const expected = raw.replace(
+			/[\p{Cc}\p{Cf}]/gu,
+			(c) => `\\u${c.codePointAt(0)!.toString(16).padStart(4, "0")}`,
+		);
+		expect(escapeControlCharacters(raw)).toBe(expected);
+		expect(escapeControlCharacters(raw)).not.toBe(raw);
+	});
+	it("caps one quoted child line and says that it cut it", () => {
+		const quoted = quoteChildOutput(`git: ${"x".repeat(9_000)}`);
+		expect(quoted.length).toBeLessThan(2_100);
+		expect(quoted).toContain("[truncated]");
+	});
+	it("leaves a short quoted line untouched", () => {
+		expect(quoteChildOutput("fatal: not a git repository")).toBe(
+			"git: fatal: not a git repository",
+		);
+	});
+	it("names the count, the first 20 paths, and points at --json", () => {
+		const many = Array.from({ length: 251 }, (_, index) => `bin/tool-${index}.sh`);
+		const described = describeReviewPaths(many);
+		expect(described).toContain('"bin/tool-0.sh"');
+		expect(described).toContain('"bin/tool-19.sh"');
+		expect(described).not.toContain('"bin/tool-20.sh"');
+		expect(described).toContain("231 more");
+		expect(described).toContain("--json");
+	});
+	it("says so plainly when nothing is hidden", () => {
+		expect(describeReviewPaths(["bin/a.sh"])).toBe(
+			'"bin/a.sh": these came from the hyperdrive; review before trusting this space.',
+		);
+	});
 	it("cleans up only its own failed clone, without relaying credential-bearing stderr", () => {
 		mocked
 			.mockReturnValueOnce(result())
-			.mockReturnValue(result({ status: 1, stderr: "fatal https://u:password@example.invalid" }));
-		expect(() =>
-			cloneProjectRepoBare(join(root, ".git"), "https://example.invalid/project", "main"),
-		).toThrow(/git said|Credential prompts are disabled/);
+			.mockReturnValue(
+				result({ status: 1, stderr: "fatal https://user:secret-password@example.invalid/x" }),
+			);
+		let message = "";
+		try {
+			cloneProjectRepoBare(
+				join(root, ".git"),
+				"https://user:secret-password@example.invalid/x",
+				"main",
+			);
+			throw new Error("should refuse");
+		} catch (error) {
+			message = String(error);
+		}
+		// The test's title has always claimed this; assert it properly. The
+		// secret must be absent from the whole message, not merely unmatched by
+		// a loose regex.
+		expect(message).not.toContain("secret-password");
+		expect(message).toContain("[redacted]");
 		expect(existsSync(join(root, ".git"))).toBe(false);
 	});
 });

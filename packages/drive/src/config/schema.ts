@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { escapeControlCharacters } from "#services/space-git";
 
 export type SyncCadence = "" | "manual" | "session-end" | "session-end+push";
 
@@ -327,7 +328,9 @@ function warnUnknown(
 	for (const key of Object.keys(raw)) {
 		if (!known.includes(key)) {
 			process.stderr.write(
-				`warning: ignoring unknown key \`${scope}${key}\` in the hyperdrive manifest at ${path}\n`,
+				// The key is manifest data: escape it so a control character in a
+				// key cannot drive the terminal that prints this warning.
+				`warning: ignoring unknown key \`${escapeControlCharacters(`${scope}${key}`)}\` in the hyperdrive manifest at ${path}\n`,
 			);
 		}
 	}
