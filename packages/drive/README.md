@@ -254,9 +254,12 @@ tooling).
   runs with a different start time. A live owner keeps it however long it
   takes. The 30-minute age rule remains only where liveness cannot be judged:
   a lock from another host, from another pid namespace (Linux), from an older
-  CLI, or a pid whose start time cannot be read. Two containers sharing a
-  hostname and the space dir but not a pid namespace are told apart only on
-  Linux; elsewhere one can misjudge the other's lock.
+  CLI, or a pid whose start time cannot be read. A lock file hyper cannot
+  read or that holds no lock record is never taken over: the command waits,
+  then says why. When it gives up, the message names the holder (pid, host,
+  how long) and tells you to delete the lock only if that process is gone.
+  Two containers sharing a hostname and the space dir but not a pid namespace
+  are told apart only on Linux; elsewhere one can misjudge the other's lock.
 - **"Backed up" only means pushed.** `session-end` and `manual` cadence
   commit to `.hyper/space.git` on the same disk; the history reaches the
   hyperdrive only through `session-end+push` or `hyper space push`.
