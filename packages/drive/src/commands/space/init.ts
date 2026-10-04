@@ -37,6 +37,8 @@ import {
 	writeCadence,
 	writeTracked,
 } from "#services/space-git";
+import { withSpaceLock } from "#services/space-lock";
+
 import {
 	commitAndPushSpace,
 	remoteRef,
@@ -547,7 +549,10 @@ export default class Init extends BaseCommand<typeof Init> {
 			};
 			if (gitReady && hasSpaceGit(root)) {
 				attempt("the index may still contain staged files", () => {
-					spaceGit(root, ["reset", "--quiet"], { allowFailure: true });
+					// Never clear an index another process may be committing from.
+					withSpaceLock(root, "clear the index", () =>
+						spaceGit(root, ["reset", "--quiet"], { allowFailure: true }),
+					);
 				});
 			}
 			if (!keepsCommit) {

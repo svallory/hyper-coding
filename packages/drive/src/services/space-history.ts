@@ -18,6 +18,7 @@ import {
 	writeTracked,
 } from "#services/space-git";
 import { incomingReview, validateIncomingSpace } from "#services/space-incoming";
+import { withSpaceLock } from "#services/space-lock";
 
 export interface InitializedSpace {
 	root: string;
@@ -162,6 +163,21 @@ export async function pullSpace(
 	options: SpacePullOptions = {},
 ): Promise<SpacePullResult> {
 	fetchSpace(root, branch);
+	// The fast-forward rewrites the index and work tree, and the refusal record
+	// is config the next commit reads: hold the space lock so a session-end
+	// commit cannot stage or reset the index under the merge. The fetch above
+	// only updates the tracking ref and is left outside, so a slow network does
+	// not keep commits waiting.
+	return withSpaceLock(root, `fast-forward ${branch}`, () =>
+		pullSpaceLocked(root, branch, options),
+	);
+}
+
+async function pullSpaceLocked(
+	root: string,
+	branch: string,
+	options: SpacePullOptions,
+): Promise<SpacePullResult> {
 	// Only a fetch that actually reached the hyperdrive may clear the record of
 	// a refusal: an unreachable remote has said nothing new about that tip.
 	clearRefusal(root);
