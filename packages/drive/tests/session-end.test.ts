@@ -56,7 +56,8 @@ beforeEach(() => {
 });
 afterEach(() => {
 	vi.unstubAllEnvs();
-	rmSync(directory, { recursive: true, force: true });
+	// A just-finished git child may briefly retain/recreate files during teardown.
+	rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 function payload(extra: Record<string, unknown> = {}): string {
 	return JSON.stringify({
