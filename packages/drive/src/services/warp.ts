@@ -151,7 +151,21 @@ export type WarpStep =
 	 * to a remote shell would look for a binary named herdr on the target with
 	 * `--machine` as its first flag.
 	 */
-	| { kind: "probe"; via: "shell" | "herdr"; summary: string; argv: string[]; problem: string }
+	| {
+			kind: "probe";
+			via: "shell" | "herdr";
+			summary: string;
+			argv: string[];
+			problem: string;
+			/**
+			 * False for a probe that is a QUESTION rather than a gate. The
+			 * default (true) means "may I start?" — a failure stops the plan.
+			 * A non-fatal probe records its answer for a later conditional step
+			 * and carries on, which is what "clone the space only if it is
+			 * missing there" needs.
+			 */
+			fatal?: false;
+	  }
 	/** SIGTERM/SIGKILL the live session (design step 2, `--stop`). */
 	| {
 			kind: "stop-session";
@@ -171,7 +185,23 @@ export type WarpStep =
 	/** Push the session out through an existing config-sync session. */
 	| { kind: "flush-sync"; summary: string; session: string }
 	/** An arbitrary command on the target (only `hyper space clone`). */
-	| { kind: "remote-command"; summary: string; argv: string[] }
+	| {
+			kind: "remote-command";
+			summary: string;
+			argv: string[];
+			/**
+			 * Run this only when an earlier probe FAILED.
+			 *
+			 * The design's "if the space is missing on the target, clone it there"
+			 * is exactly this: the probe asking whether the space is there is
+			 * unconditional (it is read-only and its answer is worth printing
+			 * either way), while the clone that follows it is conditional on the
+			 * answer. Deciding that from a probe's RESULT — rather than guessing
+			 * before the probe runs — is what lets `--dry-run` print both steps
+			 * and the real run skip the one that does not apply.
+			 */
+			whenProbeFailed?: string;
+	  }
 	/**
 	 * Copy a directory tree.
 	 *
@@ -355,6 +385,11 @@ export function resumeClaudeArgv(sessionId: string, remoteControl: boolean): str
 	return ["claude", "--resume", sessionId, ...(remoteControl ? [REMOTE_CONTROL_FLAG] : [])];
 }
 
+/** The summary of the probe that asks whether a space is already on the target. */
+function spaceProbeSummary(spaceRoot: string, machine: string): string {
+	return `check whether the space at ${spaceRoot} is already on ${machine}`;
+}
+
 /**
  * Build the plan, or refuse.
  *
@@ -491,7 +526,8 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 		steps.push({
 			kind: "probe",
 			via: "shell",
-			summary: `check the space "${inputs.space.name}" is missing on ${inputs.target.name}`,
+			fatal: false,
+			summary: spaceProbeSummary(inputs.space.root, inputs.target.name),
 			argv: ["sh", "-c", `test -d -- ${quoteForRemoteShell(inputs.space.root)}`],
 			problem: `couldn't check whether ${inputs.space.root} exists on ${inputs.target.name}. Nothing has been copied.`,
 		});
@@ -544,6 +580,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 				kind: "remote-command",
 				summary: `clone the space "${inputs.space.name}" on ${inputs.target.name}`,
 				argv: ["hyper", "space", "clone", inputs.space.name, "--yes"],
+				whenProbeFailed: spaceProbeSummary(inputs.space.root, inputs.target.name),
 			});
 		}
 		steps.push({
@@ -635,7 +672,7 @@ export function describeStep(step: WarpStep): string {
 		case "flush-sync":
 			return `sync: ${step.summary}`;
 		case "remote-command":
-			return `remote: ${step.summary}\n    ssh -- ${shellJoin(step.argv)}`;
+			return `remote: ${step.summary}${step.whenProbeFailed ? " (only if the space is missing there)" : ""}\n    ssh -- ${shellJoin(step.argv)}`;
 		case "copy": {
 			const excludes =
 				step.excludes.length > 0
@@ -706,8 +743,18 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 	const log = deps.log ?? (() => {});
 	let paneId: string | undefined;
 	let copiedAfterMarker = false;
+	/** Summary of each probe that ran, and whether it passed. */
+	const probeResults = new Map<string, boolean>();
 
 	for (const step of plan.steps) {
+		// A conditional step is skipped, not failed: it is reported as skipped so
+		// `--json` and the completion log still say what was considered.
+		if (step.kind === "remote-command" && step.whenProbeFailed !== undefined) {
+			if (probeResults.get(step.whenProbeFailed) !== false) {
+				log(`skipped: ${step.summary} (already there on ${plan.target.name})`);
+				continue;
+			}
+		}
 		try {
 			switch (step.kind) {
 				case "probe": {
@@ -718,7 +765,12 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 						step.via === "herdr"
 							? await runHerdr(step.argv, deps)
 							: await deps.runner.ssh(step.argv, { timeoutMs: 60_000 });
-					if (result.code !== 0) {
+					probeResults.set(step.summary, result.code === 0);
+					// A non-fatal probe RECORDS its answer and lets the plan carry
+					// on: the space check is a question ("is the space there
+					// already?"), and "no" is an answer, not a failure. Every other
+					// probe is fatal, because its question is "may I start?".
+					if (result.code !== 0 && step.fatal !== false) {
 						return {
 							completed,
 							failure: { summary: step.summary, detail: step.problem },
