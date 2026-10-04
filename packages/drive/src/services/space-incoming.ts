@@ -235,7 +235,12 @@ const REVIEW_NAMES: ReadonlySet<string> = new Set([
 	"gemini.md",
 	"hyper.md",
 ]);
-/** Directories whose contents can run commands or shape what an agent does. */
+/**
+ * Directories whose contents can run commands or shape what an agent does.
+ * `.hyper/` is listed whole rather than `.hyper/memory/`: a remote-supplied
+ * settings file can point `autoMemoryDirectory` anywhere under it, so memory is
+ * not a safe exemption, and clone already named all of `.hyper/`.
+ */
 const REVIEW_DIRECTORIES: readonly string[] = [
 	".claude/",
 	".config/",
@@ -243,7 +248,7 @@ const REVIEW_DIRECTORIES: readonly string[] = [
 	".codex/",
 	".vscode/",
 	".pi/",
-	".hyper/memory/",
+	".hyper/",
 	"bin/",
 ];
 

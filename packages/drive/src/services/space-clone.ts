@@ -32,7 +32,11 @@ import {
 	writeCadence,
 	writeTracked,
 } from "#services/space-git";
-import { SpaceIncomingError, validateIncomingSpace } from "#services/space-incoming";
+import {
+	incomingReviewPaths,
+	SpaceIncomingError,
+	validateIncomingSpace,
+} from "#services/space-incoming";
 import { spaceWorktrunkWarning } from "#services/space-worktrunk";
 
 /**
@@ -113,23 +117,6 @@ function cloneLibrary(
 			`I couldn't finish the space layout with ${fn}. Check bash and filesystem permissions, then retry. ${result.error?.message ?? result.stderr.trim()}`,
 		);
 	}
-}
-
-/** Advisory only: never execute or approve incoming configuration or instructions. */
-function cloneUntrustedConfiguration(paths: readonly string[]): string[] {
-	return paths.filter((path) => {
-		const lower = path.normalize("NFC").toLowerCase();
-		return (
-			["claude.md", "agents.md", "hyper.md"].includes(lower.split("/").at(-1)!) ||
-			lower.startsWith("bin/") ||
-			lower.startsWith(".config/") ||
-			// No memory exemption anywhere: `.hyper/memory` steers agents by
-			// instruction, and a remote-supplied settings.json can point
-			// autoMemoryDirectory at `.claude/memory` to make it do the same.
-			lower.startsWith(".claude/") ||
-			lower.startsWith(".hyper/")
-		);
-	});
 }
 
 export interface CloneSpaceResult {
@@ -320,7 +307,7 @@ export async function cloneSpace(
 			worktrees: [],
 			libraryWrites: [],
 			warnings,
-			untrustedConfiguration: cloneUntrustedConfiguration(incomingPaths),
+			untrustedConfiguration: await incomingReviewPaths(root, incoming.tip),
 		};
 		if (result.untrustedConfiguration.length)
 			result.warnings.push(
