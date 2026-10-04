@@ -1,7 +1,7 @@
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { TestContext } from "vitest";
 import { shellJoin, shellQuote } from "#services/remote";
 
@@ -89,6 +89,9 @@ function removeTree(root: string): void {
 }
 
 const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
+
+/** Distinguishes the status files of concurrent pty spawns. */
+let ttyRuns = 0;
 const ANSI_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 export const flat = (s: string): string =>
 	s
@@ -144,12 +147,19 @@ export function spawnCliOnTty(
 	// -c string:                script -q -c "<cmd…>" /dev/null
 	// Passing the macOS form on Linux fails with
 	// "script: unexpected number of arguments".
+	//
+	// Neither can be trusted to report the CHILD's exit status: BSD always
+	// propagates it, while util-linux returns 0 unless `-e` is given. So the
+	// child's own status is recorded by a wrapper shell and read back below,
+	// which makes an exit-code assertion mean the same thing on both.
+	const statusFile = join(dirname(fixture.configFile), `tty-exit-${process.pid}-${ttyRuns++}.txt`);
+	const inner = `${child}; printf '%s' $? > ${shellQuote(statusFile)}`;
 	const script =
 		process.platform === "darwin"
-			? `script -q /dev/null ${child}`
-			: `script -q -c ${shellQuote(child)} /dev/null`;
+			? `script -q /dev/null sh -c ${shellQuote(inner)}`
+			: `script -q -e -c ${shellQuote(`sh -c ${shellQuote(inner)}`)} /dev/null`;
 	const command = `(sleep 2; ${feeder}; sleep 3) | ${script}`;
-	return spawnSync("/bin/sh", ["-c", command], {
+	const result = spawnSync("/bin/sh", ["-c", command], {
 		encoding: "utf8",
 		// A prompt test must never be able to wedge the whole suite: if the CLI
 		// stops asking, this kills it and the assertion fails instead.
@@ -165,6 +175,9 @@ export function spawnCliOnTty(
 			FORCE_COLOR: "0",
 		},
 	});
+	const recorded = existsSync(statusFile) ? readFileSync(statusFile, "utf8").trim() : "";
+	if (recorded !== "") return { ...result, status: Number.parseInt(recorded, 10) };
+	return result;
 }
 
 /**

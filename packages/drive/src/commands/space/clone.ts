@@ -83,7 +83,10 @@ export default class Clone extends BaseCommand<typeof Clone> {
 			);
 		} catch (error) {
 			if (error instanceof CloneCancelledError) {
-				// Declining a prompt is a decision, not a failure to fix.
+				// Declining a prompt is a decision, not a failure to fix. Set the
+				// code here rather than inferring it from any prompt library's
+				// cancelled state, so it cannot depend on how the answer arrived.
+				process.exitCode = 1;
 				this.error(error.message, { exit: 1 });
 			}
 			if (!(error instanceof Error)) throw error;
