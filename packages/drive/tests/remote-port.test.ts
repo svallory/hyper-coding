@@ -154,6 +154,29 @@ describe("sshUrl", () => {
 	});
 });
 
+describe("RemoteMachine with a port AND as another user (T-17's options)", () => {
+	it("keeps both: the isolation options, then -p, then the host", async () => {
+		const { calls, spawner } = recording();
+		const machine = new RemoteMachine("agent@box:2222", spawner, { otherUser: true });
+		await machine.ssh(["true"]);
+		const args = calls[0]?.args ?? [];
+		expect(args.slice(-5)).toEqual(["-p", "2222", "agent@box", "--", "true"]);
+		expect(args).toContain("ControlMaster=no");
+		await machine.rsync("/a", "/home/agent/x");
+		const rsync = calls.find((call) => call.file === "rsync")?.args ?? [];
+		const shell = rsync[rsync.indexOf("-e") + 1] ?? "";
+		expect(shell.startsWith("ssh ")).toBe(true);
+		expect(shell).toContain("ControlMaster=no");
+		expect(shell.endsWith("-p 2222")).toBe(true);
+	});
+
+	it("asUser keeps the port of the machine it was built for", async () => {
+		const { calls, spawner } = recording();
+		await new RemoteMachine("me@box", spawner, { port: 2222 }).asUser("agent", ["true"]);
+		expect(calls[0]?.args.slice(-5)).toEqual(["-p", "2222", "agent@box", "--", "true"]);
+	});
+});
+
 describe("RemoteMachine with a port", () => {
 	it("passes -p BEFORE the host, where ssh is still reading options", async () => {
 		const { calls, spawner } = recording();
