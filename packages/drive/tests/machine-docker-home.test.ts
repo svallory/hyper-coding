@@ -55,7 +55,6 @@ import {
 	type SshOptions,
 	targetWithUser,
 } from "#services/remote";
-import { withTempConfig } from "#tests/tmp-config";
 
 const saved = process.env.HYPER_DRIVE_CONFIG;
 afterEach(() => {
@@ -470,6 +469,27 @@ describe("home-path", () => {
 		await homePathPhysical.apply(
 			ctxFor(recordingRunner(), { machine: { ...MACHINE, home: "/home/svallory" } }),
 		);
+	});
+
+	it("never creates the home just to write the line into it", async () => {
+		// `touch` is the first thing ensureBashrcLine does, and on a machine whose
+		// home is still /home/svallory that would CREATE /Users/svallory and make
+		// the move refuse its own target.
+		const runner = recordingRunner([{ match: "test -d", result: { stdout: "no\n" } }]);
+		const lines: string[] = [];
+		await homePathPhysical.apply(
+			ctxFor(runner, {
+				machine: { ...MACHINE, home: "/Users/svallory" },
+				log: (line) => lines.push(line),
+			}),
+		);
+		expect(runner.joined).not.toContain(".bashrc");
+		expect(lines.join("\n")).toContain("run the home-path root script first");
+		const present = recordingRunner([{ match: "test -d", result: { stdout: "yes\n" } }]);
+		await homePathPhysical.apply(
+			ctxFor(present, { machine: { ...MACHINE, home: "/Users/svallory" } }),
+		);
+		expect(present.joined).toContain("/Users/svallory/.bashrc");
 	});
 });
 
