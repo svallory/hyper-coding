@@ -149,7 +149,9 @@ read-only call, measured at 200 to 700 ms, killed at 5 s), writes the payload
 and starts the same detached worker, so a pi session end commits locally (and
 pushes for `session-end+push`) while pi waits only for that one call. A call
 that overruns 5 s saves nothing and leaves a `failed` "probe timed out" line
-that `hyper space status` shows.
+that `hyper space status` shows — but only in a real space git dir above the
+session's directory (real directories, no symlinks, with `HEAD` and `config`),
+and in a `manual` space too, since the cadence was never read.
 `/new`, `/resume`, `/fork` and `/reload` are session replacement and save
 nothing, like `/clear` and resume. For pi the commit subject is the session
 name, or the first line of the first prompt — prompt text lands in the
