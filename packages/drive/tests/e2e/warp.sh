@@ -66,13 +66,19 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # e2e -> tests -> drive -> packages, so the CLI is three levels up.
 cli="$here/../../../cli/bin/run.js"
 image="debian:13"
-container="hyper-t12"
+# Name and port are overridable so the suite runner (run.sh) can give each run
+# a free port and a unique container name on a shared machine.
+container="${WARP_E2E_CONTAINER:-hyper-t12}"
 port="${WARP_E2E_PORT:-23322}"
 primary="svallory"
 
 step=0
 pass() { step=$((step + 1)); printf 'ok %d - %s\n' "$step" "$1"; }
 die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
+
+# shasum is a perl script (macOS ships it; minimal Linux may not) — fall back
+# to coreutils sha256sum. Both print the same hex, so the recipe tag is stable.
+sha12() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sha256sum "$@"; fi | cut -c1-12; }
 
 [ -f "$cli" ] || { echo "# cannot find the CLI at $cli — build packages/cli first" >&2; exit 1; }
 
@@ -147,7 +153,7 @@ exec /usr/sbin/sshd -D -e
 ENTRYPOINT
 chmod +x "$work_real/entrypoint.sh"
 
-recipe="$(cat "$containerfile" "$work_real/entrypoint.sh" | shasum -a 256 | cut -c1-12)"
+recipe="$(cat "$containerfile" "$work_real/entrypoint.sh" | sha12)"
 derived="hyper-t12-e2e:$recipe"
 if ! podman image exists "$derived"; then
   echo "# building $derived from $image (sshd + rsync + git)"
@@ -158,9 +164,13 @@ fi
 # --------------------------------------------------------------------------
 # The machine
 # --------------------------------------------------------------------------
-if ! podman machine list --format '{{.Running}}' | grep -q true; then
-  echo "# starting the podman machine"
-  podman machine start >/dev/null
+# Start the podman VM when this platform has one (macOS/Windows). On Linux
+# `podman machine` is unsupported and exits non-zero; podman is native there.
+if podman machine list --format '{{.Running}}' >/dev/null 2>&1; then
+  if ! podman machine list --format '{{.Running}}' | grep -q true; then
+    echo "# starting the podman machine"
+    podman machine start >/dev/null
+  fi
 fi
 podman rm -f "$container" >/dev/null 2>&1 || true
 # The entrypoint takes the shared home path and does the user setup, because

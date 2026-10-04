@@ -14,6 +14,19 @@ tasks:
     inputs:
       - '@globs(sources)'
 
+  # The end-to-end suite (T-19). Deliberately a SEPARATE task, not part of
+  # :test, and never wired into lefthook: it needs podman, loopback ssh,
+  # mutagen or claude, downloads tools, and starts disposable containers.
+  # The scripts drive the built CLI, so build packages/cli first — that
+  # dependency cannot be a moon dep (cli depends on drive, not vice versa).
+  e2e:
+    command: 'bash tests/e2e/run.sh'
+    inputs:
+      - '@globs(sources)'
+      - 'tests/e2e/**'
+    options:
+      cache: false
+
 toolchain:
   typescript:
     syncProjectReferences: false
