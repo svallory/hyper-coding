@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { MachineRunner } from "#services/remote";
 import {
 	describeStep,
 	describeWarp,
@@ -96,6 +97,39 @@ function recorder(overrides: Partial<WarpDeps> = {}): Recorder {
 	const markers: { machine: string; at: string | undefined }[] = [];
 	const pushes: { url: string; branch: string; worktree: string }[] = [];
 	const stops: { pid: number; sessionId: string; cwd: string }[] = [];
+	// Whatever runner a test supplies is WRAPPED, not swapped out, so the
+	// recording still happens: a test that overrides `ssh` to fail one call wants
+	// to assert about the calls around it just as much.
+	const base: MachineRunner = {
+		async ssh(cmd) {
+			ssh.push(cmd);
+			return { code: 0, stdout: "", stderr: "" };
+		},
+		async rsync(src, dst, opts) {
+			copies.push({ src, dst, excludes: opts?.excludes ?? [] });
+			return { code: 0, stdout: "", stderr: "" };
+		},
+		async scp() {
+			return { code: 0, stdout: "", stderr: "" };
+		},
+	};
+	// `runner` is pulled OUT of the overrides: it is spread last below, so
+	// leaving it in would overwrite the wrapper and silently un-record.
+	const { runner: custom, ...rest } = overrides;
+	const runner: MachineRunner = custom
+		? {
+				async ssh(cmd, opts) {
+					ssh.push(cmd);
+					return custom.ssh(cmd, opts);
+				},
+				async rsync(src, dst, opts) {
+					copies.push({ src, dst, excludes: opts?.excludes ?? [] });
+					return custom.rsync(src, dst, opts);
+				},
+				scp: (src, dst) => custom.scp(src, dst),
+			}
+		: base;
+
 	return {
 		ssh,
 		copies,
@@ -105,19 +139,7 @@ function recorder(overrides: Partial<WarpDeps> = {}): Recorder {
 		pushes,
 		stops,
 		deps: {
-			runner: {
-				async ssh(cmd) {
-					ssh.push(cmd);
-					return { code: 0, stdout: "", stderr: "" };
-				},
-				async rsync(src, dst, opts) {
-					copies.push({ src, dst, excludes: opts?.excludes ?? [] });
-					return { code: 0, stdout: "", stderr: "" };
-				},
-				async scp() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-			},
+			runner,
 			async stop(pid, options) {
 				stops.push({ pid, sessionId: options.sessionId, cwd: options.cwd });
 				return "terminated";
@@ -138,7 +160,7 @@ function recorder(overrides: Partial<WarpDeps> = {}): Recorder {
 				return { code: 0, stdout: '{"result":{"tab":"w1:t1","root_pane":"w1:p1"}}', stderr: "" };
 			},
 			now: () => "2026-10-03T12:00:00.000Z",
-			...overrides,
+			...rest,
 		},
 	};
 }
@@ -302,6 +324,68 @@ describe("the plan for a space worktree", () => {
 			"research",
 			"--yes",
 		]);
+	});
+
+	it("skips the clone when the target already has the space", async () => {
+		const plan = planOf({ cwdKind: "space-worktree", space });
+		// The space probe passes (non-fatal), so the conditional clone is skipped.
+		const rec = recorder();
+		const result = await executeWarp(plan, rec.deps);
+		expect(result.failure).toBeUndefined();
+		const clone = rec.ssh.find((argv) => argv[0] === "hyper");
+		expect(clone).toBeUndefined();
+		// The branch still gets pushed: existing space, new branch.
+		expect(rec.pushes).toHaveLength(1);
+	});
+
+	it("clones the space when the target does not have it, without stopping on the probe", async () => {
+		const plan = planOf({ cwdKind: "space-worktree", space });
+		const rec = recorder({
+			runner: {
+				async ssh(cmd) {
+					// `test -d <spaceRoot>` fails (the space is missing); the clone's
+					// `command -v hyper` passes.
+					if ((cmd[2] as string).includes(space.root)) {
+						return { code: 1, stdout: "", stderr: "" };
+					}
+					return { code: 0, stdout: "", stderr: "" };
+				},
+				async rsync() {
+					return { code: 0, stdout: "", stderr: "" };
+				},
+				async scp() {
+					return { code: 0, stdout: "", stderr: "" };
+				},
+			},
+		});
+		const result = await executeWarp(plan, rec.deps);
+		expect(result.failure).toBeUndefined();
+		expect(rec.ssh.some((argv) => argv[0] === "hyper")).toBe(true);
+	});
+
+	it("refuses when the space is missing AND hyper is not installed on the target", async () => {
+		const plan = planOf({ cwdKind: "space-worktree", space });
+		const rec = recorder({
+			runner: {
+				async ssh(cmd) {
+					if ((cmd[2] as string).includes(space.root)) {
+						return { code: 1, stdout: "", stderr: "" };
+					}
+					if (cmd[0] === "command") return { code: 1, stdout: "", stderr: "" };
+					return { code: 0, stdout: "", stderr: "" };
+				},
+				async rsync() {
+					return { code: 0, stdout: "", stderr: "" };
+				},
+				async scp() {
+					return { code: 0, stdout: "", stderr: "" };
+				},
+			},
+		});
+		const result = await executeWarp(plan, rec.deps);
+		expect(result.failure?.detail).toContain("hyper isn't installed on netcup");
+		expect(rec.copies).toHaveLength(0);
+		expect(rec.markers).toHaveLength(0);
 	});
 
 	it("does not clone, and does not probe for hyper, when the space is already there", () => {
@@ -491,7 +575,7 @@ describe("hostile inputs never reach a shell unquoted", () => {
 		// The space-existence probe names a path too, and it is the one a hostile
 		// cwd most directly controls.
 		const spaceProbe = plan.steps.find(
-			(entry) => entry.kind === "probe" && entry.summary.includes("is missing on"),
+			(entry) => entry.kind === "probe" && entry.fatal === false,
 		) as Extract<WarpStep, { kind: "probe" }>;
 		const words = quotedWordsAfter(spaceProbe.argv[2] as string, "-- ");
 		expect(words).toHaveLength(1);
@@ -625,7 +709,11 @@ describe("executeWarp", () => {
 		const rec = recorder({
 			runner: {
 				async ssh(cmd) {
-					// The clone is the ssh whose program is `hyper`; fail that one.
+					// The target does not have the space, so the clone is the
+					// conditional step that runs — and it is the one that fails.
+					if ((cmd[2] as string).includes(`${HOME}/sp/r`)) {
+						return { code: 1, stdout: "", stderr: "" };
+					}
 					return cmd[0] === "hyper"
 						? { code: 1, stdout: "", stderr: "no such space" }
 						: { code: 0, stdout: "", stderr: "" };
