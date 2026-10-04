@@ -10,6 +10,7 @@ import {
 	SpaceGitInterruptedError,
 	spaceGit,
 } from "#services/space-git";
+import { type SpaceLockOptions, withSpaceLock } from "#services/space-lock";
 
 /** The first matching branch on the remote, or null. */
 export function remoteRef(root: string, remote: string, pattern: string): string | null {
@@ -182,11 +183,31 @@ export async function commitSpace(
 	reportWarning: (message: string) => void = (message) => {
 		process.stderr.write(message);
 	},
+	lock: SpaceLockOptions = {},
 ): Promise<SpaceCommitResult> {
 	if (message.trim() === "")
 		throw new SpaceGitError(
 			"A commit message cannot be empty. Pass a non-empty `-m` message before trying again.",
 		);
+	// Stage, inspect, commit and any index cleanup form ONE critical section:
+	// another process staging between the secret guard and the commit would
+	// otherwise have its unchecked files committed here (PR #45 review, B1).
+	return withSpaceLock(
+		root,
+		`commit ${branch}`,
+		() => commitSpaceLocked(root, branch, message, allowSecrets, caller, reportWarning),
+		lock,
+	);
+}
+
+async function commitSpaceLocked(
+	root: string,
+	branch: string,
+	message: string,
+	allowSecrets: string[],
+	caller: "init" | "daily",
+	reportWarning: (message: string) => void,
+): Promise<SpaceCommitResult> {
 	try {
 		const excluded = spaceGit(root, ["ls-files", "--others", "--exclude-standard", "-z"])
 			.stdout.split("\0")
@@ -302,11 +323,17 @@ export function pushSpace(
 	branch: string,
 	caller: "init" | "daily" = "daily",
 ): void {
-	const sha = spaceGit(root, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
-	spaceGitRemote(root, remote, ["push", "origin", `${sha}:refs/heads/${branch}`], branch, caller);
-	// Legacy init wrote no fetch refspec: Git cannot update a tracking ref for it.
-	// Record exactly the immutable SHA handed to the successful push, even there.
-	spaceGit(root, ["update-ref", `refs/remotes/origin/${branch}`, sha]);
+	// The push reads the branch tip and then records it as the tracking ref.
+	// Serialised with commits, a push always publishes the newest local tip:
+	// two unserialised pushes could land newest-first and the older one would
+	// then be reported as "another machine pushed first".
+	withSpaceLock(root, `push ${branch}`, () => {
+		const sha = spaceGit(root, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
+		spaceGitRemote(root, remote, ["push", "origin", `${sha}:refs/heads/${branch}`], branch, caller);
+		// Legacy init wrote no fetch refspec: Git cannot update a tracking ref for it.
+		// Record exactly the immutable SHA handed to the successful push, even there.
+		spaceGit(root, ["update-ref", `refs/remotes/origin/${branch}`, sha]);
+	});
 }
 
 /** Init/refresh publication, with callbacks preserving the caller's rollback boundary. */
