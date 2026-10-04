@@ -858,3 +858,25 @@ export function sshCommandWithBatchMode(command: string | undefined): string | u
 	if (basename(program.value).toLowerCase() !== SSH_CLIENT) return command;
 	return `${command.slice(0, program.end)} -o BatchMode=yes${command.slice(program.end)}`;
 }
+
+/**
+ * A bounded connection attempt for space remote operations: an unreachable
+ * hyperdrive host must fail in seconds, not after the operating system's TCP
+ * timeout (75 s on macOS, measured by the PR #45 review).
+ *
+ * Unlike BatchMode, a user's own `ConnectTimeout` wins: it is a deliberate
+ * choice for a slow link, not a setting that could make a hook wait for a
+ * password. The option is otherwise inserted right after the program word,
+ * like `sshCommandWithBatchMode`, and a wrapper program is left alone.
+ */
+export function sshCommandWithConnectTimeout(
+	command: string | undefined,
+	seconds: number,
+): string | undefined {
+	if (command === undefined || command.trim() === "")
+		return `${SSH_CLIENT} -o ConnectTimeout=${seconds}`;
+	const trimmed = command.trim();
+	const program = trimmed.split(/\s+/)[0] ?? "";
+	if (basename(program) !== SSH_CLIENT || /connecttimeout/i.test(trimmed)) return command;
+	return `${program} -o ConnectTimeout=${seconds}${trimmed.slice(program.length)}`;
+}

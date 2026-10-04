@@ -9,6 +9,7 @@ import {
 	SpaceGitError,
 	SpaceGitInterruptedError,
 	spaceGit,
+	spaceGitBounded,
 } from "#services/space-git";
 import { type SpaceLockOptions, withSpaceLock } from "#services/space-lock";
 
@@ -76,11 +77,21 @@ export function spaceGitRemote(
 ): void {
 	const result = spaceGit(root, [...args], { allowFailure: true });
 	if (result.status === 0) return;
-	const detail = (result.stderr || result.stdout).trim();
+	throw pushFailure(remote, (result.stderr || result.stdout).trim(), args, branch, caller);
+}
+
+/** Classify a failed push: a definite refusal, or an uncertain network failure. */
+function pushFailure(
+	remote: string,
+	detail: string,
+	args: readonly string[],
+	branch: string,
+	caller: "init" | "daily",
+): SpaceGitError {
 	const what = `push ${escapeControlCharacters(branch)}`;
 	// Ref conflicts also carry [remote rejected], but are not hook failures.
 	if (/refname conflict|cannot lock ref/i.test(detail)) {
-		throw new SpacePushRefusedError(
+		return new SpacePushRefusedError(
 			`the hyperdrive at ${escapeControlCharacters(remote)} already has a ref that ${escapeControlCharacters(branch)} collides with, so it cannot take this branch. ` +
 				(caller === "init"
 					? "Pick a space name that does not collide."
@@ -91,14 +102,14 @@ export function spaceGitRemote(
 	// A hook may itself say "fetch first"; its explicit refusal takes precedence.
 	if (/\((?:pre-receive |update )?hook declined\)/i.test(detail)) {
 		const reason = hookReason(detail);
-		throw new SpacePushRefusedError(
+		return new SpacePushRefusedError(
 			`the hyperdrive at ${escapeControlCharacters(remote)} refused to take ${escapeControlCharacters(branch)}: a server-side hook declined the push. ` +
 				`Nothing was overwritten, and retrying will not help until that hook allows it.` +
 				(reason === "" ? "" : ` It said: ${gitSaid(reason).replace(/[.!?]+$/, "")}.`),
 		);
 	}
 	if (/(fetch first|non-fast-forward|stale info|behind its remote)/i.test(detail)) {
-		throw new SpacePushRefusedError(
+		return new SpacePushRefusedError(
 			`${what} was refused: ${escapeControlCharacters(remote)} has moved on, so another machine pushed this space's branch ` +
 				`first. Nothing was overwritten — hyper never rewrites a space's history. ` +
 				(caller === "init"
@@ -107,7 +118,7 @@ export function spaceGitRemote(
 			` Pass \`--name\` with a different name to initialise a new space.`,
 		);
 	}
-	throw new SpaceGitError(
+	return new SpaceGitError(
 		`I couldn't reach your hyperdrive at ${escapeControlCharacters(remote)} to ${what}: ${gitSaid(detail) || `git ${args[0]} failed`}`,
 	);
 }
@@ -334,6 +345,40 @@ export function pushSpace(
 		// Record exactly the immutable SHA handed to the successful push, even there.
 		spaceGit(root, ["update-ref", `refs/remotes/origin/${branch}`, sha]);
 	});
+}
+
+/** Overall limit on a session-end push, connection included. */
+export const SESSION_END_PUSH_TIMEOUT_MS = 30_000;
+
+/**
+ * `pushSpace` for the detached session-end worker: never on a terminal (ssh
+ * BatchMode, connect timeout) and killed, with its whole process group, when
+ * `timeoutMs` runs out. The local commit is untouched either way.
+ */
+export async function pushSpaceBounded(
+	root: string,
+	remote: string,
+	branch: string,
+	timeoutMs: number = SESSION_END_PUSH_TIMEOUT_MS,
+	lock: SpaceLockOptions = {},
+): Promise<void> {
+	await withSpaceLock(
+		root,
+		`push ${branch}`,
+		async () => {
+			const sha = spaceGit(root, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
+			const args = ["push", "origin", `${sha}:refs/heads/${branch}`];
+			const result = await spaceGitBounded(root, args, timeoutMs);
+			if (result.timedOut)
+				throw new SpaceGitError(
+					`the push to ${escapeControlCharacters(remote)} did not finish within ${Math.round(timeoutMs / 1000)} s, so I stopped it. The commit is saved locally and will be pushed next time.`,
+				);
+			if (result.status !== 0)
+				throw pushFailure(remote, (result.stderr || result.stdout).trim(), args, branch, "daily");
+			spaceGit(root, ["update-ref", `refs/remotes/origin/${branch}`, sha]);
+		},
+		lock,
+	);
 }
 
 /** Init/refresh publication, with callbacks preserving the caller's rollback boundary. */

@@ -20,7 +20,7 @@ import type { SyncCadence } from "#config/schema";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 // C-16: only services/remote.ts may name an SSH program, so the command-shape
 // knowledge lives there and is imported, not re-spelled here.
-import { sshCommandWithBatchMode } from "#services/remote";
+import { sshCommandWithBatchMode, sshCommandWithConnectTimeout } from "#services/remote";
 
 // Re-exported: callers already import the escape from here.
 export { escapeControlCharacters, quoteForTerminal };
@@ -179,6 +179,7 @@ export function spaceGit(
 	args: string[],
 	opts: SpaceGitOptions = {},
 ): SpaceGitResult {
+	const remote = REMOTE_COMMANDS.has(gitCommand(args) ?? "");
 	const result = spawnSync("git", spaceGitArguments(spaceRoot, args, opts.readOnly), {
 		cwd: opts.cwd ?? spaceRoot,
 		input: opts.input,
@@ -189,7 +190,9 @@ export function spaceGit(
 			(args.some((arg) => ["ls-tree", "ls-files", "status", "diff"].includes(arg)) ? 128 : 16) *
 				1024 *
 				1024,
-		env: cleanGitEnv(),
+		env: remote
+			? spaceRemoteEnv(spaceRoot, !!(process.stdin.isTTY && process.stderr.isTTY))
+			: cleanGitEnv(),
 	});
 
 	// Buffer exhaustion also kills the child with SIGTERM; it is not Ctrl-C.
@@ -225,11 +228,130 @@ export function spaceGit(
 	return { status, stdout, stderr, signal: result.signal };
 }
 
-/** Harden every space operation independently of mutable local or global config. */
-function spaceGitArguments(root: string, args: string[], readOnly?: boolean): string[] {
-	const command = args.find(
+/** The git subcommand in an argument list, skipping `-c key=value` pairs. */
+function gitCommand(args: readonly string[]): string | undefined {
+	return args.find(
 		(arg, index) => !arg.startsWith("-") && (index === 0 || args[index - 1] !== "-c"),
 	);
+}
+
+/** Space git commands that reach the hyperdrive over the network. */
+const REMOTE_COMMANDS = new Set(["push", "fetch", "ls-remote"]);
+
+/** Seconds an ssh connection to the hyperdrive may take before git gives up. */
+export const SPACE_SSH_CONNECT_TIMEOUT_SECONDS = 10;
+
+/**
+ * Child environment for a space command that talks to the hyperdrive.
+ *
+ * Every such call gets an ssh connect timeout, so an unreachable host fails
+ * in seconds rather than after the operating system's TCP timeout. Off a
+ * terminal (a hook, a detached worker, CI) it also gets BatchMode, the same
+ * hardening clone has: nothing can wait for a passphrase no one will type.
+ * `GIT_SSH` alone names a wrapper that need not understand `-o`, so it is
+ * left exactly as configured. Otherwise the effective `core.sshCommand`
+ * (space, global or system config) is kept and only gains the options.
+ */
+export function spaceRemoteEnv(root: string, interactive: boolean): NodeJS.ProcessEnv {
+	const env = cleanGitEnv();
+	if (env.GIT_SSH !== undefined && env.GIT_SSH_COMMAND === undefined) return env;
+	let command = env.GIT_SSH_COMMAND || undefined;
+	if (command === undefined) {
+		const configured = spaceGit(root, ["config", "--get", "core.sshCommand"], {
+			allowFailure: true,
+		});
+		const value = configured.status === 0 ? configured.stdout.trim() : "";
+		command = value === "" ? undefined : value;
+	}
+	command = sshCommandWithConnectTimeout(command, SPACE_SSH_CONNECT_TIMEOUT_SECONDS);
+	if (!interactive) command = sshCommandWithBatchMode(command);
+	if (command !== undefined) env.GIT_SSH_COMMAND = command;
+	return env;
+}
+
+export interface BoundedSpaceGitResult extends SpaceGitResult {
+	/** The overall timeout expired and git's process group was killed. */
+	timedOut: boolean;
+}
+
+/** Grace between SIGTERM and SIGKILL for a timed-out git process group. */
+const KILL_GRACE_MS = 2000;
+/** Each captured stream is cut here; diagnostics never need more. */
+const BOUNDED_CAPTURE_LIMIT = 1024 * 1024;
+
+/**
+ * Run a space remote command with an overall time limit, never on a terminal.
+ *
+ * For the detached session-end worker, which nobody watches: git runs in its
+ * own process group (with ssh and any helper under it) so that on expiry the
+ * WHOLE group is killed. A plain `spawnSync` timeout would kill git alone and
+ * then keep waiting for the pipes an orphaned ssh still holds open.
+ */
+export function spaceGitBounded(
+	root: string,
+	args: string[],
+	timeoutMs: number,
+): Promise<BoundedSpaceGitResult> {
+	const env = spaceRemoteEnv(root, false);
+	return new Promise((resolve) => {
+		const child = spawn("git", spaceGitArguments(root, args), {
+			cwd: root,
+			env,
+			stdio: ["ignore", "pipe", "pipe"],
+			detached: true,
+		});
+		let stdout = "";
+		let stderr = "";
+		let timedOut = false;
+		let settled = false;
+		let hardKill: NodeJS.Timeout | undefined;
+		const killGroup = (signal: NodeJS.Signals) => {
+			if (child.pid === undefined) return;
+			try {
+				process.kill(-child.pid, signal);
+			} catch {
+				/* The group is already gone. */
+			}
+		};
+		const timer = setTimeout(() => {
+			timedOut = true;
+			killGroup("SIGTERM");
+			hardKill = setTimeout(() => killGroup("SIGKILL"), KILL_GRACE_MS);
+		}, timeoutMs);
+		const finish = (result: BoundedSpaceGitResult) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			if (hardKill !== undefined) clearTimeout(hardKill);
+			resolve(result);
+		};
+		child.stdout.setEncoding("utf8");
+		child.stderr.setEncoding("utf8");
+		child.stdout.on("data", (chunk: string) => {
+			if (stdout.length < BOUNDED_CAPTURE_LIMIT) stdout += chunk;
+		});
+		child.stderr.on("data", (chunk: string) => {
+			if (stderr.length < BOUNDED_CAPTURE_LIMIT) stderr += chunk;
+		});
+		child.on("error", (error) =>
+			finish({
+				status: 1,
+				stdout,
+				stderr: `I couldn't run git: ${error.message}. Is git installed and on your PATH?`,
+				timedOut,
+			}),
+		);
+		child.on("close", (code, signal) => {
+			// Anything git left behind in its group (an ssh still connecting) goes too.
+			if (timedOut) killGroup("SIGKILL");
+			finish({ status: code ?? 1, stdout, stderr, signal, timedOut });
+		});
+	});
+}
+
+/** Harden every space operation independently of mutable local or global config. */
+function spaceGitArguments(root: string, args: string[], readOnly?: boolean): string[] {
+	const command = gitCommand(args);
 	const reads = new Set([
 		"status",
 		"log",
