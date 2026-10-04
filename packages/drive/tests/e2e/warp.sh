@@ -38,6 +38,8 @@
 #       with --force only this session's files travel
 #  13.  a partial copy (rsync 23) leaves a truthful message and the marker
 #  14.  a cwd with a space is refused at planning, dry run and real run alike
+#  15.  uncommitted work in the target's worktree or repo is refused without
+#       --force (files and index intact); --force stashes a worktree's first
 #  and the Herdr argv shape (`-- --resume <id>`, pane id from the tab JSON).
 #
 # The fake `herdr` models Herdr: it records argv, answers `tab create` with the
@@ -928,6 +930,51 @@ done
 [ -e "$folder_spaced/$SESSION.warp.json" ] && die "a marker was written for a cwd that can't be sent"
 [ -z "$(ssh_t12 "ls -A '$folder_spaced'")" ] || die "the transcript reached the target"
 pass "a cwd with a space is refused at planning, by --dry-run and by a real run alike, before any marker or copy"
+
+echo "# ---------------------------------------------------------------"
+echo "# 15. uncommitted work on the target is not overwritten without --force"
+echo "# ---------------------------------------------------------------"
+# The session came back here (the marker names this machine, as after a warp
+# back), but the target's copy still holds edits nobody committed.
+mark_mine() { printf '{"owner":"mac","at":"2026-10-04T00:00:00.000Z"}\n' > "$1/$SESSION.warp.json"; }
+folder_wt="$home_local/.claude/projects/$(enc_for "$wt")"
+mark_mine "$folder_wt"
+ssh_t12 "printf 'edited on t12, never committed\n' > '$wt/stable.txt' && printf 'staged on t12\n' > '$wt/staged-t12.txt' && git -C '$wt' add staged-t12.txt"
+set +e
+out="$(run_hyper "$wt" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "a dirty target worktree was not refused: exit $code: $out"
+flat "$out" | grep -q "t12 has uncommitted work in the worktree $wt" || die "the refusal does not say why: $out"
+flat "$out" | grep -q "M stable.txt" || die "the refusal does not name the dirty paths: $out"
+[ "$(ssh_t12 "cat '$wt/stable.txt'")" = "edited on t12, never committed" ] || die "the target's edit was overwritten"
+ssh_t12 "git -C '$wt' diff --cached --name-only" | grep -qx staged-t12.txt || die "the target's staged file lost its staging"
+pass "a dirty target worktree is refused without --force; t12's edit and its staged file are intact"
+
+set +e
+out="$(run_hyper "$wt" warp t12 --force 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "--force on a dirty target worktree failed: exit $code: $out"
+printf '%s' "$out" | tr -d '\n' | grep -q "was saved as stash" || die "the user was not told about the stash: $out"
+stash_list="$(ssh_t12 "git -C '$wt' stash list")"
+printf '%s' "$stash_list" | grep -q "hyper warp $SESSION" || die "no stash on the target: $stash_list"
+ssh_t12 "git -C '$wt' show 'stash@{0}:stable.txt'" | grep -qx "edited on t12, never committed" \
+  || die "the stash does not hold the target's edit"
+pass "with --force the target's work is saved first: $(printf '%s' "$stash_list" | head -n 1 | cut -c1-90)"
+
+repo_folder="$home_local/.claude/projects/$repo_enc"
+mark_mine "$repo_folder"
+ssh_t12 "printf 'edited on t12\n' > '$repo/a.txt' && printf 'staged\n' > '$repo/new-t12.txt' && git -C '$repo' add new-t12.txt"
+set +e
+out="$(run_hyper "$repo" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "a dirty target repository was not refused: exit $code: $out"
+flat "$out" | grep -q "t12 has uncommitted work in the repository $repo" || die "the refusal does not say why: $out"
+[ "$(ssh_t12 "cat '$repo/a.txt'")" = "edited on t12" ] || die "the target's edit was overwritten"
+ssh_t12 "git -C '$repo' diff --cached --name-only" | grep -qx new-t12.txt || die "the target's staged file lost its staging"
+pass "a dirty plain git repo on the target is refused without --force; its edit and staged file are intact"
+run_hyper "$repo" warp t12 --force >/dev/null || die "--force on a dirty target repository failed"
+[ "$(ssh_t12 "cat '$repo/a.txt'")" = "hello" ] || die "--force did not overwrite the plain repo's file"
+pass "with --force the plain repo is overwritten file by file (no stash for a plain repo, as documented)"
 
 echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
