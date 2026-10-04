@@ -268,7 +268,7 @@ for round in $(seq 1 12); do
       root_log="$work_real/root-$round.log"
       [ "$(pexec "getent passwd $primary | cut -d: -f6")" = "/home/$primary" ] \
         || die "the refused script still changed the passwd entry"
-      [ ! -e "/Users/$primary" ] || die "the refused script still created /Users/$primary"
+      pexec "test -e /Users/$primary" && die "the refused script still created /Users/$primary"
       # …and the way out it names: a root console, where the user has no
       # processes of their own.
       if [ "$console_used" = 0 ]; then
