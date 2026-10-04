@@ -201,6 +201,18 @@ describe("review report completeness", () => {
 		const tip = commitAll("real file changed");
 		expect(await incomingReviewPaths(root, tip, base)).toEqual(["notes/inst2.md"]);
 	});
+	it("is not blinded by one link that resolves to its own directory", async () => {
+		write("data/secretdir/x.md", "secret\n");
+		link(".claude/aaa", "../data/secretdir");
+		for (let index = 0; index < 6; index++) link(`bin/a${index}`, `../notes/n${index}.md`);
+		link("bin/zz", ".");
+		const base = commitAll("review links published");
+		write("data/secretdir/x.md", "secret, changed\n");
+		const tip = commitAll("payload changed");
+		// The link to `.` re-covers bin/, which must not cost the .claude link
+		// its chance to be processed.
+		expect(await incomingReviewPaths(root, tip, base)).toContain("data/secretdir/x.md");
+	});
 	it("stays quiet for ordinary note churn", async () => {
 		write("notes/a.md", "one\n");
 		const base = commitAll("note");

@@ -348,21 +348,29 @@ export async function incomingReviewPaths(
 		return low;
 	};
 	const reviewRoots = new Set<string>();
-	const reviewLinks = new Set<string>();
-	const pending = [...links.keys()].filter((path) => isReviewPath(path));
-	let guard = 0;
-	while (pending.length > 0 && guard++ < linkPaths.length + 1) {
-		const link = pending.pop()!;
-		if (reviewLinks.has(link)) continue;
-		reviewLinks.add(link);
-		const target = resolveThroughLinks(link, links);
+	// `seen` covers both queued and processed links. A link that resolves to `.`
+	// makes its own directory a root, which would otherwise re-queue every link
+	// inside it: duplicates used to burn the loop budget and starve the links
+	// sorted earlier, so one such link could silence the whole report. The
+	// fixed point is bounded by the number of distinct links, so no pop counter
+	// is needed.
+	const seen = new Set<string>();
+	const pending: string[] = [];
+	const queue = (link: string): void => {
+		if (seen.has(link)) return;
+		seen.add(link);
+		pending.push(link);
+	};
+	for (const path of links.keys()) if (isReviewPath(path)) queue(path);
+	while (pending.length > 0) {
+		const target = resolveThroughLinks(pending.pop()!, links);
 		if (reviewRoots.has(target)) continue;
 		reviewRoots.add(target);
 		// Links inside a newly covered root inherit its status.
 		for (let index = lowerBound(`${target}/`); index < linkPaths.length; index++) {
 			const candidate = linkPaths[index];
 			if (!candidate.startsWith(`${target}/`)) break;
-			if (!reviewLinks.has(candidate)) pending.push(candidate);
+			queue(candidate);
 		}
 	}
 	const underReviewRoot = (path: string): boolean => {
