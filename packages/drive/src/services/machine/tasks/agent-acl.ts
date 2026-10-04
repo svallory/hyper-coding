@@ -142,16 +142,16 @@ grant_shared() {
   # an agent-owned 0700 subtree fails on "Permission denied", which turned one
   # directory the agent could create at will into denial of the whole grant.
   # The primary can neither reach nor repair inside a pruned subtree.
-  # ! -user "$(id -u)" on the execdir branch for the same reason one level up:
-  # setfacl on somebody else's file is EPERM however readable it is, and one
-  # such file under skills/ used to abort the whole traversal, so the dirs
-  # apply stopped on it. Such entries are skipped here and REPORTED by
-  # foreignEntries(), the way the shared trees report what they cannot repair.
+  # -user "$(id -u)" on the execdir branch: only entries this user OWNS are
+  # granted. setfacl on somebody else's file is EPERM however readable it is,
+  # and one such file under skills/ used to abort the whole traversal, so the
+  # dirs apply stopped on it. Such entries are skipped here and REPORTED by
+  # foreignEntriesShell(), which selects exactly the complement (! -user).
   # find resolves the shell through PATH, so pin it before execdir too.
   PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   export PATH access default_acl agent_user
   find "$1" -xdev \\( -type d ! -user "$(id -u)" ! -readable -prune \\) -o \\
-    -mindepth 1 ! -type l ! -user "$(id -u)" -execdir ${shellCommand(GRANT_SHARED_TRAVERSAL)} {} +
+    -mindepth 1 ! -type l -user "$(id -u)" -execdir ${shellCommand(GRANT_SHARED_TRAVERSAL)} {} +
 }
 grant_shared_entry() {
   setfacl -m "u:$agent_user:$access" "$1" || return 1

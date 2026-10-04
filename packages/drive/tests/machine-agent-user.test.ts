@@ -1600,7 +1600,7 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		expect(repair).toContain(
 			'find "$1" -xdev \\( -type d ! -user "$(id -u)" ! -readable -prune \\) -o',
 		);
-		expect(repair).toContain('-mindepth 1 ! -type l ! -user "$(id -u)" -execdir');
+		expect(repair).toContain('-mindepth 1 ! -type l -user "$(id -u)" -execdir');
 		// The execdir shell starts clean, so it must not rely on the caller's
 		// functions or on a PATH it inherits from the agent-writable tree.
 		// Only the execdir script itself, between the quoting sh and the `{} +`.
@@ -1615,7 +1615,25 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 	// skills/ made the traversal exit nonzero and stopped the whole dirs apply.
 	it("skips entries it does not own instead of failing the grant", () => {
 		const repair = accessRepairShell();
-		expect(repair).toContain('-mindepth 1 ! -type l ! -user "$(id -u)" -execdir');
+		// The grant selects the entries this user OWNS, and the report selects
+		// exactly the rest. This once read `! -user` on BOTH sides, so the apply
+		// called setfacl on nothing but the foreign files (EPERM, apply stopped)
+		// and never granted the primary's own: same prune, same type filter,
+		// opposite owner test.
+		const selection = (text: string, action: string): string => {
+			const at = text.indexOf(action);
+			const start = text.lastIndexOf("-mindepth 1", at);
+			expect(at, action).toBeGreaterThan(0);
+			expect(start, action).toBeGreaterThanOrEqual(0);
+			return text
+				.slice(start, at)
+				.replace(/\\\n\s*/g, "")
+				.trim();
+		};
+		const granted = selection(repair, "-execdir");
+		const reported = selection(foreignEntriesShell("/h/skills"), "-printf");
+		expect(granted).toBe('-mindepth 1 ! -type l -user "$(id -u)"');
+		expect(reported).toBe('-mindepth 1 ! -type l ! -user "$(id -u)"');
 		// And the skip has to be REPORTED, not silent: it means the agent quietly
 		// cannot read that entry. The read-only probe is the same find minus the
 		// mutation, so check and apply cannot disagree about what was skipped.
