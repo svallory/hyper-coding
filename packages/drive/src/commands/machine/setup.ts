@@ -405,7 +405,7 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		}),
 		yes: Flags.boolean({
 			description:
-				"Take the defaults: tools locally, or the features drive.toml lists for a named machine. Never runs anything as root",
+				"Take the defaults: tools locally, or the features drive.toml lists for a named machine. Never runs anything as root: it asks nothing about root even in a terminal, leaves the printed script for you, and exits 3 when root steps are pending",
 			default: false,
 		}),
 		"agent-key": Flags.string({

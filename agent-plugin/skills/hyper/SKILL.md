@@ -177,11 +177,13 @@ every step and changes nothing.
 
 **Machines.** `hyper machine setup [name]` brings a machine to parity
 (tools, agent user, layout). Hyper never runs sudo unless you pick it:
-setup writes every root step into one script and prints it. In a terminal
-it asks — "I've run it" (default), "Run it for me" (runs `sudo bash
-<script>`, here or over `ssh -t`, after your password), or "Skip" — and
-`--yes` does not skip that question. Without a terminal it asks nothing,
-leaves the script for you, and exits 3.
+setup writes every root step into one script and prints it. Without `--yes`
+in a terminal it asks — "I've run it" (default), "Run it for me" (runs
+`sudo bash <script>`, here or over `ssh -t`, after your password), or "Skip"
+— and Skip exits 0 with those tasks reported as skipped. `--yes` asks
+nothing about root even in a terminal: it takes the defaults, leaves the
+printed script for you, and exits 3 when root steps are pending. The same
+happens without `--yes` when there is no terminal.
 `hyper drive init` points the CLI at your
 private hyperdrive repo; `hyper drive sync-config` keeps `~/.claude` and
 `~/.pi/agent` in step between machines.
