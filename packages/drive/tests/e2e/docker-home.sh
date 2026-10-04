@@ -65,14 +65,19 @@ work_real="$(cd "$work" && pwd -P)"
 key="$work_real/id"
 started=0
 
+container_started=0
 cleanup() {
   # The throwaway ssh-agent goes whatever KEEP says: it holds only a throwaway
   # key, but a leftover agent process is still a leftover.
   if [ -n "${SSH_AGENT_PID:-}" ]; then ssh-agent -k >/dev/null 2>&1 || kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
   if [ "${KEEP:-0}" = "1" ]; then
-    echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
+    if [ "$container_started" = "1" ]; then
+      echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
+    else
+      echo "# KEEP=1 — logs left in $work_real (no container started)"
+    fi
   else
-    if [ "$started" = 1 ]; then
+if [ "$started" = 1 ]; then
       echo "# tearing down $container"
       podman rm -f "$container" >/dev/null 2>&1 || true
     fi
@@ -130,8 +135,11 @@ if [ "$(uname -s)" != Linux ] && podman machine list --format '{{.Running}}' >/d
   fi
 fi
 
-# Refuse a name collision rather than remove a container this run did not start.
-# run.sh passes a run-unique name via DOCKER_HOME_E2E_CONTAINER.
+# Never remove a container this invocation did not start. run.sh supplies a
+# unique name; standalone use refuses a pre-existing default name.
+if podman container exists "$container"; then
+  die "container $container already exists; refusing to touch it"
+fi
 # --privileged: nested user namespaces, which rootless Docker needs. See header.
 podman run -d --name "$container" --privileged --systemd=always -p "$port":22 "$derived" /sbin/init >/dev/null
 started=1

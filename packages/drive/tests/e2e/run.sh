@@ -232,6 +232,10 @@ printf 'failed (%d): %s\n' "${#failed[@]}" "${failed[*]:-none}"
 printf 'skipped (%d): %s\n' "${#skipped[@]}" "${skipped[*]:-none}"
 if [ "${#failed[@]}" -gt 0 ]; then
   printf 'e2e: FAILED — %s\n' "${failed[*]}" >&2
+  printf 'e2e summary: passed=%d failed=%d skipped=%d\n' \
+    "${#passed[@]}" "${#failed[@]}" "${#skipped[@]}"
   exit 1
 fi
 echo "e2e: OK"
+printf 'e2e summary: passed=%d failed=%d skipped=%d\n' \
+  "${#passed[@]}" "${#failed[@]}" "${#skipped[@]}"
