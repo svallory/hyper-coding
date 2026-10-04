@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
 import { escapeControlCharacters } from "#lib/terminal-text";
-import { detectSpace } from "#services/space";
+import { detectSpace, spaceSaveInfo } from "#services/space";
 
 export default class Detect extends BaseCommand<typeof Detect> {
 	static override description =
@@ -38,7 +38,8 @@ export default class Detect extends BaseCommand<typeof Detect> {
 			this.error(`There's no directory at ${escapeControlCharacters(dir)}`, { exit: 1 });
 		}
 
-		const info = detectSpace(dir);
+		const detected = detectSpace(dir);
+		const info = { ...detected, ...spaceSaveInfo(detected.root) };
 		if (info.root === null || info.layout === null) {
 			// Machine callers asked for JSON, so give them JSON on stdout even in
 			// the failure case — otherwise `hyper space detect --json | jq` dies on
@@ -70,7 +71,7 @@ export default class Detect extends BaseCommand<typeof Detect> {
 		this.log(
 			`repos:        ${info.repos.length > 0 ? info.repos.map(escapeControlCharacters).join(", ") : "-"}`,
 		);
-		this.log(`cadence:      ${escapeControlCharacters(info.cadence ?? "-")}`);
-		this.log(`space git:   ${escapeControlCharacters(info.spaceGitDir ?? "-")}`);
+		this.log(`cadence:     ${escapeControlCharacters(info.cadence ?? "-")}`);
+		this.log(`space git:  ${escapeControlCharacters(info.spaceGitDir ?? "-")}`);
 	}
 }

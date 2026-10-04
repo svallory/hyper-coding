@@ -11,6 +11,7 @@ import {
 	repoSlugOf,
 	spaceLayout,
 	spaceRepos,
+	spaceSaveInfo,
 	worktreesDir,
 } from "#services/space";
 import { initSpaceGitDir, spaceGit } from "#services/space-git";
@@ -277,10 +278,6 @@ describe("detectSpace", () => {
 			repos: [],
 			slug: null,
 			worktreesDir: join(d, "worktrees"),
-			// No `.hyper/space.git` yet: an uninitialised space names no git dir
-			// and no cadence, which is how a caller learns to run `space init`.
-			spaceGitDir: null,
-			cadence: null,
 		});
 	});
 
@@ -294,8 +291,6 @@ describe("detectSpace", () => {
 			slug: null,
 			// No slug at the multi root: the lib refuses rather than guess.
 			worktreesDir: null,
-			spaceGitDir: null,
-			cadence: null,
 		});
 	});
 
@@ -311,8 +306,6 @@ describe("detectSpace", () => {
 			repos: ["alpha", "beta"],
 			slug: "alpha",
 			worktreesDir: join(d, "code", "alpha", "worktrees"),
-			spaceGitDir: null,
-			cadence: null,
 		});
 	});
 
@@ -325,23 +318,23 @@ describe("detectSpace", () => {
 			repos: [],
 			slug: null,
 			worktreesDir: null,
-			spaceGitDir: null,
-			cadence: null,
 		});
 	});
 
-	// The two fields pi's session-end extension reads: a caller that may not run
-	// commands in a space learns where its history is and when it saves from one
-	// read-only call. Additive for every other caller.
+	// What pi's session-end extension reads: a caller that may not run commands
+	// in a space learns where its history is and when it saves from one
+	// read-only call. Separate from `detectSpace` on purpose, because that one
+	// runs on every space command and the cadence is one more git spawn.
 	it("reports the space git dir and cadence of an initialised space", () => {
 		const d = fixturePath("detect-cadence");
 		makeBareSpace(d);
-		expect(detectSpace(d).spaceGitDir).toBeNull();
+		expect(spaceSaveInfo(d)).toEqual({ spaceGitDir: null, cadence: null });
 		initSpaceGitDir(d, { branch: "space/cadence" });
 		spaceGit(d, ["config", "hyper.cadence", "session-end+push"]);
-		const info = detectSpace(d);
-		expect(info.spaceGitDir).toBe(join(d, ".hyper", "space.git"));
-		expect(info.cadence).toBe("session-end+push");
+		expect(spaceSaveInfo(d)).toEqual({
+			spaceGitDir: join(d, ".hyper", "space.git"),
+			cadence: "session-end+push",
+		});
 	});
 
 	it("reports a cadence it cannot accept as null rather than guessing", () => {
@@ -349,7 +342,8 @@ describe("detectSpace", () => {
 		makeBareSpace(d);
 		initSpaceGitDir(d, { branch: "space/bad-cadence" });
 		spaceGit(d, ["config", "hyper.cadence", "sometimes"]);
-		expect(detectSpace(d).cadence).toBeNull();
+		expect(spaceSaveInfo(d).cadence).toBeNull();
+		expect(spaceSaveInfo(null)).toEqual({ spaceGitDir: null, cadence: null });
 	});
 });
 

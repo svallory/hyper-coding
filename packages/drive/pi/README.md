@@ -12,11 +12,12 @@ directory "follows normal package discovery rules".
 ```bash
 # 1. for this machine. Writes the resolved path into ~/.pi/agent/settings.json
 #    under "packages" (or .pi/settings.json with --local); nothing is copied.
-pi install /path/to/packages/drive/pi
+#    Give it an ABSOLUTE path, or one relative to the settings file it lands in.
+pi install "$PWD/packages/drive/pi"
 
 # 2. or load it for one run, without installing anything:
-pi -e /path/to/packages/drive/pi            # the directory
-pi -e /path/to/packages/drive/pi/hyperdrive.ts   # the single entry file
+pi -e "$PWD/packages/drive/pi"                  # the directory
+pi -e "$PWD/packages/drive/pi/hyperdrive.ts"    # the single entry file
 ```
 
 `package.json` here declares `pi.extensions: ["./hyperdrive.ts"]`, so the
@@ -26,7 +27,7 @@ second extension, and `pi-api.d.ts` is a type declaration.
 From the npm package the directory is `node_modules/@hypercli/drive/pi`:
 
 ```bash
-pi install ./node_modules/@hypercli/drive/pi
+pi install "$(pwd)/node_modules/@hypercli/drive/pi"
 ```
 
 For one project only, copy `package.json`, `hyperdrive.ts` and `session-end.ts`
@@ -35,15 +36,14 @@ after the project is trusted, so that directory does nothing until you grant
 trust for the project.
 
 A space's own history is saved only when its cadence is `session-end` or
-`session-end+push` (`hyper.cadence` in `.hyper/space.git`). With `manual`, or
-outside a space, the extension does nothing at all.
+`session-end+push` (`hyper.cadence` in `.hyper/space.git`).
 
-## What happens at session end
+## What happens at session end, and what it costs
 
 On pi's `session_shutdown` event with reason `quit` — `/new`, `/resume`,
 `/fork` and `/reload` are session replacement and save nothing, and a SIGTERM
-or SIGHUP shutdown emits the same `quit` — the extension does this and returns
-within milliseconds; pi awaits this handler with no timeout:
+or SIGHUP shutdown emits the same `quit` — the extension does this. pi awaits
+this handler with no timeout, so every step is bounded:
 
 1. resolve `hyper` itself: absolute PATH entries only, an executable regular
    file, and that absolute path is what gets spawned (`bin/` is synced space
@@ -57,8 +57,24 @@ within milliseconds; pi awaits this handler with no timeout:
    (its own session, no inherited pipes) from the session's directory, and
    return.
 
-A CLI too old to answer prints one line naming `@hypercli/cli` and saves
-nothing. A CLI that does not answer within the bound saves nothing, silently.
+**Measured**: one quit in a space took 392 ms and one outside a space 198 ms
+on the author's machine, all of it the probe. The bound is 2 s, and hitting it
+saves nothing. With `manual`, or outside a space, the probe still runs (that is
+how the extension knows) and nothing is saved.
+
+### Every line it can print
+
+At most one, and only in these four cases:
+
+| Line | When |
+|---|---|
+| `hyperdrive: the hyper CLI is not installed; nothing was saved` | no `hyper` on an absolute PATH entry **and** an ancestor of the session's directory holds `.hyper/space.git` |
+| `hyperdrive: the installed hyper CLI is too old for this pi extension …; update @hypercli/cli` | the CLI answered with an object that has a root and no `spaceGitDir` field at all — a CLI from before T-18. Its own text, not the Claude hook's. |
+| `hyperdrive: could not write the session-end payload into <git dir>; nothing was saved` | the space's git dir would not take the payload |
+| `hyperdrive: the hyper CLI is not installed; nothing was saved` (from the worker spawn) | the resolved binary disappeared between the probe and the spawn |
+
+Everything else is silent: no space, an uninitialised space, `manual`, a CLI
+that fails, prints garbage, or overruns the bound.
 
 The detached worker — `packages/drive/src/services/session-end-worker.ts`, the
 same one the Claude hook starts — takes the space lock, commits, pushes for
