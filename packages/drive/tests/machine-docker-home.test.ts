@@ -279,12 +279,36 @@ describe("docker-rootless.packages", () => {
 			"subuid=1",
 			"subgid=1",
 			"linger=yes",
-			"agent_key=1",
 		].join("\n");
+		// The key is asked of the agent, over the agent's own session: the
+		// primary user cannot read the agent's 0700 ~/.ssh.
+		const asAgent: SpawnRequest[] = [];
+		const holding =
+			(count: string, code = 0) =>
+			async (request: SpawnRequest): Promise<RunResult> => {
+				asAgent.push(request);
+				return { code, stdout: count, stderr: code === 0 ? "" : "Permission denied" };
+			};
 		const runner = recordingRunner([{ match: "dpkg-query", result: { stdout: good } }]);
-		expect(await dockerRootlessPackages.check(ctxFor(runner, { agentKeyFile: keyFile(KEY) }))).toBe(
-			true,
-		);
+		expect(
+			await dockerRootlessPackages.check(
+				ctxFor(runner, { agentKeyFile: keyFile(KEY), spawner: holding("1\n") }),
+			),
+		).toBe(true);
+		expect(runner.joined).not.toContain("authorized_keys");
+		expect(asAgent.length).toBe(1);
+		expect(asAgent[0]?.args[0]).toBe("agent@t17box");
+		expect(asAgent[0]?.args.join(" ")).toContain("authorized_keys");
+		for (const answer of [holding("0\n"), holding("", 255)]) {
+			expect(
+				await dockerRootlessPackages.check(
+					ctxFor(recordingRunner([{ match: "dpkg-query", result: { stdout: good } }]), {
+						agentKeyFile: keyFile(KEY),
+						spawner: answer,
+					}),
+				),
+			).toBe(false);
+		}
 		const missing = good.replace("subgid=1", "subgid=0");
 		const lines: string[] = [];
 		const second = recordingRunner([{ match: "dpkg-query", result: { stdout: missing } }]);

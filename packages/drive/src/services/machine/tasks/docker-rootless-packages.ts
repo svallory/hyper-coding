@@ -35,9 +35,10 @@
  *    in Debian's archive.
  */
 
+import { agentRunnerFor } from "#services/machine";
 import { rootScriptGuards } from "#services/machine/root-script";
 import { shellQuote } from "#services/remote";
-import { agentHomeOf, agentUserOf, assertAgentUserIsSafe } from "./agent-context.js";
+import { agentUserOf, assertAgentUserIsSafe } from "./agent-context.js";
 import { type ResolvedAgentKey, resolveAgentKey } from "./agent-key.js";
 import { runScript, shellCommand } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
@@ -67,7 +68,7 @@ export const SUBID_RANGE = "100000-165535";
 export const DOCKER_REPO_LIST = "/etc/apt/sources.list.d/docker.list";
 export const DOCKER_KEYRING = "/etc/apt/keyrings/docker.asc";
 
-function probe(agentUser: string, agentHome: string, key: string): string {
+function probe(agentUser: string): string {
 	const q = shellQuote;
 	return [
 		...ROOTLESS_PACKAGES.map(
@@ -77,7 +78,6 @@ function probe(agentUser: string, agentHome: string, key: string): string {
 		`printf 'subuid=%s\\n' "$(grep -c '^${q(agentUser)}:' /etc/subuid 2>/dev/null || true)"`,
 		`printf 'subgid=%s\\n' "$(grep -c '^${q(agentUser)}:' /etc/subgid 2>/dev/null || true)"`,
 		`printf 'linger=%s\\n' "$(loginctl show-user ${q(agentUser)} --property=Linger --value 2>/dev/null || true)"`,
-		`printf 'agent_key=%s\\n' "$(grep -cxF ${q(key)} ${q(`${agentHome}/.ssh/authorized_keys`)} 2>/dev/null || true)"`,
 	].join("; ");
 }
 
@@ -86,7 +86,6 @@ interface Probe {
 	subuid: boolean;
 	subgid: boolean;
 	linger: boolean;
-	key: boolean;
 }
 
 function parseProbe(stdout: string): Probe {
@@ -101,7 +100,6 @@ function parseProbe(stdout: string): Probe {
 		subuid: count("subuid"),
 		subgid: count("subgid"),
 		linger: answers.get("linger") === "yes",
-		key: count("agent_key"),
 	};
 }
 
@@ -128,8 +126,7 @@ export const dockerRootlessPackages: Task = {
 		const agentUser = await agentUserOf(ctx);
 		await assertAgentUserIsSafe(ctx, agentUser);
 		const { key } = keyFor(ctx);
-		const agentHome = await agentHomeOf(ctx, agentUser);
-		const result = await runScript(ctx, probe(agentUser, agentHome, key));
+		const result = await runScript(ctx, probe(agentUser));
 		if (result.code !== 0) return no(`the probe failed: ${result.stderr.trim() || result.code}`);
 		const parsed = parseProbe(result.stdout);
 		const missing = ROOTLESS_PACKAGES.filter((name) => !parsed.packages.has(name));
@@ -137,7 +134,17 @@ export const dockerRootlessPackages: Task = {
 		if (!parsed.subuid || !parsed.subgid)
 			return no("the agent user is missing a subuid or subgid range");
 		if (!parsed.linger) return no("linger is disabled for the agent");
-		if (!parsed.key)
+		// The key is asked of the AGENT, over its own ssh session: the agent's
+		// ~/.ssh is 0700 and the primary user cannot read it (the container e2e
+		// showed this probe, run as the primary, failing forever). Opening the
+		// session at all is half the proof; the exact line is the other half.
+		const agent = agentRunnerFor(ctx.machine, agentUser, ctx.spawner);
+		const held = await agent.ssh([
+			"sh",
+			"-c",
+			`grep -cxF ${shellQuote(key)} "$HOME/.ssh/authorized_keys" 2>/dev/null || true`,
+		]);
+		if (held.code !== 0 || Number.parseInt(held.stdout.trim() || "0", 10) === 0)
 			return no(
 				"the agent's authorized_keys does not hold the public key this setup connects with",
 			);
