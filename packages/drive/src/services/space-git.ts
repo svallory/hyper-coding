@@ -1268,3 +1268,114 @@ export function checkProjectBranchName(branch: string): boolean {
 		throw new SpaceGitInterruptedError(result.signal);
 	return result.status === 0;
 }
+
+/**
+ * The branch a worktree has checked out, or null when it is not a worktree at
+ * all or the checkout is detached.
+ *
+ * A PROJECT-repo call, not a space one: this reads the worktree's own `.git`
+ * (which for a space worktree is a FILE holding an absolute path to the
+ * space's bare git dir), and it deliberately does NOT go through `spaceGit()` —
+ * that would force `--git-dir <space>/.hyper/space.git`, which is the space's
+ * own history, a completely different repository whose branch says nothing
+ * about the code the user is working on.
+ *
+ * It lives in this file anyway because C-2 makes this the only place allowed
+ * to name the `git` binary at all. See `pushProjectBranch` below.
+ */
+export function projectWorktreeBranch(worktree: string): string | null {
+	const result = spawnSync(
+		"git",
+		[
+			"-C",
+			worktree,
+			"--no-optional-locks",
+			"-c",
+			"core.fsmonitor=false",
+			"-c",
+			"core.hooksPath=/dev/null",
+			"rev-parse",
+			"--abbrev-ref",
+			"HEAD",
+		],
+		{ encoding: "utf8", env: cleanGitEnv() },
+	);
+	if (result.error || result.status !== 0) return null;
+	const branch = (result.stdout ?? "").trim();
+	// A detached HEAD answers "HEAD", which is not a branch and would make a
+	// push refspec of `refs/heads/HEAD` — a real, wrong branch name.
+	return branch === "" || branch === "HEAD" ? null : branch;
+}
+
+/**
+ * Push the worktree's current HEAD to an EXPLICIT URL, never to a remote name
+ * (C-9).
+ *
+ * This is the second git call warp makes and the one that can do damage, so it
+ * is the one with the strictest shape:
+ *
+ * - `url` is always an `ssh://…` URL built from the target's machine entry
+ *   (`sshUrl()` in services/remote.ts). There is deliberately NO code path
+ *   that takes a remote NAME: `git push origin …` on the target would write to
+ *   whatever `origin` is configured there, and the operator's own `origin` is
+ *   the one remote a warp must never touch by accident.
+ * - the refspec is built here from a branch that {@link projectWorktreeBranch}
+ *   read and {@link checkProjectBranchName} accepted, so a branch name is
+ *   never a free-form argument that could become `--force` or an option.
+ * - `--` ends git's option parsing before the URL.
+ *
+ * Hooks are disabled (`core.hooksPath=/dev/null`) for the same reason every
+ * other call here does, and prompts are off (from `cleanGitEnv()`), so a push
+ * can never block on a credential prompt: it fails, and warp says so.
+ */
+export function pushProjectBranch(options: {
+	/** The worktree directory holding the commits to push. */
+	worktree: string;
+	/** Explicit `ssh://` URL. Never a remote name. */
+	url: string;
+	/** Branch {@link projectWorktreeBranch} read from the worktree. */
+	branch: string;
+}): { url: string; branch: string; refspec: string } {
+	if (!checkProjectBranchName(options.branch)) {
+		throw new SpaceGitError(
+			`${JSON.stringify(options.branch)} isn't a branch name git would accept, so warp won't push it.`,
+		);
+	}
+	if (!options.url.startsWith("ssh://")) {
+		throw new SpaceGitError(
+			`refusing to push to ${JSON.stringify(options.url)}: warp only pushes to an explicit ssh:// URL built from the target's machine entry, never to a remote name.`,
+		);
+	}
+	const refspec = `HEAD:refs/heads/${options.branch}`;
+	const result = spawnSync(
+		"git",
+		[
+			"-C",
+			options.worktree,
+			"-c",
+			"core.fsmonitor=false",
+			"-c",
+			"core.hooksPath=/dev/null",
+			"push",
+			"--",
+			options.url,
+			refspec,
+		],
+		{ encoding: "utf8", env: cleanGitEnv() },
+	);
+	if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
+		throw new SpaceGitInterruptedError(result.signal);
+	}
+	if (result.error) {
+		throw new SpaceGitError(
+			`I couldn't run git push: ${result.error.message}. Is git installed and on your PATH?`,
+		);
+	}
+	if (result.status !== 0) {
+		const detail = (result.stderr ?? "").trim();
+		throw new SpaceGitError(
+			`I couldn't push ${options.branch} to ${options.url}${detail ? `: ${detail}` : ` (git push exited ${result.status})`}. Check that the path is a bare repository hyperdrive can write to and that your key is accepted there.`,
+		);
+	}
+	return { url: options.url, branch: options.branch, refspec };
+}

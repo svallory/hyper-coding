@@ -60,6 +60,109 @@ export interface RsyncOptions {
 	delete?: boolean;
 }
 
+/**
+ * An SSH target split into the two parts the three binaries each need
+ * differently: `host` (what ssh/rsync name) and `port` (what only ssh and
+ * git know how to spell).
+ *
+ * `host:port` is scp's and rsync's remote-spec grammar, NOT ssh's: handing
+ * `box:2222` to `ssh` makes it look for a host literally named `box:2222`
+ * and fail with "could not resolve hostname". A Herdr machine may legitimately
+ * be saved on a non-default port, so the two have to be split here rather than
+ * passed through whole.
+ */
+export interface SshTarget {
+	/** `user@host`, `host`, or `[ipv6]` — exactly what `ssh` accepts. */
+	host: string;
+	/** Port when the target carried one; undefined means ssh's default. */
+	port?: number;
+}
+
+/** A `host:port` we refuse to split, because it can't be split safely. */
+export class SshTargetError extends Error {
+	constructor(target: string, reason: string) {
+		super(`"${target}" isn't an SSH target hyperdrive can use: ${reason}.`);
+		this.name = "SshTargetError";
+	}
+}
+
+const MAX_PORT = 65_535;
+
+/**
+ * Split an SSH target into host and port.
+ *
+ * The port is only recognised as one when the part after the LAST colon is
+ * entirely digits, and only when there is exactly one colon outside brackets —
+ * so `user@host`, `host`, `ssh://…`-free forms and a bare IPv6 address
+ * (`::1`, `fe80::1`) are all left whole. `[::1]:2222` is the bracketed IPv6 form
+ * and is split into `[::1]` and `2222`.
+ *
+ * Anything else with a colon is refused rather than guessed: `box:notaport` and
+ * `a:b:c` are typos, and passing them to `ssh` as a hostname produces a
+ * confusing DNS failure that points nowhere near the real problem.
+ */
+export function splitSshTarget(target: string): SshTarget {
+	const trimmed = target.trim();
+	if (trimmed === "") throw new SshTargetError(target, "it is empty");
+
+	// Bracketed IPv6 with an optional port: `[::1]` or `[::1]:2222`.
+	if (trimmed.startsWith("[")) {
+		const close = trimmed.indexOf("]");
+		if (close < 0) throw new SshTargetError(target, "the '[' has no matching ']'");
+		const host = trimmed.slice(0, close + 1);
+		const rest = trimmed.slice(close + 1);
+		if (rest === "") return { host };
+		if (!rest.startsWith(":")) {
+			throw new SshTargetError(target, "an IPv6 address must end at its ']'");
+		}
+		return { host, port: parsePort(target, rest.slice(1)) };
+	}
+
+	const colons = [...trimmed].filter((char) => char === ":").length;
+	if (colons === 0) return { host: trimmed };
+	// Two or more colons and no brackets: a bare IPv6 address, never a port.
+	if (colons > 1) return { host: trimmed };
+
+	const separator = trimmed.lastIndexOf(":");
+	const host = trimmed.slice(0, separator);
+	const port = trimmed.slice(separator + 1);
+	if (host === "") throw new SshTargetError(target, "there is no host before the ':'");
+	if (!/^\d+$/.test(port)) {
+		throw new SshTargetError(target, `"${port}" is not a port number`);
+	}
+	return { host, port: parsePort(target, port) };
+}
+
+function parsePort(target: string, digits: string): number {
+	const port = Number(digits);
+	if (port < 1 || port > MAX_PORT) {
+		throw new SshTargetError(target, `${port} is not a port between 1 and ${MAX_PORT}`);
+	}
+	return port;
+}
+
+/**
+ * The `ssh://` URL for a target, for the one thing that speaks URL and not
+ * shell: git.
+ *
+ * C-9 makes this load-bearing. Warp pushes a worktree branch to a bare repo on
+ * the target, and it must do that with an EXPLICIT URL built from the machine
+ * entry — never with a remote *name*, which would mean writing to whatever
+ * `origin` happens to be on the target (or, far worse, on this machine).
+ *
+ * scp's `user@host:path` is not a URL and git would read the whole thing as a
+ * local path; `ssh://user@host:port/path` is what git's ssh transport parses,
+ * and the port has to be in it because git runs its own ssh.
+ */
+export function sshUrl(target: SshTarget, path: string): string {
+	if (!SAFE_REMOTE_PATH.test(path)) throw new RemotePathError(target.host, path);
+	if (!path.startsWith("/")) {
+		throw new RemotePathError(target.host, `${path} (an ssh:// URL needs an absolute path)`);
+	}
+	const authority = target.port === undefined ? target.host : `${target.host}:${target.port}`;
+	return `ssh://${authority}${path}`;
+}
+
 /** How commands reach a machine, local or remote. */
 export interface MachineRunner {
 	ssh(cmd: string[], opts?: SshOptions): Promise<RunResult>;
@@ -265,13 +368,21 @@ export function remoteSpec(host: string, path: string): string {
  * `--stats`, `--exclude` and `--` work everywhere. `--mkpath` (rsync 3.2.3+)
  * does *not*, so missing destination parents are created over ssh beforehand.
  */
-function rsyncArgs(src: string, dst: string, opts?: RsyncOptions, otherUser = false): string[] {
-	const args = [
-		"-a",
-		"--stats",
-		"-e",
-		otherUser ? ["ssh", ...OTHER_USER_SSH_OPTIONS].join(" ") : "ssh",
-	];
+function rsyncArgs(
+	src: string,
+	dst: string,
+	opts?: RsyncOptions,
+	otherUser = false,
+	port?: number,
+): string[] {
+	// rsync runs its own ssh, and the port has to be told to THAT ssh: a
+	// `-p 2222` here would be an rsync option, and rsync has none.
+	const sshCommand = [
+		"ssh",
+		...(otherUser ? OTHER_USER_SSH_OPTIONS : []),
+		...(port === undefined ? [] : ["-p", String(port)]),
+	].join(" ");
+	const args = ["-a", "--stats", "-e", sshCommand];
 	for (const pattern of opts?.excludes ?? []) {
 		args.push(`--exclude=${pattern}`);
 	}
@@ -598,17 +709,37 @@ export interface RemoteMachineOptions {
 	 * {@link OTHER_USER_SSH_OPTIONS}.
 	 */
 	otherUser?: boolean;
+	/**
+	 * Non-default ssh port. When absent, a `host:port` target is split for it;
+	 * when both are absent, ssh's default applies and no `-p` is passed.
+	 */
+	port?: number;
 }
 
 /** Commands on a remote machine over SSH. `host` is whatever `ssh` accepts. */
 export class RemoteMachine implements MachineRunner {
 	readonly kind = "remote" as const;
 	readonly host: string;
+	/**
+	 * The ssh port, when the machine entry named one. Undefined means ssh's
+	 * default, in which case no `-p` is passed at all — a `-p 22` would be
+	 * correct but would also show up in every transcript and in every test
+	 * assertion about the argv.
+	 */
+	readonly port: number | undefined;
 	private readonly spawner: Spawner;
 	private readonly otherUser: boolean;
 
+	/**
+	 * `host` may be the whole target as saved (including `user@` and, when the
+	 * caller did not split it, `host:port`). A `host:port` pair is split here
+	 * so a caller that forgets to split still reaches the machine instead of
+	 * asking ssh to resolve a host literally named `box:2222`.
+	 */
 	constructor(host: string, spawner: Spawner = spawnProcess, options: RemoteMachineOptions = {}) {
-		this.host = safeHost(host);
+		const split = splitSshTarget(host);
+		this.host = safeHost(split.host);
+		this.port = options.port ?? split.port;
 		this.spawner = spawner;
 		this.otherUser = options.otherUser === true;
 	}
@@ -650,9 +781,12 @@ export class RemoteMachine implements MachineRunner {
 			file: "ssh",
 			// `-t` asks for a pty; without it an interactive remote command
 			// (herdr/tmux attach, a prompt) dies with "not a terminal".
+			// `-p` comes before the host: after it, ssh reads it as part of the
+			// destination and stops parsing options.
 			args: [
 				...(otherUser ? OTHER_USER_SSH_OPTIONS : []),
 				...(opts?.tty ? ["-t"] : []),
+				...(this.port === undefined ? [] : ["-p", String(this.port)]),
 				target,
 				"--",
 				command,
@@ -696,7 +830,7 @@ export class RemoteMachine implements MachineRunner {
 		if (mkdirFailed) return mkdirFailed;
 		return this.spawner({
 			file: "rsync",
-			args: rsyncArgs(source, target, opts, this.otherUser),
+			args: rsyncArgs(source, target, opts, this.otherUser, this.port),
 		});
 	}
 
