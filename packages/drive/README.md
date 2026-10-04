@@ -51,7 +51,11 @@ one read-only call, measured at 200 to 700 ms, killed at 5 s — then writes
 the payload and starts the same detached worker, so the session end commits
 locally, and pushes for `session-end+push`, while pi waits only for that one
 call. A call that overruns 5 s saves nothing and leaves a `failed` "probe
-timed out" line that `hyper space status` shows. The commit subject is the
+timed out" line that `hyper space status` shows. That line is written only into
+a real space git dir above the session's directory (`.hyper` and `space.git`
+real directories, not symlinks, holding `HEAD` and `config`; the log itself is
+never followed through a symlink), and a `manual` space gets it too, because
+the cadence was never read. The commit subject is the
 session name, or the first line of the first prompt, so prompt text lands in
 the space's history. `/new`, `/resume`, `/fork` and `/reload` do not end the
 work and save nothing; with `manual`, or with the extension not installed, a

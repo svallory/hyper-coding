@@ -60,12 +60,18 @@ this handler with no timeout, so every step is bounded:
 **Measured**: one quit in a space took 392 ms and one outside a space 198 ms
 on the author's machine, all of it the probe; a review measured 200 to 700 ms,
 and a cold CLI start alone 0.95 s (over 2 s under load). The bound is 5 s, and
-hitting it saves nothing. It is not silent, though: when an ancestor of the
-session's directory holds `.hyper/space.git`, the extension appends one
-`failed` line, `probe timed out`, to that directory's `session-end.log` (the
-worker's own format), so `hyper space status` shows the save that did not
-happen. It prints nothing and starts nothing. Outside a space a timed-out probe
-writes nothing anywhere. With `manual`, or outside a space, the probe still
+hitting it saves nothing. It is not silent, though: the extension walks up from
+the session's directory to the nearest REAL space git dir — `.hyper` and
+`.hyper/space.git` both real directories (checked with `lstat`, so a symlink at
+either level is skipped) holding `HEAD` and `config` as regular files — and
+appends one `failed` line, `probe timed out (…)`, to its `session-end.log` in
+the worker's own format, so `hyper space status` shows the save that did not
+happen. The log is opened `O_NOFOLLOW`, and one that exists but is not a
+regular file is left alone. A `.hyper/space.git` folder without `HEAD` and
+`config` (debris inside a clone) is skipped and the walk goes on up. With no
+such directory above the session, nothing is written anywhere. A `manual`
+space gets the line too: without the CLI's answer the extension never learnt
+the cadence, and the line says so. It prints nothing and starts nothing. With `manual`, or outside a space, the probe still
 runs (that is how the extension knows) and nothing is saved.
 
 ### Every line it can print
