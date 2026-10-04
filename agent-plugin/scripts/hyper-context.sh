@@ -194,6 +194,22 @@ $wt_abs/<branch>.
 EOF
 fi
 
+# The detached session-end worker cannot print into the session it outlives;
+# its last result is the last line of .hyper/space.git/session-end.log (the
+# same record `hyper space status` reads). One cheap file read, no CLI start,
+# and best-effort: any problem reading it prints nothing. Only the outcome and
+# time are echoed — the detail can quote file names from synced space content,
+# and this text goes straight into the agent's context.
+last_end="$(tail -n 1 "$root/.hyper/space.git/session-end.log" 2>/dev/null)" || last_end=""
+IFS=$'\t' read -r end_at _ end_outcome _ <<<"$last_end"
+case "${end_outcome:-}" in
+  refused|push-failed|failed)
+    end_at="$(printf '%s' "$end_at" | tr -cd 'A-Za-z0-9:.+-')"
+    echo
+    echo "The last session-end save of this space failed (${end_outcome/push-failed/push failed}, ${end_at:-at an unknown time}). Run \`hyper space status\` for the reason."
+    ;;
+esac
+
 # Reactive Context: also say HOW to build/lint/test, not just where things
 # live. Everything below is best-effort — a detection failure must never break
 # session start, and unknown keys are omitted rather than guessed.
