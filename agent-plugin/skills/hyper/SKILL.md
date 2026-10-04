@@ -164,7 +164,8 @@ freshly cloned or pulled space.
 working directory, the transcript, and an ownership marker go over ssh.
 It refuses a session still running here (the agent's own session, often: it
 wants `--stop`, which ends it — the user's call), a session another machine
-owns or already moved to the target, a leftover marker, and a dirty target —
+owns or already moved to the target, a leftover marker, and a target copy
+holding uncommitted work (untracked files included) —
 the last three are what `--force` overrides. `--force` on a **space
 worktree** first saves the target's tracked changes there as a stash
 (untracked files are not in it); on a **plain repo** nothing is saved, files
@@ -175,9 +176,12 @@ does not see ignored files: a target `.env` is overwritten even without
 every step and changes nothing.
 
 **Machines.** `hyper machine setup [name]` brings a machine to parity
-(tools, agent user, layout). Hyper never runs sudo unattended: with
-`--yes` or without a terminal it writes the root script and exits 3;
-interactively it can run the script for you after you type your password.
+(tools, agent user, layout). Hyper never runs sudo unless you pick it:
+setup writes every root step into one script and prints it. In a terminal
+it asks — "I've run it" (default), "Run it for me" (runs `sudo bash
+<script>`, here or over `ssh -t`, after your password), or "Skip" — and
+`--yes` does not skip that question. Without a terminal it asks nothing,
+leaves the script for you, and exits 3.
 `hyper drive init` points the CLI at your
 private hyperdrive repo; `hyper drive sync-config` keeps `~/.claude` and
 `~/.pi/agent` in step between machines.

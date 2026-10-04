@@ -1,6 +1,6 @@
 ---
 name: space
-description: Space history commands — save a space's allowlisted directories to the user's private hyperdrive, publish, pull, inspect, and clone a space onto a new machine
+description: Space history commands — commit a space's allowlisted directories to the space's branch, push them to your hyperdrive, pull, inspect, and clone a space onto a new machine
 argument-hint: "[init|commit|push|pull|log|status|list|clone] [args...]"
 ---
 
@@ -21,7 +21,7 @@ hyper space clone research './research'
 
 Never paste the argument text straight into a shell line: unquoted, a `;`,
 `$()` or a backtick in a commit message would be read as shell syntax instead
-of text.
+of text. A `'` inside an argument becomes `'\''`.
 
 No arguments (or the user asks what this is): run `hyper space status` and
 explain the result — cadence, upstream state, and any failed session-end

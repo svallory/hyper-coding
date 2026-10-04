@@ -13,12 +13,13 @@ Build the call from the user's own words, one argument at a time, each
 passed as its own single-quoted word:
 
 ```bash
-hyper warp '<machine>' --session '<id>' --dry-run
+hyper warp '<machine>'
 ```
 
-Never paste the argument text straight into a shell line: unquoted, a `;`,
-`$()`, a backtick or a space in `--session` would be read as shell syntax
-instead of an argument.
+Add only the flags the user actually named. Never paste the argument text
+straight into a shell line: unquoted, a `;`, `$()`, a backtick or a space
+would be read as shell syntax instead of an argument. A `'` inside an
+argument becomes `'\''`.
 
 Warp is **send only**: the machine holding the session runs it. It copies
 the working directory file by file (no `--delete`), this session's
@@ -30,7 +31,7 @@ transcript, and an ownership marker, over ssh.
 
 - the session is owned by another machine, or already lives on the target;
 - a leftover marker from a warp that stopped mid-swap (ownership unknown);
-- the target's copy holds uncommitted tracked work.
+- the target's copy holds uncommitted work (untracked files included).
 
 **`--force` does not get past any of these** — they are refused whatever you
 pass:
@@ -57,7 +58,7 @@ retry with `--force` to "make it work".
 - **Plain repo**: nothing is saved. Files are overwritten one by one.
 - The target's clean check is `git status --porcelain`, which **does not see
   ignored files**: a `.env` (or any ignored file) on the target is overwritten
-  even *without* `--force.
+  even *without* `--force`.
 - Excluded from the copy by default: `node_modules`, `_build`, `deps`,
   `target`, `dist`, `.turbo`, `.cache`, `.next`.
 

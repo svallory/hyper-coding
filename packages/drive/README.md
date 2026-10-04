@@ -130,13 +130,14 @@ change on either machine.
 Warp refuses, without `--force`, when the session is still running here (it
 wants `--stop`, which ends that process), when the session is owned by
 another machine or already lives on the target, when a leftover marker makes
-ownership unknown, and when the target's worktree or repo is dirty. With
+ownership unknown, and when the target's worktree or repo has uncommitted
+work (including untracked files). With
 `--force`, a dirty space worktree's tracked changes are first saved on the
 target in a stash — untracked files are not in it — and a plain repo is
-overwritten file by file with nothing saved. It does not refuse, whatever
-`--force` says, when the space is missing from the hyperdrive manifest, a
-path cannot be quoted identically on both platforms, or the target's Herdr
-or push would reject the branch. `--dry-run` prints every step and changes
+overwritten file by file with nothing saved. It refuses, whatever `--force` says, when the space is missing from the
+hyperdrive manifest, a path cannot be quoted identically on both platforms,
+the target's Herdr server does not answer, or the target would reject the
+branch push. `--dry-run` prints every step and changes
 nothing.
 
 ### `hyper machine` — bring a machine to parity
@@ -148,11 +149,14 @@ hyper machine add NAME [--home path] [--features f,...] [--agent-user u]
 hyper machine list [--json]
 ```
 
-Setup is idempotent per task and **never runs sudo unattended**: with
-`--yes`, or without a terminal, it writes the root script and exits 3
-(root steps still pending); interactively it offers "Run it for me (asks
-for your password)" and runs it only if you pick that. Machines are the
-Herdr machine list merged with `[machines.*]` in `drive.toml`.
+Setup is idempotent per task and **never runs sudo unless you choose it**:
+root steps are written to one script (mode 0700) and printed. In a terminal
+it asks what to do — "I've run it" (the default), "Run it for me (asks for
+your password)", which runs `sudo bash <script>` locally or over `ssh -t`, or
+"Skip" — and `--yes` does not bypass that question. Without a terminal it
+leaves the script for you and exits 3 (root steps pending); choosing Skip in
+a terminal exits 0. Machines are the Herdr machine list merged with
+`[machines.*]` in `drive.toml`.
 
 ### `hyper drive` — the hyperdrive itself
 

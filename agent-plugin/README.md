@@ -116,7 +116,7 @@ Without the CLI:
 | `/hyper:tools [project-path]` | Detect the project's own toolchain and wire up the check hook |
 | `/hyper:plan <feature> [phase]` | 4-phase spec-driven workflow — Define, Design, Decompose, Develop — with artifacts in `notes/specs/` |
 | `/hyper:gen [template] [dest]` | Generate files from a project template — deterministic copy, agent authoring only inside marked prompt regions |
-| `/hyper:space [args...]` | Space history on your private hyperdrive — init, commit, push, pull, log, status, list, clone; a thin relay over `hyper space` |
+| `/hyper:space [args...]` | A space's history — allowlisted dirs committed to the space's branch, pushed to your hyperdrive; init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
 | `/hyper:warp <machine> [flags]` | Move a live session to another machine over ssh — a thin relay over `hyper warp` |
 
 ## Hooks
