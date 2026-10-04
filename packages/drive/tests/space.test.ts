@@ -13,6 +13,7 @@ import {
 	spaceRepos,
 	worktreesDir,
 } from "#services/space";
+import { initSpaceGitDir, spaceGit } from "#services/space-git";
 import {
 	fixturePath,
 	initBare,
@@ -276,6 +277,10 @@ describe("detectSpace", () => {
 			repos: [],
 			slug: null,
 			worktreesDir: join(d, "worktrees"),
+			// No `.hyper/space.git` yet: an uninitialised space names no git dir
+			// and no cadence, which is how a caller learns to run `space init`.
+			spaceGitDir: null,
+			cadence: null,
 		});
 	});
 
@@ -289,6 +294,8 @@ describe("detectSpace", () => {
 			slug: null,
 			// No slug at the multi root: the lib refuses rather than guess.
 			worktreesDir: null,
+			spaceGitDir: null,
+			cadence: null,
 		});
 	});
 
@@ -304,6 +311,8 @@ describe("detectSpace", () => {
 			repos: ["alpha", "beta"],
 			slug: "alpha",
 			worktreesDir: join(d, "code", "alpha", "worktrees"),
+			spaceGitDir: null,
+			cadence: null,
 		});
 	});
 
@@ -316,7 +325,31 @@ describe("detectSpace", () => {
 			repos: [],
 			slug: null,
 			worktreesDir: null,
+			spaceGitDir: null,
+			cadence: null,
 		});
+	});
+
+	// The two fields pi's session-end extension reads: a caller that may not run
+	// commands in a space learns where its history is and when it saves from one
+	// read-only call. Additive for every other caller.
+	it("reports the space git dir and cadence of an initialised space", () => {
+		const d = fixturePath("detect-cadence");
+		makeBareSpace(d);
+		expect(detectSpace(d).spaceGitDir).toBeNull();
+		initSpaceGitDir(d, { branch: "space/cadence" });
+		spaceGit(d, ["config", "hyper.cadence", "session-end+push"]);
+		const info = detectSpace(d);
+		expect(info.spaceGitDir).toBe(join(d, ".hyper", "space.git"));
+		expect(info.cadence).toBe("session-end+push");
+	});
+
+	it("reports a cadence it cannot accept as null rather than guessing", () => {
+		const d = fixturePath("detect-bad-cadence");
+		makeBareSpace(d);
+		initSpaceGitDir(d, { branch: "space/bad-cadence" });
+		spaceGit(d, ["config", "hyper.cadence", "sometimes"]);
+		expect(detectSpace(d).cadence).toBeNull();
 	});
 });
 
@@ -479,6 +512,8 @@ describe("commands (spawned against the real CLI)", () => {
 			repos: [],
 			slug: null,
 			worktreesDir: join(d, "worktrees"),
+			spaceGitDir: null,
+			cadence: null,
 		});
 	});
 
@@ -491,7 +526,12 @@ describe("commands (spawned against the real CLI)", () => {
 		expect(r.status).toBe(1);
 		// But a machine caller gets JSON to read rather than an empty stream:
 		// `hyper space detect --json | jq` should see nulls, not die.
-		expect(JSON.parse(r.stdout)).toEqual({ root: null, layout: null });
+		expect(JSON.parse(r.stdout)).toEqual({
+			root: null,
+			layout: null,
+			spaceGitDir: null,
+			cadence: null,
+		});
 		// Prose stays on stderr; it is not mixed into the JSON.
 		expect(flat(r.stderr)).toContain("is not inside a hyper space");
 	});
