@@ -13,6 +13,7 @@
 import { appendFileSync, closeSync, openSync, readSync, renameSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { sessionEndLine } from "#services/session-end";
+import { spaceGitDirWriteError } from "#services/space-lock";
 
 export const SESSION_END_LOG = "session-end.log";
 export const SESSION_END_LOG_LIMIT = 64 * 1024;
@@ -61,9 +62,13 @@ export function appendSessionEndLog(
 	} catch {
 		/* No log yet. */
 	}
-	appendFileSync(path, `${record.at}\t${record.session}\t${record.outcome}\t${record.detail}\n`, {
-		mode: 0o600,
-	});
+	try {
+		appendFileSync(path, `${record.at}\t${record.session}\t${record.outcome}\t${record.detail}\n`, {
+			mode: 0o600,
+		});
+	} catch (error) {
+		throw spaceGitDirWriteError(gitDir, `record this session end (${record.outcome})`, error);
+	}
 	return record;
 }
 
