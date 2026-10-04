@@ -41,13 +41,19 @@ wt_abs="$root/worktrees"
 marker="HYPER.md"
 [[ ! -f "$root/HYPER.md" && -f "$root/HYPERDEV.md" ]] && marker="HYPERDEV.md"
 
-# The backup sentence must match reality: with a space branch the
-# allowlisted local-only dirs sync to the user's hyperdrive; without one,
-# nothing here is backed up.
+# Two conditional notes, because a space branch changes both answers. With a
+# branch (.hyper/space.git), the allowlisted dirs ARE committed — to the
+# space's own branch, on the configured cadence — and reach the hyperdrive
+# only when pushed (session-end+push, or `hyper space push`); a cadence of
+# `session-end` or `manual` commits locally and nothing more. Without a
+# branch, nothing at the root is committed anywhere. Neither note uses
+# "backed up" for a local commit.
 if [[ -d "$root/.hyper/space.git" ]]; then
-  backup_note="This space backs up its allowlisted dirs to your hyperdrive; scratch/ never travels."
+  committed_note="nothing here is committed to the project"
+  backup_note="This space commits its allowlisted dirs (notes/, data/, bin/, .hyper/, .claude/ except settings.local.json, and the root marker files) to its own branch on your cadence; they reach your hyperdrive when pushed (session-end+push, or hyper space push). scratch/, worktrees/ and code/ are never committed."
 else
-  backup_note="Nothing here is committed or backed up."
+  committed_note="nothing here is committed"
+  backup_note="Nothing here is committed or backed up, not even to the hyperdrive — until hyper space init gives this space a branch."
 fi
 
 # Recommend wt only when it is actually installed; otherwise show the raw
@@ -81,6 +87,8 @@ Repos here: $repos. Normal git applies in this worktree.
 Space-level local-only dirs: data/, notes/, scratch/, bin/. Sibling worktrees
 of this repo are in $root/code/$slug/worktrees/.
 \`wt switch\` runs inside \`code/<slug>/\`, never from the space root.
+
+$backup_note
 EOF
 
   elif [[ -n "$slug" ]]; then
@@ -101,8 +109,10 @@ EOF
 Project space: $root (cwd is the space ROOT of a multi-repo space, not a worktree).
 
 The root itself is not a git repository — there is no .git and no worktrees/
-at this level, and nothing here is ever committed. Each repo lives in
+at this level, and $committed_note. Each repo lives in
 code/<slug>/ with its own bare .git and its own worktrees/<branch>.
+
+$backup_note
 
 Repos here: $repos.
 
@@ -133,6 +143,8 @@ elif [[ "$PWD" == "$wt_abs"/* ]]; then
 Worktree \`$wt_name\` of space $name ($root).
 Space-level local-only dirs: data/, notes/, scratch/, bin/. Sibling
 worktrees are in $wt_abs/. Normal git applies here.
+
+$backup_note
 EOF
 
 elif at_space_root; then
@@ -141,8 +153,10 @@ elif at_space_root; then
   cat <<EOF
 Project space: $root (cwd is the space ROOT, not a worktree).
 
-The .git here is bare — there is no working tree and nothing at this level is
-ever committed. Worktrees live in worktrees/<branch>.
+The .git here is bare — there is no working tree and $committed_note.
+Worktrees live in worktrees/<branch>.
+
+$backup_note
 
 - Do not run git commit/add here. cd into worktrees/<branch> first.
 - Create branches with $wt_make.
