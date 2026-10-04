@@ -32,6 +32,7 @@ import {
 } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { SpaceGitError, spaceGitDir } from "#services/space-git";
 
 export const SPACE_LOCK_FILE = "hyper.lock";
@@ -204,16 +205,16 @@ export function withSpaceLock<T>(
 		holder = readOwner(path);
 		const reason = staleReason(path, holder);
 		if (reason !== null && takeOver(gitDir, path, holder)) {
-			note(`hyperdrive: took over a stale space lock at ${path}: ${reason}.`);
+			note(`hyperdrive: took over a stale space lock at ${quoteForTerminal(path)}: ${reason}.`);
 			continue;
 		}
 		if (Date.now() >= deadline) {
 			const who =
 				holder === null
 					? "another hyper process"
-					: `another hyper process (pid ${holder.pid}${holder.host === hostname() ? "" : ` on ${holder.host}`}, since ${new Date(holder.started).toISOString()})`;
+					: `another hyper process (pid ${holder.pid}${holder.host === hostname() ? "" : ` on ${quoteForTerminal(holder.host)}`}, since ${new Date(holder.started).toISOString()})`;
 			throw new SpaceLockTimeoutError(
-				`${who} is still writing this space, so I did not ${what} (waited ${Math.round(waitMs / 1000)} s; nothing was changed). Retry when it has finished; if no hyper process is running, delete ${path}.`,
+				`${who} is still writing this space, so I did not ${escapeControlCharacters(what)} (waited ${Math.round(waitMs / 1000)} s; nothing was changed). Retry when it has finished; if no hyper process is running, delete ${quoteForTerminal(path)}.`,
 			);
 		}
 		sleepSync(Math.min(RETRY_MS, Math.max(1, deadline - Date.now())));
