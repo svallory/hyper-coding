@@ -225,6 +225,119 @@ describe("SessionEnd input and streamed transcript", () => {
 	}, 20_000);
 });
 
+describe("a harness that sends summary and harness (pi)", () => {
+	it("keeps a Claude payload byte-identical to main", async () => {
+		summary("Golden Claude line");
+		expect(await message()).toBe(`session: Golden Claude line\n\nClaude-Session: ${id}`);
+		expect(await readSessionEndInput(Readable.from([payload()]))).toEqual({
+			session_id: id,
+			transcript_path: transcript,
+			reason: "prompt_input_exit",
+		});
+	});
+	it("prefers the payload summary over the transcript and names the pi trailer", async () => {
+		summary("transcript summary");
+		expect(
+			await sessionEndMessage(
+				await readSessionEndInput(
+					Readable.from([payload({ summary: "  pi  says   hello \n there ", harness: "pi" })]),
+				),
+			),
+		).toBe(`session: pi says hello there\n\nPi-Session: ${id}`);
+	});
+	it("falls back to the transcript when pi sends no summary", async () => {
+		summary("transcript summary");
+		expect(
+			await sessionEndMessage(
+				await readSessionEndInput(Readable.from([payload({ harness: "pi" })])),
+			),
+		).toBe(`session: transcript summary\n\nPi-Session: ${id}`);
+		rmSync(transcript);
+		expect(
+			await sessionEndMessage(
+				await readSessionEndInput(Readable.from([payload({ harness: "pi" })])),
+			),
+		).toBe(`session ${id} ended\n\nPi-Session: ${id}`);
+	});
+	it.each([
+		["newlines and tabs", "a\n\tb  c", "a b c"],
+		["control and bidi characters", "a\u0000\u001b\u0085\u202eb", "ab"],
+		["a long value", "x".repeat(10_000), "x".repeat(SESSION_SUMMARY_LIMIT)],
+		["surrogate pairs", "\u{1F600}".repeat(201), "\u{1F600}".repeat(200)],
+	])("cleans and caps the payload summary: %s", async (_label, value, expected) => {
+		const input = await readSessionEndInput(Readable.from([payload({ summary: value })]));
+		expect(input.summary).toBe(expected);
+		expect(await sessionEndMessage(input)).toBe(`session: ${expected}\n\nClaude-Session: ${id}`);
+	});
+	it.each([42, null, {}, [], "", "   \n\t "])("treats %j as no summary at all", async (value) => {
+		const input = await readSessionEndInput(Readable.from([payload({ summary: value })]));
+		expect(input.summary).toBeUndefined();
+		expect(await sessionEndMessage(input)).toBe(`session ${id} ended\n\nClaude-Session: ${id}`);
+	});
+	it.each([
+		["Pi", "claude"],
+		["claude", "claude"],
+		["PI", "claude"],
+		["", "claude"],
+		[42, "claude"],
+		[null, "claude"],
+		[{}, "claude"],
+		["pi", "pi"],
+	])("reads harness %j as %s", async (harness, expected) => {
+		const input = await readSessionEndInput(Readable.from([payload({ harness })]));
+		expect(input.harness ?? "claude").toBe(expected);
+		const trailer = expected === "pi" ? "Pi-Session" : "Claude-Session";
+		expect(await sessionEndMessage(input)).toBe(`session ${id} ended\n\n${trailer}: ${id}`);
+	});
+	it("commits a pi payload with its summary and trailer", async () => {
+		const { root } = await makeSpace();
+		const file = join(root, ".hyper/space.git/session-end-payload.test-pi");
+		writeFileSync(
+			file,
+			JSON.stringify({
+				session_id: id,
+				cwd: root,
+				harness: "pi",
+				summary: "Fix the pi session-end hook",
+			}),
+		);
+		writeFileSync(join(root, "notes/a.md"), "changed by pi");
+		const result = run(root, "", "--payload-file", file);
+		expect(result.status, result.stderr).toBe(0);
+		expect(count(root)).toBe(2);
+		expect(spaceGit(root, ["log", "-1", "--format=%B"]).stdout.trim()).toBe(
+			`session: Fix the pi session-end hook\n\nPi-Session: ${id}`,
+		);
+		const lines = readFileSync(join(root, ".hyper/space.git/session-end.log"), "utf8")
+			.trim()
+			.split("\n");
+		expect(lines[0].split("\t").slice(1, 3)).toEqual([id, "committed"]);
+	});
+	it("two shutdowns with nothing changed commit once", async () => {
+		const { root } = await makeSpace();
+		const gitDir = join(root, ".hyper/space.git");
+		const outcomes: string[] = [];
+		for (const attempt of [1, 2]) {
+			const file = join(gitDir, `session-end-payload.test-pi-${attempt}`);
+			writeFileSync(
+				file,
+				JSON.stringify({ session_id: id, cwd: root, harness: "pi", summary: "n" }),
+			);
+			const result = run(root, "", "--payload-file", file);
+			expect(result.status, result.stderr).toBe(0);
+			outcomes.push(
+				readFileSync(join(gitDir, "session-end.log"), "utf8")
+					.trim()
+					.split("\n")
+					.at(-1)!
+					.split("\t")[2]!,
+			);
+		}
+		expect(outcomes).toEqual(["nothing", "nothing"]);
+		expect(count(root)).toBe(1);
+	});
+});
+
 describe("space commit --session-end and real hook", () => {
 	it("commits exactly once with literal hostile text and never runs a shell", async () => {
 		const { root } = await makeSpace();
