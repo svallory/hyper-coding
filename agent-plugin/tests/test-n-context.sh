@@ -81,6 +81,39 @@ assert_contains "bare local-only: names the directory" "$out" "notes/"
 assert_contains "bare local-only: says local-only" "$out" "local-only directory"
 assert_not_contains "bare local-only: no multi-repo wording" "$out" "multi-repo"
 
+# N7: the hyperdrive note, in every position the hook reports from, with and
+# without a space branch. The note must never call a local commit a backup,
+# and must not promise a backup a space without a branch cannot have.
+d7="$FIX/n7"; make_bare_space "$d7"
+git --git-dir="$d7/.git" worktree add -q "$d7/worktrees/main" -b main 2>/dev/null
+
+out="$(run_ctx "$d7")"
+assert_contains "no branch, root: nothing committed or backed up" "$out" \
+  "Nothing here is committed or backed up"
+assert_not_contains "no branch, root: no push claim" "$out" \
+  "reach your hyperdrive when pushed"
+
+out="$(run_ctx "$d7/worktrees/main")"
+assert_contains "no branch, worktree: same note" "$out" \
+  "Nothing here is committed or backed up"
+assert_not_contains "no branch, worktree: no push claim" "$out" \
+  "reach your hyperdrive when pushed"
+
+mkdir -p "$d7/.hyper/space.git"
+out="$(run_ctx "$d7")"
+assert_contains "branch, root: commits to the space branch" "$out" \
+  "commits its allowlisted dirs"
+assert_contains "branch, root: only a push reaches the hyperdrive" "$out" \
+  "reach your hyperdrive when pushed"
+assert_not_contains "branch, root: never a bare 'backed up' promise" "$out" \
+  "backed up to your hyperdrive"
+
+out="$(run_ctx "$d7/worktrees/main")"
+assert_contains "branch, worktree: commits to the space branch" "$out" \
+  "commits its allowlisted dirs"
+assert_contains "branch, worktree: only a push reaches the hyperdrive" "$out" \
+  "reach your hyperdrive when pushed"
+
 # N6: outside any space the hook stays silent — it must cost nothing in an
 # unrelated project.
 d3="$FIX/n6"; make_checkout "$d3"
