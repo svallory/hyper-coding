@@ -1,0 +1,135 @@
+name: drive-e2e
+
+# The hyperdrive end-to-end suite (T-19): packages/drive/tests/e2e/run.sh on
+# ubuntu-latest with loopback ssh. Unit tests still run on every PR in ci.yml;
+# this job runs only when the drive package, the agent plugin, or this
+# workflow changes. The unit-test job is deliberately untouched.
+#
+# What runs vs skips here (run.sh's documented switches, HYPER_E2E_SKIP):
+#   sessions    SKIP — needs the installed, logged-in `claude`; the runner has
+#               none and installing one would need credentials (no secrets).
+#   sync        RUNS — mutagen 0.18.1 installed below, loopback sshd below.
+#   tools       RUNS — downloads into a throwaway HOME.
+#   warp        RUNS — podman is preinstalled on ubuntu-latest.
+#   agent-user  ATTEMPTED — systemd-in-container on the hosted runner.
+#   docker-home ATTEMPTED — additionally needs --privileged (nested userns).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/drive/**"
+      - "agent-plugin/**"
+      - ".github/workflows/drive-e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/drive/**"
+      - "agent-plugin/**"
+      - ".github/workflows/drive-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        # actions/checkout v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Setup Bun
+        # oven-sh/setup-bun v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The e2e scripts drive the built CLI, and the oclif host resolves every
+      # plugin's dist/ at startup, so all packages must build first.
+      - name: Build packages
+        run: |
+          set -euo pipefail
+          for pkg in ui core create-hyper-hq kit hq drive gen cli; do
+            echo "::group::build $pkg"
+            (cd "packages/$pkg" && bun run build)
+            echo "::endgroup::"
+          done
+
+      - name: Expose hyper CLI on PATH
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          ln -sf "$PWD/packages/cli/bin/run.js" "$HOME/.local/bin/hyper"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/hyper" --version
+
+      # Loopback ssh for sync.sh: a key generated IN THIS JOB, sshd on
+      # localhost, StrictHostKeyChecking handled here and nowhere else. No
+      # secrets are involved — the key exists only for the life of the runner.
+      - name: Set up loopback ssh
+        run: |
+          set -euo pipefail
+          if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive \
+              apt-get install -y -qq openssh-server
+          fi
+          sudo ssh-keygen -A >/dev/null
+          sudo mkdir -p /run/sshd
+          if ! pgrep -x sshd >/dev/null; then
+            sudo /usr/sbin/sshd
+          fi
+          mkdir -p "$HOME/.ssh"
+          chmod 0700 "$HOME/.ssh"
+          if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
+            ssh-keygen -q -t ed25519 -N '' \
+              -f "$HOME/.ssh/id_ed25519"
+          fi
+          cat "$HOME/.ssh/id_ed25519.pub" >> "$HOME/.ssh/authorized_keys"
+          chmod 0600 "$HOME/.ssh/authorized_keys"
+          # Job-local ssh config only: accept the runner's own host key on first
+          # contact. Nothing here changes any real machine's ssh behaviour.
+          printf 'Host localhost\n' >> "$HOME/.ssh/config"
+          printf '  StrictHostKeyChecking accept-new\n' >> "$HOME/.ssh/config"
+          ssh -o BatchMode=yes -o ConnectTimeout=5 localhost true
+          echo "loopback ssh up"
+
+      # mutagen 0.18.1 is the version sync.sh was written against. The upstream
+      # release publishes no checksums file, so the tarball hash is pinned here
+      # (recorded from the v0.18.1 asset; bump both together).
+      - name: Install mutagen
+        run: |
+          set -euo pipefail
+          version="0.18.1"
+          sha256="7735286c778cc438418209f24d03a64f3a0151c8065ef0fe079cfaf093af6f8f"
+          tarball="mutagen_linux_amd64_v${version}.tar.gz"
+          url="https://github.com/mutagen-io/mutagen/releases/download"
+          curl -fsSL -o "/tmp/$tarball" "$url/v${version}/$tarball"
+          echo "$sha256  /tmp/$tarball" | sha256sum -c -
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf "/tmp/$tarball" -C "$HOME/.local/bin" mutagen
+          mutagen version
+
+      - name: Run the e2e suite
+        env:
+          # sessions: no claude on the runner (installing one would need
+          # credentials; this job uses no secrets). run.sh also skips it on
+          # its own — its probe finds no claude on PATH — the switch just
+          # makes the reason explicit in the log.
+          HYPER_E2E_SKIP: "sessions"
+        run: bash packages/drive/tests/e2e/run.sh
+
+      - name: Show leftover containers (must be none)
+        if: always()
+        run: podman ps -a
