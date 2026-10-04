@@ -272,7 +272,15 @@ for round in $(seq 1 12); do
       # …and the way out it names: a root console, where the user has no
       # processes of their own.
       if [ "$console_used" = 0 ]; then
-        echo "# the harness now runs the same script from a root console, as it says to"
+        echo "# the harness now closes every session of $primary and re-runs from a root console"
+        pexec "loginctl terminate-user $primary" >/dev/null 2>&1 || true
+        pexec "pkill -u $primary" >/dev/null 2>&1 || true
+        for _ in $(seq 1 20); do
+          [ "$(pexec "pgrep -u $primary | wc -l")" = 0 ] && break
+          pexec "pkill -9 -u $primary" >/dev/null 2>&1 || true
+          sleep 0.5
+        done
+        [ "$(pexec "pgrep -u $primary | wc -l")" = 0 ] || die "could not close every session of $primary"
         podman exec -e "SUDO_USER=$primary" "$container" bash /tmp/hyper-machine-root.sh \
           > "$work_real/root-console-$round.log" 2>&1 \
           || { cat "$work_real/root-console-$round.log"; die "the root script failed from the root console"; }

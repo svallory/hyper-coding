@@ -233,12 +233,14 @@ if [ -n "$busy_pids" ]; then
   echo "hyper: '$primary_user' still has processes running (pids: $busy_pids)." >&2
   echo "       usermod will not change a home directory while that is true, and" >&2
   echo "       doing the move first would leave your home half-way between two" >&2
-  echo "       paths. Log out of every session as '$primary_user' — including this" >&2
-  echo "       one — or run this script from a root console, and re-run." >&2
+  echo "       paths. Nothing has been changed. Close EVERY session of" >&2
+  echo "       '$primary_user' — every ssh login, every terminal — and re-run this" >&2
+  echo "       script. A root console helps only if no session of that user is" >&2
+  echo "       open anywhere else; \`loginctl terminate-user $primary_user\` closes" >&2
+  echo "       them all from root." >&2
   echo "       To do that one step by hand, from a root console:" >&2
   echo "           usermod -d $target_home $primary_user" >&2
   echo "       then re-run this script; it picks up from there and does the rest." >&2
-  echo "hyper: nothing has been changed." >&2
   exit 1
 fi
 
