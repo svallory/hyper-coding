@@ -44,6 +44,9 @@ import type { Task, TaskContext } from "./types.js";
 /** The macOS-shaped home this feature exists for. */
 export const USERS_PREFIX = "/Users/";
 
+/** The directory the home moves into, without its trailing slash. */
+export const USERS_DIR = "/Users";
+
 /** Where the account's home really is, from the password database. */
 export const LEGACY_HOME_PREFIX = "/home/";
 
@@ -97,8 +100,6 @@ function probe(target: string, name: string): string {
 		`printf 'passwd_home=%s\\n' "$(getent passwd "$(id -un)" | cut -d: -f6)"`,
 		`printf 'legacy=%s\\n' "$(${kind(`${LEGACY_HOME_PREFIX}${name}`)})"`,
 		`printf 'target=%s\\n' "$(${kind(target)})"`,
-		`printf 'users_fs=%s\\n' "$(stat -c %d ${USERS_PREFIX} 2>/dev/null || stat -c %d / 2>/dev/null || echo unknown)"`,
-		`printf 'home_fs=%s\\n' "$(stat -c %d ${LEGACY_HOME_PREFIX} 2>/dev/null || echo unknown)"`,
 		`printf 'physical=%s\\n' "$(grep -cxF ${q(PHYSICAL_LINE)} "$HOME/.bashrc" 2>/dev/null || true)"`,
 	].join("; ");
 }
@@ -182,7 +183,7 @@ export const homePathSymlink: Task = {
 # symlink. The exact commands are:
 #
 #     usermod -d ${USERS_PREFIX}<name> <name>      # the home the passwd entry names
-#     install -d -m 0755 ${USERS_PREFIX}
+#     mkdir -m 0755 ${USERS_DIR}                 # only when it is absent
 #     mv ${LEGACY_HOME_PREFIX}<name> ${USERS_PREFIX}<name>
 #     ln -s ${USERS_PREFIX}<name> ${LEGACY_HOME_PREFIX}<name>
 #
@@ -220,11 +221,20 @@ home_path_undo_failed() {
   exit 1
 }
 
+# A refusal after the passwd entry changed puts the entry back first.
+home_path_refuse_after_passwd() {
+  if [ "$1" = 1 ]; then
+    usermod -d "${LEGACY_HOME_PREFIX}$primary_user" "$primary_user" \\
+      || home_path_undo_failed "$2" "usermod -d ${LEGACY_HOME_PREFIX}$primary_user $primary_user"
+  fi
+  home_path_refuse "$2"
+}
+
 home_path_move() {
   local name="$primary_user"
   local legacy_home="${LEGACY_HOME_PREFIX}$name"
   local target_home="${USERS_PREFIX}$name"
-  local recorded_home home_fs root_fs busy_pids
+  local recorded_home home_fs users_fs users_owner users_mode busy_pids created_users=0
   recorded_home="$(getent passwd "$name" | cut -d: -f6 || true)"
   [ -n "$recorded_home" ] || home_path_refuse "I can't find the passwd entry for '$name'"
   [ "$recorded_home" = "$legacy_home" ] || [ "$recorded_home" = "$target_home" ] \\
@@ -255,11 +265,32 @@ home_path_move() {
   [ ! -e "$target_home" ] \\
     || home_path_refuse "$target_home already exists; move it aside yourself, then re-run"
 
-  # One filesystem, or mv would copy a home directory tree instead of renaming it.
+  # ${USERS_DIR} itself, before anything changes. The home is renamed INTO it, so:
+  # never through a symlink (install/mkdir would follow it), never into a
+  # directory another user owns or can write (they would control the moved
+  # home), and only on the same filesystem as ${LEGACY_HOME_PREFIX} — anything else
+  # turns the rename into a copy-and-delete of the whole home. An existing ${USERS_DIR}
+  # keeps its mode; only an absent one is created (root, 0755).
   home_fs="$(stat -c %d ${LEGACY_HOME_PREFIX} 2>/dev/null || echo none)"
-  root_fs="$(stat -c %d / 2>/dev/null || echo none)"
-  [ "$root_fs" != none ] && [ "$home_fs" = "$root_fs" ] \\
-    || home_path_refuse "${LEGACY_HOME_PREFIX} and / are on different filesystems ($home_fs vs $root_fs), so moving the home would copy it rather than rename it. Put them on one filesystem first."
+  [ "$home_fs" != none ] || home_path_refuse "I can't read the filesystem of ${LEGACY_HOME_PREFIX}"
+  if [ -L ${USERS_DIR} ]; then
+    home_path_refuse "${USERS_DIR} is a symlink; I won't move a home through it"
+  elif [ -e ${USERS_DIR} ]; then
+    [ -d ${USERS_DIR} ] || home_path_refuse "${USERS_DIR} exists and is not a directory"
+    users_owner="$(stat -c %u ${USERS_DIR})"
+    users_mode="$(stat -c %a ${USERS_DIR})"
+    [ "$users_owner" = 0 ] \\
+      || home_path_refuse "${USERS_DIR} is owned by uid $users_owner, not root; whoever owns it would control the moved home"
+    case "$users_mode" in
+      *[2367]?|*[2367]) home_path_refuse "${USERS_DIR} is group- or other-writable (mode $users_mode); I won't move a home into it" ;;
+    esac
+    users_fs="$(stat -c %d ${USERS_DIR})"
+  else
+    # Absent: it would be created on the filesystem of /.
+    users_fs="$(stat -c %d / 2>/dev/null || echo none)"
+  fi
+  [ "$users_fs" = "$home_fs" ] \\
+    || home_path_refuse "${USERS_DIR} and ${LEGACY_HOME_PREFIX} are on different filesystems ($users_fs vs $home_fs), so moving the home would copy it rather than rename it. Put them on one filesystem first."
 
   local changed_passwd=0
   if [ "$recorded_home" = "$legacy_home" ]; then
@@ -287,7 +318,12 @@ home_path_move() {
     changed_passwd=1
   fi
 
-  if ! install -d -m 0755 ${USERS_PREFIX} || ! mv "$legacy_home" "$target_home"; then
+  if [ ! -e ${USERS_DIR} ]; then
+    mkdir -m 0755 ${USERS_DIR} || home_path_refuse_after_passwd "$changed_passwd" "I couldn't create ${USERS_DIR}"
+    created_users=1
+  fi
+  if ! mv "$legacy_home" "$target_home"; then
+    [ "$created_users" = 0 ] || rmdir ${USERS_DIR} || true
     if [ "$changed_passwd" = 1 ]; then
       usermod -d "$legacy_home" "$name" \\
         || home_path_undo_failed "the move failed" "usermod -d $legacy_home $name"
@@ -298,6 +334,7 @@ home_path_move() {
   if ! ln -s "$target_home" "$legacy_home"; then
     mv "$target_home" "$legacy_home" \\
       || home_path_undo_failed "the symlink could not be created" "mv $target_home $legacy_home"
+    [ "$created_users" = 0 ] || rmdir ${USERS_DIR} || true
     if [ "$changed_passwd" = 1 ]; then
       usermod -d "$legacy_home" "$name" \\
         || home_path_undo_failed "the symlink could not be created" "usermod -d $legacy_home $name"
