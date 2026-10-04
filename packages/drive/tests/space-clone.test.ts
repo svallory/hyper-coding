@@ -225,7 +225,9 @@ describe("untrusted clone branch", () => {
 		writeFileSync(join(source, "notes", "cmds", "one.md"), "# command\n");
 		symlinkSync("../notes/cmds", join(source, ".claude", "commands"));
 		publishChange(source, "notes/cmds/one.md", "# command\n");
-		publishChange(source, ".claude/commands", "../notes/cmds");
+		// Stage the link itself: writing through it would land in notes/cmds.
+		spaceGit(source, ["add", "-f", "--", ".claude/commands"]);
+		spaceGit(source, ["commit", "-m", "link published"]);
 		useMachine("second");
 		const result = run(["sample", join(fixture.home, "destination"), "--json"]);
 		success(result);
