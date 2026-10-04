@@ -36,6 +36,7 @@
  *   `/Users/<name>` already existing as a real directory.
  */
 
+import { HOME_MOVE_TASK_ID } from "#services/machine/root-script";
 import { shellQuote } from "#services/remote";
 import { homeOf, primaryUserLines, primaryUserOf } from "./agent-context.js";
 import { ensureBashrcLine, runOrFail, runScript } from "./shell.js";
@@ -146,7 +147,7 @@ async function layout(ctx: TaskContext): Promise<{ layout: Layout; target: strin
 }
 
 export const homePathSymlink: Task = {
-	id: "home-path.symlink",
+	id: HOME_MOVE_TASK_ID,
 	feature: "home-path",
 	needsRoot: true,
 	title: "your real home at /Users/<name>, with /home/<name> as a symlink to it",
@@ -311,6 +312,9 @@ home_path_move() {
       echo "       are gone:" >&2
       echo "           usermod -d $target_home $name" >&2
       echo "       and then re-run this script from any session; it does the rest." >&2
+      echo "hyper: this section runs first, so none of the other root steps in this" >&2
+      echo "       script ran either: while the move is pending, no root section can" >&2
+      echo "       run from an ssh session of '$name'. One root console run does it." >&2
       exit 1
     fi
     usermod -d "$target_home" "$name" \\
