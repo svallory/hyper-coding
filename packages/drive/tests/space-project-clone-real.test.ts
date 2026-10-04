@@ -180,4 +180,30 @@ describe("the user's own ssh command, against real git", () => {
 		expect(logged.startsWith("-o BatchMode=yes -i /tmp/key")).toBe(true);
 		expect(readFileSync(environmentLog, "utf8").split("\n")[0]).toBe("|a b");
 	});
+	it("redacts every credentialed url git relays from ssh, not only the first", () => {
+		// Real git relays the transport's stderr verbatim, so a hostile or
+		// chatty server can put several urls on one line.
+		const noisy = join(root, "bin", "noisy-transport");
+		writeFileSync(
+			noisy,
+			"#!/bin/sh\necho 'fatal: https://user:first-password-value@example.invalid/x and https://user:second-password-value@example.invalid/y' >&2\nexit 1\n",
+			{ mode: 0o755 },
+		);
+		chmodSync(noisy, 0o755);
+		vi.stubEnv("GIT_SSH_COMMAND", noisy);
+		let message = "";
+		try {
+			cloneProjectRepoBare(join(root, "project.git"), "ssh://git@example.invalid/project", "main", {
+				allowLocal: false,
+				interactive: false,
+			});
+		} catch (error) {
+			message = String(error);
+		}
+		expect(message).toContain(
+			"https://[redacted]@example.invalid/x and https://[redacted]@example.invalid/y",
+		);
+		expect(message).not.toContain("first-password-value");
+		expect(message).not.toContain("second-password-value");
+	});
 });

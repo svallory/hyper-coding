@@ -9,7 +9,11 @@ import {
 
 /** Never print embedded credentials from untrusted manifest data. */
 export function redactCloneUrl(value: string): string {
-	return redactGitSecrets(value);
+	// One manifest value is one url, so its authority runs to the first `/`
+	// even across whitespace: a malformed `user:pass with spaces@host` is
+	// still a credential. Free text (git's stderr) cannot assume that, which
+	// is why redactGitSecrets stops at whitespace.
+	return redactGitSecrets(value.replace(/^(\s*[a-z][a-z0-9+.-]*:\/\/)[^/]*@/i, "$1[redacted]@"));
 }
 
 /** Local test/development drives may reference local projects; hosted drives may not. */

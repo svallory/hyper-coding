@@ -277,7 +277,46 @@ describe("project transport and terminal policy", () => {
 		["https://host.invalid/a@b/c", "https://host.invalid/a@b/c"],
 		["git@host.invalid:x", "git@host.invalid:x"],
 		["no credentials here at all", "no credentials here at all"],
+		[
+			"fatal: could not read from git@host.invalid:org/repo.git",
+			"fatal: could not read from git@host.invalid:org/repo.git",
+		],
 	])("leaves %s exactly as written", (value, expected) => {
+		expect(redactGitSecrets(value)).toBe(expected);
+	});
+	it.each([
+		// Two urls on one line: the second used to slip through, because only
+		// the authority after the FIRST `://` was examined.
+		[
+			"fatal: https://user:first-password-value@example.invalid/x and https://user:second-password-value@example.invalid/y",
+			"fatal: https://[redacted]@example.invalid/x and https://[redacted]@example.invalid/y",
+		],
+		// A url in the middle of a sentence, followed by more prose.
+		[
+			"remote: could not reach https://alice:password-value@example.invalid/repo.git today, retrying",
+			"remote: could not reach https://[redacted]@example.invalid/repo.git today, retrying",
+		],
+		// An unencoded `@` inside the password is still userinfo.
+		[
+			"fatal: https://user:prefix@password-value@example.invalid/r",
+			"fatal: https://[redacted]@example.invalid/r",
+		],
+		// Percent-encoded userinfo is still userinfo.
+		[
+			"fatal: https://user%40corp:password%2Fvalue%3A@example.invalid/r",
+			"fatal: https://[redacted]@example.invalid/r",
+		],
+		// A path `@` after a credentialed url on the same line stays put.
+		[
+			"https://user:password-value@example.invalid/a@b/c then https://example.invalid/a@b/c",
+			"https://[redacted]@example.invalid/a@b/c then https://example.invalid/a@b/c",
+		],
+		// Query masking still applies, alongside userinfo.
+		[
+			"https://user:password-value@example.invalid/x?token=token-value https://example.invalid/y?sig=signature-value",
+			"https://[redacted]@example.invalid/x?token=[redacted] https://example.invalid/y?sig=[redacted]",
+		],
+	])("redacts every url on the line: %s", (value, expected) => {
 		expect(redactGitSecrets(value)).toBe(expected);
 	});
 	it("redacts per line, so a later @ cannot mask or expose another line", () => {
