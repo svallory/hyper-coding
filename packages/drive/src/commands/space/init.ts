@@ -12,7 +12,12 @@ import {
 import { BaseCommand, type BaseFlags } from "#lib/base-command";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { isHyperAllowlist, normaliseTrackedEntry, renderGitignore } from "#services/allowlist";
-import { type HyperMdRefresh, refreshHyperMdBackupRule } from "#services/hyper-md";
+import {
+	HYPER_MD,
+	type HyperMdRefresh,
+	readHyperMd,
+	refreshHyperMdBackupRule,
+} from "#services/hyper-md";
 import {
 	driveCheckoutDir,
 	ensureDriveCheckout,
@@ -280,9 +285,9 @@ function spaceReposOf(
 }
 
 /**
- * Re-render HYPER.md's backup bullet now that the space has a branch
- * (services/hyper-md.ts). Best effort: the space is already initialised, so a
- * problem here is one line, never a failed init. `line` is what the text
+ * Re-render HYPER.md's backup bullet for the branch this run is creating or
+ * refreshing (services/hyper-md.ts), before the commit. Best effort: a problem
+ * here is one line, never a failed init. `line` is what the text
  * output prints, null when there is nothing to say.
  */
 function refreshHyperMd(
@@ -294,7 +299,7 @@ function refreshHyperMd(
 		if (state === "updated")
 			return {
 				state,
-				line: "HYPER.md: its backup rule now says this space commits to its branch; the change is saved with the next commit.",
+				line: "HYPER.md: its backup rule now says this space commits to its branch.",
 			};
 		if (state === "edited")
 			return {
@@ -350,11 +355,7 @@ export default class Init extends BaseCommand<typeof Init> {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(Init);
 		try {
-			const initialised = await this.initSpace(flags, args.dir);
-			// After success only: a failed init leaves no branch, and the
-			// no-branch wording is still the true one.
-			const hyperMd = refreshHyperMd(initialised.path, initialised.layout);
-			const result = { ...initialised, hyperMd: hyperMd.state };
+			const { hyperMdLine, ...result } = await this.initSpace(flags, args.dir);
 			if (flags.json) {
 				this.log(JSON.stringify(result, null, 2));
 				return;
@@ -378,7 +379,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			this.log(
 				`Manifest: ${result.refreshed ? "refreshed" : "registered"} (in ${escapeControlCharacters(driveCheckoutDir())})`,
 			);
-			if (hyperMd.line !== null) this.log(hyperMd.line);
+			if (hyperMdLine !== null) this.log(hyperMdLine);
 		} catch (err) {
 			// Everything this command throws is a message meant for a person
 			// (ConfigError, ManifestError, SpaceGitError, AllowlistError and its
@@ -407,6 +408,8 @@ export default class Init extends BaseCommand<typeof Init> {
 			unborn: boolean;
 			upToDate: boolean;
 			skipped: string[];
+			hyperMd: HyperMdRefresh | "failed";
+			hyperMdLine: string | null;
 		}
 	> {
 		const dir = resolve(dirArg ?? process.cwd());
@@ -567,6 +570,13 @@ export default class Init extends BaseCommand<typeof Init> {
 		let upToDate = false;
 		let skipped: string[] = [];
 		let pushAttempted = false;
+		// HYPER.md as it was before this run re-rendered its backup bullet, so a
+		// rollback that drops the commit can put the no-branch wording back.
+		let hyperMd: { state: HyperMdRefresh | "failed"; line: string | null } = {
+			state: "absent",
+			line: null,
+		};
+		let hyperMdBefore: string | null = null;
 
 		// Cleanup is best-effort per step: a second Ctrl-C must not prevent
 		// independent restores, nor let us falsely claim nothing was changed.
@@ -599,6 +609,12 @@ export default class Init extends BaseCommand<typeof Init> {
 						if (beforeCadence === "") clearCadence(root);
 						else writeCadence(root, beforeCadence);
 					});
+				}
+				if (hyperMd.state === "updated" && hyperMdBefore !== null) {
+					const before = hyperMdBefore;
+					attempt("HYPER.md may not be restored", () =>
+						writeFileSync(join(root, HYPER_MD), before),
+					);
 				}
 				if (created)
 					attempt("the space git dir could not be removed", () => {
@@ -659,6 +675,11 @@ export default class Init extends BaseCommand<typeof Init> {
 			writeTracked(root, tracked);
 			allowlist = writeAllowlist(root, tracked);
 			writeCadence(root, cadence);
+			// BEFORE the commit, so the first commit already carries the true
+			// text and the tree is clean afterwards (PR #52 review, M3). The
+			// rollback above restores the old bullet if the commit is dropped.
+			hyperMdBefore = readHyperMd(root);
+			hyperMd = refreshHyperMd(root, info.layout);
 
 			const staged = await commitAndPushSpace(
 				root,
@@ -806,6 +827,8 @@ export default class Init extends BaseCommand<typeof Init> {
 			unborn,
 			upToDate,
 			skipped,
+			hyperMd: hyperMd.state,
+			hyperMdLine: hyperMd.line,
 		};
 	}
 

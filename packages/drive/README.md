@@ -222,8 +222,8 @@ tooling).
   hyperdrive branch** (`hyper space init` on the first machine, `hyper space
   clone` on another).
   The generated `HYPER.md` says which case applies as of when it was written,
-  and `hyper space init` (and `--refresh`) re-renders that one bullet once
-  the branch exists, unless you edited it; `hyper space status` is the live
+  and `hyper space init` (and `--refresh`) re-renders that one bullet in the
+  commit it makes, unless you edited it; `hyper space status` is the live
   answer.
 - **Warp overwrites the target's copy file by file, with no `--delete`:**
   files that exist only on the target are kept. For a plain directory (no

@@ -205,7 +205,7 @@ write_hyper_md() {
 # pushed (`session-end+push`, or `hyper space push`). Without a branch
 # nothing at the root is committed anywhere. The writers run at
 # scaffold/clone time only; `hyper space init` re-renders just this bullet
-# afterwards, and leaves one it does not recognise — so BOTH bullets end by
+# before its commit, and leaves one it does not recognise — so BOTH bullets end by
 # naming `hyper space status` as the live answer, and the no-branch one says
 # the sentence stops being true once the space is initialised.
 #

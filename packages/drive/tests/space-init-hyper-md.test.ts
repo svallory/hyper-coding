@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { libPath } from "#services/space";
 import {
+	git,
 	isolateGitConfig,
 	type ManifestFixture,
 	skipIfUnbuilt,
@@ -63,6 +64,19 @@ function hyperMd(root: string): string {
 	return readFileSync(join(root, "HYPER.md"), "utf8");
 }
 
+/** HYPER.md as the space branch's HEAD has it. */
+function committedHyperMd(root: string): string {
+	return git(["--git-dir", join(root, ".hyper", "space.git"), "show", "HEAD:HYPER.md"], root);
+}
+
+/** The space's porcelain status: empty means init left a clean tree. */
+function spaceStatus(root: string): string {
+	return git(
+		["--git-dir", join(root, ".hyper", "space.git"), "--work-tree", root, "status", "--porcelain"],
+		root,
+	).trim();
+}
+
 function init(root: string, ...extra: string[]) {
 	return spawnCli(["space", "init", root, "--cadence", "manual", ...extra], fixture);
 }
@@ -84,11 +98,49 @@ describe.each(["bare", "multi"] as const)("space init and HYPER.md (%s layout)",
 		const after = hyperMd(root);
 		expect(after).toBe(before.replace(stale, fresh));
 		expect(after).not.toContain("until you run");
+		// Re-rendered BEFORE the commit: the first commit carries the true text
+		// and init leaves a clean tree (PR #52 review, M3).
+		expect(committedHyperMd(root)).toBe(after);
+		expect(spaceStatus(root)).toBe("");
 
 		const again = init(root, "--refresh", "--json");
 		expect(again.status, again.stderr).toBe(0);
 		expect(JSON.parse(again.stdout).hyperMd).toBe("current");
 		expect(hyperMd(root)).toBe(after);
+		expect(spaceStatus(root)).toBe("");
+	});
+
+	it("--refresh of a space whose HYPER.md went stale re-renders it before its commit", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		const root = space(layout, `refresh-${layout}`);
+		const stale = lib("hyper_md_backup_rule", root, layout, "none");
+		const fresh = lib("hyper_md_backup_rule", root, layout, "branch");
+		const original = hyperMd(root);
+		expect(init(root).status).toBe(0);
+		// A peer's old scaffold, say, brings the no-branch text back.
+		writeFileSync(join(root, "HYPER.md"), original);
+		const again = init(root, "--refresh", "--json");
+		expect(again.status, again.stderr).toBe(0);
+		expect(JSON.parse(again.stdout).hyperMd).toBe("updated");
+		expect(hyperMd(root)).toBe(original.replace(stale, fresh));
+		expect(committedHyperMd(root)).toBe(hyperMd(root));
+		expect(spaceStatus(root)).toBe("");
+	});
+
+	it("an init that rolls back puts the old bullet back", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		const root = space(layout, `rollback-${layout}`);
+		const original = hyperMd(root);
+		// The hyperdrive refuses every space branch, so the first push fails
+		// for good and the first init rolls back.
+		writeFileSync(
+			join(fixture.remote, "hooks", "pre-receive"),
+			'#!/bin/sh\nwhile read old new ref; do case "$ref" in refs/heads/space/*) echo "no spaces here" >&2; exit 1;; esac; done\n',
+			{ mode: 0o755 },
+		);
+		const result = init(root);
+		expect(result.status).not.toBe(0);
+		expect(hyperMd(root)).toBe(original);
 	});
 
 	it("re-renders the older single bullet written before the branch wording", (ctx) => {
