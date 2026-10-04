@@ -32,6 +32,16 @@
 
 set -uo pipefail
 
+# A hook runs in the session's directory, where a relative PATH entry would
+# pick a project's or space's own bin/ over the real tools: rebuild PATH from
+# absolute entries before anything is looked up by name (hyper-safe-path.sh).
+hook_dir="${BASH_SOURCE[0]%/*}"
+[[ "$hook_dir" == "${BASH_SOURCE[0]}" ]] && hook_dir=.
+# shellcheck source=agent-plugin/scripts/hyper-safe-path.sh
+source "$hook_dir/hyper-safe-path.sh" || exit 0
+hyper_safe_path
+
+
 # Hook input arrives as JSON on stdin. No jq dependency: node is already a
 # prerequisite for the Node stack, and Go projects that lack it simply skip.
 input="$(cat 2>/dev/null || true)"
@@ -115,10 +125,16 @@ checks="$(node -e '
 # timeout binary must never turn a healthy edit into a failed check.
 timeout_bin=""
 if command -v timeout >/dev/null 2>&1; then
-  timeout_bin="timeout"
+  timeout_bin="$(command -v timeout)"
 elif command -v gtimeout >/dev/null 2>&1; then
-  timeout_bin="gtimeout"
+  timeout_bin="$(command -v gtimeout)"
 fi
+# bash and the timeout wrapper come from the cleaned PATH, as absolute paths.
+# The configured check itself is project-defined code the project opted into
+# (.claude/hyper.json), so it gets the PATH the hook was started with: a
+# `biome check` that relies on ./node_modules/.bin keeps working.
+bash_bin="$(command -v bash)" || exit 0
+check_path="${HYPER_HOOK_ORIGINAL_PATH-$PATH}"
 
 pm_run=""
 pm_run_resolved=0
@@ -143,7 +159,7 @@ while IFS='|' read -r tag run_b64 cmd_b64 tmo exts_b64; do
   # package runner plus the configured script name.
   if [[ -z "$cmd" && -n "$run" ]]; then
     if [[ $pm_run_resolved -eq 0 ]]; then
-      pm_run="$(bash "$(dirname "${BASH_SOURCE[0]}")/hyper-stack.sh" detect "$root" </dev/null 2>/dev/null \
+      pm_run="$(bash "$hook_dir/hyper-stack.sh" detect "$root" </dev/null 2>/dev/null \
                 | sed -n 's/^PM_RUN=//p')"
       pm_run_resolved=1
     fi
@@ -157,9 +173,9 @@ while IFS='|' read -r tag run_b64 cmd_b64 tmo exts_b64; do
   # otherwise still attached to the herestring feeding this loop, and a check
   # that reads stdin would silently drain the remaining check records.
   if [[ -n "$timeout_bin" ]]; then
-    out="$(cd "$root" && "$timeout_bin" "$tmo" bash -c "$cmd" </dev/null 2>&1)"
+    out="$(cd "$root" && PATH="$check_path" "$timeout_bin" "$tmo" "$bash_bin" -c "$cmd" </dev/null 2>&1)"
   else
-    out="$(cd "$root" && bash -c "$cmd" </dev/null 2>&1)"
+    out="$(cd "$root" && PATH="$check_path" "$bash_bin" -c "$cmd" </dev/null 2>&1)"
   fi
   status=$?
 

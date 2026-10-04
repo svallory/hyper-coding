@@ -21,10 +21,20 @@
 # (services/session-end-worker.ts). This script never exits non-zero.
 set -u
 
+# A hook runs in the session's directory, where a relative PATH entry would
+# pick a project's or space's own bin/ over the real tools: rebuild PATH from
+# absolute entries before anything is looked up by name (hyper-safe-path.sh).
+hook_dir="${BASH_SOURCE[0]%/*}"
+[[ "$hook_dir" == "${BASH_SOURCE[0]}" ]] && hook_dir=.
+# shellcheck source=agent-plugin/scripts/hyper-safe-path.sh
+source "$hook_dir/hyper-safe-path.sh" || exit 0
+hyper_safe_path
+
+
 # A session-end save must not also start the CLI's background update check.
 export HYPER_SKIP_NEW_VERSION_CHECK=1
 
-source "$(dirname "${BASH_SOURCE[0]}")/hyper-require-lib.sh"
+source "$hook_dir/hyper-require-lib.sh"
 
 # Cheap prefilter, no CLI start-up: the nearest ancestor holding
 # .hyper/space.git. Most directories have none, and then nothing else runs.

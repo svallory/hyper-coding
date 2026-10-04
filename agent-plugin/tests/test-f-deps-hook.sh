@@ -74,4 +74,23 @@ printf '{"tool_input":{"file_path":"%s"}}' "$p/package.json" \
   | bash "$HOOK" >/dev/null 2>&1
 assert_eq "manifest not in HEAD -> exit 0" 0 "$?"
 
+# F-PATH: a project's own bin/node or bin/git never runs from this hook, even
+# with relative entries ahead of the real ones on PATH.
+p="$FIX/fpath"; git init -q "$p"
+mkdir -p "$p/.claude"
+echo '{ "deps": { "enabled": true } }' > "$p/.claude/hyper.json"
+echo '{ "name": "fpath", "dependencies": {} }' > "$p/package.json"
+git -C "$p" add -A
+git -C "$p" commit -qm baseline
+echo '{ "name": "fpath", "dependencies": { "path-dep": "1.0.0" } }' > "$p/package.json"
+for d in "$p/bin" "$p"; do
+  plant_binaries "$d" "$FIX/planted.log" node git bash sh dirname sed cat head tr
+done
+bash_bin="$(command -v bash)"
+rm -f "$FIX/planted.log"
+err="$(cd "$p" && printf '{"session_id":"fpath-%s","tool_input":{"file_path":"%s"}}' "$$" "$p/package.json" \
+  | PATH="./bin:.::$PATH" "$bash_bin" "$HOOK" 2>&1 >/dev/null)"
+assert_contains "hostile PATH: the new dependency is still reported" "$err" "path-dep"
+assert_eq "hostile PATH: no planted binary ran from the hook" "" "$(cat "$FIX/planted.log" 2>/dev/null)"
+
 finish

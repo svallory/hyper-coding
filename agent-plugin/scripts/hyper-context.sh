@@ -10,11 +10,21 @@
 # nothing in the session ever mentioned it.
 
 set -uo pipefail
+
+# A hook runs in the session's directory, where a relative PATH entry would
+# pick a project's or space's own bin/ over the real tools: rebuild PATH from
+# absolute entries before anything is looked up by name (hyper-safe-path.sh).
+hook_dir="${BASH_SOURCE[0]%/*}"
+[[ "$hook_dir" == "${BASH_SOURCE[0]}" ]] && hook_dir=.
+# shellcheck source=agent-plugin/scripts/hyper-safe-path.sh
+source "$hook_dir/hyper-safe-path.sh" || exit 0
+hyper_safe_path
+
 # Silent when the hyper CLI is missing: this hook runs on every SessionStart
 # and must not fail a session in an unrelated project. hyper_soft_lib returns
 # non-zero instead of exiting, so the hook keeps deciding for itself.
 # shellcheck source=agent-plugin/scripts/hyper-require-lib.sh
-source "$(dirname "${BASH_SOURCE[0]}")/hyper-require-lib.sh" 2>/dev/null || exit 0
+source "$hook_dir/hyper-require-lib.sh" 2>/dev/null || exit 0
 if ! hyper_soft_lib; then
   # No library, so the real detector is unavailable. A marker file above $PWD is
   # enough to tell "definitely in a space" from "unrelated project", and this
@@ -188,7 +198,7 @@ fi
 # live. Everything below is best-effort — a detection failure must never break
 # session start, and unknown keys are omitted rather than guessed.
 if [[ -n "$tree" ]]; then
-  facts="$(bash "$(dirname "${BASH_SOURCE[0]}")/hyper-stack.sh" detect "$tree" 2>/dev/null)" || facts=""
+  facts="$(bash "$hook_dir/hyper-stack.sh" detect "$tree" 2>/dev/null)" || facts=""
   stack="$(sed -n 's/^STACK=//p' <<<"$facts")"
   if [[ -n "$stack" && "$stack" != unknown ]]; then
     pm="$(sed -n 's/^PM=//p' <<<"$facts")"
