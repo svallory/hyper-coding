@@ -26,15 +26,29 @@
 #   8.         --dry-run leaves both trees byte-identical
 #   9.  AC-12  `git ls-remote origin` of the project is unchanged by a warp
 #  10.  the space-worktree kind: the clone happens only when the target is
-#       missing the space, the branch arrives through the explicit ssh:// URL,
-#       and the worktree's files arrive with the exclusions applied
+#       missing the space, at the pinned path; the branch arrives through the
+#       explicit ssh:// URL; the worktree is a working git worktree there
+#       (`git status` shows the modified and untracked files); a re-warp moves
+#       the branch checked out in that worktree
+#  11.  AC-16 for a space present on the target (unwritable worktrees/) and for
+#       a missing space (unwritable nearest ancestor): refused before --stop,
+#       the marker, any copy, clone or push; nothing changed on either side
+#  12.  a re-warp to the machine that owns the session is refused without
+#       --force, and the target's newer transcript line and edit survive;
+#       with --force only this session's files travel
+#  13.  a partial copy (rsync 23) leaves a truthful message and the marker
+#  14.  a cwd with a space is refused at planning, dry run and real run alike
+#  and the Herdr argv shape (`-- --resume <id>`, pane id from the tab JSON).
+#
+# The fake `herdr` models Herdr: it records argv, answers `tab create` with the
+# JSON shape Herdr prints, and starts the binary named by `--kind` with the
+# words after `--` as its ARGUMENTS. It never runs those words as a command.
 #
 # WHAT THIS SCRIPT DOES NOT TEST: the real `hyper space clone` that runs ON THE
-# TARGET. Installing the CLI inside the container to exercise it is out of this
-# harness's reach, so `hyper` on the far side is a stub that records its argv
-# and creates the bare repo the push needs. That command's own behaviour is
-# covered by T-8's tests (space-clone.test.ts), not here. What IS proved here is
-# that warp DECIDES to run it, and runs it with the right arguments.
+# TARGET. `hyper` on the far side is a stub that records its argv, insists on
+# `--yes` and an explicit path, and creates the bare repo the push needs. That
+# command's own behaviour is covered by T-8's tests (space-clone.test.ts). The
+# real Herdr is not exercised either (never run against the operator's).
 #
 # Usage: packages/drive/tests/e2e/warp.sh
 # Safety: the container is removed by a trap; the only ssh target is that
@@ -184,10 +198,17 @@ mkdir -p "$fakebin"
 # fake would arrive as a pile of "command not found".
 cat > "$fakebin/herdr" <<'HERDR'
 #!/bin/sh
+# Models the parts of Herdr warp uses, as the lead's live Herdr behaves:
+#   herdr --machine <m> tab create [--cwd P] [--label L] [--no-focus]
+#       prints {"result":{"tab":{...},"root_pane":{"pane_id":...}}}
+#   herdr --machine <m> agent start <name> --kind <kind> --pane <id> -- <args>
+#       starts the agent binary named by --kind with <args> as its ARGUMENTS.
+# What follows `--` is NEVER run as a command: `-- claude --resume x` would
+# start `claude claude --resume x`, which is the bug this fake must expose.
 log="%WORK%/herdr-argv.log"
 printf '%s\n' "$*" >> "$log"
+pane="w9:p3"
 
-# Drop the routing flag; the rest are the words that run on the target.
 while [ $# -gt 0 ]; do
   case "$1" in
     --machine) shift 2 ;;
@@ -201,26 +222,40 @@ case "$1 $2" in
     echo '[{"label": "t12", "target": "%PRIMARY%@localhost:%PORT%", "enabled": true}]'
     exit 0 ;;
   "pane list")
-    # The Herdr-server probe. A real server answers here; so does ours, unless
-    # the caller asks for the "no server on the target" case.
     exit ${WARP_E2E_HERDR_DOWN:-0} ;;
   "tab create")
-    echo '{"result":{"tab":"w1:t1","root_pane":"w1:p1"}}'
+    printf '{"result":{"tab":{"tab_id":"w9:t3","label":"x"},"root_pane":{"pane_id":"%s","tab_id":"w9:t3"}}}\n' "$pane"
     exit 0 ;;
 esac
 
 if [ "$1" = "agent" ] && [ "$2" = "start" ]; then
-  # Skip past herdr's own words, keeping only what came after the `--`.
-  while [ $# -gt 0 ] && [ "$1" != "--" ]; do shift; done
-  shift || true
-  # Carry the agent command to the TARGET and run it there, so the fake claude
-  # on the far side is what proves the session was really resumed remotely.
+  shift 2
+  name="$1"; shift
+  case "$name" in
+    [a-z]*) ;;
+    *) echo "herdr: invalid agent name: $name" >&2; exit 2 ;;
+  esac
+  printf '%s' "$name" | grep -Eq '^[a-z][a-z0-9_-]*$' \
+    || { echo "herdr: invalid agent name: $name" >&2; exit 2; }
+  kind=""; got_pane=""
+  while [ $# -gt 0 ] && [ "$1" != "--" ]; do
+    case "$1" in
+      --kind) kind="$2"; shift 2 ;;
+      --pane) got_pane="$2"; shift 2 ;;
+      --timeout) shift 2 ;;
+      *) echo "herdr: unexpected argument $1" >&2; exit 2 ;;
+    esac
+  done
+  [ -n "$kind" ] || { echo "herdr: --kind is required" >&2; exit 2; }
+  [ "$got_pane" = "$pane" ] || { echo "herdr: no pane $got_pane" >&2; exit 2; }
+  [ "${1:-}" = "--" ] && shift
+  # Start the KIND's binary on the target with the remaining words as its
+  # arguments: exactly one `claude`, whatever the caller sent.
   exec /usr/bin/ssh -i "%KEY%" -o StrictHostKeyChecking=no \
       -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-      -p %PORT% %PRIMARY%@localhost "$@"
+      -p %PORT% %PRIMARY%@localhost "$kind" "$@"
 fi
 
-# Anything else (`agent get`, `--remote`) is a local read; succeed quietly.
 exit 0
 HERDR
 sed -i '' \
@@ -256,17 +291,18 @@ cat > "$work_real/hyper" <<'HYPERSTUB'
 #!/bin/sh
 printf '%s\n' "$*" >> "%HOMEDIR%/hyper-argv.log"
 if [ "$1" = "space" ] && [ "$2" = "clone" ]; then
-  name="$3"
-  # Where a real `hyper space clone` would put the space is the path the
-  # manifest records, remapped under the target HOME — not a guess from the
-  # name. The harness writes that mapping next to the home so the stub can
-  # honour it; without it the stub would create the space in the wrong place
-  # and the push that follows would fail for the stub's reasons, not warp's.
-  root=""
-  while read -r n p; do
-    [ "$n" = "$name" ] && root="$p"
-  done < "%HOMEDIR%/space-root-map"
-  [ -n "$root" ] || exit 3
+  shift 2
+  yes=""
+  while [ $# -gt 0 ] && [ "$1" != "--" ]; do
+    case "$1" in --yes) yes=1; shift ;; *) echo "stub: unexpected $1" >&2; exit 2 ;; esac
+  done
+  [ "${1:-}" = "--" ] && shift
+  name="$1"; root="$2"
+  # The real clone takes `<name> [path]` and, with a path, puts the space
+  # exactly there. Without one it would remap the manifest's path, which
+  # warp must never rely on: refuse, so the e2e fails if warp stops pinning.
+  [ -n "$name" ] && [ -n "$root" ] || { echo "stub: warp did not pin the path" >&2; exit 3; }
+  [ -n "$yes" ] || { echo "stub: --yes missing (no tty here)" >&2; exit 4; }
   mkdir -p "$root/worktrees"
   git init -q --bare "$root/.git"
   exit 0
@@ -479,10 +515,22 @@ owner="$(ssh_t12 "cat '$folder/$SESSION.warp.json'" | python3 -c 'import json,sy
 pass "ownership marker reached the target naming t12"
 
 # The resume really ran on the TARGET: the fake claude there recorded it.
+# EXACT line: the fake Herdr starts the kind's binary with the words after
+# `--` as its arguments, so `-- claude --resume x` would record
+# "claude --resume x" here (claude started as `claude claude --resume x`).
 claude_argv="$(ssh_t12 "cat '$home_local/claude-argv.log'")"
-printf '%s' "$claude_argv" | grep -q -- "--resume $SESSION" \
-  || die "claude was not resumed on the target with $SESSION: $claude_argv"
-pass "claude was resumed on the target through Herdr: $claude_argv"
+[ "$claude_argv" = "--resume $SESSION" ] \
+  || die "claude on the target got the wrong arguments: '$claude_argv' (want '--resume $SESSION')"
+pass "claude was resumed on the target through Herdr with exactly: $claude_argv"
+
+# The Herdr argv shape: a tab with no focus at the cwd, then agent start with
+# a lowercase name, --kind claude, the pane id from the tab's JSON, and only
+# claude's ARGUMENTS after `--`.
+grep -Eq "^--machine t12 tab create --cwd $proj --label warp-3d9c77a6-[a-z0-9]+ --no-focus\$" "$work_real/herdr-argv.log" \
+  || die "tab create argv is not what Herdr takes: $(cat "$work_real/herdr-argv.log")"
+grep -Eq "^--machine t12 agent start warp-3d9c77a6-[a-z0-9]+ --kind claude --pane w9:p3 -- --resume $SESSION\$" "$work_real/herdr-argv.log" \
+  || die "agent start argv is not what Herdr takes: $(cat "$work_real/herdr-argv.log")"
+pass "Herdr argv: tab create --cwd … --no-focus, then agent start <lowercase name> --kind claude --pane w9:p3 -- --resume <id>"
 
 # --------------------------------------------------------------------------
 echo "# ---------------------------------------------------------------"
@@ -603,6 +651,7 @@ git init -q --bare "$space/.git"
 git --git-dir="$space/.git" worktree add -q "$space/worktrees/$branch" -b "$branch" 2>/dev/null \
   || die "could not create a linked worktree (git too old for worktree add -b on an empty bare repo)"
 printf 'worktree file\n' > "$space/worktrees/$branch/code.txt"
+printf 'tracked, unchanged\n' > "$space/worktrees/$branch/stable.txt"
 mkdir -p "$space/worktrees/$branch/node_modules"
 printf 'excluded\n' > "$space/worktrees/$branch/node_modules/dep.js"
 # Commit INSIDE the worktree, not against the bare git dir with a --work-tree:
@@ -616,6 +665,10 @@ git -C "$space/worktrees/$branch" -c user.email=t@e -c user.name=t commit -qm "w
 # The worktree is a `.git` FILE, not a directory: assert it, because a
 # directory here would make this an ordinary repo and the space path untested.
 [ -f "$space/worktrees/$branch/.git" ] || die "the fixture is not a linked worktree"
+# Uncommitted work, which is what warp is for: a modified tracked file and an
+# untracked one. Both must show up in `git status` on the target.
+printf 'worktree file, modified\n' > "$space/worktrees/$branch/code.txt"
+printf 'untracked in the worktree\n' > "$space/worktrees/$branch/untracked-wt.txt"
 
 wt="$space/worktrees/$branch"
 make_session "$wt" >/dev/null
@@ -624,10 +677,9 @@ make_session "$wt" >/dev/null
 # exist — the probe would then (correctly) say "already there", skip the clone,
 # and leave the push with no bare repo to push into.
 
-# The path `hyper space clone` would recreate the space at on the target. The
-# stub reads it rather than guessing from the name.
-printf '%s %s\n' "$space_name" "$space" > "$home_local/space-root-map"
-ssh_t12 "printf '%s %s\\n' '$space_name' '$space' > '$home_local/space-root-map'"
+# The stub needs no map: warp passes the space root explicitly
+# (`hyper space clone --yes -- <name> <root>`), and the stub refuses a call
+# without it.
 
 # A hosting remote for the PROJECT, which a warp must never touch.
 git init -q --bare "$work_real/space-origin.git"
@@ -643,9 +695,9 @@ out="$(run_hyper "$wt" warp t12 2>&1)"; code=$?
 set -e
 [ "$code" = 0 ] || die "warping a space worktree (missing on target) failed: exit $code: $out"
 stub_argv="$(ssh_t12 "cat '$home_local/hyper-argv.log'" 2>/dev/null || true)"
-printf '%s' "$stub_argv" | grep -q "^space clone $space_name --yes$" \
-  || die "the target's hyper was not asked to clone the space; got: ${stub_argv:-<nothing>}"
-pass "a space missing on the target is cloned there, with --yes (stub saw: $stub_argv)"
+[ "$stub_argv" = "space clone --yes -- $space_name $space" ] \
+  || die "the target's hyper was not asked to clone the space at its pinned path; got: ${stub_argv:-<nothing>}"
+pass "a space missing on the target is cloned there at its pinned path, with --yes (stub saw: $stub_argv)"
 
 # The push landed in the TARGET's bare repo, through the explicit ssh:// URL.
 ssh_t12 "git --git-dir='$space/.git' rev-parse --verify 'refs/heads/$branch'" >/dev/null 2>&1 \
@@ -656,17 +708,37 @@ local_sha="$(git --git-dir="$space/.git" rev-parse "refs/heads/$branch")"
 pass "the worktree branch arrived in the target's bare repo ($remote_sha)"
 
 # The worktree's files arrived, and its excluded ones did not.
-[ "$(ssh_t12 "cat '$wt/code.txt'")" = "worktree file" ] || die "worktree files did not arrive"
+[ "$(ssh_t12 "cat '$wt/code.txt'")" = "worktree file, modified" ] || die "worktree files did not arrive (or arrived unmodified)"
+[ "$(ssh_t12 "cat '$wt/untracked-wt.txt'")" = "untracked in the worktree" ] || die "the untracked worktree file did not arrive"
 ssh_t12 "test -e '$wt/node_modules'" && die "node_modules was copied despite the exclusion list"
 pass "space-worktree files arrived with the exclusions applied"
+
+# Blocker 3: the warped worktree is a WORKING git worktree on the target.
+status_target="$(ssh_t12 "git -C '$wt' status --porcelain" 2>&1)" \
+  || die "git status fails in the warped worktree on the target: $status_target"
+printf '%s\n' "$status_target" | grep -qx ' M code.txt' \
+  || die "git status on the target does not show code.txt modified: $status_target"
+printf '%s\n' "$status_target" | grep -qx '?? untracked-wt.txt' \
+  || die "git status on the target does not show untracked-wt.txt: $status_target"
+printf '%s\n' "$status_target" | grep -q 'stable.txt' \
+  && die "git status on the target reports an unchanged file: $status_target"
+[ "$(ssh_t12 "git -C '$wt' rev-parse --abbrev-ref HEAD")" = "$branch" ] \
+  || die "the target worktree is not on $branch"
+pass "git status works in the warped worktree on the target and shows ' M code.txt' and '?? untracked-wt.txt' (on $branch)"
 
 # --- case B: the space is ALREADY there ------------------------------------
 # cd26ebb9's fix: the clone is conditional on the probe, not eager. With the
 # space present, `hyper` on the target must NOT be called at all.
 ssh_t12 "rm -f '$home_local/hyper-argv.log'"
 printf 'second run\n' > "$wt/second.txt"
+# A NEW commit, so the push really has to move a branch that is checked out in
+# the target's registered worktree (receive-pack refuses that by default).
+printf 'committed between warps\n' > "$wt/between.txt"
+git -C "$wt" add between.txt
+git -C "$wt" -c user.email=t@e -c user.name=t commit -qm "between warps"
+# The marker names t12 after case A, so this re-warp needs --force (blocker 2).
 set +e
-out="$(run_hyper "$wt" warp t12 2>&1)"; code=$?
+out="$(run_hyper "$wt" warp t12 --force 2>&1)"; code=$?
 set -e
 [ "$code" = 0 ] || die "warping a space worktree (present on target) failed: exit $code: $out"
 stub_argv="$(ssh_t12 "cat '$home_local/hyper-argv.log'" 2>/dev/null || true)"
@@ -676,11 +748,186 @@ pass "with the space already on the target, hyper is NOT called (nothing in its 
 [ "$(ssh_t12 "cat '$wt/second.txt'")" = "second run" ] || die "the second run copied nothing"
 pass "the conditional warp still copied the new worktree file"
 
+[ "$(ssh_t12 "git --git-dir='$space/.git' rev-parse 'refs/heads/$branch'")" = "$(git -C "$wt" rev-parse HEAD)" ] \
+  || die "the re-warp did not move the checked-out branch on the target"
+status_target="$(ssh_t12 "git -C '$wt' status --porcelain" 2>&1)" || die "git status fails after the re-warp: $status_target"
+printf '%s\n' "$status_target" | grep -q 'between.txt' \
+  && die "the target's index was not reset to the new commit: $status_target"
+pass "a re-warp moved the branch checked out in the target's worktree, and its index follows HEAD"
+
 # AC-12 on the project's own hosting remote.
 space_origin_after="$(git --git-dir="$space/.git" ls-remote origin)"
 [ "$space_origin_before" = "$space_origin_after" ] \
   || die "AC-12: a warp changed the project's hosting remote"
 pass "AC-12 the project's git ls-remote origin is unchanged by the space-worktree warp"
+
+# --------------------------------------------------------------------------
+# oclif wraps an error at ~80 columns behind a " ›   " gutter, splitting
+# paths and sentences anywhere. Undo that before grepping a long phrase.
+flat() { printf '%s\n' "$1" | LC_ALL=C sed -e 's/^ › \{3\}//' | tr -d '\n'; }
+
+# Helpers for the "nothing changed" cases.
+# A live session THIS script starts, registered the way Claude Code does, so
+# the refusal can be shown to happen before `--stop` signals it.
+start_live() {
+  local cwd_for="$1"
+  sleep 300 &
+  live_pid=$!
+  local proc_start
+  proc_start="$(LC_ALL=C TZ=UTC ps -o lstart= -p "$live_pid" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  cat > "$home_local/.claude/sessions/$live_pid.json" <<SESSIONJSON
+{"pid":$live_pid,"cwd":"$cwd_for","sessionId":"$SESSION","startedAt":$(date +%s000),
+ "procStart":$(printf '%s' "$proc_start" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'),
+ "version":"2.1.288","entrypoint":"cli"}
+SESSIONJSON
+}
+stop_live() { kill -9 "$live_pid" 2>/dev/null || true; wait "$live_pid" 2>/dev/null || true; rm -f "$home_local/.claude/sessions/$live_pid.json"; }
+
+# Make a linked worktree of `$1` (a space) on branch `$2`, with a commit.
+make_worktree() {
+  local sp="$1" br="$2" base="${3:-}"
+  if [ -n "$base" ]; then
+    git --git-dir="$sp/.git" worktree add -q "$sp/worktrees/$br" -b "$br" "$base"
+  else
+    git --git-dir="$sp/.git" worktree add -q "$sp/worktrees/$br" -b "$br" 2>/dev/null
+  fi
+  printf '%s\n' "$br" > "$sp/worktrees/$br/$br.txt"
+  git -C "$sp/worktrees/$br" add -A
+  git -C "$sp/worktrees/$br" -c user.email=t@e -c user.name=t commit -qm "$br"
+}
+
+echo "# ---------------------------------------------------------------"
+echo "# 10. AC-16 for a space ON the target: unwritable worktrees/, refused first"
+echo "# ---------------------------------------------------------------"
+# Blocker 1 as the review reproduced it: the space is already on the target
+# and its worktrees/ dir is not writable. With --stop and a live session, the
+# refusal must come before the stop, the marker, any copy and the push.
+wt2="$space/worktrees/feat-two"
+make_worktree "$space" feat-two "$branch"
+folder_wt2="$(make_session "$wt2")"
+start_live "$wt2"
+sha_before="$(ssh_t12 "git --git-dir='$space/.git' rev-parse 'refs/heads/$branch'")"
+lines_before_local="$(wc -l < "$folder_wt2/$SESSION.jsonl" | tr -d ' ')"
+pexec "chmod 0500 '$space/worktrees'"
+set +e
+out="$(run_hyper "$wt2" warp t12 --stop 2>&1)"; code=$?
+set -e
+pexec "chmod 0755 '$space/worktrees'"
+[ "$code" = 2 ] || { stop_live; die "expected exit 2 for an unwritable worktrees/, got $code: $out"; }
+flat "$out" | grep -q "$space/worktrees exists on t12 but isn't writable" \
+  || { stop_live; die "the refusal does not name the unwritable worktrees/ dir: $out"; }
+flat "$out" | grep -q "Nothing was changed on either machine" \
+  || { stop_live; die "the refusal does not say nothing changed: $out"; }
+kill -0 "$live_pid" 2>/dev/null || die "the live session was stopped by a warp that refused"
+[ -e "$folder_wt2/$SESSION.warp.json" ] && { stop_live; die "a marker was written by a warp that refused"; }
+[ "$(wc -l < "$folder_wt2/$SESSION.jsonl" | tr -d ' ')" = "$lines_before_local" ] || { stop_live; die "the local transcript changed"; }
+[ "$(ssh_t12 "git --git-dir='$space/.git' rev-parse 'refs/heads/$branch'")" = "$sha_before" ] \
+  || { stop_live; die "the target's $branch moved"; }
+ssh_t12 "git --git-dir='$space/.git' rev-parse --verify -q refs/heads/feat-two" >/dev/null \
+  && { stop_live; die "feat-two was pushed by a warp that refused"; }
+[ -z "$(ssh_t12 "ls -A '$folder_wt2'")" ] || { stop_live; die "the transcript or marker reached the target"; }
+ssh_t12 "test -e '$wt2'" && { stop_live; die "the worktree reached the target"; }
+stop_live
+pass "AC-16 space on target, worktrees/ unwritable: exit 2 before --stop signalled pid, no marker, $branch still $sha_before, no feat-two, no transcript, no files"
+
+echo "# ---------------------------------------------------------------"
+echo "# 11. AC-16 for a space MISSING on the target: unwritable ancestor"
+echo "# ---------------------------------------------------------------"
+locked2="$home_local/work/locked2"
+space2="$locked2/spaces/research2"
+mkdir -p "$space2/worktrees"
+git init -q --bare "$space2/.git"
+make_worktree "$space2" main
+wt3="$space2/worktrees/main"
+folder_wt3="$(make_session "$wt3")"
+target_mkdir "$locked2"
+pexec "chmod 0500 '$locked2'"
+ssh_t12 "rm -f '$home_local/hyper-argv.log'"
+start_live "$wt3"
+set +e
+out="$(run_hyper "$wt3" warp t12 --stop 2>&1)"; code=$?
+set -e
+pexec "chmod 0755 '$locked2'"
+[ "$code" = 2 ] || { stop_live; die "expected exit 2 for an unwritable ancestor, got $code: $out"; }
+flat "$out" | grep -q "$space2 can be created" || { stop_live; die "the refusal does not name the space: $out"; }
+flat "$out" | grep -q "t12 said: $locked2)" || { stop_live; die "the refusal does not name the unwritable ancestor: $out"; }
+kill -0 "$live_pid" 2>/dev/null || die "the live session was stopped by a warp that refused"
+[ -e "$folder_wt3/$SESSION.warp.json" ] && { stop_live; die "a marker was written by a warp that refused"; }
+[ -z "$(ssh_t12 "cat '$home_local/hyper-argv.log' 2>/dev/null")" ] || { stop_live; die "hyper space clone ran on the target"; }
+[ -z "$(ssh_t12 "ls -A '$locked2'")" ] || { stop_live; die "something was created under $locked2 on the target"; }
+[ -z "$(ssh_t12 "ls -A '$folder_wt3'")" ] || { stop_live; die "the transcript reached the target"; }
+stop_live
+pass "AC-16 space missing, nearest ancestor $locked2 unwritable: exit 2 before --stop signalled pid, no clone, no marker, nothing on the target"
+
+echo "# ---------------------------------------------------------------"
+echo "# 12. re-warp to the machine that owns the session (blocker 2)"
+echo "# ---------------------------------------------------------------"
+# $proj was warped to t12 in step 4; its marker names t12. Work continues THERE.
+other_id="11111111-2222-4333-8444-555555555555"
+ssh_t12 "printf '%s\n' '{\"type\":\"assistant\",\"cwd\":\"$proj\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"written on t12\"}]}}' >> '$folder/$SESSION.jsonl'"
+ssh_t12 "printf 'edited on t12\n' > '$proj/tracked.txt'"
+ssh_t12 "printf 'another session, only on t12\n' > '$folder/$other_id.jsonl'"
+printf 'another session, this machine\n' > "$folder/$other_id.jsonl"
+touch -t 200001010000 "$folder/$other_id.jsonl"
+target_lines="$(ssh_t12 "wc -l < '$folder/$SESSION.jsonl' | tr -d ' '")"
+set +e
+out="$(run_hyper "$proj" warp t12 --session "$SESSION" 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "a re-warp to the owner was not refused: exit $code: $out"
+flat "$out" | grep -q "lives on t12 now" || die "the refusal does not say where the session lives: $out"
+flat "$out" | grep -q -- "--force to overwrite t12's copy with this machine's" || die "the refusal does not offer --force: $out"
+[ "$(ssh_t12 "wc -l < '$folder/$SESSION.jsonl' | tr -d ' '")" = "$target_lines" ] || die "the target's transcript changed"
+ssh_t12 "tail -n 1 '$folder/$SESSION.jsonl'" | grep -q "written on t12" || die "the target's newest transcript line is gone"
+[ "$(ssh_t12 "cat '$proj/tracked.txt'")" = "edited on t12" ] || die "the target's edit was overwritten"
+pass "re-warp to the owner refused without --force; t12 keeps its $target_lines-line transcript (newest line 'written on t12') and its edit"
+
+run_hyper "$proj" warp t12 --session "$SESSION" --force >/dev/null || die "--force did not proceed"
+[ "$(ssh_t12 "cat '$folder/$other_id.jsonl'")" = "another session, only on t12" ] \
+  || die "the warp overwrote ANOTHER session's transcript on the target"
+pass "with --force only this session's files travel: another session's transcript on t12 is untouched"
+
+echo "# ---------------------------------------------------------------"
+echo "# 13. a partial copy: truthful message, marker kept (HIGH 5, HIGH 7)"
+echo "# ---------------------------------------------------------------"
+proj5="$home_local/work/proj5"
+mkdir -p "$proj5/sub"
+printf 'top\n' > "$proj5/top.txt"
+printf 'in sub\n' > "$proj5/sub/a.txt"
+folder5="$(make_session "$proj5")"
+target_mkdir "$proj5"
+# A root-owned sub/ on the target: the user can't write there, so rsync
+# delivers top.txt and fails on sub/ (exit 23, partial transfer).
+pexec "mkdir -p '$proj5/sub' && chown root '$proj5/sub' && chmod 0755 '$proj5/sub'"
+set +e
+out="$(run_hyper "$proj5" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "a partial copy did not fail: exit $code: $out"
+flat "$out" | grep -q "PARTIAL transfer" || die "the message does not say the transfer was partial: $out"
+flat "$out" | grep -q "What may now be on t12:.*the transcript $folder5/$SESSION.jsonl.*possibly part of files under $proj5" \
+  || die "the message does not list what may have arrived: $out"
+flat "$out" | grep -q "nothing needs undoing" && die "the message still claims nothing needs undoing: $out"
+owner5="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["owner"])' "$folder5/$SESSION.warp.json")"
+[ "$owner5" = "t12" ] || die "the marker was restored after files had been copied (owner $owner5)"
+[ "$(ssh_t12 "cat '$proj5/top.txt'")" = "top" ] || die "the fixture did not partially copy"
+pass "a partial copy (rsync 23) exits 2, lists what may be on t12, keeps the marker naming t12"
+
+echo "# ---------------------------------------------------------------"
+echo "# 14. a cwd the remote path rule refuses is refused at planning (HIGH 6)"
+echo "# ---------------------------------------------------------------"
+spaced="$home_local/work/my proj"
+mkdir -p "$spaced"
+folder_spaced="$(make_session "$spaced")"
+target_mkdir "$spaced"
+for mode in --dry-run ""; do
+  set +e
+  out="$(run_hyper "$spaced" warp t12 $mode 2>&1)"; code=$?
+  set -e
+  [ "$code" = 2 ] || die "a cwd with a space was not refused (${mode:-real run}): exit $code: $out"
+  flat "$out" | grep -q "can't be sent to t12" || die "the refusal does not explain the path rule: $out"
+done
+[ -e "$folder_spaced/$SESSION.warp.json" ] && die "a marker was written for a cwd that can't be sent"
+[ -z "$(ssh_t12 "ls -A '$folder_spaced'")" ] || die "the transcript reached the target"
+pass "a cwd with a space is refused at planning, by --dry-run and by a real run alike, before any marker or copy"
 
 echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
