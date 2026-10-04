@@ -62,6 +62,29 @@ const RETRY_MS = 50;
 /** A guard or lock file with no readable owner yet is given this long to be written. */
 const UNWRITTEN_GRACE_MS = 5_000;
 
+/** Why a write failed when the cause is the place, not hyper: errno to words. */
+const UNWRITABLE: Record<string, string> = {
+	EACCES: "permission denied",
+	EPERM: "operation not permitted",
+	EROFS: "the file system is read-only",
+	ENOSPC: "the disk is full",
+	EDQUOT: "the disk quota is exceeded",
+};
+
+/**
+ * A one-line error for a write into a space git dir that the file system
+ * refused (permissions, read-only mount, full disk), or the original error
+ * when it is anything else. Used for the lock, the session-end payload and
+ * the session-end log, so none of them surfaces a raw `EACCES: …, open …`.
+ */
+export function spaceGitDirWriteError(gitDir: string, what: string, error: unknown): unknown {
+	const why = UNWRITABLE[(error as NodeJS.ErrnoException | undefined)?.code ?? ""];
+	if (why === undefined) return error;
+	return new SpaceGitError(
+		`I can't write to the space git dir ${quoteForTerminal(gitDir)} (${why}), so I did not ${escapeControlCharacters(what)}; nothing was changed. Check that directory's owner, permissions and free space.`,
+	);
+}
+
 export class SpaceLockTimeoutError extends SpaceGitError {
 	constructor(detail: string) {
 		super(detail);
@@ -335,10 +358,22 @@ export function withSpaceLock<T>(
 	let holder: LockOwner | null = null;
 	for (;;) {
 		me.started = Date.now();
-		if (createExclusive(path, `${JSON.stringify(me)}\n`)) break;
+		let created: boolean;
+		try {
+			created = createExclusive(path, `${JSON.stringify(me)}\n`);
+		} catch (error) {
+			throw spaceGitDirWriteError(gitDir, what, error);
+		}
+		if (created) break;
 		holder = readOwner(path);
 		const reason = staleReason(path, holder);
-		if (reason !== null && takeOver(gitDir, path, holder)) {
+		let tookOver = false;
+		try {
+			tookOver = reason !== null && takeOver(gitDir, path, holder);
+		} catch (error) {
+			throw spaceGitDirWriteError(gitDir, what, error);
+		}
+		if (tookOver) {
 			note(`hyperdrive: took over a stale space lock at ${quoteForTerminal(path)}: ${reason}.`);
 			continue;
 		}

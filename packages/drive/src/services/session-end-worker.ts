@@ -31,6 +31,7 @@ import { isIgnoredSessionEnd, readSessionEndInput, sessionEndMessage } from "#se
 import { appendSessionEndLog, type SessionEndLogEntry } from "#services/session-end-log";
 import { readCadence, spaceGitDir } from "#services/space-git";
 import { requireInitializedSpace, spaceRemote } from "#services/space-history";
+import { spaceGitDirWriteError } from "#services/space-lock";
 import { commitSpace, pushSpaceBounded, SESSION_END_PUSH_TIMEOUT_MS } from "#services/space-sync";
 
 export const SESSION_END_PAYLOAD_PREFIX = "session-end-payload.";
@@ -121,8 +122,13 @@ export async function runSessionEndWorker(
 	} catch (error) {
 		unread = `I couldn't read the SessionEnd payload: ${message(error)}`;
 	}
-	// Removed whatever happened above, so it can never be committed twice.
-	rmSync(payloadPath, { force: true });
+	// Removed whatever happened above, so it can never be committed twice. A
+	// git dir that refuses the removal gets the one friendly line.
+	try {
+		rmSync(payloadPath, { force: true });
+	} catch (error) {
+		throw spaceGitDirWriteError(gitDir, "remove the session-end payload", error);
+	}
 	sweepPayloads(gitDir);
 	if (raw === null)
 		return appendSessionEndLog(gitDir, { session: "-", outcome, detail: unread ?? "" });
