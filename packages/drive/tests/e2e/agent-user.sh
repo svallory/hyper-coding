@@ -38,14 +38,20 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # e2e -> tests -> drive -> packages, so the CLI is three levels up.
 cli="$here/../../../cli/bin/run.js"
 image="debian:13"
-container="hyper-fm-machine-t16"
-port=23322
+# Overridable so the suite runner (run.sh) can give each run a free port and a
+# unique container name on a shared machine; the defaults are the T-16 names.
+container="${AGENT_USER_E2E_CONTAINER:-hyper-fm-machine-t16}"
+port="${AGENT_USER_E2E_PORT:-23322}"
 primary="svallory"
 agent="agent"
 
 step=0
 pass() { step=$((step + 1)); printf 'ok %d - %s\n' "$step" "$1"; }
 die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
+
+# shasum is a perl script (macOS ships it; minimal Linux may not) — fall back
+# to coreutils sha256sum. Both print the same hex, so the recipe tag is stable.
+sha12() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sha256sum "$@"; fi | cut -c1-12; }
 
 [ -f "$cli" ] || { echo "# cannot find the CLI at $cli — build packages/cli first" >&2; exit 1; }
 
@@ -96,7 +102,7 @@ STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
 CONTAINERFILE
 
-recipe="$(shasum -a 256 "$containerfile" | cut -c1-12)"
+recipe="$(sha12 "$containerfile")"
 derived="hyper-t16-e2e:$recipe"
 if ! podman image exists "$derived"; then
   echo "# building $derived from $image (systemd + sshd + the acl/inotify packages)"
@@ -108,12 +114,17 @@ fi
 # --------------------------------------------------------------------------
 # The machine
 # --------------------------------------------------------------------------
-if ! podman machine list --format '{{.Running}}' | grep -q true; then
-  echo "# starting the podman machine"
-  podman machine start >/dev/null
+# Start the podman VM when this platform has one (macOS/Windows). On Linux
+# `podman machine` is unsupported and exits non-zero; podman is native there.
+if podman machine list --format '{{.Running}}' >/dev/null 2>&1; then
+  if ! podman machine list --format '{{.Running}}' | grep -q true; then
+    echo "# starting the podman machine"
+    podman machine start >/dev/null
+  fi
 fi
 
 # Refuse a name collision rather than remove a container this run did not start.
+# run.sh passes a run-unique name via AGENT_USER_E2E_CONTAINER.
 podman run -d --name "$container" --systemd=always -p "$port":22 "$derived" /sbin/init >/dev/null
 started=1
 echo "# started $container"
