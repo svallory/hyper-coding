@@ -136,18 +136,20 @@ user's to give for one exact path, never yours to add.
 **Cadence.** `hyper.cadence` in the space git dir is the truth:
 `manual` (you run `hyper space commit` and `hyper space push`),
 `session-end` (each Claude or pi session end commits locally),
-`session-end+push` (commits and pushes). The SessionEnd hook and the pi
-extension both return at once — a detached worker does the commit and push, so a slow network
-never holds the session. A failed save shows up in `hyper space status`,
+`session-end+push` (commits and pushes). In both, a detached worker does
+the commit and push, so a slow network never holds the session. The Claude
+SessionEnd hook returns at once; the pi extension first waits for one
+read-only CLI call (below). A failed save shows up in `hyper space status`,
 not in the session.
 
 Pi sessions are saved by the hyperdrive pi extension
 (`packages/drive/pi`, `pi install <path>`): on `session_shutdown` with reason
-`quit` it asks the CLI which space this is and what its cadence is, asks
-the CLI which space this is (one read-only call, a few hundred milliseconds
-and bounded at 2 s), writes the payload and starts the same detached worker,
-so a pi session end commits locally (and pushes for `session-end+push`) while
-pi waits for that one call.
+`quit` it asks the CLI which space this is and what its cadence is (one
+read-only call, measured at 200 to 700 ms, killed at 5 s), writes the payload
+and starts the same detached worker, so a pi session end commits locally (and
+pushes for `session-end+push`) while pi waits only for that one call. A call
+that overruns 5 s saves nothing and leaves a `failed` "probe timed out" line
+that `hyper space status` shows.
 `/new`, `/resume`, `/fork` and `/reload` are session replacement and save
 nothing, like `/clear` and resume. For pi the commit subject is the session
 name, or the first line of the first prompt — prompt text lands in the

@@ -49,7 +49,7 @@ this handler with no timeout, so every step is bounded:
    file, and that absolute path is what gets spawned (`bin/` is synced space
    content, so a space must not choose what runs at its sessions' end);
 2. run `hyper space detect --json` once, in the session's directory, killed
-   after 2 s. Its answer — root, git dir, cadence — is the only source of
+   after 5 s. Its answer — root, git dir, cadence — is the only source of
    truth for "is this a space" and "when does it save";
 3. write the payload to the git dir the CLI named, as
    `.hyper/space.git/session-end-payload.*`;
@@ -58,9 +58,15 @@ this handler with no timeout, so every step is bounded:
    return.
 
 **Measured**: one quit in a space took 392 ms and one outside a space 198 ms
-on the author's machine, all of it the probe. The bound is 2 s, and hitting it
-saves nothing. With `manual`, or outside a space, the probe still runs (that is
-how the extension knows) and nothing is saved.
+on the author's machine, all of it the probe; a review measured 200 to 700 ms,
+and a cold CLI start alone 0.95 s (over 2 s under load). The bound is 5 s, and
+hitting it saves nothing. It is not silent, though: when an ancestor of the
+session's directory holds `.hyper/space.git`, the extension appends one
+`failed` line, `probe timed out`, to that directory's `session-end.log` (the
+worker's own format), so `hyper space status` shows the save that did not
+happen. It prints nothing and starts nothing. Outside a space a timed-out probe
+writes nothing anywhere. With `manual`, or outside a space, the probe still
+runs (that is how the extension knows) and nothing is saved.
 
 ### Every line it can print
 
@@ -74,7 +80,10 @@ At most one, and only in these four cases:
 | `hyperdrive: the hyper CLI is not installed; nothing was saved` (from the worker spawn) | the resolved binary disappeared between the probe and the spawn |
 
 Everything else is silent: no space, an uninitialised space, `manual`, a CLI
-that fails, prints garbage, or overruns the bound.
+that fails, prints garbage, or overruns the bound (that last one is logged, as
+above, but not printed). A CLI so old that `space detect` has no `--json` flag
+prints nothing on stdout, so it is silent too: it does not get the outdated-CLI
+line, which needs a JSON answer with a root and no `spaceGitDir` field.
 
 The detached worker — `packages/drive/src/services/session-end-worker.ts`, the
 same one the Claude hook starts — takes the space lock, commits, pushes for
@@ -90,11 +99,12 @@ in the space's hyperdrive history.
 
 A session started with a custom `pi --session-id` that is not a UUID cannot be
 recorded: the CLI requires a UUID `session_id` and refuses the payload, which
-`hyper space status` then reports as a failed session end. The commit subject is `session: <summary>`
-and the message ends with `Pi-Session: <session id>`.
+`hyper space status` then reports as a failed session end. The commit subject
+is `session: <summary>` and the message ends with `Pi-Session: <session id>`.
 
-The extension never throws into pi, prints at most one line (a missing `hyper`
-CLI, or a payload it could not write), and never spawns `git`, `ssh`, `rsync`
+The extension never throws into pi, prints at most one line (one of the table
+above), writes nothing in a space but the payload or the timed-out line, and
+never spawns `git`, `ssh`, `rsync`
 or `scp` itself: every space operation goes through the `hyper` CLI.
 
 `hyper machine setup` and `hyper drive sync-config` do **not** install this

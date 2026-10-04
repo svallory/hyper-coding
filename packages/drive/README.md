@@ -47,16 +47,18 @@ A failed save shows in `hyper space status`.
 Pi sessions get the same save from the extension in `packages/drive/pi`
 (`pi install "$PWD/node_modules/@hypercli/drive/pi"`): when a pi session
 quits, it asks the CLI which space it is in and what that space's cadence is —
-one read-only call, a few hundred milliseconds, bounded at 2 s — then writes
+one read-only call, measured at 200 to 700 ms, killed at 5 s — then writes
 the payload and starts the same detached worker, so the session end commits
-locally, and pushes for `session-end+push`, while pi waits for that one call. The commit subject
-is the session name, or the first line of the first prompt, so prompt text
-lands in the space's history. `/new`, `/resume`, `/fork` and `/reload` do not
-end the work and save nothing; with `manual`, or with the extension not
-installed, a pi session is saved with `hyper space commit` by hand. The probe
-runs on every quit either way — that is how the extension knows — and with no
-saving space it saves nothing and prints nothing. From the
-npm package the directory is `node_modules/@hypercli/drive/pi`.
+locally, and pushes for `session-end+push`, while pi waits only for that one
+call. A call that overruns 5 s saves nothing and leaves a `failed` "probe
+timed out" line that `hyper space status` shows. The commit subject is the
+session name, or the first line of the first prompt, so prompt text lands in
+the space's history. `/new`, `/resume`, `/fork` and `/reload` do not end the
+work and save nothing; with `manual`, or with the extension not installed, a
+pi session is saved with `hyper space commit` by hand. The probe runs on every
+quit either way — that is how the extension knows — and with no saving space
+it saves nothing and prints nothing. From the npm package the directory is
+`node_modules/@hypercli/drive/pi`.
 
 `hyper space detect --json` also reports a space's `spaceGitDir` and its
 `cadence`, which is how a caller that may not run commands in a space learns
