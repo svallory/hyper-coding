@@ -19,7 +19,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderGitignore } from "#services/allowlist";
 import { initSpaceGitDir, spaceGit } from "#services/space-git";
 import { commitSpace } from "#services/space-sync";
@@ -129,8 +129,28 @@ let spaceNotes: string;
 beforeEach(() => {
 	directory = mkdtempSync(join(tmpdir(), "hyper-pi-session-end-"));
 	spaceNotes = "/spaces/outer/notes";
+	// The real-CLI test commits in this process, through the real git, so it
+	// must never read the developer's identity, HOME or global git config: on a
+	// machine without them the suite would either fail or, worse, commit as
+	// whoever happens to be logged in. Same isolation tests/session-end.test.ts
+	// uses, and the same one CI has.
+	for (const [key, value] of Object.entries({
+		HOME: join(directory, "home"),
+		HYPER_HOME: join(directory, "hyper"),
+		HYPER_DRIVE_CONFIG: join(directory, "drive.toml"),
+		XDG_CONFIG_HOME: join(directory, "config"),
+		GIT_CONFIG_GLOBAL: "/dev/null",
+		GIT_CONFIG_NOSYSTEM: "1",
+		GIT_AUTHOR_NAME: "pi e2e",
+		GIT_AUTHOR_EMAIL: "pi-e2e@example.invalid",
+		GIT_COMMITTER_NAME: "pi e2e",
+		GIT_COMMITTER_EMAIL: "pi-e2e@example.invalid",
+	}))
+		vi.stubEnv(key, value);
+	mkdirSync(process.env.HOME!, { recursive: true });
 });
 afterEach(() => {
+	vi.unstubAllEnvs();
 	rmSync(directory, { recursive: true, force: true });
 });
 
@@ -546,6 +566,8 @@ describe("against the real built CLI, in a throwaway space", () => {
 		const env = {
 			...process.env,
 			PATH: `${bin}${delimiter}${process.env.PATH}`,
+			// The stubbed, isolated environment of this file's beforeEach, so
+			// the CLI subprocess commits with the same throwaway identity.
 			HOME: join(fix, "home"),
 			HYPER_HOME: join(fix, "hyper"),
 			HYPER_DRIVE_CONFIG: join(fix, "drive.toml"),
