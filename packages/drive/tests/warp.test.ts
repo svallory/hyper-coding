@@ -23,6 +23,7 @@ import {
 	findStrayMarker,
 	listPaths,
 	MarkerConflictError,
+	manifestHasSpace,
 	PANE_PLACEHOLDER,
 	type ProbeId,
 	planWarp,
@@ -129,6 +130,7 @@ function inputs(overrides: Partial<WarpInputs> = {}): WarpInputs {
 		strayMarker: null,
 		cwdKind: "plain-dir",
 		space: null,
+		spaceInManifest: { ok: true },
 		excludes: ["node_modules"],
 		trackedUnderExcludes: [],
 		syncSession: null,
@@ -1382,6 +1384,81 @@ describe("tracked files under excluded directories (review 2, item 4)", () => {
 			).toEqual(["node_modules", "dist"]);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("a space missing on the target must be in the manifest (review 2, item 5)", () => {
+	it("refuses in the probe block, before any change, when it is not", async () => {
+		const plan = spacePlan({
+			stop: true,
+			live: [LIVE],
+			spaceInManifest: {
+				ok: false,
+				reason: 'no space named "research" in this machine\'s checkout',
+			},
+		});
+		const run = fakeTarget(plan, { probes: { space: 1 } });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.step.summary).toContain("hyperdrive manifest");
+		expect(result.failure?.detail).toContain("isn't in your hyperdrive manifest");
+		expect(result.failure?.detail).toContain("hyper space init");
+		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+		expect(run.ssh.some((argv) => argv[0] === "hyper")).toBe(false);
+	});
+
+	it("does not care when the space is already on the target", async () => {
+		const plan = spacePlan({ spaceInManifest: { ok: false, reason: "x" } });
+		const run = fakeTarget(plan, { probes: { worktree: 1 } });
+		expect((await executeWarp(plan, run.deps)).failure).toBeUndefined();
+	});
+
+	it("says in the plan that the manifest is read locally, without a fetch", () => {
+		expect(spacePlan().notes.join("\n")).toContain(
+			"in this machine's checkout as it is (no fetch)",
+		);
+		expect(describeWarp(spacePlan()).lines.join("\n")).toContain("nothing is fetched");
+	});
+
+	it("finds a space in a local checkout, and only that space", () => {
+		const home = mkdtempSync(join(tmpdir(), "warp-manifest-"));
+		const saved = { HYPER_HOME: process.env.HYPER_HOME, HOME: process.env.HOME };
+		try {
+			spawnSync("mkdir", ["-p", join(home, "drive/.git")]);
+			writeFileSync(
+				join(home, "drive/spaces.yaml"),
+				'spaces:\n  - name: research\n    group: null\n    branch: research\n    path: /x/research\n    layout: bare\n    repos: []\n    cadence: ""\n    tracked: []\n    public: []\n',
+			);
+			process.env.HYPER_HOME = home;
+			process.env.HOME = home;
+			expect(manifestHasSpace("research")).toEqual({ ok: true });
+			expect(manifestHasSpace("other")).toEqual({
+				ok: false,
+				reason: 'no space named "other" in this machine\'s checkout',
+			});
+		} finally {
+			for (const [key, value] of Object.entries(saved)) {
+				if (value === undefined) delete process.env[key];
+				else process.env[key] = value;
+			}
+			rmSync(home, { recursive: true, force: true });
+		}
+	});
+
+	it("reads an unreadable checkout as a no, with the reason", () => {
+		const home = mkdtempSync(join(tmpdir(), "warp-manifest-"));
+		const saved = { HYPER_HOME: process.env.HYPER_HOME, HOME: process.env.HOME };
+		try {
+			process.env.HYPER_HOME = home;
+			process.env.HOME = home;
+			const answer = manifestHasSpace("research");
+			expect(answer.ok).toBe(false);
+		} finally {
+			for (const [key, value] of Object.entries(saved)) {
+				if (value === undefined) delete process.env[key];
+				else process.env[key] = value;
+			}
+			rmSync(home, { recursive: true, force: true });
 		}
 	});
 });

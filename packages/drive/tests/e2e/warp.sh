@@ -40,6 +40,7 @@
 #  14.  a cwd with a space is refused at planning, dry run and real run alike
 #  15.  uncommitted work in the target's worktree or repo is refused without
 #       --force (files and index intact); --force stashes a worktree's first
+#  16.  a missing space that is not in the local manifest is refused first
 #  and the Herdr argv shape (`-- --resume <id>`, pane id from the tab JSON).
 #
 # The fake `herdr` models Herdr: it records argv, answers `tab create` with the
@@ -345,6 +346,16 @@ export LC_ALL=C LANG=C NO_COLOR=1
 # hyper's view of the machine
 # --------------------------------------------------------------------------
 mkdir -p "$work_real/hyper-home" "$work_real/xdg-empty"
+# A local hyperdrive checkout whose manifest lists the spaces this script
+# warps while they are missing on the target: warp checks that locally (no
+# fetch) before it lets the target clone. research3 is deliberately absent.
+mkdir -p "$work_real/hyper-home/drive/.git"
+{
+  echo "spaces:"
+  for name in research research2; do
+    printf '  - name: %s\n    group: null\n    branch: %s\n    path: /x/%s\n    layout: bare\n    repos: []\n    cadence: ""\n    tracked: []\n    public: []\n' "$name" "$name" "$name"
+  done
+} > "$work_real/hyper-home/drive/spaces.yaml"
 cat > "$work_real/drive.toml" <<TOML
 remote = "git@example.invalid:hyperdrive.git"
 
@@ -975,6 +986,27 @@ pass "a dirty plain git repo on the target is refused without --force; its edit 
 run_hyper "$repo" warp t12 --force >/dev/null || die "--force on a dirty target repository failed"
 [ "$(ssh_t12 "cat '$repo/a.txt'")" = "hello" ] || die "--force did not overwrite the plain repo's file"
 pass "with --force the plain repo is overwritten file by file (no stash for a plain repo, as documented)"
+
+echo "# ---------------------------------------------------------------"
+echo "# 16. a missing space that is not in the manifest is refused first"
+echo "# ---------------------------------------------------------------"
+space3="$home_local/work/spaces/research3"
+mkdir -p "$space3/worktrees"
+git init -q --bare "$space3/.git"
+make_worktree "$space3" main
+wt4="$space3/worktrees/main"
+folder_wt4="$(make_session "$wt4")"
+ssh_t12 "rm -f '$home_local/hyper-argv.log'"
+set +e
+out="$(run_hyper "$wt4" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "a space missing from the manifest was not refused: exit $code: $out"
+flat "$out" | grep -q 'the space "research3" isn.t in your hyperdrive manifest' || die "the refusal does not say why: $out"
+flat "$out" | grep -q "hyper space init" || die "the refusal does not say what to run: $out"
+[ -z "$(ssh_t12 "cat '$home_local/hyper-argv.log' 2>/dev/null")" ] || die "hyper ran on the target"
+ssh_t12 "test -e '$space3'" && die "something was created for research3 on the target"
+[ -e "$folder_wt4/$SESSION.warp.json" ] && die "a marker was written"
+pass "a missing space that is not in the local manifest is refused before any change (no clone, no marker)"
 
 echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
