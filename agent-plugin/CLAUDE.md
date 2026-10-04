@@ -12,7 +12,7 @@ there is exactly one copy of it, and the scripts source it through
 
 - **Never develop in `~/.claude/plugins/marketplaces/`.** That clone
   auto-updates and will discard uncommitted work. Develop here, commit, push.
-- **Run `agent-plugin/tests/run.sh` before committing.** 496 assertions;
+- **Run `agent-plugin/tests/run.sh` before committing.** It discovers every `tests/test-*.sh`;
   `.github/workflows/agent-plugin.yml` enforces the same suite plus
   `bash -n` and `shellcheck --severity=warning` in CI.
 - **The CLI must be built before the suite runs**, in dependency order
@@ -37,7 +37,10 @@ there is exactly one copy of it, and the scripts source it through
   `packages/drive`; the plugin shells out to `hyper` (C-1, C-5). To reach a
   library function from a script, source `scripts/hyper-require-lib.sh` and
   call `hyper_require_lib` (or `hyper_soft_lib` in a hook that must stay
-  silent when `hyper` is absent).
+  silent when `hyper` is absent). The library enables `set -euo pipefail` when
+  sourced: a hook with an always-zero exit contract must reset errexit/pipefail
+  afterwards or guard every fallible call. `SessionEnd` gates push on commit
+  success, then converts any failure into one diagnostic line and exit zero.
 - **Test hooks by piping real hook JSON into the script** — never by running
   the command in your shell, which has an environment hooks don't inherit
   (proto/mise/nvm shims, homebrew PATH):
