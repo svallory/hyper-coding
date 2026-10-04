@@ -78,8 +78,11 @@ import {
 	projectWorktreeHead,
 	pushProjectBranch,
 	SpaceGitError,
+	TARGET_DIRTY,
 	TARGET_WORKTREE_STATE,
 	targetBareRepoCheck,
+	targetStashSnapshot,
+	targetStatusCheck,
 	targetWorktreeAdd,
 	targetWorktreeReset,
 	targetWorktreeState,
@@ -170,6 +173,11 @@ export interface WarpInputs {
 	 * planner stays pure and tests stay deterministic.
 	 */
 	agentSuffix: string;
+	/**
+	 * When this warp started (ISO time). Names the stash a `--force` warp
+	 * leaves on the target. Injected so the planner stays pure.
+	 */
+	startedAt: string;
 }
 
 /**
@@ -196,7 +204,9 @@ export type ProbeId =
 	/** With the space missing: is `hyper` there to clone it? */
 	| "hyper"
 	/** With the space missing: can the space root be created? */
-	| "space-ancestor";
+	| "space-ancestor"
+	/** Without --force: the target's copy holds no uncommitted work. */
+	| "target-clean";
 
 /**
  * A step that runs only when a probe answered a certain way.
@@ -244,6 +254,11 @@ export type WarpStep =
 			when?: StepCondition;
 			/** For `push-dry-run`: what to push. */
 			push?: { worktree: string; url: string; branch: string };
+			/**
+			 * The probe prints paths (`git status --porcelain` lines) when it
+			 * refuses; the refusal lists the first few, escaped.
+			 */
+			listsPaths?: true;
 	  }
 	/** SIGTERM/SIGKILL one live process (design step 2, `--stop`). */
 	| {
@@ -273,6 +288,11 @@ export type WarpStep =
 			when?: StepCondition;
 			/** What this leaves on the target; absent for a read-only check. */
 			leaves?: string;
+			/**
+			 * Told to the user, with `{out}` replaced by the first line the
+			 * command printed, when it printed one (the stash it made).
+			 */
+			announce?: string;
 			/** Problem sentence when it fails. */
 			problem: string;
 	  }
@@ -706,6 +726,23 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 					[states.registeredButMissing]: `${inputs.cwd} is registered as a worktree on ${name}, but the directory (or its .git file) is gone. Run \`git --git-dir=${space.barePath} worktree prune\` there and run this again.`,
 				},
 			},
+			...(inputs.force
+				? []
+				: [
+						{
+							kind: "probe" as const,
+							id: "target-clean" as const,
+							via: "shell" as const,
+							when: { probe: "worktree", answer: "yes" } as StepCondition,
+							listsPaths: true as const,
+							summary: `check the worktree ${inputs.cwd} on ${name} has no uncommitted work`,
+							argv: targetStatusCheck(inputs.cwd),
+							problem: `couldn't read \`git status\` of ${inputs.cwd} on ${name}.`,
+							problems: {
+								[TARGET_DIRTY]: `${name} has uncommitted work in the worktree ${inputs.cwd}. Commit or stash it there, or pass --force to overwrite it (a --force warp first saves the tracked changes there as a stash).`,
+							},
+						},
+					]),
 			{
 				kind: "probe",
 				id: "push-check",
@@ -751,6 +788,20 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 				67: `${parent} exists on ${name} but isn't writable by the user hyperdrive logs in as. Fix its permissions and run this again.`,
 			},
 		});
+		if (inputs.cwdKind === "git-repo" && !inputs.force) {
+			steps.push({
+				kind: "probe",
+				id: "target-clean",
+				via: "shell",
+				listsPaths: true,
+				summary: `check the repository ${inputs.cwd} on ${name}, if there is one, has no uncommitted work`,
+				argv: targetStatusCheck(inputs.cwd),
+				problem: `couldn't read \`git status\` of ${inputs.cwd} on ${name}.`,
+				problems: {
+					[TARGET_DIRTY]: `${name} has uncommitted work in the repository ${inputs.cwd}. Commit or stash it there, or pass --force to overwrite it (files are overwritten one by one; nothing is saved first).`,
+				},
+			});
+		}
 	}
 	steps.push({
 		kind: "probe",
@@ -858,6 +909,22 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 				argv: targetBareRepoCheck(space.barePath),
 				problem: `\`hyper space clone\` finished on ${name}, but ${space.barePath} isn't a bare git repo there, so the branch has nowhere to go.`,
 			},
+			...(inputs.force
+				? [
+						{
+							kind: "remote-command" as const,
+							when: { probe: "worktree", answer: "yes" } as StepCondition,
+							summary: `save uncommitted tracked work in ${inputs.cwd} on ${name} as a stash (--force)`,
+							argv: targetStashSnapshot(
+								inputs.cwd,
+								`hyper warp ${inputs.sessionId} ${inputs.startedAt}`,
+							),
+							leaves: `a stash in ${inputs.cwd} ("hyper warp ${inputs.sessionId} ${inputs.startedAt}")`,
+							announce: `${name}'s uncommitted tracked work in ${inputs.cwd} was saved as stash {out} ("hyper warp ${inputs.sessionId} ${inputs.startedAt}"); see \`git -C ${inputs.cwd} stash list\` there. Untracked files are not in it (they are kept unless this warp copied a file of the same name).`,
+							problem: `couldn't save the uncommitted work in ${inputs.cwd} on ${name} as a stash, so warp stopped before overwriting it.`,
+						},
+					]
+				: []),
 			{
 				kind: "push-branch",
 				summary: `push branch ${space.branch} to ${name}'s bare repo`,
@@ -956,6 +1023,19 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 	if (inputs.cwdKind === "git-repo") {
 		notes.push(
 			`The repository's .git travels with it and is merged into ${name}'s copy file by file, like everything else.`,
+		);
+	}
+	if (inputs.cwdKind !== "plain-dir") {
+		notes.push(
+			inputs.force
+				? space
+					? `--force: uncommitted tracked work in ${name}'s worktree is saved there as a stash first; untracked files are not in that stash.`
+					: `--force: uncommitted work in ${name}'s copy of the repository is overwritten file by file; nothing is saved first.`
+				: `${name}'s copy is refused if it holds uncommitted work (git status not clean); --force overwrites it${space ? " after saving it as a stash" : ""}.`,
+		);
+	} else {
+		notes.push(
+			`A plain directory has nothing to compare: whatever ${name} holds at ${inputs.cwd} is overwritten file by file, without a check.`,
 		);
 	}
 
@@ -1079,6 +1159,8 @@ export interface WarpExecution {
 	markerWritten?: OwnerMarker;
 	/** The pane the agent was started in. */
 	paneId?: string;
+	/** Things the user must be told even on success (a stash left on the target). */
+	notices: string[];
 	/** The Herdr agent name. */
 	agentName: string;
 }
@@ -1140,6 +1222,7 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 		copied: false,
 		stopped: [],
 		agentName: plan.agentName,
+		notices: [],
 	};
 	const fail = (step: WarpStep, detail: string): WarpExecution => ({
 		...execution,
@@ -1227,6 +1310,10 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 							step,
 							`${step.problem}${said ? ` It said: ${said}` : ` (exit ${result.code}, nothing on stderr)`}`,
 						);
+					}
+					const printed = firstLine(result.stdout);
+					if (step.announce && printed) {
+						execution.notices.push(step.announce.replace("{out}", printed));
 					}
 					break;
 				}
@@ -1328,8 +1415,30 @@ function probeDetail(
 		return `couldn't reach ${target} over ssh to ${step.summary}${firstLine(result.stderr) ? `: ${firstLine(result.stderr)}` : ""}.`;
 	}
 	const base = step.problems?.[result.code] ?? step.problem;
+	if (step.listsPaths && result.code !== 0 && result.stdout.trim() !== "") {
+		return `${base}\n${listPaths(result.stdout)}`;
+	}
 	const said = firstLine(result.stdout) ?? firstLine(result.stderr);
 	return said ? `${base} (${target} said: ${said})` : base;
+}
+
+/** How many dirty paths a refusal names before it just counts the rest. */
+const LISTED_PATHS = 10;
+
+/**
+ * `git status --porcelain` lines for a terminal: at most {@link LISTED_PATHS},
+ * each with control characters (an ESC sequence in a file name could repaint
+ * the user's terminal) shown as `\xNN`, then a count of the rest.
+ */
+export function listPaths(porcelain: string): string {
+	const lines = porcelain.split("\n").filter((line) => line.trim() !== "");
+	const shown = lines.slice(0, LISTED_PATHS).map(
+		(line) =>
+			// biome-ignore lint/suspicious/noControlCharactersInRegex: escaping them IS the point.
+			`  ${line.replace(/[\u0000-\u001f\u007f-\u009f]/g, (char) => `\\x${char.charCodeAt(0).toString(16).padStart(2, "0")}`)}`,
+	);
+	const rest = lines.length - shown.length;
+	return [...shown, ...(rest > 0 ? [`  … and ${rest} more`] : [])].join("\n");
 }
 
 /** What `--dry-run` reports: the plan, and proof that nothing ran. */
@@ -1481,6 +1590,7 @@ export function describeFailure(
 		}
 	}
 
+	lines.push(...execution.notices);
 	if (execution.stopped.length > 0) {
 		lines.push(
 			`The session was stopped here (pid ${execution.stopped.join(", ")}) and isn't running anywhere now. To keep working here, run \`claude --resume ${plan.sessionId}\` from ${plan.cwd}.`,
@@ -1608,6 +1718,7 @@ export function gatherWarp(options: {
 			excludes: [...config.warp.exclude],
 			syncSession: null,
 			agentSuffix: Date.now().toString(36),
+			startedAt: new Date().toISOString(),
 		},
 	};
 }

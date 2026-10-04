@@ -12,13 +12,14 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { MachineRunner } from "#services/remote";
 import type { LiveSession, OwnerMarker } from "#services/sessions";
-import { TARGET_WORKTREE_STATE } from "#services/space-git";
+import { TARGET_DIRTY, TARGET_WORKTREE_STATE } from "#services/space-git";
 import {
 	describeFailure,
 	describeSpace,
 	describeStep,
 	describeWarp,
 	executeWarp,
+	listPaths,
 	MarkerConflictError,
 	PANE_PLACEHOLDER,
 	type ProbeId,
@@ -128,6 +129,7 @@ function inputs(overrides: Partial<WarpInputs> = {}): WarpInputs {
 		excludes: ["node_modules"],
 		syncSession: null,
 		agentSuffix: "k1",
+		startedAt: "2026-10-04T12:00:00.000Z",
 		...overrides,
 	};
 }
@@ -166,6 +168,10 @@ interface Event {
  */
 interface Scenario {
 	probes?: Partial<Record<ProbeId, number>>;
+	/** What a probe prints, by id. */
+	probeStdout?: Partial<Record<ProbeId, string>>;
+	/** What a change-phase remote command prints, by argv[0..2]. */
+	commandStdout?: Record<string, string>;
 	/** Exit code of every copy (default 0). */
 	copyCode?: number;
 	/** Exit code of remote commands, by argv[0]..argv[2] joined (default 0). */
@@ -215,12 +221,20 @@ function fakeTarget(plan: WarpPlan, scenario: Scenario = {}): Run {
 			const id = changed ? undefined : probeByArgv.get(JSON.stringify(cmd));
 			if (id) {
 				run.events.push({ type: "probe", what: id });
-				return { code: scenario.probes?.[id] ?? 0, stdout: "", stderr: "" };
+				return {
+					code: scenario.probes?.[id] ?? 0,
+					stdout: scenario.probeStdout?.[id] ?? "",
+					stderr: "",
+				};
 			}
 			const key = cmd.slice(0, 3).join(" ");
 			run.remote.push(cmd);
 			run.events.push({ type: "change", what: `remote ${key}` });
-			return { code: scenario.commands?.[key] ?? 0, stdout: "", stderr: "" };
+			return {
+				code: scenario.commands?.[key] ?? 0,
+				stdout: scenario.commandStdout?.[key] ?? "",
+				stderr: "",
+			};
 		},
 		async rsync(src, dst, opts) {
 			run.copies.push({ src, dst, excludes: opts?.excludes ?? [] });
@@ -632,6 +646,7 @@ describe("the ownership marker is compare-and-swap", () => {
 			stopped: [],
 			markerWritten: mine,
 			agentName: plan.agentName,
+			notices: [],
 			failure: { step: { kind: "flush-sync", summary: "x" }, detail: "y" },
 		};
 		expect(restoreMarker(plan, execution)).toEqual({ restored: true });
@@ -652,6 +667,7 @@ describe("the ownership marker is compare-and-swap", () => {
 			stopped: [],
 			markerWritten: mine,
 			agentName: plan.agentName,
+			notices: [],
 		};
 		expect(restoreMarker(plan, execution).restored).toBe(true);
 		expect(read()).toEqual(previous);
@@ -1108,6 +1124,166 @@ describe("a detached HEAD in a space worktree", () => {
 			expect(describeSpace(wt)?.branch).toBe("main");
 			git("-C", wt, "checkout", "-q", "--detach");
 			expect(() => describeSpace(wt)).toThrow(/detached HEAD/);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("a target with uncommitted work is not overwritten without --force (review 2, HIGH)", () => {
+	const DIRTY = " M stable.txt\nA  staged.txt\n?? notes.txt\n";
+
+	it("refuses a space worktree whose target copy is dirty, before any change, naming the paths", async () => {
+		const plan = spacePlan({ stop: true, live: [LIVE] });
+		const run = fakeTarget(plan, {
+			probes: { worktree: 0, "target-clean": TARGET_DIRTY },
+			probeStdout: { "target-clean": DIRTY },
+		});
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.detail).toContain("netcup has uncommitted work in the worktree");
+		expect(result.failure?.detail).toContain(
+			"Commit or stash it there, or pass --force to overwrite it",
+		);
+		expect(result.failure?.detail).toContain(" M stable.txt");
+		expect(result.failure?.detail).toContain("A  staged.txt");
+		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+		expect(run.stops).toEqual([]);
+	});
+
+	it("does not ask when nothing is registered there yet (first warp of that worktree)", async () => {
+		const plan = spacePlan();
+		const run = fakeTarget(plan, { probes: { worktree: 1, "target-clean": TARGET_DIRTY } });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure).toBeUndefined();
+		expect(run.events.some((event) => event.what === "target-clean")).toBe(false);
+	});
+
+	it("refuses a plain git repo whose target copy is dirty, before any change", async () => {
+		const plan = planOf({ cwdKind: "git-repo" });
+		const run = fakeTarget(plan, {
+			probes: { "target-clean": TARGET_DIRTY },
+			probeStdout: { "target-clean": DIRTY },
+		});
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.detail).toContain("uncommitted work in the repository");
+		expect(result.failure?.detail).toContain("nothing is saved first");
+		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+	});
+
+	it("has no such check for a plain directory, and says so in the plan", () => {
+		const plan = planOf();
+		expect(probeOf(plan, "target-clean")).toBeUndefined();
+		expect(plan.notes.join("\n")).toContain("A plain directory has nothing to compare");
+	});
+
+	it("with --force, snapshots the target's work as a stash BEFORE the push, and tells the user", async () => {
+		const plan = spacePlan({
+			force: true,
+			owner: { state: "owned", path: "/m", marker: { owner: "netcup", at: "t" } },
+		});
+		expect(probeOf(plan, "target-clean")).toBeUndefined();
+		// The fake keys commands by argv[0..2]; read the real key from the plan.
+		const stash = plan.steps.find(
+			(step) => step.kind === "remote-command" && step.summary.includes("stash"),
+		) as Extract<WarpStep, { kind: "remote-command" }>;
+		const key = stash.argv.slice(0, 3).join(" ");
+		const run2 = fakeTarget(plan, {
+			probes: { worktree: 0 },
+			commandStdout: { [key]: "deadbeef\n" },
+		});
+		const result = await executeWarp(plan, run2.deps);
+		expect(result.failure).toBeUndefined();
+		const changes = run2.events
+			.filter((event) => event.type === "change")
+			.map((event) => event.what);
+		expect(changes.indexOf(`remote ${key}`)).toBeGreaterThanOrEqual(0);
+		expect(changes.indexOf(`remote ${key}`)).toBeLessThan(changes.indexOf("push"));
+		expect(result.notices.join("\n")).toContain("saved as stash deadbeef");
+		expect(result.notices.join("\n")).toContain(`hyper warp ${SESSION} 2026-10-04T12:00:00.000Z`);
+		expect(result.notices.join("\n")).toContain("Untracked files are not in it");
+	});
+
+	it("with --force and nothing registered there, makes no stash", async () => {
+		const plan = spacePlan({ force: true });
+		const run = fakeTarget(plan, { probes: { space: 1 } });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure).toBeUndefined();
+		expect(result.skipped.some((summary) => summary.includes("stash"))).toBe(true);
+		expect(result.notices).toEqual([]);
+	});
+
+	it("lists at most 10 paths, escapes control characters, and counts the rest", () => {
+		const many = Array.from({ length: 13 }, (_, index) => ` M file${index}.txt`).join("\n");
+		const listed = listPaths(`?? evil\u001b[2Jname\n${many}`);
+		expect(listed).toContain("evil\\x1b[2Jname");
+		expect(listed).not.toContain("\u001b");
+		expect(
+			listed.split("\n").filter((line) => line.startsWith("  ") && !line.includes("more")),
+		).toHaveLength(10);
+		expect(listed).toContain("… and 4 more");
+	});
+
+	it("the status check and the stash snapshot work in a real shell with a real git, with no identity configured", () => {
+		const dir = realpathSync(mkdtempSync(join(tmpdir(), "warp-dirty-")));
+		const git = isolatedGit(dir, dir);
+		const plain = {
+			...process.env,
+			HOME: dir,
+			XDG_CONFIG_HOME: join(dir, ".config"),
+			GIT_CONFIG_NOSYSTEM: "1",
+			GIT_CONFIG_GLOBAL: "/dev/null",
+		};
+		try {
+			git("init", "-q", "repo");
+			writeFileSync(join(dir, "repo/stable.txt"), "committed\n");
+			git("-C", "repo", "add", "stable.txt");
+			git("-C", "repo", "commit", "-q", "-m", "a");
+			const plan = planOf({
+				selfHome: dir,
+				target: { name: "netcup", host: "me@box", home: dir },
+				cwd: join(dir, "repo"),
+				cwdKind: "git-repo",
+				transcriptPath: `${dir}/.claude/projects/x/${SESSION}.jsonl`,
+			});
+			const check = probeOf(plan, "target-clean")?.argv as string[];
+			const clean = spawnSync(check[0] as string, check.slice(1), {
+				env: plain,
+				encoding: "utf-8",
+			});
+			expect(clean.status).toBe(0);
+
+			writeFileSync(join(dir, "repo/stable.txt"), "edited on the target\n");
+			writeFileSync(join(dir, "repo/staged.txt"), "staged\n");
+			git("-C", "repo", "add", "staged.txt");
+			const dirty = spawnSync(check[0] as string, check.slice(1), {
+				env: plain,
+				encoding: "utf-8",
+			});
+			expect(dirty.status).toBe(TARGET_DIRTY);
+			expect(dirty.stdout).toContain(" M stable.txt");
+			expect(dirty.stdout).toContain("A  staged.txt");
+
+			const forced = spacePlan({
+				force: true,
+				cwd: join(dir, "repo"),
+				selfHome: dir,
+				target: { name: "netcup", host: "me@box", home: dir },
+				transcriptPath: `${dir}/.claude/projects/x/${SESSION}.jsonl`,
+				space: { root: dir, name: "x", barePath: `${dir}/b.git`, branch: "main" },
+			});
+			const stash = forced.steps.find(
+				(step) => step.kind === "remote-command" && step.summary.includes("stash"),
+			) as Extract<WarpStep, { kind: "remote-command" }>;
+			const saved = spawnSync(stash.argv[0] as string, stash.argv.slice(1), {
+				env: plain,
+				encoding: "utf-8",
+			});
+			expect(saved.status, saved.stderr).toBe(0);
+			expect(saved.stdout.trim()).toMatch(/^[0-9a-f]{40}$/);
+			expect(git("-C", "repo", "stash", "list").stdout).toContain(`hyper warp ${SESSION}`);
+			// The working tree and the index are untouched by the snapshot.
+			expect(readFileSync(join(dir, "repo/stable.txt"), "utf-8")).toBe("edited on the target\n");
+			expect(git("-C", "repo", "diff", "--cached", "--name-only").stdout).toContain("staged.txt");
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}

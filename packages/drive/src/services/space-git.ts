@@ -1529,3 +1529,77 @@ export function targetWorktreeState(bare: string, worktree: string, branch: stri
 	].join("\n");
 	return ["sh", "-c", script];
 }
+
+/** Exit code of {@link targetStatusCheck} when the target's copy has uncommitted work. */
+export const TARGET_DIRTY = 25;
+
+/**
+ * A read-only script for the target: does the repository or worktree at
+ * `worktree` hold uncommitted work? Exits 0 when there is no `.git` there or
+ * `git status --porcelain` is empty; otherwise prints the porcelain lines and
+ * exits {@link TARGET_DIRTY}. `--no-optional-locks` keeps `status` from
+ * refreshing (writing) the index.
+ */
+export function targetStatusCheck(worktree: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const script = [
+		`w=${quote(worktree)}`,
+		'[ -e "$w/.git" ] || exit 0',
+		'out=$(git -C "$w" --no-optional-locks status --porcelain) || exit 3',
+		'[ -z "$out" ] && exit 0',
+		`printf '%s\\n' "$out"`,
+		`exit ${TARGET_DIRTY}`,
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/**
+ * A script for the target that snapshots the uncommitted TRACKED work (index
+ * and working tree) of `worktree` as a stash entry named `message`, without
+ * touching the working tree: `git stash create` + `git stash store`. Prints
+ * the stash commit when there was something to save. Untracked files are not
+ * in the snapshot.
+ *
+ * `stash create` writes commits, so it needs an identity; a target with none
+ * configured gets a neutral one for this call only. Hooks and signing are off.
+ */
+export function targetStashSnapshot(worktree: string, message: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const script = [
+		`w=${quote(worktree)}; m=${quote(message)}`,
+		'who=""; git -C "$w" config user.email >/dev/null 2>&1 || who="-c user.email=hyper-warp@localhost -c user.name=hyper-warp"',
+		// $who is split on purpose: it is either empty or four fixed words.
+		'opts="-c core.hooksPath=/dev/null -c commit.gpgSign=false $who"',
+		's=$(git $opts -C "$w" stash create) || exit 1',
+		'[ -z "$s" ] && exit 0',
+		'git $opts -C "$w" stash store -m "$m" "$s" || exit 1',
+		`printf '%s\\n' "$s"`,
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/**
+ * How many TRACKED files of the repository at `worktree` live under a
+ * directory named `name`, at any depth: what a copy that excludes `name`
+ * leaves behind, so they show as deleted on the other side. Reads the index
+ * only (`ls-files`); 0 when it cannot be read.
+ */
+export function trackedUnderDirectory(worktree: string, name: string): number {
+	const result = spawnSync(
+		"git",
+		[
+			"-C",
+			worktree,
+			"--no-optional-locks",
+			"-c",
+			"core.fsmonitor=false",
+			"ls-files",
+			"-z",
+			"--",
+			`:(glob)**/${name}/**`,
+		],
+		{ encoding: "utf8", env: cleanGitEnv() },
+	);
+	if (result.error || result.status !== 0) return 0;
+	return (result.stdout ?? "").split("\0").filter((entry) => entry !== "").length;
+}

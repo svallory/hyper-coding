@@ -28,7 +28,7 @@ const SESSION_PREFIX = "hyper-";
 type Outcome =
 	| { kind: "refusal"; exit: number; message: string }
 	| { kind: "dry-run"; plan: WarpPlan; json: boolean }
-	| { kind: "done"; plan: WarpPlan; completed: string[]; json: boolean };
+	| { kind: "done"; plan: WarpPlan; completed: string[]; notices: string[]; json: boolean };
 
 /**
  * `hyper warp <machine>` — move this session to another machine.
@@ -167,6 +167,7 @@ Limits:
 			kind: "done",
 			plan,
 			completed: execution.completed.map((record) => record.summary),
+			notices: execution.notices,
 			json: flags.json,
 		};
 	}
@@ -195,10 +196,15 @@ Limits:
 		for (const note of described.notes) this.log(`  - ${note}`);
 	}
 
-	private reportDone(outcome: { plan: WarpPlan; completed: string[]; json: boolean }): void {
-		const { plan, completed, json } = outcome;
+	private reportDone(outcome: {
+		plan: WarpPlan;
+		completed: string[];
+		notices: string[];
+		json: boolean;
+	}): void {
+		const { plan, completed, notices, json } = outcome;
 		if (json) {
-			this.log(JSON.stringify({ ok: true, plan, completed }, null, 2));
+			this.log(JSON.stringify({ ok: true, plan, completed, notices }, null, 2));
 			return;
 		}
 		this.log("");
@@ -206,6 +212,10 @@ Limits:
 		this.log(`Session:    ${plan.sessionId}`);
 		this.log(`Workdir:    ${plan.cwd} (${plan.cwdKind})`);
 		this.log(`Transcript: ${plan.transcriptPath}`);
+		for (const notice of notices) {
+			this.log("");
+			this.log(notice);
+		}
 		this.log("");
 		this.log(`Watch it with: herdr --remote ${plan.target.name}`);
 		this.log(`Then attach:  herdr --machine ${plan.target.name} agent get ${plan.agentName}`);
