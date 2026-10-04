@@ -228,6 +228,42 @@ describe("pull follow-ups", () => {
 		expect(flat(result.stderr)).toContain("no space rename command");
 		expect(flat(result.stderr)).not.toContain("--name");
 	});
+	it("keeps the refusal recorded when the hyperdrive cannot be reached", () => {
+		peerFile("loose.txt", "hostile\n");
+		publish();
+		expect(run("pull").status).toBe(2);
+		spaceGit(root, ["config", "remote.origin.url", join(fixture.root, "gone.git")]);
+		const unreachable = run("pull");
+		expect(unreachable.status).toBe(2);
+		expect(config("hyper.refusedTip")).toBe(
+			git(["rev-parse", "origin/space/followups"], peer).trim(),
+		);
+		expect(JSON.parse(run("status", "--json").stdout).refused).toMatchObject({
+			reason: expect.stringContaining("loose.txt"),
+		});
+	});
+	it("answers a refusal with JSON when --json is set", () => {
+		peerFile("loose.txt", "hostile\n");
+		publish();
+		const refused = run("pull", "--json");
+		expect(refused.status).toBe(2);
+		expect(JSON.parse(refused.stdout)).toMatchObject({
+			ok: false,
+			reason: "incoming-history-refused",
+			message: expect.stringContaining("loose.txt"),
+		});
+	});
+	it("names hyper space commit when a kept tracked entry blocks the next pull", () => {
+		spaceGit(root, ["config", "--add", "hyper.tracked", "local-only"]);
+		ignoredFiles("local-only");
+		track("extra");
+		expect(run("pull", "--accept-tracked").status).toBe(0);
+		writeFileSync(join(peer, "notes", "a.md"), "remote moved on\n");
+		publish();
+		const blocked = run("pull", "--accept-tracked");
+		expect(blocked.status, flat(blocked.stderr)).toBe(2);
+		expect(flat(blocked.stderr)).toContain("hyper space commit");
+	});
 	it("keeps the refused tip out of local history but still reports behind", () => {
 		peerFile("loose.txt", "hostile\n");
 		publish();

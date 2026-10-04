@@ -225,40 +225,92 @@ export async function validateIncomingSpace(
 	return { tip: resolved, tracked };
 }
 
+/** Agent instruction files, matched by basename at any depth, case-insensitively. */
+const REVIEW_NAMES: ReadonlySet<string> = new Set([
+	"claude.md",
+	"claude.local.md",
+	"agents.md",
+	"gemini.md",
+	"hyper.md",
+]);
+/** Directories whose contents can run commands or shape what an agent does. */
+const REVIEW_DIRECTORIES: readonly string[] = [
+	".claude/",
+	".cursor/",
+	".codex/",
+	".vscode/",
+	".pi/",
+	".hyper/memory/",
+	"bin/",
+];
+
+function isReviewPath(path: string): boolean {
+	const normalized = path.normalize("NFC").toLowerCase();
+	if (REVIEW_NAMES.has(posix.basename(normalized))) return true;
+	return REVIEW_DIRECTORIES.some((dir) => normalized.startsWith(dir));
+}
+
+/** Follow a tip symlink chain inside the tip tree; returns every path it touches. */
+function resolveTipChain(start: string, links: Map<string, string>): string[] {
+	const chain: string[] = [];
+	const seen = new Set<string>();
+	let current = start;
+	while (links.has(current) && !seen.has(current)) {
+		seen.add(current);
+		const target = links.get(current)!;
+		current = posix.normalize(posix.join(posix.dirname(current), target));
+		if (current === ".." || current.startsWith("../")) return chain;
+		chain.push(current);
+		if (chain.length > 40) return chain;
+	}
+	return chain;
+}
+
 /**
- * Added/changed files that can execute commands or instruct agents. Omit base
- * for clone (report the whole tip); deletions and ordinary memory are excluded.
- * This is advisory, not a validator or execution permission.
+ * Added, changed or deleted files that can execute commands or instruct agents,
+ * plus whatever a review symlink points at. Deletions count: removing a
+ * `.claude/settings.json` silently drops its deny rules. A changed executable
+ * counts wherever it lives. Omit `base` for clone (the whole tip is new).
+ *
+ * Two tree listings plus one batched read of symlink targets — no per-path
+ * spawns, so the process count does not grow with the size of the space.
+ * Advisory: this reports, it never blocks or grants execution.
  */
-export function incomingReviewPaths(root: string, tip: string, base?: string): string[] {
-	const paths = spaceGit(
+export async function incomingReviewPaths(
+	root: string,
+	tip: string,
+	base?: string,
+): Promise<string[]> {
+	const tipTree = new Map(treeEntries(root, tip).map((entry) => [entry.path, entry]));
+	const baseTree = base
+		? new Map(treeEntries(root, base).map((entry) => [entry.path, entry]))
+		: new Map<string, TreeEntry>();
+	const symlinks = [...tipTree.values()].filter((entry) => entry.mode === "120000");
+	const links = new Map(symlinks.map((entry) => [entry.path, ""]));
+	const targets = await readSpaceBlobPrefixes(
 		root,
-		base
-			? [
-					"diff",
-					"--no-ext-diff",
-					"--no-textconv",
-					"--no-renames",
-					"--name-only",
-					"--diff-filter=ACMT",
-					"-z",
-					base,
-					tip,
-					"--",
-				]
-			: ["ls-tree", "-r", "--name-only", "-z", tip],
-	)
-		.stdout.split("\0")
-		.filter(Boolean);
-	return paths
-		.filter((path) => {
-			const normalized = path.normalize("NFC").toLowerCase();
-			if (["claude.md", "agents.md", "hyper.md"].includes(posix.basename(normalized))) return true;
-			return (
-				normalized.startsWith("bin/") ||
-				normalized.startsWith(".config/") ||
-				(normalized.startsWith(".claude/") && !normalized.startsWith(".claude/memory/"))
-			);
-		})
-		.sort();
+		symlinks.map((entry) => entry.hash),
+		4096,
+	);
+	for (const entry of symlinks)
+		links.set(entry.path, targets.get(entry.hash)!.prefix.toString("utf8"));
+	const changed = (path: string): boolean => {
+		const tipEntry = tipTree.get(path);
+		const baseEntry = baseTree.get(path);
+		return tipEntry?.hash !== baseEntry?.hash || tipEntry?.mode !== baseEntry?.mode;
+	};
+	const reported = new Set<string>();
+	for (const path of new Set([...tipTree.keys(), ...baseTree.keys()])) {
+		if (!changed(path)) continue;
+		const tipEntry = tipTree.get(path);
+		const baseEntry = baseTree.get(path);
+		if (isReviewPath(path) || tipEntry?.mode === "100755" || baseEntry?.mode === "100755")
+			reported.add(path);
+	}
+	// A reviewed path that is a symlink is only half the story: whoever wrote it
+	// can change the file behind it later without the link itself changing.
+	for (const [path, entry] of tipTree)
+		if (entry.mode === "120000" && isReviewPath(path))
+			for (const target of resolveTipChain(path, links)) if (changed(target)) reported.add(target);
+	return [...reported].sort();
 }

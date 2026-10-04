@@ -23,9 +23,12 @@ afterEach(() => fixture.cleanup());
 
 /** Build a deep history and a wide tip with one fast-import, no per-file Git spawns. */
 function buildHistory(commits: number, filesPerCommit: number, tipFiles: number): string {
+	// `from` is a fast-import COMMAND line, not part of the message: written as
+	// message text it silently produced unrelated roots, so the "deep history"
+	// this fixture claims never existed.
 	const commit = (mark: string, parent: string | null): string => {
-		const message = parent === null ? "root" : `from :${parent}`;
-		return `commit ${mark}\nmark :${mark}\nauthor hyper test <hyper-test@example.invalid> 0 +0000\ncommitter hyper test <hyper-test@example.invalid> 0 +0000\ndata ${message.length}\n${message}\n`;
+		const message = parent === null ? "root" : "next";
+		return `commit ${mark}\nmark :${mark}\nauthor hyper test <hyper-test@example.invalid> 0 +0000\ncommitter hyper test <hyper-test@example.invalid> 0 +0000\ndata ${message.length}\n${message}\n${parent === null ? "" : `from ${parent}\n`}`;
 	};
 	let script = "";
 	let previous: string | null = null;
@@ -81,6 +84,9 @@ function countingGit(): { calls: string } {
 
 it("validates a wide, deep tip with a bounded number of git processes", async () => {
 	const tip = buildHistory(300, 100, 30_000);
+	// The fixture must really be a chain: an unrelated-roots stream would make
+	// this test pass against the old full-history validator.
+	expect(spaceGit(root, ["rev-list", "--count", tip]).stdout.trim()).toBe("301");
 	const { calls } = countingGit();
 	const started = Date.now();
 	const validation = await validateIncomingSpace(root, tip);

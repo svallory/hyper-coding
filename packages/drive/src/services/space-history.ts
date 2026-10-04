@@ -155,8 +155,10 @@ export async function pullSpace(
 	branch: string,
 	options: SpacePullOptions = {},
 ): Promise<SpacePullResult> {
-	clearRefusal(root);
 	fetchSpace(root, branch);
+	// Only a fetch that actually reached the hyperdrive may clear the record of
+	// a refusal: an unreachable remote has said nothing new about that tip.
+	clearRefusal(root);
 	const target = spaceGit(root, [
 		"rev-parse",
 		"--verify",
@@ -225,9 +227,9 @@ export async function pullSpace(
 				.status !== 0
 		)
 			throw new SpaceGitError(
-				"Local .gitignore changes would be overwritten while preserving this machine's tracked entries. Save those changes before retrying.",
+				`Local .gitignore changes would be overwritten while preserving this machine's tracked entries. Commit them with \`hyper space commit\` (or move them aside) before retrying.`,
 			);
-		const reviewPaths = incomingReviewPaths(root, incoming.tip, before);
+		const reviewPaths = await incomingReviewPaths(root, incoming.tip, before);
 		const result = spaceGit(
 			root,
 			[
