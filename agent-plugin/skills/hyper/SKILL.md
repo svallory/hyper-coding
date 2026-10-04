@@ -165,14 +165,18 @@ working directory, the transcript, and an ownership marker go over ssh.
 It refuses a session still running here (the agent's own session, often: it
 wants `--stop`, which ends it — the user's call), a session another machine
 owns or already moved to the target, a leftover marker, a target copy
-holding uncommitted work (untracked files included), and a target untracked
-or ignored file (a `.env`, say) that the copy would overwrite with different
-content — the last four are what `--force` overrides. `--force` on a **space
-worktree** first saves the target's tracked changes there as a stash; on a
-**plain repo** the tracked changes are not saved. In both, the untracked or
-ignored files the copy would overwrite are first copied to
-`hyper-warp-backup/<session id>-<start time>/` in the target repo's git
-directory, and warp prints where. A merge, rebase, cherry-pick, revert or
+holding uncommitted work (untracked files included), a target untracked or
+ignored entry (a `.env`, say) that the copy would overwrite with different
+content or a different type, and, for a plain repo, a target ref this machine
+doesn't have or is behind on — the last five are what `--force` overrides.
+`--force` on a **space worktree** first saves the target's tracked changes
+there as a stash; on a **plain repo** the tracked changes are not saved, its
+refs are saved under `refs/hyper-warp-backup/<id>/` when the ref check found
+something, and the rest of its `.git` (config, `info/exclude`, hooks) is
+replaced by this machine's. In both, the colliding untracked or ignored
+entries are first copied to `hyper-warp-backup/<session id>-<start time>/` in
+the target repo's git directory (one of a different type is then removed
+there), and warp prints where. A merge, rebase, cherry-pick, revert or
 bisect in progress, unresolved conflicts, or a changed submodule in the
 target's copy are refused even with `--force`. Excluded by default (and never copied): `node_modules`, `_build`,
 `deps`, `target`, `dist`, `.turbo`, `.cache`, `.next`. `--dry-run` prints
