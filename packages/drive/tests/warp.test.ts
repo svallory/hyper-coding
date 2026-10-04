@@ -793,7 +793,7 @@ describe("several live processes for one session (HIGH 9)", () => {
 		expect(run.copies).toEqual([]);
 	});
 
-	for (const outcome of ["survived", "mismatch", "unauthorized", null] as const) {
+	for (const outcome of ["survived", "mismatch", "unauthorized"] as const) {
 		it(`treats a stop outcome of ${outcome} as a hard error, with nothing copied`, async () => {
 			const plan = planOf({ stop: true, live: [LIVE] });
 			const run = fakeTarget(plan, { stopOutcome: outcome });
@@ -1323,4 +1323,21 @@ describe("a marker swap that crashed half-way (review 2, item 2)", () => {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
+});
+
+describe("a pid that exited between listing and stopping (review 2, item 3)", () => {
+	for (const outcome of [null, "gone"] as const) {
+		it(`treats stopSession's ${outcome} as gone and lets verify-stopped decide`, async () => {
+			const plan = planOf({ stop: true, live: [LIVE] });
+			const done = fakeTarget(plan, { stopOutcome: outcome });
+			const result = await executeWarp(plan, done.deps);
+			expect(result.failure).toBeUndefined();
+			expect(result.stopped).toEqual([]);
+
+			const still = fakeTarget(plan, { stopOutcome: outcome, stillLive: [LIVE] });
+			const refused = await executeWarp(plan, still.deps);
+			expect(refused.failure?.step.kind).toBe("verify-stopped");
+			expect(still.markers).toEqual([]);
+		});
+	}
 });

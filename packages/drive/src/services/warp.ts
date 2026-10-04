@@ -1278,7 +1278,12 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 					// `survived`, `mismatch` and `unauthorized` are hard errors: the
 					// process may still be writing the transcript we are about to
 					// copy, or the pid is not provably the session's.
-					if (outcome === null || !["gone", "terminated", "killed"].includes(outcome)) {
+					// null: no sessions file claims that pid any more, i.e. it exited
+					// between the listing and now. That is "gone": nothing was
+					// signalled, and the verify-stopped step that follows decides
+					// whether anything is still running the session.
+					if (outcome === null || outcome === "gone") break;
+					if (outcome !== "terminated" && outcome !== "killed") {
 						return fail(step, stopFailureDetail(outcome, step));
 					}
 					execution.stopped.push(step.pid);
@@ -1539,8 +1544,7 @@ function stopFailureDetail(
 			return `the sessions file for pid ${step.pid} does not provably describe session ${step.sessionId} (no session id, or the pid has been reused). Warp did not signal it.`;
 		case "unauthorized":
 			return `pid ${step.pid} belongs to another user, so warp did not signal it.`;
-		case null:
-			return `no sessions file claims pid ${step.pid} in ${step.cwd} any more, so warp didn't signal anything. Run \`hyper warp\` again — if it still refuses, the session has probably just exited on its own.`;
+
 		default:
 			return String(outcome);
 	}
