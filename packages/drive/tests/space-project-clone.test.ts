@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cloneProjectRepoBare } from "#services/space-git";
+import { cloneProjectRepoBare, redactGitSecrets, sanitizeForTerminal } from "#services/space-git";
 
 vi.mock("node:child_process", () => ({ spawnSync: vi.fn() }));
 const mocked = vi.mocked(spawnSync);
@@ -60,17 +60,17 @@ describe("project transport and terminal policy", () => {
 			});
 		}
 	});
-	it("disables credential prompts and extends an existing SSH command off-TTY", () => {
+	it("disables credential prompts off-TTY and leaves a non-ssh command alone", () => {
 		vi.stubEnv("GIT_SSH_COMMAND", "custom-ssh -i /tmp/test-key");
 		cloneProjectRepoBare(join(root, ".git"), "ssh://git@example.invalid/project", "main", {
 			allowLocal: false,
 			interactive: false,
 		});
-		expect(mocked.mock.calls[1][2]).toMatchObject({
-			env: {
-				GIT_TERMINAL_PROMPT: "0",
-				GIT_SSH_COMMAND: "custom-ssh -i /tmp/test-key -o BatchMode=yes",
-			},
+		// A wrapper need not understand `-o`, so nothing is inserted.
+		expect(
+			mocked.mock.calls.find((call) => (call[1] as string[]).includes("clone"))![2],
+		).toMatchObject({
+			env: { GIT_TERMINAL_PROMPT: "0", GIT_SSH_COMMAND: "custom-ssh -i /tmp/test-key" },
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 		expect(
@@ -136,10 +136,10 @@ describe("project transport and terminal policy", () => {
 			false,
 		);
 	});
-	it("refuses when neither the branch nor a remote HEAD exists", () => {
+	it("refuses when the remote names a HEAD branch that does not exist locally", () => {
 		mocked.mockImplementation((_command: string, args: readonly string[] = []) => {
-			// The remote answers, but with no HEAD symref at all.
-			if (args.includes("ls-remote")) return result({ stdout: "" });
+			if (args.includes("ls-remote"))
+				return result({ stdout: "ref: refs/heads/other\tHEAD\nabc123\tHEAD\n" });
 			if (args.includes("--verify")) return result({ status: 1, stderr: "" });
 			return result();
 		});
@@ -152,18 +152,48 @@ describe("project transport and terminal policy", () => {
 		).toThrow(/no usable HEAD/);
 		expect(existsSync(join(root, ".git"))).toBe(false);
 	});
+	it("says an empty advertisement means the repository has no commits", () => {
+		mocked.mockImplementation((_command: string, args: readonly string[] = []) => {
+			if (args.includes("ls-remote")) return result({ stdout: "" });
+			if (args.includes("--verify")) return result({ status: 1, stderr: "" });
+			return result();
+		});
+		expect(() =>
+			cloneProjectRepoBare(join(root, ".git"), "https://example.invalid/project", "gone-branch", {
+				allowLocal: false,
+				interactive: false,
+				label: "sample",
+			}),
+		).toThrow(/no commits yet/);
+	});
+	it("refuses a HEAD branch name hyper could not have chosen", () => {
+		mocked.mockImplementation((_command: string, args: readonly string[] = []) => {
+			if (args.includes("ls-remote"))
+				return result({ stdout: "ref: refs/heads/evil$(x)\tHEAD\nabc123\tHEAD\n" });
+			// The manifest's branch is missing, so the fallback path is taken.
+			if (args.includes("--verify")) return result({ status: 1, stderr: "" });
+			return result();
+		});
+		expect(() =>
+			cloneProjectRepoBare(join(root, ".git"), "https://example.invalid/project", "gone-branch", {
+				allowLocal: false,
+				interactive: false,
+			}),
+		).toThrow(/cannot use/);
+		expect(existsSync(join(root, ".git"))).toBe(false);
+	});
 	it.each([
 		{
-			name: "keeps GIT_SSH_COMMAND",
+			name: "leaves a non-ssh GIT_SSH_COMMAND alone",
 			env: { GIT_SSH_COMMAND: "custom-ssh -i /tmp/test-key" },
 			config: "configured-ssh",
-			expect: "custom-ssh -i /tmp/test-key -o BatchMode=yes",
+			expect: "custom-ssh -i /tmp/test-key",
 		},
 		{
-			name: "keeps the user's core.sshCommand",
-			env: {},
-			config: "configured-ssh -F /tmp/ssh_config",
-			expect: "configured-ssh -F /tmp/ssh_config -o BatchMode=yes",
+			name: "inserts BatchMode right after an ssh command",
+			env: { GIT_SSH_COMMAND: "ssh -o BatchMode=no" },
+			config: "",
+			expect: "ssh -o BatchMode=yes -o BatchMode=no",
 		},
 		{
 			name: "leaves a GIT_SSH wrapper alone",
@@ -225,6 +255,27 @@ describe("project transport and terminal policy", () => {
 			expect(message).toContain("unable to access");
 			expect(message).not.toContain("hunter2");
 		}
+	});
+	it.each([
+		["https://user:password-value@example.invalid/project", "password-value"],
+		["https://host.invalid/x?token=SECRETTOKEN", "SECRETTOKEN"],
+		["https://host.invalid/x?a=1&sig=SECRETSIG", "SECRETSIG"],
+		["git@host.invalid:x", "git@host.invalid"],
+	])("redacts %s", (value, secret) => {
+		const redacted = redactGitSecrets(value);
+		if (secret !== "git@host.invalid") expect(redacted).not.toContain(secret);
+	});
+	it("redacts per line, so a later @ cannot mask or expose another line", () => {
+		const text = "fatal: user:pass1@host one\nunrelated mention of a@b here";
+		const redacted = redactGitSecrets(text);
+		expect(redacted).not.toContain("pass1");
+		expect(redacted).toContain("unrelated mention of a@b here");
+	});
+	it("strips control characters but keeps newlines and tabs", () => {
+		// The escape byte is gone; printable characters around it remain, which
+		// is harmless: they cannot move a cursor or set a window title.
+		const cleaned = sanitizeForTerminal("a\u001b]2Jb\tc\nd\u007fe\u009bf");
+		expect(cleaned).toBe("a]2Jb\tc\ndef");
 	});
 	it("cleans up only its own failed clone, without relaying credential-bearing stderr", () => {
 		mocked

@@ -189,11 +189,6 @@ export async function commitSpace(
 			"-A",
 			"--",
 			".",
-			// Leftovers from a clone killed before it could remove them (older
-			// releases staged outside the git dir). `/**` is required: the bare
-			// glob matches only the directory entry, not what is inside it. The
-			// exclude is non-destructive where deleting them would not be.
-			":(top,exclude,glob).hyper/clone-*/**",
 			...excluded.map((path) => `:(top,exclude,literal)${path}`),
 		]);
 		const staged = stagedPaths(root);

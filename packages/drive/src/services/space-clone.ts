@@ -119,18 +119,15 @@ function cloneLibrary(
 function cloneUntrustedConfiguration(paths: readonly string[]): string[] {
 	return paths.filter((path) => {
 		const lower = path.normalize("NFC").toLowerCase();
-		if (
+		return (
 			["claude.md", "agents.md", "hyper.md"].includes(lower.split("/").at(-1)!) ||
 			lower.startsWith("bin/") ||
-			lower.startsWith(".config/")
-		)
-			return true;
-		// Memory is included for its own sake: the generated HYPER.md tells
-		// agents to read it, so it steers behaviour like any other instruction.
-		return (
-			(lower.startsWith(".claude/") || lower.startsWith(".hyper/")) &&
-			lower !== ".claude/memory" &&
-			!lower.startsWith(".claude/memory/")
+			lower.startsWith(".config/") ||
+			// No memory exemption anywhere: `.hyper/memory` steers agents by
+			// instruction, and a remote-supplied settings.json can point
+			// autoMemoryDirectory at `.claude/memory` to make it do the same.
+			lower.startsWith(".claude/") ||
+			lower.startsWith(".hyper/")
 		);
 	});
 }
