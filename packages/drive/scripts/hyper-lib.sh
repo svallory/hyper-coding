@@ -218,15 +218,16 @@ hyper_md_backup_rule() {
   files, are committed to it on your cadence, and reach your hyperdrive when
   pushed (\`session-end+push\`, or \`hyper space push\`).
 - \`scratch/\`, \`$excluded/\` and loose root files are never committed: they
-  live on exactly one disk. \`hyper space status\` is the live answer — the
-  cadence, the last push, and whether the last session-end commit worked.
+  live on exactly one disk. \`hyper space status\` is the live answer — it
+  shows the cadence and how far this machine is ahead of the hyperdrive (as of
+  last contact), plus a line when the last session-end save failed.
 EOF
   elif [[ "$layout" == multi ]]; then
     cat <<EOF
 - $where never reach the project's remote. Secrets are local-only by
   construction, and nothing here is committed or backed up until you run
   \`hyper space init\` — which commits the allowlisted dirs to the space's
-  branch, to be published by \`hyper space push\`.
+  branch and pushes that first commit to the hyperdrive.
   \`hyper space status\` is the live answer.
 EOF
   else
@@ -234,7 +235,7 @@ EOF
 - $where never reach the project's remote. Secrets are local-only by
   construction, and nothing here is committed or backed up until you run
   \`hyper space init\` — which commits the allowlisted dirs to the space's
-  branch, to be published by \`hyper space push\`.
+  branch and pushes that first commit to the hyperdrive.
   \`hyper space status\` is the live answer.
 EOF
   fi
