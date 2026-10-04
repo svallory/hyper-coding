@@ -64,7 +64,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
-		"postbuild": "bunx oclif manifest",
+		"postbuild": "bun x --no-install oclif manifest",
 		"clean": "rm -rf dist tsconfig.tsbuildinfo",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -83,6 +83,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.14",
 		"@types/node": "^20.0.0",
+		"oclif": "6.0.2",
 		"typescript": "^5.4.0",
 		"vitest": "4.0.18"
 	},

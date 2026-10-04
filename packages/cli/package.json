@@ -84,7 +84,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
-		"postbuild": "bunx oclif manifest",
+		"postbuild": "bun x --no-install oclif manifest",
 		"dev": "bun run bin/dev.js",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -119,6 +119,7 @@
 		"@vitest/coverage-v8": "^4.0.0",
 		"execa": "^9.6.1",
 		"fs-extra": "^11.3.3",
+		"oclif": "6.0.2",
 		"typescript": "^5.4.0",
 		"vitest": "4.0.18"
 	},
