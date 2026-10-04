@@ -17,15 +17,7 @@ import {
 	unownedEntriesShell,
 	unprotectedEntriesShell,
 } from "./agent-acl.js";
-import {
-	type AgentPaths,
-	agentHomeOf,
-	agentPaths,
-	agentUserOf,
-	homeOf,
-	passwdHomeOf,
-	primaryUserOf,
-} from "./agent-context.js";
+import { type AgentPaths, agentHomeOf, agentPaths, agentUserOf, homeOf } from "./agent-context.js";
 import {
 	agentWrongGroup,
 	repairSharedTree,
@@ -317,27 +309,10 @@ async function shareTree(ctx: TaskContext, dir: string, agentUser: string): Prom
 }
 
 async function resolvePaths(ctx: TaskContext, agentUser: string): Promise<AgentPaths> {
-	const configured = await homeOf(ctx);
-	// A configured home that ISN'T THERE YET must not fail this task. That is
-	// exactly the state of a machine whose `home-path` root script has not run:
-	// `drive.toml` says /Users/<name>, the account's home is still /home/<name>,
-	// and the move needs root — which the runner only offers AFTER the
-	// non-root tasks have applied. Reading the configured path here made the
-	// probe report an unknown filesystem and this task THROW, which took the
-	// whole run down before the user was ever shown the root script. So the
-	// layout follows the account's real home (what the password database names)
-	// until the two agree, and says so.
-	const there = await runScript(ctx, `test -d ${shellQuote(configured)} && echo yes || echo no`);
-	// Only an explicit "no" switches. A runner that cannot answer (an empty
-	// probe) keeps the configured home, rather than silently re-aiming the layout.
-	if (there.stdout.trim() === "no") {
-		const real = await passwdHomeOf(ctx, await primaryUserOf(ctx));
-		ctx.log(
-			`agent-user.dirs: ${configured} isn't there yet, so I'm working on ${real} — the home-path root script moves it later in this same run.`,
-		);
-		return agentPaths(real, await agentHomeOf(ctx, agentUser));
-	}
-	return agentPaths(configured, await agentHomeOf(ctx, agentUser));
+	// `homeOf` is the one place that knows about a configured home that is not
+	// there yet (the home-path move needs root, and root work is offered AFTER
+	// the non-root tasks have applied), so this task does not re-decide it.
+	return agentPaths(await homeOf(ctx), await agentHomeOf(ctx, agentUser));
 }
 
 export async function missingTools(ctx: TaskContext): Promise<string[]> {
