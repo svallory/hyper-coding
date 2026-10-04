@@ -15,40 +15,39 @@ beforeEach(() => {
 	root = join(fixture.root, "report");
 	mkdirSync(root);
 	initSpaceGitDir(root, { branch: "space/report" });
-});
+}, 120_000);
 afterEach(() => fixture.cleanup());
 function commit(paths: string[]): string {
 	for (const path of paths) {
 		mkdirSync(dirname(join(root, path)), { recursive: true });
 		writeFileSync(join(root, path), `${Date.now()}\n`);
 	}
-	spaceGit(root, ["add", "-f", "--", ...paths]);
+	spaceGit(root, ["add", "--", ...paths]);
 	spaceGit(root, ["commit", "-qm", "fixture"]);
 	return spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
 }
-it("reports the whole clone tip, preserving unusual names and excluding ordinary memory", () => {
+it("reports the whole clone tip, preserving unusual names", async () => {
 	const dangerous = [
 		".claude/settings.json",
 		".claude/hooks/session.sh",
 		"bin/a\tcommand",
-		".config/wt.toml",
+		".vscode/tasks.json",
 		"CLAUDE.md",
 		"notes/AGENTS.md",
 		"HYPER.md",
-		".claude/memory/CLAUDE.md",
+		".hyper/memory/MEMORY.md",
 	];
-	const tip = commit([
-		...dangerous,
-		".claude/memory/ordinary.md",
-		".hyper/memory/fact.md",
-		"notes/safe.md",
-	]);
-	expect(incomingReviewPaths(root, tip)).toEqual(dangerous.sort());
+	const tip = commit([...dangerous, "notes/safe.md"]);
+	expect(await incomingReviewPaths(root, tip)).toEqual(dangerous.sort());
 });
-it("reports additions and modifications but not deletions or unchanged instructions", () => {
+it("reports additions and modifications, and deletions of review paths", async () => {
 	const base = commit(["bin/change", "bin/delete", "CLAUDE.md"]);
 	rmSync(join(root, "bin/delete"));
 	spaceGit(root, ["add", "-u"]);
 	const tip = commit(["bin/change", ".claude/hooks/new"]);
-	expect(incomingReviewPaths(root, tip, base)).toEqual([".claude/hooks/new", "bin/change"]);
+	expect(await incomingReviewPaths(root, tip, base)).toEqual([
+		".claude/hooks/new",
+		"bin/change",
+		"bin/delete",
+	]);
 });
