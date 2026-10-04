@@ -50,6 +50,7 @@ import {
 import { basename, dirname, join, relative, sep } from "node:path";
 import { loadConfig } from "#config/index";
 import { MachineError, type MachineInfo, resolveMachine, self, targetFor } from "#services/machine";
+import { readManifest } from "#services/manifest";
 import {
 	isIpv6Literal,
 	isSafeRemotePath,
@@ -169,6 +170,12 @@ export interface WarpInputs {
 	cwdKind: WarpCwdKind;
 	/** Space details, present exactly when `cwdKind` is `space-worktree`. */
 	space: WarpSpaceInfo | null;
+	/**
+	 * Whether the space is in the hyperdrive manifest, read from this machine's
+	 * checkout as it is (no fetch). Null for a non-space. Only matters when the
+	 * space is missing on the target: `hyper space clone` there needs it.
+	 */
+	spaceInManifest: { ok: true } | { ok: false; reason: string } | null;
 	/** `[warp] exclude` from `drive.toml`, already merged over the defaults. */
 	excludes: string[];
 	/**
@@ -221,7 +228,9 @@ export type ProbeId =
 	/** With the space missing: can the space root be created? */
 	| "space-ancestor"
 	/** Without --force: the target's copy holds no uncommitted work. */
-	| "target-clean";
+	| "target-clean"
+	/** With the space missing: the space is in the local hyperdrive manifest. */
+	| "manifest";
 
 /**
  * A step that runs only when a probe answered a certain way.
@@ -259,7 +268,7 @@ export type WarpStep =
 	| {
 			kind: "probe";
 			id: ProbeId;
-			via: "shell" | "herdr" | "push-dry-run";
+			via: "shell" | "herdr" | "push-dry-run" | "local";
 			summary: string;
 			/** The argv sent (shell/herdr), or the push line shown (push-dry-run). */
 			argv: string[];
@@ -274,6 +283,8 @@ export type WarpStep =
 			 * refuses; the refusal lists the first few, escaped.
 			 */
 			listsPaths?: true;
+			/** For `local`: the answer, established while gathering. */
+			local?: { pass: boolean };
 	  }
 	/** SIGTERM/SIGKILL one live process (design step 2, `--stop`). */
 	| {
@@ -774,8 +785,18 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 				push: { worktree: inputs.cwd, url, branch: space.branch },
 				problem: `${name} would reject branch ${space.branch}: its copy has commits this one doesn't (not a fast-forward), or it refused the push. Bring those commits here first, or push to a new branch, then run this again.`,
 			},
-			// --- the space is missing: hyper must be there to clone it, and the
-			// space root must be creatable.
+			// --- the space is missing: it must be in the manifest, hyper must
+			// be there to clone it, and the space root must be creatable.
+			{
+				kind: "probe",
+				id: "manifest",
+				via: "local",
+				when: missing,
+				local: { pass: inputs.spaceInManifest?.ok === true },
+				summary: `check the space "${space.name}" is in the hyperdrive manifest (this machine's checkout, no fetch)`,
+				argv: [],
+				problem: `the space "${space.name}" isn't in your hyperdrive manifest${inputs.spaceInManifest && !inputs.spaceInManifest.ok ? ` (${inputs.spaceInManifest.reason})` : ""}, so \`hyper space clone\` on ${name} would have nothing to clone. Run \`hyper space init\` in ${space.root} to add it, then run this again.`,
+			},
 			{
 				kind: "probe",
 				id: "hyper",
@@ -1038,6 +1059,9 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 	];
 	if (space) {
 		notes.push(
+			`If the space is missing on ${name}, it is cloned there from ${name}'s own hyperdrive checkout; whether the space is in the manifest is checked here first, in this machine's checkout as it is (no fetch).`,
+		);
+		notes.push(
 			`The worktree arrives as a git worktree of ${space.barePath} on ${name}, on ${space.branch}. Staged-but-uncommitted changes arrive as unstaged modifications: the index does not travel.`,
 		);
 	}
@@ -1128,11 +1152,13 @@ export function describeStep(step: WarpStep, target = "the target"): string {
 		case "probe": {
 			const label = step.question ? "ask" : "check";
 			const line =
-				step.via === "herdr"
-					? `herdr ${displayLine(step.argv)}`
-					: step.via === "push-dry-run"
-						? displayLine(step.argv)
-						: `ssh -- ${shellJoin(step.argv)}`;
+				step.via === "local"
+					? "(answered on this machine, from the hyperdrive checkout as it is; nothing is fetched)"
+					: step.via === "herdr"
+						? `herdr ${displayLine(step.argv)}`
+						: step.via === "push-dry-run"
+							? displayLine(step.argv)
+							: `ssh -- ${shellJoin(step.argv)}`;
 			return `${label} (${step.via}): ${step.summary}${conditionText(step.when, target)}\n    ${line}`;
 		}
 		case "stop-session":
@@ -1429,6 +1455,7 @@ async function runProbe(
 	deps: WarpDeps,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
 	if (step.via === "herdr") return runHerdr(step.argv, deps);
+	if (step.via === "local") return { code: step.local?.pass ? 0 : 1, stdout: "", stderr: "" };
 	if (step.via === "push-dry-run") {
 		if (!step.push) return { code: 2, stdout: "", stderr: "no push described" };
 		try {
@@ -1727,6 +1754,7 @@ export function gatherWarp(options: {
 	const space = kind === "space-worktree" ? describeSpace(cwd) : null;
 	const config = loadConfig();
 	const excludes = [...config.warp.exclude];
+	const spaceInManifest = space ? manifestHasSpace(space.name) : null;
 
 	return {
 		collision,
@@ -1751,6 +1779,7 @@ export function gatherWarp(options: {
 			strayMarker: findStrayMarker(dirname(chosen.path), chosen.id),
 			cwdKind: kind,
 			space,
+			spaceInManifest,
 			excludes,
 			trackedUnderExcludes: kind === "plain-dir" ? [] : excludedWithTrackedFiles(cwd, excludes),
 			syncSession: null,
@@ -1765,6 +1794,21 @@ function isDirectory(path: string): boolean {
 		return statSync(path).isDirectory();
 	} catch {
 		return false;
+	}
+}
+
+/**
+ * Is `name` in the hyperdrive manifest? Read from the local checkout as it is
+ * (`readManifest` never fetches). An unreadable checkout is a "no" with the
+ * reason, so warp refuses rather than cloning blind.
+ */
+export function manifestHasSpace(name: string): { ok: true } | { ok: false; reason: string } {
+	try {
+		return readManifest().spaces.some((entry) => entry.name === name)
+			? { ok: true }
+			: { ok: false, reason: `no space named "${name}" in this machine's checkout` };
+	} catch (error) {
+		return { ok: false, reason: errorDetail(error) };
 	}
 }
 
