@@ -120,13 +120,34 @@ export async function primaryUserOf(ctx: TaskContext): Promise<string> {
 /**
  * The primary user's home on the target.
  *
- * `drive.toml`'s `home` wins when it is absolute, so a machine whose home is
+ * `drive.toml`'s `home` wins when it is absolute — so a machine whose home is
  * `/Users/svallory` is set up at that path rather than at whatever `getent`
- * says. The probe is the fallback: a Herdr-only machine has no config entry.
+ * says — and that is what a task should follow on every run after the move.
+ *
+ * EXCEPT while the move has not happened yet, which is the FIRST run of the
+ * `home-path` feature: the config says `/Users/<name>`, the account's home is
+ * still `/home/<name>`, and non-root tasks apply BEFORE any root script is
+ * assembled, so "configured but absent" is a normal state and not an error. A
+ * path that is not a directory is not a home, so the password database's answer
+ * is used instead, and the run says so. Probed, not assumed: only an explicit
+ * `no` switches.
  */
 export async function homeOf(ctx: TaskContext): Promise<string> {
-	if (ctx.machine?.home?.startsWith("/")) return ctx.machine.home.replace(/\/+$/, "");
-	if (ctx.config.self.home.startsWith("/")) return ctx.config.self.home.replace(/\/+$/, "");
+	const configured = ctx.machine?.home?.startsWith("/")
+		? ctx.machine.home
+		: ctx.config.self.home.startsWith("/")
+			? ctx.config.self.home
+			: "";
+	if (configured !== "") {
+		const wanted = configured.replace(/\/+$/, "");
+		const there = await runScript(ctx, `test -d ${shellQuote(wanted)} && echo yes || echo no`);
+		if (there.stdout.trim() !== "no") return wanted;
+		const real = await passwdHomeOf(ctx, await primaryUserOf(ctx));
+		ctx.log(
+			`${wanted} isn't a directory on this machine, so I'm using ${real} — the home the password database names. If ${wanted} is where your home should be, run the home-path root script; until then this is the path that exists.`,
+		);
+		return real;
+	}
 	const probed = await runScript(ctx, "echo $HOME");
 	const home = probed.stdout.trim();
 	if (probed.code === 0 && home.startsWith("/")) return home.replace(/\/+$/, "");
