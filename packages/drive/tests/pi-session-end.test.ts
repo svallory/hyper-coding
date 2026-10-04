@@ -716,9 +716,17 @@ describe("what the children get (N2, N5)", () => {
 			`#!/bin/sh\n${"yes x | head -c 200000 2>/dev/null || head -c 200000 /dev/zero | tr '\\0' 'x'"}\n`,
 		);
 		chmodSync(bin, 0o755);
-		const result = await realDeps.probe(bin, directory, 5_000);
-		expect(result.stdout).toBe("");
-	});
+		// The cap, not the bound, must end this probe: `runProbe` kills the child
+		// and resolves as soon as stdout passes 64 KiB (measured 146-357 ms over
+		// 32 runs under a parallel build). The bound is generous so a slow child
+		// start under load cannot pass this test through the timeout path, and
+		// the vitest timeout sits above the bound so the two never collide (one
+		// unexplained 5005 ms run had both at 5 s).
+		const started = Date.now();
+		const result = await realDeps.probe(bin, directory, 10_000);
+		expect(result).toEqual({ status: null, stdout: "", timedOut: false });
+		expect(Date.now() - started).toBeLessThan(10_000);
+	}, 20_000);
 });
 
 describe("the real dependencies", () => {
