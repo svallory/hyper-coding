@@ -48,6 +48,10 @@ beforeEach(() => {
 		GIT_COMMITTER_EMAIL: "hook@example.invalid",
 		NO_COLOR: "1",
 		FORCE_COLOR: "0",
+		// Without this, the CLI's update-check hook spawns a detached, unref'd
+		// get-version process that writes its cache into HOME after the CLI has
+		// exited, racing the teardown below (ENOTEMPTY on fd1834ae's CI run).
+		HYPER_SKIP_NEW_VERSION_CHECK: "1",
 	}))
 		vi.stubEnv(key, value);
 	mkdirSync(process.env.HOME!, { recursive: true });
@@ -56,8 +60,7 @@ beforeEach(() => {
 });
 afterEach(() => {
 	vi.unstubAllEnvs();
-	// A just-finished git child may briefly retain/recreate files during teardown.
-	rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+	rmSync(directory, { recursive: true, force: true });
 });
 function payload(extra: Record<string, unknown> = {}): string {
 	return JSON.stringify({
