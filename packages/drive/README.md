@@ -151,13 +151,15 @@ hyper machine list [--json]
 ```
 
 Setup is idempotent per task and **never runs sudo unless you choose it**:
-root steps are written to one script (mode 0700) and printed. In a terminal
-it asks what to do — "I've run it" (the default), "Run it for me (asks for
-your password)", which runs `sudo bash <script>` locally or over `ssh -t`, or
-"Skip" — and `--yes` does not bypass that question. Without a terminal it
-leaves the script for you and exits 3 (root steps pending); choosing Skip in
-a terminal exits 0. Machines are the Herdr machine list merged with
-`[machines.*]` in `drive.toml`.
+root steps are written to one script (mode 0700) and printed. Without
+`--yes` in a terminal it asks what to do — "I've run it" (the default),
+"Run it for me (asks for your password)", which runs `sudo bash <script>`
+locally or over `ssh -t`, or "Skip"; Skip there is a deliberate answer, so
+the run exits 0 with those tasks reported as skipped. `--yes` asks nothing
+about root even in a terminal: it takes the defaults, leaves the printed
+script for you and exits 3 when root steps are pending. Without a terminal
+the same happens without `--yes`. Machines are the Herdr machine list merged
+with `[machines.*]` in `drive.toml`.
 
 ### `hyper drive` — the hyperdrive itself
 
