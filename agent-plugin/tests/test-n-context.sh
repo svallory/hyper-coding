@@ -146,6 +146,18 @@ printf '2026-10-04T12:00:00.000Z\t-\trefused\tx\n' >> "$end_log"
 assert_contains "session end: a refusal is reported" "$(run_ctx "$dl")" "$end_line (refused, 2026-10-04T12:00:00.000Z)"
 printf 'garbage without tabs\n' >> "$end_log"
 assert_not_contains "session end: a garbled last line prints nothing" "$(run_ctx "$dl")" "$end_line"
+# A FIFO would block `tail` until the hook timeout kills the whole context.
+rm -f "$end_log"; mkfifo "$end_log"
+started=$(date +%s)
+# Bounded so a regression fails here instead of hanging the suite; then a
+# writer opens and closes the FIFO to release any reader left blocked on it.
+out="$(cd "$dl" && echo '{}' | perl -e 'alarm 6; exec @ARGV' bash "$CTX" 2>/dev/null)"; rc=$?
+perl -e '$SIG{ALRM} = sub { exit 0 }; alarm 1; open my $f, ">", $ARGV[0]' "$end_log" 2>/dev/null
+assert_eq "session end: a FIFO log keeps exit 0" 0 "$rc"
+assert_ok "session end: a FIFO log does not block (took $(( $(date +%s) - started )) s; bound 4)" test $(( $(date +%s) - started )) -lt 4
+assert_contains "session end: a FIFO log still gives the context" "$out" "Project space: $dl"
+rm -f "$end_log"; printf '2026-10-04T12:00:00.000Z\t-\tfailed\tx\n' > "$FIX/real-log"; ln -s "$FIX/real-log" "$end_log"
+assert_not_contains "session end: a symlinked log is not read" "$(run_ctx "$dl")" "$end_line"
 rm -f "$end_log"; mkdir "$end_log"
 out="$(run_ctx "$dl")"; rc=$?
 assert_eq "session end: an unreadable log keeps exit 0" 0 "$rc"
