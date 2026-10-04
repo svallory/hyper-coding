@@ -1,6 +1,6 @@
 {
 	"name": "hyper",
-	"version": "0.5.0",
+	"version": "0.5.1",
 	"description": "Hyper workflow support: project spaces (a bare repo wrapping all of a project's worktrees plus local-only dirs) and per-edit integration with the linters and typecheckers a project already uses.",
 	"author": "Saulo Vallory",
 	"keywords": ["hyper", "workspaces", "lint", "typecheck"],
