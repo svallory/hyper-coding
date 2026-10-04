@@ -250,6 +250,44 @@ write_vfs() {
 }
 
 # --------------------------------------------------------------------------
+# DOCKER_IO=1: the existing-engine case (security review finding 3). Debian's
+# own docker.io is installed and started first; setup must refuse and leave it
+# exactly as it was — still installed, its unit in the same state, and no
+# Docker apt repository or key added. Then the script ends.
+# --------------------------------------------------------------------------
+if [ "${DOCKER_IO:-0}" = 1 ]; then
+  pexec 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq docker.io >/dev/null' \
+    || die "could not preinstall docker.io"
+  pexec 'systemctl start docker >/dev/null 2>&1 || true'
+  engine_before="$(pexec 'dpkg-query -W -f="\${Status} \${Version}" docker.io; echo; systemctl is-enabled docker || true; systemctl is-active docker || true')"
+  echo "# docker.io before: $(printf '%s' "$engine_before" | tr '\n' ' ')"
+  set +e
+  run_hyper > "$work_real/setup-dockerio.log" 2>&1
+  code=$?
+  set -e
+  [ "$code" != 0 ] || { cat "$work_real/setup-dockerio.log"; die "setup did not refuse over docker.io"; }
+  # The CLI wraps the error text; read it as one line.
+  refusal="$(tr '\n' ' ' < "$work_real/setup-dockerio.log" | tr -s ' ')"
+  printf '%s' "$refusal" | grep -q "already has a Docker engine that is not docker-ce: the docker.io package" \
+    || { cat "$work_real/setup-dockerio.log"; die "the refusal does not name docker.io"; }
+  printf '%s' "$refusal" | grep -q "Nothing has been changed" \
+    || { cat "$work_real/setup-dockerio.log"; die "the refusal does not say nothing changed"; }
+  pass "docker-rootless: over an installed docker.io, setup refuses, naming it"
+  engine_after="$(pexec 'dpkg-query -W -f="\${Status} \${Version}" docker.io; echo; systemctl is-enabled docker || true; systemctl is-active docker || true')"
+  [ "$engine_before" = "$engine_after" ] \
+    || { printf 'before:\n%s\nafter:\n%s\n' "$engine_before" "$engine_after"; die "docker.io changed"; }
+  pexec 'test ! -e /etc/apt/sources.list.d/docker.list' || die "a Docker apt repository appeared"
+  pexec 'test ! -e /etc/apt/keyrings/docker.asc' || die "Docker's apt key appeared"
+  # dpkg may know the NAME (docker.io declares a conflict with it); installed is the question.
+  case "$(pexec "dpkg-query -W -f='\${Status}' docker-ce 2>/dev/null || true")" in
+    *"ok installed"*) die "docker-ce was installed" ;;
+  esac
+  pass "docker-rootless: docker.io is still installed, its unit unchanged ($(printf '%s' "$engine_after" | tail -1)), and no Docker repo, key or docker-ce was added"
+  echo "# $step assertions passed (DOCKER_IO=1)"
+  exit 0
+fi
+
+# --------------------------------------------------------------------------
 # Run setup until it settles, running the root script the way the user would.
 # --------------------------------------------------------------------------
 settled=0
