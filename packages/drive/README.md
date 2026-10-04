@@ -1,18 +1,189 @@
 # @hypercli/drive
 
-Hyperdrive plugin for the `hyper` CLI: one private repo holding every space's history, `warp` (move a session between machines), config sync, and machine setup.
+Hyperdrive plugin for the `hyper` CLI: one private repository holding every
+space's history, `warp` (move a session between machines), config sync, and
+machine setup.
 
 ## Install
 
-Included automatically with the `hyper` CLI. Can also be installed as a standalone oclif plugin.
+Included automatically with the `hyper` CLI. Can also be installed as a
+standalone oclif plugin.
+
+## Concepts
+
+A **hyper space** is a project directory with a bare layout (see the hyper
+agent plugin). Hyperdrive gives each space its own history: an orphan branch
+(`space/<name>` or `space/<group>/<name>`) in your private hyperdrive
+repository, committed from a separate git dir at `<space>/.hyper/space.git`.
+The project's own `.git` is never touched.
+
+Tracking is an **allowlist**, not a blocklist: `notes/`, `data/`, `bin/`,
+`.hyper/`, `.claude/` and the root control files (`.gitignore`,
+`HYPER.md`, `AGENTS.md`, `CLAUDE.md`). `scratch/`, `worktrees/`, `code/`,
+loose root files, `.claude/settings.local.json` and the space's own git dir
+never travel, and a staged file that looks like a secret
+makes the commit refuse unless you allow that exact path. Extra directories
+join the list with `hyper space init --tracked <dir>`.
+
+## First machine
+
+```bash
+# 1. Point the CLI at your private hyperdrive repository.
+hyper drive init --remote git@github.com:you/hyperdrive.git
+
+# 2. Give a space a branch and pick its cadence.
+cd ~/spaces/my-project
+hyper space init --cadence session-end
+```
+
+Cadence is `manual` (you run `hyper space commit`), `session-end` (each
+Claude session end saves; the hook returns at once and a detached worker
+commits, so a slow network never holds the session) or `session-end+push`
+(save and push). A failed save shows in `hyper space status`. Pi sessions
+are saved with `hyper space commit` by hand for now.
+
+## Second machine
+
+```bash
+# 1. Same drive init (per-machine config lives in ~/.config/hyper/drive.toml).
+hyper drive init --remote git@github.com:you/hyperdrive.git --name laptop
+
+# 2. Recreate the space. The default destination is the recorded path
+#    remapped under this HOME; confirm it or pass one explicitly.
+hyper space clone my-project --yes
+
+# 3. Optional: keep ~/.claude and ~/.pi/agent in step between machines.
+hyper drive sync-config mac
+```
+
+Pull and clone treat incoming history as untrusted: they validate it before
+checkout and **report the files that can run commands or instruct agents**
+(executables, hooks, `CLAUDE.md`/`AGENTS.md`, anything under `.claude/`,
+`.pi/`, `bin/`). Read that list before letting an agent loose in a freshly
+cloned or pulled space.
 
 ## Commands
 
-- `hyper drive status` — Show the hyperdrive config file and the effective config
+### `hyper space` — a space's own history
+
+```
+hyper space init [DIR] [--name n] [--group g]
+                 [--cadence manual|session-end|session-end+push]
+                 [--tracked dir...] [--refresh] [--json]
+```
+
+Detect the space, refuse a branch-name clash on the remote, create
+`.hyper/space.git`, render the allowlist, make the first commit, push, and
+record the space in the manifest. `--refresh` re-renders an
+already-initialised space (adds `--tracked` entries; never removes).
+
+```
+hyper space commit [-m msg] [--allow-secret path...] [--json]
+```
+
+Stage per the allowlist, run the secret guard, commit when the index
+differs from HEAD. `--session-end` / `--payload-file` serve the detached
+SessionEnd worker; you never need them by hand.
+
+```
+hyper space push
+hyper space pull [--accept-tracked] [--json]
+hyper space log [git-log args…]
+hyper space status [--fetch] [--json]
+hyper space list [--json]
+```
+
+Push never rewrites remote history; pull is fast-forward only and never
+silently adopts a peer's new `tracked` entries (it asks, or takes
+`--accept-tracked`). Status is offline unless `--fetch` — it compares
+against the last-seen remote-tracking ref.
+
+```
+hyper space clone NAME [PATH] [--yes] [--json]
+```
+
+Recreate a space from the hyperdrive on this machine. Validates the
+manifest entry and the incoming branch, then clones the project's
+repositories and restores the cadence/tracked settings. Worktree placement
+is your worktrunk setting (`worktree-path`); clone inspects it read-only
+and warns with the actual destination — it never edits your config.
+
+Also: `hyper space detect [DIR] [--json]` (which space a directory belongs
+to; exits 1 outside one) and `hyper space lib-path` (path of the shared
+bash library the agent plugin sources).
+
+### `hyper warp` — move a session between machines
+
+```
+hyper warp MACHINE [--session id] [--stop] [--remote-control]
+             [--force] [--dry-run] [--json]
+```
+
+Send only: the machine holding the session runs it. Copies this session's
+transcript and the working directory to the same absolute path on MACHINE
+over ssh, then resumes through Herdr. Every check runs before the first
+change on either machine.
+
+Warp refuses, without `--force`, when the session already lives on the
+target and when the target's worktree or repo is dirty. With `--force`, a
+dirty space worktree's tracked changes are first saved on the target in a
+stash — untracked files are not in it — and a plain repo is overwritten
+file by file with nothing saved. `--dry-run` prints every step and changes
+nothing.
+
+### `hyper machine` — bring a machine to parity
+
+```
+hyper machine setup [MACHINE] [--features f,...] [--tools t,...|"all"]
+                    [--yes] [--agent-key key.pub]
+hyper machine add NAME [--home path] [--features f,...] [--agent-user u]
+hyper machine list [--json]
+```
+
+Setup is idempotent per task and **never runs sudo**: root steps are
+printed as one script for you to read and run yourself (exit code 3 means
+root steps are pending). Machines are the Herdr machine list merged with
+`[machines.*]` in `drive.toml`.
+
+### `hyper drive` — the hyperdrive itself
+
+```
+hyper drive init [--remote url] [--name n] [--home path]
+hyper drive status
+hyper drive sync-config [MACHINE] [--check] [--json]
+```
+
+`drive init` writes `~/.config/hyper/drive.toml` and clones the manifest.
+`sync-config` keeps `~/.claude` and `~/.pi/agent` in sync with another
+machine (Mutagen sessions); with no argument it lists them, `--check` only
+verifies and exits 1 on a mismatch.
 
 ## Configuration
 
-One user config file: `~/.config/hyper/drive.toml`. Set `HYPER_DRIVE_CONFIG=<path>` to override the location (used by tests and tooling).
+One user config file: `~/.config/hyper/drive.toml`. Set
+`HYPER_DRIVE_CONFIG=<path>` to override the location (used by tests and
+tooling).
+
+## Known limits
+
+- **Nothing at a space root is backed up until `hyper space init`.** The
+  generated `HYPER.md` says which case applies as of when it was written;
+  `hyper space status` is the live answer.
+- **Warp overwrites the target's copy file by file, with no `--delete`:**
+  files that exist only on the target are kept. An ignored file on the
+  target (the `.env` case) is overwritten even without `--force`, because
+  the dirty check does not see ignored files. Staged-but-uncommitted
+  changes arrive as unstaged modifications — the index does not travel.
+  The way back is warp from the other machine, which requires this machine
+  to be reachable from there (tailnet or a reverse tunnel).
+- **A machine on a non-default ssh port** is not reachable as a `host:port`
+  target; register it through an ssh config alias instead.
+- **The manifest is last-writer-wins by space name** — two machines
+  registering the same name at once resolve to whichever push lands last.
+- **Session-end saves cover Claude sessions.** Pi sessions are saved with
+  `hyper space commit` by hand for now.
+- **Incoming `tracked` entries widen what this machine uploads** — that is
+  why pull asks instead of adopting them.
 
 ## Documentation
 
