@@ -7,7 +7,6 @@ import {
 	mkdtempSync,
 	openSync,
 	readdirSync,
-	readFileSync,
 	readlinkSync,
 	realpathSync,
 	rmdirSync,
@@ -18,7 +17,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { ConfigError, configPath, loadConfig } from "#config/index";
 import type { SpaceEntry } from "#config/schema";
-import { isHyperAllowlist } from "#services/allowlist";
+import { normaliseTrackedEntry } from "#services/allowlist";
 import { ensureDriveCheckout, readManifest } from "#services/manifest";
 import { libPath } from "#services/space";
 import { isLocalDriveRemote, validateCloneEntry } from "#services/space-clone-validation";
@@ -33,6 +32,7 @@ import {
 	writeCadence,
 	writeTracked,
 } from "#services/space-git";
+import { SpaceIncomingError, validateIncomingSpace } from "#services/space-incoming";
 import { spaceWorktrunkWarning } from "#services/space-worktrunk";
 
 /**
@@ -115,29 +115,19 @@ function cloneLibrary(
 	}
 }
 
-/** Validate the remote tree BEFORE checkout can overwrite our private git dir. */
-function checkCloneTree(root: string, branch: string): string[] {
-	const entries = spaceGit(root, ["ls-tree", "-r", "-z", `refs/remotes/origin/${branch}`])
-		.stdout.split("\0")
-		.filter(Boolean);
-	for (const entry of entries) {
-		const tab = entry.indexOf("\t");
-		const mode = entry.slice(0, 6);
-		const path = entry.slice(tab + 1);
-		const lower = path.toLowerCase();
-		const reserved = [".git", ".hyper/space.git", "code", "worktrees", "scratch"];
-		if (
-			reserved.some((prefix) => lower === prefix || lower.startsWith(`${prefix}/`)) ||
-			(lower === ".hyper" && mode !== "040000") ||
-			(lower === ".gitignore" && mode !== "100644" && mode !== "100755") ||
-			mode === "160000"
-		) {
-			throw new Error(
-				`The space branch contains an unsafe layout path ${JSON.stringify(path)}. Repair the branch on the original machine before cloning it.`,
-			);
-		}
-	}
-	return entries.map((entry) => entry.slice(entry.indexOf("\t") + 1));
+/** Advisory only: never execute or approve incoming configuration or instructions. */
+function cloneUntrustedConfiguration(paths: readonly string[]): string[] {
+	return paths.filter((path) => {
+		const lower = path.normalize("NFC").toLowerCase();
+		return (
+			["claude.md", "agents.md", "hyper.md"].includes(lower.split("/").at(-1)!) ||
+			lower.startsWith("bin/") ||
+			lower.startsWith(".config/") ||
+			(lower.startsWith(".claude/") &&
+				lower !== ".claude/memory" &&
+				!lower.startsWith(".claude/memory/"))
+		);
+	});
 }
 
 export interface CloneSpaceResult {
@@ -259,28 +249,25 @@ export async function cloneSpace(
 		initSpaceGitDir(root, { branch: entry.branch, remote: config.remote });
 		ownedGitDirs.add(join(root, ".hyper", "space.git"));
 		fetchSpaceClone(root, entry.branch);
-		const incomingPaths = checkCloneTree(root, entry.branch);
+		const incoming = await validateIncomingSpace(root, `refs/remotes/origin/${entry.branch}`);
+		checkSignal();
+		const incomingPaths = spaceGit(root, ["ls-tree", "-r", "--name-only", "-z", incoming.tip])
+			.stdout.split("\0")
+			.filter(Boolean);
+		const allowedTracked = new Set(incoming.tracked);
+		const extraManifestTracked = entry.tracked
+			.map(normaliseTrackedEntry)
+			.filter((path) => !allowedTracked.has(path));
+		if (extraManifestTracked.length)
+			warnings.push(
+				`Manifest tracked entries ${extraManifestTracked.map((path) => JSON.stringify(path)).join(", ")} are not in the incoming allowlist; trusting the allowlist instead.`,
+			);
 		// Checkout privately, then publish files with exclusive creation. A
 		// raced-in user file cannot be overwritten or mistaken for our output.
 		const staging = mkdtempSync(join(root, ".hyper", "clone-"));
 		ownedGitDirs.add(staging);
-		spaceGit(root, [
-			"--work-tree",
-			staging,
-			"checkout",
-			"-B",
-			entry.branch,
-			`refs/remotes/origin/${entry.branch}`,
-			"--",
-		]);
-		const ignore = join(staging, ".gitignore");
-		if (
-			!lstatSync(ignore, { throwIfNoEntry: false })?.isFile() ||
-			!isHyperAllowlist(readFileSync(ignore, "utf8"))
-		)
-			throw new Error(
-				"The checked-out .gitignore is not a hyper allowlist. Repair it on the original machine with hyper space init --refresh, then retry.",
-			);
+		spaceGit(root, ["--work-tree", staging, "checkout", "-B", entry.branch, incoming.tip, "--"]);
+
 		for (const path of incomingPaths) {
 			const destination = resolve(root, path);
 			const inside = relative(root, destination);
@@ -305,7 +292,7 @@ export async function cloneSpace(
 		rmSync(staging, { recursive: true, force: true });
 		ownedGitDirs.delete(staging);
 		writeCadence(root, entry.cadence);
-		writeTracked(root, entry.tracked);
+		writeTracked(root, incoming.tracked);
 		const result: CloneSpaceResult = {
 			name,
 			path: root,
@@ -318,10 +305,7 @@ export async function cloneSpace(
 			worktrees: [],
 			libraryWrites: [],
 			warnings,
-			untrustedConfiguration: incomingPaths.filter(
-				(path) =>
-					path === ".claude/settings.json" || path.startsWith("bin/") || path === ".config/wt.toml",
-			),
+			untrustedConfiguration: cloneUntrustedConfiguration(incomingPaths),
 		};
 		if (result.untrustedConfiguration.length)
 			result.warnings.push(
@@ -410,7 +394,12 @@ export async function cloneSpace(
 				/* Never remove a nonempty parent. */
 			}
 		}
-		const detail = error instanceof Error ? error.message : String(error);
+		const detail =
+			error instanceof SpaceIncomingError
+				? `${error.message} Clone refused before checkout; review and repair the branch on the original machine.`
+				: error instanceof Error
+					? error.message
+					: String(error);
 		const cleanup = failures.length
 			? ` Cleanup is incomplete at ${failures.join(", ")}; inspect it before retrying.`
 			: "";
