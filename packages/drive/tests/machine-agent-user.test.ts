@@ -634,7 +634,7 @@ describe("the kernel condition behind the invariant", () => {
 		for (const consumer of [runner.joined, check.joined])
 			expect(consumer).toContain(shellQuote(treePolicy).slice(1, -1));
 		expect(runner.joined).toContain(shellQuote(treeRepair).slice(1, -1));
-		expect(watcher).toContain(treeRepair);
+		expect(watcher).toContain(shellQuote(treeRepair).slice(1, -1));
 	});
 
 	it("strips the other bits, which is tightening and never widening", async () => {
@@ -1846,17 +1846,49 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 
 	it("filters ALL shared-tree mutations by primary ownership and excludes symlinks", () => {
 		const script = repairSharedTree("/home/primary/work");
-		expect(script).toContain('find /home/primary/work ! -type l -user "$(id -u)" -exec');
+		expect(script).toContain('find "$tree_root" ! -type l -user "$(id -u)" -execdir');
+		expect(script).toContain("cd -P -- /home/primary/work");
+		expect(watcherScript(`${HOME}/.claude/projects`, HOME)).toContain(
+			'find "$entry" -maxdepth 0 ! -type l -user "$(id -u)" -execdir',
+		);
 		expect(script).not.toContain(" -R ");
 		const repair = sharedTreeRepairShell();
-		const mutation = repair.indexOf('setfacl -x "u:$tree_agent"');
-		expect(repair.indexOf('[ -L "$1" ] && return 0')).toBeLessThan(mutation);
-		expect(repair.indexOf('[ "$(stat -c %u "$1")" = "$(id -u)" ] || return 0')).toBeLessThan(
-			mutation,
-		);
-		expect(repair).toContain('chgrp -h collab "$1"');
+		const mutation = repair.indexOf('shared_tree_mutate "$1" setfacl');
+		expect(repair.indexOf('[ ! -L "$1" ]')).toBeGreaterThan(-1);
+		expect(repair.indexOf('[ ! -L "$1" ]')).toBeLessThan(mutation);
+		expect(repair).toContain('shared_tree_candidate "$1" || return 0');
+		expect(repair).toContain('shared_tree_mutate "$1" chgrp -h collab');
 		expect(repair).toContain('if shared_tree_ok "$1"; then return 0; fi');
 	});
+
+	it.each(["owned", "unowned", "symlink", "outside", "replaced"] as const)(
+		"rechecks shared-tree mutation bounds for %s entries",
+		(kind) => {
+			const home = isolatedHome();
+			try {
+				const tree = join(home, "tree");
+				const outside = join(home, "outside");
+				mkdirSync(tree);
+				mkdirSync(outside);
+				writeFileSync(join(tree, "victim"), "inside");
+				writeFileSync(join(outside, "victim"), "outside");
+				if (kind === "symlink") {
+					rmSync(join(tree, "victim"));
+					symlinkSync(join(outside, "victim"), join(tree, "victim"));
+				}
+				// Metadata mutators are shell stubs: NEVER execute ACL/setup mutations
+				// on the test host. Only disposable fixture files are replaced.
+				const result = shell(
+					`tree_root=$(CDPATH= cd -P -- ${shellQuote(tree)} && pwd -P)\ncd ${shellQuote(kind === "outside" ? outside : tree)}\nstat() { case "$2" in %u) ${kind === "unowned" ? "echo -1" : "command id -u"} ;; *) echo collab ;; esac; }\ngetfacl() { ${kind === "replaced" ? `rm -f ./victim; ln -s ${shellQuote(join(outside, "victim"))} ./victim;` : ""} printf 'user:agent:---\\n'; }\nchmod() { echo MUTATED; }\nchgrp() { echo MUTATED; }\nsetfacl() { echo MUTATED; }\n${sharedTreeRepairShell()}\nshared_tree_repair ./victim`,
+					home,
+				);
+				expect(result.status, result.stderr).toBe(0);
+				expect(result.stdout.includes("MUTATED")).toBe(kind === "owned");
+			} finally {
+				rmSync(join(home, ".."), { recursive: true, force: true });
+			}
+		},
+	);
 
 	it("refuses unsupported filesystems even when repairable drift exists", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');

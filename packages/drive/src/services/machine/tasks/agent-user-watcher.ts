@@ -9,7 +9,7 @@ import {
 	primaryUserLines,
 	primaryUserOf,
 } from "./agent-context.js";
-import { sharedTreeRepairShell } from "./agent-shared-tree.js";
+import { repairSharedTreeEntry } from "./agent-shared-tree.js";
 import { runOrFail, runScript } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
@@ -22,7 +22,6 @@ export function watcherScript(projectsDir: string, home: string, agentUser = "ag
 # One policy for the startup sweep, live events, setup and the read-only check.
 ${accessPolicyShell(paths, agentUser)}
 ${accessRepairShell()}
-${sharedTreeRepairShell(agentUser)}
 projects=${shellQuote(projectsDir)}
 me=$(id -u)
 
@@ -30,7 +29,7 @@ on_new() {
   repair_entry "$1" || printf 'hyper: could not protect %s\\n' "$1" >&2
 }
 widen() {
-  shared_tree_repair "$1" || printf 'hyper: could not share %s\\n' "$1" >&2
+  ${repairSharedTreeEntry(projectsDir, agentUser)} || printf 'hyper: could not share %s\\n' "$1" >&2
 }
 sweep() {
 ${directEntriesShell(paths.home, '  on_new "$entry"')}
