@@ -76,7 +76,7 @@
 	},
 	"scripts": {
 		"build": "tsc && bun run copy-assets",
-		"postbuild": "bunx oclif manifest",
+		"postbuild": "bun x --no-install oclif manifest",
 		"clean": "rm -rf dist tsconfig.tsbuildinfo",
 		"copy-assets": "mkdir -p dist/ai && cp src/ai/prompt-template.jig dist/ai/",
 		"test": "vitest run",
@@ -113,6 +113,7 @@
 		"@types/fs-extra": "^11.0.0",
 		"@types/js-yaml": "^4.0.9",
 		"@types/node": "^20.0.0",
+		"oclif": "6.0.2",
 		"typescript": "^5.4.0",
 		"vitest": "4.0.18"
 	},

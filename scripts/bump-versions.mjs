@@ -52,7 +52,11 @@ if (oclifPackages.length > 0) {
 	for (const pkg of oclifPackages) {
 		const pkgDir = resolve(root, `packages/${pkg}`);
 		try {
-			execSync("bunx oclif manifest", { cwd: pkgDir, stdio: "pipe" });
+			// `--no-install`: oclif is a devDependency of every oclif package, so
+			// the manifest is regenerated from the installed tree. A bare `bunx`
+			// would fetch oclif@latest into the shared bunx cache, which is
+			// unpinned and races with anything else doing the same.
+			execSync("bun x --no-install oclif manifest", { cwd: pkgDir, stdio: "pipe" });
 			console.log(`  ${pkg} ✓`);
 		} catch (err) {
 			console.error(`  ${pkg} ✗ — ${err.message}`);

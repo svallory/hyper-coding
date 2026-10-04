@@ -63,7 +63,7 @@
 	},
 	"scripts": {
 		"build": "tsc",
-		"postbuild": "bunx oclif manifest",
+		"postbuild": "bun x --no-install oclif manifest",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"lint": "biome check .",
@@ -88,6 +88,7 @@
 		"@types/node": "^20.0.0",
 		"@vitest/coverage-v8": "^4.0.0",
 		"fs-extra": "^11.3.3",
+		"oclif": "6.0.2",
 		"typescript": "^5.4.0",
 		"vite-tsconfig-paths": "^6.1.1",
 		"vitest": "4.0.18"
