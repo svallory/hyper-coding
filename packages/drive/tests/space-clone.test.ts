@@ -456,6 +456,48 @@ describe("untrusted clone branch", () => {
 		expect(said).toContain("the target was restored");
 		expect(existsSync(target)).toBe(false);
 	});
+	it("puts settings, hooks and executables ahead of instruction files before cutting", () => {
+		// The review's reproduction: 25 command files sort first alphabetically,
+		// and the old alphabetical cut hid the three files that run commands.
+		seed();
+		const peer = join(fixture.root, "risk-peer");
+		git(
+			["clone", "--single-branch", "--branch", "space/team/sample", fixture.remote, peer],
+			fixture.root,
+		);
+		mkdirSync(join(peer, ".claude", "commands"), { recursive: true });
+		for (let index = 1; index <= 25; index += 1)
+			writeFileSync(
+				join(peer, ".claude", "commands", `a${String(index).padStart(2, "0")}.md`),
+				"obey\n",
+			);
+		writeFileSync(join(peer, ".claude", "settings.json"), "{}\n");
+		mkdirSync(join(peer, "bin"), { recursive: true });
+		writeFileSync(join(peer, "bin", "payload"), "#!/bin/sh\n", { mode: 0o755 });
+		mkdirSync(join(peer, ".hyper"), { recursive: true });
+		writeFileSync(join(peer, ".hyper", "hooks.sh"), "#!/bin/sh\n");
+		git(["add", "-f", ".claude", "bin", ".hyper/hooks.sh"], peer);
+		git(["commit", "-qm", "risky mix"], peer);
+		git(["push", "origin", "HEAD"], peer);
+		useMachine("second");
+		const json = run(["sample", join(fixture.home, "destination-json"), "--json"]);
+		success(json);
+		const listed: string[] = JSON.parse(json.stdout).untrustedConfiguration;
+		// `--json` is complete and keeps its plain sorted order.
+		expect(listed).toEqual([...listed].sort());
+		expect(listed).toContain(".claude/commands/a25.md");
+		const text = run(["sample", join(fixture.home, "destination")]);
+		success(text);
+		const line =
+			flat(text.stderr)
+				.split("\n")
+				.find((value) => value.includes("came from the hyperdrive")) ?? "";
+		for (const dangerous of ['".claude/settings.json"', '".hyper/hooks.sh"', '"bin/payload"'])
+			expect(line).toContain(dangerous);
+		expect(line).toMatch(
+			/and \d+ more: \d+ instruction files(, \d+ other files?)?; run with --json to see them all/,
+		);
+	});
 	it("bounds the review list in text while --json stays complete", () => {
 		const source = seed();
 		for (let index = 0; index < 25; index += 1) {

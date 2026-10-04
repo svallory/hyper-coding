@@ -7,6 +7,7 @@ import { detectSpace } from "#services/space";
 import {
 	gitSaid,
 	hasSpaceGit,
+	type ReviewPathFacts,
 	readCadence,
 	readSpaceConfig,
 	readTracked,
@@ -16,7 +17,7 @@ import {
 	spaceGit,
 	writeTracked,
 } from "#services/space-git";
-import { incomingReviewPaths, validateIncomingSpace } from "#services/space-incoming";
+import { incomingReview, validateIncomingSpace } from "#services/space-incoming";
 
 export interface InitializedSpace {
 	root: string;
@@ -138,6 +139,8 @@ export interface SpacePullOptions {
 export interface SpacePullResult {
 	updated: boolean;
 	reviewPaths: string[];
+	/** Per-path risk facts for the text report; never part of `--json`. */
+	reviewFacts?: Map<string, ReviewPathFacts>;
 	addedTracked: IncomingTrackedEntry[];
 	allowlistRestored: boolean;
 }
@@ -234,7 +237,7 @@ export async function pullSpace(
 			throw new SpaceGitError(
 				`Local .gitignore changes would be overwritten while preserving this machine's tracked entries. Commit them with \`hyper space commit\` (or move them aside) before retrying.`,
 			);
-		const reviewPaths = await incomingReviewPaths(root, incoming.tip, before);
+		const review = await incomingReview(root, incoming.tip, before);
 		const result = spaceGit(
 			root,
 			[
@@ -268,7 +271,13 @@ export async function pullSpace(
 		}
 		writeTracked(root, union);
 		if (retained.length > 0) writeFileSync(join(root, ".gitignore"), rendered);
-		return { updated: true, reviewPaths, addedTracked, allowlistRestored: retained.length > 0 };
+		return {
+			updated: true,
+			reviewPaths: review.paths,
+			reviewFacts: review.facts,
+			addedTracked,
+			allowlistRestored: retained.length > 0,
+		};
 	} catch (error) {
 		const reason = (error instanceof Error ? error.message : String(error))
 			.replace(/\p{Cc}/gu, " ")

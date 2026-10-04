@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { shellQuote } from "#services/remote";
 import { initSpaceGitDir, spaceGit } from "#services/space-git";
-import { incomingReviewPaths } from "#services/space-incoming";
+import { incomingReview, incomingReviewPaths } from "#services/space-incoming";
 import { isolateGitConfig, type ManifestFixture, withManifestFixture } from "#tests/tmp-manifest";
 
 let fixture: ManifestFixture;
@@ -68,6 +68,38 @@ function commitAll(message: string): string {
 	spaceGit(root, ["commit", "-qm", message]);
 	return spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
 }
+
+describe("review facts for risk ordering", () => {
+	it("records mode, symlink and reached-through-a-link from the same listings", async () => {
+		write("notes/cmds/one.md", "obey\n");
+		link(".claude/commands", "../notes/cmds");
+		write("bin/payload", "#!/bin/sh\n", 0o755);
+		write(".claude/settings.json", "{}\n");
+		write("data/run.sh", "#!/bin/sh\n", 0o755);
+		const tip = commitAll("mixed");
+		const review = await incomingReview(root, tip);
+		// The plain list is unchanged: sorted, the same as incomingReviewPaths.
+		expect(review.paths).toEqual(await incomingReviewPaths(root, tip));
+		expect(review.paths).toEqual([...review.paths].sort());
+		expect(review.facts.get("bin/payload")).toEqual({
+			executable: true,
+			symlink: false,
+			throughLink: false,
+		});
+		expect(review.facts.get("data/run.sh")?.executable).toBe(true);
+		expect(review.facts.get(".claude/commands")).toEqual({
+			executable: false,
+			symlink: true,
+			throughLink: false,
+		});
+		expect(review.facts.get("notes/cmds/one.md")?.throughLink).toBe(true);
+		expect(review.facts.get(".claude/settings.json")).toEqual({
+			executable: false,
+			symlink: false,
+			throughLink: false,
+		});
+	});
+});
 
 describe("review report completeness", () => {
 	it("reports a change hidden behind a review symlink, at both ends of a chain", async () => {

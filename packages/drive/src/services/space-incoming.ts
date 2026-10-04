@@ -8,7 +8,12 @@ import {
 	RESERVED_PATHS,
 	renderGitignore,
 } from "#services/allowlist";
-import { readSpaceBlobPrefixes, SpaceGitError, spaceGit } from "#services/space-git";
+import {
+	type ReviewPathFacts,
+	readSpaceBlobPrefixes,
+	SpaceGitError,
+	spaceGit,
+} from "#services/space-git";
 
 export interface IncomingSpaceValidation {
 	tip: string;
@@ -328,6 +333,19 @@ export async function incomingReviewPaths(
 	tip: string,
 	base?: string,
 ): Promise<string[]> {
+	return (await incomingReview(root, tip, base)).paths;
+}
+
+/**
+ * {@link incomingReviewPaths} plus what the same two tree listings already
+ * know about each path (mode, symlink, reached through a link), so a text
+ * report can rank paths by risk without another git call per path.
+ */
+export async function incomingReview(
+	root: string,
+	tip: string,
+	base?: string,
+): Promise<{ paths: string[]; facts: Map<string, ReviewPathFacts> }> {
 	const tipTree = new Map(treeEntries(root, tip).map((entry) => [entry.path, entry]));
 	const baseTree = base
 		? new Map(treeEntries(root, base).map((entry) => [entry.path, entry]))
@@ -346,7 +364,7 @@ export async function incomingReviewPaths(
 		const baseEntry = baseTree.get(path);
 		return tipEntry?.hash !== baseEntry?.hash || tipEntry?.mode !== baseEntry?.mode;
 	};
-	const reported = new Set<string>();
+	const reported = new Map<string, ReviewPathFacts>();
 	const changedPaths = [...new Set([...tipTree.keys(), ...baseTree.keys()])].filter(changed);
 	// Review roots are transitive: a link INSIDE a directory a reviewed link
 	// points at is itself reviewed, so `.claude/commands -> ../notes/cmds` plus
@@ -402,14 +420,16 @@ export async function incomingReviewPaths(
 		// A changed path counts when it is itself a review path, when it sits
 		// behind a symlinked directory that a review path points at, or when it
 		// gained (or lost) the executable bit.
-		if (
-			isReviewPath(path) ||
-			isReviewPath(resolveThroughLinks(path, links)) ||
-			underReviewRoot(path) ||
-			tipEntry?.mode === "100755" ||
-			baseEntry?.mode === "100755"
-		)
-			reported.add(path);
+		const named = isReviewPath(path);
+		const executable = tipEntry?.mode === "100755" || baseEntry?.mode === "100755";
+		const throughLink =
+			!named && (isReviewPath(resolveThroughLinks(path, links)) || underReviewRoot(path));
+		if (named || throughLink || executable)
+			reported.set(path, {
+				executable,
+				symlink: (tipEntry ?? baseEntry)?.mode === "120000",
+				throughLink,
+			});
 	}
-	return [...reported].sort();
+	return { paths: [...reported.keys()].sort(), facts: reported };
 }
