@@ -228,6 +228,7 @@ describe("untrusted clone branch", () => {
 		// Stage the link itself: writing through it would land in notes/cmds.
 		spaceGit(source, ["add", "-f", "--", ".claude/commands"]);
 		spaceGit(source, ["commit", "-m", "link published"]);
+		spaceGit(source, ["push", "origin", "HEAD"]);
 		useMachine("second");
 		const result = run(["sample", join(fixture.home, "destination"), "--json"]);
 		success(result);
