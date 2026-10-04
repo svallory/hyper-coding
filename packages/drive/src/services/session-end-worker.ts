@@ -80,9 +80,14 @@ function message(error: unknown): string {
 }
 
 /**
- * Read (and always remove) the payload, then commit and, for the
- * `session-end+push` cadence, push. Returns the recorded entry; a payload
- * whose reason is `clear` or `resume` saves nothing and is recorded as ignored.
+ * Check that the payload belongs to the space the worker runs in, then read
+ * (and always remove) it, commit and, for the `session-end+push` cadence,
+ * push. Returns the recorded entry; a payload whose reason is `clear` or
+ * `resume` saves nothing and is recorded as ignored.
+ *
+ * Ownership comes first: a payload that belongs to another space (or that no
+ * initialised space here can claim) is left in place, for that space's own
+ * worker or the 24-hour sweep, and the refusal is logged next to it.
  */
 export async function runSessionEndWorker(
 	payloadPath: string,
@@ -90,25 +95,37 @@ export async function runSessionEndWorker(
 ): Promise<SessionEndLogEntry> {
 	const deadline = Date.now() + SESSION_END_WORKER_BUDGET_MS;
 	const gitDir = payloadGitDir(payloadPath);
-	let raw: Buffer;
+	let root: string;
+	let branch: string;
 	try {
-		if (statSync(payloadPath).size > PAYLOAD_LIMIT)
-			return appendSessionEndLog(gitDir, {
-				session: "-",
-				outcome: "refused",
-				detail: "the SessionEnd payload exceeds 64 KiB; nothing was committed.",
-			});
-		raw = readFileSync(payloadPath);
+		({ root, branch } = requireInitializedSpace(cwd));
+		if (realpathSync(spaceGitDir(root)) !== realpathSync(gitDir))
+			throw new Error(
+				`the payload belongs to ${quoteForTerminal(gitDir)}, but the worker's directory is in the space at ${quoteForTerminal(root)}; nothing was committed.`,
+			);
 	} catch (error) {
 		return appendSessionEndLog(gitDir, {
 			session: "-",
 			outcome: "failed",
-			detail: `I couldn't read the SessionEnd payload: ${message(error)}`,
+			detail: `${message(error)} The payload ${quoteForTerminal(basename(payloadPath))} was left in place.`,
 		});
-	} finally {
-		rmSync(payloadPath, { force: true });
-		sweepPayloads(gitDir);
 	}
+	let raw: Buffer | null = null;
+	let unread: string | null = null;
+	let outcome: "refused" | "failed" = "failed";
+	try {
+		if (statSync(payloadPath).size > PAYLOAD_LIMIT) {
+			outcome = "refused";
+			unread = "the SessionEnd payload exceeds 64 KiB; nothing was committed.";
+		} else raw = readFileSync(payloadPath);
+	} catch (error) {
+		unread = `I couldn't read the SessionEnd payload: ${message(error)}`;
+	}
+	// Removed whatever happened above, so it can never be committed twice.
+	rmSync(payloadPath, { force: true });
+	sweepPayloads(gitDir);
+	if (raw === null)
+		return appendSessionEndLog(gitDir, { session: "-", outcome, detail: unread ?? "" });
 
 	let input: Awaited<ReturnType<typeof readSessionEndInput>>;
 	try {
@@ -130,15 +147,8 @@ export async function runSessionEndWorker(
 			detail: `reason ${quoteForTerminal(input.reason ?? "")}: nothing is saved when a session is cleared or resumed.`,
 		});
 	const notes: string[] = [];
-	let root: string;
-	let branch: string;
 	let committed: number;
 	try {
-		({ root, branch } = requireInitializedSpace(cwd));
-		if (realpathSync(spaceGitDir(root)) !== realpathSync(gitDir))
-			throw new Error(
-				`the payload belongs to ${quoteForTerminal(gitDir)}, but the worker's directory is in the space at ${quoteForTerminal(root)}; nothing was committed.`,
-			);
 		const result = await commitSpace(
 			root,
 			branch,
