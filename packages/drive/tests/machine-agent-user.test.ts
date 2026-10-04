@@ -44,6 +44,7 @@ import { type RootChoice, runSetup, type SetupPrompt } from "#services/machine/r
 import {
 	accessPolicyShell,
 	accessRepairShell,
+	foreignEntriesShell,
 	unownedEntriesShell,
 	unprotectedEntriesShell,
 } from "#services/machine/tasks/agent-acl";
@@ -233,6 +234,9 @@ function settledDirs(overrides: Record<string, string> = {}): string {
 		"read_settings.json": "1",
 		"read_CLAUDE.md": "1",
 		read_skills: "1",
+		foreign_skills: "",
+		foreign_commands: "",
+		foreign_agents: "",
 		read_commands: "1",
 		read_agents: "1",
 		projects_group: "collab",
@@ -1596,7 +1600,7 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		expect(repair).toContain(
 			'find "$1" -xdev \\( -type d ! -user "$(id -u)" ! -readable -prune \\) -o',
 		);
-		expect(repair).toContain("-mindepth 1 ! -type l -execdir");
+		expect(repair).toContain('-mindepth 1 ! -type l ! -user "$(id -u)" -execdir');
 		// The execdir shell starts clean, so it must not rely on the caller's
 		// functions or on a PATH it inherits from the agent-writable tree.
 		// Only the execdir script itself, between the quoting sh and the `{} +`.
@@ -1604,6 +1608,41 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		expect(traversal).toContain("PATH=/usr/local/sbin:");
 		expect(traversal).not.toContain("legacy_group");
 		expect(repair).toContain("export PATH access default_acl agent_user");
+	});
+
+	// setfacl on somebody else's file is EPERM however readable that file is.
+	// The traversal had no owner filter, so ONE readable root-owned file under
+	// skills/ made the traversal exit nonzero and stopped the whole dirs apply.
+	it("skips entries it does not own instead of failing the grant", () => {
+		const repair = accessRepairShell();
+		expect(repair).toContain('-mindepth 1 ! -type l ! -user "$(id -u)" -execdir');
+		// And the skip has to be REPORTED, not silent: it means the agent quietly
+		// cannot read that entry. The read-only probe is the same find minus the
+		// mutation, so check and apply cannot disagree about what was skipped.
+		expect(foreignEntriesShell("/h/skills")).toContain('! -user "$(id -u)" -printf');
+		expect(foreignEntriesShell("/h/skills")).not.toContain("-execdir");
+	});
+
+	it("warns, without failing, about shared entries it cannot grant", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const lines: string[] = [];
+		const runner = recordingRunner([
+			{
+				match: "foreign_skills",
+				result: {
+					stdout: settledDirs({
+						foreign_skills: "/home/svallory/.claude/skills/root-owned.md,",
+					}),
+				},
+			},
+		]);
+		const settled = await agentUserDirs.check({
+			...ctxFor(runner),
+			log: (line) => lines.push(line),
+		});
+		expect(settled).toBe(true);
+		expect(lines.join("\n")).toContain("1 entries under skills/ are not owned by svallory");
+		expect(lines.join("\n")).toContain("root-owned.md");
 	});
 
 	it("applies the home protection before any shared-tree repair", async () => {
