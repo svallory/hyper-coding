@@ -293,8 +293,10 @@ for name in "${scripts[@]}"; do
 
   # Never hand a script the operator's agent. SSH_AUTH_SOCK would be forwarded
   # into every test container (1Password on this Mac), and nothing in a test may
-  # use or signal it.
-  env_args=(-u SSH_AUTH_SOCK -u SSH_AGENT_PID "HOME=$home")
+  # use or signal it. All -u flags come FIRST: BSD env (macOS /usr/bin/env)
+  # stops parsing options at the first assignment and would try to run "-u".
+  env_unset=(-u SSH_AUTH_SOCK -u SSH_AGENT_PID)
+  env_sets=("HOME=$home")
   case "$name" in
     warp | agent-user | docker-home)
       # Podman keeps machine connections in XDG_CONFIG_HOME and rootless image
@@ -302,36 +304,36 @@ for name in "${scripts[@]}"; do
       # temp HOME: otherwise macOS loses its VM connection, while Linux builds
       # fresh image layers as subuid-owned files under the throwaway HOME that
       # its ordinary user cannot remove.
-      env_args+=("XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$original_home/.config}"
+      env_sets+=("XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$original_home/.config}"
                  "XDG_DATA_HOME=${XDG_DATA_HOME:-$original_home/.local/share}")
       ;;
     *)
       # Nothing needs the real XDG dirs: drop them so a script cannot write into
       # the operator's config/state/cache by inheritance. tools.sh sets the ones
       # it needs itself.
-      env_args+=(-u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_STATE_HOME -u XDG_CACHE_HOME)
+      env_unset+=(-u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_STATE_HOME -u XDG_CACHE_HOME)
       ;;
   esac
   if [ "$name" != sessions ]; then
     mkdir -p "$home/claude"
-    env_args+=("CLAUDE_CONFIG_DIR=$home/claude")
+    env_sets+=("CLAUDE_CONFIG_DIR=$home/claude")
   fi
   case "$name" in
     warp)
-      env_args+=("WARP_E2E_PORT=$(free_port)" "WARP_E2E_CONTAINER=hyper-t12-$slug")
+      env_sets+=("WARP_E2E_PORT=$(free_port)" "WARP_E2E_CONTAINER=hyper-t12-$slug")
       ;;
     agent-user)
-      env_args+=("AGENT_USER_E2E_PORT=$(free_port)" "AGENT_USER_E2E_CONTAINER=hyper-t16-$slug")
+      env_sets+=("AGENT_USER_E2E_PORT=$(free_port)" "AGENT_USER_E2E_CONTAINER=hyper-t16-$slug")
       ;;
     docker-home)
-      env_args+=("DOCKER_HOME_E2E_PORT=$(free_port)" "DOCKER_HOME_E2E_CONTAINER=hyper-t17-$slug")
+      env_sets+=("DOCKER_HOME_E2E_PORT=$(free_port)" "DOCKER_HOME_E2E_CONTAINER=hyper-t17-$slug")
       ;;
   esac
 
   echo
   echo "=== $name.sh (HOME=$home) ==="
   start=$SECONDS
-  env "${env_args[@]}" bash "$here/$name.sh" &
+  env "${env_unset[@]}" "${env_sets[@]}" bash "$here/$name.sh" &
   child=$!
   wait "$child"
   rc=$?
