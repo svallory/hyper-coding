@@ -911,14 +911,17 @@ function redactLine(line: string): string {
 	// inside git's own line.
 	const masked = line.replace(/([?&][^=&\s]+)=([^&\s]*)/g, "$1=[redacted]");
 	// Userinfo lives in the AUTHORITY: between `scheme://` and the LAST `@`
-	// before the next `/`, whitespace or url-ending punctuation. Every url on the line is handled,
+	// before the next `/` or whitespace. Every url on the line is handled,
 	// wherever it sits. An unencoded `@` inside the password
 	// (`user:prefix@password-value@host`) is still userinfo, so the match runs to the last
 	// `@`; an `@` after the first `/` belongs to a path (`/a@b/c`), and masking
 	// there would invent a host the user never configured.
-	// Quotes, commas, `)`, `>` and `;` end a url in prose and code
-	// (`'https://h',admin@example.com`), so the authority never runs past them.
-	const urls = masked.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s'",)>;]*@/gi, "$1[redacted]@");
+	// No punctuation stops the authority: a password may contain `,`, `;`,
+	// quotes or `)` unencoded, and stopping there would print it. The price
+	// is over-redaction when an email follows a url with no whitespace
+	// between (`'https://h',admin@example.com` loses its host): hiding a host
+	// is acceptable, leaking a secret is not.
+	const urls = masked.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s]*@/gi, "$1[redacted]@");
 	// A bare `user:secret@host` with no scheme. The `//` guard keeps a url
 	// redacted above from being read as `scheme:password@`. scp-like
 	// `user@host:path` has no colon before the `@` and is not a secret.
