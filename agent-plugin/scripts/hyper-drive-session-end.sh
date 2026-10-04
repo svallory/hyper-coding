@@ -9,7 +9,7 @@
 #
 #   1. find the space and read its cadence (silent exit 0 when there is none,
 #      no .hyper/space.git, or the cadence is manual/unset);
-#   2. one line when the hyper CLI is missing;
+#   2. one line when the hyper CLI is missing, or cannot provide its library;
 #   3. write the hook JSON to a payload file in the space git dir and start
 #      `hyper space commit --session-end --payload-file <file>` DETACHED, in a
 #      new session, so it survives this hook's exit and a kill of its process
@@ -50,7 +50,15 @@ if ! command -v hyper >/dev/null 2>&1; then
   printf 'hyperdrive: cadence is %s but the hyper CLI is not installed\n' "$cadence"
   exit 0
 fi
-hyper_soft_lib </dev/null 2>/dev/null || exit 0
+if ! hyper_soft_lib </dev/null 2>/dev/null; then
+  set +e
+  if [[ "${hyper_lib_reason:-}" == outdated ]]; then
+    printf 'hyperdrive: cadence is %s but the installed hyper CLI is too old for this plugin (its hyper-lib.sh is older than v%s); update @hypercli/cli\n' "$cadence" "$HYPER_REQUIRE_LIB_VERSION"
+  else
+    printf 'hyperdrive: cadence is %s but the hyper CLI could not provide hyper-lib.sh (hyper space lib-path); reinstall or update @hypercli/cli\n' "$cadence"
+  fi
+  exit 0
+fi
 # hyper-lib.sh enables errexit/pipefail when sourced. This hook owns its exit
 # policy.
 set +e
