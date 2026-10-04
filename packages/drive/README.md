@@ -129,16 +129,22 @@ change on either machine.
 
 Warp refuses, without `--force`, when the session is owned by
 another machine or already lives on the target, when a leftover marker makes
-ownership unknown, and when the target's worktree or repo has uncommitted
-work (including untracked files). With
-`--force`, a dirty space worktree's tracked changes are first saved on the
-target in a stash — untracked files are not in it — and a plain repo is
-overwritten file by file with nothing saved. It refuses, whatever `--force` says, when the session is
-still running here (only `--stop` gets past that, and it ends that
-process), when the space is missing from the
-hyperdrive manifest, a path cannot be quoted identically on both platforms,
-the target's Herdr server does not answer, or the target would reject the
-branch push. `--dry-run` prints every step and changes
+ownership unknown, when the target's worktree or repo has uncommitted
+work (including untracked files), and when the copy would overwrite an
+untracked or ignored file there (a `.env`, say) with different content;
+identical files and excluded paths don't count. With `--force`, a dirty
+space worktree's tracked changes are first saved on the target in a stash
+(a plain repo's are not saved), and every untracked or ignored file the copy
+would overwrite with different content is first copied to
+`hyper-warp-backup/<session id>-<start time>/` inside the target repo's git
+directory (directories mode 0700); warp prints where and how many. It
+refuses, whatever `--force` says, when the session is still running here
+(only `--stop` gets past that, and it ends that process), when the space is
+missing from the hyperdrive manifest, a path cannot be quoted identically on
+both platforms, the target's Herdr server does not answer, the target would
+reject the branch push, or the target's worktree or repo has a merge,
+rebase, cherry-pick, revert or bisect in progress, unresolved conflicts, or
+a changed submodule. `--dry-run` prints every step and changes
 nothing.
 
 ### `hyper machine` — bring a machine to parity
@@ -188,9 +194,10 @@ tooling).
   The generated `HYPER.md` says which case applies as of when it was written;
   `hyper space status` is the live answer.
 - **Warp overwrites the target's copy file by file, with no `--delete`:**
-  files that exist only on the target are kept. An ignored file on the
-  target (the `.env` case) is overwritten even without `--force`, because
-  the dirty check does not see ignored files. Staged-but-uncommitted
+  files that exist only on the target are kept. For a plain directory (no
+  `.git` on the target) nothing is compared and nothing is saved first.
+  Ignored files inside a submodule of the target are not looked at.
+  Staged-but-uncommitted
   changes arrive as unstaged modifications — the index does not travel.
   The way back is warp from the other machine, which requires this machine
   to be reachable from there (tailnet or a reverse tunnel).
