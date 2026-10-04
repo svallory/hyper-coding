@@ -143,9 +143,11 @@ not in the session.
 
 Pi sessions are saved by the hyperdrive pi extension
 (`packages/drive/pi`, `pi install <path>`): on `session_shutdown` with reason
-`quit` it asks the CLI which space this is and what its cadence is, writes
-the payload and starts the same detached worker, so a pi session end commits
-locally (and pushes for `session-end+push`) and still returns at once.
+`quit` it asks the CLI which space this is and what its cadence is, asks
+the CLI which space this is (one read-only call, a few hundred milliseconds
+and bounded at 2 s), writes the payload and starts the same detached worker,
+so a pi session end commits locally (and pushes for `session-end+push`) while
+pi waits for that one call.
 `/new`, `/resume`, `/fork` and `/reload` are session replacement and save
 nothing, like `/clear` and resume. For pi the commit subject is the session
 name, or the first line of the first prompt — prompt text lands in the

@@ -153,40 +153,44 @@ export interface SpaceInfo {
 	repos: string[];
 	slug: string | null;
 	worktreesDir: string | null;
-	/** Absolute path of the space's history git dir, when it has one. */
-	spaceGitDir: string | null;
-	/** `hyper.cadence` from that git dir, or null when unset or unreadable. */
-	cadence: string | null;
 }
 
-/**
- * The full detection result in one call, for the `space detect` command.
- *
- * `spaceGitDir` and `cadence` are here so a caller that may not run commands
- * in a space learns which space it is in and when that space saves from one
- * read-only call that never guesses: pi's session-end extension asks this and
- * nothing else. They are the values `hyper space status` prints, read through
- * `services/space-git.ts`.
- */
 export function detectSpace(dir: string): SpaceInfo {
 	const root = findSpaceRoot(dir);
 	const layout = root === null ? null : spaceLayout(root);
 	const repos = root === null ? [] : spaceRepos(root);
 	const slug = root === null ? null : repoSlugOf(root, dir);
 	const worktrees = root === null || layout === null ? null : worktreesDir(root, slug ?? undefined);
-	let gitDir: string | null = null;
+	return { root, layout, repos, slug, worktreesDir: worktrees };
+}
+
+/** What a caller that may not run commands in a space needs to save one. */
+export interface SpaceSaveInfo {
+	/** Absolute path of the space's history git dir, or null when it has none. */
+	spaceGitDir: string | null;
+	/** `hyper.cadence`, or null when unset or not one of the three values. */
+	cadence: string | null;
+}
+
+/**
+ * The extra `space detect` reports: where this space's history is and when it
+ * saves, read through `services/space-git.ts` exactly as `space status` reads
+ * them. Deliberately NOT part of `detectSpace`: that runs on every space
+ * command (`requireInitializedSpace` is one call away from all of them) and
+ * the cadence is one more git spawn nobody else needs. Only the `detect`
+ * command pays, because only `detect --json` promises the answer.
+ */
+export function spaceSaveInfo(root: string | null): SpaceSaveInfo {
+	if (root === null) return { spaceGitDir: null, cadence: null };
+	const gitDir = spaceGitDir(root);
 	let cadence: string | null = null;
-	if (root !== null) {
-		const candidate = spaceGitDir(root);
-		if (existsSync(candidate)) gitDir = candidate;
-		try {
-			cadence = readCadence(root) || null;
-		} catch {
-			// A cadence outside the three allowed values is a broken space, and
-			// `readCadence` says so loudly everywhere else. Detection stays a
-			// report: null, never a guess.
-			cadence = null;
-		}
+	try {
+		cadence = readCadence(root) || null;
+	} catch {
+		// A cadence outside the three allowed values is a broken space, and
+		// `readCadence` says so loudly everywhere else. Detection stays a
+		// report: null, never a guess.
+		cadence = null;
 	}
-	return { root, layout, repos, slug, worktreesDir: worktrees, spaceGitDir: gitDir, cadence };
+	return { spaceGitDir: existsSync(gitDir) ? gitDir : null, cadence };
 }

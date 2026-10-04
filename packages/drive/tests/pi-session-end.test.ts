@@ -5,7 +5,13 @@
  * is covered by tests/session-end.test.ts and, end to end, by the real-CLI
  * test at the bottom of this file.
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import {
+	type ChildProcess,
+	execFileSync,
+	type SpawnOptions,
+	type spawn,
+	spawnSync,
+} from "node:child_process";
 import {
 	chmodSync,
 	existsSync,
@@ -26,6 +32,9 @@ import { commitSpace } from "#services/space-sync";
 import { makeBareSpace } from "#tests/tmp-space";
 import hyperdrive from "../pi/hyperdrive.ts";
 import {
+	absolutePathEntries,
+	childEnv,
+	createRealDeps,
 	entryText,
 	MISSING_CLI_LINE,
 	OUTDATED_CLI_LINE,
@@ -287,17 +296,51 @@ describe("the pi extension on session_shutdown", () => {
 	});
 
 	it.each([
-		["a CLI too old to report the git dir", answerJson({ spaceGitDir: undefined })],
-		["a CLI that printed no JSON", "Command not found: hyper space"],
-		["a CLI that printed nothing", ""],
-		["a CLI that printed an object without a root", '{"layout":"bare"}'],
-		["a CLI that printed a non-object", "42"],
+		["a CLI from before T-18", answerJson({ spaceGitDir: undefined })],
+		[
+			"a CLI from before T-18 answering with only the fields of main",
+			'{"root":"/spaces/outer","layout":"bare","repos":[],"slug":null,"worktreesDir":null}',
+		],
 	])("prints one outdated line for %s and saves nothing", async (_label, stdout) => {
-		const deps = fakeDeps({ answer: { status: 1, stdout, timedOut: false } });
+		const deps = fakeDeps({ answer: { status: 0, stdout, timedOut: false } });
 		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
 		expect(deps.lines).toEqual([OUTDATED_CLI_LINE]);
 		expect(deps.payloads).toEqual([]);
 		expect(deps.spawns).toEqual([]);
+	});
+
+	// N1: silence for everything that is not "this CLI is too old".
+	it.each([
+		["a space whose history was never initialised", answerJson({ spaceGitDir: null })],
+		["a CLI that printed no JSON", "Command not found: hyper space"],
+		["a CLI that printed nothing", ""],
+		["a CLI that failed with no output", ""],
+		["a CLI that printed an object without a root", '{"layout":"bare"}'],
+		["a CLI that printed a non-object", "42"],
+		["a CLI that printed an array", "[]"],
+		["a CLI whose answer is garbage after the cap", "x".repeat(70 * 1024)],
+	])("stays silent for %s and saves nothing", async (_label, stdout) => {
+		const deps = fakeDeps({ answer: { status: 1, stdout, timedOut: false } });
+		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
+		expect(deps.lines).toEqual([]);
+		expect(deps.payloads).toEqual([]);
+		expect(deps.spawns).toEqual([]);
+	});
+
+	// N3: the directory the payload goes into has to be the one the root implies.
+	it.each([
+		[
+			"an absolute git dir somewhere else",
+			answerJson({ spaceGitDir: "/elsewhere/.hyper/space.git" }),
+		],
+		["a relative git dir", answerJson({ spaceGitDir: "rel/.hyper/space.git" })],
+		["a git dir outside .hyper", answerJson({ spaceGitDir: "/spaces/outer/.git" })],
+	])("refuses a lying probe: %s", async (_label, stdout) => {
+		const deps = fakeDeps({ answer: { status: 0, stdout, timedOut: false } });
+		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
+		expect(deps.payloads).toEqual([]);
+		expect(deps.spawns).toEqual([]);
+		expect(deps.lines).toEqual([]);
 	});
 
 	it("gives up silently when the CLI call runs past its bound", async () => {
@@ -307,11 +350,20 @@ describe("the pi extension on session_shutdown", () => {
 		expect(deps.payloads).toEqual([]);
 	});
 
-	it("prints one line when there is no hyper CLI, and does not guess", async () => {
+	it("prints the missing-CLI line only in a space, and does not guess", async () => {
+		const inSpace = join(directory, "space", "notes");
+		mkdirSync(join(directory, "space", ".hyper", "space.git"), { recursive: true });
+		mkdirSync(inSpace, { recursive: true });
 		const deps = fakeDeps({ resolveCli: () => undefined });
-		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
+		expect(await saveSessionEnd(facts({ cwd: inSpace }), deps)).toBeUndefined();
 		expect(deps.lines).toEqual([MISSING_CLI_LINE]);
 		expect(deps.calls).toEqual([]);
+		// Anywhere else a missing CLI is silent, exactly as the Claude hook is.
+		const elsewhere = join(directory, "plain");
+		mkdirSync(elsewhere, { recursive: true });
+		const quiet = fakeDeps({ resolveCli: () => undefined });
+		expect(await saveSessionEnd(facts({ cwd: elsewhere }), quiet)).toBeUndefined();
+		expect(quiet.lines).toEqual([]);
 	});
 
 	it("reports one line when the payload cannot be written, and does not spawn", async () => {
@@ -471,7 +523,82 @@ describe("resolving the hyper CLI", () => {
 				timedOut: false,
 			}),
 		).toEqual({ root: "/a", spaceGitDir: "/a/.hyper/space.git", cadence: "manual" });
-		expect(() => parseSpaceAnswer({ status: 0, stdout: "[]", timedOut: false })).toThrow();
+		// Only "an object with a root and no spaceGitDir key" is an old CLI.
+		expect(() => parseSpaceAnswer({ status: 0, stdout: '{"root":"/a"}', timedOut: false })).toThrow(
+			/no git dir/,
+		);
+		expect(parseSpaceAnswer({ status: 0, stdout: "[]", timedOut: false })).toBeUndefined();
+	});
+});
+
+describe("what the children get (N2, N5)", () => {
+	it("gives every child a PATH of absolute entries only", () => {
+		const good = "/opt/hyper/bin";
+		const env = childEnv({
+			PATH: ["", ".", "./bin", "node_modules/.bin", "~/bin", good, "/usr/bin"].join(delimiter),
+			HYPER_HOME: "/hyper",
+		});
+		expect(env.PATH).toBe([good, "/usr/bin"].join(delimiter));
+		expect(env.HYPER_SKIP_NEW_VERSION_CHECK).toBe("1");
+		// A bare relative PATH entry list leaves the child with nothing, never
+		// with the directory it is about to run in.
+		expect(childEnv({ PATH: "./bin:." }).PATH).toBe("");
+	});
+
+	it("spawns the worker with detached, no pipes, the session's cwd and this argv", () => {
+		const calls: { bin: string; args: readonly string[]; options: SpawnOptions }[] = [];
+		const child = { on: () => child, unref: () => {} } as unknown as ChildProcess;
+		const deps: SessionEndDeps = createRealDeps({
+			spawn: ((bin: string, args: readonly string[], options: SpawnOptions) => {
+				calls.push({ bin, args, options });
+				return child;
+			}) as unknown as typeof spawn,
+		});
+		deps.spawnWorker(
+			"/spaces/outer/.hyper/space.git/session-end-payload.1.abcd",
+			"/opt/hyper/bin/hyper",
+			"/spaces/outer/notes",
+			() => {},
+		);
+		expect(calls).toHaveLength(1);
+		expect(calls[0]!.bin).toBe("/opt/hyper/bin/hyper");
+		expect(calls[0]!.args).toEqual([
+			"space",
+			"commit",
+			"--session-end",
+			"--payload-file",
+			"/spaces/outer/.hyper/space.git/session-end-payload.1.abcd",
+		]);
+		expect(calls[0]!.options.detached).toBe(true);
+		expect(calls[0]!.options.stdio).toBe("ignore");
+		expect(calls[0]!.options.cwd).toBe("/spaces/outer/notes");
+		expect(String(calls[0]!.options.env?.PATH).split(delimiter)).toEqual(
+			absolutePathEntries(process.env.PATH),
+		);
+	});
+
+	it("kills a probe that hangs at the bound, and the handler returns", async () => {
+		// `sleep 30` never answers; the bound is 250 ms here.
+		const bin = join(directory, "sleeper");
+		writeFileSync(bin, "#!/bin/sh\nsleep 30\n");
+		chmodSync(bin, 0o755);
+		const started = Date.now();
+		const result = await realDeps.probe(bin, directory, 250);
+		const elapsed = Date.now() - started;
+		expect(result.timedOut).toBe(true);
+		expect(result.stdout).toBe("");
+		expect(elapsed).toBeLessThan(5_000);
+	});
+
+	it("treats a probe that floods stdout as no answer at all", async () => {
+		const bin = join(directory, "flooder");
+		writeFileSync(
+			bin,
+			`#!/bin/sh\n${"yes x | head -c 200000 2>/dev/null || head -c 200000 /dev/zero | tr '\\0' 'x'"}\n`,
+		);
+		chmodSync(bin, 0o755);
+		const result = await realDeps.probe(bin, directory, 5_000);
+		expect(result.stdout).toBe("");
 	});
 });
 
@@ -485,11 +612,17 @@ describe("the real dependencies", () => {
 		for (const path of [first, second]) {
 			expect(path.startsWith(`${gitDir}${"/"}`)).toBe(true);
 			expect(path).toContain("session-end-payload.");
-			// O_EXCL: the same name twice is a refusal, never a silent overwrite.
 			expect(statSync(path).mode & 0o777).toBe(0o600);
 		}
 		expect(JSON.parse(readFileSync(first, "utf8")).session_id).toBe("x");
 		expect(() => realDeps.writePayload(join(directory, "absent"), "{}")).toThrow();
+		// O_EXCL really is exclusive: the same name twice is a refusal, and the
+		// first file is untouched.
+		const name = "session-end-payload.fixed";
+		const only = realDeps.writePayload(gitDir, '{"session_id":"first"}', name);
+		expect(only).toBe(join(gitDir, name));
+		expect(() => realDeps.writePayload(gitDir, '{"session_id":"second"}', name)).toThrow();
+		expect(readFileSync(only, "utf8")).toBe('{"session_id":"first"}');
 	});
 
 	it("spawns the worker detached, with no pipes, from the given directory", async () => {
