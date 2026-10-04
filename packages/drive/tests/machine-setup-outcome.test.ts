@@ -75,7 +75,7 @@ describe("setup outcomes (N4)", () => {
 			expect(output.at(-1)).toContain(`EXIT ${exit}`);
 			if (pending) expect(output.at(-1)).toContain("still need root");
 			if (failed) {
-				expect(output.at(-1)).toContain("could not be installed");
+				expect(output.at(-1)).toContain("could not be completed");
 				expect(output.findIndex((line) => line.includes("FAILED:"))).toBeLessThan(
 					output.length - 1,
 				);
