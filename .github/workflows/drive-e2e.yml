@@ -11,8 +11,10 @@ name: drive-e2e
 #   sync        RUNS — mutagen 0.18.1 installed below, loopback sshd below.
 #   tools       RUNS — downloads into a throwaway HOME.
 #   warp        RUNS — podman is preinstalled on ubuntu-latest.
-#   agent-user  ATTEMPTED — systemd-in-container on the hosted runner.
-#   docker-home ATTEMPTED — additionally needs --privileged (nested userns).
+#   agent-user  RUNS — systemd-in-container passed 53 assertions on the runner.
+#   docker-home SKIP — privileged nested systemd never became ready in 90s
+#               under the hosted runner's rootless Podman 4.9.3 (run
+#               37220719674); it passes locally in the podman VM.
 
 on:
   push:
@@ -135,7 +137,10 @@ jobs:
           # credentials; this job uses no secrets). run.sh also skips it on
           # its own — its probe finds no claude on PATH — the switch just
           # makes the reason explicit in the log.
-          HYPER_E2E_SKIP: "sessions"
+          # docker-home: tried on this hosted runner (run 37220719674), but
+          # its privileged nested systemd never became ready after 90s.
+          # This capability is not available here; it runs locally on macOS.
+          HYPER_E2E_SKIP: "sessions,docker-home"
         run: bash packages/drive/tests/e2e/run.sh
 
       - name: Show leftover containers (must be none)

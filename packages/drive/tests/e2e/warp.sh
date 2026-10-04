@@ -82,6 +82,13 @@ sha12() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sh
 
 [ -f "$cli" ] || { echo "# cannot find the CLI at $cli — build packages/cli first" >&2; exit 1; }
 
+# Fixture commits must never consult the operator's global commit-signing
+# agent (which may be absent and must not be called by a test). Per-process
+# Git config beats global config without changing the user's files.
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=commit.gpgsign
+export GIT_CONFIG_VALUE_0=false
+
 work="$(mktemp -d "${TMPDIR:-/tmp}/hyperdrive-e2e-warp.XXXXXX")"
 # macOS: /tmp is a symlink to /private/tmp. Resolve, because the SAME resolved
 # string has to be recreated inside the container and both sides compared.
@@ -96,14 +103,21 @@ home_local="$work_real/homelab"
 # reason a second HOME on one filesystem would prove nothing.
 mkdir -p "$home_local"
 
+container_started=0
 cleanup() {
   if [ "${KEEP:-0}" = "1" ]; then
-    echo "# KEEP=1 — container $container and $work_real left behind"
-    echo "#   remove with: podman rm -f $container && rm -rf $work_real"
+    if [ "$container_started" = "1" ]; then
+      echo "# KEEP=1 — container $container and $work_real left behind"
+      echo "#   remove with: podman rm -f $container && rm -rf $work_real"
+    else
+      echo "# KEEP=1 — $work_real left behind (no container started)"
+    fi
     return
   fi
-  echo "# tearing down $container"
-  podman rm -f "$container" >/dev/null 2>&1 || true
+  if [ "$container_started" = "1" ]; then
+    echo "# tearing down $container"
+    podman rm -f "$container" >/dev/null 2>&1 || true
+  fi
   rm -rf "$work_real"
 }
 trap cleanup EXIT
@@ -172,11 +186,16 @@ if [ "$(uname -s)" != Linux ] && podman machine list --format '{{.Running}}' >/d
     podman machine start >/dev/null
   fi
 fi
-podman rm -f "$container" >/dev/null 2>&1 || true
+# Never remove a container this invocation did not start, including a stale
+# standalone default name. run.sh supplies a unique name per run.
+if podman container exists "$container"; then
+  die "container $container already exists; refusing to touch it"
+fi
 # The entrypoint takes the shared home path and does the user setup, because
 # sshd is the container's main process and must be the LAST thing started.
 podman run -d --name "$container" -p "$port":22 "$derived" "$home_local" >/dev/null \
   || die "could not start the container"
+container_started=1
 echo "# started $container on port $port (shared home $home_local)"
 
 pexec() { podman exec "$container" sh -c "$1"; }
@@ -271,12 +290,18 @@ fi
 
 exit 0
 HERDR
-sed -i '' \
+# BSD sed (macOS) uses `-i ''`; GNU sed (Linux) treats that empty argument
+# as a filename. Render to a sibling temp file then rename on both platforms.
+render_in_place() {
+  local file="$1"; shift
+  sed "$@" "$file" > "$file.rendered"
+  mv "$file.rendered" "$file"
+}
+render_in_place "$fakebin/herdr" \
   -e "s|%WORK%|$work_real|g" \
   -e "s|%KEY%|$key|g" \
   -e "s|%PORT%|$port|g" \
-  -e "s|%PRIMARY%|$primary|g" \
-  "$fakebin/herdr"
+  -e "s|%PRIMARY%|$primary|g"
 chmod +x "$fakebin/herdr"
 
 # --- fake claude (target side, /usr/local/bin is on a non-login ssh PATH) ---
@@ -290,7 +315,7 @@ exit 0
 CLAUDE
 # The log goes INSIDE the shared home, which the target user owns; the harness
 # work dir is root-owned in the container and the fake would get EACCES.
-sed -i '' -e "s|%HOMEDIR%|$home_local|g" "$work_real/claude"
+render_in_place "$work_real/claude" -e "s|%HOMEDIR%|$home_local|g"
 podman cp "$work_real/claude" "$container:/usr/local/bin/claude"
 pexec "chmod 0755 /usr/local/bin/claude"
 
@@ -322,7 +347,7 @@ if [ "$1" = "space" ] && [ "$2" = "clone" ]; then
 fi
 exit 0
 HYPERSTUB
-sed -i '' -e "s|%HOMEDIR%|$home_local|g" "$work_real/hyper"
+render_in_place "$work_real/hyper" -e "s|%HOMEDIR%|$home_local|g"
 podman cp "$work_real/hyper" "$container:/usr/local/bin/hyper"
 pexec "chmod 0755 /usr/local/bin/hyper"
 
