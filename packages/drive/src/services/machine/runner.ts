@@ -17,7 +17,9 @@
  *
  * This file holds the CLI's only `sudo` call outside `root-script.ts` (C-6),
  * and it is reachable from exactly one place: the user picking "run it for me".
- * `--yes` never reaches it — picking defaults is not asking for a password.
+ * `--yes` never reaches it — it takes the default features, and being
+ * unattended it leaves the root script for the user to run themselves (see
+ * `canAskAboutRoot` in the command).
  */
 
 import { chmod, mkdir, writeFile } from "node:fs/promises";
