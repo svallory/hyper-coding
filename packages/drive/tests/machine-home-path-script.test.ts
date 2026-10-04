@@ -18,6 +18,7 @@
 
 import { spawnSync } from "node:child_process";
 import {
+	chmodSync,
 	existsSync,
 	lstatSync,
 	mkdirSync,
@@ -25,6 +26,7 @@ import {
 	readFileSync,
 	readlinkSync,
 	rmSync,
+	statSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -102,15 +104,27 @@ function sandbox(passwdHome: "legacy" | "target" = "legacy"): Sandbox {
 	);
 	const rewritten = rendered
 		.replaceAll("/home/", `${root}/home/`)
-		.replaceAll("/Users/", `${root}/Users/`);
+		.replaceAll("/Users", `${root}/Users`);
 	// Never run a script that could still reach the real prefixes.
-	const outside = rewritten.replaceAll(`${root}/home/`, "").replaceAll(`${root}/Users/`, "");
-	expect(outside).not.toMatch(/\/home\/|\/Users\//);
+	const outside = rewritten.replaceAll(`${root}/home/`, "").replaceAll(`${root}/Users`, "");
+	expect(outside).not.toMatch(/\/home\/|\/Users/);
 
 	const stubs = `
 getent() { grep "^$2:" ${JSON.stringify(passwd)}; }
 id() { [ "$1" = -u ] || return 1; [ "$2" = ${NAME} ] && { echo 1000; return 0; }; return 1; }
-stat() { echo 42; }
+# stat: the owner and the device are the fixture's (USERS_UID, USERS_DEV,
+# HOME_DEV, ROOT_DEV); the mode is the real one of the sandbox directory.
+stat() {
+  local format="$2" path="$3"
+  case "$format:$path" in
+    %u:*/Users) echo "\${USERS_UID:-0}" ;;
+    %d:*/Users) echo "\${USERS_DEV:-42}" ;;
+    %d:*/home/) echo "\${HOME_DEV:-42}" ;;
+    %d:/) echo "\${ROOT_DEV:-42}" ;;
+    %a:*) command stat -c %a "$path" 2>/dev/null || command stat -f %Lp "$path" ;;
+    *) return 1 ;;
+  esac
+}
 pgrep() {
   [ -n "\${BUSY:-}" ] || return 1
   printf '%s\\n' \${BUSY}
@@ -122,6 +136,7 @@ usermod() {
 }
 ln() { [ -z "\${LN_FAIL:-}" ] || return 1; command ln "$@"; }
 mv() { [ -z "\${MV_FAIL:-}" ] || return 1; command mv "$@"; }
+mkdir() { command mkdir "$@"; }
 `;
 	// The stubs go right after the strict-mode preamble, so the script still runs
 	// under the exact `set -euo pipefail` the user gets.
@@ -266,3 +281,75 @@ describe("the home-path root script, run", () => {
 function symlinkTo(destination: string, path: string): void {
 	spawnSync("ln", ["-s", destination, path]);
 }
+
+describe("/Users is checked before a home moves into it", () => {
+	function refusedUnchanged(box: Sandbox, env: Record<string, string>, reason: RegExp): void {
+		const result = box.run(env);
+		expect(result.code).not.toBe(0);
+		expect(result.stderr).toMatch(reason);
+		expect(result.stderr).toContain("nothing has been changed");
+		expect(passwdHomeOf(box)).toBe(box.legacy);
+		expect(lstatSync(box.legacy).isDirectory()).toBe(true);
+		expect(existsSync(box.target)).toBe(false);
+	}
+
+	it("refuses a /Users that is a symlink", () => {
+		const box = sandbox();
+		homeWithFile(box);
+		mkdirSync(join(box.root, "elsewhere"));
+		symlinkTo(join(box.root, "elsewhere"), join(box.root, "Users"));
+		refusedUnchanged(box, {}, /Users is a symlink/);
+	});
+
+	it("refuses a /Users owned by someone other than root", () => {
+		const box = sandbox();
+		homeWithFile(box);
+		mkdirSync(join(box.root, "Users"), { mode: 0o755 });
+		refusedUnchanged(box, { USERS_UID: "1000" }, /owned by uid 1000, not root/);
+	});
+
+	it("refuses a group- or other-writable /Users", () => {
+		for (const mode of [0o775, 0o757, 0o1777]) {
+			const box = sandbox();
+			homeWithFile(box);
+			mkdirSync(join(box.root, "Users"));
+			chmodSync(join(box.root, "Users"), mode);
+			refusedUnchanged(box, {}, /group- or other-writable/);
+		}
+	});
+
+	it("refuses a /Users, or an absent one's parent, on another filesystem than /home", () => {
+		const existing = sandbox();
+		homeWithFile(existing);
+		mkdirSync(join(existing.root, "Users"), { mode: 0o755 });
+		refusedUnchanged(existing, { USERS_DEV: "7" }, /different filesystems \(7 vs 42\)/);
+		const absent = sandbox();
+		homeWithFile(absent);
+		refusedUnchanged(absent, { ROOT_DEV: "7" }, /different filesystems/);
+		expect(existsSync(join(absent.root, "Users"))).toBe(false);
+	});
+
+	it("moves into an existing root-owned /Users without resetting its mode", () => {
+		const box = sandbox();
+		homeWithFile(box);
+		mkdirSync(join(box.root, "Users"));
+		chmodSync(join(box.root, "Users"), 0o711);
+		const result = box.run();
+		expect(result.stderr).toBe("");
+		expect(result.code).toBe(0);
+		expect(statSync(join(box.root, "Users")).mode & 0o7777).toBe(0o711);
+		expect(lstatSync(box.target).isDirectory()).toBe(true);
+	});
+
+	it("creates an absent /Users 0755, and removes it again when the move fails", () => {
+		const box = sandbox();
+		homeWithFile(box);
+		expect(box.run().code).toBe(0);
+		expect(statSync(join(box.root, "Users")).mode & 0o7777).toBe(0o755);
+
+		const failed = sandbox();
+		homeWithFile(failed);
+		expect(failed.run({ MV_FAIL: "1" }).code).not.toBe(0);
+		expect(existsSync(join(failed.root, "Users"))).toBe(false);
+	});
+});
