@@ -52,6 +52,30 @@ function testWords(script: string): string[] {
 	);
 }
 
+/**
+ * git for the real-repo fixtures, isolated from the machine running the
+ * tests: no system or global config (a signing helper there, like 1Password's,
+ * makes every commit fail), a throwaway HOME, and an identity of its own.
+ */
+function isolatedGit(cwd: string, home: string) {
+	const env = {
+		...process.env,
+		HOME: home,
+		XDG_CONFIG_HOME: join(home, ".config"),
+		GIT_CONFIG_NOSYSTEM: "1",
+		GIT_CONFIG_GLOBAL: "/dev/null",
+		GIT_AUTHOR_NAME: "t",
+		GIT_AUTHOR_EMAIL: "t@e",
+		GIT_COMMITTER_NAME: "t",
+		GIT_COMMITTER_EMAIL: "t@e",
+	};
+	return (...args: string[]) => {
+		const result = spawnSync("git", args, { cwd, encoding: "utf-8", env });
+		if (result.status !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
+		return result;
+	};
+}
+
 /** Run `line` through a real POSIX shell and report the argv it produced. */
 function argvAfterShell(line: string): string[] {
 	const result = spawnSync(
@@ -63,9 +87,14 @@ function argvAfterShell(line: string): string[] {
 }
 
 const SESSION = "3d9c77a6-6975-4381-b884-214b3ca452d8";
-const HOME = "/Users/svallory";
+/**
+ * A fixture home: a plain string the planner compares paths against. It is
+ * never read, and it is deliberately NOT the real home, so no test names (or
+ * could touch) the operator's ~/.claude, and results don't depend on $HOME.
+ */
+const HOME = "/home/warp-fixture";
 const CWD = `${HOME}/work/hyper`;
-const FOLDER = `${HOME}/.claude/projects/-Users-svallory-work-hyper`;
+const FOLDER = `${HOME}/.claude/projects/-home-warp-fixture-work-hyper`;
 const TRANSCRIPT = `${FOLDER}/${SESSION}.jsonl`;
 const ROOT = `${HOME}/work/spaces/research`;
 const WT = `${ROOT}/worktrees/feat-warp`;
@@ -248,7 +277,7 @@ function expectProbesFirst(events: Event[]) {
 	if (firstChange >= 0) expect(lastProbe, JSON.stringify(events)).toBeLessThan(firstChange);
 }
 
-const LIVE: LiveSession = { pid: 27145, cwd: "/Users/svallory/work", startedAt: 1_700_000_000_000 };
+const LIVE: LiveSession = { pid: 27145, cwd: `${HOME}/work`, startedAt: 1_700_000_000_000 };
 
 describe("order: every check before the first change, for every kind of working directory", () => {
 	const cases: [string, () => WarpPlan, Scenario][] = [
@@ -888,7 +917,7 @@ describe("refusals that need no machine", () => {
 			WarpStep,
 			{ kind: "stop-session" }
 		>;
-		expect(stop.cwd).toBe("/Users/svallory/work");
+		expect(stop.cwd).toBe(`${HOME}/work`);
 	});
 
 	it("refuses a cwd outside this machine's home", () => {
@@ -972,7 +1001,7 @@ describe("probe scripts survive a real shell", () => {
 
 	it("the worktree-state probe answers through a real shell and git", () => {
 		const dir = mkdtempSync(join(tmpdir(), "warp-wtstate-"));
-		const git = (...args: string[]) => spawnSync("git", args, { cwd: dir, encoding: "utf-8" });
+		const git = isolatedGit(dir, dir);
 		try {
 			git("init", "-q", "--bare", "bare.git");
 			git("init", "-q", "src");
@@ -1069,27 +1098,15 @@ describe("a detached HEAD in a space worktree", () => {
 	it("gets its own message, not 'couldn't work out which space'", () => {
 		// Real warp cwds are realpaths; tmpdir() on macOS is behind a /var symlink.
 		const dir = realpathSync(mkdtempSync(join(tmpdir(), "warp-detached-")));
-		const git = (...args: string[]) => spawnSync("git", args, { cwd: dir, encoding: "utf-8" });
+		const git = isolatedGit(dir, dir);
 		try {
 			git("init", "-q", "--bare", "space/.git");
 			spawnSync("mkdir", ["-p", join(dir, "space/worktrees")]);
 			git("--git-dir=space/.git", "worktree", "add", "-q", "space/worktrees/main", "-b", "main");
 			const wt = join(dir, "space/worktrees/main");
-			spawnSync("git", [
-				"-C",
-				wt,
-				"-c",
-				"user.email=t@e",
-				"-c",
-				"user.name=t",
-				"commit",
-				"-q",
-				"--allow-empty",
-				"-m",
-				"a",
-			]);
+			git("-C", wt, "commit", "-q", "--allow-empty", "-m", "a");
 			expect(describeSpace(wt)?.branch).toBe("main");
-			spawnSync("git", ["-C", wt, "checkout", "-q", "--detach"]);
+			git("-C", wt, "checkout", "-q", "--detach");
 			expect(() => describeSpace(wt)).toThrow(/detached HEAD/);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
