@@ -14,6 +14,8 @@ import {
 	type MachineRunner,
 	RemoteMachine,
 	type Spawner,
+	type SshTarget,
+	splitSshTarget,
 	targetWithUser,
 } from "#services/remote";
 
@@ -25,6 +27,14 @@ export interface MachineInfo {
 	name: string;
 	/** SSH target from Herdr. Undefined until Herdr knows the machine. */
 	host?: string;
+	/**
+	 * Port from the Herdr target, when it named one (`box:2222`).
+	 *
+	 * Kept apart from `host` because the three transports that carry it spell a
+	 * non-default port differently, and handing a `host:port` pair straight to
+	 * ssh would ask it to resolve a host with that literal name.
+	 */
+	port?: number;
 	/** Home dir from `drive.toml`. Undefined for a Herdr-only machine. */
 	home?: string;
 	/** Feature names from `drive.toml` (e.g. "docker", "mutagen"). */
@@ -192,9 +202,25 @@ function merged(
 ): MachineInfo {
 	const inConfig = config !== undefined;
 	const inHerdr = herdr !== undefined;
+	// A target that can't be split is not a machine hyperdrive can reach, but
+	// neither is it a crash: `machine list` still lists the machine (with its
+	// target verbatim) and the friendly error belongs on the command that tries
+	// to use it. `targetFor()` is where that error is raised.
+	let host: string | undefined;
+	let port: number | undefined;
+	if (herdr?.host) {
+		try {
+			const split = splitSshTarget(herdr.host);
+			host = split.host;
+			port = split.port;
+		} catch {
+			host = herdr.host;
+		}
+	}
 	return {
 		name,
-		host: herdr?.host,
+		host,
+		...(port === undefined ? {} : { port }),
 		home: inConfig ? config.home || undefined : undefined,
 		features: config?.features ?? [],
 		agentUser: config?.agent_user || DEFAULT_AGENT_USER,
@@ -281,6 +307,39 @@ export function self(): { name: string; home: string } {
 }
 
 /**
+ * The SSH target of a machine, as the two halves the transport binaries each
+ * need: `host` for ssh and rsync, `port` (possibly undefined) for the ssh that
+ * rsync runs and for git's own.
+ *
+ * Separate from {@link runnerFor} because a caller that builds a URL — warp's
+ * `git push` — needs the same split without holding an instance.
+ */
+export function targetFor(name: string): SshTarget {
+	const machine = resolveMachine(name);
+	if (!machine.host) {
+		throw new MachineError(
+			`I don't know how to reach the "${machine.name}" machine — Herdr has no target for it yet. Run \`${addHint(machine.name)}\`.`,
+		);
+	}
+	// Split Herdr's own target rather than trusting the lenient parse in
+	// `merged()`: here an unusable target is the answer, not a warning.
+	const herdr = listHerdrMachines().machines.find((entry) => entry.name === name);
+	if (!herdr) {
+		throw new MachineError(
+			`The "${name}" machine has no SSH target in Herdr, so there's nothing to reach. Run \`${addHint(name)}\` first.`,
+		);
+	}
+	try {
+		return splitSshTarget(herdr.host);
+	} catch (error) {
+		const detail = error instanceof Error ? error.message : String(error);
+		throw new MachineError(
+			`Herdr has "${herdr.host}" as the SSH target for "${name}", which isn't a host hyperdrive can use: ${detail}. Re-save it with \`${addHint(name)}\`.`,
+		);
+	}
+}
+
+/**
  * The runner for a command: local when there's no target or the target is this
  * machine, remote otherwise.
  */
@@ -290,13 +349,12 @@ export function runnerFor(name?: string): MachineRunner {
 	// self.name is `self()`'s friendly error, but asking for another machine is a
 	// perfectly reasonable thing to do before `hyper drive init` has ever run.
 	if (name === loadConfig().self.name) return new LocalMachine();
-	const machine = resolveMachine(name);
-	if (!machine.host) {
-		throw new MachineError(
-			`I don't know how to reach the "${machine.name}" machine — Herdr has no target for it yet. Run \`${addHint(machine.name)}\`.`,
-		);
-	}
-	return new RemoteMachine(machine.host);
+	const target = targetFor(name);
+	return new RemoteMachine(
+		target.host,
+		undefined,
+		target.port === undefined ? {} : { port: target.port },
+	);
 }
 
 /**
@@ -330,5 +388,10 @@ export function agentRunnerFor(
 	}
 	// The spawner is a test seam: without one this is the real ssh.
 	// otherUser: never the operator's agent forwarding or shared connections.
-	return new RemoteMachine(targetWithUser(machine.host, agentUser), spawner, { otherUser: true });
+	// The port Herdr's target named travels too: `machine.host` has had it
+	// split off, and the agent's ssh goes to the same sshd.
+	return new RemoteMachine(targetWithUser(machine.host, agentUser), spawner, {
+		otherUser: true,
+		...(machine.port === undefined ? {} : { port: machine.port }),
+	});
 }
