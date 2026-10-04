@@ -38,6 +38,7 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+	createReadStream,
 	existsSync,
 	linkSync,
 	lstatSync,
@@ -47,6 +48,7 @@ import {
 	realpathSync,
 	renameSync,
 	rmSync,
+	type Stats,
 	statSync,
 	writeFileSync,
 } from "node:fs";
@@ -83,6 +85,7 @@ import {
 	projectPushArgv,
 	projectWorktreeHead,
 	pushProjectBranch,
+	refsNotCoveredHere,
 	SpaceGitError,
 	TARGET_CONFLICTED,
 	TARGET_DIRTY,
@@ -91,6 +94,8 @@ import {
 	TARGET_WORKTREE_STATE,
 	targetBackupCopy,
 	targetBareRepoCheck,
+	targetRefs,
+	targetRefsSave,
 	targetStashSnapshot,
 	targetStatusCheck,
 	targetUntrackedPaths,
@@ -98,6 +103,8 @@ import {
 	targetWorktreeReset,
 	targetWorktreeState,
 	trackedUnderDirectory,
+	type UncoveredRef,
+	WARP_REF_BACKUP,
 } from "#services/space-git";
 
 /** Exit code for every refusal and every failed plan. Matches `space clone`. */
@@ -247,6 +254,12 @@ export type ProbeId =
 	 * list is what the backup step copies aside.
 	 */
 	| "collisions"
+	/**
+	 * A plain repository on the target: every ref there exists here and is
+	 * here or behind this machine's (the copy replaces the target's .git files).
+	 * Refuses without --force; with it, the save step keeps them.
+	 */
+	| "target-refs"
 	/** With the space missing: the space is in the local hyperdrive manifest. */
 	| "manifest";
 
@@ -270,10 +283,12 @@ export interface CollisionCheck {
  * A read-only script for the target: for each relative path on stdin
  * (NUL-separated), one line, in order, describing what `dir/<path>` is there:
  * `F <size> <sha256>` for a file, `L <sha256 of the link text>` for a symlink,
- * `O` for anything else (a directory), `-` when nothing is there. The hash is
- * `none` when the target has neither `sha256sum` nor `shasum`, which never
- * matches, so such a target is compared conservatively. Only sizes and hashes
- * come back; no file content leaves the target.
+ * `O` for anything else (a directory), `-` when nothing is there, and `X` when
+ * one of the path's parents is not a real directory there (a file, or a
+ * symlink, which is never followed). The hash is `none` when the target has
+ * neither `sha256sum` nor `shasum`, which never matches, so such a target is
+ * compared conservatively. Only sizes and hashes come back; no file content
+ * leaves the target.
  */
 export function targetCompareFiles(dir: string): string[] {
 	const each = [
@@ -281,7 +296,15 @@ export function targetCompareFiles(dir: string): string[] {
 		"elif command -v shasum >/dev/null 2>&1; then h() { shasum -a 256 | cut -c1-64; }",
 		"else h() { cat >/dev/null; echo none; }; fi",
 		'for p in "$@"; do',
-		'  if [ -L "./$p" ]; then printf \'L %s\\n\' "$(printf \'%s\' "$(readlink "./$p")" | h)"',
+		'  a=""; r="$p"; x=""',
+		'  while :; do case "$r" in */*) ;; *) break ;; esac',
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
+		'    a="$a${r%%/*}"; r="${r#*/}"',
+		'    if [ -L "./$a" ] || [ ! -d "./$a" ]; then x=1; break; fi',
+		'    a="$a/"',
+		"  done",
+		'  if [ -n "$x" ]; then echo X',
+		'  elif [ -L "./$p" ]; then printf \'L %s\\n\' "$(printf \'%s\' "$(readlink "./$p")" | h)"',
 		'  elif [ -f "./$p" ]; then printf \'F %s %s\\n\' "$(wc -c < "./$p" | tr -d \' \')" "$(h < "./$p")"',
 		'  elif [ -e "./$p" ]; then echo O',
 		"  else echo -; fi",
@@ -290,21 +313,37 @@ export function targetCompareFiles(dir: string): string[] {
 	return ["sh", "-c", 'cd "$1" || exit 3; exec xargs -0 sh -c "$2" sh', "sh", dir, each];
 }
 
+/**
+ * One untracked or ignored target entry the copy would overwrite.
+ * `replace` is a TYPE change (a file or symlink there where this machine has a
+ * directory, or a directory there where this machine has a file or symlink):
+ * the copy can't overwrite it in place, so a `--force` warp removes it after
+ * copying it aside.
+ */
+export interface Collision {
+	path: string;
+	replace: boolean;
+	/** What differs, for the refusal: absent for two files with different content. */
+	note?: string;
+}
+
 /** The result of {@link findCollisions}. */
 export type CollisionResult =
-	| { ok: true; paths: string[] }
+	| { ok: true; collisions: Collision[] }
 	| { ok: false; code: number; stdout: string; stderr: string };
 
 /**
- * The untracked or ignored files on the target that the copy would overwrite
- * with DIFFERENT content.
+ * The untracked or ignored entries on the target that the copy would
+ * overwrite with something different.
  *
- * 1. The target lists its untracked and ignored paths (`check`'s list argv).
- * 2. Each one the copy would write (a file or symlink under `src` at that path,
- *    with no excluded path component, by the copy's own exclude rules; a
- *    listed directory is walked here) is a candidate.
- * 3. The target reports size and sha256 of each candidate; a candidate that is
- *    absent there, or identical on both sides, is not a collision.
+ * 1. The target lists its untracked and ignored paths (`listArgv`).
+ * 2. Each of them the copy would write is a candidate, by the copy's own
+ *    exclude rules: a file, symlink or directory under `src` at that path (a
+ *    listed directory is walked here, its subdirectories included), or the
+ *    nearest file or symlink here that stands where the target has a directory.
+ * 3. The target says what it has at each candidate (size and sha256, or the
+ *    type). Absent there, or identical, or a directory on both sides: no
+ *    collision. A different type on the two sides: a collision to replace.
  */
 export async function findCollisions(
 	runner: MachineRunner,
@@ -314,8 +353,8 @@ export async function findCollisions(
 	const listed = await runner.ssh(listArgv, { timeoutMs: 60_000 });
 	if (listed.code !== 0) return { ok: false, ...listed };
 	const entries = listed.stdout.split("\0").filter((entry) => entry !== "");
-	const candidates = localCopyCandidates(check.src, entries, check.excludes);
-	if (candidates.length === 0) return { ok: true, paths: [] };
+	const candidates = await localCopyCandidates(check.src, entries, check.excludes);
+	if (candidates.length === 0) return { ok: true, collisions: [] };
 	const compared = await runner.ssh(check.compareArgv, {
 		timeoutMs: 5 * 60_000,
 		stdin: `${candidates.map((candidate) => candidate.path).join("\0")}\0`,
@@ -330,27 +369,53 @@ export async function findCollisions(
 			stderr: `expected ${candidates.length} answers from the comparison, got ${lines.length}`,
 		};
 	}
-	const paths = candidates.flatMap((candidate, index) => {
+	const collisions = candidates.flatMap((candidate, index): Collision[] => {
 		const there = lines[index] as string;
-		if (there === "-" || there === "O") return [];
-		return there === candidate.signature ? [] : [candidate.path];
+		if (there === "-" || there === "X") return [];
+		const thereKind = there === "O" ? "directory" : there.startsWith("L") ? "symlink" : "file";
+		if (candidate.signature === "D") {
+			return there === "O"
+				? []
+				: [
+						{
+							path: candidate.path,
+							replace: true,
+							note: `a ${thereKind} there, a directory here`,
+						},
+					];
+		}
+		const hereKind = candidate.signature.startsWith("L") ? "symlink" : "file";
+		if (there === "O") {
+			return [
+				{ path: candidate.path, replace: true, note: `a directory there, a ${hereKind} here` },
+			];
+		}
+		return there === candidate.signature ? [] : [{ path: candidate.path, replace: false }];
 	});
-	return { ok: true, paths };
+	return { ok: true, collisions };
 }
 
-/** A file the copy would write, with what the target's line for it must say to be identical. */
+/**
+ * A candidate the copy would write, with what the target's line for it must
+ * say to be identical: `F <size> <sha256>`, `L <sha256 of the link text>`, or
+ * `D` for a directory here (identical to a directory there, `O`).
+ */
 interface CopyCandidate {
 	path: string;
 	signature: string;
 }
 
 /**
- * The files and symlinks under `src` that the copy would write at the target
- * paths `entries` (a trailing `/` means a whole directory there). A path with
- * any excluded component is skipped, as the copy skips it.
+ * The entries under `src` that the copy would write at the target paths
+ * `entries` (a trailing `/` means a whole untracked directory there). A path
+ * with any excluded component is skipped, as the copy skips it.
  */
-function localCopyCandidates(src: string, entries: string[], excludes: string[]): CopyCandidate[] {
-	const out: CopyCandidate[] = [];
+async function localCopyCandidates(
+	src: string,
+	entries: string[],
+	excludes: string[],
+): Promise<CopyCandidate[]> {
+	const found = new Map<string, string>();
 	const excludedPath = (rel: string, isDirectory: boolean): boolean => {
 		const parts = rel.split("/");
 		for (let index = 1; index < parts.length; index++) {
@@ -358,44 +423,85 @@ function localCopyCandidates(src: string, entries: string[], excludes: string[])
 		}
 		return isExcluded(rel, excludes, isDirectory);
 	};
-	const visit = (rel: string): void => {
-		let stat: ReturnType<typeof lstatSync>;
+	const lstatOrNull = (rel: string): Stats | null => {
 		try {
-			stat = lstatSync(join(src, rel));
+			return lstatSync(join(src, rel));
 		} catch {
-			return;
+			return null;
 		}
-		if (stat.isDirectory()) {
-			if (excludedPath(rel, true)) return;
-			for (const child of readdirSync(join(src, rel)).sort()) visit(`${rel}/${child}`);
-			return;
-		}
-		if (excludedPath(rel, false)) return;
+	};
+	const addFileOrLink = async (rel: string, stat: Stats) => {
+		if (found.has(rel) || excludedPath(rel, false)) return;
 		if (stat.isSymbolicLink()) {
-			const text = readlinkSync(join(src, rel));
-			out.push({ path: rel, signature: `L ${sha256(Buffer.from(text))}` });
+			found.set(rel, `L ${sha256(Buffer.from(readlinkSync(join(src, rel))))}`);
 		} else if (stat.isFile()) {
-			const bytes = readFileSync(join(src, rel));
-			out.push({ path: rel, signature: `F ${bytes.length} ${sha256(bytes)}` });
+			const { size, hash } = await hashFile(join(src, rel));
+			found.set(rel, `F ${size} ${hash}`);
+		}
+	};
+	const walk = async (rel: string): Promise<void> => {
+		if (excludedPath(rel, true)) return;
+		for (const child of readdirSync(join(src, rel)).sort()) {
+			const childRel = `${rel}/${child}`;
+			const stat = lstatOrNull(childRel);
+			if (!stat) continue;
+			if (stat.isDirectory()) {
+				if (excludedPath(childRel, true)) continue;
+				found.set(childRel, "D");
+				await walk(childRel);
+			} else {
+				await addFileOrLink(childRel, stat);
+			}
 		}
 	};
 	for (const entry of entries) {
-		const directory = entry.endsWith("/");
+		const wholeDirectory = entry.endsWith("/");
 		const rel = entry.replace(/\/+$/, "");
 		if (rel === "") continue;
-		if (directory) {
-			let stat: ReturnType<typeof lstatSync> | undefined;
-			try {
-				stat = lstatSync(join(src, rel));
-			} catch {
-				stat = undefined;
+		const stat = lstatOrNull(rel);
+		if (stat === null) {
+			// Nothing here at that path. When a parent here is a file or symlink,
+			// the target has a directory where this machine has that file: the
+			// parent is the candidate.
+			const parts = rel.split("/");
+			for (let index = 1; index < parts.length; index++) {
+				const parent = parts.slice(0, index).join("/");
+				const parentStat = lstatOrNull(parent);
+				if (parentStat && !parentStat.isDirectory()) {
+					await addFileOrLink(parent, parentStat);
+					break;
+				}
 			}
-			if (stat?.isDirectory()) visit(rel);
+			continue;
+		}
+		if (stat.isDirectory()) {
+			if (excludedPath(rel, true)) continue;
+			if (wholeDirectory) {
+				await walk(rel);
+			} else {
+				// A file or symlink there, a directory here.
+				found.set(rel, "D");
+			}
 		} else {
-			visit(rel);
+			await addFileOrLink(rel, stat);
 		}
 	}
-	return out;
+	return [...found].map(([path, signature]) => ({ path, signature }));
+}
+
+/** Size and sha256 of a file, read as a stream (a file may be larger than a Buffer). */
+function hashFile(path: string): Promise<{ size: number; hash: string }> {
+	return new Promise((resolve, reject) => {
+		const hash = createHash("sha256");
+		let size = 0;
+		createReadStream(path)
+			.on("data", (chunk) => {
+				size += chunk.length;
+				hash.update(chunk);
+			})
+			.on("error", reject)
+			.on("end", () => resolve({ size, hash: hash.digest("hex") }));
+	});
 }
 
 function sha256(bytes: Buffer): string {
@@ -438,7 +544,7 @@ export type WarpStep =
 	| {
 			kind: "probe";
 			id: ProbeId;
-			via: "shell" | "herdr" | "push-dry-run" | "local" | "collisions";
+			via: "shell" | "herdr" | "push-dry-run" | "local" | "collisions" | "refs";
 			summary: string;
 			/** The argv sent (shell/herdr), or the push line shown (push-dry-run). */
 			argv: string[];
@@ -455,6 +561,8 @@ export type WarpStep =
 			listsPaths?: true;
 			/** For `local`: the answer, established while gathering. */
 			local?: { pass: boolean };
+			/** For `refs` (and `collisions`, in its check): refuse when something is found. */
+			refuse?: boolean;
 			/**
 			 * For `collisions`: `argv` lists the target's untracked and ignored
 			 * paths; this says what the copy would write over them.
@@ -496,10 +604,16 @@ export type WarpStep =
 			 */
 			announce?: string;
 			/**
-			 * Feed the command the paths the `collisions` probe found, NUL-separated
-			 * on stdin. The step is skipped when that probe found none.
+			 * Feed the command the entries the `collisions` probe found on stdin,
+			 * NUL-separated, each prefixed `K` (overwritten in place) or `R` (a
+			 * type change, removed after the backup).
 			 */
 			stdinFrom?: "collisions";
+			/**
+			 * Run only when that probe found something: collisions to back up, or
+			 * target refs this machine doesn't cover.
+			 */
+			needs?: "collisions" | "refs";
 			/** Problem sentence when it fails. */
 			problem: string;
 	  }
@@ -871,7 +985,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 	// plain repository's backups (hyper-warp-backup, below) stay where they are.
 	const copyExcludes = inputs.space
 		? ["/.git", ...inputs.excludes]
-		: [...inputs.excludes, "/.git/hyper-warp-backup"];
+		: [...inputs.excludes, "/.git/hyper-warp-backup", `/.git/${WARP_REF_BACKUP}`];
 	const warpId = `${inputs.sessionId}-${inputs.startedAt.replace(/[^0-9A-Za-z]/g, "")}`;
 	const backupDir = inputs.space
 		? `${inputs.space.barePath}/hyper-warp-backup/${warpId}`
@@ -909,7 +1023,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 				via: "collisions",
 				...(when ? { when } : {}),
 				listsPaths: true,
-				summary: `look for untracked or ignored files in ${inputs.cwd} on ${name} that the copy would overwrite with different content`,
+				summary: `look for untracked or ignored entries in ${inputs.cwd} on ${name} that the copy would overwrite with something different`,
 				argv: targetUntrackedPaths(inputs.cwd),
 				collisions: {
 					src: inputs.cwd,
@@ -918,19 +1032,42 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 					compareArgv: targetCompareFiles(inputs.cwd),
 					refuse: !inputs.force,
 				},
-				problem: `${name} has untracked or ignored files in ${inputs.cwd} that this warp would overwrite with different content (below). Move them away there, or pass --force: a --force warp first copies them to ${backupDir} on ${name}.`,
+				problem: `${name} has untracked or ignored files in ${inputs.cwd} that this warp would overwrite with different content, or with a different type (below). Move them away there, or pass --force: a --force warp first copies them to ${backupDir} on ${name}.`,
 			},
+			...(inputs.space
+				? []
+				: [
+						{
+							kind: "probe" as const,
+							id: "target-refs" as const,
+							via: "refs" as const,
+							summary: `check every ref of the repository ${inputs.cwd} on ${name} is here, at the same commit or behind this machine's`,
+							argv: targetRefs(inputs.cwd),
+							refuse: !inputs.force,
+							problem: `${name}'s repository ${inputs.cwd} has refs this machine doesn't cover (below). A plain-repo warp replaces ${name}'s .git files with this machine's, so commits only ${name} has would become unreachable. Bring them here first (fetch them from ${name}), or pass --force: a --force warp first saves ${name}'s refs there under ${WARP_REF_BACKUP}/${warpId}/.`,
+						},
+					]),
 		];
+	};
+	const refsSaveStep: WarpStep = {
+		kind: "remote-command",
+		needs: "refs",
+		summary: `save the refs of ${inputs.cwd} on ${name} under ${WARP_REF_BACKUP}/${warpId}/ (--force)`,
+		argv: targetRefsSave(inputs.cwd, warpId),
+		leaves: `refs under ${WARP_REF_BACKUP}/${warpId}/ in ${inputs.cwd} on ${name}`,
+		announce: `${name}'s refs in ${inputs.cwd} were saved there under {out} before this warp replaced its .git files; see \`git -C ${inputs.cwd} for-each-ref ${WARP_REF_BACKUP}/${warpId}/\` there.`,
+		problem: `couldn't save the refs of ${inputs.cwd} on ${name}, so warp stopped before overwriting them.`,
 	};
 	const backupStep = (when?: StepCondition): WarpStep => ({
 		kind: "remote-command",
 		...(when ? { when } : {}),
 		stdinFrom: "collisions",
-		summary: `copy the untracked or ignored files the copy will overwrite in ${inputs.cwd} on ${name} aside (--force)`,
+		needs: "collisions",
+		summary: `copy the untracked or ignored entries the copy will overwrite in ${inputs.cwd} on ${name} aside, then remove the ones of a different type (--force)`,
 		argv: targetBackupCopy(inputs.cwd, warpId),
-		leaves: `a backup of the colliding untracked or ignored files (${backupDir})`,
-		announce: `${name}'s untracked or ignored files in ${inputs.cwd} that this warp overwrote ({count}) were first copied to {out} there.`,
-		problem: `couldn't copy the colliding untracked or ignored files in ${inputs.cwd} on ${name} aside, so warp stopped before overwriting them.`,
+		leaves: `a backup of the colliding untracked or ignored entries (${backupDir}), with the ones of a different type removed from ${inputs.cwd}`,
+		announce: `${name}'s untracked or ignored entries in ${inputs.cwd} that this warp overwrote ({count}) were first copied to {out} there.`,
+		problem: `couldn't copy the colliding untracked or ignored entries in ${inputs.cwd} on ${name} aside (or remove the ones of a different type after copying them), so warp stopped before the copy.`,
 	});
 
 	if (!inputs.syncSession) {
@@ -1227,7 +1364,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			},
 		);
 	} else {
-		if (inputs.cwdKind === "git-repo" && inputs.force) steps.push(backupStep());
+		if (inputs.cwdKind === "git-repo" && inputs.force) steps.push(refsSaveStep, backupStep());
 		steps.push({
 			kind: "copy",
 			summary: `copy ${inputs.cwdKind} ${inputs.cwd} to ${name}`,
@@ -1290,7 +1427,10 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 	}
 	if (inputs.cwdKind === "git-repo") {
 		notes.push(
-			`The repository's .git travels with it and is merged into ${name}'s copy file by file, like everything else.`,
+			`The repository's .git travels with it and is merged into ${name}'s copy file by file, like everything else: ${name}'s .git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name.`,
+			inputs.force
+				? `--force: if ${name}'s repository has refs this machine doesn't cover, all of its refs (and a detached HEAD) are first saved there under ${WARP_REF_BACKUP}/${warpId}/, which the copy leaves alone.`
+				: `${name}'s repository is refused if it has a ref this machine doesn't have, or one ahead of this machine's (or a detached HEAD this machine's HEAD doesn't contain); --force saves its refs there first.`,
 		);
 	}
 	if (inputs.cwdKind !== "plain-dir" && inputs.excludes.length > 0) {
@@ -1310,8 +1450,8 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 					: `--force: uncommitted tracked work in ${name}'s copy of the repository is overwritten file by file; it is not saved first.`
 				: `${name}'s copy is refused if it holds uncommitted work (git status not clean); --force overwrites it${space ? " after saving it as a stash" : ""}.`,
 			inputs.force
-				? `--force: untracked or ignored files in ${name}'s copy that the copy would overwrite with different content are first copied to ${backupDir} (directories mode 0700); the count and location are printed when it runs.`
-				: `${name}'s copy is refused if the copy would overwrite an untracked or ignored file there (a .env, say) with different content; files that are identical on both sides, and paths the copy excludes, don't count. --force copies those files aside first.`,
+				? `--force: untracked or ignored entries in ${name}'s copy that the copy would overwrite with different content, or with a different type (a file where this machine has a directory, or the reverse), are first copied to ${backupDir} (directories mode 0700); the ones of a different type are then removed there so the copy can write this machine's. The count and location are printed when it runs.`
+				: `${name}'s copy is refused if the copy would overwrite an untracked or ignored entry there (a .env, say) with different content or a different type; files that are identical on both sides, and paths the copy excludes, don't count. --force copies those entries aside first.`,
 			`${name}'s copy is refused, with or without --force, while a merge, rebase, cherry-pick, revert or bisect is in progress there, while its index has unresolved conflicts, or while a submodule has changes.`,
 		);
 	} else {
@@ -1379,15 +1519,17 @@ export function describeStep(step: WarpStep, target = "the target"): string {
 		case "probe": {
 			const label = step.question ? "ask" : "check";
 			const line =
-				step.via === "collisions"
-					? `ssh -- ${shellJoin(step.argv)}\n    then, for the paths this machine's copy would write there: ssh -- ${shellJoin(step.collisions?.compareArgv ?? [])}`
-					: step.via === "local"
-						? "(answered on this machine, from the hyperdrive checkout as it is; nothing is fetched)"
-						: step.via === "herdr"
-							? `herdr ${displayLine(step.argv)}`
-							: step.via === "push-dry-run"
-								? displayLine(step.argv)
-								: `ssh -- ${shellJoin(step.argv)}`;
+				step.via === "refs"
+					? `ssh -- ${shellJoin(step.argv)}\n    then each ref is compared with this machine's (git for-each-ref, merge-base --is-ancestor, here)`
+					: step.via === "collisions"
+						? `ssh -- ${shellJoin(step.argv)}\n    then, for the paths this machine's copy would write there: ssh -- ${shellJoin(step.collisions?.compareArgv ?? [])}`
+						: step.via === "local"
+							? "(answered on this machine, from the hyperdrive checkout as it is; nothing is fetched)"
+							: step.via === "herdr"
+								? `herdr ${displayLine(step.argv)}`
+								: step.via === "push-dry-run"
+									? displayLine(step.argv)
+									: `ssh -- ${shellJoin(step.argv)}`;
 			return `${label} (${step.via}): ${step.summary}${conditionText(step.when, target)}\n    ${line}`;
 		}
 		case "stop-session":
@@ -1399,7 +1541,7 @@ export function describeStep(step: WarpStep, target = "the target"): string {
 		case "flush-sync":
 			return `sync: ${step.summary}`;
 		case "remote-command":
-			return `remote: ${step.summary}${conditionText(step.when, target)}${step.stdinFrom ? " (only if the collisions check found some; their paths go on stdin)" : ""}\n    ssh -- ${shellJoin(step.argv)}`;
+			return `remote: ${step.summary}${conditionText(step.when, target)}${step.needs === "collisions" ? " (only if the collisions check found some; their paths go on stdin)" : step.needs === "refs" ? " (only if the refs check found refs this machine doesn't cover)" : ""}\n    ssh -- ${shellJoin(step.argv)}`;
 		case "copy": {
 			const excludes =
 				step.excludes.length > 0
@@ -1472,6 +1614,8 @@ export interface WarpDeps {
 	now?: () => string;
 	/** {@link findCollisions}; injected so tests can answer it. */
 	findCollisions?: typeof findCollisions;
+	/** `refsNotCoveredHere` from services/space-git.ts; injected so tests can answer it. */
+	refsNotCoveredHere?: typeof refsNotCoveredHere;
 }
 
 /** Steps that may leave something on the target once attempted. */
@@ -1503,7 +1647,8 @@ function recordOf(step: WarpStep): StepRecord {
 export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpExecution> {
 	const log = deps.log ?? (() => {});
 	const answers = new Map<ProbeId, "yes" | "no">();
-	let collisions: string[] = [];
+	let collisions: Collision[] = [];
+	let uncoveredRefs: UncoveredRef[] = [];
 	const execution: WarpExecution = {
 		completed: [],
 		skipped: [],
@@ -1524,9 +1669,11 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 
 	for (const step of plan.steps) {
 		const when = "when" in step ? step.when : undefined;
-		const noCollisions =
-			step.kind === "remote-command" && step.stdinFrom === "collisions" && collisions.length === 0;
-		if (!holds(when) || noCollisions) {
+		const nothingNeeded =
+			step.kind === "remote-command" &&
+			((step.needs === "collisions" && collisions.length === 0) ||
+				(step.needs === "refs" && uncoveredRefs.length === 0));
+		if (!holds(when) || nothingNeeded) {
 			execution.skipped.push(step.summary);
 			log(`skipped: ${step.summary}${conditionText(when, plan.target.name)}`);
 			continue;
@@ -1550,10 +1697,29 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 									: `couldn't compare ${plan.cwd} on ${plan.target.name} with this machine's copy (exit ${found.code})${said ? `: ${said}` : ""}.`,
 							);
 						}
-						if (found.paths.length > 0 && step.collisions.refuse) {
-							return fail(step, `${step.problem}\n${listPaths(found.paths.join("\n"))}`);
+						if (found.collisions.length > 0 && step.collisions.refuse) {
+							const listed = found.collisions.map(
+								(entry) => `${quotePath(entry.path)}${entry.note ? ` (${entry.note})` : ""}`,
+							);
+							return fail(step, `${step.problem}\n${listPaths(listed.join("\n"))}`);
 						}
-						collisions = found.paths;
+						collisions = found.collisions;
+						answers.set(step.id, "yes");
+						break;
+					}
+					if (step.via === "refs") {
+						const listed = await deps.runner.ssh(step.argv, { timeoutMs: 60_000 });
+						if (listed.code !== 0) return fail(step, probeDetail(step, listed, plan.target.name));
+						const refs = listed.stdout.split("\n").flatMap((line) => {
+							const at = line.indexOf(" ");
+							return at > 0 ? [{ object: line.slice(0, at), name: line.slice(at + 1) }] : [];
+						});
+						const uncovered = (deps.refsNotCoveredHere ?? refsNotCoveredHere)(plan.cwd, refs);
+						if (uncovered.length > 0 && step.refuse) {
+							const lines = uncovered.map((ref) => `${ref.name} (${ref.reason})`);
+							return fail(step, `${step.problem}\n${listPaths(lines.join("\n"))}`);
+						}
+						uncoveredRefs = uncovered;
 						answers.set(step.id, "yes");
 						break;
 					}
@@ -1622,7 +1788,13 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 				case "remote-command": {
 					const result = await deps.runner.ssh(step.argv, {
 						timeoutMs: 15 * 60_000,
-						...(step.stdinFrom ? { stdin: `${collisions.join("\0")}\0` } : {}),
+						...(step.stdinFrom
+							? {
+									stdin: collisions
+										.map((entry) => `${entry.replace ? "R" : "K"}${entry.path}\0`)
+										.join(""),
+								}
+							: {}),
 					});
 					if (result.code !== 0) {
 						const said = firstLine(result.stderr) ?? firstLine(result.stdout);
@@ -1743,6 +1915,22 @@ function probeDetail(
 	}
 	const said = firstLine(result.stdout) ?? firstLine(result.stderr);
 	return said ? `${base} (${target} said: ${said})` : base;
+}
+
+/**
+ * A path for a one-path-per-line list: as it is, or, when it holds a quote, a
+ * backslash or a control character (a newline would split it over two lines),
+ * in double quotes with C escapes, the way `git status` shows it.
+ */
+export function quotePath(path: string): string {
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: matching them IS the check.
+	if (!/["\\\u0000-\u001f\u007f]/.test(path)) return path;
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: escaping them IS the point.
+	const escaped = path.replace(/["\\\u0000-\u001f\u007f]/g, (char) => {
+		const named: Record<string, string> = { '"': '\\"', "\\": "\\\\", "\n": "\\n", "\t": "\\t" };
+		return named[char] ?? `\\x${char.charCodeAt(0).toString(16).padStart(2, "0")}`;
+	});
+	return `"${escaped}"`;
 }
 
 /** How many dirty paths a refusal names before it just counts the rest. */

@@ -54,7 +54,8 @@ Limits:
   - The target's copy of the directory is overwritten file by file; files that exist only there are kept (no --delete).
   - Only this session's files travel (<id>.jsonl, <id>.warp.json, <id>/), never the whole project folder.
   - A space worktree arrives as a git worktree on the target. Staged-but-uncommitted changes arrive as unstaged modifications: the index does not travel.
-  - A git copy on the target is refused when it has uncommitted work, or when the copy would overwrite an untracked or ignored file there with different content; --force first saves a space worktree's tracked changes as a stash and copies those files to hyper-warp-backup/ in the target repo's git directory.
+  - A git copy on the target is refused when it has uncommitted work, or when the copy would overwrite an untracked or ignored entry there with different content or a different type; --force first saves a space worktree's tracked changes as a stash and copies those entries to hyper-warp-backup/ in the target repo's git directory.
+  - A plain repo is refused when the target has a ref this machine doesn't cover; --force saves the target's refs under refs/hyper-warp-backup/ first. The rest of the target's .git (config, info/exclude, hooks) is replaced by this machine's.
   - A merge, rebase, cherry-pick, revert or bisect in progress, unresolved conflicts, or a changed submodule on the target are refused even with --force.`;
 
 	static override examples = [

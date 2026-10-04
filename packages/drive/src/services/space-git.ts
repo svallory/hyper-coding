@@ -1624,21 +1624,31 @@ export function targetUntrackedPaths(worktree: string): string[] {
 }
 
 /**
- * A script for the target that COPIES files of the repository at `worktree`
+ * A script for the target that COPIES entries of the repository at `worktree`
  * aside before a `--force` warp overwrites them: into
  * `<git common dir>/hyper-warp-backup/<id>/`, relative paths kept, every
- * directory it creates mode 0700, each file with its mode and times (`cp -pP`:
- * a symlink is copied as a symlink). The relative paths arrive on stdin,
- * NUL-separated. The originals stay where they are; the copy that follows
- * overwrites them. Prints the backup directory. Fails (non-zero) when the
- * directory already exists or any file can't be copied.
+ * directory it creates mode 0700, each entry with its modes and times
+ * (`cp -pPR`: a symlink is copied as a symlink, a directory with everything in
+ * it). The entries arrive on stdin, NUL-separated, each prefixed with `K`
+ * (keep: the copy overwrites it in place) or `R` (replace: a type change the
+ * copy can't overwrite). Only once EVERY entry is copied are the `R` entries
+ * removed (`rm -rf` on the entry itself: a symlink is removed, never
+ * followed). Prints the backup directory. Fails (non-zero) when the directory
+ * already exists, or any entry can't be copied or removed.
  */
 export function targetBackupCopy(worktree: string, id: string): string[] {
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
-	const each = [
-		'b=$1; shift; for p in "$@"; do',
-		'  d=$(dirname "./$p")',
-		'  mkdir -p "$b/$d" && cp -pP "./$p" "$b/$p" || exit 255',
+	const copyEach = [
+		'b=$1; shift; for e in "$@"; do',
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
+		'  p=${e#?}; d=$(dirname "./$p")',
+		'  mkdir -p "$b/$d" && cp -pPR "./$p" "$b/$p" || exit 255',
+		"done",
+	].join("\n");
+	const removeEach = [
+		'for e in "$@"; do',
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
+		'  case "$e" in R*) rm -rf "./${e#?}" || exit 255 ;; esac',
 		"done",
 	].join("\n");
 	const script = [
@@ -1651,10 +1661,114 @@ export function targetBackupCopy(worktree: string, id: string): string[] {
 		'mkdir -p "$gd/hyper-warp-backup" && chmod 700 "$gd/hyper-warp-backup" || exit 4',
 		'b="$gd/hyper-warp-backup/$id"',
 		'mkdir "$b" || exit 4',
-		`xargs -0 sh -c ${quote(each)} sh "$b" || exit 5`,
+		'list="$b.list"',
+		`trap 'rm -f "$list"' EXIT`,
+		'cat > "$list" || exit 4',
+		`xargs -0 sh -c ${quote(copyEach)} sh "$b" < "$list" || exit 5`,
+		`xargs -0 sh -c ${quote(removeEach)} sh < "$list" || exit 6`,
 		`printf '%s\\n' "$b"`,
 	].join("\n");
 	return ["sh", "-c", script];
+}
+
+/** The ref namespace a `--force` plain-repo warp saves the target's refs under. */
+export const WARP_REF_BACKUP = "refs/hyper-warp-backup";
+
+/**
+ * A read-only script for the target: the refs of the repository at
+ * `worktree`, one `<object> <refname>` line each, and `<commit> HEAD` when
+ * HEAD is detached. Refs under {@link WARP_REF_BACKUP} (earlier warps'
+ * backups) are left out. Prints nothing when there is no `.git` there.
+ */
+export function targetRefs(worktree: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const script = [
+		`w=${quote(worktree)}`,
+		'[ -e "$w/.git" ] || exit 0',
+		TARGET_READ_ONLY_GIT,
+		`r=$(g for-each-ref --format='%(objectname) %(refname)') || exit 3`,
+		`printf '%s\\n' "$r" | grep -v ' ${WARP_REF_BACKUP}/' || true`,
+		"if ! g symbolic-ref -q HEAD >/dev/null; then",
+		`  h=$(g rev-parse -q --verify HEAD) && printf '%s HEAD\\n' "$h"`,
+		"fi",
+		"exit 0",
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/**
+ * A script for the target that saves every ref of the repository at
+ * `worktree` (and HEAD when it is detached) as
+ * `refs/hyper-warp-backup/<id>/<ref without "refs/">`, so a plain-repo warp,
+ * which replaces the target's `.git` files with this machine's, can't make a
+ * commit only the target had unreachable. Prints the namespace.
+ */
+export function targetRefsSave(worktree: string, id: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const ns = `${WARP_REF_BACKUP}/${id}`;
+	const script = [
+		`w=${quote(worktree)}; ns=${quote(ns)}`,
+		TARGET_READ_ONLY_GIT,
+		`r=$(g for-each-ref --format='%(objectname) %(refname)') || exit 3`,
+		`printf '%s\\n' "$r" | while read -r s n; do`,
+		'  [ -n "$n" ] || continue',
+		`  case "$n" in ${WARP_REF_BACKUP}/*) continue ;; esac`,
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
+		'  g update-ref "$ns/${n#refs/}" "$s" || exit 1',
+		"done || exit 1",
+		"if ! g symbolic-ref -q HEAD >/dev/null; then",
+		'  h=$(g rev-parse -q --verify HEAD) && { g update-ref "$ns/HEAD" "$h" || exit 1; }',
+		"fi",
+		`printf '%s/\\n' "$ns"`,
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/** A target ref this machine doesn't hold, or holds behind the target. */
+export interface UncoveredRef {
+	name: string;
+	reason: string;
+}
+
+/**
+ * Which of `refs` (the target's, from {@link targetRefs}) this machine's
+ * repository at `worktree` does NOT cover: covered means a ref of the same
+ * name here (HEAD: this machine's HEAD) at the same object, or at a commit
+ * the target's is an ancestor of. Read-only: `for-each-ref`, `rev-parse` and
+ * `merge-base --is-ancestor`, no optional locks, no fsmonitor.
+ */
+export function refsNotCoveredHere(
+	worktree: string,
+	refs: { object: string; name: string }[],
+): UncoveredRef[] {
+	if (refs.length === 0) return [];
+	const run = (...args: string[]) =>
+		spawnSync(
+			"git",
+			["-C", worktree, "--no-optional-locks", "-c", "core.fsmonitor=false", ...args],
+			{ encoding: "utf8", env: cleanGitEnv() },
+		);
+	const local = new Map<string, string>();
+	const listed = run("for-each-ref", "--format=%(objectname) %(refname)");
+	for (const line of (listed.stdout ?? "").split("\n")) {
+		const [object, name] = line.split(" ");
+		if (object && name) local.set(name, object);
+	}
+	const head = run("rev-parse", "-q", "--verify", "HEAD");
+	if (head.status === 0) local.set("HEAD", (head.stdout ?? "").trim());
+	const uncovered: UncoveredRef[] = [];
+	for (const ref of refs) {
+		const mine = local.get(ref.name);
+		if (mine === undefined) {
+			uncovered.push({ name: ref.name, reason: "only there" });
+		} else if (mine !== ref.object) {
+			const ancestor = run("merge-base", "--is-ancestor", ref.object, mine);
+			if (ancestor.status !== 0) {
+				uncovered.push({ name: ref.name, reason: "has commits this machine doesn't" });
+			}
+		}
+	}
+	return uncovered;
 }
 
 /**
@@ -1673,7 +1787,7 @@ export function targetStashSnapshot(worktree: string, message: string): string[]
 		`w=${quote(worktree)}; m=${quote(message)}`,
 		'who=""; git -C "$w" config user.email >/dev/null 2>&1 || who="-c user.email=hyper-warp@localhost -c user.name=hyper-warp"',
 		// $who is split on purpose: it is either empty or four fixed words.
-		'opts="-c core.hooksPath=/dev/null -c commit.gpgSign=false $who"',
+		'opts="-c core.hooksPath=/dev/null -c core.fsmonitor=false -c commit.gpgSign=false $who"',
 		's=$(git $opts -C "$w" stash create) || exit 1',
 		'[ -z "$s" ] && exit 0',
 		'git $opts -C "$w" stash store -m "$m" "$s" || exit 1',
