@@ -197,6 +197,37 @@ write_hyper_md() {
   write_hyper_md_bare "$1" "$2"
 }
 
+# hyper_md_backup_rule <root> <bare|multi> — the one Rules bullet about
+# backups, written to match the space's state at write time. Once the space
+# has a branch (`.hyper/space.git` exists), the allowlisted directories are
+# backed up to the user's hyperdrive; before `hyper space init` (or after a
+# clone that has not created it yet), nothing at the root is backed up. The
+# writers run at scaffold/clone time only — a space initialised later keeps
+# the no-branch sentence until the next rewrite, so the bullet always ends
+# by pointing at `hyper space status` for the live answer.
+hyper_md_backup_rule() {
+  local root="$1" layout="$2" excluded="worktrees"
+  [[ "$layout" == multi ]] && excluded="code"
+  if [[ -d "$root/.hyper/space.git" ]]; then
+    cat <<EOF
+- This space has a hyperdrive branch: \`notes/\`, \`data/\`, \`bin/\`, \`.hyper/\`,
+  \`.claude/\` and the root marker files are backed up to it (\`hyper space status\`
+  shows the cadence). \`scratch/\`, \`$excluded/\` and loose root files are not —
+  they still live on exactly one disk.
+EOF
+  elif [[ "$layout" == multi ]]; then
+    cat <<'EOF'
+- Files at the space root never reach the remote. Secrets are local-only by
+  construction, but that also means nothing here is backed up.
+EOF
+  else
+    cat <<'EOF'
+- Files here never reach the remote. Secrets are local-only by construction,
+  but that also means nothing here is backed up.
+EOF
+  fi
+}
+
 write_hyper_md_bare() {
   local root="$1" name="$2"
   cat > "$root/HYPER.md" <<EOF
@@ -223,8 +254,7 @@ nothing here is committed. The worktrees live in \`worktrees/\`.
 - Do not run \`git commit\` from the space root; \`cd\` into a worktree first.
 - Create worktrees with \`wt switch <branch>\`, never \`git worktree add\` by hand.
 - \`scratch/\` is disposable. Anything you would miss belongs in \`data/\` or \`notes/\`.
-- Files here never reach the remote. Secrets are local-only by construction,
-  but that also means nothing here is backed up.
+$(hyper_md_backup_rule "$root" bare)
 - Space memory lives in \`.hyper/memory/\`; \`MEMORY.md\` there is the index.
   Tools without automatic memory loading should read it at session start.
 
@@ -295,8 +325,7 @@ ${rows}
   \`wt switch\` must be run from inside \`code/<slug>/\` — it does not resolve a
   repo from the space root.
 - \`scratch/\` is disposable. Anything you would miss belongs in \`data/\` or \`notes/\`.
-- Files at the space root never reach the remote. Secrets are local-only by
-  construction, but that also means nothing here is backed up.
+$(hyper_md_backup_rule "$root" multi)
 - Space memory lives in \`.hyper/memory/\`; \`MEMORY.md\` there is the index.
   Tools without automatic memory loading should read it at session start.
 
@@ -492,7 +521,11 @@ the worktrees are in \`worktrees/<branch>\`, created via \`wt switch\`.
 
 Local-only directories at the space root: \`data/\` (dumps, fixtures),
 \`notes/\` (briefs, handoffs), \`scratch/\` (disposable), \`bin/\` (helper scripts).
-None of it is committed or backed up.
+$(if [[ -d "$root/.hyper/space.git" ]]; then
+  printf '%s' 'The allowlisted ones (`notes/`, `data/`, `bin/`) are backed up to the hyperdrive on this space'"'"'s branch; `scratch/` is not.'
+else
+  printf '%s' 'None of it is committed or backed up.'
+fi)
 
 **Why:** keeps a single object store across branches and gives local-only files a
 home that cannot accidentally be committed.
