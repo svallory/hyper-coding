@@ -228,6 +228,50 @@ describe("pull follow-ups", () => {
 		expect(flat(result.stderr)).toContain("no space rename command");
 		expect(flat(result.stderr)).not.toContain("--name");
 	});
+	it("answers each refusal kind with its own reason slug", () => {
+		ignoredFiles("private");
+		track("private");
+		const consent = run("pull", "--json");
+		expect(consent.status).toBe(2);
+		expect(JSON.parse(consent.stdout)).toMatchObject({ ok: false, reason: "consent-required" });
+
+		spaceGit(root, ["config", "remote.origin.url", join(fixture.root, "gone.git")]);
+		expect(JSON.parse(run("pull", "--json").stdout)).toMatchObject({ reason: "unreachable" });
+
+		spaceGit(root, ["config", "remote.origin.url", fixture.remote]);
+		peerFile("loose.txt", "hostile\n");
+		publish();
+		expect(JSON.parse(run("pull", "--json").stdout)).toMatchObject({
+			reason: "incoming-history-refused",
+		});
+
+		git(
+			["--git-dir", fixture.remote, "update-ref", "-d", "refs/heads/space/followups"],
+			fixture.root,
+		);
+		spaceGit(root, ["update-ref", "-d", "refs/remotes/origin/space/followups"]);
+		const sha = git(["rev-parse", "HEAD"], peer).trim();
+		const tree = git(["rev-parse", "HEAD^{tree}"], peer).trim();
+		const other = git(["commit-tree", tree, "-m", "divergent"], peer).trim();
+		git(["push", "-q", "origin", `+${other}:refs/heads/space/followups`], peer);
+		expect(sha).not.toBe(other);
+		expect(JSON.parse(run("pull", "--json").stdout)).toMatchObject({ reason: "diverged" });
+	});
+	it("reports ok true on a successful json pull", () => {
+		peerFile("notes/new.md", "incoming\n");
+		publish();
+		const result = run("pull", "--json");
+		expect(result.status, flat(result.stderr)).toBe(0);
+		expect(JSON.parse(result.stdout)).toMatchObject({ ok: true, updated: true });
+	});
+	it("reports local-changes when a fast-forward would overwrite local work", () => {
+		peerFile("notes/clash.md", "incoming\n");
+		publish();
+		writeFileSync(join(root, "notes", "clash.md"), "mine\n");
+		const result = run("pull", "--json");
+		expect(result.status).toBe(2);
+		expect(JSON.parse(result.stdout)).toMatchObject({ reason: "local-changes" });
+	});
 	it("keeps the refusal recorded when the hyperdrive cannot be reached", () => {
 		peerFile("loose.txt", "hostile\n");
 		publish();

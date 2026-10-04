@@ -44,7 +44,7 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 			})),
 		}));
 		if (flags.json) {
-			this.log(JSON.stringify(result, null, 2));
+			this.log(JSON.stringify({ ok: true, ...result }, null, 2));
 			return;
 		}
 		this.log(

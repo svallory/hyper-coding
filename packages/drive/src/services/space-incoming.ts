@@ -15,6 +15,8 @@ export interface IncomingSpaceValidation {
 }
 
 export class SpaceIncomingError extends SpaceGitError {
+	/** Stable slug for `--json` consumers; never parse the prose for this. */
+	readonly reason = "incoming-history-refused";
 	constructor(path: string, reason: string) {
 		super(
 			`Refusing incoming space history: ${JSON.stringify(path)} ${reason}. Local history and files were not changed; repair the remote history before retrying.`,
@@ -236,6 +238,7 @@ const REVIEW_NAMES: ReadonlySet<string> = new Set([
 /** Directories whose contents can run commands or shape what an agent does. */
 const REVIEW_DIRECTORIES: readonly string[] = [
 	".claude/",
+	".config/",
 	".cursor/",
 	".codex/",
 	".vscode/",
@@ -245,25 +248,52 @@ const REVIEW_DIRECTORIES: readonly string[] = [
 ];
 
 function isReviewPath(path: string): boolean {
-	const normalized = path.normalize("NFC").toLowerCase();
+	// A directory name matches as a tree, as a link or as a file: a peer that
+	// replaces `.hyper/memory` with a symlink must not slip past the match just
+	// by dropping the trailing slash.
+	const normalized = path.normalize("NFC").toLowerCase().replace(/\/+$/, "");
 	if (REVIEW_NAMES.has(posix.basename(normalized))) return true;
-	return REVIEW_DIRECTORIES.some((dir) => normalized.startsWith(dir));
+	return REVIEW_DIRECTORIES.some((dir) => {
+		const bare = dir.replace(/\/+$/, "");
+		return normalized === bare || normalized.startsWith(dir);
+	});
 }
 
-/** Follow a tip symlink chain inside the tip tree; returns every path it touches. */
-function resolveTipChain(start: string, links: Map<string, string>): string[] {
-	const chain: string[] = [];
+/**
+ * Resolve every component of `start` through the tip's links, so a path that
+ * merely *lives behind* a symlinked directory lands on its real location.
+ * Bounded and loop-safe; returns the input unchanged when it cannot be followed.
+ */
+function resolveThroughLinks(start: string, links: Map<string, string>, limit = 40): string {
+	const parts: string[] = [];
+	// An index cursor over segments, not a mutating queue: expanding a link
+	// splices the target's segments IN PLACE of the link itself, and the
+	// segments after the link keep their place.
+	const segments = start.split("/");
+	let index = 0;
 	const seen = new Set<string>();
-	let current = start;
-	while (links.has(current) && !seen.has(current)) {
-		seen.add(current);
-		const target = links.get(current)!;
-		current = posix.normalize(posix.join(posix.dirname(current), target));
-		if (current === ".." || current.startsWith("../")) return chain;
-		chain.push(current);
-		if (chain.length > 40) return chain;
+	let hops = 0;
+	while (index < segments.length) {
+		const next = segments[index++];
+		if (next === "" || next === ".") continue;
+		if (next === "..") {
+			if (parts.length > 0) parts.pop();
+			continue;
+		}
+		parts.push(next);
+		// Check EVERY accumulated prefix, not just the whole path: a change can
+		// sit behind a symlinked directory component, not only behind a link
+		// that happens to be the last segment.
+		const candidate = parts.join("/");
+		const link = links.get(candidate);
+		if (link === undefined) continue;
+		if (++hops > limit || seen.has(candidate) || posix.isAbsolute(link) || link.includes("\\"))
+			return start;
+		seen.add(candidate);
+		parts.pop();
+		segments.splice(index, 0, ...link.split("/"));
 	}
-	return chain;
+	return parts.join("/");
 }
 
 /**
@@ -300,17 +330,31 @@ export async function incomingReviewPaths(
 		return tipEntry?.hash !== baseEntry?.hash || tipEntry?.mode !== baseEntry?.mode;
 	};
 	const reported = new Set<string>();
-	for (const path of new Set([...tipTree.keys(), ...baseTree.keys()])) {
-		if (!changed(path)) continue;
+	const changedPaths = [...new Set([...tipTree.keys(), ...baseTree.keys()])].filter(changed);
+	for (const path of changedPaths) {
 		const tipEntry = tipTree.get(path);
 		const baseEntry = baseTree.get(path);
-		if (isReviewPath(path) || tipEntry?.mode === "100755" || baseEntry?.mode === "100755")
+		// A changed path counts when it is itself a review path, when it sits
+		// behind a symlinked directory that a review path points at, or when it
+		// gained (or lost) the executable bit.
+		const resolved = resolveThroughLinks(path, links);
+		if (
+			isReviewPath(path) ||
+			isReviewPath(resolved) ||
+			tipEntry?.mode === "100755" ||
+			baseEntry?.mode === "100755"
+		)
 			reported.add(path);
 	}
 	// A reviewed path that is a symlink is only half the story: whoever wrote it
-	// can change the file behind it later without the link itself changing.
-	for (const [path, entry] of tipTree)
-		if (entry.mode === "120000" && isReviewPath(path))
-			for (const target of resolveTipChain(path, links)) if (changed(target)) reported.add(target);
+	// can change the file behind it later without the link itself changing. The
+	// target may be a file several hops away, or a whole directory.
+	for (const [path, entry] of tipTree) {
+		if (entry.mode !== "120000" || !isReviewPath(path)) continue;
+		const target = resolveThroughLinks(path, links);
+		for (const changed of changedPaths) {
+			if (changed === target || changed.startsWith(`${target}/`)) reported.add(changed);
+		}
+	}
 	return [...reported].sort();
 }
