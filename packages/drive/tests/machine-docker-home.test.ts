@@ -394,6 +394,13 @@ describe("home-path", () => {
 				"svallory",
 			),
 		).toBe("move");
+		// Interrupted after the passwd step (or that step done by hand): finish it.
+		expect(
+			layoutProblem({ passwdHome: target, legacy: "dir", target: "absent" }, target, "svallory"),
+		).toBe("move");
+		expect(
+			layoutProblem({ passwdHome: target, legacy: "dir", target: "dir" }, target, "svallory"),
+		).toMatch(/real directory/);
 		// The refusals: both are states a careless script would "fix".
 		expect(
 			layoutProblem(
@@ -436,23 +443,25 @@ describe("home-path", () => {
 	});
 
 	it("writes a root script that checks before it moves and rolls back after", () => {
+		// The text half. `machine-home-path-script.test.ts` RUNS this script in
+		// a sandbox; this pins the order a reader of the file sees.
 		const text = homePathSymlink.rootScript?.(ctxFor(recordingRunner())) ?? "";
 		expect(text).toContain("nothing has been changed");
-		// The order that makes a refusal safe: every precondition, then usermod.
 		const checks = [
-			'refuse "$legacy_home exists and is not a symlink"',
-			'refuse "$target_home already exists',
+			'"$legacy_home is not a real directory',
+			'home_path_refuse "$target_home already exists',
 			"different filesystems",
-			'pgrep -u "$primary_user"',
-			'usermod -d "$target_home"',
+			'pgrep -u "$name"',
+			'usermod -d "$target_home" "$name"',
+			'mv "$legacy_home" "$target_home"',
 		].map((needle) => text.indexOf(needle));
 		expect(checks.every((at) => at > 0)).toBe(true);
 		expect(checks).toEqual([...checks].sort((a, b) => a - b));
 		// Rollback for each step after the usermod.
-		expect(text).toContain('usermod -d "$legacy_home" "$primary_user"');
+		expect(text).toContain('usermod -d "$legacy_home" "$name"');
 		expect(text).toContain('mv "$target_home" "$legacy_home"');
-		// The move is a rename on one filesystem, and only that one directory.
-		expect(text).toContain('mv "$legacy_home" "$target_home"');
+		// One function, returned from: never an exit 0 that ends the assembled script.
+		expect(text).not.toMatch(/exit 0/);
 		expect(text).not.toContain("sudo");
 	});
 

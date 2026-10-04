@@ -36,7 +36,6 @@
  *   `/Users/<name>` already existing as a real directory.
  */
 
-import { rootScriptGuards } from "#services/machine/root-script";
 import { shellQuote } from "#services/remote";
 import { homeOf, primaryUserLines, primaryUserOf } from "./agent-context.js";
 import { ensureBashrcLine, runOrFail, runScript } from "./shell.js";
@@ -66,6 +65,11 @@ export function layoutProblem(layout: Layout, target: string, name: string): str
 	const legacy = `${LEGACY_HOME_PREFIX}${name}`;
 	if (layout.passwdHome === target && layout.legacy === "symlink") return null;
 	if (layout.passwdHome === target && layout.legacy === "absent") return "missing-symlink";
+	// The passwd step done (by hand, as the refusal suggests, or by a script that
+	// was interrupted) and the directory not moved yet: the script finishes it.
+	if (layout.passwdHome === target && layout.legacy === "dir" && layout.target === "absent") {
+		return "move";
+	}
 	if (layout.passwdHome === target) {
 		return `the passwd entry says ${target} but ${legacy} is a ${layout.legacy === "dir" ? "real directory" : layout.legacy} — I won't replace it with a symlink`;
 	}
@@ -162,6 +166,11 @@ export const homePathSymlink: Task = {
 		// The user and both paths are worked out BY THE SCRIPT, from $SUDO_USER and
 		// the password database, so a script written on one machine and run later
 		// acts on what is actually there.
+		//
+		// The section is ONE FUNCTION, called once. It is assembled into a script
+		// with other tasks' sections after it, so "nothing to do" has to be a
+		// `return`, never an `exit 0` that would silently skip everything below.
+		// A refusal still exits the whole script (non-zero), with nothing changed.
 		return `# The same home path on this machine and on your Mac.
 #
 # Your real home is ${USERS_PREFIX}<name> and ${LEGACY_HOME_PREFIX}<name> becomes a symlink to
@@ -178,85 +187,128 @@ export const homePathSymlink: Task = {
 #     ln -s ${USERS_PREFIX}<name> ${LEGACY_HOME_PREFIX}<name>
 #
 # Nothing else is touched: not /home itself, not any other user, no file inside
-# your home. Every step is guarded, and every step after the usermod is rolled
-# back if the next one fails, so the script can be re-run from any state it can
-# be interrupted in.
+# your home. Only three shapes are acted on — already done (nothing), the home
+# at ${LEGACY_HOME_PREFIX}<name> with ${USERS_PREFIX}<name> absent (the move), and the move done
+# without its symlink (the symlink) — and every other shape is refused before
+# anything changes. A step that fails after the usermod is undone, so the
+# script can be re-run from any state it can be interrupted in.
 
-${rootScriptGuards("unused-agent-user")}
 ${primaryUserLines(ctx)}
-name="$primary_user"
-legacy_home=${LEGACY_HOME_PREFIX}"$name"
-target_home=${USERS_PREFIX}"$name"
+case "$primary_user" in
+  ''|[!a-z_]*|*[!a-z0-9_-]*)
+    echo "hyper: '$primary_user' is not a usable user name; refusing to move a home for it." >&2
+    exit 1
+    ;;
+esac
+if [ "$primary_user" = root ] || [ "$(id -u "$primary_user" 2>/dev/null || echo x)" = 0 ]; then
+  echo "hyper: '$primary_user' is root; this only moves an ordinary user's home." >&2
+  exit 1
+fi
 
-refuse() {
+home_path_refuse() {
   echo "hyper: $*" >&2
   echo "hyper: nothing has been changed." >&2
   exit 1
 }
 
-recorded_home="$(getent passwd "$primary_user" | cut -d: -f6)"
-[ -n "$recorded_home" ] || refuse "I can't find the passwd entry for '$primary_user'"
-
-# Already the shape we want: the real home at /Users, the legacy path a symlink.
-if [ "$recorded_home" = "$target_home" ]; then
-  if [ -L "$legacy_home" ]; then
-    echo "hyper: $legacy_home already points at $target_home; nothing to do."
-    exit 0
-  fi
-  [ -e "$legacy_home" ] && refuse "$legacy_home exists and is not a symlink"
-  install -d -m 0755 ${USERS_PREFIX}
-  ln -s "$target_home" "$legacy_home"
-  echo "hyper: $legacy_home -> $target_home"
-  exit 0
-fi
-
-# Everything below is the move. Each precondition is checked BEFORE anything is
-# changed, so a refusal always leaves the machine exactly as it was.
-[ "$recorded_home" = "$legacy_home" ] \\
-  || refuse "the passwd entry says $recorded_home, which is neither $legacy_home nor $target_home"
-[ -d "$legacy_home" ] && [ ! -L "$legacy_home" ] \\
-  || refuse "$legacy_home is not a real directory"
-[ ! -e "$target_home" ] \\
-  || refuse "$target_home already exists; move it aside yourself, then re-run"
-
-# One filesystem, or mv would copy a home directory tree instead of renaming it.
-home_fs="$(stat -c %d ${LEGACY_HOME_PREFIX} 2>/dev/null || echo none)"
-root_fs="$(stat -c %d / 2>/dev/null || echo none)"
-[ -n "$root_fs" ] && [ "$home_fs" = "$root_fs" ] \\
-  || refuse "${LEGACY_HOME_PREFIX} and / are on different filesystems ($home_fs vs $root_fs), so moving the home would copy it rather than rename it. Put them on one filesystem first."
-
-# usermod refuses while the user has ANY process, including the ssh session
-# running this script. Checked here so the refusal happens before the move, and
-# says how to run it instead of failing halfway.
-busy_pids="$(pgrep -u "$primary_user" 2>/dev/null | tr '\\n' ' ' | sed 's/ $//')"
-if [ -n "$busy_pids" ]; then
-  echo "hyper: '$primary_user' still has processes running (pids: $busy_pids)." >&2
-  echo "       usermod will not change a home directory while that is true, and" >&2
-  echo "       doing the move first would leave your home half-way between two" >&2
-  echo "       paths. Nothing has been changed. Close EVERY session of" >&2
-  echo "       '$primary_user' — every ssh login, every terminal — and re-run this" >&2
-  echo "       script. A root console helps only if no session of that user is" >&2
-  echo "       open anywhere else; \`loginctl terminate-user $primary_user\` closes" >&2
-  echo "       them all from root." >&2
-  echo "       To do that one step by hand, from a root console:" >&2
-  echo "           usermod -d $target_home $primary_user" >&2
-  echo "       then re-run this script; it picks up from there and does the rest." >&2
+# A rollback step that did not work is said out loud, with the state it left:
+# "undone" is only printed when it is true.
+home_path_undo_failed() {
+  echo "hyper: $1, and undoing it failed too ($2)." >&2
+  echo "hyper: the passwd entry says $(getent passwd "$primary_user" | cut -d: -f6 || true);" >&2
+  echo "hyper: put the home back at ${LEGACY_HOME_PREFIX}$primary_user by hand before anything else." >&2
   exit 1
-fi
+}
 
-usermod -d "$target_home" "$primary_user" \\
-  || refuse "usermod would not change the home directory"
-if ! install -d -m 0755 ${USERS_PREFIX} || ! mv "$legacy_home" "$target_home"; then
-  usermod -d "$legacy_home" "$primary_user" || true
-  refuse "the move failed; the passwd entry has been put back"
-fi
-if ! ln -s "$target_home" "$legacy_home"; then
-  mv "$target_home" "$legacy_home" || true
-  usermod -d "$legacy_home" "$primary_user" || true
-  refuse "the symlink could not be created; the move has been undone"
-fi
-echo "hyper: $target_home is your home; $legacy_home -> $target_home"
-echo "hyper: log out and back in, so your shell picks the new path up."
+home_path_move() {
+  local name="$primary_user"
+  local legacy_home="${LEGACY_HOME_PREFIX}$name"
+  local target_home="${USERS_PREFIX}$name"
+  local recorded_home home_fs root_fs busy_pids
+  recorded_home="$(getent passwd "$name" | cut -d: -f6 || true)"
+  [ -n "$recorded_home" ] || home_path_refuse "I can't find the passwd entry for '$name'"
+  [ "$recorded_home" = "$legacy_home" ] || [ "$recorded_home" = "$target_home" ] \\
+    || home_path_refuse "the passwd entry says $recorded_home, which is neither $legacy_home nor $target_home"
+
+  # Never act through a symlink at the target, whatever passwd says.
+  [ ! -L "$target_home" ] || home_path_refuse "$target_home is a symlink; I won't put a home there"
+
+  # Done: nothing to do.
+  if [ "$recorded_home" = "$target_home" ] && [ -L "$legacy_home" ] \\
+    && [ "$(readlink "$legacy_home")" = "$target_home" ] && [ -d "$target_home" ]; then
+    echo "hyper: $legacy_home already points at $target_home; nothing to do."
+    return 0
+  fi
+
+  # The move happened and the symlink did not.
+  if [ "$recorded_home" = "$target_home" ] && [ -d "$target_home" ] && [ ! -e "$legacy_home" ] \\
+    && [ ! -L "$legacy_home" ]; then
+    ln -s "$target_home" "$legacy_home"
+    echo "hyper: $legacy_home -> $target_home"
+    return 0
+  fi
+
+  # Everything else must be: a real directory at the legacy path and nothing at
+  # the target. Checked BEFORE anything changes.
+  [ -d "$legacy_home" ] && [ ! -L "$legacy_home" ] \\
+    || home_path_refuse "$legacy_home is not a real directory (and the home is not at $target_home either)"
+  [ ! -e "$target_home" ] \\
+    || home_path_refuse "$target_home already exists; move it aside yourself, then re-run"
+
+  # One filesystem, or mv would copy a home directory tree instead of renaming it.
+  home_fs="$(stat -c %d ${LEGACY_HOME_PREFIX} 2>/dev/null || echo none)"
+  root_fs="$(stat -c %d / 2>/dev/null || echo none)"
+  [ "$root_fs" != none ] && [ "$home_fs" = "$root_fs" ] \\
+    || home_path_refuse "${LEGACY_HOME_PREFIX} and / are on different filesystems ($home_fs vs $root_fs), so moving the home would copy it rather than rename it. Put them on one filesystem first."
+
+  local changed_passwd=0
+  if [ "$recorded_home" = "$legacy_home" ]; then
+    # usermod refuses while the user has ANY process, including the ssh session
+    # running this script. Checked here so the refusal happens before the move.
+    # \`|| true\`: pgrep exits 1 when there is no process, which is the GOOD
+    # case, and under pipefail that would end the script with no message.
+    busy_pids="$( (pgrep -u "$name" 2>/dev/null || true) | tr '\\n' ' ' | sed 's/ $//')"
+    if [ -n "$busy_pids" ]; then
+      echo "hyper: '$name' still has processes running (pids: $busy_pids)." >&2
+      echo "       usermod will not change a home directory while that is true, and" >&2
+      echo "       doing the move first would leave your home half-way between two" >&2
+      echo "       paths. Nothing has been changed. Close EVERY session of" >&2
+      echo "       '$name' — every ssh login, every terminal, and its lingering" >&2
+      echo "       systemd --user manager — and re-run this script as root from a" >&2
+      echo "       console that is not one of them: \\\`loginctl terminate-user $name\\\`" >&2
+      echo "       closes them all. Or do only the passwd step by hand once they" >&2
+      echo "       are gone:" >&2
+      echo "           usermod -d $target_home $name" >&2
+      echo "       and then re-run this script from any session; it does the rest." >&2
+      exit 1
+    fi
+    usermod -d "$target_home" "$name" \\
+      || home_path_refuse "usermod would not change the home directory"
+    changed_passwd=1
+  fi
+
+  if ! install -d -m 0755 ${USERS_PREFIX} || ! mv "$legacy_home" "$target_home"; then
+    if [ "$changed_passwd" = 1 ]; then
+      usermod -d "$legacy_home" "$name" \\
+        || home_path_undo_failed "the move failed" "usermod -d $legacy_home $name"
+      home_path_refuse "the move failed; the passwd entry has been put back"
+    fi
+    home_path_refuse "the move failed"
+  fi
+  if ! ln -s "$target_home" "$legacy_home"; then
+    mv "$target_home" "$legacy_home" \\
+      || home_path_undo_failed "the symlink could not be created" "mv $target_home $legacy_home"
+    if [ "$changed_passwd" = 1 ]; then
+      usermod -d "$legacy_home" "$name" \\
+        || home_path_undo_failed "the symlink could not be created" "usermod -d $legacy_home $name"
+    fi
+    echo "hyper: the symlink could not be created; the move has been undone." >&2
+    exit 1
+  fi
+  echo "hyper: $target_home is your home; $legacy_home -> $target_home"
+  echo "hyper: log out and back in, so your shell picks the new path up."
+}
+home_path_move
 `;
 	},
 };
