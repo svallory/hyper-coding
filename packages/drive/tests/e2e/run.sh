@@ -73,24 +73,42 @@
 # suite itself may run under `flock /tmp/hyper-heavy2.lock` like other heavy
 # commands.
 #
-# KNOWN LIMIT — signals to a BACKGROUNDED runner. Each child runs in the
-# background and INT/TERM/HUP trap to `pkill -TERM -P` plus `kill -TERM` on it,
-# so its own children and its EXIT cleanup go with it. That works when the
-# runner is a normal foreground process (how CI runs it: `run: bash …`). It does
-# NOT fire when the runner ITSELF is an async job of a non-interactive shell:
-# the runner dies of the signal (143) and the child, its container and its temp
-# HOME survive. Reproduced on macOS, whose /bin/bash is 3.2 — a trapped signal
-# interrupting `wait` is not honoured there the way bash 4+ honours it
-# (hypothesis, not proven: the same test under bash 5 has not been run). If you
-# must cancel a suite that way, expect to `podman rm -f` the exact
-# `hyper-t*-t19-*` name it printed and kill its pid by hand. Fixing this
-# properly needs delivery that does not depend on the runner's own trap;
-# recorded as a follow-up rather than worked around.
-#
 # The real herdr is never driven: every script that needs herdr puts a fake on
 # its own PATH.
 
 set -uo pipefail
+
+# Signal handling is installed FIRST, before the version prints and before any
+# temp file exists, so a signal can never land in a window where this runner
+# would tear state down without stopping the child. Everything the handlers
+# touch is initialised here and only guarded, never assumed.
+homes=()
+child=""
+known_hosts=""
+
+cleanup() {
+  for home in ${homes[@]+"${homes[@]}"}; do
+    rm -rf "$home"
+  done
+  if [ -n "$known_hosts" ]; then rm -f "$known_hosts"; fi
+}
+
+# A cancel or timeout signals the runner, not the child's process group. Stop
+# the child — and its own children, scoped to that pid and never by name — so
+# the script's EXIT trap removes its container, its ssh-agent and its daemon
+# BEFORE this runner deletes anything.
+on_signal() {
+  if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
+    pkill -TERM -P "$child" 2>/dev/null || true
+    kill -TERM "$child" 2>/dev/null || true
+    wait "$child" 2>/dev/null || true
+  fi
+  printf 'run.sh: signalled — stopped the running script and exiting\n' >&2
+  exit 130
+}
+
+trap cleanup EXIT
+trap on_signal INT TERM HUP
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cli="$here/../../../cli/bin/run.js"
@@ -144,10 +162,13 @@ parse_name_list() {
 parse_name_list "${HYPER_E2E_SKIP:-}" skip_names
 parse_name_list "${HYPER_E2E_REQUIRE:-}" require_names
 
+# Iterate "$@", not a local array: bash 3.2 (stock macOS /bin/bash) raises
+# "names[@]: unbound variable" under `set -u` for an EMPTY array.
 validate_names() {
-  local list_name="$1"; shift
-  local names=("$@") name
-  for name in "${names[@]}"; do
+  local list_name="$1"
+  shift
+  local name
+  for name in "$@"; do
     case " ${scripts[*]} " in
       *" $name "*) ;;
       *) fail_fast "$list_name names unknown script '$name' (known: ${scripts[*]})" ;;
@@ -248,33 +269,6 @@ free_port() {
 # fight over a name, and a trap only ever removes a container this run started.
 slug="t19-$$"
 
-homes=()
-child=""
-cleanup() {
-  for home in ${homes[@]+"${homes[@]}"}; do
-    rm -rf "$home"
-  done
-  rm -f "$known_hosts"
-}
-
-# M1: a cancel or timeout signals only the runner. Stop the child script (which
-# runs its own EXIT trap on TERM, so containers and daemons go with it) before
-# this runner deletes anything.
-on_signal() {
-  if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
-    # The child's OWN children (ssh, podman, bun) get TERM too, scoped to this
-    # pid — never by name, so no other run's process can be matched.
-    pkill -TERM -P "$child" 2>/dev/null || true
-    kill -TERM "$child" 2>/dev/null || true
-    wait "$child" 2>/dev/null || true
-  fi
-  printf 'run.sh: signalled — stopped the running script and exiting\n' >&2
-  exit 130
-}
-
-trap cleanup EXIT
-trap on_signal INT TERM HUP
-
 passed=()
 failed=()
 skipped=()
@@ -352,6 +346,12 @@ for name in "${scripts[@]}"; do
   start=$SECONDS
   env "${env_unset[@]}" "${env_sets[@]}" bash "$here/$name.sh" &
   child=$!
+  # Poll rather than bare `wait`: bash 3.2 (stock macOS /bin/bash) does not run
+  # a trapped signal while blocked in `wait`, so a cancel would wait for the
+  # whole script. This loop notices the signal within a second on every bash.
+  while kill -0 "$child" 2>/dev/null; do
+    sleep 1
+  done
   wait "$child"
   rc=$?
   child=""
