@@ -197,7 +197,7 @@ chmod +x "$work_real/bin/herdr"
 # ssh config of our own, reached by pointing HOME at a scratch dir — the
 # operator's real ~/.ssh is never touched.
 ssh_home="$work_real/sshhome"
-mkdir -p "$ssh_home/.ssh" "$work_real/claude-empty"
+mkdir -p "$ssh_home/.ssh" "$work_real/claude-empty" "$work_real/hyper-home" "$work_real/xdg-empty"
 cat > "$ssh_home/.ssh/config" <<SSHCFG
 Host t16box
   HostName localhost
@@ -243,6 +243,7 @@ TOML
 run_isolated() {
   PATH="$work_real/bin:$PATH" HYPER_DRIVE_CONFIG="$work_real/drive.toml" \
     HOME="$ssh_home" CLAUDE_CONFIG_DIR="$work_real/claude-empty" HYPER_MACHINE_SCRATCH="$work_real/scratch" \
+    HYPER_HOME="$work_real/hyper-home" XDG_CONFIG_HOME="$work_real/xdg-empty" \
     HYPER_T16_CONTAINER_TEST=1 HYPER_T16_TOKEN="$fixture_token" NO_COLOR=1 bun "$@"
 }
 run_hyper() { run_isolated "$cli" machine setup t16 --features agent-user --yes; }
