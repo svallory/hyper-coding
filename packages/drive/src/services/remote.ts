@@ -729,6 +729,96 @@ export class RemoteMachine implements MachineRunner {
 const SSH_CLIENT = "ssh";
 
 /**
+ * One shell word as written: where it starts and ends in the ORIGINAL string,
+ * what a shell would make of it once quotes and escapes are removed, and
+ * whether it is a `NAME=value` assignment (decided on the raw text, because
+ * `"A"=1` is a command word to a shell, not an assignment).
+ */
+interface ShellWord {
+	start: number;
+	end: number;
+	value: string;
+	assignment: boolean;
+}
+
+/**
+ * Read the words of a simple command, or `null` when this cannot be done
+ * with confidence: an unterminated quote, a trailing backslash, a command
+ * substitution, or an operator that makes it more than one simple command
+ * (a pipeline, a list, a subshell, a newline). Parameter expansions such as
+ * `$HOME` are kept literally; they only matter for the program word, and a
+ * program reached through one is simply not recognised as ssh.
+ */
+function shellWords(command: string): ShellWord[] | null {
+	const words: ShellWord[] = [];
+	let index = 0;
+	while (index < command.length) {
+		const character = command[index]!;
+		if (character === " " || character === "\t") {
+			index += 1;
+			continue;
+		}
+		if ("|&;()`\n\r".includes(character)) return null;
+		const start = index;
+		let value = "";
+		while (index < command.length) {
+			const current = command[index]!;
+			if (current === " " || current === "\t") break;
+			if ("|&;()`\n\r".includes(current)) return null;
+			if (current === "\\") {
+				if (index + 1 >= command.length) return null;
+				value += command[index + 1];
+				index += 2;
+				continue;
+			}
+			if (current === "'") {
+				const close = command.indexOf("'", index + 1);
+				if (close < 0) return null;
+				value += command.slice(index + 1, close);
+				index = close + 1;
+				continue;
+			}
+			if (current === '"') {
+				index += 1;
+				let closed = false;
+				while (index < command.length) {
+					const inner = command[index]!;
+					if (inner === '"') {
+						closed = true;
+						index += 1;
+						break;
+					}
+					if (inner === "`" || (inner === "$" && command[index + 1] === "(")) return null;
+					if (
+						inner === "\\" &&
+						index + 1 < command.length &&
+						'"\\$`'.includes(command[index + 1]!)
+					) {
+						value += command[index + 1];
+						index += 2;
+						continue;
+					}
+					value += inner;
+					index += 1;
+				}
+				if (!closed) return null;
+				continue;
+			}
+			if (current === "$" && command[index + 1] === "(") return null;
+			value += current;
+			index += 1;
+		}
+		words.push({
+			start,
+			end: index,
+			value,
+			assignment: /^[A-Za-z_][A-Za-z0-9_]*=/.test(command.slice(start, index)),
+		});
+	}
+	return words;
+}
+
+/**
  * BatchMode belongs in a `GIT_SSH_COMMAND` so a clone that cannot authenticate
  * fails instead of waiting for a password that will never arrive on a
  * noninteractive machine.
@@ -739,26 +829,32 @@ const SSH_CLIENT = "ssh";
  * A command whose program is something else — a wrapper, `sshpass`, a company
  * fork — is returned unchanged, because it need not understand `-o` at all.
  *
- * The program word is found the way a shell would: leading `NAME=value`
- * assignments are skipped, quotes are removed, and the comparison is
- * case-insensitive because a case-insensitive filesystem happily runs `SSH`.
+ * The user's words are never rewritten: git hands this string to a shell, so
+ * removing a quote changes what runs. The words are read only to FIND the
+ * program word — leading `NAME=value` assignments (and an `env` followed by
+ * assignments) are skipped, quotes and escapes are honoured — and ` -o
+ * BatchMode=yes` is inserted at that word's end offset in the original string.
+ * The comparison is on the unquoted basename, case-insensitively, because a
+ * case-insensitive filesystem happily runs `SSH`. Anything the scanner cannot
+ * read with confidence is returned unchanged.
  *
  * Pure: no process, no environment, no filesystem. `undefined` in means the
  * user configured nothing, and the default command out.
  */
 export function sshCommandWithBatchMode(command: string | undefined): string | undefined {
 	if (command === undefined || command.trim() === "") return `${SSH_CLIENT} -o BatchMode=yes`;
-	const trimmed = command.trim();
-	// Quote-aware words: `"/path with space/ssh"` is ONE word to a shell.
-	const words = trimmed.match(/"[^"]*"|'[^']*'|\S+/g) ?? [trimmed];
+	const words = shellWords(command);
+	if (words === null) return command;
 	let index = 0;
-	while (index < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]!)) index += 1;
-	const word = words[index];
-	if (word === undefined) return trimmed;
-	// `"/path with space/ssh"` and `'/opt/ssh'` name the same program.
-	const unquoted = word.replace(/^["']/, "").replace(/["']$/, "");
-	if (basename(unquoted).toLowerCase() !== SSH_CLIENT) return command;
-	// Everything before the program word (leading assignments) is kept as is.
-	const before = trimmed.slice(0, trimmed.indexOf(word));
-	return `${before}${unquoted} -o BatchMode=yes${trimmed.slice(trimmed.indexOf(word) + word.length)}`;
+	while (index < words.length && words[index]!.assignment) index += 1;
+	if (index < words.length && basename(words[index]!.value) === "env") {
+		index += 1;
+		// `env -i`, `env -u NAME`: options change what follows; not guessed at.
+		if (index < words.length && words[index]!.value.startsWith("-")) return command;
+		while (index < words.length && words[index]!.assignment) index += 1;
+	}
+	const program = words[index];
+	if (program === undefined) return command;
+	if (basename(program.value).toLowerCase() !== SSH_CLIENT) return command;
+	return `${command.slice(0, program.end)} -o BatchMode=yes${command.slice(program.end)}`;
 }
