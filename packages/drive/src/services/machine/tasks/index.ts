@@ -78,13 +78,18 @@ export function allTasks(options: { tools?: readonly string[] } = {}): Task[] {
 		...(tools.length > 0 ? [pathTask] : []),
 		rsyncTask,
 		...tools,
+		// home-path FIRST. The root script runs its sections in this order, and
+		// agent-user.create's section resolves the primary's home from the
+		// password database when it runs: after the move it links the agent's
+		// projects/ to /Users/<name>/…, before the move to /home/<name>/…, which
+		// the next check then calls wrong and asks for a second root run.
+		homePathSymlink,
+		homePathPhysical,
 		agentUserCreate,
 		agentUserDirs,
 		agentUserWatcher,
 		dockerRootlessPackages,
 		dockerRootlessInstall,
-		homePathSymlink,
-		homePathPhysical,
 	];
 }
 

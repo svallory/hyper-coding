@@ -445,6 +445,17 @@ describe("home-path", () => {
 		).toMatch(/neither/);
 	});
 
+	it("moves the home before agent-user.create's section resolves it", () => {
+		// The root script runs sections in task order, and agent-user.create links
+		// the agent's projects/ under the primary's passwd home AT RUN TIME. After
+		// the move that has to be /Users/<name>, or the very next check calls the
+		// link wrong (seen in the container e2e).
+		const ids = allTasks().map((task) => task.id);
+		expect(ids.indexOf("home-path.symlink")).toBeGreaterThanOrEqual(0);
+		expect(ids.indexOf("home-path.symlink")).toBeLessThan(ids.indexOf("agent-user.create"));
+		expect(ids.indexOf("home-path.symlink")).toBeLessThan(ids.indexOf("docker-rootless.packages"));
+	});
+
 	it("refuses a machine whose config does not ask for a /Users home", async () => {
 		const runner = recordingRunner([{ match: /^id -un$/, result: { stdout: "svallory\n" } }]);
 		await expect(
