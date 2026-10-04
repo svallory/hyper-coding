@@ -39,8 +39,14 @@ there is exactly one copy of it, and the scripts source it through
   call `hyper_require_lib` (or `hyper_soft_lib` in a hook that must stay
   silent when `hyper` is absent). The library enables `set -euo pipefail` when
   sourced: a hook with an always-zero exit contract must reset errexit/pipefail
-  afterwards or guard every fallible call. `SessionEnd` gates push on commit
-  success, then converts any failure into one diagnostic line and exit zero.
+  afterwards or guard every fallible call. `SessionEnd` does only cheap work in
+  the foreground (Claude Code's SessionEnd budget is 1.5 s) and hands the
+  commit and push to a detached `hyper space commit --session-end
+  --payload-file` worker in a new session; the worker's results go to
+  `.hyper/space.git/session-end.log` and `hyper space status`, never to the
+  session. The foreground still prints one line for a missing or unloadable
+  CLI and always exits zero. Test the detachment by killing the hook's
+  process group and waiting for the log line.
 - **Test hooks by piping real hook JSON into the script** — never by running
   the command in your shell, which has an environment hooks don't inherit
   (proto/mise/nvm shims, homebrew PATH):
