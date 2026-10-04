@@ -36,11 +36,18 @@ transcript, and an ownership marker, over ssh.
   copy (a `.env`, say) with different content, or with a different type (a
   file or symlink on one side where the other has a directory). Identical
   files and paths the copy excludes don't count;
-- **plain repo only**: the target's repository has a ref this machine
-  doesn't have, or one with commits this machine's ref doesn't contain (or a
-  detached HEAD this machine's HEAD doesn't contain). The copy replaces the
-  target's `.git` files with this machine's, so those commits would become
-  unreachable.
+- the target has a directory git TRACKS where this machine has a file or
+  symlink (the copy can't write a file over a directory). The reverse, a
+  tracked file there where this machine has a directory, is not refused: git
+  has that file, and the copy replaces it;
+- **plain repo only**: the target's repository has a ref at a commit this
+  machine doesn't have, or doesn't reach from any of its refs (or a detached
+  HEAD at such a commit). The copy replaces the target's `.git` files with
+  this machine's, so those commits would become unreachable. A ref only the
+  target has (say `refs/remotes/origin/main` or a tag it fetched more
+  recently) is fine when its commit is here and one of this machine's refs
+  reaches it; the ref itself may not survive the copy (a fetch there
+  restores it).
 
 **`--force` does not get past any of these** — they are refused whatever you
 pass:
@@ -58,6 +65,9 @@ pass:
 - in the target's copy (a space worktree or a plain repo): a merge, rebase,
   cherry-pick, revert or bisect in progress, unresolved conflicts in the
   index, or changes in a submodule. Nothing `--force` saves can carry them.
+- **plain repo only**: the target's repository keeps its refs in the
+  reftable format (`extensions.refStorage=reftable`). The copy replaces its
+  `.git/config`, which would hide every ref there.
 
 **Say `--force` is the user's call.** Relay the refusal and stop; do not
 retry with `--force` to "make it work".
@@ -72,18 +82,23 @@ retry with `--force` to "make it work".
   ref of the target's repository (and a detached HEAD) is first saved there
   as `refs/hyper-warp-backup/<session id>-<start time>/<ref without refs/>`;
   warp prints the namespace. The copy leaves `.git/refs/hyper-warp-backup`
-  alone, but the rest of the target's `.git` — `config`, `info/exclude`,
+  alone, and before every plain-repo copy, saved refs that a `git pack-refs`
+  or `gc` on the target moved into `packed-refs` are written back there as
+  loose refs, so a later warp doesn't drop them. The rest of the target's `.git` — `config`, `info/exclude`,
   hooks, `HEAD`, the index, `packed-refs` — is replaced by this machine's
   files of the same name (files only the target has are kept).
-- **Both**: every colliding untracked or ignored entry (see the refusal
-  above) is first copied (`cp -pPR`) into
+- **Both**: every colliding untracked or ignored entry, and every tracked
+  directory where this machine has a file (see the refusals above), is
+  first copied (`cp -pPR`) into
   `hyper-warp-backup/<session id>-<start time>/` inside the target repo's git
   directory (the space's bare repo for a worktree, `.git` for a plain repo),
   relative paths kept; the `hyper-warp-backup` directory and the per-warp
   directory are mode 0700. An entry of a different type is then removed on
   the target (a symlink is removed, never followed) so the copy can write
   this machine's. Warp prints the directory and the count. Untracked or
-  ignored entries that are not collisions are left alone.
+  ignored entries that are not collisions are left alone. A target that an
+  older warp left half-way (its `.git` already this machine's, a directory
+  still where this machine now has a file) is put right the same way.
 - **Plain directory** (no repo): nothing is checked and nothing is saved.
 - Excluded from the copy by default: `node_modules`, `_build`, `deps`,
   `target`, `dist`, `.turbo`, `.cache`, `.next`.
