@@ -62,9 +62,42 @@ export const ROOTLESS_PACKAGES = [
 	"docker-ce-rootless-extras",
 ] as const;
 
+/** Engines docker-ce conflicts with, or that already provide a `docker` of their own. */
+export const FOREIGN_ENGINE_PACKAGES = ["docker.io", "moby-engine", "podman-docker"] as const;
+
 /** The Docker apt repository, exactly as docs.docker.com documents it for Debian. */
 export const DOCKER_REPO_LIST = "/etc/apt/sources.list.d/docker.list";
 export const DOCKER_KEYRING = "/etc/apt/keyrings/docker.asc";
+
+/**
+ * Docker engines that are not docker-ce, found BEFORE apt is touched (security
+ * review, finding 3).
+ *
+ * docker-ce `Conflicts: docker.io`, so `apt-get install docker-ce` on a machine
+ * running Debian's own Docker REMOVES it, daemon and containers with it. Any
+ * other engine is therefore a refusal that changes nothing; only the operator
+ * can choose between the two. Shared by the root script and the read-only
+ * check. With docker-ce itself installed, its dockerd and docker.service are
+ * the ones it ships, and only the conflicting packages are looked for.
+ *
+ * `docker_foreign_engines` prints one line per finding, nothing when clean.
+ */
+export const DOCKER_ENGINE_FUNCTIONS = `have_package() {
+  dpkg-query -W -f='${"${Status}"}' "$1" 2>/dev/null | grep -q 'ok installed'
+}
+docker_foreign_engines() {
+  for engine_package in ${FOREIGN_ENGINE_PACKAGES.join(" ")}; do
+    if have_package "$engine_package"; then echo "the $engine_package package"; fi
+  done
+  if ! have_package docker-ce; then
+    engine_dockerd="$(command -v dockerd 2>/dev/null || true)"
+    if [ -n "$engine_dockerd" ]; then echo "$engine_dockerd (a dockerd that does not come from docker-ce)"; fi
+    if [ "$(systemctl show -p LoadState --value docker.service 2>/dev/null || true)" = loaded ]; then
+      echo "a docker.service unit that does not come from docker-ce"
+    fi
+  fi
+  return 0
+}`;
 
 function probe(agentUser: string): string {
 	const q = shellQuote;
@@ -73,6 +106,8 @@ function probe(agentUser: string): string {
 			(name) =>
 				`printf 'pkg_${name}=%s\\n' "$(dpkg-query -W -f='${"${Status}"}' ${q(name)} 2>/dev/null | grep -c 'ok installed' || true)"`,
 		),
+		DOCKER_ENGINE_FUNCTIONS,
+		`docker_foreign_engines | sed 's/^/foreign_engine=/'`,
 		SUBID_FUNCTIONS,
 		`agent_uid="$(id -u ${q(agentUser)} 2>/dev/null || echo none)"`,
 		`printf 'subuid=%s\\n' "$(subid_has /etc/subuid ${q(agentUser)} "$agent_uid" && echo 1 || echo 0)"`,
@@ -87,6 +122,8 @@ interface Probe {
 	packages: Set<string>;
 	subuid: boolean;
 	subgid: boolean;
+	/** Docker engines that are not docker-ce: a refusal, never "needs root". */
+	foreignEngines: string[];
 	/** "<agent line> overlaps <other line>", per file, or "". */
 	subidConflict: string;
 	linger: boolean;
@@ -98,11 +135,16 @@ function parseProbe(stdout: string): Probe {
 		const at = line.indexOf("=");
 		if (at > 0) answers.set(line.slice(0, at).trim(), line.slice(at + 1).trim());
 	}
+	const foreignEngines = stdout
+		.split("\n")
+		.filter((line) => line.startsWith("foreign_engine="))
+		.map((line) => line.slice("foreign_engine=".length).trim());
 	const count = (key: string): boolean => Number.parseInt(answers.get(key) ?? "0", 10) > 0;
 	return {
 		packages: new Set(ROOTLESS_PACKAGES.filter((name) => count(`pkg_${name}`))),
 		subuid: count("subuid"),
 		subgid: count("subgid"),
+		foreignEngines,
 		subidConflict: [answers.get("subuid_conflict"), answers.get("subgid_conflict")]
 			.filter((line): line is string => line !== undefined && line !== "")
 			.join("; "),
@@ -136,6 +178,10 @@ export const dockerRootlessPackages: Task = {
 		const result = await runScript(ctx, probe(agentUser));
 		if (result.code !== 0) return no(`the probe failed: ${result.stderr.trim() || result.code}`);
 		const parsed = parseProbe(result.stdout);
+		if (parsed.foreignEngines.length > 0)
+			throw new Error(
+				`${ctx.machine?.name ?? "this machine"} already has a Docker engine that is not docker-ce: ${parsed.foreignEngines.join("; ")}. Rootless Docker for the agent needs docker-ce, which conflicts with it — installing it would make apt REMOVE that engine, with its daemon and its containers. That is your choice to make: remove the existing engine yourself and re-run, or drop docker-rootless from this machine's features. Nothing has been changed.`,
+			);
 		const missing = ROOTLESS_PACKAGES.filter((name) => !parsed.packages.has(name));
 		if (missing.length > 0) return no(`missing ${missing.join(", ")}`);
 		// An overlapping range is not "needs root": the root script would refuse
@@ -193,10 +239,25 @@ export const dockerRootlessPackages: Task = {
 # twice changes nothing.
 
 ${rootScriptGuards(agentUser)}
-have_package() {
-  dpkg-query -W -f='\${Status}' "$1" 2>/dev/null | grep -q 'ok installed'
-}
+${DOCKER_ENGINE_FUNCTIONS}
 ${SUBID_FUNCTIONS}
+
+# Before anything changes: another Docker engine. docker-ce conflicts with
+# Debian's docker.io (and the others below), so installing it would make apt
+# REMOVE that engine with its daemon and containers. Refused, with nothing
+# changed: no apt repository, no key, no packages. A docker-ce that is already
+# here is reused as it is, its system daemon included.
+docker_foreign="$(docker_foreign_engines)"
+if [ -n "$docker_foreign" ]; then
+  echo "hyper: this machine already has a Docker engine that is not docker-ce:" >&2
+  printf '%s\n' "$docker_foreign" | sed 's/^/hyper:   - /' >&2
+  echo "hyper: rootless Docker for the agent needs docker-ce, which conflicts with it:" >&2
+  echo "hyper: installing it would make apt REMOVE that engine, with its daemon and containers." >&2
+  echo "hyper: that is your choice to make: remove it yourself and re-run, or drop" >&2
+  echo "hyper: docker-rootless from this machine's features." >&2
+  echo "hyper: nothing has been changed (no apt repository, no key, no packages)." >&2
+  exit 1
+fi
 
 # Before anything changes: an agent subid range that overlaps another user's is
 # refused, naming both lines. Two users sharing host ids can signal each other's

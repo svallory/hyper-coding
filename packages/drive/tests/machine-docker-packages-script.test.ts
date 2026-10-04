@@ -18,7 +18,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -75,8 +75,12 @@ const ALL_PACKAGES = [...ROOTLESS_PACKAGES, "ca-certificates"];
 function sandbox(fixture: Fixture): Sandbox {
 	const root = mkdtempSync(join(tmpdir(), "t17-packages-"));
 	dirs.push(root);
-	const subuid = join(root, "subuid");
-	const subgid = join(root, "subgid");
+	// Every /etc path in the script lands under the sandbox: the subid files, the
+	// apt source list and keyring, os-release.
+	mkdirSync(join(root, "etc", "apt", "sources.list.d"), { recursive: true });
+	writeFileSync(join(root, "etc", "os-release"), "VERSION_CODENAME=trixie\n");
+	const subuid = join(root, "etc", "subuid");
+	const subgid = join(root, "etc", "subgid");
 	const calls = join(root, "calls");
 	writeFileSync(subuid, fixture.subuid);
 	writeFileSync(subgid, fixture.subgid);
@@ -154,8 +158,9 @@ runuser() { record runuser "$1" "$2"; }
 	});
 
 	function rewrite(text: string): string {
-		const rewritten = text.replaceAll("/etc/subuid", subuid).replaceAll("/etc/subgid", subgid);
-		expect(rewritten).not.toMatch(/\/etc\/sub[ug]id/);
+		const rewritten = text.replaceAll("/etc/", `${root}/etc/`);
+		// Never run a script that could still reach the real /etc.
+		expect(rewritten.replaceAll(`${root}/etc/`, "")).not.toContain("/etc/");
 		return rewritten;
 	}
 
@@ -263,5 +268,81 @@ describe("the agent's subid range is allocated, never fixed", () => {
 		const before = [box.subuid(), box.subgid()];
 		expect(box.runScript().code).toBe(0);
 		expect([box.subuid(), box.subgid()]).toEqual(before);
+	});
+});
+
+describe("an existing Docker engine is detected before apt is touched", () => {
+	const touches = (calls: string[]) =>
+		calls.filter((call) =>
+			/^(apt-get|curl|install|chmod|dpkg|usermod|loginctl|runuser)\b/.test(call),
+		);
+
+	it("refuses over Debian's docker.io and changes nothing (no repo, no key, no packages)", async () => {
+		const box = sandbox({
+			subuid: PRIMARY_ONLY,
+			subgid: PRIMARY_ONLY,
+			installed: ["docker.io", "uidmap"],
+			dockerd: "/usr/sbin/dockerd",
+			dockerUnit: "loaded",
+		});
+		const result = box.runScript();
+		expect(result.code).not.toBe(0);
+		expect(result.stderr).toContain("hyper:   - the docker.io package");
+		expect(result.stderr).toContain(
+			"/usr/sbin/dockerd (a dockerd that does not come from docker-ce)",
+		);
+		expect(result.stderr).toContain("apt REMOVE that engine");
+		expect(result.stderr).toContain(
+			"nothing has been changed (no apt repository, no key, no packages)",
+		);
+		expect(touches(box.calls())).toEqual([]);
+		expect(
+			box
+				.calls()
+				.filter((call) => call.startsWith("systemctl") && !call.startsWith("systemctl show")),
+		).toEqual([]);
+		expect(box.subuid()).toBe(PRIMARY_ONLY);
+		// The check: a refusal naming what it found, never "needs root".
+		await expect(dockerRootlessPackages.check(box.ctx())).rejects.toThrow(
+			/already has a Docker engine that is not docker-ce: the docker\.io package.*Nothing has been changed/,
+		);
+	});
+
+	it("refuses moby-engine, podman-docker, a bare dockerd and a foreign docker.service too", () => {
+		for (const fixture of [
+			{ installed: ["moby-engine"], expected: "the moby-engine package" },
+			{ installed: ["podman-docker"], expected: "the podman-docker package" },
+			{ installed: [], dockerd: "/usr/local/bin/dockerd", expected: "/usr/local/bin/dockerd" },
+			{
+				installed: [],
+				dockerUnit: "loaded" as const,
+				expected: "a docker.service unit that does not come from docker-ce",
+			},
+		]) {
+			const box = sandbox({ subuid: PRIMARY_ONLY, subgid: PRIMARY_ONLY, ...fixture });
+			const result = box.runScript();
+			expect(result.code, fixture.expected).not.toBe(0);
+			expect(result.stderr).toContain(fixture.expected);
+			expect(touches(box.calls())).toEqual([]);
+		}
+	});
+
+	it("reuses an installed docker-ce and leaves its system daemon exactly as it is", () => {
+		const box = sandbox({
+			subuid: PRIMARY_ONLY,
+			subgid: PRIMARY_ONLY,
+			installed: ["docker-ce", "uidmap", "dbus-user-session", "slirp4netns", "ca-certificates"],
+			dockerd: "/usr/bin/dockerd",
+			dockerUnit: "loaded",
+		});
+		const result = box.runScript();
+		expect(result.stderr).toBe("");
+		expect(result.code).toBe(0);
+		// Only what was missing is installed…
+		expect(box.calls()).toContain("apt-get install -y docker-ce-rootless-extras");
+		// The repository was added inside the sandbox, and nowhere else.
+		expect(existsSync(join(box.root, "etc", "apt", "sources.list.d", "docker.list"))).toBe(true);
+		// …and its daemon is never stopped or disabled.
+		expect(box.calls().some((call) => call.startsWith("systemctl disable"))).toBe(false);
 	});
 });
