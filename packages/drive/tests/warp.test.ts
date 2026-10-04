@@ -211,6 +211,13 @@ function withMarkerAt(plan: WarpPlan, path: string): WarpPlan {
 }
 
 const kinds = (steps: WarpStep[]) => steps.map((step) => step.kind);
+
+/** The probe about the working directory's PARENT, wherever it sits in the plan. */
+const parentProbeOf = (plan: WarpPlan) =>
+	plan.steps.find(
+		(entry) => entry.kind === "probe" && entry.summary.includes("exists and is writable"),
+	) as Extract<WarpStep, { kind: "probe" }>;
+
 const step = <K extends WarpStep["kind"]>(steps: WarpStep[], kind: K) =>
 	steps.find((entry) => entry.kind === kind) as Extract<WarpStep, { kind: K }>;
 
@@ -279,11 +286,13 @@ describe("the plan for a plain git repo", () => {
 });
 
 describe("the plan for a space worktree", () => {
+	const ROOT = `${HOME}/work/spaces/research`;
+	const WT = `${ROOT}/worktrees/feat-warp`;
 	const space = {
-		root: `${HOME}/work/spaces/research`,
+		root: ROOT,
 		name: "research",
-		barePath: `${HOME}/work/spaces/research/.git`,
-		branch: "feat/warp",
+		barePath: `${ROOT}/.git`,
+		branch: "feat-warp",
 		cloneNeeded: true,
 	};
 
@@ -310,6 +319,7 @@ describe("the plan for a space worktree", () => {
 
 	it("puts the port in the ssh:// URL when the machine named one", () => {
 		const plan = planOf({
+			cwd: WT,
 			cwdKind: "space-worktree",
 			target: { name: "netcup", host: "me@box", port: 2222, home: HOME },
 			space,
@@ -326,6 +336,20 @@ describe("the plan for a space worktree", () => {
 			"research",
 			"--yes",
 		]);
+	});
+
+	it("checks the space BEFORE the parent, or a missing space could never be cloned", () => {
+		// The worktree's parent lives INSIDE the space. Checked first and treated
+		// as fatal, it would refuse every first-time warp and make the clone step
+		// unreachable — the target cannot have the parent before it has the space.
+		const plan = planOf({ cwd: WT, cwdKind: "space-worktree", space });
+		expect((plan.steps[0] as { summary: string }).summary).toContain("already on");
+		const parents = plan.steps.filter(
+			(entry) => entry.kind === "probe" && entry.summary.includes("exists and is writable"),
+		);
+		expect(parents).toHaveLength(2);
+		expect(parents[0]?.fatal).toBe(false);
+		expect(parents[1]?.fatal).toBeUndefined();
 	});
 
 	it("skips the clone when the target already has the space", async () => {
@@ -366,7 +390,7 @@ describe("the plan for a space worktree", () => {
 	});
 
 	it("refuses when the space is missing AND hyper is not installed on the target", async () => {
-		const plan = planOf({ cwdKind: "space-worktree", space });
+		const plan = planOf({ cwd: WT, cwdKind: "space-worktree", space });
 		const rec = recorder({
 			runner: {
 				async ssh(cmd) {
@@ -392,6 +416,7 @@ describe("the plan for a space worktree", () => {
 
 	it("does not clone, and does not probe for hyper, when the space is already there", () => {
 		const plan = planOf({
+			cwd: `${HOME}/sp/r/worktrees/main`,
 			cwdKind: "space-worktree",
 			space: { ...space, cloneNeeded: false },
 		});
@@ -499,6 +524,7 @@ describe("refusals", () => {
 
 	it("refuses a branch git would not accept", () => {
 		const refusal = refuseWith({
+			cwd: `${HOME}/sp/r/worktrees/main`,
 			cwdKind: "space-worktree",
 			space: {
 				root: "/sp/r",
@@ -544,9 +570,9 @@ describe("hostile inputs never reach a shell unquoted", () => {
 		// one level up and would prove nothing about this word.
 		const odd = `${HOME}/it's here/project`;
 		const plan = planOf({ cwd: odd });
-		const script = step(plan.steps, "probe").argv[2] as string;
-		// The first probe is about the PARENT: that is the directory which has to
-		// exist and be writable on the target.
+		const script = parentProbeOf(plan).argv[2] as string;
+		// The parent is the directory which has to exist and be writable on the
+		// target; its own name carries the apostrophe and the space.
 		const parent = `${HOME}/it's here`;
 
 		// Not a string comparison: pull each quoted word out of the probe and
@@ -577,7 +603,7 @@ describe("hostile inputs never reach a shell unquoted", () => {
 		// The space-existence probe names a path too, and it is the one a hostile
 		// cwd most directly controls.
 		const spaceProbe = plan.steps.find(
-			(entry) => entry.kind === "probe" && entry.fatal === false,
+			(entry) => entry.kind === "probe" && entry.summary.includes("already on"),
 		) as Extract<WarpStep, { kind: "probe" }>;
 		const words = testWords(spaceProbe.argv[2] as string);
 		expect(words).toHaveLength(1);
@@ -649,6 +675,7 @@ describe("a config-sync session replaces the transcript copy", () => {
 describe("--dry-run", () => {
 	it("prints every remote command, every copy with its exclusions, and the push url", () => {
 		const plan = planOf({
+			cwd: `${HOME}/work/spaces/research/worktrees/feat-warp`,
 			cwdKind: "space-worktree",
 			remoteControl: true,
 			excludes: ["node_modules", ".turbo"],
@@ -674,6 +701,7 @@ describe("--dry-run", () => {
 		const plan = planOf({
 			stop: true,
 			live: { pid: 4242, cwd: CWD },
+			cwd: `${HOME}/sp/r/worktrees/main`,
 			cwdKind: "space-worktree",
 			space: {
 				root: `${HOME}/sp/r`,
@@ -699,6 +727,7 @@ describe("--dry-run", () => {
 describe("executeWarp", () => {
 	it("runs the steps in order and stops at the first failure", async () => {
 		const plan = planOf({
+			cwd: `${HOME}/sp/r/worktrees/main`,
 			cwdKind: "space-worktree",
 			space: {
 				root: `${HOME}/sp/r`,
@@ -952,6 +981,7 @@ describe("describeStep", () => {
 		// perfectly good directory. Found by the container e2e, not by a unit
 		// test — which is exactly why the e2e exists.
 		const plan = planOf({
+			cwd: `${HOME}/sp/r/worktrees/main`,
 			cwdKind: "space-worktree",
 			space: {
 				root: `${HOME}/sp/r`,
@@ -966,8 +996,8 @@ describe("describeStep", () => {
 			expect(script, probe.summary).not.toMatch(/test -[dw] --/);
 		}
 		// …and it is still correct under dash, which is the real proof.
-		const script = step(plan.steps, "probe").argv[2] as string;
-		expect(argvAfterShell(testWords(script)[0] as string)).toEqual([`${HOME}/work`]);
+		const script = parentProbeOf(plan).argv[2] as string;
+		expect(argvAfterShell(testWords(script)[0] as string)).toEqual([`${HOME}/sp/r/worktrees`]);
 	});
 
 	it("shows a copy with its exclusions and without --delete", () => {

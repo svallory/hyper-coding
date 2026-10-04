@@ -517,21 +517,13 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 
 	// Probes first: every one of them is read-only, and every one of them can
 	// turn a half-finished warp into a refusal that changed nothing.
-	steps.push({
-		kind: "probe",
-		via: "shell",
-		summary: `check ${parentOf(inputs.cwd)} exists and is writable on ${inputs.target.name}`,
-		argv: writableProbe(parentOf(inputs.cwd)),
-		problem: `${parentOf(inputs.cwd)} doesn't exist on ${inputs.target.name}, or isn't writable by the user hyperdrive logs in as. Nothing has been copied. Create it (or fix its permissions) and run this again.`,
-	});
+	//
+	// The space-presence probe has to come BEFORE the parent check, because it
+	// decides whether the parent check can even be asked yet: when the target is
+	// missing the space, the worktree's parent directory is INSIDE that missing
+	// space, so asking first would refuse every first-time warp and make the
+	// clone step unreachable.
 	if (inputs.space?.cloneNeeded) {
-		steps.push({
-			kind: "probe",
-			via: "shell",
-			summary: `check hyper is installed on ${inputs.target.name}`,
-			argv: ["command", "-v", "hyper"],
-			problem: `hyper isn't installed on ${inputs.target.name}, and cloning the space "${inputs.space.name}" there needs it. Install hyper on ${inputs.target.name} (or clone the space by hand), then run this again. Nothing has been copied.`,
-		});
 		steps.push({
 			kind: "probe",
 			via: "shell",
@@ -539,6 +531,31 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			summary: spaceProbeSummary(inputs.space.root, inputs.target.name),
 			argv: ["sh", "-c", `test -d ${quoteForRemoteShell(inputs.space.root)}`],
 			problem: `couldn't check whether ${inputs.space.root} exists on ${inputs.target.name}. Nothing has been copied.`,
+		});
+	}
+	const parent = parentOf(inputs.cwd);
+	// Non-fatal exactly when the parent lives inside a space the target may not
+	// have yet: the clone below creates it, and a second, FATAL probe after the
+	// clone enforces AC-16 before anything is copied.
+	const parentInsideMaybeMissingSpace =
+		inputs.space !== null &&
+		(parent === inputs.space.root || parent.startsWith(`${inputs.space.root}/`));
+	const parentProbe = (fatal: boolean): WarpStep => ({
+		kind: "probe",
+		via: "shell",
+		...(fatal ? {} : { fatal: false as const }),
+		summary: `check ${parent} exists and is writable on ${inputs.target.name}`,
+		argv: writableProbe(parent),
+		problem: `${parent} doesn't exist on ${inputs.target.name}, or isn't writable by the user hyperdrive logs in as. Nothing has been copied. Create it (or fix its permissions) and run this again.`,
+	});
+	steps.push(parentProbe(!parentInsideMaybeMissingSpace));
+	if (inputs.space?.cloneNeeded && parentInsideMaybeMissingSpace) {
+		steps.push({
+			kind: "probe",
+			via: "shell",
+			summary: `check hyper is installed on ${inputs.target.name}`,
+			argv: ["command", "-v", "hyper"],
+			problem: `hyper isn't installed on ${inputs.target.name}, and cloning the space "${inputs.space.name}" there needs it. Install hyper on ${inputs.target.name} (or clone the space by hand), then run this again. Nothing has been copied.`,
 		});
 	}
 	steps.push({
@@ -600,6 +617,10 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			branch: inputs.space.branch,
 		});
 	}
+	// The deferred parent check: fatal, and immediately before the first copy of
+	// the working directory. AC-16 promises a refusal before anything is copied,
+	// and this is where that promise is kept for the clone case.
+	if (parentInsideMaybeMissingSpace) steps.push(parentProbe(true));
 	steps.push(workdirRsync(inputs));
 
 	// Design step 6: resume through Herdr.

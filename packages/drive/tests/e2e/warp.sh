@@ -25,6 +25,16 @@
 #   7.  C-10   a foreign owner is refused without --force, and --force proceeds
 #   8.         --dry-run leaves both trees byte-identical
 #   9.  AC-12  `git ls-remote origin` of the project is unchanged by a warp
+#  10.  the space-worktree kind: the clone happens only when the target is
+#       missing the space, the branch arrives through the explicit ssh:// URL,
+#       and the worktree's files arrive with the exclusions applied
+#
+# WHAT THIS SCRIPT DOES NOT TEST: the real `hyper space clone` that runs ON THE
+# TARGET. Installing the CLI inside the container to exercise it is out of this
+# harness's reach, so `hyper` on the far side is a stub that records its argv
+# and creates the bare repo the push needs. That command's own behaviour is
+# covered by T-8's tests (space-clone.test.ts), not here. What IS proved here is
+# that warp DECIDES to run it, and runs it with the right arguments.
 #
 # Usage: packages/drive/tests/e2e/warp.sh
 # Safety: the container is removed by a trap; the only ssh target is that
@@ -235,6 +245,37 @@ CLAUDE
 sed -i '' -e "s|%HOMEDIR%|$home_local|g" "$work_real/claude"
 podman cp "$work_real/claude" "$container:/usr/local/bin/claude"
 pexec "chmod 0755 /usr/local/bin/claude"
+
+# --- fake hyper (target side) ------------------------------------------------
+# Records the argv warp chose to run on the far side, and — because the step
+# that follows the clone is a `git push` into a bare repo that will not exist
+# unless something creates it — lays down the minimal space shape the push
+# needs. It creates NO code: the point is to observe the DECISION, not to
+# reimplement T-8's clone.
+cat > "$work_real/hyper" <<'HYPERSTUB'
+#!/bin/sh
+printf '%s\n' "$*" >> "%HOMEDIR%/hyper-argv.log"
+if [ "$1" = "space" ] && [ "$2" = "clone" ]; then
+  name="$3"
+  # Where a real `hyper space clone` would put the space is the path the
+  # manifest records, remapped under the target HOME — not a guess from the
+  # name. The harness writes that mapping next to the home so the stub can
+  # honour it; without it the stub would create the space in the wrong place
+  # and the push that follows would fail for the stub's reasons, not warp's.
+  root=""
+  while read -r n p; do
+    [ "$n" = "$name" ] && root="$p"
+  done < "%HOMEDIR%/space-root-map"
+  [ -n "$root" ] || exit 3
+  mkdir -p "$root/worktrees"
+  git init -q --bare "$root/.git"
+  exit 0
+fi
+exit 0
+HYPERSTUB
+sed -i '' -e "s|%HOMEDIR%|$home_local|g" "$work_real/hyper"
+podman cp "$work_real/hyper" "$container:/usr/local/bin/hyper"
+pexec "chmod 0755 /usr/local/bin/hyper"
 
 # --- ssh wrapper (local) ----------------------------------------------------
 # RemoteMachine spawns the ssh found on PATH. Ours carries the throwaway key;
@@ -546,6 +587,100 @@ pass "--dry-run left both trees byte-identical (local $after_local, target $afte
 grep -q "test -d " "$work_real/dry-run.txt" || die "--dry-run did not print the remote checks"
 grep -q -- "--exclude=node_modules" "$work_real/dry-run.txt" || die "--dry-run did not print the exclusions"
 pass "--dry-run printed the remote commands and the exclusions"
+
+# --------------------------------------------------------------------------
+echo "# ---------------------------------------------------------------"
+echo "# 9. the space-worktree kind"
+echo "# ---------------------------------------------------------------"
+# A bare space is `git init --bare .git` beside a `worktrees/` directory, and
+# the worktree is a linked checkout whose `.git` is a FILE pointing at that
+# bare repo — which is exactly how space_layout tells a worktree from a root.
+space_name="research"
+space="$home_local/work/spaces/$space_name"
+branch="feat-warp"
+mkdir -p "$space/worktrees"
+git init -q --bare "$space/.git"
+git --git-dir="$space/.git" worktree add -q "$space/worktrees/$branch" -b "$branch" 2>/dev/null \
+  || die "could not create a linked worktree (git too old for worktree add -b on an empty bare repo)"
+printf 'worktree file\n' > "$space/worktrees/$branch/code.txt"
+mkdir -p "$space/worktrees/$branch/node_modules"
+printf 'excluded\n' > "$space/worktrees/$branch/node_modules/dep.js"
+# Commit INSIDE the worktree, not against the bare git dir with a --work-tree:
+# `worktree add -b` leaves the new branch UNBORN, and `rev-parse --abbrev-ref
+# HEAD` fails on an unborn branch — which is exactly the call warp uses to learn
+# which branch to push, so a fixture that skipped it would prove nothing.
+git -C "$space/worktrees/$branch" add -A
+git -C "$space/worktrees/$branch" -c user.email=t@e -c user.name=t commit -qm "work in progress"
+[ -n "$(git --git-dir="$space/.git" rev-parse "refs/heads/$branch" 2>/dev/null)" ] \
+  || die "the fixture branch has no commit, so warp would have no branch to push"
+# The worktree is a `.git` FILE, not a directory: assert it, because a
+# directory here would make this an ordinary repo and the space path untested.
+[ -f "$space/worktrees/$branch/.git" ] || die "the fixture is not a linked worktree"
+
+wt="$space/worktrees/$branch"
+make_session "$wt" >/dev/null
+# Deliberately NOT created on the target: the space is supposed to be MISSING
+# there, and pre-creating even the worktree directory would make the space root
+# exist — the probe would then (correctly) say "already there", skip the clone,
+# and leave the push with no bare repo to push into.
+
+# The path `hyper space clone` would recreate the space at on the target. The
+# stub reads it rather than guessing from the name.
+printf '%s %s\n' "$space_name" "$space" > "$home_local/space-root-map"
+ssh_t12 "printf '%s %s\\n' '$space_name' '$space' > '$home_local/space-root-map'"
+
+# A hosting remote for the PROJECT, which a warp must never touch.
+git init -q --bare "$work_real/space-origin.git"
+# The space's own bare repo needs an `origin` too, so AC-12 has something to
+# be unchanged about.
+git --git-dir="$space/.git" remote add origin "$work_real/space-origin.git"
+space_origin_before="$(git --git-dir="$space/.git" ls-remote origin)"
+
+# --- case A: the space is MISSING on the target ----------------------------
+ssh_t12 "rm -f '$home_local/hyper-argv.log'"
+set +e
+out="$(run_hyper "$wt" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "warping a space worktree (missing on target) failed: exit $code: $out"
+stub_argv="$(ssh_t12 "cat '$home_local/hyper-argv.log'" 2>/dev/null || true)"
+printf '%s' "$stub_argv" | grep -q "^space clone $space_name --yes$" \
+  || die "the target's hyper was not asked to clone the space; got: ${stub_argv:-<nothing>}"
+pass "a space missing on the target is cloned there, with --yes (stub saw: $stub_argv)"
+
+# The push landed in the TARGET's bare repo, through the explicit ssh:// URL.
+ssh_t12 "git --git-dir='$space/.git' rev-parse --verify 'refs/heads/$branch'" >/dev/null 2>&1 \
+  || die "branch $branch did not arrive in the target's bare repo"
+remote_sha="$(ssh_t12 "git --git-dir='$space/.git' rev-parse 'refs/heads/$branch'")"
+local_sha="$(git --git-dir="$space/.git" rev-parse "refs/heads/$branch")"
+[ "$remote_sha" = "$local_sha" ] || die "target has $remote_sha, this machine has $local_sha"
+pass "the worktree branch arrived in the target's bare repo ($remote_sha)"
+
+# The worktree's files arrived, and its excluded ones did not.
+[ "$(ssh_t12 "cat '$wt/code.txt'")" = "worktree file" ] || die "worktree files did not arrive"
+ssh_t12 "test -e '$wt/node_modules'" && die "node_modules was copied despite the exclusion list"
+pass "space-worktree files arrived with the exclusions applied"
+
+# --- case B: the space is ALREADY there ------------------------------------
+# cd26ebb9's fix: the clone is conditional on the probe, not eager. With the
+# space present, `hyper` on the target must NOT be called at all.
+ssh_t12 "rm -f '$home_local/hyper-argv.log'"
+printf 'second run\n' > "$wt/second.txt"
+set +e
+out="$(run_hyper "$wt" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "warping a space worktree (present on target) failed: exit $code: $out"
+stub_argv="$(ssh_t12 "cat '$home_local/hyper-argv.log'" 2>/dev/null || true)"
+[ -z "$stub_argv" ] || die "hyper was called on the target even though the space was there: $stub_argv"
+pass "with the space already on the target, hyper is NOT called (nothing in its argv log)"
+
+[ "$(ssh_t12 "cat '$wt/second.txt'")" = "second run" ] || die "the second run copied nothing"
+pass "the conditional warp still copied the new worktree file"
+
+# AC-12 on the project's own hosting remote.
+space_origin_after="$(git --git-dir="$space/.git" ls-remote origin)"
+[ "$space_origin_before" = "$space_origin_after" ] \
+  || die "AC-12: a warp changed the project's hosting remote"
+pass "AC-12 the project's git ls-remote origin is unchanged by the space-worktree warp"
 
 echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
