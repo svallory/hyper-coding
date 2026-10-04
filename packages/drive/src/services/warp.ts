@@ -90,10 +90,12 @@ import {
 	TARGET_CONFLICTED,
 	TARGET_DIRTY,
 	TARGET_IN_PROGRESS,
+	TARGET_REFTABLE,
 	TARGET_SUBMODULE_CHANGED,
 	TARGET_WORKTREE_STATE,
 	targetBackupCopy,
 	targetBareRepoCheck,
+	targetRefBackupsLoose,
 	targetRefs,
 	targetRefsSave,
 	targetStashSnapshot,
@@ -250,14 +252,18 @@ export type ProbeId =
 	| "target-clean"
 	/**
 	 * Untracked or ignored files of the target's copy that the copy would
-	 * overwrite with different content. Refuses without --force; with it, the
-	 * list is what the backup step copies aside.
+	 * overwrite with different content, and type changes: an entry of one type
+	 * there (a tracked directory included) where the copy writes another.
+	 * Refuses without --force; with it, the list is what the backup step
+	 * copies aside.
 	 */
 	| "collisions"
 	/**
-	 * A plain repository on the target: every ref there exists here and is
-	 * here or behind this machine's (the copy replaces the target's .git files).
-	 * Refuses without --force; with it, the save step keeps them.
+	 * A plain repository on the target: every ref there points at the same
+	 * object as this machine's ref of that name, or at a commit this machine
+	 * has and reaches from one of its refs (the copy replaces the target's .git
+	 * files). Refuses without --force; with it, the save step keeps them. A
+	 * reftable repository is refused even with --force.
 	 */
 	| "target-refs"
 	/** With the space missing: the space is in the local hyperdrive manifest. */
@@ -314,7 +320,8 @@ export function targetCompareFiles(dir: string): string[] {
 }
 
 /**
- * One untracked or ignored target entry the copy would overwrite.
+ * One target entry the copy would overwrite: an untracked or ignored one, or
+ * a tracked directory where this machine has a file or symlink.
  * `replace` is a TYPE change (a file or symlink there where this machine has a
  * directory, or a directory there where this machine has a file or symlink):
  * the copy can't overwrite it in place, so a `--force` warp removes it after
@@ -333,10 +340,12 @@ export type CollisionResult =
 	| { ok: false; code: number; stdout: string; stderr: string };
 
 /**
- * The untracked or ignored entries on the target that the copy would
- * overwrite with something different.
+ * The entries on the target that the copy would overwrite with something
+ * different: untracked or ignored ones, and tracked directories where this
+ * machine has a file or symlink.
  *
- * 1. The target lists its untracked and ignored paths (`listArgv`).
+ * 1. The target lists its untracked and ignored paths, and its tracked
+ *    directories (`listArgv`, {@link targetUntrackedPaths}).
  * 2. Each of them the copy would write is a candidate, by the copy's own
  *    exclude rules: a file, symlink or directory under `src` at that path (a
  *    listed directory is walked here, its subdirectories included), or the
@@ -407,8 +416,10 @@ interface CopyCandidate {
 
 /**
  * The entries under `src` that the copy would write at the target paths
- * `entries` (a trailing `/` means a whole untracked directory there). A path
- * with any excluded component is skipped, as the copy skips it.
+ * `entries` (a trailing `/` means a whole untracked directory there; a leading
+ * `/` a directory the target tracks, which only a file or symlink here can
+ * collide with). A path with any excluded component is skipped, as the copy
+ * skips it.
  */
 async function localCopyCandidates(
 	src: string,
@@ -455,8 +466,11 @@ async function localCopyCandidates(
 		}
 	};
 	for (const entry of entries) {
+		// `/dir`: a directory the target tracks (see targetUntrackedPaths). Only
+		// a file or symlink here at that path, or above it, matters.
+		const trackedDirectory = entry.startsWith("/");
 		const wholeDirectory = entry.endsWith("/");
-		const rel = entry.replace(/\/+$/, "");
+		const rel = entry.replace(/^\/+/, "").replace(/\/+$/, "");
 		if (rel === "") continue;
 		const stat = lstatOrNull(rel);
 		if (stat === null) {
@@ -475,7 +489,7 @@ async function localCopyCandidates(
 			continue;
 		}
 		if (stat.isDirectory()) {
-			if (excludedPath(rel, true)) continue;
+			if (trackedDirectory || excludedPath(rel, true)) continue;
 			if (wholeDirectory) {
 				await walk(rel);
 			} else {
@@ -1023,7 +1037,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 				via: "collisions",
 				...(when ? { when } : {}),
 				listsPaths: true,
-				summary: `look for untracked or ignored entries in ${inputs.cwd} on ${name} that the copy would overwrite with something different`,
+				summary: `look for untracked or ignored entries, and tracked directories, in ${inputs.cwd} on ${name} that the copy would overwrite with something different`,
 				argv: targetUntrackedPaths(inputs.cwd),
 				collisions: {
 					src: inputs.cwd,
@@ -1032,7 +1046,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 					compareArgv: targetCompareFiles(inputs.cwd),
 					refuse: !inputs.force,
 				},
-				problem: `${name} has untracked or ignored files in ${inputs.cwd} that this warp would overwrite with different content, or with a different type (below). Move them away there, or pass --force: a --force warp first copies them to ${backupDir} on ${name}.`,
+				problem: `${name} has untracked or ignored files in ${inputs.cwd} that this warp would overwrite with different content, or entries of a different type (an untracked file, symlink or directory, or a TRACKED directory, where this machine has the other type) (below). Move them away there, or pass --force: a --force warp first copies them to ${backupDir} on ${name}.`,
 			},
 			...(inputs.space
 				? []
@@ -1041,9 +1055,12 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 							kind: "probe" as const,
 							id: "target-refs" as const,
 							via: "refs" as const,
-							summary: `check every ref of the repository ${inputs.cwd} on ${name} is here, at the same commit or behind this machine's`,
+							summary: `check every ref of the repository ${inputs.cwd} on ${name} is here: the same object as this machine's ref of that name, or a commit one of this machine's refs reaches`,
 							argv: targetRefs(inputs.cwd),
 							refuse: !inputs.force,
+							problems: {
+								[TARGET_REFTABLE]: `${name}'s repository ${inputs.cwd} keeps its refs in the reftable format. A plain-repo warp replaces ${name}'s .git/config with this machine's, which drops that setting, so every ref there (and any a --force warp saved) would vanish from git's view. Warp refuses it with or without --force: push or fetch the work between the two machines instead.`,
+							},
 							problem: `${name}'s repository ${inputs.cwd} has refs this machine doesn't cover (below). A plain-repo warp replaces ${name}'s .git files with this machine's, so commits only ${name} has would become unreachable. Bring them here first (fetch them from ${name}), or pass --force: a --force warp first saves ${name}'s refs there under ${WARP_REF_BACKUP}/${warpId}/.`,
 						},
 					]),
@@ -1365,6 +1382,15 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 		);
 	} else {
 		if (inputs.cwdKind === "git-repo" && inputs.force) steps.push(refsSaveStep, backupStep());
+		if (inputs.cwdKind === "git-repo") {
+			steps.push({
+				kind: "remote-command",
+				summary: `keep earlier warps' saved refs (${WARP_REF_BACKUP}/) of ${inputs.cwd} on ${name} as loose refs, which the copy leaves alone`,
+				argv: targetRefBackupsLoose(inputs.cwd),
+				leaves: `loose refs under ${WARP_REF_BACKUP}/ in ${inputs.cwd} on ${name}, for saved refs a git pack-refs had packed`,
+				problem: `couldn't keep the saved refs under ${WARP_REF_BACKUP}/ of ${inputs.cwd} on ${name} as loose refs, so warp stopped before the copy replaced its packed-refs.`,
+			});
+		}
 		steps.push({
 			kind: "copy",
 			summary: `copy ${inputs.cwdKind} ${inputs.cwd} to ${name}`,
@@ -1430,7 +1456,8 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			`The repository's .git travels with it and is merged into ${name}'s copy file by file, like everything else: ${name}'s .git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name.`,
 			inputs.force
 				? `--force: if ${name}'s repository has refs this machine doesn't cover, all of its refs (and a detached HEAD) are first saved there under ${WARP_REF_BACKUP}/${warpId}/, which the copy leaves alone.`
-				: `${name}'s repository is refused if it has a ref this machine doesn't have, or one ahead of this machine's (or a detached HEAD this machine's HEAD doesn't contain); --force saves its refs there first.`,
+				: `${name}'s repository is refused if a ref (or a detached HEAD) there points at a commit this machine doesn't have, or has but reaches from none of its refs; --force saves its refs there first.`,
+			`Refs earlier --force warps saved there under ${WARP_REF_BACKUP}/ are kept: any a git pack-refs moved into packed-refs are written back as loose refs before the copy. A repository there in the reftable ref format is refused, with or without --force.`,
 		);
 	}
 	if (inputs.cwdKind !== "plain-dir" && inputs.excludes.length > 0) {
@@ -1450,8 +1477,8 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 					: `--force: uncommitted tracked work in ${name}'s copy of the repository is overwritten file by file; it is not saved first.`
 				: `${name}'s copy is refused if it holds uncommitted work (git status not clean); --force overwrites it${space ? " after saving it as a stash" : ""}.`,
 			inputs.force
-				? `--force: untracked or ignored entries in ${name}'s copy that the copy would overwrite with different content, or with a different type (a file where this machine has a directory, or the reverse), are first copied to ${backupDir} (directories mode 0700); the ones of a different type are then removed there so the copy can write this machine's. The count and location are printed when it runs.`
-				: `${name}'s copy is refused if the copy would overwrite an untracked or ignored entry there (a .env, say) with different content or a different type; files that are identical on both sides, and paths the copy excludes, don't count. --force copies those entries aside first.`,
+				? `--force: untracked or ignored entries in ${name}'s copy that the copy would overwrite with different content, or with a different type (a file where this machine has a directory, or the reverse), and tracked directories where this machine has a file or symlink, are first copied to ${backupDir} (directories mode 0700); the ones of a different type are then removed there so the copy can write this machine's. The count and location are printed when it runs.`
+				: `${name}'s copy is refused if the copy would overwrite an untracked or ignored entry there (a .env, say) with different content or a different type, or a tracked directory there with a file or symlink; files that are identical on both sides, and paths the copy excludes, don't count. --force copies those entries aside first.`,
 			`${name}'s copy is refused, with or without --force, while a merge, rebase, cherry-pick, revert or bisect is in progress there, while its index has unresolved conflicts, or while a submodule has changes.`,
 		);
 	} else {
@@ -1711,8 +1738,10 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 						const listed = await deps.runner.ssh(step.argv, { timeoutMs: 60_000 });
 						if (listed.code !== 0) return fail(step, probeDetail(step, listed, plan.target.name));
 						const refs = listed.stdout.split("\n").flatMap((line) => {
-							const at = line.indexOf(" ");
-							return at > 0 ? [{ object: line.slice(0, at), name: line.slice(at + 1) }] : [];
+							// A ref name never holds a space; the third field, the commit an
+							// annotated tag points at, is empty for anything else.
+							const [object, name, peeled] = line.split(" ");
+							return object && name ? [{ object, name, ...(peeled ? { peeled } : {}) }] : [];
 						});
 						const uncovered = (deps.refsNotCoveredHere ?? refsNotCoveredHere)(plan.cwd, refs);
 						if (uncovered.length > 0 && step.refuse) {
