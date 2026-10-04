@@ -41,6 +41,11 @@
 #  15.  uncommitted work in the target's worktree or repo is refused without
 #       --force (files and index intact); --force stashes a worktree's first
 #  16.  a missing space that is not in the local manifest is refused first
+#  17.  an ignored .env that would be overwritten is refused without --force
+#       (target intact); with --force it and a colliding untracked file are
+#       recoverable byte-identical from hyper-warp-backup/; a merge in
+#       progress is refused even with --force, with nothing changed (marker,
+#       transcript, refs, worktree list, files)
 #  and the Herdr argv shape (`-- --resume <id>`, pane id from the tab JSON).
 #
 # The fake `herdr` models Herdr: it records argv, answers `tab create` with the
@@ -1067,6 +1072,95 @@ flat "$out" | grep -q "hyper space init" || die "the refusal does not say what t
 ssh_t12 "test -e '$space3'" && die "something was created for research3 on the target"
 [ -e "$folder_wt4/$SESSION.warp.json" ] && die "a marker was written"
 pass "a missing space that is not in the local manifest is refused before any change (no clone, no marker)"
+
+echo "# ---------------------------------------------------------------"
+echo "# 17. untracked and ignored files, and git state, on the target (fw-warp)"
+echo "# ---------------------------------------------------------------"
+# Everything warp may not touch after a refusal, on the target: every byte
+# (and every ref, the index and .git included) under a directory, plus the
+# transcript folder.
+target_tree() {
+  ssh_t12 "cd '$1' && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64"
+}
+proj6="$home_local/work/proj6"
+mkdir -p "$proj6"
+git -C "$proj6" init -q
+printf '.env\n*.secret\n' > "$proj6/.gitignore"
+printf 'tracked\n' > "$proj6/a.txt"
+git -C "$proj6" add -A
+git -C "$proj6" -c user.email=t@e -c user.name=t commit -qm init
+printf 'API_KEY=local-placeholder\n' > "$proj6/.env"
+printf 'same on both sides\n' > "$proj6/same.secret"
+folder6="$(make_session "$proj6")"
+target_mkdir "$proj6"
+# The target holds its own clone-alike of proj6: same commit, its own .env.
+ssh_t12 "cd '$proj6' && git init -q && printf '.env\n*.secret\n' > .gitignore && printf 'tracked\n' > a.txt \
+  && git add -A && git -c user.email=t@e -c user.name=t commit -qm init \
+  && printf 'API_KEY=target-placeholder\n' > .env && printf 'same on both sides\n' > same.secret \
+  && printf 'only on the target\n' > keep.secret"
+before6="$(target_tree "$proj6")"
+before_folder6="$(target_tree "$folder6")"
+set +e
+out="$(run_hyper "$proj6" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "an ignored .env collision was not refused: exit $code: $out"
+flat "$out" | grep -q "untracked or ignored files in $proj6 that this warp would overwrite" || die "the refusal does not say why: $out"
+printf '%s\n' "$out" | LC_ALL=C sed -e 's/^ › \{3\}//' | grep -qx '  \.env' || die "the refusal does not name .env: $out"
+printf '%s\n' "$out" | grep -q 'same.secret\|keep.secret' && die "an identical or untouched ignored file was named: $out"
+[ "$(ssh_t12 "cat '$proj6/.env'")" = "API_KEY=target-placeholder" ] || die "the target's .env was overwritten"
+[ "$(target_tree "$proj6")" = "$before6" ] || die "the target's repo changed after the refusal"
+[ "$(target_tree "$folder6")" = "$before_folder6" ] || die "the target's transcript folder changed after the refusal"
+[ -e "$folder6/$SESSION.warp.json" ] && die "a marker was written by a refused warp"
+pass "an ignored .env that differs is refused without --force, named alone; t12's repo, .env and transcript folder are byte-identical afterwards"
+
+# --force: the target's .env and a colliding untracked file are copied aside.
+printf 'local notes\n' > "$proj6/notes.txt"
+ssh_t12 "printf 'notes written on t12, never committed\n' > '$proj6/notes.txt'"
+env_sum="$(ssh_t12 "sha256sum < '$proj6/.env'")"
+notes_sum="$(ssh_t12 "sha256sum < '$proj6/notes.txt'")"
+set +e
+out="$(run_hyper "$proj6" warp t12 --force 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "--force with collisions failed: exit $code: $out"
+backup="$(flat "$out" | sed -n 's/.*(2) were first copied to \(.*hyper-warp-backup\/[^ ]*\) there\..*/\1/p')"
+[ -n "$backup" ] || die "warp did not say where the colliding files went: $out"
+case "$backup" in "$proj6/.git/hyper-warp-backup/$SESSION-"*) ;; *) die "unexpected backup location $backup" ;; esac
+[ "$(ssh_t12 "sha256sum < '$backup/.env'")" = "$env_sum" ] || die "the backup of .env is not byte-identical"
+[ "$(ssh_t12 "sha256sum < '$backup/notes.txt'")" = "$notes_sum" ] || die "the backup of notes.txt is not byte-identical"
+[ "$(ssh_t12 "stat -c %a '$backup'")" = "700" ] || die "the backup dir is not 0700"
+[ "$(ssh_t12 "cat '$proj6/.env'")" = "API_KEY=local-placeholder" ] || die "--force did not overwrite .env"
+[ "$(ssh_t12 "cat '$proj6/keep.secret'")" = "only on the target" ] || die "a target-only ignored file was touched"
+pass "with --force t12's .env and untracked notes.txt are recoverable byte-identical from $backup (0700)"
+
+# A merge in progress in the target's space worktree: refused even with
+# --force, and nothing changes anywhere.
+merge_head="$(ssh_t12 "cd '$wt' && git rev-parse --git-path MERGE_HEAD")"
+case "$merge_head" in /*) ;; *) merge_head="$wt/$merge_head" ;; esac
+ssh_t12 "git -C '$wt' rev-parse HEAD > '$merge_head'"
+mark_mine "$folder_wt"
+marker_before="$(cat "$folder_wt/$SESSION.warp.json")"
+before_wt="$(target_tree "$wt")"
+before_bare="$(target_tree "$space/.git")"
+before_folder_wt="$(target_tree "$folder_wt")"
+refs_before="$(ssh_t12 "git --git-dir='$space/.git' for-each-ref")"
+list_before="$(ssh_t12 "git --git-dir='$space/.git' worktree list --porcelain")"
+for force in "" --force; do
+  set +e
+  out="$(run_hyper "$wt" warp t12 $force 2>&1)"; code=$?
+  set -e
+  [ "$code" = 2 ] || die "a merge in progress was not refused (${force:-no --force}): exit $code: $out"
+  flat "$out" | grep -q "a merge is in progress" || die "the refusal does not name the merge: $out"
+  flat "$out" | grep -q "Nothing was changed on either machine" || die "the refusal does not say nothing changed: $out"
+done
+[ "$(cat "$folder_wt/$SESSION.warp.json")" = "$marker_before" ] || die "the local marker changed"
+[ "$(target_tree "$wt")" = "$before_wt" ] || die "the target worktree changed"
+[ "$(target_tree "$space/.git")" = "$before_bare" ] || die "the target's bare repo (refs, index, stash) changed"
+[ "$(target_tree "$folder_wt")" = "$before_folder_wt" ] || die "the target's transcript folder changed"
+[ "$(ssh_t12 "git --git-dir='$space/.git' for-each-ref")" = "$refs_before" ] || die "the target's refs changed"
+[ "$(ssh_t12 "git --git-dir='$space/.git' worktree list --porcelain")" = "$list_before" ] || die "the target's worktree list changed"
+ssh_t12 "test -e '$merge_head'" || die "the merge state was dropped"
+ssh_t12 "rm -f '$merge_head'"
+pass "a merge in progress in t12's worktree is refused with and without --force; marker, transcript, refs, worktree list and files unchanged"
 
 echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
