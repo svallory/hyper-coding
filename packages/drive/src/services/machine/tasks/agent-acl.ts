@@ -2,6 +2,7 @@
 import { isValidAgentUser } from "#config/schema";
 import { shellQuote } from "#services/remote";
 import type { AgentPaths } from "./agent-context.js";
+import { shellCommand } from "./shell.js";
 
 export const COLLAB_GROUP = "collab";
 export const READABLE_FILES = ["settings.json", "CLAUDE.md"] as const;
@@ -93,6 +94,23 @@ shared_ok() {
 # END hyper agent access policy`;
 }
 
+/**
+ * Runs inside `find -execdir`, whose shell gets only what is exported. Keep it
+ * self-contained: the group name is interpolated, the ACL strings are exported
+ * by the caller, and it never depends on the agent-writable working directory.
+ */
+const GRANT_SHARED_TRAVERSAL = `PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+grant_shared_entry() {
+  setfacl -m "u:$agent_user:$access" "$1" || return 1
+  if getfacl -c -p "$1" | grep -qE '^(default:)?group:${COLLAB_GROUP}:'; then
+    setfacl -x g:${COLLAB_GROUP} "$1" || return 1
+    [ ! -d "$1" ] || setfacl -x d:g:${COLLAB_GROUP} "$1" || return 1
+  fi
+  [ ! -d "$1" ] || setfacl -d -m "$default_acl" "$1" || return 1
+}
+for path; do grant_shared_entry "$path" || exit 1; done`;
+
 /** Mutations use the same policy and agent identity; never included in a check. */
 export function accessRepairShell(): string {
 	return `perms_of() {
@@ -113,14 +131,29 @@ protect() {
 }
 grant_shared() {
   access=$(shared_access "$1") || return 1
-  if [ "$(entry_kind "$1")" = read_dir ]; then
-    setfacl -R -P -m "u:$agent_user:$access" "$1" || return 1
-    setfacl -R -P -x g:${COLLAB_GROUP} "$1" || return 1
-    find "$1" -type d -exec setfacl -x d:g:${COLLAB_GROUP} {} + || return 1
-    find "$1" -type d -exec setfacl -d -m "$(shared_default "$1")" {} + || return 1
-  else
+  if [ "$(entry_kind "$1")" != read_dir ]; then
     setfacl -m "u:$agent_user:$access" "$1" || return 1
     if legacy_group "$1"; then setfacl -x g:${COLLAB_GROUP} "$1" || return 1; fi
+    return 0
+  fi
+  default_acl=$(shared_default "$1") || return 1
+  grant_shared_entry "$1" || return 1
+  # One pruned traversal instead of a recursive setfacl. A recursive grant into
+  # an agent-owned 0700 subtree fails on "Permission denied", which turned one
+  # directory the agent could create at will into denial of the whole grant.
+  # The primary can neither reach nor repair inside a pruned subtree.
+  # find resolves the shell through PATH, so pin it before execdir too.
+  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  export PATH access default_acl agent_user
+  find "$1" -xdev \\( -type d ! -user "$(id -u)" ! -readable -prune \\) -o \\
+    -mindepth 1 ! -type l -execdir ${shellCommand(GRANT_SHARED_TRAVERSAL)} {} +
+}
+grant_shared_entry() {
+  setfacl -m "u:$agent_user:$access" "$1" || return 1
+  if legacy_group "$1"; then setfacl -x g:${COLLAB_GROUP} "$1" || return 1; fi
+  if [ -d "$1" ]; then
+    if legacy_group "$1"; then setfacl -x d:g:${COLLAB_GROUP} "$1" || return 1; fi
+    setfacl -d -m "$default_acl" "$1" || return 1
   fi
 }
 repair_entry() {

@@ -50,8 +50,10 @@ import {
 import { agentPaths } from "#services/machine/tasks/agent-context";
 import {
 	repairSharedTree,
+	repairSharedTreeEntry,
 	sharedTreePolicyShell,
 	sharedTreeRepairShell,
+	unreadableSharedTree,
 	unsettledSharedTree,
 } from "#services/machine/tasks/agent-shared-tree";
 import {
@@ -211,6 +213,8 @@ function settledDirs(overrides: Record<string, string> = {}): string {
 		projects_unsettled: "",
 		work_agent_wrong_group: "",
 		projects_agent_wrong_group: "",
+		work_unreadable: "",
+		projects_unreadable: "",
 		home_default_other: "1",
 		claude_default_other: "1",
 		work_group: "collab",
@@ -761,9 +765,7 @@ describe("agent-user.dirs — the credential boundary", () => {
 		expect(runner.joined).toContain(accessRepairShell());
 		expect(runner.joined).toContain("read_file) echo r--");
 		expect(runner.joined).toContain("read_dir) echo r-X");
-		expect(runner.joined).toContain(
-			'find "$1" -type d -exec setfacl -d -m "$(shared_default "$1")" {} +',
-		);
+		expect(runner.joined).toContain('setfacl -d -m "$default_acl" "$1"');
 		expect(runner.joined).toContain(
 			'case "$(entry_kind "$entry")" in read_file|read_dir) grant_shared "$entry"',
 		);
@@ -798,8 +800,14 @@ describe("agent-user.dirs — the credential boundary", () => {
 		for (const line of defaults) {
 			const target = line.split(" ").pop() ?? "";
 			if (line.includes('"$1"')) {
-				// This function body is used only by the two bounded traversals above.
-				expect(line).toBe('setfacl -d -m g:collab:rwX "$1" || return 1');
+				// These two function bodies are used only by the bounded traversals
+				// above: one applies a shared tree's default, the other the shared
+				// config dirs'. Neither names a path, so neither can escape them.
+				const bounded = [
+					'setfacl -d -m g:collab:rwX "$1" || return 1',
+					'setfacl -d -m "$default_acl" "$1" || return 1',
+				];
+				expect(bounded, `unexpected default ACL body: ${line}`).toContain(line);
 			} else {
 				expect(allowed.includes(target), `unexpected default ACL on ${target}`).toBe(true);
 			}
@@ -1498,6 +1506,15 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		});
 	}
 
+	/**
+	 * The shared traversals prune with `find -readable`, which is GNU findutils.
+	 * The target machines are Linux; BSD find on a developer Mac does not know
+	 * the predicate, so those host-executed probes only run where it exists.
+	 * The rendered-prune assertions run everywhere.
+	 */
+	const gnuFind = spawnSync("find", [".", "-maxdepth", "0", "-readable"], { encoding: "utf8" });
+	const findSupportsReadable = !gnuFind.stderr.includes("unknown primary");
+
 	it("reports a real top-level file with NO extended ACL (including quoted home paths)", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const home = isolatedHome();
@@ -1567,7 +1584,44 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		const repair = accessRepairShell();
 		expect(repair).toContain('setfacl -x d:g:collab "$1"');
 		expect(repair).not.toContain("m::$access");
-		expect(repair).toContain('setfacl -R -P -m "u:$agent_user:$access"');
+		expect(repair).toContain('setfacl -m "u:$agent_user:$access" "$1" || return 1');
+	});
+
+	// A recursive setfacl fails on any subtree the primary cannot read, and the
+	// agent can create one at will. That made a single agent-owned 0700
+	// directory under a shared config dir deny the whole grant.
+	it("prunes unreadable non-owned subtrees instead of recursing into them", () => {
+		const repair = accessRepairShell();
+		expect(repair).not.toContain("setfacl -R");
+		expect(repair).toContain(
+			'find "$1" -xdev \\( -type d ! -user "$(id -u)" ! -readable -prune \\) -o',
+		);
+		expect(repair).toContain("-mindepth 1 ! -type l -execdir");
+		// The execdir shell starts clean, so it must not rely on the caller's
+		// functions or on a PATH it inherits from the agent-writable tree.
+		// Only the execdir script itself, between the quoting sh and the `{} +`.
+		const traversal = repair.slice(repair.indexOf("-execdir sh -c '"), repair.indexOf("' _ {} +"));
+		expect(traversal).toContain("PATH=/usr/local/sbin:");
+		expect(traversal).not.toContain("legacy_group");
+		expect(repair).toContain("export PATH access default_acl agent_user");
+	});
+
+	it("applies the home protection before any shared-tree repair", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner();
+		await agentUserDirs.apply?.(ctxFor(runner));
+		const script = runner.joined;
+		const protectedAt = script.indexOf("setfacl -k");
+		const workAt = script.indexOf(`cd -P -- ${HOME}/work`);
+		const projectsAt = script.indexOf(`cd -P -- ${HOME}/.claude/projects`);
+		const helperAt = script.indexOf("as-agent");
+		expect(protectedAt).toBeGreaterThan(-1);
+		expect(workAt).toBeGreaterThan(-1);
+		expect(projectsAt).toBeGreaterThan(-1);
+		expect(protectedAt).toBeLessThan(workAt);
+		expect(protectedAt).toBeLessThan(projectsAt);
+		expect(workAt).toBeLessThan(projectsAt);
+		expect(helperAt).toBeLessThan(projectsAt);
 	});
 
 	it("protects shared-looking names in HOME but skips real shared config entries and symlinks", () => {
@@ -1716,6 +1770,31 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		expect(logs.join("\n")).toContain("agent-file");
 	});
 
+	// The same shape, but the agent has made the entry unreadable. Failing here
+	// would let the agent suppress the setup run that restores the home
+	// protection, so it warns instead.
+	it.each(["work", "projects"] as const)(
+		"warns rather than failing on unreadable %s entries the primary cannot repair",
+		async (name) => {
+			withTempConfig('remote = "git@example:x.git"\n');
+			const logs: string[] = [];
+			const runner = recordingRunner([
+				{
+					match: "unprotected_top=",
+					result: {
+						stdout: settledDirs({
+							[`${name}_unreadable`]: `/home/svallory/${name}/agentpriv,/home/svallory/${name}/deeper,`,
+						}),
+					},
+				},
+			]);
+			expect(await agentUserDirs.check({ ...ctxFor(runner), log: (s) => logs.push(s) })).toBe(true);
+			expect(logs.join("\n")).toContain(`2 unreadable ${name} entries`);
+			expect(logs.join("\n")).toContain("cannot inspect or repair inside them");
+			expect(logs.join("\n")).toContain("agentpriv");
+		},
+	);
+
 	it("names privacy drift even when a shared tree also needs repair", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const logs: string[] = [];
@@ -1741,6 +1820,7 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		["r--", true],
 		["---", true],
 	] as const)("interprets effective shared-file access %s", (effective, missing) => {
+		if (!findSupportsReadable) return;
 		const home = isolatedHome();
 		try {
 			const dir = join(home, "work");
@@ -1846,7 +1926,7 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 
 	it("filters ALL shared-tree mutations by primary ownership and excludes symlinks", () => {
 		const script = repairSharedTree("/home/primary/work");
-		expect(script).toContain('find "$tree_root" ! -type l -user "$(id -u)" -execdir');
+		expect(script).toContain('! -type l -user "$(id -u)" -execdir');
 		expect(script).toContain("cd -P -- /home/primary/work");
 		expect(watcherScript(`${HOME}/.claude/projects`, HOME)).toContain(
 			'find "$entry" -maxdepth 0 ! -type l -user "$(id -u)" -execdir',
@@ -1859,6 +1939,36 @@ describe("r3 — real shell probes, diagnostics and quoting", () => {
 		expect(repair).toContain('shared_tree_candidate "$1" || return 0');
 		expect(repair).toContain('shared_tree_mutate "$1" chgrp -h collab');
 		expect(repair).toContain('if shared_tree_ok "$1"; then return 0; fi');
+	});
+
+	// Setting an extended ACL on a directory clears its set-group-ID bit, so a
+	// setfacl after `chmod g+s` left the shared trees never settling: every run
+	// set the bit and the default-ACL step took it away again.
+	it("sets setgid AFTER the default-ACL mutations, never before", () => {
+		const repair = sharedTreeRepairShell();
+		const setfacl = repair.indexOf('shared_tree_mutate "$1" setfacl -d -m g:collab:rwX');
+		const setgid = repair.indexOf('shared_tree_mutate "$1" chmod g+s');
+		expect(setfacl).toBeGreaterThan(-1);
+		expect(setgid).toBeGreaterThan(-1);
+		expect(setgid).toBeGreaterThan(setfacl);
+	});
+
+	// Without this prune, one agent-created 0700 directory made find exit
+	// nonzero on every later setup run, which failed the whole run before the
+	// home protection was applied.
+	it("prunes unreadable non-owned directories in every shared traversal", () => {
+		const prune = '\\( -type d ! -user "$(id -u)" ! -readable -prune \\) -o';
+		expect(repairSharedTree("/home/primary/work")).toContain(`"$tree_root" ${prune} ! -type l`);
+		expect(unsettledSharedTree("/home/primary/work")).toContain(prune);
+		expect(unsettledSharedTree("/home/primary/work")).toContain("-xdev");
+		expect(unreadableSharedTree("/home/primary/work")).toContain(
+			"\\( -type d ! -user \"$(id -u)\" ! -readable -printf '%p,' \\) -prune",
+		);
+		// The watcher's entry-only variant never descends, so it must not prune.
+		expect(repairSharedTreeEntry("/home/primary/work")).not.toContain("-prune");
+		expect(watcherScript(`${HOME}/.claude/projects`, HOME)).toContain(
+			'"$entry" -maxdepth 0 ! -type l',
+		);
 	});
 
 	it.each(["owned", "unowned", "symlink", "outside", "replaced"] as const)(

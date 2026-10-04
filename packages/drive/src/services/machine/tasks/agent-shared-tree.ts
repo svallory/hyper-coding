@@ -59,16 +59,30 @@ shared_tree_repair() {
   if [ "$(stat -c %G "$1")" != collab ]; then shared_tree_mutate "$1" chgrp -h collab || return 1; fi
   shared_tree_mutate "$1" chmod g+rwX || return 1
   if [ -d "$1" ]; then
-    shared_tree_mutate "$1" chmod g+s || return 1
     if ! shared_tree_default_ok "$1"; then
       shared_tree_mutate "$1" setfacl -x "d:u:$tree_agent" || return 1
       shared_tree_mutate "$1" setfacl -d -m g:collab:rwX || return 1
     fi
+    # LAST, never before: setting an extended ACL on a directory clears its
+    # set-group-ID bit, so a setfacl after this leaves the tree never settling.
+    shared_tree_mutate "$1" chmod g+s || return 1
   fi
   # Do not recalculate a file's mask when chmod already restored effective rw.
   if ! shared_tree_access_ok "$1"; then shared_tree_mutate "$1" setfacl -m g:collab:rwX || return 1; fi
 }`;
 }
+
+/**
+ * Directories the primary does not own and cannot read are unwedgeable: the
+ * agent can create one with a single mkdir and nothing unprivileged can undo
+ * it. Prune them instead of descending — descending makes find print
+ * "Permission denied" and exit nonzero, which turned one agent-owned directory
+ * into a denial of service against every later setup run. Never follows links.
+ */
+const UNREADABLE_PRUNE = String.raw`\( -type d ! -user "$(id -u)" ! -readable -prune \) -o`;
+
+/** The same prune for read-only probes, so a check never trips over one either. */
+const UNREADABLE_LIST = String.raw`\( -type d ! -user "$(id -u)" ! -readable -printf '%p,' \) -prune`;
 
 /** Read-only list of primary-owned entries this user can repair. Never follows links. */
 export function unsettledSharedTree(dir: string, agentUser = "agent"): string {
@@ -76,7 +90,18 @@ export function unsettledSharedTree(dir: string, agentUser = "agent"): string {
 for path; do
   if ! shared_tree_ok "$path"; then printf '%s,' "$path"; fi
 done`;
-	return `find ${shellQuote(dir)} ! -type l -user "$(id -u)" -exec ${shellCommand(body)} {} + 2>/dev/null`;
+	// Silent prune: a path reported here means "needs repair", so the skipped
+	// directories must not leak into this list.
+	return `find ${shellQuote(dir)} -xdev ${UNREADABLE_PRUNE} ! -type l -user "$(id -u)" -exec ${shellCommand(body)} {} + 2>/dev/null`;
+}
+
+/**
+ * Unreadable, non-primary-owned directories inside a shared tree. The primary
+ * can neither inspect nor repair inside them, so the check warns instead of
+ * failing on them.
+ */
+export function unreadableSharedTree(dir: string): string {
+	return `find ${shellQuote(dir)} -xdev ${UNREADABLE_LIST} 2>/dev/null`;
 }
 
 /** Not repairable by the primary; the check reports these as warnings, not failure. */
@@ -100,6 +125,9 @@ for path; do shared_tree_repair "$path" || exit 1; done`;
 	// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion
 	const entrySetup = entryOnly ? "entry=${1%/}" : "# Traverse the physical root.";
 	// execdir requires a safe absolute PATH. Never search the agent-writable cwd.
+	// The entry-only watcher variant never descends, so it needs no prune; the
+	// full traversal does, and must not fail the run because of one.
+	const prune = entryOnly ? "" : `${UNREADABLE_PRUNE} `;
 	return `(
   [ ! -L ${shellQuote(dir)} ] || exit 0
   tree_root=$(CDPATH= cd -P -- ${shellQuote(dir)} && pwd -P) || exit 1
@@ -107,6 +135,6 @@ for path; do shared_tree_repair "$path" || exit 1; done`;
   PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   export PATH
   ${entrySetup}
-  find ${entryOnly ? '"$entry" -maxdepth 0' : '"$tree_root"'} ! -type l -user "$(id -u)" -execdir ${shellCommand(body)} {} +
+  find ${entryOnly ? '"$entry" -maxdepth 0' : '"$tree_root"'} ${prune}! -type l -user "$(id -u)" -execdir ${shellCommand(body)} {} +
 )`;
 }

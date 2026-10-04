@@ -17,7 +17,12 @@ import {
 	unprotectedEntriesShell,
 } from "./agent-acl.js";
 import { type AgentPaths, agentHomeOf, agentPaths, agentUserOf, homeOf } from "./agent-context.js";
-import { agentWrongGroup, repairSharedTree, unsettledSharedTree } from "./agent-shared-tree.js";
+import {
+	agentWrongGroup,
+	repairSharedTree,
+	unreadableSharedTree,
+	unsettledSharedTree,
+} from "./agent-shared-tree.js";
 import { runOrFail, runScript, succeeds } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
@@ -39,6 +44,7 @@ function dirsProbe(paths: AgentPaths, agentUser: string): string {
 		).flatMap(([name, dir]) => [
 			`printf '${name}_unsettled=%s\\n' "$(${unsettledSharedTree(dir, agentUser)})"`,
 			`printf '${name}_agent_wrong_group=%s\\n' "$(${agentWrongGroup(dir, agentUser)})"`,
+			`printf '${name}_unreadable=%s\\n' "$(${unreadableSharedTree(dir)})"`,
 		]),
 		`printf 'work_group=%s\\n' "$(stat -c %G ${q(paths.work)} 2>/dev/null || echo missing)"`,
 		`printf 'work_setgid=%s\\n' "$(test -g ${q(paths.work)} && echo yes || echo no)"`,
@@ -154,6 +160,15 @@ export const agentUserDirs: Task = {
 				ctx.log(
 					`agent-user.dirs: warning — ${wrong.length} agent-owned ${name} entries have the wrong group; the primary cannot repair them: ${wrong.slice(0, 3).join(", ")}`,
 				);
+			// An agent-owned 0700 directory is a state the primary cannot read or
+			// repair, so it is skipped rather than failed on: failing here would
+			// let the agent suppress every later setup run, including the one that
+			// restores the home protection.
+			const unreadable = (answer.get(`${name}_unreadable`) ?? "").split(",").filter(Boolean);
+			if (unreadable.length > 0)
+				ctx.log(
+					`agent-user.dirs: warning — ${unreadable.length} unreadable ${name} entries not owned by ${primary} are skipped; the primary cannot inspect or repair inside them: ${unreadable.slice(0, 3).join(", ")}`,
+				);
 			const unsettled = answer.get(`${name}_unsettled`);
 			if (unsettled === undefined) return no(`the probe did not answer ${name}_unsettled`);
 			if (unsettled !== "")
@@ -210,8 +225,11 @@ export const agentUserDirs: Task = {
 			return;
 		}
 		const policy = `${accessPolicyShell(paths, agentUser)}\n${accessRepairShell()}`;
-		await runOrFail(ctx, "create the shared work dir", `mkdir -p ${q(paths.work)}`);
-		await shareTree(ctx, paths.work, agentUser);
+		// Privacy first. A shared tree can be wedged by anything the agent can
+		// create there, and setup is the documented fallback that restores the
+		// home protection when the watcher is down. Repairing the shared trees
+		// last means no failure in them can stop the home and config protection
+		// from being applied first.
 		await runOrFail(ctx, "create the primary config dir", `mkdir -p ${q(paths.claude)}`);
 		for (const dir of [paths.home, paths.claude]) {
 			await runOrFail(
@@ -243,8 +261,8 @@ export const agentUserDirs: Task = {
 				),
 			].join("\n"),
 		);
+		await runOrFail(ctx, "create the shared work dir", `mkdir -p ${q(paths.work)}`);
 		await runOrFail(ctx, "create the transcripts dir", `mkdir -p ${q(paths.projects)}`);
-		await shareTree(ctx, paths.projects, agentUser);
 		await runOrFail(
 			ctx,
 			"install the as-agent helper",
@@ -266,6 +284,9 @@ export const agentUserDirs: Task = {
 				].join("\n"),
 			);
 		}
+		// Both shared trees last, and only after the protection above has run.
+		await shareTree(ctx, paths.work, agentUser);
+		await shareTree(ctx, paths.projects, agentUser);
 	},
 };
 
