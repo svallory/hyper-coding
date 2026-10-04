@@ -49,9 +49,10 @@ There is no repos config file — repos are discovered by globbing
 
 The root is not a working tree in either layout. Nothing there can be committed
 — not by accident, not by a stray `git add -A`. Local-only files get a home
-structurally incapable of reaching the remote. There is no `.gitignore` to
-maintain and no protection to erode: the safety is structural, which is the
-point.
+structurally incapable of reaching the project's remote. There is no
+project `.gitignore` to maintain and no protection to erode: the safety is
+structural. Hyperdrive's separate space-history `.gitignore` is rendered by
+the CLI, not maintained by hand.
 
 An ordinary checkout is not a space and cannot be decorated into one.
 `/hyper:adopt` **converts** it: the repo becomes bare and the whole working

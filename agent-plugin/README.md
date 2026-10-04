@@ -49,9 +49,9 @@ repos config file):
 
 The root is not a working tree in either shape, so nothing there can be
 committed — not by accident, not by a stray `git add -A`. Local-only files
-get a home that is *structurally* incapable of reaching the remote. Space
-files and project files never share a directory: project code lives in a
-worktree, the space's local-only files live beside it.
+get a home that is *structurally* incapable of reaching the project's
+remote. Space files and project files never share a directory: project
+code lives in a worktree, the space's local-only files live beside it.
 
 "Never committed" means the project's remote. A space can still keep its own
 history: `hyper space init` gives it an orphan branch in your private

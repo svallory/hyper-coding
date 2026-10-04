@@ -89,9 +89,9 @@ adoption converts away from.
 
 Safety property: **structural impossibility.** The root is not a working tree;
 there is nothing to `git add` and no commit can include it. Local-only files
-cannot reach the remote by construction — not by accident, not by a stray
-`git add -A`. There is no `.gitignore` protection to maintain, because there
-is nothing to protect against: that is the point of the single shape.
+cannot reach the project's remote by construction — not by accident, not by
+a stray `git add -A`. There is no project `.gitignore` protection to
+maintain; hyperdrive's separate space-history allowlist is CLI-managed.
 
 ## Marker (HYPER.md) and the opt-in gate
 
