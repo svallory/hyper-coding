@@ -54,7 +54,7 @@ interface RunResult {
 }
 
 /** Run one hyper-lib.sh function and capture its stdout. */
-function runLib(fn: string, args: readonly string[]): RunResult {
+export function runLib(fn: string, args: readonly string[]): RunResult {
 	const result = spawnSync("bash", ["-c", `source "$0"; ${fn} "$@"`, libPath(), ...args], {
 		encoding: "utf8",
 		// bash must not inherit the caller's `set -e`/pipefail opinions, but
