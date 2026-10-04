@@ -39,6 +39,7 @@ import { spawn } from "node:child_process";
 import {
 	existsSync,
 	linkSync,
+	readdirSync,
 	readFileSync,
 	realpathSync,
 	renameSync,
@@ -156,6 +157,13 @@ export interface WarpInputs {
 	remoteControl: boolean;
 	/** Marker state of the session, from `readOwner`. */
 	owner: OwnerState;
+	/**
+	 * A `.<id>.warp.json.*.old` left by a marker swap that crashed between
+	 * moving the old marker aside and publishing the new one ({@link
+	 * findStrayMarker}). With no marker beside it, ownership is UNKNOWN, not
+	 * "unowned".
+	 */
+	strayMarker: string | null;
 	/** Which of the three working-directory shapes this is. */
 	cwdKind: WarpCwdKind;
 	/** Space details, present exactly when `cwdKind` is `space-worktree`. */
@@ -621,6 +629,12 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 		return refuse(
 			"ownership",
 			`${owner.path} can't be read as an ownership marker (${owner.reason}). Fix or delete it; hyperdrive won't guess who owns this session.`,
+		);
+	}
+	if (owner.state === "unowned" && inputs.strayMarker && !inputs.force) {
+		return refuse(
+			"ownership",
+			`ownership of session ${inputs.sessionId} is unknown: there is no marker, but ${inputs.strayMarker} is left over from a warp that stopped while swapping it, so the session may belong to another machine. Check which machine has it, then delete that file, or pass --force to claim it for ${target.name}.`,
 		);
 	}
 	if (owner.state === "owned" && !inputs.force) {
@@ -1713,6 +1727,7 @@ export function gatherWarp(options: {
 			force: false,
 			remoteControl: false,
 			owner: readOwner(cwd, chosen.id),
+			strayMarker: findStrayMarker(dirname(chosen.path), chosen.id),
 			cwdKind: kind,
 			space,
 			excludes: [...config.warp.exclude],
@@ -1902,6 +1917,22 @@ export function swapMarker(
 		rmSync(temp, { force: true });
 	}
 	if (grabbed) rmSync(grabbed, { force: true });
+}
+
+/**
+ * A marker {@link swapMarker} moved aside (`.<id>.warp.json.<unique>.old`)
+ * and never cleaned up, i.e. a swap that crashed. Null when there is none.
+ */
+export function findStrayMarker(folder: string, sessionId: string): string | null {
+	const prefix = `.${sessionId}.warp.json.`;
+	let names: string[];
+	try {
+		names = readdirSync(folder);
+	} catch {
+		return null;
+	}
+	const stray = names.find((name) => name.startsWith(prefix) && name.endsWith(".old"));
+	return stray ? join(folder, stray) : null;
 }
 
 /** Put a marker we moved aside back, unless something else took its place. */

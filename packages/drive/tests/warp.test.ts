@@ -19,6 +19,7 @@ import {
 	describeStep,
 	describeWarp,
 	executeWarp,
+	findStrayMarker,
 	listPaths,
 	MarkerConflictError,
 	PANE_PLACEHOLDER,
@@ -124,6 +125,7 @@ function inputs(overrides: Partial<WarpInputs> = {}): WarpInputs {
 		force: false,
 		remoteControl: false,
 		owner: { state: "unowned", path: `${FOLDER}/${SESSION}.warp.json` },
+		strayMarker: null,
 		cwdKind: "plain-dir",
 		space: null,
 		excludes: ["node_modules"],
@@ -1284,6 +1286,39 @@ describe("a target with uncommitted work is not overwritten without --force (rev
 			// The working tree and the index are untouched by the snapshot.
 			expect(readFileSync(join(dir, "repo/stable.txt"), "utf-8")).toBe("edited on the target\n");
 			expect(git("-C", "repo", "diff", "--cached", "--name-only").stdout).toContain("staged.txt");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("a marker swap that crashed half-way (review 2, item 2)", () => {
+	it("refuses as ownership unknown, naming the leftover file, unless --force", () => {
+		const stray = `${FOLDER}/.${SESSION}.warp.json.123.abc.old`;
+		const refusal = refuseWith({ strayMarker: stray });
+		expect(refusal.exit).toBe(2);
+		expect(refusal.message).toContain("ownership of session");
+		expect(refusal.message).toContain("is unknown");
+		expect(refusal.message).toContain(stray);
+		expect(planOf({ strayMarker: stray, force: true }).target.name).toBe("netcup");
+	});
+
+	it("finds a leftover .old from a real interrupted swap, and nothing else", () => {
+		const dir = mkdtempSync(join(tmpdir(), "warp-stray-"));
+		try {
+			expect(findStrayMarker(dir, SESSION)).toBeNull();
+			writeFileSync(join(dir, `.${SESSION}.warp.json.1.x.new`), "{}");
+			writeFileSync(join(dir, `.other.warp.json.1.x.old`), "{}");
+			expect(findStrayMarker(dir, SESSION)).toBeNull();
+			// What swapMarker leaves if it dies right after moving the marker aside.
+			writeFileSync(join(dir, `${SESSION}.warp.json`), JSON.stringify({ owner: "a", at: "t" }));
+			const unique = `${process.pid}.1.zz`;
+			spawnSync("mv", [
+				join(dir, `${SESSION}.warp.json`),
+				join(dir, `.${SESSION}.warp.json.${unique}.old`),
+			]);
+			expect(findStrayMarker(dir, SESSION)).toBe(join(dir, `.${SESSION}.warp.json.${unique}.old`));
+			expect(findStrayMarker(join(dir, "missing"), SESSION)).toBeNull();
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
