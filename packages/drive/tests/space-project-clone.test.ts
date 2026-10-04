@@ -297,19 +297,21 @@ describe("project transport and terminal policy", () => {
 			"remote: could not reach https://alice:password-value@example.invalid/repo.git today, retrying",
 			"remote: could not reach https://[redacted]@example.invalid/repo.git today, retrying",
 		],
-		// A quote or comma ends the url: an email after it is not userinfo,
-		// and the real host must stay visible.
+		// Punctuation inside a password does not end the userinfo: stopping at
+		// `,`, `;`, `'` or `)` would print the rest of the secret.
 		[
-			"'https://host.example.invalid',admin@example.invalid",
-			"'https://host.example.invalid',admin@example.invalid",
+			"fatal: https://user:pass,word;value'x)y@example.invalid/x",
+			"fatal: https://[redacted]@example.invalid/x",
 		],
+		// ACCEPTED over-redaction, the price of the case above: with no
+		// whitespace between a url and an email, the email's `@` is read as the
+		// end of the userinfo and the url's real host is hidden. Hiding a host
+		// is acceptable; leaking a password is not.
+		["'https://host.example.invalid',admin@example.invalid", "'https://[redacted]@example.invalid"],
+		// Whitespace still ends the authority, so prose keeps both.
 		[
 			'see "https://host.example.invalid"; mail admin@example.invalid',
 			'see "https://host.example.invalid"; mail admin@example.invalid',
-		],
-		[
-			"(https://host.example.invalid)admin@example.invalid",
-			"(https://host.example.invalid)admin@example.invalid",
 		],
 		// An unencoded `@` inside the password is still userinfo.
 		[
@@ -439,6 +441,10 @@ describe("project transport and terminal policy", () => {
 		expect(named).toContain(".claude/statusline.sh");
 	});
 	it.each([
+		// Already in the top class, so at least as high as (b).
+		[".cursor/hooks.json", 0],
+		[".codex/run.sh", 0],
+		[".pi/extension.ts", 0],
 		[".vscode/tasks.json", 0],
 		[".vscode/launch.json", 0],
 		[".claude/statusline.sh", 1],
