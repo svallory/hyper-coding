@@ -65,11 +65,17 @@ work_real="$(cd "$work" && pwd -P)"
 key="$work_real/id"
 started=0
 
+# Drop the operator's agent BEFORE installing the cleanup trap. The trap may
+# only signal the throwaway agent this invocation actually started.
+unset SSH_AUTH_SOCK SSH_AGENT_PID
+agent_started=0
 container_started=0
 cleanup() {
   # The throwaway ssh-agent goes whatever KEEP says: it holds only a throwaway
   # key, but a leftover agent process is still a leftover.
-  if [ -n "${SSH_AGENT_PID:-}" ]; then ssh-agent -k >/dev/null 2>&1 || kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
+  if [ "$agent_started" = "1" ] && [ -n "${SSH_AGENT_PID:-}" ]; then
+    ssh-agent -k >/dev/null 2>&1 || kill "$SSH_AGENT_PID" 2>/dev/null || true
+  fi
   if [ "${KEEP:-0}" = "1" ]; then
     if [ "$container_started" = "1" ]; then
       echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
@@ -87,10 +93,10 @@ if [ "$started" = 1 ]; then
 trap cleanup EXIT
 
 # A throwaway ssh-agent holding a throwaway key, for the forwarding assertion.
-# The operator's own agent is dropped from this script's environment first, so
-# nothing below can use or forward it.
-unset SSH_AUTH_SOCK SSH_AGENT_PID
+# The operator's own agent was dropped before installing the trap, so nothing
+# below can use or forward it.
 eval "$(ssh-agent -s)" >/dev/null
+agent_started=1
 ssh-keygen -q -t ed25519 -N '' -C forwarded-throwaway -f "$work_real/forwarded" >/dev/null 2>&1
 ssh-add -q "$work_real/forwarded" 2>/dev/null
 echo "# throwaway ssh-agent $SSH_AGENT_PID holds one throwaway key"
