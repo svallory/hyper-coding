@@ -45,7 +45,7 @@ marker="HYPER.md"
 # allowlisted local-only dirs sync to the user's hyperdrive; without one,
 # nothing here is backed up.
 if [[ -d "$root/.hyper/space.git" ]]; then
-  backup_note="Backed up to your hyperdrive on this space's branch (the allowlisted dirs; scratch/ never travels)."
+  backup_note="This space backs up its allowlisted dirs to your hyperdrive; scratch/ never travels."
 else
   backup_note="Nothing here is committed or backed up."
 fi
