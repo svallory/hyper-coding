@@ -440,12 +440,12 @@ describe("untrusted clone branch", () => {
 		mkdirSync(shim);
 		// Validation reads the tree first, the review step second: fail only the
 		// second read, so the refusal comes from the review and not from the
-		// validator. The refusal must not be raw git stderr the user cannot act
-		// on, and the target must be gone afterwards.
+		// validator. The refusal must be a sentence, with git's stderr quoted
+		// (and an ESC in it stripped), and the target must be gone afterwards.
 		const counter = join(fixture.root, "ls-tree-count");
 		writeFileSync(
 			join(shim, "git"),
-			`#!/bin/sh\ncase "$*" in\n *"ls-tree -r -z "*)\n   n=$(cat ${shellQuote(counter)} 2>/dev/null || echo 0); n=$((n+1)); printf '%s' "$n" > ${shellQuote(counter)};\n   if [ "$n" -ge 2 ]; then echo 'fatal: ambiguous argument' >&2; exit 128; fi;;\nesac\nexec ${shellQuote(real)} "$@"\n`,
+			`#!/bin/sh\ncase "$*" in\n *"ls-tree -r -z "*)\n   n=$(cat ${shellQuote(counter)} 2>/dev/null || echo 0); n=$((n+1)); printf '%s' "$n" > ${shellQuote(counter)};\n   if [ "$n" -ge 2 ]; then printf 'fatal: ambiguous\\033[2J argument\\n' >&2; exit 128; fi;;\nesac\nexec ${shellQuote(real)} "$@"\n`,
 			{ mode: 0o755 },
 		);
 		vi.stubEnv("PATH", `${shim}:${process.env.PATH}`);
@@ -453,7 +453,13 @@ describe("untrusted clone branch", () => {
 		expect(response.status).toBe(2);
 		const said = flat(response.stderr);
 		expect(said).toContain("couldn't finish the review");
-		expect(said).toContain("the target was restored");
+		// Accurate: the review runs AFTER the checkout was published, so files
+		// were written and then removed, not "never checked out".
+		expect(said).toContain("the files this clone wrote were removed again");
+		expect(said).not.toContain("Nothing was checked out");
+		// git's stderr is quoted like other child output: prefixed, sanitised.
+		expect(said).toContain("git: fatal: ambiguous[2J argument");
+		expect(/[\p{Cc}\p{Cf}]/u.test(response.stderr.replace(/[\n\t]/g, ""))).toBe(false);
 		expect(existsSync(target)).toBe(false);
 	});
 	it("puts settings, hooks and executables ahead of instruction files before cutting", () => {

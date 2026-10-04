@@ -129,6 +129,18 @@ export class SpaceGitError extends Error {
 }
 
 /**
+ * A git command that exited non-zero. `said` is git's own stderr, raw, so a
+ * caller that wraps the failure in its own sentence can quote it the same way
+ * as every other child output (sanitised, `git: ` prefixed).
+ */
+export class SpaceGitCommandError extends SpaceGitError {
+	constructor(readonly said: string) {
+		super(gitSaid(said));
+		this.name = "SpaceGitCommandError";
+	}
+}
+
+/**
  * A refusal a machine can act on. The `reason` slug is the contract for
  * `--json` callers; the message is still the human story.
  */
@@ -204,11 +216,11 @@ export function spaceGit(
 
 	if (status !== 0 && !opts.allowFailure) {
 		const detail = stderr.trim();
-		throw new SpaceGitError(
-			detail === ""
-				? `git ${args[0] ?? ""} failed with exit code ${status} and said nothing.`
-				: gitSaid(detail),
-		);
+		if (detail === "")
+			throw new SpaceGitError(
+				`git ${args[0] ?? ""} failed with exit code ${status} and said nothing.`,
+			);
+		throw new SpaceGitCommandError(detail);
 	}
 	return { status, stdout, stderr, signal: result.signal };
 }

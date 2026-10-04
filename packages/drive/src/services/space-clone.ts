@@ -28,6 +28,9 @@ import {
 	describeReviewPaths,
 	fetchSpaceClone,
 	initSpaceGitDir,
+	quoteChildOutput,
+	redactGitSecrets,
+	SpaceGitCommandError,
 	SpaceGitError,
 	SpaceGitInterruptedError,
 	sanitizeForTerminal,
@@ -105,9 +108,11 @@ function assertPhysicalHome(target: string): void {
 }
 
 /**
- * The shared review step, or a refusal that says so in a sentence. Its own git
- * stderr is not an explanation a user can act on: what failed is the REVIEW of
- * what this branch would bring in, and the target has been put back.
+ * The shared review step, or a refusal that says so in a sentence. What
+ * failed is the REVIEW of what this branch would bring in: it runs after the
+ * checkout was published, so the files this clone wrote are removed again by
+ * the caller's rollback (which reports it if that cleanup is incomplete).
+ * git's own words are quoted like every other child output.
  *
  * Names are remote data: a format character (bidi, ZWJ) is legitimate in a
  * real filename, so it is returned raw and escaped only in text output.
@@ -119,10 +124,17 @@ async function reviewOrFail(
 	try {
 		return await incomingReview(root, tip);
 	} catch (error) {
-		const detail = error instanceof Error ? error.message : String(error);
+		if (error instanceof SpaceGitInterruptedError) throw error;
+		const detail =
+			error instanceof SpaceGitCommandError
+				? quoteChildOutput(redactGitSecrets(error.said))
+				: error instanceof Error
+					? error.message
+					: escapeControlCharacters(String(error));
 		throw new SpaceGitError(
-			`I couldn't finish the review of what this space would bring in: ${detail} ` +
-				`Nothing was checked out and the target was restored. Retry the clone, or inspect ${escapeControlCharacters(root)} yourself if it keeps failing.`,
+			"I couldn't finish the review of what this space would bring in, so the clone stopped there; " +
+				"the files this clone wrote were removed again. Retry the clone, or inspect the branch on the original machine if it keeps failing.\n" +
+				detail,
 		);
 	}
 }
