@@ -9,6 +9,7 @@ import {
 	escapeControlCharacters,
 	quoteChildOutput,
 	redactGitSecrets,
+	reviewPathClass,
 	sanitizeForTerminal,
 } from "#services/space-git";
 
@@ -358,13 +359,77 @@ describe("project transport and terminal policy", () => {
 		);
 	});
 	it("names the count, the first 20 paths, and points at --json", () => {
-		const many = Array.from({ length: 251 }, (_, index) => `bin/tool-${index}.sh`);
+		// Zero-padded so the alphabetical order within one class is the
+		// numeric one: the list is now sorted inside each risk class rather
+		// than kept in input order (the previous version of this test relied on
+		// input order).
+		const many = Array.from(
+			{ length: 251 },
+			(_, index) => `bin/tool-${String(index).padStart(3, "0")}.sh`,
+		);
 		const described = describeReviewPaths(many);
-		expect(described).toContain('"bin/tool-0.sh"');
-		expect(described).toContain('"bin/tool-19.sh"');
-		expect(described).not.toContain('"bin/tool-20.sh"');
-		expect(described).toContain("231 more");
+		expect(described).toContain('"bin/tool-000.sh"');
+		expect(described).toContain('"bin/tool-019.sh"');
+		expect(described).not.toContain('"bin/tool-020.sh"');
+		expect(described).toContain("and 231 more: 231 executables");
 		expect(described).toContain("--json");
+	});
+	it("ranks settings, executables, symlinks and instructions ahead of the rest before cutting", () => {
+		// The review's reproduction: 25 command files sort before everything
+		// dangerous, so an alphabetical cut hid settings, payload and hooks.
+		const commands = Array.from(
+			{ length: 25 },
+			(_, index) => `.claude/commands/a${String(index + 1).padStart(2, "0")}.md`,
+		);
+		const paths = [
+			...commands,
+			".claude/settings.json",
+			".hyper/hooks.sh",
+			"bin/payload",
+			"data/run.sh",
+			"notes/link",
+			"notes/readme.txt",
+		].sort();
+		const facts = new Map([
+			["data/run.sh", { executable: true, symlink: false, throughLink: false }],
+			["notes/link", { executable: false, symlink: true, throughLink: false }],
+			["bin/payload", { executable: true, symlink: false, throughLink: false }],
+		]);
+		const described = describeReviewPaths(paths, facts);
+		const named = (described.match(/"[^"]+"/g) ?? []).map((quoted) => quoted.slice(1, -1));
+		expect(named.slice(0, 6)).toEqual([
+			".claude/settings.json",
+			".hyper/hooks.sh",
+			"bin/payload",
+			"data/run.sh",
+			"notes/link",
+			".claude/commands/a01.md",
+		]);
+		expect(named).toHaveLength(20);
+		expect(named).not.toContain("notes/readme.txt");
+		expect(described).toContain("and 11 more: 10 instruction files, 1 other file; run with --json");
+		// The input — what `--json` prints — is left exactly as it was.
+		expect(paths[0]).toBe(".claude/commands/a01.md");
+	});
+	it.each([
+		[".claude/settings.local.json", 0],
+		[".claude/hooks/pre.sh", 0],
+		[".config/wt.toml", 0],
+		[".vscode/settings.json", 0],
+		[".cursor/rules.json", 0],
+		[".codex/config.toml", 0],
+		[".pi/settings.json", 0],
+		[".hyper/post-merge-hook", 0],
+		["bin/tool", 1],
+		["CLAUDE.md", 3],
+		["sub/AGENTS.md", 3],
+		[".claude/skills/x/SKILL.md", 3],
+		[".claude/agents/reviewer.md", 3],
+		[".hyper/memory/MEMORY.md", 3],
+		[".cursor/notes.md", 3],
+		["notes/plain.txt", 4],
+	])("classifies %s as risk class %i", (path, rank) => {
+		expect(reviewPathClass(path)).toBe(rank);
 	});
 	it("says so plainly when nothing is hidden", () => {
 		expect(describeReviewPaths(["bin/a.sh"])).toBe(

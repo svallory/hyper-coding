@@ -36,7 +36,7 @@ import {
 	writeTracked,
 } from "#services/space-git";
 import {
-	incomingReviewPaths,
+	incomingReview,
 	SpaceIncomingError,
 	validateIncomingSpace,
 } from "#services/space-incoming";
@@ -112,9 +112,12 @@ function assertPhysicalHome(target: string): void {
  * Names are remote data: a format character (bidi, ZWJ) is legitimate in a
  * real filename, so it is returned raw and escaped only in text output.
  */
-async function reviewPathsOrFail(root: string, tip: string): Promise<string[]> {
+async function reviewOrFail(
+	root: string,
+	tip: string,
+): Promise<Awaited<ReturnType<typeof incomingReview>>> {
 	try {
-		return await incomingReviewPaths(root, tip);
+		return await incomingReview(root, tip);
 	} catch (error) {
 		const detail = error instanceof Error ? error.message : String(error);
 		throw new SpaceGitError(
@@ -318,6 +321,7 @@ export async function cloneSpace(
 		ownedGitDirs.delete(staging);
 		writeCadence(root, entry.cadence);
 		writeTracked(root, incoming.tracked);
+		const review = await reviewOrFail(root, incoming.tip);
 		const result: CloneSpaceResult = {
 			name,
 			path: root,
@@ -333,10 +337,9 @@ export async function cloneSpace(
 			// Raw, like every `--json` value: a format character is legitimate
 			// in a real filename, and JSON serialisation is the consumer's
 			// escaping. The text warning below escapes each name.
-			untrustedConfiguration: await reviewPathsOrFail(root, incoming.tip),
+			untrustedConfiguration: review.paths,
 		};
-		if (result.untrustedConfiguration.length)
-			result.warnings.push(describeReviewPaths(result.untrustedConfiguration));
+		if (review.paths.length) result.warnings.push(describeReviewPaths(review.paths, review.facts));
 		if (entry.layout === "bare") {
 			mkdirSync(join(root, "worktrees"));
 			ownedDirectories.add(join(root, "worktrees"));

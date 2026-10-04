@@ -750,17 +750,124 @@ const QUOTED_LINE_CAP = 2_000;
 export const REVIEW_PATHS_SHOWN = 20;
 
 /**
- * The review list as text: the count, the first {@link REVIEW_PATHS_SHOWN}
- * paths, and where the rest live. `--json` output is never truncated — this is
- * for the terminal only.
+ * What the review step knows about one reported path, without reading git
+ * again: its mode in the tip (or, for a deletion, in the base), and whether it
+ * was reported only because it sits behind a reviewed symlink.
  */
-export function describeReviewPaths(paths: readonly string[]): string {
-	const shown = paths.slice(0, REVIEW_PATHS_SHOWN).map((path) => quoteForTerminal(path));
-	const hidden = paths.length - shown.length;
-	const list = shown.join(", ");
-	return hidden > 0
-		? `${list} (${hidden} more; run with --json to see them all): these came from the hyperdrive; review before trusting this space.`
-		: `${list}: these came from the hyperdrive; review before trusting this space.`;
+export interface ReviewPathFacts {
+	executable: boolean;
+	symlink: boolean;
+	/** Reached through a reviewed symlink rather than named for itself. */
+	throughLink: boolean;
+}
+
+/** Risk classes, most dangerous first. The text list is cut in this order. */
+const REVIEW_CLASSES = [
+	{ singular: "settings or hook file", plural: "settings or hook files" },
+	{ singular: "executable", plural: "executables" },
+	{ singular: "symlink", plural: "symlinks" },
+	{ singular: "instruction file", plural: "instruction files" },
+	{ singular: "other file", plural: "other files" },
+] as const;
+
+const INSTRUCTION_NAMES = new Set([
+	"claude.md",
+	"claude.local.md",
+	"agents.md",
+	"gemini.md",
+	"hyper.md",
+	"memory.md",
+]);
+
+/**
+ * The risk class of one review path, 0 (settings and hooks, which run
+ * commands without anyone asking) to 4 (anything else). Pure: the facts come
+ * from the review step that already listed the trees.
+ */
+export function reviewPathClass(path: string, facts?: ReviewPathFacts): number {
+	const lower = path.normalize("NFC").toLowerCase();
+	const name = lower.slice(lower.lastIndexOf("/") + 1);
+	const under = (directory: string): boolean => lower.startsWith(directory);
+	const markdown = name.endsWith(".md");
+	if (
+		/^\.claude\/settings[^/]*\.json$/.test(lower) ||
+		under(".claude/hooks/") ||
+		under(".config/") ||
+		lower === ".vscode/settings.json" ||
+		((under(".cursor/") || under(".codex/") || under(".pi/")) && !markdown) ||
+		(under(".hyper/") && (facts?.executable || name.includes("hook")))
+	)
+		return 0;
+	if (facts?.executable || under("bin/")) return 1;
+	if (facts?.symlink || facts?.throughLink) return 2;
+	if (
+		INSTRUCTION_NAMES.has(name) ||
+		under(".claude/commands/") ||
+		under(".claude/agents/") ||
+		under(".claude/skills/") ||
+		under(".hyper/memory/") ||
+		lower === ".hyper/memory" ||
+		((under(".cursor/") || under(".codex/") || under(".pi/")) && markdown)
+	)
+		return 3;
+	return 4;
+}
+
+/**
+ * The review list for a terminal: most dangerous first (alphabetical within a
+ * class), the first {@link REVIEW_PATHS_SHOWN} of them, and how many of each
+ * class were left out. `paths` itself is never reordered: `--json` keeps the
+ * complete list in its sorted order.
+ */
+export function orderReviewPaths(
+	paths: readonly string[],
+	facts: ReadonlyMap<string, ReviewPathFacts> = new Map(),
+): { shown: string[]; hidden: number; hiddenSummary: string } {
+	const ranked = paths
+		.map((path) => ({ path, rank: reviewPathClass(path, facts.get(path)) }))
+		.sort((left, right) =>
+			left.rank !== right.rank
+				? left.rank - right.rank
+				: left.path < right.path
+					? -1
+					: left.path > right.path
+						? 1
+						: 0,
+		);
+	const shown = ranked.slice(0, REVIEW_PATHS_SHOWN).map((entry) => entry.path);
+	const counts = new Array<number>(REVIEW_CLASSES.length).fill(0);
+	for (const entry of ranked.slice(REVIEW_PATHS_SHOWN)) counts[entry.rank] += 1;
+	const hidden = ranked.length - shown.length;
+	const hiddenSummary = counts
+		.map((count, rank) =>
+			count === 0
+				? ""
+				: `${count} ${count === 1 ? REVIEW_CLASSES[rank].singular : REVIEW_CLASSES[rank].plural}`,
+		)
+		.filter(Boolean)
+		.join(", ");
+	return {
+		shown,
+		hidden,
+		hiddenSummary:
+			hidden === 0 ? "" : `and ${hidden} more: ${hiddenSummary}; run with --json to see them all`,
+	};
+}
+
+/**
+ * The review list as text, risk-ordered and bounded by
+ * {@link orderReviewPaths}. `--json` output is never truncated or reordered —
+ * this is for the terminal only.
+ */
+export function describeReviewPaths(
+	paths: readonly string[],
+	facts?: ReadonlyMap<string, ReviewPathFacts>,
+): string {
+	const { shown, hiddenSummary } = orderReviewPaths(paths, facts);
+	const list = shown.map((path) => quoteForTerminal(path)).join(", ");
+	return hiddenSummary === ""
+		? `${list}: these came from the hyperdrive; review before trusting this space.`
+		: `${list} (${hiddenSummary}): these came from the hyperdrive; review before trusting this space.`;
 }
 
 /** Redact credentials line by line: userinfo first, then every query value. */

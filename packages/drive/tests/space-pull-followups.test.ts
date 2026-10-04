@@ -1,5 +1,12 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderGitignore } from "#services/allowlist";
@@ -219,6 +226,36 @@ describe("pull follow-ups", () => {
 		const json = run("pull", "--json");
 		expect(json.status, flat(json.stderr)).toBe(0);
 		expect(JSON.parse(json.stdout).reviewPaths).toEqual(["bin/other‮txt.sh"]);
+	});
+	it("ranks settings, hooks and executables first in pull's bounded report", () => {
+		for (let index = 1; index <= 25; index += 1)
+			peerFile(`.claude/commands/a${String(index).padStart(2, "0")}.md`, "obey\n");
+		peerFile(".claude/settings.json", "{}\n");
+		peerFile(".hyper/hooks.sh", "#!/bin/sh\n");
+		peerFile("bin/payload", "#!/bin/sh\n");
+		chmodSync(join(peer, "bin", "payload"), 0o755);
+		git(["add", "-f", "--", "bin/payload"], peer);
+		publish();
+		const before = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+		const text = run("pull");
+		expect(text.status, flat(text.stderr)).toBe(0);
+		const shown = text.stdout
+			.split("\n")
+			.filter((line) => line.startsWith('  "'))
+			.map((line) => line.trim().slice(1, -1));
+		expect(shown).toHaveLength(20);
+		expect(shown.slice(0, 3)).toEqual([".claude/settings.json", ".hyper/hooks.sh", "bin/payload"]);
+		expect(text.stdout).toContain(
+			"  … and 8 more: 8 instruction files; run with --json to see them all",
+		);
+		// The same change as JSON: complete and in its plain sorted order.
+		spaceGit(root, ["reset", "-q", "--hard", before]);
+		const json = run("pull", "--json");
+		expect(json.status, flat(json.stderr)).toBe(0);
+		const listed: string[] = JSON.parse(json.stdout).reviewPaths;
+		expect(listed).toHaveLength(28);
+		expect(listed).toEqual([...listed].sort());
+		expect(JSON.parse(json.stdout)).not.toHaveProperty("reviewFacts");
 	});
 	it("prints status paths escaped in text and raw in --json", () => {
 		const path = "notes/bidi‮\\u202e.md";

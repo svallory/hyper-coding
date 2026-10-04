@@ -2,7 +2,7 @@ import * as p from "@clack/prompts";
 import { Flags } from "@oclif/core";
 import { SpaceCommand } from "#lib/space-command";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
-import { REVIEW_PATHS_SHOWN } from "#services/space-git";
+import { orderReviewPaths } from "#services/space-git";
 import { pullSpace } from "#services/space-history";
 
 export default class Pull extends SpaceCommand<typeof Pull> {
@@ -45,8 +45,11 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 						: undefined,
 			})),
 		}));
+		// Facts are for ranking the text report; `--json` keeps its complete,
+		// sorted `reviewPaths` and nothing else about them.
+		const { reviewFacts, ...reported } = result;
 		if (flags.json) {
-			this.log(JSON.stringify({ ok: true, ...result }, null, 2));
+			this.log(JSON.stringify({ ok: true, ...reported }, null, 2));
 			return;
 		}
 		this.log(
@@ -63,11 +66,12 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 				"Preserved this machine's tracked entries by re-rendering .gitignore; review and commit its local modification.",
 			);
 		if (result.reviewPaths.length > 0) {
+			// Most dangerous first, so the bound never hides a settings file or
+			// an executable behind twenty instruction files.
+			const { shown, hiddenSummary } = orderReviewPaths(result.reviewPaths, reviewFacts);
 			this.log("These can run commands or instruct agents; review them:");
-			for (const path of result.reviewPaths.slice(0, REVIEW_PATHS_SHOWN))
-				this.log(`  ${quoteForTerminal(path)}`);
-			const hidden = result.reviewPaths.length - REVIEW_PATHS_SHOWN;
-			if (hidden > 0) this.log(`  … ${hidden} more; run with --json to see them all`);
+			for (const path of shown) this.log(`  ${quoteForTerminal(path)}`);
+			if (hiddenSummary !== "") this.log(`  … ${hiddenSummary}`);
 		}
 	}
 }
