@@ -9,6 +9,7 @@ import {
 	classifyPushFailure,
 	driveCheckoutDir,
 	ensureDriveCheckout,
+	MANIFEST_LOCK_WAIT_MS,
 	readManifest,
 	removeSpace,
 	upsertSpace,
@@ -199,6 +200,7 @@ describe("ensureDriveCheckout", () => {
 });
 
 describe("concurrency between processes", () => {
+	const CHILD_LOCK_WAIT_MS = 120_000;
 	const distService = join(import.meta.dirname, "..", "dist", "services", "manifest.js");
 
 	/** Run one upsertSpace per child, several children at once, like two hooks hitting one checkout. */
@@ -212,7 +214,9 @@ describe("concurrency between processes", () => {
 							process.execPath,
 							[
 								"-e",
-								`import(${JSON.stringify(distService)}).then((m) => m.upsertSpace(${JSON.stringify(entry)}))`,
+								// Eight children each push to the remote while holding the lock;
+								// under a loaded machine the 5 s default wait timed out.
+								`import(${JSON.stringify(distService)}).then((m) => m.upsertSpace(${JSON.stringify(entry)}, { lockWaitMs: ${CHILD_LOCK_WAIT_MS} }))`,
 							],
 							{
 								env: {
@@ -238,20 +242,38 @@ describe("concurrency between processes", () => {
 		).then(() => undefined);
 	}
 
-	it("serialises two processes so both keep all of their entries", async (ctx) => {
-		if (!existsSync(distService)) {
-			// `ctx.skip()`, not `expect.skip()`: the latter is not a vitest API
-			// and throws, so this path failed the test it meant to skip.
-			ctx.skip("dist/services/manifest.js not built (run `bun run build` first)");
-			return;
-		}
+	it(
+		"serialises two processes so both keep all of their entries",
+		async (ctx) => {
+			if (!existsSync(distService)) {
+				// `ctx.skip()`, not `expect.skip()`: the latter is not a vitest API
+				// and throws, so this path failed the test it meant to skip.
+				ctx.skip("dist/services/manifest.js not built (run `bun run build` first)");
+				return;
+			}
+			ensureDriveCheckout(fixture.remote);
+			const entries = Array.from({ length: 8 }, (_, i) => sample(`p-${i}`));
+			await runChildren(entries);
+			expect(remoteNames().sort()).toEqual(entries.map((entry) => entry.name).sort());
+			// Nothing stranded locally.
+			expect(existsSync(join(driveCheckoutDir(), ".hyper-pending.jsonl"))).toBe(false);
+			expect(existsSync(join(driveCheckoutDir(), ".git", "hyper-manifest.lock"))).toBe(false);
+		},
+		CHILD_LOCK_WAIT_MS + 60_000,
+	);
+
+	it("the lock wait is injectable: a live holder makes a short wait give up early", () => {
 		ensureDriveCheckout(fixture.remote);
-		const entries = Array.from({ length: 8 }, (_, i) => sample(`p-${i}`));
-		await runChildren(entries);
-		expect(remoteNames().sort()).toEqual(entries.map((entry) => entry.name).sort());
-		// Nothing stranded locally.
-		expect(existsSync(join(driveCheckoutDir(), ".hyper-pending.jsonl"))).toBe(false);
-		expect(existsSync(join(driveCheckoutDir(), ".git", "hyper-manifest.lock"))).toBe(false);
+		const lock = join(driveCheckoutDir(), ".git", "hyper-manifest.lock");
+		// This test process is alive, so the lock is never reclaimed as stale.
+		writeFileSync(lock, `${process.pid}\n`);
+		const started = Date.now();
+		expect(() => upsertSpace(sample("waits"), { lockWaitMs: 300 })).toThrow(ManifestError);
+		const waited = Date.now() - started;
+		expect(waited).toBeGreaterThanOrEqual(250);
+		expect(waited).toBeLessThan(MANIFEST_LOCK_WAIT_MS);
+		expect(() => removeSpace("waits", { lockWaitMs: 0 })).toThrow(/held .* for too long/);
+		expect(readFileSync(lock, "utf8")).toBe(`${process.pid}\n`);
 	});
 });
 

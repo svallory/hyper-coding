@@ -414,8 +414,15 @@ export function readManifest(): Manifest {
 /* ------------------------------------------------------------------------- */
 
 const LOCK_FILE = "hyper-manifest.lock";
-const LOCK_ATTEMPTS = 50;
+/** How long a manifest write waits for another one by default. */
+export const MANIFEST_LOCK_WAIT_MS = 5_000;
 const LOCK_RETRY_MS = 100;
+
+/** How long a manifest write waits for the lock; tests under load pass more. */
+export interface ManifestLockOptions {
+	/** Give up after this many milliseconds (default `MANIFEST_LOCK_WAIT_MS`). */
+	lockWaitMs?: number;
+}
 
 /** Is a pid still running? EPERM means it exists but belongs to someone else. */
 function isProcessAlive(pid: number): boolean {
@@ -454,10 +461,17 @@ function lockOwner(path: string): number | null {
  * lock file carries the owning pid so a process killed mid-write does not
  * wedge the checkout forever: a lock whose owner is gone is reclaimed.
  */
-function withManifestLock<T>(dir: string, what: string, fn: () => T): T {
+function withManifestLock<T>(
+	dir: string,
+	what: string,
+	fn: () => T,
+	options: ManifestLockOptions = {},
+): T {
 	const path = lockPath(dir);
 	mkdirSync(join(dir, ".git"), { recursive: true });
-	for (let attempt = 0; attempt < LOCK_ATTEMPTS; attempt++) {
+	const deadline = Date.now() + (options.lockWaitMs ?? MANIFEST_LOCK_WAIT_MS);
+	// At least one attempt, however short the wait.
+	for (let first = true; first || Date.now() < deadline; first = false) {
 		try {
 			const fd = openSync(path, "wx");
 			try {
@@ -478,7 +492,7 @@ function withManifestLock<T>(dir: string, what: string, fn: () => T): T {
 				rmSync(path, { force: true });
 				continue;
 			}
-			sleepSync(LOCK_RETRY_MS);
+			sleepSync(Math.max(1, Math.min(LOCK_RETRY_MS, deadline - Date.now())));
 		}
 	}
 	throw new ManifestError(
@@ -944,18 +958,28 @@ function validateSpaceName(entry: SpaceEntry): void {
  * write with this one — that is exactly how two processes used to drop each
  * other's entries while both reported success.
  */
-export function upsertSpace(entry: SpaceEntry): void {
+export function upsertSpace(entry: SpaceEntry, options: ManifestLockOptions = {}): void {
 	const dir = driveCheckoutDir();
-	withManifestLock(dir, `upsert ${entry.name}`, () => {
-		validateSpaceName(entry);
-		applyMutation(dir, { name: entry.name, entry });
-	});
+	withManifestLock(
+		dir,
+		`upsert ${entry.name}`,
+		() => {
+			validateSpaceName(entry);
+			applyMutation(dir, { name: entry.name, entry });
+		},
+		options,
+	);
 }
 
 /** Remove a space from the manifest. */
-export function removeSpace(name: string): void {
+export function removeSpace(name: string, options: ManifestLockOptions = {}): void {
 	const dir = driveCheckoutDir();
-	withManifestLock(dir, `remove ${name}`, () => {
-		applyMutation(dir, { name });
-	});
+	withManifestLock(
+		dir,
+		`remove ${name}`,
+		() => {
+			applyMutation(dir, { name });
+		},
+		options,
+	);
 }
