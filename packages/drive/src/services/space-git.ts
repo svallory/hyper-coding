@@ -15,8 +15,11 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, rmdirSync, rmSync } from "node:fs";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import type { SyncCadence } from "#config/schema";
+// C-16: only services/remote.ts may name an SSH program, so the command-shape
+// knowledge lives there and is imported, not re-spelled here.
+import { sshCommandWithBatchMode } from "#services/remote";
 
 /**
  * The cadence values the space git dir may hold. Mirrors the union in
@@ -786,7 +789,7 @@ export function cloneProjectRepoBare(
 		if (env.GIT_SSH !== undefined && env.GIT_SSH_COMMAND === undefined) {
 			// nothing to do: git will use GIT_SSH exactly as configured
 		} else {
-			env.GIT_SSH_COMMAND = withBatchMode(env.GIT_SSH_COMMAND || readConfiguredSsh(env));
+			env.GIT_SSH_COMMAND = sshCommandWithBatchMode(env.GIT_SSH_COMMAND || readConfiguredSsh(env));
 		}
 	}
 	const protocols = [
@@ -845,29 +848,6 @@ export function cloneProjectRepoBare(
 		rmSync(gitDir, { recursive: true, force: true });
 		throw error;
 	}
-}
-
-/**
- * The OpenSSH client, spelled so C-16's boundary grep (tests/remote-exec.test.ts,
- * which fails any quoted program name outside services/remote.ts) still holds.
- * here SPAWNS the client: clone only hands git a `GIT_SSH_COMMAND`, and git is
- * the process that runs it. Written out rather than hidden so the exception is
- * visible to review.
- */
-const SSH_PROGRAM = "s" + "sh";
-
-/**
- * ssh honours the FIRST value of a repeated option, so BatchMode has to go
- * right after the ssh binary — appending would lose to a user's own
- * `-o BatchMode=no`. Any other command is a wrapper we must not touch.
- */
-function withBatchMode(configured: string | undefined): string {
-	if (configured === undefined || configured.trim() === "")
-		return `${SSH_PROGRAM} -o BatchMode=yes`;
-	const command = configured.trim();
-	const first = command.split(/\s+/)[0] ?? "";
-	if (basename(first) !== SSH_PROGRAM) return command;
-	return `${first} -o BatchMode=yes${command.slice(first.length)}`;
 }
 
 /**

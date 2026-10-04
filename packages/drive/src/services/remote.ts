@@ -19,7 +19,7 @@
 import { spawn } from "node:child_process";
 import { copyFile, cp, lstat, mkdir, readdir, readlink, rm, stat, symlink } from "node:fs/promises";
 import { constants as SIGNALS } from "node:os";
-import { dirname, join, relative, sep } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 
 /** Result of any runner operation. `code` is the process exit code (0 = ok). */
 export interface RunResult {
@@ -582,4 +582,34 @@ export class RemoteMachine implements MachineRunner {
 			args: ["-r", "--", src, target],
 		});
 	}
+}
+
+/**
+ * The OpenSSH client as a command word. Only this file may name it (C-16:
+ * `tests/remote-exec.test.ts` fails on any quoted `ssh`/`rsync`/`scp` outside
+ * `services/remote.ts`), so callers that need to reason about an SSH command
+ * import this instead of spelling the program themselves.
+ */
+const SSH_CLIENT = "ssh";
+
+/**
+ * BatchMode belongs in a `GIT_SSH_COMMAND` so a clone that cannot authenticate
+ * fails instead of waiting for a password that will never arrive on a
+ * noninteractive machine.
+ *
+ * ssh honours the FIRST value of a repeated option, so the option is inserted
+ * immediately after the program word rather than appended: a user who already
+ * wrote `-o BatchMode=no` must not win over the setting meant to apply here.
+ * A command whose first word is some other program is returned unchanged — a
+ * wrapper need not understand `-o` at all.
+ *
+ * Pure: no process, no environment, no filesystem. `undefined` in means the
+ * user configured nothing, and the default command out.
+ */
+export function sshCommandWithBatchMode(command: string | undefined): string | undefined {
+	if (command === undefined || command.trim() === "") return `${SSH_CLIENT} -o BatchMode=yes`;
+	const trimmed = command.trim();
+	const program = trimmed.split(/\s+/)[0] ?? "";
+	if (basename(program) !== SSH_CLIENT) return command;
+	return `${program} -o BatchMode=yes${trimmed.slice(program.length)}`;
 }
