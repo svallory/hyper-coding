@@ -811,6 +811,15 @@ pass "the canary keeps its owner, group, mode and full ACL across the re-run"
 # symlink into the canary, and every later check asserts that ~agent/.claude
 # links to each shared entry — so restore it or any subsequent setup run on
 # this machine fails with "projects is not a symlink".
+#
+# Restoring it FAITHFULLY is the point. `rm` + `mkdir` alone leaves an empty
+# 0775 directory owned by the agent with NO ACL on it, so the next setup run
+# reports agent-user.create as unsettled (the primary has no r-x entry on it)
+# and the run never reaches "nothing needed" on a kept container. The metadata
+# is the agent's to set, so the faithful restore is: put the links back, then
+# run the root script once more — the one thing that knows how to put the mode
+# and the ACLs back — and ASSERT both, so this cannot silently degrade into the
+# 0775 hole again.
 as_agent "bash -c 'rm -f /home/$agent/.claude && mkdir -p /home/$agent/.claude'" \
   || die 'could not restore the agent config dir'
 for entry in projects settings.json CLAUDE.md skills commands agents; do
@@ -825,7 +834,21 @@ for entry in projects settings.json CLAUDE.md skills commands agents; do
   [ "$(ssh_t16 "readlink /home/$agent/.claude/$entry")" = "$target" ] \
     || die "the agent's $entry link was not restored"
 done
+ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1 \
+  || die 'the root script failed on the canary restore — the machine is left half set up'
+[ "$(ssh_t16 "stat -c %a /home/$agent/.claude")" = "750" ] \
+  || { ssh_t16 "stat -c '%n %a %U' /home/$agent/.claude"; die "~agent/.claude is not 0750 after the restore"; }
+ssh_t16 "getfacl -c -p /home/$agent/.claude | grep -qx 'user:$primary:r-x'" \
+  || { ssh_t16 "getfacl -p /home/$agent/.claude"; die "~agent/.claude has no ACL entry for $primary after the restore"; }
 pass "the agent's config dir is usable again after the canary assertions"
+# …and the machine itself must be settled again: a kept container that reports
+# agent-user.create as unsettled is not usable, and that is exactly what the
+# empty 0775 restore used to leave behind.
+run_hyper > "$work_real/setup-after-canary.log" 2>&1 \
+  || { cat "$work_real/setup-after-canary.log"; die 'setup failed after the canary restore'; }
+grep -q "Nothing needed" "$work_real/setup-after-canary.log" \
+  || { cat "$work_real/setup-after-canary.log"; die 'setup does not report nothing needed after the canary restore'; }
+pass "a kept container still reports nothing needed after the canary assertions"
 
 # The container must not survive the script.
 echo "# container is removed by the trap"
