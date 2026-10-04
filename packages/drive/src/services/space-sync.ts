@@ -210,6 +210,21 @@ export async function commitSpace(
 			);
 		}
 		if (nested.length > 0) staged.splice(0, staged.length, ...stagedPaths(root));
+		// Every other machine refuses an incoming tree with a control character
+		// in a path (the refusal could not even name it safely), so committing
+		// one here would only break their next pull. The whole index is the
+		// tree that would be published, so a name committed earlier counts too.
+		// Format characters (bidi, ZWJ) stay legal: they are escaped on output.
+		const unsafeNames = spaceGit(root, ["ls-files", "-z"])
+			.stdout.split("\0")
+			.filter((path) => /\p{Cc}/u.test(path));
+		if (unsafeNames.length > 0)
+			throw new SpaceGitError(
+				`refusing to commit ${escapeControlCharacters(branch)}: ${unsafeNames.map(quoteForTerminal).join(", ")} ` +
+					`${unsafeNames.length === 1 ? "has a control character in its name" : "have control characters in their names"}, ` +
+					"and every other machine would refuse to pull it. Rename " +
+					`${unsafeNames.length === 1 ? "it" : "them"} without the control character, then ${caller === "init" ? "rerun `hyper space init`" : "commit again"}.`,
+			);
 		const inspection = await inspectStagedFiles(root, staged, allowSecrets);
 		const { secrets, allowedSecrets, largeFiles } = inspection;
 		for (const path of allowedSecrets)
