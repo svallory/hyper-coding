@@ -271,7 +271,9 @@ function resolveThroughLinks(start: string, links: Map<string, string>, limit = 
 	// segments after the link keep their place.
 	const segments = start.split("/");
 	let index = 0;
-	const seen = new Set<string>();
+	// No visited set: revisiting a link is not a failure. `self -> .` and a
+	// target that returns through the same directory both resolve correctly when
+	// the link is simply expanded again, and the hop cap catches genuine cycles.
 	let hops = 0;
 	while (index < segments.length) {
 		const next = segments[index++];
@@ -287,9 +289,7 @@ function resolveThroughLinks(start: string, links: Map<string, string>, limit = 
 		const candidate = parts.join("/");
 		const link = links.get(candidate);
 		if (link === undefined) continue;
-		if (++hops > limit || seen.has(candidate) || posix.isAbsolute(link) || link.includes("\\"))
-			return start;
-		seen.add(candidate);
+		if (++hops > limit || posix.isAbsolute(link) || link.includes("\\")) return start;
 		parts.pop();
 		segments.splice(index, 0, ...link.split("/"));
 	}
@@ -331,30 +331,60 @@ export async function incomingReviewPaths(
 	};
 	const reported = new Set<string>();
 	const changedPaths = [...new Set([...tipTree.keys(), ...baseTree.keys()])].filter(changed);
+	// Review roots are transitive: a link INSIDE a directory a reviewed link
+	// points at is itself reviewed, so `.claude/commands -> ../notes/cmds` plus
+	// `notes/cmds/sub -> ../../data/nested` still names changes under
+	// `data/nested`. Grow the set until nothing new appears; every candidate is
+	// resolved once.
+	const linkPaths = [...links.keys()].sort();
+	const lowerBound = (value: string): number => {
+		let low = 0;
+		let high = linkPaths.length;
+		while (low < high) {
+			const mid = (low + high) >> 1;
+			if (linkPaths[mid] < value) low = mid + 1;
+			else high = mid;
+		}
+		return low;
+	};
+	const reviewRoots = new Set<string>();
+	const reviewLinks = new Set<string>();
+	const pending = [...links.keys()].filter((path) => isReviewPath(path));
+	let guard = 0;
+	while (pending.length > 0 && guard++ < linkPaths.length + 1) {
+		const link = pending.pop()!;
+		if (reviewLinks.has(link)) continue;
+		reviewLinks.add(link);
+		const target = resolveThroughLinks(link, links);
+		if (reviewRoots.has(target)) continue;
+		reviewRoots.add(target);
+		// Links inside a newly covered root inherit its status.
+		for (let index = lowerBound(`${target}/`); index < linkPaths.length; index++) {
+			const candidate = linkPaths[index];
+			if (!candidate.startsWith(`${target}/`)) break;
+			if (!reviewLinks.has(candidate)) pending.push(candidate);
+		}
+	}
+	const underReviewRoot = (path: string): boolean => {
+		const parts = path.split("/");
+		for (let index = 1; index <= parts.length; index++)
+			if (reviewRoots.has(parts.slice(0, index).join("/"))) return true;
+		return false;
+	};
 	for (const path of changedPaths) {
 		const tipEntry = tipTree.get(path);
 		const baseEntry = baseTree.get(path);
 		// A changed path counts when it is itself a review path, when it sits
 		// behind a symlinked directory that a review path points at, or when it
 		// gained (or lost) the executable bit.
-		const resolved = resolveThroughLinks(path, links);
 		if (
 			isReviewPath(path) ||
-			isReviewPath(resolved) ||
+			isReviewPath(resolveThroughLinks(path, links)) ||
+			underReviewRoot(path) ||
 			tipEntry?.mode === "100755" ||
 			baseEntry?.mode === "100755"
 		)
 			reported.add(path);
-	}
-	// A reviewed path that is a symlink is only half the story: whoever wrote it
-	// can change the file behind it later without the link itself changing. The
-	// target may be a file several hops away, or a whole directory.
-	for (const [path, entry] of tipTree) {
-		if (entry.mode !== "120000" || !isReviewPath(path)) continue;
-		const target = resolveThroughLinks(path, links);
-		for (const changed of changedPaths) {
-			if (changed === target || changed.startsWith(`${target}/`)) reported.add(changed);
-		}
 	}
 	return [...reported].sort();
 }

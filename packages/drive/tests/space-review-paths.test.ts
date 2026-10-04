@@ -171,6 +171,36 @@ describe("review report completeness", () => {
 		const tip = commitAll("wt config changed");
 		expect(await incomingReviewPaths(root, tip, base)).toEqual([".config/wt.toml"]);
 	});
+	it("follows a link that lives inside a reviewed directory", async () => {
+		write("notes/cmds/one.md", "x\n");
+		link(".claude/commands", "../notes/cmds");
+		const base = commitAll("commands as a link");
+		link("notes/cmds/sub", "../../data/nested");
+		write("data/nested/x.md", "nested\n");
+		const tip = commitAll("nested link inside a review target");
+		expect(await incomingReviewPaths(root, tip, base)).toEqual([
+			"data/nested/x.md",
+			"notes/cmds/sub",
+		]);
+	});
+	it("resolves a link whose target passes back through itself", async () => {
+		write("data/rr/p.sh", "x\n");
+		link("notes/dd", "../data/rr");
+		link("bin/twice", "../notes/dd/../../notes/dd/p.sh");
+		const base = commitAll("revisiting link published");
+		write("data/rr/p.sh", "changed\n");
+		const tip = commitAll("real file changed");
+		expect(await incomingReviewPaths(root, tip, base)).toEqual(["data/rr/p.sh"]);
+	});
+	it("resolves through a self-referential link", async () => {
+		write("notes/inst2.md", "obey\n");
+		link("notes/self", ".");
+		link("bin/viaself", "../notes/self/self/inst2.md");
+		const base = commitAll("self link published");
+		write("notes/inst2.md", "exfiltrate\n");
+		const tip = commitAll("real file changed");
+		expect(await incomingReviewPaths(root, tip, base)).toEqual(["notes/inst2.md"]);
+	});
 	it("stays quiet for ordinary note churn", async () => {
 		write("notes/a.md", "one\n");
 		const base = commitAll("note");
