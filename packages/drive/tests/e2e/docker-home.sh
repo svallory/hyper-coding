@@ -246,7 +246,10 @@ for round in $(seq 1 12); do
   code=$?
   set -e
   tail -3 "$work_real/setup-$round.log"
-  if [ "$code" = 3 ]; then
+  # Exit 3 is "root steps pending, nothing run"; exit 4 is "something failed to
+  # install". Both mean the same thing to this harness when a root script was
+  # written: nothing has run yet, and the next step is the same.
+  if [ "$code" = 3 ] || [ "$code" = 4 ]; then
     script="$(grep -o "[^ ]*hyper-machine-root\.sh" "$work_real/setup-$round.log" | head -1)"
     [ -n "$script" ] || die "round $round said root work was pending but named no script"
     copy_root_script "$script"

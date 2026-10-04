@@ -595,8 +595,11 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		if (unattendedRootPath !== null)
 			messages.push(pendingRootMessage(machine?.name ?? "this machine", unattendedRootPath));
 		if (report.failed.length > 0)
+			// Not "tool(s)": a failed entry can be any task whose install threw —
+			// including a rootless-Docker install that could not reach the agent —
+			// and calling that a tool failure would send the user looking for one.
 			messages.push(
-				`${report.failed.length} tool(s) could not be installed. Fix the failures above and re-run setup.`,
+				`${report.failed.length} setup step(s) could not be completed. Fix the failures above and re-run setup.`,
 			);
 		const exit = exitCodeFor(unattendedRootPath, report.failed.length);
 		if (exit !== null) this.error(messages.join("\n"), { exit });
