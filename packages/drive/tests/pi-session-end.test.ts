@@ -8,6 +8,7 @@
 import {
 	type ChildProcess,
 	execFileSync,
+	spawn as realSpawn,
 	type SpawnOptions,
 	type spawn,
 	spawnSync,
@@ -17,6 +18,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
@@ -27,17 +29,26 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderGitignore } from "#services/allowlist";
+import {
+	lastSessionEndEntry,
+	lastSessionEndFailure,
+	SESSION_END_LOG,
+} from "#services/session-end-log";
 import { initSpaceGitDir, spaceGit } from "#services/space-git";
 import { commitSpace } from "#services/space-sync";
 import { makeBareSpace } from "#tests/tmp-space";
 import hyperdrive from "../pi/hyperdrive.ts";
 import {
 	absolutePathEntries,
+	appendFailureLine,
 	childEnv,
 	createRealDeps,
 	entryText,
 	MISSING_CLI_LINE,
 	OUTDATED_CLI_LINE,
+	SESSION_END_LOG as PI_SESSION_END_LOG,
+	PROBE_TIMEOUT_DETAIL,
+	PROBE_TIMEOUT_MS,
 	type ProbeResult,
 	parseSpaceAnswer,
 	realDeps,
@@ -82,6 +93,7 @@ interface FakeDeps extends SessionEndDeps {
 	written: Map<string, string>;
 	payloads: string[];
 	lines: string[];
+	logged: { gitDir: string; sessionId: string; detail: string }[];
 	/** What `probe` answers with. Replace to simulate an old or missing CLI. */
 	answer: ProbeResult | (() => ProbeResult);
 	writeThrows?: boolean;
@@ -107,6 +119,7 @@ function fakeDeps(overrides: Partial<FakeDeps> = {}): FakeDeps {
 		written: new Map(),
 		payloads: [],
 		lines: [],
+		logged: [],
 		answer: { status: 0, stdout: answerJson(), timedOut: false },
 		resolveCli: () => BIN,
 		probe: async (bin, cwd, timeoutMs) => {
@@ -125,6 +138,9 @@ function fakeDeps(overrides: Partial<FakeDeps> = {}): FakeDeps {
 		},
 		notify: (line) => {
 			deps.lines.push(line);
+		},
+		logFailure: (gitDir, sessionId, detail) => {
+			deps.logged.push({ gitDir, sessionId, detail });
 		},
 		...overrides,
 	};
@@ -241,7 +257,8 @@ describe("the pi extension on session_shutdown", () => {
 	it("asks the CLI once, in the session's directory, with a bounded timeout", async () => {
 		const deps = fakeDeps();
 		await saveSessionEnd(facts(), deps);
-		expect(deps.calls).toEqual([{ bin: BIN, cwd: spaceNotes, timeoutMs: 2_000 }]);
+		expect(deps.calls).toEqual([{ bin: BIN, cwd: spaceNotes, timeoutMs: 5_000 }]);
+		expect(PROBE_TIMEOUT_MS).toBe(5_000);
 	});
 
 	it("writes the payload under the git dir the CLI named and spawns it from the session's cwd", async () => {
@@ -348,6 +365,84 @@ describe("the pi extension on session_shutdown", () => {
 		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
 		expect(deps.lines).toEqual([]);
 		expect(deps.payloads).toEqual([]);
+		expect(deps.spawns).toEqual([]);
+		// /spaces/outer does not exist on this machine: no git dir, no log line.
+		expect(deps.logged).toEqual([]);
+	});
+
+	it("logs one failed line, readable by `space status`, when the probe times out near a space", async () => {
+		const gitDir = join(directory, "space", ".hyper", "space.git");
+		const nested = join(directory, "space", "notes", "deep");
+		mkdirSync(gitDir, { recursive: true });
+		mkdirSync(nested, { recursive: true });
+		const timedOut: ProbeResult = { status: null, stdout: "", timedOut: true };
+		const deps = createRealDeps({
+			resolveCli: () => BIN,
+			probe: async () => timedOut,
+			writePayload: () => {
+				throw new Error("a timed-out probe must not write a payload");
+			},
+			spawnWorker: () => {
+				throw new Error("a timed-out probe must not spawn anything");
+			},
+			notify: (line) => {
+				throw new Error(`a timed-out probe must print nothing, not ${line}`);
+			},
+		});
+		expect(await saveSessionEnd(facts({ cwd: nested }), deps)).toBeUndefined();
+		const log = readFileSync(join(gitDir, SESSION_END_LOG), "utf8");
+		expect(log.split("\n").filter(Boolean)).toHaveLength(1);
+		expect(statSync(join(gitDir, SESSION_END_LOG)).mode & 0o777).toBe(0o600);
+		// The real reader `hyper space status` uses reports it as a failure.
+		const failure = lastSessionEndFailure(gitDir);
+		expect(failure).toEqual({
+			at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+			session: id,
+			outcome: "failed",
+			detail: PROBE_TIMEOUT_DETAIL,
+		});
+		expect(new Date(failure!.at).getTime()).toBeGreaterThan(Date.now() - 60_000);
+		// Nothing else appeared in the git dir: no payload, no lock.
+		expect(readdirSync(gitDir)).toEqual([SESSION_END_LOG]);
+	});
+
+	it("writes nothing anywhere when the probe times out outside a space", async () => {
+		const outside = join(directory, "plain", "project");
+		mkdirSync(outside, { recursive: true });
+		const before = listTree(directory);
+		const deps = fakeDeps({
+			answer: { status: null, stdout: "", timedOut: true },
+			logFailure: (gitDir, sessionId, detail) => appendFailureLine(gitDir, sessionId, detail),
+		});
+		expect(await saveSessionEnd(facts({ cwd: outside }), deps)).toBeUndefined();
+		expect(deps.lines).toEqual([]);
+		expect(deps.payloads).toEqual([]);
+		expect(deps.spawns).toEqual([]);
+		expect(listTree(directory)).toEqual(before);
+	});
+
+	it("keeps the worker's log format, shared by the pi extension and the CLI", () => {
+		expect(PI_SESSION_END_LOG).toBe(SESSION_END_LOG);
+		const gitDir = join(directory, "space.git");
+		mkdirSync(gitDir);
+		// A hostile session id and detail are folded exactly as the worker folds them.
+		appendFailureLine(gitDir, "a\tb\nc\u0007d", "probe\ttimed\r\nout\u200b");
+		expect(lastSessionEndEntry(gitDir)).toMatchObject({
+			session: "a b cd",
+			outcome: "failed",
+			detail: "probe timed out",
+		});
+		expect(readFileSync(join(gitDir, SESSION_END_LOG), "utf8").split("\t")).toHaveLength(4);
+		// An empty id is "-", as the worker writes it.
+		appendFailureLine(gitDir, "", PROBE_TIMEOUT_DETAIL);
+		expect(lastSessionEndFailure(gitDir)?.session).toBe("-");
+		// Rotation at the worker's 64 KiB limit, into one previous generation.
+		writeFileSync(join(gitDir, SESSION_END_LOG), "x".repeat(64 * 1024));
+		appendFailureLine(gitDir, id, PROBE_TIMEOUT_DETAIL);
+		expect(statSync(join(gitDir, `${SESSION_END_LOG}.1`)).size).toBe(64 * 1024);
+		expect(lastSessionEndFailure(gitDir)?.session).toBe(id);
+		// An unwritable directory is not an exception into pi.
+		expect(() => appendFailureLine(join(directory, "absent"), id, "x")).not.toThrow();
 	});
 
 	it("prints the missing-CLI line only in a space, and does not guess", async () => {
@@ -577,6 +672,30 @@ describe("what the children get (N2, N5)", () => {
 		);
 	});
 
+	it("probes with the same injected spawn: no stdin, stdout piped, absolute PATH only", async () => {
+		vi.stubEnv(
+			"PATH",
+			["./bin", ".", "", "node_modules/.bin", "/opt/hyper/bin", "/usr/bin"].join(delimiter),
+		);
+		const calls: { bin: string; args: readonly string[]; options: SpawnOptions }[] = [];
+		const deps: SessionEndDeps = createRealDeps({
+			spawn: ((bin: string, args: readonly string[], options: SpawnOptions) => {
+				calls.push({ bin, args, options });
+				// A real, harmless child so the probe settles the way it really does.
+				return realSpawn("/bin/sh", ["-c", 'printf "%s" "{}"'], options);
+			}) as unknown as typeof spawn,
+		});
+		const result = await deps.probe("/opt/hyper/bin/hyper", directory, 5_000);
+		expect(result).toEqual({ status: 0, stdout: "{}", timedOut: false });
+		expect(calls).toHaveLength(1);
+		expect(calls[0]!.bin).toBe("/opt/hyper/bin/hyper");
+		expect(calls[0]!.args).toEqual(["space", "detect", "--json"]);
+		expect(calls[0]!.options.cwd).toBe(directory);
+		expect(calls[0]!.options.stdio).toEqual(["ignore", "pipe", "ignore"]);
+		expect(calls[0]!.options.env?.PATH).toBe(["/opt/hyper/bin", "/usr/bin"].join(delimiter));
+		expect(calls[0]!.options.env?.HYPER_SKIP_NEW_VERSION_CHECK).toBe("1");
+	});
+
 	it("kills a probe that hangs at the bound, and the handler returns", async () => {
 		// `sleep 30` never answers; the bound is 250 ms here.
 		const bin = join(directory, "sleeper");
@@ -619,9 +738,10 @@ describe("the real dependencies", () => {
 		// O_EXCL really is exclusive: the same name twice is a refusal, and the
 		// first file is untouched.
 		const name = "session-end-payload.fixed";
-		const only = realDeps.writePayload(gitDir, '{"session_id":"first"}', name);
+		const fixed = createRealDeps({ payloadName: () => name });
+		const only = fixed.writePayload(gitDir, '{"session_id":"first"}');
 		expect(only).toBe(join(gitDir, name));
-		expect(() => realDeps.writePayload(gitDir, '{"session_id":"second"}', name)).toThrow();
+		expect(() => fixed.writePayload(gitDir, '{"session_id":"second"}')).toThrow();
 		expect(readFileSync(only, "utf8")).toBe('{"session_id":"first"}');
 	});
 
@@ -768,8 +888,30 @@ describe("against the real built CLI, in a throwaway space", () => {
 				new RegExp(`^${escapeRegExp(gitDir)}/session-end-payload\\.`),
 			);
 			expect(deps.spawns[0]!.cwd).toBe(nested);
+			// A probe that overruns its bound leaves one failed line, and the real
+			// `hyper space status` reports it.
+			const slow = createRealDeps({
+				resolveCli: () => hyper,
+				probe: async () => ({ status: null, stdout: "", timedOut: true }),
+				notify: (line) => deps.lines.push(line),
+			});
+			expect(await saveSessionEnd(facts({ cwd: nested }), slow)).toBeUndefined();
+			expect(deps.lines).toEqual([]);
+			const status = JSON.parse(runCli(["space", "status", "--json"], space).stdout) as {
+				sessionEndFailure: { session: string; outcome: string; detail: string } | null;
+			};
+			expect(status.sessionEndFailure).toMatchObject({
+				session: id,
+				outcome: "failed",
+				detail: "probe timed out",
+			});
 		} finally {
 			rmSync(fix, { recursive: true, force: true });
 		}
 	}, 60_000);
 });
+
+/** Every path below `root`, sorted: "nothing was written anywhere" made checkable. */
+function listTree(root: string): string[] {
+	return readdirSync(root, { recursive: true, encoding: "utf8" }).sort();
+}
