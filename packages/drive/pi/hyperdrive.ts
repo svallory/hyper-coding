@@ -6,7 +6,9 @@
  * session in a space whose cadence is `session-end` or `session-end+push`
  * saves itself the way a Claude session does: `session_shutdown` writes the
  * payload and starts the same detached `hyper space commit --session-end`
- * worker, so pi's exit is never held by a commit or a push. Failures land in
+ * worker, so pi's exit is never held by a commit or a push — only by one
+ * read-only `hyper space detect --json` call, killed at 5 s. Failures, and a
+ * call that overran that bound in a space, land in
  * `.hyper/space.git/session-end.log` and surface in `hyper space status`.
  *
  * Only `quit` saves. `/new`, `/resume`, `/fork` and `/reload` start over in
@@ -14,7 +16,7 @@
  * nothing.
  *
  * The whole handler is wrapped: pi awaits `session_shutdown` with no timeout,
- * so it must return in milliseconds and must never throw into pi.
+ * so everything it waits for is bounded and it must never throw into pi.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { realDeps, type SessionEndDeps, type SessionFacts, saveSessionEnd } from "./session-end.ts";
