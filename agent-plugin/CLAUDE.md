@@ -47,6 +47,19 @@ there is exactly one copy of it, and the scripts source it through
   session. The foreground still prints one line for a missing or unloadable
   CLI and always exits zero. Test the detachment by killing the hook's
   process group and waiting for the log line.
+- **A hook never looks a command up on the inherited PATH.** Hooks run in
+  the session's directory, where a relative PATH entry (`./bin`, `.`, an
+  empty entry) would run a project's or space's own `bin/bash`, `bin/git` or
+  `bin/hyper` (and a space's `bin/` is synced from peers). `hooks.json` and
+  `kimi.plugin.json` start every hook as `/bin/sh …/hyper-hook.sh <script>`,
+  and every hook script sources `hyper-safe-path.sh` and calls
+  `hyper_safe_path` before its first command, locating it with
+  `${BASH_SOURCE[0]%/*}`, not `dirname`. A new hook does the same, and its
+  test plants binaries (`plant_binaries` in `tests/helpers.sh`) behind a
+  hostile PATH.
+- **Kimi runs plugin hooks with the plugin root as cwd** and passes the
+  session's directory only as `cwd` in the payload, so `$PWD`-based space
+  detection does not see the session there.
 - **Test hooks by piping real hook JSON into the script** — never by running
   the command in your shell, which has an environment hooks don't inherit
   (proto/mise/nvm shims, homebrew PATH):
