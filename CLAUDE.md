@@ -188,11 +188,19 @@ Use friendly, conversational language for error messages and user-facing output:
 
 ## Important Notes
 
-- `hyper-kits/nextjs/` is a **git submodule** — the only submodule in the repo
+- `hyper-kits/nextjs/` is a **git submodule** — the only submodule in the repo.
+  gen's e2e tests (`packages/gen/tests/e2e/`) resolve templates from it, so
+  they need it initialised: `git submodule update --init hyper-kits/nextjs`.
 - The packages under `packages/` are NOT submodules — regular monorepo directories
 - Tests live in each package's `tests/` directory
 - TypeScript strict mode is disabled (to be re-enabled incrementally)
 - DTS generation is disabled (inflection types issue — to be fixed)
+- **Do not verify with `moon run`** — on this setup it triggers a `bun install`
+  that rewrites the root `package.json` (drops `packageManager`, adds
+  `engines.node`). Use package-local `bun run <script>` instead.
+- **A stale `tsbuildinfo` can make a build silently skip.** When a package
+  builds green but `dist/` did not change, delete the package's
+  `*.tsbuildinfo` (or force the build) before trusting the output.
 
 ---
 
