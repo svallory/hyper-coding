@@ -637,6 +637,59 @@ run_dirs > "$work_real/setup-no-acl.log" 2>&1 || { cat "$work_real/setup-no-acl.
 grep -q late.txt "$work_real/setup-no-acl.log" || die 'no-ACL repair did not name the file'
 [ "$(denied "/home/$primary/late.txt")" = no ] || die 'no-ACL file was not reprotected'
 pass '8a-no-acl - setup repairs an inode with no extended ACL while watcher is stopped'
+
+# 8a-wedge. An agent-owned 0700 directory inside a shared tree is a state the
+#     primary can neither read nor repair. Before this, find descended into it,
+#     printed "Permission denied" and exited nonzero, so EVERY later setup run
+#     died in the shared-tree repair — before the home protection, which is the
+#     documented fallback when the watcher is down. The agent could therefore
+#     suppress its own privacy repair at will. The run must now succeed, protect
+#     the exposed home file, and warn about what it had to skip.
+# One `bash -c` per step: `as_agent` expands to `sudo -u agent <cmd>`, which
+# applies only to the FIRST word of an && list, so a bare `&&` would run the
+# chmod as the primary instead of the agent.
+as_agent "bash -c 'mkdir -p /home/$primary/work/agentpriv && chmod 700 /home/$primary/work/agentpriv'" \
+  || die 'could not create the agent-owned unreadable directory'
+as_agent "bash -c 'mkdir -p /home/$primary/.claude/projects/agentpriv && chmod 700 /home/$primary/.claude/projects/agentpriv'" \
+  || die 'could not create the agent-owned unreadable transcripts directory'
+# The home's default ACL denies the agent, so a new file is protected on
+# creation; remove the inherited deny explicitly or there is nothing to repair.
+ssh_t16 "printf 'exposed\n' > /home/$primary/wedged.txt && chmod 0644 /home/$primary/wedged.txt && setfacl -x u:$agent /home/$primary/wedged.txt"
+[ "$(denied "/home/$primary/wedged.txt")" = yes ] || die 'wedge fixture is not exposed'
+# The primary must not be able to list it: prove the fixture before setup runs.
+ssh_t16 "sudo -u $agent test -r /home/$primary/work/agentpriv" || die 'the agent cannot read its own directory'
+ssh_t16 "sudo -u $primary test -r /home/$primary/work/agentpriv" && die 'the primary can read the agent-owned work directory'
+ssh_t16 "sudo -u $primary test -r /home/$primary/.claude/projects/agentpriv" && die 'the primary can read the agent-owned transcripts directory'
+if ! run_dirs > "$work_real/setup-wedged.log" 2>&1; then
+  cat "$work_real/setup-wedged.log"
+  die 'an agent-owned unreadable directory made setup fail'
+fi
+[ "$(denied "/home/$primary/wedged.txt")" = no ] \
+  || die 'setup exited 0 but left the exposed home file readable'
+ssh_t16 "getfacl -c -p /home/$primary/wedged.txt | grep -qx 'user:$agent:---'" \
+  || die 'the named-user deny was not applied to wedged.txt'
+grep -q '1 unreadable work entries' "$work_real/setup-wedged.log" \
+  || { cat "$work_real/setup-wedged.log"; die 'no warning for the unreadable work entry'; }
+grep -q 'agentpriv' "$work_real/setup-wedged.log" || die 'the warning did not name the skipped entry'
+grep -q '1 unreadable projects entries' "$work_real/setup-wedged.log" \
+  || { cat "$work_real/setup-wedged.log"; die 'no warning for the unreadable projects entry'; }
+grep -q 'cannot inspect or repair inside them' "$work_real/setup-wedged.log" \
+  || die 'the warning does not state the limit'
+ssh_t16 "stat -c %U /home/$primary/work/agentpriv" | grep -qx "$agent" \
+  || die 'setup changed the owner of the skipped directory'
+pass '8a-wedge - an agent-owned unreadable shared dir is skipped, not fatal, and the home is still protected'
+# The primary still owns the shared trees' own metadata, so the wedge does not
+# stop later work; remove it so the remaining assertions start clean.
+as_agent "rm -rf /home/$primary/work/agentpriv /home/$primary/.claude/projects/agentpriv" \
+  || die 'could not remove the wedge directories as the agent'
+# `run_dirs` exits 1 when nothing needed doing, so judge the report, not the code:
+# recovery means the task settles again with nothing applied and nothing failed.
+run_dirs > "$work_real/setup-recovered.log" 2>&1 || true
+grep -q '"alreadyOk":\["agent-user.dirs"\]' "$work_real/setup-recovered.log" \
+  || { cat "$work_real/setup-recovered.log"; die 'setup did not settle again once the wedge was removed'; }
+grep -q '"failed":\[\]' "$work_real/setup-recovered.log" \
+  || { cat "$work_real/setup-recovered.log"; die 'setup reported a failure after the wedge was removed'; }
+pass '8a-wedge-recovery - setup settles again once the agent removes the wedge'
 start_watcher
 run_hyper > "$work_real/setup-after-drift.log" 2>&1 || { cat "$work_real/setup-after-drift.log"; die 'full CLI setup failed'; }
 [ "$(denied "/home/$primary/late.txt")" = no ] || die 'full CLI left late.txt readable'
@@ -753,6 +806,26 @@ if [ "$before_canary" != "$after_canary" ]; then
   die "root changed the canary through the agent's planted symlink"
 fi
 pass "the canary keeps its owner, group, mode and full ACL across the re-run"
+
+# A kept container must stay usable. The canary leaves ~agent/.claude as a
+# symlink into the canary, and every later check asserts that ~agent/.claude
+# links to each shared entry — so restore it or any subsequent setup run on
+# this machine fails with "projects is not a symlink".
+as_agent "bash -c 'rm -f /home/$agent/.claude && mkdir -p /home/$agent/.claude'" \
+  || die 'could not restore the agent config dir'
+for entry in projects settings.json CLAUDE.md skills commands agents; do
+  target="/home/$primary/.claude/$entry"
+  [ -e "$target" ] || continue
+  as_agent "ln -sfn $target /home/$agent/.claude/$entry" \
+    || die "could not restore the agent's $entry link"
+done
+for entry in projects settings.json CLAUDE.md skills commands agents; do
+  target="/home/$primary/.claude/$entry"
+  [ -e "$target" ] || continue
+  [ "$(ssh_t16 "readlink /home/$agent/.claude/$entry")" = "$target" ] \
+    || die "the agent's $entry link was not restored"
+done
+pass "the agent's config dir is usable again after the canary assertions"
 
 # The container must not survive the script.
 echo "# container is removed by the trap"
