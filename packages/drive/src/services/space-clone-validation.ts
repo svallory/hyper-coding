@@ -1,11 +1,8 @@
 import { isAbsolute, normalize } from "node:path";
 import { isValidSpaceName, type SpaceEntry } from "#config/schema";
+import { quoteForTerminal } from "#lib/terminal-text";
 import { normaliseTrackedEntry } from "#services/allowlist";
-import {
-	checkProjectBranchName,
-	escapeControlCharacters,
-	redactGitSecrets,
-} from "#services/space-git";
+import { checkProjectBranchName, redactGitSecrets } from "#services/space-git";
 
 /** Never print embedded credentials from untrusted manifest data. */
 export function redactCloneUrl(value: string): string {
@@ -143,7 +140,7 @@ export function validateCloneEntry(entry: SpaceEntry, remote: string): void {
 				`repos[${index}].url`,
 				// `JSON.stringify` escapes C0 only, so U+009B, U+202E and DEL
 				// would be printed raw by the very message refusing them.
-				`unsupported URL ${JSON.stringify(escapeControlCharacters(redactCloneUrl(String(repo.url))))}; use HTTPS or SSH without an embedded password (local paths require a local hyperdrive)`,
+				`unsupported URL ${quoteForTerminal(redactCloneUrl(String(repo.url)))}; use HTTPS or SSH without an embedded password (local paths require a local hyperdrive)`,
 			);
 		if (
 			typeof repo.default_branch !== "string" ||

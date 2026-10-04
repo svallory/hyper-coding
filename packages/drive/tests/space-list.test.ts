@@ -1,8 +1,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { stringify as stringifyYaml } from "yaml";
 import type { SpaceEntry } from "#config/schema";
-import { upsertSpace } from "#services/manifest";
+import { driveCheckoutDir, upsertSpace } from "#services/manifest";
 import {
 	flat,
 	git,
@@ -66,6 +67,36 @@ describe("hyper space list", () => {
 		const json = spawnCli(["space", "list", "--json"], fixture);
 		expect(json.status, flat(json.stderr)).toBe(0);
 		expect(JSON.parse(json.stdout)).toEqual({ spaces: [entry] });
+	});
+
+	it("escapes hostile manifest values in the table and warnings, and keeps --json raw", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		init();
+		process.env.HYPER_HOME = fixture.hyperHome;
+		// Values `space clone` would refuse, but `space list` still echoes them,
+		// so they must not drive the terminal that prints them.
+		const hostile: SpaceEntry = {
+			...entry,
+			branch: "space/re\u202ehcraes",
+			path: "/tmp/spaces/a\u009b2J\u001b]0;TITLE\u0007b",
+			repos: [{ url: "", default_branch: "main", slug: "s\u001b[31mred" }],
+		};
+		upsertSpace(entry);
+		const manifest = join(driveCheckoutDir(), "spaces.yaml");
+		writeFileSync(manifest, stringifyYaml({ spaces: [hostile] }));
+		const table = spawnCli(["space", "list"], fixture);
+		expect(table.status, flat(table.stderr)).toBe(0);
+		for (const stream of [table.stdout, table.stderr])
+			expect(
+				/[\p{Cc}\p{Cf}]/u.test(stream.replace(/[\n\t]/g, "")),
+				"raw control or format character",
+			).toBe(false);
+		expect(table.stdout).toContain("space/re\\u202ehcraes");
+		expect(table.stdout).toContain("/tmp/spaces/a\\u009b2J\\u001b]0;TITLE\\u0007b");
+		expect(flat(table.stderr)).toContain("research/s\\u001b[31mred has no project URL");
+		const json = spawnCli(["space", "list", "--json"], fixture);
+		expect(json.status, flat(json.stderr)).toBe(0);
+		expect(JSON.parse(json.stdout)).toEqual({ spaces: [hostile] });
 	});
 
 	it("prints 'no spaces yet' for an empty manifest", (ctx) => {

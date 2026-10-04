@@ -185,6 +185,55 @@ describe("pull follow-ups", () => {
 		expect(result.stderr).not.toContain("\u0007");
 		expect(result.stderr).toContain("\\u0007");
 	});
+	it("names a C1 or DEL path in pull's refusal escaped, never raw", () => {
+		// JSON.stringify escapes C0 only: U+009B and DEL used to reach stderr as
+		// themselves inside the very refusal that named them.
+		for (const [path, escaped] of [
+			["bin/b\u009b2Jx", '"bin/b\\u009b2Jx"'],
+			["bin/c\u007f", '"bin/c\\u007f"'],
+		]) {
+			peerFile(path, "#!/bin/sh\n");
+			publish();
+			const result = run("pull");
+			expect(result.status, path).toBe(2);
+			for (const stream of [result.stdout, result.stderr])
+				expect(/[\p{Cc}\p{Cf}]/u.test(stream.replace(/[\n\t]/g, "")), path).toBe(false);
+			expect(flat(result.stderr), path).toContain(escaped);
+			git(["rm", "-q", "--", path], peer);
+			publish();
+		}
+	});
+	it("prints a bidi review path escaped in text and raw in --json", () => {
+		// The spoof the warning exists to catch: `bin/run<RLO>hs.txt` displays as
+		// `bin/runtxt.sh` when printed raw.
+		const path = "bin/run‮hs.txt";
+		peerFile(path, "#!/bin/sh\n");
+		publish();
+		const text = run("pull");
+		expect(text.status, flat(text.stderr)).toBe(0);
+		for (const stream of [text.stdout, text.stderr]) expect(stream).not.toContain("‮");
+		expect(text.stdout).toContain('"bin/run\\u202ehs.txt"');
+		// The next change, read as JSON: the raw name, recoverable.
+		peerFile("bin/other‮txt.sh", "#!/bin/sh\n");
+		publish();
+		const json = run("pull", "--json");
+		expect(json.status, flat(json.stderr)).toBe(0);
+		expect(JSON.parse(json.stdout).reviewPaths).toEqual(["bin/other‮txt.sh"]);
+	});
+	it("prints status paths escaped in text and raw in --json", () => {
+		const path = "notes/bidi‮\\u202e.md";
+		mkdirSync(join(root, "notes"), { recursive: true });
+		writeFileSync(join(root, path), "x\n");
+		const text = run("status");
+		expect(text.status, flat(text.stderr)).toBe(0);
+		expect(text.stdout).not.toContain("‮");
+		// The real U+202E and the literal backslash-u text print differently.
+		expect(text.stdout).toContain('"notes/bidi\\u202e\\\\u202e.md"');
+		const json = run("status", "--json");
+		expect(json.status, flat(json.stderr)).toBe(0);
+		const paths = JSON.parse(json.stdout).status.map((entry: { path: string }) => entry.path);
+		expect(paths).toContain(path);
+	});
 	it("refuses a symlink whose target is an ancestor of reserved metadata", () => {
 		symlinkSync("../.hyper", join(peer, "notes", "up"));
 		publish();

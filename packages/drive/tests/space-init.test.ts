@@ -14,6 +14,7 @@ import { basename, dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 import type { SpaceEntry } from "#config/schema";
+import { escapeControlCharacters } from "#lib/terminal-text";
 import { ALLOWLIST_MARKER } from "#services/allowlist";
 import { shellQuote } from "#services/remote";
 import {
@@ -1864,7 +1865,10 @@ esac`);
 		]);
 		expect(result.status, flat(result.stderr)).toBe(0);
 		expect(JSON.parse(result.stdout).skipped.sort()).toEqual(paths.sort());
-		for (const path of paths) expect(result.stderr).toContain(path);
+		// Text output escapes the newline in the unusual path (a raw one would
+		// break the warning line); `--json` above carries the raw names.
+		for (const path of paths) expect(result.stderr).toContain(escapeControlCharacters(path));
+		expect(result.stderr).toContain("extra/deep/a [vendor]\\u000a contains its own git repository");
 		expect(result.stderr).toContain("its files are not saved in the space");
 		expect(result.stderr).not.toContain("does not have a commit checked out");
 		expect(remoteTree("space/unborn-vendor")).toEqual([".gitignore", "data/d.json", "notes/a.md"]);

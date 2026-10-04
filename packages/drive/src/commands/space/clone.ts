@@ -1,6 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { CloneCancelledError, cloneSpace } from "#services/space-clone";
 import { SpaceGitInterruptedError } from "#services/space-git";
 
@@ -51,7 +52,7 @@ export default class Clone extends BaseCommand<typeof Clone> {
 							terminal.on("SIGINT", onInt);
 							try {
 								const answer = await terminal.question(
-									`The hyperdrive proposes ${target} (recorded as ${JSON.stringify(recorded)}). Clone here? [y/N] `,
+									`The hyperdrive proposes ${escapeControlCharacters(target)} (recorded as ${quoteForTerminal(recorded)}). Clone here? [y/N] `,
 									{ signal: controller.signal },
 								);
 								return /^(y|yes)$/i.test(answer.trim());
@@ -72,14 +73,16 @@ export default class Clone extends BaseCommand<typeof Clone> {
 				return;
 			}
 			this.log(
-				`Path: ${result.path}${result.remapped ? ` (from ${JSON.stringify(result.originalPath)})` : ""}`,
+				`Path: ${escapeControlCharacters(result.path)}${result.remapped ? ` (from ${quoteForTerminal(result.originalPath)})` : ""}`,
 			);
 			this.log(
-				`Branch: ${result.branch} | Cadence: ${result.cadence || "unset"} | Repos cloned: ${result.reposCloned.length}`,
+				`Branch: ${escapeControlCharacters(result.branch)} | Cadence: ${escapeControlCharacters(result.cadence || "unset")} | Repos cloned: ${result.reposCloned.length}`,
 			);
-			this.log(`Worktrees: ${result.worktrees.join(", ") || "none (no project URLs)"}`);
 			this.log(
-				`Library wrote: ${result.libraryWrites.join(", ") || "nothing; tracked files preserved"}`,
+				`Worktrees: ${result.worktrees.map(escapeControlCharacters).join(", ") || "none (no project URLs)"}`,
+			);
+			this.log(
+				`Library wrote: ${result.libraryWrites.map(escapeControlCharacters).join(", ") || "nothing; tracked files preserved"}`,
 			);
 		} catch (error) {
 			if (error instanceof CloneCancelledError) {

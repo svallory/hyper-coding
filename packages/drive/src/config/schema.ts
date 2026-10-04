@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { escapeControlCharacters } from "#services/space-git";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 
 export type SyncCadence = "" | "manual" | "session-end" | "session-end+push";
 
@@ -295,6 +295,13 @@ function manifestProblem(path: string, detail: string): ManifestError {
 	return new ManifestError(path, detail);
 }
 
+/** A scalar the manifest gave us, as terminal-safe text. */
+function describeValue(value: unknown): string {
+	return typeof value === "string"
+		? quoteForTerminal(value)
+		: escapeControlCharacters(JSON.stringify(value) ?? String(value));
+}
+
 function describeYaml(value: unknown): string {
 	if (Array.isArray(value)) return "a list";
 	if (value === null) return "null";
@@ -369,15 +376,15 @@ function validateSpace(path: string, raw: unknown): SpaceEntry {
 		throw manifestProblem(
 			path,
 			`\`name\` must be a space name — lowercase letters, digits, dots, underscores and ` +
-				`dashes, no "..", and the manifest entry for ${JSON.stringify(name)} breaks that.`,
+				`dashes, no "..", and the manifest entry for ${quoteForTerminal(name)} breaks that.`,
 		);
 	}
-	const key = (field: string) => `spaces entry ${JSON.stringify(name)}: \`${field}\``;
+	const key = (field: string) => `spaces entry ${quoteForTerminal(name)}: \`${field}\``;
 
 	if (typeof raw.group === "string" && !isValidSpaceName(raw.group)) {
 		throw manifestProblem(
 			path,
-			`\`group\` must be a space name (same shape as \`name\`), but it is ${JSON.stringify(raw.group)}.`,
+			`\`group\` must be a space name (same shape as \`name\`), but it is ${quoteForTerminal(raw.group)}.`,
 		);
 	}
 	if (raw.group !== null && typeof raw.group !== "string") {
@@ -389,7 +396,7 @@ function validateSpace(path: string, raw: unknown): SpaceEntry {
 	if (!SPACE_LAYOUTS.includes(raw.layout as SpaceEntry["layout"])) {
 		throw manifestProblem(
 			path,
-			`${key("layout")} must be "bare" or "multi", but it is ${JSON.stringify(raw.layout)}.`,
+			`${key("layout")} must be "bare" or "multi", but it is ${describeValue(raw.layout)}.`,
 		);
 	}
 	if (!Array.isArray(raw.repos)) {
@@ -401,7 +408,7 @@ function validateSpace(path: string, raw: unknown): SpaceEntry {
 	if (!MANIFEST_CADENCES.includes(raw.cadence as SyncCadence)) {
 		throw manifestProblem(
 			path,
-			`${key("cadence")} must be one of "manual", "session-end", "session-end+push" (or empty) — got ${JSON.stringify(raw.cadence)}.`,
+			`${key("cadence")} must be one of "manual", "session-end", "session-end+push" (or empty) — got ${describeValue(raw.cadence)}.`,
 		);
 	}
 

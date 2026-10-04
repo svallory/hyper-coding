@@ -1,4 +1,5 @@
 import { SpaceCommand } from "#lib/space-command";
+import { escapeControlCharacters } from "#lib/terminal-text";
 import { spaceRemote } from "#services/space-history";
 import { pushSpace } from "#services/space-sync";
 
@@ -14,6 +15,6 @@ export default class Push extends SpaceCommand<typeof Push> {
 			pushSpace(root, spaceRemote(root), branch);
 			return branch;
 		});
-		this.log(`Pushed ${branch}.`);
+		this.log(`Pushed ${escapeControlCharacters(branch)}.`);
 	}
 }

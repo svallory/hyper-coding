@@ -1,8 +1,10 @@
 /** Shared staging, publication and remote diagnostics for space history. */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { findSecretPaths } from "#services/allowlist";
 import {
+	gitSaid,
 	readSpaceBlobPrefixes,
 	SpaceGitError,
 	SpaceGitInterruptedError,
@@ -14,8 +16,8 @@ export function remoteRef(root: string, remote: string, pattern: string): string
 	const result = spaceGit(root, ["ls-remote", "--heads", remote, pattern], { allowFailure: true });
 	if (result.status !== 0) {
 		throw new SpaceGitError(
-			`I couldn't reach your hyperdrive at ${remote} to look at its branches: ` +
-				`${(result.stderr || result.stdout).trim() || "git ls-remote said nothing"}`,
+			`I couldn't reach your hyperdrive at ${escapeControlCharacters(remote)} to look at its branches: ` +
+				`${gitSaid(result.stderr || result.stdout) || "git ls-remote said nothing"}`,
 		);
 	}
 	for (const line of result.stdout.split("\n")) {
@@ -32,8 +34,8 @@ export function remoteSha(root: string, remote: string, branch: string): string 
 	});
 	if (result.status !== 0) {
 		throw new SpaceGitError(
-			`I couldn't reach your hyperdrive at ${remote} to look for ${branch}: ` +
-				`${(result.stderr || result.stdout).trim() || "git ls-remote said nothing"}`,
+			`I couldn't reach your hyperdrive at ${escapeControlCharacters(remote)} to look for ${escapeControlCharacters(branch)}: ` +
+				`${gitSaid(result.stderr || result.stdout) || "git ls-remote said nothing"}`,
 		);
 	}
 	const first = result.stdout.split("\n")[0] ?? "";
@@ -74,11 +76,11 @@ export function spaceGitRemote(
 	const result = spaceGit(root, [...args], { allowFailure: true });
 	if (result.status === 0) return;
 	const detail = (result.stderr || result.stdout).trim();
-	const what = `push ${branch}`;
+	const what = `push ${escapeControlCharacters(branch)}`;
 	// Ref conflicts also carry [remote rejected], but are not hook failures.
 	if (/refname conflict|cannot lock ref/i.test(detail)) {
 		throw new SpacePushRefusedError(
-			`the hyperdrive at ${remote} already has a ref that ${branch} collides with, so it cannot take this branch. ` +
+			`the hyperdrive at ${escapeControlCharacters(remote)} already has a ref that ${escapeControlCharacters(branch)} collides with, so it cannot take this branch. ` +
 				(caller === "init"
 					? "Pick a space name that does not collide."
 					: "Inspect the remote ref hierarchy and reconcile the conflicting names manually; there is no space rename command."),
@@ -89,14 +91,14 @@ export function spaceGitRemote(
 	if (/\((?:pre-receive |update )?hook declined\)/i.test(detail)) {
 		const reason = hookReason(detail);
 		throw new SpacePushRefusedError(
-			`the hyperdrive at ${remote} refused to take ${branch}: a server-side hook declined the push. ` +
+			`the hyperdrive at ${escapeControlCharacters(remote)} refused to take ${escapeControlCharacters(branch)}: a server-side hook declined the push. ` +
 				`Nothing was overwritten, and retrying will not help until that hook allows it.` +
-				(reason === "" ? "" : ` It said: ${reason.replace(/[.!?]+$/, "")}.`),
+				(reason === "" ? "" : ` It said: ${gitSaid(reason).replace(/[.!?]+$/, "")}.`),
 		);
 	}
 	if (/(fetch first|non-fast-forward|stale info|behind its remote)/i.test(detail)) {
 		throw new SpacePushRefusedError(
-			`${what} was refused: ${remote} has moved on, so another machine pushed this space's branch ` +
+			`${what} was refused: ${escapeControlCharacters(remote)} has moved on, so another machine pushed this space's branch ` +
 				`first. Nothing was overwritten — hyper never rewrites a space's history. ` +
 				(caller === "init"
 					? "Use a different name to initialise a new space, or reconcile the existing history manually."
@@ -105,7 +107,7 @@ export function spaceGitRemote(
 		);
 	}
 	throw new SpaceGitError(
-		`I couldn't reach your hyperdrive at ${remote} to ${what}: ${detail || `git ${args[0]} failed`}`,
+		`I couldn't reach your hyperdrive at ${escapeControlCharacters(remote)} to ${what}: ${gitSaid(detail) || `git ${args[0]} failed`}`,
 	);
 }
 
@@ -204,7 +206,7 @@ export async function commitSpace(
 		}
 		for (const path of nested) {
 			process.stderr.write(
-				`warning: ${path} contains its own git repository; its files are not saved in the space.\n`,
+				`warning: ${escapeControlCharacters(path)} contains its own git repository; its files are not saved in the space.\n`,
 			);
 		}
 		if (nested.length > 0) staged.splice(0, staged.length, ...stagedPaths(root));
@@ -212,15 +214,15 @@ export async function commitSpace(
 		const { secrets, allowedSecrets, largeFiles } = inspection;
 		for (const path of allowedSecrets)
 			process.stderr.write(
-				`warning: allowing secret path ${JSON.stringify(path)} as explicitly requested.\n`,
+				`warning: allowing secret path ${quoteForTerminal(path)} as explicitly requested.\n`,
 			);
 		for (const path of largeFiles)
 			process.stderr.write(
-				`warning: ${JSON.stringify(path)} is above 50 MB; committing it will make this space's history larger.\n`,
+				`warning: ${quoteForTerminal(path)} is above 50 MB; committing it will make this space's history larger.\n`,
 			);
 		if (secrets.length > 0) {
 			throw new Error(
-				`refusing to commit ${branch}: ${secrets.join(", ")} ` +
+				`refusing to commit ${escapeControlCharacters(branch)}: ${secrets.map(escapeControlCharacters).join(", ")} ` +
 					`${secrets.length === 1 ? "matches" : "match"} the secret guard (a .env, a key, a ` +
 					`credentials file). Move ${secrets.length === 1 ? "it" : "them"} out of the space, or ` +
 					`keep ${secrets.length === 1 ? "it" : "them"} out of the allowlist.` +
@@ -243,14 +245,14 @@ export async function commitSpace(
 					/please tell me who you are|no (?:name|email) was given|empty ident|unable to auto-detect email|identity unknown/i.test(
 						detail,
 					)
-						? `git has no identity to commit ${branch} with. Set one and run this again: ` +
+						? `git has no identity to commit ${escapeControlCharacters(branch)} with. Set one and run this again: ` +
 								`\n\n  git config --global user.name "Your Name"\n  git config --global user.email "you@example.com"\n`
-						: `the commit of ${branch} failed. ${caller === "init" ? "Fix the cause and rerun `hyper space init`" : "Inspect `hyper space status` and retry"}: ${detail}`,
+						: `the commit of ${escapeControlCharacters(branch)} failed. ${caller === "init" ? "Fix the cause and rerun `hyper space init`" : "Inspect `hyper space status` and retry"}: ${gitSaid(detail)}`,
 				);
 			}
 		} else if (unborn) {
 			process.stderr.write(
-				`warning: the allowlist matched no files in ${root}, so there is nothing to commit and no branch to push.\n`,
+				`warning: the allowlist matched no files in ${escapeControlCharacters(root)}, so there is nothing to commit and no branch to push.\n`,
 			);
 		}
 		return {

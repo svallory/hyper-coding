@@ -49,7 +49,8 @@ import {
 	type SpaceEntry,
 	validateManifest,
 } from "#config/schema";
-import { SpaceGitInterruptedError } from "#services/space-git";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
+import { gitSaid, SpaceGitInterruptedError } from "#services/space-git";
 
 const MANIFEST_FILE = "spaces.yaml";
 const BRANCH = "main";
@@ -212,7 +213,7 @@ function pushMain(dir: string, what: string): boolean {
 	}
 	warn(
 		`${what} is committed locally but I couldn't push it (the hyperdrive is unreachable) — ` +
-			`the next manifest write will try again. git said: ${push.stderr.trim() || push.stdout.trim()}`,
+			`the next manifest write will try again. git said: ${gitSaid(push.stderr || push.stdout)}`,
 	);
 	return false;
 }
@@ -222,7 +223,7 @@ function hookRejection(dir: string, push: GitResult, what: string): ManifestErro
 	return new ManifestError(
 		dir,
 		`the hyperdrive server refused ${what}. This is not a conflict — a hook on the remote declined ` +
-			`it, so retrying will not help. git said: ${push.stderr.trim() || push.stdout.trim()}`,
+			`it, so retrying will not help. git said: ${gitSaid(push.stderr || push.stdout)}`,
 	);
 }
 
@@ -244,15 +245,15 @@ function initialiseMain(dir: string, remote: string): void {
 	driveGit(["add", "README.md", MANIFEST_FILE], dir);
 	const commit = driveGit([...BOOKKEEPING, "commit", "-m", "manifest: initialise hyperdrive"], dir);
 	if (!commit.ok) {
-		throw new ManifestError(dir, `the initial commit failed: ${commit.stderr.trim()}`);
+		throw new ManifestError(dir, `the initial commit failed: ${gitSaid(commit.stderr)}`);
 	}
 	const push = driveGit(["push", "-u", "origin", BRANCH], dir);
 	if (!push.ok) {
 		const failure = classifyPushFailure(push);
 		if (failure === "hook-rejected") throw hookRejection(dir, push, "the initial push");
 		warn(
-			`the hyperdrive is initialised locally but I couldn't push it to ${remote} — ` +
-				`the next manifest write will try again. git said: ${push.stderr.trim() || push.stdout.trim()}`,
+			`the hyperdrive is initialised locally but I couldn't push it to ${escapeControlCharacters(remote)} — ` +
+				`the next manifest write will try again. git said: ${gitSaid(push.stderr || push.stdout)}`,
 		);
 	}
 }
@@ -277,8 +278,8 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
 		if (origin !== remote) {
 			throw new ManifestError(
 				dir,
-				`the hyperdrive checkout there is a clone of ${JSON.stringify(origin)}, ` +
-					`but your config points at ${JSON.stringify(remote)}. ` +
+				`the hyperdrive checkout there is a clone of ${quoteForTerminal(origin)}, ` +
+					`but your config points at ${quoteForTerminal(remote)}. ` +
 					"Move the checkout away or fix `remote` in your drive.toml.",
 			);
 		}
@@ -295,10 +296,10 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
 			// LOCAL divergence, and naming it offline sends the reader after the
 			// wrong problem. A manifest write reconciles properly regardless.
 			warn(
-				`I couldn't fast-forward the hyperdrive checkout from ${remote} — continuing with the ` +
+				`I couldn't fast-forward the hyperdrive checkout from ${escapeControlCharacters(remote)} — continuing with the ` +
 					`local copy. This is usually local divergence or an unreachable remote, not a lost ` +
 					`entry: the next manifest write reconciles by space name. git said: ` +
-					`${pull.stderr.trim() || pull.stdout.trim()}`,
+					`${gitSaid(pull.stderr || pull.stdout)}`,
 			);
 		}
 		// Publish anything local that the remote has not seen. A non-empty
@@ -320,8 +321,8 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
 	if (!probe.ok) {
 		throw new ManifestError(
 			remote,
-			`I couldn't reach your hyperdrive at ${remote} — check the URL and your network. ` +
-				`git said: ${probe.stderr.trim() || probe.stdout.trim() || "no output"}`,
+			`I couldn't reach your hyperdrive at ${escapeControlCharacters(remote)} — check the URL and your network. ` +
+				`git said: ${gitSaid(probe.stderr || probe.stdout) || "no output"}`,
 		);
 	}
 
@@ -335,7 +336,7 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
 		if (!clone.ok) {
 			throw new ManifestError(
 				remote,
-				`cloning your hyperdrive failed: ${clone.stderr.trim() || clone.stdout.trim()}`,
+				`cloning your hyperdrive failed: ${gitSaid(clone.stderr || clone.stdout)}`,
 			);
 		}
 		ensureGitIdentity(dir);
@@ -349,7 +350,7 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
 	] as const) {
 		const result = driveGit(step, dir);
 		if (!result.ok) {
-			throw new ManifestError(dir, `git ${step[0]} failed: ${result.stderr.trim()}`);
+			throw new ManifestError(dir, `git ${step[0]} failed: ${gitSaid(result.stderr)}`);
 		}
 	}
 	initialiseMain(dir, remote);
@@ -403,7 +404,7 @@ export function readManifest(): Manifest {
 		raw = parseYaml(readFileSync(path, "utf-8"));
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
-		throw new ManifestError(path, `the YAML didn't parse — ${detail}`);
+		throw new ManifestError(path, `the YAML didn't parse — ${escapeControlCharacters(detail)}`);
 	}
 	return validateManifest(path, raw);
 }
@@ -546,12 +547,12 @@ function loadPending(dir: string): Mutation[] {
 			try {
 				const parsed = JSON.parse(line) as unknown;
 				if (isMutation(parsed)) return [parsed];
-				warn(`dropping a malformed line from ${path}: ${line.trim()}`);
+				warn(`dropping a malformed line from ${path}: ${escapeControlCharacters(line.trim())}`);
 				return [];
 			} catch {
 				// A truncated last line from a killed process must not wedge
 				// every later write; drop it, loudly.
-				warn(`dropping an unreadable line from ${path}: ${line.trim()}`);
+				warn(`dropping an unreadable line from ${path}: ${escapeControlCharacters(line.trim())}`);
 				return [];
 			}
 		});
@@ -593,7 +594,10 @@ function readManifestAt(dir: string, ref: string): SpaceEntry[] {
 		raw = parseYaml(show.stdout);
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
-		throw new ManifestError(`${ref}:${MANIFEST_FILE}`, `the YAML didn't parse — ${detail}`);
+		throw new ManifestError(
+			`${ref}:${MANIFEST_FILE}`,
+			`the YAML didn't parse — ${escapeControlCharacters(detail)}`,
+		);
 	}
 	if (raw === null || raw === undefined) return [];
 	return validateManifest(`${ref}:${MANIFEST_FILE}`, raw).spaces;
@@ -621,7 +625,7 @@ function recoverCheckout(dir: string): void {
 			rmSync(join(gitDir, "rebase-merge"), { recursive: true, force: true });
 			rmSync(join(gitDir, "rebase-apply"), { recursive: true, force: true });
 			warn(
-				`git couldn't roll back an interrupted rebase (${abort.stderr.trim()}), so I removed the ` +
+				`git couldn't roll back an interrupted rebase (${gitSaid(abort.stderr)}), so I removed the ` +
 					"state git left behind and continued from the remote.",
 			);
 		}
@@ -632,7 +636,7 @@ function recoverCheckout(dir: string): void {
 		if (!checkout.ok) {
 			throw new ManifestError(
 				dir,
-				`the checkout is on a detached HEAD and I couldn't get back to ${BRANCH}: ${checkout.stderr.trim()}`,
+				`the checkout is on a detached HEAD and I couldn't get back to ${BRANCH}: ${gitSaid(checkout.stderr)}`,
 			);
 		}
 	}
@@ -695,8 +699,8 @@ export class SpaceNameConflictError extends ManifestError {
 	) {
 		super(
 			join(driveCheckoutDir(), MANIFEST_FILE),
-			`the space called ${JSON.stringify(name)} is on branch ${existingBranch} on the ` +
-				`hyperdrive, and this run would put ${branch} in its place. Space names are unique ` +
+			`the space called ${quoteForTerminal(name)} is on branch ${escapeControlCharacters(existingBranch)} on the ` +
+				`hyperdrive, and this run would put ${escapeControlCharacters(branch)} in its place. Space names are unique ` +
 				`across groups, so two spaces cannot share one name — pass a name of its own.`,
 		);
 		this.name = "SpaceNameConflictError";
@@ -752,7 +756,7 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 				}
 				warn(
 					`the hyperdrive has no ${BRANCH} yet and I couldn't create it; the local copy is kept — ` +
-						`git said: ${push.stderr.trim() || push.stdout.trim()}`,
+						`git said: ${gitSaid(push.stderr || push.stdout)}`,
 				);
 				return;
 			}
@@ -761,7 +765,7 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 			const base = readManifestAt(dir, "HEAD");
 			if (commitReplay(dir, base, pending)) {
 				warn(
-					`the hyperdrive is unreachable, so ${mutation?.name ?? "the recorded changes"} is recorded ` +
+					`the hyperdrive is unreachable, so ${escapeControlCharacters(mutation?.name ?? "the recorded changes")} is recorded ` +
 						"locally only — the next write will publish it.",
 				);
 				return;
@@ -783,7 +787,7 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 			if (failure === "hook-rejected") throw hookRejection(dir, push, "the first push");
 			warn(
 				`the hyperdrive answered but couldn't take ${BRANCH}; the local copy is kept — ` +
-					`git said: ${push.stderr.trim() || push.stdout.trim()}`,
+					`git said: ${gitSaid(push.stderr || push.stdout)}`,
 			);
 			return;
 		}
@@ -801,7 +805,7 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 		if (!reset.ok) {
 			throw new ManifestError(
 				dir,
-				`I couldn't reset the checkout onto the remote ${BRANCH}: ${reset.stderr.trim()}`,
+				`I couldn't reset the checkout onto the remote ${BRANCH}: ${gitSaid(reset.stderr)}`,
 			);
 		}
 
@@ -922,8 +926,8 @@ function validateSpaceName(entry: SpaceEntry): void {
 		if (!check.ok) {
 			throw new ManifestError(
 				join(dir, MANIFEST_FILE),
-				`\`${entry.branch}\` is not a valid branch name for space ${JSON.stringify(entry.name)} ` +
-					`(git said: ${check.stderr.trim() || check.stdout.trim()}).`,
+				`${quoteForTerminal(entry.branch)} is not a valid branch name for space ${quoteForTerminal(entry.name)} ` +
+					`(git said: ${gitSaid(check.stderr || check.stdout)}).`,
 			);
 		}
 	}

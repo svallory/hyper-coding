@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
+import { escapeControlCharacters } from "#lib/terminal-text";
 import { detectSpace } from "#services/space";
 
 export default class Detect extends BaseCommand<typeof Detect> {
@@ -34,7 +35,7 @@ export default class Detect extends BaseCommand<typeof Detect> {
 
 		const dir = resolve(args.dir ?? process.cwd());
 		if (!statSync(dir, { throwIfNoEntry: false })?.isDirectory()) {
-			this.error(`There's no directory at ${dir}`, { exit: 1 });
+			this.error(`There's no directory at ${escapeControlCharacters(dir)}`, { exit: 1 });
 		}
 
 		const info = detectSpace(dir);
@@ -60,10 +61,12 @@ export default class Detect extends BaseCommand<typeof Detect> {
 			return;
 		}
 
-		this.log(`root:         ${info.root}`);
+		this.log(`root:         ${escapeControlCharacters(info.root)}`);
 		this.log(`layout:       ${info.layout}`);
-		this.log(`slug:         ${info.slug ?? "-"}`);
-		this.log(`worktrees:    ${info.worktreesDir ?? "-"}`);
-		this.log(`repos:        ${info.repos.length > 0 ? info.repos.join(", ") : "-"}`);
+		this.log(`slug:         ${escapeControlCharacters(info.slug ?? "-")}`);
+		this.log(`worktrees:    ${escapeControlCharacters(info.worktreesDir ?? "-")}`);
+		this.log(
+			`repos:        ${info.repos.length > 0 ? info.repos.map(escapeControlCharacters).join(", ") : "-"}`,
+		);
 	}
 }
