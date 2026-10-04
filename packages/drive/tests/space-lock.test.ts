@@ -8,6 +8,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readFileSync,
 	realpathSync,
 	rmSync,
 	utimesSync,
@@ -18,7 +19,16 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderGitignore } from "#services/allowlist";
 import { initSpaceGitDir, spaceGit, spaceGitDir } from "#services/space-git";
-import { SPACE_LOCK_FILE, SpaceLockTimeoutError, withSpaceLock } from "#services/space-lock";
+import {
+	type LockOwner,
+	type LockProbe,
+	ownerStaleReason,
+	processStartId,
+	SPACE_LOCK_FILE,
+	SpaceLockTimeoutError,
+	STALE_AFTER_MS,
+	withSpaceLock,
+} from "#services/space-lock";
 import { commitSpace, pushSpace } from "#services/space-sync";
 import { git } from "#tests/tmp-manifest";
 import { makeBareSpace } from "#tests/tmp-space";
@@ -115,11 +125,20 @@ function deadPid(): number {
 	const child = spawnSync("true");
 	return child.pid!;
 }
-function writeLock(root: string, pid: number, started = Date.now()) {
+function writeLock(
+	root: string,
+	pid: number,
+	started = Date.now(),
+	extra: { procStart?: string; pidNs?: string } = {},
+) {
 	writeFileSync(
 		join(spaceGitDir(root), SPACE_LOCK_FILE),
-		`${JSON.stringify({ pid, host: hostname(), started, token: "test-token" })}\n`,
+		`${JSON.stringify({ pid, host: hostname(), started, token: "test-token", ...extra })}\n`,
 	);
+}
+/** A live process this test owns; killed in `finally` by the caller. */
+function liveChild(): ChildProcess {
+	return spawn("/bin/sleep", ["120"], { stdio: "ignore" });
 }
 
 describe("space lock: concurrent commits", () => {
@@ -198,7 +217,7 @@ describe("space lock: concurrent commits", () => {
 		expect(existsSync(join(spaceGitDir(root), SPACE_LOCK_FILE))).toBe(false);
 	}, 30_000);
 
-	it("a lock older than the stale age is taken over even when its pid is alive", async () => {
+	it("a lock from an older CLI (no recorded start time) keeps the age rule even when its pid is alive", async () => {
 		const { root } = await makeSpace();
 		writeLock(root, process.pid, Date.now() - 31 * 60 * 1000);
 		writeFileSync(join(root, "notes/c.md"), "old lock\n");
@@ -264,5 +283,141 @@ describe("withSpaceLock", () => {
 			),
 		).toThrow(SpaceLockTimeoutError);
 		expect(ran).toBe(false);
+	});
+});
+
+describe("space lock: a live owner is never taken over", () => {
+	const thirtyOneMinutesAgo = () => Date.now() - 31 * 60 * 1000;
+
+	it("a live child holding the lock past the age limit keeps it", async () => {
+		const { root } = await makeSpace();
+		const child = liveChild();
+		try {
+			const procStart = processStartId(child.pid!);
+			expect(procStart).not.toBeNull();
+			writeLock(root, child.pid!, thirtyOneMinutesAgo(), { procStart: procStart! });
+			let ran = false;
+			const notes: string[] = [];
+			expect(() =>
+				withSpaceLock(
+					root,
+					"run the test action",
+					() => {
+						ran = true;
+					},
+					{ waitMs: 500, note: (message) => notes.push(message) },
+				),
+			).toThrow(new RegExp(`pid ${child.pid}`));
+			expect(ran).toBe(false);
+			expect(notes).toEqual([]);
+			expect(existsSync(join(spaceGitDir(root), SPACE_LOCK_FILE))).toBe(true);
+		} finally {
+			child.kill("SIGKILL");
+		}
+	});
+
+	it("a live pid with a different start time (reused pid) is taken over", async () => {
+		const { root } = await makeSpace();
+		const child = liveChild();
+		try {
+			writeLock(root, child.pid!, Date.now(), { procStart: "ps:Thu Jan 1 00:00:00 1970" });
+			const notes: string[] = [];
+			let ran = false;
+			withSpaceLock(
+				root,
+				"test",
+				() => {
+					ran = true;
+				},
+				{ waitMs: 500, note: (message) => notes.push(message) },
+			);
+			expect(ran).toBe(true);
+			expect(notes).toHaveLength(1);
+			expect(notes[0]).toMatch(/that pid now belongs to another process/);
+		} finally {
+			child.kill("SIGKILL");
+		}
+	});
+
+	it("a dead owner that recorded its start time is taken over at once", async () => {
+		const { root } = await makeSpace();
+		writeLock(root, deadPid(), Date.now(), { procStart: "ps:Thu Jan 1 00:00:00 1970" });
+		const notes: string[] = [];
+		withSpaceLock(root, "test", () => undefined, {
+			waitMs: 500,
+			note: (message) => notes.push(message),
+		});
+		expect(notes.join("\n")).toMatch(/is no longer running/);
+	});
+
+	it("records this process's start time and pid namespace in the lock it writes", async () => {
+		const { root } = await makeSpace();
+		const lock = join(spaceGitDir(root), SPACE_LOCK_FILE);
+		const owner = withSpaceLock(
+			root,
+			"test",
+			() => JSON.parse(readFileSync(lock, "utf8")) as LockOwner,
+		);
+		expect(owner.pid).toBe(process.pid);
+		expect(owner.procStart).toBe(processStartId(process.pid));
+		if (process.platform === "linux") expect(owner.pidNs).toMatch(/^pid:\[\d+\]$/);
+	});
+
+	describe("ownerStaleReason", () => {
+		const now = Date.now();
+		const owner = (extra: Partial<LockOwner> = {}): LockOwner => ({
+			pid: 4242,
+			host: "here",
+			started: now,
+			token: "t",
+			procStart: "ps:A",
+			...extra,
+		});
+		const probe = (extra: Partial<LockProbe> = {}): LockProbe => ({
+			host: "here",
+			pidNs: null,
+			now,
+			isAlive: () => true,
+			startOf: () => "ps:A",
+			...extra,
+		});
+		const old = now - STALE_AFTER_MS - 1;
+
+		it("same host, live pid, same start: never stale, however old", () => {
+			expect(ownerStaleReason(owner(), probe())).toBeNull();
+			expect(ownerStaleReason(owner({ started: old }), probe())).toBeNull();
+		});
+		it("same host, dead pid: stale at once", () => {
+			expect(ownerStaleReason(owner(), probe({ isAlive: () => false }))).toMatch(
+				/no longer running/,
+			);
+		});
+		it("same host, live pid, different start: stale (pid reuse)", () => {
+			expect(ownerStaleReason(owner(), probe({ startOf: () => "ps:B" }))).toMatch(
+				/another process/,
+			);
+		});
+		it("falls back to the age rule when liveness cannot be judged", () => {
+			for (const [o, p] of [
+				[owner({ host: "elsewhere" }), probe({ isAlive: () => false })],
+				[owner({ pidNs: "pid:[1]" }), probe({ pidNs: "pid:[2]", isAlive: () => false })],
+				[owner({ procStart: undefined }), probe()],
+				[owner(), probe({ startOf: () => null })],
+			] as const) {
+				expect(ownerStaleReason(o, p)).toBeNull();
+				expect(ownerStaleReason({ ...o, started: old }, p)).toMatch(/older than 30 minutes/);
+			}
+		});
+		it("the same pid namespace (or an unknown one) is judged by the pid", () => {
+			expect(
+				ownerStaleReason(
+					owner({ pidNs: "pid:[1]" }),
+					probe({ pidNs: "pid:[1]", isAlive: () => false }),
+				),
+			).toMatch(/no longer running/);
+			expect(
+				ownerStaleReason(owner({ pidNs: "pid:[1]" }), probe({ isAlive: () => false })),
+			).toMatch(/no longer running/);
+		});
 	});
 });
