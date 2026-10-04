@@ -188,8 +188,10 @@ Use friendly, conversational language for error messages and user-facing output:
 
 ## Important Notes
 
-- `hyper-kits/nextjs/` is a **git submodule** — the only submodule in the repo.
-  gen's e2e tests (`packages/gen/tests/e2e/`) resolve templates from it, so
+- `hyper-kits/nextjs/` and `hyper-kits/skills/` are **git submodules** — the
+  only submodules in the repo (see `.gitmodules`).
+  gen's e2e tests (`packages/gen/tests/e2e/`) resolve templates from the
+  nextjs kit, so
   they need it initialised: `git submodule update --init hyper-kits/nextjs`.
 - The packages under `packages/` are NOT submodules — regular monorepo directories
 - Tests live in each package's `tests/` directory

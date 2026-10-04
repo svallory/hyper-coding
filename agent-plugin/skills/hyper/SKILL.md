@@ -47,11 +47,12 @@ repo under `code/<slug>/`:
 There is no repos config file — repos are discovered by globbing
 `code/*/.git`.
 
-The root is not a working tree in either layout. Nothing there can be committed
-— not by accident, not by a stray `git add -A`. Local-only files get a home
-structurally incapable of reaching the project's remote. There is no
-project `.gitignore` to maintain and no protection to erode: the safety is
-structural. Hyperdrive's separate space-history `.gitignore` is rendered by
+The root is not a working tree in either layout. Nothing there can be
+committed *to the project* — not by accident, not by a stray `git add -A`.
+Local-only files get a home structurally incapable of reaching the project's
+remote. There is no project `.gitignore` to
+maintain and no protection to erode: the safety is structural. Hyperdrive's
+separate space-history `.gitignore` is rendered by
 the CLI, not maintained by hand.
 
 An ordinary checkout is not a space and cannot be decorated into one.
@@ -99,11 +100,13 @@ with no `.git` and no marker is just a directory, never assumed to be a space.
 ## The corollary
 
 **Until the space has a hyperdrive branch, nothing at the space root is
-backed up.** A dump in `data/` exists on exactly one disk. Once you run
-`hyper space init`, the allowlisted directories (`notes/`, `data/`, `bin/`,
-`.hyper/`, `.claude/`) are backed up to your hyperdrive on the cadence you
-chose; `scratch/`, `worktrees/`, `code/` and loose root files never are.
-See [Hyperdrive](#hyperdrive).
+committed or backed up.** A dump in `data/` exists on exactly one disk. Once
+you run `hyper space init`, the allowlisted directories (`notes/`, `data/`,
+`bin/`, `.hyper/`, `.claude/`) are committed to the space's branch on your
+cadence, and reach your hyperdrive when pushed (`session-end+push`, or
+`hyper space push`) — `session-end` and `manual` commit locally and nothing
+more. `scratch/`, `worktrees/`, `code/` and loose root files are never
+committed. See [Hyperdrive](#hyperdrive).
 
 ## Hyperdrive
 
@@ -113,25 +116,31 @@ from a separate git dir at `.hyper/space.git`. The project's own `.git` is
 never touched by this.
 
 **What is tracked.** An allowlist, not a blocklist: `notes/`, `data/`,
-`bin/`, `.hyper/`, `.claude/` and the root control files (`.gitignore`,
-`HYPER.md`, `AGENTS.md`, `CLAUDE.md`). `hyper space init --tracked <dir>` adds more
-directories; a peer's new tracked entries are never adopted silently on
+`bin/`, `.hyper/`, `.claude/` (except `.claude/settings.local.json`) and the
+root control files (`.gitignore`, `HYPER.md`, `AGENTS.md`, `CLAUDE.md`).
+`hyper space init --tracked <dir>` adds more
+directories — on a space that is already initialised it refuses without
+`--refresh`, which re-renders the allowlist and adds to the tracked list.
+A peer's new tracked entries are never adopted silently on
 pull (it asks, or `--accept-tracked`).
 
-**What never is.** `scratch/`, `worktrees/`, `code/`, loose root files and
-`.hyper/space.git` itself or `.claude/settings.local.json` (per-machine
-settings). A staged file that looks like a secret (keys,
-tokens, `.env`) makes the commit refuse — override per path with
-`hyper space commit --allow-secret <path>` when it is a false positive.
+**What never is.** `scratch/`, `worktrees/`, `code/`, loose root files,
+`.claude/settings.local.json` and `.hyper/space.git` itself. A staged file
+is refused when its **name** matches `.env*`, `*credentials*`, `*.pem`,
+`*.key` (and the `~`/`.`-suffixed variants), `id_rsa*`, `id_ed25519*`,
+`id_ecdsa*`, `secrets/**`, or when its first bytes hold a
+`-----BEGIN … PRIVATE KEY-----` header. There is no token pattern: a file
+named `notes/github-token.txt` is committed. `--allow-secret <path>` is the
+user's to give for one exact path, never yours to add.
 
 **Cadence.** `hyper.cadence` in the space git dir is the truth:
-`manual` (you run `hyper space commit`), `session-end` (each Claude session
-end saves), `session-end+push` (save and push). The SessionEnd hook returns
+`manual` (you run `hyper space commit` and `hyper space push`),
+`session-end` (each Claude session end commits locally),
+`session-end+push` (commits and pushes). The SessionEnd hook returns
 at once — a detached worker does the commit and push, so a slow network
 never holds the session. A failed save shows up in `hyper space status`,
 not in the session.
 
-<!-- T-18 updates this line -->
 Pi sessions are saved with `hyper space commit` by hand for now.
 
 **The commands:**
@@ -153,13 +162,23 @@ freshly cloned or pulled space.
 
 **`hyper warp <machine>`** moves a live session to another machine: the
 working directory, the transcript, and an ownership marker go over ssh.
-It refuses to land on a dirty target without `--force`; with `--force` the
-target's tracked changes are saved in a stash first (untracked files are
-not in it). `--dry-run` prints every step and changes nothing.
+It refuses a session still running here (the agent's own session, often: it
+wants `--stop`, which ends it — the user's call), a session another machine
+owns or already moved to the target, a leftover marker, and a dirty target —
+the last three are what `--force` overrides. `--force` on a **space
+worktree** first saves the target's tracked changes there as a stash
+(untracked files are not in it); on a **plain repo** nothing is saved, files
+are overwritten one by one. The target's clean check is `git status`, which
+does not see ignored files: a target `.env` is overwritten even without
+`--force`. Excluded by default (and never copied): `node_modules`, `_build`,
+`deps`, `target`, `dist`, `.turbo`, `.cache`, `.next`. `--dry-run` prints
+every step and changes nothing.
 
 **Machines.** `hyper machine setup [name]` brings a machine to parity
-(tools, agent user, layout). Hyper never runs sudo itself: it prints a root
-script, you read it and run it. `hyper drive init` points the CLI at your
+(tools, agent user, layout). Hyper never runs sudo unattended: with
+`--yes` or without a terminal it writes the root script and exits 3;
+interactively it can run the script for you after you type your password.
+`hyper drive init` points the CLI at your
 private hyperdrive repo; `hyper drive sync-config` keeps `~/.claude` and
 `~/.pi/agent` in step between machines.
 

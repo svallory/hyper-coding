@@ -36,11 +36,14 @@ cd ~/spaces/my-project
 hyper space init --cadence session-end
 ```
 
-Cadence is `manual` (you run `hyper space commit`), `session-end` (each
-Claude session end saves; the hook returns at once and a detached worker
-commits, so a slow network never holds the session) or `session-end+push`
-(save and push). A failed save shows in `hyper space status`. Pi sessions
-are saved with `hyper space commit` by hand for now.
+Cadence is `manual` (you run `hyper space commit` and `push`), `session-end`
+(each Claude session end commits locally; the hook returns at once and a
+detached worker commits, so a slow network never holds the session) or
+`session-end+push` (commits and pushes). Only `session-end+push` and an
+explicit `hyper space push` put the history on the hyperdrive — under
+`session-end` or `manual` the history sits in `.hyper/space.git` on this disk.
+A failed save shows in `hyper space status`. Pi sessions are saved with
+`hyper space commit` by hand for now.
 
 ## Second machine
 
@@ -124,11 +127,16 @@ transcript and the working directory to the same absolute path on MACHINE
 over ssh, then resumes through Herdr. Every check runs before the first
 change on either machine.
 
-Warp refuses, without `--force`, when the session already lives on the
-target and when the target's worktree or repo is dirty. With `--force`, a
-dirty space worktree's tracked changes are first saved on the target in a
-stash — untracked files are not in it — and a plain repo is overwritten
-file by file with nothing saved. `--dry-run` prints every step and changes
+Warp refuses, without `--force`, when the session is still running here (it
+wants `--stop`, which ends that process), when the session is owned by
+another machine or already lives on the target, when a leftover marker makes
+ownership unknown, and when the target's worktree or repo is dirty. With
+`--force`, a dirty space worktree's tracked changes are first saved on the
+target in a stash — untracked files are not in it — and a plain repo is
+overwritten file by file with nothing saved. It does not refuse, whatever
+`--force` says, when the space is missing from the hyperdrive manifest, a
+path cannot be quoted identically on both platforms, or the target's Herdr
+or push would reject the branch. `--dry-run` prints every step and changes
 nothing.
 
 ### `hyper machine` — bring a machine to parity
@@ -140,10 +148,11 @@ hyper machine add NAME [--home path] [--features f,...] [--agent-user u]
 hyper machine list [--json]
 ```
 
-Setup is idempotent per task and **never runs sudo**: root steps are
-printed as one script for you to read and run yourself (exit code 3 means
-root steps are pending). Machines are the Herdr machine list merged with
-`[machines.*]` in `drive.toml`.
+Setup is idempotent per task and **never runs sudo unattended**: with
+`--yes`, or without a terminal, it writes the root script and exits 3
+(root steps still pending); interactively it offers "Run it for me (asks
+for your password)" and runs it only if you pick that. Machines are the
+Herdr machine list merged with `[machines.*]` in `drive.toml`.
 
 ### `hyper drive` — the hyperdrive itself
 
@@ -166,8 +175,9 @@ tooling).
 
 ## Known limits
 
-- **Nothing at a space root is backed up until it has a hyperdrive branch**
-  (`hyper space init` on the first machine, `hyper space clone` on another).
+- **Nothing at a space root is committed or backed up until it has a
+  hyperdrive branch** (`hyper space init` on the first machine, `hyper space
+  clone` on another).
   The generated `HYPER.md` says which case applies as of when it was written;
   `hyper space status` is the live answer.
 - **Warp overwrites the target's copy file by file, with no `--delete`:**
@@ -181,6 +191,9 @@ tooling).
   target; register it through an ssh config alias instead.
 - **The manifest is last-writer-wins by space name** — two machines
   registering the same name at once resolve to whichever push lands last.
+- **"Backed up" only means pushed.** `session-end` and `manual` cadence
+  commit to `.hyper/space.git` on the same disk; the history reaches the
+  hyperdrive only through `session-end+push` or `hyper space push`.
 - **Session-end saves cover Claude sessions.** Pi sessions are saved with
   `hyper space commit` by hand for now.
 - **Incoming `tracked` entries widen what this machine uploads** — that is
