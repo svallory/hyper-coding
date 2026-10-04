@@ -247,6 +247,14 @@ tooling).
   target; register it through an ssh config alias instead.
 - **The manifest is last-writer-wins by space name** — two machines
   registering the same name at once resolve to whichever push lands last.
+- **A busy space lock is taken over only when its owner is provably gone**
+  (`.hyper/space.git/hyper.lock`): same host and the pid no longer runs, or
+  runs with a different start time. A live owner keeps it however long it
+  takes. The 30-minute age rule remains only where liveness cannot be judged:
+  a lock from another host, from another pid namespace (Linux), from an older
+  CLI, or a pid whose start time cannot be read. Two containers sharing a
+  hostname and the space dir but not a pid namespace are told apart only on
+  Linux; elsewhere one can misjudge the other's lock.
 - **"Backed up" only means pushed.** `session-end` and `manual` cadence
   commit to `.hyper/space.git` on the same disk; the history reaches the
   hyperdrive only through `session-end+push` or `hyper space push`.
