@@ -1284,6 +1284,21 @@ export function checkProjectBranchName(branch: string): boolean {
  * to name the `git` binary at all. See `pushProjectBranch` below.
  */
 export function projectWorktreeBranch(worktree: string): string | null {
+	const head = projectWorktreeHead(worktree);
+	return head.state === "branch" ? head.branch : null;
+}
+
+/**
+ * What a worktree has checked out: a branch, a detached HEAD, or nothing git
+ * can read (not a worktree, unborn branch, no git).
+ *
+ * Kept apart from {@link projectWorktreeBranch} so a caller can tell the user
+ * WHY there is no branch: "check out a branch first" for a detached HEAD is an
+ * instruction, "couldn't work out which space" is not.
+ */
+export function projectWorktreeHead(
+	worktree: string,
+): { state: "branch"; branch: string } | { state: "detached" } | { state: "unreadable" } {
 	const result = spawnSync(
 		"git",
 		[
@@ -1300,11 +1315,12 @@ export function projectWorktreeBranch(worktree: string): string | null {
 		],
 		{ encoding: "utf8", env: cleanGitEnv() },
 	);
-	if (result.error || result.status !== 0) return null;
+	if (result.error || result.status !== 0) return { state: "unreadable" };
 	const branch = (result.stdout ?? "").trim();
 	// A detached HEAD answers "HEAD", which is not a branch and would make a
 	// push refspec of `refs/heads/HEAD` — a real, wrong branch name.
-	return branch === "" || branch === "HEAD" ? null : branch;
+	if (branch === "HEAD") return { state: "detached" };
+	return branch === "" ? { state: "unreadable" } : { state: "branch", branch };
 }
 
 /**
@@ -1335,6 +1351,23 @@ export function pushProjectBranch(options: {
 	url: string;
 	/** Branch {@link projectWorktreeBranch} read from the worktree. */
 	branch: string;
+	/**
+	 * `--dry-run`: contact the target and decide (fast-forward or not, new
+	 * branch or not) without updating anything there. Warp runs this in its
+	 * read-only probe block so a push that would be rejected is refused
+	 * before anything is changed.
+	 */
+	dryRun?: boolean;
+	/**
+	 * The branch is checked out in a worktree on the target AT THE SAME PATH
+	 * as this one (a re-warp). receive-pack refuses to move a checked-out
+	 * branch by default ("branch is currently checked out"), so the TARGET's
+	 * receive-pack is run with `receive.denyCurrentBranch=ignore` for this
+	 * one push. Safe only because warp then runs `git reset` (mixed) in that
+	 * worktree, so its index matches the new HEAD, and copies the files.
+	 * Never set it for a branch checked out anywhere else: warp refuses that.
+	 */
+	checkedOutAtSamePath?: boolean;
 }): { url: string; branch: string; refspec: string } {
 	if (!checkProjectBranchName(options.branch)) {
 		throw new SpaceGitError(
@@ -1347,22 +1380,8 @@ export function pushProjectBranch(options: {
 		);
 	}
 	const refspec = `HEAD:refs/heads/${options.branch}`;
-	const result = spawnSync(
-		"git",
-		[
-			"-C",
-			options.worktree,
-			"-c",
-			"core.fsmonitor=false",
-			"-c",
-			"core.hooksPath=/dev/null",
-			"push",
-			"--",
-			options.url,
-			refspec,
-		],
-		{ encoding: "utf8", env: cleanGitEnv() },
-	);
+	const [program, ...args] = projectPushArgv(options);
+	const result = spawnSync(program as string, args, { encoding: "utf8", env: cleanGitEnv() });
 	if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
 		throw new SpaceGitInterruptedError(result.signal);
 	}
@@ -1378,4 +1397,135 @@ export function pushProjectBranch(options: {
 		);
 	}
 	return { url: options.url, branch: options.branch, refspec };
+}
+
+/**
+ * The full argv {@link pushProjectBranch} spawns, program first. Exported so
+ * warp's `--dry-run` prints the exact command it would run.
+ */
+export function projectPushArgv(options: {
+	worktree: string;
+	url: string;
+	branch: string;
+	dryRun?: boolean;
+	checkedOutAtSamePath?: boolean;
+}): string[] {
+	return [
+		"git",
+		"-C",
+		options.worktree,
+		"-c",
+		"core.fsmonitor=false",
+		"-c",
+		"core.hooksPath=/dev/null",
+		"push",
+		...(options.dryRun ? ["--dry-run"] : []),
+		...(options.checkedOutAtSamePath
+			? ["--receive-pack=git -c receive.denyCurrentBranch=ignore receive-pack"]
+			: []),
+		"--",
+		options.url,
+		`HEAD:refs/heads/${options.branch}`,
+	];
+}
+
+/**
+ * The commands warp runs ON THE TARGET for a space worktree, as argv for
+ * `MachineRunner.ssh` (services/remote.ts quotes them for the remote shell).
+ *
+ * They live here, not in services/warp.ts, because C-2 makes this the one file
+ * that may name the git binary; warp only sends what these return. None of
+ * them run anything on this machine.
+ */
+const TARGET_GIT_SAFETY = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false"];
+
+/** Exit 0 when `bare` is a bare git repository on the target. */
+export function targetBareRepoCheck(bare: string): string[] {
+	return ["git", `--git-dir=${bare}`, "rev-parse", "--is-bare-repository"];
+}
+
+/**
+ * Register `worktree` as a worktree of `bare` on `branch`, WITHOUT checking
+ * any file out: the files arrive by copy right after, and a checkout here would
+ * only be overwritten (or, for a file the copy excludes, left as a stale
+ * version). `--no-checkout` also skips the post-checkout hook; hooks are off
+ * anyway.
+ */
+export function targetWorktreeAdd(bare: string, worktree: string, branch: string): string[] {
+	return [
+		"git",
+		`--git-dir=${bare}`,
+		...TARGET_GIT_SAFETY,
+		"worktree",
+		"add",
+		"--no-checkout",
+		"--",
+		worktree,
+		branch,
+	];
+}
+
+/**
+ * A mixed `git reset` in the target's worktree: the index is rebuilt from HEAD
+ * and NO file is touched. After a `--no-checkout` add (or after a push moved
+ * a checked-out branch) the index is empty or stale; this makes `git status`
+ * report the copied files against HEAD. Staged-but-uncommitted state on the
+ * source does not travel: it arrives as unstaged modifications.
+ */
+export function targetWorktreeReset(worktree: string): string[] {
+	return ["git", "-C", worktree, ...TARGET_GIT_SAFETY, "reset", "-q"];
+}
+
+/**
+ * Exit codes of {@link targetWorktreeState}. 0 and 1 are the answer; every
+ * other code is a reason warp must refuse before it changes anything.
+ */
+export const TARGET_WORKTREE_STATE = {
+	/** A worktree of `bare` is registered at the path, on the branch. */
+	registeredHere: 0,
+	/** Nothing is registered at the path, and the path is absent or empty. */
+	absent: 1,
+	/** `worktree list` itself failed (not a repo, unreadable). */
+	unreadable: 3,
+	/** A worktree is registered at the path on ANOTHER branch (or detached). */
+	otherBranchHere: 20,
+	/** The branch is checked out in a worktree at a DIFFERENT path. */
+	branchElsewhere: 21,
+	/** The path exists, is not empty, and is not a registered worktree. */
+	occupied: 22,
+	/** Registered at the path, but the directory (or its `.git`) is gone. */
+	registeredButMissing: 23,
+} as const;
+
+/**
+ * A read-only script for the target: is `worktree` a registered worktree of
+ * `bare`, on `branch`? Answers through its exit code
+ * ({@link TARGET_WORKTREE_STATE}). Runs `git worktree list --porcelain`, whose
+ * records are blank-line separated, and reads them with awk's paragraph mode
+ * (`RS=""`, POSIX, so mawk on Debian handles it).
+ *
+ * The paths are interpolated, single-quoted, into the script: callers only
+ * pass paths that services/remote.ts's path rule already accepted (no quote can
+ * appear in them), and the quoting is there anyway.
+ */
+export function targetWorktreeState(bare: string, worktree: string, branch: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const states = TARGET_WORKTREE_STATE;
+	const awk = [
+		'BEGIN { RS = ""; FS = "\\n" }',
+		'{ p = ""; br = "";',
+		"  for (i = 1; i <= NF; i++) { if ($i ~ /^worktree /) p = substr($i, 10); else if ($i ~ /^branch /) br = substr($i, 8) }",
+		"  if (p == w) { if (br == b) here = 1; else other = 1 } else if (br == b) elsewhere = 1 }",
+		`END { if (other) exit ${states.otherBranchHere}; if (elsewhere) exit ${states.branchElsewhere}; if (here) exit ${states.registeredHere}; exit ${states.absent} }`,
+	].join("\n");
+	const script = [
+		`g=${quote(bare)}; w=${quote(worktree)}; b=${quote(`refs/heads/${branch}`)}`,
+		`list=$(git --git-dir="$g" worktree list --porcelain) || exit ${states.unreadable}`,
+		`printf '%s\\n' "$list" | awk -v w="$w" -v b="$b" ${quote(awk)}`,
+		"rc=$?",
+		`if [ "$rc" -eq ${states.registeredHere} ] && [ ! -e "$w/.git" ]; then exit ${states.registeredButMissing}; fi`,
+		`if [ "$rc" -eq ${states.absent} ] && [ -e "$w" ]; then if [ ! -d "$w" ] || [ -n "$(ls -A "$w" 2>/dev/null)" ]; then exit ${states.occupied}; fi; fi`,
+		'exit "$rc"',
+	].join("\n");
+	return ["sh", "-c", script];
 }

@@ -1,68 +1,64 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { MachineRunner } from "#services/remote";
+import type { LiveSession, OwnerMarker } from "#services/sessions";
+import { TARGET_WORKTREE_STATE } from "#services/space-git";
 import {
+	describeFailure,
+	describeSpace,
 	describeStep,
 	describeWarp,
 	executeWarp,
+	MarkerConflictError,
+	PANE_PLACEHOLDER,
+	type ProbeId,
 	planWarp,
 	REMOTE_CONTROL_FLAG,
 	readPaneId,
 	restoreMarker,
-	resumeClaudeArgv,
+	resumeAgentArgs,
 	spaceBarePath,
+	swapMarker,
 	type WarpDeps,
+	type WarpExecution,
 	type WarpInputs,
 	type WarpPlan,
+	type WarpSpaceInfo,
 	type WarpStep,
 } from "#services/warp";
 
 /**
- * Warp's plan is the contract, so these tests are about the PLAN: which steps
- * it holds, in which order, and which refusals stop it. `planWarp` is pure, so
- * none of this needs a machine, an SSH hop, or a filesystem — the only paths
- * involved are strings.
+ * Warp's contract is ORDER: every refusal before the first change on either
+ * machine. So most tests here EXECUTE a plan against a fake target that
+ * answers each probe the way a scenario says, and assert on one event log in
+ * which every call is tagged "probe" or "change". A recorded call list alone
+ * proves nothing about order; this log does.
  */
 
-/**
- * The shell words a probe script hands to `test`, in order.
- *
- * These are the words a remote shell has to split correctly, so they are
- * exactly what {@link argvAfterShell} should be pointed at. Split on the `test`
- * verbs rather than on a `--` separator: there is no `--` (dash has no such
- * option for its `test` builtin), and a separator that a future change removes
- * would quietly make this helper find nothing and pass vacuously.
- */
+/** The words a probe script hands to `test`, in order. */
 function testWords(script: string): string[] {
-	// Take everything up to the next `||`, NOT up to the next space: a quoted
-	// word is allowed to contain spaces, which is the whole point of quoting it.
-	return [...script.matchAll(/test -[dw] (\S.*?)(?= \|\||$)/g)].map((match) => match[1] as string);
+	return [...script.matchAll(/test -[dw] (\S.*?)(?= \|\||$|;)/g)].map(
+		(match) => match[1] as string,
+	);
 }
 
-/**
- * Run `line` through a real POSIX shell and report the argv it produced.
- *
- * This is the only way to test "it was quoted properly" honestly: a string
- * comparison can agree with a broken implementation, but a shell cannot. A
- * path with a space and an apostrophe that arrives as two words, or that lets
- * the trailing text run as a command, fails here.
- */
+/** Run `line` through a real POSIX shell and report the argv it produced. */
 function argvAfterShell(line: string): string[] {
-	// The word is CONCATENATED into the script, not handed over as a positional
-	// parameter: a positional parameter arrives already-split, so the shell would
-	// never have parsed the quoting — which is the whole thing under test. Here
-	// the shell does the word splitting, exactly as it would for a real command
-	// arriving over ssh.
 	const result = spawnSync(
 		"/bin/sh",
 		["-c", `set -- ${line}; for a in "$@"; do printf "%s\\n" "$a"; done`],
 		{ encoding: "utf-8" },
 	);
-	// One argv per line: the paths under test contain no newline, so a line
-	// break here can only mean the shell split something it should not have.
 	return result.stdout.split("\n").slice(0, -1);
 }
 
@@ -71,101 +67,17 @@ const HOME = "/Users/svallory";
 const CWD = `${HOME}/work/hyper`;
 const FOLDER = `${HOME}/.claude/projects/-Users-svallory-work-hyper`;
 const TRANSCRIPT = `${FOLDER}/${SESSION}.jsonl`;
-
-/** A recording spawner: every step's effect is inspectable, nothing is spawned. */
-interface Recorder {
-	deps: WarpDeps;
-	/** Every `runner.ssh` argv, in order. */
-	ssh: string[][];
-	/** Every `runner.rsync` call. */
-	copies: { src: string; dst: string; excludes: string[] }[];
-	/** Every `herdr` argv. */
-	herdr: string[][];
-	/** Every sync flush. */
-	flushed: string[];
-	/** Markers written. */
-	markers: { machine: string; at: string | undefined }[];
-	/** Branch pushes. */
-	pushes: { url: string; branch: string; worktree: string }[];
-	/** Stops. */
-	stops: { pid: number; sessionId: string; cwd: string }[];
-}
-
-function recorder(overrides: Partial<WarpDeps> = {}): Recorder {
-	const ssh: string[][] = [];
-	const copies: { src: string; dst: string; excludes: string[] }[] = [];
-	const herdr: string[][] = [];
-	const flushed: string[] = [];
-	const markers: { machine: string; at: string | undefined }[] = [];
-	const pushes: { url: string; branch: string; worktree: string }[] = [];
-	const stops: { pid: number; sessionId: string; cwd: string }[] = [];
-	// Whatever runner a test supplies is WRAPPED, not swapped out, so the
-	// recording still happens: a test that overrides `ssh` to fail one call wants
-	// to assert about the calls around it just as much.
-	const base: MachineRunner = {
-		async ssh(cmd) {
-			ssh.push(cmd);
-			return { code: 0, stdout: "", stderr: "" };
-		},
-		async rsync(src, dst, opts) {
-			copies.push({ src, dst, excludes: opts?.excludes ?? [] });
-			return { code: 0, stdout: "", stderr: "" };
-		},
-		async scp() {
-			return { code: 0, stdout: "", stderr: "" };
-		},
-	};
-	// `runner` is pulled OUT of the overrides: it is spread last below, so
-	// leaving it in would overwrite the wrapper and silently un-record.
-	const { runner: custom, ...rest } = overrides;
-	const runner: MachineRunner = custom
-		? {
-				async ssh(cmd, opts) {
-					ssh.push(cmd);
-					return custom.ssh(cmd, opts);
-				},
-				async rsync(src, dst, opts) {
-					copies.push({ src, dst, excludes: opts?.excludes ?? [] });
-					return custom.rsync(src, dst, opts);
-				},
-				scp: (src, dst) => custom.scp(src, dst),
-			}
-		: base;
-
-	return {
-		ssh,
-		copies,
-		herdr,
-		flushed,
-		markers,
-		pushes,
-		stops,
-		deps: {
-			runner,
-			async stop(pid, options) {
-				stops.push({ pid, sessionId: options.sessionId, cwd: options.cwd });
-				return "terminated";
-			},
-			writeOwner(_cwd, _id, machine, at) {
-				markers.push({ machine, at });
-				return { owner: machine, at: at ?? "" };
-			},
-			pushBranch(options) {
-				pushes.push(options);
-				return options;
-			},
-			flushSync: async (session: string) => {
-				flushed.push(session);
-			},
-			runHerdr: async (argv: string[]) => {
-				herdr.push(argv);
-				return { code: 0, stdout: '{"result":{"tab":"w1:t1","root_pane":"w1:p1"}}', stderr: "" };
-			},
-			now: () => "2026-10-03T12:00:00.000Z",
-			...rest,
-		},
-	};
-}
+const ROOT = `${HOME}/work/spaces/research`;
+const WT = `${ROOT}/worktrees/feat-warp`;
+const SPACE: WarpSpaceInfo = {
+	root: ROOT,
+	name: "research",
+	barePath: `${ROOT}/.git`,
+	branch: "feat-warp",
+};
+const TAB_JSON = JSON.stringify({
+	result: { tab: { tab_id: "w1:t1" }, root_pane: { pane_id: "w1:p1", tab_id: "w1:t1" } },
+});
 
 /** Inputs that pass every pre-flight check, so a test can vary one thing. */
 function inputs(overrides: Partial<WarpInputs> = {}): WarpInputs {
@@ -176,7 +88,8 @@ function inputs(overrides: Partial<WarpInputs> = {}): WarpInputs {
 		target: { name: "netcup", host: "me@box", home: HOME },
 		sessionId: SESSION,
 		transcriptPath: TRANSCRIPT,
-		live: null,
+		transcriptSubfolder: false,
+		live: [],
 		stop: false,
 		force: false,
 		remoteControl: false,
@@ -185,15 +98,19 @@ function inputs(overrides: Partial<WarpInputs> = {}): WarpInputs {
 		space: null,
 		excludes: ["node_modules"],
 		syncSession: null,
+		agentSuffix: "k1",
 		...overrides,
 	};
 }
 
-/** A plan or a thrown assertion — every refusal here is a value, not an error. */
 function planOf(overrides: Partial<WarpInputs> = {}): WarpPlan {
 	const result = planWarp(inputs(overrides));
 	if (!result.ok) throw new Error(`expected a plan, got a refusal: ${result.message}`);
 	return result.plan;
+}
+
+function spacePlan(overrides: Partial<WarpInputs> = {}): WarpPlan {
+	return planOf({ cwd: WT, cwdKind: "space-worktree", space: SPACE, ...overrides });
 }
 
 function refuseWith(overrides: Partial<WarpInputs> = {}) {
@@ -202,283 +119,376 @@ function refuseWith(overrides: Partial<WarpInputs> = {}) {
 	return result;
 }
 
-/** Re-point a plan's marker at a temp file, so undo can be tested off-HOME. */
-function withMarkerAt(plan: WarpPlan, path: string): WarpPlan {
-	return {
-		...plan,
-		steps: plan.steps.map((entry) => (entry.kind === "write-marker" ? { ...entry, path } : entry)),
-	};
+const kinds = (steps: WarpStep[]) => steps.map((step) => step.kind);
+const probeOf = (plan: WarpPlan, id: ProbeId) =>
+	plan.steps.find((step) => step.kind === "probe" && step.id === id) as
+		| Extract<WarpStep, { kind: "probe" }>
+		| undefined;
+
+/** One call the executor made, tagged by whether it can change anything. */
+interface Event {
+	type: "probe" | "change";
+	what: string;
 }
 
-const kinds = (steps: WarpStep[]) => steps.map((step) => step.kind);
+/**
+ * A fake target. Each probe is recognised by its argv (looked up in the plan)
+ * and answered with the exit code the scenario gives its id (default 0).
+ */
+interface Scenario {
+	probes?: Partial<Record<ProbeId, number>>;
+	/** Exit code of every copy (default 0). */
+	copyCode?: number;
+	/** Exit code of remote commands, by argv[0]..argv[2] joined (default 0). */
+	commands?: Record<string, number>;
+	tabJson?: string;
+	stopOutcome?: Awaited<ReturnType<NonNullable<WarpDeps["stop"]>>>;
+	stillLive?: LiveSession[];
+	pushFails?: string;
+}
 
-/** The probe about the working directory's PARENT, wherever it sits in the plan. */
-const parentProbeOf = (plan: WarpPlan) =>
-	plan.steps.find(
-		(entry) => entry.kind === "probe" && entry.summary.includes("exists and is writable"),
-	) as Extract<WarpStep, { kind: "probe" }>;
+interface Run {
+	deps: WarpDeps;
+	events: Event[];
+	ssh: string[][];
+	/** ssh calls made in the change phase (not probes). */
+	remote: string[][];
+	copies: { src: string; dst: string; excludes: string[] }[];
+	herdr: string[][];
+	markers: { path: string; expected: OwnerMarker | null; next: OwnerMarker | null }[];
+	pushes: { url: string; branch: string; checkedOutAtSamePath?: boolean; dryRun?: boolean }[];
+	stops: number[];
+}
 
-const step = <K extends WarpStep["kind"]>(steps: WarpStep[], kind: K) =>
-	steps.find((entry) => entry.kind === kind) as Extract<WarpStep, { kind: K }>;
+function fakeTarget(plan: WarpPlan, scenario: Scenario = {}): Run {
+	const probeByArgv = new Map<string, ProbeId>();
+	for (const step of plan.steps) {
+		if (step.kind === "probe") probeByArgv.set(JSON.stringify(step.argv), step.id);
+	}
+	const run: Run = {
+		events: [],
+		ssh: [],
+		remote: [],
+		copies: [],
+		herdr: [],
+		markers: [],
+		pushes: [],
+		stops: [],
+		deps: undefined as unknown as WarpDeps,
+	};
+	const runner: MachineRunner = {
+		async ssh(cmd) {
+			run.ssh.push(cmd);
+			// The same argv can be a probe AND, later, a post-clone check (the
+			// bare-repo test). Before the first change it is the probe; after it,
+			// a step of the change phase.
+			const changed = run.events.some((event) => event.type === "change");
+			const id = changed ? undefined : probeByArgv.get(JSON.stringify(cmd));
+			if (id) {
+				run.events.push({ type: "probe", what: id });
+				return { code: scenario.probes?.[id] ?? 0, stdout: "", stderr: "" };
+			}
+			const key = cmd.slice(0, 3).join(" ");
+			run.remote.push(cmd);
+			run.events.push({ type: "change", what: `remote ${key}` });
+			return { code: scenario.commands?.[key] ?? 0, stdout: "", stderr: "" };
+		},
+		async rsync(src, dst, opts) {
+			run.copies.push({ src, dst, excludes: opts?.excludes ?? [] });
+			run.events.push({ type: "change", what: `copy ${src}` });
+			const code = scenario.copyCode ?? 0;
+			return { code, stdout: "", stderr: code ? "some files could not be transferred" : "" };
+		},
+		async scp() {
+			throw new Error("warp never uses scp");
+		},
+	};
+	run.deps = {
+		runner,
+		async stop(pid) {
+			run.stops.push(pid);
+			run.events.push({ type: "change", what: `stop ${pid}` });
+			return scenario.stopOutcome === undefined ? "terminated" : scenario.stopOutcome;
+		},
+		liveSessions: () => scenario.stillLive ?? [],
+		swapMarker(path, expected, next) {
+			run.markers.push({ path, expected, next });
+			run.events.push({ type: "change", what: "marker" });
+		},
+		pushBranch(options) {
+			run.pushes.push(options);
+			run.events.push({
+				type: options.dryRun ? "probe" : "change",
+				what: options.dryRun ? "push-check" : "push",
+			});
+			if (scenario.pushFails && options.dryRun) throw new Error(scenario.pushFails);
+			return { url: options.url, branch: options.branch, refspec: "" };
+		},
+		flushSync: async (session) => {
+			run.events.push({ type: "change", what: `flush ${session}` });
+		},
+		runHerdr: async (argv) => {
+			run.herdr.push(argv);
+			const probe = argv.includes("pane") && argv.includes("list");
+			run.events.push({ type: probe ? "probe" : "change", what: `herdr ${argv[2]} ${argv[3]}` });
+			if (probe) return { code: scenario.probes?.herdr ?? 0, stdout: "", stderr: "" };
+			if (argv.includes("tab"))
+				return { code: 0, stdout: scenario.tabJson ?? TAB_JSON, stderr: "" };
+			return { code: 0, stdout: "", stderr: "" };
+		},
+		now: () => "2026-10-04T12:00:00.000Z",
+	};
+	return run;
+}
 
-describe("the plan for a plain directory", () => {
-	it("probes before it copies anything", () => {
-		const plan = planOf();
-		const order = kinds(plan.steps);
-		expect(order.slice(0, 2)).toEqual(["probe", "probe"]);
-		// Every probe must precede the first thing that can change a machine.
-		const firstProbe = order.lastIndexOf("probe");
-		const firstMutation = order.findIndex((kind) => kind !== "probe");
-		expect(firstMutation).toBeGreaterThan(firstProbe);
+/** Every probe event precedes every change event. */
+function expectProbesFirst(events: Event[]) {
+	const lastProbe = events.map((event) => event.type).lastIndexOf("probe");
+	const firstChange = events.findIndex((event) => event.type === "change");
+	if (firstChange >= 0) expect(lastProbe, JSON.stringify(events)).toBeLessThan(firstChange);
+}
+
+const LIVE: LiveSession = { pid: 27145, cwd: "/Users/svallory/work", startedAt: 1_700_000_000_000 };
+
+describe("order: every check before the first change, for every kind of working directory", () => {
+	const cases: [string, () => WarpPlan, Scenario][] = [
+		["a plain directory", () => planOf({ stop: true, live: [LIVE] }), {}],
+		["a plain git repo", () => planOf({ cwdKind: "git-repo", stop: true, live: [LIVE] }), {}],
+		[
+			"a space worktree whose space is on the target",
+			() => spacePlan({ stop: true, live: [LIVE] }),
+			{ probes: { worktree: 1 } },
+		],
+		[
+			"a space worktree whose space is on the target, worktree already registered",
+			() => spacePlan({ stop: true, live: [LIVE] }),
+			{ probes: { worktree: 0 } },
+		],
+		[
+			"a space worktree whose space is missing on the target",
+			() => spacePlan({ stop: true, live: [LIVE] }),
+			{ probes: { space: 1 } },
+		],
+		[
+			"a plain directory with a config-sync session",
+			() => planOf({ syncSession: "hyper-claude-netcup", stop: true, live: [LIVE] }),
+			{},
+		],
+	];
+	for (const [label, build, scenario] of cases) {
+		it(`completes with every probe before the first change: ${label}`, async () => {
+			const plan = build();
+			const run = fakeTarget(plan, scenario);
+			const result = await executeWarp(plan, run.deps);
+			expect(result.failure, result.failure?.detail).toBeUndefined();
+			expectProbesFirst(run.events);
+			// The first change is the stop, then the marker.
+			const changes = run.events.filter((event) => event.type === "change");
+			expect(changes[0]?.what).toBe(`stop ${LIVE.pid}`);
+			expect(changes[1]?.what).toBe("marker");
+		});
+	}
+
+	// The two AC-16 cases the review reproduced in a container (blocker 1).
+	it("refuses a space on the target with an unwritable worktrees/ dir BEFORE stopping or writing anything", async () => {
+		const plan = spacePlan({ stop: true, live: [LIVE] });
+		const run = fakeTarget(plan, { probes: { "space-parent": 67 } });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.step.summary).toContain(`${ROOT}/worktrees`);
+		expect(result.failure?.detail).toContain("isn't writable");
+		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+		expect(run.stops).toEqual([]);
+		expect(run.markers).toEqual([]);
+		expect(run.pushes.filter((push) => !push.dryRun)).toEqual([]);
+		expect(result.copied).toBe(false);
 	});
 
-	it("copies the transcript folder and the workdir to the same absolute paths", () => {
-		const plan = planOf();
-		const copies = plan.steps.filter((entry) => entry.kind === "copy");
-		expect(copies).toHaveLength(2);
-		expect(copies[0]?.src).toBe(FOLDER);
-		expect(copies[0]?.dst).toBe(FOLDER);
-		expect(copies[1]?.src).toBe(CWD);
-		expect(copies[1]?.dst).toBe(CWD);
+	it("refuses a missing space whose nearest existing ancestor is unwritable BEFORE stopping or writing anything", async () => {
+		const plan = spacePlan({ stop: true, live: [LIVE] });
+		const run = fakeTarget(plan, { probes: { space: 1, "space-ancestor": 67 } });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.step.summary).toContain(`${ROOT} can be created`);
+		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+		expect(run.stops).toEqual([]);
+		expect(run.markers).toEqual([]);
 	});
 
-	it("never passes --delete to any copy", () => {
-		// A warp adds the target's copy; it must not prune what the target had.
-		for (const cwdKind of ["plain-dir", "git-repo"] as const) {
-			const text = JSON.stringify(planOf({ cwdKind }).steps);
-			expect(text, cwdKind).not.toContain("--delete");
+	it("never places a probe after a mutating step, in any plan", () => {
+		const plans = [
+			planOf({ stop: true, live: [LIVE] }),
+			planOf({ cwdKind: "git-repo" }),
+			spacePlan({ stop: true, live: [LIVE], transcriptSubfolder: true }),
+			planOf({ syncSession: "hyper-claude-netcup" }),
+		];
+		for (const plan of plans) {
+			const order = kinds(plan.steps);
+			const firstChange = order.findIndex((kind) => kind !== "probe");
+			expect(order.lastIndexOf("probe")).toBeLessThan(firstChange);
 		}
 	});
 
-	it("writes the ownership marker before the first copy", () => {
-		const order = kinds(planOf().steps);
-		const marker = order.indexOf("write-marker");
-		const firstCopy = order.indexOf("copy");
-		expect(marker).toBeGreaterThan(-1);
-		expect(marker).toBeLessThan(firstCopy);
-	});
-
-	it("asks for a tab and then an agent, in that order", () => {
-		const plan = planOf();
-		const herdr = plan.steps.filter((entry) => entry.kind === "herdr");
-		expect(herdr).toHaveLength(2);
-		expect(herdr[0]?.argv).toEqual(["--machine", "netcup", "tab", "create", "--cwd", CWD]);
-		expect(herdr[1]?.argv).toContain("agent");
-		expect(herdr[1]?.argv).toContain("start");
-		expect(herdr[1]?.argv).toContain("claude");
-		expect(herdr[1]?.argv).toContain("--resume");
-		expect(herdr[1]?.argv).toContain(SESSION);
+	it("says nothing changed when a probe refuses, and never 'nothing needs undoing'", async () => {
+		const plan = spacePlan({ stop: true, live: [LIVE] });
+		const run = fakeTarget(plan, { probes: { "space-parent": 67 } });
+		const result = await executeWarp(plan, run.deps);
+		const message = describeFailure(plan, result, restoreMarker(plan, result));
+		expect(message).toContain("Nothing was changed on either machine");
+		expect(message).not.toContain("nothing needs undoing");
+		expect(message).not.toContain("claude --resume");
 	});
 });
 
-describe("the plan for a plain git repo", () => {
-	it("carries the same exclusions as every other kind", () => {
-		const plan = planOf({ cwdKind: "git-repo", excludes: ["node_modules", "dist"] });
-		const workdir = plan.steps.filter((entry) => entry.kind === "copy").at(-1);
-		expect(workdir?.excludes).toEqual(["node_modules", "dist"]);
-	});
-
-	it("adds no space steps, because there is no space", () => {
-		const plan = planOf({ cwdKind: "git-repo" });
-		expect(kinds(plan.steps)).not.toContain("push-branch");
-		expect(kinds(plan.steps)).not.toContain("remote-command");
-	});
-});
-
-describe("the plan for a space worktree", () => {
-	const ROOT = `${HOME}/work/spaces/research`;
-	const WT = `${ROOT}/worktrees/feat-warp`;
-	const space = {
-		root: ROOT,
-		name: "research",
-		barePath: `${ROOT}/.git`,
-		branch: "feat-warp",
-		cloneNeeded: true,
-	};
-
-	it("clones the space, then pushes the branch, then copies the worktree", () => {
-		const plan = planOf({ cwdKind: "space-worktree", space });
-		const order = kinds(plan.steps);
-		// The transcript copy comes earlier in the plan (design step 4 before
-		// step 5), so the workdir copy is the LAST one — comparing against the
-		// first would assert the wrong ordering.
-		const workdirCopy = order.lastIndexOf("copy");
-		expect(order.indexOf("remote-command")).toBeLessThan(order.indexOf("push-branch"));
-		expect(order.indexOf("push-branch")).toBeLessThan(workdirCopy);
-		expect(order.indexOf("copy")).toBeLessThan(order.indexOf("remote-command"));
-	});
-
-	it("pushes to an explicit ssh:// URL, never to a remote name (C-9)", () => {
-		const plan = planOf({ cwdKind: "space-worktree", space });
-		const push = step(plan.steps, "push-branch");
-		expect(push.url).toBe(`ssh://me@box${space.barePath}`);
-		expect(push.url.startsWith("ssh://")).toBe(true);
-		// Nothing in the plan may name a remote the git would resolve locally.
-		expect(JSON.stringify(plan.steps)).not.toMatch(/"origin"/);
-	});
-
-	it("puts the port in the ssh:// URL when the machine named one", () => {
-		const plan = planOf({
-			cwd: WT,
-			cwdKind: "space-worktree",
-			target: { name: "netcup", host: "me@box", port: 2222, home: HOME },
-			space,
-		});
-		expect(step(plan.steps, "push-branch").url).toBe(`ssh://me@box:2222${space.barePath}`);
-	});
-
-	it("clones the space over ssh with --yes, so it cannot prompt on a machine with no tty", () => {
-		const plan = planOf({ cwdKind: "space-worktree", space });
-		expect(step(plan.steps, "remote-command").argv).toEqual([
-			"hyper",
-			"space",
-			"clone",
-			"research",
-			"--yes",
+describe("the space worktree on the target is a real git worktree (blocker 3)", () => {
+	it("first warp of a missing space: clone at a pinned path, verify the repo, push, add, reset, copy without .git", async () => {
+		const plan = spacePlan();
+		const run = fakeTarget(plan, { probes: { space: 1 } });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure).toBeUndefined();
+		const remote = run.remote;
+		expect(remote[0]).toEqual(["hyper", "space", "clone", "--yes", "--", "research", ROOT]);
+		expect(remote[1]).toEqual([
+			"git",
+			`--git-dir=${ROOT}/.git`,
+			"rev-parse",
+			"--is-bare-repository",
 		]);
+		expect(remote[2]?.slice(-6)).toEqual([
+			"worktree",
+			"add",
+			"--no-checkout",
+			"--",
+			WT,
+			"feat-warp",
+		]);
+		expect(remote[2]?.slice(0, 2)).toEqual(["git", `--git-dir=${ROOT}/.git`]);
+		expect(remote[3]?.slice(-2)).toEqual(["reset", "-q"]);
+		expect(remote[3]).toContain(WT);
+		const changes = run.events
+			.filter((event) => event.type === "change")
+			.map((event) => event.what);
+		const at = (prefix: string) => changes.findIndex((what) => what.startsWith(prefix));
+		expect(at("remote hyper space clone")).toBeLessThan(at("push"));
+		expect(at("push")).toBeLessThan(at(`remote git --git-dir=${ROOT}/.git -c`));
+		expect(at(`remote git -C ${WT}`)).toBeLessThan(at(`copy ${WT}`));
+		const worktreeCopy = run.copies.find((copy) => copy.src === `${WT}/`);
+		expect(worktreeCopy?.excludes[0]).toBe("/.git");
+		// The push never tells receive-pack to accept a checked-out branch here.
+		expect(run.pushes.find((push) => !push.dryRun)?.checkedOutAtSamePath).toBe(false);
 	});
 
-	it("checks the space BEFORE the parent, or a missing space could never be cloned", () => {
-		// The worktree's parent lives INSIDE the space. Checked first and treated
-		// as fatal, it would refuse every first-time warp and make the clone step
-		// unreachable — the target cannot have the parent before it has the space.
-		const plan = planOf({ cwd: WT, cwdKind: "space-worktree", space });
-		expect((plan.steps[0] as { summary: string }).summary).toContain("already on");
-		const parents = plan.steps.filter(
-			(entry) => entry.kind === "probe" && entry.summary.includes("exists and is writable"),
-		);
-		expect(parents).toHaveLength(2);
-		expect(parents[0]?.fatal).toBe(false);
-		expect(parents[1]?.fatal).toBeUndefined();
+	it("does not ask for hyper, nor clone, when the space is already there", async () => {
+		const plan = spacePlan();
+		const run = fakeTarget(plan, { probes: { worktree: 1 } });
+		await executeWarp(plan, run.deps);
+		const probed = run.events.filter((event) => event.type === "probe").map((event) => event.what);
+		expect(probed).not.toContain("hyper");
+		expect(probed).not.toContain("space-ancestor");
+		expect(run.ssh.some((argv) => argv[0] === "hyper" || argv[0] === "command")).toBe(false);
 	});
 
-	it("skips the clone when the target already has the space", async () => {
-		const plan = planOf({ cwdKind: "space-worktree", space });
-		// The space probe passes (non-fatal), so the conditional clone is skipped.
-		const rec = recorder();
-		const result = await executeWarp(plan, rec.deps);
+	it("re-warp into a registered worktree on the same branch: no add, push allowed to move the checked-out branch, reset", async () => {
+		const plan = spacePlan({
+			force: true,
+			owner: { state: "owned", path: "/m", marker: { owner: "netcup", at: "t" } },
+		});
+		const run = fakeTarget(plan, { probes: { worktree: 0 } });
+		const result = await executeWarp(plan, run.deps);
 		expect(result.failure).toBeUndefined();
-		const clone = rec.ssh.find((argv) => argv[0] === "hyper");
-		expect(clone).toBeUndefined();
-		// The branch still gets pushed: existing space, new branch.
-		expect(rec.pushes).toHaveLength(1);
+		expect(run.ssh.some((argv) => argv.includes("worktree") && argv.includes("add"))).toBe(false);
+		expect(run.ssh.some((argv) => argv.includes("reset"))).toBe(true);
+		expect(run.pushes.find((push) => !push.dryRun)?.checkedOutAtSamePath).toBe(true);
 	});
 
-	it("clones the space when the target does not have it, without stopping on the probe", async () => {
-		const plan = planOf({ cwdKind: "space-worktree", space });
-		const rec = recorder({
-			runner: {
-				async ssh(cmd) {
-					// `test -d <spaceRoot>` fails (the space is missing); the clone's
-					// `command -v hyper` passes.
-					if ((cmd[2] as string).includes(space.root)) {
-						return { code: 1, stdout: "", stderr: "" };
-					}
-					return { code: 0, stdout: "", stderr: "" };
-				},
-				async rsync() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-				async scp() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-			},
+	for (const [state, phrase] of [
+		[TARGET_WORKTREE_STATE.otherBranchHere, "another branch"],
+		[TARGET_WORKTREE_STATE.branchElsewhere, "checked out in another worktree"],
+		[TARGET_WORKTREE_STATE.occupied, "isn't a worktree of the space"],
+		[TARGET_WORKTREE_STATE.registeredButMissing, "worktree prune"],
+	] as const) {
+		it(`refuses in the probe block when the worktree state is ${state} (${phrase})`, async () => {
+			const plan = spacePlan();
+			const run = fakeTarget(plan, { probes: { worktree: state } });
+			const result = await executeWarp(plan, run.deps);
+			expect(result.failure?.detail).toContain(phrase);
+			expect(run.events.filter((event) => event.type === "change")).toEqual([]);
 		});
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.failure).toBeUndefined();
-		expect(rec.ssh.some((argv) => argv[0] === "hyper")).toBe(true);
+	}
+
+	it("refuses a non-fast-forward push in the probe block (git push --dry-run)", async () => {
+		const plan = spacePlan();
+		const run = fakeTarget(plan, { pushFails: "! [rejected] feat-warp (fetch first)" });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.step.summary).toContain("--dry-run");
+		expect(result.failure?.detail).toContain("fetch first");
+		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
 	});
 
-	it("refuses when the space is missing AND hyper is not installed on the target", async () => {
-		const plan = planOf({ cwd: WT, cwdKind: "space-worktree", space });
-		const rec = recorder({
-			runner: {
-				async ssh(cmd) {
-					if ((cmd[2] as string).includes(space.root)) {
-						return { code: 1, stdout: "", stderr: "" };
-					}
-					if (cmd[0] === "command") return { code: 1, stdout: "", stderr: "" };
-					return { code: 0, stdout: "", stderr: "" };
-				},
-				async rsync() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-				async scp() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-			},
+	it("reports a worktrees/ dir the clone made unwritable as a step failure, with what completed", async () => {
+		const plan = spacePlan();
+		const run = fakeTarget(plan, {
+			probes: { space: 1 },
+			commands: { [`git --git-dir=${ROOT}/.git -c`]: 128 },
 		});
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.failure?.detail).toContain("hyper isn't installed on netcup");
-		expect(rec.copies).toHaveLength(0);
-		expect(rec.markers).toHaveLength(0);
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.step.summary).toContain("register");
+		const message = describeFailure(plan, result, restoreMarker(plan, result));
+		expect(message).toContain("Done before that:");
+		expect(message).toContain("clone the space");
+		expect(message).toContain(`branch feat-warp in ${ROOT}/.git`);
+		expect(message).not.toContain("Nothing was changed");
 	});
 
-	it("does not clone, and does not probe for hyper, when the space is already there", () => {
-		const plan = planOf({
-			cwd: `${HOME}/sp/r/worktrees/main`,
-			cwdKind: "space-worktree",
-			space: { ...space, cloneNeeded: false },
+	it("pins the clone destination and keeps a space named like an option from parsing as one", () => {
+		const plan = spacePlan({
+			cwd: `${HOME}/sp/-x/worktrees/main`,
+			space: { root: `${HOME}/sp/-x`, name: "-x", barePath: `${HOME}/sp/-x/.git`, branch: "main" },
 		});
-		expect(kinds(plan.steps)).not.toContain("remote-command");
-		expect(plan.steps.filter((entry) => entry.kind === "probe")).toHaveLength(2);
+		const clone = plan.steps.find(
+			(step) => step.kind === "remote-command" && step.argv[0] === "hyper",
+		) as Extract<WarpStep, { kind: "remote-command" }>;
+		expect(clone.argv).toEqual(["hyper", "space", "clone", "--yes", "--", "-x", `${HOME}/sp/-x`]);
+		expect(clone.argv.indexOf("--")).toBeLessThan(clone.argv.indexOf("-x"));
 	});
 
-	it("refuses a space worktree with no space details rather than guessing", () => {
-		const refusal = refuseWith({ cwdKind: "space-worktree", space: null });
-		expect(refusal.exit).toBe(2);
-		expect(refusal.message).toContain("worktree");
-	});
-
-	it("maps a multi-repo worktree to its own bare repo", () => {
-		expect(spaceBarePath("/sp/research", "code/api/worktrees/feat")).toBe(
-			"/sp/research/code/api/.git",
-		);
-		expect(spaceBarePath("/sp/research", "worktrees/main")).toBe("/sp/research/.git");
-		expect(spaceBarePath("/sp/research", "notes")).toBeNull();
+	it("says in the plan that the index does not travel", () => {
+		expect(spacePlan().notes.join("\n")).toContain("the index does not travel");
 	});
 });
 
-describe("refusals", () => {
-	it("exits 2 and names the pid when the session is live (AC-13)", () => {
+describe("ownership (blocker 2)", () => {
+	it("refuses a re-warp to the machine that already owns the session", () => {
 		const refusal = refuseWith({
-			live: { pid: 27145, cwd: "/Users/svallory/work", startedAt: 1_700_000_000_000 },
+			owner: { state: "owned", path: "/m", marker: { owner: "netcup", at: "2026-10-04" } },
 		});
 		expect(refusal.exit).toBe(2);
-		expect(refusal.message).toContain("27145");
-		expect(refusal.message).toContain("--stop");
+		expect(refusal.message).toContain("lives on netcup now");
+		expect(refusal.message).toContain("Warp it back from there");
+		expect(refusal.message).toContain("--force to overwrite netcup's copy with this machine's");
 	});
 
-	it("plans the stop when --stop is given with a live session", () => {
+	it("proceeds with --force, and the marker swap expects the old marker", async () => {
+		const previous = { owner: "netcup", at: "2026-10-04" };
+		const plan = planOf({ force: true, owner: { state: "owned", path: "/m", marker: previous } });
+		const run = fakeTarget(plan);
+		await executeWarp(plan, run.deps);
+		expect(run.markers[0]?.expected).toEqual(previous);
+		expect(run.markers[0]?.next).toEqual({ owner: "netcup", at: "2026-10-04T12:00:00.000Z" });
+	});
+
+	it("refuses a foreign owner (C-10)", () => {
+		const refusal = refuseWith({
+			owner: { state: "owned", path: "/m", marker: { owner: "other-box", at: "yesterday" } },
+		});
+		expect(refusal.exit).toBe(2);
+		expect(refusal.message).toContain("other-box");
+		expect(refusal.message).toContain("--force");
+	});
+
+	it("allows a session this machine owns, without --force", () => {
 		const plan = planOf({
-			stop: true,
-			live: { pid: 27145, cwd: "/Users/svallory/work", startedAt: 1_700_000_000_000 },
+			owner: { state: "owned", path: "/m", marker: { owner: "mac", at: "yesterday" } },
 		});
-		const stop = step(plan.steps, "stop-session");
-		expect(stop.pid).toBe(27145);
-		// The process cwd from the sessions file, NOT warp's cwd: they differ in
-		// practice, and stopSession re-reads the file for that exact pid.
-		expect(stop.cwd).toBe("/Users/svallory/work");
-		expect(kinds(plan.steps).indexOf("stop-session")).toBeLessThan(
-			kinds(plan.steps).indexOf("write-marker"),
-		);
-	});
-
-	it("refuses a cwd outside this machine's home", () => {
-		const refusal = refuseWith({ cwd: "/tmp/scratch", selfHome: HOME });
-		expect(refusal.exit).toBe(2);
-		expect(refusal.message).toContain("isn't inside this machine's home");
-	});
-
-	it("refuses a cwd outside the target's home", () => {
-		const refusal = refuseWith({ target: { name: "netcup", host: "me@box", home: "/home/other" } });
-		expect(refusal.exit).toBe(2);
-		expect(refusal.message).toContain("isn't inside netcup's home");
-	});
-
-	it("refuses a relative home, because the paths have to match", () => {
-		const refusal = refuseWith({ target: { name: "netcup", host: "me@box", home: "~" } });
-		expect(refusal.message).toContain("absolute");
+		expect(plan.target.name).toBe("netcup");
 	});
 
 	it("refuses a malformed ownership marker rather than guessing an owner", () => {
@@ -489,36 +499,417 @@ describe("refusals", () => {
 		expect(refusal.message).toContain("not valid JSON");
 	});
 
-	it("refuses a foreign owner (C-10)", () => {
+	it("copies only this session's files, never the project folder", () => {
+		const plan = planOf({ transcriptSubfolder: true });
+		const copies = plan.steps.filter((step) => step.kind === "copy");
+		expect(copies.map((copy) => [copy.src, copy.tree])).toEqual([
+			[TRANSCRIPT, false],
+			[`${FOLDER}/${SESSION}`, true],
+			[`${FOLDER}/${SESSION}.warp.json`, false],
+			[CWD, true],
+		]);
+		expect(copies.some((copy) => copy.src === FOLDER)).toBe(false);
+	});
+
+	it("skips the session folder when there is none", () => {
+		const plan = planOf();
+		expect(plan.steps.filter((step) => step.kind === "copy").map((copy) => copy.src)).toEqual([
+			TRANSCRIPT,
+			`${FOLDER}/${SESSION}.warp.json`,
+			CWD,
+		]);
+	});
+
+	it("says in the plan that the target's directory is overwritten file by file, with no --delete", () => {
+		const notes = planOf().notes.join("\n");
+		expect(notes).toContain("overwritten file by file");
+		expect(notes).toContain("no --delete");
+		expect(JSON.stringify(planOf().steps)).not.toContain("--delete");
+	});
+});
+
+describe("the ownership marker is compare-and-swap", () => {
+	let dir: string;
+	let path: string;
+	const mine = { owner: "netcup", at: "2026-10-04T12:00:00.000Z" };
+	const theirs = { owner: "other", at: "2026-10-04T12:00:01.000Z" };
+
+	beforeEach(() => {
+		dir = mkdtempSync(join(tmpdir(), "warp-marker-"));
+		path = join(dir, `${SESSION}.warp.json`);
+	});
+	afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+	const read = () => JSON.parse(readFileSync(path, "utf-8")) as OwnerMarker;
+
+	it("creates a marker only when there is none (exclusive create)", () => {
+		swapMarker(path, null, mine);
+		expect(read()).toEqual(mine);
+		expect(() => swapMarker(path, null, theirs)).toThrow(MarkerConflictError);
+		expect(read()).toEqual(mine);
+	});
+
+	it("replaces a marker only when it is the expected one", () => {
+		writeFileSync(path, JSON.stringify(theirs));
+		expect(() => swapMarker(path, mine, { owner: "x", at: "y" })).toThrow(MarkerConflictError);
+		expect(read()).toEqual(theirs);
+		swapMarker(path, theirs, mine);
+		expect(read()).toEqual(mine);
+	});
+
+	it("lets exactly one of two warps that read the same state win", () => {
+		swapMarker(path, null, mine);
+		expect(() => swapMarker(path, null, theirs)).toThrow(/changed while warp was running/);
+		expect(read()).toEqual(mine);
+	});
+
+	it("leaves no temporary files behind, whichever way it goes", () => {
+		swapMarker(path, null, mine);
+		expect(() => swapMarker(path, theirs, mine)).toThrow();
+		swapMarker(path, mine, null);
+		expect(existsSync(path)).toBe(false);
+		expect(spawnSync("ls", ["-A", dir], { encoding: "utf-8" }).stdout).toBe("");
+	});
+
+	it("restoreMarker never deletes a marker this run did not write", async () => {
+		const plan = withMarkerAt(planOf(), path);
+		const run = fakeTarget(plan, { copyCode: 0 });
+		run.deps.swapMarker = swapMarker;
+		// Make the first copy throw before any transfer, so nothing was copied.
+		run.deps.runner = {
+			...run.deps.runner,
+			rsync: async () => {
+				throw new Error("no route");
+			},
+		};
+		const result = await executeWarp(plan, run.deps);
+		// …but this run DID try the copy, so it counts as copied; drive the
+		// undo directly to test the compare.
+		const notCopied: WarpExecution = { ...result, copied: false };
+		writeFileSync(path, JSON.stringify(theirs)); // another warp replaced it
+		const undone = restoreMarker(plan, notCopied);
+		expect(undone.restored).toBe(false);
+		expect(undone.reason).toContain("changed while warp was running");
+		expect(read()).toEqual(theirs);
+	});
+
+	it("restoreMarker removes the marker it wrote when nothing was copied and there was none before", () => {
+		const plan = withMarkerAt(planOf(), path);
+		swapMarker(path, null, mine);
+		const execution: WarpExecution = {
+			completed: [],
+			skipped: [],
+			copied: false,
+			stopped: [],
+			markerWritten: mine,
+			agentName: plan.agentName,
+			failure: { step: { kind: "flush-sync", summary: "x" }, detail: "y" },
+		};
+		expect(restoreMarker(plan, execution)).toEqual({ restored: true });
+		expect(existsSync(path)).toBe(false);
+	});
+
+	it("restoreMarker puts the previous owner back when nothing was copied", () => {
+		const previous = { owner: "other-box", at: "yesterday" };
+		const plan = withMarkerAt(
+			planOf({ force: true, owner: { state: "owned", path, marker: previous } }),
+			path,
+		);
+		swapMarker(path, null, mine);
+		const execution: WarpExecution = {
+			completed: [],
+			skipped: [],
+			copied: false,
+			stopped: [],
+			markerWritten: mine,
+			agentName: plan.agentName,
+		};
+		expect(restoreMarker(plan, execution).restored).toBe(true);
+		expect(read()).toEqual(previous);
+	});
+});
+
+/** Re-point a plan's marker at a temp file, so undo can be tested off-HOME. */
+function withMarkerAt(plan: WarpPlan, path: string): WarpPlan {
+	return {
+		...plan,
+		steps: plan.steps.map((entry) => (entry.kind === "write-marker" ? { ...entry, path } : entry)),
+	};
+}
+
+describe("a copy that reached the transfer counts as copied (HIGH 5)", () => {
+	for (const code of [23, 24, 12]) {
+		it(`exit ${code} leaves the marker in place and says what may have arrived`, async () => {
+			const plan = planOf();
+			const run = fakeTarget(plan, { copyCode: code });
+			const result = await executeWarp(plan, run.deps);
+			expect(result.copied).toBe(true);
+			const undo = restoreMarker(plan, result);
+			expect(undo.restored).toBe(false);
+			const message = describeFailure(plan, result, undo);
+			expect(message).toContain("What may now be on netcup: possibly part of the transcript");
+			expect(message).toContain("The ownership marker still says netcup owns this session");
+			expect(message).toContain("hyper warp netcup --force");
+			if (code === 23) expect(message).toContain("PARTIAL transfer");
+		});
+	}
+
+	it("a working-directory copy that fails after the transcript arrived lists both", async () => {
+		const plan = planOf();
+		let calls = 0;
+		const run = fakeTarget(plan);
+		run.deps.runner = {
+			...run.deps.runner,
+			async rsync() {
+				calls += 1;
+				return calls < 3
+					? { code: 0, stdout: "", stderr: "" }
+					: { code: 23, stdout: "", stderr: "permission denied" };
+			},
+		};
+		const result = await executeWarp(plan, run.deps);
+		const message = describeFailure(plan, result, restoreMarker(plan, result));
+		expect(message).toContain(`the transcript ${TRANSCRIPT}`);
+		expect(message).toContain(`possibly part of files under ${CWD}`);
+	});
+});
+
+describe("paths the remote side would refuse are refused at planning (HIGH 6)", () => {
+	for (const cwd of [`${HOME}/my proj`, `${HOME}/it's`, `${HOME}/a@b`, `${HOME}/$(id)`]) {
+		it(`refuses ${JSON.stringify(cwd)} before any step exists`, () => {
+			const refusal = refuseWith({ cwd, transcriptPath: TRANSCRIPT });
+			expect(refusal.exit).toBe(2);
+			expect(refusal.message).toContain("can't be sent to netcup");
+		});
+	}
+
+	it("refuses a transcript folder outside the rule too", () => {
 		const refusal = refuseWith({
-			owner: { state: "owned", path: "/m.json", marker: { owner: "other-box", at: "yesterday" } },
+			transcriptPath: `${HOME}/.claude/projects/odd folder/${SESSION}.jsonl`,
 		});
+		expect(refusal.message).toContain("The transcript folder");
+	});
+
+	it("refuses a cwd with a newline in it", () => {
+		const refusal = refuseWith({ cwd: `${HOME}/evil\nrm -rf ~` });
+		expect(refusal.message).toContain("control character");
+	});
+});
+
+describe("failure messages are built from what happened (HIGH 7)", () => {
+	it("after --stop, a failed warp says how to resume here", async () => {
+		const plan = planOf({ stop: true, live: [LIVE] });
+		const run = fakeTarget(plan, { copyCode: 11 });
+		const result = await executeWarp(plan, run.deps);
+		const message = describeFailure(plan, result, restoreMarker(plan, result));
+		expect(message).toContain(`claude --resume ${SESSION}`);
+		expect(message).toContain(`stop session ${SESSION} (pid ${LIVE.pid})`);
+	});
+
+	it("a stop that fails says nothing was copied only through the step record", async () => {
+		const plan = planOf({ stop: true, live: [LIVE] });
+		const run = fakeTarget(plan, { stopOutcome: "survived" });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.copied).toBe(false);
+		expect(run.markers).toEqual([]);
+		const message = describeFailure(plan, result, restoreMarker(plan, result));
+		expect(message).toContain("No change had completed before that");
+		expect(message).toContain("kill -9");
+	});
+});
+
+describe("several live processes for one session (HIGH 9)", () => {
+	const OTHER: LiveSession = { pid: 31337, cwd: CWD, startedAt: 1_700_000_100_000 };
+
+	it("refuses without --stop and names every pid", () => {
+		const refusal = refuseWith({ live: [LIVE, OTHER] });
+		expect(refusal.message).toContain(String(LIVE.pid));
+		expect(refusal.message).toContain(String(OTHER.pid));
+		expect(refusal.message).toContain("2 processes");
+	});
+
+	it("with --stop, stops every one, then checks nothing survived", async () => {
+		const plan = planOf({ stop: true, live: [LIVE, OTHER] });
+		const run = fakeTarget(plan);
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure).toBeUndefined();
+		expect(run.stops).toEqual([LIVE.pid, OTHER.pid]);
+		expect(result.stopped).toEqual([LIVE.pid, OTHER.pid]);
+	});
+
+	it("treats a survivor as a hard error, before the marker", async () => {
+		const plan = planOf({ stop: true, live: [LIVE, OTHER] });
+		const run = fakeTarget(plan, { stillLive: [OTHER] });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.detail).toContain(`pid ${OTHER.pid}`);
+		expect(run.markers).toEqual([]);
+		expect(run.copies).toEqual([]);
+	});
+
+	for (const outcome of ["survived", "mismatch", "unauthorized", null] as const) {
+		it(`treats a stop outcome of ${outcome} as a hard error, with nothing copied`, async () => {
+			const plan = planOf({ stop: true, live: [LIVE] });
+			const run = fakeTarget(plan, { stopOutcome: outcome });
+			const result = await executeWarp(plan, run.deps);
+			expect(result.failure?.step.summary).toContain("stop session");
+			expect(run.copies).toEqual([]);
+			expect(run.markers).toEqual([]);
+		});
+	}
+});
+
+describe("Herdr resume (HIGH 4)", () => {
+	it("passes only the agent's ARGUMENTS after --, never the binary name", async () => {
+		const plan = planOf({ remoteControl: true });
+		const run = fakeTarget(plan);
+		await executeWarp(plan, run.deps);
+		const start = run.herdr.at(-1) as string[];
+		expect(start).toEqual([
+			"--machine",
+			"netcup",
+			"agent",
+			"start",
+			plan.agentName,
+			"--kind",
+			"claude",
+			"--pane",
+			"w1:p1",
+			"--",
+			"--resume",
+			SESSION,
+			REMOTE_CONTROL_FLAG,
+		]);
+		expect(start.slice(start.indexOf("--") + 1)).not.toContain("claude");
+	});
+
+	it("creates the tab without stealing focus, at the cwd", async () => {
+		const plan = planOf();
+		const run = fakeTarget(plan);
+		await executeWarp(plan, run.deps);
+		const create = run.herdr.find((argv) => argv.includes("tab")) as string[];
+		expect(create).toEqual([
+			"--machine",
+			"netcup",
+			"tab",
+			"create",
+			"--cwd",
+			CWD,
+			"--label",
+			plan.agentName,
+			"--no-focus",
+		]);
+	});
+
+	it("fails clearly, and starts no agent, when the tab JSON has no pane id", async () => {
+		for (const json of ["{}", '{"result":{"root_pane":"w1:p1"}}', "pane_id: w1:p2", ""]) {
+			const plan = planOf();
+			const run = fakeTarget(plan, { tabJson: json });
+			const result = await executeWarp(plan, run.deps);
+			expect(result.failure?.detail, json).toContain(".result.root_pane.pane_id");
+			expect(
+				run.herdr.some((argv) => argv.includes("agent")),
+				json,
+			).toBe(false);
+		}
+	});
+
+	it("names the agent in lowercase, valid for Herdr, and differently on a repeat warp", () => {
+		const upper = planOf({
+			sessionId: SESSION.toUpperCase(),
+			transcriptPath: `${FOLDER}/${SESSION.toUpperCase()}.jsonl`,
+		});
+		expect(upper.agentName).toMatch(/^[a-z][a-z0-9_-]*$/);
+		expect(upper.agentName).toBe("warp-3d9c77a6-k1");
+		expect(planOf({ agentSuffix: "k2" }).agentName).not.toBe(
+			planOf({ agentSuffix: "k1" }).agentName,
+		);
+	});
+
+	it("refuses an agent suffix Herdr would reject", () => {
+		expect(refuseWith({ agentSuffix: "K!" }).message).toContain("agent name");
+	});
+
+	it("points at `herdr machine add` when the target has no Herdr server, before any change", async () => {
+		const plan = planOf();
+		const run = fakeTarget(plan, { probes: { herdr: 1 } });
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.detail).toContain("herdr machine add");
+		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+	});
+
+	it("reads .result.root_pane.pane_id and nothing else", () => {
+		expect(readPaneId(TAB_JSON)).toBe("w1:p1");
+		expect(readPaneId('{"result":{"root_pane":"w1:p1"}}')).toBeUndefined();
+		expect(readPaneId("pane_id: w1:p2")).toBeUndefined();
+		expect(readPaneId("{}")).toBeUndefined();
+	});
+
+	it("keeps the remote-control flag bare and last, and absent unless asked", () => {
+		expect(resumeAgentArgs(SESSION, true)).toEqual(["--resume", SESSION, "--remote-control"]);
+		expect(resumeAgentArgs(SESSION, false)).toEqual(["--resume", SESSION]);
+	});
+
+	it("the dry-run line shows the pane placeholder, not a guessed id", () => {
+		const lines = describeWarp(planOf()).lines.join("\n");
+		expect(lines).toContain(`--pane ${PANE_PLACEHOLDER} -- --resume ${SESSION}`);
+	});
+});
+
+describe("unusual ssh targets", () => {
+	for (const host of ["fe80::1", "me@::1", "[::1]", "me@[::1]"]) {
+		it(`refuses the IPv6 literal ${host} clearly`, () => {
+			const refusal = refuseWith({ target: { name: "netcup", host, home: HOME } });
+			expect(refusal.message).toContain("IPv6");
+			expect(refusal.message).toContain("~/.ssh/config");
+		});
+	}
+
+	it("puts the port in the ssh:// URL when the machine named one", () => {
+		const plan = spacePlan({ target: { name: "netcup", host: "me@box", port: 2222, home: HOME } });
+		const push = plan.steps.find((step) => step.kind === "push-branch") as Extract<
+			WarpStep,
+			{ kind: "push-branch" }
+		>;
+		expect(push.url).toBe(`ssh://me@box:2222${ROOT}/.git`);
+	});
+});
+
+describe("refusals that need no machine", () => {
+	it("exits 2 and names the pid when the session is live (AC-13)", () => {
+		const refusal = refuseWith({ live: [LIVE] });
 		expect(refusal.exit).toBe(2);
-		expect(refusal.message).toContain("other-box");
-		expect(refusal.message).toContain("--force");
+		expect(refusal.message).toContain("27145");
+		expect(refusal.message).toContain("--stop");
 	});
 
-	it("proceeds past a foreign owner with --force, and records the old owner for undo", () => {
-		const plan = planOf({
-			force: true,
-			owner: { state: "owned", path: "/m.json", marker: { owner: "other-box", at: "yesterday" } },
-		});
-		const marker = step(plan.steps, "write-marker");
-		expect(marker.marker.owner).toBe("netcup");
-		expect(marker.previous).toEqual({ owner: "other-box", at: "yesterday" });
+	it("plans the stop with the process cwd from the sessions file", () => {
+		const plan = planOf({ stop: true, live: [LIVE] });
+		const stop = plan.steps.find((step) => step.kind === "stop-session") as Extract<
+			WarpStep,
+			{ kind: "stop-session" }
+		>;
+		expect(stop.cwd).toBe("/Users/svallory/work");
 	});
 
-	it("allows a session this machine already owns, without --force", () => {
-		const plan = planOf({
-			owner: { state: "owned", path: "/m.json", marker: { owner: "mac", at: "yesterday" } },
-		});
-		expect(plan.target.name).toBe("netcup");
+	it("refuses a cwd outside this machine's home", () => {
+		expect(refuseWith({ cwd: "/tmp/scratch" }).message).toContain(
+			"isn't inside this machine's home",
+		);
+	});
+
+	it("refuses a cwd outside the target's home", () => {
+		const refusal = refuseWith({ target: { name: "netcup", host: "me@box", home: "/home/other" } });
+		expect(refusal.message).toContain("isn't inside netcup's home");
+	});
+
+	it("refuses a relative home, because the paths have to match", () => {
+		expect(refuseWith({ target: { name: "netcup", host: "me@box", home: "~" } }).message).toContain(
+			"absolute",
+		);
 	});
 
 	it("refuses a session id that is not a UUID", () => {
 		const refusal = refuseWith({ sessionId: "../../.ssh/authorized_keys" });
-		expect(refusal.exit).toBe(2);
-		expect(refusal.message).toContain("session id");
 		expect(refusal.message).toContain("UUID");
 	});
 
@@ -526,485 +917,182 @@ describe("refusals", () => {
 		const refusal = refuseWith({
 			cwd: `${HOME}/sp/r/worktrees/main`,
 			cwdKind: "space-worktree",
-			space: {
-				root: "/sp/r",
-				name: "r",
-				barePath: "/sp/r/.git",
-				branch: "--force",
-				cloneNeeded: false,
-			},
+			space: { root: `${HOME}/sp/r`, name: "r", barePath: `${HOME}/sp/r/.git`, branch: "--force" },
 		});
-		expect(refusal.exit).toBe(2);
 		expect(refusal.message).toContain("branch");
+	});
+
+	it("refuses a space worktree with no space details rather than guessing", () => {
+		expect(refuseWith({ cwdKind: "space-worktree", space: null }).message).toContain("worktree");
+	});
+
+	it("refuses a machine name with a space, or one a shell would read as an option", () => {
+		expect(
+			refuseWith({ target: { name: "net cup", host: "me@box", home: HOME } }).message,
+		).toContain("machine name");
+		expect(
+			refuseWith({ target: { name: "-oProxyCommand=x", host: "me@box", home: HOME } }).exit,
+		).toBe(2);
+		expect(refuseWith({ selfName: "mac; rm -rf /" }).exit).toBe(2);
 	});
 });
 
-describe("hostile inputs never reach a shell unquoted", () => {
-	it("refuses a machine name with a space", () => {
-		const refusal = refuseWith({ target: { name: "net cup", host: "me@box", home: HOME } });
-		expect(refusal.exit).toBe(2);
-		expect(refusal.message).toContain("machine name");
+describe("probe scripts survive a real shell", () => {
+	it("never writes `test --`, which dash (the default /bin/sh) rejects", () => {
+		const plan = spacePlan();
+		for (const probe of plan.steps.filter((step) => step.kind === "probe")) {
+			const script = (probe as { argv: string[] }).argv.join(" ");
+			expect(script, probe.summary).not.toMatch(/test -[dw] --/);
+		}
 	});
 
-	it("refuses a machine name that a shell would read as an option", () => {
-		const refusal = refuseWith({
-			target: { name: "-oProxyCommand=x", host: "me@box", home: HOME },
-		});
-		expect(refusal.exit).toBe(2);
-	});
-
-	it("refuses a cwd with a newline in it", () => {
-		const refusal = refuseWith({ cwd: `${HOME}/evil\nrm -rf ~` });
-		expect(refusal.exit).toBe(2);
-		expect(refusal.message).toContain("control character");
-	});
-
-	it("refuses a self name that is not a name", () => {
-		const refusal = refuseWith({ selfName: "mac; rm -rf /" });
-		expect(refusal.exit).toBe(2);
-	});
-
-	it("quotes a cwd with a quote and a space so a real shell gets it back whole", () => {
-		// The apostrophe is in the PARENT, so it lands in the word the probe
-		// actually quotes — a cwd's own apostrophe would only affect the parent
-		// one level up and would prove nothing about this word.
-		const odd = `${HOME}/it's here/project`;
-		const plan = planOf({ cwd: odd });
-		const script = parentProbeOf(plan).argv[2] as string;
-		// The parent is the directory which has to exist and be writable on the
-		// target; its own name carries the apostrophe and the space.
-		const parent = `${HOME}/it's here`;
-
-		// Not a string comparison: pull each quoted word out of the probe and
-		// hand it to a REAL POSIX shell to see what argv comes out. This is the
-		// property that matters — a path with a space and an apostrophe must
-		// arrive as ONE argument, and must not close the quoting to start a
-		// command.
+	it("the parent probe hands the real parent to `test`", () => {
+		const script = probeOf(spacePlan(), "space-parent")?.argv[2] as string;
 		const words = testWords(script);
 		expect(words).toHaveLength(2);
-		for (const word of words) expect(argvAfterShell(word)).toEqual([parent]);
-		// Every such word is quoted: none starts bare.
-		expect(script).not.toMatch(/test -[dw] [^-']/);
+		for (const word of words) expect(argvAfterShell(word)).toEqual([`${ROOT}/worktrees`]);
 	});
 
-	it("keeps a hostile path out of the shell's word splitting, in the clone script too", () => {
-		const odd = `${HOME}/with space/it's`;
-		const plan = planOf({
-			cwd: odd,
-			cwdKind: "space-worktree",
-			space: {
-				root: `${HOME}/sp/r`,
-				name: "r",
-				barePath: `${HOME}/sp/r/.git`,
-				branch: "main",
-				cloneNeeded: true,
-			},
-		});
-		// The space-existence probe names a path too, and it is the one a hostile
-		// cwd most directly controls.
-		const spaceProbe = plan.steps.find(
-			(entry) => entry.kind === "probe" && entry.summary.includes("already on"),
-		) as Extract<WarpStep, { kind: "probe" }>;
-		const words = testWords(spaceProbe.argv[2] as string);
-		expect(words).toHaveLength(1);
-		expect(argvAfterShell(words[0] as string)).toEqual([`${HOME}/sp/r`]);
+	it("the nearest-writable probe finds the nearest existing ancestor and exits by its writability", () => {
+		const dir = mkdtempSync(join(tmpdir(), "warp-ancestor-"));
+		try {
+			const plan = spacePlan();
+			const argv = probeOf(plan, "space-ancestor")?.argv as string[];
+			const script = (argv[2] as string).replace(ROOT, `${dir}/a/b/c`);
+			expect(spawnSync("/bin/sh", ["-c", script]).status).toBe(0);
+			spawnSync("chmod", ["0500", dir]);
+			const refused = spawnSync("/bin/sh", ["-c", script], { encoding: "utf-8" });
+			expect(refused.status).toBe(67);
+			expect(refused.stdout.trim()).toBe(dir);
+		} finally {
+			spawnSync("chmod", ["0700", dir]);
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
-	it("never puts an unquoted machine name into a herdr argv", () => {
-		const plan = planOf();
-		for (const entry of plan.steps.filter((s) => s.kind === "herdr")) {
-			const argv = (entry as { argv: string[] }).argv;
-			expect(argv).toContain("--machine");
-			expect(argv[argv.indexOf("--machine") + 1]).toBe("netcup");
+	it("the worktree-state probe answers through a real shell and git", () => {
+		const dir = mkdtempSync(join(tmpdir(), "warp-wtstate-"));
+		const git = (...args: string[]) => spawnSync("git", args, { cwd: dir, encoding: "utf-8" });
+		try {
+			git("init", "-q", "--bare", "bare.git");
+			git("init", "-q", "src");
+			git(
+				"-C",
+				"src",
+				"-c",
+				"user.email=t@e",
+				"-c",
+				"user.name=t",
+				"commit",
+				"-q",
+				"--allow-empty",
+				"-m",
+				"a",
+			);
+			git("-C", "src", "push", "-q", `${dir}/bare.git`, "HEAD:refs/heads/b");
+			const wt = spawnSync("realpath", [dir], { encoding: "utf-8" }).stdout.trim();
+			git("--git-dir=bare.git", "worktree", "add", "-q", "--no-checkout", `${wt}/wt`, "b");
+			const state = (path: string, branch: string) => {
+				const planned = spacePlan({
+					selfHome: wt,
+					target: { name: "netcup", host: "me@box", home: wt },
+					transcriptPath: `${wt}/.claude/projects/x/${SESSION}.jsonl`,
+					cwd: path,
+					space: { root: wt, name: "x", barePath: `${wt}/bare.git`, branch },
+				});
+				const argv = probeOf(planned, "worktree")?.argv as string[];
+				return spawnSync(argv[0] as string, argv.slice(1)).status;
+			};
+			expect(state(`${wt}/wt`, "b")).toBe(TARGET_WORKTREE_STATE.registeredHere);
+			expect(state(`${wt}/wt`, "c")).toBe(TARGET_WORKTREE_STATE.otherBranchHere);
+			expect(state(`${wt}/elsewhere`, "b")).toBe(TARGET_WORKTREE_STATE.branchElsewhere);
+			expect(state(`${wt}/elsewhere`, "c")).toBe(TARGET_WORKTREE_STATE.absent);
+			expect(state(`${wt}/src`, "c")).toBe(TARGET_WORKTREE_STATE.occupied);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
 		}
 	});
 });
 
-describe("the remote-control flag", () => {
-	it("is the option claude --help documents", () => {
-		// Read from `claude --help` on 2026-10-03 (2.1.288):
-		//   --remote-control [name]  Start an interactive session with Remote
-		//                            Control enabled (optionally named)
-		expect(REMOTE_CONTROL_FLAG).toBe("--remote-control");
+describe("--dry-run", () => {
+	it("prints every probe (with its condition), every copy with its exclusions, the clone and the push url", () => {
+		const plan = spacePlan({ remoteControl: true, excludes: ["node_modules", ".turbo"] });
+		const text = describeWarp(plan).lines.join("\n");
+		expect(text).toContain("only if the space is missing on netcup");
+		expect(text).toContain("only if the space is already on netcup");
+		expect(text).toContain("command -v hyper");
+		expect(text).toContain(`hyper space clone --yes -- research ${ROOT}`);
+		expect(text).toContain("--exclude=/.git --exclude=node_modules --exclude=.turbo");
+		expect(text).toContain(`ssh://me@box${ROOT}/.git`);
+		expect(text).toContain("push --dry-run");
+		expect(text).toContain("--remote-control");
 	});
 
-	it("is passed bare, not as --remote-control=name", () => {
-		expect(resumeClaudeArgv(SESSION, true)).toEqual([
-			"claude",
-			"--resume",
-			SESSION,
-			"--remote-control",
-		]);
+	it("runs nothing: describing a plan calls no dependency", () => {
+		const plan = spacePlan({ stop: true, live: [LIVE] });
+		const described = describeWarp(plan);
+		expect(described.lines).toHaveLength(plan.steps.length);
+		expect(described.notes.length).toBeGreaterThan(0);
 	});
 
-	it("is absent unless asked for", () => {
-		expect(resumeClaudeArgv(SESSION, false)).toEqual(["claude", "--resume", SESSION]);
-	});
-
-	it("reaches the plan's agent argv", () => {
-		const plan = planOf({ remoteControl: true });
-		const agent = plan.steps.filter((entry) => entry.kind === "herdr").at(-1);
-		expect((agent as { argv: string[] }).argv).toContain("--remote-control");
-	});
-});
-
-describe("exclusions", () => {
-	it("uses the list the plan was given (from drive.toml [warp] exclude)", () => {
-		const plan = planOf({ excludes: ["node_modules", ".turbo", "coverage"] });
-		const workdir = plan.steps.filter((entry) => entry.kind === "copy").at(-1);
-		expect(workdir?.excludes).toEqual(["node_modules", ".turbo", "coverage"]);
-	});
-
-	it("does not exclude anything from the transcript folder", () => {
-		const plan = planOf({ excludes: ["node_modules"] });
-		const transcriptCopy = plan.steps.filter((entry) => entry.kind === "copy")[0];
-		expect(transcriptCopy?.excludes).toEqual([]);
+	it("shows a copy with its exclusions and without --delete", () => {
+		const workdir = planOf({ excludes: ["node_modules"] })
+			.steps.filter((step) => step.kind === "copy")
+			.at(-1) as WarpStep;
+		const text = describeStep(workdir);
+		expect(text).toContain("--exclude=node_modules");
+		expect(text).not.toContain("--delete");
 	});
 });
 
 describe("a config-sync session replaces the transcript copy", () => {
 	it("flushes instead of copying the transcript, but still copies the workdir", () => {
 		const plan = planOf({ syncSession: "hyper-claude-netcup" });
-		expect(step(plan.steps, "flush-sync").session).toBe("hyper-claude-netcup");
-		const copies = plan.steps.filter((entry) => entry.kind === "copy");
-		expect(copies).toHaveLength(1);
-		expect(copies[0]?.src).toBe(CWD);
+		expect(plan.steps.some((step) => step.kind === "flush-sync")).toBe(true);
+		const copies = plan.steps.filter((step) => step.kind === "copy");
+		expect(copies.map((copy) => copy.src)).toEqual([CWD]);
+		expect(probeOf(plan, "transcript-folder")).toBeUndefined();
 	});
 });
 
-describe("--dry-run", () => {
-	it("prints every remote command, every copy with its exclusions, and the push url", () => {
-		const plan = planOf({
-			cwd: `${HOME}/work/spaces/research/worktrees/feat-warp`,
-			cwdKind: "space-worktree",
-			remoteControl: true,
-			excludes: ["node_modules", ".turbo"],
-			space: {
-				root: `${HOME}/work/spaces/research`,
-				name: "research",
-				barePath: `${HOME}/work/spaces/research/.git`,
-				branch: "feat/warp",
-				cloneNeeded: true,
-			},
-		});
-		const text = describeWarp(plan).lines.join("\n");
-		expect(text).toContain("test -d ");
-		expect(text).toContain("test -w ");
-		expect(text).toContain("command -v hyper");
-		expect(text).toContain("hyper space clone research --yes");
-		expect(text).toContain("--exclude=node_modules --exclude=.turbo");
-		expect(text).toContain(`ssh://me@box${HOME}/work/spaces/research/.git`);
-		expect(text).toContain("--remote-control");
-	});
-
-	it("runs no step at all: no marker, no stop, no copy", async () => {
-		const plan = planOf({
-			stop: true,
-			live: { pid: 4242, cwd: CWD },
-			cwd: `${HOME}/sp/r/worktrees/main`,
-			cwdKind: "space-worktree",
-			space: {
-				root: `${HOME}/sp/r`,
-				name: "r",
-				barePath: `${HOME}/sp/r/.git`,
-				branch: "main",
-				cloneNeeded: true,
-			},
-		});
-		// describeWarp is the whole of --dry-run: it reads, and returns.
-		const described = describeWarp(plan);
-		expect(described.lines.length).toBe(plan.steps.length);
-		expect(described.transcript.lines).toBe(0);
-		// And executing it explicitly is what a caller must NOT do; the command
-		// never calls executeWarp for a dry run (asserted in the e2e).
-		const rec = recorder();
-		await executeWarp(plan, rec.deps);
-		expect(rec.markers).toHaveLength(1);
-		expect(rec.copies.length).toBeGreaterThan(0);
-	});
-});
-
-describe("executeWarp", () => {
-	it("runs the steps in order and stops at the first failure", async () => {
-		const plan = planOf({
-			cwd: `${HOME}/sp/r/worktrees/main`,
-			cwdKind: "space-worktree",
-			space: {
-				root: `${HOME}/sp/r`,
-				name: "r",
-				barePath: `${HOME}/sp/r/.git`,
-				branch: "main",
-				cloneNeeded: true,
-			},
-		});
-		const rec = recorder({
-			runner: {
-				async ssh(cmd) {
-					// The target does not have the space, so the clone is the
-					// conditional step that runs — and it is the one that fails.
-					if ((cmd[2] as string).includes(`${HOME}/sp/r`)) {
-						return { code: 1, stdout: "", stderr: "" };
-					}
-					return cmd[0] === "hyper"
-						? { code: 1, stdout: "", stderr: "no such space" }
-						: { code: 0, stdout: "", stderr: "" };
-				},
-				async rsync() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-				async scp() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-			},
-		});
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.failure?.summary).toContain("clone");
-		expect(result.failure?.detail).toContain("no such space");
-		// The transcript copy had already run (it precedes the workdir steps),
-		// but the WORKDIR copy and the push must not have.
-		expect(rec.pushes).toHaveLength(0);
-		// The Herdr PROBE ran (it is read-only and comes first); nothing that
-		// creates a tab or starts an agent may have.
-		expect(rec.herdr.every((argv) => argv.includes("pane") && argv.includes("list"))).toBe(true);
-	});
-
-	it("refuses at the parent-writable probe and copies nothing (AC-16)", async () => {
-		const plan = planOf();
-		const rec = recorder({
-			runner: {
-				async ssh() {
-					return { code: 66, stdout: "", stderr: "" };
-				},
-				async rsync() {
-					return { code: 0, stdout: "SHOULD NOT RUN", stderr: "" };
-				},
-				async scp() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-			},
-		});
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.failure?.summary).toContain("writable");
-		expect(result.failure?.detail).toContain("Nothing has been copied");
-		expect(rec.copies).toHaveLength(0);
-		expect(rec.markers).toHaveLength(0);
-		expect(rec.herdr).toHaveLength(0);
-		expect(result.copied).not.toBe(true);
-	});
-
-	it("points at `herdr machine add` when the target has no Herdr server, and never falls back to ssh", async () => {
-		const plan = planOf();
-		const rec = recorder({
-			runHerdr: async () => ({ code: 1, stdout: "", stderr: "no machine profile" }),
-		});
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.failure?.summary).toContain("Herdr server");
-		expect(result.failure?.detail).toContain("herdr machine add");
-		expect(result.failure?.detail).not.toContain("ssh claude");
-		// Nothing was copied, and no bare ssh ever stood in for Herdr.
-		expect(rec.copies).toHaveLength(0);
-		expect(rec.markers).toHaveLength(0);
-	});
-
-	it("runs the Herdr probe through Herdr, not through a remote shell", async () => {
-		// `herdr --machine <name> pane list` is a LOCAL cli call that forwards
-		// over the machine's own ssh profile; sending it to a remote shell would
-		// look for a `herdr` binary on the target.
-		const plan = planOf();
-		const probe = plan.steps.find((entry) => entry.kind === "probe" && entry.via === "herdr");
-		expect(probe).toBeDefined();
-		const rec = recorder();
-		await executeWarp(plan, rec.deps);
-		expect(rec.herdr[0]).toEqual(["--machine", "netcup", "pane", "list"]);
-		expect(rec.ssh.every((argv) => argv[0] !== "--machine")).toBe(true);
-	});
-
-	it("treats survived, mismatch and unauthorized as hard errors, with nothing copied", async () => {
-		for (const outcome of ["survived", "mismatch", "unauthorized"] as const) {
-			const plan = planOf({ stop: true, live: { pid: 999, cwd: CWD } });
-			const rec = recorder({ stop: async () => outcome });
-			const result = await executeWarp(plan, rec.deps);
-			expect(result.failure?.summary, outcome).toContain("stop session");
-			expect(rec.copies, outcome).toHaveLength(0);
-			expect(rec.markers, outcome).toHaveLength(0);
-		}
-	});
-
-	it("goes on after a clean stop", async () => {
-		const plan = planOf({ stop: true, live: { pid: 999, cwd: CWD } });
-		const rec = recorder({ stop: async () => "terminated" });
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.failure).toBeUndefined();
-		expect(rec.markers).toHaveLength(1);
-	});
-
-	it("fills the pane id from the tab into the agent start argv", async () => {
-		const plan = planOf();
-		const rec = recorder();
-		await executeWarp(plan, rec.deps);
-		const agent = rec.herdr.at(-1) as string[];
-		expect(agent[agent.indexOf("--pane") + 1]).toBe("w1:p1");
-		// The pane id must come BEFORE the `--`, or claude would eat it.
-		expect(agent.indexOf("--pane")).toBeLessThan(agent.indexOf("--"));
-	});
-
-	it("fails clearly when Herdr created a tab but reported no pane", async () => {
-		const plan = planOf();
-		const rec = recorder({ runHerdr: async () => ({ code: 0, stdout: "{}", stderr: "" }) });
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.failure?.detail).toContain("pane list");
-	});
-
-	it("stamps the marker at run time, not at plan time", async () => {
-		const plan = planOf();
-		const rec = recorder({ now: () => "2026-10-03T09:00:00.000Z" });
-		await executeWarp(plan, rec.deps);
-		expect(rec.markers[0]).toEqual({ machine: "netcup", at: "2026-10-03T09:00:00.000Z" });
-	});
-});
-
-describe("undoing a failed warp", () => {
-	let dir: string;
-	let markerPath: string;
-
-	beforeEach(() => {
-		dir = mkdtempSync(join(tmpdir(), "warp-undo-"));
-		markerPath = join(dir, `${SESSION}.warp.json`);
-	});
-
-	afterEach(() => {
-		rmSync(dir, { recursive: true, force: true });
-	});
-
-	/** A recorder whose writeOwner really writes, and whose copies fail on cue. */
-	function writing(copyCode: number) {
-		return recorder({
-			writeOwner: () => {
-				writeFileSync(markerPath, JSON.stringify({ owner: "netcup", at: "now" }));
-				return { owner: "netcup", at: "now" };
-			},
-			runner: {
-				async ssh() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-				async rsync() {
-					return copyCode === 0
-						? { code: 0, stdout: "", stderr: "" }
-						: { code: copyCode, stdout: "", stderr: "connection closed" };
-				},
-				async scp() {
-					return { code: 0, stdout: "", stderr: "" };
-				},
-			},
-		});
-	}
-
-	it("puts the previous marker back when the first copy failed and nothing arrived", async () => {
-		const plan = withMarkerAt(planOf(), markerPath);
-		const rec = writing(23);
-		const result = await executeWarp(plan, rec.deps);
-
-		expect(result.copied).not.toBe(true);
-		expect(result.failure?.summary).toContain("transcript");
-		// The marker WAS written — it comes before the first copy — so this is
-		// exactly the case undo exists for.
-		expect(readFileSync(markerPath, "utf-8")).toContain("netcup");
-
-		const undone = restoreMarker(
-			plan,
-			{ owner: "other-box", at: "yesterday" },
-			result.copied === true,
+describe("spaceBarePath", () => {
+	it("maps bare and multi layouts to their project repo", () => {
+		expect(spaceBarePath("/sp/research", "code/api/worktrees/feat")).toBe(
+			"/sp/research/code/api/.git",
 		);
-		expect(undone.restored).toBe(true);
-		expect(JSON.parse(readFileSync(markerPath, "utf-8"))).toEqual({
-			owner: "other-box",
-			at: "yesterday",
-		});
-	});
-
-	it("removes the marker again when there was none before", async () => {
-		const plan = withMarkerAt(planOf(), markerPath);
-		const rec = writing(23);
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.copied).not.toBe(true);
-		const undone = restoreMarker(plan, null, result.copied === true);
-		expect(undone.restored).toBe(true);
-		expect(existsSync(markerPath)).toBe(false);
-	});
-
-	it("leaves the marker alone once something WAS copied, and says why", async () => {
-		const plan = withMarkerAt(planOf(), markerPath);
-		const rec = writing(0);
-		const result = await executeWarp(plan, rec.deps);
-		expect(result.copied).toBe(true);
-		const undone = restoreMarker(
-			plan,
-			{ owner: "other-box", at: "yesterday" },
-			result.copied === true,
-		);
-		expect(undone.restored).toBe(false);
-		expect(undone.reason).toContain("already been copied");
-		expect(readFileSync(markerPath, "utf-8")).toContain("netcup");
+		expect(spaceBarePath("/sp/research", "worktrees/main")).toBe("/sp/research/.git");
+		expect(spaceBarePath("/sp/research", "notes")).toBeNull();
 	});
 });
 
-describe("readPaneId", () => {
-	it("reads the documented .result.root_pane string", () => {
-		expect(readPaneId('{"result":{"tab":"w1:t1","root_pane":"w1:p1"}}')).toBe("w1:p1");
-	});
-
-	it("reads the object form", () => {
-		expect(readPaneId('{"result":{"root_pane":{"pane_id":"w1:p9"}}}')).toBe("w1:p9");
-	});
-
-	it("falls back to a scan when the output is not JSON", () => {
-		expect(readPaneId("created tab; pane_id: w1:p2")).toBe("w1:p2");
-	});
-
-	it("returns undefined when there is nothing to read", () => {
-		expect(readPaneId("{}")).toBeUndefined();
-		expect(readPaneId("")).toBeUndefined();
-	});
-});
-
-describe("describeStep", () => {
-	it("names the ssh command line a probe will send", () => {
-		const plan = planOf();
-		const text = describeStep(step(plan.steps, "probe"));
-		expect(text).toContain("ssh --");
-		expect(text).toContain("test -d ");
-	});
-
-	it("never writes `test --`, which dash (the default /bin/sh) rejects", () => {
-		// `test` is a shell BUILTIN, and dash has no `--` option for it: it
-		// answers "test: --: unexpected operator" and the probe fails on a
-		// perfectly good directory. Found by the container e2e, not by a unit
-		// test — which is exactly why the e2e exists.
-		const plan = planOf({
-			cwd: `${HOME}/sp/r/worktrees/main`,
-			cwdKind: "space-worktree",
-			space: {
-				root: `${HOME}/sp/r`,
-				name: "r",
-				barePath: `${HOME}/sp/r/.git`,
-				branch: "main",
-				cloneNeeded: true,
-			},
-		});
-		for (const probe of plan.steps.filter((entry) => entry.kind === "probe")) {
-			const script = (probe as { argv: string[] }).argv.join(" ");
-			expect(script, probe.summary).not.toMatch(/test -[dw] --/);
+describe("a detached HEAD in a space worktree", () => {
+	it("gets its own message, not 'couldn't work out which space'", () => {
+		// Real warp cwds are realpaths; tmpdir() on macOS is behind a /var symlink.
+		const dir = realpathSync(mkdtempSync(join(tmpdir(), "warp-detached-")));
+		const git = (...args: string[]) => spawnSync("git", args, { cwd: dir, encoding: "utf-8" });
+		try {
+			git("init", "-q", "--bare", "space/.git");
+			spawnSync("mkdir", ["-p", join(dir, "space/worktrees")]);
+			git("--git-dir=space/.git", "worktree", "add", "-q", "space/worktrees/main", "-b", "main");
+			const wt = join(dir, "space/worktrees/main");
+			spawnSync("git", [
+				"-C",
+				wt,
+				"-c",
+				"user.email=t@e",
+				"-c",
+				"user.name=t",
+				"commit",
+				"-q",
+				"--allow-empty",
+				"-m",
+				"a",
+			]);
+			expect(describeSpace(wt)?.branch).toBe("main");
+			spawnSync("git", ["-C", wt, "checkout", "-q", "--detach"]);
+			expect(() => describeSpace(wt)).toThrow(/detached HEAD/);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
 		}
-		// …and it is still correct under dash, which is the real proof.
-		const script = parentProbeOf(plan).argv[2] as string;
-		expect(argvAfterShell(testWords(script)[0] as string)).toEqual([`${HOME}/sp/r/worktrees`]);
-	});
-
-	it("shows a copy with its exclusions and without --delete", () => {
-		const plan = planOf({ excludes: ["node_modules"] });
-		const workdir = plan.steps.filter((entry) => entry.kind === "copy").at(-1) as WarpStep;
-		const text = describeStep(workdir);
-		expect(text).toContain("--exclude=node_modules");
-		expect(text).not.toContain("--delete");
 	});
 });

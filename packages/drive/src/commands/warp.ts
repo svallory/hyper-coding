@@ -2,6 +2,7 @@ import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
 import { getEngine } from "#services/sync/engine";
 import {
+	describeFailure,
 	describeWarp,
 	executeWarp,
 	gatherWarp,
@@ -42,7 +43,17 @@ type Outcome =
  * hop, or a filesystem.
  */
 export default class Warp extends BaseCommand<typeof Warp> {
-	static override description = "Move this session to another machine";
+	static override summary = "Move this session to another machine";
+
+	static override description =
+		`Copies this session's transcript and the working directory to the SAME absolute path on <machine>, then resumes the session there through Herdr.
+
+Every check runs before the first change on either machine. A session that already lives on <machine> (its ownership marker names it) is refused unless you pass --force.
+
+Limits:
+  - The target's copy of the directory is overwritten file by file; files that exist only there are kept (no --delete).
+  - Only this session's files travel (<id>.jsonl, <id>.warp.json, <id>/), never the whole project folder.
+  - A space worktree arrives as a git worktree on the target. Staged-but-uncommitted changes arrive as unstaged modifications: the index does not travel.`;
 
 	static override examples = [
 		"<%= config.bin %> warp netcup",
@@ -145,30 +156,19 @@ export default class Warp extends BaseCommand<typeof Warp> {
 		});
 
 		if (execution.failure) {
-			const undone = restoreMarker(
-				plan,
-				plan.owner.state === "owned" ? plan.owner.marker : null,
-				execution.copied === true,
-			);
+			const undone = restoreMarker(plan, execution);
 			return {
 				kind: "refusal",
 				exit: WARP_REFUSAL_EXIT,
-				message: [
-					`Warp to ${plan.target.name} stopped at: ${execution.failure.summary}`,
-					execution.failure.detail,
-					execution.completed.length === 0
-						? "No step completed, and nothing was changed on either machine."
-						: `Completed before that: ${execution.completed.join("; ")}.`,
-					undone.restored
-						? plan.owner.state === "owned"
-							? `The ownership marker was put back to owner ${JSON.stringify(plan.owner.marker.owner)}.`
-							: "The ownership marker was removed again."
-						: (undone.reason ?? "The ownership marker was left as it is."),
-					"Run this again to retry; nothing needs undoing on the target.",
-				].join("\n"),
+				message: describeFailure(plan, execution, undone),
 			};
 		}
-		return { kind: "done", plan, completed: execution.completed, json: flags.json };
+		return {
+			kind: "done",
+			plan,
+			completed: execution.completed.map((record) => record.summary),
+			json: flags.json,
+		};
 	}
 
 	/** `--dry-run`: the whole plan, and a statement that nothing ran. */
@@ -190,6 +190,9 @@ export default class Warp extends BaseCommand<typeof Warp> {
 		}
 		this.log("");
 		for (const line of described.lines) this.log(line);
+		this.log("");
+		this.log("Worth knowing:");
+		for (const note of described.notes) this.log(`  - ${note}`);
 	}
 
 	private reportDone(outcome: { plan: WarpPlan; completed: string[]; json: boolean }): void {
@@ -214,25 +217,20 @@ export default class Warp extends BaseCommand<typeof Warp> {
  * one exists.
  *
  * `drive sync-config` names sessions `hyper-claude-<machine>`, so that is the
- * name to look for. A missing or failing engine is not an error here: it
- * simply means there is no session, and warp falls back to rsync — which is
- * what it would have done before the session existed.
+ * name to look for. Asked through `probe()`, which runs the engine with its
+ * daemon autostart DISABLED: merely looking (even for `--dry-run`) must never
+ * start a sync daemon. A stopped daemon, a missing engine or a failure all
+ * mean "no session", and warp copies the transcript itself.
  */
 async function syncSessionFor(machine: string): Promise<string | null> {
 	const name = `${SESSION_PREFIX}claude-${machine}`;
 	try {
-		const sessions = await getEngine().list();
-		return sessions.some((session) => session.name === name) ? name : null;
+		const probe = await getEngine().probe();
+		if (!probe.daemon.running) return null;
+		return probe.sessions.some((session) => session.name === name) ? name : null;
 	} catch {
 		return null;
 	}
-}
-
-/** Index of the first step that copies anything; kept for tests and reports. */
-export function firstCopyingStep(plan: WarpPlan): number {
-	const copying = new Set(["copy", "push-branch", "remote-command", "flush-sync"]);
-	const index = plan.steps.findIndex((step) => copying.has(step.kind));
-	return index < 0 ? plan.steps.length : index;
 }
 
 function truncate(text: string, max: number): string {
