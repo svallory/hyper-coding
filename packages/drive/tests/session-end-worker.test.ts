@@ -181,3 +181,32 @@ describe.skipIf(asRoot)("session-end worker: a space git dir that refuses writes
 		expect(commits(a.root)).toBe(1);
 	});
 });
+
+describe("hyper space status: the last failed session end", () => {
+	it("prints a logged path exactly as the log escaped it, once", async () => {
+		const a = await makeSpace("a");
+		// A space, a non-ASCII letter, a backslash and a newline: the newline
+		// makes the refusal quote the path, and the backslash is what a second
+		// escape would double.
+		const odd = "notes/sé cret\\b\nline";
+		mkdirSync(join(a.root, odd));
+		writeFileSync(join(a.root, odd, ".env"), "PLACEHOLDER=1\n");
+		const file = join(a.gitDir, "session-end-payload.odd");
+		writeFileSync(file, payload);
+		const entry = await runSessionEndWorker(file, a.root);
+		expect(entry.outcome).toBe("refused");
+		const logged = '"notes/sé cret\\\\b\\u000aline/.env"';
+		expect(readFileSync(join(a.gitDir, "session-end.log"), "utf8")).toContain(logged);
+		const result = spawnSync(process.execPath, [cli, "space", "status"], {
+			cwd: a.root,
+			env: process.env,
+			encoding: "utf8",
+			timeout: 30_000,
+		});
+		expect(result.status, result.stderr).toBe(0);
+		const line = result.stdout.split("\n").find((text) => text.startsWith("Last session end"));
+		expect(line).toContain(`refused: refusing to commit space/a: ${logged}`);
+		expect(line).not.toContain("\\\\\\\\");
+		expect(line).not.toContain("\\\\u000a");
+	});
+});
