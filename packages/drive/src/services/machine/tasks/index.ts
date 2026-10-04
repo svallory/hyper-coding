@@ -18,6 +18,9 @@ import { TOOLS, type ToolSpec } from "../tools.js";
 import { agentUserCreate } from "./agent-user-create.js";
 import { agentUserDirs } from "./agent-user-dirs.js";
 import { agentUserWatcher } from "./agent-user-watcher.js";
+import { dockerRootlessInstall } from "./docker-rootless-install.js";
+import { dockerRootlessPackages } from "./docker-rootless-packages.js";
+import { homePathPhysical, homePathSymlink } from "./home-path.js";
 import { pathTask } from "./tools-path.js";
 import { rsyncTask } from "./tools-rsync.js";
 import type { Task, TaskContext } from "./types.js";
@@ -78,6 +81,10 @@ export function allTasks(options: { tools?: readonly string[] } = {}): Task[] {
 		agentUserCreate,
 		agentUserDirs,
 		agentUserWatcher,
+		dockerRootlessPackages,
+		dockerRootlessInstall,
+		homePathSymlink,
+		homePathPhysical,
 	];
 }
 
@@ -96,4 +103,12 @@ export function selectedToolTasks(ids?: readonly string[]): Task[] {
 
 export * from "../tools.js";
 export * from "./types.js";
-export { agentUserCreate, agentUserDirs, agentUserWatcher };
+export {
+	agentUserCreate,
+	agentUserDirs,
+	agentUserWatcher,
+	dockerRootlessInstall,
+	dockerRootlessPackages,
+	homePathPhysical,
+	homePathSymlink,
+};

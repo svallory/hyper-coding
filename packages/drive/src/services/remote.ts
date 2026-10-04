@@ -65,6 +65,17 @@ export interface MachineRunner {
 	ssh(cmd: string[], opts?: SshOptions): Promise<RunResult>;
 	rsync(src: string, dst: string, opts?: RsyncOptions): Promise<RunResult>;
 	scp(src: string, dst: string): Promise<RunResult>;
+	/**
+	 * Run a command as ANOTHER user on the same machine.
+	 *
+	 * This is what makes the unattended agent reachable: `dockerd-rootless-setuptool.sh
+	 * install` has to run inside a real login session of the agent user, and the
+	 * only way to open one from here is ssh as that user. Remote machines do it
+	 * by substituting the user in the ssh target; a LOCAL machine cannot, because
+	 * becoming another user needs root — so `LocalMachine` refuses by name rather
+	 * than spawning anything (C-6).
+	 */
+	asUser(user: string, cmd: string[], opts?: SshOptions): Promise<RunResult>;
 }
 
 /** One spawned process, described so a fake spawner can assert on it. */
@@ -84,6 +95,13 @@ export type Spawner = (request: SpawnRequest) => Promise<RunResult>;
 
 /** Characters that need no quoting in a POSIX shell. */
 const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
+
+/**
+ * What an ssh user name may look like. The same rule as the agent user in
+ * `config/schema.ts`, kept local here because this is the ssh surface: a value
+ * carrying shell syntax would become part of an ssh target word.
+ */
+const SSH_USER_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
 
 /**
  * Quote one argument for a POSIX shell. Output is always safe to paste into a
@@ -183,6 +201,32 @@ function safeHost(host: string): string {
 		);
 	}
 	return host;
+}
+
+/** Reject an ssh user that would be read as more than a user name. */
+function safeSshUser(user: string): string {
+	if (!SSH_USER_PATTERN.test(user)) {
+		throw new RemoteError(
+			`"${user}" isn't a user hyperdrive can ssh as: a user name is lower case, starts with a letter or underscore, and contains only letters, digits, underscores and dashes.`,
+		);
+	}
+	return user;
+}
+
+/**
+ * The ssh target for the SAME machine with a different user.
+ *
+ * `machine.host` is whatever Herdr saved — usually `user@host`, sometimes a bare
+ * hostname, possibly an ssh alias. The user part is REPLACED (up to the last
+ * `@`, so an alias containing one still works) rather than appended to, because
+ * `agent@svallory@host` is not an ssh target. Nothing is quoted: the result is
+ * one argv word handed to ssh, which is the only form it accepts.
+ */
+export function targetWithUser(host: string, user: string): string {
+	const safe = safeHost(host);
+	const safeUser = safeSshUser(user);
+	const at = safe.lastIndexOf("@");
+	return at >= 0 ? `${safeUser}@${safe.slice(at + 1)}` : `${safeUser}@${safe}`;
 }
 
 /** A remote cwd must be absolute, or `cd -- <cwd>` would break on a `~`. */
@@ -496,6 +540,16 @@ export class LocalMachine implements MachineRunner {
 			};
 		}
 	}
+
+	async asUser(user: string): Promise<RunResult> {
+		// Refusing is the whole implementation, and it is deliberate: the only way
+		// to become another user HERE is `su`/`runuser`, which needs root. Naming
+		// the flag and the way out is more useful than a permission error from a
+		// child process, and it keeps hyper out of privilege escalation (C-6).
+		throw new RemoteError(
+			`I can't run a command as ${user} on this machine: becoming another user here needs root, and hyper never runs as root (C-6). Set this machine up over ssh instead: \`hyper machine setup <machine> --features docker-rootless\`.`,
+		);
+	}
 }
 
 /** Commands on a remote machine over SSH. `host` is whatever `ssh` accepts. */
@@ -510,6 +564,20 @@ export class RemoteMachine implements MachineRunner {
 	}
 
 	async ssh(cmd: string[], opts?: SshOptions): Promise<RunResult> {
+		return this.sshTo(this.host, cmd, opts);
+	}
+
+	/** Run one command over ssh as `user` on this same machine. */
+	async asUser(user: string, cmd: string[], opts?: SshOptions): Promise<RunResult> {
+		return this.sshTo(targetWithUser(this.host, user), cmd, opts);
+	}
+
+	/**
+	 * The one spawn for every ssh command, whoever it runs as, so the quoting,
+	 * the `--` separator, the tty rules and the remote `cd` are identical
+	 * whichever user the command is for.
+	 */
+	private async sshTo(target: string, cmd: string[], opts?: SshOptions): Promise<RunResult> {
 		if (opts?.tty && opts?.stdin !== undefined) {
 			throw new RemoteError(
 				"tty and stdin don't mix: a terminal would echo the input and mix it into the output. Use one or the other.",
@@ -521,13 +589,13 @@ export class RemoteMachine implements MachineRunner {
 		// be the local child's cwd (that would fail with ENOENT) — and it must be
 		// absolute, or the quoting would stop the remote shell from expanding `~`.
 		const command = opts?.cwd
-			? `cd -- ${shellQuote(absoluteCwd(this.host, opts.cwd))} && ${shellJoin(cmd)}`
+			? `cd -- ${shellQuote(absoluteCwd(target, opts.cwd))} && ${shellJoin(cmd)}`
 			: shellJoin(cmd);
 		return this.spawner({
 			file: "ssh",
 			// `-t` asks for a pty; without it an interactive remote command
 			// (herdr/tmux attach, a prompt) dies with "not a terminal".
-			args: [...(opts?.tty ? ["-t"] : []), this.host, "--", command],
+			args: [...(opts?.tty ? ["-t"] : []), target, "--", command],
 			...(opts?.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
 			stdin: opts?.stdin,
 			tty: opts?.tty,

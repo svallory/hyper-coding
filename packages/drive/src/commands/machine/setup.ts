@@ -382,6 +382,10 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 				"Take the defaults: tools locally, or the features drive.toml lists for a named machine. Never runs anything as root",
 			default: false,
 		}),
+		"agent-key": Flags.string({
+			description:
+				"Ssh PUBLIC key (.pub) the agent user should accept, so setup can open a session as it. Only the public half is ever read",
+		}),
 	};
 
 	static override args = {
@@ -519,6 +523,7 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			runner: runnerFor(name),
 			config,
 			log: (line) => this.log(line),
+			...(flags["agent-key"] === undefined ? {} : { agentKeyFile: flags["agent-key"] }),
 		};
 
 		let report: SetupReport;
