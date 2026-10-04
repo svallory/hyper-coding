@@ -41,6 +41,7 @@ import { shellQuote } from "#services/remote";
 import { agentUserOf, assertAgentUserIsSafe } from "./agent-context.js";
 import { type ResolvedAgentKey, resolveAgentKey } from "./agent-key.js";
 import { runScript, shellCommand } from "./shell.js";
+import { SUBID_COUNT, SUBID_FUNCTIONS } from "./subid.js";
 import type { Task, TaskContext } from "./types.js";
 
 /**
@@ -61,9 +62,6 @@ export const ROOTLESS_PACKAGES = [
 	"docker-ce-rootless-extras",
 ] as const;
 
-/** The subid range the root script adds when the agent has none. */
-export const SUBID_RANGE = "100000-165535";
-
 /** The Docker apt repository, exactly as docs.docker.com documents it for Debian. */
 export const DOCKER_REPO_LIST = "/etc/apt/sources.list.d/docker.list";
 export const DOCKER_KEYRING = "/etc/apt/keyrings/docker.asc";
@@ -75,16 +73,22 @@ function probe(agentUser: string): string {
 			(name) =>
 				`printf 'pkg_${name}=%s\\n' "$(dpkg-query -W -f='${"${Status}"}' ${q(name)} 2>/dev/null | grep -c 'ok installed' || true)"`,
 		),
-		`printf 'subuid=%s\\n' "$(grep -c '^${q(agentUser)}:' /etc/subuid 2>/dev/null || true)"`,
-		`printf 'subgid=%s\\n' "$(grep -c '^${q(agentUser)}:' /etc/subgid 2>/dev/null || true)"`,
+		SUBID_FUNCTIONS,
+		`agent_uid="$(id -u ${q(agentUser)} 2>/dev/null || echo none)"`,
+		`printf 'subuid=%s\\n' "$(subid_has /etc/subuid ${q(agentUser)} "$agent_uid" && echo 1 || echo 0)"`,
+		`printf 'subgid=%s\\n' "$(subid_has /etc/subgid ${q(agentUser)} "$agent_uid" && echo 1 || echo 0)"`,
+		`printf 'subuid_conflict=%s\\n' "$(subid_conflict /etc/subuid ${q(agentUser)} "$agent_uid")"`,
+		`printf 'subgid_conflict=%s\\n' "$(subid_conflict /etc/subgid ${q(agentUser)} "$agent_uid")"`,
 		`printf 'linger=%s\\n' "$(loginctl show-user ${q(agentUser)} --property=Linger --value 2>/dev/null || true)"`,
-	].join("; ");
+	].join("\n");
 }
 
 interface Probe {
 	packages: Set<string>;
 	subuid: boolean;
 	subgid: boolean;
+	/** "<agent line> overlaps <other line>", per file, or "". */
+	subidConflict: string;
 	linger: boolean;
 }
 
@@ -99,6 +103,9 @@ function parseProbe(stdout: string): Probe {
 		packages: new Set(ROOTLESS_PACKAGES.filter((name) => count(`pkg_${name}`))),
 		subuid: count("subuid"),
 		subgid: count("subgid"),
+		subidConflict: [answers.get("subuid_conflict"), answers.get("subgid_conflict")]
+			.filter((line): line is string => line !== undefined && line !== "")
+			.join("; "),
 		linger: answers.get("linger") === "yes",
 	};
 }
@@ -131,6 +138,12 @@ export const dockerRootlessPackages: Task = {
 		const parsed = parseProbe(result.stdout);
 		const missing = ROOTLESS_PACKAGES.filter((name) => !parsed.packages.has(name));
 		if (missing.length > 0) return no(`missing ${missing.join(", ")}`);
+		// An overlapping range is not "needs root": the root script would refuse
+		// it too, and only the operator can decide whose range moves.
+		if (parsed.subidConflict !== "")
+			throw new Error(
+				`the agent user's subordinate id range overlaps another user's (${parsed.subidConflict}). Two users sharing host ids can signal each other's container processes and own each other's files. Give one of them a different range in /etc/subuid and /etc/subgid yourself, then re-run setup. Nothing has been changed.`,
+			);
 		if (!parsed.subuid || !parsed.subgid)
 			return no("the agent user is missing a subuid or subgid range");
 		if (!parsed.linger) return no("linger is disabled for the agent");
@@ -183,6 +196,22 @@ ${rootScriptGuards(agentUser)}
 have_package() {
   dpkg-query -W -f='\${Status}' "$1" 2>/dev/null | grep -q 'ok installed'
 }
+${SUBID_FUNCTIONS}
+
+# Before anything changes: an agent subid range that overlaps another user's is
+# refused, naming both lines. Two users sharing host ids can signal each other's
+# container processes and own each other's files; only you can decide whose
+# range moves.
+agent_uid="$(id -u "$agent_user" 2>/dev/null || echo none)"
+for subid_file in /etc/subuid /etc/subgid; do
+  subid_overlap="$(subid_conflict "$subid_file" "$agent_user" "$agent_uid")"
+  if [ -n "$subid_overlap" ]; then
+    echo "hyper: in $subid_file, the agent's range $subid_overlap." >&2
+    echo "hyper: give one of them a different range yourself, then re-run." >&2
+    echo "hyper: nothing has been changed." >&2
+    exit 1
+  fi
+done
 
 # Docker's apt repository, added only when one of its packages is missing and
 # the repository is not configured yet. Debian 12+ ships /etc/apt/keyrings.
@@ -230,15 +259,24 @@ fi
 
 # A subuid/subgid range for the agent: the user namespace maps the container's
 # uids onto a range of host uids, and without one the daemon starts and then
-# refuses to run anything. Guarded on the entry existing, so a range that is
-# already there is left exactly as it is.
-# Each file on its own: a user with a subuid range and no subgid range gets only
-# the missing one, never a second copy of the one it has.
-if ! grep -q "^$agent_user:" /etc/subuid 2>/dev/null; then
-  usermod --add-subuids ${SUBID_RANGE} "$agent_user"
+# refuses to run anything. A range the agent already has (checked above for
+# overlap) is left exactly as it is. A missing one is ${SUBID_COUNT} ids starting at
+# the highest start+count in either file, so it never overlaps anyone's — and
+# the same start in both files when both are missing.
+subid_start=""
+if ! subid_has /etc/subuid "$agent_user" "$agent_uid"; then
+  subid_start="$(subid_next_free)"
+  usermod --add-subuids "$subid_start-$((subid_start + ${SUBID_COUNT} - 1))" "$agent_user"
 fi
-if ! grep -q "^$agent_user:" /etc/subgid 2>/dev/null; then
-  usermod --add-subgids ${SUBID_RANGE} "$agent_user"
+if ! subid_has /etc/subgid "$agent_user" "$agent_uid"; then
+  if [ -z "$subid_start" ]; then
+    # Only the gid range is missing: reuse the uid range's start if it is free.
+    subid_start="$(subid_start_of /etc/subuid "$agent_user" "$agent_uid")"
+    if [ -z "$subid_start" ] || ! subid_free_at /etc/subgid "$subid_start" ${SUBID_COUNT}; then
+      subid_start="$(subid_next_free)"
+    fi
+  fi
+  usermod --add-subgids "$subid_start-$((subid_start + ${SUBID_COUNT} - 1))" "$agent_user"
 fi
 
 # Linger, so the agent's systemd --user units — including the rootless Docker

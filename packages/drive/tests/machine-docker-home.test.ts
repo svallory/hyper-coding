@@ -257,12 +257,11 @@ describe("docker-rootless.packages", () => {
 		expect(text).toContain(
 			'have_package "$package" || missing_packages="$missing_packages $package"',
 		);
-		// subid ranges: each added only when absent, each file on its own.
-		expect(text).toContain('if ! grep -q "^$agent_user:" /etc/subuid 2>/dev/null; then');
-		expect(text).toContain('usermod --add-subuids 100000-165535 "$agent_user"');
-		expect(text).toContain('if ! grep -q "^$agent_user:" /etc/subgid 2>/dev/null; then');
-		expect(text).toContain('usermod --add-subgids 100000-165535 "$agent_user"');
-		expect(text).not.toMatch(/--add-subuids[^\n]*--add-subgids/);
+		// subid ranges: allocated, never a fixed constant (RUN in
+		// machine-docker-packages-script.test.ts).
+		expect(text).toContain('subid_has /etc/subuid "$agent_user" "$agent_uid"');
+		expect(text).toContain("subid_next_free");
+		expect(text).not.toContain("100000-165535");
 		// The system-wide daemon docker-ce brings is stopped only when this script
 		// brought docker-ce in.
 		expect(text).toContain('if [ "$had_docker_ce" = 0 ] && have_package docker-ce; then');
