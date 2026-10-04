@@ -726,6 +726,10 @@ export function cloneProjectRepoBare(
 			: "ssh -o BatchMode=yes";
 	const protocols = [
 		"-c",
+		"core.fsmonitor=false",
+		"-c",
+		"core.hooksPath=/dev/null",
+		"-c",
 		"protocol.allow=never",
 		"-c",
 		"protocol.https.allow=always",
@@ -771,10 +775,22 @@ export function cloneProjectRepoBare(
 /** Pure validation: no repository or network access, and no directory creation. */
 export function checkProjectBranchName(branch: string): boolean {
 	if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(branch) || branch.includes("..")) return false;
-	const result = spawnSync("git", ["check-ref-format", "--branch", branch], {
-		encoding: "utf8",
-		env: cleanGitEnv(),
-	});
+	const result = spawnSync(
+		"git",
+		[
+			"-c",
+			"core.fsmonitor=false",
+			"-c",
+			"core.hooksPath=/dev/null",
+			"check-ref-format",
+			"--branch",
+			branch,
+		],
+		{
+			encoding: "utf8",
+			env: cleanGitEnv(),
+		},
+	);
 	if (result.signal === "SIGINT" || result.signal === "SIGTERM")
 		throw new SpaceGitInterruptedError(result.signal);
 	return result.status === 0;

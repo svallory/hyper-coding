@@ -35,6 +35,11 @@ describe("project transport and terminal policy", () => {
 			allowLocal,
 			interactive: false,
 		});
+		for (const call of mocked.mock.calls) {
+			expect(call[1]).toEqual(
+				expect.arrayContaining(["core.fsmonitor=false", "core.hooksPath=/dev/null"]),
+			);
+		}
 		for (const call of mocked.mock.calls.slice(1)) {
 			expect(call[1]).toEqual(
 				expect.arrayContaining([

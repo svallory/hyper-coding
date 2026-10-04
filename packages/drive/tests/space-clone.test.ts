@@ -6,12 +6,14 @@ import {
 	readdirSync,
 	readFileSync,
 	renameSync,
+	rmSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SpaceEntry } from "#config/schema";
+import { renderGitignore } from "#services/allowlist";
 import { driveCheckoutDir, readManifest, upsertSpace } from "#services/manifest";
 import { shellQuote } from "#services/remote";
 import { cloneSpace, cloneTargetPath } from "#services/space-clone";
@@ -145,6 +147,154 @@ function publishChange(source: string, path: string, contents: string): void {
 	spaceGit(source, ["push", "origin", "HEAD"]);
 }
 
+describe("untrusted clone branch", () => {
+	it.each([
+		"loose.txt",
+		".hyper/space.git/config",
+		".hyper/space.git/hooks/post-checkout",
+		"notes/.GIT/config",
+		"gitlink",
+		".gitattributes",
+		"notes/.gitmodules",
+		"absolute-link",
+		"escaping-link",
+		"reserved-link",
+		"absolute-notes",
+		"marker-plus-wildcard",
+		"reserved-tracked",
+	])("refuses %s before any checkout and restores the target", (attack) => {
+		seed();
+		const peer = join(fixture.root, "hostile-peer");
+		git(
+			["clone", "--single-branch", "--branch", "space/team/sample", fixture.remote, peer],
+			fixture.root,
+		);
+		let commit: string | undefined;
+		if (attack === "notes/.GIT/config") {
+			const makeTree = (input: string): string => {
+				const result = spawnSync("git", ["mktree", "-z"], {
+					cwd: peer,
+					encoding: "utf8",
+					env: process.env,
+					input,
+				});
+				expect(result.status, result.stderr).toBe(0);
+				return result.stdout.trim();
+			};
+			const blob = git(["rev-parse", "HEAD:.gitignore"], peer).trim();
+			const configTree = makeTree(`100644 blob ${blob}\tconfig\0`);
+			const nested = makeTree(`040000 tree ${configTree}\t.GIT\0`);
+			const tree = makeTree(`100644 blob ${blob}\t.gitignore\0` + `040000 tree ${nested}\tnotes\0`);
+			commit = git(["commit-tree", tree, "-p", "HEAD", "-m", "hostile tree"], peer).trim();
+		} else if (attack === "gitlink") {
+			const sha = git(["rev-parse", "HEAD"], peer).trim();
+			git(["update-index", "--add", "--cacheinfo", `160000,${sha},notes/vendor`], peer);
+		} else if (attack.endsWith("-link") || attack === "absolute-notes") {
+			const path = attack === "absolute-notes" ? "notes" : "notes/link";
+			if (attack === "absolute-notes") {
+				git(["rm", "-r", "notes"], peer);
+				rmSync(join(peer, "notes"), { recursive: true, force: true });
+			}
+			const link =
+				attack === "escaping-link"
+					? "../../outside"
+					: attack === "reserved-link"
+						? "../.hyper/space.git"
+						: join(fixture.root, "outside");
+			symlinkSync(link, join(peer, path));
+			git(["add", "-f", "--", path], peer);
+		} else {
+			const path =
+				attack === "marker-plus-wildcard" || attack === "reserved-tracked" ? ".gitignore" : attack;
+			const contents =
+				attack === "marker-plus-wildcard"
+					? `${renderGitignore(["extra", ".config"])}!/**\n`
+					: attack === "reserved-tracked"
+						? `${renderGitignore(["extra", ".config"])}!/.hyper/space.git/\n!/.hyper/space.git/**\n`
+						: "hostile data\n";
+			mkdirSync(dirname(join(peer, path)), { recursive: true });
+			writeFileSync(join(peer, path), contents);
+			git(["add", "-f", "--", path], peer);
+		}
+		if (!commit) {
+			git(["commit", "-qm", "hostile branch"], peer);
+			commit = "HEAD";
+		}
+		git(["push", "origin", `${commit}:refs/heads/space/team/sample`], peer);
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const preexisting = attack.includes("link") || attack.includes("config");
+		if (preexisting) mkdirSync(target);
+		const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+		const shim = join(fixture.root, "checkout-guard");
+		mkdirSync(shim);
+		const marker = join(fixture.root, "checkout-ran");
+		writeFileSync(
+			join(shim, "git"),
+			`#!/bin/sh\ncase "$*" in *space.git*checkout*) touch ${shellQuote(marker)}; exit 99;; esac\nexec ${shellQuote(real)} "$@"\n`,
+			{ mode: 0o755 },
+		);
+		vi.stubEnv("PATH", `${shim}:${process.env.PATH}`);
+		const result = run(["sample", target]);
+		expect(result.status, flat(result.stderr)).toBe(2);
+		expect(flat(result.stderr)).toContain("Clone refused before checkout");
+		expect(existsSync(marker)).toBe(false);
+		expect(existsSync(target)).toBe(preexisting);
+		if (preexisting) expect(readdirSync(target)).toEqual([]);
+	});
+	it("trusts validated allowlist tracking instead of extra manifest claims", () => {
+		seed();
+		updateEntry({ tracked: ["extra", ".config", "unlisted"] });
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		expect(readTracked(target).sort()).toEqual([".config", "extra"]);
+		expect(JSON.parse(result.stdout).warnings.join(" ")).toContain("not in the incoming allowlist");
+	});
+	it("accepts safe relative links and warns on all instruction/configuration files except memory", () => {
+		const source = seed();
+		for (const path of [
+			"CLAUDE.md",
+			"AGENTS.md",
+			"notes/nested/HYPER.md",
+			"extra/CLAUDE.md",
+			"data/AGENTS.md",
+			".claude/commands/review.md",
+			".claude/memory/note.md",
+			".config/tool.json",
+			"bin/run.sh",
+		]) {
+			mkdirSync(dirname(join(source, path)), { recursive: true });
+			publishChange(source, path, "review before use\n");
+		}
+		symlinkSync("../extra/read me.md", join(source, "notes", "link"));
+		spaceGit(source, ["add", "notes/link"]);
+		spaceGit(source, ["commit", "-m", "safe link"]);
+		spaceGit(source, ["push", "origin", "HEAD"]);
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		expect(readFileSync(join(target, "notes/link"), "utf8")).toContain("tracked extra/read me.md");
+		const warned: string[] = JSON.parse(result.stdout).untrustedConfiguration;
+		for (const path of [
+			"HYPER.md",
+			"CLAUDE.md",
+			"AGENTS.md",
+			"notes/nested/HYPER.md",
+			"extra/CLAUDE.md",
+			"data/AGENTS.md",
+			".claude/commands/review.md",
+			".config/tool.json",
+			"bin/run.sh",
+		])
+			expect(warned).toContain(path);
+		expect(warned).not.toContain(".claude/memory/note.md");
+		expect(warned).not.toContain(".hyper/memory/MEMORY.md");
+	});
+});
+
 describe("round 1 clone security", () => {
 	it.each([
 		"/Users/old/.config/git",
@@ -237,6 +387,7 @@ describe("round 1 clone security", () => {
 		expect(result.untrustedConfiguration.sort()).toEqual([
 			".claude/settings.json",
 			".config/wt.toml",
+			"HYPER.md",
 			"bin/run.sh",
 		]);
 		expect(result.warnings.join(" ")).toContain("symlinked parent");
@@ -296,6 +447,7 @@ describe("manifest path remapping", () => {
 describe("space clone", () => {
 	it("round-trips init into a fresh HOME, restores config, and preserves every tracked byte", () => {
 		const source = seed();
+		spaceGit(source, ["config", "clone-test.must-not-copy", "source-only"]);
 		const paths = spaceGit(source, ["ls-files", "-z"]).stdout.split("\0").filter(Boolean);
 		const oldManifest = readFileSync(join(driveCheckoutDir(), "spaces.yaml"), "utf8");
 		useMachine("second");
@@ -317,7 +469,24 @@ describe("space clone", () => {
 		for (const path of ["scratch", "loose.txt", ".env", ".claude/settings.local.json"])
 			expect(existsSync(join(target, path)), path).toBe(false);
 		expect(readCadence(target)).toBe("session-end+push");
-		expect(readTracked(target)).toEqual(["extra", ".config"]);
+		expect(readTracked(target).sort()).toEqual([".config", "extra"]);
+		expect(readFileSync(join(target, ".hyper", "memory", "MEMORY.md"), "utf8")).toContain(
+			"tracked",
+		);
+		expect(spaceGit(target, ["config", "--get", "core.worktree"]).stdout.trim()).toBe("../..");
+		expect(
+			spaceGit(target, ["config", "--get", "clone-test.must-not-copy"], { allowFailure: true })
+				.status,
+		).toBe(1);
+		const status = spawnSync(process.execPath, [cli, "space", "status"], {
+			cwd: target,
+			encoding: "utf8",
+			env: process.env,
+		});
+		success(status);
+		expect(flat(status.stdout)).toContain("space/team/sample");
+		expect(flat(status.stdout)).toContain("session-end+push");
+		expect(flat(status.stdout)).toContain("as of the last contact");
 		expect(spaceGit(target, ["status", "--porcelain", "-z"]).stdout).toBe("");
 		expect(spaceGit(target, ["rev-parse", "--abbrev-ref", "@{upstream}"]).stdout.trim()).toBe(
 			"origin/space/team/sample",
@@ -609,7 +778,7 @@ describe("space clone", () => {
 		const target = join(fixture.home, "destination");
 		const response = run(["sample", target]);
 		expect(response.status).toBe(2);
-		expect(flat(response.stderr)).toContain("not a hyper allowlist");
+		expect(flat(response.stderr)).toContain("is not hyper's allowlist");
 		expect(existsSync(target)).toBe(false);
 	});
 
@@ -620,7 +789,7 @@ describe("space clone", () => {
 		const target = join(fixture.home, "destination");
 		const response = run(["sample", target]);
 		expect(response.status).toBe(2);
-		expect(flat(response.stderr)).toContain("unsafe layout path");
+		expect(flat(response.stderr)).toContain("Refusing incoming space history");
 		expect(existsSync(target)).toBe(false);
 	});
 
