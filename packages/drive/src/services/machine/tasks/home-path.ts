@@ -294,6 +294,19 @@ export const homePathPhysical: Task = {
 
 	async apply(ctx: TaskContext): Promise<void> {
 		const home = await homeOf(ctx);
+		// Never CREATE the home to put a line in it. `home-path.physical` is not a
+		// root task, so it runs BEFORE `home-path.symlink`'s script — and
+		// `ensureBashrcLine` starts with `touch`, which on a machine whose home is
+		// still at /home/<name> would create an empty /Users/<name> and make the
+		// move refuse its own target. The line is written after the move instead,
+		// on the next run, which is when the home really is at that path.
+		const there = await runScript(ctx, `test -d ${shellQuote(home)} && echo yes || echo no`);
+		if (there.stdout.trim() !== "yes") {
+			ctx.log(
+				`home-path.physical: ${home} isn't there yet — run the home-path root script first (it moves your home there), then re-run setup.`,
+			);
+			return;
+		}
 		await runOrFail(
 			ctx,
 			`add "${PHYSICAL_LINE}" to your .bashrc`,
