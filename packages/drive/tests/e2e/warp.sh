@@ -46,6 +46,10 @@
 #       recoverable byte-identical from hyper-warp-backup/; a merge in
 #       progress is refused even with --force, with nothing changed (marker,
 #       transcript, refs, worktree list, files)
+#  18.  in a plain repo: a type change (file/dir, symlink/dir, dir/file) is
+#       refused without --force; with it, backed up, replaced, and nothing is
+#       written through a symlink; a commit only the target has is refused
+#       without --force; with it, reachable from refs/hyper-warp-backup/
 #  and the Herdr argv shape (`-- --resume <id>`, pane id from the tab JSON).
 #
 # The fake `herdr` models Herdr: it records argv, answers `tab create` with the
@@ -1161,6 +1165,94 @@ done
 ssh_t12 "test -e '$merge_head'" || die "the merge state was dropped"
 ssh_t12 "rm -f '$merge_head'"
 pass "a merge in progress in t12's worktree is refused with and without --force; marker, transcript, refs, worktree list and files unchanged"
+
+echo "# ---------------------------------------------------------------"
+echo "# 18. type changes and target-only commits in a plain repo (PR #51 review)"
+echo "# ---------------------------------------------------------------"
+proj7="$home_local/work/proj7"
+mkdir -p "$proj7"
+git -C "$proj7" init -q
+printf 'tracked\n' > "$proj7/a.txt"
+git -C "$proj7" add -A
+git -C "$proj7" -c user.email=t@e -c user.name=t commit -qm init
+b7="$(git -C "$proj7" symbolic-ref --short HEAD)"
+folder7="$(make_session "$proj7")"
+target_mkdir "$proj7"
+run_hyper "$proj7" warp t12 >/dev/null || die "the first warp of proj7 failed"
+# Type changes, ignored on the target (its info/exclude) so only the collision
+# check can see them: a file there / directory here (typx), a symlink to a
+# directory outside the repo there / directory here (lnk), a directory there /
+# file here (typd).
+outside="$home_local/outside-fw"
+ssh_t12 "mkdir -p '$outside' && printf 'outside the repo\n' > '$outside/keep.txt' \
+  && cd '$proj7' && printf 'typx\nlnk\ntypd\n' >> .git/info/exclude \
+  && printf 'T-file-x\n' > typx && ln -s '$outside' lnk && mkdir typd && printf 'T-inner\n' > typd/inner"
+mkdir -p "$proj7/typx" "$proj7/lnk"
+printf 'local child\n' > "$proj7/typx/child"
+printf 'local, inside lnk/\n' > "$proj7/lnk/inside.txt"
+printf 'local file typd\n' > "$proj7/typd"
+mark_mine "$folder7"
+before7="$(target_tree "$proj7")"
+before_outside="$(target_tree "$outside")"
+set +e
+out="$(run_hyper "$proj7" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "type changes were not refused: exit $code: $out"
+listed7="$(printf '%s\n' "$out" | LC_ALL=C sed -e 's/^ › \{3\}//')"
+printf '%s\n' "$listed7" | grep -qx '  typx (a file there, a directory here)' || die "typx not named: $out"
+printf '%s\n' "$listed7" | grep -qx '  lnk (a symlink there, a directory here)' || die "lnk not named: $out"
+printf '%s\n' "$listed7" | grep -qx '  typd (a directory there, a file here)' || die "typd not named: $out"
+flat "$out" | grep -q "Nothing was changed on either machine" || die "the refusal does not say nothing changed: $out"
+[ "$(target_tree "$proj7")" = "$before7" ] || die "the target repo changed after the refusal"
+[ "$(ssh_t12 "readlink '$proj7/lnk'")" = "$outside" ] || die "the target's symlink changed"
+pass "type changes (file/dir, symlink/dir, dir/file) are refused without --force, each named; t12's repo is byte-identical afterwards"
+
+set +e
+out="$(run_hyper "$proj7" warp t12 --force 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "--force with type changes failed: exit $code: $out"
+backup7="$(flat "$out" | sed -n 's/.*(3) were first copied to \(.*hyper-warp-backup\/[^ ]*\) there\..*/\1/p')"
+[ -n "$backup7" ] || die "warp did not say where the entries went: $out"
+[ "$(ssh_t12 "cat '$backup7/typx'")" = "T-file-x" ] || die "typx is not in the backup"
+[ "$(ssh_t12 "readlink '$backup7/lnk'")" = "$outside" ] || die "lnk is not in the backup as a symlink"
+[ "$(ssh_t12 "cat '$backup7/typd/inner'")" = "T-inner" ] || die "typd/inner is not in the backup"
+[ "$(ssh_t12 "cat '$proj7/typx/child'")" = "local child" ] || die "typx did not become this machine's directory"
+ssh_t12 "test -d '$proj7/lnk' && test ! -L '$proj7/lnk'" || die "lnk did not become a real directory"
+[ "$(ssh_t12 "cat '$proj7/lnk/inside.txt'")" = "local, inside lnk/" ] || die "lnk/inside.txt did not arrive"
+[ "$(ssh_t12 "cat '$proj7/typd'")" = "local file typd" ] || die "typd did not become this machine's file"
+[ "$(target_tree "$outside")" = "$before_outside" ] || die "something was written through the target's symlink"
+pass "with --force each type change is copied aside ($backup7), replaced by this machine's type, and nothing is written through the symlink"
+
+# The forced warp replaced t12's .git/info/exclude with this machine's (as the
+# docs say), so those entries are plain untracked files there now: clear them
+# on both sides so the next check is about refs only.
+rm -rf "$proj7/typx" "$proj7/lnk" "$proj7/typd"
+ssh_t12 "cd '$proj7' && rm -rf typx lnk typd"
+# A commit only the target has.
+ssh_t12 "cd '$proj7' && printf 'committed only on t12\n' > t.txt && git add t.txt \
+  && git -c user.email=t@e -c user.name=t commit -qm 'only on t12'"
+t_commit="$(ssh_t12 "git -C '$proj7' rev-parse HEAD")"
+mark_mine "$folder7"
+before7="$(target_tree "$proj7")"
+set +e
+out="$(run_hyper "$proj7" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "a target-only commit was not refused: exit $code: $out"
+flat "$out" | grep -q "refs/heads/$b7 (has commits this machine doesn't)" || die "the refusal does not name the ref: $out"
+[ "$(target_tree "$proj7")" = "$before7" ] || die "the target repo changed after the refusal"
+[ "$(ssh_t12 "git -C '$proj7' rev-parse HEAD")" = "$t_commit" ] || die "the target's branch moved"
+pass "a commit only t12 has is refused without --force (refs/heads/$b7 named); t12's repo is byte-identical afterwards"
+
+set +e
+out="$(run_hyper "$proj7" warp t12 --force 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "--force with a target-only commit failed: exit $code: $out"
+ns7="$(flat "$out" | sed -n 's/.*saved there under \(refs\/hyper-warp-backup\/[^ ]*\/\) before.*/\1/p')"
+[ -n "$ns7" ] || die "warp did not say where the refs went: $out"
+[ "$(ssh_t12 "git -C '$proj7' rev-parse '${ns7}heads/$b7'")" = "$t_commit" ] || die "the target's commit is not reachable from ${ns7}heads/$b7"
+[ "$(ssh_t12 "git -C '$proj7' show '${ns7}heads/$b7:t.txt'")" = "committed only on t12" ] || die "the saved commit lost its content"
+[ "$(ssh_t12 "git -C '$proj7' rev-parse HEAD")" = "$(git -C "$proj7" rev-parse HEAD)" ] || die "the target's branch is not this machine's after --force"
+pass "with --force t12's commit $t_commit stays reachable from ${ns7}heads/$b7"
 
 echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
