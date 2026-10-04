@@ -331,7 +331,7 @@ describe("round 1 clone security", () => {
 		expect(flat(response.stderr)).toContain("--yes");
 		expect(existsSync(join(fixture.home, "work", "sample"))).toBe(false);
 	});
-	it.each(["y", "n"])("confirms a manifest target on a TTY: %s", (answer, ctx) => {
+	it.for(["y", "n"])("confirms a manifest target on a TTY: %s", (answer, ctx) => {
 		if (skipWithoutScript(ctx)) return;
 		seed();
 		updateEntry({ path: "/Users/old/work/sample" });
@@ -541,7 +541,9 @@ describe("space clone", () => {
 		expect(readFileSync(join(target, "worktrees", "main", "file.txt"), "utf8")).toBe("hello\n");
 	});
 
-	it.each([false, true])(
+	// `it.for`, not `it.each`: only `for` passes the test context as the last
+	// argument, and CI has no `wt`, so this skip is the path CI actually takes.
+	it.for([false, true])(
 		"warns about worktrunk placement without changing user config (per-project=%s)",
 		(perProject, ctx) => {
 			if (spawnSync("sh", ["-c", "command -v wt"], { encoding: "utf8" }).status !== 0)
