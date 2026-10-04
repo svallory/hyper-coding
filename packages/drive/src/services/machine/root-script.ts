@@ -12,6 +12,25 @@ import type { MachineInfo } from "#services/machine";
 import { shellQuote } from "#services/remote";
 import type { Task, TaskContext } from "./tasks/types.js";
 
+/** The task whose section moves the home, and must run first. */
+export const HOME_MOVE_TASK_ID = "home-path.symlink";
+
+/**
+ * Said in the header of any script that contains a pending home move, and in
+ * the move's refusal: the move refuses while the user has ANY process, it is
+ * the first section, and a refusal stops the script — so no other section can
+ * run from an ssh session of that user until the move is done once.
+ */
+export const HOME_MOVE_NOTICE = [
+	"THIS SCRIPT MOVES YOUR HOME, AND NEEDS A ROOT CONSOLE ONCE.",
+	"The move refuses while your user has any process (usermod will not change",
+	"a home in use), including the ssh session you would run this from. It is the",
+	"first section, and a refusal stops the script there, so while the move is",
+	"pending NO other section below can run from any ssh session of yours.",
+	"Run it once as root from a console that is not one of your sessions, after",
+	"`loginctl terminate-user <you>`. Later runs work from ssh again.",
+];
+
 /** One task's contribution to the script. */
 export interface RootScriptEntry {
 	task: Task;
@@ -166,6 +185,9 @@ export function assembleRootScript(entries: RootScriptEntry[], ctx: TaskContext)
 		"#  the copy and run commands for the machine it is setting up)",
 		"",
 	];
+	if (entries.some((entry) => entry.task.id === HOME_MOVE_TASK_ID)) {
+		lines.push(...HOME_MOVE_NOTICE.map((line) => `# ${line}`), "");
+	}
 
 	for (const entry of entries) {
 		lines.push(`# --- ${entry.task.id} ---`);

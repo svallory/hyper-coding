@@ -200,6 +200,10 @@ describe("the home-path root script, run", () => {
 		const result = box.run({ BUSY: "101 202" });
 		expect(result.code).not.toBe(0);
 		expect(result.stderr).toContain("still has processes running (pids: 101 202)");
+		expect(result.stderr).toContain("none of the other root steps in this");
+		expect(result.stderr).toContain("no root section can");
+		// The later section did not run, exactly as the message says.
+		expect(result.stdout).not.toContain("later section ran");
 		expect(passwdHomeOf(box)).toBe(box.legacy);
 		expect(lstatSync(box.legacy).isDirectory()).toBe(true);
 		expect(existsSync(join(box.root, "Users"))).toBe(false);
@@ -281,6 +285,23 @@ describe("the home-path root script, run", () => {
 function symlinkTo(destination: string, path: string): void {
 	spawnSync("ln", ["-s", destination, path]);
 }
+
+describe("the header says a pending move needs a root console", () => {
+	it("is in every assembled script that holds the move, and only those", () => {
+		const withMove = assembleRootScript(
+			[
+				{ task: homePathSymlink, script: homePathSymlink.rootScript?.(ctx) ?? "" },
+				{ task: after, script: 'echo "later section ran"' },
+			],
+			ctx,
+		);
+		const header = withMove.slice(0, withMove.indexOf("# --- "));
+		expect(header).toContain("NEEDS A ROOT CONSOLE ONCE");
+		expect(header).toContain("NO other section below can run from any ssh session");
+		const without = assembleRootScript([{ task: after, script: "true" }], ctx);
+		expect(without).not.toContain("ROOT CONSOLE");
+	});
+});
 
 describe("/Users is checked before a home moves into it", () => {
 	function refusedUnchanged(box: Sandbox, env: Record<string, string>, reason: RegExp): void {

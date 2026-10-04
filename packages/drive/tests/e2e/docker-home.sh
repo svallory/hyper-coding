@@ -283,6 +283,7 @@ for round in $(seq 1 12); do
       # user has processes, so the script refuses BEFORE changing anything.
       [ "$refused_logged" = 1 ] || refused_logged=1
       root_log="$work_real/root-$round.log"
+      cp "$script" "$work_real/refused-root.sh"
       [ "$(pexec "getent passwd $primary | cut -d: -f6")" = "/home/$primary" ] \
         || die "the refused script still changed the passwd entry"
       pexec "test -e /Users/$primary" && die "the refused script still created /Users/$primary"
@@ -356,6 +357,10 @@ grep -q "usermod will not change a home directory" "$root_log" \
   || { cat "$root_log"; die "the refusal does not explain the usermod limit"; }
 grep -q "usermod -d /Users/$primary $primary" "$root_log" \
   || { cat "$root_log"; die "the refusal does not print the one-liner to run by hand"; }
+grep -q "no root section can" "$root_log" \
+  || { cat "$root_log"; die "the refusal does not say the other root sections cannot run from ssh"; }
+grep -q "NEEDS A ROOT CONSOLE ONCE" "$work_real/refused-root.sh" \
+  || die "the root script header does not say a pending move needs a root console"
 pass "home-path: logged in, the root script refuses and changes nothing; with every session closed it moves the home (root console)"
 
 # T-16's home ACL probe, AFTER the move: the layout the agent-user tasks manage
