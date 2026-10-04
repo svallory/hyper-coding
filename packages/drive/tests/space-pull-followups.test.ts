@@ -1,0 +1,238 @@
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { renderGitignore } from "#services/allowlist";
+import { spaceGit } from "#services/space-git";
+import {
+	flat,
+	git,
+	isolateGitConfig,
+	type ManifestFixture,
+	spawnCli,
+	withManifestFixture,
+} from "#tests/tmp-manifest";
+import { makeBareSpace } from "#tests/tmp-space";
+
+let fixture: ManifestFixture;
+let root: string;
+let peer: string;
+const cli = join(import.meta.dirname, "..", "..", "cli", "bin", "run.js");
+beforeEach(() => {
+	isolateGitConfig();
+	process.env.GIT_AUTHOR_NAME = process.env.GIT_COMMITTER_NAME = "hyper test";
+	process.env.GIT_AUTHOR_EMAIL = process.env.GIT_COMMITTER_EMAIL = "hyper-test@example.invalid";
+	fixture = withManifestFixture();
+	mkdirSync(dirname(fixture.configFile), { recursive: true });
+	writeFileSync(fixture.configFile, `remote = ${JSON.stringify(fixture.remote)}\n`);
+	root = join(fixture.root, "followups");
+	makeBareSpace(root);
+	mkdirSync(join(root, "notes"));
+	writeFileSync(join(root, "notes", "a.md"), "local\n");
+	expect(spawnCli(["space", "init", root, "--cadence", "manual"], fixture).status).toBe(0);
+	peer = join(fixture.root, "peer");
+	git(
+		["clone", "--single-branch", "--branch", "space/followups", fixture.remote, peer],
+		fixture.root,
+	);
+}, 120_000);
+afterEach(() => fixture.cleanup());
+function run(command: string, ...args: string[]) {
+	return spawnSync(process.execPath, [cli, "space", command, ...args], {
+		cwd: root,
+		encoding: "utf8",
+		env: {
+			...process.env,
+			HOME: fixture.home,
+			HYPER_HOME: fixture.hyperHome,
+			HYPER_DRIVE_CONFIG: fixture.configFile,
+			XDG_CONFIG_HOME: join(fixture.root, "config"),
+			NO_COLOR: "1",
+			FORCE_COLOR: "0",
+			AI_AGENT: undefined,
+			CLAUDECODE: undefined,
+		},
+	});
+}
+function peerFile(path: string, content = "remote\n"): void {
+	mkdirSync(dirname(join(peer, path)), { recursive: true });
+	writeFileSync(join(peer, path), content);
+	git(["add", "-f", "--", path], peer);
+}
+function publish(): void {
+	git(["add", "-A"], peer);
+	git(["commit", "-qm", "peer update"], peer);
+	git(["push", "origin", "HEAD"], peer);
+}
+function track(entry: string): void {
+	writeFileSync(join(peer, ".gitignore"), renderGitignore([entry]));
+	publish();
+}
+function ignoredFiles(entry: string): void {
+	mkdirSync(join(root, entry), { recursive: true });
+	for (const name of ["a.txt", "b.txt"]) writeFileSync(join(root, entry, name), "local\n");
+	mkdirSync(join(root, entry, "nested"));
+	writeFileSync(join(root, entry, "nested", "c.txt"), "local\n");
+}
+function config(key: string): string | null {
+	return (
+		spaceGit(root, ["config", "--local", "--get", key], { allowFailure: true }).stdout.trim() ||
+		null
+	);
+}
+
+describe("pull follow-ups", () => {
+	it("refuses to adopt a peer's tracked entry without consent and lists its ignored files", () => {
+		ignoredFiles("private");
+		track("private");
+		const head = spaceGit(root, ["rev-parse", "HEAD"]).stdout;
+		const refused = run("pull");
+		expect(refused.status, flat(refused.stderr)).toBe(2);
+		expect(flat(refused.stderr)).toContain(
+			'"private": 3 local files would become eligible for commit',
+		);
+		expect(flat(refused.stderr)).toContain("--accept-tracked");
+		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(head);
+		expect(config("hyper.tracked")).toBe(null);
+		const accepted = run("pull", "--accept-tracked", "--json");
+		expect(accepted.status, flat(accepted.stderr)).toBe(0);
+		expect(JSON.parse(accepted.stdout).addedTracked).toEqual([{ path: "private", localFiles: 3 }]);
+		expect(spaceGit(root, ["config", "--get-all", "hyper.tracked"]).stdout.trim()).toBe("private");
+	});
+	it("shows a peer's executable and instruction files after a successful pull", () => {
+		peerFile(".claude/hooks/session.sh", "#!/bin/sh\n");
+		peerFile("bin/tool", "x\n");
+		peerFile("CLAUDE.md", "obey\n");
+		peerFile("notes/safe.md");
+		publish();
+		const result = run("pull");
+		expect(result.status, flat(result.stderr)).toBe(0);
+		expect(result.stdout).toContain("These can run commands or instruct agents; review them:");
+		expect(result.stdout).toContain(".claude/hooks/session.sh");
+		expect(result.stdout).not.toContain("notes/safe.md");
+	});
+	it("keeps local tracked entries and re-renders the allowlist when the incoming lacks them", () => {
+		spaceGit(root, ["config", "--add", "hyper.tracked", "local-only"]);
+		ignoredFiles("local-only");
+		track("extra");
+		const result = run("pull", "--accept-tracked");
+		expect(result.status, flat(result.stderr)).toBe(0);
+		expect(
+			spaceGit(root, ["config", "--get-all", "hyper.tracked"]).stdout.trim().split("\n"),
+		).toEqual(["extra", "local-only"]);
+		expect(readFileSync(join(root, ".gitignore"), "utf8")).toBe(
+			renderGitignore(["extra", "local-only"]),
+		);
+		expect(spaceGit(root, ["status", "--porcelain"]).stdout).toContain(".gitignore");
+		expect(result.stdout).toContain("local modification");
+	});
+	it("reports a refused tip through status until the tracking ref moves", () => {
+		peerFile("loose.txt", "hostile\n");
+		publish();
+		expect(run("pull").status).toBe(2);
+		expect(config("hyper.refusedTip")).toBe(
+			git(["rev-parse", "origin/space/followups"], peer).trim(),
+		);
+		const text = run("status");
+		expect(text.status, flat(text.stderr)).toBe(0);
+		expect(text.stdout).toContain(
+			"behind 1: the newest commit on the hyperdrive was refused by the last pull",
+		);
+		expect(text.stdout).toContain("loose.txt");
+		expect(JSON.parse(run("status", "--json").stdout).refused).toMatchObject({
+			reason: expect.stringContaining("loose.txt"),
+		});
+	});
+	it("clears the refusal once the remote tip changes", () => {
+		peerFile("loose.txt", "hostile\n");
+		publish();
+		expect(run("pull").status).toBe(2);
+		git(["rm", "-q", "loose.txt"], peer);
+		publish();
+		expect(run("status", "--fetch", "--json").status).toBe(0);
+		expect(JSON.parse(run("status", "--json").stdout).refused).toBeNull();
+		expect(config("hyper.refusedTip")).not.toBe(
+			git(["rev-parse", "origin/space/followups"], peer).trim(),
+		);
+	});
+	it("validates a large long history bounded by the tip tree", () => {
+		for (let round = 0; round < 30; round++) {
+			for (let index = 0; index < 20; index++) peerFile(`notes/bulk/${round}-${index}.md`);
+			git(["commit", "-qm", `bulk ${round}`], peer);
+			git(["push", "-q", "origin", "HEAD"], peer);
+		}
+		peerFile("loose.txt", "hostile\n");
+		publish();
+		const started = Date.now();
+		expect(run("pull").status).toBe(2);
+		expect(Date.now() - started).toBeLessThan(60_000);
+	}, 120_000);
+	it("reports control characters in status paths as escapes", () => {
+		const path = "notes/we\u0007ird\u001b[31m.md";
+		mkdirSync(join(root, "notes"), { recursive: true });
+		writeFileSync(join(root, path), "x\n");
+		const result = run("status");
+		expect(result.status, flat(result.stderr)).toBe(0);
+		expect(result.stdout).toContain('"notes/we\\u0007ird\\u001b[31m.md"');
+		expect(result.stdout).not.toContain("\u001b[31m.md");
+	});
+	it("escapes a hostile filename in pull's refusal text", () => {
+		const path = "loose\u0007.txt";
+		peerFile(path, "hostile\n");
+		publish();
+		const result = run("pull");
+		expect(result.status).toBe(2);
+		expect(result.stderr).not.toContain("\u0007");
+		expect(result.stderr).toContain("\\u0007");
+	});
+	it("refuses a symlink whose target is an ancestor of reserved metadata", () => {
+		symlinkSync("../.hyper", join(peer, "notes", "up"));
+		publish();
+		expect(run("pull").status).toBe(2);
+		expect(flat(run("pull").stderr)).toContain("notes/up");
+	});
+	it("reports untracked files git would lose as a local-overwrite refusal", () => {
+		peerFile("notes/new.md", "incoming\n");
+		publish();
+		writeFileSync(join(root, "notes", "new.md"), "mine\n");
+		const result = run("pull");
+		expect(result.status, flat(result.stderr)).toBe(2);
+		expect(flat(result.stderr)).toContain("would be overwritten by the fast-forward");
+		expect(readFileSync(join(root, "notes", "new.md"), "utf8")).toBe("mine\n");
+	});
+	it("tells a refresh refusal to pull, and a first init to change the name", () => {
+		const sha = git(["rev-parse", "HEAD"], peer).trim();
+		const tree = git(["rev-parse", "HEAD^{tree}"], peer).trim();
+		const other = git(["commit-tree", tree, "-m", "another machine"], peer).trim();
+		git(["push", "-q", "origin", `+${other}:refs/heads/space/followups`], peer);
+		const refreshed = spawnCli(
+			["space", "init", root, "--refresh", "--cadence", "manual"],
+			fixture,
+		);
+		expect(refreshed.status).toBe(2);
+		expect(flat(refreshed.stderr)).toContain("hyper space pull");
+		expect(sha).not.toBe(other);
+	});
+	it("does not claim a rename for a daily push ref conflict", () => {
+		const sha = git(["rev-parse", "HEAD"], peer).trim();
+		git(
+			["--git-dir", fixture.remote, "update-ref", "-d", "refs/heads/space/followups"],
+			fixture.root,
+		);
+		git(
+			["--git-dir", fixture.remote, "update-ref", "refs/heads/space/followups/child", sha],
+			fixture.root,
+		);
+		const result = run("push");
+		expect(result.status).toBe(2);
+		expect(flat(result.stderr)).toContain("no space rename command");
+		expect(flat(result.stderr)).not.toContain("--name");
+	});
+	it("keeps the refused tip out of local history but still reports behind", () => {
+		peerFile("loose.txt", "hostile\n");
+		publish();
+		expect(run("pull").status).toBe(2);
+		expect(existsSync(join(root, "loose.txt"))).toBe(false);
+		expect(spaceGit(root, ["rev-list", "--count", "HEAD"]).stdout.trim()).toBe("1");
+	});
+});

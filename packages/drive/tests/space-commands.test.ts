@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findSecretPaths } from "#services/allowlist";
 import { shellQuote } from "#services/remote";
-import { initSpaceGitDir, readStagedBlobPrefix, spaceGit } from "#services/space-git";
+import { initSpaceGitDir, readSpaceBlobPrefixes, spaceGit } from "#services/space-git";
 import { inspectStagedFiles } from "#services/space-sync";
 import {
 	flat,
@@ -149,7 +149,8 @@ describe("space commit", () => {
 		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([]);
 		writeFileSync(join(root, path), `${"a".repeat(4096)}-----BEGIN PRIVATE KEY-----\n`);
 		spaceGit(root, ["add", path]);
-		expect(readStagedBlobPrefix(root, path)).toHaveLength(4096);
+		const hash = spaceGit(root, ["rev-parse", `:${path}`]).stdout.trim();
+		expect((await readSpaceBlobPrefixes(root, [hash])).get(hash)!.prefix).toHaveLength(4096);
 		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([]);
 		writeFileSync(join(root, path), "-----BEGIN RSA\n PRIVATE KEY-----\n");
 		spaceGit(root, ["add", path]);

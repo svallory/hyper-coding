@@ -78,7 +78,10 @@ export function spaceGitRemote(
 	// Ref conflicts also carry [remote rejected], but are not hook failures.
 	if (/refname conflict|cannot lock ref/i.test(detail)) {
 		throw new SpacePushRefusedError(
-			`the hyperdrive at ${remote} already has a ref that ${branch} collides with, so it cannot take this branch. Pick a space name that does not collide.`,
+			`the hyperdrive at ${remote} already has a ref that ${branch} collides with, so it cannot take this branch. ` +
+				(caller === "init"
+					? "Pick a space name that does not collide."
+					: "Inspect the remote ref hierarchy and reconcile the conflicting names manually; there is no space rename command."),
 			` Pass \`--name\` or \`--group\` to pick a name that does not collide.`,
 		);
 	}
@@ -294,6 +297,7 @@ export async function commitAndPushSpace(
 	remote: string,
 	onCommitted: (files: number) => void,
 	beforePush: () => void,
+	pushCaller: "init" | "daily" = "init",
 ): Promise<SpaceCommitResult & { upToDate: boolean }> {
 	const result = await commitSpace(root, branch, `space: init ${name}`, [], "init");
 	// Tell rollback a commit exists before anything can fail during publication.
@@ -304,6 +308,6 @@ export async function commitAndPushSpace(
 	beforePush();
 	// Publish whenever HEAD exists, even with an empty index: a previous push may
 	// have failed after committing, and an unchanged refresh must still retry it.
-	pushSpace(root, remote, branch, "init");
+	pushSpace(root, remote, branch, pushCaller);
 	return { ...result, upToDate: head !== "" && head === publishedBefore };
 }
