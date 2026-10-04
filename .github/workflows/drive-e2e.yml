@@ -118,8 +118,16 @@ jobs:
           curl -fsSL -o "/tmp/$tarball" "$url/v${version}/$tarball"
           echo "$sha256  /tmp/$tarball" | sha256sum -c -
           mkdir -p "$HOME/.local/bin"
-          tar -xzf "/tmp/$tarball" -C "$HOME/.local/bin" mutagen
+          # The mutagen binary needs its matching agent bundle for ssh beta.
+          tar -xzf "/tmp/$tarball" -C "$HOME/.local/bin" \
+            mutagen mutagen-agents.tar.gz
           mutagen version
+
+      # agent-user.sh inspects the base image BEFORE it builds its derivative.
+      # Pre-pull under the runner's normal HOME; run.sh preserves podman's
+      # XDG storage path while each script receives its own temp HOME.
+      - name: Pre-pull the podman fixture image
+        run: podman pull debian:13
 
       - name: Run the e2e suite
         env:

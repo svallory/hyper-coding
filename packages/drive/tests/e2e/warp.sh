@@ -166,7 +166,7 @@ fi
 # --------------------------------------------------------------------------
 # Start the podman VM when this platform has one (macOS/Windows). On Linux
 # `podman machine` is unsupported and exits non-zero; podman is native there.
-if podman machine list --format '{{.Running}}' >/dev/null 2>&1; then
+if [ "$(uname -s)" != Linux ] && podman machine list --format '{{.Running}}' >/dev/null 2>&1; then
   if ! podman machine list --format '{{.Running}}' | grep -q true; then
     echo "# starting the podman machine"
     podman machine start >/dev/null

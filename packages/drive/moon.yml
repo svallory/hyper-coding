@@ -1,3 +1,7 @@
+# yaml-language-server: $schema=none
+# moon 1.41 accepts this project-level toolchain override (the current online
+# project schema describes moon 2.x and rejects it; `moon project drive` is the
+# authoritative validation for this workspace's pinned version).
 type: library
 language: typescript
 platform: node
