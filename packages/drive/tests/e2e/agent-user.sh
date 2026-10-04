@@ -53,6 +53,10 @@ die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
 # to coreutils sha256sum. Both print the same hex, so the recipe tag is stable.
 sha12() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sha256sum "$@"; fi | cut -c1-12; }
 
+# A signal from the suite runner must still run this script's cleanup, so its
+# container goes away with it.
+trap 'exit 143' INT TERM HUP
+
 [ -f "$cli" ] || { echo "# cannot find the CLI at $cli — build packages/cli first" >&2; exit 1; }
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/hyperdrive-e2e-agentuser.XXXXXX")"
@@ -134,8 +138,8 @@ fi
 if podman container exists "$container"; then
   die "container $container already exists; refusing to touch it"
 fi
-podman run -d --name "$container" --systemd=always -p "$port":22 "$derived" /sbin/init >/dev/null
 started=1
+podman run -d --name "$container" --systemd=always -p "127.0.0.1:$port":22 "$derived" /sbin/init >/dev/null
 echo "# started $container"
 
 pexec() { podman exec "$container" sh -c "$1"; }
@@ -174,7 +178,7 @@ ssh_t16() {
   # IdentityAgent=none + IdentitiesOnly=yes: authenticate with the throwaway key
   # on the command line and nothing else, whatever the environment offers.
   /usr/bin/ssh -F /dev/null -o ControlMaster=no -o ControlPath=none -i "$key" -p "$port" \
-    -o IdentityAgent=none -o IdentitiesOnly=yes \
+-o IdentitiesOnly=yes -o IdentityAgent=none -o ForwardAgent=no \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -o LogLevel=ERROR -o ConnectTimeout=10 \
     "$primary@localhost" "$@"
@@ -231,6 +235,9 @@ Host t16box
   Port $port
   User $primary
   IdentityFile $key
+  IdentitiesOnly yes
+  IdentityAgent none
+  ForwardAgent no
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
   LogLevel ERROR
@@ -342,6 +349,7 @@ for round in 1 2 3 4; do
     [ -n "$root_script" ] || die "run $round said root work was pending but named no script"
     echo "# the harness runs the root script itself, over ssh, with sudo"
     scp -F /dev/null -o ControlMaster=no -o ControlPath=none -q -i "$key" -P "$port" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      -o IdentitiesOnly=yes -o IdentityAgent=none -o ForwardAgent=no \
       -o LogLevel=ERROR "$root_script" "$primary@localhost:/tmp/hyper-machine-root.sh"
     ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" || die "the root script failed on round $round"
     if [ "$round" = 1 ]; then

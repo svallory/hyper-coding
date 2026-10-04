@@ -80,6 +80,21 @@ die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
 # to coreutils sha256sum. Both print the same hex, so the recipe tag is stable.
 sha12() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sha256sum "$@"; fi | cut -c1-12; }
 
+# EVERY ssh this script runs — the harness's own calls, the wrapper the CLI
+# spawns, the fake herdr and rsync's -e — carries these. OpenSSH resolves ~/.ssh
+# from the PASSWD home, not $HOME, so a temp HOME alone still reads the
+# operator's config, keys, known_hosts and (1Password) agent, forwards it into
+# the container and writes ControlMaster sockets there. -F /dev/null plus an
+# explicit -i and the no-agent/no-control flags are what isolate it. (This is
+# harness-only; services/remote.ts is untouched.)
+ssh_iso="-F /dev/null -o IdentitiesOnly=yes -o IdentityAgent=none -o ForwardAgent=no"
+ssh_iso="$ssh_iso -o ControlMaster=no -o ControlPath=none -o UserKnownHostsFile=/dev/null"
+ssh_iso="$ssh_iso -o StrictHostKeyChecking=no -o LogLevel=ERROR"
+
+# A signal from the suite runner must still run this script's cleanup, so its
+# container goes away with it.
+trap 'exit 143' INT TERM HUP
+
 [ -f "$cli" ] || { echo "# cannot find the CLI at $cli — build packages/cli first" >&2; exit 1; }
 
 # Fixture commits must never consult the operator's global commit-signing
@@ -193,9 +208,9 @@ if podman container exists "$container"; then
 fi
 # The entrypoint takes the shared home path and does the user setup, because
 # sshd is the container's main process and must be the LAST thing started.
-podman run -d --name "$container" -p "$port":22 "$derived" "$home_local" >/dev/null \
-  || die "could not start the container"
 container_started=1
+podman run -d --name "$container" -p "127.0.0.1:$port":22 "$derived" "$home_local" >/dev/null \
+  || die "could not start the container"
 echo "# started $container on port $port (shared home $home_local)"
 
 pexec() { podman exec "$container" sh -c "$1"; }
@@ -283,9 +298,8 @@ if [ "$1" = "agent" ] && [ "$2" = "start" ]; then
   [ "${1:-}" = "--" ] && shift
   # Start the KIND's binary on the target with the remaining words as its
   # arguments: exactly one `claude`, whatever the caller sent.
-  exec /usr/bin/ssh -i "%KEY%" -o StrictHostKeyChecking=no \
-      -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
-      -p %PORT% %PRIMARY%@localhost "$kind" "$@"
+  exec /usr/bin/ssh $ssh_iso \
+      -i "%KEY%" -p %PORT% %PRIMARY%@localhost "$kind" "$@"
 fi
 
 exit 0
@@ -356,14 +370,12 @@ pexec "chmod 0755 /usr/local/bin/hyper"
 # every argument, including the `-p` the port support adds, is passed through.
 cat > "$fakebin/ssh" <<WRAPPER
 #!/bin/sh
-exec /usr/bin/ssh -i "$key" -o StrictHostKeyChecking=no \\
-  -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR "\$@"
+exec /usr/bin/ssh $ssh_iso -i "$key" "\$@"
 WRAPPER
 chmod +x "$fakebin/ssh"
 
 ssh_t12() {
-  /usr/bin/ssh -F /dev/null -i "$key" -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10 \
+  /usr/bin/ssh $ssh_iso -i "$key" -o ConnectTimeout=10 \
     -p "$port" "$primary@localhost" "$@"
 }
 
@@ -442,7 +454,7 @@ mkdir -p "$work_real/rsync-src"
 printf 'payload\n' > "$work_real/rsync-src/file.txt"
 # `--` ends the OPTIONS, so it has to come after -e; everything after it is a path.
 PATH="$fakebin:$PATH" rsync -a \
-  -e "ssh -i $key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p $port" \
+  -e "ssh $ssh_iso -i $key -p $port" \
   -- "$work_real/rsync-src/" "$primary@localhost:$home_local/harness/copied/" \
   || die "rsync to the container failed"
 [ "$(ssh_t12 "cat '$home_local/harness/copied/file.txt'")" = "payload" ] \

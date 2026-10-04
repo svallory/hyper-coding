@@ -58,6 +58,10 @@ die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
 # to coreutils sha256sum. Both print the same hex, so the recipe tag is stable.
 sha12() { if command -v shasum >/dev/null 2>&1; then shasum -a 256 "$@"; else sha256sum "$@"; fi | cut -c1-12; }
 
+# A signal from the suite runner must still run this script's cleanup, so its
+# container and its throwaway agent go away with it.
+trap 'exit 143' INT TERM HUP
+
 [ -f "$cli" ] || { echo "# cannot find the CLI at $cli — build packages/cli first" >&2; exit 1; }
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/hyperdrive-e2e-dockerhome.XXXXXX")"
@@ -147,13 +151,24 @@ if podman container exists "$container"; then
   die "container $container already exists; refusing to touch it"
 fi
 # --privileged: nested user namespaces, which rootless Docker needs. See header.
-podman run -d --name "$container" --privileged --systemd=always -p "$port":22 "$derived" /sbin/init >/dev/null
 started=1
+podman run -d --name "$container" --privileged --systemd=always -p "127.0.0.1:$port":22 "$derived" /sbin/init >/dev/null
 echo "# started $container (privileged: nested user namespaces)"
 
 pexec() { podman exec "$container" sh -c "$1"; }
-pexec 'for i in $(seq 1 90); do systemctl is-system-running >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1' \
-  || die "systemd never came up in the container"
+# `systemctl is-system-running` exits non-zero for `degraded`, which a
+# privileged container routinely is (units that cannot work inside one). Only
+# `starting`/worse is a real failure, and a timeout must SHOW the state rather
+# than just say no.
+pexec 'for i in $(seq 1 90); do
+  state="$(systemctl is-system-running 2>/dev/null || true)"
+  case "$state" in running|degraded) exit 0 ;; esac
+  sleep 1
+done
+exit 1' \
+  || { pexec 'systemctl --failed --no-pager --no-legend || true' >&2 \
+       || pexec 'systemctl is-system-running || true' >&2; \
+       die "systemd never reached running/degraded in the container"; }
 pexec 'command -v polkitd >/dev/null || { export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq polkitd; }' \
   || die "could not install polkitd"
 pexec "unshare -Ur true" || die 'this container cannot create user namespaces at all'
@@ -174,6 +189,7 @@ echo "# sshd started"
 
 ssh_t17() {
   /usr/bin/ssh -F /dev/null -o ControlMaster=no -o ControlPath=none -i "$key" -p "$port" \
+    -o IdentitiesOnly=yes -o IdentityAgent=none \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -o LogLevel=ERROR -o ConnectTimeout=10 "$primary@localhost" "$@"
 }
@@ -257,11 +273,13 @@ run_probe() { HYPER_T17_CONTAINER_TEST=1 run_isolated "$here/run-as-agent-probe.
 as_agent() { ssh_t17 "sudo -u $agent -- bash -s" <<<"$1"; }
 as_agent_ssh() {
   /usr/bin/ssh -F /dev/null -o ControlMaster=no -o ControlPath=none -i "$key" -p "$port" \
+    -o IdentitiesOnly=yes -o IdentityAgent=none -o ForwardAgent=no \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
     "$agent@localhost" "$@"
 }
 copy_root_script() {
   scp -F /dev/null -o ControlMaster=no -o ControlPath=none -q -i "$key" -P "$port" \
+    -o IdentitiesOnly=yes -o IdentityAgent=none -o ForwardAgent=no \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
     "$1" "$primary@localhost:/tmp/hyper-machine-root.sh"
 }

@@ -17,30 +17,45 @@
 #   docker-home T-17 rootless docker + /Users home, privileged container
 #
 # Environment contract — every script runs with:
-#   HOME=<fresh short /tmp dir> and an EMPTY CLAUDE_CONFIG_DIR=<temp>/claude
-#   (container scripts keep the host's absolute XDG_CONFIG_HOME and
-#   XDG_DATA_HOME for podman's machine connection and image storage) — EXCEPT
-#   sessions.sh, which by design
-#   (C-18) asserts against the installed claude and so needs a LOGGED-IN
-#   config: export CLAUDE_CONFIG_DIR yourself before run.sh if you want
-#   sessions to run. run.sh never invents one and never points claude at a
-#   config you did not choose. The container scripts additionally receive a
-#   freshly picked free port and a unique container name (see below), so two
-#   runs on a shared machine do not collide.
+#   HOME=<fresh short /tmp dir>, SSH_AUTH_SOCK and SSH_AGENT_PID REMOVED, and an
+#   EMPTY CLAUDE_CONFIG_DIR=<temp>/claude — except sessions.sh, which by design
+#   (C-18) asserts against the installed claude and inherits the caller's
+#   CLAUDE_CONFIG_DIR, and the three container scripts, which keep the host's
+#   absolute XDG_CONFIG_HOME and XDG_DATA_HOME so podman finds its machine
+#   connection (macOS) and its image store (Linux). The container scripts also
+#   get a freshly picked free port and a unique container name.
+#
+#   A temp HOME does NOT isolate ssh: OpenSSH resolves ~/.ssh from the PASSWD
+#   home, so every test ssh call must carry -F /dev/null, an explicit -i and
+#   the no-agent/no-control flags (see the scripts and ssh_isolation_flags in
+#   this file). run.sh's own probe does exactly that.
+#
+# Real Claude (the C-18 exception): sessions.sh starts a REAL `claude -p`. It is
+# opt-IN and never runs by default:
+#   plain `bash run.sh`                  -> SKIP sessions: real claude -p needs HYPER_E2E_REAL_CLAUDE=1
+#   HYPER_E2E_REAL_CLAUDE=1              -> only with CLAUDE_CONFIG_DIR exported; without it run.sh exits 2
 #
 # Skipping — never silent. A script is skipped ONLY when:
-#   1. it is named in HYPER_E2E_SKIP (comma or space separated names), or
-#   2. one of its capability probes below fails.
-# Both print exactly `SKIP <script>: <reason>` and the summary counts skips
-# separately from passes. An unknown name in HYPER_E2E_SKIP is a hard FAIL:
-# a typo must not silently drop a script.
+#   1. it is named in HYPER_E2E_SKIP, or
+#   2. one of its capability probes below fails, or
+#   3. it is sessions.sh and real Claude is not enabled (above).
+# Names in HYPER_E2E_SKIP may be separated by commas, spaces, tabs or newlines.
+# Every skip prints exactly `SKIP <script>: <reason>` and the summary counts
+# skips separately from passes. An unknown name is a hard FAIL (exit 2): a typo
+# must not silently drop a script.
+#
+# Requiring — a skip that must not be a skip. HYPER_E2E_REQUIRE takes the same
+# list syntax. A listed script that would be skipped (explicitly or by a probe)
+# is a FAIL, so a broken runner image cannot turn this job into a green no-op.
+# The CI workflow lists every script it expects to run.
 #
 # Capability probes (the ONLY automatic skips):
-#   sessions                        `claude` on PATH
+#   sessions                        real Claude enabled (see above)
 #   sync                            `mutagen` on PATH; non-interactive ssh to
-#                                   localhost works (BatchMode)
+#                                   localhost works (BatchMode, isolated)
 #   tools                           `curl` on PATH; https://github.com reachable
 #   warp, agent-user, docker-home   `podman` on PATH AND `podman info` succeeds
+#                                   within 30s
 # Anything else a script needs and cannot find must make THAT script fail
 # loudly (C-18), which run.sh reports as FAIL — never a skip.
 #
@@ -50,12 +65,16 @@
 # `podman --version`, `git --version`, `ssh -V`.
 #
 # Exit status: 0 when nothing failed (skips are fine), 1 when any script
-# failed, 2 when the suite itself cannot run (missing required tool, bad
-# HYPER_E2E_SKIP name, missing CLI build).
+# failed or a required script was skipped, 2 when the suite itself cannot run
+# (missing required tool, bad HYPER_E2E_SKIP/HYPER_E2E_REQUIRE name, missing
+# CLI build, HYPER_E2E_REAL_CLAUDE=1 without CLAUDE_CONFIG_DIR).
+#
+# Concurrency: no script here takes the repository heavy-command flock, so the
+# suite itself may run under `flock /tmp/hyper-heavy2.lock` like other heavy
+# commands.
 #
 # The real herdr is never driven: every script that needs herdr puts a fake on
-# its own PATH. No script here may start a real herdr or claude session beyond
-# sessions.sh's designed `claude -p` probe (C-18); if one does, that is a bug.
+# its own PATH.
 
 set -uo pipefail
 
@@ -96,22 +115,70 @@ print_version podman podman --version
 print_version git git --version
 print_version ssh ssh -V
 
-# --- the skip switch --------------------------------------------------------
-# Comma or space separated script names, e.g. HYPER_E2E_SKIP="sessions,tools".
-skip_list="${HYPER_E2E_SKIP:-}"
-skip_list="${skip_list//,/ }"
-for name in $skip_list; do
-  case " ${scripts[*]} " in
-    *" $name "*) ;;
-    *) fail_fast "HYPER_E2E_SKIP names unknown script '$name' (known: ${scripts[*]})" ;;
-  esac
-done
+# --- switches ---------------------------------------------------------------
+# One array for each list, built by normalising EVERY separator (comma, space,
+# tab, newline) to a space. A YAML block scalar or a `printf '\n'` list must
+# not validate and then skip nothing.
+parse_name_list() {
+  local raw="${1:-}"
+  [ -n "$raw" ] || return 0
+  local normalized
+  normalized="$(tr ',	 \n' '    ' <<<"$raw")"
+  read -r -a "$2" <<<"$normalized"
+}
 
-explicitly_skipped() {
-  case " $skip_list " in
-    *" $1 "*) return 0 ;;
-  esac
+parse_name_list "${HYPER_E2E_SKIP:-}" skip_names
+parse_name_list "${HYPER_E2E_REQUIRE:-}" require_names
+
+validate_names() {
+  local list_name="$1"; shift
+  local names=("$@") name
+  for name in "${names[@]}"; do
+    case " ${scripts[*]} " in
+      *" $name "*) ;;
+      *) fail_fast "$list_name names unknown script '$name' (known: ${scripts[*]})" ;;
+    esac
+  done
+}
+validate_names HYPER_E2E_SKIP ${skip_names[@]+"${skip_names[@]}"}
+validate_names HYPER_E2E_REQUIRE ${require_names[@]+"${require_names[@]}"}
+
+# HYPER_E2E_REAL_CLAUDE=1 opts into the one script that starts a real session.
+# It must name the config to use; run.sh never invents one, and an inherited
+# one under a throwaway HOME is exactly the case that would be a billed session.
+case "${HYPER_E2E_REAL_CLAUDE:-}" in
+  1)
+    [ -n "${CLAUDE_CONFIG_DIR:-}" ] \
+      || fail_fast "HYPER_E2E_REAL_CLAUDE=1 requires CLAUDE_CONFIG_DIR to point at a logged-in Claude config"
+    ;;
+esac
+
+list_has() {
+  local needle="$1"; shift
+  local name
+  for name in "$@"; do
+    [ "$name" = "$needle" ] && return 0
+  done
   return 1
+}
+
+# --- isolated ssh, for run.sh's own loopback probe --------------------------
+# Same reasoning as the scripts: -F /dev/null (no user config), an explicit
+# identity, no agent, no ControlMaster, and a known_hosts this run owns.
+original_home="$HOME"
+known_hosts="$(mktemp /tmp/hyperdrive-e2e-known-hosts.XXXXXX)"
+ssh_identity=""
+for candidate in id_ed25519 id_rsa id_ecdsa; do
+  if [ -r "$original_home/.ssh/$candidate" ]; then
+    ssh_identity="$original_home/.ssh/$candidate"
+    break
+  fi
+done
+ssh_isolated() {
+  ssh -F /dev/null -o IdentitiesOnly=yes -o IdentityAgent=none \
+    -o ForwardAgent=no -o ControlMaster=no -o ControlPath=none \
+    -o UserKnownHostsFile="$known_hosts" -o StrictHostKeyChecking=accept-new \
+    ${ssh_identity:+-i "$ssh_identity"} "$@"
 }
 
 # Prints the skip reason and returns 0 when the script's probes fail;
@@ -119,11 +186,12 @@ explicitly_skipped() {
 probe_skip_reason() {
   case "$1" in
     sessions)
-      command -v claude >/dev/null 2>&1 || { echo "no claude on PATH"; return 0; }
+      [ "${HYPER_E2E_REAL_CLAUDE:-}" = "1" ] \
+        || { echo "real claude -p needs HYPER_E2E_REAL_CLAUDE=1"; return 0; }
       ;;
     sync)
       command -v mutagen >/dev/null 2>&1 || { echo "no mutagen on PATH"; return 0; }
-      ssh -o BatchMode=yes -o ConnectTimeout=5 localhost true >/dev/null 2>&1 \
+      ssh_isolated -o BatchMode=yes -o ConnectTimeout=5 localhost true >/dev/null 2>&1 \
         || { echo "cannot ssh to localhost non-interactively"; return 0; }
       ;;
     tools)
@@ -133,11 +201,27 @@ probe_skip_reason() {
       ;;
     warp | agent-user | docker-home)
       command -v podman >/dev/null 2>&1 || { echo "no podman on PATH"; return 0; }
-      podman info >/dev/null 2>&1 \
-        || { echo "podman info failed (no podman machine or connection)"; return 0; }
+      podman_info_ok || { echo "podman info failed (no podman machine or connection)"; return 0; }
       ;;
   esac
   return 1
+}
+
+# `podman info` can hang indefinitely on a broken connection, and this probe
+# must not hold the suite: 30s, then it counts as "cannot run".
+podman_info_ok() {
+  podman info >/dev/null 2>&1 &
+  local pid=$! waited=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$waited" -ge 30 ]; then
+      kill -TERM "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 1
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  wait "$pid"
 }
 
 # --- per-script environment -------------------------------------------------
@@ -149,30 +233,55 @@ free_port() {
 # Container names carry this run's slug so two runs on a shared machine never
 # fight over a name, and a trap only ever removes a container this run started.
 slug="t19-$$"
-original_home="$HOME"
 
 homes=()
+child=""
 cleanup() {
   for home in ${homes[@]+"${homes[@]}"}; do
     rm -rf "$home"
   done
+  rm -f "$known_hosts"
 }
+
+# M1: a cancel or timeout signals only the runner. Stop the child script (which
+# runs its own EXIT trap on TERM, so containers and daemons go with it) before
+# this runner deletes anything.
+on_signal() {
+  if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
+    kill -TERM "$child" 2>/dev/null || true
+    wait "$child" 2>/dev/null || true
+  fi
+  printf 'run.sh: signalled — stopped the running script and exiting\n' >&2
+  exit 130
+}
+
 trap cleanup EXIT
+trap on_signal INT TERM HUP
 
 passed=()
 failed=()
 skipped=()
 
-for name in "${scripts[@]}"; do
-  if explicitly_skipped "$name"; then
-    printf 'SKIP %s: excluded via HYPER_E2E_SKIP\n' "$name"
+record_skip() {
+  local name="$1" reason="$2"
+  if list_has "$name" ${require_names[@]+"${require_names[@]}"}; then
+    printf 'FAIL %s: required by HYPER_E2E_REQUIRE, cannot run (%s)\n' \
+      "$name" "$reason" >&2
+    failed+=("$name")
+  else
+    printf 'SKIP %s: %s\n' "$name" "$reason"
     skipped+=("$name")
+  fi
+}
+
+for name in "${scripts[@]}"; do
+  if list_has "$name" ${skip_names[@]+"${skip_names[@]}"}; then
+    record_skip "$name" "excluded via HYPER_E2E_SKIP"
     continue
   fi
   reason=""
   if reason="$(probe_skip_reason "$name")"; then
-    printf 'SKIP %s: %s\n' "$name" "$reason"
-    skipped+=("$name")
+    record_skip "$name" "$reason"
     continue
   fi
 
@@ -182,17 +291,25 @@ for name in "${scripts[@]}"; do
   home="$(mktemp -d /tmp/hyperdrive-e2e-home.XXXXXX)"
   homes+=("$home")
 
-  # Podman keeps machine connections in XDG_CONFIG_HOME and rootless image
-  # storage in XDG_DATA_HOME. Preserve those absolute locations across the
-  # temp HOME: otherwise macOS loses its VM connection, while Linux builds
-  # fresh image layers as subuid-owned files under the throwaway HOME that
-  # its ordinary user cannot remove. Scripts' drive/Claude fixtures still
-  # live in their own temp HOME and empty CLAUDE_CONFIG_DIR.
-  env_args=("HOME=$home")
+  # Never hand a script the operator's agent. SSH_AUTH_SOCK would be forwarded
+  # into every test container (1Password on this Mac), and nothing in a test may
+  # use or signal it.
+  env_args=(-u SSH_AUTH_SOCK -u SSH_AGENT_PID "HOME=$home")
   case "$name" in
     warp | agent-user | docker-home)
+      # Podman keeps machine connections in XDG_CONFIG_HOME and rootless image
+      # storage in XDG_DATA_HOME. Preserve those absolute locations across the
+      # temp HOME: otherwise macOS loses its VM connection, while Linux builds
+      # fresh image layers as subuid-owned files under the throwaway HOME that
+      # its ordinary user cannot remove.
       env_args+=("XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$original_home/.config}"
                  "XDG_DATA_HOME=${XDG_DATA_HOME:-$original_home/.local/share}")
+      ;;
+    *)
+      # Nothing needs the real XDG dirs: drop them so a script cannot write into
+      # the operator's config/state/cache by inheritance. tools.sh sets the ones
+      # it needs itself.
+      env_args+=(-u XDG_CONFIG_HOME -u XDG_DATA_HOME -u XDG_STATE_HOME -u XDG_CACHE_HOME)
       ;;
   esac
   if [ "$name" != sessions ]; then
@@ -214,8 +331,11 @@ for name in "${scripts[@]}"; do
   echo
   echo "=== $name.sh (HOME=$home) ==="
   start=$SECONDS
-  env "${env_args[@]}" bash "$here/$name.sh"
+  env "${env_args[@]}" bash "$here/$name.sh" &
+  child=$!
+  wait "$child"
   rc=$?
+  child=""
   if [ "$rc" -eq 0 ]; then
     printf 'PASS %s (%ds)\n' "$name" "$((SECONDS - start))"
     passed+=("$name")
@@ -230,12 +350,10 @@ echo "== e2e summary ======================================================"
 printf 'passed (%d): %s\n' "${#passed[@]}" "${passed[*]:-none}"
 printf 'failed (%d): %s\n' "${#failed[@]}" "${failed[*]:-none}"
 printf 'skipped (%d): %s\n' "${#skipped[@]}" "${skipped[*]:-none}"
+printf 'e2e summary: passed=%d failed=%d skipped=%d\n' \
+  "${#passed[@]}" "${#failed[@]}" "${#skipped[@]}"
 if [ "${#failed[@]}" -gt 0 ]; then
   printf 'e2e: FAILED — %s\n' "${failed[*]}" >&2
-  printf 'e2e summary: passed=%d failed=%d skipped=%d\n' \
-    "${#passed[@]}" "${#failed[@]}" "${#skipped[@]}"
   exit 1
 fi
 echo "e2e: OK"
-printf 'e2e summary: passed=%d failed=%d skipped=%d\n' \
-  "${#passed[@]}" "${#failed[@]}" "${#skipped[@]}"

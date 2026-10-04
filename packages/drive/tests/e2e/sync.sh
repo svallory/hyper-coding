@@ -55,10 +55,25 @@ fakebin="$work_real/bin"
 log="$work_real/mutagen.log"
 mkdir -p "$alpha_home" "$beta_home" "$fakebin" "$alpha_home/.claude" "$alpha_home/.pi/agent"
 
+# H2: this script's OWN Mutagen daemon, inside its own throwaway directory. With
+# only a temp HOME, `mutagen sync create` starts a daemon under <tmpHOME>/.mutagen
+# that nothing stops — an orphan holding a lock in a directory the suite then
+# deletes. It also means the operator's real daemon (which owns claude-config
+# and pi-config) is never contacted or terminated by this test.
+export MUTAGEN_DATA_DIRECTORY="$work_real/mutagen"
+mkdir -p "$MUTAGEN_DATA_DIRECTORY"
+
+# A signal from the suite runner must still run this cleanup, so neither a
+# session nor a daemon survives it.
+trap 'exit 143' INT TERM HUP
+
 cleanup() {
   echo "# cleaning up sessions"
   mutagen sync terminate "$claude_session" >/dev/null 2>&1 || true
   mutagen sync terminate "$pi_session" >/dev/null 2>&1 || true
+  # Stops ONLY this script's daemon: the data directory is the one exported
+  # above, so this can never reach the operator's daemon.
+  mutagen daemon stop >/dev/null 2>&1 || true
   rm -rf "$work"
 }
 # NOTE: `trap cleanup EXIT` is installed AFTER the preflight below, not here.
@@ -73,6 +88,29 @@ cat <<'JSON'
 JSON
 EOF
 chmod +x "$fakebin/herdr"
+
+# H1: every ssh this test causes must be isolated. OpenSSH resolves ~/.ssh from
+# the PASSWD home, not $HOME, so a temp HOME alone still forwards the operator's
+# agent (1Password on a Mac) into the loopback hop and writes ControlMaster
+# sockets into the real ~/.ssh. -F /dev/null plus no agent, no control reuse and
+# a known_hosts this run owns keeps it all inside the fixture. Mutagen reaches
+# beta over its own transport, but anything here that spawns ssh gets this.
+ssh_identity=""
+for candidate in id_ed25519 id_rsa id_ecdsa; do
+  if [ -r "$HOME/.ssh/$candidate" ]; then
+    ssh_identity="$HOME/.ssh/$candidate"
+    break
+  fi
+done
+cat > "$fakebin/ssh" <<WRAPPER
+#!/bin/sh
+exec ssh -F /dev/null -o IdentitiesOnly=yes -o IdentityAgent=none \\
+  -o ForwardAgent=no -o ControlMaster=no -o ControlPath=none \\
+  -o UserKnownHostsFile="$work_real/known_hosts" \\
+  -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \\
+  ${ssh_identity:+-i "$ssh_identity"} "\$@"
+WRAPPER
+chmod +x "$fakebin/ssh"
 
 # Temp drive.toml. self.home is the temp alpha so hyperdrive never syncs the real ~/.claude.
 cat > "$work_real/drive.toml" <<EOF
