@@ -38,7 +38,7 @@ for Claude Code. Two ideas:
 | `/hyper:cleanup` | delete what audit found — candidates listed first, confirmed per item; the one command that deletes |
 | `/hyper:plan <feature>` | four-phase spec-driven workflow: Define → Design → Decompose → Develop |
 | `/hyper:gen <template>` | generate files from project templates, verbatim outside marked regions |
-| `/hyper:space <args>` | space history on the user's private hyperdrive: init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
+| `/hyper:space <args>` | a space's history — dirs committed to the space's branch, pushed to your hyperdrive: init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
 | `/hyper:warp <machine>` | move a live session to another machine over ssh — a thin relay over `hyper warp` |
 
 Hooks (automatic): SessionStart context injection inside a space; per-edit
