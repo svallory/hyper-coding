@@ -29,6 +29,11 @@
  * `/proc/self/ns/pid`; anywhere else such a pair falls under the pid rule and
  * can misjudge the other's owner (a known limit, documented in the README).
  *
+ * A lock file that cannot be read (EACCES…) or does not hold a lock record is
+ * never taken over either: nothing about its owner is provable, so the waiter
+ * times out with a line naming the file and the reason. Only an EMPTY file
+ * (created, not yet written) older than `UNWRITTEN_GRACE_MS` is taken over.
+ *
  * A takeover also removes an `index.lock` the dead owner's git left behind.
  * Takeovers are serialised by a second, short-lived guard file, so two
  * waiters that both judged the same lock stale cannot delete each other's
@@ -132,8 +137,9 @@ function isProcessAlive(pid: number): boolean {
  * An opaque, comparable identity of when `pid` started, or null when it cannot
  * be read. Linux: field 22 of `/proc/<pid>/stat` (clock ticks since boot),
  * prefixed with the boot id so a reboot never compares equal. Elsewhere:
- * `ps -o lstart=` (one-second resolution), run from an absolute path with the
- * C locale.
+ * `ps -o lstart=` (one-second resolution) from an absolute path, under a fixed
+ * `TZ=UTC0` and the C locale, stored as epoch seconds so the value never
+ * depends on the caller's time zone.
  */
 export function processStartId(pid: number): string | null {
 	if (!Number.isInteger(pid) || pid <= 0) return null;
@@ -155,17 +161,45 @@ export function processStartId(pid: number): string | null {
 		/* No /proc (macOS), or the pid is gone. */
 	}
 	for (const ps of ["/bin/ps", "/usr/bin/ps"]) {
+		// The zone and locale are FIXED, never inherited: `lstart` is printed in
+		// the reading process's local time, and a writer and a waiter with
+		// different TZ values would otherwise see one live process as two
+		// (PR #52 review, B1). The text is then reduced to epoch seconds.
 		const result = spawnSync(ps, ["-o", "lstart=", "-p", String(pid)], {
 			encoding: "utf8",
-			env: { LC_ALL: "C", ...(process.env.TZ ? { TZ: process.env.TZ } : {}) },
+			env: { LC_ALL: "C", TZ: "UTC0" },
 			stdio: ["ignore", "pipe", "ignore"],
 			timeout: 2_000,
 		});
 		if ((result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") continue;
-		const text = result.status === 0 ? result.stdout.trim().replace(/\s+/g, " ") : "";
-		return text ? `ps:${text}` : null;
+		const seconds = result.status === 0 ? utcLstartSeconds(result.stdout) : null;
+		return seconds === null ? null : `ps:${seconds}`;
 	}
 	return null;
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * `ps -o lstart=` output printed under `TZ=UTC0 LC_ALL=C`
+ * (`Sun Oct  4 23:03:55 2026`) as epoch seconds, or null when it is not that
+ * shape. Exported for tests.
+ */
+export function utcLstartSeconds(text: string): number | null {
+	const match = /^[A-Z][a-z]{2} ([A-Z][a-z]{2}) +(\d{1,2}) (\d{2}):(\d{2}):(\d{2}) (\d{4})$/.exec(
+		text.trim(),
+	);
+	if (match === null) return null;
+	const month = MONTHS.indexOf(match[1]!);
+	if (month === -1) return null;
+	const [day, hours, minutes, seconds, year] = match.slice(2).map(Number) as [
+		number,
+		number,
+		number,
+		number,
+		number,
+	];
+	return Date.UTC(year, month, day, hours, minutes, seconds) / 1000;
 }
 
 /** This process's pid namespace (Linux), or null. */
@@ -183,9 +217,40 @@ function self(): { procStart: string | null; pidNs: string | null } {
 	return selfIdentity;
 }
 
-function readOwner(path: string): LockOwner | null {
+/**
+ * What a waiter found in the lock file. Only `owner` can be judged. `missing`
+ * means retry the create at once; `empty` is a lock created but not written
+ * yet (taken over only after `UNWRITTEN_GRACE_MS`); `unreadable` (EACCES…)
+ * and `garbage` can never be judged, so they are never taken over (PR #52
+ * review, H1): the waiter times out with a line that says why.
+ */
+type LockRead =
+	| { owner: LockOwner }
+	| { owner: null; state: "missing" | "empty" | "garbage" }
+	| { owner: null; state: "unreadable"; code: string };
+
+function readLock(path: string): LockRead {
+	let text: string;
 	try {
-		const value = JSON.parse(readFileSync(path, "utf8")) as Partial<LockOwner>;
+		text = readFileSync(path, "utf8");
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code ?? "an error";
+		return code === "ENOENT"
+			? { owner: null, state: "missing" }
+			: { owner: null, state: "unreadable", code };
+	}
+	if (text === "") return { owner: null, state: "empty" };
+	const owner = parseOwner(text);
+	return owner === null ? { owner: null, state: "garbage" } : { owner };
+}
+
+function readOwner(path: string): LockOwner | null {
+	return readLock(path).owner;
+}
+
+function parseOwner(text: string): LockOwner | null {
+	try {
+		const value = JSON.parse(text) as Partial<LockOwner>;
 		if (
 			typeof value.pid === "number" &&
 			typeof value.host === "string" &&
@@ -202,7 +267,7 @@ function readOwner(path: string): LockOwner | null {
 				...(typeof value.pidNs === "string" ? { pidNs: value.pidNs } : {}),
 			};
 	} catch {
-		/* Missing, or being written right now. */
+		/* Not JSON: garbage, or a write caught half-way (judged as garbage). */
 	}
 	return null;
 }
@@ -252,8 +317,10 @@ export function ownerStaleReason(owner: LockOwner, probe: LockProbe): string | n
 const startCache = new Map<string, string | null>();
 
 /** Why a lock may be taken over, or null while its owner may still be working. */
-function staleReason(path: string, owner: LockOwner | null): string | null {
+function staleReason(path: string, read: LockRead): string | null {
+	const owner = read.owner;
 	if (owner === null) {
+		if (read.state !== "empty") return null;
 		const age = ageOf(path);
 		return age !== null && age > UNWRITTEN_GRACE_MS ? "it records no owner" : null;
 	}
@@ -291,7 +358,8 @@ function createExclusive(path: string, content: string): boolean {
  * Remove a lock judged stale, but only if it is still the SAME lock: under a
  * takeover guard, re-read it and compare. Returns true when it was removed.
  */
-function takeOver(gitDir: string, path: string, judged: LockOwner | null): boolean {
+function takeOver(gitDir: string, path: string, judgedRead: LockRead): boolean {
+	const judged = judgedRead.owner;
 	const guard = `${path}.takeover`;
 	if (!createExclusive(guard, `${process.pid}\n`)) {
 		// A guard is held for microseconds; one this old belongs to a dead process.
@@ -300,9 +368,10 @@ function takeOver(gitDir: string, path: string, judged: LockOwner | null): boole
 		return false;
 	}
 	try {
-		const current = readOwner(path);
+		const currentRead = readLock(path);
+		const current = currentRead.owner;
 		if ((current?.token ?? null) !== (judged?.token ?? null)) return false;
-		if (staleReason(path, current) === null) return false;
+		if (staleReason(path, currentRead) === null) return false;
 		// Move it aside first: the rename is the atomic step, the rest is cleanup.
 		const aside = `${path}.stale-${process.pid}`;
 		try {
@@ -324,6 +393,48 @@ function takeOver(gitDir: string, path: string, judged: LockOwner | null): boole
 	} finally {
 		rmSync(guard, { force: true });
 	}
+}
+
+function describeAge(ms: number): string {
+	const seconds = Math.max(0, Math.round(ms / 1000));
+	if (seconds < 120) return `${seconds} s`;
+	const minutes = Math.round(seconds / 60);
+	return minutes < 120 ? `${minutes} min` : `${Math.round(minutes / 60)} h`;
+}
+
+/**
+ * The one line a waiter gives up with. A lock still held at this point has an
+ * owner judged alive, or one that cannot be judged, so the line says who holds
+ * it and never invites deleting a live owner's lock (PR #52 review, M4).
+ */
+function lockTimeout(
+	path: string,
+	held: LockRead,
+	what: string,
+	waitMs: number,
+): SpaceLockTimeoutError {
+	const waited = `so I did not ${escapeControlCharacters(what)} (waited ${Math.round(waitMs / 1000)} s; nothing was changed)`;
+	const file = quoteForTerminal(path);
+	const owner = held.owner;
+	if (owner !== null) {
+		const here = owner.host === hostname();
+		const where = here ? "" : ` on ${quoteForTerminal(owner.host)}`;
+		const check = here ? ` (\`ps -p ${owner.pid}\` shows whether it is)` : "";
+		return new SpaceLockTimeoutError(
+			`hyper process ${owner.pid}${where} has held this space's lock for ${describeAge(Date.now() - owner.started)} (since ${new Date(owner.started).toISOString()}) and is still running, ${waited}. Retry when it has finished, or stop that process. Delete ${file} only if process ${owner.pid}${where} is gone${check}.`,
+		);
+	}
+	if (held.state === "unreadable")
+		return new SpaceLockTimeoutError(
+			`I can't read the space lock ${file} (${held.code}), so I can't tell whether its owner is still running, ${waited}. Check that file's owner and permissions; delete it only if no hyper process is writing this space.`,
+		);
+	if (held.state === "garbage")
+		return new SpaceLockTimeoutError(
+			`The space lock ${file} holds something that is not a hyper lock record, so I can't tell whether its owner is still running, ${waited}. Delete it only if no hyper process is writing this space.`,
+		);
+	return new SpaceLockTimeoutError(
+		`Another hyper process is still writing this space, ${waited}. Retry when it has finished.`,
+	);
 }
 
 /**
@@ -355,7 +466,7 @@ export function withSpaceLock<T>(
 		...(identity.pidNs === null ? {} : { pidNs: identity.pidNs }),
 	};
 	const deadline = Date.now() + waitMs;
-	let holder: LockOwner | null = null;
+	let held: LockRead = { owner: null, state: "missing" };
 	for (;;) {
 		me.started = Date.now();
 		let created: boolean;
@@ -365,11 +476,11 @@ export function withSpaceLock<T>(
 			throw spaceGitDirWriteError(gitDir, what, error);
 		}
 		if (created) break;
-		holder = readOwner(path);
-		const reason = staleReason(path, holder);
+		held = readLock(path);
+		const reason = staleReason(path, held);
 		let tookOver = false;
 		try {
-			tookOver = reason !== null && takeOver(gitDir, path, holder);
+			tookOver = reason !== null && takeOver(gitDir, path, held);
 		} catch (error) {
 			throw spaceGitDirWriteError(gitDir, what, error);
 		}
@@ -377,15 +488,7 @@ export function withSpaceLock<T>(
 			note(`hyperdrive: took over a stale space lock at ${quoteForTerminal(path)}: ${reason}.`);
 			continue;
 		}
-		if (Date.now() >= deadline) {
-			const who =
-				holder === null
-					? "another hyper process"
-					: `another hyper process (pid ${holder.pid}${holder.host === hostname() ? "" : ` on ${quoteForTerminal(holder.host)}`}, since ${new Date(holder.started).toISOString()})`;
-			throw new SpaceLockTimeoutError(
-				`${who} is still writing this space, so I did not ${escapeControlCharacters(what)} (waited ${Math.round(waitMs / 1000)} s; nothing was changed). Retry when it has finished; if no hyper process is running, delete ${quoteForTerminal(path)}.`,
-			);
-		}
+		if (Date.now() >= deadline) throw lockTimeout(path, held, what, waitMs);
 		sleepSync(Math.min(RETRY_MS, Math.max(1, deadline - Date.now())));
 	}
 	const release = () => {

@@ -5,6 +5,7 @@
  */
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -27,6 +28,7 @@ import {
 	SPACE_LOCK_FILE,
 	SpaceLockTimeoutError,
 	STALE_AFTER_MS,
+	utcLstartSeconds,
 	withSpaceLock,
 } from "#services/space-lock";
 import { commitSpace, pushSpace } from "#services/space-sync";
@@ -242,10 +244,13 @@ describe("space lock: concurrent commits", () => {
 			// oclif wraps its one error message to the terminal width; unwrap it.
 			const message = result.stderr.replace(/\s+/g, " ").trim();
 			expect(message.match(/Error:/g)).toHaveLength(1);
-			expect(message).toContain(`pid ${process.pid}`);
+			expect(message).toContain(`hyper process ${process.pid} has held this space's lock for`);
 			expect(message).toMatch(
-				/is still writing this space, so I did not .* \(waited 15 s; nothing was changed\)/,
+				/and is still running, so I did not .* \(waited 15 s; nothing was changed\)/,
 			);
+			// Never an invitation to delete a live owner's lock.
+			expect(message).toContain(`only if process ${process.pid} is gone`);
+			expect(message).not.toMatch(/if no hyper process is running, delete/);
 		}
 		expect(elapsed).toBeGreaterThanOrEqual(14_000);
 		expect(elapsed).toBeLessThan(40_000);
@@ -307,7 +312,7 @@ describe("space lock: a live owner is never taken over", () => {
 					},
 					{ waitMs: 500, note: (message) => notes.push(message) },
 				),
-			).toThrow(new RegExp(`pid ${child.pid}`));
+			).toThrow(new RegExp(`hyper process ${child.pid} has held`));
 			expect(ran).toBe(false);
 			expect(notes).toEqual([]);
 			expect(existsSync(join(spaceGitDir(root), SPACE_LOCK_FILE))).toBe(true);
@@ -419,5 +424,130 @@ describe("space lock: a live owner is never taken over", () => {
 				ownerStaleReason(owner({ pidNs: "pid:[1]" }), probe({ isAlive: () => false })),
 			).toMatch(/no longer running/);
 		});
+	});
+});
+
+describe("space lock: PR #52 review round 2", () => {
+	const distLock = join(import.meta.dirname, "..", "dist", "services", "space-lock.js");
+	const asRoot = process.getuid?.() === 0;
+	const oneMinuteAgo = () => new Date(Date.now() - 60_000);
+
+	/** A node child that runs `body` with the built space-lock module as `m`. */
+	function lockChild(tz: string, body: string): ChildProcess {
+		return spawn(
+			process.execPath,
+			["-e", `import(${JSON.stringify(distLock)}).then(async (m) => { ${body} })`],
+			{
+				env: { ...process.env, TZ: tz },
+				stdio: ["ignore", "pipe", "pipe"],
+			},
+		);
+	}
+	function output(
+		child: ChildProcess,
+	): Promise<{ status: number | null; stdout: string; stderr: string }> {
+		let stdout = "";
+		let stderr = "";
+		child.stdout!.on("data", (chunk) => {
+			stdout += chunk;
+		});
+		child.stderr!.on("data", (chunk) => {
+			stderr += chunk;
+		});
+		return new Promise((resolve) =>
+			child.on("close", (status) => resolve({ status, stdout, stderr })),
+		);
+	}
+
+	it("parses ps lstart printed under TZ=UTC0 into epoch seconds", () => {
+		expect(utcLstartSeconds("Sun Oct  4 23:03:55 2026\n")).toBe(
+			Date.UTC(2026, 9, 4, 23, 3, 55) / 1000,
+		);
+		expect(utcLstartSeconds("Mon Jan 12 00:00:01 2026")).toBe(
+			Date.UTC(2026, 0, 12, 0, 0, 1) / 1000,
+		);
+		expect(utcLstartSeconds("dim. 4 oct. 2026")).toBeNull();
+		expect(utcLstartSeconds("")).toBeNull();
+	});
+
+	it("a writer and a waiter in different time zones agree the owner is alive, and its index.lock survives", async (ctx) => {
+		if (!existsSync(distLock)) return ctx.skip("dist not built");
+		const { root } = await makeSpace();
+		const indexLock = join(spaceGitDir(root), "index.lock");
+		const holder = lockChild(
+			"UTC",
+			`m.withSpaceLock(${JSON.stringify(root)}, "hold", () => {
+				require("node:fs").writeFileSync(${JSON.stringify(indexLock)}, "");
+				console.log("held");
+				Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 6000);
+			});`,
+		);
+		const held = output(holder);
+		try {
+			const deadline = Date.now() + 15_000;
+			while (!existsSync(indexLock) && Date.now() < deadline)
+				await new Promise((r) => setTimeout(r, 50));
+			expect(existsSync(indexLock)).toBe(true);
+			const waiter = await output(
+				lockChild(
+					"America/New_York",
+					`try { m.withSpaceLock(${JSON.stringify(root)}, "wait", () => console.log("WAITER GOT THE LOCK"), { waitMs: 1500, note: (n) => console.log("NOTE " + n) }); } catch (e) { console.log("TIMEOUT " + e.message); }`,
+				),
+			);
+			expect(waiter.stdout, waiter.stderr).toContain("TIMEOUT hyper process");
+			expect(waiter.stdout).not.toContain("WAITER GOT THE LOCK");
+			expect(waiter.stdout).not.toContain("NOTE");
+			expect(existsSync(indexLock)).toBe(true);
+		} finally {
+			holder.kill("SIGKILL");
+			await held;
+		}
+	}, 30_000);
+
+	it.skipIf(asRoot)("a lock the waiter cannot read is never taken over, however old", async () => {
+		const { root } = await makeSpace();
+		const lock = join(spaceGitDir(root), SPACE_LOCK_FILE);
+		writeFileSync(
+			lock,
+			`${JSON.stringify({ pid: process.pid, host: hostname(), started: Date.now(), token: "t" })}\n`,
+		);
+		utimesSync(lock, oneMinuteAgo(), oneMinuteAgo());
+		chmodSync(lock, 0o000);
+		try {
+			const notes: string[] = [];
+			expect(() =>
+				withSpaceLock(root, "commit this space", () => undefined, {
+					waitMs: 300,
+					note: (n) => notes.push(n),
+				}),
+			).toThrow(
+				/I can't read the space lock .* \(EACCES\), so I can't tell whether its owner is still running/,
+			);
+			expect(notes).toEqual([]);
+			expect(existsSync(lock)).toBe(true);
+		} finally {
+			chmodSync(lock, 0o600);
+		}
+	});
+
+	it("a lock holding garbage is never taken over, however old", async () => {
+		const { root } = await makeSpace();
+		const lock = join(spaceGitDir(root), SPACE_LOCK_FILE);
+		writeFileSync(lock, "not a lock record\n");
+		utimesSync(lock, oneMinuteAgo(), oneMinuteAgo());
+		expect(() =>
+			withSpaceLock(root, "commit this space", () => undefined, { waitMs: 300 }),
+		).toThrow(/holds something that is not a hyper lock record/);
+		expect(readFileSync(lock, "utf8")).toBe("not a lock record\n");
+	});
+
+	it("an empty lock (created, never written) is still taken over after the grace period", async () => {
+		const { root } = await makeSpace();
+		const lock = join(spaceGitDir(root), SPACE_LOCK_FILE);
+		writeFileSync(lock, "");
+		utimesSync(lock, oneMinuteAgo(), oneMinuteAgo());
+		const notes: string[] = [];
+		withSpaceLock(root, "test", () => undefined, { waitMs: 300, note: (n) => notes.push(n) });
+		expect(notes.join("\n")).toMatch(/it records no owner/);
 	});
 });
