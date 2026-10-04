@@ -23,18 +23,18 @@ export interface IncomingSpaceValidation {
 export class SpaceIncomingError extends SpaceGitError {
 	/** Stable slug for `--json` consumers; never parse the prose for this. */
 	readonly reason = "incoming-history-refused";
-	constructor(path: string, reason: string) {
+	constructor(path: string, reason: string, advice = "repair the remote history before retrying") {
 		super(
 			// The path is remote data, and the very message naming a hostile
 			// name must not print it raw: `JSON.stringify` escapes C0 only.
-			`Refusing incoming space history: ${quoteForTerminal(path)} ${reason}. Local history and files were not changed; repair the remote history before retrying.`,
+			`Refusing incoming space history: ${quoteForTerminal(path)} ${reason}. Local history and files were not changed; ${advice}.`,
 		);
 		this.name = "SpaceIncomingError";
 	}
 }
 
-function refuse(path: string, reason: string): never {
-	throw new SpaceIncomingError(path, reason);
+function refuse(path: string, reason: string, advice?: string): never {
+	throw new SpaceIncomingError(path, reason, advice);
 }
 
 /** Parse only the renderer's allowlist grammar, never arbitrary user-controlled ignore rules. */
@@ -188,7 +188,11 @@ export async function validateIncomingSpace(
 		// printed, by the callers.
 		// eslint-disable-next-line no-control-regex
 		if (/[\p{Cc}]/u.test(entry.path))
-			refuse(entry.path, "contains a terminal control character in its name");
+			refuse(
+				entry.path,
+				"contains a terminal control character in its name",
+				"rename it on the machine that committed it, then push",
+			);
 		if (unsafePath(entry.path))
 			refuse(
 				entry.path,

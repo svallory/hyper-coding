@@ -4,6 +4,7 @@ import {
 	existsSync,
 	mkdirSync,
 	readFileSync,
+	rmSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
@@ -206,6 +207,9 @@ describe("pull follow-ups", () => {
 			for (const stream of [result.stdout, result.stderr])
 				expect(/[\p{Cc}\p{Cf}]/u.test(stream.replace(/[\n\t]/g, "")), path).toBe(false);
 			expect(flat(result.stderr), path).toContain(escaped);
+			expect(flat(result.stderr), path).toContain(
+				"rename it on the machine that committed it, then push",
+			);
 			git(["rm", "-q", "--", path], peer);
 			publish();
 		}
@@ -256,6 +260,24 @@ describe("pull follow-ups", () => {
 		expect(listed).toHaveLength(28);
 		expect(listed).toEqual([...listed].sort());
 		expect(JSON.parse(json.stdout)).not.toHaveProperty("reviewFacts");
+	});
+	it("refuses to commit a control-character name every other machine would refuse", () => {
+		const head = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+		writeFileSync(join(root, "notes", "ctl\u0001x.md"), "x\n");
+		const refused = run("commit", "-m", "hostile name");
+		expect(refused.status, flat(refused.stderr)).toBe(2);
+		expect(/[\p{Cc}\p{Cf}]/u.test(refused.stderr.replace(/[\n\t]/g, ""))).toBe(false);
+		expect(flat(refused.stderr)).toContain('"notes/ctl\\u0001x.md" has a control character');
+		expect(flat(refused.stderr)).toContain("Rename it");
+		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim()).toBe(head);
+		// The refusal leaves nothing staged behind.
+		expect(spaceGit(root, ["diff", "--cached", "--name-only"]).stdout).toBe("");
+		// A FORMAT character stays legal: it is escaped wherever it is printed.
+		rmSync(join(root, "notes", "ctl\u0001x.md"));
+		writeFileSync(join(root, "notes", "bidi\u202ex.md"), "x\n");
+		const accepted = run("commit", "-m", "bidi name");
+		expect(accepted.status, flat(accepted.stderr)).toBe(0);
+		expect(spaceGit(root, ["ls-files", "-z"]).stdout.split("\0")).toContain("notes/bidi\u202ex.md");
 	});
 	it("prints status paths escaped in text and raw in --json", () => {
 		const path = "notes/bidi‮\\u202e.md";
