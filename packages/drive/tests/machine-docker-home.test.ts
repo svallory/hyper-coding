@@ -252,8 +252,16 @@ describe("docker-rootless.packages", () => {
 		expect(text).toContain(
 			'have_package "$package" || missing_packages="$missing_packages $package"',
 		);
-		// subid ranges: added only when absent, in both files.
-		expect(text).toContain('if ! grep -q "^$agent_user:" "$file" 2>/dev/null; then');
+		// subid ranges: each added only when absent, each file on its own.
+		expect(text).toContain('if ! grep -q "^$agent_user:" /etc/subuid 2>/dev/null; then');
+		expect(text).toContain('usermod --add-subuids 100000-165535 "$agent_user"');
+		expect(text).toContain('if ! grep -q "^$agent_user:" /etc/subgid 2>/dev/null; then');
+		expect(text).toContain('usermod --add-subgids 100000-165535 "$agent_user"');
+		expect(text).not.toMatch(/--add-subuids[^\n]*--add-subgids/);
+		// The system-wide daemon docker-ce brings is stopped only when this script
+		// brought docker-ce in.
+		expect(text).toContain('if [ "$had_docker_ce" = 0 ] && have_package docker-ce; then');
+		expect(text).toContain("systemctl disable --now docker.service docker.socket");
 		// Linger and the key.
 		expect(text).toContain('loginctl enable-linger "$agent_user"');
 		expect(text).toContain('runuser -u "$agent_user" --');
@@ -331,7 +339,7 @@ describe("docker-rootless.install", () => {
 		expect(lines.join("\n")).toContain("authorized_keys");
 	});
 
-	it("is settled while the unit is active, and asks for the DOCKER_HOST line otherwise", async () => {
+	it("is settled by the disabled unit and the DOCKER_HOST line, never by the daemon running", async () => {
 		// The install task builds its OWN runner (the agent's), so these answers
 		// come from the spawner, not from the recording runner in ctx.
 		const answering =
@@ -346,7 +354,23 @@ describe("docker-rootless.install", () => {
 						};
 		expect(
 			await dockerRootlessInstall.check(
+				ctxFor(recordingRunner(), { spawner: answering("inactive", "1") }),
+			),
+		).toBe(true);
+		// Running is not settled: the line and the disabled unit are still required.
+		expect(
+			await dockerRootlessInstall.check(
 				ctxFor(recordingRunner(), { spawner: answering("active", "0") }),
+			),
+		).toBe(false);
+		expect(
+			await dockerRootlessInstall.check(
+				ctxFor(recordingRunner(), { spawner: answering("active", "1", "enabled") }),
+			),
+		).toBe(false);
+		expect(
+			await dockerRootlessInstall.check(
+				ctxFor(recordingRunner(), { spawner: answering("active", "1") }),
 			),
 		).toBe(true);
 		const noLine: string[] = [];
