@@ -135,6 +135,14 @@ export async function homeOf(ctx: TaskContext): Promise<string> {
 	);
 }
 
+/** The account's real home, from the password database — not the configured one. */
+export async function passwdHomeOf(ctx: TaskContext, primaryUser: string): Promise<string> {
+	const probed = await runScript(ctx, `getent passwd ${shellQuote(primaryUser)} | cut -d: -f6`);
+	const home = probed.stdout.trim();
+	if (probed.code === 0 && home.startsWith("/")) return home.replace(/\/+$/, "");
+	return `/home/${primaryUser}`;
+}
+
 /** The agent user's home, from the password database — not assumed to be /home/<name>. */
 export async function agentHomeOf(ctx: TaskContext, agentUser: string): Promise<string> {
 	const probed = await runScript(ctx, `getent passwd ${shellQuote(agentUser)} | cut -d: -f6`);
