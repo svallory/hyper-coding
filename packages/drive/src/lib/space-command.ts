@@ -1,6 +1,6 @@
 import type { Command } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
-import { SpaceGitInterruptedError } from "#services/space-git";
+import { SpaceGitInterruptedError, SpaceRefusedError } from "#services/space-git";
 import {
 	type InitializedSpace,
 	requireInitializedSpace,
@@ -43,11 +43,13 @@ export abstract class SpaceCommand<T extends typeof Command> extends BaseCommand
 					{
 						ok: false,
 						reason:
-							error instanceof SpaceIncomingError
-								? "incoming-history-refused"
-								: error instanceof SpaceGitInterruptedError
-									? "interrupted"
-									: "refused",
+							error instanceof SpaceRefusedError
+								? error.reason
+								: error instanceof SpaceIncomingError
+									? error.reason
+									: error instanceof SpaceGitInterruptedError
+										? "interrupted"
+										: "refused",
 						message: error.message,
 					},
 					null,

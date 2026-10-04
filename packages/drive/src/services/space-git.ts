@@ -121,6 +121,20 @@ export class SpaceGitError extends Error {
 	}
 }
 
+/**
+ * A refusal a machine can act on. The `reason` slug is the contract for
+ * `--json` callers; the message is still the human story.
+ */
+export class SpaceRefusedError extends SpaceGitError {
+	constructor(
+		readonly reason: "unreachable" | "consent-required" | "local-changes" | "diverged" | "refused",
+		detail: string,
+	) {
+		super(detail);
+		this.name = "SpaceRefusedError";
+	}
+}
+
 /** A child interrupted by the terminal, even when ordinary failures are allowed. */
 export class SpaceGitInterruptedError extends SpaceGitError {
 	constructor(

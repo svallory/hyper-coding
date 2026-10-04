@@ -26,6 +26,7 @@ beforeEach(() => {
 			"!/notes/",
 			"!/notes/**",
 			"!/CLAUDE.md",
+			"!/AGENTS.md",
 			"!/data/",
 			"!/data/**",
 			"!/bin/",
@@ -40,6 +41,8 @@ beforeEach(() => {
 			"!/.vscode/**",
 			"!/.pi/",
 			"!/.pi/**",
+			"!/.config/",
+			"!/.config/**",
 			"!/.hyper/",
 			"!/.hyper/**",
 			"/.hyper/space.git/",
@@ -76,11 +79,12 @@ describe("review report completeness", () => {
 		const base = commitAll("symlinks published");
 		// With no base the whole tip is new, so a reviewed symlink brings its
 		// target with it: that file is arriving too, unseen behind the link.
+		// Only the FINAL target is named; the intermediate hop is not itself an
+		// agent-visible path.
 		expect(await incomingReviewPaths(root, base)).toEqual([
 			"CLAUDE.md",
 			"bin/tool",
 			"data/payload.sh",
-			"notes/chain",
 			"notes/instr.md",
 		]);
 		// The reviewer changed only what the links point at.
@@ -130,6 +134,42 @@ describe("review report completeness", () => {
 		chmodSync(join(root, "data/run.sh"), 0o755);
 		const tip = commitAll("now executable");
 		expect(await incomingReviewPaths(root, tip, base)).toEqual(["data/run.sh"]);
+	});
+	it("reports a reviewed directory delivered as a symlink to another directory", async () => {
+		write("notes/cmds/one.md", "x\n");
+		link(".claude/commands", "../notes/cmds");
+		const base = commitAll("commands as a link");
+		write("notes/cmds/two.md", "added later\n");
+		const tip = commitAll("command added");
+		expect(await incomingReviewPaths(root, tip, base)).toEqual(["notes/cmds/two.md"]);
+	});
+	it("follows a chain through a symlinked directory to the real file", async () => {
+		write("data/real/instr.md", "obey\n");
+		link("notes/d2", "../data/real");
+		link("AGENTS.md", "notes/d2/instr.md");
+		const base = commitAll("chain published");
+		write("data/real/instr.md", "exfiltrate\n");
+		const tip = commitAll("real file changed");
+		expect(await incomingReviewPaths(root, tip, base)).toEqual(["data/real/instr.md"]);
+	});
+	it("names a reviewed directory that is itself replaced by a link", async () => {
+		write(".hyper/memory/MEMORY.md", "fact\n");
+		const base = commitAll("memory directory");
+		rmSync(join(root, ".hyper/memory"), { recursive: true });
+		write("notes/mem/MEMORY.md", "fact\n");
+		link(".hyper/memory", "../notes/mem");
+		const tip = commitAll("memory is now a link");
+		expect(await incomingReviewPaths(root, tip, base)).toContain(".hyper/memory");
+		write("notes/mem/new.md", "more\n");
+		const later = commitAll("memory grew behind the link");
+		expect(await incomingReviewPaths(root, later, tip)).toContain("notes/mem/new.md");
+	});
+	it("reports worktrunk configuration under .config/", async () => {
+		write(".config/wt.toml", "[hooks]\n");
+		const base = commitAll("first");
+		write(".config/wt.toml", "[hooks]\nevil = true\n");
+		const tip = commitAll("wt config changed");
+		expect(await incomingReviewPaths(root, tip, base)).toEqual([".config/wt.toml"]);
 	});
 	it("stays quiet for ordinary note churn", async () => {
 		write("notes/a.md", "one\n");

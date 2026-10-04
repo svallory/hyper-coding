@@ -10,6 +10,7 @@ import {
 	readTracked,
 	SpaceGitError,
 	SpaceGitInterruptedError,
+	SpaceRefusedError,
 	spaceGit,
 	writeTracked,
 } from "#services/space-git";
@@ -118,7 +119,8 @@ export function fetchSpace(root: string, branch: string): void {
 			throw new SpaceGitError(
 				`Your hyperdrive has no ${branch} to fetch. Run \`hyper space push\` to publish the local branch.`,
 			);
-		throw new SpaceGitError(
+		throw new SpaceRefusedError(
+			"unreachable",
 			`I couldn't reach your hyperdrive at ${remote} to fetch ${branch}. Check the remote and your network, then retry. git said: ${detail}`,
 		);
 	}
@@ -183,7 +185,8 @@ export async function pullSpace(
 		};
 		if (isAncestor(target, before)) return unchanged;
 		if (!isAncestor(before, target)) {
-			throw new SpaceGitError(
+			throw new SpaceRefusedError(
+				"diverged",
 				`The local and remote histories of ${branch} have diverged. Nothing was merged or rebased; your local history and files were kept. Inspect \`hyper space log\` and reconcile the histories manually before retrying.`,
 			);
 		}
@@ -214,7 +217,8 @@ export async function pullSpace(
 			!options.acceptTracked &&
 			!(await options.confirmTracked?.(addedTracked))
 		) {
-			throw new SpaceGitError(
+			throw new SpaceRefusedError(
+				"consent-required",
 				`Incoming tracked entries would broaden what this machine uploads:\n${addedTracked.map((entry) => `  ${JSON.stringify(entry.path)}: ${entry.localFiles} local files would become eligible for commit`).join("\n")}\nNothing was merged. Review these paths, then run \`hyper space pull --accept-tracked\` to consent.`,
 			);
 		}
@@ -252,7 +256,8 @@ export async function pullSpace(
 					detail,
 				)
 			) {
-				throw new SpaceGitError(
+				throw new SpaceRefusedError(
+					"local-changes",
 					`Local changes would be overwritten by the fast-forward of ${branch}. Move those files aside or back them up before retrying; ignored paths cannot be saved by \`hyper space commit\`. git said: ${detail}`,
 				);
 			}
