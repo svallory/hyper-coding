@@ -168,6 +168,17 @@ space's history. Without the extension installed, pi sessions are saved with
 - `hyper space list` — every space in the hyperdrive manifest.
 - `hyper space clone <name> [path]` — recreate a space on a new machine.
 
+**When a session-end save fails or is cut short.** The detached worker
+logs one line per save to `.hyper/space.git/session-end.log`; a failure
+shows in `hyper space status` and as one line at the next session start.
+On Linux, systemd-logind with `KillUserProcesses=yes` kills every process
+of a login session at logout, the detached worker included (`setsid` does
+not leave the session's scope). That save is cut short with no log line;
+nothing is lost, because the next save commits the same working tree. Check
+with `busctl get-property org.freedesktop.login1 /org/freedesktop/login1
+org.freedesktop.login1.Manager KillUserProcesses` (`b true` means it is on),
+and when it is, run `hyper space commit` before logging out of that machine.
+
 **Pull and clone report what can act.** Incoming history is validated
 before anything is checked out, and both commands list the incoming files
 that can run commands or instruct agents — executables, hooks, and

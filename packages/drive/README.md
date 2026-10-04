@@ -264,6 +264,15 @@ tooling).
   `hyper space commit` by hand for now.
 - **Incoming `tracked` entries widen what this machine uploads** — that is
   why pull asks instead of adopting them.
+- **Linux logout can cut a session-end save short.** With systemd-logind's
+  `KillUserProcesses=yes`, logout kills every process of the login session,
+  the detached session-end worker included (`setsid` does not leave the
+  session's scope). That save leaves no log line; nothing is lost, because
+  the next save commits the same working tree, and a lock it held is taken
+  over once its pid is gone. Check with
+  `busctl get-property org.freedesktop.login1 /org/freedesktop/login1 org.freedesktop.login1.Manager KillUserProcesses`
+  (`b true` means it is on), and when it is, run `hyper space commit` before
+  logging out of that machine.
 
 ## Machine setup
 
