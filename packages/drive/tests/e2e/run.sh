@@ -73,6 +73,20 @@
 # suite itself may run under `flock /tmp/hyper-heavy2.lock` like other heavy
 # commands.
 #
+# KNOWN LIMIT — signals to a BACKGROUNDED runner. Each child runs in the
+# background and INT/TERM/HUP trap to `pkill -TERM -P` plus `kill -TERM` on it,
+# so its own children and its EXIT cleanup go with it. That works when the
+# runner is a normal foreground process (how CI runs it: `run: bash …`). It does
+# NOT fire when the runner ITSELF is an async job of a non-interactive shell:
+# the runner dies of the signal (143) and the child, its container and its temp
+# HOME survive. Reproduced on macOS, whose /bin/bash is 3.2 — a trapped signal
+# interrupting `wait` is not honoured there the way bash 4+ honours it
+# (hypothesis, not proven: the same test under bash 5 has not been run). If you
+# must cancel a suite that way, expect to `podman rm -f` the exact
+# `hyper-t*-t19-*` name it printed and kill its pid by hand. Fixing this
+# properly needs delivery that does not depend on the runner's own trap;
+# recorded as a follow-up rather than worked around.
+#
 # The real herdr is never driven: every script that needs herdr puts a fake on
 # its own PATH.
 
@@ -248,6 +262,9 @@ cleanup() {
 # this runner deletes anything.
 on_signal() {
   if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
+    # The child's OWN children (ssh, podman, bun) get TERM too, scoped to this
+    # pid — never by name, so no other run's process can be matched.
+    pkill -TERM -P "$child" 2>/dev/null || true
     kill -TERM "$child" 2>/dev/null || true
     wait "$child" 2>/dev/null || true
   fi
