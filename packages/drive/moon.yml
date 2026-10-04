@@ -30,6 +30,10 @@ tasks:
       - 'tests/e2e/**'
     options:
       cache: false
+      # Never a CI graph target: the suite needs podman, loopback ssh, a
+      # disposable container and a built CLI. CI runs run.sh itself, from the
+      # drive-e2e workflow, so this stays a local task.
+      runInCI: false
 
 toolchain:
   typescript:

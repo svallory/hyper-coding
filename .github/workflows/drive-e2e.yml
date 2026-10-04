@@ -5,16 +5,19 @@ name: drive-e2e
 # this job runs only when the drive package, the agent plugin, or this
 # workflow changes. The unit-test job is deliberately untouched.
 #
-# What runs vs skips here (run.sh's documented switches, HYPER_E2E_SKIP):
-#   sessions    SKIP — needs the installed, logged-in `claude`; the runner has
-#               none and installing one would need credentials (no secrets).
-#   sync        RUNS — mutagen 0.18.1 installed below, loopback sshd below.
+# What runs vs skips here (run.sh's documented switches):
+#   HYPER_E2E_REQUIRE names every script this job expects to run, so a broken
+#   runner image (no podman, no ssh, no network) FAILS instead of turning the
+#   job into a green no-op.
+#   sessions    SKIP — starts a REAL `claude -p` (C-18). Opt-in only via
+#               HYPER_E2E_REAL_CLAUDE=1 + CLAUDE_CONFIG_DIR; the runner has no
+#               claude and this job uses no secrets.
+#   sync        RUNS — mutagen 0.18.1 + agent bundle, loopback sshd below.
 #   tools       RUNS — downloads into a throwaway HOME.
 #   warp        RUNS — podman is preinstalled on ubuntu-latest.
-#   agent-user  RUNS — systemd-in-container passed 53 assertions on the runner.
-#   docker-home SKIP — privileged nested systemd never became ready in 90s
-#               under the hosted runner's rootless Podman 4.9.3 (run
-#               37220719674); it passes locally in the podman VM.
+#   agent-user  RUNS — systemd-in-container, 53 assertions.
+#   docker-home RUNS — privileged nested systemd; a `degraded` system counts as
+#               up, and a timeout prints `systemctl --failed` before failing.
 
 on:
   push:
@@ -22,12 +25,26 @@ on:
     paths:
       - "packages/drive/**"
       - "agent-plugin/**"
+      - "packages/cli/**"
+      - "packages/core/**"
+      - "packages/gen/**"
+      - "packages/kit/**"
+      - "packages/hq/**"
+      - "bun.lock"
+      - "package.json"
       - ".github/workflows/drive-e2e.yml"
   pull_request:
     branches: [main]
     paths:
       - "packages/drive/**"
       - "agent-plugin/**"
+      - "packages/cli/**"
+      - "packages/core/**"
+      - "packages/gen/**"
+      - "packages/kit/**"
+      - "packages/hq/**"
+      - "bun.lock"
+      - "package.json"
       - ".github/workflows/drive-e2e.yml"
 
 permissions:
@@ -53,6 +70,9 @@ jobs:
       - name: Setup Bun
         # oven-sh/setup-bun v2
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          # Pinned to the repo's .prototools; `latest` would float.
+          bun-version: 1.3.11
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -133,14 +153,10 @@ jobs:
 
       - name: Run the e2e suite
         env:
-          # sessions: no claude on the runner (installing one would need
-          # credentials; this job uses no secrets). run.sh also skips it on
-          # its own — its probe finds no claude on PATH — the switch just
-          # makes the reason explicit in the log.
-          # docker-home: tried on this hosted runner (run 37220719674), but
-          # its privileged nested systemd never became ready after 90s.
-          # This capability is not available here; it runs locally on macOS.
-          HYPER_E2E_SKIP: "sessions,docker-home"
+          # Every script this job expects to run. A probe-skip of any of these
+          # is a FAIL, not a skip, so this job cannot go green without them.
+          HYPER_E2E_REQUIRE: "sync tools warp agent-user docker-home"
+          HYPER_E2E_SKIP: "sessions"
         run: bash packages/drive/tests/e2e/run.sh
 
       - name: Show leftover containers (must be none)
