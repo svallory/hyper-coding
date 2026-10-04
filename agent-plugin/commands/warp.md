@@ -31,7 +31,10 @@ transcript, and an ownership marker, over ssh.
 
 - the session is owned by another machine, or already lives on the target;
 - a leftover marker from a warp that stopped mid-swap (ownership unknown);
-- the target's copy holds uncommitted work (untracked files included).
+- the target's copy holds uncommitted work (untracked files included);
+- the copy would overwrite an untracked or ignored file in the target's
+  copy (a `.env`, say) whose content differs from this machine's. Identical
+  files and paths the copy excludes don't count.
 
 **`--force` does not get past any of these** — they are refused whatever you
 pass:
@@ -45,7 +48,10 @@ pass:
 - a path that the copy tools cannot quote identically on both platforms;
 - an ownership marker that cannot be parsed, or a branch git would reject;
 - the target's Herdr server not answering, or the target not accepting the
-  branch.
+  branch;
+- in the target's copy (a space worktree or a plain repo): a merge, rebase,
+  cherry-pick, revert or bisect in progress, unresolved conflicts in the
+  index, or changes in a submodule. Nothing `--force` saves can carry them.
 
 **Say `--force` is the user's call.** Relay the refusal and stop; do not
 retry with `--force` to "make it work".
@@ -53,12 +59,17 @@ retry with `--force` to "make it work".
 ## What `--force` actually saves (and what it does not)
 
 - **Space worktree**: the target's uncommitted *tracked* work is saved there
-  as a stash first. **Untracked files are not in that stash** — nothing else
-  of the target's is saved.
-- **Plain repo**: nothing is saved. Files are overwritten one by one.
-- The target's clean check is `git status --porcelain`, which **does not see
-  ignored files**: a `.env` (or any ignored file) on the target is overwritten
-  even *without* `--force`.
+  as a stash first (untracked and ignored files are not in it).
+- **Plain repo**: the target's uncommitted tracked work is not saved; those
+  files are overwritten one by one.
+- **Both**: every untracked or ignored file the copy would overwrite with
+  different content is first copied into
+  `hyper-warp-backup/<session id>-<start time>/` inside the target repo's git
+  directory (the space's bare repo for a worktree, `.git` for a plain repo),
+  relative paths kept, directories mode 0700. Warp prints that directory and
+  how many files it holds. Untracked or ignored files the copy does not
+  overwrite are left alone.
+- **Plain directory** (no repo): nothing is checked and nothing is saved.
 - Excluded from the copy by default: `node_modules`, `_build`, `deps`,
   `target`, `dist`, `.turbo`, `.cache`, `.next`.
 

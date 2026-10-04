@@ -164,14 +164,17 @@ freshly cloned or pulled space.
 working directory, the transcript, and an ownership marker go over ssh.
 It refuses a session still running here (the agent's own session, often: it
 wants `--stop`, which ends it — the user's call), a session another machine
-owns or already moved to the target, a leftover marker, and a target copy
-holding uncommitted work (untracked files included) —
-the last three are what `--force` overrides. `--force` on a **space
-worktree** first saves the target's tracked changes there as a stash
-(untracked files are not in it); on a **plain repo** nothing is saved, files
-are overwritten one by one. The target's clean check is `git status`, which
-does not see ignored files: a target `.env` is overwritten even without
-`--force`. Excluded by default (and never copied): `node_modules`, `_build`,
+owns or already moved to the target, a leftover marker, a target copy
+holding uncommitted work (untracked files included), and a target untracked
+or ignored file (a `.env`, say) that the copy would overwrite with different
+content — the last four are what `--force` overrides. `--force` on a **space
+worktree** first saves the target's tracked changes there as a stash; on a
+**plain repo** the tracked changes are not saved. In both, the untracked or
+ignored files the copy would overwrite are first copied to
+`hyper-warp-backup/<session id>-<start time>/` in the target repo's git
+directory, and warp prints where. A merge, rebase, cherry-pick, revert or
+bisect in progress, unresolved conflicts, or a changed submodule in the
+target's copy are refused even with `--force`. Excluded by default (and never copied): `node_modules`, `_build`,
 `deps`, `target`, `dist`, `.turbo`, `.cache`, `.next`. `--dry-run` prints
 every step and changes nothing.
 
