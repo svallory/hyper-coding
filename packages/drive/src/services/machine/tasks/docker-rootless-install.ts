@@ -77,7 +77,12 @@ line=${JSON.stringify(dockerHostLine(uid))}
 if ! grep -qxF "$line" "$HOME/.bashrc" 2>/dev/null; then
   tmp="$(mktemp "$HOME/.bashrc.hyper.XXXXXX")"
   printf '%s\\n' "$line" > "$tmp"
-  [ -f "$HOME/.bashrc" ] && cat "$HOME/.bashrc" >> "$tmp"
+  if [ -f "$HOME/.bashrc" ]; then
+    cat "$HOME/.bashrc" >> "$tmp"
+    chmod "$(stat -c %a "$HOME/.bashrc")" "$tmp"
+  else
+    chmod 0644 "$tmp"
+  fi
   mv -f "$tmp" "$HOME/.bashrc"
 fi
 # Verify by running a container: a daemon that starts and cannot run anything is
@@ -123,11 +128,13 @@ export const dockerRootlessInstall: Task = {
 			if (at > 0) answers.set(line.slice(0, at).trim(), line.slice(at + 1).trim());
 		}
 		if (answers.get("unit") !== "yes") return no(`~${agentUser}/${DOCKER_UNIT_PATH} is missing`);
-		// A daemon that is already running is the finished state, whatever the
-		// enablement says: it was started on demand, and the next run only has to
-		// leave it alone.
-		if (answers.get("active") === "active") return true;
-		if (answers.get("enabled") !== "disabled") return no("the unit is not disabled");
+		// Whether the daemon happens to be running says nothing about the layout:
+		// a running daemon with an ENABLED unit, or with no DOCKER_HOST line, is
+		// still not set up. `is-active` is reported only, never a shortcut.
+		if (answers.get("enabled") !== "disabled")
+			return no(
+				`the unit is not disabled (it is ${answers.get("enabled") || "unknown"}${answers.get("active") === "active" ? ", and running" : ""})`,
+			);
 		if (Number.parseInt(answers.get("bashrc") ?? "0", 10) === 0)
 			return no(`the agent's .bashrc has no ${dockerHostLine(uid)} line`);
 		return true;
