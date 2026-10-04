@@ -5,6 +5,52 @@ import type { AgentPaths } from "./agent-context.js";
 import { shellCommand } from "./shell.js";
 
 export const COLLAB_GROUP = "collab";
+
+/**
+ * Restart the primary's `systemd --user` manager when — and only when — it is
+ * running without the collab group.
+ *
+ * A running process never gains a group, and with linger the manager is never
+ * restarted short of a reboot. One started BEFORE the membership was added
+ * therefore runs without collab forever, and so does the transcript watcher it
+ * hosts: that watcher's `setfacl` strips setgid bits it cannot restore, and its
+ * `chgrp` fails (the T-16 flake's product cause). The repair is restarting
+ * `user@<uid>.service`, which is root-only work, so this fragment lives in
+ * generated root scripts: `agent-user.create`'s, after the `usermod -aG`, and
+ * the watcher task's root fallback, for machines an older setup already left in
+ * that state.
+ *
+ * Guarded three ways, so a second run is a no-op (C-15): a stopped manager
+ * picks the group up when it next starts (nothing to do), an already-correct
+ * one is left alone, and the group must resolve at all. The fragment assumes
+ * `$primary_user` is set (rootScriptGuards / primaryUserLines) and says out
+ * loud what a restart costs: it ends the primary's user services.
+ */
+export function managerCollabRestartLines(): string {
+	return `# The primary's systemd --user manager only sees the groups it STARTED with:
+# a running process never gains one, and with linger it is never restarted short
+# of a reboot. If it is running WITHOUT the ${COLLAB_GROUP} group (it started before
+# the membership above was added), restart it — otherwise the transcript watcher
+# runs without the group until a reboot: its setfacl strips setgid bits it
+# cannot restore, and its chgrp fails. A stopped manager picks the group up when
+# it next starts, and an already-correct one is left alone (C-15).
+primary_uid="$(id -u "$primary_user")"
+collab_gid="$(getent group ${COLLAB_GROUP} | cut -d: -f3 || true)"
+manager_pid="$(systemctl show -p MainPID --value "user@$primary_uid.service" 2>/dev/null || true)"
+if [ -n "$collab_gid" ] && [ -n "$manager_pid" ] && [ "$manager_pid" != 0 ]; then
+  manager_groups="$(sed -n 's/^Groups:[[:space:]]*//p' "/proc/$manager_pid/status" 2>/dev/null || true)"
+  case " $manager_groups " in
+    *" $collab_gid "*) : the running manager already carries the group ;;
+    *)
+      echo "hyper: restarting user@$primary_uid.service so the primary's user manager"
+      echo "hyper: picks up the ${COLLAB_GROUP} group. THIS ENDS THE PRIMARY'S USER"
+      echo "hyper: SERVICES; enabled units (the transcript watcher) start again on"
+      echo "hyper: their own."
+      systemctl restart "user@$primary_uid.service"
+      ;;
+  esac
+fi`;
+}
 export const READABLE_FILES = ["settings.json", "CLAUDE.md"] as const;
 export const READABLE_DIRS = ["skills", "commands", "agents"] as const;
 export const SHARED_ENTRIES = ["projects", ...READABLE_FILES, ...READABLE_DIRS] as const;

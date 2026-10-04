@@ -89,6 +89,19 @@ docker_foreign_engines() {
   for engine_package in ${FOREIGN_ENGINE_PACKAGES.join(" ")}; do
     if have_package "$engine_package"; then echo "the $engine_package package"; fi
   done
+  # A snap-installed Docker: the root script's PATH may have no /snap/bin and
+  # its unit is not docker.service, so the checks below miss it — but it is an
+  # engine all the same, and docker-ce's daemon would fight it for the socket.
+  # Foreign whether or not docker-ce is installed, like the packages above.
+  if [ -x /snap/bin/docker ] || [ -x /snap/bin/dockerd ]; then
+    echo "a snap-installed Docker"
+  fi
+  if command -v snap >/dev/null 2>&1 && snap list docker >/dev/null 2>&1; then
+    echo "the docker snap package"
+  fi
+  if [ "$(systemctl show -p LoadState --value snap.docker.dockerd.service 2>/dev/null || true)" = loaded ]; then
+    echo "a snap.docker.dockerd.service unit"
+  fi
   if ! have_package docker-ce; then
     engine_dockerd="$(command -v dockerd 2>/dev/null || true)"
     if [ -n "$engine_dockerd" ]; then echo "$engine_dockerd (a dockerd that does not come from docker-ce)"; fi
@@ -274,6 +287,32 @@ for subid_file in /etc/subuid /etc/subgid; do
   fi
 done
 
+# Before ANY package or repository change, verify that a missing subordinate
+# range can fit in the 32-bit id space. Otherwise a late refusal would falsely
+# claim "nothing has been changed" after apt may already have run. If only the
+# gid range is missing, the uid start can be reused when it is free in subgid,
+# even if there is no room for another range above the highest one.
+if ! subid_has /etc/subuid "$agent_user" "$agent_uid"; then
+  if ! subid_next_free >/dev/null; then
+    echo "hyper: there is no room for a new ${SUBID_COUNT}-id subordinate uid range:" >&2
+    echo "hyper: the ranges in /etc/subuid and /etc/subgid reach the end of the 32-bit" >&2
+    echo "hyper: id space. Give the agent a range yourself, then re-run." >&2
+    echo "hyper: nothing has been changed." >&2
+    exit 1
+  fi
+elif ! subid_has /etc/subgid "$agent_user" "$agent_uid"; then
+  existing_start="$(subid_start_of /etc/subuid "$agent_user" "$agent_uid")"
+  if [ -z "$existing_start" ] || ! subid_free_at /etc/subgid "$existing_start" ${SUBID_COUNT}; then
+    if ! subid_next_free >/dev/null; then
+      echo "hyper: there is no room for a new ${SUBID_COUNT}-id subordinate gid range:" >&2
+      echo "hyper: the ranges in /etc/subuid and /etc/subgid reach the end of the 32-bit" >&2
+      echo "hyper: id space. Give the agent a range yourself, then re-run." >&2
+      echo "hyper: nothing has been changed." >&2
+      exit 1
+    fi
+  fi
+fi
+
 # Docker's apt repository, added only when one of its packages is missing and
 # the repository is not configured yet. Debian 12+ ships /etc/apt/keyrings.
 if ! have_package docker-ce-rootless-extras; then
@@ -326,7 +365,13 @@ fi
 # the same start in both files when both are missing.
 subid_start=""
 if ! subid_has /etc/subuid "$agent_user" "$agent_uid"; then
-  subid_start="$(subid_next_free)"
+  if ! subid_start="$(subid_next_free)"; then
+    echo "hyper: there is no room for a new ${SUBID_COUNT}-id subordinate uid range:" >&2
+    echo "hyper: the ranges in /etc/subuid and /etc/subgid reach the end of the 32-bit" >&2
+    echo "hyper: id space. Give the agent a range yourself, then re-run." >&2
+    echo "hyper: no uid range was added; package work above may already have run." >&2
+    exit 1
+  fi
   usermod --add-subuids "$subid_start-$((subid_start + ${SUBID_COUNT} - 1))" "$agent_user"
 fi
 if ! subid_has /etc/subgid "$agent_user" "$agent_uid"; then
@@ -334,7 +379,13 @@ if ! subid_has /etc/subgid "$agent_user" "$agent_uid"; then
     # Only the gid range is missing: reuse the uid range's start if it is free.
     subid_start="$(subid_start_of /etc/subuid "$agent_user" "$agent_uid")"
     if [ -z "$subid_start" ] || ! subid_free_at /etc/subgid "$subid_start" ${SUBID_COUNT}; then
-      subid_start="$(subid_next_free)"
+      if ! subid_start="$(subid_next_free)"; then
+        echo "hyper: there is no room for a new ${SUBID_COUNT}-id subordinate gid range:" >&2
+        echo "hyper: the ranges in /etc/subuid and /etc/subgid reach the end of the 32-bit" >&2
+        echo "hyper: id space. Give the agent a range yourself, then re-run." >&2
+        echo "hyper: no gid range was added; package work above may already have run." >&2
+        exit 1
+      fi
     fi
   fi
   usermod --add-subgids "$subid_start-$((subid_start + ${SUBID_COUNT} - 1))" "$agent_user"

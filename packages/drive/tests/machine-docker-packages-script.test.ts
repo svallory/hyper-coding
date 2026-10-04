@@ -59,6 +59,12 @@ interface Fixture {
 	dockerd?: string;
 	/** `systemctl show -p LoadState --value docker.service`. */
 	dockerUnit?: "loaded" | "not-found";
+	/** An executable at /snap/bin/docker (created inside the sandbox). */
+	snapBin?: boolean;
+	/** `snap list docker` exits 0. */
+	snapList?: boolean;
+	/** `systemctl show -p LoadState --value snap.docker.dockerd.service`. */
+	snapUnit?: "loaded" | "not-found";
 }
 
 interface Sandbox {
@@ -85,6 +91,10 @@ function sandbox(fixture: Fixture): Sandbox {
 	writeFileSync(subuid, fixture.subuid);
 	writeFileSync(subgid, fixture.subgid);
 	writeFileSync(calls, "");
+	if (fixture.snapBin === true) {
+		mkdirSync(join(root, "snap", "bin"), { recursive: true });
+		writeFileSync(join(root, "snap", "bin", "docker"), "#!/bin/sh\n", { mode: 0o755 });
+	}
 	const keyFile = join(root, "id.pub");
 	writeFileSync(keyFile, `${KEY}\n`);
 
@@ -128,8 +138,19 @@ command() {
 }
 systemctl() {
   record systemctl "$@"
-  if [ "$1" = show ]; then echo ${JSON.stringify(fixture.dockerUnit ?? "not-found")}; fi
+  if [ "$1" = show ]; then
+    case " $* " in
+      *" snap.docker.dockerd.service "*) echo ${JSON.stringify(fixture.snapUnit ?? "not-found")} ;;
+      *) echo ${JSON.stringify(fixture.dockerUnit ?? "not-found")} ;;
+    esac
+  fi
   return 0
+}
+snap() {
+  if [ "$1" = list ] && [ "$2" = docker ]; then
+    ${fixture.snapList === true ? "return 0" : "return 1"}
+  fi
+  return 1
 }
 apt-get() { record apt-get "$@"; }
 curl() { record curl "$@"; }
@@ -158,7 +179,9 @@ runuser() { record runuser "$1" "$2"; }
 	});
 
 	function rewrite(text: string): string {
-		const rewritten = text.replaceAll("/etc/", `${root}/etc/`);
+		const rewritten = text
+			.replaceAll("/etc/", `${root}/etc/`)
+			.replaceAll("/snap/", `${root}/snap/`);
 		// Never run a script that could still reach the real /etc.
 		expect(rewritten.replaceAll(`${root}/etc/`, "")).not.toContain("/etc/");
 		return rewritten;
@@ -202,6 +225,14 @@ describe("the agent's subid range is allocated, never fixed", () => {
 		await expect(dockerRootlessPackages.check(box.ctx())).resolves.toBe(true);
 	});
 
+	it("treats an absent subgid file as empty during the bounded preflight", () => {
+		const box = sandbox({ subuid: PRIMARY_ONLY, subgid: "" });
+		rmSync(join(box.root, "etc", "subgid"));
+		expect(box.runScript().code).toBe(0);
+		expect(box.subuid()).toBe(`${PRIMARY_ONLY}agent:165536:65536\n`);
+		expect(box.subgid()).toBe("agent:165536:65536\n");
+	});
+
 	it("starts above the highest range in EITHER file, never below 100000", () => {
 		const box = sandbox({
 			subuid: "svallory:100000:65536\nother:300000:65536\n",
@@ -226,7 +257,8 @@ describe("the agent's subid range is allocated, never fixed", () => {
 		expect(result.stderr).toContain("agent:100000:65536 overlaps svallory:100000:65536");
 		expect(result.stderr).toContain("nothing has been changed");
 		expect(box.subuid()).toBe(overlapping);
-		expect(box.calls()).toEqual([]);
+		// The snap unit probe is read-only; no write happened before refusal.
+		expect(box.calls().filter((call) => !call.startsWith("systemctl show"))).toEqual([]);
 		// The check calls it a refusal, not "needs root".
 		await expect(dockerRootlessPackages.check(box.ctx())).rejects.toThrow(
 			/overlaps another user's \(agent:100000:65536 overlaps svallory:100000:65536\)/,
@@ -268,6 +300,59 @@ describe("the agent's subid range is allocated, never fixed", () => {
 		const before = [box.subuid(), box.subgid()];
 		expect(box.runScript().code).toBe(0);
 		expect([box.subuid(), box.subgid()]).toEqual(before);
+	});
+
+	it("refuses a start near 2^32 with a clear message instead of usermod's, changing nothing", () => {
+		// The highest range ends at 4294967296: no room for 65536 more ids
+		// before the end of the 32-bit id space. Measured on the review's
+		// container: usermod exits 3 with "invalid subordinate uid range".
+		// With packages missing, a late check would have added an apt repository
+		// before saying "nothing has been changed". The preflight must run first.
+		const box = sandbox({
+			subuid: "svallory:4294901760:65536\n",
+			subgid: PRIMARY_ONLY,
+			installed: ["uidmap"],
+		});
+		const result = box.runScript();
+		expect(result.code).not.toBe(0);
+		expect(result.stderr).toContain("no room for a new 65536-id subordinate uid range");
+		expect(result.stderr).toContain("nothing has been changed");
+		expect(result.stderr).not.toContain("invalid subordinate");
+		expect(box.subuid()).toBe("svallory:4294901760:65536\n");
+		expect(box.subgid()).toBe(PRIMARY_ONLY);
+		expect(
+			box
+				.calls()
+				.filter((call) =>
+					/^(apt-get|curl|install|chmod|dpkg|usermod|loginctl|runuser)\b/.test(call),
+				),
+		).toEqual([]);
+		expect(existsSync(join(box.root, "etc", "apt", "sources.list.d", "docker.list"))).toBe(false);
+	});
+
+	it("refuses the gid-only-missing case the same way", () => {
+		const box = sandbox({
+			subuid: `${PRIMARY_ONLY}agent:200000:65536\n`,
+			// The uid start is taken, and the next free start has no room.
+			subgid: `${PRIMARY_ONLY}someone:200000:65536\nother:4294901760:65536\n`,
+		});
+		const result = box.runScript();
+		expect(result.code).not.toBe(0);
+		expect(result.stderr).toContain("no room for a new 65536-id subordinate gid range");
+		expect(result.stderr).toContain("nothing has been changed");
+		expect(box.subgid()).toContain("someone:200000:65536");
+	});
+
+	it("accepts the last valid start exactly (start + 65535 = 2^32 - 1)", () => {
+		// The highest range ends at 4294901760, so the next free start IS the
+		// last one a 65536-id range may have.
+		const box = sandbox({
+			subuid: "svallory:4294836224:65536\n",
+			subgid: "svallory:4294836224:65536\n",
+		});
+		expect(box.runScript().code).toBe(0);
+		expect(box.subuid()).toContain("agent:4294901760:65536");
+		expect(box.subgid()).toContain("agent:4294901760:65536");
 	});
 });
 
@@ -325,6 +410,26 @@ describe("an existing Docker engine is detected before apt is touched", () => {
 			expect(result.stderr).toContain(fixture.expected);
 			expect(touches(box.calls())).toEqual([]);
 		}
+	});
+
+	it("refuses a snap-installed Docker too, changing nothing (sudo's PATH has no /snap/bin)", async () => {
+		for (const fixture of [
+			{ snapBin: true, expected: "a snap-installed Docker" },
+			{ snapList: true, expected: "the docker snap package" },
+			{ snapUnit: "loaded" as const, expected: "a snap.docker.dockerd.service unit" },
+		]) {
+			const box = sandbox({ subuid: PRIMARY_ONLY, subgid: PRIMARY_ONLY, ...fixture });
+			const result = box.runScript();
+			expect(result.code, fixture.expected).not.toBe(0);
+			expect(result.stderr).toContain(fixture.expected);
+			expect(result.stderr).toContain("nothing has been changed");
+			expect(touches(box.calls())).toEqual([]);
+		}
+		// The check calls it a refusal, never "needs root".
+		const box = sandbox({ subuid: PRIMARY_ONLY, subgid: PRIMARY_ONLY, snapList: true });
+		await expect(dockerRootlessPackages.check(box.ctx())).rejects.toThrow(
+			/already has a Docker engine that is not docker-ce: the docker snap package.*Nothing has been changed/,
+		);
 	});
 
 	it("reuses an installed docker-ce and leaves its system daemon exactly as it is", () => {

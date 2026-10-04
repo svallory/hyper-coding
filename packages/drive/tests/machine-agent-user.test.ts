@@ -268,6 +268,7 @@ function settledWatcher(overrides: Record<string, string> = {}): string {
 		unit: "yes",
 		enabled: "enabled",
 		active: "active",
+		watcher_collab: "yes",
 		linger: "yes",
 		inotifywait: "yes",
 		...overrides,
@@ -1136,6 +1137,23 @@ describe("agent-user.watcher", () => {
 			]);
 			expect(await agentUserWatcher.check(ctxFor(runner)), JSON.stringify(broken)).toBe(false);
 		}
+	});
+
+	it("fails when the RUNNING watcher lacks the collab group (its manager started before the group was added)", async () => {
+		withTempConfig('remote = "git@example:x.git"\n');
+		const runner = recordingRunner([
+			{ match: /printf 'agent_uid=/, result: { stdout: SETTLED_CREATE } },
+			{ match: /printf 'watcher=/, result: { stdout: settledWatcher({ watcher_collab: "no" }) } },
+		]);
+		const logs: string[] = [];
+		const ctx: TaskContext = {
+			machine: MACHINE,
+			runner,
+			config: loadConfig(),
+			log: (line) => logs.push(line),
+		};
+		expect(await agentUserWatcher.check(ctx)).toBe(false);
+		expect(logs.join("\n")).toContain("does not have the collab group");
 	});
 
 	it("fails when inotifywait is absent, rather than pretending to enable a unit", async () => {
