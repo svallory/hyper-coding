@@ -65,6 +65,12 @@ EOF
 fakebin="$work/bin"
 mkdir -p "$fakebin"
 
+# Resolve runtimes BEFORE replacing HOME: proto's shims need their own
+# installed config. The isolated `env -i` invocation below uses these real
+# executables, never a shim that would search a blank temp HOME.
+node_bin="$(node -p 'process.execPath')"
+bun_bin="$(bun -e 'console.log(process.execPath)' | tail -n 1)"
+
 # The temp HOME, for this process and every command the runner spawns from it.
 export HOME="$home"
 export XDG_DATA_HOME="$home/.local/share"
@@ -77,8 +83,12 @@ mkdir -p "$CLAUDE_CONFIG_DIR" "$work/tmp"
 # inherited PATH would satisfy `detect` and the recipes would never run.
 stubs="$work/stubs"
 mkdir -p "$stubs"
+# `env -i` below hides proto's HOME. A symlink to its shim then fails with
+# "No such file or directory" instead of launching Node/Bun. Resolve their
+# actual executable paths while the invoking environment is still intact.
 for tool in node bun curl tar sed grep cat uname install find head env sh bash; do
-  path="$(command -v "$tool" || true)"
+  case "$tool" in node) path="$node_bin" ;; bun) path="$bun_bin" ;;
+    *) path="$(command -v "$tool" || true)" ;; esac
   [ -n "$path" ] && ln -sf "$path" "$stubs/$tool"
 done
 export PATH="$stubs:/usr/bin:/bin:/usr/sbin:/sbin"

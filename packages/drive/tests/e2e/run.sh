@@ -17,8 +17,10 @@
 #   docker-home T-17 rootless docker + /Users home, privileged container
 #
 # Environment contract — every script runs with:
-#   HOME=<fresh temp dir>, XDG_CONFIG_HOME=<temp>/xdg, and an EMPTY
-#   CLAUDE_CONFIG_DIR=<temp>/claude — EXCEPT sessions.sh, which by design
+#   HOME=<fresh short /tmp dir> and an EMPTY CLAUDE_CONFIG_DIR=<temp>/claude
+#   (container scripts keep the host's absolute XDG_CONFIG_HOME and
+#   XDG_DATA_HOME for podman's machine connection and image storage) — EXCEPT
+#   sessions.sh, which by design
 #   (C-18) asserts against the installed claude and so needs a LOGGED-IN
 #   config: export CLAUDE_CONFIG_DIR yourself before run.sh if you want
 #   sessions to run. run.sh never invents one and never points claude at a
@@ -147,6 +149,7 @@ free_port() {
 # Container names carry this run's slug so two runs on a shared machine never
 # fight over a name, and a trap only ever removes a container this run started.
 slug="t19-$$"
+original_home="$HOME"
 
 homes=()
 cleanup() {
@@ -173,10 +176,25 @@ for name in "${scripts[@]}"; do
     continue
   fi
 
-  home="$(mktemp -d "${TMPDIR:-/tmp}/hyperdrive-e2e-home.XXXXXX")"
+  # Short paths: docker-home.sh forwards a throwaway ssh-agent whose socket
+  # lives under $HOME, and macOS's TMPDIR (/var/folders/…) is already so long
+  # that a home under it pushes the socket path past sun_path's 104 bytes.
+  home="$(mktemp -d /tmp/hyperdrive-e2e-home.XXXXXX)"
   homes+=("$home")
 
-  env_args=("HOME=$home" "XDG_CONFIG_HOME=$home/xdg")
+  # Podman keeps machine connections in XDG_CONFIG_HOME and rootless image
+  # storage in XDG_DATA_HOME. Preserve those absolute locations across the
+  # temp HOME: otherwise macOS loses its VM connection, while Linux builds
+  # fresh image layers as subuid-owned files under the throwaway HOME that
+  # its ordinary user cannot remove. Scripts' drive/Claude fixtures still
+  # live in their own temp HOME and empty CLAUDE_CONFIG_DIR.
+  env_args=("HOME=$home")
+  case "$name" in
+    warp | agent-user | docker-home)
+      env_args+=("XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$original_home/.config}"
+                 "XDG_DATA_HOME=${XDG_DATA_HOME:-$original_home/.local/share}")
+      ;;
+  esac
   if [ "$name" != sessions ]; then
     mkdir -p "$home/claude"
     env_args+=("CLAUDE_CONFIG_DIR=$home/claude")
