@@ -17,8 +17,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it, type TestContext } from "vitest";
 import {
+	canAskAboutRoot,
 	DEFAULT_ROOT_CHOICE,
 	exitCodeFor,
+	FAILED_TOOLS_EXIT,
 	PENDING_ROOT_EXIT,
 	pendingRootMessage,
 	ROOT_CHOICE_OPTIONS,
@@ -194,6 +196,57 @@ describe("machine setup", () => {
 		expect(message).toContain("/tmp/hyper-machine-root.sh");
 		expect(message).toContain("still need root");
 		expect(message).toContain("Nothing was run");
+	});
+
+	describe("--yes is unattended, terminal or not", () => {
+		const question = {
+			machine: "netcup",
+			path: "/tmp/hyper-machine-root.sh",
+			tasks: ["agent-user.create"],
+		};
+
+		it("with --yes on a terminal, the root question is not asked and nothing runs", async () => {
+			// The promise in the flag's own help ("Never runs anything as root")
+			// and the promise in runner.ts's comment. `rootPrompt` used to be built
+			// from the terminal alone, so `--yes` on a laptop still offered
+			// "Run it for me" — the one sudo path a provisioning run must not take.
+			expect(canAskAboutRoot(true, true)).toBe(false);
+			const seen: string[] = [];
+			const prompt = rootPrompt(canAskAboutRoot(true, true), (path) => seen.push(path));
+
+			const answer = await prompt.rootChoice(question);
+
+			// "skip" is the only unattended answer, and it is the one that keeps
+			// sudo out of the run: "run-for-me" is the sole path to runRootScript.
+			expect(answer).toBe("skip");
+			expect(answer).not.toBe("run-for-me");
+			expect(seen).toEqual(["/tmp/hyper-machine-root.sh"]);
+			// The script is still written and named; the run says it is pending.
+			expect(exitCodeFor("/tmp/hyper-machine-root.sh")).toBe(PENDING_ROOT_EXIT);
+			const message = pendingRootMessage(
+				"netcup",
+				"/tmp/hyper-machine-root.sh",
+				"--yes never runs anything as root",
+			);
+			expect(message).toContain("--yes never runs anything as root");
+			expect(message).toContain("/tmp/hyper-machine-root.sh");
+			expect(message).toContain("Nothing was run");
+		});
+
+		it("without --yes on a terminal, the question is still asked and can run it", () => {
+			expect(canAskAboutRoot(true, false)).toBe(true);
+			// Which is only true because the offered options still include it.
+			expect(ROOT_CHOICE_OPTIONS.map((option) => option.value)).toContain("run-for-me");
+		});
+
+		it("a terminal user who picks Skip leaves no pending root work, so exit 0", () => {
+			// Not an unattended skip: `unattendedRootPath` is only set by the
+			// prompt's own no-answer path, so a deliberate Skip reports the tasks
+			// as skipped and the run exits as any other successful setup would.
+			expect(exitCodeFor(null)).toBeNull();
+			// Only a *failed* task upgrades the code, and that wins over pending.
+			expect(exitCodeFor(null, 1)).toBe(FAILED_TOOLS_EXIT);
+		});
 	});
 
 	it("an unknown feature is rejected by name", (ctx) => {

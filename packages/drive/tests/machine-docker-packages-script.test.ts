@@ -304,8 +304,8 @@ describe("the agent's subid range is allocated, never fixed", () => {
 
 	it("refuses a start near 2^32 with a clear message instead of usermod's, changing nothing", () => {
 		// The highest range ends at 4294967296: no room for 65536 more ids
-		// before the end of the 32-bit id space. Measured on the review's
-		// container: usermod exits 3 with "invalid subordinate uid range".
+		// below the reserved uid. Measured on the review's container: usermod
+		// exits 3 with "invalid subordinate uid range".
 		// With packages missing, a late check would have added an apt repository
 		// before saying "nothing has been changed". The preflight must run first.
 		const box = sandbox({
@@ -343,16 +343,33 @@ describe("the agent's subid range is allocated, never fixed", () => {
 		expect(box.subgid()).toContain("someone:200000:65536");
 	});
 
-	it("accepts the last valid start exactly (start + 65535 = 2^32 - 1)", () => {
-		// The highest range ends at 4294901760, so the next free start IS the
-		// last one a 65536-id range may have.
+	it("accepts the last valid start exactly (start + 65535 = 4294967294)", () => {
+		// The highest range ends at 4294901759, so the next free start IS the last
+		// one a 65536-id range may have: its last id is 4294967294, the highest
+		// subordinate id that is not the reserved (uid_t)-1.
 		const box = sandbox({
-			subuid: "svallory:4294836224:65536\n",
-			subgid: "svallory:4294836224:65536\n",
+			subuid: "svallory:4294836223:65536\n",
+			subgid: "svallory:4294836223:65536\n",
 		});
 		expect(box.runScript().code).toBe(0);
-		expect(box.subuid()).toContain("agent:4294901760:65536");
-		expect(box.subgid()).toContain("agent:4294901760:65536");
+		expect(box.subuid()).toContain("agent:4294901759:65536");
+		expect(box.subgid()).toContain("agent:4294901759:65536");
+	});
+
+	it("refuses one id higher, which would end the range on the reserved uid 4294967295", () => {
+		// usermod accepts 4294901760-4294967295 (measured in the review's
+		// container), so nothing else catches it: the kernel rejects the
+		// start + count wrap when the agent's containers are mapped.
+		const box = sandbox({
+			subuid: "svallory:4294901759:65536\n",
+			subgid: "svallory:4294901759:65536\n",
+		});
+		const result = box.runScript();
+		expect(result.code).not.toBe(0);
+		expect(result.stderr).toContain("no room for a new 65536-id subordinate uid range");
+		expect(box.subuid()).toBe("svallory:4294901759:65536\n");
+		expect(box.subgid()).toBe("svallory:4294901759:65536\n");
+		expect(box.calls().filter((call) => call.startsWith("usermod"))).toEqual([]);
 	});
 });
 

@@ -310,6 +310,24 @@ export function rootPrompt(
 }
 
 /**
+ * Whether the root question may be asked at all.
+ *
+ * A terminal alone is not permission: `--yes` says "take the defaults" and its
+ * help promises it never runs anything as root, but `rootPrompt` used to be
+ * built from the terminal alone, so `machine setup --yes` on a laptop still
+ * offered "Run it for me" and a password prompt behind it. That is the one
+ * thing `--yes` exists to avoid in a script or a provisioning pipeline. With
+ * `--yes` the run writes the script, asks nothing about root, and exits 3
+ * when root steps are pending — the same as no terminal.
+ *
+ * Exported so the rule is testable without a TTY: the terminal cannot be faked
+ * here, but this decision can.
+ */
+export function canAskAboutRoot(interactive: boolean, yes: boolean): boolean {
+	return interactive && !yes;
+}
+
+/**
  * The exit code for a finished run: 3 when root work is still pending because
  * nobody could answer, otherwise null — the run exits as it otherwise would.
  */
@@ -349,11 +367,19 @@ export const FAILED_TOOLS_EXIT = 4;
 /**
  * What to tell the user when root work is still pending after an unattended run.
  *
+ * `reason` names why nobody was asked, because there are two reasons and
+ * calling both "no terminal" would be wrong for a terminal that was right
+ * there: `--yes` forbids asking, and a pipe has nobody to ask.
+ *
  * Exported so the rule is testable without a TTY and without a root task: which
  * exit code, and that the path to the script is named, are both worth pinning.
  */
-export function pendingRootMessage(target: string, path: string): string {
-	return `Some steps on ${target} still need root, and I couldn't ask about them (no terminal). Nothing was run. Run ${path} yourself, or re-run this command interactively.`;
+export function pendingRootMessage(
+	target: string,
+	path: string,
+	reason = "there was no terminal to ask",
+): string {
+	return `Some steps on ${target} still need root, and I couldn't ask about them (${reason}). Nothing was run. Run ${path} yourself, or re-run this command interactively.`;
 }
 
 export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
@@ -511,10 +537,15 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		// Set when the root prompt had to answer for itself, so the run can report
 		// unfinished root work instead of exiting 0 on a half-prepared machine.
 		let unattendedRootPath: string | null = null;
-		const prompt = rootPrompt(interactive, (path) => {
+		// `--yes` is unattended even on a terminal: it promises never to run
+		// anything as root, so it must not reach the question that offers to.
+		const askable = canAskAboutRoot(interactive, flags.yes);
+		const prompt = rootPrompt(askable, (path) => {
 			unattendedRootPath = path;
 			this.log(
-				`This isn't an interactive terminal, so I'm leaving the root steps for you: ${path}`,
+				askable === false && interactive
+					? `--yes never runs anything as root, so I'm leaving the root steps for you: ${path}`
+					: `This isn't an interactive terminal, so I'm leaving the root steps for you: ${path}`,
 			);
 		});
 
@@ -593,7 +624,13 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 		// precedence, but must never hide the pending root steps.
 		const messages: string[] = [];
 		if (unattendedRootPath !== null)
-			messages.push(pendingRootMessage(machine?.name ?? "this machine", unattendedRootPath));
+			messages.push(
+				pendingRootMessage(
+					machine?.name ?? "this machine",
+					unattendedRootPath,
+					flags.yes ? "--yes never runs anything as root" : "there was no terminal to ask",
+				),
+			);
 		if (report.failed.length > 0)
 			// Not "tool(s)": a failed entry can be any task whose install threw —
 			// including a rootless-Docker install that could not reach the agent —

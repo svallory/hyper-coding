@@ -28,12 +28,18 @@ export const SUBID_COUNT = 65536;
 export const SUBID_FLOOR = 100000;
 
 /**
- * The highest start a new range may have: subordinate ids are 32-bit, so the
- * last id of the range (start + count − 1) must stay below 2^32. Above this
- * `usermod` fails with "invalid subordinate uid range" (measured, rc 3), and
- * the caller refuses with a clear message instead.
+ * The highest start a new range may have.
+ *
+ * Subordinate ids are 32-bit and 4294967295 is the reserved "no uid" value
+ * ((uid_t)-1), so the last id of a range (start + count − 1) must stay at or
+ * below 4294967294 — one below 2^32, not at it. A range ending on 4294967295 is
+ * accepted by `usermod` (measured in the review's container) but rejected
+ * later, when start + count wraps to 0 in the kernel's map write, leaving the
+ * agent's rootless containers unable to start with no refusal from hyper. Above
+ * this bound `usermod` also fails with "invalid subordinate uid range"
+ * (measured, rc 3); either way the caller refuses with a clear message instead.
  */
-export const SUBID_MAX_START = 4294967295 - SUBID_COUNT + 1;
+export const SUBID_MAX_START = 4294967295 - SUBID_COUNT;
 
 /**
  * Shell functions. Owner fields in these files may be a name or a numeric uid,

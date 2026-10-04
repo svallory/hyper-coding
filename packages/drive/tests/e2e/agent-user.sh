@@ -27,6 +27,13 @@
 
 set -euo pipefail
 
+# The operator's ssh-agent must never be offered to this container. The throwaway
+# key below is the only credential the harness may authenticate with, and an
+# inherited SSH_AUTH_SOCK would let ssh offer the operator's real keys (1Password
+# included, which may prompt) to a disposable sshd. Unset for this script and
+# everything it spawns, including the CLI.
+unset SSH_AUTH_SOCK SSH_AGENT_PID
+
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # e2e -> tests -> drive -> packages, so the CLI is three levels up.
 cli="$here/../../../cli/bin/run.js"
@@ -144,7 +151,10 @@ pexec '/usr/sbin/sshd'
 echo "# sshd started"
 
 ssh_t16() {
+  # IdentityAgent=none + IdentitiesOnly=yes: authenticate with the throwaway key
+  # on the command line and nothing else, whatever the environment offers.
   /usr/bin/ssh -F /dev/null -o ControlMaster=no -o ControlPath=none -i "$key" -p "$port" \
+    -o IdentityAgent=none -o IdentitiesOnly=yes \
     -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
     -o LogLevel=ERROR -o ConnectTimeout=10 \
     "$primary@localhost" "$@"
@@ -223,7 +233,7 @@ chmod 600 "$ssh_home/.ssh/config"
 # The wrapper is what the CLI spawns; the harness's own calls use /usr/bin/ssh.
 cat > "$work_real/bin/ssh" <<WRAPPER
 #!/bin/sh
-exec /usr/bin/ssh -F "$work_real/sshhome/.ssh/config" "\$@"
+exec /usr/bin/ssh -F "$work_real/sshhome/.ssh/config" -o IdentityAgent=none -o IdentitiesOnly=yes "\$@"
 WRAPPER
 chmod +x "$work_real/bin/ssh"
 # scp also needs the throwaway key without reading the operator's real ssh
@@ -231,7 +241,7 @@ chmod +x "$work_real/bin/ssh"
 # It gets -F here; the port still MUST come from RemoteMachine's -P argv.
 cat > "$work_real/bin/scp" <<WRAPPER
 #!/bin/sh
-exec /usr/bin/scp -F "$work_real/sshhome/.ssh/config" "\$@"
+exec /usr/bin/scp -F "$work_real/sshhome/.ssh/config" -o IdentityAgent=none -o IdentitiesOnly=yes "\$@"
 WRAPPER
 chmod +x "$work_real/bin/scp"
 
