@@ -77,6 +77,17 @@ assert_eq 'missing CLI exits zero' 0 "$rc"
 assert_eq 'missing CLI is exactly the expected line' 'hyperdrive: cadence is session-end but the hyper CLI is not installed' "$out"
 out="$(PATH="$SYSTEM_PATH" run_hook "$FIX/outside")"
 assert_eq 'missing CLI outside space is silent' '' "$out"
+out="$(LIB_MODE=outdated run_hook "$space/notes")"; rc=$?
+assert_eq 'outdated CLI exits zero' 0 "$rc"
+assert_eq 'outdated CLI is one line' 1 "$(printf '%s\n' "$out" | wc -l | tr -d ' ')"
+assert_contains 'outdated CLI says so' "$out" 'hyperdrive: cadence is session-end but the installed hyper CLI is too old'
+out="$(LIB_MODE=nowhere run_hook "$space/notes")"; rc=$?
+assert_eq 'unloadable library exits zero' 0 "$rc"
+assert_eq 'unloadable library is one line' 1 "$(printf '%s\n' "$out" | wc -l | tr -d ' ')"
+assert_contains 'unloadable library says so' "$out" 'could not provide hyper-lib.sh'
+out="$(LIB_MODE=outdated git --git-dir="$space/.hyper/space.git" config hyper.cadence manual; LIB_MODE=outdated run_hook "$space/notes")"
+assert_eq 'outdated CLI with manual cadence is silent' '' "$out"
+assert_ok 'no worker was started without a loadable library' test ! -f "$HOOK_LOG"
 git --git-dir="$space/.hyper/space.git" config hyper.cadence session-end
 
 # The foreground returns at once; the worker gets argv and the exact payload.
