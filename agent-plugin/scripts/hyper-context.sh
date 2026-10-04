@@ -200,7 +200,15 @@ fi
 # and best-effort: any problem reading it prints nothing. Only the outcome and
 # time are echoed — the detail can quote file names from synced space content,
 # and this text goes straight into the agent's context.
-last_end="$(tail -n 1 "$root/.hyper/space.git/session-end.log" 2>/dev/null)" || last_end=""
+# Only a regular file is read: `tail` on a FIFO or a device would block until
+# the hook timeout killed the whole SessionStart context. A symlink is skipped
+# too (the worker never writes one). The check and the read are not atomic;
+# only a local writer of .hyper/space.git could race them.
+end_log="$root/.hyper/space.git/session-end.log"
+last_end=""
+if [[ -f "$end_log" && ! -L "$end_log" ]]; then
+  last_end="$(tail -n 1 "$end_log" 2>/dev/null)" || last_end=""
+fi
 IFS=$'\t' read -r end_at _ end_outcome _ <<<"$last_end"
 case "${end_outcome:-}" in
   refused|push-failed|failed)
