@@ -193,18 +193,24 @@ wants `--stop`, which ends it — the user's call), a session another machine
 owns or already moved to the target, a leftover marker, a target copy
 holding uncommitted work (untracked files included), a target untracked or
 ignored entry (a `.env`, say) that the copy would overwrite with different
-content or a different type, and, for a plain repo, a target ref this machine
-doesn't have or is behind on — the last five are what `--force` overrides.
+content or a different type, or a target tracked directory where this
+machine has a file, and, for a plain repo, a target ref at a commit this
+machine lacks or none of its refs reach (a remote-tracking ref or tag only
+the target has passes when its commit is reachable here) — the last five
+are what `--force` overrides.
 `--force` on a **space worktree** first saves the target's tracked changes
 there as a stash; on a **plain repo** the tracked changes are not saved, its
 refs are saved under `refs/hyper-warp-backup/<id>/` when the ref check found
-something, and the rest of its `.git` (config, `info/exclude`, hooks) is
+something (kept as loose refs across later warps, even after a `git
+pack-refs` there), and the rest of its `.git` (config, `info/exclude`, hooks) is
 replaced by this machine's. In both, the colliding untracked or ignored
-entries are first copied to `hyper-warp-backup/<session id>-<start time>/` in
+entries, and tracked directories where this machine has a file, are first
+copied to `hyper-warp-backup/<session id>-<start time>/` in
 the target repo's git directory (one of a different type is then removed
 there), and warp prints where. A merge, rebase, cherry-pick, revert or
 bisect in progress, unresolved conflicts, or a changed submodule in the
-target's copy are refused even with `--force`. Excluded by default (and never copied): `node_modules`, `_build`,
+target's copy, and a plain repo using the reftable ref format there, are
+refused even with `--force`. Excluded by default (and never copied): `node_modules`, `_build`,
 `deps`, `target`, `dist`, `.turbo`, `.cache`, `.next`. `--dry-run` prints
 every step and changes nothing.
 

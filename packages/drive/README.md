@@ -156,25 +156,31 @@ ownership unknown, when the target's worktree or repo has uncommitted
 work (including untracked files), when the copy would overwrite an
 untracked or ignored entry there (a `.env`, say) with different content or
 with a different type (a file or symlink on one side, a directory on the
-other); identical files and excluded paths don't count. For a plain repo it
-also refuses when the target has a ref this machine doesn't have, or one
-with commits this machine's ref doesn't contain (or a detached HEAD this
-machine's HEAD doesn't contain). With `--force`, a dirty space worktree's
+other), or when the target has a directory git tracks where this machine
+has a file or symlink; identical files and excluded paths don't count (a
+tracked file there where this machine has a directory is not refused: git
+has it, and the copy replaces it). For a plain repo it also refuses when a
+target ref (or a detached HEAD) points at a commit this machine doesn't
+have, or has but reaches from none of its refs; a ref only the target has
+(a remote-tracking ref or a tag it fetched more recently) passes when its
+commit is here and reachable. With `--force`, a dirty space worktree's
 tracked changes are first saved on the target in a stash (a plain repo's are
 not saved); a plain repo's refs (and a detached HEAD) are first saved there
 under `refs/hyper-warp-backup/<session id>-<start time>/` when that check
-found something; and every colliding untracked or ignored entry is first
-copied (`cp -pPR`) to `hyper-warp-backup/<session id>-<start time>/` inside
+found something; and every colliding untracked or ignored entry, and every
+tracked directory where this machine has a file, is first copied (`cp -pPR`) to `hyper-warp-backup/<session id>-<start time>/` inside
 the target repo's git directory (that directory and its parent mode 0700),
 an entry of a different type then removed there (a symlink is removed, not
-followed); warp prints where and how many. It
-refuses, whatever `--force` says, when the session is still running here
+followed); warp prints where and how many. That also puts right a target an
+older warp left half-way (its `.git` already this machine's, the directory
+still there). It refuses, whatever `--force` says, when the session is still running here
 (only `--stop` gets past that, and it ends that process), when the space is
 missing from the hyperdrive manifest, a path cannot be quoted identically on
 both platforms, the target's Herdr server does not answer, the target would
 reject the branch push, or the target's worktree or repo has a merge,
 rebase, cherry-pick, revert or bisect in progress, unresolved conflicts, or
-a changed submodule. `--dry-run` prints every step and changes
+a changed submodule, or (a plain repo) keeps its refs in the reftable format
+(`extensions.refStorage=reftable`). `--dry-run` prints every step and changes
 nothing.
 
 ### `hyper machine` — bring a machine to parity
@@ -231,10 +237,15 @@ tooling).
   Ignored files inside a submodule of the target are not looked at.
 - **A plain repo's `.git` is merged file by file too:** the target's
   `.git/config`, `info/exclude`, hooks, `HEAD`, index and `packed-refs` are
-  replaced by this machine's. Saved refs under `refs/hyper-warp-backup/` stay
-  safe from later warps only while they are loose ref files: once `git
-  pack-refs` (or `gc`) packs them, the next plain-repo warp replaces
-  `packed-refs` and drops them.
+  replaced by this machine's. Saved refs under `refs/hyper-warp-backup/` are
+  kept: the copy leaves that directory alone, and before every plain-repo
+  copy, saved refs a `git pack-refs` (or `gc`) moved into `packed-refs` are
+  written back as loose refs there. A ref only the target has can be dropped
+  by the copy (when it was packed there); the refs check only lets that
+  happen when this machine's refs still reach its commit. Loose ref files
+  only the target has are kept too, so a target branch ref that is loose
+  there but packed here keeps pointing at the target's commit after the
+  copy.
 - **The collision comparison has a 5-minute limit** (about 3,000 files per
   6 s, measured in a container): past roughly 100,000 candidate files warp
   refuses with "couldn't compare".
