@@ -1,5 +1,17 @@
 {
 	"hooks": {
+		"SessionEnd": [
+			{
+				"matcher": "*",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hyper-drive-session-end.sh\"",
+						"timeout": 60
+					}
+				]
+			}
+		],
 		"SessionStart": [
 			{
 				"matcher": "*",

@@ -179,6 +179,9 @@ export async function commitSpace(
 	message: string,
 	allowSecrets: string[] = [],
 	caller: "init" | "daily" = "daily",
+	reportWarning: (message: string) => void = (message) => {
+		process.stderr.write(message);
+	},
 ): Promise<SpaceCommitResult> {
 	if (message.trim() === "")
 		throw new SpaceGitError(
@@ -205,7 +208,7 @@ export async function commitSpace(
 			spaceGit(root, ["rm", "--cached", "-q", "-f", "--", `:(literal)${path}`]);
 		}
 		for (const path of nested) {
-			process.stderr.write(
+			reportWarning(
 				`warning: ${escapeControlCharacters(path)} contains its own git repository; its files are not saved in the space.\n`,
 			);
 		}
@@ -228,11 +231,11 @@ export async function commitSpace(
 		const inspection = await inspectStagedFiles(root, staged, allowSecrets);
 		const { secrets, allowedSecrets, largeFiles } = inspection;
 		for (const path of allowedSecrets)
-			process.stderr.write(
+			reportWarning(
 				`warning: allowing secret path ${quoteForTerminal(path)} as explicitly requested.\n`,
 			);
 		for (const path of largeFiles)
-			process.stderr.write(
+			reportWarning(
 				`warning: ${quoteForTerminal(path)} is above 50 MB; committing it will make this space's history larger.\n`,
 			);
 		if (secrets.length > 0) {
@@ -266,7 +269,7 @@ export async function commitSpace(
 				);
 			}
 		} else if (unborn) {
-			process.stderr.write(
+			reportWarning(
 				`warning: the allowlist matched no files in ${escapeControlCharacters(root)}, so there is nothing to commit and no branch to push.\n`,
 			);
 		}
