@@ -690,6 +690,25 @@ export function fetchSpaceClone(spaceRoot: string, branch: string): void {
 	}
 }
 
+/** Strip `user:password@` userinfo from anything we echo back to a user. */
+export function redactGitSecrets(value: string): string {
+	const at = value.lastIndexOf("@");
+	if (at < 0) return value;
+	// Mask the whole credential span, even when whitespace makes the
+	// authority unparseable: a diagnostic that leaks a password is worse than
+	// one that hides a username.
+	const scheme = value.indexOf("://");
+	const start = scheme >= 0 && scheme < at ? scheme + 3 : 0;
+	return `${value.slice(0, start)}[redacted]@${value.slice(at + 1)}`;
+}
+
+export interface CloneProjectResult {
+	/** The branch actually checked out: `default_branch`, or the remote's HEAD. */
+	branch: string;
+	requestedBranch: string;
+	fellBack: boolean;
+}
+
 /**
  * Clone-time ONLY project provisioning. These are project git operations, not
  * space history operations: an explicit project git-dir, never the space's.
@@ -699,23 +718,30 @@ export function cloneProjectRepoBare(
 	gitDir: string,
 	url: string,
 	defaultBranch: string,
-	options: { allowLocal: boolean; interactive?: boolean } = { allowLocal: false },
-): void {
+	options: { allowLocal: boolean; interactive?: boolean; label?: string } = {
+		allowLocal: false,
+	},
+): CloneProjectResult {
 	if (!checkProjectBranchName(defaultBranch))
 		throw new SpaceGitError("Invalid project default branch; repair the manifest before cloning.");
 	if (existsSync(gitDir))
 		throw new SpaceGitError(
 			`A project repository already exists at ${gitDir}. Choose an empty clone target.`,
 		);
+	const label = options.label ? `${options.label}: ` : "";
+	const safeUrl = redactGitSecrets(url);
 	const interactive = options.interactive ?? !!(process.stdin.isTTY && process.stderr.isTTY);
 	const env = cleanGitEnv();
 	env.GIT_TERMINAL_PROMPT = interactive ? "1" : "0";
 	// Also defeat inherited protocol.<helper>.allow and URL rewrite settings.
 	env.GIT_ALLOW_PROTOCOL = options.allowLocal ? "https:ssh:file" : "https:ssh";
-	if (!interactive)
-		env.GIT_SSH_COMMAND = env.GIT_SSH_COMMAND
-			? `${env.GIT_SSH_COMMAND} -o BatchMode=yes`
-			: "ssh -o BatchMode=yes";
+	if (!interactive && env.GIT_SSH === undefined) {
+		// A credential that never prompts is the point of BatchMode, but the
+		// user may rely on a specific SSH binary or identity. GIT_SSH is left
+		// alone entirely: it names a wrapper that need not understand -o.
+		const configured = env.GIT_SSH_COMMAND || readConfiguredSsh(env);
+		env.GIT_SSH_COMMAND = configured ? `${configured} -o BatchMode=yes` : "ssh -o BatchMode=yes";
+	}
 	const protocols = [
 		"-c",
 		"core.fsmonitor=false",
@@ -729,7 +755,7 @@ export function cloneProjectRepoBare(
 		"protocol.ssh.allow=always",
 		...(options.allowLocal ? ["-c", "protocol.file.allow=always"] : []),
 	];
-	const run = (args: string[]): void => {
+	const run = (args: string[]): string => {
 		const result = spawnSync("git", [...protocols, ...args], {
 			encoding: "utf8",
 			env,
@@ -739,10 +765,18 @@ export function cloneProjectRepoBare(
 			throw new SpaceGitInterruptedError(result.signal);
 		}
 		if (result.error || result.status !== 0) {
+			const detail = (result.stderr || result.stdout || "").trim();
 			throw new SpaceGitError(
-				`I couldn't recreate the project repository at ${gitDir}. Check its URL, access and default branch, then retry the clone. ${interactive ? "See git's output above." : "Credential prompts are disabled; configure noninteractive credentials first."}`,
+				`I couldn't recreate the project repository for ${label}${safeUrl} at ${gitDir}. ` +
+					`Check its URL, access and default branch, then retry the clone. ` +
+					(interactive
+						? "See git's output above."
+						: detail === ""
+							? "git said nothing; credential prompts are disabled, so configure noninteractive credentials first."
+							: `git said: ${redactGitSecrets(detail)}`),
 			);
 		}
+		return (result.stdout ?? "").trim();
 	};
 	// Reserve ownership atomically; a raced-in user directory is never removed.
 	mkdirSync(gitDir);
@@ -757,11 +791,77 @@ export function cloneProjectRepoBare(
 			"+refs/heads/*:refs/remotes/origin/*",
 		]);
 		run(["--git-dir", gitDir, "fetch", ...(interactive ? ["--progress"] : []), "origin"]);
-		run(["--git-dir", gitDir, "symbolic-ref", "HEAD", `refs/heads/${defaultBranch}`]);
+		const branch = resolveCloneBranch(gitDir, url, defaultBranch, run, label, safeUrl);
+		run(["--git-dir", gitDir, "symbolic-ref", "HEAD", `refs/heads/${branch}`]);
+		return { branch, requestedBranch: defaultBranch, fellBack: branch !== defaultBranch };
 	} catch (error) {
 		rmSync(gitDir, { recursive: true, force: true });
 		throw error;
 	}
+}
+
+/** The user's own `core.sshCommand`, or "" — never an error, never fatal. */
+function readConfiguredSsh(env: NodeJS.ProcessEnv): string {
+	const result = spawnSync(
+		"git",
+		[
+			"-c",
+			"core.fsmonitor=false",
+			"-c",
+			"core.hooksPath=/dev/null",
+			"config",
+			"--get",
+			"core.sshCommand",
+		],
+		{ encoding: "utf8", env },
+	);
+	if (result.signal === "SIGINT" || result.signal === "SIGTERM") {
+		throw new SpaceGitInterruptedError(result.signal);
+	}
+	return result.status === 0 ? (result.stdout ?? "").trim() : "";
+}
+
+/**
+ * A manifest `default_branch` the remote does not have must not become a space's
+ * HEAD: every later fetch, worktree and status would follow a ref that is not
+ * there. Fall back to the remote's own HEAD branch and report both names.
+ */
+function resolveCloneBranch(
+	gitDir: string,
+	url: string,
+	requested: string,
+	run: (args: string[]) => string,
+	label: string,
+	safeUrl: string,
+): string {
+	const exists = (branch: string): boolean => {
+		try {
+			run([
+				"--git-dir",
+				gitDir,
+				"rev-parse",
+				"--verify",
+				"--quiet",
+				`refs/remotes/origin/${branch}`,
+			]);
+			return true;
+		} catch {
+			return false;
+		}
+	};
+	if (exists(requested)) return requested;
+	// `ls-remote --symref HEAD` is the remote's own answer, not a guess from
+	// our ref advertisement order.
+	const head = run(["ls-remote", "--symref", "--", url, "HEAD"])
+		.split("\n")
+		// `ref: refs/heads/<name>\tHEAD` — the name stops at the tab.
+		.map((line) => /^ref:\s+refs\/heads\/(\S+)/.exec(line)?.[1])
+		.find((name): name is string => name !== undefined);
+	if (head && exists(head)) return head;
+	throw new SpaceGitError(
+		`The manifest names ${JSON.stringify(requested)} as the default branch for ${label}${safeUrl}, but the remote has no such branch and no usable HEAD either. ` +
+			`Fix the project's default branch or its manifest entry, then retry the clone.`,
+	);
 }
 
 /** Pure validation: no repository or network access, and no directory creation. */

@@ -119,13 +119,18 @@ function cloneLibrary(
 function cloneUntrustedConfiguration(paths: readonly string[]): string[] {
 	return paths.filter((path) => {
 		const lower = path.normalize("NFC").toLowerCase();
-		return (
+		if (
 			["claude.md", "agents.md", "hyper.md"].includes(lower.split("/").at(-1)!) ||
 			lower.startsWith("bin/") ||
-			lower.startsWith(".config/") ||
-			(lower.startsWith(".claude/") &&
-				lower !== ".claude/memory" &&
-				!lower.startsWith(".claude/memory/"))
+			lower.startsWith(".config/")
+		)
+			return true;
+		// Memory is included for its own sake: the generated HYPER.md tells
+		// agents to read it, so it steers behaviour like any other instruction.
+		return (
+			(lower.startsWith(".claude/") || lower.startsWith(".hyper/")) &&
+			lower !== ".claude/memory" &&
+			!lower.startsWith(".claude/memory/")
 		);
 	});
 }
@@ -143,6 +148,15 @@ export interface CloneSpaceResult {
 	libraryWrites: string[];
 	warnings: string[];
 	untrustedConfiguration: string[];
+}
+
+/** A declined prompt is not an error to fix: exit 1 with the plain reason. */
+export class CloneCancelledError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "CloneCancelledError";
+		this.stack = message;
+	}
 }
 
 export interface CloneSpaceOptions {
@@ -209,7 +223,7 @@ export async function cloneSpace(
 						`The manifest proposes ${root} (recorded as ${JSON.stringify(entry.path)}). Review that target and pass --yes, or provide an explicit path.`,
 					);
 				if (!(await options.confirmTarget(root, entry.path)))
-					throw new Error("Clone cancelled; no target was created.");
+					throw new CloneCancelledError("Clone cancelled; no target was created.");
 			}
 		} else {
 			let parent = dirname(root);
@@ -264,7 +278,11 @@ export async function cloneSpace(
 			);
 		// Checkout privately, then publish files with exclusive creation. A
 		// raced-in user file cannot be overwritten or mistaken for our output.
-		const staging = mkdtempSync(join(root, ".hyper", "clone-"));
+		// Inside the space's own private git dir: `.hyper/space.git/` is
+		// reserved and already ignored, so a leftover staging directory from a
+		// killed clone can never reach `hyper space commit`, and rollback
+		// removes it with the git dir it belongs to.
+		const staging = mkdtempSync(join(root, ".hyper", "space.git", "clone-"));
 		ownedGitDirs.add(staging);
 		spaceGit(root, ["--work-tree", staging, "checkout", "-B", entry.branch, incoming.tip, "--"]);
 
@@ -333,11 +351,16 @@ export async function cloneSpace(
 				ownedDirectories.add(repoRoot);
 			}
 			const gitDir = join(repoRoot, ".git");
-			cloneProjectRepoBare(gitDir, repo.url, repo.default_branch, {
+			const cloned = cloneProjectRepoBare(gitDir, repo.url, repo.default_branch, {
 				allowLocal: isLocalDriveRemote(config.remote),
+				label: repo.slug ?? name,
 			});
 			ownedGitDirs.add(gitDir);
-			cloneLibrary("ensure_worktrunk_config", [gitDir, repo.default_branch]);
+			if (cloned.fellBack)
+				result.warnings.push(
+					`The manifest names ${JSON.stringify(cloned.requestedBranch)} as ${repo.slug ?? name}'s default branch, but that branch is not on the remote; using its HEAD branch ${JSON.stringify(cloned.branch)} instead. Fix the branch on the original machine and run hyper space init --refresh.`,
+				);
+			cloneLibrary("ensure_worktrunk_config", [gitDir, cloned.branch]);
 			result.libraryWrites.push(join(gitDir, "config"));
 			if (entry.layout === "multi") {
 				mkdirSync(join(repoRoot, "worktrees"));
@@ -408,6 +431,7 @@ export async function cloneSpace(
 				error.signal,
 				`Clone interrupted; ${failures.length ? "cleanup is incomplete" : "the target was restored"}. Run the command again when ready.${cleanup}`,
 			);
+		if (error instanceof CloneCancelledError) throw error;
 		throw new SpaceGitError(
 			`I couldn't clone ${JSON.stringify(name)}: ${detail}${cleanup} Once the problem is fixed, run hyper space clone again.`,
 		);

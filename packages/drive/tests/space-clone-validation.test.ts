@@ -116,6 +116,10 @@ describe("selected manifest entry validation", () => {
 		"ftp://example.invalid/repo",
 		"--upload-pack=evil",
 		"file://otherhost/private",
+		"ssh://-oProxyCommand=touch-pwned@example.invalid/repo",
+		"https://-oProxyCommand=touch-pwned@example.invalid/repo",
+		"git@-oProxyCommand=touch-pwned@example.invalid:repo",
+		"-oProxyCommand=touch-pwned@example.invalid:repo",
 	])("rejects transport %s even for a local drive", (url) => {
 		expect(isAllowedProjectUrl(url, true)).toBe(false);
 	});
@@ -125,6 +129,18 @@ describe("selected manifest entry validation", () => {
 		"git@example.invalid:repo",
 	])("allows %s", (url) => {
 		expect(isAllowedProjectUrl(url, false)).toBe(true);
+	});
+	it("does not double a full stop when a detail already ends in one", () => {
+		const value = entry();
+		value.tracked = ["../outside"];
+		try {
+			validateCloneEntry(value, "https://example.invalid/drive");
+			throw new Error("should refuse");
+		} catch (error) {
+			const message = String(error);
+			expect(message).toContain('contains "..". Repair the manifest');
+			expect(message).not.toContain('".."..');
+		}
 	});
 	it("recognizes only local drive transports as the local trust domain", () => {
 		for (const value of [join(root, "drive.git"), "../drive.git", "file:///tmp/drive.git"])
