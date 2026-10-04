@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
+	chmodSync,
 	existsSync,
 	lstatSync,
 	mkdirSync,
@@ -199,6 +200,38 @@ describe("untrusted clone branch", () => {
 		const result = run(["sample", target, "--json"]);
 		success(result);
 		expect(JSON.parse(result.stdout).untrustedConfiguration).toContain(".claude/memory/note.md");
+	});
+	it("names worktrunk configuration, a nested CLAUDE.local.md and an executable outside bin/", () => {
+		const source = seed();
+		for (const path of ["notes/sub/CLAUDE.local.md", "data/tool.sh"]) {
+			mkdirSync(dirname(join(source, path)), { recursive: true });
+			writeFileSync(join(source, path), "review me\n");
+		}
+		chmodSync(join(source, "data/tool.sh"), 0o755);
+		publishChange(source, "notes/sub/CLAUDE.local.md", "review me\n");
+		publishChange(source, "data/tool.sh", "review me\n");
+		useMachine("second");
+		const result = run(["sample", join(fixture.home, "destination"), "--json"]);
+		success(result);
+		const warned: string[] = JSON.parse(result.stdout).untrustedConfiguration;
+		expect(warned).toContain(".config/wt.toml");
+		expect(warned).toContain("notes/sub/CLAUDE.local.md");
+		// Executable outside bin/ can run when an agent reaches for it.
+		expect(warned).toContain("data/tool.sh");
+	});
+	it("names a change hiding behind a directory symlink", () => {
+		const source = seed();
+		mkdirSync(join(source, "notes", "cmds"), { recursive: true });
+		writeFileSync(join(source, "notes", "cmds", "one.md"), "# command\n");
+		symlinkSync("../notes/cmds", join(source, ".claude", "commands"));
+		publishChange(source, "notes/cmds/one.md", "# command\n");
+		publishChange(source, ".claude/commands", "../notes/cmds");
+		useMachine("second");
+		const result = run(["sample", join(fixture.home, "destination"), "--json"]);
+		success(result);
+		const warned: string[] = JSON.parse(result.stdout).untrustedConfiguration;
+		expect(warned).toContain(".claude/commands");
+		expect(warned).toContain("notes/cmds/one.md");
 	});
 	it("stages into the space's own git dir, never at .hyper/clone-*", () => {
 		seed();
