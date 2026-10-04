@@ -18,6 +18,7 @@ import {
 	describeSpace,
 	describeStep,
 	describeWarp,
+	excludedWithTrackedFiles,
 	executeWarp,
 	findStrayMarker,
 	listPaths,
@@ -129,6 +130,7 @@ function inputs(overrides: Partial<WarpInputs> = {}): WarpInputs {
 		cwdKind: "plain-dir",
 		space: null,
 		excludes: ["node_modules"],
+		trackedUnderExcludes: [],
 		syncSession: null,
 		agentSuffix: "k1",
 		startedAt: "2026-10-04T12:00:00.000Z",
@@ -1340,4 +1342,46 @@ describe("a pid that exited between listing and stopping (review 2, item 3)", ()
 			expect(still.markers).toEqual([]);
 		});
 	}
+});
+
+describe("tracked files under excluded directories (review 2, item 4)", () => {
+	it("says in the plan that they show as deleted on the target, naming where there are some", () => {
+		const notes = planOf({
+			cwdKind: "git-repo",
+			excludes: ["node_modules", "dist", "target"],
+			trackedUnderExcludes: ["dist"],
+		}).notes.join("\n");
+		expect(notes).toContain("Excluded directories (node_modules, dist, target) are not copied");
+		expect(notes).toContain("show as deleted in `git status` on netcup");
+		expect(notes).toContain("This repository tracks files under: dist.");
+		expect(spacePlan({ excludes: ["dist"] }).notes.join("\n")).toContain("tracks none there");
+	});
+
+	it("says nothing of git for a plain directory", () => {
+		expect(planOf({ excludes: ["dist"] }).notes.join("\n")).not.toContain("git status` on");
+	});
+
+	it("asks git which exclusions hold tracked files, at any depth", () => {
+		const dir = realpathSync(mkdtempSync(join(tmpdir(), "warp-tracked-")));
+		const git = isolatedGit(dir, dir);
+		try {
+			git("init", "-q", "repo");
+			const repo = join(dir, "repo");
+			for (const path of [
+				"dist/app.js",
+				"pkg/node_modules/x/index.js",
+				"target/ignored.o",
+				"src/a.ts",
+			]) {
+				spawnSync("mkdir", ["-p", join(repo, path, "..")]);
+				writeFileSync(join(repo, path), "x\n");
+			}
+			git("-C", "repo", "add", "dist/app.js", "pkg/node_modules/x/index.js", "src/a.ts");
+			expect(
+				excludedWithTrackedFiles(repo, ["node_modules", "dist", "target", ".turbo", "*.log"]),
+			).toEqual(["node_modules", "dist"]);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
 });
