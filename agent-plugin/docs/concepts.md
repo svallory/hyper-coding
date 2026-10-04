@@ -27,8 +27,11 @@ invariants:
 
 What a space is *for*: one object store per repository shared across
 branches, one canonical home for worktrees, and a place for files that must
-never reach the remote. The corollary: **nothing local-only is backed up** —
-a dump in `data/` exists on exactly one disk.
+never reach the project's remote. The corollary used to be **nothing
+local-only is backed up** — a dump in `data/` existed on exactly one disk.
+That holds until `hyper space init`: once the space has a hyperdrive branch,
+the allowlisted directories are backed up to the user's private hyperdrive
+repository (still never to the project's remote).
 
 ## Layout
 
@@ -174,7 +177,7 @@ single source of truth for the set. The four non-worktree members:
 
 | Dir | Purpose | Loss tolerance |
 |---|---|---|
-| `data/` | DB dumps, fixtures, large blobs | would hurt to lose — but still not backed up |
+| `data/` | DB dumps, fixtures, large blobs | would hurt to lose — backed up only once the space has a hyperdrive branch |
 | `notes/` | briefs, handoffs, working docs, plan specs | same |
 | `scratch/` | throwaway files | disposable; may be deleted without warning |
 | `bin/` | local helper scripts for this project | same as data |
@@ -183,8 +186,9 @@ Rule of thumb between `notes/` and `scratch/`: if losing it would cost more
 than ten minutes, it is not scratch.
 
 They sit at the space root, which is not a working tree — they are
-uncommittable by construction and never reach the remote. Nothing in them is
-committed **or backed up**. And nothing in the plugin ever moves or deletes
+uncommittable by construction and never reach the project's remote. Without
+a hyperdrive branch, nothing in them is committed **or backed up**. And
+nothing in the plugin ever moves or deletes
 their contents — `adopt` *suggests* where loose files belong; a human acts.
 
 ## Stack

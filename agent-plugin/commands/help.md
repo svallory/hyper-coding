@@ -30,6 +30,7 @@ for Claude Code. Two ideas:
 
 | Command | What it does |
 |---|---|
+| `/hyper:help` | this page — what the plugin is, all commands, the standard flow |
 | `/hyper:init <repo-url>` | create a new space from a remote — or `--new <name>` from nothing — or `--multi <name>` for an empty multi-repo space — or `<repo-url> --slug <slug>` to add a repo to an existing multi-repo space |
 | `/hyper:adopt [path]` | bring an existing repo into the layout — scaffolds a bare repo (single- or multi-repo), **converts** an ordinary checkout (dry run first, four data-safety guarantees) |
 | `/hyper:tools` | detect the project's toolchain, wire the per-edit check hook, recommend new tools by aspect |
@@ -37,6 +38,8 @@ for Claude Code. Two ideas:
 | `/hyper:cleanup` | delete what audit found — candidates listed first, confirmed per item; the one command that deletes |
 | `/hyper:plan <feature>` | four-phase spec-driven workflow: Define → Design → Decompose → Develop |
 | `/hyper:gen <template>` | generate files from project templates, verbatim outside marked regions |
+| `/hyper:space <args>` | space history on the user's private hyperdrive: init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
+| `/hyper:warp <machine>` | move a live session to another machine over ssh — a thin relay over `hyper warp` |
 
 Hooks (automatic): SessionStart context injection inside a space; per-edit
 check hook and new-dependency friction hook, both opt-in via

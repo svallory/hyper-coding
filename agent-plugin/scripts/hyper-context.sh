@@ -41,6 +41,15 @@ wt_abs="$root/worktrees"
 marker="HYPER.md"
 [[ ! -f "$root/HYPER.md" && -f "$root/HYPERDEV.md" ]] && marker="HYPERDEV.md"
 
+# The backup sentence must match reality: with a space branch the
+# allowlisted local-only dirs sync to the user's hyperdrive; without one,
+# nothing here is backed up.
+if [[ -d "$root/.hyper/space.git" ]]; then
+  backup_note="Backed up to your hyperdrive on this space's branch (the allowlisted dirs; scratch/ never travels)."
+else
+  backup_note="Nothing here is committed or backed up."
+fi
+
 # Recommend wt only when it is actually installed; otherwise show the raw
 # command so the advice is followable as printed.
 if command -v wt >/dev/null 2>&1; then
@@ -110,7 +119,7 @@ EOF
     rel="${PWD#"$root"/}"
     cat <<EOF
 In \`$rel/\` of multi-repo space $name ($root) — a local-only directory, not a
-worktree. Nothing here is committed or backed up. Code lives in
+worktree. $backup_note Code lives in
 $root/code/<slug>/worktrees/<branch>; repos here: $repos.
 \`wt switch\` runs inside \`code/<slug>/\`, never from the space root.
 EOF
@@ -150,7 +159,7 @@ else
   rel="${PWD#"$root"/}"
   cat <<EOF
 In \`$rel/\` of space $name ($root) — a local-only directory, not a
-worktree. Nothing here is committed or backed up. Code lives in
+worktree. $backup_note Code lives in
 $wt_abs/<branch>.
 EOF
 fi

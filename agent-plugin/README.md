@@ -53,6 +53,15 @@ get a home that is *structurally* incapable of reaching the remote. Space
 files and project files never share a directory: project code lives in a
 worktree, the space's local-only files live beside it.
 
+"Never committed" means the project's remote. A space can still keep its own
+history: `hyper space init` gives it an orphan branch in your private
+**hyperdrive** repository, and from then on the allowlisted directories
+(`notes/`, `data/`, `bin/`, `.hyper/`, `.claude/`) are backed up on the
+cadence you choose (`manual`, `session-end`, or `session-end+push`).
+`scratch/`, `worktrees/` and loose root files never travel. Until that first
+`hyper space init`, the old rule holds: nothing at the space root is backed
+up.
+
 Adopting an ordinary checkout therefore means **converting** it: the repo
 becomes bare, the entire working tree — dirty state, untracked files,
 `node_modules`, everything — moves to `worktrees/<branch>`, and existing
@@ -105,6 +114,8 @@ Without the CLI:
 | `/hyper:tools [project-path]` | Detect the project's own toolchain and wire up the check hook |
 | `/hyper:plan <feature> [phase]` | 4-phase spec-driven workflow — Define, Design, Decompose, Develop — with artifacts in `notes/specs/` |
 | `/hyper:gen [template] [dest]` | Generate files from a project template — deterministic copy, agent authoring only inside marked prompt regions |
+| `/hyper:space [args...]` | Space history on your private hyperdrive — init, commit, push, pull, log, status, list, clone; a thin relay over `hyper space` |
+| `/hyper:warp <machine> [flags]` | Move a live session to another machine over ssh — a thin relay over `hyper warp` |
 
 ## Hooks
 
