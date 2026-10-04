@@ -1255,6 +1255,136 @@ ns7="$(flat "$out" | sed -n 's/.*saved there under \(refs\/hyper-warp-backup\/[^
 pass "with --force t12's commit $t_commit stays reachable from ${ns7}heads/$b7"
 
 echo "# ---------------------------------------------------------------"
+echo "# 19. packed backup refs, ref coverage, tracked directories, reftable (fw-warp-2)"
+echo "# ---------------------------------------------------------------"
+commit7() { git -C "$proj7" add -A && git -C "$proj7" -c user.email=t@e -c user.name=t commit -qm "$1"; }
+
+# Item 2: t12 packs every ref (as gc would), this machine too, and a later
+# warp replaces t12's packed-refs with this machine's.
+ssh_t12 "cd '$proj7' && rm -f t.txt && git pack-refs --all"
+ssh_t12 "test ! -e '$proj7/.git/${ns7}heads/$b7'" || die "the saved ref is still loose after pack-refs"
+ssh_t12 "grep -q ' ${ns7}heads/$b7\$' '$proj7/.git/packed-refs'" || die "the saved ref was not packed"
+git -C "$proj7" pack-refs --all
+mark_mine "$folder7"
+set +e
+out="$(run_hyper "$proj7" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "the warp after pack-refs failed: exit $code: $out"
+ssh_t12 "grep -q 'hyper-warp-backup' '$proj7/.git/packed-refs'" && die "packed-refs was not replaced by this machine's"
+[ "$(ssh_t12 "cat '$proj7/.git/${ns7}heads/$b7'")" = "$t_commit" ] || die "the saved ref was not written back as a loose ref"
+[ "$(ssh_t12 "git -C '$proj7' rev-parse '${ns7}heads/$b7'")" = "$t_commit" ] || die "the saved commit is no longer reachable after pack-refs and a later warp"
+[ "$(ssh_t12 "git -C '$proj7' show '${ns7}heads/$b7:t.txt'")" = "committed only on t12" ] || die "the saved commit lost its content"
+pass "after git pack-refs --all on t12 and a later warp, $t_commit is still reachable from ${ns7}heads/$b7 (a loose ref again; packed-refs is this machine's)"
+
+# Item 4: refs only t12 has, at commits this machine has, are covered.
+here7="$(git -C "$proj7" rev-parse HEAD)"
+ssh_t12 "cd '$proj7' && git update-ref refs/remotes/origin/$b7 HEAD && git tag t-only HEAD \
+  && git -c user.email=t@e -c user.name=t tag -a -m annotated a-only HEAD"
+mark_mine "$folder7"
+set +e
+out="$(run_hyper "$proj7" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "refs only t12 has, at commits this machine has, were refused: exit $code: $out"
+pass "refs/remotes/origin/$b7, a tag and an annotated tag only t12 has, at commits this machine has, pass without --force"
+
+# ...but a ref only t12 has, at a commit this machine lacks, is still refused.
+lack="$(ssh_t12 "cd '$proj7' && git -c user.email=t@e -c user.name=t commit-tree -p HEAD -m 'only on t12 again' 'HEAD^{tree}'")"
+ssh_t12 "git -C '$proj7' update-ref refs/remotes/origin/feature '$lack'"
+mark_mine "$folder7"
+before7="$(target_tree "$proj7")"
+set +e
+out="$(run_hyper "$proj7" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "a ref at a commit this machine lacks was not refused: exit $code: $out"
+listed7="$(printf '%s\n' "$out" | LC_ALL=C sed -e 's/^ › \{3\}//')"
+printf '%s\n' "$listed7" | grep -qx '  refs/remotes/origin/feature (only there)' || die "the refusal does not name the ref: $out"
+printf '%s\n' "$listed7" | grep -q 'refs/remotes/origin/'"$b7"' \|refs/tags/' && die "a covered ref was named: $out"
+[ "$(target_tree "$proj7")" = "$before7" ] || die "the target repo changed after the refusal"
+ssh_t12 "git -C '$proj7' update-ref -d refs/remotes/origin/feature"
+pass "a ref only t12 has at a commit this machine lacks is still refused (refs/remotes/origin/feature named); t12's repo is byte-identical afterwards"
+
+# Item 1: a TRACKED directory on t12 where this machine has a file. t12 is
+# clean, so nothing there is untracked: only the tracked-directory listing
+# sees it.
+mkdir -p "$proj7/trk"
+printf 'tracked in a directory\n' > "$proj7/trk/t.txt"
+commit7 "trk dir"
+mark_mine "$folder7"
+run_hyper "$proj7" warp t12 >/dev/null || die "the warp that brings trk/ failed"
+git -C "$proj7" rm -q -r trk
+printf 'now a file here\n' > "$proj7/trk"
+commit7 "trk file"
+mark_mine "$folder7"
+before7="$(target_tree "$proj7")"
+set +e
+out="$(run_hyper "$proj7" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 2 ] || die "a tracked directory where this machine has a file was not refused: exit $code: $out"
+printf '%s\n' "$out" | LC_ALL=C sed -e 's/^ › \{3\}//' | grep -qx '  trk (a directory there, a file here)' || die "trk not named: $out"
+flat "$out" | grep -q "Nothing was changed on either machine" || die "the refusal does not say nothing changed: $out"
+[ "$(target_tree "$proj7")" = "$before7" ] || die "the target repo changed after the refusal"
+pass "a tracked directory on t12 where this machine has a file is refused without --force before any change (trk named); t12's repo is byte-identical afterwards"
+
+# The half state the old warp left: t12's .git already this machine's, trk/
+# still a directory there (what a copy that failed on trk leaves).
+COPYFILE_DISABLE=1 tar -C "$proj7" -cf - .git | ssh_t12 "tar -C '$proj7' -xf -"
+[ "$(ssh_t12 "git -C '$proj7' status --porcelain")" = " D trk" ] || die "the half state was not reproduced"
+mark_mine "$folder7"
+set +e
+out="$(run_hyper "$proj7" warp t12 --force 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "--force did not recover the half-way target: exit $code: $out"
+backup7b="$(flat "$out" | sed -n 's/.*(1) were first copied to \(.*hyper-warp-backup\/[^ ]*\) there\..*/\1/p')"
+[ -n "$backup7b" ] || die "warp did not say where trk went: $out"
+[ "$(ssh_t12 "cat '$backup7b/trk/t.txt'")" = "tracked in a directory" ] || die "trk/t.txt is not in the backup"
+[ "$(ssh_t12 "cat '$proj7/trk'")" = "now a file here" ] || die "trk did not become this machine's file"
+[ -z "$(ssh_t12 "git -C '$proj7' status --porcelain")" ] || die "t12's repo is not clean after the recovery"
+pass "a t12 left half-way (its .git this machine's, trk/ still a directory) recovers with --force: trk/ copied to $backup7b, git status clean"
+
+# The reverse: a tracked FILE on t12 where this machine has a directory. Not a
+# collision: git has the file, and the copy replaces it.
+git -C "$proj7" rm -q trk
+mkdir -p "$proj7/trk"
+printf 'a directory here again\n' > "$proj7/trk/x.txt"
+commit7 "trk dir again"
+mark_mine "$folder7"
+set +e
+out="$(run_hyper "$proj7" warp t12 2>&1)"; code=$?
+set -e
+[ "$code" = 0 ] || die "a tracked file on t12 where this machine has a directory failed: exit $code: $out"
+[ "$(ssh_t12 "cat '$proj7/trk/x.txt'")" = "a directory here again" ] || die "trk/ did not arrive"
+[ -z "$(ssh_t12 "git -C '$proj7' status --porcelain")" ] || die "t12's repo is not clean after the warp"
+pass "a tracked file on t12 where this machine has a directory is not a collision: the copy replaces it and git status is clean"
+
+# Item 3: a reftable repository on t12 is refused with and without --force.
+if ssh_t12 "git init -q --ref-format=reftable /tmp/reftable-probe && rm -rf /tmp/reftable-probe" >/dev/null 2>&1; then
+  proj8="$home_local/work/proj8"
+  mkdir -p "$proj8"
+  git -C "$proj8" init -q
+  printf 'tracked\n' > "$proj8/a.txt"
+  git -C "$proj8" add -A
+  git -C "$proj8" -c user.email=t@e -c user.name=t commit -qm init
+  folder8="$(make_session "$proj8")"
+  target_mkdir "$proj8"
+  ssh_t12 "cd '$proj8' && git init -q --ref-format=reftable && printf 'tracked\n' > a.txt && git add -A \
+    && git -c user.email=t@e -c user.name=t commit -qm init"
+  before8="$(target_tree "$proj8")"
+  for force in "" --force; do
+    set +e
+    out="$(run_hyper "$proj8" warp t12 $force 2>&1)"; code=$?
+    set -e
+    [ "$code" = 2 ] || die "a reftable target was not refused (${force:-no --force}): exit $code: $out"
+    flat "$out" | grep -q "keeps its refs in the reftable format" || die "the refusal does not name reftable: $out"
+    flat "$out" | grep -q "Nothing was changed on either machine" || die "the refusal does not say nothing changed: $out"
+  done
+  [ "$(target_tree "$proj8")" = "$before8" ] || die "the reftable repo changed after the refusal"
+  [ -e "$folder8/$SESSION.warp.json" ] && die "a marker was written by a refused warp"
+  pass "a reftable repository on t12 ($(ssh_t12 'git --version')) is refused with and without --force; nothing changed"
+else
+  echo "# reftable: $(ssh_t12 'git --version') can't create a reftable repository; not tested here"
+fi
+
+echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
 echo "# all $step assertions passed"
 echo "# warp-argv.log (what the fake herdr was called with):"

@@ -21,8 +21,12 @@ import {
 	refsNotCoveredHere,
 	TARGET_CONFLICTED,
 	TARGET_IN_PROGRESS,
+	TARGET_REFTABLE,
 	TARGET_SUBMODULE_CHANGED,
+	targetBackupCopy,
+	targetRefs,
 	targetStashSnapshot,
+	targetUntrackedPaths,
 } from "#services/space-git";
 import {
 	describeFailure,
@@ -667,5 +671,356 @@ describe("the --force stash never runs the target's fsmonitor (PR #51 review, su
 		});
 		expect(result.status, result.stderr).toBe(0);
 		expect(() => statSync(marker)).toThrow();
+	});
+});
+
+/** Run a target script (argv from space-git) here, with the isolated git env. */
+function runScript(argv: string[], input?: string) {
+	return spawnSync(argv[0] as string, argv.slice(1), {
+		encoding: "utf-8",
+		env: { ...process.env, ...env },
+		...(input === undefined ? {} : { input }),
+	});
+}
+
+describe("a tracked directory on the target where this machine has a file (fw-warp-2 item 1)", () => {
+	/**
+	 * Both sides committed `trk/t.txt`; this machine then replaced the
+	 * directory with a file `trk` and committed that. The target is clean, at
+	 * the older commit: nothing there is untracked, so only the tracked-
+	 * directory listing can see the type change.
+	 */
+	function trackedDirectoryHere() {
+		const { src, tgt } = twinRepos();
+		write(join(src, "trk/t.txt"), "tracked in a directory\n");
+		git(src, "add", ".");
+		git(src, "commit", "-q", "-m", "trk dir");
+		git(tgt, "fetch", "-q", "--update-head-ok", src, "main:main");
+		git(tgt, "reset", "-q", "--hard");
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		git(src, "rm", "-q", "-r", "trk");
+		write(join(src, "trk"), "now a file here\n");
+		git(src, "add", "trk");
+		git(src, "commit", "-q", "-m", "trk file");
+		return { src, tgt };
+	}
+
+	it("the listing names the target's tracked directories with a leading /", () => {
+		const { tgt } = trackedDirectoryHere();
+		write(join(tgt, "deep/er/x.txt"), "x\n");
+		git(tgt, "add", ".");
+		git(tgt, "commit", "-q", "-m", "deep");
+		const listed = runScript(targetUntrackedPaths(tgt));
+		expect(listed.status, listed.stderr).toBe(0);
+		const entries = listed.stdout.split("\0").filter(Boolean);
+		expect(entries).toContain("/trk");
+		expect(entries).toContain("/deep/er");
+		// Files at the top level have no parent directory to report.
+		expect(entries.some((entry) => entry === "/" || entry === "/a.txt")).toBe(false);
+	});
+
+	it("refuses without --force before any change, naming the path and the type change", async () => {
+		const { tgt } = trackedDirectoryHere();
+		const before = snapshot(tgt);
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo"));
+		expect(result.failure?.step.summary).toContain("tracked directories");
+		expect(result.failure?.detail).toContain("  trk (a directory there, a file here)");
+		expect(w.changes).toEqual([]);
+		expect(w.log.some((entry) => entry.startsWith("copy"))).toBe(false);
+		expect(snapshot(tgt)).toEqual(before);
+	});
+
+	it("with --force, copies the tracked directory aside, removes it, and the copy writes this machine's file", async () => {
+		const { src, tgt } = trackedDirectoryHere();
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo", { force: true }));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		const backup = join(tgt, ".git/hyper-warp-backup", WARP_ID);
+		expect(readFileSync(join(backup, "trk/t.txt"), "utf-8")).toBe("tracked in a directory\n");
+		expect(readFileSync(join(tgt, "trk"), "utf-8")).toBe("now a file here\n");
+		expect(git(tgt, "rev-parse", "HEAD")).toBe(git(src, "rev-parse", "HEAD"));
+		expect(git(tgt, "status", "--porcelain")).toBe("");
+		expect(result.notices.join("\n")).toContain(`(1) were first copied to ${backup}`);
+	});
+
+	it("a target left half-way (its .git already this machine's, the directory still there) recovers with --force", async () => {
+		const { src, tgt } = trackedDirectoryHere();
+		// What the old behaviour left: the copy replaced .git, then failed on trk.
+		spawnSync("cp", ["-pR", `${join(src, ".git")}/.`, join(tgt, ".git")]);
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		expect(git(tgt, "status", "--porcelain")).toBe(" D trk\n");
+		// Not untracked any more: the index records trk as a file.
+		expect(runScript(targetUntrackedPaths(tgt)).stdout.split("\0")).toContain("/trk");
+		const before = snapshot(tgt);
+		const refused = world();
+		const without = await refused.run(plainRepoPlan("work/repo"));
+		expect(without.failure?.detail).toContain("uncommitted work");
+		expect(refused.changes).toEqual([]);
+		expect(snapshot(tgt)).toEqual(before);
+		const result = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(readFileSync(join(tgt, "trk"), "utf-8")).toBe("now a file here\n");
+		expect(readFileSync(join(tgt, ".git/hyper-warp-backup", WARP_ID, "trk/t.txt"), "utf-8")).toBe(
+			"tracked in a directory\n",
+		);
+		expect(git(tgt, "status", "--porcelain")).toBe("");
+	});
+
+	it("the reverse (a tracked FILE there, a directory here) is not a collision: git has the file", async () => {
+		const { src, tgt } = twinRepos();
+		write(join(src, "rev"), "a tracked file\n");
+		git(src, "add", ".");
+		git(src, "commit", "-q", "-m", "rev file");
+		git(tgt, "fetch", "-q", "--update-head-ok", src, "main:main");
+		git(tgt, "reset", "-q", "--hard");
+		git(src, "rm", "-q", "rev");
+		write(join(src, "rev/inner.txt"), "now a directory here\n");
+		git(src, "add", ".");
+		git(src, "commit", "-q", "-m", "rev dir");
+		const step = plainRepoPlan("work/repo").steps.find(
+			(entry): entry is Extract<WarpStep, { kind: "probe" }> =>
+				entry.kind === "probe" && entry.id === "collisions",
+		) as Extract<WarpStep, { kind: "probe" }>;
+		const found = await findCollisions(mappedRunner([]), step.argv, {
+			src,
+			dst: src,
+			excludes: [],
+			compareArgv: targetCompareFiles(src),
+			refuse: true,
+		});
+		expect(found).toEqual({ ok: true, collisions: [] });
+	});
+
+	it("an excluded tracked directory is not a candidate", async () => {
+		const { src, tgt } = twinRepos();
+		write(join(tgt, "dist/keep.txt"), "tracked under an excluded dir\n");
+		git(tgt, "add", "-f", "dist");
+		git(tgt, "commit", "-q", "-m", "dist");
+		write(join(src, "dist"), "a file here, but the copy excludes dist\n");
+		const found = await findCollisions(mappedRunner([]), targetUntrackedPaths(src), {
+			src,
+			dst: src,
+			excludes: ["dist"],
+			compareArgv: targetCompareFiles(src),
+			refuse: true,
+		});
+		expect(found).toEqual({ ok: true, collisions: [] });
+	});
+});
+
+describe("saved refs survive a target pack-refs and a later warp (fw-warp-2 item 2)", () => {
+	it("save, git pack-refs --all on the target, warp again: the saved commits are still reachable by name", async () => {
+		const { src, tgt } = twinRepos();
+		write(join(tgt, "t.txt"), "committed only on the target\n");
+		git(tgt, "add", "t.txt");
+		git(tgt, "commit", "-q", "-m", "target only");
+		const commit = git(tgt, "rev-parse", "HEAD").trim();
+		const first = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(first.failure, first.failure?.detail).toBeUndefined();
+		const ns = `refs/hyper-warp-backup/${WARP_ID}`;
+		git(tgt, "pack-refs", "--all");
+		// This machine's refs are packed too (as after any gc), so the next
+		// copy really replaces the target's packed-refs.
+		git(src, "pack-refs", "--all");
+		// Packed: the loose file the copy leaves alone is gone.
+		expect(() => statSync(join(tgt, ".git", ns, "heads/main"))).toThrow();
+		expect(readFileSync(join(tgt, ".git/packed-refs"), "utf-8")).toContain(`${ns}/heads/main`);
+		// A second warp (nothing uncovered now, so no --force needed). The
+		// target's t.txt is in the saved commit; untracked now, it would make
+		// the target dirty.
+		rmSync(join(tgt, "t.txt"));
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		const later = world();
+		const second = await later.run(
+			plainRepoPlan("work/repo", { startedAt: "2026-10-04T13:00:00.000Z" }),
+		);
+		expect(second.failure, second.failure?.detail).toBeUndefined();
+		// The copy replaced packed-refs with this machine's, which has no backups...
+		expect(readFileSync(join(tgt, ".git/packed-refs"), "utf-8")).not.toContain(ns);
+		// ...and the saved ref is still there, loose, at the target's commit.
+		expect(readFileSync(join(tgt, ".git", ns, "heads/main"), "utf-8")).toBe(`${commit}\n`);
+		expect(git(tgt, "rev-parse", `${ns}/heads/main`).trim()).toBe(commit);
+		expect(git(tgt, "cat-file", "-p", `${ns}/heads/main:t.txt`)).toBe(
+			"committed only on the target\n",
+		);
+		// The pin step ran before the copy.
+		const pin = later.log.findIndex((entry) => entry.startsWith("ssh sh"));
+		expect(pin).toBeGreaterThanOrEqual(0);
+	});
+
+	it("leaves an already-loose saved ref alone and prints nothing", () => {
+		const { tgt } = twinRepos();
+		git(tgt, "update-ref", "refs/hyper-warp-backup/x/heads/main", "HEAD");
+		const plan = plainRepoPlan("work/repo");
+		const pin = plan.steps.find(
+			(entry) => entry.kind === "remote-command" && entry.summary.startsWith("keep earlier warps"),
+		) as Extract<WarpStep, { kind: "remote-command" }>;
+		const result = runScript(pin.argv.map(toTarget));
+		expect(result.status, result.stderr).toBe(0);
+		expect(result.stdout).toBe("");
+	});
+
+	it("runs in every plain-repo warp, after the saves and right before the copy", () => {
+		for (const force of [false, true]) {
+			const steps = plainRepoPlan("work/repo", { force }).steps;
+			const pin = steps.findIndex(
+				(entry) =>
+					entry.kind === "remote-command" && entry.summary.startsWith("keep earlier warps"),
+			);
+			const copy = steps.findIndex(
+				(entry) => entry.kind === "copy" && entry.summary.startsWith("copy git-repo"),
+			);
+			expect(pin).toBeGreaterThan(0);
+			expect(copy).toBe(pin + 1);
+		}
+	});
+});
+
+describe("a reftable repository on the target (fw-warp-2 item 3)", () => {
+	function reftableTarget() {
+		const { src } = twinRepos();
+		const tgt = join(tgtHome, "work/repo");
+		rmSync(tgt, { recursive: true, force: true });
+		mkdirSync(tgt, { recursive: true });
+		git(tgt, "init", "-q", "-b", "main", "--ref-format=reftable");
+		git(tgt, "fetch", "-q", "--update-head-ok", src, "main:main");
+		git(tgt, "reset", "-q", "--hard");
+		return { src, tgt };
+	}
+
+	it("the refs probe exits TARGET_REFTABLE before listing anything", (ctx) => {
+		const probe = spawnSync("git", ["init", "-q", "--ref-format=reftable", join(base, "probe")], {
+			env: { ...process.env, ...env },
+		});
+		if (probe.status !== 0) ctx.skip("this git has no reftable support");
+		const { tgt } = reftableTarget();
+		const result = runScript(targetRefs(tgt));
+		expect(result.status).toBe(TARGET_REFTABLE);
+		expect(result.stdout).toBe("extensions.refStorage=reftable\n");
+	});
+
+	it("is refused with and without --force, naming the format, and nothing changes", async (ctx) => {
+		const probe = spawnSync("git", ["init", "-q", "--ref-format=reftable", join(base, "probe")], {
+			env: { ...process.env, ...env },
+		});
+		if (probe.status !== 0) ctx.skip("this git has no reftable support");
+		const { tgt } = reftableTarget();
+		const before = snapshot(tgt);
+		for (const force of [false, true]) {
+			const w = world();
+			const result = await w.run(plainRepoPlan("work/repo", { force }));
+			expect(result.failure?.step.summary).toContain("check every ref");
+			expect(result.failure?.detail).toContain("keeps its refs in the reftable format");
+			expect(result.failure?.detail).toContain("with or without --force");
+			expect(w.changes).toEqual([]);
+			expect(w.log.some((entry) => entry.startsWith("copy"))).toBe(false);
+			expect(snapshot(tgt)).toEqual(before);
+		}
+	});
+});
+
+describe("target-only refs at commits this machine reaches are covered (fw-warp-2 item 4)", () => {
+	it("a remote-tracking ref and a tag only the target has, at commits this machine has, pass without --force", async () => {
+		const { src, tgt } = twinRepos();
+		const older = git(src, "rev-parse", "HEAD").trim();
+		write(join(src, "b.txt"), "ahead here\n");
+		git(src, "add", "b.txt");
+		git(src, "commit", "-q", "-m", "ahead");
+		const newer = git(src, "rev-parse", "HEAD").trim();
+		// The target fetched more recently: it has refs this machine lacks, at
+		// commits this machine has (one its main reaches, one an ancestor).
+		git(tgt, "fetch", "-q", src, "main");
+		git(tgt, "update-ref", "refs/remotes/origin/main", newer);
+		git(tgt, "tag", "t-only", older);
+		git(tgt, "tag", "-a", "-m", "annotated", "a-only", older);
+		const refs = runScript(targetRefs(tgt))
+			.stdout.trim()
+			.split("\n")
+			.map((line) => {
+				const [object, name, peeled] = line.split(" ");
+				return { object: object as string, name: name as string, peeled };
+			});
+		// The annotated tag's object exists only there; the commit it tags is here.
+		expect(refs.find((ref) => ref.name === "refs/tags/a-only")?.peeled).toBe(older);
+		expect(refs.map((ref) => ref.name)).toEqual(
+			expect.arrayContaining(["refs/remotes/origin/main", "refs/tags/t-only", "refs/tags/a-only"]),
+		);
+		expect(refsNotCoveredHere(src, refs)).toEqual([]);
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+	});
+
+	it("a same-name ref at a commit another of this machine's refs reaches is covered", () => {
+		const { src } = twinRepos();
+		const base0 = git(src, "rev-parse", "HEAD").trim();
+		git(src, "checkout", "-q", "-b", "side");
+		write(join(src, "s.txt"), "side\n");
+		git(src, "add", "s.txt");
+		git(src, "commit", "-q", "-m", "side");
+		const side = git(src, "rev-parse", "HEAD").trim();
+		git(src, "checkout", "-q", "main");
+		// The target's main is at `side`, which is not behind this machine's
+		// main, but this machine's `side` branch reaches it.
+		expect(refsNotCoveredHere(src, [{ object: side, name: "refs/heads/main" }])).toEqual([]);
+		expect(refsNotCoveredHere(src, [{ object: base0, name: "refs/heads/main" }])).toEqual([]);
+	});
+
+	it("a target-only ref at a commit this machine lacks is still refused, without --force", async () => {
+		const { tgt } = twinRepos();
+		write(join(tgt, "t.txt"), "only there\n");
+		git(tgt, "add", "t.txt");
+		git(tgt, "commit", "-q", "-m", "only there");
+		git(tgt, "update-ref", "refs/remotes/origin/feature", "HEAD");
+		git(tgt, "reset", "-q", "--hard", "HEAD~1");
+		const before = snapshot(tgt);
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail).toContain("refs/remotes/origin/feature (only there)");
+		expect(result.failure?.detail).not.toContain("refs/heads/main");
+		expect(w.changes).toEqual([]);
+		expect(snapshot(tgt)).toEqual(before);
+	});
+
+	it("a commit this machine has but no ref of it reaches is not covered", () => {
+		const { src } = twinRepos();
+		write(join(src, "d.txt"), "dangling\n");
+		git(src, "add", "d.txt");
+		git(src, "commit", "-q", "-m", "dangling");
+		const dangling = git(src, "rev-parse", "HEAD").trim();
+		git(src, "reset", "-q", "--hard", "HEAD~1");
+		git(src, "reflog", "expire", "--expire=now", "--all");
+		expect(refsNotCoveredHere(src, [{ object: dangling, name: "refs/tags/x" }])).toEqual([
+			{ name: "refs/tags/x", reason: "only there" },
+		]);
+	});
+});
+
+describe("the backup script refuses paths outside the repository (fw-warp-2 item 5)", () => {
+	for (const bad of ["R../outside", "K/etc/hosts", "Ra/../../outside", "R..", "K", "Xa.txt"]) {
+		it(`refuses ${JSON.stringify(bad)} before copying or removing anything`, () => {
+			const { tgt } = twinRepos();
+			write(join(tgt, "keep.secret"), "kept\n");
+			const outside = join(tgtHome, "work/outside");
+			write(outside, "outside\n");
+			const result = runScript(targetBackupCopy(tgt, "id1"), `Rkeep.secret\0${bad}\0`);
+			expect(result.status).toBe(7);
+			expect(readFileSync(outside, "utf-8")).toBe("outside\n");
+			expect(readFileSync(join(tgt, "keep.secret"), "utf-8")).toBe("kept\n");
+			expect(() => statSync(join(tgt, ".git/hyper-warp-backup/id1"))).toThrow();
+		});
+	}
+
+	it("still accepts names that only look like it (a..b, .hidden, -dash)", () => {
+		const { tgt } = twinRepos();
+		for (const name of ["a..b", ".hidden", "-dash"]) write(join(tgt, name), `${name}\n`);
+		const result = runScript(targetBackupCopy(tgt, "id2"), "Ka..b\0K.hidden\0R-dash\0");
+		expect(result.status, result.stderr).toBe(0);
+		const backup = join(tgt, ".git/hyper-warp-backup/id2");
+		expect(readFileSync(join(backup, "a..b"), "utf-8")).toBe("a..b\n");
+		expect(readFileSync(join(backup, "-dash"), "utf-8")).toBe("-dash\n");
+		expect(() => statSync(join(tgt, "-dash"))).toThrow();
 	});
 });
