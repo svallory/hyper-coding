@@ -1532,23 +1532,127 @@ export function targetWorktreeState(bare: string, worktree: string, branch: stri
 
 /** Exit code of {@link targetStatusCheck} when the target's copy has uncommitted work. */
 export const TARGET_DIRTY = 25;
+/** Exit code of {@link targetStatusCheck}: a merge, rebase, cherry-pick, revert or bisect is in progress. */
+export const TARGET_IN_PROGRESS = 26;
+/** Exit code of {@link targetStatusCheck}: the index has unresolved conflicts. */
+export const TARGET_CONFLICTED = 27;
+/** Exit code of {@link targetStatusCheck}: a submodule has changes (inside it, or its commit). */
+export const TARGET_SUBMODULE_CHANGED = 28;
 
 /**
- * A read-only script for the target: does the repository or worktree at
- * `worktree` hold uncommitted work? Exits 0 when there is no `.git` there or
- * `git status --porcelain` is empty; otherwise prints the porcelain lines and
- * exits {@link TARGET_DIRTY}. `--no-optional-locks` keeps `status` from
- * refreshing (writing) the index.
+ * The read-only git every target probe runs, as a shell function `g` over the
+ * repository at `$w`: no optional index lock (so `status` never refreshes the
+ * index), no fsmonitor hook and no hooks at all, whatever the target's
+ * repository configures.
  */
-export function targetStatusCheck(worktree: string): string[] {
+const TARGET_READ_ONLY_GIT =
+	'g() { git -C "$w" --no-optional-locks -c core.fsmonitor=false -c core.hooksPath=/dev/null "$@"; }';
+
+/**
+ * A read-only script for the target: may warp overwrite the repository or
+ * worktree at `worktree`? Exits 0 when there is no `.git` there. Otherwise, in
+ * this order, it refuses with:
+ *
+ *  - {@link TARGET_IN_PROGRESS} (printing which) when a merge, rebase (or
+ *    `git am`), cherry-pick, revert or bisect is in progress;
+ *  - {@link TARGET_CONFLICTED} (printing the paths) when the index has
+ *    unresolved conflicts;
+ *  - {@link TARGET_SUBMODULE_CHANGED} (printing the paths) when a submodule
+ *    has changes, inside it or to its recorded commit;
+ *  - {@link TARGET_DIRTY} (printing `git status --porcelain`) when anything is
+ *    uncommitted, unless `force` (a `--force` warp saves that work first).
+ *
+ * The first three hold with `force` too: nothing a warp saves can carry them.
+ * Exit 3 when git itself failed.
+ */
+export function targetStatusCheck(worktree: string, options: { force?: boolean } = {}): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const awkSubmodules = [
+		'($1 == "1" || $1 == "2") && $3 ~ /^S/ {',
+		'  n = ($1 == "1") ? 8 : 9; p = $0',
+		'  for (i = 0; i < n; i++) sub(/^[^ ]* /, "", p)',
+		"  print p }",
+	].join("\n");
+	const script = [
+		`w=${quote(worktree)}`,
+		'[ -e "$w/.git" ] || exit 0',
+		TARGET_READ_ONLY_GIT,
+		"state() {",
+		'  p=$(g rev-parse --git-path "$1") || exit 3',
+		'  case "$p" in /*) ;; *) p="$w/$p" ;; esac',
+		`  if [ -e "$p" ]; then printf 'a %s is in progress\\n' "$2"; exit ${TARGET_IN_PROGRESS}; fi`,
+		"}",
+		"state MERGE_HEAD merge",
+		"state rebase-merge rebase",
+		'state rebase-apply "rebase (or git am)"',
+		"state CHERRY_PICK_HEAD cherry-pick",
+		"state REVERT_HEAD revert",
+		"state BISECT_LOG bisect",
+		"u=$(g ls-files --unmerged) || exit 3",
+		`if [ -n "$u" ]; then printf '%s\\n' "$u" | cut -f2- | sort -u; exit ${TARGET_CONFLICTED}; fi`,
+		"v=$(g status --porcelain=v2 --ignore-submodules=none) || exit 3",
+		`s=$(printf '%s\\n' "$v" | awk ${quote(awkSubmodules)})`,
+		`if [ -n "$s" ]; then printf '%s\\n' "$s"; exit ${TARGET_SUBMODULE_CHANGED}; fi`,
+		...(options.force
+			? ["exit 0"]
+			: [
+					"out=$(g status --porcelain --ignore-submodules=none) || exit 3",
+					'[ -z "$out" ] && exit 0',
+					`printf '%s\\n' "$out"`,
+					`exit ${TARGET_DIRTY}`,
+				]),
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/**
+ * A read-only script for the target: every untracked OR ignored path of the
+ * repository at `worktree`, NUL-separated (`git ls-files --others
+ * --directory`: no exclude rules, so ignored files are listed too; a
+ * directory whose whole content is untracked is listed once, with a trailing
+ * `/`). Prints nothing when there is no `.git` there. Exit 3 when git failed.
+ */
+export function targetUntrackedPaths(worktree: string): string[] {
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 	const script = [
 		`w=${quote(worktree)}`,
 		'[ -e "$w/.git" ] || exit 0',
-		'out=$(git -C "$w" --no-optional-locks status --porcelain) || exit 3',
-		'[ -z "$out" ] && exit 0',
-		`printf '%s\\n' "$out"`,
-		`exit ${TARGET_DIRTY}`,
+		TARGET_READ_ONLY_GIT,
+		"g ls-files -z --others --directory || exit 3",
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/**
+ * A script for the target that COPIES files of the repository at `worktree`
+ * aside before a `--force` warp overwrites them: into
+ * `<git common dir>/hyper-warp-backup/<id>/`, relative paths kept, every
+ * directory it creates mode 0700, each file with its mode and times (`cp -pP`:
+ * a symlink is copied as a symlink). The relative paths arrive on stdin,
+ * NUL-separated. The originals stay where they are; the copy that follows
+ * overwrites them. Prints the backup directory. Fails (non-zero) when the
+ * directory already exists or any file can't be copied.
+ */
+export function targetBackupCopy(worktree: string, id: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const each = [
+		'b=$1; shift; for p in "$@"; do',
+		'  d=$(dirname "./$p")',
+		'  mkdir -p "$b/$d" && cp -pP "./$p" "$b/$p" || exit 255',
+		"done",
+	].join("\n");
+	const script = [
+		`w=${quote(worktree)}; id=${quote(id)}`,
+		'cd "$w" || exit 3',
+		TARGET_READ_ONLY_GIT,
+		"gd=$(g rev-parse --git-common-dir) || exit 3",
+		'case "$gd" in /*) ;; *) gd="$w/$gd" ;; esac',
+		"umask 077",
+		'mkdir -p "$gd/hyper-warp-backup" && chmod 700 "$gd/hyper-warp-backup" || exit 4',
+		'b="$gd/hyper-warp-backup/$id"',
+		'mkdir "$b" || exit 4',
+		`xargs -0 sh -c ${quote(each)} sh "$b" || exit 5`,
+		`printf '%s\\n' "$b"`,
 	].join("\n");
 	return ["sh", "-c", script];
 }

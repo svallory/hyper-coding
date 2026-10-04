@@ -53,7 +53,9 @@ Every check runs before the first change on either machine. A session that alrea
 Limits:
   - The target's copy of the directory is overwritten file by file; files that exist only there are kept (no --delete).
   - Only this session's files travel (<id>.jsonl, <id>.warp.json, <id>/), never the whole project folder.
-  - A space worktree arrives as a git worktree on the target. Staged-but-uncommitted changes arrive as unstaged modifications: the index does not travel.`;
+  - A space worktree arrives as a git worktree on the target. Staged-but-uncommitted changes arrive as unstaged modifications: the index does not travel.
+  - A git copy on the target is refused when it has uncommitted work, or when the copy would overwrite an untracked or ignored file there with different content; --force first saves a space worktree's tracked changes as a stash and copies those files to hyper-warp-backup/ in the target repo's git directory.
+  - A merge, rebase, cherry-pick, revert or bisect in progress, unresolved conflicts, or a changed submodule on the target are refused even with --force.`;
 
 	static override examples = [
 		"<%= config.bin %> warp netcup",
@@ -84,7 +86,8 @@ Limits:
 			default: false,
 		}),
 		force: Flags.boolean({
-			description: "Take the session over from a machine that owns it",
+			description:
+				"Take the session over from a machine that owns it, and overwrite the target's uncommitted work after saving what warp can (see Limits)",
 			default: false,
 		}),
 		"dry-run": Flags.boolean({

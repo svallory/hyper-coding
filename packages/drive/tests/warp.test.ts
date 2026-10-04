@@ -12,7 +12,13 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { MachineRunner } from "#services/remote";
 import type { LiveSession, OwnerMarker } from "#services/sessions";
-import { TARGET_DIRTY, TARGET_WORKTREE_STATE } from "#services/space-git";
+import {
+	TARGET_CONFLICTED,
+	TARGET_DIRTY,
+	TARGET_IN_PROGRESS,
+	TARGET_SUBMODULE_CHANGED,
+	TARGET_WORKTREE_STATE,
+} from "#services/space-git";
 import {
 	describeFailure,
 	describeSpace,
@@ -1172,7 +1178,7 @@ describe("a target with uncommitted work is not overwritten without --force (rev
 		});
 		const result = await executeWarp(plan, run.deps);
 		expect(result.failure?.detail).toContain("uncommitted work in the repository");
-		expect(result.failure?.detail).toContain("nothing is saved first");
+		expect(result.failure?.detail).toContain("their changes are not saved first");
 		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
 	});
 
@@ -1187,7 +1193,10 @@ describe("a target with uncommitted work is not overwritten without --force (rev
 			force: true,
 			owner: { state: "owned", path: "/m", marker: { owner: "netcup", at: "t" } },
 		});
-		expect(probeOf(plan, "target-clean")).toBeUndefined();
+		// With --force the status probe still runs, but only for what nothing can
+		// save (an operation in progress, conflicts, submodules): uncommitted work
+		// alone passes.
+		expect(probeOf(plan, "target-clean")?.argv.join(" ")).not.toContain(`exit ${TARGET_DIRTY}`);
 		// The fake keys commands by argv[0..2]; read the real key from the plan.
 		const stash = plan.steps.find(
 			(step) => step.kind === "remote-command" && step.summary.includes("stash"),
@@ -1206,7 +1215,7 @@ describe("a target with uncommitted work is not overwritten without --force (rev
 		expect(changes.indexOf(`remote ${key}`)).toBeLessThan(changes.indexOf("push"));
 		expect(result.notices.join("\n")).toContain("saved as stash deadbeef");
 		expect(result.notices.join("\n")).toContain(`hyper warp ${SESSION} 2026-10-04T12:00:00.000Z`);
-		expect(result.notices.join("\n")).toContain("Untracked files are not in it");
+		expect(result.notices.join("\n")).toContain("Untracked and ignored files are not in it");
 	});
 
 	it("with --force and nothing registered there, makes no stash", async () => {
@@ -1460,5 +1469,118 @@ describe("a space missing on the target must be in the manifest (review 2, item 
 			}
 			rmSync(home, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("the new target checks run before any change, and their failures change nothing (fw-warp)", () => {
+	const kindsUnderTest: [string, (force: boolean) => WarpPlan, Scenario][] = [
+		[
+			"a space worktree registered on the target",
+			(force) => spacePlan({ force, stop: true, live: [LIVE] }),
+			{ probes: { worktree: 0 } },
+		],
+		[
+			"a plain git repo",
+			(force) => planOf({ cwdKind: "git-repo", force, stop: true, live: [LIVE] }),
+			{},
+		],
+	];
+	const refusals: [string, number, string][] = [
+		["a merge in progress", TARGET_IN_PROGRESS, "a merge is in progress\n"],
+		["unresolved conflicts", TARGET_CONFLICTED, "a.txt\n"],
+		["a changed submodule", TARGET_SUBMODULE_CHANGED, "lib\n"],
+	];
+	for (const [kind, build, scenario] of kindsUnderTest) {
+		for (const force of [false, true]) {
+			for (const [label, code, stdout] of refusals) {
+				it(`${kind}${force ? ", --force" : ""}: ${label} is refused with zero changes on either side`, async () => {
+					const plan = build(force);
+					const run = fakeTarget(plan, {
+						...scenario,
+						probes: { ...scenario.probes, "target-clean": code },
+						probeStdout: { "target-clean": stdout },
+					});
+					const result = await executeWarp(plan, run.deps);
+					expect(result.failure?.step.summary).toContain("no git operation in progress");
+					expect(result.failure?.detail).toContain(stdout.trim());
+					expect(result.failure?.detail).toContain("with or without --force");
+					expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+					expect(run.stops).toEqual([]);
+					expect(run.markers).toEqual([]);
+					expect(describeFailure(plan, result, { restored: false })).toContain(
+						"Nothing was changed on either machine",
+					);
+				});
+			}
+			it(`${kind}${force ? ", --force" : ""}: collisions ${force ? "are copied aside after the transcript and before the working directory" : "are refused with zero changes"}`, async () => {
+				const plan = build(force);
+				const run = fakeTarget(plan, scenario);
+				const stdins: (string | undefined)[] = [];
+				const ssh = run.deps.runner.ssh.bind(run.deps.runner);
+				run.deps.runner.ssh = async (cmd, opts) => {
+					stdins.push(opts?.stdin);
+					return ssh(cmd, opts);
+				};
+				run.deps.findCollisions = async () => {
+					run.events.push({ type: "probe", what: "collisions" });
+					return { ok: true, paths: [".env", "notes/todo.txt"] };
+				};
+				const result = await executeWarp(plan, run.deps);
+				expectProbesFirst(run.events);
+				if (!force) {
+					expect(result.failure?.detail).toContain("untracked or ignored files");
+					expect(result.failure?.detail).toContain("  .env\n  notes/todo.txt");
+					expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+					expect(run.stops).toEqual([]);
+					return;
+				}
+				expect(result.failure, result.failure?.detail).toBeUndefined();
+				const backup = plan.steps.find(
+					(step) => step.kind === "remote-command" && step.stdinFrom === "collisions",
+				) as Extract<WarpStep, { kind: "remote-command" }>;
+				const key = `remote ${backup.argv.slice(0, 3).join(" ")}`;
+				const changes = run.events
+					.filter((event) => event.type === "change")
+					.map((event) => event.what);
+				const at = changes.indexOf(key);
+				expect(at).toBeGreaterThan(changes.indexOf("marker"));
+				expect(at).toBeGreaterThan(changes.indexOf(`copy ${TRANSCRIPT}`));
+				const workdirCopy = changes.indexOf(`copy ${plan.cwd}/`);
+				expect(at).toBeLessThan(workdirCopy);
+				if (plan.space) expect(at).toBeLessThan(changes.indexOf("push"));
+				expect(stdins).toContain(".env\0notes/todo.txt\0");
+			});
+		}
+	}
+
+	it("--force with no collision skips the backup step", async () => {
+		const plan = planOf({ cwdKind: "git-repo", force: true });
+		const run = fakeTarget(plan);
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure).toBeUndefined();
+		expect(result.skipped.some((summary) => summary.includes("aside"))).toBe(true);
+	});
+
+	it("the plan and --dry-run say what --force saves and where, and what is refused regardless", () => {
+		const forced = spacePlan({ force: true });
+		const text = forced.notes.join("\n");
+		expect(text).toContain(`${SPACE.barePath}/hyper-warp-backup/${SESSION}-20261004T120000000Z`);
+		expect(text).toContain("mode 0700");
+		expect(text).toContain("merge, rebase, cherry-pick, revert or bisect");
+		const lines = describeWarp(forced).lines.join("\n");
+		expect(lines).toContain("their paths go on stdin");
+		expect(planOf({ cwdKind: "git-repo" }).notes.join("\n")).toContain(
+			"identical on both sides, and paths the copy excludes, don't count",
+		);
+	});
+
+	it("the plain-repo copy never carries this machine's own warp backups", () => {
+		const plan = planOf({ cwdKind: "git-repo" });
+		const copy = plan.steps.find((step) => step.kind === "copy" && step.src === CWD) as Extract<
+			WarpStep,
+			{ kind: "copy" }
+		>;
+		expect(copy.excludes).toContain("/.git/hyper-warp-backup");
+		expect(probeOf(plan, "collisions")?.collisions?.excludes).toEqual(copy.excludes);
 	});
 });
