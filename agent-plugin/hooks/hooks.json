@@ -2,7 +2,27 @@
 	"hooks": {
 		"SessionEnd": [
 			{
-				"matcher": "*",
+				"matcher": "logout",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hyper-drive-session-end.sh\"",
+						"timeout": 60
+					}
+				]
+			},
+			{
+				"matcher": "prompt_input_exit",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/hyper-drive-session-end.sh\"",
+						"timeout": 60
+					}
+				]
+			},
+			{
+				"matcher": "other",
 				"hooks": [
 					{
 						"type": "command",

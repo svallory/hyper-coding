@@ -46,6 +46,12 @@ export default class Status extends SpaceCommand<typeof Status> {
 				? `Upstream: ahead ${result.ahead}, behind ${result.behind}${result.refused ? `: the newest commit on the hyperdrive was refused by the last pull (${quoteForTerminal(result.refused.reason)})` : " (as of the last contact with the hyperdrive)"}`
 				: "Upstream: this machine has not exchanged this branch with the hyperdrive yet — run `hyper space status --fetch` to compare.",
 		);
+		if (result.sessionEndFailure !== null) {
+			const failure = result.sessionEndFailure;
+			this.log(
+				`Last session end (${failure.at}, session ${failure.session}): ${failure.outcome === "push-failed" ? "push failed" : failure.outcome}: ${failure.detail}`,
+			);
+		}
 		if (result.status.length === 0) this.log("Working tree clean.");
 		for (const entry of result.status) {
 			this.log(

@@ -25,6 +25,7 @@ import { makeBareSpace } from "#tests/tmp-space";
 const repository = join(import.meta.dirname, "../../..");
 const cli = join(repository, "packages/cli/bin/run.js");
 const unreachable = "ssh://git@192.0.2.1/x.git";
+const id = "ba0efb18-103b-43b5-b5a0-fc3a08a2b00b";
 let directory: string;
 let originalPath: string | undefined;
 
@@ -156,6 +157,31 @@ describe("bounded space remote operations", () => {
 		vi.stubEnv("GIT_SSH", "/opt/wrapper");
 		expect(spaceRemoteEnv(root, false).GIT_SSH_COMMAND).toBeUndefined();
 	});
+
+	it("the detached worker records a failed push, keeps the commit, and status shows it", async () => {
+		const root = await makeSpace();
+		spaceGit(root, ["config", "hyper.cadence", "session-end+push"]);
+		fakeSsh("fail");
+		writeFileSync(join(root, "notes/a.md"), "saved locally\n");
+		const file = join(spaceGitDir(root), "session-end-payload.bound");
+		writeFileSync(file, JSON.stringify({ session_id: id, reason: "other" }));
+		const result = spawnSync(
+			process.execPath,
+			[cli, "space", "commit", "--session-end", "--payload-file", file],
+			{ cwd: root, env: process.env, encoding: "utf8", timeout: 60_000 },
+		);
+		expect(result.status).toBe(2);
+		expect(spaceGit(root, ["rev-list", "--count", "HEAD"]).stdout.trim()).toBe("2");
+		const line = readFileSync(join(spaceGitDir(root), "session-end.log"), "utf8").trim();
+		expect(line.split("\t").slice(1, 3)).toEqual([id, "push-failed"]);
+		expect(line).toContain("committed 1 file; push failed: I couldn't reach your hyperdrive");
+		const status = spawnSync(process.execPath, [cli, "space", "status"], {
+			cwd: root,
+			env: process.env,
+			encoding: "utf8",
+		});
+		expect(status.stdout).toMatch(/^Last session end \(.*, session ba0efb18-.*\): push failed: /m);
+	}, 60_000);
 
 	it("real ssh to an unroutable address fails within the connect timeout, in one line", async (context) => {
 		if (spawnSync("sh", ["-c", "command -v ssh"]).status !== 0) context.skip("no ssh on PATH");

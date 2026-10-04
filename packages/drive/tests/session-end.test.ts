@@ -5,6 +5,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
@@ -148,7 +149,7 @@ describe("SessionEnd input and streamed transcript", () => {
 	it("accepts unknown fields", async () => {
 		expect(
 			await readSessionEndInput(Readable.from([payload({ future: { enabled: true } })])),
-		).toEqual({ session_id: id, transcript_path: transcript });
+		).toEqual({ session_id: id, transcript_path: transcript, reason: "prompt_input_exit" });
 	});
 	it("rejects oversized stdin", async () => {
 		await expect(readSessionEndInput(Readable.from([" ".repeat(65537)]))).rejects.toThrow("64 KiB");
@@ -291,7 +292,69 @@ describe("space commit --session-end and real hook", () => {
 		expect(readFileSync(join(nested, "file.txt"), "utf8")).toBe("nested repository\n");
 		expect(count(root)).toBe(1);
 	});
-	it("simulates real hook: manual, commit, +push, no-op push, and refused commit cannot push", async () => {
+	it("ignores clear and resume on stdin too", async () => {
+		const { root } = await makeSpace();
+		writeFileSync(join(root, "notes/a.md"), "changed");
+		for (const reason of ["clear", "resume"]) {
+			const result = run(root, payload({ reason }));
+			expect(result.status, result.stderr).toBe(0);
+			expect(result.stdout + result.stderr).toBe("");
+		}
+		expect(count(root)).toBe(1);
+	});
+	it("--payload-file only accepts a session-end payload inside a space git dir, and never deletes others", async () => {
+		const { root } = await makeSpace();
+		const elsewhere = join(directory, "session-end-payload.x");
+		writeFileSync(elsewhere, payload());
+		const result = run(root, "", "--payload-file", elsewhere);
+		expect(result.status).toBe(2);
+		expect(result.stderr).toContain("--payload-file must be a session-end-payload.*");
+		expect(existsSync(elsewhere)).toBe(true);
+		const misnamed = join(root, ".hyper/space.git/config");
+		expect(run(root, "", "--payload-file", misnamed).status).toBe(2);
+		expect(existsSync(misnamed)).toBe(true);
+		expect(count(root)).toBe(1);
+	});
+	it("the worker removes its payload, commits, logs one line, and ignores clear", async () => {
+		const { root } = await makeSpace();
+		const gitDir = join(root, ".hyper/space.git");
+		const file = join(gitDir, "session-end-payload.test1");
+		writeFileSync(file, payload({ reason: "clear" }));
+		writeFileSync(join(root, "notes/a.md"), "worker change");
+		let result = run(root, "", "--payload-file", file);
+		expect(result.status, result.stderr).toBe(0);
+		expect(existsSync(file)).toBe(false);
+		expect(count(root)).toBe(1);
+		writeFileSync(file, payload({ reason: "logout" }));
+		result = run(root, "", "--payload-file", file);
+		expect(result.status, result.stderr).toBe(0);
+		expect(existsSync(file)).toBe(false);
+		expect(count(root)).toBe(2);
+		const lines = readFileSync(join(gitDir, "session-end.log"), "utf8").trim().split("\n");
+		expect(lines.map((line) => line.split("\t").slice(1, 3))).toEqual([
+			[id, "ignored"],
+			[id, "committed"],
+		]);
+		expect(lines[1]).toMatch(/^\d{4}-\d\d-\d\dT[^\t]+Z\t/);
+	});
+	it("rotates the session-end log at 64 KiB, keeping one previous generation", async () => {
+		const { root } = await makeSpace();
+		const gitDir = join(root, ".hyper/space.git");
+		const { appendSessionEndLog, SESSION_END_LOG_LIMIT, lastSessionEndEntry } = await import(
+			"#services/session-end-log"
+		);
+		writeFileSync(join(gitDir, "session-end.log"), "x".repeat(SESSION_END_LOG_LIMIT));
+		appendSessionEndLog(gitDir, { session: id, outcome: "failed", detail: "a\tb\nc\u001b[31m" });
+		expect(readFileSync(join(gitDir, "session-end.log.1"), "utf8")).toHaveLength(
+			SESSION_END_LOG_LIMIT,
+		);
+		expect(lastSessionEndEntry(gitDir)).toMatchObject({
+			session: id,
+			outcome: "failed",
+			detail: "a b c[31m",
+		});
+	});
+	it("simulates the real hook: manual, commit, +push, refusals, no-op push, clear", async () => {
 		const root = join(directory, "real-space");
 		const remote = join(directory, "real-remote.git");
 		git(["init", "--bare", remote], directory);
@@ -314,50 +377,87 @@ describe("space commit --session-end and real hook", () => {
 			`#!/bin/sh\nexec '${process.execPath.replaceAll("'", "'\\''")}' '${cli.replaceAll("'", "'\\''")}' "$@"\n`,
 			{ mode: 0o755 },
 		);
-		const runHook = (input = payload()) =>
-			spawnSync("bash", [hook], {
+		const log = join(root, ".hyper/space.git/session-end.log");
+		const logged = () =>
+			existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : [];
+		const timings: number[] = [];
+		const runHook = async (input = payload()) => {
+			const before = logged().length;
+			const started = performance.now();
+			const result = spawnSync("bash", [hook], {
 				cwd: join(root, "notes"),
 				env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
 				input,
 				encoding: "utf8",
 				timeout: 30_000,
 			});
+			timings.push(performance.now() - started);
+			expect(result.status).toBe(0);
+			expect(result.stdout + result.stderr).toBe("");
+			const deadline = Date.now() + 60_000;
+			while (logged().length === before && Date.now() < deadline)
+				await new Promise((resolve) => setTimeout(resolve, 50));
+			return (logged()[before] ?? "").split("\t");
+		};
 		const remoteCount = () =>
 			Number(git(["--git-dir", remote, "rev-list", "--count", "space/real-space"], directory));
 		summary("Hook simulation complete");
 		writeFileSync(join(root, "notes/a.md"), "manual change");
-		expect(runHook().status).toBe(0);
+		const manual = spawnSync("bash", [hook], {
+			cwd: join(root, "notes"),
+			env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+			input: payload(),
+			encoding: "utf8",
+		});
+		expect(manual.status).toBe(0);
+		expect(manual.stdout + manual.stderr).toBe("");
 		expect(count(root)).toBe(1);
 		spaceGit(root, ["config", "hyper.cadence", "session-end"]);
-		expect(runHook().status).toBe(0);
+		expect((await runHook())[2]).toBe("committed");
 		expect(count(root)).toBe(2);
 		expect(remoteCount()).toBe(1);
 		expect(spaceGit(root, ["log", "-1", "--format=%B"]).stdout.trim()).toBe(await message());
 		spaceGit(root, ["config", "hyper.cadence", "session-end+push"]);
 		writeFileSync(join(root, "notes/a.md"), "push change");
-		expect(runHook().status).toBe(0);
+		expect((await runHook()).slice(2)).toEqual(["committed", "committed 1 file, pushed"]);
 		expect(count(root)).toBe(3);
 		expect(remoteCount()).toBe(3);
 		writeFileSync(join(root, "notes/a.md"), "earlier unpushed change");
 		expect(run(root).status).toBe(0);
 		expect(remoteCount()).toBe(3);
 		writeFileSync(join(root, "notes/.env"), "guard fixture");
-		const refused = runHook();
-		expect(refused.status).toBe(0);
+		const refused = await runHook();
+		expect(refused[2]).toBe("refused");
+		expect(refused[3]).toContain("secret guard");
 		expect(remoteCount()).toBe(3);
 		expect(count(root)).toBe(4);
-		expect(refused.stdout.trim().split("\n")).toHaveLength(1);
-		expect(refused.stdout).toContain("secret guard");
+		const status = spawnSync(process.execPath, [cli, "space", "status", "--json"], {
+			cwd: root,
+			env: process.env,
+			encoding: "utf8",
+		});
+		expect(JSON.parse(status.stdout).sessionEndFailure).toMatchObject({
+			session: id,
+			outcome: "refused",
+		});
 		rmSync(join(root, "notes/.env"));
-		expect(runHook("{bad").status).toBe(0);
+		expect((await runHook("{bad"))[2]).toBe("refused");
 		expect(remoteCount()).toBe(3);
-		const noop = runHook();
-		expect(noop.status).toBe(0);
-		expect(noop.stdout + noop.stderr).toBe("");
+		expect((await runHook()).slice(2)).toEqual(["nothing", "nothing to commit, pushed"]);
 		expect(count(root)).toBe(4);
 		expect(remoteCount()).toBe(4);
+		writeFileSync(join(root, "notes/a.md"), "cleared change");
+		expect((await runHook(payload({ reason: "clear" })))[2]).toBe("ignored");
+		expect(count(root)).toBe(4);
+		expect(
+			readdirSync(join(root, ".hyper/space.git")).filter((name) => name.includes("payload")),
+		).toEqual([]);
+		const slowest = Math.max(...timings);
 		console.log(
-			"Real hook simulation: manual 1/1; session-end 2/1; +push 3/3; refusal 4/3; no-op push 4/4 (local/remote commits)",
+			`Real hook simulation: foreground ${timings.map((ms) => ms.toFixed(0)).join("/")} ms; manual 1/1; session-end 2/1; +push 3/3; refusal 4/3; no-op push 4/4 (local/remote commits)`,
 		);
-	}, 60_000);
+		// The foreground target is well under 300 ms on an idle machine; the
+		// bound is generous for a loaded CI runner. It must never approach 1.5 s.
+		expect(slowest).toBeLessThan(1_200);
+	}, 120_000);
 });
