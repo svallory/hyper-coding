@@ -32,9 +32,15 @@ transcript, and an ownership marker, over ssh.
 - the session is owned by another machine, or already lives on the target;
 - a leftover marker from a warp that stopped mid-swap (ownership unknown);
 - the target's copy holds uncommitted work (untracked files included);
-- the copy would overwrite an untracked or ignored file in the target's
-  copy (a `.env`, say) whose content differs from this machine's. Identical
-  files and paths the copy excludes don't count.
+- the copy would overwrite an untracked or ignored entry in the target's
+  copy (a `.env`, say) with different content, or with a different type (a
+  file or symlink on one side where the other has a directory). Identical
+  files and paths the copy excludes don't count;
+- **plain repo only**: the target's repository has a ref this machine
+  doesn't have, or one with commits this machine's ref doesn't contain (or a
+  detached HEAD this machine's HEAD doesn't contain). The copy replaces the
+  target's `.git` files with this machine's, so those commits would become
+  unreachable.
 
 **`--force` does not get past any of these** — they are refused whatever you
 pass:
@@ -62,13 +68,22 @@ retry with `--force` to "make it work".
   as a stash first (untracked and ignored files are not in it).
 - **Plain repo**: the target's uncommitted tracked work is not saved; those
   files are overwritten one by one.
-- **Both**: every untracked or ignored file the copy would overwrite with
-  different content is first copied into
+- **Plain repo refs**: when the refs check above found something, every
+  ref of the target's repository (and a detached HEAD) is first saved there
+  as `refs/hyper-warp-backup/<session id>-<start time>/<ref without refs/>`;
+  warp prints the namespace. The copy leaves `.git/refs/hyper-warp-backup`
+  alone, but the rest of the target's `.git` — `config`, `info/exclude`,
+  hooks, `HEAD`, the index, `packed-refs` — is replaced by this machine's
+  files of the same name (files only the target has are kept).
+- **Both**: every colliding untracked or ignored entry (see the refusal
+  above) is first copied (`cp -pPR`) into
   `hyper-warp-backup/<session id>-<start time>/` inside the target repo's git
   directory (the space's bare repo for a worktree, `.git` for a plain repo),
-  relative paths kept, directories mode 0700. Warp prints that directory and
-  how many files it holds. Untracked or ignored files the copy does not
-  overwrite are left alone.
+  relative paths kept; the `hyper-warp-backup` directory and the per-warp
+  directory are mode 0700. An entry of a different type is then removed on
+  the target (a symlink is removed, never followed) so the copy can write
+  this machine's. Warp prints the directory and the count. Untracked or
+  ignored entries that are not collisions are left alone.
 - **Plain directory** (no repo): nothing is checked and nothing is saved.
 - Excluded from the copy by default: `node_modules`, `_build`, `deps`,
   `target`, `dist`, `.turbo`, `.cache`, `.next`.

@@ -130,14 +130,21 @@ change on either machine.
 Warp refuses, without `--force`, when the session is owned by
 another machine or already lives on the target, when a leftover marker makes
 ownership unknown, when the target's worktree or repo has uncommitted
-work (including untracked files), and when the copy would overwrite an
-untracked or ignored file there (a `.env`, say) with different content;
-identical files and excluded paths don't count. With `--force`, a dirty
-space worktree's tracked changes are first saved on the target in a stash
-(a plain repo's are not saved), and every untracked or ignored file the copy
-would overwrite with different content is first copied to
-`hyper-warp-backup/<session id>-<start time>/` inside the target repo's git
-directory (directories mode 0700); warp prints where and how many. It
+work (including untracked files), when the copy would overwrite an
+untracked or ignored entry there (a `.env`, say) with different content or
+with a different type (a file or symlink on one side, a directory on the
+other); identical files and excluded paths don't count. For a plain repo it
+also refuses when the target has a ref this machine doesn't have, or one
+with commits this machine's ref doesn't contain (or a detached HEAD this
+machine's HEAD doesn't contain). With `--force`, a dirty space worktree's
+tracked changes are first saved on the target in a stash (a plain repo's are
+not saved); a plain repo's refs (and a detached HEAD) are first saved there
+under `refs/hyper-warp-backup/<session id>-<start time>/` when that check
+found something; and every colliding untracked or ignored entry is first
+copied (`cp -pPR`) to `hyper-warp-backup/<session id>-<start time>/` inside
+the target repo's git directory (that directory and its parent mode 0700),
+an entry of a different type then removed there (a symlink is removed, not
+followed); warp prints where and how many. It
 refuses, whatever `--force` says, when the session is still running here
 (only `--stop` gets past that, and it ends that process), when the space is
 missing from the hyperdrive manifest, a path cannot be quoted identically on
@@ -197,6 +204,18 @@ tooling).
   files that exist only on the target are kept. For a plain directory (no
   `.git` on the target) nothing is compared and nothing is saved first.
   Ignored files inside a submodule of the target are not looked at.
+- **A plain repo's `.git` is merged file by file too:** the target's
+  `.git/config`, `info/exclude`, hooks, `HEAD`, index and `packed-refs` are
+  replaced by this machine's. Saved refs under `refs/hyper-warp-backup/` stay
+  safe from later warps only while they are loose ref files: once `git
+  pack-refs` (or `gc`) packs them, the next plain-repo warp replaces
+  `packed-refs` and drops them.
+- **The collision comparison has a 5-minute limit** (about 3,000 files per
+  6 s, measured in a container): past roughly 100,000 candidate files warp
+  refuses with "couldn't compare".
+- **rsync's quick check** skips a file whose size and modification time
+  (to the second) match, so a target file backed up as a collision can be
+  left in place, unchanged, when only its content differs.
   Staged-but-uncommitted
   changes arrive as unstaged modifications — the index does not travel.
   The way back is warp from the other machine, which requires this machine
