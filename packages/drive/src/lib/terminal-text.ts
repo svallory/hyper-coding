@@ -25,11 +25,28 @@ const ESCAPED_CHARACTERS = /[\\\p{Cc}\p{Cf}\p{Cs}\u2028\u2029]/gu;
  * never pass it through `JSON.stringify`, which would double every backslash.
  */
 export function escapeControlCharacters(value: string): string {
-	return value.replace(ESCAPED_CHARACTERS, (character) => {
-		if (character === "\\") return "\\\\";
-		const code = character.codePointAt(0)!;
-		return code > 0xffff ? `\\u{${code.toString(16)}}` : `\\u${code.toString(16).padStart(4, "0")}`;
-	});
+	return value.replace(ESCAPED_CHARACTERS, (character) =>
+		character === "\\" ? "\\\\" : escapeOne(character),
+	);
+}
+
+function escapeOne(character: string): string {
+	const code = character.codePointAt(0)!;
+	return code > 0xffff ? `\\u{${code.toString(16)}}` : `\\u${code.toString(16).padStart(4, "0")}`;
+}
+
+/**
+ * For text hyper ALREADY escaped once when it wrote it, such as a
+ * `session-end.log` detail, whose paths went through
+ * {@link quoteForTerminal}: the same escapes, except that a backslash is left
+ * alone. Escaping it again would print `\\u000a` where the log holds
+ * `\u000a`. Anything still unsafe (the log is a file anyone can edit) is escaped
+ * as usual, so the result is still one plain line.
+ */
+export function escapeControlCharactersKeepingBackslashes(value: string): string {
+	return value.replace(ESCAPED_CHARACTERS, (character) =>
+		character === "\\" ? character : escapeOne(character),
+	);
 }
 
 /** {@link escapeControlCharacters}, inside plain double quotes. */
