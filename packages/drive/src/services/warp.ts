@@ -332,10 +332,19 @@ function parentOf(path: string): string {
  * the user needs different messages: a missing parent is a path problem, an
  * existing but unwritable one is a permissions problem. Both are read-only,
  * which is what makes this safe to run first (AC-16).
+ *
+ * NO `--` before the path, which took a container to discover: `test` is a
+ * shell BUILTIN, and dash — `/bin/sh` on Debian and Ubuntu, so most of the
+ * machines warp targets — has no `--` option for it and answers
+ * `test: --: unexpected operator`, failing the probe on a perfectly good
+ * directory. (GNU coreutils `mkdir -p --` elsewhere in the codebase is fine:
+ * that is a real binary, not a builtin.) Dropping `--` is safe because the
+ * planner has already refused any path that is not absolute, and an absolute
+ * path can never be read as an option.
  */
 function writableProbe(parent: string): string[] {
 	const quoted = quoteForRemoteShell(parent);
-	return ["sh", "-c", `test -d -- ${quoted} || exit 66; test -w -- ${quoted} || exit 67`];
+	return ["sh", "-c", `test -d ${quoted} || exit 66; test -w ${quoted} || exit 67`];
 }
 
 /** Shell-quote a single word for a script that will itself be shell-quoted. */
@@ -528,7 +537,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			via: "shell",
 			fatal: false,
 			summary: spaceProbeSummary(inputs.space.root, inputs.target.name),
-			argv: ["sh", "-c", `test -d -- ${quoteForRemoteShell(inputs.space.root)}`],
+			argv: ["sh", "-c", `test -d ${quoteForRemoteShell(inputs.space.root)}`],
 			problem: `couldn't check whether ${inputs.space.root} exists on ${inputs.target.name}. Nothing has been copied.`,
 		});
 	}

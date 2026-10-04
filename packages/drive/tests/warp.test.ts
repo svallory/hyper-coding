@@ -28,16 +28,18 @@ import {
  */
 
 /**
- * The words that follow each `marker` in a probe script, up to the next `||`.
+ * The shell words a probe script hands to `test`, in order.
  *
- * These are the words a remote shell would have to split correctly, so they are
- * exactly what {@link argvAfterShell} should be pointed at.
+ * These are the words a remote shell has to split correctly, so they are
+ * exactly what {@link argvAfterShell} should be pointed at. Split on the `test`
+ * verbs rather than on a `--` separator: there is no `--` (dash has no such
+ * option for its `test` builtin), and a separator that a future change removes
+ * would quietly make this helper find nothing and pass vacuously.
  */
-function quotedWordsAfter(script: string, marker: string): string[] {
-	return script
-		.split(marker)
-		.slice(1)
-		.map((rest) => rest.split(" || ")[0] as string);
+function testWords(script: string): string[] {
+	// Take everything up to the next `||`, NOT up to the next space: a quoted
+	// word is allowed to contain spaces, which is the whole point of quoting it.
+	return [...script.matchAll(/test -[dw] (\S.*?)(?= \|\||$)/g)].map((match) => match[1] as string);
 }
 
 /**
@@ -552,11 +554,11 @@ describe("hostile inputs never reach a shell unquoted", () => {
 		// property that matters — a path with a space and an apostrophe must
 		// arrive as ONE argument, and must not close the quoting to start a
 		// command.
-		const words = quotedWordsAfter(script, "-- ");
+		const words = testWords(script);
 		expect(words).toHaveLength(2);
 		for (const word of words) expect(argvAfterShell(word)).toEqual([parent]);
 		// Every such word is quoted: none starts bare.
-		expect(script).not.toMatch(/-- [^-']/);
+		expect(script).not.toMatch(/test -[dw] [^-']/);
 	});
 
 	it("keeps a hostile path out of the shell's word splitting, in the clone script too", () => {
@@ -577,7 +579,7 @@ describe("hostile inputs never reach a shell unquoted", () => {
 		const spaceProbe = plan.steps.find(
 			(entry) => entry.kind === "probe" && entry.fatal === false,
 		) as Extract<WarpStep, { kind: "probe" }>;
-		const words = quotedWordsAfter(spaceProbe.argv[2] as string, "-- ");
+		const words = testWords(spaceProbe.argv[2] as string);
 		expect(words).toHaveLength(1);
 		expect(argvAfterShell(words[0] as string)).toEqual([`${HOME}/sp/r`]);
 	});
@@ -659,8 +661,8 @@ describe("--dry-run", () => {
 			},
 		});
 		const text = describeWarp(plan).lines.join("\n");
-		expect(text).toContain("test -d --");
-		expect(text).toContain("test -w --");
+		expect(text).toContain("test -d ");
+		expect(text).toContain("test -w ");
 		expect(text).toContain("command -v hyper");
 		expect(text).toContain("hyper space clone research --yes");
 		expect(text).toContain("--exclude=node_modules --exclude=.turbo");
@@ -941,7 +943,31 @@ describe("describeStep", () => {
 		const plan = planOf();
 		const text = describeStep(step(plan.steps, "probe"));
 		expect(text).toContain("ssh --");
-		expect(text).toContain("test -d --");
+		expect(text).toContain("test -d ");
+	});
+
+	it("never writes `test --`, which dash (the default /bin/sh) rejects", () => {
+		// `test` is a shell BUILTIN, and dash has no `--` option for it: it
+		// answers "test: --: unexpected operator" and the probe fails on a
+		// perfectly good directory. Found by the container e2e, not by a unit
+		// test — which is exactly why the e2e exists.
+		const plan = planOf({
+			cwdKind: "space-worktree",
+			space: {
+				root: `${HOME}/sp/r`,
+				name: "r",
+				barePath: `${HOME}/sp/r/.git`,
+				branch: "main",
+				cloneNeeded: true,
+			},
+		});
+		for (const probe of plan.steps.filter((entry) => entry.kind === "probe")) {
+			const script = (probe as { argv: string[] }).argv.join(" ");
+			expect(script, probe.summary).not.toMatch(/test -[dw] --/);
+		}
+		// …and it is still correct under dash, which is the real proof.
+		const script = step(plan.steps, "probe").argv[2] as string;
+		expect(argvAfterShell(testWords(script)[0] as string)).toEqual([`${HOME}/work`]);
 	});
 
 	it("shows a copy with its exclusions and without --delete", () => {
