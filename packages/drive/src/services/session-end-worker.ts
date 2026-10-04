@@ -26,6 +26,7 @@
 import { readdirSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { Readable } from "node:stream";
+import { quoteForTerminal } from "#lib/terminal-text";
 import { isIgnoredSessionEnd, readSessionEndInput, sessionEndMessage } from "#services/session-end";
 import { appendSessionEndLog, type SessionEndLogEntry } from "#services/session-end-log";
 import { readCadence, spaceGitDir } from "#services/space-git";
@@ -57,7 +58,7 @@ function payloadGitDir(payloadPath: string): string {
 		basename(dirname(gitDir)) !== ".hyper"
 	)
 		throw new SessionEndPayloadError(
-			`--payload-file must be a ${SESSION_END_PAYLOAD_PREFIX}* file inside a space's .hyper/space.git; ${JSON.stringify(payloadPath)} is not one.`,
+			`--payload-file must be a ${SESSION_END_PAYLOAD_PREFIX}* file inside a space's .hyper/space.git; ${quoteForTerminal(payloadPath)} is not one.`,
 		);
 	return gitDir;
 }
@@ -126,7 +127,7 @@ export async function runSessionEndWorker(
 		return appendSessionEndLog(gitDir, {
 			session,
 			outcome: "ignored",
-			detail: `reason ${input.reason}: nothing is saved when a session is cleared or resumed.`,
+			detail: `reason ${quoteForTerminal(input.reason ?? "")}: nothing is saved when a session is cleared or resumed.`,
 		});
 	const notes: string[] = [];
 	let root: string;
@@ -136,7 +137,7 @@ export async function runSessionEndWorker(
 		({ root, branch } = requireInitializedSpace(cwd));
 		if (realpathSync(spaceGitDir(root)) !== realpathSync(gitDir))
 			throw new Error(
-				`the payload belongs to ${gitDir}, but the worker's directory is in the space at ${root}; nothing was committed.`,
+				`the payload belongs to ${quoteForTerminal(gitDir)}, but the worker's directory is in the space at ${quoteForTerminal(root)}; nothing was committed.`,
 			);
 		const result = await commitSpace(
 			root,

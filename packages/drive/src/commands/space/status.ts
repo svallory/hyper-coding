@@ -49,7 +49,7 @@ export default class Status extends SpaceCommand<typeof Status> {
 		if (result.sessionEndFailure !== null) {
 			const failure = result.sessionEndFailure;
 			this.log(
-				`Last session end (${failure.at}, session ${failure.session}): ${failure.outcome === "push-failed" ? "push failed" : failure.outcome}: ${failure.detail}`,
+				`Last session end (${escapeControlCharacters(failure.at)}, session ${escapeControlCharacters(failure.session)}): ${failure.outcome === "push-failed" ? "push failed" : failure.outcome}: ${escapeControlCharacters(failure.detail)}`,
 			);
 		}
 		if (result.status.length === 0) this.log("Working tree clean.");
