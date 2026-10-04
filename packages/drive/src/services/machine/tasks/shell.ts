@@ -11,7 +11,7 @@
  * quotes the whole snippet, so its spaces survive.
  */
 
-import { type RunResult, shellJoin } from "#services/remote";
+import { type RunResult, shellJoin, shellQuote } from "#services/remote";
 import type { TaskContext } from "./types.js";
 
 /** Embed a shell program as one argument, never by hand-written quote delimiters. */
@@ -47,4 +47,23 @@ export async function runOrFail(
 export async function succeeds(ctx: TaskContext, script: string): Promise<boolean> {
 	const result = await runScript(ctx, script);
 	return result.code === 0;
+}
+
+/**
+ * Append one line to an rc file, once.
+ *
+ * Shared by the two tasks that own a line in the primary's `.bashrc` — the
+ * agent-user layout (`umask 002`, `set -o physical`) and the home-path feature
+ * (`set -o physical` again) — so running both features cannot produce two
+ * copies of the same line, and neither has to know what the other writes.
+ *
+ * The match is on the WHOLE line (`grep -x`), so a commented-out copy or a
+ * differently-quoted one is not mistaken for the real thing.
+ */
+export function ensureBashrcLine(path: string, line: string): string {
+	const q = shellQuote;
+	return [
+		`touch ${q(path)}`,
+		`grep -qxF ${q(line)} ${q(path)} || printf '%s\\n' ${q(line)} >> ${q(path)}`,
+	].join("\n");
 }

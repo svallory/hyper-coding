@@ -52,6 +52,7 @@ describe("loadConfig", () => {
 			home: "/home/svallory",
 			features: ["docker", "mutagen"],
 			agent_user: "agent",
+			agent_key: "",
 		});
 		expect(config.warp.exclude).toEqual(["node_modules", "dist"]);
 		expect(config.sync.claude.ignore).toEqual(["projects/**/*.log"]);
@@ -67,6 +68,7 @@ describe("loadConfig", () => {
 			home: "/home/spare",
 			features: DEFAULT_MACHINE.features,
 			agent_user: "agent",
+			agent_key: "",
 		});
 	});
 

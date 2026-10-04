@@ -21,6 +21,13 @@ export interface MachineConfig {
 	features: string[];
 	/** User agents run as on that machine. */
 	agent_user: string;
+	/**
+	 * Path to a ssh PUBLIC key (.pub) the agent user should accept, so setup can
+	 * open a session as that user on this machine. Empty means "ask", and then
+	 * the default key in the user's own ~/.ssh is read. A private key is never
+	 * read — see services/machine/tasks/agent-key.ts.
+	 */
+	agent_key: string;
 }
 
 /**
@@ -201,6 +208,7 @@ export const DEFAULT_MACHINE: MachineConfig = {
 	home: "",
 	features: [],
 	agent_user: "agent",
+	agent_key: "",
 };
 
 /* ------------------------------------------------------------------------- */

@@ -9,7 +9,13 @@
 
 import { spawnSync } from "node:child_process";
 import { loadConfig } from "#config/index";
-import { LocalMachine, type MachineRunner, RemoteMachine } from "#services/remote";
+import {
+	LocalMachine,
+	type MachineRunner,
+	RemoteMachine,
+	type Spawner,
+	targetWithUser,
+} from "#services/remote";
 
 /** Where a machine's data came from. */
 export type MachineSource = "herdr" | "config" | "both";
@@ -25,6 +31,12 @@ export interface MachineInfo {
 	features: string[];
 	/** User agents run as on that machine. Defaults to "agent". */
 	agentUser: string;
+	/**
+	 * Path to a ssh public key (.pub) the agent user should accept there. Empty
+	 * means "not configured": setup then reads this machine's own default public
+	 * key, and says which file it read.
+	 */
+	agentKey: string;
 	source: MachineSource;
 	/** False when Herdr isn't installed or doesn't know the machine. */
 	herdr: boolean;
@@ -176,7 +188,7 @@ function friendlyError(err: unknown): string {
 function merged(
 	name: string,
 	herdr: HerdrMachine | undefined,
-	config: { home: string; features: string[]; agent_user: string } | undefined,
+	config: { home: string; features: string[]; agent_user: string; agent_key: string } | undefined,
 ): MachineInfo {
 	const inConfig = config !== undefined;
 	const inHerdr = herdr !== undefined;
@@ -186,6 +198,7 @@ function merged(
 		home: inConfig ? config.home || undefined : undefined,
 		features: config?.features ?? [],
 		agentUser: config?.agent_user || DEFAULT_AGENT_USER,
+		agentKey: config?.agent_key || "",
 		source: inHerdr && inConfig ? "both" : inHerdr ? "herdr" : "config",
 		herdr: inHerdr,
 	};
@@ -284,4 +297,37 @@ export function runnerFor(name?: string): MachineRunner {
 		);
 	}
 	return new RemoteMachine(machine.host);
+}
+
+/**
+ * A runner that reaches the same machine as ANOTHER user.
+ *
+ * The unattended agent owns its own Docker, its own `systemd --user` units and
+ * its own home, so some work simply cannot be done as the primary user. This is
+ * how a task gets at it: the same ssh transport, with the user substituted in
+ * the target (`svallory@box` becomes `agent@box`), which is the only way to
+ * open a real login session of that user — and a real login session is exactly
+ * what rootless Docker's setuptool needs.
+ *
+ * Local setups are refused here, by name: becoming another user on this
+ * machine needs root, and hyper never runs as root (C-6).
+ */
+export function agentRunnerFor(
+	machine: MachineInfo | null,
+	agentUser: string,
+	spawner?: Spawner,
+): MachineRunner {
+	const name = machine?.name ?? "this machine";
+	if (machine === null) {
+		throw new MachineError(
+			`I can't open a session as \`${agentUser}\` on this machine: becoming another user here needs root, and hyper never runs as root. Set the machine up over ssh instead — \`hyper machine setup <machine> --features docker-rootless\`.`,
+		);
+	}
+	if (!machine.host) {
+		throw new MachineError(
+			`I don't know how to reach the "${name}" machine as \`${agentUser}\` — Herdr has no target for it yet. Run \`${addHint(name)}\` first.`,
+		);
+	}
+	// The spawner is a test seam: without one this is the real ssh.
+	return new RemoteMachine(targetWithUser(machine.host, agentUser), spawner);
 }

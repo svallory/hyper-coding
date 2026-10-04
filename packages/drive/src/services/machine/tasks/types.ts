@@ -14,7 +14,7 @@
 
 import type { DriveConfig } from "#config/schema";
 import type { MachineInfo } from "#services/machine";
-import type { MachineRunner } from "#services/remote";
+import type { MachineRunner, Spawner } from "#services/remote";
 
 /** A capability a task belongs to, and what `hyper machine setup` offers to set up. */
 export type Feature = "tools" | "config-sync" | "agent-user" | "docker-rootless" | "home-path";
@@ -77,6 +77,21 @@ export interface TaskContext {
 	config: DriveConfig;
 	/** Print progress. Goes to stdout in a command, to a buffer in a test. */
 	log: (line: string) => void;
+	/**
+	 * `--agent-key <file>`: the ssh PUBLIC key (.pub) the agent user should
+	 * accept on this machine, for this run. Undefined when the flag wasn't
+	 * given, and then the machine's `agent_key` config value is used, and then
+	 * this machine's own default public key. Only ever the `.pub` half — see
+	 * `tasks/agent-key.ts`.
+	 */
+	agentKeyFile?: string;
+	/**
+	 * Injection seam for tests: the process spawner the as-agent runner uses.
+	 * Undefined in production, where `MachineRunner` uses its own. It exists
+	 * because a task that opens a session as ANOTHER user builds its own runner,
+	 * so it could not otherwise be driven by a recording runner in `ctx`.
+	 */
+	spawner?: Spawner;
 }
 
 /** One unit of machine setup. */

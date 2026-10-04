@@ -24,7 +24,7 @@ import {
 	unreadableSharedTree,
 	unsettledSharedTree,
 } from "./agent-shared-tree.js";
-import { runOrFail, runScript, succeeds } from "./shell.js";
+import { ensureBashrcLine, runOrFail, runScript, succeeds } from "./shell.js";
 import type { Task, TaskContext } from "./types.js";
 
 const UNSUPPORTED_FS = /^(nfs|cifs|smb|fuse)/;
@@ -290,13 +290,12 @@ export const agentUserDirs: Task = {
 			].join("\n"),
 		);
 		for (const line of BASHRC_LINES) {
+			// The same helper `home-path.physical` uses: one `grep -qxF` guard, so
+			// selecting both features writes this line once rather than twice.
 			await runOrFail(
 				ctx,
 				`add "${line}" to your .bashrc`,
-				[
-					`touch ${q(`${paths.home}/.bashrc`)}`,
-					`grep -qxF ${q(line)} ${q(`${paths.home}/.bashrc`)} || printf '%s\\n' ${q(line)} >> ${q(`${paths.home}/.bashrc`)}`,
-				].join("\n"),
+				ensureBashrcLine(`${paths.home}/.bashrc`, line),
 			);
 		}
 		// Both shared trees last, and only after the protection above has run.
