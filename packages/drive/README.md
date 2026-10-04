@@ -166,8 +166,9 @@ tooling).
 
 ## Known limits
 
-- **Nothing at a space root is backed up until `hyper space init`.** The
-  generated `HYPER.md` says which case applies as of when it was written;
+- **Nothing at a space root is backed up until it has a hyperdrive branch**
+  (`hyper space init` on the first machine, `hyper space clone` on another).
+  The generated `HYPER.md` says which case applies as of when it was written;
   `hyper space status` is the live answer.
 - **Warp overwrites the target's copy file by file, with no `--delete`:**
   files that exist only on the target are kept. An ignored file on the

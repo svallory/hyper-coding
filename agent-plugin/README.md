@@ -58,8 +58,9 @@ history: `hyper space init` gives it an orphan branch in your private
 **hyperdrive** repository, and from then on the allowlisted directories
 (`notes/`, `data/`, `bin/`, `.hyper/`, `.claude/`) are backed up on the
 cadence you choose (`manual`, `session-end`, or `session-end+push`).
-`scratch/`, `worktrees/` and loose root files never travel. Until that first
-`hyper space init`, the old rule holds: nothing at the space root is backed
+`scratch/`, `worktrees/` and loose root files never travel. Until the
+space has a branch (`hyper space init` on the first machine, or `hyper space
+clone` on another), the old rule holds: nothing at the space root is backed
 up.
 
 Adopting an ordinary checkout therefore means **converting** it: the repo
