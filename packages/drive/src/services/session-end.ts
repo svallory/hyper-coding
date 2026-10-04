@@ -42,6 +42,19 @@ async function* transcriptLines(stream: Readable): AsyncGenerator<string> {
 export interface SessionEndInput {
 	session_id: string;
 	transcript_path?: string;
+	/** Why the session ended (`clear`, `resume`, `logout`, `prompt_input_exit`, `other`). */
+	reason?: string;
+}
+
+/**
+ * Reasons that do not end the work: `/clear` and a resume start over in the
+ * same place. Committing on each would be noise, so they save nothing, even
+ * if a hook configuration forwards them.
+ */
+export const IGNORED_SESSION_END_REASONS: readonly string[] = ["clear", "resume"];
+
+export function isIgnoredSessionEnd(input: SessionEndInput): boolean {
+	return input.reason !== undefined && IGNORED_SESSION_END_REASONS.includes(input.reason);
 }
 
 /** Remove terminal controls/formatting and fold all line separators into spaces. */
@@ -92,6 +105,7 @@ export async function readSessionEndInput(input: Readable): Promise<SessionEndIn
 	return {
 		session_id: record.session_id,
 		transcript_path: record.transcript_path as string | undefined,
+		...(typeof record.reason === "string" ? { reason: record.reason } : {}),
 	};
 }
 

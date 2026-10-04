@@ -1,6 +1,13 @@
 import { Flags } from "@oclif/core";
 import { SpaceCommand } from "#lib/space-command";
-import { readSessionEndInput, sessionEndLine, sessionEndMessage } from "#services/session-end";
+import {
+	isIgnoredSessionEnd,
+	readSessionEndInput,
+	sessionEndLine,
+	sessionEndMessage,
+} from "#services/session-end";
+import { SESSION_END_FAILURES } from "#services/session-end-log";
+import { runSessionEndWorker } from "#services/session-end-worker";
 import { requireInitializedSpace, withSpaceSignals } from "#services/space-history";
 import { commitSpace } from "#services/space-sync";
 
@@ -19,6 +26,11 @@ export default class Commit extends SpaceCommand<typeof Commit> {
 				"Read Claude hook JSON on stdin; use the last transcript summary (200 characters)",
 			exclusive: ["message", "allow-secret", "json"],
 		}),
+		"payload-file": Flags.string({
+			description:
+				"With --session-end: read the hook JSON from this file in .hyper/space.git (removed after reading), then commit, push for the session-end+push cadence, and record the result in .hyper/space.git/session-end.log (used by the detached SessionEnd worker)",
+			dependsOn: ["session-end"],
+		}),
 		"allow-secret": Flags.string({
 			description: "Exact space-relative secret path to allow (repeatable; acknowledged in output)",
 			multiple: true,
@@ -27,9 +39,28 @@ export default class Commit extends SpaceCommand<typeof Commit> {
 	};
 	async run(): Promise<void> {
 		const { flags } = await this.parse(Commit);
+		if (flags["payload-file"] !== undefined) {
+			// The detached worker: stdout/stderr go nowhere, the log is the output.
+			// Its exit status still says whether the save worked, for callers that look.
+			let entry: Awaited<ReturnType<typeof runSessionEndWorker>>;
+			try {
+				entry = await withSpaceSignals(() => runSessionEndWorker(flags["payload-file"]!));
+			} catch (error) {
+				process.stderr.write(
+					`hyperdrive: ${sessionEndLine(error instanceof Error ? error.message : String(error), 1000)}\n`,
+				);
+				this.exit(2);
+			}
+			if (SESSION_END_FAILURES.includes(entry.outcome)) {
+				process.stderr.write(`hyperdrive: ${entry.outcome}: ${entry.detail}\n`);
+				this.exit(2);
+			}
+			return;
+		}
 		if (flags["session-end"]) {
 			try {
 				const input = await readSessionEndInput(process.stdin);
+				if (isIgnoredSessionEnd(input)) return;
 				const message = await sessionEndMessage(input);
 				const warnings: string[] = [];
 				const result = await withSpaceSignals(async () => {
