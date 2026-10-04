@@ -297,6 +297,20 @@ describe("project transport and terminal policy", () => {
 			"remote: could not reach https://alice:password-value@example.invalid/repo.git today, retrying",
 			"remote: could not reach https://[redacted]@example.invalid/repo.git today, retrying",
 		],
+		// A quote or comma ends the url: an email after it is not userinfo,
+		// and the real host must stay visible.
+		[
+			"'https://host.example.invalid',admin@example.invalid",
+			"'https://host.example.invalid',admin@example.invalid",
+		],
+		[
+			'see "https://host.example.invalid"; mail admin@example.invalid',
+			'see "https://host.example.invalid"; mail admin@example.invalid',
+		],
+		[
+			"(https://host.example.invalid)admin@example.invalid",
+			"(https://host.example.invalid)admin@example.invalid",
+		],
 		// An unencoded `@` inside the password is still userinfo.
 		[
 			"fatal: https://user:prefix@password-value@example.invalid/r",
@@ -411,7 +425,27 @@ describe("project transport and terminal policy", () => {
 		// The input — what `--json` prints — is left exactly as it was.
 		expect(paths[0]).toBe(".claude/commands/a01.md");
 	});
+	it("names a .vscode task and a .claude script ahead of 25 command files", () => {
+		const commands = Array.from(
+			{ length: 25 },
+			(_, index) => `.claude/commands/a${String(index + 1).padStart(2, "0")}.md`,
+		);
+		const paths = [...commands, ".vscode/tasks.json", ".claude/statusline.sh"].sort();
+		// No facts: neither file has the execute bit, and neither needs it.
+		const described = describeReviewPaths(paths);
+		const named = (described.match(/"[^"]+"/g) ?? []).map((quoted) => quoted.slice(1, -1));
+		expect(named).toHaveLength(20);
+		expect(named).toContain(".vscode/tasks.json");
+		expect(named).toContain(".claude/statusline.sh");
+	});
 	it.each([
+		[".vscode/tasks.json", 0],
+		[".vscode/launch.json", 0],
+		[".claude/statusline.sh", 1],
+		[".claude/scripts/run.py", 1],
+		[".claude/output-styles/terse.md", 1],
+		[".hyper/tool.conf", 1],
+		[".hyper/notes.md", 4],
 		[".claude/settings.local.json", 0],
 		[".claude/hooks/pre.sh", 0],
 		[".config/wt.toml", 0],

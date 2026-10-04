@@ -805,12 +805,31 @@ export function reviewPathClass(path: string, facts?: ReviewPathFacts): number {
 		/^\.claude\/settings[^/]*\.json$/.test(lower) ||
 		under(".claude/hooks/") ||
 		under(".config/") ||
-		lower === ".vscode/settings.json" ||
+		// Every `.vscode/*.json`: tasks.json can run on folder open, and
+		// launch.json names programs to start.
+		(under(".vscode/") && name.endsWith(".json")) ||
 		((under(".cursor/") || under(".codex/") || under(".pi/")) && !markdown) ||
 		(under(".hyper/") && (facts?.executable || name.includes("hook")))
 	)
 		return 0;
-	if (facts?.executable || under("bin/")) return 1;
+	// A script a settings file runs through an interpreter needs no execute
+	// bit, so anything in an agent directory that is not instruction markdown
+	// counts as something that can run (`.claude/statusline.sh`,
+	// `.claude/output-styles/*.md`, `.hyper/` outside memory).
+	const instructionMarkdown =
+		markdown &&
+		(under(".claude/commands/") ||
+			under(".claude/agents/") ||
+			under(".claude/skills/") ||
+			under(".claude/memory/"));
+	const hyperMemory = under(".hyper/memory/") || lower === ".hyper/memory";
+	if (
+		facts?.executable ||
+		under("bin/") ||
+		(under(".claude/") && !instructionMarkdown) ||
+		(under(".hyper/") && !hyperMemory && !markdown)
+	)
+		return 1;
 	if (facts?.symlink || facts?.throughLink) return 2;
 	if (
 		INSTRUCTION_NAMES.has(name) ||
@@ -892,12 +911,14 @@ function redactLine(line: string): string {
 	// inside git's own line.
 	const masked = line.replace(/([?&][^=&\s]+)=([^&\s]*)/g, "$1=[redacted]");
 	// Userinfo lives in the AUTHORITY: between `scheme://` and the LAST `@`
-	// before the next `/` or whitespace. Every url on the line is handled,
+	// before the next `/`, whitespace or url-ending punctuation. Every url on the line is handled,
 	// wherever it sits. An unencoded `@` inside the password
 	// (`user:prefix@password-value@host`) is still userinfo, so the match runs to the last
 	// `@`; an `@` after the first `/` belongs to a path (`/a@b/c`), and masking
 	// there would invent a host the user never configured.
-	const urls = masked.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s]*@/gi, "$1[redacted]@");
+	// Quotes, commas, `)`, `>` and `;` end a url in prose and code
+	// (`'https://h',admin@example.com`), so the authority never runs past them.
+	const urls = masked.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s'",)>;]*@/gi, "$1[redacted]@");
 	// A bare `user:secret@host` with no scheme. The `//` guard keeps a url
 	// redacted above from being read as `scheme:password@`. scp-like
 	// `user@host:path` has no colon before the `@` and is not a secret.
