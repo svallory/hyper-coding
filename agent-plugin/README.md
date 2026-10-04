@@ -56,12 +56,13 @@ code lives in a worktree, the space's local-only files live beside it.
 "Never committed" means the project's remote. A space can still keep its own
 history: `hyper space init` gives it an orphan branch in your private
 **hyperdrive** repository, and from then on the allowlisted directories
-(`notes/`, `data/`, `bin/`, `.hyper/`, `.claude/`) are backed up on the
-cadence you choose (`manual`, `session-end`, or `session-end+push`).
-`scratch/`, `worktrees/` and loose root files never travel. Until the
-space has a branch (`hyper space init` on the first machine, or `hyper space
-clone` on another), the old rule holds: nothing at the space root is backed
-up.
+(`notes/`, `data/`, `bin/`, `.hyper/`, `.claude/`) are committed to that
+branch on the cadence you choose (`manual`, `session-end`, or
+`session-end+push`) — and reach your hyperdrive only when pushed, which
+`session-end+push` and `hyper space push` do. `scratch/`, `worktrees/` and
+loose root files are never committed. Until the space has a branch
+(`hyper space init` on the first machine, or `hyper space clone` on
+another), nothing at the space root is committed or backed up.
 
 Adopting an ordinary checkout therefore means **converting** it: the repo
 becomes bare, the entire working tree — dirty state, untracked files,
