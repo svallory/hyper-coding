@@ -97,8 +97,70 @@ with no `.git` and no marker is just a directory, never assumed to be a space.
 
 ## The corollary
 
-**Nothing at the space root is backed up.** A dump in `data/` exists on
-exactly one disk.
+**Until the space has a hyperdrive branch, nothing at the space root is
+backed up.** A dump in `data/` exists on exactly one disk. Once you run
+`hyper space init`, the allowlisted directories (`notes/`, `data/`, `bin/`,
+`.hyper/`, `.claude/`) are backed up to your hyperdrive on the cadence you
+chose; `scratch/`, `worktrees/`, `code/` and loose root files never are.
+See [Hyperdrive](#hyperdrive).
+
+## Hyperdrive
+
+A space can have its own history: one orphan branch (`space/<name>`, or
+`space/<group>/<name>`) in your private hyperdrive repository, committed
+from a separate git dir at `.hyper/space.git`. The project's own `.git` is
+never touched by this.
+
+**What is tracked.** An allowlist, not a blocklist: `notes/`, `data/`,
+`bin/`, `.hyper/`, `.claude/` and the root control files (`.gitignore`,
+`HYPER.md`, `AGENTS.md`, `CLAUDE.md`). `hyper space init --tracked <dir>` adds more
+directories; a peer's new tracked entries are never adopted silently on
+pull (it asks, or `--accept-tracked`).
+
+**What never is.** `scratch/`, `worktrees/`, `code/`, loose root files and
+`.hyper/space.git` itself or `.claude/settings.local.json` (per-machine
+settings). A staged file that looks like a secret (keys,
+tokens, `.env`) makes the commit refuse — override per path with
+`hyper space commit --allow-secret <path>` when it is a false positive.
+
+**Cadence.** `hyper.cadence` in the space git dir is the truth:
+`manual` (you run `hyper space commit`), `session-end` (each Claude session
+end saves), `session-end+push` (save and push). The SessionEnd hook returns
+at once — a detached worker does the commit and push, so a slow network
+never holds the session. A failed save shows up in `hyper space status`,
+not in the session.
+
+<!-- T-18 updates this line -->
+Pi sessions are saved with `hyper space commit` by hand for now.
+
+**The commands:**
+
+- `hyper space init` — give the current space a branch (first commit, push,
+  manifest entry).
+- `hyper space commit [-m msg]` / `push` / `pull` — save, publish, fetch.
+  Pull is fast-forward only.
+- `hyper space log` / `status` — history; state, cadence and upstream.
+- `hyper space list` — every space in the hyperdrive manifest.
+- `hyper space clone <name> [path]` — recreate a space on a new machine.
+
+**Pull and clone report what can act.** Incoming history is validated
+before anything is checked out, and both commands list the incoming files
+that can run commands or instruct agents — executables, hooks, and
+instruction files (`CLAUDE.md`, `AGENTS.md`, anything under `.claude/`,
+`.pi/`, `bin/`, …). Read that list before letting an agent loose in a
+freshly cloned or pulled space.
+
+**`hyper warp <machine>`** moves a live session to another machine: the
+working directory, the transcript, and an ownership marker go over ssh.
+It refuses to land on a dirty target without `--force`; with `--force` the
+target's tracked changes are saved in a stash first (untracked files are
+not in it). `--dry-run` prints every step and changes nothing.
+
+**Machines.** `hyper machine setup [name]` brings a machine to parity
+(tools, agent user, layout). Hyper never runs sudo itself: it prints a root
+script, you read it and run it. `hyper drive init` points the CLI at your
+private hyperdrive repo; `hyper drive sync-config` keeps `~/.claude` and
+`~/.pi/agent` in step between machines.
 
 ## Where a file goes
 
