@@ -772,19 +772,18 @@ export function redactGitSecrets(value: string): string {
 function redactLine(line: string): string {
 	// A query value can carry a secret, and it is printed both in our url and
 	// inside git's own line.
-	let out = line.replace(/([?&][^=&\s]+)=([^&\s]*)/g, "$1=[redacted]");
-	// Userinfo lives in the AUTHORITY, which ends at the first `/` after the
-	// scheme. An `@` further along belongs to a path (`/a@b/c`), and masking
+	const masked = line.replace(/([?&][^=&\s]+)=([^&\s]*)/g, "$1=[redacted]");
+	// Userinfo lives in the AUTHORITY: between `scheme://` and the LAST `@`
+	// before the next `/` or whitespace. Every url on the line is handled,
+	// wherever it sits. An unencoded `@` inside the password
+	// (`user:prefix@password-value@host`) is still userinfo, so the match runs to the last
+	// `@`; an `@` after the first `/` belongs to a path (`/a@b/c`), and masking
 	// there would invent a host the user never configured.
-	const scheme = out.indexOf("://");
-	const authorityEnd = scheme >= 0 ? out.indexOf("/", scheme + 3) : -1;
-	const at = out.lastIndexOf("@", (authorityEnd >= 0 ? authorityEnd : out.length) - 1);
-	if (at >= 0) {
-		if (scheme >= 0 && scheme < at)
-			out = `${out.slice(0, scheme + 3)}[redacted]@${out.slice(at + 1)}`;
-		else out = out.replace(/(^|[\s"'(])([\w.+-]+):([^\s@]+)@/g, "$1$2:[redacted]@");
-	}
-	return out;
+	const urls = masked.replace(/(\b[a-z][a-z0-9+.-]*:\/\/)[^/\s]*@/gi, "$1[redacted]@");
+	// A bare `user:secret@host` with no scheme. The `//` guard keeps a url
+	// redacted above from being read as `scheme:password@`. scp-like
+	// `user@host:path` has no colon before the `@` and is not a secret.
+	return urls.replace(/(^|[\s"'(])([\w.+-]+):(?!\/\/)([^\s@]+)@/g, "$1$2:[redacted]@");
 }
 
 export interface CloneProjectResult {
