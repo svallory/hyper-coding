@@ -87,6 +87,7 @@ import {
 	targetWorktreeAdd,
 	targetWorktreeReset,
 	targetWorktreeState,
+	trackedUnderDirectory,
 } from "#services/space-git";
 
 /** Exit code for every refusal and every failed plan. Matches `space clone`. */
@@ -170,6 +171,12 @@ export interface WarpInputs {
 	space: WarpSpaceInfo | null;
 	/** `[warp] exclude` from `drive.toml`, already merged over the defaults. */
 	excludes: string[];
+	/**
+	 * The exclusions under which the repository TRACKS files (git kinds only;
+	 * see {@link excludedWithTrackedFiles}). Those files are not copied, so the
+	 * target's git shows them as deleted.
+	 */
+	trackedUnderExcludes: string[];
 	/**
 	 * Name of an existing config-sync session for this target, when there is
 	 * one. The transcript then travels by `flush()` instead of by rsync.
@@ -1039,6 +1046,15 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			`The repository's .git travels with it and is merged into ${name}'s copy file by file, like everything else.`,
 		);
 	}
+	if (inputs.cwdKind !== "plain-dir" && inputs.excludes.length > 0) {
+		notes.push(
+			`Excluded directories (${inputs.excludes.join(", ")}) are not copied, so files git tracks under them show as deleted in \`git status\` on ${name}.${
+				inputs.trackedUnderExcludes.length > 0
+					? ` This repository tracks files under: ${inputs.trackedUnderExcludes.join(", ")}.`
+					: " This repository tracks none there."
+			}`,
+		);
+	}
 	if (inputs.cwdKind !== "plain-dir") {
 		notes.push(
 			inputs.force
@@ -1710,6 +1726,7 @@ export function gatherWarp(options: {
 	const kind = classifyCwd(cwd);
 	const space = kind === "space-worktree" ? describeSpace(cwd) : null;
 	const config = loadConfig();
+	const excludes = [...config.warp.exclude];
 
 	return {
 		collision,
@@ -1734,7 +1751,8 @@ export function gatherWarp(options: {
 			strayMarker: findStrayMarker(dirname(chosen.path), chosen.id),
 			cwdKind: kind,
 			space,
-			excludes: [...config.warp.exclude],
+			excludes,
+			trackedUnderExcludes: kind === "plain-dir" ? [] : excludedWithTrackedFiles(cwd, excludes),
 			syncSession: null,
 			agentSuffix: Date.now().toString(36),
 			startedAt: new Date().toISOString(),
@@ -1748,6 +1766,18 @@ function isDirectory(path: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * The exclusions that are plain directory names AND have files tracked under
+ * them in the repository at `cwd` (one local `git ls-files` each, through
+ * space-git.ts). Patterns with glob or path characters are skipped: they
+ * aren't a directory name to ask git about.
+ */
+export function excludedWithTrackedFiles(cwd: string, excludes: string[]): string[] {
+	return excludes.filter(
+		(name) => /^[A-Za-z0-9._-]+$/.test(name) && trackedUnderDirectory(cwd, name) > 0,
+	);
 }
 
 /** Which of the three working-directory shapes `cwd` is. */
