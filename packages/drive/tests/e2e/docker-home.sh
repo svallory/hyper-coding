@@ -73,7 +73,6 @@ started=0
 # only signal the throwaway agent this invocation actually started.
 unset SSH_AUTH_SOCK SSH_AGENT_PID
 agent_started=0
-container_started=0
 cleanup() {
   # The throwaway ssh-agent goes whatever KEEP says: it holds only a throwaway
   # key, but a leftover agent process is still a leftover.
@@ -81,13 +80,13 @@ cleanup() {
     ssh-agent -k >/dev/null 2>&1 || kill "$SSH_AGENT_PID" 2>/dev/null || true
   fi
   if [ "${KEEP:-0}" = "1" ]; then
-    if [ "$container_started" = "1" ]; then
+    if [ "$started" = 1 ]; then
       echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
     else
       echo "# KEEP=1 — logs left in $work_real (no container started)"
     fi
   else
-if [ "$started" = 1 ]; then
+    if [ "$started" = 1 ]; then
       echo "# tearing down $container"
       podman rm -f "$container" >/dev/null 2>&1 || true
     fi

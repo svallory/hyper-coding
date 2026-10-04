@@ -298,7 +298,10 @@ if [ "$1" = "agent" ] && [ "$2" = "start" ]; then
   [ "${1:-}" = "--" ] && shift
   # Start the KIND's binary on the target with the remaining words as its
   # arguments: exactly one `claude`, whatever the caller sent.
-  exec /usr/bin/ssh $ssh_iso \
+  # %SSH_ISO% is a placeholder, NOT $ssh_iso: this heredoc is quoted, so a shell
+  # expansion here would be written out literally and expand to nothing at
+  # runtime — which silently gave this ssh the operator's agent and config.
+  exec /usr/bin/ssh %SSH_ISO% \
       -i "%KEY%" -p %PORT% %PRIMARY%@localhost "$kind" "$@"
 fi
 
@@ -315,7 +318,17 @@ render_in_place "$fakebin/herdr" \
   -e "s|%WORK%|$work_real|g" \
   -e "s|%KEY%|$key|g" \
   -e "s|%PORT%|$port|g" \
-  -e "s|%PRIMARY%|$primary|g"
+  -e "s|%PRIMARY%|$primary|g" \
+  -e "s|%SSH_ISO%|$ssh_iso|g"
+# The fake herdr's ssh is what resumes the session on the target. If its flags
+# ever stop being substituted, this ssh would fall back to the operator's ssh
+# config, agent and ControlMaster — silently. Refuse to continue.
+grep -q -- '-F /dev/null' "$fakebin/herdr" \
+  || die 'the fake herdr ssh is not isolated (-F /dev/null missing)'
+grep -q 'IdentityAgent=none' "$fakebin/herdr" \
+  || die 'the fake herdr ssh is not isolated (IdentityAgent=none missing)'
+grep -q '%SSH_ISO%' "$fakebin/herdr" \
+  && die 'the fake herdr ssh still carries an unsubstituted placeholder'
 chmod +x "$fakebin/herdr"
 
 # --- fake claude (target side, /usr/local/bin is on a non-login ssh PATH) ---

@@ -64,16 +64,15 @@ work_real="$(cd "$work" && pwd -P)"
 key="$work_real/id"
 started=0
 
-container_started=0
 cleanup() {
   if [ "${KEEP:-0}" = "1" ]; then
-    if [ "$container_started" = "1" ]; then
+    if [ "$started" = 1 ]; then
       echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
     else
       echo "# KEEP=1 — logs left in $work_real (no container started)"
     fi
   else
-if [ "$started" = 1 ]; then
+    if [ "$started" = 1 ]; then
       echo "# tearing down $container"
       podman rm -f "$container" >/dev/null 2>&1 || true
     fi
