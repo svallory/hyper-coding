@@ -140,6 +140,16 @@ function updateEntry(change: Partial<SpaceEntry>): void {
 	const entry = readManifest().spaces[0];
 	upsertSpace({ ...entry, ...change });
 }
+/** The project's bare repo HEAD, not the space's branch. */
+function projectHead(target: string): string {
+	return git(["--git-dir", join(target, ".git"), "symbolic-ref", "--short", "HEAD"], target).trim();
+}
+
+/** Config the clone wrote into the PROJECT repo, not the space's git dir. */
+function projectConfig(target: string, key: string): string {
+	return git(["--git-dir", join(target, ".git"), "config", "--get", key], target).trim();
+}
+
 function publishChange(source: string, path: string, contents: string): void {
 	writeFileSync(join(source, path), contents);
 	spaceGit(source, ["add", "-f", "--", path]);
@@ -148,6 +158,148 @@ function publishChange(source: string, path: string, contents: string): void {
 }
 
 describe("untrusted clone branch", () => {
+	it.each([
+		"HYPER.md",
+		"CLAUDE.md",
+		"AGENTS.md",
+		"notes/nested/HYPER.md",
+		"extra/CLAUDE.md",
+		"data/AGENTS.md",
+		".claude/commands/review.md",
+		".config/tool.json",
+		"bin/run.sh",
+	])("warns on every instruction or configuration path: %s", (path) => {
+		const source = seed();
+		mkdirSync(dirname(join(source, path)), { recursive: true });
+		publishChange(source, path, "review before use\n");
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		expect(JSON.parse(result.stdout).untrustedConfiguration).toContain(path);
+	});
+	it("also names .hyper/memory, which the generated HYPER.md tells agents to read", () => {
+		seed();
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		const warned: string[] = JSON.parse(result.stdout).untrustedConfiguration;
+		expect(warned).toContain(".hyper/memory/MEMORY.md");
+		expect(readFileSync(join(target, ".hyper", "memory", "MEMORY.md"), "utf8")).toContain(
+			"tracked",
+		);
+	});
+	it("keeps .claude/memory out of the warning list", () => {
+		const source = seed();
+		mkdirSync(join(source, ".claude", "memory"), { recursive: true });
+		publishChange(source, ".claude/memory/note.md", "memory\n");
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		expect(JSON.parse(result.stdout).untrustedConfiguration).not.toContain(
+			".claude/memory/note.md",
+		);
+	});
+	it("stages into the space's own git dir, never at .hyper/clone-*", () => {
+		seed();
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const real = spawnSync("sh", ["-c", "command -v git"], { encoding: "utf8" }).stdout.trim();
+		const shim = join(fixture.root, "staging-shim");
+		mkdirSync(shim);
+		const seen = join(fixture.root, "work-trees.txt");
+		writeFileSync(
+			join(shim, "git"),
+			`#!/bin/sh\ncase "$*" in *--work-tree*) printf '%s\\n' "$*" >> ${shellQuote(seen)};; esac\nexec ${shellQuote(real)} "$@"\n`,
+			{ mode: 0o755 },
+		);
+		vi.stubEnv("PATH", `${shim}:${process.env.PATH}`);
+		success(run(["sample", target, "--json"]));
+		expect(readFileSync(seen, "utf8")).toContain(join(".hyper", "space.git", "clone-"));
+		expect(readdirSync(join(target, ".hyper")).filter((name) => name.startsWith("clone-"))).toEqual(
+			[],
+		);
+	});
+	it("never commits a staging directory left behind by a killed older clone", () => {
+		const source = seed();
+		mkdirSync(join(source, ".hyper", "clone-legacy"), { recursive: true });
+		writeFileSync(join(source, ".hyper", "clone-legacy", "notes.md"), "leftover\n");
+		mkdirSync(join(source, "notes"), { recursive: true });
+		writeFileSync(join(source, "notes", "real.md"), "real\n");
+		const commit = spawnSync(process.execPath, [cli, "space", "commit", "-m", "with leftover"], {
+			cwd: source,
+			encoding: "utf8",
+			env: { ...process.env, NO_COLOR: "1", FORCE_COLOR: "0" },
+		});
+		expect(commit.status, flat(commit.stderr)).toBe(0);
+		const committed = spaceGit(source, ["show", "--name-only", "--format=", "HEAD"]).stdout;
+		expect(committed).toContain("notes/real.md");
+		expect(committed).not.toContain(".hyper/clone-legacy");
+	});
+	it("falls back to the remote HEAD branch when the manifest's default branch is absent", () => {
+		seed();
+		const entry = readManifest().spaces[0];
+		updateEntry({ repos: [{ ...entry.repos[0], default_branch: "gone-branch" }] });
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		const warnings: string = JSON.parse(result.stdout).warnings.join(" ");
+		expect(warnings).toContain('"gone-branch"');
+		expect(warnings).toContain('"main"');
+		expect(projectHead(target)).toBe("main");
+		expect(projectConfig(target, "worktrunk.default-branch")).toBe("main");
+	});
+	it("names both branches in the plain-text run too", () => {
+		seed();
+		const entry = readManifest().spaces[0];
+		updateEntry({ repos: [{ ...entry.repos[0], default_branch: "gone-branch" }] });
+		useMachine("second");
+		const response = run(["sample", join(fixture.home, "destination")]);
+		success(response);
+		expect(flat(response.stderr)).toContain("gone-branch");
+		expect(flat(response.stderr)).toContain("main");
+	});
+	it("keeps the happy path unchanged when the default branch exists", () => {
+		seed();
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		expect(
+			JSON.parse(result.stdout).warnings.filter((w: string) => w.includes("default branch")),
+		).toEqual([]);
+		expect(projectHead(target)).toBe("main");
+	});
+	it("fails with a clear reason and rolls back when the project has no branches at all", () => {
+		seed();
+		const empty = join(fixture.root, "empty-project.git");
+		git(["init", "-q", "--bare", empty], fixture.root);
+		const entry = readManifest().spaces[0];
+		updateEntry({ repos: [{ ...entry.repos[0], url: empty, default_branch: "main" }] });
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const response = run(["sample", target]);
+		expect(response.status).toBe(2);
+		expect(flat(response.stderr)).toContain("no usable HEAD");
+		expect(flat(response.stderr)).toContain("main");
+		expect(existsSync(target)).toBe(false);
+	});
+	it("names the project and git's own reason when the clone fails off a TTY", () => {
+		seed();
+		const entry = readManifest().spaces[0];
+		updateEntry({ repos: [{ ...entry.repos[0], url: join(fixture.root, "absent-project.git") }] });
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const response = run(["sample", target]);
+		expect(response.status).toBe(2);
+		expect(flat(response.stderr)).toContain("absent-project.git");
+		expect(flat(response.stderr)).toContain("git said: fatal:");
+		expect(flat(response.stderr)).toContain("sample");
+		expect(existsSync(target)).toBe(false);
+	});
 	it.each([
 		"loose.txt",
 		".hyper/space.git/config",
@@ -252,7 +404,7 @@ describe("untrusted clone branch", () => {
 		expect(readTracked(target).sort()).toEqual([".config", "extra"]);
 		expect(JSON.parse(result.stdout).warnings.join(" ")).toContain("not in the incoming allowlist");
 	});
-	it("accepts safe relative links and warns on all instruction/configuration files except memory", () => {
+	it("accepts safe relative links and warns on instruction and configuration files", () => {
 		const source = seed();
 		for (const path of [
 			"CLAUDE.md",
@@ -291,7 +443,9 @@ describe("untrusted clone branch", () => {
 		])
 			expect(warned).toContain(path);
 		expect(warned).not.toContain(".claude/memory/note.md");
-		expect(warned).not.toContain(".hyper/memory/MEMORY.md");
+		// `.claude/memory` stays exempt; `.hyper/memory` is not, because the
+		// generated HYPER.md instructs agents to read it.
+		expect(warned).toContain(".hyper/memory/MEMORY.md");
 	});
 });
 
@@ -337,13 +491,22 @@ describe("round 1 clone security", () => {
 		updateEntry({ path: "/Users/old/work/sample" });
 		useMachine("second");
 		const response = spawnCliOnTty(["space", "clone", "sample"], fixture, [answer]);
-		expect(flat(response.stdout + response.stderr)).toContain("Clone here?");
+		const said = flat(response.stdout + response.stderr);
+		expect(said).toContain("Clone here?");
 		expect(existsSync(join(fixture.home, "work", "sample"))).toBe(answer === "y");
+		if (answer === "n") {
+			// Declining is a decision, not a failure to repair: exit 1, plainly.
+			expect(response.status).toBe(1);
+			expect(said).toContain("Clone cancelled");
+			expect(said).not.toContain("once the problem is fixed");
+		}
 	});
 	it.each([
 		{ field: "url", value: "evil-helper::payload" },
 		{ field: "url", value: "ftp://example.invalid/repo" },
 		{ field: "url", value: "https://user:secret-password@example.invalid/repo" },
+		{ field: "url", value: "ssh://-oProxyCommand=touch-pwned@example.invalid/repo" },
+		{ field: "url", value: "git@-oProxyCommand=touch-pwned@example.invalid:repo" },
 		{ field: "default_branch", value: "$(x)" },
 		{ field: "default_branch", value: "main;touch-x" },
 		{ field: "default_branch", value: "a..b" },
@@ -387,6 +550,7 @@ describe("round 1 clone security", () => {
 		expect(result.untrustedConfiguration.sort()).toEqual([
 			".claude/settings.json",
 			".config/wt.toml",
+			".hyper/memory/MEMORY.md",
 			"HYPER.md",
 			"bin/run.sh",
 		]);

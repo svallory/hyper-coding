@@ -1,17 +1,11 @@
 import { isAbsolute, normalize } from "node:path";
 import { isValidSpaceName, type SpaceEntry } from "#config/schema";
 import { normaliseTrackedEntry } from "#services/allowlist";
-import { checkProjectBranchName } from "#services/space-git";
+import { checkProjectBranchName, redactGitSecrets } from "#services/space-git";
 
 /** Never print embedded credentials from untrusted manifest data. */
 export function redactCloneUrl(value: string): string {
-	const at = value.lastIndexOf("@");
-	if (at < 0) return value;
-	const scheme = value.indexOf("://");
-	const prefix = scheme >= 0 && scheme < at ? value.slice(0, scheme + 3) : "";
-	// Mask conservatively even when whitespace or malformed userinfo makes
-	// URL parsing fail. Diagnostics need not preserve an invalid authority.
-	return `${prefix}[redacted]@${value.slice(at + 1)}`;
+	return redactGitSecrets(value);
 }
 
 /** Local test/development drives may reference local projects; hosted drives may not. */
@@ -37,6 +31,10 @@ export function isAllowedProjectUrl(value: string, allowLocal: boolean): boolean
 			const url = new URL(value);
 			// Secrets in argv can also leak through inherited git progress output.
 			if (url.password) return false;
+			// A leading dash turns part of the authority into an option, not a
+			// host: `ssh://-oProxyCommand=…@host` parses the payload as the
+			// USERNAME, and `ssh user@host` would run it. Reject both spellings.
+			if (url.username.startsWith("-") || url.hostname.startsWith("-")) return false;
 			if (url.protocol === "https:" || url.protocol === "ssh:") return !!url.hostname;
 			return (
 				allowLocal && url.protocol === "file:" && (!url.hostname || url.hostname === "localhost")
@@ -45,19 +43,19 @@ export function isAllowedProjectUrl(value: string, allowLocal: boolean): boolean
 			return false;
 		}
 	}
-	if (
-		/^[A-Za-z0-9._-]+@(?:[A-Za-z0-9.-]+|\[[A-Fa-f0-9:]+\]):[^\s]+$/.test(value) &&
-		!value.includes("::")
-	)
-		return true;
+	// scp-like `user@host:path`: the host is what sits between @ and the colon.
+	const scp = /^[\w.+-]+@([^:/\s]+):.+$/.exec(value);
+	if (scp && !value.includes("::")) return !scp[1].startsWith("-");
 	return allowLocal && !value.includes(":");
 }
 
 /** Complete selected-entry validation, before any space/project creation or fetch. */
 export function validateCloneEntry(entry: SpaceEntry, remote: string): void {
 	const fail = (field: string, detail: string): never => {
+		// The detail is often a whole sentence ending in its own period.
+		const sentence = /[.!?]$/.test(detail.trim()) ? detail.trim() : `${detail}.`;
 		throw new Error(
-			`Invalid manifest field ${field}: ${detail}. Repair the manifest before cloning.`,
+			`Invalid manifest field ${field}: ${sentence} Repair the manifest before cloning.`,
 		);
 	};
 	if (typeof entry.name !== "string" || !isValidSpaceName(entry.name))

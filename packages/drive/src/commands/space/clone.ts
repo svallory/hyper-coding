@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline/promises";
 import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
-import { cloneSpace } from "#services/space-clone";
+import { CloneCancelledError, cloneSpace } from "#services/space-clone";
 import { SpaceGitInterruptedError } from "#services/space-git";
 
 export default class Clone extends BaseCommand<typeof Clone> {
@@ -82,6 +82,10 @@ export default class Clone extends BaseCommand<typeof Clone> {
 				`Library wrote: ${result.libraryWrites.join(", ") || "nothing; tracked files preserved"}`,
 			);
 		} catch (error) {
+			if (error instanceof CloneCancelledError) {
+				// Declining a prompt is a decision, not a failure to fix.
+				this.error(error.message, { exit: 1 });
+			}
 			if (!(error instanceof Error)) throw error;
 			const problem = new Error(error.message);
 			problem.stack = flags.debug ? error.stack : error.message;
