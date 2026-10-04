@@ -18,6 +18,7 @@ import {
 	TARGET_IN_PROGRESS,
 	TARGET_SUBMODULE_CHANGED,
 	TARGET_WORKTREE_STATE,
+	targetUntrackedPaths,
 } from "#services/space-git";
 import {
 	describeFailure,
@@ -1659,5 +1660,22 @@ describe("refusal lists quote awkward names (PR #51 review, suggestion)", () => 
 		expect(quotePath("new\nline.txt")).toBe('"new\\nline.txt"');
 		expect(quotePath('q"uo\\te')).toBe('"q\\"uo\\\\te"');
 		expect(quotePath("esc\u001b")).toBe('"esc\\x1b"');
+	});
+});
+
+describe("tracked directories in the collision check (fw-warp-2 item 1)", () => {
+	it("a space worktree's collision probe uses the same listing as a plain repo's, before the push", () => {
+		const plan = spacePlan({ force: true });
+		const probe = probeOf(plan, "collisions");
+		expect(probe?.argv).toEqual(targetUntrackedPaths(WT));
+		const backup = plan.steps.findIndex(
+			(step) => step.kind === "remote-command" && step.stdinFrom === "collisions",
+		);
+		const push = plan.steps.findIndex((step) => step.kind === "push-branch");
+		expect(backup).toBeGreaterThan(0);
+		expect(push).toBeGreaterThan(backup);
+		expect(probeOf(planOf({ cwdKind: "git-repo" }), "collisions")?.argv).toEqual(
+			targetUntrackedPaths(inputs().cwd),
+		);
 	});
 });
