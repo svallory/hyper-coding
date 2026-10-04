@@ -65,7 +65,6 @@ import {
 	liveSessionsFor,
 	type OwnerMarker,
 	type OwnerState,
-	ownerPath,
 	projectDir,
 	readOwner,
 	type StopOutcome,
@@ -781,7 +780,10 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			sessionId: inputs.sessionId,
 		});
 	}
-	const markerPath = ownerPath(inputs.cwd, inputs.sessionId);
+	// Beside the transcript the plan was GIVEN, not re-derived from the
+	// environment (`ownerPath` reads CLAUDE_CONFIG_DIR/HOME): the planner is
+	// pure, and the marker must travel with exactly the transcript it copies.
+	const markerPath = join(projectFolder, `${inputs.sessionId}.warp.json`);
 	steps.push({
 		kind: "write-marker",
 		summary: `write the ownership marker for ${inputs.sessionId} (owner ${name})`,
@@ -1497,7 +1499,9 @@ export function describeFailure(
 
 function ownerMarkerPath(plan: WarpPlan): string {
 	const step = plan.steps.find((entry) => entry.kind === "write-marker");
-	return step?.kind === "write-marker" ? step.path : ownerPath(plan.cwd, plan.sessionId);
+	return step?.kind === "write-marker"
+		? step.path
+		: join(plan.projectFolder, `${plan.sessionId}.warp.json`);
 }
 
 /**
