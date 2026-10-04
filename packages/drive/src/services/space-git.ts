@@ -708,15 +708,60 @@ export function sanitizeForTerminal(value: string): string {
 }
 
 /**
- * Prefix every line of quoted child output, so a hostile server cannot print
- * a line that reads like one of hyper's own messages.
+ * Render every control and format character as `\uXXXX` instead of dropping
+ * it. Dropping is right for a child's output; this is for values hyper echoes
+ * back — a refused URL, a manifest key, a path — where the reader must still
+ * see what they are looking at, and where `JSON.stringify` is not enough:
+ * it escapes C0 but prints U+009B, U+202E and DEL raw.
  */
+export function escapeControlCharacters(value: string): string {
+	// eslint-disable-next-line no-control-regex
+	return value.replace(
+		// eslint-disable-next-line no-control-regex
+		/[\p{Cc}\p{Cf}]/gu,
+		(character) => `\\u${character.codePointAt(0)!.toString(16).padStart(4, "0")}`,
+	);
+}
+
+/** Prefix every line of quoted child output, so a hostile server cannot print
+ * a line that reads like one of hyper's own messages. */
 export function quoteChildOutput(value: string, prefix = "git: "): string {
 	return sanitizeForTerminal(value)
 		.split("\n")
 		.filter((line, index, lines) => line !== "" || index < lines.length - 1)
-		.map((line) => `${prefix}${line}`)
+		.map((line) =>
+			line.length > QUOTED_LINE_CAP
+				? `${prefix}${line.slice(0, QUOTED_LINE_CAP)}… [truncated]`
+				: `${prefix}${line}`,
+		)
 		.join("\n");
+}
+
+/**
+ * A server can print a megabyte in one line, and quoting it verbatim buries
+ * the message it was quoted for. The cut is stated, never silent.
+ */
+const QUOTED_LINE_CAP = 2_000;
+
+/**
+ * How many review paths a human-readable report names before it points at
+ * `--json`. A space with a vendored tool directory can review in the hundreds,
+ * and a single line that long is unreadable and buries the clone summary.
+ */
+export const REVIEW_PATHS_SHOWN = 20;
+
+/**
+ * The review list as text: the count, the first {@link REVIEW_PATHS_SHOWN}
+ * paths, and where the rest live. `--json` output is never truncated — this is
+ * for the terminal only.
+ */
+export function describeReviewPaths(paths: readonly string[]): string {
+	const shown = paths.slice(0, REVIEW_PATHS_SHOWN).map((path) => JSON.stringify(path));
+	const hidden = paths.length - shown.length;
+	const list = shown.join(", ");
+	return hidden > 0
+		? `${list} (${hidden} more; run with --json to see them all): these came from the hyperdrive; review before trusting this space.`
+		: `${list}: these came from the hyperdrive; review before trusting this space.`;
 }
 
 /** Redact credentials line by line: userinfo first, then every query value. */
@@ -728,12 +773,13 @@ function redactLine(line: string): string {
 	// A query value can carry a secret, and it is printed both in our url and
 	// inside git's own line.
 	let out = line.replace(/([?&][^=&\s]+)=([^&\s]*)/g, "$1=[redacted]");
-	// Mask the whole credential span of an authority. The LAST `@` on the line
-	// wins, because a malformed authority (`user:a@b@host`) would otherwise
-	// expose everything between the two.
-	const at = out.lastIndexOf("@");
+	// Userinfo lives in the AUTHORITY, which ends at the first `/` after the
+	// scheme. An `@` further along belongs to a path (`/a@b/c`), and masking
+	// there would invent a host the user never configured.
+	const scheme = out.indexOf("://");
+	const authorityEnd = scheme >= 0 ? out.indexOf("/", scheme + 3) : -1;
+	const at = out.lastIndexOf("@", (authorityEnd >= 0 ? authorityEnd : out.length) - 1);
 	if (at >= 0) {
-		const scheme = out.indexOf("://");
 		if (scheme >= 0 && scheme < at)
 			out = `${out.slice(0, scheme + 3)}[redacted]@${out.slice(at + 1)}`;
 		else out = out.replace(/(^|[\s"'(])([\w.+-]+):([^\s@]+)@/g, "$1$2:[redacted]@");
@@ -809,7 +855,7 @@ export function cloneProjectRepoBare(
 		if (result.error || result.status !== 0) {
 			const detail = redactGitSecrets((result.stderr || result.stdout || "").trim());
 			throw new SpaceGitError(
-				`I couldn't recreate the project repository for ${label}${sanitizeForTerminal(safeUrl)} at ${gitDir}. ` +
+				`I couldn't recreate the project repository for ${label}${escapeControlCharacters(safeUrl)} at ${gitDir}. ` +
 					`Check its URL, access and default branch, then retry the clone. ` +
 					(interactive
 						? "See git's output above."
@@ -858,6 +904,10 @@ function readConfiguredSsh(env: NodeJS.ProcessEnv): string | undefined {
 				"core.hooksPath=/dev/null",
 				"config",
 				scope,
+				// `--includes` is not optional: with a file scope git otherwise
+				// ignores `[include]`/`[includeIf]`, so an ssh command kept in
+				// an included file would be dropped and our default would win.
+				"--includes",
 				"--get",
 				"core.sshCommand",
 			],
@@ -916,18 +966,18 @@ function resolveCloneBranch(
 	if (head !== undefined && checkProjectBranchName(head) && exists(head)) return head;
 	if (head !== undefined && !checkProjectBranchName(head)) {
 		throw new SpaceGitError(
-			`The remote ${label}${sanitizeForTerminal(safeUrl)} points HEAD at a branch name hyper cannot use (${JSON.stringify(sanitizeForTerminal(head))}). ` +
+			`The remote ${label}${escapeControlCharacters(safeUrl)} points HEAD at a branch name hyper cannot use (${JSON.stringify(escapeControlCharacters(head))}). ` +
 				`Fix the project's default branch on the original machine, then retry the clone.`,
 		);
 	}
 	if (advertisement === "") {
 		throw new SpaceGitError(
-			`The project repository ${label}${sanitizeForTerminal(safeUrl)} has no commits yet, so it has no branch to check out. ` +
+			`The project repository ${label}${escapeControlCharacters(safeUrl)} has no commits yet, so it has no branch to check out. ` +
 				`Push at least one commit to it, then retry the clone.`,
 		);
 	}
 	throw new SpaceGitError(
-		`The manifest names ${JSON.stringify(requested)} as the default branch for ${label}${sanitizeForTerminal(safeUrl)}, but the remote has no such branch and no usable HEAD either. ` +
+		`The manifest names ${JSON.stringify(escapeControlCharacters(requested))} as the default branch for ${label}${escapeControlCharacters(safeUrl)}, but the remote has no such branch and no usable HEAD either. ` +
 			`Fix the project's default branch or its manifest entry, then retry the clone.`,
 	);
 }

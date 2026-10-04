@@ -736,8 +736,12 @@ const SSH_CLIENT = "ssh";
  * ssh honours the FIRST value of a repeated option, so the option is inserted
  * immediately after the program word rather than appended: a user who already
  * wrote `-o BatchMode=no` must not win over the setting meant to apply here.
- * A command whose first word is some other program is returned unchanged — a
- * wrapper need not understand `-o` at all.
+ * A command whose program is something else — a wrapper, `sshpass`, a company
+ * fork — is returned unchanged, because it need not understand `-o` at all.
+ *
+ * The program word is found the way a shell would: leading `NAME=value`
+ * assignments are skipped, quotes are removed, and the comparison is
+ * case-insensitive because a case-insensitive filesystem happily runs `SSH`.
  *
  * Pure: no process, no environment, no filesystem. `undefined` in means the
  * user configured nothing, and the default command out.
@@ -745,7 +749,16 @@ const SSH_CLIENT = "ssh";
 export function sshCommandWithBatchMode(command: string | undefined): string | undefined {
 	if (command === undefined || command.trim() === "") return `${SSH_CLIENT} -o BatchMode=yes`;
 	const trimmed = command.trim();
-	const program = trimmed.split(/\s+/)[0] ?? "";
-	if (basename(program) !== SSH_CLIENT) return command;
-	return `${program} -o BatchMode=yes${trimmed.slice(program.length)}`;
+	// Quote-aware words: `"/path with space/ssh"` is ONE word to a shell.
+	const words = trimmed.match(/"[^"]*"|'[^']*'|\S+/g) ?? [trimmed];
+	let index = 0;
+	while (index < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[index]!)) index += 1;
+	const word = words[index];
+	if (word === undefined) return trimmed;
+	// `"/path with space/ssh"` and `'/opt/ssh'` name the same program.
+	const unquoted = word.replace(/^["']/, "").replace(/["']$/, "");
+	if (basename(unquoted).toLowerCase() !== SSH_CLIENT) return command;
+	// Everything before the program word (leading assignments) is kept as is.
+	const before = trimmed.slice(0, trimmed.indexOf(word));
+	return `${before}${unquoted} -o BatchMode=yes${trimmed.slice(trimmed.indexOf(word) + word.length)}`;
 }

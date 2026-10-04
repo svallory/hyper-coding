@@ -24,6 +24,8 @@ import { isLocalDriveRemote, validateCloneEntry } from "#services/space-clone-va
 import {
 	cleanGitEnv,
 	cloneProjectRepoBare,
+	describeReviewPaths,
+	escapeControlCharacters,
 	fetchSpaceClone,
 	initSpaceGitDir,
 	SpaceGitError,
@@ -48,7 +50,7 @@ export function cloneTargetPath(recorded: string, explicit?: string, home = home
 	if (explicit !== undefined) return resolve(explicit);
 	const refuse = (): never => {
 		throw new Error(
-			`The manifest path ${JSON.stringify(recorded)} isn't a safe home-relative destination on this machine. Pass an explicit path: hyper space clone <name> <path>.`,
+			`The manifest path ${JSON.stringify(escapeControlCharacters(recorded))} isn't a safe home-relative destination on this machine. Pass an explicit path: hyper space clone <name> <path>.`,
 		);
 	};
 	if (
@@ -97,6 +99,26 @@ function assertPhysicalHome(target: string): void {
 	) {
 		throw new Error(
 			`The recorded destination resolves into a protected HOME path through a symlink (${physical}). Pass an explicit path to hyper space clone instead.`,
+		);
+	}
+}
+
+/**
+ * The shared review step, or a refusal that says so in a sentence. Its own git
+ * stderr is not an explanation a user can act on: what failed is the REVIEW of
+ * what this branch would bring in, and the target has been put back.
+ *
+ * Names are remote data: a format character (bidi, ZWJ) is legitimate in a
+ * real filename, so it is kept and always escaped on the way out.
+ */
+async function reviewPathsOrFail(root: string, tip: string): Promise<string[]> {
+	try {
+		return (await incomingReviewPaths(root, tip)).map(escapeControlCharacters);
+	} catch (error) {
+		const detail = error instanceof Error ? error.message : String(error);
+		throw new SpaceGitError(
+			`I couldn't finish the review of what this space would bring in: ${detail} ` +
+				`Nothing was checked out and the target was restored. Retry the clone, or inspect ${root} yourself if it keeps failing.`,
 		);
 	}
 }
@@ -194,7 +216,7 @@ export async function cloneSpace(
 		const entry = spaces.find((space) => space.name === name);
 		if (!entry)
 			throw new Error(
-				`No space named ${JSON.stringify(name)} is registered. Known spaces: ${spaces.map((space) => space.name).join(", ") || "none yet"}. Use one of those names, or run hyper space init on the original machine.`,
+				`No space named ${JSON.stringify(name)} is registered. Known spaces: ${spaces.map((space) => escapeControlCharacters(space.name)).join(", ") || "none yet"}. Use one of those names, or run hyper space init on the original machine.`,
 			);
 		validateCloneEntry(entry, config.remote);
 		root = cloneTargetPath(entry.path, explicitPath);
@@ -204,7 +226,7 @@ export async function cloneSpace(
 			if (!options.yes) {
 				if (!options.confirmTarget)
 					throw new Error(
-						`The manifest proposes ${root} (recorded as ${JSON.stringify(entry.path)}). Review that target and pass --yes, or provide an explicit path.`,
+						`The manifest proposes ${root} (recorded as ${JSON.stringify(escapeControlCharacters(entry.path))}). Review that target and pass --yes, or provide an explicit path.`,
 					);
 				if (!(await options.confirmTarget(root, entry.path)))
 					throw new CloneCancelledError("Clone cancelled; no target was created.");
@@ -258,7 +280,7 @@ export async function cloneSpace(
 			.filter((path) => !allowedTracked.has(path));
 		if (extraManifestTracked.length)
 			warnings.push(
-				`Manifest tracked entries ${extraManifestTracked.map((path) => JSON.stringify(path)).join(", ")} are not in the incoming allowlist; trusting the allowlist instead.`,
+				`Manifest tracked entries ${extraManifestTracked.map((path) => JSON.stringify(escapeControlCharacters(path))).join(", ")} are not in the incoming allowlist; trusting the allowlist instead.`,
 			);
 		// Checkout privately, then publish files with exclusive creation. A
 		// raced-in user file cannot be overwritten or mistaken for our output.
@@ -307,12 +329,13 @@ export async function cloneSpace(
 			worktrees: [],
 			libraryWrites: [],
 			warnings,
-			untrustedConfiguration: await incomingReviewPaths(root, incoming.tip),
+			// Names from the shared review step are remote data: a format
+			// character is legitimate in a real filename, so it is kept here and
+			// always escaped on the way out.
+			untrustedConfiguration: await reviewPathsOrFail(root, incoming.tip),
 		};
 		if (result.untrustedConfiguration.length)
-			result.warnings.push(
-				`${result.untrustedConfiguration.map((path) => JSON.stringify(path)).join(", ")}: these came from the hyperdrive; review before trusting this space.`,
-			);
+			result.warnings.push(describeReviewPaths(result.untrustedConfiguration));
 		if (entry.layout === "bare") {
 			mkdirSync(join(root, "worktrees"));
 			ownedDirectories.add(join(root, "worktrees"));

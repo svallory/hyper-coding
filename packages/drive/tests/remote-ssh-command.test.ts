@@ -30,14 +30,27 @@ describe("sshCommandWithBatchMode", () => {
 			"/opt/homebrew/bin/ssh -o BatchMode=yes -i /tmp/key",
 		);
 	});
-	it("leaves another program completely alone: it need not understand -o", () => {
-		for (const command of [
-			"my-ssh-wrapper -i /tmp/key",
-			"/usr/local/bin/company-ssh --batch",
-			"rsync -e ssh",
-		]) {
-			expect(sshCommandWithBatchMode(command)).toBe(command);
-		}
+	it.each([
+		// Leading environment assignments, the way a shell reads them.
+		["FOO=1 ssh -i /k", "FOO=1 ssh -o BatchMode=yes -i /k"],
+		["A=1 B=2 ssh", "A=1 B=2 ssh -o BatchMode=yes"],
+		// A quoted program path, which a shell would run as one word.
+		['"/path with space/ssh" -i /k', "/path with space/ssh -o BatchMode=yes -i /k"],
+		["'/opt/ssh' -i /k", "/opt/ssh -o BatchMode=yes -i /k"],
+		// A case-insensitive filesystem will happily run `SSH`.
+		["SSH -i /k", "SSH -o BatchMode=yes -i /k"],
+		["Ssh -o BatchMode=no", "Ssh -o BatchMode=yes -o BatchMode=no"],
+	])("handles the common spelling %s", (command, expected) => {
+		expect(sshCommandWithBatchMode(command)).toBe(expected);
+	});
+	it.each([
+		// Skipped BY DESIGN: these are not the SSH client, and forcing an
+		// option onto them would break a wrapper that never asked for one.
+		"sshpass -p password-value ssh -i /k",
+		"/opt/myssh -i /k",
+		"company-ssh-wrapper",
+	])("leaves %s alone", (command) => {
+		expect(sshCommandWithBatchMode(command)).toBe(command);
 	});
 	it("trims the ends without rewriting the command's own spacing", () => {
 		// Only the inserted option is new; the user's own words pass through as

@@ -1,6 +1,7 @@
 import * as p from "@clack/prompts";
 import { Flags } from "@oclif/core";
 import { SpaceCommand } from "#lib/space-command";
+import { REVIEW_PATHS_SHOWN } from "#services/space-git";
 import { pullSpace } from "#services/space-history";
 
 export default class Pull extends SpaceCommand<typeof Pull> {
@@ -62,7 +63,10 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 			);
 		if (result.reviewPaths.length > 0) {
 			this.log("These can run commands or instruct agents; review them:");
-			for (const path of result.reviewPaths) this.log(`  ${JSON.stringify(path)}`);
+			for (const path of result.reviewPaths.slice(0, REVIEW_PATHS_SHOWN))
+				this.log(`  ${JSON.stringify(path)}`);
+			const hidden = result.reviewPaths.length - REVIEW_PATHS_SHOWN;
+			if (hidden > 0) this.log(`  … ${hidden} more; run with --json to see them all`);
 		}
 	}
 }
