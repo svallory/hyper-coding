@@ -143,7 +143,6 @@ export {
 	readCadence,
 	readSpaceBlobPrefixes,
 	readSpaceConfig,
-	readStagedBlobPrefix,
 	readTracked,
 	removeSpaceGitDir,
 	type SpaceBlobPrefix,
@@ -158,10 +157,13 @@ export {
 } from "#services/space-git";
 export {
 	fetchSpace,
+	type IncomingTrackedEntry,
 	type InitializedSpace,
 	logSpace,
 	pullSpace,
 	requireInitializedSpace,
+	type SpacePullOptions,
+	type SpacePullResult,
 	type SpaceStatusEntry,
 	spaceRemote,
 	spaceStatus,
@@ -169,6 +171,7 @@ export {
 } from "#services/space-history";
 export {
 	type IncomingSpaceValidation,
+	incomingReviewPaths,
 	SpaceIncomingError,
 	validateIncomingSpace,
 } from "#services/space-incoming";
