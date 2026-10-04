@@ -119,6 +119,20 @@ make_multi_space() {
   done
 }
 
+# plant_binaries <dir> <log> <name...> — one executable per name in <dir>
+# that only appends "PLANTED <name> <args>" to <log>. The hostile-PATH tests
+# put these in a project's or space's bin/ (and wherever else a relative PATH
+# entry resolves) and then require <log> to stay empty.
+plant_binaries() {
+  local dir="$1" log="$2" name
+  shift 2
+  mkdir -p "$dir"
+  for name in "$@"; do
+    printf '#!/bin/sh\necho "PLANTED %s $*" >> "%s"\n' "$name" "$log" > "$dir/$name"
+    chmod +x "$dir/$name"
+  done
+}
+
 finish() {
   echo "1..$_n"
   rm -rf "$FIX"

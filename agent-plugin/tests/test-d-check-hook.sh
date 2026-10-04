@@ -132,4 +132,23 @@ else
   skip "reported as a timeout"     "no timeout/gtimeout on this machine"
 fi
 
+# D-PATH: the hook runs in the session's directory, where a relative PATH
+# entry would pick the project's own bin/node, bin/bash or bin/timeout. None
+# may run from the hook itself; the configured check (project code the project
+# opted into) still gets the PATH the hook was started with.
+p="$(new_proj dpath)"
+for d in "$p/bin" "$p"; do
+  plant_binaries "$d" "$FIX/planted.log" node git bash sh dirname timeout gtimeout base64 sed cat head tr
+done
+cat > "$p/.claude/hyper.json" <<'EOF'
+{ "check": { "enabled": true, "command": "echo \"CHECK-PATH=$PATH\" >&2; exit 1" } }
+EOF
+bash_bin="$(command -v bash)"
+rm -f "$FIX/planted.log"
+(cd "$p" && printf '{"tool_input":{"file_path":"%s"}}' "$p/src/app.ts" \
+  | PATH="./bin:.::$PATH" "$bash_bin" "$HOOK" >/dev/null 2>"$ERR")
+assert_eq "hostile PATH: the failing check still exits 2" 2 "$?"
+assert_eq "hostile PATH: no planted binary ran from the hook" "" "$(cat "$FIX/planted.log" 2>/dev/null)"
+assert_contains "hostile PATH: the configured check gets the original PATH" "$(cat "$ERR")" "CHECK-PATH=./bin:.::"
+
 finish

@@ -31,6 +31,7 @@ sleep "${WORKER_DELAY:-0}"
 payload="${*: -1}"
 cp "$payload" "$HOOK_PAYLOAD.tmp" && rm -f "$payload"
 printf '%s\n' "$*" > "$HOOK_LOG.tmp"
+printf '%s\n' "$PATH" > "$HOOK_LOG.path"
 mv "$HOOK_PAYLOAD.tmp" "$HOOK_PAYLOAD"
 mv "$HOOK_LOG.tmp" "$HOOK_LOG"
 STUB
@@ -119,6 +120,41 @@ assert_ok 'the worker is not in the hook process group' test "$(ps -o pgid= -p "
 kill -KILL -- "-$group" 2>/dev/null
 assert_ok 'worker completes after the hook process group is killed' wait_for 20 test -f "$HOOK_LOG"
 unset WORKER_DELAY
+
+# A relative PATH entry resolves inside the session's directory, and bin/ is
+# synced space content: no planted binary may run, neither through the hook
+# script nor through the hooks.json command that starts it, and the detached
+# worker must inherit a PATH with absolute entries only.
+planted_names=(hyper git bash sh dirname mktemp head nohup setsid perl cat env node)
+for d in "$space/bin" "$space/node_modules/.bin" "$space"; do
+  plant_binaries "$d" "$FIX/planted.log" "${planted_names[@]}"
+done
+hostile_path="./bin:.::./node_modules/.bin:~/bin:bin:$FIX/stub:$SYSTEM_PATH:"
+hook_cmd="$("$NODE" -e 'console.log(require(process.argv[1]).hooks.SessionEnd[0].hooks[0].command)' "$PLUGIN_DIR/hooks/hooks.json")"
+bash_bin="$(command -v bash)"
+rm -f "$HOOK_LOG" "$HOOK_PAYLOAD" "$HOOK_LOG.path" "$FIX/planted.log"
+out="$(cd "$space" && printf '%s' "$payload" | PATH="$hostile_path" "$bash_bin" "$HOOK" 2>&1)"; rc=$?
+assert_eq 'hostile PATH: hook script exits zero' 0 "$rc"
+assert_ok 'hostile PATH: the real CLI worker still runs' wait_for 20 test -f "$HOOK_LOG"
+assert_eq 'hostile PATH: no planted binary ran from the hook script' '' "$(cat "$FIX/planted.log" 2>/dev/null)"
+assert_eq 'hostile PATH: the worker PATH has absolute entries only' '' \
+  "$(tr ':' '\n' < "$HOOK_LOG.path" | grep -v '^/')"
+rm -f "$HOOK_LOG" "$HOOK_PAYLOAD" "$HOOK_LOG.path" "$FIX/planted.log"
+out="$(cd "$space" && printf '%s' "$payload" | CLAUDE_PLUGIN_ROOT="$PLUGIN_DIR" PATH="$hostile_path" /bin/sh -c "$hook_cmd" 2>&1)"; rc=$?
+assert_eq 'hostile PATH: hooks.json command exits zero' 0 "$rc"
+assert_ok 'hostile PATH: hooks.json command still starts the worker' wait_for 20 test -f "$HOOK_LOG"
+assert_eq 'hostile PATH: payload reaches the worker through the trampoline' "$payload" "$(cat "$HOOK_PAYLOAD")"
+assert_eq 'hostile PATH: no planted binary ran from the hooks.json command' '' "$(cat "$FIX/planted.log" 2>/dev/null)"
+assert_ok 'every hooks.json command starts through /bin/sh and the trampoline' "$NODE" -e '
+const hooks = require(process.argv[1]).hooks;
+const all = Object.values(hooks).flat().flatMap((entry) => entry.hooks);
+if (!all.length || !all.every((h) => /^\/bin\/sh "\$\{CLAUDE_PLUGIN_ROOT\}\/scripts\/hyper-hook\.sh" hyper-[a-z-]+\.sh$/.test(h.command))) process.exit(1);
+' "$PLUGIN_DIR/hooks/hooks.json"
+out="$(cd "$space" && CLAUDE_PLUGIN_ROOT="$PLUGIN_DIR" PATH="$hostile_path" /bin/sh "$PLUGIN_DIR/scripts/hyper-hook.sh" ../tests/helpers.sh </dev/null 2>&1)"; rc=$?
+assert_eq 'the trampoline refuses a script outside the plugin scripts' '0:' "$rc:$out"
+rm -rf "${space:?}/bin" "${space:?}/node_modules"
+for name in "${planted_names[@]}"; do rm -f "${space:?}/$name"; done
+rm -f "$HOOK_LOG" "$HOOK_PAYLOAD" "$HOOK_LOG.path" "$FIX/planted.log"
 
 # Registration: SessionEnd only for the reasons that end the work.
 assert_ok 'SessionEnd fires for logout, prompt_input_exit and other, with timeout 60' "$NODE" -e '
