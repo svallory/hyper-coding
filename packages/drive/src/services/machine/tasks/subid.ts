@@ -28,6 +28,14 @@ export const SUBID_COUNT = 65536;
 export const SUBID_FLOOR = 100000;
 
 /**
+ * The highest start a new range may have: subordinate ids are 32-bit, so the
+ * last id of the range (start + count − 1) must stay below 2^32. Above this
+ * `usermod` fails with "invalid subordinate uid range" (measured, rc 3), and
+ * the caller refuses with a clear message instead.
+ */
+export const SUBID_MAX_START = 4294967295 - SUBID_COUNT + 1;
+
+/**
  * Shell functions. Owner fields in these files may be a name or a numeric uid,
  * so the agent is matched by either.
  *
@@ -71,8 +79,20 @@ subid_free_at() {
     END { exit busy }' "$1"
 }
 subid_next_free() {
-  cat /etc/subuid /etc/subgid 2>/dev/null | awk -F: -v floor=${SUBID_FLOOR} '
+  # A missing file is empty; an unreadable existing file must fail closed.
+  # The root script has pipefail, so awk's result and cat failures both count.
+  {
+    for file in /etc/subuid /etc/subgid; do
+      if [ -e "$file" ]; then cat "$file" || return 1; fi
+    done
+  } | awk -F: -v floor=${SUBID_FLOOR} -v count=${SUBID_COUNT} -v max=${SUBID_MAX_START} '
     BEGIN { top = floor }
     NF >= 3 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ { end = $2 + $3; if (end > top) top = end }
-    END { printf "%.0f\\n", top }'
+    END {
+      # No room for a whole range before the end of the 32-bit id space: fail
+      # rather than print an invalid or wrapped start. The caller turns this
+      # into a clear refusal.
+      if (top > max) exit 1
+      printf "%.0f\\n", top
+    }'
 }`;

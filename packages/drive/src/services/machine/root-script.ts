@@ -241,15 +241,20 @@ export function rootSteps(machine: MachineInfo | null, path: string): string[] {
 	}
 	const host = shellQuote(machine.host ?? machine.name);
 	const remote = remoteScriptPath("~");
+	// The printed manual recipe must carry the same port as RemoteMachine's
+	// prompted copy/run path. scp spells it -P (its -p preserves modes); ssh
+	// spells it -p. No port means the user's own ssh config still chooses one.
+	const sshPort = machine.port === undefined ? "" : `-p ${machine.port} `;
+	const scpPort = machine.port === undefined ? "" : `-P ${machine.port} `;
 	return [
-		`ssh ${host} 'mkdir -p ~/.hyper'`,
+		`ssh ${sshPort}${host} 'mkdir -p ~/.hyper'`,
 		// scp's source is local, so the user's shell has to see it as one word; its
 		// target half is never quoted, for the reasons remote.ts documents.
-		`scp ${shellQuote(path)} ${host}:${remote}`,
+		`scp ${scpPort}${shellQuote(path)} ${host}:${remote}`,
 		// Built from privilegedArgv too, but deliberately unquoted: the whole line is
 		// single-quoted so the *remote* shell expands the leading ~. Quoting it here
 		// would defeat that.
-		`ssh -t ${host} '${privilegedArgv(remote).join(" ")}'`,
+		`ssh -t ${sshPort}${host} '${privilegedArgv(remote).join(" ")}'`,
 	];
 }
 

@@ -585,11 +585,13 @@ describe("the as-agent runner", () => {
 		expect(seen[0].args).not.toContain("sudo");
 	});
 
-	// The operator's ssh config may forward their ssh-agent or share connections
-	// for this host. A session as the agent must take neither: the exact argv.
-	it("opens every session as another user with no agent forwarding and no shared connection", async () => {
+	// The operator's ssh config may forward their ssh-agent, share connections
+	// or forward X11 for this host. A session as the agent must take none of
+	// them: the exact argv.
+	it("opens every session as another user with no agent forwarding, no X11 and no shared connection", async () => {
 		const isolation = [
 			"-a",
+			"-x",
 			"-o",
 			"ForwardAgent=no",
 			"-o",
@@ -611,11 +613,20 @@ describe("the as-agent runner", () => {
 		await agentRunnerFor(MACHINE, "agent", spawner).ssh(["id", "-u"]);
 		expect(seen[1].args).toEqual([...isolation, "agent@t17box", "--", "id -u"]);
 
-		// And the transfers of a runner that IS another user.
+		// And the transfers of a runner that IS another user. scp has no `-a`
+		// or `-x`; the latter becomes `-o ForwardX11=no` for its internal ssh.
 		const agent = agentRunnerFor(MACHINE, "agent", spawner);
 		await agent.scp("/tmp/x", "/tmp/y");
 		const scp = seen.find((request) => request.file === "scp");
-		expect(scp?.args.slice(0, 8)).toEqual(isolation.slice(1));
+		expect(scp?.args).toEqual([
+			...isolation.slice(2),
+			"-o",
+			"ForwardX11=no",
+			"-r",
+			"--",
+			"/tmp/x",
+			"agent@t17box:/tmp/y",
+		]);
 		await agent.rsync("/nonexistent-src-t17", "/tmp/y");
 		const rsync = seen.find((request) => request.file === "rsync");
 		expect(rsync?.args.slice(0, 4)).toEqual([

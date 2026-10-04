@@ -2,7 +2,14 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { listMachines, MachineError, resolveMachine, targetFor } from "#services/machine";
+import {
+	listMachines,
+	MachineError,
+	type MachineInfo,
+	resolveMachine,
+	targetFor,
+} from "#services/machine";
+import { rootSteps } from "#services/machine/root-script";
 import {
 	isIpv6Literal,
 	isSafeRemotePath,
@@ -233,6 +240,157 @@ describe("RemoteMachine with a port", () => {
 
 	it("still refuses a host that ssh would read as an option", () => {
 		expect(() => new RemoteMachine("-oProxyCommand=id", recording().spawner)).toThrow(RemoteError);
+	});
+});
+
+/**
+ * The FULL argv for the three programs, primary and as-agent, with and without
+ * a port. Pinned rather than probed: `runRootScript` copies the root script
+ * with scp and then runs it over ssh, and on a host where port 22 is another
+ * sshd an scp without `-P` lands the script on the wrong machine (found by the
+ * PR #42 confirm review). scp's port spelling is `-P` — its `-p` preserves
+ * modes — and it goes where scp is still reading options: before `-r`, before
+ * `--`.
+ */
+describe("the exact argv of ssh, rsync and scp, primary and as-agent, with and without a port", () => {
+	const isolation = [
+		"-a",
+		"-x",
+		"-o",
+		"ForwardAgent=no",
+		"-o",
+		"ClearAllForwardings=yes",
+		"-o",
+		"ControlMaster=no",
+		"-o",
+		"ControlPath=none",
+	];
+	/** scp has no `-a` or `-x`; spell the latter as `-o ForwardX11=no`. */
+	const scpIsolation = [...isolation.slice(2), "-o", "ForwardX11=no"];
+
+	function callsOf(calls: SpawnRequest[], file: string): string[] {
+		const call = calls.find((request) => request.file === file);
+		expect(call, `no ${file} spawn recorded`).toBeDefined();
+		return call?.args ?? [];
+	}
+
+	it("pins ssh, rsync and scp for a PRIMARY session with a port", async () => {
+		const { calls, spawner } = recording();
+		const machine = new RemoteMachine("me@box", spawner, { port: 2222 });
+		await machine.ssh(["id", "-u"]);
+		expect(callsOf(calls, "ssh")).toEqual(["-p", "2222", "me@box", "--", "id -u"]);
+		await machine.rsync("/a", "/home/me/x");
+		expect(callsOf(calls, "rsync")).toEqual([
+			"-a",
+			"--stats",
+			"-e",
+			"ssh -p 2222",
+			"--",
+			"/a",
+			"me@box:/home/me/x",
+		]);
+		await machine.scp("/a", "/home/me/x");
+		expect(callsOf(calls, "scp")).toEqual(["-P", "2222", "-r", "--", "/a", "me@box:/home/me/x"]);
+	});
+
+	it("pins ssh, rsync and scp for a PRIMARY session without a port", async () => {
+		const { calls, spawner } = recording();
+		const machine = new RemoteMachine("me@box", spawner);
+		await machine.ssh(["id", "-u"]);
+		expect(callsOf(calls, "ssh")).toEqual(["me@box", "--", "id -u"]);
+		await machine.rsync("/a", "/home/me/x");
+		expect(callsOf(calls, "rsync")).toEqual([
+			"-a",
+			"--stats",
+			"-e",
+			"ssh",
+			"--",
+			"/a",
+			"me@box:/home/me/x",
+		]);
+		await machine.scp("/a", "/home/me/x");
+		expect(callsOf(calls, "scp")).toEqual(["-r", "--", "/a", "me@box:/home/me/x"]);
+	});
+
+	it("pins ssh, rsync and scp for an AS-AGENT session with a port", async () => {
+		const { calls, spawner } = recording();
+		const machine = new RemoteMachine("agent@box", spawner, { otherUser: true, port: 2222 });
+		await machine.ssh(["id", "-u"]);
+		expect(callsOf(calls, "ssh")).toEqual([...isolation, "-p", "2222", "agent@box", "--", "id -u"]);
+		await machine.rsync("/a", "/home/agent/x");
+		expect(callsOf(calls, "rsync")).toEqual([
+			"-a",
+			"--stats",
+			"-e",
+			["ssh", ...isolation, "-p", "2222"].join(" "),
+			"--",
+			"/a",
+			"agent@box:/home/agent/x",
+		]);
+		await machine.scp("/a", "/home/agent/x");
+		expect(callsOf(calls, "scp")).toEqual([
+			...scpIsolation,
+			"-P",
+			"2222",
+			"-r",
+			"--",
+			"/a",
+			"agent@box:/home/agent/x",
+		]);
+	});
+
+	it("pins ssh, rsync and scp for an AS-AGENT session without a port", async () => {
+		const { calls, spawner } = recording();
+		const machine = new RemoteMachine("agent@box", spawner, { otherUser: true });
+		await machine.ssh(["id", "-u"]);
+		expect(callsOf(calls, "ssh")).toEqual([...isolation, "agent@box", "--", "id -u"]);
+		await machine.rsync("/a", "/home/agent/x");
+		expect(callsOf(calls, "rsync")).toEqual([
+			"-a",
+			"--stats",
+			"-e",
+			["ssh", ...isolation].join(" "),
+			"--",
+			"/a",
+			"agent@box:/home/agent/x",
+		]);
+		await machine.scp("/a", "/home/agent/x");
+		expect(callsOf(calls, "scp")).toEqual([
+			...scpIsolation,
+			"-r",
+			"--",
+			"/a",
+			"agent@box:/home/agent/x",
+		]);
+	});
+});
+
+describe("the printed manual root-script recipe", () => {
+	const machine: MachineInfo = {
+		name: "box",
+		host: "me@box",
+		home: "/home/me",
+		features: [],
+		agentUser: "agent",
+		agentKey: "",
+		source: "both",
+		herdr: true,
+	};
+
+	it("carries a non-default port for both the scp copy and ssh run", () => {
+		expect(rootSteps({ ...machine, port: 2222 }, "/tmp/root.sh")).toEqual([
+			"ssh -p 2222 me@box 'mkdir -p ~/.hyper'",
+			"scp -P 2222 /tmp/root.sh me@box:~/.hyper/hyper-machine-root.sh",
+			"ssh -t -p 2222 me@box 'sudo bash ~/.hyper/hyper-machine-root.sh'",
+		]);
+	});
+
+	it("leaves the operator's ssh-config port alone when the machine names none", () => {
+		expect(rootSteps(machine, "/tmp/root.sh")).toEqual([
+			"ssh me@box 'mkdir -p ~/.hyper'",
+			"scp /tmp/root.sh me@box:~/.hyper/hyper-machine-root.sh",
+			"ssh -t me@box 'sudo bash ~/.hyper/hyper-machine-root.sh'",
+		]);
 	});
 });
 

@@ -43,8 +43,8 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cli="$here/../../../cli/bin/run.js"
 image="debian:13"
-container="hyper-t17"
-port=2299
+container="hyper-fm-machine-t17"
+port=23323
 primary="svallory"
 agent="agent"
 
@@ -57,6 +57,7 @@ die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/hyperdrive-e2e-dockerhome.XXXXXX")"
 work_real="$(cd "$work" && pwd -P)"
 key="$work_real/id"
+started=0
 
 cleanup() {
   # The throwaway ssh-agent goes whatever KEEP says: it holds only a throwaway
@@ -65,8 +66,10 @@ cleanup() {
   if [ "${KEEP:-0}" = "1" ]; then
     echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
   else
-    echo "# tearing down $container"
-    podman rm -f "$container" >/dev/null 2>&1 || true
+    if [ "$started" = 1 ]; then
+      echo "# tearing down $container"
+      podman rm -f "$container" >/dev/null 2>&1 || true
+    fi
     rm -rf "$work_real"
   fi
 }
@@ -110,19 +113,17 @@ if ! podman image exists "$derived"; then
   podman build --tag "$derived" --file "$containerfile" "$work_real" >/dev/null \
     || die "could not build the container image"
 fi
-for stale in $(podman images --format '{{.Repository}}:{{.Tag}}' | grep -E '^(localhost/)?hyper-t17-e2e:' || true); do
-  [ "${stale#localhost/}" = "$derived" ] && continue
-  podman rmi "$stale" >/dev/null 2>&1 || true
-done
+# Leave older image tags alone: a different run may still refer to one.
 
 if ! podman machine list --format '{{.Running}}' | grep -q true; then
   echo "# starting the podman machine"
   podman machine start >/dev/null
 fi
 
-podman rm -f "$container" >/dev/null 2>&1 || true
+# Refuse a name collision rather than remove a container this run did not start.
 # --privileged: nested user namespaces, which rootless Docker needs. See header.
 podman run -d --name "$container" --privileged --systemd=always -p "$port":22 "$derived" /sbin/init >/dev/null
+started=1
 echo "# started $container (privileged: nested user namespaces)"
 
 pexec() { podman exec "$container" sh -c "$1"; }

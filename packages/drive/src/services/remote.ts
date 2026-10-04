@@ -692,12 +692,16 @@ export class LocalMachine implements MachineRunner {
  *
  * `-a` and `ForwardAgent=no` close the first (ssh honours the first value, and
  * command-line options come before the config file); `ClearAllForwardings`
- * drops any configured port forwardings; `ControlMaster=no` with
- * `ControlPath=none` never joins or creates a shared connection. Sessions as
- * the primary user keep the operator's configuration exactly as it is.
+ * drops any configured port forwardings; `-x` (`ForwardX11=no`) closes the one
+ * forwarding `ClearAllForwardings` does not cover, so an operator config with
+ * `ForwardX11 yes` never hands the agent the operator's X display;
+ * `ControlMaster=no` with `ControlPath=none` never joins or creates a shared
+ * connection. Sessions as the primary user keep the operator's configuration
+ * exactly as it is.
  */
 export const OTHER_USER_SSH_OPTIONS = [
 	"-a",
+	"-x",
 	"-o",
 	"ForwardAgent=no",
 	"-o",
@@ -849,9 +853,22 @@ export class RemoteMachine implements MachineRunner {
 		// options so a source starting with `-` is still a path.
 		return this.spawner({
 			file: "scp",
-			// scp has no `-a`; the -o options are the same isolation.
+			// scp has no `-a` and no `-x`; use `-o ForwardX11=no` for its
+			// underlying ssh, alongside the same other -o isolation options.
+			// `-P` is scp's port spelling (its `-p` preserves modes) and goes where
+			// scp is still reading options: before `-r`, before `--`. Without it the
+			// copy goes to port 22 while the ssh that runs the script goes to the
+			// configured one — on a host where 22 is another sshd, the root script
+			// lands on the wrong machine.
 			args: [
-				...(this.otherUser ? OTHER_USER_SSH_OPTIONS.filter((option) => option !== "-a") : []),
+				...(this.otherUser
+					? [
+							...OTHER_USER_SSH_OPTIONS.filter((option) => option !== "-a" && option !== "-x"),
+							"-o",
+							"ForwardX11=no",
+						]
+					: []),
+				...(this.port === undefined ? [] : ["-P", String(this.port)]),
 				"-r",
 				"--",
 				src,

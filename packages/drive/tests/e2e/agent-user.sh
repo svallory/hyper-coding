@@ -19,7 +19,7 @@
 #   7. the container is gone at the end            (trap)
 #
 # Usage: packages/drive/tests/e2e/agent-user.sh
-# Cost:   one container (`hyper-t16`) on podman, a throwaway ssh key, and a
+# Cost:   one container (`hyper-fm-machine-t16`) on podman, a throwaway ssh key, and a
 #         temp fake `herdr` + `drive.toml` on PATH. It NEVER touches netcup,
 #         never touches the operator's real ~/.claude, and never runs sudo on
 #         the Mac: every privileged step happens INSIDE the container, over ssh.
@@ -31,8 +31,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # e2e -> tests -> drive -> packages, so the CLI is three levels up.
 cli="$here/../../../cli/bin/run.js"
 image="debian:13"
-container="hyper-t16"
-port=2222
+container="hyper-fm-machine-t16"
+port=23322
 primary="svallory"
 agent="agent"
 
@@ -45,13 +45,16 @@ die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
 work="$(mktemp -d "${TMPDIR:-/tmp}/hyperdrive-e2e-agentuser.XXXXXX")"
 work_real="$(cd "$work" && pwd -P)"
 key="$work_real/id"
+started=0
 
 cleanup() {
   if [ "${KEEP:-0}" = "1" ]; then
     echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
   else
-    echo "# tearing down $container"
-    podman rm -f "$container" >/dev/null 2>&1 || true
+    if [ "$started" = 1 ]; then
+      echo "# tearing down $container"
+      podman rm -f "$container" >/dev/null 2>&1 || true
+    fi
     rm -rf "$work_real"
   fi
 }
@@ -93,12 +96,7 @@ if ! podman image exists "$derived"; then
   podman build --tag "$derived" --file "$containerfile" "$work_real" >/dev/null \
     || die "could not build the container image"
 fi
-# Drop superseded tags of the same harness: they are this script's own byproducts
-# and nothing else refers to them.
-for stale in $(podman images --format '{{.Repository}}:{{.Tag}}' | grep -E '^(localhost/)?hyper-t16-e2e:' || true); do
-  [ "${stale#localhost/}" = "$derived" ] && continue
-  podman rmi "$stale" >/dev/null 2>&1 || true
-done
+# Leave older image tags alone: a different run may still refer to one.
 
 # --------------------------------------------------------------------------
 # The machine
@@ -108,10 +106,9 @@ if ! podman machine list --format '{{.Running}}' | grep -q true; then
   podman machine start >/dev/null
 fi
 
-# The trap removes it, but a leftover from a killed run would make `run` fail on
-# the name — so clear it before starting. Only ever this exact name.
-podman rm -f "$container" >/dev/null 2>&1 || true
+# Refuse a name collision rather than remove a container this run did not start.
 podman run -d --name "$container" --systemd=always -p "$port":22 "$derived" /sbin/init >/dev/null
+started=1
 echo "# started $container"
 
 pexec() { podman exec "$container" sh -c "$1"; }
@@ -207,6 +204,14 @@ Host t16box
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
   LogLevel ERROR
+Host localhost
+  # The host:port probe below MUST get the port from RemoteMachine's argv,
+  # not this config. This block supplies only the throwaway key and host trust.
+  IdentityFile $key
+  IdentitiesOnly yes
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  LogLevel ERROR
 SSHCFG
 chmod 700 "$ssh_home/.ssh"
 chmod 600 "$ssh_home/.ssh/config"
@@ -221,6 +226,14 @@ cat > "$work_real/bin/ssh" <<WRAPPER
 exec /usr/bin/ssh -F "$work_real/sshhome/.ssh/config" "\$@"
 WRAPPER
 chmod +x "$work_real/bin/ssh"
+# scp also needs the throwaway key without reading the operator's real ssh
+# config (OpenSSH resolves ~/.ssh/config through the passwd home, not $HOME).
+# It gets -F here; the port still MUST come from RemoteMachine's -P argv.
+cat > "$work_real/bin/scp" <<WRAPPER
+#!/bin/sh
+exec /usr/bin/scp -F "$work_real/sshhome/.ssh/config" "\$@"
+WRAPPER
+chmod +x "$work_real/bin/scp"
 
 # bun wants a ~/.bun; point it at the real one rather than re-resolving.
 [ -d "$HOME/.bun" ] && ln -sfn "$HOME/.bun" "$ssh_home/.bun"
@@ -262,6 +275,26 @@ start_watcher() {
 }
 
 # --------------------------------------------------------------------------
+# Item 2 fixture: the primary's systemd --user manager is already running
+# BEFORE setup adds the primary to collab. With linger it survives logout, and
+# a running process never gains a group — the exact production failure from
+# the T-16 confirm review. Keep it running through the root script, no reboot.
+# --------------------------------------------------------------------------
+# Fixture setup runs as container root to avoid a polkit authorization timeout
+# before the product code is even exercised. The primary's SSH session was
+# already opened above, and it remains the user whose manager runs with linger.
+pexec "loginctl enable-linger $primary" || die 'could not enable primary linger before setup'
+puid="$(pexec "id -u $primary")"
+manager_before=""
+for _ in $(seq 1 30); do
+  manager_before="$(ssh_t16 "systemctl show -p MainPID --value user@$puid.service" 2>/dev/null || true)"
+  [ -n "$manager_before" ] && [ "$manager_before" != 0 ] && break
+  sleep 1
+done
+[ -n "$manager_before" ] && [ "$manager_before" != 0 ] || die 'fixture: primary user manager did not start before setup'
+pass "fixture: primary user manager $manager_before runs with linger before collab is added"
+
+# --------------------------------------------------------------------------
 # Run setup until it settles, running the root script ourselves when one appears
 # (the harness is the human here; hyper must never run it itself — C-6).
 # --------------------------------------------------------------------------
@@ -282,6 +315,13 @@ for round in 1 2 3 4; do
       -o LogLevel=ERROR "$root_script" "$primary@localhost:/tmp/hyper-machine-root.sh"
     ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" || die "the root script failed on round $round"
     if [ "$round" = 1 ]; then
+      collab_gid="$(pexec 'getent group collab | cut -d: -f3')"
+      manager_after="$(ssh_t16 "systemctl show -p MainPID --value user@$puid.service")"
+      [ -n "$manager_after" ] && [ "$manager_after" != 0 ] || die 'the primary user manager is not running after the root script'
+      ssh_t16 "sed -n 's/^Groups:[[:space:]]*//p' /proc/$manager_after/status | tr ' ' '\n' | grep -qx '$collab_gid'" \
+        || die 'the primary user manager still lacks the collab group after the root script — the watcher would run without it until a reboot'
+      [ "$manager_after" != "$manager_before" ] || die 'the primary user manager was not restarted after its groups changed'
+      pass 'the root script restarted the primary user manager, which now carries collab (no reboot)'
       # Seed the old reference layout AND owning-collab roots. Named-user
       # traverse must win over the owning group's read access; no group-write
       # on the home, which would violate sshd StrictModes.
@@ -327,6 +367,21 @@ pass 'unowned entries and extra collab members warn without making setup unsettl
 ssh_t16 "! getfacl -c -p /home/$primary /home/$primary/.claude | grep -E '^(default:)?group:collab:'" || die 'legacy root collab ACL remains'
 pass 'setup migrates the old reference root ACLs to named-user entries'
 start_watcher
+watcher_pid="$(ssh_t16 'systemctl --user show -p MainPID --value claude-share-watch.service')"
+[ -n "$watcher_pid" ] && [ "$watcher_pid" != 0 ] || die 'no running watcher process after setup'
+ssh_t16 "sed -n 's/^Groups:[[:space:]]*//p' /proc/$watcher_pid/status | tr ' ' '\n' | grep -qx '$collab_gid'" \
+  || die 'the RUNNING watcher still lacks the collab group after the root script'
+pass 'the running watcher carries collab without a reboot'
+# A fresh directory under projects inherits setgid + collab; the watcher
+# touches it through its live-event path (setfacl/chgrp). Without the group,
+# setfacl silently strips setgid and the watcher cannot restore it.
+ssh_t16 "mkdir /home/$primary/.claude/projects/watcher-group-check" || die 'could not create the watcher-path directory'
+sleep 2
+watcher_dir_state="$(ssh_t16 "stat -c '%A %G' /home/$primary/.claude/projects/watcher-group-check")"
+case "$watcher_dir_state" in
+  *s*collab) pass 'a directory the watcher repairs keeps setgid and group collab' ;;
+  *) die "the watcher stripped setgid/group from its directory: $watcher_dir_state" ;;
+esac
 ssh_t16 "printf '{\"model\":\"claude\"}' > /home/$primary/.claude/settings.json; printf '# shared\n' > /home/$primary/.claude/CLAUDE.md"
 for _ in $(seq 1 5); do
   as_agent "cat /home/$primary/.claude/settings.json /home/$primary/.claude/CLAUDE.md" >/dev/null 2>&1 && break
@@ -758,9 +813,14 @@ snapshot() {
   ssh_t16 "getfacl -p /home/$primary /home/$primary/.claude /home/$primary/work /home/$agent /home/$agent/.claude 2>/dev/null; stat -c '%n %a %U %G' /home/$primary /home/$primary/.claude /home/$primary/work /home/$agent /home/$agent/.claude 2>/dev/null; cat /home/$agent/.bashrc 2>/dev/null | md5sum"
 }
 before="$(snapshot)"
+manager_pid_before_second="$(ssh_t16 "systemctl show -p MainPID --value user@$puid.service")"
 ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1 \
   || die "the root script failed on its SECOND run — it is not idempotent"
 after="$(snapshot)"
+manager_pid_after_second="$(ssh_t16 "systemctl show -p MainPID --value user@$puid.service")"
+[ "$manager_pid_before_second" = "$manager_pid_after_second" ] \
+  || die "the second root script run restarted the user manager ($manager_pid_before_second -> $manager_pid_after_second) — not a no-op"
+pass 'the second root script run does not restart the primary user manager (C-15)'
 if [ "$before" != "$after" ]; then
   diff <(printf '%s\n' "$before") <(printf '%s\n' "$after") | head -20
   die "the root script changed the machine on its second run"
@@ -849,6 +909,29 @@ run_hyper > "$work_real/setup-after-canary.log" 2>&1 \
 grep -q "Nothing needed" "$work_real/setup-after-canary.log" \
   || { cat "$work_real/setup-after-canary.log"; die 'setup does not report nothing needed after the canary restore'; }
 pass "a kept container still reports nothing needed after the canary assertions"
+
+# --------------------------------------------------------------------------
+# Item 1: the root-script COPY and RUN both reach THIS container on a
+# non-default port. The main setup above uses an ssh alias carrying the port,
+# so it cannot catch scp's missing -P bug. Here the target is host:port, and
+# the localhost ssh config has NO Port directive — the port must come from
+# RemoteMachine's -p (ssh) and -P (scp) argv. Make create unsettled again,
+# then the harness-only probe answers the root prompt "run it for me" (NOPASSWD
+# inside this disposable container; never sudo on the Mac).
+# --------------------------------------------------------------------------
+ssh_t16 "sudo gpasswd -d $agent collab" >/dev/null || die 'could not make create unsettled for the port probe'
+ssh_t16 "id -nG $agent | tr ' ' '\n' | grep -qx collab" && die 'port fixture: agent still belongs to collab'
+HYPER_T16_PORT_TARGET="$primary@localhost:$port" run_isolated "$here/run-root-script-remote.ts" \
+  > "$work_real/port-probe.log" 2>&1 \
+  || { tail -25 "$work_real/port-probe.log"; die "the run-for-me root script copy/run did not reach the container on port $port"; }
+grep -q '"applied":\["agent-user.create"\]' "$work_real/port-probe.log" \
+  || { tail -25 "$work_real/port-probe.log"; die 'agent-user.create did not settle through the port-carrying copy and run'; }
+ssh_t16 "id -nG $agent | tr ' ' '\n' | grep -qx collab" \
+  || die 'the root script copied via scp did not run on the container'
+run_hyper > "$work_real/setup-after-port.log" 2>&1 \
+  && grep -q "Nothing needed" "$work_real/setup-after-port.log" \
+  || { tail -25 "$work_real/setup-after-port.log"; die 'setup did not settle after the port-carrying copy and run'; }
+pass "root script copy (scp -P) and run (ssh -p) both reach the container on port $port"
 
 # The container must not survive the script.
 echo "# container is removed by the trap"

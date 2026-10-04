@@ -1,7 +1,13 @@
 /** Unprivileged watcher: shared transcripts plus one-level home/config protection. */
 import { createHash } from "node:crypto";
 import { shellQuote } from "#services/remote";
-import { accessPolicyShell, accessRepairShell, directEntriesShell } from "./agent-acl.js";
+import {
+	accessPolicyShell,
+	accessRepairShell,
+	COLLAB_GROUP,
+	directEntriesShell,
+	managerCollabRestartLines,
+} from "./agent-acl.js";
 import {
 	agentPaths,
 	agentUserOf,
@@ -83,6 +89,21 @@ function probe(bin: string, unitPath: string, primaryUser: string, scriptHash: s
 		`printf 'active=%s\\n' "$(systemctl --user is-active ${q(WATCHER_UNIT)} 2>/dev/null || true)"`,
 		`printf 'linger=%s\\n' "$(loginctl show-user ${q(primaryUser)} --property=Linger --value 2>/dev/null || true)"`,
 		`printf 'inotifywait=%s\\n' "$(command -v inotifywait >/dev/null 2>&1 && echo yes || echo no)"`,
+		// The RUNNING watcher must carry the collab group: a process only gets
+		// groups at start, so a watcher whose user manager started before the
+		// membership was added repairs shared dirs WITHOUT it — stripping setgid
+		// bits it cannot restore, and failing chgrp. `unknown` (no running
+		// process) reads as no: the active check says which it is.
+		`watcher_collab() {`,
+		`  pid="$(systemctl --user show -p MainPID --value ${q(WATCHER_UNIT)} 2>/dev/null || true)"`,
+		`  gid="$(getent group ${COLLAB_GROUP} | cut -d: -f3 || true)"`,
+		`  if [ -z "$pid" ] || [ "$pid" = 0 ] || [ -z "$gid" ]; then echo unknown; return; fi`,
+		`  case " $(sed -n "s/^Groups:[[:space:]]*//p" /proc/"$pid"/status 2>/dev/null || true) " in`,
+		`    *" $gid "*) echo yes ;;`,
+		`    *) echo no ;;`,
+		`  esac`,
+		`}`,
+		`printf 'watcher_collab=%s\\n' "$(watcher_collab)"`,
 	].join("\n");
 }
 
@@ -128,6 +149,11 @@ export const agentUserWatcher: Task = {
 			["unit", "yes", "the user service unit is missing"],
 			["enabled", "enabled", "the user service is not enabled"],
 			["active", "active", "the user service is not active"],
+			[
+				"watcher_collab",
+				"yes",
+				"the running watcher does not have the collab group (its user manager started before the group was added); the root script restarts the manager",
+			],
 			["linger", "yes", "linger is disabled for the primary user"],
 		])
 			if (answer.get(key) !== expected) return no(why);
@@ -167,9 +193,13 @@ export const agentUserWatcher: Task = {
 	},
 
 	rootFallback(ctx: TaskContext): string {
-		return `# Keep the primary user's units alive after logout.
+		return `# Keep the primary user's units alive after logout, and — when it is running
+# without the collab group — restart the primary's user manager so the watcher
+# it hosts repairs shared dirs WITH the group (see agent-user.create).
 ${primaryUserLines(ctx)}
 loginctl enable-linger "$primary_user"
+
+${managerCollabRestartLines()}
 `;
 	},
 };

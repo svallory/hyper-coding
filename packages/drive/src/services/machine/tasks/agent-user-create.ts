@@ -42,7 +42,7 @@ import {
 	SUDOERS_DIR,
 } from "#services/machine/root-script";
 import { shellQuote } from "#services/remote";
-import { COLLAB_GROUP, SHARED_ENTRIES } from "./agent-acl.js";
+import { COLLAB_GROUP, managerCollabRestartLines, SHARED_ENTRIES } from "./agent-acl.js";
 import {
 	agentHomeOf,
 	agentUserOf,
@@ -261,6 +261,8 @@ id -u "$agent_user" >/dev/null 2>&1 || useradd -m -s /bin/bash -G ${COLLAB_GROUP
 
 # You, in the same group, so the shared dirs are reachable from both sides.
 usermod -aG ${COLLAB_GROUP} "$primary_user"
+
+${managerCollabRestartLines()}
 
 # The agent's group membership too — UNCONDITIONALLY. useradd below only runs
 # for a user that does not exist yet, so on a machine that already had this
