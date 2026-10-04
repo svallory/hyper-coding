@@ -10,6 +10,7 @@ import {
 	accessRepairShell,
 	COLLAB_GROUP,
 	directEntriesShell,
+	foreignEntriesShell,
 	READABLE_DIRS,
 	READABLE_FILES,
 	SHARED_ENTRIES,
@@ -74,6 +75,10 @@ function dirsProbe(paths: AgentPaths, agentUser: string): string {
 			const optional = READABLE_FILES.some((file) => file === name) ? `[ ! -e ${path} ] || ` : "";
 			return `printf 'read_${name}=%s\\n' "$(if ${optional}shared_ok ${path}; then echo 1; else echo 0; fi)"`;
 		}),
+		...READABLE_DIRS.map(
+			(name) =>
+				`printf 'foreign_${name}=%s\\n' "$(${foreignEntriesShell(`${paths.claude}/${name}`)})"`,
+		),
 		`printf 'projects_group=%s\\n' "$(stat -c %G ${q(paths.projects)} 2>/dev/null || echo missing)"`,
 		`printf 'projects_setgid=%s\\n' "$(test -g ${q(paths.projects)} && echo yes || echo no)"`,
 		`printf 'projects_acl=%s\\n' "${aclCount(paths.projects, "group:collab:rwx")}"`,
@@ -129,6 +134,16 @@ export const agentUserDirs: Task = {
 			if (paths.length)
 				ctx.log(
 					`agent-user.dirs: warning — cannot protect, not owned by ${primary}: ${paths.length} entries; ${paths.slice(0, 3).join(", ")}`,
+				);
+		}
+		// Entries in the shared config dirs that belong to somebody else. The
+		// traversal skips them (setfacl on them is EPERM however readable they
+		// are), so this is a limit, not a fault: warn, and never fail on it.
+		for (const name of READABLE_DIRS) {
+			const foreign = (answer.get(`foreign_${name}`) ?? "").split(",").filter(Boolean);
+			if (foreign.length > 0)
+				ctx.log(
+					`agent-user.dirs: warning — ${foreign.length} entries under ${name}/ are not owned by ${primary} and are skipped; the agent cannot be granted read access to them, and no unprivileged run can fix that: ${foreign.slice(0, 3).join(", ")}`,
 				);
 		}
 		const others = (answer.get("collab_members") ?? "")
