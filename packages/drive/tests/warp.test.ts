@@ -33,6 +33,7 @@ import {
 	PANE_PLACEHOLDER,
 	type ProbeId,
 	planWarp,
+	quotePath,
 	REMOTE_CONTROL_FLAG,
 	readPaneId,
 	restoreMarker,
@@ -1523,20 +1524,28 @@ describe("the new target checks run before any change, and their failures change
 				};
 				run.deps.findCollisions = async () => {
 					run.events.push({ type: "probe", what: "collisions" });
-					return { ok: true, paths: [".env", "notes/todo.txt"] };
+					return {
+						ok: true,
+						collisions: [
+							{ path: ".env", replace: false },
+							{ path: "notes/todo.txt", replace: true, note: "a file there, a directory here" },
+						],
+					};
 				};
 				const result = await executeWarp(plan, run.deps);
 				expectProbesFirst(run.events);
 				if (!force) {
 					expect(result.failure?.detail).toContain("untracked or ignored files");
-					expect(result.failure?.detail).toContain("  .env\n  notes/todo.txt");
+					expect(result.failure?.detail).toContain(
+						"  .env\n  notes/todo.txt (a file there, a directory here)",
+					);
 					expect(run.events.filter((event) => event.type === "change")).toEqual([]);
 					expect(run.stops).toEqual([]);
 					return;
 				}
 				expect(result.failure, result.failure?.detail).toBeUndefined();
 				const backup = plan.steps.find(
-					(step) => step.kind === "remote-command" && step.stdinFrom === "collisions",
+					(step) => step.kind === "remote-command" && step.needs === "collisions",
 				) as Extract<WarpStep, { kind: "remote-command" }>;
 				const key = `remote ${backup.argv.slice(0, 3).join(" ")}`;
 				const changes = run.events
@@ -1548,7 +1557,7 @@ describe("the new target checks run before any change, and their failures change
 				const workdirCopy = changes.indexOf(`copy ${plan.cwd}/`);
 				expect(at).toBeLessThan(workdirCopy);
 				if (plan.space) expect(at).toBeLessThan(changes.indexOf("push"));
-				expect(stdins).toContain(".env\0notes/todo.txt\0");
+				expect(stdins).toContain("K.env\0Rnotes/todo.txt\0");
 			});
 		}
 	}
@@ -1582,5 +1591,73 @@ describe("the new target checks run before any change, and their failures change
 		>;
 		expect(copy.excludes).toContain("/.git/hyper-warp-backup");
 		expect(probeOf(plan, "collisions")?.collisions?.excludes).toEqual(copy.excludes);
+	});
+});
+
+describe("a plain repo's refs on the target (PR #51 review, HIGH 2)", () => {
+	const uncovered = [{ name: "refs/heads/main", reason: "has commits this machine doesn't" }];
+
+	it("refuses refs this machine doesn't cover, before any change, naming them", async () => {
+		const plan = planOf({ cwdKind: "git-repo", stop: true, live: [LIVE] });
+		const run = fakeTarget(plan);
+		run.deps.refsNotCoveredHere = () => uncovered;
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure?.step.summary).toContain("check every ref of the repository");
+		expect(result.failure?.detail).toContain("refs/heads/main (has commits this machine doesn't)");
+		expect(result.failure?.detail).toContain("pass --force");
+		expect(run.events.filter((event) => event.type === "change")).toEqual([]);
+		expect(run.stops).toEqual([]);
+	});
+
+	it("with --force, saves the target's refs after the transcript and before the working-directory copy", async () => {
+		const plan = planOf({ cwdKind: "git-repo", force: true });
+		const run = fakeTarget(plan);
+		run.deps.refsNotCoveredHere = () => uncovered;
+		const save = plan.steps.find(
+			(step) => step.kind === "remote-command" && step.needs === "refs",
+		) as Extract<WarpStep, { kind: "remote-command" }>;
+		const key = save.argv.slice(0, 3).join(" ");
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expectProbesFirst(run.events);
+		const changes = run.events
+			.filter((event) => event.type === "change")
+			.map((event) => event.what);
+		expect(changes.indexOf(`remote ${key}`)).toBeGreaterThan(changes.indexOf(`copy ${TRANSCRIPT}`));
+		expect(changes.indexOf(`remote ${key}`)).toBeLessThan(changes.indexOf(`copy ${CWD}/`));
+	});
+
+	it("with --force and every ref covered, saves nothing", async () => {
+		const plan = planOf({ cwdKind: "git-repo", force: true });
+		const run = fakeTarget(plan);
+		run.deps.refsNotCoveredHere = () => [];
+		const result = await executeWarp(plan, run.deps);
+		expect(result.failure).toBeUndefined();
+		expect(result.skipped.some((summary) => summary.includes("save the refs"))).toBe(true);
+	});
+
+	it("is not asked for a space worktree (the push check covers its branch)", () => {
+		expect(probeOf(spacePlan(), "target-refs")).toBeUndefined();
+	});
+
+	it("the copy never touches the saved refs, and the plan says .git/config and info/exclude are replaced", () => {
+		const plan = planOf({ cwdKind: "git-repo" });
+		const copy = plan.steps.find((step) => step.kind === "copy" && step.src === CWD) as Extract<
+			WarpStep,
+			{ kind: "copy" }
+		>;
+		expect(copy.excludes).toContain("/.git/refs/hyper-warp-backup");
+		expect(plan.notes.join("\n")).toContain(
+			".git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced",
+		);
+	});
+});
+
+describe("refusal lists quote awkward names (PR #51 review, suggestion)", () => {
+	it("quotes a name with a newline, a quote or a backslash like git status does", () => {
+		expect(quotePath("plain name.txt")).toBe("plain name.txt");
+		expect(quotePath("new\nline.txt")).toBe('"new\\nline.txt"');
+		expect(quotePath('q"uo\\te')).toBe('"q\\"uo\\\\te"');
+		expect(quotePath("esc\u001b")).toBe('"esc\\x1b"');
 	});
 });

@@ -1,13 +1,16 @@
 import { spawnSync } from "node:child_process";
 import {
 	chmodSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
+	readlinkSync,
 	realpathSync,
 	rmSync,
 	statSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +18,7 @@ import { dirname, join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LocalMachine, type MachineRunner } from "#services/remote";
 import {
+	refsNotCoveredHere,
 	TARGET_CONFLICTED,
 	TARGET_IN_PROGRESS,
 	TARGET_SUBMODULE_CHANGED,
@@ -189,6 +193,7 @@ function snapshot(root: string): Record<string, string> {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {
 			const path = join(dir, entry.name);
 			if (entry.isDirectory()) walk(path);
+			else if (entry.isSymbolicLink()) out[relative(root, path)] = `-> ${readlinkSync(path)}`;
 			else out[relative(root, path)] = readFileSync(path, "base64");
 		}
 	};
@@ -204,14 +209,17 @@ function snapshot(root: string): Record<string, string> {
 function twinRepos(rel = "work/repo") {
 	const src = join(srcHome, rel);
 	const tgt = join(tgtHome, rel);
-	for (const dir of [src, tgt]) {
-		mkdirSync(dir, { recursive: true });
-		git(dir, "init", "-q", "-b", "main");
-		write(join(dir, ".gitignore"), ".env\n*.secret\nnode_modules\n");
-		write(join(dir, "a.txt"), "a\n");
-		git(dir, "add", ".");
-		git(dir, "commit", "-q", "-m", "a");
-	}
+	mkdirSync(src, { recursive: true });
+	git(src, "init", "-q", "-b", "main");
+	write(join(src, ".gitignore"), ".env\n*.secret\nnode_modules\n");
+	write(join(src, "a.txt"), "a\n");
+	git(src, "add", ".");
+	git(src, "commit", "-q", "-m", "a");
+	// The target has the same history (the same refs), as after an earlier warp.
+	mkdirSync(tgt, { recursive: true });
+	git(tgt, "init", "-q", "-b", "main");
+	git(tgt, "fetch", "-q", "--update-head-ok", src, "main:main");
+	git(tgt, "reset", "-q", "--hard");
 	// git writes objects 0444, and both sides hold the same objects. rsync
 	// replaces a file through a temporary and a rename; the Node copy this
 	// runner uses writes in place, so it needs them writable.
@@ -264,7 +272,7 @@ describe("ignored and untracked files on the target (items 1 and 2)", () => {
 		const before = snapshot(tgt);
 		const w = world();
 		const result = await w.run(plainRepoPlan("work/repo"));
-		expect(result.failure?.step.summary).toContain("untracked or ignored files");
+		expect(result.failure?.step.summary).toContain("untracked or ignored entries");
 		expect(result.failure?.detail).toContain("  .env");
 		expect(result.failure?.detail).toContain("  notes/todo.secret");
 		expect(result.failure?.detail).not.toContain("same.secret");
@@ -335,7 +343,7 @@ describe("ignored and untracked files on the target (items 1 and 2)", () => {
 				refuse: true,
 			},
 		);
-		expect(found).toEqual({ ok: true, paths: [] });
+		expect(found).toEqual({ ok: true, collisions: [] });
 	});
 
 	it("compares symlinks by their link text, and an untracked directory file by file", async () => {
@@ -359,7 +367,7 @@ describe("ignored and untracked files on the target (items 1 and 2)", () => {
 			compareArgv: targetCompareFiles(src),
 		});
 		if (!found.ok) throw new Error(found.stderr);
-		const listed = found.paths.map((path) => `  ${path}`).join("\n");
+		const listed = found.collisions.map((entry) => `  ${entry.path}`).join("\n");
 		expect(listed).toContain("  link-diff");
 		expect(listed).toContain("  build/two.txt");
 		expect(listed).not.toContain("link-same");
@@ -488,5 +496,176 @@ describe("git state on the target that nothing can save (items 3, 5, 6)", () => 
 describe("exit codes of the status probe", () => {
 	it("are distinct", () => {
 		expect(new Set([TARGET_IN_PROGRESS, TARGET_CONFLICTED, TARGET_SUBMODULE_CHANGED]).size).toBe(3);
+	});
+});
+
+describe("a type change on the target is a collision (PR #51 review, BLOCKER 1)", () => {
+	/**
+	 * Three type changes, all ignored on the target (its info/exclude), so the
+	 * dirty check is clean and only the collision check can see them:
+	 *  - typx: a file there, a directory here;
+	 *  - lnk:  a symlink there (pointing outside the repo), a directory here;
+	 *  - typd: a directory there, a file here.
+	 */
+	function typeChanges() {
+		const { src, tgt } = twinRepos();
+		const outside = join(base, "outside");
+		write(join(outside, "keep.txt"), "outside the repo\n");
+		write(join(tgt, ".git/info/exclude"), "typx\nlnk\ntypd\n");
+		write(join(tgt, "typx"), "T-file-x\n");
+		write(join(src, "typx/child"), "local child\n");
+		symlinkSync(outside, join(tgt, "lnk"));
+		write(join(src, "lnk/inside.txt"), "local, inside lnk/\n");
+		write(join(tgt, "typd/inner"), "T-inner\n");
+		write(join(src, "typd"), "local file typd\n");
+		return { src, tgt, outside };
+	}
+
+	it("refuses all three without --force, saying what differs, and changes nothing on either side", async () => {
+		const { tgt, outside } = typeChanges();
+		const before = snapshot(tgt);
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo"));
+		const detail = result.failure?.detail ?? "";
+		expect(detail).toContain("  typx (a file there, a directory here)");
+		expect(detail).toContain("  lnk (a symlink there, a directory here)");
+		expect(detail).toContain("  typd (a directory there, a file here)");
+		expect(w.changes).toEqual([]);
+		expect(w.log.some((entry) => entry.startsWith("copy"))).toBe(false);
+		expect(snapshot(tgt)).toEqual(before);
+		expect(readdirSync(outside)).toEqual(["keep.txt"]);
+	});
+
+	it("with --force, copies each aside (cp -pPR), removes it, and the copy then writes this machine's type", async () => {
+		const { tgt, outside } = typeChanges();
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo", { force: true }));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		const backup = join(tgt, ".git/hyper-warp-backup", WARP_ID);
+		expect(readFileSync(join(backup, "typx"), "utf-8")).toBe("T-file-x\n");
+		expect(readlinkSync(join(backup, "lnk"))).toBe(outside);
+		expect(readFileSync(join(backup, "typd/inner"), "utf-8")).toBe("T-inner\n");
+		// The backup root is 0700; what cp -pPR copies under it keeps its own modes.
+		expect(statSync(backup).mode & 0o777).toBe(0o700);
+		expect(readFileSync(join(tgt, "typx/child"), "utf-8")).toBe("local child\n");
+		expect(lstatSync(join(tgt, "lnk")).isDirectory()).toBe(true);
+		expect(readFileSync(join(tgt, "lnk/inside.txt"), "utf-8")).toBe("local, inside lnk/\n");
+		expect(readFileSync(join(tgt, "typd"), "utf-8")).toBe("local file typd\n");
+		// Nothing was written through the target's symlink.
+		expect(readdirSync(outside)).toEqual(["keep.txt"]);
+		expect(result.notices.join("\n")).toContain(`(3) were first copied to ${backup}`);
+	});
+
+	it("catches a file here where the target's TRACKED directory holds an untracked file", async () => {
+		const { src, tgt } = twinRepos();
+		write(join(src, "dir/t.txt"), "tracked\n");
+		git(src, "add", ".");
+		git(src, "commit", "-q", "-m", "dir");
+		git(tgt, "fetch", "-q", "--update-head-ok", src, "main:main");
+		git(tgt, "reset", "-q", "--hard");
+		write(join(tgt, "dir/extra.secret"), "untracked inside a tracked dir\n");
+		git(src, "rm", "-q", "-r", "dir");
+		write(join(src, "dir"), "now a file\n");
+		const found = await findCollisions(
+			mappedRunner([]),
+			plainRepoPlan("work/repo").steps.find(
+				(step): step is Extract<WarpStep, { kind: "probe" }> =>
+					step.kind === "probe" && step.id === "collisions",
+			)?.argv as string[],
+			{ src, dst: src, excludes: [], compareArgv: targetCompareFiles(src), refuse: true },
+		);
+		expect(found).toEqual({
+			ok: true,
+			collisions: [{ path: "dir", replace: true, note: "a directory there, a file here" }],
+		});
+	});
+});
+
+describe("a plain repo's refs on the target (PR #51 review, HIGH 2)", () => {
+	function targetOnlyCommit() {
+		const { src, tgt } = twinRepos();
+		write(join(tgt, "t.txt"), "committed only on the target\n");
+		git(tgt, "add", "t.txt");
+		git(tgt, "commit", "-q", "-m", "target only");
+		git(tgt, "branch", "only-there");
+		return { src, tgt, commit: git(tgt, "rev-parse", "HEAD").trim() };
+	}
+
+	it("refuses a target-only commit and a target-only branch without --force, changing nothing", async () => {
+		const { tgt } = targetOnlyCommit();
+		const before = snapshot(tgt);
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail).toContain("refs/heads/main (has commits this machine doesn't)");
+		expect(result.failure?.detail).toContain("refs/heads/only-there (only there)");
+		expect(w.changes).toEqual([]);
+		expect(snapshot(tgt)).toEqual(before);
+	});
+
+	it("with --force, the target-only commit stays reachable from the backup refs afterwards", async () => {
+		const { src, tgt, commit } = targetOnlyCommit();
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo", { force: true }));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		// The copy replaced the target's main with this machine's...
+		expect(git(tgt, "rev-parse", "refs/heads/main").trim()).toBe(
+			git(src, "rev-parse", "HEAD").trim(),
+		);
+		// ...and the target's commit is still reachable, by name.
+		const ns = `refs/hyper-warp-backup/${WARP_ID}`;
+		expect(git(tgt, "rev-parse", `${ns}/heads/main`).trim()).toBe(commit);
+		expect(git(tgt, "rev-parse", `${ns}/heads/only-there`).trim()).toBe(commit);
+		expect(git(tgt, "cat-file", "-p", `${ns}/heads/main:t.txt`)).toBe(
+			"committed only on the target\n",
+		);
+		expect(result.notices.join("\n")).toContain(`saved there under ${ns}/`);
+	});
+
+	it("covered refs (same commit, or behind this machine's) pass without --force", async () => {
+		const { src, tgt } = twinRepos();
+		write(join(src, "b.txt"), "ahead here\n");
+		git(src, "add", "b.txt");
+		git(src, "commit", "-q", "-m", "ahead");
+		const refs = git(tgt, "for-each-ref", "--format=%(objectname) %(refname)")
+			.trim()
+			.split("\n")
+			.map((line) => {
+				const [object, name] = line.split(" ");
+				return { object: object as string, name: name as string };
+			});
+		expect(refsNotCoveredHere(src, refs)).toEqual([]);
+		expect(refsNotCoveredHere(src, [{ object: "0".repeat(40), name: "refs/heads/main" }])).toEqual([
+			{ name: "refs/heads/main", reason: "has commits this machine doesn't" },
+		]);
+	});
+
+	it("a detached HEAD on a target-only commit is refused too", async () => {
+		const { tgt } = targetOnlyCommit();
+		git(tgt, "checkout", "-q", "--detach");
+		git(tgt, "branch", "-q", "-f", "main", "HEAD~1");
+		git(tgt, "branch", "-q", "-D", "only-there");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail).toContain("HEAD (has commits this machine doesn't)");
+	});
+});
+
+describe("the --force stash never runs the target's fsmonitor (PR #51 review, suggestion)", () => {
+	it("passes core.fsmonitor=false to the stash commands, and a configured hook does not run", () => {
+		const argv = targetStashSnapshot("/x", "m");
+		expect(argv.join(" ")).toContain("-c core.fsmonitor=false");
+		const { tgt } = twinRepos();
+		const marker = join(base, "fsmonitor-ran");
+		const hook = join(base, "fsmonitor.sh");
+		writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\nexit 1\n`);
+		chmodSync(hook, 0o755);
+		git(tgt, "config", "core.fsmonitor", hook);
+		writeFileSync(join(tgt, "a.txt"), "changed\n");
+		const real = targetStashSnapshot(tgt, "m");
+		const result = spawnSync(real[0] as string, real.slice(1), {
+			encoding: "utf-8",
+			env: { ...process.env, ...env },
+		});
+		expect(result.status, result.stderr).toBe(0);
+		expect(() => statSync(marker)).toThrow();
 	});
 });
