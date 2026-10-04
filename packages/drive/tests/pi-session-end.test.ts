@@ -23,6 +23,7 @@ import {
 	realpathSync,
 	rmSync,
 	statSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -371,25 +372,10 @@ describe("the pi extension on session_shutdown", () => {
 	});
 
 	it("logs one failed line, readable by `space status`, when the probe times out near a space", async () => {
-		const gitDir = join(directory, "space", ".hyper", "space.git");
+		const gitDir = makeSpaceGitDir(join(directory, "space"));
 		const nested = join(directory, "space", "notes", "deep");
-		mkdirSync(gitDir, { recursive: true });
 		mkdirSync(nested, { recursive: true });
-		const timedOut: ProbeResult = { status: null, stdout: "", timedOut: true };
-		const deps = createRealDeps({
-			resolveCli: () => BIN,
-			probe: async () => timedOut,
-			writePayload: () => {
-				throw new Error("a timed-out probe must not write a payload");
-			},
-			spawnWorker: () => {
-				throw new Error("a timed-out probe must not spawn anything");
-			},
-			notify: (line) => {
-				throw new Error(`a timed-out probe must print nothing, not ${line}`);
-			},
-		});
-		expect(await saveSessionEnd(facts({ cwd: nested }), deps)).toBeUndefined();
+		expect(await saveSessionEnd(facts({ cwd: nested }), timedOutDeps())).toBeUndefined();
 		const log = readFileSync(join(gitDir, SESSION_END_LOG), "utf8");
 		expect(log.split("\n").filter(Boolean)).toHaveLength(1);
 		expect(statSync(join(gitDir, SESSION_END_LOG)).mode & 0o777).toBe(0o600);
@@ -403,7 +389,79 @@ describe("the pi extension on session_shutdown", () => {
 		});
 		expect(new Date(failure!.at).getTime()).toBeGreaterThan(Date.now() - 60_000);
 		// Nothing else appeared in the git dir: no payload, no lock.
-		expect(readdirSync(gitDir)).toEqual([SESSION_END_LOG]);
+		expect(readdirSync(gitDir).sort()).toEqual(["HEAD", SESSION_END_LOG, "config"].sort());
+	});
+
+	describe("never writes the timeout line through a symlink or into debris", () => {
+		// Each case: a clone (the session's cwd) carries a planted `.hyper`, and
+		// a file outside it is the victim. After a timed-out probe the victim is
+		// byte-identical and nothing new exists outside the clone.
+		function plant() {
+			const clone = join(directory, "clone");
+			const outside = join(directory, "outside");
+			mkdirSync(clone, { recursive: true });
+			mkdirSync(outside, { recursive: true });
+			const victim = join(outside, "victim");
+			writeFileSync(victim, "precious\n");
+			return { clone, outside, victim };
+		}
+		async function quitIn(cwd: string) {
+			expect(await saveSessionEnd(facts({ cwd }), timedOutDeps())).toBeUndefined();
+		}
+
+		it("refuses a session-end.log that is a symlink to a file outside", async () => {
+			const { clone, outside, victim } = plant();
+			const gitDir = makeSpaceGitDir(clone);
+			symlinkSync(victim, join(gitDir, SESSION_END_LOG));
+			const before = listTree(outside);
+			await quitIn(clone);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			expect(listTree(outside)).toEqual(before);
+		});
+
+		it("skips a .hyper that is a symlink", async () => {
+			const { clone, outside, victim } = plant();
+			// A perfect-looking git dir, reached only through the symlink.
+			makeSpaceGitDir(join(outside, "elsewhere"));
+			symlinkSync(join(outside, "elsewhere", ".hyper"), join(clone, ".hyper"));
+			const before = listTree(outside);
+			await quitIn(clone);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			expect(listTree(outside)).toEqual(before);
+			expect(existsSync(join(outside, "elsewhere", ".hyper", "space.git", SESSION_END_LOG))).toBe(
+				false,
+			);
+		});
+
+		it("skips a space.git that is a symlink", async () => {
+			const { clone, outside, victim } = plant();
+			const target = join(outside, "else3");
+			mkdirSync(target);
+			writeFileSync(join(target, "HEAD"), "ref: refs/heads/main\n");
+			writeFileSync(join(target, "config"), "[core]\n");
+			mkdirSync(join(clone, ".hyper"));
+			symlinkSync(target, join(clone, ".hyper", "space.git"));
+			const before = listTree(outside);
+			await quitIn(clone);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			expect(listTree(outside)).toEqual(before);
+			expect(existsSync(join(target, SESSION_END_LOG))).toBe(false);
+		});
+
+		it("skips a .hyper/space.git without HEAD and config, and logs in the real space above", async () => {
+			const { outside, victim } = plant();
+			const space = join(directory, "space");
+			const gitDir = makeSpaceGitDir(space);
+			// Debris: a clone inside the real space carries a bare folder.
+			const debris = join(space, "code", "clone", ".hyper", "space.git");
+			mkdirSync(debris, { recursive: true });
+			const before = listTree(outside);
+			await quitIn(join(space, "code", "clone"));
+			expect(readdirSync(debris)).toEqual([]);
+			expect(lastSessionEndFailure(gitDir)?.detail).toBe(PROBE_TIMEOUT_DETAIL);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			expect(listTree(outside)).toEqual(before);
+		});
 	});
 
 	it("writes nothing anywhere when the probe times out outside a space", async () => {
@@ -447,7 +505,7 @@ describe("the pi extension on session_shutdown", () => {
 
 	it("prints the missing-CLI line only in a space, and does not guess", async () => {
 		const inSpace = join(directory, "space", "notes");
-		mkdirSync(join(directory, "space", ".hyper", "space.git"), { recursive: true });
+		makeSpaceGitDir(join(directory, "space"));
 		mkdirSync(inSpace, { recursive: true });
 		const deps = fakeDeps({ resolveCli: () => undefined });
 		expect(await saveSessionEnd(facts({ cwd: inSpace }), deps)).toBeUndefined();
@@ -911,7 +969,7 @@ describe("against the real built CLI, in a throwaway space", () => {
 			expect(status.sessionEndFailure).toMatchObject({
 				session: id,
 				outcome: "failed",
-				detail: "probe timed out",
+				detail: PROBE_TIMEOUT_DETAIL,
 			});
 		} finally {
 			rmSync(fix, { recursive: true, force: true });
@@ -922,4 +980,30 @@ describe("against the real built CLI, in a throwaway space", () => {
 /** Every path below `root`, sorted: "nothing was written anywhere" made checkable. */
 function listTree(root: string): string[] {
 	return readdirSync(root, { recursive: true, encoding: "utf8" }).sort();
+}
+
+/** The smallest real space git dir the walk accepts: real directories, HEAD and config. */
+function makeSpaceGitDir(root: string): string {
+	const gitDir = join(root, ".hyper", "space.git");
+	mkdirSync(gitDir, { recursive: true });
+	writeFileSync(join(gitDir, "HEAD"), "ref: refs/heads/space/test\n");
+	writeFileSync(join(gitDir, "config"), "[core]\n\tbare = true\n");
+	return gitDir;
+}
+
+/** Real dependencies whose probe always times out and which must do nothing else. */
+function timedOutDeps(): SessionEndDeps {
+	return createRealDeps({
+		resolveCli: () => BIN,
+		probe: async () => ({ status: null, stdout: "", timedOut: true }),
+		writePayload: () => {
+			throw new Error("a timed-out probe must not write a payload");
+		},
+		spawnWorker: () => {
+			throw new Error("a timed-out probe must not spawn anything");
+		},
+		notify: (line) => {
+			throw new Error(`a timed-out probe must print nothing, not ${line}`);
+		},
+	});
 }

@@ -26,7 +26,16 @@
  */
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, closeSync, openSync, renameSync, statSync, writeSync } from "node:fs";
+import {
+	closeSync,
+	constants,
+	fstatSync,
+	lstatSync,
+	openSync,
+	renameSync,
+	statSync,
+	writeSync,
+} from "node:fs";
 import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 
 /** Same shape the Claude SessionEnd hook sends, plus the two fields below. */
@@ -65,7 +74,8 @@ export const PROBE_TIMEOUT_MS = 5_000;
  * The `failed` detail a timed-out probe leaves in `session-end.log`, so
  * `hyper space status` shows the save that did not happen.
  */
-export const PROBE_TIMEOUT_DETAIL = "probe timed out";
+export const PROBE_TIMEOUT_DETAIL =
+	"probe timed out (the cadence was never read, so a manual space logs this too)";
 
 /**
  * The worker's log, replicated: this extension is loaded by pi on its own (and
@@ -301,14 +311,29 @@ export function findSpaceGitDir(dir: string): string | undefined {
 	let current = resolve(dir);
 	for (;;) {
 		const candidate = join(current, ".hyper", "space.git");
-		try {
-			if (statSync(candidate).isDirectory()) return candidate;
-		} catch {
-			// Not here: keep walking.
-		}
+		if (isRealSpaceGitDir(candidate)) return candidate;
 		const parent = dirname(current);
 		if (parent === current) return undefined;
 		current = parent;
+	}
+}
+
+/**
+ * A real directory at both `.hyper` and `.hyper/space.git` (no symlink at
+ * either level, checked with `lstat`) that looks like a git dir: `HEAD` and
+ * `config` are regular files. A clone can carry symlinks or a bare
+ * `.hyper/space.git` folder as content, and the timeout line must never be
+ * steered through one; a candidate that fails is skipped and the walk goes on.
+ */
+function isRealSpaceGitDir(candidate: string): boolean {
+	try {
+		if (!lstatSync(dirname(candidate)).isDirectory()) return false;
+		if (!lstatSync(candidate).isDirectory()) return false;
+		return (
+			lstatSync(join(candidate, "HEAD")).isFile() && lstatSync(join(candidate, "config")).isFile()
+		);
+	} catch {
+		return false;
 	}
 }
 
@@ -326,16 +351,23 @@ function logField(text: string, limit: number): string {
 
 /**
  * `appendSessionEndLog(gitDir, { session, outcome: "failed", detail })`: the
- * same tab-separated record and the same rotation. Never throws: a log that
- * cannot be written costs nothing more than the save already lost.
+ * same tab-separated record and the same rotation, except that it never
+ * follows a symlink. A `session-end.log` that exists and is not a regular file
+ * is refused, and the open is `O_NOFOLLOW`. Never throws: a log that cannot be
+ * written costs nothing more than the save already lost.
  */
 export function appendFailureLine(gitDir: string, sessionId: string, detail: string): void {
 	const path = join(gitDir, SESSION_END_LOG);
 	try {
+		let existing: ReturnType<typeof lstatSync> | undefined;
 		try {
-			if (statSync(path).size >= SESSION_END_LOG_LIMIT) renameSync(path, `${path}.1`);
+			existing = lstatSync(path);
 		} catch {
 			/* No log yet. */
+		}
+		if (existing !== undefined) {
+			if (!existing.isFile()) return;
+			if (existing.size >= SESSION_END_LOG_LIMIT) renameSync(path, `${path}.1`);
 		}
 		const record = [
 			new Date().toISOString(),
@@ -343,9 +375,20 @@ export function appendFailureLine(gitDir: string, sessionId: string, detail: str
 			"failed",
 			logField(detail, 600),
 		].join("\t");
-		appendFileSync(path, `${record}\n`, { mode: 0o600 });
+		const fd = openSync(
+			path,
+			constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW,
+			0o600,
+		);
+		try {
+			// Swapped for something else between the lstat and the open.
+			if (!fstatSync(fd).isFile()) return;
+			writeSync(fd, `${record}\n`);
+		} finally {
+			closeSync(fd);
+		}
 	} catch {
-		// An unwritable git dir: nothing more to do.
+		// An unwritable git dir, or a symlink planted in the log's place.
 	}
 }
 
