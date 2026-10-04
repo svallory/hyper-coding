@@ -117,6 +117,11 @@ function recordingRunner(rules: { match: string | RegExp; result: Partial<RunRes
 
 type Fake = ReturnType<typeof recordingRunner>;
 
+/** The ssh destination: the word before `--`, whatever options precede it. */
+function targetOf(request: SpawnRequest): string {
+	return request.args[request.args.indexOf("--") - 1] ?? "";
+}
+
 function ctxFor(runner: Fake, over: Partial<TaskContext> = {}): TaskContext {
 	return {
 		machine: MACHINE,
@@ -297,7 +302,7 @@ describe("docker-rootless.packages", () => {
 		).toBe(true);
 		expect(runner.joined).not.toContain("authorized_keys");
 		expect(asAgent.length).toBe(1);
-		expect(asAgent[0]?.args[0]).toBe("agent@t17box");
+		expect(asAgent[0] && targetOf(asAgent[0])).toBe("agent@t17box");
 		expect(asAgent[0]?.args.join(" ")).toContain("authorized_keys");
 		for (const answer of [holding("0\n"), holding("", 255)]) {
 			expect(
@@ -345,7 +350,7 @@ describe("docker-rootless.install", () => {
 		expect(await dockerRootlessInstall.check(ctxFor(recordingRunner(), { spawner }))).toBe(true);
 		// Every command went to the AGENT's ssh target, never the primary's.
 		expect(seen.length).toBeGreaterThan(0);
-		for (const request of seen) expect(request.args[0]).toBe("agent@t17box");
+		for (const request of seen) expect(targetOf(request)).toBe("agent@t17box");
 	});
 
 	it("says the key is missing when it cannot even open a session as the agent", async () => {
@@ -577,8 +582,53 @@ describe("the as-agent runner", () => {
 		});
 		await machine.asUser("agent", ["id", "-u"]);
 		expect(seen[0].file).toBe("ssh");
-		expect(seen[0].args[0]).toBe("agent@box");
+		expect(targetOf(seen[0])).toBe("agent@box");
 		expect(seen[0].args).not.toContain("sudo");
+	});
+
+	// The operator's ssh config may forward their ssh-agent or share connections
+	// for this host. A session as the agent must take neither: the exact argv.
+	it("opens every session as another user with no agent forwarding and no shared connection", async () => {
+		const isolation = [
+			"-a",
+			"-o",
+			"ForwardAgent=no",
+			"-o",
+			"ClearAllForwardings=yes",
+			"-o",
+			"ControlMaster=no",
+			"-o",
+			"ControlPath=none",
+		];
+		const seen: SpawnRequest[] = [];
+		const spawner = async (request: SpawnRequest): Promise<RunResult> => {
+			seen.push(request);
+			return { code: 0, stdout: "", stderr: "" };
+		};
+		const primary = new RemoteMachine("svallory@box", spawner);
+		await primary.asUser("agent", ["id", "-u"]);
+		expect(seen[0].args).toEqual([...isolation, "agent@box", "--", "id -u"]);
+
+		await agentRunnerFor(MACHINE, "agent", spawner).ssh(["id", "-u"]);
+		expect(seen[1].args).toEqual([...isolation, "agent@t17box", "--", "id -u"]);
+
+		// And the transfers of a runner that IS another user.
+		const agent = agentRunnerFor(MACHINE, "agent", spawner);
+		await agent.scp("/tmp/x", "/tmp/y");
+		const scp = seen.find((request) => request.file === "scp");
+		expect(scp?.args.slice(0, 8)).toEqual(isolation.slice(1));
+		await agent.rsync("/nonexistent-src-t17", "/tmp/y");
+		const rsync = seen.find((request) => request.file === "rsync");
+		expect(rsync?.args.slice(0, 4)).toEqual([
+			"-a",
+			"--stats",
+			"-e",
+			["ssh", ...isolation].join(" "),
+		]);
+
+		// Sessions as the primary keep the operator's configuration untouched.
+		await primary.ssh(["id", "-u"]);
+		expect(seen.at(-1)?.args).toEqual(["svallory@box", "--", "id -u"]);
 	});
 
 	it("refuses locally, because becoming another user needs root", async () => {
@@ -593,8 +643,8 @@ describe("the as-agent runner", () => {
 		});
 		await machine.ssh(["sh", "-c", "id -u"], {} as SshOptions);
 		await machine.asUser("agent", ["id", "-u"]);
-		expect(seen[0].args[0]).toBe("svallory@box");
-		expect(seen[1].args[0]).toBe("agent@box");
+		expect(targetOf(seen[0])).toBe("svallory@box");
+		expect(targetOf(seen[1])).toBe("agent@box");
 		// machine.ts builds the same target from a Herdr alias.
 		expect(agentRunnerFor(MACHINE, "agent").host).toBe("agent@t17box");
 	});

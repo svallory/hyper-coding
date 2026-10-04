@@ -329,5 +329,6 @@ export function agentRunnerFor(
 		);
 	}
 	// The spawner is a test seam: without one this is the real ssh.
-	return new RemoteMachine(targetWithUser(machine.host, agentUser), spawner);
+	// otherUser: never the operator's agent forwarding or shared connections.
+	return new RemoteMachine(targetWithUser(machine.host, agentUser), spawner, { otherUser: true });
 }

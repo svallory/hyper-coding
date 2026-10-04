@@ -265,8 +265,13 @@ export function remoteSpec(host: string, path: string): string {
  * `--stats`, `--exclude` and `--` work everywhere. `--mkpath` (rsync 3.2.3+)
  * does *not*, so missing destination parents are created over ssh beforehand.
  */
-function rsyncArgs(src: string, dst: string, opts?: RsyncOptions): string[] {
-	const args = ["-a", "--stats", "-e", "ssh"];
+function rsyncArgs(src: string, dst: string, opts?: RsyncOptions, otherUser = false): string[] {
+	const args = [
+		"-a",
+		"--stats",
+		"-e",
+		otherUser ? ["ssh", ...OTHER_USER_SSH_OPTIONS].join(" ") : "ssh",
+	];
 	for (const pattern of opts?.excludes ?? []) {
 		args.push(`--exclude=${pattern}`);
 	}
@@ -552,24 +557,69 @@ export class LocalMachine implements MachineRunner {
 	}
 }
 
+/**
+ * The options every session opened as ANOTHER user on the machine carries.
+ *
+ * hyper reaches the agent user with the operator's own ssh client, so without
+ * these the session inherits whatever the operator's `~/.ssh/config` says for
+ * that host — and two of those settings break the agent's isolation:
+ *
+ * - **agent forwarding** (`ForwardAgent yes`, common for dev servers) hands the
+ *   operator's ssh-agent socket to a session of the agent user. Any process of
+ *   the agent's could authenticate with the operator's keys for as long as the
+ *   session lasts — including as the primary user on the same machine.
+ * - **connection sharing** (`ControlMaster`/`ControlPath` without `%r`) can
+ *   reuse the PRIMARY user's open connection, so commands meant for the agent
+ *   run as the primary.
+ *
+ * `-a` and `ForwardAgent=no` close the first (ssh honours the first value, and
+ * command-line options come before the config file); `ClearAllForwardings`
+ * drops any configured port forwardings; `ControlMaster=no` with
+ * `ControlPath=none` never joins or creates a shared connection. Sessions as
+ * the primary user keep the operator's configuration exactly as it is.
+ */
+export const OTHER_USER_SSH_OPTIONS = [
+	"-a",
+	"-o",
+	"ForwardAgent=no",
+	"-o",
+	"ClearAllForwardings=yes",
+	"-o",
+	"ControlMaster=no",
+	"-o",
+	"ControlPath=none",
+] as const;
+
+/** How a {@link RemoteMachine} connects. */
+export interface RemoteMachineOptions {
+	/**
+	 * True when the host's user is NOT the operator's own account on that
+	 * machine (the agent user). Every ssh, scp and rsync then carries
+	 * {@link OTHER_USER_SSH_OPTIONS}.
+	 */
+	otherUser?: boolean;
+}
+
 /** Commands on a remote machine over SSH. `host` is whatever `ssh` accepts. */
 export class RemoteMachine implements MachineRunner {
 	readonly kind = "remote" as const;
 	readonly host: string;
 	private readonly spawner: Spawner;
+	private readonly otherUser: boolean;
 
-	constructor(host: string, spawner: Spawner = spawnProcess) {
+	constructor(host: string, spawner: Spawner = spawnProcess, options: RemoteMachineOptions = {}) {
 		this.host = safeHost(host);
 		this.spawner = spawner;
+		this.otherUser = options.otherUser === true;
 	}
 
 	async ssh(cmd: string[], opts?: SshOptions): Promise<RunResult> {
-		return this.sshTo(this.host, cmd, opts);
+		return this.sshTo(this.host, cmd, opts, this.otherUser);
 	}
 
 	/** Run one command over ssh as `user` on this same machine. */
 	async asUser(user: string, cmd: string[], opts?: SshOptions): Promise<RunResult> {
-		return this.sshTo(targetWithUser(this.host, user), cmd, opts);
+		return this.sshTo(targetWithUser(this.host, user), cmd, opts, true);
 	}
 
 	/**
@@ -577,7 +627,12 @@ export class RemoteMachine implements MachineRunner {
 	 * the `--` separator, the tty rules and the remote `cd` are identical
 	 * whichever user the command is for.
 	 */
-	private async sshTo(target: string, cmd: string[], opts?: SshOptions): Promise<RunResult> {
+	private async sshTo(
+		target: string,
+		cmd: string[],
+		opts: SshOptions | undefined,
+		otherUser: boolean,
+	): Promise<RunResult> {
 		if (opts?.tty && opts?.stdin !== undefined) {
 			throw new RemoteError(
 				"tty and stdin don't mix: a terminal would echo the input and mix it into the output. Use one or the other.",
@@ -595,7 +650,13 @@ export class RemoteMachine implements MachineRunner {
 			file: "ssh",
 			// `-t` asks for a pty; without it an interactive remote command
 			// (herdr/tmux attach, a prompt) dies with "not a terminal".
-			args: [...(opts?.tty ? ["-t"] : []), target, "--", command],
+			args: [
+				...(otherUser ? OTHER_USER_SSH_OPTIONS : []),
+				...(opts?.tty ? ["-t"] : []),
+				target,
+				"--",
+				command,
+			],
 			...(opts?.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
 			stdin: opts?.stdin,
 			tty: opts?.tty,
@@ -635,7 +696,7 @@ export class RemoteMachine implements MachineRunner {
 		if (mkdirFailed) return mkdirFailed;
 		return this.spawner({
 			file: "rsync",
-			args: rsyncArgs(source, target, opts),
+			args: rsyncArgs(source, target, opts, this.otherUser),
 		});
 	}
 
@@ -647,7 +708,14 @@ export class RemoteMachine implements MachineRunner {
 		// options so a source starting with `-` is still a path.
 		return this.spawner({
 			file: "scp",
-			args: ["-r", "--", src, target],
+			// scp has no `-a`; the -o options are the same isolation.
+			args: [
+				...(this.otherUser ? OTHER_USER_SSH_OPTIONS.filter((option) => option !== "-a") : []),
+				"-r",
+				"--",
+				src,
+				target,
+			],
 		});
 	}
 }

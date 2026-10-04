@@ -59,6 +59,9 @@ work_real="$(cd "$work" && pwd -P)"
 key="$work_real/id"
 
 cleanup() {
+  # The throwaway ssh-agent goes whatever KEEP says: it holds only a throwaway
+  # key, but a leftover agent process is still a leftover.
+  if [ -n "${SSH_AGENT_PID:-}" ]; then ssh-agent -k >/dev/null 2>&1 || kill "$SSH_AGENT_PID" 2>/dev/null || true; fi
   if [ "${KEEP:-0}" = "1" ]; then
     echo "# KEEP=1 — container $container and logs left in $work_real; remove with podman rm -f $container"
   else
@@ -68,6 +71,15 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+
+# A throwaway ssh-agent holding a throwaway key, for the forwarding assertion.
+# The operator's own agent is dropped from this script's environment first, so
+# nothing below can use or forward it.
+unset SSH_AUTH_SOCK SSH_AGENT_PID
+eval "$(ssh-agent -s)" >/dev/null
+ssh-keygen -q -t ed25519 -N '' -C forwarded-throwaway -f "$work_real/forwarded" >/dev/null 2>&1
+ssh-add -q "$work_real/forwarded" 2>/dev/null
+echo "# throwaway ssh-agent $SSH_AGENT_PID holds one throwaway key"
 
 echo "# podman version"
 podman --version
@@ -175,6 +187,10 @@ Host t17box
   Port $port
   User $primary
   IdentityFile $key
+  IdentitiesOnly yes
+  # What a dev-server config often says. Sessions as the primary forward the
+  # (throwaway) agent; sessions hyper opens as the agent must not.
+  ForwardAgent yes
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
   LogLevel ERROR
@@ -209,6 +225,7 @@ run_isolated() {
     NO_COLOR=1 bun "$@"
 }
 run_hyper() { run_isolated "$cli" machine setup t17 --yes; }
+run_probe() { HYPER_T17_CONTAINER_TEST=1 run_isolated "$here/run-as-agent-probe.ts"; }
 # The script travels over stdin, so quoting inside the command is its own
 # business and never the harness's.
 as_agent() { ssh_t17 "sudo -u $agent -- bash -s" <<<"$1"; }
@@ -364,6 +381,17 @@ if [ "$foreign_before" != "$foreign_after" ]; then
   die "the foreign-owned entry was modified"
 fi
 pass "T-16 follow-up (a): the foreign-owned entry keeps its owner, mode and ACLs"
+
+# --------------------------------------------------------------------------
+# Sessions hyper opens as the agent never take the operator's ssh-agent, even
+# when the operator's ssh config forwards it for this host (finding 1).
+# --------------------------------------------------------------------------
+probe_out="$(run_probe 2>&1)" || { printf '%s\n' "$probe_out"; die "the as-agent probe failed"; }
+printf '%s\n' "$probe_out" | grep -q "^primary 0 user=$primary sock=/" \
+  || { printf '%s\n' "$probe_out"; die "the fixture does not forward the agent to the primary's session, so the next assertion would prove nothing"; }
+printf '%s\n' "$probe_out" | grep -qx "agent 0 user=$agent sock=unset" \
+  || { printf '%s\n' "$probe_out"; die "the session hyper opened as the agent received a forwarded ssh-agent"; }
+pass "ssh: with ForwardAgent yes in the ssh config, the primary's session gets SSH_AUTH_SOCK and hyper's as-agent session does not"
 
 # --------------------------------------------------------------------------
 # docker-rootless
