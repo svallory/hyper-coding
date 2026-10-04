@@ -127,14 +127,15 @@ transcript and the working directory to the same absolute path on MACHINE
 over ssh, then resumes through Herdr. Every check runs before the first
 change on either machine.
 
-Warp refuses, without `--force`, when the session is still running here (it
-wants `--stop`, which ends that process), when the session is owned by
+Warp refuses, without `--force`, when the session is owned by
 another machine or already lives on the target, when a leftover marker makes
 ownership unknown, and when the target's worktree or repo has uncommitted
 work (including untracked files). With
 `--force`, a dirty space worktree's tracked changes are first saved on the
 target in a stash — untracked files are not in it — and a plain repo is
-overwritten file by file with nothing saved. It refuses, whatever `--force` says, when the space is missing from the
+overwritten file by file with nothing saved. It refuses, whatever `--force` says, when the session is
+still running here (only `--stop` gets past that, and it ends that
+process), when the space is missing from the
 hyperdrive manifest, a path cannot be quoted identically on both platforms,
 the target's Herdr server does not answer, or the target would reject the
 branch push. `--dry-run` prints every step and changes

@@ -51,13 +51,15 @@ marker="HYPER.md"
 if [[ -d "$root/.hyper/space.git" ]]; then
   committed_note="nothing here is committed to the project"
   backup_note="This space commits its allowlisted dirs (notes/, data/, bin/, .hyper/, .claude/ except settings.local.json, and the root marker files) to its own branch on your cadence; they reach your hyperdrive when pushed (session-end+push, or hyper space push). scratch/, worktrees/ and code/ are never committed."
-  # Inside a worktree the "nothing here is committed" note is about the SPACE's
-  # local-only dirs, never about this worktree: normal git applies here.
-  worktree_note="The space's local-only dirs (data/, notes/, scratch/, bin/) are committed to the space's branch; this worktree is ordinary project git."
+  # Inside a worktree the note is about the SPACE's dirs, never about this
+  # worktree: normal git applies here. Name the dirs the allowlist really
+  # re-includes (notes/, data/, bin/) and say outright that scratch/ is not
+  # one of them — RESERVED_PATHS refuses it, so it is never committed.
+  worktree_note="The space's notes/, data/ and bin/ are committed to the space's branch (scratch/ never is); this worktree is ordinary project git."
 else
   committed_note="nothing here is committed"
   backup_note="Nothing here is committed or backed up, not even to the hyperdrive — until hyper space init gives this space a branch."
-  worktree_note="The space's local-only dirs (data/, notes/, scratch/, bin/) are not committed or backed up until \`hyper space init\`."
+  worktree_note="The space's notes/, data/ and bin/ are not committed or backed up until \`hyper space init\` (scratch/ never is)."
 fi
 
 # Recommend wt only when it is actually installed; otherwise show the raw

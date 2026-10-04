@@ -95,7 +95,7 @@ assert_not_contains "no branch, root: no push claim" "$out" \
 
 out="$(run_ctx "$d7/worktrees/main")"
 assert_contains "no branch, worktree: space dirs not committed until init" "$out" \
-  "The space's local-only dirs (data/, notes/, scratch/, bin/) are not committed or backed up until \`hyper space init\`"
+  "The space's notes/, data/ and bin/ are not committed or backed up until \`hyper space init\` (scratch/ never is)."
 assert_contains "no branch, worktree: normal git still applies" "$out" \
   "Normal git applies here"
 assert_not_contains "no branch, worktree: no push claim" "$out" \
@@ -112,9 +112,11 @@ assert_not_contains "branch, root: never a bare 'backed up' promise" "$out" \
 
 out="$(run_ctx "$d7/worktrees/main")"
 assert_contains "branch, worktree: space dirs committed to the branch" "$out" \
-  "The space's local-only dirs (data/, notes/, scratch/, bin/) are committed to the space's branch"
+  "The space's notes/, data/ and bin/ are committed to the space's branch (scratch/ never is)"
 assert_contains "branch, worktree: says this is ordinary project git" "$out" \
   "this worktree is ordinary project git"
+assert_not_contains "branch, worktree: never claims scratch/ is committed" "$out" \
+  "scratch/, bin/) are committed"
 assert_contains "branch, worktree: normal git still applies" "$out" \
   "Normal git applies here"
 assert_not_contains "branch, worktree: never contradicts itself with worktrees/" \
