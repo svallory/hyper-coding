@@ -328,7 +328,7 @@ ssh_t17 "mkdir -p /home/$primary/x" >/dev/null 2>&1
 acceptance="$(ssh_t17 "bash -lic 'cd /home/$primary/x && pwd'" 2>/dev/null | tail -1)"
 [ "$acceptance" = "/Users/$primary/x" ] \
   || die "the acceptance line printed '$acceptance', expected /Users/$primary/x"
-pass "4 - a login shell's \`cd /home/$primary/x && pwd\` prints /Users/$primary/x"
+pass "home-path: a login shell's \`cd /home/$primary/x && pwd\` prints /Users/$primary/x"
 [ "$(ssh_t17 "grep -cxF 'set -o physical' /Users/$primary/.bashrc")" = 1 ] \
   || die "the primary's .bashrc has no single \`set -o physical\` line"
 pass "the physical-cd line is in the primary's .bashrc exactly once"
@@ -339,7 +339,7 @@ grep -q "usermod will not change a home directory" "$root_log" \
   || { cat "$root_log"; die "the refusal does not explain the usermod limit"; }
 grep -q "usermod -d /Users/$primary $primary" "$root_log" \
   || { cat "$root_log"; die "the refusal does not print the one-liner to run by hand"; }
-pass "5 - logged in, the script refuses before changing anything and prints the way out"
+pass "home-path: logged in, the root script refuses and changes nothing; with every session closed it moves the home (root console)"
 
 # T-16's home ACL probe, AFTER the move: the layout the agent-user tasks manage
 # has to have moved with the directory, or that task stops settling.
@@ -349,7 +349,7 @@ ssh_t17 "getfacl -c -p /Users/$primary/.claude | grep -qx 'user:$agent:--x'" \
   || { ssh_t17 "getfacl -p /Users/$primary/.claude"; die "the moved config dir lost the agent traverse entry"; }
 [ "$(ssh_t17 "stat -c %U /Users/$primary/.claude/skills/root-owned.md")" = root ] \
   || die "the move changed the owner of a root-owned file (a rename must not)"
-pass "6 - T-16's home ACLs survived the move, and the foreign-owned file kept its owner"
+pass "home-path: T-16's home ACLs survived the move, and the foreign-owned file kept its owner"
 
 # --------------------------------------------------------------------------
 # T-17 follow-up (a): a readable root-owned file under skills/ is skipped with a
@@ -357,13 +357,13 @@ pass "6 - T-16's home ACLs survived the move, and the foreign-owned file kept it
 # --------------------------------------------------------------------------
 grep -h "not owned by $primary and are skipped" "$work_real"/setup-*.log | grep -q "root-owned.md" \
   || { grep -h "skipped" "$work_real"/setup-*.log || true; die 'no warning named the foreign-owned skills entry'; }
-pass "7a - the root-owned file under skills/ is skipped with a warning, and setup still settled"
+pass "T-16 follow-up (a): the root-owned file under skills/ is skipped with a warning, and setup still settled"
 foreign_after="$(pexec "stat -c '%U %G %a' /home/$primary/.claude/skills/root-owned.md; getfacl -c -p /home/$primary/.claude/skills/root-owned.md | sort")"
 if [ "$foreign_before" != "$foreign_after" ]; then
   diff <(printf '%s\n' "$foreign_before") <(printf '%s\n' "$foreign_after") || true
   die "the foreign-owned entry was modified"
 fi
-pass "7b - the foreign-owned entry keeps its owner, mode and ACLs"
+pass "T-16 follow-up (a): the foreign-owned entry keeps its owner, mode and ACLs"
 
 # --------------------------------------------------------------------------
 # docker-rootless
@@ -373,23 +373,34 @@ for _ in $(seq 1 30); do
   as_agent_ssh "docker version >/dev/null 2>&1" >/dev/null 2>&1 && break
   sleep 1
 done
-hello="$(as_agent_ssh "docker run --rm hello-world 2>&1" | tail -12)"
+# The whole output: the greeting is near the TOP of hello-world's text. In a
+# login shell, so the DOCKER_HOST line in .bashrc is what points at the daemon.
+hello="$(as_agent_ssh "bash -lic 'docker run --rm hello-world' 2>&1" || true)"
 printf '%s\n' "$hello" | grep -q "Hello from Docker!" \
-  || { printf '%s\n' "$hello"; die "hello-world did not run as the agent"; }
-pass "1 - as the agent, \`docker run --rm hello-world\` succeeds after systemctl --user start docker"
+  || { printf '%s\n' "$hello" | tail -20; die "hello-world did not run as the agent"; }
+pass "docker-rootless: as the agent, \`docker run --rm hello-world\` succeeds after systemctl --user start docker"
 [ "$(as_agent_ssh "systemctl --user is-enabled docker")" = "disabled" ] \
   || die "the unit is $(as_agent_ssh "systemctl --user is-enabled docker"), expected disabled"
-pass "2 - the agent's docker unit is enabled=no (disabled)"
+pass "docker-rootless: the agent's docker unit is enabled=no (disabled)"
 as_agent "id -nG" | grep -qw docker && die "the agent IS in the docker group"
 as_agent_ssh "docker info --format '{{.Name}}'" >/dev/null 2>&1 \
   || die "docker info failed for the agent"
 as_agent_ssh "test -w /var/run/docker.sock" >/dev/null 2>&1 && die "the agent can write the root-owned docker socket"
-as_agent_ssh "test -S /var/run/docker.sock" && die "a root-owned docker socket exists on this machine at all"
-pass "3 - the agent is not in the docker group and cannot reach /var/run/docker.sock"
+# "Cannot reach" is the claim, so it is tested by trying: the root socket, by
+# name, from the agent. (The packages script disables the system-wide daemon
+# docker-ce brings; a stale socket file may still exist, which is why this is
+# not a `test -S`.)
+as_agent_ssh "docker -H unix:///var/run/docker.sock version >/dev/null 2>&1" \
+  && die "the agent reached a daemon through /var/run/docker.sock"
+[ "$(pexec "systemctl is-active docker.service || true")" != active ] \
+  || die "the system-wide Docker daemon is running"
+pass "docker-rootless: the agent is not in the docker group and cannot reach /var/run/docker.sock"
 # The DOCKER_HOST line, above a non-interactive guard.
-[ "$(as_agent_ssh "head -1 ~/.bashrc | grep -c 'DOCKER_HOST=unix:///run/user/'" )" = 1 ] \
+[ "$(as_agent_ssh "head -1 ~/.bashrc | grep -c 'DOCKER_HOST=\"unix:///run/user/'" )" = 1 ] \
   || die "the DOCKER_HOST line is not the first line of the agent's .bashrc"
-pass "the agent's .bashrc points DOCKER_HOST at its own socket on the first line"
+[ "$(as_agent_ssh "grep -c 'DOCKER_HOST=' ~/.bashrc")" = 1 ] \
+  || die "the agent's .bashrc has the DOCKER_HOST line more than once"
+pass "the agent's .bashrc points DOCKER_HOST at its own socket, once, on the first line"
 as_agent_ssh "systemctl --user stop docker" || die "could not stop the agent's daemon"
 
 # --------------------------------------------------------------------------
@@ -399,7 +410,7 @@ as_agent_ssh "systemctl --user stop docker" || die "could not stop the agent's d
 run_hyper > "$work_real/setup-final.log" 2>&1 || { cat "$work_real/setup-final.log"; die 'the second full run failed'; }
 grep -q "Nothing needed" "$work_real/setup-final.log" \
   || { cat "$work_real/setup-final.log"; die 'the second full run is not a no-op'; }
-pass "8 - a second full run is a no-op on the kept container"
+pass "a second full run is a no-op on the kept container"
 # …and the root script is idempotent from here, from the new home.
 ssh_t17 "sudo bash /tmp/hyper-machine-root.sh" >/dev/null 2>&1 || die "the root script is not idempotent"
 run_hyper > "$work_real/setup-final2.log" 2>&1 \
