@@ -94,8 +94,10 @@ assert_not_contains "no branch, root: no push claim" "$out" \
   "reach your hyperdrive when pushed"
 
 out="$(run_ctx "$d7/worktrees/main")"
-assert_contains "no branch, worktree: same note" "$out" \
-  "Nothing here is committed or backed up"
+assert_contains "no branch, worktree: space dirs not committed until init" "$out" \
+  "The space's local-only dirs (data/, notes/, scratch/, bin/) are not committed or backed up until \`hyper space init\`"
+assert_contains "no branch, worktree: normal git still applies" "$out" \
+  "Normal git applies here"
 assert_not_contains "no branch, worktree: no push claim" "$out" \
   "reach your hyperdrive when pushed"
 
@@ -109,10 +111,14 @@ assert_not_contains "branch, root: never a bare 'backed up' promise" "$out" \
   "backed up to your hyperdrive"
 
 out="$(run_ctx "$d7/worktrees/main")"
-assert_contains "branch, worktree: commits to the space branch" "$out" \
-  "commits its allowlisted dirs"
-assert_contains "branch, worktree: only a push reaches the hyperdrive" "$out" \
-  "reach your hyperdrive when pushed"
+assert_contains "branch, worktree: space dirs committed to the branch" "$out" \
+  "The space's local-only dirs (data/, notes/, scratch/, bin/) are committed to the space's branch"
+assert_contains "branch, worktree: says this is ordinary project git" "$out" \
+  "this worktree is ordinary project git"
+assert_contains "branch, worktree: normal git still applies" "$out" \
+  "Normal git applies here"
+assert_not_contains "branch, worktree: never contradicts itself with worktrees/" \
+  "$out" "worktrees/ and code/ are never committed"
 
 # N6: outside any space the hook stays silent — it must cost nothing in an
 # unrelated project.
