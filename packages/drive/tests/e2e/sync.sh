@@ -60,7 +60,12 @@ mkdir -p "$alpha_home" "$beta_home" "$fakebin" "$alpha_home/.claude" "$alpha_hom
 # that nothing stops — an orphan holding a lock in a directory the suite then
 # deletes. It also means the operator's real daemon (which owns claude-config
 # and pi-config) is never contacted or terminated by this test.
-export MUTAGEN_DATA_DIRECTORY="$work_real/mutagen"
+# The directory is under short /tmp, NOT $work_real: the daemon's socket is a
+# unix socket, and macOS's TMPDIR (/var/folders/…) plus this script's own name
+# would push it past sun_path's 104 bytes (the daemon then starts but never
+# answers: "unable to connect to daemon: connection timed out").
+mutagen_dir="$(mktemp -d /tmp/hyperdrive-e2e-mutagen.XXXXXX)"
+export MUTAGEN_DATA_DIRECTORY="$mutagen_dir"
 mkdir -p "$MUTAGEN_DATA_DIRECTORY"
 
 # A signal from the suite runner must still run this cleanup, so neither a
@@ -74,7 +79,7 @@ cleanup() {
   # Stops ONLY this script's daemon: the data directory is the one exported
   # above, so this can never reach the operator's daemon.
   mutagen daemon stop >/dev/null 2>&1 || true
-  rm -rf "$work"
+  rm -rf "$mutagen_dir" "$work"
 }
 # NOTE: `trap cleanup EXIT` is installed AFTER the preflight below, not here.
 # Installing it earlier means the preflight's `exit 1` fires cleanup, which
@@ -102,9 +107,13 @@ for candidate in id_ed25519 id_rsa id_ecdsa; do
     break
   fi
 done
+# The REAL ssh, resolved while this file is not yet first on PATH. `exec ssh`
+# inside the wrapper would find the wrapper itself and re-exec it with another
+# copy of the flags until argv hit E2BIG.
+real_ssh="$(command -v ssh)"
 cat > "$fakebin/ssh" <<WRAPPER
 #!/bin/sh
-exec ssh -F /dev/null -o IdentitiesOnly=yes -o IdentityAgent=none \\
+exec "$real_ssh" -F /dev/null -o IdentitiesOnly=yes -o IdentityAgent=none \\
   -o ForwardAgent=no -o ControlMaster=no -o ControlPath=none \\
   -o UserKnownHostsFile="$work_real/known_hosts" \\
   -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \\
