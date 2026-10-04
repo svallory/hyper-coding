@@ -204,14 +204,37 @@ write_hyper_md() {
 # that branch on the configured cadence; they only reach the hyperdrive when
 # pushed (`session-end+push`, or `hyper space push`). Without a branch
 # nothing at the root is committed anywhere. The writers run at
-# scaffold/clone time only — `hyper space init` does not re-render
-# HYPER.md — so BOTH bullets end by naming `hyper space status` as the live
-# answer, and the no-branch one says the sentence stops being true once the
-# space is initialised.
+# scaffold/clone time only; `hyper space init` re-renders just this bullet
+# afterwards, and leaves one it does not recognise — so BOTH bullets end by
+# naming `hyper space status` as the live answer, and the no-branch one says
+# the sentence stops being true once the space is initialised.
+#
+# The optional third argument forces a variant instead of looking at the
+# space: `branch`, `none`, or `legacy` (the single bullet written before the
+# branch-aware wording existed). `hyper space init` uses them to recognise a
+# generated bullet in an existing HYPER.md and re-render it with `branch`
+# (services/hyper-md.ts); anything that matches none of them was edited by
+# hand and is left alone.
 hyper_md_backup_rule() {
-  local root="$1" layout="$2" excluded="worktrees" where="Files here"
+  local root="$1" layout="$2" state="${3:-}" excluded="worktrees" where="Files here"
   [[ "$layout" == multi ]] && { excluded="code"; where="Files at the space root"; }
-  if [[ -d "$root/.hyper/space.git" ]]; then
+  if [[ -z "$state" ]]; then
+    state=none
+    [[ -d "$root/.hyper/space.git" ]] && state=branch
+  fi
+  if [[ "$state" == legacy ]]; then
+    if [[ "$layout" == multi ]]; then
+      cat <<EOF
+- $where never reach the remote. Secrets are local-only by
+  construction, but that also means nothing here is backed up.
+EOF
+    else
+      cat <<EOF
+- $where never reach the remote. Secrets are local-only by construction,
+  but that also means nothing here is backed up.
+EOF
+    fi
+  elif [[ "$state" == branch ]]; then
     cat <<EOF
 - This space has a hyperdrive branch: \`notes/\`, \`data/\`, \`bin/\`, \`.hyper/\`
   and \`.claude/\` except \`.claude/settings.local.json\`, plus the root marker

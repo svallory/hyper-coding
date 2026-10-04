@@ -12,6 +12,7 @@ import {
 import { BaseCommand, type BaseFlags } from "#lib/base-command";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { isHyperAllowlist, normaliseTrackedEntry, renderGitignore } from "#services/allowlist";
+import { type HyperMdRefresh, refreshHyperMdBackupRule } from "#services/hyper-md";
 import {
 	driveCheckoutDir,
 	ensureDriveCheckout,
@@ -38,7 +39,6 @@ import {
 	writeTracked,
 } from "#services/space-git";
 import { withSpaceLock } from "#services/space-lock";
-
 import {
 	commitAndPushSpace,
 	remoteRef,
@@ -279,6 +279,37 @@ function spaceReposOf(
 	return repos;
 }
 
+/**
+ * Re-render HYPER.md's backup bullet now that the space has a branch
+ * (services/hyper-md.ts). Best effort: the space is already initialised, so a
+ * problem here is one line, never a failed init. `line` is what the text
+ * output prints, null when there is nothing to say.
+ */
+function refreshHyperMd(
+	root: string,
+	layout: "bare" | "multi",
+): { state: HyperMdRefresh | "failed"; line: string | null } {
+	try {
+		const state = refreshHyperMdBackupRule(root, layout);
+		if (state === "updated")
+			return {
+				state,
+				line: "HYPER.md: its backup rule now says this space commits to its branch; the change is saved with the next commit.",
+			};
+		if (state === "edited")
+			return {
+				state,
+				line: "HYPER.md: its backup rule is not one hyper wrote, so I left it; check that it still says what this space commits.",
+			};
+		return { state, line: null };
+	} catch (error) {
+		return {
+			state: "failed",
+			line: `HYPER.md: I couldn't update its backup rule (${escapeControlCharacters(error instanceof Error ? error.message : String(error))}); the space itself is fine.`,
+		};
+	}
+}
+
 export default class Init extends BaseCommand<typeof Init> {
 	static override description = "Put this hyper space under your hyperdrive";
 
@@ -319,7 +350,11 @@ export default class Init extends BaseCommand<typeof Init> {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(Init);
 		try {
-			const result = await this.initSpace(flags, args.dir);
+			const initialised = await this.initSpace(flags, args.dir);
+			// After success only: a failed init leaves no branch, and the
+			// no-branch wording is still the true one.
+			const hyperMd = refreshHyperMd(initialised.path, initialised.layout);
+			const result = { ...initialised, hyperMd: hyperMd.state };
 			if (flags.json) {
 				this.log(JSON.stringify(result, null, 2));
 				return;
@@ -343,6 +378,7 @@ export default class Init extends BaseCommand<typeof Init> {
 			this.log(
 				`Manifest: ${result.refreshed ? "refreshed" : "registered"} (in ${escapeControlCharacters(driveCheckoutDir())})`,
 			);
+			if (hyperMd.line !== null) this.log(hyperMd.line);
 		} catch (err) {
 			// Everything this command throws is a message meant for a person
 			// (ConfigError, ManifestError, SpaceGitError, AllowlistError and its
