@@ -42,8 +42,15 @@ detached worker commits, so a slow network never holds the session) or
 `session-end+push` (commits and pushes). Only `session-end+push` and an
 explicit `hyper space push` put the history on the hyperdrive — under
 `session-end` or `manual` the history sits in `.hyper/space.git` on this disk.
-A failed save shows in `hyper space status`. Pi sessions are saved with
-`hyper space commit` by hand for now.
+A failed save shows in `hyper space status`.
+
+Pi sessions get the same save from the extension in `packages/drive/pi`
+(`pi install packages/drive/pi`): on `session_shutdown` it writes the payload
+and starts the same detached worker, so a pi session end commits locally — and
+pushes for `session-end+push` — without holding pi's exit. Its commit subject
+is the session name, or the first line of the first prompt, so prompt text
+lands in the space's history. With `manual`, or with the extension not
+installed, a pi session is saved with `hyper space commit` by hand.
 
 ## Second machine
 
