@@ -26,7 +26,7 @@
  */
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { closeSync, existsSync, openSync, statSync, writeSync } from "node:fs";
+import { appendFileSync, closeSync, openSync, renameSync, statSync, writeSync } from "node:fs";
 import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 
 /** Same shape the Claude SessionEnd hook sends, plus the two fields below. */
@@ -54,8 +54,28 @@ const SAVING_CADENCES = new Set(["session-end", "session-end+push"]);
 /** Must match `SESSION_END_PAYLOAD_PREFIX` in services/session-end-worker.ts. */
 export const PAYLOAD_PREFIX = "session-end-payload.";
 
-/** Hard bound on the one CLI call. Past it, give up silently. */
-export const PROBE_TIMEOUT_MS = 2_000;
+/**
+ * Hard bound on the one CLI call. A cold CLI start measured 0.95 s alone and
+ * over 2 s under load, so 5 s. Past it nothing is saved; near a space the
+ * miss is logged (see `PROBE_TIMEOUT_DETAIL`).
+ */
+export const PROBE_TIMEOUT_MS = 5_000;
+
+/**
+ * The `failed` detail a timed-out probe leaves in `session-end.log`, so
+ * `hyper space status` shows the save that did not happen.
+ */
+export const PROBE_TIMEOUT_DETAIL = "probe timed out";
+
+/**
+ * The worker's log, replicated: this extension is loaded by pi on its own (and
+ * may be copied into a project) so it imports nothing from the CLI. Must match
+ * `SESSION_END_LOG`, `SESSION_END_LOG_LIMIT` and the record format in
+ * src/services/session-end-log.ts; tests/pi-session-end.test.ts parses a line
+ * written here with the real reader.
+ */
+export const SESSION_END_LOG = "session-end.log";
+const SESSION_END_LOG_LIMIT = 64 * 1024;
 
 /** The CLI never prints more than this; more than this is not its answer. */
 const PROBE_OUTPUT_LIMIT = 64 * 1024;
@@ -77,13 +97,17 @@ export interface SessionEndDeps {
 	/** Run `hyper space detect --json` in `cwd`, bounded by `timeoutMs`. */
 	probe(bin: string, cwd: string, timeoutMs: number): Promise<ProbeResult>;
 	/** Write the payload file exclusively; returns the path written. */
-	writePayload(dir: string, contents: string, name?: string): string;
+	writePayload(dir: string, contents: string): string;
 	/** Start the detached worker. Never throws; a failure is reported through `notify`. */
 	spawnWorker(payloadPath: string, bin: string, cwd: string, notify: (line: string) => void): void;
 	/** Tell the user one line (TUI notification, or stderr with no UI). */
 	notify(line: string): void;
+	/** Append one `failed` record to `<gitDir>/session-end.log`. Never throws. */
+	logFailure(gitDir: string, sessionId: string, detail: string): void;
 	/** Overridable so the tests can see the options a child really gets. */
 	spawn?: typeof spawn;
+	/** Overridable so the tests can force a payload-name collision. */
+	payloadName?: () => string;
 }
 
 /** What the handler needs from the session, all captured at shutdown time. */
@@ -224,15 +248,22 @@ export async function saveSessionEnd(
 		// The Claude hook prints this line only in a space that would have saved.
 		// Same rule here: this walk decides whether to PRINT and nothing else —
 		// what gets saved is decided by the CLI, below.
-		if (nearSpaceGitDir(facts.cwd)) deps.notify(MISSING_CLI_LINE);
+		if (findSpaceGitDir(facts.cwd) !== undefined) deps.notify(MISSING_CLI_LINE);
 		return undefined;
 	}
 	let answer: SpaceAnswer | undefined;
 	try {
 		const probed = await deps.probe(bin, facts.cwd, timeoutMs);
 		// A CLI that did not answer in time is not an old CLI: it is a slow
-		// machine or a stuck process, and the honest thing is silence.
-		if (probed.timedOut) return undefined;
+		// machine or a stuck process. Nothing is saved and nothing is printed,
+		// but near a space the miss goes into its session-end log, where
+		// `hyper space status` reports it. The walk picks the log's directory
+		// and nothing else: that one line is all that is written there.
+		if (probed.timedOut) {
+			const gitDir = findSpaceGitDir(facts.cwd);
+			if (gitDir !== undefined) deps.logFailure(gitDir, facts.sessionId, PROBE_TIMEOUT_DETAIL);
+			return undefined;
+		}
 		answer = parseSpaceAnswer(probed);
 	} catch {
 		deps.notify(OUTDATED_CLI_LINE);
@@ -261,17 +292,60 @@ export async function saveSessionEnd(
 }
 
 /**
- * Whether an ancestor of `dir` holds a space's git dir. Used ONLY to decide
- * whether a missing CLI is worth a line — never to decide what to save, which
- * is the CLI's answer or nothing.
+ * The nearest `.hyper/space.git` directory at or above `dir`. Used ONLY to
+ * decide whether a missing CLI is worth a line and where a timed-out probe is
+ * logged — never to decide what to save or run, which is the CLI's answer or
+ * nothing.
  */
-export function nearSpaceGitDir(dir: string): boolean {
+export function findSpaceGitDir(dir: string): string | undefined {
 	let current = resolve(dir);
 	for (;;) {
-		if (existsSync(join(current, ".hyper", "space.git"))) return true;
+		const candidate = join(current, ".hyper", "space.git");
+		try {
+			if (statSync(candidate).isDirectory()) return candidate;
+		} catch {
+			// Not here: keep walking.
+		}
 		const parent = dirname(current);
-		if (parent === current) return false;
+		if (parent === current) return undefined;
 		current = parent;
+	}
+}
+
+/** `sessionEndLine` from src/services/session-end.ts: one line, no controls, capped. */
+function logField(text: string, limit: number): string {
+	return Array.from(
+		text
+			.replace(/\s+/gu, " ")
+			.replace(/[\p{Cc}\p{Cf}]/gu, "")
+			.trim(),
+	)
+		.slice(0, limit)
+		.join("");
+}
+
+/**
+ * `appendSessionEndLog(gitDir, { session, outcome: "failed", detail })`: the
+ * same tab-separated record and the same rotation. Never throws: a log that
+ * cannot be written costs nothing more than the save already lost.
+ */
+export function appendFailureLine(gitDir: string, sessionId: string, detail: string): void {
+	const path = join(gitDir, SESSION_END_LOG);
+	try {
+		try {
+			if (statSync(path).size >= SESSION_END_LOG_LIMIT) renameSync(path, `${path}.1`);
+		} catch {
+			/* No log yet. */
+		}
+		const record = [
+			new Date().toISOString(),
+			logField(sessionId, 64) || "-",
+			"failed",
+			logField(detail, 600),
+		].join("\t");
+		appendFileSync(path, `${record}\n`, { mode: 0o600 });
+	} catch {
+		// An unwritable git dir: nothing more to do.
 	}
 }
 
@@ -345,16 +419,16 @@ function runProbe(
  */
 export function createRealDeps(overrides: Partial<SessionEndDeps> = {}): SessionEndDeps {
 	const spawnFn = overrides.spawn ?? spawn;
+	const payloadName =
+		overrides.payloadName ??
+		(() => `${PAYLOAD_PREFIX}${process.pid}.${randomBytes(6).toString("hex")}`);
 	return {
 		resolveCli: () => resolveHyper(),
-		probe: (bin, cwd, timeoutMs) => runProbe(bin, cwd, timeoutMs),
-		writePayload: (dir, contents, name) => {
+		probe: (bin, cwd, timeoutMs) => runProbe(bin, cwd, timeoutMs, spawnFn),
+		writePayload: (dir, contents) => {
 			// O_EXCL: two pi sessions in one space must not share a payload file, so
 			// the name is unique per call and a forced collision is a refusal.
-			const path = join(
-				dir,
-				name ?? `${PAYLOAD_PREFIX}${process.pid}.${randomBytes(6).toString("hex")}`,
-			);
+			const path = join(dir, payloadName());
 			const fd = openSync(path, "wx", 0o600);
 			try {
 				writeSync(fd, contents);
@@ -388,6 +462,7 @@ export function createRealDeps(overrides: Partial<SessionEndDeps> = {}): Session
 		notify: (line) => {
 			process.stderr.write(`${line}\n`);
 		},
+		logFailure: appendFailureLine,
 		...overrides,
 	};
 }
