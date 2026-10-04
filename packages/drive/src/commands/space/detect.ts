@@ -46,7 +46,9 @@ export default class Detect extends BaseCommand<typeof Detect> {
 			// (oclif's error channel) and the exit code is still 1, so nothing
 			// that branches on the status changes.
 			if (flags.json) {
-				this.log(JSON.stringify({ root: null, layout: null }, null, 2));
+				this.log(
+					JSON.stringify({ root: null, layout: null, spaceGitDir: null, cadence: null }, null, 2),
+				);
 			}
 			// One clear sentence beats printing nulls: the answer itself is the
 			// useful part, and scripts branch on the exit code.
@@ -68,5 +70,7 @@ export default class Detect extends BaseCommand<typeof Detect> {
 		this.log(
 			`repos:        ${info.repos.length > 0 ? info.repos.map(escapeControlCharacters).join(", ") : "-"}`,
 		);
+		this.log(`cadence:      ${escapeControlCharacters(info.cadence ?? "-")}`);
+		this.log(`space git:   ${escapeControlCharacters(info.spaceGitDir ?? "-")}`);
 	}
 }

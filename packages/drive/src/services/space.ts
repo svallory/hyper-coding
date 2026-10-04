@@ -16,8 +16,9 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { readCadence, spaceGitDir } from "#services/space-git";
 
 export type SpaceLayout = "bare" | "multi";
 
@@ -152,14 +153,40 @@ export interface SpaceInfo {
 	repos: string[];
 	slug: string | null;
 	worktreesDir: string | null;
+	/** Absolute path of the space's history git dir, when it has one. */
+	spaceGitDir: string | null;
+	/** `hyper.cadence` from that git dir, or null when unset or unreadable. */
+	cadence: string | null;
 }
 
-/** The full detection result in one call, for the `space detect` command. */
+/**
+ * The full detection result in one call, for the `space detect` command.
+ *
+ * `spaceGitDir` and `cadence` are here so a caller that may not run commands
+ * in a space learns which space it is in and when that space saves from one
+ * read-only call that never guesses: pi's session-end extension asks this and
+ * nothing else. They are the values `hyper space status` prints, read through
+ * `services/space-git.ts`.
+ */
 export function detectSpace(dir: string): SpaceInfo {
 	const root = findSpaceRoot(dir);
 	const layout = root === null ? null : spaceLayout(root);
 	const repos = root === null ? [] : spaceRepos(root);
 	const slug = root === null ? null : repoSlugOf(root, dir);
 	const worktrees = root === null || layout === null ? null : worktreesDir(root, slug ?? undefined);
-	return { root, layout, repos, slug, worktreesDir: worktrees };
+	let gitDir: string | null = null;
+	let cadence: string | null = null;
+	if (root !== null) {
+		const candidate = spaceGitDir(root);
+		if (existsSync(candidate)) gitDir = candidate;
+		try {
+			cadence = readCadence(root) || null;
+		} catch {
+			// A cadence outside the three allowed values is a broken space, and
+			// `readCadence` says so loudly everywhere else. Detection stays a
+			// report: null, never a guess.
+			cadence = null;
+		}
+	}
+	return { root, layout, repos, slug, worktreesDir: worktrees, spaceGitDir: gitDir, cadence };
 }

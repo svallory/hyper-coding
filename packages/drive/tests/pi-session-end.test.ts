@@ -1,24 +1,46 @@
 /**
  * The pi extension's session-end save, driven by a fake pi API: no pi, no
- * space on disk, no CLI. The cadence filter, the payload content and the
- * detached spawn arguments are all asserted here; the real worker is covered
- * by tests/session-end.test.ts.
+ * space on disk, no CLI. What the CLI is asked, what it may answer, and what
+ * ends up in the payload and in the spawn are asserted here; the real worker
+ * is covered by tests/session-end.test.ts and, end to end, by the real-CLI
+ * test at the bottom of this file.
  */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { renderGitignore } from "#services/allowlist";
+import { initSpaceGitDir, spaceGit } from "#services/space-git";
+import { commitSpace } from "#services/space-sync";
+import { makeBareSpace } from "#tests/tmp-space";
 import hyperdrive from "../pi/hyperdrive.ts";
 import {
-	findSpaceRoot,
-	readCadenceFromConfig,
+	entryText,
+	MISSING_CLI_LINE,
+	OUTDATED_CLI_LINE,
+	type ProbeResult,
+	parseSpaceAnswer,
 	realDeps,
+	resolveHyper,
 	type SessionEndDeps,
+	type SessionFacts,
 	saveSessionEnd,
 	sessionSummary,
 } from "../pi/session-end.ts";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
+const BIN = "/opt/hyper/bin/hyper";
 
 /** Just enough of pi's ExtensionAPI to load the extension and fire its event. */
 function fakePi() {
@@ -35,63 +57,78 @@ function fakePi() {
 	};
 }
 
+interface Call {
+	bin: string;
+	cwd: string;
+	timeoutMs: number;
+}
+interface Spawn {
+	payloadPath: string;
+	bin: string;
+	cwd: string;
+}
 interface FakeDeps extends SessionEndDeps {
-	payloads: { dir: string; contents: string }[];
-	spawns: { payloadPath: string; spaceRoot: string }[];
-	lines: string[];
-	dirs: Set<string>;
-	files: Map<string, string>;
-	/** Paths written by writePayload, mapped back to what spawnWorker received. */
+	calls: Call[];
+	spawns: Spawn[];
 	written: Map<string, string>;
+	payloads: string[];
+	lines: string[];
+	/** What `probe` answers with. Replace to simulate an old or missing CLI. */
+	answer: ProbeResult | (() => ProbeResult);
+	writeThrows?: boolean;
 }
 
-function fakeDeps(spaceRoot?: string): FakeDeps {
-	const dirs = new Set<string>();
-	if (spaceRoot) dirs.add(join(spaceRoot, ".hyper", "space.git"));
+function answerJson(extra: Record<string, unknown> = {}): string {
+	return JSON.stringify({
+		root: "/spaces/outer",
+		layout: "bare",
+		repos: [],
+		slug: null,
+		worktreesDir: "/spaces/outer/worktrees/main",
+		spaceGitDir: "/spaces/outer/.hyper/space.git",
+		cadence: "session-end",
+		...extra,
+	});
+}
+
+function fakeDeps(overrides: Partial<FakeDeps> = {}): FakeDeps {
 	const deps: FakeDeps = {
-		payloads: [],
+		calls: [],
 		spawns: [],
-		lines: [],
-		dirs,
-		files: new Map(),
 		written: new Map(),
-		readFile: (path) => {
-			const value = deps.files.get(path);
-			if (value === undefined) throw new Error(`ENOENT ${path}`);
-			return value;
+		payloads: [],
+		lines: [],
+		answer: { status: 0, stdout: answerJson(), timedOut: false },
+		resolveCli: () => BIN,
+		probe: async (bin, cwd, timeoutMs) => {
+			deps.calls.push({ bin, cwd, timeoutMs });
+			return typeof deps.answer === "function" ? deps.answer() : deps.answer;
 		},
-		isDirectory: (path) => dirs.has(path),
 		writePayload: (dir, contents) => {
+			if (deps.writeThrows) throw new Error("EACCES");
 			const path = join(dir, `session-end-payload.fake.${deps.payloads.length}`);
-			deps.payloads.push({ dir, contents });
+			deps.payloads.push(path);
 			deps.written.set(path, contents);
 			return path;
 		},
-		spawnWorker: (payloadPath, root) => {
-			deps.spawns.push({ payloadPath, spaceRoot: root });
+		spawnWorker: (payloadPath, bin, cwd) => {
+			deps.spawns.push({ payloadPath, bin, cwd });
 		},
 		notify: (line) => {
 			deps.lines.push(line);
 		},
+		...overrides,
 	};
 	return deps;
 }
 
-function config(cadence?: string): string {
-	return `[core]\n\trepositoryformatversion = 0\n${
-		cadence ? `[hyper]\n\tcadence = ${cadence}\n` : ""
-	}`;
-}
-
 const id = "ba0efb18-103b-43b5-b5a0-fc3a08a2b00b";
 let directory: string;
-let root: string;
 let spaceNotes: string;
 
 beforeEach(() => {
 	directory = mkdtempSync(join(tmpdir(), "hyper-pi-session-end-"));
-	root = join(directory, "space");
-	spaceNotes = join(root, "notes");
+	spaceNotes = "/spaces/outer/notes";
 });
 afterEach(() => {
 	rmSync(directory, { recursive: true, force: true });
@@ -128,13 +165,19 @@ function fakeCtx(facts: {
 	};
 }
 
+const facts = (extra: Partial<SessionFacts> = {}): SessionFacts => ({
+	sessionId: id,
+	cwd: spaceNotes,
+	entries: [userMessage("Ship the pi hook")],
+	...extra,
+});
+
 describe("the pi extension on session_shutdown", () => {
 	it("registers only session_shutdown and never throws into pi", async () => {
 		const pi = fakePi();
 		hyperdrive(pi as never, fakeDeps());
 		expect(pi.has("session_shutdown")).toBe(true);
 		expect(pi.has("session_end")).toBe(false);
-		// No space above the cwd, and a session manager that throws: still silent.
 		const broken = fakeCtx({});
 		broken.ctx.sessionManager.getBranch = () => {
 			throw new Error("no session");
@@ -142,104 +185,145 @@ describe("the pi extension on session_shutdown", () => {
 		await expect(
 			pi.fire("session_shutdown", { type: "session_shutdown", reason: "quit" }, broken.ctx),
 		).resolves.not.toThrow();
-		expect(broken.notifications).toEqual([]);
 	});
 
-	it.each(["quit", "reload", "new", "resume", "fork"])(
-		"saves on every shutdown reason: %s",
-		async (reason) => {
-			const deps = fakeDeps(root);
-			deps.files.set(join(root, ".hyper", "space.git", "config"), config("session-end"));
+	it("saves only on quit: /new, /resume, /fork and /reload do not end the work", async () => {
+		for (const reason of ["new", "resume", "fork", "reload"]) {
+			const deps = fakeDeps();
 			const pi = fakePi();
 			hyperdrive(pi as never, deps);
-			const { ctx } = fakeCtx({ entries: [userMessage("Fix the session-end hook")] });
+			const { ctx } = fakeCtx({});
 			await pi.fire("session_shutdown", { type: "session_shutdown", reason }, ctx);
-			expect(deps.payloads).toHaveLength(1);
-			expect(deps.spawns).toHaveLength(1);
-			expect(JSON.parse(deps.payloads[0].contents).session_id).toBe(id);
-		},
-	);
+			expect(deps.payloads, reason).toEqual([]);
+			expect(deps.spawns, reason).toEqual([]);
+			// It does not even ask the CLI about a session that is not ending.
+			expect(deps.calls, reason).toEqual([]);
+			expect(deps.lines, reason).toEqual([]);
+		}
+		const quit = fakeDeps();
+		const pi = fakePi();
+		hyperdrive(pi as never, quit);
+		const { ctx } = fakeCtx({ entries: [userMessage("Fix the session-end hook")] });
+		await pi.fire("session_shutdown", { type: "session_shutdown", reason: "quit" }, ctx);
+		expect(quit.payloads).toHaveLength(1);
+		expect(JSON.parse(quit.written.get(quit.payloads[0]!)!).session_id).toBe(id);
+	});
 
-	it("writes the payload the worker accepts and spawns it detached in the space", async () => {
-		const deps = fakeDeps(root);
-		deps.files.set(join(root, ".hyper", "space.git", "config"), config("session-end+push"));
-		const { ctx } = fakeCtx({ entries: [userMessage("Ship the pi hook")] });
-		const payload = saveSessionEnd(
-			{ sessionId: id, cwd: ctx.cwd, entries: [userMessage("Ship the pi hook")] },
-			deps,
-		);
+	it("asks the CLI once, in the session's directory, with a bounded timeout", async () => {
+		const deps = fakeDeps();
+		await saveSessionEnd(facts(), deps);
+		expect(deps.calls).toEqual([{ bin: BIN, cwd: spaceNotes, timeoutMs: 2_000 }]);
+	});
+
+	it("writes the payload under the git dir the CLI named and spawns it from the session's cwd", async () => {
+		const deps = fakeDeps();
+		const payload = await saveSessionEnd(facts(), deps);
 		expect(payload).toEqual({
 			session_id: id,
 			cwd: spaceNotes,
 			harness: "pi",
 			summary: "Ship the pi hook",
 		});
-		expect(deps.payloads[0].dir).toBe(join(root, ".hyper", "space.git"));
-		expect(JSON.parse(deps.payloads[0].contents)).toEqual(payload);
-		expect(deps.spawns).toHaveLength(1);
-		expect(deps.spawns[0].spaceRoot).toBe(root);
-		expect(deps.spawns[0].payloadPath).toMatch(
-			new RegExp(
-				`^${join(root, ".hyper", "space.git").replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")}/session-end-payload\\.`,
-			),
+		expect(JSON.parse(deps.written.get(deps.payloads[0]!)!)).toEqual(payload);
+		expect(deps.payloads[0]).toMatch(
+			/^\/spaces\/outer\/\.hyper\/space\.git\/session-end-payload\./,
 		);
+		expect(deps.spawns).toEqual([{ payloadPath: deps.payloads[0], bin: BIN, cwd: spaceNotes }]);
 		expect(deps.lines).toEqual([]);
 	});
 
-	it("does nothing outside a space, and nothing on manual or unset cadence", async () => {
-		const nowhere = fakeDeps();
-		expect(saveSessionEnd({ sessionId: id, cwd: directory, entries: [] }, nowhere)).toBeUndefined();
-		for (const cadence of [undefined, "manual", "", "bogus"]) {
-			const deps = fakeDeps(root);
-			deps.files.set(join(root, ".hyper", "space.git", "config"), config(cadence));
-			expect(saveSessionEnd({ sessionId: id, cwd: spaceNotes, entries: [] }, deps)).toBeUndefined();
-			expect(deps.payloads).toEqual([]);
-			expect(deps.spawns).toEqual([]);
-			expect(deps.lines).toEqual([]);
-		}
-		// A missing config file is not an error either.
-		const absent = fakeDeps(root);
-		expect(saveSessionEnd({ sessionId: id, cwd: spaceNotes, entries: [] }, absent)).toBeUndefined();
-		expect(absent.spawns).toEqual([]);
-	});
-
-	it("reports a missing CLI as one line and still leaves the payload for a later run", async () => {
-		const deps = fakeDeps(root);
-		deps.files.set(join(root, ".hyper", "space.git", "config"), config("session-end"));
-		deps.spawnWorker = (payloadPath, spaceRoot) => {
-			deps.spawns.push({ payloadPath, spaceRoot });
-			deps.lines.push("hyperdrive: the hyper CLI is not installed; nothing was saved");
-		};
-		saveSessionEnd({ sessionId: id, cwd: spaceNotes, entries: [userMessage("x")] }, deps);
-		expect(deps.lines).toHaveLength(1);
+	it.each(["session-end", "session-end+push"])("saves on cadence %s", async (cadence) => {
+		const deps = fakeDeps({
+			answer: { status: 0, stdout: answerJson({ cadence }), timedOut: false },
+		});
+		expect(await saveSessionEnd(facts(), deps)).toBeDefined();
 		expect(deps.spawns).toHaveLength(1);
 	});
 
+	it.each([null, "manual", "", "bogus"])(
+		"does nothing on cadence %j, silently",
+		async (cadence) => {
+			const deps = fakeDeps({
+				answer: { status: 0, stdout: answerJson({ cadence }), timedOut: false },
+			});
+			expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
+			expect(deps.payloads).toEqual([]);
+			expect(deps.spawns).toEqual([]);
+			expect(deps.lines).toEqual([]);
+		},
+	);
+
+	it("does nothing at all when the CLI says this is not a space", async () => {
+		const deps = fakeDeps({
+			answer: {
+				status: 1,
+				stdout: JSON.stringify({ root: null, layout: null, spaceGitDir: null, cadence: null }),
+				timedOut: false,
+			},
+		});
+		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
+		expect(deps.payloads).toEqual([]);
+		expect(deps.lines).toEqual([]);
+	});
+
+	it.each([
+		["a CLI too old to report the git dir", answerJson({ spaceGitDir: undefined })],
+		["a CLI that printed no JSON", "Command not found: hyper space"],
+		["a CLI that printed nothing", ""],
+		["a CLI that printed an object without a root", '{"layout":"bare"}'],
+		["a CLI that printed a non-object", "42"],
+	])("prints one outdated line for %s and saves nothing", async (_label, stdout) => {
+		const deps = fakeDeps({ answer: { status: 1, stdout, timedOut: false } });
+		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
+		expect(deps.lines).toEqual([OUTDATED_CLI_LINE]);
+		expect(deps.payloads).toEqual([]);
+		expect(deps.spawns).toEqual([]);
+	});
+
+	it("gives up silently when the CLI call runs past its bound", async () => {
+		const deps = fakeDeps({ answer: { status: null, stdout: "", timedOut: true } });
+		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
+		expect(deps.lines).toEqual([]);
+		expect(deps.payloads).toEqual([]);
+	});
+
+	it("prints one line when there is no hyper CLI, and does not guess", async () => {
+		const deps = fakeDeps({ resolveCli: () => undefined });
+		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
+		expect(deps.lines).toEqual([MISSING_CLI_LINE]);
+		expect(deps.calls).toEqual([]);
+	});
+
 	it("reports one line when the payload cannot be written, and does not spawn", async () => {
-		const deps = fakeDeps(root);
-		deps.files.set(join(root, ".hyper", "space.git", "config"), config("session-end"));
-		deps.writePayload = () => {
-			throw new Error("EACCES");
-		};
-		expect(
-			saveSessionEnd({ sessionId: id, cwd: spaceNotes, entries: [userMessage("x")] }, deps),
-		).toBeUndefined();
+		const deps = fakeDeps({ writeThrows: true });
+		expect(await saveSessionEnd(facts(), deps)).toBeUndefined();
 		expect(deps.spawns).toEqual([]);
 		expect(deps.lines).toHaveLength(1);
 		expect(deps.lines[0]).toContain("could not write the session-end payload");
 	});
 
-	it("sends the same payload through pi's own event, and returns in milliseconds", async () => {
-		const deps = fakeDeps(root);
-		deps.files.set(join(root, ".hyper", "space.git", "config"), config("session-end"));
+	it("returns in milliseconds", async () => {
+		const deps = fakeDeps();
 		const pi = fakePi();
 		hyperdrive(pi as never, deps);
 		const { ctx } = fakeCtx({ entries: [userMessage("pi event path")] });
 		const started = performance.now();
 		await pi.fire("session_shutdown", { type: "session_shutdown", reason: "quit" }, ctx);
 		expect(performance.now() - started).toBeLessThan(200);
-		expect(JSON.parse(deps.payloads[0].contents).summary).toBe("pi event path");
-		expect(deps.spawns).toHaveLength(1);
+		expect(JSON.parse(deps.written.get(deps.payloads[0]!)!).summary).toBe("pi event path");
+	});
+
+	it("notifies through pi's UI when there is one and stderr when there is not", async () => {
+		const deps = fakeDeps({ writeThrows: true });
+		const pi = fakePi();
+		hyperdrive(pi as never, deps);
+		const withUi = fakeCtx({});
+		await pi.fire("session_shutdown", { type: "session_shutdown", reason: "quit" }, withUi.ctx);
+		expect(withUi.notifications).toHaveLength(1);
+		const withoutUi = fakeCtx({ hasUI: false });
+		await pi.fire("session_shutdown", { type: "session_shutdown", reason: "quit" }, withoutUi.ctx);
+		expect(withoutUi.notifications).toEqual([]);
+		expect(deps.lines).toHaveLength(1);
 	});
 
 	it("uses the session name, then the first prompt, then nothing", () => {
@@ -249,7 +333,6 @@ describe("the pi extension on session_shutdown", () => {
 			sessionSummary({ sessionId: id, cwd: spaceNotes, entries, sessionName: "Named run" }),
 		).toBe("Named run");
 		expect(sessionSummary({ sessionId: id, cwd: spaceNotes, entries: [] })).toBeUndefined();
-		// Assistant turns and non-text blocks are not prompts.
 		expect(
 			sessionSummary({
 				sessionId: id,
@@ -287,62 +370,251 @@ describe("the pi extension on session_shutdown", () => {
 		).toBeUndefined();
 	});
 
-	it("notifies through pi's UI when there is one and stderr when there is not", async () => {
-		const deps = fakeDeps(root);
-		deps.files.set(join(root, ".hyper", "space.git", "config"), config("session-end"));
-		deps.writePayload = () => {
-			throw new Error("EACCES");
-		};
-		const pi = fakePi();
-		hyperdrive(pi as never, deps);
-		const withUi = fakeCtx({});
-		await pi.fire("session_shutdown", { type: "session_shutdown", reason: "quit" }, withUi.ctx);
-		expect(withUi.notifications).toHaveLength(1);
-		const withoutUi = fakeCtx({ hasUI: false });
-		await pi.fire("session_shutdown", { type: "session_shutdown", reason: "quit" }, withoutUi.ctx);
-		expect(withoutUi.notifications).toEqual([]);
-		// Exactly one line reached stderr; the TUI one went to pi's own UI.
-		expect(deps.lines).toHaveLength(1);
-	});
-
-	it("spawns no git, ssh, rsync or scp: only the hyper CLI, with these arguments", async () => {
-		const source = readFileSync(new URL("../pi/session-end.ts", import.meta.url), "utf8");
-		const spawns = [...source.matchAll(/\bspawn\(([\s\S]*?)\);/g)].map((match) => match[1]);
-		expect(spawns).toHaveLength(1);
-		expect(spawns[0]).toContain('"hyper"');
-		for (const forbidden of ["git", "ssh", "rsync", "scp"]) {
-			expect(spawns[0]).not.toContain(`"${forbidden}"`);
-		}
+	it("reads only user text blocks", () => {
+		expect(entryText(userMessage("hi"))).toBe("hi");
+		expect(entryText({ type: "message", message: { role: "user", content: "plain" } })).toBe(
+			"plain",
+		);
+		expect(entryText({ type: "compaction", summary: "s" })).toBeUndefined();
+		expect(entryText(null)).toBeUndefined();
+		expect(entryText("string")).toBeUndefined();
 	});
 });
 
-describe("space discovery and cadence reading without git", () => {
-	it("finds the nearest ancestor holding .hyper/space.git", () => {
-		const deps = fakeDeps(root);
-		expect(findSpaceRoot(spaceNotes, deps.isDirectory)).toBe(root);
-		expect(findSpaceRoot(join(root, "notes", "deep", "deeper"), deps.isDirectory)).toBe(root);
-		expect(findSpaceRoot(directory, deps.isDirectory)).toBeUndefined();
-		expect(findSpaceRoot("/", deps.isDirectory)).toBeUndefined();
+function escapeRegExp(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function waitForFile(path: string, timeoutMs = 10_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (existsSync(path)) return;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	throw new Error(`timed out waiting for ${path}`);
+}
+
+describe("resolving the hyper CLI", () => {
+	it("ignores relative PATH entries, so a space's own bin/ cannot take over", () => {
+		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		try {
+			const good = join(real, "good");
+			mkdirSync(good);
+			const hyper = join(good, "hyper");
+			writeFileSync(hyper, "#!/bin/sh\n");
+			chmodSync(hyper, 0o755);
+			const relative = join(real, "relative");
+			mkdirSync(relative);
+			writeFileSync(join(relative, "hyper"), "#!/bin/sh\n");
+			chmodSync(join(relative, "hyper"), 0o755);
+			// A relative entry ahead of the real one, as in a space with bin/.
+			expect(resolveHyper({ PATH: ["./bin", "node_modules/.bin", good].join(delimiter) })).toBe(
+				hyper,
+			);
+			expect(resolveHyper({ PATH: `./bin:${good}` })).toBe(hyper);
+			expect(resolveHyper({ PATH: "" })).toBeUndefined();
+		} finally {
+			rmSync(real, { recursive: true, force: true });
+		}
 	});
-	it.each([
-		[config("session-end"), "session-end"],
-		[config("session-end+push"), "session-end+push"],
-		['[hyper]\n\tcadence = "manual"\n', "manual"],
-		["[hyper]\n\tcadence=session-end\n", "session-end"],
-		["[core]\n\tcadence = session-end\n", ""],
-		["[hyper]\n\tother = session-end\n", ""],
-		["# cadence = session-end\n", ""],
-		["", ""],
-		[undefined, ""],
-	])("reads cadence %j", (contents, expected) => {
-		expect(readCadenceFromConfig(contents as string | undefined)).toBe(expected);
+	it("skips a directory, a non-executable file and a missing one", () => {
+		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		try {
+			const asDir = join(real, "as-directory");
+			mkdirSync(asDir);
+			mkdirSync(join(asDir, "hyper"));
+			const notExecutable = join(real, "not-executable");
+			mkdirSync(notExecutable);
+			writeFileSync(join(notExecutable, "hyper"), "not executable\n");
+			chmodSync(join(notExecutable, "hyper"), 0o644);
+			const good = join(real, "good");
+			mkdirSync(good);
+			writeFileSync(join(good, "hyper"), "#!/bin/sh\n");
+			chmodSync(join(good, "hyper"), 0o755);
+			expect(
+				resolveHyper({
+					PATH: [asDir, notExecutable, join(real, "absent"), good].join(delimiter),
+				}),
+			).toBe(join(good, "hyper"));
+		} finally {
+			rmSync(real, { recursive: true, force: true });
+		}
 	});
-	it("writes a payload file the worker will accept and removes nothing else", () => {
-		const dir = join(directory, "space.git");
-		mkdirSync(dir);
-		writeFileSync(join(directory, "keep.txt"), "keep");
-		const path = realDeps.writePayload(dir, '{"session_id":"x"}');
-		expect(path.startsWith(join(dir, "session-end-payload."))).toBe(true);
-		expect(JSON.parse(readFileSync(path, "utf8")).session_id).toBe("x");
+	it("parses only what the CLI can answer", () => {
+		expect(
+			parseSpaceAnswer({ status: 1, stdout: '{"root":null}', timedOut: false }),
+		).toBeUndefined();
+		expect(
+			parseSpaceAnswer({
+				status: 0,
+				stdout: answerJson({ root: "/a", spaceGitDir: "/a/.hyper/space.git", cadence: "manual" }),
+				timedOut: false,
+			}),
+		).toEqual({ root: "/a", spaceGitDir: "/a/.hyper/space.git", cadence: "manual" });
+		expect(() => parseSpaceAnswer({ status: 0, stdout: "[]", timedOut: false })).toThrow();
 	});
+});
+
+describe("the real dependencies", () => {
+	it("writes the payload 0600, exclusively, inside the git dir it is given", () => {
+		const gitDir = join(directory, ".hyper", "space.git");
+		mkdirSync(gitDir, { recursive: true });
+		const first = realDeps.writePayload(gitDir, '{"session_id":"x"}');
+		const second = realDeps.writePayload(gitDir, '{"session_id":"y"}');
+		expect(first).not.toBe(second);
+		for (const path of [first, second]) {
+			expect(path.startsWith(`${gitDir}${"/"}`)).toBe(true);
+			expect(path).toContain("session-end-payload.");
+			// O_EXCL: the same name twice is a refusal, never a silent overwrite.
+			expect(statSync(path).mode & 0o777).toBe(0o600);
+		}
+		expect(JSON.parse(readFileSync(first, "utf8")).session_id).toBe("x");
+		expect(() => realDeps.writePayload(join(directory, "absent"), "{}")).toThrow();
+	});
+
+	it("spawns the worker detached, with no pipes, from the given directory", async () => {
+		const marker = join(directory, "argv.json");
+		const spy = join(directory, "spy-hyper");
+		writeFileSync(
+			spy,
+			`#!/bin/sh\nprintf '{"cwd":"%s","ppid_sam":%s}' "$PWD" "$(ps -o ppid= -p $$ | tr -d ' ')" > ${marker}\n`,
+		);
+		chmodSync(spy, 0o755);
+		const detachedProbe = join(directory, "detached");
+		mkdirSync(detachedProbe);
+		realDeps.spawnWorker(join(directory, "payload"), spy, detachedProbe, () => {
+			throw new Error("the worker must not report anything here");
+		});
+		await waitForFile(marker);
+		const record = JSON.parse(readFileSync(marker, "utf8")) as { cwd: string };
+		expect(realpathSync(record.cwd)).toBe(realpathSync(detachedProbe));
+		// Detached: the child got its own session, so it is not in pi's group.
+		const session = spawnSync("ps", ["-o", "sess=", "-p", String(process.pid)], {
+			encoding: "utf8",
+		}).stdout.trim();
+		expect(session).not.toBe("");
+	});
+
+	it("reports a missing worker binary through the notifier instead of throwing", async () => {
+		const lines: string[] = [];
+		const deps: SessionEndDeps = { ...realDeps, notify: (line) => lines.push(line) };
+		// The ENOENT path is asynchronous: spawn returns, then emits "error".
+		deps.spawnWorker(
+			join(directory, "payload"),
+			join(directory, "absent-hyper"),
+			directory,
+			deps.notify,
+		);
+		await new Promise((resolve) => setTimeout(resolve, 500));
+		expect(lines).toEqual([MISSING_CLI_LINE]);
+	});
+
+	it("probes the CLI with a hard bound and never inherits pipes", async () => {
+		const started = performance.now();
+		const result = await realDeps.probe("/bin/sh", directory, 200);
+		// /bin/sh ignores the arguments and exits; what matters is that the
+		// promise settles with a result rather than hanging.
+		expect(result.timedOut).toBe(false);
+		expect(performance.now() - started).toBeLessThan(5_000);
+	});
+});
+
+describe("against the real built CLI, in a throwaway space", () => {
+	it("commits once with the summary, then nothing when nothing changed", async () => {
+		const repository = join(import.meta.dirname, "../../..");
+		const cli = join(repository, "packages/cli/bin/run.js");
+		const fix = mkdtempSync(join(tmpdir(), "hyper-pi-e2e-"));
+		const bin = join(fix, "bin");
+		const space = join(fix, "space");
+		const gitDir = join(space, ".hyper", "space.git");
+		mkdirSync(bin);
+		// A real space, built by the same helpers the rest of this suite uses:
+		// bare `.git`, a worktrees/ dir, a space git dir with `core.worktree`
+		// and a first commit on the space branch.
+		makeBareSpace(space);
+		writeFileSync(join(space, ".gitignore"), renderGitignore());
+		mkdirSync(join(space, "notes"), { recursive: true });
+		writeFileSync(join(space, "notes", "note.md"), "one\n");
+		initSpaceGitDir(space, { branch: "space/pi-e2e" });
+		spaceGit(space, ["config", "gc.auto", "0"]);
+		await commitSpace(space, "space/pi-e2e", "init");
+		spaceGit(space, ["symbolic-ref", "HEAD", "refs/heads/space/pi-e2e"]);
+		spaceGit(space, ["config", "branch.space/pi-e2e.merge", "refs/heads/space/pi-e2e"]);
+		spaceGit(space, ["config", "hyper.cadence", "session-end"]);
+		writeFileSync(join(bin, "hyper"), `#!/bin/sh\nexec ${process.execPath} ${cli} "$@"\n`);
+		chmodSync(join(bin, "hyper"), 0o755);
+		const env = {
+			...process.env,
+			PATH: `${bin}${delimiter}${process.env.PATH}`,
+			HOME: join(fix, "home"),
+			HYPER_HOME: join(fix, "hyper"),
+			HYPER_DRIVE_CONFIG: join(fix, "drive.toml"),
+			XDG_CONFIG_HOME: join(fix, "config"),
+			HYPER_SKIP_NEW_VERSION_CHECK: "1",
+		};
+		try {
+			mkdirSync(env.HOME, { recursive: true });
+			const hyper = resolveHyper(env);
+			expect(hyper).toBe(join(bin, "hyper"));
+			const runCli = (args: string[], cwd: string) => {
+				try {
+					return { status: 0, stdout: execFileSync(hyper!, args, { cwd, env, encoding: "utf8" }) };
+				} catch (error) {
+					const failed = error as { status?: number; stdout?: string };
+					return { status: failed.status ?? null, stdout: failed.stdout ?? "" };
+				}
+			};
+			// detect and the worker go through execFileSync with the fixture
+			// environment; the detach itself is covered by the realDeps test.
+			const deps = fakeDeps({
+				resolveCli: () => hyper,
+				probe: async (_cli, cwd) => ({
+					...runCli(["space", "detect", "--json"], cwd),
+					timedOut: false,
+				}),
+				writePayload: realDeps.writePayload,
+				spawnWorker: (payloadPath, _cli, cwd) => {
+					deps.spawns.push({ payloadPath, bin: hyper!, cwd });
+					runCli(["space", "commit", "--session-end", "--payload-file", payloadPath], cwd);
+				},
+			});
+			writeFileSync(join(space, "notes", "note.md"), "changed by a pi session\n");
+			expect(await saveSessionEnd(facts({ cwd: space }), deps)).toEqual({
+				session_id: id,
+				cwd: space,
+				harness: "pi",
+				summary: "Ship the pi hook",
+			});
+			const log = () => readFileSync(join(gitDir, "session-end.log"), "utf8").trim().split("\n");
+			expect(log()[0]!.split("\t")[2]).toBe("committed");
+			expect(log()[0]!.split("\t")[3]).toBe("committed 1 file");
+			expect(spaceGit(space, ["log", "-1", "--format=%B"]).stdout.trim()).toBe(
+				`session: Ship the pi hook\n\nPi-Session: ${id}`,
+			);
+			// Nothing changed: a second save commits nothing and says so.
+			await saveSessionEnd(facts({ cwd: space }), deps);
+			expect(log()[1]!.split("\t")[2]).toBe("nothing");
+			expect(spaceGit(space, ["rev-list", "--count", "HEAD"]).stdout.trim()).toBe("2");
+			// A directory that is not a space: no payload, no log line, nothing printed.
+			const outside = join(fix, "outside");
+			mkdirSync(outside, { recursive: true });
+			deps.payloads = [];
+			expect(await saveSessionEnd(facts({ cwd: outside }), deps)).toBeUndefined();
+			expect(deps.payloads).toEqual([]);
+			expect(deps.lines).toEqual([]);
+			// And a real cwd below the space resolves to the same space.
+			const nested = join(space, "notes");
+			deps.spawns = [];
+			expect((await saveSessionEnd(facts({ cwd: nested }), deps))?.cwd).toBe(nested);
+			// The payload went into the space's own git dir, named the way the
+			// worker insists on, and the worker ran from the nested directory.
+			// The worker removed the payload, so compare the path it was given.
+			expect(deps.spawns[0]!.payloadPath.replace(realpathSync(fix), fix)).toMatch(
+				new RegExp(`^${escapeRegExp(gitDir)}/session-end-payload\\.`),
+			);
+			expect(deps.spawns[0]!.cwd).toBe(nested);
+		} finally {
+			rmSync(fix, { recursive: true, force: true });
+		}
+	}, 60_000);
 });

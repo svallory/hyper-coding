@@ -37,7 +37,7 @@ hyper space init --cadence session-end
 ```
 
 Cadence is `manual` (you run `hyper space commit` and `push`), `session-end`
-(each Claude session end commits locally; the hook returns at once and a
+(each Claude or pi session end commits locally; the hook returns at once and a
 detached worker commits, so a slow network never holds the session) or
 `session-end+push` (commits and pushes). Only `session-end+push` and an
 explicit `hyper space push` put the history on the hyperdrive — under
@@ -45,12 +45,19 @@ explicit `hyper space push` put the history on the hyperdrive — under
 A failed save shows in `hyper space status`.
 
 Pi sessions get the same save from the extension in `packages/drive/pi`
-(`pi install packages/drive/pi`): on `session_shutdown` it writes the payload
-and starts the same detached worker, so a pi session end commits locally — and
-pushes for `session-end+push` — without holding pi's exit. Its commit subject
+(`pi install packages/drive/pi`): when a pi session quits, it asks the CLI
+which space it is in and what that space's cadence is, writes the payload and
+starts the same detached worker, so the session end commits locally — and
+pushes for `session-end+push` — without holding pi's exit. The commit subject
 is the session name, or the first line of the first prompt, so prompt text
-lands in the space's history. With `manual`, or with the extension not
-installed, a pi session is saved with `hyper space commit` by hand.
+lands in the space's history. `/new`, `/resume`, `/fork` and `/reload` do not
+end the work and save nothing; with `manual`, or with the extension not
+installed, a pi session is saved with `hyper space commit` by hand. From the
+npm package the directory is `node_modules/@hypercli/drive/pi`.
+
+`hyper space detect --json` also reports a space's `spaceGitDir` and its
+`cadence`, which is how a caller that may not run commands in a space learns
+what it is in.
 
 ## Second machine
 
