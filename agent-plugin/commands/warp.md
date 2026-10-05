@@ -49,6 +49,9 @@ transcript, and an ownership marker, over ssh.
   machine's branches, tags or other refs (or HEAD) reaches it; the ref itself
   is then removed there. Earlier warps' backups, another worktree's HEAD and
   the stash don't count as reaching it.
+- **plain repo only**: stash entries only the target has (each named, with
+  the count), and refs that conflict as file and directory between the two
+  sides (`df` on one, `df/x` on the other), both named.
 
 **`--force` does not get past any of these** — they are refused whatever you
 pass:
@@ -90,7 +93,16 @@ retry with `--force` to "make it work".
   warp prints the namespace. The copy leaves `.git/refs/hyper-warp-backup`
   alone, and before every plain-repo copy, saved refs that a `git pack-refs`
   or `gc` on the target moved into `packed-refs` are written back there as
-  loose refs, so a later warp doesn't drop them. The rest of the target's `.git` — `config`, `info/exclude`,
+  loose refs, so a later warp doesn't drop them.
+  Every stash entry is saved too, one ref each, as
+  `refs/hyper-warp-backup/<…>/stash/<n>` (newest is 0); warp prints how
+  many, and `git stash apply <that ref>` there re-applies one. The target's
+  reflogs are not saved: for refs this machine also has they are replaced
+  by this machine's, so a commit there reachable only from a reflog (after
+  a reset, say) is not kept, with or without `--force`. A target ref that
+  conflicts as file and directory with one of this machine's (`df` here,
+  `df/x` there) is saved with the others and then deleted there.
+  The rest of the target's `.git` — `config`, `info/exclude`,
   hooks, `HEAD`, the index, `packed-refs` — is replaced by this machine's
   files of the same name (files only the target has are kept).
 - **Both**: every colliding untracked or ignored entry, and every tracked
