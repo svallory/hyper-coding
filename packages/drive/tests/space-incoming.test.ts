@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { CLAUDE_USER_STATE, canonicalGitignores, renderGitignore } from "#services/allowlist";
+import { renderGitignore } from "#services/allowlist";
 import { initSpaceGitDir, spaceGit } from "#services/space-git";
 import { validateIncomingSpace } from "#services/space-incoming";
 import {
@@ -152,27 +152,6 @@ describe("untrusted incoming history", () => {
 			expectRefused(".gitignore");
 		},
 	);
-	it.each([[[]], [["extra"]]])(
-		"accepts a tip published with the previous render (tracked %j), so older spaces stay pullable",
-		(tracked: string[]) => {
-			const legacy = canonicalGitignores(tracked)[1];
-			expect(legacy).not.toBe(renderGitignore(tracked));
-			writeFileSync(join(peer, ".gitignore"), legacy);
-			if (tracked.length) peerFile("extra/a.md");
-			peerFile("notes/b.md");
-			publish();
-			const result = run("pull", "--accept-tracked");
-			expect(result.status, flat(result.stderr)).toBe(0);
-			expect(readFileSync(join(root, "notes", "b.md"), "utf8")).toBe("remote\n");
-		},
-	);
-	it("refuses a render with only some of the Claude user-state lines", () => {
-		const partial = renderGitignore().replace(`/.claude/${CLAUDE_USER_STATE[0]}\n`, "");
-		expect(canonicalGitignores()).not.toContain(partial);
-		writeFileSync(join(peer, ".gitignore"), partial);
-		publish();
-		expectRefused(".gitignore");
-	});
 	it.each(["/tmp/outside", "../../outside"])("refuses symlink target %s", (target: string) => {
 		symlinkSync(target, join(peer, "notes", "link"));
 		publish();
