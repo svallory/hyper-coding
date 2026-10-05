@@ -226,6 +226,17 @@ export function spaceGit(
 	const stdout = result.stdout ?? "";
 	const stderr = result.stderr ?? "";
 
+	// A stale index lock (a git or hyper process killed mid-write): one
+	// friendly line, never a raw git error and never an automatic delete, since
+	// a live process may still own it (review of PR #54, M3). Thrown even when
+	// the caller allows failure: nothing that touches the index can proceed.
+	if (status !== 0) {
+		const lock = /Unable to create '([^']*index\.lock)': File exists/.exec(stderr);
+		if (lock)
+			throw new SpaceGitError(
+				`This space's index is locked by ${quoteForTerminal(lock[1])}. If no hyper or git process is working on this space, remove that file and try again.`,
+			);
+	}
 	if (status !== 0 && !opts.allowFailure) {
 		const detail = stderr.trim();
 		if (detail === "")
@@ -2169,4 +2180,54 @@ export function trackedUnderDirectory(worktree: string, name: string): number {
 	);
 	if (result.error || result.status !== 0) return 0;
 	return (result.stdout ?? "").split("\0").filter((entry) => entry !== "").length;
+}
+
+/**
+ * An index-only fast-forward stopped between `read-tree` and `update-ref`
+ * (review of PR #54, M1): the index is exactly the hyperdrive's tip while the
+ * branch still points at one of that tip's ancestors. Read-only check.
+ */
+export function interruptedPullTip(root: string, branch: string): string | null {
+	const tip = spaceGit(
+		root,
+		["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}^{commit}`],
+		{
+			allowFailure: true,
+			readOnly: true,
+		},
+	).stdout.trim();
+	if (tip === "") return null;
+	const head = spaceGit(root, ["rev-parse", "--verify", "-q", "HEAD^{commit}"], {
+		allowFailure: true,
+		readOnly: true,
+	}).stdout.trim();
+	if (head === "" || head === tip) return null;
+	if (
+		spaceGit(root, ["merge-base", "--is-ancestor", head, tip], {
+			allowFailure: true,
+			readOnly: true,
+		}).status !== 0
+	)
+		return null;
+	return spaceGit(root, ["diff", "--cached", "--quiet", tip], {
+		allowFailure: true,
+		readOnly: true,
+	}).status === 0
+		? tip
+		: null;
+}
+
+/**
+ * Finish such a fast-forward: move the branch to the tip the index already
+ * holds (`update-ref` with the old value, so a branch that moved meanwhile is
+ * left alone). Called under the space lock at the start of commit, pull and
+ * status, so a commit never records a peer's tip as local work. Returns the
+ * tip it finished to, or null when there was nothing to finish.
+ */
+export function finishInterruptedPull(root: string, branch: string): string | null {
+	const tip = interruptedPullTip(root, branch);
+	if (tip === null) return null;
+	const head = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+	spaceGit(root, ["update-ref", `refs/heads/${branch}`, tip, head]);
+	return tip;
 }

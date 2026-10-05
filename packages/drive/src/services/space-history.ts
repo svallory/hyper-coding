@@ -6,6 +6,7 @@ import { isClaudeUserStatePath, renderGitignore } from "#services/allowlist";
 import { lastSessionEndFailure } from "#services/session-end-log";
 import { detectSpace } from "#services/space";
 import {
+	finishInterruptedPull,
 	gitSaid,
 	hasSpaceGit,
 	type ReviewPathFacts,
@@ -135,9 +136,18 @@ export interface IncomingTrackedEntry {
 	path: string;
 	localFiles: number;
 }
+/** The step boundaries of an index-only fast-forward (`advanceKeepingUserState`). */
+export type PullStep = "base" | "untracked" | "read-tree";
+
 export interface SpacePullOptions {
 	acceptTracked?: boolean;
 	confirmTracked?: (entries: IncomingTrackedEntry[]) => Promise<boolean>;
+	/**
+	 * Called after each step of an index-only fast-forward. Injected by tests
+	 * (to stop the process exactly there); never set by a command, and not
+	 * reachable through the environment.
+	 */
+	onStep?: (step: PullStep) => void;
 }
 export interface SpacePullResult {
 	updated: boolean;
@@ -154,20 +164,6 @@ export interface SpacePullResult {
 	userStateKept?: string[];
 	/** Local commits dropped because they only stopped tracking user state too. */
 	droppedUserStateCommits?: number;
-}
-
-/**
- * Test seam: when `HYPER_TEST_PULL_PAUSE_AT` names a step, stop after it until
- * the marker file is removed (or 60 s), so a test can signal the process
- * exactly there. Never set outside tests.
- */
-function pauseForTest(root: string, step: string): void {
-	if (process.env.HYPER_TEST_PULL_PAUSE_AT !== step) return;
-	const marker = join(spaceGitDir(root), `hyper-test-paused-${step}`);
-	writeFileSync(marker, `${process.pid}\n`);
-	const deadline = Date.now() + 60_000;
-	while (Date.now() < deadline && lstatSync(marker, { throwIfNoEntry: false }))
-		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
 }
 
 /**
@@ -198,6 +194,7 @@ function advanceKeepingUserState(
 	before: string,
 	tip: string,
 	userState: string[],
+	onStep: (step: PullStep) => void = () => {},
 ): ReturnType<typeof spaceGit> {
 	const literal = userState.map((path) => `:(literal)${path}`);
 	const indexFile = join(spaceGitDir(root), `hyper-pull-base-${process.pid}-${Date.now()}.index`);
@@ -217,7 +214,7 @@ function advanceKeepingUserState(
 		rmSync(indexFile, { force: true });
 		rmSync(`${indexFile}.lock`, { force: true });
 	}
-	pauseForTest(root, "base");
+	onStep("base");
 	for (let i = 0; i < literal.length; i += 500)
 		spaceGit(root, [
 			"rm",
@@ -227,7 +224,7 @@ function advanceKeepingUserState(
 			"--",
 			...literal.slice(i, i + 500),
 		]);
-	pauseForTest(root, "untracked");
+	onStep("untracked");
 	const merged = spaceGit(root, ["read-tree", "-m", "-u", base, tip], { allowFailure: true });
 	if (merged.status !== 0) {
 		// Back to exactly the state before the pull: the index entries from HEAD
@@ -238,7 +235,7 @@ function advanceKeepingUserState(
 			});
 		return merged;
 	}
-	pauseForTest(root, "read-tree");
+	onStep("read-tree");
 	spaceGit(root, ["update-ref", `refs/heads/${branch}`, tip, before]);
 	return merged;
 }
@@ -314,6 +311,9 @@ async function pullSpaceLocked(
 	branch: string,
 	options: SpacePullOptions,
 ): Promise<SpacePullResult> {
+	// A pull stopped between its index update and its branch update: finish
+	// it before comparing histories (review of PR #54, M1).
+	finishInterruptedPull(root, branch);
 	// Only a fetch that actually reached the hyperdrive may clear the record of
 	// a refusal: an unreachable remote has said nothing new about that tip.
 	clearRefusal(root);
@@ -434,7 +434,14 @@ async function pullSpaceLocked(
 						],
 						{ allowFailure: true },
 					)
-				: advanceKeepingUserState(root, branch, before, incoming.tip, userStateDeleted);
+				: advanceKeepingUserState(
+						root,
+						branch,
+						before,
+						incoming.tip,
+						userStateDeleted,
+						options.onStep,
+					);
 		if (result.status !== 0) {
 			const detail = (result.stderr || result.stdout).trim();
 			if (userStateDeleted.length > 0 && /would lose untracked files in it/i.test(detail)) {
