@@ -14,8 +14,18 @@
  * - a clone of an old space works, and its first commit cleans it up.
  */
 
-import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readFileSync,
+	readlinkSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderGitignore } from "#services/allowlist";
@@ -403,7 +413,12 @@ describe("push refuses unpushed history that holds user state or secrets (review
 		const refused = hyperIn(root, ["space", "push"]);
 		expect(refused.status).not.toBe(0);
 		expect(flat(refused.stderr)).toContain("notes/.env");
-		ok(hyperIn(root, ["space", "push", "--allow-secret", "notes/.env"]));
+		const allowed = hyperIn(root, ["space", "push", "--allow-secret", "notes/.env"]);
+		ok(allowed);
+		// R6: as loud as commit's allowance, naming the path.
+		expect(flat(allowed.stderr)).toContain(
+			'--allow-secret: publishing secret-looking path "notes/.env"',
+		);
 	});
 
 	it("--allow-user-state-history publishes it, loudly", () => {
@@ -466,5 +481,193 @@ describe("status, clone and generic names (review N3, N4, N5)", () => {
 			.filter((line) => line.startsWith("note:"));
 		expect(notes).toHaveLength(1);
 		expect(notes[0]).toContain("1 Claude user-state path under .claude/ is not tracked");
+	});
+});
+
+describe("the pull touches no Claude user-state file, whatever stops it (review R1, R2)", () => {
+	const STATE = [".claude/projects/-p/s1.jsonl", ".claude/history.jsonl", ".claude/todos/t.json"];
+
+	function legacyPair(): void {
+		write(root, [...STATE, "notes/n.md"]);
+		init();
+		spaceGit(root, ["add", "-f", "--", ...STATE]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		spaceGit(root, ["push", "-q", "origin", "HEAD"]);
+		spaceGit(root, ["fetch", "-q", "origin"]);
+		const peer = join(fixture.home, "peer-space");
+		ok(spawnCli(["space", "clone", "space", peer, "--yes"], fixture));
+		makeBareSpace(peer);
+		write(peer, ["notes/n.md"], "changed on B\n");
+		ok(hyperIn(peer, ["space", "commit", "-m", "untrack on B"]));
+		ok(hyperIn(peer, ["space", "push"]));
+		// This machine edits its history after the upgrade, and narrows a mode.
+		writeFileSync(join(root, ".claude/history.jsonl"), "edited here\n");
+	}
+	function snapshot(): { path: string; content: string | null; mode: number | null }[] {
+		return STATE.map((path) => {
+			const full = join(root, path);
+			return existsSync(full)
+				? { path, content: readFileSync(full, "latin1"), mode: statSync(full).mode }
+				: { path, content: null, mode: null };
+		});
+	}
+	/** Start the pull in its own process group, stop it after `step`, signal the group. */
+	async function interruptedPull(step: string, signal: NodeJS.Signals): Promise<void> {
+		const marker = join(root, ".hyper", "space.git", `hyper-test-paused-${step}`);
+		const child = spawn(process.execPath, [cli, "space", "pull"], {
+			cwd: root,
+			detached: true,
+			stdio: "ignore",
+			env: {
+				...process.env,
+				HOME: fixture.home,
+				XDG_CONFIG_HOME: join(fixture.root, "config"),
+				HYPER_HOME: fixture.hyperHome,
+				HYPER_DRIVE_CONFIG: fixture.configFile,
+				HYPER_SKIP_NEW_VERSION_CHECK: "1",
+				HYPER_TEST_PULL_PAUSE_AT: step,
+			},
+		});
+		const exited = new Promise<void>((resolve) => child.on("exit", () => resolve()));
+		const deadline = Date.now() + 30_000;
+		while (!existsSync(marker)) {
+			if (Date.now() > deadline) throw new Error(`the pull never reached ${step}`);
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+		process.kill(-(child.pid as number), signal);
+		await exited;
+	}
+
+	for (const step of ["base", "untracked", "read-tree"]) {
+		for (const signal of ["SIGKILL", "SIGHUP"] as const) {
+			it(`${signal} after the "${step}" step leaves every file in place, byte for byte; the next pull completes`, async () => {
+				legacyPair();
+				const before = snapshot();
+				await interruptedPull(step, signal);
+				// No recovery step: the files never moved.
+				expect(snapshot()).toEqual(before);
+				const pull = hyperIn(root, ["space", "pull"]);
+				ok(pull);
+				expect(snapshot()).toEqual(before);
+				for (const path of STATE) expect(tree(), path).not.toContain(path);
+				expect(readFileSync(join(root, "notes/n.md"), "utf8")).toBe("changed on B\n");
+			}, 60_000);
+		}
+	}
+
+	it("a tip that turns a nested .claude into a file is refused clearly; nothing is lost and status is truthful", () => {
+		write(root, ["notes/x/.claude/history.jsonl", "notes/n.md"]);
+		init();
+		spaceGit(root, ["add", "-f", "--", "notes/x/.claude/history.jsonl"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		spaceGit(root, ["push", "-q", "origin", "HEAD"]);
+		const peer = join(fixture.root, "plain-peer");
+		git(
+			["clone", "-q", "--single-branch", "--branch", "space/space", fixture.remote, peer],
+			fixture.root,
+		);
+		git(["rm", "-q", "--cached", "--", "notes/x/.claude/history.jsonl"], peer);
+		git(["-c", "core.hooksPath=/dev/null", "commit", "-qm", "untrack"], peer);
+		git(["rm", "-q", "-r", "--ignore-unmatch", "--", "notes/x/.claude"], peer);
+		rmSync(join(peer, "notes/x/.claude"), { recursive: true, force: true });
+		writeFileSync(join(peer, "notes/x/.claude"), "now a file\n");
+		git(["add", "--", "notes/x/.claude"], peer);
+		git(["-c", "core.hooksPath=/dev/null", "commit", "-qm", "dir to file"], peer);
+		git(["push", "-q", "origin", "HEAD"], peer);
+		const head = spaceGit(root, ["rev-parse", "HEAD"]).stdout;
+		const pull = hyperIn(root, ["space", "pull"]);
+		expect(pull.status).toBe(2);
+		expect(flat(pull.stderr)).toContain(
+			"replaces a directory that holds this machine's Claude user state with a file",
+		);
+		expect(readFileSync(join(root, "notes/x/.claude/history.jsonl"), "utf8")).toBe(
+			"notes/x/.claude/history.jsonl\n",
+		);
+		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(head);
+		// The index is as before the pull: still tracked, nothing staged.
+		expect(spaceGit(root, ["ls-files", "--", "notes/x/.claude/history.jsonl"]).stdout.trim()).toBe(
+			"notes/x/.claude/history.jsonl",
+		);
+		expect(spaceGit(root, ["diff", "--cached", "--name-only"]).stdout.trim()).toBe("");
+	});
+
+	it("never moves or follows symlinked user state", () => {
+		const elsewhere = join(fixture.root, "elsewhere");
+		write(elsewhere, ["-p/s1.jsonl"], "outside the space\n");
+		mkdirSync(join(root, ".claude"), { recursive: true });
+		symlinkSync(elsewhere, join(root, ".claude/projects"));
+		write(root, [".claude/history.jsonl"]);
+		init();
+		spaceGit(root, ["add", "-f", "--", ".claude/projects", ".claude/history.jsonl"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		spaceGit(root, ["push", "-q", "origin", "HEAD"]);
+		const peer = join(fixture.root, "plain-peer2");
+		git(
+			["clone", "-q", "--single-branch", "--branch", "space/space", fixture.remote, peer],
+			fixture.root,
+		);
+		git(["rm", "-q", "--cached", "--", ".claude/projects", ".claude/history.jsonl"], peer);
+		git(["-c", "core.hooksPath=/dev/null", "commit", "-qm", "untrack"], peer);
+		git(["push", "-q", "origin", "HEAD"], peer);
+		ok(hyperIn(root, ["space", "pull"]));
+		expect(lstatSync(join(root, ".claude/projects")).isSymbolicLink()).toBe(true);
+		expect(readlinkSync(join(root, ".claude/projects"))).toBe(elsewhere);
+		expect(readFileSync(join(elsewhere, "-p/s1.jsonl"), "utf8")).toBe("outside the space\n");
+	});
+});
+
+describe("the push guard asks the remote what is unpushed (review R3, R5)", () => {
+	function dropTrackingRefs(): void {
+		for (const ref of spaceGit(root, ["for-each-ref", "--format=%(refname)", "refs/remotes/"])
+			.stdout.split("\n")
+			.filter(Boolean))
+			spaceGit(root, ["update-ref", "-d", ref]);
+	}
+
+	it("without tracking refs, a commit already on the hyperdrive is never called unpushed", () => {
+		init();
+		write(root, [".claude/todos/t.json"]);
+		spaceGit(root, ["add", "-f", "--", ".claude/todos/t.json"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper, published"]);
+		ok(hyperIn(root, ["space", "push", "--allow-user-state-history"]));
+		dropTrackingRefs();
+		write(root, ["notes/clean.md"]);
+		spaceGit(root, ["add", "--", "notes/clean.md"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "clean"]);
+		ok(hyperIn(root, ["space", "push"]));
+	});
+
+	it("without tracking refs, only the truly unpushed commit is named, and the fix starts at the remote's tip", () => {
+		init();
+		ok(hyperIn(root, ["space", "push"]));
+		const remoteTip = git(
+			["--git-dir", fixture.remote, "rev-parse", "space/space"],
+			fixture.root,
+		).trim();
+		dropTrackingRefs();
+		write(root, [".claude/history.jsonl"]);
+		spaceGit(root, ["add", "-f", "--", ".claude/history.jsonl"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		const refused = hyperIn(root, ["space", "push"]);
+		expect(refused.status).not.toBe(0);
+		const err = flat(refused.stderr);
+		expect(err).toContain("a commit not yet on the hyperdrive");
+		expect(err).toContain(`reset --soft ${remoteTip.slice(0, 12)}`);
+	});
+
+	it("gives the session-end log one readable line: the reason, the paths, and where the steps are", async () => {
+		init();
+		ok(hyperIn(root, ["space", "push"]));
+		write(root, [".claude/history.jsonl"]);
+		spaceGit(root, ["add", "-f", "--", ".claude/history.jsonl"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		const { pushSpaceBounded, UnsafeOutgoingError } = await import("#services/space-sync");
+		const error = await pushSpaceBounded(root, fixture.remote, "space/space", 30_000).catch(
+			(e) => e,
+		);
+		expect(error).toBeInstanceOf(UnsafeOutgoingError);
+		expect(error.summary).not.toContain("\n");
+		expect(error.summary).toContain(".claude/history.jsonl");
+		expect(error.summary).toContain("run `hyper space push` for the fix");
 	});
 });

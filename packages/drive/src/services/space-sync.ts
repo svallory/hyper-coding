@@ -404,8 +404,9 @@ export function outgoingProblems(
 	root: string,
 	sha: string,
 	allow: PushAllowances = {},
+	published: string[] = publishedTips(root),
 ): { commit: string; userState: string[]; secrets: string[] }[] {
-	const range = [sha, "--not", ...publishedTips(root)];
+	const range = [sha, "--not", ...published];
 	const commits = spaceGit(root, ["rev-list", ...range])
 		.stdout.split("\n")
 		.filter(Boolean);
@@ -435,10 +436,8 @@ export function outgoingProblems(
 }
 
 /**
- * What this machine knows the hyperdrive already has for `branch`: the
- * last-seen tracking ref, and every other `origin` ref (a legacy space git
- * dir may lack the tracking ref until its first push from this CLI). Only
- * commits outside all of them are new.
+ * What this machine knows the hyperdrive already has: every `origin`
+ * remote-tracking ref. A fallback only: the push asks the remote itself first.
  */
 function publishedTips(root: string): string[] {
 	const tips = spaceGit(root, ["for-each-ref", "--format=%(objectname)", "refs/remotes/origin/"])
@@ -447,28 +446,87 @@ function publishedTips(root: string): string[] {
 	return [...new Set(tips)];
 }
 
-/** Refuse a push whose outgoing range publishes user state or a secret, saying how to fix it. */
+/** Is `ancestor` a commit this machine has, reachable from `sha`? */
+function isLocalAncestor(root: string, ancestor: string, sha: string): boolean {
+	const has = spaceGit(root, ["cat-file", "-e", `${ancestor}^{commit}`], { allowFailure: true });
+	if (has.status !== 0) return false;
+	return (
+		spaceGit(root, ["merge-base", "--is-ancestor", ancestor, sha], { allowFailure: true })
+			.status === 0
+	);
+}
+
+/**
+ * A push refused because unpushed commits hold user state or secrets. `summary`
+ * is one readable line (reason and paths) for the session-end log and
+ * `space status`; the message has the full steps.
+ */
+export class UnsafeOutgoingError extends SpaceGitError {
+	readonly summary: string;
+	constructor(message: string, summary: string) {
+		super(message);
+		this.name = "UnsafeOutgoingError";
+		this.summary = summary;
+	}
+}
+
+/**
+ * Refuse a push whose outgoing range publishes user state or a secret, saying
+ * how to fix it (review of PR #54, N2, R3). What is unpushed is decided from
+ * the REMOTE itself (`ls-remote`): the remote's tip and its ancestry are
+ * excluded when this machine has it, so missing tracking refs cannot make a
+ * published commit look new, and the printed fix never rewrites a commit the
+ * remote already has. Unreachable remote: the tracking refs stand in (the push
+ * fails right after anyway).
+ */
 function refuseUnsafeOutgoing(
 	root: string,
+	remote: string,
 	sha: string,
 	branch: string,
 	allow: PushAllowances,
+	asked?: { tip: string | null | undefined },
 ): void {
-	const problems = outgoingProblems(root, sha, allow);
+	let remoteTip: string | null | undefined = asked?.tip;
+	if (asked === undefined) {
+		try {
+			remoteTip = remoteSha(root, remote, branch);
+		} catch {
+			remoteTip = undefined;
+		}
+	}
+	const known =
+		remoteTip !== undefined && remoteTip !== null && isLocalAncestor(root, remoteTip, sha);
+	const published =
+		remoteTip === null
+			? []
+			: known
+				? [remoteTip as string, ...publishedTips(root)]
+				: publishedTips(root);
+	const problems = outgoingProblems(root, sha, allow, published);
 	if (problems.length === 0) return;
 	const lines = problems.slice(0, 5).map(({ commit, userState, secrets }) => {
 		const paths = [...userState, ...secrets];
 		return `  ${commit.slice(0, 12)}: ${paths.slice(0, 4).map(quoteForTerminal).join(", ")}${paths.length > 4 ? `, … (${paths.length} paths)` : ""}`;
 	});
-	const seen = spaceGit(root, ["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`], {
-		allowFailure: true,
-	}).stdout.trim();
-	throw new SpaceGitError(
+	const allPaths = [
+		...new Set(problems.flatMap(({ userState, secrets }) => [...userState, ...secrets])),
+	];
+	const fix =
+		remoteTip === null
+			? "Nothing of this branch is on the hyperdrive yet. To publish without it, start the branch's history over from your files (they are not touched):\n\n" +
+				"  git --git-dir=.hyper/space.git --work-tree=. update-ref -d HEAD\n" +
+				`  hyper space commit -m "<message>"\n  hyper space push\n\n`
+			: known
+				? "The content is only in this machine's history so far. To publish without it, fold the unpushed commits into one new commit (your files are not touched):\n\n" +
+					`  git --git-dir=.hyper/space.git --work-tree=. reset --soft ${(remoteTip as string).slice(0, 12)}\n` +
+					`  hyper space commit -m "<message>"\n  hyper space push\n\n`
+				: "The hyperdrive has commits this machine does not (or could not be reached): run `hyper space pull` first, then push again to see the exact fix.\n\n";
+	throw new UnsafeOutgoingError(
 		`refusing to push ${escapeControlCharacters(branch)}: ${problems.length === 1 ? "a commit" : `${problems.length} commits`} not yet on the hyperdrive add Claude user state or secret-looking files (made by an older hyper or by plain git), and pushing would publish them:\n${lines.join("\n")}${problems.length > 5 ? "\n  …" : ""}\n` +
-			"The content is only in this machine's history so far. To publish without it, fold the unpushed commits into one new commit (your files are not touched):\n\n" +
-			`  git --git-dir=.hyper/space.git --work-tree=. reset --soft ${seen === "" ? "<the last commit you want to keep>" : seen.slice(0, 12)}\n` +
-			`  hyper space commit -m "<message>"\n  hyper space push\n\n` +
+			fix +
 			"`hyper space commit` leaves the user state out and refuses secrets again. To publish them anyway, `hyper space push --allow-user-state-history` (user state) or `--allow-secret <path>` (one intentional secret).",
+		`push refused: ${problems.length} unpushed commit${problems.length === 1 ? "" : "s"} add Claude user state or secret-looking files (${allPaths.slice(0, 5).join(", ")}${allPaths.length > 5 ? ", …" : ""}); run \`hyper space push\` for the fix`,
 	);
 }
 
@@ -485,7 +543,7 @@ export function pushSpace(
 	// then be reported as "another machine pushed first".
 	withSpaceLock(root, `push ${branch}`, () => {
 		const sha = spaceGit(root, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
-		refuseUnsafeOutgoing(root, sha, branch, allow);
+		refuseUnsafeOutgoing(root, remote, sha, branch, allow);
 		spaceGitRemote(root, remote, ["push", "origin", `${sha}:refs/heads/${branch}`], branch, caller);
 		// Legacy init wrote no fetch refspec: Git cannot update a tracking ref for it.
 		// Record exactly the immutable SHA handed to the successful push, even there.
@@ -513,11 +571,40 @@ export async function pushSpaceBounded(
 		`push ${branch}`,
 		async () => {
 			const sha = spaceGit(root, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
+			const started = Date.now();
+			const timedOut = (): SpaceGitError =>
+				new SpaceGitError(
+					`the push to ${escapeControlCharacters(remote)} did not finish within ${Math.round(timeoutMs / 1000)} s, so I stopped it. The commit is saved locally and will be pushed next time.`,
+				);
+			// What the remote has, asked within the SAME bound as the push: a host
+			// that never answers must not hold the session-end worker past it.
+			const asked = await spaceGitBounded(
+				root,
+				["ls-remote", remote, `refs/heads/${branch}`],
+				timeoutMs,
+			);
+			if (asked.timedOut) throw timedOut();
+			const first = asked.status === 0 ? (asked.stdout.split("\n")[0] ?? "").trim() : undefined;
 			// The session-end worker never passes allowances: a refusal is
 			// logged and shown by `hyper space status`.
-			refuseUnsafeOutgoing(root, sha, branch, {});
+			refuseUnsafeOutgoing(
+				root,
+				remote,
+				sha,
+				branch,
+				{},
+				{
+					tip:
+						first === undefined
+							? undefined
+							: first === ""
+								? null
+								: (first.split("\t")[0] ?? "").trim(),
+				},
+			);
 			const args = ["push", "origin", `${sha}:refs/heads/${branch}`];
-			const result = await spaceGitBounded(root, args, timeoutMs);
+			const remaining = Math.max(1_000, timeoutMs - (Date.now() - started));
+			const result = await spaceGitBounded(root, args, remaining);
 			if (result.timedOut)
 				throw new SpaceGitError(
 					`the push to ${escapeControlCharacters(remote)} did not finish within ${Math.round(timeoutMs / 1000)} s, so I stopped it. The commit is saved locally and will be pushed next time.`,

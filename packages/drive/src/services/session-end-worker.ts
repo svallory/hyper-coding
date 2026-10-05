@@ -32,7 +32,12 @@ import { appendSessionEndLog, type SessionEndLogEntry } from "#services/session-
 import { readCadence, spaceGitDir } from "#services/space-git";
 import { requireInitializedSpace, spaceRemote } from "#services/space-history";
 import { spaceGitDirWriteError } from "#services/space-lock";
-import { commitSpace, pushSpaceBounded, SESSION_END_PUSH_TIMEOUT_MS } from "#services/space-sync";
+import {
+	commitSpace,
+	pushSpaceBounded,
+	SESSION_END_PUSH_TIMEOUT_MS,
+	UnsafeOutgoingError,
+} from "#services/space-sync";
 
 export const SESSION_END_PAYLOAD_PREFIX = "session-end-payload.";
 export const SESSION_END_WORKER_BUDGET_MS = 120_000;
@@ -203,7 +208,14 @@ export async function runSessionEndWorker(
 			return appendSessionEndLog(gitDir, {
 				session,
 				outcome: "push-failed",
-				detail: [`${saved}; push failed: ${message(error)}`, ...notes].join(" "),
+				// A user-state/secret refusal has several lines of steps; the log and
+				// `space status` get its one readable line, `hyper space push` the rest.
+				detail: [
+					error instanceof UnsafeOutgoingError
+						? `${saved}; ${error.summary}`
+						: `${saved}; push failed: ${message(error)}`,
+					...notes,
+				].join(" "),
 			});
 		}
 		return appendSessionEndLog(gitDir, {
