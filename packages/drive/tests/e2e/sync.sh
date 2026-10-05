@@ -22,7 +22,8 @@
 #   9. both sessions are terminated and this script's own daemon is stopped at
 #      the end (trap), so nothing is left running
 #
-# Usage: packages/drive/tests/e2e/sync.sh
+# Usage: packages/drive/tests/e2e/sync.sh (standalone or through run.sh; it
+#        sets its own temp HOME, empty CLAUDE_CONFIG_DIR and HYPER_HOME)
 # Cost:   creates two throwaway Mutagen sessions named hyper-claude-loop-test /
 #         hyper-pi-loop-test, a temp fake `herdr` on PATH, and an ssh hop to
 #         localhost. It NEVER touches the operator's real ~/.claude or their
@@ -117,6 +118,23 @@ for candidate in id_ed25519 id_rsa id_ecdsa; do
     break
   fi
 done
+# Review of PR #54, M4: this script runs `hyper machine setup`, so it must
+# never run with the operator's HOME or Claude config, standalone or not
+# (root CLAUDE.md, machine setup test safety). The identity above is the only
+# thing read from the caller's HOME; from here on everything is the fixture's.
+real_home="$(python3 -c 'import os, pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
+export HOME="$work_real/home"
+export CLAUDE_CONFIG_DIR="$work_real/claude-config"
+export HYPER_HOME="$work_real/hyper-home"
+export HYPER_SKIP_NEW_VERSION_CHECK=1
+unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_CACHE_HOME
+mkdir -p "$HOME" "$CLAUDE_CONFIG_DIR" "$HYPER_HOME"
+if [ "$(cd "$HOME" && pwd -P)" = "$(cd "$real_home" && pwd -P)" ]; then
+  echo "# refusing to run: HOME resolves to the real home $real_home" >&2
+  exit 1
+fi
+[ -z "$(ls -A "$CLAUDE_CONFIG_DIR")" ] || { echo "# refusing to run: CLAUDE_CONFIG_DIR is not empty" >&2; exit 1; }
+
 # The REAL ssh, resolved while this file is not yet first on PATH. `exec ssh`
 # inside the wrapper would find the wrapper itself and re-exec it with another
 # copy of the flags until argv hit E2BIG.

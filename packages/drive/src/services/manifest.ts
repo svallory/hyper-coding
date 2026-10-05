@@ -145,6 +145,11 @@ export type PushFailure = "contention" | "hook-rejected" | "unreachable";
  */
 export function classifyPushFailure(result: GitResult): PushFailure {
 	const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+	// A ref update that lost a race inside the remote ("cannot lock ref …: is
+	// at X but expected Y", "incorrect old value provided") is also printed as
+	// `[remote rejected]`, but it is another machine's push landing first:
+	// contention, which the retry loop handles (review of PR #54, M3).
+	if (/cannot lock ref|incorrect old value|failed to update ref/i.test(text)) return "contention";
 	if (/\[remote rejected\]/i.test(text)) return "hook-rejected";
 	if (/\[rejected\]/i.test(text) && /(fetch first|non-fast-forward|stale info)/i.test(text)) {
 		return "contention";
@@ -363,7 +368,7 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
  * comparison. Sorting compares code points, not the ambient locale, so the
  * file reads the same on every machine.
  */
-function serializeManifest(manifest: Manifest): string {
+function serializeManifest(manifest: Manifest, extras: ManifestExtras = NO_EXTRAS): string {
 	const spaces = [...manifest.spaces]
 		.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 		.map((space) => ({
@@ -380,8 +385,52 @@ function serializeManifest(manifest: Manifest): string {
 			cadence: space.cadence,
 			tracked: space.tracked,
 			public: space.public,
+			...extras.entries.get(space.name),
 		}));
-	return stringifyYaml({ spaces });
+	return stringifyYaml({ spaces, ...extras.top });
+}
+
+/**
+ * Keys this CLI does not know, kept so a rewrite never destroys what a newer
+ * hyper wrote (review of PR #54, M1): top-level keys beside `spaces`, and each
+ * entry's unknown keys by space name. They are written back after the known
+ * ones; a removed space takes its keys with it.
+ */
+interface ManifestExtras {
+	top: Record<string, unknown>;
+	entries: Map<string, Record<string, unknown>>;
+}
+
+const NO_EXTRAS: ManifestExtras = { top: {}, entries: new Map() };
+
+const KNOWN_ENTRY_KEYS = new Set([
+	"name",
+	"branch",
+	"group",
+	"path",
+	"layout",
+	"repos",
+	"cadence",
+	"tracked",
+	"public",
+]);
+
+/** The unknown keys of a parsed (already validated) manifest. */
+function extrasOf(raw: unknown): ManifestExtras {
+	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return NO_EXTRAS;
+	const record = raw as Record<string, unknown>;
+	const top = Object.fromEntries(Object.entries(record).filter(([key]) => key !== "spaces"));
+	const entries = new Map<string, Record<string, unknown>>();
+	if (Array.isArray(record.spaces)) {
+		for (const entry of record.spaces) {
+			if (typeof entry !== "object" || entry === null) continue;
+			const fields = entry as Record<string, unknown>;
+			if (typeof fields.name !== "string") continue;
+			const unknown = Object.entries(fields).filter(([key]) => !KNOWN_ENTRY_KEYS.has(key));
+			if (unknown.length > 0) entries.set(fields.name, Object.fromEntries(unknown));
+		}
+	}
+	return { top, entries };
 }
 
 /**
@@ -503,9 +552,21 @@ function withManifestLock<T>(
 }
 
 /** One intended change, recorded until it has been pushed. */
-type Mutation = { name: string; entry?: SpaceEntry; verb?: "add" | "update" | "remove" };
+type Mutation =
+	| { name: string; entry?: SpaceEntry; verb?: "add" | "update" | "remove" }
+	| { setPath: { name: string; path: string }; verb?: "update" };
 // `entry` set: upsert this space under that name. `entry` absent: remove it.
+// `setPath`: change only that space's `path`, applied to whatever entry the
+// base holds at replay time (a clone recording where it put the space), and
+// nothing when the space is gone. It carries no top-level `name` on purpose:
+// an older CLI reads a line without one as malformed and drops it, where a
+// `{name}` without `entry` would read as a REMOVAL.
 // `verb` is bookkeeping for the commit message, derived at replay time.
+
+/** The space a mutation is about. */
+function mutationName(mutation: Mutation): string {
+	return "setPath" in mutation ? mutation.setPath.name : mutation.name;
+}
 
 /**
  * Local mutations waiting to reach the remote, one JSON object per line.
@@ -546,6 +607,10 @@ function excludePendingFile(dir: string): void {
 function isMutation(value: unknown): value is Mutation {
 	if (typeof value !== "object" || value === null) return false;
 	const mutation = value as Record<string, unknown>;
+	if (typeof mutation.setPath === "object" && mutation.setPath !== null) {
+		const set = mutation.setPath as Record<string, unknown>;
+		return typeof set.name === "string" && set.name !== "" && typeof set.path === "string";
+	}
 	if (typeof mutation.name !== "string" || mutation.name === "") return false;
 	if (mutation.entry === undefined) return true;
 	return typeof mutation.entry === "object" && mutation.entry !== null;
@@ -593,10 +658,25 @@ function clearPendingLog(dir: string): void {
 function replay(base: SpaceEntry[], mutations: readonly Mutation[]): SpaceEntry[] {
 	const byName = new Map(base.map((space) => [space.name, space]));
 	for (const mutation of mutations) {
-		if (mutation.entry === undefined) byName.delete(mutation.name);
+		if ("setPath" in mutation) {
+			const current = byName.get(mutation.setPath.name);
+			if (current) byName.set(current.name, { ...current, path: mutation.setPath.path });
+		} else if (mutation.entry === undefined) byName.delete(mutation.name);
 		else byName.set(mutation.name, mutation.entry);
 	}
 	return [...byName.values()];
+}
+
+/** The unknown keys of the manifest at a ref (none when it has no manifest). */
+function readExtrasAt(dir: string, ref: string): ManifestExtras {
+	const show = driveGit(["show", `${ref}:${MANIFEST_FILE}`], dir);
+	if (!show.ok) return NO_EXTRAS;
+	try {
+		return extrasOf(parseYaml(show.stdout));
+	} catch {
+		// readManifestAt reports a YAML that doesn't parse; nothing to keep.
+		return NO_EXTRAS;
+	}
 }
 
 /** The manifest as it exists at a given ref, empty when that ref has none. */
@@ -758,7 +838,7 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 			if (probe.ok && probe.stdout.trim() === "") {
 				// Reachable, empty: publish our history as the remote's first
 				// `main` rather than waiting for some future change to carry it.
-				commitReplay(dir, readManifestAt(dir, "HEAD"), pending);
+				commitReplay(dir, readManifestAt(dir, "HEAD"), pending, readExtrasAt(dir, "HEAD"));
 				const push = driveGit(["push", "-u", "origin", BRANCH], dir);
 				if (push.ok) {
 					clearPendingLog(dir);
@@ -777,9 +857,9 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 			// No remote to reconcile with: keep the entries locally, stacked on
 			// HEAD, and let the next run publish them.
 			const base = readManifestAt(dir, "HEAD");
-			if (commitReplay(dir, base, pending)) {
+			if (commitReplay(dir, base, pending, readExtrasAt(dir, "HEAD"))) {
 				warn(
-					`the hyperdrive is unreachable, so ${escapeControlCharacters(mutation?.name ?? "the recorded changes")} is recorded ` +
+					`the hyperdrive is unreachable, so ${escapeControlCharacters(mutation ? mutationName(mutation) : "the recorded changes")} is recorded ` +
 						"locally only — the next write will publish it.",
 				);
 				return;
@@ -807,6 +887,7 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 		}
 
 		const base = readManifestAt(dir, `origin/${BRANCH}`);
+		const baseExtras = readExtrasAt(dir, `origin/${BRANCH}`);
 		// Name uniqueness is re-checked HERE, under the lock, against the base
 		// just read from the remote — not against whatever the command saw in a
 		// checkout that may be minutes stale. Two machines can legitimately both
@@ -814,7 +895,7 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 		// then `replay()` replaces by name with no branch comparison: `x` as
 		// `space/x` and `x` as `space/g/x` would silently become one entry. The
 		// same branch still replaces — that is the update path.
-		assertNameFreeOnBase(base, mutation?.entry);
+		assertNameFreeOnBase(base, mutation && "entry" in mutation ? mutation.entry : undefined);
 		const reset = driveGit(["reset", "--hard", `origin/${BRANCH}`], dir);
 		if (!reset.ok) {
 			throw new ManifestError(
@@ -823,7 +904,7 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 			);
 		}
 
-		if (!commitReplay(dir, base, pending)) {
+		if (!commitReplay(dir, base, pending, baseExtras)) {
 			// The remote already says exactly this: nothing to commit, nothing pending.
 			clearPendingLog(dir);
 			return;
@@ -836,24 +917,24 @@ function applyMutation(dir: string, mutation?: Mutation): void {
 		}
 		const failure = classifyPushFailure(push);
 		if (failure === "hook-rejected") {
-			throw hookRejection(dir, push, mutation?.name ?? "the recorded changes");
+			throw hookRejection(dir, push, mutation ? mutationName(mutation) : "the recorded changes");
 		}
 		if (failure === "contention") {
 			warn(
-				`the hyperdrive moved while I was pushing ${mutation?.name ?? "the recorded changes"}; ` +
+				`the hyperdrive moved while I was pushing ${mutation ? mutationName(mutation) : "the recorded changes"}; ` +
 					`retrying against the current remote (attempt ${attempt} of ${MAX_PUSH_ATTEMPTS}).`,
 			);
 			continue;
 		}
 		warn(
-			`${mutation?.name ?? "the recorded changes"} is recorded locally but I couldn't push it ` +
+			`${mutation ? mutationName(mutation) : "the recorded changes"} is recorded locally but I couldn't push it ` +
 				"(the hyperdrive is unreachable) — the next manifest write will try again.",
 		);
 		return;
 	}
 
 	warn(
-		`I couldn't publish ${mutation?.name ?? "the recorded changes"} after ${MAX_PUSH_ATTEMPTS} attempts ` +
+		`I couldn't publish ${mutation ? mutationName(mutation) : "the recorded changes"} after ${MAX_PUSH_ATTEMPTS} attempts ` +
 			"because the hyperdrive kept moving. The change is recorded locally and no entry was lost; " +
 			"run any manifest command again to retry.",
 	);
@@ -871,20 +952,32 @@ function applyMutation(dir: string, mutation?: Mutation): void {
  * base at that step (add when the name is new there, update when it already
  * exists).
  */
-function commitReplay(dir: string, base: SpaceEntry[], pending: readonly Mutation[]): boolean {
+function commitReplay(
+	dir: string,
+	base: SpaceEntry[],
+	pending: readonly Mutation[],
+	extras: ManifestExtras = NO_EXTRAS,
+): boolean {
 	const steps: Array<{ mutation: Mutation; content: string }> = [];
 	let spaces = base;
-	let previous = serializeManifest({ spaces });
+	let previous = serializeManifest({ spaces }, extras);
 	for (const mutation of pending) {
-		const existed = spaces.some((space) => space.name === mutation.name);
+		const existed = spaces.some((space) => space.name === mutationName(mutation));
 		spaces = replay(spaces, [mutation]);
-		const content = serializeManifest({ spaces });
+		const content = serializeManifest({ spaces }, extras);
 		if (content === previous) continue;
 		previous = content;
 		steps.push({
 			mutation: {
 				...mutation,
-				verb: mutation.entry === undefined ? "remove" : existed ? "update" : "add",
+				verb:
+					"setPath" in mutation
+						? "update"
+						: mutation.entry === undefined
+							? "remove"
+							: existed
+								? "update"
+								: "add",
 			} as Mutation,
 			content,
 		});
@@ -905,9 +998,10 @@ function writeSpacesYaml(dir: string, content: string): void {
 }
 
 function commitManifest(dir: string, mutation: Mutation): void {
-	const verb = mutation.verb ?? (mutation.entry === undefined ? "remove" : "update");
+	const verb =
+		mutation.verb ?? ("setPath" in mutation || mutation.entry !== undefined ? "update" : "remove");
 	const commit = driveGit(
-		[...BOOKKEEPING, "commit", "-m", `manifest: ${verb} ${mutation.name}`],
+		[...BOOKKEEPING, "commit", "-m", `manifest: ${verb} ${mutationName(mutation)}`],
 		dir,
 	);
 	if (!commit.ok) {
@@ -999,16 +1093,14 @@ export function recordSpacePath(
 		`record the path of ${name}`,
 		() => {
 			recoverCheckout(dir);
-			const pendingEntry = loadPending(dir)
-				.filter((mutation) => mutation.name === name)
-				.at(-1);
+			// The newest local view of the entry: pending writes replayed onto the
+			// remote's `main` after a fetch (else local HEAD).
+			const pending = loadPending(dir);
 			let current: SpaceEntry | undefined;
-			if (pendingEntry !== undefined) {
-				current = pendingEntry.entry;
-			} else {
+			{
 				const fetched = driveGit(["fetch", "origin", BRANCH], dir);
 				const ref = fetched.ok && remoteMainExists(dir) ? `origin/${BRANCH}` : "HEAD";
-				current = readManifestAt(dir, ref).find((space) => space.name === name);
+				current = replay(readManifestAt(dir, ref), pending).find((space) => space.name === name);
 			}
 			if (current === undefined) {
 				throw new ManifestError(
@@ -1017,9 +1109,9 @@ export function recordSpacePath(
 				);
 			}
 			if (current.path === path) return "unchanged";
-			const entry: SpaceEntry = { ...current, path };
-			validateSpaceName(entry);
-			applyMutation(dir, { name, entry });
+			// Only the path travels: replayed later onto a newer `main`, it must
+			// not overwrite what another machine changed meanwhile (review M2).
+			applyMutation(dir, { setPath: { name, path } });
 			return "recorded";
 		},
 		options,

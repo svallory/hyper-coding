@@ -319,6 +319,11 @@ tooling).
   extension, or with `manual` cadence, save with `hyper space commit`.
 - **Incoming `tracked` entries widen what this machine uploads** — that is
   why pull asks instead of adopting them.
+- **"repair the remote history before retrying" from an older hyper usually
+  means "update hyper here".** When a pull or clone on one machine refuses
+  history another machine pushed with a newer hyper, update hyper on the
+  refusing machine first and try again; only if it still refuses is the remote
+  history itself at fault.
 - **Drive commands ignore relative PATH entries.** Every `hyper space`,
   `drive`, `warp` and `machine` command keeps only the absolute entries of
   PATH before it runs, so `./bin`, `.` or `./node_modules/.bin` can never
