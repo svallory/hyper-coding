@@ -1465,6 +1465,65 @@ describe("the manifest records where the space was cloned (AC-8)", () => {
 		expect(remoteEntry()?.path).toBe("/elsewhere/sample");
 	});
 
+	it("keeps keys a newer hyper wrote, top-level and per entry, through the clone's write (review M1)", () => {
+		seed();
+		const checkout = driveCheckoutDir();
+		const manifest = join(checkout, "spaces.yaml");
+		writeFileSync(
+			manifest,
+			readFileSync(manifest, "utf8")
+				.replace("  - name: sample\n", "  - name: sample\n    future_field: keep-me-too\n")
+				.concat("future_top: keep-me\n"),
+		);
+		git(["add", "spaces.yaml"], checkout);
+		git(["commit", "-qm", "future keys"], checkout);
+		git(["push", "origin", "HEAD:main"], checkout);
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		expect(JSON.parse(result.stdout).manifestPath).toBe("recorded");
+		const yaml = git(["--git-dir", fixture.remote, "show", "main:spaces.yaml"], fixture.root);
+		expect(yaml).toContain("future_top: keep-me");
+		expect(yaml).toContain("future_field: keep-me-too");
+		expect(yaml).toContain(`path: ${target}`);
+	});
+
+	it("records only the path while offline, so a later replay keeps another machine's changes (review M2)", () => {
+		seed();
+		useMachine("second");
+		ensureDriveCheckout(fixture.remote);
+		// Offline: the hyperdrive cannot be reached while the path is recorded.
+		const parked = `${fixture.remote}.parked`;
+		renameSync(fixture.remote, parked);
+		try {
+			expect(recordSpacePath("sample", "/elsewhere/sample")).toBe("recorded");
+		} finally {
+			renameSync(parked, fixture.remote);
+		}
+		const pending = readFileSync(join(driveCheckoutDir(), ".hyper-pending.jsonl"), "utf8").trim();
+		// An older CLI must drop this line, never read it as a removal of `sample`.
+		expect(JSON.parse(pending.split("\n").at(-1) as string)).toEqual({
+			setPath: { name: "sample", path: "/elsewhere/sample" },
+		});
+		// Meanwhile the first machine changes the cadence and publishes it.
+		useMachine("first");
+		updateEntry({ cadence: "manual" });
+		// The second machine's next write replays its pending path onto that.
+		useMachine("second");
+		expect(recordSpacePath("sample", "/elsewhere/sample")).toBe("unchanged");
+		upsertSpace({
+			...readManifest().spaces.find((space) => space.name === "sample")!,
+			name: "other",
+			branch: "space/other",
+			group: null,
+		});
+		const yaml = git(["--git-dir", fixture.remote, "show", "main:spaces.yaml"], fixture.root);
+		const sample = yaml.slice(yaml.indexOf("- name: sample"));
+		expect(sample).toContain("path: /elsewhere/sample");
+		expect(sample).toContain("cadence: manual");
+	});
+
 	it("never re-adds a space another machine removed", () => {
 		seed();
 		useMachine("second");

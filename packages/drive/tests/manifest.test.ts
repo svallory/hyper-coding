@@ -326,6 +326,24 @@ describe("crash recovery", () => {
 });
 
 describe("push failure classification", () => {
+	it("calls a lost ref-update race inside the remote contention, not a hook (review M3)", () => {
+		expect(
+			classifyPushFailure({
+				ok: false,
+				stdout: "",
+				stderr:
+					"error: cannot lock ref 'refs/heads/main': is at 41e126b but expected c616355\n ! [remote rejected] main -> main (failed to update ref)",
+			}),
+		).toBe("contention");
+		expect(
+			classifyPushFailure({
+				ok: false,
+				stdout: "",
+				stderr: " ! [remote rejected] main -> main (incorrect old value provided)",
+			}),
+		).toBe("contention");
+	});
+
 	it("distinguishes contention, a declined hook, and an unreachable remote", () => {
 		expect(
 			classifyPushFailure({
