@@ -41,13 +41,14 @@ transcript, and an ownership marker, over ssh.
   tracked file there where this machine has a directory, is not refused: git
   has that file, and the copy replaces it;
 - **plain repo only**: the target's repository has a ref at a commit this
-  machine doesn't have, or doesn't reach from any of its refs (or a detached
-  HEAD at such a commit). The copy replaces the target's `.git` files with
-  this machine's, so those commits would become unreachable. A ref only the
-  target has (say `refs/remotes/origin/main` or a tag it fetched more
-  recently) is fine when its commit is here and one of this machine's refs
-  reaches it; the ref itself may not survive the copy (a fetch there
-  restores it).
+  machine doesn't have, or that none of the refs warp carries reach (or a
+  detached HEAD at such a commit). After the copy the target's refs are set
+  to exactly this machine's, so those commits would become unreachable. A
+  ref only the target has (say `refs/remotes/origin/main` or a tag it
+  fetched more recently) passes when its commit is here and one of this
+  machine's branches, tags or other refs (or HEAD) reaches it; the ref itself
+  is then removed there. Earlier warps' backups, another worktree's HEAD and
+  the stash don't count as reaching it.
 
 **`--force` does not get past any of these** — they are refused whatever you
 pass:
@@ -68,6 +69,11 @@ pass:
 - **plain repo only**: the target's repository keeps its refs in the
   reftable format (`extensions.refStorage=reftable`). The copy replaces its
   `.git/config`, which would hide every ref there.
+- **plain repo only**: a ref lock file (`<ref>.lock` or `packed-refs.lock`)
+  in the target's repository; the refusal names it. Remove it there if no
+  git command is running.
+- **plain repo only**: a `.git` that is a file (a `gitdir:` link) rather than
+  the repository itself.
 
 **Say `--force` is the user's call.** Relay the refusal and stop; do not
 retry with `--force` to "make it work".
