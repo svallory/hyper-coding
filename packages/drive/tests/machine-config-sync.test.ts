@@ -229,6 +229,25 @@ describe("config-sync against a machine", () => {
 		);
 	});
 
+	it("clears a problem a forced cycle no longer meets, and keeps one it still meets", async () => {
+		withTempConfig(CONFIG);
+		const { engine, sessions } = memoryEngine();
+		const ctx = ctxFor(NETCUP, engine, recordingRunner().runner, []);
+		await configSyncTask.apply?.(ctx);
+		const flushed: string[] = [];
+		let stillBroken = false;
+		engine.flush = async (name) => {
+			flushed.push(name);
+			if (!stillBroken) for (const session of sessions) session.problems = [];
+		};
+		sessions[1].problems = ["beta transition problem: blocked/f.txt: permission denied"];
+		expect(await configSyncTask.check(ctx)).toBe(true);
+		expect(flushed).toEqual(["hyper-pi-netcup"]);
+		stillBroken = true;
+		sessions[1].problems = ["beta transition problem: blocked/f.txt: permission denied"];
+		expect(await configSyncTask.check(ctx)).toBe(false);
+	});
+
 	it("is not settled while a session is halted", async () => {
 		withTempConfig(CONFIG);
 		const { engine, sessions } = memoryEngine();

@@ -143,6 +143,33 @@ async function ensureBetaParent(
 	return result.code === 0 ? null : result.stderr.trim() || `exit ${result.code}`;
 }
 
+/** How long a readiness check waits for the one sync cycle it forces. */
+export const READINESS_FLUSH_MS = 30_000;
+
+/**
+ * {@link sessionHealth}, made current. A scan or transition problem is
+ * recorded by the cycle that met it and stays in the session's state until
+ * another cycle runs — and Mutagen runs one only when a scan sees a CONTENT
+ * change. Fixing the cause (a directory made writable again, a mode-only
+ * change) is not one on Linux's polling watcher, so the problem would stay
+ * reported forever (seen in CI). When the session reports problems, force one
+ * cycle (`flush`, bounded) and read it again: what remains is a problem now.
+ * A halted or disconnected session cannot cycle; it is reported as it is.
+ */
+async function currentHealth(engine: SyncEngine, session: SyncSession): Promise<string> {
+	const health = sessionHealth(session);
+	if (health === "" || session.problems.length === 0) return health;
+	if (session.status.startsWith("halted") || session.status === "disconnected") return health;
+	try {
+		await engine.flush(session.name, { timeoutMs: READINESS_FLUSH_MS });
+	} catch {
+		// A flush that fails or times out leaves the problem as reported.
+		return health;
+	}
+	const fresh = (await engine.list()).find((candidate) => candidate.name === session.name);
+	return fresh ? sessionHealth(fresh) : health;
+}
+
 /**
  * Why a session whose settings all match is still not syncing, or "": halted,
  * disconnected, or with an error or a scan/transition problem on either side.
@@ -294,7 +321,7 @@ export async function syncConfigWith(
 			want,
 			engine.terminateHint(name, machine.name),
 		);
-		const health = problem || sessionHealth(current);
+		const health = problem || (await currentHealth(engine, current));
 		if (health) {
 			rows.push({
 				name,

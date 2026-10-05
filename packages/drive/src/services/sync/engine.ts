@@ -93,8 +93,11 @@ export interface SyncEngine {
 	create(name: string, alpha: string, beta: string, options: SyncCreateOptions): Promise<void>;
 	/** Every session the engine knows about. */
 	list(): Promise<SyncSession[]>;
-	/** Push everything queued on alpha out to beta now. */
-	flush(name: string): Promise<void>;
+	/**
+	 * Push everything queued on alpha out to beta now: one full sync cycle
+	 * (rescan both sides, reconcile, apply). `timeoutMs` bounds the wait.
+	 */
+	flush(name: string, options?: { timeoutMs?: number }): Promise<void>;
 	/** Delete the session (the files on both sides stay). */
 	terminate(name: string): Promise<void>;
 	/** One session, or a SyncEngineError if there is no session by that name. */
