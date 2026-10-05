@@ -83,6 +83,10 @@ function setupFixture(
 		].join("\n"),
 	);
 
+	// The fake ssh records argv and succeeds: the only thing sync-config
+	// sends over ssh is the `mkdir -p` of the beta root's parent.
+	script(binDir, "ssh", 'printf "%s\\n" "$*" >> "$(dirname "$0")/ssh.log"');
+
 	writeFileSync(sessionsFile, JSON.stringify(sessions), "utf-8");
 
 	const config = join(binDir, "drive.toml");
@@ -234,6 +238,53 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config --check", () => {
 		expect(out).toContain("ready");
 		expect(calls(fixture).filter((line) => line.startsWith("sync create"))).toHaveLength(0);
 	});
+
+	it.each([
+		[
+			"a transition problem",
+			{
+				beta: { transitionProblems: [{ path: "", error: "unable to create root: no such file" }] },
+			},
+			"beta transition problem: (root): unable to create root: no such file",
+		],
+		[
+			"a scan problem",
+			{ alpha: { scanProblems: [{ path: "x", error: "permission denied" }] } },
+			"alpha scan problem: x: permission denied",
+		],
+		["a last error", { lastError: "connection lost" }, "last error: connection lost"],
+		["a halted session", { status: "halted-on-root-emptied" }, "halted (halted-on-root-emptied)"],
+	])("is not ready, and names it, with %s (B3)", (_label, change, named) => {
+		const fixture = setupFixture([]);
+		const pi = session(
+			"hyper-pi-loop",
+			`${fixture.alphaHome}/.pi/agent`,
+			`localhost:${fixture.betaHome}/.pi/agent`,
+			"pi",
+		) as Record<string, unknown>;
+		const { alpha, beta, ...top } = change as Record<string, unknown>;
+		Object.assign(pi, top);
+		if (alpha) Object.assign(pi.alpha as object, alpha);
+		if (beta) Object.assign(pi.beta as object, beta);
+		writeFileSync(
+			fixture.sessions,
+			JSON.stringify([
+				session(
+					"hyper-claude-loop",
+					`${fixture.alphaHome}/.claude`,
+					`localhost:${fixture.betaHome}/.claude`,
+					"claude",
+				),
+				pi,
+			]),
+			"utf-8",
+		);
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop", "--check"]);
+		expect(result.status).toBe(1);
+		const out = flat(result.stdout ?? "");
+		expect(out).toContain(named);
+		expect(out).toMatch(/hyper-claude-loop .*ready/);
+	});
 });
 
 /** A temp drive.toml's effective ignore list for one target. */
@@ -293,6 +344,24 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config <machine> (create)", ()
 		expect(pi).toContain("--name hyper-pi-loop");
 		expect(pi).toContain("--ignore /auth.json");
 		expect(pi).toContain(`${fixture.alphaHome}/.pi/agent localhost:${fixture.betaHome}/.pi/agent`);
+	});
+
+	it("creates the beta root's missing parent through ssh before the pi session (B3)", () => {
+		const fixture = setupFixture([]);
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop"]);
+		expect(result.status, flat(result.stderr ?? "")).toBe(0);
+		const ssh = readFileSync(join(fixture.binDir, "ssh.log"), "utf-8");
+		// One remote command: the parent of .pi/agent. .claude's parent is the home.
+		expect(ssh.split("\n").filter((line) => line.includes("mkdir"))).toHaveLength(1);
+		expect(ssh).toContain(`mkdir -p -- ${fixture.betaHome}/.pi`);
+	});
+
+	it("creates the parent under the remote $HOME for a `~` home, never a literal `~`", () => {
+		const fixture = setupFixture([], { betaHome: "~" });
+		expect(spawnCli(fixture, ["drive", "sync-config", "loop"]).status).toBe(0);
+		const ssh = readFileSync(join(fixture.binDir, "ssh.log"), "utf-8");
+		expect(ssh).toContain('mkdir -p -- "$HOME/$1"');
+		expect(ssh).toContain(" .pi");
 	});
 
 	it("appends the subdir for a `~` home instead of syncing the whole home", () => {

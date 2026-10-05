@@ -1,7 +1,7 @@
 import { Args, Flags } from "@oclif/core";
 import { loadConfig } from "#config/index";
 import { BaseCommand } from "#lib/base-command";
-import { MachineError, resolveMachine, self } from "#services/machine";
+import { MachineError, resolveMachine, runnerFor, self } from "#services/machine";
 import {
 	CONFIG_SYNC_SESSION_PREFIX,
 	type ConfigSyncRow,
@@ -154,7 +154,12 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 		try {
 			const config = loadConfig();
 			const machine = resolveMachine(machineName);
-			result = await syncConfigWith(engine, machine, { check, config, localHome: self().home });
+			result = await syncConfigWith(engine, machine, {
+				check,
+				config,
+				localHome: self().home,
+				runner: runnerFor(machine.name),
+			});
 		} catch (err) {
 			this.fail(err, debug);
 		}

@@ -214,8 +214,45 @@ export function parseSessionList(stdout: string): SyncSession[] {
 					: "",
 			alphaConnected: bool(alpha?.connected),
 			betaConnected: bool(beta?.connected),
+			problems: sessionProblems(entry, alpha, beta),
 		};
 	});
+}
+
+/**
+ * The session's last error and its scan and transition problems, one line
+ * each. Mutagen 0.18 reports them as `lastError` and, per endpoint,
+ * `scanProblems` / `transitionProblems` arrays of `{path, error}`. A session
+ * with any of these is "Watching for changes" while files do not move — a
+ * missing beta parent directory looks exactly like that.
+ */
+function sessionProblems(
+	entry: Record<string, unknown>,
+	alpha: Record<string, unknown> | undefined,
+	beta: Record<string, unknown> | undefined,
+): string[] {
+	const lines: string[] = [];
+	if (typeof entry.lastError === "string" && entry.lastError.trim() !== "")
+		lines.push(`last error: ${entry.lastError.trim()}`);
+	for (const [side, endpoint] of [
+		["alpha", alpha],
+		["beta", beta],
+	] as const) {
+		for (const [key, kind] of [
+			["scanProblems", "scan problem"],
+			["transitionProblems", "transition problem"],
+		] as const) {
+			const list = endpoint?.[key];
+			if (!Array.isArray(list)) continue;
+			for (const problem of list) {
+				const item = (problem ?? {}) as { path?: unknown; error?: unknown };
+				const path = typeof item.path === "string" && item.path !== "" ? item.path : "(root)";
+				const error = typeof item.error === "string" ? item.error : "unknown error";
+				lines.push(`${side} ${kind}: ${path}: ${error}`);
+			}
+		}
+	}
+	return lines;
 }
 
 /**
