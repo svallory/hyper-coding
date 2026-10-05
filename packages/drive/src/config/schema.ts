@@ -156,6 +156,47 @@ export const CLAUDE_SYNC_IGNORE: readonly string[] = [
 ];
 
 /**
+ * Claude Code state that DOES sync between machines (it is the user's, it
+ * follows them) but never belongs in a space's history: prompt history,
+ * transcripts and their working files, installed plugins, Claude's own
+ * install. Together with every anchored {@link CLAUDE_SYNC_IGNORE} entry it is
+ * {@link CLAUDE_USER_STATE}: what hyper never tracks under any `.claude/`.
+ * Entries are relative to the `.claude/` directory; `*` is a glob.
+ */
+export const CLAUDE_SYNCED_USER_STATE: readonly string[] = [
+	"history.jsonl",
+	"projects",
+	"todos",
+	"plans",
+	"tasks",
+	"teams",
+	"file-history",
+	"paste-cache",
+	"session-env",
+	"shell-snapshots",
+	"statsig",
+	"plugins",
+	"local",
+	"security_warnings_state_*",
+];
+
+/**
+ * Claude Code's per-user, per-machine state, as entries relative to a
+ * `.claude/` directory: every root-anchored {@link CLAUDE_SYNC_IGNORE} entry
+ * (credentials, sessions, caches, daemon, logs, backups, …) plus
+ * {@link CLAUDE_SYNCED_USER_STATE}. ONE list for both concerns, so an entry
+ * added to the sync ignore list is never tracked in a space either. A space's
+ * `.claude/` only holds these when Claude was pointed at it as its config
+ * dir; hyper then leaves them out of every commit (ac-gaps item 7).
+ */
+export const CLAUDE_USER_STATE: readonly string[] = [
+	...new Set([
+		...CLAUDE_SYNC_IGNORE.filter((entry) => entry.startsWith("/")).map((entry) => entry.slice(1)),
+		...CLAUDE_SYNCED_USER_STATE,
+	]),
+];
+
+/**
  * Paths under `~/.pi/agent` that must never be synced, verbatim from the live
  * `pi-config` session.
  *

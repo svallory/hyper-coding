@@ -2,7 +2,11 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
-import { findSecretPaths } from "#services/allowlist";
+import {
+	claudeUserStateExcludes,
+	findSecretPaths,
+	isClaudeUserStatePath,
+} from "#services/allowlist";
 import {
 	gitSaid,
 	readSpaceBlobPrefixes,
@@ -133,6 +137,13 @@ export function stagedPaths(root: string): string[] {
 		.filter((path) => path !== "");
 }
 
+/** Every path in the index, NUL-separated so no name is quoted or trimmed. */
+function indexPaths(root: string): string[] {
+	return spaceGit(root, ["ls-files", "-z"])
+		.stdout.split("\0")
+		.filter((path) => path !== "");
+}
+
 /** Index entries with mode 160000 cannot be backed up by a space. */
 export function stagedGitlinks(root: string): string[] {
 	return spaceGit(root, ["ls-files", "-s", "-z"])
@@ -230,7 +241,37 @@ async function commitSpaceLocked(
 			"--",
 			".",
 			...excluded.map((path) => `:(top,exclude,literal)${path}`),
+			// Claude's user state never enters the index, whatever the
+			// work tree's `.gitignore` says (ac-gaps r2, B1).
+			...claudeUserStateExcludes(),
 		]);
+		// …and user state that is ALREADY tracked (an old space, an incoming
+		// tip that planted it, a force-add) leaves the index in this same
+		// commit. `--cached`: the files stay on disk.
+		const trackedUserState = indexPaths(root).filter(isClaudeUserStatePath);
+		if (trackedUserState.length > 0) {
+			for (let i = 0; i < trackedUserState.length; i += 500)
+				spaceGit(root, [
+					"rm",
+					"--cached",
+					"-q",
+					"-f",
+					"--",
+					...trackedUserState.slice(i, i + 500).map((path) => `:(literal)${path}`),
+				]);
+			const shown = trackedUserState.slice(0, 3).map(quoteForTerminal).join(", ");
+			reportWarning(
+				`note: stopped tracking ${trackedUserState.length} Claude user-state file${trackedUserState.length === 1 ? "" : "s"} under .claude/ (kept on disk): ${shown}${trackedUserState.length > 3 ? ", …" : ""}\n`,
+			);
+		}
+		// Second line of defence: nothing that is user state may be committed,
+		// and `--allow-secret` cannot override it.
+		const leftover = indexPaths(root).filter(isClaudeUserStatePath);
+		if (leftover.length > 0)
+			throw new SpaceGitError(
+				`refusing to commit ${escapeControlCharacters(branch)}: ${leftover.map(quoteForTerminal).join(", ")} ` +
+					`${leftover.length === 1 ? "is" : "are"} Claude Code user state, which a space never tracks, and could not be removed from the index. Inspect \`hyper space status\` and retry.`,
+			);
 		const staged = stagedPaths(root);
 		const gitlinks = stagedGitlinks(root);
 		const nested = [...new Set([...excluded, ...gitlinks])];

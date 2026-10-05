@@ -25,33 +25,20 @@ never travel, and a staged file that looks like a secret
 makes the commit refuse unless you allow that exact path. Extra directories
 join the list with `hyper space init --tracked <dir>`.
 
-From `.claude/` only the project configuration travels (`settings.json`,
-`commands/`, `agents/`, `skills/`, `hooks/`, `rules/`, `output-styles/`,
-`CLAUDE.md`). Claude Code's own per-user state is never tracked, in case
-Claude was ever pointed at the space's `.claude/` as its config dir:
-`.credentials.json`, `.claude.json*`, `history.jsonl`, `projects/`,
-`sessions/`, `session-env/`, `todos/`, `plans/`, `file-history/`,
-`paste-cache/`, `shell-snapshots/`, `statsig/`, `telemetry/`, `ide/`,
-`debug/`, `cache/`, `state/`, `backups/`, `plugins/`, `usage-data/`,
-`stats-cache.json` and `mcp-needs-auth-cache.json`. `.claude.json*` and
-`shell-snapshots/` are also refused by the secret guard anywhere in the space.
-
-**A space initialised by an older CLI** keeps its previous allowlist until
-you run `hyper space init --refresh` in it, which re-renders `.gitignore`
-with these rules; incoming history with either render is accepted, but an
-older CLI refuses a space published with the new one, so update the CLI on
-every machine first. Ignore rules never untrack a file: anything listed
-above that is already in the space's history stays there, and keeps being
-committed when it changes, until you remove it from the index:
-
-```bash
-cd <space>
-git --git-dir=.hyper/space.git --work-tree=. rm -r --cached -- .claude/history.jsonl .claude/projects
-hyper space commit -m "stop tracking Claude's user state"
-```
-
-That removes them from the tip (the files stay on disk); earlier commits
-still hold them, so treat anything secret in them as exposed.
+Claude Code's own per-user state is never committed, under the space's
+`.claude/` or any other `.claude/` in it, in case Claude was ever pointed at
+one as its config dir: credentials, `.claude.json*`, `history.jsonl`,
+`projects/`, `todos/`, `session-env/`, `shell-snapshots/`, `plugins/`,
+caches, logs and the rest (`CLAUDE_USER_STATE`: every entry config sync
+ignores plus the history and transcripts it syncs). Everything else in
+`.claude/` travels: `settings.json`, `commands/`, `agents/`, `skills/`,
+`hooks/`, `rules/`, `CLAUDE.md` and your own files. This is enforced at
+every commit, not by `.gitignore`: user state is never staged, and user
+state an older version committed is untracked by the next commit (one
+`note:` line, files kept on disk; earlier commits still hold it, so treat a
+secret that was in it as exposed). `--allow-secret` does not override it. A
+pull refuses history that adds or changes user state, naming the path and
+the commit: update hyper on the machine that pushed it and commit there.
 
 ## First machine
 

@@ -3,10 +3,11 @@ import { existsSync, realpathSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
 import { quoteForTerminal } from "#lib/terminal-text";
 import {
-	canonicalGitignores,
+	isClaudeUserStatePath,
 	isHyperAllowlist,
 	normaliseTrackedEntry,
 	RESERVED_PATHS,
+	renderGitignore,
 } from "#services/allowlist";
 import {
 	type ReviewPathFacts,
@@ -41,10 +42,7 @@ function refuse(path: string, reason: string, advice?: string): never {
 function incomingTrackedEntries(contents: string): string[] {
 	if (contents.includes("\0")) refuse(".gitignore", "contains a NUL byte");
 	if (!isHyperAllowlist(contents)) refuse(".gitignore", "is not hyper's allowlist");
-	// Lines of every canonical render (current and the previous one), so a
-	// space published by an older CLI still parses; the byte check below
-	// still demands one exact render.
-	const base = new Set(canonicalGitignores().flatMap((render) => render.trimEnd().split("\n")));
+	const base = new Set(renderGitignore().trimEnd().split("\n"));
 	const tracked: string[] = [];
 	for (const line of contents.trimEnd().split("\n")) {
 		if (base.has(line)) continue;
@@ -67,9 +65,9 @@ function incomingTrackedEntries(contents: string): string[] {
 	// Merely retaining the marker is not authority to add negations or reorder safety rules.
 	// Tracking an already-default directory adds only the safety tail. Recover one
 	// equivalent validated entry rather than accepting a non-canonical byte form.
-	if (tracked.length === 0 && canonicalGitignores(["notes"]).includes(contents))
+	if (tracked.length === 0 && contents === renderGitignore(["notes"]))
 		tracked.push(normaliseTrackedEntry("notes"));
-	if (!canonicalGitignores(tracked).includes(contents))
+	if (contents !== renderGitignore(tracked))
 		refuse(
 			".gitignore",
 			"does not match hyper's canonical allowlist; rerender it with space init on the publishing machine",
@@ -176,12 +174,47 @@ function treeEntries(root: string, commit: string): TreeEntry[] {
  * separately. Pure object inspection: no index/work-tree writes.
  * Returns the immutable checked tip SHA and its extra tracked directories.
  */
+/**
+ * Refuse a range that ADDS or CHANGES Claude Code user state under any
+ * `.claude/` (ac-gaps r2, B1): only a machine on an older hyper can publish
+ * that, and accepting it would bring the user state back into this machine's
+ * index. A path that merely exists in older history (a space created before
+ * the rule) is not refused, and a range that DELETES user state — what the
+ * first commit on a current hyper does — is exactly what should arrive.
+ * Two trees are compared; no history is walked.
+ */
+function refuseIncomingUserState(root: string, base: string, tip: string): void {
+	const fields = spaceGit(root, [
+		"diff-tree",
+		"-r",
+		"--no-renames",
+		"--name-status",
+		"-z",
+		base,
+		tip,
+	]).stdout.split("\0");
+	const changed: string[] = [];
+	for (let i = 0; i + 1 < fields.length; i += 2) {
+		const status = fields[i];
+		const path = fields[i + 1];
+		if (status !== "D" && isClaudeUserStatePath(path)) changed.push(path);
+	}
+	if (changed.length === 0) return;
+	const shown = changed.slice(0, 5).join(", ");
+	refuse(
+		shown,
+		`${changed.length === 1 ? "is" : "are"} Claude Code user state that commit ${tip.slice(0, 12)} adds or changes${changed.length > 5 ? ` (and ${changed.length - 5} more)` : ""}, and a space never tracks it`,
+		"update hyper on the machine that pushed it, then run `hyper space commit` there and push",
+	);
+}
+
 export async function validateIncomingSpace(
 	root: string,
 	tip: string,
-	_base?: string,
+	base?: string,
 ): Promise<IncomingSpaceValidation> {
 	const resolved = spaceGit(root, ["rev-parse", "--verify", `${tip}^{commit}`]).stdout.trim();
+	if (base) refuseIncomingUserState(root, base, resolved);
 	const entries = treeEntries(root, resolved);
 	for (const entry of entries) {
 		// A control character in a path would be echoed back in refusals and
