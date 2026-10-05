@@ -57,6 +57,12 @@ export interface SpaceGitOptions {
 	/** Mark a read command so Git does not refresh/write optional index locks. */
 	readOnly?: boolean;
 	maxBuffer?: number;
+	/**
+	 * A separate index file (`GIT_INDEX_FILE`) for building a tree without
+	 * touching the space's real index. Absolute; created and removed by the
+	 * caller.
+	 */
+	indexFile?: string;
 }
 
 /**
@@ -190,9 +196,12 @@ export function spaceGit(
 			(args.some((arg) => ["ls-tree", "ls-files", "status", "diff"].includes(arg)) ? 128 : 16) *
 				1024 *
 				1024,
-		env: remote
-			? spaceRemoteEnv(spaceRoot, !!(process.stdin.isTTY && process.stderr.isTTY))
-			: cleanGitEnv(),
+		env: {
+			...(remote
+				? spaceRemoteEnv(spaceRoot, !!(process.stdin.isTTY && process.stderr.isTTY))
+				: cleanGitEnv()),
+			...(opts.indexFile === undefined ? {} : { GIT_INDEX_FILE: opts.indexFile }),
+		},
 	});
 
 	// Buffer exhaustion also kills the child with SIGTERM; it is not Ctrl-C.

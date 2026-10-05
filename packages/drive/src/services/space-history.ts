@@ -1,6 +1,6 @@
 /** Day-to-day space history. No manifest writes and no implicit network reads. */
-import { lstatSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { lstatSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { isClaudeUserStatePath, renderGitignore } from "#services/allowlist";
 import { lastSessionEndFailure } from "#services/session-end-log";
@@ -156,6 +156,93 @@ export interface SpacePullResult {
 	droppedUserStateCommits?: number;
 }
 
+/**
+ * Test seam: when `HYPER_TEST_PULL_PAUSE_AT` names a step, stop after it until
+ * the marker file is removed (or 60 s), so a test can signal the process
+ * exactly there. Never set outside tests.
+ */
+function pauseForTest(root: string, step: string): void {
+	if (process.env.HYPER_TEST_PULL_PAUSE_AT !== step) return;
+	const marker = join(spaceGitDir(root), `hyper-test-paused-${step}`);
+	writeFileSync(marker, `${process.pid}\n`);
+	const deadline = Date.now() + 60_000;
+	while (Date.now() < deadline && lstatSync(marker, { throwIfNoEntry: false }))
+		Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+}
+
+/**
+ * Fast-forward `branch` from `before` to `tip` when the range stops tracking
+ * Claude user state, WITHOUT touching those working files (review of PR #54,
+ * R1). Index-only, step by step, each safe to stop after:
+ *
+ *  1. Build `base`: HEAD's tree minus the user-state paths, in a temporary
+ *     index (the real index is not involved).
+ *  2. Untrack the paths in the real index (`rm --cached`): working files
+ *     untouched; stopping here leaves staged deletions and the files in place.
+ *  3. `read-tree -m -u base tip`: a two-way merge from `base`, in which the
+ *     user-state paths exist on neither side, so git has no reason to look at
+ *     them (proven for clean, edited, and content-and-mode-differs files).
+ *     Everything else moves exactly as a fast-forward would: an edit to a path
+ *     the tip changes is refused, one to a path it does not change is kept,
+ *     ignored files are not overwritten.
+ *  4. `update-ref` the branch from `before` to `tip`.
+ *
+ * On a refusal in step 3 the index entries from step 2 are put back from HEAD
+ * (index only), so the space is exactly as before. A rerun after a stop at any
+ * step converges: the paths are already untracked, or the index is already the
+ * tip's. Returns git's result for step 3, like the merge it replaces.
+ */
+function advanceKeepingUserState(
+	root: string,
+	branch: string,
+	before: string,
+	tip: string,
+	userState: string[],
+): ReturnType<typeof spaceGit> {
+	const literal = userState.map((path) => `:(literal)${path}`);
+	const indexFile = join(spaceGitDir(root), `hyper-pull-base-${process.pid}-${Date.now()}.index`);
+	let base: string;
+	try {
+		spaceGit(root, ["read-tree", before], { indexFile });
+		for (let i = 0; i < literal.length; i += 500)
+			spaceGit(
+				root,
+				["rm", "--cached", "-q", "--ignore-unmatch", "--", ...literal.slice(i, i + 500)],
+				{
+					indexFile,
+				},
+			);
+		base = spaceGit(root, ["write-tree"], { indexFile }).stdout.trim();
+	} finally {
+		rmSync(indexFile, { force: true });
+		rmSync(`${indexFile}.lock`, { force: true });
+	}
+	pauseForTest(root, "base");
+	for (let i = 0; i < literal.length; i += 500)
+		spaceGit(root, [
+			"rm",
+			"--cached",
+			"-q",
+			"--ignore-unmatch",
+			"--",
+			...literal.slice(i, i + 500),
+		]);
+	pauseForTest(root, "untracked");
+	const merged = spaceGit(root, ["read-tree", "-m", "-u", base, tip], { allowFailure: true });
+	if (merged.status !== 0) {
+		// Back to exactly the state before the pull: the index entries from HEAD
+		// (index only; the working files were never touched).
+		for (let i = 0; i < literal.length; i += 500)
+			spaceGit(root, ["reset", "-q", before, "--", ...literal.slice(i, i + 500)], {
+				allowFailure: true,
+			});
+		return merged;
+	}
+	pauseForTest(root, "read-tree");
+	spaceGit(root, ["update-ref", `refs/heads/${branch}`, tip, before]);
+	return merged;
+}
+
 /** `name-status` of `a..b` (or one commit's own changes), as status/path pairs. */
 function treeChanges(root: string, args: string[]): { status: string; path: string }[] {
 	const fields = spaceGit(root, [
@@ -275,16 +362,17 @@ async function pullSpaceLocked(
 		}
 		const incoming = await validateIncomingSpace(root, target, before);
 		// Never let the fast-forward delete Claude user state from this disk
-		// (review of PR #54, N1): a peer's first commit on a current hyper stops
-		// tracking it, and applying that deletion here would remove this
-		// machine's transcripts. The files it deletes that exist here are moved
-		// aside into the space git dir (a rename on the same filesystem: bytes,
-		// modes and dirty edits kept), the merge deletes them from the index
-		// only, and they are moved back, untracked, whatever the merge did.
-		const userStateKept = treeChanges(root, [before, incoming.tip])
+		// (review of PR #54, N1 and R1): a peer's first commit on a current
+		// hyper stops tracking it, and applying that deletion here would remove
+		// this machine's transcripts. Those paths are advanced through the
+		// INDEX only (`advanceKeepingUserState`): no working file is ever moved,
+		// copied or removed, so no signal or crash can strand one.
+		const userStateDeleted = treeChanges(root, [before, incoming.tip])
 			.filter((change) => change.status === "D" && isClaudeUserStatePath(change.path))
-			.map((change) => change.path)
-			.filter((path) => lstatSync(join(root, path), { throwIfNoEntry: false }) !== undefined);
+			.map((change) => change.path);
+		const userStateKept = userStateDeleted.filter(
+			(path) => lstatSync(join(root, path), { throwIfNoEntry: false }) !== undefined,
+		);
 
 		const local = readTracked(root);
 		const added = incoming.tracked.filter((entry) => !local.includes(entry));
@@ -329,42 +417,32 @@ async function pullSpaceLocked(
 				`Local .gitignore changes would be overwritten while preserving this machine's tracked entries. Commit them with \`hyper space commit\` (or move them aside) before retrying.`,
 			);
 		const review = await incomingReview(root, incoming.tip, before);
-		const keepDir = join(spaceGitDir(root), `hyper-pull-keep-${process.pid}`);
-		const moved: string[] = [];
-		const restore = (): void => {
-			for (const path of moved.splice(0)) {
-				mkdirSync(dirname(join(root, path)), { recursive: true });
-				renameSync(join(keepDir, path), join(root, path));
-			}
-			rmSync(keepDir, { recursive: true, force: true });
-		};
-		let result: ReturnType<typeof spaceGit>;
-		try {
-			for (const path of userStateKept) {
-				mkdirSync(dirname(join(keepDir, path)), { recursive: true });
-				renameSync(join(root, path), join(keepDir, path));
-				moved.push(path);
-			}
-			result = spaceGit(
-				root,
-				[
-					"-c",
-					"merge.verifySignatures=false",
-					"-c",
-					"submodule.recurse=false",
-					"merge",
-					"--ff-only",
-					"--no-overwrite-ignore",
-					"--no-autostash",
-					incoming.tip,
-				],
-				{ allowFailure: true },
-			);
-		} finally {
-			restore();
-		}
+		const result =
+			userStateDeleted.length === 0
+				? spaceGit(
+						root,
+						[
+							"-c",
+							"merge.verifySignatures=false",
+							"-c",
+							"submodule.recurse=false",
+							"merge",
+							"--ff-only",
+							"--no-overwrite-ignore",
+							"--no-autostash",
+							incoming.tip,
+						],
+						{ allowFailure: true },
+					)
+				: advanceKeepingUserState(root, branch, before, incoming.tip, userStateDeleted);
 		if (result.status !== 0) {
 			const detail = (result.stderr || result.stdout).trim();
+			if (userStateDeleted.length > 0 && /would lose untracked files in it/i.test(detail)) {
+				throw new SpaceRefusedError(
+					"local-changes",
+					`The incoming history of ${escapeControlCharacters(branch)} replaces a directory that holds this machine's Claude user state with a file. Nothing was changed, and your files are where they were: ${userStateKept.slice(0, 3).map(quoteForTerminal).join(", ")}. Move that directory aside, then pull again. git said: ${gitSaid(detail)}`,
+				);
+			}
 			if (
 				/would be overwritten|would lose untracked files|not uptodate|local changes|untracked working tree/i.test(
 					detail,
