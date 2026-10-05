@@ -248,6 +248,34 @@ describe("config-sync against a machine", () => {
 		expect(await configSyncTask.check(ctx)).toBe(false);
 	});
 
+	it("creates the missing parent for a session that already exists, on the apply (review N6)", async () => {
+		withTempConfig(CONFIG);
+		const { engine, sessions } = memoryEngine();
+		await configSyncTask.apply?.(ctxFor(NETCUP, engine, recordingRunner().runner, []));
+		// A session an older hyper made, whose parent is now missing on beta.
+		sessions[1].problems = ["beta transition problem: (root): unable to create root"];
+		const { runner, calls } = recordingRunner();
+		await configSyncTask.apply?.(ctxFor(NETCUP, engine, runner, []));
+		expect(calls).toEqual([`ssh [["mkdir","-p","--","/home/me/.pi"]]`]);
+	});
+
+	it("runs the first cycle right after a create and reports a problem it meets (review N6)", async () => {
+		withTempConfig(CONFIG);
+		const { engine, sessions } = memoryEngine();
+		engine.flush = async (name) => {
+			const session = sessions.find((candidate) => candidate.name === name);
+			if (session && name === "hyper-pi-netcup")
+				session.problems = ["beta transition problem: x: permission denied"];
+		};
+		const logs: string[] = [];
+		const report = await setup(ctxFor(NETCUP, engine, recordingRunner().runner, logs));
+		expect(report.applied).toEqual([]);
+		expect(report.skipped).toEqual(["config-sync"]);
+		expect(logs.join("\n")).toContain(
+			"hyper-pi-netcup mismatch — created, but not syncing: beta transition problem",
+		);
+	});
+
 	it("is not settled while a session is halted", async () => {
 		withTempConfig(CONFIG);
 		const { engine, sessions } = memoryEngine();

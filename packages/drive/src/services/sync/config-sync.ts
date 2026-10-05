@@ -170,6 +170,19 @@ async function currentHealth(engine: SyncEngine, session: SyncSession): Promise<
 	return fresh ? sessionHealth(fresh) : health;
 }
 
+/** After a create: one bounded cycle, then the session's health ("" when fine or still cycling). */
+async function firstCycleHealth(engine: SyncEngine, name: string): Promise<string> {
+	try {
+		await engine.flush(name, { timeoutMs: READINESS_FLUSH_MS });
+	} catch {
+		// Still on its first cycle (a large config dir) or not connected yet:
+		// the next check judges it.
+		return "";
+	}
+	const session = (await engine.list()).find((candidate) => candidate.name === name);
+	return session ? sessionHealth(session) : "";
+}
+
 /**
  * Why a session whose settings all match is still not syncing, or "": halted,
  * disconnected, or with an error or a scan/transition problem on either side.
@@ -270,18 +283,11 @@ export async function syncConfigWith(
 			continue;
 		}
 
-		if (!current) {
-			if (check) {
-				rows.push({
-					name,
-					state: "mismatch",
-					alpha,
-					beta,
-					detail: `missing — run \`hyper drive sync-config ${machine.name}\` to create it`,
-				});
-				failures++;
-				continue;
-			}
+		// The beta root's parent, on EVERY run that may change things, not only
+		// on a create: a session made earlier (by an older hyper, by hand) with
+		// a missing parent is repaired too (review of PR #54, N6). `mkdir -p`
+		// is a no-op when it exists.
+		if (!check) {
 			const parentProblem = await ensureBetaParent(runner, machine.home, plan);
 			if (parentProblem !== null) {
 				rows.push({
@@ -293,6 +299,20 @@ export async function syncConfigWith(
 				});
 				failures++;
 				return { rows, failures, createFailed: true };
+			}
+		}
+
+		if (!current) {
+			if (check) {
+				rows.push({
+					name,
+					state: "mismatch",
+					alpha,
+					beta,
+					detail: `missing — run \`hyper drive sync-config ${machine.name}\` to create it`,
+				});
+				failures++;
+				continue;
 			}
 			try {
 				await engine.create(name, alpha, beta, {
@@ -309,6 +329,21 @@ export async function syncConfigWith(
 				});
 				failures++;
 				return { rows, failures, createFailed: true };
+			}
+			// Run the first cycle now, bounded, so a problem it meets (a parent
+			// that is not writable, …) is reported by THIS run rather than
+			// passing as "created" until the next check (review of PR #54, N6).
+			const firstCycle = await firstCycleHealth(engine, name);
+			if (firstCycle) {
+				rows.push({
+					name,
+					state: "mismatch",
+					alpha,
+					beta,
+					detail: `created, but ${firstCycle} — fix it on that side; the next check sees it`,
+				});
+				failures++;
+				continue;
 			}
 			rows.push({ name, state: "created", alpha, beta, detail: `${alpha} → ${beta}` });
 			continue;
