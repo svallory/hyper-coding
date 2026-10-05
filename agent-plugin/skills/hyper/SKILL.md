@@ -125,10 +125,13 @@ A peer's new tracked entries are never adopted silently on
 pull (it asks, or `--accept-tracked`).
 
 **What never is.** `scratch/`, `worktrees/`, `code/`, loose root files,
-`.claude/settings.local.json` and `.hyper/space.git` itself. A staged file
+`.claude/settings.local.json`, Claude Code's per-user state under `.claude/`
+(`.credentials.json`, `.claude.json*`, `history.jsonl`, `projects/`,
+`shell-snapshots/`, `todos/` and the rest of its config-dir state; see the
+drive README) and `.hyper/space.git` itself. A staged file
 is refused when its **name** matches `.env*`, `*credentials*`, `*.pem`,
 `*.key` (and the `~`/`.`-suffixed variants), `id_rsa*`, `id_ed25519*`,
-`id_ecdsa*`, `secrets/**`, or when its first bytes hold a
+`id_ecdsa*`, `secrets/**`, `.claude.json*`, `shell-snapshots/**`, or when its first bytes hold a
 `-----BEGIN … PRIVATE KEY-----` header. There is no token pattern: a file
 named `notes/github-token.txt` is committed. `--allow-secret <path>` is the
 user's to give for one exact path, never yours to add.

@@ -3,10 +3,10 @@ import { existsSync, realpathSync } from "node:fs";
 import { join, posix, relative, sep } from "node:path";
 import { quoteForTerminal } from "#lib/terminal-text";
 import {
+	canonicalGitignores,
 	isHyperAllowlist,
 	normaliseTrackedEntry,
 	RESERVED_PATHS,
-	renderGitignore,
 } from "#services/allowlist";
 import {
 	type ReviewPathFacts,
@@ -41,7 +41,10 @@ function refuse(path: string, reason: string, advice?: string): never {
 function incomingTrackedEntries(contents: string): string[] {
 	if (contents.includes("\0")) refuse(".gitignore", "contains a NUL byte");
 	if (!isHyperAllowlist(contents)) refuse(".gitignore", "is not hyper's allowlist");
-	const base = new Set(renderGitignore().trimEnd().split("\n"));
+	// Lines of every canonical render (current and the previous one), so a
+	// space published by an older CLI still parses; the byte check below
+	// still demands one exact render.
+	const base = new Set(canonicalGitignores().flatMap((render) => render.trimEnd().split("\n")));
 	const tracked: string[] = [];
 	for (const line of contents.trimEnd().split("\n")) {
 		if (base.has(line)) continue;
@@ -64,9 +67,9 @@ function incomingTrackedEntries(contents: string): string[] {
 	// Merely retaining the marker is not authority to add negations or reorder safety rules.
 	// Tracking an already-default directory adds only the safety tail. Recover one
 	// equivalent validated entry rather than accepting a non-canonical byte form.
-	if (tracked.length === 0 && contents === renderGitignore(["notes"]))
+	if (tracked.length === 0 && canonicalGitignores(["notes"]).includes(contents))
 		tracked.push(normaliseTrackedEntry("notes"));
-	if (contents !== renderGitignore(tracked))
+	if (!canonicalGitignores(tracked).includes(contents))
 		refuse(
 			".gitignore",
 			"does not match hyper's canonical allowlist; rerender it with space init on the publishing machine",
