@@ -250,13 +250,24 @@ tooling).
   `--force` warp). Saved refs under `refs/hyper-warp-backup/` are kept: the
   copy and the sync leave them alone, and before every plain-repo copy,
   saved refs a `git pack-refs` (or `gc`) moved into `packed-refs` are
-  written back as loose refs there.
+  written back as loose refs there. A `--force` warp also saves every
+  target stash entry as `refs/hyper-warp-backup/<…>/stash/<n>` (newest is
+  0; `git stash apply <ref>` re-applies one) and prints how many; without
+  `--force`, stash entries only the target has are refused, each named. A
+  target ref that conflicts as file and directory with one here (`df` and
+  `df/x`) is refused, naming both; `--force` saves it and deletes it there.
+  The target's reflogs are not saved: for refs this machine also has they
+  are replaced by this machine's, so a commit there reachable only from a
+  reflog is not kept, with or without `--force`.
 - **The collision comparison has a 5-minute limit** (about 3,000 files per
   6 s, measured in a container): past roughly 100,000 candidate files warp
   refuses with "couldn't compare".
 - **rsync's quick check** skips a file whose size and modification time
   (to the second) match, so a target file backed up as a collision can be
-  left in place, unchanged, when only its content differs.
+  left in place, unchanged, when only its content differs. The same check
+  can skip a plain repo's `.git/index` (same size, same second), so a warp
+  can exit 0 and leave the target showing modified files; a `--force` warp
+  repairs it.
   Staged-but-uncommitted
   changes arrive as unstaged modifications — the index does not travel.
   The way back is warp from the other machine, which requires this machine

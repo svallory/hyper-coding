@@ -204,7 +204,9 @@ plain repo's refs on the target equal this machine's.
 there as a stash; on a **plain repo** the tracked changes are not saved, its
 refs are saved under `refs/hyper-warp-backup/<id>/` when the ref check found
 something (kept as loose refs across later warps, even after a `git
-pack-refs` there), and the rest of its `.git` (config, `info/exclude`, hooks) is
+pack-refs` there; every stash entry is saved as `…/stash/<n>`, re-applied
+with `git stash apply <ref>`; reflogs are not kept), and the rest of its
+`.git` (config, `info/exclude`, hooks) is
 replaced by this machine's. In both, the colliding untracked or ignored
 entries, and tracked directories where this machine has a file, are first
 copied to `hyper-warp-backup/<session id>-<start time>/` in
