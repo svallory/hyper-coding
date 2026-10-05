@@ -1385,6 +1385,115 @@ else
 fi
 
 echo "# ---------------------------------------------------------------"
+echo "# 20. carried refs only, refs equal after the copy, stale ref locks (fw-warp-2 r2)"
+echo "# ---------------------------------------------------------------"
+proj9="$home_local/work/proj9"
+mkdir -p "$proj9"
+git -C "$proj9" init -q
+printf 'tracked\n' > "$proj9/a.txt"
+git -C "$proj9" add -A
+git -C "$proj9" -c user.email=t@e -c user.name=t commit -qm init
+b9="$(git -C "$proj9" symbolic-ref --short HEAD)"
+folder9="$(make_session "$proj9")"
+target_mkdir "$proj9"
+commit9() { git -C "$proj9" add -A && git -C "$proj9" -c user.email=t@e -c user.name=t commit -qm "$1"; }
+refs_here() { git -C "$proj9" for-each-ref --format='%(objectname) %(refname)' | grep -v ' refs/hyper-warp-backup/' || true; }
+refs_there() { ssh_t12 "git -C '$proj9' for-each-ref --format='%(objectname) %(refname)' | grep -v ' refs/hyper-warp-backup/' || true"; }
+gc_there() { ssh_t12 "cd '$proj9' && git reflog expire --expire=now --expire-unreachable=now --all && git gc -q --prune=now"; }
+warp9() { mark_mine "$folder9"; set +e; out="$(run_hyper "$proj9" warp t12 "$@" 2>&1)"; code=$?; set -e; }
+warp9; [ "$code" = 0 ] || die "the first warp of proj9 failed: $out"
+
+# HIGH 1 (R4a): a commit here only behind an earlier warp's backup ref; t12
+# has it under a branch and a packed tag.
+git -C "$proj9" checkout -q -b side
+printf 'shared\n' > "$proj9/s.txt"; commit9 shared
+c4a="$(git -C "$proj9" rev-parse HEAD)"
+git -C "$proj9" checkout -q "$b9"
+warp9; [ "$code" = 0 ] || die "the warp that brings side failed: $out"
+ssh_t12 "cd '$proj9' && git tag shared-tag '$c4a' && git pack-refs --all"
+git -C "$proj9" update-ref refs/hyper-warp-backup/mine/heads/x "$c4a"
+git -C "$proj9" branch -q -D side
+git -C "$proj9" reflog expire --expire=now --expire-unreachable=now --all
+before9="$(target_tree "$proj9")"
+warp9
+[ "$code" = 2 ] || die "a commit here only behind a backup ref counted as covered: exit $code: $out"
+listed9="$(printf '%s\n' "$out" | LC_ALL=C sed -e 's/^ › \{3\}//')"
+printf '%s\n' "$listed9" | grep -qx '  refs/tags/shared-tag (only there)' || die "the tag is not named: $out"
+printf '%s\n' "$listed9" | grep -qx '  refs/heads/side (only there)' || die "the branch is not named: $out"
+[ "$(target_tree "$proj9")" = "$before9" ] || die "the target repo changed after the refusal"
+warp9 --force
+[ "$code" = 0 ] || die "--force with a backup-only commit failed: exit $code: $out"
+ns9="$(flat "$out" | sed -n 's/.*saved there under \(refs\/hyper-warp-backup\/[^ ]*\/\) before.*/\1/p')"
+gc_there
+[ "$(ssh_t12 "git -C '$proj9' cat-file -t '$c4a'")" = "commit" ] || die "the commit was pruned on t12"
+[ "$(ssh_t12 "git -C '$proj9' rev-parse '${ns9}tags/shared-tag'")" = "$c4a" ] || die "the saved tag does not point at the commit"
+[ "$(refs_there)" = "$(refs_here)" ] || die "t12's refs are not this machine's after --force"
+git -C "$proj9" update-ref -d refs/hyper-warp-backup/mine/heads/x
+pass "a commit here only behind a backup ref is not covered: refused without --force; with --force it survives gc --prune=now on t12 (${ns9}tags/shared-tag)"
+
+# HIGH 1 (R4d): a branch named like a default exclude travels.
+git -C "$proj9" checkout -q -b dist
+printf 'on dist\n' > "$proj9/d.txt"; commit9 dist
+c4d="$(git -C "$proj9" rev-parse HEAD)"
+git -C "$proj9" checkout -q "$b9"
+warp9; [ "$code" = 0 ] || die "the warp with a dist branch failed: $out"
+gc_there
+[ "$(ssh_t12 "git -C '$proj9' rev-parse refs/heads/dist")" = "$c4d" ] || die "refs/heads/dist did not reach t12"
+[ "$(ssh_t12 "git -C '$proj9' cat-file -t '$c4d'")" = "commit" ] || die "dist's commit was pruned on t12"
+[ "$(refs_there)" = "$(refs_here)" ] || die "t12's refs are not this machine's"
+pass "a branch named dist (a default exclude) is carried: refs/heads/dist is $c4d on t12 after gc --prune=now"
+
+# ...and a tag t12 adds at that commit is covered (this machine's dist
+# reaches it), so the warp passes and the sync removes the tag there.
+ssh_t12 "cd '$proj9' && git tag on-dist '$c4d' && git pack-refs --all"
+warp9; [ "$code" = 0 ] || die "a tag at a carried commit was refused: exit $code: $out"
+[ "$(refs_there)" = "$(refs_here)" ] || die "t12's refs are not this machine's"
+pass "a tag only t12 has, at a commit this machine's dist branch reaches, passes; t12's refs equal this machine's afterwards"
+
+# HIGH 2 (R6): this machine's branch packed, t12's loose.
+printf 'r6\n' > "$proj9/r6.txt"; commit9 r6
+git -C "$proj9" pack-refs --all
+ssh_t12 "test -f '$proj9/.git/refs/heads/$b9'" || die "t12's $b9 is not loose before the warp"
+warp9; [ "$code" = 0 ] || die "the warp with packed refs here failed: $out"
+[ "$(ssh_t12 "git -C '$proj9' rev-parse HEAD")" = "$(git -C "$proj9" rev-parse HEAD)" ] || die "t12's HEAD is not this machine's"
+[ -z "$(ssh_t12 "git -C '$proj9' status --porcelain")" ] || die "t12 shows changes after the warp"
+[ "$(refs_there)" = "$(refs_here)" ] || die "t12's refs are not this machine's"
+pass "$b9 packed here and loose on t12: t12's HEAD, refs and status match this machine's after the warp"
+
+# A t12 left broken that way by the old warp is repaired by --force.
+old9="$(git -C "$proj9" rev-parse HEAD)"
+printf 'r7\n' > "$proj9/r7.txt"; commit9 r7
+git -C "$proj9" pack-refs --all
+COPYFILE_DISABLE=1 tar -C "$proj9" -cf - .git | ssh_t12 "tar -C '$proj9' -xf -"
+ssh_t12 "cd '$proj9' && printf '%s\n' '$old9' > '.git/refs/heads/$b9' && printf 'r7\n' > r7.txt"
+[ "$(ssh_t12 "git -C '$proj9' status --porcelain")" = "A  r7.txt" ] || die "the broken state was not reproduced"
+warp9
+[ "$code" = 2 ] || die "the broken t12 was not refused without --force: exit $code: $out"
+warp9 --force
+[ "$code" = 0 ] || die "--force did not repair the broken t12: exit $code: $out"
+[ "$(ssh_t12 "git -C '$proj9' rev-parse HEAD")" = "$(git -C "$proj9" rev-parse HEAD)" ] || die "t12's HEAD is still the old commit"
+[ -z "$(ssh_t12 "git -C '$proj9' status --porcelain")" ] || die "t12 still shows changes"
+[ "$(refs_there)" = "$(refs_here)" ] || die "t12's refs are not this machine's"
+pass "a t12 left with a loose $b9 at the old commit (staged r7.txt) is refused without --force and repaired by --force"
+
+# MINOR 1: a stale ref lock is refused before anything changes, by name.
+ssh_t12 "touch '$proj9/.git/refs/heads/$b9.lock'"
+printf 'r8\n' > "$proj9/r8.txt"; commit9 r8
+before9="$(target_tree "$proj9")"
+mark_mine "$folder9"
+marker_before9="$(cat "$folder9/$SESSION.warp.json")"
+warp9
+[ "$code" = 2 ] || die "a stale ref lock was not refused: exit $code: $out"
+flat "$out" | grep -q "has a ref lock file" || die "the refusal does not say why: $out"
+flat "$out" | grep -qF "$proj9/.git/refs/heads/$b9.lock" || die "the refusal does not name the lock: $out"
+flat "$out" | grep -q "Nothing was changed on either machine" || die "the refusal does not say nothing changed: $out"
+[ "$(target_tree "$proj9")" = "$before9" ] || die "the target repo changed after the refusal"
+[ "$(cat "$folder9/$SESSION.warp.json")" = "$marker_before9" ] || die "the marker changed"
+ssh_t12 "rm -f '$proj9/.git/refs/heads/$b9.lock'"
+warp9; [ "$code" = 0 ] || die "the warp after removing the lock failed: $out"
+pass "a stale $b9.lock on t12 is refused before the marker, naming the file; the warp passes once it is removed"
+
+echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
 echo "# all $step assertions passed"
 echo "# warp-argv.log (what the fake herdr was called with):"

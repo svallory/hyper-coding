@@ -861,7 +861,7 @@ describe("saved refs survive a target pack-refs and a later warp (fw-warp-2 item
 		expect(result.stdout).toBe("");
 	});
 
-	it("runs in every plain-repo warp, after the saves and right before the copy", () => {
+	it("runs in every plain-repo warp, after the saves and right before the .git copy", () => {
 		for (const force of [false, true]) {
 			const steps = plainRepoPlan("work/repo", { force }).steps;
 			const pin = steps.findIndex(
@@ -869,7 +869,7 @@ describe("saved refs survive a target pack-refs and a later warp (fw-warp-2 item
 					entry.kind === "remote-command" && entry.summary.startsWith("keep earlier warps"),
 			);
 			const copy = steps.findIndex(
-				(entry) => entry.kind === "copy" && entry.summary.startsWith("copy git-repo"),
+				(entry) => entry.kind === "copy" && entry.summary.startsWith("copy the repository's .git"),
 			);
 			expect(pin).toBeGreaterThan(0);
 			expect(copy).toBe(pin + 1);
@@ -1023,4 +1023,168 @@ describe("the backup script refuses paths outside the repository (fw-warp-2 item
 		expect(readFileSync(join(backup, "-dash"), "utf-8")).toBe("-dash\n");
 		expect(() => statSync(join(tgt, "-dash"))).toThrow();
 	});
+});
+
+/** The target's refs, backups aside, as sorted `<object> <name>` lines. */
+function refsOf(repo: string): string {
+	return git(repo, "for-each-ref", "--format=%(objectname) %(refname)")
+		.split("\n")
+		.filter((line) => line && !line.includes(" refs/hyper-warp-backup/"))
+		.join("\n");
+}
+
+/** gc that deletes every unreachable object at once (no grace period). */
+function gcNow(repo: string) {
+	git(repo, "reflog", "expire", "--expire=now", "--expire-unreachable=now", "--all");
+	git(repo, "gc", "-q", "--prune=now");
+}
+
+describe("coverage counts only refs the copy carries (fw-warp-2 r2, HIGH 1)", () => {
+	/** A commit both sides have: here only behind `holder`, there under a packed tag. */
+	function sharedCommit(holder: (src: string, commit: string) => void) {
+		const { src, tgt } = twinRepos();
+		write(join(src, "s.txt"), "shared\n");
+		git(src, "add", "s.txt");
+		git(src, "commit", "-q", "-m", "shared");
+		const commit = git(src, "rev-parse", "HEAD").trim();
+		git(tgt, "fetch", "-q", src, commit);
+		git(tgt, "tag", "shared-tag", commit);
+		git(tgt, "pack-refs", "--all");
+		git(src, "reset", "-q", "--hard", "HEAD~1");
+		holder(src, commit);
+		git(src, "reflog", "expire", "--expire=now", "--expire-unreachable=now", "--all");
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		return { src, tgt, commit };
+	}
+
+	it("a commit here only behind an earlier warp's backup ref is not covered: refused; --force saves it past a gc", async () => {
+		const { tgt, commit } = sharedCommit((src, c) =>
+			git(src, "update-ref", "refs/hyper-warp-backup/mine/heads/x", c),
+		);
+		const before = snapshot(tgt);
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail).toContain("refs/tags/shared-tag (only there)");
+		expect(w.changes).toEqual([]);
+		expect(snapshot(tgt)).toEqual(before);
+		const forced = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(forced.failure, forced.failure?.detail).toBeUndefined();
+		gcNow(tgt);
+		expect(git(tgt, "cat-file", "-t", commit).trim()).toBe("commit");
+		expect(git(tgt, "rev-parse", `refs/hyper-warp-backup/${WARP_ID}/tags/shared-tag`).trim()).toBe(
+			commit,
+		);
+	});
+
+	it("a commit here only behind another worktree's HEAD is not covered", async () => {
+		sharedCommit((repo, c) =>
+			git(repo, "worktree", "add", "-q", "--detach", join(base, "other-wt"), c),
+		);
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail).toContain("refs/tags/shared-tag (only there)");
+	});
+
+	it("a commit here only behind the stash is not covered", () => {
+		const { src, commit } = sharedCommit((repo, c) => {
+			git(repo, "update-ref", "refs/stash", c);
+		});
+		expect(refsNotCoveredHere(src, [{ object: commit, name: "refs/tags/shared-tag" }])).toEqual([
+			{ name: "refs/tags/shared-tag", reason: "only there" },
+		]);
+	});
+
+	it("a branch named like a default exclude (dist) is carried: covered, and the target keeps it past a gc", async () => {
+		const { src, tgt, commit } = sharedCommit((repo, c) => git(repo, "branch", "dist", c));
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		gcNow(tgt);
+		expect(git(tgt, "rev-parse", "refs/heads/dist").trim()).toBe(commit);
+		expect(git(tgt, "cat-file", "-t", commit).trim()).toBe("commit");
+		expect(refsOf(tgt)).toBe(refsOf(src));
+		// The working tree's dist is still excluded: only .git ignores the pattern.
+		write(join(src, "dist/out.js"), "built\n");
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		const again = await world().run(
+			plainRepoPlan("work/repo", { startedAt: "2026-10-04T13:00:00.000Z" }),
+		);
+		expect(again.failure, again.failure?.detail).toBeUndefined();
+		expect(() => statSync(join(tgt, "dist/out.js"))).toThrow();
+	});
+});
+
+describe("the target's refs equal this machine's after a plain-repo warp (fw-warp-2 r2, HIGH 2)", () => {
+	function aheadHere() {
+		const { src, tgt } = twinRepos();
+		write(join(src, "r6.txt"), "r6\n");
+		git(src, "add", "r6.txt");
+		git(src, "commit", "-q", "-m", "r6");
+		return { src, tgt };
+	}
+
+	for (const [label, packHere, packThere] of [
+		["packed here, loose there", true, false],
+		["loose here, packed there", false, true],
+		["packed on both sides", true, true],
+		["loose on both sides", false, false],
+	] as const) {
+		it(`${label}: HEAD, refs and status match this machine's`, async () => {
+			const { src, tgt } = aheadHere();
+			git(tgt, "branch", "gone-there", "HEAD");
+			if (packHere) git(src, "pack-refs", "--all");
+			if (packThere) git(tgt, "pack-refs", "--all");
+			const result = await world().run(plainRepoPlan("work/repo"));
+			expect(result.failure, result.failure?.detail).toBeUndefined();
+			expect(git(tgt, "rev-parse", "HEAD")).toBe(git(src, "rev-parse", "HEAD"));
+			expect(refsOf(tgt)).toBe(refsOf(src));
+			expect(git(tgt, "status", "--porcelain")).toBe("");
+		});
+	}
+
+	it("a target already broken that way (loose main at the old commit, index this machine's) is repaired by --force", async () => {
+		const { src, tgt } = aheadHere();
+		const old = git(tgt, "rev-parse", "HEAD").trim();
+		git(src, "pack-refs", "--all");
+		// What the old warp left: this machine's .git copied file by file, the
+		// target's loose main still there and winning.
+		spawnSync("cp", ["-pR", `${join(src, ".git")}/.`, join(tgt, ".git")]);
+		write(join(tgt, ".git/refs/heads/main"), `${old}\n`);
+		write(join(tgt, "r6.txt"), "r6\n");
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		expect(git(tgt, "status", "--porcelain")).toBe("A  r6.txt\n");
+		const refused = await world().run(plainRepoPlan("work/repo"));
+		expect(refused.failure?.detail).toContain("uncommitted work");
+		const result = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(git(tgt, "rev-parse", "HEAD")).toBe(git(src, "rev-parse", "HEAD"));
+		expect(refsOf(tgt)).toBe(refsOf(src));
+		expect(git(tgt, "status", "--porcelain")).toBe("");
+	});
+
+	it("the sync never touches earlier warps' backups", async () => {
+		const { src, tgt } = aheadHere();
+		const old = git(tgt, "rev-parse", "HEAD").trim();
+		git(tgt, "update-ref", "refs/hyper-warp-backup/earlier/heads/main", old);
+		git(tgt, "pack-refs", "--all");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(git(tgt, "rev-parse", "refs/hyper-warp-backup/earlier/heads/main").trim()).toBe(old);
+		expect(refsOf(tgt)).toBe(refsOf(src));
+	});
+});
+
+describe("a stale ref lock on the target (fw-warp-2 r2, MINOR 1)", () => {
+	for (const lock of ["refs/heads/main.lock", "packed-refs.lock"]) {
+		it(`${lock} is refused before the marker, naming the file`, async () => {
+			const { tgt } = twinRepos();
+			write(join(tgt, ".git", lock), "");
+			const before = snapshot(tgt);
+			const w = world();
+			const result = await w.run(plainRepoPlan("work/repo"));
+			expect(result.failure?.step.summary).toContain("check every ref");
+			expect(result.failure?.detail).toContain("has a ref lock file");
+			expect(result.failure?.detail).toContain(join(tgt, ".git", lock));
+			expect(w.changes).toEqual([]);
+			expect(snapshot(tgt)).toEqual(before);
+		});
+	}
 });
