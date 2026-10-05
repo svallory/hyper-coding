@@ -51,8 +51,12 @@
 #
 # Capability probes (the ONLY automatic skips):
 #   sessions                        real Claude enabled (see above)
-#   sync                            `mutagen` on PATH; non-interactive ssh to
-#                                   localhost works (BatchMode, isolated)
+#   sync                            HYPER_E2E_LOOPBACK_OWN_KEY=1 (or CI=true):
+#                                   its beta is LOOPBACK, so it logs in to
+#                                   localhost as you with your own ssh key
+#                                   (never your agent, never writing any
+#                                   authorized_keys); `mutagen` on PATH;
+#                                   non-interactive ssh to localhost works
 #   tools                           `curl` on PATH; https://github.com reachable
 #   warp, agent-user, docker-home   `podman` on PATH AND `podman info` succeeds
 #                                   within 30s
@@ -225,6 +229,10 @@ probe_skip_reason() {
         || { echo "real claude -p needs HYPER_E2E_REAL_CLAUDE=1"; return 0; }
       ;;
     sync)
+      # sync.sh logs in to localhost as YOU with YOUR ssh key (loopback beta):
+      # only when asked, or on a CI runner's throwaway account.
+      [ "${HYPER_E2E_LOOPBACK_OWN_KEY:-}" = "1" ] || [ "${CI:-}" = "true" ] \
+        || { echo "needs HYPER_E2E_LOOPBACK_OWN_KEY=1 (uses your own ssh key against localhost)"; return 0; }
       command -v mutagen >/dev/null 2>&1 || { echo "no mutagen on PATH"; return 0; }
       ssh_isolated -o BatchMode=yes -o ConnectTimeout=5 localhost true >/dev/null 2>&1 \
         || { echo "cannot ssh to localhost non-interactively"; return 0; }
@@ -330,6 +338,10 @@ for name in "${scripts[@]}"; do
     env_sets+=("CLAUDE_CONFIG_DIR=$home/claude")
   fi
   case "$name" in
+    sync)
+      # The probe above allowed it: explicitly, or on CI.
+      env_sets+=("HYPER_E2E_LOOPBACK_OWN_KEY=1")
+      ;;
     warp)
       env_sets+=("WARP_E2E_PORT=$(free_port)" "WARP_E2E_CONTAINER=hyper-t12-$slug")
       ;;
