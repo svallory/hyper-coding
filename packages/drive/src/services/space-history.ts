@@ -1,8 +1,8 @@
 /** Day-to-day space history. No manifest writes and no implicit network reads. */
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { lstatSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
-import { renderGitignore } from "#services/allowlist";
+import { isClaudeUserStatePath, renderGitignore } from "#services/allowlist";
 import { lastSessionEndFailure } from "#services/session-end-log";
 import { detectSpace } from "#services/space";
 import {
@@ -146,6 +146,53 @@ export interface SpacePullResult {
 	reviewFacts?: Map<string, ReviewPathFacts>;
 	addedTracked: IncomingTrackedEntry[];
 	allowlistRestored: boolean;
+	/**
+	 * Claude user-state files the incoming history stops tracking that this
+	 * machine has on disk: untracked here first, so the fast-forward kept them
+	 * byte for byte (review of PR #54, N1).
+	 */
+	userStateKept?: string[];
+	/** Local commits dropped because they only stopped tracking user state too. */
+	droppedUserStateCommits?: number;
+}
+
+/** `name-status` of `a..b` (or one commit's own changes), as status/path pairs. */
+function treeChanges(root: string, args: string[]): { status: string; path: string }[] {
+	const fields = spaceGit(root, [
+		"diff-tree",
+		"-r",
+		"--no-renames",
+		"--name-status",
+		"-z",
+		...args,
+	]).stdout.split("\0");
+	const changes: { status: string; path: string }[] = [];
+	for (let i = 0; i + 1 < fields.length; i += 2) {
+		if (/^[A-Z]/.test(fields[i])) changes.push({ status: fields[i], path: fields[i + 1] });
+	}
+	return changes;
+}
+
+/**
+ * Local commits on top of `base` that do nothing but stop tracking Claude user
+ * state (what the first commit on a current hyper does), when the index has
+ * nothing staged: such a local history and an incoming one that did the same
+ * are not a real divergence. Returns how many, or 0 when they are not all so.
+ */
+function userStateOnlyLocalCommits(root: string, base: string, head: string): number {
+	if (spaceGit(root, ["diff", "--cached", "--quiet", "HEAD"], { allowFailure: true }).status !== 0)
+		return 0;
+	const commits = spaceGit(root, ["rev-list", `${base}..${head}`])
+		.stdout.split("\n")
+		.filter(Boolean);
+	if (commits.length === 0) return 0;
+	for (const commit of commits) {
+		const changes = treeChanges(root, ["--no-commit-id", commit]);
+		if (changes.length === 0) return 0;
+		if (!changes.every((change) => change.status === "D" && isClaudeUserStatePath(change.path)))
+			return 0;
+	}
+	return commits.length;
 }
 
 function clearRefusal(root: string): void {
@@ -195,7 +242,7 @@ async function pullSpaceLocked(
 		allowlistRestored: false,
 	};
 	try {
-		const before = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+		let before = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
 		if (before === target) return unchanged;
 		const isAncestor = (a: string, b: string): boolean => {
 			const result = spaceGit(root, ["merge-base", "--is-ancestor", a, b], { allowFailure: true });
@@ -206,6 +253,20 @@ async function pullSpaceLocked(
 			return result.status === 0;
 		};
 		if (isAncestor(target, before)) return unchanged;
+		let droppedUserStateCommits = 0;
+		if (!isAncestor(before, target)) {
+			// Both machines upgraded and each committed the untracking of the
+			// same user state: drop the local commits that did only that (mixed
+			// reset: the work tree is not touched), then fast-forward as usual.
+			const base = spaceGit(root, ["merge-base", before, target], {
+				allowFailure: true,
+			}).stdout.trim();
+			droppedUserStateCommits = base ? userStateOnlyLocalCommits(root, base, before) : 0;
+			if (droppedUserStateCommits > 0) {
+				spaceGit(root, ["reset", "-q", base]);
+				before = base;
+			}
+		}
 		if (!isAncestor(before, target)) {
 			throw new SpaceRefusedError(
 				"diverged",
@@ -213,6 +274,18 @@ async function pullSpaceLocked(
 			);
 		}
 		const incoming = await validateIncomingSpace(root, target, before);
+		// Never let the fast-forward delete Claude user state from this disk
+		// (review of PR #54, N1): a peer's first commit on a current hyper stops
+		// tracking it, and applying that deletion here would remove this
+		// machine's transcripts. The files it deletes that exist here are moved
+		// aside into the space git dir (a rename on the same filesystem: bytes,
+		// modes and dirty edits kept), the merge deletes them from the index
+		// only, and they are moved back, untracked, whatever the merge did.
+		const userStateKept = treeChanges(root, [before, incoming.tip])
+			.filter((change) => change.status === "D" && isClaudeUserStatePath(change.path))
+			.map((change) => change.path)
+			.filter((path) => lstatSync(join(root, path), { throwIfNoEntry: false }) !== undefined);
+
 		const local = readTracked(root);
 		const added = incoming.tracked.filter((entry) => !local.includes(entry));
 		const ignored =
@@ -256,21 +329,40 @@ async function pullSpaceLocked(
 				`Local .gitignore changes would be overwritten while preserving this machine's tracked entries. Commit them with \`hyper space commit\` (or move them aside) before retrying.`,
 			);
 		const review = await incomingReview(root, incoming.tip, before);
-		const result = spaceGit(
-			root,
-			[
-				"-c",
-				"merge.verifySignatures=false",
-				"-c",
-				"submodule.recurse=false",
-				"merge",
-				"--ff-only",
-				"--no-overwrite-ignore",
-				"--no-autostash",
-				incoming.tip,
-			],
-			{ allowFailure: true },
-		);
+		const keepDir = join(spaceGitDir(root), `hyper-pull-keep-${process.pid}`);
+		const moved: string[] = [];
+		const restore = (): void => {
+			for (const path of moved.splice(0)) {
+				mkdirSync(dirname(join(root, path)), { recursive: true });
+				renameSync(join(keepDir, path), join(root, path));
+			}
+			rmSync(keepDir, { recursive: true, force: true });
+		};
+		let result: ReturnType<typeof spaceGit>;
+		try {
+			for (const path of userStateKept) {
+				mkdirSync(dirname(join(keepDir, path)), { recursive: true });
+				renameSync(join(root, path), join(keepDir, path));
+				moved.push(path);
+			}
+			result = spaceGit(
+				root,
+				[
+					"-c",
+					"merge.verifySignatures=false",
+					"-c",
+					"submodule.recurse=false",
+					"merge",
+					"--ff-only",
+					"--no-overwrite-ignore",
+					"--no-autostash",
+					incoming.tip,
+				],
+				{ allowFailure: true },
+			);
+		} finally {
+			restore();
+		}
 		if (result.status !== 0) {
 			const detail = (result.stderr || result.stdout).trim();
 			if (
@@ -295,6 +387,8 @@ async function pullSpaceLocked(
 			reviewFacts: review.facts,
 			addedTracked,
 			allowlistRestored: retained.length > 0,
+			userStateKept,
+			droppedUserStateCommits,
 		};
 	} catch (error) {
 		const reason = (error instanceof Error ? error.message : String(error))
@@ -322,12 +416,16 @@ export function spaceStatus(root: string, branch: string) {
 		"--untracked-files=all",
 	]).stdout.split("\0");
 	const status: SpaceStatusEntry[] = [];
+	const userState: string[] = [];
 	for (let index = 0; index < records.length; index++) {
 		const record = records[index];
 		if (!record) continue;
 		const entry: SpaceStatusEntry = { code: record.slice(0, 2), path: record.slice(3) };
 		if (/[RC]/.test(entry.code)) entry.originalPath = records[++index];
-		status.push(entry);
+		// Claude user state is never tracked: not "untracked noise" in every
+		// status, but one count in its own field (review of PR #54, N3).
+		if (entry.code === "??" && isClaudeUserStatePath(entry.path)) userState.push(entry.path);
+		else status.push(entry);
 	}
 	const ref = trackingRef(branch);
 	const tracking = spaceGit(root, ["rev-parse", "--verify", `${ref}^{commit}`], {
@@ -357,6 +455,8 @@ export function spaceStatus(root: string, branch: string) {
 		ahead,
 		behind,
 		status,
+		/** Claude user-state files on disk; never tracked, not listed in `status`. */
+		userState,
 		refused,
 		// The detached SessionEnd worker cannot print to the session it outlives;
 		// its last result is surfaced here when it was a failure.

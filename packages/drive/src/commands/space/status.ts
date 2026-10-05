@@ -62,5 +62,9 @@ export default class Status extends SpaceCommand<typeof Status> {
 				`${entry.code} ${entry.originalPath === undefined ? "" : `${displayPath(entry.originalPath)} -> `}${displayPath(entry.path)}`,
 			);
 		}
+		if (result.userState.length > 0)
+			this.log(
+				`Not tracked (Claude user state under .claude/): ${result.userState.length} — \`hyper space status --json\` lists them.`,
+			);
 	}
 }

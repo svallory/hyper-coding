@@ -16,7 +16,7 @@
  */
 
 import picomatch from "picomatch";
-import { CLAUDE_USER_STATE } from "#config/schema";
+import { CLAUDE_USER_STATE, CLAUDE_USER_STATE_ANYWHERE } from "#config/schema";
 import { quoteForTerminal } from "#lib/terminal-text";
 
 /**
@@ -287,39 +287,51 @@ export function findSecretPaths(paths: string[], allow: string[] = []): string[]
 }
 
 /** One matcher per user-state entry: the entry itself and anything below it. */
-const USER_STATE_MATCHERS = CLAUDE_USER_STATE.map((entry) =>
-	picomatch([entry, `${entry}/**`], { dot: true, nocase: true }),
-);
+function entryMatcher(entry: string): (path: string) => boolean {
+	return picomatch([entry, `${entry}/**`], { dot: true, nocase: true });
+}
+const ANYWHERE_MATCHERS = CLAUDE_USER_STATE_ANYWHERE.map(entryMatcher);
+const TOP_ONLY = CLAUDE_USER_STATE.filter((entry) => !CLAUDE_USER_STATE_ANYWHERE.includes(entry));
+const TOP_ONLY_MATCHERS = TOP_ONLY.map(entryMatcher);
 
 /**
- * Is `path` (relative to the space root) Claude Code user state: inside ANY
- * `.claude/` directory of the space, at any depth, under one of the
- * {@link CLAUDE_USER_STATE} entries? Case-insensitive, like the secret guard,
- * because a case-insensitive filesystem can hand back either spelling.
+ * Is `path` (relative to the space root) Claude Code user state? Unmistakable
+ * names ({@link CLAUDE_USER_STATE_ANYWHERE}) count under a `.claude/` at any
+ * depth; generic ones only in the space's top-level `.claude/`.
+ * Case-insensitive, like the secret guard, because a case-insensitive
+ * filesystem can hand back either spelling.
  *
- * Enforced in code at every commit (`space-sync.ts`), not by the rendered
- * `.gitignore`: an incoming tip can replace that file or plant tracked files,
- * and a rule in a file another machine wrote is no guarantee (ac-gaps r2, B1).
+ * Enforced in code at every commit, pull, clone, push and status
+ * (`space-sync.ts`, `space-history.ts`, `space-incoming.ts`), not by the
+ * rendered `.gitignore`: an incoming tip can replace that file or plant
+ * tracked files (ac-gaps r2, B1).
  */
 export function isClaudeUserStatePath(path: string): boolean {
 	const segments = path.split("/");
 	for (let i = 0; i < segments.length - 1; i++) {
 		if (segments[i].toLowerCase() !== ".claude") continue;
 		const rest = segments.slice(i + 1).join("/");
-		if (USER_STATE_MATCHERS.some((match) => match(rest))) return true;
+		if (ANYWHERE_MATCHERS.some((match) => match(rest))) return true;
+		if (i === 0 && TOP_ONLY_MATCHERS.some((match) => match(rest))) return true;
 	}
 	return false;
 }
 
 /**
- * `git add` pathspecs that keep every user-state path out of the index, under
- * any `.claude/` at any depth: one `:(exclude,glob,icase)` pair per entry (the
- * entry and everything below it). `**\/` at the start matches zero or more
- * directories, so the space's own `.claude/` is covered too.
+ * `git add` / `git status` pathspecs that leave out every user-state path: one
+ * `:(exclude,glob,icase)` pair per entry (the entry and everything below it),
+ * at any depth for the unmistakable names, at the top-level `.claude/` for the
+ * generic ones. Always run from the space root.
  */
 export function claudeUserStateExcludes(): string[] {
-	return CLAUDE_USER_STATE.flatMap((entry) => [
-		`:(exclude,glob,icase)**/.claude/${entry}`,
-		`:(exclude,glob,icase)**/.claude/${entry}/**`,
-	]);
+	return [
+		...CLAUDE_USER_STATE_ANYWHERE.flatMap((entry) => [
+			`:(exclude,glob,icase)**/.claude/${entry}`,
+			`:(exclude,glob,icase)**/.claude/${entry}/**`,
+		]),
+		...TOP_ONLY.flatMap((entry) => [
+			`:(exclude,glob,icase,top).claude/${entry}`,
+			`:(exclude,glob,icase,top).claude/${entry}/**`,
+		]),
+	];
 }

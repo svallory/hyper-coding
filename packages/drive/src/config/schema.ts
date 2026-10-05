@@ -181,19 +181,62 @@ export const CLAUDE_SYNCED_USER_STATE: readonly string[] = [
 ];
 
 /**
+ * Sync-ignore entries that are NOT Claude Code state and so never count as
+ * user state in a space: a third-party plugin's flag file, and the status
+ * line script, which a project's own `.claude/settings.json` may legitimately
+ * point at (review of PR #54, N5).
+ */
+export const NOT_CLAUDE_USER_STATE: readonly string[] = [".caveman-active", "statusline*.sh"];
+
+/**
  * Claude Code's per-user, per-machine state, as entries relative to a
  * `.claude/` directory: every root-anchored {@link CLAUDE_SYNC_IGNORE} entry
  * (credentials, sessions, caches, daemon, logs, backups, …) plus
- * {@link CLAUDE_SYNCED_USER_STATE}. ONE list for both concerns, so an entry
- * added to the sync ignore list is never tracked in a space either. A space's
- * `.claude/` only holds these when Claude was pointed at it as its config
- * dir; hyper then leaves them out of every commit (ac-gaps item 7).
+ * {@link CLAUDE_SYNCED_USER_STATE}, minus {@link NOT_CLAUDE_USER_STATE}. ONE
+ * list for both concerns, so an entry added to the sync ignore list is never
+ * tracked in a space either. A space's `.claude/` only holds these when Claude
+ * was pointed at it as its config dir; hyper then leaves them out of every
+ * commit (ac-gaps item 7).
  */
 export const CLAUDE_USER_STATE: readonly string[] = [
 	...new Set([
 		...CLAUDE_SYNC_IGNORE.filter((entry) => entry.startsWith("/")).map((entry) => entry.slice(1)),
 		...CLAUDE_SYNCED_USER_STATE,
 	]),
+].filter((entry) => !NOT_CLAUDE_USER_STATE.includes(entry));
+
+/**
+ * The {@link CLAUDE_USER_STATE} entries whose names are Claude's own and
+ * unmistakable, matched under a `.claude/` at ANY depth of the space. Every
+ * other entry (`plans`, `tasks`, `state`, `cache`, `local`, `debug`,
+ * `plugins`, …) is a generic name a project could use for its own files, so it
+ * counts only in the space's TOP-LEVEL `.claude/`, the one Claude can be
+ * pointed at as its config dir (review of PR #54, N5).
+ */
+export const CLAUDE_USER_STATE_ANYWHERE: readonly string[] = [
+	".credentials.json",
+	".claude.json*",
+	"history.jsonl",
+	"projects",
+	"sessions",
+	"session-env",
+	"todos",
+	"file-history",
+	"paste-cache",
+	"shell-snapshots",
+	"statsig",
+	"telemetry",
+	"stats-cache.json",
+	"mcp-needs-auth-cache.json",
+	"policy-limits.json*",
+	"remote-settings.json",
+	"gh-pr-status-cache.json",
+	"security_warnings_state_*",
+	"settings.json.bak*",
+	".last-*",
+	"daemon.log",
+	"usage-data",
+	".anthropic",
 ];
 
 /**

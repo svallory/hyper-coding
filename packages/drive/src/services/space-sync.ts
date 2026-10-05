@@ -137,6 +137,17 @@ export function stagedPaths(root: string): string[] {
 		.filter((path) => path !== "");
 }
 
+/**
+ * Claude user-state files on disk that the space does not track: untracked
+ * files (gitignore rules respected) that are user state. What a commit leaves
+ * out and what `space status` reports instead of listing them as untracked.
+ */
+export function userStateOnDisk(root: string): string[] {
+	return spaceGit(root, ["ls-files", "--others", "--exclude-standard", "-z"])
+		.stdout.split("\0")
+		.filter((path) => path !== "" && isClaudeUserStatePath(path));
+}
+
 /** Every path in the index, NUL-separated so no name is quoted or trimmed. */
 function indexPaths(root: string): string[] {
 	return spaceGit(root, ["ls-files", "-z"])
@@ -259,9 +270,15 @@ async function commitSpaceLocked(
 					"--",
 					...trackedUserState.slice(i, i + 500).map((path) => `:(literal)${path}`),
 				]);
-			const shown = trackedUserState.slice(0, 3).map(quoteForTerminal).join(", ");
+		}
+		// An exclusion is never silent (review of PR #54, N5): one line with
+		// the count, whenever any user state is left out or stopped being
+		// tracked here. `hyper space status --json` lists them.
+		const leftOut = userStateOnDisk(root);
+		if (leftOut.length > 0) {
+			const stopped = trackedUserState.length;
 			reportWarning(
-				`note: stopped tracking ${trackedUserState.length} Claude user-state file${trackedUserState.length === 1 ? "" : "s"} under .claude/ (kept on disk): ${shown}${trackedUserState.length > 3 ? ", …" : ""}\n`,
+				`note: ${leftOut.length} Claude user-state path${leftOut.length === 1 ? "" : "s"} under .claude/ ${leftOut.length === 1 ? "is" : "are"} not tracked${stopped > 0 ? ` (${stopped} stopped being tracked by this commit)` : ""}; kept on disk, listed by \`hyper space status --json\`: ${leftOut.slice(0, 3).map(quoteForTerminal).join(", ")}${leftOut.length > 3 ? ", …" : ""}\n`,
 			);
 		}
 		// Second line of defence: nothing that is user state may be committed,
@@ -369,11 +386,98 @@ async function commitSpaceLocked(
 }
 
 /** A plain, explicit branch push; never rewrites remote history. */
+/** What a push may publish that its own guard would otherwise refuse. */
+export interface PushAllowances {
+	/** Exact paths of intentionally committed secrets (as `commit --allow-secret`). */
+	allowSecrets?: string[];
+	/** Publish commits that hold Claude user state anyway. Loud, never a default. */
+	allowUserStateHistory?: boolean;
+}
+
+/**
+ * The commits a push would publish (what the last-seen remote tip lacks) that
+ * ADD or CHANGE Claude user state or a secret-looking path (review of PR #54,
+ * N2): commits made by an older hyper or by plain git, which the commit-time
+ * guards never saw. Each with the offending paths.
+ */
+export function outgoingProblems(
+	root: string,
+	sha: string,
+	allow: PushAllowances = {},
+): { commit: string; userState: string[]; secrets: string[] }[] {
+	const range = [sha, "--not", ...publishedTips(root)];
+	const commits = spaceGit(root, ["rev-list", ...range])
+		.stdout.split("\n")
+		.filter(Boolean);
+	const problems: { commit: string; userState: string[]; secrets: string[] }[] = [];
+	for (const commit of commits) {
+		const fields = spaceGit(root, [
+			"diff-tree",
+			"-r",
+			"--root",
+			"--no-commit-id",
+			"--no-renames",
+			"--name-status",
+			"-z",
+			commit,
+		]).stdout.split("\0");
+		const added: string[] = [];
+		for (let i = 0; i + 1 < fields.length; i += 2)
+			if (/^[AMT]/.test(fields[i])) added.push(fields[i + 1]);
+		const userState = allow.allowUserStateHistory ? [] : added.filter(isClaudeUserStatePath);
+		const secrets = findSecretPaths(
+			added.filter((path) => !isClaudeUserStatePath(path)),
+			allow.allowSecrets ?? [],
+		);
+		if (userState.length + secrets.length > 0) problems.push({ commit, userState, secrets });
+	}
+	return problems;
+}
+
+/**
+ * What this machine knows the hyperdrive already has for `branch`: the
+ * last-seen tracking ref, and every other `origin` ref (a legacy space git
+ * dir may lack the tracking ref until its first push from this CLI). Only
+ * commits outside all of them are new.
+ */
+function publishedTips(root: string): string[] {
+	const tips = spaceGit(root, ["for-each-ref", "--format=%(objectname)", "refs/remotes/origin/"])
+		.stdout.split("\n")
+		.filter(Boolean);
+	return [...new Set(tips)];
+}
+
+/** Refuse a push whose outgoing range publishes user state or a secret, saying how to fix it. */
+function refuseUnsafeOutgoing(
+	root: string,
+	sha: string,
+	branch: string,
+	allow: PushAllowances,
+): void {
+	const problems = outgoingProblems(root, sha, allow);
+	if (problems.length === 0) return;
+	const lines = problems.slice(0, 5).map(({ commit, userState, secrets }) => {
+		const paths = [...userState, ...secrets];
+		return `  ${commit.slice(0, 12)}: ${paths.slice(0, 4).map(quoteForTerminal).join(", ")}${paths.length > 4 ? `, … (${paths.length} paths)` : ""}`;
+	});
+	const seen = spaceGit(root, ["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`], {
+		allowFailure: true,
+	}).stdout.trim();
+	throw new SpaceGitError(
+		`refusing to push ${escapeControlCharacters(branch)}: ${problems.length === 1 ? "a commit" : `${problems.length} commits`} not yet on the hyperdrive add Claude user state or secret-looking files (made by an older hyper or by plain git), and pushing would publish them:\n${lines.join("\n")}${problems.length > 5 ? "\n  …" : ""}\n` +
+			"The content is only in this machine's history so far. To publish without it, fold the unpushed commits into one new commit (your files are not touched):\n\n" +
+			`  git --git-dir=.hyper/space.git --work-tree=. reset --soft ${seen === "" ? "<the last commit you want to keep>" : seen.slice(0, 12)}\n` +
+			`  hyper space commit -m "<message>"\n  hyper space push\n\n` +
+			"`hyper space commit` leaves the user state out and refuses secrets again. To publish them anyway, `hyper space push --allow-user-state-history` (user state) or `--allow-secret <path>` (one intentional secret).",
+	);
+}
+
 export function pushSpace(
 	root: string,
 	remote: string,
 	branch: string,
 	caller: "init" | "daily" = "daily",
+	allow: PushAllowances = {},
 ): void {
 	// The push reads the branch tip and then records it as the tracking ref.
 	// Serialised with commits, a push always publishes the newest local tip:
@@ -381,6 +485,7 @@ export function pushSpace(
 	// then be reported as "another machine pushed first".
 	withSpaceLock(root, `push ${branch}`, () => {
 		const sha = spaceGit(root, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
+		refuseUnsafeOutgoing(root, sha, branch, allow);
 		spaceGitRemote(root, remote, ["push", "origin", `${sha}:refs/heads/${branch}`], branch, caller);
 		// Legacy init wrote no fetch refspec: Git cannot update a tracking ref for it.
 		// Record exactly the immutable SHA handed to the successful push, even there.
@@ -408,6 +513,9 @@ export async function pushSpaceBounded(
 		`push ${branch}`,
 		async () => {
 			const sha = spaceGit(root, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
+			// The session-end worker never passes allowances: a refusal is
+			// logged and shown by `hyper space status`.
+			refuseUnsafeOutgoing(root, sha, branch, {});
 			const args = ["push", "origin", `${sha}:refs/heads/${branch}`];
 			const result = await spaceGitBounded(root, args, timeoutMs);
 			if (result.timedOut)

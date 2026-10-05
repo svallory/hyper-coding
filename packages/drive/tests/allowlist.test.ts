@@ -1,7 +1,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CLAUDE_SYNC_IGNORE, CLAUDE_SYNCED_USER_STATE, CLAUDE_USER_STATE } from "#config/schema";
+import {
+	CLAUDE_SYNC_IGNORE,
+	CLAUDE_SYNCED_USER_STATE,
+	CLAUDE_USER_STATE,
+	CLAUDE_USER_STATE_ANYWHERE,
+	NOT_CLAUDE_USER_STATE,
+} from "#config/schema";
 import {
 	ALLOWLIST_MARKER,
 	AllowlistError,
@@ -533,9 +539,13 @@ describe("Claude Code user state (ac-gaps r2: B1, B2, M5)", () => {
 		"settings.local.json",
 	];
 
-	it("derives the list from CLAUDE_SYNC_IGNORE: every anchored sync-ignore entry is user state", () => {
+	it("derives the list from CLAUDE_SYNC_IGNORE: every anchored sync-ignore entry is user state, except the named non-Claude ones", () => {
 		for (const entry of CLAUDE_SYNC_IGNORE.filter((pattern) => pattern.startsWith("/")))
-			expect(CLAUDE_USER_STATE, entry).toContain(entry.slice(1));
+			if (!NOT_CLAUDE_USER_STATE.includes(entry.slice(1)))
+				expect(CLAUDE_USER_STATE, entry).toContain(entry.slice(1));
+		expect(CLAUDE_USER_STATE).not.toContain(".caveman-active");
+		expect(CLAUDE_USER_STATE).not.toContain("statusline*.sh");
+		for (const entry of CLAUDE_USER_STATE_ANYWHERE) expect(CLAUDE_USER_STATE).toContain(entry);
 		for (const entry of CLAUDE_SYNCED_USER_STATE) expect(CLAUDE_USER_STATE).toContain(entry);
 	});
 
@@ -547,11 +557,30 @@ describe("Claude Code user state (ac-gaps r2: B1, B2, M5)", () => {
 		expect(isClaudeUserStatePath(`.claude/${entry}`)).toBe(false);
 	});
 
+	it("counts generic names only in the space's top-level .claude/ (review N5)", () => {
+		for (const entry of [
+			"plans/p.md",
+			"tasks/t.md",
+			"state/s",
+			"cache/c",
+			"local/x",
+			"debug/d",
+			"plugins/p",
+			"jobs/j",
+		]) {
+			expect(isClaudeUserStatePath(`.claude/${entry}`), `.claude/${entry}`).toBe(true);
+			expect(isClaudeUserStatePath(`notes/proj/.claude/${entry}`), `nested ${entry}`).toBe(false);
+		}
+		for (const path of [".claude/statusline.sh", ".claude/.caveman-active"])
+			expect(isClaudeUserStatePath(path), path).toBe(false);
+	});
+
 	it("matches a .claude/ at any depth and in any case, and nothing outside one", () => {
 		for (const path of [
 			"notes/sub/.claude/history.jsonl",
 			"data/.claude/todos/t.json",
 			".hyper/.claude/projects/-x/s.jsonl",
+			"notes/sub/.claude/session-env/x/env",
 			".Claude/History.jsonl",
 			".claude/PROJECTS/x",
 		])
