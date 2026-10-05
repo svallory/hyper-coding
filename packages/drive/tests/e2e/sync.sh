@@ -379,12 +379,22 @@ printf '%s' "$out" | grep -F "$claude_session" | grep -q "blocked" \
   || die "the not-ready row does not name the blocked path: $out"
 pass "--check exits 1 and names the transition problem while Mutagen still watches"
 # Writable again: the next cycle clears the problem and the check recovers.
+# Fixing a mode is not a content change, so on Linux's polling watcher no new
+# cycle would run on its own: the check forces one before calling a problem
+# current (that is what this step proves, not a timing allowance).
 recovered=0
 for _ in $(seq 1 60); do
-  if run_cli drive sync-config loop --check >/dev/null; then recovered=1; break; fi
+  set +e
+  out="$(run_cli drive sync-config loop --check)"
+  rc=$?
+  set -e
+  if [ "$rc" = 0 ]; then recovered=1; break; fi
   sleep 1
 done
-[ "$recovered" = 1 ] || die "--check never recovered after the problem was fixed"
+if [ "$recovered" != 1 ]; then
+  mutagen sync list "$claude_session" >&2 || true
+  die "--check never recovered after the problem was fixed; last output: $out"
+fi
 wait_for "$beta_home/.claude/blocked/f.txt" blocked || die "the blocked file never arrived after the fix"
 pass "once fixed, the file arrives and --check is ready again"
 

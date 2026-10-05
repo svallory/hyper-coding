@@ -318,10 +318,17 @@ export class MutagenSyncEngine implements SyncEngine {
 	}
 
 	/** Run the engine, turning every failure into a friendly SyncEngineError. */
-	private async run(args: string[], env?: Record<string, string>): Promise<string> {
+	private async run(
+		args: string[],
+		env?: Record<string, string>,
+		timeoutMs?: number,
+	): Promise<string> {
 		let result: RunResult;
 		try {
-			result = await this.runner.ssh([BIN, ...args], { env });
+			result = await this.runner.ssh([BIN, ...args], {
+				env,
+				...(timeoutMs === undefined ? {} : { timeoutMs }),
+			});
 		} catch (err) {
 			const code = (err as NodeJS.ErrnoException | undefined)?.code;
 			// ENOENT is the only "not installed". Anything else (EACCES, a crash)
@@ -352,8 +359,8 @@ export class MutagenSyncEngine implements SyncEngine {
 		return parseSessionList(await this.run(["sync", "list", "--template", LIST_TEMPLATE]));
 	}
 
-	async flush(name: string): Promise<void> {
-		await this.run(["sync", "flush", name]);
+	async flush(name: string, options: { timeoutMs?: number } = {}): Promise<void> {
+		await this.run(["sync", "flush", name], undefined, options.timeoutMs);
 	}
 
 	async terminate(name: string): Promise<void> {
