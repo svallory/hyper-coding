@@ -1829,7 +1829,8 @@ ${awk}' "$t" - || exit 5`,
  * `worktree`, one `<object> <refname> <peeled>` line each (`<peeled>` is the
  * commit an annotated tag points at, empty otherwise), and `<commit> HEAD`
  * when HEAD is detached. Refs under {@link WARP_REF_BACKUP} (earlier warps'
- * backups) are left out. Prints nothing when there is no `.git` there. Exits
+ * backups) are left out. The stash is listed entry by entry, as
+ * `<commit> refs/stash@{<n>}` (newest is 0), instead of `refs/stash`. Prints nothing when there is no `.git` there. Exits
  * {@link TARGET_REFTABLE} when the repository's config sets
  * `extensions.refStorage` to `reftable`, and {@link TARGET_REF_LOCK} (printing
  * the path) when a `<ref>.lock` or `packed-refs.lock` exists, before listing
@@ -1849,7 +1850,10 @@ export function targetRefs(worktree: string): string[] {
 		'[ -n "$l" ] || l=$(find "$gd/refs" -name \'*.lock\' -print 2>/dev/null | head -n 1)',
 		`if [ -n "$l" ]; then printf '%s\\n' "$l"; exit ${TARGET_REF_LOCK}; fi`,
 		`r=$(g for-each-ref --format='%(objectname) %(refname) %(*objectname)') || exit 3`,
-		`printf '%s\\n' "$r" | grep -v ' ${WARP_REF_BACKUP}/' || true`,
+		`printf '%s\\n' "$r" | grep -v -e ' ${WARP_REF_BACKUP}/' -e ' refs/stash ' || true`,
+		"if g rev-parse -q --verify refs/stash >/dev/null; then",
+		'  k=0; for s in $(g log -g --format=%H refs/stash --); do printf \'%s refs/stash@{%s}\\n\' "$s" "$k"; k=$((k + 1)); done',
+		"fi",
 		"if ! g symbolic-ref -q HEAD >/dev/null; then",
 		`  h=$(g rev-parse -q --verify HEAD) && printf '%s HEAD\\n' "$h"`,
 		"fi",
@@ -1898,9 +1902,12 @@ export function targetRefBackupsLoose(worktree: string): string[] {
 /**
  * A script for the target that saves every ref of the repository at
  * `worktree` (and HEAD when it is detached) as
- * `refs/hyper-warp-backup/<id>/<ref without "refs/">`, so a plain-repo warp,
+ * `refs/hyper-warp-backup/<id>/<ref without "refs/">`, and every stash entry
+ * as `<ns>/stash/<n>` (newest is 0; re-apply one with `git stash apply
+ * <ref>`), so a plain-repo warp,
  * which replaces the target's `.git` files with this machine's, can't make a
- * commit only the target had unreachable. Prints the namespace.
+ * commit only the target had unreachable. Prints the namespace, then the
+ * number of stash entries saved.
  */
 export function targetRefsSave(worktree: string, id: string): string[] {
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
@@ -1911,14 +1918,79 @@ export function targetRefsSave(worktree: string, id: string): string[] {
 		`r=$(g for-each-ref --format='%(objectname) %(refname)') || exit 3`,
 		`printf '%s\\n' "$r" | while read -r s n; do`,
 		'  [ -n "$n" ] || continue',
-		`  case "$n" in ${WARP_REF_BACKUP}/*) continue ;; esac`,
+		`  case "$n" in ${WARP_REF_BACKUP}/*|refs/stash) continue ;; esac`,
 		// biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion, not a template.
 		'  g update-ref "$ns/${n#refs/}" "$s" || exit 1',
 		"done || exit 1",
 		"if ! g symbolic-ref -q HEAD >/dev/null; then",
 		'  h=$(g rev-parse -q --verify HEAD) && { g update-ref "$ns/HEAD" "$h" || exit 1; }',
 		"fi",
-		`printf '%s/\\n' "$ns"`,
+		// Every stash entry, newest first, one ref each: refs/stash keeps only
+		// the newest, the rest live in its reflog, which the sync deletes.
+		"k=0",
+		"if g rev-parse -q --verify refs/stash >/dev/null; then",
+		"  e=$(g log -g --format=%H refs/stash --) || exit 1",
+		'  for s in $e; do g update-ref "$ns/stash/$k" "$s" || exit 1; k=$((k + 1)); done',
+		"fi",
+		`printf '%s/\\n%s\\n' "$ns" "$k"`,
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/** A target ref and one of this machine's that can't both exist: one is a directory of the other. */
+export interface RefConflict {
+	there: string;
+	here: string;
+}
+
+/**
+ * The target refs (`there`, from {@link targetRefs}) that conflict as file and
+ * directory with this machine's carried refs (`here`): `refs/heads/df` on one
+ * side and `refs/heads/df/x` on the other. git can't hold both, so the copy
+ * (a directory where a file goes) or the ref sync would fail half-way. HEAD
+ * and stash entries never conflict.
+ */
+export function refConflicts(here: string[], there: string[]): RefConflict[] {
+	const mine = new Set(here.filter((name) => name.startsWith("refs/")));
+	const conflicts: RefConflict[] = [];
+	for (const name of there) {
+		if (!name.startsWith("refs/") || mine.has(name)) continue;
+		const parts = name.split("/");
+		// A ref here at one of this name's parents...
+		for (let index = 2; index < parts.length; index++) {
+			const parent = parts.slice(0, index).join("/");
+			if (mine.has(parent)) conflicts.push({ there: name, here: parent });
+		}
+		// ...or under this name.
+		for (const other of mine) {
+			if (other.startsWith(`${name}/`)) conflicts.push({ there: name, here: other });
+		}
+	}
+	return conflicts;
+}
+
+/**
+ * A script for the target that deletes the refs named on stdin (one per line)
+ * from the repository at `worktree`, in one `git update-ref --no-deref
+ * --stdin` transaction. Used under `--force` for refs that conflict as file
+ * and directory with this machine's, after the save step kept them. Refuses
+ * (exit 2) a name outside `refs/` or under {@link WARP_REF_BACKUP}. Prints
+ * how many it deleted.
+ */
+export function targetRefsDelete(worktree: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const script = [
+		`w=${quote(worktree)}`,
+		TARGET_READ_ONLY_GIT,
+		"n=$(cat) || exit 4",
+		`printf '%s\\n' "$n" | while read -r r; do`,
+		'  [ -n "$r" ] || continue',
+		`  case "$r" in ${WARP_REF_BACKUP}/*|*" "*) exit 2 ;; refs/*) ;; *) exit 2 ;; esac`,
+		"done || exit 2",
+		`c=$(printf '%s\\n' "$n" | sed -e '/^$/d' -e 's/^/delete /')`,
+		'[ -n "$c" ] || exit 0',
+		`printf '%s\\n' "$c" | g update-ref --no-deref --stdin || exit 6`,
+		`printf '%s\\n' "$c" | wc -l | tr -d ' '`,
 	].join("\n");
 	return ["sh", "-c", script];
 }
@@ -1963,8 +2035,31 @@ export function refsNotCoveredHere(
 	for (const ref of carried) local.set(ref.name, ref.object);
 	const head = run(["rev-parse", "-q", "--verify", "HEAD"]);
 	if (head.status === 0) local.set("HEAD", (head.stdout ?? "").trim());
-	const pending = refs.filter((ref) => local.get(ref.name) !== ref.object);
-	if (pending.length === 0) return [];
+	// A target stash entry is covered only by the same commit at the same
+	// position here: a stash commit is never on a branch.
+	const stashEntry = /^refs\/stash@\{\d+\}$/;
+	const stashThere = refs.filter((ref) => stashEntry.test(ref.name)).length;
+	if (stashThere > 0) {
+		const mine = run(["log", "-g", "--format=%H", "refs/stash", "--"]);
+		if (mine.status === 0) {
+			(mine.stdout ?? "")
+				.split("\n")
+				.filter(Boolean)
+				.forEach((commit, index) => {
+					local.set(`refs/stash@{${index}}`, commit);
+				});
+		}
+	}
+	const stashUncovered: UncoveredRef[] = refs
+		.filter((ref) => stashEntry.test(ref.name) && local.get(ref.name) !== ref.object)
+		.map((ref) => ({
+			name: ref.name,
+			reason: `a stash entry only there, one of ${stashThere}`,
+		}));
+	const pending = refs.filter(
+		(ref) => !stashEntry.test(ref.name) && local.get(ref.name) !== ref.object,
+	);
+	if (pending.length === 0) return stashUncovered;
 	// The commit each object stands for (an annotated tag: the commit it tags),
 	// when this machine has it: the target's pending refs first, then this
 	// machine's tips. A stash is a ref the sync carries, but not a branch
@@ -2001,16 +2096,19 @@ export function refsNotCoveredHere(
 			for (const tip of tips) unreached.add(tip as string);
 		}
 	}
-	return pending.flatMap((ref, index): UncoveredRef[] => {
-		const commit = commitOf(index);
-		if (commit !== undefined && !unreached.has(commit)) return [];
-		return [
-			{
-				name: ref.name,
-				reason: local.has(ref.name) ? "has commits this machine doesn't" : "only there",
-			},
-		];
-	});
+	return [
+		...pending.flatMap((ref, index): UncoveredRef[] => {
+			const commit = commitOf(index);
+			if (commit !== undefined && !unreached.has(commit)) return [];
+			return [
+				{
+					name: ref.name,
+					reason: local.has(ref.name) ? "has commits this machine doesn't" : "only there",
+				},
+			];
+		}),
+		...stashUncovered,
+	];
 }
 
 /**
