@@ -77,6 +77,8 @@ function setupFixture(
 			'printf "%s\\n" "$*" >> "$MUTAGEN_LOG"',
 			'case "$1 $2" in',
 			`  "sync list") cat "$MUTAGEN_SESSIONS" ;;`,
+			// A forced cycle: when the test left an "after" state, it becomes current.
+			`  "sync flush") [ -f "$MUTAGEN_SESSIONS.after-flush" ] && mv "$MUTAGEN_SESSIONS.after-flush" "$MUTAGEN_SESSIONS" ;;`,
 			`  "sync create") name=""; while [ $# -gt 0 ]; do [ "$1" = "--name" ] && { name="$2"; break; }; shift; done;`,
 			`    printf '[{"name":"%s","alpha":"/a","beta":"localhost:/b","status":"watching","mode":"two-way-resolved","ignore":{"paths":[".credentials.json"]},"paused":false}]' "$name" > "$MUTAGEN_SESSIONS" ;;`,
 			"esac",
@@ -284,6 +286,37 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config --check", () => {
 		const out = flat(result.stdout ?? "");
 		expect(out).toContain(named);
 		expect(out).toMatch(/hyper-claude-loop .*ready/);
+	});
+
+	it("forces one sync cycle before calling a problem current, so a fixed one is not reported (CI on Linux)", () => {
+		const fixture = setupFixture([]);
+		const claude = session(
+			"hyper-claude-loop",
+			`${fixture.alphaHome}/.claude`,
+			`localhost:${fixture.betaHome}/.claude`,
+			"claude",
+		);
+		const pi = session(
+			"hyper-pi-loop",
+			`${fixture.alphaHome}/.pi/agent`,
+			`localhost:${fixture.betaHome}/.pi/agent`,
+			"pi",
+		) as Record<string, unknown>;
+		const stale = {
+			...pi,
+			beta: {
+				...(pi.beta as object),
+				transitionProblems: [{ path: "blocked/f.txt", error: "permission denied" }],
+			},
+		};
+		writeFileSync(fixture.sessions, JSON.stringify([claude, stale]), "utf-8");
+		// The cycle the check forces finds the cause fixed.
+		writeFileSync(`${fixture.sessions}.after-flush`, JSON.stringify([claude, pi]), "utf-8");
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop", "--check"]);
+		expect(result.status, flat(result.stdout ?? "")).toBe(0);
+		expect(calls(fixture)).toContain("sync flush hyper-pi-loop");
+		// The healthy claude session is never flushed.
+		expect(calls(fixture)).not.toContain("sync flush hyper-claude-loop");
 	});
 });
 
@@ -751,6 +784,10 @@ JSON`,
 				"esac",
 			].join("\n"),
 		);
+		// A create sends one `mkdir -p` of the beta root's parent over ssh. A
+		// fake on this PATH, never the real /usr/bin/ssh: without it the test
+		// opened a real ssh hop to localhost (and failed where no sshd runs).
+		script(binDir, "ssh", 'printf "%s\\n" "$*" >> "$(dirname "$0")/ssh.log"');
 		writeFileSync(sessionsFile, "[]", "utf-8");
 		const config = join(binDir, "drive.toml");
 		writeFileSync(
@@ -795,6 +832,9 @@ JSON`,
 				.split("\n")
 				.filter((l) => l.includes("sync create"));
 			expect(creates.filter((l) => l.includes("--name hyper-claude-1box"))).toHaveLength(1);
+			expect(readFileSync(join(binDir, "ssh.log"), "utf-8")).toContain(
+				`mkdir -p -- ${betaHome}/.pi`,
+			);
 		} finally {
 			if (saved === undefined) delete process.env.HYPER_DRIVE_CONFIG;
 			else process.env.HYPER_DRIVE_CONFIG = saved;
