@@ -10,7 +10,9 @@
 #      (Claude + pi), and `sync-config loop` then finds them ready (AC-21)
 #   3. `--check` then reports ready
 #   4. a file written on alpha shows up on beta within 60s
-#   5. an ignored path (.credentials.json) never reaches beta
+#   5. `.credentials.json`, `.claude.json`, `sessions/`, `state/` and pi's
+#      `auth.json`, present on alpha before the sessions existed, never reach
+#      beta, and beta's `.credentials.json` never reaches alpha (AC-17)
 #   6. a symlink to an absolute target resolves on beta (posix-raw symlinks)
 #   7. a second `machine setup` run reports nothing needed (C-15, AC-24)
 #   8. both sessions are terminated and this script's own daemon is stopped at
@@ -163,6 +165,34 @@ done
 
 trap cleanup EXIT
 
+# Files that must NEVER reach the other machine, put on alpha BEFORE any
+# session exists (AC-17): an initial scan is exactly when a forgotten ignore
+# pattern would carry them across.
+echo "secret" > "$alpha_home/.claude/.credentials.json"
+echo '{"oauthAccount":"x"}' > "$alpha_home/.claude/.claude.json"
+mkdir -p "$alpha_home/.claude/sessions" "$alpha_home/.claude/state"
+echo '{"pid":1}' > "$alpha_home/.claude/sessions/1.json"
+echo "lock" > "$alpha_home/.claude/state/lock"
+echo '{"token":"x"}' > "$alpha_home/.pi/agent/auth.json"
+# …and one on beta that must never come back to alpha. Beta has both config
+# dirs, as a machine with Claude Code and pi installed does: Mutagen creates a
+# missing beta ROOT but not its missing parent (`~/.pi`), and then reports a
+# transition problem while the session still says "Watching for changes".
+mkdir -p "$beta_home/.claude" "$beta_home/.pi/agent"
+echo "beta-secret" > "$beta_home/.claude/.credentials.json"
+
+# Waits up to 60s for a file to exist with the given content. Returns 1 on timeout.
+wait_for() {
+  local file="$1" content="$2"
+  for _ in $(seq 1 60); do
+    if [ -f "$file" ] && grep -q "$content" "$file"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 # AC-21 / D-1: `hyper machine setup <machine> --features config-sync` creates the
 # sync through the same service `drive sync-config` uses. It must be able to
 # FAIL LOUDLY: `out=$(...)` under `set -e` would abort with no `not ok` line.
@@ -221,37 +251,34 @@ pass "--check exits 0 and reports both sessions ready"
 
 echo "# waiting for a file written on alpha to land on beta (up to 60s)"
 echo "hello-from-alpha" > "$alpha_home/.claude/probe.txt"
-landed=0
-for _ in $(seq 1 60); do
-  if [ -f "$beta_home/.claude/probe.txt" ] && grep -q hello-from-alpha "$beta_home/.claude/probe.txt"; then
-    landed=1
-    break
-  fi
-  sleep 1
-done
-[ "$landed" = 1 ] || die "file written on alpha never appeared on beta within 60s"
+wait_for "$beta_home/.claude/probe.txt" hello-from-alpha \
+  || die "file written on alpha never appeared on beta within 60s"
 pass "file propagated alpha -> beta"
 
-echo "# ignored path must not reach beta"
-echo "secret" > "$alpha_home/.claude/.credentials.json"
-# A fixed sleep would race: if the sentinel hasn't landed yet, "not on beta"
-# proves nothing. Write a normal file after it, wait for THAT to arrive, then
-# the ignored file has demonstrably had every chance to arrive too.
+echo "# ignored paths must not cross"
+# A fixed sleep would race: if the sentinels haven't landed yet, "not there"
+# proves nothing. Write a normal file in each session after the ignored ones,
+# wait for THAT to arrive, and the ignored files have demonstrably had every
+# chance to arrive too — they have existed since before the sessions did.
 echo "sentinel" > "$alpha_home/.claude/sentinel.txt"
-sentinel=0
-for _ in $(seq 1 60); do
-  if [ -f "$beta_home/.claude/sentinel.txt" ] \
-    && grep -q sentinel "$beta_home/.claude/sentinel.txt"; then
-    sentinel=1
-    break
-  fi
-  sleep 1
+echo "sentinel" > "$alpha_home/.pi/agent/sentinel.txt"
+echo "sentinel" > "$beta_home/.claude/beta-sentinel.txt"
+wait_for "$beta_home/.claude/sentinel.txt" sentinel \
+  || die "the claude sentinel never reached beta, so the ignore check proves nothing"
+wait_for "$beta_home/.pi/agent/sentinel.txt" sentinel \
+  || { mutagen sync list "$pi_session" >&2 || true; die "the pi sentinel never reached beta, so the ignore check proves nothing"; }
+wait_for "$alpha_home/.claude/beta-sentinel.txt" sentinel \
+  || die "the beta sentinel never reached alpha, so the reverse ignore check proves nothing"
+# beta has its OWN .credentials.json (seeded above): that one is checked by content below.
+for path in .claude/.claude.json .claude/sessions .claude/state .pi/agent/auth.json; do
+  if [ -e "$beta_home/$path" ]; then die "$path is ignored but reached beta"; fi
 done
-[ "$sentinel" = 1 ] || die "sentinel never reached beta, so the ignore check proves nothing"
-if [ -e "$beta_home/.claude/.credentials.json" ]; then
-  die ".credentials.json is ignored but reached beta"
-fi
-pass ".credentials.json stayed off beta (sentinel landed first)"
+pass ".claude.json, sessions/, state/ and pi auth.json stayed off beta (sentinels landed first)"
+[ "$(cat "$alpha_home/.claude/.credentials.json")" = "secret" ] \
+  || die "beta's .credentials.json replaced alpha's"
+[ "$(cat "$beta_home/.claude/.credentials.json")" = "beta-secret" ] \
+  || die "alpha's .credentials.json replaced beta's"
+pass "each side keeps its own .credentials.json (nothing crossed either way)"
 
 echo "# symlink with an absolute target resolves on beta (posix-raw)"
 mkdir -p "$alpha_home/.claude/skills" "$work_real/skill-target"
