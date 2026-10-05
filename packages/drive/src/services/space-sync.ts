@@ -8,6 +8,7 @@ import {
 	isClaudeUserStatePath,
 } from "#services/allowlist";
 import {
+	finishInterruptedPull,
 	gitSaid,
 	readSpaceBlobPrefixes,
 	SpaceGitError,
@@ -242,6 +243,13 @@ async function commitSpaceLocked(
 	reportWarning: (message: string) => void,
 ): Promise<SpaceCommitResult> {
 	try {
+		// A pull stopped between its index update and its branch update leaves
+		// the peer's tip in the index: finish it first, or this commit would
+		// record that tip as local work (review of PR #54, M1).
+		if (finishInterruptedPull(root, branch) !== null)
+			reportWarning(
+				"note: finished a pull that was interrupted before it could move the branch.\n",
+			);
 		const excluded = spaceGit(root, ["ls-files", "--others", "--exclude-standard", "-z"])
 			.stdout.split("\0")
 			.filter((path) => path.endsWith("/") && existsSync(join(root, path, ".git")))

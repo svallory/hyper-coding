@@ -511,23 +511,30 @@ describe("the pull touches no Claude user-state file, whatever stops it (review 
 				: { path, content: null, mode: null };
 		});
 	}
-	/** Start the pull in its own process group, stop it after `step`, signal the group. */
+	/**
+	 * Start the BUILT pull in its own process group through the test-only
+	 * runner, which stops it after `step` (an injected `onStep`; the product
+	 * has no environment switch for this), then signal the group.
+	 */
 	async function interruptedPull(step: string, signal: NodeJS.Signals): Promise<void> {
-		const marker = join(root, ".hyper", "space.git", `hyper-test-paused-${step}`);
-		const child = spawn(process.execPath, [cli, "space", "pull"], {
-			cwd: root,
-			detached: true,
-			stdio: "ignore",
-			env: {
-				...process.env,
-				HOME: fixture.home,
-				XDG_CONFIG_HOME: join(fixture.root, "config"),
-				HYPER_HOME: fixture.hyperHome,
-				HYPER_DRIVE_CONFIG: fixture.configFile,
-				HYPER_SKIP_NEW_VERSION_CHECK: "1",
-				HYPER_TEST_PULL_PAUSE_AT: step,
+		const marker = join(fixture.root, `paused-${step}-${Date.now()}`);
+		const child = spawn(
+			"bun",
+			[join(import.meta.dirname, "pull-step-runner.ts"), root, "space/space", step, marker],
+			{
+				cwd: root,
+				detached: true,
+				stdio: "ignore",
+				env: {
+					...process.env,
+					HOME: fixture.home,
+					XDG_CONFIG_HOME: join(fixture.root, "config"),
+					HYPER_HOME: fixture.hyperHome,
+					HYPER_DRIVE_CONFIG: fixture.configFile,
+					HYPER_SKIP_NEW_VERSION_CHECK: "1",
+				},
 			},
-		});
+		);
 		const exited = new Promise<void>((resolve) => child.on("exit", () => resolve()));
 		const deadline = Date.now() + 30_000;
 		while (!existsSync(marker)) {
@@ -537,6 +544,83 @@ describe("the pull touches no Claude user-state file, whatever stops it (review 
 		process.kill(-(child.pid as number), signal);
 		await exited;
 	}
+
+	it("an environment variable alone cannot pause a shipped pull (review M2)", () => {
+		legacyPair();
+		const result = spawnSync(process.execPath, [cli, "space", "pull"], {
+			cwd: root,
+			encoding: "utf8",
+			timeout: 30_000,
+			env: {
+				...process.env,
+				HOME: fixture.home,
+				XDG_CONFIG_HOME: join(fixture.root, "config"),
+				HYPER_HOME: fixture.hyperHome,
+				HYPER_DRIVE_CONFIG: fixture.configFile,
+				HYPER_SKIP_NEW_VERSION_CHECK: "1",
+				HYPER_TEST_PULL_PAUSE_AT: "untracked",
+			},
+		});
+		ok(result);
+	});
+
+	it("a kill between read-tree and update-ref is finished by the next commit, not recorded as local work (review M1)", async () => {
+		legacyPair();
+		const before = snapshot();
+		await interruptedPull("read-tree", "SIGKILL");
+		const commit = hyperIn(root, ["space", "commit", "-m", "after the kill"]);
+		ok(commit);
+		expect(flat(commit.stderr)).toContain("finished a pull that was interrupted");
+		const tip = spaceGit(root, ["rev-parse", "refs/remotes/origin/space/space"]).stdout;
+		// Nothing of the peer's tip was committed as local work: HEAD IS the tip.
+		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(tip);
+		const pull = hyperIn(root, ["space", "pull"]);
+		ok(pull);
+		expect(flat(pull.stdout)).toContain("already up to date");
+		expect(snapshot()).toEqual(before);
+	}, 60_000);
+
+	it("the same kill followed by a session-end save is finished too", async () => {
+		legacyPair();
+		await interruptedPull("read-tree", "SIGKILL");
+		const payload = join(root, ".hyper", "space.git", "session-end-payload.tail");
+		writeFileSync(
+			payload,
+			JSON.stringify({
+				session_id: "1b4e28ba-2fa1-11d2-883f-0016d3cca427",
+				hook_event_name: "SessionEnd",
+				reason: "prompt_input_exit",
+				cwd: root,
+			}),
+		);
+		ok(hyperIn(root, ["space", "commit", "--session-end", "--payload-file", payload]));
+		const tip = spaceGit(root, ["rev-parse", "refs/remotes/origin/space/space"]).stdout;
+		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(tip);
+		expect(flat(hyperIn(root, ["space", "pull"]).stdout)).toContain("already up to date");
+	}, 60_000);
+
+	it("status finishes it as well, and then reports truthfully", async () => {
+		legacyPair();
+		await interruptedPull("read-tree", "SIGKILL");
+		ok(hyperIn(root, ["space", "status"]));
+		const tip = spaceGit(root, ["rev-parse", "refs/remotes/origin/space/space"]).stdout;
+		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(tip);
+	}, 60_000);
+
+	it("a stale index.lock gives one friendly line naming it, and is not deleted (review M3)", () => {
+		init();
+		write(root, ["notes/new.md"]);
+		const lock = join(root, ".hyper", "space.git", "index.lock");
+		writeFileSync(lock, "");
+		const result = hyperIn(root, ["space", "commit", "-m", "x"]);
+		expect(result.status).not.toBe(0);
+		const err = flat(result.stderr);
+		expect(err).toContain("index is locked by");
+		expect(err).toContain("index.lock");
+		expect(err).toContain("If no hyper or git process is working on this space, remove that file");
+		expect(err).not.toContain("fatal:");
+		expect(existsSync(lock)).toBe(true);
+	});
 
 	for (const step of ["base", "untracked", "read-tree"]) {
 		for (const signal of ["SIGKILL", "SIGHUP"] as const) {

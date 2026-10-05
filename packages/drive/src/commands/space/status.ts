@@ -5,7 +5,9 @@ import {
 	escapeControlCharactersKeepingBackslashes,
 	quoteForTerminal,
 } from "#lib/terminal-text";
+import { finishInterruptedPull, interruptedPullTip } from "#services/space-git";
 import { fetchSpace, spaceStatus } from "#services/space-history";
+import { withSpaceLock } from "#services/space-lock";
 
 /**
  * Status prints paths from the work tree AND from an incoming branch, so a
@@ -35,6 +37,13 @@ export default class Status extends SpaceCommand<typeof Status> {
 		const { flags } = await this.parse(Status);
 		const result = await this.inSpace(flags.debug, ({ root, branch }) => {
 			if (flags.fetch) fetchSpace(root, branch);
+			// Status is read-only, except to finish a pull that was stopped
+			// between its index and its branch update (review of PR #54, M1):
+			// only then does it take the space lock.
+			if (interruptedPullTip(root, branch) !== null)
+				withSpaceLock(root, `finish the pull of ${branch}`, () =>
+					finishInterruptedPull(root, branch),
+				);
 			return spaceStatus(root, branch);
 		});
 		if (flags.json) {
