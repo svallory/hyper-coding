@@ -18,6 +18,7 @@ import { dirname, join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LocalMachine, type MachineRunner } from "#services/remote";
 import {
+	refConflicts,
 	refsNotCoveredHere,
 	TARGET_CONFLICTED,
 	TARGET_IN_PROGRESS,
@@ -76,6 +77,14 @@ beforeEach(() => {
 		GIT_AUTHOR_EMAIL: "t@e",
 		GIT_COMMITTER_NAME: "t",
 		GIT_COMMITTER_EMAIL: "t@e",
+		// No detached auto-maintenance/gc from the fixture's own git calls: it
+		// can still hold .git/objects/maintenance.lock (or repack) while a test
+		// takes its before/after snapshot of the target.
+		GIT_CONFIG_COUNT: "2",
+		GIT_CONFIG_KEY_0: "maintenance.auto",
+		GIT_CONFIG_VALUE_0: "false",
+		GIT_CONFIG_KEY_1: "gc.auto",
+		GIT_CONFIG_VALUE_1: "0",
 	};
 });
 
@@ -1185,6 +1194,116 @@ describe("a stale ref lock on the target (fw-warp-2 r2, MINOR 1)", () => {
 			expect(result.failure?.detail).toContain(join(tgt, ".git", lock));
 			expect(w.changes).toEqual([]);
 			expect(snapshot(tgt)).toEqual(before);
+		});
+	}
+});
+
+describe("every target stash entry is kept (fw-warp-2 r3, HIGH)", () => {
+	function threeStashes() {
+		const { src, tgt } = twinRepos();
+		const entries: string[] = [];
+		for (const n of [1, 2, 3]) {
+			write(join(tgt, "a.txt"), `stashed ${n}\n`);
+			git(tgt, "stash", "-q");
+		}
+		entries.push(...git(tgt, "log", "-g", "--format=%H", "refs/stash", "--").trim().split("\n"));
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		return { src, tgt, entries };
+	}
+
+	it("refuses without --force before any change, naming each entry and the count", async () => {
+		const { tgt } = threeStashes();
+		const before = snapshot(tgt);
+		const w = world();
+		const result = await w.run(plainRepoPlan("work/repo"));
+		const detail = result.failure?.detail ?? "";
+		for (const n of [0, 1, 2]) {
+			expect(detail).toContain(`refs/stash@{${n}} (a stash entry only there, one of 3)`);
+		}
+		expect(w.changes).toEqual([]);
+		expect(snapshot(tgt)).toEqual(before);
+	});
+
+	it("with --force saves all three as refs, each survives gc --prune=now, and stash apply works", async () => {
+		const { tgt, entries } = threeStashes();
+		const result = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		const ns = `refs/hyper-warp-backup/${WARP_ID}`;
+		expect(result.notices.join("\n")).toContain(
+			`Stash entries saved: 3, one ref each under ${ns}/stash/<n>`,
+		);
+		gcNow(tgt);
+		entries.forEach((entry, n) => {
+			expect(git(tgt, "rev-parse", `${ns}/stash/${n}`).trim()).toBe(entry);
+		});
+		// The sync removed the stash itself (this machine has none)...
+		expect(
+			spawnSync("git", ["-C", tgt, "rev-parse", "-q", "--verify", "refs/stash"]).status,
+		).not.toBe(0);
+		// ...and an entry re-applies from its saved ref.
+		git(tgt, "stash", "apply", "-q", `${ns}/stash/1`);
+		expect(readFileSync(join(tgt, "a.txt"), "utf-8")).toBe("stashed 2\n");
+	});
+
+	it("the same stash on both sides is covered", () => {
+		const { src } = twinRepos();
+		write(join(src, "a.txt"), "mine\n");
+		git(src, "stash", "-q");
+		const entry = git(src, "rev-parse", "refs/stash").trim();
+		expect(refsNotCoveredHere(src, [{ object: entry, name: "refs/stash@{0}" }])).toEqual([]);
+		expect(refsNotCoveredHere(src, [{ object: entry, name: "refs/stash@{1}" }])).toEqual([
+			{ name: "refs/stash@{1}", reason: "a stash entry only there, one of 1" },
+		]);
+	});
+});
+
+describe("refs that conflict as file and directory (fw-warp-2 r3, MINOR)", () => {
+	it("finds both directions, and nothing else", () => {
+		expect(
+			refConflicts(
+				["refs/heads/df", "refs/heads/a/b", "refs/heads/main"],
+				[
+					"refs/heads/df/x",
+					"refs/heads/a",
+					"refs/heads/main",
+					"refs/heads/dfx",
+					"HEAD",
+					"refs/stash@{0}",
+				],
+			),
+		).toEqual([
+			{ there: "refs/heads/df/x", here: "refs/heads/df" },
+			{ there: "refs/heads/a", here: "refs/heads/a/b" },
+		]);
+	});
+
+	for (const [label, here, there, packThere] of [
+		["a file here, a directory there (loose)", "df", "df/x", false],
+		["a directory here, a file there (packed)", "df2/y", "df2", true],
+	] as const) {
+		it(`${label}: refused without --force naming both; --force saves and deletes the target's, and refs end equal`, async () => {
+			const { src, tgt } = twinRepos();
+			git(src, "branch", here, "HEAD");
+			git(tgt, "branch", there, "HEAD");
+			if (packThere) git(tgt, "pack-refs", "--all");
+			const before = snapshot(tgt);
+			const w = world();
+			const refused = await w.run(plainRepoPlan("work/repo"));
+			expect(refused.failure?.detail).toContain("conflict as file and directory");
+			expect(refused.failure?.detail).toContain(
+				`refs/heads/${there} there, refs/heads/${here} here`,
+			);
+			expect(w.changes).toEqual([]);
+			expect(snapshot(tgt)).toEqual(before);
+			const result = await world().run(plainRepoPlan("work/repo", { force: true }));
+			expect(result.failure, result.failure?.detail).toBeUndefined();
+			expect(refsOf(tgt)).toBe(refsOf(src));
+			expect(git(tgt, "rev-parse", `refs/hyper-warp-backup/${WARP_ID}/heads/${there}`).trim()).toBe(
+				git(src, "rev-parse", "HEAD").trim(),
+			);
+			expect(result.notices.join("\n")).toContain(
+				"conflicted as file and directory with this machine's (1)",
+			);
 		});
 	}
 });

@@ -1494,6 +1494,55 @@ warp9; [ "$code" = 0 ] || die "the warp after removing the lock failed: $out"
 pass "a stale $b9.lock on t12 is refused before the marker, naming the file; the warp passes once it is removed"
 
 echo "# ---------------------------------------------------------------"
+echo "# 21. stash entries and file/directory ref conflicts (fw-warp-2 r3)"
+echo "# ---------------------------------------------------------------"
+# Three stash entries on t12; this machine has none.
+ssh_t12 "cd '$proj9' && for n in 1 2 3; do printf 'stashed %s\n' \$n > a.txt; git -c user.email=t@e -c user.name=t stash -q; done"
+stashes9="$(ssh_t12 "git -C '$proj9' log -g --format=%H refs/stash --")"
+[ "$(printf '%s\n' "$stashes9" | wc -l | tr -d ' ')" = 3 ] || die "t12 does not hold 3 stash entries"
+before9="$(target_tree "$proj9")"
+warp9
+[ "$code" = 2 ] || die "stash entries only t12 has were not refused: exit $code: $out"
+listed9="$(printf '%s\n' "$out" | LC_ALL=C sed -e 's/^ › \{3\}//')"
+for n in 0 1 2; do
+  printf '%s\n' "$listed9" | grep -qxF "  refs/stash@{$n} (a stash entry only there, one of 3)" || die "stash@{$n} not named: $out"
+done
+[ "$(target_tree "$proj9")" = "$before9" ] || die "the target repo changed after the refusal"
+pass "3 stash entries only t12 has are refused without --force, each named with the count; t12's repo is byte-identical afterwards"
+
+warp9 --force
+[ "$code" = 0 ] || die "--force with stash entries failed: exit $code: $out"
+flat "$out" | grep -q "Stash entries saved: 3" || die "the save does not announce 3 stash entries: $out"
+ns9="$(flat "$out" | sed -n 's/.*saved there under \(refs\/hyper-warp-backup\/[^ ]*\/\) before.*/\1/p')"
+gc_there
+n=0
+for entry in $stashes9; do
+  [ "$(ssh_t12 "git -C '$proj9' rev-parse '${ns9}stash/$n'")" = "$entry" ] || die "stash entry $n is not at ${ns9}stash/$n after gc"
+  n=$((n + 1))
+done
+ssh_t12 "cd '$proj9' && git stash apply -q '${ns9}stash/1'"
+[ "$(ssh_t12 "cat '$proj9/a.txt'")" = "stashed 2" ] || die "git stash apply of ${ns9}stash/1 did not restore its change"
+ssh_t12 "cd '$proj9' && git checkout -q -- a.txt"
+pass "with --force all 3 stash entries are kept as ${ns9}stash/0..2 past gc --prune=now, and git stash apply of one works"
+
+# A ref that conflicts as file and directory: df here, df/x on t12.
+git -C "$proj9" branch df
+ssh_t12 "git -C '$proj9' branch df/x"
+before9="$(target_tree "$proj9")"
+warp9
+[ "$code" = 2 ] || die "a file/directory ref conflict was not refused: exit $code: $out"
+flat "$out" | grep -q "conflict as file and directory" || die "the refusal does not say why: $out"
+printf '%s\n' "$out" | LC_ALL=C sed -e 's/^ › \{3\}//' | grep -qxF "  refs/heads/df/x there, refs/heads/df here" || die "the refusal does not name both refs: $out"
+flat "$out" | grep -q "Nothing was changed on either machine" || die "the refusal does not say nothing changed: $out"
+[ "$(target_tree "$proj9")" = "$before9" ] || die "the target repo changed after the refusal"
+warp9 --force
+[ "$code" = 0 ] || die "--force with a file/directory ref conflict failed: exit $code: $out"
+ns9="$(flat "$out" | sed -n 's/.*saved there under \(refs\/hyper-warp-backup\/[^ ]*\/\) before.*/\1/p')"
+[ "$(ssh_t12 "git -C '$proj9' rev-parse '${ns9}heads/df/x'")" = "$(git -C "$proj9" rev-parse HEAD)" ] || die "the target's df/x was not saved"
+[ "$(refs_there)" = "$(refs_here)" ] || die "t12's refs are not this machine's"
+pass "refs/heads/df here and refs/heads/df/x on t12 are refused naming both; --force saves df/x (${ns9}heads/df/x), deletes it there and ends with equal refs"
+
+echo "# ---------------------------------------------------------------"
 printf '1..%d\n' "$step"
 echo "# all $step assertions passed"
 echo "# warp-argv.log (what the fake herdr was called with):"
