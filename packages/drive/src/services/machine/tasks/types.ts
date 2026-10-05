@@ -15,6 +15,7 @@
 import type { DriveConfig } from "#config/schema";
 import type { MachineInfo } from "#services/machine";
 import type { MachineRunner, Spawner } from "#services/remote";
+import type { SyncEngine } from "#services/sync/engine";
 
 /** A capability a task belongs to, and what `hyper machine setup` offers to set up. */
 export type Feature = "tools" | "config-sync" | "agent-user" | "docker-rootless" | "home-path";
@@ -92,6 +93,12 @@ export interface TaskContext {
 	 * so it could not otherwise be driven by a recording runner in `ctx`.
 	 */
 	spawner?: Spawner;
+	/**
+	 * Injection seam for tests: the sync engine the `config-sync` task drives.
+	 * Undefined in production, where the task uses `getEngine()` — the same
+	 * engine `hyper drive sync-config` uses.
+	 */
+	syncEngine?: SyncEngine;
 }
 
 /** One unit of machine setup. */

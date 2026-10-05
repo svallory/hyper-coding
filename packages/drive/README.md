@@ -203,7 +203,10 @@ locally or over `ssh -t`, or "Skip"; Skip there is a deliberate answer, so
 the run exits 0 with those tasks reported as skipped. `--yes` asks nothing
 about root even in a terminal: it takes the defaults, leaves the printed
 script for you and exits 3 when root steps are pending. Without a terminal
-the same happens without `--yes`. Machines are the Herdr machine list merged
+the same happens without `--yes`. The `config-sync` feature creates (or
+verifies) the same two sessions as `hyper drive sync-config MACHINE`, so a
+second run reports nothing needed; it pairs two machines, so on the local
+machine (no MACHINE) it only says how to pair and is reported skipped. Machines are the Herdr machine list merged
 with `[machines.*]` in `drive.toml`.
 
 ### `hyper drive` — the hyperdrive itself
