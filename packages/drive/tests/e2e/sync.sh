@@ -2,15 +2,19 @@
 # e2e: config sync end to end, against a real Mutagen and a real SSH hop to
 # localhost.
 #
-# Runs `hyper drive sync-config loop` where `loop` is a fake machine that
-# Herdr maps to host `localhost` with a temp home on both sides. It asserts:
+# Runs `hyper machine setup loop --features config-sync` and `hyper drive
+# sync-config loop`, where `loop` is a fake machine that Herdr maps to host
+# `localhost` with a temp home on both sides. It asserts:
 #   1. `mutagen version` and the version this script was written against
-#   2. `sync-config loop` creates both sessions (Claude + pi)
+#   2. `machine setup loop --features config-sync --yes` creates both sessions
+#      (Claude + pi), and `sync-config loop` then finds them ready (AC-21)
 #   3. `--check` then reports ready
 #   4. a file written on alpha shows up on beta within 60s
 #   5. an ignored path (.credentials.json) never reaches beta
 #   6. a symlink to an absolute target resolves on beta (posix-raw symlinks)
-#   7. both sessions are terminated at the end (trap), so nothing is left running
+#   7. a second `machine setup` run reports nothing needed (C-15, AC-24)
+#   8. both sessions are terminated and this script's own daemon is stopped at
+#      the end (trap), so nothing is left running
 #
 # Usage: packages/drive/tests/e2e/sync.sh
 # Cost:   creates two throwaway Mutagen sessions named hyper-claude-loop-test /
@@ -159,25 +163,45 @@ done
 
 trap cleanup EXIT
 
-# SHOULD: the create step must be able to FAIL LOUDLY. Previously `out=$(...)`
-# under `set -e` aborted the script on a non-zero exit with no `not ok` line at
-# all, so a broken create looked like a silent, truncated run.
+# AC-21 / D-1: `hyper machine setup <machine> --features config-sync` creates the
+# sync through the same service `drive sync-config` uses. It must be able to
+# FAIL LOUDLY: `out=$(...)` under `set -e` would abort with no `not ok` line.
+echo "# machine setup loop --features config-sync --yes (create)"
 set +e
-out="$(run_cli drive sync-config loop)"
+out="$(run_cli machine setup loop --features config-sync --yes)"
 create_rc=$?
 set -e
 echo "$out"
 if [ "$create_rc" != 0 ]; then
-  die "sync-config loop exited $create_rc; got: $out"
+  die "machine setup loop --features config-sync exited $create_rc; got: $out"
 fi
-if ! printf '%s' "$out" | grep -q "$claude_session"; then
-  die "expected the claude session to be created; got: $out"
+printf '%s' "$out" | grep -q "set up: *config-sync" \
+  || die "setup did not report config-sync as set up; got: $out"
+if ! printf '%s' "$out" | grep -F "$claude_session" | grep -q created; then
+  die "expected setup to create the claude session; got: $out"
 fi
-pass "created $claude_session"
-if ! printf '%s' "$out" | grep -q "$pi_session"; then
-  die "expected the pi session to be created; got: $out"
+pass "machine setup created $claude_session"
+if ! printf '%s' "$out" | grep -F "$pi_session" | grep -q created; then
+  die "expected setup to create the pi session; got: $out"
 fi
-pass "created $pi_session"
+pass "machine setup created $pi_session"
+
+# The command and the task share one service: what setup created, the command
+# finds ready and leaves alone (exit 0, nothing created).
+set +e
+out="$(run_cli drive sync-config loop)"
+rc=$?
+set -e
+echo "$out"
+[ "$rc" = 0 ] || die "sync-config loop after setup exited $rc; got: $out"
+if printf '%s' "$out" | grep -q created; then
+  die "sync-config created a session setup had already made: $out"
+fi
+for name in "$claude_session" "$pi_session"; do
+  printf '%s' "$out" | grep -F "$name" | grep -q ready \
+    || die "sync-config did not find $name ready after setup; got: $out"
+done
+pass "drive sync-config finds both sessions setup made ready, and creates nothing"
 
 echo "# sync-config loop --check (ready)"
 # `--check` is defined by both its output and its exit status, so both are
@@ -250,6 +274,19 @@ fi
 # And it must actually resolve to a real file through the link.
 [ -f "$beta_home/.claude/skills/x/SKILL.md" ] || die "skills/x does not resolve to a file on beta"
 pass "skills/x symlink preserved, absolute and resolving on beta"
+
+echo "# a second machine setup run changes nothing (C-15, AC-24)"
+set +e
+out="$(run_cli machine setup loop --features config-sync --yes)"
+rc=$?
+set -e
+echo "$out"
+[ "$rc" = 0 ] || die "the second machine setup run exited $rc; got: $out"
+printf '%s' "$out" | grep -q "Nothing needed" \
+  || die "the second setup run did not report nothing needed; got: $out"
+printf '%s' "$out" | grep -q "already fine: *config-sync" \
+  || die "the second setup run did not call config-sync already fine; got: $out"
+pass "a second machine setup run reports nothing needed and creates nothing"
 
 echo "# all assertions passed"
 exit 0

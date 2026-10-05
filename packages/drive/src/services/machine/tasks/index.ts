@@ -18,6 +18,7 @@ import { TOOLS, type ToolSpec } from "../tools.js";
 import { agentUserCreate } from "./agent-user-create.js";
 import { agentUserDirs } from "./agent-user-dirs.js";
 import { agentUserWatcher } from "./agent-user-watcher.js";
+import { configSyncTask } from "./config-sync.js";
 import { dockerRootlessInstall } from "./docker-rootless-install.js";
 import { dockerRootlessPackages } from "./docker-rootless-packages.js";
 import { homePathPhysical, homePathSymlink } from "./home-path.js";
@@ -90,6 +91,9 @@ export function allTasks(options: { tools?: readonly string[] } = {}): Task[] {
 		agentUserWatcher,
 		dockerRootlessPackages,
 		dockerRootlessInstall,
+		// No root and no target-side commands: it drives this machine's sync
+		// engine, so where it sits does not change the root script.
+		configSyncTask,
 	];
 }
 
@@ -112,6 +116,7 @@ export {
 	agentUserCreate,
 	agentUserDirs,
 	agentUserWatcher,
+	configSyncTask,
 	dockerRootlessInstall,
 	dockerRootlessPackages,
 	homePathPhysical,
