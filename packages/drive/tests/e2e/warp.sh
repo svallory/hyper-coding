@@ -21,7 +21,9 @@
 #   4.  AC-9   the target's transcript has the same line count and the same last
 #              message
 #   5.  AC-11  modified and untracked files arrive; node_modules does not
-#   6.  AC-10  the plain-directory kind, then the plain-git-repo kind
+#   6.  AC-10  the plain-directory kind, then the plain-git-repo kind; AC-9's
+#              transcript check (same line count, same last message) runs for
+#              the plain repo and the space worktree (section 9) as well
 #   7.  C-10   a foreign owner is refused without --force, and --force proceeds
 #   8.         --dry-run leaves both trees byte-identical
 #   9.  AC-12  `git ls-remote origin` of the project is unchanged by a warp
@@ -509,6 +511,18 @@ make_session() {
   printf '%s' "$folder"
 }
 
+# AC-9's transcript check, for any cwd kind: the target's copy of `file` has
+# the same line count as this machine's, and its last line carries `lastmsg`.
+assert_transcript_arrived() {
+  local file="$1" lastmsg="$2" remote_lines local_lines
+  remote_lines="$(ssh_t12 "wc -l < '$file' | tr -d ' '")"
+  local_lines="$(wc -l < "$file" | tr -d ' ')"
+  [ "$remote_lines" = "$local_lines" ] \
+    || die "line count differs for $file: local $local_lines, target $remote_lines"
+  ssh_t12 "tail -n 1 '$file'" | grep -qF "$lastmsg" \
+    || die "the last message did not reach the target in $file"
+}
+
 proj="$home_local/work/proj"
 mkdir -p "$proj/node_modules/pkg"
 printf 'should not travel\n' > "$proj/node_modules/pkg/index.js"
@@ -648,6 +662,9 @@ repo_enc="$(printf '%s' "$repo" | sed 's/[^A-Za-z0-9]/-/g')"
 mkdir -p "$home_local/.claude/projects/$repo_enc"
 printf '{"type":"user","cwd":"%s","message":{"role":"user","content":"repo"}}\n' "$repo" \
   > "$home_local/.claude/projects/$repo_enc/$SESSION.jsonl"
+REPO_LASTMSG="the last thing I said in the plain repo"
+printf '{"type":"assistant","cwd":"%s","message":{"id":"m2","content":[{"type":"text","text":"%s"}]}}\n' "$repo" "$REPO_LASTMSG" \
+  >> "$home_local/.claude/projects/$repo_enc/$SESSION.jsonl"
 target_mkdir "$home_local/.claude/projects/$repo_enc"
 target_mkdir "$repo"
 
@@ -655,6 +672,10 @@ run_hyper "$repo" warp t12 >/dev/null \
   || die "warping a plain git repo failed"
 [ "$(ssh_t12 "cat '$repo/a.txt'")" = "hello" ] || die "the git repo's files did not arrive"
 pass "AC-10 a plain git repository copies across, .git included"
+
+# AC-10 says AC-9 holds for this kind too: same line count, same last message.
+assert_transcript_arrived "$home_local/.claude/projects/$repo_enc/$SESSION.jsonl" "$REPO_LASTMSG"
+pass "AC-10 (plain repo) AC-9 holds: the transcript has $(wc -l < "$home_local/.claude/projects/$repo_enc/$SESSION.jsonl" | tr -d ' ') lines on the target and the same last message"
 
 after_origin="$(git -C "$repo" ls-remote origin)"
 [ "$before_origin" = "$after_origin" ] || die "AC-12: warp changed the hosting remote"
@@ -753,7 +774,7 @@ printf 'worktree file, modified\n' > "$space/worktrees/$branch/code.txt"
 printf 'untracked in the worktree\n' > "$space/worktrees/$branch/untracked-wt.txt"
 
 wt="$space/worktrees/$branch"
-make_session "$wt" >/dev/null
+wt_folder="$(make_session "$wt")"
 # Deliberately NOT created on the target: the space is supposed to be MISSING
 # there, and pre-creating even the worktree directory would make the space root
 # exist — the probe would then (correctly) say "already there", skip the clone,
@@ -794,6 +815,10 @@ pass "the worktree branch arrived in the target's bare repo ($remote_sha)"
 [ "$(ssh_t12 "cat '$wt/untracked-wt.txt'")" = "untracked in the worktree" ] || die "the untracked worktree file did not arrive"
 ssh_t12 "test -e '$wt/node_modules'" && die "node_modules was copied despite the exclusion list"
 pass "space-worktree files arrived with the exclusions applied"
+
+# AC-10 says AC-9 holds for this kind too: same line count, same last message.
+assert_transcript_arrived "$wt_folder/$SESSION.jsonl" "$LASTMSG"
+pass "AC-10 (space worktree) AC-9 holds: the transcript has $(wc -l < "$wt_folder/$SESSION.jsonl" | tr -d ' ') lines on the target and the same last message"
 
 # Blocker 3: the warped worktree is a WORKING git worktree on the target.
 status_target="$(ssh_t12 "git -C '$wt' status --porcelain" 2>&1)" \
