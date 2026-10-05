@@ -19,7 +19,7 @@ import { ConfigError, configPath, loadConfig } from "#config/index";
 import type { SpaceEntry } from "#config/schema";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { normaliseTrackedEntry } from "#services/allowlist";
-import { ensureDriveCheckout, readManifest } from "#services/manifest";
+import { ensureDriveCheckout, readManifest, recordSpacePath } from "#services/manifest";
 import { libPath } from "#services/space";
 import { isLocalDriveRemote, validateCloneEntry } from "#services/space-clone-validation";
 import {
@@ -170,6 +170,13 @@ export interface CloneSpaceResult {
 	libraryWrites: string[];
 	warnings: string[];
 	untrustedConfiguration: string[];
+	/**
+	 * What happened to the manifest's `path` for this space: `unchanged` when
+	 * it already named this clone's physical path, `recorded` when it now
+	 * does, `not recorded` when the write failed (the clone itself is kept;
+	 * the warning says how to record it later).
+	 */
+	manifestPath: "unchanged" | "recorded" | "not recorded";
 }
 
 /** A declined prompt is not an error to fix: exit 1 with the plain reason. */
@@ -350,6 +357,7 @@ export async function cloneSpace(
 			// in a real filename, and JSON serialisation is the consumer's
 			// escaping. The text warning below escapes each name.
 			untrustedConfiguration: review.paths,
+			manifestPath: "unchanged",
 		};
 		if (review.paths.length) result.warnings.push(describeReviewPaths(review.paths, review.facts));
 		if (entry.layout === "bare") {
@@ -406,6 +414,20 @@ export async function cloneSpace(
 			result.libraryWrites.push(join(root, "HYPER.md"));
 		}
 		checkSignal();
+		// The manifest records where the space lives (AC-8): this clone's
+		// physical path. DELIBERATELY outside the rollback: the space is fully
+		// cloned by now, and a manifest that cannot be written (offline, lock
+		// held) must not delete it. `hyper space init --refresh` in the space
+		// records it later.
+		const physical = realpathSync(root);
+		try {
+			result.manifestPath = recordSpacePath(name, physical);
+		} catch (error) {
+			result.manifestPath = "not recorded";
+			result.warnings.push(
+				`The space is cloned, but its path wasn't recorded in the manifest: ${error instanceof Error ? error.message : String(error)} Run \`hyper space init --refresh\` in ${escapeControlCharacters(physical)} to record it.`,
+			);
+		}
 		return result;
 	} catch (error) {
 		const failures: string[] = [];

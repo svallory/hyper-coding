@@ -130,7 +130,8 @@ hyper space clone NAME [PATH] [--yes] [--json]
 
 Recreate a space from the hyperdrive on this machine. Validates the
 manifest entry and the incoming branch, then clones the project's
-repositories and restores the cadence/tracked settings. Worktree placement
+repositories, restores the cadence/tracked settings, and records this
+clone's path in the manifest when it differs from the recorded one. Worktree placement
 is your worktrunk setting (`worktree-path`); clone inspects it read-only
 and warns with the actual destination — it never edits your config.
 
@@ -279,6 +280,10 @@ tooling).
   target; register it through an ssh config alias instead.
 - **The manifest is last-writer-wins by space name** — two machines
   registering the same name at once resolve to whichever push lands last.
+  It holds ONE path per space: `hyper space clone` records its clone's path
+  when it differs from the recorded one, so `path` is where the space lives
+  on the machine that last cloned or initialised it. If that write fails, the
+  clone is kept and `hyper space init --refresh` in the space records it.
 - **A busy space lock is taken over only when its owner is provably gone**
   (`.hyper/space.git/hyper.lock`): same host and the pid no longer runs, or
   runs with a different start time. A live owner keeps it however long it
