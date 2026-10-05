@@ -294,6 +294,9 @@ function fakeTarget(plan: WarpPlan, scenario: Scenario = {}): Run {
 			return { code: 0, stdout: "", stderr: "" };
 		},
 		now: () => "2026-10-04T12:00:00.000Z",
+		// The ref sync reads this machine's refs when it runs; the fixture cwd
+		// is not a repository here.
+		warpCarriedRefs: () => [],
 	};
 	return run;
 }
@@ -1584,14 +1587,31 @@ describe("the new target checks run before any change, and their failures change
 		);
 	});
 
-	it("the plain-repo copy never carries this machine's own warp backups", () => {
+	it("the plain-repo copy never carries this machine's own warp backups, and .git travels on its own", () => {
 		const plan = planOf({ cwdKind: "git-repo" });
 		const copy = plan.steps.find((step) => step.kind === "copy" && step.src === CWD) as Extract<
 			WarpStep,
 			{ kind: "copy" }
 		>;
-		expect(copy.excludes).toContain("/.git/hyper-warp-backup");
+		const gitCopy = plan.steps.find(
+			(step) => step.kind === "copy" && step.src === `${CWD}/.git`,
+		) as Extract<WarpStep, { kind: "copy" }>;
+		// The working tree never writes into .git; the .git copy excludes only
+		// the backups, never the user's patterns (a branch named dist travels).
+		expect(copy.excludes[0]).toBe("/.git");
+		expect(gitCopy.excludes).toEqual(["/hyper-warp-backup", "/refs/hyper-warp-backup"]);
+		expect(gitCopy.dst).toBe(`${CWD}/.git`);
 		expect(probeOf(plan, "collisions")?.collisions?.excludes).toEqual(copy.excludes);
+		// .git first, then the ref sync, then the working tree.
+		const at = (predicate: (step: WarpStep) => boolean) => plan.steps.findIndex(predicate);
+		const sync = at((step) => step.kind === "remote-command" && step.stdinFrom === "local-refs");
+		expect(at((step) => step === gitCopy)).toBe(sync - 1);
+		expect(at((step) => step === copy)).toBe(sync + 1);
+	});
+
+	it("refuses a plain repo whose .git is a file, before any probe", () => {
+		const refused = refuseWith({ cwdKind: "git-repo", gitDirIsFile: true });
+		expect(refused.message).toContain(".git is a file pointing at a git directory elsewhere");
 	});
 });
 
@@ -1647,7 +1667,11 @@ describe("a plain repo's refs on the target (PR #51 review, HIGH 2)", () => {
 			WarpStep,
 			{ kind: "copy" }
 		>;
-		expect(copy.excludes).toContain("/.git/refs/hyper-warp-backup");
+		const gitCopy = plan.steps.find(
+			(step) => step.kind === "copy" && step.src === `${CWD}/.git`,
+		) as Extract<WarpStep, { kind: "copy" }>;
+		expect(copy.excludes).toContain("/.git");
+		expect(gitCopy.excludes).toContain("/refs/hyper-warp-backup");
 		expect(plan.notes.join("\n")).toContain(
 			".git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced",
 		);
