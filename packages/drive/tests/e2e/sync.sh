@@ -9,7 +9,8 @@
 #   2. `machine setup loop --features config-sync --yes` creates both sessions
 #      (Claude + pi), and `sync-config loop` then finds them ready (AC-21)
 #   3. `--check` then reports ready
-#   4. a file written on alpha shows up on beta within 60s
+#   4. a plugin written on alpha shows up on beta within 60s, and a transcript
+#      written on beta shows up on alpha within 60s (AC-18)
 #   5. `.credentials.json`, `.claude.json`, `sessions/`, `state/` and pi's
 #      `auth.json`, present on alpha before the sessions existed, never reach
 #      beta, and beta's `.credentials.json` never reaches alpha (AC-17)
@@ -249,11 +250,20 @@ for name in "$claude_session" "$pi_session"; do
 done
 pass "--check exits 0 and reports both sessions ready"
 
-echo "# waiting for a file written on alpha to land on beta (up to 60s)"
-echo "hello-from-alpha" > "$alpha_home/.claude/probe.txt"
-wait_for "$beta_home/.claude/probe.txt" hello-from-alpha \
-  || die "file written on alpha never appeared on beta within 60s"
-pass "file propagated alpha -> beta"
+echo "# a plugin installed on alpha lands on beta (up to 60s)"
+mkdir -p "$alpha_home/.claude/plugins/e2e-plugin/.claude-plugin"
+echo '{"name":"e2e-plugin"}' > "$alpha_home/.claude/plugins/e2e-plugin/.claude-plugin/plugin.json"
+wait_for "$beta_home/.claude/plugins/e2e-plugin/.claude-plugin/plugin.json" e2e-plugin \
+  || die "the plugin written on alpha never appeared on beta within 60s"
+pass "plugin propagated alpha -> beta"
+
+echo "# a transcript created on beta lands on alpha (up to 60s)"
+# AC-18's other half: the machine writes, the laptop receives.
+mkdir -p "$beta_home/.claude/projects/-e2e-proj"
+echo '{"type":"user","message":"from beta"}' > "$beta_home/.claude/projects/-e2e-proj/beta-session.jsonl"
+wait_for "$alpha_home/.claude/projects/-e2e-proj/beta-session.jsonl" "from beta" \
+  || die "the transcript written on beta never appeared on alpha within 60s"
+pass "transcript propagated beta -> alpha"
 
 echo "# ignored paths must not cross"
 # A fixed sleep would race: if the sentinels haven't landed yet, "not there"
