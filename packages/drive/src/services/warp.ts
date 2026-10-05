@@ -90,6 +90,7 @@ import {
 	TARGET_CONFLICTED,
 	TARGET_DIRTY,
 	TARGET_IN_PROGRESS,
+	TARGET_REF_LOCK,
 	TARGET_REFTABLE,
 	TARGET_SUBMODULE_CHANGED,
 	TARGET_WORKTREE_STATE,
@@ -98,6 +99,7 @@ import {
 	targetRefBackupsLoose,
 	targetRefs,
 	targetRefsSave,
+	targetRefsSync,
 	targetStashSnapshot,
 	targetStatusCheck,
 	targetUntrackedPaths,
@@ -106,7 +108,9 @@ import {
 	targetWorktreeState,
 	trackedUnderDirectory,
 	type UncoveredRef,
+	WARP_GIT_DIR_EXCLUDES,
 	WARP_REF_BACKUP,
+	warpCarriedRefs,
 } from "#services/space-git";
 
 /** Exit code for every refusal and every failed plan. Matches `space clone`. */
@@ -202,6 +206,12 @@ export interface WarpInputs {
 	 * target's git shows them as deleted.
 	 */
 	trackedUnderExcludes: string[];
+	/**
+	 * `git-repo` only: the working directory's `.git` is a FILE (a `gitdir:`
+	 * link), not the repository itself. Warp refuses it: its refs and objects
+	 * live elsewhere and would not travel.
+	 */
+	gitDirIsFile?: boolean;
 	/**
 	 * Name of an existing config-sync session for this target, when there is
 	 * one. The transcript then travels by `flush()` instead of by rsync.
@@ -620,9 +630,11 @@ export type WarpStep =
 			/**
 			 * Feed the command the entries the `collisions` probe found on stdin,
 			 * NUL-separated, each prefixed `K` (overwritten in place) or `R` (a
-			 * type change, removed after the backup).
+			 * type change, removed after the backup); or (`local-refs`) this
+			 * machine's carried refs, read when the step runs, one
+			 * `<object> <refname>` line each (`- <refname>` for a symbolic ref).
 			 */
-			stdinFrom?: "collisions";
+			stdinFrom?: "collisions" | "local-refs";
 			/**
 			 * Run only when that probe found something: collisions to back up, or
 			 * target refs this machine doesn't cover.
@@ -990,16 +1002,23 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 		);
 	}
 
+	if (inputs.cwdKind === "git-repo" && inputs.gitDirIsFile) {
+		return refuse(
+			"repository",
+			`${inputs.cwd}/.git is a file pointing at a git directory elsewhere, not the repository itself. Warp carries a plain repository's .git directory with it; this one's refs and objects would not travel. Warp the repository it points at, or a space worktree, instead.`,
+		);
+	}
+
 	// ---- the plan: probes ------------------------------------------------
 	const steps: WarpStep[] = [];
 	const name = target.name;
 	// What the working-directory copy excludes. The collision check uses the
 	// SAME list, so it asks about exactly the files the copy would write. A
 	// space worktree's own `.git` file points at this machine's admin dir; a
-	// plain repository's backups (hyper-warp-backup, below) stay where they are.
-	const copyExcludes = inputs.space
-		? ["/.git", ...inputs.excludes]
-		: [...inputs.excludes, "/.git/hyper-warp-backup", `/.git/${WARP_REF_BACKUP}`];
+	// plain repository's `.git` travels in a copy of its own, where the user's
+	// excludes (meant for the working tree: `dist`, `target`, ...) never apply,
+	// so a branch named `dist` still travels.
+	const copyExcludes = ["/.git", ...inputs.excludes];
 	const warpId = `${inputs.sessionId}-${inputs.startedAt.replace(/[^0-9A-Za-z]/g, "")}`;
 	const backupDir = inputs.space
 		? `${inputs.space.barePath}/hyper-warp-backup/${warpId}`
@@ -1059,6 +1078,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 							argv: targetRefs(inputs.cwd),
 							refuse: !inputs.force,
 							problems: {
+								[TARGET_REF_LOCK]: `${name}'s repository ${inputs.cwd} has a ref lock file (named below): another git command is writing its refs, or one died and left the lock behind. Warp writes refs there, so it stops before changing anything. If no git command is running there, remove that file and run this again.`,
 								[TARGET_REFTABLE]: `${name}'s repository ${inputs.cwd} keeps its refs in the reftable format. A plain-repo warp replaces ${name}'s .git/config with this machine's, which drops that setting, so every ref there (and any a --force warp saved) would vanish from git's view. Warp refuses it with or without --force: push or fetch the work between the two machines instead.`,
 							},
 							problem: `${name}'s repository ${inputs.cwd} has refs this machine doesn't cover (below). A plain-repo warp replaces ${name}'s .git files with this machine's, so commits only ${name} has would become unreachable. Bring them here first (fetch them from ${name}), or pass --force: a --force warp first saves ${name}'s refs there under ${WARP_REF_BACKUP}/${warpId}/.`,
@@ -1391,6 +1411,27 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 				problem: `couldn't keep the saved refs under ${WARP_REF_BACKUP}/ of ${inputs.cwd} on ${name} as loose refs, so warp stopped before the copy replaced its packed-refs.`,
 			});
 		}
+		if (inputs.cwdKind === "git-repo") {
+			steps.push(
+				{
+					kind: "copy",
+					summary: `copy the repository's .git ${inputs.cwd}/.git to ${name} (all of it but earlier warps' backups)`,
+					src: `${inputs.cwd}/.git`,
+					dst: `${inputs.cwd}/.git`,
+					tree: true,
+					excludes: [...WARP_GIT_DIR_EXCLUDES],
+					leaves: `files under ${inputs.cwd}/.git`,
+				},
+				{
+					kind: "remote-command",
+					stdinFrom: "local-refs",
+					summary: `make the refs of ${inputs.cwd} on ${name} equal to this machine's (set each, delete the ones this machine doesn't have; earlier warps' backups untouched)`,
+					argv: targetRefsSync(inputs.cwd),
+					leaves: `the refs of ${inputs.cwd} on ${name}, set to this machine's`,
+					problem: `couldn't make the refs of ${inputs.cwd} on ${name} equal to this machine's after copying its .git, so warp stopped before copying the working tree.`,
+				},
+			);
+		}
 		steps.push({
 			kind: "copy",
 			summary: `copy ${inputs.cwdKind} ${inputs.cwd} to ${name}`,
@@ -1453,11 +1494,11 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 	}
 	if (inputs.cwdKind === "git-repo") {
 		notes.push(
-			`The repository's .git travels with it and is merged into ${name}'s copy file by file, like everything else: ${name}'s .git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name.`,
+			`The repository's .git travels in a copy of its own (only earlier warps' backups are excluded; the working-tree excludes don't apply in it) and is merged into ${name}'s copy file by file: ${name}'s .git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name. Then ${name}'s refs are set to exactly this machine's in one git update-ref transaction (refs only ${name} has are deleted there), so a stale loose ref there can't shadow a packed one here.`,
 			inputs.force
 				? `--force: if ${name}'s repository has refs this machine doesn't cover, all of its refs (and a detached HEAD) are first saved there under ${WARP_REF_BACKUP}/${warpId}/, which the copy leaves alone.`
-				: `${name}'s repository is refused if a ref (or a detached HEAD) there points at a commit this machine doesn't have, or has but reaches from none of its refs; --force saves its refs there first.`,
-			`Refs earlier --force warps saved there under ${WARP_REF_BACKUP}/ are kept: any a git pack-refs moved into packed-refs are written back as loose refs before the copy. A repository there in the reftable ref format is refused, with or without --force.`,
+				: `${name}'s repository is refused if a ref (or a detached HEAD) there points at a commit this machine doesn't have, or has but reaches from none of the refs warp carries (not earlier warps' backups, other worktrees' HEADs or the stash); --force saves its refs there first.`,
+			`Refs earlier --force warps saved there under ${WARP_REF_BACKUP}/ are kept: any a git pack-refs moved into packed-refs are written back as loose refs before the copy. A repository there in the reftable ref format, or with a ref lock file, is refused, with or without --force.`,
 		);
 	}
 	if (inputs.cwdKind !== "plain-dir" && inputs.excludes.length > 0) {
@@ -1643,6 +1684,8 @@ export interface WarpDeps {
 	findCollisions?: typeof findCollisions;
 	/** `refsNotCoveredHere` from services/space-git.ts; injected so tests can answer it. */
 	refsNotCoveredHere?: typeof refsNotCoveredHere;
+	/** This machine's carried refs, for the ref sync. */
+	warpCarriedRefs?: typeof warpCarriedRefs;
 }
 
 /** Steps that may leave something on the target once attempted. */
@@ -1815,15 +1858,17 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 					break;
 				}
 				case "remote-command": {
+					const stdin =
+						step.stdinFrom === "collisions"
+							? collisions.map((entry) => `${entry.replace ? "R" : "K"}${entry.path}\0`).join("")
+							: step.stdinFrom === "local-refs"
+								? (deps.warpCarriedRefs ?? warpCarriedRefs)(plan.cwd)
+										.map((ref) => `${ref.symbolic ? "-" : ref.object} ${ref.name}\n`)
+										.join("")
+								: undefined;
 					const result = await deps.runner.ssh(step.argv, {
 						timeoutMs: 15 * 60_000,
-						...(step.stdinFrom
-							? {
-									stdin: collisions
-										.map((entry) => `${entry.replace ? "R" : "K"}${entry.path}\0`)
-										.join(""),
-								}
-							: {}),
+						...(stdin === undefined ? {} : { stdin }),
 					});
 					if (result.code !== 0) {
 						const said = firstLine(result.stderr) ?? firstLine(result.stdout);
@@ -2256,6 +2301,7 @@ export function gatherWarp(options: {
 			owner: readOwner(cwd, chosen.id),
 			strayMarker: findStrayMarker(dirname(chosen.path), chosen.id),
 			cwdKind: kind,
+			...(kind === "git-repo" && !isDirectory(join(cwd, ".git")) ? { gitDirIsFile: true } : {}),
 			space,
 			spaceInManifest,
 			excludes,

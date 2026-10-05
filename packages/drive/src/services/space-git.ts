@@ -1719,13 +1719,121 @@ export const WARP_REF_BACKUP = "refs/hyper-warp-backup";
 export const TARGET_REFTABLE = 29;
 
 /**
+ * Exit code of {@link targetRefs}: a ref lock (`<ref>.lock` under `refs/`, or
+ * `packed-refs.lock`) exists in the target's repository, so the steps that
+ * write refs there would fail half-way. The path is printed.
+ */
+export const TARGET_REF_LOCK = 30;
+
+/**
+ * What a plain-repo warp copies of `.git` leaves out, anchored at the `.git`
+ * directory: the backups of earlier `--force` warps (entries and refs), which
+ * stay as they are on the target. Nothing else in `.git` is excluded; in
+ * particular the user's `warp.exclude` patterns (meant for the working tree)
+ * never apply inside it. {@link isWarpCarriedRef} is derived from this list.
+ */
+export const WARP_GIT_DIR_EXCLUDES = ["/hyper-warp-backup", `/${WARP_REF_BACKUP}`];
+
+/**
+ * Does a plain-repo warp make the target's ref `name` equal to this
+ * machine's? Every ref is, except those under an excluded path of
+ * {@link WARP_GIT_DIR_EXCLUDES} (earlier warps' backups). After the copy, the
+ * ref sync ({@link targetRefsSync}) sets each of these to this machine's
+ * value and deletes the ones this machine doesn't have.
+ */
+export function isWarpCarriedRef(name: string): boolean {
+	if (!name.startsWith("refs/")) return false;
+	return !WARP_GIT_DIR_EXCLUDES.some((excluded) => `/${name}`.startsWith(`${excluded}/`));
+}
+
+/**
+ * This machine's refs that a plain-repo warp carries to the target
+ * ({@link isWarpCarriedRef}), as `{ object, name, symbolic }`, from the
+ * repository at `worktree`. Read-only. Throws when git can't list them.
+ */
+export function warpCarriedRefs(
+	worktree: string,
+): { object: string; name: string; symbolic: boolean }[] {
+	const listed = spawnSync(
+		"git",
+		[
+			"-C",
+			worktree,
+			"--no-optional-locks",
+			"-c",
+			"core.fsmonitor=false",
+			"for-each-ref",
+			"--format=%(objectname) %(refname) %(symref)",
+		],
+		{ encoding: "utf8", env: cleanGitEnv(), maxBuffer: 256 * 1024 * 1024 },
+	);
+	if (listed.error || listed.status !== 0) {
+		throw new SpaceGitError(
+			`couldn't list the refs of ${worktree}: ${(listed.stderr ?? "").trim() || listed.error?.message}`,
+		);
+	}
+	return (listed.stdout ?? "").split("\n").flatMap((line) => {
+		const [object, name, symref] = line.split(" ");
+		return object && name && isWarpCarriedRef(name)
+			? [{ object, name, symbolic: Boolean(symref) }]
+			: [];
+	});
+}
+
+/**
+ * A script for the target that makes the refs of the repository at
+ * `worktree` equal to this machine's, after a plain-repo copy: stdin holds
+ * this machine's carried refs ({@link warpCarriedRefs}), `<object> <refname>`
+ * per line, or `- <refname>` for a symbolic ref (which the copy carries as its
+ * file and the sync leaves alone). In ONE `git update-ref --no-deref --stdin`
+ * transaction, every other one of them is set to that object, and every
+ * target ref {@link isWarpCarriedRef} covers that is not in the list is
+ * deleted (a symbolic ref itself, never what it points at). A loose ref and a packed one are
+ * handled alike, so a stale loose ref there can't shadow this machine's
+ * packed one. Earlier warps' backups are never touched. Only run after the
+ * refs check passed (or `--force` saved the target's refs).
+ */
+export function targetRefsSync(worktree: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const keep = WARP_GIT_DIR_EXCLUDES.filter((path) => path.startsWith("/refs/")).map(
+		(path) => `${path.slice(1)}/`,
+	);
+	const awk = [
+		"NR == FNR { w[$2] = 1; next }",
+		`{ for (i in k) if (index($1, k[i]) == 1) next }`,
+		'index($1, "refs/") == 1 && !($1 in w) { print "delete " $1 }',
+	].join("\n");
+	const script = [
+		`w=${quote(worktree)}`,
+		'cd "$w" || exit 3',
+		TARGET_READ_ONLY_GIT,
+		"gd=$(g rev-parse --git-common-dir) || exit 3",
+		'case "$gd" in /*) ;; *) gd="$w/$gd" ;; esac',
+		't="$gd/hyper-warp-refs.$$"',
+		`trap 'rm -f "$t"' EXIT`,
+		'cat > "$t" || exit 4',
+		"{",
+		`  g for-each-ref --format='%(refname)' | awk -v keep=${quote(keep.join(" "))} 'BEGIN { split(keep, k, " ") }
+${awk}' "$t" - || exit 5`,
+		`  awk 'NF == 2 && $1 != "-" { print "update " $2 " " $1 }' "$t" || exit 5`,
+		'} > "$t.cmd" || { rm -f "$t.cmd"; exit 5; }',
+		'g update-ref --no-deref --stdin < "$t.cmd"; rc=$?; rm -f "$t.cmd"',
+		'[ "$rc" -eq 0 ] || exit 6',
+		"exit 0",
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/**
  * A read-only script for the target: the refs of the repository at
  * `worktree`, one `<object> <refname> <peeled>` line each (`<peeled>` is the
  * commit an annotated tag points at, empty otherwise), and `<commit> HEAD`
  * when HEAD is detached. Refs under {@link WARP_REF_BACKUP} (earlier warps'
  * backups) are left out. Prints nothing when there is no `.git` there. Exits
  * {@link TARGET_REFTABLE} when the repository's config sets
- * `extensions.refStorage` to `reftable`, before listing anything.
+ * `extensions.refStorage` to `reftable`, and {@link TARGET_REF_LOCK} (printing
+ * the path) when a `<ref>.lock` or `packed-refs.lock` exists, before listing
+ * anything.
  */
 export function targetRefs(worktree: string): string[] {
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
@@ -1735,6 +1843,11 @@ export function targetRefs(worktree: string): string[] {
 		TARGET_READ_ONLY_GIT,
 		"f=$(g config --get extensions.refStorage)",
 		`case "$f" in [Rr][Ee][Ff][Tt][Aa][Bb][Ll][Ee]) echo "extensions.refStorage=$f"; exit ${TARGET_REFTABLE} ;; esac`,
+		"gd=$(g rev-parse --git-common-dir) || exit 3",
+		'case "$gd" in /*) ;; *) gd="$w/$gd" ;; esac',
+		'l=""; [ -e "$gd/packed-refs.lock" ] && l="$gd/packed-refs.lock"',
+		'[ -n "$l" ] || l=$(find "$gd/refs" -name \'*.lock\' -print 2>/dev/null | head -n 1)',
+		`if [ -n "$l" ]; then printf '%s\\n' "$l"; exit ${TARGET_REF_LOCK}; fi`,
 		`r=$(g for-each-ref --format='%(objectname) %(refname) %(*objectname)') || exit 3`,
 		`printf '%s\\n' "$r" | grep -v ' ${WARP_REF_BACKUP}/' || true`,
 		"if ! g symbolic-ref -q HEAD >/dev/null; then",
@@ -1822,12 +1935,14 @@ export interface UncoveredRef {
  * same name here (HEAD: this machine's HEAD) points at the same object, or
  * when the commit it points at (an annotated tag: the commit it tags, `peeled`
  * as the target read it, so a tag object only the target has counts) exists
- * here and is reachable from one of this machine's refs or HEAD, whatever
- * their names: after the copy those refs are the target's, so the commit stays
- * reachable there. Uncovered: an object this machine doesn't have, a commit
+ * here and is reachable from one of the refs the copy carries
+ * ({@link warpCarriedRefs}, the stash aside) or HEAD, whatever their names:
+ * after the copy and the ref sync those refs are the target's, so the commit
+ * stays reachable there. Uncovered: an object this machine doesn't have, a commit
  * here that none of its refs reach, or anything that is not a commit at all
  * and differs. Read-only: `for-each-ref`, `rev-parse`, `cat-file
- * --batch-check` and `rev-list --not --all`, no optional locks, no fsmonitor.
+ * --batch-check` and `rev-list` with an explicit tip list, no optional locks,
+ * no fsmonitor.
  */
 export function refsNotCoveredHere(
 	worktree: string,
@@ -1840,30 +1955,46 @@ export function refsNotCoveredHere(
 			["-C", worktree, "--no-optional-locks", "-c", "core.fsmonitor=false", ...args],
 			{ encoding: "utf8", env: cleanGitEnv(), maxBuffer: 256 * 1024 * 1024, input },
 		);
+	// Only what the copy carries counts: the refs the ref sync makes equal on
+	// the target, and HEAD. Never `--all`: that would count earlier warps'
+	// backups and other worktrees' HEADs, which the target never gets.
+	const carried = warpCarriedRefs(worktree);
 	const local = new Map<string, string>();
-	const listed = run(["for-each-ref", "--format=%(objectname) %(refname)"]);
-	for (const line of (listed.stdout ?? "").split("\n")) {
-		const [object, name] = line.split(" ");
-		if (object && name) local.set(name, object);
-	}
+	for (const ref of carried) local.set(ref.name, ref.object);
 	const head = run(["rev-parse", "-q", "--verify", "HEAD"]);
 	if (head.status === 0) local.set("HEAD", (head.stdout ?? "").trim());
 	const pending = refs.filter((ref) => local.get(ref.name) !== ref.object);
-	// The commit each pending ref stands for, when this machine has it.
+	if (pending.length === 0) return [];
+	// The commit each object stands for (an annotated tag: the commit it tags),
+	// when this machine has it: the target's pending refs first, then this
+	// machine's tips. A stash is a ref the sync carries, but not a branch
+	// anyone keeps: it never counts as covering.
+	const tipObjects = [...local]
+		.filter(([name]) => name !== "refs/stash")
+		.map(([, object]) => object);
 	const peeled = run(
 		["cat-file", "--batch-check=%(objectname) %(objecttype)"],
-		pending.map((ref) => `${ref.peeled || ref.object}^{commit}\n`).join(""),
+		[...pending.map((ref) => ref.peeled || ref.object), ...tipObjects]
+			.map((object) => `${object}^{commit}\n`)
+			.join(""),
 	);
-	const commits = (peeled.stdout ?? "").split("\n").slice(0, pending.length);
-	const commitOf = (index: number): string | undefined => {
-		const [object, type] = (commits[index] ?? "").split(" ");
+	const answers = (peeled.stdout ?? "").split("\n");
+	const commitAt = (index: number): string | undefined => {
+		const [object, type] = (answers[index] ?? "").split(" ");
 		return peeled.status === 0 && type === "commit" ? object : undefined;
 	};
+	const commitOf = (index: number) => commitAt(index);
 	const tips = [...new Set(pending.map((_, index) => commitOf(index)).filter(Boolean))];
-	// Of those commits, the ones none of this machine's refs (or HEAD) reach.
+	const negatives = [
+		...new Set(tipObjects.map((_, index) => commitAt(pending.length + index)).filter(Boolean)),
+	];
+	// Of those commits, the ones none of the carried refs (or HEAD) reach.
 	const unreached = new Set<string>();
 	if (tips.length > 0) {
-		const walked = run(["rev-list", "--stdin", "--not", "--all"], `${tips.join("\n")}\n`);
+		const walked = run(
+			["rev-list", "--stdin"],
+			[...tips, ...negatives.map((tip) => `^${tip}`)].map((line) => `${line}\n`).join(""),
+		);
 		if (walked.status === 0) {
 			for (const line of (walked.stdout ?? "").split("\n")) if (line) unreached.add(line);
 		} else {
