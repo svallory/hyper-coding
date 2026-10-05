@@ -65,10 +65,20 @@ export default class Pull extends SpaceCommand<typeof Pull> {
 			this.log(
 				"Preserved this machine's tracked entries by re-rendering .gitignore; review and commit its local modification.",
 			);
-		if (result.reviewPaths.length > 0) {
+		if (result.droppedUserStateCommits)
+			this.log(
+				`Dropped ${result.droppedUserStateCommits} local commit${result.droppedUserStateCommits === 1 ? "" : "s"} that only stopped tracking Claude user state; the incoming history does the same.`,
+			);
+		const kept = new Set(result.userStateKept ?? []);
+		if (kept.size > 0)
+			this.log(
+				`Kept ${kept.size} Claude user-state file${kept.size === 1 ? "" : "s"} on disk that the incoming history stops tracking (never tracked here): ${[...kept].slice(0, 3).map(quoteForTerminal).join(", ")}${kept.size > 3 ? ", …" : ""}.`,
+			);
+		const reviewPaths = result.reviewPaths.filter((path) => !kept.has(path));
+		if (reviewPaths.length > 0) {
 			// Most dangerous first, so the bound never hides a settings file or
 			// an executable behind twenty instruction files.
-			const { shown, hiddenSummary } = orderReviewPaths(result.reviewPaths, reviewFacts);
+			const { shown, hiddenSummary } = orderReviewPaths(reviewPaths, reviewFacts);
 			this.log("These can run commands or instruct agents; review them:");
 			for (const path of shown) this.log(`  ${quoteForTerminal(path)}`);
 			if (hiddenSummary !== "") this.log(`  … ${hiddenSummary}`);

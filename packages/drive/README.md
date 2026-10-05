@@ -25,20 +25,37 @@ never travel, and a staged file that looks like a secret
 makes the commit refuse unless you allow that exact path. Extra directories
 join the list with `hyper space init --tracked <dir>`.
 
-Claude Code's own per-user state is never committed, under the space's
-`.claude/` or any other `.claude/` in it, in case Claude was ever pointed at
-one as its config dir: credentials, `.claude.json*`, `history.jsonl`,
-`projects/`, `todos/`, `session-env/`, `shell-snapshots/`, `plugins/`,
-caches, logs and the rest (`CLAUDE_USER_STATE`: every entry config sync
-ignores plus the history and transcripts it syncs). Everything else in
-`.claude/` travels: `settings.json`, `commands/`, `agents/`, `skills/`,
-`hooks/`, `rules/`, `CLAUDE.md` and your own files. This is enforced at
-every commit, not by `.gitignore`: user state is never staged, and user
-state an older version committed is untracked by the next commit (one
-`note:` line, files kept on disk; earlier commits still hold it, so treat a
-secret that was in it as exposed). `--allow-secret` does not override it. A
-pull refuses history that adds or changes user state, naming the path and
-the commit: update hyper on the machine that pushed it and commit there.
+Claude Code's own per-user state is never committed, in case Claude was ever
+pointed at a space's `.claude/` as its config dir: credentials,
+`.claude.json*`, `history.jsonl`, `projects/`, `todos/`, `session-env/`,
+`shell-snapshots/` and Claude's other unmistakable files under any `.claude/`,
+plus generic names Claude also writes (`plans/`, `tasks/`, `state/`,
+`cache/`, `plugins/`, `local/`, …) in the space's top-level `.claude/` only
+(`CLAUDE_USER_STATE`: every entry config sync ignores plus the history and
+transcripts it syncs). Everything else in `.claude/` travels: `settings.json`,
+`commands/`, `agents/`, `skills/`, `hooks/`, `rules/`, `CLAUDE.md`,
+`statusline.sh` and your own files.
+
+This is enforced in hyper itself, not by `.gitignore`, and nothing is ever
+removed from disk, on any machine:
+- every commit leaves user state out and prints one `note:` line with the
+  count; `hyper space status` shows the count and `hyper space status --json`
+  lists the paths (`userState`), so you can see what was excluded;
+- user state an older version committed is untracked by the next commit (the
+  files stay); when another machine pulls that commit, its own copies stay on
+  its disk too, byte for byte, clean or edited, and if both machines already
+  untracked it, the pull treats that as no divergence;
+- a pull refuses history that adds or changes user state, naming the path and
+  the commit: update hyper on the machine that pushed it and commit there;
+- a push refuses unpushed commits (made by an older hyper or plain git) that
+  add user state or secret-looking files, names them, and prints the fix:
+  `git --git-dir=.hyper/space.git --work-tree=. reset --soft <pushed tip>`,
+  `hyper space commit`, `hyper space push`. `--allow-secret <path>` publishes
+  one intentional secret; `--allow-user-state-history` publishes user state
+  anyway (not recommended, and it cannot be taken back).
+Commits already on the hyperdrive still hold what they held: treat a secret
+that was in them as exposed. `--allow-secret` never overrides the user-state
+rule.
 
 ## First machine
 

@@ -177,7 +177,7 @@ describe("committing a space with Claude user state in it", () => {
 			.filter((line) => line.startsWith("note:"));
 		expect(notes).toHaveLength(1);
 		expect(notes[0]).toContain(
-			"stopped tracking 3 Claude user-state files under .claude/ (kept on disk)",
+			"3 Claude user-state paths under .claude/ are not tracked (3 stopped being tracked by this commit); kept on disk",
 		);
 		for (const path of [
 			".claude/todos/y.json",
@@ -274,8 +274,197 @@ describe("incoming history with Claude user state", () => {
 		makeBareSpace(target);
 		const commit = hyperIn(target, ["space", "commit", "-m", "clean"]);
 		ok(commit);
-		expect(flat(commit.stderr)).toContain("stopped tracking 1 Claude user-state file");
+		expect(flat(commit.stderr)).toContain("(1 stopped being tracked by this commit)");
 		expect(tree(target)).not.toContain(".claude/history.jsonl");
 		expect(tree(target)).toContain(".claude/commands/c.md");
+	});
+});
+
+/** Byte snapshot of the given paths under `dir` (null when absent). */
+function bytes(dir: string, paths: string[]): (string | null)[] {
+	return paths.map((path) =>
+		existsSync(join(dir, path)) ? readFileSync(join(dir, path), "latin1") : null,
+	);
+}
+
+describe("a peer's untracking commit never deletes Claude user state here (review N1)", () => {
+	const STATE = [
+		".claude/projects/-p/s1.jsonl",
+		".claude/history.jsonl",
+		".claude/plugins/installed_plugins.json",
+	];
+
+	/** Machine A (root): a legacy space that tracked user state, pushed. Machine B: a clone that commits the untracking and pushes it. */
+	function legacyPairWithPeerUntrack(): string {
+		write(root, [...STATE, ".claude/commands/c.md"]);
+		init();
+		spaceGit(root, ["add", "-f", "--", ...STATE]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		spaceGit(root, ["push", "-q", "origin", "HEAD"]);
+		spaceGit(root, ["fetch", "-q", "origin"]);
+		const peer = join(fixture.home, "peer-space");
+		ok(spawnCli(["space", "clone", "space", peer, "--yes"], fixture));
+		makeBareSpace(peer);
+		ok(hyperIn(peer, ["space", "commit", "-m", "untrack on B"]));
+		expect(tree(peer)).not.toContain(".claude/history.jsonl");
+		ok(hyperIn(peer, ["space", "push"]));
+		return peer;
+	}
+
+	it("clean: the pull keeps every file byte for byte and stops tracking them here", () => {
+		legacyPairWithPeerUntrack();
+		const before = bytes(root, STATE);
+		const pull = hyperIn(root, ["space", "pull"]);
+		ok(pull);
+		expect(bytes(root, STATE)).toEqual(before);
+		expect(flat(pull.stdout)).toContain("Kept 3 Claude user-state files on disk");
+		for (const path of STATE) expect(tree(), path).not.toContain(path);
+		expect(tree()).toContain(".claude/commands/c.md");
+	});
+
+	it("dirty: a locally modified history.jsonl survives the pull with its new bytes", () => {
+		legacyPairWithPeerUntrack();
+		writeFileSync(join(root, ".claude/history.jsonl"), "a prompt written here after the upgrade\n");
+		const before = bytes(root, STATE);
+		ok(hyperIn(root, ["space", "pull"]));
+		expect(bytes(root, STATE)).toEqual(before);
+		expect(readFileSync(join(root, ".claude/history.jsonl"), "utf8")).toBe(
+			"a prompt written here after the upgrade\n",
+		);
+	});
+
+	it("committed first: both machines untracked it; the pull is not a divergence and keeps the files", () => {
+		legacyPairWithPeerUntrack();
+		ok(hyperIn(root, ["space", "commit", "-m", "untrack on A"]));
+		const before = bytes(root, STATE);
+		const pull = hyperIn(root, ["space", "pull"]);
+		ok(pull);
+		expect(flat(pull.stdout)).toContain(
+			"Dropped 1 local commit that only stopped tracking Claude user state",
+		);
+		expect(bytes(root, STATE)).toEqual(before);
+		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(
+			spaceGit(root, ["rev-parse", "refs/remotes/origin/space/space"]).stdout,
+		);
+	});
+
+	it("a real divergence is still reported plainly", () => {
+		legacyPairWithPeerUntrack();
+		write(root, ["notes/local.md"]);
+		ok(hyperIn(root, ["space", "commit", "-m", "real local work"]));
+		const pull = hyperIn(root, ["space", "pull"]);
+		expect(pull.status).toBe(2);
+		expect(flat(pull.stderr)).toContain("have diverged");
+		expect(bytes(root, STATE).every((content) => content !== null)).toBe(true);
+	});
+});
+
+describe("push refuses unpushed history that holds user state or secrets (review N2)", () => {
+	it("refuses a plain-git commit, names it, and the documented fix publishes it without the user state", () => {
+		init();
+		ok(hyperIn(root, ["space", "push"]));
+		write(root, [".claude/history.jsonl", "notes/b.md"]);
+		spaceGit(root, ["add", "-f", "--", ".claude/history.jsonl", "notes/b.md"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		const sha = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+		const remoteBefore = git(
+			["--git-dir", fixture.remote, "rev-parse", "space/space"],
+			fixture.root,
+		);
+		const refused = hyperIn(root, ["space", "push"]);
+		expect(refused.status).not.toBe(0);
+		const err = flat(refused.stderr);
+		expect(err).toContain(sha.slice(0, 12));
+		expect(err).toContain(".claude/history.jsonl");
+		expect(err).toContain("reset --soft");
+		expect(git(["--git-dir", fixture.remote, "rev-parse", "space/space"], fixture.root)).toBe(
+			remoteBefore,
+		);
+		// The documented fix: fold the unpushed commits, recommit, push.
+		const upstream = spaceGit(root, ["rev-parse", "refs/remotes/origin/space/space"]).stdout.trim();
+		spaceGit(root, ["reset", "-q", "--soft", upstream]);
+		ok(hyperIn(root, ["space", "commit", "-m", "notes only"]));
+		ok(hyperIn(root, ["space", "push"]));
+		const published = git(
+			["--git-dir", fixture.remote, "ls-tree", "-r", "--name-only", "space/space"],
+			fixture.root,
+		);
+		expect(published).toContain("notes/b.md");
+		expect(published).not.toContain(".claude/history.jsonl");
+		expect(readFileSync(join(root, ".claude/history.jsonl"), "utf8")).toContain("history.jsonl");
+	});
+
+	it("refuses a secret in an unpushed plain-git commit; --allow-secret <path> publishes that one", () => {
+		init();
+		ok(hyperIn(root, ["space", "push"]));
+		write(root, ["notes/.env"]);
+		spaceGit(root, ["add", "-f", "--", "notes/.env"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "plain git secret"]);
+		const refused = hyperIn(root, ["space", "push"]);
+		expect(refused.status).not.toBe(0);
+		expect(flat(refused.stderr)).toContain("notes/.env");
+		ok(hyperIn(root, ["space", "push", "--allow-secret", "notes/.env"]));
+	});
+
+	it("--allow-user-state-history publishes it, loudly", () => {
+		init();
+		ok(hyperIn(root, ["space", "push"]));
+		write(root, [".claude/todos/t.json"]);
+		spaceGit(root, ["add", "-f", "--", ".claude/todos/t.json"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		const result = hyperIn(root, ["space", "push", "--allow-user-state-history"]);
+		ok(result);
+		expect(flat(result.stderr)).toContain("cannot be taken back");
+	});
+});
+
+describe("status, clone and generic names (review N3, N4, N5)", () => {
+	it("status counts user state once instead of listing it as untracked", () => {
+		init();
+		write(root, [".claude/history.jsonl", ".claude/projects/-x/s.jsonl", "notes/new.md"]);
+		const text = hyperIn(root, ["space", "status"]);
+		ok(text);
+		expect(flat(text.stdout)).toContain("Not tracked (Claude user state under .claude/): 2");
+		expect(flat(text.stdout)).not.toContain("?? .claude/history.jsonl");
+		expect(flat(text.stdout)).toContain("?? notes/new.md");
+		const json = JSON.parse(hyperIn(root, ["space", "status", "--json"]).stdout);
+		expect([...json.userState].sort()).toEqual([
+			".claude/history.jsonl",
+			".claude/projects/-x/s.jsonl",
+		]);
+	});
+
+	it("clone of a tip that holds user state says what it is, not the generic warning", () => {
+		write(root, [".claude/history.jsonl"]);
+		init();
+		spaceGit(root, ["add", "-f", "--", ".claude/history.jsonl"]);
+		spaceGit(root, ["-c", "core.hooksPath=/dev/null", "commit", "-qm", "older hyper"]);
+		spaceGit(root, ["push", "-q", "origin", "HEAD"]);
+		const clone = spawnCli(["space", "clone", "space", join(fixture.home, "c"), "--yes"], fixture);
+		ok(clone);
+		const err = flat(clone.stderr);
+		expect(err).toContain("Claude user-state file from another machine");
+		expect(err).not.toMatch(/"\.claude\/history\.jsonl"[^.]*these came from the hyperdrive/);
+	});
+
+	it("tracks a project's generic names in a nested .claude/, and every exclusion is one counted line", () => {
+		init();
+		write(root, [
+			"notes/proj/.claude/plans/p.md",
+			"notes/proj/.claude/tasks/t.md",
+			".claude/statusline.sh",
+			".claude/plans/p.md",
+		]);
+		const result = hyperIn(root, ["space", "commit", "-m", "generic"]);
+		ok(result);
+		expect(tree()).toContain("notes/proj/.claude/plans/p.md");
+		expect(tree()).toContain("notes/proj/.claude/tasks/t.md");
+		expect(tree()).toContain(".claude/statusline.sh");
+		expect(tree()).not.toContain(".claude/plans/p.md");
+		const notes = flat(result.stderr)
+			.split(/(?=note:)/)
+			.filter((line) => line.startsWith("note:"));
+		expect(notes).toHaveLength(1);
+		expect(notes[0]).toContain("1 Claude user-state path under .claude/ is not tracked");
 	});
 });

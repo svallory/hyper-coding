@@ -18,7 +18,7 @@ import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "no
 import { ConfigError, configPath, loadConfig } from "#config/index";
 import type { SpaceEntry } from "#config/schema";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
-import { normaliseTrackedEntry } from "#services/allowlist";
+import { isClaudeUserStatePath, normaliseTrackedEntry } from "#services/allowlist";
 import { ensureDriveCheckout, readManifest, recordSpacePath } from "#services/manifest";
 import { libPath } from "#services/space";
 import { isLocalDriveRemote, validateCloneEntry } from "#services/space-clone-validation";
@@ -359,7 +359,17 @@ export async function cloneSpace(
 			untrustedConfiguration: review.paths,
 			manifestPath: "unchanged",
 		};
-		if (review.paths.length) result.warnings.push(describeReviewPaths(review.paths, review.facts));
+		// Claude user state another machine committed (an older hyper): say
+		// what it is, not the generic instruction-file warning (review of PR
+		// #54, N4). It is checked out like the rest, and this machine's next
+		// commit stops tracking it; the files stay on disk.
+		const userState = incomingPaths.filter(isClaudeUserStatePath);
+		if (userState.length > 0)
+			result.warnings.push(
+				`${userState.length} Claude user-state file${userState.length === 1 ? "" : "s"} from another machine (prompt history, transcripts, …) came with this space under .claude/: ${userState.slice(0, 3).map(quoteForTerminal).join(", ")}${userState.length > 3 ? ", …" : ""}. A space never tracks them: your next \`hyper space commit\` stops tracking them (the files stay on disk; delete them if you don't want them here).`,
+			);
+		const reviewPaths = review.paths.filter((path) => !isClaudeUserStatePath(path));
+		if (reviewPaths.length) result.warnings.push(describeReviewPaths(reviewPaths, review.facts));
 		if (entry.layout === "bare") {
 			mkdirSync(join(root, "worktrees"));
 			ownedDirectories.add(join(root, "worktrees"));
