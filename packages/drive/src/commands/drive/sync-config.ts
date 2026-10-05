@@ -31,7 +31,8 @@ export default class SyncConfig extends BaseCommand<typeof SyncConfig> {
 	static override flags = {
 		...BaseCommand.baseFlags,
 		check: Flags.boolean({
-			description: "Only verify; never create. Exits 1 if anything is missing or mismatched.",
+			description:
+				"Only verify; never create, change or remove a session. Exits 1 if anything is missing, mismatched or not syncing. A connected session that reports a problem first gets one sync cycle (the one the sync engine would run on the next change), at most 30 s per session, 60 s in all, so a problem already fixed is not reported.",
 			default: false,
 		}),
 		json: Flags.boolean({ description: "Print the result as JSON.", default: false }),
