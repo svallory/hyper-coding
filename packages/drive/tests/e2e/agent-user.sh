@@ -9,8 +9,10 @@
 # and then asserts the properties that make the layout safe:
 #
 #   1. `sudo -n true` fails as the agent            (no privileged group)
-#   Docker daemon access is not tested (no daemon/socket fixture). Unit tests
-#   check that setup removes the agent from the privileged docker group.
+#   2. the agent is not in the docker group and is refused at the system and
+#      the primary's rootless Docker sockets (real listeners with Docker's
+#      ownership and modes, positive controls first); an agent added to docker
+#      is removed by setup's root script (AC-23 as recorded in deviations.md)
 #   3. the agent can create a file in the shared work dir
 #   4. the agent can read ~agent/.claude/settings.json
 #   5. the agent CANNOT read the primary's .credentials.json
@@ -430,9 +432,8 @@ if as_agent true && as_agent "sudo -n true" >/dev/null 2>&1; then
 fi
 pass "sudo -n true fails as $agent"
 
-# No docker CLI/daemon exists in this image: a failing `docker ps` would be
-# vacuous, so deliberately do not count it as a security assertion.
-echo '# Docker socket access is not covered by this fixture (no daemon/socket).'
+# Docker socket access: see the AC-23 block near the end, which provides real
+# sockets so the refusal is permission, not absence.
 
 as_agent "bash -c \"mkdir -p /home/$primary/work && printf 'from the agent\\n' > /home/$primary/work/from-agent.txt\"" \
   || die "the agent could not create a file in the shared work dir"
@@ -638,7 +639,8 @@ pass "0644 .credentials.json is NOT readable as $agent (ACL, not owner-only mode
 
 
 as_agent "cat /home/$primary/.claude/projects/x/agent-wrote.jsonl" >/dev/null 2>&1 \
-  && pass "the agent can read the primary's transcripts"
+  || die "the agent cannot read the primary's transcripts"
+pass "the agent can read the primary's transcripts"
 
 # The watcher: a 0600 file, written by its owner, becomes group-readable.
 #
@@ -969,6 +971,104 @@ run_hyper > "$work_real/setup-after-port.log" 2>&1 \
   && grep -q "Nothing needed" "$work_real/setup-after-port.log" \
   || { tail -25 "$work_real/setup-after-port.log"; die 'setup did not settle after the port-carrying copy and run'; }
 pass "root script copy (scp -P) and run (ssh -p) both reach the container on port $port"
+
+# --------------------------------------------------------------------------
+# AC-23 as it now holds (deviations.md, ac-gaps item 6): the agent is not in
+# the docker group and cannot reach the system's or the primary user's Docker
+# socket. (With docker-rootless the agent has its OWN rootless daemon by
+# design, so "docker ps fails" is no longer the criterion; docker-home.sh
+# covers that daemon.)
+#
+# The image has no Docker, so a refused connect would prove nothing. The
+# fixture therefore provides both sockets with Docker's own ownership and
+# modes and a REAL listener behind each, and checks the positive controls: a
+# member of the docker group (root) reaches the system socket and the primary
+# reaches its own, so the agent's refusals are permission, not absence.
+#   system:   /var/run/docker.sock, root:docker 0660 (dockerd's default)
+#   primary:  /run/user/<uid>/docker.sock, the rootless default, inside the
+#             primary's 0700 runtime dir
+# --------------------------------------------------------------------------
+pexec "getent group docker >/dev/null || groupadd --system docker"
+pexec "cat > /usr/local/bin/hyper-e2e-sock-listen <<'PERL'
+#!/usr/bin/perl
+# Listen on a unix socket, answer every connection with ok, forever.
+use strict; use IO::Socket::UNIX;
+my (\$path, \$mode, \$group) = @ARGV;
+unlink \$path;
+my \$server = IO::Socket::UNIX->new(Type => SOCK_STREAM(), Local => \$path, Listen => 5) or die \"listen \$path: \$!\";
+chown -1, scalar(getgrnam(\$group)), \$path if defined \$group;
+chmod oct(\$mode), \$path;
+while (my \$client = \$server->accept) { print \$client \"ok\\n\"; close \$client; }
+PERL
+cat > /usr/local/bin/hyper-e2e-sock-probe <<'PERL'
+#!/usr/bin/perl
+# Connect to a unix socket: print connected, or the errno text and exit 1.
+use strict; use IO::Socket::UNIX;
+my \$socket = IO::Socket::UNIX->new(Type => SOCK_STREAM(), Peer => \$ARGV[0]);
+if (\$socket) { print \"connected\\n\"; exit 0 }
+print \"\$!\\n\"; exit 1;
+PERL
+chmod 0755 /usr/local/bin/hyper-e2e-sock-listen /usr/local/bin/hyper-e2e-sock-probe"
+pexec "systemd-run --quiet --unit=hyper-e2e-docker-sock /usr/local/bin/hyper-e2e-sock-listen /var/run/docker.sock 0660 docker" \
+  || die 'fixture: could not start the system docker socket listener'
+pexec "systemd-run --quiet --unit=hyper-e2e-rootless-sock --uid=$primary /usr/local/bin/hyper-e2e-sock-listen /run/user/$puid/docker.sock 0660" \
+  || die "fixture: could not start the primary's rootless docker socket listener"
+for _ in $(seq 1 20); do
+  pexec "test -S /var/run/docker.sock && test -S /run/user/$puid/docker.sock" && break
+  sleep 0.5
+done
+[ "$(pexec "stat -c '%U:%G %a' /var/run/docker.sock")" = "root:docker 660" ] \
+  || die "fixture: /var/run/docker.sock is $(pexec "stat -c '%U:%G %a' /var/run/docker.sock"), expected root:docker 660"
+[ "$(pexec "stat -c '%a' /run/user/$puid")" = "700" ] \
+  || die "fixture: the primary's runtime dir is not 0700"
+[ "$(pexec "/usr/local/bin/hyper-e2e-sock-probe /var/run/docker.sock")" = connected ] \
+  || die 'positive control: root cannot reach the fixture system socket, so the agent check would prove nothing'
+[ "$(ssh_t16 "/usr/local/bin/hyper-e2e-sock-probe /run/user/$puid/docker.sock")" = connected ] \
+  || die "positive control: $primary cannot reach its own rootless socket, so the agent check would prove nothing"
+
+# Asserts the agent's state: not in docker, and refused (EACCES) at both sockets.
+assert_agent_has_no_docker() {
+  local label="$1" groups answer
+  groups="$(pexec "id -nG $agent")"
+  if printf '%s\n' "$groups" | tr ' ' '\n' | grep -qx docker; then
+    die "$label: the agent IS in the docker group ($groups)"
+  fi
+  answer="$(as_agent "/usr/local/bin/hyper-e2e-sock-probe /var/run/docker.sock" 2>/dev/null || true)"
+  [ "$answer" = "Permission denied" ] \
+    || die "$label: the agent's connect to the system docker socket answered '$answer', expected Permission denied"
+  answer="$(as_agent "/usr/local/bin/hyper-e2e-sock-probe /run/user/$puid/docker.sock" 2>/dev/null || true)"
+  [ "$answer" = "Permission denied" ] \
+    || die "$label: the agent's connect to $primary's rootless docker socket answered '$answer', expected Permission denied"
+}
+assert_agent_has_no_docker "after setup"
+pass "AC-23: the agent is not in the docker group and is refused at the system socket and at $primary's rootless socket (both listening, both reachable by their owners)"
+
+# The other half: an agent someone ADDED to docker is taken out by setup's own
+# root script (agent-user.create's check names it; the harness plays the human
+# who runs the printed script).
+pexec "usermod -aG docker $agent"
+[ "$(as_agent "/usr/local/bin/hyper-e2e-sock-probe /var/run/docker.sock" 2>/dev/null || true)" = connected ] \
+  || die 'fixture: adding the agent to docker did not let it reach the system socket'
+set +e
+run_hyper > "$work_real/setup-docker-member.log" 2>&1
+code=$?
+set -e
+[ "$code" = 3 ] || { tail -25 "$work_real/setup-docker-member.log"; die "setup with the agent in docker exited $code, expected 3 (root work pending)"; }
+grep -q "agent-user.create" "$work_real/setup-docker-member.log" \
+  || { tail -25 "$work_real/setup-docker-member.log"; die 'setup did not name agent-user.create for the docker membership'; }
+root_script="$(grep -o "[^ ]*hyper-machine-root\.sh" "$work_real/setup-docker-member.log" | head -1)"
+[ -n "$root_script" ] || die 'setup said root work was pending but named no script'
+scp -F /dev/null -o ControlMaster=no -o ControlPath=none -q -i "$key" -P "$port" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+  -o IdentitiesOnly=yes -o IdentityAgent=none -o ForwardAgent=no \
+  -o LogLevel=ERROR "$root_script" "$primary@localhost:/tmp/hyper-machine-root.sh"
+ssh_t16 "sudo bash /tmp/hyper-machine-root.sh" > "$work_real/root-docker-member.log" 2>&1 \
+  || { tail -25 "$work_real/root-docker-member.log"; die 'the root script failed removing the agent from docker'; }
+run_hyper > "$work_real/setup-after-docker.log" 2>&1 \
+  && grep -q "Nothing needed" "$work_real/setup-after-docker.log" \
+  || { tail -25 "$work_real/setup-after-docker.log"; die 'setup did not settle after the docker removal'; }
+assert_agent_has_no_docker "after the root script"
+pass "AC-23: an agent added to docker is flagged by setup, removed by its root script, and refused at both sockets again"
+pexec "systemctl stop hyper-e2e-docker-sock hyper-e2e-rootless-sock" || true
 
 # The container must not survive the script.
 echo "# container is removed by the trap"
