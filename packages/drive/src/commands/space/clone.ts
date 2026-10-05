@@ -82,6 +82,15 @@ export default class Clone extends BaseCommand<typeof Clone> {
 				`Worktrees: ${result.worktrees.map(escapeControlCharacters).join(", ") || "none (no project URLs)"}`,
 			);
 			this.log(
+				`Manifest: ${
+					result.manifestPath === "recorded"
+						? "this clone's path recorded"
+						: result.manifestPath === "unchanged"
+							? "path already recorded"
+							: "path NOT recorded (see the warning above)"
+				}`,
+			);
+			this.log(
 				`Library wrote: ${result.libraryWrites.map(escapeControlCharacters).join(", ") || "nothing; tracked files preserved"}`,
 			);
 		} catch (error) {

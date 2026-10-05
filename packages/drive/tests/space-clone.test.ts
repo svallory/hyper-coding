@@ -15,7 +15,14 @@ import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SpaceEntry } from "#config/schema";
 import { renderGitignore } from "#services/allowlist";
-import { driveCheckoutDir, readManifest, upsertSpace } from "#services/manifest";
+import {
+	driveCheckoutDir,
+	ensureDriveCheckout,
+	readManifest,
+	recordSpacePath,
+	removeSpace,
+	upsertSpace,
+} from "#services/manifest";
 import { shellQuote } from "#services/remote";
 import { cloneSpace, cloneTargetPath } from "#services/space-clone";
 import { REVIEW_PATHS_SHOWN, readCadence, readTracked, spaceGit } from "#services/space-git";
@@ -339,18 +346,19 @@ describe("untrusted clone branch", () => {
 		git(["add", "spaces.yaml"], checkout);
 		git(["commit", "-qm", "unknown key"], checkout);
 		git(["push", "origin", "HEAD:main"], checkout);
-		useMachine("second");
-		for (const args of [
-			["space", "clone", "sample", join(fixture.home, "destination")],
-			["space", "list"],
-		]) {
-			// ONE spawn: two would clone into the same target twice and mix streams.
+		// `space list` on the machine that has the key, then the clone on a new
+		// one: the clone records its path in the manifest, and that write goes
+		// through the schema, which drops the unknown key afterwards.
+		const expectEscaped = (args: string[]): void => {
 			const response = spawnCli(args, fixture);
 			const stream = flat(response.stdout + response.stderr);
 			expect(stream, args.join(" ")).toContain("unknown key");
 			expect(stream, args.join(" ")).not.toContain("evil\u001b[]0;PWNED\u0007key");
 			expect(/[\p{Cc}\p{Cf}]/u.test(stream.replace(/[\n\t]/g, "")), args.join(" ")).toBe(false);
-		}
+		};
+		expectEscaped(["space", "list"]);
+		useMachine("second");
+		expectEscaped(["space", "clone", "sample", join(fixture.home, "destination")]);
 	});
 	it("refuses an incoming path containing a control character", () => {
 		seed();
@@ -934,7 +942,7 @@ describe("space clone", () => {
 		const source = seed();
 		spaceGit(source, ["config", "clone-test.must-not-copy", "source-only"]);
 		const paths = spaceGit(source, ["ls-files", "-z"]).stdout.split("\0").filter(Boolean);
-		const oldManifest = readFileSync(join(driveCheckoutDir(), "spaces.yaml"), "utf8");
+		const oldEntry = readManifest().spaces.find((space) => space.name === "sample");
 		useMachine("second");
 		expect(existsSync(fixture.hyperHome)).toBe(false);
 		const target = join(fixture.home, "a space 'quoted'");
@@ -979,7 +987,11 @@ describe("space clone", () => {
 		expect(
 			spaceGit(target, ["for-each-ref", "--format=%(refname)", "refs/remotes"]).stdout.trim(),
 		).toBe("refs/remotes/origin/space/team/sample");
-		expect(readFileSync(join(driveCheckoutDir(), "spaces.yaml"), "utf8")).toBe(oldManifest);
+		// AC-8: the clone's path is now the recorded one; nothing else changed.
+		expect(readManifest().spaces.find((space) => space.name === "sample")).toEqual({
+			...oldEntry,
+			path: target,
+		});
 		const config = git(
 			["--git-dir", join(target, ".git"), "config", "--get", "remote.origin.fetch"],
 			target,
@@ -1368,4 +1380,102 @@ describe("interrupted clone", () => {
 		},
 		20_000,
 	);
+});
+
+describe("the manifest records where the space was cloned (AC-8)", () => {
+	/** The manifest as the hyperdrive remote holds it, not as a checkout does. */
+	function remoteEntry(): SpaceEntry | undefined {
+		const yaml = git(["--git-dir", fixture.remote, "show", "main:spaces.yaml"], fixture.root);
+		const match = /name: sample[\s\S]*?path: (.+)/.exec(yaml);
+		return match ? ({ path: match[1].trim() } as SpaceEntry) : undefined;
+	}
+	function mainCommits(): number {
+		return Number(
+			git(["--git-dir", fixture.remote, "rev-list", "--count", "main"], fixture.root).trim(),
+		);
+	}
+
+	it("records a clone at another path, keeping every other field", () => {
+		const source = seed();
+		const before = readManifest().spaces.find((space) => space.name === "sample");
+		expect(before?.path).toBe(source);
+		useMachine("second");
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		expect(JSON.parse(result.stdout).manifestPath).toBe("recorded");
+		expect(remoteEntry()?.path).toBe(target);
+		// Read back through the service on this machine's own checkout.
+		const after = readManifest().spaces.find((space) => space.name === "sample");
+		expect(after).toEqual({ ...before, path: target });
+	});
+
+	it("says so in the plain-text output", () => {
+		seed();
+		useMachine("second");
+		const result = run(["sample", join(fixture.home, "destination")]);
+		success(result);
+		expect(result.stdout).toContain("Manifest: this clone's path recorded");
+	});
+
+	it("writes nothing when the clone is at the recorded path", () => {
+		const source = seed();
+		// The original machine's copy goes away; the new machine has the same path.
+		renameSync(source, join(fixture.root, "source-moved"));
+		useMachine("second");
+		const commits = mainCommits();
+		const result = run(["sample", source, "--json"]);
+		success(result);
+		expect(JSON.parse(result.stdout).manifestPath).toBe("unchanged");
+		expect(mainCommits()).toBe(commits);
+		expect(remoteEntry()?.path).toBe(source);
+	});
+
+	it("keeps the clone and warns when the manifest can't be written", () => {
+		seed();
+		useMachine("second");
+		ensureDriveCheckout(fixture.remote);
+		// A live process (this one) holds the manifest lock past the wait.
+		writeFileSync(join(driveCheckoutDir(), ".git", "hyper-manifest.lock"), `${process.pid}\n`);
+		const target = join(fixture.home, "destination");
+		const result = run(["sample", target, "--json"]);
+		success(result);
+		const json = JSON.parse(result.stdout);
+		expect(json.manifestPath).toBe("not recorded");
+		expect(flat(result.stderr)).toContain("its path wasn't recorded in the manifest");
+		expect(flat(result.stderr)).toContain("hyper space init --refresh");
+		expect(existsSync(join(target, ".hyper", "space.git"))).toBe(true);
+		expect(existsSync(join(target, "notes"))).toBe(true);
+		expect(remoteEntry()?.path).not.toBe(target);
+	}, 30_000);
+
+	it("puts the path into the newest entry, not the copy read when the clone started", () => {
+		seed();
+		useMachine("second");
+		ensureDriveCheckout(fixture.remote);
+		const stale = readManifest().spaces.find((space) => space.name === "sample");
+		expect(stale?.cadence).toBe("session-end+push");
+		// The first machine changes the cadence after this checkout last fetched.
+		useMachine("first");
+		updateEntry({ cadence: "manual" });
+		useMachine("second");
+		expect(recordSpacePath("sample", "/elsewhere/sample")).toBe("recorded");
+		const now = readManifest().spaces.find((space) => space.name === "sample");
+		expect(now).toEqual({ ...stale, cadence: "manual", path: "/elsewhere/sample" });
+		expect(remoteEntry()?.path).toBe("/elsewhere/sample");
+	});
+
+	it("never re-adds a space another machine removed", () => {
+		seed();
+		useMachine("second");
+		ensureDriveCheckout(fixture.remote);
+		useMachine("first");
+		removeSpace("sample");
+		useMachine("second");
+		expect(() => recordSpacePath("sample", "/elsewhere/sample")).toThrow(
+			/no longer in the manifest/,
+		);
+		// Nothing was written: the hyperdrive still has no entry for it.
+		expect(remoteEntry()).toBeUndefined();
+	});
 });

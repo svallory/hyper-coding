@@ -971,6 +971,61 @@ export function upsertSpace(entry: SpaceEntry, options: ManifestLockOptions = {}
 	);
 }
 
+/** What {@link recordSpacePath} did. */
+export type RecordPathOutcome = "unchanged" | "recorded";
+
+/**
+ * Record where a space now lives on THIS machine, changing nothing else.
+ *
+ * The manifest holds one path per space; this makes it the path of the latest
+ * machine to clone (or init) the space, last writer wins like every other
+ * manifest field. The entry the new path is put into is the newest one this
+ * checkout can see — a not-yet-published local write for that name, else the
+ * remote's `main` after a fetch, else local HEAD — so a cadence or tracked
+ * change another machine published while a long clone ran is kept rather than
+ * overwritten with the copy read at the clone's start.
+ *
+ * A space that is no longer in the manifest is not re-added: that is a removal
+ * this machine must not undo by cloning.
+ */
+export function recordSpacePath(
+	name: string,
+	path: string,
+	options: ManifestLockOptions = {},
+): RecordPathOutcome {
+	const dir = driveCheckoutDir();
+	return withManifestLock(
+		dir,
+		`record the path of ${name}`,
+		() => {
+			recoverCheckout(dir);
+			const pendingEntry = loadPending(dir)
+				.filter((mutation) => mutation.name === name)
+				.at(-1);
+			let current: SpaceEntry | undefined;
+			if (pendingEntry !== undefined) {
+				current = pendingEntry.entry;
+			} else {
+				const fetched = driveGit(["fetch", "origin", BRANCH], dir);
+				const ref = fetched.ok && remoteMainExists(dir) ? `origin/${BRANCH}` : "HEAD";
+				current = readManifestAt(dir, ref).find((space) => space.name === name);
+			}
+			if (current === undefined) {
+				throw new ManifestError(
+					join(dir, MANIFEST_FILE),
+					`${quoteForTerminal(name)} is no longer in the manifest, so its path was not recorded.`,
+				);
+			}
+			if (current.path === path) return "unchanged";
+			const entry: SpaceEntry = { ...current, path };
+			validateSpaceName(entry);
+			applyMutation(dir, { name, entry });
+			return "recorded";
+		},
+		options,
+	);
+}
+
 /** Remove a space from the manifest. */
 export function removeSpace(name: string, options: ManifestLockOptions = {}): void {
 	const dir = driveCheckoutDir();
