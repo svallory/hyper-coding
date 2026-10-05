@@ -87,9 +87,16 @@ cleanup() {
   echo "# cleaning up sessions"
   mutagen sync terminate "$claude_session" >/dev/null 2>&1 || true
   mutagen sync terminate "$pi_session" >/dev/null 2>&1 || true
-  # Stops ONLY this script's daemon: the data directory is the one exported
-  # above, so this can never reach the operator's daemon.
-  mutagen daemon stop >/dev/null 2>&1 || true
+  # Stops ONLY this script's daemon. MUTAGEN_DATA_DIRECTORY alone does NOT
+  # guarantee that: on macOS `mutagen daemon stop` first looks for a launchd
+  # registration under os.UserHomeDir() ($HOME/Library/LaunchAgents/
+  # io.mutagen.mutagen.plist) and, when there is one, runs `launchctl unload`
+  # on it — the operator's daemon, whatever the data directory says (this is
+  # how an ad-hoc probe stopped it on 2026-10-04). So: only with the fixture's
+  # HOME, which the guard below proves holds no registration.
+  if [ "$HOME" = "$work_real/home" ] && [ ! -e "$HOME/Library/LaunchAgents/io.mutagen.mutagen.plist" ]; then
+    mutagen daemon stop >/dev/null 2>&1 || true
+  fi
   rm -rf "$mutagen_dir" "$work"
 }
 # NOTE: `trap cleanup EXIT` is installed AFTER the preflight below, not here.
@@ -134,6 +141,14 @@ if [ "$(cd "$HOME" && pwd -P)" = "$(cd "$real_home" && pwd -P)" ]; then
   exit 1
 fi
 [ -z "$(ls -A "$CLAUDE_CONFIG_DIR")" ] || { echo "# refusing to run: CLAUDE_CONFIG_DIR is not empty" >&2; exit 1; }
+# Mutagen resolves its launchd registration from $HOME, not from
+# MUTAGEN_DATA_DIRECTORY: a registered daemon in this HOME would be the one
+# every auto-start and `daemon stop` acts on (see cleanup). The fixture HOME
+# must hold none.
+if [ -e "$HOME/Library/LaunchAgents/io.mutagen.mutagen.plist" ]; then
+  echo "# refusing to run: a Mutagen launchd registration exists under $HOME" >&2
+  exit 1
+fi
 
 # The REAL ssh, resolved while this file is not yet first on PATH. `exec ssh`
 # inside the wrapper would find the wrapper itself and re-exec it with another
