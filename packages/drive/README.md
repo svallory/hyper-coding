@@ -161,9 +161,11 @@ has a file or symlink; identical files and excluded paths don't count (a
 tracked file there where this machine has a directory is not refused: git
 has it, and the copy replaces it). For a plain repo it also refuses when a
 target ref (or a detached HEAD) points at a commit this machine doesn't
-have, or has but reaches from none of its refs; a ref only the target has
-(a remote-tracking ref or a tag it fetched more recently) passes when its
-commit is here and reachable. With `--force`, a dirty space worktree's
+have, or has but reaches from none of the refs warp carries (its branches,
+tags and other refs, and HEAD; not earlier warps' backups, other worktrees'
+HEADs or the stash); a ref only the target has (a remote-tracking ref or a
+tag it fetched more recently) passes when its commit is reachable that
+way, and is then removed there. With `--force`, a dirty space worktree's
 tracked changes are first saved on the target in a stash (a plain repo's are
 not saved); a plain repo's refs (and a detached HEAD) are first saved there
 under `refs/hyper-warp-backup/<session id>-<start time>/` when that check
@@ -180,7 +182,8 @@ both platforms, the target's Herdr server does not answer, the target would
 reject the branch push, or the target's worktree or repo has a merge,
 rebase, cherry-pick, revert or bisect in progress, unresolved conflicts, or
 a changed submodule, or (a plain repo) keeps its refs in the reftable format
-(`extensions.refStorage=reftable`). `--dry-run` prints every step and changes
+(`extensions.refStorage=reftable`), has a ref lock file (named in the
+refusal), or has a `.git` that is a `gitdir:` file. `--dry-run` prints every step and changes
 nothing.
 
 ### `hyper machine` — bring a machine to parity
@@ -235,17 +238,19 @@ tooling).
   files that exist only on the target are kept. For a plain directory (no
   `.git` on the target) nothing is compared and nothing is saved first.
   Ignored files inside a submodule of the target are not looked at.
-- **A plain repo's `.git` is merged file by file too:** the target's
-  `.git/config`, `info/exclude`, hooks, `HEAD`, index and `packed-refs` are
-  replaced by this machine's. Saved refs under `refs/hyper-warp-backup/` are
-  kept: the copy leaves that directory alone, and before every plain-repo
-  copy, saved refs a `git pack-refs` (or `gc`) moved into `packed-refs` are
-  written back as loose refs there. A ref only the target has can be dropped
-  by the copy (when it was packed there); the refs check only lets that
-  happen when this machine's refs still reach its commit. Loose ref files
-  only the target has are kept too, so a target branch ref that is loose
-  there but packed here keeps pointing at the target's commit after the
-  copy.
+- **A plain repo's `.git` is copied on its own, then its refs are synced:**
+  the `.git` copy excludes nothing but earlier warps' backups (your
+  `warp.exclude` patterns apply to the working tree only, so a branch named
+  `dist` travels), and replaces the target's `.git/config`, `info/exclude`,
+  hooks, `HEAD`, index and `packed-refs` with this machine's. Then one
+  `git update-ref` transaction on the target sets every ref to this
+  machine's value and deletes the ones this machine doesn't have, loose or
+  packed alike, so afterwards the target's refs equal this machine's (a
+  target left with a stale loose branch by an older warp is put right by a
+  `--force` warp). Saved refs under `refs/hyper-warp-backup/` are kept: the
+  copy and the sync leave them alone, and before every plain-repo copy,
+  saved refs a `git pack-refs` (or `gc`) moved into `packed-refs` are
+  written back as loose refs there.
 - **The collision comparison has a 5-minute limit** (about 3,000 files per
   6 s, measured in a container): past roughly 100,000 candidate files warp
   refuses with "couldn't compare".
