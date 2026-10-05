@@ -143,7 +143,11 @@ async function ensureBetaParent(
 	return result.code === 0 ? null : result.stderr.trim() || `exit ${result.code}`;
 }
 
-/** How long a readiness check waits for the one sync cycle it forces. */
+/**
+ * How long a readiness check waits for the one sync cycle it forces on a
+ * connected session that reports a problem. Two sessions per machine, so a
+ * `--check` waits at most 60 s in all (stated in `--help` and the README).
+ */
 export const READINESS_FLUSH_MS = 30_000;
 
 /**
@@ -159,7 +163,16 @@ export const READINESS_FLUSH_MS = 30_000;
 async function currentHealth(engine: SyncEngine, session: SyncSession): Promise<string> {
 	const health = sessionHealth(session);
 	if (health === "" || session.problems.length === 0) return health;
-	if (session.status.startsWith("halted") || session.status === "disconnected") return health;
+	// A cycle needs both endpoints: on a session that is halted, disconnected
+	// or still connecting, a flush could only wait out its bound (review of PR
+	// #54, R4), so it is reported as it is.
+	if (
+		session.status.startsWith("halted") ||
+		session.status === "disconnected" ||
+		!session.alphaConnected ||
+		!session.betaConnected
+	)
+		return health;
 	try {
 		await engine.flush(session.name, { timeoutMs: READINESS_FLUSH_MS });
 	} catch {

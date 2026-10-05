@@ -252,8 +252,12 @@ hyper drive sync-config [MACHINE] [--check] [--json]
 
 `drive init` writes `~/.config/hyper/drive.toml` and clones the manifest.
 `sync-config` keeps `~/.claude` and `~/.pi/agent` in sync with another
-machine (Mutagen sessions); with no argument it lists them, `--check` only
-verifies and exits 1 on a mismatch.
+machine (Mutagen sessions); with no argument it lists them. `--check` creates,
+changes and removes nothing, and exits 1 when a session is missing, does not
+match, or is not syncing (halted, disconnected, or with a scan or transition
+problem, named). A connected session that reports a problem first gets one
+sync cycle, the same one Mutagen runs on the next change, so a problem already
+fixed is not reported: at most 30 s per session, 60 s in all.
 
 ## Configuration
 

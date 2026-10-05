@@ -288,6 +288,39 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config --check", () => {
 		expect(out).toMatch(/hyper-claude-loop .*ready/);
 	});
 
+	it("never forces a cycle on a session that is not connected; --check stays bounded (review R4)", () => {
+		const fixture = setupFixture([]);
+		const pi = session(
+			"hyper-pi-loop",
+			`${fixture.alphaHome}/.pi/agent`,
+			`localhost:${fixture.betaHome}/.pi/agent`,
+			"pi",
+		) as Record<string, unknown>;
+		const stuck = {
+			...pi,
+			status: "connecting-beta",
+			lastError: "unable to connect to beta",
+			beta: { ...(pi.beta as object), connected: false },
+		};
+		writeFileSync(
+			fixture.sessions,
+			JSON.stringify([
+				session(
+					"hyper-claude-loop",
+					`${fixture.alphaHome}/.claude`,
+					`localhost:${fixture.betaHome}/.claude`,
+					"claude",
+				),
+				stuck,
+			]),
+			"utf-8",
+		);
+		const result = spawnCli(fixture, ["drive", "sync-config", "loop", "--check"]);
+		expect(result.status).toBe(1);
+		expect(flat(result.stdout ?? "")).toContain("last error: unable to connect to beta");
+		expect(calls(fixture).filter((line) => line.startsWith("sync flush"))).toEqual([]);
+	});
+
 	it("forces one sync cycle before calling a problem current, so a fixed one is not reported (CI on Linux)", () => {
 		const fixture = setupFixture([]);
 		const claude = session(
