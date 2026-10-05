@@ -10,8 +10,9 @@
  * would, and a second setup run finds it ready (C-15).
  *
  * The sync engine runs on THIS machine (it reaches the target over its own
- * transport), so the task talks to the engine directly rather than through
- * `ctx.runner`. No root is involved anywhere.
+ * transport), so the task talks to the engine directly. `ctx.runner` is used
+ * for one thing: creating the beta root's missing parent on the target before
+ * a create. No root is involved anywhere.
  *
  * With no target there is nothing to pair with: the sessions belong to a pair
  * of machines, and setup on the local machine cannot pick the other one. The
@@ -39,6 +40,7 @@ async function run(ctx: TaskContext, check: boolean, explain: boolean) {
 			check,
 			config: ctx.config,
 			localHome: ctx.config.self.home,
+			runner: ctx.runner,
 		});
 	} catch (err) {
 		// The engine missing, its daemon unreachable, or a machine with no home

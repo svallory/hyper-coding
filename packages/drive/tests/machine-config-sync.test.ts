@@ -78,6 +78,7 @@ function memoryEngine(initial: SyncSession[] = []) {
 				betaDirMode: options.betaDirMode,
 				alphaConnected: true,
 				betaConnected: true,
+				problems: [],
 			});
 		},
 		async list() {
@@ -104,12 +105,12 @@ function memoryEngine(initial: SyncSession[] = []) {
 	return { engine, sessions, creates };
 }
 
-/** A machine runner that records calls: the task must never need one. */
-function recordingRunner() {
+/** A machine runner that records calls: the task uses it only for the beta parent. */
+function recordingRunner(answer: RunResult = { code: 0, stdout: "", stderr: "" }) {
 	const calls: string[] = [];
 	const done = async (kind: string, args: unknown[]): Promise<RunResult> => {
 		calls.push(`${kind} ${JSON.stringify(args)}`);
-		return { code: 0, stdout: "", stderr: "" };
+		return answer;
 	};
 	const runner: MachineRunner = {
 		ssh: (...args) => done("ssh", args),
@@ -207,9 +208,53 @@ describe("config-sync against a machine", () => {
 		expect(creates).toHaveLength(2);
 		expect(renderReport(second, "netcup")[0]).toMatch(/^Nothing needed — netcup/);
 
-		// The engine runs here and reaches the target itself: no ssh, scp or
-		// rsync through the setup runner.
-		expect(calls).toEqual([]);
+		// The engine runs here and reaches the target itself. The runner carries
+		// one command, once: the beta root's missing parent (B3).
+		expect(calls).toEqual([`ssh [["mkdir","-p","--","/home/me/.pi"]]`]);
+	});
+
+	it("is not settled while a session has a transition problem, and says which (B3)", async () => {
+		withTempConfig(CONFIG);
+		const { engine, sessions } = memoryEngine();
+		const ctx = ctxFor(NETCUP, engine, recordingRunner().runner, []);
+		await configSyncTask.apply?.(ctx);
+		sessions[1].problems = ["beta transition problem: (root): unable to create root"];
+		expect(await configSyncTask.check(ctx)).toBe(false);
+		const logs: string[] = [];
+		const report = await setup(ctxFor(NETCUP, engine, recordingRunner().runner, logs));
+		expect(report.skipped).toEqual(["config-sync"]);
+		expect(renderReport(report, "netcup").join("\n")).not.toContain("Nothing needed");
+		expect(logs.join("\n")).toContain(
+			"hyper-pi-netcup mismatch — not syncing: beta transition problem",
+		);
+	});
+
+	it("is not settled while a session is halted", async () => {
+		withTempConfig(CONFIG);
+		const { engine, sessions } = memoryEngine();
+		const ctx = ctxFor(NETCUP, engine, recordingRunner().runner, []);
+		await configSyncTask.apply?.(ctx);
+		sessions[0].status = "halted-on-root-deletion";
+		expect(await configSyncTask.check(ctx)).toBe(false);
+	});
+
+	it("reports a parent it could not create, and creates no session after it", async () => {
+		withTempConfig(CONFIG);
+		const { engine, creates } = memoryEngine();
+		const logs: string[] = [];
+		const report = await setup(
+			ctxFor(
+				NETCUP,
+				engine,
+				recordingRunner({ code: 1, stdout: "", stderr: "Permission denied" }).runner,
+				logs,
+			),
+		);
+		expect(report.skipped).toEqual(["config-sync"]);
+		expect(creates.map((create) => create.name)).toEqual(["hyper-claude-netcup"]);
+		expect(logs.join("\n")).toContain(
+			"could not create the parent of me@netcup:/home/me/.pi/agent on netcup: Permission denied",
+		);
 	});
 
 	it("finds sessions created by `sync-config` already settled", async () => {
@@ -252,6 +297,7 @@ describe("config-sync against a machine", () => {
 			betaDirMode: "0770",
 			alphaConnected: true,
 			betaConnected: true,
+			problems: [],
 		};
 		const { engine, creates } = memoryEngine([foreign]);
 		const logs: string[] = [];

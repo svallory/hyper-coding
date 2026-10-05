@@ -10,6 +10,7 @@
 
 import { type DriveConfig, type SyncTarget, syncIgnoreFor } from "#config/schema";
 import { MachineError, type MachineInfo } from "#services/machine";
+import type { MachineRunner } from "#services/remote";
 import type { SyncEngine, SyncSession } from "#services/sync/engine";
 
 /** One thing hyperdrive keeps in sync. */
@@ -105,6 +106,56 @@ export interface ConfigSyncOptions {
 	config: DriveConfig;
 	/** This machine's home (`self.home`): the alpha side. */
 	localHome: string;
+	/**
+	 * How to reach the target (`remote.ts`), used only to create the beta
+	 * root's missing parent before a create: Mutagen creates a missing root but
+	 * not its parent (`~/.pi` on a machine where pi never ran), and the session
+	 * then says "Watching for changes" while nothing syncs.
+	 */
+	runner: MachineRunner;
+}
+
+/**
+ * Make sure the parent of the beta root exists on the target. Only plans
+ * whose subdir has a parent of its own need it (`.pi/agent` → `.pi`); the
+ * home itself is the parent of `.claude`.
+ */
+async function ensureBetaParent(
+	runner: MachineRunner,
+	home: string,
+	plan: SyncPlan,
+): Promise<string | null> {
+	const slash = plan.relative.lastIndexOf("/");
+	if (slash < 0) return null;
+	const parent = plan.relative.slice(0, slash);
+	// A home of `~` or `~/sub` is the remote's own: `$HOME` expands there, and
+	// a quoted `~` would create a literal directory named `~`.
+	const tilde = home === "" || home === "~" || home.startsWith("~/");
+	const result = tilde
+		? await runner.ssh([
+				"sh",
+				"-c",
+				'mkdir -p -- "$HOME/$1"',
+				"sh",
+				[home.slice(2), parent].filter(Boolean).join("/"),
+			])
+		: await runner.ssh(["mkdir", "-p", "--", `${home.replace(/\/+$/, "")}/${parent}`]);
+	return result.code === 0 ? null : result.stderr.trim() || `exit ${result.code}`;
+}
+
+/**
+ * Why a session whose settings all match is still not syncing, or "": halted,
+ * disconnected, or with an error or a scan/transition problem on either side.
+ * A freshly created session that is still connecting or scanning is fine.
+ */
+export function sessionHealth(session: SyncSession): string {
+	if (session.status.startsWith("halted")) return `the session is halted (${session.status})`;
+	if (session.status === "disconnected") return "the session is disconnected";
+	if (session.problems.length > 0) {
+		const shown = session.problems.slice(0, 3).join("; ");
+		return `not syncing: ${shown}${session.problems.length > 3 ? ` (and ${session.problems.length - 3} more)` : ""}`;
+	}
+	return "";
 }
 
 /**
@@ -118,7 +169,7 @@ export interface ConfigSyncOptions {
 export async function syncConfigWith(
 	engine: SyncEngine,
 	machine: MachineInfo,
-	{ check, config, localHome }: ConfigSyncOptions,
+	{ check, config, localHome, runner }: ConfigSyncOptions,
 ): Promise<ConfigSyncResult> {
 	if (!machine.home) {
 		throw new MachineError(
@@ -204,6 +255,18 @@ export async function syncConfigWith(
 				failures++;
 				continue;
 			}
+			const parentProblem = await ensureBetaParent(runner, machine.home, plan);
+			if (parentProblem !== null) {
+				rows.push({
+					name,
+					state: "mismatch",
+					alpha,
+					beta,
+					detail: `could not create the parent of ${beta} on ${machine.name}: ${parentProblem}`,
+				});
+				failures++;
+				return { rows, failures, createFailed: true };
+			}
 			try {
 				await engine.create(name, alpha, beta, {
 					ignore: syncIgnoreFor(plan.target, config),
@@ -231,8 +294,15 @@ export async function syncConfigWith(
 			want,
 			engine.terminateHint(name, machine.name),
 		);
-		if (problem) {
-			rows.push({ name, state: "mismatch", alpha, beta, detail: problem });
+		const health = problem || sessionHealth(current);
+		if (health) {
+			rows.push({
+				name,
+				state: "mismatch",
+				alpha,
+				beta,
+				detail: problem ? problem : `${health} — fix it on that side; the next check sees it`,
+			});
 			failures++;
 			continue;
 		}

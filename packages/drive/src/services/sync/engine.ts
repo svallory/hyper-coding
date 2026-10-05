@@ -49,6 +49,12 @@ export interface SyncSession {
 	/** Whether each side answered on the last poll. */
 	alphaConnected: boolean;
 	betaConnected: boolean;
+	/**
+	 * Why the session is not moving files, as the engine reports it: its last
+	 * error and every scan or transition problem on either side, one line each
+	 * (`beta transition problem: <path>: <error>`). Empty when it is healthy.
+	 */
+	problems: string[];
 }
 
 export interface SyncCreateOptions {

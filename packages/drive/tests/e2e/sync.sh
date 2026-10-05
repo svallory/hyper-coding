@@ -7,7 +7,8 @@
 # `localhost` with a temp home on both sides. It asserts:
 #   1. `mutagen version` and the version this script was written against
 #   2. `machine setup loop --features config-sync --yes` creates both sessions
-#      (Claude + pi), and `sync-config loop` then finds them ready (AC-21)
+#      (Claude + pi), creating beta's missing `~/.pi` first, and `sync-config
+#      loop` then finds them ready (AC-21, review B3)
 #   3. `--check` then reports ready
 #   4. a plugin written on alpha shows up on beta within 60s, and a transcript
 #      written on beta shows up on alpha within 60s (AC-18)
@@ -15,8 +16,10 @@
 #      `auth.json`, present on alpha before the sessions existed, never reach
 #      beta, and beta's `.credentials.json` never reaches alpha (AC-17)
 #   6. a symlink to an absolute target resolves on beta (posix-raw symlinks)
-#   7. a second `machine setup` run reports nothing needed (C-15, AC-24)
-#   8. both sessions are terminated and this script's own daemon is stopped at
+#   7. a transition problem makes `--check` exit 1 naming it, and it recovers
+#      once fixed (review B3)
+#   8. a second `machine setup` run reports nothing needed (C-15, AC-24)
+#   9. both sessions are terminated and this script's own daemon is stopped at
 #      the end (trap), so nothing is left running
 #
 # Usage: packages/drive/tests/e2e/sync.sh
@@ -175,11 +178,12 @@ mkdir -p "$alpha_home/.claude/sessions" "$alpha_home/.claude/state"
 echo '{"pid":1}' > "$alpha_home/.claude/sessions/1.json"
 echo "lock" > "$alpha_home/.claude/state/lock"
 echo '{"token":"x"}' > "$alpha_home/.pi/agent/auth.json"
-# …and one on beta that must never come back to alpha. Beta has both config
-# dirs, as a machine with Claude Code and pi installed does: Mutagen creates a
-# missing beta ROOT but not its missing parent (`~/.pi`), and then reports a
-# transition problem while the session still says "Watching for changes".
-mkdir -p "$beta_home/.claude" "$beta_home/.pi/agent"
+# …and one on beta that must never come back to alpha. Beta has NO `~/.pi`, as
+# a fresh machine where pi never ran (review B3): Mutagen creates a missing
+# beta ROOT but not its missing parent, so hyper must create `~/.pi` first, or
+# the session says "Watching for changes" while pi never syncs.
+mkdir -p "$beta_home/.claude"
+[ ! -e "$beta_home/.pi" ] || die "fixture: beta must start without ~/.pi"
 echo "beta-secret" > "$beta_home/.claude/.credentials.json"
 
 # Waits up to 60s for a file to exist with the given content. Returns 1 on timeout.
@@ -216,6 +220,8 @@ if ! printf '%s' "$out" | grep -F "$pi_session" | grep -q created; then
   die "expected setup to create the pi session; got: $out"
 fi
 pass "machine setup created $pi_session"
+[ -d "$beta_home/.pi" ] || die "setup did not create beta's missing ~/.pi before the pi session"
+pass "machine setup created beta's missing ~/.pi through ssh (B3)"
 
 # The command and the task share one service: what setup created, the command
 # finds ready and leaves alone (exit 0, nothing created).
@@ -311,6 +317,43 @@ fi
 # And it must actually resolve to a real file through the link.
 [ -f "$beta_home/.claude/skills/x/SKILL.md" ] || die "skills/x does not resolve to a file on beta"
 pass "skills/x symlink preserved, absolute and resolving on beta"
+
+echo "# a session with a transition problem is not ready (B3)"
+# Beta cannot write into a directory it may not write: alpha's new file there
+# becomes a transition problem, which Mutagen reports while still "Watching".
+mkdir -p "$beta_home/.claude/blocked"
+chmod 0500 "$beta_home/.claude/blocked"
+mkdir -p "$alpha_home/.claude/blocked"
+echo "blocked" > "$alpha_home/.claude/blocked/f.txt"
+problem=0
+for _ in $(seq 1 60); do
+  set +e
+  out="$(run_cli drive sync-config loop --check)"
+  rc=$?
+  set -e
+  if [ "$rc" = 1 ] && printf '%s' "$out" | grep -q "transition problem"; then
+    problem=1
+    break
+  fi
+  sleep 1
+done
+chmod 0700 "$beta_home/.claude/blocked"
+if [ "$problem" != 1 ]; then
+  mutagen sync list "$claude_session" >&2 || true
+  die "--check never reported the transition problem as not ready; last output: $out"
+fi
+printf '%s' "$out" | grep -F "$claude_session" | grep -q "blocked" \
+  || die "the not-ready row does not name the blocked path: $out"
+pass "--check exits 1 and names the transition problem while Mutagen still watches"
+# Writable again: the next cycle clears the problem and the check recovers.
+recovered=0
+for _ in $(seq 1 60); do
+  if run_cli drive sync-config loop --check >/dev/null; then recovered=1; break; fi
+  sleep 1
+done
+[ "$recovered" = 1 ] || die "--check never recovered after the problem was fixed"
+wait_for "$beta_home/.claude/blocked/f.txt" blocked || die "the blocked file never arrived after the fix"
+pass "once fixed, the file arrives and --check is ready again"
 
 echo "# a second machine setup run changes nothing (C-15, AC-24)"
 set +e
