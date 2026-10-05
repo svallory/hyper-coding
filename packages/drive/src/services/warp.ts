@@ -85,6 +85,7 @@ import {
 	projectPushArgv,
 	projectWorktreeHead,
 	pushProjectBranch,
+	refConflicts,
 	refsNotCoveredHere,
 	SpaceGitError,
 	TARGET_CONFLICTED,
@@ -98,6 +99,7 @@ import {
 	targetBareRepoCheck,
 	targetRefBackupsLoose,
 	targetRefs,
+	targetRefsDelete,
 	targetRefsSave,
 	targetRefsSync,
 	targetStashSnapshot,
@@ -634,12 +636,12 @@ export type WarpStep =
 			 * machine's carried refs, read when the step runs, one
 			 * `<object> <refname>` line each (`- <refname>` for a symbolic ref).
 			 */
-			stdinFrom?: "collisions" | "local-refs";
+			stdinFrom?: "collisions" | "local-refs" | "ref-conflicts";
 			/**
 			 * Run only when that probe found something: collisions to back up, or
 			 * target refs this machine doesn't cover.
 			 */
-			needs?: "collisions" | "refs";
+			needs?: "collisions" | "refs" | "ref-conflicts";
 			/** Problem sentence when it fails. */
 			problem: string;
 	  }
@@ -1092,7 +1094,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 		summary: `save the refs of ${inputs.cwd} on ${name} under ${WARP_REF_BACKUP}/${warpId}/ (--force)`,
 		argv: targetRefsSave(inputs.cwd, warpId),
 		leaves: `refs under ${WARP_REF_BACKUP}/${warpId}/ in ${inputs.cwd} on ${name}`,
-		announce: `${name}'s refs in ${inputs.cwd} were saved there under {out} before this warp replaced its .git files; see \`git -C ${inputs.cwd} for-each-ref ${WARP_REF_BACKUP}/${warpId}/\` there.`,
+		announce: `${name}'s refs in ${inputs.cwd} were saved there under {out} before this warp replaced its .git files; see \`git -C ${inputs.cwd} for-each-ref ${WARP_REF_BACKUP}/${warpId}/\` there. Stash entries saved: {second}, one ref each under {out}stash/<n> (newest is 0); re-apply one there with \`git -C ${inputs.cwd} stash apply <ref>\`.`,
 		problem: `couldn't save the refs of ${inputs.cwd} on ${name}, so warp stopped before overwriting them.`,
 	};
 	const backupStep = (when?: StepCondition): WarpStep => ({
@@ -1401,7 +1403,18 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			},
 		);
 	} else {
-		if (inputs.cwdKind === "git-repo" && inputs.force) steps.push(refsSaveStep, backupStep());
+		if (inputs.cwdKind === "git-repo" && inputs.force) {
+			steps.push(refsSaveStep, backupStep(), {
+				kind: "remote-command",
+				needs: "ref-conflicts",
+				stdinFrom: "ref-conflicts",
+				summary: `delete ${name}'s refs in ${inputs.cwd} that conflict as file and directory with this machine's, after saving them (--force)`,
+				argv: targetRefsDelete(inputs.cwd),
+				leaves: `the conflicting refs removed from ${inputs.cwd} on ${name} (saved under ${WARP_REF_BACKUP}/${warpId}/)`,
+				announce: `${name}'s refs in ${inputs.cwd} that conflicted as file and directory with this machine's ({count}) were deleted there after being saved under ${WARP_REF_BACKUP}/${warpId}/.`,
+				problem: `couldn't delete ${name}'s refs in ${inputs.cwd} that conflict with this machine's, so warp stopped before copying its .git.`,
+			});
+		}
 		if (inputs.cwdKind === "git-repo") {
 			steps.push({
 				kind: "remote-command",
@@ -1496,7 +1509,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 		notes.push(
 			`The repository's .git travels in a copy of its own (only earlier warps' backups are excluded; the working-tree excludes don't apply in it) and is merged into ${name}'s copy file by file: ${name}'s .git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name. Then ${name}'s refs are set to exactly this machine's in one git update-ref transaction (refs only ${name} has are deleted there), so a stale loose ref there can't shadow a packed one here.`,
 			inputs.force
-				? `--force: if ${name}'s repository has refs this machine doesn't cover, all of its refs (and a detached HEAD) are first saved there under ${WARP_REF_BACKUP}/${warpId}/, which the copy leaves alone.`
+				? `--force: if ${name}'s repository has refs this machine doesn't cover, all of its refs (and a detached HEAD) are first saved there under ${WARP_REF_BACKUP}/${warpId}/, which the copy leaves alone, every stash entry as ${WARP_REF_BACKUP}/${warpId}/stash/<n>; its refs that conflict as file and directory with this machine's are then deleted there. Its reflogs are not saved.`
 				: `${name}'s repository is refused if a ref (or a detached HEAD) there points at a commit this machine doesn't have, or has but reaches from none of the refs warp carries (not earlier warps' backups, other worktrees' HEADs or the stash); --force saves its refs there first.`,
 			`Refs earlier --force warps saved there under ${WARP_REF_BACKUP}/ are kept: any a git pack-refs moved into packed-refs are written back as loose refs before the copy. A repository there in the reftable ref format, or with a ref lock file, is refused, with or without --force.`,
 		);
@@ -1719,6 +1732,7 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 	const answers = new Map<ProbeId, "yes" | "no">();
 	let collisions: Collision[] = [];
 	let uncoveredRefs: UncoveredRef[] = [];
+	let conflictingRefs: string[] = [];
 	const execution: WarpExecution = {
 		completed: [],
 		skipped: [],
@@ -1742,7 +1756,8 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 		const nothingNeeded =
 			step.kind === "remote-command" &&
 			((step.needs === "collisions" && collisions.length === 0) ||
-				(step.needs === "refs" && uncoveredRefs.length === 0));
+				(step.needs === "refs" && uncoveredRefs.length === 0) ||
+				(step.needs === "ref-conflicts" && conflictingRefs.length === 0));
 		if (!holds(when) || nothingNeeded) {
 			execution.skipped.push(step.summary);
 			log(`skipped: ${step.summary}${conditionText(when, plan.target.name)}`);
@@ -1787,11 +1802,29 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 							return object && name ? [{ object, name, ...(peeled ? { peeled } : {}) }] : [];
 						});
 						const uncovered = (deps.refsNotCoveredHere ?? refsNotCoveredHere)(plan.cwd, refs);
+						const conflicts = refConflicts(
+							(deps.warpCarriedRefs ?? warpCarriedRefs)(plan.cwd).map((ref) => ref.name),
+							refs.map((ref) => ref.name),
+						);
+						if (conflicts.length > 0 && step.refuse) {
+							const lines = conflicts.map(
+								(conflict) => `${conflict.there} there, ${conflict.here} here`,
+							);
+							return fail(
+								step,
+								`${plan.target.name}'s repository ${plan.cwd} has refs that conflict as file and directory with this machine's (below): git can't hold both, so the copy would stop half-way. Delete or rename one side's ref (\`git branch -m\`, \`git tag -d\`, \`git update-ref -d\`), or pass --force: a --force warp saves ${plan.target.name}'s refs under ${WARP_REF_BACKUP}/ there first and then deletes its conflicting ones.\n${listPaths(lines.join("\n"))}`,
+							);
+						}
 						if (uncovered.length > 0 && step.refuse) {
 							const lines = uncovered.map((ref) => `${ref.name} (${ref.reason})`);
 							return fail(step, `${step.problem}\n${listPaths(lines.join("\n"))}`);
 						}
-						uncoveredRefs = uncovered;
+						conflictingRefs = [...new Set(conflicts.map((conflict) => conflict.there))];
+						// A conflicting ref is deleted there, so it must be saved first.
+						uncoveredRefs = [
+							...uncovered,
+							...conflictingRefs.map((name) => ({ name, reason: "conflicts with this machine's" })),
+						];
 						answers.set(step.id, "yes");
 						break;
 					}
@@ -1865,7 +1898,9 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 								? (deps.warpCarriedRefs ?? warpCarriedRefs)(plan.cwd)
 										.map((ref) => `${ref.symbolic ? "-" : ref.object} ${ref.name}\n`)
 										.join("")
-								: undefined;
+								: step.stdinFrom === "ref-conflicts"
+									? conflictingRefs.map((ref) => `${ref}\n`).join("")
+									: undefined;
 					const result = await deps.runner.ssh(step.argv, {
 						timeoutMs: 15 * 60_000,
 						...(stdin === undefined ? {} : { stdin }),
@@ -1879,8 +1914,14 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 					}
 					const printed = firstLine(result.stdout);
 					if (step.announce && printed) {
+						const count =
+							step.stdinFrom === "ref-conflicts" ? conflictingRefs.length : collisions.length;
+						const second = result.stdout.split("\n")[1]?.trim() || "0";
 						execution.notices.push(
-							step.announce.replace("{out}", printed).replace("{count}", String(collisions.length)),
+							step.announce
+								.replaceAll("{out}", printed)
+								.replace("{count}", String(count))
+								.replace("{second}", second),
 						);
 					}
 					break;
