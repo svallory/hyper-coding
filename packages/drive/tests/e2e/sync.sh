@@ -32,6 +32,16 @@
 
 set -euo pipefail
 
+# The beta is LOOPBACK: Mutagen and the setup's `mkdir` log in to localhost as
+# the caller, with the caller's own ssh key (the passwd home's ~/.ssh/id_*;
+# never the agent, never a write to any authorized_keys). Opt in explicitly.
+# run.sh sets it when allowed (CI=true, or the caller set it). A disposable
+# container beta, like warp.sh's, is the follow-up that removes this.
+if [ "${HYPER_E2E_LOOPBACK_OWN_KEY:-}" != "1" ]; then
+  echo "# refusing to run: sync.sh logs in to localhost as you with your own ssh key; set HYPER_E2E_LOOPBACK_OWN_KEY=1 to allow it" >&2
+  exit 1
+fi
+
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 pkg="$(cd "$here/../.." && pwd)"
 # e2e -> tests -> drive -> packages, so the CLI is three levels up.
