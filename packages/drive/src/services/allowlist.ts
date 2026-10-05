@@ -19,10 +19,56 @@ import picomatch from "picomatch";
 import { quoteForTerminal } from "#lib/terminal-text";
 
 /**
- * The base allowlist, verbatim from design.md. Order matters: gitignore
- * rules apply last-match-wins, so the two re-ignores (`/.hyper/space.git/`,
- * `/.claude/settings.local.json`) must come after the `!` re-includes of
- * their parent trees.
+ * Claude Code's per-user, per-machine state: the entries Claude writes into
+ * its CONFIG directory (`~/.claude`, or `$CLAUDE_CONFIG_DIR`) as opposed to the
+ * shareable project configuration a `.claude/` directory may hold
+ * (`settings.json`, `commands/`, `agents/`, `skills/`, `hooks/`, `CLAUDE.md`).
+ *
+ * A space's `.claude/` only holds these when Claude was pointed at it as its
+ * config directory, and then they are prompt history, transcripts, account
+ * state and shell environment captures — material that often quotes secrets
+ * and must not reach a hyperdrive that may be shared. They are never tracked:
+ * the allowlist ignores them (silently, like `scratch/`), and the secret guard
+ * refuses the credential-bearing ones if they are ever force-added.
+ *
+ * Names are relative to `.claude/`; a trailing `*` is a glob.
+ */
+export const CLAUDE_USER_STATE: readonly string[] = [
+	".credentials.json",
+	".claude.json*",
+	"history.jsonl",
+	"projects",
+	"sessions",
+	"session-env",
+	"todos",
+	"plans",
+	"file-history",
+	"paste-cache",
+	"shell-snapshots",
+	"statsig",
+	"telemetry",
+	"ide",
+	"debug",
+	"cache",
+	"state",
+	"backups",
+	"plugins",
+	"usage-data",
+	"stats-cache.json",
+	"mcp-needs-auth-cache.json",
+];
+
+/** One `.gitignore` line per {@link CLAUDE_USER_STATE} entry, anchored at the space root. */
+const CLAUDE_USER_STATE_RULES: readonly string[] = CLAUDE_USER_STATE.map(
+	(entry) => `/.claude/${entry}`,
+);
+
+/**
+ * The base allowlist from design.md, plus the Claude user-state ignores
+ * (deviations.md, ac-gaps item 7). Order matters: gitignore rules apply
+ * last-match-wins, so the re-ignores (`/.hyper/space.git/`,
+ * `/.claude/settings.local.json`, the user state) must come after the `!`
+ * re-includes of their parent trees.
  */
 const BASE_ALLOWLIST: readonly string[] = [
 	"*",
@@ -42,6 +88,7 @@ const BASE_ALLOWLIST: readonly string[] = [
 	"!/.claude/",
 	"!/.claude/**",
 	"/.claude/settings.local.json",
+	...CLAUDE_USER_STATE_RULES,
 ];
 
 /**
@@ -53,7 +100,24 @@ const BASE_ALLOWLIST: readonly string[] = [
  * dir. Repeating the lines costs nothing (git ignores duplicates) and keeps
  * the invariant true by construction rather than by the refusal below.
  */
-const SAFETY_TAIL: readonly string[] = ["/.hyper/space.git/", "/.claude/settings.local.json"];
+const SAFETY_TAIL: readonly string[] = [
+	"/.hyper/space.git/",
+	"/.claude/settings.local.json",
+	...CLAUDE_USER_STATE_RULES,
+];
+
+/**
+ * The previous canonical render (before the Claude user-state ignores), kept
+ * so a space published by an older CLI stays pullable and clonable: incoming
+ * validation accepts either render byte for byte, and `hyper space init
+ * --refresh` upgrades a space to the current one.
+ */
+const LEGACY_BASE_ALLOWLIST: readonly string[] = BASE_ALLOWLIST.filter(
+	(line) => !CLAUDE_USER_STATE_RULES.includes(line),
+);
+const LEGACY_SAFETY_TAIL: readonly string[] = SAFETY_TAIL.filter(
+	(line) => !CLAUDE_USER_STATE_RULES.includes(line),
+);
 
 /**
  * Paths a `tracked` entry may never name — the space's own git dir, the
@@ -80,7 +144,11 @@ export const RESERVED_PATHS: readonly string[] = [
  *
  * `id_ed25519*` and `id_ecdsa*` are additions to design.md's list of six —
  * the same keys in different shapes, which the guard exists to keep out of
- * history; recorded in notes/specs/hyperdrive/deviations.md.
+ * history; recorded in notes/specs/hyperdrive/deviations.md. So are
+ * `.claude.json*` (Claude's account state, which carries MCP server `env`
+ * values) and `shell-snapshots/` (captures of a shell's environment): the
+ * allowlist already ignores them under `.claude/`, and the guard refuses them
+ * anywhere, including when force-added (ac-gaps item 7).
  */
 export const SECRET_PATTERNS: readonly string[] = [
 	"**/.env*",
@@ -95,6 +163,8 @@ export const SECRET_PATTERNS: readonly string[] = [
 	"**/id_ed25519*",
 	"**/id_ecdsa*",
 	"**/secrets/**",
+	"**/.claude.json*",
+	"**/shell-snapshots/**",
 ];
 
 /**
@@ -240,7 +310,23 @@ export function isHyperAllowlist(contents: string): boolean {
  * deliberately re-emitted after the tracked pairs (see SAFETY_TAIL).
  */
 export function renderGitignore(tracked: string[] = []): string {
-	const lines: string[] = [...BASE_ALLOWLIST];
+	return renderWith(BASE_ALLOWLIST, SAFETY_TAIL, tracked);
+}
+
+/**
+ * Every render hyper has published for these `tracked` entries, current
+ * first: what incoming validation accepts byte for byte. The older render
+ * lacks the Claude user-state ignores; see {@link LEGACY_BASE_ALLOWLIST}.
+ */
+export function canonicalGitignores(tracked: string[] = []): string[] {
+	return [
+		renderWith(BASE_ALLOWLIST, SAFETY_TAIL, tracked),
+		renderWith(LEGACY_BASE_ALLOWLIST, LEGACY_SAFETY_TAIL, tracked),
+	];
+}
+
+function renderWith(base: readonly string[], tail: readonly string[], tracked: string[]): string {
+	const lines: string[] = [...base];
 	const seen = new Set(lines);
 	for (const raw of tracked) {
 		const entry = normaliseTrackedEntry(raw);
@@ -253,7 +339,7 @@ export function renderGitignore(tracked: string[] = []): string {
 	// Only when a tracked pair could shadow them: with no tracked entries the
 	// base list is already verbatim (and C-4 checks it line for line), so the
 	// tail would add nothing but noise.
-	if (tracked.length > 0) lines.push(...SAFETY_TAIL);
+	if (tracked.length > 0) lines.push(...tail);
 	lines.push(ALLOWLIST_MARKER);
 	return `${lines.join("\n")}\n`;
 }

@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
 	ALLOWLIST_MARKER,
 	AllowlistError,
+	CLAUDE_USER_STATE,
+	canonicalGitignores,
 	findSecretPaths,
 	isHyperAllowlist,
 	normaliseTrackedEntry,
@@ -119,6 +121,7 @@ describe("renderGitignore", () => {
 				"!/.claude/",
 				"!/.claude/**",
 				"/.claude/settings.local.json",
+				...CLAUDE_USER_STATE.map((entry) => `/.claude/${entry}`),
 				// The marker comes last so the design's rules keep the file's
 				// first line and their exact order (C-4 is checked against
 				// them); it is what tells `hyper space init` this file is its own
@@ -442,6 +445,117 @@ describe("findSecretPaths", () => {
 			"**/id_ed25519*",
 			"**/id_ecdsa*",
 			"**/secrets/**",
+			"**/.claude.json*",
+			"**/shell-snapshots/**",
 		]);
+	});
+
+	it("refuses Claude's account state and shell environment captures anywhere", () => {
+		expect(
+			findSecretPaths([
+				".claude/.claude.json",
+				".claude/.claude.json.backup",
+				"notes/.claude.json",
+				".claude/shell-snapshots/snapshot-zsh-1.sh",
+				"data/shell-snapshots/x",
+				".claude/settings.json",
+				".claude/history.jsonl",
+			]),
+		).toEqual([
+			".claude/.claude.json",
+			".claude/.claude.json.backup",
+			"notes/.claude.json",
+			".claude/shell-snapshots/snapshot-zsh-1.sh",
+			"data/shell-snapshots/x",
+		]);
+	});
+});
+
+describe("Claude's user state under a space's .claude/ (ac-gaps item 7)", () => {
+	/** User state Claude writes into its config dir, by the entry it lives under. */
+	const USER_STATE_FILES = [
+		".claude/.credentials.json",
+		".claude/.claude.json",
+		".claude/.claude.json.backup",
+		".claude/history.jsonl",
+		".claude/projects/-x/s.jsonl",
+		".claude/projects/-x/memory/MEMORY.md",
+		".claude/sessions/1.json",
+		".claude/session-env/abc/env",
+		".claude/todos/t.json",
+		".claude/plans/p.md",
+		".claude/file-history/abc/f",
+		".claude/paste-cache/p",
+		".claude/shell-snapshots/snapshot-zsh.sh",
+		".claude/statsig/s",
+		".claude/telemetry/t",
+		".claude/ide/1.lock",
+		".claude/debug/d.txt",
+		".claude/cache/c",
+		".claude/state/s",
+		".claude/backups/b",
+		".claude/plugins/installed_plugins.json",
+		".claude/usage-data/u",
+		".claude/stats-cache.json",
+		".claude/mcp-needs-auth-cache.json",
+	];
+	/** The shareable project configuration a .claude/ may hold. */
+	const PROJECT_CONFIG_FILES = [
+		".claude/settings.json",
+		".claude/CLAUDE.md",
+		".claude/commands/c.md",
+		".claude/agents/a.md",
+		".claude/skills/s/SKILL.md",
+		".claude/hooks/h.sh",
+		".claude/rules/r.md",
+		".claude/output-styles/o.md",
+	];
+
+	function spaceWith(tracked: string[]): string {
+		const root = makeSpace(tracked);
+		for (const file of [...USER_STATE_FILES, ...PROJECT_CONFIG_FILES]) {
+			mkdirSync(dirname(join(root, file)), { recursive: true });
+			writeFileSync(join(root, file), "x\n");
+		}
+		return root;
+	}
+
+	it("covers one entry per user-state name, each rendered under /.claude/", () => {
+		for (const entry of CLAUDE_USER_STATE) {
+			const name = entry.replace(/\*$/, "");
+			expect(
+				USER_STATE_FILES.some((file) => file.startsWith(`.claude/${name}`)),
+				`a fixture file under .claude/${entry}`,
+			).toBe(true);
+			expect(renderGitignore()).toContain(`\n/.claude/${entry}\n`);
+		}
+	});
+
+	for (const tracked of [[], ["extra"]]) {
+		it(`stages none of it and all of the project config (tracked: ${JSON.stringify(tracked)})`, () => {
+			const root = spaceWith(tracked);
+			for (const path of USER_STATE_FILES)
+				expect(isIgnored(root, path), `${path} must be ignored`).toBe(true);
+			for (const path of PROJECT_CONFIG_FILES)
+				expect(isIgnored(root, path), `${path} must be tracked`).toBe(false);
+			spaceGit(root, ["add", "-A"]);
+			const staged = spaceGit(root, ["ls-files"]).stdout.split("\n").filter(Boolean);
+			for (const path of USER_STATE_FILES) expect(staged).not.toContain(path);
+			for (const path of PROJECT_CONFIG_FILES) expect(staged).toContain(path);
+		});
+	}
+
+	it("keeps the previous render as the second canonical one, minus only the user-state lines", () => {
+		const [current, legacy] = canonicalGitignores(["extra"]);
+		expect(current).toBe(renderGitignore(["extra"]));
+		const userState = new Set(CLAUDE_USER_STATE.map((entry) => `/.claude/${entry}`));
+		expect(legacy).toBe(
+			current
+				.split("\n")
+				.filter((line) => !userState.has(line))
+				.join("\n"),
+		);
+		expect(legacy).toContain("/.claude/settings.local.json");
+		expect(isHyperAllowlist(legacy)).toBe(true);
 	});
 });
