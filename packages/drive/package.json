@@ -1,6 +1,6 @@
 {
 	"name": "@hypercli/drive",
-	"version": "0.5.1",
+	"version": "0.5.2",
 	"packageManager": "bun@1.3.11",
 	"type": "module",
 	"description": "Hyperdrive — one private repo holding every space, machine sync, and session warp for the hyper CLI",
