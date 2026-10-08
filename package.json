@@ -1,7 +1,9 @@
 {
 	"name": "@hypercli/monorepo",
 	"version": "0.0.0",
-	"packageManager": "bun@1.3.11",
+	"dependencies": {
+		"tiged": "^2.12.7"
+	},
 	"author": "Saulo Vallory",
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.14",
@@ -30,7 +32,8 @@
 		"typescript": "^5.3.3"
 	},
 	"engines": {
-		"bun": ">=1.3.0"
+		"bun": ">=1.3.0",
+		"node": "~20"
 	},
 	"infra": "monorepo",
 	"license": "MIT",
@@ -46,8 +49,5 @@
 		"libs/*",
 		"packages/*",
 		"devtools/*/*"
-	],
-	"dependencies": {
-		"tiged": "^2.12.7"
-	}
+	]
 }

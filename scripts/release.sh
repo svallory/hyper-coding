@@ -38,13 +38,12 @@ node "$REPO_ROOT/scripts/bump-versions.mjs" "$VERSION"
 # Publishing order respects the dependency graph:
 #   ui              → (no workspace deps)
 #   core            → ui
-#   create-hyper-hq → (no workspace deps, synced version)
 #   kit             → core, ui
-#   hq              → create-hyper-hq, ui
 #   drive           → (no workspace deps)
 #   gen             → core, kit, ui
-#   cli             → core, ui, gen, hq, kit
-PACKAGES=(ui core create-hyper-hq kit hq drive gen cli)
+#   cli             → core, ui, gen, kit, drive
+# hq and create-hyper-hq are being retired: not published, not loaded by cli.
+PACKAGES=(ui core kit drive gen cli)
 
 publish_package() {
   local pkg=$1
