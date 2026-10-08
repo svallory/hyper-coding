@@ -59,7 +59,7 @@ export default class MachineList extends BaseCommand<typeof MachineList> {
 		if (machines.length === 0) {
 			this.log("No machines yet.");
 			this.log(
-				`Add one with \`${addHint("<name>")}\`, or run \`hyper drive init\` to set up this one.`,
+				`Add one with \`${addHint("<name>")}\`, or run \`hyper drive setup\` to set up this one.`,
 			);
 			return;
 		}

@@ -5,7 +5,7 @@ import { promptValidation, promptValue } from "#lib/prompt-default";
  * These two rules are the whole of "Enter accepts the default" in a
  * `@clack/prompts` text prompt.
  *
- * `tests/drive-init.test.ts` covers the same ground end to end through a pty
+ * `tests/drive-setup.test.ts` covers the same ground end to end through a pty
  * (`script -q /dev/null`), which is the only place the real prompt can be
  * driven. This suite stays because it pins the rules directly: the pty test
  * takes ~11 s of real waiting, and these two functions are where the

@@ -26,14 +26,25 @@ afterEach(() => {
 	fixture.cleanup();
 });
 
-describe("hyper drive init", () => {
+describe("hyper drive setup", () => {
+	it("still answers to the old name `drive init`", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		const result = spawnCli(
+			["drive", "init", "--remote", fixture.remote, "--name", "mac", "--home", "/tmp/h"],
+			fixture,
+		);
+		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
+		expect(flat(result.stdout)).toContain("Next steps:");
+		expect(parseTOML(readFileSync(fixture.configFile, "utf-8")).self.name).toBe("mac");
+	});
+
 	it("asks for every value on a TTY and accepts each default with Enter", (ctx) => {
 		if (skipIfUnbuilt(ctx) || skipWithoutScript(ctx)) return;
 		// The interactive path, end to end: a pipe has no isTTY, so a piped spawn
 		// would skip every prompt and prove nothing. Answer the remote (it has no
 		// default) and press Enter for the machine name and home, which must take
 		// their defaults rather than re-prompt forever or hang.
-		const result = spawnCliOnTty(["drive", "init"], fixture, [fixture.remote, "", ""]);
+		const result = spawnCliOnTty(["drive", "setup"], fixture, [fixture.remote, "", ""]);
 		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
 
 		const config = parseTOML(readFileSync(fixture.configFile, "utf-8"));
@@ -52,7 +63,16 @@ describe("hyper drive init", () => {
 
 	it("writes config and creates main on a bare remote; a second run is idempotent", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
-		const args = ["drive", "init", "--remote", fixture.remote, "--name", "mac", "--home", "/tmp/h"];
+		const args = [
+			"drive",
+			"setup",
+			"--remote",
+			fixture.remote,
+			"--name",
+			"mac",
+			"--home",
+			"/tmp/h",
+		];
 		const first = spawnCli(args, fixture);
 		expect(first.status, flat(first.stderr)).toBe(0);
 		expect(first.stdout).toContain("checkout created");
@@ -80,7 +100,7 @@ describe("hyper drive init", () => {
 			'legacy = "keep"\n[machines.other]\nhome = "/home/other"\ncustom = "keep too"\n',
 		);
 		const result = spawnCli(
-			["drive", "init", "--remote", fixture.remote, "--name", "mac", "--home", "/tmp/h"],
+			["drive", "setup", "--remote", fixture.remote, "--name", "mac", "--home", "/tmp/h"],
 			fixture,
 		);
 		expect(result.status, flat(result.stderr)).toBe(0);
@@ -94,7 +114,7 @@ describe("hyper drive init", () => {
 		if (skipIfUnbuilt(ctx)) return;
 		// The config must not point at a hyperdrive that was never connected.
 		const missing = join(fixture.root, "missing.git");
-		const result = spawnCli(["drive", "init", "--remote", missing], fixture);
+		const result = spawnCli(["drive", "setup", "--remote", missing], fixture);
 		expect(result.status).not.toBe(0);
 		// The URL is wrapped by oclif's renderer, so assert on the sentence
 		// rather than on a path that may be broken across lines.
@@ -104,7 +124,7 @@ describe("hyper drive init", () => {
 
 	it("reports the missing --remote flag without a TTY", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
-		const result = spawnCli(["drive", "init", "--name", "mac", "--home", "/tmp/h"], fixture);
+		const result = spawnCli(["drive", "setup", "--name", "mac", "--home", "/tmp/h"], fixture);
 		expect(result.status).not.toBe(0);
 		expect(flat(result.stderr)).toContain("--remote");
 		expect(flat(result.stderr)).not.toContain("at Init.run");

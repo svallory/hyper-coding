@@ -61,7 +61,7 @@ rule.
 
 ```bash
 # 1. Point the CLI at your private hyperdrive repository.
-hyper drive init --remote git@github.com:you/hyperdrive.git
+hyper drive setup --remote git@github.com:you/hyperdrive.git
 
 # 2. Give a space a branch and pick its cadence.
 cd ~/spaces/my-project
@@ -103,8 +103,8 @@ what it is in.
 ## Second machine
 
 ```bash
-# 1. Same drive init (per-machine config lives in ~/.config/hyper/drive.toml).
-hyper drive init --remote git@github.com:you/hyperdrive.git --name laptop
+# 1. Same drive setup (per-machine config lives in ~/.config/hyper/drive.toml).
+hyper drive setup --remote git@github.com:you/hyperdrive.git --name laptop
 
 # 2. Recreate the space. The default destination is the recorded path
 #    remapped under this HOME; confirm it or pass one explicitly.
@@ -245,12 +245,15 @@ with `[machines.*]` in `drive.toml`.
 ### `hyper drive` — the hyperdrive itself
 
 ```
-hyper drive init [--remote url] [--name n] [--home path]
+hyper drive setup [--remote url] [--name n] [--home path]
 hyper drive status
 hyper drive sync-config [MACHINE] [--check] [--json]
 ```
 
-`drive init` writes `~/.config/hyper/drive.toml` and clones the manifest.
+`drive setup` writes `~/.config/hyper/drive.toml` and clones the manifest.
+It is per machine and never touches the current directory; in a terminal it
+asks for each value it does not know (remote, machine name, home) and ends
+with the next steps. `drive init` still works as an alias.
 `sync-config` keeps `~/.claude` and `~/.pi/agent` in sync with another
 machine (Mutagen sessions); with no argument it lists them. `--check` creates,
 changes and removes nothing, and exits 1 when a session is missing, does not

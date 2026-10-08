@@ -449,7 +449,7 @@ export default class Init extends BaseCommand<typeof Init> {
 		if (!config.remote) {
 			throw new ConfigError(
 				configPath(),
-				"there's no `remote` yet — run `hyper drive init` first.",
+				"there's no `remote` yet — run `hyper drive setup` first.",
 			);
 		}
 		const remote = config.remote;

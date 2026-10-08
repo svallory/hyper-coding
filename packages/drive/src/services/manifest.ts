@@ -3,7 +3,7 @@
  * hyperdrive repository.
  *
  * The CLI keeps ONE ordinary clone of `main` at `~/.hyper/drive/` (created by
- * `hyper drive init`); every read and write happens there.
+ * `hyper drive setup`); every read and write happens there.
  *
  * A hyperdrive is shared by the owner's whole fleet, so several machines can
  * write it without having seen each other. git must never merge
@@ -435,7 +435,7 @@ function extrasOf(raw: unknown): ManifestExtras {
 
 /**
  * Read and validate `spaces.yaml` from the checkout. A missing checkout is a
- * friendly error pointing at `hyper drive init`; a missing file on an
+ * friendly error pointing at `hyper drive setup`; a missing file on an
  * initialised checkout reads as an empty manifest.
  */
 export function readManifest(): Manifest {
@@ -443,7 +443,7 @@ export function readManifest(): Manifest {
 	if (!existsSync(join(dir, ".git"))) {
 		throw new ManifestError(
 			dir,
-			"there's no hyperdrive checkout there yet — run `hyper drive init` first.",
+			"there's no hyperdrive checkout there yet — run `hyper drive setup` first.",
 		);
 	}
 	const path = manifestPath();

@@ -269,11 +269,11 @@ describe("self", () => {
 		expect(self()).toEqual({ name: "test-machine", home: "/home/tester" });
 	});
 
-	it("asks for `hyper drive init` when self.name is empty", () => {
+	it("asks for `hyper drive setup` when self.name is empty", () => {
 		fakeHerdrOnPath("[]");
 		withTempConfig('remote = "git@example.com:x/y.git"\n');
 
-		expect(() => self()).toThrow(/hyper drive init/);
+		expect(() => self()).toThrow(/hyper drive setup/);
 	});
 });
 
@@ -304,12 +304,12 @@ describe("runnerFor", () => {
 
 	it("works for another machine even when self.name is unset", () => {
 		fakeHerdrOnPath(JSON.stringify([{ label: "netcup", target: "agent@netcup.example.com" }]));
-		// No [self] section: `hyper drive init` hasn't run here yet.
+		// No [self] section: `hyper drive setup` hasn't run here yet.
 		withTempConfig('[machines.netcup]\nhome = "/home/svallory"\n');
 
 		// self() is the right place to complain about an unset self.name —
 		// asking for a remote machine is not.
-		expect(() => self()).toThrow(/hyper drive init/);
+		expect(() => self()).toThrow(/hyper drive setup/);
 		expect(runnerFor("netcup")).toBeInstanceOf(RemoteMachine);
 	});
 });

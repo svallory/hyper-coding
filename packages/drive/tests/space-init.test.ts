@@ -573,7 +573,7 @@ describe("the manifest entry", () => {
 });
 
 describe("refusals and refresh", () => {
-	it("refuses a directory that is not a space, and points at hyper drive init with no remote", (ctx) => {
+	it("refuses a directory that is not a space, and points at hyper drive setup with no remote", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		const plain = join(fixture.root, "plain");
 		mkdirSync(plain, { recursive: true });
@@ -587,7 +587,7 @@ describe("refusals and refresh", () => {
 		writeFileSync(fixture.configFile, 'self = { name = "mac", home = "/tmp" }\n');
 		const noRemote = run(["space", "init", root, "--cadence", "manual"], fixture);
 		expect(noRemote.status).not.toBe(0);
-		expect(flat(noRemote.stderr)).toContain("hyper drive init");
+		expect(flat(noRemote.stderr)).toContain("hyper drive setup");
 		expect(existsSync(join(root, ".hyper", "space.git"))).toBe(false);
 	});
 
@@ -918,7 +918,7 @@ describe("a failure after the branch is pushed", () => {
 		// the branch is already on the hyperdrive when the write fails.
 		expect(
 			spawnCli(
-				["drive", "init", "--remote", fixture.remote, "--name", "m", "--home", "/tmp"],
+				["drive", "setup", "--remote", fixture.remote, "--name", "m", "--home", "/tmp"],
 				fixture,
 			).status,
 		).toBe(0);
@@ -1087,7 +1087,7 @@ describe("a failed run puts the space back", () => {
 		// missing remote, and the failure has to happen further in.
 		expect(
 			spawnCli(
-				["drive", "init", "--remote", fixture.remote, "--name", "m", "--home", "/tmp"],
+				["drive", "setup", "--remote", fixture.remote, "--name", "m", "--home", "/tmp"],
 				fixture,
 			).status,
 		).toBe(0);
@@ -1194,7 +1194,7 @@ describe("failures that reach the hyperdrive", () => {
 		writeConfig();
 		expect(
 			spawnCli(
-				["drive", "init", "--remote", fixture.remote, "--name", "m", "--home", "/tmp"],
+				["drive", "setup", "--remote", fixture.remote, "--name", "m", "--home", "/tmp"],
 				fixture,
 			).status,
 		).toBe(0);
@@ -1658,7 +1658,7 @@ function spaceGitShim(script: string, spaceOnly = true): () => void {
 function initialiseDrive(): void {
 	expect(
 		spawnCli(
-			["drive", "init", "--remote", fixture.remote, "--name", "m", "--home", fixture.home],
+			["drive", "setup", "--remote", fixture.remote, "--name", "m", "--home", fixture.home],
 			fixture,
 		).status,
 	).toBe(0);

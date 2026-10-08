@@ -25,17 +25,17 @@ export default class List extends BaseCommand<typeof List> {
 			if (!config.remote) {
 				throw new ConfigError(
 					configPath(),
-					"there's no `remote` yet — run `hyper drive init` first.",
+					"there's no `remote` yet — run `hyper drive setup` first.",
 				);
 			}
 			// Listing the old checkout while drive.toml names a new remote is how
-			// a half-finished `drive init` used to look like a working setup.
+			// a half-finished `drive setup` used to look like a working setup.
 			const origin = driveCheckoutOrigin();
 			if (origin !== null && origin !== config.remote) {
 				throw new ManifestError(
 					origin,
 					`the hyperdrive checkout is a clone of ${quoteForTerminal(origin)}, ` +
-						`but your config points at ${quoteForTerminal(config.remote)} — run \`hyper drive init\`.`,
+						`but your config points at ${quoteForTerminal(config.remote)} — run \`hyper drive setup\`.`,
 				);
 			}
 			const manifest = readManifest();

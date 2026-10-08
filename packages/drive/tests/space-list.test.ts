@@ -31,7 +31,7 @@ afterEach(() => {
 
 function init(): void {
 	const result = spawnCli(
-		["drive", "init", "--remote", fixture.remote, "--name", "mac", "--home", fixture.home],
+		["drive", "setup", "--remote", fixture.remote, "--name", "mac", "--home", fixture.home],
 		fixture,
 	);
 	expect(result.status, flat(result.stderr)).toBe(0);
@@ -112,7 +112,7 @@ describe("hyper space list", () => {
 		init();
 		// Point the config at a DIFFERENT hyperdrive: listing the old checkout
 		// while the config names a new remote is how a half-finished
-		// `drive init` used to look like a working setup.
+		// `drive setup` used to look like a working setup.
 		const other = join(fixture.root, "other.git");
 		mkdirSync(dirname(other), { recursive: true });
 		git(["init", "--bare", other], fixture.root);
@@ -120,22 +120,22 @@ describe("hyper space list", () => {
 		writeFileSync(fixture.configFile, `remote = ${JSON.stringify(other)}\n`);
 		const result = spawnCli(["space", "list"], fixture);
 		expect(result.status).not.toBe(0);
-		expect(flat(result.stderr)).toContain("hyper drive init");
+		expect(flat(result.stderr)).toContain("hyper drive setup");
 	});
 
-	it("points to hyper drive init when remote is absent", (ctx) => {
+	it("points to hyper drive setup when remote is absent", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		const result = spawnCli(["space", "list"], fixture);
 		expect(result.status).not.toBe(0);
-		expect(flat(result.stderr)).toContain("hyper drive init");
+		expect(flat(result.stderr)).toContain("hyper drive setup");
 	});
 
-	it("points to hyper drive init when the checkout is absent", (ctx) => {
+	it("points to hyper drive setup when the checkout is absent", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		mkdirSync(dirname(fixture.configFile), { recursive: true });
 		writeFileSync(fixture.configFile, `remote = ${JSON.stringify(fixture.remote)}\n`);
 		const result = spawnCli(["space", "list"], fixture);
 		expect(result.status).not.toBe(0);
-		expect(flat(result.stderr)).toContain("hyper drive init");
+		expect(flat(result.stderr)).toContain("hyper drive setup");
 	});
 });

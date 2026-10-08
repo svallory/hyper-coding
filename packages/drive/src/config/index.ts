@@ -309,7 +309,7 @@ function validateComplete(path: string, raw: Record<string, unknown>): void {
  * Patch `drive.toml` with the given values and write it back atomically
  * (temp file + rename). Unknown keys and sections already in the file are
  * preserved: the existing TOML is parsed and the patch deep-merged over it,
- * so `hyper drive init` never discards a `[machines.*]` or `[sync.*]` table
+ * so `hyper drive setup` never discards a `[machines.*]` or `[sync.*]` table
  * it knows nothing about. Creates the config directory when missing, and
  * leaves the file untouched when the patch changes nothing.
  *
