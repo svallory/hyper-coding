@@ -76,7 +76,7 @@
     },
     "packages/cli": {
       "name": "@hypercli/cli",
-      "version": "0.5.0",
+      "version": "0.5.2",
       "bin": {
         "hyper": "./bin/run.js",
       },
@@ -84,7 +84,6 @@
         "@hypercli/core": "workspace:*",
         "@hypercli/drive": "workspace:*",
         "@hypercli/gen": "workspace:*",
-        "@hypercli/hq": "workspace:*",
         "@hypercli/kit": "workspace:*",
         "@hypercli/ui": "workspace:*",
         "@oclif/core": "^4.8.0",
@@ -152,7 +151,7 @@
     },
     "packages/drive": {
       "name": "@hypercli/drive",
-      "version": "0.5.0",
+      "version": "0.5.2",
       "dependencies": {
         "@clack/prompts": "^0.11.0",
         "@oclif/core": "^4",
@@ -171,7 +170,7 @@
     },
     "packages/gen": {
       "name": "@hypercli/gen",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@clack/prompts": "^0.11.0",
         "@hypercli/core": "workspace:*",
@@ -206,7 +205,7 @@
     },
     "packages/hq": {
       "name": "@hypercli/hq",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@clack/prompts": "^1.1.0",
         "@hypercli/ui": "workspace:*",
@@ -224,7 +223,7 @@
     },
     "packages/kit": {
       "name": "@hypercli/kit",
-      "version": "0.5.0",
+      "version": "0.5.1",
       "dependencies": {
         "@clack/prompts": "^0.11.0",
         "@hypercli/core": "workspace:*",
