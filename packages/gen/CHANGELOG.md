@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.1](https://github.com/svallory/hyper-coding/compare/v0.5.0...v0.5.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* **ci:** install oclif instead of downloading it at build time ([fc556bc](https://github.com/svallory/hyper-coding/commit/fc556bcbd77426148dcf2364e07e57ab695525fc))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * dependencies
+    * @hypercli/kit bumped to 0.5.1
+
 ## [0.5.0](https://github.com/svallory/hyper-coding/compare/v0.4.0...v0.5.0) (2026-10-03)
 
 
