@@ -91,7 +91,7 @@ flock /tmp/hyper-heavy2.lock -c 'cd packages/drive && bun run build && bun run t
 ## How the CLI Works
 
 CLI is a thin oclif shell that loads drive, gen, hq, and kit as plugins:
-- `hyper drive init` / `hyper space list` → routed to @hypercli/drive
+- `hyper drive setup` / `hyper space list` → routed to @hypercli/drive
 - `hyper kit install` → routed to @hypercli/kit
 - `hyper run nextjs crud` → routed to @hypercli/gen
 - `hyper nextjs crud list` → gen's `command_not_found` hook rewrites to `hyper run`

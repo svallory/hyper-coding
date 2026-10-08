@@ -232,7 +232,7 @@ export async function cloneSpace(
 		if (!config.remote)
 			throw new ConfigError(
 				configPath(),
-				"there's no `remote` yet — run `hyper drive init` first.",
+				"there's no `remote` yet — run `hyper drive setup` first.",
 			);
 		ensureDriveCheckout(config.remote);
 		const spaces = readManifest().spaces;

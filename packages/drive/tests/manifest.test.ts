@@ -404,7 +404,7 @@ describe("a reachable remote with no main", () => {
 		expect(() => ensureDriveCheckout(fixture.remote)).toThrow(/not yet/);
 		writeFileSync(hook, "", { mode: 0o755 });
 
-		// `drive init`'s second run goes through ensureDriveCheckout's
+		// `drive setup`'s second run goes through ensureDriveCheckout's
 		// reconcile path and must create main on the remote.
 		const second = ensureDriveCheckout(fixture.remote);
 		expect(second.created).toBe(false);

@@ -300,7 +300,7 @@ export function self(): { name: string; home: string } {
 	const config = loadConfig();
 	if (!config.self.name) {
 		throw new MachineError(
-			"Your hyperdrive config doesn't say which machine this is. Run `hyper drive init` to set it up.",
+			"Your hyperdrive config doesn't say which machine this is. Run `hyper drive setup` to set it up.",
 		);
 	}
 	return { name: config.self.name, home: config.self.home };
@@ -347,7 +347,7 @@ export function runnerFor(name?: string): MachineRunner {
 	if (name === undefined) return new LocalMachine();
 	// Read self.name straight from the config rather than through self(): an unset
 	// self.name is `self()`'s friendly error, but asking for another machine is a
-	// perfectly reasonable thing to do before `hyper drive init` has ever run.
+	// perfectly reasonable thing to do before `hyper drive setup` has ever run.
 	if (name === loadConfig().self.name) return new LocalMachine();
 	const target = targetFor(name);
 	return new RemoteMachine(

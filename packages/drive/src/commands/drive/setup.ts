@@ -12,12 +12,16 @@ function defaultName(): string {
 	return hostname().split(".")[0] || hostname();
 }
 
-export default class Init extends BaseCommand<typeof Init> {
-	static override description = "Connect this machine to your hyperdrive repository";
+export default class Setup extends BaseCommand<typeof Setup> {
+	static override description =
+		"Connect this machine to your hyperdrive repository (writes ~/.config/hyper/drive.toml; never touches the current directory)";
+
+	/** `drive init` was the name before 0.5.2; kept so old notes and scripts still work. */
+	static override aliases = ["drive:init"];
 
 	static override examples = [
-		"<%= config.bin %> drive init --remote git@github.com:you/hyperdrive.git",
-		"<%= config.bin %> drive init --remote /path/to/hyperdrive.git --name mac --home /Users/you",
+		"<%= config.bin %> drive setup --remote git@github.com:you/hyperdrive.git",
+		"<%= config.bin %> drive setup --remote /path/to/hyperdrive.git --name mac --home /Users/you",
 	];
 
 	static override flags = {
@@ -28,7 +32,7 @@ export default class Init extends BaseCommand<typeof Init> {
 	};
 
 	async run(): Promise<void> {
-		const { flags } = await this.parse(Init);
+		const { flags } = await this.parse(Setup);
 		try {
 			// The RAW file, not the effective config: `loadConfig` fills in
 			// defaults, and a value that came from a default is exactly the one
@@ -55,6 +59,11 @@ export default class Init extends BaseCommand<typeof Init> {
 					? `Hyperdrive checkout created at ${checkout.dir}`
 					: `Hyperdrive checkout already exists at ${checkout.dir} (updated if online)`,
 			);
+			this.log("");
+			this.log("Next steps:");
+			this.log("  hyper space init             in a space: give it a branch on the hyperdrive");
+			this.log("  hyper space clone <name>     recreate a space another machine pushed");
+			this.log("  hyper drive sync-config      optional: keep ~/.claude and ~/.pi/agent in step");
 		} catch (err) {
 			if (!(err instanceof ConfigError || err instanceof ManifestError)) throw err;
 			const problem = new Error(err.message);
