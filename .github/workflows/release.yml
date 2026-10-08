@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the version on main to npm even without a new release (skips versions already published)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,7 +29,7 @@ jobs:
 
   publish:
     needs: release-please
-    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+    if: ${{ needs.release-please.outputs.releases_created == 'true' || inputs.publish == true }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
