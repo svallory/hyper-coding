@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/svallory/hyper-coding/compare/v0.5.1...v0.5.2) (2026-10-08)
+
+
+### Features
+
+* **drive:** rename `hyper drive init` to `hyper drive setup` ([#56](https://github.com/svallory/hyper-coding/issues/56)) ([7b8adae](https://github.com/svallory/hyper-coding/commit/7b8adaec3ac0b38980b7118cecca88b1589dfa50))
+
 ## [0.5.1](https://github.com/svallory/hyper-coding/compare/v0.5.0...v0.5.1) (2026-10-05)
 
 
