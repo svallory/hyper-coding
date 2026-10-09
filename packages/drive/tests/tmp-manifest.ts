@@ -1,5 +1,13 @@
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { TestContext } from "vitest";
@@ -100,11 +108,16 @@ export const flat = (s: string): string =>
 		.replace(/\s+/g, " ")
 		.trim();
 
-export function spawnCli(args: string[], fixture: ManifestFixture): SpawnSyncReturns<string> {
+export function spawnCli(
+	args: string[],
+	fixture: ManifestFixture,
+	extraEnv: NodeJS.ProcessEnv = {},
+): SpawnSyncReturns<string> {
 	return spawnSync(process.execPath, [cli, ...args], {
 		encoding: "utf8",
 		env: {
 			...process.env,
+			...extraEnv,
 			HOME: fixture.home,
 			XDG_CONFIG_HOME: join(fixture.root, "config"),
 			HYPER_HOME: fixture.hyperHome,
@@ -133,6 +146,7 @@ export function spawnCliOnTty(
 	args: string[],
 	fixture: ManifestFixture,
 	answers: string[],
+	extraEnv: NodeJS.ProcessEnv = {},
 ): SpawnSyncReturns<string> {
 	// \r is the key a terminal sends for Enter; \n is not what readline expects.
 	// The answers are spaced apart: written all at once they arrive before the
@@ -167,6 +181,7 @@ export function spawnCliOnTty(
 		killSignal: "SIGKILL",
 		env: {
 			...process.env,
+			...extraEnv,
 			HOME: fixture.home,
 			XDG_CONFIG_HOME: join(fixture.root, "config"),
 			HYPER_HOME: fixture.hyperHome,
@@ -219,4 +234,50 @@ export function skipIfUnbuilt(ctx: TestContext): boolean {
 	}
 	ctx.skip("cli/drive not built (run `bun run build` in drive and cli first)");
 	return true;
+}
+
+/**
+ * A fake `gh` on a fixture-private PATH, so setup's forge detection and
+ * repository creation are exercised without the real CLI, an account or a
+ * network. `api user` answers with LOGIN; `repo create owner/name` makes a
+ * bare repository under `<forgeRoot>/owner/name.git`. The returned env puts
+ * the shim first on PATH and makes git rewrite `git@github.com:` to that
+ * directory, so the URL setup builds really reaches the repository the shim
+ * created. `gh --version` works so the CLI counts as installed; any other
+ * call fails, as a wrong invocation should.
+ */
+export function withFakeForge(
+	fixture: ManifestFixture,
+	login: string,
+): { env: NodeJS.ProcessEnv; forgeRoot: string; ghLog: string } {
+	const bin = join(fixture.root, "fake-bin");
+	const forgeRoot = join(fixture.root, "forge");
+	const ghLog = join(fixture.root, "gh.log");
+	mkdirSync(bin, { recursive: true });
+	mkdirSync(forgeRoot, { recursive: true });
+	const script = `#!/bin/sh
+printf '%s\n' "$*" >> ${shellQuote(ghLog)}
+case "$1 $2" in
+  "--version ") echo "gh version 0.0.0-fake"; exit 0 ;;
+  "api user") printf '{"login":"%s"}\n' ${shellQuote(login)}; exit 0 ;;
+  "repo create")
+    case "$3" in */*) ;; *) echo "fake gh: expected owner/name" >&2; exit 1 ;; esac
+    dir=${shellQuote(forgeRoot)}/"$3".git
+    if [ -e "$dir" ]; then echo "GraphQL: Name already exists on this account" >&2; exit 1; fi
+    mkdir -p "$(dirname "$dir")" && git init -q --bare "$dir" && echo "https://github.com/$3"; exit 0 ;;
+esac
+echo "fake gh: unsupported: $*" >&2; exit 1
+`;
+	writeFileSync(join(bin, "gh"), script, { mode: 0o755 });
+	const gitconfig = join(fixture.root, "gitconfig");
+	writeFileSync(gitconfig, `[url "${forgeRoot}/"]\n\tinsteadOf = git@github.com:\n`);
+	return {
+		env: {
+			PATH: `${bin}:${process.env.PATH ?? ""}`,
+			GIT_CONFIG_GLOBAL: gitconfig,
+			GH_HOST: undefined,
+		},
+		forgeRoot,
+		ghLog,
+	};
 }

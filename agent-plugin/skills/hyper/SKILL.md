@@ -232,7 +232,8 @@ nothing about root even in a terminal: it takes the defaults, leaves the
 printed script for you, and exits 3 when root steps are pending. The same
 happens without `--yes` when there is no terminal.
 `hyper drive setup` points the CLI at your
-private hyperdrive repo; `hyper drive sync-config` keeps `~/.claude` and
+private hyperdrive repo (with `gh`/`glab` logged in it offers
+`<you>/hyperdrive` and can create it); `hyper drive sync-config` keeps `~/.claude` and
 `~/.pi/agent` in step between machines.
 
 ## Where a file goes

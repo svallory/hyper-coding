@@ -12,6 +12,7 @@ import {
 	skipWithoutScript,
 	spawnCli,
 	spawnCliOnTty,
+	withFakeForge,
 	withManifestFixture,
 } from "#tests/tmp-manifest";
 
@@ -38,13 +39,90 @@ describe("hyper drive setup", () => {
 		expect(parseTOML(readFileSync(fixture.configFile, "utf-8")).self.name).toBe("mac");
 	});
 
+	it("never asks for the home directory", (ctx) => {
+		if (skipIfUnbuilt(ctx) || skipWithoutScript(ctx)) return;
+		// Two answers only: remote and machine name. A third prompt would wait
+		// for input that never comes and the 60 s guard would fail the test.
+		const result = spawnCliOnTty(["drive", "setup"], fixture, [fixture.remote, ""]);
+		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
+		expect(flat(result.stdout)).not.toContain("home directory");
+		expect(parseTOML(readFileSync(fixture.configFile, "utf-8")).self.home).toBe(fixture.home);
+	});
+
+	it("offers the logged-in user's hyperdrive as the default remote and creates it", (ctx) => {
+		if (skipIfUnbuilt(ctx) || skipWithoutScript(ctx)) return;
+		const forge = withFakeForge(fixture, "ada");
+		// Enter on the remote (takes the default), Enter on the name, "y" to
+		// create the repository that does not exist yet.
+		const result = spawnCliOnTty(["drive", "setup"], fixture, ["", "", "y"], forge.env);
+		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
+		const out = flat(result.stdout).replace(/\s+/g, "");
+		expect(out).toContain("Loggedintogithub.comasada(gh)");
+		expect(out).toContain("Createitasaprivaterepositorywithgh");
+		expect(readFileSync(forge.ghLog, "utf8")).toContain("repo create ada/hyperdrive --private");
+		const config = parseTOML(readFileSync(fixture.configFile, "utf-8"));
+		expect(config.remote).toBe("git@github.com:ada/hyperdrive.git");
+		expect(existsSync(join(forge.forgeRoot, "ada", "hyperdrive.git", "HEAD"))).toBe(true);
+		expect(existsSync(join(fixture.hyperHome, "drive", ".git"))).toBe(true);
+		expect(
+			git(
+				["--git-dir", join(forge.forgeRoot, "ada", "hyperdrive.git"), "log", "--oneline", "main"],
+				fixture.root,
+			),
+		).toContain("manifest: initialise hyperdrive");
+	});
+
+	it("expands owner/name and creates it with --create off a terminal", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		const forge = withFakeForge(fixture, "ada");
+		const result = spawnCli(
+			["drive", "setup", "--remote", "ada/drive", "--name", "mac", "--create"],
+			fixture,
+			forge.env,
+		);
+		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
+		expect(parseTOML(readFileSync(fixture.configFile, "utf-8")).remote).toBe(
+			"git@github.com:ada/drive.git",
+		);
+		expect(readFileSync(forge.ghLog, "utf8")).toContain("repo create ada/drive --private");
+		// The remote on the flag never needs a default, so the forge is not asked who is logged in.
+		expect(readFileSync(forge.ghLog, "utf8")).not.toContain("api user");
+	});
+
+	it("refuses to create off a terminal without --create, naming the flag", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		const forge = withFakeForge(fixture, "ada");
+		const result = spawnCli(
+			["drive", "setup", "--remote", "ada/drive", "--name", "mac"],
+			fixture,
+			forge.env,
+		);
+		expect(result.status).toBe(2);
+		expect(flat(result.stderr)).toContain("--create");
+		expect(existsSync(fixture.configFile)).toBe(false);
+		expect(readFileSync(forge.ghLog, "utf8")).not.toContain("repo create");
+	});
+
+	it("does not create anything when the repository already exists", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		const forge = withFakeForge(fixture, "ada");
+		git(["init", "--bare", join(forge.forgeRoot, "ada", "drive.git")], fixture.root);
+		const result = spawnCli(
+			["drive", "setup", "--remote", "ada/drive", "--name", "mac", "--create"],
+			fixture,
+			forge.env,
+		);
+		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
+		expect(readFileSync(forge.ghLog, "utf8")).not.toContain("repo create");
+	});
+
 	it("asks for every value on a TTY and accepts each default with Enter", (ctx) => {
 		if (skipIfUnbuilt(ctx) || skipWithoutScript(ctx)) return;
 		// The interactive path, end to end: a pipe has no isTTY, so a piped spawn
 		// would skip every prompt and prove nothing. Answer the remote (it has no
 		// default) and press Enter for the machine name and home, which must take
 		// their defaults rather than re-prompt forever or hang.
-		const result = spawnCliOnTty(["drive", "setup"], fixture, [fixture.remote, "", ""]);
+		const result = spawnCliOnTty(["drive", "setup"], fixture, [fixture.remote, ""]);
 		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
 
 		const config = parseTOML(readFileSync(fixture.configFile, "utf-8"));
