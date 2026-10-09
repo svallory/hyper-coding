@@ -264,6 +264,17 @@ function initialiseMain(dir: string, remote: string): void {
 }
 
 /**
+ * Whether the remote has a `main` branch: true/false when it answered,
+ * null when it could not be reached (no such repository, no access, no
+ * network). One `ls-remote`, nothing written anywhere.
+ */
+export function remoteHasBranch(remote: string): boolean | null {
+	const probe = driveGit(["ls-remote", "--heads", remote, BRANCH], process.cwd());
+	if (!probe.ok) return null;
+	return probe.stdout.includes(`refs/heads/${BRANCH}`);
+}
+
+/**
  * Ensure the local clone of the hyperdrive's `main` branch exists.
  *
  * - Already cloned: verify the origin matches `remote` (a mismatch means the
