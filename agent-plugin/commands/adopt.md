@@ -95,8 +95,11 @@ With `--apply`, the conversion:
 2. Sets `core.bare=true` and registers `worktrees/<branch>` as a worktree of
    the now-bare repo.
 3. Moves pre-existing linked worktrees under `worktrees/` with
-   `git worktree move` (each named after its branch). Orphaned worktrees and
-   name collisions are reported and left untouched.
+   `git worktree move` (each named after its branch). Worktrees nested
+   inside the checkout (`.worktrees/<name>`, for example) travel with it in
+   step 1, are repaired there with `git worktree repair`, and are then moved
+   like the rest. Orphaned worktrees and name collisions are reported and
+   left untouched.
 4. Scaffolds `data/ notes/ scratch/ bin/` and regenerates `HYPER.md` and
    the memory seed (unconditionally — the old files describe a shape that no
    longer exists).
