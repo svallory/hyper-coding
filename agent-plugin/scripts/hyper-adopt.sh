@@ -656,6 +656,10 @@ if [[ $apply -eq 0 ]]; then
       printf '  %-32s → already under worktrees/, left alone\n' "$p"
     elif [[ ! -e "$p/.git" ]]; then
       printf '  %-32s → ORPHANED worktree (gitdir missing) — will not be touched\n' "$p"
+    elif [[ "$p" == "$root/"* && "$p" != "$root/.claude/worktrees/"* ]]; then
+      # Nested in the checkout: the working-tree move carries it along, so
+      # it is repaired at its new location before coming home.
+      printf '  %-32s → nested in the checkout: moves with it, then git worktree repair + move → worktrees/%s/\n' "$p" "$wname"
     else
       printf '  %-32s → git worktree move → worktrees/%s/\n' "$p" "$wname"
     fi
@@ -855,16 +859,28 @@ for i in "${!linked_worktrees[@]}"; do
     echo "  worktree $p already under worktrees/ — left alone"
     continue
   fi
-  if [[ ! -e "$p/.git" ]]; then
+  # A worktree nested inside the checkout (.worktrees/<name>, ...) travelled
+  # with it in step 7. Its own .git file still points at the right admin dir;
+  # only the admin dir's back-pointer is stale, which `worktree repair` fixes.
+  cur="$p"
+  if [[ ! -e "$p/.git" && "$p" == "$root/"* && -e "$wt_dir/${p#"$root"/}/.git" ]]; then
+    cur="$wt_dir/${p#"$root"/}"
+    if ! git --git-dir="$root/.git" worktree repair "$cur" >/dev/null 2>&1; then
+      echo "  worktree repair failed for $cur — left in place; run 'git worktree repair' on it yourself"
+      continue
+    fi
+    echo "  repaired nested worktree pointers: $cur"
+  fi
+  if [[ ! -e "$cur/.git" ]]; then
     echo "  worktree $p is ORPHANED (gitdir missing) — not touched; recover or prune it yourself"
     continue
   fi
   if [[ -e "$root/worktrees/$wname" ]]; then
-    echo "  worktrees/$wname already exists — $p left where it is; move it yourself"
+    echo "  worktrees/$wname already exists — $cur left where it is; move it yourself"
     continue
   fi
-  git --git-dir="$root/.git" worktree move "$p" "$root/worktrees/$wname"
-  echo "  moved worktree $p → worktrees/$wname"
+  git --git-dir="$root/.git" worktree move "$cur" "$root/worktrees/$wname"
+  echo "  moved worktree $cur → worktrees/$wname"
   if [[ "$p" == "$root/"* ]]; then
     wt_moves+=("${p#"$root"/}|worktrees/$wname")
   fi
@@ -921,6 +937,20 @@ post_state="$(git -C "$wt_dir" status --porcelain=v1 2>/dev/null)" || post_state
 pre_norm="$pre_state"
 for k in "${keep_space[@]}" ".claude/memory/hyper-layout.md"; do
   pre_norm="$(awk -v k="$k" 'substr($0, 4, length(k)) != k' <<< "$pre_norm")"
+done
+# A nested worktree that left the checkout takes its untracked-status line
+# with it, and so does each parent directory it leaves empty (git lists an
+# untracked dir as one "?? dir/" line, which vanishes once the dir is empty).
+for m in "${wt_moves[@]}"; do
+  d="${m%%|*}"
+  while :; do
+    if [[ "$d" == "${m%%|*}" ]] \
+       || [[ -z "$(find "$wt_dir/$d" -mindepth 1 2>/dev/null | head -n1)" ]]; then
+      pre_norm="$(awk -v k="$d" '{ q = substr($0, 4) } q != k && q != k "/"' <<< "$pre_norm")"
+    fi
+    [[ "$d" == */* ]] || break
+    d="${d%/*}"
+  done
 done
 if [[ "$pre_norm" != "$post_state" ]]; then
   note=""

@@ -111,6 +111,46 @@ assert_eq "moved worktree is functional (clean status)" "" \
   "$(git -C "$d/worktrees/feature" status --porcelain=v1)"
 
 # ---------------------------------------------------------------------------
+# I3b: linked worktrees nested INSIDE the checkout (.worktrees/<name>). The
+# working-tree move carries them along, so they must be repaired at their
+# new location and then moved under worktrees/ — never reported orphaned.
+# Two parents: one gitignored (status-invisible) and one untracked (its
+# "??" line must drop out of the status-parity check once it is emptied).
+# ---------------------------------------------------------------------------
+d="$FIX/i3b"; make_checkout "$d"
+echo '.worktrees/' > "$d/.gitignore"
+git -C "$d" add .gitignore && git -C "$d" commit -q -m "ignore .worktrees"
+git -C "$d" worktree add -q "$d/.worktrees/nested-a" -b nested/a
+git -C "$d" worktree add -q "$d/.wt-untracked/nested-b" -b nested/b
+echo dirty > "$d/.worktrees/nested-a/untracked.txt"
+nested_a_pre="$(git -C "$d/.worktrees/nested-a" rev-parse HEAD)"
+dry="$(bash "$ADOPT" "$d" 2>&1)"
+assert_contains "dry run announces nested worktree repair+move" "$dry" \
+  "nested in the checkout"
+assert_not_contains "dry run does not call a nested worktree orphaned" "$dry" \
+  "ORPHANED"
+out="$(bash "$ADOPT" "$d" --apply 2>&1)"
+assert_eq "convert with nested worktrees exits 0" 0 "$?"
+assert_not_contains "nested worktrees are not reported orphaned" "$out" "ORPHANED"
+assert_ok "gitignored nested worktree moved to worktrees/nested-a" \
+  test -d "$d/worktrees/nested-a"
+assert_ok "untracked nested worktree moved to worktrees/nested-b" \
+  test -d "$d/worktrees/nested-b"
+assert_fails "nested worktree no longer stranded inside worktrees/main" \
+  test -e "$d/worktrees/main/.worktrees/nested-a"
+assert_fails "untracked nested worktree no longer stranded inside worktrees/main" \
+  test -e "$d/worktrees/main/.wt-untracked/nested-b"
+assert_eq "moved nested worktree is on its branch" "nested/a" \
+  "$(git -C "$d/worktrees/nested-a" branch --show-current)"
+assert_eq "moved nested worktree kept its HEAD" "$nested_a_pre" \
+  "$(git -C "$d/worktrees/nested-a" rev-parse HEAD)"
+assert_eq "moved nested worktree kept its untracked file (status parity)" \
+  "?? untracked.txt" "$(git -C "$d/worktrees/nested-a" status --porcelain=v1)"
+assert_eq "no prunable worktrees after conversion" "" \
+  "$(git --git-dir="$d/.git" worktree list | grep prunable || :)"
+assert_not_contains "no guarantee failure reported" "$out" "STATUS differs"
+
+# ---------------------------------------------------------------------------
 # I4: old checkout-layout repo — marker + .claude/worktrees/<wt> + untracked
 # data/. Space-local pieces stay at the root; project files and .claude
 # config go to the worktree; the old-layout worktree is moved.
