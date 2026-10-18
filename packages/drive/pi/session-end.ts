@@ -133,30 +133,17 @@ export interface SessionFacts {
 }
 
 /**
- * PATH entries that cannot be trusted from a directory whose contents a space
- * or a clone controls. `./bin`, `.`, `node_modules/.bin` and `~/…` are all
- * resolved against the CHILD's cwd — which is the session's directory, because
- * that is where the probe and the worker have to run — so a relative entry
- * there means "whatever this checkout ships". Only absolute entries survive.
- */
-export function absolutePathEntries(pathValue = process.env.PATH ?? ""): string[] {
-	return pathValue
-		.split(delimiter)
-		.filter((entry) => entry.length > 0 && isAbsolute(entry) && !entry.startsWith("~"));
-}
-
-/**
- * The `hyper` to spawn: the first executable regular file named `hyper` in an
- * absolute PATH entry. The child gets that same filtered PATH, so the CLI's
- * own `bash` and `git` lookups cannot land in the session's directory either.
+ * The `hyper` to spawn: the first executable regular file named `hyper` on the
+ * caller's PATH (a relative entry is taken against the hook's cwd), which the children inherit unchanged.
  */
 export function resolveHyper(env: NodeJS.ProcessEnv = process.env): string | undefined {
-	for (const entry of absolutePathEntries(env.PATH)) {
+	for (const entry of (env.PATH ?? "").split(delimiter)) {
+		if (entry.length === 0) continue;
 		for (const name of process.platform === "win32" ? ["hyper.cmd", "hyper"] : ["hyper"]) {
 			const candidate = join(entry, name);
 			try {
 				const stats = statSync(candidate);
-				if (stats.isFile() && (stats.mode & 0o111) !== 0) return candidate;
+				if (stats.isFile() && (stats.mode & 0o111) !== 0) return resolve(candidate);
 			} catch {
 				// Not there, or not readable: keep looking.
 			}
@@ -393,16 +380,12 @@ export function appendFailureLine(gitDir: string, sessionId: string, detail: str
 }
 
 /**
- * The environment every child gets: no CLI update check racing the teardown,
- * and a PATH of absolute entries only. The probe and the worker both run with
- * the session's directory as their cwd, so a relative PATH entry would let
- * that directory decide which `bash` and which `git` the CLI runs — and
- * `bin/` is synced space content.
+ * The environment every child gets: no CLI update check racing the teardown;
+ * PATH is the caller's, unchanged.
  */
 export function childEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
 	return {
 		...env,
-		PATH: absolutePathEntries(env.PATH).join(delimiter),
 		HYPER_SKIP_NEW_VERSION_CHECK: "1",
 	};
 }

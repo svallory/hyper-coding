@@ -40,7 +40,6 @@ import { commitSpace } from "#services/space-sync";
 import { makeBareSpace } from "#tests/tmp-space";
 import hyperdrive from "../pi/hyperdrive.ts";
 import {
-	absolutePathEntries,
 	appendFailureLine,
 	childEnv,
 	createRealDeps,
@@ -620,25 +619,23 @@ async function waitForFile(path: string, timeoutMs = 10_000): Promise<void> {
 }
 
 describe("resolving the hyper CLI", () => {
-	it("ignores relative PATH entries, so a space's own bin/ cannot take over", () => {
+	it("resolves a relative PATH entry against the cwd, as the caller's PATH says", () => {
 		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		const previous = process.cwd();
 		try {
-			const good = join(real, "good");
-			mkdirSync(good);
-			const hyper = join(good, "hyper");
+			const bin = join(real, "bin");
+			mkdirSync(bin);
+			const hyper = join(bin, "hyper");
 			writeFileSync(hyper, "#!/bin/sh\n");
 			chmodSync(hyper, 0o755);
-			const relative = join(real, "relative");
-			mkdirSync(relative);
-			writeFileSync(join(relative, "hyper"), "#!/bin/sh\n");
-			chmodSync(join(relative, "hyper"), 0o755);
-			// A relative entry ahead of the real one, as in a space with bin/.
-			expect(resolveHyper({ PATH: ["./bin", "node_modules/.bin", good].join(delimiter) })).toBe(
-				hyper,
+			process.chdir(real);
+			expect(resolveHyper({ PATH: ["", "./nope", "./bin"].join(delimiter) })).toBe(
+				realpathSync(hyper),
 			);
-			expect(resolveHyper({ PATH: `./bin:${good}` })).toBe(hyper);
 			expect(resolveHyper({ PATH: "" })).toBeUndefined();
+			expect(resolveHyper({})).toBeUndefined();
 		} finally {
+			process.chdir(previous);
 			rmSync(real, { recursive: true, force: true });
 		}
 	});
@@ -685,17 +682,14 @@ describe("resolving the hyper CLI", () => {
 });
 
 describe("what the children get (N2, N5)", () => {
-	it("gives every child a PATH of absolute entries only", () => {
-		const good = "/opt/hyper/bin";
-		const env = childEnv({
-			PATH: ["", ".", "./bin", "node_modules/.bin", "~/bin", good, "/usr/bin"].join(delimiter),
-			HYPER_HOME: "/hyper",
-		});
-		expect(env.PATH).toBe([good, "/usr/bin"].join(delimiter));
+	it("gives every child the caller's PATH unchanged", () => {
+		const path = ["", ".", "./bin", "node_modules/.bin", "/opt/hyper/bin", "/usr/bin"].join(
+			delimiter,
+		);
+		const env = childEnv({ PATH: path, HYPER_HOME: "/hyper" });
+		expect(env.PATH).toBe(path);
+		expect(env.HYPER_HOME).toBe("/hyper");
 		expect(env.HYPER_SKIP_NEW_VERSION_CHECK).toBe("1");
-		// A bare relative PATH entry list leaves the child with nothing, never
-		// with the directory it is about to run in.
-		expect(childEnv({ PATH: "./bin:." }).PATH).toBe("");
 	});
 
 	it("spawns the worker with detached, no pipes, the session's cwd and this argv", () => {
@@ -725,12 +719,10 @@ describe("what the children get (N2, N5)", () => {
 		expect(calls[0]!.options.detached).toBe(true);
 		expect(calls[0]!.options.stdio).toBe("ignore");
 		expect(calls[0]!.options.cwd).toBe("/spaces/outer/notes");
-		expect(String(calls[0]!.options.env?.PATH).split(delimiter)).toEqual(
-			absolutePathEntries(process.env.PATH),
-		);
+		expect(calls[0]!.options.env?.PATH).toBe(process.env.PATH);
 	});
 
-	it("probes with the same injected spawn: no stdin, stdout piped, absolute PATH only", async () => {
+	it("probes with the same injected spawn: no stdin, stdout piped, PATH unchanged", async () => {
 		vi.stubEnv(
 			"PATH",
 			["./bin", ".", "", "node_modules/.bin", "/opt/hyper/bin", "/usr/bin"].join(delimiter),
@@ -750,7 +742,9 @@ describe("what the children get (N2, N5)", () => {
 		expect(calls[0]!.args).toEqual(["space", "detect", "--json"]);
 		expect(calls[0]!.options.cwd).toBe(directory);
 		expect(calls[0]!.options.stdio).toEqual(["ignore", "pipe", "ignore"]);
-		expect(calls[0]!.options.env?.PATH).toBe(["/opt/hyper/bin", "/usr/bin"].join(delimiter));
+		expect(calls[0]!.options.env?.PATH).toBe(
+			["./bin", ".", "", "node_modules/.bin", "/opt/hyper/bin", "/usr/bin"].join(delimiter),
+		);
 		expect(calls[0]!.options.env?.HYPER_SKIP_NEW_VERSION_CHECK).toBe("1");
 	});
 

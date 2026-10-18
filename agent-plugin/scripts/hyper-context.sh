@@ -11,14 +11,8 @@
 
 set -uo pipefail
 
-# A hook runs in the session's directory, where a relative PATH entry would
-# pick a project's or space's own bin/ over the real tools: rebuild PATH from
-# absolute entries before anything is looked up by name (hyper-safe-path.sh).
 hook_dir="${BASH_SOURCE[0]%/*}"
 [[ "$hook_dir" == "${BASH_SOURCE[0]}" ]] && hook_dir=.
-# shellcheck source=agent-plugin/scripts/hyper-safe-path.sh
-source "$hook_dir/hyper-safe-path.sh" || exit 0
-hyper_safe_path
 
 # Silent when the hyper CLI is missing: this hook runs on every SessionStart
 # and must not fail a session in an unrelated project. hyper_soft_lib returns
