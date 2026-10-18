@@ -485,9 +485,13 @@ describe("space commit --session-end and real hook", () => {
 		spaceGit(root, ["config", "gc.auto", "0"]);
 		const bin = join(directory, "bin");
 		mkdirSync(bin);
+		// While `hold` exists the detached worker (`space commit --session-end`)
+		// blocks at its first instruction, so the hook can only return if it
+		// really does not wait for the worker.
+		const hold = join(directory, "hold-worker");
 		writeFileSync(
 			join(bin, "hyper"),
-			`#!/bin/sh\nexec '${process.execPath.replaceAll("'", "'\\''")}' '${cli.replaceAll("'", "'\\''")}' "$@"\n`,
+			`#!/bin/sh\ncase " $* " in *" --session-end "*) while [ -e '${hold}' ]; do sleep 0.05; done;; esac\nexec '${process.execPath.replaceAll("'", "'\\''")}' '${cli.replaceAll("'", "'\\''")}' "$@"\n`,
 			{ mode: 0o755 },
 		);
 		const log = join(root, ".hyper/space.git/session-end.log");
@@ -496,6 +500,7 @@ describe("space commit --session-end and real hook", () => {
 		const timings: number[] = [];
 		const runHook = async (input = payload()) => {
 			const before = logged().length;
+			writeFileSync(hold, "");
 			const started = performance.now();
 			const result = spawnSync("bash", [hook], {
 				cwd: join(root, "notes"),
@@ -505,8 +510,11 @@ describe("space commit --session-end and real hook", () => {
 				timeout: 30_000,
 			});
 			timings.push(performance.now() - started);
-			expect(result.status).toBe(0);
+			// Returned with the worker still held: the hook did not wait for it.
+			expect(result.status, "the hook must return while its worker is still running").toBe(0);
 			expect(result.stdout + result.stderr).toBe("");
+			expect(logged().length).toBe(before);
+			rmSync(hold, { force: true });
 			const deadline = Date.now() + 60_000;
 			while (logged().length === before && Date.now() < deadline)
 				await new Promise((resolve) => setTimeout(resolve, 50));
@@ -565,12 +573,12 @@ describe("space commit --session-end and real hook", () => {
 		expect(
 			readdirSync(join(root, ".hyper/space.git")).filter((name) => name.includes("payload")),
 		).toEqual([]);
-		const slowest = Math.max(...timings);
 		console.log(
 			`Real hook simulation: foreground ${timings.map((ms) => ms.toFixed(0)).join("/")} ms; manual 1/1; session-end 2/1; +push 3/3; refusal 4/3; no-op push 4/4 (local/remote commits)`,
 		);
-		// The foreground target is well under 300 ms on an idle machine; the
-		// bound is generous for a loaded CI runner. It must never approach 1.5 s.
-		expect(slowest).toBeLessThan(1_200);
+		// No wall-clock bound: the contract is that the hook never waits for its
+		// worker, which each runHook proves by returning while the worker was held
+		// (a hook that waited would hang to spawnSync's 30 s timeout and fail
+		// there). A fixed millisecond window only measured machine load.
 	}, 120_000);
 });
