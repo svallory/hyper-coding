@@ -9,6 +9,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
@@ -539,6 +540,59 @@ describe("space lock: PR #52 review round 2", () => {
 			withSpaceLock(root, "commit this space", () => undefined, { waitMs: 300 }),
 		).toThrow(/holds something that is not a hyper lock record/);
 		expect(readFileSync(lock, "utf8")).toBe("not a lock record\n");
+	});
+
+	it("a reader never observes a lock without its owner record, and no temp file is left (hyper-prj.29)", async () => {
+		const { root } = await makeSpace();
+		const dir = spaceGitDir(root);
+		const lock = join(dir, SPACE_LOCK_FILE);
+		// A separate process polls the lock path as fast as it can while this one
+		// takes and drops the lock: a create-then-write would show an empty file.
+		const reader = spawn(
+			process.execPath,
+			[
+				"-e",
+				`const fs = require("fs");
+const lock = ${JSON.stringify(lock)};
+const stop = lock + ".stop-reading";
+let seen = 0, bad = 0, n = 0;
+while (++n % 200 !== 0 || !fs.existsSync(stop)) {
+  let text;
+  try { text = fs.readFileSync(lock, "utf8"); } catch { continue; }
+  seen++;
+  try { JSON.parse(text); } catch { bad++; }
+}
+process.stdout.write(JSON.stringify({ seen, bad }));`,
+			],
+			{ stdio: ["ignore", "pipe", "pipe"] },
+		);
+		const done = output(reader);
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		for (let i = 0; i < 300; i++) withSpaceLock(root, "test", () => undefined);
+		writeFileSync(`${lock}.stop-reading`, "");
+		const { stdout } = await done;
+		const { seen, bad } = JSON.parse(stdout) as { seen: number; bad: number };
+		expect(seen).toBeGreaterThan(0);
+		expect(bad).toBe(0);
+		expect(
+			readdirSync(dir).filter(
+				(name) => name.startsWith(`${SPACE_LOCK_FILE}.`) && !name.endsWith(".stop-reading"),
+			),
+		).toEqual([]);
+	}, 30_000);
+
+	it("a lock held by someone else is not replaced, and the failed attempt leaves no temp file", async () => {
+		const { root } = await makeSpace();
+		const dir = spaceGitDir(root);
+		const lock = join(dir, SPACE_LOCK_FILE);
+		withSpaceLock(root, "outer", () => {
+			const record = readFileSync(lock, "utf8");
+			expect(() => withSpaceLock(root, "inner", () => undefined, { waitMs: 100 })).toThrow(
+				SpaceLockTimeoutError,
+			);
+			expect(readFileSync(lock, "utf8")).toBe(record);
+			expect(readdirSync(dir).filter((name) => name.startsWith(`${SPACE_LOCK_FILE}.`))).toEqual([]);
+		});
 	});
 
 	it("an empty lock (created, never written) is still taken over after the grace period", async () => {
