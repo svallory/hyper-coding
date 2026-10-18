@@ -5,6 +5,7 @@ import {
 	escapeControlCharactersKeepingBackslashes,
 	quoteForTerminal,
 } from "#lib/terminal-text";
+import { warpSyncStatusLine } from "#services/session-end-log";
 import {
 	finishInterruptedPull,
 	interruptedPullTip,
@@ -119,6 +120,9 @@ export default class Status extends SpaceCommand<typeof Status> {
 			this.log(
 				`Last session end (${escapeControlCharacters(failure.at)}, session ${escapeControlCharacters(failure.session)}): ${failure.outcome === "push-failed" ? "push failed" : failure.outcome}: ${escapeControlCharactersKeepingBackslashes(failure.detail)}`,
 			);
+		}
+		if (result.warpSync !== null && result.warpSync.outcome !== "synced") {
+			this.log(escapeControlCharactersKeepingBackslashes(warpSyncStatusLine(result.warpSync)));
 		}
 		if (result.status.length === 0) this.log("Working tree clean.");
 		for (const entry of result.status) {

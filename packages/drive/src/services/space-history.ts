@@ -3,7 +3,7 @@ import { lstatSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { isClaudeUserStatePath, renderGitignore } from "#services/allowlist";
-import { lastSessionEndFailure } from "#services/session-end-log";
+import { lastSessionEndFailure, lastWarpSync } from "#services/session-end-log";
 import { detectSpace } from "#services/space";
 import {
 	clearPullMarker,
@@ -571,6 +571,8 @@ export function spaceStatus(root: string, branch: string) {
 		// The detached SessionEnd worker cannot print to the session it outlives;
 		// its last result is surfaced here when it was a failure.
 		sessionEndFailure: lastSessionEndFailure(spaceGitDir(root)),
+		// A detached `hyper warp` transfer writes its progress to the same log.
+		warpSync: lastWarpSync(spaceGitDir(root)),
 	};
 }
 

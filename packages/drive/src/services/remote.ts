@@ -64,6 +64,8 @@ export interface RsyncOptions {
 	 * only, never for a tree.
 	 */
 	checksum?: boolean;
+	/** Keep a partly transferred file (`--partial`), so a repeated run resumes it. */
+	partial?: boolean;
 }
 
 /**
@@ -349,6 +351,7 @@ function rsyncArgs(src: string, dst: string, opts?: RsyncOptions, port?: number)
 	// half-sent tree destroys whatever the destination had that we didn't send.
 	if (opts?.delete === true) args.push("--delete");
 	if (opts?.checksum === true) args.push("--checksum");
+	if (opts?.partial === true) args.push("--partial");
 	// `--` ends rsync's options, so a path starting with `-` is still a path.
 	args.push("--", src, dst);
 	return args;
@@ -960,3 +963,76 @@ export function isSafeRemotePath(path: string): boolean {
 
 /** The characters {@link isSafeRemotePath} allows, for error messages. */
 export const SAFE_REMOTE_PATH_DESCRIPTION = "letters, digits and . _ / ~ + -";
+
+/** One transfer of a {@link detachSync} run. */
+export interface DetachedSyncJob {
+	/** Local path; a directory is sent as its contents. */
+	src: string;
+	/** Same path on the host. */
+	dst: string;
+	/** What this transfer is, for the progress line. */
+	label: string;
+}
+
+export interface DetachedSyncOptions {
+	host: string;
+	port?: number;
+	jobs: DetachedSyncJob[];
+	/** Session the progress lines are about. */
+	session: string;
+	/** Append-only log file for the progress lines (the session-end log), when there is one. */
+	logFile?: string;
+	/** Name of the target, for the progress lines. */
+	targetName: string;
+}
+
+/**
+ * Start the transfers in a detached shell on THIS machine and return at once.
+ *
+ * The shell outlives the caller (own session via `detached`, SIGHUP ignored,
+ * no inherited pipes). Every transfer is `--partial` and never `--delete`, so
+ * a second run finishes what a killed one left. Progress goes to `logFile` as
+ * tab-separated session-end records (`syncing`, then `synced` or `sync-failed`);
+ * a log that is a symlink is never written through.
+ */
+export function detachSync(options: DetachedSyncOptions): { pid: number | undefined } {
+	const host = safeHost(options.host);
+	const total = options.jobs.length;
+	const sshArgs = ["ssh", ...(options.port === undefined ? [] : ["-p", String(options.port)])];
+	const lines: string[] = [
+		"trap '' HUP",
+		`LOG=${shellQuote(options.logFile ?? "")}`,
+		`SESSION=${shellQuote(options.session)}`,
+		`TARGET=${shellQuote(options.targetName)}`,
+		`TOTAL=${total}`,
+		'log() { [ -n "$LOG" ] && [ ! -L "$LOG" ] || return 0; printf \'%s\\t%s\\t%s\\t%s\\n\' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$SESSION" "$1" "$2" >> "$LOG" 2>/dev/null || true; }',
+		"DONE=0; FAILED=0; LASTCODE=0",
+		'log syncing "to $TARGET: 0 of $TOTAL transfers done"',
+	];
+	for (const job of options.jobs) {
+		if (!SAFE_REMOTE_PATH.test(job.dst)) throw new RemotePathError(host, job.dst);
+		const isDir = job.src.endsWith("/");
+		const parent = isDir ? job.dst : dirname(job.dst);
+		const src = isDir ? job.src : job.src;
+		const rsync = [
+			"rsync",
+			...rsyncArgs(src, `${host}:${job.dst}${isDir ? "/" : ""}`, { partial: true }, options.port),
+		];
+		lines.push(
+			`${shellJoin([...sshArgs, host, "--", `mkdir -p -- ${shellQuote(parent)}`])} >/dev/null 2>&1 && ${shellJoin(rsync)} >/dev/null 2>&1`,
+			"CODE=$?",
+			'if [ "$CODE" -ne 0 ]; then FAILED=$((FAILED+1)); LASTCODE=$CODE; fi',
+			"DONE=$((DONE+1))",
+			`log syncing "to $TARGET: $DONE of $TOTAL transfers done (last: ${job.label.replaceAll(/[^A-Za-z0-9 ._/-]/g, "_")})"`,
+		);
+	}
+	lines.push(
+		'if [ "$FAILED" -eq 0 ]; then log synced "to $TARGET: all $TOTAL transfers done"; else log sync-failed "to $TARGET: $FAILED of $TOTAL transfers failed (last exit $LASTCODE); run hyper warp again to finish"; fi',
+	);
+	const child = spawn("sh", ["-c", lines.join("\n")], { detached: true, stdio: "ignore" });
+	child.on("error", () => {
+		/* The caller already moved on; a missing sh shows up as no progress line. */
+	});
+	child.unref();
+	return { pid: child.pid };
+}
