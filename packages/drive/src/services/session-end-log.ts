@@ -10,7 +10,18 @@
  * The log is rotated at `SESSION_END_LOG_LIMIT` bytes into `<log>.1` (one
  * previous generation is kept), so it never grows past twice that size.
  */
-import { appendFileSync, closeSync, openSync, readSync, renameSync, statSync } from "node:fs";
+import {
+	closeSync,
+	constants,
+	fstatSync,
+	lstatSync,
+	openSync,
+	readSync,
+	renameSync,
+	type Stats,
+	statSync,
+	writeSync,
+} from "node:fs";
 import { join } from "node:path";
 import { sessionEndLine } from "#services/session-end";
 import { spaceGitDirWriteError } from "#services/space-lock";
@@ -45,6 +56,17 @@ export function sessionEndLogPath(gitDir: string): string {
 	return join(gitDir, SESSION_END_LOG);
 }
 
+/**
+ * Whether a `session-end.log` that exists may be appended to: a regular file
+ * with exactly one link. A symlink would steer the write elsewhere and a hard
+ * link would append to a file that lives outside the git dir too. The pi
+ * extension (`pi/session-end.ts`) applies the same rule; it imports nothing
+ * from the CLI, so keep the two in step.
+ */
+export function isAppendableLog(stat: { isFile(): boolean; nlink: number }): boolean {
+	return stat.isFile() && stat.nlink === 1;
+}
+
 /** Append one record, rotating first when the log has reached its limit. */
 export function appendSessionEndLog(
 	gitDir: string,
@@ -57,15 +79,44 @@ export function appendSessionEndLog(
 		detail: sessionEndLine(entry.detail, DETAIL_LIMIT),
 	};
 	const path = sessionEndLogPath(gitDir);
+	const refused = (reason: string) =>
+		spaceGitDirWriteError(
+			gitDir,
+			`record this session end (${record.outcome})`,
+			new Error(`${path} ${reason}`),
+		);
+	let existing: Stats | undefined;
 	try {
-		if (statSync(path).size >= SESSION_END_LOG_LIMIT) renameSync(path, `${path}.1`);
+		existing = lstatSync(path);
 	} catch {
 		/* No log yet. */
 	}
+	if (existing !== undefined) {
+		if (!isAppendableLog(existing)) {
+			throw refused("is not a regular file with a single link");
+		}
+		if (existing.size >= SESSION_END_LOG_LIMIT) {
+			try {
+				renameSync(path, `${path}.1`);
+			} catch {
+				/* Rotation is best effort; the append below decides. */
+			}
+		}
+	}
 	try {
-		appendFileSync(path, `${record.at}\t${record.session}\t${record.outcome}\t${record.detail}\n`, {
-			mode: 0o600,
-		});
+		const fd = openSync(
+			path,
+			constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW,
+			0o600,
+		);
+		try {
+			// Swapped for something else between the lstat and the open.
+			if (!isAppendableLog(fstatSync(fd)))
+				throw refused("is not a regular file with a single link");
+			writeSync(fd, `${record.at}\t${record.session}\t${record.outcome}\t${record.detail}\n`);
+		} finally {
+			closeSync(fd);
+		}
 	} catch (error) {
 		throw spaceGitDirWriteError(gitDir, `record this session end (${record.outcome})`, error);
 	}

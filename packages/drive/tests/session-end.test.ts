@@ -3,12 +3,14 @@ import {
 	appendFileSync,
 	chmodSync,
 	existsSync,
+	linkSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
 	rmSync,
+	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -449,6 +451,49 @@ describe("space commit --session-end and real hook", () => {
 			[id, "committed"],
 		]);
 		expect(lines[1]).toMatch(/^\d{4}-\d\d-\d\dT[^\t]+Z\t/);
+	});
+	describe("the CLI log writer never appends through a link", () => {
+		async function victimLog(kind: "symlink" | "hardlink") {
+			const { root } = await makeSpace();
+			const gitDir = join(root, ".hyper/space.git");
+			const victim = join(root, "victim");
+			writeFileSync(victim, "precious\n");
+			(kind === "symlink" ? symlinkSync : linkSync)(victim, join(gitDir, "session-end.log"));
+			const { appendSessionEndLog } = await import("#services/session-end-log");
+			return {
+				gitDir,
+				victim,
+				append: () => appendSessionEndLog(gitDir, { session: id, outcome: "failed", detail: "x" }),
+			};
+		}
+		it("refuses a session-end.log that is a symlink and writes nothing through it", async () => {
+			const { victim, append } = await victimLog("symlink");
+			expect(append).toThrow(/regular file/);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+		});
+		it("refuses a session-end.log that is a symlink even at the rotation size", async () => {
+			const { gitDir, victim, append } = await victimLog("symlink");
+			writeFileSync(victim, "x".repeat(64 * 1024));
+			expect(append).toThrow(/regular file/);
+			expect(existsSync(join(gitDir, "session-end.log.1"))).toBe(false);
+			expect(readFileSync(victim, "utf8")).toHaveLength(64 * 1024);
+		});
+		it("refuses a session-end.log with a second hard link", async () => {
+			const { victim, append } = await victimLog("hardlink");
+			expect(append).toThrow(/regular file/);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+		});
+		it("refuses a dangling symlink without creating its target", async () => {
+			const { root } = await makeSpace();
+			const gitDir = join(root, ".hyper/space.git");
+			const target = join(root, "created-through-link");
+			symlinkSync(target, join(gitDir, "session-end.log"));
+			const { appendSessionEndLog } = await import("#services/session-end-log");
+			expect(() =>
+				appendSessionEndLog(gitDir, { session: id, outcome: "failed", detail: "x" }),
+			).toThrow();
+			expect(existsSync(target)).toBe(false);
+		});
 	});
 	it("rotates the session-end log at 64 KiB, keeping one previous generation", async () => {
 		const { root } = await makeSpace();
