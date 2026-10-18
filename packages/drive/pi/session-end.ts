@@ -16,11 +16,10 @@
  * return. The commit, the push and the log line belong to the worker, so a
  * 30 MB session never delays pi's exit.
  *
- * `hyper` is resolved here, never left to the child's PATH: only ABSOLUTE
- * PATH entries count, the candidate must be an executable regular file, and
- * that absolute path is what gets spawned. `bin/` is synced space content, so
- * a space that carries its own `bin/hyper` must not decide what runs at the
- * end of every pi session in it.
+ * `hyper` is resolved here, never left to the child's PATH: it is the first
+ * executable regular file named `hyper` on the caller's PATH (relative
+ * entries are taken against the session's directory), and that absolute path
+ * is what gets spawned.
  *
  * Nothing here throws: every failure ends as at most one line.
  */
@@ -103,7 +102,7 @@ export interface ProbeResult {
 
 export interface SessionEndDeps {
 	/** Absolute path of the `hyper` to use, or undefined when PATH has none. */
-	resolveCli(): string | undefined;
+	resolveCli(cwd: string): string | undefined;
 	/** Run `hyper space detect --json` in `cwd`, bounded by `timeoutMs`. */
 	probe(bin: string, cwd: string, timeoutMs: number): Promise<ProbeResult>;
 	/** Write the payload file exclusively; returns the path written. */
@@ -134,16 +133,20 @@ export interface SessionFacts {
 
 /**
  * The `hyper` to spawn: the first executable regular file named `hyper` on the
- * caller's PATH (a relative entry is taken against the hook's cwd), which the children inherit unchanged.
+ * caller's PATH, which the children inherit unchanged. Relative entries are
+ * taken against `cwd` (the directory the probe and worker run in), and an
+ * empty entry means `.`, as in POSIX.
  */
-export function resolveHyper(env: NodeJS.ProcessEnv = process.env): string | undefined {
+export function resolveHyper(
+	env: NodeJS.ProcessEnv = process.env,
+	cwd: string = process.cwd(),
+): string | undefined {
 	for (const entry of (env.PATH ?? "").split(delimiter)) {
-		if (entry.length === 0) continue;
 		for (const name of process.platform === "win32" ? ["hyper.cmd", "hyper"] : ["hyper"]) {
-			const candidate = join(entry, name);
+			const candidate = resolve(cwd, entry === "" ? "." : entry, name);
 			try {
 				const stats = statSync(candidate);
-				if (stats.isFile() && (stats.mode & 0o111) !== 0) return resolve(candidate);
+				if (stats.isFile() && (stats.mode & 0o111) !== 0) return candidate;
 			} catch {
 				// Not there, or not readable: keep looking.
 			}
@@ -240,7 +243,7 @@ export async function saveSessionEnd(
 	deps: SessionEndDeps,
 	timeoutMs = PROBE_TIMEOUT_MS,
 ): Promise<SessionEndPayload | undefined> {
-	const bin = deps.resolveCli();
+	const bin = deps.resolveCli(facts.cwd);
 	if (bin === undefined) {
 		// The Claude hook prints this line only in a space that would have saved.
 		// Same rule here: this walk decides whether to PRINT and nothing else —
@@ -449,7 +452,7 @@ export function createRealDeps(overrides: Partial<SessionEndDeps> = {}): Session
 		overrides.payloadName ??
 		(() => `${PAYLOAD_PREFIX}${process.pid}.${randomBytes(6).toString("hex")}`);
 	return {
-		resolveCli: () => resolveHyper(),
+		resolveCli: (cwd) => resolveHyper(process.env, cwd),
 		probe: (bin, cwd, timeoutMs) => runProbe(bin, cwd, timeoutMs, spawnFn),
 		writePayload: (dir, contents) => {
 			// O_EXCL: two pi sessions in one space must not share a payload file, so

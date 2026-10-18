@@ -261,6 +261,18 @@ describe("the pi extension on session_shutdown", () => {
 		expect(PROBE_TIMEOUT_MS).toBe(5_000);
 	});
 
+	it("resolves the CLI against the session's directory", async () => {
+		const seen: string[] = [];
+		const deps = fakeDeps({
+			resolveCli: (cwd: string) => {
+				seen.push(cwd);
+				return BIN;
+			},
+		});
+		await saveSessionEnd(facts(), deps);
+		expect(seen).toEqual([spaceNotes]);
+	});
+
 	it("writes the payload under the git dir the CLI named and spawns it from the session's cwd", async () => {
 		const deps = fakeDeps();
 		const payload = await saveSessionEnd(facts(), deps);
@@ -619,8 +631,9 @@ async function waitForFile(path: string, timeoutMs = 10_000): Promise<void> {
 }
 
 describe("resolving the hyper CLI", () => {
-	it("resolves a relative PATH entry against the cwd, as the caller's PATH says", () => {
+	it("resolves a relative PATH entry against the given cwd, not the process cwd", () => {
 		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		const elsewhere = mkdtempSync(join(tmpdir(), "hyper-pi-elsewhere-"));
 		const previous = process.cwd();
 		try {
 			const bin = join(real, "bin");
@@ -628,14 +641,46 @@ describe("resolving the hyper CLI", () => {
 			const hyper = join(bin, "hyper");
 			writeFileSync(hyper, "#!/bin/sh\n");
 			chmodSync(hyper, 0o755);
-			process.chdir(real);
-			expect(resolveHyper({ PATH: ["", "./nope", "./bin"].join(delimiter) })).toBe(
-				realpathSync(hyper),
-			);
-			expect(resolveHyper({ PATH: "" })).toBeUndefined();
-			expect(resolveHyper({})).toBeUndefined();
+			process.chdir(elsewhere);
+			expect(resolveHyper({ PATH: ["./nope", "./bin"].join(delimiter) }, real)).toBe(hyper);
+			expect(resolveHyper({ PATH: "./bin" })).toBeUndefined();
+			expect(resolveHyper({ PATH: "" }, real)).toBeUndefined();
+			expect(resolveHyper({}, real)).toBeUndefined();
 		} finally {
 			process.chdir(previous);
+			rmSync(real, { recursive: true, force: true });
+			rmSync(elsewhere, { recursive: true, force: true });
+		}
+	});
+	it("treats an empty PATH entry as the cwd, as POSIX does", () => {
+		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		try {
+			const hyper = join(real, "hyper");
+			writeFileSync(hyper, "#!/bin/sh\n");
+			chmodSync(hyper, 0o755);
+			for (const path of ["", `${delimiter}/nonexistent`, `/nonexistent${delimiter}`]) {
+				expect(resolveHyper({ PATH: path }, real)).toBe(hyper);
+			}
+		} finally {
+			rmSync(real, { recursive: true, force: true });
+		}
+	});
+	it("takes the first match in PATH order, relative before absolute and the reverse", () => {
+		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		try {
+			const make = (dir: string) => {
+				mkdirSync(dir, { recursive: true });
+				const file = join(dir, "hyper");
+				writeFileSync(file, "#!/bin/sh\n");
+				chmodSync(file, 0o755);
+				return file;
+			};
+			const relative = make(join(real, "bin"));
+			const absolute = make(join(real, "abs"));
+			const absDir = join(real, "abs");
+			expect(resolveHyper({ PATH: ["./bin", absDir].join(delimiter) }, real)).toBe(relative);
+			expect(resolveHyper({ PATH: [absDir, "./bin"].join(delimiter) }, real)).toBe(absolute);
+		} finally {
 			rmSync(real, { recursive: true, force: true });
 		}
 	});
