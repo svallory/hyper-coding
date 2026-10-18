@@ -23,7 +23,6 @@ home = "/home/tester"
 [machines.netcup]
 home = "/home/svallory"
 features = ["docker", "mutagen"]
-agent_user = "agent"
 
 # Herdr doesn't know this one — resolveMachine must say so.
 [machines.spare]
@@ -106,7 +105,6 @@ describe("listMachines", () => {
 			host: "agent@netcup.example.com",
 			home: "/home/svallory",
 			features: ["docker", "mutagen"],
-			agentUser: "agent",
 			source: "both",
 			herdr: true,
 		});
@@ -124,7 +122,6 @@ describe("listMachines", () => {
 			host: "agent@workbox.example.com",
 			home: undefined,
 			features: [],
-			agentUser: "agent",
 			source: "herdr",
 			herdr: true,
 		});

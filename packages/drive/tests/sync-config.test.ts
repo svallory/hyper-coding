@@ -104,7 +104,6 @@ function setupFixture(
 			"[machines.loop]",
 			`home = "${betaHome}"`,
 			'features = ["mutagen"]',
-			'agent_user = "agent"',
 			"",
 		].join("\n"),
 		"utf-8",

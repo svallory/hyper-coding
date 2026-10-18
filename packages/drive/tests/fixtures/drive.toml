@@ -11,9 +11,8 @@ cadence = "session-end"
 [machines.netcup]
 home = "/home/svallory"
 features = ["docker", "mutagen"]
-agent_user = "agent"
 
-# Only `home` set — features/agent_user must come back as per-machine defaults.
+# Only `home` set — features must come back as per-machine defaults.
 [machines.spare]
 home = "/home/spare"
 
@@ -21,7 +20,6 @@ home = "/home/spare"
 [machines.laptop]
 home = "~/alice"
 features = []
-agent_user = "agent"
 
 [warp]
 exclude = ["node_modules", "dist"]

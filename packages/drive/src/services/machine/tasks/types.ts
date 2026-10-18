@@ -14,11 +14,11 @@
 
 import type { DriveConfig } from "#config/schema";
 import type { MachineInfo } from "#services/machine";
-import type { MachineRunner, Spawner } from "#services/remote";
+import type { MachineRunner } from "#services/remote";
 import type { SyncEngine } from "#services/sync/engine";
 
 /** A capability a task belongs to, and what `hyper machine setup` offers to set up. */
-export type Feature = "tools" | "config-sync" | "agent-user" | "docker-rootless" | "home-path";
+export type Feature = "tools" | "config-sync";
 
 /** One feature as the prompt shows it. */
 export interface FeatureInfo {
@@ -38,21 +38,6 @@ export const FEATURE_LIST: readonly FeatureInfo[] = [
 		feature: "config-sync",
 		label: "config-sync",
 		hint: "keep ~/.claude and ~/.pi/agent in sync across machines",
-	},
-	{
-		feature: "agent-user",
-		label: "agent-user",
-		hint: "an unattended `agent` user the agents run as, plus its shared dirs",
-	},
-	{
-		feature: "docker-rootless",
-		label: "docker-rootless",
-		hint: "Docker that runs without root, as the agent user",
-	},
-	{
-		feature: "home-path",
-		label: "home-path",
-		hint: "a /Users/<name> home path, so the same paths work on both machines",
 	},
 ];
 
@@ -79,21 +64,6 @@ export interface TaskContext {
 	/** Print progress. Goes to stdout in a command, to a buffer in a test. */
 	log: (line: string) => void;
 	/**
-	 * `--agent-key <file>`: the ssh PUBLIC key (.pub) the agent user should
-	 * accept on this machine, for this run. Undefined when the flag wasn't
-	 * given, and then the machine's `agent_key` config value is used, and then
-	 * this machine's own default public key. Only ever the `.pub` half — see
-	 * `tasks/agent-key.ts`.
-	 */
-	agentKeyFile?: string;
-	/**
-	 * Injection seam for tests: the process spawner the as-agent runner uses.
-	 * Undefined in production, where `MachineRunner` uses its own. It exists
-	 * because a task that opens a session as ANOTHER user builds its own runner,
-	 * so it could not otherwise be driven by a recording runner in `ctx`.
-	 */
-	spawner?: Spawner;
-	/**
 	 * Injection seam for tests: the sync engine the `config-sync` task drives.
 	 * Undefined in production, where the task uses `getEngine()` — the same
 	 * engine `hyper drive sync-config` uses.
@@ -103,7 +73,7 @@ export interface TaskContext {
 
 /** One unit of machine setup. */
 export interface Task {
-	/** Stable id, e.g. "noop.check" or "agent-user.create". Printed and asserted on. */
+	/** Stable id, e.g. "noop.check" or "tools.rg". Printed and asserted on. */
 	id: string;
 	feature: Feature;
 	/**

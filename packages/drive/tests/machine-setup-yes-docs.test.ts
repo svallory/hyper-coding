@@ -52,7 +52,7 @@ describe("machine setup --yes: help, comment and docs match the behaviour", () =
 		).rootChoice({
 			machine: "m",
 			path: "/tmp/hyper-machine-root.sh",
-			tasks: ["agent-user.create"],
+			tasks: ["tools.rsync"],
 		});
 		expect(answer).toBe("skip");
 		expect(left).toEqual(["/tmp/hyper-machine-root.sh"]);

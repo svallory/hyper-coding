@@ -15,12 +15,6 @@ name: drive-e2e
 #   sync        RUNS — mutagen 0.18.1 + agent bundle, loopback sshd below.
 #   tools       RUNS — downloads into a throwaway HOME.
 #   warp        RUNS — podman is preinstalled on ubuntu-latest.
-#   agent-user  RUNS — systemd-in-container, 53 assertions (run 37225364337).
-#   docker-home SKIP — the `degraded` fix got systemd up on the hosted runner,
-#               but nested ROOTLESS DOCKER cannot run there at all: captured
-#               "RootlessKit failed" from the agent's dockerd (run 37225364337).
-#               The other five scripts, including agent-user's privileged
-#               neighbour warp, pass there; it runs locally in the podman VM.
 
 on:
   push:
@@ -152,7 +146,7 @@ jobs:
             mutagen mutagen-agents.tar.gz
           mutagen version
 
-      # agent-user.sh inspects the base image BEFORE it builds its derivative.
+      # warp.sh builds its fixture from this base image.
       # Pre-pull under the runner's normal HOME; run.sh preserves podman's
       # XDG storage path while each script receives its own temp HOME.
       - name: Pre-pull the podman fixture image
@@ -162,11 +156,9 @@ jobs:
         env:
           # Every script this job expects to run. A probe-skip of any of these
           # is a FAIL, not a skip, so this job cannot go green without them.
-          HYPER_E2E_REQUIRE: "sync tools warp agent-user"
-          # sessions: real `claude -p`, opt-in only. docker-home: nested
-          # rootless Docker (RootlessKit) is unavailable on the hosted runner;
-          # captured in run 37225364337. Both skips are printed with a reason.
-          HYPER_E2E_SKIP: "sessions docker-home"
+          HYPER_E2E_REQUIRE: "sync tools warp"
+          # sessions: real `claude -p`, opt-in only. The skip is printed with a reason.
+          HYPER_E2E_SKIP: "sessions"
         run: bash packages/drive/tests/e2e/run.sh
 
       - name: Show leftover containers (must be none)

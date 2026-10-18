@@ -181,7 +181,7 @@ describe("machine setup", () => {
 		const answer = await prompt.rootChoice({
 			machine: "netcup",
 			path: "/tmp/hyper-machine-root.sh",
-			tasks: ["agent-user.create"],
+			tasks: ["tools.rsync"],
 		});
 
 		expect(answer).toBe("skip");
@@ -202,7 +202,7 @@ describe("machine setup", () => {
 		const question = {
 			machine: "netcup",
 			path: "/tmp/hyper-machine-root.sh",
-			tasks: ["agent-user.create"],
+			tasks: ["tools.rsync"],
 		};
 
 		it("with --yes on a terminal, the root question is not asked and nothing runs", async () => {
@@ -257,7 +257,7 @@ describe("machine setup", () => {
 		// 2, not just non-zero: this is a user error the caller can fix.
 		expect(r.status).toBe(2);
 		expect(flat(r.stderr)).toContain("nope");
-		expect(flat(r.stderr)).toContain("docker-rootless");
+		expect(flat(r.stderr)).toContain("config-sync");
 	});
 
 	it("an unknown machine names the machines that do exist", (ctx) => {

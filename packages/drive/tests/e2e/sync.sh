@@ -183,7 +183,6 @@ home = "$alpha_home"
 [machines.loop]
 home = "$beta_home"
 features = ["mutagen"]
-agent_user = "agent"
 EOF
 
 export PATH="$fakebin:$PATH"

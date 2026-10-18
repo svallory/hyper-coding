@@ -70,7 +70,7 @@ export function refreshHyperMdBackupRule(root: string, layout: SpaceLayout): Hyp
 		const at = text.indexOf(`\n${stale}`);
 		if (at === -1) continue;
 		// Written in place, not through a temporary file and a rename: the file
-		// keeps its owner, mode and ACLs (an agent user's grant, a group
+		// keeps its owner, mode and ACLs (an ACL grant, a group
 		// member's ownership), which a rename would replace with the writer's
 		// defaults (PR #52 review, M5).
 		writeFileSync(path, `${text.slice(0, at + 1)}${current}${text.slice(at + 1 + stale.length)}`);

@@ -90,7 +90,7 @@ describe("machine add", () => {
 			"--home",
 			"/home/svallory",
 			"--features",
-			"tools,docker-rootless",
+			"tools,config-sync",
 		]);
 
 		expect(r.status).toBe(0);
@@ -98,23 +98,11 @@ describe("machine add", () => {
 		expect(written).toContain("[machines.netcup]");
 		expect(written).toContain("/home/svallory");
 		expect(written).toContain("tools");
-		expect(written).toContain("docker-rootless");
+		expect(written).toContain("config-sync");
 		// The parts that were already there survive the write.
 		expect(written).toContain("git@example:x.git");
 		expect(before).not.toContain("netcup");
 		expect(flat(r.stdout)).toContain("netcup");
-	});
-
-	it("records the agent user, defaulting to `agent`", (ctx) => {
-		if (skipIfUnbuilt(ctx)) return;
-		fakeHerdr();
-		const configPath = withTempConfig('remote = "git@example:x.git"\n');
-
-		expect(spawnCli(["machine", "add", "spare", "--agent-user", "agent"]).status).toBe(0);
-		expect(readFileSync(configPath, "utf-8")).toContain('agent_user = "agent"');
-
-		expect(spawnCli(["machine", "add", "spare", "--agent-user", "bot"]).status).toBe(0);
-		expect(readFileSync(configPath, "utf-8")).toContain('agent_user = "bot"');
 	});
 
 	it("re-running add with one flag changes only that field", (ctx) => {
@@ -131,11 +119,10 @@ describe("machine add", () => {
 
 		// The hints below tell people to fix one field at a time, so a second run
 		// that omitted --home must not blank it out.
-		expect(spawnCli(["machine", "add", "netcup", "--agent-user", "bob"]).status).toBe(0);
+		expect(spawnCli(["machine", "add", "netcup", "--features", "config-sync"]).status).toBe(0);
 		const second = readFileSync(configPath, "utf-8");
 		expect(second).toContain("/home/svallory");
-		expect(second).toContain("tools");
-		expect(second).toContain('agent_user = "bob"');
+		expect(second).toContain("config-sync");
 	});
 
 	it("keeps the file to what was there plus the machine", (ctx) => {
@@ -158,12 +145,12 @@ describe("machine add", () => {
 		const configPath = withTempConfig('remote = "git@example:x.git"\n');
 
 		expect(spawnCli(["machine", "add", "netcup", "--features", "tools"]).status).toBe(0);
-		expect(spawnCli(["machine", "add", "netcup", "--features", "docker-rootless"]).status).toBe(0);
+		expect(spawnCli(["machine", "add", "netcup", "--features", "config-sync"]).status).toBe(0);
 
 		// Appending would leave the file claiming the machine has a feature the
 		// user just removed.
 		const written = readFileSync(configPath, "utf-8");
-		expect(written).toContain("docker-rootless");
+		expect(written).toContain("config-sync");
 		expect(written).not.toContain('"tools"');
 	});
 
@@ -177,7 +164,7 @@ describe("machine add", () => {
 		// here would print a MachineError: prefix and a stack.
 		expect(r.status).toBe(2);
 		expect(flat(r.stderr)).toContain("bogus");
-		expect(flat(r.stderr)).toContain("docker-rootless");
+		expect(flat(r.stderr)).toContain("config-sync");
 		expect(flat(r.stderr)).not.toContain("MachineError:");
 		expect(flat(r.stderr)).not.toContain("at MachineAdd");
 		// A typo must not become a feature nothing will ever pick up.

@@ -3,6 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { preselected } from "#commands/machine/setup";
 import { configExists, configPath, loadConfig, writeConfig } from "#config/index";
 import { DEFAULT_CONFIG, DEFAULT_MACHINE } from "#config/schema";
 import { withTempConfig } from "#tests/tmp-config";
@@ -51,12 +52,35 @@ describe("loadConfig", () => {
 		expect(config.machines.netcup).toEqual({
 			home: "/home/svallory",
 			features: ["docker", "mutagen"],
-			agent_user: "agent",
-			agent_key: "",
 		});
 		expect(config.warp.exclude).toEqual(["node_modules", "dist"]);
 		expect(config.sync.claude.ignore).toEqual(["projects/**/*.log"]);
 		expect(config.sync.pi.ignore).toEqual(["sessions/**"]);
+	});
+
+	it("loads an old drive.toml that still names the retired agent-user keys and features", () => {
+		withTempConfig(
+			[
+				"[machines.old]",
+				'home = "/home/old"',
+				'features = ["tools", "docker-rootless", "agent-user", "home-path"]',
+				'agent_user = "agent"',
+				'agent_key = "/home/old/.ssh/id_ed25519.pub"',
+				"",
+			].join("\n"),
+		);
+
+		const config = loadConfig();
+		expect(config.machines.old?.home).toBe("/home/old");
+
+		// A dead feature is never offered or preselected by `machine setup`.
+		const machine = {
+			name: "old",
+			features: config.machines.old?.features ?? [],
+			source: "config" as const,
+			herdr: false,
+		};
+		expect(preselected(machine)).toEqual(["tools"]);
 	});
 
 	it("fills per-machine defaults when a machine omits them", () => {
@@ -67,8 +91,6 @@ describe("loadConfig", () => {
 		expect(config.machines.spare).toEqual({
 			home: "/home/spare",
 			features: DEFAULT_MACHINE.features,
-			agent_user: "agent",
-			agent_key: "",
 		});
 	});
 
@@ -226,13 +248,6 @@ describe("loadConfig", () => {
 			expect(() => loadConfig()).toThrowError(/`self\.name` must be a string/);
 		});
 
-		it("rejects a non-string machine agent_user", () => {
-			withTempConfig("[machines.x]\nagent_user = 5\n");
-			expect(() => loadConfig()).toThrowError(
-				/`machines\.x\.agent_user` must be a string, but it is a number/,
-			);
-		});
-
 		it("rejects a non-string machine home", () => {
 			withTempConfig("[machines.x]\nhome = 5\n");
 			expect(() => loadConfig()).toThrowError(
@@ -299,11 +314,11 @@ describe("writeConfig", () => {
 
 	it("deep-merges: one machine's field changes, the others survive", () => {
 		const path = withTempConfig(`${BASE}\n[machines.netcup]\nhome = "/home/svallory"\n`);
-		writeConfig({ machines: { netcup: { agent_user: "bot" } } });
+		writeConfig({ machines: { netcup: { features: ["tools"] } } });
 
 		const written = bytes(path);
 		expect(written).toContain("/home/svallory");
-		expect(written).toContain('agent_user = "bot"');
+		expect(written).toMatch(/features = \[\s*"tools"\s*\]/);
 	});
 
 	it("replaces arrays rather than merging them", () => {

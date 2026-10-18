@@ -7,14 +7,7 @@ import { quoteForTerminal } from "#lib/terminal-text";
 // config loader asks through the engine module rather than importing the
 // implementation directly.
 import { ignorePatternProblem } from "#services/sync/engine";
-import {
-	agentUserProblem,
-	DEFAULT_CONFIG,
-	DEFAULT_MACHINE,
-	type DriveConfig,
-	isValidAgentUser,
-	type SyncCadence,
-} from "./schema.js";
+import { DEFAULT_CONFIG, DEFAULT_MACHINE, type DriveConfig, type SyncCadence } from "./schema.js";
 
 /**
  * The one user config file lives at ~/.config/hyper/drive.toml (C-14).
@@ -169,21 +162,6 @@ function validateShape(path: string, raw: Record<string, unknown>): void {
 			}
 			if ("features" in machine && !isStringList(machine.features)) {
 				throw configProblem(path, `\`machines.${name}.features\` must be a list of strings.`);
-			}
-			if ("agent_user" in machine && typeof machine.agent_user !== "string") {
-				throw configProblem(
-					path,
-					`\`machines.${name}.agent_user\` must be a string, but it is ${describe(machine.agent_user)}.`,
-				);
-			}
-			if ("agent_user" in machine && !isValidAgentUser(machine.agent_user)) {
-				// Not just a type check: this name is interpolated into a root script,
-				// so a value carrying shell syntax is a way to run something as root.
-				// See AGENT_USER_PATTERN.
-				throw configProblem(
-					path,
-					`\`machines.${name}.agent_user\` is ${describe(machine.agent_user)}, which can't be the agent user: ${agentUserProblem(machine.agent_user)}.`,
-				);
 			}
 			if ("home" in machine && typeof machine.home !== "string") {
 				throw configProblem(

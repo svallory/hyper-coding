@@ -3,7 +3,7 @@
  * user's `drive.toml` with the SSH machines Herdr has saved.
  *
  * Herdr owns the connection (host, keys, compression); `drive.toml` owns the
- * hyperdrive details (home, features, agent user). Neither alone is enough, so
+ * hyperdrive details (home, features). Neither alone is enough, so
  * the two are merged here rather than in each command.
  */
 
@@ -13,10 +13,8 @@ import {
 	LocalMachine,
 	type MachineRunner,
 	RemoteMachine,
-	type Spawner,
 	type SshTarget,
 	splitSshTarget,
-	targetWithUser,
 } from "#services/remote";
 
 /** Where a machine's data came from. */
@@ -39,14 +37,6 @@ export interface MachineInfo {
 	home?: string;
 	/** Feature names from `drive.toml` (e.g. "docker", "mutagen"). */
 	features: string[];
-	/** User agents run as on that machine. Defaults to "agent". */
-	agentUser: string;
-	/**
-	 * Path to a ssh public key (.pub) the agent user should accept there. Empty
-	 * means "not configured": setup then reads this machine's own default public
-	 * key, and says which file it read.
-	 */
-	agentKey: string;
 	source: MachineSource;
 	/** False when Herdr isn't installed or doesn't know the machine. */
 	herdr: boolean;
@@ -65,8 +55,6 @@ export class MachineError extends Error {
 		this.name = "MachineError";
 	}
 }
-
-const DEFAULT_AGENT_USER = "agent";
 
 /**
  * Herdr's `machine list --json` key names have shifted between releases, so
@@ -198,7 +186,7 @@ function friendlyError(err: unknown): string {
 function merged(
 	name: string,
 	herdr: HerdrMachine | undefined,
-	config: { home: string; features: string[]; agent_user: string; agent_key: string } | undefined,
+	config: { home: string; features: string[] } | undefined,
 ): MachineInfo {
 	const inConfig = config !== undefined;
 	const inHerdr = herdr !== undefined;
@@ -223,8 +211,6 @@ function merged(
 		...(port === undefined ? {} : { port }),
 		home: inConfig ? config.home || undefined : undefined,
 		features: config?.features ?? [],
-		agentUser: config?.agent_user || DEFAULT_AGENT_USER,
-		agentKey: config?.agent_key || "",
 		source: inHerdr && inConfig ? "both" : inHerdr ? "herdr" : "config",
 		herdr: inHerdr,
 	};
@@ -355,43 +341,4 @@ export function runnerFor(name?: string): MachineRunner {
 		undefined,
 		target.port === undefined ? {} : { port: target.port },
 	);
-}
-
-/**
- * A runner that reaches the same machine as ANOTHER user.
- *
- * The unattended agent owns its own Docker, its own `systemd --user` units and
- * its own home, so some work simply cannot be done as the primary user. This is
- * how a task gets at it: the same ssh transport, with the user substituted in
- * the target (`svallory@box` becomes `agent@box`), which is the only way to
- * open a real login session of that user — and a real login session is exactly
- * what rootless Docker's setuptool needs.
- *
- * Local setups are refused here, by name: becoming another user on this
- * machine needs root, and hyper never runs as root (C-6).
- */
-export function agentRunnerFor(
-	machine: MachineInfo | null,
-	agentUser: string,
-	spawner?: Spawner,
-): MachineRunner {
-	const name = machine?.name ?? "this machine";
-	if (machine === null) {
-		throw new MachineError(
-			`I can't open a session as \`${agentUser}\` on this machine: becoming another user here needs root, and hyper never runs as root. Set the machine up over ssh instead — \`hyper machine setup <machine> --features docker-rootless\`.`,
-		);
-	}
-	if (!machine.host) {
-		throw new MachineError(
-			`I don't know how to reach the "${name}" machine as \`${agentUser}\` — Herdr has no target for it yet. Run \`${addHint(name)}\` first.`,
-		);
-	}
-	// The spawner is a test seam: without one this is the real ssh.
-	// otherUser: never the operator's agent forwarding or shared connections.
-	// The port Herdr's target named travels too: `machine.host` has had it
-	// split off, and the agent's ssh goes to the same sshd.
-	return new RemoteMachine(targetWithUser(machine.host, agentUser), spawner, {
-		otherUser: true,
-		...(machine.port === undefined ? {} : { port: machine.port }),
-	});
 }
