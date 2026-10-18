@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
 import {
+	appendFileSync,
 	chmodSync,
+	copyFileSync,
+	existsSync,
 	lstatSync,
 	mkdirSync,
 	mkdtempSync,
@@ -18,6 +21,7 @@ import { dirname, join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LocalMachine, type MachineRunner } from "#services/remote";
 import {
+	fileSha256,
 	refConflicts,
 	refsNotCoveredHere,
 	TARGET_CONFLICTED,
@@ -25,6 +29,7 @@ import {
 	TARGET_REFTABLE,
 	TARGET_SUBMODULE_CHANGED,
 	targetBackupCopy,
+	targetConfigRestore,
 	targetRefs,
 	targetStashSnapshot,
 	targetUntrackedPaths,
@@ -111,7 +116,7 @@ function write(path: string, content: string) {
 const toTarget = (value: string) => value.split(srcHome).join(tgtHome);
 
 /** A runner that "reaches" the target home: the real LocalMachine, paths mapped. */
-function mappedRunner(log: string[]): MachineRunner {
+function mappedRunner(log: string[], failWhen?: (src: string) => boolean): MachineRunner {
 	const local = new LocalMachine();
 	return {
 		async ssh(cmd, opts) {
@@ -120,6 +125,7 @@ function mappedRunner(log: string[]): MachineRunner {
 		},
 		async rsync(src, dst, opts) {
 			log.push(`copy ${src}`);
+			if (failWhen?.(src)) return { code: 23, stdout: "", stderr: "injected failure" };
 			return local.rsync(src, toTarget(dst), opts);
 		},
 		async scp() {
@@ -134,11 +140,11 @@ interface World {
 	log: string[];
 }
 
-function world(): World {
+function world(failWhen?: (src: string) => boolean): World {
 	const log: string[] = [];
 	const changes: string[] = [];
 	const deps: WarpDeps = {
-		runner: mappedRunner(log),
+		runner: mappedRunner(log, failWhen),
 		swapMarker(path, _expected, next) {
 			changes.push("marker");
 			if (next) write(path, JSON.stringify(next));
@@ -870,7 +876,7 @@ describe("saved refs survive a target pack-refs and a later warp (fw-warp-2 item
 		expect(result.stdout).toBe("");
 	});
 
-	it("runs in every plain-repo warp, after the saves and right before the .git copy", () => {
+	it("runs in every plain-repo warp, after the saves and before the .git copy (the config keep sits between)", () => {
 		for (const force of [false, true]) {
 			const steps = plainRepoPlan("work/repo", { force }).steps;
 			const pin = steps.findIndex(
@@ -881,7 +887,8 @@ describe("saved refs survive a target pack-refs and a later warp (fw-warp-2 item
 				(entry) => entry.kind === "copy" && entry.summary.startsWith("copy the repository's .git"),
 			);
 			expect(pin).toBeGreaterThan(0);
-			expect(copy).toBe(pin + 1);
+			expect(copy).toBe(pin + 2);
+			expect(steps[pin + 1]?.summary).toContain("own .git/config");
 		}
 	});
 });
@@ -1245,6 +1252,52 @@ describe("every target stash entry is kept (fw-warp-2 r3, HIGH)", () => {
 		expect(readFileSync(join(tgt, "a.txt"), "utf-8")).toBe("stashed 2\n");
 	});
 
+	it("a stash whose reflog expired is still refused, and with --force saved (prj.30)", async () => {
+		const { tgt } = twinRepos();
+		write(join(tgt, "a.txt"), "stashed\n");
+		git(tgt, "stash", "-q");
+		const entry = git(tgt, "rev-parse", "refs/stash").trim();
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		rmSync(join(tgt, ".git", "logs", "refs", "stash"), { force: true });
+		expect(git(tgt, "log", "-g", "--format=%H", "refs/stash", "--").trim()).toBe("");
+		const before = snapshot(tgt);
+		const refused = world();
+		const result = await refused.run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail ?? "").toContain(
+			"refs/stash@{0} (a stash entry only there, one of 1)",
+		);
+		expect(refused.changes).toEqual([]);
+		expect(snapshot(tgt)).toEqual(before);
+		const forced = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(forced.failure, forced.failure?.detail).toBeUndefined();
+		const ns = `refs/hyper-warp-backup/${WARP_ID}`;
+		gcNow(tgt);
+		expect(git(tgt, "rev-parse", `${ns}/stash/0`).trim()).toBe(entry);
+	});
+
+	it("a stale reflog (tip equals an older entry) lists no commit twice (L1)", async () => {
+		const { tgt } = twinRepos();
+		for (const n of [1, 2]) {
+			write(join(tgt, "a.txt"), `stashed ${n}\n`);
+			git(tgt, "stash", "-q");
+		}
+		const [newest, older] = git(tgt, "log", "-g", "--format=%H", "refs/stash", "--")
+			.trim()
+			.split("\n");
+		// refs/stash now points at the older entry; the reflog still starts with the newest.
+		writeFileSync(join(tgt, ".git", "refs", "stash"), `${older}\n`);
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		const forced = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(forced.failure, forced.failure?.detail).toBeUndefined();
+		const ns = `refs/hyper-warp-backup/${WARP_ID}`;
+		const saved = git(tgt, "for-each-ref", "--format=%(objectname)", `${ns}/stash/`)
+			.trim()
+			.split("\n");
+		expect(saved).toHaveLength(2);
+		expect(new Set(saved).size).toBe(2);
+		expect(newest).toBeTruthy();
+	});
+
 	it("the same stash on both sides is covered", () => {
 		const { src } = twinRepos();
 		write(join(src, "a.txt"), "mine\n");
@@ -1254,6 +1307,226 @@ describe("every target stash entry is kept (fw-warp-2 r3, HIGH)", () => {
 		expect(refsNotCoveredHere(src, [{ object: entry, name: "refs/stash@{1}" }])).toEqual([
 			{ name: "refs/stash@{1}", reason: "a stash entry only there, one of 1" },
 		]);
+	});
+});
+
+describe("the target's .git/config survives a plain-repo warp (prj.44)", () => {
+	const urlOf = (repo: string, remote: string) =>
+		spawnSync("git", ["-C", repo, "config", "--get", `remote.${remote}.url`], {
+			encoding: "utf-8",
+		}).stdout.trim();
+
+	it("keeps the target's remote URL and settings, reports a source-only remote, leaves no keep file", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(src, "remote", "add", "upstream", "https://example.test/upstream.git");
+		git(src, "config", "user.email", "source@example.test");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		git(tgt, "remote", "add", "mirror", "https://example.test/mirror.git");
+		git(tgt, "config", "user.email", "target@example.test");
+		const configBefore = readFileSync(join(tgt, ".git", "config"), "utf-8");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(readFileSync(join(tgt, ".git", "config"), "utf-8")).toBe(configBefore);
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+		expect(urlOf(tgt, "mirror")).toBe("https://example.test/mirror.git");
+		expect(urlOf(tgt, "upstream")).toBe("");
+		expect(git(tgt, "config", "user.email").trim()).toBe("target@example.test");
+		const said = result.notices.filter((line) => line.startsWith("warp: remote "));
+		expect(said).toEqual([
+			'warp: remote "upstream" exists on the source but not here; add it with git remote add upstream <url>',
+		]);
+		expect(existsSync(join(tgt, ".git", "hyper-warp-config.keep"))).toBe(false);
+	});
+
+	it("says nothing when every source remote exists on the target", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(result.notices.filter((line) => line.startsWith("warp: remote "))).toEqual([]);
+	});
+
+	const KEEP = "hyper-warp-config.keep";
+
+	it("a keep file in the SOURCE's .git is never copied over the target's parked config (H1)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		write(join(src, ".git", KEEP), '[remote "origin"]\n\turl = https://example.test/stale.git\n');
+		write(join(src, ".git", `${KEEP}.123`), "stale\n");
+		const before = readFileSync(join(tgt, ".git", "config"), "utf-8");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(readFileSync(join(tgt, ".git", "config"), "utf-8")).toBe(before);
+		expect(existsSync(join(tgt, ".git", KEEP))).toBe(false);
+		expect(existsSync(join(tgt, ".git", `${KEEP}.123`))).toBe(false);
+	});
+
+	const sha = (path: string) => fileSha256(path);
+
+	it("a leftover keep file is used when the target holds the config that was copied, even if the source's changed since (M2, R2-M1)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		const original = readFileSync(join(tgt, ".git", "config"), "utf-8");
+		write(join(tgt, ".git", KEEP), original);
+		// What the interrupted warp copied, and its hash...
+		copyFileSync(join(src, ".git", "config"), join(tgt, ".git", "config"));
+		write(join(tgt, ".git", `${KEEP}.copied`), `${sha(join(src, ".git", "config"))}\n`);
+		// ...then the source's config changed.
+		git(src, "config", "user.name", "changed since");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+		expect(result.notices.join("\n")).toContain(
+			"an earlier warp stopped before putting the .git/config back",
+		);
+		expect(existsSync(join(tgt, ".git", `${KEEP}.copied`))).toBe(false);
+	});
+
+	it("a leftover identical to the current config is dropped silently (warp stopped before its copy)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		write(join(tgt, ".git", KEEP), readFileSync(join(tgt, ".git", "config"), "utf-8"));
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+		expect(result.notices.filter((line) => line.includes("earlier warp"))).toEqual([]);
+		expect(readdirSync(join(tgt, ".git")).filter((name) => name.startsWith(KEEP))).toEqual([]);
+	});
+
+	it("a leftover next to a config the operator edited since is renamed, not restored (M2)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/old.git");
+		write(join(tgt, ".git", KEEP), readFileSync(join(tgt, ".git", "config"), "utf-8"));
+		write(join(tgt, ".git", `${KEEP}.copied`), `${sha(join(src, ".git", "config"))}\n`);
+		git(tgt, "remote", "set-url", "origin", "https://example.test/edited.git");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/edited.git");
+		const left = readdirSync(join(tgt, ".git")).filter((name) =>
+			/^hyper-warp-config\.keep\.\d+$/.test(name),
+		);
+		expect(left).toHaveLength(1);
+		expect(readFileSync(join(tgt, ".git", left[0] as string), "utf-8")).toContain("old.git");
+		expect(result.notices.join("\n")).toContain("does not match the one that was copied");
+	});
+
+	it("a sha256 source onto a sha1 target leaves a working repository (R2-H1)", async () => {
+		const src = join(srcHome, "work/repo");
+		const tgt = join(tgtHome, "work/repo");
+		mkdirSync(src, { recursive: true });
+		mkdirSync(tgt, { recursive: true });
+		git(src, "init", "-q", "-b", "main", "--object-format=sha256");
+		write(join(src, "a.txt"), "a\n");
+		git(src, "add", ".");
+		git(src, "commit", "-q", "-m", "a");
+		git(tgt, "init", "-q", "-b", "main");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		const result = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(git(tgt, "status", "--porcelain").trim()).toBe("");
+		expect(git(tgt, "rev-parse", "--show-object-format").trim()).toBe("sha256");
+		expect(git(tgt, "config", "--local", "--get", "core.repositoryformatversion").trim()).toBe("1");
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+	});
+
+	it("a valueless extension on the source is set on the target (R2-L1)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "config", "core.repositoryformatversion", "1");
+		appendFileSync(join(src, ".git", "config"), "[extensions]\n\tworktreeConfig\n");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(
+			spawnSync("git", ["-C", tgt, "config", "--local", "--bool", "extensions.worktreeconfig"], {
+				encoding: "utf-8",
+			}).stdout.trim(),
+		).toBe("true");
+	});
+
+	it("remote names in format keys are case-sensitive (R2-L2)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "config", "remote.up.promisor", "true");
+		appendFileSync(join(tgt, ".git", "config"), '[remote "Up"]\n\tpromisor = true\n');
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		const keys = git(tgt, "config", "--local", "--name-only", "--list");
+		expect(keys).toContain("remote.up.promisor");
+		expect(keys).not.toContain("remote.Up.promisor");
+	});
+
+	it("a failed index re-send puts the config back AND syncs the format keys, on the real target (R2-L4, R2-L5)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "config", "core.repositoryformatversion", "1");
+		git(src, "config", "extensions.worktreeConfig", "true");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		const result = await world((from) => from.endsWith("/.git/index")).run(
+			plainRepoPlan("work/repo"),
+		);
+		expect(result.failure?.step.kind).toBe("copy");
+		expect(result.failure?.detail).toContain("own .git/config was put back");
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+		expect(git(tgt, "config", "--local", "--get", "extensions.worktreeconfig").trim()).toBe("true");
+		expect(readdirSync(join(tgt, ".git")).filter((name) => name.startsWith(KEEP))).toEqual([]);
+	});
+
+	it("a failed tree copy puts the config back and says so only when there was one (R2-L3, R2-L5)", async () => {
+		const { tgt } = twinRepos();
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		const before = readFileSync(join(tgt, ".git", "config"), "utf-8");
+		const result = await world((from) => from.endsWith("/.git/")).run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail).toContain("own .git/config was put back");
+		expect(readFileSync(join(tgt, ".git", "config"), "utf-8")).toBe(before);
+		expect(readdirSync(join(tgt, ".git")).filter((name) => name.startsWith(KEEP))).toEqual([]);
+	});
+
+	it("repository-format settings follow the copied .git, everything else stays the target's (M3)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "config", "core.repositoryformatversion", "1");
+		git(src, "config", "extensions.worktreeConfig", "true");
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(src, "config", "remote.origin.promisor", "true");
+		git(src, "config", "remote.origin.partialclonefilter", "blob:none");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		git(tgt, "config", "core.repositoryformatversion", "1");
+		git(tgt, "config", "extensions.objectFormat", "sha1");
+		git(tgt, "config", "user.email", "target@example.test");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		const get = (key: string) =>
+			spawnSync("git", ["-C", tgt, "config", "--local", "--get", key], {
+				encoding: "utf-8",
+			}).stdout.trim();
+		expect(get("core.repositoryformatversion")).toBe("1");
+		expect(get("extensions.worktreeconfig")).toBe("true");
+		expect(get("extensions.objectformat")).toBe("");
+		expect(get("remote.origin.promisor")).toBe("true");
+		expect(get("remote.origin.partialclonefilter")).toBe("blob:none");
+		expect(get("remote.origin.url")).toBe("https://example.test/target.git");
+		expect(get("user.email")).toBe("target@example.test");
+		expect(result.notices.join("\n")).toContain("repository-format settings");
+	});
+
+	it("a global remote.<n>.url does not hide the source-only notice (L3)", async () => {
+		const { src } = twinRepos();
+		git(src, "remote", "add", "upstream", "https://example.test/upstream.git");
+		const globalConfig = join(tgtHome, ".gitconfig-global");
+		write(globalConfig, '[remote "upstream"]\n\turl = https://example.test/global.git\n');
+		const previous = process.env.GIT_CONFIG_GLOBAL;
+		process.env.GIT_CONFIG_GLOBAL = globalConfig;
+		try {
+			const result = await world().run(plainRepoPlan("work/repo"));
+			expect(result.failure, result.failure?.detail).toBeUndefined();
+			expect(result.notices.join("\n")).toContain('remote "upstream" exists on the source');
+		} finally {
+			if (previous === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+			else process.env.GIT_CONFIG_GLOBAL = previous;
+		}
 	});
 });
 
@@ -1306,4 +1579,16 @@ describe("refs that conflict as file and directory (fw-warp-2 r3, MINOR)", () =>
 			);
 		});
 	}
+});
+
+describe("the config-restore temp dir (prj.56)", () => {
+	it("is made inside the target's git dir, never in an unwritable /tmp, and is always removed", () => {
+		const script = targetConfigRestore("/work/repo").at(-1) as string;
+		const mktemps = script.match(/mktemp[^;]*/g) ?? [];
+		expect(mktemps).toHaveLength(1);
+		expect(mktemps[0]).toContain('"$gd/hyper-warp-restore.XXXXXX"');
+		expect(script).not.toMatch(/mktemp(\s+-d)?\s*[)|;]/);
+		expect(script).toContain("trap 'rm -rf \"$tmp\"' EXIT");
+		expect(script).not.toContain("hyper-warp-restore.XXXXXX.keep");
+	});
 });

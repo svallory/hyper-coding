@@ -297,8 +297,17 @@ tooling).
 - **A plain repo's `.git` is copied on its own, then its refs are synced:**
   the `.git` copy excludes nothing but earlier warps' backups (your
   `warp.exclude` patterns apply to the working tree only, so a branch named
-  `dist` travels), and replaces the target's `.git/config`, `info/exclude`,
-  hooks, `HEAD`, index and `packed-refs` with this machine's. Then one
+  `dist` travels), and replaces the target's `info/exclude`, hooks, `HEAD`, index and
+  `packed-refs` with this machine's. The target's own `.git/config` is kept
+  (remotes, local settings) except for the repository-format settings that
+  describe the `.git` just copied (`core.repositoryformatversion`,
+  `extensions.*`, a remote's `promisor` and `partialclonefilter`), which are
+  made equal to this machine's, with a notice when any changed. A remote only
+  this machine has is reported as a notice, never added. While the copy runs
+  the target's config is parked in `.git/hyper-warp-config.keep` (never copied
+  from this machine); if a warp stops before putting it back, the next warp
+  uses that file only when the target still holds the config the stopped warp
+  copied, and otherwise renames it to `.keep.<epoch>` and tells you. Then one
   `git update-ref` transaction on the target sets every ref to this
   machine's value and deletes the ones this machine doesn't have, loose or
   packed alike, so afterwards the target's refs equal this machine's (a

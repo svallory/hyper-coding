@@ -537,6 +537,17 @@ describe("RemoteMachine", () => {
 		expect(calls[1].args).not.toContain("--delete");
 	});
 
+	it("passes --checksum only when asked, for one file (prj.31)", async () => {
+		const { calls, spawner } = recordingSpawner();
+		const machine = new RemoteMachine("netcup", spawner);
+
+		await machine.rsync("/w/.git/index", "/w/.git/index", { checksum: true });
+		await machine.rsync("/w/.git/", "/w/.git/");
+
+		expect(calls[1].args).toContain("--checksum");
+		expect(calls[calls.length - 1].args).not.toContain("--checksum");
+	});
+
 	it("passes --delete only when explicitly asked", async () => {
 		const { calls, spawner } = recordingSpawner();
 		await new RemoteMachine("netcup", spawner).rsync("/a", "/home/agent/b", { delete: true });

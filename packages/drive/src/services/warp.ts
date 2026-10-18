@@ -82,6 +82,8 @@ import {
 import { findSpaceRoot } from "#services/space";
 import {
 	checkProjectBranchName,
+	fileSha256,
+	localConfigInput,
 	projectPushArgv,
 	projectWorktreeHead,
 	pushProjectBranch,
@@ -97,6 +99,8 @@ import {
 	TARGET_WORKTREE_STATE,
 	targetBackupCopy,
 	targetBareRepoCheck,
+	targetConfigKeep,
+	targetConfigRestore,
 	targetRefBackupsLoose,
 	targetRefs,
 	targetRefsDelete,
@@ -110,6 +114,7 @@ import {
 	targetWorktreeState,
 	trackedUnderDirectory,
 	type UncoveredRef,
+	WARP_CONFIG_KEEP,
 	WARP_GIT_DIR_EXCLUDES,
 	WARP_REF_BACKUP,
 	warpCarriedRefs,
@@ -634,9 +639,18 @@ export type WarpStep =
 			 * NUL-separated, each prefixed `K` (overwritten in place) or `R` (a
 			 * type change, removed after the backup); or (`local-refs`) this
 			 * machine's carried refs, read when the step runs, one
-			 * `<object> <refname>` line each (`- <refname>` for a symbolic ref).
+			 * `<object> <refname>` line each (`- <refname>` for a symbolic ref); or
+			 * (`local-config`) this machine's remotes and repository-format settings;
+			 * or (`local-config-hash`) the sha-256 of its `.git/config`.
 			 */
-			stdinFrom?: "collisions" | "local-refs" | "ref-conflicts";
+			stdinFrom?:
+				| "collisions"
+				| "local-refs"
+				| "ref-conflicts"
+				| "local-config"
+				| "local-config-hash";
+			/** Like `announce`, once per line the command printed, `{out}` being that line. */
+			announceEach?: string;
 			/**
 			 * Run only when that probe found something: collisions to back up, or
 			 * target refs this machine doesn't cover.
@@ -665,6 +679,22 @@ export type WarpStep =
 			dst: string;
 			tree: boolean;
 			excludes: string[];
+			/**
+			 * Paths under `src` (tree copies) sent again after the copy with
+			 * `--checksum`. rsync's quick check skips a file whose size and mtime
+			 * match, and git rewrites `.git/index` in place: a changed index of the
+			 * same size within the same second would stay stale on the target. A
+			 * whole-tree `--checksum` would read every file, so only these are
+			 * compared by content.
+			 */
+			checksumFiles?: string[];
+			/**
+			 * Run on the target when the copy fails, before the failure is
+			 * reported: `argv` puts the config back; `syncArgv` (with this
+			 * machine's config on stdin) also makes its repository-format settings
+			 * match, and is used when the tree itself arrived.
+			 */
+			onFailure?: { argv: string[]; syncArgv: string[]; summary: string };
 			leaves: string;
 	  }
 	/** Push a worktree branch to an explicit `ssh://` URL (C-9). */
@@ -1427,13 +1457,37 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 		if (inputs.cwdKind === "git-repo") {
 			steps.push(
 				{
+					kind: "remote-command",
+					summary: `keep ${name}'s own .git/config of ${inputs.cwd} aside, so the .git copy doesn't replace it`,
+					argv: targetConfigKeep(inputs.cwd),
+					stdinFrom: "local-config-hash",
+					announceEach: "{out}",
+					leaves: `${inputs.cwd}/.git/${WARP_CONFIG_KEEP} on ${name}, a copy of its .git/config (moved back after the copy, or right away when the copy fails)`,
+					problem: `couldn't keep the .git/config of ${inputs.cwd} on ${name} aside, so warp stopped before the copy would have replaced it.`,
+				},
+				{
 					kind: "copy",
 					summary: `copy the repository's .git ${inputs.cwd}/.git to ${name} (all of it but earlier warps' backups)`,
 					src: `${inputs.cwd}/.git`,
 					dst: `${inputs.cwd}/.git`,
 					tree: true,
 					excludes: [...WARP_GIT_DIR_EXCLUDES],
+					checksumFiles: ["index"],
+					onFailure: {
+						argv: targetConfigRestore(inputs.cwd, { sync: false, marker: true }),
+						syncArgv: targetConfigRestore(inputs.cwd, { marker: true }),
+						summary: `${name}'s own .git/config`,
+					},
 					leaves: `files under ${inputs.cwd}/.git`,
+				},
+				{
+					kind: "remote-command",
+					stdinFrom: "local-config",
+					summary: `put ${name}'s own .git/config of ${inputs.cwd} back (but for the repository-format settings, which follow the copied .git), and list the remotes only this machine has`,
+					argv: targetConfigRestore(inputs.cwd),
+					leaves: `${inputs.cwd}/.git/config on ${name}, as it was before the copy but for the repository-format settings`,
+					announceEach: "{out}",
+					problem: `couldn't put the .git/config of ${inputs.cwd} on ${name} back after copying its .git, so warp stopped before copying the working tree. The original is ${inputs.cwd}/.git/${WARP_CONFIG_KEEP} there.`,
 				},
 				{
 					kind: "remote-command",
@@ -1507,7 +1561,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 	}
 	if (inputs.cwdKind === "git-repo") {
 		notes.push(
-			`The repository's .git travels in a copy of its own (only earlier warps' backups are excluded; the working-tree excludes don't apply in it) and is merged into ${name}'s copy file by file: ${name}'s .git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name. Then ${name}'s refs are set to exactly this machine's in one git update-ref transaction (refs only ${name} has are deleted there), so a stale loose ref there can't shadow a packed one here.`,
+			`The repository's .git travels in a copy of its own (only earlier warps' backups are excluded; the working-tree excludes don't apply in it) and is merged into ${name}'s copy file by file: ${name}'s info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name. ${name}'s .git/config is kept (a remote only this machine has is reported, not added), except for the repository-format settings (core.repositoryformatversion, extensions.*, partial-clone), which follow the copied .git. Then ${name}'s refs are set to exactly this machine's in one git update-ref transaction (refs only ${name} has are deleted there), so a stale loose ref there can't shadow a packed one here.`,
 			inputs.force
 				? `--force: if ${name}'s repository has refs this machine doesn't cover, all of its refs (and a detached HEAD) are first saved there under ${WARP_REF_BACKUP}/${warpId}/, which the copy leaves alone, every stash entry as ${WARP_REF_BACKUP}/${warpId}/stash/<n>; its refs that conflict as file and directory with this machine's are then deleted there. Its reflogs are not saved.`
 				: `${name}'s repository is refused if a ref (or a detached HEAD) there points at a commit this machine doesn't have, or has but reaches from none of the refs warp carries (not earlier warps' backups, other worktrees' HEADs or the stash); --force saves its refs there first.`,
@@ -1629,7 +1683,13 @@ export function describeStep(step: WarpStep, target = "the target"): string {
 					? ` ${step.excludes.map((pattern) => `--exclude=${pattern}`).join(" ")}`
 					: "";
 			const slash = step.tree ? "/" : "";
-			return `copy: ${step.summary}\n    rsync -a --stats${excludes} -- ${step.src}${slash} ${step.dst}${slash}`;
+			const again = (step.checksumFiles ?? [])
+				.map(
+					(file) =>
+						`\n    then, when it exists here: rsync -a --stats --checksum -- ${step.src}/${file} ${step.dst}/${file}`,
+				)
+				.join("");
+			return `copy: ${step.summary}\n    rsync -a --stats${excludes} -- ${step.src}${slash} ${step.dst}${slash}${again}`;
 		}
 		case "push-branch":
 			return `push: ${step.summary}\n    ${displayLine(projectPushArgv(step))}\n    (when the worktree is already registered there on this branch, the target's receive-pack is told to accept moving it: --receive-pack='... receive.denyCurrentBranch=ignore ...')`;
@@ -1699,6 +1759,10 @@ export interface WarpDeps {
 	refsNotCoveredHere?: typeof refsNotCoveredHere;
 	/** This machine's carried refs, for the ref sync. */
 	warpCarriedRefs?: typeof warpCarriedRefs;
+	/** This machine's remotes and repository-format settings, for the config restore. */
+	localConfigInput?: typeof localConfigInput;
+	/** Sha-256 of a file, for the leftover-keep-file check. */
+	fileSha256?: typeof fileSha256;
 }
 
 /** Steps that may leave something on the target once attempted. */
@@ -1900,7 +1964,11 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 										.join("")
 								: step.stdinFrom === "ref-conflicts"
 									? conflictingRefs.map((ref) => `${ref}\n`).join("")
-									: undefined;
+									: step.stdinFrom === "local-config"
+										? (deps.localConfigInput ?? localConfigInput)(plan.cwd)
+										: step.stdinFrom === "local-config-hash"
+											? `${(deps.fileSha256 ?? fileSha256)(`${plan.cwd}/.git/config`)}\n`
+											: undefined;
 					const result = await deps.runner.ssh(step.argv, {
 						timeoutMs: 15 * 60_000,
 						...(stdin === undefined ? {} : { stdin }),
@@ -1911,6 +1979,12 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 							step,
 							`${step.problem}${said ? ` It said: ${said}` : ` (exit ${result.code}, nothing on stderr)`}`,
 						);
+					}
+					if (step.announceEach) {
+						for (const line of result.stdout.split("\n")) {
+							if (line.trim())
+								execution.notices.push(step.announceEach.replaceAll("{out}", line.trim()));
+						}
 					}
 					const printed = firstLine(result.stdout);
 					if (step.announce && printed) {
@@ -1927,20 +2001,48 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 					break;
 				}
 				case "copy": {
-					const result = await deps.runner.rsync(
+					let result = await deps.runner.rsync(
 						step.tree ? `${step.src}/` : step.src,
 						step.tree ? `${step.dst}/` : step.dst,
 						{ excludes: step.excludes },
 					);
+					const treeArrived = result.code === 0;
+					// The quick check can skip a rewritten file (see `checksumFiles`).
+					for (const file of step.checksumFiles ?? []) {
+						if (result.code !== 0 || !existsSync(`${step.src}/${file}`)) continue;
+						const again = await deps.runner.rsync(`${step.src}/${file}`, `${step.dst}/${file}`, {
+							checksum: true,
+						});
+						if (again.code !== 0) result = { ...result, ...again };
+					}
 					if (result.code !== 0) {
 						const said = firstLine(result.stderr);
 						const partial =
 							result.code === 23 || result.code === 24
 								? " rsync reports a PARTIAL transfer: some files arrived, some did not."
 								: "";
+						// Best effort, like the marker undo: a failed copy must not leave
+						// the target's own config parked in the keep file.
+						let restored = "";
+						if (step.onFailure) {
+							const back = await deps.runner
+								.ssh(treeArrived ? step.onFailure.syncArgv : step.onFailure.argv, {
+									timeoutMs: 60_000,
+									...(treeArrived
+										? { stdin: (deps.localConfigInput ?? localConfigInput)(plan.cwd) }
+										: {}),
+								})
+								.catch(() => ({ code: 1, stdout: "", stderr: "" }));
+							restored =
+								back.code !== 0
+									? ` Putting ${step.onFailure.summary} back failed too; it is in ${plan.cwd}/.git/${WARP_CONFIG_KEEP} there.`
+									: back.stdout.includes("@restored")
+										? ` ${step.onFailure.summary} was put back.`
+										: ` There was no saved ${step.onFailure.summary} to put back.`;
+						}
 						return fail(
 							step,
-							`the copy failed (exit ${result.code})${said ? `: ${said}` : ""}.${partial}`,
+							`the copy failed (exit ${result.code})${said ? `: ${said}` : ""}.${partial}${restored}`,
 						);
 					}
 					break;
