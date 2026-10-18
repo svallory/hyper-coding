@@ -13,8 +13,6 @@
 #   sync        mutagen sync-config over loopback ssh
 #   tools       the tool registry: real downloads into a temp HOME
 #   warp        `hyper warp` against a disposable podman container
-#   agent-user  the T-16 agent layout, systemd podman container
-#   docker-home T-17 rootless docker + /Users home, privileged container
 #
 # Environment contract — every script runs with:
 #   HOME=<fresh short /tmp dir>, SSH_AUTH_SOCK and SSH_AGENT_PID REMOVED, and an
@@ -58,7 +56,7 @@
 #                                   authorized_keys); `mutagen` on PATH;
 #                                   non-interactive ssh to localhost works
 #   tools                           `curl` on PATH; https://github.com reachable
-#   warp, agent-user, docker-home   `podman` on PATH AND `podman info` succeeds
+#   warp                            `podman` on PATH AND `podman info` succeeds
 #                                   within 30s
 # Anything else a script needs and cannot find must make THAT script fail
 # loudly (C-18), which run.sh reports as FAIL — never a skip.
@@ -125,7 +123,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cli="$here/../../../cli/bin/run.js"
 
 # Fixed order — do not reorder casually; the summary and CI log read top-down.
-scripts=(sessions sync tools warp agent-user docker-home)
+scripts=(sessions sync tools warp)
 
 fail_fast() {
   printf 'FAIL run.sh: %s\n' "$1" >&2
@@ -249,7 +247,7 @@ probe_skip_reason() {
       curl -fsSI --max-time 10 https://github.com >/dev/null 2>&1 \
         || { echo "https://github.com unreachable"; return 0; }
       ;;
-    warp | agent-user | docker-home)
+    warp)
       command -v podman >/dev/null 2>&1 || { echo "no podman on PATH"; return 0; }
       podman_info_ok || { echo "podman info failed (no podman machine or connection)"; return 0; }
       ;;
@@ -311,7 +309,7 @@ for name in "${scripts[@]}"; do
     continue
   fi
 
-  # Short paths: docker-home.sh forwards a throwaway ssh-agent whose socket
+  # Short paths: a script may run a throwaway ssh-agent whose socket
   # lives under $HOME, and macOS's TMPDIR (/var/folders/…) is already so long
   # that a home under it pushes the socket path past sun_path's 104 bytes.
   home="$(mktemp -d /tmp/hyperdrive-e2e-home.XXXXXX)"
@@ -324,7 +322,7 @@ for name in "${scripts[@]}"; do
   env_unset=(-u SSH_AUTH_SOCK -u SSH_AGENT_PID)
   env_sets=("HOME=$home")
   case "$name" in
-    warp | agent-user | docker-home)
+    warp)
       # Podman keeps machine connections in XDG_CONFIG_HOME and rootless image
       # storage in XDG_DATA_HOME. Preserve those absolute locations across the
       # temp HOME: otherwise macOS loses its VM connection, while Linux builds
@@ -351,12 +349,6 @@ for name in "${scripts[@]}"; do
       ;;
     warp)
       env_sets+=("WARP_E2E_PORT=$(free_port)" "WARP_E2E_CONTAINER=hyper-t12-$slug")
-      ;;
-    agent-user)
-      env_sets+=("AGENT_USER_E2E_PORT=$(free_port)" "AGENT_USER_E2E_CONTAINER=hyper-t16-$slug")
-      ;;
-    docker-home)
-      env_sets+=("DOCKER_HOME_E2E_PORT=$(free_port)" "DOCKER_HOME_E2E_CONTAINER=hyper-t17-$slug")
       ;;
   esac
 

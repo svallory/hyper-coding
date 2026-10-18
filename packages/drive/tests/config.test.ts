@@ -51,8 +51,6 @@ describe("loadConfig", () => {
 		expect(config.machines.netcup).toEqual({
 			home: "/home/svallory",
 			features: ["docker", "mutagen"],
-			agent_user: "agent",
-			agent_key: "",
 		});
 		expect(config.warp.exclude).toEqual(["node_modules", "dist"]);
 		expect(config.sync.claude.ignore).toEqual(["projects/**/*.log"]);
@@ -67,8 +65,6 @@ describe("loadConfig", () => {
 		expect(config.machines.spare).toEqual({
 			home: "/home/spare",
 			features: DEFAULT_MACHINE.features,
-			agent_user: "agent",
-			agent_key: "",
 		});
 	});
 
@@ -226,13 +222,6 @@ describe("loadConfig", () => {
 			expect(() => loadConfig()).toThrowError(/`self\.name` must be a string/);
 		});
 
-		it("rejects a non-string machine agent_user", () => {
-			withTempConfig("[machines.x]\nagent_user = 5\n");
-			expect(() => loadConfig()).toThrowError(
-				/`machines\.x\.agent_user` must be a string, but it is a number/,
-			);
-		});
-
 		it("rejects a non-string machine home", () => {
 			withTempConfig("[machines.x]\nhome = 5\n");
 			expect(() => loadConfig()).toThrowError(
@@ -299,11 +288,11 @@ describe("writeConfig", () => {
 
 	it("deep-merges: one machine's field changes, the others survive", () => {
 		const path = withTempConfig(`${BASE}\n[machines.netcup]\nhome = "/home/svallory"\n`);
-		writeConfig({ machines: { netcup: { agent_user: "bot" } } });
+		writeConfig({ machines: { netcup: { features: ["tools"] } } });
 
 		const written = bytes(path);
 		expect(written).toContain("/home/svallory");
-		expect(written).toContain('agent_user = "bot"');
+		expect(written).toMatch(/features = \[\s*"tools"\s*\]/);
 	});
 
 	it("replaces arrays rather than merging them", () => {

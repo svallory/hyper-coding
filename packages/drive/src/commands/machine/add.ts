@@ -46,7 +46,7 @@ export default class MachineAdd extends BaseCommand<typeof MachineAdd> {
 
 	static override examples = [
 		"<%= config.bin %> machine add netcup",
-		"<%= config.bin %> machine add netcup --home /home/svallory --features docker-rootless",
+		"<%= config.bin %> machine add netcup --home /home/svallory --features tools",
 	];
 
 	static override args = {
@@ -62,10 +62,7 @@ export default class MachineAdd extends BaseCommand<typeof MachineAdd> {
 			description: "Home directory on that machine, e.g. /home/svallory",
 		}),
 		features: Flags.string({
-			description: 'Comma-separated features this machine has, e.g. "tools,docker-rootless"',
-		}),
-		"agent-user": Flags.string({
-			description: "User agents run as on that machine (default: agent)",
+			description: 'Comma-separated features this machine has, e.g. "tools,config-sync"',
 		}),
 	};
 
@@ -86,14 +83,13 @@ export default class MachineAdd extends BaseCommand<typeof MachineAdd> {
 			);
 		}
 
-		// Only the flags actually given. Writing `home: ""` for an `--agent-user`
-		// re-run would erase a home the user set earlier — and the hints below
+		// Only the flags actually given. Writing `home: ""` for a re-run
+		// without `--home` would erase a home the user set earlier — and the hints below
 		// tell people to re-run exactly that way to fix one field at a time.
 		const update: DeepPartial<MachineConfig> = {};
 		try {
 			if (flags.home !== undefined) update.home = flags.home;
 			if (flags.features !== undefined) update.features = parseFeatures(flags.features);
-			if (flags["agent-user"] !== undefined) update.agent_user = flags["agent-user"];
 
 			// No `defaults` override: writeConfig's base is the file as it stands,
 			// so keys this version doesn't know about survive the write.

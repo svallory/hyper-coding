@@ -227,8 +227,8 @@ nothing.
 
 ```
 hyper machine setup [MACHINE] [--features f,...] [--tools t,...|"all"]
-                    [--yes] [--agent-key key.pub]
-hyper machine add NAME [--home path] [--features f,...] [--agent-user u]
+                    [--yes]
+hyper machine add NAME [--home path] [--features f,...]
 hyper machine list [--json]
 ```
 
@@ -376,9 +376,7 @@ tooling).
 
 ## Machine setup
 
-`hyper machine setup <machine>` checks each selected feature, applies unprivileged steps, and prints any remaining root steps as a script for you to read. **Run that script from a root console or a sudo session of your own**; hyper never runs it as root without your explicit choice at the prompt. If a home move is pending, use a root console with the primary user's sessions closed — the move cannot run from that user's own SSH session.
-
-The root script may restart `user@<uid>.service` **only if the primary user's running `systemd --user` manager lacks the new `collab` group**. That restart stops **all of the primary user's user services at once**, including any rootless containers the user runs, so they are down for the moment it takes; enabled units, including the transcript watcher, start again, and containers come back only if a restart policy or a user unit restarts them. A stopped or already-correct manager is left alone, so a second setup is a no-op. If this run installs `docker-ce`, the script also stops and disables the new system-wide Docker daemon; an existing `docker-ce` is reused and its daemon left alone, while any other Docker engine (docker.io, snap, …) makes setup refuse and change nothing.
+`hyper machine setup <machine>` checks each selected feature, applies unprivileged steps, and prints any remaining root steps as a script for you to read. **Run that script from a root console or a sudo session of your own**; hyper never runs it as root without your explicit choice at the prompt.
 
 ## Documentation
 

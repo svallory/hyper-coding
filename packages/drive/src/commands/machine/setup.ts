@@ -52,7 +52,7 @@ function parseFeatures(raw: string): Feature[] {
 
 /**
  * Features to preselect: whatever `drive.toml` already says this machine has.
- * A machine registered with `features = ["tools", "docker-rootless"]` should
+ * A machine registered with `features = ["tools", "config-sync"]` should
  * only be asked about the ones it doesn't have.
  */
 function preselected(machine: MachineInfo | null): Feature[] {
@@ -384,11 +384,11 @@ export function pendingRootMessage(
 
 export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 	static override description =
-		"Set up a machine for hyper work (tools, config sync, agent user, …)\n\nExit codes: 0 success; 1 bug in a task; 2 usage error; 3 unattended root steps pending; 4 tool installation failed or the fix did not take (also when root steps are pending).";
+		"Set up a machine for hyper work (tools, config sync, …)\n\nExit codes: 0 success; 1 bug in a task; 2 usage error; 3 unattended root steps pending; 4 tool installation failed or the fix did not take (also when root steps are pending).";
 
 	static override examples = [
 		"<%= config.bin %> machine setup",
-		"<%= config.bin %> machine setup netcup --features tools,agent-user",
+		"<%= config.bin %> machine setup netcup --features tools,config-sync",
 		// --yes with no machine means `tools`: the local default.
 		"<%= config.bin %> machine setup --features tools --yes",
 		"<%= config.bin %> machine setup --features tools --tools jq,wt --yes",
@@ -407,10 +407,6 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			description:
 				"Take the defaults: tools locally, or the features drive.toml lists for a named machine. Never runs anything as root: it asks nothing about root even in a terminal, leaves the printed script for you, and exits 3 when root steps are pending",
 			default: false,
-		}),
-		"agent-key": Flags.string({
-			description:
-				"Ssh PUBLIC key (.pub) the agent user should accept, so setup can open a session as it. Only the public half is ever read",
 		}),
 	};
 
@@ -554,7 +550,6 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 			runner: runnerFor(name),
 			config,
 			log: (line) => this.log(line),
-			...(flags["agent-key"] === undefined ? {} : { agentKeyFile: flags["agent-key"] }),
 		};
 
 		let report: SetupReport;

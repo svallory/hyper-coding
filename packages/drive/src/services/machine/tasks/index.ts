@@ -10,18 +10,10 @@
  * `noop.check` stays, so the report and the "nothing needed" path keep working
  * before any real tool is selected — and so a machine that has every tool still
  * proves the no-op path.
- *
- * Agent-user order: user and group, shared dirs, then their watcher.
  */
 
 import { TOOLS, type ToolSpec } from "../tools.js";
-import { agentUserCreate } from "./agent-user-create.js";
-import { agentUserDirs } from "./agent-user-dirs.js";
-import { agentUserWatcher } from "./agent-user-watcher.js";
 import { configSyncTask } from "./config-sync.js";
-import { dockerRootlessInstall } from "./docker-rootless-install.js";
-import { dockerRootlessPackages } from "./docker-rootless-packages.js";
-import { homePathPhysical, homePathSymlink } from "./home-path.js";
 import { pathTask } from "./tools-path.js";
 import { rsyncTask } from "./tools-rsync.js";
 import type { Task, TaskContext } from "./types.js";
@@ -79,18 +71,6 @@ export function allTasks(options: { tools?: readonly string[] } = {}): Task[] {
 		...(tools.length > 0 ? [pathTask] : []),
 		rsyncTask,
 		...tools,
-		// home-path FIRST. The root script runs its sections in this order, and
-		// agent-user.create's section resolves the primary's home from the
-		// password database when it runs: after the move it links the agent's
-		// projects/ to /Users/<name>/…, before the move to /home/<name>/…, which
-		// the next check then calls wrong and asks for a second root run.
-		homePathSymlink,
-		homePathPhysical,
-		agentUserCreate,
-		agentUserDirs,
-		agentUserWatcher,
-		dockerRootlessPackages,
-		dockerRootlessInstall,
 		// No root and no target-side commands: it drives this machine's sync
 		// engine, so where it sits does not change the root script.
 		configSyncTask,
@@ -112,13 +92,4 @@ export function selectedToolTasks(ids?: readonly string[]): Task[] {
 
 export * from "../tools.js";
 export * from "./types.js";
-export {
-	agentUserCreate,
-	agentUserDirs,
-	agentUserWatcher,
-	configSyncTask,
-	dockerRootlessInstall,
-	dockerRootlessPackages,
-	homePathPhysical,
-	homePathSymlink,
-};
+export { configSyncTask };

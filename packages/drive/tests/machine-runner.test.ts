@@ -159,7 +159,6 @@ const REMOTE: MachineInfo = {
 	host: "user@host",
 	home: "",
 	features: [],
-	agentUser: "agent",
 	source: "both",
 	herdr: true,
 };
@@ -172,13 +171,7 @@ function remoteCtx(runner: MachineRunner, logs: string[]): TaskContext {
 	return { machine: REMOTE, runner, config: loadConfig(), log: (line) => logs.push(line) };
 }
 
-const ALL_FEATURES: Feature[] = [
-	"tools",
-	"config-sync",
-	"agent-user",
-	"docker-rootless",
-	"home-path",
-];
+const ALL_FEATURES: Feature[] = ["tools", "config-sync"];
 
 describe("runSetup — nothing to do (C-15)", () => {
 	it("with every check true: no apply, no root script, and the report says so", async () => {
@@ -224,7 +217,7 @@ describe("runSetup — nothing to do (C-15)", () => {
 
 	it("ignores tasks whose feature wasn't selected", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		const docker = fakeTask({ id: "docker.install", feature: "docker-rootless", checks: [false] });
+		const docker = fakeTask({ id: "fake.install", feature: "config-sync", checks: [false] });
 		await runSetup(localCtx(fakeRunner(), []), {
 			features: ["tools"],
 			tasks: [docker],
@@ -277,7 +270,7 @@ describe("runSetup — tasks it can do itself", () => {
 
 	it("never calls apply on a task that needs root", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		await runSetup(localCtx(fakeRunner(), []), {
 			features: ["tools"],
 			tasks: [task],
@@ -293,8 +286,8 @@ describe("runSetup — the root script", () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
 		const task = fakeTask({
-			id: "agent-user.create",
-			feature: "agent-user",
+			id: "fake.root",
+			feature: "tools",
 			needsRoot: true,
 			checks: [false],
 			script: "useradd --system agent",
@@ -302,7 +295,7 @@ describe("runSetup — the root script", () => {
 		const logs: string[] = [];
 
 		const report = await runSetup(remoteCtx(fakeRunner(), logs), {
-			features: ["agent-user"],
+			features: ["tools"],
 			tasks: [task],
 			prompt: scriptedPrompt(["skip"]),
 			scratchDir: dir,
@@ -316,8 +309,8 @@ describe("runSetup — the root script", () => {
 		const script = readFileSync(path, "utf-8");
 		expect(script.startsWith("#!/usr/bin/env bash\nset -euo pipefail")).toBe(true);
 		expect(script).toContain("netcup");
-		expect(script).toContain("features: agent-user");
-		expect(script).toContain("# --- agent-user.create ---");
+		expect(script).toContain("features: tools");
+		expect(script).toContain("# --- fake.root ---");
 		expect(script).toContain("useradd --system agent");
 
 		// The user must see the whole thing before choosing anything.
@@ -329,15 +322,15 @@ describe("runSetup — the root script", () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
 		const one = fakeTask({
-			id: "docker.packages",
-			feature: "docker-rootless",
+			id: "fake.packages",
+			feature: "config-sync",
 			needsRoot: true,
 			checks: [false],
 			script: "apt install uidmap",
 		});
 		const two = fakeTask({
-			id: "home-path.create",
-			feature: "home-path",
+			id: "fake.home",
+			feature: "tools",
 			needsRoot: true,
 			checks: [false],
 			script: "mkdir /Users/svallory",
@@ -352,14 +345,14 @@ describe("runSetup — the root script", () => {
 		});
 
 		const script = readFileSync(join(dir, ROOT_SCRIPT_NAME), "utf-8");
-		expect(script).toContain("# --- docker.packages ---");
-		expect(script).toContain("# --- home-path.create ---");
-		expect(script).toContain("features: docker-rootless, home-path");
+		expect(script).toContain("# --- fake.packages ---");
+		expect(script).toContain("# --- fake.home ---");
+		expect(script).toContain("features: config-sync, tools");
 	});
 
 	it("'ran' with the check still failing asks again; 'skip' then leaves it skipped", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const prompt = scriptedPrompt(["ran", "skip"]);
 
 		const report = await runSetup(remoteCtx(fakeRunner(), []), {
@@ -370,14 +363,14 @@ describe("runSetup — the root script", () => {
 		});
 
 		expect(prompt.asked).toHaveLength(2);
-		expect(prompt.asked[0].tasks).toEqual(["agent-user.create"]);
-		expect(report.skipped).toEqual(["agent-user.create"]);
+		expect(prompt.asked[0].tasks).toEqual(["fake.root"]);
+		expect(report.skipped).toEqual(["fake.root"]);
 		expect(report.applied).toEqual([]);
 	});
 
 	it("'ran' with the check now passing reports the task as applied and stops asking", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const prompt = scriptedPrompt(["ran"]);
 		// The user ran it: the next check sees the world fixed.
 		const runner = fakeRunner();
@@ -396,7 +389,7 @@ describe("runSetup — the root script", () => {
 		});
 
 		expect(prompt.asked).toHaveLength(1);
-		expect(report.applied).toEqual(["agent-user.create"]);
+		expect(report.applied).toEqual(["fake.root"]);
 		expect(report.skipped).toEqual([]);
 	});
 
@@ -407,7 +400,7 @@ describe("runSetup — the root script", () => {
 		// what: the question it hands the prompt has to name the machine and every
 		// task still outstanding, so "run it for me" can't cover a task that
 		// already passed.
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const prompt = scriptedPrompt(["skip"]);
 		await runSetup(remoteCtx(fakeRunner(), []), {
 			features: ["tools"],
@@ -422,7 +415,7 @@ describe("runSetup — the root script", () => {
 	it("prints the copy and run commands for a remote target", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const logs: string[] = [];
 
 		await runSetup(remoteCtx(fakeRunner(), logs), {
@@ -443,7 +436,7 @@ describe("runSetup — the root script", () => {
 	it("prints a single local command when the target is this machine", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const logs: string[] = [];
 
 		await runSetup(localCtx(fakeRunner(), logs), {
@@ -461,7 +454,7 @@ describe("runSetup — the root script", () => {
 	it("prints a local recipe with a space in the path as one command", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = mkdtempSync(join(tmpdir(), "drive setup ")); // the space is the point
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const logs: string[] = [];
 
 		await runSetup(localCtx(fakeRunner(), logs), {
@@ -481,7 +474,7 @@ describe("runSetup — the root script", () => {
 	it("prints a remote recipe with a space in the path as one scp source", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = mkdtempSync(join(tmpdir(), "drive setup "));
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const logs: string[] = [];
 
 		await runSetup(remoteCtx(fakeRunner(), logs), {
@@ -501,7 +494,7 @@ describe("runSetup — the root script", () => {
 	it("an unattended skip leaves the root task in `skipped`, with the script written", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		// What the command's rootChoice does with no terminal.
 		const unattended = scriptedPrompt(["skip"]);
 
@@ -512,7 +505,7 @@ describe("runSetup — the root script", () => {
 			scratchDir: dir,
 		});
 
-		expect(report.skipped).toEqual(["agent-user.create"]);
+		expect(report.skipped).toEqual(["fake.root"]);
 		expect(report.rootScriptPath).toBe(join(dir, ROOT_SCRIPT_NAME));
 		expect(existsSync(report.rootScriptPath as string)).toBe(true);
 		// Nothing was run on the user's behalf.
@@ -524,7 +517,7 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 	it("remote: copies the script, then runs exactly one privileged command on a tty", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const runner = fakeRunner("/home/svallory");
 		let checks = 0;
 		task.check = async () => {
@@ -555,7 +548,7 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 
 	it("remote: a failed copy stops the run and never runs anything privileged", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const runner = fakeRunner();
 		// scp failed: the script is not on the other machine, so the privileged
 		// command would fail with a confusing "No such file" instead of saying the
@@ -577,8 +570,8 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 	it("remote: an unanswerable $HOME probe fails with a way out, not a stray path", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const task = fakeTask({
-			id: "home-path.create",
-			feature: "home-path",
+			id: "fake.home",
+			feature: "tools",
 			needsRoot: true,
 			checks: [false],
 		});
@@ -589,7 +582,7 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 
 		await expect(
 			runSetup(remoteCtx(runner, []), {
-				features: ["home-path"],
+				features: ["tools"],
 				tasks: [task],
 				prompt: scriptedPrompt(["run-for-me"]),
 				scratchDir: scratch(),
@@ -603,8 +596,8 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 	it("remote: asks the machine for its home when drive.toml doesn't know it", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const task = fakeTask({
-			id: "home-path.create",
-			feature: "home-path",
+			id: "fake.home",
+			feature: "tools",
 			needsRoot: true,
 			checks: [false],
 		});
@@ -616,7 +609,7 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 		};
 
 		await runSetup(remoteCtx(runner, []), {
-			features: ["home-path"],
+			features: ["tools"],
 			tasks: [task],
 			prompt: scriptedPrompt(["run-for-me"]),
 			scratchDir: scratch(),
@@ -630,7 +623,7 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 	it("local: spawns one `sudo bash <path>` and nothing else", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const spawned: SpawnRequest[] = [];
 		let checks = 0;
 		task.check = async () => {
@@ -664,7 +657,7 @@ describe("runSetup — 'run it for me' (C-6)", () => {
 	it("says what the privileged command returned before re-checking", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const dir = scratch();
-		const task = fakeTask({ id: "agent-user.create", needsRoot: true, checks: [false] });
+		const task = fakeTask({ id: "fake.root", needsRoot: true, checks: [false] });
 		const logs: string[] = [];
 
 		// Three wrong passwords, then skip: "Still to do" on its own would hide the
@@ -767,8 +760,8 @@ describe("runSetup — failures", () => {
 	it("names the task when its rootScript throws", async () => {
 		withTempConfig('remote = "git@example:x.git"\n');
 		const task = fakeTask({
-			id: "docker.packages",
-			feature: "docker-rootless",
+			id: "fake.packages",
+			feature: "config-sync",
 			needsRoot: true,
 			checks: [false],
 			throwInRootScript: true,
@@ -776,11 +769,11 @@ describe("runSetup — failures", () => {
 
 		await expect(
 			runSetup(remoteCtx(fakeRunner(), []), {
-				features: ["docker-rootless"],
+				features: ["config-sync"],
 				tasks: [task],
 				prompt: scriptedPrompt([]),
 				scratchDir: scratch(),
 			}),
-		).rejects.toThrow(/docker\.packages/);
+		).rejects.toThrow(/fake\.packages/);
 	});
 });

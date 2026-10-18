@@ -52,8 +52,6 @@ const NETCUP: MachineInfo = {
 	host: "me@netcup",
 	home: "/home/me",
 	features: [],
-	agentUser: "agent",
-	agentKey: "",
 	source: "both",
 	herdr: true,
 } as MachineInfo;
@@ -116,7 +114,6 @@ function recordingRunner(answer: RunResult = { code: 0, stdout: "", stderr: "" }
 		ssh: (...args) => done("ssh", args),
 		rsync: (...args) => done("rsync", args),
 		scp: (...args) => done("scp", args),
-		asUser: (...args) => done("asUser", args),
 	};
 	return { runner, calls };
 }

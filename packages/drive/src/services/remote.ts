@@ -175,17 +175,6 @@ export interface MachineRunner {
 	ssh(cmd: string[], opts?: SshOptions): Promise<RunResult>;
 	rsync(src: string, dst: string, opts?: RsyncOptions): Promise<RunResult>;
 	scp(src: string, dst: string): Promise<RunResult>;
-	/**
-	 * Run a command as ANOTHER user on the same machine.
-	 *
-	 * This is what makes the unattended agent reachable: `dockerd-rootless-setuptool.sh
-	 * install` has to run inside a real login session of the agent user, and the
-	 * only way to open one from here is ssh as that user. Remote machines do it
-	 * by substituting the user in the ssh target; a LOCAL machine cannot, because
-	 * becoming another user needs root — so `LocalMachine` refuses by name rather
-	 * than spawning anything (C-6).
-	 */
-	asUser(user: string, cmd: string[], opts?: SshOptions): Promise<RunResult>;
 }
 
 /** One spawned process, described so a fake spawner can assert on it. */
@@ -205,13 +194,6 @@ export type Spawner = (request: SpawnRequest) => Promise<RunResult>;
 
 /** Characters that need no quoting in a POSIX shell. */
 const SHELL_SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
-
-/**
- * What an ssh user name may look like. The same rule as the agent user in
- * `config/schema.ts`, kept local here because this is the ssh surface: a value
- * carrying shell syntax would become part of an ssh target word.
- */
-const SSH_USER_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/;
 
 /**
  * Quote one argument for a POSIX shell. Output is always safe to paste into a
@@ -313,32 +295,6 @@ function safeHost(host: string): string {
 	return host;
 }
 
-/** Reject an ssh user that would be read as more than a user name. */
-function safeSshUser(user: string): string {
-	if (!SSH_USER_PATTERN.test(user)) {
-		throw new RemoteError(
-			`"${user}" isn't a user hyperdrive can ssh as: a user name is lower case, starts with a letter or underscore, and contains only letters, digits, underscores and dashes.`,
-		);
-	}
-	return user;
-}
-
-/**
- * The ssh target for the SAME machine with a different user.
- *
- * `machine.host` is whatever Herdr saved — usually `user@host`, sometimes a bare
- * hostname, possibly an ssh alias. The user part is REPLACED (up to the last
- * `@`, so an alias containing one still works) rather than appended to, because
- * `agent@svallory@host` is not an ssh target. Nothing is quoted: the result is
- * one argv word handed to ssh, which is the only form it accepts.
- */
-export function targetWithUser(host: string, user: string): string {
-	const safe = safeHost(host);
-	const safeUser = safeSshUser(user);
-	const at = safe.lastIndexOf("@");
-	return at >= 0 ? `${safeUser}@${safe.slice(at + 1)}` : `${safeUser}@${safe}`;
-}
-
 /** A remote cwd must be absolute, or `cd -- <cwd>` would break on a `~`. */
 function absoluteCwd(host: string, cwd: string): string {
 	if (!cwd.startsWith("/")) {
@@ -375,20 +331,10 @@ export function remoteSpec(host: string, path: string): string {
  * `--stats`, `--exclude` and `--` work everywhere. `--mkpath` (rsync 3.2.3+)
  * does *not*, so missing destination parents are created over ssh beforehand.
  */
-function rsyncArgs(
-	src: string,
-	dst: string,
-	opts?: RsyncOptions,
-	otherUser = false,
-	port?: number,
-): string[] {
+function rsyncArgs(src: string, dst: string, opts?: RsyncOptions, port?: number): string[] {
 	// rsync runs its own ssh, and the port has to be told to THAT ssh: a
 	// `-p 2222` here would be an rsync option, and rsync has none.
-	const sshCommand = [
-		"ssh",
-		...(otherUser ? OTHER_USER_SSH_OPTIONS : []),
-		...(port === undefined ? [] : ["-p", String(port)]),
-	].join(" ");
+	const sshCommand = ["ssh", ...(port === undefined ? [] : ["-p", String(port)])].join(" ");
 	const args = ["-a", "--stats", "-e", sshCommand];
 	for (const pattern of opts?.excludes ?? []) {
 		args.push(`--exclude=${pattern}`);
@@ -663,63 +609,10 @@ export class LocalMachine implements MachineRunner {
 			};
 		}
 	}
-
-	async asUser(user: string): Promise<RunResult> {
-		// Refusing is the whole implementation, and it is deliberate: the only way
-		// to become another user HERE is `su`/`runuser`, which needs root. Naming
-		// the flag and the way out is more useful than a permission error from a
-		// child process, and it keeps hyper out of privilege escalation (C-6).
-		throw new RemoteError(
-			`I can't run a command as ${user} on this machine: becoming another user here needs root, and hyper never runs as root (C-6). Set this machine up over ssh instead: \`hyper machine setup <machine> --features docker-rootless\`.`,
-		);
-	}
 }
-
-/**
- * The options every session opened as ANOTHER user on the machine carries.
- *
- * hyper reaches the agent user with the operator's own ssh client, so without
- * these the session inherits whatever the operator's `~/.ssh/config` says for
- * that host — and two of those settings break the agent's isolation:
- *
- * - **agent forwarding** (`ForwardAgent yes`, common for dev servers) hands the
- *   operator's ssh-agent socket to a session of the agent user. Any process of
- *   the agent's could authenticate with the operator's keys for as long as the
- *   session lasts — including as the primary user on the same machine.
- * - **connection sharing** (`ControlMaster`/`ControlPath` without `%r`) can
- *   reuse the PRIMARY user's open connection, so commands meant for the agent
- *   run as the primary.
- *
- * `-a` and `ForwardAgent=no` close the first (ssh honours the first value, and
- * command-line options come before the config file); `ClearAllForwardings`
- * drops any configured port forwardings; `-x` (`ForwardX11=no`) closes the one
- * forwarding `ClearAllForwardings` does not cover, so an operator config with
- * `ForwardX11 yes` never hands the agent the operator's X display;
- * `ControlMaster=no` with `ControlPath=none` never joins or creates a shared
- * connection. Sessions as the primary user keep the operator's configuration
- * exactly as it is.
- */
-export const OTHER_USER_SSH_OPTIONS = [
-	"-a",
-	"-x",
-	"-o",
-	"ForwardAgent=no",
-	"-o",
-	"ClearAllForwardings=yes",
-	"-o",
-	"ControlMaster=no",
-	"-o",
-	"ControlPath=none",
-] as const;
 
 /** How a {@link RemoteMachine} connects. */
 export interface RemoteMachineOptions {
-	/**
-	 * True when the host's user is NOT the operator's own account on that
-	 * machine (the agent user). Every ssh, scp and rsync then carries
-	 * {@link OTHER_USER_SSH_OPTIONS}.
-	 */
-	otherUser?: boolean;
 	/**
 	 * Non-default ssh port. When absent, a `host:port` target is split for it;
 	 * when both are absent, ssh's default applies and no `-p` is passed.
@@ -739,7 +632,6 @@ export class RemoteMachine implements MachineRunner {
 	 */
 	readonly port: number | undefined;
 	private readonly spawner: Spawner;
-	private readonly otherUser: boolean;
 
 	/**
 	 * `host` may be the whole target as saved (including `user@` and, when the
@@ -752,16 +644,10 @@ export class RemoteMachine implements MachineRunner {
 		this.host = safeHost(split.host);
 		this.port = options.port ?? split.port;
 		this.spawner = spawner;
-		this.otherUser = options.otherUser === true;
 	}
 
 	async ssh(cmd: string[], opts?: SshOptions): Promise<RunResult> {
-		return this.sshTo(this.host, cmd, opts, this.otherUser);
-	}
-
-	/** Run one command over ssh as `user` on this same machine. */
-	async asUser(user: string, cmd: string[], opts?: SshOptions): Promise<RunResult> {
-		return this.sshTo(targetWithUser(this.host, user), cmd, opts, true);
+		return this.sshTo(this.host, cmd, opts);
 	}
 
 	/**
@@ -773,7 +659,6 @@ export class RemoteMachine implements MachineRunner {
 		target: string,
 		cmd: string[],
 		opts: SshOptions | undefined,
-		otherUser: boolean,
 	): Promise<RunResult> {
 		if (opts?.tty && opts?.stdin !== undefined) {
 			throw new RemoteError(
@@ -795,7 +680,6 @@ export class RemoteMachine implements MachineRunner {
 			// `-p` comes before the host: after it, ssh reads it as part of the
 			// destination and stops parsing options.
 			args: [
-				...(otherUser ? OTHER_USER_SSH_OPTIONS : []),
 				...(opts?.tty ? ["-t"] : []),
 				...(this.port === undefined ? [] : ["-p", String(this.port)]),
 				target,
@@ -841,7 +725,7 @@ export class RemoteMachine implements MachineRunner {
 		if (mkdirFailed) return mkdirFailed;
 		return this.spawner({
 			file: "rsync",
-			args: rsyncArgs(source, target, opts, this.otherUser, this.port),
+			args: rsyncArgs(source, target, opts, this.port),
 		});
 	}
 
@@ -853,21 +737,12 @@ export class RemoteMachine implements MachineRunner {
 		// options so a source starting with `-` is still a path.
 		return this.spawner({
 			file: "scp",
-			// scp has no `-a` and no `-x`; use `-o ForwardX11=no` for its
-			// underlying ssh, alongside the same other -o isolation options.
 			// `-P` is scp's port spelling (its `-p` preserves modes) and goes where
 			// scp is still reading options: before `-r`, before `--`. Without it the
 			// copy goes to port 22 while the ssh that runs the script goes to the
 			// configured one — on a host where 22 is another sshd, the root script
 			// lands on the wrong machine.
 			args: [
-				...(this.otherUser
-					? [
-							...OTHER_USER_SSH_OPTIONS.filter((option) => option !== "-a" && option !== "-x"),
-							"-o",
-							"ForwardX11=no",
-						]
-					: []),
 				...(this.port === undefined ? [] : ["-P", String(this.port)]),
 				"-r",
 				"--",

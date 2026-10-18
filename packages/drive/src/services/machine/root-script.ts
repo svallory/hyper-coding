@@ -12,25 +12,6 @@ import type { MachineInfo } from "#services/machine";
 import { shellQuote } from "#services/remote";
 import type { Task, TaskContext } from "./tasks/types.js";
 
-/** The task whose section moves the home, and must run first. */
-export const HOME_MOVE_TASK_ID = "home-path.symlink";
-
-/**
- * Said in the header of any script that contains a pending home move, and in
- * the move's refusal: the move refuses while the user has ANY process, it is
- * the first section, and a refusal stops the script — so no other section can
- * run from an ssh session of that user until the move is done once.
- */
-export const HOME_MOVE_NOTICE = [
-	"THIS SCRIPT MOVES YOUR HOME, AND NEEDS A ROOT CONSOLE ONCE.",
-	"The move refuses while your user has any process (usermod will not change",
-	"a home in use), including the ssh session you would run this from. It is the",
-	"first section, and a refusal stops the script there, so while the move is",
-	"pending NO other section below can run from any ssh session of yours.",
-	"Run it once as root from a console that is not one of your sessions, after",
-	"`loginctl terminate-user <you>`. Later runs work from ssh again.",
-];
-
 /** One task's contribution to the script. */
 export interface RootScriptEntry {
 	task: Task;
@@ -43,106 +24,6 @@ export interface RootScriptEntry {
 	 * is about to run with their password.
 	 */
 	fallback?: boolean;
-}
-
-/**
- * The group whose membership is the difference between a user and a root user.
- *
- * Named here, in the one file the C-6 grep allows, because the agent-user tasks
- * have to both read that membership in their `check` and hand a script that
- * removes it to the user. Spelling the name out in those tasks would put the
- * word "sudo" in four more files for no gain.
- */
-export const PRIVILEGED_GROUP = "sudo";
-
-/** The group that is root with a group seat instead. Handled exactly like the above. */
-export const DOCKER_GROUP = "docker";
-
-/** Where sudoers drop-ins live; one is named after the user it grants. */
-export const SUDOERS_DIR = "/etc/sudoers.d";
-
-/**
- * The command that removes a supplementary group membership.
- *
- * Named here for the same reason as {@link PRIVILEGED_GROUP}: the agent-user
- * task's root script contains this word, and having it there would put privilege
- * logic in `tasks/` where C-6's grep would start matching a file that has no
- * business holding it.
- */
-export const GPASSWD = "gpasswd";
-
-/**
- * The shell guard a generated root script runs before it does anything.
- *
- * The script is generated from a config value on one machine and run on another,
- * possibly later, possibly after the config changed — so it re-checks the names
- * it was built from rather than trusting them. A name that does not match the
- * pattern is not a user name, and interpolating it into `usermod` or a `rm -f`
- * path is how a config value becomes root execution.
- *
- * Kept beside {@link asAgentScript} rather than in the task that uses it, so the
- * pattern itself lives in exactly one place.
- */
-export function rootScriptGuards(agentUser: string): string {
-	return `# Re-check what this script was generated from, before doing any of it. The
-# names came from a config file on a different machine, possibly edited since, and
-# they are about to become arguments to usermod, a path in an rm, and a user to
-# become. A name that is not a user name is not a user name.
-agent_user=${shellQuote(agentUser)}
-primary_user="\${SUDO_USER:-}"
-if [ -z "$primary_user" ]; then
-  echo "hyper: I don't know who the primary user is (\\$SUDO_USER was empty)." >&2
-  exit 1
-fi
-for name in "$agent_user" "$primary_user"; do
-  case "$name" in
-    ''|[!a-z_]*|*[!a-z0-9_-]*)
-      echo "hyper: '$name' is not a usable user name; refusing to run this as root." >&2
-      exit 1
-      ;;
-  esac
-done
-if [ "\${#agent_user}" -gt 32 ]; then
-  echo "hyper: '$agent_user' is longer than 32 characters; refusing." >&2
-  exit 1
-fi
-if [ "$agent_user" = root ] || [ "$primary_user" = root ]; then
-  echo "hyper: one of these is root; that is not a user to set up." >&2
-  exit 1
-fi
-if [ "$agent_user" = "$primary_user" ]; then
-  echo "hyper: the agent user and the primary user are both '$agent_user'." >&2
-  exit 1
-fi
-if [ "$(id -u "$agent_user" 2>/dev/null || echo x)" = 0 ]; then
-  echo "hyper: '$agent_user' is uid 0; refusing." >&2
-  exit 1
-fi
-`;
-}
-
-/**
- * The `as-agent` helper, verbatim from the machine it was proven on.
- *
- * The one line in the whole design where a user types a privileged command
- * themselves: hyper installs the file and never runs it. It lives here, as
- * template text, so that C-6's grep stays a real check — a task that embedded
- * it would put "sudo" in `tasks/`, where it is supposed never to appear.
- *
- * Arguments are joined and `eval`ed in the target user's shell, which is what
- * makes `as-agent 'echo $USER'` behave like `ssh 'echo $USER'` rather than
- * passing the command in as a single quoted argument.
- */
-export function asAgentScript(agentUser: string): string {
-	return `#!/usr/bin/env bash
-# Run a command line as ${agentUser} in the current directory.
-# Arguments are joined and evaluated by ${agentUser}'s shell, like ssh:
-#   as-agent 'echo $USER'   -> ${agentUser}
-# With no arguments it runs: claude --resume
-dir=$(pwd -P)
-[ $# -eq 0 ] && set -- claude --resume
-exec ${PRIVILEGED_GROUP} -H -u ${shellQuote(agentUser)} bash -lic 'cd "$1" && eval "$2"' _ "$dir" "$*"
-`;
 }
 
 /** How the machine is named in the header: local setups have no MachineInfo. */
@@ -185,10 +66,6 @@ export function assembleRootScript(entries: RootScriptEntry[], ctx: TaskContext)
 		"#  the copy and run commands for the machine it is setting up)",
 		"",
 	];
-	if (entries.some((entry) => entry.task.id === HOME_MOVE_TASK_ID)) {
-		lines.push(...HOME_MOVE_NOTICE.map((line) => `# ${line}`), "");
-	}
-
 	for (const entry of entries) {
 		lines.push(`# --- ${entry.task.id} ---`);
 		lines.push(`# ${entry.task.title}`);
