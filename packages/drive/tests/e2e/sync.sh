@@ -129,13 +129,6 @@ mkdir -p "$MUTAGEN_DATA_DIRECTORY"
 trap 'exit 143' INT TERM HUP
 
 cleanup() {
-  local rc=$?
-  # DEBUG (revert with the debug commit): dump the evidence on failure.
-  if [ "$rc" != 0 ]; then
-    echo "##### DEBUG ssh-calls.log"; cat "$work_real/ssh-calls.log" 2>&1 || true
-    echo "##### DEBUG ssh-debug.log (last 300 lines)"; tail -n 300 "$work_real/ssh-debug.log" 2>&1 || true
-    echo "##### DEBUG mutagen sync list -l"; mutagen sync list -l 2>&1 || true
-  fi
   echo "# cleaning up sessions"
   mutagen sync terminate "$claude_session" >/dev/null 2>&1 || true
   mutagen sync terminate "$pi_session" >/dev/null 2>&1 || true
@@ -238,16 +231,9 @@ Host *
   LogLevel ERROR
 ${ssh_identity:+  IdentityFile "$ssh_identity"}
 SSHCONFIG
-# DEBUG (revert with the debug commit): log every call and trace the real ssh.
-calls_log="$work_real/ssh-calls.log"
-ssh_debug_log="$work_real/ssh-debug.log"
 cat > "$fakebin/ssh" <<WRAPPER
-#!/bin/bash
-{ printf '%s | argv:' "\$0"; printf ' %q' "\$@"
-  printf ' | HOME=%s USER=%s PATH=%s MUTAGEN_SSH_PATH=%s uid=%s PPID=%s parent=%s\\n' \\
-    "\$HOME" "\${USER:-}" "\$PATH" "\${MUTAGEN_SSH_PATH:-}" "\$(id -u)" "\$PPID" "\$(ps -o comm= -p \$PPID)"
-} >> "$calls_log"
-exec "$real_ssh" -E "$ssh_debug_log" -vv -F "$work_real/ssh_config" "\$@"
+#!/bin/sh
+exec "$real_ssh" -F "$work_real/ssh_config" "\$@"
 WRAPPER
 chmod +x "$fakebin/ssh"
 # Mutagen copies its agent to an ssh beta with `scp`, which starts ssh by
@@ -256,11 +242,7 @@ chmod +x "$fakebin/ssh"
 # fixture config.
 real_scp="$(command -v scp)"
 cat > "$fakebin/scp" <<WRAPPER
-#!/bin/bash
-{ printf '%s | argv:' "\$0"; printf ' %q' "\$@"
-  printf ' | HOME=%s USER=%s PATH=%s MUTAGEN_SSH_PATH=%s uid=%s PPID=%s parent=%s\\n' \\
-    "\$HOME" "\${USER:-}" "\$PATH" "\${MUTAGEN_SSH_PATH:-}" "\$(id -u)" "\$PPID" "\$(ps -o comm= -p \$PPID)"
-} >> "$calls_log"
+#!/bin/sh
 exec "$real_scp" -F "$work_real/ssh_config" -S "$real_ssh" "\$@"
 WRAPPER
 chmod +x "$fakebin/scp"
@@ -403,12 +385,6 @@ wait_for_beta() {
 # AC-21 / D-1: `hyper machine setup <machine> --features config-sync` creates the
 # sync through the same service `drive sync-config` uses. It must be able to
 # FAIL LOUDLY: `out=$(...)` under `set -e` would abort with no `not ok` line.
-# DEBUG (revert with the debug commit): who started the daemon, with what env.
-echo "##### DEBUG mutagen daemon before step 2"
-for pid in $(pgrep -f 'mutagen daemon run' || true); do
-  echo "daemon pid $pid: $(ps -o ppid=,etime= -p "$pid")"
-  tr '\0' '\n' < "/proc/$pid/environ" 2>&1 | grep -E '^(HOME|PATH|MUTAGEN_|USER)=' || true
-done
 echo "# machine setup loop --features config-sync --yes (create)"
 set +e
 out="$(run_cli machine setup loop --features config-sync --yes)"
