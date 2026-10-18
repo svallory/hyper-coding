@@ -15,6 +15,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
 
 export type Provider = "github" | "gitlab";
 
@@ -30,6 +31,8 @@ export interface Forge {
 	host: string;
 	/** The logged-in account. */
 	user: string;
+	/** True when the CLI is configured for HTTPS git URLs; SSH URLs when it does not say. */
+	https?: boolean;
 }
 
 export interface ForgeRepo {
@@ -45,8 +48,11 @@ function defaultHost(provider: Provider): string {
 	return process.env.GITLAB_HOST?.trim() || "gitlab.com";
 }
 
-/** Milliseconds a CLI call may take before it is killed and treated as absent. */
+/** Milliseconds a read-only CLI call may take before it is killed and treated as absent. */
 const CLI_TIMEOUT_MS = 5000;
+
+/** Creating a repository is a write over the network: give it room. */
+const CREATE_TIMEOUT_MS = 60_000;
 
 interface CliResult {
 	ok: boolean;
@@ -54,26 +60,42 @@ interface CliResult {
 	stderr: string;
 	/** True when the binary itself was not found. */
 	missing: boolean;
+	/** True when the call was killed for running past its timeout. */
+	timedOut: boolean;
+	/** The spawn error (not found, timeout, ...), when there was one. */
+	error: string | null;
 }
 
-function runCli(bin: string, args: string[]): CliResult {
+/**
+ * Run a forge CLI from a neutral directory: setup never touches the current
+ * directory, so no flag a CLI grows may be able to either.
+ */
+function runCli(
+	bin: string,
+	args: string[],
+	options: { timeoutMs?: number; env?: Record<string, string> } = {},
+): CliResult {
 	const result = spawnSync(bin, args, {
 		encoding: "utf8",
-		timeout: CLI_TIMEOUT_MS,
+		timeout: options.timeoutMs ?? CLI_TIMEOUT_MS,
+		cwd: tmpdir(),
 		env: {
 			...process.env,
+			...options.env,
 			GIT_TERMINAL_PROMPT: "0",
 			GH_PROMPT_DISABLED: "1",
 			GLAB_PROMPT_DISABLED: "1",
 		},
 		stdio: ["ignore", "pipe", "pipe"],
 	});
-	const missing = (result.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
+	const code = (result.error as NodeJS.ErrnoException | undefined)?.code;
 	return {
 		ok: result.status === 0 && !result.error,
 		stdout: result.stdout ?? "",
 		stderr: result.stderr ?? "",
-		missing,
+		missing: code === "ENOENT",
+		timedOut: code === "ETIMEDOUT",
+		error: result.error?.message ?? null,
 	};
 }
 
@@ -94,6 +116,12 @@ function loginFrom(provider: Provider, json: string): string | null {
 	}
 }
 
+/** The git protocol the CLI is configured for on this host; SSH when it does not say. */
+function prefersHttps(provider: Provider, host: string): boolean {
+	const result = runCli(FORGE_CLI[provider], ["config", "get", "git_protocol", "-h", host]);
+	return result.ok && result.stdout.trim().toLowerCase() === "https";
+}
+
 /**
  * The forge the user is logged in to, GitHub first. Null when neither CLI is
  * installed, logged in, or reachable within the timeout — setup then simply
@@ -104,7 +132,10 @@ export function detectForge(): Forge | null {
 		const result = runCli(FORGE_CLI[provider], ["api", "user"]);
 		if (!result.ok) continue;
 		const user = loginFrom(provider, result.stdout);
-		if (user) return { provider, host: defaultHost(provider), user };
+		if (user) {
+			const host = defaultHost(provider);
+			return { provider, host, user, https: prefersHttps(provider, host) };
+		}
 	}
 	return null;
 }
@@ -112,23 +143,43 @@ export function detectForge(): Forge | null {
 const SEGMENT = "[A-Za-z0-9][A-Za-z0-9._-]*";
 const SHORTHAND = new RegExp(`^(?:(${SEGMENT})/)?(${SEGMENT})$`);
 
+/** `owner/name` or a bare `name`, as people type them; null for URLs, paths and anything else. */
+function shorthand(input: string): { owner: string | undefined; name: string } | null {
+	const value = input.trim();
+	if (value === "" || /^[a-z][a-z0-9+.-]*:\/\//i.test(value) || value.includes(":")) return null;
+	if (/^[/.~]/.test(value) || value.includes("\\")) return null;
+	const match = SHORTHAND.exec(value);
+	if (!match) return null;
+	return { owner: match[1], name: match[2].replace(/\.git$/, "") };
+}
+
+/** True when expanding this remote needs to know the forge (a bare name or `owner/name`). */
+export function isShorthand(input: string): boolean {
+	return shorthand(input) !== null;
+}
+
+/** True for a bare `name` with no owner: it cannot be expanded without a logged-in user. */
+export function isBareName(input: string): boolean {
+	const parts = shorthand(input);
+	return parts !== null && parts.owner === undefined;
+}
+
 /**
- * Expand `owner/name` or a bare `name` into an SSH URL on the forge. A value
- * that is already a URL or a path (has a scheme, a colon, or a leading `/`,
- * `.` or `~`) is returned unchanged. A bare name needs a detected user to
- * fill the owner; without one it is returned unchanged so git reports it.
+ * Expand `owner/name` or a bare `name` into a URL on the forge, over the
+ * protocol the forge CLI is configured for (SSH when unknown). A value that
+ * is already a URL or a path (has a scheme, a colon, or a leading `/`, `.` or
+ * `~`) is returned unchanged. A bare name needs a detected user to fill the
+ * owner; without one it is returned unchanged (callers check `isBareName`).
  */
 export function expandRemote(input: string, forge: Forge | null): string {
-	const value = input.trim();
-	if (value === "" || /^[a-z][a-z0-9+.-]*:\/\//i.test(value) || value.includes(":")) return value;
-	if (/^[/.~]/.test(value) || value.includes("\\")) return value;
-	const match = SHORTHAND.exec(value);
-	if (!match) return value;
-	const owner = match[1] ?? forge?.user;
-	if (!owner) return value;
-	const name = match[2].replace(/\.git$/, "");
+	const parts = shorthand(input);
+	if (!parts) return input.trim();
+	const owner = parts.owner ?? forge?.user;
+	if (!owner) return input.trim();
 	const host = forge?.host ?? defaultHost("github");
-	return `git@${host}:${owner}/${name}.git`;
+	return forge?.https
+		? `https://${host}/${owner}/${parts.name}.git`
+		: `git@${host}:${owner}/${parts.name}.git`;
 }
 
 /**
@@ -165,27 +216,58 @@ export function describeRepo(repo: ForgeRepo): string {
 	return `${repo.owner}/${repo.name} on ${repo.host}`;
 }
 
+/** Point the CLI at the remote's own host, not whichever host it defaults to. */
+function hostEnv(repo: ForgeRepo): Record<string, string> {
+	return repo.provider === "github" ? { GH_HOST: repo.host } : { GITLAB_HOST: repo.host };
+}
+
 /**
- * Create a private, empty repository through the forge's CLI. The CLI is
- * trusted to pick the host it is logged in to; a host mismatch comes back
- * as its own error text.
+ * Whether the forge knows the repository: `missing` only on a definite
+ * not-found. Anything else (auth, network, timeout, an odd answer) is
+ * `unknown`, which must never be read as permission to create.
+ */
+export function forgeRepoExists(repo: ForgeRepo): "exists" | "missing" | "unknown" {
+	const result = runCli(FORGE_CLI[repo.provider], ["repo", "view", `${repo.owner}/${repo.name}`], {
+		env: hostEnv(repo),
+	});
+	if (result.ok) return "exists";
+	if (result.missing || result.timedOut) return "unknown";
+	return /could not resolve to a repository|not found|404/i.test(
+		`${result.stderr}\n${result.stdout}`,
+	)
+		? "missing"
+		: "unknown";
+}
+
+/**
+ * Create a private, empty repository through the forge's CLI, on the host
+ * the remote names. glab gets `--skipGitInit`: by default it would set up a
+ * local repository, which setup must never do.
  */
 export function createForgeRepo(repo: ForgeRepo): { ok: boolean; message: string } {
 	const bin = FORGE_CLI[repo.provider];
 	const args =
 		repo.provider === "github"
 			? ["repo", "create", `${repo.owner}/${repo.name}`, "--private"]
-			: ["repo", "create", repo.name, "--private", "--group", repo.owner];
-	const result = runCli(bin, args);
+			: ["repo", "create", repo.name, "--private", "--group", repo.owner, "--skipGitInit"];
+	const result = runCli(bin, args, { timeoutMs: CREATE_TIMEOUT_MS, env: hostEnv(repo) });
 	if (result.missing) {
 		return {
 			ok: false,
 			message: `${bin} is not installed, so I can't create the repository for you.`,
 		};
 	}
+	if (result.timedOut) {
+		return {
+			ok: false,
+			message: `${bin} took longer than ${CREATE_TIMEOUT_MS / 1000} s to create the repository. It may exist by now: check ${describeRepo(repo)} before trying again.`,
+		};
+	}
 	if (!result.ok) {
 		const said =
-			(result.stderr || result.stdout).trim().split("\n").filter(Boolean).pop() ?? "no output";
+			(result.stderr || result.stdout).trim().split("\n").filter(Boolean).join(" ").slice(0, 400) ||
+			result.error ||
+			"no output";
 		return { ok: false, message: `${bin} could not create the repository: ${said}` };
 	}
 	return { ok: true, message: `Created private repository ${describeRepo(repo)}.` };

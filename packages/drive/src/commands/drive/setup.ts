@@ -12,10 +12,18 @@ import {
 	detectForge,
 	expandRemote,
 	FORGE_CLI,
+	forgeRepoExists,
 	hasForgeCli,
+	isBareName,
+	isShorthand,
 	parseForgeRemote,
 } from "#services/forge";
-import { driveCheckoutOrigin, ensureDriveCheckout, remoteHasBranch } from "#services/manifest";
+import {
+	assertDriveOrigin,
+	driveCheckoutOrigin,
+	ensureDriveCheckout,
+	probeRemote,
+} from "#services/manifest";
 
 /** This machine's short name: the hostname up to its first dot. */
 function defaultName(): string {
@@ -44,7 +52,8 @@ export default class Setup extends BaseCommand<typeof Setup> {
 		}),
 		name: Flags.string({ description: "This machine's short name" }),
 		home: Flags.string({
-			description: "Your home directory on this machine (defaults to the current one)",
+			description:
+				"Your home directory on this machine (defaults to the config's value, else this user's home)",
 		}),
 		create: Flags.boolean({
 			description:
@@ -66,18 +75,29 @@ export default class Setup extends BaseCommand<typeof Setup> {
 					: {};
 			const known = (value: unknown): string => (typeof value === "string" ? value : "");
 
-			// Only look at the forge when the remote is still unknown: a remote
-			// already in the config or on the flag never needs a default, and
-			// `gh api user` is a network call worth skipping.
-			const forge = flags.remote !== undefined || known(raw?.remote) ? null : detectForge();
+			// Only look at the forge when it matters: the remote is still unknown
+			// (it needs a default) or is a shorthand (`name`, `owner/name`) that
+			// has to be expanded. A full URL or path never needs `gh api user`,
+			// a network call worth skipping.
+			const given = flags.remote ?? known(raw?.remote);
+			const forge = !given.trim() || isShorthand(given) ? detectForge() : null;
 			if (forge)
 				this.log(`Logged in to ${forge.host} as ${forge.user} (${FORGE_CLI[forge.provider]}).`);
 
-			const remoteDefault = forge ? `git@${forge.host}:${forge.user}/hyperdrive.git` : "";
-			const remote = expandRemote(
-				await this.value("remote", flags.remote, known(raw?.remote), remoteDefault),
-				forge,
-			);
+			const remoteDefault = forge
+				? forge.https
+					? `https://${forge.host}/${forge.user}/hyperdrive.git`
+					: `git@${forge.host}:${forge.user}/hyperdrive.git`
+				: "";
+			const typed = await this.value("remote", flags.remote, known(raw?.remote), remoteDefault);
+			const remote = expandRemote(typed, forge);
+			// Unexpanded, a bare name is a path relative to the current directory.
+			if (isBareName(typed) && remote === typed.trim()) {
+				throw new ConfigError(
+					configPath(),
+					`I can't tell whose account \`${escapeControlCharacters(typed.trim())}\` belongs to: neither gh nor glab is logged in. Pass owner/name or the full git URL.`,
+				);
+			}
 			const name = await this.value("name", flags.name, known(rawSelf.name), defaultName());
 			// Home is never asked: the flag, else what the file says, else where we are.
 			const home = this.flagOrConfig("home", flags.home, known(rawSelf.home)) || homedir();
@@ -110,16 +130,34 @@ export default class Setup extends BaseCommand<typeof Setup> {
 
 	/**
 	 * When the remote names a repository on a forge whose CLI is installed,
-	 * and that repository cannot be reached, offer to create it (private,
-	 * empty) before the checkout is attempted. Anything else — a reachable
-	 * remote, a path, an unknown host, no CLI — falls through to the usual
-	 * connection error from `ensureDriveCheckout`.
+	 * and git cannot reach it, ask the forge whether it exists. Only a
+	 * definite "no such repository" offers to create it (private, empty);
+	 * a repository that exists, or an answer we can't read, is a connection
+	 * problem and shows git's own words. Anything else — a reachable remote,
+	 * a path, an unknown host, no CLI — falls through to the usual connection
+	 * error from `ensureDriveCheckout`.
+	 *
+	 * A checkout that belongs to another remote fails first, before anything
+	 * is created on a forge.
 	 */
 	private async offerToCreate(remote: string, create: boolean): Promise<void> {
-		if (driveCheckoutOrigin() === remote) return;
+		assertDriveOrigin(remote);
+		if (driveCheckoutOrigin() !== null) return;
 		const repo = parseForgeRemote(remote);
 		if (!repo || !hasForgeCli(repo.provider)) return;
-		if (remoteHasBranch(remote) !== null) return;
+		const probe = probeRemote(remote);
+		if (probe.ok) return;
+		const found = forgeRepoExists(repo);
+		if (found !== "missing") {
+			const hint =
+				found === "exists"
+					? `${FORGE_CLI[repo.provider]} says the repository exists, so this is probably access (an SSH key or credentials for this machine).`
+					: `I couldn't tell whether the repository exists, so I won't try to create it.`;
+			throw new ManifestError(
+				remote,
+				`I couldn't reach ${escapeControlCharacters(describeRepo(repo))}. git said: ${escapeControlCharacters(probe.said)} ${hint}`,
+			);
+		}
 
 		const shown = describeRepo(repo);
 		let go = create;

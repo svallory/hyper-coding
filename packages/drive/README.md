@@ -259,7 +259,7 @@ asks for the remote and the machine name when it does not know them (home
 is this machine's, `--home` to override) and ends with the next steps.
 When `gh` or `glab` is logged in, the remote defaults to
 `git@<host>:<you>/hyperdrive.git`, and `owner/name` or a bare `name` expand
-to an SSH URL on that forge. A remote on github.com or gitlab.com that
+to a URL on that forge, over the git protocol its CLI is configured for (SSH when unknown). A remote on a host gh or glab serves (github.com, gitlab.com, or your GH_HOST/GITLAB_HOST) that
 cannot be reached is offered for creation (private, empty) through that
 CLI; `--create` says yes without asking and is required for that off a
 terminal. `drive init` still works as an alias.

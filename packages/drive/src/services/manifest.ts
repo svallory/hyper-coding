@@ -264,14 +264,40 @@ function initialiseMain(dir: string, remote: string): void {
 }
 
 /**
- * Whether the remote has a `main` branch: true/false when it answered,
- * null when it could not be reached (no such repository, no access, no
- * network). One `ls-remote`, nothing written anywhere.
+ * Ask the remote about its `main` branch with one `ls-remote`, nothing
+ * written anywhere. `ok: false` carries git's own words: no such repository,
+ * no access and no network all look alike from here.
  */
-export function remoteHasBranch(remote: string): boolean | null {
+export function probeRemote(
+	remote: string,
+): { ok: true; hasBranch: boolean } | { ok: false; said: string } {
 	const probe = driveGit(["ls-remote", "--heads", remote, BRANCH], process.cwd());
-	if (!probe.ok) return null;
-	return probe.stdout.includes(`refs/heads/${BRANCH}`);
+	if (!probe.ok) return { ok: false, said: gitSaid(probe.stderr || probe.stdout) };
+	return { ok: true, hasBranch: probe.stdout.includes(`refs/heads/${BRANCH}`) };
+}
+
+/** Whether the remote has a `main` branch: null when it could not be reached. */
+export function remoteHasBranch(remote: string): boolean | null {
+	const probe = probeRemote(remote);
+	return probe.ok ? probe.hasBranch : null;
+}
+
+/**
+ * Throw when a hyperdrive checkout exists and belongs to a different remote.
+ * Side-effect free, so callers can run it before doing anything irreversible.
+ */
+export function assertDriveOrigin(remote: string): void {
+	const dir = driveCheckoutDir();
+	if (!existsSync(join(dir, ".git"))) return;
+	const origin = driveGit(["config", "--get", "remote.origin.url"], dir).stdout.trim();
+	if (origin !== remote) {
+		throw new ManifestError(
+			dir,
+			`the hyperdrive checkout there is a clone of ${quoteForTerminal(origin)}, ` +
+				`but your config points at ${quoteForTerminal(remote)}. ` +
+				"Move the checkout away or fix `remote` in your drive.toml.",
+		);
+	}
 }
 
 /**
@@ -290,15 +316,7 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
 	const dir = driveCheckoutDir();
 
 	if (existsSync(join(dir, ".git"))) {
-		const origin = driveGit(["config", "--get", "remote.origin.url"], dir).stdout.trim();
-		if (origin !== remote) {
-			throw new ManifestError(
-				dir,
-				`the hyperdrive checkout there is a clone of ${quoteForTerminal(origin)}, ` +
-					`but your config points at ${quoteForTerminal(remote)}. ` +
-					"Move the checkout away or fix `remote` in your drive.toml.",
-			);
-		}
+		assertDriveOrigin(remote);
 		// A `.git` on its own is not a finished checkout: a failed first commit
 		// leaves an unborn branch with the files staged, and reporting "already
 		// exists" there would leave the hyperdrive without a `main` forever.

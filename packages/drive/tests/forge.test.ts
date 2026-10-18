@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { expandRemote, type Forge, parseForgeRemote } from "#services/forge";
+import {
+	expandRemote,
+	type Forge,
+	isBareName,
+	isShorthand,
+	parseForgeRemote,
+} from "#services/forge";
 
 const github: Forge = { provider: "github", host: "github.com", user: "ada" };
 const gitlab: Forge = { provider: "gitlab", host: "gitlab.com", user: "ada" };
@@ -17,6 +23,17 @@ describe("expandRemote", () => {
 
 	it("assumes github.com for owner/name when nobody is logged in", () => {
 		expect(expandRemote("ada/hyperdrive", null)).toBe("git@github.com:ada/hyperdrive.git");
+	});
+
+	it("follows the forge CLI's https protocol", () => {
+		const https: Forge = { ...github, https: true };
+		expect(expandRemote("hyperdrive", https)).toBe("https://github.com/ada/hyperdrive.git");
+		expect(expandRemote("team/hyperdrive", { ...gitlab, https: true })).toBe(
+			"https://gitlab.com/team/hyperdrive.git",
+		);
+		expect(expandRemote("hyperdrive", { ...github, https: false })).toBe(
+			"git@github.com:ada/hyperdrive.git",
+		);
 	});
 
 	it("leaves a bare name alone when there is no user to own it", () => {
@@ -70,5 +87,25 @@ describe("parseForgeRemote", () => {
 		expect(parseForgeRemote("/srv/git/hyperdrive.git")).toBeNull();
 		expect(parseForgeRemote("git@git.example.com:ada/hyperdrive.git")).toBeNull();
 		expect(parseForgeRemote("hyperdrive")).toBeNull();
+	});
+});
+
+describe("isShorthand / isBareName", () => {
+	it("tells shorthands from URLs and paths", () => {
+		expect(isShorthand("hyperdrive")).toBe(true);
+		expect(isShorthand("ada/hyperdrive")).toBe(true);
+		expect(isBareName("hyperdrive")).toBe(true);
+		expect(isBareName("ada/hyperdrive")).toBe(false);
+		for (const value of [
+			"git@github.com:ada/x.git",
+			"https://github.com/a/b",
+			"./x",
+			"/x",
+			"a/b/c",
+			"",
+		]) {
+			expect(isShorthand(value)).toBe(false);
+			expect(isBareName(value)).toBe(false);
+		}
 	});
 });
