@@ -776,3 +776,54 @@ function describeError(error: unknown, path: string): string {
 	if (code === "EISDIR") return `${path} is a directory`;
 	return error instanceof Error ? error.message : String(error);
 }
+
+/**
+ * The first thing the user typed in a transcript, one line, for a session picker.
+ *
+ * CLAUDE-INTERNAL (verified 2.1.288): a user turn is a line `{"type":"user",
+ * "message":{"role":"user","content":<string | [{"type":"text","text":…}]>}}`;
+ * `isMeta` lines and turns that open with `<` (command and hook wrappers) are
+ * not something the user typed. Only the first 256 KiB are read.
+ */
+export function firstUserMessage(path: string, max = 120): string | null {
+	let text: string;
+	try {
+		const fd = openSync(path, "r");
+		try {
+			const buffer = Buffer.alloc(256 * 1024);
+			const read = readSync(fd, buffer, 0, buffer.length, 0);
+			text = buffer.toString("utf8", 0, read);
+		} finally {
+			closeSync(fd);
+		}
+	} catch {
+		return null;
+	}
+	for (const line of text.split("\n")) {
+		if (!line.includes('"user"')) continue;
+		let record: { type?: string; isMeta?: boolean; message?: { content?: unknown } };
+		try {
+			record = JSON.parse(line);
+		} catch {
+			continue; // a line cut at the 256 KiB boundary
+		}
+		if (record.type !== "user" || record.isMeta === true) continue;
+		const content = record.message?.content;
+		const typed =
+			typeof content === "string"
+				? content
+				: Array.isArray(content)
+					? content
+							.map((part) =>
+								part && typeof part === "object" && (part as { type?: string }).type === "text"
+									? String((part as { text?: unknown }).text ?? "")
+									: "",
+							)
+							.join(" ")
+					: "";
+		const flat = typed.replaceAll(/\s+/g, " ").trim();
+		if (flat === "" || flat.startsWith("<")) continue;
+		return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
+	}
+	return null;
+}

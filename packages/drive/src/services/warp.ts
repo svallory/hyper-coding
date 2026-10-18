@@ -57,6 +57,7 @@ import { loadConfig } from "#config/index";
 import { MachineError, type MachineInfo, resolveMachine, self, targetFor } from "#services/machine";
 import { readManifest } from "#services/manifest";
 import {
+	detachSync,
 	isExcluded,
 	isIpv6Literal,
 	isSafeRemotePath,
@@ -66,10 +67,14 @@ import {
 	shellJoin,
 	sshUrl,
 } from "#services/remote";
+import { sessionEndLogPath } from "#services/session-end-log";
 import {
+	claudeHome,
+	firstUserMessage,
 	type LiveSession,
 	lastAssistantText,
 	listTranscripts,
+	liveSessions,
 	liveSessionsFor,
 	type OwnerMarker,
 	type OwnerState,
@@ -90,6 +95,7 @@ import {
 	refConflicts,
 	refsNotCoveredHere,
 	SpaceGitError,
+	spaceGitDir,
 	TARGET_CONFLICTED,
 	TARGET_DIRTY,
 	TARGET_IN_PROGRESS,
@@ -119,6 +125,18 @@ import {
 	WARP_REF_BACKUP,
 	warpCarriedRefs,
 } from "#services/space-git";
+import {
+	chooseSession,
+	type OtherSessions,
+	type OthersMode,
+	otherProjectEntries,
+	otherSessionEntries,
+	type SessionChoice,
+	type TierEntry,
+	tier1Extras,
+	tier2Entries,
+	withoutNeverCopied,
+} from "#services/warp-tiers";
 
 /** Exit code for every refusal and every failed plan. Matches `space clone`. */
 export const WARP_REFUSAL_EXIT = 2;
@@ -174,6 +192,20 @@ export interface WarpInputs {
 	 * Code keeps per-session tool output there). It travels with the session.
 	 */
 	transcriptSubfolder: boolean;
+	/**
+	 * Tier 1 beyond the transcript and marker (project memory, session aliases,
+	 * file history, session env), those that exist. See services/warp-tiers.ts.
+	 */
+	tier1Extras?: TierEntry[];
+	/** Tier 2: the session's `tool-results` and `subagents`, sent in the background. */
+	tier2?: TierEntry[];
+	/** Tier 3, after the user's answer: what else to send, and how. */
+	others?: { mode: OthersMode; entries: TierEntry[] };
+	/**
+	 * The session-end log of the space this directory belongs to, where the
+	 * background transfer writes its progress; null when there is none.
+	 */
+	syncLogFile?: string | null;
 	/**
 	 * Every live Claude Code process registered under this session id. Usually
 	 * zero or one; several means the same session was resumed twice, and all of
@@ -711,6 +743,17 @@ export type WarpStep =
 			 */
 			checkedOutHereWhen: ProbeId;
 			leaves: string;
+	  }
+	/**
+	 * Start the background transfers (tier 2, and tier 3 when asked to) in a
+	 * detached process on this machine and go on. Runs after the resume
+	 * launched; failing to start it is a notice, never a failed warp.
+	 */
+	| {
+			kind: "background-sync";
+			summary: string;
+			entries: TierEntry[];
+			logFile: string | null;
 	  }
 	/** A `herdr` call through `--machine` routing. */
 	| {
@@ -1332,18 +1375,6 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			excludes: [],
 			leaves: `the transcript ${inputs.transcriptPath}`,
 		});
-		if (inputs.transcriptSubfolder) {
-			const folder = join(projectFolder, inputs.sessionId);
-			steps.push({
-				kind: "copy",
-				summary: `copy the session folder ${folder} to ${name}`,
-				src: folder,
-				dst: folder,
-				tree: true,
-				excludes: [],
-				leaves: `the session folder ${folder}`,
-			});
-		}
 		steps.push({
 			kind: "copy",
 			summary: `copy the ownership marker ${markerPath} to ${name}`,
@@ -1352,6 +1383,24 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			tree: false,
 			excludes: [],
 			leaves: `the ownership marker ${markerPath}`,
+		});
+	}
+
+	// Tier 1: the small rest of what resume needs, and tier 3 when the user
+	// asked for it NOW. Both are sent whichever way the transcript travels.
+	const nowEntries = [
+		...(inputs.tier1Extras ?? []),
+		...(inputs.others?.mode === "now" ? inputs.others.entries : []),
+	];
+	for (const entry of nowEntries) {
+		steps.push({
+			kind: "copy",
+			summary: `copy ${entry.label} ${entry.src} to ${name}`,
+			src: entry.src,
+			dst: entry.src,
+			tree: entry.tree,
+			excludes: [],
+			leaves: `${entry.label} ${entry.src}`,
 		});
 	}
 
@@ -1547,8 +1596,22 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 		},
 	);
 
+	// Tier 2 (always) and tier 3 "background": detached, after the resume.
+	const background = [
+		...(inputs.tier2 ?? []),
+		...(inputs.others?.mode === "background" ? inputs.others.entries : []),
+	];
+	if (background.length > 0) {
+		steps.push({
+			kind: "background-sync",
+			summary: `send ${background.length} more ${background.length === 1 ? "path" : "paths"} (tool results, subagents${inputs.others?.mode === "background" ? ", other sessions" : ""}) to ${name} in the background`,
+			entries: background,
+			logFile: inputs.syncLogFile ?? null,
+		});
+	}
+
 	const notes = [
-		`Only this session's files travel: ${basename(inputs.transcriptPath)}, ${basename(markerPath)}${inputs.transcriptSubfolder ? `, ${inputs.sessionId}/` : ""}. Other sessions in ${projectFolder} are left alone on both sides.`,
+		`Sent before the resume: ${basename(inputs.transcriptPath)}, ${basename(markerPath)}${(inputs.tier1Extras ?? []).map((entry) => `, ${entry.label}`).join("")}. Sent in the background after it (resumable: a second warp finishes them): ${(inputs.tier2 ?? []).map((entry) => entry.label).join(", ") || "nothing for this session"}. Other sessions in ${projectFolder} are left alone unless you asked for them.`,
 		`${name}'s copy of ${inputs.cwd} is overwritten file by file with this machine's; files that exist only on ${name} are kept (no --delete).`,
 	];
 	if (space) {
@@ -1693,6 +1756,8 @@ export function describeStep(step: WarpStep, target = "the target"): string {
 		}
 		case "push-branch":
 			return `push: ${step.summary}\n    ${displayLine(projectPushArgv(step))}\n    (when the worktree is already registered there on this branch, the target's receive-pack is told to accept moving it: --receive-pack='... receive.denyCurrentBranch=ignore ...')`;
+		case "background-sync":
+			return `background: ${step.summary}\n${step.entries.map((entry) => `    rsync -a --partial -- ${entry.src}${entry.tree ? "/" : ""} ${entry.src}${entry.tree ? "/" : ""}`).join("\n")}`;
 		case "herdr":
 			return `herdr: ${step.summary}\n    herdr ${displayLine(step.argv)}`;
 	}
@@ -1747,6 +1812,8 @@ export interface WarpDeps {
 	swapMarker?: typeof swapMarker;
 	/** `SyncEngine.flush`, when a config-sync session carries the transcript. */
 	flushSync?: (session: string) => Promise<void>;
+	/** {@link detachSync}; injected so tests do not start a process. */
+	detachSync?: typeof detachSync;
 	/** Runs a `herdr` argv and answers with its exit code and output. */
 	runHerdr?: (argv: string[]) => Promise<{ code: number; stdout: string; stderr: string }>;
 	/** Told about each finished step. */
@@ -2043,6 +2110,34 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 						return fail(
 							step,
 							`the copy failed (exit ${result.code})${said ? `: ${said}` : ""}.${partial}${restored}`,
+						);
+					}
+					break;
+				}
+				case "background-sync": {
+					// After the resume launched: a failure here costs only the
+					// convenience of having the big files already there.
+					try {
+						const started = (deps.detachSync ?? detachSync)({
+							host: plan.target.host,
+							...(plan.target.port === undefined ? {} : { port: plan.target.port }),
+							session: plan.sessionId,
+							targetName: plan.target.name,
+							...(step.logFile ? { logFile: step.logFile } : {}),
+							jobs: step.entries.map((entry) => ({
+								src: entry.tree ? `${entry.src}/` : entry.src,
+								dst: entry.src,
+								label: entry.label,
+							})),
+						});
+						execution.notices.push(
+							step.logFile
+								? `Still sending ${step.entries.length} ${step.entries.length === 1 ? "path" : "paths"} to ${plan.target.name} in the background (pid ${started.pid ?? "?"}). \`hyper space status\` shows how it goes; run this warp again to finish a transfer that was interrupted.`
+								: `Still sending ${step.entries.length} ${step.entries.length === 1 ? "path" : "paths"} to ${plan.target.name} in the background (pid ${started.pid ?? "?"}); there is no space log here, so it reports nothing. Run this warp again to finish an interrupted transfer.`,
+						);
+					} catch (error) {
+						execution.notices.push(
+							`Could not start the background transfer to ${plan.target.name} (${errorDetail(error)}). The session resumed without its tool results and subagents; run this warp again to send them.`,
 						);
 					}
 					break;
@@ -2346,6 +2441,8 @@ function ownerMarkerPath(plan: WarpPlan): string {
  * — gathered here so the planner stays pure.
  */
 export interface GatheredWarp {
+	/** Tier 3 candidates: the project's other sessions (or other projects), not yet asked about. */
+	others: OtherSessions;
 	inputs: WarpInputs;
 	/** Set when the transcript's own `cwd` disagrees with ours (folder collision). */
 	collision?: string;
@@ -2364,6 +2461,8 @@ export function gatherWarp(options: {
 	cwd: string;
 	targetName: string;
 	sessionId?: string;
+	/** Offer every other project instead of this project's other sessions. */
+	allProjects?: boolean;
 }): GatheredWarp {
 	const cwd = options.cwd;
 	const machine: MachineInfo = resolveMachine(options.targetName);
@@ -2422,9 +2521,21 @@ export function gatherWarp(options: {
 	const excludes = [...config.warp.exclude];
 	const spaceInManifest = space ? manifestHasSpace(space.name) : null;
 
+	const home = claudeHome();
+	const key = basename(dirname(chosen.path));
+	const spaceRoot = findSpaceRoot(cwd);
+	const gitDir = spaceRoot === null ? null : spaceGitDir(spaceRoot);
+	const others = options.allProjects
+		? otherProjectEntries(home, key)
+		: otherSessionEntries(home, key, chosen.id);
+
 	return {
 		collision,
+		others: { ...others, entries: withoutNeverCopied(home, others.entries) },
 		inputs: {
+			tier1Extras: withoutNeverCopied(home, tier1Extras(home, key, chosen.id)),
+			tier2: withoutNeverCopied(home, tier2Entries(home, key, chosen.id)),
+			syncLogFile: gitDir !== null && isDirectory(gitDir) ? sessionEndLogPath(gitDir) : null,
 			cwd,
 			selfName: me.name,
 			selfHome: me.home,
@@ -2728,4 +2839,41 @@ export function runnerForTarget(target: WarpTarget): MachineRunner {
 		undefined,
 		target.port === undefined ? {} : { port: target.port },
 	);
+}
+
+/**
+ * Choose the session to warp from `cwd`'s transcripts: the explicit id, the
+ * running session's own id, the one live session, the only transcript, the
+ * newest with `yes`, else the newest five (with what the user first typed in
+ * each) for the command to ask about. See {@link chooseSession}.
+ */
+export function gatherSessionChoice(options: {
+	cwd: string;
+	explicit?: string;
+	yes: boolean;
+	envSessionId?: string;
+}): SessionChoice {
+	const transcripts = listTranscripts(options.cwd);
+	const choice = chooseSession({
+		candidates: transcripts.map((entry) => ({
+			id: entry.id,
+			mtimeMs: entry.mtime.getTime(),
+			firstMessage: null,
+		})),
+		...(options.explicit === undefined ? {} : { explicit: options.explicit }),
+		...(options.envSessionId === undefined ? {} : { envSessionId: options.envSessionId }),
+		liveIds: liveSessions(options.cwd).flatMap((live) =>
+			live.sessionId === undefined ? [] : [live.sessionId],
+		),
+		yes: options.yes,
+	});
+	if (choice.kind !== "ask") return choice;
+	const paths = new Map(transcripts.map((entry) => [entry.id, entry.path]));
+	return {
+		kind: "ask",
+		options: choice.options.map((option) => ({
+			...option,
+			firstMessage: firstUserMessage(paths.get(option.id) ?? ""),
+		})),
+	};
 }
