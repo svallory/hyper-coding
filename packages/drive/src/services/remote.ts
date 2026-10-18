@@ -58,6 +58,12 @@ export interface RsyncOptions {
 	excludes?: string[];
 	/** Mirror deletions on the destination. Never enabled unless explicitly true. */
 	delete?: boolean;
+	/**
+	 * Compare file contents instead of size + mtime (`--checksum`, `-c`: portable
+	 * to openrsync). Reads every file on both sides, so pass it for single files
+	 * only, never for a tree.
+	 */
+	checksum?: boolean;
 }
 
 /**
@@ -342,6 +348,7 @@ function rsyncArgs(src: string, dst: string, opts?: RsyncOptions, port?: number)
 	// Safety: never pass --delete unless the caller explicitly asked. Mirroring a
 	// half-sent tree destroys whatever the destination had that we didn't send.
 	if (opts?.delete === true) args.push("--delete");
+	if (opts?.checksum === true) args.push("--checksum");
 	// `--` ends rsync's options, so a path starting with `-` is still a path.
 	args.push("--", src, dst);
 	return args;

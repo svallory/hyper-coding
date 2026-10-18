@@ -1727,6 +1727,19 @@ export function targetBackupCopy(worktree: string, id: string): string[] {
 	return ["sh", "-c", script];
 }
 
+/**
+ * Shell lines (inside `if t=$(g rev-parse -q --verify refs/stash)`) that set
+ * `e` to the stash commits, newest first. They come from the reflog, but
+ * `refs/stash` is the truth: an expired or never-written reflog is empty, and
+ * one whose newest entry isn't the ref's value is stale, so the ref's own
+ * value is put first. Without that the stash would be neither checked nor saved.
+ */
+const STASH_ENTRIES_SH = [
+	"  e=$(g log -g --format=%H refs/stash -- 2>/dev/null) || e=",
+	'  [ "$(printf \'%s\\n\' "$e" | head -n 1)" = "$t" ] || e="$t',
+	'$e"',
+].join("\n");
+
 /** The ref namespace a `--force` plain-repo warp saves the target's refs under. */
 export const WARP_REF_BACKUP = "refs/hyper-warp-backup";
 
@@ -1800,6 +1813,64 @@ export function warpCarriedRefs(
 	});
 }
 
+/** Where {@link targetConfigKeep} parks the target's `.git/config` during the copy. */
+export const WARP_CONFIG_KEEP = "hyper-warp-config.keep";
+
+/**
+ * A script for the target, run BEFORE a plain-repo `.git` copy (which would
+ * replace `.git/config` with this machine's): parks the target's own
+ * `.git/config` as `.git/{@link WARP_CONFIG_KEEP}`. An existing keep file is
+ * left alone: it is the original of an earlier warp that stopped before
+ * {@link targetConfigRestore}, and `.git/config` may already be the copied one.
+ * Prints nothing; exits 0 when there is no config there.
+ */
+export function targetConfigKeep(worktree: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const script = [
+		`gd=${quote(`${worktree}/.git`)}`,
+		`k="$gd/${WARP_CONFIG_KEEP}"`,
+		'[ -f "$gd/config" ] || exit 0',
+		'[ -e "$k" ] || cp -p "$gd/config" "$k" || exit 1',
+		"exit 0",
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/**
+ * A script for the target, run AFTER the `.git` copy: puts the target's own
+ * `.git/config` back from {@link targetConfigKeep}'s file, then reads stdin,
+ * this machine's remote names one per line, and prints the ones whose
+ * `remote.<name>.url` the (restored) config lacks. Nothing is merged: the
+ * target's config is exactly what it was. Without a keep file (the target had
+ * no config) it restores nothing and prints nothing.
+ */
+export function targetConfigRestore(worktree: string): string[] {
+	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
+	const script = [
+		`w=${quote(worktree)}; gd="$w/.git"`,
+		`k="$gd/${WARP_CONFIG_KEEP}"`,
+		TARGET_READ_ONLY_GIT,
+		'if [ -f "$k" ]; then mv -f "$k" "$gd/config" || exit 1; fi',
+		"while read -r n; do",
+		'  [ -n "$n" ] || continue',
+		'  g config --get "remote.$n.url" >/dev/null 2>&1 || printf \'%s\\n\' "$n"',
+		"done",
+		"exit 0",
+	].join("\n");
+	return ["sh", "-c", script];
+}
+
+/** The names of the remotes configured in the repository at `worktree` (empty when git can't list them). */
+export function localRemoteNames(worktree: string): string[] {
+	const listed = spawnSync(
+		"git",
+		["-C", worktree, "--no-optional-locks", "-c", "core.fsmonitor=false", "remote"],
+		{ encoding: "utf8", env: cleanGitEnv() },
+	);
+	if (listed.error || listed.status !== 0) return [];
+	return (listed.stdout ?? "").split("\n").filter(Boolean);
+}
+
 /**
  * A script for the target that makes the refs of the repository at
  * `worktree` equal to this machine's, after a plain-repo copy: stdin holds
@@ -1871,8 +1942,9 @@ export function targetRefs(worktree: string): string[] {
 		`if [ -n "$l" ]; then printf '%s\\n' "$l"; exit ${TARGET_REF_LOCK}; fi`,
 		`r=$(g for-each-ref --format='%(objectname) %(refname) %(*objectname)') || exit 3`,
 		`printf '%s\\n' "$r" | grep -v -e ' ${WARP_REF_BACKUP}/' -e ' refs/stash ' || true`,
-		"if g rev-parse -q --verify refs/stash >/dev/null; then",
-		'  k=0; for s in $(g log -g --format=%H refs/stash --); do printf \'%s refs/stash@{%s}\\n\' "$s" "$k"; k=$((k + 1)); done',
+		"if t=$(g rev-parse -q --verify refs/stash); then",
+		STASH_ENTRIES_SH,
+		'  k=0; for s in $e; do printf \'%s refs/stash@{%s}\\n\' "$s" "$k"; k=$((k + 1)); done',
 		"fi",
 		"if ! g symbolic-ref -q HEAD >/dev/null; then",
 		`  h=$(g rev-parse -q --verify HEAD) && printf '%s HEAD\\n' "$h"`,
@@ -1948,8 +2020,8 @@ export function targetRefsSave(worktree: string, id: string): string[] {
 		// Every stash entry, newest first, one ref each: refs/stash keeps only
 		// the newest, the rest live in its reflog, which the sync deletes.
 		"k=0",
-		"if g rev-parse -q --verify refs/stash >/dev/null; then",
-		"  e=$(g log -g --format=%H refs/stash --) || exit 1",
+		"if t=$(g rev-parse -q --verify refs/stash); then",
+		STASH_ENTRIES_SH,
 		'  for s in $e; do g update-ref "$ns/stash/$k" "$s" || exit 1; k=$((k + 1)); done',
 		"fi",
 		`printf '%s/\\n%s\\n' "$ns" "$k"`,
@@ -2061,14 +2133,14 @@ export function refsNotCoveredHere(
 	const stashThere = refs.filter((ref) => stashEntry.test(ref.name)).length;
 	if (stashThere > 0) {
 		const mine = run(["log", "-g", "--format=%H", "refs/stash", "--"]);
-		if (mine.status === 0) {
-			(mine.stdout ?? "")
-				.split("\n")
-				.filter(Boolean)
-				.forEach((commit, index) => {
-					local.set(`refs/stash@{${index}}`, commit);
-				});
-		}
+		const tip = run(["rev-parse", "-q", "--verify", "refs/stash"]);
+		const commits = mine.status === 0 ? (mine.stdout ?? "").split("\n").filter(Boolean) : [];
+		// Same rule as the target side: an expired reflog doesn't hide the stash.
+		const top = tip.status === 0 ? (tip.stdout ?? "").trim() : "";
+		if (top && commits[0] !== top) commits.unshift(top);
+		commits.forEach((commit, index) => {
+			local.set(`refs/stash@{${index}}`, commit);
+		});
 	}
 	const stashUncovered: UncoveredRef[] = refs
 		.filter((ref) => stashEntry.test(ref.name) && local.get(ref.name) !== ref.object)

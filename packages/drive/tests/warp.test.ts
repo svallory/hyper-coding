@@ -1601,11 +1601,13 @@ describe("the new target checks run before any change, and their failures change
 		expect(copy.excludes[0]).toBe("/.git");
 		expect(gitCopy.excludes).toEqual(["/hyper-warp-backup", "/refs/hyper-warp-backup"]);
 		expect(gitCopy.dst).toBe(`${CWD}/.git`);
+		// rsync's quick check could skip a rewritten index of the same size and second.
+		expect(gitCopy.checksumFiles).toEqual(["index"]);
 		expect(probeOf(plan, "collisions")?.collisions?.excludes).toEqual(copy.excludes);
-		// .git first, then the ref sync, then the working tree.
+		// Keep the config, .git, restore the config, the ref sync, then the working tree.
 		const at = (predicate: (step: WarpStep) => boolean) => plan.steps.findIndex(predicate);
 		const sync = at((step) => step.kind === "remote-command" && step.stdinFrom === "local-refs");
-		expect(at((step) => step === gitCopy)).toBe(sync - 1);
+		expect(at((step) => step === gitCopy)).toBe(sync - 2);
 		expect(at((step) => step === copy)).toBe(sync + 1);
 	});
 
@@ -1661,7 +1663,7 @@ describe("a plain repo's refs on the target (PR #51 review, HIGH 2)", () => {
 		expect(probeOf(spacePlan(), "target-refs")).toBeUndefined();
 	});
 
-	it("the copy never touches the saved refs, and the plan says .git/config and info/exclude are replaced", () => {
+	it("the copy never touches the saved refs, and the plan says info/exclude is replaced and .git/config kept", () => {
 		const plan = planOf({ cwdKind: "git-repo" });
 		const copy = plan.steps.find((step) => step.kind === "copy" && step.src === CWD) as Extract<
 			WarpStep,
@@ -1673,8 +1675,9 @@ describe("a plain repo's refs on the target (PR #51 review, HIGH 2)", () => {
 		expect(copy.excludes).toContain("/.git");
 		expect(gitCopy.excludes).toContain("/refs/hyper-warp-backup");
 		expect(plan.notes.join("\n")).toContain(
-			".git/config, info/exclude, hooks, HEAD, index and packed-refs are replaced",
+			"info/exclude, hooks, HEAD, index and packed-refs are replaced",
 		);
+		expect(plan.notes.join("\n")).toContain(".git/config is kept as it is");
 	});
 });
 

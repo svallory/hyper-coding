@@ -1,6 +1,8 @@
 import { spawnSync } from "node:child_process";
 import {
 	chmodSync,
+	copyFileSync,
+	existsSync,
 	lstatSync,
 	mkdirSync,
 	mkdtempSync,
@@ -870,7 +872,7 @@ describe("saved refs survive a target pack-refs and a later warp (fw-warp-2 item
 		expect(result.stdout).toBe("");
 	});
 
-	it("runs in every plain-repo warp, after the saves and right before the .git copy", () => {
+	it("runs in every plain-repo warp, after the saves and before the .git copy (the config keep sits between)", () => {
 		for (const force of [false, true]) {
 			const steps = plainRepoPlan("work/repo", { force }).steps;
 			const pin = steps.findIndex(
@@ -881,7 +883,8 @@ describe("saved refs survive a target pack-refs and a later warp (fw-warp-2 item
 				(entry) => entry.kind === "copy" && entry.summary.startsWith("copy the repository's .git"),
 			);
 			expect(pin).toBeGreaterThan(0);
-			expect(copy).toBe(pin + 1);
+			expect(copy).toBe(pin + 2);
+			expect(steps[pin + 1]?.summary).toContain("own .git/config");
 		}
 	});
 });
@@ -1245,6 +1248,29 @@ describe("every target stash entry is kept (fw-warp-2 r3, HIGH)", () => {
 		expect(readFileSync(join(tgt, "a.txt"), "utf-8")).toBe("stashed 2\n");
 	});
 
+	it("a stash whose reflog expired is still refused, and with --force saved (prj.30)", async () => {
+		const { tgt } = twinRepos();
+		write(join(tgt, "a.txt"), "stashed\n");
+		git(tgt, "stash", "-q");
+		const entry = git(tgt, "rev-parse", "refs/stash").trim();
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		rmSync(join(tgt, ".git", "logs", "refs", "stash"), { force: true });
+		expect(git(tgt, "log", "-g", "--format=%H", "refs/stash", "--").trim()).toBe("");
+		const before = snapshot(tgt);
+		const refused = world();
+		const result = await refused.run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail ?? "").toContain(
+			"refs/stash@{0} (a stash entry only there, one of 1)",
+		);
+		expect(refused.changes).toEqual([]);
+		expect(snapshot(tgt)).toEqual(before);
+		const forced = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(forced.failure, forced.failure?.detail).toBeUndefined();
+		const ns = `refs/hyper-warp-backup/${WARP_ID}`;
+		gcNow(tgt);
+		expect(git(tgt, "rev-parse", `${ns}/stash/0`).trim()).toBe(entry);
+	});
+
 	it("the same stash on both sides is covered", () => {
 		const { src } = twinRepos();
 		write(join(src, "a.txt"), "mine\n");
@@ -1254,6 +1280,58 @@ describe("every target stash entry is kept (fw-warp-2 r3, HIGH)", () => {
 		expect(refsNotCoveredHere(src, [{ object: entry, name: "refs/stash@{1}" }])).toEqual([
 			{ name: "refs/stash@{1}", reason: "a stash entry only there, one of 1" },
 		]);
+	});
+});
+
+describe("the target's .git/config survives a plain-repo warp (prj.44)", () => {
+	const urlOf = (repo: string, remote: string) =>
+		spawnSync("git", ["-C", repo, "config", "--get", `remote.${remote}.url`], {
+			encoding: "utf-8",
+		}).stdout.trim();
+
+	it("keeps the target's remote URL and settings, reports a source-only remote, leaves no keep file", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(src, "remote", "add", "upstream", "https://example.test/upstream.git");
+		git(src, "config", "user.email", "source@example.test");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		git(tgt, "remote", "add", "mirror", "https://example.test/mirror.git");
+		git(tgt, "config", "user.email", "target@example.test");
+		const configBefore = readFileSync(join(tgt, ".git", "config"), "utf-8");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(readFileSync(join(tgt, ".git", "config"), "utf-8")).toBe(configBefore);
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+		expect(urlOf(tgt, "mirror")).toBe("https://example.test/mirror.git");
+		expect(urlOf(tgt, "upstream")).toBe("");
+		expect(git(tgt, "config", "user.email").trim()).toBe("target@example.test");
+		const said = result.notices.filter((line) => line.startsWith("warp: remote "));
+		expect(said).toEqual([
+			'warp: remote "upstream" exists on the source but not here; add it with git remote add upstream <url>',
+		]);
+		expect(existsSync(join(tgt, ".git", "hyper-warp-config.keep"))).toBe(false);
+	});
+
+	it("says nothing when every source remote exists on the target", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(result.notices.filter((line) => line.startsWith("warp: remote "))).toEqual([]);
+	});
+
+	it("an earlier warp's leftover keep file stays the original, not the copied config", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		// A warp that stopped after the copy: config is the source's, the keep file the target's.
+		const original = readFileSync(join(tgt, ".git", "config"), "utf-8");
+		write(join(tgt, ".git", "hyper-warp-config.keep"), original);
+		copyFileSync(join(src, ".git", "config"), join(tgt, ".git", "config"));
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
 	});
 });
 
