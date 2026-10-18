@@ -1964,7 +1964,8 @@ export function targetConfigRestore(
 		"fi",
 		...(sync
 			? [
-					"tmp=$(mktemp -d) || exit 1; trap 'rm -rf \"$tmp\"' EXIT",
+					// In the git dir: the recipe just wrote there, while /tmp may be unwritable for the target's user.
+					'tmp=$(mktemp -d "$gd/hyper-warp-restore.XXXXXX") || exit 1; trap \'rm -rf "$tmp"\' EXIT',
 					'inp="$tmp/in"; cf="$tmp/config"',
 					'cat > "$inp" || exit 1',
 					'cp -p "$gd/config" "$cf" || exit 1',

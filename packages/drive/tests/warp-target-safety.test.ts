@@ -29,6 +29,7 @@ import {
 	TARGET_REFTABLE,
 	TARGET_SUBMODULE_CHANGED,
 	targetBackupCopy,
+	targetConfigRestore,
 	targetRefs,
 	targetStashSnapshot,
 	targetUntrackedPaths,
@@ -1578,4 +1579,16 @@ describe("refs that conflict as file and directory (fw-warp-2 r3, MINOR)", () =>
 			);
 		});
 	}
+});
+
+describe("the config-restore temp dir (prj.56)", () => {
+	it("is made inside the target's git dir, never in an unwritable /tmp, and is always removed", () => {
+		const script = targetConfigRestore("/work/repo").at(-1) as string;
+		const mktemps = script.match(/mktemp[^;]*/g) ?? [];
+		expect(mktemps).toHaveLength(1);
+		expect(mktemps[0]).toContain('"$gd/hyper-warp-restore.XXXXXX"');
+		expect(script).not.toMatch(/mktemp(\s+-d)?\s*[)|;]/);
+		expect(script).toContain("trap 'rm -rf \"$tmp\"' EXIT");
+		expect(script).not.toContain("hyper-warp-restore.XXXXXX.keep");
+	});
 });
