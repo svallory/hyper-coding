@@ -479,6 +479,23 @@ function lockTimeout(
 }
 
 /**
+ * Who holds the space lock right now, without waiting for it and without
+ * touching it: null when it is free, or held by an owner that is provably gone
+ * (the next writer takes that over). A lock whose owner cannot be read is
+ * reported with `pid: null`. Used by `space status` (hyper-prj.28).
+ */
+export function peekSpaceLock(root: string): { pid: number | null; since: number | null } | null {
+	const path = join(spaceGitDir(root), SPACE_LOCK_FILE);
+	const read = readLock(path);
+	if (read.owner === null) {
+		if (read.state === "missing") return null;
+		return staleReason(path, read) === null ? { pid: null, since: null } : null;
+	}
+	if (staleReason(path, read) !== null) return null;
+	return { pid: read.owner.pid, since: read.owner.started };
+}
+
+/**
  * Run `action` holding the space lock. Works for synchronous and asynchronous
  * actions: the lock is released when the returned promise settles. Throws
  * `SpaceLockTimeoutError` (nothing touched) when the wait runs out.

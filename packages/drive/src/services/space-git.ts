@@ -15,7 +15,16 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmdirSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import type { SyncCadence } from "#config/schema";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
@@ -2385,20 +2394,70 @@ export function trackedUnderDirectory(worktree: string, name: string): number {
 	return (result.stdout ?? "").split("\0").filter((entry) => entry !== "").length;
 }
 
+export const PULL_MARKER_FILE = "pull-in-flight.json";
+
+/** What a fast-forward writes before it touches the index (hyper-prj.28). */
+export interface PullMarker {
+	startedAt: number;
+	pid: number;
+	branch: string;
+	/** The branch tip the pull started from. */
+	before: string;
+	/** The tip it is about to move the index and the branch to. */
+	tip: string;
+}
+
+const pullMarkerPath = (root: string) => join(spaceGitDir(root), PULL_MARKER_FILE);
+
+/** Record that a pull is about to move the index; call under the space lock. */
+export function writePullMarker(root: string, marker: PullMarker): void {
+	const path = pullMarkerPath(root);
+	const temp = `${path}.${process.pid}.tmp`;
+	writeFileSync(temp, `${JSON.stringify(marker)}\n`, { mode: 0o600 });
+	renameSync(temp, path);
+}
+
+export function clearPullMarker(root: string): void {
+	rmSync(pullMarkerPath(root), { force: true });
+}
+
+/** The marker of a pull that has not finished, or null (absent or unreadable). */
+export function readPullMarker(root: string): PullMarker | null {
+	try {
+		const value = JSON.parse(readFileSync(pullMarkerPath(root), "utf8")) as Partial<PullMarker>;
+		if (
+			typeof value.startedAt === "number" &&
+			typeof value.pid === "number" &&
+			typeof value.branch === "string" &&
+			typeof value.before === "string" &&
+			typeof value.tip === "string"
+		)
+			return value as PullMarker;
+	} catch {
+		/* No marker, or one that is not ours: the ref-state check below still applies. */
+	}
+	return null;
+}
+
 /**
  * An index-only fast-forward stopped between `read-tree` and `update-ref`
- * (review of PR #54, M1): the index is exactly the hyperdrive's tip while the
+ * (review of PR #54, M1): the index is exactly the pull's tip while the
  * branch still points at one of that tip's ancestors. Read-only check.
+ *
+ * The tip comes from the in-flight marker the pull wrote before it touched
+ * the index, so a fetch after the kill cannot hide it by moving the tracking
+ * ref (hyper-prj.28). Without a marker (a pull by an older CLI) the tracking
+ * ref is the tip, as before.
  */
 export function interruptedPullTip(root: string, branch: string): string | null {
-	const tip = spaceGit(
-		root,
-		["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}^{commit}`],
-		{
+	const marker = readPullMarker(root);
+	const recorded = marker !== null && marker.branch === branch ? marker.tip : null;
+	const tip =
+		recorded ??
+		spaceGit(root, ["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}^{commit}`], {
 			allowFailure: true,
 			readOnly: true,
-		},
-	).stdout.trim();
+		}).stdout.trim();
 	if (tip === "") return null;
 	const head = spaceGit(root, ["rev-parse", "--verify", "-q", "HEAD^{commit}"], {
 		allowFailure: true,
@@ -2429,8 +2488,12 @@ export function interruptedPullTip(root: string, branch: string): string | null 
  */
 export function finishInterruptedPull(root: string, branch: string): string | null {
 	const tip = interruptedPullTip(root, branch);
-	if (tip === null) return null;
-	const head = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
-	spaceGit(root, ["update-ref", `refs/heads/${branch}`, tip, head]);
+	if (tip !== null) {
+		const head = spaceGit(root, ["rev-parse", "HEAD"]).stdout.trim();
+		spaceGit(root, ["update-ref", `refs/heads/${branch}`, tip, head]);
+	}
+	// Called under the space lock, so a marker still here belongs to a pull that
+	// is gone: finished above, or stopped before it changed the index.
+	clearPullMarker(root);
 	return tip;
 }
