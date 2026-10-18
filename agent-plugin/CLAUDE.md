@@ -1,7 +1,8 @@
 # agent-plugin — rules for working on the hyper plugin
 
-The plugin in this directory ships to users through the `svallory-plugins`
-Claude Code marketplace (a `git-subdir` pointer at this path on `main`).
+The plugin in this directory ships to users through the `tutor` Claude Code
+marketplace (github `svallory/tutor`; its `hyper` entry is a `git-subdir`
+pointer at this path on `main`, installed as `hyper@tutor`).
 It is bash + markdown with its own test suite and CI. The suite is pure
 bash, but it now needs the **hyper CLI on PATH**, because the space-detection
 library (`hyper-lib.sh`) lives inside `@hypercli/drive` rather than here —
@@ -87,6 +88,17 @@ there is exactly one copy of it, and the scripts source it through
   first-class — the marker/layout contract above covers either shape.
   `tests/helpers.sh` has a multi-repo fixture, `make_multi_space`, for
   exercising the second layout in tests.
+
+- **`skills/team/` is generated.** Its authored copy is
+  `/work/claude-plugins/src/plugins/team-lead`; change it there, rebuild
+  claude-plugins (`bun run build`), then run `scripts/sync-team-skill.sh`
+  (`--build` does both). `tests/test-s-team-skill.sh` fails on drift when
+  that checkout exists and skips that one check when it does not (CI). So
+  the local suite goes red whenever claude-plugins' `src/` or `dist/` moves
+  ahead of the committed copy (`--check` also runs `bun run build:check`
+  there): that is the signal to re-sync, not a test bug. The skill's
+  directory is its id, so its frontmatter is rewritten to `name: team`
+  (`/hyper:team`); `commands/team-lead.md` is the alias.
 
 ## Process
 
