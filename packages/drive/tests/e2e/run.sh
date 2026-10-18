@@ -97,14 +97,21 @@ cleanup() {
   if [ -n "$known_hosts" ]; then rm -f "$known_hosts"; fi
 }
 
-# A cancel or timeout signals the runner, not the child's process group. Stop
-# the child — and its own children, scoped to that pid and never by name — so
-# the script's EXIT trap removes its container, its ssh-agent and its daemon
-# BEFORE this runner deletes anything.
+# A cancel or timeout signals the runner, not the child's process group. The
+# child runs as its own process-group leader (see the launch below), so TERM
+# goes to the whole group: the script's EXIT trap removes its container, its
+# ssh-agent and its daemon BEFORE this runner deletes anything, and nothing a
+# script spawned at any depth is left behind. A group that ignores TERM gets
+# KILL after a bounded wait.
 on_signal() {
-  if [ -n "$child" ] && kill -0 "$child" 2>/dev/null; then
-    pkill -TERM -P "$child" 2>/dev/null || true
-    kill -TERM "$child" 2>/dev/null || true
+  if [ -n "$child" ]; then
+    kill -TERM -- "-$child" 2>/dev/null || kill -TERM "$child" 2>/dev/null || true
+    local waited=0
+    while [ "$waited" -lt 30 ] && kill -0 -- "-$child" 2>/dev/null; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    kill -KILL -- "-$child" 2>/dev/null || true
     wait "$child" 2>/dev/null || true
   fi
   printf 'run.sh: signalled — stopped the running script and exiting\n' >&2
@@ -356,8 +363,12 @@ for name in "${scripts[@]}"; do
   echo
   echo "=== $name.sh (HOME=$home) ==="
   start=$SECONDS
+  # Job control on for the launch only: the child becomes a process-group
+  # leader (pgid == pid), so on_signal can address everything it spawned.
+  set -m
   env "${env_unset[@]}" "${env_sets[@]}" bash "$here/$name.sh" &
   child=$!
+  set +m
   # Poll rather than bare `wait`: bash 3.2 (stock macOS /bin/bash) does not run
   # a trapped signal while blocked in `wait`, so a cancel would wait for the
   # whole script. This loop notices the signal within a second on every bash.
