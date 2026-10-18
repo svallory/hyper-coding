@@ -144,6 +144,9 @@ assert_not_contains "session end: the logged detail is never echoed" "$out" "IGN
 assert_contains "session end: the usual context is still there" "$out" "Project space: $dl"
 printf '2026-10-04T12:00:00.000Z\t-\trefused\tx\n' >> "$end_log"
 assert_contains "session end: a refusal is reported" "$(run_ctx "$dl")" "$end_line (refused, 2026-10-04T12:00:00.000Z)"
+# `hyper warp` transfers share the log: progress lines must not hide the failure.
+printf '2026-10-04T12:30:00.000Z\tba0efb18-103b-43b5-b5a0-fc3a08a2b00b\tsyncing\tto b: 0 of 2 transfers done\n2026-10-04T12:31:00.000Z\tba0efb18-103b-43b5-b5a0-fc3a08a2b00b\tsynced\tto b: all 2 transfers done\n2026-10-04T12:32:00.000Z\tba0efb18-103b-43b5-b5a0-fc3a08a2b00b\tsync-failed\tto b: 1 of 2 transfers failed\n' >> "$end_log"
+assert_contains "session end: warp progress lines do not hide a failed save" "$(run_ctx "$dl")" "$end_line (refused, 2026-10-04T12:00:00.000Z)"
 printf 'garbage without tabs\n' >> "$end_log"
 assert_not_contains "session end: a garbled last line prints nothing" "$(run_ctx "$dl")" "$end_line"
 # A FIFO would block `tail` until the hook timeout kills the whole context.

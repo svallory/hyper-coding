@@ -201,7 +201,10 @@ fi
 end_log="$root/.hyper/space.git/session-end.log"
 last_end=""
 if [[ -f "$end_log" && ! -L "$end_log" ]]; then
-  last_end="$(tail -n 1 "$end_log" 2>/dev/null)" || last_end=""
+  # `hyper warp` transfers share the log (syncing / synced / sync-failed): they
+  # are progress, not a session end, so they must not hide a failed save.
+  last_end="$(tail -c 16384 "$end_log" 2>/dev/null |
+    awk -F'\t' '$3 != "syncing" && $3 != "synced" && $3 != "sync-failed" { line = $0 } END { print line }' 2>/dev/null)" || last_end=""
 fi
 IFS=$'\t' read -r end_at _ end_outcome _ <<<"$last_end"
 case "${end_outcome:-}" in

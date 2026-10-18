@@ -66,6 +66,15 @@ export interface RsyncOptions {
 	checksum?: boolean;
 	/** Keep a partly transferred file (`--partial`), so a repeated run resumes it. */
 	partial?: boolean;
+	/** Skip files that are newer on the destination (`--update`). */
+	update?: boolean;
+	/**
+	 * No one is at the keyboard: ssh gets `BatchMode=yes` (no password prompt)
+	 * and a connect timeout, so a dead network fails instead of hanging.
+	 */
+	unattended?: boolean;
+	/** `--include` rules, placed before the excludes so they win over a final `--exclude=*`. */
+	includes?: string[];
 }
 
 /**
@@ -339,11 +348,21 @@ export function remoteSpec(host: string, path: string): string {
  * `--stats`, `--exclude` and `--` work everywhere. `--mkpath` (rsync 3.2.3+)
  * does *not*, so missing destination parents are created over ssh beforehand.
  */
+/** Options for an ssh nobody can answer: fail, never prompt or wait out the OS timeout. */
+const UNATTENDED_SSH_OPTIONS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15"];
+
 function rsyncArgs(src: string, dst: string, opts?: RsyncOptions, port?: number): string[] {
 	// rsync runs its own ssh, and the port has to be told to THAT ssh: a
 	// `-p 2222` here would be an rsync option, and rsync has none.
-	const sshCommand = ["ssh", ...(port === undefined ? [] : ["-p", String(port)])].join(" ");
+	const sshCommand = [
+		"ssh",
+		...(opts?.unattended ? UNATTENDED_SSH_OPTIONS : []),
+		...(port === undefined ? [] : ["-p", String(port)]),
+	].join(" ");
 	const args = ["-a", "--stats", "-e", sshCommand];
+	for (const pattern of opts?.includes ?? []) {
+		args.push(`--include=${pattern}`);
+	}
 	for (const pattern of opts?.excludes ?? []) {
 		args.push(`--exclude=${pattern}`);
 	}
@@ -352,6 +371,7 @@ function rsyncArgs(src: string, dst: string, opts?: RsyncOptions, port?: number)
 	if (opts?.delete === true) args.push("--delete");
 	if (opts?.checksum === true) args.push("--checksum");
 	if (opts?.partial === true) args.push("--partial");
+	if (opts?.update === true) args.push("--update");
 	// `--` ends rsync's options, so a path starting with `-` is still a path.
 	args.push("--", src, dst);
 	return args;
@@ -966,12 +986,16 @@ export const SAFE_REMOTE_PATH_DESCRIPTION = "letters, digits and . _ / ~ + -";
 
 /** One transfer of a {@link detachSync} run. */
 export interface DetachedSyncJob {
-	/** Local path; a directory is sent as its contents. */
+	/** Local path; a directory is sent as its contents (trailing slash). */
 	src: string;
 	/** Same path on the host. */
 	dst: string;
 	/** What this transfer is, for the progress line. */
 	label: string;
+	/** Skip files that are newer on the host. */
+	update?: boolean;
+	includes?: string[];
+	excludes?: string[];
 }
 
 export interface DetachedSyncOptions {
@@ -991,21 +1015,34 @@ export interface DetachedSyncOptions {
  *
  * The shell outlives the caller (own session via `detached`, SIGHUP ignored,
  * no inherited pipes). Every transfer is `--partial` and never `--delete`, so
- * a second run finishes what a killed one left. Progress goes to `logFile` as
- * tab-separated session-end records (`syncing`, then `synced` or `sync-failed`);
- * a log that is a symlink is never written through.
+ * a second run finishes what a killed one left, and runs unattended (ssh
+ * BatchMode and a connect timeout). Progress goes to `logFile` as
+ * tab-separated session-end records: `syncing` at the start and after each
+ * transfer, then `synced` or `sync-failed`. Jobs are roots, a handful per run,
+ * so the log gets a handful of lines.
+ *
+ * The log is appended to only when it is absent or a regular file with one
+ * link (never a symlink, a pipe, a directory or a hard-linked file), created
+ * 0600. The test and the open are not atomic; only a local writer of the git
+ * dir could race them.
  */
 export function detachSync(options: DetachedSyncOptions): { pid: number | undefined } {
 	const host = safeHost(options.host);
 	const total = options.jobs.length;
-	const sshArgs = ["ssh", ...(options.port === undefined ? [] : ["-p", String(options.port)])];
+	const sshArgs = [
+		"ssh",
+		...UNATTENDED_SSH_OPTIONS,
+		...(options.port === undefined ? [] : ["-p", String(options.port)]),
+	];
 	const lines: string[] = [
 		"trap '' HUP",
+		"umask 077",
 		`LOG=${shellQuote(options.logFile ?? "")}`,
 		`SESSION=${shellQuote(options.session)}`,
 		`TARGET=${shellQuote(options.targetName)}`,
 		`TOTAL=${total}`,
-		'log() { [ -n "$LOG" ] && [ ! -L "$LOG" ] || return 0; printf \'%s\\t%s\\t%s\\t%s\\n\' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$SESSION" "$1" "$2" >> "$LOG" 2>/dev/null || true; }',
+		// $1 and $2 are copied first: `set --` below replaces them.
+		`log() { OUTCOME=$1; DETAIL=$2; [ -n "$LOG" ] || return 0; if [ -e "$LOG" ] || [ -L "$LOG" ]; then [ -f "$LOG" ] && [ ! -L "$LOG" ] || return 0; set -- $(ls -ld -- "$LOG"); [ "$2" = 1 ] || return 0; fi; printf '%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "$SESSION" "$OUTCOME" "$DETAIL" >> "$LOG" 2>/dev/null || true; }`,
 		"DONE=0; FAILED=0; LASTCODE=0",
 		'log syncing "to $TARGET: 0 of $TOTAL transfers done"',
 	];
@@ -1013,10 +1050,20 @@ export function detachSync(options: DetachedSyncOptions): { pid: number | undefi
 		if (!SAFE_REMOTE_PATH.test(job.dst)) throw new RemotePathError(host, job.dst);
 		const isDir = job.src.endsWith("/");
 		const parent = isDir ? job.dst : dirname(job.dst);
-		const src = isDir ? job.src : job.src;
 		const rsync = [
 			"rsync",
-			...rsyncArgs(src, `${host}:${job.dst}${isDir ? "/" : ""}`, { partial: true }, options.port),
+			...rsyncArgs(
+				job.src,
+				`${host}:${job.dst}${isDir ? "/" : ""}`,
+				{
+					partial: true,
+					unattended: true,
+					...(job.update ? { update: true } : {}),
+					...(job.includes ? { includes: job.includes } : {}),
+					...(job.excludes ? { excludes: job.excludes } : {}),
+				},
+				options.port,
+			),
 		];
 		lines.push(
 			`${shellJoin([...sshArgs, host, "--", `mkdir -p -- ${shellQuote(parent)}`])} >/dev/null 2>&1 && ${shellJoin(rsync)} >/dev/null 2>&1`,

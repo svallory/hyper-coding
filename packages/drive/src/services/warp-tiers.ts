@@ -30,6 +30,11 @@ export interface TierEntry {
 	tree: boolean;
 	/** Short name for plans and progress lines. */
 	label: string;
+	/** Send only what is newer than the target's file (`--update`): shared data, other sessions. */
+	update?: boolean;
+	/** Transfer filter rules, `--include` first and then `--exclude`, in that order. */
+	includes?: string[];
+	excludes?: string[];
 }
 
 /**
@@ -88,7 +93,7 @@ export function tier1Extras(home: string, key: string, sessionId: string): TierE
 	const project = join(home, "projects", key);
 	const out: TierEntry[] = [];
 	const memory = join(project, "memory");
-	if (isDir(memory)) out.push({ src: memory, tree: true, label: "project memory" });
+	if (isDir(memory)) out.push({ src: memory, tree: true, label: "project memory", update: true });
 	const aliases = join(project, ".session-aliases");
 	if (isFile(aliases)) out.push({ src: aliases, tree: false, label: "session aliases" });
 	const history = join(home, "file-history", sessionId);
@@ -122,21 +127,50 @@ export function sizeOf(path: string): number {
 	return total;
 }
 
-/** The other sessions of a project: how many, and everything that is theirs. */
+/** Tier 3 candidates: what would be sent, as few roots as possible, and what was left out. */
 export interface OtherSessions {
+	/** Sessions (or project folders) that will be sent. */
 	ids: string[];
+	/** One entry per root, never one per session: one transfer each. */
 	entries: TierEntry[];
-	bytes: number;
+	/** The per-session paths behind `entries`, for {@link othersBytes} only. */
+	sizePaths: string[];
+	/** Sessions left out because another machine owns them or they run here. */
+	skipped: { id: string; reason: string }[];
+}
+
+/** Bytes of what tier 3 would send; walks the trees, so call it only to ask the question. */
+export function othersBytes(others: OtherSessions): number {
+	return others.sizePaths.reduce((sum, path) => sum + sizeOf(path), 0);
+}
+
+/** A name safe to put in an rsync filter pattern. */
+const FILTER_SAFE = /^[A-Za-z0-9_-]+$/;
+
+/** `--include` rules that let exactly these `<id>` names (and what is under them) through. */
+function includeIds(ids: string[], suffixes: readonly string[]): string[] {
+	return ids.flatMap((id) => suffixes.map((suffix) => `/${id}${suffix}`));
 }
 
 /**
- * Tier 3, project scope: every transcript of the project but `sessionId`, with
- * its marker, its `<id>/` folder, its file history and session env.
+ * Tier 3, project scope: the project's other sessions with their markers,
+ * `<id>/` folders, file history and session env, as THREE roots (the project
+ * folder, `file-history`, `session-env`) filtered to the sessions kept.
+ *
+ * `skip` names a session to leave alone (owned by another machine, or running
+ * here): sending ours over the target's newer copy would lose work. Every root
+ * is sent with `--update` as well, so a newer file on the target survives.
  */
-export function otherSessionEntries(home: string, key: string, sessionId: string): OtherSessions {
+export function otherSessionEntries(
+	home: string,
+	key: string,
+	sessionId: string,
+	skip: (id: string) => string | null = () => null,
+): OtherSessions {
 	const project = join(home, "projects", key);
 	const ids: string[] = [];
-	const entries: TierEntry[] = [];
+	const skipped: OtherSessions["skipped"] = [];
+	const sizePaths: string[] = [];
 	let names: string[] = [];
 	try {
 		names = readdirSync(project);
@@ -147,24 +181,57 @@ export function otherSessionEntries(home: string, key: string, sessionId: string
 		if (extname(name) !== ".jsonl") continue;
 		const id = name.slice(0, -".jsonl".length);
 		if (id === sessionId) continue;
+		if (!FILTER_SAFE.test(id)) {
+			skipped.push({ id, reason: "its name has characters a transfer filter cannot name safely" });
+			continue;
+		}
+		const reason = skip(id);
+		if (reason !== null) {
+			skipped.push({ id, reason });
+			continue;
+		}
 		ids.push(id);
-		const add = (src: string, tree: boolean, label: string): void => {
-			if (existsSync(src)) entries.push({ src, tree, label });
-		};
-		add(join(project, name), false, `${id} transcript`);
-		add(join(project, `${id}.warp.json`), false, `${id} marker`);
-		add(join(project, id), true, `${id} folder`);
-		add(join(home, "file-history", id), true, `${id} file history`);
-		add(join(home, "session-env", id), true, `${id} session env`);
+		for (const path of [
+			join(project, name),
+			join(project, `${id}.warp.json`),
+			join(project, id),
+			join(home, "file-history", id),
+			join(home, "session-env", id),
+		]) {
+			if (existsSync(path)) sizePaths.push(path);
+		}
 	}
-	return { ids, entries, bytes: entries.reduce((sum, entry) => sum + sizeOf(entry.src), 0) };
+	const entries: TierEntry[] =
+		ids.length === 0
+			? []
+			: [
+					{
+						src: project,
+						tree: true,
+						label: "the project's other sessions",
+						update: true,
+						includes: includeIds(ids, [".jsonl", ".warp.json", "/", "/**"]),
+						excludes: ["*"],
+					},
+					...["file-history", "session-env"]
+						.filter((folder) => isDir(join(home, folder)))
+						.map((folder) => ({
+							src: join(home, folder),
+							tree: true,
+							label: `their ${folder}`,
+							update: true,
+							includes: includeIds(ids, ["/", "/**"]),
+							excludes: ["*"],
+						})),
+				];
+	return { ids, entries, sizePaths, skipped };
 }
 
-/** Tier 3, all projects: every project folder but `key` (its sessions are asked about separately). */
+/** Tier 3, all projects: one root, `projects/` without the current project; `--update` keeps newer target files. */
 export function otherProjectEntries(home: string, key: string): OtherSessions {
 	const root = join(home, "projects");
 	const ids: string[] = [];
-	const entries: TierEntry[] = [];
+	const sizePaths: string[] = [];
 	let names: string[] = [];
 	try {
 		names = readdirSync(root);
@@ -175,9 +242,21 @@ export function otherProjectEntries(home: string, key: string): OtherSessions {
 		const src = join(root, name);
 		if (name === key || !isDir(src)) continue;
 		ids.push(name);
-		entries.push({ src, tree: true, label: `project ${name}` });
+		sizePaths.push(src);
 	}
-	return { ids, entries, bytes: entries.reduce((sum, entry) => sum + sizeOf(entry.src), 0) };
+	const entries: TierEntry[] =
+		ids.length === 0
+			? []
+			: [
+					{
+						src: root,
+						tree: true,
+						label: "every other project",
+						update: true,
+						excludes: [`/${key}/`],
+					},
+				];
+	return { ids, entries, sizePaths, skipped: [] };
 }
 
 /**
@@ -245,7 +324,9 @@ export interface SessionChoiceInput {
 
 export type SessionChoice =
 	| { kind: "chosen"; id: string; why: "explicit" | "env" | "live" | "only" | "newest" }
-	| { kind: "ask"; options: SessionCandidate[] };
+	| { kind: "ask"; options: SessionCandidate[] }
+	/** No transcript to choose from: the caller reports it, not a prompt. */
+	| { kind: "none" };
 
 /** How many sessions the picker offers. */
 export const PICKER_SIZE = 5;
@@ -258,6 +339,7 @@ export const PICKER_SIZE = 5;
 export function chooseSession(input: SessionChoiceInput): SessionChoice {
 	const sorted = [...input.candidates].sort((a, b) => b.mtimeMs - a.mtimeMs);
 	if (input.explicit !== undefined) return { kind: "chosen", id: input.explicit, why: "explicit" };
+	if (sorted.length === 0) return { kind: "none" };
 	const known = new Set(sorted.map((entry) => entry.id));
 	if (input.envSessionId !== undefined && known.has(input.envSessionId)) {
 		return { kind: "chosen", id: input.envSessionId, why: "env" };
