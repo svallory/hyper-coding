@@ -32,6 +32,7 @@ import {
 	fstatSync,
 	lstatSync,
 	openSync,
+	readSync,
 	renameSync,
 	statSync,
 	writeSync,
@@ -302,6 +303,47 @@ export async function saveSessionEnd(
 }
 
 /**
+ * `[core] worktree = ../..` as `initSpaceGitDir` writes it. The key is
+ * case-insensitive, the value may be quoted, and a trailing `;` or `#` comment
+ * is allowed, as git reads it, and the last value of a repeated key wins, as
+ * in git. Only the `[core]` section counts.
+ */
+function hasOwnWorktree(config: string): boolean {
+	let inCore = false;
+	let last: string | undefined;
+	for (const raw of config.split("\n")) {
+		const line = raw.trim();
+		const section = /^\[\s*([^\s\]"]+)[^\]]*\]/.exec(line);
+		if (section !== null) {
+			inCore = section[1]?.toLowerCase() === "core" && !line.includes('"');
+			continue;
+		}
+		const key = inCore ? /^worktree[ \t]*=(.*)$/i.exec(line) : null;
+		// git takes the last value of a repeated key.
+		if (key !== null)
+			last = (key[1] ?? "")
+				.replace(/[ \t]*[;#].*$/, "")
+				.trim()
+				.replace(/^"(.*)"$/, "$1");
+	}
+	return last === "../..";
+}
+
+/** Read at most `limit` bytes of a plain file: no symlink, and a FIFO cannot block the open. */
+function readPlainFile(path: string, limit: number): string | undefined {
+	const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+	try {
+		const stat = fstatSync(fd);
+		if (!stat.isFile()) return undefined;
+		const buffer = Buffer.alloc(Math.min(stat.size, limit));
+		readSync(fd, buffer, 0, buffer.length, 0);
+		return buffer.toString("utf8");
+	} finally {
+		closeSync(fd);
+	}
+}
+
+/**
  * The nearest `.hyper/space.git` directory at or above `dir`. Used ONLY to
  * decide whether a missing CLI is worth a line and where a timed-out probe is
  * logged — never to decide what to save or run, which is the CLI's answer or
@@ -321,17 +363,24 @@ export function findSpaceGitDir(dir: string): string | undefined {
 /**
  * A real directory at both `.hyper` and `.hyper/space.git` (no symlink at
  * either level, checked with `lstat`) that looks like a git dir: `HEAD` and
- * `config` are regular files. A clone can carry symlinks or a bare
- * `.hyper/space.git` folder as content, and the timeout line must never be
- * steered through one; a candidate that fails is skipped and the walk goes on.
+ * `config` are regular files, owned by the current user, and the config
+ * carries the `core.worktree = ../..` that `hyper space init` writes (the CLI
+ * refuses any other git dir as not its own). This rejects git-looking debris:
+ * a symlink, an empty `.hyper/space.git` folder or another repository's git dir
+ * left in the way. It is not a defence against a crafted clone, whose content
+ * is owned by the user and can carry that very line. A candidate that fails is
+ * skipped and the walk goes on.
  */
 function isRealSpaceGitDir(candidate: string): boolean {
 	try {
 		if (!lstatSync(dirname(candidate)).isDirectory()) return false;
-		if (!lstatSync(candidate).isDirectory()) return false;
-		return (
-			lstatSync(join(candidate, "HEAD")).isFile() && lstatSync(join(candidate, "config")).isFile()
-		);
+		const dir = lstatSync(candidate);
+		if (!dir.isDirectory()) return false;
+		if (typeof process.getuid === "function" && dir.uid !== process.getuid()) return false;
+		if (!lstatSync(join(candidate, "HEAD")).isFile()) return false;
+		if (!lstatSync(join(candidate, "config")).isFile()) return false;
+		const config = readPlainFile(join(candidate, "config"), 64 * 1024);
+		return config !== undefined && hasOwnWorktree(config);
 	} catch {
 		return false;
 	}
@@ -353,20 +402,27 @@ function logField(text: string, limit: number): string {
  * `appendSessionEndLog(gitDir, { session, outcome: "failed", detail })`: the
  * same tab-separated record and the same rotation, except that it never
  * follows a symlink. A `session-end.log` that exists and is not a regular file
- * is refused, and the open is `O_NOFOLLOW`. Never throws: a log that cannot be
+ * is refused, as is one with more than one hard link (it would append to a file
+ * that also lives outside the git dir), and the open is `O_NOFOLLOW`. The CLI
+ * writer (`isAppendableLog`) applies the same rule. Never throws: a log that cannot be
  * written costs nothing more than the save already lost.
  */
-export function appendFailureLine(gitDir: string, sessionId: string, detail: string): void {
+export function appendFailureLine(
+	gitDir: string,
+	sessionId: string,
+	detail: string,
+	io: { lstat: typeof lstatSync; open: typeof openSync } = { lstat: lstatSync, open: openSync },
+): void {
 	const path = join(gitDir, SESSION_END_LOG);
 	try {
 		let existing: ReturnType<typeof lstatSync> | undefined;
 		try {
-			existing = lstatSync(path);
+			existing = io.lstat(path) as ReturnType<typeof lstatSync>;
 		} catch {
 			/* No log yet. */
 		}
 		if (existing !== undefined) {
-			if (!existing.isFile()) return;
+			if (!existing.isFile() || existing.nlink !== 1) return;
 			if (existing.size >= SESSION_END_LOG_LIMIT) renameSync(path, `${path}.1`);
 		}
 		const record = [
@@ -375,14 +431,21 @@ export function appendFailureLine(gitDir: string, sessionId: string, detail: str
 			"failed",
 			logField(detail, 600),
 		].join("\t");
-		const fd = openSync(
+		const fd = io.open(
 			path,
-			constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW,
+			// O_NONBLOCK: a FIFO swapped in for the log fails with ENXIO instead of
+			// holding pi's quit forever (pi awaits session_shutdown with no timeout).
+			constants.O_WRONLY |
+				constants.O_APPEND |
+				constants.O_CREAT |
+				constants.O_NOFOLLOW |
+				constants.O_NONBLOCK,
 			0o600,
 		);
 		try {
 			// Swapped for something else between the lstat and the open.
-			if (!fstatSync(fd).isFile()) return;
+			const opened = fstatSync(fd);
+			if (!opened.isFile() || opened.nlink !== 1) return;
 			writeSync(fd, `${record}\n`);
 		} finally {
 			closeSync(fd);
@@ -512,3 +575,58 @@ export function createRealDeps(overrides: Partial<SessionEndDeps> = {}): Session
 
 /** The extension's real dependencies. */
 export const realDeps: SessionEndDeps = createRealDeps();
+
+/**
+ * The notice `agent-plugin/scripts/hyper-context.sh` prints at Claude session
+ * start, for pi: when the last record of the nearest space's
+ * `session-end.log` is a failure, one line saying so, else undefined. Same
+ * wording, and like the hook it echoes only the outcome and the time (the
+ * detail can quote file names from synced space content). Best effort: a log
+ * that is missing, not a regular file or unreadable says nothing. The CLI's
+ * `lastSessionEndFailure` is the same read; this extension imports nothing
+ * from the CLI, so the parse is repeated here.
+ */
+export function failedSaveNotice(cwd: string): string | undefined {
+	const gitDir = findSpaceGitDir(cwd);
+	if (gitDir === undefined) return undefined;
+	// Every writer refuses a log that is not a plain file, so its last line can
+	// no longer say anything: say that instead of staying quiet.
+	try {
+		const stat = lstatSync(join(gitDir, SESSION_END_LOG));
+		if (!stat.isFile() || stat.nlink !== 1) {
+			return `${SESSION_END_LOG} in ${logField(gitDir, 300)} is not a plain file; session ends are not being recorded. Move it aside.`;
+		}
+	} catch {
+		// No log yet.
+	}
+	let text: string;
+	try {
+		// O_NONBLOCK: a FIFO planted in the log's place must not hang pi's start.
+		const fd = openSync(
+			join(gitDir, SESSION_END_LOG),
+			constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+		);
+		try {
+			const stat = fstatSync(fd);
+			if (!stat.isFile()) return undefined;
+			const length = Math.min(stat.size, 16 * 1024);
+			const buffer = Buffer.alloc(length);
+			readSync(fd, buffer, 0, length, stat.size - length);
+			text = buffer.toString("utf8");
+		} finally {
+			closeSync(fd);
+		}
+	} catch {
+		return undefined;
+	}
+	const last = text
+		.split("\n")
+		.filter((value) => value !== "")
+		.pop();
+	if (last === undefined) return undefined;
+	const [at, , outcome] = last.split("\t");
+	if (outcome !== "refused" && outcome !== "push-failed" && outcome !== "failed") return undefined;
+	const when = (at ?? "").replace(/[^A-Za-z0-9:.+-]/g, "") || "at an unknown time";
+	const what = outcome === "push-failed" ? "push failed" : outcome;
+	return `The last session-end save of this space failed (${what}, ${when}). Run \`hyper space status\` for the reason.`;
+}

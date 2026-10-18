@@ -16,6 +16,12 @@ declare module "@earendil-works/pi-coding-agent" {
 		targetSessionFile?: string;
 	}
 
+	export interface SessionStartEvent {
+		type: "session_start";
+		reason: "startup" | "reload" | "new" | "resume" | "fork";
+		previousSessionFile?: string;
+	}
+
 	export interface ReadonlySessionManager {
 		getCwd(): string;
 		getSessionId(): string;
@@ -39,6 +45,10 @@ declare module "@earendil-works/pi-coding-agent" {
 	}
 
 	export interface ExtensionAPI {
+		on(
+			event: "session_start",
+			handler: (event: SessionStartEvent, ctx: ExtensionContext) => void | Promise<void>,
+		): () => void;
 		on(
 			event: "session_shutdown",
 			handler: (event: SessionShutdownEvent, ctx: ExtensionContext) => void | Promise<void>,

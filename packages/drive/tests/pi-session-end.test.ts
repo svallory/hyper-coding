@@ -16,8 +16,11 @@ import {
 import {
 	chmodSync,
 	existsSync,
+	linkSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
+	openSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
@@ -45,6 +48,8 @@ import {
 	childEnv,
 	createRealDeps,
 	entryText,
+	failedSaveNotice,
+	findSpaceGitDir,
 	MISSING_CLI_LINE,
 	OUTDATED_CLI_LINE,
 	SESSION_END_LOG as PI_SESSION_END_LOG,
@@ -218,11 +223,101 @@ const facts = (extra: Partial<SessionFacts> = {}): SessionFacts => ({
 	...extra,
 });
 
+describe("the pi extension on session_start: the failed-save notice", () => {
+	function spaceWithLog(...lines: string[]) {
+		const space = join(directory, "space");
+		const gitDir = makeSpaceGitDir(space);
+		mkdirSync(join(space, "notes"), { recursive: true });
+		if (lines.length > 0) writeFileSync(join(gitDir, SESSION_END_LOG), `${lines.join("\n")}\n`);
+		return { space, gitDir };
+	}
+	async function start(cwd: string, reason = "startup", levels?: string[]) {
+		const pi = fakePi();
+		const deps = fakeDeps();
+		hyperdrive(pi as never, deps);
+		const { ctx, notifications } = fakeCtx({ cwd });
+		if (levels) {
+			ctx.ui.notify = (message: string, level?: string) => {
+				notifications.push(message);
+				levels.push(level ?? "");
+			};
+		}
+		await pi.fire("session_start", { type: "session_start", reason }, ctx);
+		return notifications;
+	}
+	const at = "2026-10-18T10:00:00.000Z";
+
+	it("prints the Claude hook's line when the last save failed", async () => {
+		const { space } = spaceWithLog(
+			`${at}\t${id}\tcommitted\t-`,
+			`${at}\t${id}\tfailed\tsecret in /x`,
+		);
+		expect(await start(join(space, "notes"))).toEqual([
+			`The last session-end save of this space failed (failed, ${at}). Run \`hyper space status\` for the reason.`,
+		]);
+	});
+	it("says 'push failed' for push-failed and never echoes the detail", async () => {
+		const { space } = spaceWithLog(`${at}\t${id}\tpush-failed\tsecret-name.txt`);
+		const [line] = await start(space);
+		expect(line).toContain("(push failed,");
+		expect(line).not.toContain("secret-name");
+	});
+	it("prints nothing when the last save succeeded, even after an older failure", async () => {
+		const { space } = spaceWithLog(`${at}\t${id}\tfailed\told`, `${at}\t${id}\tcommitted\t-`);
+		expect(await start(space)).toEqual([]);
+	});
+	it("prints nothing without a log, outside a space, or on a restart", async () => {
+		const { space } = spaceWithLog();
+		expect(await start(space)).toEqual([]);
+		expect(await start(directory)).toEqual([]);
+		const failing = spaceWithLog(`${at}\t${id}\tfailed\tx`);
+		for (const reason of ["reload", "new", "resume", "fork"]) {
+			expect(await start(failing.space, reason)).toEqual([]);
+		}
+	});
+	it("notifies at warning level", async () => {
+		const { space } = spaceWithLog(`${at}\t${id}\tfailed\tx`);
+		const levels: string[] = [];
+		expect(await start(space, "startup", levels)).toHaveLength(1);
+		expect(levels).toEqual(["warning"]);
+	});
+	it("prints nothing for a malformed last line or one without an outcome", () => {
+		for (const last of [
+			"garbage",
+			`${at}`,
+			`${at}\t${id}`,
+			`${at}\t${id}\tweird\tx`,
+			`${at}\t${id}\t`,
+		]) {
+			const { space } = spaceWithLog(`${at}\t${id}\tfailed\told`, last);
+			expect(failedSaveNotice(space), last).toBeUndefined();
+			rmSync(join(directory, "space"), { recursive: true, force: true });
+		}
+	});
+	it.each(["directory", "fifo", "symlink", "hardlink"] as const)(
+		"says session ends are not being recorded when the log is a %s",
+		(kind) => {
+			const { space, gitDir } = spaceWithLog();
+			const log = join(gitDir, SESSION_END_LOG);
+			const elsewhere = join(directory, "elsewhere.log");
+			writeFileSync(elsewhere, `${at}\t${id}\tfailed\tx\n`);
+			if (kind === "directory") mkdirSync(log);
+			if (kind === "fifo") expect(spawnSync("mkfifo", [log]).status).toBe(0);
+			if (kind === "symlink") symlinkSync(elsewhere, log);
+			if (kind === "hardlink") linkSync(elsewhere, log);
+			expect(failedSaveNotice(space)).toBe(
+				`session-end.log in ${gitDir} is not a plain file; session ends are not being recorded. Move it aside.`,
+			);
+		},
+	);
+});
+
 describe("the pi extension on session_shutdown", () => {
-	it("registers only session_shutdown and never throws into pi", async () => {
+	it("registers only session_start and session_shutdown and never throws into pi", async () => {
 		const pi = fakePi();
 		hyperdrive(pi as never, fakeDeps());
 		expect(pi.has("session_shutdown")).toBe(true);
+		expect(pi.has("session_start")).toBe(true);
 		expect(pi.has("session_end")).toBe(false);
 		const broken = fakeCtx({});
 		broken.ctx.sessionManager.getBranch = () => {
@@ -415,6 +510,74 @@ describe("the pi extension on session_shutdown", () => {
 			symlinkSync(victim, join(gitDir, SESSION_END_LOG));
 			const before = listTree(outside);
 			await quitIn(clone);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			expect(listTree(outside)).toEqual(before);
+		});
+
+		it("refuses a session-end.log with a second hard link", async () => {
+			const { clone, outside, victim } = plant();
+			const gitDir = makeSpaceGitDir(clone);
+			linkSync(victim, join(gitDir, SESSION_END_LOG));
+			const before = listTree(outside);
+			await quitIn(clone);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			expect(listTree(outside)).toEqual(before);
+		});
+
+		it("refuses a FIFO in the log's place without blocking", async () => {
+			const { clone } = plant();
+			const gitDir = makeSpaceGitDir(clone);
+			expect(spawnSync("mkfifo", [join(gitDir, SESSION_END_LOG)]).status).toBe(0);
+			await quitIn(clone);
+		});
+
+		it.each([
+			["a quoted value", '[core]\n\tworktree = "../.."\n', true],
+			["a trailing ; comment", "[core]\n\tworktree = ../.. ; the space\n", true],
+			["a trailing # comment", "[core]\n\tworktree = ../.. # the space\n", true],
+			["a case-insensitive key and section", "[Core]\n\tWorkTree = ../..\n", true],
+			[
+				"the last of a repeated key",
+				"[core]\n\tworktree = ../elsewhere\n\tworktree = ../..\n",
+				true,
+			],
+			["a later different value", "[core]\n\tworktree = ../..\n\tworktree = ../elsewhere\n", false],
+			["the key outside [core]", "[other]\n\tworktree = ../..\n", false],
+			["a different worktree", "[core]\n\tworktree = ../elsewhere\n", false],
+			["no section at all", "worktree = ../..\n", false],
+		])("reads core.worktree with %s", (_name, config, accepted) => {
+			const gitDir = makeSpaceGitDir(join(directory, "cfg"));
+			writeFileSync(join(gitDir, "config"), config);
+			expect(findSpaceGitDir(join(directory, "cfg"))).toBe(accepted ? gitDir : undefined);
+		});
+
+		it.each(["fifo", "symlink"] as const)(
+			"never blocks or writes when the open meets a %s the lstat did not see",
+			(kind) => {
+				const { clone, victim } = plant();
+				const gitDir = makeSpaceGitDir(clone);
+				const log = join(gitDir, SESSION_END_LOG);
+				if (kind === "fifo") expect(spawnSync("mkfifo", [log]).status).toBe(0);
+				else symlinkSync(victim, log);
+				const plain = join(directory, "plain.log");
+				writeFileSync(plain, "");
+				// The precheck sees a plain file; only the open meets the swap.
+				appendFailureLine(gitDir, id, "x", {
+					lstat: (() => lstatSync(plain)) as never,
+					open: openSync,
+				});
+				expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			},
+		);
+
+		it("skips a git dir carried by a clone that is not the space's own", async () => {
+			const { clone, outside, victim } = plant();
+			// Real directories, HEAD and config, but another repo's config: no core.worktree = ../..
+			const gitDir = makeSpaceGitDir(clone);
+			writeFileSync(join(gitDir, "config"), "[core]\n\tbare = true\n");
+			const before = listTree(outside);
+			await quitIn(clone);
+			expect(existsSync(join(gitDir, SESSION_END_LOG))).toBe(false);
 			expect(readFileSync(victim, "utf8")).toBe("precious\n");
 			expect(listTree(outside)).toEqual(before);
 		});
@@ -987,7 +1150,7 @@ function makeSpaceGitDir(root: string): string {
 	const gitDir = join(root, ".hyper", "space.git");
 	mkdirSync(gitDir, { recursive: true });
 	writeFileSync(join(gitDir, "HEAD"), "ref: refs/heads/space/test\n");
-	writeFileSync(join(gitDir, "config"), "[core]\n\tbare = true\n");
+	writeFileSync(join(gitDir, "config"), "[core]\n\tbare = false\n\tworktree = ../..\n");
 	return gitDir;
 }
 
