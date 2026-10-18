@@ -1271,6 +1271,29 @@ describe("every target stash entry is kept (fw-warp-2 r3, HIGH)", () => {
 		expect(git(tgt, "rev-parse", `${ns}/stash/0`).trim()).toBe(entry);
 	});
 
+	it("a stale reflog (tip equals an older entry) lists no commit twice (L1)", async () => {
+		const { tgt } = twinRepos();
+		for (const n of [1, 2]) {
+			write(join(tgt, "a.txt"), `stashed ${n}\n`);
+			git(tgt, "stash", "-q");
+		}
+		const [newest, older] = git(tgt, "log", "-g", "--format=%H", "refs/stash", "--")
+			.trim()
+			.split("\n");
+		// refs/stash now points at the older entry; the reflog still starts with the newest.
+		writeFileSync(join(tgt, ".git", "refs", "stash"), `${older}\n`);
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		const forced = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(forced.failure, forced.failure?.detail).toBeUndefined();
+		const ns = `refs/hyper-warp-backup/${WARP_ID}`;
+		const saved = git(tgt, "for-each-ref", "--format=%(objectname)", `${ns}/stash/`)
+			.trim()
+			.split("\n");
+		expect(saved).toHaveLength(2);
+		expect(new Set(saved).size).toBe(2);
+		expect(newest).toBeTruthy();
+	});
+
 	it("the same stash on both sides is covered", () => {
 		const { src } = twinRepos();
 		write(join(src, "a.txt"), "mine\n");
@@ -1321,17 +1344,94 @@ describe("the target's .git/config survives a plain-repo warp (prj.44)", () => {
 		expect(result.notices.filter((line) => line.startsWith("warp: remote "))).toEqual([]);
 	});
 
-	it("an earlier warp's leftover keep file stays the original, not the copied config", async () => {
+	const KEEP = "hyper-warp-config.keep";
+
+	it("a keep file in the SOURCE's .git is never copied over the target's parked config (H1)", async () => {
 		const { src, tgt } = twinRepos();
 		git(src, "remote", "add", "origin", "https://example.test/source.git");
 		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
-		// A warp that stopped after the copy: config is the source's, the keep file the target's.
+		write(join(src, ".git", KEEP), '[remote "origin"]\n\turl = https://example.test/stale.git\n');
+		write(join(src, ".git", `${KEEP}.123`), "stale\n");
+		const before = readFileSync(join(tgt, ".git", "config"), "utf-8");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(readFileSync(join(tgt, ".git", "config"), "utf-8")).toBe(before);
+		expect(existsSync(join(tgt, ".git", KEEP))).toBe(false);
+		expect(existsSync(join(tgt, ".git", `${KEEP}.123`))).toBe(false);
+	});
+
+	it("a leftover keep file that matches the copied config is the original: used, with a notice (M2)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
 		const original = readFileSync(join(tgt, ".git", "config"), "utf-8");
-		write(join(tgt, ".git", "hyper-warp-config.keep"), original);
+		write(join(tgt, ".git", KEEP), original);
 		copyFileSync(join(src, ".git", "config"), join(tgt, ".git", "config"));
 		const result = await world().run(plainRepoPlan("work/repo"));
 		expect(result.failure, result.failure?.detail).toBeUndefined();
 		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+		expect(result.notices.join("\n")).toContain(
+			"an earlier warp stopped before putting the .git/config back",
+		);
+	});
+
+	it("a leftover keep file next to a config the operator edited since is renamed, not restored (M2)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/old.git");
+		write(join(tgt, ".git", KEEP), readFileSync(join(tgt, ".git", "config"), "utf-8"));
+		git(tgt, "remote", "set-url", "origin", "https://example.test/edited.git");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/edited.git");
+		const left = readdirSync(join(tgt, ".git")).filter((name) => name.startsWith(`${KEEP}.`));
+		expect(left).toHaveLength(1);
+		expect(readFileSync(join(tgt, ".git", left[0] as string), "utf-8")).toContain("old.git");
+		expect(result.notices.join("\n")).toContain("no longer matches the copied one");
+	});
+
+	it("repository-format settings follow the copied .git, everything else stays the target's (M3)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "config", "core.repositoryformatversion", "1");
+		git(src, "config", "extensions.worktreeConfig", "true");
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(src, "config", "remote.origin.promisor", "true");
+		git(src, "config", "remote.origin.partialclonefilter", "blob:none");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		git(tgt, "config", "core.repositoryformatversion", "1");
+		git(tgt, "config", "extensions.objectFormat", "sha1");
+		git(tgt, "config", "user.email", "target@example.test");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		const get = (key: string) =>
+			spawnSync("git", ["-C", tgt, "config", "--local", "--get", key], {
+				encoding: "utf-8",
+			}).stdout.trim();
+		expect(get("core.repositoryformatversion")).toBe("1");
+		expect(get("extensions.worktreeconfig")).toBe("true");
+		expect(get("extensions.objectformat")).toBe("");
+		expect(get("remote.origin.promisor")).toBe("true");
+		expect(get("remote.origin.partialclonefilter")).toBe("blob:none");
+		expect(get("remote.origin.url")).toBe("https://example.test/target.git");
+		expect(get("user.email")).toBe("target@example.test");
+		expect(result.notices.join("\n")).toContain("repository-format settings");
+	});
+
+	it("a global remote.<n>.url does not hide the source-only notice (L3)", async () => {
+		const { src } = twinRepos();
+		git(src, "remote", "add", "upstream", "https://example.test/upstream.git");
+		const globalConfig = join(tgtHome, ".gitconfig-global");
+		write(globalConfig, '[remote "upstream"]\n\turl = https://example.test/global.git\n');
+		const previous = process.env.GIT_CONFIG_GLOBAL;
+		process.env.GIT_CONFIG_GLOBAL = globalConfig;
+		try {
+			const result = await world().run(plainRepoPlan("work/repo"));
+			expect(result.failure, result.failure?.detail).toBeUndefined();
+			expect(result.notices.join("\n")).toContain('remote "upstream" exists on the source');
+		} finally {
+			if (previous === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+			else process.env.GIT_CONFIG_GLOBAL = previous;
+		}
 	});
 });
 

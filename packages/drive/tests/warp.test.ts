@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
 	existsSync,
+	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	realpathSync,
@@ -1599,7 +1600,12 @@ describe("the new target checks run before any change, and their failures change
 		// The working tree never writes into .git; the .git copy excludes only
 		// the backups, never the user's patterns (a branch named dist travels).
 		expect(copy.excludes[0]).toBe("/.git");
-		expect(gitCopy.excludes).toEqual(["/hyper-warp-backup", "/refs/hyper-warp-backup"]);
+		expect(gitCopy.excludes).toEqual([
+			"/hyper-warp-backup",
+			"/refs/hyper-warp-backup",
+			"/hyper-warp-config.keep",
+			"/hyper-warp-config.keep.*",
+		]);
 		expect(gitCopy.dst).toBe(`${CWD}/.git`);
 		// rsync's quick check could skip a rewritten index of the same size and second.
 		expect(gitCopy.checksumFiles).toEqual(["index"]);
@@ -1678,6 +1684,95 @@ describe("a plain repo's refs on the target (PR #51 review, HIGH 2)", () => {
 			"info/exclude, hooks, HEAD, index and packed-refs are replaced",
 		);
 		expect(plan.notes.join("\n")).toContain(".git/config is kept as it is");
+	});
+});
+
+describe(".git/index is re-sent with --checksum, and a failed .git copy puts the config back (prj.31, prj.44)", () => {
+	interface Call {
+		src: string;
+		dst: string;
+		checksum: boolean;
+	}
+
+	/** A plan whose .git copy reads a real directory, run with a runner that records every rsync. */
+	async function runGitCopy(opts: { index: boolean; failCall?: number; restoreCode?: number }) {
+		const root = mkdtempSync(join(tmpdir(), "warp-index-"));
+		try {
+			mkdirSync(join(root, ".git"), { recursive: true });
+			if (opts.index) writeFileSync(join(root, ".git", "index"), "x");
+			const plan = planOf({ cwdKind: "git-repo" });
+			const gitCopy = plan.steps.find(
+				(step) => step.kind === "copy" && step.src === `${CWD}/.git`,
+			) as Extract<WarpStep, { kind: "copy" }>;
+			const moved: WarpPlan = {
+				...plan,
+				steps: plan.steps.map((step) =>
+					step === gitCopy ? { ...gitCopy, src: join(root, ".git") } : step,
+				),
+			};
+			const run = fakeTarget(moved);
+			const calls: Call[] = [];
+			const inner = run.deps.runner;
+			let restoreRan = false;
+			run.deps.runner = {
+				...inner,
+				async ssh(cmd, o) {
+					if (cmd.join(" ").includes("mv -f") && !cmd.join(" ").includes("cat >"))
+						restoreRan = true;
+					return inner.ssh(cmd, o);
+				},
+				async rsync(src, dst, o) {
+					if (src.startsWith(root)) {
+						calls.push({ src, dst, checksum: o?.checksum === true });
+						const code = opts.failCall === calls.length ? 23 : 0;
+						return { code, stdout: "", stderr: code ? "some files could not be transferred" : "" };
+					}
+					return inner.rsync(src, dst, o);
+				},
+			};
+			const result = await executeWarp(moved, run.deps);
+			return { result, calls, root, restoreRan };
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	}
+
+	it("sends .git/index again right after the .git copy, with checksum, and only that", async () => {
+		const { result, calls, root } = await runGitCopy({ index: true });
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(calls).toEqual([
+			{ src: `${root}/.git/`, dst: `${CWD}/.git/`, checksum: false },
+			{ src: `${root}/.git/index`, dst: `${CWD}/.git/index`, checksum: true },
+		]);
+	});
+
+	it("skips the second call when the source has no index", async () => {
+		const { result, calls } = await runGitCopy({ index: false });
+		expect(result.failure).toBeUndefined();
+		expect(calls).toHaveLength(1);
+	});
+
+	it("skips the second call when the first fails, and puts the config back before reporting", async () => {
+		const { result, calls, restoreRan } = await runGitCopy({ index: true, failCall: 1 });
+		expect(calls).toHaveLength(1);
+		expect(result.failure?.step.kind).toBe("copy");
+		expect(result.failure?.detail).toContain("the copy failed (exit 23)");
+		expect(result.failure?.detail).toContain("own .git/config was put back");
+		expect(restoreRan).toBe(true);
+	});
+
+	it("fails the step when the second call fails", async () => {
+		const { result, calls } = await runGitCopy({ index: true, failCall: 2 });
+		expect(calls).toHaveLength(2);
+		expect(result.failure?.step.kind).toBe("copy");
+		expect(result.failure?.detail).toContain("the copy failed (exit 23)");
+	});
+
+	it("--dry-run shows the second call", () => {
+		const text = JSON.stringify(
+			planOf({ cwdKind: "git-repo" }).steps.map((step) => describeStep(step, "box")),
+		);
+		expect(text).toContain("rsync -a --stats --checksum --");
 	});
 });
 
