@@ -1,0 +1,62 @@
+# team-lead default model chains. CURATED by hand: edit this file directly.
+# The check tool (tools/model-tiers/check.ts) only proposes diffs against live data and never rewrites it.
+#
+# Shape = the `routing:` block of harnesses.yaml (role -> ordered harness:model preferences, best first).
+# Entry format: claude:<model>[@effort]  |  pi:<provider>/<model>[:<thinking>]
+# The team-lead skill proposes routing from this file, keeping only the harnesses the user chose.
+#
+# Sources: operator ranking 2026-09-30; opencode-go Go-plan req/5h; aicodingdaily for the free models;
+# Artificial Analysis (AA) free-API rows, quoted only where they exist at the stated effort; the one exception is
+# the AA Engineering Index chart (artificialanalysis.ai website, operator screenshot 2026-09-29), cited by name.
+# Rules: a reviewer family is disjoint from the dev family (no kimi/mimo in reviewer); free models come
+# after the primary, never before it; Space Bunny (~19 min/prompt) stays out of loop-heavy roles.
+routing:
+  reviewer:                                     # no kimi/mimo: they are the dev family
+    - claude:opus@xhigh                         # operator; scarcest quota, reviews are short
+    - pi:openai-codex/gpt-6-astra:xhigh         # operator ~ Opus; AA xhigh coding 75.9 measured
+    - pi:openai-codex/gpt-6.1-sol:xhigh         # operator: right after Astra; AA Intelligence 51.0 vs 52.4 at xhigh, Engineering 54 vs 55 at max (AA Engineering Index chart, artificialanalysis.ai, 2026-09-29)
+    - pi:opencode-go/glm-5.3:high               # operator's current reviewer fallback; 220 req/5h
+    - pi:opencode-go/space-bunny-free           # free, unlimited, ~ GPT-6 Sol High; 19 min/prompt, fine for a short review
+  squad-leader:
+    - claude:opus@high                          # operator; the lead must be the strongest model
+    - pi:openai-codex/gpt-6-astra:high          # operator ~ Opus
+    - pi:openai-codex/gpt-6.1-sol:high          # operator: right after Astra (AA Intelligence 51.0 vs 52.4 at xhigh)
+    - pi:kimi-coding/k3:high                    # operator: second overall; absent from AA free data
+    - pi:opencode-go/space-bunny-free           # free, unlimited fallback
+    - pi:opencode-go/longcat-2.5-preview-free   # free, unlimited last resort
+  senior-dev:
+    - pi:openai-codex/gpt-6-astra:high          # operator ~ Opus, spends codex quota instead of Claude's
+    - pi:openai-codex/gpt-6.1-sol:high          # operator: right after Astra (AA Engineering Index chart, artificialanalysis.ai, 2026-09-29: 54 vs 55 at max)
+    - pi:kimi-coding/k3:high                    # operator: second overall
+    - claude:opus                               # operator instinct; last because scarcest
+    - pi:opencode-go/space-bunny-free           # free, unlimited fallback
+    - pi:opencode-go/longcat-2.5-preview-free   # free, unlimited last resort
+  developer:
+    - pi:kimi-coding/k3:medium                  # operator: default dev model
+    - pi:openai-codex/gpt-6-sol:medium          # operator: Sol > Luna; AA has only the low row for Sol
+    - claude:sonnet                             # operator decision: third; AA Intelligence 46.7 at high
+    - pi:opencode-go/mimo-v2.6-pro:medium       # 3,250 req/5h; AA Intelligence 46.3
+    - pi:opencode-go/longcat-2.5-preview-free   # free; Space Bunny omitted: too slow for a dev loop
+  mechanic:                                     # speed first; no free models
+    - pi:opencode-go/mimo-v2.6-flash:low        # 30,100 req/5h; AA 49 s/task
+    - pi:opencode-go/glm-5.3-flash:low          # 6,320 req/5h; AA coding 71.5 (single effort-unmarked AA row)
+    - claude:haiku                              # operator instinct; cheap Claude tier
+    - pi:openai-codex/gpt-6-sol:low             # AA 9 s/task; spends codex quota
+  researcher:                                   # long context, cheap
+    - pi:google/gemini-3.8-flash                # operator preference; google returns 402 today
+    - pi:opencode-go/qwen3.8-flash              # operator's current chain; 5,400 req/5h
+    - pi:opencode-go/mimo-v2.6-flash            # 30,100 req/5h, 1M context
+    - pi:kimi-coding/k3-256k                    # reads a lot of source
+    - pi:opencode-go/space-bunny-free           # free, unlimited; latency does not matter for research
+
+# Models pi offers from the covered providers that no role uses, on purpose. The check tool reads this
+# list so it stays quiet about them; the team-lead skill ignores it.
+skip:
+  - pi:openai-codex/gpt-6-luna                  # operator: Sol > Luna within a generation
+  - pi:openai-codex/gpt-5.6-sol                 # older generation than gpt-6
+  - pi:openai-codex/gpt-5.6-luna                # older generation, below its Sol
+  - pi:openai-codex/gpt-5.6-terra               # older generation
+  - pi:openai-codex/gpt-5.5                     # older generation
+  - pi:openai-codex/gpt-5.3-codex-spark         # older generation
+  - pi:kimi-coding/kimi-for-coding              # superseded by k3 in this table
+  - pi:kimi-coding/kimi-for-coding-highspeed    # superseded by k3 in this table
