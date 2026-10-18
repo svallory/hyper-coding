@@ -170,8 +170,12 @@ or the merge was rolled back. The heal reads its tip from that marker, so a
 fetch after the kill, which moves the remote-tracking ref, no longer defeats
 it. `status` never waits for the lock: it peeks at the holder, finishes an
 interrupted pull only if the lock is free, and while a pull is still running
-prints `Pull in progress (pid N, since T)` (`pullInProgress` in `--json`).
-Commands that change the space keep waiting for the lock.
+prints `Pull in progress (pid N, since T)` (`pullInProgress` in `--json`,
+`state: "running"`). If the lock is held by a different process than the one
+that wrote the marker (the pull was killed), it names that holder instead:
+`Another hyper process (pid H) holds the space lock; the interrupted pull will
+be finished when it releases it.` (`state: "interrupted"`). Commands that
+change the space keep waiting for the lock.
 
 ```
 hyper space clone NAME [PATH] [--yes] [--json]

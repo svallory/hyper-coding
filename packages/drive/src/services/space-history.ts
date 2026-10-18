@@ -248,6 +248,37 @@ function advanceKeepingUserState(
 	return merged;
 }
 
+/**
+ * The plain fast-forward (nothing to keep aside). Marked like the index-only
+ * one, so a kill inside git still leaves the heal something that a later
+ * fetch cannot hide (hyper-prj.28).
+ */
+function fastForwardMarked(
+	root: string,
+	branch: string,
+	before: string,
+	tip: string,
+): ReturnType<typeof spaceGit> {
+	writePullMarker(root, { startedAt: Date.now(), pid: process.pid, branch, before, tip });
+	const merged = spaceGit(
+		root,
+		[
+			"-c",
+			"merge.verifySignatures=false",
+			"-c",
+			"submodule.recurse=false",
+			"merge",
+			"--ff-only",
+			"--no-overwrite-ignore",
+			"--no-autostash",
+			tip,
+		],
+		{ allowFailure: true },
+	);
+	clearPullMarker(root);
+	return merged;
+}
+
 /** `name-status` of `a..b` (or one commit's own changes), as status/path pairs. */
 function treeChanges(root: string, args: string[]): { status: string; path: string }[] {
 	const fields = spaceGit(root, [
@@ -427,21 +458,7 @@ async function pullSpaceLocked(
 		const review = await incomingReview(root, incoming.tip, before);
 		const result =
 			userStateDeleted.length === 0
-				? spaceGit(
-						root,
-						[
-							"-c",
-							"merge.verifySignatures=false",
-							"-c",
-							"submodule.recurse=false",
-							"merge",
-							"--ff-only",
-							"--no-overwrite-ignore",
-							"--no-autostash",
-							incoming.tip,
-						],
-						{ allowFailure: true },
-					)
+				? fastForwardMarked(root, branch, before, incoming.tip)
 				: advanceKeepingUserState(
 						root,
 						branch,

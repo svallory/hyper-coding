@@ -14,8 +14,14 @@ import {
 import { fetchSpace, spaceStatus } from "#services/space-history";
 import { peekSpaceLock, SpaceLockTimeoutError, withSpaceLock } from "#services/space-lock";
 
-/** A pull another process is still running, as status reports it. */
+/**
+ * What status reports instead of waiting for the lock. `running`: the pull
+ * that wrote the marker is the one holding the lock. `interrupted`: some other
+ * process holds it, and the interrupted pull is finished once it lets go.
+ */
 interface PullInProgress {
+	state: "running" | "interrupted";
+	/** The process holding the lock (the pull itself when `running`). */
 	pid: number | null;
 	since: string | null;
 }
@@ -24,9 +30,14 @@ function describePull(
 	marker: PullMarker | null,
 	holder: { pid: number | null; since: number | null } | null,
 ): PullInProgress {
-	const pid = marker?.pid ?? holder?.pid ?? null;
-	const since = marker?.startedAt ?? holder?.since ?? null;
-	return { pid, since: since === null ? null : new Date(since).toISOString() };
+	const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
+	if (marker !== null && holder !== null && marker.pid === holder.pid)
+		return { state: "running", pid: marker.pid, since: iso(marker.startedAt) };
+	if (holder !== null) return { state: "interrupted", pid: holder.pid, since: iso(holder.since) };
+	// The lock was released between the check and the report: the marker is all there is.
+	return marker === null
+		? { state: "interrupted", pid: null, since: null }
+		: { state: "running", pid: marker.pid, since: iso(marker.startedAt) };
 }
 
 /**
@@ -96,8 +107,11 @@ export default class Status extends SpaceCommand<typeof Status> {
 		);
 		if (result.pullInProgress !== null) {
 			const pull = result.pullInProgress;
+			const who = pull.pid === null ? "pid unknown" : `pid ${pull.pid}`;
 			this.log(
-				`Pull in progress (${pull.pid === null ? "pid unknown" : `pid ${pull.pid}`}${pull.since === null ? "" : `, since ${pull.since}`}): the numbers below may change when it finishes.`,
+				pull.state === "running"
+					? `Pull in progress (${who}${pull.since === null ? "" : `, since ${pull.since}`}): the numbers below may change when it finishes.`
+					: `Another hyper process (${who}) holds the space lock; the interrupted pull will be finished when it releases it.`,
 			);
 		}
 		if (result.sessionEndFailure !== null) {
