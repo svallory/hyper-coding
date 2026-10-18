@@ -276,12 +276,6 @@ export function probeRemote(
 	return { ok: true, hasBranch: probe.stdout.includes(`refs/heads/${BRANCH}`) };
 }
 
-/** Whether the remote has a `main` branch: null when it could not be reached. */
-export function remoteHasBranch(remote: string): boolean | null {
-	const probe = probeRemote(remote);
-	return probe.ok ? probe.hasBranch : null;
-}
-
 /**
  * Throw when a hyperdrive checkout exists and belongs to a different remote.
  * Side-effect free, so callers can run it before doing anything irreversible.
@@ -351,18 +345,18 @@ export function ensureDriveCheckout(remote: string): { dir: string; created: boo
 		return { dir, created: false };
 	}
 
-	const probe = driveGit(["ls-remote", "--heads", remote, BRANCH], process.cwd());
+	const probe = probeRemote(remote);
 	if (!probe.ok) {
 		throw new ManifestError(
 			remote,
 			`I couldn't reach your hyperdrive at ${escapeControlCharacters(remote)} — check the URL and your network. ` +
-				`git said: ${gitSaid(probe.stderr || probe.stdout) || "no output"}`,
+				`git said: ${probe.said || "no output"}`,
 		);
 	}
 
 	mkdirSync(dir, { recursive: true });
 
-	if (probe.stdout.includes(`refs/heads/${BRANCH}`)) {
+	if (probe.hasBranch) {
 		const clone = driveGit(
 			["clone", "--branch", BRANCH, "--single-branch", remote, dir],
 			process.cwd(),

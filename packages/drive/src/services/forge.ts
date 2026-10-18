@@ -2,16 +2,19 @@
  * The code forge behind a hyperdrive remote: GitHub or GitLab, found through
  * the CLI the user already logged in with (`gh`, `glab`).
  *
- * Three jobs, all best effort and all optional:
- * - detect the logged-in user, so `hyper drive setup` can offer
- *   `git@github.com:<user>/hyperdrive.git` as the default remote;
+ * Four jobs, all best effort and all optional:
+ * - detect the logged-in user and the git protocol their CLI is set to, so
+ *   `hyper drive setup` can offer `git@github.com:<user>/hyperdrive.git` (or
+ *   its https form) as the default remote;
  * - expand the shorthands people type (`you/hyperdrive`, or just
- *   `hyperdrive`) into a full SSH URL on that forge;
- * - create the repository when the remote does not exist yet.
+ *   `hyperdrive`) into a full URL on that forge;
+ * - ask the forge whether a repository exists, so an unreachable remote is
+ *   not mistaken for a missing one;
+ * - create the repository when the forge says it does not exist yet.
  *
- * Nothing here runs without the user asking: detection is one read-only
- * `api user` call with a short timeout, and creation only happens after a
- * confirmation or `--create`.
+ * Nothing here runs without the user asking: detection is two read-only CLI
+ * calls (`api user`, `config get`) with a short timeout, and creation only
+ * happens after a confirmation or `--create`.
  */
 
 import { spawnSync } from "node:child_process";
@@ -221,6 +224,11 @@ function hostEnv(repo: ForgeRepo): Record<string, string> {
 	return repo.provider === "github" ? { GH_HOST: repo.host } : { GITLAB_HOST: repo.host };
 }
 
+/** The words gh (GraphQL, HTTP) and glab use for a repository that is not there. */
+export function notFound(text: string): boolean {
+	return /HTTP 404|404 (Project )?Not Found|Could not resolve to a Repository/i.test(text);
+}
+
 /**
  * Whether the forge knows the repository: `missing` only on a definite
  * not-found. Anything else (auth, network, timeout, an odd answer) is
@@ -232,11 +240,7 @@ export function forgeRepoExists(repo: ForgeRepo): "exists" | "missing" | "unknow
 	});
 	if (result.ok) return "exists";
 	if (result.missing || result.timedOut) return "unknown";
-	return /could not resolve to a repository|not found|404/i.test(
-		`${result.stderr}\n${result.stdout}`,
-	)
-		? "missing"
-		: "unknown";
+	return notFound(`${result.stderr}\n${result.stdout}`) ? "missing" : "unknown";
 }
 
 /**

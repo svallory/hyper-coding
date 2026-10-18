@@ -4,6 +4,7 @@ import {
 	type Forge,
 	isBareName,
 	isShorthand,
+	notFound,
 	parseForgeRemote,
 } from "#services/forge";
 
@@ -106,6 +107,35 @@ describe("isShorthand / isBareName", () => {
 		]) {
 			expect(isShorthand(value)).toBe(false);
 			expect(isBareName(value)).toBe(false);
+		}
+	});
+});
+
+describe("notFound", () => {
+	it("says missing only for the forges' own not-found text", () => {
+		for (const text of [
+			"GraphQL: Could not resolve to a Repository with the name 'ada/x'. (repository)",
+			"GET https://gitlab.com/api/v4/projects/ada%2Fx: 404 Project Not Found",
+			"GET: 404 Not Found",
+			"HTTP 404: Not Found (https://api.github.com/repos/ada/x)",
+		]) {
+			expect(notFound(text), text).toBe(true);
+		}
+	});
+
+	it("says unknown for network, DNS, auth, timeout and missing-binary failures", () => {
+		for (const text of [
+			"error connecting to api.github.com",
+			"dial tcp: lookup api.github.com: no such host",
+			"Could not resolve host: github.com",
+			"HTTP 401: Bad credentials (https://api.github.com/graphql)",
+			"HTTP 403: Resource not accessible",
+			"spawnSync gh ETIMEDOUT",
+			"spawnSync gh ENOENT",
+			"command not found",
+			"",
+		]) {
+			expect(notFound(text), text).toBe(false);
 		}
 	});
 });

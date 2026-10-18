@@ -163,7 +163,7 @@ export default class Setup extends BaseCommand<typeof Setup> {
 		let go = create;
 		if (!go && process.stdin.isTTY) {
 			const answer = await p.confirm({
-				message: `I can't reach ${escapeControlCharacters(shown)}. Create it as a private repository with ${FORGE_CLI[repo.provider]}?`,
+				message: `${escapeControlCharacters(shown)} does not exist yet. Create it as a private repository with ${FORGE_CLI[repo.provider]}?`,
 				initialValue: true,
 			});
 			if (p.isCancel(answer)) {
@@ -176,7 +176,7 @@ export default class Setup extends BaseCommand<typeof Setup> {
 			if (!process.stdin.isTTY) {
 				throw new ManifestError(
 					remote,
-					`I couldn't reach ${escapeControlCharacters(shown)}. Create it first, or pass --create to let ${FORGE_CLI[repo.provider]} create it.`,
+					`${escapeControlCharacters(shown)} does not exist yet. Create it first, or pass --create to let ${FORGE_CLI[repo.provider]} create it.`,
 				);
 			}
 			return;

@@ -61,9 +61,10 @@ rule.
 
 ```bash
 # 1. Point the CLI at your private hyperdrive repository. With gh or glab
-#    logged in it offers git@github.com:<you>/hyperdrive.git and creates the
-#    repository (private, empty) if it does not exist yet; `you/hyperdrive`
-#    or just `hyperdrive` work as shorthands.
+#    logged in it offers <you>/hyperdrive on that forge as the default (an
+#    SSH URL, or https if the CLI is set to https) and creates the
+#    repository (private, empty) if the forge says it does not exist yet;
+#    `you/hyperdrive` or just `hyperdrive` work as shorthands.
 hyper drive setup
 
 # 2. Give a space a branch and pick its cadence.
@@ -258,11 +259,14 @@ It is per machine and never touches the current directory; in a terminal it
 asks for the remote and the machine name when it does not know them (home
 is this machine's, `--home` to override) and ends with the next steps.
 When `gh` or `glab` is logged in, the remote defaults to
-`git@<host>:<you>/hyperdrive.git`, and `owner/name` or a bare `name` expand
-to a URL on that forge, over the git protocol its CLI is configured for (SSH when unknown). A remote on a host gh or glab serves (github.com, gitlab.com, or your GH_HOST/GITLAB_HOST) that
-cannot be reached is offered for creation (private, empty) through that
-CLI; `--create` says yes without asking and is required for that off a
-terminal. `drive init` still works as an alias.
+`git@<host>:<you>/hyperdrive.git` (an https URL when the CLI is set to
+https), and `owner/name` or a bare `name` expand to a URL on that forge.
+When git cannot reach a remote on a host that `gh` or `glab` serves
+(github.com, gitlab.com, or your `GH_HOST`/`GITLAB_HOST`), setup asks the
+forge whether the repository exists. Only a definite "no such repository"
+is offered for creation (private, empty) through that CLI; `--create` says
+yes without asking and is required for that off a terminal. Any other
+failure (access, network) shows git's own message instead. `drive init` still works as an alias.
 `sync-config` keeps `~/.claude` and `~/.pi/agent` in sync with another
 machine (Mutagen sessions); with no argument it lists them. `--check` creates,
 changes and removes nothing, and exits 1 when a session is missing, does not

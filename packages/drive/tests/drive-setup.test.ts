@@ -194,6 +194,18 @@ describe("hyper drive setup", () => {
 		expect(calls(forge)).toMatch(/gh repo create ada\/drive --private \[GH_HOST=ghe\.corp /);
 	});
 
+	it("creates on the remote's host even when GH_HOST points elsewhere", (ctx) => {
+		if (skipIfUnbuilt(ctx)) return;
+		const forge = withFakeForge(fixture, "ada");
+		const result = runSetup(
+			["drive", "setup", "--remote", "git@github.com:ada/drive.git", "--name", "mac", "--create"],
+			forge,
+			{ GH_HOST: "ghe.corp" },
+		);
+		expect(result.status, `${flat(result.stdout)} | ${flat(result.stderr)}`).toBe(0);
+		expect(calls(forge)).toMatch(/gh repo create ada\/drive --private \[GH_HOST=github\.com /);
+	});
+
 	it("follows the forge CLI's https protocol when expanding", (ctx) => {
 		if (skipIfUnbuilt(ctx)) return;
 		const forge = withFakeForge(fixture, "ada", { https: true });

@@ -108,6 +108,29 @@ export const flat = (s: string): string =>
 		.replace(/\s+/g, " ")
 		.trim();
 
+/**
+ * `gh` and `glab` stubs that always fail, first on PATH for every CLI spawn
+ * that was not handed a fake forge: a spawned `drive setup` can then never
+ * reach a developer's real, logged-in CLI.
+ */
+function denyForgeBin(fixture: ManifestFixture): string {
+	const dir = join(fixture.root, "deny-forge-bin");
+	mkdirSync(dir, { recursive: true });
+	for (const name of ["gh", "glab"]) {
+		writeFileSync(
+			join(dir, name),
+			`#!/bin/sh\necho "${name}: blocked in tests (pass withFakeForge)" >&2\nexit 1\n`,
+			{ mode: 0o755 },
+		);
+	}
+	return dir;
+}
+
+/** The PATH a CLI spawn gets: the caller's own, else one with the failing stubs first. */
+function spawnPath(fixture: ManifestFixture, extraEnv: NodeJS.ProcessEnv): string {
+	return extraEnv.PATH ?? `${denyForgeBin(fixture)}:${process.env.PATH ?? ""}`;
+}
+
 export function spawnCli(
 	args: string[],
 	fixture: ManifestFixture,
@@ -118,6 +141,7 @@ export function spawnCli(
 		env: {
 			...process.env,
 			...extraEnv,
+			PATH: spawnPath(fixture, extraEnv),
 			HOME: fixture.home,
 			XDG_CONFIG_HOME: join(fixture.root, "config"),
 			HYPER_HOME: fixture.hyperHome,
@@ -182,6 +206,7 @@ export function spawnCliOnTty(
 		env: {
 			...process.env,
 			...extraEnv,
+			PATH: spawnPath(fixture, extraEnv),
 			HOME: fixture.home,
 			XDG_CONFIG_HOME: join(fixture.root, "config"),
 			HYPER_HOME: fixture.hyperHome,
