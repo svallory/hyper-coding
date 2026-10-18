@@ -40,6 +40,7 @@ for Claude Code. Two ideas:
 | `/hyper:gen <template>` | generate files from project templates, verbatim outside marked regions |
 | `/hyper:space <args>` | a space's history — dirs committed to the space's branch, pushed to your hyperdrive: init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
 | `/hyper:warp <machine>` | move a live session to another machine over ssh — a thin relay over `hyper warp` |
+| `/hyper:team-lead [tasks]` | lead developer agents through a batch: decompose, assign the cheapest adequate model, review, track — runs the `hyper:team` skill, which can also be invoked directly by that name |
 
 Hooks (automatic): SessionStart context injection inside a space; per-edit
 check hook and new-dependency friction hook, both opt-in via

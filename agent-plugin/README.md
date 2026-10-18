@@ -118,6 +118,7 @@ Without the CLI:
 | `/hyper:gen [template] [dest]` | Generate files from a project template — deterministic copy, agent authoring only inside marked prompt regions |
 | `/hyper:space [args...]` | A space's history — allowlisted dirs committed to the space's branch, pushed to your hyperdrive; init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
 | `/hyper:warp <machine> [flags]` | Move a live session to another machine over ssh — a thin relay over `hyper warp` |
+| `/hyper:team [tasks]` | Lead developer agents through a batch — decompose, assign each task to the cheapest adequate model, review, track. A skill; `/hyper:team-lead` is a command alias for it. The skill under `skills/team/` is generated from the claude-plugins team-lead source by `scripts/sync-team-skill.sh` (`--check` reports drift); never edit it here. |
 
 ## Hooks
 
