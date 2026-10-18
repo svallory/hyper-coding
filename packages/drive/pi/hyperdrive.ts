@@ -63,7 +63,7 @@ export default function hyperdrive(pi: ExtensionAPI, deps: SessionEndDeps = real
 		try {
 			if (event.reason !== "startup") return;
 			const notice = failedSaveNotice(ctx.cwd);
-			if (notice !== undefined) withNotify(deps, ctx).notify(notice);
+			if (notice !== undefined) warn(deps, ctx, notice);
 		} catch {
 			// Never throw into pi.
 		}
@@ -97,4 +97,17 @@ function withNotify(deps: SessionEndDeps, ctx: ExtensionContext): SessionEndDeps
 			}
 		},
 	};
+}
+
+/** The failed-save notice is a warning; without a UI it goes the way every other line does. */
+function warn(deps: SessionEndDeps, ctx: ExtensionContext, line: string): void {
+	if (ctx.hasUI) {
+		try {
+			ctx.ui.notify(line, "warning");
+			return;
+		} catch {
+			// Fall through to the plain channel.
+		}
+	}
+	deps.notify(line);
 }

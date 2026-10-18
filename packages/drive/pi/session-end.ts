@@ -32,7 +32,6 @@ import {
 	fstatSync,
 	lstatSync,
 	openSync,
-	readFileSync,
 	readSync,
 	renameSync,
 	statSync,
@@ -303,8 +302,38 @@ export async function saveSessionEnd(
 	return payload;
 }
 
-/** `core.worktree = ../..` as `initSpaceGitDir` writes it: the marker of a space's own git dir. */
-const OWN_WORKTREE = /^[ \t]*worktree[ \t]*=[ \t]*\.\.\/\.\.[ \t]*$/m;
+/**
+ * `[core] worktree = ../..` as `initSpaceGitDir` writes it. The key is
+ * case-insensitive, the value may be quoted, and a trailing `;` or `#` comment
+ * is allowed, as git reads it. Only the `[core]` section counts.
+ */
+function hasOwnWorktree(config: string): boolean {
+	let inCore = false;
+	for (const raw of config.split("\n")) {
+		const line = raw.trim();
+		const section = /^\[\s*([^\s\]"]+)[^\]]*\]/.exec(line);
+		if (section !== null) {
+			inCore = section[1]?.toLowerCase() === "core" && !line.includes('"');
+			continue;
+		}
+		if (inCore && /^worktree[ \t]*=[ \t]*("?)\.\.\/\.\.\1[ \t]*([;#].*)?$/i.test(line)) return true;
+	}
+	return false;
+}
+
+/** Read at most `limit` bytes of a plain file: no symlink, and a FIFO cannot block the open. */
+function readPlainFile(path: string, limit: number): string | undefined {
+	const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+	try {
+		const stat = fstatSync(fd);
+		if (!stat.isFile()) return undefined;
+		const buffer = Buffer.alloc(Math.min(stat.size, limit));
+		readSync(fd, buffer, 0, buffer.length, 0);
+		return buffer.toString("utf8");
+	} finally {
+		closeSync(fd);
+	}
+}
 
 /**
  * The nearest `.hyper/space.git` directory at or above `dir`. Used ONLY to
@@ -328,9 +357,10 @@ export function findSpaceGitDir(dir: string): string | undefined {
  * either level, checked with `lstat`) that looks like a git dir: `HEAD` and
  * `config` are regular files, owned by the current user, and the config
  * carries the `core.worktree = ../..` that `hyper space init` writes (the CLI
- * refuses any other git dir as not its own). A clone can carry symlinks, a
- * bare `.hyper/space.git` folder or a whole foreign git dir as content, and
- * the timeout line must never be steered into one; a candidate that fails is
+ * refuses any other git dir as not its own). This rejects git-looking debris:
+ * a symlink, an empty `.hyper/space.git` folder or another repository's git dir
+ * left in the way. It is not a defence against a crafted clone, whose content
+ * is owned by the user and can carry that very line. A candidate that fails is
  * skipped and the walk goes on.
  */
 function isRealSpaceGitDir(candidate: string): boolean {
@@ -341,7 +371,8 @@ function isRealSpaceGitDir(candidate: string): boolean {
 		if (typeof process.getuid === "function" && dir.uid !== process.getuid()) return false;
 		if (!lstatSync(join(candidate, "HEAD")).isFile()) return false;
 		if (!lstatSync(join(candidate, "config")).isFile()) return false;
-		return OWN_WORKTREE.test(readFileSync(join(candidate, "config"), "utf8").slice(0, 64 * 1024));
+		const config = readPlainFile(join(candidate, "config"), 64 * 1024);
+		return config !== undefined && hasOwnWorktree(config);
 	} catch {
 		return false;
 	}
@@ -389,7 +420,13 @@ export function appendFailureLine(gitDir: string, sessionId: string, detail: str
 		].join("\t");
 		const fd = openSync(
 			path,
-			constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW,
+			// O_NONBLOCK: a FIFO swapped in for the log fails with ENXIO instead of
+			// holding pi's quit forever (pi awaits session_shutdown with no timeout).
+			constants.O_WRONLY |
+				constants.O_APPEND |
+				constants.O_CREAT |
+				constants.O_NOFOLLOW |
+				constants.O_NONBLOCK,
 			0o600,
 		);
 		try {

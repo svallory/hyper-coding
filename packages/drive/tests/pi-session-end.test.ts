@@ -47,6 +47,7 @@ import {
 	createRealDeps,
 	entryText,
 	failedSaveNotice,
+	findSpaceGitDir,
 	MISSING_CLI_LINE,
 	OUTDATED_CLI_LINE,
 	SESSION_END_LOG as PI_SESSION_END_LOG,
@@ -228,11 +229,17 @@ describe("the pi extension on session_start: the failed-save notice", () => {
 		if (lines.length > 0) writeFileSync(join(gitDir, SESSION_END_LOG), `${lines.join("\n")}\n`);
 		return { space, gitDir };
 	}
-	async function start(cwd: string, reason = "startup") {
+	async function start(cwd: string, reason = "startup", levels?: string[]) {
 		const pi = fakePi();
 		const deps = fakeDeps();
 		hyperdrive(pi as never, deps);
 		const { ctx, notifications } = fakeCtx({ cwd });
+		if (levels) {
+			ctx.ui.notify = (message: string, level?: string) => {
+				notifications.push(message);
+				levels.push(level ?? "");
+			};
+		}
 		await pi.fire("session_start", { type: "session_start", reason }, ctx);
 		return notifications;
 	}
@@ -265,6 +272,33 @@ describe("the pi extension on session_start: the failed-save notice", () => {
 		for (const reason of ["reload", "new", "resume", "fork"]) {
 			expect(await start(failing.space, reason)).toEqual([]);
 		}
+	});
+	it("notifies at warning level", async () => {
+		const { space } = spaceWithLog(`${at}\t${id}\tfailed\tx`);
+		const levels: string[] = [];
+		expect(await start(space, "startup", levels)).toHaveLength(1);
+		expect(levels).toEqual(["warning"]);
+	});
+	it("prints nothing for a malformed last line or one without an outcome", () => {
+		for (const last of [
+			"garbage",
+			`${at}`,
+			`${at}\t${id}`,
+			`${at}\t${id}\tweird\tx`,
+			`${at}\t${id}\t`,
+		]) {
+			const { space } = spaceWithLog(`${at}\t${id}\tfailed\told`, last);
+			expect(failedSaveNotice(space), last).toBeUndefined();
+			rmSync(join(directory, "space"), { recursive: true, force: true });
+		}
+	});
+	it("prints nothing when the log is a directory or a FIFO", () => {
+		const { space, gitDir } = spaceWithLog();
+		mkdirSync(join(gitDir, SESSION_END_LOG));
+		expect(failedSaveNotice(space)).toBeUndefined();
+		rmSync(join(gitDir, SESSION_END_LOG), { recursive: true });
+		expect(spawnSync("mkfifo", [join(gitDir, SESSION_END_LOG)]).status).toBe(0);
+		expect(failedSaveNotice(space)).toBeUndefined();
 	});
 	it("does not read a symlinked log", () => {
 		const { space, gitDir } = spaceWithLog();
@@ -485,6 +519,27 @@ describe("the pi extension on session_shutdown", () => {
 			await quitIn(clone);
 			expect(readFileSync(victim, "utf8")).toBe("precious\n");
 			expect(listTree(outside)).toEqual(before);
+		});
+
+		it("refuses a FIFO in the log's place without blocking", async () => {
+			const { clone } = plant();
+			const gitDir = makeSpaceGitDir(clone);
+			expect(spawnSync("mkfifo", [join(gitDir, SESSION_END_LOG)]).status).toBe(0);
+			await quitIn(clone);
+		});
+
+		it.each([
+			["a quoted value", '[core]\n\tworktree = "../.."\n', true],
+			["a trailing ; comment", "[core]\n\tworktree = ../.. ; the space\n", true],
+			["a trailing # comment", "[core]\n\tworktree = ../.. # the space\n", true],
+			["a case-insensitive key and section", "[Core]\n\tWorkTree = ../..\n", true],
+			["the key outside [core]", "[other]\n\tworktree = ../..\n", false],
+			["a different worktree", "[core]\n\tworktree = ../elsewhere\n", false],
+			["no section at all", "worktree = ../..\n", false],
+		])("reads core.worktree with %s", (_name, config, accepted) => {
+			const gitDir = makeSpaceGitDir(join(directory, "cfg"));
+			writeFileSync(join(gitDir, "config"), config);
+			expect(findSpaceGitDir(join(directory, "cfg"))).toBe(accepted ? gitDir : undefined);
 		});
 
 		it("skips a git dir carried by a clone that is not the space's own", async () => {

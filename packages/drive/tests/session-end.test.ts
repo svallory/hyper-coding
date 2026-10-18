@@ -468,20 +468,61 @@ describe("space commit --session-end and real hook", () => {
 		}
 		it("refuses a session-end.log that is a symlink and writes nothing through it", async () => {
 			const { victim, append } = await victimLog("symlink");
-			expect(append).toThrow(/regular file/);
+			expect(append).toThrow(/not a plain file/);
 			expect(readFileSync(victim, "utf8")).toBe("precious\n");
 		});
 		it("refuses a session-end.log that is a symlink even at the rotation size", async () => {
 			const { gitDir, victim, append } = await victimLog("symlink");
 			writeFileSync(victim, "x".repeat(64 * 1024));
-			expect(append).toThrow(/regular file/);
+			expect(append).toThrow(/not a plain file/);
 			expect(existsSync(join(gitDir, "session-end.log.1"))).toBe(false);
 			expect(readFileSync(victim, "utf8")).toHaveLength(64 * 1024);
 		});
 		it("refuses a session-end.log with a second hard link", async () => {
 			const { victim, append } = await victimLog("hardlink");
-			expect(append).toThrow(/regular file/);
+			expect(append).toThrow(/not a plain file/);
 			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+		});
+		it("says what to do: a SpaceGitError naming the quoted path and the next step", async () => {
+			const { append } = await victimLog("symlink");
+			expect(append).toThrow(/session-end\.log.*Move it aside/s);
+			try {
+				append();
+			} catch (error) {
+				expect((error as Error).name).toBe("SpaceGitError");
+			}
+		});
+		it("refuses a directory in the log's place", async () => {
+			const { root } = await makeSpace();
+			const gitDir = join(root, ".hyper/space.git");
+			mkdirSync(join(gitDir, "session-end.log"));
+			const { appendSessionEndLog } = await import("#services/session-end-log");
+			expect(() =>
+				appendSessionEndLog(gitDir, { session: id, outcome: "failed", detail: "x" }),
+			).toThrow(/not a plain file/);
+			expect(readdirSync(join(gitDir, "session-end.log"))).toEqual([]);
+		});
+		it("refuses a FIFO in the log's place without blocking, and the reader skips it", async () => {
+			const { root } = await makeSpace();
+			const gitDir = join(root, ".hyper/space.git");
+			const fifo = join(gitDir, "session-end.log");
+			expect(spawnSync("mkfifo", [fifo]).status).toBe(0);
+			const { appendSessionEndLog, lastSessionEndEntry } = await import(
+				"#services/session-end-log"
+			);
+			expect(() =>
+				appendSessionEndLog(gitDir, { session: id, outcome: "failed", detail: "x" }),
+			).toThrow(/not a plain file/);
+			expect(lastSessionEndEntry(gitDir)).toBeNull();
+		});
+		it("does not read a symlinked log back", async () => {
+			const { root } = await makeSpace();
+			const gitDir = join(root, ".hyper/space.git");
+			const elsewhere = join(root, "elsewhere.log");
+			writeFileSync(elsewhere, `2026-10-18T10:00:00.000Z\t${id}\tfailed\tx\n`);
+			symlinkSync(elsewhere, join(gitDir, "session-end.log"));
+			const { lastSessionEndEntry } = await import("#services/session-end-log");
+			expect(lastSessionEndEntry(gitDir)).toBeNull();
 		});
 		it("refuses a dangling symlink without creating its target", async () => {
 			const { root } = await makeSpace();

@@ -19,11 +19,12 @@ import {
 	readSync,
 	renameSync,
 	type Stats,
-	statSync,
 	writeSync,
 } from "node:fs";
 import { join } from "node:path";
+import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import { sessionEndLine } from "#services/session-end";
+import { SpaceGitError } from "#services/space-git";
 import { spaceGitDirWriteError } from "#services/space-lock";
 
 export const SESSION_END_LOG = "session-end.log";
@@ -79,11 +80,11 @@ export function appendSessionEndLog(
 		detail: sessionEndLine(entry.detail, DETAIL_LIMIT),
 	};
 	const path = sessionEndLogPath(gitDir);
-	const refused = (reason: string) =>
-		spaceGitDirWriteError(
-			gitDir,
-			`record this session end (${record.outcome})`,
-			new Error(`${path} ${reason}`),
+	// Something that is not a plain file sits where the log goes. hyper never
+	// creates one, so the next step is the user's: move it aside.
+	const refused = () =>
+		new SpaceGitError(
+			`I did not record this session end (${escapeControlCharacters(record.outcome)}): ${quoteForTerminal(path)} is not a plain file (a link, a directory or a pipe is in its place), and I never write through one; nothing was changed. Move it aside and the next session end creates the log again.`,
 		);
 	let existing: Stats | undefined;
 	try {
@@ -92,9 +93,7 @@ export function appendSessionEndLog(
 		/* No log yet. */
 	}
 	if (existing !== undefined) {
-		if (!isAppendableLog(existing)) {
-			throw refused("is not a regular file with a single link");
-		}
+		if (!isAppendableLog(existing)) throw refused();
 		if (existing.size >= SESSION_END_LOG_LIMIT) {
 			try {
 				renameSync(path, `${path}.1`);
@@ -106,18 +105,28 @@ export function appendSessionEndLog(
 	try {
 		const fd = openSync(
 			path,
-			constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW,
+			// O_NONBLOCK: a FIFO swapped in for the log fails with ENXIO instead of
+			// holding the worker forever.
+			constants.O_WRONLY |
+				constants.O_APPEND |
+				constants.O_CREAT |
+				constants.O_NOFOLLOW |
+				constants.O_NONBLOCK,
 			0o600,
 		);
 		try {
 			// Swapped for something else between the lstat and the open.
-			if (!isAppendableLog(fstatSync(fd)))
-				throw refused("is not a regular file with a single link");
+			if (!isAppendableLog(fstatSync(fd))) throw refused();
 			writeSync(fd, `${record.at}\t${record.session}\t${record.outcome}\t${record.detail}\n`);
 		} finally {
 			closeSync(fd);
 		}
 	} catch (error) {
+		// ELOOP: O_NOFOLLOW met a symlink. ENXIO: O_NONBLOCK met a FIFO.
+		const code = (error as NodeJS.ErrnoException | undefined)?.code;
+		if (error instanceof SpaceGitError || code === "ELOOP" || code === "ENXIO") {
+			throw error instanceof SpaceGitError ? error : refused();
+		}
 		throw spaceGitDirWriteError(gitDir, `record this session end (${record.outcome})`, error);
 	}
 	return record;
@@ -128,12 +137,15 @@ export function lastSessionEndEntry(gitDir: string): SessionEndLogEntry | null {
 	const path = sessionEndLogPath(gitDir);
 	let text: string;
 	try {
-		const size = statSync(path).size;
-		const length = Math.min(size, 16 * 1024);
-		const buffer = Buffer.alloc(length);
-		const fd = openSync(path, "r");
+		// O_NONBLOCK: a FIFO planted in the log's place must not hang `space status`.
+		const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+		let buffer: Buffer;
 		try {
-			readSync(fd, buffer, 0, length, size - length);
+			const stat = fstatSync(fd);
+			if (!stat.isFile()) return null;
+			const length = Math.min(stat.size, 16 * 1024);
+			buffer = Buffer.alloc(length);
+			readSync(fd, buffer, 0, length, stat.size - length);
 		} finally {
 			closeSync(fd);
 		}
