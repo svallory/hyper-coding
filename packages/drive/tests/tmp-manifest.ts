@@ -1,5 +1,13 @@
 import { type SpawnSyncReturns, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { TestContext } from "vitest";
@@ -100,11 +108,40 @@ export const flat = (s: string): string =>
 		.replace(/\s+/g, " ")
 		.trim();
 
-export function spawnCli(args: string[], fixture: ManifestFixture): SpawnSyncReturns<string> {
+/**
+ * `gh` and `glab` stubs that always fail, first on PATH for every CLI spawn
+ * that was not handed a fake forge: a spawned `drive setup` can then never
+ * reach a developer's real, logged-in CLI.
+ */
+function denyForgeBin(fixture: ManifestFixture): string {
+	const dir = join(fixture.root, "deny-forge-bin");
+	mkdirSync(dir, { recursive: true });
+	for (const name of ["gh", "glab"]) {
+		writeFileSync(
+			join(dir, name),
+			`#!/bin/sh\necho "${name}: blocked in tests (pass withFakeForge)" >&2\nexit 1\n`,
+			{ mode: 0o755 },
+		);
+	}
+	return dir;
+}
+
+/** The PATH a CLI spawn gets: the caller's own, else one with the failing stubs first. */
+function spawnPath(fixture: ManifestFixture, extraEnv: NodeJS.ProcessEnv): string {
+	return extraEnv.PATH ?? `${denyForgeBin(fixture)}:${process.env.PATH ?? ""}`;
+}
+
+export function spawnCli(
+	args: string[],
+	fixture: ManifestFixture,
+	extraEnv: NodeJS.ProcessEnv = {},
+): SpawnSyncReturns<string> {
 	return spawnSync(process.execPath, [cli, ...args], {
 		encoding: "utf8",
 		env: {
 			...process.env,
+			...extraEnv,
+			PATH: spawnPath(fixture, extraEnv),
 			HOME: fixture.home,
 			XDG_CONFIG_HOME: join(fixture.root, "config"),
 			HYPER_HOME: fixture.hyperHome,
@@ -133,6 +170,7 @@ export function spawnCliOnTty(
 	args: string[],
 	fixture: ManifestFixture,
 	answers: string[],
+	extraEnv: NodeJS.ProcessEnv = {},
 ): SpawnSyncReturns<string> {
 	// \r is the key a terminal sends for Enter; \n is not what readline expects.
 	// The answers are spaced apart: written all at once they arrive before the
@@ -167,6 +205,8 @@ export function spawnCliOnTty(
 		killSignal: "SIGKILL",
 		env: {
 			...process.env,
+			...extraEnv,
+			PATH: spawnPath(fixture, extraEnv),
 			HOME: fixture.home,
 			XDG_CONFIG_HOME: join(fixture.root, "config"),
 			HYPER_HOME: fixture.hyperHome,
@@ -219,4 +259,92 @@ export function skipIfUnbuilt(ctx: TestContext): boolean {
 	}
 	ctx.skip("cli/drive not built (run `bun run build` in drive and cli first)");
 	return true;
+}
+
+/**
+ * Fake `gh` and `glab` on a fixture-private PATH, so setup's forge detection
+ * and repository creation never reach a real CLI, account or network. Every
+ * setup test must run with this on PATH (see `forge.bin`).
+ *
+ * - `api user` answers with the login, or fails when it is null (not logged in).
+ * - `repo view owner/name` succeeds when the repository exists under
+ *   `<forgeRoot>`, else answers with each CLI's "not found" text.
+ * - `repo create` makes a bare repository under `<forgeRoot>/owner/name.git`
+ *   (`CREATE_FAILS=1` in the environment makes it fail with "boom").
+ * - `config get git_protocol` answers with `protocol`.
+ *
+ * Every call is logged to `log` together with GH_HOST, GITLAB_HOST and the
+ * working directory it ran in. The returned env makes git rewrite the forges'
+ * SSH and HTTPS URLs (and `ghe.corp`) to `<forgeRoot>`, so the URL setup
+ * builds reaches the repository the shim created.
+ */
+export function withFakeForge(
+	fixture: ManifestFixture,
+	login: string | null,
+	options: { glabLogin?: string | null; https?: boolean } = {},
+): {
+	env: NodeJS.ProcessEnv;
+	forgeRoot: string;
+	ghLog: string;
+	bin: string;
+} {
+	const bin = join(fixture.root, "fake-bin");
+	const forgeRoot = join(fixture.root, "forge");
+	const ghLog = join(fixture.root, "gh.log");
+	mkdirSync(bin, { recursive: true });
+	mkdirSync(forgeRoot, { recursive: true });
+	const protocol = options.https ? "https" : "ssh";
+	const shim = (name: string, who: string | null, key: string, notFound: string) => `#!/bin/sh
+printf '%s [GH_HOST=%s GITLAB_HOST=%s cwd=%s]\n' "${name} $*" "$GH_HOST" "$GITLAB_HOST" "$(pwd -P)" >> ${shellQuote(ghLog)}
+case "$1 $2" in
+  "--version ") echo "${name} version 0.0.0-fake"; exit 0 ;;
+  "api user")
+    ${who === null ? `echo "not logged in" >&2; exit 1` : `printf '{"${key}":"%s"}\n' ${shellQuote(who)}; exit 0`} ;;
+  "config get") echo ${shellQuote(protocol)}; exit 0 ;;
+  "repo view")
+    if [ -d ${shellQuote(forgeRoot)}/"$3".git ]; then echo "$3"; exit 0; fi
+    echo ${shellQuote(notFound)} >&2; exit 1 ;;
+  "repo create")
+    if [ -n "$CREATE_FAILS" ]; then echo "boom" >&2; exit 1; fi
+    ${name === "gh" ? `path="$3"` : `path="$6/$3"; case "$*" in *--skipGitInit*) ;; *) echo "fake glab: would git init the current directory" >&2; exit 1 ;; esac`}
+    case "$path" in */*) ;; *) echo "fake ${name}: expected owner/name" >&2; exit 1 ;; esac
+    dir=${shellQuote(forgeRoot)}/"$path".git
+    if [ -e "$dir" ]; then echo "Name already exists on this account" >&2; exit 1; fi
+    mkdir -p "$(dirname "$dir")" && git init -q --bare "$dir" && echo "https://example/$path"; exit 0 ;;
+esac
+echo "fake ${name}: unsupported: $*" >&2; exit 1
+`;
+	writeFileSync(
+		join(bin, "gh"),
+		shim(
+			"gh",
+			login,
+			"login",
+			"GraphQL: Could not resolve to a Repository with the name 'x'. (repository)",
+		),
+		{ mode: 0o755 },
+	);
+	writeFileSync(
+		join(bin, "glab"),
+		shim("glab", options.glabLogin ?? null, "username", "GET: 404 Not Found"),
+		{ mode: 0o755 },
+	);
+	const gitconfig = join(fixture.root, "gitconfig");
+	writeFileSync(
+		gitconfig,
+		["git@github.com:", "https://github.com/", "git@gitlab.com:", "git@ghe.corp:"]
+			.map((from) => `[url "${forgeRoot}/"]\n\tinsteadOf = ${from}\n`)
+			.join(""),
+	);
+	return {
+		env: {
+			PATH: `${bin}:${process.env.PATH ?? ""}`,
+			GIT_CONFIG_GLOBAL: gitconfig,
+			GH_HOST: undefined,
+			GITLAB_HOST: undefined,
+		},
+		forgeRoot,
+		ghLog,
+		bin,
+	};
 }
