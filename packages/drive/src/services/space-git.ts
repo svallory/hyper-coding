@@ -1847,33 +1847,42 @@ const SHA_SH =
 /**
  * A script for the target, run BEFORE a plain-repo `.git` copy (which would
  * replace `.git/config` with this machine's): parks the target's own
- * `.git/config` as `.git/{@link WARP_CONFIG_KEEP}`. Stdin: the sha-256 of this
- * machine's `.git/config`, one line. An existing keep file is the original of
- * an earlier warp that stopped before {@link targetConfigRestore}. It is kept
- * (and a line saying so printed) only when the current config hashes equal to
- * this machine's, i.e. it is the copied one; otherwise the operator has
- * changed the config since, so the leftover is renamed to
- * `<keep>.<epoch seconds>` and the current config is parked. Exits 0 when
- * there is no config there.
+ * `.git/config` as `.git/{@link WARP_CONFIG_KEEP}`, and records the sha-256 of
+ * the config about to be copied (stdin, one line) in `<keep>.copied`.
+ *
+ * A keep file already there is the leftover of an earlier warp that stopped
+ * before {@link targetConfigRestore}:
+ *  - identical to the current config: that warp stopped before its copy, so it
+ *    is dropped, silently;
+ *  - the current config hashes equal to the recorded `.copied` hash: the
+ *    current config is the copied one and the leftover is the target's
+ *    original, so it is kept (a line says so) and `.copied` is updated;
+ *  - anything else: the config changed since, so the leftover is renamed to
+ *    `<keep>.<epoch seconds>` (a line says so) and the current config is parked.
+ * Exits 0 when there is no config there.
  */
 export function targetConfigKeep(worktree: string): string[] {
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 	const script = [
 		`gd=${quote(`${worktree}/.git`)}`,
-		`k="$gd/${WARP_CONFIG_KEEP}"`,
+		`k="$gd/${WARP_CONFIG_KEEP}"; kc="$k.copied"`,
 		SHA_SH,
 		"read -r want",
 		'[ -f "$gd/config" ] || exit 0',
 		'if [ -e "$k" ]; then',
-		'  cur=$(h "$gd/config")',
-		'  if [ -n "$want" ] && [ "$cur" = "$want" ]; then',
+		'  if cmp -s "$k" "$gd/config"; then',
+		'    rm -f "$k" "$kc"',
+		'  elif [ -f "$kc" ] && [ "$(cat "$kc")" = "$(h "$gd/config")" ]; then',
 		`    printf 'warp: an earlier warp stopped before putting the .git/config back; its saved copy (%s) is used.\\n' "$k"`,
+		'    printf \'%s\\n\' "$want" > "$kc" || exit 1',
 		"    exit 0",
+		"  else",
+		'    mv "$k" "$k.$(date +%s)" || exit 1; rm -f "$kc"',
+		`    printf 'warp: a saved .git/config of an earlier warp does not match the one that was copied, so it was renamed to %s.*\\n' "$k"`,
 		"  fi",
-		'  mv "$k" "$k.$(date +%s)" || exit 1',
-		`  printf 'warp: a saved .git/config of an earlier warp no longer matches the copied one, so it was renamed to %s.*\\n' "$k"`,
 		"fi",
 		'cp -p "$gd/config" "$k" || exit 1',
+		'printf \'%s\\n\' "$want" > "$kc" || exit 1',
 		"exit 0",
 	].join("\n");
 	return ["sh", "-c", script];
@@ -1913,7 +1922,8 @@ export function localConfigInput(worktree: string): string {
 		for (const entry of (listed.stdout ?? "").split("\0")) {
 			const at = entry.indexOf("\n");
 			const key = at < 0 ? entry : entry.slice(0, at);
-			const value = at < 0 ? "" : entry.slice(at + 1);
+			// A key without "=" reads as true, and `git config` can only write a value.
+			const value = at < 0 ? "true" : entry.slice(at + 1);
 			if (FORMAT_KEY.test(key) && !value.includes("\n")) lines.push(`S ${key}\t${value}`);
 		}
 	}
@@ -1922,41 +1932,67 @@ export function localConfigInput(worktree: string): string {
 
 /**
  * A script for the target, run AFTER the `.git` copy: puts the target's own
- * `.git/config` back from {@link targetConfigKeep}'s file. With `sync` it then
- * reads {@link localConfigInput} on stdin and
- *  - makes the repository-format settings of the restored config equal this
- *    machine's (set, replace or unset), printing one line when any changed;
+ * `.git/config` back from {@link targetConfigKeep}'s file (and drops its
+ * `.copied` record). With `sync` it then reads {@link localConfigInput} on
+ * stdin and
+ *  - makes the repository-format settings of the config equal this machine's
+ *    (set, replace or unset), printing one line when any changed. The edit is
+ *    made on a temp copy with `git config --file`, which neither discovers the
+ *    repository nor checks its format, so the order of the keys can't matter
+ *    (an extension set while `core.repositoryformatversion` is still 0 would
+ *    break every later `git` call), and the copy is moved into place only when
+ *    every write worked;
  *  - prints one line per remote of this machine whose `remote.<n>.url` the
- *    (local) config lacks.
+ *    config lacks (the file itself, never global config).
  * Everything else in the config stays the target's: nothing is merged. Without
- * a keep file (the target had no config) nothing is restored. Without `sync`
- * (the copy failed) it only puts the file back.
+ * a keep file (the target had no config) nothing is restored. `marker` makes it
+ * print `@restored` first when it put a file back (for the failure report,
+ * which can't tell otherwise). Exits 1 on any failed write or listing.
  */
-export function targetConfigRestore(worktree: string, sync = true): string[] {
+export function targetConfigRestore(
+	worktree: string,
+	options: { sync?: boolean; marker?: boolean } = {},
+): string[] {
+	const { sync = true, marker = false } = options;
 	const quote = (value: string) => `'${value.replaceAll("'", `'\\''`)}'`;
 	const script = [
-		`w=${quote(worktree)}; gd="$w/.git"`,
+		`gd=${quote(`${worktree}/.git`)}`,
 		`k="$gd/${WARP_CONFIG_KEEP}"`,
-		TARGET_READ_ONLY_GIT,
-		'if [ -f "$k" ]; then mv -f "$k" "$gd/config" || exit 1; fi',
+		'if [ -f "$k" ]; then',
+		'  mv -f "$k" "$gd/config" || exit 1; rm -f "$k.copied"',
+		...(marker ? ["  echo @restored"] : []),
+		"fi",
 		...(sync
 			? [
-					"inp=$(mktemp) || exit 1; trap 'rm -f \"$inp\"' EXIT",
-					'cat > "$inp"',
+					"tmp=$(mktemp -d) || exit 1; trap 'rm -rf \"$tmp\"' EXIT",
+					'inp="$tmp/in"; cf="$tmp/config"',
+					'cat > "$inp" || exit 1',
+					'cp -p "$gd/config" "$cf" || exit 1',
+					'gc() { git config --file "$cf" "$@"; }',
 					"tab=$(printf '\\t')",
 					`fk='^(core\\.repositoryformatversion|extensions\\..+|remote\\..+\\.(promisor|partialclonefilter))$'`,
-					// Unset what the copied .git doesn't have; set what it has.
-					"c=$( {",
-					'  g config --local --name-only --list | grep -iE "$fk" | while read -r key; do',
-					`    sed -n 's/^S //p' "$inp" | cut -f1 | grep -qixF "$key" || { g config --local --unset-all "$key" && echo x; }`,
-					"  done",
-					`  sed -n 's/^S //p' "$inp" | while IFS="$tab" read -r key value; do`,
-					'    [ "$(g config --local --get-all "$key" 2>/dev/null)" = "$value" ] || { g config --local --replace-all "$key" "$value" && echo x; }',
-					"  done",
-					"} | wc -l | tr -d ' ')",
-					`[ "$c" = 0 ] || printf 'warp: the repository-format settings of .git/config (core.repositoryformatversion, extensions.*, partial-clone) were set to match the .git just copied; the rest of the config is untouched.\\n'`,
+					`sed -n 's/^S //p' "$inp" > "$tmp/want" || exit 1`,
+					'cut -f1 "$tmp/want" > "$tmp/wantkeys" || exit 1',
+					'gc --name-only --list > "$tmp/list" || exit 1',
+					'grep -iE "$fk" "$tmp/list" > "$tmp/have" || true',
+					"c=0",
+					// Unset what the copied .git doesn't have (names are case-sensitive).
+					"while IFS= read -r key; do",
+					'  grep -qxF -- "$key" "$tmp/wantkeys" && continue',
+					'  gc --unset-all "$key" || exit 1; c=$((c + 1))',
+					'done < "$tmp/have"',
+					// Set what it has; a missing key and an empty value are different.
+					'while IFS="$tab" read -r key value; do',
+					'  [ -n "$key" ] || continue',
+					'  if cur=$(gc --get-all "$key" 2>/dev/null) && [ "$cur" = "$value" ]; then continue; fi',
+					'  gc --replace-all "$key" "$value" || exit 1; c=$((c + 1))',
+					'done < "$tmp/want"',
+					'if [ "$c" != 0 ]; then',
+					'  mv -f "$cf" "$gd/config" || exit 1',
+					`  printf 'warp: the repository-format settings of .git/config (core.repositoryformatversion, extensions.*, partial-clone) were set to match the .git just copied; the rest of the config is untouched.\\n'`,
+					"fi",
 					`sed -n 's/^R //p' "$inp" | while IFS= read -r n; do`,
-					`  g config --local --get "remote.$n.url" >/dev/null 2>&1 || printf 'warp: remote "%s" exists on the source but not here; add it with git remote add %s <url>\\n' "$n" "$n"`,
+					`  git config --file "$gd/config" --get "remote.$n.url" >/dev/null 2>&1 || printf 'warp: remote "%s" exists on the source but not here; add it with git remote add %s <url>\\n' "$n" "$n"`,
 					"done",
 				]
 			: []),

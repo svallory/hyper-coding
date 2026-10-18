@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
+	appendFileSync,
 	chmodSync,
 	copyFileSync,
 	existsSync,
@@ -20,6 +21,7 @@ import { dirname, join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { LocalMachine, type MachineRunner } from "#services/remote";
 import {
+	fileSha256,
 	refConflicts,
 	refsNotCoveredHere,
 	TARGET_CONFLICTED,
@@ -113,7 +115,7 @@ function write(path: string, content: string) {
 const toTarget = (value: string) => value.split(srcHome).join(tgtHome);
 
 /** A runner that "reaches" the target home: the real LocalMachine, paths mapped. */
-function mappedRunner(log: string[]): MachineRunner {
+function mappedRunner(log: string[], failWhen?: (src: string) => boolean): MachineRunner {
 	const local = new LocalMachine();
 	return {
 		async ssh(cmd, opts) {
@@ -122,6 +124,7 @@ function mappedRunner(log: string[]): MachineRunner {
 		},
 		async rsync(src, dst, opts) {
 			log.push(`copy ${src}`);
+			if (failWhen?.(src)) return { code: 23, stdout: "", stderr: "injected failure" };
 			return local.rsync(src, toTarget(dst), opts);
 		},
 		async scp() {
@@ -136,11 +139,11 @@ interface World {
 	log: string[];
 }
 
-function world(): World {
+function world(failWhen?: (src: string) => boolean): World {
 	const log: string[] = [];
 	const changes: string[] = [];
 	const deps: WarpDeps = {
-		runner: mappedRunner(log),
+		runner: mappedRunner(log, failWhen),
 		swapMarker(path, _expected, next) {
 			changes.push("marker");
 			if (next) write(path, JSON.stringify(next));
@@ -1360,34 +1363,125 @@ describe("the target's .git/config survives a plain-repo warp (prj.44)", () => {
 		expect(existsSync(join(tgt, ".git", `${KEEP}.123`))).toBe(false);
 	});
 
-	it("a leftover keep file that matches the copied config is the original: used, with a notice (M2)", async () => {
+	const sha = (path: string) => fileSha256(path);
+
+	it("a leftover keep file is used when the target holds the config that was copied, even if the source's changed since (M2, R2-M1)", async () => {
 		const { src, tgt } = twinRepos();
 		git(src, "remote", "add", "origin", "https://example.test/source.git");
 		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
 		const original = readFileSync(join(tgt, ".git", "config"), "utf-8");
 		write(join(tgt, ".git", KEEP), original);
+		// What the interrupted warp copied, and its hash...
 		copyFileSync(join(src, ".git", "config"), join(tgt, ".git", "config"));
+		write(join(tgt, ".git", `${KEEP}.copied`), `${sha(join(src, ".git", "config"))}\n`);
+		// ...then the source's config changed.
+		git(src, "config", "user.name", "changed since");
 		const result = await world().run(plainRepoPlan("work/repo"));
 		expect(result.failure, result.failure?.detail).toBeUndefined();
 		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
 		expect(result.notices.join("\n")).toContain(
 			"an earlier warp stopped before putting the .git/config back",
 		);
+		expect(existsSync(join(tgt, ".git", `${KEEP}.copied`))).toBe(false);
 	});
 
-	it("a leftover keep file next to a config the operator edited since is renamed, not restored (M2)", async () => {
+	it("a leftover identical to the current config is dropped silently (warp stopped before its copy)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "remote", "add", "origin", "https://example.test/source.git");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		write(join(tgt, ".git", KEEP), readFileSync(join(tgt, ".git", "config"), "utf-8"));
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+		expect(result.notices.filter((line) => line.includes("earlier warp"))).toEqual([]);
+		expect(readdirSync(join(tgt, ".git")).filter((name) => name.startsWith(KEEP))).toEqual([]);
+	});
+
+	it("a leftover next to a config the operator edited since is renamed, not restored (M2)", async () => {
 		const { src, tgt } = twinRepos();
 		git(src, "remote", "add", "origin", "https://example.test/source.git");
 		git(tgt, "remote", "add", "origin", "https://example.test/old.git");
 		write(join(tgt, ".git", KEEP), readFileSync(join(tgt, ".git", "config"), "utf-8"));
+		write(join(tgt, ".git", `${KEEP}.copied`), `${sha(join(src, ".git", "config"))}\n`);
 		git(tgt, "remote", "set-url", "origin", "https://example.test/edited.git");
 		const result = await world().run(plainRepoPlan("work/repo"));
 		expect(result.failure, result.failure?.detail).toBeUndefined();
 		expect(urlOf(tgt, "origin")).toBe("https://example.test/edited.git");
-		const left = readdirSync(join(tgt, ".git")).filter((name) => name.startsWith(`${KEEP}.`));
+		const left = readdirSync(join(tgt, ".git")).filter((name) =>
+			/^hyper-warp-config\.keep\.\d+$/.test(name),
+		);
 		expect(left).toHaveLength(1);
 		expect(readFileSync(join(tgt, ".git", left[0] as string), "utf-8")).toContain("old.git");
-		expect(result.notices.join("\n")).toContain("no longer matches the copied one");
+		expect(result.notices.join("\n")).toContain("does not match the one that was copied");
+	});
+
+	it("a sha256 source onto a sha1 target leaves a working repository (R2-H1)", async () => {
+		const src = join(srcHome, "work/repo");
+		const tgt = join(tgtHome, "work/repo");
+		mkdirSync(src, { recursive: true });
+		mkdirSync(tgt, { recursive: true });
+		git(src, "init", "-q", "-b", "main", "--object-format=sha256");
+		write(join(src, "a.txt"), "a\n");
+		git(src, "add", ".");
+		git(src, "commit", "-q", "-m", "a");
+		git(tgt, "init", "-q", "-b", "main");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		spawnSync("chmod", ["-R", "u+w", join(tgt, ".git")]);
+		const result = await world().run(plainRepoPlan("work/repo", { force: true }));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(git(tgt, "status", "--porcelain").trim()).toBe("");
+		expect(git(tgt, "rev-parse", "--show-object-format").trim()).toBe("sha256");
+		expect(git(tgt, "config", "--local", "--get", "core.repositoryformatversion").trim()).toBe("1");
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+	});
+
+	it("a valueless extension on the source is set on the target (R2-L1)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "config", "core.repositoryformatversion", "1");
+		appendFileSync(join(src, ".git", "config"), "[extensions]\n\tworktreeConfig\n");
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		expect(
+			spawnSync("git", ["-C", tgt, "config", "--local", "--bool", "extensions.worktreeconfig"], {
+				encoding: "utf-8",
+			}).stdout.trim(),
+		).toBe("true");
+	});
+
+	it("remote names in format keys are case-sensitive (R2-L2)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "config", "remote.up.promisor", "true");
+		appendFileSync(join(tgt, ".git", "config"), '[remote "Up"]\n\tpromisor = true\n');
+		const result = await world().run(plainRepoPlan("work/repo"));
+		expect(result.failure, result.failure?.detail).toBeUndefined();
+		const keys = git(tgt, "config", "--local", "--name-only", "--list");
+		expect(keys).toContain("remote.up.promisor");
+		expect(keys).not.toContain("remote.Up.promisor");
+	});
+
+	it("a failed index re-send puts the config back AND syncs the format keys, on the real target (R2-L4, R2-L5)", async () => {
+		const { src, tgt } = twinRepos();
+		git(src, "config", "core.repositoryformatversion", "1");
+		git(src, "config", "extensions.worktreeConfig", "true");
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		const result = await world((from) => from.endsWith("/.git/index")).run(
+			plainRepoPlan("work/repo"),
+		);
+		expect(result.failure?.step.kind).toBe("copy");
+		expect(result.failure?.detail).toContain("own .git/config was put back");
+		expect(urlOf(tgt, "origin")).toBe("https://example.test/target.git");
+		expect(git(tgt, "config", "--local", "--get", "extensions.worktreeconfig").trim()).toBe("true");
+		expect(readdirSync(join(tgt, ".git")).filter((name) => name.startsWith(KEEP))).toEqual([]);
+	});
+
+	it("a failed tree copy puts the config back and says so only when there was one (R2-L3, R2-L5)", async () => {
+		const { tgt } = twinRepos();
+		git(tgt, "remote", "add", "origin", "https://example.test/target.git");
+		const before = readFileSync(join(tgt, ".git", "config"), "utf-8");
+		const result = await world((from) => from.endsWith("/.git/")).run(plainRepoPlan("work/repo"));
+		expect(result.failure?.detail).toContain("own .git/config was put back");
+		expect(readFileSync(join(tgt, ".git", "config"), "utf-8")).toBe(before);
+		expect(readdirSync(join(tgt, ".git")).filter((name) => name.startsWith(KEEP))).toEqual([]);
 	});
 
 	it("repository-format settings follow the copied .git, everything else stays the target's (M3)", async () => {

@@ -1683,7 +1683,7 @@ describe("a plain repo's refs on the target (PR #51 review, HIGH 2)", () => {
 		expect(plan.notes.join("\n")).toContain(
 			"info/exclude, hooks, HEAD, index and packed-refs are replaced",
 		);
-		expect(plan.notes.join("\n")).toContain(".git/config is kept as it is");
+		expect(plan.notes.join("\n")).toContain(".git/config is kept");
 	});
 });
 
@@ -1757,7 +1757,7 @@ describe(".git/index is re-sent with --checksum, and a failed .git copy puts the
 		expect(calls).toHaveLength(1);
 		expect(result.failure?.step.kind).toBe("copy");
 		expect(result.failure?.detail).toContain("the copy failed (exit 23)");
-		expect(result.failure?.detail).toContain("own .git/config was put back");
+		expect(result.failure?.detail).toContain("own .git/config");
 		expect(restoreRan).toBe(true);
 	});
 

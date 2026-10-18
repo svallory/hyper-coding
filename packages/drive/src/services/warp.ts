@@ -688,8 +688,13 @@ export type WarpStep =
 			 * compared by content.
 			 */
 			checksumFiles?: string[];
-			/** Run on the target (output ignored) when the copy fails, before the failure is reported. */
-			onFailure?: { argv: string[]; summary: string };
+			/**
+			 * Run on the target when the copy fails, before the failure is
+			 * reported: `argv` puts the config back; `syncArgv` (with this
+			 * machine's config on stdin) also makes its repository-format settings
+			 * match, and is used when the tree itself arrived.
+			 */
+			onFailure?: { argv: string[]; syncArgv: string[]; summary: string };
 			leaves: string;
 	  }
 	/** Push a worktree branch to an explicit `ssh://` URL (C-9). */
@@ -1469,7 +1474,8 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 					excludes: [...WARP_GIT_DIR_EXCLUDES],
 					checksumFiles: ["index"],
 					onFailure: {
-						argv: targetConfigRestore(inputs.cwd, false),
+						argv: targetConfigRestore(inputs.cwd, { sync: false, marker: true }),
+						syncArgv: targetConfigRestore(inputs.cwd, { marker: true }),
 						summary: `${name}'s own .git/config`,
 					},
 					leaves: `files under ${inputs.cwd}/.git`,
@@ -1555,7 +1561,7 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 	}
 	if (inputs.cwdKind === "git-repo") {
 		notes.push(
-			`The repository's .git travels in a copy of its own (only earlier warps' backups are excluded; the working-tree excludes don't apply in it) and is merged into ${name}'s copy file by file: ${name}'s info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name. ${name}'s .git/config is kept as it is (a remote only this machine has is reported, not added). Then ${name}'s refs are set to exactly this machine's in one git update-ref transaction (refs only ${name} has are deleted there), so a stale loose ref there can't shadow a packed one here.`,
+			`The repository's .git travels in a copy of its own (only earlier warps' backups are excluded; the working-tree excludes don't apply in it) and is merged into ${name}'s copy file by file: ${name}'s info/exclude, hooks, HEAD, index and packed-refs are replaced by this machine's files of the same name. ${name}'s .git/config is kept (a remote only this machine has is reported, not added), except for the repository-format settings (core.repositoryformatversion, extensions.*, partial-clone), which follow the copied .git. Then ${name}'s refs are set to exactly this machine's in one git update-ref transaction (refs only ${name} has are deleted there), so a stale loose ref there can't shadow a packed one here.`,
 			inputs.force
 				? `--force: if ${name}'s repository has refs this machine doesn't cover, all of its refs (and a detached HEAD) are first saved there under ${WARP_REF_BACKUP}/${warpId}/, which the copy leaves alone, every stash entry as ${WARP_REF_BACKUP}/${warpId}/stash/<n>; its refs that conflict as file and directory with this machine's are then deleted there. Its reflogs are not saved.`
 				: `${name}'s repository is refused if a ref (or a detached HEAD) there points at a commit this machine doesn't have, or has but reaches from none of the refs warp carries (not earlier warps' backups, other worktrees' HEADs or the stash); --force saves its refs there first.`,
@@ -2000,6 +2006,7 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 						step.tree ? `${step.dst}/` : step.dst,
 						{ excludes: step.excludes },
 					);
+					const treeArrived = result.code === 0;
 					// The quick check can skip a rewritten file (see `checksumFiles`).
 					for (const file of step.checksumFiles ?? []) {
 						if (result.code !== 0 || !existsSync(`${step.src}/${file}`)) continue;
@@ -2019,12 +2026,19 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 						let restored = "";
 						if (step.onFailure) {
 							const back = await deps.runner
-								.ssh(step.onFailure.argv, { timeoutMs: 60_000 })
+								.ssh(treeArrived ? step.onFailure.syncArgv : step.onFailure.argv, {
+									timeoutMs: 60_000,
+									...(treeArrived
+										? { stdin: (deps.localConfigInput ?? localConfigInput)(plan.cwd) }
+										: {}),
+								})
 								.catch(() => ({ code: 1, stdout: "", stderr: "" }));
 							restored =
-								back.code === 0
-									? ` ${step.onFailure.summary} was put back.`
-									: ` Putting ${step.onFailure.summary} back failed too; it is in ${plan.cwd}/.git/${WARP_CONFIG_KEEP} there.`;
+								back.code !== 0
+									? ` Putting ${step.onFailure.summary} back failed too; it is in ${plan.cwd}/.git/${WARP_CONFIG_KEEP} there.`
+									: back.stdout.includes("@restored")
+										? ` ${step.onFailure.summary} was put back.`
+										: ` There was no saved ${step.onFailure.summary} to put back.`;
 						}
 						return fail(
 							step,
