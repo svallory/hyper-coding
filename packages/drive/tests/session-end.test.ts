@@ -501,20 +501,23 @@ describe("space commit --session-end and real hook", () => {
 		const runHook = async (input = payload()) => {
 			const before = logged().length;
 			writeFileSync(hold, "");
-			const started = performance.now();
-			const result = spawnSync("bash", [hook], {
-				cwd: join(root, "notes"),
-				env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
-				input,
-				encoding: "utf8",
-				timeout: 30_000,
-			});
-			timings.push(performance.now() - started);
-			// Returned with the worker still held: the hook did not wait for it.
-			expect(result.status, "the hook must return while its worker is still running").toBe(0);
-			expect(result.stdout + result.stderr).toBe("");
-			expect(logged().length).toBe(before);
-			rmSync(hold, { force: true });
+			try {
+				const started = performance.now();
+				const result = spawnSync("bash", [hook], {
+					cwd: join(root, "notes"),
+					env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+					input,
+					encoding: "utf8",
+					timeout: 30_000,
+				});
+				timings.push(performance.now() - started);
+				// Returned with the worker still held: the hook did not wait for it.
+				expect(result.status, "the hook must return while its worker is still running").toBe(0);
+				expect(result.stdout + result.stderr).toBe("");
+				expect(logged().length).toBe(before);
+			} finally {
+				rmSync(hold, { force: true });
+			}
 			const deadline = Date.now() + 60_000;
 			while (logged().length === before && Date.now() < deadline)
 				await new Promise((resolve) => setTimeout(resolve, 50));
@@ -579,6 +582,8 @@ describe("space commit --session-end and real hook", () => {
 		// No wall-clock bound: the contract is that the hook never waits for its
 		// worker, which each runHook proves by returning while the worker was held
 		// (a hook that waited would hang to spawnSync's 30 s timeout and fail
-		// there). A fixed millisecond window only measured machine load.
+		// there). A fixed millisecond window only measured machine load; this
+		// loose bound only catches a gross regression.
+		expect(Math.max(...timings)).toBeLessThan(10_000);
 	}, 120_000);
 });

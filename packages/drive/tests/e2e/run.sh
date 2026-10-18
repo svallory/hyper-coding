@@ -365,8 +365,10 @@ for name in "${scripts[@]}"; do
   start=$SECONDS
   # Job control on for the launch only: the child becomes a process-group
   # leader (pgid == pid), so on_signal can address everything it spawned.
+  # stdin from /dev/null: a background group that reads the terminal (ssh
+  # without -n) would get SIGTTIN, stop, and hang the poll loop below.
   set -m
-  env "${env_unset[@]}" "${env_sets[@]}" bash "$here/$name.sh" &
+  env "${env_unset[@]}" "${env_sets[@]}" bash "$here/$name.sh" </dev/null &
   child=$!
   set +m
   # Poll rather than bare `wait`: bash 3.2 (stock macOS /bin/bash) does not run
