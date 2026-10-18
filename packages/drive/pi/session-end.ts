@@ -33,6 +33,7 @@ import {
 	lstatSync,
 	openSync,
 	readFileSync,
+	readSync,
 	renameSync,
 	statSync,
 	writeSync,
@@ -524,3 +525,48 @@ export function createRealDeps(overrides: Partial<SessionEndDeps> = {}): Session
 
 /** The extension's real dependencies. */
 export const realDeps: SessionEndDeps = createRealDeps();
+
+/**
+ * The notice `agent-plugin/scripts/hyper-context.sh` prints at Claude session
+ * start, for pi: when the last record of the nearest space's
+ * `session-end.log` is a failure, one line saying so, else undefined. Same
+ * wording, and like the hook it echoes only the outcome and the time (the
+ * detail can quote file names from synced space content). Best effort: a log
+ * that is missing, not a regular file or unreadable says nothing. The CLI's
+ * `lastSessionEndFailure` is the same read; this extension imports nothing
+ * from the CLI, so the parse is repeated here.
+ */
+export function failedSaveNotice(cwd: string): string | undefined {
+	const gitDir = findSpaceGitDir(cwd);
+	if (gitDir === undefined) return undefined;
+	let text: string;
+	try {
+		// O_NONBLOCK: a FIFO planted in the log's place must not hang pi's start.
+		const fd = openSync(
+			join(gitDir, SESSION_END_LOG),
+			constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+		);
+		try {
+			const stat = fstatSync(fd);
+			if (!stat.isFile()) return undefined;
+			const length = Math.min(stat.size, 16 * 1024);
+			const buffer = Buffer.alloc(length);
+			readSync(fd, buffer, 0, length, stat.size - length);
+			text = buffer.toString("utf8");
+		} finally {
+			closeSync(fd);
+		}
+	} catch {
+		return undefined;
+	}
+	const last = text
+		.split("\n")
+		.filter((value) => value !== "")
+		.pop();
+	if (last === undefined) return undefined;
+	const [at, , outcome] = last.split("\t");
+	if (outcome !== "refused" && outcome !== "push-failed" && outcome !== "failed") return undefined;
+	const when = (at ?? "").replace(/[^A-Za-z0-9:.+-]/g, "") || "at an unknown time";
+	const what = outcome === "push-failed" ? "push failed" : outcome;
+	return `The last session-end save of this space failed (${what}, ${when}). Run \`hyper space status\` for the reason.`;
+}

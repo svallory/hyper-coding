@@ -46,6 +46,7 @@ import {
 	childEnv,
 	createRealDeps,
 	entryText,
+	failedSaveNotice,
 	MISSING_CLI_LINE,
 	OUTDATED_CLI_LINE,
 	SESSION_END_LOG as PI_SESSION_END_LOG,
@@ -219,11 +220,67 @@ const facts = (extra: Partial<SessionFacts> = {}): SessionFacts => ({
 	...extra,
 });
 
+describe("the pi extension on session_start: the failed-save notice", () => {
+	function spaceWithLog(...lines: string[]) {
+		const space = join(directory, "space");
+		const gitDir = makeSpaceGitDir(space);
+		mkdirSync(join(space, "notes"), { recursive: true });
+		if (lines.length > 0) writeFileSync(join(gitDir, SESSION_END_LOG), `${lines.join("\n")}\n`);
+		return { space, gitDir };
+	}
+	async function start(cwd: string, reason = "startup") {
+		const pi = fakePi();
+		const deps = fakeDeps();
+		hyperdrive(pi as never, deps);
+		const { ctx, notifications } = fakeCtx({ cwd });
+		await pi.fire("session_start", { type: "session_start", reason }, ctx);
+		return notifications;
+	}
+	const at = "2026-10-18T10:00:00.000Z";
+
+	it("prints the Claude hook's line when the last save failed", async () => {
+		const { space } = spaceWithLog(
+			`${at}\t${id}\tcommitted\t-`,
+			`${at}\t${id}\tfailed\tsecret in /x`,
+		);
+		expect(await start(join(space, "notes"))).toEqual([
+			`The last session-end save of this space failed (failed, ${at}). Run \`hyper space status\` for the reason.`,
+		]);
+	});
+	it("says 'push failed' for push-failed and never echoes the detail", async () => {
+		const { space } = spaceWithLog(`${at}\t${id}\tpush-failed\tsecret-name.txt`);
+		const [line] = await start(space);
+		expect(line).toContain("(push failed,");
+		expect(line).not.toContain("secret-name");
+	});
+	it("prints nothing when the last save succeeded, even after an older failure", async () => {
+		const { space } = spaceWithLog(`${at}\t${id}\tfailed\told`, `${at}\t${id}\tcommitted\t-`);
+		expect(await start(space)).toEqual([]);
+	});
+	it("prints nothing without a log, outside a space, or on a restart", async () => {
+		const { space } = spaceWithLog();
+		expect(await start(space)).toEqual([]);
+		expect(await start(directory)).toEqual([]);
+		const failing = spaceWithLog(`${at}\t${id}\tfailed\tx`);
+		for (const reason of ["reload", "new", "resume", "fork"]) {
+			expect(await start(failing.space, reason)).toEqual([]);
+		}
+	});
+	it("does not read a symlinked log", () => {
+		const { space, gitDir } = spaceWithLog();
+		const elsewhere = join(directory, "elsewhere.log");
+		writeFileSync(elsewhere, `${at}\t${id}\tfailed\tx\n`);
+		symlinkSync(elsewhere, join(gitDir, SESSION_END_LOG));
+		expect(failedSaveNotice(space)).toBeUndefined();
+	});
+});
+
 describe("the pi extension on session_shutdown", () => {
-	it("registers only session_shutdown and never throws into pi", async () => {
+	it("registers only session_start and session_shutdown and never throws into pi", async () => {
 		const pi = fakePi();
 		hyperdrive(pi as never, fakeDeps());
 		expect(pi.has("session_shutdown")).toBe(true);
+		expect(pi.has("session_start")).toBe(true);
 		expect(pi.has("session_end")).toBe(false);
 		const broken = fakeCtx({});
 		broken.ctx.sessionManager.getBranch = () => {

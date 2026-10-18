@@ -11,6 +11,9 @@
  * call that overran that bound in a space, land in
  * `.hyper/space.git/session-end.log` and surface in `hyper space status`.
  *
+ * At the next `startup` a failed last save is reported in one line, as Claude's
+ * SessionStart hook does.
+ *
  * Only `quit` saves. `/new`, `/resume`, `/fork` and `/reload` start over in
  * the same place, exactly like Claude's `/clear` and resume, so they save
  * nothing.
@@ -19,7 +22,13 @@
  * so everything it waits for is bounded and it must never throw into pi.
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { realDeps, type SessionEndDeps, type SessionFacts, saveSessionEnd } from "./session-end.ts";
+import {
+	failedSaveNotice,
+	realDeps,
+	type SessionEndDeps,
+	type SessionFacts,
+	saveSessionEnd,
+} from "./session-end.ts";
 
 /** Capture only plain data here: the context is invalid after shutdown. */
 function factsFrom(ctx: ExtensionContext): SessionFacts {
@@ -46,6 +55,19 @@ function factsFrom(ctx: ExtensionContext): SessionFacts {
  * spawn.
  */
 export default function hyperdrive(pi: ExtensionAPI, deps: SessionEndDeps = realDeps): void {
+	// The detached worker cannot print into the session it outlives, so a failed
+	// save is told here, at the next start: the same one line Claude's
+	// SessionStart hook prints. `reload`, `new`, `resume` and `fork` start over
+	// in the same place and say nothing.
+	pi.on("session_start", async (event, ctx) => {
+		try {
+			if (event.reason !== "startup") return;
+			const notice = failedSaveNotice(ctx.cwd);
+			if (notice !== undefined) withNotify(deps, ctx).notify(notice);
+		} catch {
+			// Never throw into pi.
+		}
+	});
 	pi.on("session_shutdown", async (event, ctx) => {
 		try {
 			// `/new`, `/resume`, `/fork` and `/reload` are session replacement,
