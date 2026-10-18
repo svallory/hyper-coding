@@ -55,7 +55,7 @@ function parseFeatures(raw: string): Feature[] {
  * A machine registered with `features = ["tools", "config-sync"]` should
  * only be asked about the ones it doesn't have.
  */
-function preselected(machine: MachineInfo | null): Feature[] {
+export function preselected(machine: MachineInfo | null): Feature[] {
 	const configured = machine?.features ?? [];
 	return FEATURE_LIST.map((entry) => entry.feature).filter((feature) =>
 		configured.includes(feature),
@@ -627,9 +627,8 @@ export default class MachineSetup extends BaseCommand<typeof MachineSetup> {
 				),
 			);
 		if (report.failed.length > 0)
-			// Not "tool(s)": a failed entry can be any task whose install threw —
-			// including a rootless-Docker install that could not reach the agent —
-			// and calling that a tool failure would send the user looking for one.
+			// Not "tool(s)": a failed entry can be any task whose install threw, and
+			// calling that a tool failure would send the user looking for one.
 			messages.push(
 				`${report.failed.length} setup step(s) could not be completed. Fix the failures above and re-run setup.`,
 			);

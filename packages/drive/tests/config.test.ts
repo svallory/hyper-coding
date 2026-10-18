@@ -3,6 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { preselected } from "#commands/machine/setup";
 import { configExists, configPath, loadConfig, writeConfig } from "#config/index";
 import { DEFAULT_CONFIG, DEFAULT_MACHINE } from "#config/schema";
 import { withTempConfig } from "#tests/tmp-config";
@@ -55,6 +56,31 @@ describe("loadConfig", () => {
 		expect(config.warp.exclude).toEqual(["node_modules", "dist"]);
 		expect(config.sync.claude.ignore).toEqual(["projects/**/*.log"]);
 		expect(config.sync.pi.ignore).toEqual(["sessions/**"]);
+	});
+
+	it("loads an old drive.toml that still names the retired agent-user keys and features", () => {
+		withTempConfig(
+			[
+				"[machines.old]",
+				'home = "/home/old"',
+				'features = ["tools", "docker-rootless", "agent-user", "home-path"]',
+				'agent_user = "agent"',
+				'agent_key = "/home/old/.ssh/id_ed25519.pub"',
+				"",
+			].join("\n"),
+		);
+
+		const config = loadConfig();
+		expect(config.machines.old?.home).toBe("/home/old");
+
+		// A dead feature is never offered or preselected by `machine setup`.
+		const machine = {
+			name: "old",
+			features: config.machines.old?.features ?? [],
+			source: "config" as const,
+			herdr: false,
+		};
+		expect(preselected(machine)).toEqual(["tools"]);
 	});
 
 	it("fills per-machine defaults when a machine omits them", () => {

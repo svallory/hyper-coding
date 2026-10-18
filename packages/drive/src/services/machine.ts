@@ -3,7 +3,7 @@
  * user's `drive.toml` with the SSH machines Herdr has saved.
  *
  * Herdr owns the connection (host, keys, compression); `drive.toml` owns the
- * hyperdrive details (home, features, agent user). Neither alone is enough, so
+ * hyperdrive details (home, features). Neither alone is enough, so
  * the two are merged here rather than in each command.
  */
 

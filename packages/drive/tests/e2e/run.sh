@@ -309,9 +309,8 @@ for name in "${scripts[@]}"; do
     continue
   fi
 
-  # Short paths: a script may run a throwaway ssh-agent whose socket
-  # lives under $HOME, and macOS's TMPDIR (/var/folders/…) is already so long
-  # that a home under it pushes the socket path past sun_path's 104 bytes.
+  # Short paths: a script may bind a unix socket under $HOME, and macOS's
+  # TMPDIR (/var/folders/…) is already so long that a home under it pushes the socket path past sun_path's 104 bytes.
   home="$(mktemp -d /tmp/hyperdrive-e2e-home.XXXXXX)"
   homes+=("$home")
 
