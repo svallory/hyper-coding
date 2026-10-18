@@ -31,11 +31,13 @@ export { type BaseArgs, BaseCommand, type BaseFlags } from "#lib/base-command";
 export {
 	ALLOWLIST_MARKER,
 	AllowlistError,
+	findSecretContent,
 	findSecretPaths,
 	isHyperAllowlist,
 	normaliseTrackedEntry,
 	RESERVED_PATHS,
 	renderGitignore,
+	SECRET_CONTENT_PATTERNS,
 	SECRET_PATTERNS,
 } from "#services/allowlist";
 export {

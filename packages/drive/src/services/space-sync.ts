@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { escapeControlCharacters, quoteForTerminal } from "#lib/terminal-text";
 import {
 	claudeUserStateExcludes,
+	findSecretContent,
 	findSecretPaths,
 	isClaudeUserStatePath,
 } from "#services/allowlist";
@@ -165,12 +166,31 @@ export function stagedGitlinks(root: string): string[] {
 		.filter((path) => path !== "");
 }
 
+/** Text files above this size are not scanned for token shapes. */
+const CONTENT_SCAN_MAX_BYTES = 1024 * 1024;
+/** A NUL byte in this much of the start marks a binary file (skipped). */
+const BINARY_SNIFF_BYTES = 4096;
+/** Upper bound on blob bytes held in memory at once while scanning content. */
+const CONTENT_SCAN_BATCH_BYTES = 16 * 1024 * 1024;
+
+/** A content hit: where and which rule, never the matched value. */
+export interface SecretContentFinding {
+	path: string;
+	line: number;
+	pattern: string;
+}
+
 /** Inspect the index, not disk: deletions are safe and exact overrides never act as globs. */
 export async function inspectStagedFiles(
 	root: string,
 	paths: string[],
 	allow: string[] = [],
-): Promise<{ secrets: string[]; allowedSecrets: string[]; largeFiles: string[] }> {
+): Promise<{
+	secrets: string[];
+	allowedSecrets: string[];
+	largeFiles: string[];
+	contentFindings: SecretContentFinding[];
+}> {
 	const entries = new Map<string, string>();
 	for (const entry of spaceGit(root, ["ls-files", "-s", "-z"]).stdout.split("\0")) {
 		if (!entry) continue;
@@ -181,22 +201,72 @@ export async function inspectStagedFiles(
 	const secrets: string[] = [];
 	const allowedSecrets: string[] = [];
 	const largeFiles: string[] = [];
+	const contentFindings: SecretContentFinding[] = [];
 	const blobs = await readSpaceBlobPrefixes(
 		root,
 		paths.flatMap((path) => (entries.has(path) ? [entries.get(path)!] : [])),
 	);
+	const flagged = new Set<string>();
+	// Text blobs small enough to scan, by blob hash (identical files share a read).
+	const scannable = new Map<string, string[]>();
 	for (const path of paths) {
 		const hash = entries.get(path);
 		if (!hash) continue; // Deleted paths have no staged blob to leak.
 		const blob = blobs.get(hash)!;
 		if (blob.size > 50 * 1024 * 1024) largeFiles.push(path);
-		const prefix = blob.prefix.toString("utf8");
-		const secret =
-			findSecretPaths([path]).length > 0 ||
-			/-----BEGIN (?:[^\r\n]* )?PRIVATE KEY(?: BLOCK)?-----/.test(prefix);
-		if (secret) (allow.includes(path) ? allowedSecrets : secrets).push(path);
+		if (findSecretPaths([path]).length > 0) {
+			flagged.add(path);
+			continue;
+		}
+		const binary = blob.prefix.subarray(0, BINARY_SNIFF_BYTES).includes(0);
+		if (binary || blob.size > CONTENT_SCAN_MAX_BYTES) {
+			// Not scanned for tokens, but a key block at the start still counts.
+			if (/-----BEGIN (?:[^\r\n]* )?PRIVATE KEY(?: BLOCK)?-----/.test(blob.prefix.toString("utf8")))
+				flagged.add(path);
+		} else if (blob.size > 0) {
+			scannable.set(hash, [...(scannable.get(hash) ?? []), path]);
+		}
 	}
-	return { secrets, allowedSecrets, largeFiles };
+	// A blob that fits in the first read is already whole: scan it as is, so a
+	// tree of small files costs no extra Git process.
+	const bodyOf = new Map<string, Buffer>();
+	const queue: string[] = [];
+	for (const hash of scannable.keys()) {
+		const blob = blobs.get(hash)!;
+		if (blob.size <= blob.prefix.length) bodyOf.set(hash, blob.prefix);
+		else queue.push(hash);
+	}
+	// Larger bodies in size-bounded batches: one batch reader per batch, not per file.
+	while (queue.length > 0) {
+		const batch: string[] = [];
+		let bytes = 0;
+		while (queue.length > 0) {
+			const size = blobs.get(queue[0])!.size;
+			if (batch.length > 0 && bytes + size > CONTENT_SCAN_BATCH_BYTES) break;
+			bytes += size;
+			batch.push(queue.shift()!);
+		}
+		const bodies = await readSpaceBlobPrefixes(root, batch, CONTENT_SCAN_MAX_BYTES);
+		for (const hash of batch) bodyOf.set(hash, bodies.get(hash)!.prefix);
+	}
+	for (const [hash, body] of bodyOf) {
+		const hits = findSecretContent(body.toString("utf8"));
+		if (hits.length === 0) continue;
+		for (const path of scannable.get(hash)!) {
+			flagged.add(path);
+			for (const hit of hits) contentFindings.push({ path, ...hit });
+		}
+	}
+	for (const path of paths) {
+		if (!flagged.has(path)) continue;
+		if (allow.includes(path)) {
+			allowedSecrets.push(path);
+			// An allowed path reports nothing as a refusal.
+			for (let i = contentFindings.length - 1; i >= 0; i--)
+				if (contentFindings[i].path === path) contentFindings.splice(i, 1);
+		} else secrets.push(path);
+	}
+	return { secrets, allowedSecrets, largeFiles, contentFindings };
 }
 
 export interface SpaceCommitResult {
@@ -327,7 +397,7 @@ async function commitSpaceLocked(
 					`${unsafeNames.length === 1 ? "it" : "them"} without the control character, then ${caller === "init" ? "rerun `hyper space init`" : "commit again"}.`,
 			);
 		const inspection = await inspectStagedFiles(root, staged, allowSecrets);
-		const { secrets, allowedSecrets, largeFiles } = inspection;
+		const { secrets, allowedSecrets, largeFiles, contentFindings } = inspection;
 		for (const path of allowedSecrets)
 			reportWarning(
 				`warning: allowing secret path ${quoteForTerminal(path)} as explicitly requested.\n`,
@@ -337,10 +407,16 @@ async function commitSpaceLocked(
 				`warning: ${quoteForTerminal(path)} is above 50 MB; committing it will make this space's history larger.\n`,
 			);
 		if (secrets.length > 0) {
+			const described = secrets.flatMap((path) => {
+				const hits = contentFindings.filter((finding) => finding.path === path);
+				return hits.length === 0
+					? [escapeControlCharacters(path)]
+					: hits.map((hit) => `${escapeControlCharacters(path)}:${hit.line} (${hit.pattern})`);
+			});
 			throw new Error(
-				`refusing to commit ${escapeControlCharacters(branch)}: ${secrets.map(escapeControlCharacters).join(", ")} ` +
+				`refusing to commit ${escapeControlCharacters(branch)}: ${described.join(", ")} ` +
 					`${secrets.length === 1 ? "matches" : "match"} the secret guard (a .env, a key, a ` +
-					`credentials file). Move ${secrets.length === 1 ? "it" : "them"} out of the space, or ` +
+					`credentials file, or a token in its text). Move ${secrets.length === 1 ? "it" : "them"} out of the space, or ` +
 					`keep ${secrets.length === 1 ? "it" : "them"} out of the allowlist.` +
 					(caller === "init"
 						? " Then rerun `hyper space init`."

@@ -137,7 +137,7 @@ describe("space commit", () => {
 		expect(flat(allowed.stderr)).toContain("notes/readme.txt");
 		expect(count(root)).toBe(2);
 	});
-	it("inspects staged bytes, not changed disk content, within a 4 KB cap", async () => {
+	it("inspects staged bytes, not changed disk content, and scans small text files in full", async () => {
 		const root = makeSpace();
 		const path = "notes/readme.txt";
 		writeFileSync(join(root, path), "-----BEGIN OPENSSH PRIVATE KEY-----\n");
@@ -151,7 +151,8 @@ describe("space commit", () => {
 		spaceGit(root, ["add", path]);
 		const hash = spaceGit(root, ["rev-parse", `:${path}`]).stdout.trim();
 		expect((await readSpaceBlobPrefixes(root, [hash])).get(hash)!.prefix).toHaveLength(4096);
-		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([]);
+		// Past the 4 KB prefix, the content scan of a small text file still sees the key.
+		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([path]);
 		writeFileSync(join(root, path), "-----BEGIN RSA\n PRIVATE KEY-----\n");
 		spaceGit(root, ["add", path]);
 		expect((await inspectStagedFiles(root, [path])).secrets).toEqual([]);
