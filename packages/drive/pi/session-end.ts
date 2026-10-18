@@ -32,6 +32,7 @@ import {
 	fstatSync,
 	lstatSync,
 	openSync,
+	readFileSync,
 	renameSync,
 	statSync,
 	writeSync,
@@ -301,6 +302,9 @@ export async function saveSessionEnd(
 	return payload;
 }
 
+/** `core.worktree = ../..` as `initSpaceGitDir` writes it: the marker of a space's own git dir. */
+const OWN_WORKTREE = /^[ \t]*worktree[ \t]*=[ \t]*\.\.\/\.\.[ \t]*$/m;
+
 /**
  * The nearest `.hyper/space.git` directory at or above `dir`. Used ONLY to
  * decide whether a missing CLI is worth a line and where a timed-out probe is
@@ -321,17 +325,22 @@ export function findSpaceGitDir(dir: string): string | undefined {
 /**
  * A real directory at both `.hyper` and `.hyper/space.git` (no symlink at
  * either level, checked with `lstat`) that looks like a git dir: `HEAD` and
- * `config` are regular files. A clone can carry symlinks or a bare
- * `.hyper/space.git` folder as content, and the timeout line must never be
- * steered through one; a candidate that fails is skipped and the walk goes on.
+ * `config` are regular files, owned by the current user, and the config
+ * carries the `core.worktree = ../..` that `hyper space init` writes (the CLI
+ * refuses any other git dir as not its own). A clone can carry symlinks, a
+ * bare `.hyper/space.git` folder or a whole foreign git dir as content, and
+ * the timeout line must never be steered into one; a candidate that fails is
+ * skipped and the walk goes on.
  */
 function isRealSpaceGitDir(candidate: string): boolean {
 	try {
 		if (!lstatSync(dirname(candidate)).isDirectory()) return false;
-		if (!lstatSync(candidate).isDirectory()) return false;
-		return (
-			lstatSync(join(candidate, "HEAD")).isFile() && lstatSync(join(candidate, "config")).isFile()
-		);
+		const dir = lstatSync(candidate);
+		if (!dir.isDirectory()) return false;
+		if (typeof process.getuid === "function" && dir.uid !== process.getuid()) return false;
+		if (!lstatSync(join(candidate, "HEAD")).isFile()) return false;
+		if (!lstatSync(join(candidate, "config")).isFile()) return false;
+		return OWN_WORKTREE.test(readFileSync(join(candidate, "config"), "utf8").slice(0, 64 * 1024));
 	} catch {
 		return false;
 	}
@@ -353,7 +362,9 @@ function logField(text: string, limit: number): string {
  * `appendSessionEndLog(gitDir, { session, outcome: "failed", detail })`: the
  * same tab-separated record and the same rotation, except that it never
  * follows a symlink. A `session-end.log` that exists and is not a regular file
- * is refused, and the open is `O_NOFOLLOW`. Never throws: a log that cannot be
+ * is refused, as is one with more than one hard link (it would append to a file
+ * that also lives outside the git dir), and the open is `O_NOFOLLOW`. The CLI
+ * writer (`isAppendableLog`) applies the same rule. Never throws: a log that cannot be
  * written costs nothing more than the save already lost.
  */
 export function appendFailureLine(gitDir: string, sessionId: string, detail: string): void {
@@ -366,7 +377,7 @@ export function appendFailureLine(gitDir: string, sessionId: string, detail: str
 			/* No log yet. */
 		}
 		if (existing !== undefined) {
-			if (!existing.isFile()) return;
+			if (!existing.isFile() || existing.nlink !== 1) return;
 			if (existing.size >= SESSION_END_LOG_LIMIT) renameSync(path, `${path}.1`);
 		}
 		const record = [
@@ -382,7 +393,8 @@ export function appendFailureLine(gitDir: string, sessionId: string, detail: str
 		);
 		try {
 			// Swapped for something else between the lstat and the open.
-			if (!fstatSync(fd).isFile()) return;
+			const opened = fstatSync(fd);
+			if (!opened.isFile() || opened.nlink !== 1) return;
 			writeSync(fd, `${record}\n`);
 		} finally {
 			closeSync(fd);

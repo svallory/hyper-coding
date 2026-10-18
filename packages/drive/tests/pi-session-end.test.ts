@@ -16,6 +16,7 @@ import {
 import {
 	chmodSync,
 	existsSync,
+	linkSync,
 	mkdirSync,
 	mkdtempSync,
 	readdirSync,
@@ -415,6 +416,28 @@ describe("the pi extension on session_shutdown", () => {
 			symlinkSync(victim, join(gitDir, SESSION_END_LOG));
 			const before = listTree(outside);
 			await quitIn(clone);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			expect(listTree(outside)).toEqual(before);
+		});
+
+		it("refuses a session-end.log with a second hard link", async () => {
+			const { clone, outside, victim } = plant();
+			const gitDir = makeSpaceGitDir(clone);
+			linkSync(victim, join(gitDir, SESSION_END_LOG));
+			const before = listTree(outside);
+			await quitIn(clone);
+			expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			expect(listTree(outside)).toEqual(before);
+		});
+
+		it("skips a git dir carried by a clone that is not the space's own", async () => {
+			const { clone, outside, victim } = plant();
+			// Real directories, HEAD and config, but another repo's config: no core.worktree = ../..
+			const gitDir = makeSpaceGitDir(clone);
+			writeFileSync(join(gitDir, "config"), "[core]\n\tbare = true\n");
+			const before = listTree(outside);
+			await quitIn(clone);
+			expect(existsSync(join(gitDir, SESSION_END_LOG))).toBe(false);
 			expect(readFileSync(victim, "utf8")).toBe("precious\n");
 			expect(listTree(outside)).toEqual(before);
 		});
@@ -987,7 +1010,7 @@ function makeSpaceGitDir(root: string): string {
 	const gitDir = join(root, ".hyper", "space.git");
 	mkdirSync(gitDir, { recursive: true });
 	writeFileSync(join(gitDir, "HEAD"), "ref: refs/heads/space/test\n");
-	writeFileSync(join(gitDir, "config"), "[core]\n\tbare = true\n");
+	writeFileSync(join(gitDir, "config"), "[core]\n\tbare = false\n\tworktree = ../..\n");
 	return gitDir;
 }
 
