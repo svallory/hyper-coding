@@ -15,9 +15,6 @@
 
 set -uo pipefail
 
-hook_dir="${BASH_SOURCE[0]%/*}"
-[[ "$hook_dir" == "${BASH_SOURCE[0]}" ]] && hook_dir=.
-
 # Hook input arrives as JSON on stdin. No jq dependency: node is already a
 # prerequisite for the Node stack, and projects that lack it simply skip.
 input="$(cat 2>/dev/null || true)"
