@@ -13,8 +13,10 @@ import * as drive from "#index";
 
 const ALLOWLIST_EXPORTS = [
 	"AllowlistError",
+	"findSecretContent",
 	"findSecretPaths",
 	"renderGitignore",
+	"SECRET_CONTENT_PATTERNS",
 	"SECRET_PATTERNS",
 ] as const;
 

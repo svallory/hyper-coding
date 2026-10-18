@@ -103,6 +103,68 @@ export const SECRET_PATTERNS: readonly string[] = [
 	"**/shell-snapshots/**",
 ];
 
+/** One content rule: a name to report and a single-line regex. */
+export interface SecretContentPattern {
+	name: string;
+	regex: RegExp;
+}
+
+/**
+ * Content shapes that mean a file holds a credential, whatever its name. Each
+ * regex is tested against one line (no `g` flag, so no state). A hit is
+ * reported as `path:line (name)`; the matched text is never kept or printed.
+ * A false positive is waived per path, like a path hit (`--allow-secret`).
+ */
+export const SECRET_CONTENT_PATTERNS: readonly SecretContentPattern[] = [
+	// A PEM/OpenSSH private key block header (RSA, EC, OPENSSH, ENCRYPTED, bare).
+	{
+		name: "private key block",
+		regex: /-----BEGIN (?:[^\r\n]* )?PRIVATE KEY(?: BLOCK)?-----/,
+	},
+	// GitHub classic and OAuth/app tokens: ghp_, gho_, ghu_, ghs_, ghr_ + 36 chars.
+	{ name: "GitHub token", regex: /\bgh[pousr]_[A-Za-z0-9]{36}\b/ },
+	// GitHub fine-grained personal access token.
+	{ name: "GitHub fine-grained token", regex: /\bgithub_pat_[A-Za-z0-9_]{22,}/ },
+	// Anthropic API key (checked before the generic `sk-` rule so it gets its own name).
+	{ name: "Anthropic API key", regex: /\bsk-ant-[A-Za-z0-9_-]{20,}/ },
+	// OpenAI-style secret keys (`sk-`, `sk-proj-`): a long body after the prefix.
+	{ name: "API key (sk-)", regex: /\bsk-(?!ant-)[A-Za-z0-9_-]{32,}/ },
+	// AWS access key id: long-term (AKIA) or temporary (ASIA) + 16 upper-case alphanumerics.
+	{ name: "AWS access key id", regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
+	// Slack bot, user-app and legacy tokens: xoxb-, xoxp-, xoxa-.
+	{ name: "Slack token", regex: /\bxox[bpa]-[A-Za-z0-9-]{10,}/ },
+	// npm automation/publish token: npm_ + 36 alphanumerics.
+	{ name: "npm token", regex: /\bnpm_[A-Za-z0-9]{36}\b/ },
+	// Generic assignment: password/token/secret/api_key `=` a long unbroken value.
+	// `$`, `{` and spaces end the value, so `token=${TOKEN}` and prose do not match.
+	{
+		name: "generic secret assignment",
+		regex:
+			/\b(?:password|passwd|token|secret|api[_-]?key)\b["']?\s*=\s*["']?[A-Za-z0-9_\-./+=]{16,}/i,
+	},
+];
+
+/** Where, and by which rule, a file's text looks like a credential. No value. */
+export interface SecretContentHit {
+	line: number;
+	pattern: string;
+}
+
+/**
+ * Which lines of `text` match SECRET_CONTENT_PATTERNS: at most one hit per
+ * line and rule, in line order. Never returns the matched text.
+ */
+export function findSecretContent(text: string): SecretContentHit[] {
+	const hits: SecretContentHit[] = [];
+	const lines = text.split(/\r\n|\r|\n/);
+	for (let i = 0; i < lines.length; i++) {
+		for (const { name, regex } of SECRET_CONTENT_PATTERNS) {
+			if (regex.test(lines[i])) hits.push({ line: i + 1, pattern: name });
+		}
+	}
+	return hits;
+}
+
 /**
  * A `tracked` entry that cannot be rendered safely. Friendly, like
  * `SpaceGitError`: the message is the whole story and a stack would only
