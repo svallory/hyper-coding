@@ -3,8 +3,12 @@
 # localhost.
 #
 # Runs `hyper machine setup loop --features config-sync` and `hyper drive
-# sync-config loop`, where `loop` is a fake machine that Herdr maps to host
-# `localhost` with a temp home on both sides. It asserts:
+# sync-config loop`, where `loop` is a fake machine that Herdr maps to the
+# beta side with a temp home on both sides. The beta is a disposable podman
+# container (the same sshd image warp.sh uses, tests/e2e/lib/ssh-target.sh)
+# reached on a mapped localhost port with a throwaway ed25519 key through a
+# temporary ssh config (`ssh -F`); the operator's ~/.ssh, agent and keys are
+# never read. It asserts:
 #   1. `mutagen version` and the version this script was written against
 #   2. `machine setup loop --features config-sync --yes` creates both sessions
 #      (Claude + pi), creating beta's missing `~/.pi` first, and `sync-config
@@ -24,26 +28,24 @@
 #
 # Usage: packages/drive/tests/e2e/sync.sh (standalone or through run.sh; it
 #        sets its own temp HOME, empty CLAUDE_CONFIG_DIR and HYPER_HOME)
-# Cost:   creates two throwaway Mutagen sessions named hyper-claude-loop-test /
-#         hyper-pi-loop-test, a temp fake `herdr` on PATH, and an ssh hop to
-#         localhost. It NEVER touches the operator's real ~/.claude or their
-#         existing claude-config / pi-config sessions. Requires sshd reachable
-#         at localhost (Remote Login on macOS).
+#        Requires `mutagen` and `podman` on PATH. SYNC_E2E_PORT and
+#        SYNC_E2E_CONTAINER pick the mapped port and container name (run.sh
+#        gives each run a free port and a unique name).
+# Cost:   creates two throwaway Mutagen sessions named hyper-claude-loop /
+#         hyper-pi-loop, a temp fake `herdr` on PATH, one container and its
+#         image (built once, shared with warp.sh). It NEVER touches the
+#         operator's real ~/.claude or their existing claude-config /
+#         pi-config sessions.
+#
+# Loopback opt-in, for people without podman: HYPER_E2E_LOOPBACK_OWN_KEY=1 makes
+# the beta `localhost` itself instead, logging in as YOU with your own ssh key
+# (the passwd home's ~/.ssh/id_*; never the agent, never a write to any
+# authorized_keys). It needs sshd reachable at localhost (Remote Login on
+# macOS). It is never implied: not by CI, not by run.sh.
 
 set -euo pipefail
 
-# The beta is LOOPBACK: Mutagen and the setup's `mkdir` log in to localhost as
-# the caller, with the caller's own ssh key (the passwd home's ~/.ssh/id_*;
-# never the agent, never a write to any authorized_keys). Opt in explicitly.
-# run.sh sets it when allowed (CI=true, or the caller set it). A disposable
-# container beta, like warp.sh's, is the follow-up that removes this.
-if [ "${HYPER_E2E_LOOPBACK_OWN_KEY:-}" != "1" ]; then
-  echo "# refusing to run: sync.sh logs in to localhost as you with your own ssh key; set HYPER_E2E_LOOPBACK_OWN_KEY=1 to allow it" >&2
-  exit 1
-fi
-
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-pkg="$(cd "$here/../.." && pwd)"
 # e2e -> tests -> drive -> packages, so the CLI is three levels up.
 cli="$here/../../../cli/bin/run.js"
 [ -f "$cli" ] || { echo "# cannot find the CLI at $cli — build packages/cli first" >&2; exit 1; }
@@ -59,6 +61,39 @@ step=0
 pass() { step=$((step + 1)); printf 'ok %d - %s\n' "$step" "$1"; }
 die() { printf 'not ok %d - %s\n' "$((step + 1))" "$1" >&2; exit 1; }
 
+# Where the beta lives. The container is the default; logging in to localhost as
+# the caller with the caller's own key happens only when asked for by name.
+if [ "${HYPER_E2E_LOOPBACK_OWN_KEY:-}" = "1" ]; then
+  mode=loopback
+else
+  mode=container
+  command -v podman >/dev/null 2>&1 \
+    || { echo "# podman is not on PATH: install it, or set HYPER_E2E_LOOPBACK_OWN_KEY=1 to log in to localhost as you with your own ssh key" >&2; exit 1; }
+fi
+image="debian:13"
+beta_user="svallory"
+container="${SYNC_E2E_CONTAINER:-hyper-sync-e2e-$$}"
+port="${SYNC_E2E_PORT:-}"
+if [ "$mode" = container ] && [ -z "$port" ]; then
+  port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
+fi
+container_started=0
+
+# podman keeps its machine connection (macOS) and image store (Linux) under the
+# caller's XDG dirs, and this script swaps HOME and drops XDG below. Pin what
+# podman saw at start, for every call, so the swap cannot strand it.
+podman_home="$HOME"
+podman_xdg_config="${XDG_CONFIG_HOME:-}"
+podman_xdg_data="${XDG_DATA_HOME:-}"
+podman() {
+  local -a pe=("HOME=$podman_home")
+  [ -z "$podman_xdg_config" ] || pe+=("XDG_CONFIG_HOME=$podman_xdg_config")
+  [ -z "$podman_xdg_data" ] || pe+=("XDG_DATA_HOME=$podman_xdg_data")
+  env "${pe[@]}" podman "$@"
+}
+# shellcheck source=lib/ssh-target.sh
+source "$here/lib/ssh-target.sh"
+
 echo "# mutagen version"
 version="$(mutagen version 2>/dev/null | awk '{print $1}')"
 echo "$version"
@@ -73,8 +108,8 @@ work_real="$(cd "$work" && pwd -P)"
 alpha_home="$work_real/alpha"
 beta_home="$work_real/beta"
 fakebin="$work_real/bin"
-log="$work_real/mutagen.log"
-mkdir -p "$alpha_home" "$beta_home" "$fakebin" "$alpha_home/.claude" "$alpha_home/.pi/agent"
+mkdir -p "$alpha_home" "$fakebin" "$alpha_home/.claude" "$alpha_home/.pi/agent"
+key="$work_real/id"
 
 # H2: this script's OWN Mutagen daemon, inside its own throwaway directory. With
 # only a temp HOME, `mutagen sync create` starts a daemon under <tmpHOME>/.mutagen
@@ -107,17 +142,26 @@ cleanup() {
   if [ "$HOME" = "$work_real/home" ] && [ ! -e "$HOME/Library/LaunchAgents/io.mutagen.mutagen.plist" ]; then
     mutagen daemon stop >/dev/null 2>&1 || true
   fi
+  if [ "$container_started" = "1" ]; then
+    echo "# tearing down $container"
+    podman rm -f "$container" >/dev/null 2>&1 || true
+  fi
   rm -rf "$mutagen_dir" "$work"
 }
 # NOTE: `trap cleanup EXIT` is installed AFTER the preflight below, not here.
 # Installing it earlier means the preflight's `exit 1` fires cleanup, which
 # terminates the very `hyper-*-loop` session it just refused to touch.
 
-# Fake herdr: the `loop` machine is host `localhost` with a temp home on both sides.
+# Fake herdr: the `loop` machine is the beta, with a temp home on both sides.
+if [ "$mode" = container ]; then
+  beta_target="$beta_user@localhost:$port"
+else
+  beta_target="localhost"
+fi
 cat > "$fakebin/herdr" <<EOF
 #!/bin/sh
 cat <<'JSON'
-[{"label":"loop","target":"localhost","enabled":true}]
+[{"label":"loop","target":"$beta_target","enabled":true}]
 JSON
 EOF
 chmod +x "$fakebin/herdr"
@@ -129,16 +173,25 @@ chmod +x "$fakebin/herdr"
 # a known_hosts this run owns keeps it all inside the fixture. Mutagen reaches
 # beta over its own transport, but anything here that spawns ssh gets this.
 ssh_identity=""
-for candidate in id_ed25519 id_rsa id_ecdsa; do
-  if [ -r "$HOME/.ssh/$candidate" ]; then
-    ssh_identity="$HOME/.ssh/$candidate"
-    break
-  fi
-done
+if [ "$mode" = container ]; then
+  # A throwaway key: it exists only in this run's work dir and, as the one
+  # authorized key, in the container.
+  ssh-keygen -q -t ed25519 -N '' -f "$key" >/dev/null 2>&1 \
+    || ssh-keygen -q -t ed25519 -N '' -f "$key"
+  ssh_identity="$key"
+else
+  for candidate in id_ed25519 id_rsa id_ecdsa; do
+    if [ -r "$HOME/.ssh/$candidate" ]; then
+      ssh_identity="$HOME/.ssh/$candidate"
+      break
+    fi
+  done
+fi
 # Review of PR #54, M4: this script runs `hyper machine setup`, so it must
 # never run with the operator's HOME or Claude config, standalone or not
-# (root CLAUDE.md, machine setup test safety). The identity above is the only
-# thing read from the caller's HOME; from here on everything is the fixture's.
+# (root CLAUDE.md, machine setup test safety). In loopback mode the identity
+# above is the only thing read from the caller's HOME; from here on everything
+# is the fixture's.
 real_home="$(python3 -c 'import os, pwd; print(pwd.getpwuid(os.getuid()).pw_dir)')"
 export HOME="$work_real/home"
 export CLAUDE_CONFIG_DIR="$work_real/claude-config"
@@ -164,15 +217,35 @@ fi
 # inside the wrapper would find the wrapper itself and re-exec it with another
 # copy of the flags until argv hit E2BIG.
 real_ssh="$(command -v ssh)"
+# One temporary ssh config (`-F`) carries every isolation option, so neither the
+# operator's ~/.ssh/config nor their agent or keys are ever consulted.
+cat > "$work_real/ssh_config" <<SSHCONFIG
+Host *
+  IdentitiesOnly yes
+  IdentityAgent none
+  ForwardAgent no
+  ControlMaster no
+  ControlPath none
+  UserKnownHostsFile "$work_real/known_hosts"
+  StrictHostKeyChecking accept-new
+  LogLevel ERROR
+${ssh_identity:+  IdentityFile "$ssh_identity"}
+SSHCONFIG
 cat > "$fakebin/ssh" <<WRAPPER
 #!/bin/sh
-exec "$real_ssh" -F /dev/null -o IdentitiesOnly=yes -o IdentityAgent=none \\
-  -o ForwardAgent=no -o ControlMaster=no -o ControlPath=none \\
-  -o UserKnownHostsFile="$work_real/known_hosts" \\
-  -o StrictHostKeyChecking=accept-new -o LogLevel=ERROR \\
-  ${ssh_identity:+-i "$ssh_identity"} "\$@"
+exec "$real_ssh" -F "$work_real/ssh_config" "\$@"
 WRAPPER
 chmod +x "$fakebin/ssh"
+# Mutagen copies its agent to an ssh beta with `scp`, which starts ssh by
+# absolute path: without this wrapper that hop would skip the fixture config and
+# read the operator's ~/.ssh. `-S` points scp at the real ssh, `-F` at the
+# fixture config.
+real_scp="$(command -v scp)"
+cat > "$fakebin/scp" <<WRAPPER
+#!/bin/sh
+exec "$real_scp" -F "$work_real/ssh_config" -S "$real_ssh" "\$@"
+WRAPPER
+chmod +x "$fakebin/scp"
 
 # Temp drive.toml. self.home is the temp alpha so hyperdrive never syncs the real ~/.claude.
 cat > "$work_real/drive.toml" <<EOF
@@ -186,6 +259,8 @@ features = ["mutagen"]
 EOF
 
 export PATH="$fakebin:$PATH"
+# Mutagen looks for ssh and scp here first.
+export MUTAGEN_SSH_PATH="$fakebin"
 export HYPER_DRIVE_CONFIG="$work_real/drive.toml"
 
 # Runs the CLI, echoing its output AND returning its real exit status. An
@@ -211,6 +286,62 @@ done
 
 trap cleanup EXIT
 
+# The beta side. In container mode that is a container whose account's HOME is
+# $beta_home (the same absolute path the drive.toml names), reached over ssh on
+# the mapped port with the throwaway key; the helpers run a shell snippet there,
+# as that account. In loopback mode the beta is this machine and they run it
+# locally.
+beta_sh() {
+  local snippet="$1"
+  shift
+  if [ "$mode" = container ]; then
+    podman exec -u "$beta_user" "$container" sh -c "$snippet" sh "$@"
+  else
+    sh -c "$snippet" sh "$@"
+  fi
+}
+# Same, as root: only for a fixture outside the account's home.
+beta_root_sh() {
+  if [ "$mode" = container ]; then
+    podman exec "$container" sh -c "$1"
+  else
+    sh -c "$1"
+  fi
+}
+
+if [ "$mode" = container ]; then
+  echo "# container beta (podman)"
+  ensure_podman_machine
+  build_ssh_target_image
+  # Never remove a container this invocation did not start.
+  if podman container exists "$container"; then
+    die "container $container already exists; refusing to touch it"
+  fi
+  container_started=1
+  podman run -d --name "$container" -p "127.0.0.1:$port":22 "$derived" "$beta_home" >/dev/null \
+    || die "could not start the container"
+  echo "# started $container on port $port (beta home $beta_home)"
+  # The entrypoint creates the account after the container starts.
+  for _ in $(seq 1 30); do
+    podman exec "$container" id "$beta_user" >/dev/null 2>&1 && break
+    sleep 1
+  done
+  podman exec "$container" id "$beta_user" >/dev/null 2>&1 \
+    || die "the container never created the account $beta_user"
+  podman cp "$key.pub" "$container:/tmp/key.pub"
+  beta_root_sh "mkdir -p '$beta_home/.ssh' && chown $beta_user '$beta_home/.ssh' && chmod 0700 '$beta_home/.ssh' \
+    && install -m 0600 -o $beta_user /tmp/key.pub '$beta_home/.ssh/authorized_keys' && rm -f /tmp/key.pub"
+  ssh_beta() { "$real_ssh" -F "$work_real/ssh_config" -o ConnectTimeout=10 -o BatchMode=yes -p "$port" "$beta_user@localhost" "$@"; }
+  for _ in $(seq 1 40); do
+    ssh_beta true >/dev/null 2>&1 && break
+    sleep 1
+  done
+  ssh_beta true >/dev/null 2>&1 || die "could not ssh into the container as $beta_user"
+  pass "the throwaway key reaches the container at localhost:$port"
+else
+  mkdir -p "$beta_home"
+fi
+
 # Files that must NEVER reach the other machine, put on alpha BEFORE any
 # session exists (AC-17): an initial scan is exactly when a forgotten ignore
 # pattern would carry them across.
@@ -224,15 +355,26 @@ echo '{"token":"x"}' > "$alpha_home/.pi/agent/auth.json"
 # a fresh machine where pi never ran (review B3): Mutagen creates a missing
 # beta ROOT but not its missing parent, so hyper must create `~/.pi` first, or
 # the session says "Watching for changes" while pi never syncs.
-mkdir -p "$beta_home/.claude"
-[ ! -e "$beta_home/.pi" ] || die "fixture: beta must start without ~/.pi"
-echo "beta-secret" > "$beta_home/.claude/.credentials.json"
+beta_sh "mkdir -p '$beta_home/.claude'"
+beta_sh "[ ! -e '$beta_home/.pi' ]" || die "fixture: beta must start without ~/.pi"
+beta_sh "echo beta-secret > '$beta_home/.claude/.credentials.json'"
 
 # Waits up to 60s for a file to exist with the given content. Returns 1 on timeout.
 wait_for() {
   local file="$1" content="$2"
   for _ in $(seq 1 60); do
     if [ -f "$file" ] && grep -q "$content" "$file"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+# The same, for a file on the beta side.
+wait_for_beta() {
+  local file="$1" content="$2"
+  for _ in $(seq 1 60); do
+    if beta_sh '[ -f "$1" ] && grep -qF -- "$2" "$1"' "$file" "$content"; then
       return 0
     fi
     sleep 1
@@ -262,7 +404,7 @@ if ! printf '%s' "$out" | grep -F "$pi_session" | grep -q created; then
   die "expected setup to create the pi session; got: $out"
 fi
 pass "machine setup created $pi_session"
-[ -d "$beta_home/.pi" ] || die "setup did not create beta's missing ~/.pi before the pi session"
+beta_sh "[ -d '$beta_home/.pi' ]" || die "setup did not create beta's missing ~/.pi before the pi session"
 pass "machine setup created beta's missing ~/.pi through ssh (B3)"
 
 # The command and the task share one service: what setup created, the command
@@ -301,14 +443,14 @@ pass "--check exits 0 and reports both sessions ready"
 echo "# a plugin installed on alpha lands on beta (up to 60s)"
 mkdir -p "$alpha_home/.claude/plugins/e2e-plugin/.claude-plugin"
 echo '{"name":"e2e-plugin"}' > "$alpha_home/.claude/plugins/e2e-plugin/.claude-plugin/plugin.json"
-wait_for "$beta_home/.claude/plugins/e2e-plugin/.claude-plugin/plugin.json" e2e-plugin \
+wait_for_beta "$beta_home/.claude/plugins/e2e-plugin/.claude-plugin/plugin.json" e2e-plugin \
   || die "the plugin written on alpha never appeared on beta within 60s"
 pass "plugin propagated alpha -> beta"
 
 echo "# a transcript created on beta lands on alpha (up to 60s)"
 # AC-18's other half: the machine writes, the laptop receives.
-mkdir -p "$beta_home/.claude/projects/-e2e-proj"
-echo '{"type":"user","message":"from beta"}' > "$beta_home/.claude/projects/-e2e-proj/beta-session.jsonl"
+beta_sh "mkdir -p '$beta_home/.claude/projects/-e2e-proj' \
+  && echo '{\"type\":\"user\",\"message\":\"from beta\"}' > '$beta_home/.claude/projects/-e2e-proj/beta-session.jsonl'"
 wait_for "$alpha_home/.claude/projects/-e2e-proj/beta-session.jsonl" "from beta" \
   || die "the transcript written on beta never appeared on alpha within 60s"
 pass "transcript propagated beta -> alpha"
@@ -320,51 +462,55 @@ echo "# ignored paths must not cross"
 # chance to arrive too — they have existed since before the sessions did.
 echo "sentinel" > "$alpha_home/.claude/sentinel.txt"
 echo "sentinel" > "$alpha_home/.pi/agent/sentinel.txt"
-echo "sentinel" > "$beta_home/.claude/beta-sentinel.txt"
-wait_for "$beta_home/.claude/sentinel.txt" sentinel \
+beta_sh "echo sentinel > '$beta_home/.claude/beta-sentinel.txt'"
+wait_for_beta "$beta_home/.claude/sentinel.txt" sentinel \
   || die "the claude sentinel never reached beta, so the ignore check proves nothing"
-wait_for "$beta_home/.pi/agent/sentinel.txt" sentinel \
+wait_for_beta "$beta_home/.pi/agent/sentinel.txt" sentinel \
   || { mutagen sync list "$pi_session" >&2 || true; die "the pi sentinel never reached beta, so the ignore check proves nothing"; }
 wait_for "$alpha_home/.claude/beta-sentinel.txt" sentinel \
   || die "the beta sentinel never reached alpha, so the reverse ignore check proves nothing"
 # beta has its OWN .credentials.json (seeded above): that one is checked by content below.
 for path in .claude/.claude.json .claude/sessions .claude/state .pi/agent/auth.json; do
-  if [ -e "$beta_home/$path" ]; then die "$path is ignored but reached beta"; fi
+  if beta_sh "[ -e '$beta_home/$path' ]"; then die "$path is ignored but reached beta"; fi
 done
 pass ".claude.json, sessions/, state/ and pi auth.json stayed off beta (sentinels landed first)"
 [ "$(cat "$alpha_home/.claude/.credentials.json")" = "secret" ] \
   || die "beta's .credentials.json replaced alpha's"
-[ "$(cat "$beta_home/.claude/.credentials.json")" = "beta-secret" ] \
+[ "$(beta_sh "cat '$beta_home/.claude/.credentials.json'")" = "beta-secret" ] \
   || die "alpha's .credentials.json replaced beta's"
 pass "each side keeps its own .credentials.json (nothing crossed either way)"
 
 echo "# symlink with an absolute target resolves on beta (posix-raw)"
 mkdir -p "$alpha_home/.claude/skills" "$work_real/skill-target"
 echo "x" > "$work_real/skill-target/SKILL.md"
+# The target must resolve on the beta too, and in a container it is a different
+# filesystem: create the same absolute path there (outside the account's home).
+if [ "$mode" = container ]; then
+  beta_root_sh "mkdir -p '$work_real/skill-target' && echo x > '$work_real/skill-target/SKILL.md'"
+fi
 ln -s "$work_real/skill-target" "$alpha_home/.claude/skills/x"
 # The link must survive as a link (posix-raw), not be copied as a file, and must
 # still point at the absolute target it had on alpha.
 resolved=0
 for _ in $(seq 1 60); do
-  if [ -L "$beta_home/.claude/skills/x" ]; then
+  if beta_sh "[ -L '$beta_home/.claude/skills/x' ]"; then
     resolved=1
     break
   fi
   sleep 1
 done
 [ "$resolved" = 1 ] || die "skills/x never appeared as a symlink on beta"
-if [ "$(cd "$beta_home/.claude" && readlink skills/x)" != "$work_real/skill-target" ]; then
+if [ "$(beta_sh "cd '$beta_home/.claude' && readlink skills/x")" != "$work_real/skill-target" ]; then
   die "skills/x target changed on beta (expected an absolute posix-raw target)"
 fi
 # And it must actually resolve to a real file through the link.
-[ -f "$beta_home/.claude/skills/x/SKILL.md" ] || die "skills/x does not resolve to a file on beta"
+beta_sh "[ -f '$beta_home/.claude/skills/x/SKILL.md' ]" || die "skills/x does not resolve to a file on beta"
 pass "skills/x symlink preserved, absolute and resolving on beta"
 
 echo "# a session with a transition problem is not ready (B3)"
 # Beta cannot write into a directory it may not write: alpha's new file there
 # becomes a transition problem, which Mutagen reports while still "Watching".
-mkdir -p "$beta_home/.claude/blocked"
-chmod 0500 "$beta_home/.claude/blocked"
+beta_sh "mkdir -p '$beta_home/.claude/blocked' && chmod 0500 '$beta_home/.claude/blocked'"
 mkdir -p "$alpha_home/.claude/blocked"
 echo "blocked" > "$alpha_home/.claude/blocked/f.txt"
 problem=0
@@ -379,7 +525,7 @@ for _ in $(seq 1 60); do
   fi
   sleep 1
 done
-chmod 0700 "$beta_home/.claude/blocked"
+beta_sh "chmod 0700 '$beta_home/.claude/blocked'"
 if [ "$problem" != 1 ]; then
   mutagen sync list "$claude_session" >&2 || true
   die "--check never reported the transition problem as not ready; last output: $out"
@@ -404,7 +550,7 @@ if [ "$recovered" != 1 ]; then
   mutagen sync list "$claude_session" >&2 || true
   die "--check never recovered after the problem was fixed; last output: $out"
 fi
-wait_for "$beta_home/.claude/blocked/f.txt" blocked || die "the blocked file never arrived after the fix"
+wait_for_beta "$beta_home/.claude/blocked/f.txt" blocked || die "the blocked file never arrived after the fix"
 pass "once fixed, the file arrives and --check is ready again"
 
 echo "# a second machine setup run changes nothing (C-15, AC-24)"
