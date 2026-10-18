@@ -163,26 +163,6 @@ out="$(run_ctx "$dl")"; rc=$?
 assert_eq "session end: an unreadable log keeps exit 0" 0 "$rc"
 assert_not_contains "session end: an unreadable log prints nothing" "$out" "$end_line"
 
-# N-PATH: a relative PATH entry resolves inside the session's directory, and
-# a space's bin/ is synced content. No planted binary may run, neither from
-# the script nor from the hooks.json command that starts it; the context is
-# still printed, from the real CLI.
-dp="$FIX/npath"; make_bare_space "$dp"; mkdir -p "$dp/.hyper/space.git"
-for d in "$dp/bin" "$dp/node_modules/.bin" "$dp"; do
-  plant_binaries "$d" "$FIX/planted.log" hyper git bash sh dirname basename sed paste wt node cat head tail tr
-done
-hostile_path="./bin:.::./node_modules/.bin:~/bin:bin:$PATH"
-bash_bin="$(command -v bash)"
-ctx_cmd="$(node -e 'console.log(require(process.argv[1]).hooks.SessionStart[0].hooks[0].command)' "$PLUGIN_DIR/hooks/hooks.json")"
-rm -f "$FIX/planted.log"
-out="$(cd "$dp" && echo '{"hook_event_name":"SessionStart"}' | PATH="$hostile_path" "$bash_bin" "$CTX" 2>/dev/null)"
-assert_contains "hostile PATH: the script still prints the context" "$out" "Project space: $dp"
-assert_eq "hostile PATH: no planted binary ran from the script" "" "$(cat "$FIX/planted.log" 2>/dev/null)"
-rm -f "$FIX/planted.log"
-out="$(cd "$dp" && echo '{"hook_event_name":"SessionStart"}' | CLAUDE_PLUGIN_ROOT="$PLUGIN_DIR" PATH="$hostile_path" /bin/sh -c "$ctx_cmd" 2>/dev/null)"
-assert_contains "hostile PATH: the hooks.json command still prints the context" "$out" "Project space: $dp"
-assert_eq "hostile PATH: no planted binary ran from the hooks.json command" "" "$(cat "$FIX/planted.log" 2>/dev/null)"
-
 # N6: outside any space the hook stays silent — it must cost nothing in an
 # unrelated project.
 d3="$FIX/n6"; make_checkout "$d3"

@@ -45,9 +45,8 @@ On pi's `session_shutdown` event with reason `quit` — `/new`, `/resume`,
 or SIGHUP shutdown emits the same `quit` — the extension does this. pi awaits
 this handler with no timeout, so every step is bounded:
 
-1. resolve `hyper` itself: absolute PATH entries only, an executable regular
-   file, and that absolute path is what gets spawned (`bin/` is synced space
-   content, so a space must not choose what runs at its sessions' end);
+1. resolve `hyper` itself: on PATH, an executable regular file, and that
+   absolute path is what gets spawned;
 2. run `hyper space detect --json` once, in the session's directory, killed
    after 5 s. Its answer — root, git dir, cadence — is the only source of
    truth for "is this a space" and "when does it save";
@@ -80,7 +79,7 @@ At most one, and only in these four cases:
 
 | Line | When |
 |---|---|
-| `hyperdrive: the hyper CLI is not installed; nothing was saved` | no `hyper` on an absolute PATH entry **and** an ancestor of the session's directory holds `.hyper/space.git` |
+| `hyperdrive: the hyper CLI is not installed; nothing was saved` | no `hyper` on PATH **and** an ancestor of the session's directory holds `.hyper/space.git` |
 | `hyperdrive: the installed hyper CLI is too old for this pi extension …; update @hypercli/cli` | the CLI answered with an object that has a root and no `spaceGitDir` field at all — a CLI from before T-18. Its own text, not the Claude hook's. |
 | `hyperdrive: could not write the session-end payload into <git dir>; nothing was saved` | the space's git dir would not take the payload |
 | `hyperdrive: the hyper CLI is not installed; nothing was saved` (from the worker spawn) | the resolved binary disappeared between the probe and the spawn |

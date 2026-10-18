@@ -43,7 +43,6 @@ import { commitSpace } from "#services/space-sync";
 import { makeBareSpace } from "#tests/tmp-space";
 import hyperdrive from "../pi/hyperdrive.ts";
 import {
-	absolutePathEntries,
 	appendFailureLine,
 	childEnv,
 	createRealDeps,
@@ -355,6 +354,18 @@ describe("the pi extension on session_shutdown", () => {
 		await saveSessionEnd(facts(), deps);
 		expect(deps.calls).toEqual([{ bin: BIN, cwd: spaceNotes, timeoutMs: 5_000 }]);
 		expect(PROBE_TIMEOUT_MS).toBe(5_000);
+	});
+
+	it("resolves the CLI against the session's directory", async () => {
+		const seen: string[] = [];
+		const deps = fakeDeps({
+			resolveCli: (cwd: string) => {
+				seen.push(cwd);
+				return BIN;
+			},
+		});
+		await saveSessionEnd(facts(), deps);
+		expect(seen).toEqual([spaceNotes]);
 	});
 
 	it("writes the payload under the git dir the CLI named and spawns it from the session's cwd", async () => {
@@ -783,24 +794,55 @@ async function waitForFile(path: string, timeoutMs = 10_000): Promise<void> {
 }
 
 describe("resolving the hyper CLI", () => {
-	it("ignores relative PATH entries, so a space's own bin/ cannot take over", () => {
+	it("resolves a relative PATH entry against the given cwd, not the process cwd", () => {
 		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		const elsewhere = mkdtempSync(join(tmpdir(), "hyper-pi-elsewhere-"));
+		const previous = process.cwd();
 		try {
-			const good = join(real, "good");
-			mkdirSync(good);
-			const hyper = join(good, "hyper");
+			const bin = join(real, "bin");
+			mkdirSync(bin);
+			const hyper = join(bin, "hyper");
 			writeFileSync(hyper, "#!/bin/sh\n");
 			chmodSync(hyper, 0o755);
-			const relative = join(real, "relative");
-			mkdirSync(relative);
-			writeFileSync(join(relative, "hyper"), "#!/bin/sh\n");
-			chmodSync(join(relative, "hyper"), 0o755);
-			// A relative entry ahead of the real one, as in a space with bin/.
-			expect(resolveHyper({ PATH: ["./bin", "node_modules/.bin", good].join(delimiter) })).toBe(
-				hyper,
-			);
-			expect(resolveHyper({ PATH: `./bin:${good}` })).toBe(hyper);
-			expect(resolveHyper({ PATH: "" })).toBeUndefined();
+			process.chdir(elsewhere);
+			expect(resolveHyper({ PATH: ["./nope", "./bin"].join(delimiter) }, real)).toBe(hyper);
+			expect(resolveHyper({ PATH: "./bin" })).toBeUndefined();
+			expect(resolveHyper({ PATH: "" }, real)).toBeUndefined();
+			expect(resolveHyper({}, real)).toBeUndefined();
+		} finally {
+			process.chdir(previous);
+			rmSync(real, { recursive: true, force: true });
+			rmSync(elsewhere, { recursive: true, force: true });
+		}
+	});
+	it("treats an empty PATH entry as the cwd, as POSIX does", () => {
+		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		try {
+			const hyper = join(real, "hyper");
+			writeFileSync(hyper, "#!/bin/sh\n");
+			chmodSync(hyper, 0o755);
+			for (const path of ["", `${delimiter}/nonexistent`, `/nonexistent${delimiter}`]) {
+				expect(resolveHyper({ PATH: path }, real)).toBe(hyper);
+			}
+		} finally {
+			rmSync(real, { recursive: true, force: true });
+		}
+	});
+	it("takes the first match in PATH order, relative before absolute and the reverse", () => {
+		const real = mkdtempSync(join(tmpdir(), "hyper-pi-path-"));
+		try {
+			const make = (dir: string) => {
+				mkdirSync(dir, { recursive: true });
+				const file = join(dir, "hyper");
+				writeFileSync(file, "#!/bin/sh\n");
+				chmodSync(file, 0o755);
+				return file;
+			};
+			const relative = make(join(real, "bin"));
+			const absolute = make(join(real, "abs"));
+			const absDir = join(real, "abs");
+			expect(resolveHyper({ PATH: ["./bin", absDir].join(delimiter) }, real)).toBe(relative);
+			expect(resolveHyper({ PATH: [absDir, "./bin"].join(delimiter) }, real)).toBe(absolute);
 		} finally {
 			rmSync(real, { recursive: true, force: true });
 		}
@@ -848,17 +890,14 @@ describe("resolving the hyper CLI", () => {
 });
 
 describe("what the children get (N2, N5)", () => {
-	it("gives every child a PATH of absolute entries only", () => {
-		const good = "/opt/hyper/bin";
-		const env = childEnv({
-			PATH: ["", ".", "./bin", "node_modules/.bin", "~/bin", good, "/usr/bin"].join(delimiter),
-			HYPER_HOME: "/hyper",
-		});
-		expect(env.PATH).toBe([good, "/usr/bin"].join(delimiter));
+	it("gives every child the caller's PATH unchanged", () => {
+		const path = ["", ".", "./bin", "node_modules/.bin", "/opt/hyper/bin", "/usr/bin"].join(
+			delimiter,
+		);
+		const env = childEnv({ PATH: path, HYPER_HOME: "/hyper" });
+		expect(env.PATH).toBe(path);
+		expect(env.HYPER_HOME).toBe("/hyper");
 		expect(env.HYPER_SKIP_NEW_VERSION_CHECK).toBe("1");
-		// A bare relative PATH entry list leaves the child with nothing, never
-		// with the directory it is about to run in.
-		expect(childEnv({ PATH: "./bin:." }).PATH).toBe("");
 	});
 
 	it("spawns the worker with detached, no pipes, the session's cwd and this argv", () => {
@@ -888,12 +927,10 @@ describe("what the children get (N2, N5)", () => {
 		expect(calls[0]!.options.detached).toBe(true);
 		expect(calls[0]!.options.stdio).toBe("ignore");
 		expect(calls[0]!.options.cwd).toBe("/spaces/outer/notes");
-		expect(String(calls[0]!.options.env?.PATH).split(delimiter)).toEqual(
-			absolutePathEntries(process.env.PATH),
-		);
+		expect(calls[0]!.options.env?.PATH).toBe(process.env.PATH);
 	});
 
-	it("probes with the same injected spawn: no stdin, stdout piped, absolute PATH only", async () => {
+	it("probes with the same injected spawn: no stdin, stdout piped, PATH unchanged", async () => {
 		vi.stubEnv(
 			"PATH",
 			["./bin", ".", "", "node_modules/.bin", "/opt/hyper/bin", "/usr/bin"].join(delimiter),
@@ -913,7 +950,9 @@ describe("what the children get (N2, N5)", () => {
 		expect(calls[0]!.args).toEqual(["space", "detect", "--json"]);
 		expect(calls[0]!.options.cwd).toBe(directory);
 		expect(calls[0]!.options.stdio).toEqual(["ignore", "pipe", "ignore"]);
-		expect(calls[0]!.options.env?.PATH).toBe(["/opt/hyper/bin", "/usr/bin"].join(delimiter));
+		expect(calls[0]!.options.env?.PATH).toBe(
+			["./bin", ".", "", "node_modules/.bin", "/opt/hyper/bin", "/usr/bin"].join(delimiter),
+		);
 		expect(calls[0]!.options.env?.HYPER_SKIP_NEW_VERSION_CHECK).toBe("1");
 	});
 

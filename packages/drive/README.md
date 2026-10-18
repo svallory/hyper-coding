@@ -361,12 +361,9 @@ tooling).
   history another machine pushed with a newer hyper, update hyper on the
   refusing machine first and try again; only if it still refuses is the remote
   history itself at fault.
-- **Drive commands ignore relative PATH entries.** Every `hyper space`,
-  `drive`, `warp` and `machine` command keeps only the absolute entries of
-  PATH before it runs, so `./bin`, `.` or `./node_modules/.bin` can never
-  make it run a space's own `bin/bash` or `bin/git`; a tool reachable only
-  through a relative entry is not found. Other `hyper` topics (kits,
-  recipes) are not covered by this.
+- **Drive commands use your PATH as is.** Nothing filters it, so a relative
+  entry such as `./bin` still wins. Accepted risk: a synced space `bin/git`
+  or `bin/bash` runs when your PATH lists `./bin`.
 - **Linux logout can cut a session-end save short.** With systemd-logind's
   `KillUserProcesses=yes`, logout kills every process of the login session,
   the detached session-end worker included (`setsid` does not leave the

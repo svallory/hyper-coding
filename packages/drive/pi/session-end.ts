@@ -16,11 +16,10 @@
  * return. The commit, the push and the log line belong to the worker, so a
  * 30 MB session never delays pi's exit.
  *
- * `hyper` is resolved here, never left to the child's PATH: only ABSOLUTE
- * PATH entries count, the candidate must be an executable regular file, and
- * that absolute path is what gets spawned. `bin/` is synced space content, so
- * a space that carries its own `bin/hyper` must not decide what runs at the
- * end of every pi session in it.
+ * `hyper` is resolved here, never left to the child's PATH: it is the first
+ * executable regular file named `hyper` on the caller's PATH (relative
+ * entries are taken against the session's directory), and that absolute path
+ * is what gets spawned.
  *
  * Nothing here throws: every failure ends as at most one line.
  */
@@ -104,7 +103,7 @@ export interface ProbeResult {
 
 export interface SessionEndDeps {
 	/** Absolute path of the `hyper` to use, or undefined when PATH has none. */
-	resolveCli(): string | undefined;
+	resolveCli(cwd: string): string | undefined;
 	/** Run `hyper space detect --json` in `cwd`, bounded by `timeoutMs`. */
 	probe(bin: string, cwd: string, timeoutMs: number): Promise<ProbeResult>;
 	/** Write the payload file exclusively; returns the path written. */
@@ -134,27 +133,18 @@ export interface SessionFacts {
 }
 
 /**
- * PATH entries that cannot be trusted from a directory whose contents a space
- * or a clone controls. `./bin`, `.`, `node_modules/.bin` and `~/…` are all
- * resolved against the CHILD's cwd — which is the session's directory, because
- * that is where the probe and the worker have to run — so a relative entry
- * there means "whatever this checkout ships". Only absolute entries survive.
+ * The `hyper` to spawn: the first executable regular file named `hyper` on the
+ * caller's PATH, which the children inherit unchanged. Relative entries are
+ * taken against `cwd` (the directory the probe and worker run in), and an
+ * empty entry means `.`, as in POSIX.
  */
-export function absolutePathEntries(pathValue = process.env.PATH ?? ""): string[] {
-	return pathValue
-		.split(delimiter)
-		.filter((entry) => entry.length > 0 && isAbsolute(entry) && !entry.startsWith("~"));
-}
-
-/**
- * The `hyper` to spawn: the first executable regular file named `hyper` in an
- * absolute PATH entry. The child gets that same filtered PATH, so the CLI's
- * own `bash` and `git` lookups cannot land in the session's directory either.
- */
-export function resolveHyper(env: NodeJS.ProcessEnv = process.env): string | undefined {
-	for (const entry of absolutePathEntries(env.PATH)) {
+export function resolveHyper(
+	env: NodeJS.ProcessEnv = process.env,
+	cwd: string = process.cwd(),
+): string | undefined {
+	for (const entry of (env.PATH ?? "").split(delimiter)) {
 		for (const name of process.platform === "win32" ? ["hyper.cmd", "hyper"] : ["hyper"]) {
-			const candidate = join(entry, name);
+			const candidate = resolve(cwd, entry === "" ? "." : entry, name);
 			try {
 				const stats = statSync(candidate);
 				if (stats.isFile() && (stats.mode & 0o111) !== 0) return candidate;
@@ -254,7 +244,7 @@ export async function saveSessionEnd(
 	deps: SessionEndDeps,
 	timeoutMs = PROBE_TIMEOUT_MS,
 ): Promise<SessionEndPayload | undefined> {
-	const bin = deps.resolveCli();
+	const bin = deps.resolveCli(facts.cwd);
 	if (bin === undefined) {
 		// The Claude hook prints this line only in a space that would have saved.
 		// Same rule here: this walk decides whether to PRINT and nothing else —
@@ -456,16 +446,12 @@ export function appendFailureLine(
 }
 
 /**
- * The environment every child gets: no CLI update check racing the teardown,
- * and a PATH of absolute entries only. The probe and the worker both run with
- * the session's directory as their cwd, so a relative PATH entry would let
- * that directory decide which `bash` and which `git` the CLI runs — and
- * `bin/` is synced space content.
+ * The environment every child gets: no CLI update check racing the teardown;
+ * PATH is the caller's, unchanged.
  */
 export function childEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
 	return {
 		...env,
-		PATH: absolutePathEntries(env.PATH).join(delimiter),
 		HYPER_SKIP_NEW_VERSION_CHECK: "1",
 	};
 }
@@ -529,7 +515,7 @@ export function createRealDeps(overrides: Partial<SessionEndDeps> = {}): Session
 		overrides.payloadName ??
 		(() => `${PAYLOAD_PREFIX}${process.pid}.${randomBytes(6).toString("hex")}`);
 	return {
-		resolveCli: () => resolveHyper(),
+		resolveCli: (cwd) => resolveHyper(process.env, cwd),
 		probe: (bin, cwd, timeoutMs) => runProbe(bin, cwd, timeoutMs, spawnFn),
 		writePayload: (dir, contents) => {
 			// O_EXCL: two pi sessions in one space must not share a payload file, so

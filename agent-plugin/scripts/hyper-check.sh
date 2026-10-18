@@ -32,15 +32,8 @@
 
 set -uo pipefail
 
-# A hook runs in the session's directory, where a relative PATH entry would
-# pick a project's or space's own bin/ over the real tools: rebuild PATH from
-# absolute entries before anything is looked up by name (hyper-safe-path.sh).
 hook_dir="${BASH_SOURCE[0]%/*}"
 [[ "$hook_dir" == "${BASH_SOURCE[0]}" ]] && hook_dir=.
-# shellcheck source=agent-plugin/scripts/hyper-safe-path.sh
-source "$hook_dir/hyper-safe-path.sh" || exit 0
-hyper_safe_path
-
 
 # Hook input arrives as JSON on stdin. No jq dependency: node is already a
 # prerequisite for the Node stack, and Go projects that lack it simply skip.
@@ -129,12 +122,10 @@ if command -v timeout >/dev/null 2>&1; then
 elif command -v gtimeout >/dev/null 2>&1; then
   timeout_bin="$(command -v gtimeout)"
 fi
-# bash and the timeout wrapper come from the cleaned PATH, as absolute paths.
-# The configured check itself is project-defined code the project opted into
-# (.claude/hyper.json), so it gets the PATH the hook was started with: a
-# `biome check` that relies on ./node_modules/.bin keeps working.
+# bash and the timeout wrapper are looked up on the caller's PATH, as is the
+# configured check (project-defined code the project opted into in
+# .claude/hyper.json): a `biome check` that relies on ./node_modules/.bin works.
 bash_bin="$(command -v bash)" || exit 0
-check_path="${HYPER_HOOK_ORIGINAL_PATH-$PATH}"
 
 pm_run=""
 pm_run_resolved=0
@@ -173,9 +164,9 @@ while IFS='|' read -r tag run_b64 cmd_b64 tmo exts_b64; do
   # otherwise still attached to the herestring feeding this loop, and a check
   # that reads stdin would silently drain the remaining check records.
   if [[ -n "$timeout_bin" ]]; then
-    out="$(cd "$root" && PATH="$check_path" "$timeout_bin" "$tmo" "$bash_bin" -c "$cmd" </dev/null 2>&1)"
+    out="$(cd "$root" && "$timeout_bin" "$tmo" "$bash_bin" -c "$cmd" </dev/null 2>&1)"
   else
-    out="$(cd "$root" && PATH="$check_path" "$bash_bin" -c "$cmd" </dev/null 2>&1)"
+    out="$(cd "$root" && "$bash_bin" -c "$cmd" </dev/null 2>&1)"
   fi
   status=$?
 
