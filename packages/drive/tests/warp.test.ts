@@ -560,12 +560,12 @@ describe("ownership (blocker 2)", () => {
 		expect(refusal.message).toContain("not valid JSON");
 	});
 
-	it("copies only this session's files, never the project folder", () => {
+	it("copies only this session's files, never the project folder or the session folder", () => {
+		// The session folder's big parts are tier 2 (background), see warp-tiers.test.ts.
 		const plan = planOf({ transcriptSubfolder: true });
 		const copies = plan.steps.filter((step) => step.kind === "copy");
 		expect(copies.map((copy) => [copy.src, copy.tree])).toEqual([
 			[TRANSCRIPT, false],
-			[`${FOLDER}/${SESSION}`, true],
 			[`${FOLDER}/${SESSION}.warp.json`, false],
 			[CWD, true],
 		]);

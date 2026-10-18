@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline/promises";
 import { Args, Flags } from "@oclif/core";
 import { BaseCommand } from "#lib/base-command";
 import { getEngine } from "#services/sync/engine";
@@ -5,6 +6,7 @@ import {
 	describeFailure,
 	describeWarp,
 	executeWarp,
+	gatherSessionChoice,
 	gatherWarp,
 	planWarp,
 	restoreMarker,
@@ -13,6 +15,7 @@ import {
 	type WarpInputs,
 	type WarpPlan,
 } from "#services/warp";
+import { type OthersMode, othersQuestion, parseOthersMode, pickerLine } from "#services/warp-tiers";
 
 /** Prefix of every sync session hyperdrive owns, as `drive sync-config` builds it. */
 const SESSION_PREFIX = "hyper-";
@@ -52,7 +55,8 @@ Every check runs before the first change on either machine. A session that alrea
 
 Limits:
   - The target's copy of the directory is overwritten file by file; files that exist only there are kept (no --delete).
-  - Only this session's files travel (<id>.jsonl, <id>.warp.json, <id>/), never the whole project folder.
+  - Claude's data travels in tiers, never the whole project folder. Before the resume: <id>.jsonl, <id>.warp.json, the project's memory/ and .session-aliases, file-history/<id>, session-env/<id>. After it, in the background: <id>/tool-results and <id>/subagents, sent by a detached transfer that reports to \`hyper space status\` (run warp again to finish an interrupted one). The project's other sessions (or --all-projects) are sent only if you say so (--others now|background, or the question it asks; --yes means no). ~/.claude/sessions, debug, statsig and ~/.claude.json never travel.
+  - With no --session it takes the session you run it from, else the one live session of this directory, else asks you to choose among the newest five (--yes takes the newest).
   - A space worktree arrives as a git worktree on the target. Staged-but-uncommitted changes arrive as unstaged modifications: the index does not travel.
   - A git copy on the target is refused when it has uncommitted work, when the copy would overwrite an untracked or ignored entry there with different content or a different type, or when it has a tracked directory where this machine has a file; --force first saves a space worktree's tracked changes as a stash and copies those entries to hyper-warp-backup/ in the target repo's git directory.
   - A plain repo is refused when a target ref points at a commit this machine doesn't have or doesn't reach from the refs warp carries; --force saves the target's refs (every stash entry too, as .../stash/<n>) under refs/hyper-warp-backup/ first (kept as loose refs by every later warp). Stash entries only the target has, and refs that conflict as file and directory, are refused without --force. The rest of the target's .git (config, info/exclude, hooks, packed-refs) is replaced by this machine's, and its refs are then set to exactly this machine's.
@@ -95,6 +99,20 @@ Limits:
 			description: "Print every step warp would take and change nothing, here or there",
 			default: false,
 		}),
+		yes: Flags.boolean({
+			description:
+				"Don't ask: take the newest session when several could be meant, and answer no to sending other sessions",
+			default: false,
+		}),
+		others: Flags.string({
+			description:
+				"Also send the project's other sessions: now (before the resume), background (after it) or no (default)",
+			options: ["now", "background", "no"],
+		}),
+		"all-projects": Flags.boolean({
+			description: "With --others, send every other project instead of this project's sessions",
+			default: false,
+		}),
 		json: Flags.boolean({ description: "Print the result as JSON", default: false }),
 	};
 
@@ -126,16 +144,24 @@ Limits:
 			force: boolean;
 			"remote-control": boolean;
 			"dry-run": boolean;
+			yes: boolean;
+			others?: string;
+			"all-projects": boolean;
 			json: boolean;
 		},
 	): Promise<Outcome> {
+		const cwd = process.cwd();
+		const sessionId = await this.pickSession(cwd, flags);
 		const gathered = gatherWarp({
-			cwd: process.cwd(),
+			cwd,
 			targetName: machine,
-			...(flags.session === undefined ? {} : { sessionId: flags.session }),
+			sessionId,
+			allProjects: flags["all-projects"],
 		});
+		const mode = await this.askOthers(gathered.others, flags);
 		const inputs: WarpInputs = {
 			...gathered.inputs,
+			...(mode === "no" ? {} : { others: { mode, entries: gathered.others.entries } }),
 			stop: flags.stop,
 			force: flags.force,
 			remoteControl: flags["remote-control"],
@@ -174,6 +200,57 @@ Limits:
 			notices: execution.notices,
 			json: flags.json,
 		};
+	}
+
+	/**
+	 * The session to warp. Asks (a numbered list of the newest five, with what
+	 * was first typed in each) only when it cannot tell and neither `--session`
+	 * nor `--yes` was given; off a terminal it refuses instead of guessing.
+	 */
+	private async pickSession(
+		cwd: string,
+		flags: { session?: string; yes: boolean; json: boolean },
+	): Promise<string | undefined> {
+		const choice = gatherSessionChoice({
+			cwd,
+			yes: flags.yes,
+			...(flags.session === undefined ? {} : { explicit: flags.session }),
+			...(process.env.CLAUDE_CODE_SESSION_ID === undefined
+				? {}
+				: { envSessionId: process.env.CLAUDE_CODE_SESSION_ID }),
+		});
+		if (choice.kind === "chosen") return choice.id;
+		const lines = choice.options.map((option, index) => pickerLine(index, option));
+		if (!process.stdin.isTTY || flags.json) {
+			throw new Error(
+				`Uh oh! Several sessions could be meant here:\n${lines.join("\n")}\nPass \`--session <id>\` to pick one, or \`--yes\` for the newest.`,
+			);
+		}
+		this.log("Which session should move?");
+		for (const line of lines) this.log(`  ${line}`);
+		const answer = await ask("Number (default 1): ");
+		const number = answer.trim() === "" ? 1 : Number(answer.trim());
+		const picked = choice.options[number - 1];
+		if (!Number.isInteger(number) || picked === undefined) {
+			throw new Error(`"${answer.trim()}" isn't one of the numbers above. Run it again.`);
+		}
+		return picked.id;
+	}
+
+	/** Tier 3: ask once; `--yes` means no, and so does anywhere we cannot ask. */
+	private async askOthers(
+		others: { ids: string[]; bytes: number },
+		flags: { yes: boolean; others?: string; "all-projects": boolean; json: boolean },
+	): Promise<OthersMode> {
+		if (flags.others !== undefined) return flags.others as OthersMode;
+		if (flags.yes || others.ids.length === 0 || !process.stdin.isTTY || flags.json) return "no";
+		for (;;) {
+			const mode = parseOthersMode(
+				await ask(othersQuestion(others.ids.length, others.bytes, flags["all-projects"])),
+			);
+			if (mode !== null) return mode;
+			this.log("Please answer now, background or no.");
+		}
 	}
 
 	/** `--dry-run`: the whole plan, and a statement that nothing ran. */
@@ -250,4 +327,13 @@ async function syncSessionFor(machine: string): Promise<string | null> {
 function truncate(text: string, max: number): string {
 	const flat = text.replaceAll(/\s+/g, " ").trim();
 	return flat.length <= max ? flat : `${flat.slice(0, max - 1)}…`;
+}
+
+async function ask(question: string): Promise<string> {
+	const readline = createInterface({ input: process.stdin, output: process.stdout });
+	try {
+		return await readline.question(question);
+	} finally {
+		readline.close();
+	}
 }
