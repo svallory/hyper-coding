@@ -4,8 +4,10 @@ import {
 	chmodSync,
 	existsSync,
 	linkSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
+	openSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
@@ -524,6 +526,53 @@ describe("space commit --session-end and real hook", () => {
 			const { lastSessionEndEntry } = await import("#services/session-end-log");
 			expect(lastSessionEndEntry(gitDir)).toBeNull();
 		});
+		it.each(["fifo", "symlink", "directory"] as const)(
+			"maps what the open meets (a %s the lstat did not see) to the same refusal",
+			async (kind) => {
+				const { root } = await makeSpace();
+				const gitDir = join(root, ".hyper/space.git");
+				const log = join(gitDir, "session-end.log");
+				const victim = join(root, "victim");
+				writeFileSync(victim, "precious\n");
+				if (kind === "fifo") expect(spawnSync("mkfifo", [log]).status).toBe(0);
+				if (kind === "symlink") symlinkSync(victim, log);
+				if (kind === "directory") mkdirSync(log);
+				const { appendSessionEndLog } = await import("#services/session-end-log");
+				const plain = join(root, "plain.log");
+				writeFileSync(plain, "");
+				try {
+					appendSessionEndLog(
+						gitDir,
+						{ session: id, outcome: "failed", detail: "x" },
+						{ lstat: (() => lstatSync(plain)) as never, open: openSync },
+					);
+					expect.unreachable("must refuse");
+				} catch (error) {
+					expect((error as Error).name).toBe("SpaceGitError");
+					expect((error as Error).message).toMatch(/not a plain file.*Move it aside/s);
+				}
+				expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			},
+		);
+		it.each(["fifo", "symlink", "directory", "hardlink"] as const)(
+			"reports a %s in the log's place as a failure, so `space status` says so",
+			async (kind) => {
+				const { root } = await makeSpace();
+				const gitDir = join(root, ".hyper/space.git");
+				const log = join(gitDir, "session-end.log");
+				const other = join(root, "other.log");
+				writeFileSync(other, `2026-10-18T10:00:00.000Z\t${id}\tcommitted\t-\n`);
+				if (kind === "fifo") expect(spawnSync("mkfifo", [log]).status).toBe(0);
+				if (kind === "symlink") symlinkSync(other, log);
+				if (kind === "directory") mkdirSync(log);
+				if (kind === "hardlink") linkSync(other, log);
+				const { lastSessionEndFailure } = await import("#services/session-end-log");
+				expect(lastSessionEndFailure(gitDir)).toMatchObject({
+					outcome: "failed",
+					detail: expect.stringMatching(/not a plain file.*Move it aside/),
+				});
+			},
+		);
 		it("refuses a dangling symlink without creating its target", async () => {
 			const { root } = await makeSpace();
 			const gitDir = join(root, ".hyper/space.git");

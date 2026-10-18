@@ -68,10 +68,19 @@ export function isAppendableLog(stat: { isFile(): boolean; nlink: number }): boo
 	return stat.isFile() && stat.nlink === 1;
 }
 
+/** The two filesystem calls whose answers the guard compares; tests stub them to stage a swap. */
+export interface SessionEndLogIo {
+	lstat: typeof lstatSync;
+	open: typeof openSync;
+}
+
+const realIo: SessionEndLogIo = { lstat: lstatSync, open: openSync };
+
 /** Append one record, rotating first when the log has reached its limit. */
 export function appendSessionEndLog(
 	gitDir: string,
 	entry: Omit<SessionEndLogEntry, "at"> & { at?: string },
+	io: SessionEndLogIo = realIo,
 ): SessionEndLogEntry {
 	const record: SessionEndLogEntry = {
 		at: entry.at ?? new Date().toISOString(),
@@ -88,7 +97,7 @@ export function appendSessionEndLog(
 		);
 	let existing: Stats | undefined;
 	try {
-		existing = lstatSync(path);
+		existing = io.lstat(path) as Stats;
 	} catch {
 		/* No log yet. */
 	}
@@ -103,7 +112,7 @@ export function appendSessionEndLog(
 		}
 	}
 	try {
-		const fd = openSync(
+		const fd = io.open(
 			path,
 			// O_NONBLOCK: a FIFO swapped in for the log fails with ENXIO instead of
 			// holding the worker forever.
@@ -123,8 +132,14 @@ export function appendSessionEndLog(
 		}
 	} catch (error) {
 		// ELOOP: O_NOFOLLOW met a symlink. ENXIO: O_NONBLOCK met a FIFO.
+		// EISDIR: a directory was swapped in between the lstat and the open.
 		const code = (error as NodeJS.ErrnoException | undefined)?.code;
-		if (error instanceof SpaceGitError || code === "ELOOP" || code === "ENXIO") {
+		if (
+			error instanceof SpaceGitError ||
+			code === "ELOOP" ||
+			code === "ENXIO" ||
+			code === "EISDIR"
+		) {
 			throw error instanceof SpaceGitError ? error : refused();
 		}
 		throw spaceGitDirWriteError(gitDir, `record this session end (${record.outcome})`, error);
@@ -173,8 +188,36 @@ export function lastSessionEndEntry(gitDir: string): SessionEndLogEntry | null {
 	};
 }
 
+/**
+ * A synthetic failure when something that is not a plain file (a link, a
+ * directory, a pipe, a hard-linked file) sits where the log goes. Every writer
+ * refuses it, so the log's own last line can no longer report anything and
+ * session ends are silently lost; this is how that becomes visible.
+ */
+export function sessionEndLogObstruction(gitDir: string): SessionEndLogEntry | null {
+	const path = sessionEndLogPath(gitDir);
+	let stat: Stats;
+	try {
+		stat = lstatSync(path);
+	} catch {
+		return null;
+	}
+	if (isAppendableLog(stat)) return null;
+	return {
+		at: new Date().toISOString(),
+		session: "-",
+		outcome: "failed",
+		detail: sessionEndLine(
+			`${path} is not a plain file, so session ends are not being recorded. Move it aside and the next session end creates the log again.`,
+			DETAIL_LIMIT,
+		),
+	};
+}
+
 /** The newest record when it was a failure; what `hyper space status` shows. */
 export function lastSessionEndFailure(gitDir: string): SessionEndLogEntry | null {
+	const obstruction = sessionEndLogObstruction(gitDir);
+	if (obstruction !== null) return obstruction;
 	const entry = lastSessionEndEntry(gitDir);
 	return entry !== null && SESSION_END_FAILURES.includes(entry.outcome) ? entry : null;
 }

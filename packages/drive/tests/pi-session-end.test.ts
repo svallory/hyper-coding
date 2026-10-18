@@ -17,8 +17,10 @@ import {
 	chmodSync,
 	existsSync,
 	linkSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
+	openSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
@@ -292,21 +294,22 @@ describe("the pi extension on session_start: the failed-save notice", () => {
 			rmSync(join(directory, "space"), { recursive: true, force: true });
 		}
 	});
-	it("prints nothing when the log is a directory or a FIFO", () => {
-		const { space, gitDir } = spaceWithLog();
-		mkdirSync(join(gitDir, SESSION_END_LOG));
-		expect(failedSaveNotice(space)).toBeUndefined();
-		rmSync(join(gitDir, SESSION_END_LOG), { recursive: true });
-		expect(spawnSync("mkfifo", [join(gitDir, SESSION_END_LOG)]).status).toBe(0);
-		expect(failedSaveNotice(space)).toBeUndefined();
-	});
-	it("does not read a symlinked log", () => {
-		const { space, gitDir } = spaceWithLog();
-		const elsewhere = join(directory, "elsewhere.log");
-		writeFileSync(elsewhere, `${at}\t${id}\tfailed\tx\n`);
-		symlinkSync(elsewhere, join(gitDir, SESSION_END_LOG));
-		expect(failedSaveNotice(space)).toBeUndefined();
-	});
+	it.each(["directory", "fifo", "symlink", "hardlink"] as const)(
+		"says session ends are not being recorded when the log is a %s",
+		(kind) => {
+			const { space, gitDir } = spaceWithLog();
+			const log = join(gitDir, SESSION_END_LOG);
+			const elsewhere = join(directory, "elsewhere.log");
+			writeFileSync(elsewhere, `${at}\t${id}\tfailed\tx\n`);
+			if (kind === "directory") mkdirSync(log);
+			if (kind === "fifo") expect(spawnSync("mkfifo", [log]).status).toBe(0);
+			if (kind === "symlink") symlinkSync(elsewhere, log);
+			if (kind === "hardlink") linkSync(elsewhere, log);
+			expect(failedSaveNotice(space)).toBe(
+				`session-end.log in ${gitDir} is not a plain file; session ends are not being recorded. Move it aside.`,
+			);
+		},
+	);
 });
 
 describe("the pi extension on session_shutdown", () => {
@@ -533,6 +536,12 @@ describe("the pi extension on session_shutdown", () => {
 			["a trailing ; comment", "[core]\n\tworktree = ../.. ; the space\n", true],
 			["a trailing # comment", "[core]\n\tworktree = ../.. # the space\n", true],
 			["a case-insensitive key and section", "[Core]\n\tWorkTree = ../..\n", true],
+			[
+				"the last of a repeated key",
+				"[core]\n\tworktree = ../elsewhere\n\tworktree = ../..\n",
+				true,
+			],
+			["a later different value", "[core]\n\tworktree = ../..\n\tworktree = ../elsewhere\n", false],
 			["the key outside [core]", "[other]\n\tworktree = ../..\n", false],
 			["a different worktree", "[core]\n\tworktree = ../elsewhere\n", false],
 			["no section at all", "worktree = ../..\n", false],
@@ -541,6 +550,25 @@ describe("the pi extension on session_shutdown", () => {
 			writeFileSync(join(gitDir, "config"), config);
 			expect(findSpaceGitDir(join(directory, "cfg"))).toBe(accepted ? gitDir : undefined);
 		});
+
+		it.each(["fifo", "symlink"] as const)(
+			"never blocks or writes when the open meets a %s the lstat did not see",
+			(kind) => {
+				const { clone, victim } = plant();
+				const gitDir = makeSpaceGitDir(clone);
+				const log = join(gitDir, SESSION_END_LOG);
+				if (kind === "fifo") expect(spawnSync("mkfifo", [log]).status).toBe(0);
+				else symlinkSync(victim, log);
+				const plain = join(directory, "plain.log");
+				writeFileSync(plain, "");
+				// The precheck sees a plain file; only the open meets the swap.
+				appendFailureLine(gitDir, id, "x", {
+					lstat: (() => lstatSync(plain)) as never,
+					open: openSync,
+				});
+				expect(readFileSync(victim, "utf8")).toBe("precious\n");
+			},
+		);
 
 		it("skips a git dir carried by a clone that is not the space's own", async () => {
 			const { clone, outside, victim } = plant();

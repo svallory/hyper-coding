@@ -305,10 +305,12 @@ export async function saveSessionEnd(
 /**
  * `[core] worktree = ../..` as `initSpaceGitDir` writes it. The key is
  * case-insensitive, the value may be quoted, and a trailing `;` or `#` comment
- * is allowed, as git reads it. Only the `[core]` section counts.
+ * is allowed, as git reads it, and the last value of a repeated key wins, as
+ * in git. Only the `[core]` section counts.
  */
 function hasOwnWorktree(config: string): boolean {
 	let inCore = false;
+	let last: string | undefined;
 	for (const raw of config.split("\n")) {
 		const line = raw.trim();
 		const section = /^\[\s*([^\s\]"]+)[^\]]*\]/.exec(line);
@@ -316,9 +318,15 @@ function hasOwnWorktree(config: string): boolean {
 			inCore = section[1]?.toLowerCase() === "core" && !line.includes('"');
 			continue;
 		}
-		if (inCore && /^worktree[ \t]*=[ \t]*("?)\.\.\/\.\.\1[ \t]*([;#].*)?$/i.test(line)) return true;
+		const key = inCore ? /^worktree[ \t]*=(.*)$/i.exec(line) : null;
+		// git takes the last value of a repeated key.
+		if (key !== null)
+			last = (key[1] ?? "")
+				.replace(/[ \t]*[;#].*$/, "")
+				.trim()
+				.replace(/^"(.*)"$/, "$1");
 	}
-	return false;
+	return last === "../..";
 }
 
 /** Read at most `limit` bytes of a plain file: no symlink, and a FIFO cannot block the open. */
@@ -399,12 +407,17 @@ function logField(text: string, limit: number): string {
  * writer (`isAppendableLog`) applies the same rule. Never throws: a log that cannot be
  * written costs nothing more than the save already lost.
  */
-export function appendFailureLine(gitDir: string, sessionId: string, detail: string): void {
+export function appendFailureLine(
+	gitDir: string,
+	sessionId: string,
+	detail: string,
+	io: { lstat: typeof lstatSync; open: typeof openSync } = { lstat: lstatSync, open: openSync },
+): void {
 	const path = join(gitDir, SESSION_END_LOG);
 	try {
 		let existing: ReturnType<typeof lstatSync> | undefined;
 		try {
-			existing = lstatSync(path);
+			existing = io.lstat(path) as ReturnType<typeof lstatSync>;
 		} catch {
 			/* No log yet. */
 		}
@@ -418,7 +431,7 @@ export function appendFailureLine(gitDir: string, sessionId: string, detail: str
 			"failed",
 			logField(detail, 600),
 		].join("\t");
-		const fd = openSync(
+		const fd = io.open(
 			path,
 			// O_NONBLOCK: a FIFO swapped in for the log fails with ENXIO instead of
 			// holding pi's quit forever (pi awaits session_shutdown with no timeout).
@@ -576,6 +589,16 @@ export const realDeps: SessionEndDeps = createRealDeps();
 export function failedSaveNotice(cwd: string): string | undefined {
 	const gitDir = findSpaceGitDir(cwd);
 	if (gitDir === undefined) return undefined;
+	// Every writer refuses a log that is not a plain file, so its last line can
+	// no longer say anything: say that instead of staying quiet.
+	try {
+		const stat = lstatSync(join(gitDir, SESSION_END_LOG));
+		if (!stat.isFile() || stat.nlink !== 1) {
+			return `${SESSION_END_LOG} in ${logField(gitDir, 300)} is not a plain file; session ends are not being recorded. Move it aside.`;
+		}
+	} catch {
+		// No log yet.
+	}
 	let text: string;
 	try {
 		// O_NONBLOCK: a FIFO planted in the log's place must not hang pi's start.
