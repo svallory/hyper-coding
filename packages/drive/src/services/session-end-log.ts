@@ -39,6 +39,24 @@ export type SessionEndOutcome =
 	| "push-failed"
 	| "failed";
 
+/**
+ * Progress records of a detached `hyper warp` transfer. They share the log with
+ * the session-end records but are not session ends: `lastSessionEndEntry` skips
+ * them and `lastWarpSync` reads them.
+ */
+export type WarpSyncOutcome = "syncing" | "synced" | "sync-failed";
+
+export const WARP_SYNC_OUTCOMES: readonly WarpSyncOutcome[] = ["syncing", "synced", "sync-failed"];
+
+const SESSION_END_OUTCOMES: readonly SessionEndOutcome[] = [
+	"committed",
+	"nothing",
+	"ignored",
+	"refused",
+	"push-failed",
+	"failed",
+];
+
 /** Outcomes that `hyper space status` reports. */
 export const SESSION_END_FAILURES: readonly SessionEndOutcome[] = [
 	"refused",
@@ -147,45 +165,85 @@ export function appendSessionEndLog(
 	return record;
 }
 
-/** The newest record, or null when there is none (or it cannot be read). */
-export function lastSessionEndEntry(gitDir: string): SessionEndLogEntry | null {
+/** Read the tail of the log (at most 16 KiB), or null when it cannot be read. */
+function readLogTail(gitDir: string): string[] | null {
 	const path = sessionEndLogPath(gitDir);
-	let text: string;
 	try {
 		// O_NONBLOCK: a FIFO planted in the log's place must not hang `space status`.
 		const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-		let buffer: Buffer;
 		try {
 			const stat = fstatSync(fd);
 			if (!stat.isFile()) return null;
 			const length = Math.min(stat.size, 16 * 1024);
-			buffer = Buffer.alloc(length);
+			const buffer = Buffer.alloc(length);
 			readSync(fd, buffer, 0, length, stat.size - length);
+			return buffer
+				.toString("utf8")
+				.split("\n")
+				.filter((value) => value !== "");
 		} finally {
 			closeSync(fd);
 		}
-		text = buffer.toString("utf8");
 	} catch {
 		return null;
 	}
-	const line = text
-		.split("\n")
-		.filter((value) => value !== "")
-		.pop();
-	if (line === undefined) return null;
+}
+
+function parseRecord(
+	line: string,
+): { at: string; session: string; outcome: string; detail: string } | null {
 	const [at, session, outcome, ...detail] = line.split("\t");
-	if (
-		at === undefined ||
-		session === undefined ||
-		!["committed", "nothing", "ignored", "refused", "push-failed", "failed"].includes(outcome ?? "")
-	)
-		return null;
-	return {
-		at,
-		session,
-		outcome: outcome as SessionEndOutcome,
-		detail: sessionEndLine(detail.join(" "), DETAIL_LIMIT),
-	};
+	if (at === undefined || session === undefined || outcome === undefined) return null;
+	return { at, session, outcome, detail: sessionEndLine(detail.join(" "), DETAIL_LIMIT) };
+}
+
+/** The newest session-end record, or null when there is none (or it cannot be read). */
+export function lastSessionEndEntry(gitDir: string): SessionEndLogEntry | null {
+	const lines = readLogTail(gitDir);
+	if (lines === null) return null;
+	// Warp transfer progress shares the log; it must not hide a session end.
+	for (let index = lines.length - 1; index >= 0; index--) {
+		const record = parseRecord(lines[index] as string);
+		if (record === null) return null;
+		if (WARP_SYNC_OUTCOMES.includes(record.outcome as WarpSyncOutcome)) continue;
+		if (!SESSION_END_OUTCOMES.includes(record.outcome as SessionEndOutcome)) return null;
+		return { ...record, outcome: record.outcome as SessionEndOutcome };
+	}
+	return null;
+}
+
+export interface WarpSyncEntry {
+	at: string;
+	session: string;
+	outcome: WarpSyncOutcome;
+	detail: string;
+}
+
+/** The newest warp transfer record, or null when the log has none. */
+export function lastWarpSync(gitDir: string): WarpSyncEntry | null {
+	const lines = readLogTail(gitDir);
+	if (lines === null) return null;
+	for (let index = lines.length - 1; index >= 0; index--) {
+		const record = parseRecord(lines[index] as string);
+		if (record !== null && WARP_SYNC_OUTCOMES.includes(record.outcome as WarpSyncOutcome)) {
+			return { ...record, outcome: record.outcome as WarpSyncOutcome };
+		}
+	}
+	return null;
+}
+
+/**
+ * What `hyper space status` prints for a warp transfer record. Pure so the
+ * format is tested without a space.
+ */
+export function warpSyncStatusLine(entry: WarpSyncEntry): string {
+	const state =
+		entry.outcome === "syncing"
+			? "in progress"
+			: entry.outcome === "synced"
+				? "finished"
+				: "FAILED";
+	return `Warp transfer ${state} (${entry.at}, session ${entry.session}): ${entry.detail}`;
 }
 
 /**
