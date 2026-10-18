@@ -280,6 +280,22 @@ describe("the pi extension on session_start: the failed-save notice", () => {
 		expect(await start(space, "startup", levels)).toHaveLength(1);
 		expect(levels).toEqual(["warning"]);
 	});
+	it("a warp transfer's progress lines do not hide a failed save", () => {
+		const { space } = spaceWithLog(
+			`${at}\t${id}\tpush-failed\tx`,
+			`${at}\t${id}\tsyncing\tto b: 0 of 2 transfers done`,
+			`${at}\t${id}\tsynced\tto b: all 2 transfers done`,
+			`${at}\t${id}\tsync-failed\tto b: 1 of 2 failed`,
+		);
+		expect(failedSaveNotice(space)).toContain("push failed");
+	});
+	it("says nothing when only progress lines follow a success", () => {
+		const { space } = spaceWithLog(
+			`${at}\t${id}\tcommitted\tx`,
+			`${at}\t${id}\tsync-failed\tto b: 1 of 2 failed`,
+		);
+		expect(failedSaveNotice(space)).toBeUndefined();
+	});
 	it("prints nothing for a malformed last line or one without an outcome", () => {
 		for (const last of [
 			"garbage",

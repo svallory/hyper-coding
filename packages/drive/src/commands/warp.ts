@@ -15,7 +15,14 @@ import {
 	type WarpInputs,
 	type WarpPlan,
 } from "#services/warp";
-import { type OthersMode, othersQuestion, parseOthersMode, pickerLine } from "#services/warp-tiers";
+import {
+	type OtherSessions,
+	type OthersMode,
+	othersBytes,
+	othersQuestion,
+	parseOthersMode,
+	pickerLine,
+} from "#services/warp-tiers";
 
 /** Prefix of every sync session hyperdrive owns, as `drive sync-config` builds it. */
 const SESSION_PREFIX = "hyper-";
@@ -220,6 +227,8 @@ Limits:
 				: { envSessionId: process.env.CLAUDE_CODE_SESSION_ID }),
 		});
 		if (choice.kind === "chosen") return choice.id;
+		// No transcript: gatherWarp says so, with the directory and what to do.
+		if (choice.kind === "none") return undefined;
 		const lines = choice.options.map((option, index) => pickerLine(index, option));
 		if (!process.stdin.isTTY || flags.json) {
 			throw new Error(
@@ -239,14 +248,17 @@ Limits:
 
 	/** Tier 3: ask once; `--yes` means no, and so does anywhere we cannot ask. */
 	private async askOthers(
-		others: { ids: string[]; bytes: number },
+		others: OtherSessions,
 		flags: { yes: boolean; others?: string; "all-projects": boolean; json: boolean },
 	): Promise<OthersMode> {
 		if (flags.others !== undefined) return flags.others as OthersMode;
 		if (flags.yes || others.ids.length === 0 || !process.stdin.isTTY || flags.json) return "no";
 		for (;;) {
 			const mode = parseOthersMode(
-				await ask(othersQuestion(others.ids.length, others.bytes, flags["all-projects"])),
+				await ask(
+					// The size walk is the slow part: only when we really ask.
+					othersQuestion(others.ids.length, othersBytes(others), flags["all-projects"]),
+				),
 			);
 			if (mode !== null) return mode;
 			this.log("Please answer now, background or no.");

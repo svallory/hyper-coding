@@ -605,9 +605,12 @@ export function failedSaveNotice(cwd: string): string | undefined {
 	} catch {
 		return undefined;
 	}
+	// `hyper warp` transfers share the log; their progress lines are not a
+	// session end and must not hide a failed save.
 	const last = text
 		.split("\n")
 		.filter((value) => value !== "")
+		.filter((value) => !["syncing", "synced", "sync-failed"].includes(value.split("\t")[2] ?? ""))
 		.pop();
 	if (last === undefined) return undefined;
 	const [at, , outcome] = last.split("\t");

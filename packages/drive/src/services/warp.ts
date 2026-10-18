@@ -188,11 +188,6 @@ export interface WarpInputs {
 	/** Absolute path of the transcript that will be copied. */
 	transcriptPath: string;
 	/**
-	 * True when the session has a `<id>/` folder beside its transcript (Claude
-	 * Code keeps per-session tool output there). It travels with the session.
-	 */
-	transcriptSubfolder: boolean;
-	/**
 	 * Tier 1 beyond the transcript and marker (project memory, session aliases,
 	 * file history, session env), those that exist. See services/warp-tiers.ts.
 	 */
@@ -711,6 +706,10 @@ export type WarpStep =
 			dst: string;
 			tree: boolean;
 			excludes: string[];
+			/** `--include` rules, before the excludes. */
+			includes?: string[];
+			/** `--update`: a file that is newer on the target is left alone. */
+			update?: boolean;
 			/**
 			 * Paths under `src` (tree copies) sent again after the copy with
 			 * `--checksum`. rsync's quick check skips a file whose size and mtime
@@ -1006,6 +1005,18 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			return refuse(
 				"paths",
 				`${label} ${JSON.stringify(value)} can't be sent to ${target.name}: remote paths may only contain ${SAFE_REMOTE_PATH_DESCRIPTION} (no spaces, quotes or shell characters), because the copy tools quote them differently on each platform. Rename it, or warp from a directory whose path has none of those.`,
+			);
+		}
+	}
+	for (const entry of [
+		...(inputs.tier1Extras ?? []),
+		...(inputs.tier2 ?? []),
+		...(inputs.others?.entries ?? []),
+	]) {
+		if (!isSafeRemotePath(entry.src)) {
+			return refuse(
+				"paths",
+				`${entry.label} ${JSON.stringify(entry.src)} can't be sent to ${target.name}: remote paths may only contain ${SAFE_REMOTE_PATH_DESCRIPTION} (no spaces, quotes or shell characters). Your Claude config directory has to be named without them for warp to carry its data.`,
 			);
 		}
 	}
@@ -1399,7 +1410,9 @@ export function planWarp(inputs: WarpInputs): WarpPlanResult {
 			src: entry.src,
 			dst: entry.src,
 			tree: entry.tree,
-			excludes: [],
+			excludes: entry.excludes ?? [],
+			...(entry.includes ? { includes: entry.includes } : {}),
+			...(entry.update ? { update: true } : {}),
 			leaves: `${entry.label} ${entry.src}`,
 		});
 	}
@@ -1752,12 +1765,28 @@ export function describeStep(step: WarpStep, target = "the target"): string {
 						`\n    then, when it exists here: rsync -a --stats --checksum -- ${step.src}/${file} ${step.dst}/${file}`,
 				)
 				.join("");
-			return `copy: ${step.summary}\n    rsync -a --stats${excludes} -- ${step.src}${slash} ${step.dst}${slash}${again}`;
+			const filters = [
+				...(step.includes ?? []).map((pattern) => `--include=${pattern}`),
+				...(step.update ? ["--update"] : []),
+			].join(" ");
+			return `copy: ${step.summary}\n    rsync -a --stats${filters ? ` ${filters}` : ""}${excludes} -- ${step.src}${slash} ${step.dst}${slash}${again}`;
 		}
 		case "push-branch":
 			return `push: ${step.summary}\n    ${displayLine(projectPushArgv(step))}\n    (when the worktree is already registered there on this branch, the target's receive-pack is told to accept moving it: --receive-pack='... receive.denyCurrentBranch=ignore ...')`;
 		case "background-sync":
-			return `background: ${step.summary}\n${step.entries.map((entry) => `    rsync -a --partial -- ${entry.src}${entry.tree ? "/" : ""} ${entry.src}${entry.tree ? "/" : ""}`).join("\n")}`;
+			return `background: ${step.summary}\n${step.entries
+				.map((entry) => {
+					const slash = entry.tree ? "/" : "";
+					const flags = [
+						"-a",
+						"--partial",
+						...(entry.update ? ["--update"] : []),
+						...(entry.includes ?? []).map((pattern) => `--include=${pattern}`),
+						...(entry.excludes ?? []).map((pattern) => `--exclude=${pattern}`),
+					];
+					return `    ${`rsync ${displayLine([...flags, "--", `${entry.src}${slash}`, `${entry.src}${slash}`])}`}`;
+				})
+				.join("\n")}`;
 		case "herdr":
 			return `herdr: ${step.summary}\n    herdr ${displayLine(step.argv)}`;
 	}
@@ -2071,7 +2100,11 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 					let result = await deps.runner.rsync(
 						step.tree ? `${step.src}/` : step.src,
 						step.tree ? `${step.dst}/` : step.dst,
-						{ excludes: step.excludes },
+						{
+							excludes: step.excludes,
+							...(step.includes ? { includes: step.includes } : {}),
+							...(step.update ? { update: true } : {}),
+						},
 					);
 					const treeArrived = result.code === 0;
 					// The quick check can skip a rewritten file (see `checksumFiles`).
@@ -2128,6 +2161,9 @@ export async function executeWarp(plan: WarpPlan, deps: WarpDeps): Promise<WarpE
 								src: entry.tree ? `${entry.src}/` : entry.src,
 								dst: entry.src,
 								label: entry.label,
+								...(entry.update ? { update: true } : {}),
+								...(entry.includes ? { includes: entry.includes } : {}),
+								...(entry.excludes ? { excludes: entry.excludes } : {}),
 							})),
 						});
 						execution.notices.push(
@@ -2525,9 +2561,19 @@ export function gatherWarp(options: {
 	const key = basename(dirname(chosen.path));
 	const spaceRoot = findSpaceRoot(cwd);
 	const gitDir = spaceRoot === null ? null : spaceGitDir(spaceRoot);
+	// Another session is left out when a different machine owns it (our copy
+	// would replace work done there) or when it is running here.
+	const skipOther = (id: string): string | null => {
+		const owner = readOwner(cwd, id);
+		if (owner.state === "malformed") return "its ownership marker is unreadable";
+		if (owner.state === "owned" && owner.marker.owner !== me.name) {
+			return `${owner.marker.owner} owns it`;
+		}
+		return liveSessionsFor(id).length > 0 ? "it is running here" : null;
+	};
 	const others = options.allProjects
 		? otherProjectEntries(home, key)
-		: otherSessionEntries(home, key, chosen.id);
+		: otherSessionEntries(home, key, chosen.id, skipOther);
 
 	return {
 		collision,
@@ -2547,7 +2593,6 @@ export function gatherWarp(options: {
 			},
 			sessionId: chosen.id,
 			transcriptPath: chosen.path,
-			transcriptSubfolder: isDirectory(join(dirname(chosen.path), chosen.id)),
 			live: liveSessionsFor(chosen.id),
 			stop: false,
 			force: false,
@@ -2853,7 +2898,18 @@ export function gatherSessionChoice(options: {
 	yes: boolean;
 	envSessionId?: string;
 }): SessionChoice {
-	const transcripts = listTranscripts(options.cwd);
+	const all = listTranscripts(options.cwd);
+	// Two directories can share one project folder (names differing only in
+	// punctuation): offer only transcripts about THIS directory, so the id
+	// that comes back is never about the other one. A transcript that names no
+	// cwd stays; if nothing is left the folder's own list is used and the
+	// planner reports the collision.
+	const here = realPath(options.cwd);
+	const mine = all.filter((entry) => {
+		const own = transcriptCwd(entry.path);
+		return own === undefined || own === here;
+	});
+	const transcripts = mine.length > 0 ? mine : all;
 	const choice = chooseSession({
 		candidates: transcripts.map((entry) => ({
 			id: entry.id,

@@ -1,15 +1,22 @@
+import { spawnSync } from "node:child_process";
 import {
 	chmodSync,
 	existsSync,
+	linkSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
 	readFileSync,
+	realpathSync,
 	rmSync,
+	statSync,
 	symlinkSync,
+	utimesSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { detachSync, type MachineRunner } from "#services/remote";
 import {
@@ -19,10 +26,11 @@ import {
 	lastWarpSync,
 	warpSyncStatusLine,
 } from "#services/session-end-log";
-import { firstUserMessage } from "#services/sessions";
+import { encodeProjectDir, firstUserMessage } from "#services/sessions";
 import {
 	describeStep,
 	executeWarp,
+	gatherSessionChoice,
 	planWarp,
 	type WarpDeps,
 	type WarpInputs,
@@ -34,6 +42,7 @@ import {
 	isNeverCopied,
 	otherProjectEntries,
 	otherSessionEntries,
+	othersBytes,
 	othersQuestion,
 	parseOthersMode,
 	pickerLine,
@@ -128,7 +137,7 @@ describe("tier 2: the session's big folders", () => {
 });
 
 describe("tier 3: everything else", () => {
-	it("collects the project's other sessions with their files, not this one", () => {
+	it("sends the project's other sessions as three filtered roots, not one path each", () => {
 		tree({
 			[`projects/${KEY}/${ID}.jsonl`]: "{}",
 			[`projects/${KEY}/${OTHER}.jsonl`]: "12345",
@@ -140,15 +149,51 @@ describe("tier 3: everything else", () => {
 		});
 		const others = otherSessionEntries(home, KEY, ID);
 		expect(others.ids).toEqual([OTHER]);
-		expect(labels(others.entries)).toEqual([
-			`/projects/${KEY}/${OTHER}.jsonl`,
-			`/projects/${KEY}/${OTHER}.warp.json`,
-			`/projects/${KEY}/${OTHER}`,
-			`/file-history/${OTHER}`,
-			`/session-env/${OTHER}`,
+		expect(labels(others.entries)).toEqual([`/projects/${KEY}`, "/file-history", "/session-env"]);
+		for (const entry of others.entries) {
+			expect(entry.update).toBe(true);
+			expect(entry.excludes).toEqual(["*"]);
+		}
+		expect(others.entries[0]?.includes).toEqual([
+			`/${OTHER}.jsonl`,
+			`/${OTHER}.warp.json`,
+			`/${OTHER}/`,
+			`/${OTHER}/**`,
 		]);
-		// 5 + 2 + 3 + 1 + 0
-		expect(others.bytes).toBe(11);
+		expect(others.entries[1]?.includes).toEqual([`/${OTHER}/`, `/${OTHER}/**`]);
+		// 5 + 2 + 3 + 1 + 0, counted only when asked.
+		expect(othersBytes(others)).toBe(11);
+	});
+
+	it("skips sessions another machine owns or that run here, and names why", () => {
+		const THIRD = "bbbbbbbb-6975-4381-b884-214b3ca452d8";
+		tree({
+			[`projects/${KEY}/${OTHER}.jsonl`]: "1",
+			[`projects/${KEY}/${THIRD}.jsonl`]: "1",
+		});
+		const others = otherSessionEntries(home, KEY, ID, (id) =>
+			id === OTHER ? "netcup owns it" : null,
+		);
+		expect(others.ids).toEqual([THIRD]);
+		expect(others.skipped).toEqual([{ id: OTHER, reason: "netcup owns it" }]);
+		expect(JSON.stringify(others.entries)).not.toContain(OTHER);
+	});
+
+	it("sends nothing when every other session is skipped", () => {
+		tree({ [`projects/${KEY}/${OTHER}.jsonl`]: "1" });
+		expect(otherSessionEntries(home, KEY, ID, () => "busy").entries).toEqual([]);
+	});
+
+	it("leaves out a session whose name a filter cannot name safely", () => {
+		tree({ [`projects/${KEY}/we*ird.jsonl`]: "1" });
+		const others = otherSessionEntries(home, KEY, ID);
+		expect(others.ids).toEqual([]);
+		expect(others.skipped[0]?.id).toBe("we*ird");
+	});
+
+	it("project memory is sent with --update (it is shared by every session)", () => {
+		tree({ [`projects/${KEY}/memory/MEMORY.md`]: "x" });
+		expect(tier1Extras(home, KEY, ID)[0]).toMatchObject({ update: true });
 	});
 
 	it("has nothing to offer for a project with one session", () => {
@@ -164,7 +209,9 @@ describe("tier 3: everything else", () => {
 		});
 		const all = otherProjectEntries(home, KEY);
 		expect(all.ids).toEqual(["-home-other", "-home-third"]);
-		expect(all.bytes).toBe(5);
+		expect(othersBytes(all)).toBe(5);
+		expect(all.entries).toHaveLength(1);
+		expect(all.entries[0]).toMatchObject({ update: true, excludes: [`/${KEY}/`] });
 	});
 
 	it("sizeOf counts files under a directory", () => {
@@ -305,10 +352,8 @@ describe("choosing the session", () => {
 	});
 
 	it("has nothing to choose without transcripts", () => {
-		expect(chooseSession({ candidates: [], liveIds: [], yes: true })).toEqual({
-			kind: "ask",
-			options: [],
-		});
+		expect(chooseSession({ candidates: [], liveIds: [], yes: true })).toEqual({ kind: "none" });
+		expect(chooseSession({ candidates: [], liveIds: [], yes: false })).toEqual({ kind: "none" });
 	});
 
 	it("picker lines show the id, the time and what was typed", () => {
@@ -397,7 +442,6 @@ describe("the plan: which tier goes where", () => {
 			target: { name: "netcup", host: "me@box", home: "/home/fixture" },
 			sessionId: ID,
 			transcriptPath: `${FOLDER}/${ID}.jsonl`,
-			transcriptSubfolder: true,
 			live: [],
 			stop: false,
 			force: false,
@@ -672,9 +716,11 @@ describe("the detached transfer, with a fake rsync and ssh on PATH", () => {
 		expect(lines[3]?.[1]).toBe(ID);
 		const made = readFileSync(calls, "utf8");
 		expect(made).toContain(
-			"rsync -a --stats -e ssh -p 2222 --partial -- /tmp/src0/ me@box:/tmp/dst0/",
+			"rsync -a --stats -e ssh -o BatchMode=yes -o ConnectTimeout=15 -p 2222 --partial -- /tmp/src0/ me@box:/tmp/dst0/",
 		);
-		expect(made).toContain("ssh -p 2222 me@box -- mkdir -p -- /tmp/dst0");
+		expect(made).toContain(
+			"ssh -o BatchMode=yes -o ConnectTimeout=15 -p 2222 me@box -- mkdir -p -- /tmp/dst0",
+		);
 		expect(made).not.toContain("--delete");
 		// The line the status command prints reads back from the same file.
 		expect(warpSyncStatusLine(lastWarpSync(join(home))!)).toContain("finished");
@@ -710,6 +756,106 @@ describe("the detached transfer, with a fake rsync and ssh on PATH", () => {
 		await waitFor(join(home, "finished"), () => true);
 	});
 
+	it("passes the update and filter rules of a job to the transfer", async () => {
+		fake("ssh", "exit 0");
+		fake("rsync", `touch '${home}/finished'\nexit 0`);
+		detachSync({
+			host: "me@box",
+			jobs: [
+				{
+					src: "/tmp/p/",
+					dst: "/tmp/p",
+					label: "p",
+					update: true,
+					includes: ["/a/", "/a/**"],
+					excludes: ["*"],
+				},
+			],
+			session: ID,
+			targetName: "netcup",
+		});
+		await waitFor(join(home, "finished"), () => true);
+		expect(readFileSync(calls, "utf8")).toContain(
+			"--include=/a/ --include=/a/** --exclude=* --partial --update -- /tmp/p/ me@box:/tmp/p/",
+		);
+	});
+
+	it("a single-file job creates the PARENT directory, not the file path", async () => {
+		fake("ssh", "exit 0");
+		fake("rsync", `touch '${home}/finished'\nexit 0`);
+		detachSync({
+			host: "me@box",
+			jobs: [{ src: "/tmp/dir/file.json", dst: "/tmp/dir/file.json", label: "f" }],
+			session: ID,
+			targetName: "netcup",
+		});
+		await waitFor(join(home, "finished"), () => true);
+		const made = readFileSync(calls, "utf8");
+		expect(made).toContain("mkdir -p -- /tmp/dir");
+		expect(made).not.toContain("mkdir -p -- /tmp/dir/file.json");
+		expect(made).toContain("-- /tmp/dir/file.json me@box:/tmp/dir/file.json");
+	});
+
+	it("a failing mkdir skips that transfer and ends as sync-failed", async () => {
+		fake("ssh", "exit 3");
+		fake("rsync", `touch '${home}/rsync-ran'\nexit 0`);
+		const log = join(home, "session-end.log");
+		detachSync({ host: "me@box", jobs: jobs(1), session: ID, logFile: log, targetName: "netcup" });
+		const text = await waitFor(log, (value) => value.includes("sync-failed"));
+		expect(text).toContain("1 of 1 transfers failed (last exit 3)");
+		expect(existsSync(join(home, "rsync-ran"))).toBe(false);
+	});
+
+	it("never opens a FIFO in the log's place, and still transfers", async () => {
+		fake("ssh", "exit 0");
+		fake("rsync", `touch '${home}/finished'\nexit 0`);
+		const log = join(home, "session-end.log");
+		expect(spawnSync("mkfifo", [log]).status).toBe(0);
+		detachSync({ host: "me@box", jobs: jobs(1), session: ID, logFile: log, targetName: "netcup" });
+		await waitFor(join(home, "finished"), () => true);
+		expect(lstatSync(log).isFIFO()).toBe(true);
+	});
+
+	it("never writes through a hard-linked log", async () => {
+		fake("ssh", "exit 0");
+		fake("rsync", `touch '${home}/finished'\nexit 0`);
+		const victim = join(home, "victim.txt");
+		writeFileSync(victim, "keep\n");
+		const log = join(home, "session-end.log");
+		linkSync(victim, log);
+		detachSync({ host: "me@box", jobs: jobs(1), session: ID, logFile: log, targetName: "netcup" });
+		await waitFor(join(home, "finished"), () => true);
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		expect(readFileSync(victim, "utf8")).toBe("keep\n");
+	});
+
+	it("creates the log readable by its owner only", async () => {
+		fake("ssh", "exit 0");
+		fake("rsync", "exit 0");
+		const log = join(home, "session-end.log");
+		detachSync({ host: "me@box", jobs: jobs(1), session: ID, logFile: log, targetName: "netcup" });
+		await waitFor(log, (value) => value.includes("\tsynced\t"));
+		expect(statSync(log).mode & 0o777).toBe(0o600);
+	});
+
+	it("keeps going after the process that started it has exited", async () => {
+		fake("ssh", "exit 0");
+		fake("rsync", `sleep 1\ntouch '${home}/finished'\nexit 0`);
+		const module = pathToFileURL(
+			join(dirname(fileURLToPath(import.meta.url)), "../src/services/remote.ts"),
+		).href;
+		const parent = join(home, "parent.mjs");
+		writeFileSync(
+			parent,
+			`import { detachSync } from ${JSON.stringify(module)};\ndetachSync({ host: "me@box", jobs: [{ src: "/tmp/s/", dst: "/tmp/d", label: "j" }], session: ${JSON.stringify(ID)}, logFile: ${JSON.stringify(join(home, "session-end.log"))}, targetName: "netcup" });\n`,
+		);
+		const run = spawnSync("bun", [parent], { env: process.env, encoding: "utf8" });
+		expect(run.status, run.stderr).toBe(0);
+		expect(existsSync(join(home, "finished"))).toBe(false);
+		await waitFor(join(home, "finished"), () => true);
+		await waitFor(join(home, "session-end.log"), (value) => value.includes("\tsynced\t"));
+	}, 30_000);
+
 	it("refuses a destination the remote shell could misread, before starting anything", () => {
 		expect(() =>
 			detachSync({
@@ -725,5 +871,164 @@ describe("the detached transfer, with a fake rsync and ssh on PATH", () => {
 		expect(() =>
 			detachSync({ host: "-oProxyCommand=x", jobs: jobs(1), session: ID, targetName: "n" }),
 		).toThrow(/can't start with "-"/);
+	});
+});
+
+describe("tier 3 in the plan: shared data is never overwritten", () => {
+	const FOLDER = `/home/fixture/.claude/projects/${KEY}`;
+	function baseInputs(): WarpInputs {
+		return {
+			cwd: "/home/fixture/work/proj",
+			selfName: "mac",
+			selfHome: "/home/fixture",
+			target: { name: "netcup", host: "me@box", home: "/home/fixture" },
+			sessionId: ID,
+			transcriptPath: `${FOLDER}/${ID}.jsonl`,
+			live: [],
+			stop: false,
+			force: false,
+			remoteControl: false,
+			owner: { state: "unowned", path: `${FOLDER}/${ID}.warp.json` },
+			strayMarker: null,
+			cwdKind: "plain-dir",
+			space: null,
+			spaceInManifest: { ok: true },
+			excludes: [],
+			trackedUnderExcludes: [],
+			syncSession: null,
+			agentSuffix: "k1",
+			startedAt: "2026-10-04T12:00:00.000Z",
+		};
+	}
+	function planWith(overrides: Partial<WarpInputs>): WarpPlan {
+		const result = planWarp({ ...baseInputs(), ...overrides });
+		if (!result.ok) throw new Error(result.message);
+		return result.plan;
+	}
+	const root = {
+		src: FOLDER,
+		tree: true,
+		label: "the project's other sessions",
+		update: true,
+		includes: [`/${OTHER}.jsonl`, `/${OTHER}/`, `/${OTHER}/**`],
+		excludes: ["*"],
+	};
+
+	it("'now' copies each root once, with --update and its filter rules", () => {
+		const plan = planWith({ others: { mode: "now", entries: [root] } });
+		const copy = plan.steps.find((step) => step.kind === "copy" && step.src === FOLDER);
+		expect(copy).toMatchObject({ update: true, excludes: ["*"], includes: root.includes });
+		const text = describeStep(copy as never);
+		expect(text).toContain("--update");
+		expect(text).toContain(`--include=/${OTHER}.jsonl`);
+	});
+
+	it("'background' carries the same rules into the detached job", async () => {
+		const plan = planWith({ others: { mode: "background", entries: [root] } });
+		const started: Array<{ jobs: unknown[] }> = [];
+		const run = await executeWarp(plan, {
+			runner: {
+				async ssh() {
+					return { code: 0, stdout: "", stderr: "" };
+				},
+				async rsync() {
+					return { code: 0, stdout: "", stderr: "" };
+				},
+				async scp() {
+					throw new Error("no scp");
+				},
+			},
+			swapMarker: () => {},
+			runHerdr: async (argv) => ({
+				code: 0,
+				stdout: argv.includes("tab")
+					? JSON.stringify({ result: { root_pane: { pane_id: "w1:p1" } } })
+					: "",
+				stderr: "",
+			}),
+			warpCarriedRefs: () => [],
+			detachSync: ((options: { jobs: unknown[] }) => {
+				started.push(options);
+				return { pid: 1 };
+			}) as never,
+		});
+		expect(run.failure).toBeUndefined();
+		expect(started[0]?.jobs).toEqual([
+			{
+				src: `${FOLDER}/`,
+				dst: FOLDER,
+				label: root.label,
+				update: true,
+				includes: root.includes,
+				excludes: ["*"],
+			},
+		]);
+	});
+
+	it("refuses at planning a tier path the copy tools could not carry", () => {
+		const bad = { src: "/home/fixture/my claude/memory", tree: true, label: "project memory" };
+		const result = planWarp({ ...baseInputs(), tier1Extras: [bad] });
+		expect(result.ok).toBe(false);
+		if (!result.ok) {
+			expect(result.message).toContain("project memory");
+			expect(result.message).toContain("can't be sent to netcup");
+		}
+	});
+});
+
+describe("choosing among the transcripts of one directory", () => {
+	let config: string | undefined;
+	beforeEach(() => {
+		config = process.env.CLAUDE_CONFIG_DIR;
+		process.env.CLAUDE_CONFIG_DIR = join(home, "claude");
+	});
+	afterEach(() => {
+		if (config === undefined) {
+			// biome-ignore lint/performance/noDelete: an env var set to undefined becomes the string "undefined"
+			delete process.env.CLAUDE_CONFIG_DIR;
+		} else process.env.CLAUDE_CONFIG_DIR = config;
+	});
+
+	function transcript(folder: string, id: string, cwd: string | null, mtime: number): void {
+		const dir = join(home, "claude", "projects", folder);
+		mkdirSync(dir, { recursive: true });
+		const path = join(dir, `${id}.jsonl`);
+		writeFileSync(path, `${JSON.stringify(cwd === null ? { type: "x" } : { cwd })}\n`);
+		utimesSync(path, mtime, mtime);
+	}
+
+	it("offers only transcripts about THIS directory when two share a project folder", () => {
+		const underscore = join(realpathSync(home), "work", "foo_bar");
+		const dash = join(realpathSync(home), "work", "foo-bar");
+		mkdirSync(underscore, { recursive: true });
+		mkdirSync(dash, { recursive: true });
+		const folder = encodeProjectDir(dash);
+		expect(encodeProjectDir(underscore)).toBe(folder);
+		transcript(folder, "dash-old", dash, 1000);
+		transcript(folder, "underscore-new", underscore, 2000);
+		// The newest is the other directory's: it must not be taken.
+		expect(gatherSessionChoice({ cwd: dash, yes: true })).toMatchObject({
+			kind: "chosen",
+			id: "dash-old",
+		});
+		expect(gatherSessionChoice({ cwd: underscore, yes: true })).toMatchObject({
+			kind: "chosen",
+			id: "underscore-new",
+		});
+	});
+
+	it("reports no transcripts as such, not as an empty question", () => {
+		const dir = join(realpathSync(home), "work", "empty");
+		mkdirSync(dir, { recursive: true });
+		expect(gatherSessionChoice({ cwd: dir, yes: false })).toEqual({ kind: "none" });
+	});
+
+	it("an explicit id is returned as given", () => {
+		const dir = join(realpathSync(home), "work", "x");
+		mkdirSync(dir, { recursive: true });
+		expect(gatherSessionChoice({ cwd: dir, yes: false, explicit: "abc" })).toMatchObject({
+			kind: "chosen",
+			id: "abc",
+		});
 	});
 });

@@ -184,7 +184,6 @@ function plainRepoPlan(cwdRel: string, overrides: Partial<WarpInputs> = {}): War
 		target: { name: "box", host: "me@box", home: srcHome },
 		sessionId: SESSION,
 		transcriptPath: transcript(),
-		transcriptSubfolder: false,
 		live: [],
 		stop: false,
 		force: false,

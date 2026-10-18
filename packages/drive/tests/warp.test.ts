@@ -130,7 +130,6 @@ function inputs(overrides: Partial<WarpInputs> = {}): WarpInputs {
 		target: { name: "netcup", host: "me@box", home: HOME },
 		sessionId: SESSION,
 		transcriptPath: TRANSCRIPT,
-		transcriptSubfolder: false,
 		live: [],
 		stop: false,
 		force: false,
@@ -378,7 +377,7 @@ describe("order: every check before the first change, for every kind of working 
 		const plans = [
 			planOf({ stop: true, live: [LIVE] }),
 			planOf({ cwdKind: "git-repo" }),
-			spacePlan({ stop: true, live: [LIVE], transcriptSubfolder: true }),
+			spacePlan({ stop: true, live: [LIVE] }),
 			planOf({ syncSession: "hyper-claude-netcup" }),
 		];
 		for (const plan of plans) {
@@ -562,7 +561,7 @@ describe("ownership (blocker 2)", () => {
 
 	it("copies only this session's files, never the project folder or the session folder", () => {
 		// The session folder's big parts are tier 2 (background), see warp-tiers.test.ts.
-		const plan = planOf({ transcriptSubfolder: true });
+		const plan = planOf();
 		const copies = plan.steps.filter((step) => step.kind === "copy");
 		expect(copies.map((copy) => [copy.src, copy.tree])).toEqual([
 			[TRANSCRIPT, false],
