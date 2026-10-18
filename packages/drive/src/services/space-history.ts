@@ -6,6 +6,7 @@ import { isClaudeUserStatePath, renderGitignore } from "#services/allowlist";
 import { lastSessionEndFailure } from "#services/session-end-log";
 import { detectSpace } from "#services/space";
 import {
+	clearPullMarker,
 	finishInterruptedPull,
 	gitSaid,
 	hasSpaceGit,
@@ -18,6 +19,7 @@ import {
 	SpaceRefusedError,
 	spaceGit,
 	spaceGitDir,
+	writePullMarker,
 	writeTracked,
 } from "#services/space-git";
 import { incomingReview, validateIncomingSpace } from "#services/space-incoming";
@@ -215,6 +217,10 @@ function advanceKeepingUserState(
 		rmSync(`${indexFile}.lock`, { force: true });
 	}
 	onStep("base");
+	// From the first change to the real index until the branch moves, a kill
+	// leaves the peer's tip in the index. The marker keeps that recoverable
+	// whatever a later fetch does to the tracking ref (hyper-prj.28).
+	writePullMarker(root, { startedAt: Date.now(), pid: process.pid, branch, before, tip });
 	for (let i = 0; i < literal.length; i += 500)
 		spaceGit(root, [
 			"rm",
@@ -233,10 +239,43 @@ function advanceKeepingUserState(
 			spaceGit(root, ["reset", "-q", before, "--", ...literal.slice(i, i + 500)], {
 				allowFailure: true,
 			});
+		clearPullMarker(root);
 		return merged;
 	}
 	onStep("read-tree");
 	spaceGit(root, ["update-ref", `refs/heads/${branch}`, tip, before]);
+	clearPullMarker(root);
+	return merged;
+}
+
+/**
+ * The plain fast-forward (nothing to keep aside). Marked like the index-only
+ * one, so a kill inside git still leaves the heal something that a later
+ * fetch cannot hide (hyper-prj.28).
+ */
+function fastForwardMarked(
+	root: string,
+	branch: string,
+	before: string,
+	tip: string,
+): ReturnType<typeof spaceGit> {
+	writePullMarker(root, { startedAt: Date.now(), pid: process.pid, branch, before, tip });
+	const merged = spaceGit(
+		root,
+		[
+			"-c",
+			"merge.verifySignatures=false",
+			"-c",
+			"submodule.recurse=false",
+			"merge",
+			"--ff-only",
+			"--no-overwrite-ignore",
+			"--no-autostash",
+			tip,
+		],
+		{ allowFailure: true },
+	);
+	clearPullMarker(root);
 	return merged;
 }
 
@@ -419,21 +458,7 @@ async function pullSpaceLocked(
 		const review = await incomingReview(root, incoming.tip, before);
 		const result =
 			userStateDeleted.length === 0
-				? spaceGit(
-						root,
-						[
-							"-c",
-							"merge.verifySignatures=false",
-							"-c",
-							"submodule.recurse=false",
-							"merge",
-							"--ff-only",
-							"--no-overwrite-ignore",
-							"--no-autostash",
-							incoming.tip,
-						],
-						{ allowFailure: true },
-					)
+				? fastForwardMarked(root, branch, before, incoming.tip)
 				: advanceKeepingUserState(
 						root,
 						branch,

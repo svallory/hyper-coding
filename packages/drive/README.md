@@ -160,6 +160,23 @@ silently adopts a peer's new `tracked` entries (it asks, or takes
 `--accept-tracked`). Status is offline unless `--fetch` — it compares
 against the last-seen remote-tracking ref.
 
+A pull that is killed after it updated the index but before it moved the
+branch is finished by the next `commit`, `pull` or `status`, so the peer's
+tip is never committed as local work. To make that survive a later fetch, a
+pull writes `.hyper/space.git/pull-in-flight.json` (start time, pid, branch,
+the tip it started from and the tip it is moving to) under the space lock
+before it first changes the index, and removes it once the branch has moved
+or the merge was rolled back. The heal reads its tip from that marker, so a
+fetch after the kill, which moves the remote-tracking ref, no longer defeats
+it. `status` never waits for the lock: it peeks at the holder, finishes an
+interrupted pull only if the lock is free, and while a pull is still running
+prints `Pull in progress (pid N, since T)` (`pullInProgress` in `--json`,
+`state: "running"`). If the lock is held by a different process than the one
+that wrote the marker (the pull was killed), it names that holder instead:
+`Another hyper process (pid H) holds the space lock; the interrupted pull will
+be finished when it releases it.` (`state: "interrupted"`). Commands that
+change the space keep waiting for the lock.
+
 ```
 hyper space clone NAME [PATH] [--yes] [--json]
 ```
@@ -356,6 +373,8 @@ tooling).
   how long) and tells you to delete the lock only if that process is gone.
   Two containers sharing a hostname and the space dir but not a pid namespace
   are told apart only on Linux; elsewhere one can misjudge the other's lock.
+  The lock record is published atomically (written to a temp file, then
+  linked into place), so a reader never sees a lock without its owner.
 - **"Backed up" only means pushed.** `session-end` and `manual` cadence
   commit to `.hyper/space.git` on the same disk; the history reaches the
   hyperdrive only through `session-end+push` or `hyper space push`.

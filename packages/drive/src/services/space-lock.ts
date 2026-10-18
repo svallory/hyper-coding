@@ -42,6 +42,7 @@
 import { spawnSync } from "node:child_process";
 import {
 	closeSync,
+	linkSync,
 	openSync,
 	readFileSync,
 	readlinkSync,
@@ -337,8 +338,48 @@ function staleReason(path: string, read: LockRead): string | null {
 	});
 }
 
-/** Create `path` exclusively with `content`; false when it already exists. */
+/**
+ * Create `path` exclusively with `content`; false when it already exists.
+ *
+ * The record is written to a private temp file first and then hard-linked to
+ * `path`: `link` fails with EEXIST when the lock exists (the same exclusivity
+ * as O_EXCL) and, unlike create-then-write, a reader never sees the lock
+ * without its owner record. A stall between creating and writing used to leave
+ * an empty lock that a waiter took over as unwritten (hyper-prj.29). Where the
+ * file system has no hard links, the record is created in place as before.
+ */
 function createExclusive(path: string, content: string): boolean {
+	const temp = `${path}.new-${process.pid}-${Math.random().toString(36).slice(2)}`;
+	let fd: number;
+	try {
+		fd = openSync(temp, "wx", 0o600);
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "EEXIST") return false;
+		throw error;
+	}
+	try {
+		try {
+			writeSync(fd, content);
+		} finally {
+			closeSync(fd);
+		}
+		try {
+			linkSync(temp, path);
+			return true;
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code;
+			if (code === "EEXIST") return false;
+			if (code === "EPERM" || code === "ENOSYS" || code === "ENOTSUP" || code === "EOPNOTSUPP")
+				return createInPlace(path, content);
+			throw error;
+		}
+	} finally {
+		rmSync(temp, { force: true });
+	}
+}
+
+/** The fallback for file systems that cannot hard-link: create, then write. */
+function createInPlace(path: string, content: string): boolean {
 	let fd: number;
 	try {
 		fd = openSync(path, "wx", 0o600);
@@ -435,6 +476,23 @@ function lockTimeout(
 	return new SpaceLockTimeoutError(
 		`Another hyper process is still writing this space, ${waited}. Retry when it has finished.`,
 	);
+}
+
+/**
+ * Who holds the space lock right now, without waiting for it and without
+ * touching it: null when it is free, or held by an owner that is provably gone
+ * (the next writer takes that over). A lock whose owner cannot be read is
+ * reported with `pid: null`. Used by `space status` (hyper-prj.28).
+ */
+export function peekSpaceLock(root: string): { pid: number | null; since: number | null } | null {
+	const path = join(spaceGitDir(root), SPACE_LOCK_FILE);
+	const read = readLock(path);
+	if (read.owner === null) {
+		if (read.state === "missing") return null;
+		return staleReason(path, read) === null ? { pid: null, since: null } : null;
+	}
+	if (staleReason(path, read) !== null) return null;
+	return { pid: read.owner.pid, since: read.owner.started };
 }
 
 /**

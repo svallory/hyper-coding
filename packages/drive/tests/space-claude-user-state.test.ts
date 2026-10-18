@@ -26,6 +26,7 @@ import {
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
+import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderGitignore } from "#services/allowlist";
@@ -606,6 +607,101 @@ describe("the pull touches no Claude user-state file, whatever stops it (review 
 		const tip = spaceGit(root, ["rev-parse", "refs/remotes/origin/space/space"]).stdout;
 		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(tip);
 	}, 60_000);
+
+	it("a fetch after the kill does not defeat the heal: the in-flight marker names the tip (hyper-prj.28)", async () => {
+		legacyPair();
+		await interruptedPull("read-tree", "SIGKILL");
+		const marker = join(root, ".hyper", "space.git", "pull-in-flight.json");
+		expect(existsSync(marker)).toBe(true);
+		const interruptedTip = spaceGit(root, ["rev-parse", "refs/remotes/origin/space/space"]).stdout;
+		// A peer pushes again and this machine fetches: the tracking ref moves on,
+		// and the index no longer equals it.
+		const peer = join(fixture.home, "peer-space");
+		write(peer, ["notes/n.md"], "changed again on B\n");
+		ok(hyperIn(peer, ["space", "commit", "-m", "second change on B"]));
+		ok(hyperIn(peer, ["space", "push"]));
+		spaceGit(root, ["fetch", "-q", "origin"]);
+		expect(spaceGit(root, ["rev-parse", "refs/remotes/origin/space/space"]).stdout).not.toBe(
+			interruptedTip,
+		);
+		ok(hyperIn(root, ["space", "status"]));
+		// Finished to the tip the pull had reached, not recorded as local work.
+		expect(spaceGit(root, ["rev-parse", "HEAD"]).stdout).toBe(interruptedTip);
+		expect(existsSync(marker)).toBe(false);
+		// The next pull then takes the newer tip.
+		ok(hyperIn(root, ["space", "pull"]));
+		expect(readFileSync(join(root, "notes/n.md"), "utf8")).toBe("changed again on B\n");
+	}, 90_000);
+
+	it("a completed pull leaves no in-flight marker (hyper-prj.28)", () => {
+		legacyPair();
+		ok(hyperIn(root, ["space", "pull"]));
+		expect(existsSync(join(root, ".hyper", "space.git", "pull-in-flight.json"))).toBe(false);
+	}, 60_000);
+
+	/** A lock held by this (live) test process, as another hyper process would. */
+	function holdLock(gitDir: string): number {
+		const started = Date.now() - 4_000;
+		writeFileSync(
+			join(gitDir, "hyper.lock"),
+			`${JSON.stringify({ pid: process.pid, host: hostname(), started, token: "t-hold" })}\n`,
+		);
+		return started;
+	}
+
+	it("status does not wait for a lock held by a running pull: it says so (hyper-prj.28)", async () => {
+		legacyPair();
+		await interruptedPull("read-tree", "SIGKILL");
+		const gitDir = join(root, ".hyper", "space.git");
+		const markerPath = join(gitDir, "pull-in-flight.json");
+		// The killed pull's marker, rewritten so that this live process is the pull.
+		const marker = JSON.parse(readFileSync(markerPath, "utf8"));
+		const started = holdLock(gitDir);
+		writeFileSync(
+			markerPath,
+			`${JSON.stringify({ ...marker, pid: process.pid, startedAt: started })}\n`,
+		);
+		const begun = Date.now();
+		const result = hyperIn(root, ["space", "status"]);
+		const took = Date.now() - begun;
+		ok(result);
+		expect(flat(result.stdout)).toContain(`Pull in progress (pid ${process.pid}, since `);
+		// The old status took the lock to finish the pull and waited the full 15 s.
+		expect(took).toBeLessThan(10_000);
+		// Not finished: the pull is running, the index is still the tip's.
+		expect(existsSync(markerPath)).toBe(true);
+		const json = hyperIn(root, ["space", "status", "--json"]);
+		ok(json);
+		expect(JSON.parse(json.stdout).pullInProgress).toMatchObject({
+			state: "running",
+			pid: process.pid,
+		});
+	}, 90_000);
+
+	it("a killed pull and another process holding the lock: status names the holder, not the dead pull (hyper-prj.28)", async () => {
+		legacyPair();
+		await interruptedPull("read-tree", "SIGKILL");
+		const gitDir = join(root, ".hyper", "space.git");
+		const marker = JSON.parse(readFileSync(join(gitDir, "pull-in-flight.json"), "utf8"));
+		expect(marker.pid).not.toBe(process.pid);
+		holdLock(gitDir);
+		const begun = Date.now();
+		const result = hyperIn(root, ["space", "status"]);
+		const took = Date.now() - begun;
+		ok(result);
+		const out = flat(result.stdout);
+		expect(out).toContain(`Another hyper process (pid ${process.pid}) holds the space lock`);
+		expect(out).toContain("the interrupted pull will be finished when it releases it");
+		expect(out).not.toContain(`pid ${marker.pid}`);
+		expect(out).not.toContain("Pull in progress");
+		expect(took).toBeLessThan(10_000);
+		const json = hyperIn(root, ["space", "status", "--json"]);
+		ok(json);
+		expect(JSON.parse(json.stdout).pullInProgress).toMatchObject({
+			state: "interrupted",
+			pid: process.pid,
+		});
+	}, 90_000);
 
 	it("a stale index.lock gives one friendly line naming it, and is not deleted (review M3)", () => {
 		init();

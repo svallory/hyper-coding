@@ -5,9 +5,40 @@ import {
 	escapeControlCharactersKeepingBackslashes,
 	quoteForTerminal,
 } from "#lib/terminal-text";
-import { finishInterruptedPull, interruptedPullTip } from "#services/space-git";
+import {
+	finishInterruptedPull,
+	interruptedPullTip,
+	type PullMarker,
+	readPullMarker,
+} from "#services/space-git";
 import { fetchSpace, spaceStatus } from "#services/space-history";
-import { withSpaceLock } from "#services/space-lock";
+import { peekSpaceLock, SpaceLockTimeoutError, withSpaceLock } from "#services/space-lock";
+
+/**
+ * What status reports instead of waiting for the lock. `running`: the pull
+ * that wrote the marker is the one holding the lock. `interrupted`: some other
+ * process holds it, and the interrupted pull is finished once it lets go.
+ */
+interface PullInProgress {
+	state: "running" | "interrupted";
+	/** The process holding the lock (the pull itself when `running`). */
+	pid: number | null;
+	since: string | null;
+}
+
+function describePull(
+	marker: PullMarker | null,
+	holder: { pid: number | null; since: number | null } | null,
+): PullInProgress {
+	const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString());
+	if (marker !== null && holder !== null && marker.pid === holder.pid)
+		return { state: "running", pid: marker.pid, since: iso(marker.startedAt) };
+	if (holder !== null) return { state: "interrupted", pid: holder.pid, since: iso(holder.since) };
+	// The lock was released between the check and the report: the marker is all there is.
+	return marker === null
+		? { state: "interrupted", pid: null, since: null }
+		: { state: "running", pid: marker.pid, since: iso(marker.startedAt) };
+}
 
 /**
  * Status prints paths from the work tree AND from an incoming branch, so a
@@ -39,12 +70,27 @@ export default class Status extends SpaceCommand<typeof Status> {
 			if (flags.fetch) fetchSpace(root, branch);
 			// Status is read-only, except to finish a pull that was stopped
 			// between its index and its branch update (review of PR #54, M1):
-			// only then does it take the space lock.
-			if (interruptedPullTip(root, branch) !== null)
-				withSpaceLock(root, `finish the pull of ${branch}`, () =>
-					finishInterruptedPull(root, branch),
-				);
-			return spaceStatus(root, branch);
+			// only then does it take the space lock, and it never waits for it
+			// (hyper-prj.28): a pull that is still running is reported instead.
+			let pullInProgress: PullInProgress | null = null;
+			const marker = readPullMarker(root);
+			if (marker !== null || interruptedPullTip(root, branch) !== null) {
+				const holder = peekSpaceLock(root);
+				if (holder !== null) pullInProgress = describePull(marker, holder);
+				else
+					try {
+						withSpaceLock(
+							root,
+							`finish the pull of ${branch}`,
+							() => finishInterruptedPull(root, branch),
+							{ waitMs: 0 },
+						);
+					} catch (error) {
+						if (!(error instanceof SpaceLockTimeoutError)) throw error;
+						pullInProgress = describePull(marker, peekSpaceLock(root));
+					}
+			}
+			return { ...spaceStatus(root, branch), pullInProgress };
 		});
 		if (flags.json) {
 			// Raw paths: JSON serialisation is the consumer's escaping, and a
@@ -59,6 +105,15 @@ export default class Status extends SpaceCommand<typeof Status> {
 				? `Upstream: ahead ${result.ahead}, behind ${result.behind}${result.refused ? `: the newest commit on the hyperdrive was refused by the last pull (${quoteForTerminal(result.refused.reason)})` : " (as of the last contact with the hyperdrive)"}`
 				: "Upstream: this machine has not exchanged this branch with the hyperdrive yet — run `hyper space status --fetch` to compare.",
 		);
+		if (result.pullInProgress !== null) {
+			const pull = result.pullInProgress;
+			const who = pull.pid === null ? "pid unknown" : `pid ${pull.pid}`;
+			this.log(
+				pull.state === "running"
+					? `Pull in progress (${who}${pull.since === null ? "" : `, since ${pull.since}`}): the numbers below may change when it finishes.`
+					: `Another hyper process (${who}) holds the space lock; the interrupted pull will be finished when it releases it.`,
+			);
+		}
 		if (result.sessionEndFailure !== null) {
 			const failure = result.sessionEndFailure;
 			this.log(
