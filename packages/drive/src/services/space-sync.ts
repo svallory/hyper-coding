@@ -7,6 +7,7 @@ import {
 	findSecretContent,
 	findSecretPaths,
 	isClaudeUserStatePath,
+	PRIVATE_KEY_HEADER,
 } from "#services/allowlist";
 import {
 	finishInterruptedPull,
@@ -221,22 +222,30 @@ export async function inspectStagedFiles(
 		const binary = blob.prefix.subarray(0, BINARY_SNIFF_BYTES).includes(0);
 		if (binary || blob.size > CONTENT_SCAN_MAX_BYTES) {
 			// Not scanned for tokens, but a key block at the start still counts.
-			if (/-----BEGIN (?:[^\r\n]* )?PRIVATE KEY(?: BLOCK)?-----/.test(blob.prefix.toString("utf8")))
-				flagged.add(path);
+			if (PRIVATE_KEY_HEADER.test(blob.prefix.toString("utf8"))) flagged.add(path);
 		} else if (blob.size > 0) {
 			scannable.set(hash, [...(scannable.get(hash) ?? []), path]);
 		}
 	}
+	// Scan one body and let it go: nothing but the findings outlives the call.
+	const scan = (hash: string, body: Buffer) => {
+		const hits = findSecretContent(body.toString("utf8"));
+		if (hits.length === 0) return;
+		for (const path of scannable.get(hash)!) {
+			flagged.add(path);
+			for (const hit of hits) contentFindings.push({ path, ...hit });
+		}
+	};
 	// A blob that fits in the first read is already whole: scan it as is, so a
 	// tree of small files costs no extra Git process.
-	const bodyOf = new Map<string, Buffer>();
 	const queue: string[] = [];
 	for (const hash of scannable.keys()) {
 		const blob = blobs.get(hash)!;
-		if (blob.size <= blob.prefix.length) bodyOf.set(hash, blob.prefix);
+		if (blob.size <= blob.prefix.length) scan(hash, blob.prefix);
 		else queue.push(hash);
 	}
-	// Larger bodies in size-bounded batches: one batch reader per batch, not per file.
+	// Larger bodies in batches of at most CONTENT_SCAN_BATCH_BYTES, each scanned
+	// as soon as it is read and then dropped (one batch reader per batch).
 	while (queue.length > 0) {
 		const batch: string[] = [];
 		let bytes = 0;
@@ -247,15 +256,7 @@ export async function inspectStagedFiles(
 			batch.push(queue.shift()!);
 		}
 		const bodies = await readSpaceBlobPrefixes(root, batch, CONTENT_SCAN_MAX_BYTES);
-		for (const hash of batch) bodyOf.set(hash, bodies.get(hash)!.prefix);
-	}
-	for (const [hash, body] of bodyOf) {
-		const hits = findSecretContent(body.toString("utf8"));
-		if (hits.length === 0) continue;
-		for (const path of scannable.get(hash)!) {
-			flagged.add(path);
-			for (const hit of hits) contentFindings.push({ path, ...hit });
-		}
+		for (const hash of batch) scan(hash, bodies.get(hash)!.prefix);
 	}
 	for (const path of paths) {
 		if (!flagged.has(path)) continue;
