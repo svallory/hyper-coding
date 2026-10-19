@@ -110,37 +110,59 @@ export interface SecretContentPattern {
 }
 
 /**
+ * A private key block header: PEM/OpenSSH (RSA, EC, OPENSSH, ENCRYPTED, bare)
+ * and PGP's `PRIVATE KEY BLOCK`. The label is bounded (at most three words) so
+ * a very long line cannot make the match quadratic. Shared with the 4 KiB
+ * header check that stands in for files the content scan skips.
+ */
+export const PRIVATE_KEY_HEADER = /-----BEGIN (?:[A-Z0-9]+ ){0,3}PRIVATE KEY(?: BLOCK)?-----/;
+
+/** Keywords of the generic rules: not glued to a letter or digit before them. */
+const SECRET_WORD = "(?<![A-Za-z0-9])(?:password|passwd|token|secret|api[_-]?key)[A-Za-z_-]{0,20}";
+
+/**
  * Content shapes that mean a file holds a credential, whatever its name. Each
  * regex is tested against one line (no `g` flag, so no state). A hit is
  * reported as `path:line (name)`; the matched text is never kept or printed.
- * A false positive is waived per path, like a path hit (`--allow-secret`).
+ * A false positive is waived per path (`--allow-secret`).
+ *
+ * Only UTF-8 text is scanned: a file with a NUL byte in its first 4 KiB is
+ * treated as binary, which includes UTF-16 text (it is skipped, not scanned).
  */
 export const SECRET_CONTENT_PATTERNS: readonly SecretContentPattern[] = [
-	// A PEM/OpenSSH private key block header (RSA, EC, OPENSSH, ENCRYPTED, bare).
-	{
-		name: "private key block",
-		regex: /-----BEGIN (?:[^\r\n]* )?PRIVATE KEY(?: BLOCK)?-----/,
-	},
+	// A PEM/OpenSSH/PGP private key block header.
+	{ name: "private key block", regex: PRIVATE_KEY_HEADER },
 	// GitHub classic and OAuth/app tokens: ghp_, gho_, ghu_, ghs_, ghr_ + 36 chars.
 	{ name: "GitHub token", regex: /\bgh[pousr]_[A-Za-z0-9]{36}\b/ },
 	// GitHub fine-grained personal access token.
 	{ name: "GitHub fine-grained token", regex: /\bgithub_pat_[A-Za-z0-9_]{22,}/ },
 	// Anthropic API key (checked before the generic `sk-` rule so it gets its own name).
 	{ name: "Anthropic API key", regex: /\bsk-ant-[A-Za-z0-9_-]{20,}/ },
-	// OpenAI-style secret keys (`sk-`, `sk-proj-`): a long body after the prefix.
-	{ name: "API key (sk-)", regex: /\bsk-(?!ant-)[A-Za-z0-9_-]{32,}/ },
+	// OpenAI-style secret keys (`sk-`, `sk-proj-`): a long body holding a digit,
+	// so kebab-case identifiers made of words do not match.
+	{ name: "API key (sk-)", regex: /\bsk-(?!ant-)(?=[A-Za-z0-9_-]*\d)[A-Za-z0-9_-]{32,}/ },
 	// AWS access key id: long-term (AKIA) or temporary (ASIA) + 16 upper-case alphanumerics.
 	{ name: "AWS access key id", regex: /\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/ },
-	// Slack bot, user-app and legacy tokens: xoxb-, xoxp-, xoxa-.
-	{ name: "Slack token", regex: /\bxox[bpa]-[A-Za-z0-9-]{10,}/ },
+	// Slack bot, user, app, refresh, config and legacy tokens (xoxb-, xoxp-, xoxa-, xoxr-,
+	// xoxe-) and app-level tokens (xapp-1-...).
+	{ name: "Slack token", regex: /\b(?:xox[bpare]-|xapp-\d-)[A-Za-z0-9-]{10,}/ },
+	// Slack incoming webhook URL: the path is the credential.
+	{
+		name: "Slack webhook URL",
+		regex: /hooks\.slack\.com\/services\/T[A-Z0-9]+\/B[A-Z0-9]+\/[A-Za-z0-9]{10,}/,
+	},
 	// npm automation/publish token: npm_ + 36 alphanumerics.
 	{ name: "npm token", regex: /\bnpm_[A-Za-z0-9]{36}\b/ },
-	// Generic assignment: password/token/secret/api_key `=` a long unbroken value.
-	// `$`, `{` and spaces end the value, so `token=${TOKEN}` and prose do not match.
+	// Assignment: DB_PASSWORD=, export API_TOKEN=, aws_secret_access_key = ... a 12+ char
+	// value. `$`, `{`, quotes and spaces end the value, so `token=${TOKEN}` and prose do not match.
 	{
 		name: "generic secret assignment",
-		regex:
-			/\b(?:password|passwd|token|secret|api[_-]?key)\b["']?\s*=\s*["']?[A-Za-z0-9_\-./+=]{16,}/i,
+		regex: new RegExp(`${SECRET_WORD}["']?\\s*=\\s*["']?[^\\s"'$\`{}]{12,}`, "i"),
+	},
+	// `key: value` form: YAML `password: ...` and JSON `"password": "..."`, 16+ chars.
+	{
+		name: "generic secret value (key: value)",
+		regex: new RegExp(`${SECRET_WORD}["']?\\s*:\\s*["']?[^\\s"'$\`{}]{16,}`, "i"),
 	},
 ];
 

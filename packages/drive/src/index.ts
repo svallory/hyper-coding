@@ -39,6 +39,8 @@ export {
 	renderGitignore,
 	SECRET_CONTENT_PATTERNS,
 	SECRET_PATTERNS,
+	type SecretContentHit,
+	type SecretContentPattern,
 } from "#services/allowlist";
 export {
 	addHint,
@@ -185,6 +187,7 @@ export {
 	pushSpace,
 	remoteRef,
 	remoteSha,
+	type SecretContentFinding,
 	type SpaceCommitResult,
 	SpacePushRefusedError,
 	spaceGitRemote,
