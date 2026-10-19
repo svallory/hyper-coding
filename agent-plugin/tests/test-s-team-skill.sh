@@ -45,6 +45,30 @@ assert_eq "every skills/team/ path in SKILL.md exists" "" "$missing"
 for s in "${scripts[@]}"; do
   assert_ok "scripts/$s is executable" test -x "$team/scripts/$s"
 done
+
+# The references SKILL.md loads on demand: rendered like SKILL.md, each opening
+# with one line that says when to read it, each pointed at from SKILL.md, and
+# every path they name must exist too.
+refs=(harness-setup herdr-mode hotfix orca-mode peer-leads)
+assert_eq "skills/team/references holds exactly the five reference files" \
+  "${refs[*]/%/.md}" "$(cd "$team/references" && ls | tr '\n' ' ' | sed 's/ $//')"
+for r in "${refs[@]}"; do
+  rf="$team/references/$r.md"
+  assert_contains "SKILL.md points at references/$r.md" "$(cat "$team/SKILL.md")" \
+    '${CLAUDE_PLUGIN_ROOT}/skills/team/references/'"$r.md"
+  assert_eq "references/$r.md opens with a when-to-read line" "Read this when" \
+    "$(head -n 1 "$rf" | cut -c1-14)"
+  assert_eq "references/$r.md has no leftover template syntax" "" \
+    "$(grep -nE '\{\{|^@(if|else|elseif|end|let|each)\b' "$rf" || true)"
+  assert_eq "references/$r.md has no path into skills/team-lead/ or unbraced plugin root" "0" \
+    "$(grep -cE '/skills/team-lead/|\$CLAUDE_PLUGIN_ROOT|\{\{ *platform' "$rf")"
+  while read -r rel; do
+    [[ -n "$rel" ]] || continue
+    [[ -e "$PLUGIN_DIR/$rel" ]] || missing="$missing $rel"
+  done < <(grep -oE '\$\{CLAUDE_PLUGIN_ROOT\}/skills/team/[A-Za-z0-9._/-]+' "$rf" \
+    | sed 's|^${CLAUDE_PLUGIN_ROOT}/||' | sort -u)
+done
+assert_eq "every skills/team/ path named by a reference exists" "" "$missing"
 assert_eq "skills/team/scripts holds exactly the five scripts" \
   "${scripts[*]}" "$(cd "$team/scripts" && ls | tr '\n' ' ' | sed 's/ $//')"
 
@@ -86,6 +110,8 @@ Then read `$CLAUDE_PLUGIN_ROOT/skills/team-lead/default-models.yaml`.
 Leave $CLAUDE_PLUGIN_ROOT_EXTRA alone.
 Config: `${XDG_CONFIG_HOME:-$HOME/.config}/hyper/team-lead/harnesses.yaml`.
 EOF
+mkdir -p "$dist/references"
+printf 'Read this when fixing.\n\nRun {{ platform.pluginRootVar }}/skills/team-lead/scripts/check-deps.sh or $CLAUDE_PLUGIN_ROOT/skills/team-lead/x.\nLeave $CLAUDE_PLUGIN_ROOT_EXTRA alone.\n' > "$dist/references/fix.md"
 echo "routing: {}" > "$dist/default-models.yaml"
 # --check runs `bun run build:check` in the source; the fixture's answer is
 # whatever this script says (fresh unless a test flips it).
@@ -113,6 +139,11 @@ assert_contains "bare \$CLAUDE_PLUGIN_ROOT is braced and repointed" "$synced" \
 assert_contains "the team-lead data dir is left alone" "$synced" "hyper/team-lead/harnesses.yaml"
 assert_contains "a longer variable that starts with CLAUDE_PLUGIN_ROOT is left alone" "$synced" \
   'Leave $CLAUDE_PLUGIN_ROOT_EXTRA alone.'
+refsynced="$(cat "$out/references/fix.md")"
+assert_contains "a reference gets the root var rewritten" "$refsynced" \
+  'Run ${CLAUDE_PLUGIN_ROOT}/skills/team/scripts/check-deps.sh or ${CLAUDE_PLUGIN_ROOT}/skills/team/x.'
+assert_contains "a reference leaves a longer variable alone" "$refsynced" 'Leave $CLAUDE_PLUGIN_ROOT_EXTRA alone.'
+assert_eq "a reference keeps its first line (no frontmatter, no header)" "Read this when fixing." "$(head -n 1 "$out/references/fix.md")"
 assert_ok "default-models.yaml is copied byte for byte" cmp "$dist/default-models.yaml" "$out/default-models.yaml"
 assert_fails "TODO.md is not shipped" test -e "$out/TODO.md"
 for s in "${scripts[@]}"; do
@@ -133,6 +164,12 @@ assert_fails "--check fails when a script loses its executable bit" bash "$fsync
 bash "$fsync" --source "$src" >/dev/null 2>&1
 touch "$out/scripts/extra.sh"
 assert_fails "--check fails on a file the source does not have" bash "$fsync" --check --source "$src"
+bash "$fsync" --source "$src" >/dev/null 2>&1
+echo "# local edit" >> "$out/references/fix.md"
+assert_fails "--check fails on a hand-edited reference" bash "$fsync" --check --source "$src"
+bash "$fsync" --source "$src" >/dev/null 2>&1
+touch "$out/references/extra.md"
+assert_fails "--check fails on a reference the source does not have" bash "$fsync" --check --source "$src"
 bash "$fsync" --source "$src" >/dev/null 2>&1
 assert_ok "a re-sync clears every drift" bash "$fsync" --check --source "$src"
 
@@ -167,6 +204,16 @@ printf -- '---\nname: team-lead\nno closing fence\n' > "$dist/SKILL.md"
 assert_fails "sync refuses a SKILL.md with unclosed frontmatter" bash "$fsync" --source "$src"
 
 cp "$FIX/skill.bak" "$dist/SKILL.md"
+cp "$dist/references/fix.md" "$FIX/ref.bak"
+printf '@if(x)\ny\n@end\n' >> "$dist/references/fix.md"
+assert_fails "sync refuses a reference with leftover template syntax" bash "$fsync" --source "$src"
+cp "$FIX/ref.bak" "$dist/references/fix.md"
+printf '{{ stray }}\n' >> "$dist/references/fix.md"
+assert_fails "sync refuses a reference with an unrendered {{ }} tag" bash "$fsync" --source "$src"
+cp "$FIX/ref.bak" "$dist/references/fix.md"
+touch "$dist/references/notes.txt"
+assert_fails "sync refuses a non-markdown file in references/" bash "$fsync" --source "$src"
+rm "$dist/references/notes.txt"
 assert_ok "the restored source syncs again" bash "$fsync" --source "$src"
 
 rm "$dist/scripts/retire-agent.sh"

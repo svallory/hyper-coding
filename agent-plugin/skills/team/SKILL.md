@@ -68,7 +68,7 @@ Re-run the setup when the user asks ("reconfigure harnesses", "add codex to the 
 
 Pick the cheapest role that will finish in one or two attempts. Escalate one tier when a dev gets stuck (see below). Never start at the top tier to "be safe".
 
-When the harness config exists, its `routing` decides which harness and model fills each role; the table below is the fallback for a Claude Code-only team. Use [Known harnesses and models](#known-harnesses-and-models) to translate between the two.
+When the harness config exists, its `routing` decides which harness and model fills each role; the table below is the fallback for a Claude Code-only team. Use [Known harnesses and models](#harness-setup) to translate between the two.
 
 Overrides to the table:
 - A "mechanical" change that touches a DB schema, migration, API contract, or serialized key is not mechanical. Researcher first, then Sonnet.
@@ -76,89 +76,8 @@ Overrides to the table:
 
 ## Harness setup
 
-Run when the harness config is missing or the user asks to reconfigure. The goal: a saved list of the coding-agent CLIs the user wants on this team, how to launch each, and which roles each fills.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/team/references/harness-setup.md` when the harness config is missing or the user asks to reconfigure. The same file holds *Dev environment* (resolving a harness's `env:` block into the variables a dev gets) and *Known harnesses and models* (the harness table); read it when you launch a dev with an `env:` block or need to map a role to a harness.
 
-1. **Detect installed harnesses.** Some CLIs are only on the interactive shell's PATH, so check through a login shell:
-   ```bash
-   for t in claude codex agy gemini kimi klaude pi opencode aider crush cursor-agent amp goose qwen droid copilot; do
-     p=$("${SHELL:-zsh}" -ic "command -v $t" 2>/dev/null | tail -1); [ -n "$p" ] && echo "$t $p"
-   done
-   ```
-2. **Ask which to use.** One multi-select question per group of at most four detected harnesses (the question tool caps options at four; use up to four questions). Label each option with the harness and one line on what it is good for, from [Known harnesses and models](#known-harnesses-and-models). Tell the user they can type any harness that was not detected in "Other" (a wrapper script, a remote runner, a CLI installed somewhere unusual) with its launch command.
-3. **Fill each chosen harness.** From the known-harness table plus the harness's own `--help` or model list: launch command (non-interactive and interactive), optional `bin:` (the actual executable, required when `launch:` starts with `env` or an assignment), Herdr `--kind` if it has one, the models the user's plan gives access to, quota notes, and the `env:` block (see [Dev environment](#dev-environment)): `inherit:` starts from the "Env to inherit" column of the table, so a dev runs under the same account and config directory as the lead; add `defaults:` or `set:` only when the user asks for them. For a multi-provider harness, list what it can actually run instead of guessing: `pi --list-models` shows only providers that have credentials configured, so a paid model whose provider isn't set up won't appear. Ask only what you cannot find out (for example which models their subscription includes). Then check what the chosen harnesses need for [Agent messaging](#agent-messaging): for pi, the `pi-claude-link` extension (`pi list | grep -q pi-claude-link`). If it is missing, ask the user before installing (`pi install git:github.com/alonw0/pi-claude-link`); if they decline, record `messaging: herdr` for pi in the config so pi devs use Herdr.
-4. **Propose routing.** Do not invent it: start from the curated chains in `${CLAUDE_PLUGIN_ROOT}/skills/team/default-models.yaml`. Its `routing:` block has the same shape as the config's (role -> ordered `harness:model` preferences, one reason per line as a comment). Keep only the entries whose harness the user chose in step 2 (`claude:...` needs `claude`; `pi:<provider>/<model>[:<thinking>]` needs `pi`, and its provider/model must appear in `pi --list-models`, which shows only providers with credentials; for `claude:` entries the model must be one the user's plan gives). Keep the file's order. A role left with no entry falls back to the "best for" column of [Known harnesses and models](#known-harnesses-and-models); tell the user which roles you had to fill that way. Ask the user to confirm or edit the result in one question with it as the default. The file is curated by hand and may lag reality: where it disagrees with what the harness lists, the harness wins and you say so.
-5. **Save** the confirmed routing, with the user's edits, to `${XDG_CONFIG_HOME:-$HOME/.config}/hyper/team-lead/harnesses.yaml` (create the directory if needed); from then on the saved routing is the source of truth, not `default-models.yaml`. Show the user a 5-line summary. Format:
-   ```yaml
-   # team-lead harness config. Written by the team-lead skill; safe to edit by hand.
-   updated: 2026-09-27
-   harnesses:
-     codex:
-       launch: codex -m gpt-5.6-sol -c 'model_reasoning_effort="high"'
-       bin: codex            # optional for direct commands; required for env/wrappers
-       herdr_kind: codex
-       models: [gpt-5.6-sol]
-       notes: weekly quota; check before assigning M/L work
-       env:
-         inherit: [CODEX_HOME]
-     claude:
-       launch: claude --model <model>
-       herdr_kind: claude
-       models: [haiku, sonnet, opus]
-       env:
-         inherit: [CLAUDE_CONFIG_DIR]   # same account/config dir as the lead; see Dev environment
-     pi:
-       launch: pi --name <agent-name>
-       herdr_kind: pi
-       messaging: claude-link   # or herdr when pi-claude-link is not installed
-       env:
-         inherit: [PI_CODING_AGENT_DIR]
-   routing:                     # role -> ordered harness:model preferences
-     researcher:   [agy:gemini-3.1-pro, claude:haiku]
-     mechanic:     [kimi:kimi-for-coding-highspeed, claude:haiku]
-     developer:    [codex:gpt-5.6-sol, kimi:kimi-for-coding, claude:sonnet]
-     senior-dev:   [codex:gpt-5.6-sol@high, claude:opus]
-     reviewer:     [claude:opus, claude:sonnet]
-     squad-leader: [claude:opus]
-   ```
-6. From then on, pick a role's first harness whose quota is available; fall to the next on a quota error, and note the switch in the status table.
-
-### Dev environment
-
-A dev's shell does not inherit the lead's environment: inside Herdr the pane shell comes from the Herdr server, and outside Herdr a background shell starts clean. So a lead running under a non-default config directory (for example `CLAUDE_CONFIG_DIR` pointing at a work account) would otherwise spawn devs on the personal account. Each harness's optional `env:` block says which variables cross that boundary:
-
-```yaml
-env:
-  inherit: [CLAUDE_CONFIG_DIR, CLAUDE_PROMPT_INFO]   # copy from the lead's env when set there
-  defaults:                                          # used when a listed var is unset in the lead's env
-    CLAUDE_CONFIG_DIR: ~/.claude-work
-  set:                                               # always this value, whatever the lead has
-    DISABLE_AUTOUPDATER: "1"
-```
-
-- `inherit`: copied from your own environment when set there; a variable not listed is never copied, so Herdr pane IDs and other session-specific values never leak into a dev.
-- `defaults`: value for a listed variable that is unset in your environment. Every key must also appear in `inherit`; a default for an unlisted variable is a config error (`check-deps.sh` reports it).
-- `set`: forced value, independent of your environment.
-
-Precedence: `set` > your value > `defaults`. Expand a leading `~` to `$HOME`. Resolve the block once per launch into `KEY=VALUE` pairs and pass them to the launcher: `--env KEY=VALUE` on `herdr tab create` in [Herdr mode](#herdr-mode), a `KEY=VALUE ...` prefix inside the `--command` string in [Orca mode](#orca-mode), an `env KEY=VALUE ...` prefix on the launch command elsewhere. With no `env:` block nothing is passed, which is why setup always writes the table's `inherit` list. A remote machine has its own home and its own credentials: a value that is a path on your machine (a config dir) is only valid there if the same path exists on the remote; check with the probe terminal before inheriting it across machines.
-
-## Known harnesses and models
-
-Snapshot as of 2026-09. Model names change often: confirm with the harness's own model list before writing the config, and let the user's config win over this table.
-
-| Harness (CLI) | Models | Best for | Launch notes | Env to inherit |
-|---|---|---|---|---|
-| Claude Code (`claude`) | Haiku 4.5 (`haiku`) | lookups, research that returns text, mechanical edits, running verify and reporting counts | `--model haiku`; cheapest Claude tier | `CLAUDE_CONFIG_DIR` (account and settings directory) |
-| | Sonnet 5 (`sonnet`) | default development: features, bug fixes, tests, `/code-review` passes | | |
-| | Opus 5.5 (`opus`) | hard bugs, gnarly types, multi-system changes, reviews of core contracts, squad leaders | | |
-| | Fable 5.1 (`fable`) | only when the user asks for it; never for work Opus or Sonnet can do | most expensive tier | |
-| Codex CLI (`codex`) | `gpt-5.6-sol` | M/L implementation; strong at following a precise brief | `-c 'model_reasoning_effort="high"'` for M/L (the default effort may be low); weekly quota, so check before assigning; its sandbox may block git writes when the repo's `.git` is outside the worktree (add it to `writable_roots`) | `CODEX_HOME` (config and auth directory) |
-| Kimi Code (`kimi`) | `kimi-for-coding-highspeed`, `kimi-for-coding`, `k3`, `k3-256k` | highspeed: mechanical edits and verify runs; `kimi-for-coding`/`k3`: S/M implementation; `k3-256k`: tasks that read a lot of source | use the managed alias `-m kimi-code/<model>`; a bare alias may fail auth. A wrapper that runs Claude Code against Kimi's endpoint (e.g. a `klaude` script) is a drop-in Claude-kind dev with the same skills and hooks | none known; a `klaude`-style wrapper inherits like Claude Code |
-| Antigravity (`agy`) | Gemini 3.1 Pro | research with citations, docs lookups, really simple tasks | asks a folder-trust question on first run in a directory; answer it before sending the brief | none known |
-| Gemini CLI (`gemini`) | Gemini models on the user's plan | same niche as `agy` when it is the one configured | | none known |
-| pi (`pi`) | any model from its configured providers; list them with `pi --list-models` | route by the model behind it, not the CLI | pick a model with `--model <provider>/<model>[:<thinking>]`; launch with `--name <agent-name>` so it shows under that name in Claude's `/list-agents`; needs the `pi-claude-link` extension to message Claude sessions | `PI_CODING_AGENT_DIR` (config directory) |
-| opencode, aider, crush, others | whatever provider the user configured | ask the user; route by the model behind it, not the CLI | record the exact launch command the user gives | ask the user |
-
-Routing rule of thumb: the cheapest harness that finishes in one or two attempts, with Claude kept for leads, reviews and hard problems when other harnesses are available. A reviewer should use a different model from the dev whose work it reviews.
 
 ## Workflow
 
@@ -175,7 +94,7 @@ Routing rule of thumb: the cheapest harness that finishes in one or two attempts
    WORKTREE=$(wt list --format json | jq -r --arg b "$BRANCH" '.items[] | select(.branch==$b) | .path')
    ```
    Elsewhere: `git worktree add "../<repo>-<ref>" -b "$BRANCH"` and use that path.
-5. **Launch devs** on the harness and model the config's `routing` gives the role, in the [launch mode](#launch-mode) detected for the session. Orca: pick the machine per [Orca mode](#orca-mode) and adopt the dev as a worker. Herdr: [Herdr mode](#herdr-mode) for every harness. Plain: a Claude Code dev uses the Agent tool with `run_in_background: true`; another harness runs non-interactively in a background shell (e.g. `codex exec`, `kimi -p`) with its report written to a file, prefixed with the `env KEY=VALUE ...` pairs its config's `env:` block resolves to ([Dev environment](#dev-environment)).
+5. **Launch devs** on the harness and model the config's `routing` gives the role, in the [launch mode](#launch-mode) detected for the session. Orca: pick the machine per [Orca mode](#orca-mode) and adopt the dev as a worker. Herdr: [Herdr mode](#herdr-mode) for every harness. Plain: a Claude Code dev uses the Agent tool with `run_in_background: true`; another harness runs non-interactively in a background shell (e.g. `codex exec`, `kimi -p`) with its report written to a file, prefixed with the `env KEY=VALUE ...` pairs its config's `env:` block resolves to ([Dev environment](#harness-setup)).
 6. **Brief each dev** with the [dev brief template](#dev-brief-template). In Orca mode the brief travels as the worker spec; elsewhere it is sent as a message.
 7. **Monitor.** Act on completion notifications. Do not poll. Keep a status table (ref, dev, model, state, machine, worktree, last note).
 8. **Review** every delivery with the [review checklist](#review-checklist). Send back with specific findings, or accept.
@@ -229,7 +148,7 @@ Never let a dev exceed 3 attempts. Never let yourself exceed 3 rounds of resend 
 
 A `DONE` alert, an idle status, or the word "done" is a claim. Run this before believing it. Note a dev may also finish *silently* — it wrote its report and went idle without sending the completion message (brief step 12) — so do not assume "no message = still working"; a dev idle well past its time budget has likely finished or stalled, so check it rather than wait indefinitely.
 
-1. **Real completion?** Report file exists and its first line is `STATUS: DONE`; `agent get` still idle ~20s later; no unsent prompt in the input box (see [Reading the input box](#reading-the-input-box); a dim suggestion is not a prompt). `BLOCKED`/`NEEDS-USER` → go to [Handling "stuck"](#handling-stuck) or the user. Otherwise the dev is still working; wait for the next message or alert.
+1. **Real completion?** Report file exists and its first line is `STATUS: DONE`; `agent get` still idle ~20s later; no unsent prompt in the input box (see [Reading the input box](${CLAUDE_PLUGIN_ROOT}/skills/team/references/herdr-mode.md); a dim suggestion is not a prompt). `BLOCKED`/`NEEDS-USER` → go to [Handling "stuck"](#handling-stuck) or the user. Otherwise the dev is still working; wait for the next message or alert.
 2. **Verify state, not the story** (git facts, cheap enough for you or a Haiku verifier): branch exists off the right base (`git merge-base --is-ancestor origin/<base> HEAD`), commits present (`git log --oneline origin/<base>..HEAD`), working tree clean, `git diff --stat origin/<base>...HEAD` touches only expected areas, and **the base branch was not pushed to** — compare `origin/<base>` against the SHA you noted when briefing.
 3. **Re-run the gates yourself — once.** Devs verify only what they touched; this is the single full run. A Haiku verifier runs the project's verify command (from the repo's agent instructions: the single `verify` script when the project has one) in the worktree and returns counts only. Compare with the report; a mismatch is a finding.
 4. **Criteria → evidence.** Each acceptance criterion maps to a file/test; open questions in the report are answered by you or the user before acceptance.
@@ -258,15 +177,8 @@ Run it for every dev you retire, and for your own scratch worktrees (release che
 
 ## After a hotfix to production
 
-Policy: no merge commits, ever. Downstream branches are rewritten onto the hotfixed production branch, then every open PR under our control is rebased. Procedure, run by the lead:
+Read `${CLAUDE_PLUGIN_ROOT}/skills/team/references/hotfix.md` after a hotfix to a production branch, or when you must sequence merges and rebases of open PRs.
 
-1. `git fetch`; in the branch's worktree **first `git reset --hard origin/<branch>`** (a local worktree is often stale; rebasing a stale local branch and force-pushing silently drops commits others pushed), then `git rebase origin/main && git push --force-with-lease` for `staging`; then the same reset + `git rebase origin/staging` + force-with-lease for `dev` (adapt names to the project's chain). Afterwards verify `git log --oneline origin/main..origin/dev` still lists every commit that was there before.
-2. **Halt** every dev with an open PR to the rewritten branch: `herdr agent send-keys <name> esc` (Orca: `orca terminal send --terminal <handle> --text $'\e'`), then prompt "Checkpoint: commit or stash any WIP, then reply IDLE" and wait for idle. (A prompt to a working agent is lost; the `esc` first is what makes it land.)
-3. Run `${CLAUDE_PLUGIN_ROOT}/skills/team/scripts/rebase-worktrees.sh --base <branch> --push` (invoke via `${CLAUDE_PLUGIN_ROOT}`, never a hardcoded path): it rebases each worktree that has an open PR to that base, force-pushes clean ones, and leaves conflicted ones mid-rebase. Dirty worktrees and other authors' PRs are skipped and listed.
-4. **Resume** each dev: "Base was rewritten and your branch rebased. If your worktree is mid-rebase, resolve conflicts, `git rebase --continue`, `git push --force-with-lease`, run verify; otherwise continue." A conflicted worktree with no live agent gets a fresh Sonnet dev.
-5. Confirm CI green on each PR and that the deploy platform redeployed the rewritten branches.
-
-Merge trains: when merges trigger deploys (CI/CD on the base branch, per-PR previews), merge one PR, wait for its deploy to finish, then rebase and merge the next. Rebases of open PRs also trigger preview builds, so rebase only the next PR in line, not all of them, when previews are enabled. A burst of merges plus rebases can overload a shared build host.
 
 ## Review checklist
 
@@ -311,24 +223,15 @@ Shared files (skills, notes) that both you and a Squad Leader edit: only one wri
 An agent already working (started by the user or another lead) joins the team the same way a new one does, minus the parts it already knows. Assume the user has been talking to it.
 
 1. **Ask it to summarize**: what task, which worktree/branch, what is done, what the user already accepted, what is open. Its own words are the baseline; verify the git facts (commits ahead of base, dirty tree, open PR) before trusting them.
-2. **Check its state**: idle/working/blocked, and whether a prompt sits unsent in its input box (see [Reading the input box](#reading-the-input-box)).
+2. **Check its state**: idle/working/blocked, and whether a prompt sits unsent in its input box (see [Reading the input box](${CLAUDE_PLUGIN_ROOT}/skills/team/references/herdr-mode.md)).
 3. **Send the adoption brief**: "Your lead is now <me>. Task as I understand it: <criteria from the summary>. Report file: <path>, first line `STATUS:`. Stuck rule. Chain of command: send questions to me, not the operator; do not use `AskUserQuestion`. Identity for the PR note: operator + session id. Do not push/PR until accepted." Ask it to correct anything it disagrees with.
 4. **Register it**: status table row with session id (the launcher knows it). From here the normal protocol applies.
 5. Leave its tab and name as they are; the user is in that conversation.
 
 ## Peer team leads
 
-One team lead per repository. Several leads may run at once, each in its own Herdr workspace whose cwd is that project's space root. Naming is the contract: session/agent name `<project>-team-lead` (e.g. `api-team-lead`, `web-team-lead`); dev agents are `<project>-<task-ref>`.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/team/references/peer-leads.md` when another team lead is running or a task belongs to another repository (discovering peers, handing a dev to a peer lead).
 
-Discover peers when you need one (never assume): `herdr agent list` and match `terminal_title_stripped` or `name` against `*-team-lead`; the row gives `pane_id`, `workspace_id`, `cwd`. Address a peer by its pane ID when it has no registered name. In Orca mode: `orca terminal list --json` (add `--environment <env-id>` per remote machine) and match the title against `*-team-lead`; the row gives the handle, which is also the peer's address for `orca orchestration send`. Pane moves are Herdr-only; in Orca the handoff message carries the dev's terminal handle and dispatch id, and the peer adopts the dispatch into its own Run with `worker-start --terminal <handle> --retry-of <dispatch-id>` after you `worker-release` it.
-
-Cross-project work: if research shows a task belongs to another repo (a bug report from the wrong app, a shared package), do not spawn its devs under your workspace. Either hand the task to the peer lead with the facts you have, or, if you already started a dev, hand the dev over:
-
-1. Move the dev's pane into the peer's workspace so the user finds it there: `herdr pane move <dev-pane-id> --workspace <peer-workspace-id> --new-tab`. Agent names follow the pane; after the move use the name, not the old pane ID.
-2. Send the peer a handoff message (`SendMessage` to the peer's session name; `herdr agent prompt <peer-name-or-pane>` only if the peer is not a Claude Code or pi session; see [Agent messaging](#agent-messaging)) containing: dev agent name and new pane/tab IDs, worktree path and branch, brief file path, report file path and completion phrase, rules already given to the dev (discussion-first, no deploy, no push until accepted), and the established facts with `file:line`. End with "I am no longer tracking it."
-3. Drop the row from your status table. Only one lead tracks a dev at a time.
-
-If no peer lead is running for that repo, tell the user and offer to start one (`herdr tab create --workspace <that project's workspace id> --cwd <its space root>` + `herdr agent start <project>-team-lead --kind claude ... -- --name <project>-team-lead --remote-control <project>-team-lead --disallowedTools AskUserQuestion`, then send it `/team-lead` with the task, naming you as its lead) rather than coordinating two repos yourself.
 
 ## Agent messaging
 
@@ -352,182 +255,20 @@ Before sending over Herdr, follow the idle check in [Herdr mode](#herdr-mode).
 
 Known limitations:
 
-- **Codex and Kimi devs still report over Herdr**, so their completion messages can collide with the operator typing in the lead's pane. The [Monitoring](#monitoring) status script sees `DONE` on its own, so a mangled report is recoverable: read the dev's report file. The plan to remove this gap is in `TODO.md` next to this skill.
+- **Codex and Kimi devs still report over Herdr**, so their completion messages can collide with the operator typing in the lead's pane. The [Monitoring](#monitoring) status script sees `DONE` on its own, so a mangled report is recoverable: read the dev's report file.
 - **Peer input, not user authority.** Messages over `SendMessage`/`claude-link` arrive framed as coming from another agent, so the receiver won't treat them as the operator's approval. If a Claude dev hesitates on a brief because it came from a peer, re-send the brief with `herdr agent prompt` and note it in the status table.
 - **`crossSessionInbound: "hold"`** in the receiver's Claude settings makes the operator approve every inbound message. Expect that delay, and don't escalate it as a stuck dev.
 - **Protocol drift.** `pi-claude-link` re-implements Claude Code's private cross-session protocol (verified against Claude Code 2.1.224, pi 0.80.6). If a pi dev is missing from `ListAgents` after a Claude update, fall back to Herdr for that dev and tell the operator.
 
 ## Herdr mode
 
-Applies only when `test "${HERDR_ENV:-}" = 1` passes. Inside Herdr every dev (Haiku included) gets its own tab so the user can watch and take over; Researchers and reviewers that only return text still use the Agent tool.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/team/references/herdr-mode.md` when `HERDR_ENV=1`, before you launch your first dev. It has the tab and agent launch commands, the brief delivery branches, how to read a dev's input box, and the stall watchdog.
 
-Variables: `WORKSPACE` is your pane's current workspace. Look it up right before each `tab create` with `herdr pane current --current | jq -r .result.pane.workspace_id`. Never use `$HERDR_WORKSPACE_ID` for this: Herdr sets it when the pane starts and never updates it, so after your pane is moved to another workspace it still names the old one (verified with herdr 0.9.1). `SPACE_ROOT` is the hyper space root (repo root outside a space). `PROJECT` is the space/repo directory name. **REQUIRED SUB-SKILL:** use the `herdr` skill for command syntax; run `herdr tab`, `herdr pane`, `herdr agent` to confirm current flags before first use.
-
-Each dev gets **one tab** whose root pane runs the dev session, with cwd = the hyper space root (or the repo root outside a space).
-
-Session naming: `[project]-[task-ref]`, e.g. `web-login-form`. Same name for the Claude display name, the Remote Control name, and the Herdr agent name.
-
-```bash
-# 0. the dev's environment: resolve the harness's env: block (see Dev
-#    environment) into --env flags. Shown for claude with inherit: [CLAUDE_CONFIG_DIR];
-#    one --env per resolved pair, inherited vars only when set in your own env.
-env_args=()
-[ -n "${CLAUDE_CONFIG_DIR:-}" ] && env_args+=(--env "CLAUDE_CONFIG_DIR=$CLAUDE_CONFIG_DIR")
-
-# 1. tab, cwd = space root, no focus steal; the env flags apply to the pane shell,
-#    so everything started in it (agent start included) sees them
-WORKSPACE=$(herdr pane current --current | jq -r .result.pane.workspace_id)
-tab=$(herdr tab create --workspace "$WORKSPACE" --cwd "$SPACE_ROOT" --label "$REF" --no-focus "${env_args[@]}")
-tab_id=$(jq -r .result.tab.tab_id <<<"$tab")
-root_pane=$(jq -r .result.root_pane.pane_id <<<"$tab")
-
-# 2. the dev in the root pane, named (+ remote control for Claude Code); the
-#    question tool is denied so questions come to you, not the operator
-#    (see Chain of command)
-name="${PROJECT}-${REF}"
-herdr agent start "$name" --kind claude --pane "$root_pane" \
-  -- --name "$name" --remote-control "$name" --model "$MODEL" \
-     --disallowedTools AskUserQuestion
-# other harnesses: --kind <herdr_kind from the config>, args after `--` per that
-# CLI, always denying its ask-the-operator tool (pi: `--exclude-tools ask_user`).
-# `agent start` runs the kind's canonical executable, so the dev's account and
-# config come from the --env flags above, never from a shell alias or wrapper.
-# If `agent start` rejects a kind or a wrapper script, fall back to
-#   herdr pane run "$root_pane" "<launch command from the config>"
-#   herdr agent rename "$root_pane" "$name"
-
-```
-
-**Brief branch — Claude lead → Claude or pi dev (default):** use the `SendMessage` tool with recipient `$name` and message set to the contents of `$BRIEF_FILE`. Launch pi with `--name "$name"`. This sends over sockets; do not also type into the pane.
-
-**Brief branch — other harness pairs or `messaging: herdr`:** after `herdr agent get "$name"` confirms `idle`/`done`, fire and forget (do not use `--wait`):
-
-```bash
-herdr agent prompt "$name" "$(cat "$BRIEF_FILE")"
-```
-
-Choose the lead → dev pair from [Agent messaging](#agent-messaging); a Kimi/omni lead does not have Claude's `SendMessage` tool.
-
-No per-dev waiter: the dev's `STATUS:` message is the notification, and the [Monitoring](#monitoring) status script catches a dev that finishes without sending one.
-
-Check `herdr agent get "$name"` shows `idle` before prompting (`agent start` returns before the TUI is fully ready; `.result.agent.agent_status` may be null right after start). Do not `--wait` on the prompt itself: it blocks your turn for the whole task. Only prompt an agent whose status is `idle`/`done`: a prompt sent while it is `working` lands in the input box unsubmitted and the agent goes idle forever. If `agent get` reports idle but nothing happened, check the input box (see [Reading the input box](#reading-the-input-box)). Read results with `herdr agent read "$name" --source recent-unwrapped --lines 200`; on failure fall back to asking the dev to write its report to a file under `scratch/` and read that. Herdr agent names must match `[a-z][a-z0-9_-]{0,31}`. If `PROJECT-REF` is longer, truncate `PROJECT` to its first 8 chars; the ref is never shortened.
-
-Outside Herdr, the Agent tool is the launcher; the naming rule still applies to the agent `description`.
-
-### Reading the input box
-
-Claude Code shows a dim **suggested next prompt** in its `❯` box; it is not input, so never submit or report it. Plain text only shows the difference with attributes kept: `herdr agent read "$name" --source visible --format ansi --lines 8 | cat -v | grep -a '❯'`. Dim text (`^[[2m`) is a suggestion; bare text is an unsent draft — yours if you just prompted a working agent (send `herdr agent send-keys "$name" enter`), otherwise the user's (leave it, tell the user).
 
 ## Orca mode
 
-Applies only when `test -z "${HERDR_ENV:-}" && test -n "${ORCA_WORKSPACE_ID:-}"` passes (Herdr wins when both are set). Every dev becomes an Orca **worker**: a terminal running the harness, adopted into an orchestration **Run** so Orca tracks its liveness, carries its brief and its completion mail, and lets you place it on any machine Orca reaches. Researchers and reviewers that only return text still use the Agent tool, locally. **REQUIRED SUB-SKILL:** `orca skills get orca-cli` and `orca skills get orchestration` (references `worker-contract`, `placement-and-remote`, `recovery-and-cleanup`, `messaging-and-gates`) are the command reference; confirm flags with `--help` before first use. Verified against Orca 1.4.223 (macOS app) driving an `orca-ide serve` 1.4.222 remote, 2026-10-10.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/team/references/orca-mode.md` when you are in Orca mode, before you create the Run or launch your first dev. It has the coordinator handle and Run, machine inventory and budgets, launch and adopt, completion mail, and stop/release/recover.
 
-Orchestration verbs live under `orca orchestration <verb>` (`run-create`, `worker-start`, `worker-list`, `worker-show`, `worker-read`, `worker-stop`, `worker-release`, `worker-abandon`, `send`, `check`, `task-create`); a bare `orca worker-start` is "Unknown command". The CLI is `$ORCA_CLI_COMMAND`, else `orca-dev`, else `orca-ide` (Linux), else `orca` (macOS: `/Applications/Orca.app/Contents/Resources/bin/orca`).
-
-### Coordinator handle and Run
-
-You are the coordinator. Your identity is the handle Orca binds to the Run, which is **not always `$ORCA_TERMINAL_HANDLE`**: a floating or global Orca terminal (`ORCA_WORKSPACE_ID=global-floating-terminal`) has no stable pane identity, and `run-create --from "$ORCA_TERMINAL_HANDLE"` fails there with "The coordinator terminal has no stable pane identity". Create the Run without `--from` from inside your own Orca terminal and read the bound handle back; that handle is `$COORD` for the whole session and goes as `--from` to `worker-start`, `send`, `ask`, `reply`. **Never pass another pane's handle as `--from`**: Orca binds the Run to the sender, and the real coordinator is then fenced out (`consumer_fenced`). `worker-show`, `worker-list`, `worker-stop`, `worker-release` and `check` reject `--from`; `check` takes `--terminal "$COORD" --run "$RUN"` instead.
-
-One Run per batch, created once and written into the status table header. The flag is `--objective` (`--title` is "Unknown flag"):
-
-```bash
-RUN=$(orca orchestration run-create --objective "${PROJECT} $(date +%F)" --json | jq -r .result.run.id)
-COORD=$(orca orchestration run-current --json | jq -r .result.run.coordinator_handle)
-```
-
-If you are not inside an Orca terminal at all, create one (`orca terminal create --worktree path:"$SPACE_ROOT" --title "${PROJECT}-team-lead" --json`, handle at `.result.terminal.handle`) and run the two commands above through it with `terminal send`; `--worktree` must be a path registered in `orca project setups`, anything else is `selector_not_found`.
-
-A lead that resumes after compaction finds its devs again with `orca orchestration worker-list --run "$RUN" --include-remote --json`.
-
-### Machine inventory and budgets
-
-Machines are the local one plus every environment in `orca environment list --json` (`.result.environments[] | {id, name}`; the list has no status field, so a machine that fails its probe is simply excluded). Right before each dispatch, probe the candidate machines' live load (no capacity config file; other people's jobs count, which is why you measure instead of assuming). The status script does the same probe for every machine in the status table, so `team-status.sh --orca --run "$RUN" --json` (`.machines[]`) is the easiest way to get all of them at once; by hand:
-
-```bash
-# local
-ncpu=$(sysctl -n hw.ncpu 2>/dev/null || nproc); load1=$(uptime | sed -n 's/.*load average[s]*: *\([0-9.]*\).*/\1/p')
-# remote: a throwaway terminal that prints ncpu, load averages and available MB between two markers.
-# --worktree MUST be a path registered on that environment (orca project setups --environment "$ENV" --json,
-# .result.setups[].path); any other path is selector_not_found. Every later call on the handle MUST repeat
-# --environment, or the local runtime answers terminal_handle_stale.
-REMOTE_REPO=$(orca project setups --environment "$ENV" --json | jq -r '.result.setups[0].path')
-probe=$(orca terminal create --environment "$ENV" --worktree path:"$REMOTE_REPO" --title probe \
-  --command "echo PROBE-BEGIN; nproc; uptime; free -m | awk '/Mem:/{print \$7}'; echo PROBE-END" --json | jq -r .result.terminal.handle)
-# the shell stays open after the command, so `terminal wait --for exit` times out; poll for the end marker
-until orca terminal read --environment "$ENV" --terminal "$probe" --json | jq -r '.result.terminal.tail[]' | grep -q PROBE-END; do sleep 1; done
-orca terminal read --environment "$ENV" --terminal "$probe" --json | jq -r '.result.terminal.tail[]'
-orca terminal close --environment "$ENV" --terminal "$probe"
-```
-
-Budget per machine, derived from the probe: `max_devs = ncpu / 2` (at least 1), `max_heavy = 2` (same cap as [Machine load](#machine-load)). A machine whose `load1 > ncpu` or with under 2 GB available takes no new dev until a later probe clears it. Count against a machine only the devs you placed there (status table `machine` column). Record the observed load next to the budget calibration data; `ncpu / 2` is a starting point, not a law.
-
-Placement: the least loaded candidate (`load1 / ncpu`) with a free slot **and the repo registered there**; ties go to local, where the operator can watch. The lead itself, merges, reviews, verifiers and anything that uses the operator's `gh` login stay local; remote machines run devs only.
-
-Each candidate machine is checked once per session for `git`, `wt`, `jq`, `flock` and the harness CLI through the same probe pattern (`--command "command -v git wt jq flock pi claude"`); a machine missing a tool is reported to the user and excluded, never silently used with a workaround.
-
-### Repo registration on a remote machine
-
-`orca project setups --environment "$ENV" --json` must list the project before you dispatch there. If it does not: ask (through the chain of command) whether to clone, then
-
-```bash
-orca project setup-clone --project "$PROJECT_ID" --host "runtime:$ENV" --path "$REMOTE_PATH" --json
-# or, when the operator names a folder that already holds the repo:
-orca project setup-existing-folder --project "$PROJECT_ID" --host "runtime:$ENV" --path "$REMOTE_PATH" --json
-```
-
-Until the setup is registered the machine is excluded from placement. Worktrees on the remote are created with `wt` through a probe-style terminal in the registered path (same `wt switch --create … --no-cd -y` as step 4), and the resulting path is the dev's `--worktree path:<abs>`.
-
-### Launch and adopt
-
-Session naming is the same as Herdr's: `${PROJECT}-${REF}` is the terminal title and the dev's `--name`. Per dev, on the chosen machine:
-
-```bash
-# 0. env: block resolved to KEY=VALUE pairs that prefix the launch command
-#    (remote: only values valid on that machine; see Dev environment)
-LAUNCH="PI_CODING_AGENT_DIR=... pi --name ${PROJECT}-${REF} --model $MODEL --exclude-tools ask_user"
-#    claude: claude --name ... --model $MODEL --disallowedTools AskUserQuestion
-
-# 1. terminal running the harness; drop --environment for the local machine
-ENV_FLAG=(); [ "$MACHINE" != local ] && ENV_FLAG=(--environment "$ENV" )
-#    remote: $WORKTREE must live under a path registered with `orca project setups --environment "$ENV"`
-H=$(orca terminal create "${ENV_FLAG[@]}" --worktree path:"$WORKTREE" --title "${PROJECT}-${REF}" \
-      --command "$LAUNCH" --json | jq -r .result.terminal.handle)
-orca terminal wait "${ENV_FLAG[@]}" --terminal "$H" --for tui-idle --timeout-ms 120000 --json
-#    satisfied:false with blockedReason "agent-trust-workspace" = Claude Code's folder-trust prompt on a path
-#    this machine has not seen; answer it (Down, Enter) and wait again:
-#    orca terminal send "${ENV_FLAG[@]}" --terminal "$H" --text $'\x1b[B'; orca terminal send "${ENV_FLAG[@]}" --terminal "$H" --enter
-
-# 2. adopt it as a worker; the brief IS the spec, delivered by Orca on input_accepted
-ON_FLAG=(); [ "$MACHINE" != local ] && ON_FLAG=(--on "$ENV")
-orca orchestration worker-start --spec "$(cat "$BRIEF_FILE")" --task-title "${REF}: ${TITLE}" \
-  "${ON_FLAG[@]}" --worktree path:"$WORKTREE" --terminal "$H" --run "$RUN" --from "$COORD" \
-  --timeout-ms 90000 --json
-# exit 0 only when the worker is ready; record .result.dispatch.id (ctx_…) and
-# .result.task.id in the status table together with $H and the machine
-```
-
-Rules learned the hard way: `--model`/`--effort` cannot be combined with `--terminal`, so the model goes in the launch command. The launch command also carries the **account**: a remote machine's default harness profile is whatever was logged in there (it may be a different, exhausted subscription), so prefix the env block (`CLAUDE_CONFIG_DIR`, `CLAUDE_CODE_OAUTH_TOKEN`) or use the machine's alias for the right profile, exactly as [Dev environment](#dev-environment) says; a dev that answers "You've hit your weekly limit" never reaches the task and `check --wait` burns its whole timeout. `worker-start --spec` works on a terminal whose TUI is already idle; the brief arrives as `=== TASK ===` input, so the dev needs no separate paste. `--worktree current`/`new-child` are invalid for a remote machine; always pass the exact path. A `worker-start` that fails at stage `worktree_resolve` with "not running a recognized agent" means the TUI was not up yet: `terminal wait --for tui-idle` again and retry once. Headless remotes return `surface: background` plus a warning that the terminal could not be made discoverable; harmless. Every `terminal wait|read|send|close` on a remote handle needs `--environment "$ENV"`, otherwise `terminal_handle_stale`. `worker-list` carries no task title; to map workers back to refs join `.workers[].taskId` with `orca orchestration task-list --run "$RUN" --json` (`.result.tasks[] | {id, task_title}`), which is what the status script does. `worker-list --limit` tops out at 100. `worker-start --agent <id>` (ids: claude, codex, cursor, antigravity, muse, zcode, opencode, opencode2) is the fallback only when adoption keeps failing for a harness in that list; pi is not in it, so pi devs always use adoption. Do not use `--agent` for a harness Orca does not know; report it as unusable in Orca mode instead.
-
-### Completion and follow-ups
-
-Two signals per dev, both required so a failure of one does not strand the task:
-
-1. **Worker contract.** The brief's completion step (template item 12) is this exact command, with ids filled in by you, run by the dev as its last action after writing the report file:
-   ```bash
-   orca orchestration send --from "$ORCA_TERMINAL_HANDLE" --type worker_done \
-     --subject "STATUS: DONE|BLOCKED|NEEDS-USER — <ref>" --body "<2–3 line summary>" \
-     --task-id <task-id> --dispatch-id <dispatch-id> --outcome succeeded|failed --report-path <report file>
-   ```
-   `--task-id` and `--dispatch-id` are mandatory: without them Orca rejects the message ("Federated worker report is incomplete", `invalid_payload`) and you receive a `worker_done` whose subject starts with `Rejected worker_done:` — treat that as *not done* and tell the dev to resend with the ids. Orca's injected preamble already shows the dev the correct `--from`, task and dispatch ids; the brief says to copy them from there rather than hardcoding. Questions use the same command with `--type question` and FIRST LINE `QUESTION — <ref>` in the body; the dev then waits on `orca orchestration check --terminal "$ORCA_TERMINAL_HANDLE" --wait`.
-2. **Report file** with the `STATUS:` first line, read by the status script.
-
-You receive mail with `orca orchestration check --terminal "$COORD" --run "$RUN" --json`, which returns the oldest unacknowledged batch (`.result.deliveryId`, `.result.messages[]`); acknowledge it on the next call with `--ack <deliveryId>` (`--ack` without a value is an error, and `--unread` does not acknowledge). `--wait --types worker_done,question --timeout-ms <ms>` blocks until something arrives (keepalive JSON on stderr every 15 s) and is the Orca-mode replacement for the stall watchdog: run it in a background shell and act on what it returns. Follow-ups to a dev: `orca orchestration send --from "$COORD" --to dispatch:<id> --type status --subject "<ref>: follow-up" --body "…"` (valid `--type` values are `status, dispatch, worker_done, merge_ready, escalation, handoff, decision_gate, question, heartbeat`; `instruction` is rejected); Orca delivers to the dev's terminal only when it is idle, so a reply to a question never lands in a busy input box. Read a dev's screen with `orca orchestration worker-read --dispatch <id>`.
-
-### Stop, release, recover
-
-- `worker-list --run "$RUN" --include-remote --json` gives per worker `projection.liveness.verdict` (`live|exited|unverifiable`), `projection.stage.activity`, `projection.outcome`, `projection.nextAction.kind` and `projection.attention.requiresAction`. **`unverifiable` authorizes inspection only** (`worker-read`, then `terminal read --screen`, with `--environment` for a remote), never a stop or a retry. A failed dispatch whose terminal is already gone also reads `unverifiable`, so check `dispatchStatus` before deciding it is a live dev you cannot see.
-- Retire: `worker-stop --dispatch <id>` if still live, then `worker-release --dispatch <id>` so Orca reclaims the terminal (the flag is `--dispatch`; `--dispatch-id` is "Unknown flag" on both). `worker-stop` ends the terminal, so never `worker-start` onto that handle again: the new dispatch reports `ready` and then dies with the terminal (`status: exited`, `source: screen-unavailable` on `terminal read`), then the [teardown checklist](#teardown-checklist) (remote worktrees are removed through a probe-style terminal). `worker-abandon` only for a worker whose terminal is gone and that will not be retried.
-- Retry a failed dispatch with a fresh terminal and `--retry-of <old dispatch id>` so the Run keeps the lineage.
 
 ## Monitoring
 
@@ -537,23 +278,8 @@ Calibrate budgets: after each task write the actual brief→DONE time next to th
 
 ### Stall watchdog (Herdr, no tokens)
 
-Herdr mode only: the script reads and prompts Herdr agents. In Orca mode the equivalent is the blocking `check --wait` described in [Orca mode](#orca-mode) plus the liveness verdicts the status script reports; a token-free Orca watchdog is tracked in `TODO.md`.
+Herdr mode only. Read `${CLAUDE_PLUGIN_ROOT}/skills/team/references/herdr-mode.md` (*Stall watchdog*) before you arm the watchdog; in Orca mode the equivalent is the blocking `check --wait` in `${CLAUDE_PLUGIN_ROOT}/skills/team/references/orca-mode.md`, plus the liveness verdicts the status script reports.
 
-`team-status.sh` needs you awake to read it. A team can also stall silently: a dev goes idle waiting on its leader while the leader believes the dev is busy, and nobody works for hours. Start `stall-watch.sh` once per session as a background shell (Bash with `run_in_background`; the user sees and stops it in the task list). It runs a plain shell loop, costs no tokens, and only prompts an agent when there is something to act on. If your harness has no background shells, run it in a pane instead.
-
-```bash
-${CLAUDE_PLUGIN_ROOT}/skills/team/scripts/stall-watch.sh \
-  --team <leader-name-or-pane-id>='<project>-<glob>' [--team ...] --escalate <agent-name-or-pane-id> --quiet-min 15
-```
-
-It delivers its alerts with `herdr agent prompt`, so they can collide with the operator typing in the leader's pane (see [Agent messaging](#agent-messaging)); `TODO.md` tracks the fix.
-
-- A team is a leader plus every agent matching its globs. For your own devs, the leader is you (`--team <you>='<project>-*'`); for a Squad Leader, add a `--team` for it and its devs. Use the live Herdr agent name, or your pane ID if you have no Herdr name: `herdr pane current --current | jq -r .result.pane.pane_id`. Do not use `$HERDR_PANE_ID`: it goes stale if the pane moves. Use the same rule for `--escalate`.
-- When nobody on a team has been `working` for `--quiet-min` minutes, it prompts the leader once per quiet episode with each member's status and the last lines of its pane. If the team is still quiet `--quiet-min` minutes later, it prompts `--escalate` once.
-- A member stuck in a non-idle, non-working state (approval dialog, error) for two checks is reported to the leader right away.
-- It only prompts agents that are not `working`, retrying on the next tick otherwise.
-- When your team is legitimately waiting (the user, CI, a merge), silence it: `stall-watch.sh --snooze <leader> <minutes>`. The alert text includes the exact command.
-- Test a configuration with `--once --dry-run` before leaving it running.
 
 ## Protect the lead's own files
 

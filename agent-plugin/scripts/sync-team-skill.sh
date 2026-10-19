@@ -26,6 +26,8 @@
 #     `$CLAUDE_PLUGIN_ROOT` (as a whole word) both become `${CLAUDE_PLUGIN_ROOT}`, the form this
 #     plugin's other skills and commands use
 #   - script and data paths move from skills/team-lead/ to skills/team/
+#   - references/*.md (loaded on demand by SKILL.md) get the same three path
+#     rewrites; they have no frontmatter, so nothing else changes
 # The scripts and default-models.yaml are copied byte for byte.
 
 set -euo pipefail
@@ -96,7 +98,8 @@ if [[ "$(head -n 1 "$rendered/SKILL.md")" != "---" ]]; then
   echo "sync-team-skill: $rendered/SKILL.md does not start with frontmatter (---)" >&2
   exit 1
 fi
-awk -v header="$header" '
+# Path rewrites shared by SKILL.md and the references (awk source).
+rewrite_awk='
   # $CLAUDE_PLUGIN_ROOT only as a whole word: $CLAUDE_PLUGIN_ROOT_X is left alone.
   function brace_root(s,    out, rest, i, next_char) {
     out = ""; rest = s
@@ -109,13 +112,20 @@ awk -v header="$header" '
     }
     return out rest
   }
+  # All three path rewrites, in one place for SKILL.md and the references.
+  function rewrite(s) {
+    gsub(/\{\{ *platform\.pluginRootVar *\}\}/, "${CLAUDE_PLUGIN_ROOT}", s)
+    s = brace_root(s)
+    gsub(/\/skills\/team-lead\//, "/skills/team/", s)
+    return s
+  }
+'
+
+awk -v header="$header" "$rewrite_awk"'
   { line = $0
     if (NR > 1 && !done && line == "---") { print line; print ""; print header; done = 1; next }
     if (!done && line ~ /^name: *team-lead *$/) { print "name: team"; renamed = 1; next }
-    gsub(/\{\{ *platform\.pluginRootVar *\}\}/, "${CLAUDE_PLUGIN_ROOT}", line)
-    line = brace_root(line)
-    gsub(/\/skills\/team-lead\//, "/skills/team/", line)
-    print line
+    print rewrite(line)
   }
   END { if (!done || !renamed) exit 3 }
 ' "$rendered/SKILL.md" > "$out/SKILL.md" || {
@@ -127,6 +137,28 @@ awk -v header="$header" '
 if grep -nE '\{\{|^@(if|else|elseif|end|let|each)\b' "$out/SKILL.md" >&2; then
   echo "sync-team-skill: unrendered template syntax in $rendered/SKILL.md (lines above)" >&2
   exit 1
+fi
+
+# references/ holds the files SKILL.md tells the agent to read on demand. Each
+# one is a rendered markdown file with no frontmatter; it gets the same path
+# rewrites, and the same refusal when a template tag was left behind.
+if [[ -d "$rendered/references" ]]; then
+  mkdir -p "$out/references"
+  for r in "$rendered"/references/*; do
+    [[ -e "$r" ]] || continue
+    if [[ ! -f "$r" || "$r" != *.md ]]; then
+      echo "sync-team-skill: $r is not a markdown file; references/ ships .md files only" >&2
+      exit 1
+    fi
+    rname="$(basename "$r")"
+    awk "$rewrite_awk"'
+      { print rewrite($0) }
+    ' "$r" > "$out/references/$rname"
+    if grep -nE '\{\{|^@(if|else|elseif|end|let|each)\b' "$out/references/$rname" >&2; then
+      echo "sync-team-skill: unrendered template syntax in $r (lines above)" >&2
+      exit 1
+    fi
+  done
 fi
 
 cp "$rendered/default-models.yaml" "$out/default-models.yaml"
