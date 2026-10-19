@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, type DriveConfig, syncIgnoreFor } from "#config/schema";
+import { betaUrl } from "#services/sync/config-sync";
+import { parseSessionList } from "#services/sync/mutagen";
 
 /**
  * `hyper drive sync-config` driven through the real CLI, with a fake `mutagen`
@@ -454,6 +456,15 @@ describe.skipIf(skipWithoutCli)("hyper drive sync-config <machine> (create)", ()
 		expect(creates[0]).toContain("localhost:~/svc/.claude");
 	});
 
+	it("keeps the port of a host:port Herdr target in the beta URL", () => {
+		const fixture = setupFixture([], { herdrTarget: "me@localhost:2222" });
+		spawnCli(fixture, ["drive", "sync-config", "loop"]);
+		const creates = calls(fixture).filter((line) => line.startsWith("sync create"));
+		expect(creates).toHaveLength(2);
+		expect(creates[0]).toContain(`me@localhost:2222:${fixture.betaHome}/.claude`);
+		expect(creates[1]).toContain(`me@localhost:2222:${fixture.betaHome}/.pi/agent`);
+	});
+
 	it("passes a user@host Herdr target through unchanged", () => {
 		const fixture = setupFixture([], { herdrTarget: "me@localhost" });
 		spawnCli(fixture, ["drive", "sync-config", "loop"]);
@@ -871,5 +882,47 @@ JSON`,
 			if (saved === undefined) delete process.env.HYPER_DRIVE_CONFIG;
 			else process.env.HYPER_DRIVE_CONFIG = saved;
 		}
+	});
+});
+
+describe("beta URL with an SSH port", () => {
+	const claude = { target: "claude", relative: ".claude", label: "Claude" } as const;
+
+	it("emits host:port:path when the machine has a port", () => {
+		expect(betaUrl("localhost", 2222, "/home/me", claude)).toBe("localhost:2222:/home/me/.claude");
+		expect(betaUrl("me@box", 60909, "/home/me/", claude)).toBe("me@box:60909:/home/me/.claude");
+		expect(betaUrl("me@box", 2222, "~", claude)).toBe("me@box:2222:~/.claude");
+	});
+
+	it("emits host:path, as before, when there is no port", () => {
+		expect(betaUrl("localhost", undefined, "/home/me", claude)).toBe("localhost:/home/me/.claude");
+		expect(betaUrl("me@box", undefined, "~", claude)).toBe("me@box:~/.claude");
+	});
+
+	it("round-trips through the engine's session list, so --check sees no mismatch", () => {
+		const want = betaUrl("me@localhost", 2222, "/home/me", claude);
+		const listed = parseSessionList(
+			JSON.stringify([
+				{
+					name: "hyper-claude-loop",
+					alpha: { protocol: "local", path: "/a" },
+					beta: {
+						protocol: "ssh",
+						user: "me",
+						host: "localhost",
+						port: 2222,
+						path: "/home/me/.claude",
+					},
+				},
+			]),
+		);
+		expect(listed[0]?.beta).toBe(want);
+		// …and without a port, the engine's URL still equals ours.
+		const noPort = parseSessionList(
+			JSON.stringify([
+				{ name: "x", beta: { protocol: "ssh", user: "me", host: "box", path: "/home/me/.claude" } },
+			]),
+		);
+		expect(noPort[0]?.beta).toBe(betaUrl("me@box", undefined, "/home/me", claude));
 	});
 });

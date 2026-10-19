@@ -45,10 +45,12 @@ function alphaUrl(home: string, plan: SyncPlan): string {
 }
 
 /**
- * The beta URL for a plan: `<ssh host>:<that machine's home>/<subdir>`.
+ * The beta URL for a plan: `<ssh host>:[<port>:]<that machine's home>/<subdir>`.
  *
  * The host is whatever Herdr stores as the machine's SSH target, which may
- * include a user (`me@host`) and a port (`host:2222`) — passed through whole.
+ * include a user (`me@host`). A port Herdr's target named (`host:2222`) has
+ * already been split off the host, so it is put back here in Mutagen's
+ * `user@host:port:path` form; dropping it would sync to port 22.
  *
  * The subdir is ALWAYS appended, including for a home of exactly `~` (allowed
  * by the config loader, which deliberately does not expand a remote home).
@@ -56,9 +58,14 @@ function alphaUrl(home: string, plan: SyncPlan): string {
  * resolved session mirroring every file in it — which is exactly the kind of
  * mistake that only shows up after the first cycle has already run.
  */
-function betaUrl(host: string, home: string, plan: SyncPlan): string {
+export function betaUrl(
+	host: string,
+	port: number | undefined,
+	home: string,
+	plan: SyncPlan,
+): string {
 	const base = home === "" || home === "~" ? "~" : home.replace(/\/+$/, "");
-	return `${host}:${base}/${plan.relative}`;
+	return `${host}:${port === undefined ? "" : `${port}:`}${base}/${plan.relative}`;
 }
 
 /** Session name for a plan + machine: `hyper-claude-<machine>`. */
@@ -250,7 +257,7 @@ export async function syncConfigWith(
 			throw new MachineError(`${nameProblem}. Rename the machine in Herdr.`);
 		}
 		const alpha = alphaUrl(localHome, plan);
-		const beta = betaUrl(machine.host, machine.home, plan);
+		const beta = betaUrl(machine.host, machine.port, machine.home, plan);
 		const want = {
 			symlinkMode: SYMLINK_MODE,
 			betaFileMode: BETA_FILE_MODE,

@@ -10,7 +10,7 @@
 #
 # Fixed order (cheap first, containers last):
 #   sessions    session discovery against the installed claude (real `claude -p`)
-#   sync        mutagen sync-config over loopback ssh
+#   sync        mutagen sync-config against a disposable podman container
 #   tools       the tool registry: real downloads into a temp HOME
 #   warp        `hyper warp` against a disposable podman container
 #
@@ -18,15 +18,17 @@
 #   HOME=<fresh short /tmp dir>, SSH_AUTH_SOCK and SSH_AGENT_PID REMOVED, and an
 #   EMPTY CLAUDE_CONFIG_DIR=<temp>/claude — except sessions.sh, which by design
 #   (C-18) asserts against the installed claude and inherits the caller's
-#   CLAUDE_CONFIG_DIR, and the three container scripts, which keep the host's
+#   CLAUDE_CONFIG_DIR, and the container scripts (sync, warp), which keep the host's
 #   absolute XDG_CONFIG_HOME and XDG_DATA_HOME so podman finds its machine
 #   connection (macOS) and its image store (Linux). The container scripts also
 #   get a freshly picked free port and a unique container name.
 #
 #   A temp HOME does NOT isolate ssh: OpenSSH resolves ~/.ssh from the PASSWD
-#   home, so every test ssh call must carry -F /dev/null, an explicit -i and
-#   the no-agent/no-control flags (see the scripts and ssh_isolation_flags in
-#   this file). run.sh's own probe does exactly that.
+#   home, so every test ssh AND scp call (mutagen copies its agent with scp)
+#   must go through -F /dev/null plus an explicit -i and the no-agent/no-control
+#   flags, or through a fixture-owned -F config holding the same options and the
+#   throwaway IdentityFile (sync.sh). See the scripts and ssh_isolated in this
+#   file; run.sh's own probe does exactly that.
 #
 # Real Claude (the C-18 exception): sessions.sh starts a REAL `claude -p`. It is
 # opt-IN and never runs by default:
@@ -49,17 +51,27 @@
 #
 # Capability probes (the ONLY automatic skips):
 #   sessions                        real Claude enabled (see above)
-#   sync                            HYPER_E2E_LOOPBACK_OWN_KEY=1 (or CI=true):
-#                                   its beta is LOOPBACK, so it logs in to
-#                                   localhost as you with your own ssh key
-#                                   (never your agent, never writing any
-#                                   authorized_keys); `mutagen` on PATH;
-#                                   non-interactive ssh to localhost works
+#   sync                            `mutagen` on PATH, AND `podman` on PATH with
+#                                   `podman info` succeeding within 30s: its
+#                                   beta is a container reached with a
+#                                   throwaway key (the same image as warp).
+#                                   Without podman, HYPER_E2E_LOOPBACK_OWN_KEY=1
+#                                   is the explicit opt-in to a LOOPBACK beta:
+#                                   it logs in to localhost as you with your own
+#                                   ssh key (never your agent, never writing any
+#                                   authorized_keys), and then needs
+#                                   non-interactive ssh to localhost. Nothing
+#                                   implies it, CI included.
 #   tools                           `curl` on PATH; https://github.com reachable
 #   warp                            `podman` on PATH AND `podman info` succeeds
 #                                   within 30s
 # Anything else a script needs and cannot find must make THAT script fail
 # loudly (C-18), which run.sh reports as FAIL — never a skip.
+#
+# Usage text: `run.sh` runs every script above, in order. Skip some with
+# HYPER_E2E_SKIP="sync warp"; make a skip a failure with
+# HYPER_E2E_REQUIRE="sync tools warp". On a machine without podman, `sync` skips
+# with a one-line reason (exit 0) unless HYPER_E2E_LOOPBACK_OWN_KEY=1.
 #
 # Before anything runs, run.sh prints the version of every tool the suite can
 # depend on: `claude --version` (only when claude is present — a version print
@@ -234,13 +246,16 @@ probe_skip_reason() {
         || { echo "real claude -p needs HYPER_E2E_REAL_CLAUDE=1"; return 0; }
       ;;
     sync)
-      # sync.sh logs in to localhost as YOU with YOUR ssh key (loopback beta):
-      # only when asked, or on a CI runner's throwaway account.
-      [ "${HYPER_E2E_LOOPBACK_OWN_KEY:-}" = "1" ] || [ "${CI:-}" = "true" ] \
-        || { echo "needs HYPER_E2E_LOOPBACK_OWN_KEY=1 (uses your own ssh key against localhost)"; return 0; }
       command -v mutagen >/dev/null 2>&1 || { echo "no mutagen on PATH"; return 0; }
-      ssh_isolated -o BatchMode=yes -o ConnectTimeout=5 localhost true >/dev/null 2>&1 \
-        || { echo "cannot ssh to localhost non-interactively"; return 0; }
+      if [ "${HYPER_E2E_LOOPBACK_OWN_KEY:-}" = "1" ]; then
+        # Explicit opt-in: the beta is localhost, reached as YOU with YOUR key.
+        ssh_isolated -o BatchMode=yes -o ConnectTimeout=5 localhost true >/dev/null 2>&1 \
+          || { echo "cannot ssh to localhost non-interactively"; return 0; }
+      else
+        command -v podman >/dev/null 2>&1 \
+          || { echo "no podman on PATH (or set HYPER_E2E_LOOPBACK_OWN_KEY=1 to use localhost with your own ssh key)"; return 0; }
+        podman_info_ok || { echo "podman info failed (no podman machine or connection)"; return 0; }
+      fi
       ;;
     tools)
       command -v curl >/dev/null 2>&1 || { echo "no curl on PATH"; return 0; }
@@ -321,7 +336,7 @@ for name in "${scripts[@]}"; do
   env_unset=(-u SSH_AUTH_SOCK -u SSH_AGENT_PID)
   env_sets=("HOME=$home")
   case "$name" in
-    warp)
+    warp|sync)
       # Podman keeps machine connections in XDG_CONFIG_HOME and rootless image
       # storage in XDG_DATA_HOME. Preserve those absolute locations across the
       # temp HOME: otherwise macOS loses its VM connection, while Linux builds
@@ -341,10 +356,11 @@ for name in "${scripts[@]}"; do
     mkdir -p "$home/claude"
     env_sets+=("CLAUDE_CONFIG_DIR=$home/claude")
   fi
+  # HYPER_E2E_LOOPBACK_OWN_KEY is never set here: sync.sh sees it only when the
+  # caller exported it.
   case "$name" in
     sync)
-      # The probe above allowed it: explicitly, or on CI.
-      env_sets+=("HYPER_E2E_LOOPBACK_OWN_KEY=1")
+      env_sets+=("SYNC_E2E_PORT=$(free_port)" "SYNC_E2E_CONTAINER=hyper-sync-$slug")
       ;;
     warp)
       env_sets+=("WARP_E2E_PORT=$(free_port)" "WARP_E2E_CONTAINER=hyper-t12-$slug")

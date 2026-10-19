@@ -1,7 +1,7 @@
 name: drive-e2e
 
 # The hyperdrive end-to-end suite (T-19): packages/drive/tests/e2e/run.sh on
-# ubuntu-latest with loopback ssh. Unit tests still run on every PR in ci.yml;
+# ubuntu-latest. Unit tests still run on every PR in ci.yml;
 # this job runs only when the drive package, the agent plugin, or this
 # workflow changes. The unit-test job is deliberately untouched.
 #
@@ -12,7 +12,9 @@ name: drive-e2e
 #   sessions    SKIP — starts a REAL `claude -p` (C-18). Opt-in only via
 #               HYPER_E2E_REAL_CLAUDE=1 + CLAUDE_CONFIG_DIR; the runner has no
 #               claude and this job uses no secrets.
-#   sync        RUNS — mutagen 0.18.1 + agent bundle, loopback sshd below.
+#   sync        RUNS — mutagen 0.18.1 + agent bundle; its beta is a podman
+#               container with a throwaway key (the warp image). No loopback
+#               sshd and no ssh key of the runner's own are involved.
 #   tools       RUNS — downloads into a throwaway HOME.
 #   warp        RUNS — podman is preinstalled on ubuntu-latest.
 
@@ -97,37 +99,6 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/hyper" --version
 
-      # Loopback ssh for sync.sh: a key generated IN THIS JOB, sshd on
-      # localhost, StrictHostKeyChecking handled here and nowhere else. No
-      # secrets are involved — the key exists only for the life of the runner.
-      - name: Set up loopback ssh
-        run: |
-          set -euo pipefail
-          if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive \
-              apt-get install -y -qq openssh-server
-          fi
-          sudo ssh-keygen -A >/dev/null
-          sudo mkdir -p /run/sshd
-          if ! pgrep -x sshd >/dev/null; then
-            sudo /usr/sbin/sshd
-          fi
-          mkdir -p "$HOME/.ssh"
-          chmod 0700 "$HOME/.ssh"
-          if [ ! -f "$HOME/.ssh/id_ed25519" ]; then
-            ssh-keygen -q -t ed25519 -N '' \
-              -f "$HOME/.ssh/id_ed25519"
-          fi
-          cat "$HOME/.ssh/id_ed25519.pub" >> "$HOME/.ssh/authorized_keys"
-          chmod 0600 "$HOME/.ssh/authorized_keys"
-          # Job-local ssh config only: accept the runner's own host key on first
-          # contact. Nothing here changes any real machine's ssh behaviour.
-          printf 'Host localhost\n' >> "$HOME/.ssh/config"
-          printf '  StrictHostKeyChecking accept-new\n' >> "$HOME/.ssh/config"
-          ssh -o BatchMode=yes -o ConnectTimeout=5 localhost true
-          echo "loopback ssh up"
-
       # mutagen 0.18.1 is the version sync.sh was written against. The upstream
       # release publishes no checksums file, so the tarball hash is pinned here
       # (recorded from the v0.18.1 asset; bump both together).
@@ -146,7 +117,7 @@ jobs:
             mutagen mutagen-agents.tar.gz
           mutagen version
 
-      # warp.sh builds its fixture from this base image.
+      # warp.sh and sync.sh build their container fixture from this base image.
       # Pre-pull under the runner's normal HOME; run.sh preserves podman's
       # XDG storage path while each script receives its own temp HOME.
       - name: Pre-pull the podman fixture image
