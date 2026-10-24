@@ -77,8 +77,14 @@ ship_require_yq() {
 # without it (or with an outdated one) set SHIP_SPACE_ROOT instead.
 ship_space_root() {
   if [[ -n "${SHIP_SPACE_ROOT:-}" ]]; then
-    printf '%s\n' "$SHIP_SPACE_ROOT"
-    return 0
+    local r="$SHIP_SPACE_ROOT"
+    while [[ "$r" == */ && "$r" != / ]]; do r="${r%/}"; done
+    if [[ ! -d "$r" ]]; then
+      _ship_err "SHIP_SPACE_ROOT=$SHIP_SPACE_ROOT is not a directory"
+      return 2
+    fi
+    CDPATH='' cd -- "$r" && pwd -P
+    return
   fi
   # shellcheck source=../hyper-require-lib.sh
   source "$SHIP_PLUGIN_ROOT/scripts/hyper-require-lib.sh"

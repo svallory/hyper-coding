@@ -253,7 +253,7 @@ rm -f "$USER_CFG"
   bash -c \"source '$SHIP_DIR/lib.sh'; ship_config_load\"") >/dev/null 2>&1
 # --version probes do not count; parses are one per layer file (defaults + project).
 parses="$(grep -c x "$cnt")"
-if [[ "$parses" -le 4 ]]; then pass "layers parsed once (yq calls: $parses, version probes included)"; else fail "layers re-read (yq calls: $parses)"; fi
+if [[ "$parses" -eq 3 ]]; then pass "layers parsed once (3 yq calls: version probe + defaults + project)"; else fail "layers re-read (yq calls: $parses)"; fi
 
 # T13: C-14 — every key in defaults.yml is commented ---------------------------
 undocumented="$(awk '/^[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*:/ { if (prev !~ /^[[:space:]]*#/ && $0 !~ /[[:space:]]#/) print NR": "$0 } {prev=$0}' "$DEFAULTS")"
@@ -304,6 +304,20 @@ rc=0; (cd "$outside" && PATH="$NOHYPER_PATH" bash -c "source '$SHIP_DIR/lib.sh';
 assert_eq "ship_space_root returns 2 when it cannot tell" "2" "$rc"
 rc=0; (cd "$outside" && bash -c "source '$SHIP_DIR/lib.sh'; ship_space_root") >/dev/null 2>&1 || rc=$?
 assert_eq "ship_space_root returns 1 outside a space" "1" "$rc"
+
+# T15b: SHIP_SPACE_ROOT is checked and normalised ------------------------------
+printf 'gate: "true"\n' > "$PROJECT"
+out="$(cd "$outside" && SHIP_SPACE_ROOT="$SPACE/" bash "$CFG" --get units_group 2>/dev/null)"
+assert_eq "trailing slash: units_group expands" "my space-units" "$out"
+out="$(cd "$outside" && SHIP_SPACE_ROOT="$SPACE//" bash "$CFG" --get units_group 2>/dev/null)"
+assert_eq "double trailing slash: units_group expands" "my space-units" "$out"
+rc=0; err="$(cd "$outside" && SHIP_SPACE_ROOT="$FIX/nope" bash "$CFG" --get base 2>&1 >/dev/null)" || rc=$?
+assert_eq "missing SHIP_SPACE_ROOT directory: exit 1" "1" "$rc"
+assert_contains "missing directory: message" "$err" "SHIP_SPACE_ROOT=$FIX/nope is not a directory"
+rc=0; (cd "$outside" && SHIP_SPACE_ROOT="$FIX/nope" bash -c "source '$SHIP_DIR/lib.sh'; ship_space_root") >/dev/null 2>&1 || rc=$?
+assert_eq "ship_space_root returns 2 for a missing directory" "2" "$rc"
+ln -s "$SPACE" "$FIX/space-link"
+assert_eq "symlinked SHIP_SPACE_ROOT is resolved physically" "$SPACE" "$(cd "$outside" && SHIP_SPACE_ROOT="$FIX/space-link/" bash -c "source '$SHIP_DIR/lib.sh'; ship_space_root")"
 
 # T16: yq stderr never pollutes the JSON (#2) -----------------------------------
 reset_layers

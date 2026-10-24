@@ -86,7 +86,7 @@ jobs:
 
       # The ship scripts need mikefarah yq v4 (preinstalled on ubuntu-latest).
       - name: Check yq
-        run: yq --version | grep -q 'mikefarah/yq'
+        run: bash -c 'source agent-plugin/scripts/ship/lib.sh && ship_require_yq'
 
       - name: Run the plugin test suite
         run: bash agent-plugin/tests/run.sh
