@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# ship-config — show or query the merged hyper:ship configuration.
+#
+# Usage:
+#   ship-config [--print]      every key, its value and the file it came from (default)
+#   ship-config --get <key>    one value by dotted key (models.dev, spec.paths, gate)
+#
+# Layers: skills/ship/defaults.yml < ~/.config/hyper/ship.yml
+#         < <space root>/.hyper/ship.yml. Objects merge, arrays replace.
+#
+# Exit: 0 ok; 1 config error (yq missing or not mikefarah v4, malformed YAML,
+# required key `gate` unset) or --get on an unset key; 2 usage.
+set -euo pipefail
+
+# shellcheck source=lib.sh
+source "${BASH_SOURCE[0]%/*}/lib.sh"
+
+mode=print key=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --print) mode=print ;;
+    --get)
+      [[ $# -ge 2 ]] || { echo "ship-config: --get needs a key" >&2; exit 2; }
+      mode=get key="$2"; shift ;;
+    -h|--help) sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "ship-config: unknown argument '$1' (try --help)" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+ship_config_load || exit 1
+
+case "$mode" in
+  print) ship_cfg_print ;;
+  get)
+    if ! ship_cfg_get "$key"; then
+      echo "ship-config: '$key' is not set" >&2
+      exit 1
+    fi ;;
+esac
