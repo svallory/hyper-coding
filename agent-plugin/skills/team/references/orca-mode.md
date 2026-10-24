@@ -57,20 +57,33 @@ orca project setup-clone --project "$PROJECT_ID" --host "runtime:$ENV" --path "$
 orca project setup-existing-folder --project "$PROJECT_ID" --host "runtime:$ENV" --path "$REMOTE_PATH" --json
 ```
 
-Until the setup is registered the machine is excluded from placement. Worktrees on the remote are created with `wt` through a probe-style terminal in the registered path (same `wt switch --create … --no-cd -y` as step 4), and the resulting path is the dev's `--worktree path:<abs>`.
+Until the setup is registered the machine is excluded from placement. Worktrees on the remote are created with `wt` through a probe-style terminal in the registered path (same `wt switch --create … --no-cd -y` as step 4), and the resulting path is the dev's `--worktree path:<abs>`. Check the repo's worktree visibility on that machine too (see *Worktree workspaces*).
+
+### Worktree workspaces
+
+As in Herdr mode, every dev runs in its own worktree workspace, and `wt` creates the worktree (workflow step 4); do not use `orca worktree create`, which picks its own path and branch. Orca calls a worktree it did not create a *non-Orca worktree* and hides it when the repo's `externalWorktreeVisibility` is `hide`. A hidden worktree is not an Orca workspace: `--worktree path:<it>` fails with `selector_not_found`, and it never shows in the sidebar. Check once per repo and machine before the first dev:
+
+```bash
+ENV_FLAG=(); [ "$MACHINE" != local ] && ENV_FLAG=(--environment "$ENV" )   # drop --environment for the local machine
+orca repo show "${ENV_FLAG[@]}" --repo path:"$SPACE_ROOT" --json | jq -r .result.repo.externalWorktreeVisibility
+```
+
+`show` is ready. On `hide`, or on `inherit` when `orca worktree show --worktree path:"$WORKTREE"` returns `selector_not_found`, ask the operator (through the chain of command) to let you run `orca repo set --repo path:"$SPACE_ROOT" --external-worktree-visibility show`. It is a per-repo Orca setting, and you never change it without asking. If they decline, Orca mode cannot place devs in that repo; use Herdr or plain mode and say so. Verified with Orca 1.4.229.
 
 ### Launch and adopt
 
 Session naming is the same as Herdr's: `${PROJECT}-${REF}` is the terminal title and the dev's `--name`. Per dev, on the chosen machine:
 
 ```bash
+# 0a. label the worktree workspace in Orca's sidebar and board
+orca worktree set "${ENV_FLAG[@]}" --worktree path:"$WORKTREE" --display-name "$REF" --workspace-status in-progress --json
+
 # 0. env: block resolved to KEY=VALUE pairs that prefix the launch command
 #    (remote: only values valid on that machine; see Dev environment)
 LAUNCH="PI_CODING_AGENT_DIR=... pi --name ${PROJECT}-${REF} --model $MODEL --exclude-tools ask_user"
 #    claude: claude --name ... --model $MODEL --disallowedTools AskUserQuestion
 
-# 1. terminal running the harness; drop --environment for the local machine
-ENV_FLAG=(); [ "$MACHINE" != local ] && ENV_FLAG=(--environment "$ENV" )
+# 1. terminal running the harness in that worktree workspace (ENV_FLAG as above)
 #    remote: $WORKTREE must live under a path registered with `orca project setups --environment "$ENV"`
 H=$(orca terminal create "${ENV_FLAG[@]}" --worktree path:"$WORKTREE" --title "${PROJECT}-${REF}" \
       --command "$LAUNCH" --json | jq -r .result.terminal.handle)

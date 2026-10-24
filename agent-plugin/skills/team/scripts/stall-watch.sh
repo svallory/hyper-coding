@@ -29,11 +29,20 @@
 # act on; the loop itself costs no tokens. Run it in its own Herdr pane (so the
 # user can see and stop it) or with nohup.
 #
+# Lifecycle: the watchdog exists only while a leader is coordinating a team.
+# Start it when the first dev is launched and stop it with `--stop <leader>`
+# when the batch is over; a watcher left running after the team is gone keeps
+# prompting the leader about a team that no longer exists. Each run records
+# its PID in <state-dir>/<leader>.pid; a second start for a leader whose
+# watcher is still alive is refused, so a session cannot stack watchers.
+#
 # Usage:
 #   stall-watch.sh --team <leader>=<glob>[,<glob>...] [--team ...]
 #                  [--escalate <agent>] [--quiet-min 15] [--interval 60]
 #                  [--state-dir DIR] [--once] [--dry-run]
 #   stall-watch.sh --snooze <leader> <minutes> [--state-dir DIR]
+#   stall-watch.sh --stop <leader> [--state-dir DIR]
+#   stall-watch.sh --status <leader> [--state-dir DIR]
 #
 #   --team L=G      Leader agent name or pane ID L; members are every Herdr agent whose
 #                   name matches one of the comma-separated shell globs G
@@ -48,6 +57,11 @@
 #   --snooze L M    Silence team L for M minutes (a leader legitimately waiting
 #                   on the user, CI, or a merge). The alert text tells the
 #                   leader how to run this.
+#   --stop L        Stop the watcher recorded for leader L and remove its
+#                   state (snooze, episode, stuck-member marks). Exit 0 when
+#                   it stopped or none was running.
+#   --status L      Print whether a watcher is running for L. Exit 0 if it
+#                   is, 1 if not.
 #
 # Messages are delivered with `herdr agent prompt`, only to an agent that is
 # not `working` (a prompt sent to a working agent lands unsubmitted in its
@@ -65,10 +79,45 @@ DRY=0
 TEAMS=()
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 
-usage() { echo 'usage: stall-watch.sh --team <leader>=<glob> [--escalate <agent>] [--quiet-min N] [--interval S] [--state-dir DIR] [--busy-if CMD] [--once] [--dry-run] | --snooze <leader> <minutes> [--state-dir DIR]' >&2; }
+usage() { echo 'usage: stall-watch.sh --team <leader>=<glob> [--escalate <agent>] [--quiet-min N] [--interval S] [--state-dir DIR] [--busy-if CMD] [--once] [--dry-run] | --snooze <leader> <minutes> [--state-dir DIR] | --stop <leader> [--state-dir DIR] | --status <leader> [--state-dir DIR]' >&2; }
 die() { echo "stall-watch: $*" >&2; usage; exit 2; }
 value() { [[ $# -ge 2 && -n "$2" && "$2" != --* ]] || die "missing value for $1"; }
 number() { [[ "$2" =~ ^[0-9]+$ ]] && (( 10#$2 > 0 )) || die "$1 must be a positive integer"; }
+valid_leader() { [[ "$1" =~ ^[a-zA-Z0-9_-]+(:[a-zA-Z0-9_-]+)?$ ]] || die 'invalid leader'; }
+
+# PID of the live watcher for a leader, or nothing (a stale pid file is removed).
+live_pid() {
+  local pf="$STATE_DIR/$1.pid" pid
+  [[ -f "$pf" ]] || return 1
+  pid=$(cat "$pf" 2>/dev/null)
+  if [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then printf '%s\n' "$pid"; return 0; fi
+  rm -f "$pf"; return 1
+}
+
+# --stop / --status <leader> [--state-dir DIR]: one-shot subcommands.
+if [[ "${1:-}" == "--stop" || "${1:-}" == "--status" ]]; then
+  cmd="$1"; value "$@"; leader="$2"; shift 2
+  if [[ $# -gt 0 ]]; then
+    [[ "$1" == "--state-dir" ]] || die "unexpected $cmd argument: $1"
+    value "$@"; STATE_DIR="$2"; shift 2
+  fi
+  [[ $# -eq 0 ]] || die "unexpected $cmd argument: $1"
+  valid_leader "$leader"
+  if [[ "$cmd" == "--status" ]]; then
+    if pid=$(live_pid "$leader"); then echo "stall-watch: $leader watched by pid $pid"; exit 0; fi
+    echo "stall-watch: no watcher for $leader"; exit 1
+  fi
+  if pid=$(live_pid "$leader"); then
+    kill "$pid" 2>/dev/null
+    for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
+    kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
+    echo "stall-watch: stopped watcher for $leader (pid $pid)"
+  else
+    echo "stall-watch: no watcher running for $leader; clearing its state"
+  fi
+  rm -f "$STATE_DIR/$leader.pid" "$STATE_DIR/$leader.state" "$STATE_DIR/$leader.snooze" "$STATE_DIR/$leader".*.odd
+  exit 0
+fi
 
 if [[ "${1:-}" == "--snooze" ]]; then
   value "$@"; leader="$2"; shift 2
@@ -78,7 +127,7 @@ if [[ "${1:-}" == "--snooze" ]]; then
     value "$@"; STATE_DIR="$2"; shift 2
   fi
   [[ $# -eq 0 ]] || die "unexpected snooze argument: $1"
-  [[ "$leader" =~ ^[a-zA-Z0-9_-]+(:[a-zA-Z0-9_-]+)?$ ]] || die 'invalid leader'
+  valid_leader "$leader"
   mkdir -p "$STATE_DIR"
   echo $(( $(date +%s) + minutes * 60 )) > "$STATE_DIR/$leader.snooze"
   echo "stall-watch: $leader snoozed for ${minutes}m"
@@ -95,7 +144,7 @@ while [[ $# -gt 0 ]]; do
     --state-dir) value "$@"; STATE_DIR="$2"; shift 2 ;;
     --once) ONCE=1; shift ;;
     --dry-run) DRY=1; shift ;;
-    -h|--help) sed -n '2,45p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,68p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -105,6 +154,24 @@ command -v jq >/dev/null || die "jq not found"
 mkdir -p "$STATE_DIR"
 
 log() { echo "$(date +%H:%M:%S) $*"; }
+
+# One watcher per leader. The pid file is what `--stop` and `--status` read;
+# a `--once` run is a probe, so it registers nothing.
+LEADERS=()
+for t in "${TEAMS[@]}"; do LEADERS+=("${t%%=*}"); done
+if [[ $ONCE -eq 0 ]]; then
+  for l in "${LEADERS[@]}"; do
+    if pid=$(live_pid "$l"); then
+      echo "stall-watch: a watcher for $l is already running (pid $pid); stop it first: $SELF --stop $l --state-dir $STATE_DIR" >&2
+      exit 1
+    fi
+  done
+  for l in "${LEADERS[@]}"; do echo $$ > "$STATE_DIR/$l.pid"; done
+  cleanup() { for l in "${LEADERS[@]}"; do rm -f "$STATE_DIR/$l.pid"; done; }
+  trap 'cleanup; exit 0' INT TERM
+  trap cleanup EXIT
+  log "watching ${LEADERS[*]} (pid $$); stop with: $SELF --stop <leader> --state-dir $STATE_DIR"
+fi
 
 # Last few meaningful lines of an agent's pane, joined on one line.
 pane_tail() {
