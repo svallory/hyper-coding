@@ -4,7 +4,7 @@
 
 # Multiplexer backend: a file name under scripts/ship/mux/. herdr is the only real backend today.
 mux: herdr
-# Name of the multiplexer group that holds unit spaces. <project> stands for the space directory name; the mux backend expands it.
+# Name of the multiplexer group that holds unit spaces. <project> is replaced by the space directory name when the config is loaded.
 units_group: <project>-units
 # Command run in the unit worktree before push and before merge. Exit 0 = pass. Required; no default.
 # gate:
@@ -18,7 +18,7 @@ spec:
   paths: []
 # Forbidden-pattern scan run by finalize.
 scan:
-  # Regexes that must not appear in added lines; the finalize scan fails on a match.
+  # Regexes that must not appear in added lines; the finalize scan fails on a match. Dialect: jq/Oniguruma regex, matched with jq test().
   forbidden: []
   # Globs excluded from the forbidden-pattern scan.
   exclude: []
@@ -26,7 +26,7 @@ scan:
 stages:
   # Settings for the final gate stage.
   final:
-    # Run the final gate on every unit instead of only when review asks for it.
+    # Run the final gate on every unit (otherwise only with --final-gate).
     always: false
   # Settings for the verify stage (optional keys, unset by default):
   #   stages.verify.instructions: path to a markdown file with the verify prompt text; unset means the stage is skipped.
@@ -56,7 +56,7 @@ quota:
   max_age_min: 30
 # Usage-limit detection.
 limits:
-  # Regexes matched against an agent's screen to detect that it hit a usage limit.
+  # Regexes matched against an agent's screen to detect that it hit a usage limit. Dialect: jq/Oniguruma regex, matched with jq test().
   patterns:
     # Claude Code limit message.
     claude: 'You.{1,3}ve hit your ([a-z]+ )?limit'
@@ -78,7 +78,7 @@ budgets:
   L: 90
   # Fraction of the class budget given to a fix round.
   fix_fraction: 0.5
-  # Minutes allowed for a check (verify, gate) stage.
+  # Minutes allowed for a check stage (verify, review, spec check, final); the gate is not a stage.
   check: 30
 # Where units run. Each host has an optional ssh target and a number of concurrent unit slots.
 hosts:
@@ -90,7 +90,7 @@ hosts:
 rulings: notes/decisions.md
 # Issue tracker kickoff writes to: beads or none.
 tracker: none
-# Commands run after a successful merge; {task} is replaced by the unit's tracker id.
+# Commands run after a successful merge; {ref}, {pr} and {task} are replaced by the unit ref, the PR number and the unit's tracker id.
 on_land: []
 # Per-role agent profiles (read by ship-role). A project overrides a role by naming it; arrays replace.
 roles:
@@ -104,21 +104,29 @@ roles:
     plugins_keep: []
     # Skills a pi agent is launched with.
     pi_skills: [affected-tests, rci, receiving-code-review, systematic-debugging, verification-before-completion]
-    # Extensions a pi agent is launched with, with their flags.
-    pi_extensions: ['pi-lens --no-autofix --no-tests --no-opengrep']
+    # Extensions a pi agent is launched with: a list of {name, flags}.
+    pi_extensions: [{name: pi-lens, flags: [--no-autofix, --no-tests, --no-opengrep]}]
   # Verify agents.
   verify:
     # Claude plugins left enabled.
     plugins_keep: []
     # Skills a pi agent is launched with.
     pi_skills: [verification-before-completion]
+    # Extensions a pi agent is launched with: a list of {name, flags}.
+    pi_extensions: []
   # Review and final-gate agents.
   review:
     # Claude plugins left enabled (projects add language servers here).
     plugins_keep: []
     # Skills a pi agent is launched with.
     pi_skills: [code-review, arch-review]
+    # Extensions a pi agent is launched with: a list of {name, flags}.
+    pi_extensions: []
   # Spec check and spec writer agents.
   spec:
     # Claude plugins left enabled.
     plugins_keep: []
+    # Skills a pi agent is launched with.
+    pi_skills: []
+    # Extensions a pi agent is launched with: a list of {name, flags}.
+    pi_extensions: []
