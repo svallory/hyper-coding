@@ -357,7 +357,11 @@ ship_models_override() {
 #                                      Returns 0 when valid, 1 when not (every
 #                                      problem on stderr, one per line), 2 on
 #                                      usage errors (missing or unreadable file,
-#                                      invalid JSON).
+#                                      invalid JSON). A file holding zero or
+#                                      several JSON values is invalid (1).
+#
+# Cross-field rules are not checked here: "GAP needs a non-empty gaps" and
+# "REMOVE needs a non-empty removals" are left to the driver (ship-loop).
 #
 # The schema dialect is the JSON Schema subset the schemas use: type (a name or a
 # list of names; "integer" and "number" both accept whole numbers), enum,
@@ -386,7 +390,7 @@ _SHIP_VALIDATE_JQ='
 '
 
 validate_verdict() {
-  local schema="${1:-}" file="${2:-}" errs
+  local schema="${1:-}" file="${2:-}" errs line
   if [[ -z "$schema" || -z "$file" ]]; then
     _ship_err "usage: validate_verdict <schema> <file>"
     return 2
@@ -404,9 +408,13 @@ validate_verdict() {
     _ship_err "validate_verdict: schema is not valid JSON: $schema"
     return 2
   fi
-  if ! jq -e . "$file" >/dev/null 2>&1; then
+  if ! jq empty "$file" >/dev/null 2>&1; then
     _ship_err "validate_verdict: not valid JSON: $file"
     return 2
+  fi
+  if [[ "$(jq -s length "$file" 2>/dev/null)" != 1 ]]; then
+    _ship_err "validate_verdict: $file: expected exactly one JSON value"
+    return 1
   fi
   errs="$(jq -r --slurpfile s "$schema" "$_SHIP_VALIDATE_JQ" "$file" 2>&1)" || {
     _ship_err "validate_verdict: validator failed on $file: $errs"

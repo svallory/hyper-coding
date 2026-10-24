@@ -1,12 +1,12 @@
 {
   "title": "develop / fix / finalize result",
-  "description": "Written by the dev agent for develop.json, fix-rN.json and finalize.json. The driver adds failovers.",
+  "description": "Written by the dev agent for develop.json and fix-rN.json (the driver writes finalize.json). The driver adds failovers.",
   "type": "object",
-  "required": ["status", "summary"],
+  "required": ["status", "pr", "head", "summary"],
   "properties": {
     "status": {"type": "string", "enum": ["DONE", "BLOCKED", "QUESTION"]},
-    "pr": {"type": "integer"},
-    "head": {"type": "string"},
+    "pr": {"type": ["integer", "null"]},
+    "head": {"type": ["string", "null"]},
     "summary": {"type": "string"},
     "question": {"type": "string"},
     "failovers": {"type": "integer"}

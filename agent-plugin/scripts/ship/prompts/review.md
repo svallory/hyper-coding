@@ -9,7 +9,7 @@ You review only: do not run tests, do not edit, commit or push.
 
 Report every bug, contract violation, missing or vacuous test and spec drift as a finding with a concrete fix. Also report any element the PR adds (function, flag, file, schema key, config key) that no consumer in the PR or the brief's Consumers section uses. The verdict is ACCEPT only when nothing BLOCKING or SHOULD remains.
 
-When finished, write your result as JSON to {verdict_file} using the Write tool, shaped like:
+When finished, write your result as JSON to the file {verdict_file} as the file contents, shaped like:
 
 {"verdict":"ACCEPT|CHANGES","findings":[{"severity":"BLOCKING|SHOULD|NOTE","file":"...","line":<int>,"summary":"...","fix":"<concrete change>"}]}
 

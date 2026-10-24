@@ -2,7 +2,7 @@
   "title": "failover record",
   "description": "failover-N.json, written by the driver.",
   "type": "object",
-  "required": ["stage", "round", "agent", "from", "to", "reason", "at"],
+  "required": ["stage", "round", "agent", "from", "to", "reason", "limit_kind", "matched", "summarizer", "status_md", "at"],
   "properties": {
     "stage": {"type": "string"},
     "round": {"type": "integer"},
@@ -10,8 +10,8 @@
     "from": {"type": "string"},
     "to": {"type": "string"},
     "reason": {"type": "string", "enum": ["preflight", "limit"]},
-    "limit_kind": {"type": "string", "enum": ["account", "model"]},
-    "matched": {"type": "string"},
+    "limit_kind": {"type": ["string", "null"], "enum": ["account", "model", null]},
+    "matched": {"type": ["string", "null"]},
     "quota": {
       "type": "object",
       "properties": {
@@ -20,8 +20,8 @@
         "resets_at": {"type": ["string", "number"]}
       }
     },
-    "summarizer": {"type": "string"},
-    "status_md": {"type": "string"},
+    "summarizer": {"type": ["string", "null"]},
+    "status_md": {"type": ["string", "null"]},
     "at": {"type": "string"}
   }
 }

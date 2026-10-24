@@ -2,7 +2,7 @@
   "title": "unit result",
   "description": "result.json, written by the driver when it exits.",
   "type": "object",
-  "required": ["ref", "stage", "status", "rounds"],
+  "required": ["ref", "pr", "stage", "status", "rounds", "spec", "final", "specwriter", "finalize", "host", "worktree"],
   "properties": {
     "ref": {"type": "string"},
     "pr": {"type": ["integer", "null"]},
@@ -19,6 +19,7 @@
     },
     "final": {
       "type": "object",
+      "required": ["verdict", "rounds"],
       "properties": {
         "verdict": {"type": "string", "enum": ["NOT_RUN", "ACCEPT", "CHANGES", "BLOCKED"]},
         "rounds": {"type": "integer"}
@@ -26,12 +27,13 @@
     },
     "specwriter": {
       "type": "object",
+      "required": ["runs", "commits"],
       "properties": {
         "runs": {"type": "integer"},
         "commits": {"type": "array", "items": {"type": "string"}}
       }
     },
-    "finalize": {"type": "object"},
+    "finalize": {"type": ["object", "null"]},
     "failovers": {"type": "integer"},
     "host": {"type": "string"},
     "worktree": {"type": "string"}

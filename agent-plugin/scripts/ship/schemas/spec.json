@@ -2,7 +2,7 @@
   "title": "spec check result",
   "description": "spec-rN.json. Precedence when several apply: GAP > REMOVE > CHANGES > ACCEPT.",
   "type": "object",
-  "required": ["verdict", "findings", "gaps", "removals"],
+  "required": ["verdict", "findings", "gaps", "removals", "commits", "gate"],
   "properties": {
     "verdict": {"type": "string", "enum": ["ACCEPT", "CHANGES", "GAP", "REMOVE"]},
     "findings": {
