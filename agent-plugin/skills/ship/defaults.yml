@@ -1,0 +1,132 @@
+# Defaults for hyper:ship. Layers, lowest to highest precedence:
+#   this file <- ~/.config/hyper/ship.yml <- <space root>/.hyper/ship.yml
+# Objects merge key by key; arrays replace. Every key below is commented.
+
+# Multiplexer backend: a file name under scripts/ship/mux/. herdr is the only real backend today.
+mux: herdr
+# Name of the multiplexer group that holds unit spaces. <project> is replaced by the space directory name when the config is loaded.
+units_group: <project>-units
+# Command run in the unit worktree before push and before merge. Exit 0 = pass. Required; no default.
+# gate:
+# Branch that units are rebased onto and merged into.
+base: main
+# How land merges the PR: rebase, squash or merge.
+merge_method: rebase
+# Spec check settings.
+spec:
+  # Globs of spec/contract docs. A diff touching one of them triggers the spec check stage.
+  paths: []
+# Forbidden-pattern scan run by finalize.
+scan:
+  # Regexes that must not appear in added lines; the finalize scan fails on a match. Dialect: jq/Oniguruma regex, matched with jq test().
+  forbidden: []
+  # Globs excluded from the forbidden-pattern scan.
+  exclude: []
+# Per-stage settings.
+stages:
+  # Settings for the final gate stage.
+  final:
+    # Run the final gate on every unit (otherwise only with --final-gate).
+    always: false
+  # Settings for the verify stage (optional keys, unset by default):
+  #   stages.verify.instructions: path to a markdown file with the verify prompt text; unset means the stage is skipped.
+  #   stages.review.instructions: path to a markdown file appended to the review prompt.
+# Maximum review/fix rounds before the unit is parked as STUCK.
+max_rounds: 3
+# Ordered model lists per stage. Bare name = Claude Code; provider/model[:thinking] = pi.
+# The driver starts with the first usable entry and fails over down the list on a usage limit.
+models:
+  # Develop and fix rounds.
+  dev: [sonnet]
+  # Runtime verification of the change.
+  verify: [haiku]
+  # Code review rounds.
+  review: [opus]
+  # Spec check over spec/contract hunks.
+  spec_check: [opus]
+  # Spec writer for GAP / spec-text REMOVE verdicts. Fable while quota allows, then Opus.
+  spec_write: [fable, opus]
+  # Optional final gate.
+  final: [opus]
+# Preflight routing on Claude Code rate-limit snapshots.
+quota:
+  # Skip a Claude entry before it starts when either rate-limit window is at or above this percentage.
+  threshold_pct: 95
+  # Ignore quota snapshots older than this many minutes.
+  max_age_min: 30
+# Usage-limit detection.
+limits:
+  # Regexes matched against an agent's screen to detect that it hit a usage limit. Dialect: jq/Oniguruma regex, matched with jq test().
+  patterns:
+    # Claude Code limit message.
+    claude: 'You.{1,3}ve hit your ([a-z]+ )?limit'
+    # pi has no fixed wording; provider messages vary.
+    pi: '(?i)(rate.?limit|usage limit|quota exceeded|\b429\b)'
+  # Minutes to treat an account or model as limited when the reset time is unknown.
+  cooldown_min: 60
+# Reactive failover after a usage limit.
+failover:
+  # Models tried in order to summarise an interrupted stage into STATUS.md.
+  summarizer: [haiku]
+# Time budgets per stage, in minutes. Exceeding one parks the unit as OVER-BUDGET.
+budgets:
+  # Class S (small) unit.
+  S: 15
+  # Class M (medium) unit.
+  M: 45
+  # Class L (large) unit.
+  L: 90
+  # Fraction of the class budget given to a fix round.
+  fix_fraction: 0.5
+  # Minutes allowed for a check stage (verify, review, spec check, final); the gate is not a stage.
+  check: 30
+# Where units run. Each host has an optional ssh target and a number of concurrent unit slots.
+hosts:
+  # The machine running ship itself.
+  local:
+    # Maximum concurrent units on this host.
+    slots: 2
+# Rulings file, relative to the space root: numbered D<n> entries the lead and briefs quote.
+rulings: notes/decisions.md
+# Issue tracker kickoff writes to: beads or none.
+tracker: none
+# Commands run after a successful merge; {ref}, {pr} and {task} are replaced by the unit ref, the PR number and the unit's tracker id.
+on_land: []
+# Per-role agent profiles (read by ship-role). A project overrides a role by naming it; arrays replace.
+roles:
+  # The lead session.
+  lead:
+    # Claude plugins left enabled in the generated settings; everything else is switched off.
+    plugins_keep: [hyper, beads, papiro]
+  # Develop and fix agents.
+  dev:
+    # Claude plugins left enabled (projects add language servers here).
+    plugins_keep: []
+    # Skills a pi agent is launched with.
+    pi_skills: [affected-tests, rci, receiving-code-review, systematic-debugging, verification-before-completion]
+    # Extensions a pi agent is launched with: a list of {name, flags}.
+    pi_extensions: [{name: pi-lens, flags: [--no-autofix, --no-tests, --no-opengrep]}]
+  # Verify agents.
+  verify:
+    # Claude plugins left enabled.
+    plugins_keep: []
+    # Skills a pi agent is launched with.
+    pi_skills: [verification-before-completion]
+    # Extensions a pi agent is launched with: a list of {name, flags}.
+    pi_extensions: []
+  # Review and final-gate agents.
+  review:
+    # Claude plugins left enabled (projects add language servers here).
+    plugins_keep: []
+    # Skills a pi agent is launched with.
+    pi_skills: [code-review, arch-review]
+    # Extensions a pi agent is launched with: a list of {name, flags}.
+    pi_extensions: []
+  # Spec check and spec writer agents.
+  spec:
+    # Claude plugins left enabled.
+    plugins_keep: []
+    # Skills a pi agent is launched with.
+    pi_skills: []
+    # Extensions a pi agent is launched with: a list of {name, flags}.
+    pi_extensions: []

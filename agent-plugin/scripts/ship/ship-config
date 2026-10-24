@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# ship-config — show or query the merged hyper:ship configuration.
+#
+# Usage:
+#   ship-config [--print]      every key, its value and the file it came from (default)
+#   ship-config --get <key>    one value by dotted key (models.dev, spec.paths, gate)
+#
+# Layers: skills/ship/defaults.yml < ~/.config/hyper/ship.yml
+#         < <space root>/.hyper/ship.yml. Objects merge, arrays replace.
+# The space root comes from $SHIP_SPACE_ROOT when set, else from the hyper CLI.
+#
+# Exit codes:
+#   0  ok (an empty string value prints an empty line and is ok)
+#   1  config error: yq missing or not mikefarah v4, malformed or invalid YAML,
+#      space root undeterminable, or `gate` unset/invalid (--print still prints
+#      everything, with `gate = <unset: required>`, before exiting 1)
+#   2  usage
+#   3  --get on a key that is unset (null or absent)
+set -euo pipefail
+
+# Resolve this script's directory through symlinks (bash 3.2, BSD readlink).
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+_dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+# shellcheck source=lib.sh
+source "$_dir/lib.sh"
+
+mode=print key=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --print) mode=print ;;
+    --get)
+      [[ $# -ge 2 ]] || { echo "ship-config: --get needs a key" >&2; exit 2; }
+      mode=get key="$2"; shift ;;
+    -h|--help) sed -n '2,19p' "$_src" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "ship-config: unknown argument '$1' (try --help)" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+ship_config_load || exit 1
+
+case "$mode" in
+  print)
+    out="$(ship_cfg_print)"
+    if [[ "$(_ship_cfg_type gate)" == null ]]; then
+      out="gate = <unset: required>
+$out"
+    fi
+    printf '%s\n' "$out"
+    ship_require_gate || exit 1 ;;
+  get)
+    if [[ "$key" == gate ]]; then
+      ship_require_gate || exit 1
+    fi
+    rc=0
+    ship_cfg_get "$key" || rc=$?
+    if [[ $rc -eq 3 ]]; then
+      echo "ship-config: '$key' is not set" >&2
+      exit 3
+    fi
+    exit "$rc" ;;
+esac
