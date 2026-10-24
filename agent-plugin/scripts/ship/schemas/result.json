@@ -1,0 +1,39 @@
+{
+  "title": "unit result",
+  "description": "result.json, written by the driver when it exits.",
+  "type": "object",
+  "required": ["ref", "stage", "status", "rounds"],
+  "properties": {
+    "ref": {"type": "string"},
+    "pr": {"type": ["integer", "null"]},
+    "stage": {"type": "string"},
+    "status": {"type": "string", "enum": ["READY", "PARKED", "OVER-BUDGET", "STUCK", "ERROR"]},
+    "rounds": {"type": "array", "items": {"type": "object"}},
+    "spec": {
+      "type": "object",
+      "required": ["verdict", "rounds"],
+      "properties": {
+        "verdict": {"type": "string", "enum": ["NOT_RUN", "SKIP", "ACCEPT", "CHANGES", "GAP", "REMOVE", "BLOCKED"]},
+        "rounds": {"type": "integer"}
+      }
+    },
+    "final": {
+      "type": "object",
+      "properties": {
+        "verdict": {"type": "string", "enum": ["NOT_RUN", "ACCEPT", "CHANGES", "BLOCKED"]},
+        "rounds": {"type": "integer"}
+      }
+    },
+    "specwriter": {
+      "type": "object",
+      "properties": {
+        "runs": {"type": "integer"},
+        "commits": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "finalize": {"type": "object"},
+    "failovers": {"type": "integer"},
+    "host": {"type": "string"},
+    "worktree": {"type": "string"}
+  }
+}

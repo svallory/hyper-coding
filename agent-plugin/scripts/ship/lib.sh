@@ -22,6 +22,10 @@
 # Preflight (ship-loop --preflight) must check `hyper` on PATH unless
 # SHIP_SPACE_ROOT is set, plus ship_require_yq and ship_require_gate.
 #
+# Verdicts
+#   validate_verdict <schema> <file>   jq-only check of a verdict file against a
+#                                      schema in scripts/ship/schemas/ (see the end)
+#
 # Models
 #   ship_model_parse <model>           print "harness<TAB>provider<TAB>model<TAB>thinking"
 #   ship_models_override <stage=a,b>   replace one stage's model list in the loaded config
@@ -345,4 +349,74 @@ ship_models_override() {
   json="$(printf '%s\n' "${models[@]}" | jq -R . | jq -sc .)"
   SHIP_CONFIG_JSON="$(jq -c --arg s "$stage" --argjson l "$json" '.models[$s] = $l' <<<"$SHIP_CONFIG_JSON")" || return 1
   export SHIP_CONFIG_JSON
+}
+
+# Verdict validation
+#   validate_verdict <schema> <file>   check one agent or driver JSON file against
+#                                      a schema in scripts/ship/schemas/. jq only.
+#                                      Returns 0 when valid, 1 when not (every
+#                                      problem on stderr, one per line), 2 on
+#                                      usage errors (missing or unreadable file,
+#                                      invalid JSON).
+#
+# The schema dialect is the JSON Schema subset the schemas use: type (a name or a
+# list of names; "integer" and "number" both accept whole numbers), enum,
+# required, properties, items. Keys the schema does not name are allowed.
+_SHIP_VALIDATE_JQ='
+  def tname: if type == "number" then (if . == floor then "integer" else "number" end) else type end;
+  def tmatch($t):
+    tname as $n
+    | ($t | if type == "array" then . else [.] end)
+    | any(.[]; . == $n or (. == "number" and $n == "integer"));
+  def chk($s; $p):
+    . as $v
+    | (if ($s.type? // null) != null and ($v | tmatch($s.type) | not)
+       then "\($p): expected \($s.type | tostring), got \($v | tname)" else empty end),
+      (if ($s.enum? // null) != null and ($s.enum | index([$v]) | not)
+       then "\($p): \($v | tojson) is not one of \($s.enum | map(tojson) | join(", "))" else empty end),
+      (if ($v | type) == "object" then
+         (($s.required? // [])[] as $k | select($v | has($k) | not) | "\($p): missing required key \($k)"),
+         (($s.properties? // {}) | to_entries[] | select(.key as $k | $v | has($k))
+            | . as $e | $v[$e.key] | chk($e.value; "\($p).\($e.key)"))
+       else empty end),
+      (if ($v | type) == "array" and ($s.items? // null) != null then
+         range(0; $v | length) as $i | $v[$i] | chk($s.items; "\($p)[\($i)]")
+       else empty end);
+  chk($s[0]; "$")
+'
+
+validate_verdict() {
+  local schema="${1:-}" file="${2:-}" errs
+  if [[ -z "$schema" || -z "$file" ]]; then
+    _ship_err "usage: validate_verdict <schema> <file>"
+    return 2
+  fi
+  if [[ ! -f "$schema" ]]; then
+    _ship_err "validate_verdict: schema not found: $schema"
+    return 2
+  fi
+  if [[ ! -f "$file" ]]; then
+    _ship_err "validate_verdict: file not found: $file"
+    return 2
+  fi
+  command -v jq >/dev/null 2>&1 || { _ship_err "jq is required but was not found on PATH"; return 2; }
+  if ! jq -e . "$schema" >/dev/null 2>&1; then
+    _ship_err "validate_verdict: schema is not valid JSON: $schema"
+    return 2
+  fi
+  if ! jq -e . "$file" >/dev/null 2>&1; then
+    _ship_err "validate_verdict: not valid JSON: $file"
+    return 2
+  fi
+  errs="$(jq -r --slurpfile s "$schema" "$_SHIP_VALIDATE_JQ" "$file" 2>&1)" || {
+    _ship_err "validate_verdict: validator failed on $file: $errs"
+    return 2
+  }
+  if [[ -n "$errs" ]]; then
+    while IFS= read -r line; do
+      _ship_err "$(basename "$file") does not match $(basename "$schema"): $line"
+    done <<<"$errs"
+    return 1
+  fi
+  return 0
 }
