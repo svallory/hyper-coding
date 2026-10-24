@@ -165,9 +165,21 @@ roles:
       - {name: "/abs/missing.ts", flags: [--dropped]}
 YAML
 out="$(role spec --harness pi)"
-assert_eq "override replaces skills and extensions; unresolved extension and its flags dropped" \
-  "-ne -ns -np --no-mcp --skill $AG/rci -e $NPM/pi-lens/ext/main.ts --only-this --exclude-tools ask_user" "$out"
-assert_contains "unresolved extension is warned about" "$(role_err spec --harness pi)" "missing.ts"
+assert_eq "unresolved extension: exit 1" 1 "$(role_rc spec --harness pi)"
+assert_contains "unresolved extension is named" "$(role_err spec --harness pi)" "/abs/missing.ts"
+assert_eq "unresolved extension: nothing on stdout" "" "$(role spec --harness pi)"
+cat > "$PROJECT" <<'YAML'
+roles:
+  spec:
+    pi_skills: [rci]
+    pi_extensions:
+      - {name: pi-lens, flags: [--only-this]}
+YAML
+assert_eq "override replaces skills and extensions" \
+  "-ne -ns -np --no-mcp --skill $AG/rci -e $NPM/pi-lens/ext/main.ts --only-this --exclude-tools ask_user" "$(role spec --harness pi)"
+printf 'roles:\n  spec:\n    pi_extensions: [{name: nopkg, flags: []}]\n' > "$PROJECT"
+assert_eq "an uninstalled extension package: exit 1" 1 "$(role_rc spec --harness pi)"
+assert_contains "uninstalled extension is named" "$(role_err spec --harness pi)" "nopkg"
 : > "$FIX/ext.ts"
 printf 'roles:\n  spec:\n    pi_extensions:\n      - {name: "%s", flags: []}\n' "$FIX/ext.ts" > "$PROJECT"
 assert_eq "absolute extension path resolves" \

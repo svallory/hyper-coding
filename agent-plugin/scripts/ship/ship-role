@@ -20,8 +20,8 @@
 #         `--exclude-tools ask_user`. Skills are looked up in ~/.agents/skills,
 #         ~/.claude/skills, then the newest superpowers skills dir; extensions are
 #         packages under ~/.pi/agent/npm/node_modules (or absolute file paths). A
-#         skill that is not found is an error; an extension that is not found is
-#         skipped with a warning, together with its flags. The lead has no pi form.
+#         skill or extension that is not found is an error (exit 1, named). The
+#         lead has no pi form.
 #
 # Output is one line of space-separated arguments on stdout; paths containing
 # spaces are not supported.
@@ -144,7 +144,7 @@ while IFS= read -r name; do
 done < <(jq -r 'if type == "array" then .[] else empty end' <<<"$skills_json")
 [[ $missing -eq 0 ]] || exit 1
 
-# Extensions: [{name, flags[]}]. Flags are dropped with an unresolved extension.
+# Extensions: [{name, flags[]}]. An unresolved extension is an error.
 ext_json="$(_role_json pi_extensions)" || exit 1
 n="$(jq -r 'if type == "array" then length else 0 end' <<<"$ext_json")"
 i=0
@@ -164,11 +164,12 @@ while [[ $i -lt $n ]]; do
   fi
   entries="${entries# }"
   if [[ -z "$entries" ]]; then
-    echo "ship-role: $role: pi extension '$name' not found on this host; skipped${flags:+ (dropped flags: ${flags% })}" >&2
-    continue
+    echo "ship-role: $role: pi extension '$name' not found on this host" >&2
+    missing=1; continue
   fi
   for e in $entries; do args="$args -e $e"; done
   [[ -z "$flags" ]] || args="$args ${flags% }"
 done
 
+[[ $missing -eq 0 ]] || exit 1
 printf '%s\n' "$args --exclude-tools ask_user"
