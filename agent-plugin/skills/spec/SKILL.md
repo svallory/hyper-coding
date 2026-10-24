@@ -43,9 +43,8 @@ time; no questionnaire dump.
 **No one to ask** (autonomous run, or the requester is away): do not silently
 invent answers. Write your best guess, collect every guess under
 `## Assumptions (unconfirmed)`, and set the frontmatter to
-`status: draft - assumptions unconfirmed`. Both gates still apply. Nothing
-built from the spec may be landed while that status stands; the lead
-confirms the assumptions (or logs them as rulings) first.
+`status: draft - assumptions unconfirmed`. Both gates still apply. The lead
+confirms or rules on each unconfirmed assumption before running `kickoff`.
 
 ### define.md format
 
@@ -72,7 +71,9 @@ headings, which `design` and `plan` read by name:
 Do not start part 2, or tell anyone Define is done, while there are no
 acceptance criteria or any criterion is untestable as written. Say which one
 fails and why, and propose a testable rewrite for the requester to accept or
-correct. An untestable definition makes every later phase unverifiable.
+correct. With no one to ask, apply your rewrite and list it under
+`## Assumptions (unconfirmed)`. An untestable definition makes every later
+phase unverifiable.
 
 ## Part 2 - Design
 
@@ -102,6 +103,7 @@ Frontmatter (`feature`, `status`, `phase: design`, `created`, `reads`), then:
 ## Data Model
 ## Risks
 ## Traceability
+## Spec Documents Touched
 ```
 
 - **Architecture** - components, boundaries, how the feature slots into the
@@ -119,15 +121,17 @@ Frontmatter (`feature`, `status`, `phase: design`, `created`, `reads`), then:
 - **Risks** - what could invalidate this design, and the early signal for each.
 - **Traceability** - map from each `AC-n` to the design parts that satisfy
   it. An `AC` with no coverage means the design is incomplete.
-- **Spec documents touched** - if the project keeps contract or design docs
-  (the globs in the ship config key `spec.paths`; read it with `ship-config
-  --get spec.paths`), list every one this design changes. `plan` turns that
-  list into a spec-PR unit that comes first.
+- **Spec Documents Touched** - if the project keeps contract or design docs
+  (the globs in the ship config key `spec.paths`; read it with
+  `${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-config --get spec.paths`), list every file under them
+  this design changes. "None" is allowed. `plan` turns a non-empty list into
+  a spec-PR unit that comes first. If it is missing or fails, use the defaults: rulings `notes/decisions.md`, `spec.paths` empty.
 
 ### Gate 2
 
-Before declaring Design done: every constraint has a stated check, and every
-`AC-n` from `define.md` appears in Traceability. If designing shows that
+Before declaring Design done: every constraint has a stated check, every
+`AC-n` from `define.md` appears in Traceability, and every file under
+`spec.paths` this design changes is listed under Spec Documents Touched. If designing shows that
 `define.md` is wrong or incomplete, fix `define.md` first (with the requester,
 or as a recorded assumption in an autonomous run) and re-pass Gate 1; do not
 paper over it in the design.

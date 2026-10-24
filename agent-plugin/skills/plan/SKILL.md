@@ -18,11 +18,13 @@ in a tracker when the project uses one. If a spec is expected but
 ## Read first
 
 1. `define.md` and `design.md` in full (skip when there is no spec).
-2. The rulings file: the ship config key `rulings` (`ship-config --get
-   rulings`; default `notes/decisions.md`). Entries are `## D<n> - <title>`
+2. The rulings file: the ship config key `rulings`
+   (`${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-config --get rulings`). Entries are `## D<n> - <title>`
    with `Ruling`, `Reason`, `By`, `Status`. Briefs quote the ones they
    depend on; they never paraphrase them.
-3. The spec-paths globs: `ship-config --get spec.paths`.
+3. The spec-paths globs: `${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-config --get spec.paths`.
+   If it is missing or fails, use the defaults: rulings `notes/decisions.md`, `spec.paths` empty.
+   These skills must work in a project with no ship config.
 4. A project-wide common brief at `notes/briefs/common.md`, if one exists.
    Briefs point at it; they do not repeat it.
 
@@ -56,7 +58,7 @@ in a tracker when the project uses one. If a spec is expected but
   depends on.
 - Acceptance is verifiable when that task completes, not "once everything
   else lands".
-- **Spec-PR first.** If `design.md` lists spec documents touched (anything
+- **Spec-PR first.** If `design.md` lists files under Spec Documents Touched (anything
   under `spec.paths`), `T-1` is a unit that lands those document changes
   alone, and every unit that builds on them depends on it.
 - A table of waves (which tasks run together) at the top helps the lead.
@@ -108,7 +110,7 @@ Before telling anyone planning is done, verify and state the evidence for:
 
 1. every `AC-n` in `define.md` is traced by a task (skip when no spec);
 2. no dependency cycle;
-3. every brief has all template sections filled, no `<placeholder>` left outside the verbatim Rules example;
+3. every brief has all template sections filled, no `<placeholder>` left outside the Rules section;
 4. every element in every brief has a named consumer (the gate above);
 5. every ruling quoted in a brief exists in the rulings file with that text.
 

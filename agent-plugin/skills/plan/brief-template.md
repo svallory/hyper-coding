@@ -2,8 +2,8 @@
 
 Copy everything below the line into `notes/briefs/<ref>.md`, fill every
 `<...>`, delete the guidance lines in parentheses, and keep the "Rules" and
-"Verdict file" sections word for word. A brief with a leftover `<...>` is not
-ready. The plan skill's consumer gate and no-fix-hypotheses rules apply.
+"Verdict file" sections word for word. A brief with a leftover `<...>`
+outside the Rules section is not ready. The plan skill's consumer gate and no-fix-hypotheses rules apply.
 
 ---
 
@@ -109,7 +109,10 @@ These apply to every unit. Do not edit them.
    - What is done instead: ...
    ```
 
-   If the justification is not worth writing, follow the spec.
+   If the justification is not worth writing, follow the spec. If the
+   deviation would break another unit's work or a constraint other units rely
+   on, write a QUESTION verdict instead of proceeding. List every deviation in
+   `summary` as well.
 3. **Two failures, then stop.** If the same check fails twice in a row, stop
    changing code. The problem is upstream of the code. Write a BLOCKED
    verdict with what you tried and what you observed. Do not try a third
@@ -117,10 +120,11 @@ These apply to every unit. Do not edit them.
 4. **Questions go in the verdict.** Never ask the operator, and never message
    the lead. If the spec, a ruling or this brief is silent or contradicts
    itself and you cannot proceed, write a QUESTION verdict with the options
-   you see and your recommendation, then stop. Decide small things yourself
-   and record the decision in `summary`.
-5. **Commits.** Conventional commits with a detailed body on your branch.
-   No attribution, AI or session trailers. Do not merge.
+   you see and your recommendation, then stop. If an answer arrives later, continue the work and overwrite the
+   verdict file with your new verdict. Decide small things yourself and record
+   the decision in `summary`.
+5. **Commits.** Commit on your branch following the project's rules file.
+   Do not merge.
 6. **Surface, do not fix, what you notice outside scope.** List it in
    `summary`.
 
@@ -137,7 +141,8 @@ path and schema; this is the contract:
   out of scope.
 - `question` (QUESTION and BLOCKED only) states the problem, the options and
   your recommendation.
-- `pr` and `head` are the pull request URL and head commit when you opened
-  one; otherwise empty.
+- `pr` (PR number) and `head` (short sha) are required for DONE; leave them
+  empty only for BLOCKED/QUESTION. `failovers`: write `0`; the driver
+  maintains it.
 - A file that is missing, malformed or off-schema is an ERROR for the unit.
   Write it only when the work is truly finished or stuck.
