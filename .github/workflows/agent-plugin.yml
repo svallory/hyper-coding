@@ -71,7 +71,8 @@ jobs:
           bash -n agent-plugin/scripts/*.sh
           bash -n agent-plugin/stacks/*/detect.sh
           bash -n agent-plugin/tests/*.sh
-          bash -n agent-plugin/scripts/ship/lib.sh agent-plugin/scripts/ship/ship-config
+          bash -n agent-plugin/scripts/ship/lib.sh agent-plugin/scripts/ship/ship-config \
+            agent-plugin/scripts/ship/ship-role
 
       - name: shellcheck
         run: |
@@ -82,7 +83,8 @@ jobs:
             agent-plugin/stacks/*/detect.sh \
             agent-plugin/tests/*.sh \
             agent-plugin/scripts/ship/lib.sh \
-            agent-plugin/scripts/ship/ship-config
+            agent-plugin/scripts/ship/ship-config \
+            agent-plugin/scripts/ship/ship-role
 
       # The ship scripts need mikefarah yq v4 (preinstalled on ubuntu-latest).
       - name: Check yq
