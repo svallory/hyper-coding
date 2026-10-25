@@ -13,7 +13,7 @@
         "properties": {
           "severity": {"type": "string", "enum": ["BLOCKING", "SHOULD", "NOTE"]},
           "file": {"type": "string"},
-          "line": {"type": "integer"},
+          "line": {"type": ["integer", "null"]},
           "summary": {"type": "string"},
           "fix": {"type": "string"}
         }

@@ -8,7 +8,7 @@
     "pr": {"type": ["integer", "null"]},
     "head": {"type": ["string", "null"]},
     "summary": {"type": "string"},
-    "question": {"type": "string"},
+    "question": {"type": ["string", "null"]},
     "failovers": {"type": "integer"}
   }
 }

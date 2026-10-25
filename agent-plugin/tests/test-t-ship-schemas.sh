@@ -33,6 +33,7 @@ done
 
 # develop (also fix-rN and finalize)
 ok_case develop is-done '{"status":"DONE","pr":12,"head":"abc1234","summary":"did it","failovers":0}'
+ok_case develop done-null-question '{"status":"DONE","pr":1,"head":"a","summary":"s","question":null}'
 ok_case develop question-no-pr '{"status":"QUESTION","pr":null,"head":null,"summary":"s","question":"which?"}'
 bad_case develop enum '{"status":"FINISHED","pr":1,"head":"a","summary":"s"}' '$.status:'
 bad_case develop missing '{"status":"DONE","pr":1,"head":"a"}' '$: missing required key summary'
@@ -49,6 +50,7 @@ bad_case verify nested '{"verdict":"FAIL","summary":"s","failures":[{"what":"w"}
 # review (also final)
 ok_case review accept '{"verdict":"ACCEPT","findings":[]}'
 ok_case review changes '{"verdict":"CHANGES","findings":[{"severity":"BLOCKING","file":"a.sh","line":3,"summary":"s","fix":"f"},{"severity":"NOTE","file":"b.sh","summary":"s","fix":"f"}]}'
+ok_case review null-line '{"verdict":"CHANGES","findings":[{"severity":"NOTE","file":"a","line":null,"summary":"s","fix":"f"}]}'
 bad_case review enum '{"verdict":"GAP","findings":[]}' '$.verdict:'
 bad_case review severity '{"verdict":"CHANGES","findings":[{"severity":"MAJOR","file":"a","summary":"s","fix":"f"}]}' '$.findings[0].severity:'
 bad_case review findings-type '{"verdict":"CHANGES","findings":"none"}' '$.findings:'
@@ -61,6 +63,7 @@ bad_case review no-findings '{"verdict":"ACCEPT"}' '$: missing required key find
 ok_case spec accept '{"verdict":"ACCEPT","findings":[],"gaps":[],"removals":[],"commits":[],"gate":"ok"}'
 ok_case spec remove '{"verdict":"REMOVE","findings":[],"gaps":[],"removals":[{"where":"d.md:4","kind":"spec","what":"the flag","why_no_consumer":"none named"}],"commits":[],"gate":"ok"}'
 ok_case spec gap '{"verdict":"GAP","findings":[],"gaps":[{"where":"d.md","quotes":["a","b"],"question":"q","operator_call":false}],"removals":[],"commits":[],"gate":"ok"}'
+ok_case spec null-line '{"verdict":"CHANGES","findings":[{"severity":"NOTE","file":"a","line":null,"summary":"s","fix":"f"}],"gaps":[],"removals":[],"commits":[],"gate":"g"}'
 bad_case spec enum '{"verdict":"MAYBE","findings":[],"gaps":[],"removals":[],"commits":[],"gate":"g"}' '$.verdict:'
 bad_case spec removal-kind '{"verdict":"REMOVE","findings":[],"gaps":[],"removals":[{"where":"w","kind":"docs","what":"x","why_no_consumer":"y"}],"commits":[],"gate":"g"}' '$.removals[0].kind:'
 bad_case spec removal-missing '{"verdict":"REMOVE","findings":[],"gaps":[],"removals":[{"where":"w","kind":"code","what":"x"}],"commits":[],"gate":"g"}' '$.removals[0]: missing required key why_no_consumer'
@@ -95,11 +98,12 @@ bad_case park enum '{"status":"DONE","stage":"s","agent":"a","question":"q","sin
 bad_case park missing '{"status":"BLOCKED","stage":"s","agent":"a","since":"t"}' '$: missing required key question'
 
 # result (driver-written)
-ok_case result ready '{"ref":"u","pr":7,"stage":"done","status":"READY","rounds":[{"round":1,"verdict":"ACCEPT"}],"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"failovers":0,"host":"local","worktree":"/w"}'
-ok_case result null-pr '{"ref":"u","pr":null,"stage":"develop","status":"PARKED","rounds":[],"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":null,"host":"local","worktree":"/w"}'
-bad_case result status '{"ref":"u","pr":1,"stage":"done","status":"DONE","rounds":[],"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"host":"local","worktree":"/w"}' '$.status:'
-bad_case result spec '{"ref":"u","pr":1,"stage":"done","status":"READY","rounds":[],"spec":{"verdict":"MAYBE","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"host":"l","worktree":"/w"}' '$.spec.verdict:'
-bad_case result rounds '{"ref":"u","pr":1,"stage":"done","status":"READY","rounds":{},"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"host":"local","worktree":"/w"}' '$.rounds:'
+ok_case result ready '{"ref":"u","pr":7,"stage":"done","status":"READY","rounds":[{"round":1,"verdict":"ACCEPT"}],"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"host":"local","failovers":0,"worktree":"/w"}'
+ok_case result null-pr '{"ref":"u","pr":null,"stage":"develop","status":"PARKED","rounds":[],"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":null,"host":"local","failovers":0,"worktree":"/w"}'
+bad_case result status '{"ref":"u","pr":1,"stage":"done","status":"DONE","rounds":[],"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"host":"local","failovers":0,"worktree":"/w"}' '$.status:'
+bad_case result spec '{"ref":"u","pr":1,"stage":"done","status":"READY","rounds":[],"spec":{"verdict":"MAYBE","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"host":"l","failovers":0,"worktree":"/w"}' '$.spec.verdict:'
+bad_case result rounds '{"ref":"u","pr":1,"stage":"done","status":"READY","rounds":{},"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"host":"local","failovers":0,"worktree":"/w"}' '$.rounds:'
+bad_case result no-failovers '{"ref":"u","pr":1,"stage":"done","status":"READY","rounds":[],"spec":{"verdict":"SKIP","rounds":0},"final":{"verdict":"NOT_RUN","rounds":0},"specwriter":{"runs":0,"commits":[]},"finalize":{},"host":"l","worktree":"/w"}' '$: missing required key failovers'
 bad_case result no-host '{"ref":"u","pr":1,"stage":"done","status":"READY","rounds":[]}' '$: missing required key host'
 
 # validate_verdict edge cases
@@ -110,9 +114,9 @@ assert_eq "missing file returns 2" "2" "$(validate_verdict "$SCHEMAS/review.json
 assert_eq "missing schema returns 2" "2" "$(validate_verdict "$SCHEMAS/nope.json" "$D/garbage.json" 2>/dev/null; echo $?)"
 assert_eq "no arguments returns 2" "2" "$(validate_verdict 2>/dev/null; echo $?)"
 printf '[]' > "$D/array.json"
-assert_fails "a top-level array is rejected" validate_verdict "$SCHEMAS/review.json" "$D/array.json" 2>/dev/null
+assert_eq "a top-level array is rejected with rc 1" "1" "$(validate_verdict "$SCHEMAS/review.json" "$D/array.json" 2>/dev/null; echo $?)"
 printf '"ACCEPT"' > "$D/string.json"
-assert_fails "a top-level string is rejected" validate_verdict "$SCHEMAS/review.json" "$D/string.json" 2>/dev/null
+assert_eq "a top-level string is rejected with rc 1" "1" "$(validate_verdict "$SCHEMAS/review.json" "$D/string.json" 2>/dev/null; echo $?)"
 printf '{"verdict":"ACCEPT","findings":[],"extra":{"x":1}}' > "$D/extra.json"
 assert_ok "unnamed keys are allowed" validate_verdict "$SCHEMAS/review.json" "$D/extra.json"
 printf '{"verdict":"CHANGES","findings":[{"severity":"X","file":1,"summary":"s","fix":"f"}]}' > "$D/multi.json"
@@ -142,17 +146,9 @@ assert_eq "no model names in prompts and schemas" "" "$leaks"
 # each prompt's example JSON, filled with realistic values, validates ------------
 # example_of <prompt> — the example line, first enum alternative picked, ints filled
 example_of() {
-  python3 -I - "$PROMPTS/$1.md" <<'PY'
-import re, sys
-for line in open(sys.argv[1]):
-    if line.startswith('{"'):
-        line = re.sub(r'"([A-Za-z_-]+(?:\|[A-Za-z_-]+)+)"', lambda m: '"' + m.group(1).split('|')[0] + '"', line)
-        line = re.sub(r'<int[^>]*>', '3', line)
-        line = re.sub(r'<true[^>]*>', 'false', line)
-        line = line.replace('{pr}', '7')
-        print(line.strip())
-        break
-PY
+  jq -Rr 'select(startswith("{\""))
+    | gsub("\"(?<a>[A-Za-z_-]+)(\\|[A-Za-z_-]+)+\""; "\"\(.a)\"")
+    | gsub("<int[^>]*>"; "3") | gsub("<true[^>]*>"; "false") | gsub("\\{pr\\}"; "7")' "$PROMPTS/$1.md" | head -n 1
 }
 for pair in develop:develop fix:develop verify:verify review:review final:review spec:spec specwriter:specwriter; do
   pr="${pair%%:*}"; sc="${pair##*:}"
