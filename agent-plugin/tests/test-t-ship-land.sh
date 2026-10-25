@@ -46,11 +46,15 @@ cat > "$FIX/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 echo "$PWD :: $*" >> "$GH_LOG"
 case "$1 $2" in
-  "pr list") printf '%s\n' "${GH_PR:-}" ;;
-  "pr view")
-    # MERGED once the branch tip is an ancestor of the remote main
+  "pr list")
+    # like gh: only open PRs are listed. A merged one is not.
     b="$(git branch --show-current)"
-    if git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then echo MERGED; else echo OPEN; fi ;;
+    if git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then echo ""; else printf '%s\n' "${GH_PR:-}"; fi ;;
+  "pr view")
+    # `pr view <number|branch> --json ... -q .number|.state`
+    b="$(git branch --show-current)"
+    if git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then st=MERGED; else st=OPEN; fi
+    case "$*" in *"-q .number"*) printf '%s\n' "${GH_PR:?gh stub: GH_PR not set}" ;; *) echo "$st" ;; esac ;;
   "pr merge")
     [[ -z "${GH_MERGE_FAIL:-}" ]] || { echo "gh: merge failed" >&2; exit 1; }
     b="$(git branch --show-current)"
@@ -268,14 +272,16 @@ rc="$(GH_MERGE_FAIL=1 land u7)"
 assert_eq "a failed merge exits 1 and keeps the unit" "1" "$rc"
 assert_eq "...the worktree stays" "yes" "$([[ -d "$SPACE/worktrees/u7" ]] && echo yes || echo no)"
 
-# a failing on_land command does not skip the teardown
+# a failing on_land command stops the land before the teardown; the rerun resumes
 write_cfg 'on_land: ["exit 7"]
 '
 rc="$(land u7)"
 assert_eq "a failing on_land command exits 1" "1" "$rc"
 assert_contains "...naming the command" "$(cat "$FIX/land.err")" "on_land command failed: exit 7"
-assert_eq "...but the unit is torn down" "no" "$([[ -d "$SPACE/worktrees/u7" ]] && echo yes || echo no)"
+assert_eq "...the teardown has not run" "yes" "$([[ -d "$SPACE/worktrees/u7" ]] && echo yes || echo no)"
 write_cfg
+assert_eq "...and the rerun (PR already merged) finishes the unit" "0" "$(land u7)"
+assert_eq "...torn down" "no" "$([[ -d "$SPACE/worktrees/u7" ]] && echo yes || echo no)"
 
 # 6: the PR number falls back to gh -------------------------------------------------------
 mk_unit u8 108
@@ -317,6 +323,15 @@ assert_contains "...naming the missing key" "$(cat "$FIX/land.err")" "rounds"
 assert_eq "...no merge" "$m0" "$(merges)"
 assert_eq "...--force lands it with a warning" "0" "$(land u13 --force)"
 assert_contains "...warning on stderr" "$(cat "$FIX/land.err")" "does not match the result schema"
+
+# a merged PR is found by gh pr view even though gh pr list shows only open ones
+mk_unit u8b 188
+jq '.pr = null' "$SPACE/notes/loops/u8b/result.json" > "$FIX/r.json" && mv "$FIX/r.json" "$SPACE/notes/loops/u8b/result.json"
+git -C "$REMOTE" update-ref refs/heads/main "$(git -C "$REMOTE" rev-parse refs/heads/u8b)"
+m0="$(merges)"
+rc="$(GH_PR=909 land u8b)"
+assert_eq "a null pr whose PR is already merged is looked up (gh pr view) and finished" "0" "$rc"
+assert_eq "...without merging again" "$m0" "$(merges)"
 
 # 8: usage -------------------------------------------------------------------------------
 assert_eq "no ref is a usage error (2)" "2" "$(land)"
@@ -561,6 +576,36 @@ assert_eq "land with a truncated mux.json is refused before the merge (1)" "1" "
 assert_eq "...no merge" "$m0" "$(merges)"
 git -C "$G" worktree remove --force "$SPACE/worktrees/u31"
 git -C "$G" worktree remove --force "$SPACE/worktrees/u32"
+
+# on_land runs each command exactly once across a failed teardown and its rerun
+CNT="$FIX/count.log"; rm -f "$CNT"
+fresh_fake
+write_cfg 'on_land: ["echo first >> '"$CNT"'", "echo second-{ref}-{task} >> '"$CNT"'"]
+'
+mk_unit u40 140
+advance_main fifteen
+rc="$(WT_FAIL=1 land u40 --task T-40)"
+assert_eq "run 1 fails at the worktree removal" "1" "$rc"
+assert_eq "...both on_land commands ran once" "first second-u40-T-40" "$(tr '\n' ' ' <"$CNT" | sed 's/ $//')"
+assert_eq "...and are on the done list" "2" "$(wc -l <"$SPACE/notes/loops/u40/on_land.done" | tr -d ' ')"
+rc="$(land u40 --task T-40)"
+assert_eq "the rerun completes" "0" "$rc"
+assert_eq "...and no on_land command ran twice" "first second-u40-T-40" "$(tr '\n' ' ' <"$CNT" | sed 's/ $//')"
+# a failing command stops the list; the rerun resumes at it
+rm -f "$CNT" "$FIX/ok"
+write_cfg 'on_land: ["echo one >> '"$CNT"'", "test -f '"$FIX"'/ok && echo two >> '"$CNT"'", "echo three >> '"$CNT"'"]
+'
+mk_unit u41 141
+advance_main sixteen
+rc="$(land u41)"
+assert_eq "an on_land command that fails stops the list (1)" "1" "$rc"
+assert_eq "...only the first ran" "one" "$(tr '\n' ' ' <"$CNT" | sed 's/ $//')"
+assert_eq "...the unit is not torn down" "yes" "$(exists_word "$SPACE/worktrees/u41")"
+touch "$FIX/ok"
+rc="$(land u41)"
+assert_eq "after the fix the rerun resumes at the failed command" "0" "$rc"
+assert_eq "...each command ran exactly once" "one two three" "$(tr '\n' ' ' <"$CNT" | sed 's/ $//')"
+write_cfg
 
 # 12: nothing in the new files names the space -------------------------------------------
 # The pattern is built from pieces so this file does not contain the names itself.

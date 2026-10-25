@@ -230,7 +230,8 @@ fi
 pr=""
 if [[ -f "$result" ]]; then pr="$(jq -r '.pr // ""' "$result" 2>/dev/null)" || pr=""; fi
 if [[ -z "$pr" ]]; then
-  pr="$(cd "$wt_path" && gh pr list --head "$branch" --json number -q '.[0].number // empty')" || pr=""
+  # pr view, not pr list: list only shows open PRs, and a merged one is a rerun.
+  pr="$(cd "$wt_path" && gh pr view "$branch" --json number -q .number 2>/dev/null)" || pr=""
 fi
 [[ -n "$pr" ]] || fail "no open PR for branch $branch"
 [[ "$pr" =~ ^[0-9]+$ ]] || fail "PR number '$pr' is not a number"
@@ -349,21 +350,33 @@ fi
 fi   # PR not yet merged
 
 # --- 6. on_land -------------------------------------------------------------------------
-land_bad=0
+# Each command that succeeds is recorded in on_land.done (index and text), so a
+# rerun after a failed teardown never runs it twice; a failure stops here and the
+# rerun resumes at that command.
+done_file="$loop_dir/on_land.done"
+mkdir -p "$loop_dir"
+idx=0
 while IFS= read -r cmd; do
+  idx=$((idx + 1))
   [[ -n "$cmd" ]] || continue
   cmd="${cmd//\{ref\}/$ref}"
   cmd="${cmd//\{pr\}/$pr}"
   cmd="${cmd//\{task\}/$task}"
+  entry="$idx $cmd"
+  if [[ -f "$done_file" ]] && grep -qxF -- "$entry" "$done_file"; then
+    say "on_land: already done: $cmd"
+    continue
+  fi
   if (CDPATH='' cd -- "$root" && bash -c "$cmd"); then
+    printf '%s\n' "$entry" >>"$done_file"
     say "on_land: $cmd"
   else
-    echo "ship-land: on_land command failed: $cmd" >&2; land_bad=1
+    echo "ship-land: on_land command failed: $cmd" >&2
+    fail "$ref is merged but an on_land command failed; fix it and rerun 'ship-land $ref' to resume from that command (the teardown has not run)"
   fi
 done < <(jq -r '.[]' <<<"$on_land")
 
 # --- 7. teardown ------------------------------------------------------------------------
 unlock_dir "$lock"; trap - EXIT
 teardown
-[[ $land_bad -eq 0 ]] || fail "$ref is merged and torn down, but an on_land command failed (see above)"
 say "$ref landed"
