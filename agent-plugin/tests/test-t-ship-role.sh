@@ -57,7 +57,7 @@ assert_eq "lead keeps papiro" true "$(plug lead papiro@tutor)"
 assert_eq "lead switches gopls-lsp off" false "$(plug lead gopls-lsp@claude-plugins-official)"
 assert_eq "lead switches playwright off" false "$(plug lead playwright@claude-plugins-official)"
 assert_eq "an already-off plugin stays off" false "$(plug lead off-already@tutor)"
-assert_eq "profile holds only enabledPlugins and env (no statusLine, no model)" '["enabledPlugins","env"]' \
+assert_eq "profile holds only enabledPlugins, env and statusLine (no model)" '["enabledPlugins","env","statusLine"]' \
   "$(jq -c 'keys' "$OUTDIR/lead.json")"
 assert_eq "same plugin keys as the host" \
   "$(jq -cS '.enabledPlugins | keys' "$HS")" "$(jq -cS '.enabledPlugins | keys' "$OUTDIR/lead.json")"
@@ -108,6 +108,33 @@ printf 'roles:\n  review:\n    plugins_keep: [playwright]\n' > "$USER_CFG"
 role review --harness claude >/dev/null
 assert_eq "user config layer overrides the default" true "$(plug review playwright@claude-plugins-official)"
 rm -f "$USER_CFG"
+
+# C6: statusLine is the quota tap wrapping the host's command ---------------------
+TAP="$SCRIPTS_DIR/ship/ship-quota-tap"
+role dev --harness claude >/dev/null
+assert_eq "statusLine is a command" command "$(jq -r .statusLine.type "$OUTDIR/dev.json")"
+assert_eq "statusLine runs the tap, wrapping the host command" "'$TAP' --original 'echo hi'" \
+  "$(jq -r .statusLine.command "$OUTDIR/dev.json")"
+for r in lead verify review spec; do
+  role "$r" --harness claude >/dev/null
+  assert_contains "$r: statusLine runs the tap" "$(jq -r .statusLine.command "$OUTDIR/$r.json")" "$TAP"
+done
+# The command string works as written, quotes in the original included.
+jq '.statusLine = {"type":"command","command":"printf \"%s|it'"'"'s\" \"$(cat)\"","padding":3}' "$HS" > "$HS.new" && mv "$HS.new" "$HS"
+role dev --harness claude >/dev/null
+assert_eq "other statusLine keys of the host are kept" 3 "$(jq -r .statusLine.padding "$OUTDIR/dev.json")"
+assert_eq "the generated command pipes stdin to a quoted original" '{"a":1}|it'"'"'s' \
+  "$(printf '%s' '{"a":1}' | SHIP_QUOTA_DIR="$FIX/quota-role" sh -c "$(jq -r .statusLine.command "$OUTDIR/dev.json")")"
+# A project statusLine wins over the host's; no statusLine anywhere = the tap alone.
+mkdir -p "$CWD/.claude"
+printf '{"statusLine":{"type":"command","command":"echo project"}}\n' > "$CWD/.claude/settings.json"
+role dev --harness claude >/dev/null
+assert_eq "the project layer's statusLine is the one wrapped" "'$TAP' --original 'echo project'" \
+  "$(jq -r .statusLine.command "$OUTDIR/dev.json")"
+rm -f "$CWD/.claude/settings.json"
+jq 'del(.statusLine)' "$HS" > "$HS.new" && mv "$HS.new" "$HS"
+role dev --harness claude >/dev/null
+assert_eq "no host statusLine: the tap runs alone" "'$TAP'" "$(jq -r .statusLine.command "$OUTDIR/dev.json")"
 
 # C5: --host-settings, missing/invalid host settings ----------------------------
 printf '{"enabledPlugins":{"x@y":true,"hyper@z":true}}\n' > "$FIX/other.json"

@@ -58,9 +58,12 @@
 # it; every other agent stage gets budgets.check. The clock is wall time since the
 # stage's prompt was sent, without the time the unit was parked.
 #
-# Failover: the two hooks below (model_pick, failover_on_limit) walk each stage's
-# model list from its first entry and park LIMIT when an agent hits a usage limit.
-# Preflight routing and reactive failover replace them later.
+# Failover: every agent start goes through model_pick, which walks the stage's model
+# list with preflight routing (pick_model in lib.sh: limited.json, the quota snapshot,
+# pi never skipped); each skipped entry writes failover-N.json (reason preflight).
+# A list with nothing usable parks LIMIT (resets_at when known). failover_on_limit,
+# the reaction to a limit seen while a stage runs, still parks LIMIT; reactive
+# failover replaces it later.
 #
 # Environment (test knobs): SHIP_POLL_S (poll interval, default 2), SHIP_IDLE_GRACE_S
 # (seconds an idle agent without a verdict is left alone before a nudge, default 1200),
@@ -228,8 +231,14 @@ if [[ -s "$STATE/models.override" ]]; then
 fi
 
 # --- failover hooks -----------------------------------------------------------------------------
-# model_pick <list key> — the model to launch for a stage. Walks the list from its first entry.
-model_pick() { jq -r --arg k "$1" '.models[$k][0]' <<<"$SHIP_CONFIG_JSON"; }
+# model_pick <list key> <agent name> — the model to launch for a stage: sets PICK_MODEL. Walks the
+# list from its first entry, skipping what preflight rules out (pick_model, lib.sh). Returns 2 when
+# nothing is usable (PICK_RESETS_AT may say when), 1 on a config error. Not for use in $( ).
+model_pick() {
+  local round=0
+  [[ "$2" =~ -r([0-9]+)$ ]] && round="${BASH_REMATCH[1]}"
+  pick_model "$1" "$2" "$STAGE" "$round"
+}
 # failover_on_limit <agent> <stage> <verdict file> <matched text> — an agent hit a usage limit.
 # With nothing to fail over to, the unit parks.
 failover_on_limit() {
@@ -309,13 +318,14 @@ over_budget() { # stage agent file budget_min elapsed_s
 }
 
 # --- parking ------------------------------------------------------------------------------------
-park() { # status stage agent question [verdict-file]
+park() { # status stage agent question [verdict-file [resets_at]]
   local n=1 q
   while [[ -e "$STATE/park-$n.json" ]]; do n=$((n + 1)); done
   q="$4"
   write_json "$STATE/park.json" "$(jq -n --arg st "$1" --arg stage "$2" --arg agent "$3" --arg q "$q" \
-    --arg since "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg file "${5:-}" --argjson n "$n" \
-    '{status:$st, stage:$stage, agent:$agent, question:$q, since:$since, n:$n, file:$file}')"
+    --arg since "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg file "${5:-}" --arg resets "${6:-}" --argjson n "$n" \
+    '{status:$st, stage:$stage, agent:$agent, question:$q, since:$since, n:$n, file:$file}
+     + (if $resets == "" then {} else {resets_at:$resets} end)')"
   check_verdict park "$STATE/park.json"
   log "PARKED $1 $2: $3 — $(tr '\n\t' '  ' <<<"$q" | tr -s ' ' | cut -c1-300)"
   finish 2 "$2" PARKED "$(jq -c '{park:.}' "$STATE/park.json")"
@@ -355,8 +365,16 @@ agent_harness() { jq -r '.harness // "claude"' "$STATE/agents/$1.json" 2>/dev/nu
 
 # start_agent <name> <role> <model list key> — a fresh agent in the unit space; sets A_ID.
 start_agent() {
-  local name="$1" role="$2" key="$3" model harness rout rargs=() args=() out uuid session
-  model="$(model_pick "$key")" || return 1
+  local name="$1" role="$2" key="$3" model resets harness rout rargs=() args=() out uuid session
+  model_pick "$key" "$name"
+  case $? in
+    0) model="$PICK_MODEL" ;;
+    2)
+      resets=""
+      [[ -z "$PICK_RESETS_AT" ]] || resets="$(jq -nr --argjson t "$PICK_RESETS_AT" '$t | todate')"
+      park LIMIT "$STAGE" "$name" "every model for $key is limited or over its quota threshold (see failover-*.json); nothing to start $name with. Wait for the reset${resets:+ ($resets)}, or resume with a models.override" "" "$resets" ;;
+    *) return 1 ;;
+  esac
   harness="$(ship_model_parse "$model" | cut -f1)" || return 1
   rout="$("$ROLE_BIN" "$role" --harness "$harness" --cwd "$WT" 2>>"$LOG")" || { log "ship-role $role failed for $name"; return 1; }
   read -r -a rargs <<<"$rout"
@@ -598,6 +616,7 @@ if [[ -z "$DEV_ID" || "$L_STATE" == gone ]]; then
     done
     [[ -z "$_old" ]] || log "archived the previous run's results to $_old"
   fi
+  STAGE=develop
   start_agent "$DEV" dev dev || die_error "dev agent did not start; see loop.log"
   DEV_ID="$A_ID"
   log "dev $DEV is $DEV_ID in space $SPACE_ID"
@@ -829,7 +848,8 @@ do_review() {
   if [[ ! -e "$rf.sent" ]] || sent_after_result "$rf"; then
     diff_sig >"$STATE/review-r$r.sig"
   fi
-  rtext="$(prompt review round="$r" skill_call="$(skill_call code-review "$(model_pick review)")" prior="$prior" \
+  pick_model --dry review
+  rtext="$(prompt review round="$r" skill_call="$(skill_call code-review "$PICK_MODEL")" prior="$prior" \
     review_instructions="$(file_text "$REVIEW_INSTR_FILE")" verdict_file="$rf")"
   fresh_step "$(aname "-review-r$r")" review review "$rf" "$rtext" review "$(budget_min check "$rf")" review
   RV_VERDICT="$(jq -r .verdict "$rf")"; RV_N="$(jlen "$rf" findings)"
