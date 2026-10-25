@@ -28,6 +28,7 @@ while :; do
     [[ -f "$src" ]] || src="$script/$b"
     [[ -f "$src" ]] || continue
     if [[ -x "$script/$b.hook" ]]; then "$script/$b.hook" || true; fi
+    [[ -z "${STUB_DELAY:-}" ]] || sleep "$STUB_DELAY"
     cp "$src" "$f.tmp" && mv "$f.tmp" "$f"
     echo "$next" >"$script/.done/$b"
   done

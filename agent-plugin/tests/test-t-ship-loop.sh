@@ -765,6 +765,23 @@ check_result t35 "a marker one second newer" 0 READY
 assert_eq "fresh: the verdict was reused, its reviewer never started" "0" "$(starts_of t35-review-r1)"
 assert_eq "fresh: so the CHANGES verdict led to a fix round" "CHANGES" "$(res t35 '.rounds[0].verdict')"
 
+
+# --- 34: a verdict written while the driver is still looking things up is picked up, not prompted over --------------------------------------
+# The stub answers 0.3 s after it sees a prompt marker, and `list` takes 0.4 s: the verdict lands between the
+# driver's "is it there yet" check and its look at the agent. The driver used to delete it and prompt again.
+reset_fake; unit t36
+script t36 develop.json.1 '{"status":"QUESTION","pr":null,"head":null,"summary":"s","question":"Q?"}'
+script t36 develop.json.2 "$DEV_DONE"; script t36 review-r1.json "$REV_OK"
+export SHIP_LOOP_MUX="$TESTS_DIR/fixtures/ship/slowmux" SLOWMUX_REAL="$SCRIPTS_DIR/ship/ship-mux"
+BUD_S=0.5; write_cfg
+STUB_DELAY=0.3 stub_start t36; run_loop t36
+check_result t36 "slow lookup: question" 2 PARKED
+printf 'Yes.\n' >"$(st t36)/answer-1.md"
+run_loop t36; stub_stop
+check_result t36 "slow lookup: answered" 0 READY
+assert_eq "slow lookup: develop was prompted twice, not three times" "2" "$(wc -l <"$(st t36)/develop.json.sent" | tr -d ' ')"
+unset SHIP_LOOP_MUX SLOWMUX_REAL; BUD_S=10; write_cfg
+
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"
 assert_eq "C-2: no messaging, Monitor or watchdog in ship-loop" "" "$(grep -nE 'SendMessage|claude-link|hyper msg|Monitor|stall' "$LOOP")"

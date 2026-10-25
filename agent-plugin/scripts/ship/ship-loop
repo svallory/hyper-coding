@@ -78,7 +78,7 @@ case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
 SHIP_DIR="$(CDPATH='' cd -- "$_dir" && pwd -P)"
 # shellcheck source=lib.sh
 source "$SHIP_DIR/lib.sh"
-MUX="$SHIP_DIR/ship-mux"
+MUX="${SHIP_LOOP_MUX:-$SHIP_DIR/ship-mux}" # SHIP_LOOP_MUX: a test seam
 ROLE_BIN="$SHIP_DIR/ship-role"
 PROMPTS="$SHIP_DIR/prompts"
 SCHEMAS="$SHIP_DIR/schemas"
@@ -412,7 +412,12 @@ mtime_s() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
 fresh_result() {
   local f="$1"
   valid_json "$f" && [[ -e "$f.sent" ]] || return 1
-  [[ $(( $(mtime_s "$f.sent") - $(mtime_s "$f") )) -le 1 ]]
+  ! sent_after_result "$f"
+}
+# sent_after_result <file> — the file exists and its prompt marker is more than a second newer
+sent_after_result() {
+  [[ -e "$1" && -e "$1.sent" ]] || return 1
+  [[ $(( $(mtime_s "$1.sent") - $(mtime_s "$1") )) -gt 1 ]]
 }
 
 # limit_hit <agent name> <agent id> — print the matching screen line when the agent shows its harness's limit text
@@ -473,7 +478,10 @@ run_step() {
   if fresh_result "$file"; then log "$name: reusing $(basename "$file")"; return 0; fi
   agent_lookup "$name"; id="$L_ID"
   [[ -n "$id" ]] || die_error "agent $name is not running"
-  if [[ -e "$file.sent" && ! -e "$file" ]] && agent_state "$id" && [[ "$L_STATE" != gone ]]; then
+  # The agent may write its verdict while the lookup above runs, so decide again from what is on disk
+  # now: a verdict that is not older than its prompt is simply picked up (await_file returns at once).
+  if fresh_result "$file"; then log "$name: reusing $(basename "$file")"; return 0; fi
+  if [[ -e "$file.sent" ]] && ! sent_after_result "$file" && agent_state "$id" && [[ "$L_STATE" != gone ]]; then
     log "reattaching to $name for $(basename "$file")"
   else
     [[ ! -e "$file" ]] || log "$name: $(basename "$file") is older than its prompt; prompting again"
