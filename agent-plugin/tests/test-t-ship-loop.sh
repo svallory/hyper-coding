@@ -100,7 +100,9 @@ res() { jq -r "$2" "$(st "$1")/result.json"; } # ref filter
 check_result() { # ref desc exit status
   if [[ "$RC" != "$3" ]]; then
     echo "# $2: driver.err: $(cat "$(st "$1")/driver.err" 2>/dev/null)" >&2
-    tail -n 6 "$(st "$1")/loop.log" 2>/dev/null | sed 's/^/# loop.log: /' >&2
+    tail -n 25 "$(st "$1")/loop.log" 2>/dev/null | sed 's/^/# loop.log: /' >&2
+    (cd "$(st "$1")" && for f in *.sent; do [ -e "$f" ] && echo "# $f: $(wc -l <"$f" | tr -d ' ') line(s)"; done; ls -l --time-style=full-iso . 2>/dev/null | sed 's/^/# ls: /') >&2
+    for f in "$FIX/scripts/$1/.done"/*; do [ -e "$f" ] && echo "# stub done $(basename "$f")=$(cat "$f")" >&2; done
   fi
   assert_eq "$2: exit code" "$3" "$RC"
   assert_eq "$2: result.json status" "$4" "$(res "$1" .status)"
