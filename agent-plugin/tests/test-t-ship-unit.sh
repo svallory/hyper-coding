@@ -115,8 +115,13 @@ map() { # a "host:path" is on the host; relative host paths are under its HOME
 }
 src="$(map "${args[0]}")"; dst="$(map "${args[1]}")"
 # Real rsync tolerates two clients writing the same tree; this stub's cp does not.
-until mkdir "$FIX/rsync.lock" 2>/dev/null; do sleep 0.02; done
-trap 'rmdir "$FIX/rsync.lock"' EXIT
+until mkdir "$FIX/rsync.lock" 2>/dev/null; do
+  lp="$(cat "$FIX/rsync.lock/pid" 2>/dev/null)"
+  if [[ -n "$lp" ]] && ! kill -0 "$lp" 2>/dev/null; then rm -f "$FIX/rsync.lock/pid"; rmdir "$FIX/rsync.lock" 2>/dev/null; fi
+  sleep 0.02
+done
+echo $$ > "$FIX/rsync.lock/pid"
+trap 'rm -f "$FIX/rsync.lock/pid"; rmdir "$FIX/rsync.lock"' EXIT
 if [[ -d "$src" ]]; then
   mkdir -p "$dst"
   [[ "$(cd "$src" && pwd -P)" != "$(cd "$dst" && pwd -P)" ]] || exit 0
@@ -149,7 +154,7 @@ mode="$(cat "$FIX/mode.$ref")"
 case "$mode" in
   ready) ready ;;
   error) result ERROR; exit 1 ;;
-  hold) for _ in $(seq 1 600); do [[ -e "$FIX/release.$ref" ]] && ready; sleep 0.1; done; exit 1 ;;
+  hold) for _ in $(seq 1 3000); do [[ -e "$FIX/release.$ref" ]] && ready; sleep 0.1; done; exit 1 ;;
   park|park3|parklimit|parkdialog)
     pn=1; st=QUESTION
     [[ "$mode" == park3 ]] && pn=3
@@ -228,6 +233,11 @@ wait_for() { # seconds command...
   while ! "$@" 2>/dev/null; do sleep 0.1; i=$((i + 1)); [[ $i -lt $((t * 10)) ]] || return 1; done
 }
 exists() { [[ -e "$1" ]]; }
+# refused <tag> <tag> — one of the two background runs has ended with 3.
+refused() { [[ "$(cat "$FIX/bg.$1.rc" 2>/dev/null)" == 3 || "$(cat "$FIX/bg.$2.rc" 2>/dev/null)" == 3 ]]; }
+diag() { { echo "diag: locks and processes"; ls -d "$HOSTSPACE"/.hyper/* "$FIX"/rsync.lock* "$FIX"/bg.*.rc 2>&1; ps -ax -o pid,command | grep -E 'ship-(unit|loop)|rsync|loop-stub' | grep -v grep | cut -c1-140; } | sed 's/^/# /' >&2; }
+# pair_ok <a> <b> — one ended with 3, the other has not ended; diag on a miss.
+pair_ok() { { [[ "$1/$2" == "3/" ]] || [[ "$1/$2" == "/3" ]]; } && echo yes || { diag; echo no; }; }
 gone() { [[ ! -e "$1" ]]; }
 # bg <tag> args... — a ship-unit in the background; bgrc <tag> waits for it and prints its code.
 bg() { local tag="$1"; shift; ( bash "$UNIT" "$@" >"$FIX/bg.$tag.out" 2>"$FIX/bg.$tag.err"; echo $? >"$FIX/bg.$tag.rc" ) & BGPID=$!; }
@@ -443,11 +453,11 @@ rm_loops "$SPACE"; rm_loops "$HOSTSPACE"
 mode c1 hold; mode c2 hold
 bg c1 run c1 --brief "$BRIEF" --class S --host box
 bg c2 run c2 --brief "$BRIEF" --class S --host box
-wait_for 120 test -s "$FIX/bg.c1.rc" -o -s "$FIX/bg.c2.rc"
+wait_for 120 refused c1 c2
 sleep 0.3
 for t in c1 c2; do sed "s/^/# bg $t: /" "$FIX/bg.$t.err" >&2; done
 rc1="$(cat "$FIX/bg.c1.rc" 2>/dev/null)"; rc2="$(cat "$FIX/bg.c2.rc" 2>/dev/null)"
-assert_eq "two concurrent runs at slots=1: one is refused (3), the other is running" "yes" "$( { [[ "$rc1/$rc2" == "3/" ]] || [[ "$rc1/$rc2" == "/3" ]]; } && echo yes)"
+assert_eq "two concurrent runs at slots=1: one is refused (3), the other is running" "yes" "$(pair_ok "$rc1" "$rc2")"
 assert_eq "...and only one driver was started" "1" "$(mux_count run "$FIX/hostfake.log" | awk '{print ($1 > 0) ? 1 : 0}')"
 if [[ "$rc1" == 3 ]]; then winner=c2; else winner=c1; fi
 release "$winner"
@@ -473,10 +483,10 @@ mkdir -p "$HOSTSPACE/.hyper/ship-unit.lock"; echo 99999999 > "$HOSTSPACE/.hyper/
 mode k1 hold; mode k2 hold
 bg k1 run k1 --brief "$BRIEF" --class S --host box
 bg k2 run k2 --brief "$BRIEF" --class S --host box
-wait_for 120 test -s "$FIX/bg.k1.rc" -o -s "$FIX/bg.k2.rc"
+wait_for 120 refused k1 k2
 sleep 0.3
 rk1="$(cat "$FIX/bg.k1.rc" 2>/dev/null)"; rk2="$(cat "$FIX/bg.k2.rc" 2>/dev/null)"
-assert_eq "crashed lock holder, two waiters at slots=1: one is refused (3), the other is running" "yes" "$( { [[ "$rk1/$rk2" == "3/" ]] || [[ "$rk1/$rk2" == "/3" ]]; } && echo yes)"
+assert_eq "crashed lock holder, two waiters at slots=1: one is refused (3), the other is running" "yes" "$(pair_ok "$rk1" "$rk2")"
 if [[ "$rk1" == 3 ]]; then kw=k2; else kw=k1; fi
 release "$kw"
 assert_eq "...the other runs to READY" "0" "$(bgrc "$kw")"
@@ -489,10 +499,10 @@ touch -t 202001010000 "$HOSTSPACE/.hyper/ship-unit.lock.break"
 mode m1 hold; mode m2 hold
 bg m1 run m1 --brief "$BRIEF" --class S --host box
 bg m2 run m2 --brief "$BRIEF" --class S --host box
-wait_for 120 test -s "$FIX/bg.m1.rc" -o -s "$FIX/bg.m2.rc"
+wait_for 120 refused m1 m2
 sleep 0.3
 rm1="$(cat "$FIX/bg.m1.rc" 2>/dev/null)"; rm2="$(cat "$FIX/bg.m2.rc" 2>/dev/null)"
-assert_eq "a crashed breaker's old .break marker: one run refused (3), the other running" "yes" "$( { [[ "$rm1/$rm2" == "3/" ]] || [[ "$rm1/$rm2" == "/3" ]]; } && echo yes)"
+assert_eq "a crashed breaker's old .break marker: one run refused (3), the other running" "yes" "$(pair_ok "$rm1" "$rm2")"
 if [[ "$rm1" == 3 ]]; then mw=m2; else mw=m1; fi
 release "$mw"
 assert_eq "...the other runs to READY" "0" "$(bgrc "$mw")"

@@ -145,14 +145,23 @@ positive_number() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v n="$1" 'BEGIN { 
 # --- driver liveness (runs where the driver runs) -------------------------------------------
 # The pid must be alive AND be our driver: a recycled pid is some other process, and the
 # lead's own `ship-unit run`/`wait` processes are not drivers. The command line comes from
-# ps, else /proc; when neither says, the pid is not taken for ours.
+# ps, else /proc. A command that cannot be read is retried; see below.
 driver_proc_ok() { # pid ref
   local c=""
-  kill -0 "$1" 2>/dev/null || return 1
-  c="$(ps -o command= -p "$1" 2>/dev/null)" || c=""
-  if [[ -z "$c" && -r "/proc/$1/cmdline" ]]; then c="$(tr '\0' ' ' <"/proc/$1/cmdline" 2>/dev/null)" || c=""; fi
+  for _ in 1 2 3; do
+    kill -0 "$1" 2>/dev/null || return 1
+    c="$(ps -o command= -p "$1" 2>/dev/null)" || c=""
+    if [[ -z "$c" && -r "/proc/$1/cmdline" ]]; then c="$(tr '\0' ' ' <"/proc/$1/cmdline" 2>/dev/null)" || c=""; fi
+    [[ -z "$c" ]] || break
+    sleep 0.1
+  done
+  if [[ -z "$c" ]]; then
+    # A live pid whose command will not read: if ps or /proc exist here the read failed
+    # (fork pressure), and a driver must not be taken for dead. With neither, it is not ours.
+    command -v ps >/dev/null 2>&1 || [[ -d /proc/self ]]
+    return $?
+  fi
   c="${c%"${c##*[! ]}"}"
-  [[ -n "$c" ]] || return 1
   case "$c" in
     *ship-unit*" _driver $2") return 0 ;;
     *ship-loop*|*"${LOOP##*/}"*) return 0 ;;
@@ -227,7 +236,15 @@ LOCK_DIR="" LOCK_HELD=0 CLEAN_FILE=""
 
 internal_cleanup() {
   [[ -z "$CLEAN_FILE" ]] || rm -f "$CLEAN_FILE"
-  if [[ $LOCK_HELD -eq 1 ]]; then rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true; LOCK_HELD=0; fi
+  if [[ $LOCK_HELD -eq 1 ]]; then rm -f "$LOCK_DIR/pid" "$LOCK_DIR/pid.tmp"; rmdir "$LOCK_DIR" 2>/dev/null || true; LOCK_HELD=0; fi
+}
+
+# age_of <path> — seconds since the path was modified; 0 when that cannot be read, so a
+# failed stat never makes a fresh lock look old.
+age_of() {
+  local m
+  m="$(mtime "$1")"
+  if [[ "$m" -gt 0 ]]; then echo $(( $(date +%s) - m )); else echo 0; fi
 }
 
 # lock_stale <pid> <age> — the holder is gone, or never wrote its pid and is over 10s old.
@@ -242,14 +259,14 @@ lock_break() {
   if ! mkdir "$b" 2>/dev/null; then
     # Someone else is breaking. A breaker that crashed leaves its marker behind: an old one
     # is moved aside (one waiter wins the rename) and removed. Either way the caller waits.
-    age=$(( $(date +%s) - $(mtime "$b") ))
+    age="$(age_of "$b")"
     if [[ $age -gt 30 ]] && mv "$b" "$b.$$" 2>/dev/null; then rmdir "$b.$$" 2>/dev/null || true; fi
     return 1
   fi
   p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
-  age=$(( $(date +%s) - $(mtime "$LOCK_DIR") ))
+  age="$(age_of "$LOCK_DIR")"
   if [[ -d "$LOCK_DIR" ]] && lock_stale "$p" "$age"; then
-    rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true
+    rm -f "$LOCK_DIR/pid" "$LOCK_DIR/pid.tmp"; rmdir "$LOCK_DIR" 2>/dev/null || true
   fi
   rmdir "$b" 2>/dev/null || true
   return 0
@@ -262,7 +279,7 @@ lock_acquire() {
   trap internal_cleanup EXIT
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
-    age=$(( $(date +%s) - $(mtime "$LOCK_DIR") ))
+    age="$(age_of "$LOCK_DIR")"
     if lock_stale "$p" "$age" && lock_break; then
       continue
     fi
@@ -271,7 +288,8 @@ lock_acquire() {
     fi
     sleep 0.2; waited_ms=$((waited_ms + 200))
   done
-  echo $$ >"$LOCK_DIR/pid"
+  # Written whole: a waiter must never read half a pid and take it for a dead holder.
+  echo $$ >"$LOCK_DIR/pid.tmp" && mv "$LOCK_DIR/pid.tmp" "$LOCK_DIR/pid"
   LOCK_HELD=1
 }
 
