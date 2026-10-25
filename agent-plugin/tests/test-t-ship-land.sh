@@ -47,6 +47,10 @@ cat > "$FIX/bin/gh" <<'STUB'
 echo "$PWD :: $*" >> "$GH_LOG"
 case "$1 $2" in
   "pr list") printf '%s\n' "${GH_PR:-}" ;;
+  "pr view")
+    # MERGED once the branch tip is an ancestor of the remote main
+    b="$(git branch --show-current)"
+    if git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then echo MERGED; else echo OPEN; fi ;;
   "pr merge")
     [[ -z "${GH_MERGE_FAIL:-}" ]] || { echo "gh: merge failed" >&2; exit 1; }
     b="$(git branch --show-current)"
@@ -58,6 +62,7 @@ cat > "$FIX/bin/wt" <<'STUB'
 #!/usr/bin/env bash
 echo "$PWD :: $*" >> "$WT_LOG"
 [[ "$1" == remove ]] || exit 1
+[[ -z "${WT_FAIL:-}" ]] || { echo "wt: refusing" >&2; exit 1; }
 shift
 d=0; [[ "$1" == -D ]] && { d=1; shift; }
 git -C "$STUB_G" worktree remove --force "$STUB_SPACE/worktrees/$1" || exit 1
@@ -129,7 +134,7 @@ mk_unit() {
   a1="$(mux start --ref "$ref" --space "$U_SPACE" --name dev --harness claude --cwd "$wt")"
   a2="$(mux start --ref "$ref" --space "$U_SPACE" --name review --harness pi --cwd "$wt")"
   U_A1="$(jq -r .agent <<<"$a1")"; U_A2="$(jq -r .agent <<<"$a2")"
-  U_P3="$(jq -r .pane <<<"$a2")"
+  U_P3="$(jq -r .pane <<<"$a2")"; U_AP1="$(jq -r .pane <<<"$a1")"
 }
 sent_file() { echo "$SHIP_MUX_FAKE_DIR/sent/$1"; }
 state_exists() { [[ -f "$SHIP_MUX_FAKE_DIR/state/$1.json" ]]; }
@@ -137,7 +142,7 @@ state_exists() { [[ -f "$SHIP_MUX_FAKE_DIR/state/$1.json" ]]; }
 # 1: the happy path, with a second unit keeping the group alive ------------------------
 write_cfg 'on_land: ["echo {ref}-{pr}-{task} >> '"$ONLAND_LOG"'"]
 '
-mk_unit u1 101; U1_SPACE=$U_SPACE U1_PANE=$U_PANE U1_A1=$U_A1 U1_A2=$U_A2 U1_P3=$U_P3
+mk_unit u1 101; U1_SPACE=$U_SPACE U1_PANE=$U_PANE U1_A1=$U_A1 U1_A2=$U_A2 U1_P3=$U_P3 U1_AP1=$U_AP1
 mk_unit u2 102; U2_SPACE=$U_SPACE U2_A1=$U_A1 U2_A2=$U_A2
 G1="$(jq -r '.created[] | select(.kind == "space") | .group' "$SPACE/notes/loops/u1/mux.json")"
 advance_main one
@@ -158,13 +163,13 @@ assert_eq "the claude agent got /exit (harness from the record)" "/exit" "$(cat 
 assert_eq "the pi agent got a single ctrl+d" "<keys:ctrl+d>" "$(cat "$(sent_file "$U1_A2")" 2>/dev/null)"
 assert_eq "u2's agents were not touched" "no" "$([[ -e "$(sent_file "$U2_A1")" || -e "$(sent_file "$U2_A2")" ]] && echo yes || echo no)"
 assert_ok "the extra pane was closed" log_closed "$U1_P3"
+assert_eq "the first agent's pane is gone from the backend" "no" "$(state_exists "$U1_AP1" && echo yes || echo no)"
 assert_ok "the unit space was closed" log_closed "$U1_SPACE"
 assert_eq "the root pane was never closed on its own" "no" "$(log_closed "$U1_PANE" && jq -e --arg id "$U1_PANE" 'select(.verb == "close" and (.args | index($id)))' "$SHIP_MUX_FAKE_LOG" >/dev/null 2>&1 && echo yes || echo no)"
 assert_eq "nothing of u1 is left on the backend" "" "$(for i in $U1_SPACE $U1_PANE $U1_A1 $U1_A2 $U1_P3; do state_exists "$i" && echo yes; done | head -n 1)"
 assert_eq "u2's space is still open" "yes" "$(state_exists "$U2_SPACE" && echo yes || echo no)"
 assert_eq "the units group was kept (u2 still in it)" "yes" "$([[ -f "$SHIP_MUX_FAKE_DIR/groups/proj-units" ]] && echo yes || echo no)"
 assert_eq "no group close reached the backend" "0" "$(jq -c --arg g "$G1" 'select(.verb == "close" and (.args | index($g)))' "$SHIP_MUX_FAKE_LOG" | wc -l | tr -d ' ')"
-assert_eq "ship-mux list for u1 is empty" "[]" "$(mux list --ref u1)"
 assert_eq "the worktree is gone" "no" "$([[ -d "$SPACE/worktrees/u1" ]] && echo yes || echo no)"
 assert_contains "wt ran from the space root without -D" "$(cat "$WT_LOG")" "$SPACE :: remove u1"
 assert_eq "the loop dir moved to .done" "yes" "$([[ -f "$SPACE/notes/loops/.done/u1/result.json" && ! -d "$SPACE/notes/loops/u1" ]] && echo yes || echo no)"
@@ -193,7 +198,7 @@ advance_main three
 rc="$(land u3)"
 assert_eq "land u3 exits 0" "0" "$rc"
 assert_eq "a pre-existing group stays" "yes" "$([[ -f "$SHIP_MUX_FAKE_DIR/groups/proj-units" ]] && echo yes || echo no)"
-assert_contains "...and the output says why" "$(cat "$FIX/land.out")" "kept"
+assert_eq "...ship never asked to close it" "0" "$(jq -c 'select(.verb == "close" and (.args | index("group-proj-units")))' "$SHIP_MUX_FAKE_LOG" | wc -l | tr -d ' ')"
 
 # 4: refusals --------------------------------------------------------------------------
 mk_unit u4 104 PARKED
@@ -402,8 +407,165 @@ mk_agent claude
 printf 'gone\n' > "$SHIP_MUX_FAKE_DIR/status/$RA"
 assert_eq "state gone with exit 0 is treated as gone: exit 0, nothing sent" "0 no" "$(retire --ref r1 --harness claude "$RA") $([[ -e "$(sent_file "$RA")" ]] && echo yes || echo no)"
 
-# 11: nothing in the new files names the space -------------------------------------------
-assert_eq "no husk, forge or absolute work path in the scripts" "0" \
-  "$(grep -ciE 'husk|forge|/work/|/Users/' "$LAND" "$RETIRE" | awk -F: '{s += $2} END {print s + 0}')"
+# 11: review fixes -------------------------------------------------------------------
+# Units that earlier sections left unlanded still hold records in the group.
+fresh_fake() { rm -rf "$SHIP_MUX_FAKE_DIR" "$SHIP_MUX_FAKE_LOG" "$SPACE/.hyper/ship-mux.json" "$SPACE"/notes/loops/u[0-9]* "$SPACE/notes/loops/r1"; }
+exists_word() { [[ -e "$1" ]] && echo yes || echo no; }
+
+# A land whose ship-mux can be told to skip or fail a close: a copy of the scripts
+# next to a wrapper (ship-land and ship-retire find ship-mux beside themselves).
+W2="$FIX/wland"; mkdir -p "$W2"
+cp "$LAND" "$RETIRE" "$SHIP_DIR/lib.sh" "$W2/"
+cat > "$W2/ship-mux" <<WRAP
+#!/usr/bin/env bash
+if [[ "\$1" == close && -n "\${WRAP_LEAVE:-}" && " \$* " == *" \$WRAP_LEAVE "* ]]; then exit 0; fi
+if [[ "\$1" == close && -n "\${WRAP_FAIL:-}" && " \$* " == *" \$WRAP_FAIL "* ]]; then exit 1; fi
+if [[ "\$1" == close && -n "\${WRAP_FAILAFTER:-}" && " \$* " == *" \$WRAP_FAILAFTER "* ]]; then bash "$MUXBIN" "\$@"; exit 1; fi
+exec bash "$MUXBIN" "\$@"
+WRAP
+chmod +x "$W2/ship-mux"
+wland() { SHIP_PLUGIN_ROOT="$PLUGIN_DIR" bash "$W2/ship-land" "$@" 2>"$FIX/land.err" >"$FIX/land.out"; echo $?; }
+
+# a close that leaves the space alive: ship-mux list catches it, the unit is kept
+fresh_fake; write_cfg
+mk_unit u20 120; S20=$U_SPACE
+advance_main seven
+runs0="$(gate_runs)"; m0="$(merges)"
+rc="$(WRAP_LEAVE=$S20 wland u20)"
+assert_eq "a close that leaves an id alive: exit 1" "1" "$rc"
+assert_contains "...ship-mux list is what says so" "$(cat "$FIX/land.err")" "still holds"
+assert_contains "...and the message names the way out" "$(cat "$FIX/land.err")" "--abandon"
+assert_eq "...the worktree and the loop dir are kept" "yes yes" "$(exists_word "$SPACE/worktrees/u20") $(exists_word "$SPACE/notes/loops/u20")"
+assert_eq "...the PR was merged by then" "feat: u20" "$(git -C "$REMOTE" log -1 --format=%s main)"
+# the natural recovery: rerun. The PR is merged, so no rebase, gate, push or merge.
+rc="$(land u20)"
+assert_eq "rerun after a failed teardown: exit 0" "0" "$rc"
+assert_contains "...it skips to teardown" "$(cat "$FIX/land.out")" "already merged"
+assert_eq "...without gating or merging again" "$((runs0 + 1))/$((m0 + 1))" "$(gate_runs)/$(merges)"
+assert_eq "...and the unit is torn down" "no no" "$(exists_word "$SPACE/worktrees/u20") $(exists_word "$SPACE/notes/loops/u20")"
+
+# a failed space close
+fresh_fake
+mk_unit u21 121; P21=$U_SPACE
+advance_main eight
+rc="$(WRAP_FAIL=$P21 wland u21)"
+assert_eq "a failed space close: exit 1" "1" "$rc"
+assert_contains "...naming the pane" "$(cat "$FIX/land.err")" "could not close space $P21"
+assert_eq "...the worktree and the loop dir are kept" "yes yes" "$(exists_word "$SPACE/worktrees/u21") $(exists_word "$SPACE/notes/loops/u21")"
+assert_eq "...abandon finishes the job" "0" "$(land u21 --abandon)"
+
+# a close that reports failure although the id is gone: still a failed teardown
+fresh_fake
+mk_unit u21b 121; S21=$U_SPACE
+advance_main eight-b
+rc="$(WRAP_FAILAFTER=$S21 wland u21b)"
+assert_eq "a close that exits 1 (even if the id is gone): exit 1" "1" "$rc"
+assert_eq "...the worktree and the loop dir are kept" "yes yes" "$(exists_word "$SPACE/worktrees/u21b") $(exists_word "$SPACE/notes/loops/u21b")"
+assert_eq "...abandon finishes the job" "0" "$(land u21b --abandon)"
+
+# a failed wt remove
+fresh_fake
+mk_unit u22 122
+advance_main nine
+runs0="$(gate_runs)"
+rc="$(WT_FAIL=1 land u22)"
+assert_eq "a failed wt remove: exit 1" "1" "$rc"
+assert_contains "...saying so" "$(cat "$FIX/land.err")" "wt remove u22 failed"
+assert_eq "...the worktree and the loop dir are kept" "yes yes" "$(exists_word "$SPACE/worktrees/u22") $(exists_word "$SPACE/notes/loops/u22")"
+rc="$(land u22)"
+assert_eq "...and the rerun finishes the teardown without a second merge" "0 $((runs0 + 1))" "$rc $(gate_runs)"
+
+# the units group: a backend that refuses is a warning, and the next land retries
+fresh_fake
+mk_unit u23 123
+advance_main ten
+printf '{"kind":"space","group":"proj-units","ref":"operator"}' > "$SHIP_MUX_FAKE_DIR/state/space-999.json"
+rc="$(land u23)"
+assert_eq "a group the backend refuses to close does not fail a merged land" "0" "$rc"
+assert_contains "...it warns" "$(cat "$FIX/land.err")" "could not close units group"
+assert_eq "...the unit is torn down" "no" "$(exists_word "$SPACE/worktrees/u23")"
+assert_eq "...the group is still on the backend and in the record" "yes true" \
+  "$(exists_word "$SHIP_MUX_FAKE_DIR/groups/proj-units") $(jq -r '.groups | to_entries[0].value.created' "$SPACE/.hyper/ship-mux.json")"
+rm -f "$SHIP_MUX_FAKE_DIR/state/space-999.json"
+mk_unit u24 124
+advance_main eleven
+assert_eq "the next land retries it" "0" "$(land u24)"
+assert_eq "...and the group is closed and dropped from the record" "no {}" \
+  "$(exists_word "$SHIP_MUX_FAKE_DIR/groups/proj-units") $(jq -c .groups "$SPACE/.hyper/ship-mux.json")"
+
+# abandon on a detached HEAD removes the worktree by path
+fresh_fake
+mk_unit u25 125 PARKED
+git -C "$SPACE/worktrees/u25" checkout -q --detach
+rc="$(land u25 --abandon)"
+assert_eq "abandon on a detached HEAD: exit 0" "0" "$rc"
+assert_eq "...the worktree is removed" "no" "$(exists_word "$SPACE/worktrees/u25")"
+assert_eq "...the loop dir moved" "yes" "$(exists_word "$SPACE/notes/loops/.done/u25")"
+mk_unit u26 126 PARKED
+mkdir -p "$FIX/plain"
+jq --arg w "$FIX/plain" '.worktree = $w' "$SPACE/notes/loops/u26/result.json" > "$FIX/r.json" && mv "$FIX/r.json" "$SPACE/notes/loops/u26/result.json"
+rc="$(land u26 --abandon)"
+assert_eq "...a worktree that cannot be removed fails (1)" "1" "$rc"
+assert_eq "...before the loop dir moves" "yes" "$(exists_word "$SPACE/notes/loops/u26")"
+git -C "$G" worktree remove --force "$SPACE/worktrees/u26"
+
+# the lock
+mk_unit u27 127
+advance_main twelve
+mkdir "$SPACE/.hyper/ship-land.lock"; touch -t 202001010000 "$SPACE/.hyper/ship-land.lock"
+assert_eq "an ownerless lock older than 120 s is taken over" "0" "$(land u27)"
+mk_unit u28 128
+advance_main thirteen
+mkdir "$SPACE/.hyper/ship-land.lock"; echo "1@otherhost" > "$SPACE/.hyper/ship-land.lock/owner"
+touch -t 202001010000 "$SPACE/.hyper/ship-land.lock"
+assert_eq "a foreign-host lock older than 120 s is taken over" "0" "$(land u28)"
+mk_unit u29 129
+mkdir "$SPACE/.hyper/ship-land.lock"; echo "1@otherhost" > "$SPACE/.hyper/ship-land.lock/owner"
+rc="$(SHIP_LAND_LOCK_WAIT_SEC=2 land u29)"
+assert_eq "a young foreign lock is waited for, then land gives up (1)" "1" "$rc"
+assert_contains "...saying what it waited for" "$(cat "$FIX/land.err")" "gave up waiting"
+assert_eq "...and does not remove a lock that is not its own" "yes" "$(exists_word "$SPACE/.hyper/ship-land.lock")"
+rm -rf "$SPACE/.hyper/ship-land.lock"
+git -C "$G" worktree remove --force "$SPACE/worktrees/u29"
+
+# the lease: a commit pushed to the PR branch from elsewhere is never overwritten
+fresh_fake
+mk_unit u30 130
+git clone -q "$REMOTE" "$FIX/elsewhere" 2>/dev/null
+git -C "$FIX/elsewhere" checkout -q u30
+echo late > "$FIX/elsewhere/late.txt"; git -C "$FIX/elsewhere" add late.txt
+git -C "$FIX/elsewhere" commit -q -m "fix: late commit on the PR branch"
+git -C "$FIX/elsewhere" push -q origin u30
+m0="$(merges)"
+rc="$(land u30)"
+assert_eq "a late commit on the remote PR branch refuses the push (1)" "1" "$rc"
+assert_contains "...saying so" "$(cat "$FIX/land.err")" "push of u30 failed"
+assert_eq "...the late commit is still the remote head" "fix: late commit on the PR branch" "$(git -C "$REMOTE" log -1 --format=%s u30)"
+assert_eq "...nothing was merged" "$m0" "$(merges)"
+assert_eq "...and the lock is released" "no" "$(exists_word "$SPACE/.hyper/ship-land.lock")"
+
+# a malformed record is reported, never a bare jq exit code
+fresh_fake
+mk_unit u31 131 PARKED
+printf '{"backend":"fake","created":[' > "$SPACE/notes/loops/u31/mux.json"
+rc="$(land u31 --abandon)"
+assert_eq "abandon with a truncated mux.json: exit 1" "1" "$rc"
+assert_contains "...with a message naming the file" "$(cat "$FIX/land.err")" "mux.json is not a valid mux record"
+assert_eq "...nothing was removed" "yes yes" "$(exists_word "$SPACE/worktrees/u31") $(exists_word "$SPACE/notes/loops/u31")"
+mk_unit u32 132
+advance_main fourteen
+printf '{"backend":"fake","created":[' > "$SPACE/notes/loops/u32/mux.json"
+m0="$(merges)"
+rc="$(land u32)"
+assert_eq "land with a truncated mux.json is refused before the merge (1)" "1" "$rc"
+assert_eq "...no merge" "$m0" "$(merges)"
+git -C "$G" worktree remove --force "$SPACE/worktrees/u31"
+git -C "$G" worktree remove --force "$SPACE/worktrees/u32"
+
+# 12: nothing in the new files names the space -------------------------------------------
+# The pattern is built from pieces so this file does not contain the names itself.
+names="$(printf '%s|%s|%s|%s' "hu""sk" "for""ge" "/wo""rk/" "/Us""ers/")"
+assert_eq "no space-specific name or absolute path in the scripts" "0" \
+  "$(grep -ciE "$names" "$LAND" "$RETIRE" | awk -F: '{s += $2} END {print s + 0}')"
 
 finish

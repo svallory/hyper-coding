@@ -15,16 +15,22 @@
 #
 # Steps
 #   1. take <space root>/.hyper/ship-land.lock (one land at a time per space;
-#      waits while the holder is alive, takes the lock over when it died)
+#      waits while the holder is alive, takes the lock over when it died or,
+#      when it is ownerless or from another host, is older than 120 s; gives up
+#      with exit 1 after SHIP_LAND_LOCK_WAIT_SEC)
 #   2. require result.json status READY (--force overrides)
-#   3. fetch, rebase on origin/<base>; refuse an empty branch, or a rebase that
+#   3. a PR that is already MERGED (a rerun after a failed teardown) skips to
+#      step 6. Otherwise fetch, rebase on origin/<base>; refuse an empty branch, or a rebase that
 #      drops commits (the branch is put back as it was)
-#   4. run `gate` (config) in the worktree; git push --force-with-lease
+#   4. run `gate` (config) in the worktree; git push --force-with-lease, leased
+#      on the origin/<branch> seen before the fetch (a commit pushed meanwhile
+#      from elsewhere refuses the push instead of being overwritten)
 #   5. gh pr merge <pr> --<merge_method>; pull the base in its worktree
 #   6. run each on_land command ({ref}, {pr}, {task} replaced)
 #   7. teardown: ship-retire every agent recorded in mux.json; ship-mux close
-#      every recorded pane, then the unit space; close the units group when
-#      ship created it and it is empty (kept otherwise); `ship-mux list` must
+#      every recorded pane, then the unit space; try to close every ship-created
+#      units group in <space root>/.hyper/ship-mux.json (kept when others use it;
+#      a refusal is only a warning and is retried by the next land); `ship-mux list` must
 #      then return nothing; wt remove <branch>; move notes/loops/<ref>/ to
 #      notes/loops/.done/<ref>/
 #
@@ -37,7 +43,7 @@
 # uncommitted changes).
 #
 # Environment: SHIP_LAND_SETTLE_SEC (seconds between push and merge so GitHub
-# sees the new head; default 5).
+# sees the new head; default 5), SHIP_LAND_LOCK_WAIT_SEC (default 1800).
 
 set -euo pipefail
 
@@ -91,9 +97,16 @@ if [[ -f "$result" ]]; then wt_path="$(jq -r '.worktree // ""' "$result" 2>/dev/
 branch=""
 if [[ -d "$wt_path" ]]; then branch="$(git -C "$wt_path" branch --show-current 2>/dev/null || true)"; fi
 
+# check_rec — a malformed mux.json is reported, not left to kill teardown.
+check_rec() {
+  [[ ! -f "$rec" ]] || jq -e '.created | type == "array"' "$rec" >/dev/null 2>&1 \
+    || fail "$rec is not a valid mux record (truncated or edited?); fix or remove it, then rerun ship-land $ref (or --abandon)"
+}
+
 # --- teardown ------------------------------------------------------------------------
 teardown() {
   local bad=0 id rc out left groups g h hargs
+  check_rec
 
   if [[ -f "$rec" ]]; then
     # 1. every recorded agent, stopped the way its harness expects
@@ -107,8 +120,6 @@ teardown() {
       # ends it; say so and go on.
       [[ $rc -eq 0 ]] || echo "ship-land: warning: ship-retire $id exited $rc; closing its pane regardless" >&2
     done
-    # The units group is known from the space entry; read it before closing.
-    groups="$(jq -r '[.created[]? | select(.kind == "space") | .group // empty] | unique | .[]' "$rec")"
     # 2. every recorded pane except the root pane (the space owns that one)
     for id in $(jq -r '.created[]? | select(.kind == "pane" and (.root // false) != true) | .id' "$rec"); do
       rc=0
@@ -121,17 +132,6 @@ teardown() {
       bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
       [[ $rc -eq 0 ]] || { echo "ship-land: could not close space $id (ship-mux exit $rc)" >&2; bad=1; }
     done
-    # 4. the units group, when ship created it and nothing is left in it. ship-mux
-    # refuses (3) otherwise, which is the normal "someone else still uses it".
-    for g in $groups; do
-      rc=0
-      out="$(bash "$MUX" close --ref "$ref" --id "$g" 2>&1)" || rc=$?
-      case "$rc" in
-        0) say "units group $g closed" ;;
-        3) say "units group $g kept (${out#ship-mux: refused: })" ;;
-        *) echo "ship-land: could not close units group $g (ship-mux exit $rc): $out" >&2; bad=1 ;;
-      esac
-    done
     # 5. nothing recorded may be alive
     rc=0
     left="$(bash "$MUX" list --ref "$ref")" || rc=$?
@@ -142,16 +142,43 @@ teardown() {
     fi
   fi
   if [[ $bad -ne 0 ]]; then
-    fail "teardown incomplete; the worktree and notes/loops/$ref are kept"
+    fail "teardown incomplete; the worktree and notes/loops/$ref are kept. Fix the cause and rerun 'ship-land $ref' (a merged PR skips to teardown), or 'ship-land $ref --abandon'"
   fi
 
+  # 4. the units groups ship created (shared state: read from the group record,
+  # not from this unit's entries). ship-mux refuses (3) while others still use
+  # one; a backend that refuses is only a warning, and the record stays so the
+  # next land retries.
+  groups=""
+  if [[ -f "$root/.hyper/ship-mux.json" ]]; then
+    groups="$(jq -r '(.groups // {}) | to_entries[] | select(.value.created == true) | .key' "$root/.hyper/ship-mux.json" 2>/dev/null || true)"
+  fi
+  for g in $groups; do
+    rc=0
+    out="$(bash "$MUX" close --ref "$ref" --id "$g" 2>&1)" || rc=$?
+    case "$rc" in
+      0) say "units group $g closed" ;;
+      3) say "units group $g kept (${out#ship-mux: refused: })" ;;
+      *) echo "ship-land: warning: could not close units group $g (ship-mux exit $rc): $out; the next land retries" >&2 ;;
+    esac
+  done
+
   # 6. the worktree
-  if [[ -d "$wt_path" && -n "$branch" ]]; then
-    local wargs=(remove)
-    if [[ $abandon -eq 1 && $force -eq 1 ]]; then wargs+=(-D); fi
-    wargs+=("$branch")
-    (CDPATH='' cd -- "$root" && wt "${wargs[@]}") || fail "wt ${wargs[*]} failed; the worktree is kept"
-    say "worktree $branch removed"
+  if [[ -d "$wt_path" ]]; then
+    if [[ -n "$branch" ]]; then
+      local wargs=(remove)
+      if [[ $abandon -eq 1 && $force -eq 1 ]]; then wargs+=(-D); fi
+      wargs+=("$branch")
+      (CDPATH='' cd -- "$root" && wt "${wargs[@]}") || fail "wt ${wargs[*]} failed; the worktree is kept"
+      say "worktree $branch removed"
+    else
+      # Detached HEAD (a dev left it mid-rebase): no branch name for wt, so remove by path.
+      local common
+      common="$(CDPATH='' cd -- "$wt_path" && cd -- "$(git rev-parse --git-common-dir)" && pwd -P)" \
+        || fail "$wt_path is not a git worktree; it is kept"
+      git --git-dir="$common" worktree remove --force "$wt_path" || fail "could not remove the detached worktree $wt_path; it is kept"
+      say "worktree $wt_path removed (detached HEAD; its branch, if any, is untouched)"
+    fi
   fi
 
   # 7. the loop directory
@@ -193,6 +220,7 @@ on_land="[]"
 on_land="$(ship_cfg_get on_land)" || [[ $? -eq 3 ]] || exit 1
 [[ "$(jq -r 'type' <<<"$on_land")" == array ]] || fail "on_land must be a list of commands"
 [[ -n "$task" ]] || task="$ref"
+check_rec
 [[ -d "$wt_path" ]] || fail "worktree $wt_path does not exist"
 [[ -n "$branch" ]] || fail "worktree $wt_path is not on a branch"
 if [[ -n "$(git -C "$wt_path" status --porcelain --untracked-files=no)" ]]; then
@@ -210,22 +238,77 @@ fi
 # --- 1. the lock ----------------------------------------------------------------------
 lock="$root/.hyper/ship-land.lock"
 host="$(hostname 2>/dev/null || echo unknown)"
+me="$$@$host"
 mkdir -p "$root/.hyper"
-waited=0
+
+# unlock_dir <lockdir> — remove it only while the owner file still names us: after
+# a takeover the directory belongs to someone else.
+unlock_dir() {
+  local o=""
+  [[ -f "$1/owner" ]] && o="$(cat "$1/owner" 2>/dev/null || true)"
+  [[ "$o" == "$me" ]] || return 0
+  rm -rf "$1" 2>/dev/null || true
+}
+
+# lock_stale <lockdir> — sets owner_seen. Stale when the owner is on this host and
+# its pid is dead (the pid alone decides there), or when the owner is on another
+# host or unknown and the lock is over 120 s old.
+owner_seen=""
+lock_stale() {
+  local d="$1" opid ohost
+  owner_seen=""
+  [[ -d "$d" ]] || return 1
+  [[ -f "$d/owner" ]] && owner_seen="$(cat "$d/owner" 2>/dev/null || true)"
+  if [[ "$owner_seen" == *@* ]]; then
+    opid="${owner_seen%%@*}" ohost="${owner_seen#*@}"
+    if [[ "$ohost" == "$host" ]]; then
+      [[ "$opid" =~ ^[0-9]+$ ]] || return 1
+      kill -0 "$opid" 2>/dev/null && return 1
+      return 0
+    fi
+  fi
+  [[ -n "$(find "$d" -maxdepth 0 -mmin +2 2>/dev/null)" ]]
+}
+
+# lock_break <lockdir> — takeovers are serialised with <lockdir>.break; inside it
+# the owner is read again and the lock is broken only if it is still the owner
+# that was judged stale.
+lock_break() {
+  local d="$1" judged="$owner_seen"
+  if [[ -d "$d.break" && -n "$(find "$d.break" -maxdepth 0 -mmin +2 2>/dev/null)" ]]; then
+    rm -rf "$d.break"   # a breaker that died
+  fi
+  mkdir "$d.break" 2>/dev/null || return 0
+  if lock_stale "$d" && [[ "$owner_seen" == "$judged" ]]; then
+    rm -rf "$d"
+  fi
+  rmdir "$d.break" 2>/dev/null || true
+}
+
+waited=0 lock_start=$SECONDS
 while ! mkdir "$lock" 2>/dev/null; do
-  owner="$(cat "$lock/owner" 2>/dev/null || true)"
-  opid="${owner%%@*}" ohost="${owner#*@}"
-  if [[ "$owner" == *@* && "$ohost" == "$host" && "$opid" =~ ^[0-9]+$ ]] && ! kill -0 "$opid" 2>/dev/null; then
-    if mv "$lock" "$lock.stale.$$" 2>/dev/null; then rm -rf "$lock.stale.$$"; fi
+  if lock_stale "$lock"; then
+    lock_break "$lock"
+    sleep 0.1
     continue
   fi
-  if [[ $waited -eq 0 ]]; then say "waiting for another land in this space (${owner:-unknown owner})"; waited=1; fi
+  if [[ $waited -eq 0 ]]; then say "waiting for another land in this space (${owner_seen:-unknown owner})"; waited=1; fi
+  if [[ $((SECONDS - lock_start)) -ge ${SHIP_LAND_LOCK_WAIT_SEC:-1800} ]]; then
+    fail "gave up waiting for the land lock $lock (held by ${owner_seen:-unknown owner})"
+  fi
   sleep 1
 done
-printf '%s@%s\n' "$$" "$host" >"$lock/owner"
-trap 'rm -rf "$lock"' EXIT
+printf '%s\n' "$me" >"$lock/owner"
+trap 'unlock_dir "$lock"' EXIT
+
+# --- 2. a merged PR (rerun after a failed teardown) skips to on_land -----------------------
+pr_state="$(cd "$wt_path" && gh pr view "$pr" --json state -q .state)" || fail "gh pr view $pr failed"
+if [[ "$pr_state" == MERGED ]]; then
+  say "#$pr is already merged; skipping to on_land and teardown"
+else
 
 # --- 3. rebase --------------------------------------------------------------------------
+lease_sha="$(git -C "$wt_path" rev-parse -q --verify "refs/remotes/origin/$branch" 2>/dev/null || true)"
 git -C "$wt_path" fetch -q origin || fail "git fetch origin failed in $wt_path"
 git -C "$wt_path" rev-parse --verify -q "origin/$base" >/dev/null || fail "origin/$base does not exist"
 head0="$(git -C "$wt_path" rev-parse HEAD)"
@@ -250,7 +333,7 @@ if ! (CDPATH='' cd -- "$wt_path" && bash -c "$gate") >"$glog" 2>&1; then
   fail "gate failed (full output: $glog); nothing was pushed"
 fi
 say "gate passed"
-git -C "$wt_path" push -q --force-with-lease origin "HEAD:$branch" || fail "push of $branch failed"
+git -C "$wt_path" push -q "--force-with-lease=$branch:$lease_sha" origin "HEAD:$branch" || fail "push of $branch failed"
 
 # --- 5. merge ---------------------------------------------------------------------------
 sleep "${SHIP_LAND_SETTLE_SEC:-5}"
@@ -263,6 +346,7 @@ if [[ -n "$base_wt" ]]; then
 else
   say "#$pr merged (no worktree has $base checked out; nothing to pull)"
 fi
+fi   # PR not yet merged
 
 # --- 6. on_land -------------------------------------------------------------------------
 land_bad=0
@@ -279,7 +363,7 @@ while IFS= read -r cmd; do
 done < <(jq -r '.[]' <<<"$on_land")
 
 # --- 7. teardown ------------------------------------------------------------------------
-rm -rf "$lock"; trap - EXIT
+unlock_dir "$lock"; trap - EXIT
 teardown
 [[ $land_bad -eq 0 ]] || fail "$ref is merged and torn down, but an on_land command failed (see above)"
 say "$ref landed"
