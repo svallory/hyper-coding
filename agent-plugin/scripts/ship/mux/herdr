@@ -60,6 +60,10 @@ shift
 ROOT_PREFIX='ship:'
 PROMPT_RE='[$%>#❯➜»→λ] *$'
 
+# jq exits 5 on bad input, which would read as "not found": only an explicit
+# notfound may exit 5.
+jq() { local rc=0; command jq "$@" || rc=$?; if [[ $rc -ne 0 ]]; then echo "mux/herdr: jq failed ($rc)" >&2; return 1; fi; }
+
 die() { echo "mux/herdr: $*" >&2; exit 1; }
 notfound() { echo "mux/herdr: $*" >&2; exit 5; }
 
@@ -198,6 +202,14 @@ case "$verb" in
       pane="$(jq -r --arg l "$ROOT_PREFIX$f_ref" '[.result.panes[] | select(.label == $l)][0].pane_id // empty' <<<"$out")"
       if [[ -n "$pane" ]]; then
         tab="$(jq -r --arg p "$pane" '[.result.panes[] | select(.pane_id == $p)][0].tab_id // empty' <<<"$out")"
+      else
+        # no marked pane: a tab still labelled with the ref (no agent has renamed it yet)
+        out="$(herdr tab list --workspace "$ws" 2>"$errf")" || hx_fail "tab list"
+        tab="$(jq -r --arg l "$f_ref" '[.result.tabs[] | select(.label == $l)][0].tab_id // empty' <<<"$out")"
+        if [[ -n "$tab" ]]; then
+          out="$(tab_panes "$tab")" || exit $?
+          pane="${out%%$'\n'*}"
+        fi
       fi
     fi
     if [[ -z "$tab" || -z "$pane" ]]; then
@@ -223,7 +235,11 @@ case "$verb" in
     [[ "$(kind_of "$f_space")" == tab ]] || die "start: '$f_space' is not a space"
     hx tab get "$f_space"
     [[ $hx_rc -eq 0 ]] || hx_fail "space $f_space"
-    mapfile -t panes < <(tab_panes "$f_space")
+    out="$(tab_panes "$f_space")" || exit $?
+    panes=()
+    while IFS= read -r line; do
+      if [[ -n "$line" ]]; then panes+=("$line"); fi
+    done <<<"$out"
     [[ ${#panes[@]} -gt 0 ]] || notfound "start: space '$f_space' has no panes"
     if [[ ${#panes[@]} -eq 1 ]]; then target="${panes[0]}" dir=right; else target="${panes[${#panes[@]}-1]}" dir=down; fi
     out="$(herdr pane split "$target" --direction "$dir" --cwd "$f_cwd" --no-focus 2>"$errf")" || hx_fail "pane split"
@@ -232,21 +248,38 @@ case "$verb" in
     hname="$(agent_name "$f_ref" "$f_name" "$pane")"
     abort() { herdr pane close "$pane" >/dev/null 2>&1 || true; echo "mux/herdr: start: $*" >&2; exit 1; }
 
-    peer="${SHIP_MUX_LAUNCH_PEER-$(command -v launch-peer 2>/dev/null || true)}"
+    # launch-peer: $SHIP_MUX_LAUNCH_PEER (empty disables it) or the one on PATH.
+    peer=""
+    if [[ -z "${SHIP_MUX_LAUNCH_PEER+x}" ]]; then
+      peer="$(command -v launch-peer 2>/dev/null || true)"
+    elif [[ -n "$SHIP_MUX_LAUNCH_PEER" ]]; then
+      peer="$(command -v "$SHIP_MUX_LAUNCH_PEER" 2>/dev/null || true)"
+      [[ -n "$peer" && -x "$peer" ]] || { echo "mux/herdr: warning: SHIP_MUX_LAUNCH_PEER='$SHIP_MUX_LAUNCH_PEER' cannot be run; starting claude without it" >&2; peer=""; }
+    fi
     args=()
     [[ ${#cmdline[@]} -eq 0 ]] || args=("${cmdline[@]}")
+    # agent_start <kind> — herdr agent start, retrying a pane whose shell is not up.
+    # agent_not_ready / workspace_trust_blocked mean the agent is there but blocked:
+    # a successful start (status reports blocked), so the pane stays.
+    agent_start() {
+      local err=""
+      for _ in 1 2 3 4 5 6 7 8 9 10; do
+        if err="$(herdr agent start "$hname" --kind "$1" --pane "$pane" --timeout 120000 -- ${args[@]+"${args[@]}"} 2>&1 >/dev/null)"; then return 0; fi
+        case "$err" in
+          *agent_not_ready*|*workspace_trust_blocked*) echo "mux/herdr: start: $hname is blocked at startup; read it" >&2; return 0 ;;
+          *agent_pane_busy*) wait_prompt "$pane" 1000 || true; pause "$pane" ;;
+          *) break ;;
+        esac
+      done
+      abort "agent start ($1): $err"
+    }
     case "$f_harness" in
       pi)
         ext="${PI_AGENT_DIR:-$HOME/.pi/agent}/extensions/herdr-agent-state.ts"
         if [[ -f "$ext" ]]; then args=(-e "$ext" ${args[@]+"${args[@]}"}); else echo "mux/herdr: warning: $ext not found; pi will not report its state" >&2; fi
-        err=""
-        for _ in 1 2 3 4 5 6 7 8 9 10; do
-          if err="$(herdr agent start "$hname" --kind pi --pane "$pane" --timeout 120000 -- ${args[@]+"${args[@]}"} 2>&1 >/dev/null)"; then err=""; break; fi
-          case "$err" in *agent_pane_busy*) wait_prompt "$pane" 1000 || true; pause "$pane" ;; *) break ;; esac
-        done
-        [[ -z "$err" ]] || abort "agent start (pi): $err" ;;
+        agent_start pi ;;
       claude)
-        if [[ -n "$peer" && -x "$peer" ]]; then
+        if [[ -n "$peer" ]]; then
           cmd="$(printf '%q ' "$peer" off claude ${args[@]+"${args[@]}"})"
           wait_prompt "$pane" 10000 || true
           herdr pane run "$pane" "${cmd% }" >/dev/null 2>"$errf" || abort "pane run failed in $pane"
@@ -259,12 +292,7 @@ case "$verb" in
           herdr agent rename "$pane" "$hname" >/dev/null 2>"$errf" || abort "agent rename: $(hx_msg)"
           herdr agent wait "$hname" --timeout 120000 >/dev/null 2>"$errf" || abort "agent $hname never became ready: $(hx_msg)"
         else
-          err=""
-          for _ in 1 2 3 4 5 6 7 8 9 10; do
-            if err="$(herdr agent start "$hname" --kind claude --pane "$pane" --timeout 120000 -- ${args[@]+"${args[@]}"} 2>&1 >/dev/null)"; then err=""; break; fi
-            case "$err" in *agent_pane_busy*) wait_prompt "$pane" 1000 || true; pause "$pane" ;; *) break ;; esac
-          done
-          [[ -z "$err" ]] || abort "agent start (claude): $err"
+          agent_start claude
         fi ;;
       *) die "start: unknown harness '$f_harness'" ;;
     esac
@@ -280,13 +308,17 @@ case "$verb" in
       IFS=, read -r -a keys <<<"$f_keys"
       herdr agent send-keys "$tgt" "${keys[@]}" >/dev/null 2>"$errf" || hx_fail "agent send-keys"
     elif [[ $have_wait -eq 1 ]]; then
-      err=""
-      if herdr agent prompt "$tgt" "$f_text" --wait --until working --timeout "$f_wait_ms" >/dev/null 2>"$errf"; then exit 0; fi
+      t0=$SECONDS
+      if herdr agent prompt "$tgt" "$f_text" --wait --until working --until blocked --until unknown --timeout "$f_wait_ms" >/dev/null 2>"$errf"; then exit 0; fi
       case "$(hx_code)" in
         agent_prompt_stalled)
+          # Claude Code can drop the Enter of a pasted prompt: press it again, within the budget
           for _ in 1 2 3; do
+            left=$((f_wait_ms - (SECONDS - t0) * 1000))
+            [[ $left -gt 0 ]] || break
+            [[ $left -le 15000 ]] || left=15000
             herdr agent send-keys "$tgt" enter >/dev/null 2>"$errf" || hx_fail "agent send-keys"
-            if herdr agent wait "$tgt" --until working --timeout 15000 >/dev/null 2>&1; then exit 0; fi
+            if herdr agent wait "$tgt" --until working --until blocked --until unknown --timeout "$left" >/dev/null 2>&1; then exit 0; fi
           done
           echo "mux/herdr: send: '$f_to' never started working" >&2; exit 4 ;;
         agent_blocked) die "send: '$f_to' is waiting at a dialog; read it before sending" ;;
@@ -349,7 +381,7 @@ case "$verb" in
           probe="$(agent_probe "$f_to")"
           [[ "${probe%%$'\n'*}" == live ]] || notfound "wait: '$f_to' is gone"
           case "$f_until" in
-            working) sts=(--until working) ;;
+            working) sts=(--until working --until unknown) ;;
             *) sts=(--until idle --until "done") ;;
           esac
           herdr agent wait "$tgt" "${sts[@]}" --timeout "$f_timeout_ms" >/dev/null 2>"$errf" || hx_fail "agent wait" ;;
@@ -365,7 +397,10 @@ case "$verb" in
     case "$(kind_of "$f_id")" in
       pane) herdr pane close "$f_id" >/dev/null 2>"$errf" || hx_fail "pane close" ;;
       tab) herdr tab close "$f_id" >/dev/null 2>"$errf" || hx_fail "tab close" ;;
-      agent) herdr pane close "$(a_pane "$f_id")" >/dev/null 2>"$errf" || hx_fail "pane close" ;;
+      agent)
+        # the agent's current pane if Herdr still knows the name, else the one in the id
+        pane="$(herdr agent get "$(a_name "$f_id")" 2>/dev/null | jq -r '.result.agent.pane_id // .result.pane.pane_id // empty')" || pane=""
+        herdr pane close "${pane:-$(a_pane "$f_id")}" >/dev/null 2>"$errf" || hx_fail "pane close" ;;
       workspace)
         out="$(herdr tab list --workspace "$f_id" 2>"$errf")" || hx_fail "workspace $f_id"
         n="$(jq -r '.result.tabs | length' <<<"$out")"
@@ -383,7 +418,7 @@ case "$verb" in
       [ $ids[] | . as $id
         | if ($id | contains("@")) then
             ($id | sub("@.*$"; "")) as $n | ($id | sub("^.*@"; "")) as $p
-            | ( first($agents[] | select(.name == $n and .pane_id == $p) | {id: $id, kind: "agent", name: $n, state: ((.agent_status // "unknown") | st)})
+            | ( first($agents[] | select(.name == $n) | {id: $id, kind: "agent", name: $n, state: ((.agent_status // "unknown") | st)})
               // first($panes[] | select(.pane_id == $p) | {id: $id, kind: "agent", name: $n, state: "gone"}) )
           else
             ( first($ws[] | select(.workspace_id == $id) | {id: $id, kind: "group", name: (.label // ""), state: ""})
