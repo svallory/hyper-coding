@@ -527,11 +527,12 @@ check_result t22 "a prompt that never starts" 2 PARKED
 assert_eq "send: park.json status" "BLOCKED" "$(jq -r .status "$(st t22)/park.json")"
 assert_eq "send: a prompt that was not delivered leaves no .sent marker" "no" "$([[ -e "$(st t22)/develop.json.sent" ]] && echo yes || echo no)"
 
+# (the seeded .sent markers are empty: a running stub must not take them for a prompt to answer)
 # --- 23: a stale verdict (older than the last prompt) is not reused; a gone dev after develop is taken over ----------------------
 seed_unit() { # ref — develop.json DONE and an old review CHANGES in the state dir, no agents
   mkdir -p "$(st "$1")"
-  printf '%s\n' "$DEV_DONE" >"$(st "$1")/develop.json"; echo 1 >"$(st "$1")/develop.json.sent"
-  printf '%s\n' "$REV_CHANGES" >"$(st "$1")/review-r1.json"; echo 1 >"$(st "$1")/review-r1.json.sent"
+  printf '%s\n' "$DEV_DONE" >"$(st "$1")/develop.json"; : >"$(st "$1")/develop.json.sent"
+  printf '%s\n' "$REV_CHANGES" >"$(st "$1")/review-r1.json"; : >"$(st "$1")/review-r1.json.sent"
   touch -t 202001010000 "$(st "$1")/develop.json" "$(st "$1")/develop.json.sent" "$(st "$1")/review-r1.json" "$(st "$1")/review-r1.json.sent"
 }
 reset_fake; unit t23
