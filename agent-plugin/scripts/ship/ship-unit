@@ -48,7 +48,8 @@
 # are rsynced to ~/.cache/hyper/ship/<plugin version>/ on the host (the host needs no
 # hyper CLI), SHIP_SPACE_ROOT is exported over ssh, and the brief, the rulings file and
 # the spec dir are rsynced to the same paths. The lead's merged config goes over in the
-# ssh environment (SHIP_CONFIG_JSON); the host writes it to notes/loops/<ref>/config.json
+# ssh command line (SHIP_CONFIG_JSON=..., so it is visible in `ps` on the host while the
+# call runs); the host writes it to notes/loops/<ref>/config.json
 # and the driver loads it through SHIP_CONFIG_FILE, so the unit runs under the lead's
 # config whatever the host's own files say. The wait loop polls the host; when ssh fails
 # it reconnects with a growing delay (SHIP_UNIT_POLL_S doubling up to
@@ -72,7 +73,7 @@
 # Environment (test knobs): SHIP_UNIT_POLL_S (poll interval, default 5),
 # SHIP_UNIT_BACKOFF_MAX_S (default 30), SHIP_UNIT_RECONNECT_SEC, SHIP_UNIT_START_GRACE_S
 # (how long a driver that has not written a pid yet counts as starting, default 60),
-# SHIP_UNIT_LOCK_WAIT_S (default 30), SHIP_LOOP_BIN (the driver).
+# SHIP_UNIT_LOCK_WAIT_S (default 300), SHIP_LOOP_BIN (the driver).
 # _launch, _resume, _probe and _driver are internal and need SHIP_UNIT_INTERNAL=1.
 
 set -euo pipefail
@@ -97,7 +98,7 @@ POLL_S="${SHIP_UNIT_POLL_S:-5}"
 BACKOFF_MAX_S="${SHIP_UNIT_BACKOFF_MAX_S:-30}"
 RECONNECT_SEC="${SHIP_UNIT_RECONNECT_SEC:-900}"
 START_GRACE_S="${SHIP_UNIT_START_GRACE_S:-60}"
-LOCK_WAIT_S="${SHIP_UNIT_LOCK_WAIT_S:-30}"
+LOCK_WAIT_S="${SHIP_UNIT_LOCK_WAIT_S:-300}"
 
 E_REFUSED=3 E_USAGE=64 E_INTERNAL=70 E_LOST=75
 usage() { echo "ship-unit: $*" >&2; exit "$E_USAGE"; }
@@ -119,7 +120,12 @@ check_ref() {
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid ref '$1' (letters, digits, '.', '_', '-'; must start with a letter or digit)"
 }
 
-mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
+mtime() { # epoch seconds, 0 when the path is gone (GNU or BSD stat; never a non-number)
+  local m
+  m="$(stat -c %Y "$1" 2>/dev/null)" && [[ "$m" =~ ^[0-9]+$ ]] && { echo "$m"; return; }
+  m="$(stat -f %m "$1" 2>/dev/null)" && [[ "$m" =~ ^[0-9]+$ ]] && { echo "$m"; return; }
+  echo 0
+}
 
 abs_path() { # path -> absolute (the directory must exist)
   local p="$1" d
@@ -137,14 +143,19 @@ load_cfg() { # sets root, exports SHIP_SPACE_ROOT
 positive_number() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v n="$1" 'BEGIN { exit !(n + 0 > 0) }'; }
 
 # --- driver liveness (runs where the driver runs) -------------------------------------------
-# The pid must be alive AND be one of ours: a recycled pid is some other process.
-driver_proc_ok() { # pid
-  local c
+# The pid must be alive AND be our driver: a recycled pid is some other process, and the
+# lead's own `ship-unit run`/`wait` processes are not drivers. The command line comes from
+# ps, else /proc; when neither says, the pid is not taken for ours.
+driver_proc_ok() { # pid ref
+  local c=""
   kill -0 "$1" 2>/dev/null || return 1
-  # If ps itself fails (fork pressure) a live pid gets the benefit of the doubt.
   c="$(ps -o command= -p "$1" 2>/dev/null)" || c=""
-  [[ -n "$c" ]] || return 0
-  case "$c" in *ship-unit*|*ship-loop*|*"${LOOP##*/}"*) return 0 ;; esac
+  if [[ -z "$c" && -r "/proc/$1/cmdline" ]]; then c="$(tr '\0' ' ' <"/proc/$1/cmdline" 2>/dev/null)" || c=""; fi
+  [[ -n "$c" ]] || return 1
+  case "$c" in
+    *ship-unit*" _driver "*"$2"*) return 0 ;;
+    *ship-loop*|*"${LOOP##*/}"*) return 0 ;;
+  esac
   return 1
 }
 
@@ -155,7 +166,7 @@ unit_state() {
   if [[ -s "$d/driver.exit" ]]; then echo "exit $(tr -dc '0-9' <"$d/driver.exit")"; return 0; fi
   if [[ -s "$d/driver.pid" ]]; then
     p="$(cat "$d/driver.pid" 2>/dev/null)" || p=""
-    if [[ "$p" =~ ^[0-9]+$ ]] && driver_proc_ok "$p"; then echo running; return 0; fi
+    if [[ "$p" =~ ^[0-9]+$ ]] && driver_proc_ok "$p" "${d##*/}"; then echo running; return 0; fi
   fi
   launched="$(jq -r '.launched_at // 0' "$d/unit.json" 2>/dev/null)" || launched=0
   [[ "$launched" =~ ^[0-9]+$ ]] || launched=0
@@ -218,6 +229,29 @@ internal_cleanup() {
   if [[ $LOCK_HELD -eq 1 ]]; then rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true; LOCK_HELD=0; fi
 }
 
+# lock_stale <pid> <age> — the holder is gone, or never wrote its pid and is over 10s old.
+lock_stale() {
+  { [[ "$1" =~ ^[0-9]+$ ]] && ! kill -0 "$1" 2>/dev/null; } || { [[ -z "$1" && $2 -gt 10 ]]; }
+}
+
+# lock_break — takeovers are serialised by <lock>.break; inside it the holder is read
+# again, so a lock just taken by someone else is never removed.
+lock_break() {
+  local b="$LOCK_DIR.break" p age
+  if ! mkdir "$b" 2>/dev/null; then
+    # A breaker that crashed leaves its marker behind.
+    age=$(( $(date +%s) - $(mtime "$b") ))
+    [[ $age -le 30 ]] || rmdir "$b" 2>/dev/null || true
+    return 0
+  fi
+  p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
+  age=$(( $(date +%s) - $(mtime "$LOCK_DIR") ))
+  if [[ -d "$LOCK_DIR" ]] && lock_stale "$p" "$age"; then
+    rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true
+  fi
+  rmdir "$b" 2>/dev/null || true
+}
+
 lock_acquire() {
   local waited_ms=0 p age
   LOCK_DIR="$root/.hyper/ship-unit.lock"
@@ -226,8 +260,8 @@ lock_acquire() {
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
     age=$(( $(date +%s) - $(mtime "$LOCK_DIR") ))
-    if { [[ "$p" =~ ^[0-9]+$ ]] && ! kill -0 "$p" 2>/dev/null; } || { [[ -z "$p" ]] && [[ $age -gt 10 ]]; }; then
-      rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true
+    if lock_stale "$p" "$age"; then
+      lock_break
       continue
     fi
     if [[ $waited_ms -ge $((LOCK_WAIT_S * 1000)) ]]; then
@@ -328,6 +362,8 @@ if [[ "$sub" == _launch ]]; then
   [[ -n "$base" ]] || base="$(ship_cfg_get base)" || fail "config has no base"
   d="$root/notes/loops/$ref"
 
+  # Fetching can be slow; it must not hold the lock (a wave of runs would queue behind it).
+  GIT_TERMINAL_PROMPT=0 git -C "$root" fetch -q origin >/dev/null 2>&1 || true
   lock_acquire
   check_free "$ref"
 
@@ -341,7 +377,6 @@ if [[ "$sub" == _launch ]]; then
       (CDPATH='' cd -- "$root" && wt switch --no-cd "$branch") >&2 || fail "wt switch $branch failed"
     else
       # A new branch starts from the remote base, not from whatever the local one is.
-      GIT_TERMINAL_PROMPT=0 git -C "$root" fetch -q origin >/dev/null 2>&1 || true
       from="$base"
       git -C "$root" rev-parse --verify -q "refs/remotes/origin/$base" >/dev/null 2>&1 && from="origin/$base"
       (CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$from" "$branch") >&2 || fail "wt switch -c $branch failed"

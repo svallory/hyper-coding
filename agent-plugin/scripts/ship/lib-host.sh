@@ -98,7 +98,7 @@ ship_host_run() {
   shift 4
   cmd="env SHIP_SPACE_ROOT=$(ship_sq "$root") SHIP_HOST=$(ship_sq "$name") SHIP_UNIT_INTERNAL=1"
   if [[ -n "${SHIP_CONFIG_JSON:-}" ]]; then
-    cmd+=" SHIP_CONFIG_JSON=$(ship_sq "$SHIP_CONFIG_JSON") SHIP_CONFIG_LAYERS='[]'"
+    cmd+=" SHIP_CONFIG_JSON=$(ship_sq "$SHIP_CONFIG_JSON") SHIP_CONFIG_LAYERS=$(ship_sq '[{"file":"the lead config","data":{}}]')"
   fi
   cmd+=" bash \"\$HOME\"/$(_ship_host_cache)/scripts/ship/$script"
   for a in "$@"; do cmd+=" $(ship_sq "$a")"; done

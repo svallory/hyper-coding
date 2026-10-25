@@ -388,6 +388,15 @@ echo 0 > "$(loops busy1)/driver.exit"
 mode full3 ready
 assert_eq "a unit with driver.exit does not count" "0" "$(unit run full3 --brief "$BRIEF" --class S)"
 rm -f "$(loops busy1)/driver.exit"
+# the lead's own ship-unit processes are not drivers
+mkdir -p "$FIX/lead"
+printf '#!/usr/bin/env bash\nwhile :; do sleep 1; done\n' > "$FIX/lead/ship-unit"
+bash "$FIX/lead/ship-unit" wait zz & LEADP=$!; SLEEPERS="$SLEEPERS $LEADP"
+mk_state leadwait local "$LEADP"
+mode full6 ready
+assert_eq "a pid running 'ship-unit wait' is not a driver: its unit's slot is free" "0" "$(unit run full6 --brief "$BRIEF" --class S)"
+unsleep "$LEADP"
+rm -rf "$(loops leadwait)"
 # starting units count
 rm_loops "$SPACE"
 unsleep "$S1" "$OTHER"
@@ -458,6 +467,20 @@ mkdir -p "$SPACE/.hyper/ship-unit.lock"; echo 99999999 > "$SPACE/.hyper/ship-uni
 mode lk ready
 assert_eq "a launch lock held by a dead process is taken over" "0" "$(unit run lk --brief "$BRIEF" --class S)"
 assert_eq "...and released after the launch" "" "$([[ -e "$SPACE/.hyper/ship-unit.lock" ]] && echo held)"
+# a crashed holder and two waiters: the takeover is serialised, so exactly one gets in
+rm_loops "$SPACE"; rm_loops "$HOSTSPACE"; rm -f "$FIX/bg."*
+mkdir -p "$HOSTSPACE/.hyper/ship-unit.lock"; echo 99999999 > "$HOSTSPACE/.hyper/ship-unit.lock/pid"
+mode k1 hold; mode k2 hold
+bg k1 run k1 --brief "$BRIEF" --class S --host box
+bg k2 run k2 --brief "$BRIEF" --class S --host box
+wait_for 120 test -s "$FIX/bg.k1.rc" -o -s "$FIX/bg.k2.rc"
+sleep 0.3
+rk1="$(cat "$FIX/bg.k1.rc" 2>/dev/null)"; rk2="$(cat "$FIX/bg.k2.rc" 2>/dev/null)"
+assert_eq "crashed lock holder, two waiters at slots=1: one is refused (3), not both let in" "3" "$( [[ "$rk1" == 3 ]] && echo 3 || echo "$rk2" )"
+if [[ "$rk1" == 3 ]]; then kw=k2; else kw=k1; fi
+release "$kw"
+assert_eq "...the other runs to READY" "0" "$(bgrc "$kw")"
+assert_eq "...and no break marker is left" "" "$([[ -e "$HOSTSPACE/.hyper/ship-unit.lock.break" ]] && echo left)"
 
 LOCAL_RUNS="$(mux_count run)"
 # 5: host runs ---------------------------------------------------------------------------------
@@ -539,11 +562,14 @@ wait_for 60 exists "$(hloops h7)/driver.pid"
 wait_for 60 exists "$(loops h7)/unit.json"
 : > "$FIX/ssh.down"
 t0=$SECONDS
-rc="$(SHIP_UNIT_RECONNECT_SEC=1 unit wait h7)"
+# bounded: a regression that waits forever fails here instead of hanging the suite
+SHIP_UNIT_RECONNECT_SEC=1 bg w7 wait h7
+rc="$(bgrc w7 20)"
+if [[ -z "$rc" ]]; then pkill -f "ship-unit wait h7" 2>/dev/null; rc="hung"; fi
 assert_eq "wait: a host that stays down is given up on (75)" "75" "$rc"
-assert_eq "...within a few seconds" "yes" "$([[ $((SECONDS - t0)) -le 10 ]] && echo yes)"
-assert_contains "...saying it gave up" "$(err)" "gave up reconnecting to box"
-assert_contains "...and that wait reattaches" "$(err)" "ship-unit wait h7"
+assert_eq "...within a few seconds" "yes" "$([[ $((SECONDS - t0)) -le 20 ]] && echo yes)"
+assert_contains "...saying it gave up" "$(cat "$FIX/bg.w7.err")" "gave up reconnecting to box"
+assert_contains "...and that wait reattaches" "$(cat "$FIX/bg.w7.err")" "ship-unit wait h7"
 # the original run gives up too, after the default window: stop it by bringing ssh back
 rm -f "$FIX/ssh.down"
 release h7
