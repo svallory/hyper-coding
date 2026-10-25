@@ -174,6 +174,13 @@ fi
 # --- preconditions ---------------------------------------------------------------------
 status=""
 if [[ -f "$result" ]]; then status="$(jq -r '.status // ""' "$result" 2>/dev/null)" || status=""; fi
+if [[ -f "$result" ]] && ! validate_verdict "$SHIP_PLUGIN_ROOT/scripts/ship/schemas/result.json" "$result" 2>"$loop_dir/.validate.err"; then
+  if [[ $force -ne 1 ]]; then
+    refuse "$result does not match the result schema: $(head -n 3 "$loop_dir/.validate.err" | tr '\n' ' ')"
+  fi
+  echo "ship-land: warning: $result does not match the result schema; continuing (--force)" >&2
+fi
+rm -f "$loop_dir/.validate.err"
 if [[ "$status" != READY && $force -ne 1 ]]; then
   refuse "$ref is not READY (result.json status: ${status:-none}); fix it, or --force to land anyway"
 fi
