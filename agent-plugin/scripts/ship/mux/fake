@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+# mux/fake — the test backend of ship-mux. It touches no multiplexer.
+#
+# Every call is appended to $SHIP_MUX_FAKE_LOG as one JSON line
+# {"verb":"send","args":["--ref","r","--to","agent-3","--text","hi"]}. State
+# lives in $SHIP_MUX_FAKE_DIR; both variables are required (exit 1 if unset).
+# Ids are generated: space-N, pane-N, agent-N (one locked counter), group-<name>.
+# Names are shortened to 24 characters, like a backend with a name limit.
+# Exit codes follow the backend contract in ship-mux's header: 4 for a timeout,
+# 5 for a target that does not exist.
+#
+# Screens: `run -- CMD` appends "$ CMD" to the pane's screen, `send --text T`
+# appends T to the agent's pane screen; `read` prints the scripted file (below)
+# and then the screen. Sending to a pane id is an error (exit 1).
+#
+# Scripted answers, all plain files under $SHIP_MUX_FAKE_DIR, looked up by the
+# id first and then by the agent's (shortened) name:
+#   read/<key>      text printed by `read` before the live screen
+#   status/<key>    the agent state, one of working|idle|blocked|gone (an agent
+#                   that exited but still exists; anything else
+#                   is an error, exit 1). With several lines, `status` consumes
+#                   the first line per call and keeps the last one; `wait` only
+#                   peeks at the first. Default: idle. `send --text --wait-ms`
+#                   exits 4 when a status file exists and says the agent is not
+#                   working (it never started), else 0.
+#   groups/<name>   a pre-existing units group: `open` then reports created=false
+#   check-fail      `check` prints this file and exits 1
+# Written for assertions:
+#   sent/<id>       every --text sent, one line each; --keys as "<keys:enter,esc>"
+#
+# `wait` never sleeps: 0 when the state is reached, 4 when not. A target that does
+# not exist exits 5 (any --until but `gone`; `gone` then exits 0), as do run, send,
+# read and status.
+
+# shellcheck disable=SC2034  # f_* are filled by printf -v; not every verb reads each
+set -euo pipefail
+
+[[ -n "${SHIP_MUX_FAKE_DIR:-}" ]] || { echo "mux/fake: SHIP_MUX_FAKE_DIR is not set" >&2; exit 1; }
+[[ -n "${SHIP_MUX_FAKE_LOG:-}" ]] || { echo "mux/fake: SHIP_MUX_FAKE_LOG is not set" >&2; exit 1; }
+D="$SHIP_MUX_FAKE_DIR"
+mkdir -p "$D/state" "$D/groups" "$D/read" "$D/status" "$D/sent" "$D/screen"
+
+verb="${1:?mux/fake: verb required}"
+shift
+jq -nc --arg v "$verb" '{verb: $v, args: $ARGS.positional}' --args -- "$@" >>"$SHIP_MUX_FAKE_LOG"
+
+die() { echo "mux/fake: $*" >&2; exit 1; }
+notfound() { echo "mux/fake: $*" >&2; exit 5; }
+
+# next_id <prefix> — space-1, pane-2, ... from one counter, under a lock.
+next_id() {
+  local n=0 i=0
+  while ! mkdir "$D/counter.lock" 2>/dev/null; do
+    i=$((i + 1)); [[ $i -le 200 ]] || die "counter lock timed out"
+    sleep 0.02
+  done
+  [[ -f "$D/counter" ]] && n="$(cat "$D/counter")"
+  n=$((n + 1))
+  printf '%s' "$n" >"$D/counter"
+  rmdir "$D/counter.lock"
+  printf '%s-%s\n' "$1" "$n"
+}
+
+# Flags: fill f_<name> from the args. The command after `--` is kept for run.
+# Filled by printf -v; not every verb reads every one.
+# shellcheck disable=SC2034
+f_ref="" f_cwd="" f_label="" f_group="" f_pane="" f_space="" f_name="" f_harness=""
+f_to="" f_text="" f_keys="" f_wait_ms="" f_lines="" f_until="" f_timeout_ms="" f_id="" f_ids="[]"
+have_text=0 have_wait=0
+cmdline=()
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "--" ]]; then shift; cmdline=("$@"); break; fi
+  [[ "$1" == --* && $# -ge 2 ]] || die "bad argument '$1'"
+  n="${1#--}"; n="${n//-/_}"
+  printf -v "f_$n" '%s' "$2"
+  [[ "$n" != text ]] || have_text=1
+  [[ "$n" != wait_ms ]] || have_wait=1
+  shift 2
+done
+
+sfile() { printf '%s/state/%s.json' "$D" "$1"; }
+exists() { [[ -f "$(sfile "$1")" ]]; }
+field() { jq -r --arg f "$2" '.[$f] // ""' "$(sfile "$1")"; }
+safe() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'; }
+short() { printf '%s' "${1:0:24}"; }
+
+# scripted <dir> <id> — print the first existing scripted file's path.
+scripted() {
+  local k
+  for k in "$2" "$( exists "$2" && field "$2" name || true )"; do
+    [[ -n "$k" && -f "$D/$1/$(safe "$k")" ]] && { printf '%s\n' "$D/$1/$(safe "$k")"; return 0; }
+  done
+  return 1
+}
+
+# The screen of an id: an agent shares its pane's screen.
+screen_of() {
+  local id="$1"
+  [[ "$(field "$id" kind)" != agent ]] || id="$(field "$id" pane)"
+  printf '%s/screen/%s' "$D" "$(safe "$id")"
+}
+
+# agent_state <id> [consume] — current state of an agent id; 3 on a bad script.
+agent_state() {
+  local f first
+  if ! exists "$1" || [[ "$(field "$1" kind)" != agent ]]; then echo gone; return 0; fi
+  if f="$(scripted status "$1")"; then
+    first="$(head -n 1 "$f")"
+    case "$first" in
+      working|idle|blocked|gone) ;;
+      *) echo "mux/fake: unknown scripted state '$first' in $f" >&2; return 3 ;;
+    esac
+    if [[ "${2:-}" == consume && "$(wc -l <"$f" | tr -d ' ')" -gt 1 ]]; then
+      tail -n +2 "$f" >"$f.tmp" && mv "$f.tmp" "$f"
+    fi
+    echo "$first"
+  else
+    echo idle
+  fi
+}
+
+case "$verb" in
+  check)
+    if [[ -f "$D/check-fail" ]]; then cat "$D/check-fail" >&2; exit 1; fi ;;
+
+  open)
+    sp="" pn=""
+    if [[ -f "$D/state/open-$(safe "$f_ref")" ]]; then
+      sp="$(sed -n 1p "$D/state/open-$(safe "$f_ref")")"
+      pn="$(sed -n 2p "$D/state/open-$(safe "$f_ref")")"
+      exists "$sp" || { sp=""; pn=""; }
+    fi
+    gjson=null
+    if [[ -n "$f_group" ]]; then
+      gid="group-$(safe "$f_group")"
+      if [[ -f "$D/groups/$(safe "$f_group")" ]]; then created=false; else
+        created=true; printf '%s\n' "$f_group" >"$D/groups/$(safe "$f_group")"
+      fi
+      gjson="$(jq -nc --arg id "$gid" --argjson c "$created" --arg n "$f_group" '{id: $id, created: $c, name: $n}')"
+    fi
+    if [[ -z "$sp" ]]; then
+      sp="$(next_id space)"; pn="$(next_id pane)"
+      lbl="$(short "${f_label:-$f_ref}")"
+      jq -nc --arg id "$sp" --arg n "$lbl" --arg r "$f_ref" --arg c "$f_cwd" --arg g "$f_group" \
+        '{id: $id, kind: "space", name: $n, ref: $r, cwd: $c, group: $g}' >"$(sfile "$sp")"
+      jq -nc --arg id "$pn" --arg n "$lbl" --arg r "$f_ref" --arg s "$sp" '{id: $id, kind: "pane", name: $n, ref: $r, space: $s}' >"$(sfile "$pn")"
+      printf '%s\n%s\n' "$sp" "$pn" >"$D/state/open-$(safe "$f_ref")"
+    fi
+    jq -nc --arg s "$sp" --arg p "$pn" --argjson g "$gjson" \
+      '{space: $s, pane: $p} + (if $g == null then {} else {group: $g} end)' ;;
+
+  run)
+    exists "$f_pane" || notfound "run: no such pane '$f_pane'"
+    [[ "$(field "$f_pane" kind)" == pane ]] || die "run: '$f_pane' is not a pane"
+    printf '$ %s\n' "${cmdline[*]}" >>"$(screen_of "$f_pane")" ;;
+
+  start)
+    exists "$f_space" || notfound "start: no such space '$f_space'"
+    pn="$(next_id pane)"; ag="$(next_id agent)"
+    nm="$(short "$f_name")"
+    jq -nc --arg id "$pn" --arg n "$nm" --arg r "$f_ref" --arg s "$f_space" '{id: $id, kind: "pane", name: $n, ref: $r, space: $s}' >"$(sfile "$pn")"
+    jq -nc --arg id "$ag" --arg n "$nm" --arg r "$f_ref" --arg s "$f_space" --arg p "$pn" --arg h "$f_harness" \
+      '{id: $id, kind: "agent", name: $n, ref: $r, space: $s, pane: $p, harness: $h}' >"$(sfile "$ag")"
+    jq -nc --arg a "$ag" --arg p "$pn" '{agent: $a, pane: $p}' ;;
+
+  send)
+    exists "$f_to" || notfound "send: no such agent '$f_to'"
+    [[ "$(field "$f_to" kind)" == agent ]] || die "send: '$f_to' is not an agent"
+    if [[ $have_text -eq 1 ]]; then
+      printf '%s\n' "$f_text" >>"$D/sent/$(safe "$f_to")"
+      printf '%s\n' "$f_text" >>"$(screen_of "$f_to")"
+      if [[ $have_wait -eq 1 ]] && scripted status "$f_to" >/dev/null; then
+        st="$(agent_state "$f_to")" || exit 1
+        [[ "$st" == working ]] || { echo "mux/fake: agent '$f_to' did not start working" >&2; exit 4; }
+      fi
+    else
+      printf '<keys:%s>\n' "$f_keys" >>"$D/sent/$(safe "$f_to")"
+    fi ;;
+
+  read)
+    exists "$f_to" || notfound "read: no such agent or pane '$f_to'"
+    tmp="$(mktemp "$D/read.XXXXXX")"
+    {
+      if f="$(scripted read "$f_to")"; then cat "$f"; fi
+      s="$(screen_of "$f_to")"
+      if [[ -f "$s" ]]; then cat "$s"; fi
+    } >"$tmp"
+    if [[ -n "$f_lines" ]]; then tail -n "$f_lines" "$tmp"; else cat "$tmp"; fi
+    rm -f "$tmp" ;;
+
+  status)
+    exists "$f_to" || notfound "status: no such agent '$f_to'"
+    [[ "$(field "$f_to" kind)" == agent ]] || die "status: '$f_to' is not an agent"
+    st="$(agent_state "$f_to" consume)" || exit 1
+    jq -nc --arg s "$st" --arg p "$(field "$f_to" pane)" --arg sp "$(field "$f_to" space)" '{state: $s, pane: $p, space: $sp}' ;;
+
+  wait)
+    case "$f_until" in
+      gone)  if exists "$f_to"; then
+               [[ "$(field "$f_to" kind)" == agent ]] || exit 4
+               st="$(agent_state "$f_to")" || exit 1
+               [[ "$st" == gone ]] || exit 4
+             fi ;;
+      ready) exists "$f_to" || notfound "wait: no such target '$f_to'" ;;
+      *)     exists "$f_to" || notfound "wait: no such target '$f_to'"
+             st="$(agent_state "$f_to")" || exit 1
+             [[ "$st" == "$f_until" ]] || exit 4 ;;
+    esac ;;
+
+  close)
+    case "$f_id" in
+      group-*)
+        found=""
+        for g in "$D"/groups/*; do
+          [[ -e "$g" ]] || continue
+          [[ "group-${g##*/}" == "$f_id" ]] || continue
+          gname="$(cat "$g")"
+          for s in "$D"/state/*.json; do
+            [[ -e "$s" ]] || continue
+            [[ "$(jq -r 'select(.kind == "space") | .group // ""' "$s")" == "$gname" ]] && die "close: group '$f_id' still has children"
+          done
+          rm -f "$g"; found=1
+        done
+        [[ -n "$found" ]] || notfound "close: no such group '$f_id'" ;;
+      *)
+        exists "$f_id" || notfound "close: no such id '$f_id'"
+        case "$(field "$f_id" kind)" in
+          space)
+            for s in "$D"/state/*.json; do
+              [[ -e "$s" ]] || continue
+              [[ "$(jq -r '.space // ""' "$s")" == "$f_id" ]] && rm -f "$s"
+            done
+            rm -f "$D/state/open-$(safe "$(field "$f_id" ref)")" ;;
+          pane)
+            for s in "$D"/state/*.json; do
+              [[ -e "$s" ]] || continue
+              [[ "$(jq -r 'select(.kind == "agent") | .pane // ""' "$s")" == "$f_id" ]] && rm -f "$s"
+            done ;;
+        esac
+        rm -f "$(sfile "$f_id")" ;;
+    esac ;;
+
+  list)
+    out="[]"
+    while IFS= read -r id; do
+      [[ -n "$id" ]] || continue
+      case "$id" in
+        group-*)
+          for g in "$D"/groups/*; do
+            [[ -e "$g" ]] || continue
+            [[ "group-${g##*/}" == "$id" ]] || continue
+            out="$(jq -c --arg id "$id" --arg n "$(cat "$g")" '. + [{id: $id, kind: "group", name: $n, state: ""}]' <<<"$out")"
+          done ;;
+        *)
+          exists "$id" || continue
+          st=""
+          if [[ "$(field "$id" kind)" == agent ]]; then st="$(agent_state "$id")" || exit 1; fi
+          out="$(jq -c --slurpfile o "$(sfile "$id")" --arg st "$st" '. + [{id: $o[0].id, kind: $o[0].kind, name: $o[0].name, state: $st}]' <<<"$out")"
+          ;;
+      esac
+    done < <(jq -r '.[]' <<<"$f_ids")
+    printf '%s\n' "$out" ;;
+
+  *) die "unknown verb '$verb'" ;;
+esac

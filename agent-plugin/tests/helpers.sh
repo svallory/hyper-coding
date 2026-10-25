@@ -75,6 +75,39 @@ assert_not_contains() {
   esac
 }
 
+# herdr_invocation_re — C-11: an ERE matching a Herdr command invocation, that is
+# the Herdr command (after optional flags) followed by one of its real
+# subcommands, or `command -v`/`type -p`/`which`/`hash` of it. Prose and stub
+# strings that mention Herdr do not match. It is built from pieces, so this file
+# does not match itself.
+herdr_invocation_re() {
+  local h=herd subs tail
+  h+=r
+  subs='agent|api|channel|completion|config|integration|machine|notification|pane|server|session|status|tab|update|workspace|worktree'
+  tail='( |$|["'"'"'`);])'
+  printf '%s' "(^|[^[:alnum:]_./-])${h}( +--?[a-z][a-z-]*( +[^ -][^ ]*)?)* +(${subs})${tail}|(command +-v|type +-[pP]|which|hash) +${h}\\b"
+}
+
+# assert_no_direct_herdr [excluded path prefix...] — C-11: no file under the
+# plugin except scripts/ship/mux/<the Herdr backend> invokes the Herdr command.
+# Callers pass prefixes (relative to the plugin dir) still allowed to break the
+# rule; test S passes skills/team/ until that skill is deleted.
+assert_no_direct_herdr() {
+  local f rel x skip hits="" re
+  re="$(herdr_invocation_re)"
+  while IFS= read -r f; do
+    rel="${f#"$PLUGIN_DIR"/}"
+    [[ "$rel" != scripts/ship/mux/herdr ]] || continue
+    skip=0
+    for x in "$@"; do case "$rel" in "$x"*) skip=1 ;; esac; done
+    [[ $skip -eq 0 ]] || continue
+    if grep -qE "$re" "$f" 2>/dev/null; then
+      hits="$hits $rel"
+    fi
+  done < <(find "$PLUGIN_DIR" -type f -not -path '*/.git/*' -not -path '*/node_modules/*')
+  assert_eq "no file calls Herdr directly (C-11)" "" "$hits"
+}
+
 # Fixture builders ----------------------------------------------------------
 
 # make_checkout <dir> — normal working tree with one commit
