@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# ship-retire — stop one agent the way its harness expects, wait until the
+# multiplexer no longer has it, then close it (which also closes its pane).
+#
+# A retired agent whose pane stays open is not retired: the pane still holds a
+# shell, the operator's space is cluttered, and the next lead cannot tell a
+# finished dev from a live one. This is the one retire path; ship-land's
+# teardown uses it for every agent recorded for the unit.
+#
+# Usage: ship-retire --ref R [--harness claude|pi|codex] [--timeout S] <agent-id>
+#
+#   --ref      the unit ref; the agent id must be recorded for it (ship-mux)
+#   --harness  how to stop the agent. claude: type /exit (ctrl+d if that fails).
+#              pi: ctrl+d, never a prompt (a prompt is a user turn there and
+#              re-sends the whole context). codex: ctrl+c twice. Unset (the
+#              record does not say): ctrl+d twice, which every harness treats
+#              as quit at an empty prompt.
+#   --timeout  seconds to wait for the agent to disappear (default 60). At a
+#              third of the budget an agent that ignores the stop (mid-turn)
+#              gets esc, ctrl+c and the stop again, once.
+#
+# The agent is reached only through ship-mux: status, send, wait, close. An
+# agent that is already gone (state "gone" with exit 0: the process exited but
+# the backend still has the id; or exit 5: the id has vanished) is not an
+# error: it is only closed. A wait that returns 0 or 5 also means gone.
+#
+# Exit codes: 0 retired (or already gone); 1 error; 2 usage; 3 refused by
+# ship-mux (id not recorded for the ref); 4 the agent did not stop in time (its
+# pane is left open so a human can look).
+#
+# Environment: SHIP_RETIRE_POLL (seconds between waits, default 1).
+
+set -euo pipefail
+
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+_dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+MUX="$_dir/ship-mux"
+
+usage() { echo "ship-retire: $*" >&2; exit 2; }
+say() { echo "ship-retire: $*"; }
+
+ref="" harness="" timeout=60 agent=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ref|--harness|--timeout)
+      [[ $# -ge 2 ]] || usage "$1 needs a value"
+      case "$1" in --ref) ref="$2" ;; --harness) harness="$2" ;; --timeout) timeout="$2" ;; esac
+      shift 2 ;;
+    -h|--help) sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*) usage "unknown option $1" ;;
+    *) [[ -z "$agent" ]] || usage "one agent at a time"; agent="$1"; shift ;;
+  esac
+done
+[[ -n "$ref" ]] || usage "--ref is required"
+[[ -n "$agent" ]] || usage "an agent id is required"
+case "$harness" in ""|claude|pi|codex) ;; *) usage "--harness must be claude, pi or codex (got '$harness')" ;; esac
+[[ "$timeout" =~ ^[0-9]+$ && "$timeout" -gt 0 ]] || usage "--timeout takes whole seconds (> 0)"
+poll="${SHIP_RETIRE_POLL:-1}"
+
+mux() { bash "$MUX" "$@"; }
+# keys <list> — best effort; "gone" (5) and any failure are ignored here, the
+# wait decides what happened.
+keys() { mux send --ref "$ref" --to "$agent" --keys "$1" >/dev/null 2>&1 || true; }
+
+send_stop() {
+  case "$harness" in
+    claude)
+      mux send --ref "$ref" --to "$agent" --text "/exit" >/dev/null 2>&1 || keys ctrl+d ;;
+    pi) keys ctrl+d ;;
+    codex) keys ctrl+c; sleep 1; keys ctrl+c ;;
+    *) keys ctrl+d,ctrl+d ;;
+  esac
+}
+
+# close_agent — ship-mux close: 0 also when the backend no longer has it.
+close_agent() {
+  local rc=0
+  mux close --ref "$ref" --id "$agent" >/dev/null || rc=$?
+  case "$rc" in
+    0) say "$agent closed" ;;
+    3) echo "ship-retire: ship-mux refused to close '$agent' (not recorded for ref '$ref')" >&2; exit 3 ;;
+    *) echo "ship-retire: could not close '$agent' (ship-mux exit $rc)" >&2; exit 1 ;;
+  esac
+}
+
+rc=0
+out="$(mux status --ref "$ref" --to "$agent" 2>/dev/null)" || rc=$?
+case "$rc" in
+  0) ;;
+  3) echo "ship-retire: ship-mux refused '$agent' (not recorded for ref '$ref', or not an agent)" >&2; exit 3 ;;
+  5) out='{"state":"gone"}' ;;
+  *) echo "ship-retire: ship-mux status failed (exit $rc)" >&2; exit 1 ;;
+esac
+state="$(jq -r '.state // ""' <<<"$out" 2>/dev/null)" || state=""
+if [[ "$state" == gone ]]; then
+  say "$agent is already gone"
+  close_agent
+  exit 0
+fi
+
+say "stopping $agent (${harness:-unknown harness}, state ${state:-unknown})"
+send_stop
+
+deadline=$((SECONDS + timeout))
+escalate_at=$((SECONDS + timeout / 3))
+escalated=0 gone=0
+while :; do
+  rc=0
+  mux wait --ref "$ref" --to "$agent" --until gone --timeout-ms 1000 >/dev/null 2>&1 || rc=$?
+  case "$rc" in
+    0|5) gone=1; break ;;
+    4) ;;
+    *) echo "ship-retire: ship-mux wait failed (exit $rc)" >&2; exit 1 ;;
+  esac
+  if [[ $SECONDS -ge $deadline ]]; then break; fi
+  if [[ $escalated -eq 0 && $SECONDS -ge $escalate_at ]]; then
+    escalated=1
+    # An agent mid-turn ignores the stop: esc then ctrl+c gets it back to its
+    # prompt, then the stop again.
+    keys esc; sleep 1; keys ctrl+c; sleep 1
+    send_stop
+  fi
+  sleep "$poll"
+done
+
+if [[ $gone -ne 1 ]]; then
+  echo "ship-retire: $agent still present after ${timeout}s; its pane is left open" >&2
+  exit 4
+fi
+say "$agent stopped"
+close_agent
