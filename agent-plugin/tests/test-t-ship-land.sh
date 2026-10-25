@@ -141,9 +141,6 @@ mk_unit u1 101; U1_SPACE=$U_SPACE U1_PANE=$U_PANE U1_A1=$U_A1 U1_A2=$U_A2 U1_P3=
 mk_unit u2 102; U2_SPACE=$U_SPACE U2_A1=$U_A1 U2_A2=$U_A2
 G1="$(jq -r '.created[] | select(.kind == "space") | .group' "$SPACE/notes/loops/u1/mux.json")"
 advance_main one
-rc="$(land u1)"
-assert_eq "an on_land command that uses {task} needs --task (usage error)" "2" "$rc"
-assert_eq "...and nothing happened before that" "0" "$(gate_runs)"
 rm -f "$SHIP_MUX_FAKE_LOG"
 rc="$(land u1 --task T-9)"
 assert_eq "land u1 exits 0" "0" "$rc"
@@ -157,8 +154,8 @@ assert_eq "on_land ran with {ref}, {pr} and {task} replaced" "u1-101-T-9" "$(cat
 assert_eq "the lock is released" "no" "$([[ -e "$SPACE/.hyper/ship-land.lock" ]] && echo yes || echo no)"
 assert_contains "stdout says what landed" "$(cat "$FIX/land.out")" "u1 landed"
 # teardown
-assert_contains "agent 1 got /exit (claude)" "$(cat "$(sent_file "$U1_A1")" 2>/dev/null)" "ctrl+d"
-assert_contains "agent 2 got a stop key" "$(cat "$(sent_file "$U1_A2")" 2>/dev/null)" "ctrl+d"
+assert_eq "the claude agent got /exit (harness from the record)" "/exit" "$(cat "$(sent_file "$U1_A1")" 2>/dev/null)"
+assert_eq "the pi agent got a single ctrl+d" "<keys:ctrl+d>" "$(cat "$(sent_file "$U1_A2")" 2>/dev/null)"
 assert_eq "u2's agents were not touched" "no" "$([[ -e "$(sent_file "$U2_A1")" || -e "$(sent_file "$U2_A2")" ]] && echo yes || echo no)"
 assert_ok "the extra pane was closed" log_closed "$U1_P3"
 assert_ok "the unit space was closed" log_closed "$U1_SPACE"
@@ -174,11 +171,18 @@ assert_eq "the loop dir moved to .done" "yes" "$([[ -f "$SPACE/notes/loops/.done
 
 # 2: landing the last unit closes the empty, ship-created group -----------------------
 advance_main two
-rc="$(land u2 --task T-10)"
+rc="$(land u2)"
 assert_eq "land u2 exits 0" "0" "$rc"
+assert_eq "{task} falls back to the ref" "u2-102-u2" "$(tail -n 1 "$ONLAND_LOG")"
 assert_eq "the empty ship-created group was closed" "no" "$([[ -f "$SHIP_MUX_FAKE_DIR/groups/proj-units" ]] && echo yes || echo no)"
 assert_eq "...and dropped from the group record" "{}" "$(jq -c .groups "$SPACE/.hyper/ship-mux.json")"
 assert_contains "stdout says the group closed" "$(cat "$FIX/land.out")" "units group $G1 closed"
+
+# a record without a harness (older record) falls back to ctrl+d twice
+mk_unit u2b 120
+jq '(.created[] | select(.kind == "agent")) |= del(.harness)' "$SPACE/notes/loops/u2b/mux.json" > "$FIX/m.json" && mv "$FIX/m.json" "$SPACE/notes/loops/u2b/mux.json"
+assert_eq "abandon with harness-less records exits 0" "0" "$(land u2b --abandon)"
+assert_eq "...the agent got ctrl+d twice" "<keys:ctrl+d,ctrl+d>" "$(cat "$(sent_file "$U_A1")")"
 
 # 3: a group ship did not create is never closed ---------------------------------------
 rm -rf "$SHIP_MUX_FAKE_DIR" "$SHIP_MUX_FAKE_LOG" "$SPACE/.hyper/ship-mux.json"

@@ -10,8 +10,7 @@
 #              result.json and mux.json
 #   --force    land: merge although result.json is not READY. With --abandon:
 #              delete the branch too (wt remove -D), even if it is unmerged
-#   --task ID  the unit's tracker id, substituted for {task} in on_land
-#              commands. Required when an on_land command uses {task}.
+#   --task ID  substituted for {task} in on_land commands (default: the ref)
 #   --abandon  run only the teardown (steps 7 below): no merge, no gate, no push
 #
 # Steps
@@ -94,13 +93,16 @@ if [[ -d "$wt_path" ]]; then branch="$(git -C "$wt_path" branch --show-current 2
 
 # --- teardown ------------------------------------------------------------------------
 teardown() {
-  local bad=0 id rc out left groups g
+  local bad=0 id rc out left groups g h hargs
 
   if [[ -f "$rec" ]]; then
     # 1. every recorded agent, stopped the way its harness expects
     for id in $(jq -r '.created[]? | select(.kind == "agent") | .id' "$rec"); do
       rc=0
-      bash "$RETIRE" --ref "$ref" "$id" || rc=$?
+      h="$(jq -r --arg id "$id" '.created[] | select(.id == $id) | .harness // ""' "$rec")"
+      hargs=()
+      case "$h" in claude|pi|codex) hargs=(--harness "$h") ;; esac
+      bash "$RETIRE" --ref "$ref" ${hargs[@]+"${hargs[@]}"} "$id" || rc=$?
       # A stuck agent is not retired gracefully, but closing its pane below
       # ends it; say so and go on.
       [[ $rc -eq 0 ]] || echo "ship-land: warning: ship-retire $id exited $rc; closing its pane regardless" >&2
@@ -183,9 +185,7 @@ case "$method" in rebase|squash|merge) ;; *) fail "merge_method must be rebase, 
 on_land="[]"
 on_land="$(ship_cfg_get on_land)" || [[ $? -eq 3 ]] || exit 1
 [[ "$(jq -r 'type' <<<"$on_land")" == array ]] || fail "on_land must be a list of commands"
-if [[ -z "$task" ]] && jq -e 'any(.[]; type == "string" and contains("{task}"))' <<<"$on_land" >/dev/null; then
-  usage "an on_land command uses {task}: pass --task ID"
-fi
+[[ -n "$task" ]] || task="$ref"
 [[ -d "$wt_path" ]] || fail "worktree $wt_path does not exist"
 [[ -n "$branch" ]] || fail "worktree $wt_path is not on a branch"
 if [[ -n "$(git -C "$wt_path" status --porcelain --untracked-files=no)" ]]; then
