@@ -3,8 +3,8 @@
 # merge its PR, run the on_land commands, then tear the unit down (agents, panes,
 # space, worktree, loop directory). Runs where the worktree lives.
 #
-# Usage: ship-land <ref> [--force] [--task ID]
-#        ship-land <ref> --abandon [--force]
+# Usage: ship-land <ref> [--force] [--task ID] [--host H]
+#        ship-land <ref> --abandon [--force] [--host H]
 #
 #   <ref>      the unit: notes/loops/<ref>/ under the space root holds its
 #              result.json and mux.json
@@ -12,6 +12,10 @@
 #              delete the branch too (wt remove -D), even if it is unmerged
 #   --task ID  substituted for {task} in on_land commands (default: the ref)
 #   --abandon  run only the teardown (steps 7 below): no merge, no gate, no push
+#   --host H   the unit lives on host H (hosts.H.ssh in the ship config): copy the ship
+#              scripts there (as ship-unit does), run this same command there over ssh
+#              with the same flags, then mirror notes/loops/ back. The landing runs
+#              where the worktree is; nothing else changes.
 #
 # Steps
 #   1. take <space root>/.hyper/ship-land.lock (one land at a time per space;
@@ -37,6 +41,10 @@
 # Config (ship.yml): gate (required to land, not to abandon), base, merge_method,
 # on_land, mux, units_group.
 #
+# With --host, the remote ship-land's exit code is returned; a lost connection is
+# exit 1 (the landing may have finished or still be running there: rerun it, a merged
+# PR skips ahead to on_land and teardown).
+#
 # Exit codes: 0 landed (or abandoned); 1 error (gate failed, rebase conflict,
 # merge failed, teardown left something behind, an on_land command failed);
 # 2 usage; 3 refused (not READY, empty branch, rebase dropped commits,
@@ -57,18 +65,21 @@ case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
 _dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
 # shellcheck source=lib.sh
 source "$_dir/lib.sh"
+# shellcheck source=lib-host.sh
+source "$_dir/lib-host.sh"
 
 usage() { echo "ship-land: $*" >&2; exit 2; }
 fail() { echo "ship-land: $*" >&2; exit 1; }
 refuse() { echo "ship-land: refused: $*" >&2; exit 3; }
 say() { echo "ship-land: $*"; }
 
-ref="" abandon=0 force=0 task=""
+ref="" abandon=0 force=0 task="" host=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --abandon) abandon=1; shift ;;
     --force) force=1; shift ;;
     --task) [[ $# -ge 2 ]] || usage "--task needs a value"; task="$2"; shift 2 ;;
+    --host) [[ $# -ge 2 ]] || usage "--host needs a value"; host="$2"; shift 2 ;;
     -h|--help) sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) usage "unknown option $1" ;;
     *) [[ -z "$ref" ]] || usage "one ref at a time"; ref="$1"; shift ;;
@@ -84,6 +95,37 @@ if [[ $abandon -eq 1 && -n "$task" ]]; then usage "--task has no use with --aban
 ship_config_load || exit 1
 root="$(ship_space_root)" || exit 1
 export SHIP_SPACE_ROOT="$root"
+
+# --- --host: run the same command where the worktree lives ------------------------------
+if ! ship_host_is_local "$host"; then
+  [[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid --host '$host'"
+  target="$(ship_host_target "$host")" || exit 1
+  ship_host_sync "$target" || fail "could not copy the ship scripts to $host ($target)"
+  rargs=("$ref")
+  [[ $abandon -eq 0 ]] || rargs+=(--abandon)
+  [[ $force -eq 0 ]] || rargs+=(--force)
+  [[ -z "$task" ]] || rargs+=(--task "$task")
+  rc=0
+  ship_host_run "$target" "$root" "$host" ship-land "${rargs[@]}" || rc=$?
+  if ship_host_lost "$rc"; then
+    echo "ship-land: lost the connection to $host (ssh exit $rc); the landing may have finished or still be running there. Rerun 'ship-land $ref --host $host' (a merged PR skips ahead to on_land and teardown)" >&2
+    rc=1
+  fi
+  # Mirror the state back: the unit's loop directory, or where the land moved it.
+  mirror_rc=0
+  if ssh "${SHIP_SSH_OPTS[@]}" "$target" "test -d $(printf '%q' "$root/notes/loops/$ref")" 2>/dev/null; then
+    ship_host_pull_dir "$target" "$root/notes/loops/$ref" "$root/notes/loops/$ref" 2>/dev/null || mirror_rc=1
+  elif ssh "${SHIP_SSH_OPTS[@]}" "$target" "test -d $(printf '%q' "$root/notes/loops/.done/$ref")" 2>/dev/null; then
+    ship_host_pull_dir "$target" "$root/notes/loops/.done/$ref" "$root/notes/loops/.done/$ref" 2>/dev/null || mirror_rc=1
+    # The loop directory moved on the host; its local mirror is stale.
+    if [[ $mirror_rc -eq 0 && -d "$root/notes/loops/$ref" ]]; then rm -rf "${root:?}/notes/loops/$ref"; fi
+  else
+    mirror_rc=1
+  fi
+  [[ $mirror_rc -eq 0 ]] || echo "ship-land: could not mirror notes/loops/$ref back from $host; the host holds the current state" >&2
+  exit "$rc"
+fi
+
 loop_dir="$root/notes/loops/$ref"
 result="$loop_dir/result.json"
 rec="$loop_dir/mux.json"
@@ -233,7 +275,7 @@ if [[ -z "$pr" ]]; then
   # pr view, not pr list: list only shows open PRs, and a merged one is a rerun.
   pr="$(cd "$wt_path" && gh pr view "$branch" --json number -q .number 2>/dev/null)" || pr=""
 fi
-[[ -n "$pr" ]] || fail "no open PR for branch $branch"
+[[ -n "$pr" ]] || fail "no PR for branch $branch"
 [[ "$pr" =~ ^[0-9]+$ ]] || fail "PR number '$pr' is not a number"
 
 # --- 1. the lock ----------------------------------------------------------------------
