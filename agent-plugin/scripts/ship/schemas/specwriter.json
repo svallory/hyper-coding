@@ -1,0 +1,37 @@
+{
+  "title": "spec writer result",
+  "description": "specwriter-rN.json.",
+  "type": "object",
+  "required": ["status", "commits", "resolved", "operator_questions"],
+  "properties": {
+    "status": {"type": "string", "enum": ["WRITTEN", "OPERATOR"]},
+    "commits": {"type": "array", "items": {"type": "string"}},
+    "resolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["where", "question", "says"],
+        "properties": {
+          "where": {"type": "string"},
+          "question": {"type": "string"},
+          "says": {"type": "string"}
+        }
+      }
+    },
+    "operator_questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["where", "question"],
+        "properties": {
+          "where": {"type": "string"},
+          "question": {"type": "string"},
+          "options": {"type": "string"},
+          "recommendation": {"type": "string"}
+        }
+      }
+    },
+    "gate": {"type": "string"},
+    "failovers": {"type": "integer"}
+  }
+}

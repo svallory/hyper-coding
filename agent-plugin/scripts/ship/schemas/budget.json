@@ -1,0 +1,14 @@
+{
+  "title": "budget overrun",
+  "description": "budget-rN.json, written by the driver.",
+  "type": "object",
+  "required": ["verdict", "stage", "agent", "class", "budget_min", "elapsed_min"],
+  "properties": {
+    "verdict": {"type": "string", "enum": ["OVER-BUDGET"]},
+    "stage": {"type": "string"},
+    "agent": {"type": "string"},
+    "class": {"type": "string", "enum": ["S", "M", "L"]},
+    "budget_min": {"type": "number"},
+    "elapsed_min": {"type": "number"}
+  }
+}

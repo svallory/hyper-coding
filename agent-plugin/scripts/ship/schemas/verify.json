@@ -1,0 +1,22 @@
+{
+  "title": "verify result",
+  "description": "verify-rN.json. The driver writes SKIP itself when no verify instructions are configured.",
+  "type": "object",
+  "required": ["verdict", "summary"],
+  "properties": {
+    "verdict": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "SKIP"]},
+    "summary": {"type": "string"},
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["what", "evidence"],
+        "properties": {
+          "what": {"type": "string"},
+          "evidence": {"type": "string"}
+        }
+      }
+    },
+    "failovers": {"type": "integer"}
+  }
+}

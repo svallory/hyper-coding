@@ -1,0 +1,52 @@
+{
+  "title": "spec check result",
+  "description": "spec-rN.json. Precedence when several apply: GAP > REMOVE > CHANGES > ACCEPT.",
+  "type": "object",
+  "required": ["verdict", "findings", "gaps", "removals", "commits", "gate"],
+  "properties": {
+    "verdict": {"type": "string", "enum": ["ACCEPT", "CHANGES", "GAP", "REMOVE"]},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "file", "summary", "fix"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["BLOCKING", "SHOULD", "NOTE"]},
+          "file": {"type": "string"},
+          "line": {"type": ["integer", "null"]},
+          "summary": {"type": "string"},
+          "fix": {"type": "string"}
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["where", "quotes", "question", "operator_call"],
+        "properties": {
+          "where": {"type": "string"},
+          "quotes": {"type": "array", "items": {"type": "string"}},
+          "question": {"type": "string"},
+          "operator_call": {"type": "boolean"}
+        }
+      }
+    },
+    "removals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["where", "kind", "what", "why_no_consumer"],
+        "properties": {
+          "where": {"type": "string"},
+          "kind": {"type": "string", "enum": ["code", "spec"]},
+          "what": {"type": "string"},
+          "why_no_consumer": {"type": "string"}
+        }
+      }
+    },
+    "commits": {"type": "array", "items": {"type": "string"}},
+    "gate": {"type": "string"},
+    "failovers": {"type": "integer"}
+  }
+}
