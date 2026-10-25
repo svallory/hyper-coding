@@ -1,0 +1,396 @@
+#!/usr/bin/env bash
+# mux/herdr — the Herdr backend of ship-mux. It is the only file that calls the
+# `herdr` CLI. The interface (verbs, flags, output, exit codes) is documented in
+# ship-mux's header; this file only turns those verbs into Herdr calls.
+#
+# Mapping
+#   units group  a Herdr workspace labelled with the group name (`open --group`)
+#   space        a tab of that workspace; its root pane (labelled "ship:<ref>", the
+#                only label Herdr leaves alone) is the space's pane. A workspace this backend creates donates its
+#                initial tab as the first ref's space, so no empty tab is left.
+#   pane         a Herdr pane; agents run in panes split off the space's panes
+#   agent        id "<hname>@<pane>". Herdr agent names are [a-z][a-z0-9_-]{0,31}
+#                and unique among live agents, so the caller's name is lowered,
+#                cut to 23 characters and given "-<8 hex of ref/name/pane>" to
+#                make hname; the pane in the id lets the backend tell an agent
+#                that exited (its pane is still there) from an id that is gone.
+#   Ids are told apart by their shape: "@" agent, "W:tN" tab, "W:pN" pane,
+#   anything else a workspace.
+#
+# State: Herdr's agent states map to idle (idle, done), working (working,
+# unknown: present but not provably ready), blocked. An agent that exited (Herdr
+# dropped its name, its pane remains) is state "gone" (status exits 0; wait
+# --until gone reaches it; send and other waits exit 5; read still reads the
+# pane). An agent whose pane is gone too exits 5 everywhere except close, and
+# wait --until gone, which reach 0.
+#
+# Notes
+#   run     one CMD argument is run as a shell string; several are shell-quoted
+#           and joined.
+#   start   pi gets Herdr's state extension (-e herdr-agent-state.ts from
+#           $PI_AGENT_DIR/extensions, default ~/.pi/agent) in front of ARGS.
+#           claude is started through `launch-peer off claude ...` (so the peer
+#           integration is off for the agent) when launch-peer is on PATH or
+#           named by $SHIP_MUX_LAUNCH_PEER (empty disables it); otherwise
+#           through `herdr agent start --kind claude`. Panes split right from
+#           the space's root pane, then down from its last pane.
+#   send    --text uses `agent prompt`; with --wait-ms it waits for the agent to
+#           start working, pressing Enter up to 3 times when Claude Code drops
+#           the Enter of a pasted prompt; exit 4 if no work starts.
+#   read    the visible screen, or the last N lines (recent output, falling back
+#           to the visible screen while the agent is blocked).
+#   wait    `ready` on a pane is its shell prompt (regex below), on an agent it
+#           is idle.
+#
+# Guard (D202): under SHIP_MUX_TEST=1 every verb exits 99 before anything else,
+# so no test can reach a real Herdr server.
+
+set -euo pipefail
+
+if [[ "${SHIP_MUX_TEST:-}" == 1 ]]; then
+  echo "mux/herdr: refusing to run under SHIP_MUX_TEST=1 (test guard)" >&2
+  exit 99
+fi
+
+verb="${1:?mux/herdr: verb required}"
+shift
+
+# Shell-prompt regex for "this pane is ready for input".
+# A space's root pane carries this label plus the ref: it is how open finds the ref again.
+ROOT_PREFIX='ship:'
+PROMPT_RE='[$%>#❯➜»→λ] *$'
+
+die() { echo "mux/herdr: $*" >&2; exit 1; }
+notfound() { echo "mux/herdr: $*" >&2; exit 5; }
+
+# Flags: --name value fills f_<name>; the command after `--` goes to cmdline.
+# shellcheck disable=SC2034  # filled by printf -v; not every verb reads each
+f_ref="" f_cwd="" f_label="" f_group="" f_pane="" f_space="" f_name="" f_harness=""
+f_to="" f_text="" f_keys="" f_wait_ms="" f_lines="" f_until="" f_timeout_ms="" f_id="" f_ids="[]"
+have_wait=0
+cmdline=()
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "--" ]]; then shift; cmdline=("$@"); break; fi
+  [[ "$1" == --* && $# -ge 2 ]] || die "bad argument '$1'"
+  n="${1#--}"; n="${n//-/_}"
+  printf -v "f_$n" '%s' "$2"
+  [[ "$n" != wait_ms ]] || have_wait=1
+  shift 2
+done
+
+errf="$(mktemp "${TMPDIR:-/tmp}/ship-mux-herdr.XXXXXX")"
+trap 'rm -f "$errf"' EXIT
+
+# hx <herdr args...> — run herdr for its status only; stderr is kept for hx_code.
+hx_rc=0
+hx() { hx_rc=0; herdr "$@" >/dev/null 2>"$errf" || hx_rc=$?; return 0; }
+hx_code() { jq -r '.error.code // ""' "$errf" 2>/dev/null || true; }
+hx_msg() { jq -r '.error.message // empty' "$errf" 2>/dev/null || cat "$errf"; }
+
+# hx_fail <what> — exit for the failed herdr call: 5 not found, 4 timeout, else 1.
+hx_fail() {
+  local c; c="$(hx_code)"
+  case "$c" in
+    *_not_found) notfound "$1: $(hx_msg)" ;;
+    timeout) echo "mux/herdr: $1: timed out" >&2; exit 4 ;;
+    *) die "$1: ${c:+$c: }$(hx_msg)" ;;
+  esac
+}
+
+# hxj <herdr args...> — run herdr, require success, print stdout.
+hxj() {
+  local out; out="$(herdr "$@" 2>"$errf")" || hx_fail "herdr $1 $2"
+  printf '%s\n' "$out"
+}
+
+kind_of() {
+  case "$1" in
+    *@*) echo agent ;;
+    *:t*) echo tab ;;
+    *:p*) echo pane ;;
+    *) echo workspace ;;
+  esac
+}
+
+is_agent() { [[ "$(kind_of "$1")" == agent ]]; }
+
+# state_of <herdr agent_status> — the ship-mux state.
+map_state() {
+  case "$1" in
+    idle|done) echo idle ;;
+    blocked) echo blocked ;;
+    *) echo working ;;
+  esac
+}
+
+a_name() { printf '%s' "${1%@*}"; }
+a_pane() { printf '%s' "${1#*@}"; }
+
+# agent_probe <id> — print "live" and the agent JSON, "exited" when only its
+# pane remains, or "none" when neither is there. Other failures exit.
+agent_probe() {
+  local out
+  if out="$(herdr agent get "$(a_name "$1")" 2>"$errf")"; then
+    printf 'live\n%s\n' "$(jq -c '.result.agent // .result.pane // .result' <<<"$out")"; return 0
+  fi
+  case "$(hx_code)" in
+    agent_not_found) ;;
+    *) hx_fail "agent $1" ;;
+  esac
+  if out="$(herdr pane get "$(a_pane "$1")" 2>"$errf")"; then
+    printf 'exited\n%s\n' "$(jq -c '.result.pane' <<<"$out")"; return 0
+  fi
+  case "$(hx_code)" in
+    pane_not_found) echo none ;;
+    *) hx_fail "pane $(a_pane "$1")" ;;
+  esac
+}
+
+# agent_name <ref> <name> <pane> — the Herdr-legal, unique name for an agent.
+agent_name() {
+  local base h
+  base="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9_-' '-')"
+  base="${base%$'\n'}"
+  [[ "$base" =~ ^[a-z] ]] || base="a$base"
+  h="$(printf '%s' "$1/$2/$3" | cksum | cut -d' ' -f1)"
+  printf '%s-%08x\n' "${base:0:23}" "$h"
+}
+
+# wait_prompt <pane> <ms> — wait for the shell prompt; exit status says whether it came.
+wait_prompt() { herdr pane wait-output "$1" --regex "$PROMPT_RE" --timeout "$2" >/dev/null 2>&1; }
+# pause: a one-second wait that needs no sleep binary quirks.
+pause() { herdr pane wait-output "$1" --match "ship-mux-no-such-text" --timeout 1000 >/dev/null 2>&1 || true; }
+
+# tab_panes <tab> — the pane ids of a tab, in layout order.
+tab_panes() {
+  local out
+  out="$(herdr pane list --workspace "${1%%:*}" 2>"$errf")" || hx_fail "pane list"
+  jq -r --arg t "$1" '[.result.panes[] | select(.tab_id == $t) | .pane_id] | .[]' <<<"$out"
+}
+
+case "$verb" in
+  check)
+    [[ "${HERDR_ENV:-}" == 1 ]] || { echo "mux/herdr: not running inside Herdr (HERDR_ENV is not 1)" >&2; exit 1; }
+    command -v herdr >/dev/null 2>&1 || { echo "mux/herdr: the herdr CLI is not on PATH" >&2; exit 1; }
+    command -v jq >/dev/null 2>&1 || { echo "mux/herdr: jq is not on PATH" >&2; exit 1; } ;;
+
+  open)
+    [[ -n "$f_ref" && -n "$f_cwd" ]] || die "open: --ref and --cwd are required"
+    grp="${f_group:-ship-units}"
+    out="$(herdr workspace list 2>"$errf")" || hx_fail "workspace list"
+    ws="$(jq -r --arg l "$grp" '[.result.workspaces[] | select(.label == $l) | .workspace_id][0] // empty' <<<"$out")"
+    created=false tab="" pane=""
+    if [[ -z "$ws" ]]; then
+      out="$(herdr workspace create --cwd "$f_cwd" --label "$grp" --no-focus 2>"$errf")" || hx_fail "workspace create"
+      ws="$(jq -r '.result.workspace.workspace_id // empty' <<<"$out")"
+      [[ -n "$ws" ]] || die "workspace create returned no workspace id"
+      created=true
+      # The new workspace's initial tab becomes this ref's space.
+      tab="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
+      pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
+      if [[ -n "$tab" ]]; then
+        herdr tab rename "$tab" "$f_ref" >/dev/null 2>"$errf" || hx_fail "tab rename"
+      fi
+    else
+      # Herdr relabels a tab after the agent running in it, so the ref is kept on
+      # the root pane's label instead.
+      out="$(herdr pane list --workspace "$ws" 2>"$errf")" || hx_fail "pane list"
+      pane="$(jq -r --arg l "$ROOT_PREFIX$f_ref" '[.result.panes[] | select(.label == $l)][0].pane_id // empty' <<<"$out")"
+      if [[ -n "$pane" ]]; then
+        tab="$(jq -r --arg p "$pane" '[.result.panes[] | select(.pane_id == $p)][0].tab_id // empty' <<<"$out")"
+      fi
+    fi
+    if [[ -z "$tab" || -z "$pane" ]]; then
+      out="$(herdr tab create --workspace "$ws" --cwd "$f_cwd" --label "$f_ref" --no-focus 2>"$errf")" || hx_fail "tab create"
+      tab="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
+      pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
+      [[ -n "$tab" && -n "$pane" ]] || die "tab create returned no tab or pane id"
+    fi
+    herdr pane rename "$pane" "$ROOT_PREFIX$f_ref" >/dev/null 2>"$errf" || hx_fail "pane rename"
+    jq -nc --arg s "$tab" --arg p "$pane" --arg g "$ws" --argjson c "$created" --arg n "$grp" \
+      '{space: $s, pane: $p, group: {id: $g, created: $c, name: $n}}' ;;
+
+  run)
+    [[ -n "$f_pane" && ${#cmdline[@]} -gt 0 ]] || die "run: --pane and a command are required"
+    hx pane get "$f_pane"
+    [[ $hx_rc -eq 0 ]] || hx_fail "pane $f_pane"
+    if [[ ${#cmdline[@]} -eq 1 ]]; then cmd="${cmdline[0]}"; else cmd="$(printf '%q ' "${cmdline[@]}")"; cmd="${cmd% }"; fi
+    wait_prompt "$f_pane" 15000 || true
+    herdr pane run "$f_pane" "$cmd" >/dev/null 2>"$errf" || hx_fail "pane run in $f_pane" ;;
+
+  start)
+    [[ -n "$f_space" && -n "$f_name" && -n "$f_harness" && -n "$f_cwd" ]] || die "start: --space, --name, --harness and --cwd are required"
+    [[ "$(kind_of "$f_space")" == tab ]] || die "start: '$f_space' is not a space"
+    hx tab get "$f_space"
+    [[ $hx_rc -eq 0 ]] || hx_fail "space $f_space"
+    mapfile -t panes < <(tab_panes "$f_space")
+    [[ ${#panes[@]} -gt 0 ]] || notfound "start: space '$f_space' has no panes"
+    if [[ ${#panes[@]} -eq 1 ]]; then target="${panes[0]}" dir=right; else target="${panes[${#panes[@]}-1]}" dir=down; fi
+    out="$(herdr pane split "$target" --direction "$dir" --cwd "$f_cwd" --no-focus 2>"$errf")" || hx_fail "pane split"
+    pane="$(jq -r '.result.pane.pane_id // empty' <<<"$out")"
+    [[ -n "$pane" ]] || die "pane split returned no pane id"
+    hname="$(agent_name "$f_ref" "$f_name" "$pane")"
+    abort() { herdr pane close "$pane" >/dev/null 2>&1 || true; echo "mux/herdr: start: $*" >&2; exit 1; }
+
+    peer="${SHIP_MUX_LAUNCH_PEER-$(command -v launch-peer 2>/dev/null || true)}"
+    args=()
+    [[ ${#cmdline[@]} -eq 0 ]] || args=("${cmdline[@]}")
+    case "$f_harness" in
+      pi)
+        ext="${PI_AGENT_DIR:-$HOME/.pi/agent}/extensions/herdr-agent-state.ts"
+        if [[ -f "$ext" ]]; then args=(-e "$ext" ${args[@]+"${args[@]}"}); else echo "mux/herdr: warning: $ext not found; pi will not report its state" >&2; fi
+        err=""
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+          if err="$(herdr agent start "$hname" --kind pi --pane "$pane" --timeout 120000 -- ${args[@]+"${args[@]}"} 2>&1 >/dev/null)"; then err=""; break; fi
+          case "$err" in *agent_pane_busy*) wait_prompt "$pane" 1000 || true; pause "$pane" ;; *) break ;; esac
+        done
+        [[ -z "$err" ]] || abort "agent start (pi): $err" ;;
+      claude)
+        if [[ -n "$peer" && -x "$peer" ]]; then
+          cmd="$(printf '%q ' "$peer" off claude ${args[@]+"${args[@]}"})"
+          wait_prompt "$pane" 10000 || true
+          herdr pane run "$pane" "${cmd% }" >/dev/null 2>"$errf" || abort "pane run failed in $pane"
+          came=0
+          for _ in $(seq 90); do
+            if [[ "$(herdr agent get "$pane" 2>/dev/null | jq -r '.result.agent.agent // empty')" == claude ]]; then came=1; break; fi
+            pause "$pane"
+          done
+          [[ $came -eq 1 ]] || abort "claude never came up in $pane (launch-peer)"
+          herdr agent rename "$pane" "$hname" >/dev/null 2>"$errf" || abort "agent rename: $(hx_msg)"
+          herdr agent wait "$hname" --timeout 120000 >/dev/null 2>"$errf" || abort "agent $hname never became ready: $(hx_msg)"
+        else
+          err=""
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            if err="$(herdr agent start "$hname" --kind claude --pane "$pane" --timeout 120000 -- ${args[@]+"${args[@]}"} 2>&1 >/dev/null)"; then err=""; break; fi
+            case "$err" in *agent_pane_busy*) wait_prompt "$pane" 1000 || true; pause "$pane" ;; *) break ;; esac
+          done
+          [[ -z "$err" ]] || abort "agent start (claude): $err"
+        fi ;;
+      *) die "start: unknown harness '$f_harness'" ;;
+    esac
+    jq -nc --arg a "$hname@$pane" --arg p "$pane" '{agent: $a, pane: $p}' ;;
+
+  send)
+    [[ -n "$f_to" ]] || die "send: --to is required"
+    is_agent "$f_to" || die "send: '$f_to' is not an agent"
+    tgt="$(a_name "$f_to")"
+    probe="$(agent_probe "$f_to")"
+    [[ "${probe%%$'\n'*}" == live ]] || notfound "send: agent '$f_to' is gone"
+    if [[ -n "$f_keys" ]]; then
+      IFS=, read -r -a keys <<<"$f_keys"
+      herdr agent send-keys "$tgt" "${keys[@]}" >/dev/null 2>"$errf" || hx_fail "agent send-keys"
+    elif [[ $have_wait -eq 1 ]]; then
+      err=""
+      if herdr agent prompt "$tgt" "$f_text" --wait --until working --timeout "$f_wait_ms" >/dev/null 2>"$errf"; then exit 0; fi
+      case "$(hx_code)" in
+        agent_prompt_stalled)
+          for _ in 1 2 3; do
+            herdr agent send-keys "$tgt" enter >/dev/null 2>"$errf" || hx_fail "agent send-keys"
+            if herdr agent wait "$tgt" --until working --timeout 15000 >/dev/null 2>&1; then exit 0; fi
+          done
+          echo "mux/herdr: send: '$f_to' never started working" >&2; exit 4 ;;
+        agent_blocked) die "send: '$f_to' is waiting at a dialog; read it before sending" ;;
+        *) hx_fail "agent prompt" ;;
+      esac
+    else
+      herdr agent prompt "$tgt" "$f_text" >/dev/null 2>"$errf" || hx_fail "agent prompt"
+    fi ;;
+
+  read)
+    [[ -n "$f_to" ]] || die "read: --to is required"
+    if is_agent "$f_to"; then
+      probe="$(agent_probe "$f_to")"
+      case "${probe%%$'\n'*}" in
+        live) sub=(agent read "$(a_name "$f_to")") ;;
+        exited) sub=(pane read "$(a_pane "$f_to")") ;;   # the agent left; its screen did not
+        *) notfound "read: agent '$f_to' is gone" ;;
+      esac
+    else
+      sub=(pane read "$f_to")
+    fi
+    if [[ -n "$f_lines" ]]; then
+      if ! out="$(herdr "${sub[@]}" --source recent-unwrapped --lines "$f_lines" 2>"$errf")"; then
+        # recent-* fails while an agent is blocked on a dialog: fall back to the screen
+        case "$(hx_code)" in *_not_found) hx_fail "read $f_to" ;; esac
+        out="$(herdr "${sub[@]}" --source visible 2>"$errf" | tail -n "$f_lines")" || hx_fail "read $f_to"
+      fi
+    else
+      out="$(herdr "${sub[@]}" --source visible 2>"$errf")" || hx_fail "read $f_to"
+    fi
+    printf '%s\n' "$out" ;;
+
+  status)
+    [[ -n "$f_to" ]] || die "status: --to is required"
+    is_agent "$f_to" || die "status: '$f_to' is not an agent"
+    probe="$(agent_probe "$f_to")"
+    kind="${probe%%$'\n'*}"; obj="${probe#*$'\n'}"
+    case "$kind" in
+      none) notfound "status: '$f_to' is gone" ;;
+      exited) st=gone ;;
+      *) st="$(map_state "$(jq -r '.agent_status // "unknown"' <<<"$obj")")" ;;
+    esac
+    jq -nc --arg s "$st" --argjson o "$obj" '{state: $s, pane: ($o.pane_id // ""), space: ($o.tab_id // "")}' ;;
+
+  wait)
+    [[ -n "$f_to" && -n "$f_until" && -n "$f_timeout_ms" ]] || die "wait: --to, --until and --timeout-ms are required"
+    if is_agent "$f_to"; then
+      tgt="$(a_name "$f_to")"
+      case "$f_until" in
+        gone)
+          # reached once the agent has exited or its pane is gone too
+          deadline=$((SECONDS + (f_timeout_ms + 999) / 1000))
+          while :; do
+            probe="$(agent_probe "$f_to")"
+            [[ "${probe%%$'\n'*}" == live ]] || exit 0
+            [[ $SECONDS -lt $deadline ]] || { echo "mux/herdr: wait: '$f_to' is still there" >&2; exit 4; }
+            sleep 1
+          done ;;
+        ready|idle|working)
+          probe="$(agent_probe "$f_to")"
+          [[ "${probe%%$'\n'*}" == live ]] || notfound "wait: '$f_to' is gone"
+          case "$f_until" in
+            working) sts=(--until working) ;;
+            *) sts=(--until idle --until "done") ;;
+          esac
+          herdr agent wait "$tgt" "${sts[@]}" --timeout "$f_timeout_ms" >/dev/null 2>"$errf" || hx_fail "agent wait" ;;
+        *) die "wait: bad --until '$f_until'" ;;
+      esac
+    else
+      [[ "$f_until" == ready ]] || die "wait: '$f_to' is a pane; only --until ready applies"
+      herdr pane wait-output "$f_to" --regex "$PROMPT_RE" --timeout "$f_timeout_ms" >/dev/null 2>"$errf" || hx_fail "pane wait-output"
+    fi ;;
+
+  close)
+    [[ -n "$f_id" ]] || die "close: --id is required"
+    case "$(kind_of "$f_id")" in
+      pane) herdr pane close "$f_id" >/dev/null 2>"$errf" || hx_fail "pane close" ;;
+      tab) herdr tab close "$f_id" >/dev/null 2>"$errf" || hx_fail "tab close" ;;
+      agent) herdr pane close "$(a_pane "$f_id")" >/dev/null 2>"$errf" || hx_fail "pane close" ;;
+      workspace)
+        out="$(herdr tab list --workspace "$f_id" 2>"$errf")" || hx_fail "workspace $f_id"
+        n="$(jq -r '.result.tabs | length' <<<"$out")"
+        [[ "$n" -eq 0 ]] || die "close: group '$f_id' still has $n tab(s)"
+        herdr workspace close "$f_id" >/dev/null 2>"$errf" || hx_fail "workspace close" ;;
+    esac ;;
+
+  list)
+    ws="$(hxj workspace list | jq -c '.result.workspaces // []')"
+    tabs="$(hxj tab list | jq -c '.result.tabs // []')"
+    allpanes="$(hxj pane list | jq -c '.result.panes // []')"
+    agents="$(hxj agent list | jq -c '.result.agents // []')"
+    jq -nc --argjson ids "$f_ids" --argjson ws "$ws" --argjson tabs "$tabs" --argjson panes "$allpanes" --argjson agents "$agents" '
+      def st: if . == "idle" or . == "done" then "idle" elif . == "blocked" then "blocked" else "working" end;
+      [ $ids[] | . as $id
+        | if ($id | contains("@")) then
+            ($id | sub("@.*$"; "")) as $n | ($id | sub("^.*@"; "")) as $p
+            | ( first($agents[] | select(.name == $n and .pane_id == $p) | {id: $id, kind: "agent", name: $n, state: ((.agent_status // "unknown") | st)})
+              // first($panes[] | select(.pane_id == $p) | {id: $id, kind: "agent", name: $n, state: "gone"}) )
+          else
+            ( first($ws[] | select(.workspace_id == $id) | {id: $id, kind: "group", name: (.label // ""), state: ""})
+            // first($tabs[] | select(.tab_id == $id) | {id: $id, kind: "space", name: (.label // ""), state: ""})
+            // first($panes[] | select(.pane_id == $id) | {id: $id, kind: "pane", name: (.label // ""), state: ""}) )
+          end
+        | select(. != null) ]' ;;
+
+  *) die "unknown verb '$verb'" ;;
+esac
