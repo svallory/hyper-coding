@@ -92,7 +92,7 @@
 # Ownership record
 #   open and start append what they created to <space root>/notes/loops/<ref>/
 #   mux.json: {"backend":NAME,"created":[{"id","kind","name","space"?,"pane"?,
-#   "group"?,"cwd"?,"root"?}]}. close removes what it closed. The units group is
+#   "group"?,"cwd"?,"root"?,"harness"?}]} (harness: an agent's, as given to start). close removes what it closed. The units group is
 #   recorded in <space root>/.hyper/ship-mux.json: {"groups":{ID:{"name",
 #   "backend","created"}}}; `created` is true only when ship's own open created
 #   it. The group closes only when ship created it, the backend still reports
@@ -468,8 +468,8 @@ case "$verb" in
     out="$(_be start "${orig[@]}")" || exit $?
     jq -e 'type == "object" and (.agent | type == "string" and length > 0) and (.pane | type == "string" and length > 0)' \
       <<<"$out" >/dev/null 2>&1 || fail "backend '$mux' returned invalid start output: $out"
-    if ! _rec_add "$(jq -nc --argjson o "$out" --arg n "$f_name" --arg s "$f_space" \
-      '[{id: $o.agent, kind: "agent", name: $n, space: $s, pane: $o.pane}, {id: $o.pane, kind: "pane", name: $n, space: $s}]')"; then
+    if ! _rec_add "$(jq -nc --argjson o "$out" --arg n "$f_name" --arg s "$f_space" --arg h "$f_harness" \
+      '[{id: $o.agent, kind: "agent", name: $n, space: $s, pane: $o.pane, harness: $h}, {id: $o.pane, kind: "pane", name: $n, space: $s}]')"; then
       echo "ship-mux: could not record the new agent; closing it" >&2
       _rollback_close "$(jq -r .agent <<<"$out")"
       _rollback_close "$(jq -r .pane <<<"$out")"

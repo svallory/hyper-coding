@@ -1,0 +1,382 @@
+#!/usr/bin/env bash
+# ship-land — land one READY unit: rebase it on the base branch, gate it, push,
+# merge its PR, run the on_land commands, then tear the unit down (agents, panes,
+# space, worktree, loop directory). Runs where the worktree lives.
+#
+# Usage: ship-land <ref> [--force] [--task ID]
+#        ship-land <ref> --abandon [--force]
+#
+#   <ref>      the unit: notes/loops/<ref>/ under the space root holds its
+#              result.json and mux.json
+#   --force    land: merge although result.json is not READY. With --abandon:
+#              delete the branch too (wt remove -D), even if it is unmerged
+#   --task ID  substituted for {task} in on_land commands (default: the ref)
+#   --abandon  run only the teardown (steps 7 below): no merge, no gate, no push
+#
+# Steps
+#   1. take <space root>/.hyper/ship-land.lock (one land at a time per space;
+#      waits while the holder is alive, takes the lock over when it died or,
+#      when it is ownerless or from another host, is older than 120 s; gives up
+#      with exit 1 after SHIP_LAND_LOCK_WAIT_SEC)
+#   2. require result.json status READY (--force overrides)
+#   3. a PR that is already MERGED (a rerun after a failed teardown) skips to
+#      step 6. Otherwise fetch, rebase on origin/<base>; refuse an empty branch, or a rebase that
+#      drops commits (the branch is put back as it was)
+#   4. run `gate` (config) in the worktree; git push --force-with-lease, leased
+#      on the origin/<branch> seen before the fetch (a commit pushed meanwhile
+#      from elsewhere refuses the push instead of being overwritten)
+#   5. gh pr merge <pr> --<merge_method>; pull the base in its worktree
+#   6. run each on_land command ({ref}, {pr}, {task} replaced)
+#   7. teardown: ship-retire every agent recorded in mux.json; ship-mux close
+#      every recorded pane, then the unit space; try to close every ship-created
+#      units group in <space root>/.hyper/ship-mux.json (kept when others use it;
+#      a refusal is only a warning and is retried by the next land); `ship-mux list` must
+#      then return nothing; wt remove <branch>; move notes/loops/<ref>/ to
+#      notes/loops/.done/<ref>/
+#
+# Config (ship.yml): gate (required to land, not to abandon), base, merge_method,
+# on_land, mux, units_group.
+#
+# Exit codes: 0 landed (or abandoned); 1 error (gate failed, rebase conflict,
+# merge failed, teardown left something behind, an on_land command failed);
+# 2 usage; 3 refused (not READY, empty branch, rebase dropped commits,
+# uncommitted changes).
+#
+# Environment: SHIP_LAND_SETTLE_SEC (seconds between push and merge so GitHub
+# sees the new head; default 5), SHIP_LAND_LOCK_WAIT_SEC (default 1800).
+
+set -euo pipefail
+
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+_dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+# shellcheck source=lib.sh
+source "$_dir/lib.sh"
+
+usage() { echo "ship-land: $*" >&2; exit 2; }
+fail() { echo "ship-land: $*" >&2; exit 1; }
+refuse() { echo "ship-land: refused: $*" >&2; exit 3; }
+say() { echo "ship-land: $*"; }
+
+ref="" abandon=0 force=0 task=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --abandon) abandon=1; shift ;;
+    --force) force=1; shift ;;
+    --task) [[ $# -ge 2 ]] || usage "--task needs a value"; task="$2"; shift 2 ;;
+    -h|--help) sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*) usage "unknown option $1" ;;
+    *) [[ -z "$ref" ]] || usage "one ref at a time"; ref="$1"; shift ;;
+  esac
+done
+[[ -n "$ref" ]] || usage "a ref is required"
+[[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid ref '$ref' (letters, digits, '.', '_', '-'; must start with a letter or digit)"
+if [[ -n "$task" ]]; then
+  [[ "$task" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] || usage "invalid --task '$task' (letters, digits, '.', '_', ':', '-')"
+fi
+if [[ $abandon -eq 1 && -n "$task" ]]; then usage "--task has no use with --abandon"; fi
+
+ship_config_load || exit 1
+root="$(ship_space_root)" || exit 1
+export SHIP_SPACE_ROOT="$root"
+loop_dir="$root/notes/loops/$ref"
+result="$loop_dir/result.json"
+rec="$loop_dir/mux.json"
+MUX="$_dir/ship-mux"
+RETIRE="$_dir/ship-retire"
+
+# The worktree: where the driver says it is, else the space convention.
+wt_path=""
+if [[ -f "$result" ]]; then wt_path="$(jq -r '.worktree // ""' "$result" 2>/dev/null)" || wt_path=""; fi
+[[ -n "$wt_path" ]] || wt_path="$root/worktrees/$ref"
+branch=""
+if [[ -d "$wt_path" ]]; then branch="$(git -C "$wt_path" branch --show-current 2>/dev/null || true)"; fi
+
+# check_rec — a malformed mux.json is reported, not left to kill teardown.
+check_rec() {
+  [[ ! -f "$rec" ]] || jq -e '.created | type == "array"' "$rec" >/dev/null 2>&1 \
+    || fail "$rec is not a valid mux record (truncated or edited?); fix or remove it, then rerun ship-land $ref (or --abandon)"
+}
+
+# --- teardown ------------------------------------------------------------------------
+teardown() {
+  local bad=0 id rc out left groups g h hargs
+  check_rec
+
+  if [[ -f "$rec" ]]; then
+    # 1. every recorded agent, stopped the way its harness expects
+    for id in $(jq -r '.created[]? | select(.kind == "agent") | .id' "$rec"); do
+      rc=0
+      h="$(jq -r --arg id "$id" '.created[] | select(.id == $id) | .harness // ""' "$rec")"
+      hargs=()
+      case "$h" in claude|pi|codex) hargs=(--harness "$h") ;; esac
+      bash "$RETIRE" --ref "$ref" ${hargs[@]+"${hargs[@]}"} "$id" || rc=$?
+      # A stuck agent is not retired gracefully, but closing its pane below
+      # ends it; say so and go on.
+      [[ $rc -eq 0 ]] || echo "ship-land: warning: ship-retire $id exited $rc; closing its pane regardless" >&2
+    done
+    # 2. every recorded pane except the root pane (the space owns that one)
+    for id in $(jq -r '.created[]? | select(.kind == "pane" and (.root // false) != true) | .id' "$rec"); do
+      rc=0
+      bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
+      [[ $rc -eq 0 ]] || { echo "ship-land: could not close pane $id (ship-mux exit $rc)" >&2; bad=1; }
+    done
+    # 3. the unit space
+    for id in $(jq -r '.created[]? | select(.kind == "space") | .id' "$rec"); do
+      rc=0
+      bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
+      [[ $rc -eq 0 ]] || { echo "ship-land: could not close space $id (ship-mux exit $rc)" >&2; bad=1; }
+    done
+    # 5. nothing recorded may be alive
+    rc=0
+    left="$(bash "$MUX" list --ref "$ref")" || rc=$?
+    if [[ $rc -ne 0 ]]; then
+      echo "ship-land: ship-mux list failed (exit $rc)" >&2; bad=1
+    elif [[ "$(jq -r 'length' <<<"$left" 2>/dev/null)" != 0 ]]; then
+      echo "ship-land: the multiplexer still holds: $left" >&2; bad=1
+    fi
+  fi
+  if [[ $bad -ne 0 ]]; then
+    fail "teardown incomplete; the worktree and notes/loops/$ref are kept. Fix the cause and rerun 'ship-land $ref' (a merged PR skips to teardown), or 'ship-land $ref --abandon'"
+  fi
+
+  # 4. the units groups ship created (shared state: read from the group record,
+  # not from this unit's entries). ship-mux refuses (3) while others still use
+  # one; a backend that refuses is only a warning, and the record stays so the
+  # next land retries.
+  groups=""
+  if [[ -f "$root/.hyper/ship-mux.json" ]]; then
+    groups="$(jq -r '(.groups // {}) | to_entries[] | select(.value.created == true) | .key' "$root/.hyper/ship-mux.json" 2>/dev/null || true)"
+  fi
+  for g in $groups; do
+    rc=0
+    out="$(bash "$MUX" close --ref "$ref" --id "$g" 2>&1)" || rc=$?
+    case "$rc" in
+      0) say "units group $g closed" ;;
+      3) say "units group $g kept (${out#ship-mux: refused: })" ;;
+      *) echo "ship-land: warning: could not close units group $g (ship-mux exit $rc): $out; the next land retries" >&2 ;;
+    esac
+  done
+
+  # 6. the worktree
+  if [[ -d "$wt_path" ]]; then
+    if [[ -n "$branch" ]]; then
+      local wargs=(remove)
+      if [[ $abandon -eq 1 && $force -eq 1 ]]; then wargs+=(-D); fi
+      wargs+=("$branch")
+      (CDPATH='' cd -- "$root" && wt "${wargs[@]}") || fail "wt ${wargs[*]} failed; the worktree is kept"
+      say "worktree $branch removed"
+    else
+      # Detached HEAD (a dev left it mid-rebase): no branch name for wt, so remove by path.
+      local common
+      common="$(CDPATH='' cd -- "$wt_path" && cd -- "$(git rev-parse --git-common-dir)" && pwd -P)" \
+        || fail "$wt_path is not a git worktree; it is kept"
+      git --git-dir="$common" worktree remove --force "$wt_path" || fail "could not remove the detached worktree $wt_path; it is kept"
+      say "worktree $wt_path removed (detached HEAD; its branch, if any, is untouched)"
+    fi
+  fi
+
+  # 7. the loop directory
+  if [[ -d "$loop_dir" ]]; then
+    local done_dir="$root/notes/loops/.done/$ref"
+    mkdir -p "$root/notes/loops/.done"
+    [[ ! -e "$done_dir" ]] || done_dir="$done_dir.$(date +%s)"
+    mv "$loop_dir" "$done_dir"
+    say "notes/loops/$ref moved to ${done_dir#"$root"/}"
+  fi
+}
+
+if [[ $abandon -eq 1 ]]; then
+  [[ -d "$loop_dir" || -d "$wt_path" ]] || fail "nothing to abandon: no notes/loops/$ref and no worktree $wt_path"
+  teardown
+  say "$ref abandoned"
+  exit 0
+fi
+
+# --- preconditions ---------------------------------------------------------------------
+status=""
+if [[ -f "$result" ]]; then status="$(jq -r '.status // ""' "$result" 2>/dev/null)" || status=""; fi
+if [[ -f "$result" ]] && ! validate_verdict "$SHIP_PLUGIN_ROOT/scripts/ship/schemas/result.json" "$result" 2>"$loop_dir/.validate.err"; then
+  if [[ $force -ne 1 ]]; then
+    refuse "$result does not match the result schema: $(head -n 3 "$loop_dir/.validate.err" | tr '\n' ' ')"
+  fi
+  echo "ship-land: warning: $result does not match the result schema; continuing (--force)" >&2
+fi
+rm -f "$loop_dir/.validate.err"
+if [[ "$status" != READY && $force -ne 1 ]]; then
+  refuse "$ref is not READY (result.json status: ${status:-none}); fix it, or --force to land anyway"
+fi
+ship_require_gate || exit 1
+gate="$(ship_cfg_get gate)" || exit 1
+base="$(ship_cfg_get base)" || fail "config key 'base' is not set"
+method="$(ship_cfg_get merge_method)" || fail "config key 'merge_method' is not set"
+case "$method" in rebase|squash|merge) ;; *) fail "merge_method must be rebase, squash or merge (got '$method')" ;; esac
+on_land="[]"
+on_land="$(ship_cfg_get on_land)" || [[ $? -eq 3 ]] || exit 1
+[[ "$(jq -r 'type' <<<"$on_land")" == array ]] || fail "on_land must be a list of commands"
+[[ -n "$task" ]] || task="$ref"
+check_rec
+[[ -d "$wt_path" ]] || fail "worktree $wt_path does not exist"
+[[ -n "$branch" ]] || fail "worktree $wt_path is not on a branch"
+if [[ -n "$(git -C "$wt_path" status --porcelain --untracked-files=no)" ]]; then
+  refuse "$wt_path has uncommitted changes"
+fi
+
+pr=""
+if [[ -f "$result" ]]; then pr="$(jq -r '.pr // ""' "$result" 2>/dev/null)" || pr=""; fi
+if [[ -z "$pr" ]]; then
+  # pr view, not pr list: list only shows open PRs, and a merged one is a rerun.
+  pr="$(cd "$wt_path" && gh pr view "$branch" --json number -q .number 2>/dev/null)" || pr=""
+fi
+[[ -n "$pr" ]] || fail "no open PR for branch $branch"
+[[ "$pr" =~ ^[0-9]+$ ]] || fail "PR number '$pr' is not a number"
+
+# --- 1. the lock ----------------------------------------------------------------------
+lock="$root/.hyper/ship-land.lock"
+host="$(hostname 2>/dev/null || echo unknown)"
+me="$$@$host"
+mkdir -p "$root/.hyper"
+
+# unlock_dir <lockdir> — remove it only while the owner file still names us: after
+# a takeover the directory belongs to someone else.
+unlock_dir() {
+  local o=""
+  [[ -f "$1/owner" ]] && o="$(cat "$1/owner" 2>/dev/null || true)"
+  [[ "$o" == "$me" ]] || return 0
+  rm -rf "$1" 2>/dev/null || true
+}
+
+# lock_stale <lockdir> — sets owner_seen. Stale when the owner is on this host and
+# its pid is dead (the pid alone decides there), or when the owner is on another
+# host or unknown and the lock is over 120 s old.
+owner_seen=""
+lock_stale() {
+  local d="$1" opid ohost
+  owner_seen=""
+  [[ -d "$d" ]] || return 1
+  [[ -f "$d/owner" ]] && owner_seen="$(cat "$d/owner" 2>/dev/null || true)"
+  if [[ "$owner_seen" == *@* ]]; then
+    opid="${owner_seen%%@*}" ohost="${owner_seen#*@}"
+    if [[ "$ohost" == "$host" ]]; then
+      [[ "$opid" =~ ^[0-9]+$ ]] || return 1
+      kill -0 "$opid" 2>/dev/null && return 1
+      return 0
+    fi
+  fi
+  [[ -n "$(find "$d" -maxdepth 0 -mmin +2 2>/dev/null)" ]]
+}
+
+# lock_break <lockdir> — takeovers are serialised with <lockdir>.break; inside it
+# the owner is read again and the lock is broken only if it is still the owner
+# that was judged stale.
+lock_break() {
+  local d="$1" judged="$owner_seen"
+  if [[ -d "$d.break" && -n "$(find "$d.break" -maxdepth 0 -mmin +2 2>/dev/null)" ]]; then
+    rm -rf "$d.break"   # a breaker that died
+  fi
+  mkdir "$d.break" 2>/dev/null || return 0
+  if lock_stale "$d" && [[ "$owner_seen" == "$judged" ]]; then
+    rm -rf "$d"
+  fi
+  rmdir "$d.break" 2>/dev/null || true
+}
+
+waited=0 lock_start=$SECONDS
+while ! mkdir "$lock" 2>/dev/null; do
+  if lock_stale "$lock"; then
+    lock_break "$lock"
+    sleep 0.1
+    continue
+  fi
+  if [[ $waited -eq 0 ]]; then say "waiting for another land in this space (${owner_seen:-unknown owner})"; waited=1; fi
+  if [[ $((SECONDS - lock_start)) -ge ${SHIP_LAND_LOCK_WAIT_SEC:-1800} ]]; then
+    fail "gave up waiting for the land lock $lock (held by ${owner_seen:-unknown owner})"
+  fi
+  sleep 1
+done
+printf '%s\n' "$me" >"$lock/owner"
+trap 'unlock_dir "$lock"' EXIT
+
+# --- 2. a merged PR (rerun after a failed teardown) skips to on_land -----------------------
+pr_state="$(cd "$wt_path" && gh pr view "$pr" --json state -q .state)" || fail "gh pr view $pr failed"
+if [[ "$pr_state" == MERGED ]]; then
+  say "#$pr is already merged; skipping to on_land and teardown"
+else
+
+# --- 3. rebase --------------------------------------------------------------------------
+lease_sha="$(git -C "$wt_path" rev-parse -q --verify "refs/remotes/origin/$branch" 2>/dev/null || true)"
+git -C "$wt_path" fetch -q origin || fail "git fetch origin failed in $wt_path"
+git -C "$wt_path" rev-parse --verify -q "origin/$base" >/dev/null || fail "origin/$base does not exist"
+head0="$(git -C "$wt_path" rev-parse HEAD)"
+n0="$(git -C "$wt_path" rev-list --count "origin/$base..HEAD")"
+[[ "$n0" -gt 0 ]] || refuse "branch $branch has no commits on top of origin/$base"
+if ! git -C "$wt_path" rebase -q "origin/$base" >/dev/null 2>&1; then
+  git -C "$wt_path" rebase --abort >/dev/null 2>&1 || true
+  fail "rebase of $branch on origin/$base failed (conflicts?); the branch is unchanged"
+fi
+n1="$(git -C "$wt_path" rev-list --count "origin/$base..HEAD")"
+if [[ "$n1" != "$n0" ]]; then
+  git -C "$wt_path" reset -q --hard "$head0"
+  refuse "rebase dropped commits ($n0 before, $n1 after); the branch is unchanged"
+fi
+say "rebased $branch on origin/$base ($n1 commits)"
+
+# --- 4. gate and push -------------------------------------------------------------------
+mkdir -p "$loop_dir"
+glog="$loop_dir/land-gate.log"
+if ! (CDPATH='' cd -- "$wt_path" && bash -c "$gate") >"$glog" 2>&1; then
+  tail -n 30 "$glog" >&2
+  fail "gate failed (full output: $glog); nothing was pushed"
+fi
+say "gate passed"
+git -C "$wt_path" push -q "--force-with-lease=$branch:$lease_sha" origin "HEAD:$branch" || fail "push of $branch failed"
+
+# --- 5. merge ---------------------------------------------------------------------------
+sleep "${SHIP_LAND_SETTLE_SEC:-5}"
+(CDPATH='' cd -- "$wt_path" && gh pr merge "$pr" "--$method") || fail "gh pr merge $pr failed; $branch is pushed"
+base_wt="$(git -C "$wt_path" worktree list --porcelain | awk -v b="refs/heads/$base" '
+  $1 == "worktree" { p = substr($0, 10) } $1 == "branch" && $2 == b { print p; exit }')"
+if [[ -n "$base_wt" ]]; then
+  git -C "$base_wt" pull --ff-only -q origin "$base" || echo "ship-land: warning: could not fast-forward $base in $base_wt" >&2
+  say "#$pr merged at $(git -C "$base_wt" log --oneline -1)"
+else
+  say "#$pr merged (no worktree has $base checked out; nothing to pull)"
+fi
+fi   # PR not yet merged
+
+# --- 6. on_land -------------------------------------------------------------------------
+# Each command that succeeds is recorded in on_land.done (index and text), so a
+# rerun after a failed teardown never runs it twice; a failure stops here and the
+# rerun resumes at that command.
+done_file="$loop_dir/on_land.done"
+mkdir -p "$loop_dir"
+idx=0
+while IFS= read -r cmd; do
+  idx=$((idx + 1))
+  [[ -n "$cmd" ]] || continue
+  cmd="${cmd//\{ref\}/$ref}"
+  cmd="${cmd//\{pr\}/$pr}"
+  cmd="${cmd//\{task\}/$task}"
+  entry="$idx $cmd"
+  if [[ -f "$done_file" ]] && grep -qxF -- "$entry" "$done_file"; then
+    say "on_land: already done: $cmd"
+    continue
+  fi
+  if (CDPATH='' cd -- "$root" && bash -c "$cmd"); then
+    printf '%s\n' "$entry" >>"$done_file"
+    say "on_land: $cmd"
+  else
+    echo "ship-land: on_land command failed: $cmd" >&2
+    fail "$ref is merged but an on_land command failed; fix it and rerun 'ship-land $ref' to resume from that command (the teardown has not run)"
+  fi
+done < <(jq -r '.[]' <<<"$on_land")
+
+# --- 7. teardown ------------------------------------------------------------------------
+unlock_dir "$lock"; trap - EXIT
+teardown
+say "$ref landed"
