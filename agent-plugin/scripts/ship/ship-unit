@@ -151,9 +151,10 @@ driver_proc_ok() { # pid ref
   kill -0 "$1" 2>/dev/null || return 1
   c="$(ps -o command= -p "$1" 2>/dev/null)" || c=""
   if [[ -z "$c" && -r "/proc/$1/cmdline" ]]; then c="$(tr '\0' ' ' <"/proc/$1/cmdline" 2>/dev/null)" || c=""; fi
+  c="${c%"${c##*[! ]}"}"
   [[ -n "$c" ]] || return 1
   case "$c" in
-    *ship-unit*" _driver "*"$2"*) return 0 ;;
+    *ship-unit*" _driver $2") return 0 ;;
     *ship-loop*|*"${LOOP##*/}"*) return 0 ;;
   esac
   return 1
@@ -239,10 +240,11 @@ lock_stale() {
 lock_break() {
   local b="$LOCK_DIR.break" p age
   if ! mkdir "$b" 2>/dev/null; then
-    # A breaker that crashed leaves its marker behind.
+    # Someone else is breaking. A breaker that crashed leaves its marker behind: an old one
+    # is moved aside (one waiter wins the rename) and removed. Either way the caller waits.
     age=$(( $(date +%s) - $(mtime "$b") ))
-    [[ $age -le 30 ]] || rmdir "$b" 2>/dev/null || true
-    return 0
+    if [[ $age -gt 30 ]] && mv "$b" "$b.$$" 2>/dev/null; then rmdir "$b.$$" 2>/dev/null || true; fi
+    return 1
   fi
   p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
   age=$(( $(date +%s) - $(mtime "$LOCK_DIR") ))
@@ -250,6 +252,7 @@ lock_break() {
     rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true
   fi
   rmdir "$b" 2>/dev/null || true
+  return 0
 }
 
 lock_acquire() {
@@ -260,8 +263,7 @@ lock_acquire() {
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
     p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
     age=$(( $(date +%s) - $(mtime "$LOCK_DIR") ))
-    if lock_stale "$p" "$age"; then
-      lock_break
+    if lock_stale "$p" "$age" && lock_break; then
       continue
     fi
     if [[ $waited_ms -ge $((LOCK_WAIT_S * 1000)) ]]; then

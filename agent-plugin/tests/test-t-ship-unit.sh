@@ -230,7 +230,7 @@ wait_for() { # seconds command...
 exists() { [[ -e "$1" ]]; }
 gone() { [[ ! -e "$1" ]]; }
 # bg <tag> args... — a ship-unit in the background; bgrc <tag> waits for it and prints its code.
-bg() { local tag="$1"; shift; ( bash "$UNIT" "$@" >"$FIX/bg.$tag.out" 2>"$FIX/bg.$tag.err"; echo $? >"$FIX/bg.$tag.rc" ) & }
+bg() { local tag="$1"; shift; ( bash "$UNIT" "$@" >"$FIX/bg.$tag.out" 2>"$FIX/bg.$tag.err"; echo $? >"$FIX/bg.$tag.rc" ) & BGPID=$!; }
 bgrc() { wait_for "${2:-90}" test -s "$FIX/bg.$1.rc" && cat "$FIX/bg.$1.rc"; }
 # sleeper — a live "driver" pid for a unit; sets SLEEPER_PID.
 sleeper() { "$FIX/bin/ship-loop-sleeper" & SLEEPER_PID=$!; SLEEPERS="$SLEEPERS $SLEEPER_PID"; }
@@ -447,7 +447,7 @@ wait_for 120 test -s "$FIX/bg.c1.rc" -o -s "$FIX/bg.c2.rc"
 sleep 0.3
 for t in c1 c2; do sed "s/^/# bg $t: /" "$FIX/bg.$t.err" >&2; done
 rc1="$(cat "$FIX/bg.c1.rc" 2>/dev/null)"; rc2="$(cat "$FIX/bg.c2.rc" 2>/dev/null)"
-assert_eq "two concurrent runs at slots=1: exactly one is refused (3)" "3" "$( [[ "$rc1" == 3 ]] && echo "$rc1" || echo "$rc2" )"
+assert_eq "two concurrent runs at slots=1: one is refused (3), the other is running" "yes" "$( { [[ "$rc1/$rc2" == "3/" ]] || [[ "$rc1/$rc2" == "/3" ]]; } && echo yes)"
 assert_eq "...and only one driver was started" "1" "$(mux_count run "$FIX/hostfake.log" | awk '{print ($1 > 0) ? 1 : 0}')"
 if [[ "$rc1" == 3 ]]; then winner=c2; else winner=c1; fi
 release "$winner"
@@ -476,11 +476,27 @@ bg k2 run k2 --brief "$BRIEF" --class S --host box
 wait_for 120 test -s "$FIX/bg.k1.rc" -o -s "$FIX/bg.k2.rc"
 sleep 0.3
 rk1="$(cat "$FIX/bg.k1.rc" 2>/dev/null)"; rk2="$(cat "$FIX/bg.k2.rc" 2>/dev/null)"
-assert_eq "crashed lock holder, two waiters at slots=1: one is refused (3), not both let in" "3" "$( [[ "$rk1" == 3 ]] && echo 3 || echo "$rk2" )"
+assert_eq "crashed lock holder, two waiters at slots=1: one is refused (3), the other is running" "yes" "$( { [[ "$rk1/$rk2" == "3/" ]] || [[ "$rk1/$rk2" == "/3" ]]; } && echo yes)"
 if [[ "$rk1" == 3 ]]; then kw=k2; else kw=k1; fi
 release "$kw"
 assert_eq "...the other runs to READY" "0" "$(bgrc "$kw")"
 assert_eq "...and no break marker is left" "" "$([[ -e "$HOSTSPACE/.hyper/ship-unit.lock.break" ]] && echo left)"
+# a breaker that crashed inside .break: the old marker is taken over, the waiters do not spin
+rm_loops "$SPACE"; rm_loops "$HOSTSPACE"; rm -f "$FIX/bg."*
+mkdir -p "$HOSTSPACE/.hyper/ship-unit.lock" "$HOSTSPACE/.hyper/ship-unit.lock.break"
+echo 99999999 > "$HOSTSPACE/.hyper/ship-unit.lock/pid"
+touch -t 202001010000 "$HOSTSPACE/.hyper/ship-unit.lock.break"
+mode m1 hold; mode m2 hold
+bg m1 run m1 --brief "$BRIEF" --class S --host box
+bg m2 run m2 --brief "$BRIEF" --class S --host box
+wait_for 120 test -s "$FIX/bg.m1.rc" -o -s "$FIX/bg.m2.rc"
+sleep 0.3
+rm1="$(cat "$FIX/bg.m1.rc" 2>/dev/null)"; rm2="$(cat "$FIX/bg.m2.rc" 2>/dev/null)"
+assert_eq "a crashed breaker's old .break marker: one run refused (3), the other running" "yes" "$( { [[ "$rm1/$rm2" == "3/" ]] || [[ "$rm1/$rm2" == "/3" ]]; } && echo yes)"
+if [[ "$rm1" == 3 ]]; then mw=m2; else mw=m1; fi
+release "$mw"
+assert_eq "...the other runs to READY" "0" "$(bgrc "$mw")"
+assert_eq "...and the marker is gone" "" "$([[ -e "$HOSTSPACE/.hyper/ship-unit.lock.break" ]] && echo left)"
 
 LOCAL_RUNS="$(mux_count run)"
 # 5: host runs ---------------------------------------------------------------------------------
@@ -565,7 +581,7 @@ t0=$SECONDS
 # bounded: a regression that waits forever fails here instead of hanging the suite
 SHIP_UNIT_RECONNECT_SEC=1 bg w7 wait h7
 rc="$(bgrc w7 20)"
-if [[ -z "$rc" ]]; then pkill -f "ship-unit wait h7" 2>/dev/null; rc="hung"; fi
+if [[ -z "$rc" ]]; then pkill -P "$BGPID" 2>/dev/null; kill "$BGPID" 2>/dev/null; rc="hung"; fi
 assert_eq "wait: a host that stays down is given up on (75)" "75" "$rc"
 assert_eq "...within a few seconds" "yes" "$([[ $((SECONDS - t0)) -le 20 ]] && echo yes)"
 assert_contains "...saying it gave up" "$(cat "$FIX/bg.w7.err")" "gave up reconnecting to box"
