@@ -1,0 +1,874 @@
+#!/usr/bin/env bash
+# ship-loop — run one briefed unit through develop -> verify -> review -> spec check
+# -> fix rounds -> optional final gate -> finalize, with every agent in a pane
+# reached only through ship-mux. The driver's exit is the only notification: it
+# never waits for a human. When a unit parks, runs out of budget, gets stuck or
+# finishes, the process exits and result.json says why.
+#
+# Usage:
+#   ship-loop --ref REF --worktree ABS --branch B --brief ABS --class S|M|L
+#             [--base B] [--max-rounds N] [--final-gate] [--model STAGE=M[,M...]]...
+#   ship-loop --preflight [--ref REF]   check the toolchain and the config, then exit
+#
+# Everything else (gate, models, budgets, scan rules, spec paths, ...) comes from the
+# merged ship config (see ship-config). --base and --max-rounds override `base` and
+# `max_rounds`; --model replaces one stage's model list for this run (stages: dev
+# verify review spec_check spec_write final). A bare model name launches Claude Code,
+# provider/model[:thinking] launches pi; agents are launched with the flags that
+# `ship-role <role> --harness H --cwd <worktree>` prints.
+#
+# State directory: <space root>/notes/loops/<REF>/ (ship-mux keeps mux.json there).
+#   loop.log driver.pid driver.err   log, pid of the running driver, last ERROR message
+#   <stage>.prompt.md                the prompt each agent was given
+#   <verdict>.json + <verdict>.json.sent
+#       The agent's verdict file, and the marker of when it was prompted: one line is
+#       appended per prompt. A verdict newer than its marker is the answer to the last
+#       prompt; finished stages (valid, fresh verdict) are never re-run. Files:
+#         develop.json  fix-r<N>.json  verify-r<N>.json  review-r<N>.json
+#         spec-r<N>.json  specwriter-r<N>.json  final-r<N>.json   (agents)
+#         finalize.json  verify-r<N>.json when verify is skipped  (driver-written)
+#   agents/<name>.json               role, model, harness and session of each agent
+#   park.json                        the unit is parked (see below)
+#   park-<n>.json, <verdict>.<STATUS>-<n>.json    resolved parks and the verdicts that caused them
+#   budget-r<k>.json                 a stage ran over budget
+#   result.json                      the outcome; also printed on stdout
+#
+# Exit codes and result.json.status
+#   0  READY        finalize passed (rebase, gate, scan, push); land it
+#   2  PARKED       park.json: a dev QUESTION/BLOCKED, a permission DIALOG, a usage
+#                   LIMIT with nothing left to fail over to, or an OPERATOR question
+#                   from the spec writer. The agent is left alive and waiting.
+#      OVER-BUDGET  budget-r<k>.json; the agent is left running
+#      STUCK        max rounds without ACCEPT, or finalize failures the dev could not fix
+#   1  ERROR        tool or script failure, malformed verdict, bad usage (driver.err)
+#
+# Restart = resume. Running the driver again with the same --ref reattaches to live
+# agents and replays the finished stages from their files. The lead hands things to a
+# parked unit through files in the state directory before restarting it (ship-unit
+# resume writes them):
+#   answer-<n>.md    the answer to park.json (n is park.json's "n"); sent to the parked
+#                    agent. QUESTION, BLOCKED and OPERATOR parks wait for it; a DIALOG
+#                    park resumes once the agent is no longer blocked; a LIMIT park
+#                    resumes at once (change the models with models.override first).
+#   extend           minutes to add to the stage that went OVER-BUDGET (a number)
+#   models.override  lines of "stage=model[,model...]"; applied on every start
+# Without what the park needs, the driver re-emits the same result and exits 2.
+#
+# Budgets: budgets.<class> minutes for develop; fix rounds get budgets.fix_fraction of
+# it; every other agent stage gets budgets.check. The clock is wall time since the
+# stage's prompt was sent, without the time the unit was parked.
+#
+# Failover: the two hooks below (model_pick, failover_on_limit) walk each stage's
+# model list from its first entry and park LIMIT when an agent hits a usage limit.
+# Preflight routing and reactive failover replace them later.
+#
+# Environment (test knobs): SHIP_POLL_S (poll interval, default 2), SHIP_IDLE_GRACE_S
+# (seconds an idle agent without a verdict is left alone before a nudge, default 1200),
+# SHIP_HOST (recorded in result.json, default local).
+
+set -uo pipefail
+
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+SHIP_DIR="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+# shellcheck source=lib.sh
+source "$SHIP_DIR/lib.sh"
+MUX="$SHIP_DIR/ship-mux"
+ROLE_BIN="$SHIP_DIR/ship-role"
+PROMPTS="$SHIP_DIR/prompts"
+SCHEMAS="$SHIP_DIR/schemas"
+# A replacement string in ${x//a/$b} must not treat & specially (bash 5.2).
+shopt -u patsub_replacement 2>/dev/null || true
+
+POLL_S="${SHIP_POLL_S:-2}"
+IDLE_GRACE_S="${SHIP_IDLE_GRACE_S:-1200}"
+SEND_WAIT_MS=30000
+
+REF="" WT="" BRANCH="" BRIEF="" CLASS="" BASE="" MAX="" FINAL_GATE=0 PREFLIGHT=0
+MODEL_OVERRIDES=()
+STATE="" LOG=/dev/null STAGE=setup FINISHED=""
+PR="" ROUNDS='[]' FINALIZE_JSON='null'
+SPEC_VERDICT=NOT_RUN SPEC_ROUNDS=0
+FINAL_VERDICT=NOT_RUN FINAL_ROUNDS=0
+SW_RUNS=0 SW_COMMITS='[]'
+
+usage_exit() { echo "ship-loop: $*" >&2; exit 1; }
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --final-gate) FINAL_GATE=1; shift; continue ;;
+    --preflight) PREFLIGHT=1; shift; continue ;;
+    --ref|--worktree|--branch|--brief|--class|--base|--max-rounds|--model)
+      [[ $# -ge 2 ]] || usage_exit "$1 needs a value" ;;
+    *) usage_exit "unknown argument: $1" ;;
+  esac
+  case "$1" in
+    --ref) REF="$2" ;; --worktree) WT="$2" ;; --branch) BRANCH="$2" ;; --brief) BRIEF="$2" ;;
+    --class) CLASS="$2" ;; --base) BASE="$2" ;; --max-rounds) MAX="$2" ;;
+    --model) MODEL_OVERRIDES+=("$2") ;;
+  esac
+  shift 2
+done
+
+# --- preflight ---------------------------------------------------------------------------------
+preflight() {
+  local bad=0 m h cfg_ok=1 stage
+  need() { command -v "$1" >/dev/null 2>&1 || { echo "preflight: $1 not found on PATH${2:+ ($2)}" >&2; bad=1; }; }
+  need jq; need git; need gh
+  if [[ -z "${SHIP_SPACE_ROOT:-}" ]]; then need hyper "or set SHIP_SPACE_ROOT"; fi
+  ship_require_yq || bad=1
+  if [[ $bad -eq 0 ]]; then ship_config_load || cfg_ok=0; else cfg_ok=0; fi
+  if [[ $cfg_ok -eq 1 ]]; then
+    for m in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$m" || bad=1; done
+    ship_require_gate || bad=1
+    "$MUX" check || bad=1
+    for stage in $SHIP_STAGES; do
+      while IFS= read -r m; do
+        [[ -n "$m" ]] || continue
+        h="$(ship_model_parse "$m" | cut -f1)"
+        need "$(case "$h" in claude) echo claude ;; *) echo pi ;; esac)" "needed by model $m"
+      done < <(jq -r --arg s "$stage" '.models[$s][]' <<<"$SHIP_CONFIG_JSON")
+    done
+    while IFS= read -r m; do
+      [[ -n "$m" ]] || continue
+      h="$(ship_model_parse "$m" | cut -f1)"
+      need "$(case "$h" in claude) echo claude ;; *) echo pi ;; esac)" "needed by failover.summarizer $m"
+    done < <(jq -r '.failover.summarizer[]' <<<"$SHIP_CONFIG_JSON")
+  else
+    bad=1
+  fi
+  if [[ $bad -eq 0 ]]; then echo "preflight: ok"; else echo "preflight: failed" >&2; fi
+  exit "$bad"
+}
+
+[[ $PREFLIGHT -eq 1 ]] && preflight
+ship_require_yq || exit 1
+ship_config_load || exit 1
+for _o in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$_o" || exit 1; done
+
+for _v in REF WT BRANCH BRIEF CLASS; do
+  [[ -n "${!_v}" ]] || usage_exit "--$(printf '%s' "$_v" | tr 'A-Z' 'a-z') is required"
+done
+case "$CLASS" in S|M|L) ;; *) usage_exit "--class must be S, M or L" ;; esac
+[[ -d "$WT" ]] || usage_exit "worktree $WT is not a directory"
+[[ -f "$BRIEF" ]] || usage_exit "brief $BRIEF is not a file"
+[[ -n "$BASE" ]] || BASE="$(ship_cfg_get base)" || usage_exit "config has no base"
+[[ -n "$MAX" ]] || MAX="$(ship_cfg_get max_rounds)" || usage_exit "config has no max_rounds"
+case "$MAX" in ''|*[!0-9]*|0) usage_exit "max rounds must be a positive integer (got '$MAX')" ;; esac
+
+SPACE_ROOT="$(ship_space_root)" || usage_exit "cannot locate the space root"
+STATE="$SPACE_ROOT/notes/loops/$REF"
+mkdir -p "$STATE/agents" || usage_exit "cannot create $STATE"
+LOG="$STATE/loop.log"
+echo $$ >"$STATE/driver.pid"
+HOST="${SHIP_HOST:-local}"
+
+log() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*" | tee -a "$LOG" >&2; }
+
+# Result JSON to result.json and stdout, then exit. Every result carries spec, final and
+# specwriter summaries.
+finish() { # code stage status [extra-json]
+  local extra="${4:-}" tmp="$STATE/result.json.tmp"
+  [[ -n "$extra" ]] || extra='{}'
+  FINISHED=1
+  jq -n --arg ref "$REF" --arg stage "$2" --arg status "$3" --arg pr "$PR" \
+    --arg sv "$SPEC_VERDICT" --argjson sr "$SPEC_ROUNDS" --arg fv "$FINAL_VERDICT" --argjson fr "$FINAL_ROUNDS" \
+    --argjson swr "$SW_RUNS" --argjson swc "$SW_COMMITS" --argjson rounds "$ROUNDS" --argjson fin "$FINALIZE_JSON" \
+    --arg host "$HOST" --arg wt "$WT" --argjson extra "$extra" \
+    '{ref:$ref, pr:($pr|tonumber? // null), stage:$stage, status:$status, rounds:$rounds,
+      spec:{verdict:$sv, rounds:$sr}, final:{verdict:$fv, rounds:$fr}, specwriter:{runs:$swr, commits:$swc},
+      finalize:$fin, failovers:0, host:$host, worktree:$wt} + $extra' >"$tmp" && mv "$tmp" "$STATE/result.json"
+  cat "$STATE/result.json"
+  exit "$1"
+}
+
+die_error() { # message
+  log "ERROR: $*"
+  printf '%s\n' "$*" >"$STATE/driver.err"
+  finish 1 "$STAGE" ERROR "$(jq -n --arg why "$*" '{why:$why}')"
+}
+
+# Anything that ends the script without finish (a bug, an unbound variable) is an ERROR too.
+trap '[[ -n "$FINISHED" ]] || { log "driver exited unexpectedly"; die_error "driver exited unexpectedly; see loop.log"; }' EXIT
+
+command -v git >/dev/null 2>&1 || die_error "git not found"
+ship_require_gate || die_error "config has no usable gate (see driver output above)"
+GATE="$(ship_cfg_get gate)"
+git -C "$WT" rev-parse --verify -q "origin/$BASE" >/dev/null || die_error "origin/$BASE does not exist in $WT; fetch it first"
+
+# --- config -------------------------------------------------------------------------------------
+cfg() { ship_cfg_get "$1" 2>/dev/null || true; }
+abs_in_space() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$SPACE_ROOT" "$1" ;; esac; }
+RULINGS="$(abs_in_space "$(cfg rulings)")"
+SPEC_PATHS=()
+while IFS= read -r _p; do [[ -z "$_p" ]] || SPEC_PATHS+=("$_p"); done < <(jq -r '.spec.paths // [] | .[]' <<<"$SHIP_CONFIG_JSON")
+SPEC_PATHS_TXT="(none configured)"
+[[ ${#SPEC_PATHS[@]} -eq 0 ]] || SPEC_PATHS_TXT="${SPEC_PATHS[*]}"
+FORBIDDEN_TXT="$(jq -r '(.scan.forbidden // []) | if length == 0 then "(none configured)" else map("`" + . + "`") | join(", ") end' <<<"$SHIP_CONFIG_JSON")"
+FORBIDDEN_EXCLUDE_TXT="$(jq -r '(.scan.exclude // []) | if length == 0 then "" else " except in files matching " + (map("`" + . + "`") | join(", ")) end' <<<"$SHIP_CONFIG_JSON")"
+VERIFY_INSTR_FILE="$(cfg stages.verify.instructions)"
+REVIEW_INSTR_FILE="$(cfg stages.review.instructions)"
+[[ "$(cfg stages.final.always)" == true ]] && FINAL_GATE=1
+
+# models.override (written by the lead's resume) applies on every start, before --model.
+if [[ -s "$STATE/models.override" ]]; then
+  while IFS= read -r _o; do
+    [[ -z "$_o" ]] || ship_models_override "$_o" || die_error "bad line in models.override: $_o"
+  done <"$STATE/models.override"
+  for _o in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$_o" || die_error "bad --model $_o"; done
+fi
+
+# --- failover hooks -----------------------------------------------------------------------------
+# model_pick <list key> — the model to launch for a stage. Walks the list from its first entry.
+model_pick() { jq -r --arg k "$1" '.models[$k][0]' <<<"$SHIP_CONFIG_JSON"; }
+# failover_on_limit <agent> <stage> <verdict file> <matched text> — an agent hit a usage limit.
+# With nothing to fail over to, the unit parks.
+failover_on_limit() {
+  park LIMIT "$2" "$1" "$1 hit a usage limit (${4:-no text}); no other model to fail over to. Wait for the reset, or resume with a models.override" "$3"
+}
+
+# --- small helpers ------------------------------------------------------------------------------
+aname() { printf '%s%s' "${REF:0:$((32 - ${#1}))}" "$1"; } # agent names are at most 32 chars: keep the suffix whole
+write_json() { printf '%s\n' "$2" >"$1.tmp" && mv "$1.tmp" "$1"; }
+valid_json() { [[ -s "$1" ]] && jq -e . "$1" >/dev/null 2>&1; }
+new_uuid() {
+  if command -v uuidgen >/dev/null 2>&1; then uuidgen | tr 'A-Z' 'a-z'
+  elif [[ -r /proc/sys/kernel/random/uuid ]]; then cat /proc/sys/kernel/random/uuid
+  else od -An -N16 -tx1 /dev/urandom | tr -d ' \n' | sed -E 's/(.{8})(.{4})(.{4})(.{4})(.{12})/\1-\2-\3-\4-\5/'
+  fi
+}
+mux() { local verb="$1"; shift; "$MUX" "$verb" --ref "$REF" "$@"; }
+
+# render <template> key=value... — the template without its first line, with {key} replaced in
+# one pass (a value containing {other} is not substituted again). Unknown {keys} stay visible.
+render() {
+  local tpl="$1" m='{}' kv
+  shift
+  for kv in "$@"; do m="$(jq -c --arg k "${kv%%=*}" --arg v "${kv#*=}" '.[$k] = $v' <<<"$m")"; done
+  sed 1d "$PROMPTS/$tpl.md" \
+    | jq -Rrs --argjson m "$m" 'gsub("\\{(?<k>[a-z_]+)\\}"; ($m[.k] // ("{" + .k + "}")))'
+}
+RULES="$(render rules ref="$REF" worktree="$WT" branch="$BRANCH" brief="$BRIEF" gate="$GATE" rulings="$RULINGS" \
+  forbidden="$FORBIDDEN_TXT" forbidden_exclude="$FORBIDDEN_EXCLUDE_TXT")"
+# prompt <template> key=value... — render with the pairs every prompt gets (templates ignore the
+# ones they do not use).
+prompt() {
+  local tpl="$1"
+  shift
+  render "$tpl" "ref=$REF" "pr=$PR" "worktree=$WT" "branch=$BRANCH" "base=$BASE" "brief=$BRIEF" "gate=$GATE" \
+    "rulings=$RULINGS" "spec_paths=$SPEC_PATHS_TXT" "forbidden=$FORBIDDEN_TXT" "forbidden_exclude=$FORBIDDEN_EXCLUDE_TXT" \
+    "rules=$RULES" "$@"
+}
+skill_call() { # skill model
+  case "$2" in */*) echo "pi: the /skill:$1 command, or read its SKILL.md" ;; *) echo "Skill tool, skill \"$1\"" ;; esac
+}
+file_text() { # path relative to the space root (or absolute); empty when unset or missing
+  local p="$1"
+  [[ -n "$p" ]] || return 0
+  p="$(abs_in_space "$p")"
+  [[ -f "$p" ]] && cat "$p"
+  return 0
+}
+
+check_verdict() { # schema file — a verdict that does not match its schema is an ERROR
+  local errs
+  errs="$(validate_verdict "$SCHEMAS/$1.json" "$2" 2>&1)" || die_error "$(basename "$2") is not a valid $1 result: $(tr '\n' ' ' <<<"$errs" | cut -c1-500)"
+}
+
+# --- budgets ------------------------------------------------------------------------------------
+budget_min() { # kind (develop|fix|check) verdict-file
+  local base extra=0
+  case "$1" in
+    develop) base="$(jq -r --arg c "$CLASS" '.budgets[$c]' <<<"$SHIP_CONFIG_JSON")" ;;
+    fix) base="$(jq -r --arg c "$CLASS" '.budgets[$c] * .budgets.fix_fraction' <<<"$SHIP_CONFIG_JSON")" ;;
+    *) base="$(jq -r '.budgets.check' <<<"$SHIP_CONFIG_JSON")" ;;
+  esac
+  [[ -s "$2.extra" ]] && extra="$(cat "$2.extra")"
+  awk -v a="$base" -v b="$extra" 'BEGIN { print a + b }'
+}
+
+over_budget() { # stage agent file budget_min elapsed_s
+  local k=1 f
+  while [[ -e "$STATE/budget-r$k.json" ]]; do k=$((k + 1)); done
+  f="$STATE/budget-r$k.json"
+  write_json "$f" "$(jq -n --arg stage "$1" --arg agent "$2" --arg class "$CLASS" --arg file "$(basename "$3")" \
+    --argjson b "$4" --argjson e "$5" \
+    '{verdict:"OVER-BUDGET", stage:$stage, agent:$agent, class:$class, budget_min:$b, elapsed_min:($e / 60 * 100 | round / 100), file:$file}')"
+  check_verdict budget "$f"
+  log "OVER-BUDGET $1: $2 used $(jq -r .elapsed_min "$f") of $4 min; agent left running (resume with --extend)"
+  finish 2 "$1" OVER-BUDGET "$(jq -c '{budget:.}' "$f")"
+}
+
+# --- parking ------------------------------------------------------------------------------------
+park() { # status stage agent question [verdict-file]
+  local n=1 q
+  while [[ -e "$STATE/park-$n.json" ]]; do n=$((n + 1)); done
+  q="$4"
+  write_json "$STATE/park.json" "$(jq -n --arg st "$1" --arg stage "$2" --arg agent "$3" --arg q "$q" \
+    --arg since "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg file "${5:-}" --argjson n "$n" \
+    '{status:$st, stage:$stage, agent:$agent, question:$q, since:$since, n:$n, file:$file}')"
+  check_verdict park "$STATE/park.json"
+  log "PARKED $1 $2: $3 — $(tr '\n\t' '  ' <<<"$q" | tr -s ' ' | cut -c1-300)"
+  finish 2 "$2" PARKED "$(jq -c '{park:.}' "$STATE/park.json")"
+}
+
+# park_result <verdict file> <status> <stage> <agent> <question> — the agent's own verdict asked
+# a question: keep it next to the park, clear the verdict so the agent's next answer is fresh.
+park_result() {
+  local f="$1" n=1 keep
+  while [[ -e "$STATE/park-$n.json" ]]; do n=$((n + 1)); done
+  keep="${f%.json}.$2-$n.json"
+  mv "$f" "$keep"
+  park "$2" "$3" "$4" "$5" "$f"
+}
+
+# --- agents -------------------------------------------------------------------------------------
+# agent_lookup <name> — sets L_ID to the agent's id, empty when there is none. Not run in a
+# command substitution, so a ship-mux failure ends the driver.
+L_ID="" L_STATE=""
+agent_lookup() {
+  local out
+  L_ID=""
+  out="$(mux list 2>>"$LOG")" || die_error "ship-mux list failed; see loop.log"
+  L_ID="$(jq -r --arg n "$1" '[.[] | select(.kind == "agent" and .name == $n)][0].id // empty' <<<"$out")"
+}
+# agent_state <id> — sets L_STATE to working|idle|blocked|gone.
+agent_state() {
+  local out rc=0
+  L_STATE=gone
+  [[ -n "$1" ]] || return 0
+  out="$(mux status --to "$1" 2>>"$LOG")" || rc=$?
+  if [[ $rc -eq 5 ]]; then return 0; fi
+  [[ $rc -eq 0 ]] || die_error "ship-mux status $1 failed (exit $rc); see loop.log"
+  L_STATE="$(jq -r '.state // "gone"' <<<"$out")"
+}
+agent_harness() { jq -r '.harness // "claude"' "$STATE/agents/$1.json" 2>/dev/null || echo claude; }
+
+# start_agent <name> <role> <model list key> — a fresh agent in the unit space; sets A_ID.
+start_agent() {
+  local name="$1" role="$2" key="$3" model harness rout rargs=() args=() out uuid session
+  model="$(model_pick "$key")" || return 1
+  harness="$(ship_model_parse "$model" | cut -f1)" || return 1
+  rout="$("$ROLE_BIN" "$role" --harness "$harness" --cwd "$WT" 2>>"$LOG")" || { log "ship-role $role failed for $name"; return 1; }
+  read -r -a rargs <<<"$rout"
+  if [[ "$harness" == claude ]]; then
+    uuid="$(new_uuid)"; session="$uuid"
+    args=(--model "$model" --permission-mode bypassPermissions ${rargs[@]+"${rargs[@]}"} --session-id "$uuid")
+  else
+    mkdir -p "$STATE/pi-sessions"; session="$STATE/pi-sessions"
+    args=(--model "$model" --approve ${rargs[@]+"${rargs[@]}"} --session-dir "$STATE/pi-sessions")
+  fi
+  out="$(mux start --space "$SPACE_ID" --name "$name" --harness "$harness" --cwd "$WT" -- "${args[@]}" 2>>"$LOG")" \
+    || { log "could not start $name"; return 1; }
+  A_ID="$(jq -r .agent <<<"$out")"
+  write_json "$STATE/agents/$name.json" "$(jq -n --arg n "$name" --arg r "$role" --arg k "$key" --arg m "$model" \
+    --arg h "$harness" --arg s "$session" --arg id "$A_ID" '{name:$n, role:$r, models_key:$k, model:$m, harness:$h, session:$s, id:$id}')"
+  log "started $name ($role, $model) as $A_ID"
+}
+
+close_agent() { # name
+  local id
+  agent_lookup "$1"; id="$L_ID"
+  [[ -n "$id" ]] || return 0
+  mux close --id "$id" >/dev/null 2>>"$LOG" || log "could not close $1 ($id)"
+}
+
+# send_prompt <agent id> <text> — a turn that never starts gets Enter pressed up to 3 times
+# (a pasted prompt can be dropped while the harness is still starting).
+send_prompt() {
+  local id="$1" text="$2" rc=0 try
+  mux send --to "$id" --text "$text" --wait-ms "$SEND_WAIT_MS" >/dev/null 2>>"$LOG" || rc=$?
+  case $rc in
+    0) return 0 ;;
+    4) ;;
+    *) log "send to $id failed (exit $rc)"; return 1 ;;
+  esac
+  for try in 1 2 3; do
+    log "prompt to $id has not started a turn; pressing Enter ($try)"
+    mux send --to "$id" --keys enter >/dev/null 2>>"$LOG" || true
+    if mux wait --to "$id" --until working --timeout-ms 15000 >/dev/null 2>&1; then return 0; fi
+  done
+  log "prompt to $id never started a turn"
+  return 1
+}
+
+# fresh_result <file> — a valid verdict written after the last prompt
+fresh_result() { valid_json "$1" && [[ -e "$1.sent" ]] && ! [[ "$1.sent" -nt "$1" ]]; }
+
+# limit_hit <agent name> <agent id> — print the matching screen line when the agent shows its harness's limit text
+limit_hit() {
+  local re screen
+  re="$(jq -r --arg h "$(agent_harness "$1")" '.limits.patterns[$h] // empty' <<<"$SHIP_CONFIG_JSON")"
+  [[ -n "$re" ]] || return 1
+  screen="$(mux read --to "$2" --lines 80 2>/dev/null)" || return 1
+  printf '%s\n' "$screen" | jq -Rr --arg re "$re" 'select(test($re))' 2>/dev/null | tail -n 1 | sed -E 's/^[^[:alnum:]]*//' | tr -s ' ' | cut -c1-160 | grep .
+}
+
+# await_file <name> <id> <file> <stage> <budget min> — wait for the agent to write its verdict.
+# 0 written; 1 the agent is gone or stopped without writing (FAIL_WHY says which); 2 not JSON.
+# Parks (DIALOG, LIMIT) and budget overruns exit the driver.
+FAIL_WHY=""
+await_file() {
+  local name="$1" id="$2" file="$3" stage="$4" budget="$5" acc=0 seg now el lim st idle=0 nudges=0 hit
+  [[ -s "$file.clock" ]] && acc="$(cat "$file.clock")"
+  seg="$(date +%s)"
+  lim="$(awk -v m="$budget" 'BEGIN { printf "%d", m * 60 }')"
+  while true; do
+    if [[ -s "$file" ]]; then
+      valid_json "$file" && return 0
+    fi
+    now="$(date +%s)"; el=$((acc + now - seg))
+    printf '%s\n' "$el" >"$file.clock"
+    if [[ $el -gt $lim ]]; then over_budget "$stage" "$name" "$file" "$budget" "$el"; fi
+    agent_state "$id"; st="$L_STATE"
+    case "$st" in
+      gone) FAIL_WHY="$name is gone"; return 1 ;;
+      blocked)
+        park DIALOG "$stage" "$name" "$name is blocked on a dialog. Answer it in its pane, then resume. Screen: $(mux read --to "$id" --lines 15 2>/dev/null | tr -s ' \n' ' ' | cut -c1-500)" "$file" ;;
+      working) idle=0 ;;
+      *)
+        if hit="$(limit_hit "$name" "$id")"; then failover_on_limit "$name" "$stage" "$file" "$hit"; fi
+        if [[ -s "$file" ]] && ! valid_json "$file"; then FAIL_WHY="$(basename "$file") is not valid JSON"; return 2; fi
+        [[ $idle -gt 0 ]] || idle="$now"
+        if [[ $((now - idle)) -ge $IDLE_GRACE_S ]]; then
+          if [[ $nudges -ge 2 ]]; then FAIL_WHY="$name stopped without writing $(basename "$file")"; return 1; fi
+          nudges=$((nudges + 1)); idle=0
+          log "nudging $name ($nudges)"
+          send_prompt "$id" "You stopped without writing $file. Finish the task, then write that file." || { FAIL_WHY="$name did not take the nudge"; return 1; }
+        fi ;;
+    esac
+    sleep "$POLL_S"
+  done
+}
+
+step_failed() { # stage name file rc
+  [[ "$4" -ne 2 ]] || die_error "$FAIL_WHY"
+  park BLOCKED "$1" "$2" "$FAIL_WHY. See loop.log; answer to nudge the agent, or resume to retry the stage with a new agent" "$3"
+}
+
+# run_step <agent name> <file> <prompt> <budget min> <stage> — prompt a live agent and wait for
+# its verdict. Reuses a fresh verdict; reattaches (no new prompt) to a stage already in flight.
+run_step() {
+  local name="$1" file="$2" text="$3" budget="$4" stage="$5" id rc=0
+  if fresh_result "$file"; then log "$name: reusing $(basename "$file")"; return 0; fi
+  agent_lookup "$name"; id="$L_ID"
+  [[ -n "$id" ]] || die_error "agent $name is not running"
+  if [[ -e "$file.sent" && ! -e "$file" ]] && agent_state "$id" && [[ "$L_STATE" != gone ]]; then
+    log "reattaching to $name for $(basename "$file")"
+  else
+    rm -f "$file" "$file.clock"
+    printf '%s\n' "$text" >"${file%.json}.prompt.md"
+    date +%s >>"$file.sent"
+    send_prompt "$id" "$text" || { FAIL_WHY="could not prompt $name (gone, or it never started a turn)"; step_failed "$stage" "$name" "$file" 1; }
+  fi
+  await_file "$name" "$id" "$file" "$stage" "$budget" || rc=$?
+  [[ $rc -eq 0 ]] || step_failed "$stage" "$name" "$file" "$rc"
+}
+
+# fresh_step <name> <role> <model key> <file> <prompt> <schema> <budget> <stage> [keep] — a fresh
+# agent per stage, closed when its verdict is in (unless keep).
+fresh_step() {
+  local name="$1" role="$2" key="$3" file="$4" text="$5" schema="$6" budget="$7" stage="$8" keep="${9:-}" id
+  if fresh_result "$file"; then
+    log "$name already finished: reusing $(basename "$file")"
+    [[ -n "$keep" ]] || close_agent "$name"
+    check_verdict "$schema" "$file"
+    return 0
+  fi
+  agent_lookup "$name"; id="$L_ID"; agent_state "$id"
+  if [[ -z "$id" || "$L_STATE" == gone ]]; then
+    rm -f "$file" "$file.sent" "$file.clock"
+    start_agent "$name" "$role" "$key" || die_error "could not start $name; see loop.log"
+  fi
+  run_step "$name" "$file" "$text" "$budget" "$stage"
+  check_verdict "$schema" "$file"
+  [[ -n "$keep" ]] || close_agent "$name"
+  return 0
+}
+
+# --- formatting ---------------------------------------------------------------------------------
+fmt_findings() { jq -r '.findings // [] | to_entries[] | "\(.key+1). [\(.value.severity // "BLOCKING")] \(.value.file)\(if .value.line then ":\(.value.line)" else "" end) — \(.value.summary)\(if .value.fix then "\n   Fix: \(.value.fix)" else "" end)"' "$1"; }
+fmt_failures() { jq -r '.failures // [] | to_entries[] | "\(.key+1). \(.value.what)\n   Evidence: \(.value.evidence)"' "$1"; }
+fmt_gaps() {
+  jq -r '.gaps // [] | to_entries[] | "\(.key+1). \(.value.where // "?")\(if .value.operator_call == true then " [operator call]" else "" end) — \(.value.question // "")"
+    + (.value.quotes // [] | map("\n   Spec text: " + tostring) | join(""))' "$1"
+}
+fmt_removals() { # file kind
+  jq -r --arg k "$2" '[.removals // [] | .[] | select(.kind == $k)] | to_entries[]
+    | "\(.key+1). \(.value.where // "?") — \(.value.what // ""). No consumer: \(.value.why_no_consumer // "")"' "$1"
+}
+fmt_resolved() { jq -r '.resolved // [] | to_entries[] | "\(.key+1). \(.value.where // "?"): \(.value.says // "")\(if (.value.question // "") != "" then "\n   (settles: \(.value.question))" else "" end)"' "$1"; }
+fmt_opq() { jq -r '.operator_questions // [] | to_entries[] | "\(.key+1). \(.value.where // "?") — \(.value.question // "")\(if (.value.options // "") != "" then " Options: \(.value.options)." else "" end)\(if (.value.recommendation // "") != "" then " Recommendation: \(.value.recommendation)." else "" end)"' "$1"; }
+jlen() { jq -r --arg k "$2" '(.[$k] // []) | length' "$1"; }
+add_round() { ROUNDS="$(jq -c --argjson e "$1" '. + [$e]' <<<"$ROUNDS")"; }
+
+# --- setup: the unit space and the dev ------------------------------------------------------------
+open_out="$(mux open --cwd "$WT" --label "$REF" 2>>"$LOG")" || die_error "ship-mux open failed; see loop.log"
+SPACE_ID="$(jq -r .space <<<"$open_out")"
+DEV="$(aname -dev)"
+agent_lookup "$DEV"; DEV_ID="$L_ID"; agent_state "$DEV_ID"
+A_ID=""
+if [[ -z "$DEV_ID" || "$L_STATE" == gone ]]; then
+  # A new dev means a new run: set the results of an earlier run of this ref aside.
+  _old=""
+  for _f in "$STATE"/*; do
+    [[ -f "$_f" ]] || continue
+    case "${_f##*/}" in mux.json|loop.log|driver.pid|driver.err|models.override|answer-*.md|extend) continue ;; esac
+    [[ -n "$_old" ]] || { _old="$STATE/run-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$_old"; }
+    mv "$_f" "$_old"/
+  done
+  [[ -z "$_old" ]] || log "archived the previous run's results to $_old"
+  start_agent "$DEV" dev dev || die_error "dev agent did not start; see loop.log"
+  DEV_ID="$A_ID"
+  log "dev $DEV is $DEV_ID in space $SPACE_ID"
+else
+  log "reusing $DEV ($DEV_ID)"
+fi
+
+# --- resume: what the lead left for a parked or over-budget unit -------------------------------
+resume_park() {
+  local st stage agent n file ans id
+  [[ -s "$STATE/park.json" ]] || return 0
+  st="$(jq -r .status "$STATE/park.json")"; stage="$(jq -r .stage "$STATE/park.json")"
+  agent="$(jq -r .agent "$STATE/park.json")"; n="$(jq -r .n "$STATE/park.json")"
+  file="$(jq -r '.file // ""' "$STATE/park.json")"
+  STAGE="$stage"
+  agent_lookup "$agent"; id="$L_ID"; agent_state "$id"
+  case "$st" in
+    QUESTION|BLOCKED|OPERATOR)
+      ans="$STATE/answer-$n.md"
+      if [[ -z "$id" || "$L_STATE" == gone ]]; then
+        log "parked agent $agent is gone: the stage will be restarted"
+      elif [[ -s "$ans" ]]; then
+        [[ -z "$file" ]] || { rm -f "$file"; date +%s >>"$file.sent"; }
+        send_prompt "$id" "Answer from the lead to your $st:
+$(cat "$ans")
+Continue the task. When it is complete, write the result file ${file:-you were given} again." \
+          || die_error "could not deliver answer-$n.md to $agent"
+        log "delivered answer-$n.md to $agent"
+      else
+        log "still parked ($st): waiting for $ans"
+        finish 2 "$stage" PARKED "$(jq -c '{park:.}' "$STATE/park.json")"
+      fi ;;
+    DIALOG)
+      if [[ -n "$id" && "$L_STATE" == blocked ]]; then
+        log "still parked (DIALOG): $agent is still blocked"
+        finish 2 "$stage" PARKED "$(jq -c '{park:.}' "$STATE/park.json")"
+      fi ;;
+    LIMIT) ;;
+  esac
+  mv "$STATE/park.json" "$STATE/park-$n.json"
+  log "resumed from park $n ($st)"
+}
+resume_budget() {
+  local b stage file mins
+  for b in "$STATE"/budget-r*.json; do
+    [[ -f "$b" && ! -e "$b.handled" ]] || continue
+    stage="$(jq -r .stage "$b")"; file="$STATE/$(jq -r '.file // ""' "$b")"
+    if [[ -s "$STATE/extend" ]]; then
+      mins="$(cat "$STATE/extend")"
+      case "$mins" in ''|*[!0-9.]*) die_error "extend file must hold a number of minutes (got '$mins')" ;; esac
+      awk -v a="$( [[ -s "$file.extra" ]] && cat "$file.extra" || echo 0 )" -v b="$mins" 'BEGIN { print a + b }' >"$file.extra"
+      mv "$STATE/extend" "$STATE/extend.applied"
+      touch "$b.handled"
+      log "extended $stage by $mins min"
+    else
+      STAGE="$stage"
+      log "still over budget: $stage; resume with --extend"
+      finish 2 "$stage" OVER-BUDGET "$(jq -c '{budget:.}' "$b")"
+    fi
+  done
+}
+resume_park
+resume_budget
+
+# --- stage helpers -------------------------------------------------------------------------------
+# dev_ok <file> <stage> — DONE continues; QUESTION and BLOCKED park the unit (the dev stays alive).
+dev_ok() {
+  local f="$1" stage="$2" st q
+  st="$(jq -r .status "$f")"
+  [[ "$st" == DONE ]] && return 0
+  q="$(jq -r 'if (.question // "") == "" then "(no question text; the dev summary follows) " + (.summary // "") else .question end' "$f")"
+  park_result "$f" "$st" "$stage" "$DEV" "$q"
+}
+
+# fix_round <round> <findings> — the same dev fixes; file fix-r<round>.json
+fix_round() {
+  local r="$1" findings="$2" f="$STATE/fix-r$1.json" text
+  STAGE=fix
+  text="$(prompt fix round="$r" pending="$findings" verdict_file="$f")"
+  run_step "$DEV" "$f" "$text" "$(budget_min fix "$f")" fix
+  check_verdict develop "$f"
+  dev_ok "$f" fix
+  log "round $r fixed at $(jq -r '.head // "?"' "$f")"
+}
+
+spec_touched() {
+  [[ ${#SPEC_PATHS[@]} -gt 0 ]] || return 1
+  ! git -C "$WT" diff --quiet "origin/$BASE...HEAD" -- "${SPEC_PATHS[@]}"
+}
+spec_required() { spec_touched || grep -qiE '^[[:space:]]*Spec:[[:space:]]*required' "$BRIEF"; }
+
+# --- develop ---------------------------------------------------------------------------------------
+STAGE=develop
+f="$STATE/develop.json"
+text="$(prompt develop verdict_file="$f")"
+run_step "$DEV" "$f" "$text" "$(budget_min develop "$f")" develop
+check_verdict develop "$f"
+dev_ok "$f" develop
+PR="$(jq -r '.pr // empty' "$f")"
+[[ -n "$PR" ]] || die_error "develop.json is DONE but names no pr; the dev must open the PR"
+log "PR #$PR opened"
+
+# --- spec writer: GAP and spec-text REMOVE ---------------------------------------------------------
+# Runs a fresh spec writer on the gaps and spec removals of <from> (the spec check's result), then
+# sets pending and spec_pending for the next round. Code removals and findings go to the dev.
+spec_write() { # source from round
+  local src="$1" from="$2" r="$3" w wf extra="" gaps removals commits nres v text q
+  STAGE=specwriter
+  w="$(aname "-specwriter-r$r")"; wf="$STATE/specwriter-r$r.json"
+  if [[ "$(jq '[.gaps // [] | .[] | select(.operator_call == true)] | length' "$from")" -gt 0 ]]; then
+    extra="Gaps marked [operator call] wait on the operator: do not write text for them; put them in operator_questions with the options and your recommendation."
+  fi
+  gaps="$(fmt_gaps "$from")"; removals="$(fmt_removals "$from" spec)"
+  [[ -n "$gaps" ]] || gaps="(none)"
+  [[ -n "$removals" ]] || removals="(none)"
+  text="$(prompt specwriter round="$r" source="$src" gaps="$gaps" removals="$removals" extra="$extra" verdict_file="$wf")"
+  fresh_step "$w" spec spec_write "$wf" "$text" specwriter "$(budget_min check "$wf")" specwriter keep
+  v="$(jq -r .status "$wf")"
+  if [[ "$v" == OPERATOR ]]; then
+    q="$(fmt_opq "$wf")"
+    [[ -n "$q" ]] || q="(no operator_questions; the writer's result follows) $(jq -c . "$wf")"
+    park_result "$wf" OPERATOR specwriter "$w" "$q"
+  fi
+  nres="$(jlen "$wf" resolved)"
+  [[ "$nres" -gt 0 ]] || die_error "$(basename "$wf") is WRITTEN with nothing resolved"
+  close_agent "$w"
+  SW_RUNS=$((SW_RUNS + 1))
+  commits="$(jq -r '.commits // [] | join(", ")' "$wf")"
+  SW_COMMITS="$(jq -c --slurpfile s "$wf" '. + ($s[0].commits // [])' <<<"$SW_COMMITS")"
+  add_round "$(jq -nc --argjson r "$r" --arg v "SPECWRITER-$v" --argjson n "$nres" --argjson c "$(jlen "$wf" commits)" \
+    '{round:$r, verdict:$v, resolved:$n, specCommits:$c}')"
+  log "round $r spec writer $v ($nres resolved; commits: ${commits:-none})"
+  pending="The spec changed under this PR: the $src found problems, and the spec author settled them in commits already on $BRANCH in $WT (${commits:-see git log}). The spec now says:
+$(fmt_resolved "$wf")
+Make the code and tests match the spec exactly; do not edit the spec files. If the new text cannot be implemented as written, stop with status QUESTION and say why."
+  spec_pending="In round $r the $src found spec problems, which the spec author settled (${commits:-see git log}). Check the new text first, against the rulings and the code at HEAD:
+$(fmt_resolved "$wf")
+"
+  add_dev_work "$from" "the $src"
+}
+# add_dev_work <spec result> <who> — append the findings and code removals of a result to pending
+add_dev_work() {
+  local from="$1" who="$2" n nr
+  n="$(jlen "$from" findings)"; nr="$(fmt_removals "$from" code)"
+  if [[ "$n" -gt 0 ]]; then
+    pending="$pending
+$who also asks for these code changes:
+$(fmt_findings "$from")"
+  fi
+  if [[ -n "$nr" ]]; then
+    pending="$pending
+$who found code with no consumer named in the brief's Consumers section. Remove it (and its tests) in this round:
+$nr"
+  fi
+}
+
+# --- rounds ------------------------------------------------------------------------------------------
+pending="" spec_pending="" final_pending="" accepted="" last=review ACC_R=0
+for ((r = 1; r <= MAX; r++)); do
+  fixed=""
+  if [[ -n "$pending" ]]; then
+    fixed="$pending"
+    fix_round "$r" "$pending"
+    pending=""
+  fi
+
+  # verify
+  STAGE=verify
+  vf="$STATE/verify-r$r.json"
+  if [[ -z "$VERIFY_INSTR_FILE" ]]; then
+    [[ -s "$vf" ]] || write_json "$vf" '{"verdict":"SKIP","summary":"no stages.verify.instructions configured","failures":[]}'
+  else
+    vtext="$(prompt verify round="$r" verify_instructions="$(file_text "$VERIFY_INSTR_FILE")" verdict_file="$vf")"
+    fresh_step "$(aname "-verify-r$r")" verify verify "$vf" "$vtext" verify "$(budget_min check "$vf")" verify
+  fi
+  vv="$(jq -r .verdict "$vf")"
+  log "round $r verify $vv"
+  if [[ "$vv" == FAIL ]]; then
+    [[ "$(jlen "$vf" failures)" -gt 0 ]] || die_error "$(basename "$vf") is FAIL with no failures"
+    pending="$(fmt_failures "$vf")"
+    add_round "$(jq -nc --argjson r "$r" '{round:$r, verdict:"VERIFY-FAIL"}')"
+    last=verify
+    continue
+  fi
+
+  # review
+  STAGE=review last=review
+  rf="$STATE/review-r$r.json"
+  prior=""
+  [[ -z "$fixed" ]] || prior="The previous round's findings, which the dev says are fixed. Verify each one against the current head before looking for new issues:
+$fixed"
+  rtext="$(prompt review round="$r" skill_call="$(skill_call code-review "$(model_pick review)")" prior="$prior" \
+    review_instructions="$(file_text "$REVIEW_INSTR_FILE")" verdict_file="$rf")"
+  fresh_step "$(aname "-review-r$r")" review review "$rf" "$rtext" review "$(budget_min check "$rf")" review
+  verdict="$(jq -r .verdict "$rf")"; n="$(jlen "$rf" findings)"
+  add_round "$(jq -nc --argjson r "$r" --arg v "$verdict" --argjson n "$n" '{round:$r, verdict:$v, findings:$n}')"
+  log "round $r review $verdict ($n findings)"
+  if [[ "$verdict" != ACCEPT ]]; then
+    [[ "$n" -gt 0 ]] || die_error "$(basename "$rf") is CHANGES with no findings"
+    pending="$(fmt_findings "$rf")"
+    continue
+  fi
+
+  # spec check: only after the code review accepts; code changes it asks for are a normal fix round
+  if spec_required; then
+    STAGE=spec last=spec
+    sf="$STATE/spec-r$r.json"
+    SPEC_ROUNDS=$((SPEC_ROUNDS + 1))
+    stext="$(prompt spec round="$r" spec_pending="$spec_pending" verdict_file="$sf")"
+    fresh_step "$(aname "-spec-r$r")" spec spec_check "$sf" "$stext" spec "$(budget_min check "$sf")" spec
+    SPEC_VERDICT="$(jq -r .verdict "$sf")"
+    n="$(jlen "$sf" findings)"; ng="$(jlen "$sf" gaps)"; nrm="$(jlen "$sf" removals)"; nc="$(jlen "$sf" commits)"
+    add_round "$(jq -nc --argjson r "$r" --arg v "SPEC-$SPEC_VERDICT" --argjson n "$n" --argjson g "$ng" --argjson m "$nrm" --argjson c "$nc" \
+      '{round:$r, verdict:$v, findings:$n, gaps:$g, removals:$m, specCommits:$c}')"
+    log "round $r spec $SPEC_VERDICT ($n findings, $ng gaps, $nrm removals, $nc spec commits)"
+    case "$SPEC_VERDICT" in
+      ACCEPT)
+        [[ $((ng + nrm)) -eq 0 ]] || die_error "$(basename "$sf") is ACCEPT but lists gaps or removals"
+        spec_pending="" ;;
+      GAP)
+        [[ "$ng" -gt 0 ]] || die_error "$(basename "$sf") is GAP with no gaps"
+        spec_write "spec checker" "$sf" "$r"
+        continue ;;
+      REMOVE)
+        [[ "$nrm" -gt 0 ]] || die_error "$(basename "$sf") is REMOVE with no removals"
+        if [[ -n "$(fmt_removals "$sf" spec)" ]]; then
+          spec_write "spec checker" "$sf" "$r"
+        else
+          pending="The spec check found elements with no consumer."
+          spec_pending="In round $r the spec check asked for removals; the dev removed them. Check they are gone and nothing else broke:
+$(fmt_removals "$sf" code)
+"
+          add_dev_work "$sf" "the spec check"
+        fi
+        continue ;;
+      *)
+        [[ "$n" -gt 0 ]] || die_error "$(basename "$sf") is CHANGES with no findings"
+        SPEC_VERDICT=CHANGES
+        pending="$(fmt_findings "$sf")"
+        spec_pending="Your previous spec round's findings, which the dev says are fixed. Check each one first:
+$pending
+"
+        continue ;;
+    esac
+  else
+    SPEC_VERDICT=SKIP
+    log "round $r spec SKIP (no spec hunks, brief does not require it)"
+  fi
+
+  # final gate: the whole PR against the brief and the specs it touches
+  if [[ $FINAL_GATE -eq 0 ]]; then accepted=1; ACC_R=$r; break; fi
+  STAGE=final last=final
+  ff="$STATE/final-r$r.json"
+  FINAL_ROUNDS=$((FINAL_ROUNDS + 1))
+  ftext="$(prompt final round="$r" final_pending="$final_pending" verdict_file="$ff")"
+  fresh_step "$(aname "-final-r$r")" review final "$ff" "$ftext" review "$(budget_min check "$ff")" final
+  FINAL_VERDICT="$(jq -r .verdict "$ff")"; n="$(jlen "$ff" findings)"
+  add_round "$(jq -nc --argjson r "$r" --arg v "FINAL-$FINAL_VERDICT" --argjson n "$n" '{round:$r, verdict:$v, findings:$n}')"
+  log "round $r final $FINAL_VERDICT ($n findings)"
+  if [[ "$FINAL_VERDICT" == ACCEPT ]]; then accepted=1; ACC_R=$r; break; fi
+  [[ "$n" -gt 0 ]] || die_error "$(basename "$ff") is CHANGES with no findings"
+  pending="$(fmt_findings "$ff")"
+  final_pending="Your previous round's findings, which the dev says are fixed. Check each one first:
+$pending
+"
+done
+if [[ -z "$accepted" ]]; then
+  log "STUCK after $MAX rounds ($last)"
+  finish 2 "$last" STUCK "$(jq -n --arg f "$pending" '{findings:$f}')"
+fi
+
+# --- finalize ----------------------------------------------------------------------------------------
+# The driver rebases, runs the gate, scans the added lines and pushes. Anything wrong goes back to the
+# dev as a fix finding (at most twice); the dev's space stays open until the unit is landed.
+forbidden_scan() { # prints offending added lines; returns 1 on a bad regex
+  local pats file g skip out rc=0
+  pats="$(jq -c '.scan.forbidden // []' <<<"$SHIP_CONFIG_JSON")"
+  [[ "$pats" != "[]" ]] || return 0
+  while IFS= read -r file; do
+    [[ -n "$file" ]] || continue
+    skip=0
+    while IFS= read -r g; do
+      [[ -n "$g" ]] || continue
+      # shellcheck disable=SC2254  # the user's glob is meant as a pattern
+      case "$file" in $g) skip=1 ;; esac
+    done < <(jq -r '.scan.exclude // [] | .[]' <<<"$SHIP_CONFIG_JSON")
+    [[ $skip -eq 0 ]] || continue
+    out="$(git -C "$WT" diff -U0 --no-color "origin/$BASE..HEAD" -- "$file" \
+      | jq -Rr --argjson p "$pats" --arg f "$file" 'select(startswith("+") and (startswith("+++") | not))
+          | . as $l | ($p[] | select(. as $re | $l | test($re))) as $m | "\($f): \($l[1:]) (matches \($m))"' 2>&1)" || rc=1
+    [[ -z "$out" ]] || printf '%s\n' "$out"
+  done < <(git -C "$WT" diff --name-only "origin/$BASE..HEAD")
+  return $rc
+}
+
+# finalize_try — 0 pushed (finalize.json written); 1 the dev has to fix something (FIN_MSG says what)
+FIN_MSG=""
+finalize_try() {
+  local out files ahead gate_out hits head
+  git -C "$WT" fetch origin >>"$LOG" 2>&1 || die_error "git fetch origin failed in $WT; see loop.log"
+  if ! out="$(git -C "$WT" rebase "origin/$BASE" 2>&1)"; then
+    files="$(git -C "$WT" diff --name-only --diff-filter=U | tr '\n' ' ')"
+    git -C "$WT" rebase --abort >/dev/null 2>&1 || true
+    FIN_MSG="1. [BLOCKING] $BRANCH — rebasing onto origin/$BASE failed${files:+ with conflicts in: $files}.
+   Fix: in $WT run \`git rebase origin/$BASE\`, resolve the conflicts keeping both sides' intent (a conflict that needs a design choice: stop with status QUESTION), finish the rebase, run the gate, and \`git push --force-with-lease\`. git said: $(tr '\n' ' ' <<<"$out" | cut -c1-400)"
+    return 1
+  fi
+  ahead="$(git -C "$WT" rev-list --count "origin/$BASE..HEAD")"
+  [[ "$ahead" -gt 0 ]] || die_error "$BRANCH has no commits ahead of origin/$BASE after the rebase"
+  if ! gate_out="$( (cd "$WT" && bash -c "$GATE") 2>&1)"; then
+    printf '%s\n' "$gate_out" >"$STATE/gate.log"
+    FIN_MSG="1. [BLOCKING] $BRANCH — the gate failed after the rebase onto origin/$BASE.
+   Fix: make the gate pass in $WT (\`$GATE\`), commit, and push. Last lines:
+$(printf '%s\n' "$gate_out" | tail -n 30)"
+    return 1
+  fi
+  printf '%s\n' "$gate_out" >"$STATE/gate.log"
+  hits="$(forbidden_scan)" || die_error "scan.forbidden holds an invalid regular expression: $hits"
+  if [[ -n "$hits" ]]; then
+    FIN_MSG="1. [BLOCKING] $BRANCH — added lines match scan.forbidden:
+$(printf '%s\n' "$hits" | head -n 30)
+   Fix: reword or remove each hit in a commit, run the gate, and push."
+    return 1
+  fi
+  git -C "$WT" push --force-with-lease origin "HEAD:refs/heads/$BRANCH" >>"$LOG" 2>&1 \
+    || die_error "git push --force-with-lease failed for $BRANCH; see loop.log"
+  head="$(git -C "$WT" rev-parse --short HEAD)"
+  write_json "$STATE/finalize.json" "$(jq -n --argjson pr "$PR" --arg h "$head" --arg b "$BASE" \
+    '{status:"DONE", pr:$pr, head:$h, summary:("rebased onto origin/" + $b + ", gate passed, scan clean, pushed"), failovers:0}')"
+  return 0
+}
+
+STAGE=finalize
+attempt=0
+while ! { valid_json "$STATE/finalize.json" && [[ "$(jq -r .status "$STATE/finalize.json")" == DONE ]]; }; do
+  if finalize_try; then break; fi
+  attempt=$((attempt + 1))
+  if [[ $attempt -gt 2 ]]; then
+    log "finalize still failing after 2 dev fixes"
+    finish 2 finalize STUCK "$(jq -n --arg f "$FIN_MSG" '{findings:$f}')"
+  fi
+  log "finalize problem, back to the dev (attempt $attempt)"
+  fix_round "$((ACC_R + attempt))" "$FIN_MSG"
+  STAGE=finalize
+done
+FINALIZE_JSON="$(jq -c . "$STATE/finalize.json")"
+log "finalized at $(jq -r .head "$STATE/finalize.json")"
+finish 0 "done" READY

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# stub-agent STATE_DIR SCRIPT_DIR — plays every agent of a ship-loop test.
+#
+# ship-loop appends one line to <verdict>.json.sent each time it prompts an agent
+# for that verdict file, and deletes the verdict first. This stub watches those
+# markers: when a verdict file has more prompts than answers and does not exist, it
+# writes it from SCRIPT_DIR:
+#   SCRIPT_DIR/<verdict>.json.<N>   the Nth answer for that file, else
+#   SCRIPT_DIR/<verdict>.json       every answer
+# A scripted file that does not exist yet means the agent is "still working": the
+# stub waits, so a test can add the file later. SCRIPT_DIR/<verdict>.json.hook, when
+# executable, runs just before the answer is written (it plays the agent's side
+# effects: commits, resolving a rebase). Run it in the background and kill it when
+# the scenario ends.
+state="${1:?state dir}" script="${2:?script dir}"
+mkdir -p "$script/.done"
+while :; do
+  for sent in "$state"/*.sent; do
+    [[ -e "$sent" ]] || continue
+    f="${sent%.sent}"
+    b="$(basename "$f")"
+    prompts="$(wc -l <"$sent" | tr -d ' ')"
+    answered="$(cat "$script/.done/$b" 2>/dev/null || echo 0)"
+    [[ "$prompts" -gt "$answered" ]] || continue
+    [[ ! -e "$f" ]] || continue
+    next=$((answered + 1))
+    src="$script/$b.$next"
+    [[ -f "$src" ]] || src="$script/$b"
+    [[ -f "$src" ]] || continue
+    if [[ -x "$script/$b.hook" ]]; then "$script/$b.hook" || true; fi
+    cp "$src" "$f.tmp" && mv "$f.tmp" "$f"
+    echo "$next" >"$script/.done/$b"
+  done
+  sleep 0.05
+done
