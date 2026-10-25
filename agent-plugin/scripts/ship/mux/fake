@@ -27,8 +27,9 @@
 # Written for assertions:
 #   sent/<id>       every --text sent, one line each; --keys as "<keys:enter,esc>"
 #
-# `wait` never sleeps: 0 when the state is reached, 4 when not. `ready` is reached
-# while the target exists, `gone` while it does not.
+# `wait` never sleeps: 0 when the state is reached, 4 when not. A target that does
+# not exist exits 5 (any --until but `gone`; `gone` then exits 0), as do run, send,
+# read and status.
 
 # shellcheck disable=SC2034  # f_* are filled by printf -v; not every verb reads each
 set -euo pipefail
@@ -177,27 +178,26 @@ case "$verb" in
 
   read)
     exists "$f_to" || notfound "read: no such agent or pane '$f_to'"
+    tmp="$(mktemp "$D/read.XXXXXX")"
     {
       if f="$(scripted read "$f_to")"; then cat "$f"; fi
       s="$(screen_of "$f_to")"
       if [[ -f "$s" ]]; then cat "$s"; fi
-    } >"$D/read.out"
-    if [[ -n "$f_lines" ]]; then tail -n "$f_lines" "$D/read.out"; else cat "$D/read.out"; fi
-    rm -f "$D/read.out" ;;
+    } >"$tmp"
+    if [[ -n "$f_lines" ]]; then tail -n "$f_lines" "$tmp"; else cat "$tmp"; fi
+    rm -f "$tmp" ;;
 
   status)
+    exists "$f_to" || notfound "status: no such agent '$f_to'"
     st="$(agent_state "$f_to" consume)" || exit 1
-    if [[ "$st" == gone ]]; then
-      jq -nc '{state: "gone", pane: "", space: ""}'
-    else
-      jq -nc --arg s "$st" --arg p "$(field "$f_to" pane)" --arg sp "$(field "$f_to" space)" '{state: $s, pane: $p, space: $sp}'
-    fi ;;
+    jq -nc --arg s "$st" --arg p "$(field "$f_to" pane)" --arg sp "$(field "$f_to" space)" '{state: $s, pane: $p, space: $sp}' ;;
 
   wait)
     case "$f_until" in
-      ready) exists "$f_to" || exit 4 ;;
       gone)  ! exists "$f_to" || exit 4 ;;
-      *)     st="$(agent_state "$f_to")" || exit 1
+      ready) exists "$f_to" || notfound "wait: no such target '$f_to'" ;;
+      *)     exists "$f_to" || notfound "wait: no such target '$f_to'"
+             st="$(agent_state "$f_to")" || exit 1
              [[ "$st" == "$f_until" ]] || exit 4 ;;
     esac ;;
 

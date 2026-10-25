@@ -27,6 +27,7 @@
 #       Wait until pane P is ready for input, then run CMD in it as a shell
 #       command. No stdout. Creates nothing, so nothing is recorded.
 #   start --ref R --space S --name N --harness claude|pi --cwd D -- ARGS...
+#       S must be a space recorded for R (else exit 3, no backend call).
 #       Start an agent named N in a new pane of space S, running the harness
 #       with ARGS (which may be empty). The backend may shorten N internally.
 #       stdout: {"agent":id,"pane":id}
@@ -38,11 +39,12 @@
 #       stdout: plain text of the agent's or pane's visible screen, or only its
 #       last N lines.
 #   status --ref R --to A
-#       stdout: {"state":"working|idle|blocked|gone","pane":id,"space":id}. An
-#       agent that no longer exists is state "gone" (exit 0).
+#       stdout: {"state":"working|idle|blocked|gone","pane":id,"space":id}. A
+#       recorded agent the backend no longer has exits 5.
 #   wait  --ref R --to A --until working|idle|gone|ready --timeout-ms N
 #       Block until the state is reached. `ready` means the pane accepts input.
-#       Exit 0 reached, 4 timeout.
+#       Exit 0 reached, 4 timeout. A target the backend no longer has exits 5
+#       at once for any --until but `gone`, which then exits 0.
 #   close --ref R --id X
 #       Close pane, agent, space or the units group X. Refused with exit 3, and
 #       no backend call, unless X is recorded for ref R (a group: recorded as
@@ -60,19 +62,22 @@
 # Keys (backend-neutral names for --keys, comma-separated): enter esc ctrl+c ctrl+d
 #
 # Exit codes (ship-mux)
-#   0  ok                                  3  refused: id not recorded for the ref,
-#   1  error (config, unknown backend,        root pane, or group not ship-created /
-#      backend failure)                       not empty / renamed
-#   2  usage error (verb, flag, value, ref)   4  timeout (wait; send --wait-ms)
-#   99 a backend refused to run under SHIP_MUX_TEST=1 (the test guard)
+#   0  ok                                  4  timeout (wait; send --wait-ms when the
+#   1  error (config, unknown backend,        agent never starts working)
+#      backend failure)                    5  target gone: run, send, read, status or
+#   2  usage error (verb, flag, value, ref)   wait on a recorded id the backend no
+#   3  refused: id not recorded for the       longer has (close maps it to 0)
+#      ref, start into an unrecorded space, 99 a backend refused to run under
+#      root pane, group not ship-created,        SHIP_MUX_TEST=1 (the test guard)
+#      not empty, renamed, or unreadable records
 #
 # Backend contract
 #   A backend is one bash file in scripts/ship/mux/ called as `<file> <verb>
 #   <flags>` with the flags above, plus: open also gets --group NAME, list gets
 #   --ids JSON (a JSON array of the recorded ids, instead of any ref mapping:
 #   a backend keeps no ref mapping of its own). Its exit codes: 0 ok, 1 error,
-#   4 timeout, 5 not found (a target, or for `close` an id it no longer has);
-#   ship-mux maps 2 and 3 to 1 and passes 4, 5 (close only) and 99 through.
+#   4 timeout, 5 not found (a target it no longer has); ship-mux maps 2 and 3 to
+#   1, passes 4, 5 and 99 through, and turns a 5 from `close` into 0.
 #   stdout as above, with these differences:
 #     open   {"space","pane","group":{"id","created":bool,"name"}} — the
 #            dispatcher records the group and prints the plain id.
@@ -224,46 +229,78 @@ ops="$root/.hyper/ship-mux.ops"
 
 # --- locks and JSON files -----------------------------------------------------------
 _held=()
+_host="$(hostname 2>/dev/null || echo unknown)"
+_me="$$@$_host"
+
+# _unlock_dir <lockdir> — remove the lock only if it is still ours: after a
+# takeover the directory belongs to someone else.
+_unlock_dir() {
+  local o=""
+  [[ -f "$1/owner" ]] && o="$(cat "$1/owner" 2>/dev/null || true)"
+  [[ "$o" == "$_me" ]] || return 0
+  rm -rf "$1" 2>/dev/null || true
+}
 _release_all() {
   local i
-  for ((i = ${#_held[@]} - 1; i >= 0; i--)); do rm -rf "${_held[$i]}" 2>/dev/null || true; done
+  for ((i = ${#_held[@]} - 1; i >= 0; i--)); do _unlock_dir "${_held[$i]}"; done
 }
 trap _release_all EXIT
 
-_host="$(hostname 2>/dev/null || echo unknown)"
-
-# _lock_stale <lockdir> — owner died on this host, or the lock is over 120 s old.
+# _lock_stale <lockdir> — sets _owner to what the owner file says now. Stale when
+# the owner is on this host and its pid is dead (the pid alone decides there), or
+# when the owner is on another host or unknown and the lock is over 120 s old.
+_owner=""
 _lock_stale() {
-  local d="$1" owner="" opid ohost
+  local d="$1" opid ohost
+  _owner=""
   [[ -d "$d" ]] || return 1
-  [[ -f "$d/owner" ]] && owner="$(cat "$d/owner" 2>/dev/null || true)"
-  if [[ "$owner" == *@* ]]; then
-    opid="${owner%%@*}" ohost="${owner#*@}"
-    if [[ "$ohost" == "$_host" && "$opid" =~ ^[0-9]+$ ]] && ! kill -0 "$opid" 2>/dev/null; then return 0; fi
+  [[ -f "$d/owner" ]] && _owner="$(cat "$d/owner" 2>/dev/null || true)"
+  if [[ "$_owner" == *@* ]]; then
+    opid="${_owner%%@*}" ohost="${_owner#*@}"
+    if [[ "$ohost" == "$_host" ]]; then
+      [[ "$opid" =~ ^[0-9]+$ ]] || return 1
+      kill -0 "$opid" 2>/dev/null && return 1
+      return 0
+    fi
   fi
   [[ -n "$(find "$d" -maxdepth 0 -mmin +2 2>/dev/null)" ]]
 }
 
+# _lock_break <lockdir> — take over a lock judged stale. Takeovers are serialised
+# with <lockdir>.break; inside it the owner is read again and the lock is broken
+# only if it is still the owner that was judged stale.
+_lock_break() {
+  local d="$1" judged="$_owner"
+  if [[ -d "$d.break" && -n "$(find "$d.break" -maxdepth 0 -mmin +2 2>/dev/null)" ]]; then
+    rm -rf "$d.break"   # a breaker that died
+  fi
+  mkdir "$d.break" 2>/dev/null || return 0
+  if _lock_stale "$d" && [[ "$_owner" == "$judged" ]]; then
+    rm -rf "$d"
+  fi
+  rmdir "$d.break" 2>/dev/null || true
+}
+
 # _lock <file> — advisory lock for a read-modify-write of one JSON file.
+# SHIP_MUX_LOCK_TRIES (default 200, 50 ms apart) bounds the wait.
 _lock() {
   local d="$1.lock" i=0
   mkdir -p "${1%/*}" 2>/dev/null || { echo "ship-mux: cannot create ${1%/*}" >&2; return 1; }
   while ! mkdir "$d" 2>/dev/null; do
     if _lock_stale "$d"; then
-      if mv "$d" "$d.stale.$$" 2>/dev/null; then rm -rf "$d.stale.$$"; fi
-      continue
+      _lock_break "$d"
     fi
     i=$((i + 1))
-    if [[ $i -gt 200 ]]; then echo "ship-mux: timed out waiting for the lock $d" >&2; return 1; fi
+    if [[ $i -gt ${SHIP_MUX_LOCK_TRIES:-200} ]]; then echo "ship-mux: timed out waiting for the lock $d" >&2; return 1; fi
     sleep 0.05
   done
-  printf '%s@%s\n' "$$" "$_host" >"$d/owner"
+  printf '%s\n' "$_me" >"$d/owner"
   _held+=("$d")
 }
 _unlock() {
   local n=${#_held[@]}
   [[ $n -gt 0 ]] || return 0
-  rm -rf "${_held[$((n - 1))]}" 2>/dev/null || true
+  _unlock_dir "${_held[$((n - 1))]}"
   unset "_held[$((n - 1))]"
 }
 
@@ -312,15 +349,29 @@ _drop() {
 }
 
 # _group_has_spaces <group id> — true when any ref's record holds a space in it.
+# A record that does not parse counts as holding one (_bad_file names it).
+_bad_file=""
 _group_has_spaces() {
-  local f
+  local f r
   for f in "$root"/notes/loops/*/mux.json; do
     [[ -f "$f" ]] || continue
-    if jq -e --arg g "$1" '[.created[]? | select(.kind == "space" and .group == $g)] | length > 0' "$f" >/dev/null 2>&1; then
-      return 0
-    fi
+    r="$(jq -r --arg g "$1" '[.created[]? | select(.kind == "space" and .group == $g)] | length > 0' "$f" 2>/dev/null)" || r=bad
+    case "$r" in
+      false) ;;
+      true) return 0 ;;
+      *) _bad_file="$f"; return 0 ;;
+    esac
   done
   return 1
+}
+
+# _rollback_close <id> — close what a failed open/start created; an id that
+# cannot be closed is reported, never silently left behind.
+_rollback_close() {
+  local rc=0
+  _be close --ref "$f_ref" --id "$1" >/dev/null 2>&1 || rc=$?
+  if [[ $rc -ne 0 && $rc -ne 5 ]]; then echo "ship-mux: could not close '$1' while rolling back; it is orphaned on the backend" >&2; fi
+  return 0
 }
 
 # _close_ok <id> — close on the backend; "not found" (5) counts as closed.
@@ -396,9 +447,9 @@ case "$verb" in
     if [[ $ok -eq 0 ]]; then
       # Roll back what this call created, so the backend holds nothing unrecorded.
       echo "ship-mux: could not record the new space; closing it" >&2
-      if [[ $isnew -eq 1 ]]; then _be close --ref "$f_ref" --id "$space" >/dev/null 2>&1 || true; fi
+      if [[ $isnew -eq 1 ]]; then _rollback_close "$space"; fi
       if [[ "$gcreated" == true && -n "$gid" ]]; then
-        _be close --ref "$f_ref" --id "$gid" >/dev/null 2>&1 || true
+        _rollback_close "$gid"
         [[ $wrote_group -eq 0 ]] || _json_update "$grp" '{"groups":{}}' 'del(.groups[$id])' --arg id "$gid" 2>/dev/null || true
       fi
       exit 1
@@ -407,14 +458,16 @@ case "$verb" in
     jq -c '{space, pane} + (if (.group | type) == "object" then {group: .group.id} elif (.group | type) == "string" then {group: .group} else {} end)' <<<"$out" ;;
 
   start)
+    sentry="$(_entry "$f_space")"
+    [[ -n "$sentry" && "$(jq -r '.kind' <<<"$sentry")" == space ]] || refuse "--space '$f_space' is not a space recorded for ref '$f_ref'; no backend call made"
     out="$(_be start "${orig[@]}")" || exit $?
     jq -e 'type == "object" and (.agent | type == "string" and length > 0) and (.pane | type == "string" and length > 0)' \
       <<<"$out" >/dev/null 2>&1 || fail "backend '$mux' returned invalid start output: $out"
     if ! _rec_add "$(jq -nc --argjson o "$out" --arg n "$f_name" --arg s "$f_space" \
       '[{id: $o.agent, kind: "agent", name: $n, space: $s, pane: $o.pane}, {id: $o.pane, kind: "pane", name: $n, space: $s}]')"; then
       echo "ship-mux: could not record the new agent; closing it" >&2
-      _be close --ref "$f_ref" --id "$(jq -r .agent <<<"$out")" >/dev/null 2>&1 || true
-      _be close --ref "$f_ref" --id "$(jq -r .pane <<<"$out")" >/dev/null 2>&1 || true
+      _rollback_close "$(jq -r .agent <<<"$out")"
+      _rollback_close "$(jq -r .pane <<<"$out")"
       exit 1
     fi
     jq -c '{agent, pane}' <<<"$out" ;;
@@ -450,7 +503,10 @@ case "$verb" in
     [[ ! -f "$grp" ]] || g="$(jq -c --arg id "$f_id" '.groups[$id] // empty' "$grp")"
     [[ -n "$g" ]] || refuse "id '$f_id' is not recorded for ref '$f_ref' (see $rec); no backend call made"
     [[ "$(jq -r '.created' <<<"$g")" == true ]] || refuse "units group '$f_id' was not created by ship; not closing it"
-    if _group_has_spaces "$f_id"; then refuse "units group '$f_id' still has spaces recorded in notes/loops/*/mux.json; not closing it"; fi
+    if _group_has_spaces "$f_id"; then
+      [[ -z "$_bad_file" ]] || refuse "cannot parse $_bad_file, so units group '$f_id' may still have spaces; not closing it"
+      refuse "units group '$f_id' still has spaces recorded in notes/loops/*/mux.json; not closing it"
+    fi
     gname="$(jq -r '.name' <<<"$g")"
     ids="$(jq -nc --arg id "$f_id" '[$id]')"
     seen_name="$(_be list --ref "$f_ref" --ids "$ids" | jq -r --arg id "$f_id" '[.[] | select(.id == $id and .kind == "group") | .name] | first // ""')" || exit 1
@@ -458,6 +514,6 @@ case "$verb" in
       refuse "units group '$f_id' is now named '$seen_name' on the backend, not '$gname'; not closing it"
     fi
     if [[ -n "$seen_name" ]]; then _close_ok "$f_id" || exit $?; fi
-    _unlock
-    _json_update "$grp" '{"groups":{}}' 'del(.groups[$id])' --arg id "$f_id" || exit 1 ;;
+    _json_update "$grp" '{"groups":{}}' 'del(.groups[$id])' --arg id "$f_id" || exit 1
+    _unlock ;;
 esac

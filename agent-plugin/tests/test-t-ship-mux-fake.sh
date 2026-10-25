@@ -185,6 +185,18 @@ assert_eq "the backend saw the group close" "yes" "$(log_has close "$G" && echo 
 assert_eq "the group leaves the record" "{}" "$(jq -c .groups "$SPACE/.hyper/ship-mux.json")"
 assert_eq "a second group close exits 3" "3" "$(mux_rc close --ref gb --id "$G")"
 
+# 7a: a mux.json that does not parse counts as holding spaces
+reset_fake
+a="$(mux open --ref gj --cwd "$WT")"; G="$(jq -r .group <<<"$a")"
+mux close --ref gj --id "$(jq -r .space <<<"$a")" >/dev/null
+mkdir -p "$SPACE/notes/loops/broken"; echo '{not json' > "$SPACE/notes/loops/broken/mux.json"
+assert_eq "group close is refused when a record does not parse" "3" "$(mux_rc close --ref gj --id "$G")"
+assert_contains "...naming the file" "$(mux_err close --ref gj --id "$G")" "broken/mux.json"
+assert_eq "...with no close on the backend" "no" "$(log_has close "$G" && echo yes || echo no)"
+rm -rf "$SPACE/notes/loops/broken"
+assert_eq "...and it closes once the record is gone" "0" "$(mux_rc close --ref gj --id "$G")"
+assert_eq "the group record is gone before the lock is released" "no" "$([[ -d "$SPACE/.hyper/ship-mux.ops.lock" ]] && echo yes || echo no)"
+
 # 7b: a group that already existed is never closed -------------------------------------------
 reset_fake
 mkdir -p "$SHIP_MUX_FAKE_DIR/groups"; echo proj-units > "$SHIP_MUX_FAKE_DIR/groups/proj-units"
@@ -222,9 +234,35 @@ assert_eq "...and so was the group it created" "0" "$(ls "$SHIP_MUX_FAKE_DIR/gro
 assert_eq "...and the group record holds nothing" "{}" "$(jq -c '.groups // {}' "$SPACE/.hyper/ship-mux.json" 2>/dev/null || echo '{}')"
 rm -f "$SPACE/notes"
 a="$(mux open --ref rb2 --cwd "$WT")"; SP2="$(jq -r .space <<<"$a")"
-rm -rf "$SPACE/notes/loops/rb2"; : > "$SPACE/notes/loops/rb2"
-assert_eq "start exits 1 when the record cannot be written" "1" "$(mux_rc start --ref rb2 --space "$SP2" --name x --harness claude --cwd "$WT")"
-assert_eq "...and leaves no agent behind" "0" "$(grep -l '"kind":"agent"' "$SHIP_MUX_FAKE_DIR"/state/*.json 2>/dev/null | wc -l | tr -d ' ')"
+if [[ "$(id -u)" != 0 ]]; then
+  chmod a-w "$SPACE/notes/loops/rb2"
+  assert_eq "start exits 1 when the record cannot be written" "1" "$(SHIP_MUX_LOCK_TRIES=2 mux_rc start --ref rb2 --space "$SP2" --name x --harness claude --cwd "$WT")"
+  chmod u+w "$SPACE/notes/loops/rb2"
+  assert_eq "...and leaves no agent behind" "0" "$(grep -l '"kind":"agent"' "$SHIP_MUX_FAKE_DIR"/state/*.json 2>/dev/null | wc -l | tr -d ' ')"
+else
+  skip "start rollback needs a non-root user" root
+fi
+assert_eq "start into an unrecorded space exits 3" "3" "$(mux_rc start --ref rb2 --space space-404 --name x --harness claude --cwd "$WT")"
+n_before="$(log_lines)"
+assert_eq "...and into a pane exits 3" "3" "$(mux_rc start --ref rb2 --space "$(jq -r .pane <<<"$a")" --name x --harness claude --cwd "$WT")"
+assert_eq "...with no backend call" "$n_before" "$(log_lines)"
+
+# 8b: a rollback close that fails names the orphan
+PLUG="$FIX/plugin"
+mkdir -p "$PLUG/scripts/ship/mux" "$PLUG/skills/ship"
+cp "$SCRIPTS_DIR/ship/ship-mux" "$SCRIPTS_DIR/ship/lib.sh" "$PLUG/scripts/ship/"
+cp "$SCRIPTS_DIR/hyper-require-lib.sh" "$PLUG/scripts/"
+cp "$PLUGIN_DIR/skills/ship/defaults.yml" "$PLUG/skills/ship/"
+printf '#!/usr/bin/env bash\n[[ "$1" == close ]] && exit 1\nexec bash "%s" "$@"\n' "$FAKE_BE" > "$PLUG/scripts/ship/mux/flaky"
+printf 'mux: flaky\n' > "$PROJECT"; reload_cfg
+reset_fake
+: > "$SPACE/notes"
+e="$(cd "$WT" && bash "$PLUG/scripts/ship/ship-mux" open --ref orp --cwd "$WT" 2>&1 >/dev/null; echo "rc=$?")"
+assert_contains "open still exits 1 when the rollback close fails" "$e" "rc=1"
+assert_contains "...and names the orphan on stderr" "$e" "orphaned"
+assert_contains "...with its id" "$e" "'space-"
+rm -f "$SPACE/notes"
+printf 'mux: fake\n' > "$PROJECT"; reload_cfg
 
 # 9: locks --------------------------------------------------------------------------------------
 reset_fake
@@ -239,6 +277,33 @@ mkdir "$SPACE/.hyper/ship-mux.json.lock"; echo "4242@some-other-host" > "$SPACE/
 touch -t 200001010000 "$SPACE/.hyper/ship-mux.json.lock" "$SPACE/.hyper/ship-mux.json.lock/owner"
 assert_eq "a lock older than 120 s is taken over (owner on another host)" "0" "$(mux_rc open --ref lk2 --cwd "$WT")"
 assert_eq "an old lock without an owner file is taken over" "0" "$(mkdir "$SPACE/.hyper/ship-mux.ops.lock"; touch -t 200001010000 "$SPACE/.hyper/ship-mux.ops.lock"; mux_rc open --ref lk3 --cwd "$WT")"
+# a live owner is never taken over, however old the lock
+reset_fake
+sleep 60 & LIVE=$!
+mkdir -p "$SPACE/notes/loops/lv"; mkdir "$SPACE/notes/loops/lv/mux.json.lock"
+echo "$LIVE@$(hostname)" > "$SPACE/notes/loops/lv/mux.json.lock/owner"
+touch -t 200001010000 "$SPACE/notes/loops/lv/mux.json.lock" "$SPACE/notes/loops/lv/mux.json.lock/owner"
+assert_eq "a live, aged owner on this host is not taken over (open times out, 1)" "1" "$(SHIP_MUX_LOCK_TRIES=3 mux_rc open --ref lv --cwd "$WT")"
+assert_eq "...and its lock is untouched" "$LIVE@$(hostname)" "$(cat "$SPACE/notes/loops/lv/mux.json.lock/owner")"
+kill "$LIVE" 2>/dev/null; wait "$LIVE" 2>/dev/null
+assert_eq "once that owner is dead the lock is taken over" "0" "$(mux_rc open --ref lv --cwd "$WT")"
+# takeovers are serialised: a held .break blocks them, a dead breaker's does not
+mkdir -p "$SPACE/notes/loops/bk"; mkdir "$SPACE/notes/loops/bk/mux.json.lock" "$SPACE/notes/loops/bk/mux.json.lock.break"
+echo "$dead@$(hostname)" > "$SPACE/notes/loops/bk/mux.json.lock/owner"
+assert_eq "a takeover in progress (.break held) is not raced (open times out, 1)" "1" "$(SHIP_MUX_LOCK_TRIES=3 mux_rc open --ref bk --cwd "$WT")"
+touch -t 200001010000 "$SPACE/notes/loops/bk/mux.json.lock.break"
+assert_eq "a .break older than 120 s is cleared and the takeover goes ahead" "0" "$(mux_rc open --ref bk --cwd "$WT")"
+# unlock and the exit trap leave a lock that was taken over alone
+sed -n '/^_held=()/,/^rec_default=/p' "$MUX_BIN" | sed '$d' > "$FIX/locks.sh"
+mkdir -p "$FIX/lk"
+out="$(bash -c 'source "$1"; _lock "$2/f.json"; echo "other@elsewhere" > "$2/f.json.lock/owner"; _unlock; [[ -f "$2/f.json.lock/owner" ]] && cat "$2/f.json.lock/owner"' _ "$FIX/locks.sh" "$FIX/lk")"
+assert_eq "_unlock leaves a lock whose owner changed (taken over)" "other@elsewhere" "$out"
+rm -rf "$FIX/lk/f.json.lock"
+out="$(bash -c 'source "$1"; _lock "$2/f.json"; echo "other@elsewhere" > "$2/f.json.lock/owner"' _ "$FIX/locks.sh" "$FIX/lk"; cat "$FIX/lk/f.json.lock/owner" 2>/dev/null)"
+assert_eq "the exit trap leaves a lock whose owner changed" "other@elsewhere" "$out"
+rm -rf "$FIX/lk/f.json.lock"
+out="$(bash -c 'source "$1"; _lock "$2/f.json"; _unlock; [[ -d "$2/f.json.lock" ]] && echo held || echo released' _ "$FIX/locks.sh" "$FIX/lk")"
+assert_eq "_unlock removes a lock that is still ours" "released" "$out"
 # concurrent opens: unique ids, valid records
 reset_fake
 for i in 1 2 3 4 5 6; do mux open --ref "par$i" --cwd "$WT" >/dev/null & done
@@ -248,11 +313,6 @@ assert_eq "...in one group, still recorded" "1" "$(jq '.groups | length' "$SPACE
 assert_eq "the fake's counter issued 12 unique ids" "12" "$(cat "$SPACE"/notes/loops/par*/mux.json | jq -r '.created[].id' | sort -u | wc -l | tr -d ' ')"
 
 # 10: exit codes of the dispatcher and of a backend ---------------------------------------------
-PLUG="$FIX/plugin"
-mkdir -p "$PLUG/scripts/ship/mux" "$PLUG/skills/ship"
-cp "$SCRIPTS_DIR/ship/ship-mux" "$SCRIPTS_DIR/ship/lib.sh" "$PLUG/scripts/ship/"
-cp "$SCRIPTS_DIR/hyper-require-lib.sh" "$PLUG/scripts/"
-cp "$PLUGIN_DIR/skills/ship/defaults.yml" "$PLUG/skills/ship/"
 printf '#!/usr/bin/env bash\nexit "${SHIP_TEST_RC:?}"\n' > "$PLUG/scripts/ship/mux/rc"
 printf 'mux: rc\n' > "$PROJECT"; reload_cfg
 for rc in 2 3; do

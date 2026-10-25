@@ -41,7 +41,7 @@ _mc_has() { jq -e --arg id "$2" 'any(.[]; .id == $id)' >/dev/null 2>&1 <<<"$1"; 
 
 mux_contract() {
   local prefix="$1" cwd="$2" ref="$1-a" ref2="$1-b" harness="${MUX_CONTRACT_HARNESS:-claude}"
-  local id out rc sp pn g g2 ag apn ag2 apn2 ag3 apn3 ag4 unrelated unrelated_pn l created marker sent
+  local id u out rc sp pn g g2 ag apn ag2 apn2 ag3 apn3 ag4 unrelated unrelated_pn l created marker sent
   local grecord="${SHIP_SPACE_ROOT:-}/.hyper/ship-mux.json"
 
   assert_ok "contract: check succeeds" mux check
@@ -129,12 +129,20 @@ mux_contract() {
   assert_eq "contract: send with an unknown key exits 2" "2" "$rc"
   mux send --ref "$ref" --to "$ag" --text a --keys enter >/dev/null 2>&1; rc=$?
   assert_eq "contract: send with --text and --keys exits 2" "2" "$rc"
+  mux start --ref "$ref" --space "$unrelated" --name n --harness "$harness" --cwd "$cwd" >/dev/null 2>&1; rc=$?
+  assert_eq "contract: start into another ref's space exits 3" "3" "$rc"
+  mux start --ref "$ref" --space "$pn" --name n --harness "$harness" --cwd "$cwd" >/dev/null 2>&1; rc=$?
+  assert_eq "contract: start into something that is not a space exits 3" "3" "$rc"
+  mux start --ref "$ref" --space "never-recorded-$prefix" --name n --harness "$harness" --cwd "$cwd" >/dev/null 2>&1; rc=$?
+  assert_eq "contract: start into an unrecorded id exits 3" "3" "$rc"
+  _mc_json "contract: ...and none of them started anything" "$(mux list --ref "$ref")" '[.[] | select(.kind == "agent")] | length == 1'
   mux start --ref "$ref" --space "$sp" --name n --harness emacs --cwd "$cwd" >/dev/null 2>&1; rc=$?
   assert_eq "contract: start with an unknown harness exits 2" "2" "$rc"
 
   # closing an agent takes its pane
   assert_ok "contract: close a recorded agent" mux close --ref "$ref" --id "$ag"
-  _mc_json "contract: status of a closed agent is gone" "$(mux status --ref "$ref" --to "$ag" 2>/dev/null || echo '{"state":"refused"}')" '.state == "gone" or .state == "refused"'
+  mux status --ref "$ref" --to "$ag" >/dev/null 2>&1; rc=$?
+  assert_eq "contract: a closed agent is no longer recorded: status exits 3" "3" "$rc"
   l="$(mux list --ref "$ref")"
   if _mc_has "$l" "$ag"; then fail "contract: list no longer holds the closed agent"; else pass "contract: list no longer holds the closed agent"; fi
   if _mc_has "$l" "$apn"; then fail "contract: closing the agent took its pane"; else pass "contract: closing the agent took its pane"; fi
@@ -154,6 +162,21 @@ mux_contract() {
     ag3="$(jq -r .agent <<<"$out")"; apn3="$(jq -r .pane <<<"$out")"
     mux_contract_vanish "$ag3"
     mux_contract_vanish "$apn3"
+    # recorded, but the backend no longer has them: exit 5 (target gone)
+    mux status --ref "$ref" --to "$ag3" >/dev/null 2>&1; rc=$?
+    assert_eq "contract: status of a gone agent exits 5" "5" "$rc"
+    mux read --ref "$ref" --to "$ag3" >/dev/null 2>&1; rc=$?
+    assert_eq "contract: read of a gone agent exits 5" "5" "$rc"
+    mux send --ref "$ref" --to "$ag3" --text x >/dev/null 2>&1; rc=$?
+    assert_eq "contract: send to a gone agent exits 5" "5" "$rc"
+    mux run --ref "$ref" --pane "$apn3" -- true >/dev/null 2>&1; rc=$?
+    assert_eq "contract: run in a gone pane exits 5" "5" "$rc"
+    for u in ready idle working; do
+      mux wait --ref "$ref" --to "$ag3" --until "$u" --timeout-ms 5000 >/dev/null 2>&1; rc=$?
+      assert_eq "contract: wait --until $u on a gone agent exits 5 at once" "5" "$rc"
+    done
+    mux wait --ref "$ref" --to "$ag3" --until gone --timeout-ms 5000 >/dev/null 2>&1; rc=$?
+    assert_eq "contract: wait --until gone on a gone agent exits 0" "0" "$rc"
     assert_eq "contract: closing an id the backend lost exits 0" "0" "$(mux close --ref "$ref" --id "$ag3" >/dev/null 2>&1; echo $?)"
     l="$(mux list --ref "$ref")"
     if _mc_has "$l" "$ag3" || _mc_has "$l" "$apn3"; then fail "contract: the lost agent and its pane left the record"; else pass "contract: the lost agent and its pane left the record"; fi
@@ -169,7 +192,7 @@ mux_contract() {
   if [[ -n "$g" ]]; then
     mux close --ref "$ref" --id "$g" >/dev/null 2>&1; rc=$?
     assert_eq "contract: group close while spaces remain exits 3" "3" "$rc"
-    if [[ ${#MUX_CONTRACT_BACKEND[@]} -gt 0 ]]; then
+    if [[ -n "${MUX_CONTRACT_BACKEND[0]+x}" ]]; then
       "${MUX_CONTRACT_BACKEND[@]}" close --ref "$ref" --id "$g" >/dev/null 2>&1; rc=$?
       assert_eq "contract: the backend itself refuses a group with children (1)" "1" "$rc"
       _mc_json "contract: ...and the group is still reported" "$("${MUX_CONTRACT_BACKEND[@]}" list --ref "$ref" --ids "$(jq -nc --arg g "$g" '[$g]')")" 'any(.[]; .kind == "group")'
