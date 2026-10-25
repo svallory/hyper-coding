@@ -7,7 +7,10 @@ description: Use when a unit the driver finished as READY must be merged and tor
 
 Written for Claude Code sessions. Landing merges one READY unit and tears
 everything it created down: agents, the unit's panes and space, the worktree.
-It runs where the unit's worktree lives.
+It runs where the unit's worktree lives. For a unit started on another host with
+`ship-unit run --host`, land it with `ship-land --host <host> <ref>`, using the host
+shown by `ship-unit list`: it holds the local land lock and runs the land and
+retire steps on that host.
 
 ## When to land
 
@@ -22,7 +25,7 @@ hand edit.
 ## Land
 
 ```
-${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-land <ref> [--task <tracker id>]
+${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-land [--host <host>] <ref> [--task <tracker id>]
 ```
 
 It rebases on the base branch (refusing an empty or commit-dropping rebase),
