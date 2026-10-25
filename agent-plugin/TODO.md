@@ -113,9 +113,9 @@ get generated builds.
 
 ## Reactive Context
 
-- [ ] Task-scoped context: when plan-develop starts a task, inject that
-      task's acceptance criteria and design constraints (today the whole
-      spec must be read manually).
+- [ ] Task-scoped context: attach a unit's acceptance criteria and design
+      constraints to its brief automatically (today the `plan` skill copies
+      them in by hand).
 
 ## Spaces
 
@@ -126,6 +126,11 @@ get generated builds.
       `wt switch` places worktrees inside the space on machines where the
       user template points elsewhere.
 - [ ] Submodule support for conversion (currently a preflight refusal).
+
+## Ship
+
+- [ ] Mux backends: the operator's multiplexer, Orca. Each is one file under
+      `scripts/ship/mux/` plus a test that runs the shared contract.
 
 ## Plan / Gen (Deterministic First)
 

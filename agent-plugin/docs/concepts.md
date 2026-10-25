@@ -289,7 +289,7 @@ The plugin is an implementation, at Claude Code plugin scale, of the five
 |---|---|
 | Tools Integration + Real-time Feedback | check hook |
 | Reactive Context | SessionStart hook |
-| Engineered Friction | deps hook + plan-develop gate |
+| Engineered Friction | deps hook + brief deviations rule |
 | Deterministic First | gen templates |
 
 **Tools Integration + Real-time Feedback → check hook.** The agent gets the
@@ -303,15 +303,15 @@ with the warnings each location needs) and *how to work here* (detected
 toolchain facts and check-hook status). Silent outside a space, so it costs
 nothing in unrelated projects.
 
-**Engineered Friction → deps hook + plan-develop gate.** Friction is placed
+**Engineered Friction → deps hook + brief deviations rule.** Friction is placed
 where a cheap decision has expensive consequences. The deps hook
 (`scripts/hyper-deps.sh`, opt-in via `"deps": {"enabled": true}`) notices
 when an edit adds a *new* dependency to a manifest and asks — once per
-dependency per session — for one sentence of justification. The plan-develop
-gate is the Develop phase of hyper plan: tasks execute one at a time, each
-validated against `define.md` criteria and `design.md` constraints before it
-is marked done, and disagreeing with the design costs a written entry in
-`deviations.md`. In both, the easy path is compliance; deviation costs a
+dependency per session — for one sentence of justification. The deviations
+rule is in every unit brief that `plan` writes: before writing code that
+departs from the spec, a ruling or a constraint, the dev appends an entry to
+`deviations.md`, and after two consecutive failures of the same check it stops
+and reports BLOCKED. In both, the easy path is compliance; deviation costs a
 sentence.
 
 **Deterministic First → gen templates.** If it can be done deterministically,
@@ -320,7 +320,77 @@ placeholder substitution; the agent authors only inside regions the template
 explicitly opens. There is no engine — the command instructs the agent — but
 templates keep a format a real generator could consume later.
 
-The plan phases themselves (the `spec` and `plan` skills: Define, Design, Decompose) are the methodology's spine: each phase produces an
-artifact (`define.md`, `design.md`, `tasks.md`, then code + `deviations.md`)
-that the next phase consumes, with artifacts living under
+The spec work itself (the `spec` skill: `define.md`, then `design.md`; the
+`plan` skill: `tasks.md` and briefs) is the methodology's spine: each step
+produces an artifact the next consumes, with artifacts living under
 `notes/specs/<feature-slug>/` in the space.
+
+---
+
+## Ship
+
+**Ship** is the lead workflow: one coordinating session (the **lead**) takes a
+request to merged PRs through **units**, never reading code itself. The `ship`
+skill is the lead's playbook; `spec`, `plan`, `kickoff`, `unit`, `land` and
+`auto` are the steps, each runnable alone.
+
+- **Unit**: one briefed piece of work with a ref, a class (S, M or L, which sets
+  its time budget), a worktree and a branch. Its state lives in
+  `notes/loops/<ref>/`.
+- **Brief**: the self-contained task text for a unit, at
+  `notes/briefs/<ref>.md`. It has a `Consumers` section naming, for every new
+  type, flag, file, option and command, who uses it today. It quotes the
+  rulings it depends on by number and never states a fix hypothesis.
+- **Driver**: `scripts/ship/ship-loop`. Runs one unit through dev, verify,
+  review, spec check (only when the diff touches `spec.paths`), fix rounds, an
+  optional final gate and finalize. Every stage writes
+  `<stage>-r<N>.json`; those verdict files are the only completion and blocking
+  signal. Exits 0 when the unit is READY, 2 when it parked, got stuck or ran
+  over budget, 1 on error. The exit is the lead's notification.
+- **Parked**: the driver stopped on a question, a block, a usage limit it could
+  not route around, or a dialog. `park.json` says why; the lead answers and
+  resumes the unit.
+- **Ruling**: a numbered decision, `## D<n> — <title>` with `Ruling`, `Reason`,
+  `By` and `Status`, in the rulings file. Briefs and answers quote rulings by
+  number.
+- **Consumer gate**: no brief is written for an element nobody uses once the
+  unit merges.
+- **Landing**: `scripts/ship/ship-land` takes a per-space lock, rebases on the
+  base branch, runs the gate, pushes, merges, runs `on_land`, then tears down
+  what ship created. `--abandon` runs only the teardown.
+- **Auto**: `auto on` makes the lead rule instead of asking the operator, logging
+  each ruling `By: lead-auto`; `auto off` turns those into a papiro review sheet
+  and applies the reply.
+
+### ship.yml
+
+Ship's settings are their own YAML file, never `.claude/hyper.json`. Three
+layers, later wins: `skills/ship/defaults.yml` (every key commented), the user
+layer `~/.config/hyper/ship.yml`, and the project layer
+`<space root>/.hyper/ship.yml`. The project layer lives in the space, not the
+repo, because it is lead tooling. Objects merge key by key; arrays replace.
+`scripts/ship/ship-config --print` shows the merged result and the file each
+key came from; `--get key` prints one value. `gate` is required.
+
+Models are an ordered list per stage (`models.dev`, `verify`, `review`,
+`spec_check`, `spec_write`, `final`). A bare name (`sonnet`) launches Claude
+Code; `provider/model[:thinking]` launches pi. The driver starts with the first
+usable entry. Before a Claude entry starts it reads the latest rate-limit
+snapshot and skips the entry when a window is at or above `quota.threshold_pct`;
+when an agent hits a limit mid-stage, a summariser writes `STATUS.md` and the
+stage restarts on the next entry. Only an exhausted list parks the unit.
+
+### The mux seam
+
+Panes and agents are reached only through `scripts/ship/ship-mux`, which takes
+intents (`check`, `open`, `run`, `start`, `send`, `read`, `status`, `wait`,
+`close`, `list`) with opaque ids, not multiplexer concepts. The `mux:` config
+key picks the backend file `scripts/ship/mux/<mux>`. `herdr` is the only real
+backend; `fake` records calls for tests. No other file calls `herdr`. A
+backend is one bash file plus a test that runs the shared contract
+(`tests/lib/mux-contract.sh`) against it.
+
+`ship-mux` keeps an ownership record per unit (`notes/loops/<ref>/mux.json`) and
+closes only ids it recorded; closing anything else exits 3 without calling the
+backend. The units group is closed only when ship created it and it is empty.
+The header comment of `ship-mux` is the one place the interface is documented.
