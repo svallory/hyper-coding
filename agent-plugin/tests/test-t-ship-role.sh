@@ -2,6 +2,12 @@
 # Row T (ship-role) — role launch profiles for claude and pi. HOME is a temp
 # dir (helpers.sh), so the real ~/.claude and ~/.pi are never read or written.
 
+REAL_HOME="$HOME"
+_mt() { # mtime-ish fingerprint of a path, or "absent"
+  if [[ -e "$1" ]]; then stat -c '%Y %s' "$1" 2>/dev/null || stat -f '%m %z' "$1"; else echo absent; fi
+}
+REAL_BEFORE="$(_mt "$REAL_HOME/.claude/settings.json") $(_mt "$REAL_HOME/.cache/hyper")"
+
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 set +eu
 set +o pipefail
@@ -14,7 +20,9 @@ export SHIP_SPACE_ROOT="$SPACE"
 PROJECT="$SPACE/.hyper/ship.yml"
 USER_CFG="$HOME/.config/hyper/ship.yml"
 mkdir -p "$HOME/.config/hyper"
-OUTDIR="$HOME/.cache/hyper/roles/proj"
+if command -v sha256sum >/dev/null 2>&1; then _h="$(printf '%s' "$SPACE" | sha256sum)"; else _h="$(printf '%s' "$SPACE" | shasum -a 256)"; fi
+OUTDIR="$HOME/.cache/hyper/roles/proj-${_h:0:8}"
+CWD="$FIX/cwd"; mkdir -p "$CWD"
 
 # Fixture host settings: a mix of enabled and disabled plugins and other keys.
 cat > "$HOME/.claude/settings.json" <<'JSON'
@@ -33,10 +41,10 @@ cat > "$HOME/.claude/settings.json" <<'JSON'
 JSON
 HS="$HOME/.claude/settings.json"
 
-role() { bash "$ROLE" "$@" 2>/dev/null; }
-role_rc() { bash "$ROLE" "$@" >/dev/null 2>&1; echo $?; }
+role() { (cd "$CWD" && bash "$ROLE" "$@" 2>/dev/null); }
+role_rc() { (cd "$CWD" && bash "$ROLE" "$@" >/dev/null 2>&1); echo $?; }
 # shellcheck disable=SC2069
-role_err() { bash "$ROLE" "$@" 2>&1 >/dev/null; }
+role_err() { (cd "$CWD" && bash "$ROLE" "$@" 2>&1 >/dev/null); }
 plug() { jq -r --arg k "$2" '.enabledPlugins[$k]' "$OUTDIR/$1.json"; }
 
 # C1: lead keeps hyper, beads, papiro; the rest is false ----------------------
@@ -58,10 +66,22 @@ assert_eq "same plugin keys as the host" \
 for r in dev verify review spec; do
   out="$(role "$r" --harness claude)"
   assert_eq "$r args carry the AskUserQuestion block" \
-    "--settings $OUTDIR/$r.json --strict-mcp-config --disallowedTools AskUserQuestion" "$out"
+    "--settings $OUTDIR/$r.json --strict-mcp-config --disallowedTools=AskUserQuestion" "$out"
   assert_eq "$r: no plugin enabled by default" 0 \
     "$(jq '[.enabledPlugins[] | select(. == true)] | length' "$OUTDIR/$r.json")"
 done
+# The flag is a single token, so a following prompt is not swallowed.
+cat > "$FIX/claude-stub" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "$STUB_OUT"
+STUB
+chmod +x "$FIX/claude-stub"
+export STUB_OUT="$FIX/stub.out"
+# shellcheck disable=SC2046
+(cd "$CWD" && "$FIX/claude-stub" $(bash "$ROLE" dev --harness claude 2>/dev/null) "the prompt")
+assert_eq "the prompt arrives as the last argument" "the prompt" "$(tail -n 1 "$STUB_OUT")"
+assert_eq "AskUserQuestion is one token, directly after the flag" "--disallowedTools=AskUserQuestion" \
+  "$(tail -n 2 "$STUB_OUT" | head -n 1)"
 assert_eq "lead output never mentions disallowedTools" 0 \
   "$(role lead --harness claude | grep -c disallowedTools)"
 
@@ -203,7 +223,74 @@ assert_eq "symlinked ship-role works" \
 ln -s "$FIX/bin/ship-role" "$FIX/bin/ship-role2"
 assert_eq "chained symlink works" 0 "$(PATH="$FIX/bin:$PATH" ship-role2 lead --harness claude >/dev/null 2>&1; echo $?)"
 
+# C14: a kept plugin the host has off stays off ------------------------------------------
+printf '{"enabledPlugins":{"hyper@tutor":false,"beads@beads-marketplace":true}}\n' > "$FIX/off.json"
+role lead --harness claude --host-settings "$FIX/off.json" >/dev/null
+assert_eq "kept but host-off plugin stays false" false "$(plug lead hyper@tutor)"
+assert_eq "kept and host-on plugin is true" true "$(plug lead beads@beads-marketplace)"
+
+# C15: non-list role values are errors, naming the key -----------------------------------
+printf 'roles:\n  dev:\n    pi_skills: rci\n' > "$PROJECT"
+assert_eq "pi_skills as a string: exit 1" 1 "$(role_rc dev --harness pi)"
+assert_contains "names roles.dev.pi_skills" "$(role_err dev --harness pi)" "roles.dev.pi_skills"
+printf 'roles:\n  dev:\n    pi_skills: []\n    pi_extensions: {name: pi-lens}\n' > "$PROJECT"
+assert_eq "pi_extensions as a map: exit 1" 1 "$(role_rc dev --harness pi)"
+assert_contains "names roles.dev.pi_extensions" "$(role_err dev --harness pi)" "roles.dev.pi_extensions"
+printf 'roles:\n  dev:\n    pi_skills: [1]\n' > "$PROJECT"
+assert_eq "pi_skills with a non-string entry: exit 1" 1 "$(role_rc dev --harness pi)"
+printf 'roles:\n  dev:\n    plugins_keep: hyper\n' > "$PROJECT"
+assert_eq "plugins_keep as a string: exit 1" 1 "$(role_rc dev --harness claude)"
+printf 'roles:\n  dev:\n    pi_skills: []\n    pi_extensions: [{name: "/x/a b.ts", flags: []}]\n' > "$PROJECT"
+rm -f "$PROJECT"
+
+# C16: paths with whitespace or glob characters are rejected -------------------------------
+mkskill "$HOME/.agents/skills" "odd name"
+printf 'roles:\n  dev:\n    pi_skills: ["odd name"]\n    pi_extensions: []\n' > "$PROJECT"
+assert_eq "skill path with a space: exit 1" 1 "$(role_rc dev --harness pi)"
+assert_contains "names the path" "$(role_err dev --harness pi)" "odd name"
+rm -rf "$HOME/.agents/skills/odd name"
+mkskill "$HOME/.agents/skills" "star*"
+printf 'roles:\n  dev:\n    pi_skills: ["star*"]\n    pi_extensions: []\n' > "$PROJECT"
+assert_eq "skill path with a glob char: exit 1" 1 "$(role_rc dev --harness pi)"
+rm -rf "$HOME/.agents/skills/star*"
+printf 'x' > "$FIX/with space.ts"
+printf 'roles:\n  dev:\n    pi_skills: []\n    pi_extensions: [{name: "%s", flags: []}]\n' "$FIX/with space.ts" > "$PROJECT"
+assert_eq "extension path with a space: exit 1" 1 "$(role_rc dev --harness pi)"
+rm -f "$PROJECT"
+
+# C17: CLAUDE_CONFIG_DIR is the default host settings location ------------------------------
+mkdir -p "$FIX/cc"
+printf '{"enabledPlugins":{"cfgdir@m":true}}\n' > "$FIX/cc/settings.json"
+(cd "$CWD" && CLAUDE_CONFIG_DIR="$FIX/cc" bash "$ROLE" lead --harness claude >/dev/null 2>&1)
+assert_eq "CLAUDE_CONFIG_DIR/settings.json is read" '["cfgdir@m"]' "$(jq -c '.enabledPlugins | keys' "$OUTDIR/lead.json")"
+
+# C18: project layers are folded in; PLUGIN_DIRS is blanked ---------------------------------
+mkdir -p "$CWD/.claude"
+printf '{"enabledPlugins":{"proj-only@m":true,"hyper@tutor":true}}\n' > "$CWD/.claude/settings.json"
+printf '{"enabledPlugins":{"local-only@m":true,"proj-only@m":false},"env":{"CLAUDE_CODE_PLUGIN_DIRS":"/some/dir"}}\n' > "$CWD/.claude/settings.local.json"
+role lead --harness claude >/dev/null
+assert_eq "project-layer key is present and false when not kept" false "$(plug lead local-only@m)"
+assert_eq "later layer wins (proj-only turned off by settings.local)" false "$(plug lead proj-only@m)"
+assert_eq "kept plugin enabled in a project layer is true" true "$(plug lead hyper@tutor)"
+assert_eq "host keys are still there" false "$(plug lead playwright@claude-plugins-official)"
+assert_eq "CLAUDE_CODE_PLUGIN_DIRS blanked" '""' "$(jq -c '.env.CLAUDE_CODE_PLUGIN_DIRS' "$OUTDIR/lead.json")"
+rm -rf "$CWD/.claude"
+role lead --harness claude >/dev/null
+assert_eq "no env block when no layer sets PLUGIN_DIRS" null "$(jq -c '.env' "$OUTDIR/lead.json")"
+printf '{"env":{"CLAUDE_CODE_PLUGIN_DIRS":"/d"}}\n' > "$FIX/envhost.json"
+role lead --harness claude --host-settings "$FIX/envhost.json" >/dev/null
+assert_eq "host layer PLUGIN_DIRS also blanked" '""' "$(jq -c '.env.CLAUDE_CODE_PLUGIN_DIRS' "$OUTDIR/lead.json")"
+
+# C19: the cache dir is keyed by basename + hash of the space root ----------------------------
+mkdir -p "$FIX/other/proj"
+role lead --harness claude >/dev/null
+(cd "$CWD" && SHIP_SPACE_ROOT="$FIX/other/proj" bash "$ROLE" lead --harness claude >/dev/null 2>&1)
+assert_eq "two spaces sharing a basename get two cache dirs" 2 "$(find "$HOME/.cache/hyper/roles" -maxdepth 1 -name 'proj-*' | wc -l | tr -d ' ')"
+assert_eq "cache dir name is <basename>-<8 hex>" 1 "$(basename "$OUTDIR" | grep -Ec '^proj-[0-9a-f]{8}$')"
+
 # C13: the real home is untouched -----------------------------------------------------------------
 case "$HOME" in "$FIX"/*) pass "HOME is inside the fixture dir" ;; *) fail "HOME escaped the fixture dir: $HOME" ;; esac
+REAL_AFTER="$(_mt "$REAL_HOME/.claude/settings.json") $(_mt "$REAL_HOME/.cache/hyper")"
+assert_eq "the real ~/.claude/settings.json and ~/.cache/hyper are unchanged" "$REAL_BEFORE" "$REAL_AFTER"
 
 finish
