@@ -33,6 +33,15 @@ while read -r name; do
 done < <(grep -o '/hyper:[a-z-]*' <<<"$help_text" | sort -u | sed 's|^/hyper:||')
 assert_eq "every /hyper:<name> in help.md exists as a command" "" "$dead"
 
+# Every skills/*/ must be named in help.md (its Skills table), so the skills the
+# plugin ships are not invisible to "what can this do".
+unlisted=""
+for d in "$PLUGIN_DIR"/skills/*/; do
+  name="$(basename "$d")"
+  grep -qE "\`$name\`" <<<"$help_text" || unlisted="$unlisted $name"
+done
+assert_eq "every skills/*/ is named in help.md" "" "$unlisted"
+
 # The T-9 pair: thin commands that relay the hyper CLI.
 assert_contains "/hyper:space appears in help.md" "$help_text" "/hyper:space"
 assert_contains "/hyper:warp appears in help.md" "$help_text" "/hyper:warp"

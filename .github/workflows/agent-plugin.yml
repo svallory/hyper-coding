@@ -72,18 +72,18 @@ jobs:
           bash -n agent-plugin/stacks/*/detect.sh
           bash -n agent-plugin/tests/*.sh
           bash -n agent-plugin/tests/lib/*.sh
-          # The ship scripts are extensionless: every file directly in scripts/ship
-          # and in scripts/ship/mux (prompts/ and schemas/ hold no scripts).
-          shipfiles="$(find agent-plugin/scripts/ship -maxdepth 2 -type f \
-            \( -path '*/ship/lib*.sh' -o -path '*/ship/ship-*' -o -path '*/ship/mux/*' \))"
+          # The ship scripts are mostly extensionless: every file under scripts/ship
+          # except prompts/ and schemas/ (which hold no scripts) is checked.
+          shipfiles="$(find agent-plugin/scripts/ship -type f \
+            -not -path '*/ship/prompts/*' -not -path '*/ship/schemas/*')"
           while IFS= read -r f; do bash -n "$f"; done <<<"$shipfiles"
 
       - name: shellcheck
         run: |
           set -euo pipefail
           shellcheck --version
-          shipfiles="$(find agent-plugin/scripts/ship -maxdepth 2 -type f \
-            \( -path '*/ship/lib*.sh' -o -path '*/ship/ship-*' -o -path '*/ship/mux/*' \))"
+          shipfiles="$(find agent-plugin/scripts/ship -type f \
+            -not -path '*/ship/prompts/*' -not -path '*/ship/schemas/*')"
           # shellcheck disable=SC2086  # one path per line, none with spaces
           shellcheck --severity=warning -x \
             agent-plugin/scripts/*.sh \

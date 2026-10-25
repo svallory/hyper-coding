@@ -114,11 +114,9 @@ Without the CLI:
 | `/hyper:audit [space-path]` | Read-only drift report: missing dirs, loose files, stale worktrees |
 | `/hyper:cleanup [space-path]` | Delete what audit reports — candidates listed first, every deletion confirmed per item and re-verified; the plugin's one deleting command |
 | `/hyper:tools [project-path]` | Detect the project's own toolchain and wire up the check hook |
-| `/hyper:plan <feature> [phase]` | 4-phase spec-driven workflow — Define, Design, Decompose, Develop — with artifacts in `notes/specs/` |
 | `/hyper:gen [template] [dest]` | Generate files from a project template — deterministic copy, agent authoring only inside marked prompt regions |
 | `/hyper:space [args...]` | A space's history — allowlisted dirs committed to the space's branch, pushed to your hyperdrive; init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
 | `/hyper:warp <machine> [flags]` | Move a live session to another machine over ssh — a thin relay over `hyper warp` |
-| `/hyper:team [tasks]` | Lead developer agents through a batch — decompose, assign each task to the cheapest adequate model, review, track. A skill; `/hyper:team-lead` is a command alias for it. The skill under `skills/team/` is generated from the claude-plugins team-lead source by `scripts/sync-team-skill.sh` (`--check` reports drift); never edit it here. |
 
 ## Hooks
 
@@ -178,8 +176,7 @@ pillars, honestly scored:
 | Engineered Friction | 🟡 | deps hook (new dependency → justify or remove, once per session); plan-develop's `deviations.md` gate | complexity scoring, formal simplicity-first enforcement |
 | Deterministic First | 🟡 | `/hyper:gen`: verbatim-outside-prompt-regions templates built from exemplars | starter kits, a real generation engine |
 
-Toolkit components: `hyper plan` → `/hyper:plan` (full four-phase flow,
-native format only); `hyper gen` → `/hyper:gen` (templates, no engine);
+Toolkit components: `hyper plan` → the `spec` and `plan` skills (native format only); `hyper gen` → `/hyper:gen` (templates, no engine);
 `hyper tools` → `/hyper:tools` (checks only — see `TODO.md` for the
 recommended-tools catalog plan); `hyper watch` and `hyper dash` are
 deliberately not stubbed — they need real infrastructure a plugin cannot

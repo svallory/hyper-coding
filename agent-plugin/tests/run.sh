@@ -9,6 +9,20 @@ set -u
 
 dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# C-12: no test may reach a real multiplexer server. SHIP_MUX_TEST=1 makes the
+# Herdr backend exit 99 before anything else, and a `herdr` stub that fails
+# loudly sits first on PATH in case anything else calls the command directly.
+stub_dir="$(mktemp -d "${TMPDIR:-/tmp}/hyper-herdr-stub.XXXXXX")"
+trap 'rm -rf "$stub_dir"' EXIT
+cat > "$stub_dir/herdr" <<'STUB'
+#!/bin/sh
+echo "herdr stub: a test called the real herdr command; this must never run" >&2
+exit 97
+STUB
+chmod +x "$stub_dir/herdr"
+export SHIP_MUX_TEST=1
+export PATH="$stub_dir:$PATH"
+
 total_pass=0
 total_fail=0
 crashed=0

@@ -317,8 +317,9 @@ confirmed id at a time, re-verified at deletion time.
   project-specific and must be detected or asked about, never assumed. The
   same config file gates the deps friction hook, which asks for one sentence
   of justification when an edit adds a new dependency.
-- `/hyper:plan <feature> [phase]` — the four-phase spec workflow: Define,
-  Design, Decompose, Develop. Artifacts live under `notes/specs/`.
+- The `spec` and `plan` skills (`hyper:spec`, `hyper:plan`) write the spec
+  and the unit briefs; `ship` leads a feature through them. Artifacts live
+  under `notes/specs/`.
 - `/hyper:gen [template] [dest]` — generate files from a project template;
   deterministic copy, agent authoring only inside marked prompt regions.
 
