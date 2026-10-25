@@ -16,18 +16,23 @@
 #                                and skills/ship/defaults.yml to
 #                                ~/.cache/hyper/ship/<plugin version>/ on the host,
 #                                keeping the plugin layout
-#   ship_host_script <name>      print the remote path expression of a ship script
-#                                (the remote shell expands $HOME)
+#   ship_sq <string>             print the string single-quoted for a POSIX shell
 #   ship_host_run <target> <space root> <host name> <script> [args...]
-#                                run a synced ship script on the host under a login
-#                                shell, with SHIP_SPACE_ROOT and SHIP_HOST set;
-#                                returns ssh's exit status
+#                                run a synced ship script on the host under
+#                                `bash -lc`, with SHIP_SPACE_ROOT, SHIP_HOST and
+#                                SHIP_UNIT_INTERNAL=1 set, and the lead's merged
+#                                config (SHIP_CONFIG_JSON, when loaded) passed along
+#                                so the host never re-resolves it. Returns ssh's
+#                                exit status.
 #   ship_host_push <target> <path>...   rsync files or directories to the same
 #                                absolute path on the host
 #   ship_host_pull_dir <target> <remote dir> <local dir>   mirror a directory back
 #                                (local files the host does not have are removed)
 #   ship_host_lost <rc>          true when an exit status means the connection was
 #                                lost or ssh was killed (255, or killed by a signal)
+#
+# Paths handed to rsync must be plain (letters, digits and . _ / + : @ % = , ~ -):
+# rsync passes "host:path" through the remote shell. Anything else is refused.
 #
 # The ssh and rsync commands are looked up on PATH. Nothing here touches a
 # multiplexer.
@@ -48,6 +53,23 @@ ship_host_target() {
 
 ship_host_lost() { [[ "${1:-0}" -eq 255 || "${1:-0}" -ge 128 ]]; }
 
+# ship_sq <string> — single-quoted, safe for any POSIX shell (no $'..' form).
+ship_sq() {
+  local s
+  s="$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+  printf "'%s'" "$s"
+}
+
+_ship_host_path_ok() {
+  local p
+  for p in "$@"; do
+    if [[ ! "$p" =~ ^[A-Za-z0-9._/+:@%=,~-]+$ ]]; then
+      _ship_err "host mode cannot copy '$p': paths may only hold letters, digits and . _ / + : @ % = , ~ -"
+      return 1
+    fi
+  done
+}
+
 # _ship_host_version — the plugin version, which names the cache directory.
 _ship_host_version() {
   local v=""
@@ -59,10 +81,6 @@ _ship_host_version() {
 }
 
 _ship_host_cache() { printf '.cache/hyper/ship/%s' "$(_ship_host_version)"; }
-
-ship_host_script() {
-  printf '"$HOME"/%s/scripts/ship/%s' "$(_ship_host_cache)" "${1:?ship_host_script: name required}"
-}
 
 # ship_host_sync <target> — the host needs no hyper CLI, only these files.
 ship_host_sync() {
@@ -78,22 +96,27 @@ ship_host_sync() {
 ship_host_run() {
   local target="$1" root="$2" name="$3" script="$4" cmd a
   shift 4
-  cmd="SHIP_SPACE_ROOT=$(printf '%q' "$root") SHIP_HOST=$(printf '%q' "$name") exec bash $(ship_host_script "$script")"
-  for a in "$@"; do cmd+=" $(printf '%q' "$a")"; done
-  ssh "${SHIP_SSH_OPTS[@]}" "$target" bash -lc "$(printf '%q' "$cmd")"
+  cmd="env SHIP_SPACE_ROOT=$(ship_sq "$root") SHIP_HOST=$(ship_sq "$name") SHIP_UNIT_INTERNAL=1"
+  if [[ -n "${SHIP_CONFIG_JSON:-}" ]]; then
+    cmd+=" SHIP_CONFIG_JSON=$(ship_sq "$SHIP_CONFIG_JSON") SHIP_CONFIG_LAYERS='[]'"
+  fi
+  cmd+=" bash \"\$HOME\"/$(_ship_host_cache)/scripts/ship/$script"
+  for a in "$@"; do cmd+=" $(ship_sq "$a")"; done
+  ssh "${SHIP_SSH_OPTS[@]}" "$target" bash -lc "$(ship_sq "$cmd")"
 }
 
 # ship_host_push <target> <path>... — files and directories keep their absolute path.
 ship_host_push() {
   local target="$1" p parent
   shift
+  _ship_host_path_ok "$@" || return 1
   for p in "$@"; do
     if [[ -d "$p" ]]; then
-      ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p $(printf '%q' "$p")" || return $?
+      ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p $p" || return $?
       rsync -a "$p/" "$target:$p/" || return $?
     elif [[ -f "$p" ]]; then
       parent="${p%/*}"
-      ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p $(printf '%q' "$parent")" || return $?
+      ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p $parent" || return $?
       rsync -a "$p" "$target:$p" || return $?
     fi
   done
@@ -101,6 +124,7 @@ ship_host_push() {
 
 # ship_host_pull_dir <target> <remote dir> <local dir>
 ship_host_pull_dir() {
+  _ship_host_path_ok "$2" || return 1
   mkdir -p "$3" || return 1
   rsync -a --delete "$1:$2/" "$3/"
 }

@@ -13,20 +13,22 @@
 #   ship-unit wait <ref>
 #   ship-unit list
 #
-#   run     create the worktree (wt switch -c <branch>; the branch defaults to the
-#           ref), check the host has a free slot, open the unit's space with
+#   run     create the worktree (wt switch -c from origin/<base>; the branch defaults to
+#           the ref), check the host has a free slot, open the unit's space with
 #           ship-mux and start the driver in it, then block until it exits. Mirrors
 #           notes/loops/<ref>/ back (host mode), prints result.json and exits with
-#           the driver's code.
+#           the driver's code. --model values are written to models.override.
 #   resume  restart the driver of a parked or over-budget unit; it reattaches. First
 #           writes what ship-loop reads from notes/loops/<ref>/: --answer becomes
-#           answer-<n>.md (n is park.json's "n"), --extend becomes `extend` (minutes
-#           for the stage that went OVER-BUDGET), --model lines are appended to
-#           models.override. Then blocks like run.
+#           answer-<n>.md (n is park.json's "n"; refused for LIMIT and DIALOG parks),
+#           --extend becomes `extend` (minutes, above 0, for the stage that went
+#           OVER-BUDGET), --model lines are appended to models.override (so they beat
+#           run's). Then blocks like run.
 #   wait    block on an already running driver (after the caller's session was lost).
 #   list    one line per unit under notes/loops/ (not .done): ref, host, status,
 #           stage, failovers, age, driver alive. A unit with a live driver is RUNNING;
-#           without one its status is result.json's, or DEAD when it left none.
+#           without one its status is result.json's, or DEAD when it left none. Each
+#           remote host is asked once, in parallel.
 #
 #   --host H      run on the host named H in the ship config (hosts.H.ssh is the ssh
 #                 destination, hosts.H.slots the number of concurrent units). The
@@ -35,29 +37,43 @@
 #   --spec-dir D  a spec directory the unit's agents read; with --host it is copied
 #                 to the host together with the brief and the rulings file.
 #
-# Slots: a unit counts toward a host's slots while its driver.pid names a live process
-# there. `run` and `resume` refuse (exit 3) when the host is full.
+# Slots: a unit counts toward a host's slots while its driver is alive there (a
+# driver.pid naming a ship process, or a launch in its first SHIP_UNIT_START_GRACE_S
+# seconds with no pid yet). Checking, creating the worktree and launching happen under
+# one lock per host (<space>/.hyper/ship-unit.lock), so concurrent runs cannot
+# overbook. `run` and `resume` refuse (exit 3) when the host is full, or when the
+# ref's driver is already running.
 #
 # Host mode: scripts/ship/, scripts/hyper-require-lib.sh and skills/ship/defaults.yml
 # are rsynced to ~/.cache/hyper/ship/<plugin version>/ on the host (the host needs no
-# hyper CLI), SHIP_SPACE_ROOT is exported over ssh, and the brief, the rulings file, the spec dir
-# and the space's .hyper/ship.yml (so the unit runs under the lead's config; `resume`
-# copies it again) are rsynced to the same paths. The wait loop polls the host; when ssh
-# fails it reconnects and keeps polling (up to SHIP_UNIT_RECONNECT_SEC, default 900,
-# of continuous failure; the driver keeps running, `ship-unit wait <ref>` reattaches).
+# hyper CLI), SHIP_SPACE_ROOT is exported over ssh, and the brief, the rulings file and
+# the spec dir are rsynced to the same paths. The lead's merged config goes over in the
+# ssh environment (SHIP_CONFIG_JSON); the host writes it to notes/loops/<ref>/config.json
+# and the driver loads it through SHIP_CONFIG_FILE, so the unit runs under the lead's
+# config whatever the host's own files say. The wait loop polls the host; when ssh fails
+# it reconnects with a growing delay (SHIP_UNIT_POLL_S doubling up to
+# SHIP_UNIT_BACKOFF_MAX_S) and keeps polling, up to SHIP_UNIT_RECONNECT_SEC (default
+# 900) of continuous failure. The driver keeps running; `ship-unit wait <ref>`
+# reattaches. The loop directory is mirrored back right after the start and at the end.
 #
 # State written next to the driver's own (see ship-loop): unit.json (what the unit was
-# started with, so resume and wait need no arguments) and driver.exit (the driver's
-# exit code; removed on every start).
+# started with, so resume and wait need no arguments), driver.exit (the driver's exit
+# code; removed on every start) and, for host units, config.json.
 #
 # Exit codes
-#   0 READY   1 ERROR   2 parked, over budget or stuck     the driver's result
-#   1 also: ship-unit's own failures    3 refused (host full, driver already running,
-#   nothing to answer or extend)        64 usage
+#   0 READY   1 ERROR   2 parked, over budget or stuck    only ever the driver's result
+#   3 refused (host full, driver already running, nothing to answer or extend)
+#   64 usage (a bad option, a bad --model, --extend 0)
+#   70 ship-unit failed: sync or copy failure, no ssh destination, unknown unit, a
+#      driver that died without an exit code or result
+#   75 the connection to the host was lost while the driver is still running (also:
+#      gave up reconnecting); `ship-unit wait <ref>` reattaches
 #
 # Environment (test knobs): SHIP_UNIT_POLL_S (poll interval, default 5),
-# SHIP_UNIT_RECONNECT_SEC, SHIP_UNIT_START_GRACE_S (how long a driver that has not
-# written a pid yet counts as starting, default 60), SHIP_LOOP_BIN (the driver).
+# SHIP_UNIT_BACKOFF_MAX_S (default 30), SHIP_UNIT_RECONNECT_SEC, SHIP_UNIT_START_GRACE_S
+# (how long a driver that has not written a pid yet counts as starting, default 60),
+# SHIP_UNIT_LOCK_WAIT_S (default 30), SHIP_LOOP_BIN (the driver).
+# _launch, _resume, _probe and _driver are internal and need SHIP_UNIT_INTERNAL=1.
 
 set -euo pipefail
 
@@ -78,17 +94,22 @@ source "$_dir/lib-host.sh"
 MUX="$_dir/ship-mux"
 LOOP="${SHIP_LOOP_BIN:-$_dir/ship-loop}"
 POLL_S="${SHIP_UNIT_POLL_S:-5}"
+BACKOFF_MAX_S="${SHIP_UNIT_BACKOFF_MAX_S:-30}"
 RECONNECT_SEC="${SHIP_UNIT_RECONNECT_SEC:-900}"
 START_GRACE_S="${SHIP_UNIT_START_GRACE_S:-60}"
+LOCK_WAIT_S="${SHIP_UNIT_LOCK_WAIT_S:-30}"
 
-usage() { echo "ship-unit: $*" >&2; exit 64; }
-fail() { echo "ship-unit: $*" >&2; exit 1; }
-refuse() { echo "ship-unit: refused: $*" >&2; exit 3; }
+E_REFUSED=3 E_USAGE=64 E_INTERNAL=70 E_LOST=75
+usage() { echo "ship-unit: $*" >&2; exit "$E_USAGE"; }
+fail() { echo "ship-unit: $*" >&2; exit "$E_INTERNAL"; }
+refuse() { echo "ship-unit: refused: $*" >&2; exit "$E_REFUSED"; }
 
 sub="${1:-}"
 case "$sub" in
-  -h|--help|"") sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; [[ -n "$sub" ]] && exit 0; exit 64 ;;
-  run|resume|wait|list|_launch|_resume|_probe|_driver) ;;
+  -h|--help|"") sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; [[ -n "$sub" ]] && exit 0; exit "$E_USAGE" ;;
+  run|resume|wait|list) ;;
+  _launch|_resume|_probe|_driver)
+    [[ "${SHIP_UNIT_INTERNAL:-}" == 1 ]] || usage "unknown subcommand '$sub' (try --help)" ;;
   *) usage "unknown subcommand '$sub' (try --help)" ;;
 esac
 shift
@@ -96,14 +117,6 @@ shift
 check_ref() {
   [[ -n "${1:-}" ]] || usage "a ref is required"
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid ref '$1' (letters, digits, '.', '_', '-'; must start with a letter or digit)"
-}
-
-pid_alive() { # pidfile
-  local p
-  [[ -s "$1" ]] || return 1
-  p="$(cat "$1" 2>/dev/null)" || return 1
-  [[ "$p" =~ ^[0-9]+$ ]] || return 1
-  kill -0 "$p" 2>/dev/null
 }
 
 mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0; }
@@ -116,39 +129,69 @@ abs_path() { # path -> absolute (the directory must exist)
 }
 
 load_cfg() { # sets root, exports SHIP_SPACE_ROOT
-  ship_config_load || exit 1
-  root="$(ship_space_root)" || exit 1
+  ship_config_load || exit "$E_INTERNAL"
+  root="$(ship_space_root)" || exit "$E_INTERNAL"
   export SHIP_SPACE_ROOT="$root"
 }
 
-# --- internal: probe -----------------------------------------------------------------------
-# One line on stdout: "exit <code>", "running", "starting" or "dead".
-if [[ "$sub" == _probe ]]; then
-  ref="${1:-}"; check_ref "$ref"
-  root="$(ship_space_root)" || exit 1
-  d="$root/notes/loops/$ref"
-  if [[ -s "$d/driver.exit" ]]; then echo "exit $(tr -dc '0-9' <"$d/driver.exit")"; exit 0; fi
-  if pid_alive "$d/driver.pid"; then echo running; exit 0; fi
-  launched=0
-  [[ -f "$d/unit.json" ]] && launched="$(jq -r '.launched_at // 0' "$d/unit.json" 2>/dev/null || echo 0)"
+positive_number() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v n="$1" 'BEGIN { exit !(n + 0 > 0) }'; }
+
+# --- driver liveness (runs where the driver runs) -------------------------------------------
+# The pid must be alive AND be one of ours: a recycled pid is some other process.
+driver_proc_ok() { # pid
+  local c
+  kill -0 "$1" 2>/dev/null || return 1
+  # If ps itself fails (fork pressure) a live pid gets the benefit of the doubt.
+  c="$(ps -o command= -p "$1" 2>/dev/null)" || c=""
+  [[ -n "$c" ]] || return 0
+  case "$c" in *ship-unit*|*ship-loop*|*"${LOOP##*/}"*) return 0 ;; esac
+  return 1
+}
+
+# unit_state <loop dir> — one of: "exit N", running, starting, dead, missing.
+unit_state() {
+  local d="$1" p launched=0 now st
+  [[ -f "$d/unit.json" ]] || { echo missing; return 0; }
+  if [[ -s "$d/driver.exit" ]]; then echo "exit $(tr -dc '0-9' <"$d/driver.exit")"; return 0; fi
+  if [[ -s "$d/driver.pid" ]]; then
+    p="$(cat "$d/driver.pid" 2>/dev/null)" || p=""
+    if [[ "$p" =~ ^[0-9]+$ ]] && driver_proc_ok "$p"; then echo running; return 0; fi
+  fi
+  launched="$(jq -r '.launched_at // 0' "$d/unit.json" 2>/dev/null)" || launched=0
+  [[ "$launched" =~ ^[0-9]+$ ]] || launched=0
   now="$(date +%s)"
-  if [[ ! -s "$d/driver.pid" && $((now - launched)) -lt "$START_GRACE_S" && "$launched" -gt 0 ]]; then echo starting; exit 0; fi
+  if [[ ! -s "$d/driver.pid" && "$launched" -gt 0 && $((now - launched)) -lt "$START_GRACE_S" ]]; then
+    echo starting; return 0
+  fi
   # The driver is gone and left no exit code (its pane was closed, the host rebooted).
   # A result written since the launch still says how it ended.
   if [[ -s "$d/result.json" && "$(mtime "$d/result.json")" -ge "$launched" ]]; then
-    case "$(jq -r '.status // ""' "$d/result.json" 2>/dev/null)" in
-      READY) echo "exit 0" ;; ERROR) echo "exit 1" ;; "") echo dead ;; *) echo "exit 2" ;;
-    esac
-    exit 0
+    st="$(jq -r '.status // ""' "$d/result.json" 2>/dev/null)" || st=""
+    case "$st" in READY) echo "exit 0" ;; ERROR) echo "exit 1" ;; "") echo dead ;; *) echo "exit 2" ;; esac
+    return 0
   fi
   echo dead
+}
+
+unit_live() { case "$(unit_state "$1")" in running|starting) return 0 ;; *) return 1 ;; esac; }
+
+# --- internal: probe -----------------------------------------------------------------------
+# One line per ref: "ship-unit-probe: <ref> <state>". The prefix lets the caller ignore
+# whatever a login shell prints around it.
+if [[ "$sub" == _probe ]]; then
+  [[ $# -gt 0 ]] || usage "_probe needs a ref"
+  root="$(ship_space_root)" || exit "$E_INTERNAL"
+  for ref in "$@"; do
+    check_ref "$ref"
+    echo "ship-unit-probe: $ref $(unit_state "$root/notes/loops/$ref")"
+  done
   exit 0
 fi
 
 # --- internal: the command that runs in the unit's pane ------------------------------------
 if [[ "$sub" == _driver ]]; then
   ref="${1:-}"; check_ref "$ref"
-  root="$(ship_space_root)" || exit 1
+  root="$(ship_space_root)" || exit "$E_INTERNAL"
   d="$root/notes/loops/$ref"
   [[ -f "$d/unit.json" ]] || fail "$d/unit.json is missing"
   args=(--ref "$ref")
@@ -157,9 +200,8 @@ if [[ "$sub" == _driver ]]; then
   v="$(jq -r '.base // ""' "$d/unit.json")"; [[ -z "$v" ]] || args+=(--base "$v")
   v="$(jq -r '.max_rounds // ""' "$d/unit.json")"; [[ -z "$v" ]] || args+=(--max-rounds "$v")
   [[ "$(jq -r '.final_gate // false' "$d/unit.json")" != true ]] || args+=(--final-gate)
-  while IFS= read -r v; do
-    [[ -z "$v" ]] || args+=(--model "$v")
-  done < <(jq -r '.models[]?' "$d/unit.json")
+  # Models reach ship-loop through models.override (written by run, appended by resume),
+  # so a resume --model beats the run's.
   echo $$ >"$d/driver.pid"
   rc=0
   "$LOOP" "${args[@]}" || rc=$?
@@ -169,8 +211,35 @@ fi
 
 # --- launching (on the host that runs the driver) ------------------------------------------
 host_name="local" slots=""
+LOCK_DIR="" LOCK_HELD=0 CLEAN_FILE=""
 
-# live_units — refs whose driver is alive on this host, other than $1.
+internal_cleanup() {
+  [[ -z "$CLEAN_FILE" ]] || rm -f "$CLEAN_FILE"
+  if [[ $LOCK_HELD -eq 1 ]]; then rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true; LOCK_HELD=0; fi
+}
+
+lock_acquire() {
+  local waited_ms=0 p age
+  LOCK_DIR="$root/.hyper/ship-unit.lock"
+  mkdir -p "$root/.hyper" || fail "cannot create $root/.hyper"
+  trap internal_cleanup EXIT
+  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
+    p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
+    age=$(( $(date +%s) - $(mtime "$LOCK_DIR") ))
+    if { [[ "$p" =~ ^[0-9]+$ ]] && ! kill -0 "$p" 2>/dev/null; } || { [[ -z "$p" ]] && [[ $age -gt 10 ]]; }; then
+      rm -f "$LOCK_DIR/pid"; rmdir "$LOCK_DIR" 2>/dev/null || true
+      continue
+    fi
+    if [[ $waited_ms -ge $((LOCK_WAIT_S * 1000)) ]]; then
+      fail "could not get the launch lock $LOCK_DIR in ${LOCK_WAIT_S}s (held by pid ${p:-?})"
+    fi
+    sleep 0.2; waited_ms=$((waited_ms + 200))
+  done
+  echo $$ >"$LOCK_DIR/pid"
+  LOCK_HELD=1
+}
+
+# live_units [except ref] — refs of this host whose driver is alive or starting.
 live_units() {
   local u r
   for u in "$root"/notes/loops/*/; do
@@ -178,35 +247,60 @@ live_units() {
     r="${u%/}"; r="${r##*/}"
     [[ "$r" != "${1:-}" ]] || continue
     [[ "$(jq -r '.host // "local"' "$u/unit.json" 2>/dev/null)" == "$host_name" ]] || continue
-    pid_alive "$u/driver.pid" && echo "$r"
+    ! unit_live "${u%/}" || echo "$r"
   done
   return 0
 }
 
-# launch_driver <ref> — slots check, space, driver in its pane. unit.json exists.
-launch_driver() {
-  local ref="$1" d="$root/notes/loops/$1" live n wt open_out pane cmd tmp
-  [[ -n "$slots" ]] || { slots="$(ship_cfg_get "hosts.$host_name.slots" 2>/dev/null)" || slots=""; }
-  [[ "$slots" =~ ^[0-9]+$ ]] || fail "host '$host_name' has no usable hosts.$host_name.slots in the ship config"
-  if pid_alive "$d/driver.pid" && [[ ! -e "$d/driver.exit" ]]; then
+# check_free <ref> — refuse when the ref's driver is up or the host is full. Holds the lock.
+check_free() {
+  local ref="$1" d="$root/notes/loops/$1" live n
+  if [[ -f "$d/unit.json" ]] && unit_live "$d"; then
     refuse "the driver of $ref is already running on $host_name; use 'ship-unit wait $ref'"
   fi
+  [[ "$slots" =~ ^[0-9]+$ ]] || { slots="$(ship_cfg_get "hosts.$host_name.slots" 2>/dev/null)" || slots=""; }
+  [[ "$slots" =~ ^[0-9]+$ ]] || fail "host '$host_name' has no usable hosts.$host_name.slots in the ship config"
   live="$(live_units "$ref" | tr '\n' ' ')"
   n="$(printf '%s' "$live" | wc -w | tr -d ' ')"
   if [[ "$n" -ge "$slots" ]]; then
     refuse "host $host_name is full: $n of $slots slots in use (${live% }); wait for one to finish"
   fi
+}
+
+# write_config <ref> — a host unit runs under the lead's merged config, not its own files.
+write_config() {
+  local d="$root/notes/loops/$1"
+  if [[ "$host_name" != local && -n "${SHIP_CONFIG_JSON:-}" ]]; then
+    (umask 077; printf '%s\n' "$SHIP_CONFIG_JSON" >"$d/config.json.tmp") && mv "$d/config.json.tmp" "$d/config.json"
+  fi
+}
+
+# launch_driver <ref> — space and driver pane. unit.json exists and its launched_at is set.
+launch_driver() {
+  local ref="$1" d="$root/notes/loops/$1" wt open_out pane cmd
   "$MUX" check || fail "the multiplexer is not usable here"
   wt="$(jq -r .worktree "$d/unit.json")"
   rm -f "$d/driver.exit" "$d/driver.pid"
-  tmp="$d/unit.json.tmp"
-  jq --argjson t "$(date +%s)" '.launched_at = $t' "$d/unit.json" >"$tmp" && mv "$tmp" "$d/unit.json"
-  open_out="$("$MUX" open --ref "$ref" --cwd "$wt" --label "$ref")" || fail "ship-mux open failed"
+  jq --argjson t "$(date +%s)" '.launched_at = $t' "$d/unit.json" >"$d/unit.json.tmp" && mv "$d/unit.json.tmp" "$d/unit.json"
+  write_config "$ref"
+  if ! open_out="$("$MUX" open --ref "$ref" --cwd "$wt" --label "$ref")"; then
+    unlaunch "$ref"; fail "ship-mux open failed"
+  fi
   pane="$(jq -r .pane <<<"$open_out")"
-  cmd="SHIP_SPACE_ROOT=$(printf '%q' "$root") SHIP_HOST=$(printf '%q' "$host_name") bash $(printf '%q' "$_src") _driver $(printf '%q' "$ref")"
-  "$MUX" run --ref "$ref" --pane "$pane" -- "$cmd" || fail "ship-mux run failed"
+  cmd="SHIP_UNIT_INTERNAL=1 SHIP_SPACE_ROOT=$(ship_sq "$root") SHIP_HOST=$(ship_sq "$host_name")"
+  if [[ "$host_name" != local && -f "$d/config.json" ]]; then cmd+=" SHIP_CONFIG_FILE=$(ship_sq "$d/config.json")"; fi
+  cmd+=" bash $(ship_sq "$_src") _driver $(ship_sq "$ref")"
+  if ! "$MUX" run --ref "$ref" --pane "$pane" -- "$cmd"; then
+    unlaunch "$ref"; fail "ship-mux run failed"
+  fi
   jq -nc --arg ref "$ref" --arg host "$host_name" --arg wt "$wt" --argjson open "$open_out" \
     '{ref: $ref, host: $host, worktree: $wt, space: $open.space, pane: $open.pane}'
+}
+
+# unlaunch <ref> — a launch that failed must not hold a slot.
+unlaunch() {
+  local d="$root/notes/loops/$1"
+  jq '.launched_at = 0' "$d/unit.json" >"$d/unit.json.tmp" && mv "$d/unit.json.tmp" "$d/unit.json"
 }
 
 if [[ "$sub" == _launch ]]; then
@@ -228,21 +322,14 @@ if [[ "$sub" == _launch ]]; then
     shift 2
   done
   load_cfg
-  [[ -f "$brief" ]] || fail "brief $brief is not a file${host_name:+ (on $host_name)}"
+  [[ -f "$brief" ]] || fail "brief $brief is not a file (on $host_name)"
   [[ -z "$spec_dir" || -d "$spec_dir" ]] || fail "spec dir $spec_dir is not a directory"
   [[ -n "$branch" ]] || branch="$ref"
   [[ -n "$base" ]] || base="$(ship_cfg_get base)" || fail "config has no base"
   d="$root/notes/loops/$ref"
-  if pid_alive "$d/driver.pid" && [[ ! -e "$d/driver.exit" ]]; then
-    refuse "the driver of $ref is already running on $host_name; use 'ship-unit wait $ref'"
-  fi
 
-  # The slot check comes before the worktree is created.
-  [[ "$slots" =~ ^[0-9]+$ ]] || { slots="$(ship_cfg_get "hosts.$host_name.slots" 2>/dev/null)" || slots=""; }
-  [[ "$slots" =~ ^[0-9]+$ ]] || fail "host '$host_name' has no usable hosts.$host_name.slots in the ship config"
-  live="$(live_units "$ref" | tr '\n' ' ')"
-  n="$(printf '%s' "$live" | wc -w | tr -d ' ')"
-  [[ "$n" -lt "$slots" ]] || refuse "host $host_name is full: $n of $slots slots in use (${live% }); wait for one to finish"
+  lock_acquire
+  check_free "$ref"
 
   wt_find() {
     git -C "$root" worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$branch" '
@@ -253,7 +340,11 @@ if [[ "$sub" == _launch ]]; then
     if git -C "$root" rev-parse --verify -q "refs/heads/$branch" >/dev/null 2>&1; then
       (CDPATH='' cd -- "$root" && wt switch --no-cd "$branch") >&2 || fail "wt switch $branch failed"
     else
-      (CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$base" "$branch") >&2 || fail "wt switch -c $branch failed"
+      # A new branch starts from the remote base, not from whatever the local one is.
+      GIT_TERMINAL_PROMPT=0 git -C "$root" fetch -q origin >/dev/null 2>&1 || true
+      from="$base"
+      git -C "$root" rev-parse --verify -q "refs/remotes/origin/$base" >/dev/null 2>&1 && from="origin/$base"
+      (CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$from" "$branch") >&2 || fail "wt switch -c $branch failed"
     fi
     wt_path="$(wt_find)"
     [[ -n "$wt_path" && -d "$wt_path" ]] || fail "wt did not leave a worktree for branch $branch"
@@ -261,13 +352,17 @@ if [[ "$sub" == _launch ]]; then
 
   mkdir -p "$d"
   models_json="$(printf '%s\n' ${models[@]+"${models[@]}"} | jq -R 'select(. != "")' | jq -sc .)"
+  # A fresh run starts from the run's own model overrides; a later resume appends.
+  : >"$d/models.override"
+  for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
   jq -n --arg ref "$ref" --arg host "$host_name" --arg branch "$branch" --arg wt "$wt_path" --arg brief "$brief" \
     --arg class "$class" --arg base "$base" --arg mr "$max_rounds" --argjson fg "$final_gate" \
-    --argjson models "$models_json" --arg spec "$spec_dir" \
+    --argjson models "$models_json" --arg spec "$spec_dir" --argjson t "$(date +%s)" \
     '{ref: $ref, host: $host, branch: $branch, worktree: $wt, brief: $brief, class: $class, base: $base,
       max_rounds: (if $mr == "" then null else ($mr | tonumber) end), final_gate: $fg, models: $models,
-      spec_dir: (if $spec == "" then null else $spec end), launched_at: 0}' >"$d/unit.json.tmp"
+      spec_dir: (if $spec == "" then null else $spec end), launched_at: $t}' >"$d/unit.json.tmp"
   mv "$d/unit.json.tmp" "$d/unit.json"
+  rm -f "$d/driver.exit" "$d/driver.pid"
   launch_driver "$ref"
   exit 0
 fi
@@ -287,21 +382,26 @@ if [[ "$sub" == _resume ]]; then
     shift 2
   done
   load_cfg
+  # A staged answer is a copy for this call only.
+  case "$answer" in */.resume-answer) CLEAN_FILE="$answer" ;; esac
   d="$root/notes/loops/$ref"
   [[ -f "$d/unit.json" ]] || fail "unknown unit '$ref': $d/unit.json does not exist"
-  if pid_alive "$d/driver.pid" && [[ ! -e "$d/driver.exit" ]]; then
-    refuse "the driver of $ref is still running on $host_name; use 'ship-unit wait $ref'"
-  fi
+  lock_acquire
+  check_free "$ref"
   # Check everything before writing anything.
   n=""
   if [[ -n "$answer" ]]; then
     [[ -s "$answer" ]] || fail "answer file $answer is missing or empty"
     [[ -s "$d/park.json" ]] || refuse "$ref is not parked (no park.json); nothing is waiting for an answer"
+    case "$(jq -r '.status // ""' "$d/park.json")" in
+      LIMIT) refuse "$ref is parked on a usage limit; an answer does not help: wait for the reset or resume with --model" ;;
+      DIALOG) refuse "$ref is parked on a dialog the agent could not pass; an answer does not help: fix it in the pane, then resume without --answer" ;;
+    esac
     n="$(jq -r '.n // empty' "$d/park.json")"
     [[ "$n" =~ ^[0-9]+$ ]] || fail "$d/park.json has no park number"
   fi
   if [[ -n "$extend" ]]; then
-    [[ "$extend" =~ ^[0-9]+(\.[0-9]+)?$ ]] || usage "--extend takes minutes (a positive number), got '$extend'"
+    positive_number "$extend" || usage "--extend takes minutes (a number above 0), got '$extend'"
     ok=0
     for b in "$d"/budget-r*.json; do
       [[ -f "$b" && ! -e "$b.handled" ]] && ok=1
@@ -314,30 +414,38 @@ if [[ "$sub" == _resume ]]; then
   fi
   [[ -z "$extend" ]] || { printf '%s\n' "$extend" >"$d/extend"; echo "ship-unit: wrote extend ($extend min)" >&2; }
   for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
-  rm -f "$d/.resume-answer"
   launch_driver "$ref"
   exit 0
 fi
 
 # --- client side: run / resume / wait / list -----------------------------------------------
-HTARGET="" HNAME=local need_sync=0
+HTARGET="" HNAME=local need_sync=0 resynced=0 DRIVER_RC=""
 
 # unit_exec <ship-unit args...> — run a ship-unit subcommand where the unit lives.
+# A host whose cache copy is missing (exit 127) gets one more sync.
 unit_exec() {
+  local rc=0
   if [[ -z "$HTARGET" ]]; then
-    SHIP_HOST="$HNAME" bash "$_src" "$@"
-  else
-    ship_host_run "$HTARGET" "$root" "$HNAME" ship-unit "$@"
+    SHIP_UNIT_INTERNAL=1 SHIP_HOST="$HNAME" bash "$_src" "$@"
+    return $?
   fi
+  ship_host_run "$HTARGET" "$root" "$HNAME" ship-unit "$@" || rc=$?
+  if [[ $rc -eq 127 && $resynced -eq 0 ]]; then
+    resynced=1
+    ship_host_sync "$HTARGET" >&2 || return 70
+    rc=0
+    ship_host_run "$HTARGET" "$root" "$HNAME" ship-unit "$@" || rc=$?
+  fi
+  return "$rc"
 }
 
-# select_host <name> [soft] — sets HNAME, HTARGET; syncs the scripts for a remote host.
+# select_host <name> [soft] — sets HNAME, HTARGET; syncs the scripts for a remote host once.
 # With "soft" a failed sync is not fatal: the wait loop syncs again when it reconnects.
 select_host() {
   HNAME="${1:-local}"
   HTARGET=""
   if ! ship_host_is_local "$HNAME"; then
-    HTARGET="$(ship_host_target "$HNAME")" || exit 1
+    HTARGET="$(ship_host_target "$HNAME")" || exit "$E_INTERNAL"
     if ! ship_host_sync "$HTARGET"; then
       [[ "${2:-}" == soft ]] || fail "could not copy the ship scripts to $HNAME ($HTARGET)"
       need_sync=1
@@ -352,65 +460,108 @@ host_slots() {
   printf '%s\n' "$s"
 }
 
-# wait_driver <ref> — block until the driver exits; sets DRIVER_RC. Reconnects on ssh failure.
+# probe_state <rc var> <output var> — not used; see probe_ref.
+# probe_ref <ref> — sets PROBE (the state) and returns ssh's status; 0 only with a state.
+PROBE=""
+probe_ref() {
+  local out rc=0
+  PROBE=""
+  out="$(unit_exec _probe "$1" 2>/dev/null)" || rc=$?
+  [[ $rc -eq 0 ]] || return "$rc"
+  PROBE="$(printf '%s\n' "$out" | sed -n "s/^ship-unit-probe: $1 //p" | tail -n 1)"
+  return 0
+}
+
+# next_delay <current> — doubled, capped.
+next_delay() { awk -v d="$1" -v m="$BACKOFF_MAX_S" 'BEGIN { d = d * 2; if (d > m) d = m; printf "%g", d }'; }
+
+# wait_driver <ref> — block until the driver exits; sets DRIVER_RC (the code ship-unit exits
+# with). Reconnects, with a growing delay, while ssh fails.
 wait_driver() {
-  local ref="$1" line rc lost_since="" announced=0
+  local ref="$1" rc lost_since="" announced=0 delay="$POLL_S" dead_seen=0
   DRIVER_RC=""
   while :; do
     if [[ $need_sync -eq 1 && -n "$HTARGET" ]]; then
-      if ship_host_sync "$HTARGET" 2>/dev/null; then need_sync=0; fi
+      if ship_host_sync "$HTARGET" >/dev/null 2>&1; then need_sync=0; fi
     fi
     rc=0
-    if [[ $need_sync -eq 1 ]]; then rc=255; else line="$(unit_exec _probe "$ref" 2>/dev/null)" || rc=$?; fi
+    if [[ $need_sync -eq 1 ]]; then rc=255; else probe_ref "$ref" || rc=$?; fi
     if [[ $rc -eq 0 ]]; then
       if [[ -n "$lost_since" ]]; then echo "ship-unit: reconnected to $HNAME" >&2; fi
-      lost_since="" announced=0
-      case "$line" in
-        "exit "*) DRIVER_RC="${line#exit }"; return 0 ;;
+      lost_since="" announced=0 delay="$POLL_S"
+      [[ "$PROBE" == dead ]] || dead_seen=0
+      case "$PROBE" in
+        "exit "*)
+          DRIVER_RC="${PROBE#exit }"
+          case "$DRIVER_RC" in
+            0|1|2) ;;
+            *) echo "ship-unit: the driver of $ref exited with code $DRIVER_RC" >&2; DRIVER_RC=$E_INTERNAL ;;
+          esac
+          return 0 ;;
         running|starting) ;;
-        dead) echo "ship-unit: the driver of $ref is not running on $HNAME and left no exit code; see notes/loops/$ref/loop.log" >&2
-              DRIVER_RC=1; return 0 ;;
-        *) echo "ship-unit: unexpected probe answer '$line'" >&2; DRIVER_RC=1; return 0 ;;
+        dead)
+          # Twice in a row: one odd reading (a process table under load) is not a verdict.
+          if [[ $dead_seen -eq 0 ]]; then dead_seen=1
+          else
+            echo "ship-unit: the driver of $ref is not running on $HNAME and left no exit code or result; see notes/loops/$ref/loop.log" >&2
+            DRIVER_RC=$E_INTERNAL; return 0
+          fi ;;
+        missing) echo "ship-unit: $HNAME has no unit $ref" >&2; DRIVER_RC=$E_INTERNAL; return 0 ;;
+        *) echo "ship-unit: unexpected probe answer '$PROBE'" >&2; DRIVER_RC=$E_INTERNAL; return 0 ;;
       esac
     elif [[ -n "$HTARGET" ]] && ship_host_lost "$rc"; then
-      need_sync=1
       [[ -n "$lost_since" ]] || lost_since=$SECONDS
       if [[ $announced -eq 0 ]]; then echo "ship-unit: lost the connection to $HNAME (ssh exit $rc); retrying" >&2; announced=1; fi
       if [[ $((SECONDS - lost_since)) -ge $RECONNECT_SEC ]]; then
         echo "ship-unit: gave up reconnecting to $HNAME after ${RECONNECT_SEC}s; the driver keeps running there: 'ship-unit wait $ref' reattaches" >&2
-        DRIVER_RC=1; return 0
+        DRIVER_RC=$E_LOST; return 0
       fi
+      delay="$(next_delay "$delay")"
     else
       echo "ship-unit: probing the driver of $ref on $HNAME failed (exit $rc)" >&2
-      DRIVER_RC=1; return 0
+      DRIVER_RC=$E_INTERNAL; return 0
     fi
-    sleep "$POLL_S"
+    sleep "$delay"
   done
 }
 
+# pull_state <ref> — mirror the host's loop directory here. Returns pull's status.
+pull_state() {
+  [[ -n "$HTARGET" ]] || return 0
+  ship_host_pull_dir "$HTARGET" "$root/notes/loops/$1" "$root/notes/loops/$1" 2>/dev/null
+}
+
 # finish_unit <ref> — mirror the state back, print the result, exit with the driver's code.
+# A mirror that cannot be made is retried, with a growing delay, for as long as a lost
+# connection is retried; then the exit is 75 (the driver is done, `ship-unit wait` copies it).
 finish_unit() {
-  local ref="$1" rc=1 code="$DRIVER_RC"
-  if [[ -n "$HTARGET" ]]; then
-    for _ in 1 2 3; do
-      if ship_host_pull_dir "$HTARGET" "$root/notes/loops/$ref" "$root/notes/loops/$ref" 2>/dev/null; then rc=0; break; fi
-      sleep "$POLL_S"
+  local ref="$1" code="$DRIVER_RC" delay="$POLL_S" t0=$SECONDS
+  if [[ -n "$HTARGET" && "$code" != "$E_LOST" ]]; then
+    until pull_state "$ref"; do
+      if [[ $((SECONDS - t0)) -ge $RECONNECT_SEC ]]; then
+        echo "ship-unit: could not copy notes/loops/$ref back from $HNAME; the driver finished with $code, the host holds the state: 'ship-unit wait $ref' copies it" >&2
+        exit "$E_LOST"
+      fi
+      sleep "$delay"; delay="$(next_delay "$delay")"
     done
-    [[ $rc -eq 0 ]] || echo "ship-unit: could not copy notes/loops/$ref back from $HNAME; the host holds the current state" >&2
   fi
   [[ ! -s "$root/notes/loops/$ref/result.json" ]] || cat "$root/notes/loops/$ref/result.json"
-  [[ "$code" =~ ^[0-9]+$ ]] || code=1
+  [[ "$code" =~ ^[0-9]+$ ]] || code=$E_INTERNAL
   exit "$code"
 }
 
-# launch_failed <rc> — a failed remote launch that lost the connection is an error.
+# launch_failed <rc> <ref> <verb> — map a failed _launch/_resume to ship-unit's exit codes.
 launch_failed() {
-  local rc="$1"
+  local rc="$1" ref="$2"
+  case "$rc" in
+    3|64|70) exit "$rc" ;;
+  esac
   if [[ -n "$HTARGET" ]] && ship_host_lost "$rc"; then
-    echo "ship-unit: lost the connection to $HNAME while starting the unit (ssh exit $rc); check with 'ship-unit wait <ref>'" >&2
-    exit 1
+    echo "ship-unit: lost the connection to $HNAME while starting $ref (ssh exit $rc); the driver may be running: 'ship-unit wait $ref' reattaches" >&2
+    exit "$E_LOST"
   fi
-  exit "$rc"
+  echo "ship-unit: starting $ref on $HNAME failed (exit $rc)" >&2
+  exit "$E_INTERNAL"
 }
 
 case "$sub" in
@@ -444,7 +595,7 @@ case "$sub" in
       spec_dir="$(CDPATH='' cd -- "$spec_dir" && pwd -P)"
     fi
     load_cfg
-    for m in ${models[@]+"${models[@]}"}; do ship_models_override "$m" || exit 1; done
+    for m in ${models[@]+"${models[@]}"}; do ship_models_override "$m" || exit "$E_USAGE"; done
     select_host "$host"
     slots="$(host_slots)"
 
@@ -456,7 +607,6 @@ case "$sub" in
         push+=("$rulings")
       fi
       [[ -z "$spec_dir" ]] || push+=("$spec_dir")
-      [[ ! -f "$root/.hyper/ship.yml" ]] || push+=("$root/.hyper/ship.yml")
       ship_host_push "$HTARGET" "${push[@]}" || fail "could not copy the brief and spec files to $HNAME"
     fi
 
@@ -467,10 +617,21 @@ case "$sub" in
     [[ $final_gate -eq 0 ]] || largs+=(--final-gate)
     [[ -z "$spec_dir" ]] || largs+=(--spec-dir "$spec_dir")
     for m in ${models[@]+"${models[@]}"}; do largs+=(--model "$m"); done
+    # A host unit must be findable by `wait` even when the connection drops during the start.
+    stub=""
+    if [[ -n "$HTARGET" && ! -f "$root/notes/loops/$ref/unit.json" ]]; then
+      mkdir -p "$root/notes/loops/$ref"
+      stub="$root/notes/loops/$ref/unit.json"
+      jq -nc --arg r "$ref" --arg h "$HNAME" '{ref: $r, host: $h, launched_at: 0}' >"$stub"
+    fi
     rc=0
     unit_exec _launch "${largs[@]}" >/dev/null || rc=$?
-    [[ $rc -eq 0 ]] || launch_failed "$rc"
+    if [[ $rc -ne 0 ]]; then
+      if [[ -n "$stub" && $rc -ne $E_LOST && ! ( $rc -ne 3 && $rc -ne 64 && $rc -ne 70 && -n "$HTARGET" ) ]]; then rm -f "$stub"; fi
+      launch_failed "$rc" "$ref"
+    fi
     echo "ship-unit: $ref started on $HNAME" >&2
+    pull_state "$ref" || true
     wait_driver "$ref"
     finish_unit "$ref"
     ;;
@@ -495,22 +656,20 @@ case "$sub" in
       answer="$(abs_path "$answer")"
     fi
     if [[ -n "$extend" ]]; then
-      [[ "$extend" =~ ^[0-9]+(\.[0-9]+)?$ ]] || usage "--extend takes minutes (a positive number), got '$extend'"
+      positive_number "$extend" || usage "--extend takes minutes (a number above 0), got '$extend'"
     fi
     load_cfg
-    for m in ${models[@]+"${models[@]}"}; do ship_models_override "$m" || exit 1; done
+    for m in ${models[@]+"${models[@]}"}; do ship_models_override "$m" || exit "$E_USAGE"; done
     [[ -f "$root/notes/loops/$ref/unit.json" ]] || fail "unknown unit '$ref': no notes/loops/$ref/unit.json"
     select_host "$(jq -r '.host // "local"' "$root/notes/loops/$ref/unit.json")"
     slots="$(host_slots)"
-    if [[ -n "$HTARGET" && -f "$root/.hyper/ship.yml" ]]; then
-      ship_host_push "$HTARGET" "$root/.hyper/ship.yml" || fail "could not copy the space config to $HNAME"
-    fi
     rargs=("$ref" --host-name "$HNAME" --slots "$slots")
+    staged=""
     if [[ -n "$answer" ]]; then
       if [[ -n "$HTARGET" ]]; then
         staged="$root/notes/loops/$ref/.resume-answer"
         cp "$answer" "$staged"
-        ship_host_push "$HTARGET" "$staged" || fail "could not copy the answer to $HNAME"
+        if ! ship_host_push "$HTARGET" "$staged"; then rm -f "$staged"; fail "could not copy the answer to $HNAME"; fi
         rargs+=(--answer-file "$staged")
       else
         rargs+=(--answer-file "$answer")
@@ -520,8 +679,10 @@ case "$sub" in
     for m in ${models[@]+"${models[@]}"}; do rargs+=(--model "$m"); done
     rc=0
     unit_exec _resume "${rargs[@]}" >/dev/null || rc=$?
-    [[ $rc -eq 0 ]] || launch_failed "$rc"
+    [[ -z "$staged" ]] || rm -f "$staged"
+    [[ $rc -eq 0 ]] || launch_failed "$rc" "$ref"
     echo "ship-unit: $ref restarted on $HNAME" >&2
+    pull_state "$ref" || true
     wait_driver "$ref"
     finish_unit "$ref"
     ;;
@@ -545,26 +706,50 @@ case "$sub" in
   list)
     [[ $# -eq 0 ]] || usage "list takes no arguments"
     load_cfg
+    tmp="$(mktemp -d "${TMPDIR:-/tmp}/ship-unit-list.XXXXXX")" || fail "cannot create a temp dir"
+    hosts_seen=()
+    # One probe per remote host, all at once: each lists the refs it should answer for.
+    for u in "$root"/notes/loops/*/; do
+      [[ -f "$u/unit.json" ]] || continue
+      h="$(jq -r '.host // "local"' "$u/unit.json" 2>/dev/null)" || h=local
+      ship_host_is_local "$h" && continue
+      hk="$(printf '%s' "$h" | tr -c 'A-Za-z0-9_-' '_')"
+      if [[ ! -f "$tmp/$hk.refs" ]]; then hosts_seen+=("$h"); fi
+      ref="${u%/}"; ref="${ref##*/}"
+      echo "$ref" >>"$tmp/$hk.refs"
+    done
+    for h in ${hosts_seen[@]+"${hosts_seen[@]}"}; do
+      hk="$(printf '%s' "$h" | tr -c 'A-Za-z0-9_-' '_')"
+      (
+        t="$(ship_host_target "$h" 2>/dev/null)" || { echo 255 >"$tmp/$hk.rc"; exit 0; }
+        # shellcheck disable=SC2046
+        ship_host_run "$t" "$root" "$h" ship-unit _probe $(cat "$tmp/$hk.refs") >"$tmp/$hk.out" 2>/dev/null
+        echo $? >"$tmp/$hk.rc"
+      ) &
+    done
+    wait
     rows=0
     printf '%-24s %-10s %-12s %-14s %-9s %-6s %s\n' REF HOST STATUS STAGE FAILOVERS AGE ALIVE
     for u in "$root"/notes/loops/*/; do
       [[ -d "$u" ]] || continue
-      ref="${u%/}"; ref="${ref##*/}"
+      u="${u%/}"
+      ref="${u##*/}"
       h=local
       [[ ! -f "$u/unit.json" ]] || h="$(jq -r '.host // "local"' "$u/unit.json" 2>/dev/null || echo local)"
-      # Is the driver alive? On this machine, or asked of the host.
+      # Is the driver alive? Ask where it runs.
       alive=no
-      if [[ -s "$u/driver.pid" ]]; then
+      if [[ -f "$u/unit.json" ]]; then
         if ship_host_is_local "$h"; then
-          if pid_alive "$u/driver.pid"; then alive=yes; fi
+          unit_live "$u" && alive=yes
         else
-          t="$(ship_host_target "$h" 2>/dev/null)" || t=""
-          if [[ -z "$t" ]]; then
-            alive='?'
+          hk="$(printf '%s' "$h" | tr -c 'A-Za-z0-9_-' '_')"
+          if [[ "$(cat "$tmp/$hk.rc" 2>/dev/null)" == 0 ]]; then
+            case "$(sed -n "s/^ship-unit-probe: $ref //p" "$tmp/$hk.out" | tail -n 1)" in
+              running|starting) alive=yes ;;
+              "") alive='?' ;;
+            esac
           else
-            rc=0
-            ssh "${SHIP_SSH_OPTS[@]}" "$t" "kill -0 $(tr -dc '0-9' <"$u/driver.pid")" >/dev/null 2>&1 || rc=$?
-            if [[ $rc -eq 0 ]]; then alive=yes; elif ship_host_lost "$rc"; then alive='?'; fi
+            alive='?'
           fi
         fi
       fi
@@ -579,7 +764,7 @@ case "$sub" in
       [[ "$nf" -le "$fo" ]] || fo="$nf"
       if [[ "$alive" == yes ]]; then
         st=RUNNING
-        newest="$(ls -t "$u"*.prompt.md 2>/dev/null | head -n 1 || true)"
+        newest="$(ls -t "$u"/*.prompt.md 2>/dev/null | head -n 1 || true)"
         stage="-"
         [[ -z "$newest" ]] || { stage="${newest##*/}"; stage="${stage%.prompt.md}"; }
       elif [[ -z "$st" ]]; then
@@ -600,6 +785,11 @@ case "$sub" in
       printf '%-24s %-10s %-12s %-14s %-9s %-6s %s\n' "$ref" "$h" "$st" "$stage" "$fo" "$age_s" "$alive"
       rows=$((rows + 1))
     done
+    for h in ${hosts_seen[@]+"${hosts_seen[@]}"}; do
+      hk="$(printf '%s' "$h" | tr -c 'A-Za-z0-9_-' '_')"
+      rm -f "$tmp/$hk.refs" "$tmp/$hk.out" "$tmp/$hk.rc"
+    done
+    rmdir "$tmp" 2>/dev/null || true
     [[ $rows -gt 0 ]] || echo "(no units)"
     ;;
 esac

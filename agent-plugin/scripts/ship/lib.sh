@@ -35,7 +35,8 @@
 # Objects merge key-wise, arrays replace. Each file is read once with
 # `yq -o=json` and merged with jq. The merged config is exported as
 # SHIP_CONFIG_JSON (and the per-file data as SHIP_CONFIG_LAYERS) so child
-# scripts of one run do not re-read the files.
+# scripts of one run do not re-read the files. When SHIP_CONFIG_FILE names a
+# merged-config JSON file, that file is the config and no layer is read (host mode).
 
 # _ship_self_dir <path> — physical directory of a script, following symlinks.
 # Portable to bash 3.2 and BSD readlink (no readlink -f).
@@ -229,6 +230,17 @@ ship_require_gate() {
 # in the same run (or in a child that inherited the exports) is a no-op.
 ship_config_load() {
   if [[ -n "${SHIP_CONFIG_JSON:-}" && -n "${SHIP_CONFIG_LAYERS:-}" ]]; then
+    return 0
+  fi
+  # SHIP_CONFIG_FILE: a merged config the lead resolved on another machine (host mode
+  # writes it to notes/loops/<ref>/config.json). It replaces the layers; nothing is
+  # re-resolved here.
+  if [[ -n "${SHIP_CONFIG_FILE:-}" ]]; then
+    command -v jq >/dev/null 2>&1 || { _ship_err "jq is required but was not found on PATH"; return 1; }
+    SHIP_CONFIG_JSON="$(jq -c . "$SHIP_CONFIG_FILE" 2>/dev/null)" && [[ -n "$SHIP_CONFIG_JSON" ]] \
+      || { _ship_err "cannot read the lead's config $SHIP_CONFIG_FILE"; unset SHIP_CONFIG_JSON; return 1; }
+    SHIP_CONFIG_LAYERS="$(jq -nc --arg f "$SHIP_CONFIG_FILE" '[{file: $f, data: {}}]')"
+    export SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS
     return 0
   fi
   ship_require_yq || return 1
