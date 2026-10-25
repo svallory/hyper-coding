@@ -30,6 +30,7 @@ driver, blocks until it exits and returns the driver's exit code.
 
 ## On exit
 
+Exit codes 0, 1 and 2 are only ever the driver's result (READY, ERROR, parked / over budget / stuck); 3, 64, 70 and 75 are `ship-unit`'s own.
 Read `notes/loops/<ref>/result.json` (small; read it yourself). When the
 unit is parked its `.park` field holds the park (kind, stage, agent,
 question, `resets_at`); the same data is in `park.json`. Then act:
@@ -39,14 +40,16 @@ question, `resets_at`); the same data is in `park.json`. Then act:
 | 0 | `READY` | `land` skill: land `<ref>`. |
 | 2 | PARKED, QUESTION | Rule on it (write the ruling first), write the answer to a file, then `ship-unit resume <ref> --answer <file>` in the background. The answer quotes rulings by number. |
 | 2 | PARKED, BLOCKED | Same as QUESTION. If the block is a defect in the brief, re-brief: fix the brief file, then resume with an answer saying so. If it cannot be unblocked, abandon. |
-| 2 | PARKED, DIALOG | An agent is stuck on a permission dialog. Look (below). It usually needs the operator or a profile fix; ask them, then `ship-unit resume <ref>`. In auto mode do not abandon: leave the unit parked, record a `pending-review` ruling that says it is deferred to the operator, and carry on with other units. |
+| 2 | PARKED, DIALOG | An agent is stuck on a permission dialog. Look (below). It usually needs the operator or a profile fix; ask them, then `ship-unit resume <ref>` with no `--answer` (it is refused for a DIALOG park). In auto mode do not abandon: leave the unit parked, record a `pending-review` ruling that says it is deferred to the operator, and carry on with other units. |
 | 2 | PARKED, OPERATOR | The spec writer needs a call that is the operator's. Ask the operator, or under `auto` rule it with `By: lead-auto`; resume with the answer. |
-| 2 | PARKED, LIMIT | Every model for a stage is used up. `resets_at` in `park.json` says when. Either `resume <ref> --model <stage>=<list>` now with another list, or run `resume <ref>` in the background after `resets_at` (its exit wakes you; do not sleep or poll). Meanwhile work on other units, or tell the operator the unit is waiting. |
+| 2 | PARKED, LIMIT | Every model for a stage is used up. `resets_at` in `park.json` says when. `--answer` is refused for a LIMIT park. Either `resume <ref> --model <stage>=<list>` now with another list, or run `resume <ref>` in the background after `resets_at` (its exit wakes you; do not sleep or poll). Meanwhile work on other units, or tell the operator the unit is waiting. |
 | 2 | OVER-BUDGET | The agent is still running. Extend with `ship-unit resume <ref> --extend <minutes>`, or re-brief a smaller unit and abandon this one. |
 | 2 | STUCK | Max rounds without ACCEPT, or finalize failures the dev could not fix. Re-brief (smaller or clearer), change the model for the stage with `resume --model`, or abandon. |
 | 1 | ERROR | `driver.err` names the cause. Have a cheap `Explore` subagent read `loop.log` and report the cause in two sentences; fix the config or environment, then `resume <ref>`. A malformed verdict from an agent is an ERROR, not a question. |
-| 3 | `ship-unit` refused (nothing ran) | Host slots full, a driver already running for the ref, no `park.json` for `--answer`, or no over-budget stage for `--extend`. Read the message. Wait for a slot (an exit frees one), `ship-unit wait <ref>` for a running driver, or drop the stray flag. |
-| 64 | `ship-unit` usage error | Fix the command line. Never mistake it for a parked unit: parks are exit 2. |
+| 3 | `ship-unit` refused (nothing ran) | The host is full, a driver is already running for the ref, there is nothing to answer or extend (no `park.json` for `--answer`, no over-budget stage for `--extend`), or `--answer` was given for a LIMIT or DIALOG park. Read the message. Wait for a slot (an exit frees one), `ship-unit wait <ref>` for a running driver, or drop the stray flag. |
+| 64 | `ship-unit` usage error | Fix the command line (a bad `--model`, `--extend 0`, a missing argument). Never mistake it for a parked unit. |
+| 70 | `ship-unit`'s own failure | Sync failure, no ssh destination for the host, unknown unit, or a driver that died with no exit code or result. Read the message; fix the host config or the ref, then `resume <ref>`. |
+| 75 | The host was lost while the driver is still running | Run `ship-unit wait <ref>` in the background to reattach. Do not re-run the unit. |
 
 Rules for acting:
 
