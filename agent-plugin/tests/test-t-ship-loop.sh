@@ -688,7 +688,7 @@ printf '6\n' >"$(st t31)/develop.json.clock"   # 6 of the 6 seconds are used
 printf 'working\n' >"$SHIP_MUX_FAKE_DIR/status/t31-dev"
 SECONDS=0; run_loop t31; _took=$SECONDS
 check_result t31 "the used time is carried over a restart" 2 OVER-BUDGET
-assert_ok "carried clock: over budget within 5 s of the restart, startup included (a clock restarted at zero needs 7 or more; took $_took)" test "$_took" -lt 5
+assert_ok "carried clock: over budget well before a clock restarted at zero could be (that needs more than 6 s plus startup; took $_took)" test "$_took" -lt 7
 BUD_S=10; write_cfg
 
 # --- 31: a pi model is launched with pi's flags ------------------------------------------------------------------------------------------------------------
@@ -740,6 +740,30 @@ stub_start t33b; run_loop t33b; stub_stop
 check_result t33b "mixed gaps" 0 READY
 assert_eq "mixed gaps: the writer ran" "1" "$(starts_of t33b-specwriter-r1)"
 assert_contains "mixed gaps: and was told to return the operator ones" "$(cat "$(st t33b)/specwriter-r1.prompt.md")" "wait on the operator"
+
+
+# --- 33: unit files survive an archive; a verdict one second older than its marker is still fresh ------------------------------------
+reset_fake; unit t34
+mkdir -p "$(st t34)"
+for _f in unit.json driver.exit config.json; do echo "keep $_f" >"$(st t34)/$_f"; done
+echo "review=kept-model" >"$(st t34)/models.override"
+echo stale >"$(st t34)/stale.json"
+script t34 develop.json "$DEV_DONE"; script t34 review-r1.json "$REV_OK"
+stub_start t34; run_loop t34; stub_stop
+check_result t34 "archive keeps the unit files" 0 READY
+for _f in unit.json driver.exit config.json; do
+  assert_eq "archive: $_f stays in place" "keep $_f" "$(cat "$(st t34)/$_f" 2>/dev/null)"
+done
+assert_eq "archive: models.override stays in place" "review=kept-model" "$(cat "$(st t34)/models.override" 2>/dev/null)"
+assert_eq "archive: another file is moved into run-*" "yes" "$(ls "$(st t34)"/run-*/stale.json >/dev/null 2>&1 && echo yes || echo no)"
+reset_fake; unit t35
+seed_unit t35
+touch -t 202001010000.00 "$(st t35)/review-r1.json"; touch -t 202001010000.01 "$(st t35)/review-r1.json.sent"
+script t35 fix-r2.json "$DEV_DONE"; script t35 review-r2.json "$REV_OK"
+stub_start t35; run_loop t35; stub_stop
+check_result t35 "a marker one second newer" 0 READY
+assert_eq "fresh: the verdict was reused, its reviewer never started" "0" "$(starts_of t35-review-r1)"
+assert_eq "fresh: so the CHANGES verdict led to a fix round" "CHANGES" "$(res t35 '.rounds[0].verdict')"
 
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"

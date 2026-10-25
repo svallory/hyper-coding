@@ -401,13 +401,19 @@ send_prompt() {
 
 # mark_sent <file> — record that the agent was prompted for <file> (after the prompt went out). A
 # verdict the agent already wrote during the send is not made stale by the marker.
-mark_sent() {
-  date +%s >>"$1.sent"
-  if [[ -e "$1" ]]; then touch -r "$1" "$1.sent"; fi
-}
+mark_sent() { date +%s >>"$1.sent"; }
+# mtime_s <file> — modification time in whole seconds
+mtime_s() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
 
 # fresh_result <file> — a valid verdict written after the last prompt
-fresh_result() { valid_json "$1" && [[ -e "$1.sent" ]] && ! [[ "$1.sent" -nt "$1" ]]; }
+# A verdict is stale when its prompt marker is more than a second newer. Whole seconds, with that one
+# second of slack: a verdict written right after the marker can carry an older timestamp (coarse file
+# clocks), and calling it stale makes the driver delete a good answer and prompt again.
+fresh_result() {
+  local f="$1"
+  valid_json "$f" && [[ -e "$f.sent" ]] || return 1
+  [[ $(( $(mtime_s "$f.sent") - $(mtime_s "$f") )) -le 1 ]]
+}
 
 # limit_hit <agent name> <agent id> — print the matching screen line when the agent shows its harness's limit text
 limit_hit() {
@@ -470,6 +476,7 @@ run_step() {
   if [[ -e "$file.sent" && ! -e "$file" ]] && agent_state "$id" && [[ "$L_STATE" != gone ]]; then
     log "reattaching to $name for $(basename "$file")"
   else
+    [[ ! -e "$file" ]] || log "$name: $(basename "$file") is older than its prompt; prompting again"
     rm -f "$file" "$file.clock"
     printf '%s\n' "$text" >"${file%.json}.prompt.md"
     send_prompt "$id" "$text" || { rm -f "$file.sent"; FAIL_WHY="could not prompt $name (gone, or it never started a turn)"; step_failed "$stage" "$name" "$file" 1; }
@@ -520,6 +527,9 @@ add_round() { ROUNDS="$(jq -c --argjson e "$1" '. + [$e]' <<<"$ROUNDS")"; }
 open_out="$(mux open --cwd "$WT" --label "$REF" 2>>"$LOG")" || die_error "ship-mux open failed; see loop.log"
 SPACE_ID="$(jq -r .space <<<"$open_out")"
 DEV="$(aname -dev)"
+# Files that belong to the unit, not to a run: an archive leaves them where they are (unit.json,
+# driver.exit and config.json are ship-unit's).
+KEEP_ON_ARCHIVE="mux.json loop.log driver.pid driver.err models.override unit.json driver.exit config.json"
 A_ID="" TAKEOVER=""
 # resume_restart — a LIMIT park, or a BLOCKED park the lead left without an answer, ends with the parked
 # agent closed and its stage cleared, so the stage starts again with a new agent (model_pick, so a
@@ -557,7 +567,7 @@ if [[ -z "$DEV_ID" || "$L_STATE" == gone ]]; then
     _old=""
     for _f in "$STATE"/*; do
       [[ -f "$_f" ]] || continue
-      case "${_f##*/}" in mux.json|loop.log|driver.pid|driver.err|models.override) continue ;; esac
+      case " $KEEP_ON_ARCHIVE " in *" ${_f##*/} "*) continue ;; esac
       [[ -n "$_old" ]] || { _old="$STATE/run-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$_old"; }
       mv "$_f" "$_old"/
     done
