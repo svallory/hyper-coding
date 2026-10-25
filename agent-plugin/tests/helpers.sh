@@ -20,6 +20,8 @@ FIX="$(mktemp -d "${TMPDIR:-/tmp}/hyper-test.XXXXXX")"
 FIX="$(cd "$FIX" && pwd -P)"
 
 export HOME="$FIX/home"
+# A real config dir must not leak into tests that run the plugin scripts.
+unset CLAUDE_CONFIG_DIR
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL="$HOME/.gitconfig"
 # The plugin scripts source hyper-lib.sh out of the CLI (C-5), so the suite

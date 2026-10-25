@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+# ship-role — launch arguments for one agent role.
+#
+# Usage:
+#   ship-role <role> --harness claude|pi [--host-settings <file>] [--cwd <dir>]
+#
+# Roles: lead, dev, verify, review, spec. Settings come from the merged ship
+# config (`roles.<role>`); see skills/ship/defaults.yml.
+#
+# claude  Reads enabledPlugins from the host settings (default
+#         ${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json) and from the project
+#         layers <cwd>/.claude/settings.json and settings.local.json (cwd is --cwd,
+#         default $PWD: the directory the agent will start in; ship-loop passes the
+#         agent's worktree); the last layer that sets a key wins. Every key
+#         is then set false except those that are true there AND named in
+#         roles.<role>.plugins_keep (a bare name or the full `name@marketplace`
+#         key). A kept plugin the host has off stays off. The profile always sets
+#         env.CLAUDE_CODE_PLUGIN_DIRS to "" so plugin dirs load nothing, whatever
+#         a settings layer or the shell says. Writes
+#         ~/.cache/hyper/roles/<project>-<8 hex of sha256(space root)>/<role>.json
+#         and prints
+#           --settings <file> --strict-mcp-config
+#         plus `--disallowedTools=AskUserQuestion` for every role except lead (one
+#         token with `=`: the flag takes several values and would otherwise swallow
+#         the prompt that follows). Generated at every launch, so a plugin
+#         installed later cannot leak in.
+#         Not isolated (inherited as is): hooks, permissions, statusLine, and
+#         user skills in ~/.claude/skills.
+#         Use it as: claude $(ship-role lead --harness claude) "prompt"
+# pi      Prints `-ne -ns -np --no-mcp`, `--skill <dir>` per roles.<role>.pi_skills,
+#         `-e <entry>` plus the flags per roles.<role>.pi_extensions, and
+#         `--exclude-tools ask_user`. Skills are looked up in ~/.agents/skills,
+#         ~/.claude/skills, then the newest superpowers skills dir; extensions are
+#         packages under ~/.pi/agent/npm/node_modules (or absolute file paths). A
+#         skill or extension that is not found is an error (exit 1, named). The
+#         lead has no pi form.
+#
+# Output is one line of space-separated arguments on stdout. A path that would be
+# emitted with whitespace or a glob character (* ? [) is an error, exit 1.
+#
+# Exit codes: 0 ok; 1 error (config, missing skill or extension,
+# unreadable settings, bad path);
+# 2 usage.
+set -euo pipefail
+
+# Resolve this script's directory through symlinks (bash 3.2, BSD readlink).
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+_dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+# shellcheck source=lib.sh
+source "$_dir/lib.sh"
+
+usage() { echo "ship-role: $*" >&2; echo "usage: ship-role <lead|dev|verify|review|spec> --harness claude|pi [--host-settings <file>] [--cwd <dir>]" >&2; exit 2; }
+
+agent_cwd="$PWD" role="" harness="" host_settings="" explicit_host=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --harness)
+      [[ $# -ge 2 ]] || usage "--harness needs a value"
+      harness="$2"; shift ;;
+    --host-settings)
+      [[ $# -ge 2 ]] || usage "--host-settings needs a file"
+      host_settings="$2" explicit_host=1; shift ;;
+    --cwd)
+      [[ $# -ge 2 ]] || usage "--cwd needs a directory"
+      agent_cwd="$2"; shift ;;
+    -h|--help) sed -n '/^set -euo pipefail/q;2,$p' "$_src" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*) usage "unknown argument '$1'" ;;
+    *)
+      [[ -z "$role" ]] || usage "unexpected argument '$1'"
+      role="$1" ;;
+  esac
+  shift
+done
+
+case "$role" in
+  lead|dev|verify|review|spec) ;;
+  "") usage "a role is required" ;;
+  *) usage "unknown role '$role' (roles: lead dev verify review spec)" ;;
+esac
+case "$harness" in
+  claude|pi) ;;
+  "") usage "--harness is required" ;;
+  *) usage "unknown harness '$harness' (claude or pi)" ;;
+esac
+if [[ "$role" == lead && "$harness" == pi ]]; then
+  usage "the lead role has no pi form (the lead is a Claude Code session)"
+fi
+
+ship_config_load || exit 1
+
+# _role_json <key> — roles.<role>.<key> as JSON; [] when unset; 1 on a config error.
+_role_json() {
+  local v rc=0
+  v="$(ship_cfg_get "roles.$role.$1")" || rc=$?
+  case $rc in 0) printf '%s\n' "$v" ;; 3) printf '[]\n' ;; *) return 1 ;; esac
+}
+
+_bad_path() { # exit 1 when an emitted path would not survive word splitting
+  case "$1" in
+    *[[:space:]*?[]*) echo "ship-role: path contains whitespace or a glob character: $1" >&2; exit 1 ;;
+  esac
+}
+
+# _role_list <key> — roles.<role>.<key> must be a list; JSON on stdout.
+_role_list() {
+  local v
+  v="$(_role_json "$1")" || exit 1
+  [[ "$(jq -r type <<<"$v")" == array ]] || { echo "ship-role: roles.$role.$1 must be a list" >&2; exit 1; }
+  printf '%s\n' "$v"
+}
+
+if [[ "$harness" == claude ]]; then
+  keep="$(_role_list plugins_keep)" || exit 1
+  jq -e 'all(type == "string")' <<<"$keep" >/dev/null || { echo "ship-role: roles.$role.plugins_keep must be a list of strings" >&2; exit 1; }
+  [[ -n "$host_settings" ]] || host_settings="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+  if [[ ! -f "$host_settings" && $explicit_host -eq 1 ]]; then
+    echo "ship-role: host settings file not found: $host_settings" >&2; exit 1
+  fi
+  # Layers, lowest first: host, then the project's two files. Each yields
+  # {p: enabledPlugins, d: env.CLAUDE_CODE_PLUGIN_DIRS}.
+  layers="[]"
+  for f in "$host_settings" "$agent_cwd/.claude/settings.json" "$agent_cwd/.claude/settings.local.json"; do
+    [[ -f "$f" ]] || continue
+    l="$(jq -c '{p: (.enabledPlugins // {}), d: (.env.CLAUDE_CODE_PLUGIN_DIRS // null)}' "$f" 2>/dev/null)" || {
+      echo "ship-role: cannot parse $f as JSON settings" >&2; exit 1; }
+    [[ "$(jq -r '.p | type' <<<"$l")" == object ]] || { echo "ship-role: enabledPlugins in $f is not an object" >&2; exit 1; }
+    layers="$(jq -c --argjson l "$l" '. + [$l]' <<<"$layers")"
+  done
+  # A keep entry matches the bare plugin name or the full name@marketplace key.
+  profile="$(jq -n --argjson layers "$layers" --argjson keep "$keep" '
+    ($layers | map(.p) | add // {}) as $eff
+    | {enabledPlugins: ($eff | to_entries | map(
+        .key as $k
+        | .value = (.value == true and any($keep[]; . == $k or . == ($k | split("@")[0])))
+      ) | from_entries)}
+    + {env: {CLAUDE_CODE_PLUGIN_DIRS: ""}}')" \
+    || { echo "ship-role: cannot build the profile" >&2; exit 1; }
+  space="$(ship_space_root)" || exit 1
+  if command -v sha256sum >/dev/null 2>&1; then h="$(printf '%s' "$space" | sha256sum)"
+  else h="$(printf '%s' "$space" | shasum -a 256)"; fi
+  outdir="$HOME/.cache/hyper/roles/${space##*/}-${h:0:8}"
+  out="$outdir/$role.json"
+  _bad_path "$out"
+  mkdir -p "$outdir"
+  tmp="$(mktemp "$outdir/.$role.XXXXXX")"
+  trap 'rm -f "$tmp"' EXIT
+  printf '%s\n' "$profile" > "$tmp"
+  mv -f "$tmp" "$out"
+  line="--settings $out --strict-mcp-config"
+  [[ "$role" == lead ]] || line="$line --disallowedTools=AskUserQuestion"
+  printf '%s\n' "$line"
+  exit 0
+fi
+
+# pi ---------------------------------------------------------------------------
+pi_dir="$HOME/.pi/agent"
+skill_dirs=("$HOME/.agents/skills" "$HOME/.claude/skills")
+sp=""
+# shellcheck disable=SC2012
+sp="$(ls -d "$HOME"/.claude/plugins/cache/claude-plugins-official/superpowers/*/skills 2>/dev/null | sort -V | tail -1)" || true
+[[ -z "$sp" ]] || skill_dirs+=("$sp")
+
+args=(-ne -ns -np --no-mcp)
+skills_json="$(_role_list pi_skills)" || exit 1
+jq -e 'all(type == "string")' <<<"$skills_json" >/dev/null || { echo "ship-role: roles.$role.pi_skills must be a list of strings" >&2; exit 1; }
+missing=0
+name="" d="" found=""
+while IFS= read -r name; do
+  [[ -n "$name" ]] || continue
+  found=""
+  for d in "${skill_dirs[@]}"; do
+    if [[ -f "$d/$name/SKILL.md" ]]; then found="$d/$name"; break; fi
+  done
+  if [[ -z "$found" ]]; then
+    echo "ship-role: $role: pi skill '$name' not found in ${skill_dirs[*]}" >&2
+    missing=1; continue
+  fi
+  _bad_path "$found"
+  args+=(--skill "$found")
+done < <(jq -r '.[]' <<<"$skills_json")
+[[ $missing -eq 0 ]] || exit 1
+
+# Extensions: [{name, flags[]}]. An unresolved extension is an error.
+ext_json="$(_role_list pi_extensions)" || exit 1
+jq -e 'all(type == "object" and (.name | type == "string") and ((.flags // []) | type == "array" and all(type == "string")))' \
+  <<<"$ext_json" >/dev/null || { echo "ship-role: roles.$role.pi_extensions must be a list of {name, flags[]} objects" >&2; exit 1; }
+n="$(jq -r 'length' <<<"$ext_json")"
+i=0
+while [[ $i -lt $n ]]; do
+  name="$(jq -r --argjson i "$i" '.[$i].name' <<<"$ext_json")"
+  flags=()
+  while IFS= read -r f; do [[ -z "$f" ]] || flags+=("$f"); done < <(jq -r --argjson i "$i" '(.[$i].flags // [])[]' <<<"$ext_json")
+  i=$((i + 1))
+  [[ -n "$name" ]] || { echo "ship-role: $role: pi_extensions entry $i has no name" >&2; exit 1; }
+  ents=()
+  if [[ "$name" == /* ]]; then
+    [[ -f "$name" ]] && ents+=("$name")
+  elif [[ -f "$pi_dir/npm/node_modules/$name/package.json" ]]; then
+    pkg="$pi_dir/npm/node_modules/$name"
+    while IFS= read -r e; do
+      [[ -n "$e" && -f "$pkg/$e" ]] && ents+=("$pkg/${e#./}")
+    done < <(jq -r '.pi.extensions[]? // empty' "$pkg/package.json" 2>/dev/null)
+  fi
+  if [[ ${#ents[@]} -eq 0 ]]; then
+    echo "ship-role: $role: pi extension '$name' not found on this host" >&2
+    missing=1; continue
+  fi
+  for e in "${ents[@]}"; do _bad_path "$e"; args+=(-e "$e"); done
+  for f in ${flags[@]+"${flags[@]}"}; do
+    case "$f" in
+      *[[:space:]]*) echo "ship-role: pi extension flag contains whitespace: $f" >&2; exit 1 ;;
+    esac
+    args+=("$f")
+  done
+done
+
+[[ $missing -eq 0 ]] || exit 1
+args+=(--exclude-tools ask_user)
+printf '%s\n' "${args[*]}"
