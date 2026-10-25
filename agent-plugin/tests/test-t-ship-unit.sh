@@ -252,7 +252,7 @@ mk_state() {
   local d="$ST_SPACE/notes/loops/$1"
   mkdir -p "$d"
   jq -n --arg r "$1" --arg h "$2" --argjson t "$ST_LAUNCHED" '{ref: $r, host: $h, branch: $r, worktree: "/nowhere", brief: "/b", class: "S", launched_at: $t}' > "$d/unit.json"
-  [[ -z "${3:-}" ]] || echo "$3" > "$d/driver.pid"
+  [[ -z "${3:-}" ]] || { echo "$3" > "$d/driver.pid.tmp" && mv -f "$d/driver.pid.tmp" "$d/driver.pid"; }
   if [[ -n "${4:-}" ]]; then
     jq -n --arg r "$1" --arg s "$4" --arg st "${5:-finalize}" --argjson f "${6:-0}" '{ref: $r, status: $s, stage: $st, failovers: $f}' > "$d/result.json"
   fi
@@ -418,6 +418,32 @@ assert_contains "...named in the refusal" "$(err)" "starting1"
 ST_LAUNCHED=$(( $(date +%s) - 3600 )) mk_state starting1 local
 ST_LAUNCHED=$(( $(date +%s) - 3600 )) mk_state starting2 local
 assert_eq "...but not once the grace period has passed" "0" "$(unit run full4 --brief "$BRIEF" --class S)"
+# an empty driver.pid (a driver mid-start) is "starting", never dead
+rm_loops "$SPACE"
+ST_LAUNCHED="$(date +%s)" mk_state emp1 local
+: > "$(loops emp1)/driver.pid"
+probe() { SHIP_UNIT_INTERNAL=1 bash "$UNIT" _probe "$1" 2>/dev/null | sed -n "s/^ship-unit-probe: $1 //p"; }
+assert_eq "an empty driver.pid within the grace period is starting" "starting" "$(probe emp1)"
+ST_LAUNCHED="$(date +%s)" mk_state emp2 local
+: > "$(loops emp2)/driver.pid"
+mode full7 ready
+assert_eq "...and two such units fill the slots" "3" "$(unit run full7 --brief "$BRIEF" --class S)"
+rm_loops "$SPACE"
+ST_LAUNCHED=$(( $(date +%s) - 3600 )) mk_state emp3 local
+: > "$(loops emp3)/driver.pid"
+assert_eq "an empty driver.pid long after the launch is dead" "dead" "$(probe emp3)"
+# a live driver whose pid file flips between empty and whole is never read as dead
+rm_loops "$SPACE"
+sleeper; SF=$SLEEPER_PID
+ST_LAUNCHED="$(date +%s)" mk_state flip1 local
+( for _ in $(seq 1 200); do : > "$(loops flip1)/driver.pid"; echo "$SF" > "$(loops flip1)/driver.pid"; done ) &
+FLIPPER=$!
+dead_seen=0
+for _ in $(seq 1 25); do [[ "$(probe flip1)" != dead ]] || dead_seen=$((dead_seen + 1)); done
+wait "$FLIPPER" 2>/dev/null
+assert_eq "a pid file that is empty for an instant never reads as dead (25 probes)" "0" "$dead_seen"
+unsleep "$SF"
+rm_loops "$SPACE"
 # the unit's own ref is excluded; exactly at the limit
 rm_loops "$SPACE"
 sleeper; S3=$SLEEPER_PID; sleeper; S4=$SLEEPER_PID
@@ -458,7 +484,7 @@ sleep 0.3
 for t in c1 c2; do sed "s/^/# bg $t: /" "$FIX/bg.$t.err" >&2; done
 rc1="$(cat "$FIX/bg.c1.rc" 2>/dev/null)"; rc2="$(cat "$FIX/bg.c2.rc" 2>/dev/null)"
 assert_eq "two concurrent runs at slots=1: one is refused (3), the other is running" "yes" "$(pair_ok "$rc1" "$rc2")"
-assert_eq "...and only one driver was started" "1" "$(mux_count run "$FIX/hostfake.log" | awk '{print ($1 > 0) ? 1 : 0}')"
+assert_eq "...and exactly one driver was started" "1" "$(mux_count run "$FIX/hostfake.log")"
 if [[ "$rc1" == 3 ]]; then winner=c2; else winner=c1; fi
 release "$winner"
 assert_eq "...the other one runs to READY (0)" "0" "$(bgrc "$winner")"

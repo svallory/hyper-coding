@@ -174,14 +174,15 @@ unit_state() {
   local d="$1" p launched=0 now st
   [[ -f "$d/unit.json" ]] || { echo missing; return 0; }
   if [[ -s "$d/driver.exit" ]]; then echo "exit $(tr -dc '0-9' <"$d/driver.exit")"; return 0; fi
-  if [[ -s "$d/driver.pid" ]]; then
-    p="$(cat "$d/driver.pid" 2>/dev/null)" || p=""
-    if [[ "$p" =~ ^[0-9]+$ ]] && driver_proc_ok "$p" "${d##*/}"; then echo running; return 0; fi
-  fi
+  # The pid file is read once and everything is decided from that one value: it can be
+  # empty for an instant while the driver starts, and a second look must not disagree.
+  p=""
+  { read -r p <"$d/driver.pid"; } 2>/dev/null || true
+  if [[ "$p" =~ ^[0-9]+$ ]] && driver_proc_ok "$p" "${d##*/}"; then echo running; return 0; fi
   launched="$(jq -r '.launched_at // 0' "$d/unit.json" 2>/dev/null)" || launched=0
   [[ "$launched" =~ ^[0-9]+$ ]] || launched=0
   now="$(date +%s)"
-  if [[ ! -s "$d/driver.pid" && "$launched" -gt 0 && $((now - launched)) -lt "$START_GRACE_S" ]]; then
+  if [[ -z "$p" && "$launched" -gt 0 && $((now - launched)) -lt "$START_GRACE_S" ]]; then
     echo starting; return 0
   fi
   # The driver is gone and left no exit code (its pane was closed, the host rebooted).
@@ -223,7 +224,8 @@ if [[ "$sub" == _driver ]]; then
   [[ "$(jq -r '.final_gate // false' "$d/unit.json")" != true ]] || args+=(--final-gate)
   # Models reach ship-loop through models.override (written by run, appended by resume),
   # so a resume --model beats the run's.
-  echo $$ >"$d/driver.pid"
+  # Atomic: a reader must see the whole pid or no file, never an empty one.
+  echo $$ >"$d/driver.pid.tmp.$$" && mv -f "$d/driver.pid.tmp.$$" "$d/driver.pid"
   rc=0
   "$LOOP" "${args[@]}" || rc=$?
   echo "$rc" >"$d/driver.exit.tmp" && mv "$d/driver.exit.tmp" "$d/driver.exit"
@@ -263,7 +265,7 @@ lock_break() {
     if [[ $age -gt 30 ]] && mv "$b" "$b.$$" 2>/dev/null; then rmdir "$b.$$" 2>/dev/null || true; fi
     return 1
   fi
-  p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
+  p=""; { read -r p <"$LOCK_DIR/pid"; } 2>/dev/null || true
   age="$(age_of "$LOCK_DIR")"
   if [[ -d "$LOCK_DIR" ]] && lock_stale "$p" "$age"; then
     rm -f "$LOCK_DIR/pid" "$LOCK_DIR/pid.tmp"; rmdir "$LOCK_DIR" 2>/dev/null || true
@@ -278,7 +280,7 @@ lock_acquire() {
   mkdir -p "$root/.hyper" || fail "cannot create $root/.hyper"
   trap internal_cleanup EXIT
   while ! mkdir "$LOCK_DIR" 2>/dev/null; do
-    p="$(cat "$LOCK_DIR/pid" 2>/dev/null)" || p=""
+    p=""; { read -r p <"$LOCK_DIR/pid"; } 2>/dev/null || true
     age="$(age_of "$LOCK_DIR")"
     if lock_stale "$p" "$age" && lock_break; then
       continue
