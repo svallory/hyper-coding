@@ -1,0 +1,304 @@
+#!/usr/bin/env bash
+# ship-mux — the multiplexer seam of hyper:ship. This header is the one place the
+# interface is documented.
+#
+# Scripts speak intents to ship-mux; the backend named by `mux:` in the merged
+# ship config (scripts/ship/mux/<mux>) turns them into calls on one multiplexer.
+# Nothing outside the real backend may call a multiplexer CLI directly. ids are
+# opaque strings: callers store and pass them, and never parse them.
+#
+# Usage: ship-mux <verb> [flags]      (flags below; every flag takes one value)
+#
+# Verbs
+#   check
+#       Is the backend usable here? Exit 0, or 1 with one line on stderr saying
+#       what is missing.
+#   open  --ref R --cwd D [--label L]
+#       Open (or find) the unit's space for ref R, rooted at D, inside the units
+#       group (`units_group`). Idempotent per ref: a second call returns the same
+#       ids. stdout: {"space":id,"pane":id,"group":id}; `group` is present when
+#       the backend has a units group, and is only closeable by `close` once
+#       ship created it and no recorded space is left in it.
+#   run   --ref R --pane P -- CMD...
+#       Wait until pane P is ready for input, then run CMD in it as a shell
+#       command. No stdout. Creates nothing, so nothing is recorded.
+#   start --ref R --space S --name N --harness claude|pi --cwd D -- ARGS...
+#       Start an agent named N in a new pane of space S, running the harness
+#       with ARGS (which may be empty). The backend may shorten N internally.
+#       stdout: {"agent":id,"pane":id}
+#   send  --to A (--text T [--wait-ms N] | --keys K[,K...])
+#       Send a prompt (--text; with --wait-ms, wait up to N ms for the agent to
+#       start working) or key presses (--keys) to agent A. No stdout.
+#   read  --to A|P [--lines N]
+#       stdout: plain text of the agent's or pane's visible screen, or only its
+#       last N lines.
+#   status --to A
+#       stdout: {"state":"working|idle|blocked|gone","pane":id,"space":id}. An
+#       agent that no longer exists is state "gone" (exit 0).
+#   wait  --to A --until working|idle|gone|ready --timeout-ms N
+#       Block until the state is reached. `ready` means the pane accepts input.
+#       Exit 0 reached, 1 timeout.
+#   close --ref R --id X
+#       Close pane, agent, space or units group X. Refused with exit 3, and no
+#       backend call, unless X is recorded for ref R (below). Closing a space
+#       also drops its recorded panes and agents.
+#   list  --ref R
+#       stdout: [{"id","kind":"space|pane|agent","name","state"}] for ref R, or
+#       [] when nothing is left. `state` is the agent state, empty otherwise.
+#
+# Keys (backend-neutral names for --keys, comma-separated): enter esc ctrl+c ctrl+d
+#
+# Exit codes
+#   0   ok                         2   usage error (bad verb, flag, value, ref)
+#   1   error (config, unknown backend, backend failure, wait timeout)
+#   3   close refused: id not recorded, or a group not ship-created / not empty
+#   99  a backend refused to run under SHIP_MUX_TEST=1 (the test guard)
+#   Any other backend exit code is passed through.
+#
+# Ownership record
+#   open and start append what they created to <space root>/notes/loops/<ref>/
+#   mux.json: {"backend":NAME,"created":[{"id","kind","name","space"?}]}. close
+#   removes the entry it closed. The units group lives in <space root>/.hyper/
+#   ship-mux.json: {"groups":{ID:{"name","backend","created","spaces":[id...]}}};
+#   `created` is true only when ship's own open created the group.
+#
+# Config: `mux` (backend file name) and `units_group`, read through lib.sh. ship-mux
+# does not need `gate`. The space root is $SHIP_SPACE_ROOT or the hyper CLI's.
+#
+# Writing a backend: one bash file in scripts/ship/mux/ implementing these verbs
+# with the same flags (open also receives --group NAME), printing the stdout above
+# (open's `group` as {"id","created":bool}; the dispatcher records it and prints
+# the plain id), plus tests/test-t-ship-mux-<name>.sh that runs
+# tests/lib/mux-contract.sh against it.
+
+# shellcheck disable=SC2034  # f_* are filled by printf -v; not every verb reads each
+set -euo pipefail
+
+# Resolve this script's directory through symlinks (bash 3.2, BSD readlink).
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+_dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+# shellcheck source=lib.sh
+source "$_dir/lib.sh"
+
+usage() { echo "ship-mux: $*" >&2; exit 2; }
+fail() { echo "ship-mux: $*" >&2; exit 1; }
+
+verb="${1:-}"
+case "$verb" in
+  -h|--help) sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+  "") usage "missing verb (try --help)" ;;
+  check|open|run|start|send|read|status|wait|close|list) ;;
+  *) usage "unknown verb '$verb' (try --help)" ;;
+esac
+shift
+
+# Flags each verb accepts, and those it requires.
+case "$verb" in
+  check)  allowed="" required="" ;;
+  open)   allowed="ref cwd label" required="ref cwd" ;;
+  run)    allowed="ref pane" required="ref pane" ;;
+  start)  allowed="ref space name harness cwd" required="ref space name harness cwd" ;;
+  send)   allowed="to text keys wait_ms" required="to" ;;
+  read)   allowed="to lines" required="to" ;;
+  status) allowed="to" required="to" ;;
+  wait)   allowed="to until timeout_ms" required="to until timeout_ms" ;;
+  close)  allowed="ref id" required="ref id" ;;
+  list)   allowed="ref" required="ref" ;;
+esac
+
+orig=("$@")
+cmd=()
+# Filled by printf -v below; not every verb reads every one.
+f_ref="" f_cwd="" f_label="" f_pane="" f_space="" f_name="" f_harness="" f_to=""
+f_text="" f_keys="" f_wait_ms="" f_lines="" f_until="" f_timeout_ms="" f_id=""
+seen=" "
+while [[ $# -gt 0 ]]; do
+  if [[ "$1" == "--" ]]; then
+    shift
+    [[ "$verb" == run || "$verb" == start ]] || usage "$verb takes no '--' command"
+    cmd=("$@")
+    break
+  fi
+  [[ "$1" == --* ]] || usage "$verb: unexpected argument '$1'"
+  n="${1#--}"; n="${n//-/_}"
+  case " $allowed " in *" $n "*) ;; *) usage "$verb: unknown flag '$1'" ;; esac
+  [[ $# -ge 2 ]] || usage "$verb: $1 needs a value"
+  case "$seen" in *" $n "*) usage "$verb: $1 given twice" ;; esac
+  seen="$seen$n "
+  printf -v "f_$n" '%s' "$2"
+  shift 2
+done
+
+for n in $required; do
+  case "$seen" in *" $n "*) ;; *) usage "$verb: --${n//_/-} is required" ;; esac
+done
+isint() { [[ "$1" =~ ^[0-9]+$ ]]; }
+if [[ -n "$f_ref" ]]; then
+  # The ref names a directory under notes/loops/.
+  [[ "$f_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "$verb: invalid --ref '$f_ref' (letters, digits, '.', '_', '-'; must start with a letter or digit)"
+fi
+case "$seen" in *" id "*) [[ -n "$f_id" ]] || usage "close: --id is empty" ;; esac
+case "$seen" in *" to "*) [[ -n "$f_to" ]] || usage "$verb: --to is empty" ;; esac
+case "$verb" in
+  run) [[ ${#cmd[@]} -gt 0 ]] || usage "run: a command is required after '--'" ;;
+  start)
+    case "$f_harness" in claude|pi) ;; *) usage "start: --harness must be claude or pi (got '$f_harness')" ;; esac ;;
+  send)
+    has_text=0 has_keys=0
+    case "$seen" in *" text "*) has_text=1 ;; esac
+    case "$seen" in *" keys "*) has_keys=1 ;; esac
+    [[ $((has_text + has_keys)) -eq 1 ]] || usage "send: exactly one of --text or --keys is required"
+    case "$seen" in *" wait_ms "*) case "$seen" in *" text "*) isint "$f_wait_ms" || usage "send: --wait-ms must be an integer" ;; *) usage "send: --wait-ms only goes with --text" ;; esac ;; esac
+    case "$seen" in *" keys "*)
+      [[ -n "$f_keys" ]] || usage "send: --keys is empty"
+      IFS=, read -r -a _keys <<<"$f_keys"
+      for k in "${_keys[@]}"; do
+        case "$k" in enter|esc|ctrl+c|ctrl+d) ;; *) usage "send: unknown key '$k' (keys: enter esc ctrl+c ctrl+d)" ;; esac
+      done ;;
+    esac ;;
+  read) case "$seen" in *" lines "*) isint "$f_lines" || usage "read: --lines must be an integer" ;; esac ;;
+  wait)
+    case "$f_until" in working|idle|gone|ready) ;; *) usage "wait: --until must be working, idle, gone or ready (got '$f_until')" ;; esac
+    isint "$f_timeout_ms" || usage "wait: --timeout-ms must be an integer" ;;
+esac
+
+# --- config and backend ---------------------------------------------------------
+ship_config_load || exit 1
+mux="$(ship_cfg_get mux)" || fail "config key 'mux' is not set"
+if [[ -z "$mux" || ! "$mux" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ || ! -f "$_dir/mux/$mux" ]]; then
+  fail "unknown mux backend '$mux' (config key mux): no such file scripts/ship/mux/$mux"
+fi
+backend="$_dir/mux/$mux"
+units_group=""
+units_group="$(ship_cfg_get units_group)" || [[ $? -eq 3 ]] || exit 1
+
+# Verbs that need no record go straight to the backend.
+case "$verb" in
+  check|run|send|read|status|wait|list)
+    exec bash "$backend" "$verb" ${orig[@]+"${orig[@]}"} ;;
+esac
+
+root="$(ship_space_root)" || exit 1
+loop_dir="$root/notes/loops/$f_ref"
+rec="$loop_dir/mux.json"
+grp="$root/.hyper/ship-mux.json"
+
+# --- records --------------------------------------------------------------------
+_held=""
+trap '[[ -z "$_held" ]] || rmdir "$_held" 2>/dev/null || true' EXIT
+
+# _lock <file> — advisory lock for a read-modify-write of one JSON file.
+_lock() {
+  local d="$1.lock" i=0
+  while ! mkdir "$d" 2>/dev/null; do
+    i=$((i + 1))
+    [[ $i -le 200 ]] || fail "timed out waiting for the lock $d (remove it if no ship-mux is running)"
+    sleep 0.05
+  done
+  _held="$d"
+}
+_unlock() { rmdir "$_held" 2>/dev/null || true; _held=""; }
+
+# _json_update <file> <default-json> <jq filter> [jq args...] — locked rewrite.
+_json_update() {
+  local file="$1" default="$2" filter="$3" cur tmp
+  shift 3
+  mkdir -p "${file%/*}"
+  _lock "$file"
+  if [[ -f "$file" ]]; then cur="$(cat "$file")"; else cur="$default"; fi
+  tmp="$file.tmp.$$"
+  if ! jq -c "$@" "$filter" <<<"$cur" >"$tmp"; then
+    rm -f "$tmp"; _unlock; fail "cannot update $file"
+  fi
+  mv "$tmp" "$file"
+  _unlock
+}
+
+rec_default="$(jq -nc --arg b "$mux" '{backend: $b, created: []}')"
+# A record written for another backend holds ids that mean nothing to this one.
+if [[ -f "$rec" ]]; then
+  rec_backend="$(jq -r '.backend // ""' "$rec")" || fail "cannot read $rec"
+  [[ "$rec_backend" == "$mux" ]] || fail "$rec belongs to backend '$rec_backend', config says '$mux'"
+fi
+
+# _rec_add <jq array of entries> — add entries to the ref record, dedup by id.
+_rec_add() {
+  _json_update "$rec" "$rec_default" \
+    '.created as $c | .created += [$new[] | select(.id as $i | $c | map(.id) | index($i) | not)]' \
+    --argjson new "$1"
+}
+
+case "$verb" in
+  open)
+    gargs=()
+    [[ -z "$units_group" ]] || gargs=(--group "$units_group")
+    out="$(bash "$backend" open "${orig[@]}" ${gargs[@]+"${gargs[@]}"})" || exit $?
+    jq -e 'type == "object" and (.space | type == "string" and length > 0) and (.pane | type == "string" and length > 0)' \
+      <<<"$out" >/dev/null 2>&1 || fail "backend '$mux' returned invalid open output: $out"
+    space="$(jq -r '.space' <<<"$out")"
+    gid="$(jq -r 'if (.group | type) == "object" then .group.id elif (.group | type) == "string" then .group else "" end' <<<"$out")"
+    gcreated="$(jq -r 'if (.group | type) == "object" then (.group.created // false) else false end' <<<"$out")"
+    name="${f_label:-$f_ref}"
+    _rec_add "$(jq -nc --argjson o "$out" --arg n "$name" \
+      '[{id: $o.space, kind: "space", name: $n}, {id: $o.pane, kind: "pane", name: $n, space: $o.space}]')"
+    if [[ -n "$gid" ]]; then
+      _json_update "$grp" '{"groups":{}}' \
+        '.groups[$id] = ((.groups[$id] // {name: $name, backend: $b, created: false, spaces: []})
+           | .created = (.created or $created)
+           | .spaces = ((.spaces + [$space]) | unique))' \
+        --arg id "$gid" --arg name "$units_group" --arg b "$mux" --argjson created "$gcreated" --arg space "$space"
+    fi
+    jq -c '{space, pane} + (if (.group | type) == "object" then {group: .group.id} elif (.group | type) == "string" then {group: .group} else {} end)' <<<"$out" ;;
+
+  start)
+    out="$(bash "$backend" start "${orig[@]}")" || exit $?
+    jq -e 'type == "object" and (.agent | type == "string" and length > 0) and (.pane | type == "string" and length > 0)' \
+      <<<"$out" >/dev/null 2>&1 || fail "backend '$mux' returned invalid start output: $out"
+    _rec_add "$(jq -nc --argjson o "$out" --arg n "$f_name" --arg s "$f_space" \
+      '[{id: $o.agent, kind: "agent", name: $n, space: $s}, {id: $o.pane, kind: "pane", name: $n, space: $s}]')"
+    jq -c '{agent, pane}' <<<"$out" ;;
+
+  close)
+    kind=""
+    if [[ -f "$rec" ]]; then
+      kind="$(jq -r --arg id "$f_id" '[.created[] | select(.id == $id) | .kind] | first // ""' "$rec")"
+    fi
+    if [[ -n "$kind" ]]; then
+      bash "$backend" close "${orig[@]}" || exit $?
+      if [[ "$kind" == space ]]; then
+        _json_update "$rec" "$rec_default" \
+          '.created |= map(select(.id != $id and .space != $id))' --arg id "$f_id"
+        if [[ -f "$grp" ]]; then
+          _json_update "$grp" '{"groups":{}}' \
+            '.groups |= map_values(.spaces -= [$id])' --arg id "$f_id"
+        fi
+      else
+        _json_update "$rec" "$rec_default" '.created |= map(select(.id != $id))' --arg id "$f_id"
+      fi
+      exit 0
+    fi
+    # Not in the ref record: it may be the units group.
+    gstate=""
+    if [[ -f "$grp" ]]; then
+      gstate="$(jq -r --arg id "$f_id" \
+        '.groups[$id] // empty | if .created | not then "not-created" elif (.spaces | length) > 0 then "not-empty" else "ok" end' "$grp")"
+    fi
+    case "$gstate" in
+      ok)
+        bash "$backend" close "${orig[@]}" || exit $?
+        _json_update "$grp" '{"groups":{}}' 'del(.groups[$id])' --arg id "$f_id"
+        exit 0 ;;
+      not-created)
+        echo "ship-mux: refused: units group '$f_id' was not created by ship; not closing it" >&2; exit 3 ;;
+      not-empty)
+        echo "ship-mux: refused: units group '$f_id' still has recorded spaces; not closing it" >&2; exit 3 ;;
+      *)
+        echo "ship-mux: refused: id '$f_id' is not recorded for ref '$f_ref' (see $rec); not closing it" >&2; exit 3 ;;
+    esac ;;
+esac

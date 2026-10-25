@@ -2,7 +2,7 @@
 #   this file <- ~/.config/hyper/ship.yml <- <space root>/.hyper/ship.yml
 # Objects merge key by key; arrays replace. Every key below is commented.
 
-# Multiplexer backend: a file name under scripts/ship/mux/. herdr is the only real backend today.
+# Multiplexer backend: a file name under scripts/ship/mux/. Herdr is the only real backend today.
 mux: herdr
 # Name of the multiplexer group that holds unit spaces. <project> is replaced by the space directory name when the config is loaded.
 units_group: <project>-units

@@ -221,4 +221,9 @@ assert_fails "sync refuses a render missing one of the five scripts" bash "$fsyn
 assert_ok "a refused sync keeps the shipped script" test -x "$out/scripts/retire-agent.sh"
 assert_fails "an absent source is an error, not a silent no-op" bash "$fsync" --check --source "$FIX/nowhere"
 
+
+# C-11: the Herdr backend file is the only caller of the Herdr CLI. skills/team/ is exempt until
+# it is deleted; drop the argument then.
+assert_no_direct_herdr skills/team/
+
 finish

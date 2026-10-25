@@ -75,6 +75,27 @@ assert_not_contains() {
   esac
 }
 
+# assert_no_direct_herdr [excluded path prefix...] — C-11: no file under the
+# plugin except scripts/ship/mux/herdr contains a herdr command invocation
+# (`herdr <word> <word>` or `command -v herdr`). Prose that mentions Herdr is
+# fine. Callers pass prefixes (relative to the plugin dir) still allowed to
+# break the rule; test S passes skills/team/ until that skill is deleted.
+assert_no_direct_herdr() {
+  local f rel x skip hits=""
+  while IFS= read -r f; do
+    rel="${f#"$PLUGIN_DIR"/}"
+    [[ "$rel" != scripts/ship/mux/herdr ]] || continue
+    skip=0
+    for x in "$@"; do case "$rel" in "$x"*) skip=1 ;; esac; done
+    [[ $skip -eq 0 ]] || continue
+    if grep -qE '(^|[^[:alnum:]_-])herdr +[a-z-]+ +[a-z-]+|command -v herdr' "$f" 2>/dev/null; then
+      hits="$hits $rel"
+    fi
+  done < <(find "$PLUGIN_DIR" -type f -not -path '*/.git/*' -not -path '*/node_modules/*' \
+             -not -path "$PLUGIN_DIR/tests/helpers.sh")
+  assert_eq "no file calls herdr directly (C-11)" "" "$hits"
+}
+
 # Fixture builders ----------------------------------------------------------
 
 # make_checkout <dir> — normal working tree with one commit
