@@ -692,7 +692,8 @@ BUD_S=10; write_cfg
 reset_fake; unit t32
 CFG_EXTRA="roles:
   dev:
-    pi_skills: []"; write_cfg
+    pi_skills: []
+    pi_extensions: []"; write_cfg
 script t32 develop.json "$DEV_DONE"; script t32 review-r1.json "$REV_OK"
 stub_start t32; run_loop t32 --model dev=prov/model:high; stub_stop
 check_result t32 "pi dev" 0 READY
