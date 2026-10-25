@@ -57,7 +57,7 @@ assert_eq "lead keeps papiro" true "$(plug lead papiro@tutor)"
 assert_eq "lead switches gopls-lsp off" false "$(plug lead gopls-lsp@claude-plugins-official)"
 assert_eq "lead switches playwright off" false "$(plug lead playwright@claude-plugins-official)"
 assert_eq "an already-off plugin stays off" false "$(plug lead off-already@tutor)"
-assert_eq "profile holds only enabledPlugins (no statusLine, no model)" '["enabledPlugins"]' \
+assert_eq "profile holds only enabledPlugins and env (no statusLine, no model)" '["enabledPlugins","env"]' \
   "$(jq -c 'keys' "$OUTDIR/lead.json")"
 assert_eq "same plugin keys as the host" \
   "$(jq -cS '.enabledPlugins | keys' "$HS")" "$(jq -cS '.enabledPlugins | keys' "$OUTDIR/lead.json")"
@@ -240,7 +240,6 @@ printf 'roles:\n  dev:\n    pi_skills: [1]\n' > "$PROJECT"
 assert_eq "pi_skills with a non-string entry: exit 1" 1 "$(role_rc dev --harness pi)"
 printf 'roles:\n  dev:\n    plugins_keep: hyper\n' > "$PROJECT"
 assert_eq "plugins_keep as a string: exit 1" 1 "$(role_rc dev --harness claude)"
-printf 'roles:\n  dev:\n    pi_skills: []\n    pi_extensions: [{name: "/x/a b.ts", flags: []}]\n' > "$PROJECT"
 rm -f "$PROJECT"
 
 # C16: paths with whitespace or glob characters are rejected -------------------------------
@@ -276,7 +275,7 @@ assert_eq "host keys are still there" false "$(plug lead playwright@claude-plugi
 assert_eq "CLAUDE_CODE_PLUGIN_DIRS blanked" '""' "$(jq -c '.env.CLAUDE_CODE_PLUGIN_DIRS' "$OUTDIR/lead.json")"
 rm -rf "$CWD/.claude"
 role lead --harness claude >/dev/null
-assert_eq "no env block when no layer sets PLUGIN_DIRS" null "$(jq -c '.env' "$OUTDIR/lead.json")"
+assert_eq "PLUGIN_DIRS blanked even when no layer sets it" '""' "$(jq -c '.env.CLAUDE_CODE_PLUGIN_DIRS' "$OUTDIR/lead.json")"
 printf '{"env":{"CLAUDE_CODE_PLUGIN_DIRS":"/d"}}\n' > "$FIX/envhost.json"
 role lead --harness claude --host-settings "$FIX/envhost.json" >/dev/null
 assert_eq "host layer PLUGIN_DIRS also blanked" '""' "$(jq -c '.env.CLAUDE_CODE_PLUGIN_DIRS' "$OUTDIR/lead.json")"
@@ -287,6 +286,29 @@ role lead --harness claude >/dev/null
 (cd "$CWD" && SHIP_SPACE_ROOT="$FIX/other/proj" bash "$ROLE" lead --harness claude >/dev/null 2>&1)
 assert_eq "two spaces sharing a basename get two cache dirs" 2 "$(find "$HOME/.cache/hyper/roles" -maxdepth 1 -name 'proj-*' | wc -l | tr -d ' ')"
 assert_eq "cache dir name is <basename>-<8 hex>" 1 "$(basename "$OUTDIR" | grep -Ec '^proj-[0-9a-f]{8}$')"
+
+# C20: --cwd picks the project layers; flags with whitespace are rejected; --help is whole --------
+mkdir -p "$FIX/wt/.claude"
+printf '{"enabledPlugins":{"wt-only@m":true}}\n' > "$FIX/wt/.claude/settings.json"
+(cd "$CWD" && bash "$ROLE" lead --harness claude --cwd "$FIX/wt" >/dev/null 2>&1)
+assert_eq "--cwd layer is read" false "$(plug lead wt-only@m)"
+role lead --harness claude >/dev/null
+assert_eq "without --cwd the layer is not read" null "$(plug lead wt-only@m)"
+assert_eq "--cwd without a value: exit 2" 2 "$(role_rc lead --harness claude --cwd)"
+cat > "$PROJECT" <<'YAML'
+roles:
+  spec:
+    pi_skills: []
+    pi_extensions:
+      - {name: pi-lens, flags: ["--a b"]}
+YAML
+assert_eq "extension flag with whitespace: exit 1" 1 "$(role_rc spec --harness pi)"
+assert_contains "names the flag" "$(role_err spec --harness pi)" "--a b"
+rm -f "$PROJECT"
+help_out="$(role --help)"
+assert_contains "--help includes the pi docs" "$help_out" "--exclude-tools ask_user"
+assert_contains "--help includes the exit codes" "$help_out" "Exit codes"
+assert_contains "--help documents --cwd" "$help_out" "--cwd"
 
 # C13: the real home is untouched -----------------------------------------------------------------
 case "$HOME" in "$FIX"/*) pass "HOME is inside the fixture dir" ;; *) fail "HOME escaped the fixture dir: $HOME" ;; esac

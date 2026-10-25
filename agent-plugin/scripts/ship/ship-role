@@ -2,20 +2,21 @@
 # ship-role — launch arguments for one agent role.
 #
 # Usage:
-#   ship-role <role> --harness claude|pi [--host-settings <file>]
+#   ship-role <role> --harness claude|pi [--host-settings <file>] [--cwd <dir>]
 #
 # Roles: lead, dev, verify, review, spec. Settings come from the merged ship
 # config (`roles.<role>`); see skills/ship/defaults.yml.
 #
 # claude  Reads enabledPlugins from the host settings (default
 #         ${CLAUDE_CONFIG_DIR:-~/.claude}/settings.json) and from the project
-#         layers <cwd>/.claude/settings.json and settings.local.json (cwd is where
-#         the agent will start); the last layer that sets a key wins. Every key
+#         layers <cwd>/.claude/settings.json and settings.local.json (cwd is --cwd,
+#         default $PWD: the directory the agent will start in; ship-loop passes the
+#         agent's worktree); the last layer that sets a key wins. Every key
 #         is then set false except those that are true there AND named in
 #         roles.<role>.plugins_keep (a bare name or the full `name@marketplace`
-#         key). A kept plugin the host has off stays off. When any layer sets
-#         env.CLAUDE_CODE_PLUGIN_DIRS the profile sets it to "" so plugin dirs
-#         load nothing. Writes
+#         key). A kept plugin the host has off stays off. The profile always sets
+#         env.CLAUDE_CODE_PLUGIN_DIRS to "" so plugin dirs load nothing, whatever
+#         a settings layer or the shell says. Writes
 #         ~/.cache/hyper/roles/<project>-<8 hex of sha256(space root)>/<role>.json
 #         and prints
 #           --settings <file> --strict-mcp-config
@@ -54,9 +55,9 @@ _dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
 # shellcheck source=lib.sh
 source "$_dir/lib.sh"
 
-usage() { echo "ship-role: $*" >&2; echo "usage: ship-role <lead|dev|verify|review|spec> --harness claude|pi [--host-settings <file>]" >&2; exit 2; }
+usage() { echo "ship-role: $*" >&2; echo "usage: ship-role <lead|dev|verify|review|spec> --harness claude|pi [--host-settings <file>] [--cwd <dir>]" >&2; exit 2; }
 
-role="" harness="" host_settings="" explicit_host=0
+agent_cwd="$PWD" role="" harness="" host_settings="" explicit_host=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --harness)
@@ -65,7 +66,10 @@ while [[ $# -gt 0 ]]; do
     --host-settings)
       [[ $# -ge 2 ]] || usage "--host-settings needs a file"
       host_settings="$2" explicit_host=1; shift ;;
-    -h|--help) sed -n '2,29p' "$_src" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --cwd)
+      [[ $# -ge 2 ]] || usage "--cwd needs a directory"
+      agent_cwd="$2"; shift ;;
+    -h|--help) sed -n '/^set -euo pipefail/q;2,$p' "$_src" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) usage "unknown argument '$1'" ;;
     *)
       [[ -z "$role" ]] || usage "unexpected argument '$1'"
@@ -121,7 +125,7 @@ if [[ "$harness" == claude ]]; then
   # Layers, lowest first: host, then the project's two files. Each yields
   # {p: enabledPlugins, d: env.CLAUDE_CODE_PLUGIN_DIRS}.
   layers="[]"
-  for f in "$host_settings" "$PWD/.claude/settings.json" "$PWD/.claude/settings.local.json"; do
+  for f in "$host_settings" "$agent_cwd/.claude/settings.json" "$agent_cwd/.claude/settings.local.json"; do
     [[ -f "$f" ]] || continue
     l="$(jq -c '{p: (.enabledPlugins // {}), d: (.env.CLAUDE_CODE_PLUGIN_DIRS // null)}' "$f" 2>/dev/null)" || {
       echo "ship-role: cannot parse $f as JSON settings" >&2; exit 1; }
@@ -135,7 +139,7 @@ if [[ "$harness" == claude ]]; then
         .key as $k
         | .value = (.value == true and any($keep[]; . == $k or . == ($k | split("@")[0])))
       ) | from_entries)}
-    + (if any($layers[]; .d != null) then {env: {CLAUDE_CODE_PLUGIN_DIRS: ""}} else {} end)')" \
+    + {env: {CLAUDE_CODE_PLUGIN_DIRS: ""}}')" \
     || { echo "ship-role: cannot build the profile" >&2; exit 1; }
   space="$(ship_space_root)" || exit 1
   if command -v sha256sum >/dev/null 2>&1; then h="$(printf '%s' "$space" | sha256sum)"
@@ -208,7 +212,12 @@ while [[ $i -lt $n ]]; do
     missing=1; continue
   fi
   for e in "${ents[@]}"; do _bad_path "$e"; args+=(-e "$e"); done
-  [[ ${#flags[@]} -eq 0 ]] || args+=("${flags[@]}")
+  for f in ${flags[@]+"${flags[@]}"}; do
+    case "$f" in
+      *[[:space:]]*) echo "ship-role: pi extension flag contains whitespace: $f" >&2; exit 1 ;;
+    esac
+    args+=("$f")
+  done
 done
 
 [[ $missing -eq 0 ]] || exit 1
