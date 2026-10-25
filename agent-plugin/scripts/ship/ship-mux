@@ -39,12 +39,14 @@
 #       stdout: plain text of the agent's or pane's visible screen, or only its
 #       last N lines.
 #   status --ref R --to A
-#       stdout: {"state":"working|idle|blocked|gone","pane":id,"space":id}. A
-#       recorded agent the backend no longer has exits 5.
+#       stdout: {"state":"working|idle|blocked|gone","pane":id,"space":id}.
+#       `gone` is an agent that exited but still exists. A recorded agent the
+#       backend no longer has exits 5; an id that is not an agent exits 3.
 #   wait  --ref R --to A --until working|idle|gone|ready --timeout-ms N
 #       Block until the state is reached. `ready` means the pane accepts input.
 #       Exit 0 reached, 4 timeout. A target the backend no longer has exits 5
-#       at once for any --until but `gone`, which then exits 0.
+#       at once for any --until but `gone`, which then exits 0 (also for an agent
+#       whose state is `gone`).
 #   close --ref R --id X
 #       Close pane, agent, space or the units group X. Refused with exit 3, and
 #       no backend call, unless X is recorded for ref R (a group: recorded as
@@ -386,6 +388,9 @@ case "$verb" in
   run|send|read|status|wait)
     case "$verb" in run) target="$f_pane" ;; *) target="$f_to" ;; esac
     _need_recorded "$target"
+    if [[ "$verb" == status && "$(_entry "$target" | jq -r '.kind')" != agent ]]; then
+      refuse "status: '$target' is recorded but is not an agent; no backend call made"
+    fi
     rc=0; _be "$verb" "${orig[@]}" || rc=$?
     exit "$rc" ;;
 

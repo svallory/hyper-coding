@@ -16,7 +16,8 @@
 # Scripted answers, all plain files under $SHIP_MUX_FAKE_DIR, looked up by the
 # id first and then by the agent's (shortened) name:
 #   read/<key>      text printed by `read` before the live screen
-#   status/<key>    the agent state, one of working|idle|blocked (anything else
+#   status/<key>    the agent state, one of working|idle|blocked|gone (an agent
+#                   that exited but still exists; anything else
 #                   is an error, exit 1). With several lines, `status` consumes
 #                   the first line per call and keeps the last one; `wait` only
 #                   peeks at the first. Default: idle. `send --text --wait-ms`
@@ -106,7 +107,7 @@ agent_state() {
   if f="$(scripted status "$1")"; then
     first="$(head -n 1 "$f")"
     case "$first" in
-      working|idle|blocked) ;;
+      working|idle|blocked|gone) ;;
       *) echo "mux/fake: unknown scripted state '$first' in $f" >&2; return 3 ;;
     esac
     if [[ "${2:-}" == consume && "$(wc -l <"$f" | tr -d ' ')" -gt 1 ]]; then
@@ -189,12 +190,17 @@ case "$verb" in
 
   status)
     exists "$f_to" || notfound "status: no such agent '$f_to'"
+    [[ "$(field "$f_to" kind)" == agent ]] || die "status: '$f_to' is not an agent"
     st="$(agent_state "$f_to" consume)" || exit 1
     jq -nc --arg s "$st" --arg p "$(field "$f_to" pane)" --arg sp "$(field "$f_to" space)" '{state: $s, pane: $p, space: $sp}' ;;
 
   wait)
     case "$f_until" in
-      gone)  ! exists "$f_to" || exit 4 ;;
+      gone)  if exists "$f_to"; then
+               [[ "$(field "$f_to" kind)" == agent ]] || exit 4
+               st="$(agent_state "$f_to")" || exit 1
+               [[ "$st" == gone ]] || exit 4
+             fi ;;
       ready) exists "$f_to" || notfound "wait: no such target '$f_to'" ;;
       *)     exists "$f_to" || notfound "wait: no such target '$f_to'"
              st="$(agent_state "$f_to")" || exit 1

@@ -46,6 +46,7 @@ reset_fake
 # shellcheck disable=SC2034  # read by mux_contract
 MUX_CONTRACT_BACKEND=(bash "$FAKE_BE")
 mux_contract_vanish() { vanish "$1"; }
+mux_contract_exit_agent() { echo gone > "$SHIP_MUX_FAKE_DIR/status/$1"; }
 mux_contract contract "$WT"
 unset MUX_CONTRACT_BACKEND
 
@@ -110,6 +111,13 @@ assert_eq "an unknown scripted state is an error (status)" "1" "$(mux_rc status 
 assert_eq "an unknown scripted state is an error (wait)" "1" "$(mux_rc wait --ref u1 --to "$AG" --until idle --timeout-ms 5)"
 assert_eq "an unknown scripted state is an error (list)" "1" "$(mux_rc list --ref u1)"
 rm -f "$SHIP_MUX_FAKE_DIR/status/$AG" "$SHIP_MUX_FAKE_DIR/status/dev-1"
+assert_eq "status of a pane id: the dispatcher refuses (3)" "3" "$(mux_rc status --ref u1 --to "$PN")"
+assert_eq "status of a pane id: the fake itself exits 1" "1" "$(bash "$FAKE_BE" status --ref u1 --to "$PN" >/dev/null 2>&1; echo $?)"
+echo gone > "$SHIP_MUX_FAKE_DIR/status/$AG"
+assert_eq "gone is a scripted state: status says gone (0)" "gone" "$(mux status --ref u1 --to "$AG" | jq -r .state)"
+assert_ok "wait --until gone returns 0 for a scripted gone state" mux wait --ref u1 --to "$AG" --until gone --timeout-ms 5
+rm -f "$SHIP_MUX_FAKE_DIR/status/$AG"
+assert_eq "wait --until gone on a live pane exits 4" "4" "$(mux_rc wait --ref u1 --to "$PN" --until gone --timeout-ms 5)"
 assert_eq "send to a pane id is an error" "1" "$(mux_rc send --ref u1 --to "$PN" --text x)"
 assert_eq "...even when the pane is recorded (agent pane)" "1" "$(mux_rc send --ref u1 --to "$APN" --text x)"
 

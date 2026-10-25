@@ -17,6 +17,9 @@
 #                           (not ship-mux) with its environment, to check what
 #                           ship-mux's own checks would mask: a backend refuses
 #                           to close a group that still has children
+#   mux_contract_exit_agent ID  function: make agent ID exit while it still exists
+#                           (state gone), to check status says gone (exit 0) and
+#                           wait --until gone returns 0
 #   mux_contract_vanish ID  function: make the backend lose ID behind ship-mux's
 #                           back (an agent that exited), to check close of a gone
 #                           id exits 0 and drops the entry
@@ -155,6 +158,24 @@ mux_contract() {
   assert_ok "contract: close an agent's pane" mux close --ref "$ref" --id "$apn2"
   l="$(mux list --ref "$ref")"
   if _mc_has "$l" "$ag2" || _mc_has "$l" "$apn2"; then fail "contract: closing a pane took the agent in it"; else pass "contract: closing a pane took the agent in it"; fi
+
+  # status needs an agent
+  mux status --ref "$ref" --to "$apn" >/dev/null 2>&1; rc=$?
+  assert_eq "contract: status of a pane id exits 3" "3" "$rc"
+
+  # an agent that exited but still exists
+  if declare -F mux_contract_exit_agent >/dev/null; then
+    out="$(mux start --ref "$ref" --space "$sp" --name "$ref-exit" --harness "$harness" --cwd "$cwd" -- ${MUX_CONTRACT_AGENT_ARGS[@]+"${MUX_CONTRACT_AGENT_ARGS[@]}"})"
+    ag3="$(jq -r .agent <<<"$out")"
+    mux_contract_exit_agent "$ag3"
+    out="$(mux status --ref "$ref" --to "$ag3")"; rc=$?
+    assert_eq "contract: status of an exited agent exits 0" "0" "$rc"
+    _mc_json "contract: ...and says gone" "$out" '.state == "gone"'
+    mux wait --ref "$ref" --to "$ag3" --until gone --timeout-ms 5000 >/dev/null 2>&1; rc=$?
+    assert_eq "contract: wait --until gone on an exited agent returns 0" "0" "$rc"
+    mux close --ref "$ref" --id "$ag3" >/dev/null 2>&1; rc=$?
+    assert_eq "contract: an exited agent can be closed" "0" "$rc"
+  fi
 
   # an id the backend lost behind ship-mux's back
   if declare -F mux_contract_vanish >/dev/null; then
