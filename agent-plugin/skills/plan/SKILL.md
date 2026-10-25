@@ -19,7 +19,7 @@ in a tracker when the project uses one. If a spec is expected but
 
 1. `define.md` and `design.md` in full (skip when there is no spec).
 2. The rulings file: the ship config key `rulings`
-   (`${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-config --get rulings`). Entries are `## D<n> - <title>`
+   (`${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-config --get rulings`). Entries are `## D<n> — <title>`
    with `Ruling`, `Reason`, `By`, `Status`. Briefs quote the ones they
    depend on; they never paraphrase them.
 3. The spec-paths globs: `${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-config --get spec.paths`.

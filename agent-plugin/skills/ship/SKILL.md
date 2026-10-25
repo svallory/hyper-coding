@@ -36,10 +36,10 @@ from them into a brief or a ruling by hand; name the key.
 ## Rulings
 
 Every decision you make for the project goes in the rulings file (config key
-`rulings`, default `notes/decisions.md`) as:
+`rulings`) as:
 
 ```
-## D<n> - <title>
+## D<n> — <title>
 Ruling: <what was decided>
 Reason: <why>
 By: lead | lead-auto | operator
@@ -90,8 +90,8 @@ it, or rule that a named consumer exists. Do not argue the gate away.
    `unit` (land, answer, extend, re-brief, or abandon).
 6. **Land.** Use the `land` skill for each READY unit, one at a time. When a
    unit lands, start any unit whose dependencies are now met, within the slots.
-7. **Close out.** When every unit is landed or abandoned: close the epic in the
-   tracker, check `ship-unit list` shows nothing in flight, and give the
+7. **Close out.** When every unit is landed or abandoned: close the epic (when
+   `tracker` is `beads`), check `ship-unit list` shows nothing in flight, and give the
    operator a summary: PRs merged, rulings made (and any still
    `pending-review`), units abandoned and why, anything deferred.
 
@@ -101,13 +101,15 @@ rulings file and `tasks.md`. A unit still running is reattached with
 
 ## Peer leads
 
-- Name yourself `<project>-lead`; one lead per repo.
-- Several leads may run at once, each in its own session and space.
-- Never touch another repo's worktrees, rulings or units.
-- A task that belongs to another repo goes to that repo's lead, by message through
-  the operator's channel, as a plain request with the context it needs.
-- Rulings are per repo; quote another lead's ruling in your own file before relying on it.
-- Reply to a peer's request only with what you did or decided, never with code.
+- Name your session `<project>-lead` when you start it, so peers can address it.
+- One lead per repo: if a lead for this repo already runs, tell the operator and stop.
+- A task that belongs to another repo is never briefed or run here: send the
+  owning lead a message addressed to its session name `<project>-lead`, with the
+  goal, the evidence and the rulings it depends on.
+- No reachable peer for that repo: tell the operator, park that task, and carry
+  on with yours. Do not coordinate two repos yourself.
+- Never touch another repo's worktrees, rulings file or units.
+- Answer a peer's request with what you decided or did, and log it as a ruling.
 
 ## Red flags
 

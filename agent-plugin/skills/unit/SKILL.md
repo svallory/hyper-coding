@@ -30,20 +30,23 @@ driver, blocks until it exits and returns the driver's exit code.
 
 ## On exit
 
-Read `notes/loops/<ref>/result.json` (small; read it yourself). If it names
-`park.json`, read that too. Then act:
+Read `notes/loops/<ref>/result.json` (small; read it yourself). When the
+unit is parked its `.park` field holds the park (kind, stage, agent,
+question, `resets_at`); the same data is in `park.json`. Then act:
 
 | Exit | `result.json` status / park kind | Do |
 |---|---|---|
 | 0 | `READY` | `land` skill: land `<ref>`. |
 | 2 | PARKED, QUESTION | Rule on it (write the ruling first), write the answer to a file, then `ship-unit resume <ref> --answer <file>` in the background. The answer quotes rulings by number. |
 | 2 | PARKED, BLOCKED | Same as QUESTION. If the block is a defect in the brief, re-brief: fix the brief file, then resume with an answer saying so. If it cannot be unblocked, abandon. |
-| 2 | PARKED, DIALOG | An agent is stuck on a permission dialog. Look (below). It usually needs the operator or a profile fix; ask them (or in auto mode, record a ruling and abandon), then `ship-unit resume <ref>`. |
+| 2 | PARKED, DIALOG | An agent is stuck on a permission dialog. Look (below). It usually needs the operator or a profile fix; ask them, then `ship-unit resume <ref>`. In auto mode do not abandon: leave the unit parked, record a `pending-review` ruling that says it is deferred to the operator, and carry on with other units. |
 | 2 | PARKED, OPERATOR | The spec writer needs a call that is the operator's. Ask the operator, or under `auto` rule it with `By: lead-auto`; resume with the answer. |
-| 2 | PARKED, LIMIT | Every model for a stage is used up. `resets_at` in `park.json` says when. Either wait and `resume <ref>`, or `resume <ref> --model <stage>=<list>` with another list. |
+| 2 | PARKED, LIMIT | Every model for a stage is used up. `resets_at` in `park.json` says when. Either `resume <ref> --model <stage>=<list>` now with another list, or run `resume <ref>` in the background after `resets_at` (its exit wakes you; do not sleep or poll). Meanwhile work on other units, or tell the operator the unit is waiting. |
 | 2 | OVER-BUDGET | The agent is still running. Extend with `ship-unit resume <ref> --extend <minutes>`, or re-brief a smaller unit and abandon this one. |
-| 2 | STUCK | Max rounds without ACCEPT. Re-brief (smaller or clearer), change the model for the stage with `resume --model`, or abandon. |
+| 2 | STUCK | Max rounds without ACCEPT, or finalize failures the dev could not fix. Re-brief (smaller or clearer), change the model for the stage with `resume --model`, or abandon. |
 | 1 | ERROR | `driver.err` names the cause. Have a cheap `Explore` subagent read `loop.log` and report the cause in two sentences; fix the config or environment, then `resume <ref>`. A malformed verdict from an agent is an ERROR, not a question. |
+| 3 | `ship-unit` refused (nothing ran) | Host slots full, a driver already running for the ref, no `park.json` for `--answer`, or no over-budget stage for `--extend`. Read the message. Wait for a slot (an exit frees one), `ship-unit wait <ref>` for a running driver, or drop the stray flag. |
+| 64 | `ship-unit` usage error | Fix the command line. Never mistake it for a parked unit: parks are exit 2. |
 
 Rules for acting:
 
@@ -54,6 +57,9 @@ Rules for acting:
   compaction or a restart); also in the background.
 - `ship-unit list` shows ref, host, status, stage, failovers, age and whether
   the pid is alive.
+
+For a unit on another host (`--host`), `run` also takes `--spec-dir <dir>`
+(the unit's spec directory, copied to the host with the brief and rulings).
 
 `resume` flags: `--answer <file>`, `--extend <minutes>`,
 `--model <stage>=<m>[,<m>...]` (stages: dev verify review spec_check

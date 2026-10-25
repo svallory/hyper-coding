@@ -47,17 +47,17 @@ for s in ship-auto ship-config ship-land ship-mux; do
 done
 
 # --- C-11, C-1, C-2 over these skills -----------------------------------------------------
-files=""; for n in $names; do files="$files $SKILLS/$n/SKILL.md"; done
+files="$AUTO"; for n in $names; do files="$files $SKILLS/$n/SKILL.md"; done
 # shellcheck disable=SC2086
 mux_cmd="$(grep -nE '(^|[^A-Za-z-])herdr +(-[^ ]+ +)*(agent|api|channel|completion|config|integration|machine|notification|pane|server|session|status|tab|update|workspace|worktree)\b|(command -v|type -p|which|hash) +herdr' $files)"
-assert_eq "no skill calls a multiplexer command (C-11)" "" "$mux_cmd"
+assert_eq "no skill or ship-auto calls a multiplexer command (C-11)" "" "$mux_cmd"
 # shellcheck disable=SC2086
-assert_eq "no skill mentions the multiplexer by name" "" "$(grep -niE 'herdr' $files)"
+assert_eq "no skill or ship-auto mentions the multiplexer by name" "" "$(grep -niE 'herdr' $files)"
 # shellcheck disable=SC2086
-assert_eq "no project, host or model literal in the skills (C-1)" "" \
+assert_eq "no project, host or model literal in the skills and ship-auto (C-1)" "" \
   "$(grep -nE 'husk|forge|/work/|/Users/|sonnet|opus|haiku|fable' $files)"
 # shellcheck disable=SC2086
-assert_eq "no messaging, Monitor or watchdog in the skills (C-2)" "" \
+assert_eq "no messaging, Monitor or watchdog in the skills and ship-auto (C-2)" "" \
   "$(grep -nE 'SendMessage|claude-link|hyper msg|Monitor|stall' $files)"
 # shellcheck disable=SC2086
 assert_eq "no bead id or bd command in the skills" "" "$(grep -nE 'hyper-[a-z0-9]+\.[0-9]|\bbd [a-z]' $files)"
@@ -65,7 +65,15 @@ assert_eq "no bead id or bd command in the skills" "" "$(grep -nE 'hyper-[a-z0-9
 # --- ship carries what the design puts in it ---------------------------------------------
 ship="$(cat "$SKILLS/ship/SKILL.md")"
 assert_contains "ship has the lead rules table" "$ship" "## Lead rules"
-assert_contains "ship has the spec heuristic" "$ship" "Changes a contract"
+for k in "Chain of command" "Never read code" "Answer questions yourself" "Consumer gate first" "Rulings, not hypotheses" "Spec decision is a ruling" "Respect the slots" "You only merge" "Limits are not yours"; do
+  assert_contains "ship lead rule: $k" "$ship" "| $k |"
+done
+assert_contains "chain of command names the devs never asking the operator" "$ship" "never ask the operator"
+assert_contains "never-read-code delegates to a subagent" "$ship" "Explore"
+assert_contains "slots rule names hosts.<h>.slots" "$ship" 'hosts.<h>.slots'
+for k in "Changes a contract" "Crosses components" "request is ambiguous" "A bug fix" "A mechanical change" "An internal refactor"; do
+  assert_contains "ship heuristic cell: $k" "$ship" "$k"
+done
 assert_contains "ship records the spec decision as a ruling" "$ship" "Spec decision is a ruling"
 assert_contains "ship has the consumer gate" "$ship" "## Consumer gate"
 assert_contains "ship has the sequence" "$ship" "## Sequence"
@@ -246,6 +254,121 @@ assert_eq "all as suggested: confirmed" "confirmed" "$(status_of 1)"
 
 assert_fails "apply with nothing pending exits non-zero" "$AUTO" apply "$reply" --rulings "$rf"
 assert_eq "apply with nothing pending exits 3" "3" "$("$AUTO" apply "$reply" --rulings "$rf" >/dev/null 2>&1; echo $?)"
-assert_eq "no subcommand is a usage error" "2" "$("$AUTO" >/dev/null 2>&1; echo $?)"
+assert_eq "no subcommand is a usage error" "64" "$("$AUTO" >/dev/null 2>&1; echo $?)"
+
+# --- ship-auto: reply validation (nothing is written for a bad reply) ----------------------
+fresh() {
+  cat > "$rf" <<'EOT'
+# Decisions
+
+## D1 — Cache layer
+Ruling: use the in-process cache.
+Reason: smallest change.
+Alternatives: memcached | redis
+By: lead-auto
+Status: pending-review
+
+## D2 — Keep the ruling format
+Ruling: keep it as is.
+Reason: nobody reads it.
+By: lead-auto
+Status: pending-review
+
+## D3 — Third
+Ruling: c
+Reason: r
+By: lead-auto
+Status: pending-review
+EOT
+  rm -f "$space/notes/auto.json"
+}
+apply_reply() { printf '%s\n' "$1" > "$FIX/r.txt"; "$AUTO" apply "$FIX/r.txt" --rulings "$rf" > "$FIX/apply.out" 2> "$FIX/apply.err"; echo $?; }
+unchanged() { [[ "$(cat "$rf")" == "$(cat "$FIX/frozen")" ]] && echo yes || echo no; }
+
+fresh; cp "$rf" "$FIX/frozen"
+assert_eq "title text does not decide the answer: 'Alternative 1 for the cache' + Something else is an overturn" "0" \
+  "$(apply_reply '- D1 Alternative 1 for the cache: Something else (suggested: Keep the ruling). Note: use neither')"
+assert_eq "  ... recorded as overturned, with the note, not memcached" "overturned (by D4)" "$(status_of 1)"
+assert_eq "  ... the new ruling is the note" "use neither" "$(awk '/^## D4 /{f=1;next} /^## /{f=0} f && /^Ruling:/{sub(/^Ruling: */,""); print}' "$rf")"
+fresh
+assert_eq "'Keep the ruling format' + Overturn is an overturn" "0" \
+  "$(apply_reply '- D2 Keep the ruling format: Overturn (suggested: Keep the ruling). Note: change it')"
+assert_eq "  ... recorded as overturned, not confirmed" "overturned (by D4)" "$(status_of 2)"
+fresh; cp "$rf" "$FIX/frozen"
+assert_eq "an unknown id (D33) fails the reply" "1" "$(apply_reply '- D33 Nope: Keep the ruling')"
+assert_eq "  ... nothing written" "yes" "$(unchanged)"
+assert_contains "  ... the bad line is listed" "$(cat "$FIX/apply.err")" "D33"
+assert_eq "a line with no colon ('D2 looks fine to me') fails" "1" "$(apply_reply 'D2 looks fine to me')"
+assert_eq "  ... nothing written" "yes" "$(unchanged)"
+assert_eq "an unrecognised answer fails" "1" "$(apply_reply '- D1 Cache layer: Maybe')"
+assert_eq "an Alternative out of range fails" "1" "$(apply_reply '- D1 Cache layer: Alternative 3')"
+assert_eq "an Alternative on a ruling without alternatives fails" "1" "$(apply_reply '- D3 Third: Alternative 1')"
+assert_eq "a ruling answered twice fails" "1" "$(apply_reply "$(printf -- '- D1 Cache layer: Keep the ruling\n- D1 Cache layer: Overturn')")"
+assert_eq "one bad line among good ones fails the lot" "1" "$(apply_reply "$(printf -- '- D1 Cache layer: Alternative 1\n- D2 Keep the ruling format: Maybe')")"
+assert_eq "  ... nothing written (D1 not overturned)" "yes" "$(unchanged)"
+assert_eq "  ... every bad line is listed" "2" "$(printf -- '- D9 x: Keep the ruling\n- D8 y: Keep the ruling\n' > "$FIX/r.txt"; "$AUTO" apply "$FIX/r.txt" --rulings "$rf" 2>&1 | grep -c 'not a pending')"
+assert_eq "an empty fallback answer fails" "1" "$(apply_reply 'D1:')"
+awk '/^## D1 /{f=1} /^## D2 /{f=0} f && /^Status:/{print "Status: confirmed"; next} {print}' "$rf" > "$FIX/d1done.md"; cp "$FIX/d1done.md" "$rf"; cp "$rf" "$FIX/frozen"
+assert_eq "a ruling that is not pending (D1 already confirmed) fails" "1" "$(apply_reply 'D1: ok')"
+assert_eq "  ... nothing written" "yes" "$(unchanged)"
+fresh
+assert_eq "fallback 'D1: Keep the ruling' is a confirm" "0" "$(apply_reply 'D1: Keep the ruling')"
+assert_eq "  ... confirmed" "confirmed" "$(status_of 1)"
+assert_eq "  ... and D2, D3 (not named) are confirmed too" "confirmed confirmed" "$(status_of 2) $(status_of 3)"
+fresh
+assert_eq "papiro 'Keep the ruling' with a note is a confirm" "0" "$(apply_reply '- D2 Keep the ruling format: Keep the ruling (suggested: Keep the ruling). Note: but tell the docs team')"
+assert_eq "  ... confirmed" "confirmed" "$(status_of 2)"
+assert_contains "  ... the note is printed for the lead" "$(cat "$FIX/apply.out")" "NOTE D2: but tell the docs team"
+fresh
+assert_eq "title containing ': ' still parses" "0" "$(apply_reply '- D1 Cache layer: which one: Alternative 2 (suggested: Keep the ruling).')"
+assert_eq "  ... took alternative 2 (redis)" "redis" "$(awk '/^## D4 /{f=1;next} /^## /{f=0} f && /^Ruling:/{sub(/^Ruling: */,""); print}' "$rf")"
+
+# --- ship-auto: a trailing heading, CRLF, on twice, default path, --markdown, usage -------------
+fresh
+printf '\n## Notes\nStatus: scratch\nsome text\n' >> "$rf"
+apply_reply 'D1: ok' >/dev/null
+assert_eq "a '## Notes' heading after the last ruling is not part of it (Status line untouched)" "Status: scratch" "$(grep -n '^Status: scratch' "$rf" | cut -d: -f2-)"
+assert_eq "  ... D3 (the last ruling) is confirmed, not mangled" "confirmed" "$(status_of 3)"
+fresh
+printf '\n## Notes\nStatus: pending-review\nBy: lead-auto\n' >> "$rf"
+assert_eq "  ... the heading is not read as a ruling: 3 questions" "3" "$("$AUTO" questions --rulings "$rf" | jq '[.groups[].questions[]] | length')"
+fresh
+sed 's/$/\r/' "$rf" > "$FIX/crlf.md"; cp "$FIX/crlf.md" "$rf"
+assert_eq "CRLF file: three pending rulings are found" "3" "$("$AUTO" questions --rulings "$rf" | jq '[.groups[].questions[]] | length')"
+assert_eq "CRLF file: alternatives have no stray CR" "memcached" "$("$AUTO" questions --rulings "$rf" | jq -r '.groups[].questions[0].options[1].description')"
+apply_reply 'D1: ok' >/dev/null
+assert_eq "CRLF file: D1 confirmed" "confirmed" "$(status_of 1 | tr -d '\r')"
+assert_eq "CRLF file: line endings kept on the Status line" "Status: confirmed" "$(grep '^Status: confirmed' "$rf" | head -n 1 | tr -d '\r')"
+assert_ok "CRLF file: the Status line still ends in CR" grep -q $'^Status: confirmed\r$' "$rf"
+
+rm -f "$space/notes/auto.json"; fresh
+"$AUTO" on --rulings "$rf" >/dev/null 2>&1
+first="$(jq -r .first_ruling "$space/notes/auto.json")"
+printf '\n## D4 — later\nRuling: x\nBy: lead-auto\nStatus: pending-review\n' >> "$rf"
+"$AUTO" on --rulings "$rf" > "$FIX/on2.out" 2>/dev/null
+assert_eq "on twice keeps first_ruling" "$first" "$(jq -r .first_ruling "$space/notes/auto.json")"
+assert_eq "on twice prints the existing file" "$first" "$(jq -r .first_ruling "$FIX/on2.out")"
+
+fresh
+md="$("$AUTO" questions --markdown --rulings "$rf")"
+assert_contains "markdown list names D1" "$md" "### D1 — Cache layer"
+assert_contains "markdown list shows the alternatives" "$md" "memcached | redis"
+assert_contains "markdown list says how to reply" "$md" 'D<n>: <new answer>'
+assert_eq "markdown list covers all three" "3" "$(printf '%s\n' "$md" | grep -c '^### D')"
+
+# the default rulings path comes from ship-config; a failing config is an error, not a guess
+if command -v yq >/dev/null 2>&1 && yq --version 2>&1 | grep -q mikefarah; then
+  assert_eq "no --rulings: the configured default path is read" "3" "$("$AUTO" questions | jq '[.groups[].questions[]] | length')"
+  mkdir -p "$space/.hyper"; printf 'rulings: [broken\n' > "$space/.hyper/ship.yml"
+  assert_eq "no --rulings and a broken config: exit 1" "1" "$("$AUTO" questions >/dev/null 2>&1; echo $?)"
+  rm -f "$space/.hyper/ship.yml"
+else
+  skip "ship-auto reads the default rulings path through ship-config" "mikefarah yq v4 is not installed here"
+fi
+
+assert_eq "an unexpected argument is a usage error (64)" "64" "$("$AUTO" next extra >/dev/null 2>&1; echo $?)"
+assert_eq "an unknown option is a usage error (64)" "64" "$("$AUTO" next --nope >/dev/null 2>&1; echo $?)"
+assert_eq "--out outside questions is a usage error (64)" "64" "$("$AUTO" next --out x >/dev/null 2>&1; echo $?)"
+assert_eq "an unknown subcommand is a usage error (64)" "64" "$("$AUTO" frob >/dev/null 2>&1; echo $?)"
 
 finish

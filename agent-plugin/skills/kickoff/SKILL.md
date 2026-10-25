@@ -24,7 +24,7 @@ name, description = the spec path and goal) and one child per unit (title =
 the unit's title, description = its ref, class and brief path). Then add a
 dependency edge for each `Depends on` in `tasks.md`, so the tracker's ready
 list matches the plan. Use the beads skills (create, dep, epic). Write the
-tracker ids back into `tasks.md` beside each unit (`Tracker: <id>`), so the
+tracker ids back into `tasks.md` beside each unit (`- Tracker: <id>`), so the
 lead can pass `--task <id>` to `land` later. Do not duplicate items: if
 `tasks.md` already has a tracker id for a unit, reuse it.
 
