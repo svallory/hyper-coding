@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+# ship-auto — the mechanics of hyper:auto: mark the start of an auto stretch, build
+# the papiro questions JSON for the rulings the lead made on its own, and apply the
+# operator's reply to the rulings file. Works in any session, with or without ship.
+#
+# Usage:
+#   ship-auto on                      write notes/auto.json {since, first_ruling}
+#   ship-auto next                    print the next ruling number (max existing + 1)
+#   ship-auto questions [--out FILE]  papiro questions JSON for the pending auto rulings
+#   ship-auto apply REPLY|-           apply a papiro reply (or the markdown fallback)
+#
+# Options (before or after the subcommand):
+#   --rulings FILE   the rulings file (default: config `rulings`, else notes/decisions.md);
+#                    a relative path is relative to the space root
+#
+# Rulings file: entries `## D<n> — <title>` followed by `Ruling:`, `Reason:`, `By:`
+# and `Status:` lines. A ruling may also carry `Alternatives:` (alternatives it
+# rejected, separated by ` | `). In scope: entries with `By: lead-auto` and
+# `Status: pending-review` and a number >= first_ruling (all of them when
+# notes/auto.json is absent).
+#
+# questions: one question per ruling. id `D<n>`; options `keep` ("Keep the ruling",
+# the suggested one), `alt-N` ("Alternative N") per alternative, or `overturn`
+# ("Overturn") when there are none. The reason is the summary.
+#
+# apply: a question left on its suggestion, or answered "Keep the ruling", marks the
+# ruling `confirmed`. "Alternative N", "Overturn" or "Something else" marks it
+# `overturned (by D<m>)` and appends `## D<m>` (By: operator, Status: binding) whose
+# Ruling is the alternative's text or the operator's note. The markdown fallback is
+# lines `D<n>: <new answer>` (overturn) or `D<n>: ok` (confirm); a ruling not named
+# is confirmed. Prints one line per ruling and, for each overturned one, a
+# FOLLOW-UP line. Deletes notes/auto.json.
+#
+# Exit codes: 0 ok; 1 error; 2 usage; 3 nothing pending.
+set -euo pipefail
+
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+_dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+# shellcheck source=lib.sh
+source "$_dir/lib.sh"
+
+usage() { echo "ship-auto: $*" >&2; exit 2; }
+fail() { echo "ship-auto: $*" >&2; exit 1; }
+
+cmd="" rulings_arg="" out="" arg=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --rulings) [[ $# -ge 2 ]] || usage "--rulings needs a value"; rulings_arg="$2"; shift 2 ;;
+    --out) [[ $# -ge 2 ]] || usage "--out needs a value"; out="$2"; shift 2 ;;
+    -h|--help) sed -n '2,/^set -/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -) arg="-"; shift ;;
+    -*) usage "unknown option $1" ;;
+    *)
+      if [[ -z "$cmd" ]]; then cmd="$1"
+      elif [[ -z "$arg" ]]; then arg="$1"
+      else usage "unexpected argument $1"; fi
+      shift ;;
+  esac
+done
+case "$cmd" in on|next|questions|apply) ;; "") usage "a subcommand is required" ;; *) usage "unknown subcommand $cmd" ;; esac
+if [[ "$cmd" == apply && -z "$arg" ]]; then usage "apply needs a reply file (or - for stdin)"; fi
+
+root="$(ship_space_root)" || fail "cannot locate the space root"
+if [[ -n "$rulings_arg" ]]; then
+  rulings="$rulings_arg"
+else
+  rulings="$("$_dir/ship-config" --get rulings 2>/dev/null)" || rulings=""
+  [[ -n "$rulings" ]] || rulings="notes/decisions.md"
+fi
+case "$rulings" in /*) ;; *) rulings="$root/$rulings" ;; esac
+auto_file="$root/notes/auto.json"
+
+# next_number — max existing D<n> + 1 (1 when there are none).
+next_number() {
+  local max=0
+  if [[ -f "$rulings" ]]; then
+    max="$(sed -n 's/^## D\([0-9][0-9]*\).*/\1/p' "$rulings" | sort -n | tail -n 1)"
+    [[ -n "$max" ]] || max=0
+  fi
+  echo $((max + 1))
+}
+
+# entries_json — every ruling as a JSON array of {n, title, Ruling, Reason, By,
+# Status, Alternatives}. A value continues on following lines until the next field.
+entries_json() {
+  [[ -f "$rulings" ]] || { echo '[]'; return; }
+  awk '
+    /^## D[0-9]+/ {
+      line = $0; sub(/^## D/, "", line)
+      n = line; sub(/[^0-9].*$/, "", n)
+      title = line; sub(/^[0-9]+[ \t]*/, "", title); sub(/^(—|-|:)[ \t]*/, "", title)
+      printf "%s\ttitle\t%s\n", n, title
+      cur = n; key = ""; next
+    }
+    cur != "" && /^(Ruling|Reason|By|Status|Alternatives):/ {
+      key = $0; sub(/:.*$/, "", key)
+      val = $0; sub(/^[A-Za-z]+:[ \t]*/, "", val)
+      printf "%s\t%s\t%s\n", cur, key, val; next
+    }
+    cur != "" && key != "" && NF { v = $0; gsub(/^[ \t]+/, "", v); printf "%s\t%s+\t%s\n", cur, key, v; next }
+    /^#/ { cur = ""; key = "" }
+  ' "$rulings" | jq -R -s '
+    split("\n") | map(select(length > 0) | split("\t"))
+    | reduce .[] as $r ({order: [], by: {}};
+        ($r[0]) as $n
+        | (if (.by[$n] == null) then .order += [$n] | .by[$n] = {n: ($n | tonumber)} else . end)
+        | if ($r[1] | endswith("+"))
+          then (($r[1] | rtrimstr("+")) as $k | .by[$n][$k] = ((.by[$n][$k] // "") + " " + ($r[2:] | join("\t"))))
+          else .by[$n][$r[1]] = ($r[2:] | join("\t")) end)
+    | [.order[] as $n | .by[$n]]'
+}
+
+# pending_json — auto rulings awaiting review in scope.
+pending_json() {
+  local first=0
+  if [[ -f "$auto_file" ]]; then
+    first="$(jq -r '.first_ruling // 0' "$auto_file" 2>/dev/null | sed 's/^D//')" || first=0
+    [[ "$first" =~ ^[0-9]+$ ]] || first=0
+  fi
+  entries_json | jq --argjson first "$first" \
+    '[.[] | select(.By == "lead-auto" and ((.Status // "") | startswith("pending-review")) and .n >= $first)]'
+}
+
+case "$cmd" in
+  next) next_number ;;
+
+  on)
+    mkdir -p "$root/notes"
+    jq -n --arg since "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson n "$(next_number)" \
+      '{since: $since, first_ruling: ("D" + ($n | tostring))}' > "$auto_file"
+    cat "$auto_file" ;;
+
+  questions)
+    pend="$(pending_json)"
+    if [[ "$(jq 'length' <<<"$pend")" -eq 0 ]]; then
+      echo "ship-auto: no pending-review rulings" >&2; exit 3
+    fi
+    json="$(jq --arg rf "$rulings" '
+      def alts: ((.Alternatives // "") | split(" | ") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0)));
+      {
+        title: "Auto rulings review",
+        id: "auto-rulings",
+        intro: "While you were away the lead ruled on these instead of asking you. Each is pre-answered with its ruling; change only the ones you disagree with.",
+        options: ["Keep the ruling", "Overturn"],
+        groups: [{
+          title: "Rulings",
+          questions: [ .[] | {
+            id: ("D" + (.n | tostring)),
+            title: (.title // ("Ruling D" + (.n | tostring))),
+            summary: (.Reason // ""),
+            details: ("Ruling: " + (.Ruling // "") + (if (alts | length) > 0 then "\n\nRejected alternatives:\n" + (alts | map("- " + .) | join("\n")) else "" end)),
+            options: ([{value: "keep", label: "Keep the ruling", description: (.Ruling // "")}]
+              + (if (alts | length) > 0
+                 then [alts | to_entries[] | {value: ("alt-" + ((.key + 1) | tostring)), label: ("Alternative " + ((.key + 1) | tostring)), description: .value}]
+                 else [{value: "overturn", label: "Overturn", description: "Reject this ruling. Say what to do instead in the note."}] end)),
+            suggested: "keep",
+            resources: [$rf]
+          } ]
+        }]
+      }' <<<"$pend")"
+    if [[ -n "$out" ]]; then printf '%s\n' "$json" > "$out"; else printf '%s\n' "$json"; fi ;;
+
+  apply)
+    [[ -f "$rulings" ]] || fail "no rulings file at $rulings"
+    if [[ "$arg" == "-" ]]; then reply="$(cat)"; else
+      [[ -f "$arg" ]] || fail "no reply file $arg"
+      reply="$(cat "$arg")"
+    fi
+    pend="$(pending_json)"
+    [[ "$(jq 'length' <<<"$pend")" -gt 0 ]] || { echo "ship-auto: no pending-review rulings" >&2; exit 3; }
+    # answers: one "n<TAB>kind<TAB>text" line per ruling named in the reply.
+    # kind: keep | alt-N | overturn (text = the note, or the new answer in the fallback).
+    answers="$(printf '%s\n' "$reply" | awk '
+      function lower(s) { return tolower(s) }
+      {
+        line = $0; sub(/^[ \t]*[-*][ \t]*/, "", line)
+        if (match(line, /^D[0-9]+/) == 0) next
+        n = substr(line, 2, RLENGTH - 1); rest = substr(line, RLENGTH + 1)
+        if (rest ~ /^:[ \t]*/) {                        # fallback: D<n>: <answer>
+          ans = rest; sub(/^:[ \t]*/, "", ans)
+          if (lower(ans) ~ /^(ok|keep|confirmed?|yes)\.?$/) { printf "%s\tkeep\t\n", n; next }
+          printf "%s\toverturn\t%s\n", n, ans; next
+        }
+        note = ""
+        if (match(rest, /Note: .*/)) { note = substr(rest, RSTART + 6); rest = substr(rest, 1, RSTART - 1) }
+        gsub(/\(suggested:[^)]*\)/, "", rest)
+        kind = "overturn"
+        if (rest ~ /Keep the ruling/) kind = "keep"
+        else if (match(rest, /Alternative [0-9]+/)) { a = substr(rest, RSTART + 12, RLENGTH - 12); kind = "alt-" a }
+        printf "%s\t%s\t%s\n", n, kind, note
+      }')"
+    next_n="$(next_number)"
+    statuses="" appended="" follow=""
+    count="$(jq 'length' <<<"$pend")"
+    i=0
+    while [[ $i -lt $count ]]; do
+      n="$(jq -r ".[$i].n" <<<"$pend")"
+      title="$(jq -r ".[$i].title // \"\"" <<<"$pend")"
+      line="$(printf '%s\n' "$answers" | awk -F'\t' -v n="$n" '$1 == n { print; exit }')"
+      kind="keep" note=""
+      if [[ -n "$line" ]]; then
+        kind="$(printf '%s' "$line" | cut -f2)"; note="$(printf '%s' "$line" | cut -f3-)"
+      fi
+      if [[ "$kind" == keep ]]; then
+        statuses="${statuses}${n}=confirmed"$'\n'
+        echo "D$n confirmed"
+      else
+        m="$next_n"; next_n=$((next_n + 1))
+        newtext="$note"
+        case "$kind" in
+          alt-*)
+            idx="${kind#alt-}"
+            alt="$(jq -r --argjson i "$i" --argjson k "$idx" \
+              '.[$i].Alternatives // "" | split(" | ") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0)) | .[$k - 1] // ""' <<<"$pend")"
+            if [[ -n "$alt" && -n "$note" ]]; then newtext="$alt ($note)"; elif [[ -n "$alt" ]]; then newtext="$alt"; fi ;;
+        esac
+        [[ -n "$newtext" ]] || newtext="Overturned with no replacement given; ask the operator what to do instead."
+        statuses="${statuses}${n}=overturned (by D$m)"$'\n'
+        appended="${appended}"$'\n'"## D$m — Replaces D$n: $title"$'\n'"Ruling: $newtext"$'\n'"Reason: The operator overturned D$n on review."$'\n'"By: operator"$'\n'"Status: binding"$'\n'
+        echo "D$n overturned by D$m"
+        follow="${follow}FOLLOW-UP D$n -> D$m: $newtext"$'\n'
+      fi
+      i=$((i + 1))
+    done
+    tmp="$rulings.tmp.$$"
+    printf '%s' "$statuses" | awk -v rf="$rulings" '
+      BEGIN { FS = "=" }
+      { n = $1; v = $0; sub(/^[0-9]+=/, "", v); st[n] = v }
+      END {
+        cur = ""
+        while ((getline line < rf) > 0) {
+          if (line ~ /^## D[0-9]+/) { cur = line; sub(/^## D/, "", cur); sub(/[^0-9].*$/, "", cur) }
+          if (cur != "" && (cur in st) && line ~ /^Status:/) { print "Status: " st[cur]; delete st[cur]; continue }
+          print line
+        }
+      }' > "$tmp"
+    printf '%s' "$appended" >> "$tmp"
+    mv "$tmp" "$rulings"
+    printf '%s' "$follow"
+    rm -f "$auto_file" ;;
+esac
