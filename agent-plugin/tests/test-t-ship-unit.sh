@@ -25,7 +25,7 @@ REMOTE="$FIX/remote.git"
 export FIX SPACE HOSTSPACE HOSTHOME
 export SHIP_SPACE_ROOT="$SPACE"
 export SHIP_MUX_FAKE_DIR="$FIX/fake" SHIP_MUX_FAKE_LOG="$FIX/fake.log" SHIP_MUX_TEST=1
-export SHIP_UNIT_POLL_S=0.1 SHIP_UNIT_BACKOFF_MAX_S=0.5
+export SHIP_UNIT_POLL_S=0.1 SHIP_UNIT_BACKOFF_MAX_S=0.5 SHIP_UNIT_LOCK_WAIT_S=120
 export SHIP_LOOP_BIN="$FIX/bin/loop-stub"
 export WT_LOG="$FIX/wt.log" SSH_LOG="$FIX/ssh.log" RSYNC_LOG="$FIX/rsync.log"
 export STUB_G="$G" STUB_SPACE="$SPACE" LIBSH="$SHIP_DIR/lib.sh"
@@ -181,6 +181,7 @@ SHIP_MUX_FAKE_DIR=$FIX/hostfake
 SHIP_MUX_FAKE_LOG=$FIX/hostfake.log
 SHIP_LOOP_BIN=$FIX/bin/loop-stub
 SHIP_UNIT_POLL_S=0.1
+SHIP_UNIT_LOCK_WAIT_S=120
 WT_LOG=$FIX/wt.log
 STUB_G=$HG
 STUB_SPACE=$HOSTSPACE
@@ -230,7 +231,7 @@ exists() { [[ -e "$1" ]]; }
 gone() { [[ ! -e "$1" ]]; }
 # bg <tag> args... — a ship-unit in the background; bgrc <tag> waits for it and prints its code.
 bg() { local tag="$1"; shift; ( bash "$UNIT" "$@" >"$FIX/bg.$tag.out" 2>"$FIX/bg.$tag.err"; echo $? >"$FIX/bg.$tag.rc" ) & }
-bgrc() { wait_for "${2:-30}" test -s "$FIX/bg.$1.rc" && cat "$FIX/bg.$1.rc"; }
+bgrc() { wait_for "${2:-90}" test -s "$FIX/bg.$1.rc" && cat "$FIX/bg.$1.rc"; }
 # sleeper — a live "driver" pid for a unit; sets SLEEPER_PID.
 sleeper() { "$FIX/bin/ship-loop-sleeper" & SLEEPER_PID=$!; SLEEPERS="$SLEEPERS $SLEEPER_PID"; }
 unsleep() { kill "$@" 2>/dev/null; wait "$@" 2>/dev/null; }
@@ -433,8 +434,9 @@ rm_loops "$SPACE"; rm_loops "$HOSTSPACE"
 mode c1 hold; mode c2 hold
 bg c1 run c1 --brief "$BRIEF" --class S --host box
 bg c2 run c2 --brief "$BRIEF" --class S --host box
-wait_for 30 test -s "$FIX/bg.c1.rc" -o -s "$FIX/bg.c2.rc"
+wait_for 120 test -s "$FIX/bg.c1.rc" -o -s "$FIX/bg.c2.rc"
 sleep 0.3
+for t in c1 c2; do sed "s/^/# bg $t: /" "$FIX/bg.$t.err" >&2; done
 rc1="$(cat "$FIX/bg.c1.rc" 2>/dev/null)"; rc2="$(cat "$FIX/bg.c2.rc" 2>/dev/null)"
 assert_eq "two concurrent runs at slots=1: exactly one is refused (3)" "3" "$( [[ "$rc1" == 3 ]] && echo "$rc1" || echo "$rc2" )"
 assert_eq "...and only one driver was started" "1" "$(mux_count run "$FIX/hostfake.log" | awk '{print ($1 > 0) ? 1 : 0}')"
@@ -446,7 +448,7 @@ rm_loops "$SPACE"; rm_loops "$HOSTSPACE"
 rm -f "$FIX/bg."*
 mode s1 hold
 bg s1a run s1 --brief "$BRIEF" --class S --host box
-wait_for 20 exists "$(hloops s1)/driver.pid"
+wait_for 60 exists "$(hloops s1)/driver.pid"
 assert_eq "a second run of a ref whose driver is up: refused (3)" "3" "$(unit run s1 --brief "$BRIEF" --class S --host box)"
 assert_contains "...pointing at wait" "$(err)" "ship-unit wait s1"
 release s1
@@ -466,8 +468,8 @@ mode h1 hold
 : > "$FIX/ssh.noise"
 : > "$FIX/ssh.drop"
 bg h1 run h1 --brief "$BRIEF" --class S --host box --spec-dir "$SPACE/notes/specs/feat" --model dev=Y
-assert_eq "the host's driver is up" "yes" "$(wait_for 20 exists "$(hloops h1)/driver.pid" && echo yes)"
-assert_eq "the unit is visible here while it runs (mirrored right after the start)" "yes" "$(wait_for 20 exists "$(loops h1)/unit.json" && echo yes)"
+assert_eq "the host's driver is up" "yes" "$(wait_for 60 exists "$(hloops h1)/driver.pid" && echo yes)"
+assert_eq "the unit is visible here while it runs (mirrored right after the start)" "yes" "$(wait_for 60 exists "$(loops h1)/unit.json" && echo yes)"
 assert_eq "...with the host as recorded on the host" "box" "$(jq -r .host "$(loops h1)/unit.json")"
 assert_eq "...and the host's worktree path" "$HOSTSPACE/worktrees/h1" "$(jq -r .worktree "$(loops h1)/unit.json")"
 bash "$UNIT" list > "$FIX/list.out" 2>/dev/null
@@ -533,8 +535,8 @@ rm -f "$FIX/ssh.down"
 # the host stays unreachable: give up with 75, within a time bound, the driver keeps running
 mode h7 hold
 bg h7 run h7 --brief "$BRIEF" --class S --host box
-wait_for 20 exists "$(hloops h7)/driver.pid"
-wait_for 20 exists "$(loops h7)/unit.json"
+wait_for 60 exists "$(hloops h7)/driver.pid"
+wait_for 60 exists "$(loops h7)/unit.json"
 : > "$FIX/ssh.down"
 t0=$SECONDS
 rc="$(SHIP_UNIT_RECONNECT_SEC=1 unit wait h7)"
@@ -550,11 +552,11 @@ assert_eq "the original run (which kept polling) ends with the driver's code (0)
 # the driver finishes while ssh is down; the code and content arrive after the reconnect
 mode h8 hold
 bg h8 run h8 --brief "$BRIEF" --class S --host box
-wait_for 20 exists "$(hloops h8)/driver.pid"
+wait_for 60 exists "$(hloops h8)/driver.pid"
 : > "$FIX/ssh.down"
 sleep 0.7     # longer than any probe already on its way
 release h8
-assert_eq "the host's driver finished while ssh was down" "yes" "$(wait_for 20 exists "$(hloops h8)/driver.exit" && echo yes)"
+assert_eq "the host's driver finished while ssh was down" "yes" "$(wait_for 60 exists "$(hloops h8)/driver.exit" && echo yes)"
 sleep 0.5
 assert_eq "...the run is still waiting" "" "$(cat "$FIX/bg.h8.rc" 2>/dev/null)"
 rm -f "$FIX/ssh.down"

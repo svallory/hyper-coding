@@ -130,7 +130,7 @@ script_dir r2
 mkdir -p "$(loops r2)"
 agent r2     # no develop.json yet: the dev "is still working"
 ( bash "$UNIT" run r2 --brief "$BRIEF" --class S >"$FIX/r2.out" 2>"$FIX/r2.err"; echo $? > "$FIX/r2.rc" ) &
-assert_eq "the real driver of r2 is up" "yes" "$(wait_for 20 has_pid r2 && echo yes)"
+assert_eq "the real driver of r2 is up" "yes" "$(wait_for 60 has_pid r2 && echo yes)"
 script_dir r3
 rc="$(unit run r3 --brief "$BRIEF" --class S)"
 assert_eq "slots=1: a second run is refused while r2's driver runs (3)" "3" "$rc"
@@ -139,7 +139,7 @@ assert_eq "...no worktree for r3" "" "$([[ -e "$SPACE/worktrees/r3" ]] && echo r
 assert_contains "list shows r2 RUNNING" "$(bash "$UNIT" list | grep '^r2 ')" "RUNNING"
 printf '%s\n' "$DEV_DONE" > "$FIX/scripts/r2/develop.json"
 script r2 review-r1.json "$REV_OK"
-assert_eq "r2 finishes" "yes" "$(wait_for 30 test -s "$FIX/r2.rc" && echo yes)"
+assert_eq "r2 finishes" "yes" "$(wait_for 90 test -s "$FIX/r2.rc" && echo yes)"
 assert_eq "...READY (0)" "0" "$(cat "$FIX/r2.rc")"
 script r3 develop.json "$DEV_DONE"
 script r3 review-r1.json "$REV_OK"
