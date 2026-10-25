@@ -314,8 +314,9 @@ out="$(bash -c 'source "$1"; _lock "$2/f.json"; _unlock; [[ -d "$2/f.json.lock" 
 assert_eq "_unlock removes a lock that is still ours" "released" "$out"
 # concurrent opens: unique ids, valid records
 reset_fake
-for i in 1 2 3 4 5 6; do mux open --ref "par$i" --cwd "$WT" >/dev/null & done
+for i in 1 2 3 4 5 6; do (cd "$WT" && bash "$MUX_BIN" open --ref "par$i" --cwd "$WT" >/dev/null 2>"$FIX/par$i.err"; echo $? >"$FIX/par$i.rc") & done
 wait
+assert_eq "...every one exited 0 (a lock timeout would lose a space)" "0 6" "$(cat "$FIX"/par[1-6].rc | sort -u | tr -d '\n') $(cat "$FIX"/par[1-6].rc | wc -l | tr -d ' ')"
 assert_eq "six parallel opens made six distinct spaces" "6" "$(cat "$SPACE"/notes/loops/par*/mux.json | jq -r '.created[] | select(.kind == "space") | .id' | sort -u | wc -l | tr -d ' ')"
 assert_eq "...in one group, still recorded" "1" "$(jq '.groups | length' "$SPACE/.hyper/ship-mux.json")"
 assert_eq "the fake's counter issued 12 unique ids" "12" "$(cat "$SPACE"/notes/loops/par*/mux.json | jq -r '.created[].id' | sort -u | wc -l | tr -d ' ')"

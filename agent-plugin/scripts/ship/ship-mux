@@ -284,16 +284,24 @@ _lock_break() {
 }
 
 # _lock <file> — advisory lock for a read-modify-write of one JSON file.
-# SHIP_MUX_LOCK_TRIES (default 200, 50 ms apart) bounds the wait.
+# The wait is bounded by wall-clock time, not by a count of polls: a poll takes
+# far longer than its 50 ms sleep on a loaded machine, and the ops lock is held
+# for a whole backend `open`, so a count ran out while the holders were still
+# working and the waiting open was lost. SHIP_MUX_LOCK_TRIES is the bound in
+# 50 ms units (default 2400 = 120 s, the age at which a foreign lock is taken
+# over); it is rounded up to whole seconds. Running out is an error (exit 1).
 _lock() {
-  local d="$1.lock" i=0
+  local d="$1.lock" start="$SECONDS" limit
+  limit=$(((${SHIP_MUX_LOCK_TRIES:-2400} * 50 + 999) / 1000))
   mkdir -p "${1%/*}" 2>/dev/null || { echo "ship-mux: cannot create ${1%/*}" >&2; return 1; }
   while ! mkdir "$d" 2>/dev/null; do
     if _lock_stale "$d"; then
       _lock_break "$d"
     fi
-    i=$((i + 1))
-    if [[ $i -gt ${SHIP_MUX_LOCK_TRIES:-200} ]]; then echo "ship-mux: timed out waiting for the lock $d" >&2; return 1; fi
+    if [[ $((SECONDS - start)) -gt $limit ]]; then
+      echo "ship-mux: timed out after ${limit}s waiting for the lock $d; nothing was recorded" >&2
+      return 1
+    fi
     sleep 0.05
   done
   printf '%s\n' "$_me" >"$d/owner"
