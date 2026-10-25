@@ -40,8 +40,9 @@
 #
 # Host mode: scripts/ship/, scripts/hyper-require-lib.sh and skills/ship/defaults.yml
 # are rsynced to ~/.cache/hyper/ship/<plugin version>/ on the host (the host needs no
-# hyper CLI), SHIP_SPACE_ROOT is exported over ssh, and the brief, the rulings file and
-# the spec dir are rsynced to the same paths. The wait loop polls the host; when ssh
+# hyper CLI), SHIP_SPACE_ROOT is exported over ssh, and the brief, the rulings file, the spec dir
+# and the space's .hyper/ship.yml (so the unit runs under the lead's config; `resume`
+# copies it again) are rsynced to the same paths. The wait loop polls the host; when ssh
 # fails it reconnects and keeps polling (up to SHIP_UNIT_RECONNECT_SEC, default 900,
 # of continuous failure; the driver keeps running, `ship-unit wait <ref>` reattaches).
 #
@@ -455,6 +456,7 @@ case "$sub" in
         push+=("$rulings")
       fi
       [[ -z "$spec_dir" ]] || push+=("$spec_dir")
+      [[ ! -f "$root/.hyper/ship.yml" ]] || push+=("$root/.hyper/ship.yml")
       ship_host_push "$HTARGET" "${push[@]}" || fail "could not copy the brief and spec files to $HNAME"
     fi
 
@@ -500,6 +502,9 @@ case "$sub" in
     [[ -f "$root/notes/loops/$ref/unit.json" ]] || fail "unknown unit '$ref': no notes/loops/$ref/unit.json"
     select_host "$(jq -r '.host // "local"' "$root/notes/loops/$ref/unit.json")"
     slots="$(host_slots)"
+    if [[ -n "$HTARGET" && -f "$root/.hyper/ship.yml" ]]; then
+      ship_host_push "$HTARGET" "$root/.hyper/ship.yml" || fail "could not copy the space config to $HNAME"
+    fi
     rargs=("$ref" --host-name "$HNAME" --slots "$slots")
     if [[ -n "$answer" ]]; then
       if [[ -n "$HTARGET" ]]; then

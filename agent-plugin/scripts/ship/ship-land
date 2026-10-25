@@ -101,6 +101,9 @@ if ! ship_host_is_local "$host"; then
   [[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid --host '$host'"
   target="$(ship_host_target "$host")" || exit 1
   ship_host_sync "$target" || fail "could not copy the ship scripts to $host ($target)"
+  if [[ -f "$root/.hyper/ship.yml" ]]; then
+    ship_host_push "$target" "$root/.hyper/ship.yml" || fail "could not copy the space config to $host"
+  fi
   rargs=("$ref")
   [[ $abandon -eq 0 ]] || rargs+=(--abandon)
   [[ $force -eq 0 ]] || rargs+=(--force)
