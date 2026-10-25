@@ -371,4 +371,20 @@ assert_eq "an unknown option is a usage error (64)" "64" "$("$AUTO" next --nope 
 assert_eq "--out outside questions is a usage error (64)" "64" "$("$AUTO" next --out x >/dev/null 2>&1; echo $?)"
 assert_eq "an unknown subcommand is a usage error (64)" "64" "$("$AUTO" frob >/dev/null 2>&1; echo $?)"
 
+# --- ship-auto: a reply that is not one of the two shapes is refused ------------------------
+fresh; cp "$rf" "$FIX/frozen"
+assert_eq "garbage text is refused" "1" "$(apply_reply 'thanks, looks good!')"
+assert_eq "  ... nothing written" "yes" "$(unchanged)"
+assert_contains "  ... the message shows the expected shape" "$(cat "$FIX/apply.err")" "D<n>: <new answer>"
+assert_eq "an empty reply is refused" "1" "$(apply_reply '')"
+assert_eq "a blank-lines reply is refused" "1" "$(apply_reply "$(printf '\n  \n')")"
+assert_eq "a header naming the wrong sheet is refused" "1" "$(apply_reply 'zsh triage: all 3 as suggested.')"
+assert_eq "  ... nothing written" "yes" "$(unchanged)"
+assert_eq "the right header with a changed count but no lines is refused" "1" "$(apply_reply 'Auto rulings review: 2 changed, 1 as suggested.')"
+assert_eq "  ... nothing written" "yes" "$(unchanged)"
+assert_eq "the one-line all-as-suggested header is accepted" "0" "$(apply_reply 'Auto rulings review: all 3 as suggested.')"
+assert_eq "  ... and confirms all three" "confirmed confirmed confirmed" "$(status_of 1) $(status_of 2) $(status_of 3)"
+fresh
+assert_eq "the header after leading blank lines is accepted" "0" "$(apply_reply "$(printf '\nAuto rulings review: all 3 as suggested.')")"
+
 finish

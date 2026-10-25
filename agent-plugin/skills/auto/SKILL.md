@@ -59,7 +59,8 @@ Status: pending-review
    D<m>)` with a new `By: operator`, `Status: binding` ruling appended. It
    prints one `FOLLOW-UP` line per overturned ruling and deletes
    `notes/auto.json`. A reply line that names a ruling that is not pending,
-   or that does not parse, fails the whole reply with the bad lines listed
+   or that does not parse, fails the whole reply (so does a reply that is neither the
+   papiro reply nor a list of `D<n>:` lines; "all N as suggested" is accepted) with the bad lines listed
    and nothing written: show them to the operator and ask again. A note on a
    kept ruling is printed as `NOTE D<n>: ...`; act on it.
 5. Act on every follow-up: re-brief the affected unit, resume a parked one

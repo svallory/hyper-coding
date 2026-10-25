@@ -32,7 +32,9 @@
 # " (suggested: ...)", ", as suggested" or ". Note: ...". Papiro answers must be exactly
 # "Keep the ruling", "Alternative N" (N in range), "Overturn" or "Something else"; the
 # fallback also takes ok/keep/yes/confirmed, and any other text is a new answer. A
-# ruling not named is confirmed. Kept -> `confirmed` (a note is printed as `NOTE D<n>:
+# ruling not named is confirmed. A reply with no D line is accepted only as the header
+# line "Auto rulings review: all N as suggested."; anything else (empty, garbage, another
+# sheet's title) exits 1 and writes nothing. Kept -> `confirmed` (a note is printed as `NOTE D<n>:
 # ...` for the lead). Overturned -> `overturned (by D<m>)` plus an appended `## D<m>`
 # (By: operator, Status: binding) whose Ruling is the alternative or the operator's
 # note, and a `FOLLOW-UP D<n> -> D<m>: ...` line. A reply line naming a ruling that is
@@ -202,11 +204,12 @@ case "$cmd" in
     re_sugg='[[:space:]]*\(suggested:[^)]*\)\.?$'
     re_asis=', as suggested\.?$'
     re_alt='^Alternative ([0-9]+)$'
-    answers="" bad=""
+    answers="" bad="" dlines=0
     while IFS= read -r line; do
       line="${line%$'\r'}"
       l="$(printf '%s' "$line" | sed -E 's/^[[:space:]]*[-*][[:space:]]*//')"
       [[ "$l" =~ $re_id ]] || continue
+      dlines=$((dlines + 1))
       n="${BASH_REMATCH[1]}"; rest="${BASH_REMATCH[2]}"
       if ! jq -e --argjson n "$n" 'any(.[]; .n == $n)' <<<"$pend" >/dev/null; then
         bad="${bad}  ${line}   (D$n is not a pending auto ruling)"$'\n'; continue
@@ -255,6 +258,18 @@ case "$cmd" in
     if [[ -n "$bad" ]]; then
       printf 'ship-auto: reply not applied; nothing was written. Lines to fix:\n%s' "$bad" >&2
       exit 1
+    fi
+
+    if [[ $dlines -eq 0 ]]; then
+      first_line="$(printf '%s\n' "$reply" | sed -n '/[^[:space:]]/{p;q;}' | tr -d '\r')"
+      if [[ ! "$first_line" =~ ^Auto\ rulings\ review:\ all\ [0-9]+\ as\ suggested\.?$ ]]; then
+        {
+          echo "ship-auto: not a reply to the review; nothing was written. Expected one of:"
+          echo "  - the papiro reply, whose first line is \"Auto rulings review: ...\" (one line, \"Auto rulings review: all N as suggested.\", when nothing changed);"
+          echo "  - a list of lines \"D<n>: <new answer>\" or \"D<n>: ok\", at least one."
+        } >&2
+        exit 1
+      fi
     fi
 
     # ---- decide ----
