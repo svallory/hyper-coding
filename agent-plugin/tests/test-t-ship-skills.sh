@@ -387,4 +387,16 @@ assert_eq "  ... and confirms all three" "confirmed confirmed confirmed" "$(stat
 fresh
 assert_eq "the header after leading blank lines is accepted" "0" "$(apply_reply "$(printf '\nAuto rulings review: all 3 as suggested.')")"
 
+fresh; cp "$rf" "$FIX/frozen"
+assert_eq "another sheet's papiro header with valid D lines is refused" "1" \
+  "$(apply_reply "$(printf 'zsh triage: 2 changed, 1 as suggested.\n- D1 Cache layer: Keep the ruling\n- D2 Keep the ruling format: Keep the ruling')")"
+assert_eq "  ... nothing written" "yes" "$(unchanged)"
+assert_contains "  ... the message names the other sheet" "$(cat "$FIX/apply.err")" "zsh triage"
+assert_eq "another sheet's all-as-suggested header with D lines is refused" "1" \
+  "$(apply_reply "$(printf 'zsh triage: all 3 as suggested.\nD1: ok')")"
+assert_eq "the right header with D lines is accepted" "0" \
+  "$(apply_reply "$(printf 'Auto rulings review: 1 changed, 2 as suggested.\n- D1 Cache layer: Alternative 1 (suggested: Keep the ruling).')")"
+fresh
+assert_eq "a fallback list whose first line has a colon but no header shape is accepted" "0" "$(apply_reply "$(printf 'D1: ok')")"
+
 finish

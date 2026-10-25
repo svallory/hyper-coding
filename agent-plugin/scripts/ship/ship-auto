@@ -34,7 +34,7 @@
 # fallback also takes ok/keep/yes/confirmed, and any other text is a new answer. A
 # ruling not named is confirmed. A reply with no D line is accepted only as the header
 # line "Auto rulings review: all N as suggested."; anything else (empty, garbage, another
-# sheet's title) exits 1 and writes nothing. Kept -> `confirmed` (a note is printed as `NOTE D<n>:
+# sheet's title) exits 1; so does a papiro header for another sheet even when D lines follow and writes nothing. Kept -> `confirmed` (a note is printed as `NOTE D<n>:
 # ...` for the lead). Overturned -> `overturned (by D<m>)` plus an appended `## D<m>`
 # (By: operator, Status: binding) whose Ruling is the alternative or the operator's
 # note, and a `FOLLOW-UP D<n> -> D<m>: ...` line. A reply line naming a ruling that is
@@ -199,6 +199,13 @@ case "$cmd" in
     [[ "$(jq 'length' <<<"$pend")" -gt 0 ]] || { echo "ship-auto: no pending-review rulings" >&2; exit 3; }
 
     # ---- parse and validate the whole reply before writing anything ----
+    # A papiro header names its sheet; another sheet's reply must not be applied here.
+    first_line="$(printf '%s\n' "$reply" | sed -n '/[^[:space:]]/{p;q;}' | tr -d '\r')"
+    re_hdr='^(.+): (all [0-9]+ as suggested|[0-9]+ (changed|answered|notes?|as suggested))'
+    if [[ "$first_line" =~ $re_hdr && "${BASH_REMATCH[1]}" != "Auto rulings review" ]]; then
+      echo "ship-auto: the reply is for another sheet (\"${BASH_REMATCH[1]}\"), not \"Auto rulings review\"; nothing was written." >&2
+      exit 1
+    fi
     TAB=$'\t'
     re_id='^D([0-9]+)([^0-9].*)?$'
     re_sugg='[[:space:]]*\(suggested:[^)]*\)\.?$'
@@ -261,7 +268,6 @@ case "$cmd" in
     fi
 
     if [[ $dlines -eq 0 ]]; then
-      first_line="$(printf '%s\n' "$reply" | sed -n '/[^[:space:]]/{p;q;}' | tr -d '\r')"
       if [[ ! "$first_line" =~ ^Auto\ rulings\ review:\ all\ [0-9]+\ as\ suggested\.?$ ]]; then
         {
           echo "ship-auto: not a reply to the review; nothing was written. Expected one of:"
