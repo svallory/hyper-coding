@@ -167,7 +167,9 @@ SPACE_ROOT="$(ship_space_root)" || usage_exit "cannot locate the space root"
 STATE="$SPACE_ROOT/notes/loops/$REF"
 mkdir -p "$STATE/agents" || usage_exit "cannot create $STATE"
 LOG="$STATE/loop.log"
-echo $$ >"$STATE/driver.pid"
+# Atomic, so a reader never sees an empty pid file. A driver killed between the two commands leaves a
+# one-line driver.pid.tmp.<pid>: harmless (nothing reads it, and the next run archive moves it away).
+echo $$ >"$STATE/driver.pid.tmp.$$" && mv -f "$STATE/driver.pid.tmp.$$" "$STATE/driver.pid"
 HOST="${SHIP_HOST:-local}"
 
 log() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*" | tee -a "$LOG" >&2; }
