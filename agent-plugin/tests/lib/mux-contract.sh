@@ -82,10 +82,11 @@ mux_contract() {
   sent="SENT_${prefix}_text"
   assert_ok "contract: send --text" mux send --ref "$ref" --to "$ag" --text "$sent"
   assert_contains "contract: sent text shows up in read --to <agent>" "$(mux read --ref "$ref" --to "$ag")" "$sent"
-  assert_ok "contract: send --keys" mux send --ref "$ref" --to "$ag" --keys enter,esc,ctrl+c,ctrl+d
-  assert_ok "contract: read the last lines of the pane" mux read --ref "$ref" --to "$apn" --lines 5
   mux wait --ref "$ref" --to "$ag" --until gone --timeout-ms 100 >/dev/null 2>&1; rc=$?
   assert_eq "contract: wait --until gone on a live agent times out (4)" "4" "$rc"
+  # Harmless keys only: ctrl+c / ctrl+d can end a real agent, so they go last, just before the close.
+  assert_ok "contract: send --keys" mux send --ref "$ref" --to "$ag" --keys enter,esc
+  assert_ok "contract: read the last lines of the pane" mux read --ref "$ref" --to "$apn" --lines 5
   if [[ "$(mux status --ref "$ref" --to "$ag" | jq -r .state)" == idle ]]; then
     mux wait --ref "$ref" --to "$ag" --until working --timeout-ms 100 >/dev/null 2>&1; rc=$?
     assert_eq "contract: wait --until working on an idle agent times out (4)" "4" "$rc"
@@ -141,6 +142,8 @@ mux_contract() {
   _mc_json "contract: ...and none of them started anything" "$(mux list --ref "$ref")" '[.[] | select(.kind == "agent")] | length == 1'
   mux start --ref "$ref" --space "$sp" --name n --harness emacs --cwd "$cwd" >/dev/null 2>&1; rc=$?
   assert_eq "contract: start with an unknown harness exits 2" "2" "$rc"
+
+  assert_ok "contract: send --keys ctrl+c,ctrl+d" mux send --ref "$ref" --to "$ag" --keys ctrl+c,ctrl+d
 
   # closing an agent takes its pane
   assert_ok "contract: close a recorded agent" mux close --ref "$ref" --id "$ag"
