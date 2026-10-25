@@ -31,7 +31,7 @@
 # `D<n>: <answer>` (fallback). The answer is the text after the last ": " and before
 # " (suggested: ...)", ", as suggested" or ". Note: ...". Papiro answers must be exactly
 # "Keep the ruling", "Alternative N" (N in range), "Overturn" or "Something else"; the
-# fallback also takes ok/keep/yes/confirmed, and any other text is a new answer. A
+# fallback also takes ok/keep/yes/confirmed and "Alternative N" (N in range), and any other text is a new answer. A
 # ruling not named is confirmed. A reply with no D line is accepted only as the header
 # line "Auto rulings review: all N as suggested."; anything else (empty, garbage, another
 # sheet's title) exits 1; so does a papiro header for another sheet even when D lines follow and writes nothing. Kept -> `confirmed` (a note is printed as `NOTE D<n>:
@@ -202,7 +202,8 @@ case "$cmd" in
     # A papiro header names its sheet; another sheet's reply must not be applied here.
     first_line="$(printf '%s\n' "$reply" | sed -n '/[^[:space:]]/{p;q;}' | tr -d '\r')"
     re_hdr='^(.+): (all [0-9]+ as suggested|[0-9]+ (changed|answered|notes?|as suggested))'
-    if [[ "$first_line" =~ $re_hdr && "${BASH_REMATCH[1]}" != "Auto rulings review" ]]; then
+    first_body="$(printf '%s' "$first_line" | sed -E 's/^[[:space:]]*[-*][[:space:]]*//')"
+    if [[ ! "$first_body" =~ ^D[0-9]+ && "$first_line" =~ $re_hdr && "${BASH_REMATCH[1]}" != "Auto rulings review" ]]; then
       echo "ship-auto: the reply is for another sheet (\"${BASH_REMATCH[1]}\"), not \"Auto rulings review\"; nothing was written." >&2
       exit 1
     fi
@@ -230,6 +231,15 @@ case "$cmd" in
         ans="${rest#:}"; ans="${ans#"${ans%%[![:space:]]*}"}"; ans="${ans%"${ans##*[![:space:]]}"}"
         lc="$(printf '%s' "$ans" | tr '[:upper:]' '[:lower:]')"
         lc="${lc%.}"
+        if [[ "$ans" =~ $re_alt ]]; then
+          k="${BASH_REMATCH[1]}"
+          if jq -e --argjson n "$n" --argjson k "$k" 'any(.[]; .n == $n and $k >= 1 and $k <= (.alts | length))' <<<"$pend" >/dev/null; then
+            answers="${answers}${n}${TAB}alt-${k}${TAB}"$'\n'
+          else
+            bad="${bad}  ${line}   (D$n has no Alternative $k)"$'\n'
+          fi
+          continue
+        fi
         case "$lc" in
           ok|keep|yes|confirm|confirmed|"keep the ruling") kind=keep ;;
           "") bad="${bad}  ${line}   (empty answer)"$'\n'; continue ;;

@@ -399,4 +399,18 @@ assert_eq "the right header with D lines is accepted" "0" \
 fresh
 assert_eq "a fallback list whose first line has a colon but no header shape is accepted" "0" "$(apply_reply "$(printf 'D1: ok')")"
 
+fresh
+assert_eq "a fallback line that looks like a header ('D2: 2 changed files only') is not another sheet" "0" \
+  "$(apply_reply 'D2: 2 changed files only')"
+assert_eq "  ... it is an overturn with that text" "overturned (by D4)" "$(status_of 2)"
+fresh
+assert_eq "a bulleted fallback line that looks like a header is accepted too" "0" "$(apply_reply '- D2: all 3 as suggested')"
+fresh
+assert_eq "fallback 'D1: Alternative 2' takes that alternative" "0" "$(apply_reply 'D1: Alternative 2')"
+assert_eq "  ... overturned" "overturned (by D4)" "$(status_of 1)"
+assert_eq "  ... the new ruling is redis, not the literal text" "redis" "$(awk '/^## D4 /{f=1;next} /^## /{f=0} f && /^Ruling:/{sub(/^Ruling: */,""); print}' "$rf")"
+fresh; cp "$rf" "$FIX/frozen"
+assert_eq "fallback 'D1: Alternative 3' (out of range) fails" "1" "$(apply_reply 'D1: Alternative 3')"
+assert_eq "  ... nothing written" "yes" "$(unchanged)"
+
 finish
