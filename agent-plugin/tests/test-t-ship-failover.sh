@@ -75,6 +75,7 @@ assert_eq "failover-1: stage, round and agent" "develop 0 t1-dev" \
 assert_eq "failover-1: the quota block carries the percentage" 97 "$(jq -r .quota.seven_day "$STATE/failover-1.json")"
 assert_eq "failover-1: the quota block carries resets_at" "$(jq -r .rate_limits.seven_day.resets_at "$SHIP_QUOTA_DIR/claude-default.json")" \
   "$(jq -r .quota.resets_at "$STATE/failover-1.json")"
+assert_eq "failover-1/2: a quota hit is an account limit" "account account" "$(jq -r .limit_kind "$STATE/failover-1.json") $(jq -r .limit_kind "$STATE/failover-2.json")"
 assert_ok "failover-1 matches the failover schema" validate_verdict "$SCHEMAS_DIR/failover.json" "$STATE/failover-1.json"
 assert_ok "failover-2 matches the failover schema" validate_verdict "$SCHEMAS_DIR/failover.json" "$STATE/failover-2.json"
 assert_eq "two FAILOVER log lines" 2 "$(grep -c 'FAILOVER preflight develop' "$FIX/pick.log")"
@@ -193,6 +194,7 @@ fclear; pick dev
 assert_eq "limited.json: only the limited model is skipped" sonnet "$PICK_MODEL"
 assert_eq "limited.json: one failover file" 1 "$(fcount)"
 assert_eq "limited.json: it names the skipped model" opus "$(jq -r .from "$STATE/failover-1.json")"
+assert_eq "limited.json: a model entry is a model limit" model "$(jq -r .limit_kind "$STATE/failover-1.json")"
 assert_eq "limited.json: it has no quota block" null "$(jq -r '.quota // null' "$STATE/failover-1.json")"
 assert_ok "limited.json: the record matches the schema" validate_verdict "$SCHEMAS_DIR/failover.json" "$STATE/failover-1.json"
 cfg dev "$LIST"
@@ -200,6 +202,7 @@ jq -nc --arg u "$(iso 3600)" '{accounts: {default: {until: $u}}}' >"$SHIP_QUOTA_
 fclear; pick dev
 assert_eq "limited.json: a limited account skips every claude entry (ISO until)" "zai/glm-5.3" "$PICK_MODEL"
 assert_eq "limited.json: two failover files" 2 "$(fcount)"
+assert_eq "limited.json: an account entry is an account limit" "account account" "$(jq -r .limit_kind "$STATE/failover-1.json") $(jq -r .limit_kind "$STATE/failover-2.json")"
 cfg dev '["sonnet","opus"]'
 fclear; pick dev
 assert_eq "limited.json: exhausted list returns 2" 2 "$PICK_RC"

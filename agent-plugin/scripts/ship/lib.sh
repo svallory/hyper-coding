@@ -543,13 +543,14 @@ pick_model() {
     m="$(jq -r --argjson i "$i" '.[$i]' <<<"$list")"
     i=$((i + 1))
     if [[ "$(ship_model_parse "$m" 2>/dev/null | cut -f1)" != claude ]]; then picked="$m"; break; fi
-    # why: "" usable; else a JSON {why, until, quota?}
+    # blocked: empty when usable; else JSON {why, kind (account|model), until, quota?}
     blocked="$(jq -nc --argjson now "$now" --argjson lim "$lim_json" --argjson q "$quota" \
       --arg acct "$account" --arg m "$m" "$_SHIP_EPOCH_JQ"'
-      ([($lim.accounts[$acct].until? | epoch), ($lim.models[$m].until? | epoch)]
-        | map(select(. != null and . > $now))) as $l
-      | if ($l | length) > 0 then {why: "limited.json", until: ($l | max)}
-        elif $q != null then {why: ("\($q.window) at or above the threshold"), until: $q.resets_at, quota: ($q | del(.window))}
+      ([($lim.accounts[$acct].until? | epoch)] | map(select(. != null and . > $now))) as $la
+      | ([($lim.models[$m].until? | epoch)] | map(select(. != null and . > $now))) as $lm
+      | ($la + $lm) as $l
+      | if ($l | length) > 0 then {why: "limited.json", kind: (if ($la | length) > 0 then "account" else "model" end), until: ($l | max)}
+        elif $q != null then {why: ("\($q.window) at or above the threshold"), kind: "account", until: $q.resets_at, quota: ($q | del(.window))}
         else empty end')" || blocked=""
     if [[ -z "$blocked" ]]; then picked="$m"; break; fi
     skipped="$(jq -c --arg m "$m" --argjson b "$blocked" '. + [$b + {from: $m}]' <<<"$skipped")"
@@ -581,7 +582,7 @@ pick_model() {
     while [[ -e "$STATE/failover-$idx.json" ]]; do idx=$((idx + 1)); done
     rec="$(jq -nc --argjson s "$skip_json" --arg stage "$stage" --argjson round "$round" --arg agent "$agent" \
       --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-      '{stage:$stage, round:$round, agent:$agent, from:$s.from, to:$s.to, reason:"preflight", limit_kind:null,
+      '{stage:$stage, round:$round, agent:$agent, from:$s.from, to:$s.to, reason:"preflight", limit_kind:$s.kind,
         matched:null, summarizer:null, status_md:null, at:$at} + (if $s.quota then {quota:$s.quota} else {} end)')"
     printf '%s\n' "$rec" >"$STATE/failover-$idx.json.tmp" && mv "$STATE/failover-$idx.json.tmp" "$STATE/failover-$idx.json"
   done

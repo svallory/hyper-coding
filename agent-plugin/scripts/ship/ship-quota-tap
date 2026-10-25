@@ -36,7 +36,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-# Keep stdin byte for byte (the trailing x protects trailing newlines).
+# Keep stdin as read (text or JSON; NUL bytes are dropped by the shell). The trailing x protects
+# trailing newlines.
 input="$(cat; printf x)"
 input="${input%x}"
 
