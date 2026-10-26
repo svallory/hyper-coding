@@ -1047,12 +1047,46 @@ for i in 1 2 3 4 5 6 7 8; do ship_limit_record model "par$i" "$FARU" & LPIDS+=($
 LFAIL=0; for pid in "${LPIDS[@]}"; do wait "$pid" || LFAIL=$((LFAIL + 1)); done
 assert_eq "8 parallel writers: every call succeeded" 0 "$LFAIL"
 assert_eq "8 parallel writers: every entry is there" 10 "$(jq -r '.models | length' "$SHIP_QUOTA_DIR/limited.json")"
-[[ "$(jq -r '.models | length' "$SHIP_QUOTA_DIR/limited.json")" == 10 ]] || { echo "# limited.json: $(cat "$SHIP_QUOTA_DIR/limited.json")" >&2; ls -la "$SHIP_QUOTA_DIR" >&2; }
 assert_eq "the lock is released" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json.lock" ]] && echo present || echo absent)"
-# a stale lock is broken
-mkdir "$SHIP_QUOTA_DIR/limited.json.lock"; touch -t 200001010000 "$SHIP_QUOTA_DIR/limited.json.lock"
+# the race: 32 writers x 20 entries each, every one must survive
+rm -f "$SHIP_QUOTA_DIR/limited.json"
+RACE_OUT="$FIX/race.out"; : >"$RACE_OUT"
+LPIDS=()
+for w in $(seq 1 32); do
+  ( for k in $(seq 1 20); do ship_limit_record model "w${w}k${k}" "$FARU" || echo "fail $w $k" >>"$RACE_OUT"; done ) & LPIDS+=($!)
+done
+for pid in "${LPIDS[@]}"; do wait "$pid"; done
+assert_eq "race, 32 writers x 20: no call failed" "" "$(cat "$RACE_OUT")"
+assert_eq "race, 32 writers x 20: all 640 entries are kept" 640 "$(jq -r '.models | length' "$SHIP_QUOTA_DIR/limited.json")"
+# the lock itself: exactly one winner per round, on the file primitive
+WON="$FIX/won"; rm -rf "$WON"; mkdir -p "$WON"
+for round in $(seq 1 40); do
+  LPIDS=()
+  for w in 1 2 3 4 5 6 7 8; do ( if ship_lock "$FIX/rlock.$round" 0; then echo "$w" >"$WON/$round.$w"; fi ) & LPIDS+=($!); done
+  for pid in "${LPIDS[@]}"; do wait "$pid"; done
+done
+assert_eq "ship_lock: one winner in each of 40 contended rounds" "40 40" "$(ls "$WON" | cut -d. -f1 | sort -u | wc -l | tr -d ' ') $(ls "$WON" | wc -l | tr -d ' ')"
+rm -f "$FIX"/rlock.*
+# a lock whose owner is dead on this host is taken over at once; a live one, however old, is not
+echo "99999999@$(hostname)" >"$FIX/dl"
+assert_ok "ship_lock takes over a dead owner's lock" ship_lock "$FIX/dl" 0
+ship_unlock "$FIX/dl"; assert_eq "ship_unlock releases our own lock" absent "$([[ -e "$FIX/dl" ]] && echo present || echo absent)"
+sleep 30 & LIVEP=$!
+echo "$LIVEP@$(hostname)" >"$FIX/ll"; touch -t 200001010000 "$FIX/ll"
+assert_eq "ship_lock does not take a live local owner's lock, however old" 1 "$(ship_lock "$FIX/ll" 0 1; echo $?)"
+kill "$LIVEP" 2>/dev/null; wait "$LIVEP" 2>/dev/null
+# a foreign lock is stale only past stale_s; ship_unlock leaves a lock that is not ours
+echo "1@elsewhere" >"$FIX/fl"
+assert_eq "a young foreign lock is kept" 1 "$(ship_lock "$FIX/fl" 0 600; echo $?)"
+ship_unlock "$FIX/fl"; assert_eq "ship_unlock leaves a lock that is not ours" present "$([[ -e "$FIX/fl" ]] && echo present || echo absent)"
+touch -t 200001010000 "$FIX/fl"
+assert_ok "an old foreign lock is taken over" ship_lock "$FIX/fl" 0 60
+rm -f "$FIX/fl" "$FIX/ll"
+# a stale lock does not block the writer
+echo "1@elsewhere" >"$SHIP_QUOTA_DIR/limited.json.lock"; touch -t 200001010000 "$SHIP_QUOTA_DIR/limited.json.lock"
 ship_limit_record model after-stale "$FARU"
 assert_eq "a stale lock does not block the writer" true "$(jq -r '.models | has("after-stale")' "$SHIP_QUOTA_DIR/limited.json")"
+ship_limit_record model par1 "$FARU"; ship_limit_record model par2 "$FARU"; ship_limit_record model m1 "$FARU"; ship_limit_record account acct1 "$FARU"
 ship_limit_clear par1; ship_limit_clear acct1
 assert_eq "ship_limit_clear removes a model" false "$(jq -r '.models | has("par1")' "$SHIP_QUOTA_DIR/limited.json")"
 assert_eq "ship_limit_clear removes an account" false "$(jq -r '.accounts | has("acct1")' "$SHIP_QUOTA_DIR/limited.json")"

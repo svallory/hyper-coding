@@ -641,45 +641,81 @@ ship_quota_block() {
   return 0
 }
 
-# _ship_lock <file> — take <file>.lock (a directory: mkdir is atomic on every platform, flock is not on
-# macOS). Retries for about 30 s, then breaks a lock older than 60 s. 1 when it cannot be taken.
-_ship_lock() {
-  local l="$1.lock" i=0 age
-  while ! mkdir "$l" 2>/dev/null; do
-    i=$((i + 1))
-    if [[ $i -gt 600 ]]; then
-      age=$(( $(date +%s) - $(stat -c %Y "$l" 2>/dev/null || stat -f %m "$l" 2>/dev/null || echo 0) ))
-      if [[ $age -gt 60 ]]; then rmdir "$l" 2>/dev/null; i=0; continue; fi
-      return 1
+# --- locks ---------------------------------------------------------------------------------------
+# ship_lock <path> <timeout_s> [stale_s] — take the lock file <path>, waiting up to <timeout_s> seconds
+# (0 = one try). Returns 1 when it could not. The file is created with noclobber (O_EXCL), which is atomic
+# on every platform; a mkdir lock is not (uutils mkdir, the ubuntu CI image's, lets several callers win),
+# and flock is missing on macOS. The file holds "pid@host". A lock is stale when its owner is on this host
+# and dead, or (owner elsewhere or unknown) when it is older than <stale_s> seconds (default 120) and stat could read its age; a live owner on this host is never taken from; it is
+# moved aside first (one waiter wins the rename) and the copy is removed, so a lock somebody just took is
+# put back and never deleted. Sets SHIP_LOCK_OWNER to what the lock file said when it gave up.
+# Safe under `set -e`.
+SHIP_LOCK_OWNER=""
+SHIP_LOCK_HOST=""
+_ship_me() { printf '%s@%s' "$$" "$SHIP_LOCK_HOST"; }
+_ship_lock_init() { if [[ -z "$SHIP_LOCK_HOST" ]]; then SHIP_LOCK_HOST="$(hostname 2>/dev/null || echo unknown)"; fi; }
+_ship_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || true; }
+ship_lock() {
+  local l="$1" wait_s="${2:-30}" stale_s="${3:-120}" start="$SECONDS" me owner m age opid ohost judged live
+  _ship_lock_init
+  me="$(_ship_me)"
+  mkdir -p "$(dirname "$l")" 2>/dev/null || true
+  while true; do
+    if ( set -C; printf '%s\n' "$me" >"$l" ) 2>/dev/null; then return 0; fi
+    owner=""
+    if [[ -f "$l" ]]; then owner="$(cat "$l" 2>/dev/null || true)"; fi
+    SHIP_LOCK_OWNER="$owner"
+    judged=0 live=0
+    if [[ "$owner" == *@* ]]; then
+      opid="${owner%%@*}" ohost="${owner#*@}"
+      if [[ "$ohost" == "$SHIP_LOCK_HOST" && "$opid" =~ ^[0-9]+$ ]]; then
+        # on this host the pid decides, however old the lock is
+        if kill -0 "$opid" 2>/dev/null; then live=1; else judged=1; fi
+      fi
     fi
+    if [[ $judged -eq 0 && $live -eq 0 ]]; then
+      m="$(_ship_mtime "$l")"
+      if [[ "$m" =~ ^[0-9]+$ ]]; then
+        age=$(( $(date +%s) - m ))
+        if [[ $age -gt $stale_s ]]; then judged=1; fi
+      fi
+    fi
+    if [[ $judged -eq 1 ]] && mv "$l" "$l.stale.$$" 2>/dev/null; then
+      if [[ "$(cat "$l.stale.$$" 2>/dev/null || true)" == "$owner" ]]; then
+        rm -f "$l.stale.$$"
+        continue
+      fi
+      # it was not the lock we judged: somebody took it in between; put it back
+      if [[ ! -e "$l" ]]; then mv "$l.stale.$$" "$l" 2>/dev/null || rm -f "$l.stale.$$"; else rm -f "$l.stale.$$"; fi
+    fi
+    if [[ $((SECONDS - start)) -ge $wait_s ]]; then return 1; fi
     sleep 0.05
   done
 }
-_ship_unlock() { rmdir "$1.lock" 2>/dev/null || true; }
+# ship_unlock <path> — release the lock if it is still ours (after a takeover it belongs to someone else).
+ship_unlock() {
+  local o=""
+  _ship_lock_init
+  if [[ -f "$1" ]]; then o="$(cat "$1" 2>/dev/null || true)"; fi
+  if [[ "$o" == "$(_ship_me)" ]]; then rm -f "$1"; fi
+  return 0
+}
 
 # ship_limit_record <account|model> <key> <until epoch> — add an entry to limited.json (the file pick_model
 # reads), atomically and under a lock, keeping the entries other units wrote.
 ship_limit_record() {
-  local f cur tmp rc=1 try c
+  local f cur tmp rc=0 c
   f="$(ship_quota_dir)/limited.json"
   mkdir -p "$(dirname "$f")" || return 1
   c=models; [[ "$1" != account ]] || c=accounts
-  # The write is checked by reading the entry back; if another writer's update replaced ours, it is redone.
-  for try in 1 2 3 4 5; do
-    _ship_lock "$f" || { _ship_err "limited.json is locked"; return 1; }
-    cur='{}'
-    if [[ -s "$f" ]]; then
-      # a read that fails is retried, not taken as "empty" (that would drop every other entry); a file that stays unreadable is replaced
-      cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" && [[ -n "$cur" ]] || { if [[ $try -lt 5 ]]; then _ship_unlock "$f"; sleep 0.1; continue; fi; cur='{}'; }
-    fi
-    tmp="$f.tmp.$$.$RANDOM.$try"
-    jq -c --arg c "$c" --arg key "$2" --argjson u "$3" '.[$c] = ((.[$c] // {}) + {($key): {until: $u}})' <<<"$cur" >"$tmp" \
-      && mv -f "$tmp" "$f"
-    rm -f "$tmp"
-    _ship_unlock "$f"
-    if jq -e --arg c "$c" --arg key "$2" --argjson u "$3" '.[$c][$key].until == $u' "$f" >/dev/null 2>&1; then rc=0; break; fi
-    sleep 0.05
-  done
+  ship_lock "$f.lock" 120 60 || { _ship_err "limited.json is locked (by ${SHIP_LOCK_OWNER:-?})"; return 1; }
+  cur='{}'
+  if [[ -s "$f" ]]; then cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'; [[ -n "$cur" ]] || cur='{}'; fi
+  tmp="$f.tmp.$$"
+  jq -c --arg c "$c" --arg key "$2" --argjson u "$3" '.[$c] = ((.[$c] // {}) + {($key): {until: $u}})' <<<"$cur" >"$tmp" \
+    && mv -f "$tmp" "$f" || rc=1
+  rm -f "$tmp"
+  ship_unlock "$f.lock"
   return $rc
 }
 
@@ -689,11 +725,11 @@ ship_limit_clear() {
   local f cur tmp rc=0
   f="$(ship_quota_dir)/limited.json"
   [[ -s "$f" ]] || return 0
-  _ship_lock "$f" || { _ship_err "limited.json is locked"; return 1; }
+  ship_lock "$f.lock" 120 60 || { _ship_err "limited.json is locked (by ${SHIP_LOCK_OWNER:-?})"; return 1; }
   cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'
-  tmp="$f.tmp.$$.$RANDOM"
+  tmp="$f.tmp.$$"
   jq -c --arg n "$1" 'del(.accounts[$n]?) | del(.models[$n]?)' <<<"$cur" >"$tmp" && mv -f "$tmp" "$f" || rc=1
   rm -f "$tmp"
-  _ship_unlock "$f"
+  ship_unlock "$f.lock"
   return $rc
 }
