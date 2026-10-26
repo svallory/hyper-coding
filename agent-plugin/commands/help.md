@@ -85,5 +85,7 @@ For a brand-new setup: `/hyper:init <repo-url>` instead of step 1 — or `/hyper
 - Layout rules and conventions: the `hyper` skill, or `HYPER.md` in
   their space.
 - Domain language and design rules: `docs/concepts.md` in the plugin.
+- The ship workflow in full (scripts, config keys, unit files, park states):
+  `docs/ship.md` in the plugin.
 - What maps to which Hyper Coding pillar: the "Methodology coverage" section
   of the plugin README.

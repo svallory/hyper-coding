@@ -121,7 +121,7 @@ Without the CLI:
 ## Skills
 
 Skills are loaded by Claude when a request matches their description, or named
-directly (`hyper:ship`). Four are the space and tooling rules; the rest are the
+directly (`hyper:ship`). Three are the space and tooling rules; the rest are the
 lead workflow, described under [Shipping a feature](#shipping-a-feature).
 
 | Skill | What it does |
@@ -139,8 +139,9 @@ lead workflow, described under [Shipping a feature](#shipping-a-feature).
 
 `hyper:ship` is for a lead session (Claude Code) that is given a request and
 takes it to merged PRs without the operator in the loop. The lead decides
-whether a spec is needed, writes briefs, and starts one driver per unit
-(`scripts/ship/ship-loop`). The driver runs the unit through dev, verify,
+whether a spec is needed, writes briefs, and starts each unit with
+`scripts/ship/ship-unit`, which runs the driver (`scripts/ship/ship-loop`) and
+waits for it. The driver runs the unit through dev, verify,
 review, an optional spec check, fix rounds, an optional final gate and a
 finalize step (rebase, gate, forbidden-pattern scan, push), writing one JSON
 verdict file per stage under `notes/loops/<ref>/`. When a unit finishes, parks
@@ -154,7 +155,9 @@ Requirements: `jq`, mikefarah `yq` v4, `git`, `gh`, and a multiplexer backend
 then `~/.config/hyper/ship.yml`, then `<space root>/.hyper/ship.yml` (objects
 merge, arrays replace). `gate`, the command that must pass before push and
 merge, has no default and must be set. See [docs/concepts.md](docs/concepts.md)
-for the terms.
+for the terms and [docs/ship.md](docs/ship.md) for the reference: every script
+and flag, every config key, the unit directory, the park states and the mux
+backend contract.
 
 ## Hooks
 

@@ -375,10 +375,21 @@ key came from; `--get key` prints one value. `gate` is required.
 Models are an ordered list per stage (`models.dev`, `verify`, `review`,
 `spec_check`, `spec_write`, `final`). A bare name (`sonnet`) launches Claude
 Code; `provider/model[:thinking]` launches pi. The driver starts with the first
-usable entry. Before a Claude entry starts it reads the latest rate-limit
-snapshot and skips the entry when a window is at or above `quota.threshold_pct`;
-when an agent hits a limit mid-stage, a summariser writes `STATUS.md` and the
-stage restarts on the next entry. Only an exhausted list parks the unit.
+usable entry.
+
+Two mechanisms route around usage limits. **Preflight**: before a Claude entry
+starts, the driver reads the latest rate-limit snapshot (written by the
+`ship-quota-tap` status line) and skips the entry when a window is at or above
+`quota.threshold_pct` and not yet reset, or when the account or model is in
+`limited.json`; pi entries are never skipped this way. **Failover**: the
+driver searches only the newest 25 lines of an agent's screen for the harness's
+limit pattern, which is anchored to the start of a line so quoted code and
+messages do not match. On a hit it records the limit, stops the agent, has a
+summariser write `STATUS.md` (scrubbed of any line quoting a limit message) and
+restarts the same stage on the next usable entry. A limit that names another
+model than the agent runs on is recorded but does not stop the agent. Only an
+exhausted list parks the unit as LIMIT; `ship-loop --clear-limit NAME` tells
+the driver a quota is back.
 
 ### The mux seam
 
@@ -393,4 +404,5 @@ backend is one bash file plus a test that runs the shared contract
 `ship-mux` keeps an ownership record per unit (`notes/loops/<ref>/mux.json`) and
 closes only ids it recorded; closing anything else exits 3 without calling the
 backend. The units group is closed only when ship created it and it is empty.
-The header comment of `ship-mux` is the one place the interface is documented.
+The header comment of `ship-mux` is the one place the interface is documented;
+[ship.md](ship.md) is the full reference for every script, key and file.

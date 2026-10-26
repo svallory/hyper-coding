@@ -16,7 +16,9 @@ Settings (models, gate, hosts, slots, budgets, rulings path, tracker) live in
 `~/.config/hyper/ship.yml` and `<space root>/.hyper/ship.yml`. Read the merged
 result with `${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-config` (`--print` shows
 each key and where it came from, `--get key` one value). Never copy a value
-from them into a brief or a ruling by hand; name the key.
+from them into a brief or a ruling by hand; name the key. The full reference
+(every script and flag, every key, the unit directory, every park state) is
+`${CLAUDE_PLUGIN_ROOT}/docs/ship.md`.
 
 ## Lead rules
 
