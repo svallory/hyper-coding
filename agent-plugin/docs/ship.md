@@ -586,9 +586,11 @@ Each verdict `X.json` has companions: `X.json.sent` (one line appended per
 prompt; a verdict newer than its marker answers the last prompt, so a finished
 stage is never re-run), `X.json.clock` (accumulated stage time, so a resume does
 not reset the budget) and `X.json.answer` (the lead's answer last delivered to
-that agent). Review verdicts also leave `review-r<N>.sig` (the signature of the
-diff that review saw; the driver pushes only a diff whose signature matches an
-ACCEPT) and fix rounds leave `fix-r<N>.findings`, `fix-r<N>.src` and
+that agent). Review, spec-check and final-gate verdicts also leave `<stage>-r<N>.sig`
+(the signature of the diff that agent saw; the driver pushes only a diff whose
+signature matches a review or final-gate ACCEPT, and never one that a spec check or
+final gate rejected and none accepted since, so a revert to a rejected diff is sent
+back to the dev) and fix rounds leave `fix-r<N>.findings`, `fix-r<N>.src` and
 `fix-r<N>.before`, which record what the dev was asked so a resumed park
 continues that fix instead of replaying it.
 

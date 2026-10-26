@@ -1170,6 +1170,102 @@ PATH="$_path"
 assert_eq "old git: the run ends ERROR (exit 1)" "1" "$RC"
 assert_eq "old git: nothing was pushed" "$O49" "$(git -C "$FIX/origin-t49.git" rev-parse refs/heads/feat-t49)"
 
+# --- 50: a diff_sig that fails ends the run with its own ERROR: no JSON in a .sig/.before file, no "exited unexpectedly" ---------------------
+mkdir -p "$FIX/shim50"; REALGIT50="$(command -v git)"
+printf '#!/bin/sh\nif [ -e "$FLAG50" ]; then for a in "$@"; do [ "$a" = "--verbatim" ] && { echo "error: patch-id broke" >&2; exit 129; }; done; fi\nexec "%s" "$@"\n' "$REALGIT50" >"$FIX/shim50/git"; chmod +x "$FIX/shim50/git"
+flag_hook() { printf '#!/bin/sh\ntouch "%s"\nexit 0\n' "$FIX/flag50-$1" >"$FIX/scripts/$1/$2.hook"; chmod +x "$FIX/scripts/$1/$2.hook"; }
+_path="$PATH"
+# a: it fails before the first review is prompted
+reset_fake; unit t50a; : >"$FIX/flag50-t50a"
+script t50a develop.json "$DEV_DONE"; script t50a review-r1.json "$REV_OK"
+export FLAG50="$FIX/flag50-t50a"; PATH="$FIX/shim50:$_path"
+stub_start t50a; run_loop t50a; stub_stop
+PATH="$_path"
+assert_eq "diff_sig a: the run ends ERROR (exit 1)" "1" "$RC"
+assert_eq "diff_sig a: the review signature file holds no error JSON" "0" "$(cat "$(st t50a)/review-r1.sig" 2>/dev/null | grep -c '"status"')"
+assert_contains "diff_sig a: driver.err says what failed" "$(cat "$(st t50a)/driver.err")" "patch-id"
+# b: it fails after the review ACCEPT (inside reviewed_diff, a command substitution)
+reset_fake; unit t50b
+script t50b develop.json "$DEV_DONE"; script t50b review-r1.json "$REV_OK"; flag_hook t50b review-r1.json
+export FLAG50="$FIX/flag50-t50b"; PATH="$FIX/shim50:$_path"
+stub_start t50b; run_loop t50b; stub_stop
+PATH="$_path"
+assert_eq "diff_sig b: the run ends ERROR (exit 1)" "1" "$RC"
+assert_eq "diff_sig b: result.json status" "ERROR" "$(res t50b .status)"
+assert_contains "diff_sig b: result.json keeps the real reason" "$(res t50b .why)" "patch-id"
+assert_contains "diff_sig b: driver.err keeps the real reason" "$(cat "$(st t50b)/driver.err")" "patch-id"
+assert_not_contains "diff_sig b: the exit trap did not overwrite it" "$(cat "$(st t50b)/loop.log")" "driver exited unexpectedly"
+# c: it fails when a fix round records the diff it started from
+reset_fake; unit t50c
+script t50c develop.json "$DEV_DONE"; script t50c review-r1.json "$REV_CHANGES"; flag_hook t50c review-r1.json; script t50c fix-r2.json "$DEV_DONE"
+export FLAG50="$FIX/flag50-t50c"; PATH="$FIX/shim50:$_path"
+stub_start t50c; run_loop t50c; stub_stop
+PATH="$_path"; unset FLAG50
+assert_eq "diff_sig c: the run ends ERROR (exit 1)" "1" "$RC"
+assert_eq "diff_sig c: fix-r2.before holds no error JSON" "0" "$(cat "$(st t50c)/fix-r2.before" 2>/dev/null | grep -c '"status"')"
+assert_not_contains "diff_sig c: the exit trap did not overwrite it" "$(cat "$(st t50c)/loop.log")" "driver exited unexpectedly"
+
+# --- 51: the final gate's signature is written when it is prompted --------------------------------------------------------------
+reset_fake; unit t51
+script t51 develop.json "$DEV_DONE"; script t51 review-r1.json "$REV_OK"; script t51 final-r1.json "$REV_OK"
+stub_start t51; run_loop t51 --final-gate; stub_stop
+check_result t51 "final sig" 0 READY
+assert_ok "final sig: final-r1.sig exists" test -s "$(st t51)/final-r1.sig"
+assert_eq "final sig: and equals the diff the review was shown" "$(cat "$(st t51)/review-r1.sig")" "$(cat "$(st t51)/final-r1.sig" 2>/dev/null)"
+
+# --- 52: a restarted reviewer keeps the clock of its stage -------------------------------------------------------------------------
+reset_fake; unit t52
+mkdir -p "$(st t52)"
+printf '%s\n' "$DEV_DONE" >"$(st t52)/develop.json"; : >"$(st t52)/develop.json.sent"
+: >"$(st t52)/review-r1.json.sent"; printf '99999\n' >"$(st t52)/review-r1.json.clock"
+touch -t 202001010000 "$(st t52)/develop.json" "$(st t52)/develop.json.sent" "$(st t52)/review-r1.json.sent"
+run_loop t52
+check_result t52 "restarted reviewer" 2 OVER-BUDGET
+assert_eq "clock: the stage that ran over budget is the review" "review" "$(res t52 .stage)"
+
+# --- 53: after a failed send a live dev is not told it is taking over ---------------------------------------------------------------
+reset_fake; unit t53
+script t53 develop.json "$DEV_DONE"; script t53 review-r1.json "$REV_OK"
+: >"$FIX/failmux53.on"
+export SHIP_LOOP_MUX="$TESTS_DIR/fixtures/ship/failmux" FAILMUX_REAL="$SCRIPTS_DIR/ship/ship-mux" FAILMUX_FILE="$FIX/failmux53.on"
+run_loop t53
+check_result t53 "failed send: parked" 2 PARKED
+unset SHIP_LOOP_MUX FAILMUX_REAL FAILMUX_FILE
+printf 'Use the second option.\n' >"$(st t53)/answer-1.md"
+stub_start t53; run_loop t53; stub_stop
+check_result t53 "failed send: answered" 0 READY
+assert_eq "failed send: the dev was not restarted" "1" "$(starts_of t53-dev)"
+assert_not_contains "failed send: a live dev is not told it is taking over" "$(sent_to t53 t53-dev)" "taking over"
+assert_contains "failed send: it gets the task" "$(sent_to t53 t53-dev)" "$BRIEF"
+assert_contains "failed send: and the answer" "$(sent_to t53 t53-dev)" "Use the second option."
+
+# --- 54: a revert to a diff the spec check rejected is not a diff to push -------------------------------------------------------
+reset_fake; unit t54 spec
+W54="$SPACE/worktrees/t54"; O54="$(git -C "$FIX/origin-t54.git" rev-parse refs/heads/feat-t54)"
+export GATEOK54="$FIX/gateok-t54"; GATE_CMD='test -e "$GATEOK54"'; write_cfg
+SPEC_CHG='{"verdict":"CHANGES","findings":[{"severity":"BLOCKING","file":"docs/spec/a.md","line":1,"summary":"the spec is wrong","fix":"change it"}],"gaps":[],"removals":[],"commits":[],"gate":"green"}'
+script t54 develop.json "$DEV_DONE"; script t54 review-r1.json "$REV_OK"; script t54 spec-r1.json "$SPEC_CHG"
+script t54 fix-r2.json "$DEV_DONE"; script t54 review-r2.json "$REV_OK"; script t54 spec-r2.json "$SPEC_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W54" "$W54" "$W54" >"$FIX/scripts/t54/fix-r2.json.hook"
+printf '#!/bin/sh\ntouch "%s"\ngit -C "%s" revert --no-edit HEAD >/dev/null 2>&1\nexit 0\n' "$GATEOK54" "$W54" >"$FIX/scripts/t54/fix-r3.json.hook"
+chmod +x "$FIX/scripts/t54"/*.hook
+for _r in 3 4 5 6; do script t54 fix-r$_r.json "$DEV_DONE"; script t54 review-r$_r.json "$REV_OK"; done
+stub_start t54; run_loop t54; stub_stop
+check_result t54 "revert to a rejected diff" 2 STUCK
+assert_eq "rejected diff: nothing was pushed" "$O54" "$(git -C "$FIX/origin-t54.git" rev-parse refs/heads/feat-t54)"
+unset GATEOK54; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 55: the stub agent does not miss a prompt when a recreated .sent marker has the same inode -----------------------------------
+S55="$FIX/stub55"; mkdir -p "$S55/state" "$S55/script"
+printf '{"n":1}\n' >"$S55/script/x.json"; printf '1000 a\n' >"$S55/state/x.json.sent"
+bash "$STUB" "$S55/state" "$S55/script" >/dev/null 2>&1 & _sp=$!
+for _ in $(seq 100); do [[ -e "$S55/state/x.json" ]] && break; sleep 0.05; done
+assert_ok "stub: the first prompt is answered" test -e "$S55/state/x.json"
+rm -f "$S55/state/x.json"; printf '1000 b\n' >"$S55/state/x.json.sent"   # truncated in place: the same inode, one line again
+for _ in $(seq 100); do [[ -e "$S55/state/x.json" ]] && break; sleep 0.05; done
+assert_ok "stub: a marker that reuses the inode still counts as a new prompt" test -e "$S55/state/x.json"
+kill "$_sp" 2>/dev/null; wait "$_sp" 2>/dev/null
+
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"
 assert_eq "C-2: no messaging, Monitor or watchdog in ship-loop" "" "$(grep -nE 'SendMessage|claude-link|hyper msg|Monitor|stall' "$LOOP")"

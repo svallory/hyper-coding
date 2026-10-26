@@ -561,7 +561,7 @@ send_prompt() {
 # mark_sent <file> — record that the agent was prompted for <file> (after the prompt went out). A
 # verdict the agent already wrote during the send is not made stale by the marker.
 mark_sent() {
-  date +%s >>"$1.sent"
+  printf '%s %s%s\n' "$(date +%s)" "$RANDOM" "$RANDOM" >>"$1.sent"
   # A verdict the agent wrote while the prompt was still going out is not older than its prompt.
   if [[ -s "$1" ]]; then touch -r "$1" "$1.sent" 2>/dev/null || true; fi
 }
@@ -902,7 +902,9 @@ fresh_step() {
   fi
   agent_lookup "$name"; id="$L_ID"; agent_state "$id"
   if [[ -z "$id" || "$L_STATE" == gone ]]; then
-    rm -f "$file" "$file.sent" "$file.clock"
+    # The stage continues the same run: the time already used stays counted (run_step keeps its clock).
+    [[ ! -e "$file.clock" ]] || KEEP_CLOCK="$file"
+    rm -f "$file" "$file.sent"
     start_agent "$name" "$role" "$key" || die_error "could not start $name; see loop.log"
   fi
   run_step "$name" "$file" "$text" "$budget" "$stage"
@@ -1014,7 +1016,7 @@ resume_park() {
         # The dev that asked is gone and a new one took over without ever being prompted for this stage:
         # the answer goes into its first prompt (takeover text, stage prompt, answer in one message).
         if [[ -s "$ans" ]]; then
-          TAKEOVER=1
+          # (TAKEOVER is set above when the dev was replaced; a live dev whose prompt failed to go out is not told it took over)
           TAKEOVER_ANSWER="The previous dev stopped with this ($st):
 $(jq -r '.question // ""' "$STATE/park.json")
 The lead answers:
@@ -1099,7 +1101,7 @@ Continue from there."
     TAKEOVER_ANSWER=""
   fi
   # What the diff was when the dev was prompted: written once, so a resumed fix is compared with it.
-  [[ -e "$f.sent" && -s "$STATE/fix-r$r.before" ]] || diff_sig >"$STATE/fix-r$r.before"
+  if [[ ! ( -e "$f.sent" && -s "$STATE/fix-r$r.before" ) ]]; then diff_sig; printf '%s\n' "$DSIG" >"$STATE/fix-r$r.before"; fi
   run_step "$DEV" "$f" "$text" "$(budget_min fix "$f")" fix
   check_verdict develop "$f"
   dev_ok "$f" fix
@@ -1215,9 +1217,7 @@ do_review() {
   local r="$1" prior="$2" rf="$STATE/review-r$1.json" rtext
   STAGE=review CUR_ROUND="$r"
   # What this review is shown: written when the prompt goes out, never when a finished review is replayed.
-  if [[ ! -e "$rf.sent" ]] || sent_after_result "$rf"; then
-    diff_sig >"$STATE/review-r$r.sig"
-  fi
+  write_sig "$rf"
   pick_model --dry review
   rtext="$(prompt review round="$r" skill_call="$(skill_call code-review "$PICK_MODEL")" prior="$prior" \
     review_instructions="$(file_text "$REVIEW_INSTR_FILE")" verdict_file="$rf")"
@@ -1230,7 +1230,8 @@ do_review() {
 # The only thing that lets finalize push.
 reviewed_diff() {
   local cur rv sig
-  cur="$(diff_sig)" || exit 1   # (the subshell already wrote the ERROR result)
+  diff_sig; cur="$DSIG"
+  rejected_diff && return 1
   for rv in "$STATE"/review-r*.json "$STATE"/final-r*.json; do
     [[ -f "$rv" ]] && fresh_result "$rv" || continue
     [[ "$(jq -r .verdict "$rv" 2>/dev/null)" == ACCEPT ]] || continue
@@ -1239,19 +1240,45 @@ reviewed_diff() {
   done
   return 1
 }
-# diff_sig — a signature of what the PR changes
+# diff_sig — sets DSIG to a signature of what the PR changes. Never run it in $( ) or with its output
+# redirected: a failure ends the driver through die_error, which must run in the main shell to write the
+# one ERROR result (a subshell's exit leaves the exit trap to overwrite it).
 # (git patch-id --verbatim: line numbers do not count, so a rebase that only shifts lines keeps it; whitespace does, since it can change what code does.)
 # Both the signature stored with a review and the one the push is checked against come from this function.
+DSIG=""
 diff_sig() {
   # Fail closed: a git that cannot compute the signature (too old for --verbatim, a missing origin/$BASE)
   # ends the run, because an equal fake signature on both sides would let any diff through the push check.
   local d sig
+  DSIG=""
   d="$(git -C "$WT" diff -U0 --no-color "origin/$BASE...HEAD" 2>>"$LOG")" || die_error "git diff origin/$BASE...HEAD failed; see loop.log"
-  if [[ -z "$d" ]]; then printf 'empty\n'; return 0; fi
+  if [[ -z "$d" ]]; then DSIG=empty; return 0; fi
   sig="$(printf '%s\n' "$d" | git patch-id --verbatim 2>>"$LOG")" || die_error "git patch-id --verbatim failed (git 2.39 or newer is required); see loop.log"
   sig="${sig%% *}"
   [[ -n "$sig" ]] || die_error "git patch-id produced no signature; see loop.log"
-  printf '%s\n' "$sig"
+  DSIG="$sig"
+}
+# write_sig <verdict file> — store the diff an agent is shown next to its verdict (<stage>.sig), when the
+# prompt goes out; a finished verdict that is replayed keeps the signature it was written with.
+write_sig() {
+  if [[ ! -e "$1.sent" ]] || sent_after_result "$1"; then
+    diff_sig
+    printf '%s\n' "$DSIG" >"${1%.json}.sig"
+  fi
+}
+# rejected_diff — the diff as it is now was rejected by the spec check or the final gate, and neither accepted
+# it since. A revert to such a diff must not ride on the code review that once accepted it.
+rejected_diff() {
+  local f sig rej=1
+  diff_sig
+  for f in "$STATE"/spec-r*.json "$STATE"/final-r*.json; do
+    [[ -f "$f" ]] && fresh_result "$f" || continue
+    sig="${f%.json}.sig"
+    [[ -s "$sig" && "$(cat "$sig")" == "$DSIG" ]] || continue
+    if [[ "$(jq -r .verdict "$f" 2>/dev/null)" == ACCEPT ]]; then return 1; fi
+    rej=0
+  done
+  return $rej
 }
 
 # --- rounds ------------------------------------------------------------------------------------------
@@ -1307,6 +1334,7 @@ $fixed"
     STAGE=spec last=spec CUR_ROUND="$r"
     sf="$STATE/spec-r$r.json"
     SPEC_ROUNDS=$((SPEC_ROUNDS + 1))
+    write_sig "$sf"
     stext="$(prompt spec round="$r" spec_pending="$spec_pending" verdict_file="$sf")"
     fresh_step "$(aname "-spec-r$r")" spec spec_check "$sf" "$stext" spec "$(budget_min check "$sf")" spec
     SPEC_VERDICT="$(jq -r .verdict "$sf")"
@@ -1353,6 +1381,7 @@ $pending
   STAGE=final last=final CUR_ROUND="$r"
   ff="$STATE/final-r$r.json"
   FINAL_ROUNDS=$((FINAL_ROUNDS + 1))
+  write_sig "$ff"
   ftext="$(prompt final round="$r" final_pending="$final_pending" verdict_file="$ff")"
   fresh_step "$(aname "-final-r$r")" review final "$ff" "$ftext" review "$(budget_min check "$ff")" final
   FINAL_VERDICT="$(jq -r .verdict "$ff")"; n="$(jlen "$ff" findings)"
@@ -1447,15 +1476,15 @@ review_gate() {
       FR=$((FR + 1))
       fix_round "$FR" "$NEED_FIX"
       before="$(cat "$STATE/fix-r$FR.before")"
-      after="$(diff_sig)" || exit 1
-      if [[ "$FIX_SRC" == review && "$after" == "$before" ]]; then
+      diff_sig; after="$DSIG"
+      if [[ "$FIX_SRC" == review && "$after" == "$before" ]] || rejected_diff; then
         cycles=$((cycles + 1))
-        log "round $FR: the fix changed nothing after a CHANGES verdict ($cycles of $MAX)"
+        log "round $FR: the fix changed nothing after a CHANGES verdict, or restored a diff the spec check or final gate rejected ($cycles of $MAX)"
         if [[ $cycles -ge $MAX ]]; then
           finish 2 review STUCK "$(jq -n --arg f "$NEED_FIX" '{findings:$f}')"
         fi
         NEED_FIX="$NEED_FIX
-(Your last attempt changed nothing in the diff. Change the code, or stop with QUESTION and say why not.)"
+(Your last attempt left the diff as it was, or restored a diff the spec check or final gate rejected (see spec-r*.json and final-r*.json). Change the code, or stop with QUESTION and say why not.)"
         continue
       fi
       NEED_FIX=""
