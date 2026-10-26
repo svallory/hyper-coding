@@ -333,9 +333,15 @@ rc="$(GH_PR=909 land u8b)"
 assert_eq "a null pr whose PR is already merged is looked up (gh pr view) and finished" "0" "$rc"
 assert_eq "...without merging again" "$m0" "$(merges)"
 
+# no PR at all (neither open nor merged): the message does not say "open"
+mk_unit u8c 189
+jq '.pr = null' "$SPACE/notes/loops/u8c/result.json" > "$FIX/r.json" && mv "$FIX/r.json" "$SPACE/notes/loops/u8c/result.json"
+assert_eq "a null pr with no PR for the branch: exit 1" "1" "$(land u8c)"
+assert_contains "...says there is no PR (not 'no open PR')" "$(cat "$FIX/land.err")" "no PR for branch u8c"
+
 # 8: usage -------------------------------------------------------------------------------
 assert_eq "no ref is a usage error (2)" "2" "$(land)"
-assert_eq "an unknown flag is a usage error (2)" "2" "$(land u1 --host box)"
+assert_eq "an unknown flag is a usage error (2)" "2" "$(land u1 --bogus)"
 assert_eq "a bad ref is a usage error (2)" "2" "$(land '../x')"
 
 # 9: the lock ---------------------------------------------------------------------------
@@ -430,7 +436,7 @@ exists_word() { [[ -e "$1" ]] && echo yes || echo no; }
 # A land whose ship-mux can be told to skip or fail a close: a copy of the scripts
 # next to a wrapper (ship-land and ship-retire find ship-mux beside themselves).
 W2="$FIX/wland"; mkdir -p "$W2"
-cp "$LAND" "$RETIRE" "$SHIP_DIR/lib.sh" "$W2/"
+cp "$LAND" "$RETIRE" "$SHIP_DIR/lib.sh" "$SHIP_DIR/lib-host.sh" "$W2/"
 cat > "$W2/ship-mux" <<WRAP
 #!/usr/bin/env bash
 if [[ "\$1" == close && -n "\${WRAP_LEAVE:-}" && " \$* " == *" \$WRAP_LEAVE "* ]]; then exit 0; fi
