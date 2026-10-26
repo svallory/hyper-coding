@@ -403,7 +403,11 @@ send_prompt() {
 
 # mark_sent <file> — record that the agent was prompted for <file> (after the prompt went out). A
 # verdict the agent already wrote during the send is not made stale by the marker.
-mark_sent() { date +%s >>"$1.sent"; }
+mark_sent() {
+  date +%s >>"$1.sent"
+  # A verdict the agent wrote while the prompt was still going out is not older than its prompt.
+  if [[ -s "$1" ]]; then touch -r "$1" "$1.sent" 2>/dev/null || true; fi
+}
 # mtime_s <file> — modification time in whole seconds
 mtime_s() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1"; }
 
@@ -480,6 +484,8 @@ run_step() {
   if fresh_result "$file"; then log "$name: reusing $(basename "$file")"; return 0; fi
   agent_lookup "$name"; id="$L_ID"
   [[ -n "$id" ]] || die_error "agent $name is not running"
+  # SHIP_LOOP_AFTER_LOOKUP: a test seam, run here with the verdict file's path (to land a verdict in this window)
+  [[ -z "${SHIP_LOOP_AFTER_LOOKUP:-}" ]] || "$SHIP_LOOP_AFTER_LOOKUP" "$file" >>"$LOG" 2>&1 || true
   # The agent may write its verdict while the lookup above runs, so decide again from what is on disk
   # now: a verdict that is not older than its prompt is simply picked up (await_file returns at once).
   if fresh_result "$file"; then log "$name: reusing $(basename "$file")"; return 0; fi
@@ -487,7 +493,8 @@ run_step() {
     log "reattaching to $name for $(basename "$file")"
   else
     [[ ! -e "$file" ]] || log "$name: $(basename "$file") is older than its prompt; prompting again"
-    rm -f "$file" "$file.clock"
+    rm -f "$file"
+    [[ "$file" == "$KEEP_CLOCK" ]] || rm -f "$file.clock"
     printf '%s\n' "$text" >"${file%.json}.prompt.md"
     send_prompt "$id" "$text" || { rm -f "$file.sent"; FAIL_WHY="could not prompt $name (gone, or it never started a turn)"; step_failed "$stage" "$name" "$file" 1; }
     mark_sent "$file"
@@ -540,7 +547,12 @@ DEV="$(aname -dev)"
 # Files that belong to the unit, not to a run: an archive leaves them where they are (unit.json,
 # driver.exit and config.json are ship-unit's).
 KEEP_ON_ARCHIVE="mux.json loop.log driver.pid driver.err models.override unit.json driver.exit config.json"
-A_ID="" TAKEOVER=""
+A_ID="" TAKEOVER="" TAKEOVER_ANSWER="" FIX_SRC="" RESTART_DEV="" KEEP_CLOCK=""
+# takeover_text — what a dev that replaces a gone one is told first
+takeover_text() {
+  printf 'You are taking over unit %s (PR #%s) from a previous dev agent that is gone. Its work is all in %s on branch %s, and nothing was reset. Before anything else read the brief (%s), then run `git -C %s status` and `git -C %s log origin/%s..HEAD`. Then do what follows.' \
+    "$REF" "${PR:-?}" "$WT" "$BRANCH" "$BRIEF" "$WT" "$WT" "$BASE"
+}
 # resume_restart — a LIMIT park, or a BLOCKED park the lead left without an answer, ends with the parked
 # agent closed and its stage cleared, so the stage starts again with a new agent (model_pick, so a
 # models.override applies). Done before the dev is looked up: the parked agent may be the dev.
@@ -556,21 +568,24 @@ resume_restart() {
   esac
   agent_lookup "$agent"
   if [[ -n "$L_ID" ]]; then mux close --id "$L_ID" >/dev/null 2>>"$LOG" || log "could not close $agent ($L_ID)"; fi
-  [[ -z "$file" ]] || rm -f "$file" "$file.sent" "$file.clock"
+  # The clock stays: the stage continues the same run and the budget already spent still counts.
+  [[ -z "$file" ]] || rm -f "$file" "$file.sent"
+  [[ "$agent" != "$DEV" ]] || RESTART_DEV=1
+  KEEP_CLOCK="$file"
   mv "$STATE/park.json" "$STATE/park-$n.json"
   log "resumed from park $n ($st): $agent closed, its stage restarts with a new agent"
 }
 resume_restart
 agent_lookup "$DEV"; DEV_ID="$L_ID"; agent_state "$DEV_ID"
 if [[ -z "$DEV_ID" || "$L_STATE" == gone ]]; then
-  if valid_json "$STATE/develop.json" && [[ "$(jq -r .status "$STATE/develop.json")" == DONE ]]; then
+  if [[ -n "$RESTART_DEV" ]] || { valid_json "$STATE/develop.json" && [[ "$(jq -r .status "$STATE/develop.json")" == DONE ]]; }; then
     # develop is finished: the worktree holds the work and nothing is reset. A new dev takes over, and
     # every result stays. Prompts the old dev had in flight are forgotten so they are sent again.
     for _s in "$STATE"/fix-r*.json.sent; do
       [[ -e "$_s" && ! -e "${_s%.sent}" ]] && rm -f "$_s" "${_s%.sent}.clock"
     done
     TAKEOVER=1
-    log "$DEV is gone and develop.json is DONE: a new dev takes over, results kept"
+    log "$DEV is gone and its run continues (develop.json DONE, or its park was restarted): a new dev takes over, results kept"
   else
     # No finished develop: this is a new run. Set the results of the earlier run (answers and extensions
     # too, they belong to its numbering) aside.
@@ -607,6 +622,20 @@ resume_park() {
         finish 2 "$stage" PARKED "$(jq -c '{park:.}' "$STATE/park.json")"
       elif [[ -z "$id" || "$L_STATE" == gone ]]; then
         log "parked agent $agent is gone: the stage will be restarted"
+      elif [[ "$agent" == "$DEV" && -n "$file" && ! -e "$file.sent" ]]; then
+        # The dev that asked is gone and a new one took over without ever being prompted for this stage:
+        # the answer goes into its first prompt (takeover text, stage prompt, answer in one message).
+        if [[ -s "$ans" ]]; then
+          TAKEOVER=1
+          TAKEOVER_ANSWER="The previous dev stopped with this ($st):
+$(jq -r '.question // ""' "$STATE/park.json")
+The lead answers:
+$(cat "$ans")"
+          log "answer-$n.md will go to the new $agent in its first prompt"
+        else
+          log "still parked ($st): waiting for $ans"
+          finish 2 "$stage" PARKED "$(jq -c '{park:.}' "$STATE/park.json")"
+        fi
       elif [[ -s "$ans" ]]; then
         [[ -z "$file" ]] || rm -f "$file"
         send_prompt "$id" "Answer from the lead to your $st:
@@ -665,12 +694,20 @@ dev_ok() {
 fix_round() {
   local r="$1" findings="$2" f="$STATE/fix-r$1.json" text
   STAGE=fix
+  printf '%s\n' "$findings" >"$STATE/fix-r$r.findings"; printf '%s\n' "$FIX_SRC" >"$STATE/fix-r$r.src"
   text="$(prompt fix round="$r" pending="$findings" verdict_file="$f")"
   if [[ -n "$TAKEOVER" ]]; then
-    text="You are taking over unit $REF (PR #$PR) from a previous dev agent that is gone. Its work is all in $WT on branch $BRANCH, and nothing was reset. Before anything else read the brief ($BRIEF), then run \`git -C $WT status\` and \`git -C $WT log origin/$BASE..HEAD\`. Then do what follows.
+    text="$(takeover_text)
 
 $text"
     TAKEOVER=""
+  fi
+  if [[ -n "$TAKEOVER_ANSWER" ]]; then
+    text="$text
+
+$TAKEOVER_ANSWER
+Continue from there."
+    TAKEOVER_ANSWER=""
   fi
   run_step "$DEV" "$f" "$text" "$(budget_min fix "$f")" fix
   check_verdict develop "$f"
@@ -688,6 +725,22 @@ spec_required() { spec_touched || grep -qiE '^[[:space:]]*Spec:[[:space:]]*requi
 STAGE=develop
 f="$STATE/develop.json"
 text="$(prompt develop verdict_file="$f")"
+# (a develop.json that is already in is reused: the takeover text then belongs to the first fix round)
+if ! fresh_result "$f"; then
+  if [[ -n "$TAKEOVER" ]]; then
+    text="$(takeover_text)
+
+$text"
+    TAKEOVER=""
+  fi
+  if [[ -n "$TAKEOVER_ANSWER" ]]; then
+    text="$text
+
+$TAKEOVER_ANSWER
+Continue from there."
+    TAKEOVER_ANSWER=""
+  fi
+fi
 run_step "$DEV" "$f" "$text" "$(budget_min develop "$f")" develop
 check_verdict develop "$f"
 dev_ok "$f" develop
@@ -770,6 +823,10 @@ $nr"
 do_review() {
   local r="$1" prior="$2" rf="$STATE/review-r$1.json" rtext
   STAGE=review
+  # What this review is shown: written when the prompt goes out, never when a finished review is replayed.
+  if [[ ! -e "$rf.sent" ]] || sent_after_result "$rf"; then
+    diff_sig >"$STATE/review-r$r.sig"
+  fi
   rtext="$(prompt review round="$r" skill_call="$(skill_call code-review "$(model_pick review)")" prior="$prior" \
     review_instructions="$(file_text "$REVIEW_INSTR_FILE")" verdict_file="$rf")"
   fresh_step "$(aname "-review-r$r")" review review "$rf" "$rtext" review "$(budget_min check "$rf")" review
@@ -777,8 +834,27 @@ do_review() {
   add_round "$(jq -nc --argjson r "$r" --arg v "$RV_VERDICT" --argjson n "$RV_N" '{round:$r, verdict:$v, findings:$n}')"
   log "round $r review $RV_VERDICT ($RV_N findings)"
 }
-# diff_sig — a signature of what the PR changes (no context lines, so a rebase that changes nothing keeps it)
-diff_sig() { git -C "$WT" diff -U0 --no-color "origin/$BASE...HEAD" | cksum; }
+# reviewed_diff — the diff as it is now has a READY (ACCEPT) review that was shown exactly this diff.
+# The only thing that lets finalize push.
+reviewed_diff() {
+  local cur rv sig
+  cur="$(diff_sig)"
+  for rv in "$STATE"/review-r*.json "$STATE"/final-r*.json; do
+    [[ -f "$rv" ]] && fresh_result "$rv" || continue
+    [[ "$(jq -r .verdict "$rv" 2>/dev/null)" == ACCEPT ]] || continue
+    sig="${rv%.json}.sig"
+    [[ -s "$sig" && "$(cat "$sig")" == "$cur" ]] && return 0
+  done
+  return 1
+}
+# diff_sig — a signature of what the PR changes
+# (git patch-id --stable: line numbers and the order of files do not count, so a rebase that only shifts lines keeps it.)
+# Both the signature stored with a review and the one the push is checked against come from this function.
+diff_sig() {
+  local sig
+  sig="$(git -C "$WT" diff -U0 --no-color "origin/$BASE...HEAD" | git patch-id --stable | cut -d' ' -f1)"
+  printf '%s\n' "${sig:-empty}"
+}
 
 # --- rounds ------------------------------------------------------------------------------------------
 pending="" spec_pending="" final_pending="" accepted="" last=review ACC_R=0
@@ -895,7 +971,6 @@ if [[ -z "$accepted" ]]; then
   log "STUCK after $MAX rounds ($last)"
   finish 2 "$last" STUCK "$(jq -n --arg f "$pending" '{findings:$f}')"
 fi
-diff_sig >"$STATE/reviewed.sig"
 
 # --- finalize ----------------------------------------------------------------------------------------
 # The driver rebases, runs the gate, scans the added lines and pushes. Anything wrong goes back to the
@@ -921,7 +996,8 @@ forbidden_scan() { # prints offending added lines; returns 1 on a bad regex
   return $rc
 }
 
-# finalize_try — 0 pushed (finalize.json written); 1 the dev has to fix something (FIN_MSG says what)
+# finalize_try — 0 pushed (finalize.json written); 1 the dev has to fix something (FIN_MSG says what);
+# 2 the diff after the rebase is not one a reviewer accepted: nothing was pushed
 FIN_MSG=""
 finalize_try() {
   local out files ahead gate_out hits head
@@ -950,6 +1026,8 @@ $(printf '%s\n' "$hits" | head -n 30)
    Fix: reword or remove each hit in a commit, run the gate, and push."
     return 1
   fi
+  # The one push invariant: only a diff that a READY review was shown goes out.
+  if ! reviewed_diff; then log "the diff to push has no READY review; reviewing it first"; return 2; fi
   git -C "$WT" push --force-with-lease origin "HEAD:refs/heads/$BRANCH" >>"$LOG" 2>&1 \
     || die_error "git push --force-with-lease failed for $BRANCH; see loop.log"
   head="$(git -C "$WT" rev-parse --short HEAD)"
@@ -958,36 +1036,79 @@ $(printf '%s\n' "$hits" | head -n 30)
   return 0
 }
 
+# review_gate — returns when the diff as it is now has a READY review and no fix is pending. NEED_FIX (with
+# FIX_SRC, where it came from) is work the dev still owes; a fix for a CHANGES verdict that leaves the diff
+# as it was is a failed round. Every CHANGES verdict and every failed round counts toward max_rounds.
+FR=$ACC_R cycles=0 NEED_FIX="" GATE_PRIOR="" guard=0
+review_gate() {
+  local before rv
+  while true; do
+    guard=$((guard + 1))
+    [[ $guard -le $((MAX * 4 + 8)) ]] || die_error "finalize could not settle on a reviewed diff after $guard steps"
+    if [[ -n "$NEED_FIX" ]]; then
+      before="$(diff_sig)"
+      FR=$((FR + 1))
+      fix_round "$FR" "$NEED_FIX"
+      if [[ "$FIX_SRC" == review && "$(diff_sig)" == "$before" ]]; then
+        cycles=$((cycles + 1))
+        log "round $FR: the fix changed nothing after a CHANGES verdict ($cycles of $MAX)"
+        if [[ $cycles -ge $MAX ]]; then
+          finish 2 review STUCK "$(jq -n --arg f "$NEED_FIX" '{findings:$f}')"
+        fi
+        NEED_FIX="$NEED_FIX
+(Your last attempt changed nothing in the diff. Change the code, or stop with QUESTION and say why not.)"
+        continue
+      fi
+      NEED_FIX=""
+      if reviewed_diff; then return 0; fi
+      rv=$FR
+    else
+      if reviewed_diff; then return 0; fi
+      FR=$((FR + 1)); rv=$FR
+      GATE_PRIOR="The PR changed after your last accept. Review the diff against origin/$BASE as it is now."
+    fi
+    do_review "$rv" "$GATE_PRIOR"
+    if [[ "$RV_VERDICT" != ACCEPT ]]; then
+      [[ "$RV_N" -gt 0 ]] || die_error "review-r$rv.json is CHANGES with no findings"
+      cycles=$((cycles + 1))
+      if [[ $cycles -ge $MAX ]]; then
+        log "STUCK: the post-fix review kept asking for changes"
+        finish 2 review STUCK "$(jq -n --arg f "$(fmt_findings "$STATE/review-r$rv.json")" '{findings:$f}')"
+      fi
+      NEED_FIX="$(fmt_findings "$STATE/review-r$rv.json")"; FIX_SRC=review
+      GATE_PRIOR="The previous findings, which the dev says are fixed. Verify each against the current head first:
+$NEED_FIX"
+    fi
+  done
+}
+
 STAGE=finalize
-attempt=0 cycles=0 FR=$ACC_R
+attempt=0
+# A fix that was in flight when the driver stopped (a QUESTION in the middle of it, a crash) is continued,
+# not replayed over: it is the next round of the dev's work.
+_k=$((ACC_R + 1))
+if [[ -e "$STATE/fix-r$_k.json.sent" && -s "$STATE/fix-r$_k.findings" ]]; then
+  NEED_FIX="$(cat "$STATE/fix-r$_k.findings")"; FIX_SRC="$(cat "$STATE/fix-r$_k.src" 2>/dev/null)"
+  FR=$((_k - 1))
+  log "continuing the dev's fix round $_k"
+fi
 while ! { valid_json "$STATE/finalize.json" && [[ "$(jq -r .status "$STATE/finalize.json")" == DONE ]]; }; do
-  if finalize_try; then break; fi
+  review_gate
+  STAGE=finalize
+  _rc=0; finalize_try || _rc=$?
+  case $_rc in
+    0) break ;;
+    2) continue ;;
+  esac
   attempt=$((attempt + 1))
   if [[ $attempt -gt 2 ]]; then
     log "finalize still failing after 2 dev fixes"
     finish 2 finalize STUCK "$(jq -n --arg f "$FIN_MSG" '{findings:$f}')"
   fi
   log "finalize problem, back to the dev (attempt $attempt)"
-  FR=$((FR + 1))
-  fix_round "$FR" "$FIN_MSG"
-  # Whatever the dev changed here has not been reviewed: one review round on the post-fix diff before
-  # anything is pushed. CHANGES goes back to the dev, and the result is reviewed again.
-  while [[ "$(diff_sig)" != "$(cat "$STATE/reviewed.sig" 2>/dev/null)" ]]; do
-    do_review "$FR" "The dev changed the PR after your last accept, to fix this: $FIN_MSG
+  NEED_FIX="$FIN_MSG"; FIX_SRC=finalize
+  GATE_PRIOR="The dev changed the PR after your last accept, to fix this: $FIN_MSG
 Review the diff against origin/$BASE as it is now."
-    if [[ "$RV_VERDICT" == ACCEPT ]]; then diff_sig >"$STATE/reviewed.sig"; break; fi
-    [[ "$RV_N" -gt 0 ]] || die_error "review-r$FR.json is CHANGES with no findings"
-    cycles=$((cycles + 1))
-    if [[ $cycles -ge $MAX ]]; then
-      log "STUCK: the post-fix review kept asking for changes"
-      finish 2 review STUCK "$(jq -n --arg f "$(fmt_findings "$STATE/review-r$FR.json")" '{findings:$f}')"
-    fi
-    FR=$((FR + 1))
-    before="$(diff_sig)"
-    fix_round "$FR" "$(fmt_findings "$STATE/review-r$((FR - 1)).json")"
-    [[ "$(diff_sig)" != "$before" ]] || break
-  done
-  STAGE=finalize
 done
 FINALIZE_JSON="$(jq -c . "$STATE/finalize.json")"
 log "finalized at $(jq -r .head "$STATE/finalize.json")"

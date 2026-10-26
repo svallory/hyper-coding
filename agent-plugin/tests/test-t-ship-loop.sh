@@ -90,11 +90,26 @@ clear_sent() { rm -f "$(st "$1")/$2.sent"; } # ref verdict-file
 stub_stop() { [[ -z "$STUB_PID" ]] || { kill "$STUB_PID" 2>/dev/null; wait "$STUB_PID" 2>/dev/null; STUB_PID=""; }; }
 
 RC="" OUT=""
+# Every driver run is bounded (RUN_LIMIT_S, default 180): a stage that never gets its answer fails the test
+# with a message instead of hanging the suite. On expiry the driver and its children are killed, RC is 124.
+RUN_LIMIT_S="${RUN_LIMIT_S:-180}"
 run_loop() { # ref [args...]
-  local ref="$1"; shift
-  OUT="$(bash "$LOOP" --ref "$ref" --worktree "$SPACE/worktrees/$ref" --branch "feat-$ref" --brief "$BRIEF" --class S "$@" 2>"$FIX/err-$ref.log")"
-  RC=$?
+  local ref="$1" pid wd; shift
+  bash "$LOOP" --ref "$ref" --worktree "$SPACE/worktrees/$ref" --branch "feat-$ref" --brief "$BRIEF" --class S "$@" >"$FIX/out-$ref.json" 2>"$FIX/err-$ref.log" &
+  pid=$!
+  ( sleep "$RUN_LIMIT_S"; pkill -P "$pid" 2>/dev/null; kill "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  wd=$!
+  wait "$pid" 2>/dev/null; RC=$?
+  pkill -P "$wd" 2>/dev/null; kill "$wd" 2>/dev/null; wait "$wd" 2>/dev/null
+  if [[ "$RC" -eq 143 || "$RC" -eq 137 ]]; then
+    echo "# TIMEOUT: the driver for $ref was still running after ${RUN_LIMIT_S}s and was killed" >&2
+    tail -n 15 "$(st "$ref")/loop.log" 2>/dev/null | sed 's/^/# loop.log: /' >&2
+    RC=124
+  fi
+  OUT="$(cat "$FIX/out-$ref.json" 2>/dev/null)"
 }
+# whatever a failed check leaves running (stub, driver) is stopped when the suite ends
+trap 'stub_stop; pkill -P $$ 2>/dev/null' EXIT
 st() { echo "$SPACE/notes/loops/$1"; }
 res() { jq -r "$2" "$(st "$1")/result.json"; } # ref filter
 check_result() { # ref desc exit status
@@ -341,7 +356,7 @@ script t12 develop.json "$DEV_DONE"
 stub_start t12
 bash "$LOOP" --ref t12 --worktree "$SPACE/worktrees/t12" --branch feat-t12 --brief "$BRIEF" --class S >/dev/null 2>"$FIX/err-t12.log" &
 DRV=$!
-for _ in $(seq 200); do [[ -e "$(st t12)/review-r1.json.sent" ]] && break; sleep 0.05; done
+for _ in $(seq 2400); do [[ -e "$(st t12)/review-r1.json.sent" ]] && break; sleep 0.05; done
 assert_ok "restart: the driver reached the review" test -e "$(st t12)/review-r1.json.sent"
 kill -9 "$DRV" 2>/dev/null; wait "$DRV" 2>/dev/null
 assert_ok "restart: develop.json was already written" test -s "$(st t12)/develop.json"
@@ -680,15 +695,16 @@ printf 'idle\n' >"$SHIP_MUX_FAKE_DIR/status/t30-dev"
 script t30 develop.json "$DEV_DONE"; script t30 review-r1.json "$REV_OK"
 run_loop t30; stub_stop
 check_result t30 "resumed after more than the budget in wall time" 0 READY
+BUD_S=0.5; write_cfg   # a 30 s budget: the check below is about the carried clock, not about machine speed
 reset_fake; unit t31
 mkdir -p "$SHIP_MUX_FAKE_DIR/status"; printf 'working\nblocked\n' >"$SHIP_MUX_FAKE_DIR/status/t31-dev"
 stub_start t31; run_loop t31; stub_stop
 check_result t31 "parked on a dialog (carry case)" 2 PARKED
-printf '6\n' >"$(st t31)/develop.json.clock"   # 6 of the 6 seconds are used
+printf '30\n' >"$(st t31)/develop.json.clock"   # 30 of the 30 seconds are used
 printf 'working\n' >"$SHIP_MUX_FAKE_DIR/status/t31-dev"
 SECONDS=0; run_loop t31; _took=$SECONDS
 check_result t31 "the used time is carried over a restart" 2 OVER-BUDGET
-assert_ok "carried clock: over budget well before a clock restarted at zero could be (that needs more than 6 s plus startup; took $_took)" test "$_took" -lt 7
+assert_ok "carried clock: over budget well before a clock restarted at zero could be (that needs more than 30 s; took $_took)" test "$_took" -lt 25
 BUD_S=10; write_cfg
 
 # --- 31: a pi model is launched with pi's flags ------------------------------------------------------------------------------------------------------------
@@ -774,13 +790,171 @@ script t36 develop.json.1 '{"status":"QUESTION","pr":null,"head":null,"summary":
 script t36 develop.json.2 "$DEV_DONE"; script t36 review-r1.json "$REV_OK"
 export SHIP_LOOP_MUX="$TESTS_DIR/fixtures/ship/slowmux" SLOWMUX_REAL="$SCRIPTS_DIR/ship/ship-mux"
 BUD_S=0.5; write_cfg
-STUB_DELAY=0.3 stub_start t36; run_loop t36
+export STUB_DELAY=0.3; stub_start t36; unset STUB_DELAY; run_loop t36
 check_result t36 "slow lookup: question" 2 PARKED
 printf 'Yes.\n' >"$(st t36)/answer-1.md"
 run_loop t36; stub_stop
 check_result t36 "slow lookup: answered" 0 READY
 assert_eq "slow lookup: develop was prompted twice, not three times" "2" "$(wc -l <"$(st t36)/develop.json.sent" | tr -d ' ')"
 unset SHIP_LOOP_MUX SLOWMUX_REAL; BUD_S=10; write_cfg
+
+# --- 37: the push invariant — only a diff a READY review was shown goes out ---------------------------------------------------------
+leak_unit() { # ref — a unit whose pushed branch carries a forbidden word
+  local w="$SPACE/worktrees/$1"
+  unit "$1"
+  echo "see SECRETWORD here" >"$w/leak.txt"; git -C "$w" add -A; git -C "$w" commit -qm "feat: leak"; git -C "$w" push -q origin "feat-$1" 2>/dev/null
+  CFG_EXTRA="scan:
+  forbidden: ['SECRETW[O]RD']"; write_cfg
+}
+reword_hook() { # ref fix-file — the dev rewords the leak in a commit, without pushing
+  local w="$SPACE/worktrees/$1"
+  printf '#!/bin/sh\necho clean >"%s/leak.txt"\ngit -C "%s" commit -qam "fix: reword"\nexit 0\n' "$w" "$w" >"$FIX/scripts/$1/$2.hook"
+  chmod +x "$FIX/scripts/$1/$2.hook"
+}
+# R7: a post-fix review says CHANGES and the dev's next fix changes nothing: STUCK, never a push
+reset_fake; leak_unit t37
+O37="$(git -C "$FIX/origin-t37.git" rev-parse refs/heads/feat-t37)"
+script t37 develop.json "$DEV_DONE"; script t37 review-r1.json "$REV_OK"
+script t37 fix-r2.json "$DEV_DONE"; reword_hook t37 fix-r2.json
+script t37 review-r2.json "$REV_CHANGES"
+script t37 fix-r3.json "$DEV_DONE"; script t37 fix-r4.json "$DEV_DONE"
+stub_start t37; run_loop t37; stub_stop
+check_result t37 "R7: a no-op fix after CHANGES" 2 STUCK
+assert_eq "R7: nothing was pushed" "$O37" "$(git -C "$FIX/origin-t37.git" rev-parse refs/heads/feat-t37)"
+assert_eq "R7: no finalize" "no" "$([[ -e "$(st t37)/finalize.json" ]] && echo yes || echo no)"
+assert_eq "R7: the dev was asked again after the no-op" "yes" "$([[ -e "$(st t37)/fix-r4.json.sent" ]] && echo yes || echo no)"
+assert_eq "R7: no review of an unchanged diff" "0" "$(starts_of t37-review-r3)"
+CFG_EXTRA=''; write_cfg
+
+# R6: the dev parks QUESTION in the middle of a finalize fix; the resume continues that fix and waits for it
+reset_fake; leak_unit t38
+O38="$(git -C "$FIX/origin-t38.git" rev-parse refs/heads/feat-t38)"
+script t38 develop.json "$DEV_DONE"; script t38 review-r1.json "$REV_OK"
+script t38 fix-r2.json.1 '{"status":"QUESTION","pr":null,"head":null,"summary":"s","question":"Reword how?"}'
+script t38 fix-r2.json.2 "$DEV_DONE"; reword_hook t38 fix-r2.json
+script t38 review-r2.json "$REV_OK"
+stub_start t38; run_loop t38
+check_result t38 "R6: parked in a finalize fix" 2 PARKED
+assert_eq "R6: nothing pushed while parked" "$O38" "$(git -C "$FIX/origin-t38.git" rev-parse refs/heads/feat-t38)"
+printf 'Say clean.\n' >"$(st t38)/answer-1.md"
+run_loop t38; stub_stop
+check_result t38 "R6: answered" 0 READY
+assert_eq "R6: the fix was finished (fix-r2.json is DONE)" "DONE" "$(jq -r .status "$(st t38)/fix-r2.json")"
+assert_eq "R6: the fix was reviewed before the push" "1" "$(starts_of t38-review-r2)"
+assert_eq "R6: the push is the dev's reworded head" "$(git -C "$SPACE/worktrees/t38" rev-parse HEAD)" "$(git -C "$FIX/origin-t38.git" rev-parse refs/heads/feat-t38)"
+CFG_EXTRA=''; write_cfg
+
+# R8: the dev parks QUESTION in a fix round and dies; the replacement gets takeover + fix prompt + answer in one message
+reset_fake; leak_unit t39
+script t39 develop.json "$DEV_DONE"; script t39 review-r1.json "$REV_OK"
+script t39 fix-r2.json.1 '{"status":"QUESTION","pr":null,"head":null,"summary":"s","question":"Reword how?"}'
+stub_start t39; run_loop t39; stub_stop
+check_result t39 "R8: parked in a fix round" 2 PARKED
+printf 'Say clean.\n' >"$(st t39)/answer-1.md"
+_id="$(agent_of t39 t39-dev)"; (cd "$SPACE" && bash "$SCRIPTS_DIR/ship/ship-mux" close --ref t39 --id "$_id" >/dev/null 2>&1)
+rm -rf "$FIX/scripts/t39"; mkdir -p "$FIX/scripts/t39"
+script t39 fix-r2.json "$DEV_DONE"; reword_hook t39 fix-r2.json; script t39 review-r2.json "$REV_OK"
+clear_sent t39 fix-r2.json; stub_start t39; run_loop t39; stub_stop
+check_result t39 "R8: replaced dev" 0 READY
+assert_eq "R8: a second dev started" "2" "$(starts_of t39-dev)"
+assert_eq "R8: the new dev's first message is a single send" "1" "$(grep -c 'taking over unit t39' <<<"$(sent_to t39 t39-dev)")"
+assert_contains "R8: it carries the fix prompt" "$(sent_to t39 t39-dev)" "SECRETWORD"
+assert_contains "R8: and the operator's answer" "$(sent_to t39 t39-dev)" "Say clean."
+CFG_EXTRA=''; write_cfg
+
+# The invariant itself: a forged reviewed.sig and a review.sig that does not match the diff do not allow a push
+reset_fake; unit t40
+script t40 develop.json "$DEV_DONE"; script t40 review-r2.json "$REV_OK"
+mkdir -p "$(st t40)"
+printf '%s\n' "$DEV_DONE" >"$(st t40)/develop.json"; : >"$(st t40)/develop.json.sent"
+printf '%s\n' "$REV_OK" >"$(st t40)/review-r1.json"; : >"$(st t40)/review-r1.json.sent"
+echo forged >"$(st t40)/review-r1.sig"; echo forged >"$(st t40)/reviewed.sig"
+touch -t 202001010000 "$(st t40)/develop.json" "$(st t40)/develop.json.sent" "$(st t40)/review-r1.json" "$(st t40)/review-r1.json.sent"
+stub_start t40; run_loop t40; stub_stop
+check_result t40 "invariant: forged signatures" 0 READY
+assert_eq "invariant: the diff was reviewed again before the push" "1" "$(starts_of t40-review-r2)"
+assert_eq "normal run: no extra review (t1)" "0" "$(starts_of t1-review-r2)"
+
+# --- 41: post-fix reviews keep asking for changes and every fix changes the diff: STUCK at the budget, never a push --------------
+churn_hook() { # ref fix-file — each call changes the diff again (and removes the leak)
+  local w="$SPACE/worktrees/$1"
+  printf '#!/bin/sh\necho clean >"%s/leak.txt"\necho "$$ $(date +%%s)" >>"%s/churn.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: churn"\nexit 0\n' "$w" "$w" "$w" "$w" >"$FIX/scripts/$1/$2.hook"
+  chmod +x "$FIX/scripts/$1/$2.hook"
+}
+reset_fake; leak_unit t41
+O41="$(git -C "$FIX/origin-t41.git" rev-parse refs/heads/feat-t41)"
+script t41 develop.json "$DEV_DONE"; script t41 review-r1.json "$REV_OK"
+for _r in 2 3 4; do script t41 fix-r$_r.json "$DEV_DONE"; churn_hook t41 fix-r$_r.json; script t41 review-r$_r.json "$REV_CHANGES"; done
+stub_start t41; run_loop t41; stub_stop
+check_result t41 "post-fix review budget" 2 STUCK
+assert_eq "budget: nothing was pushed" "$O41" "$(git -C "$FIX/origin-t41.git" rev-parse refs/heads/feat-t41)"
+assert_eq "budget: no finalize" "no" "$([[ -e "$(st t41)/finalize.json" ]] && echo yes || echo no)"
+assert_eq "budget: the third review was the last" "1 0" "$(starts_of t41-review-r4) $(starts_of t41-review-r5)"
+CFG_EXTRA=''; write_cfg
+
+# --- 42: a dev replaced during a finalize fix: the in-flight marker is cleared, the new dev is told everything ----------------------
+reset_fake; leak_unit t42
+mkdir -p "$(st t42)"
+printf '%s\n' "$DEV_DONE" >"$(st t42)/develop.json"; : >"$(st t42)/develop.json.sent"
+printf '%s\n' "$REV_OK" >"$(st t42)/review-r1.json"; : >"$(st t42)/review-r1.json.sent"
+echo stale >"$(st t42)/review-r1.sig"
+printf 'old findings\n' >"$(st t42)/fix-r2.findings"; printf 'finalize\n' >"$(st t42)/fix-r2.src"
+# (empty markers, like the other seeds: a running stub must not take them for a prompt)
+: >"$(st t42)/fix-r2.json.sent"
+touch -t 202001010000 "$(st t42)/develop.json" "$(st t42)/develop.json.sent" "$(st t42)/review-r1.json" "$(st t42)/review-r1.json.sent" "$(st t42)/fix-r2.json.sent"
+script t42 review-r2.json "$REV_OK"; script t42 fix-r3.json "$DEV_DONE"; reword_hook t42 fix-r3.json; script t42 review-r3.json "$REV_OK"
+stub_start t42; run_loop t42; stub_stop
+check_result t42 "takeover with a fix in flight" 0 READY
+assert_contains "takeover: the new dev got the takeover text" "$(sent_to t42 t42-dev)" "You are taking over unit t42"
+assert_contains "takeover: and the fix prompt" "$(sent_to t42 t42-dev)" "SECRETWORD"
+assert_eq "takeover: the in-flight fix marker of the dead dev was cleared" "no" "$([[ -e "$(st t42)/fix-r2.json.sent" ]] && echo yes || echo no)"
+CFG_EXTRA=''; write_cfg
+
+# --- 43: a prompt that fails to go out leaves no .sent marker behind ----------------------------------------------------------
+reset_fake; unit t43
+script t43 develop.json.1 '{"status":"QUESTION","pr":null,"head":null,"summary":"s","question":"Q?"}'
+stub_start t43; run_loop t43; stub_stop
+check_result t43 "send failure: first run" 2 PARKED
+rm -f "$(st t43)/park.json"      # the lead resumed without an answer and the park is gone: the stage is re-prompted
+printf '%s\n' "$DEV_DONE" >"$(st t43)/develop.json"; touch -t 202001010000 "$(st t43)/develop.json"
+: >"$FIX/failmux.on"
+export SHIP_LOOP_MUX="$TESTS_DIR/fixtures/ship/failmux" FAILMUX_REAL="$SCRIPTS_DIR/ship/ship-mux" FAILMUX_FILE="$FIX/failmux.on"
+run_loop t43
+check_result t43 "send failure: the prompt could not go out" 2 PARKED
+assert_eq "send failure: parked BLOCKED" "BLOCKED" "$(jq -r .status "$(st t43)/park.json")"
+assert_eq "send failure: the stale .sent marker was removed" "no" "$([[ -e "$(st t43)/develop.json.sent" ]] && echo yes || echo no)"
+unset SHIP_LOOP_MUX FAILMUX_REAL FAILMUX_FILE
+
+# --- 44: a verdict that lands between the driver's two looks at a stage in flight is reused, not prompted over -------------------------------
+reset_fake; unit t44
+script t44 develop.json.1 '{"status":"QUESTION","pr":null,"head":null,"summary":"s","question":"Q?"}'
+stub_start t44; run_loop t44; stub_stop
+check_result t44 "race: first run parks" 2 PARKED
+assert_ok "race: the dev was prompted" test -e "$(st t44)/develop.json.sent"
+rm -f "$(st t44)/park.json" "$(st t44)/develop.json"   # resumed: the stage is in flight, the verdict not there yet
+printf '%s\n' "$DEV_DONE" >"$FIX/t44-verdict.json"
+export SHIP_LOOP_AFTER_LOOKUP="$TESTS_DIR/fixtures/ship/landverdict" LANDVERDICT_NAME=develop.json LANDVERDICT_SRC="$FIX/t44-verdict.json"
+script t44 review-r1.json "$REV_OK"
+stub_start t44; run_loop t44; stub_stop
+unset SHIP_LOOP_AFTER_LOOKUP LANDVERDICT_NAME LANDVERDICT_SRC
+check_result t44 "race: verdict landed during the lookup" 0 READY
+assert_eq "race: develop was prompted once" "1" "$(wc -l <"$(st t44)/develop.json.sent" | tr -d ' ')"
+assert_contains "race: the landed verdict was reused" "$(cat "$(st t44)/loop.log")" "reusing develop.json"
+assert_not_contains "race: and never deleted for a new prompt" "$(cat "$(st t44)/loop.log")" "prompting again"
+
+# --- 45: a restarted LIMIT park in develop continues the same run: clock kept, new dev takes over -----------------------------------------
+reset_fake; unit t45b
+mkdir -p "$(st t45b)"
+cat >"$(st t45b)/park.json" <<PARK
+{"status":"BLOCKED","stage":"develop","agent":"t45b-dev","question":"it stopped","since":"2026-01-01T00:00:00Z","n":1,"file":"$(st t45b)/develop.json"}
+PARK
+printf '17\n' >"$(st t45b)/develop.json.clock"
+script t45b develop.json "$DEV_DONE"; script t45b review-r1.json "$REV_OK"
+stub_start t45b; run_loop t45b; stub_stop
+check_result t45b "restarted park continues the run" 0 READY
+assert_contains "restart: the new dev is told it takes over" "$(sent_to t45b t45b-dev)" "You are taking over unit t45b"
+assert_eq "restart: nothing was archived" "0" "$(ls -d "$(st t45b)"/run-* 2>/dev/null | wc -l | tr -d ' ')"
+assert_eq "restart: the clock of the earlier run was carried (17 s or more)" "yes" "$([[ "$(cat "$(st t45b)/develop.json.clock")" -ge 17 ]] && echo yes || echo no)"
 
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"

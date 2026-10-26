@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# failmux — ship-mux whose `send` fails while the file $FAILMUX_FILE exists (FAILMUX_REAL is the real ship-mux).
+# A test seam for ship-loop (SHIP_LOOP_MUX): it makes a prompt fail to go out.
+if [[ "$1" == send && -e "${FAILMUX_FILE:-/nonexistent}" ]]; then echo "failmux: send refused" >&2; exit 1; fi
+exec "${FAILMUX_REAL:?}" "$@"
