@@ -23,6 +23,8 @@ chmod +x "$stub_dir/herdr"
 export SHIP_MUX_TEST=1
 export PATH="$stub_dir:$PATH"
 
+file_timeout="${HYPER_TEST_FILE_TIMEOUT:-900}"
+
 total_pass=0
 total_fail=0
 crashed=0
@@ -33,8 +35,16 @@ for f in "$dir"/test-*.sh; do
   files=$((files + 1))
   name="$(basename "$f")"
   echo "# === $name"
-  out="$(bash "$f" 2>&1)"
+  # Output goes to a file, not a command substitution: a leaked background
+  # child holding the pipe would otherwise keep this runner waiting forever.
+  # The per-file alarm (seconds, HYPER_TEST_FILE_TIMEOUT) turns a hang into a
+  # loud failure instead of a stuck job.
+  perl -e 'alarm shift; exec @ARGV' "$file_timeout" bash "$f" >"$stub_dir/out" 2>&1 </dev/null
   status=$?
+  out="$(cat "$stub_dir/out")"
+  if [[ $status -eq 142 ]]; then
+    out="$out"$'\n'"not ok - $name timed out after ${file_timeout}s"
+  fi
   printf '%s\n' "$out" | sed 's/^/    /'
 
   p="$(printf '%s\n' "$out" | grep -c '^ok ')"
