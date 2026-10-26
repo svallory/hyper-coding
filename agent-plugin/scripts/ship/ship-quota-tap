@@ -30,6 +30,7 @@ source "$_dir/lib.sh"
 original=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    -h|--help) sed -n '2,/^set -u/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
     --original) original="${2-}"; shift ;;
     *) ;;
   esac

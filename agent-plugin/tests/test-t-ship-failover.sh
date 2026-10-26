@@ -240,6 +240,10 @@ no_quota
 STATE="$FIX/state-a"; export STATE
 
 # --- the quota tap ------------------------------------------------------------------------------------
+HELP_OUT="$(bash "$TAP" --help </dev/null 2>&1)"; HELP_RC=$?
+assert_eq "tap --help exits 0 without reading stdin" 0 "$HELP_RC"
+assert_contains "tap --help prints the header comment" "$HELP_OUT" "ship-quota-tap — Claude Code status-line command"
+assert_contains "tap -h prints the usage too" "$(bash "$TAP" -h </dev/null 2>&1)" "Usage"
 
 # A fixture original status-line command: reads stdin, prints a line with ANSI and a trailing blank line.
 cat >"$FIX/orig.sh" <<'EOF'
