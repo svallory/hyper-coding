@@ -660,18 +660,26 @@ _ship_unlock() { rmdir "$1.lock" 2>/dev/null || true; }
 # ship_limit_record <account|model> <key> <until epoch> — add an entry to limited.json (the file pick_model
 # reads), atomically and under a lock, keeping the entries other units wrote.
 ship_limit_record() {
-  local f cur tmp rc=0
+  local f cur tmp rc=1 try c
   f="$(ship_quota_dir)/limited.json"
   mkdir -p "$(dirname "$f")" || return 1
-  _ship_lock "$f" || { _ship_err "limited.json is locked"; return 1; }
-  cur='{}'
-  if [[ -s "$f" ]]; then cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'; [[ -n "$cur" ]] || cur='{}'; fi
-  tmp="$f.tmp.$$.$RANDOM"
-  jq -c --arg k "$1" --arg key "$2" --argjson u "$3" \
-    '(if $k == "account" then "accounts" else "models" end) as $c | .[$c] = ((.[$c] // {}) + {($key): {until: $u}})' <<<"$cur" >"$tmp" \
-    && mv -f "$tmp" "$f" || rc=1
-  rm -f "$tmp"
-  _ship_unlock "$f"
+  c=models; [[ "$1" != account ]] || c=accounts
+  # The write is checked by reading the entry back; if another writer's update replaced ours, it is redone.
+  for try in 1 2 3 4 5; do
+    _ship_lock "$f" || { _ship_err "limited.json is locked"; return 1; }
+    cur='{}'
+    if [[ -s "$f" ]]; then
+      # a read that fails is retried, not taken as "empty" (that would drop every other entry); a file that stays unreadable is replaced
+      cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" && [[ -n "$cur" ]] || { if [[ $try -lt 5 ]]; then _ship_unlock "$f"; sleep 0.1; continue; fi; cur='{}'; }
+    fi
+    tmp="$f.tmp.$$.$RANDOM.$try"
+    jq -c --arg c "$c" --arg key "$2" --argjson u "$3" '.[$c] = ((.[$c] // {}) + {($key): {until: $u}})' <<<"$cur" >"$tmp" \
+      && mv -f "$tmp" "$f"
+    rm -f "$tmp"
+    _ship_unlock "$f"
+    if jq -e --arg c "$c" --arg key "$2" --argjson u "$3" '.[$c][$key].until == $u' "$f" >/dev/null 2>&1; then rc=0; break; fi
+    sleep 0.05
+  done
   return $rc
 }
 
