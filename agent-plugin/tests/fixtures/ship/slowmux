@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# slowmux — ship-mux with a slow `list` (SLOWMUX_REAL is the real ship-mux, SLOWMUX_LIST_S the delay).
+# A test seam for ship-loop (SHIP_LOOP_MUX): it widens the window between the driver's checks.
+[[ "$1" != list ]] || sleep "${SLOWMUX_LIST_S:-0.4}"
+exec "${SLOWMUX_REAL:?}" "$@"
