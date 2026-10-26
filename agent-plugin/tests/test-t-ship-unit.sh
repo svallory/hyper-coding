@@ -58,6 +58,8 @@ BRIEF="$SPACE/notes/brief-a.md"
 echo "# brief" > "$BRIEF"
 # shellcheck source=../scripts/ship/lib.sh
 source "$SHIP_DIR/lib.sh"
+# shellcheck source=../scripts/ship/lib-host.sh
+source "$SHIP_DIR/lib-host.sh"
 ship_config_load      # one config load per run, as the lead's scripts share it
 
 # --- stubs ---------------------------------------------------------------------------------
@@ -632,6 +634,30 @@ assert_eq "...SHIP_HOST=box" "box" "$(sed -n 's/^host=\([^ ]*\) .*/\1/p' "$FIX/l
 assert_eq "run --model reached the host's models.override" "dev=Y" "$(cat "$(loops h1)/models.override")"
 assert_eq "unit.json has the spec dir (as the host sees it)" "$HOSTSPACE/notes/specs/feat" "$(jq -r .spec_dir "$(loops h1)/unit.json")"
 assert_eq "the same config holds on the host's own ship-unit (SHIP_CONFIG_JSON over ssh)" "yes" "$(grep -q 'SHIP_CONFIG_JSON' "$SSH_LOG" && echo yes)"
+
+# host runs copy paths with spaces, quotes and non-ASCII characters ------------------------
+WEIRD_BRIEF="$SPACE/notes/br ief's é.md"
+WEIRD_RULINGS="$SPACE/notes/de cisions \"2\" é.md"
+WEIRD_SPEC="$SPACE/notes/specs/fe at's é"
+mkdir -p "$WEIRD_SPEC"
+printf '# brief\xc3\xa9 \n\n' > "$WEIRD_BRIEF"
+printf '# rulings\xc3\xa9\n' > "$WEIRD_RULINGS"
+printf '# spec\xc3\xa9\n' > "$WEIRD_SPEC/de sign.md"
+cp "$SPACE/.hyper/ship.yml" "$FIX/ship.yml.keep"
+sed "s|^rulings: .*|rulings: 'notes/de cisions \"2\" é.md'|" "$FIX/ship.yml.keep" > "$SPACE/.hyper/ship.yml"
+unset SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS; ship_config_load
+mode w1 ready
+: > "$SSH_LOG"; : > "$RSYNC_LOG"
+assert_eq "host run with spaces, quotes and non-ASCII in the brief, rulings and spec paths: 0" "0" "$(unit run w1 --brief "$WEIRD_BRIEF" --class S --host box --spec-dir "$WEIRD_SPEC")"
+cp "$FIX/ship.yml.keep" "$SPACE/.hyper/ship.yml"
+unset SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS; ship_config_load
+H_BRIEF="${WEIRD_BRIEF/#$SPACE/$HOSTSPACE}" H_RULINGS="${WEIRD_RULINGS/#$SPACE/$HOSTSPACE}" H_SPEC="${WEIRD_SPEC/#$SPACE/$HOSTSPACE}"
+assert_eq "the brief reached the host byte-identical" "yes" "$(cmp -s "$WEIRD_BRIEF" "$H_BRIEF" && echo yes)"
+assert_eq "the rulings file reached the host byte-identical" "yes" "$(cmp -s "$WEIRD_RULINGS" "$H_RULINGS" && echo yes)"
+assert_eq "the spec dir file reached the host byte-identical" "yes" "$(cmp -s "$WEIRD_SPEC/de sign.md" "$H_SPEC/de sign.md" && echo yes)"
+assert_contains "the host mkdir quoted the spec dir for the remote shell" "$(cat "$SSH_LOG")" "mkdir -p -- $(ship_sq "$WEIRD_SPEC")"
+assert_eq "the host run mirrored the unit back" "READY" "$(jq -r .status "$(loops w1)/result.json")"
+assert_eq "no stray files were made from a split path" "" "$([[ -e "$HOSTSPACE/notes/br" || -e "$HOSTSPACE/notes/de" || -e "$HOSTSPACE/notes/specs/fe" ]] && echo made)"
 
 # host slots are the host's
 sleeper; S7=$SLEEPER_PID

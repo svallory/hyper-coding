@@ -31,8 +31,11 @@
 #   ship_host_lost <rc>          true when an exit status means the connection was
 #                                lost or ssh was killed (255, or killed by a signal)
 #
-# Paths handed to rsync must be plain (letters, digits and . _ / + : @ % = , ~ -):
-# rsync passes "host:path" through the remote shell. Anything else is refused.
+# Any path can be copied (spaces, quotes, non-ASCII) except one with a newline.
+# rsync gets --protect-args (-s), so the remote path reaches the host untouched by
+# its shell; that flag exists in GNU rsync 3.0+ and in the macOS rsync, and unlike
+# quoting the path by hand it behaves the same before and after GNU rsync 3.2.4
+# changed how remote arguments are escaped. ssh commands quote with ship_sq.
 #
 # The ssh and rsync commands are looked up on PATH. Nothing here touches a
 # multiplexer.
@@ -63,8 +66,8 @@ ship_sq() {
 _ship_host_path_ok() {
   local p
   for p in "$@"; do
-    if [[ ! "$p" =~ ^[A-Za-z0-9._/+:@%=,~-]+$ ]]; then
-      _ship_err "host mode cannot copy '$p': paths may only hold letters, digits and . _ / + : @ % = , ~ -"
+    if [[ "$p" == *$'\n'* ]]; then
+      _ship_err "host mode cannot copy a path with a newline in it: '${p//$'\n'/\\n}'"
       return 1
     fi
   done
@@ -112,12 +115,12 @@ ship_host_push() {
   _ship_host_path_ok "$@" || return 1
   for p in "$@"; do
     if [[ -d "$p" ]]; then
-      ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p $p" || return $?
-      rsync -a "$p/" "$target:$p/" || return $?
+      ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p -- $(ship_sq "$p")" || return $?
+      rsync -as "$p/" "$target:$p/" || return $?
     elif [[ -f "$p" ]]; then
       parent="${p%/*}"
-      ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p $parent" || return $?
-      rsync -a "$p" "$target:$p" || return $?
+      ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p -- $(ship_sq "$parent")" || return $?
+      rsync -as -- "$p" "$target:$p" || return $?
     fi
   done
 }
@@ -126,5 +129,5 @@ ship_host_push() {
 ship_host_pull_dir() {
   _ship_host_path_ok "$2" || return 1
   mkdir -p "$3" || return 1
-  rsync -a --delete "$1:$2/" "$3/"
+  rsync -as --delete "$1:$2/" "$3/"
 }

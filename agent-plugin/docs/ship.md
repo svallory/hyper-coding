@@ -133,7 +133,10 @@ v4 (a different `yq` is refused), `git` 2.39 or newer, `gh`, `wt` (worktrunk;
 `SHIP_SPACE_ROOT` is set), `claude` and/or `pi` for the models you configure
 (including `failover.summarizer`), and the multiplexer backend named by `mux`
 (Herdr needs `HERDR_ENV=1` and `herdr` on PATH). Host mode (`--host`) also needs
-`ssh` and `rsync` here, and the same tools on the host.
+`ssh` and `rsync` here, and the same tools on the host (rsync 3.0 or newer
+on both ends). Host mode copies the brief, the rulings file, the spec dir and the
+mirrored unit directory by any path: spaces, quotes and non-ASCII characters are
+fine. Only a path with a newline in it is refused.
 
 `ship-loop --preflight` checks `jq`, `git`, `gh`, `hyper` (unless
 `SHIP_SPACE_ROOT` is set), `yq` v4, that the config loads and has a `gate`,
