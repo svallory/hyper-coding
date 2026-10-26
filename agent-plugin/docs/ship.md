@@ -625,7 +625,7 @@ that agent). Review, spec-check and final-gate verdicts also leave `<stage>-r<N>
 signature matches a review or final-gate ACCEPT, and never a diff that the spec
 check or the final gate rejected: that is decided per stage, and a diff counts as
 rejected when, for either of those two stages, its newest verdict on exactly that
-diff is not ACCEPT (the other stage's ACCEPT does not clear it). A fix that restores
+diff is not ACCEPT (the other stage's ACCEPT does not clear it). A fix, or anything else (the gate, a rebase, a stray commit), that restores
 a rejected diff is sent back to the dev, counts toward `max_rounds`, and when the
 rounds run out the unit ends `STUCK` with `stage` set to the stage that rejected it.
 Fix rounds leave `fix-r<N>.findings`, `fix-r<N>.src` and

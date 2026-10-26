@@ -1183,6 +1183,7 @@ stub_start t50a; run_loop t50a; stub_stop
 PATH="$_path"
 assert_eq "diff_sig a: the run ends ERROR (exit 1)" "1" "$RC"
 assert_ok "diff_sig a: no signature file was written, or it holds no error JSON" bash -c '[ ! -e "$1" ] || ! grep -q "\"status\"" "$1"' _ "$(st t50a)/review-r1.sig"
+assert_eq "diff_sig a: it failed at write_sig, in the review stage" "review" "$(res t50a .stage)"
 assert_contains "diff_sig a: driver.err says what failed" "$(cat "$(st t50a)/driver.err")" "patch-id"
 # b: it fails after the review ACCEPT (inside reviewed_diff, a command substitution)
 reset_fake; unit t50b
@@ -1202,6 +1203,7 @@ export FLAG50="$FIX/flag50-t50c"; PATH="$FIX/shim50:$_path"
 stub_start t50c; run_loop t50c; stub_stop
 PATH="$_path"; unset FLAG50
 assert_eq "diff_sig c: the run ends ERROR (exit 1)" "1" "$RC"
+assert_contains "diff_sig c: driver.err says what failed" "$(cat "$(st t50c)/driver.err")" "patch-id"
 assert_ok "diff_sig c: the run got as far as the fix round" test -e "$(st t50c)/fix-r2.findings"
 assert_ok "diff_sig c: fix-r2.before is absent or holds no error JSON" bash -c '[ ! -e "$1" ] || ! grep -q "\"status\"" "$1"' _ "$(st t50c)/fix-r2.before"
 assert_not_contains "diff_sig c: the exit trap did not overwrite it" "$(cat "$(st t50c)/loop.log")" "driver exited unexpectedly"
@@ -1337,6 +1339,26 @@ check_result t60 "revert to a diff the final gate rejected" 2 STUCK
 assert_eq "final rejected diff: nothing was pushed" "$O60" "$(git -C "$FIX/origin-t60.git" rev-parse refs/heads/feat-t60)"
 assert_eq "final rejected diff: no review of the restored diff" "0" "$(starts_of t60-review-r3)"
 unset GATEOK60; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 64: a gate commit that restores a diff the final gate rejected ends STUCK, not a storm of reviewers ------------------------------
+reset_fake; unit t64
+W64="$SPACE/worktrees/t64"; O64="$(git -C "$FIX/origin-t64.git" rev-parse refs/heads/feat-t64)"
+export GATEFLAG64="$FIX/gateflag-t64"
+GATE_CMD='if [ ! -e "$GATEFLAG64" ]; then touch "$GATEFLAG64"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t64 develop.json "$DEV_DONE"; script t64 review-r1.json "$REV_OK"; script t64 final-r1.json "$REV_CHANGES"
+script t64 fix-r2.json "$DEV_DONE"; script t64 review-r2.json "$REV_OK"; script t64 final-r2.json "$REV_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W64" "$W64" "$W64" >"$FIX/scripts/t64/fix-r2.json.hook"
+chmod +x "$FIX/scripts/t64"/*.hook
+for _r in 3 4 5 6 7 8; do script t64 fix-r$_r.json "$DEV_DONE"; script t64 review-r$_r.json "$REV_OK"; done
+stub_start t64; run_loop t64 --final-gate; stub_stop
+check_result t64 "gate restores a diff the final gate rejected" 2 STUCK
+assert_eq "gate-restored rejected diff: nothing was pushed" "$O64" "$(git -C "$FIX/origin-t64.git" rev-parse refs/heads/feat-t64)"
+assert_eq "gate-restored rejected diff: the stage is the rejecting one" "final" "$(res t64 .stage)"
+assert_eq "gate-restored rejected diff: rejected_by names the verdict" "final-r1.json" "$(res t64 .rejected_by)"
+assert_contains "gate-restored rejected diff: the log says no dev fix made it" "$(cat "$(st t64)/loop.log")" "without a dev fix"
+_rv=0; for _r in 3 4 5 6 7 8; do _rv=$((_rv + $(starts_of "t64-review-r$_r"))); done
+assert_eq "gate-restored rejected diff: no reviewer storm (review rounds after the restore)" "0" "$_rv"
+unset GATEFLAG64; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
 
 # --- 61: a finalize fix that is continued after a park is waited for: its verdict (here another QUESTION) is read before anything is pushed --------
 reset_fake; leak_unit t61

@@ -1518,6 +1518,19 @@ review_gate() {
       rv=$FR
     else
       if reviewed_diff; then return 0; fi
+      if rejected_diff; then
+        # No dev fix made this diff: the gate (or a rebase, or anything else) restored one that the spec
+        # check or the final gate rejected. A new review would ACCEPT it without counting, so treat it as
+        # the fix branch treats a restored rejected diff: it counts, goes back to the dev, and ends STUCK.
+        cycles=$((cycles + 1))
+        log "the diff changed without a dev fix and is the one $REJECTED_BY rejected ($cycles of $MAX)"
+        if [[ $cycles -ge $MAX ]]; then
+          finish 2 "${REJECTED_BY%%-r*}" STUCK "$(jq -n --arg by "$REJECTED_BY" '{findings:("The diff was restored to the one " + $by + " rejected, by something other than a dev fix (the gate, a rebase or a commit outside the loop)."), rejected_by:$by}')"
+        fi
+        NEED_FIX="The diff now in the PR is the one $REJECTED_BY rejected, and a change outside your fixes put it back (the gate, a rebase or a commit). Change the code so it is not that diff, or stop with QUESTION and say why not."
+        FIX_SRC=gate
+        continue
+      fi
       FR=$((FR + 1)); rv=$FR
       GATE_PRIOR="The PR changed after your last accept. Review the diff against origin/$BASE as it is now."
     fi
