@@ -59,7 +59,7 @@ usage() { echo "ship-auto: $*" >&2; exit 64; }
 fail() { echo "ship-auto: $*" >&2; exit 1; }
 
 if [[ "${1:-}" == -h || "${1:-}" == --help ]]; then
-  sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0
+  sed -n '2,/^set -euo pipefail/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0
 fi
 [[ $# -gt 0 ]] || usage "a subcommand is required (on, next, questions, apply)"
 cmd="$1"; shift

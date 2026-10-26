@@ -72,7 +72,7 @@ while [[ $# -gt 0 ]]; do
     --cwd)
       [[ $# -ge 2 ]] || usage "--cwd needs a directory"
       agent_cwd="$2"; shift ;;
-    -h|--help) sed -n '/^set -euo pipefail/q;2,$p' "$_src" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,$p' "$_src" | sed '/^set -euo pipefail/,$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) usage "unknown argument '$1'" ;;
     *)
       [[ -z "$role" ]] || usage "unexpected argument '$1'"

@@ -118,6 +118,47 @@ Without the CLI:
 | `/hyper:space [args...]` | A space's history — allowlisted dirs committed to the space's branch, pushed to your hyperdrive; init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
 | `/hyper:warp <machine> [flags]` | Move a live session to another machine over ssh — a thin relay over `hyper warp` |
 
+## Skills
+
+Skills are loaded by Claude when a request matches their description, or named
+directly (`hyper:ship`). Three are the space and tooling rules; the rest are the
+lead workflow, described under [Shipping a feature](#shipping-a-feature).
+
+| Skill | What it does |
+|---|---|
+| `hyper`, `hyper-gen`, `hyper-tooling` | space layout rules, template-generation rules, toolchain detection and check-hook setup |
+| `ship` | lead a request to merged PRs: spec decision, consumer gate, briefs, rulings, landing |
+| `spec` | write `define.md`, then `design.md`, under `notes/specs/<slug>/` |
+| `plan` | write `tasks.md` and one brief per unit; refuses a brief with an element that has no consumer |
+| `kickoff` | tracker epic with dependent children (when a tracker is configured), then the first wave |
+| `unit` | run one unit through the dev-review driver; continue a parked or over-budget one |
+| `land` | merge a READY unit and tear down its agents, panes and worktree; `--abandon` tears down only |
+| `auto` | `auto on`: the lead rules instead of asking and logs each ruling; `auto off`: a review sheet of those rulings |
+
+## Shipping a feature
+
+`hyper:ship` is for a lead session (Claude Code) that is given a request and
+takes it to merged PRs without the operator in the loop. The lead decides
+whether a spec is needed, writes briefs, and starts each unit with
+`scripts/ship/ship-unit`, which runs the driver (`scripts/ship/ship-loop`) and
+waits for it. The driver runs the unit through dev, verify,
+review, an optional spec check, fix rounds, an optional final gate and a
+finalize step (rebase, gate, forbidden-pattern scan, push), writing one JSON
+verdict file per stage under `notes/loops/<ref>/`. When a unit finishes, parks
+on a question, runs over its time budget or fails, the driver process exits and
+that exit wakes the lead. Landing (`scripts/ship/ship-land`) merges the PR,
+runs the configured `on_land` commands and removes the agents, panes, unit
+space and worktree it created.
+
+Requirements: `jq`, mikefarah `yq` v4, `git`, `gh`, and a multiplexer backend
+(Herdr today). Settings live in YAML, resolved from `skills/ship/defaults.yml`,
+then `~/.config/hyper/ship.yml`, then `<space root>/.hyper/ship.yml` (objects
+merge, arrays replace). `gate`, the command that must pass before push and
+merge, has no default and must be set. See [docs/concepts.md](docs/concepts.md)
+for the terms and [docs/ship.md](docs/ship.md) for the reference: every script
+and flag, every config key, the unit directory, the park states and the mux
+backend contract.
+
 ## Hooks
 
 Three hook scripts ship. Each is a silent no-op until its own opt-in, and the
@@ -173,10 +214,11 @@ pillars, honestly scored:
 | Tools Integration | ✅ | `/hyper:tools` + check hook: the project's own linter/typechecker/tests, detected never guessed, four stacks (node, go, rust, python) | security scanning, SAST, architecture-compliance checks |
 | Real-time Feedback | ✅ | per-edit check hook: halted execution (exit 2) with the specific failure, multi-command `checks` array | per-file routing (fast `eslint <file>`) |
 | Reactive Context | 🟡 | SessionStart injects layout + toolchain + check status; space auto-memory at `.hyper/memory/` loads every session | task-scoped injection (a task's docs/schemas appearing when it starts) |
-| Engineered Friction | 🟡 | deps hook (new dependency → justify or remove, once per session); plan-develop's `deviations.md` gate | complexity scoring, formal simplicity-first enforcement |
+| Engineered Friction | 🟡 | deps hook (new dependency → justify or remove, once per session); the unit brief's deviations rule (write a `deviations.md` entry before code that departs from the spec) | complexity scoring, formal simplicity-first enforcement |
 | Deterministic First | 🟡 | `/hyper:gen`: verbatim-outside-prompt-regions templates built from exemplars | starter kits, a real generation engine |
 
-Toolkit components: `hyper plan` → the `spec` and `plan` skills (native format only); `hyper gen` → `/hyper:gen` (templates, no engine);
+Toolkit components: `hyper plan` → the `spec` and `plan` skills (native
+format only); `hyper gen` → `/hyper:gen` (templates, no engine);
 `hyper tools` → `/hyper:tools` (checks only — see `TODO.md` for the
 recommended-tools catalog plan); `hyper watch` and `hyper dash` are
 deliberately not stubbed — they need real infrastructure a plugin cannot

@@ -37,7 +37,7 @@ while [[ $# -gt 0 ]]; do
     --get)
       [[ $# -ge 2 ]] || { echo "ship-config: --get needs a key" >&2; exit 2; }
       mode=get key="$2"; shift ;;
-    -h|--help) sed -n '2,19p' "$_src" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,18p' "$_src" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ship-config: unknown argument '$1' (try --help)" >&2; exit 2 ;;
   esac
   shift
