@@ -15,7 +15,10 @@
 #   --host H   the unit lives on host H (hosts.H.ssh in the ship config): copy the ship
 #              scripts there (as ship-unit does), run this same command there over ssh
 #              with the same flags, then mirror notes/loops/ back. The landing runs
-#              where the worktree is; nothing else changes.
+#              where the worktree is (rebase, gate, push, merge, teardown); the on_land
+#              commands run HERE, on the lead machine in its space root, because the
+#              operator's tracker is wherever the lead runs. Order: merge there, on_land
+#              here, teardown there. A rerun after an on_land failure resumes at on_land.
 #
 # Steps
 #   1. take the lock file <space root>/.hyper/ship-land.lock (one land at a time per space;
@@ -31,7 +34,8 @@
 #      from elsewhere refuses the push instead of being overwritten)
 #   5. gh pr merge <pr> --<merge_method>; then, the PR being MERGED, git push origin --delete <branch>;
 #      pull the base in its worktree
-#   6. run each on_land command ({ref}, {pr}, {task} replaced)
+#   6. run each on_land command ({ref}, {pr}, {task} replaced); with --host, here on the
+#      lead machine, never over ssh
 #   7. teardown: ship-retire every agent recorded in mux.json; ship-mux close
 #      every recorded pane, then the unit space; try to close every ship-created
 #      units group in <space root>/.hyper/ship-mux.json (kept when others use it;
@@ -52,7 +56,8 @@
 # uncommitted changes).
 #
 # Environment: SHIP_LAND_SETTLE_SEC (seconds between push and merge so GitHub
-# sees the new head; default 5), SHIP_LAND_LOCK_WAIT_SEC (default 1800).
+# sees the new head; default 5), SHIP_LAND_LOCK_WAIT_SEC (default 1800), SHIP_LAND_LOCK
+# (the lock file; default <space root>/.hyper/ship-land.lock).
 
 set -euo pipefail
 
@@ -74,13 +79,17 @@ fail() { echo "ship-land: $*" >&2; exit 1; }
 refuse() { echo "ship-land: refused: $*" >&2; exit 3; }
 say() { echo "ship-land: $*"; }
 
-ref="" abandon=0 force=0 task="" host=""
+ref="" abandon=0 force=0 task="" host="" phase=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --abandon) abandon=1; shift ;;
     --force) force=1; shift ;;
     --task) [[ $# -ge 2 ]] || usage "--task needs a value"; task="$2"; shift 2 ;;
     --host) [[ $# -ge 2 ]] || usage "--host needs a value"; host="$2"; shift 2 ;;
+    --phase) # internal: the lead drives a host land in two phases around its own on_land
+      [[ "${SHIP_UNIT_INTERNAL:-}" == 1 ]] || usage "--phase is internal"
+      [[ $# -ge 2 && ( "$2" == merge || "$2" == finish ) ]] || usage "--phase needs merge or finish"
+      phase="$2"; shift 2 ;;
     -h|--help) sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) usage "unknown option $1" ;;
     *) [[ -z "$ref" ]] || usage "one ref at a time"; ref="$1"; shift ;;
@@ -98,7 +107,7 @@ root="$(ship_space_root)" || exit 1
 export SHIP_SPACE_ROOT="$root"
 
 # --- the lock: one land at a time per space -------------------------------------------
-lock="$root/.hyper/ship-land.lock"
+lock="${SHIP_LAND_LOCK:-$root/.hyper/ship-land.lock}"
 mkdir -p "$root/.hyper"
 
 # acquire_lock — take the lock (ship_lock in lib.sh; waiting for a live holder) and release it on exit.
@@ -113,6 +122,33 @@ acquire_lock() {
   trap 'ship_unlock "$lock"' EXIT
 }
 
+# run_on_land <done file> <rerun command> — run each on_land command in the space root.
+# Each command that succeeds is recorded in the done file (index and text), so a rerun
+# never runs it twice; a failure stops here and the rerun resumes at that command.
+run_on_land() {
+  local done_file="$1" rerun="$2" idx=0 cmd entry
+  mkdir -p "${done_file%/*}"
+  while IFS= read -r cmd; do
+    idx=$((idx + 1))
+    [[ -n "$cmd" ]] || continue
+    cmd="${cmd//\{ref\}/$ref}"
+    cmd="${cmd//\{pr\}/$pr}"
+    cmd="${cmd//\{task\}/$task}"
+    entry="$idx $cmd"
+    if [[ -f "$done_file" ]] && grep -qxF -- "$entry" "$done_file"; then
+      say "on_land: already done: $cmd"
+      continue
+    fi
+    if (CDPATH='' cd -- "$root" && bash -c "$cmd"); then
+      printf '%s\n' "$entry" >>"$done_file"
+      say "on_land: $cmd"
+    else
+      echo "ship-land: on_land command failed: $cmd" >&2
+      fail "$ref is merged but an on_land command failed; fix it and rerun '$rerun' to resume from that command (the teardown has not run)"
+    fi
+  done < <(jq -r '.[]' <<<"$on_land")
+}
+
 # --- --host: run the same command where the worktree lives ------------------------------
 if ! ship_host_is_local "$host"; then
   [[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid --host '$host'"
@@ -122,28 +158,52 @@ if ! ship_host_is_local "$host"; then
   [[ $abandon -eq 0 ]] || rargs+=(--abandon)
   [[ $force -eq 0 ]] || rargs+=(--force)
   [[ -z "$task" ]] || rargs+=(--task "$task")
-  # The local lock is held while the remote land runs, so two lands of this space
-  # started from here do not overlap.
+  # host_call <phase flags...> — run ship-land on the host, then mirror the unit's state
+  # back (the loop directory, or where the land moved it). Sets rc; the caller exits on
+  # a non-zero one.
+  host_call() {
+    local mirror_rc=0
+    rc=0
+    ship_host_run "$target" "$root" "$host" ship-land "${rargs[@]}" "$@" || rc=$?
+    if ship_host_lost "$rc"; then
+      echo "ship-land: lost the connection to $host (ssh exit $rc); the landing may have finished or still be running there. Rerun 'ship-land $ref --host $host' (a merged PR skips ahead to on_land and teardown)" >&2
+      rc=1
+    fi
+    if ssh "${SHIP_SSH_OPTS[@]}" "$target" "test -d $(ship_sq "$root/notes/loops/$ref")" 2>/dev/null; then
+      ship_host_pull_dir "$target" "$root/notes/loops/$ref" "$root/notes/loops/$ref" 2>/dev/null || mirror_rc=1
+    elif ssh "${SHIP_SSH_OPTS[@]}" "$target" "test -d $(ship_sq "$root/notes/loops/.done/$ref")" 2>/dev/null; then
+      ship_host_pull_dir "$target" "$root/notes/loops/.done/$ref" "$root/notes/loops/.done/$ref" 2>/dev/null || mirror_rc=1
+      # The loop directory moved on the host; its local mirror is stale.
+      if [[ $mirror_rc -eq 0 && -d "$root/notes/loops/$ref" ]]; then rm -rf "${root:?}/notes/loops/$ref"; fi
+    else
+      mirror_rc=1
+    fi
+    [[ $mirror_rc -eq 0 ]] || echo "ship-land: could not mirror notes/loops/$ref back from $host; the host holds the current state" >&2
+  }
+  # The local lock is held for the whole land, so two lands of this space started from
+  # here do not overlap.
   acquire_lock
-  rc=0
-  ship_host_run "$target" "$root" "$host" ship-land "${rargs[@]}" || rc=$?
+  if [[ $abandon -eq 1 ]]; then
+    host_call
+    ship_unlock "$lock"; trap - EXIT
+    exit "$rc"
+  fi
+  # 1. rebase, gate, push, merge on the host (a merged PR passes straight through)
+  host_call --phase merge
+  if [[ $rc -ne 0 ]]; then ship_unlock "$lock"; trap - EXIT; exit "$rc"; fi
+  # 2. on_land here, on the lead: the tracker is wherever the lead runs. The done file is
+  # kept outside the unit's loop directory, which the mirror-back replaces.
+  on_land="[]"
+  on_land="$(ship_cfg_get on_land)" || [[ $? -eq 3 ]] || exit 1
+  [[ "$(jq -r 'type' <<<"$on_land")" == array ]] || fail "on_land must be a list of commands"
+  [[ -n "$task" ]] || task="$ref"
+  pr="$(cat "$root/notes/loops/$ref/land.pr" 2>/dev/null)" || pr=""
+  [[ "$pr" =~ ^[0-9]+$ ]] || fail "could not learn the PR number of $ref from $host"
+  run_on_land "$root/notes/loops/$ref.on_land.done" "ship-land $ref --host $host"
+  # 3. teardown on the host
+  host_call --phase finish
   ship_unlock "$lock"; trap - EXIT
-  if ship_host_lost "$rc"; then
-    echo "ship-land: lost the connection to $host (ssh exit $rc); the landing may have finished or still be running there. Rerun 'ship-land $ref --host $host' (a merged PR skips ahead to on_land and teardown)" >&2
-    rc=1
-  fi
-  # Mirror the state back: the unit's loop directory, or where the land moved it.
-  mirror_rc=0
-  if ssh "${SHIP_SSH_OPTS[@]}" "$target" "test -d $(ship_sq "$root/notes/loops/$ref")" 2>/dev/null; then
-    ship_host_pull_dir "$target" "$root/notes/loops/$ref" "$root/notes/loops/$ref" 2>/dev/null || mirror_rc=1
-  elif ssh "${SHIP_SSH_OPTS[@]}" "$target" "test -d $(ship_sq "$root/notes/loops/.done/$ref")" 2>/dev/null; then
-    ship_host_pull_dir "$target" "$root/notes/loops/.done/$ref" "$root/notes/loops/.done/$ref" 2>/dev/null || mirror_rc=1
-    # The loop directory moved on the host; its local mirror is stale.
-    if [[ $mirror_rc -eq 0 && -d "$root/notes/loops/$ref" ]]; then rm -rf "${root:?}/notes/loops/$ref"; fi
-  else
-    mirror_rc=1
-  fi
-  [[ $mirror_rc -eq 0 ]] || echo "ship-land: could not mirror notes/loops/$ref back from $host; the host holds the current state" >&2
+  [[ $rc -ne 0 ]] || rm -f "$root/notes/loops/$ref.on_land.done"
   exit "$rc"
 fi
 
@@ -362,31 +422,18 @@ fi
 fi   # PR not yet merged
 
 # --- 6. on_land -------------------------------------------------------------------------
-# Each command that succeeds is recorded in on_land.done (index and text), so a
-# rerun after a failed teardown never runs it twice; a failure stops here and the
-# rerun resumes at that command.
-done_file="$loop_dir/on_land.done"
-mkdir -p "$loop_dir"
-idx=0
-while IFS= read -r cmd; do
-  idx=$((idx + 1))
-  [[ -n "$cmd" ]] || continue
-  cmd="${cmd//\{ref\}/$ref}"
-  cmd="${cmd//\{pr\}/$pr}"
-  cmd="${cmd//\{task\}/$task}"
-  entry="$idx $cmd"
-  if [[ -f "$done_file" ]] && grep -qxF -- "$entry" "$done_file"; then
-    say "on_land: already done: $cmd"
-    continue
-  fi
-  if (CDPATH='' cd -- "$root" && bash -c "$cmd"); then
-    printf '%s\n' "$entry" >>"$done_file"
-    say "on_land: $cmd"
-  else
-    echo "ship-land: on_land command failed: $cmd" >&2
-    fail "$ref is merged but an on_land command failed; fix it and rerun 'ship-land $ref' to resume from that command (the teardown has not run)"
-  fi
-done < <(jq -r '.[]' <<<"$on_land")
+# With --host the lead runs these (see above); under --phase merge the lead takes over here.
+if [[ "$phase" == merge ]]; then
+  mkdir -p "$loop_dir"
+  printf '%s\n' "$pr" >"$loop_dir/land.pr"
+  ship_unlock "$lock"; trap - EXIT
+  say "#$pr merged; the lead runs on_land"
+  exit 0
+fi
+if [[ "$phase" != finish ]]; then
+  mkdir -p "$loop_dir"
+  run_on_land "$loop_dir/on_land.done" "ship-land $ref"
+fi
 
 # --- 7. teardown ------------------------------------------------------------------------
 ship_unlock "$lock"; trap - EXIT

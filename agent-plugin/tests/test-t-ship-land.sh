@@ -632,4 +632,64 @@ names="$(printf '%s|%s|%s|%s' "hu""sk" "for""ge" "/wo""rk/" "/Us""ers/")"
 assert_eq "no space-specific name or absolute path in the scripts" "0" \
   "$(grep -ciE "$names" "$LAND" "$RETIRE" | awk -F: '{s += $2} END {print s + 0}')"
 
+# --host: on_land runs on the lead, never over ssh ------------------------------------------
+# The "host" is this machine: the fake ssh runs the remote command here (marked with
+# SHIP_FAKE_REMOTE=1) from a home of its own, so an on_land that ran over ssh would log
+# "remote". The real rsync copies the scripts and mirrors the unit back (the same paths).
+mkdir -p "$FIX/hbin"
+cat > "$FIX/hbin/ssh" <<'STUB'
+#!/bin/bash
+echo "ssh $*" >> "$SSH_LOG"
+while [[ "$1" == -o ]]; do shift 2; done
+shift
+cmd="$*"
+cd "$HOME" || exit 255
+export SHIP_FAKE_REMOTE=1 SHIP_LAND_LOCK="$FIX/host-land.lock"
+exec /bin/bash -c "${cmd/#bash -lc /bash -c }"
+STUB
+chmod +x "$FIX/hbin/ssh"
+export FIX SSH_LOG="$FIX/hostssh.log"
+OLDPATH="$PATH"; PATH="$FIX/hbin:$PATH"
+hcfg() { write_cfg 'hosts:
+  box:
+    ssh: fakehost
+on_land: '"$1"'
+'; }
+
+CNT="$FIX/hcount.log"; rm -f "$CNT" "$FIX/hok"; : > "$SSH_LOG"
+fresh_fake
+hcfg '["echo {ref}-{pr}-{task}-${SHIP_FAKE_REMOTE:-lead} >> '"$CNT"'"]'
+mk_unit hl1 201
+advance_main host-one
+rc="$(land hl1 --host box --task T-7)"
+assert_eq "land --host: 0" "0" "$rc"
+assert_eq "on_land ran on the lead, not over ssh, with {ref} {pr} {task} replaced" "hl1-201-T-7-lead" "$(cat "$CNT")"
+assert_contains "...the host did the merge phase" "$(grep -c 'phase.*merge' "$SSH_LOG")" "1"
+assert_contains "...and the teardown phase" "$(grep -c 'phase.*finish' "$SSH_LOG")" "1"
+assert_eq "...the PR was merged once" "1" "$(grep -c 'pr merge 201' "$GH_LOG")"
+assert_eq "...the unit was torn down and moved to .done" "yes" "$([[ -d "$SPACE/notes/loops/.done/hl1" && ! -d "$SPACE/notes/loops/hl1" ]] && echo yes)"
+assert_eq "...no on_land bookkeeping is left behind" "" "$(compgen -G "$SPACE/notes/loops/*on_land*" || true)"
+
+# a failing on_land stops before the teardown; the rerun resumes at it, then tears down
+rm -f "$CNT"; : > "$SSH_LOG"
+fresh_fake
+hcfg '["echo one-${SHIP_FAKE_REMOTE:-lead} >> '"$CNT"'", "test -f '"$FIX"'/hok && echo two-${SHIP_FAKE_REMOTE:-lead} >> '"$CNT"'"]'
+mk_unit hl2 202
+advance_main host-two
+rc="$(land hl2 --host box)"
+assert_eq "host land with a failing on_land: 1" "1" "$rc"
+assert_contains "...it names the command" "$(cat "$FIX/land.err")" "on_land command failed"
+assert_contains "...and the rerun command with --host" "$(cat "$FIX/land.err")" "ship-land hl2 --host box"
+assert_eq "...the PR is merged and the unit is not torn down" "yes" "$([[ -d "$SPACE/notes/loops/hl2" && -d "$SPACE/worktrees/hl2" ]] && echo yes)"
+assert_eq "...only the first command ran" "one-lead" "$(cat "$CNT")"
+assert_eq "...the teardown phase has not run" "0" "$(grep -c 'phase.*finish' "$SSH_LOG")"
+touch "$FIX/hok"
+rc="$(land hl2 --host box)"
+assert_eq "the rerun resumes at on_land and lands: 0" "0" "$rc"
+assert_eq "...each on_land command ran once, on the lead" "one-lead two-lead" "$(tr '\n' ' ' <"$CNT" | sed 's/ $//')"
+assert_eq "...the PR was not merged twice" "1" "$(grep -c 'pr merge 202' "$GH_LOG")"
+assert_eq "...the teardown ran" "yes" "$([[ -d "$SPACE/notes/loops/.done/hl2" && ! -d "$SPACE/worktrees/hl2" ]] && echo yes)"
+assert_eq "...and no on_land bookkeeping is left behind" "" "$(compgen -G "$SPACE/notes/loops/*on_land*" || true)"
+PATH="$OLDPATH"
+
 finish
