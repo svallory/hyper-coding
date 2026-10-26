@@ -264,6 +264,7 @@ case "$verb" in
     # this process's PATH (nothing else from the environment).
     path_q="$(printf '%q' "$PATH")"
     # set_path — export PATH in the pane's shell, for `herdr agent start`, which runs the agent there.
+    # (The line lands in the pane shell's history; it holds only PATH, so it is left as it is.)
     set_path() {
       wait_prompt "$pane" 10000 || true
       herdr pane run "$pane" "export PATH=$path_q" >/dev/null 2>"$errf" || abort "pane run failed in $pane"

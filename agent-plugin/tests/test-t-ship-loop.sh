@@ -295,6 +295,23 @@ stub_start t4d; run_loop t4d; stub_stop
 check_result t4d "another dialog" 2 PARKED
 assert_eq "another dialog: parked as DIALOG" "DIALOG" "$(jq -r .status "$(st t4d)/park.json")"
 assert_eq "...and no key was sent" "0" "$(enter_count t4d t4d-dev)"
+
+# a trust dialog quoted in the agent's output, with a real permission prompt below it: no key may be sent
+PERM=$'\n \u23fa Bash command\n\n   rm -rf build\n\n Do you want to proceed?\n \u276f 1. Yes\n   2. No, and tell Claude what to do differently'
+for v in unindented indented; do
+  ref="t4f-$v"; ref="${ref//-/}"
+  reset_fake; unit "$ref"
+  mkdir -p "$SHIP_MUX_FAKE_DIR/read" "$SHIP_MUX_FAKE_DIR/status"
+  if [[ $v == unindented ]]; then quoted="$TRUST_DLG"; else quoted="$(printf '%s\n' "$TRUST_DLG" | sed 's/^/    /')"; fi
+  printf '%s\n%s\n' "$quoted" "$PERM" >"$SHIP_MUX_FAKE_DIR/read/$ref-dev"
+  printf 'working\nblocked\n' >"$SHIP_MUX_FAKE_DIR/status/$ref-dev"
+  stub_start "$ref"; run_loop "$ref"; stub_stop
+  check_result "$ref" "quoted trust dialog ($v) above a permission prompt" 2 PARKED
+  assert_eq "quoted trust dialog ($v): parked as DIALOG" "DIALOG" "$(jq -r .status "$(st "$ref")/park.json")"
+  assert_not_contains "...with the generic message, not the trust one" "$(jq -r .question "$(st "$ref")/park.json")" "workspace-trust"
+  assert_eq "...no enter was sent" "0" "$(key_count "$ref" "$ref-dev" enter)"
+  assert_eq "...no down was sent" "0" "$(key_count "$ref" "$ref-dev" down)"
+done
 unset SHIP_TRUST_WAIT_S
 assert_eq "the rulings file was created on first use" "yes" "$([[ -s "$SPACE/notes/decisions.md" ]] && echo yes || echo no)"
 

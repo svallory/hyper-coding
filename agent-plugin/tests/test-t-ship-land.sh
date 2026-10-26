@@ -62,7 +62,7 @@ case "$1 $2" in
     : > "$STUB_REMOTE/merged-$b"
     # GH_MERGE_FAIL_AFTER: the merge happens, then gh errors (it cannot delete a branch a worktree holds)
     if [[ -n "${GH_MERGE_FAIL_AFTER:-}" ]]; then echo "gh: failed to delete local branch" >&2; exit 1; fi
-    case "$*" in *--delete-branch*) git -C "$STUB_REMOTE" update-ref -d "refs/heads/$b" ;; esac ;;
+;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
 esac
 STUB

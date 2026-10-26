@@ -83,8 +83,10 @@ add to it. If it does not exist when a unit starts, ship creates it with a
   `loop.log`. It does this once per agent start and answers no other dialog. If
   the cursor never reaches Yes, or the dialog is still showing after Enter, the
   unit parks as `DIALOG`.
-- **PATH.** Agents get the `PATH` of the shell that ran `ship-unit`, passed
-  explicitly to the pane (`env PATH=...`, or an export in the pane's shell). Nothing else from your
+- **PATH.** A local unit's agents get the `PATH` of the shell that ran
+  `ship-unit`, passed explicitly to the pane (`env PATH=...`, or an export in the
+  pane's shell). A `--host` unit's agents get the host's login-shell `PATH`, not
+  yours. Nothing else from your
   environment is passed on, and no secrets; tokens such as `GH_TOKEN` must reach
   the agent the way they would reach any new terminal in the multiplexer.
 
@@ -95,7 +97,7 @@ add to it. If it does not exist when a unit starts, ship creates it with a
 | `gh pr create --base <base> --head <branch>` | the dev agent, in its pane | open the PR (the brief tells it to) |
 | `gh pr view <branch> --json number -q .number` | `ship-land` | find the PR number when `result.json` has none |
 | `gh pr view <n> --json state -q .state` | `ship-land` | skip a PR that is already `MERGED`; confirm a merge |
-| `gh pr merge <n> --<merge_method> --delete-branch` | `ship-land` | merge, and delete the remote branch |
+| `gh pr merge <n> --<merge_method>` | `ship-land` | merge (the remote branch is then deleted with `git push origin --delete`, not by gh) |
 
 A stub `gh` that implements these four is enough for a test run.
 
@@ -289,7 +291,7 @@ space); (2) require READY; (3) a PR already MERGED skips to step 6, otherwise
 fetch and rebase on `origin/<base>`, refusing an empty branch or a rebase that
 drops commits (the branch is restored); (4) run `gate`, then
 `git push --force-with-lease` leased on the remote branch as seen before the
-fetch; (5) `gh pr merge --<merge_method> --delete-branch` (the PR's remote branch goes with it) and pull the base; (6) run each
+fetch; (5) `gh pr merge --<merge_method>`, then, with the PR MERGED, `git push origin --delete <branch>`, and pull the base; (6) run each
 `on_land` command with `{ref}`, `{pr}`, `{task}` replaced; (7) teardown:
 `ship-retire` every recorded agent, close every recorded pane and the unit
 space, close a ship-created units group when empty, verify `ship-mux list` is
@@ -723,7 +725,7 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 | `ship-mux check` fails | Herdr: run inside Herdr (`HERDR_ENV=1`) with `herdr` on PATH. |
 | A unit parked `DIALOG` and the question names the workspace-trust dialog | Claude Code asked to trust the worktree and ship's one attempt (down, then Enter) did not clear it, or the cursor would not move onto Yes. `ship-mux read --ref <ref> --to <agent id>` shows the screen. Answer it in the pane, then `ship-unit resume <ref>` with no answer. |
 | A unit parked `BLOCKED` with "could not prompt" | ship-mux could not deliver the prompt and the agent was not at a dialog. Read `loop.log` (the line before `PARKED` has the exit code), and the agent's pane. `resume` with no answer retries with a fresh agent. |
-| The dev ran the wrong tool, or cannot find one that works for you | The agent's `PATH` is the one of the shell that ran `ship-unit`. Run `ship-unit` from a shell whose `PATH` has what the agent needs (a stub `gh`, a pinned toolchain). Other variables are not passed. |
+| The dev ran the wrong tool, or cannot find one that works for you | For a local unit the agent's `PATH` is the one of the shell that ran `ship-unit`; for a `--host` unit it is the host's login `PATH` (set it up on the host). Run `ship-unit` from a shell whose `PATH` has what the agent needs (a stub `gh`, a pinned toolchain). Other variables are not passed. |
 | `ship-unit run` exits 70 with "wt switch -c ... failed" and `branch 'x' has no upstream information` | Your global git config has `branch.autosetupmerge` set to an empty value, which breaks `wt switch -c`. Fix it with `git config --global --unset branch.autosetupmerge`, or set it to `true`. ship removes the branch and worktree that run created, so a rerun starts clean. |
 | A script exits 99 | `SHIP_MUX_TEST=1` is set (tests set it). Unset it for a real run. |
 | `ship-unit run` exits 3 | The host has no free slot (`ship-unit list`; raise `hosts.<h>.slots` or wait), or a driver is already running for that ref (`ship-unit wait <ref>`). |
