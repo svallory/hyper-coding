@@ -12,7 +12,8 @@
 #                  LIMIT (exit 2) with resets_at, and the unit resumes once the quota is back
 #   quota tap      the original status-line command's output is printed unchanged; the snapshot
 #                  is written only when rate_limits is present
-# Reactive failover (a limit seen while a stage runs) is tested with its own task.
+#   reactive       (1)-(6): a limit seen on an agent's screen is recorded, the agent stopped, STATUS.md written and the stage
+#                  restarted on the next model with the takeover prompt; see the section below
 
 REAL_HOME="$HOME"
 _mt() { if [[ -e "$1" ]]; then stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1"; else echo absent; fi; }
@@ -450,6 +451,255 @@ assert_eq "driver, stale snapshot: READY" 0 "$RC"
 assert_eq "driver, stale snapshot: no failover files" 0 "$(ls "$(st f4)"/failover-*.json 2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "driver, stale snapshot: sonnet" sonnet "$(jq -r .model "$(st f4)/agents/f4-dev.json")"
 no_quota
+
+# --- reactive failover (T-15) ---------------------------------------------------------------------------
+# A limit seen on an agent's screen: the agent is stopped, STATUS.md is written, and the same stage restarts
+# on the next model with the takeover prompt. mux/fake shows the limit text from a scripted `read` file; the
+# wrapper below drops that file when the pane is closed (a new pane starts clean); `claude -p` is a stub.
+
+export SHIP_FAILOVER_STOP_MS=100
+export SHIP_SUMMARY_TIMEOUT_S=60
+cat >"$FIX/wrapmux" <<'EOF'
+#!/usr/bin/env bash
+# ship-mux; after `close --id X` the scripted screen of X's agent is gone (a new pane starts clean).
+id="" prev=""
+for a in "$@"; do
+  [[ "$prev" == --id && "$1" == close ]] && id="$a"
+  prev="$a"
+done
+name=""
+[[ -z "$id" ]] || name="$(jq -r '.name // ""' "$SHIP_MUX_FAKE_DIR/state/$id.json" 2>/dev/null)"
+"${WRAP_REAL:?}" "$@"
+rc=$?
+[[ -z "$name" ]] || rm -f "$SHIP_MUX_FAKE_DIR/read/$name"
+exit $rc
+EOF
+chmod +x "$FIX/wrapmux"
+export WRAP_REAL="$SCRIPTS_DIR/ship/ship-mux" SHIP_LOOP_MUX="$FIX/wrapmux"
+
+# `claude -p` stub: records its arguments and stdin; SUMMARIZER_MODE ok|fail|hang (from $FIX/summarizer.mode).
+cat >"$FIX/bin/claude" <<'EOF'
+#!/bin/sh
+case " $* " in *" -p "*) ;; *) exit 0 ;; esac
+echo "$*" >>"$FIX_DIR/claude-p.args"
+cat >>"$FIX_DIR/claude-p.stdin"
+case "$(cat "$FIX_DIR/summarizer.mode" 2>/dev/null)" in
+  fail) echo "boom" >&2; exit 1 ;;
+  hang) exec sleep 120 ;;
+esac
+printf 'Here is the note.\n\n## Done\nWrote the parser.\n\n## In progress\nHalf of the tests.\n\n## Next steps\n1. Finish the tests.\n\n## Open questions\nNone.\n'
+EOF
+chmod +x "$FIX/bin/claude"
+export FIX_DIR="$FIX"
+printf 'ok\n' >"$FIX/summarizer.mode"
+# A fixed session id, so the test can put a transcript where the driver will look for it.
+SESSION_ID=11111111-2222-3333-4444-555555555555
+printf '#!/bin/sh\necho %s\n' "$SESSION_ID" >"$FIX/bin/uuidgen"; chmod +x "$FIX/bin/uuidgen"
+mkdir -p "$HOME/.claude/projects/proj"
+printf '{"type":"user"}\n' >"$HOME/.claude/projects/proj/$SESSION_ID.jsonl"
+
+# The default claude pattern has a lower-case-only model word, so "Opus limit" needs (?i) (see the report).
+rwrite_cfg() { # dev list
+  write_cfg "$1"
+  printf 'limits:\n  patterns:\n    claude: %s\n' "'(?i)You.{1,3}ve hit your ([a-z]+ )?limit'" >>"$PROJECT"
+}
+# runit <ref> — a unit whose dev does not answer until it is told to (see answer_after_takeover); the reviewer does.
+runit() {
+  unit "$1"
+  rm -f "$FIX/scripts/$1/develop.json"
+}
+GATE_PID=""
+# answer_after_takeover <ref> <verdict file> <json> — the stub agent may answer <file> once some agent has been
+# sent the takeover prompt (polls for the condition; gives up after about a minute).
+answer_after_takeover() {
+  (
+    n=0
+    while [[ $n -lt 1200 ]]; do
+      if grep -qs 'taking over' "$SHIP_MUX_FAKE_DIR"/sent/* 2>/dev/null; then
+        printf '%s\n' "$3" >"$FIX/scripts/$1/$2.1.tmp" && mv "$FIX/scripts/$1/$2.1.tmp" "$FIX/scripts/$1/$2.1"
+        exit 0
+      fi
+      n=$((n + 1)); sleep 0.05
+    done
+  ) &
+  GATE_PID=$!
+}
+gate_stop() { [[ -z "$GATE_PID" ]] || { kill "$GATE_PID" 2>/dev/null; wait "$GATE_PID" 2>/dev/null; GATE_PID=""; }; }
+# limit_screen <agent name> <text> — what the agent's pane shows
+limit_screen() { mkdir -p "$SHIP_MUX_FAKE_DIR/read"; printf '%s\n' "$2" >"$SHIP_MUX_FAKE_DIR/read/$1"; }
+sent_all() { cat "$SHIP_MUX_FAKE_DIR/sent/$(jq -r .id "$(st "$1")/agents/$2.json")" 2>/dev/null; }
+fcount_of() { ls "$(st "$1")"/failover-*.json 2>/dev/null | wc -l | tr -d ' '; }
+r_run() { # ref — gate, stub, driver, with a dump on failure
+  stub_start "$1"; run_loop "$1"; stub_stop; gate_stop
+  [[ "$RC" == "${2:-0}" ]] || dump "$1"
+}
+rm -f "$FIX/claude-p.args" "$FIX/claude-p.stdin"
+
+# (1) The dev on [sonnet, zai/glm-5.3] hits a Sonnet limit: STATUS.md has the four sections, the pi agent is given the
+# takeover prompt with STATUS.md and the brief, the unit ends READY with one failover.
+reset_fake; no_quota; runit r1
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+limit_screen r1-dev "You've hit your Sonnet limit · resets 4pm"
+answer_after_takeover r1 develop.json "$DEV_DONE"
+r_run r1
+assert_eq "(1) reactive: READY" 0 "$RC"
+assert_eq "(1) result.json status" READY "$(jq -r .status "$(st r1)/result.json")"
+assert_eq "(1) result.json failovers is 1" 1 "$(jq -r .failovers "$(st r1)/result.json")"
+assert_ok "(1) result.json matches the schema" validate_verdict "$SCHEMAS_DIR/result.json" "$(st r1)/result.json"
+assert_eq "(1) one failover file" 1 "$(fcount_of r1)"
+F1="$(st r1)/failover-1.json"
+assert_ok "(1) failover-1 matches the failover schema" validate_verdict "$SCHEMAS_DIR/failover.json" "$F1"
+assert_eq "(1) failover-1: reason, stage, agent" "limit develop r1-dev" "$(jq -r '"\(.reason) \(.stage) \(.agent)"' "$F1")"
+assert_eq "(1) failover-1: from sonnet to the pi entry" "sonnet zai/glm-5.3" "$(jq -r '"\(.from) \(.to)"' "$F1")"
+assert_eq "(1) failover-1: a named model is a model limit" model "$(jq -r .limit_kind "$F1")"
+assert_contains "(1) failover-1: the matched screen text" "$(jq -r .matched "$F1")" "Sonnet limit"
+assert_eq "(1) failover-1: the summariser" haiku "$(jq -r .summarizer "$F1")"
+assert_eq "(1) failover-1: names STATUS.md" "$(st r1)/STATUS.md" "$(jq -r .status_md "$F1")"
+for sec in "## Done" "## In progress" "## Next steps" "## Open questions"; do
+  assert_contains "(1) STATUS.md has '$sec'" "$(cat "$(st r1)/STATUS.md")" "$sec"
+done
+assert_eq "(1) STATUS.md starts at the first section (the summariser's preface is dropped)" "## Done" "$(head -n 1 "$(st r1)/STATUS.md")"
+assert_eq "(1) the summariser ran headless on haiku" 1 "$(grep -c -e '-p --model haiku' "$FIX/claude-p.args")"
+assert_contains "(1) the summariser was told where the transcript is" "$(cat "$FIX/claude-p.stdin")" "$HOME/.claude/projects/proj/$SESSION_ID.jsonl"
+assert_contains "(1) the summariser was told the worktree" "$(cat "$FIX/claude-p.stdin")" "$SPACE/worktrees/r1"
+assert_eq "(1) the dev was started twice" 2 "$(starts_of r1-dev)"
+assert_eq "(1) the second start is the pi entry" "zai/glm-5.3" "$(jq -r .model "$(st r1)/agents/r1-dev.json")"
+assert_eq "(1) as a pi agent" pi "$(jq -r .harness "$(st r1)/agents/r1-dev.json")"
+TK="$(sent_all r1 r1-dev)"
+assert_eq "(1) the pi agent got exactly one prompt" 1 "$(grep -c 'taking over' <<<"$TK")"
+assert_contains "(1) the takeover prompt names STATUS.md" "$TK" "$(st r1)/STATUS.md"
+assert_contains "(1) the takeover prompt names the brief" "$TK" "$BRIEF"
+assert_contains "(1) the takeover prompt carries the stage prompt (the verdict file to write)" "$TK" "$(st r1)/develop.json"
+assert_contains "(1) the takeover prompt says who replaced whom" "$TK" "sonnet was replaced by zai/glm-5.3"
+assert_eq "(1) the takeover prompt does not trip the pi limit pattern" "" \
+  "$(jq -Rr 'select(test("(?i)(rate.?limit|usage limit|quota exceeded|\\b429\\b)"))' <<<"$TK")"
+OLD="$(grep -l '/exit' "$SHIP_MUX_FAKE_DIR"/sent/* | head -n 1)"
+assert_contains "(1) the limited claude agent got esc" "$(cat "$OLD")" "<keys:esc>"
+assert_contains "(1) the limited claude agent got /exit" "$(cat "$OLD")" "/exit"
+assert_eq "(1) the stage's prompt marker was cleared on replacement: one line" 1 "$(wc -l <"$(st r1)/develop.json.sent" | tr -d ' ')"
+assert_eq "(1) develop.json carries failovers" 1 "$(jq -r .failovers "$(st r1)/develop.json")"
+assert_eq "(1) the reviewer's verdict carries 0" 0 "$(jq -r '.failovers // "none"' "$(st r1)/review-r1.json")"
+assert_eq "(1) loop.log has one FAILOVER limit line" 1 "$(grep -c 'FAILOVER limit develop' "$(st r1)/loop.log")"
+assert_eq "(1) limited.json: the model, not the account" "sonnet" "$(jq -r '.models | keys | join(",")' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "(1) limited.json: no account entry" null "$(jq -r '.accounts // null' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "(1) limited.json: until is in the future (cooldown)" true "$(jq -r --argjson n "$(date +%s)" '.models.sonnet.until > $n' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "(1) the limited agent's pane was closed: one live agent named r1-dev" r1-dev \
+  "$(jq -rs '[.[] | select(.kind == "agent") | .name] | join(" ")' "$SHIP_MUX_FAKE_DIR"/state/*.json)"
+assert_eq "(1) the PR branch was pushed after the failover" "$(git -C "$SPACE/worktrees/r1" rev-parse HEAD)" "$(git -C "$FIX/origin-r1.git" rev-parse refs/heads/feat-r1)"
+
+# (5) A second unit started after (1) skips sonnet preflight, through limited.json, and starts on pi.
+reset_fake; unit r5
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+r_run r5
+assert_eq "(5) the second unit is READY" 0 "$RC"
+assert_eq "(5) its dev started on the pi entry" "zai/glm-5.3" "$(jq -r .model "$(st r5)/agents/r5-dev.json")"
+assert_eq "(5) it was started once" 1 "$(starts_of r5-dev)"
+assert_eq "(5) failover-1: a preflight skip of sonnet, a model limit" "preflight sonnet model" \
+  "$(jq -r '"\(.reason) \(.from) \(.limit_kind)"' "$(st r5)/failover-1.json")"
+assert_eq "(5) result.json counts it" 1 "$(jq -r .failovers "$(st r5)/result.json")"
+
+# (2) Only [sonnet]: the list is exhausted, the unit parks LIMIT (exit 2) with resets_at from the snapshot.
+rm -f "$FIX/claude-p.args" "$FIX/claude-p.stdin"
+reset_fake; no_quota; runit r2
+rwrite_cfg '[sonnet]'
+snap 40 94 60 7200   # below the 95% threshold: preflight starts the dev; the limit hits later
+limit_screen r2-dev "You've hit your limit · resets 4pm"
+r_run r2 2
+assert_eq "(2) exit 2" 2 "$RC"
+assert_eq "(2) result.json status PARKED" PARKED "$(jq -r .status "$(st r2)/result.json")"
+assert_eq "(2) park.json status LIMIT" LIMIT "$(jq -r .status "$(st r2)/park.json")"
+assert_eq "(2) park.json names the stage and the agent" "develop r2-dev" "$(jq -r '"\(.stage) \(.agent)"' "$(st r2)/park.json")"
+assert_eq "(2) park.json resets_at is the snapshot's (the fullest window)" \
+  "$(jq -nr --argjson t "$(jq -r .rate_limits.seven_day.resets_at "$SHIP_QUOTA_DIR/claude-default.json")" '$t | todate')" \
+  "$(jq -r .resets_at "$(st r2)/park.json")"
+assert_ok "(2) park.json matches the park schema" validate_verdict "$SCHEMAS_DIR/park.json" "$(st r2)/park.json"
+assert_eq "(2) a plain limit is an account limit in limited.json, until = resets_at" \
+  "$(jq -r .rate_limits.seven_day.resets_at "$SHIP_QUOTA_DIR/claude-default.json")" "$(jq -r '.accounts.default.until' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "(2) the dev was started once and left alone (no keys sent)" "1 0" "$(starts_of r2-dev) $(cat "$SHIP_MUX_FAKE_DIR/sent/$(jq -r .id "$(st r2)/agents/r2-dev.json")" 2>/dev/null | grep -c keys)"
+assert_eq "(2) no failover file, no summariser" "0 absent" "$(fcount_of r2) $([[ -e "$FIX/claude-p.args" ]] && echo present || echo absent)"
+rm -f "$FIX/claude-p.args" "$FIX/claude-p.stdin"
+
+# (3) The summariser itself is limited (the account is the one limited, so haiku is skipped): the git-facts STATUS.md.
+reset_fake; no_quota; runit r3
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+limit_screen r3-dev "You've hit your limit · resets 4pm"
+answer_after_takeover r3 develop.json "$DEV_DONE"
+r_run r3
+assert_eq "(3) READY" 0 "$RC"
+S3="$(cat "$(st r3)/STATUS.md")"
+assert_contains "(3) STATUS.md says the transcript was not summarised" "$S3" "transcript not summarised"
+for sec in "## Done" "## In progress" "## Next steps" "## Open questions"; do assert_contains "(3) STATUS.md has '$sec'" "$S3" "$sec"; done
+assert_contains "(3) STATUS.md lists the commit from git" "$S3" "feat: the change"
+assert_contains "(3) STATUS.md lists the changed file" "$S3" "feat.txt"
+assert_eq "(3) no summariser ran" absent "$([[ -e "$FIX/claude-p.args" ]] && echo present || echo absent)"
+assert_eq "(3) failover-1: no summariser recorded, an account limit" "null account" "$(jq -r '"\(.summarizer) \(.limit_kind)"' "$(st r3)/failover-1.json")"
+assert_eq "(3) limited.json: the account" default "$(jq -r '.accounts | keys | join(",")' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "(3) the pi agent still got the takeover prompt" 1 "$(sent_all r3 r3-dev | grep -c 'taking over')"
+# uncommitted work shows up under In progress
+reset_fake; no_quota; runit r3b
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+echo wip >"$SPACE/worktrees/r3b/half-done.txt"
+limit_screen r3b-dev "You've hit your limit · resets 4pm"
+answer_after_takeover r3b develop.json "$DEV_DONE"
+r_run r3b
+assert_contains "(3) uncommitted files are listed" "$(cat "$(st r3b)/STATUS.md")" "half-done.txt"
+rm -f "$SPACE/worktrees/r3b/half-done.txt"
+
+# (3b) A summariser that fails, and one that never returns, give the same fallback.
+for mode in fail hang; do
+  reset_fake; no_quota; runit "r3$mode"
+  rwrite_cfg '[sonnet, zai/glm-5.3]'
+  printf '%s\n' "$mode" >"$FIX/summarizer.mode"
+  limit_screen "r3$mode-dev" "You've hit your Sonnet limit"
+  answer_after_takeover "r3$mode" develop.json "$DEV_DONE"
+  if [[ "$mode" == hang ]]; then export SHIP_SUMMARY_TIMEOUT_S=1; fi
+  r_run "r3$mode"
+  export SHIP_SUMMARY_TIMEOUT_S=60
+  assert_eq "(3b, $mode) READY" 0 "$RC"
+  assert_contains "(3b, $mode) git-facts STATUS.md" "$(cat "$(st "r3$mode")/STATUS.md")" "transcript not summarised"
+  assert_eq "(3b, $mode) failover-1 records no summariser" null "$(jq -r .summarizer "$(st "r3$mode")/failover-1.json")"
+done
+printf 'ok\n' >"$FIX/summarizer.mode"
+
+# (4) An Opus limit skips only opus: the dev goes opus -> sonnet; limited.json names the model, not the account.
+reset_fake; no_quota; runit r4
+rwrite_cfg '[opus, sonnet, zai/glm-5.3]'
+limit_screen r4-dev "You've hit your Opus limit · resets 4pm"
+answer_after_takeover r4 develop.json "$DEV_DONE"
+r_run r4
+assert_eq "(4) READY" 0 "$RC"
+assert_eq "(4) failover-1: opus -> sonnet, a model limit" "opus sonnet model" "$(jq -r '"\(.from) \(.to) \(.limit_kind)"' "$(st r4)/failover-1.json")"
+assert_eq "(4) the dev restarted on sonnet" sonnet "$(jq -r .model "$(st r4)/agents/r4-dev.json")"
+assert_eq "(4) as a claude agent" claude "$(jq -r .harness "$(st r4)/agents/r4-dev.json")"
+assert_eq "(4) limited.json holds opus only" "opus" "$(jq -r '.models | keys | join(",")' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "(4) limited.json holds no account" null "$(jq -r '.accounts // null' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "(4) the summariser (haiku) was usable and used" haiku "$(jq -r .summarizer "$(st r4)/failover-1.json")"
+cfg dev '["sonnet","opus","zai/glm-5.3"]'
+STATE="$FIX/state-a"; fclear
+pick --dry dev
+assert_eq "(4) afterwards a walk skips opus only (sonnet first)" sonnet "$PICK_MODEL"
+cfg dev '["opus","sonnet"]'
+pick dev
+assert_eq "(4) a walk over [opus, sonnet] skips opus, picks sonnet" "sonnet 1" "$PICK_MODEL $(fcount)"
+fclear; unset STATE SHIP_CONFIG_JSON
+
+# (6) A reviewer (a fresh agent per stage) fails over too: its verdict carries the count.
+reset_fake; no_quota; unit r6
+rwrite_cfg '[sonnet]'
+limit_screen r6-review-r1 "You've hit your Opus limit"
+rm -f "$FIX/scripts/r6/review-r1.json"
+answer_after_takeover r6 review-r1.json "$REV_OK"
+r_run r6
+assert_eq "(6) READY" 0 "$RC"
+assert_eq "(6) the reviewer failed over from opus to its pi entry" "limit review opus prov/reviewer" \
+  "$(jq -r '"\(.reason) \(.stage) \(.from) \(.to)"' "$(st r6)/failover-1.json")"
+assert_eq "(6) review-r1.json carries failovers 1" 1 "$(jq -r .failovers "$(st r6)/review-r1.json")"
+assert_eq "(6) result.json counts it" 1 "$(jq -r .failovers "$(st r6)/result.json")"
+assert_eq "(6) the dev's verdict carries 0" 0 "$(jq -r '.failovers // 0' "$(st r6)/develop.json")"
+
+no_quota
+unset SHIP_LOOP_MUX WRAP_REAL FIX_DIR SHIP_FAILOVER_STOP_MS SHIP_SUMMARY_TIMEOUT_S
+rm -f "$FIX/bin/uuidgen"
 
 # --- constraints --------------------------------------------------------------------------------------
 

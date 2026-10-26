@@ -61,13 +61,18 @@
 # Failover: every agent start goes through model_pick, which walks the stage's model
 # list with preflight routing (pick_model in lib.sh: limited.json, the quota snapshot,
 # pi never skipped); each skipped entry writes failover-N.json (reason preflight).
-# A list with nothing usable parks LIMIT (resets_at when known). failover_on_limit,
-# the reaction to a limit seen while a stage runs, still parks LIMIT; reactive
-# failover replaces it later.
+# A list with nothing usable parks LIMIT (resets_at when known).
+# Reactive failover (failover_on_limit): a limit seen on an agent's screen while a stage runs is
+# recorded in limited.json, the agent is stopped and closed, a summariser (first usable
+# failover.summarizer entry, headless) or the git facts write STATUS.md, and the same stage restarts
+# under the same agent name on the next usable model with the takeover prompt. failover-N.json
+# (reason limit) records it. The list exhausted parks LIMIT. result.json.failovers counts every
+# failover-N.json; a stage's verdict file gets the count of its agent's.
 #
 # Environment (test knobs): SHIP_POLL_S (poll interval, default 2), SHIP_IDLE_GRACE_S
 # (seconds an idle agent without a verdict is left alone before a nudge, default 1200),
-# SHIP_HOST (recorded in result.json, default local).
+# SHIP_HOST (recorded in result.json, default local), SHIP_FAILOVER_STOP_MS (how long a stopped agent
+# gets to exit before its pane is closed anyway, default 15000), SHIP_SUMMARY_TIMEOUT_S (default 300).
 
 set -uo pipefail
 
@@ -91,6 +96,8 @@ shopt -u patsub_replacement 2>/dev/null || true
 POLL_S="${SHIP_POLL_S:-2}"
 IDLE_GRACE_S="${SHIP_IDLE_GRACE_S:-1200}"
 SEND_WAIT_MS=30000
+STOP_MS="${SHIP_FAILOVER_STOP_MS:-15000}"
+SUMMARY_TIMEOUT_S="${SHIP_SUMMARY_TIMEOUT_S:-300}"
 
 REF="" WT="" BRANCH="" BRIEF="" CLASS="" BASE="" MAX="" FINAL_GATE=0 PREFLIGHT=0
 MODEL_OVERRIDES=()
@@ -177,19 +184,23 @@ HOST="${SHIP_HOST:-local}"
 
 log() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*" | tee -a "$LOG" >&2; }
 
+# failover_count — the failover-N.json files of this run (preflight and reactive).
+failover_count() { ls "$STATE"/failover-*.json 2>/dev/null | wc -l | tr -d ' '; }
+
 # Result JSON to result.json and stdout, then exit. Every result carries spec, final and
 # specwriter summaries.
 finish() { # code stage status [extra-json]
-  local extra="${4:-}" tmp="$STATE/result.json.tmp"
+  local extra="${4:-}" tmp="$STATE/result.json.tmp" nfo
   [[ -n "$extra" ]] || extra='{}'
+  nfo="$(failover_count)"
   FINISHED=1
   jq -n --arg ref "$REF" --arg stage "$2" --arg status "$3" --arg pr "$PR" \
     --arg sv "$SPEC_VERDICT" --argjson sr "$SPEC_ROUNDS" --arg fv "$FINAL_VERDICT" --argjson fr "$FINAL_ROUNDS" \
     --argjson swr "$SW_RUNS" --argjson swc "$SW_COMMITS" --argjson rounds "$ROUNDS" --argjson fin "$FINALIZE_JSON" \
-    --arg host "$HOST" --arg wt "$WT" --argjson extra "$extra" \
+    --arg host "$HOST" --arg wt "$WT" --argjson extra "$extra" --argjson nfo "$nfo" \
     '{ref:$ref, pr:($pr|tonumber? // null), stage:$stage, status:$status, rounds:$rounds,
       spec:{verdict:$sv, rounds:$sr}, final:{verdict:$fv, rounds:$fr}, specwriter:{runs:$swr, commits:$swc},
-      finalize:$fin, failovers:0, host:$host, worktree:$wt} + $extra' >"$tmp" && mv "$tmp" "$STATE/result.json"
+      finalize:$fin, failovers:$nfo, host:$host, worktree:$wt} + $extra' >"$tmp" && mv "$tmp" "$STATE/result.json"
   cat "$STATE/result.json"
   exit "$1"
 }
@@ -239,11 +250,7 @@ model_pick() {
   [[ "$2" =~ -r([0-9]+)$ ]] && round="${BASH_REMATCH[1]}"
   pick_model "$1" "$2" "$STAGE" "$round"
 }
-# failover_on_limit <agent> <stage> <verdict file> <matched text> — an agent hit a usage limit.
-# With nothing to fail over to, the unit parks.
-failover_on_limit() {
-  park LIMIT "$2" "$1" "$1 hit a usage limit (${4:-no text}); no other model to fail over to. Wait for the reset, or resume with a models.override" "$3"
-}
+# failover_on_limit (reactive failover) is defined with the agent helpers below.
 
 # --- small helpers ------------------------------------------------------------------------------
 aname() { printf '%s%s' "${REF:0:$((32 - ${#1}))}" "$1"; } # agent names are at most 32 chars: keep the suffix whole
@@ -363,12 +370,17 @@ agent_state() {
 }
 agent_harness() { jq -r '.harness // "claude"' "$STATE/agents/$1.json" 2>/dev/null || echo claude; }
 
-# start_agent <name> <role> <model list key> — a fresh agent in the unit space; sets A_ID.
+# start_agent <name> <role> <model list key> [model] — a fresh agent in the unit space; sets A_ID. Without
+# a model, the first usable entry of the list (model_pick); failover passes the one it picked.
 start_agent() {
   local name="$1" role="$2" key="$3" model resets harness rout rargs=() args=() out uuid session
-  model_pick "$key" "$name"
+  if [[ -n "${4:-}" ]]; then
+    model="$4" # a failover picked it already
+  else
+    model_pick "$key" "$name"
+  fi
   case $? in
-    0) model="$PICK_MODEL" ;;
+    0) [[ -n "${4:-}" ]] || model="$PICK_MODEL" ;;
     2)
       resets=""
       [[ -z "$PICK_RESETS_AT" ]] || resets="$(jq -nr --argjson t "$PICK_RESETS_AT" '$t | todate')"
@@ -476,7 +488,12 @@ await_file() {
         park DIALOG "$stage" "$name" "$name is blocked on a dialog. Answer it in its pane, then resume. Screen: $(mux read --to "$id" --lines 15 2>/dev/null | tr -s ' \n' ' ' | cut -c1-500)" "$file" ;;
       working) idle=0 ;;
       *)
-        if hit="$(limit_hit "$name" "$id")"; then failover_on_limit "$name" "$stage" "$file" "$hit"; fi
+        if hit="$(limit_hit "$name" "$id")"; then
+          failover_on_limit "$name" "$stage" "$file" "$hit" "$id" || return 1
+          # A new agent has the stage now; the restart does not count against the budget.
+          id="$FO_ID"; acc="$el"; seg="$(date +%s)"; idle=0; nudges=0
+          continue
+        fi
         if [[ -s "$file" ]] && ! valid_json "$file"; then FAIL_WHY="$(basename "$file") is not valid JSON"; return 2; fi
         [[ $idle -gt 0 ]] || idle="$now"
         if [[ $((now - idle)) -ge $IDLE_GRACE_S ]]; then
@@ -493,6 +510,177 @@ await_file() {
 step_failed() { # stage name file rc
   [[ "$4" -ne 2 ]] || die_error "$FAIL_WHY"
   park BLOCKED "$1" "$2" "$FAIL_WHY. See loop.log; write answer-<n>.md to nudge this agent, or resume without an answer to close it and retry the stage with a new agent" "$3"
+}
+
+# --- reactive failover ---------------------------------------------------------------------------
+# stamp_failovers <agent> <verdict file> — the verdict carries the number of failover-N.json files of its agent.
+stamp_failovers() {
+  local n tmp="$2.tmp"
+  n="$(cat "$STATE"/failover-*.json 2>/dev/null | jq -s --arg a "$1" '[.[] | select(.agent == $a)] | length' 2>/dev/null)"
+  [[ -n "$n" ]] || return 0
+  jq --argjson n "$n" '.failovers = $n' "$2" >"$tmp" 2>/dev/null && mv "$tmp" "$2" || rm -f "$tmp"
+}
+
+# stop_agent <name> <id> <harness> — ask the agent to exit, give it SHIP_FAILOVER_STOP_MS, close its pane.
+stop_agent() {
+  local rc=0
+  if [[ "$3" == claude ]]; then
+    mux send --to "$2" --keys esc >/dev/null 2>>"$LOG" || true
+    mux send --to "$2" --text /exit >/dev/null 2>>"$LOG" || true
+  else
+    mux send --to "$2" --keys esc >/dev/null 2>>"$LOG" || true
+    mux send --to "$2" --keys ctrl+d >/dev/null 2>>"$LOG" || true
+  fi
+  mux wait --to "$2" --until gone --timeout-ms "$STOP_MS" >/dev/null 2>>"$LOG" || rc=$?
+  [[ $rc -eq 0 || $rc -eq 5 ]] || log "$1 did not exit within ${STOP_MS} ms; closing its pane"
+  mux close --id "$2" >/dev/null 2>>"$LOG" || log "could not close $1 ($2)"
+}
+
+# limit_word <matched text> — the word of "hit your <word> limit", lower case; empty for a plain limit.
+limit_word() { printf '%s' "$1" | sed -nE 's/.*[Hh]it your ([A-Za-z]+) limit.*/\1/p' | tr 'A-Z' 'a-z'; }
+
+# git_facts_status <agent> <stage> — STATUS.md from git alone.
+git_facts_status() {
+  local f="$STATE/STATUS.md" ahead stat dirty
+  ahead="$(git -C "$WT" log --oneline "origin/$BASE..HEAD" 2>/dev/null)"
+  stat="$(git -C "$WT" diff --stat "origin/$BASE...HEAD" 2>/dev/null)"
+  dirty="$(git -C "$WT" status --short 2>/dev/null)"
+  {
+    printf '# Handover (transcript not summarised)\n\n'
+    printf 'Agent %s stopped at a usage limit during the %s stage. No summariser could read its transcript, so this note comes from git alone.\n\n' "$1" "$2"
+    printf '## Done\n\nCommits on %s ahead of origin/%s:\n\n%s\n\nDiffstat against origin/%s:\n\n%s\n\n' "$BRANCH" "$BASE" "${ahead:-(none)}" "$BASE" "${stat:-(no changes)}"
+    printf '## In progress\n\n'
+    if [[ -n "$dirty" ]]; then printf 'Uncommitted changes in the worktree (git status --short):\n\n%s\n\n' "$dirty"; else printf 'No uncommitted changes. What the agent was doing when it stopped is unknown.\n\n'; fi
+    printf '## Next steps\n\nRead the brief, compare the diff with it, and continue the %s stage from there. Check the gate before you declare the stage done.\n\n' "$2"
+    printf '## Open questions\n\nUnknown: the transcript was not read.\n'
+  } >"$f.tmp" && mv "$f.tmp" "$f"
+}
+
+# write_status <agent> <stage> <harness> <session> — write STATUS.md; sets SUM_MODEL to the summariser model,
+# empty when the git-facts fallback was used.
+SUM_MODEL=""
+write_status() {
+  local name="$1" stage="$2" harness="$3" session="$4" saved m sh transcript f ptxt out pid t0 rc=0 cfgdir
+  SUM_MODEL=""
+  out="$STATE/STATUS.md.tmp"
+  saved="$SHIP_CONFIG_JSON"
+  SHIP_CONFIG_JSON="$(jq -c '.models.summarizer = (.failover.summarizer // [])' <<<"$SHIP_CONFIG_JSON")"
+  pick_model --dry summarizer 2>>"$LOG" || rc=$?
+  SHIP_CONFIG_JSON="$saved"
+  m="$PICK_MODEL"
+  if [[ $rc -ne 0 || -z "$m" ]]; then
+    log "no usable summariser (failover.summarizer); STATUS.md from git facts"
+    git_facts_status "$name" "$stage"
+    return 0
+  fi
+  transcript="(not found)"
+  if [[ "$harness" == claude ]]; then
+    cfgdir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+    for f in "$cfgdir"/projects/*/"$session".jsonl; do [[ -f "$f" ]] && transcript="$f"; done
+  else
+    f="$(ls -t "$session"/* 2>/dev/null | head -n 1)"
+    [[ -z "$f" ]] || transcript="$f"
+  fi
+  ptxt="$(render summarize ref="$REF" stage="$stage" worktree="$WT" base="$BASE" transcript="$transcript")"
+  printf '%s\n' "$ptxt" >"$STATE/summarize.prompt.md"
+  sh="$(ship_model_parse "$m" | cut -f1)"
+  if [[ "$sh" == claude ]]; then
+    (cd "$WT" && exec claude -p --model "$m" --allowedTools 'Read,Bash(git diff:*),Bash(git status:*),Bash(git log:*)' <"$STATE/summarize.prompt.md") >"$out" 2>>"$LOG" &
+  else
+    (cd "$WT" && exec pi -p --approve --model "$m" "$ptxt" </dev/null) >"$out" 2>>"$LOG" &
+  fi
+  pid=$!
+  t0="$(date +%s)"
+  while kill -0 "$pid" 2>/dev/null; do
+    if [[ $(( $(date +%s) - t0 )) -ge $SUMMARY_TIMEOUT_S ]]; then kill "$pid" 2>/dev/null; log "summariser $m timed out"; break; fi
+    sleep "$POLL_S"
+  done
+  rc=0; wait "$pid" 2>/dev/null || rc=$?
+  if [[ $rc -eq 0 ]] && grep -qi '^## *done' "$out" && grep -qi '^## *in progress' "$out" \
+    && grep -qi '^## *next steps' "$out" && grep -qi '^## *open questions' "$out"; then
+    sed -n '/^## *[Dd]one/,$p' "$out" >"$STATE/STATUS.md.tmp2" && mv "$STATE/STATUS.md.tmp2" "$STATE/STATUS.md"
+    rm -f "$out"
+    SUM_MODEL="$m"
+    log "STATUS.md written by $m"
+  else
+    log "summariser $m failed (exit $rc) or did not write the four sections; STATUS.md from git facts"
+    rm -f "$out"
+    git_facts_status "$name" "$stage"
+  fi
+}
+
+# failover_on_limit <agent> <stage> <verdict file> <matched text> <agent id> — an agent shows its harness's
+# limit text. Records the limit, picks the next usable model after the agent's own, stops the agent,
+# writes STATUS.md and starts the same stage again under the same name; sets FO_ID to the new agent.
+# Nothing left to fail over to: parks LIMIT (exits). Returns 1 when the restart failed (FAIL_WHY says why).
+FO_ID=""
+failover_on_limit() {
+  local name="$1" stage="$2" file="$3" matched="$4" old_id="$5" af
+  af="$STATE/agents/$name.json"
+  local cur role key harness session kind lkey lim_until cool block round rc=0 nxt resets idx rec w lc text
+  cur="$(jq -r .model "$af")"; role="$(jq -r .role "$af")"; key="$(jq -r .models_key "$af")"
+  harness="$(jq -r .harness "$af")"; session="$(jq -r .session "$af")"
+  kind=model; lkey="$cur"
+  if [[ "$harness" == claude ]]; then
+    kind=account; lkey="$(ship_quota_account)"
+    w="$(limit_word "$matched")"; lc="$(printf '%s' "$cur" | tr 'A-Z' 'a-z')"
+    case "$w" in
+      '') ;;
+      opus|sonnet|haiku) kind=model; case "$lc" in *"$w"*) lkey="$cur" ;; *) lkey="$w" ;; esac ;;
+      *) case "$lc" in *"$w"*) kind=model; lkey="$cur" ;; esac ;;
+    esac
+  fi
+  block=""; lim_until=""
+  if [[ "$kind" == account ]]; then
+    block="$(ship_quota_block)"
+    [[ -z "$block" ]] || lim_until="$(jq -r '.resets_at // empty' <<<"$block")"
+  fi
+  if [[ -z "$lim_until" ]]; then
+    cool="$(cfg limits.cooldown_min)"; [[ -n "$cool" ]] || cool=60
+    lim_until="$(awk -v n="$(date +%s)" -v c="$cool" 'BEGIN { printf "%d", n + c * 60 }')"
+  fi
+  ship_limit_record "$kind" "$lkey" "$lim_until" || log "could not write limited.json"
+  log "LIMIT $name ($cur, $kind limit on $lkey): ${matched:-no text}"
+
+  round=0
+  [[ "$name" =~ -r([0-9]+)$ ]] && round="${BASH_REMATCH[1]}"
+  PICK_AFTER="$cur"
+  pick_model "$key" "$name" "$stage" "$round" 2>>"$LOG" || rc=$?
+  # shellcheck disable=SC2034  # read by pick_model
+  PICK_AFTER=""
+  case $rc in
+    0) nxt="$PICK_MODEL" ;;
+    2)
+      resets="$(jq -nr --argjson a "$lim_until" --arg b "$PICK_RESETS_AT" '[$a, ($b | tonumber? // empty)] | min | todate')"
+      park LIMIT "$stage" "$name" "$name hit a usage limit (${matched:-no text}); no other model to fail over to. Wait for the reset${resets:+ ($resets)}, or resume with a models.override" "$file" "$resets" ;;
+    *) FAIL_WHY="could not pick a model to replace $name"; return 1 ;;
+  esac
+
+  stop_agent "$name" "$old_id" "$harness"
+  write_status "$name" "$stage" "$harness" "$session"
+
+  idx=1
+  while [[ -e "$STATE/failover-$idx.json" ]]; do idx=$((idx + 1)); done
+  rec="$(jq -nc --arg stage "$stage" --argjson round "$round" --arg agent "$name" --arg from "$cur" --arg to "$nxt" \
+    --arg kind "$kind" --arg matched "$matched" --arg sum "$SUM_MODEL" --arg st "$STATE/STATUS.md" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --argjson block "${block:-null}" \
+    '{stage:$stage, round:$round, agent:$agent, from:$from, to:$to, reason:"limit", limit_kind:$kind, matched:$matched,
+      summarizer:(if $sum == "" then null else $sum end), status_md:$st, at:$at} + (if $block == null then {} else {quota:($block | del(.resets_at))} end)')"
+  write_json "$STATE/failover-$idx.json" "$rec"
+  check_verdict failover "$STATE/failover-$idx.json"
+  log "FAILOVER limit $stage: $cur -> $nxt ($name; $kind limit; STATUS.md by ${SUM_MODEL:-git facts})"
+
+  # The agent is replaced: its prompt marker goes, and the new agent's first (only) prompt is the takeover text
+  # followed by the stage prompt (the same rule as a dev taken over after its pane is gone).
+  rm -f "$file" "$file.sent"
+  start_agent "$name" "$role" "$key" "$nxt" || { FAIL_WHY="could not start $name on $nxt after the limit"; return 1; }
+  FO_ID="$A_ID"
+  text="$(render takeover stage_prompt="$(cat "${file%.json}.prompt.md" 2>/dev/null)" worktree="$WT" status_file="$STATE/STATUS.md" \
+    brief="$BRIEF" from="$cur" to="$nxt")"
+  printf '%s\n' "$text" >"${file%.json}.takeover.md"
+  send_prompt "$FO_ID" "$text" || { FAIL_WHY="could not prompt $name after the failover to $nxt"; return 1; }
+  mark_sent "$file"
+  return 0
 }
 
 # run_step <agent name> <file> <prompt> <budget min> <stage> — prompt a live agent and wait for
@@ -519,6 +707,7 @@ run_step() {
   fi
   await_file "$name" "$id" "$file" "$stage" "$budget" || rc=$?
   [[ $rc -eq 0 ]] || step_failed "$stage" "$name" "$file" "$rc"
+  stamp_failovers "$name" "$file"
 }
 
 # fresh_step <name> <role> <model key> <file> <prompt> <schema> <budget> <stage> [keep] — a fresh

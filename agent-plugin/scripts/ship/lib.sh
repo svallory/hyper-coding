@@ -452,7 +452,7 @@ validate_verdict() {
 # The quota tap (ship-quota-tap) writes <quota dir>/claude-<account>.json:
 #   {"account": A, "at": ISO-8601 UTC, "rate_limits": {"five_hour": {"used_percentage",
 #    "resets_at"}, "seven_day": {...}}}
-# Reactive failover (a later task) writes <quota dir>/limited.json:
+# Reactive failover (ship_limit_record below) writes <quota dir>/limited.json:
 #   {"accounts": {A: {"until": T}}, "models": {M: {"until": T}}}
 # where T is epoch seconds or ISO-8601 and M is a model as written in a list.
 # Times in either file may be epoch seconds or ISO-8601; milliseconds are accepted.
@@ -491,6 +491,8 @@ _ship_pick_log() {
 #     five_hour or seven_day used_percentage is at or above quota.threshold_pct and that window's
 #     resets_at is in the future (no snapshot, a stale one, or a window that already reset: no skip);
 #   - a pi entry (provider/model) is never skipped here.
+# PICK_AFTER, when set to an entry of the list, starts the walk after that entry (reactive failover: the
+# next model after the one that hit a limit).
 # Unless --dry, each skip writes $STATE/failover-N.json (reason preflight) and logs one line. $STATE
 # unset means nothing is written. agent, stage and round fill the record (stage defaults to the key).
 # shellcheck disable=SC2034  # PICK_MODEL and PICK_RESETS_AT are read by the caller
@@ -539,6 +541,9 @@ pick_model() {
   if [[ -s "$lim" ]]; then lim_json="$(jq -c . "$lim" 2>/dev/null)" || lim_json='{}'; [[ -n "$lim_json" ]] || lim_json='{}'; fi
 
   i=0
+  if [[ -n "${PICK_AFTER:-}" ]]; then
+    i="$(jq -r --arg m "$PICK_AFTER" '(index($m) // -1) + 1' <<<"$list")"
+  fi
   while [[ $i -lt $n ]]; do
     m="$(jq -r --argjson i "$i" '.[$i]' <<<"$list")"
     i=$((i + 1))
@@ -588,4 +593,47 @@ pick_model() {
   done
   [[ -n "$picked" ]] || return 2
   return 0
+}
+
+# ship_quota_block — print {five_hour, seven_day, resets_at} (epoch) from the account's snapshot when it is
+# younger than quota.max_age_min; nothing otherwise. resets_at is the latest future resets_at among the
+# windows at 100%, else among those at or above quota.threshold_pct, else the window with the highest
+# used_percentage (a snapshot taken a little before the limit), and absent when that has already reset.
+ship_quota_block() {
+  local snap now maxage thr cfgj
+  snap="$(ship_quota_dir)/claude-$(ship_quota_account).json"
+  [[ -s "$snap" ]] || return 0
+  now="$(date +%s)"
+  cfgj="${SHIP_CONFIG_JSON:-}"; [[ -n "$cfgj" ]] || cfgj='{}'
+  maxage="$(jq -r '.quota.max_age_min // 30' <<<"$cfgj" 2>/dev/null)"; [[ -n "$maxage" ]] || maxage=30
+  thr="$(jq -r '.quota.threshold_pct // 95' <<<"$cfgj" 2>/dev/null)"; [[ -n "$thr" ]] || thr=95
+  jq -c --argjson now "$now" --argjson maxage "$maxage" --argjson thr "$thr" "$_SHIP_EPOCH_JQ"'
+    (.at | epoch) as $at
+    | if $at == null or ($now - $at) > ($maxage * 60) then empty
+      else
+        (.rate_limits // {}) as $rl
+        | def hits($min): [("five_hour", "seven_day") as $w | $rl[$w]? | select(type == "object")
+            | select((.used_percentage | type) == "number" and .used_percentage >= $min)
+            | (.resets_at | epoch) | select(. != null and . > $now)];
+          ((hits(100) | max) // (hits($thr) | max)
+            // ([("five_hour", "seven_day") as $w | $rl[$w]? | select(type == "object" and (.used_percentage | type) == "number")
+                 | {u: .used_percentage, r: (.resets_at | epoch)}] | sort_by(.u) | last | .r? | select(. != null and . > $now))) as $r
+        | {five_hour: ($rl.five_hour.used_percentage? // null), seven_day: ($rl.seven_day.used_percentage? // null), resets_at: $r}
+        | with_entries(select(.value != null))
+      end' "$snap" 2>/dev/null
+  return 0
+}
+
+# ship_limit_record <account|model> <key> <until epoch> — add an entry to limited.json (the file pick_model
+# reads), atomically, keeping the entries of other units.
+ship_limit_record() {
+  local f cur tmp
+  f="$(ship_quota_dir)/limited.json"
+  mkdir -p "$(dirname "$f")" || return 1
+  cur='{}'
+  if [[ -s "$f" ]]; then cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'; [[ -n "$cur" ]] || cur='{}'; fi
+  tmp="$f.tmp.$$"
+  jq -c --arg k "$1" --arg key "$2" --argjson u "$3" \
+    '(if $k == "account" then "accounts" else "models" end) as $c | .[$c] = ((.[$c] // {}) + {($key): {until: $u}})' <<<"$cur" >"$tmp" \
+    && mv -f "$tmp" "$f"
 }
