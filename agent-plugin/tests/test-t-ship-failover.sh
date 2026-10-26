@@ -624,7 +624,7 @@ assert_contains "(1) the takeover prompt names the brief" "$TK" "$BRIEF"
 assert_contains "(1) the takeover prompt carries the stage prompt (the verdict file to write)" "$TK" "$(st r1)/develop.json"
 assert_contains "(1) the takeover prompt says who replaced whom" "$TK" "sonnet was replaced by zai/glm-5.3"
 assert_eq "(1) the takeover prompt does not trip the pi limit pattern" "" \
-  "$(jq -Rr --arg re '(?i)^[^[:alnum:]+>-]*((((api |provider |http )?error:?|✗)\\s*(429\\s*)?|429\\s*)((too many requests|status code)\\s*([.!]|:.*|[({\\[].*)?\\s*$|resource_exhausted)|(((api |provider |http )?error:?|✗)\\s*)?(429\\b.*rate_limit_error|429\\b.{0,30}rate.?limit|\\{"error":\\{"code":"?(1302|1308)\\b|(rate|usage) limit (has been )?(reached|exceeded|hit)( for .*)?\\s*[.!]?\\s*$|quota (has been )?exceeded([.!,:]|\\s*$|\\sfor\\s)|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit)([.!,:]|\\s*$)))' 'select(test($re))' <<<"$TK")"
+  "$(jq -Rr --arg re '(?i)^[^[:alnum:]+>-]*((((api |provider |http )?error:?|✗)\\s*(429\\s*)?|429\\s*)((too many requests|status code( 429)?)\\s*([.!]|:.*|[({\\[].*)?\\s*$|resource_exhausted)|(((api |provider |http )?error:?|✗)\\s*)?(429\\b.*rate_limit_error|429\\b.{0,30}rate.?limit|\\{"error":\\{"code":"?(1302|1308)\\b|(rate|usage) limit (has been )?(reached|exceeded|hit)( for .*)?\\s*[.!]?\\s*$|quota (has been )?exceeded([.!,:]|\\s*$|\\sfor\\s)|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit)([.!,:]|\\s*$)))' 'select(test($re))' <<<"$TK")"
 OLD="$(grep -l '/exit' "$SHIP_MUX_FAKE_DIR"/sent/* | head -n 1)"
 assert_contains "(1) the limited claude agent got esc" "$(cat "$OLD")" "<keys:esc>"
 assert_contains "(1) the limited claude agent got /exit" "$(cat "$OLD")" "/exit"
@@ -915,7 +915,7 @@ for l in "Summary: limit_hit now matches \"You've hit your weekly limit\" and mo
   "  You've hit your weekly limit fails over…" "You've hit your weekly limit. What do you want to do?" "“You've hit your limit”" "‘You’ve hit your limit’" "│ x You've hit your limit" "You've hit your limit and then more" "You've hit your limit · resumes"; do
   assert_eq "claude pattern ignores: $l" false "$(m "$CL_RE" "$l")"
 done
-for l in "Error: 429 Too Many Requests" "429 status code (no body)" "Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\"}}" "Error: RESOURCE_EXHAUSTED: quota" "429 RESOURCE_EXHAUSTED: Resource has been exhausted" "Error: 429 RESOURCE_EXHAUSTED: Resource has been exhausted" "✗ too many requests" "Error: Too Many Requests" "429 Too Many Requests" "{\"error\":{\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}}" "{\"error\":{\"code\":1308,\"message\":\"x\"}}" "Usage limit reached for 5 hour" "Rate limit reached" "You exceeded your current quota, please check your plan" "Error: You exceeded your current quota" "│ Error: 429 status code"; do
+for l in "Error: 429 Too Many Requests" "429 status code (no body)" "Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\"}}" "Error: RESOURCE_EXHAUSTED: quota" "429 RESOURCE_EXHAUSTED: Resource has been exhausted" "Error: 429 RESOURCE_EXHAUSTED: Resource has been exhausted" "✗ too many requests" "Error: Too Many Requests" "429 Too Many Requests" "{\"error\":{\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}}" "{\"error\":{\"code\":1308,\"message\":\"x\"}}" "Usage limit reached for 5 hour" "Rate limit reached" "You exceeded your current quota, please check your plan" "Error: You exceeded your current quota" "│ Error: 429 status code" "error: status code 429"; do
   assert_eq "pi pattern fires on: $l" true "$(m "$PI_RE" "$l")"
 done
 for l in "retry with backoff when the API answers 429 Too Many Requests" "ship-loop:429" "src/x.sh:429: handler" "// retry on a rate limit" "- Error: 429 Too Many Requests" "+ Rate limit reached" "the code 1302 means something" "> RESOURCE_EXHAUSTED" \
@@ -1062,11 +1062,51 @@ assert_eq "race, 32 writers x 20: all 640 entries are kept" 640 "$(jq -r '.model
 WON="$FIX/won"; rm -rf "$WON"; mkdir -p "$WON"
 for round in $(seq 1 40); do
   LPIDS=()
-  for w in 1 2 3 4 5 6 7 8; do ( if ship_lock "$FIX/rlock.$round" 0; then echo "$w" >"$WON/$round.$w"; fi ) & LPIDS+=($!); done
+  for w in 1 2 3 4 5 6 7 8; do ( if ship_lock "$FIX/rlock.$round" 0; then
+        echo "$w" >"$WON/$round.$w"
+        # the winner stays alive until the 7 others have tried: a dead owner's lock is taken over
+        for _ in $(seq 1 200); do set -- "$WON"/t"$round".*; [[ -e "$1" && $# -ge 7 ]] && break; sleep 0.05; done
+      else :; fi
+      : >"$WON/t$round.$w" ) & LPIDS+=($!); done
   for pid in "${LPIDS[@]}"; do wait "$pid"; done
 done
-assert_eq "ship_lock: one winner in each of 40 contended rounds" "40 40" "$(ls "$WON" | cut -d. -f1 | sort -u | wc -l | tr -d ' ') $(ls "$WON" | wc -l | tr -d ' ')"
+WCNT=0 WROUNDS=0
+for round in $(seq 1 40); do set -- "$WON/$round".*; if [[ -e "$1" ]]; then WROUNDS=$((WROUNDS + 1)); WCNT=$((WCNT + $#)); fi; done
+assert_eq "ship_lock: one winner in each of 40 contended rounds" "40 40" "$WROUNDS $WCNT"
 rm -f "$FIX"/rlock.*
+# takeover of a dead owner's lock by 8 concurrent waiters, with pauses injected at the race windows:
+# never two holders at once, every waiter gets its turn, nothing is left behind (no lock, no .break)
+LKT="$FIX/tk"; rm -rf "$LKT"; mkdir -p "$LKT"
+LKBAD=0 LKGOT=0 LKLEFT=0
+for round in $(seq 1 12); do
+  rm -f "$LKT"/*
+  echo "99999999@$(hostname)" >"$LKT/lock"
+  LPIDS=()
+  for w in 1 2 3 4 5 6 7 8; do
+    (
+      SHIP_LOCK_TEST_PAUSE=40 ship_lock "$LKT/lock" 60 || { echo "gave-up $w" >>"$LKT/bad"; exit 0; }
+      if ( set -C; echo "$w" >"$LKT/inside" ) 2>/dev/null; then sleep 0.02; rm -f "$LKT/inside"; else echo "overlap $w" >>"$LKT/bad"; fi
+      echo "$w" >>"$LKT/got"
+      ship_unlock "$LKT/lock"
+    ) & LPIDS+=($!)
+  done
+  for pid in "${LPIDS[@]}"; do wait "$pid"; done
+  [[ ! -s "$LKT/bad" ]] || LKBAD=$((LKBAD + 1))
+  [[ "$(wc -l <"$LKT/got" 2>/dev/null | tr -d ' ')" == 8 ]] && LKGOT=$((LKGOT + 1))
+  [[ ! -e "$LKT/lock" && ! -e "$LKT/lock.break" && ! -e "$LKT/inside" ]] || LKLEFT=$((LKLEFT + 1))
+done
+assert_eq "takeover race, 12 rounds x 8 waiters: never two holders, nobody gave up" 0 "$LKBAD"
+assert_eq "takeover race: every waiter got its turn in every round" 12 "$LKGOT"
+assert_eq "takeover race: no lock, .break or marker left behind" 0 "$LKLEFT"
+# a .break left by a dead process does not wedge the takeover
+rm -f "$LKT"/*; echo "99999999@$(hostname)" >"$LKT/lock"; echo "99999998@$(hostname)" >"$LKT/lock.break"
+assert_ok "a dead process's .break is cleared and the takeover goes on" ship_lock "$LKT/lock" 10
+ship_unlock "$LKT/lock"
+assert_eq "no lock or .break left after that" "absent absent" "$([[ -e "$LKT/lock" ]] && echo present || echo absent) $([[ -e "$LKT/lock.break" ]] && echo present || echo absent)"
+# a directory left by an old mkdir lock is removed
+rm -f "$LKT"/*; mkdir "$LKT/lock"
+assert_ok "an old mkdir lock directory is replaced" ship_lock "$LKT/lock" 10
+ship_unlock "$LKT/lock"
 # a lock whose owner is dead on this host is taken over at once; a live one, however old, is not
 echo "99999999@$(hostname)" >"$FIX/dl"
 assert_ok "ship_lock takes over a dead owner's lock" ship_lock "$FIX/dl" 0

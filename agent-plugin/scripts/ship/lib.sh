@@ -645,59 +645,98 @@ ship_quota_block() {
 # ship_lock <path> <timeout_s> [stale_s] — take the lock file <path>, waiting up to <timeout_s> seconds
 # (0 = one try). Returns 1 when it could not. The file is created with noclobber (O_EXCL), which is atomic
 # on every platform; a mkdir lock is not (uutils mkdir, the ubuntu CI image's, lets several callers win),
-# and flock is missing on macOS. The file holds "pid@host". A lock is stale when its owner is on this host
-# and dead, or (owner elsewhere or unknown) when it is older than <stale_s> seconds (default 120) and stat could read its age; a live owner on this host is never taken from; it is
-# moved aside first (one waiter wins the rename) and the copy is removed, so a lock somebody just took is
-# put back and never deleted. Sets SHIP_LOCK_OWNER to what the lock file said when it gave up.
+# and flock is missing on macOS. The file holds "pid@host" (the pid of the calling shell or subshell). A lock
+# is stale when its owner is on this host and dead, or (owner elsewhere or unknown) when it is older than
+# <stale_s> seconds (default 120) and stat could read its age; a live owner on this host is never taken from.
+# A lock is never moved or put back. A stale one is removed under a second noclobber mutex, "<path>.break":
+# take it, judge the owner again, remove the lock only if it is still the same stale owner, drop the mutex,
+# then compete for the normal create. A ".break" is stale on the same rules after 5 seconds. A directory left
+# by an old mkdir lock is removed with rmdir. Sets SHIP_LOCK_OWNER to what the lock file said when it gave up.
+# SHIP_LOCK_TEST_PAUSE=<ms> makes the takeover pause a random time at its race windows (tests only).
 # Safe under `set -e`.
 SHIP_LOCK_OWNER=""
 SHIP_LOCK_HOST=""
-_ship_me() { printf '%s@%s' "$$" "$SHIP_LOCK_HOST"; }
+# _ship_set_me — set SHIP_LOCK_ME to "pid@host" for this shell or subshell. $$ is the parent's in a subshell,
+# bash 3.2 has no BASHPID, and a command substitution is a subshell of its own, so this sets a variable
+# instead of printing
+SHIP_LOCK_ME=""
+_ship_set_me() {
+  local t="" p=""
+  _ship_lock_init
+  if [[ -n "${BASHPID:-}" ]]; then p="$BASHPID"
+  else
+    t="$(mktemp "${TMPDIR:-/tmp}/ship-pid.XXXXXX")" || t=""
+    if [[ -n "$t" ]]; then sh -c 'echo $PPID' >"$t"; read -r p <"$t" || p=""; rm -f "$t"; fi
+    [[ -n "$p" ]] || p="$$"
+  fi
+  SHIP_LOCK_ME="$p@$SHIP_LOCK_HOST"
+}
 _ship_lock_init() { if [[ -z "$SHIP_LOCK_HOST" ]]; then SHIP_LOCK_HOST="$(hostname 2>/dev/null || echo unknown)"; fi; }
 _ship_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || true; }
+_ship_pause() {
+  if [[ "${SHIP_LOCK_TEST_PAUSE:-0}" =~ ^[1-9][0-9]*$ ]]; then
+    sleep "$(printf '0.%03d' $(( (RANDOM + $$ + SECONDS) % SHIP_LOCK_TEST_PAUSE % 1000 )))"
+  fi
+  return 0
+}
+# _ship_judge <file> <stale_s> — returns 0 when <file> exists and its owner is dead or it is too old; sets SHIP_LOCK_OWNER
+_ship_judge() {
+  local f="$1" stale_s="$2" owner="" opid ohost m age
+  SHIP_LOCK_OWNER=""
+  [[ -f "$f" ]] || return 1
+  owner="$(cat "$f" 2>/dev/null || true)"
+  SHIP_LOCK_OWNER="$owner"
+  if [[ "$owner" == *@* ]]; then
+    opid="${owner%%@*}" ohost="${owner#*@}"
+    if [[ "$ohost" == "$SHIP_LOCK_HOST" && "$opid" =~ ^[0-9]+$ ]]; then
+      # on this host the pid decides, however old the lock is
+      if kill -0 "$opid" 2>/dev/null; then return 1; fi
+      return 0
+    fi
+  fi
+  m="$(_ship_mtime "$f")"
+  if [[ "$m" =~ ^[0-9]+$ ]]; then
+    age=$(( $(date +%s) - m ))
+    if [[ $age -gt $stale_s ]]; then return 0; fi
+  fi
+  return 1
+}
 ship_lock() {
-  local l="$1" wait_s="${2:-30}" stale_s="${3:-120}" start="$SECONDS" me owner m age opid ohost judged live
-  _ship_lock_init
-  me="$(_ship_me)"
+  local l="$1" wait_s="${2:-30}" stale_s="${3:-120}" start="$SECONDS" me owner last=""
+  _ship_set_me
+  me="$SHIP_LOCK_ME"
   mkdir -p "$(dirname "$l")" 2>/dev/null || true
   while true; do
     if ( set -C; printf '%s\n' "$me" >"$l" ) 2>/dev/null; then return 0; fi
-    owner=""
-    if [[ -f "$l" ]]; then owner="$(cat "$l" 2>/dev/null || true)"; fi
-    SHIP_LOCK_OWNER="$owner"
-    judged=0 live=0
-    if [[ "$owner" == *@* ]]; then
-      opid="${owner%%@*}" ohost="${owner#*@}"
-      if [[ "$ohost" == "$SHIP_LOCK_HOST" && "$opid" =~ ^[0-9]+$ ]]; then
-        # on this host the pid decides, however old the lock is
-        if kill -0 "$opid" 2>/dev/null; then live=1; else judged=1; fi
-      fi
-    fi
-    if [[ $judged -eq 0 && $live -eq 0 ]]; then
-      m="$(_ship_mtime "$l")"
-      if [[ "$m" =~ ^[0-9]+$ ]]; then
-        age=$(( $(date +%s) - m ))
-        if [[ $age -gt $stale_s ]]; then judged=1; fi
-      fi
-    fi
-    if [[ $judged -eq 1 ]] && mv "$l" "$l.stale.$$" 2>/dev/null; then
-      if [[ "$(cat "$l.stale.$$" 2>/dev/null || true)" == "$owner" ]]; then
-        rm -f "$l.stale.$$"
+    if [[ -d "$l" ]]; then
+      rmdir "$l" 2>/dev/null || true
+    elif _ship_judge "$l" "$stale_s"; then
+      owner="$SHIP_LOCK_OWNER" last="$owner"
+      _ship_pause
+      if ( set -C; printf '%s\n' "$me" >"$l.break" ) 2>/dev/null; then
+        if _ship_judge "$l" "$stale_s" && [[ "$SHIP_LOCK_OWNER" == "$owner" ]]; then
+          _ship_pause
+          rm -f "$l"
+        fi
+        if [[ -f "$l.break" && "$(cat "$l.break" 2>/dev/null || true)" == "$me" ]]; then rm -f "$l.break"; fi
+        continue
+      elif _ship_judge "$l.break" 5; then
+        rm -f "$l.break"
         continue
       fi
-      # it was not the lock we judged: somebody took it in between; put it back
-      if [[ ! -e "$l" ]]; then mv "$l.stale.$$" "$l" 2>/dev/null || rm -f "$l.stale.$$"; else rm -f "$l.stale.$$"; fi
+    else
+      last="$SHIP_LOCK_OWNER"
     fi
-    if [[ $((SECONDS - start)) -ge $wait_s ]]; then return 1; fi
+    if [[ $((SECONDS - start)) -ge $wait_s ]]; then SHIP_LOCK_OWNER="$last"; return 1; fi
     sleep 0.05
   done
 }
 # ship_unlock <path> — release the lock if it is still ours (after a takeover it belongs to someone else).
 ship_unlock() {
   local o=""
-  _ship_lock_init
+  _ship_set_me
   if [[ -f "$1" ]]; then o="$(cat "$1" 2>/dev/null || true)"; fi
-  if [[ "$o" == "$(_ship_me)" ]]; then rm -f "$1"; fi
+  if [[ "$o" == "$SHIP_LOCK_ME" ]]; then rm -f "$1"; fi
   return 0
 }
 
