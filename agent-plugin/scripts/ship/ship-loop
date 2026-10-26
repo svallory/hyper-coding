@@ -840,7 +840,7 @@ do_review() {
 # The only thing that lets finalize push.
 reviewed_diff() {
   local cur rv sig
-  cur="$(diff_sig)"
+  cur="$(diff_sig)" || exit 1   # (the subshell already wrote the ERROR result)
   for rv in "$STATE"/review-r*.json "$STATE"/final-r*.json; do
     [[ -f "$rv" ]] && fresh_result "$rv" || continue
     [[ "$(jq -r .verdict "$rv" 2>/dev/null)" == ACCEPT ]] || continue
@@ -853,9 +853,15 @@ reviewed_diff() {
 # (git patch-id --verbatim: line numbers do not count, so a rebase that only shifts lines keeps it; whitespace does, since it can change what code does.)
 # Both the signature stored with a review and the one the push is checked against come from this function.
 diff_sig() {
-  local sig
-  sig="$(git -C "$WT" diff -U0 --no-color "origin/$BASE...HEAD" | git patch-id --verbatim | cut -d' ' -f1)"
-  printf '%s\n' "${sig:-empty}"
+  # Fail closed: a git that cannot compute the signature (too old for --verbatim, a missing origin/$BASE)
+  # ends the run, because an equal fake signature on both sides would let any diff through the push check.
+  local d sig
+  d="$(git -C "$WT" diff -U0 --no-color "origin/$BASE...HEAD" 2>>"$LOG")" || die_error "git diff origin/$BASE...HEAD failed; see loop.log"
+  if [[ -z "$d" ]]; then printf 'empty\n'; return 0; fi
+  sig="$(printf '%s\n' "$d" | git patch-id --verbatim 2>>"$LOG")" || die_error "git patch-id --verbatim failed (git 2.39 or newer is required); see loop.log"
+  sig="${sig%% *}"
+  [[ -n "$sig" ]] || die_error "git patch-id produced no signature; see loop.log"
+  printf '%s\n' "$sig"
 }
 
 # --- rounds ------------------------------------------------------------------------------------------
@@ -1043,7 +1049,7 @@ $(printf '%s\n' "$hits" | head -n 30)
 # as it was is a failed round. Every CHANGES verdict and every failed round counts toward max_rounds.
 FR=$ACC_R cycles=0 NEED_FIX="" GATE_PRIOR="" guard=0
 review_gate() {
-  local before rv
+  local before after rv
   while true; do
     guard=$((guard + 1))
     [[ $guard -le $((MAX * 4 + 8)) ]] || die_error "finalize could not settle on a reviewed diff after $guard steps"
@@ -1051,7 +1057,8 @@ review_gate() {
       FR=$((FR + 1))
       fix_round "$FR" "$NEED_FIX"
       before="$(cat "$STATE/fix-r$FR.before")"
-      if [[ "$FIX_SRC" == review && "$(diff_sig)" == "$before" ]]; then
+      after="$(diff_sig)" || exit 1
+      if [[ "$FIX_SRC" == review && "$after" == "$before" ]]; then
         cycles=$((cycles + 1))
         log "round $FR: the fix changed nothing after a CHANGES verdict ($cycles of $MAX)"
         if [[ $cycles -ge $MAX ]]; then

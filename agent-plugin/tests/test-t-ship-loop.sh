@@ -998,6 +998,18 @@ check_result t48 "resume r3: answered" 0 READY
 assert_eq "resume r3: the changed diff was reviewed" "1" "$(starts_of t48-review-r3)"
 CFG_EXTRA=''; write_cfg
 
+# --- 49: a git that cannot compute the signature ends the run with ERROR and pushes nothing ------------------------------------------------
+reset_fake; unit t49
+O49="$(git -C "$FIX/origin-t49.git" rev-parse refs/heads/feat-t49)"
+mkdir -p "$FIX/shim49"; REALGIT="$(command -v git)"
+printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = "--verbatim" ] && { echo "error: unknown option verbatim" >&2; exit 129; }; done\nexec "%s" "$@"\n' "$REALGIT" >"$FIX/shim49/git"; chmod +x "$FIX/shim49/git"
+script t49 develop.json "$DEV_DONE"; script t49 review-r1.json "$REV_OK"
+_path="$PATH"; PATH="$FIX/shim49:$PATH"
+stub_start t49; run_loop t49; stub_stop
+PATH="$_path"
+assert_eq "old git: the run ends ERROR (exit 1)" "1" "$RC"
+assert_eq "old git: nothing was pushed" "$O49" "$(git -C "$FIX/origin-t49.git" rev-parse refs/heads/feat-t49)"
+
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"
 assert_eq "C-2: no messaging, Monitor or watchdog in ship-loop" "" "$(grep -nE 'SendMessage|claude-link|hyper msg|Monitor|stall' "$LOOP")"
