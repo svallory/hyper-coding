@@ -11,10 +11,37 @@ For the vocabulary (unit, brief, driver, ruling, parked) see
 `--help`; this page is the same information arranged for lookup, plus the
 parts that span scripts.
 
-Contents: [Overview](#overview), [Scripts](#scripts),
+Contents: [Quick start](#quick-start), [Overview](#overview), [Scripts](#scripts),
 [Configuration](#configuration), [The unit directory](#the-unit-directory),
 [Stopped units](#stopped-units), [Usage limits and failover](#usage-limits-and-failover),
 [Multiplexer backends](#multiplexer-backends), [Troubleshooting](#troubleshooting).
+
+## Quick start
+
+For a first unit, start in the space root.
+
+1. Install the prerequisites listed under [Overview](#overview) (`jq`, mikefarah
+   `yq` v4, `git`, `gh`, `wt`, the `hyper` CLI, `claude` or `pi`, and Herdr).
+2. Create `<space root>/.hyper/ship.yml` with the one required key, the command
+   that must pass before push and merge: `gate: "bun test"` (any command; exit 0
+   passes). Check it with `ship-config --print`.
+3. Run inside Herdr (`HERDR_ENV=1`) from the space root. To exercise the flow
+   without a multiplexer, set `mux: fake` (see
+   [Multiplexer backends](#multiplexer-backends)); no real agent runs then.
+4. Write the brief, a markdown file such as `notes/briefs/my-unit.md`: the goal,
+   the files to read, the acceptance criteria and the gate. It must tell the dev to
+   push the branch and open a PR against the base with `gh pr create`, because
+   a `DONE` verdict without a PR number ends the unit as `ERROR`.
+5. Pick a ref: letters, digits, `.`, `_`, `-`, starting with a letter or digit
+   (`^[A-Za-z0-9][A-Za-z0-9._-]*$`). It names the unit, its branch and its state
+   directory.
+6. `ship-unit run my-unit --brief notes/briefs/my-unit.md --class S`. It blocks
+   until the driver exits (run it in the background if you have other work), then
+   prints `result.json` and exits 0 for READY, 2 for stopped, 1 for ERROR. Read
+   `notes/loops/my-unit/result.json`; if it is not READY, see
+   [Stopped units](#stopped-units).
+7. `ship-land my-unit` merges the PR, runs `on_land` and removes the agents,
+   panes and worktree.
 
 ## Overview
 
@@ -40,9 +67,18 @@ ship-auto                                    (rulings review; no unit needed)
 `lib.sh` and `lib-host.sh` in that directory are shared code the scripts source; they are not commands.
 
 Requirements on the machine that runs a script: `bash`, `jq`, mikefarah `yq`
-v4 (a different `yq` is refused), `git`, `gh`, and the multiplexer backend named
-by `mux` (Herdr needs `HERDR_ENV=1` and `herdr` on PATH). `ship-loop --preflight`
-checks all of it.
+v4 (a different `yq` is refused), `git` 2.39 or newer, `gh`, `wt` (worktrunk;
+`ship-unit run` creates the worktree with it), the `hyper` CLI (not needed when
+`SHIP_SPACE_ROOT` is set), `claude` and/or `pi` for the models you configure
+(including `failover.summarizer`), and the multiplexer backend named by `mux`
+(Herdr needs `HERDR_ENV=1` and `herdr` on PATH). Host mode (`--host`) also needs
+`ssh` and `rsync` here, and the same tools on the host.
+
+`ship-loop --preflight` checks `jq`, `git`, `gh`, `hyper` (unless
+`SHIP_SPACE_ROOT` is set), `yq` v4, that the config loads and has a `gate`,
+`ship-mux check`, and that `claude` or `pi` is on PATH for every model in every
+stage list and in `failover.summarizer`. It does not check `wt`, `ssh` or
+`rsync`; `ship-unit run` stops with exit 70 when `wt` is missing.
 
 Shared environment:
 
@@ -121,10 +157,10 @@ Environment knobs: `SHIP_UNIT_POLL_S` (default 5), `SHIP_UNIT_BACKOFF_MAX_S`
 `SHIP_UNIT_LOCK_WAIT_S` (300), `SHIP_LOOP_BIN` (the driver to run).
 
 ```
-ship-unit run T-13 --brief notes/briefs/T-13.md --class M --host forge &
-ship-unit resume T-13 --answer /tmp/answer.md
-ship-unit resume T-13 --extend 20
-ship-unit resume T-13 --model dev=sonnet,zai/glm-5.3
+ship-unit run my-unit --brief notes/briefs/my-unit.md --class M --host buildbox &
+ship-unit resume my-unit --answer /tmp/answer.md
+ship-unit resume my-unit --extend 20
+ship-unit resume my-unit --model dev=sonnet,provider/model-b
 ship-unit list
 ```
 
@@ -215,9 +251,9 @@ Knobs: `SHIP_LAND_SETTLE_SEC` (seconds between push and merge, default 5),
 `SHIP_LAND_LOCK_WAIT_SEC` (1800).
 
 ```
-ship-land T-13
-ship-land T-13 --abandon
-ship-land T-13 --force --abandon     # also drops an unmerged branch
+ship-land my-unit
+ship-land my-unit --abandon
+ship-land my-unit --force --abandon     # also drops an unmerged branch
 ```
 
 ### ship-mux
@@ -392,9 +428,9 @@ Minimal project file:
 ```yaml
 gate: "bun run typecheck && bun test"
 models:
-  dev: [sonnet, zai/glm-5.3]
+  dev: [sonnet, provider/model-b]
 hosts:
-  forge: {ssh: me@forge, slots: 4}
+  buildbox: {ssh: me@buildbox, slots: 4}
 ```
 
 | Key | Meaning |
@@ -426,7 +462,7 @@ hosts:
 | `budgets.S`, `budgets.M`, `budgets.L` | Develop time budget in minutes per class. Defaults 15, 45, 90. |
 | `budgets.fix_fraction` | Fraction of the class budget a fix round gets. Default 0.5. |
 | `budgets.check` | Minutes for a check stage (verify, review, spec check, final). Default 30. The gate is not a stage. |
-| `hosts.<name>.slots` | Concurrent units on that host. `hosts.local.slots` defaults to 2. |
+| `hosts.local.slots`, `hosts.<name>.slots` | Concurrent units on that host. `hosts.local.slots` defaults to 2. |
 | `hosts.<name>.ssh` | ssh destination for a remote host (not needed for `local`). |
 | `rulings` | Rulings file, relative to the space root. Default `notes/decisions.md`. |
 | `tracker` | `beads` or `none`; `kickoff` writes tracker items for `beads`. Default `none`. |
@@ -531,7 +567,7 @@ the stop needs, the driver re-emits the same result and exits 2 again.
 | `DIALOG` | an agent is blocked on a permission or other dialog in its pane | `park.json` status `DIALOG`, with the screen text | answer the dialog in the pane (`ship-mux read` shows it), then `resume` with no answer. `--answer` is refused. |
 | `LIMIT` | every model for the stage is limited or over `quota.threshold_pct`, or the limited one has no successor | `park.json` status `LIMIT`, `resets_at` when known | wait for the reset, or `--model stage=...` to name a usable list, or `ship-loop --clear-limit NAME` if the quota is back; then `resume`. `--answer` is refused. |
 | `OVER-BUDGET` | a stage ran past its budget | `budget-r<k>.json`; agent left running | `--extend MIN`. |
-| `STUCK` | `max_rounds` reached without ACCEPT, or finalize failed and the dev could not fix it | `result.json.findings` | read `result.json.findings`, rule or re-brief, and start the unit again; or abandon it. |
+| `STUCK` | `max_rounds` reached without ACCEPT, or finalize failed and the dev could not fix it | `result.json.findings` | Raise the limit and run it again: `ship-unit run <ref> --brief ... --class ... --max-rounds <higher>`. Finished rounds are replayed from their files and the driver goes on with the next round (`resume` reuses the old limit and would stop at STUCK again). Or abandon it: `ship-land <ref> --abandon --force`, then start a fresh `ship-unit run`. Read `result.json.findings` first; if the reviewer keeps asking for the same thing, rule on it or re-brief rather than raising the limit. |
 | `ERROR` | tool or script failure, or a malformed verdict (CHANGES with no findings; DONE with no PR; WRITTEN with nothing resolved; finalize found nothing ahead of `origin/<base>`) | `driver.err`, `result.json.why` | fix the cause, then `resume`; or abandon. |
 
 `resume` also refuses (exit 3) an `--answer` when there is no `park.json`, and
@@ -621,8 +657,9 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 
 | Symptom | Cause and fix |
 |---|---|
-| Every script exits 1 with a message naming `gate` | `gate` is unset. Set it in `<space root>/.hyper/ship.yml`. `ship-config --print` shows what is merged. |
+| `ship-unit`, `ship-loop`, `ship-land` or `ship-config` exits 1 with a message naming `gate` | `gate` is unset (`ship-land --abandon`, `ship-mux`, `ship-role` and `ship-auto` do not need it). Set it in `<space root>/.hyper/ship.yml`. `ship-config --print` shows what is merged. |
 | "yq" error | `yq` is missing or is not mikefarah v4 (`yq --version`). Install mikefarah yq. |
+| `ship-unit` exits 70 with "wt (worktrunk) not found on PATH" | Install worktrunk (`wt`). |
 | `ship-mux check` fails | Herdr: run inside Herdr (`HERDR_ENV=1`) with `herdr` on PATH. |
 | A script exits 99 | `SHIP_MUX_TEST=1` is set (tests set it). Unset it for a real run. |
 | `ship-unit run` exits 3 | The host has no free slot (`ship-unit list`; raise `hosts.<h>.slots` or wait), or a driver is already running for that ref (`ship-unit wait <ref>`). |

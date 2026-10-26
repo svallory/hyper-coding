@@ -15,24 +15,33 @@ assert_ok "jq is available" command -v jq
 assert_ok "yq is available" command -v yq
 doc_text="$(cat "$doc")"
 
-# Every leaf key of defaults.yml, flattened to a dotted path. Arrays are leaves
-# (their members are not keys); an empty object counts as a leaf too.
+# The Configuration section of the doc: from its heading to the next "## ".
+config_section="$(awk '/^## Configuration$/ {on = 1; next} /^## / {on = 0} on' "$doc")"
+assert_ok "docs/ship.md has a Configuration section" test -n "$config_section"
+
+# The first cell of every table row in that section, e.g. "`base`" or "`a`, `b`".
+first_cells="$(printf '%s\n' "$config_section" | awk -F'|' '/^\|/ {print $2}')"
+
+# Every leaf key of defaults.yml, flattened to a dotted path, has a table row in
+# the Configuration section (the key in backticks in the row's first cell). Arrays
+# are leaves (their members are not keys); an empty object counts as a leaf too.
 missing=""
 while IFS= read -r key; do
   [[ -n "$key" ]] || continue
-  case "$doc_text" in
-    *"$key"*) ;;
+  case "$first_cells" in
+    *"\`$key\`"*) ;;
     *) missing="$missing $key" ;;
   esac
 done < <(yq -o=json '.' "$defaults" | jq -r '
   [paths(type != "object" or length == 0)] | map(select(all(.[]; type == "string")))
   | map(join(".")) | unique[]')
-assert_eq "every defaults.yml key is documented in docs/ship.md" "" "$missing"
+assert_eq "every defaults.yml key has a row in the Configuration table" "" "$missing"
 
-# The documented keys are real: a flattened path is also what ship-config
-# --get accepts, so check that the table mentions the layering too.
-assert_contains "docs/ship.md names the three config layers" "$doc_text" "~/.config/hyper/ship.yml"
-assert_contains "docs/ship.md names the project layer" "$doc_text" ".hyper/ship.yml"
+# All three layers are named in that section. The tilde is literal text here.
+# shellcheck disable=SC2088
+for layer in "skills/ship/defaults.yml" "~/.config/hyper/ship.yml" "<space root>/.hyper/ship.yml"; do
+  assert_contains "Configuration names the layer $layer" "$config_section" "$layer"
+done
 
 # Every ship-* command in scripts/ship/ (the lib*.sh files are sourced, not run) is mentioned, and prints usage.
 undoc="" bad_help="" no_usage="" n=0
@@ -46,10 +55,10 @@ for f in "$ship_dir"/ship-*; do
   esac
   out="$(SHIP_MUX_TEST=1 bash "$f" --help </dev/null 2>&1)"; rc=$?
   [[ $rc -eq 0 ]] || bad_help="$bad_help $name($rc)"
-  case "$out" in
-    *[Uu]sage*|*"$name"*) ;;
-    *) no_usage="$no_usage $name" ;;
-  esac
+  # usage text: the word "usage", or a synopsis line that starts with the command and its arguments
+  if ! grep -qiE "usage" <<<"$out" && ! grep -qE "^[[:space:]]*${name}[[:space:]]+(\\[|<|-|[a-z]+[[:space:]]*[<\\[-])" <<<"$out"; then
+    no_usage="$no_usage $name"
+  fi
 done
 assert_ok "found the ship scripts" test "$n" -ge 9
 assert_eq "every scripts/ship executable is documented in docs/ship.md" "" "$undoc"

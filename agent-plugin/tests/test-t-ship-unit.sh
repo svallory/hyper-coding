@@ -280,6 +280,27 @@ assert_eq "resume of an unknown unit: 70" "70" "$(unit resume ghost)"
 assert_eq "wait for an unknown unit: 70" "70" "$(unit wait ghost)"
 assert_eq "no worktree was made by any of those" "main" "$(cd "$SPACE/worktrees" && echo *)"
 
+# wt (worktrunk) missing: run stops with 70 before any worktree, space or driver
+# A PATH like ours with every wt hidden: a directory holding one is replaced by a copy made of symlinks.
+mv "$FIX/bin/wt" "$FIX/bin/wt.off"
+nowt_path="" nowt_n=0
+IFS=: read -r -a _dirs <<<"$PATH"
+for _d in "${_dirs[@]}"; do
+  [[ -d "$_d" ]] || continue
+  if [[ -e "$_d/wt" ]]; then
+    nowt_n=$((nowt_n + 1)); mkdir -p "$FIX/nowt/$nowt_n"
+    for _f in "$_d"/*; do [[ "$(basename "$_f")" == wt ]] || ln -sf "$_f" "$FIX/nowt/$nowt_n/" 2>/dev/null; done
+    _d="$FIX/nowt/$nowt_n"
+  fi
+  nowt_path="${nowt_path:+$nowt_path:}$_d"
+done
+mode nowt ready
+assert_eq "run without wt on PATH: 70" "70" "$(PATH="$nowt_path" unit run nowt --brief "$BRIEF" --class S)"
+assert_contains "...says wt (worktrunk) is missing" "$(err)" "ship-unit: wt (worktrunk) not found on PATH"
+assert_eq "...no worktree was made" "main" "$(cd "$SPACE/worktrees" && echo *)"
+assert_eq "...no multiplexer space was opened" "0" "$(mux_count open)"
+mv "$FIX/bin/wt.off" "$FIX/bin/wt"
+
 # 2: a local run returns the driver's exit code ----------------------------------------------
 mode l1 ready
 rc="$(unit run l1 --brief "$BRIEF" --class S --max-rounds 2 --final-gate --model dev=sonnet)"

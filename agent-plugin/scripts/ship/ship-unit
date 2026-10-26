@@ -65,7 +65,7 @@
 #   0 READY   1 ERROR   2 parked, over budget or stuck    only ever the driver's result
 #   3 refused (host full, driver already running, nothing to answer or extend)
 #   64 usage (a bad option, a bad --model, --extend 0)
-#   70 ship-unit failed: sync or copy failure, no ssh destination, unknown unit, a
+#   70 ship-unit failed: wt (worktrunk) not on PATH, sync or copy failure, no ssh destination, unknown unit, a
 #      driver that died without an exit code or result
 #   75 the connection to the host was lost while the driver is still running (also:
 #      gave up reconnecting); `ship-unit wait <ref>` reattaches
@@ -316,6 +316,7 @@ unlaunch() {
 }
 
 if [[ "$sub" == _launch ]]; then
+  command -v wt >/dev/null 2>&1 || fail "wt (worktrunk) not found on PATH"
   ref="${1:-}"; check_ref "$ref"; shift
   brief="" class="" branch="" base="" max_rounds="" final_gate=false spec_dir=""
   models=()
