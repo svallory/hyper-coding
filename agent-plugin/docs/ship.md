@@ -321,10 +321,20 @@ space root, never over ssh: steps 1-5 and 7 run on the host, step 6 here); (7) t
 `ship-retire` every recorded agent, close every recorded pane and the unit
 space, close a ship-created units group when empty, verify `ship-mux list` is
 empty, `wt remove <branch>`, move `notes/loops/<ref>/` to `notes/loops/.done/<ref>/`.
-With `--host`, a rerun after an `on_land` failure (`ship-land <ref> --host H`) skips the
+With `--host`, a rerun after an `on_land` failure (`ship-land <ref> --host H --task ID`) skips the
 merge, resumes at the failed `on_land` command on the lead, then runs the teardown on
-the host; the commands already done are remembered in `notes/loops/<ref>.on_land.done`
-here.
+the host. The lead's lock is held across the three steps; the host's own lock is taken
+inside each of them and is free between them.
+
+The first land saves its `{task}` and the PR number on the lead (`notes/loops/<ref>.land.task`
+and `.land.pr`, in the loop directory for a local land). A rerun reuses the saved task; a
+different `--task` is refused (exit 2), so every printed rerun command carries `--task`.
+The commands already done are remembered in `<ref>.on_land.done` as `<pr> <index> <text>`
+(removed after a successful teardown or `--abandon`); inserting a command into `on_land`
+between runs shifts the indexes, so edit the list only before the first land. `on_land` is
+checked before anything is merged. The PR must be MERGED before `on_land` runs: with
+auto-merge or a merge queue that leaves it open, `ship-land` stops (exit 1) and says to
+rerun once it is merged.
 
 Config used: `gate` (needed to land, not to abandon), `base`, `merge_method`,
 `on_land`, `mux`, `units_group`. A rerun after a failed teardown is safe.

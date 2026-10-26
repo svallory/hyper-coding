@@ -13,12 +13,19 @@
 #   --task ID  substituted for {task} in on_land commands (default: the ref)
 #   --abandon  run only the teardown (steps 7 below): no merge, no gate, no push
 #   --host H   the unit lives on host H (hosts.H.ssh in the ship config): copy the ship
-#              scripts there (as ship-unit does), run this same command there over ssh
-#              with the same flags, then mirror notes/loops/ back. The landing runs
-#              where the worktree is (rebase, gate, push, merge, teardown); the on_land
-#              commands run HERE, on the lead machine in its space root, because the
-#              operator's tracker is wherever the lead runs. Order: merge there, on_land
-#              here, teardown there. A rerun after an on_land failure resumes at on_land.
+#              scripts there (as ship-unit does) and land in three steps, then mirror
+#              notes/loops/ back after each: the host rebases, gates, pushes and merges
+#              (this script there with the internal --phase merge); the on_land commands
+#              run HERE, on the lead machine in its space root, because the operator's
+#              tracker is wherever the lead runs; the host then tears the unit down
+#              (--phase finish). The lead's lock is held across the three steps; the
+#              host's own lock is taken and released inside each of them, so it is free
+#              between the steps. A rerun after an on_land failure resumes at on_land.
+#              The first land saves its {task} and PR number on the lead
+#              (notes/loops/<ref>.land.task, .land.pr; in the loop directory for a local
+#              land): a rerun reuses the task, and a different --task is refused (2).
+#              Commands already done are kept in .on_land.done as "<pr> <index> <text>":
+#              inserting a command into on_land between runs shifts the indexes.
 #
 # Steps
 #   1. take the lock file <space root>/.hyper/ship-land.lock (one land at a time per space;
@@ -27,7 +34,8 @@
 #      with exit 1 after SHIP_LAND_LOCK_WAIT_SEC)
 #   2. require result.json status READY (--force overrides)
 #   3. a PR that is already MERGED (a rerun after a failed teardown) skips to
-#      step 6. Otherwise fetch, rebase on origin/<base>; refuse an empty branch, or a rebase that
+#      step 6. The PR must be MERGED before step 6 (auto-merge or a merge queue that
+#      leaves it open fails here: rerun once it is merged). Otherwise fetch, rebase on origin/<base>; refuse an empty branch, or a rebase that
 #      drops commits (the branch is put back as it was)
 #   4. run `gate` (config) in the worktree; git push --force-with-lease, leased
 #      on the origin/<branch> seen before the fetch (a commit pushed meanwhile
@@ -47,8 +55,8 @@
 # on_land, mux, units_group.
 #
 # With --host, the remote ship-land's exit code is returned; a lost connection is
-# exit 1 (the landing may have finished or still be running there: rerun it, a merged
-# PR skips ahead to on_land and teardown).
+# exit 1 (the landing may have finished or still be running there: rerun it with the
+# same --task, a merged PR skips ahead to on_land and teardown).
 #
 # Exit codes: 0 landed (or abandoned); 1 error (gate failed, rebase conflict,
 # merge failed, teardown left something behind, an on_land command failed);
@@ -122,11 +130,37 @@ acquire_lock() {
   trap 'ship_unlock "$lock"' EXIT
 }
 
-# run_on_land <done file> <rerun command> — run each on_land command in the space root.
-# Each command that succeeds is recorded in the done file (index and text), so a rerun
-# never runs it twice; a failure stops here and the rerun resumes at that command.
+# The lead's land state, under a prefix: <prefix>land.task, <prefix>land.pr and
+# <prefix>on_land.done. Local: the loop directory. --host: notes/loops/<ref>. (the mirror
+# of the host's loop directory replaces that directory, so the state lives beside it).
+# resolve_task <prefix> — {task} is the one saved at the first land; a different --task
+# is refused. Without either it is the ref.
+resolve_task() {
+  local saved=""
+  [[ ! -f "$1land.task" ]] || saved="$(cat "$1land.task")"
+  if [[ -n "$saved" ]]; then
+    [[ -z "$task" || "$task" == "$saved" ]] \
+      || usage "--task $task differs from the task saved at the first land of $ref ($saved); rerun with --task $saved or without --task"
+    task="$saved"
+  elif [[ -z "$task" ]]; then
+    task="$ref"
+  fi
+}
+# save_land_state <prefix> — remember the task and PR number (once the PR is merged).
+save_land_state() {
+  mkdir -p "${1%/*}"
+  printf '%s\n' "$task" >"$1land.task"
+  printf '%s\n' "$pr" >"$1land.pr"
+}
+clear_land_state() { rm -f "$1land.task" "$1land.pr" "$1on_land.done"; }
+
+# run_on_land <prefix> <rerun command> — run each on_land command in the space root.
+# Each command that succeeds is recorded in <prefix>on_land.done as "<pr> <index> <text>",
+# so a rerun never runs it twice (and a relaunch of the ref, with another PR, never skips
+# one); a failure stops here and the rerun resumes at that command. Entries without the
+# PR number come from an older ship-land and count for the PR being landed.
 run_on_land() {
-  local done_file="$1" rerun="$2" idx=0 cmd entry
+  local done_file="$1on_land.done" rerun="$2" idx=0 cmd entry
   mkdir -p "${done_file%/*}"
   while IFS= read -r cmd; do
     idx=$((idx + 1))
@@ -134,8 +168,8 @@ run_on_land() {
     cmd="${cmd//\{ref\}/$ref}"
     cmd="${cmd//\{pr\}/$pr}"
     cmd="${cmd//\{task\}/$task}"
-    entry="$idx $cmd"
-    if [[ -f "$done_file" ]] && grep -qxF -- "$entry" "$done_file"; then
+    entry="$pr $idx $cmd"
+    if [[ -f "$done_file" ]] && { grep -qxF -- "$entry" "$done_file" || grep -qxF -- "$idx $cmd" "$done_file"; }; then
       say "on_land: already done: $cmd"
       continue
     fi
@@ -149,11 +183,25 @@ run_on_land() {
   done < <(jq -r '.[]' <<<"$on_land")
 }
 
+# load_on_land — the on_land list from the config, checked.
+load_on_land() {
+  on_land="[]"
+  on_land="$(ship_cfg_get on_land)" || [[ $? -eq 3 ]] || exit 1
+  [[ "$(jq -r 'type' <<<"$on_land")" == array ]] || fail "on_land must be a list of commands"
+}
+
 # --- --host: run the same command where the worktree lives ------------------------------
 if ! ship_host_is_local "$host"; then
   [[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid --host '$host'"
   target="$(ship_host_target "$host")" || exit 1
   ship_host_sync "$target" || fail "could not copy the ship scripts to $host ($target)"
+  lead_prefix="$root/notes/loops/$ref."
+  if [[ $abandon -eq 0 ]]; then
+    # Validated before anything is merged, as the local land does.
+    load_on_land
+    resolve_task "$lead_prefix"
+  fi
+  rerun="ship-land $ref --host $host${task:+ --task $task}"
   rargs=("$ref")
   [[ $abandon -eq 0 ]] || rargs+=(--abandon)
   [[ $force -eq 0 ]] || rargs+=(--force)
@@ -166,7 +214,7 @@ if ! ship_host_is_local "$host"; then
     rc=0
     ship_host_run "$target" "$root" "$host" ship-land "${rargs[@]}" "$@" || rc=$?
     if ship_host_lost "$rc"; then
-      echo "ship-land: lost the connection to $host (ssh exit $rc); the landing may have finished or still be running there. Rerun 'ship-land $ref --host $host' (a merged PR skips ahead to on_land and teardown)" >&2
+      echo "ship-land: lost the connection to $host (ssh exit $rc); the landing may have finished or still be running there. Rerun '$rerun' (a merged PR skips ahead to on_land and teardown)" >&2
       rc=1
     fi
     if ssh "${SHIP_SSH_OPTS[@]}" "$target" "test -d $(ship_sq "$root/notes/loops/$ref")" 2>/dev/null; then
@@ -186,24 +234,25 @@ if ! ship_host_is_local "$host"; then
   if [[ $abandon -eq 1 ]]; then
     host_call
     ship_unlock "$lock"; trap - EXIT
+    [[ $rc -ne 0 ]] || clear_land_state "$lead_prefix"
     exit "$rc"
   fi
   # 1. rebase, gate, push, merge on the host (a merged PR passes straight through)
   host_call --phase merge
   if [[ $rc -ne 0 ]]; then ship_unlock "$lock"; trap - EXIT; exit "$rc"; fi
-  # 2. on_land here, on the lead: the tracker is wherever the lead runs. The done file is
-  # kept outside the unit's loop directory, which the mirror-back replaces.
-  on_land="[]"
-  on_land="$(ship_cfg_get on_land)" || [[ $? -eq 3 ]] || exit 1
-  [[ "$(jq -r 'type' <<<"$on_land")" == array ]] || fail "on_land must be a list of commands"
-  [[ -n "$task" ]] || task="$ref"
+  # 2. on_land here, on the lead: the tracker is wherever the lead runs.
   pr="$(cat "$root/notes/loops/$ref/land.pr" 2>/dev/null)" || pr=""
   [[ "$pr" =~ ^[0-9]+$ ]] || fail "could not learn the PR number of $ref from $host"
-  run_on_land "$root/notes/loops/$ref.on_land.done" "ship-land $ref --host $host"
+  # A unit half-landed by an older ship-land has its done list on the host's side.
+  if [[ ! -f "${lead_prefix}on_land.done" && -f "$root/notes/loops/$ref/on_land.done" ]]; then
+    cp "$root/notes/loops/$ref/on_land.done" "${lead_prefix}on_land.done"
+  fi
+  save_land_state "$lead_prefix"
+  run_on_land "$lead_prefix" "$rerun"
   # 3. teardown on the host
   host_call --phase finish
   ship_unlock "$lock"; trap - EXIT
-  [[ $rc -ne 0 ]] || rm -f "$root/notes/loops/$ref.on_land.done"
+  [[ $rc -ne 0 ]] || clear_land_state "$lead_prefix"
   exit "$rc"
 fi
 
@@ -339,10 +388,9 @@ gate="$(ship_cfg_get gate)" || exit 1
 base="$(ship_cfg_get base)" || fail "config key 'base' is not set"
 method="$(ship_cfg_get merge_method)" || fail "config key 'merge_method' is not set"
 case "$method" in rebase|squash|merge) ;; *) fail "merge_method must be rebase, squash or merge (got '$method')" ;; esac
-on_land="[]"
-on_land="$(ship_cfg_get on_land)" || [[ $? -eq 3 ]] || exit 1
-[[ "$(jq -r 'type' <<<"$on_land")" == array ]] || fail "on_land must be a list of commands"
-[[ -n "$task" ]] || task="$ref"
+load_on_land
+if [[ -z "$phase" ]]; then resolve_task "$loop_dir/"; else [[ -n "$task" ]] || task="$ref"; fi
+rerun="ship-land $ref${task:+ --task $task}${phase:+${SHIP_HOST:+ --host $SHIP_HOST}}"
 check_rec
 [[ -d "$wt_path" ]] || fail "worktree $wt_path does not exist"
 [[ -n "$branch" ]] || fail "worktree $wt_path is not on a branch"
@@ -365,6 +413,8 @@ acquire_lock
 pr_state="$(cd "$wt_path" && gh pr view "$pr" --json state -q .state)" || fail "gh pr view $pr failed"
 if [[ "$pr_state" == MERGED ]]; then
   say "#$pr is already merged; skipping to on_land and teardown"
+elif [[ "$phase" == finish ]]; then
+  refuse "#$pr is not merged (state $pr_state); the teardown only follows a merge"
 else
 
 # --- 3. rebase --------------------------------------------------------------------------
@@ -420,6 +470,10 @@ else
   say "#$pr merged (no worktree has $base checked out; nothing to pull)"
 fi
 fi   # PR not yet merged
+# on_land and the teardown follow a merge: with auto-merge or a merge queue the PR may
+# still be open here.
+pr_state="$(cd -- "$wt_path" && gh pr view "$pr" --json state -q .state 2>/dev/null)" || pr_state=""
+[[ "$pr_state" == MERGED ]] || fail "#$pr is not merged yet (state ${pr_state:-unknown}; auto-merge or a merge queue?); rerun '$rerun' once it is merged"
 
 # --- 6. on_land -------------------------------------------------------------------------
 # With --host the lead runs these (see above); under --phase merge the lead takes over here.
@@ -432,7 +486,8 @@ if [[ "$phase" == merge ]]; then
 fi
 if [[ "$phase" != finish ]]; then
   mkdir -p "$loop_dir"
-  run_on_land "$loop_dir/on_land.done" "ship-land $ref"
+  save_land_state "$loop_dir/"
+  run_on_land "$loop_dir/" "$rerun"
 fi
 
 # --- 7. teardown ------------------------------------------------------------------------
