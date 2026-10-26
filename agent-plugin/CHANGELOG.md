@@ -3,6 +3,24 @@
 Changes to the hyper agent plugin. The plugin version in
 `.claude-plugin/plugin.json` is bumped separately, at release.
 
+## 0.6.2 — 2026-10-26
+
+### Fixed
+
+- `ship-land` deletes the unit's local branch after the squash merge, once the
+  branch head is the head of the merged PR. When the PR head cannot be read or
+  differs, it keeps the branch and says why.
+- `ship-land` refuses a rerun (exit 3) while the PR is still OPEN with
+  auto-merge set or in a merge queue, before any rebase, gate, push or merge,
+  in local and host mode. The message names the merge state. When the
+  merge-queue lookup fails, it warns and goes on.
+- `ship-land` no longer accepts `on_land` done entries in the format written
+  before 0.6.1, which ignored the PR number.
+- `ship-loop`: when the gate or another change outside the dev's fixes puts
+  back a diff that a stage rejected, the dev and the next reviewer get that
+  stage's findings again, and the unit ends STUCK instead of looping reviewers
+  until the guard. `result.json` records `rejected_by`.
+
 ## 0.6.1 — 2026-10-26
 
 ### Fixed
