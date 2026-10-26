@@ -53,12 +53,14 @@ case "$1 $2" in
   "pr view")
     # `pr view <number|branch> --json ... -q .number|.state`
     b="$(git branch --show-current)"
-    if git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then st=MERGED; else st=OPEN; fi
+    if [[ -e "$STUB_REMOTE/merged-$b" ]] || git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then st=MERGED; else st=OPEN; fi
     case "$*" in *"-q .number"*) printf '%s\n' "${GH_PR:?gh stub: GH_PR not set}" ;; *) echo "$st" ;; esac ;;
   "pr merge")
     [[ -z "${GH_MERGE_FAIL:-}" ]] || { echo "gh: merge failed" >&2; exit 1; }
     b="$(git branch --show-current)"
-    git -C "$STUB_REMOTE" update-ref refs/heads/main "$(git -C "$STUB_REMOTE" rev-parse "refs/heads/$b")" ;;
+    git -C "$STUB_REMOTE" update-ref refs/heads/main "$(git -C "$STUB_REMOTE" rev-parse "refs/heads/$b")"
+    : > "$STUB_REMOTE/merged-$b"
+    case "$*" in *--delete-branch*) git -C "$STUB_REMOTE" update-ref -d "refs/heads/$b" ;; esac ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
 esac
 STUB

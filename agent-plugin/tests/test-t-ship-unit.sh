@@ -74,6 +74,11 @@ if [[ -n "$start" ]]; then
 else
   git -C "$STUB_G" worktree add -q "$STUB_SPACE/worktrees/$br" "$br"
 fi
+# Like the real wt failing late: the branch and worktree exist, and the exit is non-zero.
+if [[ -e "$FIX/wt.fail" ]]; then
+  echo "✗ git branch --unset-upstream -- $br failed (exit 128) fatal: branch '$br' has no upstream information" >&2
+  exit 128
+fi
 STUB
 # The host's environment: nothing of ours but what is listed.
 cat > "$FIX/bin/hostenv" <<'STUB'
@@ -146,6 +151,7 @@ n=$((n + 1))
 printf '%s\n' "$@" > "$FIX/loopargs.$ref.$n"
 D="$SHIP_SPACE_ROOT/notes/loops/$ref"
 cat "$D/models.override" > "$FIX/loopmodels.$ref.$n" 2>/dev/null
+printf '%s' "$PATH" > "$FIX/looppath.$ref.$n"
 slots="$(source "$LIBSH"; ship_config_load >/dev/null 2>&1; ship_cfg_get hosts.box.slots 2>/dev/null)"
 echo "host=${SHIP_HOST:-} cfgfile=${SHIP_CONFIG_FILE:-} slots=$slots" > "$FIX/loopenv.$ref.$n"
 result() { jq -nc --arg r "$ref" --arg s "$1" --arg h "${SHIP_HOST:-local}" '{ref: $r, pr: 7, stage: "finalize", status: $s, failovers: 0, host: $h}' > "$D/result.json"; cat "$D/result.json"; }
@@ -325,6 +331,48 @@ assert_contains "driver got --final-gate" "$args1" "--final-gate"
 assert_not_contains "the models do not go on the command line" "$args1" "--model"
 assert_eq "...they reach the driver through models.override" "dev=sonnet" "$(cat "$FIX/loopmodels.l1.1")"
 assert_eq "the driver saw host local" "local" "$(jq -r .host "$(loops l1)/result.json")"
+
+# 2b: the driver runs with the PATH of the shell that ran ship-unit, not the pane's -----------
+mkdir -p "$FIX/extra"
+mode lp1 ready
+rc="$(PATH="$FIX/extra:$PATH" unit run lp1 --brief "$BRIEF" --class S)"
+assert_eq "run with a PATH prefix: READY exits 0" "0" "$rc"
+assert_eq "the driver got the caller's PATH, prefix first" "$FIX/extra:$PATH" "$(cat "$FIX/looppath.lp1.1")"
+
+# 2c: a failed wt switch -c leaves nothing behind, and a rerun starts clean ---------------------
+mode wf1 ready
+: > "$FIX/wt.fail"
+rc="$(unit run wf1 --brief "$BRIEF" --class S)"
+assert_eq "wt switch -c fails: exit 70" "70" "$rc"
+assert_contains "...the wt error is in the message" "$(err)" "has no upstream information"
+assert_contains "...and the message names the command" "$(err)" "wt switch -c wf1 failed"
+assert_eq "...the branch this run created is gone" "no" "$(git -C "$G" rev-parse --verify -q refs/heads/wf1 >/dev/null && echo yes || echo no)"
+assert_eq "...the worktree is gone" "no" "$([[ -e "$SPACE/worktrees/wf1" ]] && echo yes || echo no)"
+assert_eq "...git no longer lists it" "" "$(git -C "$G" worktree list --porcelain | grep 'worktrees/wf1')"
+assert_eq "...no driver was started" "0" "$(ls "$FIX"/loopargs.wf1.* 2>/dev/null | wc -l | tr -d ' ')"
+rm -f "$FIX/wt.fail"
+rc="$(unit run wf1 --brief "$BRIEF" --class S)"
+assert_eq "the rerun starts clean and finishes READY" "0" "$rc"
+assert_eq "...on a worktree it made itself" "yes" "$([[ -d "$SPACE/worktrees/wf1" ]] && echo yes)"
+
+# a branch that already existed is kept; only the worktree this run made goes
+git -C "$G" branch wf2 origin/main
+mode wf2 ready
+: > "$FIX/wt.fail"
+rc="$(unit run wf2 --brief "$BRIEF" --class S)"
+rm -f "$FIX/wt.fail"
+assert_eq "wt switch of an existing branch fails: exit 70" "70" "$rc"
+assert_eq "...the branch that was already there is kept" "yes" "$(git -C "$G" rev-parse --verify -q refs/heads/wf2 >/dev/null && echo yes || echo no)"
+assert_eq "...the worktree this run made is gone" "no" "$([[ -e "$SPACE/worktrees/wf2" ]] && echo yes || echo no)"
+
+# a later setup step failing (the multiplexer is unusable) removes what the run created too
+mode wf3 ready
+printf 'mux is down\n' > "$SHIP_MUX_FAKE_DIR/check-fail"
+rc="$(unit run wf3 --brief "$BRIEF" --class S)"
+rm -f "$SHIP_MUX_FAKE_DIR/check-fail"
+assert_eq "a failing setup step after wt: non-zero exit" "70" "$rc"
+assert_eq "...its branch is gone" "no" "$(git -C "$G" rev-parse --verify -q refs/heads/wf3 >/dev/null && echo yes || echo no)"
+assert_eq "...its worktree is gone" "no" "$([[ -e "$SPACE/worktrees/wf3" ]] && echo yes || echo no)"
 
 mode l2 park
 rc="$(unit run l2 --brief "$BRIEF" --class M --branch feat-two)"

@@ -29,7 +29,7 @@
 #   4. run `gate` (config) in the worktree; git push --force-with-lease, leased
 #      on the origin/<branch> seen before the fetch (a commit pushed meanwhile
 #      from elsewhere refuses the push instead of being overwritten)
-#   5. gh pr merge <pr> --<merge_method>; pull the base in its worktree
+#   5. gh pr merge <pr> --<merge_method> --delete-branch (the remote head branch goes); pull the base in its worktree
 #   6. run each on_land command ({ref}, {pr}, {task} replaced)
 #   7. teardown: ship-retire every agent recorded in mux.json; ship-mux close
 #      every recorded pane, then the unit space; try to close every ship-created
@@ -336,7 +336,14 @@ git -C "$wt_path" push -q "--force-with-lease=$branch:$lease_sha" origin "HEAD:$
 
 # --- 5. merge ---------------------------------------------------------------------------
 sleep "${SHIP_LAND_SETTLE_SEC:-5}"
-(CDPATH='' cd -- "$wt_path" && gh pr merge "$pr" "--$method") || fail "gh pr merge $pr failed; $branch is pushed"
+# --delete-branch removes the remote head branch. gh also tries the local one, which the unit's
+# worktree holds, so it may exit non-zero after a good merge: the PR's state decides.
+if ! (CDPATH='' cd -- "$wt_path" && gh pr merge "$pr" "--$method" --delete-branch); then
+  [[ "$(cd -- "$wt_path" && gh pr view "$pr" --json state -q .state 2>/dev/null)" == MERGED ]] \
+    || fail "gh pr merge $pr failed; $branch is pushed"
+  echo "ship-land: warning: gh reported an error after merging #$pr; the PR is merged" >&2
+  git -C "$wt_path" push -q origin --delete "$branch" 2>/dev/null || true
+fi
 base_wt="$(git -C "$wt_path" worktree list --porcelain | awk -v b="refs/heads/$base" '
   $1 == "worktree" { p = substr($0, 10) } $1 == "branch" && $2 == b { print p; exit }')"
 if [[ -n "$base_wt" ]]; then

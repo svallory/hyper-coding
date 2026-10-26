@@ -231,6 +231,53 @@ run_loop t4; stub_stop
 check_result t4 "DIALOG, resumed after the dialog cleared" 0 READY
 assert_eq "DIALOG: the dev was never restarted" "1" "$(starts_of t4-dev)"
 
+# --- 4b: the workspace-trust dialog is accepted once; every other dialog is left alone -----------------------
+TRUST_DLG=$'Accessing workspace:\n\n /work/proj/worktrees/x\n\n Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team).\n\n Claude Code\'ll be able to read, edit, and execute files here.\n\n \u276f 1. Yes, I trust this folder\n   2. No, exit\n\n Enter to confirm \u00b7 Esc to cancel'
+enter_count() { local n; n="$(grep -c '^<keys:enter>$' "$SHIP_MUX_FAKE_DIR/sent/$(agent_of "$1" "$2")" 2>/dev/null)"; echo "${n:-0}"; }
+export SHIP_TRUST_WAIT_S=2
+
+reset_fake; unit t4a
+mkdir -p "$SHIP_MUX_FAKE_DIR/read"
+printf '%s\n' "$TRUST_DLG" >"$SHIP_MUX_FAKE_DIR/read/t4a-dev"
+printf 'Welcome back\n' >"$SHIP_MUX_FAKE_DIR/read/t4a-dev.after-enter"
+script t4a develop.json "$DEV_DONE"; script t4a review-r1.json "$REV_OK"
+stub_start t4a; run_loop t4a; stub_stop
+check_result t4a "trust dialog accepted" 0 READY
+assert_eq "trust dialog: Enter was pressed once" "1" "$(enter_count t4a t4a-dev)"
+assert_eq "trust dialog: one log line says so" "1" "$(grep -c 'workspace-trust dialog' "$(st t4a)/loop.log")"
+assert_eq "trust dialog: the dev was started once" "1" "$(starts_of t4a-dev)"
+
+reset_fake; unit t4b
+mkdir -p "$SHIP_MUX_FAKE_DIR/read"
+printf '%s\n' "$TRUST_DLG" >"$SHIP_MUX_FAKE_DIR/read/t4b-dev"
+script t4b develop.json "$DEV_DONE"; script t4b review-r1.json "$REV_OK"
+stub_start t4b; run_loop t4b; stub_stop
+check_result t4b "trust dialog that stays" 2 PARKED
+assert_eq "trust dialog that stays: park.json status" "DIALOG" "$(jq -r .status "$(st t4b)/park.json")"
+assert_contains "...the message names the trust dialog" "$(jq -r .question "$(st t4b)/park.json")" "workspace-trust dialog"
+assert_eq "...Enter was pressed once, not again" "1" "$(enter_count t4b t4b-dev)"
+assert_eq "...the dev was left alive" "t4b-dev" "$(live_agents t4b)"
+
+reset_fake; unit t4c
+mkdir -p "$SHIP_MUX_FAKE_DIR/read"
+printf '%s\n' "Quick safety check: Is this a project you created or one you trust?" "" "   1. Yes, I trust this folder" " $(printf '\u276f') 2. No, exit" >"$SHIP_MUX_FAKE_DIR/read/t4c-dev"
+script t4c develop.json "$DEV_DONE"; script t4c review-r1.json "$REV_OK"
+stub_start t4c; run_loop t4c; stub_stop
+check_result t4c "trust dialog with No selected" 2 PARKED
+assert_eq "No selected: park.json status" "DIALOG" "$(jq -r .status "$(st t4c)/park.json")"
+assert_eq "...Enter was never pressed" "0" "$(enter_count t4c t4c-dev)"
+
+reset_fake; unit t4d
+mkdir -p "$SHIP_MUX_FAKE_DIR/read"
+printf 'Some tool wants to run.\n\n  \u276f 1. Yes\n    2. No\n' >"$SHIP_MUX_FAKE_DIR/read/t4d-dev"
+mkdir -p "$SHIP_MUX_FAKE_DIR/status"; printf 'working\nblocked\n' >"$SHIP_MUX_FAKE_DIR/status/t4d-dev"
+stub_start t4d; run_loop t4d; stub_stop
+check_result t4d "another dialog" 2 PARKED
+assert_eq "another dialog: parked as DIALOG" "DIALOG" "$(jq -r .status "$(st t4d)/park.json")"
+assert_eq "...and no key was sent" "0" "$(enter_count t4d t4d-dev)"
+unset SHIP_TRUST_WAIT_S
+assert_eq "the rulings file was created on first use" "yes" "$([[ -s "$SPACE/notes/decisions.md" ]] && echo yes || echo no)"
+
 # --- 5: OVER-BUDGET, then --extend -----------------------------------------------------------------------------
 reset_fake; unit t5
 BUD_S=0.02; write_cfg

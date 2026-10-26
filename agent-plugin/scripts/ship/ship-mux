@@ -333,9 +333,14 @@ _rollback_close() {
 }
 
 # _close_ok <id> — close on the backend; "not found" (5) counts as closed.
+# Closing an agent closes its pane, so the pane's own close finds nothing: that is expected, and its
+# "not found" message is dropped (any other failure keeps its message).
 _close_ok() {
-  local rc=0
-  _be close --ref "$f_ref" --id "$1" || rc=$?
+  local rc=0 err
+  err="$(mktemp "${TMPDIR:-/tmp}/ship-mux-close.XXXXXX")" || err=/dev/null
+  _be close --ref "$f_ref" --id "$1" 2>"$err" || rc=$?
+  if [[ $rc -ne 5 && "$err" != /dev/null ]]; then cat "$err" >&2; fi
+  [[ "$err" == /dev/null ]] || rm -f "$err"
   [[ $rc -eq 5 ]] && return 0
   return "$rc"
 }
