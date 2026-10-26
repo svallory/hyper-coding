@@ -22,7 +22,8 @@
 #                                `bash -lc`, with SHIP_SPACE_ROOT, SHIP_HOST and
 #                                SHIP_UNIT_INTERNAL=1 set, and the lead's merged
 #                                config (SHIP_CONFIG_JSON, when loaded) passed along
-#                                so the host never re-resolves it. Returns ssh's
+#                                so the host never re-resolves it. HERDR_ENV=1 is
+#                                forwarded only when the lead's own HERDR_ENV is 1. Returns ssh's
 #                                exit status.
 #   ship_host_push <target> <path>...   rsync files or directories to the same
 #                                absolute path on the host
@@ -136,6 +137,8 @@ ship_host_run() {
   local target="$1" root="$2" name="$3" script="$4" cmd a
   shift 4
   cmd="env SHIP_SPACE_ROOT=$(ship_sq "$root") SHIP_HOST=$(ship_sq "$name") SHIP_UNIT_INTERNAL=1"
+  # The operator's Herdr opt-in on the lead carries over; it is never set from nothing.
+  [[ "${HERDR_ENV:-}" != 1 ]] || cmd+=" HERDR_ENV=1"
   if [[ -n "${SHIP_CONFIG_JSON:-}" ]]; then
     cmd+=" SHIP_CONFIG_JSON=$(ship_sq "$SHIP_CONFIG_JSON") SHIP_CONFIG_LAYERS=$(ship_sq '[{"file":"the lead config","data":{}}]')"
   fi

@@ -150,6 +150,9 @@ on both ends; the stock macOS `/usr/bin/rsync` is openrsync and is refused, so i
 rsync 3 and put it first on `PATH`). Host mode copies the brief, the rulings file, the spec dir and the
 mirrored unit directory by any path: spaces, quotes and non-ASCII characters are
 fine, glob characters included. Only a path with a newline in it is refused.
+With the Herdr backend, host mode passes the lead's `HERDR_ENV=1` to the host (only
+when the lead has it set to 1); the host needs `herdr` on its login `PATH` and its
+Herdr server running.
 
 `ship-loop --preflight` checks `jq`, `git`, `gh`, `hyper` (unless
 `SHIP_SPACE_ROOT` is set), `yq` v4, that the config loads and has a `gate`,
