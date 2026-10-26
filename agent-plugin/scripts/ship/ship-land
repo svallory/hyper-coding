@@ -63,7 +63,8 @@
 # Exit codes: 0 landed (or abandoned); 1 error (gate failed, rebase conflict,
 # merge failed, teardown left something behind, an on_land command failed);
 # 2 usage; 3 refused (not READY, empty branch, rebase dropped commits,
-# uncommitted changes).
+# uncommitted changes, the PR is OPEN and queued to merge: auto-merge enabled or in a
+# merge queue; a rerun would drop it from the queue, so rerun once it is MERGED).
 #
 # Environment: SHIP_LAND_SETTLE_SEC (seconds between push and merge so GitHub
 # sees the new head; default 5), SHIP_LAND_LOCK_WAIT_SEC (default 1800), SHIP_LAND_LOCK
@@ -159,8 +160,7 @@ clear_land_state() { rm -f "$1land.task" "$1land.pr" "$1on_land.done"; }
 # run_on_land <prefix> <rerun command> — run each on_land command in the space root.
 # Each command that succeeds is recorded in <prefix>on_land.done as "<pr> <index> <text>",
 # so a rerun never runs it twice (and a relaunch of the ref, with another PR, never skips
-# one); a failure stops here and the rerun resumes at that command. Entries without the
-# PR number come from an older ship-land and count for the PR being landed.
+# one); a failure stops here and the rerun resumes at that command.
 run_on_land() {
   local done_file="$1on_land.done" rerun="$2" idx=0 cmd entry
   mkdir -p "${done_file%/*}"
@@ -171,7 +171,7 @@ run_on_land() {
     cmd="${cmd//\{pr\}/$pr}"
     cmd="${cmd//\{task\}/$task}"
     entry="$pr $idx $cmd"
-    if [[ -f "$done_file" ]] && { grep -qxF -- "$entry" "$done_file" || grep -qxF -- "$idx $cmd" "$done_file"; }; then
+    if [[ -f "$done_file" ]] && grep -qxF -- "$entry" "$done_file"; then
       say "on_land: already done: $cmd"
       continue
     fi
@@ -429,7 +429,29 @@ fi
 acquire_lock
 
 # --- 2. a merged PR (rerun after a failed teardown) skips to on_land -----------------------
-pr_state="$(cd "$wt_path" && gh pr view "$pr" --json state -q .state)" || fail "gh pr view $pr failed"
+pr_json="$(cd "$wt_path" && gh pr view "$pr" --json state,autoMergeRequest,mergeStateStatus)" || fail "gh pr view $pr failed"
+pr_state="$(jq -r '.state // ""' <<<"$pr_json")" || fail "could not read the state of #$pr"
+if [[ "$pr_state" == OPEN ]]; then
+  # Queued to merge (auto-merge, or a merge queue) by an earlier ship-land: a rebase and a
+  # push now would drop the PR out of the queue, so nothing is touched until it is MERGED.
+  queued=""
+  if [[ "$(jq -r '.autoMergeRequest // empty | type' <<<"$pr_json")" == object ]]; then
+    queued="auto-merge is enabled"
+  else
+    # gh pr view has no merge-queue field: ask GraphQL (best effort; a failure means not queued).
+    pr_url="$(cd "$wt_path" && gh pr view "$pr" --json url -q .url 2>/dev/null)" || pr_url=""
+    if [[ "$pr_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)/pull/[0-9]+$ ]]; then
+      # shellcheck disable=SC2016 # $owner etc. are GraphQL variables, not shell ones
+      in_queue="$(cd "$wt_path" && gh api graphql -F "number=$pr" -F "owner=${BASH_REMATCH[1]}" -F "name=${BASH_REMATCH[2]}" \
+        -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){isInMergeQueue}}}' \
+        -q .data.repository.pullRequest.isInMergeQueue 2>/dev/null)" || in_queue=""
+      [[ "$in_queue" != true ]] || queued="it is in the merge queue"
+    fi
+  fi
+  if [[ -n "$queued" ]]; then
+    refuse "#$pr is queued to merge ($queued); wait for it, then rerun '$rerun' once it is MERGED (to re-land it instead, cancel auto-merge or leave the merge queue first)"
+  fi
+fi
 if [[ "$pr_state" == MERGED ]]; then
   say "#$pr is already merged; skipping to on_land and teardown"
 elif [[ "$phase" == finish ]]; then

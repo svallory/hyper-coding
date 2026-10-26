@@ -55,7 +55,12 @@ case "$1 $2" in
     b="$(git branch --show-current)"
     if [[ -e "$STUB_REMOTE/merged-$b" ]] || git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then st=MERGED; else st=OPEN; fi
     case "$*" in
+      *"--json url"*) echo "https://github.com/acme/stub/pull/${GH_PR:-1}" ;;
       *"-q .number"*) printf '%s\n' "${GH_PR:?gh stub: GH_PR not set}" ;;
+      *autoMergeRequest*)
+        # GH_AUTOMERGE: an OPEN PR with auto-merge enabled
+        am=null; [[ -z "${GH_AUTOMERGE:-}" || "$st" != OPEN ]] || am='{"enabledBy":{"login":"op"},"mergeMethod":"REBASE"}'
+        printf '{"state":"%s","autoMergeRequest":%s,"mergeStateStatus":"CLEAN"}\n' "$st" "$am" ;;
       *headRefOid*)
         # GH_HEADOID_FAIL: only this query fails
         [[ -z "${GH_HEADOID_FAIL:-}" ]] || { echo "gh: HTTP 502 (stub)" >&2; exit 1; }
@@ -75,6 +80,10 @@ case "$1 $2" in
     # GH_MERGE_FAIL_AFTER: the merge happens, then gh errors (it cannot delete a branch a worktree holds)
     if [[ -n "${GH_MERGE_FAIL_AFTER:-}" ]]; then echo "gh: failed to delete local branch" >&2; exit 1; fi
 ;;
+  "api graphql")
+    # GH_QUEUE: an OPEN PR in the merge queue (gh pr view has no field for it)
+    b="$(git branch --show-current)"
+    if [[ -n "${GH_QUEUE:-}" && ! -e "$STUB_REMOTE/merged-$b" ]]; then echo true; else echo false; fi ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
 esac
 STUB
@@ -875,6 +884,77 @@ assert_eq "...on_land did not run" "" "$([[ -s "$CNT" ]] && echo ran)"
 assert_contains "...says it is not merged yet" "$(cat "$FIX/land.err")" "not merged yet"
 bash "$LAND" hl9 --abandon --force >/dev/null 2>&1
 
+# a rerun while the PR is queued to merge is refused before anything is touched
+queued_rerun_check() { # <label> <ref> <env var> <land args...>
+  local label="$1" r="$2" knob="$3" head_before remote_before g0 m0 rc
+  shift 3
+  : > "$GH_LOG"
+  head_before="$(git -C "$SPACE/worktrees/$r" rev-parse HEAD)"
+  remote_before="$(git -C "$REMOTE" rev-parse "refs/heads/$r")"
+  g0="$(gate_runs)"; m0="$(merges)"
+  rc="$(env "$knob=1" bash "$LAND" "$r" "$@" 2>"$FIX/land.err" >"$FIX/land.out"; echo $?)"
+  assert_eq "$label: exit 3" "3" "$rc"
+  assert_contains "...says the PR is queued to merge" "$(cat "$FIX/land.err")" "queued to merge"
+  assert_contains "...says to rerun once MERGED" "$(cat "$FIX/land.err")" "once it is MERGED"
+  assert_contains "...and how to cancel auto-merge for a re-land" "$(cat "$FIX/land.err")" "cancel auto-merge"
+  assert_eq "...no merge call" "$m0" "$(merges)"
+  assert_eq "...no gate run" "$g0" "$(gate_runs)"
+  assert_eq "...no rebase (the local head is unchanged)" "$head_before" "$(git -C "$SPACE/worktrees/$r" rev-parse HEAD)"
+  assert_eq "...no push (the remote branch is unchanged)" "$remote_before" "$(git -C "$REMOTE" rev-parse "refs/heads/$r")"
+  assert_eq "...no push of any kind in the gh log either" "0" "$(grep -c 'push' "$GH_LOG" || true)"
+}
+rm -f "$CNT"
+fresh_fake
+write_cfg 'on_land: ["echo {ref}-{pr} >> '"$CNT"'"]
+'
+mk_unit q1 501
+advance_main queue-one
+rc="$(GH_MERGE_QUEUE=1 land q1)"
+assert_eq "first land with a merge queue: the PR stays open, exit 1" "1" "$rc"
+queued_rerun_check "rerun while auto-merge is enabled" q1 GH_AUTOMERGE
+queued_rerun_check "rerun while in the merge queue" q1 GH_QUEUE
+assert_eq "...the unit is kept" "yes" "$([[ -d "$SPACE/worktrees/q1" ]] && echo yes || echo no)"
+assert_eq "...on_land did not run" "" "$([[ -s "$CNT" ]] && echo ran)"
+# the PR is merged (by the queue): the rerun lands normally, with no merge call
+touch "$REMOTE/merged-q1"
+git -C "$REMOTE" update-ref refs/heads/main "$(git -C "$REMOTE" rev-parse refs/heads/q1)"
+m0="$(merges)"
+rc="$(GH_AUTOMERGE=1 GH_QUEUE=1 land q1)"
+assert_eq "rerun once the PR is MERGED: 0" "0" "$rc"
+assert_eq "...no merge call" "$m0" "$(merges)"
+assert_eq "...on_land ran" "q1-501" "$(hcnt)"
+assert_eq "...the worktree was torn down" "no" "$([[ -d "$SPACE/worktrees/q1" ]] && echo yes || echo no)"
+# a PR merged outside this ship-land (no land state was ever saved) is finished the same way
+rm -f "$CNT"
+mk_unit q2 502
+advance_main queue-two
+touch "$REMOTE/merged-q2"
+git -C "$REMOTE" update-ref refs/heads/main "$(git -C "$REMOTE" rev-parse refs/heads/q2)"
+assert_eq "...no saved land state before" "" "$(state_files q2)"
+rc="$(land q2)"
+assert_eq "a PR merged elsewhere, never recorded by ship-land: 0" "0" "$rc"
+assert_eq "...on_land ran once" "q2-502" "$(hcnt)"
+assert_eq "...the worktree was torn down" "no" "$([[ -d "$SPACE/worktrees/q2" ]] && echo yes || echo no)"
+# host mode: the host's merge phase refuses, before any push, and nothing runs on the lead
+rm -f "$CNT"; : > "$SSH_LOG"
+fresh_fake
+hcfg '["echo {ref} >> '"$CNT"'"]'
+mk_unit q3 503
+advance_main queue-three
+rc="$(GH_MERGE_QUEUE=1 land q3 --host box)"
+assert_eq "host land with a merge queue: the PR stays open, exit 1" "1" "$rc"
+queued_rerun_check "host rerun while auto-merge is enabled" q3 GH_AUTOMERGE --host box
+assert_eq "...the host's merge phase ran" "2" "$(grep -c 'phase.*merge' "$SSH_LOG")"
+assert_eq "...no teardown phase" "0" "$(grep -c 'phase.*finish' "$SSH_LOG")"
+assert_eq "...on_land did not run" "" "$([[ -s "$CNT" ]] && echo ran)"
+queued_rerun_check "host rerun while in the merge queue" q3 GH_QUEUE --host box
+touch "$REMOTE/merged-q3"
+git -C "$REMOTE" update-ref refs/heads/main "$(git -C "$REMOTE" rev-parse refs/heads/q3)"
+rc="$(GH_AUTOMERGE=1 land q3 --host box)"
+assert_eq "host rerun once the PR is MERGED: 0" "0" "$rc"
+assert_eq "...on_land ran" "q3" "$(hcnt)"
+assert_eq "...the teardown ran on the host" "1" "$(grep -c 'phase.*finish' "$SSH_LOG")"
+
 # a lost connection: the hint carries --task
 : > "$FIX/ssh.lost"
 hcfg '[]'
@@ -885,7 +965,7 @@ assert_eq "host land with the connection lost: 1" "1" "$rc"
 assert_contains "...the hint carries --task" "$(cat "$FIX/land.err")" "Rerun 'ship-land hl10 --host box --task T-10'"
 bash "$LAND" hl10 --abandon --force >/dev/null 2>&1
 
-# a unit half-landed by an older ship-land (its done list is on the host side)
+# an entry without the PR number (written before PR #99) is not accepted
 rm -f "$CNT"
 fresh_fake
 hcfg '["echo {ref}-{pr} >> '"$CNT"'", "echo second >> '"$CNT"'"]'
@@ -893,8 +973,8 @@ mk_unit hl11 311
 advance_main host-eleven
 echo "1 echo hl11-311 >> $CNT" > "$SPACE/notes/loops/hl11/on_land.done"
 rc="$(land hl11 --host box)"
-assert_eq "an old-format done list is honoured: 0" "0" "$rc"
-assert_eq "...the command it lists did not run again" "second" "$(hcnt)"
+assert_eq "an old-format done list: 0" "0" "$rc"
+assert_eq "...is no longer honoured: the command it lists runs again" "hl11-311 second" "$(hcnt)"
 
 # a host-mode land deletes the branch on the host side
 rm -f "$CNT"
