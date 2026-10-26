@@ -24,7 +24,7 @@
 #                   exits 4 when a status file exists and says the agent is not
 #                   working (it never started), else 0.
 #   groups/<name>   a pre-existing units group: `open` then reports created=false
-#   read/<key>.after-enter  replaces read/<key> once `send --keys` has pressed enter (a dialog that goes away)
+#   read/<key>.after-<k>  replaces read/<key> once `send --keys` has pressed key <k> (enter, down, ...): a dialog that changes or goes away
 #   check-fail      `check` prints this file and exits 1
 # Written for assertions:
 #   sent/<id>       every --text sent, one line each; --keys as "<keys:enter,esc>"
@@ -175,8 +175,11 @@ case "$verb" in
       fi
     else
       printf '<keys:%s>\n' "$f_keys" >>"$D/sent/$(safe "$f_to")"
-      if rf="$(scripted read "$f_to")" && [[ -f "$rf.after-enter" && ",$f_keys," == *",enter,"* ]]; then
-        mv -f "$rf.after-enter" "$rf"
+      if rf="$(scripted read "$f_to")"; then
+        IFS=, read -r -a ks <<<"$f_keys"
+        for k in "${ks[@]}"; do
+          if [[ -f "$rf.after-$k" ]]; then mv -f "$rf.after-$k" "$rf"; fi
+        done
       fi
     fi ;;
 

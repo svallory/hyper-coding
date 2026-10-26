@@ -60,6 +60,8 @@ case "$1 $2" in
     b="$(git branch --show-current)"
     git -C "$STUB_REMOTE" update-ref refs/heads/main "$(git -C "$STUB_REMOTE" rev-parse "refs/heads/$b")"
     : > "$STUB_REMOTE/merged-$b"
+    # GH_MERGE_FAIL_AFTER: the merge happens, then gh errors (it cannot delete a branch a worktree holds)
+    if [[ -n "${GH_MERGE_FAIL_AFTER:-}" ]]; then echo "gh: failed to delete local branch" >&2; exit 1; fi
     case "$*" in *--delete-branch*) git -C "$STUB_REMOTE" update-ref -d "refs/heads/$b" ;; esac ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
 esac
@@ -272,7 +274,16 @@ assert_contains "...naming gate" "$(cat "$FIX/land.err")" "gate"
 write_cfg
 rc="$(GH_MERGE_FAIL=1 land u7)"
 assert_eq "a failed merge exits 1 and keeps the unit" "1" "$rc"
+assert_contains "...a merge that did not happen fails loudly, naming the PR" "$(cat "$FIX/land.err")" "gh pr merge"
 assert_eq "...the worktree stays" "yes" "$([[ -d "$SPACE/worktrees/u7" ]] && echo yes || echo no)"
+
+# gh exits non-zero but the PR shows MERGED: the land succeeds and the remote branch is deleted with git
+mk_unit u7b 117
+rc="$(GH_MERGE_FAIL_AFTER=1 land u7b)"
+assert_eq "gh erroring after a good merge: the land succeeds" "0" "$rc"
+assert_contains "...with a warning" "$(cat "$FIX/land.err")" "the PR is merged"
+assert_eq "...the remote branch was deleted with git" "" "$(git -C "$REMOTE" for-each-ref refs/heads/u7b)"
+assert_eq "...the unit was torn down" "no" "$([[ -d "$SPACE/worktrees/u7b" ]] && echo yes || echo no)"
 
 # a failing on_land command stops the land before the teardown; the rerun resumes
 write_cfg 'on_land: ["exit 7"]

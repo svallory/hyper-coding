@@ -444,22 +444,34 @@ close_agent() { # name
 TRUST_RE='^[[:space:]│|]*Quick safety check: [Ii]s this a project you created or one you trust'
 TRUST_WAIT_S="${SHIP_TRUST_WAIT_S:-10}"
 
-# trust_dialog <agent name> <agent id> <stage> — 0 when the trust dialog was showing and Enter cleared
-# it; 1 when it was not showing. Parks the unit as DIALOG when it cannot be cleared: it is still there
-# after the one Enter, it was already answered once for this agent, or its selected option is "No".
+# trust_dialog <agent name> <agent id> <stage> — 0 when the trust dialog was showing and was cleared;
+# 1 when it was not showing. The dialog opens with the cursor on "No, exit", so the cursor marker (the
+# line with the arrow, whatever the option order) is moved onto "Yes, I trust this folder" with `down`
+# (at most 2 times, re-reading the pane each time), then Enter is pressed. One attempt per agent start;
+# parks the unit as DIALOG when the marker never reaches Yes, when the dialog is still showing after the
+# Enter, or when it was already answered once for this agent.
 trust_dialog() {
-  local name="$1" id="$2" stage="$3" screen sel mark="$STATE/agents/$1.trust" end
+  local name="$1" id="$2" stage="$3" screen sel mark="$STATE/agents/$1.trust" end downs=0 why
+  why="$name is showing Claude Code's workspace-trust dialog"
   screen="$(mux read --to "$id" --lines 40 2>/dev/null)" || return 1
   printf '%s\n' "$screen" | grep -Eq "$TRUST_RE" || return 1
-  sel="$(printf '%s\n' "$screen" | grep -E '^[[:space:]│|]*(❯|>|›)' | head -n 1)"
   if [[ -e "$mark" ]]; then
-    park DIALOG "$stage" "$name" "$name is showing Claude Code's workspace-trust dialog again after ship accepted it once. Answer it in its pane, then resume."
-  fi
-  if [[ "$sel" == *"No, exit"* ]]; then
-    park DIALOG "$stage" "$name" "$name is showing Claude Code's workspace-trust dialog with \"No, exit\" selected; ship will not press Enter on it. Answer it in its pane, then resume."
+    park DIALOG "$stage" "$name" "$why again after ship answered it once. Answer it in its pane, then resume."
   fi
   : >"$mark"
-  log "workspace-trust dialog in $WT shown to $name; accepting it with Enter"
+  while true; do
+    sel="$(printf '%s\n' "$screen" | grep -E '^[[:space:]│|]*(❯|>|›)[[:space:]]*[0-9]+\.' | head -n 1)"
+    [[ "$sel" != *"Yes, I trust this folder"* ]] || break
+    if [[ $downs -ge 2 || -z "$sel" ]]; then
+      park DIALOG "$stage" "$name" "$why and the cursor never reached \"Yes, I trust this folder\" (ship moved it $downs time(s)). Answer it in its pane, then resume."
+    fi
+    downs=$((downs + 1))
+    mux send --to "$id" --keys down >/dev/null 2>>"$LOG" || true
+    sleep "$POLL_S"
+    screen="$(mux read --to "$id" --lines 40 2>/dev/null)" || return 0
+    printf '%s\n' "$screen" | grep -Eq "$TRUST_RE" || return 0
+  done
+  log "workspace-trust dialog in $WT shown to $name; cursor on Yes after $downs down key(s), pressing Enter"
   mux send --to "$id" --keys enter >/dev/null 2>>"$LOG" || true
   end=$((SECONDS + TRUST_WAIT_S))
   while [[ $SECONDS -lt $end ]]; do
@@ -467,7 +479,7 @@ trust_dialog() {
     screen="$(mux read --to "$id" --lines 40 2>/dev/null)" || return 0
     printf '%s\n' "$screen" | grep -Eq "$TRUST_RE" || return 0
   done
-  park DIALOG "$stage" "$name" "$name is still showing Claude Code's workspace-trust dialog after ship pressed Enter on it. Answer it in its pane, then resume."
+  park DIALOG "$stage" "$name" "$why after ship pressed Enter on it. Answer it in its pane, then resume."
 }
 
 # send_prompt <agent id> <text> [name stage] — a turn that never starts gets Enter pressed up to 3 times

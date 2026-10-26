@@ -246,6 +246,7 @@ check_result t4a "trust dialog accepted" 0 READY
 assert_eq "trust dialog: Enter was pressed once" "1" "$(enter_count t4a t4a-dev)"
 assert_eq "trust dialog: one log line says so" "1" "$(grep -c 'workspace-trust dialog' "$(st t4a)/loop.log")"
 assert_eq "trust dialog: the dev was started once" "1" "$(starts_of t4a-dev)"
+assert_eq "default on Yes: no down was sent" "0" "$(grep -c '^<keys:down>$' "$SHIP_MUX_FAKE_DIR/sent/$(agent_of t4a t4a-dev)" 2>/dev/null)"
 
 reset_fake; unit t4b
 mkdir -p "$SHIP_MUX_FAKE_DIR/read"
@@ -258,14 +259,33 @@ assert_contains "...the message names the trust dialog" "$(jq -r .question "$(st
 assert_eq "...Enter was pressed once, not again" "1" "$(enter_count t4b t4b-dev)"
 assert_eq "...the dev was left alive" "t4b-dev" "$(live_agents t4b)"
 
+TRUST_NO="${TRUST_DLG/❯ 1. Yes, I trust this folder/  1. Yes, I trust this folder}"
+TRUST_NO="${TRUST_NO/   2. No, exit/ ❯ 2. No, exit}"
+key_count() { local n; n="$(grep -c "^<keys:$3>\$" "$SHIP_MUX_FAKE_DIR/sent/$(agent_of "$1" "$2")" 2>/dev/null)"; echo "${n:-0}"; }
+assert_contains "fixture: the No dialog has the cursor on No" "$TRUST_NO" "❯ 2. No, exit"
+
 reset_fake; unit t4c
 mkdir -p "$SHIP_MUX_FAKE_DIR/read"
-printf '%s\n' "Quick safety check: Is this a project you created or one you trust?" "" "   1. Yes, I trust this folder" " $(printf '\u276f') 2. No, exit" >"$SHIP_MUX_FAKE_DIR/read/t4c-dev"
+printf '%s\n' "$TRUST_NO" >"$SHIP_MUX_FAKE_DIR/read/t4c-dev"
+printf '%s\n' "$TRUST_DLG" >"$SHIP_MUX_FAKE_DIR/read/t4c-dev.after-down"
+printf 'Welcome back\n' >"$SHIP_MUX_FAKE_DIR/read/t4c-dev.after-enter"
 script t4c develop.json "$DEV_DONE"; script t4c review-r1.json "$REV_OK"
 stub_start t4c; run_loop t4c; stub_stop
-check_result t4c "trust dialog with No selected" 2 PARKED
-assert_eq "No selected: park.json status" "DIALOG" "$(jq -r .status "$(st t4c)/park.json")"
-assert_eq "...Enter was never pressed" "0" "$(enter_count t4c t4c-dev)"
+check_result t4c "trust dialog defaulting to No" 0 READY
+assert_eq "default on No: one down" "1" "$(key_count t4c t4c-dev down)"
+assert_eq "...then one enter" "1" "$(key_count t4c t4c-dev enter)"
+assert_eq "...down came before enter" "<keys:down>" "$(grep '^<keys:' "$SHIP_MUX_FAKE_DIR/sent/$(agent_of t4c t4c-dev)" | head -n 1)"
+
+reset_fake; unit t4e
+mkdir -p "$SHIP_MUX_FAKE_DIR/read"
+printf '%s\n' "$TRUST_NO" >"$SHIP_MUX_FAKE_DIR/read/t4e-dev"
+script t4e develop.json "$DEV_DONE"; script t4e review-r1.json "$REV_OK"
+stub_start t4e; run_loop t4e; stub_stop
+check_result t4e "trust dialog whose cursor never moves" 2 PARKED
+assert_eq "stuck cursor: park.json status" "DIALOG" "$(jq -r .status "$(st t4e)/park.json")"
+assert_contains "...the message names the trust dialog" "$(jq -r .question "$(st t4e)/park.json")" "workspace-trust dialog"
+assert_eq "...at most 2 downs" "2" "$(key_count t4e t4e-dev down)"
+assert_eq "...and Enter was never pressed" "0" "$(key_count t4e t4e-dev enter)"
 
 reset_fake; unit t4d
 mkdir -p "$SHIP_MUX_FAKE_DIR/read"

@@ -77,10 +77,12 @@ add to it. If it does not exist when a unit starts, ship creates it with a
   willing to expose to an agent, and read what a unit did before you land it.
 - **Workspace trust.** Claude Code asks whether to trust every folder it has not
   seen, and each unit worktree is a new folder. ship creates the worktree from
-  your own repo, so the driver accepts that one dialog for you: it presses Enter
-  (the default, "Yes, I trust this folder") once per agent start and logs one line
-  to `loop.log`. It answers no other dialog. If the trust dialog is still showing
-  afterwards, or has "No, exit" selected, the unit parks as `DIALOG`.
+  your own repo, so the driver accepts that one dialog for you: it finds the
+  cursor (the `❯` line), moves it with `down` (at most twice) onto "Yes, I trust
+  this folder", which is not where it starts, presses Enter, and logs one line to
+  `loop.log`. It does this once per agent start and answers no other dialog. If
+  the cursor never reaches Yes, or the dialog is still showing after Enter, the
+  unit parks as `DIALOG`.
 - **PATH.** Agents get the `PATH` of the shell that ran `ship-unit`, passed
   explicitly to the pane (`env PATH=...`, or an export in the pane's shell). Nothing else from your
   environment is passed on, and no secrets; tokens such as `GH_TOKEN` must reach
@@ -329,7 +331,7 @@ ship-mux close  --ref R --id X
 ship-mux list   --ref R
 ```
 
-Ids are opaque strings; never parse them. Keys are `enter esc ctrl+c ctrl+d`.
+Ids are opaque strings; never parse them. Keys are `enter esc up down ctrl+c ctrl+d`.
 Every verb except `check` is scoped to a ref and may only touch ids recorded
 for that ref; anything else exits 3 with no backend call.
 
@@ -618,7 +620,7 @@ the stop needs, the driver re-emits the same result and exits 2 again.
 | `QUESTION` | the dev (or a fix round) wrote `QUESTION` in its verdict | `park.json` status `QUESTION`; the verdict is kept as `<verdict>.QUESTION-<n>.json` | `--answer FILE`. The answer goes to the waiting dev. |
 | `BLOCKED` | the dev, or verify, wrote `BLOCKED`; or an agent could not be started, kept alive or prompted for a reason other than a dialog (`loop.log` says why) | `park.json` status `BLOCKED` | `--answer FILE` to nudge the agent; resuming without an answer closes it and retries the stage with a fresh agent. |
 | `OPERATOR` | the spec writer needs a decision only the operator can make (all gaps marked `operator_call`, or `operator_questions`) | `park.json` status `OPERATOR` | `--answer FILE`; a fresh spec writer gets the answer in its prompt. |
-| `DIALOG` | an agent is blocked on a dialog in its pane: the workspace-trust dialog ship could not clear (still showing after its one Enter, or with "No, exit" selected), or any other dialog (ship answers none) | `park.json` status `DIALOG`, with the screen text | answer the dialog in the pane (`ship-mux read` shows it), then `resume` with no answer. `--answer` is refused. |
+| `DIALOG` | an agent is blocked on a dialog in its pane: the workspace-trust dialog ship could not clear (the cursor would not move onto "Yes, I trust this folder", or it is still showing after Enter), or any other dialog (ship answers none) | `park.json` status `DIALOG`, with the screen text | answer the dialog in the pane (`ship-mux read` shows it), then `resume` with no answer. `--answer` is refused. |
 | `LIMIT` | every model for the stage is limited or over `quota.threshold_pct`, or the limited one has no successor | `park.json` status `LIMIT`, `resets_at` when known | wait for the reset, or `--model stage=...` to name a usable list, or `ship-loop --clear-limit NAME` if the quota is back; then `resume`. `--answer` is refused. |
 | `OVER-BUDGET` | a stage ran past its budget | `budget-r<k>.json`; agent left running | `--extend MIN`. |
 | `STUCK` | `max_rounds` reached without ACCEPT, or finalize failed and the dev could not fix it | `result.json.findings` | Raise the limit and run it again: `ship-unit run <ref> --brief ... --class ... --max-rounds <higher>`. Finished rounds are replayed from their files and the driver goes on with the next round (`resume` reuses the old limit and would stop at STUCK again). Or abandon it: `ship-land <ref> --abandon --force`, then start a fresh `ship-unit run`. Read `result.json.findings` first; if the reviewer keeps asking for the same thing, rule on it or re-brief rather than raising the limit. |
@@ -719,7 +721,7 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 | "yq" error | `yq` is missing or is not mikefarah v4 (`yq --version`). Install mikefarah yq. |
 | `ship-unit` exits 70 with "wt (worktrunk) not found on PATH" | Install worktrunk (`wt`). |
 | `ship-mux check` fails | Herdr: run inside Herdr (`HERDR_ENV=1`) with `herdr` on PATH. |
-| A unit parked `DIALOG` and the question names the workspace-trust dialog | Claude Code asked to trust the worktree and ship's one Enter did not clear it, or "No, exit" was selected. `ship-mux read --ref <ref> --to <agent id>` shows the screen. Answer it in the pane, then `ship-unit resume <ref>` with no answer. |
+| A unit parked `DIALOG` and the question names the workspace-trust dialog | Claude Code asked to trust the worktree and ship's one attempt (down, then Enter) did not clear it, or the cursor would not move onto Yes. `ship-mux read --ref <ref> --to <agent id>` shows the screen. Answer it in the pane, then `ship-unit resume <ref>` with no answer. |
 | A unit parked `BLOCKED` with "could not prompt" | ship-mux could not deliver the prompt and the agent was not at a dialog. Read `loop.log` (the line before `PARKED` has the exit code), and the agent's pane. `resume` with no answer retries with a fresh agent. |
 | The dev ran the wrong tool, or cannot find one that works for you | The agent's `PATH` is the one of the shell that ran `ship-unit`. Run `ship-unit` from a shell whose `PATH` has what the agent needs (a stub `gh`, a pinned toolchain). Other variables are not passed. |
 | `ship-unit run` exits 70 with "wt switch -c ... failed" and `branch 'x' has no upstream information` | Your global git config has `branch.autosetupmerge` set to an empty value, which breaks `wt switch -c`. Fix it with `git config --global --unset branch.autosetupmerge`, or set it to `true`. ship removes the branch and worktree that run created, so a rerun starts clean. |
