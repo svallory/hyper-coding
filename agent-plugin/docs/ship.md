@@ -18,30 +18,88 @@ Contents: [Quick start](#quick-start), [Overview](#overview), [Scripts](#scripts
 
 ## Quick start
 
-For a first unit, start in the space root.
+A unit runs in a space: a bare repo with `worktrees/` and a `.hyper/` directory.
+A plain clone is not a space.
 
-1. Install the prerequisites listed under [Overview](#overview) (`jq`, mikefarah
+1. **Get a space.** For a new project, `/hyper:init <remote-url> [name]` (the
+   plugin's init command) clones the remote into a bare repo and adds
+   `worktrees/<default branch>`. For a repo you already have, `/hyper:adopt`
+   converts the checkout in place. Then work from the space root.
+2. **Load the plugin and call the scripts.** The scripts live in
+   `scripts/ship/` inside the plugin and are not on your PATH.
+   `${CLAUDE_PLUGIN_ROOT}` is set for Claude Code (skills and commands), not in
+   your own shell. For local use, start Claude Code with the plugin loaded from
+   its directory, and put the scripts on the PATH of the shell you run ship from:
+
+   ```
+   claude --plugin-dir /path/to/agent-plugin
+   export PATH="/path/to/agent-plugin/scripts/ship:$PATH"
+   ```
+
+   The lead is a Claude session (the `ship` skill describes its role); the
+   scripts can also be run by hand from any shell.
+3. Install the prerequisites listed under [Overview](#overview) (`jq`, mikefarah
    `yq` v4, `git`, `gh`, `wt`, the `hyper` CLI, `claude` or `pi`, and Herdr).
-2. Create `<space root>/.hyper/ship.yml` with the one required key, the command
+   [What ship asks of `gh`](#what-ship-asks-of-gh) lists the exact calls.
+4. Create `<space root>/.hyper/ship.yml` with the one required key, the command
    that must pass before push and merge: `gate: "bun test"` (any command; exit 0
    passes). Check it with `ship-config --print`.
-3. Run inside Herdr (`HERDR_ENV=1`) from the space root. To exercise the flow
+5. Run inside Herdr (`HERDR_ENV=1`) from the space root. To exercise the flow
    without a multiplexer, set `mux: fake` (see
    [Multiplexer backends](#multiplexer-backends)); no real agent runs then.
-4. Write the brief, a markdown file such as `notes/briefs/my-unit.md`: the goal,
+6. Write the brief, a markdown file such as `notes/briefs/my-unit.md`: the goal,
    the files to read, the acceptance criteria and the gate. It must tell the dev to
    push the branch and open a PR against the base with `gh pr create`, because
    a `DONE` verdict without a PR number ends the unit as `ERROR`.
-5. Pick a ref: letters, digits, `.`, `_`, `-`, starting with a letter or digit
+7. Pick a ref: letters, digits, `.`, `_`, `-`, starting with a letter or digit
    (`^[A-Za-z0-9][A-Za-z0-9._-]*$`). It names the unit, its branch and its state
    directory.
-6. `ship-unit run my-unit --brief notes/briefs/my-unit.md --class S`. It blocks
+8. `ship-unit run my-unit --brief notes/briefs/my-unit.md --class S`. It blocks
    until the driver exits (run it in the background if you have other work), then
    prints `result.json` and exits 0 for READY, 2 for stopped, 1 for ERROR. Read
    `notes/loops/my-unit/result.json`; if it is not READY, see
    [Stopped units](#stopped-units).
-7. `ship-land my-unit` merges the PR, runs `on_land` and removes the agents,
-   panes and worktree.
+9. `ship-land my-unit` merges the PR, deletes its remote branch, runs `on_land`
+   and removes the agents, panes and worktree.
+
+The rulings file (`rulings` in the config, default `notes/decisions.md`) is
+optional. You can write your own rulings into it before a run; agents read it and
+add to it. If it does not exist when a unit starts, ship creates it with a
+`# Rulings` heading.
+
+### What agents run with
+
+- **Permissions are off.** Every Claude agent ship starts runs with
+  `--permission-mode bypassPermissions`: it can run any command and edit any file
+  the user running ship can, without asking. The only guards are the worktree it
+  starts in, the role settings ship passes, and the review and gate steps. Run ship
+  only on repos and machines where that is acceptable, with credentials you are
+  willing to expose to an agent, and read what a unit did before you land it.
+- **Workspace trust.** Claude Code asks whether to trust every folder it has not
+  seen, and each unit worktree is a new folder. ship creates the worktree from
+  your own repo, so the driver accepts that one dialog for you: it finds the
+  cursor (the `❯` line), moves it with `down` (at most twice) onto "Yes, I trust
+  this folder", which is not where it starts, presses Enter, and logs one line to
+  `loop.log`. It does this once per agent start and answers no other dialog. If
+  the cursor never reaches Yes, or the dialog is still showing after Enter, the
+  unit parks as `DIALOG`.
+- **PATH.** A local unit's agents get the `PATH` of the shell that ran
+  `ship-unit`, passed explicitly to the pane (`env PATH=...`, or an export in the
+  pane's shell). A `--host` unit's agents get the host's login-shell `PATH`, not
+  yours. Nothing else from your
+  environment is passed on, and no secrets; tokens such as `GH_TOKEN` must reach
+  the agent the way they would reach any new terminal in the multiplexer.
+
+### What ship asks of `gh`
+
+| Call | Who | Used for |
+|---|---|---|
+| `gh pr create --base <base> --head <branch>` | the dev agent, in its pane | open the PR (the brief tells it to) |
+| `gh pr view <branch> --json number -q .number` | `ship-land` | find the PR number when `result.json` has none |
+| `gh pr view <n> --json state -q .state` | `ship-land` | skip a PR that is already `MERGED`; confirm a merge |
+| `gh pr merge <n> --<merge_method>` | `ship-land` | merge (the remote branch is then deleted with `git push origin --delete`, not by gh) |
+
+A stub `gh` that implements these four is enough for a test run.
 
 ## Overview
 
@@ -92,7 +150,7 @@ Shared environment:
 
 ## Scripts
 
-All scripts are in `${CLAUDE_PLUGIN_ROOT}/scripts/ship/`. Exit code 0 is
+All scripts are in `scripts/ship/` of the plugin (`${CLAUDE_PLUGIN_ROOT}/scripts/ship/` inside Claude Code; see the [Quick start](#quick-start) for putting them on your PATH). Exit code 0 is
 success everywhere; the others are listed per script. `-h` and `--help` print
 usage and exit 0.
 
@@ -233,7 +291,7 @@ space); (2) require READY; (3) a PR already MERGED skips to step 6, otherwise
 fetch and rebase on `origin/<base>`, refusing an empty branch or a rebase that
 drops commits (the branch is restored); (4) run `gate`, then
 `git push --force-with-lease` leased on the remote branch as seen before the
-fetch; (5) `gh pr merge --<merge_method>` and pull the base; (6) run each
+fetch; (5) `gh pr merge --<merge_method>`, then, with the PR MERGED, `git push origin --delete <branch>`, and pull the base; (6) run each
 `on_land` command with `{ref}`, `{pr}`, `{task}` replaced; (7) teardown:
 `ship-retire` every recorded agent, close every recorded pane and the unit
 space, close a ship-created units group when empty, verify `ship-mux list` is
@@ -275,7 +333,7 @@ ship-mux close  --ref R --id X
 ship-mux list   --ref R
 ```
 
-Ids are opaque strings; never parse them. Keys are `enter esc ctrl+c ctrl+d`.
+Ids are opaque strings; never parse them. Keys are `enter esc up down ctrl+c ctrl+d`.
 Every verb except `check` is scoped to a ref and may only touch ids recorded
 for that ref; anything else exits 3 with no backend call.
 
@@ -562,9 +620,9 @@ the stop needs, the driver re-emits the same result and exits 2 again.
 | State | Caused by | `park.json` / file | Resume with |
 |---|---|---|---|
 | `QUESTION` | the dev (or a fix round) wrote `QUESTION` in its verdict | `park.json` status `QUESTION`; the verdict is kept as `<verdict>.QUESTION-<n>.json` | `--answer FILE`. The answer goes to the waiting dev. |
-| `BLOCKED` | the dev, or verify, wrote `BLOCKED`; or an agent could not be started or kept alive (`loop.log` says why) | `park.json` status `BLOCKED` | `--answer FILE` to nudge the agent; resuming without an answer closes it and retries the stage with a fresh agent. |
+| `BLOCKED` | the dev, or verify, wrote `BLOCKED`; or an agent could not be started, kept alive or prompted for a reason other than a dialog (`loop.log` says why) | `park.json` status `BLOCKED` | `--answer FILE` to nudge the agent; resuming without an answer closes it and retries the stage with a fresh agent. |
 | `OPERATOR` | the spec writer needs a decision only the operator can make (all gaps marked `operator_call`, or `operator_questions`) | `park.json` status `OPERATOR` | `--answer FILE`; a fresh spec writer gets the answer in its prompt. |
-| `DIALOG` | an agent is blocked on a permission or other dialog in its pane | `park.json` status `DIALOG`, with the screen text | answer the dialog in the pane (`ship-mux read` shows it), then `resume` with no answer. `--answer` is refused. |
+| `DIALOG` | an agent is blocked on a dialog in its pane: the workspace-trust dialog ship could not clear (the cursor would not move onto "Yes, I trust this folder", or it is still showing after Enter), or any other dialog (ship answers none) | `park.json` status `DIALOG`, with the screen text | answer the dialog in the pane (`ship-mux read` shows it), then `resume` with no answer. `--answer` is refused. |
 | `LIMIT` | every model for the stage is limited or over `quota.threshold_pct`, or the limited one has no successor | `park.json` status `LIMIT`, `resets_at` when known | wait for the reset, or `--model stage=...` to name a usable list, or `ship-loop --clear-limit NAME` if the quota is back; then `resume`. `--answer` is refused. |
 | `OVER-BUDGET` | a stage ran past its budget | `budget-r<k>.json`; agent left running | `--extend MIN`. |
 | `STUCK` | `max_rounds` reached without ACCEPT, or finalize failed and the dev could not fix it | `result.json.findings` | Raise the limit and run it again: `ship-unit run <ref> --brief ... --class ... --max-rounds <higher>`. Finished rounds are replayed from their files and the driver goes on with the next round (`resume` reuses the old limit and would stop at STUCK again). Or abandon it: `ship-land <ref> --abandon --force`, then start a fresh `ship-unit run`. Read `result.json.findings` first; if the reviewer keeps asking for the same thing, rule on it or re-brief rather than raising the limit. |
@@ -665,6 +723,10 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 | "yq" error | `yq` is missing or is not mikefarah v4 (`yq --version`). Install mikefarah yq. |
 | `ship-unit` exits 70 with "wt (worktrunk) not found on PATH" | Install worktrunk (`wt`). |
 | `ship-mux check` fails | Herdr: run inside Herdr (`HERDR_ENV=1`) with `herdr` on PATH. |
+| A unit parked `DIALOG` and the question names the workspace-trust dialog | Claude Code asked to trust the worktree and ship's one attempt (down, then Enter) did not clear it, or the cursor would not move onto Yes. `ship-mux read --ref <ref> --to <agent id>` shows the screen. Answer it in the pane, then `ship-unit resume <ref>` with no answer. |
+| A unit parked `BLOCKED` with "could not prompt" | ship-mux could not deliver the prompt and the agent was not at a dialog. Read `loop.log` (the line before `PARKED` has the exit code), and the agent's pane. `resume` with no answer retries with a fresh agent. |
+| The dev ran the wrong tool, or cannot find one that works for you | For a local unit the agent's `PATH` is the one of the shell that ran `ship-unit`; for a `--host` unit it is the host's login `PATH` (set it up on the host). Run `ship-unit` from a shell whose `PATH` has what the agent needs (a stub `gh`, a pinned toolchain). Other variables are not passed. |
+| `ship-unit run` exits 70 with "wt switch -c ... failed" and `branch 'x' has no upstream information` | Your global git config has `branch.autosetupmerge` set to an empty value, which breaks `wt switch -c`. Fix it with `git config --global --unset branch.autosetupmerge`, or set it to `true`. ship removes the branch and worktree that run created, so a rerun starts clean. |
 | A script exits 99 | `SHIP_MUX_TEST=1` is set (tests set it). Unset it for a real run. |
 | `ship-unit run` exits 3 | The host has no free slot (`ship-unit list`; raise `hosts.<h>.slots` or wait), or a driver is already running for that ref (`ship-unit wait <ref>`). |
 | `ship-unit` exits 75 | The connection to the host dropped. The driver still runs there; `ship-unit wait <ref>` reattaches. |

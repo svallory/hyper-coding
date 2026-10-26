@@ -32,7 +32,9 @@
 #           claude is started through `launch-peer off claude ...` (so the peer
 #           integration is off for the agent) when launch-peer is on PATH or
 #           named by $SHIP_MUX_LAUNCH_PEER (empty disables it); otherwise
-#           through `herdr agent start --kind claude`. Panes split right from
+#           through `herdr agent start --kind claude`. Either way the agent runs
+#           with this process's PATH (`env PATH=...`, or an export in the pane's
+#           shell first), and with nothing else from it. Panes split right from
 #           the space's root pane, then down from its last pane.
 #   send    --text uses `agent prompt`; with --wait-ms it waits for the agent to
 #           start working, pressing Enter up to 3 times when Claude Code drops
@@ -258,6 +260,16 @@ case "$verb" in
     fi
     args=()
     [[ ${#cmdline[@]} -eq 0 ]] || args=("${cmdline[@]}")
+    # The pane's shell has its own PATH, not the one of the shell that ran ship-unit: the agent gets
+    # this process's PATH (nothing else from the environment).
+    path_q="$(printf '%q' "$PATH")"
+    # set_path — export PATH in the pane's shell, for `herdr agent start`, which runs the agent there.
+    # (The line lands in the pane shell's history; it holds only PATH, so it is left as it is.)
+    set_path() {
+      wait_prompt "$pane" 10000 || true
+      herdr pane run "$pane" "export PATH=$path_q" >/dev/null 2>"$errf" || abort "pane run failed in $pane"
+      wait_prompt "$pane" 5000 || true
+    }
     # agent_start <kind> — herdr agent start, retrying a pane whose shell is not up.
     # agent_not_ready / workspace_trust_blocked mean the agent is there but blocked:
     # a successful start (status reports blocked), so the pane stays.
@@ -277,10 +289,11 @@ case "$verb" in
       pi)
         ext="${PI_AGENT_DIR:-$HOME/.pi/agent}/extensions/herdr-agent-state.ts"
         if [[ -f "$ext" ]]; then args=(-e "$ext" ${args[@]+"${args[@]}"}); else echo "mux/herdr: warning: $ext not found; pi will not report its state" >&2; fi
+        set_path
         agent_start pi ;;
       claude)
         if [[ -n "$peer" ]]; then
-          cmd="$(printf '%q ' "$peer" off claude ${args[@]+"${args[@]}"})"
+          cmd="env PATH=$path_q $(printf '%q ' "$peer" off claude ${args[@]+"${args[@]}"})"
           wait_prompt "$pane" 10000 || true
           herdr pane run "$pane" "${cmd% }" >/dev/null 2>"$errf" || abort "pane run failed in $pane"
           came=0
@@ -292,6 +305,7 @@ case "$verb" in
           herdr agent rename "$pane" "$hname" >/dev/null 2>"$errf" || abort "agent rename: $(hx_msg)"
           herdr agent wait "$hname" --timeout 120000 >/dev/null 2>"$errf" || abort "agent $hname never became ready: $(hx_msg)"
         else
+          set_path
           agent_start claude
         fi ;;
       *) die "start: unknown harness '$f_harness'" ;;

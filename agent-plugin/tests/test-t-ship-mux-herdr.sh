@@ -206,6 +206,28 @@ STUB
   assert_contains "stub: ...resolved to its path" "$(hlog)" "$HSTUB/my-peer off claude"
   assert_not_contains "stub: the real herdr was never involved" "$(hlog)" "server"
 
+  # 11: the agent runs with the PATH of the process that called the backend (and nothing else of its environment)
+  ODD="$FIX/odd dir'q"; mkdir -p "$ODD"
+  CALLER_PATH="$ODD:$HSTUB:$PATH"
+  PEER_OUT="$FIX/peer.path"
+  printf '#!/bin/sh\nprintf %%s "$PATH" > "%s"\n' "$PEER_OUT" > "$HSTUB/path-peer"; chmod +x "$HSTUB/path-peer"
+  hreset; hset tab_get 0 '{}'; hset pane_list 0 "$PANES1"; hset pane_split 0 '{"result":{"pane":{"pane_id":"w1:p2"}}}'; hset pane_run 0 '{}'
+  hset agent_get 0 '{"result":{"agent":{"agent":"claude"}}}'; hset agent_rename 0 '{}'; hset agent_wait 0 '{}'; hset pane_wait-output 0 '{}'
+  env -u SHIP_MUX_TEST HERDR_ENV=1 STUB_DIR="$HD" PATH="$CALLER_PATH" GH_TOKEN=s3cret-token SHIP_MUX_LAUNCH_PEER=path-peer /bin/bash "$BE" start --ref r --space w1:t1 --name d --harness claude --cwd /tmp -- --model m >/dev/null 2>&1; rc=$?
+  assert_eq "stub: start through launch-peer with a PATH holding a space and a quote (exit 0)" "0" "$rc"
+  runcmd="$(grep '^pane run w1:p2 ' "$HD/log" | head -n 1)"; runcmd="${runcmd#pane run w1:p2 }"
+  assert_contains "stub: the launch line sets PATH with env" "$runcmd" "env PATH="
+  rm -f "$PEER_OUT"; env -i PATH="/usr/bin:/bin" /bin/bash -c "$runcmd"
+  assert_eq "stub: the shell that runs the launch line gives the agent the caller's PATH exactly" "$CALLER_PATH" "$(cat "$PEER_OUT" 2>/dev/null)"
+  assert_not_contains "stub: no other variable (no secret) is passed" "$(hlog)" "s3cret-token"
+  hreset; hset tab_get 0 '{}'; hset pane_list 0 "$PANES1"; hset pane_split 0 '{"result":{"pane":{"pane_id":"w1:p2"}}}'; hset pane_run 0 '{}'; hset agent_start 0 '{}'; hset pane_wait-output 0 '{}'
+  env -u SHIP_MUX_TEST HERDR_ENV=1 STUB_DIR="$HD" PATH="$CALLER_PATH" GH_TOKEN=s3cret-token SHIP_MUX_LAUNCH_PEER= /bin/bash "$BE" start --ref r --space w1:t1 --name d --harness claude --cwd /tmp -- --model m >/dev/null 2>&1; rc=$?
+  assert_eq "stub: start without launch-peer (exit 0)" "0" "$rc"
+  runcmd="$(grep '^pane run w1:p2 ' "$HD/log" | head -n 1)"; runcmd="${runcmd#pane run w1:p2 }"
+  assert_eq "stub: the export comes before the agent start" "pane_run" "$(grep -n '' "$HD/log" | grep -E 'pane run|agent start' | head -n 1 | sed -E 's/^[0-9]+:pane run.*/pane_run/')"
+  assert_eq "stub: the pane's shell ends up with the caller's PATH exactly" "$CALLER_PATH" "$(env -i PATH="/usr/bin:/bin" /bin/bash -c "$runcmd; printf %s \"\$PATH\"")"
+  assert_not_contains "stub: no secret reaches herdr here either" "$(hlog)" "s3cret-token"
+
   # 5: keep the repo free of the hyper space
   assert_eq "no space paths or tracker ids in the backend" "0" "$(grep -cE '/work/|notes/specs|hyper-[a-z0-9]+\.[0-9]|/Users/' "$BE")"
   if command -v shellcheck >/dev/null 2>&1; then

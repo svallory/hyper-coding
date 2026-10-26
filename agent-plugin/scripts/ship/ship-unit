@@ -102,7 +102,10 @@ LOCK_WAIT_S="${SHIP_UNIT_LOCK_WAIT_S:-300}"
 
 E_REFUSED=3 E_USAGE=64 E_INTERNAL=70 E_LOST=75
 usage() { echo "ship-unit: $*" >&2; exit "$E_USAGE"; }
-fail() { echo "ship-unit: $*" >&2; exit "$E_INTERNAL"; }
+# UNDO_FN: set while _launch holds a branch and worktree it created, so that any failure removes them.
+UNDO_FN=""
+undo_now() { local f="$UNDO_FN"; UNDO_FN=""; [[ -z "$f" ]] || "$f" || true; }
+fail() { undo_now; echo "ship-unit: $*" >&2; exit "$E_INTERNAL"; }
 refuse() { echo "ship-unit: refused: $*" >&2; exit "$E_REFUSED"; }
 
 sub="${1:-}"
@@ -301,6 +304,9 @@ launch_driver() {
   pane="$(jq -r .pane <<<"$open_out")"
   cmd="SHIP_UNIT_INTERNAL=1 SHIP_SPACE_ROOT=$(ship_sq "$root") SHIP_HOST=$(ship_sq "$host_name")"
   if [[ "$host_name" != local && -f "$d/config.json" ]]; then cmd+=" SHIP_CONFIG_FILE=$(ship_sq "$d/config.json")"; fi
+  # The driver pane's shell has its own PATH; the agents must see the one of the shell that ran
+  # ship-unit (a local run only: another host's PATH is its own).
+  if [[ "$host_name" == local && -n "${PATH:-}" ]]; then cmd+=" PATH=$(ship_sq "$PATH")"; fi
   cmd+=" bash $(ship_sq "$_src") _driver $(ship_sq "$ref")"
   if ! "$MUX" run --ref "$ref" --pane "$pane" -- "$cmd"; then
     unlaunch "$ref"; fail "ship-mux run failed"
@@ -351,15 +357,32 @@ if [[ "$sub" == _launch ]]; then
       $1 == "worktree" { p = substr($0, 10) } $1 == "branch" && $2 == b { print p; exit }'
   }
   wt_path="$(wt_find)"
+  # What this run creates (a reused worktree or branch is never touched), so that a failure of any
+  # later step removes exactly that and the next run starts clean.
+  made_branch=0 made_wt=0
+  undo_created() {
+    local p
+    p="$(wt_find)"
+    if [[ $made_wt -eq 1 && -n "$p" ]]; then
+      git -C "$root" worktree remove --force "$p" >/dev/null 2>&1 || true
+      git -C "$root" worktree prune >/dev/null 2>&1 || true
+    fi
+    if [[ $made_branch -eq 1 ]]; then git -C "$root" branch -D "$branch" >/dev/null 2>&1 || true; fi
+    echo "ship-unit: removed the worktree and branch this run created for $ref" >&2
+  }
   if [[ -z "$wt_path" ]]; then
+    UNDO_FN=undo_created
     if git -C "$root" rev-parse --verify -q "refs/heads/$branch" >/dev/null 2>&1; then
-      (CDPATH='' cd -- "$root" && wt switch --no-cd "$branch") >&2 || fail "wt switch $branch failed"
+      made_wt=1
+      wt_out="$(CDPATH='' cd -- "$root" && wt switch --no-cd "$branch" 2>&1)" || { echo "$wt_out" >&2; fail "wt switch $branch failed: $(tr '\n' ' ' <<<"$wt_out" | cut -c1-500)"; }
     else
       # A new branch starts from the remote base, not from whatever the local one is.
       from="$base"
       git -C "$root" rev-parse --verify -q "refs/remotes/origin/$base" >/dev/null 2>&1 && from="origin/$base"
-      (CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$from" "$branch") >&2 || fail "wt switch -c $branch failed"
+      made_wt=1 made_branch=1
+      wt_out="$(CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$from" "$branch" 2>&1)" || { echo "$wt_out" >&2; fail "wt switch -c $branch failed: $(tr '\n' ' ' <<<"$wt_out" | cut -c1-500)"; }
     fi
+    [[ -z "$wt_out" ]] || echo "$wt_out" >&2
     wt_path="$(wt_find)"
     [[ -n "$wt_path" && -d "$wt_path" ]] || fail "wt did not leave a worktree for branch $branch"
   fi
@@ -378,6 +401,7 @@ if [[ "$sub" == _launch ]]; then
   mv "$d/unit.json.tmp" "$d/unit.json"
   rm -f "$d/driver.exit" "$d/driver.pid"
   launch_driver "$ref"
+  UNDO_FN=""
   exit 0
 fi
 

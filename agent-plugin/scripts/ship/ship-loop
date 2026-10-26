@@ -233,6 +233,11 @@ git -C "$WT" rev-parse --verify -q "origin/$BASE" >/dev/null || die_error "origi
 cfg() { ship_cfg_get "$1" 2>/dev/null || true; }
 abs_in_space() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$SPACE_ROOT" "$1" ;; esac; }
 RULINGS="$(abs_in_space "$(cfg rulings)")"
+# The rulings file is optional for the operator, but the agents are told to read it and to add to it:
+# an empty one is created on first use.
+if [[ ! -e "$RULINGS" ]]; then
+  mkdir -p "$(dirname "$RULINGS")" 2>/dev/null && printf '# Rulings\n' >"$RULINGS" 2>/dev/null || true
+fi
 SPEC_PATHS=()
 while IFS= read -r _p; do [[ -z "$_p" ]] || SPEC_PATHS+=("$_p"); done < <(jq -r '.spec.paths // [] | .[]' <<<"$SHIP_CONFIG_JSON")
 SPEC_PATHS_TXT="(none configured)"
@@ -381,7 +386,7 @@ agent_harness() { jq -r '.harness // "claude"' "$STATE/agents/$1.json" 2>/dev/nu
 # start_agent <name> <role> <model list key> [model] — a fresh agent in the unit space; sets A_ID. Without
 # a model, the first usable entry of the list (model_pick); failover passes the one it picked.
 start_agent() {
-  local name="$1" role="$2" key="$3" model resets harness rout rargs=() args=() out uuid session
+  local name="$1" role="$2" key="$3" model resets harness rout rargs=() args=() out uuid session end
   # Never two agents under one name: a leftover one (exited, or being replaced) is closed first.
   agent_lookup "$name"
   if [[ -n "$L_ID" ]]; then
@@ -416,9 +421,13 @@ start_agent() {
   out="$(mux start --space "$SPACE_ID" --name "$name" --harness "$harness" --cwd "$WT" -- "${args[@]}" 2>>"$LOG")" \
     || { log "could not start $name"; return 1; }
   A_ID="$(jq -r .agent <<<"$out")"
+  rm -f "$STATE/agents/$name.trust"
   write_json "$STATE/agents/$name.json" "$(jq -n --arg n "$name" --arg r "$role" --arg k "$key" --arg m "$model" \
     --arg h "$harness" --arg s "$session" --arg id "$A_ID" '{name:$n, role:$r, models_key:$k, model:$m, harness:$h, session:$s, id:$id}')"
   log "started $name ($role, $model) as $A_ID"
+  # The trust dialog is up by the time the start returns (a blocked agent shows it at once); a later
+  # one is caught when a prompt to the agent fails.
+  if [[ "$harness" == claude ]]; then trust_dialog "$name" "$A_ID" "$STAGE" || true; fi
 }
 
 close_agent() { # name
@@ -428,11 +437,109 @@ close_agent() { # name
   mux close --id "$id" >/dev/null 2>>"$LOG" || log "could not close $1 ($id)"
 }
 
-# send_prompt <agent id> <text> — a turn that never starts gets Enter pressed up to 3 times
-# (a pasted prompt can be dropped while the harness is still starting).
+# --- the workspace-trust dialog --------------------------------------------------------------------
+# Every unit worktree is a new folder to Claude Code, which asks whether to trust it before it takes
+# a prompt. ship made the worktree from the operator's own repo, so the driver answers that one dialog
+# itself. It opens with the cursor on "No, exit", so the cursor is moved onto "Yes, I trust this folder"
+# first. No other dialog is ever answered, and anything unclear is left alone (no key is sent).
+TRUST_WAIT_S="${SHIP_TRUST_WAIT_S:-10}"
+
+# trust_state — reads a screen on stdin and prints what it shows:
+#   none       no trust header (a quote of one, indented or prefixed, does not count)
+#   ambiguous  a header, but not a lone, last dialog: the lines after the LAST header must hold exactly
+#              the two trust options with one cursor line, and nothing that looks like another dialog
+#   yes|other  a clean trust dialog, with the cursor on Yes / on the other option
+# The header must sit at the left edge of the dialog (at most two spaces, or a box border, before it).
+trust_state() {
+  awk '
+    { l[NR] = $0 }
+    END {
+      h = 0
+      for (i = 1; i <= NR; i++) if (l[i] ~ /^( ? ?|(│|\|) ? ?)Quick safety check: [Ii]s this a project you created or one you trust/) h = i
+      if (h == 0) { print "none"; exit }
+      n = 0; cur = 0; last = h
+      for (i = h + 1; i <= NR; i++) {
+        t = l[i]
+        if (t ~ /^[ │|]*(❯|>|›)? *[0-9]+\. /) {
+          n++
+          m = (t ~ /^[ │|]*(❯|>|›) *[0-9]+\. /)
+          sub(/^[ │|]*(❯|>|›)? *[0-9]+\. */, "", t); sub(/ *(│|\|)? *$/, "", t)
+          txt[n] = t; if (m) { cur++; curtxt = t }
+          last = i
+        }
+      }
+      ok = (n == 2 && cur == 1)
+      if (ok) {
+        y = 0; x = 0
+        for (k = 1; k <= 2; k++) { if (txt[k] == "Yes, I trust this folder") y++; if (txt[k] == "No, exit") x++ }
+        ok = (y == 1 && x == 1)
+      }
+      for (i = last + 1; i <= NR && ok; i++)
+        if (l[i] ~ /[Dd]o you want|\(y\/n\)|\[y\/n\]|[Aa]llow |❯|^ *(│|\|)? *[0-9]+\. /) ok = 0
+      if (!ok) { print "ambiguous"; exit }
+      print (curtxt == "Yes, I trust this folder" ? "yes" : "other")
+    }'
+}
+
+# trust_dialog <agent name> <agent id> <stage> — 0 when the trust dialog was showing and was cleared;
+# 1 when it is not showing or not clearly the lone, last dialog (nothing is sent then, and the caller's
+# normal DIALOG handling applies). The cursor is moved with `down` (at most 2 times, re-reading the pane
+# each time) until it is on "Yes, I trust this folder", then Enter is pressed. One attempt per agent
+# start. Parks the unit as DIALOG when the cursor never reaches Yes, when the pane cannot be read
+# partway, when the dialog is still showing after the Enter, or when it was already answered once.
+trust_dialog() {
+  local name="$1" id="$2" stage="$3" screen st mark="$STATE/agents/$1.trust" end downs=0 why
+  why="$name is showing Claude Code's workspace-trust dialog"
+  screen="$(mux read --to "$id" --lines 40 2>/dev/null)" || return 1
+  st="$(trust_state <<<"$screen")"
+  case "$st" in none) return 1 ;; ambiguous) log "$name shows something like the workspace-trust dialog, but not clearly alone; sending no key"; return 1 ;; esac
+  if [[ -e "$mark" ]]; then
+    park DIALOG "$stage" "$name" "$why again after ship answered it once. Answer it in its pane, then resume."
+  fi
+  : >"$mark"
+  while [[ "$st" != yes ]]; do
+    if [[ $downs -ge 2 ]]; then
+      park DIALOG "$stage" "$name" "$why and the cursor never reached \"Yes, I trust this folder\" (ship moved it $downs time(s)). Answer it in its pane, then resume."
+    fi
+    downs=$((downs + 1))
+    mux send --to "$id" --keys down >/dev/null 2>>"$LOG" || true
+    sleep "$POLL_S"
+    screen="$(mux read --to "$id" --lines 40 2>/dev/null)" \
+      || park DIALOG "$stage" "$name" "$why but its pane could not be read while moving the cursor. Answer it in its pane, then resume."
+    st="$(trust_state <<<"$screen")"
+    [[ "$st" != none ]] || return 0
+    [[ "$st" != ambiguous ]] || park DIALOG "$stage" "$name" "$why, and the screen changed to something ship cannot read safely. Answer it in its pane, then resume."
+  done
+  log "workspace-trust dialog in $WT shown to $name; cursor on Yes after $downs down key(s), pressing Enter"
+  mux send --to "$id" --keys enter >/dev/null 2>>"$LOG" || true
+  end=$((SECONDS + TRUST_WAIT_S))
+  while [[ $SECONDS -lt $end ]]; do
+    sleep "$POLL_S"
+    screen="$(mux read --to "$id" --lines 40 2>/dev/null)" \
+      || park DIALOG "$stage" "$name" "$why but its pane could not be read after Enter. Answer it in its pane, then resume."
+    [[ "$(trust_state <<<"$screen")" != none ]] || return 0
+  done
+  park DIALOG "$stage" "$name" "$why after ship pressed Enter on it. Answer it in its pane, then resume."
+}
+
+# send_prompt <agent id> <text> [name stage] — a turn that never starts gets Enter pressed up to 3 times
+# (a pasted prompt can be dropped while the harness is still starting). With a name, a send that fails
+# because the agent is blocked is a dialog: the trust dialog is accepted and the send retried, any other
+# dialog parks the unit as DIALOG.
 send_prompt() {
-  local id="$1" text="$2" rc=0 try
+  local id="$1" text="$2" name="${3:-}" stage="${4:-$STAGE}" rc=0 try
   mux send --to "$id" --text "$text" --wait-ms "$SEND_WAIT_MS" >/dev/null 2>>"$LOG" || rc=$?
+  if [[ $rc -ne 0 && $rc -ne 4 && -n "$name" ]]; then
+    agent_state "$id"
+    if [[ "$L_STATE" == blocked ]]; then
+      if trust_dialog "$name" "$id" "$stage"; then
+        rc=0
+        mux send --to "$id" --text "$text" --wait-ms "$SEND_WAIT_MS" >/dev/null 2>>"$LOG" || rc=$?
+      else
+        park DIALOG "$stage" "$name" "$name is blocked on a dialog and cannot take the prompt. Answer it in its pane, then resume. Screen: $(mux read --to "$id" --lines 15 2>/dev/null | tr -s ' \n' ' ' | cut -c1-500)"
+      fi
+    fi
+  fi
   case $rc in
     0) return 0 ;;
     4) ;;
@@ -521,7 +628,7 @@ await_file() {
           if [[ $nudges -ge 2 ]]; then FAIL_WHY="$name stopped without writing $(basename "$file")"; return 1; fi
           nudges=$((nudges + 1)); idle=0
           log "nudging $name ($nudges)"
-          send_prompt "$id" "You stopped without writing $file. Finish the task, then write that file." || { FAIL_WHY="$name did not take the nudge"; return 1; }
+          send_prompt "$id" "You stopped without writing $file. Finish the task, then write that file." "$name" "$stage" || { FAIL_WHY="$name did not take the nudge"; return 1; }
         fi ;;
     esac
     sleep "$POLL_S"
@@ -747,7 +854,7 @@ $(cat "$file.answer")"
   text="$(render takeover stage_prompt="$(cat "${file%.json}.prompt.md" 2>/dev/null)" answer="$answer" worktree="$WT" status_file="$STATE/STATUS.md" \
     brief="$BRIEF" from="$cur" to="$nxt")"
   printf '%s\n' "$text" >"${file%.json}.takeover.md"
-  send_prompt "$FO_ID" "$text" || { FAIL_WHY="could not prompt $name after the failover to $nxt"; return 1; }
+  send_prompt "$FO_ID" "$text" "$name" "$stage" || { FAIL_WHY="could not prompt $name after the failover to $nxt"; return 1; }
   mark_sent "$file"
   return 0
 }
@@ -771,7 +878,7 @@ run_step() {
     rm -f "$file" "$file.answer"
     [[ "$file" == "$KEEP_CLOCK" ]] || rm -f "$file.clock"
     printf '%s\n' "$text" >"${file%.json}.prompt.md"
-    send_prompt "$id" "$text" || { rm -f "$file.sent"; FAIL_WHY="could not prompt $name (gone, or it never started a turn)"; step_failed "$stage" "$name" "$file" 1; }
+    send_prompt "$id" "$text" "$name" "$stage" || { rm -f "$file.sent"; FAIL_WHY="could not prompt $name: ship-mux send failed or the turn never started (see loop.log; the agent may be gone)"; step_failed "$stage" "$name" "$file" 1; }
     mark_sent "$file"
   fi
   await_file "$name" "$id" "$file" "$stage" "$budget" || rc=$?
@@ -918,7 +1025,7 @@ $(cat "$ans")"
         atext="Answer from the lead to your $st:
 $(cat "$ans")
 Continue the task. When it is complete, write the result file ${file:-you were given} again."
-        send_prompt "$id" "$atext" || die_error "could not deliver answer-$n.md to $agent"
+        send_prompt "$id" "$atext" "$agent" "$stage" || die_error "could not deliver answer-$n.md to $agent"
         # kept so that a successor (after a usage limit) is told the answer again
         [[ -z "$file" ]] || { printf '%s\n' "$atext" >"$file.answer"; mark_sent "$file"; }
         log "delivered answer-$n.md to $agent"
@@ -1315,7 +1422,7 @@ $(printf '%s\n' "$hits" | head -n 30)
   fi
   # The one push invariant: only a diff that a READY review was shown goes out.
   if ! reviewed_diff; then log "the diff to push has no READY review; reviewing it first"; return 2; fi
-  git -C "$WT" push --force-with-lease origin "HEAD:refs/heads/$BRANCH" >>"$LOG" 2>&1 \
+  git -C "$WT" push -q --force-with-lease origin "HEAD:refs/heads/$BRANCH" >>"$LOG" 2>&1 \
     || die_error "git push --force-with-lease failed for $BRANCH; see loop.log"
   head="$(git -C "$WT" rev-parse --short HEAD)"
   write_json "$STATE/finalize.json" "$(jq -n --argjson pr "$PR" --arg h "$head" --arg b "$BASE" \

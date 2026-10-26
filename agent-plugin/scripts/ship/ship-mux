@@ -61,7 +61,7 @@
 #       `name` is the caller's name from the record, `backend_name` the
 #       backend's (it may be shortened). `state` is the agent state, else "".
 #
-# Keys (backend-neutral names for --keys, comma-separated): enter esc ctrl+c ctrl+d
+# Keys (backend-neutral names for --keys, comma-separated): enter esc up down ctrl+c ctrl+d
 #
 # Exit codes (ship-mux)
 #   0  ok                                  4  timeout (wait; send --wait-ms when the
@@ -192,7 +192,7 @@ case "$verb" in
       [[ -n "$f_keys" ]] || usage "send: --keys is empty"
       IFS=, read -r -a _keys <<<"$f_keys"
       for k in "${_keys[@]}"; do
-        case "$k" in enter|esc|ctrl+c|ctrl+d) ;; *) usage "send: unknown key '$k' (keys: enter esc ctrl+c ctrl+d)" ;; esac
+        case "$k" in enter|esc|up|down|ctrl+c|ctrl+d) ;; *) usage "send: unknown key '$k' (keys: enter esc up down ctrl+c ctrl+d)" ;; esac
       done
     fi ;;
   read) case "$seen" in *" lines "*) isint "$f_lines" || usage "read: --lines must be an integer" ;; esac ;;
@@ -333,9 +333,14 @@ _rollback_close() {
 }
 
 # _close_ok <id> — close on the backend; "not found" (5) counts as closed.
+# Closing an agent closes its pane, so the pane's own close finds nothing: that is expected, and its
+# "not found" message is dropped (any other failure keeps its message).
 _close_ok() {
-  local rc=0
-  _be close --ref "$f_ref" --id "$1" || rc=$?
+  local rc=0 err
+  err="$(mktemp "${TMPDIR:-/tmp}/ship-mux-close.XXXXXX")" || err=/dev/null
+  _be close --ref "$f_ref" --id "$1" 2>"$err" || rc=$?
+  if [[ $rc -ne 5 && "$err" != /dev/null ]]; then cat "$err" >&2; fi
+  [[ "$err" == /dev/null ]] || rm -f "$err"
   [[ $rc -eq 5 ]] && return 0
   return "$rc"
 }
