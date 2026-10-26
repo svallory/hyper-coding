@@ -626,8 +626,9 @@ failover_on_limit() {
     w="$(limit_word "$matched")"; lc="$(printf '%s' "$cur" | tr 'A-Z' 'a-z')"
     case "$w" in
       '') ;;
-      opus|sonnet|haiku) kind=model; case "$lc" in *"$w"*) lkey="$cur" ;; *) lkey="$w" ;; esac ;;
-      *) case "$lc" in *"$w"*) kind=model; lkey="$cur" ;; esac ;;
+      # the words of an account window; any other word names a model
+      session|weekly|week|daily|day|hourly|hour|five-hour|monthly|month|usage|rate|account|plan|extra) ;;
+      *) kind=model; case "$lc" in *"$w"*) lkey="$cur" ;; *) lkey="$w" ;; esac ;;
     esac
   fi
   block=""; lim_until=""

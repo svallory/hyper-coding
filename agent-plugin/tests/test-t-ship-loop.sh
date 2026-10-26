@@ -368,7 +368,7 @@ assert_eq "restart: the dev was prompted once" "1" "$(wc -l <"$(st t12)/develop.
 assert_eq "restart: the reviewer was reattached, not restarted" "1" "$(starts_of t12-review-r1)"
 assert_eq "restart: the reviewer was prompted once" "1" "$(wc -l <"$(st t12)/review-r1.json.sent" | tr -d ' ')"
 
-# --- 13: LIMIT (failover is a stub: the unit parks) ------------------------------------------------------------------------------------
+# --- 13: LIMIT (nothing to fail over to: the unit parks) ------------------------------------------------------------------------------------
 reset_fake; unit t13
 mkdir -p "$SHIP_MUX_FAKE_DIR/read"
 printf "You've hit your weekly limit. What do you want to do?\n" >"$SHIP_MUX_FAKE_DIR/read/t13-dev"
@@ -378,6 +378,9 @@ assert_eq "LIMIT: park.json status" "LIMIT" "$(jq -r .status "$(st t13)/park.jso
 assert_contains "LIMIT: the matched text is reported" "$(jq -r .question "$(st t13)/park.json")" "hit your weekly limit"
 assert_eq "LIMIT: the agent is left alone" "t13-dev" "$(live_agents t13)"
 # resume: the parked agent is closed and the stage restarts through model_pick, so the override applies
+# The limit was recorded in limited.json (reactive failover); the quota has reset by the time the lead resumes.
+assert_ok "LIMIT: the limit was recorded in limited.json" test -s "$HOME/.cache/hyper/quota/limited.json"
+rm -f "$HOME/.cache/hyper/quota/limited.json"
 printf 'dev=zz-after-limit\n' >"$(st t13)/models.override"
 rm -f "$SHIP_MUX_FAKE_DIR/read/t13-dev"; rm -rf "$FIX/scripts/t13/.done"
 script t13 develop.json "$DEV_DONE"; script t13 review-r1.json "$REV_OK"
