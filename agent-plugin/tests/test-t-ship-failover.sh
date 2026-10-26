@@ -1103,6 +1103,29 @@ rm -f "$LKT"/*; echo "99999999@$(hostname)" >"$LKT/lock"; echo "99999998@$(hostn
 assert_ok "a dead process's .break is cleared and the takeover goes on" ship_lock "$LKT/lock" 10
 ship_unlock "$LKT/lock"
 assert_eq "no lock or .break left after that" "absent absent" "$([[ -e "$LKT/lock" ]] && echo present || echo absent) $([[ -e "$LKT/lock.break" ]] && echo present || echo absent)"
+# a dead owner AND a dead .break, with the pause only before the .break removal: the stale .break is re-read
+# before it is removed, so a fresh one made by another waiter is never deleted (no overlap)
+cat >"$LKT/w3.sh" <<'W3'
+source "$1"; L="$2"; LOG="$3"
+for k in 1; do
+  ship_lock "$L" 20 120 || { echo "TIMEOUT $BASHPID" >>"$LOG"; exit 1; }
+  echo "in $BASHPID" >>"$LOG"; sleep "0.0$((RANDOM % 3))"; echo "out $BASHPID" >>"$LOG"
+  ship_unlock "$L"
+done
+W3
+LKOV=0 LKTMO=0 LKLEFT3=0
+for round in $(seq 1 40); do
+  rm -f "$LKT/lock" "$LKT/lock.break" "$LKT/log"; : >"$LKT/log"
+  (exit 0) & LKDEAD=$!; wait "$LKDEAD"
+  echo "$LKDEAD@$(hostname)" >"$LKT/lock"; echo "$LKDEAD@$(hostname)" >"$LKT/lock.break"
+  LPIDS=()
+  for w in 1 2 3 4 5 6 7 8; do SHIP_LOCK_TEST_PAUSE=40 bash "$LKT/w3.sh" "$SCRIPTS_DIR/ship/lib.sh" "$LKT/lock" "$LKT/log" & LPIDS+=($!); done
+  for pid in "${LPIDS[@]}"; do wait "$pid"; done
+  [[ "$(awk '$1=="in"{d++; if(d>1)o++} $1=="out"{d--} END{print o+0}' "$LKT/log")" == 0 ]] || LKOV=$((LKOV + 1))
+  grep -q TIMEOUT "$LKT/log" && LKTMO=$((LKTMO + 1))
+  [[ ! -e "$LKT/lock" && ! -e "$LKT/lock.break" ]] || LKLEFT3=$((LKLEFT3 + 1))
+done
+assert_eq "dead owner + dead .break, pause before the .break re-read: no overlap in 40 rounds" "0 0 0" "$LKOV $LKTMO $LKLEFT3"
 # a directory left by an old mkdir lock is removed
 rm -f "$LKT"/*; mkdir "$LKT/lock"
 assert_ok "an old mkdir lock directory is replaced" ship_lock "$LKT/lock" 10

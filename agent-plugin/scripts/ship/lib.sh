@@ -650,7 +650,9 @@ ship_quota_block() {
 # <stale_s> seconds (default 120) and stat could read its age; a live owner on this host is never taken from.
 # A lock is never moved or put back. A stale one is removed under a second noclobber mutex, "<path>.break":
 # take it, judge the owner again, remove the lock only if it is still the same stale owner, drop the mutex,
-# then compete for the normal create. A ".break" is stale on the same rules after 5 seconds. A directory left
+# then compete for the normal create. A ".break" is stale on the same rules after 5 seconds, and is removed
+# only after re-reading it and finding the owner that was judged stale. One cat/rm gap remains there; hitting it
+# takes two crashed waiters in a row, and then a fresh .break can be removed. A directory left
 # by an old mkdir lock is removed with rmdir. Sets SHIP_LOCK_OWNER to what the lock file said when it gave up.
 # SHIP_LOCK_TEST_PAUSE=<ms> makes the takeover pause a random time at its race windows (tests only).
 # Safe under `set -e`.
@@ -702,7 +704,7 @@ _ship_judge() {
   return 1
 }
 ship_lock() {
-  local l="$1" wait_s="${2:-30}" stale_s="${3:-120}" start="$SECONDS" me owner last=""
+  local l="$1" wait_s="${2:-30}" stale_s="${3:-120}" start="$SECONDS" me owner bowner last=""
   _ship_set_me
   me="$SHIP_LOCK_ME"
   mkdir -p "$(dirname "$l")" 2>/dev/null || true
@@ -721,7 +723,11 @@ ship_lock() {
         if [[ -f "$l.break" && "$(cat "$l.break" 2>/dev/null || true)" == "$me" ]]; then rm -f "$l.break"; fi
         continue
       elif _ship_judge "$l.break" 5; then
-        rm -f "$l.break"
+        # remove the stale .break only if it still holds the owner judged stale: another waiter may have
+        # removed it and a third made a fresh one in between
+        bowner="$SHIP_LOCK_OWNER"
+        _ship_pause
+        if [[ -f "$l.break" && "$(cat "$l.break" 2>/dev/null || true)" == "$bowner" ]]; then rm -f "$l.break"; fi
         continue
       fi
     else
