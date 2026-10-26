@@ -350,6 +350,7 @@ assert_eq "...Enter was never pressed" "0" "$(key_count t4h t4h-dev enter)"
 # trust_dialog with a scripted pane: after Enter, one blank read between two dialog reads is not "cleared"
 eval "$(sed -n '/^trust_dialog() {/,/^}/p' "$LOOP")"
 (
+  # shellcheck disable=SC2034  # read by the eval'd trust_dialog
   STATE="$(mktemp -d)"; mkdir -p "$STATE/agents"; LOG=/dev/null; POLL_S=0; TRUST_WAIT_S=2; WT=/x
   YES="$(cat "$TRUSTFIX/narrow-after-down.txt")"; Q="$STATE/q"
   log() { :; }; sleep() { :; }
@@ -365,6 +366,7 @@ eval "$(sed -n '/^trust_dialog() {/,/^}/p' "$LOOP")"
 ) >"$SHIP_MUX_FAKE_DIR/../t4h-one.out" 2>&1
 assert_contains "one blank read after Enter, then the dialog again: parked, not cleared" "$(cat "$SHIP_MUX_FAKE_DIR/../t4h-one.out")" "PARK DIALOG"
 (
+  # shellcheck disable=SC2034  # read by the eval'd trust_dialog
   STATE="$(mktemp -d)"; mkdir -p "$STATE/agents"; LOG=/dev/null; POLL_S=0; TRUST_WAIT_S=2; WT=/x
   YES="$(cat "$TRUSTFIX/narrow-after-down.txt")"; Q="$STATE/q"
   log() { :; }; sleep() { :; }
