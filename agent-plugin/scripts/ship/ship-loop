@@ -1479,12 +1479,21 @@ $(printf '%s\n' "$hits" | head -n 30)
   return 0
 }
 
+# rejection_text <verdict file> — what a rejecting stage asked for: its findings, and for the spec check its
+# gaps and removals (GAP and REMOVE verdicts carry no findings).
+rejection_text() {
+  fmt_findings "$1"
+  if [[ "$(basename "$1")" == spec-* ]]; then
+    fmt_gaps "$1"; fmt_removals "$1" code; fmt_removals "$1" spec
+  fi
+}
+
 # review_gate — returns when the diff as it is now has a READY review and no fix is pending. NEED_FIX (with
 # FIX_SRC, where it came from) is work the dev still owes; a fix for a CHANGES verdict that leaves the diff
 # as it was is a failed round. Every CHANGES verdict and every failed round counts toward max_rounds.
 FR=$ACC_R cycles=0 NEED_FIX="" GATE_PRIOR="" guard=0
 review_gate() {
-  local before after rv
+  local before after rv rej
   while true; do
     guard=$((guard + 1))
     [[ $guard -le $((MAX * 4 + 8)) ]] || die_error "finalize could not settle on a reviewed diff after $guard steps"
@@ -1527,7 +1536,11 @@ review_gate() {
         if [[ $cycles -ge $MAX ]]; then
           finish 2 "${REJECTED_BY%%-r*}" STUCK "$(jq -n --arg by "$REJECTED_BY" '{findings:("The diff was restored to the one " + $by + " rejected, by something other than a dev fix (the gate, a rebase or a commit outside the loop)."), rejected_by:$by}')"
         fi
-        NEED_FIX="The diff now in the PR is the one $REJECTED_BY rejected, and a change outside your fixes put it back (the gate, a rebase or a commit). Change the code so it is not that diff, or stop with QUESTION and say why not."
+        rej="$(rejection_text "$STATE/$REJECTED_BY")"
+        NEED_FIX="The diff now in the PR is the one $REJECTED_BY rejected. The gate, a rebase or a commit outside your fixes (not a fix of yours) restored it, so the change that answered these has been undone. Address them again in the code, or stop with QUESTION and say why not:
+$rej"
+        GATE_PRIOR="The PR was restored, by the gate or another change that is not a dev fix, to the diff that ${REJECTED_BY%%-r*} rejected. Check that each of these is addressed in the diff as it is now:
+$rej"
         FIX_SRC=gate
         continue
       fi

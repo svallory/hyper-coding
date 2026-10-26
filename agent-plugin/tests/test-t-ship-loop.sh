@@ -1353,12 +1353,51 @@ for _r in 3 4 5 6 7 8; do script t64 fix-r$_r.json "$DEV_DONE"; script t64 revie
 stub_start t64; run_loop t64 --final-gate; stub_stop
 check_result t64 "gate restores a diff the final gate rejected" 2 STUCK
 assert_eq "gate-restored rejected diff: nothing was pushed" "$O64" "$(git -C "$FIX/origin-t64.git" rev-parse refs/heads/feat-t64)"
+assert_contains "gate-restored rejected diff: the dev is told the stage and gets its findings" "$(cat "$(st t64)/fix-r3.prompt.md")" "final-r1.json rejected"
+assert_contains "gate-restored rejected diff: the dev prompt carries the findings text" "$(cat "$(st t64)/fix-r3.prompt.md")" "the bug"
+assert_contains "gate-restored rejected diff: the prompt says it was not a fix" "$(cat "$(st t64)/fix-r3.prompt.md")" "not a fix of yours"
 assert_eq "gate-restored rejected diff: the stage is the rejecting one" "final" "$(res t64 .stage)"
 assert_eq "gate-restored rejected diff: rejected_by names the verdict" "final-r1.json" "$(res t64 .rejected_by)"
 assert_contains "gate-restored rejected diff: the log says no dev fix made it" "$(cat "$(st t64)/loop.log")" "without a dev fix"
 _rv=0; for _r in 3 4 5 6 7 8; do _rv=$((_rv + $(starts_of "t64-review-r$_r"))); done
 assert_eq "gate-restored rejected diff: no reviewer storm (review rounds after the restore)" "0" "$_rv"
 unset GATEFLAG64; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 65: the same for a spec rejection (REMOVE): the removals reach the dev ---------------------------------------------------------
+reset_fake; unit t65 spec
+W65="$SPACE/worktrees/t65"; O65="$(git -C "$FIX/origin-t65.git" rev-parse refs/heads/feat-t65)"
+export GATEFLAG65="$FIX/gateflag-t65"
+GATE_CMD='if [ ! -e "$GATEFLAG65" ]; then touch "$GATEFLAG65"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t65 develop.json "$DEV_DONE"; script t65 review-r1.json "$REV_OK"; script t65 spec-r1.json "$SPEC_RM_CODE"
+script t65 fix-r2.json "$DEV_DONE"; script t65 review-r2.json "$REV_OK"; script t65 spec-r2.json "$SPEC_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W65" "$W65" "$W65" >"$FIX/scripts/t65/fix-r2.json.hook"
+chmod +x "$FIX/scripts/t65"/*.hook
+for _r in 3 4 5 6; do script t65 fix-r$_r.json "$DEV_DONE"; script t65 review-r$_r.json "$REV_OK"; script t65 spec-r$_r.json "$SPEC_OK"; done
+stub_start t65; run_loop t65; stub_stop
+check_result t65 "gate restores a diff the spec check rejected" 2 STUCK
+assert_eq "gate-restored spec-rejected diff: nothing was pushed" "$O65" "$(git -C "$FIX/origin-t65.git" rev-parse refs/heads/feat-t65)"
+assert_eq "gate-restored spec-rejected diff: the stage is spec" "spec" "$(res t65 .stage)"
+assert_eq "gate-restored spec-rejected diff: rejected_by" "spec-r1.json" "$(res t65 .rejected_by)"
+assert_contains "gate-restored spec-rejected diff: the dev gets the removal" "$(cat "$(st t65)/fix-r3.prompt.md")" "the --frobnicate flag"
+assert_contains "gate-restored spec-rejected diff: and why there is no consumer" "$(cat "$(st t65)/fix-r3.prompt.md")" "the brief names no caller"
+unset GATEFLAG65; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 66: after a gate-restored rejected diff the dev changes the code; the next review is told about the restore ---------------------
+reset_fake; unit t66
+W66="$SPACE/worktrees/t66"
+export GATEFLAG66="$FIX/gateflag-t66"
+GATE_CMD='if [ ! -e "$GATEFLAG66" ]; then touch "$GATEFLAG66"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t66 develop.json "$DEV_DONE"; script t66 review-r1.json "$REV_OK"; script t66 final-r1.json "$REV_CHANGES"
+script t66 fix-r2.json "$DEV_DONE"; script t66 review-r2.json "$REV_OK"; script t66 final-r2.json "$REV_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W66" "$W66" "$W66" >"$FIX/scripts/t66/fix-r2.json.hook"
+printf '#!/bin/sh\necho again >"%s/again.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$W66" "$W66" "$W66" >"$FIX/scripts/t66/fix-r3.json.hook"
+chmod +x "$FIX/scripts/t66"/*.hook
+script t66 fix-r3.json "$DEV_DONE"; script t66 review-r3.json "$REV_OK"; script t66 final-r3.json "$REV_OK"
+stub_start t66; run_loop t66 --final-gate; stub_stop
+check_result t66 "gate restores a rejected diff, the dev changes it" 0 READY
+assert_contains "restore note: the next review is told the diff was restored" "$(cat "$(st t66)/review-r3.prompt.md")" "restored, by the gate or another change that is not a dev fix"
+assert_contains "restore note: and gets the rejecting findings to check" "$(cat "$(st t66)/review-r3.prompt.md")" "the bug"
+unset GATEFLAG66; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
 
 # --- 61: a finalize fix that is continued after a park is waited for: its verdict (here another QUESTION) is read before anything is pushed --------
 reset_fake; leak_unit t61
