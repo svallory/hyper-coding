@@ -212,6 +212,23 @@ _ship_validate_config() {
       bad=1
     fi
   done
+  _ship_validate_patterns || bad=1
+  return $bad
+}
+
+# _ship_validate_patterns — every limits.patterns.<harness> is a string and a regex jq can compile.
+_ship_validate_patterns() {
+  local k re bad=0
+  while IFS= read -r k; do
+    [[ -n "$k" ]] || continue
+    if [[ "$(_ship_cfg_type "limits.patterns.$k")" != string ]]; then
+      _ship_err "limits.patterns.$k must be a string (a regex); set in $(_ship_key_src "limits.patterns.$k")"; bad=1; continue
+    fi
+    re="$(jq -r --arg k "$k" '.limits.patterns[$k]' <<<"$SHIP_CONFIG_JSON")"
+    if ! jq -n --arg re "$re" '"" | test($re)' >/dev/null 2>&1; then
+      _ship_err "limits.patterns.$k is not a valid regex ($re); set in $(_ship_key_src "limits.patterns.$k")"; bad=1
+    fi
+  done < <(jq -r '.limits.patterns // {} | keys[]' <<<"$SHIP_CONFIG_JSON" 2>/dev/null)
   return $bad
 }
 
@@ -452,7 +469,7 @@ validate_verdict() {
 # The quota tap (ship-quota-tap) writes <quota dir>/claude-<account>.json:
 #   {"account": A, "at": ISO-8601 UTC, "rate_limits": {"five_hour": {"used_percentage",
 #    "resets_at"}, "seven_day": {...}}}
-# Reactive failover (a later task) writes <quota dir>/limited.json:
+# Reactive failover (ship_limit_record below) writes <quota dir>/limited.json:
 #   {"accounts": {A: {"until": T}}, "models": {M: {"until": T}}}
 # where T is epoch seconds or ISO-8601 and M is a model as written in a list.
 # Times in either file may be epoch seconds or ISO-8601; milliseconds are accepted.
@@ -491,6 +508,8 @@ _ship_pick_log() {
 #     five_hour or seven_day used_percentage is at or above quota.threshold_pct and that window's
 #     resets_at is in the future (no snapshot, a stale one, or a window that already reset: no skip);
 #   - a pi entry (provider/model) is never skipped here.
+# PICK_AFTER, when set to an entry of the list, starts the walk after that entry (reactive failover: the
+# next model after the one that hit a limit).
 # Unless --dry, each skip writes $STATE/failover-N.json (reason preflight) and logs one line. $STATE
 # unset means nothing is written. agent, stage and round fill the record (stage defaults to the key).
 # shellcheck disable=SC2034  # PICK_MODEL and PICK_RESETS_AT are read by the caller
@@ -539,6 +558,9 @@ pick_model() {
   if [[ -s "$lim" ]]; then lim_json="$(jq -c . "$lim" 2>/dev/null)" || lim_json='{}'; [[ -n "$lim_json" ]] || lim_json='{}'; fi
 
   i=0
+  if [[ -n "${PICK_AFTER:-}" ]]; then
+    i="$(jq -r --arg m "$PICK_AFTER" '(index($m) // -1) + 1' <<<"$list")"
+  fi
   while [[ $i -lt $n ]]; do
     m="$(jq -r --argjson i "$i" '.[$i]' <<<"$list")"
     i=$((i + 1))
@@ -588,4 +610,171 @@ pick_model() {
   done
   [[ -n "$picked" ]] || return 2
   return 0
+}
+
+# ship_quota_block — print {five_hour, seven_day, resets_at} (epoch) from the account's snapshot when it is
+# younger than quota.max_age_min; nothing otherwise. resets_at is the latest future resets_at among the
+# windows at 100%, else among those at or above quota.threshold_pct, else the window with the highest
+# used_percentage (a snapshot taken a little before the limit), and absent when that has already reset.
+ship_quota_block() {
+  local snap now maxage thr cfgj
+  snap="$(ship_quota_dir)/claude-$(ship_quota_account).json"
+  [[ -s "$snap" ]] || return 0
+  now="$(date +%s)"
+  cfgj="${SHIP_CONFIG_JSON:-}"; [[ -n "$cfgj" ]] || cfgj='{}'
+  maxage="$(jq -r '.quota.max_age_min // 30' <<<"$cfgj" 2>/dev/null)"; [[ -n "$maxage" ]] || maxage=30
+  thr="$(jq -r '.quota.threshold_pct // 95' <<<"$cfgj" 2>/dev/null)"; [[ -n "$thr" ]] || thr=95
+  jq -c --argjson now "$now" --argjson maxage "$maxage" --argjson thr "$thr" "$_SHIP_EPOCH_JQ"'
+    (.at | epoch) as $at
+    | if $at == null or ($now - $at) > ($maxage * 60) then empty
+      else
+        (.rate_limits // {}) as $rl
+        | def hits($min): [("five_hour", "seven_day") as $w | $rl[$w]? | select(type == "object")
+            | select((.used_percentage | type) == "number" and .used_percentage >= $min)
+            | (.resets_at | epoch) | select(. != null and . > $now)];
+          ((hits(100) | max) // (hits($thr) | max)
+            // ([("five_hour", "seven_day") as $w | $rl[$w]? | select(type == "object" and (.used_percentage | type) == "number")
+                 | {u: .used_percentage, r: (.resets_at | epoch)}] | sort_by(.u) | last | .r? | select(. != null and . > $now))) as $r
+        | {five_hour: ($rl.five_hour.used_percentage? // null), seven_day: ($rl.seven_day.used_percentage? // null), resets_at: $r}
+        | with_entries(select(.value != null))
+      end' "$snap" 2>/dev/null
+  return 0
+}
+
+# --- locks ---------------------------------------------------------------------------------------
+# ship_lock <path> <timeout_s> [stale_s] — take the lock file <path>, waiting up to <timeout_s> seconds
+# (0 = one try). Returns 1 when it could not. The file is created with noclobber (O_EXCL), which is atomic
+# on every platform; a mkdir lock is not (uutils mkdir, the ubuntu CI image's, lets several callers win),
+# and flock is missing on macOS. The file holds "pid@host" (the pid of the calling shell or subshell). A lock
+# is stale when its owner is on this host and dead, or (owner elsewhere or unknown) when it is older than
+# <stale_s> seconds (default 120) and stat could read its age; a live owner on this host is never taken from.
+# A lock is never moved or put back. A stale one is removed under a second noclobber mutex, "<path>.break":
+# take it, judge the owner again, remove the lock only if it is still the same stale owner, drop the mutex,
+# then compete for the normal create. A ".break" is stale on the same rules after 5 seconds, and is removed
+# only after re-reading it and finding the owner that was judged stale. One cat/rm gap remains there; hitting it
+# takes two crashed waiters in a row, and then a fresh .break can be removed. A directory left
+# by an old mkdir lock is removed with rmdir. Sets SHIP_LOCK_OWNER to what the lock file said when it gave up.
+# SHIP_LOCK_TEST_PAUSE=<ms> makes the takeover pause a random time at its race windows (tests only).
+# Safe under `set -e`.
+SHIP_LOCK_OWNER=""
+SHIP_LOCK_HOST=""
+# _ship_set_me — set SHIP_LOCK_ME to "pid@host" for this shell or subshell. $$ is the parent's in a subshell,
+# bash 3.2 has no BASHPID, and a command substitution is a subshell of its own, so this sets a variable
+# instead of printing
+SHIP_LOCK_ME=""
+_ship_set_me() {
+  local t="" p=""
+  _ship_lock_init
+  if [[ -n "${BASHPID:-}" ]]; then p="$BASHPID"
+  else
+    t="$(mktemp "${TMPDIR:-/tmp}/ship-pid.XXXXXX")" || t=""
+    if [[ -n "$t" ]]; then sh -c 'echo $PPID' >"$t"; read -r p <"$t" || p=""; rm -f "$t"; fi
+    [[ -n "$p" ]] || p="$$"
+  fi
+  SHIP_LOCK_ME="$p@$SHIP_LOCK_HOST"
+}
+_ship_lock_init() { if [[ -z "$SHIP_LOCK_HOST" ]]; then SHIP_LOCK_HOST="$(hostname 2>/dev/null || echo unknown)"; fi; }
+_ship_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || true; }
+_ship_pause() {
+  if [[ "${SHIP_LOCK_TEST_PAUSE:-0}" =~ ^[1-9][0-9]*$ ]]; then
+    sleep "$(printf '0.%03d' $(( (RANDOM + $$ + SECONDS) % SHIP_LOCK_TEST_PAUSE % 1000 )))"
+  fi
+  return 0
+}
+# _ship_judge <file> <stale_s> — returns 0 when <file> exists and its owner is dead or it is too old; sets SHIP_LOCK_OWNER
+_ship_judge() {
+  local f="$1" stale_s="$2" owner="" opid ohost m age
+  SHIP_LOCK_OWNER=""
+  [[ -f "$f" ]] || return 1
+  owner="$(cat "$f" 2>/dev/null || true)"
+  SHIP_LOCK_OWNER="$owner"
+  if [[ "$owner" == *@* ]]; then
+    opid="${owner%%@*}" ohost="${owner#*@}"
+    if [[ "$ohost" == "$SHIP_LOCK_HOST" && "$opid" =~ ^[0-9]+$ ]]; then
+      # on this host the pid decides, however old the lock is
+      if kill -0 "$opid" 2>/dev/null; then return 1; fi
+      return 0
+    fi
+  fi
+  m="$(_ship_mtime "$f")"
+  if [[ "$m" =~ ^[0-9]+$ ]]; then
+    age=$(( $(date +%s) - m ))
+    if [[ $age -gt $stale_s ]]; then return 0; fi
+  fi
+  return 1
+}
+ship_lock() {
+  local l="$1" wait_s="${2:-30}" stale_s="${3:-120}" start="$SECONDS" me owner bowner last=""
+  _ship_set_me
+  me="$SHIP_LOCK_ME"
+  mkdir -p "$(dirname "$l")" 2>/dev/null || true
+  while true; do
+    if ( set -C; printf '%s\n' "$me" >"$l" ) 2>/dev/null; then return 0; fi
+    if [[ -d "$l" ]]; then
+      rmdir "$l" 2>/dev/null || true
+    elif _ship_judge "$l" "$stale_s"; then
+      owner="$SHIP_LOCK_OWNER" last="$owner"
+      _ship_pause
+      if ( set -C; printf '%s\n' "$me" >"$l.break" ) 2>/dev/null; then
+        if _ship_judge "$l" "$stale_s" && [[ "$SHIP_LOCK_OWNER" == "$owner" ]]; then
+          _ship_pause
+          rm -f "$l"
+        fi
+        if [[ -f "$l.break" && "$(cat "$l.break" 2>/dev/null || true)" == "$me" ]]; then rm -f "$l.break"; fi
+        continue
+      elif _ship_judge "$l.break" 5; then
+        # remove the stale .break only if it still holds the owner judged stale: another waiter may have
+        # removed it and a third made a fresh one in between
+        bowner="$SHIP_LOCK_OWNER"
+        _ship_pause
+        if [[ -f "$l.break" && "$(cat "$l.break" 2>/dev/null || true)" == "$bowner" ]]; then rm -f "$l.break"; fi
+        continue
+      fi
+    else
+      last="$SHIP_LOCK_OWNER"
+    fi
+    if [[ $((SECONDS - start)) -ge $wait_s ]]; then SHIP_LOCK_OWNER="$last"; return 1; fi
+    sleep 0.05
+  done
+}
+# ship_unlock <path> — release the lock if it is still ours (after a takeover it belongs to someone else).
+ship_unlock() {
+  local o=""
+  _ship_set_me
+  if [[ -f "$1" ]]; then o="$(cat "$1" 2>/dev/null || true)"; fi
+  if [[ "$o" == "$SHIP_LOCK_ME" ]]; then rm -f "$1"; fi
+  return 0
+}
+
+# ship_limit_record <account|model> <key> <until epoch> — add an entry to limited.json (the file pick_model
+# reads), atomically and under a lock, keeping the entries other units wrote.
+ship_limit_record() {
+  local f cur tmp rc=0 c
+  f="$(ship_quota_dir)/limited.json"
+  mkdir -p "$(dirname "$f")" || return 1
+  c=models; [[ "$1" != account ]] || c=accounts
+  ship_lock "$f.lock" 120 60 || { _ship_err "limited.json is locked (by ${SHIP_LOCK_OWNER:-?})"; return 1; }
+  cur='{}'
+  if [[ -s "$f" ]]; then cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'; [[ -n "$cur" ]] || cur='{}'; fi
+  tmp="$f.tmp.$$"
+  jq -c --arg c "$c" --arg key "$2" --argjson u "$3" '.[$c] = ((.[$c] // {}) + {($key): {until: $u}})' <<<"$cur" >"$tmp" \
+    && mv -f "$tmp" "$f" || rc=1
+  rm -f "$tmp"
+  ship_unlock "$f.lock"
+  return $rc
+}
+
+# ship_limit_clear <name> — remove an account or a model named <name> from limited.json (the lead's way to say
+# the quota is back). 0 also when there was nothing to remove.
+ship_limit_clear() {
+  local f cur tmp rc=0
+  f="$(ship_quota_dir)/limited.json"
+  [[ -s "$f" ]] || return 0
+  ship_lock "$f.lock" 120 60 || { _ship_err "limited.json is locked (by ${SHIP_LOCK_OWNER:-?})"; return 1; }
+  cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'
+  tmp="$f.tmp.$$"
+  jq -c --arg n "$1" 'del(.accounts[$n]?) | del(.models[$n]?)' <<<"$cur" >"$tmp" && mv -f "$tmp" "$f" || rc=1
+  rm -f "$tmp"
+  ship_unlock "$f.lock"
+  return $rc
 }

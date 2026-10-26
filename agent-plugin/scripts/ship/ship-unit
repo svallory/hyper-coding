@@ -238,60 +238,16 @@ LOCK_DIR="" LOCK_HELD=0 CLEAN_FILE=""
 
 internal_cleanup() {
   [[ -z "$CLEAN_FILE" ]] || rm -f "$CLEAN_FILE"
-  if [[ $LOCK_HELD -eq 1 ]]; then rm -f "$LOCK_DIR/pid" "$LOCK_DIR/pid.tmp"; rmdir "$LOCK_DIR" 2>/dev/null || true; LOCK_HELD=0; fi
+  if [[ $LOCK_HELD -eq 1 ]]; then ship_unlock "$LOCK_DIR"; LOCK_HELD=0; fi
 }
 
-# age_of <path> — seconds since the path was modified; 0 when that cannot be read, so a
-# failed stat never makes a fresh lock look old.
-age_of() {
-  local m
-  m="$(mtime "$1")"
-  if [[ "$m" -gt 0 ]]; then echo $(( $(date +%s) - m )); else echo 0; fi
-}
-
-# lock_stale <pid> <age> — the holder is gone, or never wrote its pid and is over 10s old.
-lock_stale() {
-  { [[ "$1" =~ ^[0-9]+$ ]] && ! kill -0 "$1" 2>/dev/null; } || { [[ -z "$1" && $2 -gt 10 ]]; }
-}
-
-# lock_break — takeovers are serialised by <lock>.break; inside it the holder is read
-# again, so a lock just taken by someone else is never removed.
-lock_break() {
-  local b="$LOCK_DIR.break" p age
-  if ! mkdir "$b" 2>/dev/null; then
-    # Someone else is breaking. A breaker that crashed leaves its marker behind: an old one
-    # is moved aside (one waiter wins the rename) and removed. Either way the caller waits.
-    age="$(age_of "$b")"
-    if [[ $age -gt 30 ]] && mv "$b" "$b.$$" 2>/dev/null; then rmdir "$b.$$" 2>/dev/null || true; fi
-    return 1
-  fi
-  p=""; { read -r p <"$LOCK_DIR/pid"; } 2>/dev/null || true
-  age="$(age_of "$LOCK_DIR")"
-  if [[ -d "$LOCK_DIR" ]] && lock_stale "$p" "$age"; then
-    rm -f "$LOCK_DIR/pid" "$LOCK_DIR/pid.tmp"; rmdir "$LOCK_DIR" 2>/dev/null || true
-  fi
-  rmdir "$b" 2>/dev/null || true
-  return 0
-}
-
+# lock_acquire — one launch at a time per host (ship_lock in lib.sh: a lock file, stale when its holder is
+# dead or it is over ten minutes old).
 lock_acquire() {
-  local waited_ms=0 p age
   LOCK_DIR="$root/.hyper/ship-unit.lock"
   mkdir -p "$root/.hyper" || fail "cannot create $root/.hyper"
   trap internal_cleanup EXIT
-  while ! mkdir "$LOCK_DIR" 2>/dev/null; do
-    p=""; { read -r p <"$LOCK_DIR/pid"; } 2>/dev/null || true
-    age="$(age_of "$LOCK_DIR")"
-    if lock_stale "$p" "$age" && lock_break; then
-      continue
-    fi
-    if [[ $waited_ms -ge $((LOCK_WAIT_S * 1000)) ]]; then
-      fail "could not get the launch lock $LOCK_DIR in ${LOCK_WAIT_S}s (held by pid ${p:-?})"
-    fi
-    sleep 0.2; waited_ms=$((waited_ms + 200))
-  done
-  # Written whole: a waiter must never read half a pid and take it for a dead holder.
-  echo $$ >"$LOCK_DIR/pid.tmp" && mv "$LOCK_DIR/pid.tmp" "$LOCK_DIR/pid"
+  ship_lock "$LOCK_DIR" "$LOCK_WAIT_S" 600 || fail "could not get the launch lock $LOCK_DIR in ${LOCK_WAIT_S}s (held by ${SHIP_LOCK_OWNER:-?})"
   LOCK_HELD=1
 }
 

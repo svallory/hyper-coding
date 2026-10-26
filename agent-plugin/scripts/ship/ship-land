@@ -18,7 +18,7 @@
 #              where the worktree is; nothing else changes.
 #
 # Steps
-#   1. take <space root>/.hyper/ship-land.lock (one land at a time per space;
+#   1. take the lock file <space root>/.hyper/ship-land.lock (one land at a time per space;
 #      waits while the holder is alive, takes the lock over when it died or,
 #      when it is ownerless or from another host, is older than 120 s; gives up
 #      with exit 1 after SHIP_LAND_LOCK_WAIT_SEC)
@@ -98,71 +98,18 @@ export SHIP_SPACE_ROOT="$root"
 
 # --- the lock: one land at a time per space -------------------------------------------
 lock="$root/.hyper/ship-land.lock"
-lock_host="$(hostname 2>/dev/null || echo unknown)"
-me="$$@$lock_host"
 mkdir -p "$root/.hyper"
 
-# unlock_dir <lockdir> — remove it only while the owner file still names us: after
-# a takeover the directory belongs to someone else.
-unlock_dir() {
-  local o=""
-  [[ -f "$1/owner" ]] && o="$(cat "$1/owner" 2>/dev/null || true)"
-  [[ "$o" == "$me" ]] || return 0
-  rm -rf "$1" 2>/dev/null || true
-}
-
-# lock_stale <lockdir> — sets owner_seen. Stale when the owner is on this host and
-# its pid is dead (the pid alone decides there), or when the owner is on another
-# host or unknown and the lock is over 120 s old.
-owner_seen=""
-lock_stale() {
-  local d="$1" opid ohost
-  owner_seen=""
-  [[ -d "$d" ]] || return 1
-  [[ -f "$d/owner" ]] && owner_seen="$(cat "$d/owner" 2>/dev/null || true)"
-  if [[ "$owner_seen" == *@* ]]; then
-    opid="${owner_seen%%@*}" ohost="${owner_seen#*@}"
-    if [[ "$ohost" == "$lock_host" ]]; then
-      [[ "$opid" =~ ^[0-9]+$ ]] || return 1
-      kill -0 "$opid" 2>/dev/null && return 1
-      return 0
-    fi
-  fi
-  [[ -n "$(find "$d" -maxdepth 0 -mmin +2 2>/dev/null)" ]]
-}
-
-# lock_break <lockdir> — takeovers are serialised with <lockdir>.break; inside it
-# the owner is read again and the lock is broken only if it is still the owner
-# that was judged stale.
-lock_break() {
-  local d="$1" judged="$owner_seen"
-  if [[ -d "$d.break" && -n "$(find "$d.break" -maxdepth 0 -mmin +2 2>/dev/null)" ]]; then
-    rm -rf "$d.break"   # a breaker that died
-  fi
-  mkdir "$d.break" 2>/dev/null || return 0
-  if lock_stale "$d" && [[ "$owner_seen" == "$judged" ]]; then
-    rm -rf "$d"
-  fi
-  rmdir "$d.break" 2>/dev/null || true
-}
-
-# acquire_lock — take the lock (waiting for a live holder) and release it on exit.
+# acquire_lock — take the lock (ship_lock in lib.sh; waiting for a live holder) and release it on exit.
 acquire_lock() {
   local waited=0 lock_start=$SECONDS
-  while ! mkdir "$lock" 2>/dev/null; do
-    if lock_stale "$lock"; then
-      lock_break "$lock"
-      sleep 0.1
-      continue
-    fi
-    if [[ $waited -eq 0 ]]; then say "waiting for another land in this space (${owner_seen:-unknown owner})"; waited=1; fi
+  while ! ship_lock "$lock" 1 120; do
+    if [[ $waited -eq 0 ]]; then say "waiting for another land in this space (${SHIP_LOCK_OWNER:-unknown owner})"; waited=1; fi
     if [[ $((SECONDS - lock_start)) -ge ${SHIP_LAND_LOCK_WAIT_SEC:-1800} ]]; then
-      fail "gave up waiting for the land lock $lock (held by ${owner_seen:-unknown owner})"
+      fail "gave up waiting for the land lock $lock (held by ${SHIP_LOCK_OWNER:-unknown owner})"
     fi
-    sleep 1
   done
-  printf '%s\n' "$me" >"$lock/owner"
-  trap 'unlock_dir "$lock"' EXIT
+  trap 'ship_unlock "$lock"' EXIT
 }
 
 # --- --host: run the same command where the worktree lives ------------------------------
@@ -179,7 +126,7 @@ if ! ship_host_is_local "$host"; then
   acquire_lock
   rc=0
   ship_host_run "$target" "$root" "$host" ship-land "${rargs[@]}" || rc=$?
-  unlock_dir "$lock"; trap - EXIT
+  ship_unlock "$lock"; trap - EXIT
   if ship_host_lost "$rc"; then
     echo "ship-land: lost the connection to $host (ssh exit $rc); the landing may have finished or still be running there. Rerun 'ship-land $ref --host $host' (a merged PR skips ahead to on_land and teardown)" >&2
     rc=1
@@ -428,6 +375,6 @@ while IFS= read -r cmd; do
 done < <(jq -r '.[]' <<<"$on_land")
 
 # --- 7. teardown ------------------------------------------------------------------------
-unlock_dir "$lock"; trap - EXIT
+ship_unlock "$lock"; trap - EXIT
 teardown
 say "$ref landed"

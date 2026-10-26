@@ -347,9 +347,8 @@ assert_eq "a bad ref is a usage error (2)" "2" "$(land '../x')"
 # 9: the lock ---------------------------------------------------------------------------
 mk_unit u11 111
 advance_main five
-mkdir "$SPACE/.hyper/ship-land.lock"
 sleep 30 & HOLDER=$!
-echo "$HOLDER@$(hostname)" > "$SPACE/.hyper/ship-land.lock/owner"
+echo "$HOLDER@$(hostname)" > "$SPACE/.hyper/ship-land.lock"
 ( bash "$LAND" u11 >"$FIX/l11.out" 2>&1; echo $? >"$FIX/l11.rc" ) &
 LANDER=$!
 sleep 2
@@ -360,8 +359,7 @@ wait "$LANDER"
 assert_eq "when the holder dies, land takes the lock over and lands" "0" "$(cat "$FIX/l11.rc")"
 mk_unit u12 112
 advance_main six
-mkdir "$SPACE/.hyper/ship-land.lock"
-echo "$HOLDER@$(hostname)" > "$SPACE/.hyper/ship-land.lock/owner"
+echo "$HOLDER@$(hostname)" > "$SPACE/.hyper/ship-land.lock"
 assert_eq "a lock left by a dead process is taken over" "0" "$(land u12)"
 
 # 10: ship-retire ----------------------------------------------------------------------
@@ -533,15 +531,15 @@ git -C "$G" worktree remove --force "$SPACE/worktrees/u26"
 # the lock
 mk_unit u27 127
 advance_main twelve
-mkdir "$SPACE/.hyper/ship-land.lock"; touch -t 202001010000 "$SPACE/.hyper/ship-land.lock"
+: > "$SPACE/.hyper/ship-land.lock"; touch -t 202001010000 "$SPACE/.hyper/ship-land.lock"
 assert_eq "an ownerless lock older than 120 s is taken over" "0" "$(land u27)"
 mk_unit u28 128
 advance_main thirteen
-mkdir "$SPACE/.hyper/ship-land.lock"; echo "1@otherhost" > "$SPACE/.hyper/ship-land.lock/owner"
+echo "1@otherhost" > "$SPACE/.hyper/ship-land.lock"
 touch -t 202001010000 "$SPACE/.hyper/ship-land.lock"
 assert_eq "a foreign-host lock older than 120 s is taken over" "0" "$(land u28)"
 mk_unit u29 129
-mkdir "$SPACE/.hyper/ship-land.lock"; echo "1@otherhost" > "$SPACE/.hyper/ship-land.lock/owner"
+echo "1@otherhost" > "$SPACE/.hyper/ship-land.lock"
 rc="$(SHIP_LAND_LOCK_WAIT_SEC=2 land u29)"
 assert_eq "a young foreign lock is waited for, then land gives up (1)" "1" "$rc"
 assert_contains "...saying what it waited for" "$(cat "$FIX/land.err")" "gave up waiting"

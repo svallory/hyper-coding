@@ -88,7 +88,7 @@ shift   # the destination
 if [[ -e "$FIX/ssh.down" ]]; then exit 255; fi
 if [[ -e "$FIX/ssh.drop" && "$*" == *_probe* ]]; then rm -f "$FIX/ssh.drop"; exit 255; fi
 if [[ -e "$FIX/ssh.spy" && "$*" == *ship-land* ]]; then
-  [[ -d "$SPACE/.hyper/ship-land.lock" ]] && echo held >> "$FIX/spy.out"
+  [[ -e "$SPACE/.hyper/ship-land.lock" ]] && echo held >> "$FIX/spy.out"
 fi
 cmd="$*"
 cmd="${cmd//$SPACE/$HOSTSPACE}"
@@ -499,13 +499,13 @@ assert_contains "...pointing at wait" "$(err)" "ship-unit wait s1"
 release s1
 assert_eq "...the first run is unaffected (0)" "0" "$(bgrc s1a)"
 # a stale launch lock from a dead process is taken over
-mkdir -p "$SPACE/.hyper/ship-unit.lock"; echo 99999999 > "$SPACE/.hyper/ship-unit.lock/pid"
+echo "99999999@$(hostname)" > "$SPACE/.hyper/ship-unit.lock"
 mode lk ready
 assert_eq "a launch lock held by a dead process is taken over" "0" "$(unit run lk --brief "$BRIEF" --class S)"
 assert_eq "...and released after the launch" "" "$([[ -e "$SPACE/.hyper/ship-unit.lock" ]] && echo held)"
-# a crashed holder and two waiters: the takeover is serialised, so exactly one gets in
+# a crashed holder and two waiters: the takeover is a rename, so exactly one gets in
 rm_loops "$SPACE"; rm_loops "$HOSTSPACE"; rm -f "$FIX/bg."*
-mkdir -p "$HOSTSPACE/.hyper/ship-unit.lock"; echo 99999999 > "$HOSTSPACE/.hyper/ship-unit.lock/pid"
+echo "99999999@$(hostname)" > "$HOSTSPACE/.hyper/ship-unit.lock"
 mode k1 hold; mode k2 hold
 bg k1 run k1 --brief "$BRIEF" --class S --host box
 bg k2 run k2 --brief "$BRIEF" --class S --host box
@@ -516,23 +516,6 @@ assert_eq "crashed lock holder, two waiters at slots=1: one is refused (3), the 
 if [[ "$rk1" == 3 ]]; then kw=k2; else kw=k1; fi
 release "$kw"
 assert_eq "...the other runs to READY" "0" "$(bgrc "$kw")"
-assert_eq "...and no break marker is left" "" "$([[ -e "$HOSTSPACE/.hyper/ship-unit.lock.break" ]] && echo left)"
-# a breaker that crashed inside .break: the old marker is taken over, the waiters do not spin
-rm_loops "$SPACE"; rm_loops "$HOSTSPACE"; rm -f "$FIX/bg."*
-mkdir -p "$HOSTSPACE/.hyper/ship-unit.lock" "$HOSTSPACE/.hyper/ship-unit.lock.break"
-echo 99999999 > "$HOSTSPACE/.hyper/ship-unit.lock/pid"
-touch -t 202001010000 "$HOSTSPACE/.hyper/ship-unit.lock.break"
-mode m1 hold; mode m2 hold
-bg m1 run m1 --brief "$BRIEF" --class S --host box
-bg m2 run m2 --brief "$BRIEF" --class S --host box
-wait_for 120 refused m1 m2
-sleep 0.3
-rm1="$(cat "$FIX/bg.m1.rc" 2>/dev/null)"; rm2="$(cat "$FIX/bg.m2.rc" 2>/dev/null)"
-assert_eq "a crashed breaker's old .break marker: one run refused (3), the other running" "yes" "$(pair_ok "$rm1" "$rm2")"
-if [[ "$rm1" == 3 ]]; then mw=m2; else mw=m1; fi
-release "$mw"
-assert_eq "...the other runs to READY" "0" "$(bgrc "$mw")"
-assert_eq "...and the marker is gone" "" "$([[ -e "$HOSTSPACE/.hyper/ship-unit.lock.break" ]] && echo left)"
 
 LOCAL_RUNS="$(mux_count run)"
 # 5: host runs ---------------------------------------------------------------------------------

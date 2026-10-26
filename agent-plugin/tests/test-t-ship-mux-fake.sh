@@ -203,7 +203,7 @@ assert_contains "...naming the file" "$(mux_err close --ref gj --id "$G")" "brok
 assert_eq "...with no close on the backend" "no" "$(log_has close "$G" && echo yes || echo no)"
 rm -rf "$SPACE/notes/loops/broken"
 assert_eq "...and it closes once the record is gone" "0" "$(mux_rc close --ref gj --id "$G")"
-assert_eq "the group record is gone before the lock is released" "no" "$([[ -d "$SPACE/.hyper/ship-mux.ops.lock" ]] && echo yes || echo no)"
+assert_eq "the group record is gone before the lock is released" "no" "$([[ -e "$SPACE/.hyper/ship-mux.ops.lock" ]] && echo yes || echo no)"
 
 # 7b: a group that already existed is never closed -------------------------------------------
 reset_fake
@@ -276,41 +276,35 @@ printf 'mux: fake\n' > "$PROJECT"; reload_cfg
 reset_fake
 mkdir -p "$SPACE/notes/loops/lk"
 dead=999999; while kill -0 "$dead" 2>/dev/null; do dead=$((dead + 1)); done
-mkdir "$SPACE/notes/loops/lk/mux.json.lock"; echo "$dead@$(hostname)" > "$SPACE/notes/loops/lk/mux.json.lock/owner"
+echo "$dead@$(hostname)" > "$SPACE/notes/loops/lk/mux.json.lock"
 start_s=$SECONDS
 assert_eq "a lock whose owner died on this host is taken over" "0" "$(mux_rc open --ref lk --cwd "$WT")"
 assert_eq "...without waiting for a timeout" "1" "$([[ $((SECONDS - start_s)) -lt 5 ]] && echo 1 || echo 0)"
-assert_eq "...and the lock is released" "no" "$([[ -d "$SPACE/notes/loops/lk/mux.json.lock" ]] && echo yes || echo no)"
-mkdir "$SPACE/.hyper/ship-mux.json.lock"; echo "4242@some-other-host" > "$SPACE/.hyper/ship-mux.json.lock/owner"
-touch -t 200001010000 "$SPACE/.hyper/ship-mux.json.lock" "$SPACE/.hyper/ship-mux.json.lock/owner"
+assert_eq "...and the lock is released" "no" "$([[ -e "$SPACE/notes/loops/lk/mux.json.lock" ]] && echo yes || echo no)"
+echo "4242@some-other-host" > "$SPACE/.hyper/ship-mux.json.lock"
+touch -t 200001010000 "$SPACE/.hyper/ship-mux.json.lock"
 assert_eq "a lock older than 120 s is taken over (owner on another host)" "0" "$(mux_rc open --ref lk2 --cwd "$WT")"
-assert_eq "an old lock without an owner file is taken over" "0" "$(mkdir "$SPACE/.hyper/ship-mux.ops.lock"; touch -t 200001010000 "$SPACE/.hyper/ship-mux.ops.lock"; mux_rc open --ref lk3 --cwd "$WT")"
+assert_eq "an old lock without an owner file is taken over" "0" "$(: > "$SPACE/.hyper/ship-mux.ops.lock"; touch -t 200001010000 "$SPACE/.hyper/ship-mux.ops.lock"; mux_rc open --ref lk3 --cwd "$WT")"
 # a live owner is never taken over, however old the lock
 reset_fake
 sleep 60 & LIVE=$!
-mkdir -p "$SPACE/notes/loops/lv"; mkdir "$SPACE/notes/loops/lv/mux.json.lock"
-echo "$LIVE@$(hostname)" > "$SPACE/notes/loops/lv/mux.json.lock/owner"
-touch -t 200001010000 "$SPACE/notes/loops/lv/mux.json.lock" "$SPACE/notes/loops/lv/mux.json.lock/owner"
+mkdir -p "$SPACE/notes/loops/lv"
+echo "$LIVE@$(hostname)" > "$SPACE/notes/loops/lv/mux.json.lock"
+touch -t 200001010000 "$SPACE/notes/loops/lv/mux.json.lock"
 assert_eq "a live, aged owner on this host is not taken over (open times out, 1)" "1" "$(SHIP_MUX_LOCK_TRIES=3 mux_rc open --ref lv --cwd "$WT")"
-assert_eq "...and its lock is untouched" "$LIVE@$(hostname)" "$(cat "$SPACE/notes/loops/lv/mux.json.lock/owner")"
+assert_eq "...and its lock is untouched" "$LIVE@$(hostname)" "$(cat "$SPACE/notes/loops/lv/mux.json.lock")"
 kill "$LIVE" 2>/dev/null; wait "$LIVE" 2>/dev/null
 assert_eq "once that owner is dead the lock is taken over" "0" "$(mux_rc open --ref lv --cwd "$WT")"
-# takeovers are serialised: a held .break blocks them, a dead breaker's does not
-mkdir -p "$SPACE/notes/loops/bk"; mkdir "$SPACE/notes/loops/bk/mux.json.lock" "$SPACE/notes/loops/bk/mux.json.lock.break"
-echo "$dead@$(hostname)" > "$SPACE/notes/loops/bk/mux.json.lock/owner"
-assert_eq "a takeover in progress (.break held) is not raced (open times out, 1)" "1" "$(SHIP_MUX_LOCK_TRIES=3 mux_rc open --ref bk --cwd "$WT")"
-touch -t 200001010000 "$SPACE/notes/loops/bk/mux.json.lock.break"
-assert_eq "a .break older than 120 s is cleared and the takeover goes ahead" "0" "$(mux_rc open --ref bk --cwd "$WT")"
 # unlock and the exit trap leave a lock that was taken over alone
-sed -n '/^_held=()/,/^rec_default=/p' "$MUX_BIN" | sed '$d' > "$FIX/locks.sh"
+{ printf 'source "%s/scripts/ship/lib.sh"\n' "$PLUG"; sed -n '/^_held=()/,/^rec_default=/p' "$MUX_BIN" | sed '$d'; } > "$FIX/locks.sh"
 mkdir -p "$FIX/lk"
-out="$(bash -c 'source "$1"; _lock "$2/f.json"; echo "other@elsewhere" > "$2/f.json.lock/owner"; _unlock; [[ -f "$2/f.json.lock/owner" ]] && cat "$2/f.json.lock/owner"' _ "$FIX/locks.sh" "$FIX/lk")"
+out="$(bash -c 'source "$1"; _lock "$2/f.json"; echo "other@elsewhere" > "$2/f.json.lock"; _unlock; [[ -f "$2/f.json.lock" ]] && cat "$2/f.json.lock"' _ "$FIX/locks.sh" "$FIX/lk")"
 assert_eq "_unlock leaves a lock whose owner changed (taken over)" "other@elsewhere" "$out"
 rm -rf "$FIX/lk/f.json.lock"
-out="$(bash -c 'source "$1"; _lock "$2/f.json"; echo "other@elsewhere" > "$2/f.json.lock/owner"' _ "$FIX/locks.sh" "$FIX/lk"; cat "$FIX/lk/f.json.lock/owner" 2>/dev/null)"
+out="$(bash -c 'source "$1"; _lock "$2/f.json"; echo "other@elsewhere" > "$2/f.json.lock"' _ "$FIX/locks.sh" "$FIX/lk"; cat "$FIX/lk/f.json.lock" 2>/dev/null)"
 assert_eq "the exit trap leaves a lock whose owner changed" "other@elsewhere" "$out"
 rm -rf "$FIX/lk/f.json.lock"
-out="$(bash -c 'source "$1"; _lock "$2/f.json"; _unlock; [[ -d "$2/f.json.lock" ]] && echo held || echo released' _ "$FIX/locks.sh" "$FIX/lk")"
+out="$(bash -c 'source "$1"; _lock "$2/f.json"; _unlock; [[ -e "$2/f.json.lock" ]] && echo held || echo released' _ "$FIX/locks.sh" "$FIX/lk")"
 assert_eq "_unlock removes a lock that is still ours" "released" "$out"
 # concurrent opens: unique ids, valid records
 reset_fake

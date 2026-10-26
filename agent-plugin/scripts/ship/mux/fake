@@ -38,6 +38,8 @@ set -euo pipefail
 [[ -n "${SHIP_MUX_FAKE_DIR:-}" ]] || { echo "mux/fake: SHIP_MUX_FAKE_DIR is not set" >&2; exit 1; }
 [[ -n "${SHIP_MUX_FAKE_LOG:-}" ]] || { echo "mux/fake: SHIP_MUX_FAKE_LOG is not set" >&2; exit 1; }
 D="$SHIP_MUX_FAKE_DIR"
+# shellcheck source=../lib.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../lib.sh"
 mkdir -p "$D/state" "$D/groups" "$D/read" "$D/status" "$D/sent" "$D/screen"
 
 verb="${1:?mux/fake: verb required}"
@@ -49,15 +51,12 @@ notfound() { echo "mux/fake: $*" >&2; exit 5; }
 
 # next_id <prefix> — space-1, pane-2, ... from one counter, under a lock.
 next_id() {
-  local n=0 i=0
-  while ! mkdir "$D/counter.lock" 2>/dev/null; do
-    i=$((i + 1)); [[ $i -le 200 ]] || die "counter lock timed out"
-    sleep 0.02
-  done
+  local n=0
+  ship_lock "$D/counter.lock" 10 30 || die "counter lock timed out"
   [[ -f "$D/counter" ]] && n="$(cat "$D/counter")"
   n=$((n + 1))
   printf '%s' "$n" >"$D/counter"
-  rmdir "$D/counter.lock"
+  ship_unlock "$D/counter.lock"
   printf '%s-%s\n' "$1" "$n"
 }
 
