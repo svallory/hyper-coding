@@ -108,6 +108,7 @@ exit $rc
 STUB
 cat > "$FIX/bin/rsync" <<'STUB'
 #!/usr/bin/env bash
+if [[ "${1:-}" == --version ]]; then echo "rsync  version 3.2.7  protocol version 31"; exit 0; fi
 echo "rsync $*" >> "$RSYNC_LOG"
 if [[ -e "$FIX/ssh.down" ]]; then exit 255; fi
 del=0 args=()
