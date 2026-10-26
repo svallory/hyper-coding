@@ -275,6 +275,7 @@ for k in mux units_group base merge_method spec.paths scan.forbidden scan.exclud
 done
 assert_eq "gate has no default" "0" "$(grep -c '^gate:' "$DEFAULTS")"
 # The limit patterns survive YAML quoting intact.
+# shellcheck disable=SC1112  # the curly quotes are part of the pattern
 assert_eq "claude limit pattern" '(?i)^([^[:alnum:]\s+>"\x27`“”‘’-]\s*)?You.{1,3}ve hit your ([a-z]+ )?limit\s*($|[·∙]\s*resets)' "$(cfg --get limits.patterns.claude)"
 assert_eq "pi limit pattern" '(?i)^[^[:alnum:]+>-]*(((api |provider |http )?error:?|✗) *(429 *)?(too many requests|resource_exhausted|status code)|429 *(too many requests|resource_exhausted|status code)|((api |provider |http )?error:? *)?(429\b.*rate_limit_error|429\b.{0,30}rate.?limit|\{"error":\{"code":"?(1302|1308)\b)|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit))' "$(cfg --get limits.patterns.pi)"
 

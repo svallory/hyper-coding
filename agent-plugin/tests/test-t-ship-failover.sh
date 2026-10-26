@@ -903,6 +903,7 @@ m() { jq -Rn --arg re "$1" --arg l "$2" '$l | test($re)'; }
 for l in "You've hit your Sonnet limit · resets 4pm" "You’ve hit your limit" "│ You've hit your weekly limit" "● YOU'VE HIT YOUR OPUS LIMIT" "You've hit your limit ∙ resets 4pm" "You've hit your limit"; do
   assert_eq "claude pattern fires on: $l" true "$(m "$CL_RE" "$l")"
 done
+# shellcheck disable=SC1111  # curly quotes are test data
 for l in "Summary: limit_hit now matches \"You've hit your weekly limit\" and more" "+ You've hit your Sonnet limit" "│ + You've hit your Sonnet limit" "- You've hit your limit" "> You've hit your limit" "\"You've hit your weekly limit\" in the output" "12 + You've hit your limit" \
   "  You've hit your weekly limit fails over…" "  You've hit your weekly limit" "You've hit your weekly limit. What do you want to do?" "“You've hit your limit”" "‘You’ve hit your limit’" "│ x You've hit your limit" "You've hit your limit and then more" "You've hit your limit · resumes"; do
   assert_eq "claude pattern ignores: $l" false "$(m "$CL_RE" "$l")"
