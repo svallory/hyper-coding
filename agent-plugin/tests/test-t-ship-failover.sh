@@ -980,7 +980,8 @@ assert_eq "ship_limit_record keeps the other entries (models)" "m1,m2" "$(jq -r 
 assert_eq "ship_limit_record keeps the other entries (accounts)" "acct1,acct2" "$(jq -r '.accounts | keys | join(",")' "$SHIP_QUOTA_DIR/limited.json")"
 LPIDS=()
 for i in 1 2 3 4 5 6 7 8; do ship_limit_record model "par$i" "$FARU" & LPIDS+=($!); done
-for pid in "${LPIDS[@]}"; do wait "$pid"; done
+LFAIL=0; for pid in "${LPIDS[@]}"; do wait "$pid" || LFAIL=$((LFAIL + 1)); done
+assert_eq "8 parallel writers: every call succeeded" 0 "$LFAIL"
 assert_eq "8 parallel writers: every entry is there" 10 "$(jq -r '.models | length' "$SHIP_QUOTA_DIR/limited.json")"
 assert_eq "the lock is released" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json.lock" ]] && echo present || echo absent)"
 # a stale lock is broken

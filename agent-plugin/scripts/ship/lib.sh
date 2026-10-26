@@ -642,12 +642,12 @@ ship_quota_block() {
 }
 
 # _ship_lock <file> — take <file>.lock (a directory: mkdir is atomic on every platform, flock is not on
-# macOS). Retries for about 10 s, then breaks a lock older than 60 s. 1 when it cannot be taken.
+# macOS). Retries for about 30 s, then breaks a lock older than 60 s. 1 when it cannot be taken.
 _ship_lock() {
   local l="$1.lock" i=0 age
   while ! mkdir "$l" 2>/dev/null; do
     i=$((i + 1))
-    if [[ $i -gt 200 ]]; then
+    if [[ $i -gt 600 ]]; then
       age=$(( $(date +%s) - $(stat -c %Y "$l" 2>/dev/null || stat -f %m "$l" 2>/dev/null || echo 0) ))
       if [[ $age -gt 60 ]]; then rmdir "$l" 2>/dev/null; i=0; continue; fi
       return 1
@@ -666,7 +666,7 @@ ship_limit_record() {
   _ship_lock "$f" || { _ship_err "limited.json is locked"; return 1; }
   cur='{}'
   if [[ -s "$f" ]]; then cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'; [[ -n "$cur" ]] || cur='{}'; fi
-  tmp="$f.tmp.$$"
+  tmp="$f.tmp.$$.$RANDOM"
   jq -c --arg k "$1" --arg key "$2" --argjson u "$3" \
     '(if $k == "account" then "accounts" else "models" end) as $c | .[$c] = ((.[$c] // {}) + {($key): {until: $u}})' <<<"$cur" >"$tmp" \
     && mv -f "$tmp" "$f" || rc=1
@@ -683,7 +683,7 @@ ship_limit_clear() {
   [[ -s "$f" ]] || return 0
   _ship_lock "$f" || { _ship_err "limited.json is locked"; return 1; }
   cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'
-  tmp="$f.tmp.$$"
+  tmp="$f.tmp.$$.$RANDOM"
   jq -c --arg n "$1" 'del(.accounts[$n]?) | del(.models[$n]?)' <<<"$cur" >"$tmp" && mv -f "$tmp" "$f" || rc=1
   rm -f "$tmp"
   _ship_unlock "$f"
