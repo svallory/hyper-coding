@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+# ship-auto — the mechanics of hyper:auto: mark the start of an auto stretch, build
+# the papiro questions JSON (or a markdown list) for the rulings the lead made on its
+# own, and apply the operator's reply to the rulings file. Works in any session, with
+# or without ship.
+#
+# Usage:
+#   ship-auto on [--rulings FILE]
+#       write notes/auto.json {since, first_ruling}; an existing file is kept and printed
+#   ship-auto next [--rulings FILE]
+#       print the next ruling number (max existing + 1)
+#   ship-auto questions [--markdown] [--out FILE] [--rulings FILE]
+#       papiro questions JSON for the pending auto rulings (--markdown: the same list
+#       as markdown, for a session without papiro)
+#   ship-auto apply REPLY|- [--rulings FILE]
+#       apply a papiro reply (or the markdown fallback) to the rulings file
+#
+# --rulings FILE   the rulings file (default: config key `rulings`, read with
+#                  ship-config; a relative path is relative to the space root)
+#
+# Rulings file: entries `## D<n> — <title>` followed by `Ruling:`, `Reason:`, `By:`
+# and `Status:` lines, and optionally `Alternatives:` (rejected alternatives separated
+# by ` | `). In scope: entries with `By: lead-auto` and `Status: pending-review` and a
+# number >= first_ruling (all of them when notes/auto.json is absent).
+#
+# questions: one question per ruling. id `D<n>`; options `keep` ("Keep the ruling",
+# the suggested one), `alt-N` ("Alternative N") per alternative, or `overturn`
+# ("Overturn") when there are none. The reason is the summary.
+#
+# apply: each reply line names a ruling: `D<n> <title>: <answer>` (papiro) or
+# `D<n>: <answer>` (fallback). The answer is the text after the last ": " and before
+# " (suggested: ...)", ", as suggested" or ". Note: ...". Papiro answers must be exactly
+# "Keep the ruling", "Alternative N" (N in range), "Overturn" or "Something else"; the
+# fallback also takes ok/keep/yes/confirmed and "Alternative N" (N in range), and any other text is a new answer. A
+# ruling not named is confirmed. A reply with no D line is accepted only as the header
+# line "Auto rulings review: all N as suggested."; anything else (empty, garbage, another
+# sheet's title) exits 1; so does a papiro header for another sheet even when D lines follow and writes nothing. Kept -> `confirmed` (a note is printed as `NOTE D<n>:
+# ...` for the lead). Overturned -> `overturned (by D<m>)` plus an appended `## D<m>`
+# (By: operator, Status: binding) whose Ruling is the alternative or the operator's
+# note, and a `FOLLOW-UP D<n> -> D<m>: ...` line. A reply line naming a ruling that is
+# not pending, naming one twice, or that does not parse, fails the whole reply: nothing
+# is written, the bad lines are listed, exit 1. A good reply deletes notes/auto.json.
+#
+# Exit codes: 0 ok; 1 error (including a bad reply); 3 nothing pending; 64 usage.
+set -euo pipefail
+
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+_dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+# shellcheck source=lib.sh
+source "$_dir/lib.sh"
+
+usage() { echo "ship-auto: $*" >&2; exit 64; }
+fail() { echo "ship-auto: $*" >&2; exit 1; }
+
+if [[ "${1:-}" == -h || "${1:-}" == --help ]]; then
+  sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0
+fi
+[[ $# -gt 0 ]] || usage "a subcommand is required (on, next, questions, apply)"
+cmd="$1"; shift
+case "$cmd" in on|next|questions|apply) ;; *) usage "unknown subcommand $cmd" ;; esac
+
+rulings_arg="" out="" arg="" markdown=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --rulings) [[ $# -ge 2 ]] || usage "--rulings needs a value"; rulings_arg="$2"; shift 2 ;;
+    --out) [[ "$cmd" == questions ]] || usage "--out is only for questions"; [[ $# -ge 2 ]] || usage "--out needs a value"; out="$2"; shift 2 ;;
+    --markdown) [[ "$cmd" == questions ]] || usage "--markdown is only for questions"; markdown=1; shift ;;
+    -) [[ "$cmd" == apply && -z "$arg" ]] || usage "unexpected argument -"; arg="-"; shift ;;
+    -*) usage "unknown option $1" ;;
+    *) [[ "$cmd" == apply && -z "$arg" ]] || usage "unexpected argument $1"; arg="$1"; shift ;;
+  esac
+done
+if [[ "$cmd" == apply && -z "$arg" ]]; then usage "apply needs a reply file (or - for stdin)"; fi
+
+root="$(ship_space_root)" || fail "cannot locate the space root"
+if [[ -n "$rulings_arg" ]]; then
+  rulings="$rulings_arg"
+else
+  rulings="$("$_dir/ship-config" --get rulings)" || fail "cannot read the rulings path from the ship config"
+fi
+case "$rulings" in /*) ;; *) rulings="$root/$rulings" ;; esac
+auto_file="$root/notes/auto.json"
+
+# next_number — max existing D<n> + 1 (1 when there are none).
+next_number() {
+  local max=0
+  if [[ -f "$rulings" ]]; then
+    max="$(tr -d '\r' < "$rulings" | sed -n 's/^## D\([0-9][0-9]*\).*/\1/p' | sort -n | tail -n 1)"
+    [[ -n "$max" ]] || max=0
+  fi
+  echo $((max + 1))
+}
+
+# entries_json — every ruling as a JSON array of {n, title, Ruling, Reason, By,
+# Status, Alternatives}. A value continues on following lines until the next field
+# or heading. CRLF files are read as LF.
+entries_json() {
+  [[ -f "$rulings" ]] || { echo '[]'; return; }
+  tr -d '\r' < "$rulings" | awk '
+    /^## D[0-9]+/ {
+      line = $0; sub(/^## D/, "", line)
+      n = line; sub(/[^0-9].*$/, "", n)
+      title = line; sub(/^[0-9]+[ \t]*/, "", title); sub(/^(—|-|:)[ \t]*/, "", title)
+      printf "%s\ttitle\t%s\n", n, title
+      cur = n; key = ""; next
+    }
+    /^#/ { cur = ""; key = ""; next }
+    cur != "" && /^(Ruling|Reason|By|Status|Alternatives):/ {
+      key = $0; sub(/:.*$/, "", key)
+      val = $0; sub(/^[A-Za-z]+:[ \t]*/, "", val)
+      printf "%s\t%s\t%s\n", cur, key, val; next
+    }
+    cur != "" && key != "" && NF { v = $0; gsub(/^[ \t]+/, "", v); printf "%s\t%s+\t%s\n", cur, key, v; next }
+  ' | jq -R -s '
+    split("\n") | map(select(length > 0) | split("\t"))
+    | reduce .[] as $r ({order: [], by: {}};
+        ($r[0]) as $n
+        | (if (.by[$n] == null) then .order += [$n] | .by[$n] = {n: ($n | tonumber)} else . end)
+        | if ($r[1] | endswith("+"))
+          then (($r[1] | rtrimstr("+")) as $k | .by[$n][$k] = ((.by[$n][$k] // "") + " " + ($r[2:] | join("\t"))))
+          else .by[$n][$r[1]] = ($r[2:] | join("\t")) end)
+    | [.order[] as $n | .by[$n]]'
+}
+
+# pending_json — auto rulings awaiting review in scope, each with its `alts` array.
+pending_json() {
+  local first=0
+  if [[ -f "$auto_file" ]]; then
+    first="$(jq -r '.first_ruling // 0' "$auto_file" 2>/dev/null | sed 's/^D//')" || first=0
+    [[ "$first" =~ ^[0-9]+$ ]] || first=0
+  fi
+  entries_json | jq --argjson first "$first" '
+    [.[] | select(.By == "lead-auto" and ((.Status // "") | startswith("pending-review")) and .n >= $first)
+     | . + {alts: ((.Alternatives // "") | split(" | ") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0)))}]'
+}
+
+case "$cmd" in
+  next) next_number ;;
+
+  on)
+    if [[ -f "$auto_file" ]]; then
+      echo "ship-auto: auto is already on; keeping $auto_file" >&2
+      cat "$auto_file"; exit 0
+    fi
+    mkdir -p "$root/notes"
+    jq -n --arg since "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson n "$(next_number)" \
+      '{since: $since, first_ruling: ("D" + ($n | tostring))}' > "$auto_file"
+    cat "$auto_file" ;;
+
+  questions)
+    pend="$(pending_json)"
+    if [[ "$(jq 'length' <<<"$pend")" -eq 0 ]]; then
+      echo "ship-auto: no pending-review rulings" >&2; exit 3
+    fi
+    if [[ $markdown -eq 1 ]]; then
+      text="$(jq -r '
+        "These rulings were made by the lead while you were away. Reply with `D<n>: <new answer>` for each one you disagree with, or `D<n>: ok`. Rulings you do not name are confirmed.\n",
+        (.[] | "### D\(.n) — \(.title // "")\n- Ruling: \(.Ruling // "")\n- Reason: \(.Reason // "")" + (if (.alts | length) > 0 then "\n- Rejected alternatives: " + (.alts | join(" | ")) else "" end) + "\n")' <<<"$pend")"
+      if [[ -n "$out" ]]; then printf '%s\n' "$text" > "$out"; else printf '%s\n' "$text"; fi
+      exit 0
+    fi
+    json="$(jq --arg rf "$rulings" '
+      {
+        title: "Auto rulings review",
+        id: "auto-rulings",
+        intro: "While you were away the lead ruled on these instead of asking you. Each is pre-answered with its ruling; change only the ones you disagree with.",
+        options: ["Keep the ruling", "Overturn"],
+        groups: [{
+          title: "Rulings",
+          questions: [ .[] | {
+            id: ("D" + (.n | tostring)),
+            title: (.title // ("Ruling D" + (.n | tostring))),
+            summary: (.Reason // ""),
+            details: ("Ruling: " + (.Ruling // "") + (if (.alts | length) > 0 then "\n\nRejected alternatives:\n" + (.alts | map("- " + .) | join("\n")) else "" end)),
+            options: ([{value: "keep", label: "Keep the ruling", description: (.Ruling // "")}]
+              + (if (.alts | length) > 0
+                 then [.alts | to_entries[] | {value: ("alt-" + ((.key + 1) | tostring)), label: ("Alternative " + ((.key + 1) | tostring)), description: .value}]
+                 else [{value: "overturn", label: "Overturn", description: "Reject this ruling. Say what to do instead in the note."}] end)),
+            suggested: "keep",
+            resources: [$rf]
+          } ]
+        }]
+      }' <<<"$pend")"
+    if [[ -n "$out" ]]; then printf '%s\n' "$json" > "$out"; else printf '%s\n' "$json"; fi ;;
+
+  apply)
+    [[ -f "$rulings" ]] || fail "no rulings file at $rulings"
+    if [[ "$arg" == "-" ]]; then reply="$(cat)"; else
+      [[ -f "$arg" ]] || fail "no reply file $arg"
+      reply="$(cat "$arg")"
+    fi
+    pend="$(pending_json)"
+    [[ "$(jq 'length' <<<"$pend")" -gt 0 ]] || { echo "ship-auto: no pending-review rulings" >&2; exit 3; }
+
+    # ---- parse and validate the whole reply before writing anything ----
+    # A papiro header names its sheet; another sheet's reply must not be applied here.
+    first_line="$(printf '%s\n' "$reply" | sed -n '/[^[:space:]]/{p;q;}' | tr -d '\r')"
+    re_hdr='^(.+): (all [0-9]+ as suggested|[0-9]+ (changed|answered|notes?|as suggested))'
+    first_body="$(printf '%s' "$first_line" | sed -E 's/^[[:space:]]*[-*][[:space:]]*//')"
+    if [[ ! "$first_body" =~ ^D[0-9]+ && "$first_line" =~ $re_hdr && "${BASH_REMATCH[1]}" != "Auto rulings review" ]]; then
+      echo "ship-auto: the reply is for another sheet (\"${BASH_REMATCH[1]}\"), not \"Auto rulings review\"; nothing was written." >&2
+      exit 1
+    fi
+    TAB=$'\t'
+    re_id='^D([0-9]+)([^0-9].*)?$'
+    re_sugg='[[:space:]]*\(suggested:[^)]*\)\.?$'
+    re_asis=', as suggested\.?$'
+    re_alt='^Alternative ([0-9]+)$'
+    answers="" bad="" dlines=0
+    while IFS= read -r line; do
+      line="${line%$'\r'}"
+      l="$(printf '%s' "$line" | sed -E 's/^[[:space:]]*[-*][[:space:]]*//')"
+      [[ "$l" =~ $re_id ]] || continue
+      dlines=$((dlines + 1))
+      n="${BASH_REMATCH[1]}"; rest="${BASH_REMATCH[2]}"
+      if ! jq -e --argjson n "$n" 'any(.[]; .n == $n)' <<<"$pend" >/dev/null; then
+        bad="${bad}  ${line}   (D$n is not a pending auto ruling)"$'\n'; continue
+      fi
+      if printf '%s\n' "$answers" | awk -F'\t' -v n="$n" '$1 == n { f = 1 } END { exit !f }'; then
+        bad="${bad}  ${line}   (D$n is answered twice)"$'\n'; continue
+      fi
+      kind="" note="" ans=""
+      if [[ "$rest" == :* ]]; then
+        # fallback: D<n>: <answer>
+        ans="${rest#:}"; ans="${ans#"${ans%%[![:space:]]*}"}"; ans="${ans%"${ans##*[![:space:]]}"}"
+        lc="$(printf '%s' "$ans" | tr '[:upper:]' '[:lower:]')"
+        lc="${lc%.}"
+        if [[ "$ans" =~ $re_alt ]]; then
+          k="${BASH_REMATCH[1]}"
+          if jq -e --argjson n "$n" --argjson k "$k" 'any(.[]; .n == $n and $k >= 1 and $k <= (.alts | length))' <<<"$pend" >/dev/null; then
+            answers="${answers}${n}${TAB}alt-${k}${TAB}"$'\n'
+          else
+            bad="${bad}  ${line}   (D$n has no Alternative $k)"$'\n'
+          fi
+          continue
+        fi
+        case "$lc" in
+          ok|keep|yes|confirm|confirmed|"keep the ruling") kind=keep ;;
+          "") bad="${bad}  ${line}   (empty answer)"$'\n'; continue ;;
+          *) kind=overturn; note="$ans" ;;
+        esac
+      else
+        # papiro: D<n> <title>: <answer>[ (suggested: ...)][. Note: ...]
+        r="$rest"
+        if [[ "$r" == *". Note: "* ]]; then note="${r#*. Note: }"; r="${r%%. Note: *}"; fi
+        r="$(printf '%s' "$r" | sed -E "s/$re_sugg//; s/$re_asis//; s/\\.$//")"
+        if [[ "$r" != *": "* ]]; then
+          bad="${bad}  ${line}   (no \": <answer>\" found)"$'\n'; continue
+        fi
+        ans="${r##*: }"; ans="${ans%"${ans##*[![:space:]]}"}"
+        case "$ans" in
+          "Keep the ruling") kind=keep ;;
+          "Overturn"|"Something else") kind=overturn ;;
+          *)
+            if [[ "$ans" =~ $re_alt ]]; then
+              k="${BASH_REMATCH[1]}"
+              if jq -e --argjson n "$n" --argjson k "$k" 'any(.[]; .n == $n and $k >= 1 and $k <= (.alts | length))' <<<"$pend" >/dev/null; then
+                kind="alt-$k"
+              else
+                bad="${bad}  ${line}   (D$n has no Alternative $k)"$'\n'; continue
+              fi
+            else
+              bad="${bad}  ${line}   (answer \"$ans\" is not Keep the ruling, Alternative N, Overturn or Something else)"$'\n'; continue
+            fi ;;
+        esac
+      fi
+      answers="${answers}${n}${TAB}${kind}${TAB}${note}"$'\n'
+    done <<<"$reply"
+    if [[ -n "$bad" ]]; then
+      printf 'ship-auto: reply not applied; nothing was written. Lines to fix:\n%s' "$bad" >&2
+      exit 1
+    fi
+
+    if [[ $dlines -eq 0 ]]; then
+      if [[ ! "$first_line" =~ ^Auto\ rulings\ review:\ all\ [0-9]+\ as\ suggested\.?$ ]]; then
+        {
+          echo "ship-auto: not a reply to the review; nothing was written. Expected one of:"
+          echo "  - the papiro reply, whose first line is \"Auto rulings review: ...\" (one line, \"Auto rulings review: all N as suggested.\", when nothing changed);"
+          echo "  - a list of lines \"D<n>: <new answer>\" or \"D<n>: ok\", at least one."
+        } >&2
+        exit 1
+      fi
+    fi
+
+    # ---- decide ----
+    next_n="$(next_number)"
+    statuses="" appended="" follow="" notes_out="" report=""
+    count="$(jq 'length' <<<"$pend")"
+    i=0
+    while [[ $i -lt $count ]]; do
+      n="$(jq -r ".[$i].n" <<<"$pend")"
+      title="$(jq -r ".[$i].title // \"\"" <<<"$pend")"
+      line="$(printf '%s\n' "$answers" | awk -F'\t' -v n="$n" '$1 == n { print; exit }')"
+      kind="keep" note=""
+      if [[ -n "$line" ]]; then
+        kind="$(printf '%s' "$line" | cut -f2)"; note="$(printf '%s' "$line" | cut -f3-)"
+      fi
+      if [[ "$kind" == keep ]]; then
+        statuses="${statuses}${n}=confirmed"$'\n'
+        report="${report}D$n confirmed"$'\n'
+        if [[ -n "$note" ]]; then notes_out="${notes_out}NOTE D$n: $note"$'\n'; fi
+      else
+        m="$next_n"; next_n=$((next_n + 1))
+        newtext="$note"
+        case "$kind" in
+          alt-*)
+            alt="$(jq -r --argjson i "$i" --argjson k "${kind#alt-}" '.[$i].alts[$k - 1]' <<<"$pend")"
+            if [[ -n "$note" ]]; then newtext="$alt ($note)"; else newtext="$alt"; fi ;;
+        esac
+        [[ -n "$newtext" ]] || newtext="Overturned with no replacement given; ask the operator what to do instead."
+        statuses="${statuses}${n}=overturned (by D$m)"$'\n'
+        appended="${appended}"$'\n'"## D$m — Replaces D$n: $title"$'\n'"Ruling: $newtext"$'\n'"Reason: The operator overturned D$n on review."$'\n'"By: operator"$'\n'"Status: binding"$'\n'
+        report="${report}D$n overturned by D$m"$'\n'
+        follow="${follow}FOLLOW-UP D$n -> D$m: $newtext"$'\n'
+      fi
+      i=$((i + 1))
+    done
+
+    # ---- write: replace each Status line inside its own entry, append new rulings ----
+    tmp="$rulings.tmp.$$"
+    printf '%s' "$statuses" | awk -v rf="$rulings" '
+      BEGIN { FS = "=" }
+      { n = $1; v = $0; sub(/^[0-9]+=/, "", v); st[n] = v }
+      END {
+        cur = ""
+        while ((getline line < rf) > 0) {
+          bare = line; sub(/\r$/, "", bare)
+          cr = (bare != line) ? "\r" : ""
+          if (bare ~ /^## D[0-9]+/) { cur = bare; sub(/^## D/, "", cur); sub(/[^0-9].*$/, "", cur) }
+          else if (bare ~ /^#/) cur = ""
+          if (cur != "" && (cur in st) && bare ~ /^Status:/) { print "Status: " st[cur] cr; delete st[cur]; continue }
+          print line
+        }
+      }' > "$tmp"
+    printf '%s' "$appended" >> "$tmp"
+    mv "$tmp" "$rulings"
+    printf '%s%s%s' "$report" "$follow" "$notes_out"
+    rm -f "$auto_file" ;;
+esac
