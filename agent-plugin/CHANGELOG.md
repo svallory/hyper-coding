@@ -3,6 +3,30 @@
 Changes to the hyper agent plugin. The plugin version in
 `.claude-plugin/plugin.json` is bumped separately, at release.
 
+## 0.6.1 — 2026-10-26
+
+### Fixed
+
+- Host mode (`--host`) copies the brief, rulings file, spec dir and unit
+  directory by any path: spaces, quotes, glob characters and non-ASCII are
+  fine; only a newline is refused. The copy back from the host matches glob
+  characters literally, so it can no longer mirror a similar-named sibling and
+  delete local files.
+- Host mode needs rsync 3.0 or newer on both ends and says so: the stock macOS
+  openrsync is refused with a message naming the cause.
+- Host mode passes the lead's `HERDR_ENV=1` to the host, so the `herdr`
+  backend works there.
+- `ship-land --host` runs `on_land` on the lead, where the tracker lives, in
+  three steps (merge on the host, `on_land` on the lead, teardown on the host).
+  A rerun keeps the task saved at the first land and refuses a different
+  `--task`; every printed rerun command carries `--task`. `on_land` is checked
+  before anything merges, and runs only once the PR is MERGED.
+- `ship-loop`: a diff that the spec check or final gate rejected is never
+  pushed; each stage's newest verdict on the diff counts on its own. A
+  resumed unit no longer loses the lead's answer to an earlier fix round. A
+  failed patch-id no longer writes error JSON into signature files.
+- Docs from the third clean-room run.
+
 ## 0.6.0 — 2026-10-26
 
 ### Added
