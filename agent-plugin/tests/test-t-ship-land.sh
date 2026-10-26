@@ -166,6 +166,8 @@ assert_eq "the base worktree was fast-forwarded" "feat: u1" "$(git -C "$SPACE/wo
 assert_eq "on_land ran with {ref}, {pr} and {task} replaced" "u1-101-T-9" "$(cat "$ONLAND_LOG")"
 assert_eq "the lock is released" "no" "$([[ -e "$SPACE/.hyper/ship-land.lock" ]] && echo yes || echo no)"
 assert_contains "stdout says what landed" "$(cat "$FIX/land.out")" "u1 landed"
+assert_contains "stdout says the remote branch was deleted" "$(cat "$FIX/land.out")" "remote branch u1 deleted"
+assert_contains "stdout says the unit space was closed" "$(cat "$FIX/land.out")" "unit space $U1_SPACE closed"
 # teardown
 assert_eq "the claude agent got /exit (harness from the record)" "/exit" "$(cat "$(sent_file "$U1_A1")" 2>/dev/null)"
 assert_eq "the pi agent got a single ctrl+d" "<keys:ctrl+d>" "$(cat "$(sent_file "$U1_A2")" 2>/dev/null)"

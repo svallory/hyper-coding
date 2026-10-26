@@ -76,7 +76,8 @@ else
 fi
 # Like the real wt failing late: the branch and worktree exist, and the exit is non-zero.
 if [[ -e "$FIX/wt.fail" ]]; then
-  echo "✗ git branch --unset-upstream -- $br failed (exit 128) fatal: branch '$br' has no upstream information" >&2
+  echo "✗ git branch --unset-upstream -- $br failed (exit 128)" >&2
+  echo "  fatal: branch '$br' has no upstream information" >&2
   exit 128
 fi
 STUB
@@ -346,6 +347,11 @@ rc="$(unit run wf1 --brief "$BRIEF" --class S)"
 assert_eq "wt switch -c fails: exit 70" "70" "$rc"
 assert_contains "...the wt error is in the message" "$(err)" "has no upstream information"
 assert_contains "...and the message names the command" "$(err)" "wt switch -c wf1 failed"
+assert_contains "...wt's lines stay on their own lines, indented" "$(err)" "failed:
+  ✗ git branch --unset-upstream"
+assert_contains "...each of its lines is indented on its own line" "$(err)" "
+    fatal: branch 'wf1' has no upstream information"
+assert_eq "...the message is not joined into one line" "0" "$(err | grep -c 'failed (exit 128) fatal')"
 assert_eq "...the branch this run created is gone" "no" "$(git -C "$G" rev-parse --verify -q refs/heads/wf1 >/dev/null && echo yes || echo no)"
 assert_eq "...the worktree is gone" "no" "$([[ -e "$SPACE/worktrees/wf1" ]] && echo yes || echo no)"
 assert_eq "...git no longer lists it" "" "$(git -C "$G" worktree list --porcelain | grep 'worktrees/wf1')"

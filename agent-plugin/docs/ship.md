@@ -24,7 +24,10 @@ A plain clone is not a space.
 1. **Get a space.** For a new project, `/hyper:init <remote-url> [name]` (the
    plugin's init command) clones the remote into a bare repo and adds
    `worktrees/<default branch>`. For a repo you already have, `/hyper:adopt`
-   converts the checkout in place. Then work from the space root.
+   converts the checkout in place. Then work from the space root. Without
+   Claude Code, run the adopt script from a shell:
+   `bash /path/to/agent-plugin/scripts/hyper-adopt.sh [path] [--apply]` (a dry run
+   without `--apply`; see [`commands/adopt.md`](../commands/adopt.md)).
 2. **Load the plugin and call the scripts.** The scripts live in
    `scripts/ship/` inside the plugin and are not on your PATH.
    `${CLAUDE_PLUGIN_ROOT}` is set for Claude Code (skills and commands), not in
@@ -37,27 +40,33 @@ A plain clone is not a space.
    ```
 
    The lead is a Claude session (the `ship` skill describes its role); the
-   scripts can also be run by hand from any shell.
+   scripts can also be run by hand from any shell. Without a lead session you do
+   not need `claude --plugin-dir`; the PATH line is enough.
 3. Install the prerequisites listed under [Overview](#overview) (`jq`, mikefarah
    `yq` v4, `git`, `gh`, `wt`, the `hyper` CLI, `claude` or `pi`, and Herdr).
    [What ship asks of `gh`](#what-ship-asks-of-gh) lists the exact calls.
 4. Create `<space root>/.hyper/ship.yml` with the one required key, the command
    that must pass before push and merge: `gate: "bun test"` (any command; exit 0
-   passes). Check it with `ship-config --print`.
+   passes). Check it with `ship-config --print`. The verify stage is off until you
+   set `stages.verify.instructions`, even though `ship-config --print` shows a
+   verify model.
 5. Run inside Herdr (`HERDR_ENV=1`) from the space root, or from anywhere with
-   `SHIP_SPACE_ROOT=<space root>` exported (the scripts take no directory flag). To exercise the flow
+   `SHIP_SPACE_ROOT=<space root>` exported (the scripts take no directory flag).
+   To exercise the flow
    without a multiplexer, set `mux: fake` (see
    [Multiplexer backends](#multiplexer-backends)); no real agent runs then.
 6. Write the brief, a markdown file such as `notes/briefs/my-unit.md`: the goal,
-   the files to read, the acceptance criteria and the gate. It must tell the dev to
-   push the branch and open a PR against the base with `gh pr create`, and it should
-   have a `Consumers` section naming, for every new type, flag, file, option and
-   command, who uses it today ([concepts](concepts.md#ship)), because
-   a `DONE` verdict without a PR number ends the unit as `ERROR`.
+   the files to read, the acceptance criteria and the gate. The develop prompt
+   already tells the dev to push the branch and open the PR, so the brief does not
+   need to. Add a `Consumers` section naming, for every new type, flag, file,
+   option and command, who uses it today ([concepts](concepts.md#ship)).
 7. Pick a ref: letters, digits, `.`, `_`, `-`, starting with a letter or digit
    (`^[A-Za-z0-9][A-Za-z0-9._-]*$`). It names the unit, its branch and its state
    directory.
-8. `ship-unit run my-unit --brief notes/briefs/my-unit.md --class S`. It blocks
+8. `ship-unit run my-unit --brief notes/briefs/my-unit.md --class S`. A relative
+   `--brief` path is resolved against the directory you run the command from, not
+   against the space root, also when `SHIP_SPACE_ROOT` is set. `ship-unit` stores
+   the absolute path. It blocks
    until the driver exits (run it in the background if you have other work), then
    prints `result.json` and exits 0 for READY, 2 for stopped, 1 for ERROR. Read
    `notes/loops/my-unit/result.json`; if it is not READY, see
@@ -102,7 +111,10 @@ add to it. If it does not exist when a unit starts, ship creates it with a
 | `gh pr view <n> --json state -q .state` | `ship-land` | skip a PR that is already `MERGED`; confirm a merge |
 | `gh pr merge <n> --<merge_method>` | `ship-land` | merge (the remote branch is then deleted with `git push origin --delete`, not by gh) |
 
-A stub `gh` that implements these four is enough for a test run.
+A stub `gh` that implements these four is enough for a test run. Ship itself
+never runs `gh auth token`. If you see that call in a `gh` log, it comes from the
+agent's environment (Claude Code or your shell setup), at agent start. A stub
+should answer `gh auth` with exit 0.
 
 ## Overview
 
@@ -731,7 +743,7 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 | A unit parked `DIALOG` and the question names the workspace-trust dialog | Claude Code asked to trust the worktree and ship's one attempt (down, then Enter) did not clear it, the cursor would not move onto Yes, or the screen was not recognised as the trust dialog alone (nothing is sent then). `ship-mux read --ref <ref> --to <agent>` shows the screen (`--to` takes the agent name from `park.json` or an id). Answer it with `down` then `enter` (only once `❯` is on Yes) or in the pane, then `ship-unit resume <ref>` with no answer. |
 | A unit parked `BLOCKED` with "could not prompt" | ship-mux could not deliver the prompt and the agent was not at a dialog. Read `loop.log` (the line before `PARKED` has the exit code), and the agent's pane. `resume` with no answer retries with a fresh agent. |
 | The dev ran the wrong tool, or cannot find one that works for you | For a local unit the agent's `PATH` is the one of the shell that ran `ship-unit`; for a `--host` unit it is the host's login `PATH` (set it up on the host). Run `ship-unit` from a shell whose `PATH` has what the agent needs (a stub `gh`, a pinned toolchain). Other variables are not passed. |
-| `ship-unit run` exits 70 with "wt switch -c ... failed" and `branch 'x' has no upstream information` | Your global git config has `branch.autosetupmerge` set to an empty value, which breaks `wt switch -c`. Fix it with `git config --global --unset branch.autosetupmerge`, or set it to `true`. ship removes the branch and worktree that run created, so a rerun starts clean. |
+| `ship-unit run` exits 70 with "wt switch -c ... failed" and `branch 'x' has no upstream information` | Your global git config has `branch.autosetupmerge` set to an empty value, which breaks `wt switch -c`. Fix it with `git config --global --unset branch.autosetupmerge`, or set it to `true`. To leave global config alone, export `GIT_CONFIG_PARAMETERS="'branch.autosetupmerge=true'"` in the shell that runs ship. ship removes the branch and worktree that run created, so a rerun starts clean. |
 | A script exits 99 | `SHIP_MUX_TEST=1` is set (tests set it). Unset it for a real run. |
 | `ship-unit run` exits 3 | The host has no free slot (`ship-unit list`; raise `hosts.<h>.slots` or wait), or a driver is already running for that ref (`ship-unit wait <ref>`). |
 | `ship-unit` exits 75 | The connection to the host dropped. The driver still runs there; `ship-unit wait <ref>` reattaches. |
