@@ -275,7 +275,7 @@ for k in mux units_group base merge_method spec.paths scan.forbidden scan.exclud
 done
 assert_eq "gate has no default" "0" "$(grep -c '^gate:' "$DEFAULTS")"
 # The limit patterns survive YAML quoting intact.
-assert_eq "claude limit pattern" 'You.{1,3}ve hit your ([a-z]+ )?limit' "$(cfg --get limits.patterns.claude)"
+assert_eq "claude limit pattern" '(?i)You.{1,3}ve hit your ([a-z]+ )?limit' "$(cfg --get limits.patterns.claude)"
 assert_eq "pi limit pattern" '(?i)(rate.?limit|usage limit|quota exceeded|\b429\b)' "$(cfg --get limits.patterns.pi)"
 
 # T15: space root without the hyper CLI (#1) -----------------------------------

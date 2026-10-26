@@ -498,11 +498,7 @@ printf '#!/bin/sh\necho %s\n' "$SESSION_ID" >"$FIX/bin/uuidgen"; chmod +x "$FIX/
 mkdir -p "$HOME/.claude/projects/proj"
 printf '{"type":"user"}\n' >"$HOME/.claude/projects/proj/$SESSION_ID.jsonl"
 
-# The default claude pattern has a lower-case-only model word, so "Opus limit" needs (?i) (see the report).
-rwrite_cfg() { # dev list
-  write_cfg "$1"
-  printf 'limits:\n  patterns:\n    claude: %s\n' "'(?i)You.{1,3}ve hit your ([a-z]+ )?limit'" >>"$PROJECT"
-}
+rwrite_cfg() { write_cfg "$1"; } # dev list; the default limit patterns apply
 # runit <ref> — a unit whose dev does not answer until it is told to (see answer_after_takeover); the reviewer does.
 runit() {
   unit "$1"
