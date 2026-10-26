@@ -456,7 +456,7 @@ hosts:
 | `quota.threshold_pct` | Preflight skips a Claude entry when a rate-limit window is at or above this percentage. Default 95. |
 | `quota.max_age_min` | Quota snapshots older than this many minutes are ignored. Default 30. |
 | `limits.patterns.claude` | Regex matched against the newest lines of a Claude agent's screen to detect a usage limit. Anchored (see [below](#usage-limits-and-failover)). |
-| `limits.patterns.pi` | The same for pi agents; only error phrasing counts. |
+| `limits.patterns.pi` | The same for pi agents; only error phrasing counts (for example `error: status code 429`). |
 | `limits.cooldown_min` | Minutes an account or model is treated as limited when no reset time is known. Default 60. |
 | `failover.summarizer` | Models tried in order to summarise an interrupted stage into `STATUS.md`. Default `[haiku]`. |
 | `budgets.S`, `budgets.M`, `budgets.L` | Develop time budget in minutes per class. Defaults 15, 45, 90. |
@@ -597,13 +597,17 @@ harness's `limits.patterns` regex. The patterns are anchored to the start of a
 line (after terminal glyphs, never after `+`, `-`, `>` or a quote), so diffs and
 quotations of the message do not match; the Claude pattern must be the whole
 message, optionally followed by `· resets ...`. The pi pattern only accepts
-error phrasing. On a match the driver records the limit in `limited.json` (until
+error phrasing: `Error: ... 429`, `error: status code 429`, "too many requests",
+`RESOURCE_EXHAUSTED`, a provider `rate_limit_error`, or a sentence such as "rate
+limit reached" or "quota exceeded". A bare "rate limit" or "429" in code or a
+file listing does not match. On a match the driver records the limit in `limited.json` (until
 the snapshot's reset time, else `limits.cooldown_min` from now), stops the agent
 cleanly, has the first usable `failover.summarizer` model read the transcript
 and the worktree's diff and git state and write `STATUS.md` (Done, In progress,
 Next steps, Open questions), and restarts the same stage under the same agent
-name on the next usable model with the takeover prompt, which points at
-`STATUS.md` and the brief. If no summariser is usable, `STATUS.md` is built from
+name on the next usable model. The successor's first prompt is, in order: the
+takeover text (which points at `STATUS.md` and the brief), then the stage prompt,
+then the lead's answer if one was pending for the old agent. If no summariser is usable, `STATUS.md` is built from
 git facts and begins "transcript not summarised". Before it is handed on,
 `STATUS.md` is scrubbed: any line that quotes a limit message is replaced by
 `[line removed: it quoted a provider message]`, so the successor's own screen

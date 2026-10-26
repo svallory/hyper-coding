@@ -386,7 +386,7 @@ driver searches only the newest 25 lines of an agent's screen for the harness's
 limit pattern, which is anchored to the start of a line so quoted code and
 messages do not match. On a hit it records the limit, stops the agent, has a
 summariser write `STATUS.md` (scrubbed of any line quoting a limit message) and
-restarts the same stage on the next usable entry. A limit that names another
+restarts the same stage on the next usable entry (the successor gets the takeover text, then the stage prompt, then any pending answer). A limit that names another
 model than the agent runs on is recorded but does not stop the agent. Only an
 exhausted list parks the unit as LIMIT; `ship-loop --clear-limit NAME` tells
 the driver a quota is back.
