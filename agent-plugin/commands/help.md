@@ -36,11 +36,24 @@ for Claude Code. Two ideas:
 | `/hyper:tools` | detect the project's toolchain, wire the per-edit check hook, recommend new tools by aspect |
 | `/hyper:audit` | read-only health report: drift, debris, stale branches, secrets |
 | `/hyper:cleanup` | delete what audit found — candidates listed first, confirmed per item; the one command that deletes |
-| `/hyper:plan <feature>` | four-phase spec-driven workflow: Define → Design → Decompose → Develop |
 | `/hyper:gen <template>` | generate files from project templates, verbatim outside marked regions |
 | `/hyper:space <args>` | a space's history — dirs committed to the space's branch, pushed to your hyperdrive: init, commit, push, pull, log, status, list, clone — a thin relay over `hyper space` |
 | `/hyper:warp <machine>` | move a live session to another machine over ssh — a thin relay over `hyper warp` |
-| `/hyper:team-lead [tasks]` | lead developer agents through a batch: decompose, assign the cheapest adequate model, review, track — runs the `hyper:team` skill, which can also be invoked directly by that name |
+
+## Skills
+
+| Skill | What it does |
+|---|---|
+| `hyper` | space layout rules |
+| `hyper-gen` | template-driven generation rules |
+| `hyper-tooling` | check-hook setup |
+| `ship` | take a feature from request to merged |
+| `spec` | write define.md and design.md, gated |
+| `plan` | break a design into tasks and unit briefs |
+| `kickoff` | create tracker items and start the first wave |
+| `unit` | run, resume or extend one unit |
+| `land` | land a READY unit, or abandon it |
+| `auto` | auto on / off for pending rulings |
 
 Hooks (automatic): SessionStart context injection inside a space; per-edit
 check hook and new-dependency friction hook, both opt-in via
@@ -57,7 +70,7 @@ For an existing project:
    write `.claude/hyper.json`, and **prove the hook can fail** (inject an
    error, expect exit 2).
 3. `/hyper:audit` — periodically, to catch drift and debris.
-4. `/hyper:plan` when starting a feature; `/hyper:gen` when the team
+4. the `ship` skill when starting a feature; `/hyper:gen` when the team
    has patterns worth templating.
 
 For a brand-new setup: `/hyper:init <repo-url>` instead of step 1 — or `/hyper:init --new <name>` when no repo exists yet.

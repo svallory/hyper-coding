@@ -320,8 +320,7 @@ placeholder substitution; the agent authors only inside regions the template
 explicitly opens. There is no engine — the command instructs the agent — but
 templates keep a format a real generator could consume later.
 
-The plan phases themselves (`/hyper:plan` → Define, Design, Decompose,
-Develop, one skill each) are the methodology's spine: each phase produces an
+The plan phases themselves (the `spec` and `plan` skills: Define, Design, Decompose) are the methodology's spine: each phase produces an
 artifact (`define.md`, `design.md`, `tasks.md`, then code + `deviations.md`)
 that the next phase consumes, with artifacts living under
 `notes/specs/<feature-slug>/` in the space.

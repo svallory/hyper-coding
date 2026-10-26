@@ -91,7 +91,7 @@ herdr_invocation_re() {
 # assert_no_direct_herdr [excluded path prefix...] — C-11: no file under the
 # plugin except scripts/ship/mux/<the Herdr backend> invokes the Herdr command.
 # Callers pass prefixes (relative to the plugin dir) still allowed to break the
-# rule; test S passes skills/team/ until that skill is deleted.
+# rule; test S passes none.
 assert_no_direct_herdr() {
   local f rel x skip hits="" re
   re="$(herdr_invocation_re)"
