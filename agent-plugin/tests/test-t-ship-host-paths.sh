@@ -96,6 +96,29 @@ printf '#!/bin/sh\necho "rsync  version 2.6.8  protocol version 29"\n' > "$FIX/o
 msg="$(unset _SHIP_HOST_RSYNC_CHECKED; PATH="$FIX/oldbin:$PATH" ship_host_pull_dir fakehost "$FIX/gh/a?b" "$FIX/gl/none" 2>&1)"
 assert_contains "rsync below 3.0 is refused too" "$msg" "rsync 3.0 or newer"
 
+# a long, slow --version must not trip pipefail: the version is read without a pipe
+mkdir -p "$FIX/longbin"
+cat > "$FIX/longbin/rsync" <<'STUB'
+#!/bin/bash
+if [[ "$1" == --version ]]; then
+  echo "rsync  version 3.5.1  protocol version 33"
+  for ((i = 0; i < 1500; i++)); do
+    printf 'capability line %05d %0100d\n' "$i" 0
+    (( i % 100 )) || sleep 0.02
+  done
+  exit 0
+fi
+exec "$REAL_RSYNC" "$@"
+STUB
+chmod +x "$FIX/longbin/rsync"
+REAL_RSYNC="$(command -v rsync)"; export REAL_RSYNC
+mkdir -p "$FIX/lv/src" "$FIX/lv/dst"; echo ok > "$FIX/lv/src/f"
+assert_ok "a 150 KB slow rsync --version is accepted under pipefail" bash -c '
+  set -eo pipefail
+  source "$1/lib.sh"; source "$1/lib-host.sh"
+  PATH="$2:$PATH" ship_host_pull_dir fakehost "$3/src" "$3/dst"' _ "$SHIP_DIR" "$FIX/longbin" "$FIX/lv"
+assert_eq "...and the pull ran" "ok" "$(cat "$FIX/lv/dst/f" 2>/dev/null)"
+
 # the ssh mkdir quoted the path for the remote shell
 assert_contains "ssh mkdir single-quotes a path with a space" "$(cat "$SSH_LOG")" "mkdir -p -- '$FIX/lead/2/with space'"
 assert_contains "...and escapes a single quote" "$(cat "$SSH_LOG")" "mkdir -p -- '$FIX/lead/3/it'\\''s'"

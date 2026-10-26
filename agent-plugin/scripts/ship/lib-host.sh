@@ -92,10 +92,12 @@ _ship_host_cache() { printf '.cache/hyper/ship/%s' "$(_ship_host_version)"; }
 _ship_host_rsync_ok() {
   [[ "${_SHIP_HOST_RSYNC_CHECKED:-}" == 1 ]] && return 0
   local v ver
-  v="$(rsync --version 2>&1 | head -n 2)" || v=""
-  ver="$(printf '%s\n' "$v" | sed -n 's/^rsync  *version  *\([0-9][0-9]*\)\..*/\1/p' | head -n 1)"
+  # No pipe to head: under pipefail a closed pipe makes rsync exit 141 and the fallback empties v.
+  v="$(rsync --version 2>&1)" || v=""
+  ver=""
+  [[ "$v" =~ (^|$'\n')rsync\ +version\ +([0-9]+)\. ]] && ver="${BASH_REMATCH[2]}"
   if [[ "$v" == *openrsync* || -z "$ver" || "$ver" -lt 3 ]]; then
-    _ship_err "host mode needs rsync 3.0 or newer here (--protect-args); this rsync is $(printf '%s' "$v" | head -n 1 | tr -d '\n'). The stock macOS /usr/bin/rsync is openrsync and is too old: install rsync 3 (brew install rsync) and put it first on PATH"
+    _ship_err "host mode needs rsync 3.0 or newer here (--protect-args); this rsync is ${v%%$'\n'*}. The stock macOS /usr/bin/rsync is openrsync and is too old: install rsync 3 (brew install rsync) and put it first on PATH"
     return 1
   fi
   _SHIP_HOST_RSYNC_CHECKED=1
