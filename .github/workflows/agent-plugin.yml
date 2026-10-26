@@ -99,6 +99,17 @@ jobs:
       - name: Run the plugin test suite
         run: bash agent-plugin/tests/run.sh
 
+      # jq 1.7.1 ships with Ubuntu 24.04, Debian and macOS; some filter syntax only parses on 1.8.
+      - name: Run the ship jq tests on jq 1.7.1
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/jq171"
+          curl -fsSL -o "$RUNNER_TEMP/jq171/jq" https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64
+          chmod +x "$RUNNER_TEMP/jq171/jq"
+          PATH="$RUNNER_TEMP/jq171:$PATH"
+          jq --version | grep -x 'jq-1.7.1'
+          for t in role failover; do bash "agent-plugin/tests/test-t-ship-$t.sh"; done
+
       - name: Validate every JSON file in the plugin
         run: |
           set -euo pipefail

@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# ship-quota-tap — Claude Code status-line command that records the account's quota.
+#
+# Usage (set by ship-role as the profile's statusLine command):
+#   ship-quota-tap [--original <shell command>]
+#
+# Reads the status-line JSON on stdin. When it carries a `rate_limits` object, writes
+#   <quota dir>/claude-<account>.json = {"account", "at", "rate_limits"}
+# (quota dir: ${SHIP_QUOTA_DIR:-~/.cache/hyper/quota}; account: CLAUDE_CONFIG_DIR with
+# unsafe characters turned into "_", or "default"). Without `rate_limits` (Claude Code
+# omits it before the first API response) nothing is written.
+#
+# Then pipes the same stdin to the original status-line command and prints its output
+# and exit status unchanged, so the host's own status line keeps working. Without
+# --original it prints nothing. A failure to write the snapshot never changes the output.
+# Preflight routing (pick_model in lib.sh) reads the snapshot.
+set -u
+
+_src="${BASH_SOURCE[0]}"
+while [[ -L "$_src" ]]; do
+  case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$_dir/$_link" ;; esac
+done
+case "$_src" in */*) _dir="${_src%/*}" ;; *) _dir="." ;; esac
+_dir="$(CDPATH='' cd -- "$_dir" && pwd -P)"
+# shellcheck source=lib.sh
+source "$_dir/lib.sh"
+
+original=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help) sed -n '2,/^set -u/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --original) original="${2-}"; shift ;;
+    *) ;;
+  esac
+  shift
+done
+
+# Keep stdin as read (text or JSON; NUL bytes are dropped by the shell). The trailing x protects
+# trailing newlines.
+input="$(cat; printf x)"
+input="${input%x}"
+
+record() {
+  command -v jq >/dev/null 2>&1 || return 0
+  printf '%s' "$input" | jq -e '(.rate_limits | type) == "object"' >/dev/null 2>&1 || return 0
+  local acct dir tmp
+  acct="$(ship_quota_account)"
+  dir="$(ship_quota_dir)"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  tmp="$dir/.claude-$acct.$$.tmp"
+  printf '%s' "$input" | jq -c --arg a "$acct" --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '{account:$a, at:$at, rate_limits:.rate_limits}' >"$tmp" 2>/dev/null \
+    && mv -f "$tmp" "$dir/claude-$acct.json" 2>/dev/null
+  rm -f "$tmp"
+  return 0
+}
+record || true
+
+if [[ -n "$original" ]]; then
+  printf '%s' "$input" | sh -c "$original"
+  exit $?
+fi
+exit 0

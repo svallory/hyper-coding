@@ -24,8 +24,11 @@
 #         token with `=`: the flag takes several values and would otherwise swallow
 #         the prompt that follows). Generated at every launch, so a plugin
 #         installed later cannot leak in.
-#         Not isolated (inherited as is): hooks, permissions, statusLine, and
-#         user skills in ~/.claude/skills.
+#         The profile's statusLine is ship-quota-tap, which records the account's
+#         rate limits for preflight routing and runs the host's own statusLine
+#         command (the last settings layer that sets one) unchanged behind it.
+#         Not isolated (inherited as is): hooks, permissions, and user skills in
+#         ~/.claude/skills.
 #         Use it as: claude $(ship-role lead --harness claude) "prompt"
 # pi      Prints `-ne -ns -np --no-mcp`, `--skill <dir>` per roles.<role>.pi_skills,
 #         `-e <entry>` plus the flags per roles.<role>.pi_extensions, and
@@ -123,23 +126,30 @@ if [[ "$harness" == claude ]]; then
     echo "ship-role: host settings file not found: $host_settings" >&2; exit 1
   fi
   # Layers, lowest first: host, then the project's two files. Each yields
-  # {p: enabledPlugins, d: env.CLAUDE_CODE_PLUGIN_DIRS}.
+  # {p: enabledPlugins, d: env.CLAUDE_CODE_PLUGIN_DIRS, s: statusLine}.
   layers="[]"
   for f in "$host_settings" "$agent_cwd/.claude/settings.json" "$agent_cwd/.claude/settings.local.json"; do
     [[ -f "$f" ]] || continue
-    l="$(jq -c '{p: (.enabledPlugins // {}), d: (.env.CLAUDE_CODE_PLUGIN_DIRS // null)}' "$f" 2>/dev/null)" || {
+    l="$(jq -c '{p: (.enabledPlugins // {}), d: (.env.CLAUDE_CODE_PLUGIN_DIRS // null), s: (.statusLine // null)}' "$f" 2>/dev/null)" || {
       echo "ship-role: cannot parse $f as JSON settings" >&2; exit 1; }
     [[ "$(jq -r '.p | type' <<<"$l")" == object ]] || { echo "ship-role: enabledPlugins in $f is not an object" >&2; exit 1; }
     layers="$(jq -c --argjson l "$l" '. + [$l]' <<<"$layers")"
   done
   # A keep entry matches the bare plugin name or the full name@marketplace key.
-  profile="$(jq -n --argjson layers "$layers" --argjson keep "$keep" '
+  tap="$_dir/ship-quota-tap"
+  # The tap wraps the host's statusLine command: it gets it as --original, shell-quoted.
+  profile="$(jq -n --argjson layers "$layers" --argjson keep "$keep" --arg tap "$tap" --arg sq "'" '
+    def q: $sq + gsub($sq; $sq + "\\" + $sq + $sq) + $sq;
+    ([$layers[].s | select(type == "object")] | last // {}) as $orig |
     ($layers | map(.p) | add // {}) as $eff
     | {enabledPlugins: ($eff | to_entries | map(
         .key as $k
         | .value = (.value == true and any($keep[]; . == $k or . == ($k | split("@")[0])))
       ) | from_entries)}
-    + {env: {CLAUDE_CODE_PLUGIN_DIRS: ""}}')" \
+    + {env: {CLAUDE_CODE_PLUGIN_DIRS: ""}}
+    + {statusLine: (($orig | del(.command)) + {type: "command",
+        command: (($tap | q) + (if $orig.type == "command" and ($orig.command | type) == "string" and $orig.command != ""
+                                then " --original " + ($orig.command | q) else "" end))})}')" \
     || { echo "ship-role: cannot build the profile" >&2; exit 1; }
   space="$(ship_space_root)" || exit 1
   if command -v sha256sum >/dev/null 2>&1; then h="$(printf '%s' "$space" | sha256sum)"
