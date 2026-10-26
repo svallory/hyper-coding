@@ -22,6 +22,7 @@ if [[ "${SHIP_MUX_TEST:-}" == 1 ]]; then   # without the guard this could reach 
   assert_eq "mux/herdr exits 99 under SHIP_MUX_TEST=1" "99" "$rc"
   assert_not_contains "mux/herdr never ran the herdr stub" "$out" "must never run"
 else
+  unset SHIP_MUX_TEST   # the negative case never runs with the guard, even by inheritance
   fail "mux/herdr exits 99 under SHIP_MUX_TEST=1 (not run: the guard is not exported)"
 fi
 

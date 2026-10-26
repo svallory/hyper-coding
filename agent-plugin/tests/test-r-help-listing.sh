@@ -35,12 +35,14 @@ assert_eq "every /hyper:<name> in help.md exists as a command" "" "$dead"
 
 # Every skills/*/ must be named in help.md (its Skills table), so the skills the
 # plugin ships are not invisible to "what can this do".
+# Only the rows of the Skills table count: a mention elsewhere does not list it.
+skills_table="$(awk '/^## Skills/ { f = 1; next } /^## / { f = 0 } f && /^\|/' <<<"$help_text")"
 unlisted=""
 for d in "$PLUGIN_DIR"/skills/*/; do
   name="$(basename "$d")"
-  grep -qE "\`$name\`" <<<"$help_text" || unlisted="$unlisted $name"
+  grep -qE "\`$name\`" <<<"$skills_table" || unlisted="$unlisted $name"
 done
-assert_eq "every skills/*/ is named in help.md" "" "$unlisted"
+assert_eq "every skills/*/ is named in the help.md Skills table" "" "$unlisted"
 
 # The T-9 pair: thin commands that relay the hyper CLI.
 assert_contains "/hyper:space appears in help.md" "$help_text" "/hyper:space"

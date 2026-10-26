@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Test runner: executes every tests/test-*.sh under bash (never zsh), prints
 # each file's TAP-ish assertion lines, and exits non-zero when anything fails.
-# No dependencies beyond bash, git, node, and coreutils.
+# Dependencies: bash, git, node, perl (per-file process groups and timeouts),
+# and coreutils.
 #
 # Usage: bash tests/run.sh
 
@@ -13,7 +14,8 @@ dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Herdr backend exit 99 before anything else, and a `herdr` stub that fails
 # loudly sits first on PATH in case anything else calls the command directly.
 stub_dir="$(mktemp -d "${TMPDIR:-/tmp}/hyper-herdr-stub.XXXXXX")"
-trap 'rm -rf "$stub_dir"' EXIT
+work="$(mktemp -d "${TMPDIR:-/tmp}/hyper-run.XXXXXX")"
+trap 'rm -rf "$stub_dir" "$work"' EXIT
 cat > "$stub_dir/herdr" <<'STUB'
 #!/bin/sh
 echo "herdr stub: a test called the real herdr command; this must never run" >&2
@@ -35,13 +37,31 @@ for f in "$dir"/test-*.sh; do
   files=$((files + 1))
   name="$(basename "$f")"
   echo "# === $name"
-  # Output goes to a file, not a command substitution: a leaked background
-  # child holding the pipe would otherwise keep this runner waiting forever.
-  # The per-file alarm (seconds, HYPER_TEST_FILE_TIMEOUT) turns a hang into a
-  # loud failure instead of a stuck job.
-  perl -e 'alarm shift; exec @ARGV' "$file_timeout" bash "$f" >"$stub_dir/out" 2>&1 </dev/null
+  # Each file runs in its own process group with its own output file and its
+  # own TMPDIR. On timeout the whole group gets TERM, then KILL, so no child
+  # outlives the file to write into a later file's results; the TMPDIR is
+  # removed afterwards, so a killed file leaks no fixture directory. Output
+  # goes to a file, not a command substitution, so a leaked background child
+  # holding a pipe cannot keep this runner waiting. HYPER_TEST_FILE_TIMEOUT is
+  # in seconds.
+  outfile="$work/$name.out"
+  ftmp="$work/tmp-$files"
+  mkdir -p "$ftmp"
+  TMPDIR="$ftmp" perl -e '
+    my ($t, @cmd) = @ARGV;
+    my $pid = fork();
+    if (!$pid) { setpgrp(0, 0); open(STDIN, "<", "/dev/null"); exec @cmd; exit 127 }
+    $SIG{ALRM} = sub {
+      kill "TERM", -$pid; select(undef, undef, undef, 1);
+      kill "KILL", -$pid; waitpid($pid, 0); exit 142;
+    };
+    alarm $t; waitpid($pid, 0); my $st = $?; alarm 0;
+    kill "KILL", -$pid;   # stragglers left in the group
+    exit($st & 127 ? 128 + ($st & 127) : $st >> 8);
+  ' "$file_timeout" bash "$f" >"$outfile" 2>&1
   status=$?
-  out="$(cat "$stub_dir/out")"
+  rm -rf "$ftmp"
+  out="$(cat "$outfile")"
   if [[ $status -eq 142 ]]; then
     out="$out"$'\n'"not ok - $name timed out after ${file_timeout}s"
   fi
