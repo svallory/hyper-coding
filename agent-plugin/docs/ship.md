@@ -108,10 +108,13 @@ add to it. If it does not exist when a unit starts, ship creates it with a
 |---|---|---|
 | `gh pr create --base <base> --head <branch>` | the dev agent, in its pane | open the PR (the brief tells it to) |
 | `gh pr view <branch> --json number -q .number` | `ship-land` | find the PR number when `result.json` has none |
-| `gh pr view <n> --json state -q .state` | `ship-land` | skip a PR that is already `MERGED`; confirm a merge |
+| `gh pr view <n> --json state,autoMergeRequest,mergeStateStatus,url` | `ship-land` | skip a PR that is already `MERGED`; refuse a rerun while an `OPEN` PR has auto-merge set (the message names the merge state); `url` gives the owner and repo for the next call |
+| `gh api graphql` (`isInMergeQueue`) | `ship-land` | the same refusal for a PR in the merge queue (`gh pr view` has no field for it). A failed query does not stop the land: it prints a warning with gh's exit code and error and says the check was skipped; a GHES without the field is skipped quietly |
+| `gh pr view <n> --json state -q .state` | `ship-land` | confirm a merge |
+| `gh pr view <n> --json headRefOid -q .headRefOid` | `ship-land` | at teardown, compare the merged PR's head with the local branch |
 | `gh pr merge <n> --<merge_method>` | `ship-land` | merge (the remote branch is then deleted with `git push origin --delete`, not by gh) |
 
-A stub `gh` that implements these four is enough for a test run. Ship itself
+A stub `gh` that implements these is enough for a test run. Ship itself
 never runs `gh auth token`. If you see that call in a `gh` log, it comes from the
 agent's environment (Claude Code or your shell setup), at agent start. A stub
 should answer `gh auth` with exit 0.
@@ -337,7 +340,11 @@ The commands already done are remembered in `<ref>.on_land.done` as `<pr> <index
 between runs shifts the indexes, so edit the list only before the first land. `on_land` is
 checked before anything is merged. The PR must be MERGED before `on_land` runs: with
 auto-merge or a merge queue that leaves it open, `ship-land` stops (exit 1) and says to
-rerun once it is merged.
+rerun once it is merged. A rerun while the PR is still OPEN and queued (auto-merge enabled,
+or in the merge queue) is refused (exit 3) before the rebase, the gate, any push or the
+merge call, so the queue entry survives; with `--host` the refusal comes from the host's
+merge phase, also before any push. Rerun the same command once the PR is MERGED, or
+cancel auto-merge (or leave the queue) first to re-land it.
 
 Config used: `gate` (needed to land, not to abandon), `base`, `merge_method`,
 `on_land`, `mux`, `units_group`. A rerun after a failed teardown is safe.
@@ -345,7 +352,7 @@ Config used: `gate` (needed to land, not to abandon), `base`, `merge_method`,
 Exit codes: 0 landed or abandoned; 1 error (gate failed, rebase conflict, merge
 failed, teardown left something behind, an `on_land` command failed, lost
 connection to the host); 2 usage; 3 refused (not READY, empty branch, rebase
-dropped commits, uncommitted changes).
+dropped commits, uncommitted changes, a PR queued to merge).
 
 Knobs: `SHIP_LAND_SETTLE_SEC` (seconds between push and merge, default 5),
 `SHIP_LAND_LOCK_WAIT_SEC` (1800).
@@ -786,7 +793,7 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 | A unit parked LIMIT but you have quota | A stale `limited.json` entry. `ship-loop --clear-limit <account or model>`, then `resume`. |
 | Preflight keeps skipping Claude | The snapshot says a window is over `quota.threshold_pct`. Check `~/.cache/hyper/quota/claude-<account>.json` and `ship-config --get quota.threshold_pct`. |
 | A dev sat idle for a long time | After `SHIP_IDLE_GRACE_S` the driver nudges it; read the agent's screen with `ship-mux read --ref <ref> --to <agent id>` (ids are in `agents/` and `mux.json`). |
-| `ship-land` exits 3 | Not READY (use `ship-unit resume` or `--force`), an empty branch, a rebase that dropped commits, or uncommitted changes in the worktree. |
+| `ship-land` exits 3 | Not READY (use `ship-unit resume` or `--force`), an empty branch, a rebase that dropped commits, or uncommitted changes in the worktree, or a rerun while the PR is queued to merge (auto-merge or a merge queue): wait for it to be MERGED and rerun the same command, or cancel auto-merge first to re-land it. |
 | `ship-land` exits 1 after the merge | Teardown or an `on_land` command failed. Fix and rerun: a merged PR skips straight to `on_land` and teardown. |
 | `ship-land` printed "keeping branch" after a land | The local branch head differs from the merged PR's head (a commit made after the merge, or a push from elsewhere). Both SHAs are printed; check the branch, then `git branch -D <branch>`. The message instead says it "could not read the head" when `gh pr view --json headRefOid` failed (network, auth, rate limit): the gh error is printed and the branch is kept; compare the branch with the PR head yourself, then `git branch -D <branch>`. |
 | `ship-land` waits | Another land holds `<space root>/.hyper/ship-land.lock`; it gives up after `SHIP_LAND_LOCK_WAIT_SEC`. A lock whose holder died is taken over. |
