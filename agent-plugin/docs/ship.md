@@ -320,7 +320,10 @@ fetch; (5) `gh pr merge --<merge_method>`, then, with the PR MERGED, `git push o
 space root, never over ssh: steps 1-5 and 7 run on the host, step 6 here); (7) teardown:
 `ship-retire` every recorded agent, close every recorded pane and the unit
 space, close a ship-created units group when empty, verify `ship-mux list` is
-empty, `wt remove <branch>`, move `notes/loops/<ref>/` to `notes/loops/.done/<ref>/`.
+empty, `wt remove <branch>` (`wt remove -D <branch>` when this run saw the PR MERGED and
+`refs/heads/<branch>` equals the PR's `headRefOid`; a squash or rebase merge would otherwise leave
+the branch behind as "unmerged". When the two differ, the branch is kept and both SHAs are printed),
+move `notes/loops/<ref>/` to `notes/loops/.done/<ref>/`.
 With `--host`, a rerun after an `on_land` failure (`ship-land <ref> --host H --task ID`) skips the
 merge, resumes at the failed `on_land` command on the lead, then runs the teardown on
 the host. The lead's lock is held across the three steps; the host's own lock is taken
@@ -785,6 +788,7 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 | A dev sat idle for a long time | After `SHIP_IDLE_GRACE_S` the driver nudges it; read the agent's screen with `ship-mux read --ref <ref> --to <agent id>` (ids are in `agents/` and `mux.json`). |
 | `ship-land` exits 3 | Not READY (use `ship-unit resume` or `--force`), an empty branch, a rebase that dropped commits, or uncommitted changes in the worktree. |
 | `ship-land` exits 1 after the merge | Teardown or an `on_land` command failed. Fix and rerun: a merged PR skips straight to `on_land` and teardown. |
+| `ship-land` printed "keeping branch" after a land | The local branch head differs from the merged PR's head (a commit made after the merge, or a push from elsewhere). Both SHAs are printed; check the branch, then `git branch -D <branch>`. The message instead says it "could not read the head" when `gh pr view --json headRefOid` failed (network, auth, rate limit): the gh error is printed and the branch is kept; compare the branch with the PR head yourself, then `git branch -D <branch>`. |
 | `ship-land` waits | Another land holds `<space root>/.hyper/ship-land.lock`; it gives up after `SHIP_LAND_LOCK_WAIT_SEC`. A lock whose holder died is taken over. |
 | Panes left after a crash | `ship-land <ref> --abandon` closes everything recorded for the ref. `ship-mux` closes only ids it recorded; it exits 3 for anything else. |
 | A host unit used the wrong settings | It should not: the lead's merged config travels with the command. Check `notes/loops/<ref>/config.json` on the host. |
