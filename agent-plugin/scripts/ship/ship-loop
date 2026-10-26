@@ -709,6 +709,8 @@ $TAKEOVER_ANSWER
 Continue from there."
     TAKEOVER_ANSWER=""
   fi
+  # What the diff was when the dev was prompted: written once, so a resumed fix is compared with it.
+  [[ -e "$f.sent" && -s "$STATE/fix-r$r.before" ]] || diff_sig >"$STATE/fix-r$r.before"
   run_step "$DEV" "$f" "$text" "$(budget_min fix "$f")" fix
   check_verdict develop "$f"
   dev_ok "$f" fix
@@ -848,11 +850,11 @@ reviewed_diff() {
   return 1
 }
 # diff_sig — a signature of what the PR changes
-# (git patch-id --stable: line numbers and the order of files do not count, so a rebase that only shifts lines keeps it.)
+# (git patch-id --verbatim: line numbers do not count, so a rebase that only shifts lines keeps it; whitespace does, since it can change what code does.)
 # Both the signature stored with a review and the one the push is checked against come from this function.
 diff_sig() {
   local sig
-  sig="$(git -C "$WT" diff -U0 --no-color "origin/$BASE...HEAD" | git patch-id --stable | cut -d' ' -f1)"
+  sig="$(git -C "$WT" diff -U0 --no-color "origin/$BASE...HEAD" | git patch-id --verbatim | cut -d' ' -f1)"
   printf '%s\n' "${sig:-empty}"
 }
 
@@ -1046,9 +1048,9 @@ review_gate() {
     guard=$((guard + 1))
     [[ $guard -le $((MAX * 4 + 8)) ]] || die_error "finalize could not settle on a reviewed diff after $guard steps"
     if [[ -n "$NEED_FIX" ]]; then
-      before="$(diff_sig)"
       FR=$((FR + 1))
       fix_round "$FR" "$NEED_FIX"
+      before="$(cat "$STATE/fix-r$FR.before")"
       if [[ "$FIX_SRC" == review && "$(diff_sig)" == "$before" ]]; then
         cycles=$((cycles + 1))
         log "round $FR: the fix changed nothing after a CHANGES verdict ($cycles of $MAX)"

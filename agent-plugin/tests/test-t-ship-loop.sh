@@ -956,6 +956,48 @@ assert_contains "restart: the new dev is told it takes over" "$(sent_to t45b t45
 assert_eq "restart: nothing was archived" "0" "$(ls -d "$(st t45b)"/run-* 2>/dev/null | wc -l | tr -d ' ')"
 assert_eq "restart: the clock of the earlier run was carried (17 s or more)" "yes" "$([[ "$(cat "$(st t45b)/develop.json.clock")" -ge 17 ]] && echo yes || echo no)"
 
+# --- 46: a whitespace-only change after the last review is reviewed again (the signature counts whitespace) ---------------------------------
+reset_fake; unit t46
+W46="$SPACE/worktrees/t46"; export GATEOK46="$FIX/gateok-t46"
+printf 'if x:\nb()\n' >"$W46/p.py"; git -C "$W46" add -A; git -C "$W46" commit -qm "feat: py"; git -C "$W46" push -q origin feat-t46 2>/dev/null
+GATE_CMD='test -e "$GATEOK46"'; write_cfg
+script t46 develop.json "$DEV_DONE"; script t46 review-r1.json "$REV_OK"; script t46 fix-r2.json "$DEV_DONE"; script t46 review-r2.json "$REV_OK"
+printf '#!/bin/sh\nprintf "if x:\\n    b()\\n" >"%s/p.py"\ntouch "%s"\ngit -C "%s" commit -qam "fix: indent"\nexit 0\n' "$W46" "$GATEOK46" "$W46" >"$FIX/scripts/t46/fix-r2.json.hook"
+chmod +x "$FIX/scripts/t46/fix-r2.json.hook"
+stub_start t46; run_loop t46; stub_stop
+check_result t46 "whitespace-only fix" 0 READY
+assert_eq "whitespace: the re-indented diff got its own review" "1" "$(starts_of t46-review-r2)"
+unset GATEOK46; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 47: a CHANGES review whose stored signature matches the diff is no licence to push (and a missing sig is none either) ---------------------
+reset_fake; unit t47
+W47="$SPACE/worktrees/t47"; O47="$(git -C "$FIX/origin-t47.git" rev-parse refs/heads/feat-t47)"
+mkdir -p "$(st t47)"
+printf '%s\n' "$DEV_DONE" >"$(st t47)/develop.json"; : >"$(st t47)/develop.json.sent"
+printf '%s\n' "$REV_OK" >"$(st t47)/review-r1.json"; : >"$(st t47)/review-r1.json.sent"
+printf '%s\n' "$REV_CHANGES" >"$(st t47)/review-r2.json"; : >"$(st t47)/review-r2.json.sent"
+git -C "$W47" diff -U0 --no-color origin/main...HEAD | git patch-id --verbatim | cut -d' ' -f1 >"$(st t47)/review-r2.sig"
+echo forged >"$(st t47)/review-r1.sig"
+touch -t 202001010000 "$(st t47)"/*.json "$(st t47)"/*.sent
+script t47 fix-r3.json "$DEV_DONE"; script t47 fix-r4.json "$DEV_DONE"; script t47 review-r3.json "$REV_OK"
+stub_start t47; run_loop t47; stub_stop
+assert_eq "CHANGES+matching sig: not READY" "2" "$RC"
+assert_eq "CHANGES+matching sig: nothing pushed" "$O47" "$(git -C "$FIX/origin-t47.git" rev-parse refs/heads/feat-t47)"
+
+# --- 48: a finalize fix resumed in round 3 is compared with the diff it started from, not with the replayed head --------------------------------
+reset_fake; leak_unit t48
+script t48 develop.json "$DEV_DONE"; script t48 review-r1.json "$REV_OK"
+script t48 fix-r2.json "$DEV_DONE"; reword_hook t48 fix-r2.json; script t48 review-r2.json "$REV_CHANGES"
+script t48 fix-r3.json.1 '{"status":"QUESTION","pr":null,"head":null,"summary":"s","question":"How?"}'
+script t48 fix-r3.json.2 "$DEV_DONE"; churn_hook t48 fix-r3.json; script t48 review-r3.json "$REV_OK"
+stub_start t48; run_loop t48
+check_result t48 "resume r3: parked" 2 PARKED
+printf 'Go.\n' >"$(st t48)/answer-1.md"
+run_loop t48; stub_stop
+check_result t48 "resume r3: answered" 0 READY
+assert_eq "resume r3: the changed diff was reviewed" "1" "$(starts_of t48-review-r3)"
+CFG_EXTRA=''; write_cfg
+
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"
 assert_eq "C-2: no messaging, Monitor or watchdog in ship-loop" "" "$(grep -nE 'SendMessage|claude-link|hyper msg|Monitor|stall' "$LOOP")"
