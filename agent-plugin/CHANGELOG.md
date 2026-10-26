@@ -3,7 +3,7 @@
 Changes to the hyper agent plugin. The plugin version in
 `.claude-plugin/plugin.json` is bumped separately, at release.
 
-## Unreleased
+## 0.6.0 — 2026-10-26
 
 ### Added
 
