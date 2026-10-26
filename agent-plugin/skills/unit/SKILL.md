@@ -40,7 +40,7 @@ question, `resets_at`); the same data is in `park.json`. Then act:
 | 0 | `READY` | `land` skill: land `<ref>`. |
 | 2 | PARKED, QUESTION | Rule on it (write the ruling first), write the answer to a file, then `ship-unit resume <ref> --answer <file>` in the background. The answer quotes rulings by number. |
 | 2 | PARKED, BLOCKED | Same as QUESTION. If the block is a defect in the brief, re-brief: fix the brief file, then resume with an answer saying so. If it cannot be unblocked, abandon. |
-| 2 | PARKED, DIALOG | An agent is stuck on a permission dialog. Look (below). It usually needs the operator or a profile fix; ask them, then `ship-unit resume <ref>` with no `--answer` (it is refused for a DIALOG park). In auto mode do not abandon: leave the unit parked, record a `pending-review` ruling that says it is deferred to the operator, and carry on with other units. |
+| 2 | PARKED, DIALOG | An agent is stuck on a dialog. Look (below). If it is a dialog ship does not answer itself, it needs the operator or a profile fix; ask them. If the question says ship did not recognise the workspace-trust dialog, answer it as described under "Taking a look". Then `ship-unit resume <ref>` with no `--answer` (it is refused for a DIALOG park). In auto mode do not abandon: leave the unit parked, record a `pending-review` ruling that says it is deferred to the operator, and carry on with other units. |
 | 2 | PARKED, OPERATOR | The spec writer needs a call that is the operator's. Ask the operator, or under `auto` rule it with `By: lead-auto`; resume with the answer. |
 | 2 | PARKED, LIMIT | Every model for a stage is used up. `resets_at` in `park.json` says when. `--answer` is refused for a LIMIT park. Either `resume <ref> --model <stage>=<list>` now with another list, or run `resume <ref>` in the background after `resets_at` (its exit wakes you; do not sleep or poll). Meanwhile work on other units, or tell the operator the unit is waiting. |
 | 2 | OVER-BUDGET | The agent is still running. Extend with `ship-unit resume <ref> --extend <minutes>`, or re-brief a smaller unit and abandon this one. |
@@ -78,9 +78,20 @@ directly.
 ${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-mux read --ref <ref> --to <agent from park.json> [--lines 40]
 ```
 
+`--to` takes the agent name from `park.json` (or an id from `ship-mux list`).
 `ship-mux list --ref <ref>` shows the unit's panes and agents. This is a look,
 not a control: do not send keys or close anything from here. Teardown is
 `land`'s job.
+
+The one exception: a DIALOG park on Claude Code's workspace-trust dialog, which
+ship could not answer itself. Read the pane first. Only if it shows "Quick
+safety check…" with exactly the options "No, exit" and "Yes, I trust this
+folder", send `ship-mux send --ref <ref> --to <agent> --keys down`, read the
+pane again, and send `--keys enter` only when `❯` is on "Yes, I trust this
+folder". Then `ship-unit resume <ref>` with no answer. Those two keys, for that
+dialog, are all this allows. Any other dialog (a permission prompt, "Do you want
+to proceed?", anything else) belongs to the operator: send no keys, ask them.
+Never call the multiplexer directly.
 
 ## Do not
 

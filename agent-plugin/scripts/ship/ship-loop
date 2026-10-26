@@ -446,37 +446,39 @@ TRUST_WAIT_S="${SHIP_TRUST_WAIT_S:-10}"
 
 # trust_state — reads a screen on stdin and prints what it shows:
 #   none       no trust header (a quote of one, indented or prefixed, does not count)
-#   ambiguous  a header, but not a lone, last dialog: the lines after the LAST header must hold exactly
-#              the two trust options with one cursor line, and nothing that looks like another dialog
+#   ambiguous  a header, but not a lone, last dialog (see below)
 #   yes|other  a clean trust dialog, with the cursor on Yes / on the other option
-# The header must sit at the left edge of the dialog (at most two spaces, or a box border, before it).
+# The real dialog (captured from Claude Code; see tests/fixtures/ship/trust) is: a rule, "Accessing
+# workspace:", the folder path (wrapped to the width), "Quick safety check: ..." (wrapped too), prose,
+# "Security guide", then two UNNUMBERED options, the cursor "❯" on one, then "Enter to confirm · Esc to
+# cancel". Anything above the header (the echoed launch command, rules) is ignored. The header is the
+# last "Quick safety check:" line at the dialog's left edge (at most two spaces, or a box border). After
+# it there must be exactly the two options "No, exit" and "Yes, I trust this folder" (a leading number is
+# tolerated), as one block set off by blank lines, with one cursor; after the block only blank lines and
+# the footer. A numbered option, another cursor, "Allow", "Do you want", (y/n), or any other text after
+# the options makes it ambiguous.
 trust_state() {
   awk '
+    function blank(x) { return x ~ /^[ │|]*$/ }
     { l[NR] = $0 }
     END {
       h = 0
-      for (i = 1; i <= NR; i++) if (l[i] ~ /^( ? ?|(│|\|) ? ?)Quick safety check: [Ii]s this a project you created or one you trust/) h = i
+      for (i = 1; i <= NR; i++) if (l[i] ~ /^( ? ?|(│|\|) ? ?)Quick safety check: [Ii]s this a project/) h = i
       if (h == 0) { print "none"; exit }
-      n = 0; cur = 0; last = h
+      n = 0; cur = 0; curtxt = ""
       for (i = h + 1; i <= NR; i++) {
         t = l[i]
-        if (t ~ /^[ │|]*(❯|>|›)? *[0-9]+\. /) {
-          n++
-          m = (t ~ /^[ │|]*(❯|>|›) *[0-9]+\. /)
-          sub(/^[ │|]*(❯|>|›)? *[0-9]+\. */, "", t); sub(/ *(│|\|)? *$/, "", t)
-          txt[n] = t; if (m) { cur++; curtxt = t }
-          last = i
-        }
+        if (t ~ /^[ │|]*(❯|>|›)? *([0-9]+\. )?(No, exit|Yes, I trust this folder) *(│|\|)? *$/) {
+          n++; pos[n] = i
+          if (t ~ /^[ │|]*(❯|>|›)/) { cur++; c = t; sub(/^[ │|]*(❯|>|›) *([0-9]+\. )?/, "", c); sub(/ *(│|\|)? *$/, "", c); curtxt = c }
+          x = t; sub(/^[ │|]*(❯|>|›)? *([0-9]+\. )?/, "", x); sub(/ *(│|\|)? *$/, "", x); txt[n] = x
+        } else if (t ~ /^[ │|]*(❯|>|›)/ || t ~ /^[ │|]*[0-9]+\. /) { print "ambiguous"; exit }
       }
-      ok = (n == 2 && cur == 1)
-      if (ok) {
-        y = 0; x = 0
-        for (k = 1; k <= 2; k++) { if (txt[k] == "Yes, I trust this folder") y++; if (txt[k] == "No, exit") x++ }
-        ok = (y == 1 && x == 1)
-      }
-      for (i = last + 1; i <= NR && ok; i++)
-        if (l[i] ~ /[Dd]o you want|\(y\/n\)|\[y\/n\]|[Aa]llow |❯|^ *(│|\|)? *[0-9]+\. /) ok = 0
-      if (!ok) { print "ambiguous"; exit }
+      if (n != 2 || cur != 1 || txt[1] == txt[2] || pos[2] != pos[1] + 1) { print "ambiguous"; exit }
+      if (pos[1] - 1 <= h || !blank(l[pos[1] - 1])) { print "ambiguous"; exit }
+      if (pos[2] < NR && !blank(l[pos[2] + 1])) { print "ambiguous"; exit }
+      for (i = pos[2] + 1; i <= NR; i++)
+        if (!blank(l[i]) && l[i] !~ /^ *(│|\|)? *(Enter to confirm( · Esc to cancel)?|Esc to cancel) *(│|\|)? *$/) { print "ambiguous"; exit }
       print (curtxt == "Yes, I trust this folder" ? "yes" : "other")
     }'
 }
@@ -488,7 +490,7 @@ trust_state() {
 # start. Parks the unit as DIALOG when the cursor never reaches Yes, when the pane cannot be read
 # partway, when the dialog is still showing after the Enter, or when it was already answered once.
 trust_dialog() {
-  local name="$1" id="$2" stage="$3" screen st mark="$STATE/agents/$1.trust" end downs=0 why
+  local name="$1" id="$2" stage="$3" screen st mark="$STATE/agents/$1.trust" end downs=0 gone why
   why="$name is showing Claude Code's workspace-trust dialog"
   screen="$(mux read --to "$id" --lines 40 2>/dev/null)" || return 1
   st="$(trust_state <<<"$screen")"
@@ -507,17 +509,19 @@ trust_dialog() {
     screen="$(mux read --to "$id" --lines 40 2>/dev/null)" \
       || park DIALOG "$stage" "$name" "$why but its pane could not be read while moving the cursor. Answer it in its pane, then resume."
     st="$(trust_state <<<"$screen")"
-    [[ "$st" != none ]] || return 0
+    [[ "$st" != none ]] || park DIALOG "$stage" "$name" "$why, and the dialog vanished after a down key (the screen shows no trust dialog and ship cannot tell why). Look at its pane, then resume."
     [[ "$st" != ambiguous ]] || park DIALOG "$stage" "$name" "$why, and the screen changed to something ship cannot read safely. Answer it in its pane, then resume."
   done
   log "workspace-trust dialog in $WT shown to $name; cursor on Yes after $downs down key(s), pressing Enter"
   mux send --to "$id" --keys enter >/dev/null 2>>"$LOG" || true
-  end=$((SECONDS + TRUST_WAIT_S))
+  end=$((SECONDS + TRUST_WAIT_S)); gone=0
   while [[ $SECONDS -lt $end ]]; do
     sleep "$POLL_S"
     screen="$(mux read --to "$id" --lines 40 2>/dev/null)" \
       || park DIALOG "$stage" "$name" "$why but its pane could not be read after Enter. Answer it in its pane, then resume."
-    [[ "$(trust_state <<<"$screen")" != none ]] || return 0
+    # a single blank read may be a redraw: the dialog counts as cleared after two in a row
+    if [[ "$(trust_state <<<"$screen")" == none ]]; then gone=$((gone + 1)); else gone=0; fi
+    [[ $gone -lt 2 ]] || return 0
   done
   park DIALOG "$stage" "$name" "$why after ship pressed Enter on it. Answer it in its pane, then resume."
 }

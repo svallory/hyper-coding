@@ -301,6 +301,24 @@ _need_recorded() {
   [[ -n "$(_entry "$1")" ]] || refuse "id '$1' is not recorded for ref '$f_ref' (see $rec); no backend call made"
 }
 
+# _resolve_to — --to may name a recorded agent by the name it was started with (park.json's "agent"):
+# when no id matches and exactly one recorded agent has that name, its id is used; several is refused.
+_resolve_to() {
+  local found cnt i=0
+  [[ -z "$(_entry "$f_to")" && -f "$rec" ]] || return 0
+  found="$(jq -r --arg n "$f_to" '[.created[] | select(.kind == "agent" and .name == $n) | .id] | length as $c | "\($c) \(.[0] // "")"' "$rec")"
+  cnt="${found%% *}"
+  [[ "$cnt" -gt 0 ]] || return 0
+  [[ "$cnt" -eq 1 ]] || refuse "--to '$f_to' names $cnt recorded agents; use an id (ship-mux list)"
+  found="${found#* }"
+  # walk the flag/value pairs (up to '--'), so a value that happens to read "--to" is left alone
+  while [[ $i -lt ${#orig[@]} && "${orig[$i]}" != -- ]]; do
+    if [[ "${orig[$i]}" == --to ]]; then orig[i + 1]="$found"; fi
+    i=$((i + 2))
+  done
+  f_to="$found"
+}
+
 # _drop <jq select expression over an entry, using $id> <id> — remove entries.
 _drop() {
   _json_update "$rec" "$rec_default" ".created |= map(select(($1) | not))" --arg id "$2" || return 1
@@ -347,7 +365,7 @@ _close_ok() {
 
 case "$verb" in
   run|send|read|status|wait)
-    case "$verb" in run) target="$f_pane" ;; *) target="$f_to" ;; esac
+    case "$verb" in run) target="$f_pane" ;; *) _resolve_to; target="$f_to" ;; esac
     _need_recorded "$target"
     if [[ "$verb" == status && "$(_entry "$target" | jq -r '.kind')" != agent ]]; then
       refuse "status: '$target' is recorded but is not an agent; no backend call made"

@@ -232,7 +232,9 @@ check_result t4 "DIALOG, resumed after the dialog cleared" 0 READY
 assert_eq "DIALOG: the dev was never restarted" "1" "$(starts_of t4-dev)"
 
 # --- 4b: the workspace-trust dialog is accepted once; every other dialog is left alone -----------------------
-TRUST_DLG=$'Accessing workspace:\n\n /tmp/proj/worktrees/x\n\n Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team).\n\n Claude Code\'ll be able to read, edit, and execute files here.\n\n \u276f 1. Yes, I trust this folder\n   2. No, exit\n\n Enter to confirm \u00b7 Esc to cancel'
+# The real dialog, captured from Claude Code through ship-mux read (paths scrubbed): cursor on Yes / on No.
+TRUSTFIX="$TESTS_DIR/fixtures/ship/trust"
+TRUST_DLG="$(cat "$TRUSTFIX/narrow-after-down.txt")"
 enter_count() { local n; n="$(grep -c '^<keys:enter>$' "$SHIP_MUX_FAKE_DIR/sent/$(agent_of "$1" "$2")" 2>/dev/null)"; echo "${n:-0}"; }
 export SHIP_TRUST_WAIT_S=2
 
@@ -259,10 +261,9 @@ assert_contains "...the message names the trust dialog" "$(jq -r .question "$(st
 assert_eq "...Enter was pressed once, not again" "1" "$(enter_count t4b t4b-dev)"
 assert_eq "...the dev was left alive" "t4b-dev" "$(live_agents t4b)"
 
-TRUST_NO="${TRUST_DLG/❯ 1. Yes, I trust this folder/  1. Yes, I trust this folder}"
-TRUST_NO="${TRUST_NO/   2. No, exit/ ❯ 2. No, exit}"
+TRUST_NO="$(cat "$TRUSTFIX/narrow-before.txt")"
 key_count() { local n; n="$(grep -c "^<keys:$3>\$" "$SHIP_MUX_FAKE_DIR/sent/$(agent_of "$1" "$2")" 2>/dev/null)"; echo "${n:-0}"; }
-assert_contains "fixture: the No dialog has the cursor on No" "$TRUST_NO" "❯ 2. No, exit"
+assert_contains "fixture: the No dialog has the cursor on No" "$TRUST_NO" "❯ No, exit"
 
 reset_fake; unit t4c
 mkdir -p "$SHIP_MUX_FAKE_DIR/read"
@@ -312,6 +313,73 @@ for v in unindented indented; do
   assert_eq "...no enter was sent" "0" "$(key_count "$ref" "$ref-dev" enter)"
   assert_eq "...no down was sent" "0" "$(key_count "$ref" "$ref-dev" down)"
 done
+
+# --- 4g: trust_state on the real captures, and on the ambiguous cases it must never answer ------------------
+eval "$(sed -n '/^trust_state() {/,/^}/p' "$LOOP")"
+for f in medium narrow wide; do
+  assert_eq "trust_state: $f capture, cursor on No" "other" "$(trust_state <"$TRUSTFIX/$f-before.txt")"
+  assert_eq "trust_state: $f capture, cursor on Yes" "yes" "$(trust_state <"$TRUSTFIX/$f-after-down.txt")"
+done
+LAUNCH="env PATH=/usr/bin:/bin:/opt/tools/bin /home/user/.local/bin/launch-peer off claude --model haiku --permission-mode bypassPermissions --session-id 11111111-2222-4333-8444-555555555555"
+assert_eq "trust_state: the echoed launch command and a rule above the header do not count" "other" "$(printf '%s\n\n%s\n' "$LAUNCH" "$(cat "$TRUSTFIX/wide-before.txt")" | trust_state)"
+assert_eq "trust_state: no dialog at all" "none" "$(printf 'hello\n\n> prompt\n' | trust_state)"
+assert_eq "trust_state: a trust dialog quoted with an indent" "none" "$(sed 's/^/      /' "$TRUSTFIX/narrow-before.txt" | trust_state)"
+PERM2=$'\n \u23fa Bash command\n\n   rm -rf build\n\n Do you want to proceed?\n \u276f 1. Yes\n   2. No'
+assert_eq "trust_state: a trust dialog followed by a real permission prompt" "ambiguous" "$({ cat "$TRUSTFIX/narrow-before.txt"; printf '%s\n' "$PERM2"; } | trust_state)"
+assert_eq "trust_state: ...an unnumbered permission prompt too" "ambiguous" "$({ cat "$TRUSTFIX/narrow-before.txt"; printf '\n Allow this tool?\n \u276f Allow once\n   Deny\n'; } | trust_state)"
+assert_eq "trust_state: a third option (unnumbered)" "ambiguous" "$(sed 's/^   Yes, I trust this folder$/   Yes, I trust this folder\n   Maybe later/' "$TRUSTFIX/narrow-before.txt" | trust_state)"
+assert_eq "trust_state: a third option (numbered)" "ambiguous" "$({ sed '/Enter to confirm/d' "$TRUSTFIX/narrow-before.txt"; printf '  3. Always\n\n Enter to confirm\n'; } | trust_state)"
+assert_eq "trust_state: Allow... after the options" "ambiguous" "$({ cat "$TRUSTFIX/narrow-before.txt"; printf '\n Allow all edits this session?\n'; } | trust_state)"
+assert_eq "trust_state: a footer that only starts like the real one" "ambiguous" "$(sed 's/Enter to confirm.*/Enter to confirm and allow all commands/' "$TRUSTFIX/narrow-before.txt" | trust_state)"
+assert_eq "trust_state: the real footer, boxed" "other" "$(sed 's/^\( *\)\(Enter to confirm.*\)$/\1│ \2 │/' "$TRUSTFIX/narrow-before.txt" | trust_state)"
+assert_eq "trust_state: two cursors" "ambiguous" "$(sed 's/^   Yes, I trust this folder$/ ❯ Yes, I trust this folder/' "$TRUSTFIX/narrow-before.txt" | trust_state)"
+assert_eq "trust_state: no cursor" "ambiguous" "$(sed 's/^ ❯ No, exit$/   No, exit/' "$TRUSTFIX/narrow-before.txt" | trust_state)"
+# --- 4h: a dialog that vanishes after a down key, and a single blank read after Enter --------------------
+export SHIP_TRUST_WAIT_S=2
+reset_fake; unit t4h
+mkdir -p "$SHIP_MUX_FAKE_DIR/read"
+printf '%s\n' "$TRUST_NO" >"$SHIP_MUX_FAKE_DIR/read/t4h-dev"
+printf 'Welcome back\n' >"$SHIP_MUX_FAKE_DIR/read/t4h-dev.after-down"
+script t4h develop.json "$DEV_DONE"; script t4h review-r1.json "$REV_OK"
+stub_start t4h; run_loop t4h; stub_stop
+check_result t4h "dialog vanished after a down" 2 PARKED
+assert_eq "vanished after down: park.json status" "DIALOG" "$(jq -r .status "$(st t4h)/park.json")"
+assert_contains "...the message says it vanished" "$(jq -r .question "$(st t4h)/park.json")" "vanished after a down key"
+assert_eq "...Enter was never pressed" "0" "$(key_count t4h t4h-dev enter)"
+
+# trust_dialog with a scripted pane: after Enter, one blank read between two dialog reads is not "cleared"
+eval "$(sed -n '/^trust_dialog() {/,/^}/p' "$LOOP")"
+# shellcheck disable=SC2034  # LOG, POLL_S, TRUST_WAIT_S, WT are read by the eval'd trust_dialog
+(
+  STATE="$(mktemp -d)"; mkdir -p "$STATE/agents"; LOG=/dev/null; POLL_S=0; TRUST_WAIT_S=2; WT=/x
+  YES="$(cat "$TRUSTFIX/narrow-after-down.txt")"; Q="$STATE/q"
+  log() { :; }; sleep() { :; }
+  park() { echo "PARK $1"; exit 9; }
+  # reads come from a queue: the first line of $Q is consumed per read, the last one repeats
+  mux() {
+    [[ "$1" == read ]] || return 0
+    local f; f="$(head -n 1 "$Q")"; [[ "$(wc -l <"$Q")" -le 1 ]] || sed -i.bak 1d "$Q"
+    case "$f" in y) printf '%s\n' "$YES" ;; *) printf 'Welcome back\n' ;; esac
+  }
+  printf 'y\ny\nn\ny\n' >"$Q"
+  trust_dialog a a-id develop; echo "rc=$?"
+) >"$SHIP_MUX_FAKE_DIR/../t4h-one.out" 2>&1
+assert_contains "one blank read after Enter, then the dialog again: parked, not cleared" "$(cat "$SHIP_MUX_FAKE_DIR/../t4h-one.out")" "PARK DIALOG"
+# shellcheck disable=SC2034  # LOG, POLL_S, TRUST_WAIT_S, WT are read by the eval'd trust_dialog
+(
+  STATE="$(mktemp -d)"; mkdir -p "$STATE/agents"; LOG=/dev/null; POLL_S=0; TRUST_WAIT_S=2; WT=/x
+  YES="$(cat "$TRUSTFIX/narrow-after-down.txt")"; Q="$STATE/q"
+  log() { :; }; sleep() { :; }
+  park() { echo "PARK $1"; exit 9; }
+  mux() {
+    [[ "$1" == read ]] || return 0
+    local f; f="$(head -n 1 "$Q")"; [[ "$(wc -l <"$Q")" -le 1 ]] || sed -i.bak 1d "$Q"
+    case "$f" in y) printf '%s\n' "$YES" ;; *) printf 'Welcome back\n' ;; esac
+  }
+  printf 'y\ny\nn\nn\n' >"$Q"
+  trust_dialog a a-id develop; echo "rc=$?"
+) >"$SHIP_MUX_FAKE_DIR/../t4h-two.out" 2>&1
+assert_contains "two blank reads in a row after Enter: cleared" "$(cat "$SHIP_MUX_FAKE_DIR/../t4h-two.out")" "rc=0"
 unset SHIP_TRUST_WAIT_S
 assert_eq "the rulings file was created on first use" "yes" "$([[ -s "$SPACE/notes/decisions.md" ]] && echo yes || echo no)"
 
