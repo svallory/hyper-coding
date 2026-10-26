@@ -989,6 +989,7 @@ advance_main queue-six
 rc="$(GH_MERGE_QUEUE=1 land q6)"
 queued_rerun_check "rerun with auto-merge set on a BEHIND PR" q6 GH_AUTOMERGE
 rc="$(GH_MSS=BEHIND GH_AUTOMERGE=1 land q6)"
+assert_eq "...a BEHIND PR with auto-merge is refused (3)" "3" "$rc"
 assert_contains "...the refusal names the merge state" "$(cat "$FIX/land.err")" "merge state BEHIND"
 bash "$LAND" q6 --abandon --force >/dev/null 2>&1
 
@@ -1008,7 +1009,7 @@ fresh_fake
 hcfg '["echo {ref}-{pr} >> '"$CNT"'", "echo second >> '"$CNT"'"]'
 mk_unit hl11 311
 advance_main host-eleven
-echo "1 echo hl11-311 >> $CNT" > "$SPACE/notes/loops/hl11/on_land.done"
+echo "1 echo hl11-311 >> $CNT" > "$SPACE/notes/loops/hl11.on_land.done"
 rc="$(land hl11 --host box)"
 assert_eq "an old-format done list: 0" "0" "$rc"
 assert_eq "...is no longer honoured: the command it lists runs again" "hl11-311 second" "$(hcnt)"

@@ -446,7 +446,7 @@ if [[ "$pr_state" == OPEN ]]; then
         -q .data.repository.pullRequest.isInMergeQueue 2>"$gq_err")" || gq_rc=$?
       if [[ $gq_rc -ne 0 ]]; then
         # An older GHES has no isInMergeQueue field: there is no queue to check, say nothing.
-        if ! grep -qi "isInMergeQueue" "$gq_err" || ! grep -qi "doesn't exist\|not exist" "$gq_err"; then
+        if ! grep -qi "isInMergeQueue" "$gq_err" || ! grep -qiE "doesn't exist|not exist" "$gq_err"; then
           echo "ship-land: warning: merge-queue check skipped for #$pr: gh api graphql failed (exit $gq_rc): $(tr '\n' ' ' <"$gq_err")" >&2
         fi
       elif [[ "$in_queue" == true ]]; then
