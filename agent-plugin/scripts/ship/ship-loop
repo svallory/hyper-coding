@@ -164,8 +164,9 @@ preflight() {
 
 [[ $PREFLIGHT -eq 1 ]] && preflight
 if [[ -n "$CLEAR_LIMIT" ]]; then
+  _was="$(jq -r --arg n "$CLEAR_LIMIT" '[(.accounts[$n]?), (.models[$n]?)] | map(select(. != null)) | length' "$(ship_quota_dir)/limited.json" 2>/dev/null)"
   ship_limit_clear "$CLEAR_LIMIT" || { echo "ship-loop: could not update limited.json" >&2; exit 1; }
-  echo "ship-loop: '$CLEAR_LIMIT' is no longer marked limited"
+  if [[ "${_was:-0}" -gt 0 ]]; then echo "ship-loop: '$CLEAR_LIMIT' is no longer marked limited"; else echo "ship-loop: '$CLEAR_LIMIT' was not marked limited"; fi
   exit 0
 fi
 ship_require_yq || exit 1
@@ -486,7 +487,7 @@ limit_hit() {
 # Parks (DIALOG, LIMIT) and budget overruns exit the driver.
 FAIL_WHY=""
 await_file() {
-  local name="$1" id="$2" file="$3" stage="$4" budget="$5" acc=0 seg now el lim st idle=0 nudges=0 hit
+  local name="$1" id="$2" file="$3" stage="$4" budget="$5" acc=0 seg now el lim st idle=0 nudges=0 hit ignored="" fo
   [[ -s "$file.clock" ]] && acc="$(cat "$file.clock")"
   seg="$(date +%s)"
   lim="$(awk -v m="$budget" 'BEGIN { printf "%d", m * 60 }')"
@@ -499,8 +500,10 @@ await_file() {
     if [[ $el -gt $lim ]]; then over_budget "$stage" "$name" "$file" "$budget" "$el"; fi
     agent_state "$id"; st="$L_STATE"
     # Claude shows its limit as a dialog, which reads as blocked: look for the limit text before parking a dialog.
-    if [[ "$st" == blocked || "$st" == idle ]] && hit="$(limit_hit "$name" "$id")"; then
-      failover_on_limit "$name" "$stage" "$file" "$hit" "$id" || return 1
+    if [[ "$st" == blocked || "$st" == idle ]] && hit="$(limit_hit "$name" "$id")" && [[ "$hit" != "$ignored" ]]; then
+      fo=0; failover_on_limit "$name" "$stage" "$file" "$hit" "$id" || fo=$?
+      if [[ $fo -eq 3 ]]; then ignored="$hit"; sleep "$POLL_S"; continue; fi
+      [[ $fo -eq 0 ]] || return 1
       # A new agent has the stage now; the time already used stays counted, the restart does not.
       id="$FO_ID"; acc="$el"; seg="$(date +%s)"; idle=0; nudges=0
       log "budget: ${el}s used before the failover stay counted"
@@ -563,9 +566,14 @@ limit_word() { printf '%s' "$1" | tr 'A-Z' 'a-z' | sed -nE "s/.*hit your ([a-z-]
 # quotes a limit message (either harness's pattern) is replaced.
 scrub_status() {
   local f="$STATE/STATUS.md" pats
-  pats="$(jq -c '[.limits.patterns[]?]' <<<"$SHIP_CONFIG_JSON")"
-  jq -Rr --argjson p "$pats" 'if (. as $l | any($p[]; . as $re | $l | test($re))) then "[line removed: it quoted a provider message]" else . end' "$f" >"$f.tmp" \
-    && mv "$f.tmp" "$f"
+  # the scrub is stricter than the detection: the line anchor is dropped, so a quotation anywhere in a line goes
+  pats="$(jq -c '[.limits.patterns[]? | sub("\\^\\[\\^\\[:alnum:\\][^\\]]*\\]\\*"; "")]' <<<"$SHIP_CONFIG_JSON")"
+  if jq -Rr --argjson p "$pats" 'if (. as $l | any($p[]; . as $re | $l | test($re))) then "[line removed: it quoted a provider message]" else . end' "$f" >"$f.tmp"; then
+    mv "$f.tmp" "$f"
+  else
+    rm -f "$f.tmp"
+    log "could not scrub STATUS.md; kept as written"
+  fi
 }
 
 # git_facts_status <agent> <stage> — STATUS.md from git alone.
@@ -691,6 +699,11 @@ failover_on_limit() {
   fi
   ship_limit_record "$kind" "$lkey" "$lim_until" || log "could not write limited.json"
   log "LIMIT $name ($cur, $kind limit on $lkey): ${matched:-no text}"
+  # A limit on another model than the one this agent runs on: recorded, this agent keeps going.
+  if [[ "$kind" == model && "$harness" == claude && "$lkey" != "$cur" ]]; then
+    log "limit on $lkey does not concern $name ($cur); no failover"
+    return 3
+  fi
 
   PICK_AFTER="$cur"
   pick_model "$key" "$name" "$stage" "$round" 2>>"$LOG" || rc=$?

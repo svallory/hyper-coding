@@ -619,7 +619,7 @@ assert_contains "(1) the takeover prompt names the brief" "$TK" "$BRIEF"
 assert_contains "(1) the takeover prompt carries the stage prompt (the verdict file to write)" "$TK" "$(st r1)/develop.json"
 assert_contains "(1) the takeover prompt says who replaced whom" "$TK" "sonnet was replaced by zai/glm-5.3"
 assert_eq "(1) the takeover prompt does not trip the pi limit pattern" "" \
-  "$(jq -Rr --arg re '(?i)(\\b429\\b.{0,30}(too many requests|rate.?limit)|too many requests|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|exceeded (your|the) (current )?(quota|rate limit|usage limit))' 'select(test($re))' <<<"$TK")"
+  "$(jq -Rr --arg re '(?i)^[^[:alnum:]+>-]*((api |provider |http )?error:? *)?(429( status code|\\b.*rate_limit_error|\\b.{0,30}(too many requests|rate.?limit))|too many requests|resource_exhausted|\\{"error":\\{"code":"?(1302|1308)\\b|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit))' 'select(test($re))' <<<"$TK")"
 OLD="$(grep -l '/exit' "$SHIP_MUX_FAKE_DIR"/sent/* | head -n 1)"
 assert_contains "(1) the limited claude agent got esc" "$(cat "$OLD")" "<keys:esc>"
 assert_contains "(1) the limited claude agent got /exit" "$(cat "$OLD")" "/exit"
@@ -759,7 +759,7 @@ assert_eq "(7) no DIALOG park was written" absent "$([[ -e "$(st r7)/park.json" 
 
 # (8) The limit wording is matched case-insensitively and its word is lowercased: an Opus limit in capitals is a model limit.
 reset_fake; no_quota; runit r8
-rwrite_cfg '[sonnet, zai/glm-5.3]'
+rwrite_cfg '[opus, zai/glm-5.3]'
 limit_screen r8-dev "YOU'VE HIT YOUR OPUS LIMIT"
 answer_after_takeover r8 develop.json "$DEV_DONE"
 r_run r8
@@ -896,6 +896,59 @@ if [[ -s "$(st r16)/develop.json.clock" ]]; then
     "$([[ "$(cat "$(st r16)/develop.json.clock")" -ge "$USED" ]] && echo true || echo false)"
 fi
 
+# (17) Quoted limit wording is not a limit: the default patterns are anchored to the start of a line.
+CL_RE="$(sed -n "s/^    claude: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml")"
+PI_RE="$(sed -n "s/^    pi: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml")"
+m() { jq -Rn --arg re "$1" --arg l "$2" '$l | test($re)'; }
+for l in "You've hit your Sonnet limit · resets 4pm" "  You’ve hit your limit" "│ You've hit your weekly limit" "● YOU'VE HIT YOUR OPUS LIMIT"; do
+  assert_eq "claude pattern fires on: $l" true "$(m "$CL_RE" "$l")"
+done
+for l in "Summary: limit_hit now matches \"You've hit your weekly limit\" and more" "+ You've hit your Sonnet limit" "│ + You've hit your Sonnet limit" "- You've hit your limit" "> You've hit your limit" "\"You've hit your weekly limit\" in the output" "12 + You've hit your limit"; do
+  assert_eq "claude pattern ignores: $l" false "$(m "$CL_RE" "$l")"
+done
+for l in "Error: 429 Too Many Requests" "429 status code (no body)" "Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\"}}" "RESOURCE_EXHAUSTED: quota" "{\"error\":{\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}}" "{\"error\":{\"code\":1308,\"message\":\"x\"}}" "Usage limit reached for 5 hour" "Rate limit reached" "You exceeded your current quota, please check your plan" "│ Error: 429 status code"; do
+  assert_eq "pi pattern fires on: $l" true "$(m "$PI_RE" "$l")"
+done
+for l in "retry with backoff when the API answers 429 Too Many Requests" "ship-loop:429" "src/x.sh:429: handler" "// retry on a rate limit" "- Error: 429 Too Many Requests" "+ Rate limit reached" "the code 1302 means something" "> RESOURCE_EXHAUSTED"; do
+  assert_eq "pi pattern ignores: $l" false "$(m "$PI_RE" "$l")"
+done
+
+# (18) V1: a pi dev idle after a summary quoting a 429 does not fail over.
+reset_fake; no_quota; runit r18
+rwrite_cfg '[zai/glm-5.3, prov/second]'
+limit_screen r18-dev "Summary: added retry with backoff when the API answers 429 Too Many Requests"
+answer_after_screen r18 develop.json "$DEV_DONE" "retry with backoff"
+r_run r18
+assert_eq "(18) V1: READY, no failover, one start" "0 0 1" "$RC $(fcount_of r18) $(starts_of r18-dev)"
+# V3: a claude dev idle after a summary quoting the weekly wording records nothing
+reset_fake; no_quota; runit r19
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+limit_screen r19-dev "Summary: limit_hit now matches \"You've hit your weekly limit\" and the
+\"You've hit your weekly limit\" wording in the output is fine"
+answer_after_screen r19 develop.json "$DEV_DONE" "limit_hit now matches"
+r_run r19
+assert_eq "(19) V3: READY, no failover, one start" "0 0 1" "$RC $(fcount_of r19) $(starts_of r19-dev)"
+assert_eq "(19) V3: limited.json was not written" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json" ]] && echo present || echo absent)"
+# V2: a claude dev blocked on an edit dialog whose diff has the wording parks DIALOG, no failover
+reset_fake; no_quota; runit r20
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+blocked_screen r20-dev "Edit file src/x.sh?
+│ + You've hit your Sonnet limit
+│ - old line"
+r_run r20 2
+assert_eq "(20) V2: parked DIALOG, no failover" "2 DIALOG 0" "$RC $(jq -r .status "$(st r20)/park.json") $(fcount_of r20)"
+assert_eq "(20) V2: limited.json was not written" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json" ]] && echo present || echo absent)"
+
+# (21) A limit on another model than the agent runs on is recorded; this agent keeps going.
+reset_fake; no_quota; runit r21
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+limit_screen r21-dev "You've hit your Opus limit · resets 4pm"
+answer_after_screen r21 develop.json "$DEV_DONE" "Opus limit"
+r_run r21
+assert_eq "(21) READY, no failover of the dev, one start" "0 0 1" "$RC $(jq -s '[.[] | select(.agent == "r21-dev")] | length' "$(st r21)"/failover-*.json 2>/dev/null || echo 0) $(starts_of r21-dev)"
+assert_eq "(21) opus is recorded in limited.json" opus "$(jq -r '.models | keys | join(",")' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "(21) no account is recorded" null "$(jq -r '.accounts // null' "$SHIP_QUOTA_DIR/limited.json")"
+
 # --- limited.json: locking, records, clear -----------------------------------------------------------------
 SAVED_Q="$SHIP_QUOTA_DIR"; export SHIP_QUOTA_DIR="$FIX/quota-lock"; rm -rf "$SHIP_QUOTA_DIR"; mkdir -p "$SHIP_QUOTA_DIR"
 FARU=99999999999
@@ -920,8 +973,9 @@ assert_eq "ship_limit_clear keeps the rest" true "$(jq -r '.models | has("par2")
 bash "$LOOP" --clear-limit m1; CRC=$?
 assert_eq "ship-loop --clear-limit exits 0" 0 "$CRC"
 assert_eq "ship-loop --clear-limit removed the entry" false "$(jq -r '.models | has("m1")' "$SHIP_QUOTA_DIR/limited.json")"
-bash "$LOOP" --clear-limit nothing-here; CRC=$?
+CLR="$(bash "$LOOP" --clear-limit nothing-here)"; CRC=$?
 assert_eq "ship-loop --clear-limit of an unknown name exits 0" 0 "$CRC"
+assert_contains "ship-loop --clear-limit says an unknown name was not marked" "$CLR" "was not marked limited"
 SHIP_QUOTA_DIR="$SAVED_Q"; export SHIP_QUOTA_DIR
 
 no_quota

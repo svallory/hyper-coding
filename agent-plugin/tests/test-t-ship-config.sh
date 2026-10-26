@@ -275,8 +275,8 @@ for k in mux units_group base merge_method spec.paths scan.forbidden scan.exclud
 done
 assert_eq "gate has no default" "0" "$(grep -c '^gate:' "$DEFAULTS")"
 # The limit patterns survive YAML quoting intact.
-assert_eq "claude limit pattern" '(?i)You.{1,3}ve hit your ([a-z]+ )?limit' "$(cfg --get limits.patterns.claude)"
-assert_eq "pi limit pattern" '(?i)(\b429\b.{0,30}(too many requests|rate.?limit)|too many requests|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|exceeded (your|the) (current )?(quota|rate limit|usage limit))' "$(cfg --get limits.patterns.pi)"
+assert_eq "claude limit pattern" '(?i)^[^[:alnum:]+>"\x27`-]*You.{1,3}ve hit your ([a-z]+ )?limit' "$(cfg --get limits.patterns.claude)"
+assert_eq "pi limit pattern" '(?i)^[^[:alnum:]+>-]*((api |provider |http )?error:? *)?(429( status code|\b.*rate_limit_error|\b.{0,30}(too many requests|rate.?limit))|too many requests|resource_exhausted|\{"error":\{"code":"?(1302|1308)\b|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit))' "$(cfg --get limits.patterns.pi)"
 
 # T15: space root without the hyper CLI (#1) -----------------------------------
 reset_layers
