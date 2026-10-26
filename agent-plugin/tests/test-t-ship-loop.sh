@@ -1182,7 +1182,7 @@ export FLAG50="$FIX/flag50-t50a"; PATH="$FIX/shim50:$_path"
 stub_start t50a; run_loop t50a; stub_stop
 PATH="$_path"
 assert_eq "diff_sig a: the run ends ERROR (exit 1)" "1" "$RC"
-assert_eq "diff_sig a: the review signature file holds no error JSON" "0" "$(cat "$(st t50a)/review-r1.sig" 2>/dev/null | grep -c '"status"')"
+assert_ok "diff_sig a: no signature file was written, or it holds no error JSON" bash -c '[ ! -e "$1" ] || ! grep -q "\"status\"" "$1"' _ "$(st t50a)/review-r1.sig"
 assert_contains "diff_sig a: driver.err says what failed" "$(cat "$(st t50a)/driver.err")" "patch-id"
 # b: it fails after the review ACCEPT (inside reviewed_diff, a command substitution)
 reset_fake; unit t50b
@@ -1202,7 +1202,8 @@ export FLAG50="$FIX/flag50-t50c"; PATH="$FIX/shim50:$_path"
 stub_start t50c; run_loop t50c; stub_stop
 PATH="$_path"; unset FLAG50
 assert_eq "diff_sig c: the run ends ERROR (exit 1)" "1" "$RC"
-assert_eq "diff_sig c: fix-r2.before holds no error JSON" "0" "$(cat "$(st t50c)/fix-r2.before" 2>/dev/null | grep -c '"status"')"
+assert_ok "diff_sig c: the run got as far as the fix round" test -e "$(st t50c)/fix-r2.findings"
+assert_ok "diff_sig c: fix-r2.before is absent or holds no error JSON" bash -c '[ ! -e "$1" ] || ! grep -q "\"status\"" "$1"' _ "$(st t50c)/fix-r2.before"
 assert_not_contains "diff_sig c: the exit trap did not overwrite it" "$(cat "$(st t50c)/loop.log")" "driver exited unexpectedly"
 
 # --- 51: the final gate's signature is written when it is prompted --------------------------------------------------------------
@@ -1236,6 +1237,8 @@ stub_start t53; run_loop t53; stub_stop
 check_result t53 "failed send: answered" 0 READY
 assert_eq "failed send: the dev was not restarted" "1" "$(starts_of t53-dev)"
 assert_not_contains "failed send: a live dev is not told it is taking over" "$(sent_to t53 t53-dev)" "taking over"
+assert_not_contains "failed send: nor that a previous dev stopped" "$(sent_to t53 t53-dev)" "The previous dev stopped"
+assert_contains "failed send: it is spoken to as the dev that was parked" "$(sent_to t53 t53-dev)" "You were parked earlier (BLOCKED):"
 assert_contains "failed send: it gets the task" "$(sent_to t53 t53-dev)" "$BRIEF"
 assert_contains "failed send: and the answer" "$(sent_to t53 t53-dev)" "Use the second option."
 
@@ -1269,6 +1272,7 @@ kill "$_sp" 2>/dev/null; wait "$_sp" 2>/dev/null
 # --- 56: mark_sent keeps a verdict that landed while the prompt went out from looking older than its prompt ------------------------------
 eval "$(sed -n '/^mark_sent() {/,/^}/p;/^mtime_s() /p;/^sent_after_result() {/,/^}/p' "$LOOP")"
 printf '{}\n' >"$FIX/m56.json"; touch -t 202001010000 "$FIX/m56.json"; rm -f "$FIX/m56.json.sent"
+assert_ok "mark_sent: the functions were extracted from the script" declare -F mark_sent mtime_s sent_after_result
 mark_sent "$FIX/m56.json"
 assert_ok "mark_sent: the marker of an already written verdict is not newer than it" bash -c '[ "$1" -le 1 ]' _ "$(( $(mtime_s "$FIX/m56.json.sent") - $(mtime_s "$FIX/m56.json") ))"
 assert_eq "mark_sent: so that verdict is not stale" "no" "$(sent_after_result "$FIX/m56.json" && echo yes || echo no)"
@@ -1353,6 +1357,40 @@ printf 'The leak word.\n' >"$(st t61)/answer-2.md"
 run_loop t61; stub_stop
 check_result t61 "continued fix: answered" 0 READY
 CFG_EXTRA=''; write_cfg
+
+# --- 62: a spec ACCEPT does not clear the final gate's rejection of the same diff ------------------------------------------------------
+reset_fake; unit t62 spec
+W62="$SPACE/worktrees/t62"; O62="$(git -C "$FIX/origin-t62.git" rev-parse refs/heads/feat-t62)"
+export GATEOK62="$FIX/gateok-t62"; GATE_CMD='test -e "$GATEOK62"'; write_cfg
+script t62 develop.json "$DEV_DONE"; script t62 review-r1.json "$REV_OK"; script t62 spec-r1.json "$SPEC_OK"; script t62 final-r1.json "$REV_CHANGES"
+script t62 fix-r2.json "$DEV_DONE"; script t62 review-r2.json "$REV_OK"; script t62 spec-r2.json "$SPEC_OK"; script t62 final-r2.json "$REV_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W62" "$W62" "$W62" >"$FIX/scripts/t62/fix-r2.json.hook"
+printf '#!/bin/sh\ntouch "%s"\ngit -C "%s" revert --no-edit HEAD >/dev/null 2>&1\nexit 0\n' "$GATEOK62" "$W62" >"$FIX/scripts/t62/fix-r3.json.hook"
+chmod +x "$FIX/scripts/t62"/*.hook
+for _r in 3 4 5 6; do script t62 fix-r$_r.json "$DEV_DONE"; script t62 review-r$_r.json "$REV_OK"; script t62 spec-r$_r.json "$SPEC_OK"; script t62 final-r$_r.json "$REV_OK"; done
+stub_start t62; run_loop t62 --final-gate; stub_stop
+check_result t62 "spec accepted, final rejected, then a revert" 2 STUCK
+assert_eq "per-stage reject: nothing was pushed" "$O62" "$(git -C "$FIX/origin-t62.git" rev-parse refs/heads/feat-t62)"
+assert_eq "per-stage reject: the stage that rejected the diff is recorded" "final" "$(res t62 .stage)"
+assert_contains "per-stage reject: and the log names the verdict" "$(cat "$(st t62)/loop.log")" "restored the diff that final-r1.json rejected"
+assert_not_contains "per-stage reject: not the no-op wording" "$(cat "$(st t62)/loop.log")" "changed nothing after a CHANGES verdict"
+unset GATEOK62; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 63: the lead's answer waits for the fix that is actually prompted, not for a fix that is replayed ----------------------------------
+reset_fake; unit t63
+script t63 develop.json "$DEV_DONE"; script t63 review-r1.json "$REV_CHANGES"; script t63 fix-r2.json "$DEV_DONE"
+script t63 review-r2.json "$REV_CHANGES"; script t63 fix-r3.json "$DEV_DONE"; script t63 review-r3.json "$REV_OK"
+printf '#!/bin/sh\ntouch "%s"\nexit 0\n' "$FIX/failmux63.on" >"$FIX/scripts/t63/review-r2.json.hook"; chmod +x "$FIX/scripts/t63/review-r2.json.hook"
+export SHIP_LOOP_MUX="$TESTS_DIR/fixtures/ship/failmux" FAILMUX_REAL="$SCRIPTS_DIR/ship/ship-mux" FAILMUX_FILE="$FIX/failmux63.on"
+stub_start t63; run_loop t63; stub_stop
+check_result t63 "failed send on fix-r3: parked" 2 PARKED
+assert_eq "failed send on fix-r3: the park belongs to the fix" "fix" "$(jq -r .stage "$(st t63)/park.json")"
+unset SHIP_LOOP_MUX FAILMUX_REAL FAILMUX_FILE; rm -f "$FIX/failmux63.on"
+printf 'Use the second option.\n' >"$(st t63)/answer-1.md"
+stub_start t63; run_loop t63; stub_stop
+check_result t63 "failed send on fix-r3: answered" 0 READY
+assert_contains "answer kept: the fix-r3 prompt carries the answer" "$(cat "$(st t63)/fix-r3.prompt.md" 2>/dev/null)" "Use the second option."
+assert_contains "answer kept: and it reached the dev" "$(sent_to t63 t63-dev)" "Use the second option."
 
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"

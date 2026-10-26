@@ -997,7 +997,7 @@ fi
 
 # --- resume: what the lead left for a parked or over-budget unit -------------------------------
 resume_park() {
-  local st stage agent n file ans id atext
+  local st stage agent n file ans id atext who
   [[ -s "$STATE/park.json" ]] || return 0
   st="$(jq -r .status "$STATE/park.json")"; stage="$(jq -r .stage "$STATE/park.json")"
   agent="$(jq -r .agent "$STATE/park.json")"; n="$(jq -r .n "$STATE/park.json")"
@@ -1016,8 +1016,9 @@ resume_park() {
         # The dev that asked is gone and a new one took over without ever being prompted for this stage:
         # the answer goes into its first prompt (takeover text, stage prompt, answer in one message).
         if [[ -s "$ans" ]]; then
-          # (TAKEOVER is set above when the dev was replaced; a live dev whose prompt failed to go out is not told it took over)
-          TAKEOVER_ANSWER="The previous dev stopped with this ($st):
+          # TAKEOVER is set above when the dev was replaced; a live dev whose prompt failed to go out is spoken to as itself
+          if [[ -n "$TAKEOVER" ]]; then who="The previous dev stopped with this ($st):"; else who="You were parked earlier ($st):"; fi
+          TAKEOVER_ANSWER="$who
 $(jq -r '.question // ""' "$STATE/park.json")
 The lead answers:
 $(cat "$ans")"
@@ -1087,18 +1088,21 @@ fix_round() {
   STAGE=fix CUR_ROUND="$r"
   printf '%s\n' "$findings" >"$STATE/fix-r$r.findings"; printf '%s\n' "$FIX_SRC" >"$STATE/fix-r$r.src"
   text="$(prompt fix round="$r" pending="$findings" verdict_file="$f")"
-  if [[ -n "$TAKEOVER" ]]; then
-    text="$(takeover_text)
+  # (a fix that is already in is replayed, not prompted: the takeover text and the lead's answer wait for the step that is)
+  if ! fresh_result "$f"; then
+    if [[ -n "$TAKEOVER" ]]; then
+      text="$(takeover_text)
 
 $text"
-    TAKEOVER=""
-  fi
-  if [[ -n "$TAKEOVER_ANSWER" ]]; then
-    text="$text
+      TAKEOVER=""
+    fi
+    if [[ -n "$TAKEOVER_ANSWER" ]]; then
+      text="$text
 
 $TAKEOVER_ANSWER
 Continue from there."
-    TAKEOVER_ANSWER=""
+      TAKEOVER_ANSWER=""
+    fi
   fi
   # What the diff was when the dev was prompted: written once, so a resumed fix is compared with it.
   if [[ ! ( -e "$f.sent" && -s "$STATE/fix-r$r.before" ) ]]; then diff_sig; printf '%s\n' "$DSIG" >"$STATE/fix-r$r.before"; fi
@@ -1266,19 +1270,31 @@ write_sig() {
     printf '%s\n' "$DSIG" >"${1%.json}.sig"
   fi
 }
-# rejected_diff — the diff as it is now was rejected by the spec check or the final gate, and neither accepted
-# it since. A revert to such a diff must not ride on the code review that once accepted it.
+# rejected_diff — sets REJECTED_BY (a verdict file name) and returns 0 when the diff as it is now was rejected
+# by the spec check or by the final gate. Decided per stage: a stage rejects the diff when its newest verdict
+# on exactly this diff is not ACCEPT; the other stage's ACCEPT does not clear it. A revert to such a diff must
+# not ride on the code review that once accepted it.
+REJECTED_BY=""
 rejected_diff() {
-  local f sig rej=1
+  local stage f n sig best bestn
   diff_sig
-  for f in "$STATE"/spec-r*.json "$STATE"/final-r*.json; do
-    [[ -f "$f" ]] && fresh_result "$f" || continue
-    sig="${f%.json}.sig"
-    [[ -s "$sig" && "$(cat "$sig")" == "$DSIG" ]] || continue
-    if [[ "$(jq -r .verdict "$f" 2>/dev/null)" == ACCEPT ]]; then return 1; fi
-    rej=0
+  REJECTED_BY=""
+  for stage in spec final; do
+    best="" bestn=-1
+    for f in "$STATE/$stage"-r*.json; do
+      [[ -f "$f" ]] && fresh_result "$f" || continue
+      sig="${f%.json}.sig"
+      [[ -s "$sig" && "$(cat "$sig")" == "$DSIG" ]] || continue
+      n="${f##*-r}"; n="${n%.json}"
+      [[ "$n" =~ ^[0-9]+$ ]] || continue
+      if [[ $n -gt $bestn ]]; then best="$f"; bestn=$n; fi
+    done
+    if [[ -n "$best" && "$(jq -r .verdict "$best" 2>/dev/null)" != ACCEPT ]]; then
+      REJECTED_BY="$(basename "$best")"
+      return 0
+    fi
   done
-  return $rej
+  return 1
 }
 
 # --- rounds ------------------------------------------------------------------------------------------
@@ -1477,14 +1493,24 @@ review_gate() {
       fix_round "$FR" "$NEED_FIX"
       before="$(cat "$STATE/fix-r$FR.before")"
       diff_sig; after="$DSIG"
-      if [[ "$FIX_SRC" == review && "$after" == "$before" ]] || rejected_diff; then
+      if rejected_diff; then
         cycles=$((cycles + 1))
-        log "round $FR: the fix changed nothing after a CHANGES verdict, or restored a diff the spec check or final gate rejected ($cycles of $MAX)"
+        log "round $FR: the fix restored the diff that $REJECTED_BY rejected ($cycles of $MAX)"
+        if [[ $cycles -ge $MAX ]]; then
+          finish 2 "${REJECTED_BY%%-r*}" STUCK "$(jq -n --arg f "$NEED_FIX" --arg by "$REJECTED_BY" '{findings:$f, rejected_by:$by}')"
+        fi
+        NEED_FIX="$NEED_FIX
+(Your last attempt restored the diff that $REJECTED_BY rejected. Change the code, or stop with QUESTION and say why not.)"
+        continue
+      fi
+      if [[ "$FIX_SRC" == review && "$after" == "$before" ]]; then
+        cycles=$((cycles + 1))
+        log "round $FR: the fix changed nothing after a CHANGES verdict ($cycles of $MAX)"
         if [[ $cycles -ge $MAX ]]; then
           finish 2 review STUCK "$(jq -n --arg f "$NEED_FIX" '{findings:$f}')"
         fi
         NEED_FIX="$NEED_FIX
-(Your last attempt left the diff as it was, or restored a diff the spec check or final gate rejected (see spec-r*.json and final-r*.json). Change the code, or stop with QUESTION and say why not.)"
+(Your last attempt changed nothing in the diff. Change the code, or stop with QUESTION and say why not.)"
         continue
       fi
       NEED_FIX=""
