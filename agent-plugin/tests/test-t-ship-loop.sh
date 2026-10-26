@@ -232,7 +232,7 @@ check_result t4 "DIALOG, resumed after the dialog cleared" 0 READY
 assert_eq "DIALOG: the dev was never restarted" "1" "$(starts_of t4-dev)"
 
 # --- 4b: the workspace-trust dialog is accepted once; every other dialog is left alone -----------------------
-TRUST_DLG=$'Accessing workspace:\n\n /work/proj/worktrees/x\n\n Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team).\n\n Claude Code\'ll be able to read, edit, and execute files here.\n\n \u276f 1. Yes, I trust this folder\n   2. No, exit\n\n Enter to confirm \u00b7 Esc to cancel'
+TRUST_DLG=$'Accessing workspace:\n\n /tmp/proj/worktrees/x\n\n Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team).\n\n Claude Code\'ll be able to read, edit, and execute files here.\n\n \u276f 1. Yes, I trust this folder\n   2. No, exit\n\n Enter to confirm \u00b7 Esc to cancel'
 enter_count() { local n; n="$(grep -c '^<keys:enter>$' "$SHIP_MUX_FAKE_DIR/sent/$(agent_of "$1" "$2")" 2>/dev/null)"; echo "${n:-0}"; }
 export SHIP_TRUST_WAIT_S=2
 
