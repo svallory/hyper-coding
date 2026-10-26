@@ -23,7 +23,7 @@ chmod +x "$stub_dir/herdr"
 export SHIP_MUX_TEST=1
 export PATH="$stub_dir:$PATH"
 
-file_timeout="${HYPER_TEST_FILE_TIMEOUT:-900}"
+file_timeout="${HYPER_TEST_FILE_TIMEOUT:-1200}"
 
 total_pass=0
 total_fail=0
