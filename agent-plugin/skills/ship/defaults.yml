@@ -60,8 +60,8 @@ limits:
   patterns:
     # Claude Code limit message.
     claude: '(?i)You.{1,3}ve hit your ([a-z]+ )?limit'
-    # pi has no fixed wording; provider messages vary.
-    pi: '(?i)(rate.?limit|usage limit|quota exceeded|\b429\b)'
+    # pi has no fixed wording; provider messages vary. Only error phrasing counts: a bare "rate limit" or 429 is also code and file:line text.
+    pi: '(?i)(\b429\b.{0,30}(too many requests|rate.?limit)|too many requests|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|exceeded (your|the) (current )?(quota|rate limit|usage limit))'
   # Minutes to treat an account or model as limited when the reset time is unknown.
   cooldown_min: 60
 # Reactive failover after a usage limit.

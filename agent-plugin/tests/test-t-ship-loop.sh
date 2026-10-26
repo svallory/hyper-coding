@@ -370,8 +370,10 @@ assert_eq "restart: the reviewer was prompted once" "1" "$(wc -l <"$(st t12)/rev
 
 # --- 13: LIMIT (nothing to fail over to: the unit parks) ------------------------------------------------------------------------------------
 reset_fake; unit t13
-mkdir -p "$SHIP_MUX_FAKE_DIR/read"
-printf "You've hit your weekly limit. What do you want to do?\n" >"$SHIP_MUX_FAKE_DIR/read/t13-dev"
+# the limit text appears on the pane after the dev's prompt (the driver reads only the newest lines)
+export SHIP_LOOP_MUX="$TESTS_DIR/fixtures/ship/limitmux" LIMITMUX_REAL="$SCRIPTS_DIR/ship/ship-mux"
+mkdir -p "$SHIP_MUX_FAKE_DIR/after-send"
+printf "You've hit your weekly limit. What do you want to do?\n" >"$SHIP_MUX_FAKE_DIR/after-send/t13-dev"
 stub_start t13; run_loop t13; stub_stop
 check_result t13 "LIMIT" 2 PARKED
 assert_eq "LIMIT: park.json status" "LIMIT" "$(jq -r .status "$(st t13)/park.json")"
@@ -380,9 +382,11 @@ assert_eq "LIMIT: the agent is left alone" "t13-dev" "$(live_agents t13)"
 # resume: the parked agent is closed and the stage restarts through model_pick, so the override applies
 # The limit was recorded in limited.json (reactive failover); the quota has reset by the time the lead resumes.
 assert_ok "LIMIT: the limit was recorded in limited.json" test -s "$HOME/.cache/hyper/quota/limited.json"
-rm -f "$HOME/.cache/hyper/quota/limited.json"
+assert_eq "LIMIT: it is an account limit" default "$(jq -r '.accounts | keys | join(",")' "$HOME/.cache/hyper/quota/limited.json")"
+bash "$LOOP" --clear-limit default >/dev/null
+assert_eq "LIMIT: --clear-limit forgot the account" null "$(jq -r '.accounts.default // null' "$HOME/.cache/hyper/quota/limited.json")"
 printf 'dev=zz-after-limit\n' >"$(st t13)/models.override"
-rm -f "$SHIP_MUX_FAKE_DIR/read/t13-dev"; rm -rf "$FIX/scripts/t13/.done"
+rm -f "$SHIP_MUX_FAKE_DIR/after-send/t13-dev" "$SHIP_MUX_FAKE_DIR/status/t13-dev"; rm -rf "$FIX/scripts/t13/.done"
 script t13 develop.json "$DEV_DONE"; script t13 review-r1.json "$REV_OK"
 clear_sent t13 develop.json; stub_start t13; run_loop t13; stub_stop
 check_result t13 "LIMIT, resumed with a models.override" 0 READY
@@ -390,6 +394,7 @@ assert_eq "LIMIT: the limited dev was closed and a new one started" "2" "$(start
 assert_contains "LIMIT: the new dev runs the override model" "$(grep '"start"' "$SHIP_MUX_FAKE_LOG" | grep t13-dev | tail -n 1)" '"zz-after-limit"'
 assert_contains "LIMIT: and the first one did not" "$(grep '"start"' "$SHIP_MUX_FAKE_LOG" | grep t13-dev | head -n 1)" '--model'
 assert_not_contains "LIMIT: the first dev was not on the override" "$(grep '"start"' "$SHIP_MUX_FAKE_LOG" | grep t13-dev | head -n 1)" 'zz-after-limit'
+unset SHIP_LOOP_MUX LIMITMUX_REAL
 
 # --- 14: verify FAIL -> fix -> PASS ---------------------------------------------------------------------------------------------------------
 reset_fake; unit t14

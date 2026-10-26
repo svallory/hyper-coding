@@ -624,16 +624,51 @@ ship_quota_block() {
   return 0
 }
 
+# _ship_lock <file> — take <file>.lock (a directory: mkdir is atomic on every platform, flock is not on
+# macOS). Retries for about 10 s, then breaks a lock older than 60 s. 1 when it cannot be taken.
+_ship_lock() {
+  local l="$1.lock" i=0 age
+  while ! mkdir "$l" 2>/dev/null; do
+    i=$((i + 1))
+    if [[ $i -gt 200 ]]; then
+      age=$(( $(date +%s) - $(stat -c %Y "$l" 2>/dev/null || stat -f %m "$l" 2>/dev/null || echo 0) ))
+      if [[ $age -gt 60 ]]; then rmdir "$l" 2>/dev/null; i=0; continue; fi
+      return 1
+    fi
+    sleep 0.05
+  done
+}
+_ship_unlock() { rmdir "$1.lock" 2>/dev/null || true; }
+
 # ship_limit_record <account|model> <key> <until epoch> — add an entry to limited.json (the file pick_model
-# reads), atomically, keeping the entries of other units.
+# reads), atomically and under a lock, keeping the entries other units wrote.
 ship_limit_record() {
-  local f cur tmp
+  local f cur tmp rc=0
   f="$(ship_quota_dir)/limited.json"
   mkdir -p "$(dirname "$f")" || return 1
+  _ship_lock "$f" || { _ship_err "limited.json is locked"; return 1; }
   cur='{}'
   if [[ -s "$f" ]]; then cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'; [[ -n "$cur" ]] || cur='{}'; fi
   tmp="$f.tmp.$$"
   jq -c --arg k "$1" --arg key "$2" --argjson u "$3" \
     '(if $k == "account" then "accounts" else "models" end) as $c | .[$c] = ((.[$c] // {}) + {($key): {until: $u}})' <<<"$cur" >"$tmp" \
-    && mv -f "$tmp" "$f"
+    && mv -f "$tmp" "$f" || rc=1
+  rm -f "$tmp"
+  _ship_unlock "$f"
+  return $rc
+}
+
+# ship_limit_clear <name> — remove an account or a model named <name> from limited.json (the lead's way to say
+# the quota is back). 0 also when there was nothing to remove.
+ship_limit_clear() {
+  local f cur tmp rc=0
+  f="$(ship_quota_dir)/limited.json"
+  [[ -s "$f" ]] || return 0
+  _ship_lock "$f" || { _ship_err "limited.json is locked"; return 1; }
+  cur="$(jq -c 'if type == "object" then . else {} end' "$f" 2>/dev/null)" || cur='{}'
+  tmp="$f.tmp.$$"
+  jq -c --arg n "$1" 'del(.accounts[$n]?) | del(.models[$n]?)' <<<"$cur" >"$tmp" && mv -f "$tmp" "$f" || rc=1
+  rm -f "$tmp"
+  _ship_unlock "$f"
+  return $rc
 }

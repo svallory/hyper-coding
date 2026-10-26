@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# limitmux — ship-mux (LIMITMUX_REAL) over mux/fake, plus scripted things an agent's pane shows AFTER a prompt
+# was sent to it (mux/fake's own scripted `read` text comes before the prompt, where a newest-lines search
+# never looks). Files under $SHIP_MUX_FAKE_DIR, all keyed by the agent's (shortened) name:
+#   after-send/<name>.<k>   shown after the k-th `send --text` to any agent of that name (k counts across
+#                           successors); else after-send/<name>. A single line "@/abs/path" shows that file.
+#   after-send-delay/<name> seconds to wait before the text appears (in the background)
+#   after-send-status/<name> the agent state (blocked, ...) that goes with the text
+#   after-send-next/<name>  moved to after-send/<name> when the agent is closed (what its successor shows)
+#   close-fail/<name>       `close --id` of that agent exits 1 and closes nothing
+# Closing an agent drops its read/, status/ and after-send* files.
+D="${SHIP_MUX_FAKE_DIR:?}"
+verb="$1"; id=""; prev=""
+for a in "$@"; do
+  case "$verb:$prev" in send:--to|close:--id) id="$a" ;; esac
+  prev="$a"
+done
+safe() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'; }
+name="" pane=""
+if [[ -n "$id" && -f "$D/state/$id.json" ]]; then
+  name="$(jq -r '.name // ""' "$D/state/$id.json")"
+  pane="$(jq -r '.pane // ""' "$D/state/$id.json")"
+fi
+istext=0
+[[ "$verb" == send ]] && for a in "$@"; do [[ "$a" == --text ]] && istext=1; done
+if [[ "$verb" == close && -n "$name" && -e "$D/close-fail/$(safe "$name")" ]]; then
+  echo "limitmux: close refused for $name" >&2; exit 1
+fi
+"${LIMITMUX_REAL:?}" "$@"
+rc=$?
+if [[ "$verb" == send && $istext -eq 1 && -n "$name" && -n "$pane" ]]; then
+  k=0; mkdir -p "$D/send-count"
+  [[ -f "$D/send-count/$(safe "$name")" ]] && k="$(cat "$D/send-count/$(safe "$name")")"
+  k=$((k + 1)); printf '%s' "$k" >"$D/send-count/$(safe "$name")"
+  f="$D/after-send/$(safe "$name").$k"; [[ -f "$f" ]] || f="$D/after-send/$(safe "$name")"
+  if [[ -f "$f" ]]; then
+    scr="$D/screen/$(safe "$pane")"
+    delay=0; [[ -f "$D/after-send-delay/$(safe "$name")" ]] && delay="$(cat "$D/after-send-delay/$(safe "$name")")"
+    show() {
+      sleep "$1"
+      first="$(head -n 1 "$f")"
+      case "$first" in @/*) cat "${first#@}" >>"$scr" ;; *) cat "$f" >>"$scr" ;; esac
+      if [[ -f "$D/after-send-status/$(safe "$name")" ]]; then cp "$D/after-send-status/$(safe "$name")" "$D/status/$(safe "$name")"; fi
+    }
+    if [[ "$delay" == 0 ]]; then show 0; else ( show "$delay" ) >/dev/null 2>&1 </dev/null & fi
+  fi
+fi
+if [[ "$verb" == close && $rc -eq 0 && -n "$name" ]]; then
+  n="$(safe "$name")"
+  rm -f "$D/read/$n" "$D/status/$n" "$D/after-send/$n" "$D/after-send-delay/$n" "$D/after-send-status/$n"
+  if [[ -f "$D/after-send-next/$n" ]]; then mkdir -p "$D/after-send"; mv "$D/after-send-next/$n" "$D/after-send/$n"; fi
+fi
+exit $rc
