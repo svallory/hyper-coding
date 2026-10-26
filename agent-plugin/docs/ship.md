@@ -625,9 +625,12 @@ that agent). Review, spec-check and final-gate verdicts also leave `<stage>-r<N>
 signature matches a review or final-gate ACCEPT, and never a diff that the spec
 check or the final gate rejected: that is decided per stage, and a diff counts as
 rejected when, for either of those two stages, its newest verdict on exactly that
-diff is not ACCEPT (the other stage's ACCEPT does not clear it). A fix that restores
-a rejected diff is sent back to the dev, counts toward `max_rounds`, and when the
-rounds run out the unit ends `STUCK` with `stage` set to the stage that rejected it.
+diff is not ACCEPT (the other stage's ACCEPT does not clear it). A fix, or anything
+else (the gate, a rebase, a stray commit), that restores a rejected diff is sent back
+to the dev with the rejecting stage's findings (for the spec check, its gaps and
+removals too), counts toward `max_rounds`, and when the rounds run out the unit ends
+`STUCK` with `stage` set to the stage that rejected it and `rejected_by` naming its
+verdict file. The next review of a restored diff is told about the restore.
 Fix rounds leave `fix-r<N>.findings`, `fix-r<N>.src` and
 `fix-r<N>.before`, which record what the dev was asked so a resumed park
 continues that fix instead of replaying it.
@@ -643,6 +646,7 @@ continues that fix instead of replaying it.
 | `failovers` | the number of `failover-N.json` files. |
 | `host`, `worktree` | where it ran. |
 | plus `park`, `budget`, `findings` or `why` | the record for a PARKED, OVER-BUDGET, STUCK or ERROR result. |
+| plus `rejected_by` | on a STUCK caused by a restored rejected diff: the name of the verdict file that rejected it (for example `final-r1.json`). |
 
 `failover-<N>.json` fields: `stage`, `round`, `agent`, `from`, `to`, `reason`
 (`preflight` or `limit`), `limit_kind` (`account` or `model`), `matched` (the
