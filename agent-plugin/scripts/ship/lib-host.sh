@@ -102,11 +102,20 @@ _ship_host_rsync_ok() {
 }
 
 # _ship_rsync_glob_esc <path> — backslash-escape * ? [ ] \ so a protected remote source
-# path is matched literally (the remote rsync would otherwise glob it). A path with
-# none of * ? [ ] is left alone: rsync only unescapes a path it treats as a pattern,
-# so escaping a lone backslash there would break it.
+# path is matched literally (the remote rsync would otherwise glob it). rsync expands
+# one path component at a time and unescapes only a component that holds * ? or [;
+# every other component is taken literally, backslashes included. So only those
+# components are escaped, and the rest stay byte for byte as they are.
 _ship_rsync_glob_esc() {
-  if [[ "$1" == *[\*?\[\]]* ]]; then printf '%s' "$1" | sed 's/[][*?\\]/\\&/g'; else printf '%s' "$1"; fi
+  local rest="$1" c out="" sep=""
+  while :; do
+    c="${rest%%/*}"
+    if [[ "$c" == *[\*?\[]* ]]; then c="$(printf '%s' "$c" | sed 's/[][*?\\]/\\&/g')"; fi
+    out+="$sep$c"
+    [[ "$rest" == */* ]] || break
+    rest="${rest#*/}" sep=/
+  done
+  printf '%s' "$out"
 }
 
 # ship_host_sync <target> — the host needs no hyper CLI, only these files.

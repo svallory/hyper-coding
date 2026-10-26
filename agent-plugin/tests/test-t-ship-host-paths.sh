@@ -66,7 +66,7 @@ done
 
 # glob characters in the remote source are literal: the pull mirrors only the named
 # directory and --delete keeps the local siblings the glob would have matched
-for pair in "a?b|axb" "Decisions [draft]|Decisions d" "x*y|xzzy" 'back\slash|backXslash' 'q*\z|qaaaz' 'p[1\]|p1'; do
+for pair in "a?b|axb" "Decisions [draft]|Decisions d" "x*y|xzzy" 'back\slash|backXslash' 'q*\z|qaaaz' 'p[1\]|p1' 'a]b|axb' 'a]b/c*d|a]b/cxd' 'a]b/plain|a]b/plan' 'back\slash/y*z|back\slash/yaz' 'x\]y|x]y' 'k]*|k]z'; do
   lit="${pair%%|*}" sib="${pair##*|}"
   mkdir -p "$FIX/gh/$lit/in" "$FIX/gh/$sib/in" "$FIX/gl/$lit" "$FIX/gl/$sib"
   echo remote-lit > "$FIX/gh/$lit/in/f.txt"; echo remote-sib > "$FIX/gh/$sib/in/f.txt"
@@ -78,6 +78,7 @@ for pair in "a?b|axb" "Decisions [draft]|Decisions d" "x*y|xzzy" 'back\slash|bac
 done
 assert_eq "_ship_rsync_glob_esc escapes * ? [ ] and backslash" 'a\*\?\[\]\\z' "$(_ship_rsync_glob_esc 'a*?[]\z')"
 assert_eq "...but leaves a path without them alone" 'a\z' "$(_ship_rsync_glob_esc 'a\z')"
+assert_eq "...and only escapes the components that have a glob character" '/a]b/c\*d/e\f' "$(_ship_rsync_glob_esc '/a]b/c*d/e\f')"
 
 # an rsync that cannot do -s (openrsync, rsync 2.x) is refused with its cause
 mkdir -p "$FIX/oldbin"
@@ -89,7 +90,7 @@ assert_contains "...naming openrsync" "$msg" "openrsync"
 assert_contains "...and saying to install rsync 3 first on PATH" "$msg" "install rsync 3"
 assert_eq "...nothing was created" "" "$([[ -e "$FIX/gl/none" ]] && echo made)"
 for fn in "ship_host_push fakehost $FIX/lead/1/plain" "ship_host_sync fakehost"; do
-  assert_fails "openrsync: refused by $fn" env PATH="$FIX/oldbin:$PATH" SHIP_PLUGIN_ROOT="$PLUGIN_DIR" bash -c "source '$SHIP_DIR/lib.sh'; source '$SHIP_DIR/lib-host.sh'; $fn"
+  assert_fails "openrsync: refused by $fn" env PATH="$FIX/oldbin:$PATH" SHIP_PLUGIN_ROOT="$PLUGIN_DIR" bash -c "source '\$1/lib.sh'; source '\$1/lib-host.sh'; $fn" _ "$SHIP_DIR"
 done
 printf '#!/bin/sh\necho "rsync  version 2.6.8  protocol version 29"\n' > "$FIX/oldbin/rsync"
 msg="$(unset _SHIP_HOST_RSYNC_CHECKED; PATH="$FIX/oldbin:$PATH" ship_host_pull_dir fakehost "$FIX/gh/a?b" "$FIX/gl/none" 2>&1)"
