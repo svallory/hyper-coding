@@ -18,17 +18,19 @@ inode() { stat -c %i "$1" 2>/dev/null || stat -f %i "$1"; }
 # put <file> <text> — atomic, so a reader never sees a half-written counter
 put() { printf '%s\n' "$2" >"$1.tmp.$$" && mv -f "$1.tmp.$$" "$1"; }
 # Two counters per verdict file, both under .done/: <b> is how many answers were given (it picks the
-# scripted <b>.N), <b>.seen is "inode lines" of the .sent marker already answered. A marker that was
-# archived, deleted or recreated has another inode, so its prompts count from zero again; none is lost.
+# scripted <b>.N), <b>.seen is the identity of the .sent marker (its inode and its first line) and the number
+# of its lines already answered. A marker that was archived, deleted or recreated has another identity, so its
+# prompts count from zero again; none is lost. The first line counts because a recreated file can reuse the inode.
 while :; do
   for sent in "$state"/*.sent; do
     [[ -e "$sent" ]] || continue
     f="${sent%.sent}"
     b="$(basename "$f")"
-    ino="$(inode "$sent")"
+    ino="$(inode "$sent") $(head -n 1 "$sent")"
     prompts="$(wc -l <"$sent" | tr -d ' ')"
     answered="$(cat "$script/.done/$b" 2>/dev/null)"; answered="${answered:-0}"
-    read -r seen_ino seen_n <"$script/.done/$b.seen" 2>/dev/null || { seen_ino="" seen_n=0; }
+    { IFS= read -r seen_ino; read -r seen_n; } <"$script/.done/$b.seen" 2>/dev/null || { seen_ino="" seen_n=0; }
+    seen_n="${seen_n:-0}"
     [[ "$seen_ino" == "$ino" ]] || seen_n=0
     [[ "$prompts" -gt "$seen_n" ]] || continue
     [[ ! -e "$f" ]] || continue
@@ -40,7 +42,8 @@ while :; do
     [[ -z "${STUB_DELAY:-}" ]] || sleep "$STUB_DELAY"
     cp "$src" "$f.tmp" && mv -f "$f.tmp" "$f"
     put "$script/.done/$b" "$next"
-    put "$script/.done/$b.seen" "$ino $((seen_n + 1))"
+    put "$script/.done/$b.seen" "$ino
+$((seen_n + 1))"
   done
   sleep 0.05
 done

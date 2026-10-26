@@ -602,9 +602,15 @@ Each verdict `X.json` has companions: `X.json.sent` (one line appended per
 prompt; a verdict newer than its marker answers the last prompt, so a finished
 stage is never re-run), `X.json.clock` (accumulated stage time, so a resume does
 not reset the budget) and `X.json.answer` (the lead's answer last delivered to
-that agent). Review verdicts also leave `review-r<N>.sig` (the signature of the
-diff that review saw; the driver pushes only a diff whose signature matches an
-ACCEPT) and fix rounds leave `fix-r<N>.findings`, `fix-r<N>.src` and
+that agent). Review, spec-check and final-gate verdicts also leave `<stage>-r<N>.sig`
+(the signature of the diff that agent saw). The driver pushes only a diff whose
+signature matches a review or final-gate ACCEPT, and never a diff that the spec
+check or the final gate rejected: that is decided per stage, and a diff counts as
+rejected when, for either of those two stages, its newest verdict on exactly that
+diff is not ACCEPT (the other stage's ACCEPT does not clear it). A fix that restores
+a rejected diff is sent back to the dev, counts toward `max_rounds`, and when the
+rounds run out the unit ends `STUCK` with `stage` set to the stage that rejected it.
+Fix rounds leave `fix-r<N>.findings`, `fix-r<N>.src` and
 `fix-r<N>.before`, which record what the dev was asked so a resumed park
 continues that fix instead of replaying it.
 
