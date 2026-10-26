@@ -340,7 +340,7 @@ teardown() {
   # 6. the worktree
   if [[ -d "$wt_path" ]]; then
     if [[ -n "$branch" ]]; then
-      local wargs=(remove) delete_branch=0 local_sha pr_sha
+      local wargs=(remove) delete_branch=0 local_sha pr_sha pr_rc
       if [[ $abandon -eq 1 ]]; then
         [[ $force -eq 0 ]] || delete_branch=1
       elif [[ $merged_seen -eq 1 ]]; then
@@ -348,8 +348,11 @@ teardown() {
         # "unmerged" for git, so wt keeps it; delete it only when it is exactly what the
         # PR merged (a later commit, or a push from elsewhere, makes the two differ).
         local_sha="$(git -C "$wt_path" rev-parse "refs/heads/$branch" 2>/dev/null)" || local_sha=""
-        pr_sha="$(cd -- "$wt_path" && gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null)" || pr_sha=""
-        if [[ -n "$local_sha" && "$local_sha" == "$pr_sha" ]]; then
+        pr_rc=0
+        pr_sha="$(cd -- "$wt_path" && gh pr view "$pr" --json headRefOid -q .headRefOid 2>&1)" || pr_rc=$?
+        if [[ $pr_rc -ne 0 ]]; then
+          echo "ship-land: keeping branch $branch: could not read the head of merged #$pr (gh pr view exit $pr_rc: ${pr_sha:-no output}); its head is ${local_sha:-unknown}; delete it by hand once you checked it" >&2
+        elif [[ -n "$local_sha" && "$local_sha" == "$pr_sha" ]]; then
           delete_branch=1
         else
           echo "ship-land: keeping branch $branch: its head (${local_sha:-unknown}) is not the head of merged #$pr (${pr_sha:-unknown}); delete it by hand once you checked it" >&2

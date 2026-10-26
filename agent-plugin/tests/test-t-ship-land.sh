@@ -57,6 +57,8 @@ case "$1 $2" in
     case "$*" in
       *"-q .number"*) printf '%s\n' "${GH_PR:?gh stub: GH_PR not set}" ;;
       *headRefOid*)
+        # GH_HEADOID_FAIL: only this query fails
+        [[ -z "${GH_HEADOID_FAIL:-}" ]] || { echo "gh: HTTP 502 (stub)" >&2; exit 1; }
         # the head the PR was merged at (kept in the marker); GH_HEAD_OID overrides
         if [[ -n "${GH_HEAD_OID:-}" ]]; then echo "$GH_HEAD_OID"
         elif [[ -s "$STUB_REMOTE/merged-$b" ]]; then cat "$STUB_REMOTE/merged-$b"
@@ -83,7 +85,10 @@ echo "$PWD :: $*" >> "$WT_LOG"
 [[ -z "${WT_FAIL:-}" ]] || { echo "wt: refusing" >&2; exit 1; }
 shift
 d=0; [[ "$1" == -D ]] && { d=1; shift; }
-git -C "$STUB_G" worktree remove --force "$STUB_SPACE/worktrees/$1" || exit 1
+# wt takes a branch: find the worktree that holds it (the branch need not equal the ref)
+wtp="$(git -C "$STUB_G" worktree list --porcelain | awk -v b="refs/heads/$1" '$1 == "worktree" { p = substr($0, 10) } $1 == "branch" && $2 == b { print p; exit }')"
+[[ -n "$wtp" ]] || exit 1
+git -C "$STUB_G" worktree remove --force "$wtp" || exit 1
 [[ $d -eq 0 ]] || git -C "$STUB_G" branch -D "$1" >/dev/null
 STUB
 chmod +x "$FIX/bin/gh" "$FIX/bin/wt"
@@ -350,7 +355,8 @@ rc="$(land bc1)"
 assert_eq "squash land: exit 0" "0" "$rc"
 assert_contains "...wt remove -D" "$(tail -n 1 "$WT_LOG")" "remove -D bc1"
 assert_eq "...the branch is deleted" "no" "$(branch_exists bc1)"
-# the branch is ahead of the PR head: kept, both SHAs printed
+# the PR head differs from the branch head (the stub reports another SHA, as after a
+# push from elsewhere): kept, both SHAs printed
 mk_unit bc2 402
 advance_main bc-two
 bc2_pr_sha="$(printf 'f%.0s' {1..40})"
@@ -362,7 +368,8 @@ assert_eq "...the worktree is gone" "no" "$([[ -d "$SPACE/worktrees/bc2" ]] && e
 assert_contains "...wt without -D" "$(tail -n 1 "$WT_LOG")" "remove bc2"
 assert_contains "...the message prints the branch SHA" "$(cat "$FIX/land.err")" "$bc2_local"
 assert_contains "...and the PR SHA" "$(cat "$FIX/land.err")" "$bc2_pr_sha"
-# the PR is not seen as MERGED in the final check: no teardown, branch kept
+# a PR still OPEN after the merge call stops the land before the teardown is reached:
+# nothing is torn down, the branch and worktree are kept
 mk_unit bc3 403
 advance_main bc-three
 rc="$(GH_MERGE_QUEUE=1 land bc3)"
@@ -370,6 +377,24 @@ assert_eq "PR not MERGED: exit 1" "1" "$rc"
 assert_eq "...the branch is kept" "yes" "$(branch_exists bc3)"
 assert_eq "...and so is the worktree" "yes" "$([[ -d "$SPACE/worktrees/bc3" ]] && echo yes || echo no)"
 bash "$LAND" bc3 --abandon --force >/dev/null 2>&1
+# only the headRefOid query fails: the teardown cannot verify, keeps the branch, says why
+mk_unit bc5 405
+advance_main bc-five
+rc="$(GH_HEADOID_FAIL=1 land bc5)"
+assert_eq "unreadable PR head: exit 0" "0" "$rc"
+assert_eq "...the branch is kept" "yes" "$(branch_exists bc5)"
+assert_contains "...wt without -D" "$(tail -n 1 "$WT_LOG")" "remove bc5"
+assert_contains "...the message says the head could not be read" "$(cat "$FIX/land.err")" "could not read the head of merged #405"
+assert_contains "...with the gh error" "$(cat "$FIX/land.err")" "HTTP 502"
+# the branch name differs from the ref
+mk_unit bc6 406
+git -C "$SPACE/worktrees/bc6" branch -m bc6-renamed
+advance_main bc-six
+rc="$(land bc6)"
+assert_eq "branch name differs from the ref: exit 0" "0" "$rc"
+assert_contains "...wt remove -D by branch name" "$(tail -n 1 "$WT_LOG")" "remove -D bc6-renamed"
+assert_eq "...the branch is deleted" "no" "$(branch_exists bc6-renamed)"
+assert_eq "...the worktree is gone" "no" "$([[ -d "$SPACE/worktrees/bc6" ]] && echo yes || echo no)"
 # --abandon without --force: unchanged
 mk_unit bc4 404 PARKED
 rc="$(land bc4 --abandon)"
@@ -557,6 +582,8 @@ assert_contains "...saying so" "$(cat "$FIX/land.err")" "wt remove -D u22 failed
 assert_eq "...the worktree and the loop dir are kept" "yes yes" "$(exists_word "$SPACE/worktrees/u22") $(exists_word "$SPACE/notes/loops/u22")"
 rc="$(land u22)"
 assert_eq "...and the rerun finishes the teardown without a second merge" "0 $((runs0 + 1))" "$rc $(gate_runs)"
+assert_contains "...the rerun ran wt remove -D" "$(tail -n 1 "$WT_LOG")" "remove -D u22"
+assert_eq "...and the branch is gone" "no" "$(git -C "$G" rev-parse -q --verify refs/heads/u22 >/dev/null && echo yes || echo no)"
 
 # the units group: a backend that refuses is a warning, and the next land retries
 fresh_fake
