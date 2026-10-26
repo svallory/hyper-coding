@@ -150,6 +150,9 @@ on both ends; the stock macOS `/usr/bin/rsync` is openrsync and is refused, so i
 rsync 3 and put it first on `PATH`). Host mode copies the brief, the rulings file, the spec dir and the
 mirrored unit directory by any path: spaces, quotes and non-ASCII characters are
 fine, glob characters included. Only a path with a newline in it is refused.
+With the Herdr backend, host mode passes the lead's `HERDR_ENV=1` to the host (only
+when the lead has it set to 1); the host needs `herdr` on its login `PATH` and its
+Herdr server running.
 
 `ship-loop --preflight` checks `jq`, `git`, `gh`, `hyper` (unless
 `SHIP_SPACE_ROOT` is set), `yq` v4, that the config loads and has a `gate`,
@@ -313,10 +316,25 @@ fetch and rebase on `origin/<base>`, refusing an empty branch or a rebase that
 drops commits (the branch is restored); (4) run `gate`, then
 `git push --force-with-lease` leased on the remote branch as seen before the
 fetch; (5) `gh pr merge --<merge_method>`, then, with the PR MERGED, `git push origin --delete <branch>`, and pull the base; (6) run each
-`on_land` command with `{ref}`, `{pr}`, `{task}` replaced; (7) teardown:
+`on_land` command with `{ref}`, `{pr}`, `{task}` replaced (with `--host`, on the lead machine in its
+space root, never over ssh: steps 1-5 and 7 run on the host, step 6 here); (7) teardown:
 `ship-retire` every recorded agent, close every recorded pane and the unit
 space, close a ship-created units group when empty, verify `ship-mux list` is
 empty, `wt remove <branch>`, move `notes/loops/<ref>/` to `notes/loops/.done/<ref>/`.
+With `--host`, a rerun after an `on_land` failure (`ship-land <ref> --host H --task ID`) skips the
+merge, resumes at the failed `on_land` command on the lead, then runs the teardown on
+the host. The lead's lock is held across the three steps; the host's own lock is taken
+inside each of them and is free between them.
+
+The first land saves its `{task}` and the PR number on the lead (`notes/loops/<ref>.land.task`
+and `.land.pr`, in the loop directory for a local land). A rerun reuses the saved task; a
+different `--task` is refused (exit 2), so every printed rerun command carries `--task`.
+The commands already done are remembered in `<ref>.on_land.done` as `<pr> <index> <text>`
+(removed after a successful teardown or `--abandon`); inserting a command into `on_land`
+between runs shifts the indexes, so edit the list only before the first land. `on_land` is
+checked before anything is merged. The PR must be MERGED before `on_land` runs: with
+auto-merge or a merge queue that leaves it open, `ship-land` stops (exit 1) and says to
+rerun once it is merged.
 
 Config used: `gate` (needed to land, not to abandon), `base`, `merge_method`,
 `on_land`, `mux`, `units_group`. A rerun after a failed teardown is safe.
@@ -545,7 +563,7 @@ hosts:
 | `hosts.<name>.ssh` | ssh destination for a remote host (not needed for `local`). |
 | `rulings` | Rulings file, relative to the space root. Default `notes/decisions.md`. |
 | `tracker` | `beads` or `none`; `kickoff` writes tracker items for `beads`. Default `none`. |
-| `on_land` | Commands run after a successful merge; `{ref}`, `{pr}`, `{task}` are replaced. Default `[]`. |
+| `on_land` | Commands run after a successful merge; `{ref}`, `{pr}`, `{task}` are replaced. They always run on the lead machine, in the lead's space root, also for a `--host` unit: the tracker belongs to the operator, not to the host. Default `[]`. |
 | `roles.lead.plugins_keep` | Claude plugins left enabled for the lead. Default `[hyper, beads, papiro]`. |
 | `roles.dev.plugins_keep`, `roles.verify.plugins_keep`, `roles.review.plugins_keep`, `roles.spec.plugins_keep` | Claude plugins left enabled for that role (projects add language servers here). Default `[]`. |
 | `roles.dev.pi_skills`, `roles.verify.pi_skills`, `roles.review.pi_skills`, `roles.spec.pi_skills` | Skills a pi agent of that role is launched with. |

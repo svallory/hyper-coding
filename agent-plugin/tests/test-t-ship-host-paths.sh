@@ -96,6 +96,55 @@ printf '#!/bin/sh\necho "rsync  version 2.6.8  protocol version 29"\n' > "$FIX/o
 msg="$(unset _SHIP_HOST_RSYNC_CHECKED; PATH="$FIX/oldbin:$PATH" ship_host_pull_dir fakehost "$FIX/gh/a?b" "$FIX/gl/none" 2>&1)"
 assert_contains "rsync below 3.0 is refused too" "$msg" "rsync 3.0 or newer"
 
+# HERDR_ENV=1 is forwarded to the host command only when the lead has it set to 1.
+# The fake host scrubs the environment, so what the probe sees is what ssh carried.
+export SHIP_MUX_TEST=1
+HH="$FIX/herdrhome"
+VER="$(jq -r '.version // "dev"' "$PLUGIN_DIR/.claude-plugin/plugin.json")"
+mkdir -p "$HH/.cache/hyper/ship/$VER/scripts/ship" "$FIX/hbin"
+printf '#!/bin/bash\necho "herdr_env=${HERDR_ENV-unset} mux_test=${SHIP_MUX_TEST-unset}"\n' > "$HH/.cache/hyper/ship/$VER/scripts/ship/probe"
+cat > "$FIX/hbin/ssh" <<'STUB'
+#!/bin/bash
+echo "ssh $*" >> "$PROBE_LOG"
+while [[ "$1" == -o ]]; do shift 2; done
+shift
+HH="$HH" exec env -i PATH="$PATH" HOME="$HH" /bin/sh -c "$*"
+STUB
+chmod +x "$FIX/hbin/ssh"
+export HH PROBE_LOG="$FIX/probe.log"
+host_probe() { PATH="$FIX/hbin:$PATH" ship_host_run fakehost "$FIX/lead" box probe; }
+: > "$PROBE_LOG"
+assert_eq "lead HERDR_ENV=1: the ssh command carries HERDR_ENV=1" "yes" "$(HERDR_ENV=1 host_probe >/dev/null; grep -q 'HERDR_ENV=1' "$PROBE_LOG" && echo yes)"
+assert_eq "...and the host command sees it" "herdr_env=1 mux_test=unset" "$(HERDR_ENV=1 host_probe)"
+: > "$PROBE_LOG"
+assert_eq "lead HERDR_ENV unset: nothing is forwarded" "herdr_env=unset mux_test=unset" "$(unset HERDR_ENV; host_probe)"
+assert_eq "...the ssh command has no HERDR_ENV" "" "$(grep 'HERDR_ENV' "$PROBE_LOG")"
+assert_eq "lead HERDR_ENV=0: nothing is forwarded" "herdr_env=unset mux_test=unset" "$(HERDR_ENV=0 host_probe)"
+assert_eq "lead HERDR_ENV=true: nothing is forwarded" "herdr_env=unset mux_test=unset" "$(HERDR_ENV=true host_probe)"
+
+# a long, slow --version must not trip pipefail: the version is read without a pipe
+mkdir -p "$FIX/longbin"
+cat > "$FIX/longbin/rsync" <<'STUB'
+#!/bin/bash
+if [[ "$1" == --version ]]; then
+  echo "rsync  version 3.5.1  protocol version 33"
+  for ((i = 0; i < 1500; i++)); do
+    printf 'capability line %05d %0100d\n' "$i" 0
+    (( i % 100 )) || sleep 0.02
+  done
+  exit 0
+fi
+exec "$REAL_RSYNC" "$@"
+STUB
+chmod +x "$FIX/longbin/rsync"
+REAL_RSYNC="$(command -v rsync)"; export REAL_RSYNC
+mkdir -p "$FIX/lv/src" "$FIX/lv/dst"; echo ok > "$FIX/lv/src/f"
+assert_ok "a 150 KB slow rsync --version is accepted under pipefail" bash -c '
+  set -eo pipefail
+  source "$1/lib.sh"; source "$1/lib-host.sh"
+  PATH="$2:$PATH" ship_host_pull_dir fakehost "$3/src" "$3/dst"' _ "$SHIP_DIR" "$FIX/longbin" "$FIX/lv"
+assert_eq "...and the pull ran" "ok" "$(cat "$FIX/lv/dst/f" 2>/dev/null)"
+
 # the ssh mkdir quoted the path for the remote shell
 assert_contains "ssh mkdir single-quotes a path with a space" "$(cat "$SSH_LOG")" "mkdir -p -- '$FIX/lead/2/with space'"
 assert_contains "...and escapes a single quote" "$(cat "$SSH_LOG")" "mkdir -p -- '$FIX/lead/3/it'\\''s'"

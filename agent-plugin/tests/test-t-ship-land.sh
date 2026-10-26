@@ -58,6 +58,8 @@ case "$1 $2" in
   "pr merge")
     [[ -z "${GH_MERGE_FAIL:-}" ]] || { echo "gh: merge failed" >&2; exit 1; }
     b="$(git branch --show-current)"
+    # GH_MERGE_QUEUE: gh accepts the merge but the PR stays open (auto-merge, a merge queue)
+    [[ -z "${GH_MERGE_QUEUE:-}" ]] || exit 0
     git -C "$STUB_REMOTE" update-ref refs/heads/main "$(git -C "$STUB_REMOTE" rev-parse "refs/heads/$b")"
     : > "$STUB_REMOTE/merged-$b"
     # GH_MERGE_FAIL_AFTER: the merge happens, then gh errors (it cannot delete a branch a worktree holds)
@@ -631,5 +633,194 @@ write_cfg
 names="$(printf '%s|%s|%s|%s' "hu""sk" "for""ge" "/wo""rk/" "/Us""ers/")"
 assert_eq "no space-specific name or absolute path in the scripts" "0" \
   "$(grep -ciE "$names" "$LAND" "$RETIRE" | awk -F: '{s += $2} END {print s + 0}')"
+
+# --host: on_land runs on the lead, never over ssh ------------------------------------------
+# The "host" is this machine: the fake ssh runs the remote command here (marked with
+# SHIP_FAKE_REMOTE=1) from a home of its own, so an on_land that ran over ssh would log
+# "remote". The real rsync copies the scripts and mirrors the unit back (the same paths).
+mkdir -p "$FIX/hbin"
+cat > "$FIX/hbin/ssh" <<'STUB'
+#!/bin/bash
+echo "ssh $*" >> "$SSH_LOG"
+while [[ "$1" == -o ]]; do shift 2; done
+shift
+cmd="$*"
+cd "$HOME" || exit 255
+[[ ! -e "$FIX/ssh.lost" || "$cmd" != *phase* ]] || exit 255
+export SHIP_FAKE_REMOTE=1 SHIP_LAND_LOCK="$FIX/host-land.lock"
+exec /bin/bash -c "${cmd/#bash -lc /bash -c }"
+STUB
+chmod +x "$FIX/hbin/ssh"
+export FIX SSH_LOG="$FIX/hostssh.log"
+OLDPATH="$PATH"; PATH="$FIX/hbin:$PATH"
+hcfg() { write_cfg 'hosts:
+  box:
+    ssh: fakehost
+on_land: '"$1"'
+'; }
+
+CNT="$FIX/hcount.log"; rm -f "$CNT" "$FIX/hok"; : > "$SSH_LOG"
+fresh_fake
+hcfg '["echo {ref}-{pr}-{task}-${SHIP_FAKE_REMOTE:-lead} >> '"$CNT"'"]'
+mk_unit hl1 201
+advance_main host-one
+rc="$(land hl1 --host box --task T-7)"
+assert_eq "land --host: 0" "0" "$rc"
+assert_eq "on_land ran on the lead, not over ssh, with {ref} {pr} {task} replaced" "hl1-201-T-7-lead" "$(cat "$CNT")"
+assert_eq "...the host did the merge phase" "1" "$(grep -c 'phase.*merge' "$SSH_LOG")"
+assert_eq "...and the teardown phase" "1" "$(grep -c 'phase.*finish' "$SSH_LOG")"
+assert_eq "...the PR was merged once" "1" "$(grep -c 'pr merge 201' "$GH_LOG")"
+assert_eq "...the unit was torn down and moved to .done" "yes" "$([[ -d "$SPACE/notes/loops/.done/hl1" && ! -d "$SPACE/notes/loops/hl1" ]] && echo yes)"
+assert_eq "...no on_land bookkeeping is left behind" "" "$(compgen -G "$SPACE/notes/loops/*on_land*" || true)"
+
+# a failing on_land stops before the teardown; the rerun resumes at it, then tears down
+rm -f "$CNT"; : > "$SSH_LOG"
+fresh_fake
+hcfg '["echo one-${SHIP_FAKE_REMOTE:-lead} >> '"$CNT"'", "test -f '"$FIX"'/hok && echo two-${SHIP_FAKE_REMOTE:-lead} >> '"$CNT"'"]'
+mk_unit hl2 202
+advance_main host-two
+rc="$(land hl2 --host box)"
+assert_eq "host land with a failing on_land: 1" "1" "$rc"
+assert_contains "...it names the command" "$(cat "$FIX/land.err")" "on_land command failed"
+assert_contains "...and the rerun command with --host" "$(cat "$FIX/land.err")" "ship-land hl2 --host box"
+assert_eq "...the PR is merged and the unit is not torn down" "yes" "$([[ -d "$SPACE/notes/loops/hl2" && -d "$SPACE/worktrees/hl2" ]] && echo yes)"
+assert_eq "...only the first command ran" "one-lead" "$(cat "$CNT")"
+assert_eq "...the teardown phase has not run" "0" "$(grep -c 'phase.*finish' "$SSH_LOG")"
+touch "$FIX/hok"
+rc="$(land hl2 --host box)"
+assert_eq "the rerun resumes at on_land and lands: 0" "0" "$rc"
+assert_eq "...each on_land command ran once, on the lead" "one-lead two-lead" "$(tr '\n' ' ' <"$CNT" | sed 's/ $//')"
+assert_eq "...the PR was not merged twice" "1" "$(grep -c 'pr merge 202' "$GH_LOG")"
+assert_eq "...the teardown ran" "yes" "$([[ -d "$SPACE/notes/loops/.done/hl2" && ! -d "$SPACE/worktrees/hl2" ]] && echo yes)"
+assert_eq "...and no on_land bookkeeping is left behind" "" "$(compgen -G "$SPACE/notes/loops/*on_land*" || true)"
+
+# --- review rulings: saved task, validation first, MERGED required, abandon, resume ---------
+hcnt() { tr '\n' ' ' <"$CNT" | sed 's/ $//'; }
+state_files() { compgen -G "$SPACE/notes/loops/$1.*" || true; }
+
+# --phase is internal
+assert_eq "--phase without SHIP_UNIT_INTERNAL: usage (2)" "2" "$(env -u SHIP_UNIT_INTERNAL bash "$LAND" hl1 --phase merge >/dev/null 2>&1; echo $?)"
+assert_eq "--phase with a bad value: 2" "2" "$(SHIP_UNIT_INTERNAL=1 bash "$LAND" hl1 --phase bogus >/dev/null 2>&1; echo $?)"
+
+# on_land is validated before anything is merged
+rm -f "$CNT"; : > "$SSH_LOG"
+write_cfg 'hosts:
+  box:
+    ssh: fakehost
+on_land: "not-a-list"
+'
+mk_unit hl7 307
+advance_main host-seven
+rc="$(land hl7 --host box)"
+assert_eq "host land with an invalid on_land: 1" "1" "$rc"
+assert_contains "...says so" "$(cat "$FIX/land.err")" "on_land must be a list"
+assert_eq "...before any merge" "0" "$(grep -c 'pr merge 307' "$GH_LOG")"
+assert_eq "...and before the host was asked to land" "0" "$(grep -c 'phase' "$SSH_LOG")"
+bash "$LAND" hl7 --abandon >/dev/null 2>&1
+
+# a rerun reuses the saved task; a different --task is refused
+rm -f "$CNT" "$FIX/hok"; : > "$SSH_LOG"
+fresh_fake
+hcfg '["echo {ref}-{task} >> '"$CNT"'", "test -f '"$FIX"'/hok && echo {task}-second >> '"$CNT"'"]'
+mk_unit hl5 305
+advance_main host-five
+rc="$(land hl5 --host box --task T-5)"
+assert_eq "host land (task T-5) with a failing on_land: 1" "1" "$rc"
+assert_contains "...the rerun hint carries the task" "$(cat "$FIX/land.err")" "ship-land hl5 --host box --task T-5"
+assert_eq "...the task is saved on the lead" "T-5" "$(cat "$SPACE/notes/loops/hl5.land.task")"
+rc="$(land hl5 --host box --task T-6)"
+assert_eq "a rerun with another --task: 2" "2" "$rc"
+assert_contains "...naming the saved one" "$(cat "$FIX/land.err")" "T-5"
+touch "$FIX/hok"
+rc="$(land hl5 --host box)"
+assert_eq "a rerun without --task lands: 0" "0" "$rc"
+assert_eq "...it used the saved task, and the first command did not rerun" "hl5-T-5 T-5-second" "$(hcnt)"
+assert_eq "...no land state is left on the lead" "" "$(state_files hl5)"
+
+# the same for a local land
+rm -f "$CNT" "$FIX/hok"
+fresh_fake
+write_cfg 'on_land: ["echo {task} >> '"$CNT"'", "test -f '"$FIX"'/hok && echo {task}-second >> '"$CNT"'"]
+'
+mk_unit hl6 306
+advance_main host-six
+rc="$(land hl6 --task T-6)"
+assert_eq "local land (task T-6) with a failing on_land: 1" "1" "$rc"
+assert_contains "...the rerun hint carries the task" "$(cat "$FIX/land.err")" "ship-land hl6 --task T-6"
+assert_eq "a local rerun with another --task: 2" "2" "$(land hl6 --task X)"
+touch "$FIX/hok"
+assert_eq "a local rerun without --task lands: 0" "0" "$(land hl6)"
+assert_eq "...with the saved task" "T-6 T-6-second" "$(hcnt)"
+
+# a finish phase that fails: the rerun does not run on_land again
+rm -f "$CNT"; : > "$SSH_LOG"
+fresh_fake
+hcfg '["echo {ref} >> '"$CNT"'"]'
+mk_unit hl4 304
+advance_main host-four
+rc="$(WT_FAIL=1 land hl4 --host box)"
+assert_eq "host land whose teardown fails: 1" "1" "$rc"
+assert_eq "...on_land ran once" "hl4" "$(hcnt)"
+assert_eq "...and its record stays on the lead" "yes" "$([[ -f "$SPACE/notes/loops/hl4.on_land.done" ]] && echo yes)"
+rc="$(land hl4 --host box)"
+assert_eq "the rerun finishes: 0" "0" "$rc"
+assert_eq "...without running on_land again" "hl4" "$(hcnt)"
+assert_contains "...it says the command was done" "$(cat "$FIX/land.out")" "already done"
+assert_eq "...the record is gone" "" "$(state_files hl4)"
+
+# --abandon --host removes the on_land record
+mk_unit hl3 303 PARKED
+echo "303 1 echo x" > "$SPACE/notes/loops/hl3.on_land.done"
+echo T-3 > "$SPACE/notes/loops/hl3.land.task"
+rc="$(land hl3 --abandon --host box)"
+assert_eq "abandon --host: 0" "0" "$rc"
+assert_eq "...removes the lead's on_land record and task" "" "$(state_files hl3)"
+
+# the PR must be MERGED before on_land and the teardown
+rm -f "$CNT"; : > "$SSH_LOG"
+fresh_fake
+hcfg '["echo {ref} >> '"$CNT"'"]'
+mk_unit hl8 308
+advance_main host-eight
+rc="$(GH_MERGE_QUEUE=1 land hl8 --host box)"
+assert_eq "host land while the PR stays OPEN after the merge call: 1" "1" "$rc"
+assert_contains "...says it is not merged yet" "$(cat "$FIX/land.err")" "not merged yet"
+assert_eq "...on_land did not run" "" "$([[ -s "$CNT" ]] && echo ran)"
+assert_eq "...nor the teardown" "0" "$(grep -c 'phase.*finish' "$SSH_LOG")"
+assert_eq "--phase finish refuses an unmerged PR (3)" "3" "$(SHIP_UNIT_INTERNAL=1 bash "$LAND" hl8 --phase finish >/dev/null 2>&1; echo $?)"
+bash "$LAND" hl8 --abandon --force >/dev/null 2>&1
+rm -f "$CNT"
+fresh_fake
+write_cfg 'on_land: ["echo {ref} >> '"$CNT"'"]
+'
+mk_unit hl9 309
+advance_main host-nine
+rc="$(GH_MERGE_QUEUE=1 land hl9)"
+assert_eq "local land while the PR stays OPEN: 1" "1" "$rc"
+assert_eq "...on_land did not run" "" "$([[ -s "$CNT" ]] && echo ran)"
+assert_contains "...says it is not merged yet" "$(cat "$FIX/land.err")" "not merged yet"
+bash "$LAND" hl9 --abandon --force >/dev/null 2>&1
+
+# a lost connection: the hint carries --task
+: > "$FIX/ssh.lost"
+hcfg '[]'
+mk_unit hl10 310
+rc="$(land hl10 --host box --task T-10)"
+rm -f "$FIX/ssh.lost"
+assert_eq "host land with the connection lost: 1" "1" "$rc"
+assert_contains "...the hint carries --task" "$(cat "$FIX/land.err")" "Rerun 'ship-land hl10 --host box --task T-10'"
+bash "$LAND" hl10 --abandon --force >/dev/null 2>&1
+
+# a unit half-landed by an older ship-land (its done list is on the host side)
+rm -f "$CNT"
+fresh_fake
+hcfg '["echo {ref}-{pr} >> '"$CNT"'", "echo second >> '"$CNT"'"]'
+mk_unit hl11 311
+advance_main host-eleven
+echo "1 echo hl11-311 >> $CNT" > "$SPACE/notes/loops/hl11/on_land.done"
+rc="$(land hl11 --host box)"
+assert_eq "an old-format done list is honoured: 0" "0" "$rc"
+assert_eq "...the command it lists did not run again" "second" "$(hcnt)"
+PATH="$OLDPATH"
 
 finish
