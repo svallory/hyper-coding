@@ -44,12 +44,15 @@ A plain clone is not a space.
 4. Create `<space root>/.hyper/ship.yml` with the one required key, the command
    that must pass before push and merge: `gate: "bun test"` (any command; exit 0
    passes). Check it with `ship-config --print`.
-5. Run inside Herdr (`HERDR_ENV=1`) from the space root. To exercise the flow
+5. Run inside Herdr (`HERDR_ENV=1`) from the space root, or from anywhere with
+   `SHIP_SPACE_ROOT=<space root>` exported (the scripts take no directory flag). To exercise the flow
    without a multiplexer, set `mux: fake` (see
    [Multiplexer backends](#multiplexer-backends)); no real agent runs then.
 6. Write the brief, a markdown file such as `notes/briefs/my-unit.md`: the goal,
    the files to read, the acceptance criteria and the gate. It must tell the dev to
-   push the branch and open a PR against the base with `gh pr create`, because
+   push the branch and open a PR against the base with `gh pr create`, and it should
+   have a `Consumers` section naming, for every new type, flag, file, option and
+   command, who uses it today ([concepts](concepts.md#ship)), because
    a `DONE` verdict without a PR number ends the unit as `ERROR`.
 7. Pick a ref: letters, digits, `.`, `_`, `-`, starting with a letter or digit
    (`^[A-Za-z0-9][A-Za-z0-9._-]*$`). It names the unit, its branch and its state
@@ -194,7 +197,9 @@ end. After an ssh failure it reconnects with a growing delay and keeps polling;
 the driver keeps running meanwhile.
 
 `list` prints one line per unit under `notes/loops/` (not `.done`): ref, host,
-status, stage, failovers, age, driver alive. A unit with a live driver is
+status, stage, failovers, age, driver alive. AGE is the time since the unit's `launched_at`
+(in `unit.json`), which `run` sets and every `resume` sets again, so it counts from the last
+(re)launch, not from the first. A unit with a live driver is
 `RUNNING`; without one the status is `result.json`'s, or `DEAD` when it left
 none.
 
@@ -622,7 +627,7 @@ the stop needs, the driver re-emits the same result and exits 2 again.
 | `QUESTION` | the dev (or a fix round) wrote `QUESTION` in its verdict | `park.json` status `QUESTION`; the verdict is kept as `<verdict>.QUESTION-<n>.json` | `--answer FILE`. The answer goes to the waiting dev. |
 | `BLOCKED` | the dev, or verify, wrote `BLOCKED`; or an agent could not be started, kept alive or prompted for a reason other than a dialog (`loop.log` says why) | `park.json` status `BLOCKED` | `--answer FILE` to nudge the agent; resuming without an answer closes it and retries the stage with a fresh agent. |
 | `OPERATOR` | the spec writer needs a decision only the operator can make (all gaps marked `operator_call`, or `operator_questions`) | `park.json` status `OPERATOR` | `--answer FILE`; a fresh spec writer gets the answer in its prompt. |
-| `DIALOG` | an agent is blocked on a dialog in its pane: the workspace-trust dialog ship could not clear (the cursor would not move onto "Yes, I trust this folder", or it is still showing after Enter), or any other dialog (ship answers none) | `park.json` status `DIALOG`, with the screen text | answer the dialog in the pane (`ship-mux read` shows it), then `resume` with no answer. `--answer` is refused. |
+| `DIALOG` | an agent is blocked on a dialog in its pane, for one of three reasons: (1) the workspace-trust dialog, which ship answers itself, could not be cleared (the cursor would not move onto "Yes, I trust this folder", or it is still showing after Enter); (2) any other dialog (ship answers none); (3) the screen looks like the trust dialog but is **not recognised** as one alone on screen (a third option, a permission prompt below it, ...): ship sends no key, and `loop.log` says "not clearly alone" | `park.json` status `DIALOG`, with the screen text. `agent` is the agent name; `ship-mux --to` accepts it. `file` is the verdict file the park belongs to (empty when there is none) | read the pane (`ship-mux read --ref <ref> --to <agent>`) and answer the dialog: with `ship-mux send --ref <ref> --to <agent> --keys down` / `--keys enter` (keys: `enter esc up down ctrl+c ctrl+d`) for a dialog you can answer safely, or by hand in the pane; then `resume` with no answer. `--answer` is refused. |
 | `LIMIT` | every model for the stage is limited or over `quota.threshold_pct`, or the limited one has no successor | `park.json` status `LIMIT`, `resets_at` when known | wait for the reset, or `--model stage=...` to name a usable list, or `ship-loop --clear-limit NAME` if the quota is back; then `resume`. `--answer` is refused. |
 | `OVER-BUDGET` | a stage ran past its budget | `budget-r<k>.json`; agent left running | `--extend MIN`. |
 | `STUCK` | `max_rounds` reached without ACCEPT, or finalize failed and the dev could not fix it | `result.json.findings` | Raise the limit and run it again: `ship-unit run <ref> --brief ... --class ... --max-rounds <higher>`. Finished rounds are replayed from their files and the driver goes on with the next round (`resume` reuses the old limit and would stop at STUCK again). Or abandon it: `ship-land <ref> --abandon --force`, then start a fresh `ship-unit run`. Read `result.json.findings` first; if the reviewer keeps asking for the same thing, rule on it or re-brief rather than raising the limit. |
@@ -723,7 +728,7 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 | "yq" error | `yq` is missing or is not mikefarah v4 (`yq --version`). Install mikefarah yq. |
 | `ship-unit` exits 70 with "wt (worktrunk) not found on PATH" | Install worktrunk (`wt`). |
 | `ship-mux check` fails | Herdr: run inside Herdr (`HERDR_ENV=1`) with `herdr` on PATH. |
-| A unit parked `DIALOG` and the question names the workspace-trust dialog | Claude Code asked to trust the worktree and ship's one attempt (down, then Enter) did not clear it, or the cursor would not move onto Yes. `ship-mux read --ref <ref> --to <agent id>` shows the screen. Answer it in the pane, then `ship-unit resume <ref>` with no answer. |
+| A unit parked `DIALOG` and the question names the workspace-trust dialog | Claude Code asked to trust the worktree and ship's one attempt (down, then Enter) did not clear it, the cursor would not move onto Yes, or the screen was not recognised as the trust dialog alone (nothing is sent then). `ship-mux read --ref <ref> --to <agent>` shows the screen (`--to` takes the agent name from `park.json` or an id). Answer it with `ship-mux send --keys` or in the pane, then `ship-unit resume <ref>` with no answer. |
 | A unit parked `BLOCKED` with "could not prompt" | ship-mux could not deliver the prompt and the agent was not at a dialog. Read `loop.log` (the line before `PARKED` has the exit code), and the agent's pane. `resume` with no answer retries with a fresh agent. |
 | The dev ran the wrong tool, or cannot find one that works for you | For a local unit the agent's `PATH` is the one of the shell that ran `ship-unit`; for a `--host` unit it is the host's login `PATH` (set it up on the host). Run `ship-unit` from a shell whose `PATH` has what the agent needs (a stub `gh`, a pinned toolchain). Other variables are not passed. |
 | `ship-unit run` exits 70 with "wt switch -c ... failed" and `branch 'x' has no upstream information` | Your global git config has `branch.autosetupmerge` set to an empty value, which breaks `wt switch -c`. Fix it with `git config --global --unset branch.autosetupmerge`, or set it to `true`. ship removes the branch and worktree that run created, so a rerun starts clean. |

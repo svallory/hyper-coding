@@ -301,6 +301,19 @@ _need_recorded() {
   [[ -n "$(_entry "$1")" ]] || refuse "id '$1' is not recorded for ref '$f_ref' (see $rec); no backend call made"
 }
 
+# _resolve_to — --to may name a recorded agent by the name it was started with (park.json's "agent"):
+# when no id matches and exactly one recorded agent has that name, its id is used.
+_resolve_to() {
+  local ids i
+  [[ -z "$(_entry "$f_to")" && -f "$rec" ]] || return 0
+  ids="$(jq -r --arg n "$f_to" '[.created[] | select(.kind == "agent" and .name == $n) | .id] | if length == 1 then .[0] else empty end' "$rec")"
+  [[ -n "$ids" ]] || return 0
+  for ((i = 0; i < ${#orig[@]}; i++)); do
+    if [[ "${orig[$i]}" == --to ]]; then orig[i + 1]="$ids"; fi
+  done
+  f_to="$ids"
+}
+
 # _drop <jq select expression over an entry, using $id> <id> — remove entries.
 _drop() {
   _json_update "$rec" "$rec_default" ".created |= map(select(($1) | not))" --arg id "$2" || return 1
@@ -347,7 +360,7 @@ _close_ok() {
 
 case "$verb" in
   run|send|read|status|wait)
-    case "$verb" in run) target="$f_pane" ;; *) target="$f_to" ;; esac
+    case "$verb" in run) target="$f_pane" ;; *) _resolve_to; target="$f_to" ;; esac
     _need_recorded "$target"
     if [[ "$verb" == status && "$(_entry "$target" | jq -r '.kind')" != agent ]]; then
       refuse "status: '$target' is recorded but is not an agent; no backend call made"
