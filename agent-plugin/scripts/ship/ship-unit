@@ -374,13 +374,13 @@ if [[ "$sub" == _launch ]]; then
     UNDO_FN=undo_created
     if git -C "$root" rev-parse --verify -q "refs/heads/$branch" >/dev/null 2>&1; then
       made_wt=1
-      wt_out="$(CDPATH='' cd -- "$root" && wt switch --no-cd "$branch" 2>&1)" || { echo "$wt_out" >&2; fail "wt switch $branch failed: $(tr '\n' ' ' <<<"$wt_out" | cut -c1-500)"; }
+      wt_out="$(CDPATH='' cd -- "$root" && wt switch --no-cd "$branch" 2>&1)" || fail "wt switch $branch failed:"$'\n'"$(head -c 1500 <<<"$wt_out" | sed 's/^/  /')"
     else
       # A new branch starts from the remote base, not from whatever the local one is.
       from="$base"
       git -C "$root" rev-parse --verify -q "refs/remotes/origin/$base" >/dev/null 2>&1 && from="origin/$base"
       made_wt=1 made_branch=1
-      wt_out="$(CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$from" "$branch" 2>&1)" || { echo "$wt_out" >&2; fail "wt switch -c $branch failed: $(tr '\n' ' ' <<<"$wt_out" | cut -c1-500)"; }
+      wt_out="$(CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$from" "$branch" 2>&1)" || fail "wt switch -c $branch failed:"$'\n'"$(head -c 1500 <<<"$wt_out" | sed 's/^/  /')"
     fi
     [[ -z "$wt_out" ]] || echo "$wt_out" >&2
     wt_path="$(wt_find)"

@@ -187,13 +187,13 @@ teardown() {
     for id in $(jq -r '.created[]? | select(.kind == "pane" and (.root // false) != true) | .id' "$rec"); do
       rc=0
       bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
-      [[ $rc -eq 0 ]] || { echo "ship-land: could not close pane $id (ship-mux exit $rc)" >&2; bad=1; }
+      if [[ $rc -eq 0 ]]; then say "pane $id closed"; else echo "ship-land: could not close pane $id (ship-mux exit $rc)" >&2; bad=1; fi
     done
     # 3. the unit space
     for id in $(jq -r '.created[]? | select(.kind == "space") | .id' "$rec"); do
       rc=0
       bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
-      [[ $rc -eq 0 ]] || { echo "ship-land: could not close space $id (ship-mux exit $rc)" >&2; bad=1; }
+      if [[ $rc -eq 0 ]]; then say "unit space $id closed"; else echo "ship-land: could not close space $id (ship-mux exit $rc)" >&2; bad=1; fi
     done
     # 5. nothing recorded may be alive
     rc=0
@@ -345,8 +345,11 @@ if ! (CDPATH='' cd -- "$wt_path" && gh pr merge "$pr" "--$method"); then
   echo "ship-land: warning: gh reported an error after merging #$pr; the PR is merged" >&2
 fi
 if [[ "$(cd -- "$wt_path" && gh pr view "$pr" --json state -q .state 2>/dev/null)" == MERGED ]]; then
-  git -C "$wt_path" push -q origin --delete "$branch" 2>/dev/null \
-    || echo "ship-land: warning: could not delete the remote branch $branch (already gone?)" >&2
+  if git -C "$wt_path" push -q origin --delete "$branch" 2>/dev/null; then
+    say "remote branch $branch deleted"
+  else
+    echo "ship-land: warning: could not delete the remote branch $branch (already gone?)" >&2
+  fi
 fi
 base_wt="$(git -C "$wt_path" worktree list --porcelain | awk -v b="refs/heads/$base" '
   $1 == "worktree" { p = substr($0, 10) } $1 == "branch" && $2 == b { print p; exit }')"
