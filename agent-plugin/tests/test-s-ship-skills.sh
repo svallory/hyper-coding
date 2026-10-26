@@ -40,21 +40,14 @@ done < <(find "$PLUGIN_DIR" -type f -not -path '*/.git/*' -not -path '*/node_mod
 assert_eq "no file references the removed team and plan commands (AC-1)" "" "$hits"
 
 # --- every ${CLAUDE_PLUGIN_ROOT} path exists (C-10) --------------------------------------
-missing="" deferred=""
+missing=""
 for n in $want; do
   while read -r rel; do
     [[ -n "$rel" ]] || continue
-    [[ -e "$PLUGIN_DIR/$rel" ]] && continue
-    case "$rel" in
-      scripts/ship/ship-unit) deferred="$rel" ;;   # its own unit; checked once it is on the branch
-      *) missing="$missing $n:$rel" ;;
-    esac
+    [[ -e "$PLUGIN_DIR/$rel" ]] || missing="$missing $n:$rel"
   done < <(grep -oE '\$\{CLAUDE_PLUGIN_ROOT\}/[A-Za-z0-9._/-]+' "$SKILLS/$n/SKILL.md" | sed 's|^${CLAUDE_PLUGIN_ROOT}/||; s|[./]*$||' | sort -u)
 done
 assert_eq "every \${CLAUDE_PLUGIN_ROOT} path in every skill exists (C-10)" "" "$missing"
-if [[ -n "$deferred" ]]; then
-  skip "scripts/ship/ship-unit exists" "not on this branch yet (separate unit)"
-fi
 
 # --- C-11 ---------------------------------------------------------------------------------
 assert_no_direct_herdr
