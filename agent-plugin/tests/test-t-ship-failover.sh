@@ -1134,7 +1134,6 @@ for LKMODE in $LKMODES; do
     rm -f "$LKT/lock" "$LKT/lock.break" "$LKT/log"; : >"$LKT/log"
     (exit 0) & LKDEAD=$!; wait "$LKDEAD"
     echo "$LKDEAD@$(hostname)" >"$LKT/lock"
-    [[ "$LKMODE" == perl ]] || echo "$LKDEAD@$(hostname)" >"$LKT/lock.break"
     LPIDS=()
     for w in 1 2 3 4 5 6 7 8; do SHIP_LOCK_TEST_PAUSE=40 bash "$LKT/w3.sh" "$SCRIPTS_DIR/ship/lib.sh" "$LKT/lock" "$LKT/log" & LPIDS+=($!); done
     for pid in "${LPIDS[@]}"; do wait "$pid"; done

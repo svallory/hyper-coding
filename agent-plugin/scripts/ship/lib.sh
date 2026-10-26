@@ -651,9 +651,11 @@ ship_quota_block() {
 # never taken from. A lock is never moved or put back.
 # Taking over a stale lock is a critical section, and it is a kernel lock when perl is there: one perl
 # process opens "<path>.break", takes flock LOCK_EX, judges the lock's owner again by the rules above,
-# unlinks the lock only if it is still the same file with the same stale owner, and exits. Exiting (or
+# unlinks the lock only if it still holds the same stale owner, and exits. Exiting (or
 # dying) releases the flock, so ".break" has no owner and no staleness; nobody ever deletes it and it stays
-# behind, empty, next to the lock. Without perl (or with SHIP_LOCK_NO_PERL=1) the section is a second
+# behind, empty, next to the lock. Locks must be on a local filesystem (flock and O_EXCL are not reliable on
+# NFS and the like). Without perl (or with SHIP_LOCK_NO_PERL=1, which is for tests only: waiters that mix the
+# two takeover paths on one lock do not exclude each other) the section is a second
 # noclobber file "<path>.break" holding the taker's pid@host: judge again under it, remove the lock only if
 # the owner is unchanged, drop it. That fallback treats a ".break" as stale on the same rules after 5 seconds
 # and removes it only after re-reading it. It is not airtight: removing a stale ".break" is a cat/rm gap, and
@@ -697,7 +699,8 @@ _ship_judge() {
     opid="${owner%%@*}" ohost="${owner#*@}"
     if [[ "$ohost" == "$SHIP_LOCK_HOST" && "$opid" =~ ^[0-9]+$ ]]; then
       # on this host the pid decides, however old the lock is
-      if kill -0 "$opid" 2>/dev/null; then return 1; fi
+      # kill -0 fails with EPERM for a live process of another user: that is alive too (as in the perl path)
+      if kill -0 "$opid" 2>/dev/null || ps -p "$opid" >/dev/null 2>&1; then return 1; fi
       return 0
     fi
   fi
@@ -709,7 +712,7 @@ _ship_judge() {
   return 1
 }
 # _ship_flock_break <lock> <owner> <stale_s> — the perl takeover (see ship_lock): under flock on <lock>.break,
-# unlink <lock> if it is the same file still held by <owner> and that owner is dead or too old.
+# unlink <lock> if it still holds <owner> and that owner is dead or too old.
 # exit 0: done or nothing to do; 2: could not get the flock in 20 s; 3: could not open .break
 _ship_flock_break() {
   perl -e '
@@ -734,8 +737,6 @@ _ship_flock_break() {
     }
     exit 0 unless $dead;
     nap();
-    my @now = lstat($l) or exit 0;
-    exit 0 unless $now[1] == $st[1] && $now[0] == $st[0];
     unlink $l;
     exit 0;
   ' "$1" "$2" "$3" "$SHIP_LOCK_HOST"
