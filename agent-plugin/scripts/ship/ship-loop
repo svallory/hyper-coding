@@ -478,7 +478,7 @@ trust_state() {
       if (pos[1] - 1 <= h || !blank(l[pos[1] - 1])) { print "ambiguous"; exit }
       if (pos[2] < NR && !blank(l[pos[2] + 1])) { print "ambiguous"; exit }
       for (i = pos[2] + 1; i <= NR; i++)
-        if (!blank(l[i]) && l[i] !~ /^ *(│|\|)? *Enter to confirm|^ *(│|\|)? *Esc to cancel/) { print "ambiguous"; exit }
+        if (!blank(l[i]) && l[i] !~ /^ *(│|\|)? *(Enter to confirm( · Esc to cancel)?|Esc to cancel) *(│|\|)? *$/) { print "ambiguous"; exit }
       print (curtxt == "Yes, I trust this folder" ? "yes" : "other")
     }'
 }
@@ -490,7 +490,7 @@ trust_state() {
 # start. Parks the unit as DIALOG when the cursor never reaches Yes, when the pane cannot be read
 # partway, when the dialog is still showing after the Enter, or when it was already answered once.
 trust_dialog() {
-  local name="$1" id="$2" stage="$3" screen st mark="$STATE/agents/$1.trust" end downs=0 why
+  local name="$1" id="$2" stage="$3" screen st mark="$STATE/agents/$1.trust" end downs=0 gone why
   why="$name is showing Claude Code's workspace-trust dialog"
   screen="$(mux read --to "$id" --lines 40 2>/dev/null)" || return 1
   st="$(trust_state <<<"$screen")"
@@ -509,17 +509,19 @@ trust_dialog() {
     screen="$(mux read --to "$id" --lines 40 2>/dev/null)" \
       || park DIALOG "$stage" "$name" "$why but its pane could not be read while moving the cursor. Answer it in its pane, then resume."
     st="$(trust_state <<<"$screen")"
-    [[ "$st" != none ]] || return 0
+    [[ "$st" != none ]] || park DIALOG "$stage" "$name" "$why, and the dialog vanished after a down key (the screen shows no trust dialog and ship cannot tell why). Look at its pane, then resume."
     [[ "$st" != ambiguous ]] || park DIALOG "$stage" "$name" "$why, and the screen changed to something ship cannot read safely. Answer it in its pane, then resume."
   done
   log "workspace-trust dialog in $WT shown to $name; cursor on Yes after $downs down key(s), pressing Enter"
   mux send --to "$id" --keys enter >/dev/null 2>>"$LOG" || true
-  end=$((SECONDS + TRUST_WAIT_S))
+  end=$((SECONDS + TRUST_WAIT_S)); gone=0
   while [[ $SECONDS -lt $end ]]; do
     sleep "$POLL_S"
     screen="$(mux read --to "$id" --lines 40 2>/dev/null)" \
       || park DIALOG "$stage" "$name" "$why but its pane could not be read after Enter. Answer it in its pane, then resume."
-    [[ "$(trust_state <<<"$screen")" != none ]] || return 0
+    # a single blank read may be a redraw: the dialog counts as cleared after two in a row
+    if [[ "$(trust_state <<<"$screen")" == none ]]; then gone=$((gone + 1)); else gone=0; fi
+    [[ $gone -lt 2 ]] || return 0
   done
   park DIALOG "$stage" "$name" "$why after ship pressed Enter on it. Answer it in its pane, then resume."
 }

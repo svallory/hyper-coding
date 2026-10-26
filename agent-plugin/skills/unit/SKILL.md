@@ -83,14 +83,15 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/ship/ship-mux read --ref <ref> --to <agent from pa
 not a control: do not send keys or close anything from here. Teardown is
 `land`'s job.
 
-The one exception is a DIALOG park: read the pane first, and only if it shows
-a dialog you can answer safely (for example the workspace-trust dialog, which
-opens on "No, exit"), send the keys to that agent with
-`ship-mux send --ref <ref> --to <agent> --keys down` and then `--keys enter`
-(keys: `enter esc up down ctrl+c ctrl+d`), read the pane again to confirm it
-is gone, and then `ship-unit resume <ref>` with no answer. Do this for a DIALOG
-park only, never to drive an agent's work, and never call the multiplexer
-directly.
+The one exception: a DIALOG park on Claude Code's workspace-trust dialog, which
+ship could not answer itself. Read the pane first. Only if it shows "Quick
+safety check…" with exactly the options "No, exit" and "Yes, I trust this
+folder", send `ship-mux send --ref <ref> --to <agent> --keys down`, read the
+pane again, and send `--keys enter` only when `❯` is on "Yes, I trust this
+folder". Then `ship-unit resume <ref>` with no answer. Those two keys, for that
+dialog, are all this allows. Any other dialog (a permission prompt, "Do you want
+to proceed?", anything else) belongs to the operator: send no keys, ask them.
+Never call the multiplexer directly.
 
 ## Do not
 

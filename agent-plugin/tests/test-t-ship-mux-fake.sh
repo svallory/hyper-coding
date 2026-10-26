@@ -110,6 +110,10 @@ go2
 <keys:enter,ctrl+d>" "$(cat "$SHIP_MUX_FAKE_DIR/sent/$AG")"
 mux send --ref u1 --to dev-1 --keys up,down >/dev/null
 assert_eq "send --keys accepts up and down, by name" "<keys:up,down>" "$(tail -n 1 "$SHIP_MUX_FAKE_DIR/sent/$AG")"
+mux send --ref u1 --to dev-1 --text --to >/dev/null
+assert_eq "a --text value that reads --to is not taken for the target" "--to" "$(tail -n 1 "$SHIP_MUX_FAKE_DIR/sent/$AG")"
+mux send --ref u1 --text --to --to dev-1 >/dev/null
+assert_eq "...even when the real --to follows it" "--to" "$(tail -n 1 "$SHIP_MUX_FAKE_DIR/sent/$AG")"
 printf 'sleeping\n' > "$SHIP_MUX_FAKE_DIR/status/$AG"
 assert_eq "an unknown scripted state is an error (status)" "1" "$(mux_rc status --ref u1 --to "$AG")"
 assert_eq "an unknown scripted state is an error (wait)" "1" "$(mux_rc wait --ref u1 --to "$AG" --until idle --timeout-ms 5)"
@@ -379,5 +383,14 @@ done
 for t in "$h is the only real backend" "the $h stub" "foo/$h agent list" "see the $h docs" "$h-mode.md" "Run the $h skill" "${h}s agent"; do
   assert_eq "C-11 allows prose: $t" "0" "$(grep -cE "$re" <<<"$t")"
 done
+
+# 9: a name shared by several recorded agents is refused, not guessed or reported as missing ----------
+sp9="$(mux open --ref twin --cwd "$WT")"; SP9="$(jq -r .space <<<"$sp9")"
+mux start --ref twin --space "$SP9" --name dup --harness pi --cwd "$WT" >/dev/null
+mux start --ref twin --space "$SP9" --name dup --harness pi --cwd "$WT" >/dev/null
+e="$(mux_err read --ref twin --to dup)"
+assert_contains "two agents with one name: --to names the count" "$e" "--to 'dup' names 2 recorded agents; use an id (ship-mux list)"
+assert_eq "...and exits 3" "3" "$(mux_rc read --ref twin --to dup)"
+assert_eq "...an id still works" "0" "$(mux_rc read --ref twin --to "$(rec twin | jq -r '[.created[] | select(.kind == "agent")][0].id')")"
 
 finish
