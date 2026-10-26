@@ -566,8 +566,10 @@ limit_word() { printf '%s' "$1" | tr 'A-Z' 'a-z' | sed -nE "s/.*hit your ([a-z-]
 # quotes a limit message (either harness's pattern) is replaced.
 scrub_status() {
   local f="$STATE/STATUS.md" pats
-  # the scrub is stricter than the detection: loose patterns, so a quotation anywhere in a line goes
-  pats='["you.{1,3}ve hit your ([a-z]+ )?limit", "\\b429\\b.{0,40}(too many requests|rate.?limit|status code|rate_limit_error)", "too many requests", "resource_exhausted", "(rate|usage) limit (has been )?(reached|exceeded|hit)", "quota (has been )?exceeded", "exceeded (your|the) (current )?(quota|rate limit|usage limit)"]'
+  # the scrub is stricter than the detection: loose built-in patterns, and the configured ones without their
+  # line anchor, so a quotation anywhere in a line goes
+  pats="$(jq -c '["you.{1,3}ve hit your ([a-z]+ )?limit", "\\b429\\b.{0,40}(too many requests|rate.?limit|status code|rate_limit_error)", "too many requests", "resource_exhausted", "(rate|usage) limit (has been )?(reached|exceeded|hit)", "quota (has been )?exceeded", "exceeded (your|the) (current )?(quota|rate limit|usage limit)"]
+    + [.limits.patterns[]? | sub("^(?<f>\\(\\?[a-z]+\\))\\^"; "\(.f)") | sub("^\\^"; "")]' <<<"$SHIP_CONFIG_JSON")" || pats='[]'
   if jq -Rr --argjson p "$pats" 'if (. as $l | any($p[]; . as $re | $l | test($re; "i"))) then "[line removed: it quoted a provider message]" else . end' "$f" >"$f.tmp"; then
     mv "$f.tmp" "$f"
   else

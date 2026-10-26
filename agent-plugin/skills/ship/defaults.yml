@@ -59,9 +59,9 @@ limits:
   # Regexes matched against an agent's screen to detect that it hit a usage limit. Dialect: jq/Oniguruma regex, matched with jq test().
   patterns:
     # Claude Code limit message.
-    claude: '(?i)^([^[:alnum:]\s+>"\x27`“”‘’-]\s*)?You.{1,3}ve hit your ([a-z]+ )?limit\s*($|[·∙]\s*resets)'
+    claude: '(?i)^\s*([^[:alnum:]\s+>"\x27`“”‘’-]\s*)?You.{1,3}ve hit your ([a-z]+ )?limit\s*($|[·∙]\s*resets)'
     # pi has no fixed wording; provider messages vary. Both patterns are anchored to the start of a line (after TUI glyphs; never after + - > or a quote, so diffs and quotations never match). Claude's must be the whole message: nothing before it but one glyph, and only end of line or "· resets" after it. For pi only error phrasing counts, and "too many requests", RESOURCE_EXHAUSTED and "status code" need an "Error:", a cross or a 429 before them: a bare "rate limit" or 429 is also code and file:line text.
-    pi: '(?i)^[^[:alnum:]+>-]*(((api |provider |http )?error:?|✗) *(429 *)?(too many requests|resource_exhausted|status code)|429 *(too many requests|resource_exhausted|status code)|((api |provider |http )?error:? *)?(429\b.*rate_limit_error|429\b.{0,30}rate.?limit|\{"error":\{"code":"?(1302|1308)\b)|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit))'
+    pi: '(?i)^[^[:alnum:]+>-]*((((api |provider |http )?error:?|✗)\s*(429\s*)?|429\s*)((too many requests|status code)\s*([.!]|:.*|[({\[].*)?\s*$|resource_exhausted)|(((api |provider |http )?error:?|✗)\s*)?(429\b.*rate_limit_error|429\b.{0,30}rate.?limit|\{"error":\{"code":"?(1302|1308)\b|(rate|usage) limit (has been )?(reached|exceeded|hit)( for .*)?\s*[.!]?\s*$|quota (has been )?exceeded([.!,:]|\s*$|\sfor\s)|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit)([.!,:]|\s*$)))'
   # Minutes to treat an account or model as limited when the reset time is unknown.
   cooldown_min: 60
 # Reactive failover after a usage limit.

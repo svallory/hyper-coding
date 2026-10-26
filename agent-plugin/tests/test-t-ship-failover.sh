@@ -480,6 +480,9 @@ mode="$(cat "$FIX_DIR/summarizer.mode" 2>/dev/null)"
 case "$mode" in
   fail) echo "boom" >&2; exit 1 ;;
   hang) exec sleep 120 ;;
+  custom)
+    printf '## Done\nThe agent saw a zzz-custom-limit message today.\n\n## In progress\nNothing.\n\n## Next steps\n1. Finish.\n\n## Open questions\nNone.\n'
+    exit 0 ;;
   quote)
     printf 'Here is the note.\n\n## Done\nThe agent saw "You'"'"'ve hit your Sonnet limit" and then "Error: 429 Too Many Requests".\n\n## In progress\nThe rate limit exceeded handler.\n\n## Next steps\n1. Finish the tests.\n\n## Open questions\nNone.\n'
     exit 0 ;;
@@ -568,6 +571,8 @@ blocked_screen() { limit_screen "$1" "$2"; mkdir -p "$SHIP_MUX_FAKE_DIR/after-se
 next_screen() { mkdir -p "$SHIP_MUX_FAKE_DIR/after-send-next"; printf '@%s\n' "$2" >"$SHIP_MUX_FAKE_DIR/after-send-next/$1"; }
 sum_cfg() { printf 'failover:\n  summarizer: [%s]\n' "$1" >>"$PROJECT"; } # after rwrite_cfg
 sent_all() { cat "$SHIP_MUX_FAKE_DIR/sent/$(jq -r .id "$(st "$1")/agents/$2.json")" 2>/dev/null; }
+# dev_fcount_of <ref> — failover files of the dev only (an account limit also makes the reviewer skip its claude entry)
+dev_fcount_of() { jq -s --arg a "$1-dev" '[.[] | select(.agent == $a)] | length' "$(st "$1")"/failover-*.json 2>/dev/null || echo 0; }
 fcount_of() { ls "$(st "$1")"/failover-*.json 2>/dev/null | wc -l | tr -d ' '; }
 r_run() { # ref — gate, stub, driver, with a dump on failure
   stub_start "$1"; run_loop "$1"; stub_stop; gate_stop
@@ -619,7 +624,7 @@ assert_contains "(1) the takeover prompt names the brief" "$TK" "$BRIEF"
 assert_contains "(1) the takeover prompt carries the stage prompt (the verdict file to write)" "$TK" "$(st r1)/develop.json"
 assert_contains "(1) the takeover prompt says who replaced whom" "$TK" "sonnet was replaced by zai/glm-5.3"
 assert_eq "(1) the takeover prompt does not trip the pi limit pattern" "" \
-  "$(jq -Rr --arg re '(?i)^[^[:alnum:]+>-]*(((api |provider |http )?error:?|✗) *(429 *)?(too many requests|resource_exhausted|status code)|429 *(too many requests|resource_exhausted|status code)|((api |provider |http )?error:? *)?(429\\b.*rate_limit_error|429\\b.{0,30}rate.?limit|\\{"error":\\{"code":"?(1302|1308)\\b)|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit))' 'select(test($re))' <<<"$TK")"
+  "$(jq -Rr --arg re '(?i)^[^[:alnum:]+>-]*((((api |provider |http )?error:?|✗)\\s*(429\\s*)?|429\\s*)((too many requests|status code)\\s*([.!]|:.*|[({\\[].*)?\\s*$|resource_exhausted)|(((api |provider |http )?error:?|✗)\\s*)?(429\\b.*rate_limit_error|429\\b.{0,30}rate.?limit|\\{"error":\\{"code":"?(1302|1308)\\b|(rate|usage) limit (has been )?(reached|exceeded|hit)( for .*)?\\s*[.!]?\\s*$|quota (has been )?exceeded([.!,:]|\\s*$|\\sfor\\s)|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit)([.!,:]|\\s*$)))' 'select(test($re))' <<<"$TK")"
 OLD="$(grep -l '/exit' "$SHIP_MUX_FAKE_DIR"/sent/* | head -n 1)"
 assert_contains "(1) the limited claude agent got esc" "$(cat "$OLD")" "<keys:esc>"
 assert_contains "(1) the limited claude agent got /exit" "$(cat "$OLD")" "/exit"
@@ -899,20 +904,23 @@ fi
 # (17) Quoted limit wording is not a limit: the default patterns are anchored to the start of a line.
 CL_RE="$(sed -n "s/^    claude: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml")"
 PI_RE="$(sed -n "s/^    pi: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml")"
+NB="$(printf '\302\240')"   # a no-break space
+REAL_CL="  ⎿ ${NB}You've hit your weekly limit · resets Oct 24, 4pm (America/Sao_Paulo)"   # the line Claude Code prints
 m() { jq -Rn --arg re "$1" --arg l "$2" '$l | test($re)'; }
-for l in "You've hit your Sonnet limit · resets 4pm" "You’ve hit your limit" "│ You've hit your weekly limit" "● YOU'VE HIT YOUR OPUS LIMIT" "You've hit your limit ∙ resets 4pm" "You've hit your limit"; do
+for l in "You've hit your Sonnet limit · resets 4pm" "You’ve hit your limit" "│ You've hit your weekly limit" "● YOU'VE HIT YOUR OPUS LIMIT" "You've hit your limit ∙ resets 4pm" "You've hit your limit" "  You've hit your weekly limit" "$REAL_CL"; do
   assert_eq "claude pattern fires on: $l" true "$(m "$CL_RE" "$l")"
 done
 # shellcheck disable=SC1111  # curly quotes are test data
 for l in "Summary: limit_hit now matches \"You've hit your weekly limit\" and more" "+ You've hit your Sonnet limit" "│ + You've hit your Sonnet limit" "- You've hit your limit" "> You've hit your limit" "\"You've hit your weekly limit\" in the output" "12 + You've hit your limit" \
-  "  You've hit your weekly limit fails over…" "  You've hit your weekly limit" "You've hit your weekly limit. What do you want to do?" "“You've hit your limit”" "‘You’ve hit your limit’" "│ x You've hit your limit" "You've hit your limit and then more" "You've hit your limit · resumes"; do
+  "  You've hit your weekly limit fails over…" "You've hit your weekly limit. What do you want to do?" "“You've hit your limit”" "‘You’ve hit your limit’" "│ x You've hit your limit" "You've hit your limit and then more" "You've hit your limit · resumes"; do
   assert_eq "claude pattern ignores: $l" false "$(m "$CL_RE" "$l")"
 done
-for l in "Error: 429 Too Many Requests" "429 status code (no body)" "Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\"}}" "Error: RESOURCE_EXHAUSTED: quota" "429 RESOURCE_EXHAUSTED: Resource has been exhausted" "Error: 429 RESOURCE_EXHAUSTED: Resource has been exhausted" "✗ too many requests" "Error: Too Many Requests" "429 Too Many Requests" "{\"error\":{\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}}" "{\"error\":{\"code\":1308,\"message\":\"x\"}}" "Usage limit reached for 5 hour" "Rate limit reached" "You exceeded your current quota, please check your plan" "│ Error: 429 status code"; do
+for l in "Error: 429 Too Many Requests" "429 status code (no body)" "Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\"}}" "Error: RESOURCE_EXHAUSTED: quota" "429 RESOURCE_EXHAUSTED: Resource has been exhausted" "Error: 429 RESOURCE_EXHAUSTED: Resource has been exhausted" "✗ too many requests" "Error: Too Many Requests" "429 Too Many Requests" "{\"error\":{\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}}" "{\"error\":{\"code\":1308,\"message\":\"x\"}}" "Usage limit reached for 5 hour" "Rate limit reached" "You exceeded your current quota, please check your plan" "Error: You exceeded your current quota" "│ Error: 429 status code"; do
   assert_eq "pi pattern fires on: $l" true "$(m "$PI_RE" "$l")"
 done
 for l in "retry with backoff when the API answers 429 Too Many Requests" "ship-loop:429" "src/x.sh:429: handler" "// retry on a rate limit" "- Error: 429 Too Many Requests" "+ Rate limit reached" "the code 1302 means something" "> RESOURCE_EXHAUSTED" \
-  "Too many requests are retried" "too many requests" "RESOURCE_EXHAUSTED handling" "resource_exhausted" "status code" "status code 429 is retried" "Error handling: too many requests" "Handles RESOURCE_EXHAUSTED: Resource has been exhausted"; do
+  "Too many requests are retried" "too many requests" "RESOURCE_EXHAUSTED handling" "resource_exhausted" "status code" "status code 429 is retried" "Error handling: too many requests" "Handles RESOURCE_EXHAUSTED: Resource has been exhausted" \
+  "rate limit reached errors are now retried with backoff" "quota exceeded is mapped to a retryable error" "429 status code handling added" "Error: Too Many Requests is now retried" "usage limit reached is logged"; do
   assert_eq "pi pattern ignores: $l" false "$(m "$PI_RE" "$l")"
 done
 
@@ -936,7 +944,7 @@ assert_eq "(19) V3: limited.json was not written" absent "$([[ -e "$SHIP_QUOTA_D
 reset_fake; no_quota; runit r22
 rwrite_cfg '[sonnet, zai/glm-5.3]'
 limit_screen r22-dev "  You've hit your weekly limit fails over the unit when the
-  You've hit your weekly limit"
+  You've hit your weekly limit is quoted in prose"
 answer_after_screen r22 develop.json "$DEV_DONE" "fails over the unit"
 r_run r22
 assert_eq "(22) B1: READY, no failover, one start" "0 0 1" "$RC $(fcount_of r22) $(starts_of r22-dev)"
@@ -960,6 +968,62 @@ assert_eq "(23) exit 1" 1 "$RC"
 assert_contains "(23) the message names the key" "$(cat "$FIX/err-r23.log")" "limits.patterns.pi"
 assert_contains "(23) and says it is not a valid regex" "$(cat "$FIX/err-r23.log")" "not a valid regex"
 rwrite_cfg '[sonnet]'
+
+# (24) The exact line Claude Code prints (indented, a glyph, a no-break space), idle and in the blocked dialog: both fail over.
+reset_fake; no_quota; runit r24
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+limit_screen r24-dev "$REAL_CL"
+answer_after_takeover r24 develop.json "$DEV_DONE"
+r_run r24
+assert_eq "(24) idle: READY after one account failover" "0 1 account" "$RC $(dev_fcount_of r24) $(jq -r .limit_kind "$(st r24)/failover-1.json")"
+reset_fake; no_quota; runit r25
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+blocked_screen r25-dev "$REAL_CL
+
+What do you want to do?
+❯ 1. Stop and wait for limit to reset
+  2. Upgrade your plan"
+answer_after_takeover r25 develop.json "$DEV_DONE"
+r_run r25
+assert_eq "(25) blocked dialog: READY after one account failover" "0 1 account" "$RC $(dev_fcount_of r25) $(jq -r .limit_kind "$(st r25)/failover-1.json")"
+assert_eq "(25) no DIALOG park" absent "$([[ -e "$(st r25)/park.json" ]] && echo present || echo absent)"
+
+# (26) STATUS.md is also scrubbed with the configured patterns, unanchored.
+reset_fake; no_quota; runit r26
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+printf 'limits:\n  patterns:\n    claude: "(?i)^zzz-custom-limit"\n' >>"$PROJECT"
+printf 'custom\n' >"$FIX/summarizer.mode"
+limit_screen r26-dev "zzz-custom-limit"
+answer_after_takeover r26 develop.json "$DEV_DONE"
+r_run r26
+printf 'ok\n' >"$FIX/summarizer.mode"
+assert_eq "(26) READY, one failover" "0 1" "$RC $(dev_fcount_of r26)"
+assert_not_contains "(26) the configured wording is scrubbed from mid-line" "$(cat "$(st r26)/STATUS.md")" "zzz-custom-limit"
+rwrite_cfg '[sonnet]'
+
+# (27) A reviewer fails over; the diff changes before the successor's ACCEPT. That ACCEPT is not used to push:
+# another review of the new diff is needed.
+reset_fake; no_quota; unit r27
+rwrite_cfg '[sonnet]'
+limit_screen r27-review-r1 "You've hit your Opus limit"
+rm -f "$FIX/scripts/r27/review-r1.json"
+printf '%s\n' "$REV_OK" >"$FIX/scripts/r27/review-r2.json"
+(
+  n=0
+  while [[ $n -lt 1200 ]]; do
+    if grep -qs 'taking over' "$SHIP_MUX_FAKE_DIR"/sent/* 2>/dev/null && [[ -s "$(st r27)/review-r1.json.sent" ]]; then
+      echo more >>"$SPACE/worktrees/r27/feat.txt"; git -C "$SPACE/worktrees/r27" commit -qam "feat: more"
+      printf '%s\n' "$REV_OK" >"$(st r27)/review-r1.json.tmp" && mv "$(st r27)/review-r1.json.tmp" "$(st r27)/review-r1.json"
+      exit 0
+    fi
+    n=$((n + 1)); sleep 0.05
+  done
+) &
+GATE_PID=$!
+r_run r27
+assert_eq "(27) the unit finished READY" 0 "$RC"
+assert_eq "(27) the old ACCEPT was not trusted: a second reviewer ran" 1 "$(starts_of r27-review-r2)"
+assert_eq "(27) the pushed head is the reviewed one (after review 2)" "$(git -C "$SPACE/worktrees/r27" rev-parse HEAD)" "$(git -C "$FIX/origin-r27.git" rev-parse refs/heads/feat-r27)"
 
 # (21) A limit on another model than the agent runs on is recorded; this agent keeps going.
 reset_fake; no_quota; runit r21
