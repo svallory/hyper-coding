@@ -108,12 +108,13 @@ add to it. If it does not exist when a unit starts, ship creates it with a
 |---|---|---|
 | `gh pr create --base <base> --head <branch>` | the dev agent, in its pane | open the PR (the brief tells it to) |
 | `gh pr view <branch> --json number -q .number` | `ship-land` | find the PR number when `result.json` has none |
-| `gh pr view <n> --json state,autoMergeRequest,mergeStateStatus` | `ship-land` | skip a PR that is already `MERGED`; refuse a rerun while an `OPEN` PR has auto-merge enabled |
-| `gh api graphql` (`isInMergeQueue`) | `ship-land` | the same refusal for a PR in the merge queue (`gh pr view` has no field for it; a failed query counts as not queued) |
+| `gh pr view <n> --json state,autoMergeRequest,mergeStateStatus,url` | `ship-land` | skip a PR that is already `MERGED`; refuse a rerun while an `OPEN` PR has auto-merge set (the message names the merge state); `url` gives the owner and repo for the next call |
+| `gh api graphql` (`isInMergeQueue`) | `ship-land` | the same refusal for a PR in the merge queue (`gh pr view` has no field for it). A failed query does not stop the land: it prints a warning with gh's exit code and error and says the check was skipped; a GHES without the field is skipped quietly |
 | `gh pr view <n> --json state -q .state` | `ship-land` | confirm a merge |
+| `gh pr view <n> --json headRefOid -q .headRefOid` | `ship-land` | at teardown, compare the merged PR's head with the local branch |
 | `gh pr merge <n> --<merge_method>` | `ship-land` | merge (the remote branch is then deleted with `git push origin --delete`, not by gh) |
 
-A stub `gh` that implements these four is enough for a test run. Ship itself
+A stub `gh` that implements these is enough for a test run. Ship itself
 never runs `gh auth token`. If you see that call in a `gh` log, it comes from the
 agent's environment (Claude Code or your shell setup), at agent start. A stub
 should answer `gh auth` with exit 0.

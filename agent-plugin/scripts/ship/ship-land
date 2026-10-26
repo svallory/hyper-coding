@@ -245,10 +245,6 @@ if ! ship_host_is_local "$host"; then
   # 2. on_land here, on the lead: the tracker is wherever the lead runs.
   pr="$(cat "$root/notes/loops/$ref/land.pr" 2>/dev/null)" || pr=""
   [[ "$pr" =~ ^[0-9]+$ ]] || fail "could not learn the PR number of $ref from $host"
-  # A unit half-landed by an older ship-land has its done list on the host's side.
-  if [[ ! -f "${lead_prefix}on_land.done" && -f "$root/notes/loops/$ref/on_land.done" ]]; then
-    cp "$root/notes/loops/$ref/on_land.done" "${lead_prefix}on_land.done"
-  fi
   save_land_state "$lead_prefix"
   run_on_land "$lead_prefix" "$rerun"
   # 3. teardown on the host
@@ -429,23 +425,36 @@ fi
 acquire_lock
 
 # --- 2. a merged PR (rerun after a failed teardown) skips to on_land -----------------------
-pr_json="$(cd "$wt_path" && gh pr view "$pr" --json state,autoMergeRequest,mergeStateStatus)" || fail "gh pr view $pr failed"
+pr_json="$(cd "$wt_path" && gh pr view "$pr" --json state,autoMergeRequest,mergeStateStatus,url)" || fail "gh pr view $pr failed"
 pr_state="$(jq -r '.state // ""' <<<"$pr_json")" || fail "could not read the state of #$pr"
 if [[ "$pr_state" == OPEN ]]; then
-  # Queued to merge (auto-merge, or a merge queue) by an earlier ship-land: a rebase and a
-  # push now would drop the PR out of the queue, so nothing is touched until it is MERGED.
+  # Queued to merge (auto-merge or a merge queue, set by anyone): a rebase and a push now
+  # would drop the PR out of the queue, so nothing is touched until it is MERGED.
   queued=""
   if [[ "$(jq -r '.autoMergeRequest // empty | type' <<<"$pr_json")" == object ]]; then
-    queued="auto-merge is enabled"
+    queued="auto-merge is set (merge state $(jq -r '.mergeStateStatus // "unknown"' <<<"$pr_json"); if it is BEHIND or BLOCKED it may never merge)"
   else
-    # gh pr view has no merge-queue field: ask GraphQL (best effort; a failure means not queued).
-    pr_url="$(cd "$wt_path" && gh pr view "$pr" --json url -q .url 2>/dev/null)" || pr_url=""
+    # gh pr view has no merge-queue field: ask GraphQL. Fail-open (the land continues), but
+    # never silently.
+    pr_url="$(jq -r '.url // ""' <<<"$pr_json")"
     if [[ "$pr_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)/pull/[0-9]+$ ]]; then
+      gq_err="$(mktemp)"
+      gq_rc=0
       # shellcheck disable=SC2016 # $owner etc. are GraphQL variables, not shell ones
-      in_queue="$(cd "$wt_path" && gh api graphql -F "number=$pr" -F "owner=${BASH_REMATCH[1]}" -F "name=${BASH_REMATCH[2]}" \
+      in_queue="$(cd "$wt_path" && gh api graphql -F "number=$pr" -f "owner=${BASH_REMATCH[1]}" -f "name=${BASH_REMATCH[2]}" \
         -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){isInMergeQueue}}}' \
-        -q .data.repository.pullRequest.isInMergeQueue 2>/dev/null)" || in_queue=""
-      [[ "$in_queue" != true ]] || queued="it is in the merge queue"
+        -q .data.repository.pullRequest.isInMergeQueue 2>"$gq_err")" || gq_rc=$?
+      if [[ $gq_rc -ne 0 ]]; then
+        # An older GHES has no isInMergeQueue field: there is no queue to check, say nothing.
+        if ! grep -qi "isInMergeQueue" "$gq_err" || ! grep -qi "doesn't exist\|not exist" "$gq_err"; then
+          echo "ship-land: warning: merge-queue check skipped for #$pr: gh api graphql failed (exit $gq_rc): $(tr '\n' ' ' <"$gq_err")" >&2
+        fi
+      elif [[ "$in_queue" == true ]]; then
+        queued="it is in the merge queue"
+      fi
+      rm -f "$gq_err"
+    else
+      echo "ship-land: warning: merge-queue check skipped for #$pr: could not read owner/repo from the PR url '$pr_url'" >&2
     fi
   fi
   if [[ -n "$queued" ]]; then

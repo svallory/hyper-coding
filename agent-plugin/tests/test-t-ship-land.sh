@@ -33,6 +33,12 @@ git -C "$FIX/seed" commit -q -m "chore: base"
 git -C "$FIX/seed" branch -M main
 git -C "$FIX/seed" push -q origin main
 git -C "$REMOTE" symbolic-ref HEAD refs/heads/main
+# every ref update that reaches the remote is logged (the queued-rerun cases assert it stays empty)
+cat > "$REMOTE/hooks/update" <<'HOOK'
+#!/bin/sh
+echo "$1" >> "$(dirname "$0")/../push.log"
+HOOK
+chmod +x "$REMOTE/hooks/update"
 git clone -q --bare "$REMOTE" "$G"
 git -C "$G" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
 git -C "$G" fetch -q origin
@@ -55,12 +61,11 @@ case "$1 $2" in
     b="$(git branch --show-current)"
     if [[ -e "$STUB_REMOTE/merged-$b" ]] || git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then st=MERGED; else st=OPEN; fi
     case "$*" in
-      *"--json url"*) echo "https://github.com/acme/stub/pull/${GH_PR:-1}" ;;
       *"-q .number"*) printf '%s\n' "${GH_PR:?gh stub: GH_PR not set}" ;;
       *autoMergeRequest*)
         # GH_AUTOMERGE: an OPEN PR with auto-merge enabled
         am=null; [[ -z "${GH_AUTOMERGE:-}" || "$st" != OPEN ]] || am='{"enabledBy":{"login":"op"},"mergeMethod":"REBASE"}'
-        printf '{"state":"%s","autoMergeRequest":%s,"mergeStateStatus":"CLEAN"}\n' "$st" "$am" ;;
+        printf '{"state":"%s","autoMergeRequest":%s,"mergeStateStatus":"%s","url":"https://github.com/acme/stub/pull/%s"}\n' "$st" "$am" "${GH_MSS:-CLEAN}" "${GH_PR:-1}" ;;
       *headRefOid*)
         # GH_HEADOID_FAIL: only this query fails
         [[ -z "${GH_HEADOID_FAIL:-}" ]] || { echo "gh: HTTP 502 (stub)" >&2; exit 1; }
@@ -82,6 +87,9 @@ case "$1 $2" in
 ;;
   "api graphql")
     # GH_QUEUE: an OPEN PR in the merge queue (gh pr view has no field for it)
+    # GH_GQL_FAIL: the query fails; GH_GQL_NOFIELD: a GHES without isInMergeQueue
+    [[ -z "${GH_GQL_FAIL:-}" ]] || { echo "gh: HTTP 502 (stub graphql)" >&2; exit 1; }
+    [[ -z "${GH_GQL_NOFIELD:-}" ]] || { echo "gh: GraphQL: Field 'isInMergeQueue' doesn't exist on type 'PullRequest'" >&2; exit 1; }
     b="$(git branch --show-current)"
     if [[ -n "${GH_QUEUE:-}" && ! -e "$STUB_REMOTE/merged-$b" ]]; then echo true; else echo false; fi ;;
   *) echo "gh stub: unexpected $*" >&2; exit 1 ;;
@@ -888,7 +896,9 @@ bash "$LAND" hl9 --abandon --force >/dev/null 2>&1
 queued_rerun_check() { # <label> <ref> <env var> <land args...>
   local label="$1" r="$2" knob="$3" head_before remote_before g0 m0 rc
   shift 3
-  : > "$GH_LOG"
+  # main moves first, so a rebase (and then a push) would change the branch
+  QN=$((${QN:-0} + 1)); advance_main "queued-check-$QN"
+  : > "$GH_LOG"; : > "$REMOTE/push.log"
   head_before="$(git -C "$SPACE/worktrees/$r" rev-parse HEAD)"
   remote_before="$(git -C "$REMOTE" rev-parse "refs/heads/$r")"
   g0="$(gate_runs)"; m0="$(merges)"
@@ -901,7 +911,8 @@ queued_rerun_check() { # <label> <ref> <env var> <land args...>
   assert_eq "...no gate run" "$g0" "$(gate_runs)"
   assert_eq "...no rebase (the local head is unchanged)" "$head_before" "$(git -C "$SPACE/worktrees/$r" rev-parse HEAD)"
   assert_eq "...no push (the remote branch is unchanged)" "$remote_before" "$(git -C "$REMOTE" rev-parse "refs/heads/$r")"
-  assert_eq "...no push of any kind in the gh log either" "0" "$(grep -c 'push' "$GH_LOG" || true)"
+  assert_eq "...no ref update reached the remote (hook log empty)" "" "$(cat "$REMOTE/push.log")"
+  assert_contains "...the message names the merge state (auto-merge case) or the queue" "$(cat "$FIX/land.err")" "$([[ "$knob" == GH_QUEUE ]] && echo "merge queue" || echo "merge state")"
 }
 rm -f "$CNT"
 fresh_fake
@@ -954,6 +965,32 @@ rc="$(GH_AUTOMERGE=1 land q3 --host box)"
 assert_eq "host rerun once the PR is MERGED: 0" "0" "$rc"
 assert_eq "...on_land ran" "q3" "$(hcnt)"
 assert_eq "...the teardown ran on the host" "1" "$(grep -c 'phase.*finish' "$SSH_LOG")"
+
+# the merge-queue query fails: the land goes on, with a warning, never silently
+rm -f "$CNT"
+fresh_fake
+write_cfg 'on_land: ["echo {ref}-{pr} >> '"$CNT"'"]
+'
+mk_unit q4 504
+advance_main queue-four
+rc="$(GH_GQL_FAIL=1 land q4)"
+assert_eq "merge-queue query failing: the land goes on (0)" "0" "$rc"
+assert_contains "...warns on stderr that the check was skipped" "$(cat "$FIX/land.err")" "merge-queue check skipped"
+assert_contains "...with gh's exit code" "$(cat "$FIX/land.err")" "exit 1"
+assert_contains "...and gh's error text" "$(cat "$FIX/land.err")" "HTTP 502 (stub graphql)"
+mk_unit q5 505
+advance_main queue-five
+rc="$(GH_GQL_NOFIELD=1 land q5)"
+assert_eq "no isInMergeQueue field (older GHES): the land goes on (0)" "0" "$rc"
+assert_eq "...without a warning" "0" "$(grep -c 'merge-queue check skipped' "$FIX/land.err" || true)"
+# auto-merge set but the PR is BEHIND: the refusal names the merge state
+mk_unit q6 506
+advance_main queue-six
+rc="$(GH_MERGE_QUEUE=1 land q6)"
+queued_rerun_check "rerun with auto-merge set on a BEHIND PR" q6 GH_AUTOMERGE
+rc="$(GH_MSS=BEHIND GH_AUTOMERGE=1 land q6)"
+assert_contains "...the refusal names the merge state" "$(cat "$FIX/land.err")" "merge state BEHIND"
+bash "$LAND" q6 --abandon --force >/dev/null 2>&1
 
 # a lost connection: the hint carries --task
 : > "$FIX/ssh.lost"
