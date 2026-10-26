@@ -48,7 +48,9 @@
 #      every recorded pane, then the unit space; try to close every ship-created
 #      units group in <space root>/.hyper/ship-mux.json (kept when others use it;
 #      a refusal is only a warning and is retried by the next land); `ship-mux list` must
-#      then return nothing; wt remove <branch>; move notes/loops/<ref>/ to
+#      then return nothing; wt remove <branch> (with -D when this run saw the PR MERGED
+#      and the branch head equals the PR's headRefOid; otherwise the branch is kept and
+#      both SHAs are printed); move notes/loops/<ref>/ to
 #      notes/loops/.done/<ref>/
 #
 # Config (ship.yml): gate (required to land, not to abandon), base, merge_method,
@@ -87,7 +89,7 @@ fail() { echo "ship-land: $*" >&2; exit 1; }
 refuse() { echo "ship-land: refused: $*" >&2; exit 3; }
 say() { echo "ship-land: $*"; }
 
-ref="" abandon=0 force=0 task="" host="" phase=""
+ref="" abandon=0 force=0 task="" host="" phase="" merged_seen=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --abandon) abandon=1; shift ;;
@@ -338,8 +340,22 @@ teardown() {
   # 6. the worktree
   if [[ -d "$wt_path" ]]; then
     if [[ -n "$branch" ]]; then
-      local wargs=(remove)
-      if [[ $abandon -eq 1 && $force -eq 1 ]]; then wargs+=(-D); fi
+      local wargs=(remove) delete_branch=0 local_sha pr_sha
+      if [[ $abandon -eq 1 ]]; then
+        [[ $force -eq 0 ]] || delete_branch=1
+      elif [[ $merged_seen -eq 1 ]]; then
+        # This run saw the PR MERGED. A squash or rebase merge leaves the local branch
+        # "unmerged" for git, so wt keeps it; delete it only when it is exactly what the
+        # PR merged (a later commit, or a push from elsewhere, makes the two differ).
+        local_sha="$(git -C "$wt_path" rev-parse "refs/heads/$branch" 2>/dev/null)" || local_sha=""
+        pr_sha="$(cd -- "$wt_path" && gh pr view "$pr" --json headRefOid -q .headRefOid 2>/dev/null)" || pr_sha=""
+        if [[ -n "$local_sha" && "$local_sha" == "$pr_sha" ]]; then
+          delete_branch=1
+        else
+          echo "ship-land: keeping branch $branch: its head (${local_sha:-unknown}) is not the head of merged #$pr (${pr_sha:-unknown}); delete it by hand once you checked it" >&2
+        fi
+      fi
+      if [[ $delete_branch -eq 1 ]]; then wargs+=(-D); fi
       wargs+=("$branch")
       (CDPATH='' cd -- "$root" && wt "${wargs[@]}") || fail "wt ${wargs[*]} failed; the worktree is kept"
       say "worktree $branch removed"
@@ -474,6 +490,7 @@ fi   # PR not yet merged
 # still be open here.
 pr_state="$(cd -- "$wt_path" && gh pr view "$pr" --json state -q .state 2>/dev/null)" || pr_state=""
 [[ "$pr_state" == MERGED ]] || fail "#$pr is not merged yet (state ${pr_state:-unknown}; auto-merge or a merge queue?); rerun '$rerun' once it is merged"
+merged_seen=1
 
 # --- 6. on_land -------------------------------------------------------------------------
 # With --host the lead runs these (see above); under --phase merge the lead takes over here.

@@ -54,14 +54,22 @@ case "$1 $2" in
     # `pr view <number|branch> --json ... -q .number|.state`
     b="$(git branch --show-current)"
     if [[ -e "$STUB_REMOTE/merged-$b" ]] || git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then st=MERGED; else st=OPEN; fi
-    case "$*" in *"-q .number"*) printf '%s\n' "${GH_PR:?gh stub: GH_PR not set}" ;; *) echo "$st" ;; esac ;;
+    case "$*" in
+      *"-q .number"*) printf '%s\n' "${GH_PR:?gh stub: GH_PR not set}" ;;
+      *headRefOid*)
+        # the head the PR was merged at (kept in the marker); GH_HEAD_OID overrides
+        if [[ -n "${GH_HEAD_OID:-}" ]]; then echo "$GH_HEAD_OID"
+        elif [[ -s "$STUB_REMOTE/merged-$b" ]]; then cat "$STUB_REMOTE/merged-$b"
+        else git -C "$STUB_REMOTE" rev-parse "refs/heads/$b"; fi ;;
+      *) echo "$st" ;;
+    esac ;;
   "pr merge")
     [[ -z "${GH_MERGE_FAIL:-}" ]] || { echo "gh: merge failed" >&2; exit 1; }
     b="$(git branch --show-current)"
     # GH_MERGE_QUEUE: gh accepts the merge but the PR stays open (auto-merge, a merge queue)
     [[ -z "${GH_MERGE_QUEUE:-}" ]] || exit 0
     git -C "$STUB_REMOTE" update-ref refs/heads/main "$(git -C "$STUB_REMOTE" rev-parse "refs/heads/$b")"
-    : > "$STUB_REMOTE/merged-$b"
+    git -C "$STUB_REMOTE" rev-parse "refs/heads/$b" > "$STUB_REMOTE/merged-$b"
     # GH_MERGE_FAIL_AFTER: the merge happens, then gh errors (it cannot delete a branch a worktree holds)
     if [[ -n "${GH_MERGE_FAIL_AFTER:-}" ]]; then echo "gh: failed to delete local branch" >&2; exit 1; fi
 ;;
@@ -183,7 +191,7 @@ assert_eq "u2's space is still open" "yes" "$(state_exists "$U2_SPACE" && echo y
 assert_eq "the units group was kept (u2 still in it)" "yes" "$([[ -f "$SHIP_MUX_FAKE_DIR/groups/proj-units" ]] && echo yes || echo no)"
 assert_eq "no group close reached the backend" "0" "$(jq -c --arg g "$G1" 'select(.verb == "close" and (.args | index($g)))' "$SHIP_MUX_FAKE_LOG" | wc -l | tr -d ' ')"
 assert_eq "the worktree is gone" "no" "$([[ -d "$SPACE/worktrees/u1" ]] && echo yes || echo no)"
-assert_contains "wt ran from the space root without -D" "$(cat "$WT_LOG")" "$SPACE :: remove u1"
+assert_contains "wt ran from the space root, with -D (verified merge)" "$(cat "$WT_LOG")" "$SPACE :: remove -D u1"
 assert_eq "the loop dir moved to .done" "yes" "$([[ -f "$SPACE/notes/loops/.done/u1/result.json" && ! -d "$SPACE/notes/loops/u1" ]] && echo yes || echo no)"
 
 # 2: landing the last unit closes the empty, ship-created group -----------------------
@@ -329,6 +337,45 @@ assert_contains "...and deletes the branch (wt remove -D)" "$(tail -n 1 "$WT_LOG
 assert_eq "...the branch is gone" "no" "$(git -C "$G" rev-parse -q --verify refs/heads/u10 >/dev/null && echo yes || echo no)"
 rc="$(land nonesuch --abandon)"
 assert_eq "--abandon on an unknown ref is an error (1)" "1" "$rc"
+write_cfg
+
+# 7b: branch cleanup after a verified merge -------------------------------------------------
+branch_exists() { git -C "$G" rev-parse -q --verify "refs/heads/$1" >/dev/null && echo yes || echo no; }
+# squash-merged, branch head == PR head: deleted
+write_cfg 'merge_method: squash
+'
+mk_unit bc1 401
+advance_main bc-one
+rc="$(land bc1)"
+assert_eq "squash land: exit 0" "0" "$rc"
+assert_contains "...wt remove -D" "$(tail -n 1 "$WT_LOG")" "remove -D bc1"
+assert_eq "...the branch is deleted" "no" "$(branch_exists bc1)"
+# the branch is ahead of the PR head: kept, both SHAs printed
+mk_unit bc2 402
+advance_main bc-two
+bc2_pr_sha="$(printf 'f%.0s' {1..40})"
+rc="$(GH_HEAD_OID=$bc2_pr_sha land bc2)"
+bc2_local="$(git -C "$G" rev-parse refs/heads/bc2 2>/dev/null)"
+assert_eq "branch differing from the PR head: exit 0" "0" "$rc"
+assert_eq "...the branch is kept" "yes" "$(branch_exists bc2)"
+assert_eq "...the worktree is gone" "no" "$([[ -d "$SPACE/worktrees/bc2" ]] && echo yes || echo no)"
+assert_contains "...wt without -D" "$(tail -n 1 "$WT_LOG")" "remove bc2"
+assert_contains "...the message prints the branch SHA" "$(cat "$FIX/land.err")" "$bc2_local"
+assert_contains "...and the PR SHA" "$(cat "$FIX/land.err")" "$bc2_pr_sha"
+# the PR is not seen as MERGED in the final check: no teardown, branch kept
+mk_unit bc3 403
+advance_main bc-three
+rc="$(GH_MERGE_QUEUE=1 land bc3)"
+assert_eq "PR not MERGED: exit 1" "1" "$rc"
+assert_eq "...the branch is kept" "yes" "$(branch_exists bc3)"
+assert_eq "...and so is the worktree" "yes" "$([[ -d "$SPACE/worktrees/bc3" ]] && echo yes || echo no)"
+bash "$LAND" bc3 --abandon --force >/dev/null 2>&1
+# --abandon without --force: unchanged
+mk_unit bc4 404 PARKED
+rc="$(land bc4 --abandon)"
+assert_eq "--abandon: exit 0" "0" "$rc"
+assert_contains "...wt without -D" "$(tail -n 1 "$WT_LOG")" "remove bc4"
+assert_eq "...the branch is kept" "yes" "$(branch_exists bc4)"
 write_cfg
 
 # a result.json that does not match the schema is refused
@@ -506,7 +553,7 @@ advance_main nine
 runs0="$(gate_runs)"
 rc="$(WT_FAIL=1 land u22)"
 assert_eq "a failed wt remove: exit 1" "1" "$rc"
-assert_contains "...saying so" "$(cat "$FIX/land.err")" "wt remove u22 failed"
+assert_contains "...saying so" "$(cat "$FIX/land.err")" "wt remove -D u22 failed"
 assert_eq "...the worktree and the loop dir are kept" "yes yes" "$(exists_word "$SPACE/worktrees/u22") $(exists_word "$SPACE/notes/loops/u22")"
 rc="$(land u22)"
 assert_eq "...and the rerun finishes the teardown without a second merge" "0 $((runs0 + 1))" "$rc $(gate_runs)"
@@ -821,6 +868,22 @@ echo "1 echo hl11-311 >> $CNT" > "$SPACE/notes/loops/hl11/on_land.done"
 rc="$(land hl11 --host box)"
 assert_eq "an old-format done list is honoured: 0" "0" "$rc"
 assert_eq "...the command it lists did not run again" "second" "$(hcnt)"
+
+# a host-mode land deletes the branch on the host side
+rm -f "$CNT"
+fresh_fake
+hcfg '["true"]'
+mk_unit hl12 312
+advance_main host-twelve
+rc="$(land hl12 --host box)"
+assert_eq "host land: 0" "0" "$rc"
+assert_contains "...the host's teardown ran wt remove -D" "$(tail -n 1 "$WT_LOG")" "remove -D hl12"
+assert_eq "...the branch is deleted" "no" "$(git -C "$G" rev-parse -q --verify refs/heads/hl12 >/dev/null && echo yes || echo no)"
+mk_unit hl13 313
+advance_main host-thirteen
+rc="$(GH_HEAD_OID=$(printf 'e%.0s' {1..40}) land hl13 --host box)"
+assert_eq "host land with a differing PR head: 0" "0" "$rc"
+assert_eq "...the branch is kept" "yes" "$(git -C "$G" rev-parse -q --verify refs/heads/hl13 >/dev/null && echo yes || echo no)"
 PATH="$OLDPATH"
 
 finish
