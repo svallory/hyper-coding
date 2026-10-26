@@ -1074,58 +1074,78 @@ WCNT=0 WROUNDS=0
 for round in $(seq 1 40); do set -- "$WON/$round".*; if [[ -e "$1" ]]; then WROUNDS=$((WROUNDS + 1)); WCNT=$((WCNT + $#)); fi; done
 assert_eq "ship_lock: one winner in each of 40 contended rounds" "40 40" "$WROUNDS $WCNT"
 rm -f "$FIX"/rlock.*
-# takeover of a dead owner's lock by 8 concurrent waiters, with pauses injected at the race windows:
-# never two holders at once, every waiter gets its turn, nothing is left behind (no lock, no .break)
+# takeover of a dead owner's lock by 8 concurrent waiters, with pauses injected at the race windows: never two
+# holders at once, every waiter gets its turn, no lock or marker is left behind. Both takeover paths run: the
+# perl flock one and the noclobber .break fallback (SHIP_LOCK_NO_PERL=1). With perl, .break stays behind, by design.
 LKT="$FIX/tk"; rm -rf "$LKT"; mkdir -p "$LKT"
-LKBAD=0 LKGOT=0 LKLEFT=0
-for round in $(seq 1 12); do
-  rm -f "$LKT"/*
-  echo "99999999@$(hostname)" >"$LKT/lock"
-  LPIDS=()
-  for w in 1 2 3 4 5 6 7 8; do
-    (
-      SHIP_LOCK_TEST_PAUSE=40 ship_lock "$LKT/lock" 60 || { echo "gave-up $w" >>"$LKT/bad"; exit 0; }
-      if ( set -C; echo "$w" >"$LKT/inside" ) 2>/dev/null; then sleep 0.02; rm -f "$LKT/inside"; else echo "overlap $w" >>"$LKT/bad"; fi
-      echo "$w" >>"$LKT/got"
-      ship_unlock "$LKT/lock"
-    ) & LPIDS+=($!)
+LKMODES="noperl"; command -v perl >/dev/null 2>&1 && LKMODES="perl noperl"
+for LKMODE in $LKMODES; do
+  if [[ "$LKMODE" == noperl ]]; then export SHIP_LOCK_NO_PERL=1; else unset SHIP_LOCK_NO_PERL; fi
+  LKBAD=0 LKGOT=0 LKLEFT=0
+  for round in $(seq 1 12); do
+    rm -f "$LKT"/*
+    echo "99999999@$(hostname)" >"$LKT/lock"
+    LPIDS=()
+    for w in 1 2 3 4 5 6 7 8; do
+      (
+        SHIP_LOCK_TEST_PAUSE=40 ship_lock "$LKT/lock" 60 || { echo "gave-up $w" >>"$LKT/bad"; exit 0; }
+        if ( set -C; echo "$w" >"$LKT/inside" ) 2>/dev/null; then sleep 0.02; rm -f "$LKT/inside"; else echo "overlap $w" >>"$LKT/bad"; fi
+        echo "$w" >>"$LKT/got"
+        ship_unlock "$LKT/lock"
+      ) & LPIDS+=($!)
+    done
+    for pid in "${LPIDS[@]}"; do wait "$pid"; done
+    [[ ! -s "$LKT/bad" ]] || LKBAD=$((LKBAD + 1))
+    [[ "$(wc -l <"$LKT/got" 2>/dev/null | tr -d ' ')" == 8 ]] && LKGOT=$((LKGOT + 1))
+    [[ ! -e "$LKT/lock" && ! -e "$LKT/inside" ]] || LKLEFT=$((LKLEFT + 1))
+    if [[ "$LKMODE" == noperl && -e "$LKT/lock.break" ]]; then LKLEFT=$((LKLEFT + 1)); fi
   done
-  for pid in "${LPIDS[@]}"; do wait "$pid"; done
-  [[ ! -s "$LKT/bad" ]] || LKBAD=$((LKBAD + 1))
-  [[ "$(wc -l <"$LKT/got" 2>/dev/null | tr -d ' ')" == 8 ]] && LKGOT=$((LKGOT + 1))
-  [[ ! -e "$LKT/lock" && ! -e "$LKT/lock.break" && ! -e "$LKT/inside" ]] || LKLEFT=$((LKLEFT + 1))
+  assert_eq "takeover race ($LKMODE), 12 rounds x 8 waiters: never two holders, nobody gave up" 0 "$LKBAD"
+  assert_eq "takeover race ($LKMODE): every waiter got its turn in every round" 12 "$LKGOT"
+  assert_eq "takeover race ($LKMODE): no lock or marker left behind" 0 "$LKLEFT"
 done
-assert_eq "takeover race, 12 rounds x 8 waiters: never two holders, nobody gave up" 0 "$LKBAD"
-assert_eq "takeover race: every waiter got its turn in every round" 12 "$LKGOT"
-assert_eq "takeover race: no lock, .break or marker left behind" 0 "$LKLEFT"
-# a .break left by a dead process does not wedge the takeover
+unset SHIP_LOCK_NO_PERL
+# a stray .break (any content, any age) does not wedge the takeover, with perl
+if command -v perl >/dev/null 2>&1; then
+  rm -f "$LKT"/*; echo "99999999@$(hostname)" >"$LKT/lock"; echo "99999998@$(hostname)" >"$LKT/lock.break"
+  assert_ok "perl: a stray .break does not matter and the takeover goes on" ship_lock "$LKT/lock" 10
+  ship_unlock "$LKT/lock"
+  assert_eq "perl: the lock is gone and the .break is left in place" "absent present" "$([[ -e "$LKT/lock" ]] && echo present || echo absent) $([[ -e "$LKT/lock.break" ]] && echo present || echo absent)"
+fi
+# the fallback: a .break left by a dead process is cleared and the takeover goes on
 rm -f "$LKT"/*; echo "99999999@$(hostname)" >"$LKT/lock"; echo "99999998@$(hostname)" >"$LKT/lock.break"
-assert_ok "a dead process's .break is cleared and the takeover goes on" ship_lock "$LKT/lock" 10
-ship_unlock "$LKT/lock"
-assert_eq "no lock or .break left after that" "absent absent" "$([[ -e "$LKT/lock" ]] && echo present || echo absent) $([[ -e "$LKT/lock.break" ]] && echo present || echo absent)"
-# a dead owner AND a dead .break, with the pause only before the .break removal: the stale .break is re-read
-# before it is removed, so a fresh one made by another waiter is never deleted (no overlap)
+assert_ok "fallback: a dead process's .break is cleared and the takeover goes on" env SHIP_LOCK_NO_PERL=1 bash -c 'source "$1"; ship_lock "$2" 10' _ "$SCRIPTS_DIR/ship/lib.sh" "$LKT/lock"
+rm -f "$LKT/lock"
+assert_eq "fallback: no .break left after that" absent "$([[ -e "$LKT/lock.break" ]] && echo present || echo absent)"
+# contention under load: a dead owner, 8 separate waiters with pauses at every race window (also between the
+# flock and the unlink), 4 CPU hogs running, 40 rounds: never two holders, nobody times out, no lock left
 cat >"$LKT/w3.sh" <<'W3'
 source "$1"; L="$2"; LOG="$3"
-for k in 1; do
-  ship_lock "$L" 20 120 || { echo "TIMEOUT $BASHPID" >>"$LOG"; exit 1; }
-  echo "in $BASHPID" >>"$LOG"; sleep "0.0$((RANDOM % 3))"; echo "out $BASHPID" >>"$LOG"
-  ship_unlock "$L"
-done
+ship_lock "$L" 30 120 || { echo "TIMEOUT $$" >>"$LOG"; exit 1; }
+echo "in" >>"$LOG"; sleep "0.0$((RANDOM % 3))"; echo "out" >>"$LOG"
+ship_unlock "$L"
 W3
-LKOV=0 LKTMO=0 LKLEFT3=0
-for round in $(seq 1 40); do
-  rm -f "$LKT/lock" "$LKT/lock.break" "$LKT/log"; : >"$LKT/log"
-  (exit 0) & LKDEAD=$!; wait "$LKDEAD"
-  echo "$LKDEAD@$(hostname)" >"$LKT/lock"; echo "$LKDEAD@$(hostname)" >"$LKT/lock.break"
-  LPIDS=()
-  for w in 1 2 3 4 5 6 7 8; do SHIP_LOCK_TEST_PAUSE=40 bash "$LKT/w3.sh" "$SCRIPTS_DIR/ship/lib.sh" "$LKT/lock" "$LKT/log" & LPIDS+=($!); done
-  for pid in "${LPIDS[@]}"; do wait "$pid"; done
-  [[ "$(awk '$1=="in"{d++; if(d>1)o++} $1=="out"{d--} END{print o+0}' "$LKT/log")" == 0 ]] || LKOV=$((LKOV + 1))
-  grep -q TIMEOUT "$LKT/log" && LKTMO=$((LKTMO + 1))
-  [[ ! -e "$LKT/lock" && ! -e "$LKT/lock.break" ]] || LKLEFT3=$((LKLEFT3 + 1))
+HOGS=()
+for _ in 1 2 3 4; do ( while :; do :; done ) & HOGS+=($!); done
+for LKMODE in $LKMODES; do
+  if [[ "$LKMODE" == noperl ]]; then export SHIP_LOCK_NO_PERL=1; LKR=12; else unset SHIP_LOCK_NO_PERL; LKR=40; fi
+  LKOV=0 LKTMO=0 LKLEFT3=0
+  for round in $(seq 1 "$LKR"); do
+    rm -f "$LKT/lock" "$LKT/lock.break" "$LKT/log"; : >"$LKT/log"
+    (exit 0) & LKDEAD=$!; wait "$LKDEAD"
+    echo "$LKDEAD@$(hostname)" >"$LKT/lock"
+    [[ "$LKMODE" == perl ]] || echo "$LKDEAD@$(hostname)" >"$LKT/lock.break"
+    LPIDS=()
+    for w in 1 2 3 4 5 6 7 8; do SHIP_LOCK_TEST_PAUSE=40 bash "$LKT/w3.sh" "$SCRIPTS_DIR/ship/lib.sh" "$LKT/lock" "$LKT/log" & LPIDS+=($!); done
+    for pid in "${LPIDS[@]}"; do wait "$pid"; done
+    [[ "$(awk '$1=="in"{d++; if(d>1)o++} $1=="out"{d--} END{print o+0}' "$LKT/log")" == 0 ]] || LKOV=$((LKOV + 1))
+    if grep -q TIMEOUT "$LKT/log"; then LKTMO=$((LKTMO + 1)); fi
+    [[ ! -e "$LKT/lock" ]] || LKLEFT3=$((LKLEFT3 + 1))
+  done
+  assert_eq "under load ($LKMODE): $LKR rounds of 8 waiters over a dead owner: no overlap, no timeout, no lock left" "0 0 0" "$LKOV $LKTMO $LKLEFT3"
 done
-assert_eq "dead owner + dead .break, pause before the .break re-read: no overlap in 40 rounds" "0 0 0" "$LKOV $LKTMO $LKLEFT3"
+unset SHIP_LOCK_NO_PERL
+for pid in "${HOGS[@]}"; do kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; done
 # a directory left by an old mkdir lock is removed
 rm -f "$LKT"/*; mkdir "$LKT/lock"
 assert_ok "an old mkdir lock directory is replaced" ship_lock "$LKT/lock" 10

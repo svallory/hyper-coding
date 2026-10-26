@@ -645,17 +645,22 @@ ship_quota_block() {
 # ship_lock <path> <timeout_s> [stale_s] — take the lock file <path>, waiting up to <timeout_s> seconds
 # (0 = one try). Returns 1 when it could not. The file is created with noclobber (O_EXCL), which is atomic
 # on every platform; a mkdir lock is not (uutils mkdir, the ubuntu CI image's, lets several callers win),
-# and flock is missing on macOS. The file holds "pid@host" (the pid of the calling shell or subshell). A lock
-# is stale when its owner is on this host and dead, or (owner elsewhere or unknown) when it is older than
-# <stale_s> seconds (default 120) and stat could read its age; a live owner on this host is never taken from.
-# A lock is never moved or put back. A stale one is removed under a second noclobber mutex, "<path>.break":
-# take it, judge the owner again, remove the lock only if it is still the same stale owner, drop the mutex,
-# then compete for the normal create. A ".break" is stale on the same rules after 5 seconds, and is removed
-# only after re-reading it and finding the owner that was judged stale. One cat/rm gap remains there; hitting it
-# takes two crashed waiters in a row, and then a fresh .break can be removed. A directory left
-# by an old mkdir lock is removed with rmdir. Sets SHIP_LOCK_OWNER to what the lock file said when it gave up.
-# SHIP_LOCK_TEST_PAUSE=<ms> makes the takeover pause a random time at its race windows (tests only).
-# Safe under `set -e`.
+# and the flock(1) command is missing on macOS. The file holds "pid@host" (the pid of the calling shell or
+# subshell). A lock is stale when its owner is on this host and dead, or (owner elsewhere or unknown) when it
+# is older than <stale_s> seconds (default 120) and stat could read its age; a live owner on this host is
+# never taken from. A lock is never moved or put back.
+# Taking over a stale lock is a critical section, and it is a kernel lock when perl is there: one perl
+# process opens "<path>.break", takes flock LOCK_EX, judges the lock's owner again by the rules above,
+# unlinks the lock only if it is still the same file with the same stale owner, and exits. Exiting (or
+# dying) releases the flock, so ".break" has no owner and no staleness; nobody ever deletes it and it stays
+# behind, empty, next to the lock. Without perl (or with SHIP_LOCK_NO_PERL=1) the section is a second
+# noclobber file "<path>.break" holding the taker's pid@host: judge again under it, remove the lock only if
+# the owner is unchanged, drop it. That fallback treats a ".break" as stale on the same rules after 5 seconds
+# and removes it only after re-reading it. It is not airtight: removing a stale ".break" is a cat/rm gap, and
+# one dead ".break" plus bad timing can let two waiters through the takeover.
+# A directory left by an old mkdir lock is removed with rmdir. Sets SHIP_LOCK_OWNER to what the lock file said
+# when it gave up. SHIP_LOCK_TEST_PAUSE=<ms> makes the takeover pause a random time at its race windows (tests
+# only). Safe under `set -e`.
 SHIP_LOCK_OWNER=""
 SHIP_LOCK_HOST=""
 # _ship_set_me — set SHIP_LOCK_ME to "pid@host" for this shell or subshell. $$ is the parent's in a subshell,
@@ -703,6 +708,38 @@ _ship_judge() {
   fi
   return 1
 }
+# _ship_flock_break <lock> <owner> <stale_s> — the perl takeover (see ship_lock): under flock on <lock>.break,
+# unlink <lock> if it is the same file still held by <owner> and that owner is dead or too old.
+# exit 0: done or nothing to do; 2: could not get the flock in 20 s; 3: could not open .break
+_ship_flock_break() {
+  perl -e '
+    use strict; use Fcntl qw(:flock O_RDWR O_CREAT);
+    my ($l, $owner, $stale, $host) = @ARGV;
+    my $pause = $ENV{SHIP_LOCK_TEST_PAUSE} || 0;
+    sub nap { select(undef, undef, undef, int(rand($pause)) / 1000) if $pause =~ /^[1-9][0-9]*$/; }
+    sysopen(my $bk, "$l.break", O_RDWR | O_CREAT, 0644) or exit 3;
+    $SIG{ALRM} = sub { exit 2 }; alarm 20;
+    flock($bk, LOCK_EX) or exit 2;
+    alarm 0;
+    nap();
+    open(my $fh, "<", $l) or exit 0;
+    my @st = stat($fh) or exit 0;
+    my $cur = <$fh>; $cur = "" unless defined $cur; chomp $cur;
+    exit 0 if $cur ne $owner;
+    my $dead = 0;
+    if ($cur =~ /^([0-9]+)@(.*)$/ && $2 eq $host) {
+      $dead = (kill(0, $1) || $!{EPERM}) ? 0 : 1;
+    } else {
+      $dead = (time - $st[9] > $stale) ? 1 : 0;
+    }
+    exit 0 unless $dead;
+    nap();
+    my @now = lstat($l) or exit 0;
+    exit 0 unless $now[1] == $st[1] && $now[0] == $st[0];
+    unlink $l;
+    exit 0;
+  ' "$1" "$2" "$3" "$SHIP_LOCK_HOST"
+}
 ship_lock() {
   local l="$1" wait_s="${2:-30}" stale_s="${3:-120}" start="$SECONDS" me owner bowner last=""
   _ship_set_me
@@ -715,7 +752,10 @@ ship_lock() {
     elif _ship_judge "$l" "$stale_s"; then
       owner="$SHIP_LOCK_OWNER" last="$owner"
       _ship_pause
-      if ( set -C; printf '%s\n' "$me" >"$l.break" ) 2>/dev/null; then
+      if [[ "${SHIP_LOCK_NO_PERL:-}" != 1 ]] && command -v perl >/dev/null 2>&1; then
+        _ship_flock_break "$l" "$owner" "$stale_s" || true
+        if [[ ! -e "$l" ]]; then continue; fi
+      elif ( set -C; printf '%s\n' "$me" >"$l.break" ) 2>/dev/null; then
         if _ship_judge "$l" "$stale_s" && [[ "$SHIP_LOCK_OWNER" == "$owner" ]]; then
           _ship_pause
           rm -f "$l"
