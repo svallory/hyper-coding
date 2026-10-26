@@ -373,7 +373,7 @@ reset_fake; unit t13
 # the limit text appears on the pane after the dev's prompt (the driver reads only the newest lines)
 export SHIP_LOOP_MUX="$TESTS_DIR/fixtures/ship/limitmux" LIMITMUX_REAL="$SCRIPTS_DIR/ship/ship-mux"
 mkdir -p "$SHIP_MUX_FAKE_DIR/after-send"
-printf "You've hit your weekly limit. What do you want to do?\n" >"$SHIP_MUX_FAKE_DIR/after-send/t13-dev"
+printf "You've hit your weekly limit · resets Fri 4pm\n" >"$SHIP_MUX_FAKE_DIR/after-send/t13-dev"
 stub_start t13; run_loop t13; stub_stop
 check_result t13 "LIMIT" 2 PARKED
 assert_eq "LIMIT: park.json status" "LIMIT" "$(jq -r .status "$(st t13)/park.json")"

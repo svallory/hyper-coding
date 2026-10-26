@@ -212,6 +212,23 @@ _ship_validate_config() {
       bad=1
     fi
   done
+  _ship_validate_patterns || bad=1
+  return $bad
+}
+
+# _ship_validate_patterns — every limits.patterns.<harness> is a string and a regex jq can compile.
+_ship_validate_patterns() {
+  local k re bad=0
+  while IFS= read -r k; do
+    [[ -n "$k" ]] || continue
+    if [[ "$(_ship_cfg_type "limits.patterns.$k")" != string ]]; then
+      _ship_err "limits.patterns.$k must be a string (a regex); set in $(_ship_key_src "limits.patterns.$k")"; bad=1; continue
+    fi
+    re="$(jq -r --arg k "$k" '.limits.patterns[$k]' <<<"$SHIP_CONFIG_JSON")"
+    if ! jq -n --arg re "$re" '"" | test($re)' >/dev/null 2>&1; then
+      _ship_err "limits.patterns.$k is not a valid regex ($re); set in $(_ship_key_src "limits.patterns.$k")"; bad=1
+    fi
+  done < <(jq -r '.limits.patterns // {} | keys[]' <<<"$SHIP_CONFIG_JSON" 2>/dev/null)
   return $bad
 }
 

@@ -619,7 +619,7 @@ assert_contains "(1) the takeover prompt names the brief" "$TK" "$BRIEF"
 assert_contains "(1) the takeover prompt carries the stage prompt (the verdict file to write)" "$TK" "$(st r1)/develop.json"
 assert_contains "(1) the takeover prompt says who replaced whom" "$TK" "sonnet was replaced by zai/glm-5.3"
 assert_eq "(1) the takeover prompt does not trip the pi limit pattern" "" \
-  "$(jq -Rr --arg re '(?i)^[^[:alnum:]+>-]*((api |provider |http )?error:? *)?(429( status code|\\b.*rate_limit_error|\\b.{0,30}(too many requests|rate.?limit))|too many requests|resource_exhausted|\\{"error":\\{"code":"?(1302|1308)\\b|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit))' 'select(test($re))' <<<"$TK")"
+  "$(jq -Rr --arg re '(?i)^[^[:alnum:]+>-]*(((api |provider |http )?error:?|✗) *(429 *)?(too many requests|resource_exhausted|status code)|429 *(too many requests|resource_exhausted|status code)|((api |provider |http )?error:? *)?(429\\b.*rate_limit_error|429\\b.{0,30}rate.?limit|\\{"error":\\{"code":"?(1302|1308)\\b)|(rate|usage) limit (has been )?(reached|exceeded|hit)|quota (has been )?exceeded|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit))' 'select(test($re))' <<<"$TK")"
 OLD="$(grep -l '/exit' "$SHIP_MUX_FAKE_DIR"/sent/* | head -n 1)"
 assert_contains "(1) the limited claude agent got esc" "$(cat "$OLD")" "<keys:esc>"
 assert_contains "(1) the limited claude agent got /exit" "$(cat "$OLD")" "/exit"
@@ -900,16 +900,18 @@ fi
 CL_RE="$(sed -n "s/^    claude: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml")"
 PI_RE="$(sed -n "s/^    pi: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml")"
 m() { jq -Rn --arg re "$1" --arg l "$2" '$l | test($re)'; }
-for l in "You've hit your Sonnet limit · resets 4pm" "  You’ve hit your limit" "│ You've hit your weekly limit" "● YOU'VE HIT YOUR OPUS LIMIT"; do
+for l in "You've hit your Sonnet limit · resets 4pm" "You’ve hit your limit" "│ You've hit your weekly limit" "● YOU'VE HIT YOUR OPUS LIMIT" "You've hit your limit ∙ resets 4pm" "You've hit your limit"; do
   assert_eq "claude pattern fires on: $l" true "$(m "$CL_RE" "$l")"
 done
-for l in "Summary: limit_hit now matches \"You've hit your weekly limit\" and more" "+ You've hit your Sonnet limit" "│ + You've hit your Sonnet limit" "- You've hit your limit" "> You've hit your limit" "\"You've hit your weekly limit\" in the output" "12 + You've hit your limit"; do
+for l in "Summary: limit_hit now matches \"You've hit your weekly limit\" and more" "+ You've hit your Sonnet limit" "│ + You've hit your Sonnet limit" "- You've hit your limit" "> You've hit your limit" "\"You've hit your weekly limit\" in the output" "12 + You've hit your limit" \
+  "  You've hit your weekly limit fails over…" "  You've hit your weekly limit" "You've hit your weekly limit. What do you want to do?" "“You've hit your limit”" "‘You’ve hit your limit’" "│ x You've hit your limit" "You've hit your limit and then more" "You've hit your limit · resumes"; do
   assert_eq "claude pattern ignores: $l" false "$(m "$CL_RE" "$l")"
 done
-for l in "Error: 429 Too Many Requests" "429 status code (no body)" "Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\"}}" "RESOURCE_EXHAUSTED: quota" "{\"error\":{\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}}" "{\"error\":{\"code\":1308,\"message\":\"x\"}}" "Usage limit reached for 5 hour" "Rate limit reached" "You exceeded your current quota, please check your plan" "│ Error: 429 status code"; do
+for l in "Error: 429 Too Many Requests" "429 status code (no body)" "Error: 429 {\"type\":\"error\",\"error\":{\"type\":\"rate_limit_error\"}}" "Error: RESOURCE_EXHAUSTED: quota" "429 RESOURCE_EXHAUSTED: Resource has been exhausted" "Error: 429 RESOURCE_EXHAUSTED: Resource has been exhausted" "✗ too many requests" "Error: Too Many Requests" "429 Too Many Requests" "{\"error\":{\"code\":\"1302\",\"message\":\"Rate limit reached for requests\"}}" "{\"error\":{\"code\":1308,\"message\":\"x\"}}" "Usage limit reached for 5 hour" "Rate limit reached" "You exceeded your current quota, please check your plan" "│ Error: 429 status code"; do
   assert_eq "pi pattern fires on: $l" true "$(m "$PI_RE" "$l")"
 done
-for l in "retry with backoff when the API answers 429 Too Many Requests" "ship-loop:429" "src/x.sh:429: handler" "// retry on a rate limit" "- Error: 429 Too Many Requests" "+ Rate limit reached" "the code 1302 means something" "> RESOURCE_EXHAUSTED"; do
+for l in "retry with backoff when the API answers 429 Too Many Requests" "ship-loop:429" "src/x.sh:429: handler" "// retry on a rate limit" "- Error: 429 Too Many Requests" "+ Rate limit reached" "the code 1302 means something" "> RESOURCE_EXHAUSTED" \
+  "Too many requests are retried" "too many requests" "RESOURCE_EXHAUSTED handling" "resource_exhausted" "status code" "status code 429 is retried" "Error handling: too many requests" "Handles RESOURCE_EXHAUSTED: Resource has been exhausted"; do
   assert_eq "pi pattern ignores: $l" false "$(m "$PI_RE" "$l")"
 done
 
@@ -929,6 +931,15 @@ answer_after_screen r19 develop.json "$DEV_DONE" "limit_hit now matches"
 r_run r19
 assert_eq "(19) V3: READY, no failover, one start" "0 0 1" "$RC $(fcount_of r19) $(starts_of r19-dev)"
 assert_eq "(19) V3: limited.json was not written" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json" ]] && echo present || echo absent)"
+# B1: a wrapped line that starts with the wording, indented, is not the real message
+reset_fake; no_quota; runit r22
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+limit_screen r22-dev "  You've hit your weekly limit fails over the unit when the
+  You've hit your weekly limit"
+answer_after_screen r22 develop.json "$DEV_DONE" "fails over the unit"
+r_run r22
+assert_eq "(22) B1: READY, no failover, one start" "0 0 1" "$RC $(fcount_of r22) $(starts_of r22-dev)"
+assert_eq "(22) B1: limited.json was not written" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json" ]] && echo present || echo absent)"
 # V2: a claude dev blocked on an edit dialog whose diff has the wording parks DIALOG, no failover
 reset_fake; no_quota; runit r20
 rwrite_cfg '[sonnet, zai/glm-5.3]'
@@ -938,6 +949,16 @@ blocked_screen r20-dev "Edit file src/x.sh?
 r_run r20 2
 assert_eq "(20) V2: parked DIALOG, no failover" "2 DIALOG 0" "$RC $(jq -r .status "$(st r20)/park.json") $(fcount_of r20)"
 assert_eq "(20) V2: limited.json was not written" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json" ]] && echo present || echo absent)"
+
+# (23) An invalid limits regex fails loudly at config load, naming the key.
+reset_fake; unit r23
+rwrite_cfg '[sonnet]'
+printf 'limits:\n  patterns:\n    pi: "(unclosed"\n' >>"$PROJECT"
+run_loop r23
+assert_eq "(23) exit 1" 1 "$RC"
+assert_contains "(23) the message names the key" "$(cat "$FIX/err-r23.log")" "limits.patterns.pi"
+assert_contains "(23) and says it is not a valid regex" "$(cat "$FIX/err-r23.log")" "not a valid regex"
+rwrite_cfg '[sonnet]'
 
 # (21) A limit on another model than the agent runs on is recorded; this agent keeps going.
 reset_fake; no_quota; runit r21
