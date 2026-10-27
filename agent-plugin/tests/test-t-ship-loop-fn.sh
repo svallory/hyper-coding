@@ -867,6 +867,12 @@ fix_round() { GC="$GC|r$1[src=$FIX_SRC n=$3]<<$2>>"; printf '%s\n' "$BEFORE" >"$
 rejected_diff() { REJECTED_BY=""; [[ "$CUR" == "$REJ" ]] || return 1; REJECTED_BY=spec-r1.json; }
 reviewed_diff() { [[ "$CUR" == "$OKSIG" ]]; }
 rejection_text() { printf 'REJTEXT(%s)' "$(basename "$1")"; }
+# the re-check collaborators: recheck_diff (scripted: RD_FIX makes its first call send the dev back to fix), set_recheck
+# (records its arguments in SR) and spec_route (SPEC_ROUTED makes it take the diff once, recording SRT)
+RD=0 RD_FIX="" SR="" SRT="" SPEC_ROUTED=""
+recheck_diff() { RD=$((RD + 1)); if [[ -n "$RD_FIX" && $RD -eq 1 ]]; then NEED_FIX="RECHECK-FIX" NEED_FIX_N=1; FIX_SRC=gate; return 1; fi; return 0; }
+set_recheck() { SR="$1|$2"; }
+spec_route() { [[ -n "$SPEC_ROUTED" ]] || return 1; SRT="$1|$2"; SPEC_ROUTED=""; CUR=ok; return 0; }
 do_review() { echo "REVIEWED"; exit 9; }
 RG() { # prints the fix_round calls and the log (or what finish ended with)
   newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; BEFORE="${BEFORE:-b0}"
@@ -911,6 +917,92 @@ NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""
 assert_eq "review_gate: nothing pending and the diff already reviewed: returns at once" "return gc=" "$( ( review_gate; echo "return gc=$GC" ) 2>&1 )"
 NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=fresh
 assert_contains "review_gate: a diff nobody reviewed (not rejected either) goes to a new review" "$( ( review_gate ) 2>&1 )" "REVIEWED"
+# The re-check wiring (D4). mutation: drop `recheck_diff && return 0` (the first), `continue` after a failed re-check,
+# the set_recheck call in the restore branch, its stage (${REJECTED_BY%%-r*}), the spec_route call and its `continue`
+fix_round() { GC="$GC|r$1[src=$FIX_SRC n=$3]<<$2>>"; printf 'b\n' >"$STATE/fix-r$1.before"; CUR=ok; }
+rejected_diff() { REJECTED_BY=""; [[ "$CUR" == "$REJ" ]] || return 1; REJECTED_BY="${REJBY:-spec-r1.json}"; }
+REJ=bad OKSIG=ok
+RD=0 RD_FIX=1; NEED_FIX="" NEED_FIX_N=1 FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=ok
+out="$( ( review_gate; echo "return gc=$GC rd=$RD" ) 2>&1 )"
+assert_contains "review_gate: a re-check that rejects (FIX_SRC=gate) sends the dev to fix, with the stage's findings" "$out" "|r1[src=gate n=1]<<RECHECK-FIX>>"
+assert_contains "review_gate: ...and the gate settles once the re-check accepts the fixed diff (two re-check calls)" "$out" "return gc=|r1[src=gate n=1]<<RECHECK-FIX>> rd=2"
+RD=0 RD_FIX=""; NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=ok
+assert_eq "review_gate: a re-check that accepts lets a reviewed diff through with no fix" "return gc= rd=1" "$( ( review_gate; echo "return gc=$GC rd=$RD" ) 2>&1 )"
+for by in spec-r1.json final-r2.json; do
+  REJBY="$by"; SR=""; NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=bad
+  out="$( ( review_gate; echo "SR=$SR" ) 2>&1 )"
+  assert_contains "review_gate: the restore branch owes a re-check to ${by%%-r*} (the stage that rejected the diff)" "$out" "SR=${by%%-r*}|The PR was restored, by the gate or another change that is not a dev fix, to the diff that ${by%%-r*} rejected."
+done
+REJBY=""
+# a restored spec rejection that no writer has handled goes to the spec writer, with the verdict file and its round
+SPEC_ROUTED=1 SRT=""; NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=bad
+out="$( ( review_gate; echo "SRT=$SRT gc=$GC" ) 2>&1; cat "$LOG" )"
+assert_contains "review_gate: a spec rejection with nothing handled yet goes to spec_route (file, round)" "$out" "SRT=$STATE/spec-r1.json|1 gc="
+assert_not_contains "review_gate: ...and no fix round is spent on it" "$out" "r1[src="
+assert_not_contains "review_gate: ...nor does it count as a restored-diff cycle" "$out" "(1 of 3)"
+assert_contains "review_gate: ...and the log says it went to the spec writer" "$out" "left to the spec writer; routed there, not to the dev"
+# a spec writer that already WRITTEN for that round is not run again: the old restore path (to the dev) applies
+SPEC_ROUTED=1 SRT=""; NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=bad
+printf '{"status":"WRITTEN"}\n' >"$STATE/specwriter-r1.json"
+out="$( ( review_gate; echo "SRT=$SRT gc=$GC" ) 2>&1 )"
+assert_contains "review_gate: a round whose spec writer already finished goes to the dev instead" "$out" "SRT= gc=|r1[src=gate n=1]"
+SPEC_ROUTED=""
+
+# spec_route (real): GAP and spec-text REMOVE go to the writer, the rest does not. spec_write is a stub.
+loop_fn spec_route jlen rmlen fmt_removals
+spec_write() { SW="$1|$2|$3"; pending="WRITER-NOTE"; pending_n=2; spec_pending="WRITER-SAID"; }
+SRV() { # verdict-json -> prints rc, writer call, set_recheck, NEED_FIX
+  newstate; printf '%s\n' "$1" >"$STATE/spec-r4.json"; SW="" SR="" NEED_FIX="" NEED_FIX_N=0 FIX_SRC=review GATE_PRIOR=""
+  spec_route "$STATE/spec-r4.json" 4; echo "rc=$? sw=${SW#*|} sr=$SR nf=[$NEED_FIX] n=$NEED_FIX_N src=$FIX_SRC gp=[$GATE_PRIOR] pend=[$pending]"
+}
+G1='{"where":"d:1","quotes":["q"],"question":"Q","operator_call":false}'
+out="$(SRV "{\"verdict\":\"GAP\",\"findings\":[],\"gaps\":[$G1],\"removals\":[]}")"
+assert_eq "spec_route: a GAP-only verdict goes to the writer, is owed a re-check told what the writer settled, and spends no fix" "rc=0 sw=SPEC|4 sr=spec|WRITER-SAID nf=[] n=0 src=review gp=[WRITER-SAID] pend=[]" "$(sed "s#/[^ ]*/spec-r4.json#SPEC#" <<<"$out")"
+out="$(SRV "{\"verdict\":\"GAP\",\"findings\":[{\"severity\":\"BLOCKING\",\"file\":\"a\",\"line\":1,\"summary\":\"s\",\"fix\":\"f\"}],\"gaps\":[$G1],\"removals\":[]}")"
+assert_contains "spec_route: a GAP with findings also sends the dev the writer's note (FIX_SRC=gate)" "$out" "nf=[WRITER-NOTE] n=2 src=gate"
+out="$(SRV '{"verdict":"REMOVE","findings":[],"gaps":[],"removals":[{"where":"d:9","kind":"spec","what":"x","why_no_consumer":"y"}]}')"
+assert_contains "spec_route: a REMOVE with spec-text removals goes to the writer" "$out" "rc=0 sw="
+out="$(SRV '{"verdict":"REMOVE","findings":[],"gaps":[],"removals":[{"where":"a.go:9","kind":"code","what":"x","why_no_consumer":"y"}]}')"
+assert_contains "spec_route: a REMOVE with only code removals stays with the dev (rc 1, writer not run)" "$out" "rc=1 sw= sr= nf=[]"
+out="$(SRV '{"verdict":"CHANGES","findings":[],"gaps":[],"removals":[]}')"
+assert_contains "spec_route: any other verdict stays with the dev" "$out" "rc=1 sw="
+newstate; printf '{"verdict":"GAP","gaps":[],"removals":[]}\n' >"$STATE/final-r4.json"; SW=""
+spec_route "$STATE/final-r4.json" 4; assert_eq "spec_route: only the spec check's file is routed (final-r4 is not)" "1|" "$?|$SW"
+unset -f spec_write
+
+# rechecked_diff (real) and finalize_try's push check
+loop_fn rechecked_diff fresh_result valid_json sent_after_result mtime_s
+diff_sig() { DSIG="${CUR:-sig0}"; }
+spec_required() { return 0; }
+RCV() { # RECHECK verdict-sig verdict -> rc of rechecked_diff
+  newstate; RECHECK="$1"
+  if [[ -n "$2" ]]; then printf '{"verdict":"%s"}\n' "$3" >"$STATE/spec-r2.json"; : >"$STATE/spec-r2.json.sent"; touch -r "$STATE/spec-r2.json" "$STATE/spec-r2.json.sent"; printf '%s\n' "$2" >"$STATE/spec-r2.sig"; fi
+  rechecked_diff; echo $?
+}
+CUR=sigA
+assert_eq "rechecked_diff: nothing owed: true" "0" "$(RCV '' '' '')"
+assert_eq "rechecked_diff: owed, a fresh ACCEPT on exactly this diff: true" "0" "$(RCV spec sigA ACCEPT)"
+assert_eq "rechecked_diff: owed, the ACCEPT was for another diff (sig mismatch): false" "1" "$(RCV spec sigB ACCEPT)"
+assert_eq "rechecked_diff: owed, the verdict on this diff is a rejection: false" "1" "$(RCV spec sigA GAP)"
+assert_eq "rechecked_diff: owed, no verdict at all: false" "1" "$(RCV spec '' '')"
+spec_required() { return 1; }
+assert_eq "rechecked_diff: a spec re-check owed but the spec not required: true" "0" "$(RCV spec '' '')"
+assert_eq "rechecked_diff: ...which does not excuse the final gate" "1" "$(RCV final '' '')"
+spec_required() { return 0; }
+
+# finalize_try with reviewed_diff true and rechecked_diff false: returns 2 and pushes nothing (mutation: drop `|| ! rechecked_diff`)
+loop_fn finalize_try
+git() { case "$*" in *rev-list*) echo 1;; *push*) echo PUSHED >>"$STATE/pushlog";; *rev-parse*) echo abc;; esac; return 0; }
+forbidden_scan() { :; }
+write_json() { echo "$2" >"$1"; }
+reviewed_diff() { return 0; }
+rechecked_diff() { return "$RC_RC"; }
+WT="$FIX" BRANCH=b BASE=main GATE=true
+newstate; RC_RC=1; finalize_try >/dev/null 2>&1; rc=$?
+assert_eq "finalize_try: a READY review but the owed re-check not accepted: returns 2, nothing pushed" "2|no" "$rc|$([[ -e "$STATE/pushlog" ]] && echo yes || echo no)"
+newstate; RC_RC=0; finalize_try >/dev/null 2>&1; rc=$?
+assert_eq "finalize_try: with both READYs it pushes and returns 0" "0|yes" "$rc|$([[ -e "$STATE/pushlog" ]] && echo yes || echo no)"
+unset -f git forbidden_scan write_json diff_sig spec_required rechecked_diff reviewed_diff recheck_diff set_recheck spec_route
 unset -f fix_round rejected_diff reviewed_diff rejection_text do_review prompt takeover_text run_step check_verdict dev_ok budget_min diff_sig
 unset CUR REJ NEXT OKSIG BEFORE GC
 
