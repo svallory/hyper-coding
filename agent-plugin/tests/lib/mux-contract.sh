@@ -20,6 +20,8 @@
 #   mux_contract_exit_agent ID  function: make agent ID exit while it still exists
 #                           (state gone), to check status says gone (exit 0) and
 #                           wait --until gone returns 0
+#   mux_contract_direct ARGS  function: run the backend file itself with ARGS (a ship-mux verb line) for the calls
+#                           whose answer the dispatcher does not change; optional, default is mux
 #   mux_contract_vanish ID  function: make the backend lose ID behind ship-mux's
 #                           back (an agent that exited), to check close of a gone
 #                           id exits 0 and drops the entry
@@ -42,12 +44,35 @@ _mc_ids() { jq -r '.[].id' <<<"$1"; }
 # _mc_has <list json> <id> — id is listed.
 _mc_has() { jq -e --arg id "$2" 'any(.[]; .id == $id)' >/dev/null 2>&1 <<<"$1"; }
 
+# _mcd <mux args> - a call whose answer the dispatcher does not change (the happy path, and what a backend
+# answers for an id it lost). A test may define mux_contract_direct to run these straight against the backend
+# file, skipping ship-mux's own startup; everything that tests ship-mux's records and refusals stays on mux.
+_mcd() { if declare -F mux_contract_direct >/dev/null; then mux_contract_direct "$@"; else mux "$@"; fi; }
+
+# _mc_rcs — stdin: lines "expected exit|description|mux arguments" (no quoting: the arguments are split on
+# spaces). Runs them side by side, then asserts each one's exit code, in order.
+_mc_rcs() {
+  local d line exp desc args i=0 n
+  d="$(mktemp -d "${TMPDIR:-/tmp}/mc-rcs.XXXXXX")"
+  local -a exps=() descs=()
+  while IFS='|' read -r exp desc args; do
+    [[ -n "$exp" ]] || continue
+    exps+=("$exp"); descs+=("$desc")
+    # shellcheck disable=SC2086
+    ( mux $args >/dev/null 2>&1; echo $? >"$d/$i" ) &
+    i=$((i + 1))
+  done
+  wait
+  for ((n = 0; n < i; n++)); do assert_eq "contract: ${descs[$n]}" "${exps[$n]}" "$(cat "$d/$n")"; done
+  rm -rf "$d"
+}
+
 mux_contract() {
   local prefix="$1" cwd="$2" ref="$1-a" ref2="$1-b" harness="${MUX_CONTRACT_HARNESS:-claude}"
   local id u out rc sp pn g g2 ag apn ag2 apn2 ag3 apn3 ag4 unrelated unrelated_pn l created marker sent
   local grecord="${SHIP_SPACE_ROOT:-}/.hyper/ship-mux.json"
 
-  assert_ok "contract: check succeeds" mux check
+  assert_ok "contract: check succeeds" _mcd check
 
   # open: shape, idempotency, groups
   out="$(mux open --ref "$ref" --cwd "$cwd" --label "$ref")"
@@ -65,30 +90,30 @@ mux_contract() {
   fi
 
   # run and read
-  assert_ok "contract: wait --until ready on the opened pane" mux wait --ref "$ref" --to "$pn" --until ready --timeout-ms 5000
+  assert_ok "contract: wait --until ready on the opened pane" _mcd wait --ref "$ref" --to "$pn" --until ready --timeout-ms 5000
   marker="MARKER_${prefix}_run"
-  assert_ok "contract: run a command in the pane" mux run --ref "$ref" --pane "$pn" -- echo "$marker"
-  assert_contains "contract: run's output shows up in read" "$(mux read --ref "$ref" --to "$pn")" "$marker"
+  assert_ok "contract: run a command in the pane" _mcd run --ref "$ref" --pane "$pn" -- echo "$marker"
+  assert_contains "contract: run's output shows up in read" "$(_mcd read --ref "$ref" --to "$pn")" "$marker"
 
   # start and the round trip
   out="$(mux start --ref "$ref" --space "$sp" --name "$ref-dev" --harness "$harness" --cwd "$cwd" -- ${MUX_CONTRACT_AGENT_ARGS[@]+"${MUX_CONTRACT_AGENT_ARGS[@]}"})"
   _mc_json "contract: start prints agent and pane ids" "$out" '(.agent | type == "string" and length > 0) and (.pane | type == "string" and length > 0)'
   ag="$(jq -r .agent <<<"$out")"; apn="$(jq -r .pane <<<"$out")"
-  out="$(mux status --ref "$ref" --to "$ag")"
+  out="$(_mcd status --ref "$ref" --to "$ag")"
   _mc_json "contract: status of a live agent is a known state" "$out" '.state | IN("working","idle","blocked")'
   assert_eq "contract: status reports the agent's pane" "$apn" "$(jq -r .pane <<<"$out")"
   assert_eq "contract: status reports the agent's space" "$sp" "$(jq -r .space <<<"$out")"
-  assert_ok "contract: wait --until ready on the agent" mux wait --ref "$ref" --to "$ag" --until ready --timeout-ms 5000
+  assert_ok "contract: wait --until ready on the agent" _mcd wait --ref "$ref" --to "$ag" --until ready --timeout-ms 5000
   sent="SENT_${prefix}_text"
-  assert_ok "contract: send --text" mux send --ref "$ref" --to "$ag" --text "$sent"
-  assert_contains "contract: sent text shows up in read --to <agent>" "$(mux read --ref "$ref" --to "$ag")" "$sent"
-  mux wait --ref "$ref" --to "$ag" --until gone --timeout-ms 100 >/dev/null 2>&1; rc=$?
+  assert_ok "contract: send --text" _mcd send --ref "$ref" --to "$ag" --text "$sent"
+  assert_contains "contract: sent text shows up in read --to <agent>" "$(_mcd read --ref "$ref" --to "$ag")" "$sent"
+  _mcd wait --ref "$ref" --to "$ag" --until gone --timeout-ms 100 >/dev/null 2>&1; rc=$?
   assert_eq "contract: wait --until gone on a live agent times out (4)" "4" "$rc"
   # Harmless keys only: ctrl+c / ctrl+d can end a real agent, so they go last, just before the close.
-  assert_ok "contract: send --keys" mux send --ref "$ref" --to "$ag" --keys enter,esc
-  assert_ok "contract: read the last lines of the pane" mux read --ref "$ref" --to "$apn" --lines 5
-  if [[ "$(mux status --ref "$ref" --to "$ag" | jq -r .state)" == idle ]]; then
-    mux wait --ref "$ref" --to "$ag" --until working --timeout-ms 100 >/dev/null 2>&1; rc=$?
+  assert_ok "contract: send --keys" _mcd send --ref "$ref" --to "$ag" --keys enter,esc
+  assert_ok "contract: read the last lines of the pane" _mcd read --ref "$ref" --to "$apn" --lines 5
+  if [[ "$(_mcd status --ref "$ref" --to "$ag" | jq -r .state)" == idle ]]; then
+    _mcd wait --ref "$ref" --to "$ag" --until working --timeout-ms 100 >/dev/null 2>&1; rc=$?
     assert_eq "contract: wait --until working on an idle agent times out (4)" "4" "$rc"
   fi
   l="$(mux list --ref "$ref")"
@@ -102,48 +127,32 @@ mux_contract() {
   done
 
   # refusals (3) and usage errors (2)
-  mux close --ref "$ref" --id "$unrelated" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: close of another ref's space exits 3" "3" "$rc"
-  mux close --ref "$ref" --id "never-recorded-$prefix" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: close of an unrecorded id exits 3" "3" "$rc"
-  mux wait --ref "$ref" --to "never-recorded-$prefix" --until ready --timeout-ms 10 >/dev/null 2>&1; rc=$?
-  assert_eq "contract: wait on an unrecorded id exits 3" "3" "$rc"
-  mux read --ref "$ref" --to "$unrelated_pn" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: read of another ref's pane exits 3" "3" "$rc"
-  mux run --ref "$ref" --pane "$unrelated_pn" -- true >/dev/null 2>&1; rc=$?
-  assert_eq "contract: run in another ref's pane exits 3" "3" "$rc"
-  mux send --ref "$ref" --to never-recorded --text x >/dev/null 2>&1; rc=$?
-  assert_eq "contract: send to an unrecorded id exits 3" "3" "$rc"
-  mux status --ref "$ref" --to never-recorded >/dev/null 2>&1; rc=$?
-  assert_eq "contract: status of an unrecorded id exits 3" "3" "$rc"
-  mux close --ref "$ref" --id "$pn" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: closing a space's root pane exits 3" "3" "$rc"
-  assert_ok "contract: ...and the space is still there" mux wait --ref "$ref" --to "$pn" --until ready --timeout-ms 5000
-  mux send --ref "$ref" --to "$apn" --text x >/dev/null 2>&1; rc=$?
-  assert_eq "contract: send to a pane id is an error (1)" "1" "$rc"
-  mux bogus >/dev/null 2>&1; rc=$?
-  assert_eq "contract: unknown verb exits 2" "2" "$rc"
-  mux close --id x >/dev/null 2>&1; rc=$?
-  assert_eq "contract: close without --ref exits 2" "2" "$rc"
-  mux send --ref "$ref" --to "$ag" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: send without --text or --keys exits 2" "2" "$rc"
-  mux send --to "$ag" --text x >/dev/null 2>&1; rc=$?
-  assert_eq "contract: send without --ref exits 2" "2" "$rc"
-  mux send --ref "$ref" --to "$ag" --keys enter,f13 >/dev/null 2>&1; rc=$?
-  assert_eq "contract: send with an unknown key exits 2" "2" "$rc"
-  mux send --ref "$ref" --to "$ag" --text a --keys enter >/dev/null 2>&1; rc=$?
-  assert_eq "contract: send with --text and --keys exits 2" "2" "$rc"
-  mux start --ref "$ref" --space "$unrelated" --name n --harness "$harness" --cwd "$cwd" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: start into another ref's space exits 3" "3" "$rc"
-  mux start --ref "$ref" --space "$pn" --name n --harness "$harness" --cwd "$cwd" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: start into something that is not a space exits 3" "3" "$rc"
-  mux start --ref "$ref" --space "never-recorded-$prefix" --name n --harness "$harness" --cwd "$cwd" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: start into an unrecorded id exits 3" "3" "$rc"
+  # None of these reaches the backend or changes a record, so they run side by side (a dispatcher call is slow).
+  _mc_rcs <<EOF
+3|close of another ref's space exits 3|close --ref $ref --id $unrelated
+3|close of an unrecorded id exits 3|close --ref $ref --id never-recorded-$prefix
+3|wait on an unrecorded id exits 3|wait --ref $ref --to never-recorded-$prefix --until ready --timeout-ms 10
+3|read of another ref's pane exits 3|read --ref $ref --to $unrelated_pn
+3|run in another ref's pane exits 3|run --ref $ref --pane $unrelated_pn -- true
+3|send to an unrecorded id exits 3|send --ref $ref --to never-recorded --text x
+3|status of an unrecorded id exits 3|status --ref $ref --to never-recorded
+3|closing a space's root pane exits 3|close --ref $ref --id $pn
+1|send to a pane id is an error (1)|send --ref $ref --to $apn --text x
+2|unknown verb exits 2|bogus
+2|close without --ref exits 2|close --id x
+2|send without --text or --keys exits 2|send --ref $ref --to $ag
+2|send without --ref exits 2|send --to $ag --text x
+2|send with an unknown key exits 2|send --ref $ref --to $ag --keys enter,f13
+2|send with --text and --keys exits 2|send --ref $ref --to $ag --text a --keys enter
+3|start into another ref's space exits 3|start --ref $ref --space $unrelated --name n --harness $harness --cwd $cwd
+3|start into something that is not a space exits 3|start --ref $ref --space $pn --name n --harness $harness --cwd $cwd
+3|start into an unrecorded id exits 3|start --ref $ref --space never-recorded-$prefix --name n --harness $harness --cwd $cwd
+2|start with an unknown harness exits 2|start --ref $ref --space $sp --name n --harness emacs --cwd $cwd
+EOF
+  assert_ok "contract: ...and the space is still there" _mcd wait --ref "$ref" --to "$pn" --until ready --timeout-ms 5000
   _mc_json "contract: ...and none of them started anything" "$(mux list --ref "$ref")" '[.[] | select(.kind == "agent")] | length == 1'
-  mux start --ref "$ref" --space "$sp" --name n --harness emacs --cwd "$cwd" >/dev/null 2>&1; rc=$?
-  assert_eq "contract: start with an unknown harness exits 2" "2" "$rc"
 
-  assert_ok "contract: send --keys ctrl+c,ctrl+d" mux send --ref "$ref" --to "$ag" --keys ctrl+c,ctrl+d
+  assert_ok "contract: send --keys ctrl+c,ctrl+d" _mcd send --ref "$ref" --to "$ag" --keys ctrl+c,ctrl+d
 
   # closing an agent takes its pane
   assert_ok "contract: close a recorded agent" mux close --ref "$ref" --id "$ag"
@@ -171,10 +180,10 @@ mux_contract() {
     out="$(mux start --ref "$ref" --space "$sp" --name "$ref-exit" --harness "$harness" --cwd "$cwd" -- ${MUX_CONTRACT_AGENT_ARGS[@]+"${MUX_CONTRACT_AGENT_ARGS[@]}"})"
     ag3="$(jq -r .agent <<<"$out")"
     mux_contract_exit_agent "$ag3"
-    out="$(mux status --ref "$ref" --to "$ag3")"; rc=$?
+    out="$(_mcd status --ref "$ref" --to "$ag3")"; rc=$?
     assert_eq "contract: status of an exited agent exits 0" "0" "$rc"
     _mc_json "contract: ...and says gone" "$out" '.state == "gone"'
-    mux wait --ref "$ref" --to "$ag3" --until gone --timeout-ms 5000 >/dev/null 2>&1; rc=$?
+    _mcd wait --ref "$ref" --to "$ag3" --until gone --timeout-ms 5000 >/dev/null 2>&1; rc=$?
     assert_eq "contract: wait --until gone on an exited agent returns 0" "0" "$rc"
     mux close --ref "$ref" --id "$ag3" >/dev/null 2>&1; rc=$?
     assert_eq "contract: an exited agent can be closed" "0" "$rc"
@@ -187,19 +196,19 @@ mux_contract() {
     mux_contract_vanish "$ag3"
     mux_contract_vanish "$apn3"
     # recorded, but the backend no longer has them: exit 5 (target gone)
-    mux status --ref "$ref" --to "$ag3" >/dev/null 2>&1; rc=$?
+    _mcd status --ref "$ref" --to "$ag3" >/dev/null 2>&1; rc=$?
     assert_eq "contract: status of a gone agent exits 5" "5" "$rc"
-    mux read --ref "$ref" --to "$ag3" >/dev/null 2>&1; rc=$?
+    _mcd read --ref "$ref" --to "$ag3" >/dev/null 2>&1; rc=$?
     assert_eq "contract: read of a gone agent exits 5" "5" "$rc"
-    mux send --ref "$ref" --to "$ag3" --text x >/dev/null 2>&1; rc=$?
+    _mcd send --ref "$ref" --to "$ag3" --text x >/dev/null 2>&1; rc=$?
     assert_eq "contract: send to a gone agent exits 5" "5" "$rc"
-    mux run --ref "$ref" --pane "$apn3" -- true >/dev/null 2>&1; rc=$?
+    _mcd run --ref "$ref" --pane "$apn3" -- true >/dev/null 2>&1; rc=$?
     assert_eq "contract: run in a gone pane exits 5" "5" "$rc"
     for u in ready idle working; do
-      mux wait --ref "$ref" --to "$ag3" --until "$u" --timeout-ms 5000 >/dev/null 2>&1; rc=$?
+      _mcd wait --ref "$ref" --to "$ag3" --until "$u" --timeout-ms 5000 >/dev/null 2>&1; rc=$?
       assert_eq "contract: wait --until $u on a gone agent exits 5 at once" "5" "$rc"
     done
-    mux wait --ref "$ref" --to "$ag3" --until gone --timeout-ms 5000 >/dev/null 2>&1; rc=$?
+    _mcd wait --ref "$ref" --to "$ag3" --until gone --timeout-ms 5000 >/dev/null 2>&1; rc=$?
     assert_eq "contract: wait --until gone on a gone agent exits 0" "0" "$rc"
     assert_eq "contract: closing an id the backend lost exits 0" "0" "$(mux close --ref "$ref" --id "$ag3" >/dev/null 2>&1; echo $?)"
     l="$(mux list --ref "$ref")"
