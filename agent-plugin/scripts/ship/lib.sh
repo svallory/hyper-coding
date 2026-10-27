@@ -123,43 +123,23 @@ ship_project() {
   printf '%s\n' "${root##*/}"
 }
 
-# _ship_layer_json <file> — the file as a JSON object on stdout.
-_ship_layer_json() {
-  local f="$1" json kind count errf
-  errf="$(mktemp "${TMPDIR:-/tmp}/ship-yq.XXXXXX")" || return 1
-  # stderr stays out of the JSON: yq warns (exit 0) on merge keys and the like.
-  if ! json="$(yq -o=json '.' "$f" 2>"$errf")"; then
-    _ship_err "cannot parse $f: $(cat "$errf")"
-    rm -f "$errf"
-    return 1
-  fi
-  rm -f "$errf"
-  count="$(printf '%s' "$json" | jq -s 'length' 2>/dev/null)" || {
-    _ship_err "cannot parse $f: yq produced invalid JSON"
-    return 1
-  }
-  if [[ "$count" -gt 1 ]]; then
-    _ship_err "cannot parse $f: multiple YAML documents (a ship config is one document)"
-    return 1
-  fi
-  [[ "$count" -eq 0 ]] && { printf '{}'; return 0; }
-  kind="$(printf '%s' "$json" | jq -r 'type')"
-  case "$kind" in
-    object) printf '%s' "$json" ;;
-    null)   printf '{}' ;;
-    *)      _ship_err "$f must be a YAML mapping at the top level, not a $kind"; return 1 ;;
-  esac
-}
+# _ship_layer_text <file> — the file as one compact JSON value per YAML document
+# on stdout (nothing for an empty file). stderr is dropped: yq warns (exit 0) on
+# merge keys and the like, and a failure is re-run by the caller to read why.
+_ship_layer_text() { yq -o=json -I0 '.' "$1" 2>/dev/null; }
 
 # _ship_cfg_type <dotted.key> — jq type of the key in the merged config.
 _ship_cfg_type() {
   jq -r --arg k "$1" 'try getpath($k | split(".")) catch null | type' <<<"$SHIP_CONFIG_JSON"
 }
 
-# _ship_key_src <dotted.key> — the layer file that decided the key's value: the
-# last layer that sets it, or sets one of its parents to a non-mapping.
-_ship_key_src() {
-  jq -r --arg k "$1" '
+# The merge + validation, one jq run per load. Input: none. Args: the layer files
+# (positional) and $datas (their JSON, same order), $project
+# (space directory name or ""), $stages. Output (raw): line 1 the layers array,
+# line 2 the merged config, then one "ship: ..." line per validation problem.
+_SHIP_LOAD_JQ='
+  def ctype($k): try getpath($k | split(".")) catch null | type;
+  def keysrc($layers; $k):
     ($k | split(".")) as $p
     | def has_path($d; $q): any($d | path(..); . == $q);
       def overrides($d):
@@ -167,75 +147,52 @@ _ship_key_src() {
         or any(range(1; $p | length);
                ($p[:.]) as $q
                | has_path($d; $q) and (($d | getpath($q) | type) != "object"));
-    (map(select(overrides(.data))) | last | .file) // .[0].file
-  ' <<<"$SHIP_CONFIG_LAYERS"
-}
-
-# _ship_validate_models <dotted.key> — non-empty array of valid model names.
-_ship_validate_models() {
-  local key="$1" t n i m err bad=0
-  t="$(_ship_cfg_type "$key")"
-  if [[ "$t" != array ]]; then
-    _ship_err "$key must be a non-empty list of models (got $t); set in $(_ship_key_src "$key")"
-    return 1
-  fi
-  n="$(jq -r --arg k "$key" 'getpath($k | split(".")) | length' <<<"$SHIP_CONFIG_JSON")"
-  if [[ "$n" -eq 0 ]]; then
-    _ship_err "$key must be a non-empty list of models; set in $(_ship_key_src "$key")"
-    return 1
-  fi
-  for ((i = 0; i < n; i++)); do
-    if [[ "$(jq -r --arg k "$key" --argjson i "$i" 'getpath($k | split(".")) | .[$i] | type' <<<"$SHIP_CONFIG_JSON")" != string ]]; then
-      _ship_err "$key entry $((i + 1)) is not a string; set in $(_ship_key_src "$key")"
-      bad=1; continue
-    fi
-    m="$(jq -r --arg k "$key" --argjson i "$i" 'getpath($k | split(".")) | .[$i]' <<<"$SHIP_CONFIG_JSON")"
-    if ! err="$(ship_model_parse "$m" 2>&1 >/dev/null)"; then
-      _ship_err "${err#ship: } (in $key; set in $(_ship_key_src "$key"))"
-      bad=1
-    fi
-  done
-  return $bad
-}
-
-# _ship_validate_config — shape checks on the merged config; names the key and
-# the layer file it came from.
-_ship_validate_config() {
-  local bad=0 s k
-  for s in $SHIP_STAGES; do
-    _ship_validate_models "models.$s" || bad=1
-  done
-  _ship_validate_models failover.summarizer || bad=1
-  for k in max_rounds budgets.S budgets.M budgets.L budgets.fix_fraction budgets.fix_per_finding budgets.check; do
-    if [[ "$(_ship_cfg_type "$k")" != number ]]; then
-      _ship_err "$k must be a number (got $(_ship_cfg_type "$k")); set in $(_ship_key_src "$k")"
-      bad=1
-    fi
-  done
-  if [[ "$(_ship_cfg_type budgets.fix_per_finding)" == number ]] \
-    && [[ "$(jq -r '.budgets.fix_per_finding < 0' <<<"$SHIP_CONFIG_JSON")" == true ]]; then
-    _ship_err "budgets.fix_per_finding must not be negative; set in $(_ship_key_src budgets.fix_per_finding)"
-    bad=1
-  fi
-  _ship_validate_patterns || bad=1
-  return $bad
-}
-
-# _ship_validate_patterns — every limits.patterns.<harness> is a string and a regex jq can compile.
-_ship_validate_patterns() {
-  local k re bad=0
-  while IFS= read -r k; do
-    [[ -n "$k" ]] || continue
-    if [[ "$(_ship_cfg_type "limits.patterns.$k")" != string ]]; then
-      _ship_err "limits.patterns.$k must be a string (a regex); set in $(_ship_key_src "limits.patterns.$k")"; bad=1; continue
-    fi
-    re="$(jq -r --arg k "$k" '.limits.patterns[$k]' <<<"$SHIP_CONFIG_JSON")"
-    if ! jq -n --arg re "$re" '"" | test($re)' >/dev/null 2>&1; then
-      _ship_err "limits.patterns.$k is not a valid regex ($re); set in $(_ship_key_src "limits.patterns.$k")"; bad=1
-    fi
-  done < <(jq -r '.limits.patterns // {} | keys[]' <<<"$SHIP_CONFIG_JSON" 2>/dev/null)
-  return $bad
-}
+    ($layers | map(select(overrides(.data))) | last | .file) // $layers[0].file;
+  # The reason a model name is invalid, or null. Mirrors ship_model_parse.
+  def sq: [39] | implode;
+  def model_err:
+    if . == "" or test("\\s") then "invalid model \(sq)\(.)\(sq): empty or contains whitespace"
+    elif (contains("/") | not) then
+      if contains(":") then "invalid model \(sq)\(.)\(sq): a bare Claude name takes no \(sq):thinking\(sq) suffix" else null end
+    else
+      (split("/")) as $sp | $sp[0] as $prov | ($sp[1:] | join("/")) as $rest
+      | (if ($rest | contains(":")) then ($rest | split(":")) else null end) as $c
+      | (if $c then ($c[:-1] | join(":")) else $rest end) as $model
+      | (if $c then $c[-1] else "" end) as $think
+      | if $prov == "" or $model == "" or ($c != null and $think == "")
+        then "invalid model \(sq)\(.)\(sq): expected provider/model[:thinking]" else null end
+    end;
+  def val_models($cfg; $layers; $key):
+    ($cfg | ctype($key)) as $t
+    | keysrc($layers; $key) as $src
+    | if $t != "array" then "ship: \($key) must be a non-empty list of models (got \($t)); set in \($src)"
+      elif ($cfg | getpath($key | split(".")) | length) == 0 then "ship: \($key) must be a non-empty list of models; set in \($src)"
+      else
+        ($cfg | getpath($key | split("."))) as $l
+        | range(0; $l | length) as $i | $l[$i]
+        | if type != "string" then "ship: \($key) entry \($i + 1) is not a string; set in \($src)"
+          else model_err | if . != null then "ship: \(.) (in \($key); set in \($src))" else empty end end
+      end;
+  [range(0; $ARGS.positional | length) as $i | {file: $ARGS.positional[$i], data: $datas[$i]}] as $layers
+  | (reduce $layers[].data as $l ({}; . * $l)) as $m0
+  | (if $project != "" and ($m0.units_group | type) == "string"
+     then $m0 | .units_group |= gsub("<project>"; $project) else $m0 end) as $cfg
+  | ($layers | tojson), ($cfg | tojson),
+    (   ($stages | [splits("\\s+")] | map(select(length > 0)) | map("models." + .)[]) , "failover.summarizer"
+        | val_models($cfg; $layers; .)),
+    ("max_rounds", "budgets.S", "budgets.M", "budgets.L", "budgets.fix_fraction", "budgets.fix_per_finding", "budgets.check"
+        | . as $k | ($cfg | ctype($k)) as $t | select($t != "number")
+        | "ship: \($k) must be a number (got \($t)); set in \(keysrc($layers; $k))"),
+    (if ($cfg | ctype("budgets.fix_per_finding")) == "number" and $cfg.budgets.fix_per_finding < 0
+     then "ship: budgets.fix_per_finding must not be negative; set in \(keysrc($layers; "budgets.fix_per_finding"))" else empty end),
+    ([try ($cfg.limits.patterns // {} | keys[] | tostring) catch empty][] as $k
+        | if ($cfg | ctype("limits.patterns." + $k)) != "string"
+          then "ship: limits.patterns.\($k) must be a string (a regex); set in \(keysrc($layers; "limits.patterns." + $k))"
+          else $cfg.limits.patterns[$k] as $re
+            | if (try ("" | test($re) | true) catch false) then empty
+              else "ship: limits.patterns.\($k) is not a valid regex (\($re)); set in \(keysrc($layers; "limits.patterns." + $k))" end
+          end)
+'
 
 # ship_require_gate — `gate` has no default; callers that run it (finalize,
 # land) require it. Everything else (ship-role, ship-mux, --abandon) does not.
@@ -274,7 +231,7 @@ ship_config_load() {
   ship_require_yq || return 1
   command -v jq >/dev/null 2>&1 || { _ship_err "jq is required but was not found on PATH"; return 1; }
 
-  local files=("$SHIP_DEFAULTS_FILE") root="" layers="[]" f data rc=0
+  local files=("$SHIP_DEFAULTS_FILE") datas=() root="" f json first kind rc=0
   [[ -f "$SHIP_DEFAULTS_FILE" ]] || { _ship_err "missing defaults file $SHIP_DEFAULTS_FILE"; return 1; }
   [[ -n "${HOME:-}" && -f "$HOME/.config/hyper/ship.yml" ]] && files+=("$HOME/.config/hyper/ship.yml")
   root="$(ship_space_root)" || rc=$?
@@ -282,21 +239,46 @@ ship_config_load() {
   [[ $rc -eq 2 ]] && return 1
   [[ $rc -eq 0 && -f "$root/.hyper/ship.yml" ]] && files+=("$root/.hyper/ship.yml")
 
+  # One yq per file (so a parse error names its file); the checks that need only
+  # the shape of the text (document count, top-level type) run in bash.
   for f in "${files[@]}"; do
-    data="$(_ship_layer_json "$f")" || return 1
-    layers="$(jq -c --arg file "$f" --argjson data "$data" '. + [{file: $file, data: $data}]' <<<"$layers")" || return 1
+    if ! json="$(_ship_layer_text "$f")"; then
+      _ship_err "cannot parse $f: $(yq -o=json '.' "$f" 2>&1 >/dev/null)"
+      return 1
+    fi
+    if [[ -z "$json" ]]; then
+      json='{}'
+    else
+      first="${json%%$'\n'*}"
+      if [[ "$json" == *$'\n'* ]]; then
+        _ship_err "cannot parse $f: multiple YAML documents (a ship config is one document)"
+        return 1
+      fi
+      case "$first" in
+        '{'*) ;;
+        null) json='{}' ;;
+        *)
+          case "$first" in
+            '['*) kind=array ;; '"'*) kind=string ;; true|false) kind=boolean ;; *) kind=number ;;
+          esac
+          _ship_err "$f must be a YAML mapping at the top level, not a $kind"
+          return 1 ;;
+      esac
+    fi
+    datas+=("$json")
   done
 
-  local merged
-  merged="$(jq -c '[.[].data] | reduce .[] as $l ({}; . * $l)' <<<"$layers")" || return 1
-  # <project> in units_group is the space directory name, when there is a space.
-  if [[ $rc -eq 0 && -n "$root" ]]; then
-    merged="$(jq -c --arg p "${root##*/}" 'if (.units_group | type) == "string" then .units_group |= gsub("<project>"; $p) else . end' <<<"$merged")" || return 1
+  local out rest project=""
+  [[ $rc -eq 0 && -n "$root" ]] && project="${root##*/}"
+  out="$(jq -nr --argjson datas "[$(IFS=,; printf '%s' "${datas[*]}")]" \
+    --arg project "$project" --arg stages "$SHIP_STAGES" "$_SHIP_LOAD_JQ" --args "${files[@]}")" || return 1
+  rest="${out#*$'\n'}"
+  if [[ "$rest" == *$'\n'* ]]; then
+    printf '%s\n' "${rest#*$'\n'}" >&2
+    return 1
   fi
-
-  SHIP_CONFIG_LAYERS="$layers"
-  SHIP_CONFIG_JSON="$merged"
-  _ship_validate_config || { unset SHIP_CONFIG_LAYERS SHIP_CONFIG_JSON; return 1; }
+  SHIP_CONFIG_LAYERS="${out%%$'\n'*}"
+  SHIP_CONFIG_JSON="$rest"
   export SHIP_CONFIG_LAYERS SHIP_CONFIG_JSON
 }
 
