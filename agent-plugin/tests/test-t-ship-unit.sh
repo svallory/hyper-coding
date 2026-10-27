@@ -81,6 +81,14 @@ if [[ -n "$start" ]]; then
 else
   git -C "$STUB_G" worktree add -q "$STUB_SPACE/worktrees/$br" "$br"
 fi
+git -C "$STUB_G" config --get core.abbrev >> "$FIX/wt.abbrev" || true
+# wt 0.73: after creating the branch it unsets the upstream, which exits 128 when the effective
+# branch.autoSetupMerge is false or empty (git then set none).
+if [[ -n "$start" ]] && asm="$(git -C "$STUB_G" config --get branch.autoSetupMerge)" && [[ "$asm" == "" || "$asm" == false ]]; then
+  echo "✗ git branch --unset-upstream -- $br failed (exit 128)" >&2
+  echo "  fatal: branch '$br' has no upstream information" >&2
+  exit 128
+fi
 # Like the real wt failing late: the branch and worktree exist, and the exit is non-zero.
 if [[ -e "$FIX/wt.fail" ]]; then
   echo "✗ git branch --unset-upstream -- $br failed (exit 128)" >&2
@@ -369,6 +377,22 @@ assert_not_contains "the models do not go on the command line" "$args1" "--model
 assert_eq "...they reach the driver through models.override" "dev=sonnet" "$(cat "$FIX/loopmodels.l1.1")"
 assert_eq "the driver saw host local" "local" "$(jq -r .host "$(loops l1)/result.json")"
 assert_eq "the driver got the caller's PATH, prefix first" "$FIX/extra:$PATH" "$(cat "$FIX/looppath.l1.1")"
+
+# 2b2: branch.autoSetupMerge false or empty (global or repo) must not break wt switch -c ------------
+mode as1 ready
+git -C "$G" config branch.autoSetupMerge false
+rc="$(unit run as1 --brief "$BRIEF" --class S)"
+assert_eq "autoSetupMerge=false: run still starts the driver (exit 0)" "0" "$rc"
+mode as2 ready
+git -C "$G" config branch.autoSetupMerge ""
+rc="$(unit run as2 --brief "$BRIEF" --class S)"
+assert_eq "autoSetupMerge empty: run still starts the driver (exit 0)" "0" "$rc"
+assert_eq "...the user's config was not rewritten" "" "$(git -C "$G" config --get branch.autoSetupMerge)"
+mode as3 ready
+rc="$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.abbrev GIT_CONFIG_VALUE_0=9 unit run as3 --brief "$BRIEF" --class S)"
+assert_eq "an existing GIT_CONFIG_COUNT is extended, not clobbered: exit 0" "0" "$rc"
+assert_eq "...and the caller's own entry still reached wt" "9" "$(tail -1 "$FIX/wt.abbrev")"
+git -C "$G" config --unset-all branch.autoSetupMerge
 
 # 2c: a failed wt switch -c leaves nothing behind, and a rerun starts clean ---------------------
 mode wf1 ready
