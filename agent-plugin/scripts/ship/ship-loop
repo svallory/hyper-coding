@@ -1485,7 +1485,7 @@ finalize_try() {
   if ! gate_out="$( (cd "$WT" && bash -c "$GATE") 2>&1)"; then
     printf '%s\n' "$gate_out" >"$STATE/gate.log"
     FIN_MSG="1. [BLOCKING] $BRANCH — the gate failed after the rebase onto origin/$BASE.
-   Fix: make the gate pass in $WT (\`$GATE\`), commit, and push. Last lines:
+   Fix: make the failure below go away in $WT: run the failing tests it names, or the gate (\`$GATE\`) itself once to confirm the fix; then commit and push. Last lines:
 $(printf '%s\n' "$gate_out" | tail -n 30)"
     return 1
   fi

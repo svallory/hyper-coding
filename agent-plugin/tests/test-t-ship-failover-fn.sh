@@ -504,6 +504,7 @@ newstate
 git_facts_status fo-dev develop
 G="$(cat "$STATE/STATUS.md")"
 for sec in "## Done" "## In progress" "## Next steps" "## Open questions"; do assert_contains "git_facts_status: has '$sec'" "$G" "$sec"; done
+assert_contains "git_facts_status: the next steps leave the gate to the driver" "$G" "the driver runs the gate"
 assert_contains "git_facts_status: says the transcript was not summarised" "$G" "transcript not summarised"
 assert_contains "git_facts_status: lists the commit ahead of origin/main" "$G" "feat: the change"
 assert_contains "git_facts_status: lists the changed file in the diffstat" "$G" "feat.txt"

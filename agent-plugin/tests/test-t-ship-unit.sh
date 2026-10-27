@@ -82,9 +82,9 @@ else
   git -C "$STUB_G" worktree add -q "$STUB_SPACE/worktrees/$br" "$br"
 fi
 git -C "$STUB_G" config --get core.abbrev >> "$FIX/wt.abbrev" || true
-# wt 0.73: after creating the branch it unsets the upstream, which exits 128 when the effective
-# branch.autoSetupMerge is false or empty (git then set none).
-if [[ -n "$start" ]] && asm="$(git -C "$STUB_G" config --get branch.autoSetupMerge)" && [[ "$asm" == "" || "$asm" == false ]]; then
+# wt 0.73: after creating the branch from a remote ref it unsets the upstream. git set one only when the
+# effective branch.autoSetupMerge is true (or unset), so the unset exits 128 for false, empty, simple...
+if [[ "$start" == origin/* ]] && ! git -C "$STUB_G" branch --unset-upstream -- "$br" 2>/dev/null; then
   echo "✗ git branch --unset-upstream -- $br failed (exit 128)" >&2
   echo "  fatal: branch '$br' has no upstream information" >&2
   exit 128
@@ -392,6 +392,15 @@ mode as3 ready
 rc="$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.abbrev GIT_CONFIG_VALUE_0=9 unit run as3 --brief "$BRIEF" --class S)"
 assert_eq "an existing GIT_CONFIG_COUNT is extended, not clobbered: exit 0" "0" "$rc"
 assert_eq "...and the caller's own entry still reached wt" "9" "$(tail -1 "$FIX/wt.abbrev")"
+# the emulation itself fires without the override, and not with it (so the cases above prove the override)
+git -C "$G" config branch.autoSetupMerge simple
+emu_rc=0; emu_out="$(PATH="$FIX/bin:$PATH" WT_LOG=/dev/null bash -c 'cd "$1" && wt switch -c --no-cd -b origin/main emu1' _ "$SPACE" 2>&1)" || emu_rc=$?
+assert_eq "stub emulation: autoSetupMerge=simple without the override fails like wt 0.73" "128" "$emu_rc"
+assert_contains "...with wt's message" "$emu_out" "has no upstream information"
+git -C "$G" worktree remove --force "$SPACE/worktrees/emu1"; git -C "$G" branch -D emu1 >/dev/null
+emu_rc=0; PATH="$FIX/bin:$PATH" WT_LOG=/dev/null GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=branch.autoSetupMerge GIT_CONFIG_VALUE_0=true bash -c 'cd "$1" && wt switch -c --no-cd -b origin/main emu2' _ "$SPACE" >/dev/null 2>&1 || emu_rc=$?
+assert_eq "stub emulation: the override makes it pass" "0" "$emu_rc"
+git -C "$G" worktree remove --force "$SPACE/worktrees/emu2"; git -C "$G" branch -D emu2 >/dev/null
 git -C "$G" config --unset-all branch.autoSetupMerge
 
 # 2c: a failed wt switch -c leaves nothing behind, and a rerun starts clean ---------------------
