@@ -202,9 +202,9 @@ assert_contains "a nested .md under scripts/ship falls through to the ALL catch-
 assert_contains "a nested .md under tests/fixtures falls through to ALL" "$out" "fixtures/other/x.md -> ALL"
 out="$(sel agent-plugin/docs/guide.md agent-plugin/CHANGELOG.md)"
 assert_not_contains "docs/ and top-level markdown stay non-widening" "$out" "running everything"
-out="$(TMPDIR="$FIX/jtmp" bash "$TESTS_DIR/run.sh" --affected origin/main 2>&1)"; rc=$?
+out="$(TMPDIR="$FIX/jtmp" bash "$TESTS_DIR/run.sh" --affected HEAD 2>&1)"; rc=$?
 assert_eq "old positional --affected <ref> is a usage error" "2" "$rc"
-assert_contains "...that names the right form" "$out" "--affected --base origin/main"
+assert_contains "...that names the right form" "$out" "--affected --base HEAD"
 out="$(sel agent-plugin/tests/test-z-brand-new.sh)"
 assert_not_contains "a test file that does not exist is not selected" "$(printf '%s\n' "$out" | grep '^would run')" "test-z-brand-new.sh"
 : > "$TESTS_DIR/test-z-brand-new.sh"
