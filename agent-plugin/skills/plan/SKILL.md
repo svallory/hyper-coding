@@ -27,6 +27,12 @@ in a tracker when the project uses one. If a spec is expected but
    These skills must work in a project with no ship config.
 4. A project-wide common brief at `notes/briefs/common.md`, if one exists.
    Briefs point at it; they do not repeat it.
+5. The `test-engineer` skill
+   (`${CLAUDE_PLUGIN_ROOT}/skills/test-engineer/SKILL.md`), section "Plan the
+   tests of a unit": it fills each brief's `## Tests` section (layer per
+   behaviour, fixtures, budget, affected-run command). If the project has no
+   affected-only test command, the first unit of the plan adds one and the
+   others depend on it.
 
 ## Shape of a unit
 
@@ -101,6 +107,11 @@ One file per unit from the template. Rules the template cannot enforce:
   verbatim.
 - **Scope has an out side.** Name what the dev must not touch, especially
   files a parallel unit owns.
+- **Tests are planned, not accumulated.** The `## Tests` section is filled
+  with the `test-engineer` skill: one row per behaviour at the lowest layer
+  that can fail for it, a budget in seconds, the affected-run command, and the
+  tests not to add. A seam the lowest layer needs is an element of the unit
+  (its consumers: the test that calls it and the shell that uses it).
 - No `bd`, tracker, or host-specific instructions in a brief; the driver and
   `kickoff` own those.
 
@@ -112,7 +123,10 @@ Before telling anyone planning is done, verify and state the evidence for:
 2. no dependency cycle;
 3. every brief has all template sections filled, no `<placeholder>` left outside the Rules section;
 4. every element in every brief has a named consumer (the gate above);
-5. every ruling quoted in a brief exists in the rulings file with that text.
+5. every ruling quoted in a brief exists in the rulings file with that text;
+6. every brief's `## Tests` section has a row per acceptance criterion, a
+   budget, an affected-run command, and no row at the large layer without the
+   reason a lower layer cannot reach it.
 
 Then report the waves, the briefs written, the briefs held and why, and name
 the next step: the `kickoff` skill.

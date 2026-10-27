@@ -288,8 +288,9 @@ render() {
   sed 1d "$PROMPTS/$tpl.md" \
     | jq -Rrs --argjson m "$m" 'gsub("\\{(?<k>[a-z_]+)\\}"; ($m[.k] // ("{" + .k + "}")))'
 }
+TEST_SKILL="$SHIP_PLUGIN_ROOT/skills/test-engineer/SKILL.md" # the dev and review prompts point at it
 RULES="$(render rules ref="$REF" worktree="$WT" branch="$BRANCH" brief="$BRIEF" gate="$GATE" rulings="$RULINGS" \
-  forbidden="$FORBIDDEN_TXT" forbidden_exclude="$FORBIDDEN_EXCLUDE_TXT")"
+  test_skill="$TEST_SKILL" forbidden="$FORBIDDEN_TXT" forbidden_exclude="$FORBIDDEN_EXCLUDE_TXT")"
 # prompt <template> key=value... — render with the pairs every prompt gets (templates ignore the
 # ones they do not use).
 prompt() {
@@ -297,7 +298,7 @@ prompt() {
   shift
   render "$tpl" "ref=$REF" "pr=$PR" "worktree=$WT" "branch=$BRANCH" "base=$BASE" "brief=$BRIEF" "gate=$GATE" \
     "rulings=$RULINGS" "spec_paths=$SPEC_PATHS_TXT" "forbidden=$FORBIDDEN_TXT" "forbidden_exclude=$FORBIDDEN_EXCLUDE_TXT" \
-    "rules=$RULES" "$@"
+    "test_skill=$TEST_SKILL" "rules=$RULES" "$@"
 }
 skill_call() { # skill model
   case "$2" in */*) echo "pi: the /skill:$1 command, or read its SKILL.md" ;; *) echo "Skill tool, skill \"$1\"" ;; esac

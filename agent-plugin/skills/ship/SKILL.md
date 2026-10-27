@@ -28,6 +28,7 @@ from them into a brief or a ruling by hand; name the key. The full reference
 | Never read code | Do not open source files, diffs or logs yourself. Delegate a lookup to a cheap `Explore` subagent with one narrow question and take the answer. |
 | Answer questions yourself | A dev QUESTION is yours to rule on. Only a spec gap goes to the spec writer (the driver routes it); only a call that is truly the operator's goes to the operator. |
 | Consumer gate first | No brief is written for a unit that adds something nobody uses. See below. |
+| Tests are planned | Every brief carries a `## Tests` section from the `test-engineer` skill: a layer per behaviour, a budget in seconds, the affected-run command. The review enforces it; a budget is cut to, never raised for a unit. |
 | Rulings, not hypotheses | Rulings go in briefs, quoted by number. Fix hypotheses never do: you are not the debugger. |
 | Spec decision is a ruling | Record whether a spec is needed, and why, before anything else. |
 | Respect the slots | At most `hosts.<h>.slots` units run on a host at once. |
@@ -84,7 +85,9 @@ it, or rule that a named consumer exists. Do not argue the gate away.
    slug (`notes/specs/<slug>/`).
 2. **Spec decision** (above), logged as a ruling. Run `spec` if needed.
 3. **Plan.** Run the `plan` skill: `tasks.md` (units, classes, dependencies,
-   waves) and one brief per unit, each passing the consumer gate.
+   waves) and one brief per unit, each passing the consumer gate and carrying
+   its `## Tests` section (the `test-engineer` skill; a project with no
+   affected-only test command gets one as its first unit).
 4. **Kick off.** Run the `kickoff` skill: tracker items when `tracker` is
    `beads`, then the first wave, within the host slots.
 5. **Run units.** Start each unit with the `unit` skill, in the background.
@@ -120,6 +123,8 @@ Stop and fix your approach when you catch yourself:
 - reading source, a diff or `loop.log` instead of delegating the lookup;
 - writing a brief for a unit whose elements have no consumer;
 - writing "probably because" or "change X to Y" in a brief;
+- writing a brief with no `## Tests` section, or raising its budget so a
+  unit's tests fit;
 - asking the operator something you can rule on (unless auto is off and the
   call is truly theirs);
 - running more units on a host than it has slots;

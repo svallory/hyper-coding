@@ -90,6 +90,27 @@ command below says otherwise. The final gate is run by the driver.)
 <command>   # expect: <pass condition>
 ```
 
+## Tests
+
+(Planned with the test-engineer skill before any code exists. One row per
+behaviour in the acceptance criteria and constraints, at the lowest layer that
+can fail for it; the entry point the test calls; the fixture it reuses; the
+existing test it extends or replaces, or "new". A seam named here is also a
+row in Consumers. The budget and the affected-run command are required; the
+dev reports the run's counts and wall time in the verdict summary. Rows at
+the large layer need the reason the lower layers cannot reach them.)
+
+| Behaviour | Layer | Entry point / seam | Fixture | Extends or replaces |
+|---|---|---|---|---|
+| <AC-n: behaviour> | <small\|medium\|large> | <function, command, or seam to add> | <shared fixture, built once per file> | <extends\|replaces\|covered by file:test, or new> |
+
+Budget: new tests add at most <N> s; the affected run stays under <M> s.
+
+Affected run: `<command>`   # what you run while working; not the suite
+
+Do not add: <tests that would overlap the rows above, e.g. the same behaviour
+end to end, a snapshot of the whole output, one test per table row>
+
 ## Rules
 
 These apply to every unit. Do not edit them.
