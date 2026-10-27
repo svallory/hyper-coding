@@ -112,6 +112,9 @@ die() { undo_now; echo "ship-unit: $*" >&2; exit "$E_INTERNAL"; }
 refuse() { echo "ship-unit: refused: $*" >&2; exit "$E_REFUSED"; }
 
 check_ref() {
+  # The bracket ranges below match collation-order characters (e.g. 'é') under some UTF-8 locales:
+  # pin the C locale so the check does not depend on the caller's LC_ALL/LANG.
+  local LC_ALL=C
   [[ -n "${1:-}" ]] || usage "a ref is required"
   [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid ref '$1' (letters, digits, '.', '_', '-'; must start with a letter or digit)"
 }

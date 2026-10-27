@@ -295,6 +295,12 @@ assert_eq "internal subcommands need SHIP_UNIT_INTERNAL: 64" "64" "$(unit _probe
 assert_contains "...saying the subcommand is unknown" "$(err)" "unknown subcommand '_probe'"
 assert_eq "run with a bad class: 64 (the run checks are wired)" "64" "$(unit run a1 --brief "$BRIEF" --class X)"
 assert_contains "...saying so" "$(err)" "--class must be S, M or L"
+# ref validation is locale-independent: a non-ASCII ref is refused whatever the caller's locale
+# en_US.UTF-8 is the row that tells fixed from unfixed (its collation lets 'é' into [a-z]); say so when the host lacks it
+locale -a 2>/dev/null | grep -qi "^en_US\.utf-\?8$" || echo "# WARNING: no en_US.UTF-8 locale on this host: the non-ASCII ref row for it cannot prove the fix here"
+for loc in C.UTF-8 en_US.UTF-8 C; do
+  assert_eq "run with a non-ASCII ref under LC_ALL=$loc: 64" "64" "$(LC_ALL=$loc unit run caf$'\xc3\xa9' --brief "$BRIEF" --class S)"
+done
 assert_eq "run with a bad model override: 64" "64" "$(unit run a1 --brief "$BRIEF" --class S --model nostage=opus)"
 assert_contains "...saying which" "$(err)" "invalid model override 'nostage=opus'"
 : > "$FIX/empty.md"
