@@ -1,0 +1,70 @@
+# run.sh --affected: which test files a changed path selects.
+#
+#   <glob, relative to the repo root>   <test files | ALL | CLI | NONE | SELF>
+#
+# FIRST matching rule wins for a changed path, so order is most specific
+# first. Globs are shell patterns where `*` also crosses `/`.
+#   ALL   every tests/test-*.sh
+#   CLI   the files that need the built hyper CLI (CLI_FILES in run.sh)
+#   NONE  nothing in this suite owns the path
+#   SELF  the changed file itself (a new tests/test-*.sh needs no map edit)
+# A path under agent-plugin/ matching nothing hits `agent-plugin/*` -> ALL, so
+# a missing rule costs time, never coverage. A path outside agent-plugin/ and
+# packages/{cli,drive} selects nothing (the monorepo's own tests own it).
+# Targets that do not exist yet are dropped at run time.
+
+agent-plugin/tests/helpers.sh                    ALL
+agent-plugin/tests/run.sh                        test-w-run-timeout.sh
+agent-plugin/tests/affected.map                  ALL
+agent-plugin/tests/hyper                         ALL
+agent-plugin/tests/lib/loop-journey.sh           test-t-ship-loop.sh test-t-ship-loop-b.sh
+agent-plugin/tests/lib/mux-contract.sh           test-t-ship-mux-fake.sh test-t-ship-mux-herdr.sh
+agent-plugin/tests/fixtures/ship/*               test-t-ship-loop.sh test-t-ship-loop-b.sh test-t-ship-loop-fn.sh test-t-ship-failover.sh test-t-ship-unit-driver.sh
+agent-plugin/tests/fixtures/*                    ALL
+agent-plugin/tests/test-*.sh                     SELF
+agent-plugin/scripts/ship/lib.sh                 ALL
+agent-plugin/scripts/ship/lib-host.sh            test-t-ship-host-paths.sh test-t-ship-land.sh test-t-ship-land-fn.sh test-t-ship-unit.sh test-t-ship-unit-fn.sh
+agent-plugin/scripts/ship/ship-loop              test-t-ship-loop.sh test-t-ship-loop-b.sh test-t-ship-loop-fn.sh test-t-ship-failover.sh test-t-ship-failover-fn.sh test-t-ship-unit-driver.sh
+agent-plugin/scripts/ship/prompts/*              test-t-ship-loop-fn.sh test-t-ship-loop.sh test-t-ship-loop-b.sh test-t-ship-schemas.sh
+agent-plugin/scripts/ship/schemas/*              test-t-ship-schemas.sh test-t-ship-loop-fn.sh test-t-ship-failover.sh
+agent-plugin/scripts/ship/ship-mux               test-t-ship-mux-fake.sh test-t-ship-mux-herdr.sh test-t-ship-loop.sh test-t-ship-loop-b.sh test-t-ship-failover.sh test-t-ship-land.sh test-t-ship-unit.sh test-t-ship-unit-driver.sh
+agent-plugin/scripts/ship/mux/fake               test-t-ship-mux-fake.sh test-t-ship-loop.sh test-t-ship-loop-b.sh test-t-ship-failover.sh test-t-ship-land.sh test-t-ship-unit.sh test-t-ship-unit-driver.sh
+agent-plugin/scripts/ship/mux/herdr              test-t-ship-mux-herdr.sh test-v-herdr-guard.sh
+agent-plugin/scripts/ship/mux/*                  test-t-ship-mux-fake.sh
+agent-plugin/scripts/ship/ship-land              test-t-ship-land.sh test-t-ship-land-fn.sh test-t-ship-unit.sh
+agent-plugin/scripts/ship/ship-retire            test-t-ship-retire.sh test-t-ship-land.sh
+agent-plugin/scripts/ship/ship-unit              test-t-ship-unit.sh test-t-ship-unit-fn.sh test-t-ship-unit-driver.sh test-t-ship-skills.sh
+agent-plugin/scripts/ship/ship-config            test-t-ship-config.sh
+agent-plugin/scripts/ship/ship-role              test-t-ship-role.sh
+agent-plugin/scripts/ship/ship-quota-tap         test-t-ship-role.sh test-t-ship-failover.sh test-t-ship-failover-fn.sh
+agent-plugin/scripts/ship/ship-auto              test-t-ship-skills.sh
+agent-plugin/scripts/ship/probe                  test-t-ship-host-paths.sh
+agent-plugin/scripts/ship/*                      ALL
+agent-plugin/scripts/hyper-require-lib.sh        test-a-detection.sh test-c-memory-seed.sh test-l-legacy.sh test-m-init.sh test-o-require-lib.sh test-q-hyper-md-backup.sh test-t-ship-mux-fake.sh test-t-ship-unit.sh
+agent-plugin/scripts/hyper-adopt.sh              test-h-adopt.sh test-i-convert.sh test-l-legacy.sh test-m-init.sh
+agent-plugin/scripts/hyper-audit.sh              test-g-audit.sh test-l-legacy.sh
+agent-plugin/scripts/hyper-check.sh              test-d-check-hook.sh test-l-legacy.sh
+agent-plugin/scripts/hyper-stack.sh              test-e-stack.sh
+agent-plugin/scripts/hyper-deps.sh               test-f-deps-hook.sh
+agent-plugin/scripts/hyper-recommend.sh          test-j-recommend.sh
+agent-plugin/scripts/hyper-cleanup.sh            test-k-cleanup.sh
+agent-plugin/scripts/hyper-init.sh               test-m-init.sh
+agent-plugin/scripts/hyper-context.sh            test-n-context.sh test-o-require-lib.sh
+agent-plugin/scripts/hyper-hook.sh               test-p-drive-hook.sh
+agent-plugin/scripts/hyper-drive-session-end.sh  test-p-drive-hook.sh
+agent-plugin/stacks/*                            test-a-detection.sh test-e-stack.sh
+agent-plugin/skills/ship/defaults.yml            test-t-ship-config.sh test-t-ship-failover-fn.sh test-t-ship-mux-fake.sh test-t-ship-unit.sh test-t-ship-role.sh test-w-ship-docs.sh
+agent-plugin/skills/ship/*                       test-w-ship-docs.sh test-s-ship-skills.sh test-u-skill-triggers.sh test-t-ship-skills.sh
+agent-plugin/skills/test-engineer/*              test-t-ship-loop-fn.sh test-t-ship-unit.sh
+agent-plugin/skills/*                            test-s-ship-skills.sh test-u-skill-triggers.sh test-r-help-listing.sh test-t-ship-skills.sh
+agent-plugin/commands/*                          test-r-help-listing.sh test-s-ship-skills.sh test-w-ship-docs.sh
+agent-plugin/docs/ship.md                        test-w-ship-docs.sh
+agent-plugin/docs/repo/stacks/*                  test-j-recommend.sh
+agent-plugin/resources/*                         test-j-recommend.sh
+agent-plugin/hooks/*                             test-p-drive-hook.sh
+agent-plugin/.claude-plugin/*                    test-t-ship-host-paths.sh test-t-ship-unit.sh
+agent-plugin/*.md                                NONE
+agent-plugin/*                                   ALL
+packages/drive/scripts/hyper-lib.sh              CLI
+packages/drive/*                                 CLI
+packages/cli/*                                   CLI
