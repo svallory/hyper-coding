@@ -19,7 +19,7 @@ size decides the budget and the lane.
 |---|---|---|---|---|
 | **small** | one process, one thread, memory, a hermetic in-memory or temp file system | sleep, the real clock, network, other processes, a database, a browser | 100 ms per case, 2 s per file | always, and in the affected run |
 | **medium** | several processes or threads, a temp directory, localhost (a stub binary on PATH, an in-memory or local store, a loopback server) | anything off this machine, the real clock, sleeps | 2 s per case | affected run when its package or fixture changed |
-| **large** | the real surface: the built program, several machines, a browser, a real service behind a contract | per-edge-case use | seconds to minutes | slow lane: CI and the pre-merge gate, never the working loop |
+| **large** | the real surface: the built program, several machines, a browser, a real service behind a contract | per-edge-case use | seconds to minutes | slow lane: CI, never the affected run |
 
 Rules of thumb that follow:
 
@@ -68,7 +68,7 @@ that has it. Tests need seams to reach behaviour in-process.
 | Sourceable script | put the logic in functions; run `main` only when executed | bash `[[ "${BASH_SOURCE[0]}" == "$0" ]] && main "$@"` |
 | Pure core, I/O shell | decisions as pure functions over values; one thin shell does the I/O and calls them | `decideLand(prState, headSha) -> {action, reason}`; the shell runs `gh` and `git` |
 | Binary on PATH | the program calls tools by name; tests prepend a directory with stubs | a `gh` stub that reads `GH_STATE=merged` |
-| Environment knob | a documented variable the shell reads | `SHIP_POLL_S=0` |
+| Environment knob | a documented variable the shell reads in production (a poll interval, a cache directory), which a test then sets; never a switch only tests read | `SHIP_POLL_S=0` |
 
 The **functional core / imperative shell** split is the single highest-return
 change for a slow suite: every decision becomes a small test with literal
@@ -214,6 +214,6 @@ def test_branch_deleted_after_verified_merge(repo, branch, fake_gh):
 ```
 
 Affected run: `pytest --testmon` when installed, else the touched test files
-plus a path map; `-p no:randomly` off and `pytest-randomly` on once to prove
-order independence; `hypothesis` with `max_examples=25` in the affected
-profile and the default in the slow lane.
+plus a path map; one run with `pytest-randomly` installed proves order
+independence; `hypothesis` with `max_examples=25` in the affected profile and
+the default in the slow lane.

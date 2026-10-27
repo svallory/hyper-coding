@@ -110,8 +110,10 @@ One file per unit from the template. Rules the template cannot enforce:
 - **Tests are planned, not accumulated.** The `## Tests` section is filled
   with the `test-engineer` skill: one row per behaviour at the lowest layer
   that can fail for it, a budget in seconds, the affected-run command, and the
-  tests not to add. A seam the lowest layer needs is an element of the unit
-  (its consumers: the test that calls it and the shell that uses it).
+  tests not to add. A seam the lowest layer needs is an element of the unit;
+  its consumer is the production code that calls it (the shell, the
+  command), never the test. A unit that adds no behaviour (docs, config)
+  writes `None — <reason>` instead of the table.
 - No `bd`, tracker, or host-specific instructions in a brief; the driver and
   `kickoff` own those.
 
@@ -126,7 +128,8 @@ Before telling anyone planning is done, verify and state the evidence for:
 5. every ruling quoted in a brief exists in the rulings file with that text;
 6. every brief's `## Tests` section has a row per acceptance criterion, a
    budget, an affected-run command, and no row at the large layer without the
-   reason a lower layer cannot reach it.
+   reason a lower layer cannot reach it; or reads `None — <reason>` for a
+   unit that adds no behaviour.
 
 Then report the waves, the briefs written, the briefs held and why, and name
 the next step: the `kickoff` skill.

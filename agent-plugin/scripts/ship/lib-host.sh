@@ -12,8 +12,9 @@
 #   ship_host_target <name>      print the ssh destination; return 1 (message on
 #                                stderr) when the host has none
 #   ship_host_is_local <name>    true for "" and "local"
-#   ship_host_sync <target>      rsync scripts/ship/, scripts/hyper-require-lib.sh
-#                                and skills/ship/defaults.yml to
+#   ship_host_sync <target>      rsync scripts/ship/, scripts/hyper-require-lib.sh,
+#                                skills/ship/defaults.yml and skills/test-engineer/
+#                                (the dev and review prompts point at it) to
 #                                ~/.cache/hyper/ship/<plugin version>/ on the host,
 #                                keeping the plugin layout
 #   ship_sq <string>             print the string single-quoted for a POSIX shell
@@ -126,10 +127,12 @@ ship_host_sync() {
   local target="${1:?ship_host_sync: target required}" cache
   _ship_host_rsync_ok || return 1
   cache="$(_ship_host_cache)"
-  ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p $cache/scripts/ship $cache/skills/ship" || return $?
+  ssh "${SHIP_SSH_OPTS[@]}" "$target" "mkdir -p $cache/scripts/ship $cache/skills/ship $cache/skills/test-engineer" || return $?
   rsync -a --delete "$SHIP_PLUGIN_ROOT/scripts/ship/" "$target:$cache/scripts/ship/" || return $?
   rsync -a "$SHIP_PLUGIN_ROOT/scripts/hyper-require-lib.sh" "$target:$cache/scripts/" || return $?
   rsync -a "$SHIP_PLUGIN_ROOT/skills/ship/defaults.yml" "$target:$cache/skills/ship/" || return $?
+  # The driver renders {test_skill} as <plugin root>/skills/test-engineer/SKILL.md; on the host that is the cache.
+  rsync -a --delete "$SHIP_PLUGIN_ROOT/skills/test-engineer/" "$target:$cache/skills/test-engineer/" || return $?
 }
 
 # ship_host_run <target> <space root> <host name> <script> [args...]

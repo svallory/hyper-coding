@@ -38,12 +38,12 @@ pass (N files, M tests, T s)" is.
 
 | Stack | Mechanism | Notes |
 |---|---|---|
-| vitest | `bunx vitest related <changed source files> --run`; branch-wide: `bunx vitest related $(git diff --name-only origin/main...HEAD -- '*.ts' '*.tsx') --run` | static import graph; dynamic `import()` edges are missed, so a module loaded dynamically needs a path-map entry. `--changed origin/main` is the same with git built in |
+| vitest | `files=$(<the contract's changed-file list, filtered to '*.ts' '*.tsx' '*.js'>); [ -n "$files" ] && bunx vitest related $files --run` (uncommitted changes included, empty list guarded: `vitest related` with no files runs nothing useful) | static import graph; dynamic `import()` edges are missed, so a module loaded dynamically needs a path-map entry. `vitest --changed origin/main` does the git part itself, uncommitted changes included |
 | jest | `jest --findRelatedTests <files>` or `jest --changedSince=origin/main` | static graph, same caveat |
 | bun test | `bun test <test files or directories>` from a path map | no graph; map or run the package |
 | pytest | `pytest --testmon` (coverage-based, keeps `.testmondata`); else `pytest <touched test files>` plus a path map | testmon selects by executed lines, so it sees dynamic imports |
-| Go | `go test $(go list -f '{{.ImportPath}}' ./... \| affected-by <changed pkgs>)`; simplest: `go list -deps` of each package, keep those whose deps include a changed package | `go test` caches unchanged packages anyway: a full `go test ./...` on a warm cache is often already affected-only |
-| Rust | `cargo test -p <changed crates>`; `cargo nextest` with `--workspace` and a warm cache | |
+| Go | map changed files to packages (`go list -f '{{.ImportPath}}' ./<dir>`), then keep every package whose `go list -f '{{.ImportPath}} {{join .Deps " "}} {{join .TestImports " "}} {{join .XTestImports " "}}' ./...` line names a changed package, and `go test` those | `.Deps` excludes test-only imports, hence the `TestImports` fields. `go test` also caches unchanged packages, so a full `go test ./...` on a warm cache often is affected-only already |
+| Rust | no built-in selection: `cargo test -p <changed crates>` plus their reverse dependencies from `cargo tree -i -p <crate> --workspace` (one line per dependent) | `cargo nextest` runs the same set faster, in parallel per test |
 | Bazel | `bazel test $(bazel query "tests(rdeps(//..., set(<changed labels>)))")` | exact, when the build graph is complete |
 | moon / nx / turbo | `moon run :test --affected`, `nx affected -t test --base=origin/main`, `turbo run test --filter=...[origin/main]` | project-level granularity; pair with the stack's file-level selector inside the project |
 | bash harnesses (bats, hand-rolled `test-*.sh`) | a path map, below | no graph exists; the map is the graph |
@@ -74,7 +74,9 @@ docs/*                            tests/test-w-ship-docs.sh
 
 ```bash
 #!/usr/bin/env bash
-# tests/affected.sh [base] — run the test files the change affects (path map above)
+# tests/affected.sh [base] — run the test files the change affects (path map above).
+# Needs bash 4+ for the associative array (macOS ships 3.2: use Homebrew bash, or
+# collect the selection in a sorted temp file instead).
 set -euo pipefail
 base="${1:-origin/main}"; here="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"; root="$(cd "$here/.." && pwd)"
 changed="$( { git -C "$root" diff --name-only "$(git -C "$root" merge-base "$base" HEAD)"; git -C "$root" ls-files --others --exclude-standard; } | sort -u)"
@@ -106,9 +108,10 @@ brief's `## Tests` section.
 
 - **Affected run**: the dev loop and, by choice, the ship `gate`. Small and
   medium tests only.
-- **Full suite**: CI on the PR, sharded (`vitest --shard=i/n`,
-  `jest --shard`, `pytest-xdist`, `bats --jobs`) so wall time stays under the
-  suite budget (10 min default). CI enforces the budget: a job timeout at the
+- **Full suite**: CI on the PR, sharded across jobs (`vitest --shard=i/n`,
+  `jest --shard=i/n`, `pytest-split`) and parallel within a job
+  (`pytest-xdist`, `bats --jobs`) so wall time stays under the suite budget
+  (10 min default). CI enforces the budget: a job timeout at the
   budget, and a duration report (`vitest --reporter=verbose`,
   `pytest --durations=20`, timing lines in a bash harness) so growth is
   visible in the PR.

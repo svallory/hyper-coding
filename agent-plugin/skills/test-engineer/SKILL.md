@@ -32,21 +32,24 @@ Violating the letter of a rule is violating its spirit.
 1. **One behaviour, one test, lowest layer.** Each behaviour in the acceptance
    criteria gets exactly one test, at the lowest layer that can fail for that
    behaviour (table below). A second test of the same behaviour at a higher
-   layer is overlap: delete it, or delete the lower one if the higher one is
-   the only way to reach the behaviour.
+   layer is overlap: delete it. If the lower test cannot fail for the
+   behaviour, it is the one that goes.
 2. **Budgets are part of the plan.** A unit states, before code exists, how
    many seconds its new tests may add and how long its affected run may take.
-   Defaults, measured on an idle machine: a small test under 100 ms; a test
-   file under 2 s; new tests of one unit under 5 s (S), 15 s (M), 30 s (L);
-   the affected run under 60 s; the full suite under 10 min. A project may
+   Defaults, measured on an idle machine: a small test under 100 ms and a
+   file of them under 2 s; a medium test under 2 s and a file of them under
+   20 s; new tests of one unit under 5 s (S), 15 s (M), 30 s (L); the
+   affected run under 60 s; the full suite under 10 min. A project may
    set tighter numbers in its rules file, never looser ones without a ruling.
 3. **Expensive things are built once.** A process spawn, a git repository, a
    database, a browser, a network listener is a fixture built once per file
    (or once per suite) and reused; a test case changes state inside it
-   (a branch, a row, a route) and never rebuilds it. A file that spawns the
-   system under test more than ten times, or builds more than one repository,
-   is a finding. A unit never adds a case to a file that is already over
-   this line: its new tests go to a new file at the lowest layer, and the
+   (a branch, a row, a route) and never rebuilds it. The one threshold,
+   everywhere in this skill: **more than ten spawns of the system under test,
+   or more than one repository, server or browser, per file** is a finding.
+   A medium file for a CLI therefore holds at most ten cases that run the
+   program; the decisions behind the rest belong in the small layer. A unit
+   never adds a case to a file that is already over this line: its new tests go to a new file at the lowest layer, and the
    file is named in the summary as audit work (`audit.md`).
 4. **A seam is part of the unit.** If a behaviour can only be reached by
    spawning the program, the unit adds the seam that exposes it in-process
@@ -74,7 +77,7 @@ Violating the letter of a rule is violating its spirit.
 | The behaviour is | Layer | Looks like | Each case costs |
 |---|---|---|---|
 | A computation, a decision, parsing, formatting, validation | **small** (unit): one process, no I/O, no clock, no sleep | call the function with literal input, assert literal output; table-driven for variants | under 100 ms |
-| A boundary your code owns: file layout, a CLI's exit codes and output, a module talking to a real local dependency | **medium** (integration): one machine, localhost only, real fakes (temp dir, in-memory store, stub binary on PATH) | one shared fixture per file; cases change state inside it | under 2 s |
+| A boundary your code owns: file layout, a CLI's exit codes and output, a module talking to a real local dependency | **medium** (integration): one machine, localhost only, real fakes (temp dir, in-memory store, stub binary on PATH) | one shared fixture per file; cases change state inside it; at most ten runs of the program per file | under 2 s |
 | A contract with something you do not own (a remote API, another repo's CLI) | **contract**: a fake that is itself checked against the real thing, on a schedule, not per change | fake plus one contract test; the fake is what units test against | runs in a slow lane |
 | A whole journey through the real surface | **large** (end to end) | at most one per journey the feature exists for; never per edge case | seconds to minutes; slow lane |
 
@@ -96,7 +99,8 @@ brief's `## Tests` section from this:
 2. **Pick the layer** per row with the table above. Write the entry point
    (function, command, module) the test calls. When the lowest layer needs a
    seam that does not exist, name the seam in the row and in `## Consumers`
-   (its consumer is the test that calls it and the shell that uses it).
+   (its consumer is the production code that calls it: the shell, the
+   command; a test is never a consumer).
 3. **Name the fixture** per row, and reuse: one fixture per file, built once.
    If the fixture is the project's existing one (a helper, a stub binary),
    name it.
@@ -126,9 +130,9 @@ without running tests. Each check that fails is a finding with a concrete fix.
 
 | Check | How | Severity |
 |---|---|---|
-| Follows the brief's `## Tests` | each row has its test at its layer and entry point; each new test maps to a row | SHOULD: move it; BLOCKING: a row with no test |
+| Follows the brief's `## Tests` | each row has its test at its layer and entry point; a `covered by` row names an existing test that is in the tree; each new test maps to a row | SHOULD: move it; BLOCKING: a row with no test and no existing `covered by` test |
 | No overlap | for each new test, name the production change that only it catches; two tests sharing one break lose one; a test whose break an existing test already catches is deleted | SHOULD: delete, name the survivor |
-| Layer and fixtures | count process spawns, repositories, servers, browsers created per test and per file; anything above one per file, or any large test the brief did not plan, is a finding | SHOULD: hoist to a file fixture, or add the seam |
+| Layer and fixtures | count spawns of the system under test and repositories, servers, browsers created per file; more than ten spawns, or more than one repository, server or browser, per file (rule 3), or any large test the brief did not plan, is a finding | SHOULD: hoist to a file fixture, or add the seam |
 | Budget met | the summary states the affected-run command, its counts and its wall time; compare with the brief's budget | SHOULD: over budget, with what to cut; BLOCKING: no timing in the summary |
 | Deterministic | no sleep, `Date.now`/`time.time`/`date` without injection, unseeded random, test order dependence, shared mutable module state, real network | BLOCKING |
 | Assertions hold | expected values are literals; no assertion that mirrors the implementation; no change detector (asserting a constant, exact log wording, private structure); no snapshot wider than the contract it pins; no `toHaveBeenCalled` on a read; a mock earns no assertion by existing | BLOCKING: vacuous or mirrored; SHOULD: change detector |
