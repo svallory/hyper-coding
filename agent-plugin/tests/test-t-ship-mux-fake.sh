@@ -30,19 +30,26 @@ stream_init() { # <name> — a fresh space "proj", fake dir and log of its own, 
   printf 'mux: fake\n' > "$PROJECT"   # no gate: ship-mux must not need one
   WT="$SPACE/worktrees/wt"
 }
-PAR_PIDS=(); PAR_NAMES=()
+PAR_PIDS=(); PAR_NAMES=(); PAR_DOGS=()
 # par <name> <function> — run a part in a subshell with counters of its own
-par() { local n="$1"; shift; ( _n=0; _fail=0; stream_init "$n"; "$@" ) >"$FIX/par.$n.out" 2>&1 & PAR_PIDS+=($!); PAR_NAMES+=("$n"); }
+par() {   # a part that ends without printing its "# part done" line crashed or timed out
+  local n="$1" pid; shift
+  ( _n=0; _fail=0; stream_init "$n"; "$@"; echo "# part $n done" ) >"$FIX/par.$n.out" 2>&1 & pid=$!
+  ( sleep "${PART_MAX_S:-300}"; pkill -TERM -P "$pid" 2>/dev/null; kill "$pid" 2>/dev/null ) >/dev/null 2>&1 & PAR_DOGS+=($!)
+  PAR_PIDS+=("$pid"); PAR_NAMES+=("$n")
+}
 # par_wait — wait for the parts and replay their lines as this shell's own results, in start order
 par_wait() {
   local i line
   for i in "${!PAR_NAMES[@]}"; do
-    wait "${PAR_PIDS[$i]}"
+    wait "${PAR_PIDS[$i]}" || fail "part ${PAR_NAMES[$i]} exited $?"
+    kill "${PAR_DOGS[$i]}" 2>/dev/null
+    grep -q "^# part ${PAR_NAMES[$i]} done$" "$FIX/par.${PAR_NAMES[$i]}.out" || fail "part ${PAR_NAMES[$i]} did not finish (crashed or timed out)"
     while IFS= read -r line; do
       case "$line" in
         "not ok "*) fail "${line#not ok * - }" ;;
         "ok "*) pass "${line#ok * - }" ;;
-        "1.."*) ;;
+        "1.."*|"# part "*" done") ;;
         *) echo "$line" ;;
       esac
     done <"$FIX/par.${PAR_NAMES[$i]}.out"
@@ -72,6 +79,7 @@ mux_rc() { (cd "$WT" && bash "$MUX_BIN" "$@" >/dev/null 2>&1); echo $?; }
 # shellcheck disable=SC2069
 mux_err() { (cd "$WT" && bash "$MUX_BIN" "$@" 2>&1 >/dev/null); }
 log_lines() { [[ -f "$SHIP_MUX_FAKE_LOG" ]] && wc -l <"$SHIP_MUX_FAKE_LOG" | tr -d ' ' || echo 0; }
+closes_of() { jq -s --arg a "$1" '[.[] | select(.verb == "close" and (.args | index($a)))] | length' "$SHIP_MUX_FAKE_LOG" 2>/dev/null || echo 0; }
 log_has() { jq -e --arg v "$1" --arg a "$2" 'select(.verb == $v and (.args | index($a)))' "$SHIP_MUX_FAKE_LOG" >/dev/null 2>&1; }
 rec() { cat "$SPACE/notes/loops/$1/mux.json"; }
 ids_of() { rec "$1" | jq -r '[.created[].id] | sort | join(" ")'; }
@@ -93,7 +101,10 @@ part_contract() {
   # shellcheck disable=SC2034  # read by mux_contract
   mux_contract_vanish() { vanish "$1"; }
   mux_contract_exit_agent() { echo gone > "$SHIP_MUX_FAKE_DIR/status/$1"; }
+  # the backend file itself: a backend refuses to close a group that still has children (contract rows)
+  MUX_CONTRACT_BACKEND=(bash "$FAKE_BE")
   mux_contract contract "$WT"
+  unset MUX_CONTRACT_BACKEND
 
 }
 
@@ -111,6 +122,8 @@ part_records() {
   assert_eq "open passes --group to the backend" "proj-units" "$(jq -r 'select(.verb == "open") | .args | .[index("--group") + 1]' "$SHIP_MUX_FAKE_LOG" | head -n 1)"
   assert_eq "the group record keeps the id, name and created flag" "proj-units true" "$(jq -r --arg g "$G" '.groups[$g] | "\(.name) \(.created)"' "$SPACE/.hyper/ship-mux.json")"
   assert_eq "the group record has no space list (the records are the truth)" "null" "$(jq -c --arg g "$G" '.groups[$g].spaces' "$SPACE/.hyper/ship-mux.json")"
+  run_mux open --ref u1 --cwd "$WT"
+  assert_eq "open with the same cwd does not warn" "" "$ERR"
   run_mux open --ref u1 --cwd /somewhere/else
   assert_contains "open with another cwd warns on stderr" "$ERR" "already open with cwd"
   assert_eq "...and still returns the existing space (idempotent open: the contract also asserts it)" "$o1" "$OUT"
@@ -130,6 +143,7 @@ part_records() {
   assert_eq "scripted status keeps the last line" "idle" "$(fk status --ref u1 --to "$AG" | jq -r .state)"
   printf 'blocked\n' > "$SHIP_MUX_FAKE_DIR/status/$AG"
   assert_eq "scripted status by id wins" "blocked" "$(fk status --ref u1 --to "$AG" | jq -r .state)"
+  assert_eq "ship-mux passes a backend's exit 4 through (wait on a blocked agent)" "4" "$(mux_rc wait --ref u1 --to "$AG" --until idle --timeout-ms 10)"
   assert_eq "wait --until idle times out with exit 4 while blocked" "4" "$(fk_rc wait --ref u1 --to "$AG" --until idle --timeout-ms 10)"
   printf 'working\n' > "$SHIP_MUX_FAKE_DIR/status/$AG"
   assert_eq "wait --until working is reached" "0" "$(fk_rc wait --ref u1 --to "$AG" --until working --timeout-ms 10)"
@@ -226,10 +240,12 @@ part_groups() {
   reset_fake
   a="$(mux open --ref ga --cwd "$WT")"
   G="$(jq -r .group <<<"$a")"
+  assert_eq "the backend itself refuses to close a group with children (1)" "1" "$(fk_rc close --ref ga --id "$G")"
+  BASE_CLOSES="$(closes_of "$G")"   # that direct call is in the log; the dispatcher must add none
   run_mux close --ref ga --id "$G"
   assert_eq "group close with a space left exits 3" "3" "$RC"
   assert_contains "...and the refusal points at the records" "$ERR" "notes/loops"
-  assert_eq "...with no close of the group on the backend" "no" "$(log_has close "$G" && echo yes || echo no)"
+  assert_eq "...with no close of the group on the backend" "$BASE_CLOSES" "$(closes_of "$G")"
   # the space goes (its close is the contract's), then the group may close -- unless the backend renamed it
   fk close --ref ga --id "$(jq -r .space <<<"$a")" >/dev/null
   echo '{"backend":"fake","created":[]}' > "$SPACE/notes/loops/ga/mux.json"
@@ -237,10 +253,10 @@ part_groups() {
   run_mux close --ref ga --id "$G"
   assert_eq "group close is refused when the backend reports another name for the id" "3" "$RC"
   assert_contains "...and says so" "$ERR" "now named"
-  assert_eq "...with no close on the backend" "no" "$(log_has close "$G" && echo yes || echo no)"
+  assert_eq "...with no close on the backend" "$BASE_CLOSES" "$(closes_of "$G")"
   echo "proj-units" > "$SHIP_MUX_FAKE_DIR/groups/proj-units"
   assert_eq "group close of an empty ship-created group exits 0" "0" "$(mux_rc close --ref ga --id "$G")"
-  assert_eq "the backend saw the group close" "yes" "$(log_has close "$G" && echo yes || echo no)"
+  assert_eq "the backend saw the group close" "$((BASE_CLOSES + 1))" "$(closes_of "$G")"
   assert_eq "the group leaves the record" "{}" "$(jq -c .groups "$SPACE/.hyper/ship-mux.json")"
   assert_eq "the ops lock is released" "no" "$([[ -e "$SPACE/.hyper/ship-mux.ops.lock" ]] && echo yes || echo no)"
 
@@ -250,6 +266,7 @@ part_groups() {
   a="$(mux open --ref gp --cwd "$WT")"
   G="$(jq -r .group <<<"$a")"
   assert_eq "a pre-existing group is recorded as not ship-created" "false" "$(jq -r --arg g "$G" '.groups[$g].created' "$SPACE/.hyper/ship-mux.json")"
+  mux close --ref gp --id "$(jq -r .space <<<"$a")" >/dev/null   # no space left: only "not created by ship" can refuse
   run_mux close --ref gp --id "$G"
   assert_eq "group close of a pre-existing group exits 3" "3" "$RC"
   assert_contains "...and says it was not created by ship" "$ERR" "not created by ship"
@@ -359,7 +376,9 @@ held=0"
 
   # 10: exit codes of the dispatcher and of a backend (one of each class: 2 and 3 become 1, others pass) -----
   printf '#!/usr/bin/env bash\nexit "${SHIP_TEST_RC:?}"\n' > "$PLUG/scripts/ship/mux/rc"
+  assert_eq "a backend exit 2 becomes 1" "1" "$(with_mux rc bash -c 'cd "$1" && SHIP_TEST_RC=2 bash "$2" check >/dev/null 2>&1; echo $?' _ "$WT" "$PLUG/scripts/ship/ship-mux")"
   assert_eq "a backend exit 3 becomes 1" "1" "$(with_mux rc bash -c 'cd "$1" && SHIP_TEST_RC=3 bash "$2" check >/dev/null 2>&1; echo $?' _ "$WT" "$PLUG/scripts/ship/ship-mux")"
+  assert_eq "a backend exit 99 passes through" "99" "$(with_mux rc bash -c 'cd "$1" && SHIP_TEST_RC=99 bash "$2" check >/dev/null 2>&1; echo $?' _ "$WT" "$PLUG/scripts/ship/ship-mux")"
   assert_eq "a backend exit 4 passes through" "4" "$(with_mux rc bash -c 'cd "$1" && SHIP_TEST_RC=4 bash "$2" check >/dev/null 2>&1; echo $?' _ "$WT" "$PLUG/scripts/ship/ship-mux")"
 
   # 11: the call log -----------------------------------------------------------------------------
@@ -383,7 +402,10 @@ held=0"
   assert_eq "the mux is read from the project config when nothing is inherited" "0" "$( (unset SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS; mux_rc check) )"
 
   # 13: usage errors (one per class; the others share their parser) ----------------------------------
+  assert_eq "no verb exits 2" "2" "$(mux_rc)"
   assert_eq "unknown verb exits 2" "2" "$(mux_rc nope)"
+  assert_eq "an unknown flag exits 2" "2" "$(mux_rc list --ref r --bogus 1)"
+  assert_eq "run without a command exits 2" "2" "$(mux_rc run --ref r --pane p)"
   assert_eq "open without --cwd exits 2" "2" "$(mux_rc open --ref r)"
   assert_eq "an unsafe ref exits 2" "2" "$(mux_rc list --ref ../x)"
   assert_eq "wait with a bad --until exits 2" "2" "$(mux_rc wait --ref r --to a --until sleeping --timeout-ms 1)"

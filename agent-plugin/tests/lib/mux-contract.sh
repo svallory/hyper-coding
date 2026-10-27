@@ -49,22 +49,25 @@ _mc_has() { jq -e --arg id "$2" 'any(.[]; .id == $id)' >/dev/null 2>&1 <<<"$1"; 
 # file, skipping ship-mux's own startup; everything that tests ship-mux's records and refusals stays on mux.
 _mcd() { if declare -F mux_contract_direct >/dev/null; then mux_contract_direct "$@"; else mux "$@"; fi; }
 
-# _mc_rcs — stdin: lines "expected exit|description|mux arguments" (no quoting: the arguments are split on
-# spaces). Runs them side by side, then asserts each one's exit code, in order.
-_mc_rcs() {
-  local d exp desc args i=0 n
-  d="$(mktemp -d "${TMPDIR:-/tmp}/mc-rcs.XXXXXX")"
-  local -a exps=() descs=()
-  while IFS='|' read -r exp desc args; do
-    [[ -n "$exp" ]] || continue
-    exps+=("$exp"); descs+=("$desc")
-    # shellcheck disable=SC2086
-    ( mux $args >/dev/null 2>&1; echo $? >"$d/$i" ) &
-    i=$((i + 1))
+# _mc_q <expected exit> <description> <mux args...> — queue one call, started at once in the background (its
+# arguments are kept as given, so a path with spaces works); _mc_flush waits for exactly those calls and asserts
+# each exit code, in order. Only for calls with no effect on the backend or the records.
+_MC_DIR=""; _MC_PIDS=(); _MC_EXP=(); _MC_DESC=()
+_mc_q() {
+  local exp="$1" desc="$2" i=${#_MC_PIDS[@]}
+  shift 2
+  [[ -n "$_MC_DIR" ]] || _MC_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mc-rcs.XXXXXX")"
+  _MC_EXP+=("$exp"); _MC_DESC+=("$desc")
+  ( mux "$@" >/dev/null 2>&1; echo $? >"$_MC_DIR/$i" ) &
+  _MC_PIDS+=($!)
+}
+_mc_flush() {
+  local n
+  for ((n = 0; n < ${#_MC_PIDS[@]}; n++)); do
+    wait "${_MC_PIDS[$n]}"
+    assert_eq "contract: ${_MC_DESC[$n]}" "${_MC_EXP[$n]}" "$(cat "$_MC_DIR/$n")"
   done
-  wait
-  for ((n = 0; n < i; n++)); do assert_eq "contract: ${descs[$n]}" "${exps[$n]}" "$(cat "$d/$n")"; done
-  rm -rf "$d"
+  rm -rf "$_MC_DIR"; _MC_DIR=""; _MC_PIDS=(); _MC_EXP=(); _MC_DESC=()
 }
 
 mux_contract() {
@@ -127,28 +130,28 @@ mux_contract() {
   done
 
   # refusals (3) and usage errors (2)
-  # None of these reaches the backend or changes a record, so they run side by side (a dispatcher call is slow).
-  _mc_rcs <<EOF
-3|close of another ref's space exits 3|close --ref $ref --id $unrelated
-3|close of an unrecorded id exits 3|close --ref $ref --id never-recorded-$prefix
-3|wait on an unrecorded id exits 3|wait --ref $ref --to never-recorded-$prefix --until ready --timeout-ms 10
-3|read of another ref's pane exits 3|read --ref $ref --to $unrelated_pn
-3|run in another ref's pane exits 3|run --ref $ref --pane $unrelated_pn -- true
-3|send to an unrecorded id exits 3|send --ref $ref --to never-recorded --text x
-3|status of an unrecorded id exits 3|status --ref $ref --to never-recorded
-3|closing a space's root pane exits 3|close --ref $ref --id $pn
-1|send to a pane id is an error (1)|send --ref $ref --to $apn --text x
-2|unknown verb exits 2|bogus
-2|close without --ref exits 2|close --id x
-2|send without --text or --keys exits 2|send --ref $ref --to $ag
-2|send without --ref exits 2|send --to $ag --text x
-2|send with an unknown key exits 2|send --ref $ref --to $ag --keys enter,f13
-2|send with --text and --keys exits 2|send --ref $ref --to $ag --text a --keys enter
-3|start into another ref's space exits 3|start --ref $ref --space $unrelated --name n --harness $harness --cwd $cwd
-3|start into something that is not a space exits 3|start --ref $ref --space $pn --name n --harness $harness --cwd $cwd
-3|start into an unrecorded id exits 3|start --ref $ref --space never-recorded-$prefix --name n --harness $harness --cwd $cwd
-2|start with an unknown harness exits 2|start --ref $ref --space $sp --name n --harness emacs --cwd $cwd
-EOF
+  # Refused by the dispatcher or a usage error: they change no record, so they run side by side (a dispatcher
+  # call is slow). "send to a pane id" does reach the backend (it answers 1) but changes nothing.
+  _mc_q 3 "close of another ref's space exits 3" close --ref "$ref" --id "$unrelated"
+  _mc_q 3 "close of an unrecorded id exits 3" close --ref "$ref" --id "never-recorded-$prefix"
+  _mc_q 3 "wait on an unrecorded id exits 3" wait --ref "$ref" --to "never-recorded-$prefix" --until ready --timeout-ms 10
+  _mc_q 3 "read of another ref's pane exits 3" read --ref "$ref" --to "$unrelated_pn"
+  _mc_q 3 "run in another ref's pane exits 3" run --ref "$ref" --pane "$unrelated_pn" -- true
+  _mc_q 3 "send to an unrecorded id exits 3" send --ref "$ref" --to never-recorded --text x
+  _mc_q 3 "status of an unrecorded id exits 3" status --ref "$ref" --to never-recorded
+  _mc_q 3 "closing a space's root pane exits 3" close --ref "$ref" --id "$pn"
+  _mc_q 1 "send to a pane id is an error (1)" send --ref "$ref" --to "$apn" --text x
+  _mc_q 2 "unknown verb exits 2" bogus
+  _mc_q 2 "close without --ref exits 2" close --id x
+  _mc_q 2 "send without --text or --keys exits 2" send --ref "$ref" --to "$ag"
+  _mc_q 2 "send without --ref exits 2" send --to "$ag" --text x
+  _mc_q 2 "send with an unknown key exits 2" send --ref "$ref" --to "$ag" --keys enter,f13
+  _mc_q 2 "send with --text and --keys exits 2" send --ref "$ref" --to "$ag" --text a --keys enter
+  _mc_q 3 "start into another ref's space exits 3" start --ref "$ref" --space "$unrelated" --name n --harness "$harness" --cwd "$cwd"
+  _mc_q 3 "start into something that is not a space exits 3" start --ref "$ref" --space "$pn" --name n --harness "$harness" --cwd "$cwd"
+  _mc_q 3 "start into an unrecorded id exits 3" start --ref "$ref" --space "never-recorded-$prefix" --name n --harness "$harness" --cwd "$cwd"
+  _mc_q 2 "start with an unknown harness exits 2" start --ref "$ref" --space "$sp" --name n --harness emacs --cwd "$cwd"
+  _mc_flush
   assert_ok "contract: ...and the space is still there" _mcd wait --ref "$ref" --to "$pn" --until ready --timeout-ms 5000
   _mc_json "contract: ...and none of them started anything" "$(mux list --ref "$ref")" '[.[] | select(.kind == "agent")] | length == 1'
 
