@@ -146,7 +146,7 @@ assert_eq "gate from the user layer is the value" "from-user" "$(g gate)"
 reset_layers
 printf 'gate: "true"\ntracker: ""\nbase: ~\n' > "$PROJECT"
 lc
-rc=0; v="$(g tracker)" || rc=$?
+rc=0; g tracker >/dev/null || rc=$?
 assert_eq "empty string: exit 0" "0" "$rc"
 assert_eq "empty string: prints one empty line" "|" "$(g tracker | tr '\n' '|')"
 rc=0; g base >/dev/null || rc=$?
