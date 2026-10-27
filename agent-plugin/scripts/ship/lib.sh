@@ -9,9 +9,12 @@
 # Config
 #   ship_require_yq            yq present and mikefarah v4, else return 1
 #   ship_space_root            print the space root: $SHIP_SPACE_ROOT if set, else
-#                              the hyper CLI's find_space_root. Returns 1 when cwd
-#                              is not in a space, 2 when the hyper CLI is missing
-#                              or outdated and SHIP_SPACE_ROOT is unset.
+#                              the hyper CLI's find_space_root (answered from the
+#                              filesystem, without spawning the CLI, when cwd is
+#                              in a plain bare space and `hyper` is on PATH).
+#                              Returns 1 when cwd is not in a space, 2 when the
+#                              hyper CLI is missing or outdated and
+#                              SHIP_SPACE_ROOT is unset.
 #   ship_project               print the project name (basename of the space root)
 #   ship_config_load           load, merge and validate the layers once per run
 #   ship_require_gate          the merged config has a non-empty string `gate`
@@ -84,6 +87,51 @@ ship_require_yq() {
   return 1
 }
 
+# _ship_fs_space_root — the common case of find_space_root (packages/drive/scripts/hyper-lib.sh) answered
+# from the filesystem, so that no node process starts: walk up from $PWD to the first directory that has a
+# .git directory (a .git file is a linked worktree: keep walking) whose config says `bare = true` and that has
+# worktrees/ or a HYPER.md/HYPERDEV.md beside it. Sets SHIP_FS_ROOT and returns 0 only when that answer is
+# certain; anything else (no bare space found, a repo under code/ of a multi-repo space, a root that may be a
+# multi-repo one, a config it cannot read with certainty) returns 1 and the CLI decides.
+SHIP_FS_ROOT=""
+_ship_fs_space_root() {
+  local d="$PWD" cfg line section bare n parent gp
+  SHIP_FS_ROOT=""
+  [[ "$d" == /* ]] || return 1
+  while [[ "$d" != / && -n "$d" ]]; do
+    if [[ -d "$d/.git" ]]; then
+      cfg="$d/.git/config"
+      [[ -f "$cfg" ]] || return 1
+      section="" bare="" n=0
+      while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^[[:space:]]*\[([A-Za-z0-9.-]+)([[:space:]]+\"[^\"]*\")?\][[:space:]]*(.*)$ ]]; then
+          case "${BASH_REMATCH[1]}" in
+            [Ii][Nn][Cc][Ll][Uu][Dd][Ee]*) return 1 ;;
+            [Cc][Oo][Rr][Ee]) if [[ -z "${BASH_REMATCH[2]}" ]]; then section=core; else section=other; fi ;;   # [core "x"] is not [core]
+            *) section=other ;;
+          esac
+        elif [[ "$section" == core && "$line" =~ ^[[:space:]]*[Bb][Aa][Rr][Ee][[:space:]]*=[[:space:]]*([^[:space:]#;]*)[[:space:]]*$ ]]; then
+          bare="${BASH_REMATCH[1]}" n=$((n + 1))
+        fi
+      done <"$cfg"
+      [[ $n -eq 1 && "$bare" == true ]] || return 1
+      [[ -d "$d/worktrees" || -f "$d/HYPER.md" || -f "$d/HYPERDEV.md" ]] || return 1
+      # a repo of a multi-repo space (<root>/code/<slug>): the CLI answers with the root, so leave it to the CLI
+      parent="${d%/*}"
+      if [[ "${parent##*/}" == code ]]; then
+        gp="${parent%/*}"
+        if [[ ! -e "$gp/.git" && ( -f "$gp/HYPER.md" || -f "$gp/HYPERDEV.md" ) && -d "$gp/code" ]]; then return 1; fi
+      fi
+      SHIP_FS_ROOT="$d"
+      return 0
+    elif [[ ! -e "$d/.git" && ( -f "$d/HYPER.md" || -f "$d/HYPERDEV.md" ) && -d "$d/code" ]]; then
+      return 1   # a multi-repo root: leave it to the CLI
+    fi
+    d="${d%/*}"
+  done
+  return 1
+}
+
 # ship_space_root — see the header. The hyper CLI owns space detection; hosts
 # without it (or with an outdated one) set SHIP_SPACE_ROOT instead.
 ship_space_root() {
@@ -96,6 +144,10 @@ ship_space_root() {
     fi
     CDPATH='' cd -- "$r" && pwd -P
     return
+  fi
+  if command -v hyper >/dev/null 2>&1 && _ship_fs_space_root; then
+    printf '%s\n' "$SHIP_FS_ROOT"
+    return 0
   fi
   # shellcheck source=../hyper-require-lib.sh
   source "$SHIP_PLUGIN_ROOT/scripts/hyper-require-lib.sh"
