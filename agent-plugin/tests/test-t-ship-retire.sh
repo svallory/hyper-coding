@@ -3,7 +3,7 @@
 # Row T (ship-retire) — stopping one agent the way its harness expects, over mux/fake: the keys each harness
 # gets, an agent that is already gone, the refusals, the escalation and the timeout. Moved out of
 # test-t-ship-land.sh (its section 10) unchanged except the waits: SHIP_RETIRE_POLL is 0.1 and the two
-# --timeout 3 runs are 1 and 2. No real multiplexer is touched.
+# --timeout 3 runs are 1 and 3. No real multiplexer is touched.
 
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 set +eu
@@ -86,7 +86,7 @@ assert_eq "a bad --harness is a usage error (2)" "2" "$(retire --ref r1 --harnes
 reset_mux
 mk_agent claude
 touch "$FIX/noreap"
-assert_eq "an agent that will not stop: exit 4 after the timeout" "4" "$(retire --ref r1 --harness claude --timeout 2 "$RA")"
+assert_eq "an agent that will not stop: exit 4 after the timeout" "4" "$(retire --ref r1 --harness claude --timeout 3 "$RA")"
 assert_contains "...it was escalated (esc, ctrl+c) before giving up" "$(cat "$(sent_file "$RA")")" "<keys:esc>"
 assert_eq "...and its pane is left open" "yes" "$(state_exists "$RP" && echo yes || echo no)"
 rm -f "$FIX/noreap"
