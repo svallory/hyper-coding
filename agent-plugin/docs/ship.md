@@ -561,7 +561,7 @@ hosts:
 | Key | Meaning |
 |---|---|
 | `gate` | Required, no default. Command run in the unit worktree before push and before merge; exit 0 passes. It runs twice per unit (finalize and land), so prefer the project's affected-only test command against `origin/<base>` and leave the full suite to CI on the PR (`skills/test-engineer/affected.md` shows how to set one up). To run it on another machine, see [Running on other machines](#running-on-other-machines). |
-| `offload` | Optional, unset by default. A command prefix that runs one shell-string argument on a build host, in a synced copy of the current worktree. When set, the dev and fix prompts tell the agent to run test runs, builds and the gate through it. See [Running on other machines](#running-on-other-machines). |
+| `offload` | Optional, unset by default. A command prefix that runs one shell-string argument on a build host, in a synced copy of the current worktree. When set, the dev and fix prompts tell the agent to run test runs and builds through it (the dev does not run the gate). See [Running on other machines](#running-on-other-machines). |
 | `mux` | Backend file under `scripts/ship/mux/`. Default `herdr`. |
 | `units_group` | Name of the multiplexer group holding unit spaces. `<project>` becomes the space directory name. Default `<project>-units`. |
 | `base` | Branch units are rebased onto and merged into. Default `main`. |
