@@ -38,7 +38,12 @@ Changes to the hyper agent plugin. The plugin version in
   gate-restore path), that stage judges the fixed diff once the code review is
   READY and before the push; a repeat rejection goes back to the dev under the
   same `max_rounds` cap and ends STUCK with `rejected_by` naming the re-run
-  verdict. Units without a spec or final rejection run no extra stage.
+  verdict. A re-check that answers GAP (or REMOVE with spec-text removals)
+  goes to the spec writer or parks for the operator, as in the rounds loop,
+  and a resumed driver routes it there too instead of spending a dev fix
+  round. The owed re-check and what the stage rejected are kept in the unit's
+  state directory, so a restarted driver still owes it. Units without a spec
+  or final rejection run no extra stage.
 - A ship fix round's time budget now grows with the findings it must answer:
   `min(budgets.<class>, budgets.<class> × budgets.fix_fraction + budgets.fix_per_finding × F)`
   minutes, where F is the number of findings (1 for a finalize rejection that

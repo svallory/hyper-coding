@@ -1687,6 +1687,34 @@ assert_eq "GAP re-check: the spec check judged the pushed diff" "$(git -C "$W71"
 assert_eq "GAP re-check: the push is the head" "$(git -C "$W71" rev-parse HEAD)" "$(git -C "$FIX/origin-t71.git" rev-parse refs/heads/feat-t71)"
 unset GATEFLAG71; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
 
+# --- 71b: a spec re-check whose every gap is an operator call parks, and the answer reaches the spec writer, not the dev ------------
+reset_fake; unit t71b spec
+W71B="$SPACE/worktrees/t71b"
+export GATEFLAG71B="$FIX/gateflag-t71b"
+GATE_CMD='if [ ! -e "$GATEFLAG71B" ]; then touch "$GATEFLAG71B"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+SPEC_GAP_OP='{"verdict":"GAP","findings":[],"gaps":[{"where":"docs/spec/a.md:3","quotes":["the spec is silent"],"question":"Pick A or B?","operator_call":true}],"removals":[],"commits":[],"gate":"green"}'
+script t71b develop.json "$DEV_DONE"; script t71b review-r1.json "$REV_OK"; script t71b spec-r1.json "$SPEC_CHG"
+script t71b fix-r2.json "$DEV_DONE"; script t71b review-r2.json "$REV_OK"; script t71b spec-r2.json "$SPEC_OK"
+script t71b fix-r3.json "$DEV_DONE"; script t71b review-r3.json "$REV_OK"; script t71b spec-r3.json "$SPEC_GAP_OP"
+script t71b specwriter-r3.json "$SW_OK"; script t71b review-r4.json "$REV_OK"; script t71b spec-r4.json "$SPEC_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W71B" "$W71B" "$W71B" >"$FIX/scripts/t71b/fix-r2.json.hook"
+printf '#!/bin/sh\necho again >"%s/again.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$W71B" "$W71B" "$W71B" >"$FIX/scripts/t71b/fix-r3.json.hook"
+printf '#!/bin/sh\necho settled >>"%s/docs/spec/a.md"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "spec: settle it"\nexit 0\n' "$W71B" "$W71B" "$W71B" >"$FIX/scripts/t71b/specwriter-r3.json.hook"
+chmod +x "$FIX/scripts/t71b"/*.hook
+stub_start t71b; run_loop t71b
+check_result t71b "operator-call gap at the re-check parks" 2 PARKED
+assert_eq "operator re-check: park status" "OPERATOR" "$(jq -r .status "$(st t71b)/park.json")"
+assert_eq "operator re-check: no writer yet" "0" "$(starts_of t71b-specwriter-r3)"
+printf 'Pick B.\n' >"$(st t71b)/answer-1.md"
+run_loop t71b; stub_stop
+check_result t71b "operator-call gap at the re-check, answered" 0 READY
+assert_eq "operator re-check: the writer ran once" "1" "$(starts_of t71b-specwriter-r3)"
+assert_contains "operator re-check: ...and got the operator's answer" "$(cat "$(st t71b)/specwriter-r3.prompt.md")" "Pick B."
+assert_ok "operator re-check: no fix round was spent on the gap, before or after the park" test ! -e "$(st t71b)/fix-r4.json.sent"
+assert_eq "operator re-check: the new diff was reviewed and re-checked" "1 1" "$(starts_of t71b-review-r4) $(starts_of t71b-spec-r4)"
+assert_eq "operator re-check: the push is the head" "$(git -C "$W71B" rev-parse HEAD)" "$(git -C "$FIX/origin-t71b.git" rev-parse refs/heads/feat-t71b)"
+unset GATEFLAG71B; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
 # --- 72: a driver that dies before the re-check still owes it, and what it rejected, when it is restarted -------------------------------------------------
 reset_fake; unit t72 spec
 W72="$SPACE/worktrees/t72"
