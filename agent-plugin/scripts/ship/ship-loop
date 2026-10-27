@@ -1266,7 +1266,7 @@ rejection_text() {
 # RECHECK — the stage (spec or final) that rejected a diff the dev then fixed in finalize (the gate-restore
 # branch of review_gate). The push needs that stage's ACCEPT on the diff being pushed, as well as a READY review.
 # It is kept in the state dir so a restarted driver still owes the re-check.
-RECHECK="" RECHECK_PRIOR="" # read from the state dir at the start of main()
+RECHECK="" RECHECK_PRIOR="" # read from the state dir in main(), after the previous run was archived
 # set_recheck <stage> <prior> — the stage owes a re-check; the prior is what it is told it rejected.
 set_recheck() {
   RECHECK="$1" RECHECK_PRIOR="$2"
@@ -1534,8 +1534,6 @@ main() {
     for _o in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$_o" || die_error "bad --model $_o"; done
   fi
   RULES="$(rules_text)"
-  RECHECK="$(cat "$STATE/recheck" 2>/dev/null || true)"
-  RECHECK_PRIOR="$(cat "$STATE/recheck.prior" 2>/dev/null || true)"
   open_out="$(mux open --cwd "$WT" --label "$REF" 2>>"$LOG")" || die_error "ship-mux open failed; see loop.log"
   SPACE_ID="$(jq -r .space <<<"$open_out")"
   DEV="$(aname -dev)"
@@ -1712,6 +1710,8 @@ $pending
     log "STUCK after $MAX rounds ($last)"
     finish 2 "$last" STUCK "$(jq -n --arg f "$pending" '{findings:$f}')"
   fi
+  RECHECK="$(cat "$STATE/recheck" 2>/dev/null || true)"
+  RECHECK_PRIOR="$(cat "$STATE/recheck.prior" 2>/dev/null || true)"
   FR=$ACC_R
   STAGE=finalize
   attempt=0
