@@ -1477,7 +1477,7 @@ finalize_try() {
     files="$(git -C "$WT" diff --name-only --diff-filter=U | tr '\n' ' ')"
     git -C "$WT" rebase --abort >/dev/null 2>&1 || true
     FIN_MSG="1. [BLOCKING] $BRANCH — rebasing onto origin/$BASE failed${files:+ with conflicts in: $files}.
-   Fix: in $WT run \`git rebase origin/$BASE\`, resolve the conflicts keeping both sides' intent (a conflict that needs a design choice: stop with status QUESTION), finish the rebase, run the gate, and \`git push --force-with-lease\`. git said: $(tr '\n' ' ' <<<"$out" | cut -c1-400)"
+   Fix: in $WT run \`git rebase origin/$BASE\`, resolve the conflicts keeping both sides' intent (a conflict that needs a design choice: stop with status QUESTION), finish the rebase, run the tests your change affects, and \`git push --force-with-lease\`. git said: $(tr '\n' ' ' <<<"$out" | cut -c1-400)"
     return 1
   fi
   ahead="$(git -C "$WT" rev-list --count "origin/$BASE..HEAD")"
@@ -1494,7 +1494,7 @@ $(printf '%s\n' "$gate_out" | tail -n 30)"
   if [[ -n "$hits" ]]; then
     FIN_MSG="1. [BLOCKING] $BRANCH — added lines match scan.forbidden:
 $(printf '%s\n' "$hits" | head -n 30)
-   Fix: reword or remove each hit in a commit, run the gate, and push."
+   Fix: reword or remove each hit in a commit, run the tests your change affects, and push."
     return 1
   fi
   # The one push invariant: only a diff that a READY review was shown goes out, and, when a spec check or final
