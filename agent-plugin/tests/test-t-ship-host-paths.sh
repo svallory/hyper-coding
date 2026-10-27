@@ -27,6 +27,11 @@ STUB
 chmod +x "$FIX/bin/ssh"
 export PATH="$FIX/bin:$PATH"
 
+# Cases that run the real rsync need GNU rsync 3.x on PATH. macOS /usr/bin/rsync is
+# openrsync, which lib-host.sh refuses; those cases skip with a reason instead of failing.
+# Cases that use a stub rsync or no rsync at all always run.
+RSYNC_SKIP="rsync on PATH is not GNU 3.x (openrsync)"
+
 # Names with a space, a single quote, a double quote, a dollar sign, a glob character,
 # a leading dash and non-ASCII characters.
 NAMES=("plain" "with space" "it's" 'say "hi"' 'cash $HOME `x`' 'star*[a]?' "-dash" "café é" "tab	name")
@@ -41,6 +46,7 @@ for name in "${NAMES[@]}"; do
   esac
   printf 'brief %s\n\n  ' "$name" > "$src/file one.md"
   printf '\x00\x01\xff bin' > "$src/sub dir/b.bin"
+  if ! rsync_is_gnu3; then skip "push and pull [$name]" "$RSYNC_SKIP"; continue; fi
 
   # push a directory and a file to the same absolute path
   assert_ok "push dir [$name]" ship_host_push fakehost "$src"
@@ -71,6 +77,7 @@ for pair in "a?b|axb" "Decisions [draft]|Decisions d" "x*y|xzzy" 'back\slash|bac
   mkdir -p "$FIX/gh/$lit/in" "$FIX/gh/$sib/in" "$FIX/gl/$lit" "$FIX/gl/$sib"
   echo remote-lit > "$FIX/gh/$lit/in/f.txt"; echo remote-sib > "$FIX/gh/$sib/in/f.txt"
   echo local-sib > "$FIX/gl/$sib/keep.txt"; echo local-sib2 > "$FIX/gl/$sib/in.txt"
+  if ! rsync_is_gnu3; then skip "pull [$lit] with a glob-matching sibling" "$RSYNC_SKIP"; continue; fi
   assert_ok "pull [$lit] with a glob-matching sibling" ship_host_pull_dir fakehost "$FIX/gh/$lit" "$FIX/gl/$lit"
   assert_eq "...mirrors the literal directory [$lit]" "remote-lit" "$(cat "$FIX/gl/$lit/in/f.txt")"
   assert_eq "...nothing of the sibling came in [$lit]" "yes" "$([[ ! -e "$FIX/gl/$lit/keep.txt" && "$(ls "$FIX/gl/$lit")" == in ]] && echo yes)"
@@ -139,19 +146,31 @@ STUB
 chmod +x "$FIX/longbin/rsync"
 REAL_RSYNC="$(command -v rsync)"; export REAL_RSYNC
 mkdir -p "$FIX/lv/src" "$FIX/lv/dst"; echo ok > "$FIX/lv/src/f"
-assert_ok "a 150 KB slow rsync --version is accepted under pipefail" bash -c '
-  set -eo pipefail
-  source "$1/lib.sh"; source "$1/lib-host.sh"
-  PATH="$2:$PATH" ship_host_pull_dir fakehost "$3/src" "$3/dst"' _ "$SHIP_DIR" "$FIX/longbin" "$FIX/lv"
-assert_eq "...and the pull ran" "ok" "$(cat "$FIX/lv/dst/f" 2>/dev/null)"
+if rsync_is_gnu3; then
+  assert_ok "a 150 KB slow rsync --version is accepted under pipefail" bash -c '
+    set -eo pipefail
+    source "$1/lib.sh"; source "$1/lib-host.sh"
+    PATH="$2:$PATH" ship_host_pull_dir fakehost "$3/src" "$3/dst"' _ "$SHIP_DIR" "$FIX/longbin" "$FIX/lv"
+  assert_eq "...and the pull ran" "ok" "$(cat "$FIX/lv/dst/f" 2>/dev/null)"
+else
+  skip "a 150 KB slow rsync --version is accepted under pipefail" "$RSYNC_SKIP"
+fi
 
 # the ssh mkdir quoted the path for the remote shell
-assert_contains "ssh mkdir single-quotes a path with a space" "$(cat "$SSH_LOG")" "mkdir -p -- '$FIX/lead/2/with space'"
-assert_contains "...and escapes a single quote" "$(cat "$SSH_LOG")" "mkdir -p -- '$FIX/lead/3/it'\\''s'"
+if rsync_is_gnu3; then
+  assert_contains "ssh mkdir single-quotes a path with a space" "$(cat "$SSH_LOG")" "mkdir -p -- '$FIX/lead/2/with space'"
+  assert_contains "...and escapes a single quote" "$(cat "$SSH_LOG")" "mkdir -p -- '$FIX/lead/3/it'\\''s'"
+else
+  skip "ssh mkdir quotes the path for the remote shell" "$RSYNC_SKIP"
+fi
 
 # a pull creates a missing local directory with a odd name
-assert_ok "pull into a missing local dir" ship_host_pull_dir fakehost "$FIX/host/2/with space" "$FIX/new dir/it's é"
-assert_eq "...and copied the file" "yes" "$([[ -f "$FIX/new dir/it's é/file one.md" ]] && echo yes)"
+if rsync_is_gnu3; then
+  assert_ok "pull into a missing local dir" ship_host_pull_dir fakehost "$FIX/host/2/with space" "$FIX/new dir/it's é"
+  assert_eq "...and copied the file" "yes" "$([[ -f "$FIX/new dir/it's é/file one.md" ]] && echo yes)"
+else
+  skip "pull into a missing local dir" "$RSYNC_SKIP"
+fi
 
 # a newline cannot be made safe: refused before anything runs, with a message that names it
 : > "$SSH_LOG"
