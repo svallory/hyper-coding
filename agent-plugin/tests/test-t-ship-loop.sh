@@ -1687,28 +1687,29 @@ assert_eq "GAP re-check: the spec check judged the pushed diff" "$(git -C "$W71"
 assert_eq "GAP re-check: the push is the head" "$(git -C "$W71" rev-parse HEAD)" "$(git -C "$FIX/origin-t71.git" rev-parse refs/heads/feat-t71)"
 unset GATEFLAG71; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
 
-# --- 72: a driver that dies at the re-check still owes it when it is restarted -------------------------------------------------
+# --- 72: a driver that dies before the re-check still owes it, and what it rejected, when it is restarted -------------------------------------------------
 reset_fake; unit t72 spec
 W72="$SPACE/worktrees/t72"
 export GATEFLAG72="$FIX/gateflag-t72"
 GATE_CMD='if [ ! -e "$GATEFLAG72" ]; then touch "$GATEFLAG72"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
 script t72 develop.json "$DEV_DONE"; script t72 review-r1.json "$REV_OK"; script t72 spec-r1.json "$SPEC_CHG"
 script t72 fix-r2.json "$DEV_DONE"; script t72 review-r2.json "$REV_OK"; script t72 spec-r2.json "$SPEC_OK"
-script t72 fix-r3.json "$DEV_DONE"; script t72 review-r3.json "$REV_OK"
+script t72 fix-r3.json "$DEV_DONE"; script t72 spec-r3.json "$SPEC_OK"
 printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W72" "$W72" "$W72" >"$FIX/scripts/t72/fix-r2.json.hook"
 printf '#!/bin/sh\necho again >"%s/again.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$W72" "$W72" "$W72" >"$FIX/scripts/t72/fix-r3.json.hook"
 chmod +x "$FIX/scripts/t72"/*.hook
 stub_start t72
 bash "$LOOP" --ref t72 --worktree "$W72" --branch feat-t72 --brief "$BRIEF" --class S >/dev/null 2>"$FIX/err-t72.log" &
 DRV=$!
-for _ in $(seq 2400); do [[ -e "$(st t72)/spec-r3.json.sent" ]] && break; sleep 0.05; done
-assert_ok "re-check restart: the driver reached the re-check" test -e "$(st t72)/spec-r3.json.sent"
+for _ in $(seq 2400); do [[ -e "$(st t72)/review-r3.json.sent" ]] && break; sleep 0.05; done
+assert_ok "re-check restart: the driver reached the post-fix review" test -e "$(st t72)/review-r3.json.sent"
 kill -9 "$DRV" 2>/dev/null; wait "$DRV" 2>/dev/null
 assert_ok "re-check restart: nothing was finalized yet" test ! -e "$(st t72)/finalize.json"
-script t72 spec-r3.json "$SPEC_OK"
+script t72 review-r3.json "$REV_OK"
 run_loop t72; stub_stop
 check_result t72 "restart at the spec re-check" 0 READY
-assert_eq "re-check restart: the re-check was reattached, not restarted" "1" "$(starts_of t72-spec-r3)"
+assert_contains "re-check restart: the restarted driver took the spec check's verdict before the push" "$(cat "$(st t72)/loop.log")" "round 3 spec re-check of the fixed diff: ACCEPT"
+assert_eq "re-check restart: the owed spec check ran once, after the restart" "1" "$(starts_of t72-spec-r3)"
 assert_contains "re-check restart: it was told what the spec check rejected" "$(cat "$(st t72)/spec-r3.prompt.md")" "the spec is wrong"
 assert_eq "re-check restart: the spec check judged the pushed diff" "$(git -C "$W72" diff -U0 --no-color origin/main...HEAD | git patch-id --verbatim | cut -d' ' -f1)" "$(cat "$(st t72)/spec-r3.sig")"
 assert_eq "re-check restart: the push is the head" "$(git -C "$W72" rev-parse HEAD)" "$(git -C "$FIX/origin-t72.git" rev-parse refs/heads/feat-t72)"
