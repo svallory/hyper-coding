@@ -4,7 +4,7 @@
 # multiplexer and no stub agent. They are taken from scripts/ship/ship-loop with `loop_fn` (the script is
 # sourced; its main guard keeps the driver from running) and called against a scripted `mux`, a
 # scratch state directory and one temp repo. (`finish` is the driver's here; the suite ends with
-# finish_suite.) What needs a whole unit (the order of stages, the exit trap, the push) stays in test-t-ship-loop.sh and test-t-ship-loop-b.sh.
+# finish_suite.) What needs a whole unit (the order of stages, the exit trap, the push) stays in test-t-ship-loop.sh, test-t-ship-loop-b.sh and test-t-ship-loop-c.sh.
 #
 # Every group names the break it catches in a "mutation" comment: the production line that, edited out
 # or inverted, makes the group fail.

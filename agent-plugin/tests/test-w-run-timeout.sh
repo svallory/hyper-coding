@@ -184,7 +184,7 @@ sel() { # sel <changed path>... -> run.sh's selection output
   bash "$TESTS_DIR/run.sh" --affected --paths-from "$FIX/changed.txt" --dry-run 2>&1
 }
 out="$(sel agent-plugin/scripts/ship/ship-role)"
-assert_contains "leaf script: role, loop and failover plus the lint files" "$out" "would run: test-s-ship-skills.sh test-t-ship-failover-fn.sh test-t-ship-failover.sh test-t-ship-loop.sh test-t-ship-role.sh test-u-skill-triggers.sh test-w-ship-docs.sh"
+assert_contains "leaf script: role, loop and failover plus the lint files" "$out" "would run: test-s-ship-skills.sh test-t-ship-failover-fn.sh test-t-ship-failover.sh test-t-ship-loop-b.sh test-t-ship-loop-c.sh test-t-ship-loop-fn.sh test-t-ship-loop.sh test-t-ship-role.sh test-u-skill-triggers.sh test-w-ship-docs.sh"
 assert_contains "leaf script: the rule is printed" "$out" "(agent-plugin/scripts/ship/ship-role)"
 assert_not_contains "leaf script: the ship/* catch-all does not widen it" "$out" "running everything"
 out="$(sel agent-plugin/scripts/ship/lib.sh)"
@@ -211,7 +211,7 @@ assert_not_contains "a test file that does not exist is not selected" "$(printf 
 out="$(sel agent-plugin/tests/test-z-brand-new.sh)"; rm -f "$TESTS_DIR/test-z-brand-new.sh"
 assert_contains "a new tests/test-*.sh is selected by SELF" "$(printf '%s\n' "$out" | grep '^would run')" "test-z-brand-new.sh"
 out="$(sel agent-plugin/scripts/ship/ship-role agent-plugin/scripts/ship/ship-config)"
-assert_eq "two leaves: each test once, sorted" "1" "$(printf '%s\n' "$out" | grep -c '^would run: test-s-ship-skills.sh test-t-ship-config.sh test-t-ship-failover-fn.sh test-t-ship-failover.sh test-t-ship-loop.sh test-t-ship-role.sh ')"
+assert_eq "two leaves: each test once, sorted" "1" "$(printf '%s\n' "$out" | grep -c '^would run: test-s-ship-skills.sh test-t-ship-config.sh test-t-ship-failover-fn.sh test-t-ship-failover.sh test-t-ship-loop-b.sh test-t-ship-loop-c.sh test-t-ship-loop-fn.sh test-t-ship-loop.sh test-t-ship-role.sh ')"
 out="$(sel packages/cli/src/x.ts)"
 assert_contains "packages/cli selects the CLI-dependent files" "$out" "test-a-detection.sh"
 assert_not_contains "packages/cli does not select the rest" "$out" "test-w-run-timeout.sh"
