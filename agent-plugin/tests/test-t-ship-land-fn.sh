@@ -314,7 +314,9 @@ td_reset; git -C "$TD/wt" worktree add -q --detach "$TD/wt-det"
 assert_eq "detached HEAD: exit 0" "0" "$(td 'wt_path="$TD/wt-det" branch=""')"
 assert_contains "...removed by path" "$(cat "$FIX/td.out")" "worktree $TD/wt-det removed (detached HEAD; its branch, if any, is untouched)"
 assert_eq "...the directory is gone and wt was not asked" "no no" "$(exists_word "$TD/wt-det") $(exists_word "$TD/wt.log")"
-td_reset; mkdir -p "$TD/plain"
+# a real repo, not a bare directory: a main working tree is a directory git refuses to remove, on any git
+# version (outside a repo, older git prints the option name and ship-land reports "not a git worktree" instead)
+td_reset; mkdir -p "$TD/plain"; git init -q "$TD/plain"
 assert_eq "a worktree directory that git cannot remove: exit 1" "1" "$(td 'wt_path="$TD/plain" branch=""')"
 assert_contains "...kept, and says so" "$(cat "$FIX/td.err")" "could not remove the detached worktree $TD/plain; it is kept"
 assert_eq "...before the loop dir moves" "yes" "$(exists_word "$TD/root/notes/loops/r1/mux.json")"
