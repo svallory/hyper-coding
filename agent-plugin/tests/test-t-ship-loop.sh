@@ -1533,18 +1533,39 @@ stub_start t66e; run_loop t66e; stub_stop
 fb_check t66e "fix budget, post-accept review F=2" 0.15
 CFG_EXTRA=''; write_cfg
 
-# f: the gate restores a diff the final gate rejected (2 findings): the round is text, F = 1, not 2
+# f: the gate restores a diff the final gate rejected, after a post-accept review left NEED_FIX_N at 2: the text round is F = 1
+# Gate calls: 1 fails (text round, fix-r3), 2 reverts the three fix commits to the diff final-r1 rejected. Between them a review
+# with 2 findings sends the dev back (fix-r4), so the count is 2 when the gate-restore round starts.
 reset_fake; unit t66f
-W66="$SPACE/worktrees/t66f"; export GATEFLAG66="$FIX/gateflag-t66f"
-GATE_CMD='if [ ! -e "$GATEFLAG66" ]; then touch "$GATEFLAG66"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; fb_cfg 0.2 0.025
+W66="$SPACE/worktrees/t66f"; export GATECNT66="$FIX/gatecnt-t66f"; rm -f "$GATECNT66"
+GATE_CMD='n=$(cat "$GATECNT66" 2>/dev/null || echo 0); echo $((n + 1)) >"$GATECNT66"; if [ "$n" -eq 0 ]; then echo "gate says no"; exit 1; fi; if [ "$n" -eq 1 ]; then git revert --no-edit HEAD HEAD~1 HEAD~2 >/dev/null 2>&1; fi'; fb_cfg 0.2 0.025
 script t66f develop.json "$DEV_DONE"; script t66f review-r1.json "$REV_OK"
 script t66f final-r1.json "$(jq -nc --argjson f "$(findn 2)" '{verdict:"CHANGES",findings:$f}')"
 script t66f fix-r2.json "$DEV_DONE"; script t66f review-r2.json "$REV_OK"; script t66f final-r2.json "$REV_OK"
-printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W66" "$W66" "$W66" >"$FIX/scripts/t66f/fix-r2.json.hook"
+script t66f fix-r3.json "$DEV_DONE"; script t66f review-r3.json "$(jq -nc --argjson f "$(findn 2)" '{verdict:"CHANGES",findings:$f}')"
+script t66f fix-r4.json "$DEV_DONE"; script t66f review-r4.json "$REV_OK"
+for _r in 2 3 4; do
+  printf '#!/bin/sh\necho x >"%s/extra%s.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W66" "$_r" "$W66" "$W66" >"$FIX/scripts/t66f/fix-r$_r.json.hook"
+done
 chmod +x "$FIX/scripts/t66f"/*.hook
 stub_start t66f; run_loop t66f --final-gate; stub_stop
-fb_check t66f "fix budget, gate-restored diff F=1" 0.125
-unset GATEFLAG66; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'
+fb_check t66f "fix budget, gate-restored diff F=1 after a 2-finding review" 0.125 budget-r1.json
+assert_eq "gate-restored diff: the round is fix-r5 and holds count 1" "1" "$(cat "$(st t66f)/fix-r5.n")"
+assert_contains "gate-restored diff: it is the gate-restore round" "$(cat "$(st t66f)/fix-r5.prompt.md")" "not a fix of yours"
+unset GATECNT66; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'
+
+# h: a finalize retry (the gate fails) after a post-accept review left NEED_FIX_N at 2: the text round is F = 1
+reset_fake; leak_unit t66h; export GATECNT66H="$FIX/gatecnt-t66h"; rm -f "$GATECNT66H"
+GATE_CMD='n=$(cat "$GATECNT66H" 2>/dev/null || echo 0); echo $((n + 1)) >"$GATECNT66H"; [ "$n" -ne 1 ]'; fb_cfg 0.2 0.025
+script t66h develop.json "$DEV_DONE"; script t66h review-r1.json "$REV_OK"
+script t66h fix-r2.json "$DEV_DONE"; reword_hook t66h fix-r2.json
+script t66h review-r2.json "$(jq -nc --argjson f "$(findn 2)" '{verdict:"CHANGES",findings:$f}')"
+script t66h fix-r3.json "$DEV_DONE"; churn_hook t66h fix-r3.json; script t66h review-r3.json "$REV_OK"
+stub_start t66h; run_loop t66h; stub_stop
+fb_check t66h "fix budget, finalize retry F=1 after a 2-finding review" 0.125 budget-r1.json
+assert_eq "finalize retry: the round is fix-r4 and holds count 1" "1" "$(cat "$(st t66h)/fix-r4.n")"
+assert_eq "finalize retry: the review before it had two findings" "2" "$(cat "$(st t66h)/fix-r3.n")"
+unset GATECNT66H; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; CFG_EXTRA=''; write_cfg
 
 # g: a finalize fix round goes over budget and is extended: the resumed round keeps the count saved with it
 reset_fake; unit t66g
