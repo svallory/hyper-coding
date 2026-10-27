@@ -58,7 +58,9 @@ A plain clone is not a space.
 6. Write the brief, a markdown file such as `notes/briefs/my-unit.md`: the goal,
    the files to read, the acceptance criteria and the gate. The develop prompt
    already tells the dev to push the branch and open the PR, so the brief does not
-   need to. Add a `Consumers` section naming, for every new type, flag, file,
+   need to. The dev runs only the tests its change affects (the affected-run command
+   in the brief's `## Tests` section); it is told not to run the `gate`, which the
+   driver runs itself at finalize and again at land. Add a `Consumers` section naming, for every new type, flag, file,
    option and command, who uses it today ([concepts](concepts.md#ship)), and a
    `Tests` section (one row per behaviour with its layer, fixture and entry
    point, a budget in seconds, the affected-run command): the dev follows it
@@ -850,7 +852,7 @@ answers `read`, `status` and `wait` from files in `$SHIP_MUX_FAKE_DIR`.
 | A unit parked `DIALOG` and the question names the workspace-trust dialog | Claude Code asked to trust the worktree and ship's one attempt (down, then Enter) did not clear it, the cursor would not move onto Yes, or the screen was not recognised as the trust dialog alone (nothing is sent then). `ship-mux read --ref <ref> --to <agent>` shows the screen (`--to` takes the agent name from `park.json` or an id). Answer it with `down` then `enter` (only once `❯` is on Yes) or in the pane, then `ship-unit resume <ref>` with no answer. |
 | A unit parked `BLOCKED` with "could not prompt" | ship-mux could not deliver the prompt and the agent was not at a dialog. Read `loop.log` (the line before `PARKED` has the exit code), and the agent's pane. `resume` with no answer retries with a fresh agent. |
 | The dev ran the wrong tool, or cannot find one that works for you | For a local unit the agent's `PATH` is the one of the shell that ran `ship-unit`; for a `--host` unit it is the host's login `PATH` (set it up on the host). Run `ship-unit` from a shell whose `PATH` has what the agent needs (a stub `gh`, a pinned toolchain). Other variables are not passed. |
-| `ship-unit run` exits 70 with "wt switch -c ... failed" and `branch 'x' has no upstream information` | Your global git config has `branch.autosetupmerge` set to an empty value, which breaks `wt switch -c`. Fix it with `git config --global --unset branch.autosetupmerge`, or set it to `true`. To leave global config alone, export `GIT_CONFIG_PARAMETERS="'branch.autosetupmerge=true'"` in the shell that runs ship. ship removes the branch and worktree that run created, so a rerun starts clean. |
+| `ship-unit run` exits 70 with "wt switch -c ... failed" and `branch 'x' has no upstream information` | worktrunk before 0.80 unsets the new branch's upstream, and that fails when `branch.autosetupmerge` is `false` or empty. `ship-unit` now sets `branch.autosetupmerge=true` for its own `wt switch -c` command (your git config is not touched), so this should not recur; if you still see it, `wt --version` is older than 0.73 or `wt` is a wrapper that drops the environment. Upgrade worktrunk, or set the key to `true` in the repo's git config. ship removes the branch and worktree that run created, so a rerun starts clean. |
 | A script exits 99 | `SHIP_MUX_TEST=1` is set (tests set it). Unset it for a real run. |
 | `ship-unit run` exits 3 | The host has no free slot (`ship-unit list`; raise `hosts.<h>.slots` or wait), or a driver is already running for that ref (`ship-unit wait <ref>`). |
 | `ship-unit` exits 75 | The connection to the host dropped. The driver still runs there; `ship-unit wait <ref>` reattaches. |
