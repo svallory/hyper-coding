@@ -98,7 +98,9 @@ can fail for it; the entry point the test calls; the fixture it reuses; the
 existing test it extends or replaces, or "new". A seam named here is also a
 row in Consumers. The budget and the affected-run command are required; the
 dev reports the run's counts and wall time in the verdict summary. Rows at
-the large layer need the reason the lower layers cannot reach them.)
+the large layer need the reason the lower layers cannot reach them. A unit
+that adds no behaviour, such as docs or config alone, writes
+`None — <reason>` in place of the table, budget and lists.)
 
 | Behaviour | Layer | Entry point / seam | Fixture | Extends or replaces |
 |---|---|---|---|---|

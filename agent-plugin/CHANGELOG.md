@@ -40,7 +40,9 @@ Changes to the hyper agent plugin. The plugin version in
   with several findings could park OVER-BUDGET while still making progress.
 
 - The driver renders a `{test_skill}` placeholder (the absolute path of
-  `skills/test-engineer/SKILL.md`) into the dev rules and the review prompt.
+  `skills/test-engineer/SKILL.md`) into the dev rules and the review prompt;
+  host mode syncs `skills/test-engineer/` to the host cache so the path
+  resolves there too.
   The dev follows the brief's `## Tests` section and reports the affected
   run's command, counts and wall time in its summary; the reviewer runs the
   skill's test checks (wrong layer, overlap, per-case fixtures, missing
