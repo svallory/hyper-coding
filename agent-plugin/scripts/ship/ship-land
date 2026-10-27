@@ -90,36 +90,7 @@ fail() { echo "ship-land: $*" >&2; exit 1; }
 refuse() { echo "ship-land: refused: $*" >&2; exit 3; }
 say() { echo "ship-land: $*"; }
 
-ref="" abandon=0 force=0 task="" host="" phase="" merged_seen=0
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --abandon) abandon=1; shift ;;
-    --force) force=1; shift ;;
-    --task) [[ $# -ge 2 ]] || usage "--task needs a value"; task="$2"; shift 2 ;;
-    --host) [[ $# -ge 2 ]] || usage "--host needs a value"; host="$2"; shift 2 ;;
-    --phase) # internal: the lead drives a host land in two phases around its own on_land
-      [[ "${SHIP_UNIT_INTERNAL:-}" == 1 ]] || usage "--phase is internal"
-      [[ $# -ge 2 && ( "$2" == merge || "$2" == finish ) ]] || usage "--phase needs merge or finish"
-      phase="$2"; shift 2 ;;
-    -h|--help) sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
-    -*) usage "unknown option $1" ;;
-    *) [[ -z "$ref" ]] || usage "one ref at a time"; ref="$1"; shift ;;
-  esac
-done
-[[ -n "$ref" ]] || usage "a ref is required"
-[[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid ref '$ref' (letters, digits, '.', '_', '-'; must start with a letter or digit)"
-if [[ -n "$task" ]]; then
-  [[ "$task" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] || usage "invalid --task '$task' (letters, digits, '.', '_', ':', '-')"
-fi
-if [[ $abandon -eq 1 && -n "$task" ]]; then usage "--task has no use with --abandon"; fi
-
-ship_config_load || exit 1
-root="$(ship_space_root)" || exit 1
-export SHIP_SPACE_ROOT="$root"
-
-# --- the lock: one land at a time per space -------------------------------------------
-lock="${SHIP_LAND_LOCK:-$root/.hyper/ship-land.lock}"
-mkdir -p "$root/.hyper"
+# --- functions (sourceable: the main body below runs only when the file is executed) -------
 
 # acquire_lock — take the lock (ship_lock in lib.sh; waiting for a live holder) and release it on exit.
 acquire_lock() {
@@ -191,6 +162,185 @@ load_on_land() {
   on_land="$(ship_cfg_get on_land)" || [[ $? -eq 3 ]] || exit 1
   [[ "$(jq -r 'type' <<<"$on_land")" == array ]] || fail "on_land must be a list of commands"
 }
+
+# check_rec — a malformed mux.json is reported, not left to kill teardown.
+check_rec() {
+  [[ ! -f "$rec" ]] || jq -e '.created | type == "array"' "$rec" >/dev/null 2>&1 \
+    || fail "$rec is not a valid mux record (truncated or edited?); fix or remove it, then rerun ship-land $ref (or --abandon)"
+}
+
+# --- teardown ------------------------------------------------------------------------
+teardown() {
+  local bad=0 id rc out left groups g h hargs
+  check_rec
+
+  if [[ -f "$rec" ]]; then
+    # 1. every recorded agent, stopped the way its harness expects
+    for id in $(jq -r '.created[]? | select(.kind == "agent") | .id' "$rec"); do
+      rc=0
+      h="$(jq -r --arg id "$id" '.created[] | select(.id == $id) | .harness // ""' "$rec")"
+      hargs=()
+      case "$h" in claude|pi|codex) hargs=(--harness "$h") ;; esac
+      bash "$RETIRE" --ref "$ref" ${hargs[@]+"${hargs[@]}"} "$id" || rc=$?
+      # A stuck agent is not retired gracefully, but closing its pane below
+      # ends it; say so and go on.
+      [[ $rc -eq 0 ]] || echo "ship-land: warning: ship-retire $id exited $rc; closing its pane regardless" >&2
+    done
+    # 2. every recorded pane except the root pane (the space owns that one)
+    for id in $(jq -r '.created[]? | select(.kind == "pane" and (.root // false) != true) | .id' "$rec"); do
+      rc=0
+      bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
+      if [[ $rc -eq 0 ]]; then say "pane $id closed"; else echo "ship-land: could not close pane $id (ship-mux exit $rc)" >&2; bad=1; fi
+    done
+    # 3. the unit space
+    for id in $(jq -r '.created[]? | select(.kind == "space") | .id' "$rec"); do
+      rc=0
+      bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
+      if [[ $rc -eq 0 ]]; then say "unit space $id closed"; else echo "ship-land: could not close space $id (ship-mux exit $rc)" >&2; bad=1; fi
+    done
+    # 5. nothing recorded may be alive
+    rc=0
+    left="$(bash "$MUX" list --ref "$ref")" || rc=$?
+    if [[ $rc -ne 0 ]]; then
+      echo "ship-land: ship-mux list failed (exit $rc)" >&2; bad=1
+    elif [[ "$(jq -r 'length' <<<"$left" 2>/dev/null)" != 0 ]]; then
+      echo "ship-land: the multiplexer still holds: $left" >&2; bad=1
+    fi
+  fi
+  if [[ $bad -ne 0 ]]; then
+    fail "teardown incomplete; the worktree and notes/loops/$ref are kept. Fix the cause and rerun 'ship-land $ref' (a merged PR skips to teardown), or 'ship-land $ref --abandon'"
+  fi
+
+  # 4. the units groups ship created (shared state: read from the group record,
+  # not from this unit's entries). ship-mux refuses (3) while others still use
+  # one; a backend that refuses is only a warning, and the record stays so the
+  # next land retries.
+  groups=""
+  if [[ -f "$root/.hyper/ship-mux.json" ]]; then
+    groups="$(jq -r '(.groups // {}) | to_entries[] | select(.value.created == true) | .key' "$root/.hyper/ship-mux.json" 2>/dev/null || true)"
+  fi
+  for g in $groups; do
+    rc=0
+    out="$(bash "$MUX" close --ref "$ref" --id "$g" 2>&1)" || rc=$?
+    case "$rc" in
+      0) say "units group $g closed" ;;
+      3) say "units group $g kept (${out#ship-mux: refused: })" ;;
+      *) echo "ship-land: warning: could not close units group $g (ship-mux exit $rc): $out; the next land retries" >&2 ;;
+    esac
+  done
+
+  # 6. the worktree
+  if [[ -d "$wt_path" ]]; then
+    if [[ -n "$branch" ]]; then
+      local wargs=(remove) local_sha="" pr_sha="" pr_rc=0
+      if [[ $abandon -eq 0 && $merged_seen -eq 1 ]]; then
+        local_sha="$(git -C "$wt_path" rev-parse "refs/heads/$branch" 2>/dev/null)" || local_sha=""
+        pr_sha="$(cd -- "$wt_path" && gh pr view "$pr" --json headRefOid -q .headRefOid 2>&1)" || pr_rc=$?
+      fi
+      if [[ "$(decide_branch_cleanup "$abandon" "$force" "$merged_seen" "$local_sha" "$pr_sha" "$pr_rc")" == delete ]]; then wargs+=(-D); fi
+      wargs+=("$branch")
+      (CDPATH='' cd -- "$root" && wt "${wargs[@]}") || fail "wt ${wargs[*]} failed; the worktree is kept"
+      say "worktree $branch removed"
+    else
+      # Detached HEAD (a dev left it mid-rebase): no branch name for wt, so remove by path.
+      local common
+      common="$(CDPATH='' cd -- "$wt_path" && cd -- "$(git rev-parse --git-common-dir)" && pwd -P)" \
+        || fail "$wt_path is not a git worktree; it is kept"
+      git --git-dir="$common" worktree remove --force "$wt_path" || fail "could not remove the detached worktree $wt_path; it is kept"
+      say "worktree $wt_path removed (detached HEAD; its branch, if any, is untouched)"
+    fi
+  fi
+
+  # 7. the loop directory
+  if [[ -d "$loop_dir" ]]; then
+    local done_dir="$root/notes/loops/.done/$ref"
+    mkdir -p "$root/notes/loops/.done"
+    [[ ! -e "$done_dir" ]] || done_dir="$done_dir.$(date +%s)"
+    mv "$loop_dir" "$done_dir"
+    say "notes/loops/$ref moved to ${done_dir#"$root"/}"
+  fi
+}
+
+# decide_branch_cleanup <abandon> <force> <merged_seen> <local_sha> <pr_sha> <pr_rc> — print "delete" when
+# the teardown may remove the branch with the worktree (wt remove -D), else "keep" (a reason on stderr when
+# there is one). --abandon deletes only with --force. After a land, a squash or rebase merge leaves the
+# local branch "unmerged" for git, so it is deleted only when this run saw the PR MERGED and the branch head
+# is exactly the PR's head (a later commit, or a push from elsewhere, makes the two differ). Reads $branch
+# and $pr for the messages.
+decide_branch_cleanup() {
+  local abandon="$1" force="$2" merged="$3" local_sha="$4" pr_sha="$5" pr_rc="$6"
+  if [[ "$abandon" -eq 1 ]]; then
+    if [[ "$force" -eq 1 ]]; then echo delete; else echo keep; fi
+    return 0
+  fi
+  if [[ "$merged" -ne 1 ]]; then echo keep; return 0; fi
+  if [[ "$pr_rc" -ne 0 ]]; then
+    echo "ship-land: keeping branch $branch: could not read the head of merged #$pr (gh pr view exit $pr_rc: ${pr_sha:-no output}); its head is ${local_sha:-unknown}; delete it by hand once you checked it" >&2
+    echo keep
+  elif [[ -n "$local_sha" && "$local_sha" == "$pr_sha" ]]; then
+    echo delete
+  else
+    echo "ship-land: keeping branch $branch: its head (${local_sha:-unknown}) is not the head of merged #$pr (${pr_sha:-unknown}); delete it by hand once you checked it" >&2
+    echo keep
+  fi
+}
+
+# decide_queued <pr_json> <gq_rc> <gq_out> <gq_err> — for an OPEN PR: print why it is queued to merge
+# (nothing when it is not). gq_* is the merge-queue query (gh pr view has no field for it): its exit code
+# ("skip" when the owner/repo could not be read from the PR url), its output (isInMergeQueue) and its
+# stderr. The query is fail-open (the land continues), but never silently, except on a GHES without the
+# field. Reads $pr for the messages.
+decide_queued() {
+  local pr_json="$1" gq_rc="$2" in_queue="$3" gq_err="$4"
+  if [[ "$(jq -r '.autoMergeRequest // empty | type' <<<"$pr_json")" == object ]]; then
+    echo "auto-merge is set (merge state $(jq -r '.mergeStateStatus // "unknown"' <<<"$pr_json"); if it is BEHIND or BLOCKED it may never merge)"
+    return 0
+  fi
+  case "$gq_rc" in
+    skip) echo "ship-land: warning: merge-queue check skipped for #$pr: could not read owner/repo from the PR url '$(jq -r '.url // ""' <<<"$pr_json")'" >&2 ;;
+    0) if [[ "$in_queue" == true ]]; then echo "it is in the merge queue"; fi ;;
+    *)
+      # An older GHES has no isInMergeQueue field: there is no queue to check, say nothing.
+      if ! grep -qi "isInMergeQueue" <<<"$gq_err" || ! grep -qiE "doesn't exist|not exist" <<<"$gq_err"; then
+        echo "ship-land: warning: merge-queue check skipped for #$pr: gh api graphql failed (exit $gq_rc): $(tr '\n' ' ' <<<"$gq_err")" >&2
+      fi ;;
+  esac
+}
+
+# A sourced file defines the functions above and stops (the tests call them directly).
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
+
+
+ref="" abandon=0 force=0 task="" host="" phase="" merged_seen=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --abandon) abandon=1; shift ;;
+    --force) force=1; shift ;;
+    --task) [[ $# -ge 2 ]] || usage "--task needs a value"; task="$2"; shift 2 ;;
+    --host) [[ $# -ge 2 ]] || usage "--host needs a value"; host="$2"; shift 2 ;;
+    --phase) # internal: the lead drives a host land in two phases around its own on_land
+      [[ "${SHIP_UNIT_INTERNAL:-}" == 1 ]] || usage "--phase is internal"
+      [[ $# -ge 2 && ( "$2" == merge || "$2" == finish ) ]] || usage "--phase needs merge or finish"
+      phase="$2"; shift 2 ;;
+    -h|--help) sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -*) usage "unknown option $1" ;;
+    *) [[ -z "$ref" ]] || usage "one ref at a time"; ref="$1"; shift ;;
+  esac
+done
+[[ -n "$ref" ]] || usage "a ref is required"
+[[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || usage "invalid ref '$ref' (letters, digits, '.', '_', '-'; must start with a letter or digit)"
+if [[ -n "$task" ]]; then
+  [[ "$task" =~ ^[A-Za-z0-9][A-Za-z0-9._:-]*$ ]] || usage "invalid --task '$task' (letters, digits, '.', '_', ':', '-')"
+fi
+if [[ $abandon -eq 1 && -n "$task" ]]; then usage "--task has no use with --abandon"; fi
+
+ship_config_load || exit 1
+root="$(ship_space_root)" || exit 1
+export SHIP_SPACE_ROOT="$root"
+
+# --- the lock: one land at a time per space -------------------------------------------
+lock="${SHIP_LAND_LOCK:-$root/.hyper/ship-land.lock}"
+mkdir -p "$root/.hyper"
 
 # --- --host: run the same command where the worktree lives ------------------------------
 if ! ship_host_is_local "$host"; then
@@ -267,116 +417,6 @@ if [[ -f "$result" ]]; then wt_path="$(jq -r '.worktree // ""' "$result" 2>/dev/
 branch=""
 if [[ -d "$wt_path" ]]; then branch="$(git -C "$wt_path" branch --show-current 2>/dev/null || true)"; fi
 
-# check_rec — a malformed mux.json is reported, not left to kill teardown.
-check_rec() {
-  [[ ! -f "$rec" ]] || jq -e '.created | type == "array"' "$rec" >/dev/null 2>&1 \
-    || fail "$rec is not a valid mux record (truncated or edited?); fix or remove it, then rerun ship-land $ref (or --abandon)"
-}
-
-# --- teardown ------------------------------------------------------------------------
-teardown() {
-  local bad=0 id rc out left groups g h hargs
-  check_rec
-
-  if [[ -f "$rec" ]]; then
-    # 1. every recorded agent, stopped the way its harness expects
-    for id in $(jq -r '.created[]? | select(.kind == "agent") | .id' "$rec"); do
-      rc=0
-      h="$(jq -r --arg id "$id" '.created[] | select(.id == $id) | .harness // ""' "$rec")"
-      hargs=()
-      case "$h" in claude|pi|codex) hargs=(--harness "$h") ;; esac
-      bash "$RETIRE" --ref "$ref" ${hargs[@]+"${hargs[@]}"} "$id" || rc=$?
-      # A stuck agent is not retired gracefully, but closing its pane below
-      # ends it; say so and go on.
-      [[ $rc -eq 0 ]] || echo "ship-land: warning: ship-retire $id exited $rc; closing its pane regardless" >&2
-    done
-    # 2. every recorded pane except the root pane (the space owns that one)
-    for id in $(jq -r '.created[]? | select(.kind == "pane" and (.root // false) != true) | .id' "$rec"); do
-      rc=0
-      bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
-      if [[ $rc -eq 0 ]]; then say "pane $id closed"; else echo "ship-land: could not close pane $id (ship-mux exit $rc)" >&2; bad=1; fi
-    done
-    # 3. the unit space
-    for id in $(jq -r '.created[]? | select(.kind == "space") | .id' "$rec"); do
-      rc=0
-      bash "$MUX" close --ref "$ref" --id "$id" >/dev/null || rc=$?
-      if [[ $rc -eq 0 ]]; then say "unit space $id closed"; else echo "ship-land: could not close space $id (ship-mux exit $rc)" >&2; bad=1; fi
-    done
-    # 5. nothing recorded may be alive
-    rc=0
-    left="$(bash "$MUX" list --ref "$ref")" || rc=$?
-    if [[ $rc -ne 0 ]]; then
-      echo "ship-land: ship-mux list failed (exit $rc)" >&2; bad=1
-    elif [[ "$(jq -r 'length' <<<"$left" 2>/dev/null)" != 0 ]]; then
-      echo "ship-land: the multiplexer still holds: $left" >&2; bad=1
-    fi
-  fi
-  if [[ $bad -ne 0 ]]; then
-    fail "teardown incomplete; the worktree and notes/loops/$ref are kept. Fix the cause and rerun 'ship-land $ref' (a merged PR skips to teardown), or 'ship-land $ref --abandon'"
-  fi
-
-  # 4. the units groups ship created (shared state: read from the group record,
-  # not from this unit's entries). ship-mux refuses (3) while others still use
-  # one; a backend that refuses is only a warning, and the record stays so the
-  # next land retries.
-  groups=""
-  if [[ -f "$root/.hyper/ship-mux.json" ]]; then
-    groups="$(jq -r '(.groups // {}) | to_entries[] | select(.value.created == true) | .key' "$root/.hyper/ship-mux.json" 2>/dev/null || true)"
-  fi
-  for g in $groups; do
-    rc=0
-    out="$(bash "$MUX" close --ref "$ref" --id "$g" 2>&1)" || rc=$?
-    case "$rc" in
-      0) say "units group $g closed" ;;
-      3) say "units group $g kept (${out#ship-mux: refused: })" ;;
-      *) echo "ship-land: warning: could not close units group $g (ship-mux exit $rc): $out; the next land retries" >&2 ;;
-    esac
-  done
-
-  # 6. the worktree
-  if [[ -d "$wt_path" ]]; then
-    if [[ -n "$branch" ]]; then
-      local wargs=(remove) delete_branch=0 local_sha pr_sha pr_rc
-      if [[ $abandon -eq 1 ]]; then
-        [[ $force -eq 0 ]] || delete_branch=1
-      elif [[ $merged_seen -eq 1 ]]; then
-        # This run saw the PR MERGED. A squash or rebase merge leaves the local branch
-        # "unmerged" for git, so wt keeps it; delete it only when it is exactly what the
-        # PR merged (a later commit, or a push from elsewhere, makes the two differ).
-        local_sha="$(git -C "$wt_path" rev-parse "refs/heads/$branch" 2>/dev/null)" || local_sha=""
-        pr_rc=0
-        pr_sha="$(cd -- "$wt_path" && gh pr view "$pr" --json headRefOid -q .headRefOid 2>&1)" || pr_rc=$?
-        if [[ $pr_rc -ne 0 ]]; then
-          echo "ship-land: keeping branch $branch: could not read the head of merged #$pr (gh pr view exit $pr_rc: ${pr_sha:-no output}); its head is ${local_sha:-unknown}; delete it by hand once you checked it" >&2
-        elif [[ -n "$local_sha" && "$local_sha" == "$pr_sha" ]]; then
-          delete_branch=1
-        else
-          echo "ship-land: keeping branch $branch: its head (${local_sha:-unknown}) is not the head of merged #$pr (${pr_sha:-unknown}); delete it by hand once you checked it" >&2
-        fi
-      fi
-      if [[ $delete_branch -eq 1 ]]; then wargs+=(-D); fi
-      wargs+=("$branch")
-      (CDPATH='' cd -- "$root" && wt "${wargs[@]}") || fail "wt ${wargs[*]} failed; the worktree is kept"
-      say "worktree $branch removed"
-    else
-      # Detached HEAD (a dev left it mid-rebase): no branch name for wt, so remove by path.
-      local common
-      common="$(CDPATH='' cd -- "$wt_path" && cd -- "$(git rev-parse --git-common-dir)" && pwd -P)" \
-        || fail "$wt_path is not a git worktree; it is kept"
-      git --git-dir="$common" worktree remove --force "$wt_path" || fail "could not remove the detached worktree $wt_path; it is kept"
-      say "worktree $wt_path removed (detached HEAD; its branch, if any, is untouched)"
-    fi
-  fi
-
-  # 7. the loop directory
-  if [[ -d "$loop_dir" ]]; then
-    local done_dir="$root/notes/loops/.done/$ref"
-    mkdir -p "$root/notes/loops/.done"
-    [[ ! -e "$done_dir" ]] || done_dir="$done_dir.$(date +%s)"
-    mv "$loop_dir" "$done_dir"
-    say "notes/loops/$ref moved to ${done_dir#"$root"/}"
-  fi
-}
 
 if [[ $abandon -eq 1 ]]; then
   [[ -d "$loop_dir" || -d "$wt_path" ]] || fail "nothing to abandon: no notes/loops/$ref and no worktree $wt_path"
@@ -430,33 +470,19 @@ pr_state="$(jq -r '.state // ""' <<<"$pr_json")" || fail "could not read the sta
 if [[ "$pr_state" == OPEN ]]; then
   # Queued to merge (auto-merge or a merge queue, set by anyone): a rebase and a push now
   # would drop the PR out of the queue, so nothing is touched until it is MERGED.
-  queued=""
-  if [[ "$(jq -r '.autoMergeRequest // empty | type' <<<"$pr_json")" == object ]]; then
-    queued="auto-merge is set (merge state $(jq -r '.mergeStateStatus // "unknown"' <<<"$pr_json"); if it is BEHIND or BLOCKED it may never merge)"
-  else
-    # gh pr view has no merge-queue field: ask GraphQL. Fail-open (the land continues), but
-    # never silently.
-    pr_url="$(jq -r '.url // ""' <<<"$pr_json")"
-    if [[ "$pr_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)/pull/[0-9]+$ ]]; then
-      gq_err="$(mktemp)"
-      gq_rc=0
-      # shellcheck disable=SC2016 # $owner etc. are GraphQL variables, not shell ones
-      in_queue="$(cd "$wt_path" && gh api graphql -F "number=$pr" -f "owner=${BASH_REMATCH[1]}" -f "name=${BASH_REMATCH[2]}" \
-        -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){isInMergeQueue}}}' \
-        -q .data.repository.pullRequest.isInMergeQueue 2>"$gq_err")" || gq_rc=$?
-      if [[ $gq_rc -ne 0 ]]; then
-        # An older GHES has no isInMergeQueue field: there is no queue to check, say nothing.
-        if ! grep -qi "isInMergeQueue" "$gq_err" || ! grep -qiE "doesn't exist|not exist" "$gq_err"; then
-          echo "ship-land: warning: merge-queue check skipped for #$pr: gh api graphql failed (exit $gq_rc): $(tr '\n' ' ' <"$gq_err")" >&2
-        fi
-      elif [[ "$in_queue" == true ]]; then
-        queued="it is in the merge queue"
-      fi
-      rm -f "$gq_err"
-    else
-      echo "ship-land: warning: merge-queue check skipped for #$pr: could not read owner/repo from the PR url '$pr_url'" >&2
-    fi
+  gq_rc=skip gq_out="" gq_err=""
+  pr_url="$(jq -r '.url // ""' <<<"$pr_json")"
+  if [[ "$(jq -r '.autoMergeRequest // empty | type' <<<"$pr_json")" != object && "$pr_url" =~ ^https?://[^/]+/([^/]+)/([^/]+)/pull/[0-9]+$ ]]; then
+    gq_file="$(mktemp)"
+    gq_rc=0
+    # shellcheck disable=SC2016 # $owner etc. are GraphQL variables, not shell ones
+    gq_out="$(cd "$wt_path" && gh api graphql -F "number=$pr" -f "owner=${BASH_REMATCH[1]}" -f "name=${BASH_REMATCH[2]}" \
+      -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){isInMergeQueue}}}' \
+      -q .data.repository.pullRequest.isInMergeQueue 2>"$gq_file")" || gq_rc=$?
+    gq_err="$(cat "$gq_file")"
+    rm -f "$gq_file"
   fi
+  queued="$(decide_queued "$pr_json" "$gq_rc" "$gq_out" "$gq_err")"
   if [[ -n "$queued" ]]; then
     refuse "#$pr is queued to merge ($queued); wait for it, then rerun '$rerun' once it is MERGED (to re-land it instead, cancel auto-merge or leave the merge queue first)"
   fi
