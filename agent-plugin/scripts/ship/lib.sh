@@ -223,11 +223,13 @@ ship_config_load() {
   if [[ -n "${SHIP_CONFIG_FILE:-}" ]]; then
     command -v jq >/dev/null 2>&1 || { _ship_err "jq is required but was not found on PATH"; return 1; }
     SHIP_CONFIG_JSON="$(jq -c . "$SHIP_CONFIG_FILE" 2>/dev/null)" && [[ -n "$SHIP_CONFIG_JSON" ]] \
-      || { _ship_err "cannot read the lead's config $SHIP_CONFIG_FILE"; unset SHIP_CONFIG_JSON; return 1; }
+      || { _ship_err "cannot read the lead's config $SHIP_CONFIG_FILE"; unset SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS; return 1; }
     SHIP_CONFIG_LAYERS="$(jq -nc --arg f "$SHIP_CONFIG_FILE" '[{file: $f, data: {}}]')"
     export SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS
     return 0
   fi
+  # A failed load leaves no config behind, even a stale exported one.
+  unset SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS
   ship_require_yq || return 1
   command -v jq >/dev/null 2>&1 || { _ship_err "jq is required but was not found on PATH"; return 1; }
 
@@ -271,7 +273,10 @@ ship_config_load() {
   local out rest project=""
   [[ $rc -eq 0 && -n "$root" ]] && project="${root##*/}"
   out="$(jq -nr --argjson datas "[$(IFS=,; printf '%s' "${datas[*]}")]" \
-    --arg project "$project" --arg stages "$SHIP_STAGES" "$_SHIP_LOAD_JQ" --args "${files[@]}")" || return 1
+    --arg project "$project" --arg stages "$SHIP_STAGES" "$_SHIP_LOAD_JQ" --args "${files[@]}" 2>/dev/null)" || {
+    _ship_err "cannot merge and validate the config layers (${files[*]})"
+    return 1
+  }
   rest="${out#*$'\n'}"
   if [[ "$rest" == *$'\n'* ]]; then
     printf '%s\n' "${rest#*$'\n'}" >&2
