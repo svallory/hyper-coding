@@ -27,6 +27,27 @@ export SHIP_QUOTA_DIR="$FIX/quota-lock"
 unset CLAUDE_CONFIG_DIR SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS
 mkdir -p "$SHIP_QUOTA_DIR"
 
+# Fast-fail guard: a broken liveness or age check in either takeover path leaves a stale lock in
+# place, and every later row then waits out its 60 s lock timeout (the whole file hangs to the outer timeout).
+# Take a dead owner's lock and an old foreign lock with a 5 s budget under a 15 s hard stop, once per takeover
+# path, before any part starts; a failure ends the file here, in seconds.
+GUARD_FAILED=0
+guard_takeover() {   # <label> <lock content> <old|young> [env assignment]
+  local f="$FIX/guard.$1" rc=0
+  echo "$2" >"$f"
+  [[ "$3" != old ]] || touch -t 200001010000 "$f"
+  env ${4:+"$4"} timeout 15 bash -c 'source "$1"; ship_lock "$2" 5 600' _ "$SCRIPTS_DIR/ship/lib.sh" "$f" >/dev/null 2>&1 || rc=$?
+  assert_eq "fast guard ($1): taken over within 5 s" 0 "$rc"
+  [[ "$rc" == 0 ]] || GUARD_FAILED=1
+  rm -f "$f"
+}
+for GMODE in perl bash; do
+  GENV=""; [[ "$GMODE" == perl ]] || GENV=SHIP_LOCK_NO_PERL=1
+  if [[ "$GMODE" == perl ]] && ! command -v perl >/dev/null 2>&1; then continue; fi
+  guard_takeover "$GMODE, dead owner" "99999999@$(hostname)" young "$GENV"
+  guard_takeover "$GMODE, old foreign lock" "1@elsewhere" old "$GENV"
+done
+if [[ $GUARD_FAILED -ne 0 ]]; then echo "# the takeover is broken: the rows below would hang on it, so the file stops here"; finish; fi
 
 # Each part runs in a subshell of its own, in parallel with the others (separate quota dir and lock files);
 # par_wait replays their TAP lines in order.
@@ -164,6 +185,26 @@ assert_eq "fallback: no .break left after that" absent "$([[ -e "$LKT/lock.break
 rm -f "$LKT"/*; mkdir "$LKT/lock"
 assert_ok "an old mkdir lock directory is replaced" ship_lock "$LKT/lock" 10
 ship_unlock "$LKT/lock"
+# the bash path (SHIP_LOCK_NO_PERL=1) judges owners on its own: the same stale-lock rules, so a mutation of its
+# liveness or age check cannot survive (the perl path is covered by the rows below)
+export SHIP_LOCK_NO_PERL=1
+echo "99999999@$(hostname)" >"$FIX/bd"
+assert_ok "bash path: a dead owner's lock is taken over" ship_lock "$FIX/bd" 0
+ship_unlock "$FIX/bd"
+echo "$$@$(hostname)" >"$FIX/bl"; touch -t 200001010000 "$FIX/bl"
+assert_eq "bash path: a live local owner's lock is never taken, however old" "1 $$@$(hostname)" "$(ship_lock "$FIX/bl" 0 1; echo -n "$? "; cat "$FIX/bl")"
+echo "1@elsewhere" >"$FIX/bf"
+assert_eq "bash path: a young foreign lock is kept" 1 "$(ship_lock "$FIX/bf" 0 600; echo $?)"
+assert_eq "...as it was, and its owner is reported" "1@elsewhere 1@elsewhere" "$(cat "$FIX/bf") $(ship_lock "$FIX/bf" 0 600; echo "$SHIP_LOCK_OWNER")"
+touch -t 200001010000 "$FIX/bf"
+assert_ok "bash path: an old foreign lock is taken over" ship_lock "$FIX/bf" 0 60
+: >"$FIX/bo"
+assert_eq "bash path: a young ownerless lock is kept" 1 "$(ship_lock "$FIX/bo" 0 120; echo $?)"
+assert_eq "...as it was (still empty)" "0" "$(wc -c <"$FIX/bo" | tr -d ' ')"
+touch -t 200001010000 "$FIX/bo"
+assert_ok "bash path: an old ownerless lock is taken over" ship_lock "$FIX/bo" 0 120
+unset SHIP_LOCK_NO_PERL
+rm -f "$FIX/bd" "$FIX/bl" "$FIX/bf" "$FIX/bo"
 # a lock whose owner is dead on this host is taken over at once; a live one, however old, is not
 echo "99999999@$(hostname)" >"$FIX/dl"
 assert_ok "ship_lock takes over a dead owner's lock" ship_lock "$FIX/dl" 0
