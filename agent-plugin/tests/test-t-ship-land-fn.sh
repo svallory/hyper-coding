@@ -258,6 +258,13 @@ assert_eq "a group ship did not create is never closed" "close --ref r1 --id P1|
 td_reset; rm -f "$TD/root/.hyper/ship-mux.json"
 assert_eq "no group record: exit 0" "0" "$(td "")"
 
+td_reset; echo '{"backend":"fake","created":[{"kind":"agent","id":"A3","harness":"codex"},{"kind":"agent","id":"A4","harness":"pi"}]}' >"$TD/root/notes/loops/r1/mux.json"
+td "" >/dev/null
+assert_eq "teardown passes codex and pi as the harness" "--ref r1 --harness codex A3|--ref r1 --harness pi A4" "$(tr '\n' '|' <"$TD/retire.log" | sed 's/|$//')"
+td_reset; echo '{"backend":"fake","created":[{"kind":"agent","id":"A5","harness":"bash"}]}' >"$TD/root/notes/loops/r1/mux.json"
+td "" >/dev/null
+assert_eq "...an unknown harness in the record is not passed on" "--ref r1 A5" "$(cat "$TD/retire.log")"
+
 td_reset; echo 4 >"$TD/retire.rc"
 assert_eq "a retire that exits 4: teardown goes on (0)" "0" "$(td "")"
 assert_contains "...with a warning naming the exit code" "$(cat "$FIX/td.err")" "warning: ship-retire A1 exited 4; closing its pane regardless"
@@ -514,6 +521,7 @@ cat > "$FIX/hstub/ssh" <<'STUB'
 #!/bin/bash
 echo "ssh $*" >> "$SSH_LOG"
 [[ ! -e "$FIX/ssh.lost" || "$*" != *phase* ]] || exit 255
+[[ ! -e "$FIX/ssh.mergerc" || "$*" != *phase*merge* ]] || exit "$(cat "$FIX/ssh.mergerc")"
 exit 0
 STUB
 cat > "$FIX/hstub/rsync" <<'STUB'
@@ -551,7 +559,43 @@ echo "303 1 echo x" >"$SPACE/notes/loops/hl3.on_land.done"; echo T-3 >"$SPACE/no
 assert_eq "abandon --host: 0" "0" "$(wl hl3 --abandon --host box)"
 assert_eq "...removes the lead's on_land record, task and PR" "" "$(compgen -G "$SPACE/notes/loops/hl3.*" || true)"
 assert_eq "...after asking the host to abandon it (no --phase)" "1 0" "$(grep -c -- '--abandon' "$SSH_LOG") $(grep -c 'phase' "$SSH_LOG")"
+
+# the host's merge phase refuses (3): the lead exits with that code, runs no on_land, never asks for the teardown
+: >"$SSH_LOG"; rm -f "$CNT"; echo 3 >"$FIX/ssh.mergerc"
+hcfg '["echo ran >> '"$CNT"'"]'
+mk_unit_git hm1 701
+assert_eq "host land whose merge phase exits 3: the lead exits 3" "3" "$(wl hm1 --host box)"
+assert_eq "...the host was asked for the merge phase once" "1" "$(grep -c 'phase.*merge' "$SSH_LOG")"
+assert_eq "...never for the teardown" "0" "$(grep -c 'phase.*finish' "$SSH_LOG")"
+assert_eq "...and on_land did not run" "no" "$(exists_word "$CNT")"
+rm -f "$FIX/ssh.mergerc"
+
+# on_land runs on the lead BEFORE the teardown phase: a failing on_land stops the host land before it
+: >"$SSH_LOG"; rm -f "$CNT"
+hcfg '["exit 7"]'
+mk_unit_git hm2 702
+echo 702 >"$SPACE/notes/loops/hm2/land.pr"   # what the host's merge phase leaves for the lead
+assert_eq "host land with a failing on_land: 1" "1" "$(wl hm2 --host box --task T-2)"
+assert_contains "...it names the command" "$(errof)" "on_land command failed: exit 7"
+assert_contains "...and the rerun command, with --host and the task" "$(errof)" "rerun 'ship-land hm2 --host box --task T-2' to resume"
+assert_eq "...the host was asked for the merge phase, not the teardown" "1 0" "$(grep -c 'phase.*merge' "$SSH_LOG") $(grep -c 'phase.*finish' "$SSH_LOG")"
+assert_eq "...the lead saved the task and PR for the rerun" "T-2 702" "$(cat "$SPACE/notes/loops/hm2.land.task") $(cat "$SPACE/notes/loops/hm2.land.pr")"
 PATH="$OLDPATH"
+write_cfg
+
+# the rerun hint on the host side (--phase) carries --host: the lead passes SHIP_HOST
+mk_unit_git hm3 703
+assert_eq "host merge phase while the PR stays OPEN after the merge call: 1" "1" "$(SHIP_UNIT_INTERNAL=1 SHIP_HOST=box GH_MERGE_QUEUE=1 wl hm3 --phase merge)"
+assert_contains "...the rerun hint ends with --host <host> (the lead's SHIP_HOST)" "$(errof)" "rerun 'ship-land hm3 --task hm3 --host box' once it is merged"
+
+# merge_method must be rebase, squash or merge
+write_cfg 'merge_method: bogus
+'
+mk_unit_git mm1 704
+remote_before="$(git -C "$REMOTE" rev-parse mm1)"; s0="$(gate_state)"
+assert_eq "an unknown merge_method: exit 1" "1" "$(wl mm1)"
+assert_contains "...naming the value" "$(errof)" "merge_method must be rebase, squash or merge (got 'bogus')"
+assert_eq "...nothing pushed or merged" "$remote_before $s0" "$(git -C "$REMOTE" rev-parse mm1) $(gate_state)"
 write_cfg
 
 # ===== constraint: nothing in the scripts names the space ===========================================
