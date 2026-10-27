@@ -176,6 +176,7 @@ assert_eq "add_dev_work: nothing to add leaves pending alone" "P/0" "$pending/$p
 t="$(takeover_text)"
 # mutation: takeover_text's "origin/%s..HEAD" or the git status hint
 assert_contains "takeover_text: names the unit and the PR" "$t" "unit u6 (PR #7)"
+assert_contains "takeover_text: opens by telling the agent it takes over" "$t" "You are taking over unit u6"
 assert_contains "takeover_text: says the previous dev is gone and nothing was reset" "$t" "from a previous dev agent that is gone"
 assert_contains "takeover_text: points at the brief, git status and the log against the base" "$t" "run \`git -C $WT status\`"
 assert_contains "takeover_text: ...the log range is origin/<base>..HEAD" "$t" "git -C $WT log origin/main..HEAD"
@@ -610,6 +611,8 @@ a="$(mux_start_args)"
 assert_eq "start_agent pi: no trust dialog is looked at" "rc=0 A_ID=new-id td=[]" "$out"
 assert_contains "start_agent pi: harness pi, model with thinking suffix, --approve" "$a" "--harness pi --cwd $WT -- --model prov/model:high --approve"
 assert_contains "start_agent pi: one session directory per agent under pi-sessions" "$a" "--session-dir $STATE/pi-sessions/u6-review-r1-00000000-0000-4000-8000-000000000001"
+assert_contains "start_agent pi: the role flags from ship-role reach the argv (MCP off)" "$a" "--no-mcp"
+assert_eq "start_agent pi: the agent file records the pi harness" "pi" "$(jq -r .harness "$STATE/agents/u6-review-r1.json")"
 assert_not_contains "start_agent pi: no claude flags" "$a" "--session-id"
 assert_not_contains "start_agent pi: ...nor the permission mode" "$a" "--permission-mode"
 assert_eq "start_agent pi: the session directory exists" "yes" "$([[ -d "$STATE/pi-sessions/u6-review-r1-00000000-0000-4000-8000-000000000001" ]] && echo yes)"
@@ -728,8 +731,12 @@ out="$(sx usage_exit "bad thing")"
 assert_eq "usage_exit: prints 'ship-loop: <message>' and exits 1" $'ship-loop: bad thing\nrc=1' "$out"
 LB() { SHIP_CONFIG_JSON="$BASE_CFG" SHIP_CONFIG_LAYERS="$BASE_LAY" bash "$LOOP" "$@" 2>&1; echo "rc=$?"; } # the driver itself (config passed in), ending in its argument checks
 assert_eq "driver: an unknown argument" $'ship-loop: unknown argument: --bogus\nrc=1' "$(LB --bogus)"
-# hyper-chp: the message names the flag (--worktree), not the variable WT
+# a missing flag is reported by the flag the operator typed (--worktree), not by the shell variable (WT)
 assert_eq "driver: --worktree is required once --ref is given" $'ship-loop: --worktree is required\nrc=1' "$(LB --ref r)"
+for _row in "ref:--worktree /w --branch b --brief /b --class S" "branch:--ref r --worktree /w --brief /b --class S" "brief:--ref r --worktree /w --branch b --class S" "class:--ref r --worktree /w --branch b --brief /b"; do
+  # shellcheck disable=SC2086  # the row is a word list on purpose
+  assert_eq "driver: a missing --${_row%%:*} is reported by that flag" "ship-loop: --${_row%%:*} is required"$'\nrc=1' "$(LB ${_row#*:})"
+done
 assert_eq "driver: a class outside S, M, L" $'ship-loop: --class must be S, M or L\nrc=1' "$(LB --ref r --worktree /w --branch b --brief /b --class Q)"
 assert_eq "driver: class M and L are accepted (the next check is the worktree)" $'ship-loop: worktree /w is not a directory\nrc=1/ship-loop: worktree /w is not a directory\nrc=1' "$(LB --ref r --worktree /w --branch b --brief /b --class M)/$(LB --ref r --worktree /w --branch b --brief /b --class L)"
 assert_contains "driver: a --model for an unknown stage is refused (with a valid worktree and brief)" "$(LB --ref r --worktree "$FIX" --branch b --brief "$FIX/mux-check" --class S --model nostage=x)" "unknown stage"
@@ -1010,6 +1017,14 @@ newstate; RC_RC=1; finalize_try >/dev/null 2>&1; rc=$?
 assert_eq "finalize_try: a READY review but the owed re-check not accepted: returns 2, nothing pushed" "2|no" "$rc|$([[ -e "$STATE/pushlog" ]] && echo yes || echo no)"
 newstate; RC_RC=0; finalize_try >/dev/null 2>&1; rc=$?
 assert_eq "finalize_try: with both READYs it pushes and returns 0" "0|yes" "$rc|$([[ -e "$STATE/pushlog" ]] && echo yes || echo no)"
+# a forbidden hit in the diff to push: rc 1, the dev is told the file and the rule, nothing is pushed (mutation: skip the `-n "$hits"` branch)
+forbidden_scan() { echo "leak.txt: leaked SECRETWORD here (matches SECRETWORD)"; }
+newstate; RC_RC=0; FIN_MSG=""; finalize_try >/dev/null 2>&1; rc=$?
+assert_eq "finalize_try: a forbidden hit returns 1 and pushes nothing" "1|no" "$rc|$([[ -e "$STATE/pushlog" ]] && echo yes || echo no)"
+assert_contains "finalize_try: a forbidden hit names the rule" "$FIN_MSG" "added lines match scan.forbidden"
+assert_contains "finalize_try: ...and the offending file and line" "$FIN_MSG" "leak.txt: leaked SECRETWORD here"
+assert_contains "finalize_try: a forbidden hit tells the dev to run the tests its change affects" "$FIN_MSG" "in a commit, run the tests your change affects"
+assert_not_contains "finalize_try: ...and not to run the gate" "$FIN_MSG" "run the gate"
 unset -f git forbidden_scan write_json diff_sig spec_required rechecked_diff reviewed_diff recheck_diff set_recheck spec_route
 unset -f fix_round rejected_diff reviewed_diff rejection_text do_review prompt takeover_text run_step check_verdict dev_ok budget_min diff_sig
 unset CUR REJ NEXT OKSIG BEFORE GC
