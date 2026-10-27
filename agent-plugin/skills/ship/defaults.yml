@@ -76,7 +76,7 @@ budgets:
   M: 45
   # Class L (large) unit.
   L: 90
-  # Fraction of the class budget given to a fix round.
+  # Fraction of the class budget a fix round starts with; fix_per_finding adds to it.
   fix_fraction: 0.5
   # Minutes added to a fix round for each finding it must answer; the round never gets more than the class budget.
   fix_per_finding: 2

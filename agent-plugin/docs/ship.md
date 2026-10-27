@@ -284,9 +284,11 @@ Budgets: develop gets `budgets.<class>` minutes, every other agent stage
 `budgets.check`. A fix round answering F findings gets
 `min(budgets.<class>, budgets.<class> × budgets.fix_fraction + budgets.fix_per_finding × F)`
 minutes, so a round with more findings gets more time, up to the class budget.
-F is the number of findings (or failures, or resolved spec points) the round
-carries; a problem the driver only has as text (a finalize rebase, gate or scan
-failure, or a gate-restored diff) counts as F = 1. The clock is wall time since
+F is the number of items the round carries: review, spec and final findings,
+verify failures, and for a spec round the resolved spec points plus the
+checker's findings and code removals. A problem the driver only has as text (a
+finalize rebase, gate or scan failure, or a gate-restored diff) counts as
+F = 1. The clock is wall time since
 the stage's prompt was sent, minus time spent parked.
 
 Exit codes and `result.json` status:
