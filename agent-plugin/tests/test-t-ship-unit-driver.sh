@@ -124,7 +124,7 @@ script_dir r3
 # a refusal is immediate: if it is not, r3 got a driver, so kill it and fail instead of hanging
 ( bash "$UNIT" run r3 --brief "$BRIEF" --class S 2>"$FIX/unit.err" >"$FIX/unit.out"; echo $? > "$FIX/r3.rc" ) &
 R3=$!
-wait_for 20 test -s "$FIX/r3.rc" || { kill "$R3" 2>/dev/null; pkill -f "ship-loop.*r3" 2>/dev/null; echo "none (still running)" > "$FIX/r3.rc"; }
+wait_for 20 test -s "$FIX/r3.rc" || { kill "$R3" 2>/dev/null; echo "none (still running)" > "$FIX/r3.rc"; }
 rc="$(cat "$FIX/r3.rc")"
 assert_eq "slots=1: a second run is refused while r2's driver runs (3)" "3" "$rc"
 assert_contains "...naming the host and r2" "$(cat "$FIX/unit.err")" "host local is full: 1 of 1 slots in use (r2)"
