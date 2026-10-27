@@ -556,7 +556,8 @@ hosts:
 
 | Key | Meaning |
 |---|---|
-| `gate` | Required, no default. Command run in the unit worktree before push and before merge; exit 0 passes. It runs twice per unit (finalize and land), so prefer the project's affected-only test command against `origin/<base>` and leave the full suite to CI on the PR (`skills/test-engineer/affected.md` shows how to set one up). |
+| `gate` | Required, no default. Command run in the unit worktree before push and before merge; exit 0 passes. It runs twice per unit (finalize and land), so prefer the project's affected-only test command against `origin/<base>` and leave the full suite to CI on the PR (`skills/test-engineer/affected.md` shows how to set one up). To run it on another machine, see [Running on other machines](#running-on-other-machines). |
+| `offload` | Optional, unset by default. A command prefix that runs one shell-string argument on a build host, in a synced copy of the current worktree. When set, the dev and fix prompts tell the agent to run test runs, builds and the gate through it. See [Running on other machines](#running-on-other-machines). |
 | `mux` | Backend file under `scripts/ship/mux/`. Default `herdr`. |
 | `units_group` | Name of the multiplexer group holding unit spaces. `<project>` becomes the space directory name. Default `<project>-units`. |
 | `base` | Branch units are rebased onto and merged into. Default `main`. |
@@ -597,6 +598,40 @@ hosts:
 A model entry is a bare name (`sonnet`, `opus`, `haiku`, `fable`) for Claude
 Code, or `provider/model[:thinking]` for pi. A stage's list is walked in order.
 `--model stage=a,b` on `ship-unit` replaces one stage's list for that unit.
+
+## Running on other machines
+
+Two config keys move work off the machine that runs the driver. They are
+independent. This plugin requires none of the tools named below; they are examples.
+
+- `hosts.<name>` runs whole units (agents included) on another machine. Each
+  host has an optional `ssh` target and a number of `slots`.
+- `offload` runs only the heavy commands of a unit on a build box while the
+  agents stay where they are. It is a command prefix that takes ONE shell-string
+  argument, runs it inside a synced copy of the current worktree (same relative
+  directory; uncommitted files synced, gitignored files not) and exits with the
+  remote command's exit code. Example: `offload: "RCI_HOST=forge rci"`.
+
+When `offload` is set, the rules in the dev and fix prompts tell the agent to
+run every test run and build as `<offload> '<command>'` from the worktree, and
+only when `command -v <command>` succeeds, where `<command>` is the prefix's
+first word after any leading `VAR=value` words (for `RCI_HOST=forge rci` that is
+`rci`). When `offload` is unset, or that command is missing, the agent runs
+locally and says so in its summary.
+
+The dev does not run the gate; the driver does, at finalize (`ship-loop`) and at
+land (`ship-land`), literally as configured. `offload` does not change that. A
+project that wants the gate on the build box writes the prefix into `gate`
+itself:
+
+```yaml
+offload: "RCI_HOST=forge rci"
+gate: "RCI_HOST=forge rci 'bun run typecheck && bun test'"
+```
+
+An instabox box qualifies for either key when the space exists on it at the
+same absolute path and `ssh` reaches it non-interactively
+(`instabox ssh-cert <box>` writes a `Host instabox-<box>` alias).
 
 ## The unit directory
 

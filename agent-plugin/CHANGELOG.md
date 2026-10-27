@@ -7,6 +7,16 @@ Changes to the hyper agent plugin. The plugin version in
 
 ### Added
 
+- `offload` ship config key: a command prefix that runs one shell-string
+  argument on a build host in a synced copy of the worktree. When set, the
+  rules in the dev and fix prompts send test runs and builds through it (only
+  if `command -v` finds the prefix's command, skipping leading `VAR=value`
+  words; otherwise they run locally and say so). The dev does not run the
+  gate: `ship-loop` and `ship-land` run `gate` literally, so a project that
+  wants the gate on the build box writes the prefix into `gate` itself.
+  `docs/ship.md` gets a "Running on other machines" section covering
+  `offload` and `hosts`.
+
 - `ship-unit resume <ref> --max-rounds N` raises the unit's round limit and
   continues it where it stopped, so a unit that went STUCK for want of rounds
   can be continued. `N` must be above the current limit (else exit 64). The new

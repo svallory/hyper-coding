@@ -229,6 +229,7 @@ trap '[[ -n "$FINISHED" ]] || { log "driver exited unexpectedly"; die_error "dri
 command -v git >/dev/null 2>&1 || die_error "git not found"
 ship_require_gate || die_error "config has no usable gate (see driver output above)"
 GATE="$(ship_cfg_get gate)"
+OFFLOAD="$(ship_cfg_get offload 2>/dev/null || true)" # optional command prefix for heavy commands; unset = run locally
 git -C "$WT" rev-parse --verify -q "origin/$BASE" >/dev/null || die_error "origin/$BASE does not exist in $WT; fetch it first"
 
 # --- config -------------------------------------------------------------------------------------
@@ -289,8 +290,26 @@ render() {
     | jq -Rrs --argjson m "$m" 'gsub("\\{(?<k>[a-z_]+)\\}"; ($m[.k] // ("{" + .k + "}")))'
 }
 TEST_SKILL="$SHIP_PLUGIN_ROOT/skills/test-engineer/SKILL.md" # the dev and review prompts point at it
-RULES="$(render rules ref="$REF" worktree="$WT" branch="$BRANCH" brief="$BRIEF" gate="$GATE" rulings="$RULINGS" \
-  test_skill="$TEST_SKILL" forbidden="$FORBIDDEN_TXT" forbidden_exclude="$FORBIDDEN_EXCLUDE_TXT")"
+# offload_text — the rules line for heavy commands: the build-box wording when OFFLOAD is set, else "run locally".
+# The command to look for with `command -v` is the prefix's first word that is not a leading VAR=value.
+offload_text() {
+  local w cmd=""
+  if [[ -z "$OFFLOAD" ]]; then
+    printf '%s' "Heavy commands (test runs, builds) run locally; say so in your summary."
+    return 0
+  fi
+  for w in $OFFLOAD; do
+    [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] && continue
+    cmd="$w"
+    break
+  done
+  printf '%s' "Heavy commands (test runs, builds) run on the build box: \`$OFFLOAD '<command>'\` from the worktree runs <command> in a synced copy (uncommitted files synced, gitignored files not, exit code preserved). Use it only if \`command -v $cmd\` succeeds; otherwise run locally and say so in your summary."
+}
+rules_text() {
+  render rules ref="$REF" worktree="$WT" branch="$BRANCH" brief="$BRIEF" gate="$GATE" rulings="$RULINGS" offload="$(offload_text)" \
+    test_skill="$TEST_SKILL" forbidden="$FORBIDDEN_TXT" forbidden_exclude="$FORBIDDEN_EXCLUDE_TXT"
+}
+RULES="$(rules_text)"
 # prompt <template> key=value... — render with the pairs every prompt gets (templates ignore the
 # ones they do not use).
 prompt() {
