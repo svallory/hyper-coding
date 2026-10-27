@@ -3,7 +3,7 @@
 # Row T (ship failover), function level: preflight routing (pick_model), the quota tap, the limit
 # patterns, and the reactive-failover functions of ship-loop, one at a time. No driver run, no
 # multiplexer, no stub agent: the driver's functions are lifted out of scripts/ship/ship-loop with
-# `loop_fn` (a sed slice; the script has no main guard yet) and called against a scripted `mux`.
+# `loop_fn` (the script is sourced; its main guard keeps the driver from running) and called against a scripted `mux`.
 # The journeys that need a whole unit (preflight swap, LIMIT park and restart, reactive failover with
 # takeover, limit with nothing to fail over to, limit inside a blocked dialog) stay in
 # test-t-ship-failover.sh.
