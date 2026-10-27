@@ -5,7 +5,7 @@
 # run end to end here: READY; QUESTION park and answered resume; BLOCKED park, restart without an answer
 # and the verify stage; DIALOG park and clear; OVER-BUDGET and --extend; LIMIT park and resume; restart and
 # takeover. Everything a function can decide (prompt text, fmt_*, budgets, trust dialog, signatures, ...) is
-# in test-t-ship-loop-fn.sh; the finalize/push journeys are in test-t-ship-loop-b.sh.
+# in test-t-ship-loop-fn.sh; the finalize/push journeys are in test-t-ship-loop-b.sh and test-t-ship-loop-c.sh.
 #
 # The stub agent (tests/fixtures/ship/stub-agent) answers each prompt the driver records in
 # <verdict>.json.sent with a scripted file, so no scenario touches a real multiplexer, claude or pi.
@@ -26,7 +26,7 @@ start_line() { grep '"start"' "$SHIP_MUX_FAKE_LOG" | grep "$1" | "${2:-head}" -n
 export SHIP_TRUST_WAIT_S=2
 unit t1
 mkdir -p "$(st t1)" "$SHIP_MUX_FAKE_DIR/read"
-for _f in unit.json driver.exit config.json; do echo "keep $_f" >"$(st t1)/$_f"; done
+for _f in unit.json config.json; do echo "keep $_f" >"$(st t1)/$_f"; done
 echo "spec_write=kept-model" >"$(st t1)/models.override"
 echo stale >"$(st t1)/stale.json"
 printf '%s\n' "$(cat "$TRUSTFIX/narrow-after-down.txt")" >"$SHIP_MUX_FAKE_DIR/read/t1-dev"
@@ -76,7 +76,7 @@ assert_eq "trust dialog: Enter was pressed once" "1" "$(key_count t1 t1-dev ente
 assert_eq "trust dialog: no down was sent (the default was Yes)" "0" "$(key_count t1 t1-dev down)"
 assert_eq "trust dialog: one log line says so" "1" "$(grep -c 'workspace-trust dialog' "$(st t1)/loop.log")"
 # a new run moves the earlier run's files aside and keeps the unit's own
-for _f in unit.json driver.exit config.json; do
+for _f in unit.json config.json; do
   assert_eq "archive: $_f stays in place" "keep $_f" "$(cat "$(st t1)/$_f" 2>/dev/null)"
 done
 assert_eq "archive: models.override stays in place" "spec_write=kept-model" "$(cat "$(st t1)/models.override" 2>/dev/null)"
