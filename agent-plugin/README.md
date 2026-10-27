@@ -211,16 +211,16 @@ first (steps in `agent-plugin/CLAUDE.md`); `run.sh` builds it for you when the
 monorepo is present and it is missing (`HYPER_TEST_CLI=auto|build|skip|require`).
 
 ```bash
-bash agent-plugin/tests/run.sh --affected origin/main     # your working loop: only what the change affects
+bash agent-plugin/tests/run.sh --affected                 # your working loop (--base REF, default origin/main): only what the change affects
 bash agent-plugin/tests/run.sh test-t-ship-role.sh        # one file
 bash agent-plugin/tests/run.sh --jobs 4                   # everything, 4 files at once (CI uses --jobs 2)
 bash agent-plugin/tests/run.sh --affected --dry-run       # show the selection and why, run nothing
 ```
 
-`--affected` reads `agent-plugin/tests/affected.map` (first matching rule wins;
-an unmapped plugin path runs everything, so a missing rule costs time, never
-coverage). Each file prints its wall time; the run ends with the five slowest
-files and fails any file over `--budget` seconds (default 300). On macOS put
+`--affected` reads `agent-plugin/tests/affected.map` (matching rules add up; an
+unmapped plugin path runs everything, so a missing rule costs time, never
+coverage; the three cheap lint files run for any plugin change). Each file prints its wall time; the run ends with the five slowest
+files and warns about any file over `--budget` seconds (default 300; `--budget-fail` makes it an error). On macOS put
 GNU rsync first (`PATH=/opt/homebrew/bin:$PATH`) or the host-copy cases skip.
 The runner clears `SHIP_*` and `HYPER_SPACE_ROOT` from the caller's
 environment, so it is safe to run inside a ship driver.
