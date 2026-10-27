@@ -102,6 +102,7 @@ part_contract() {
   mux_contract_vanish() { vanish "$1"; }
   mux_contract_exit_agent() { echo gone > "$SHIP_MUX_FAKE_DIR/status/$1"; }
   # the backend file itself: a backend refuses to close a group that still has children (contract rows)
+  # shellcheck disable=SC2034  # read by mux_contract
   MUX_CONTRACT_BACKEND=(bash "$FAKE_BE")
   mux_contract contract "$WT"
   unset MUX_CONTRACT_BACKEND
