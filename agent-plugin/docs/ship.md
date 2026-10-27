@@ -59,7 +59,12 @@ A plain clone is not a space.
    the files to read, the acceptance criteria and the gate. The develop prompt
    already tells the dev to push the branch and open the PR, so the brief does not
    need to. Add a `Consumers` section naming, for every new type, flag, file,
-   option and command, who uses it today ([concepts](concepts.md#ship)).
+   option and command, who uses it today ([concepts](concepts.md#ship)), and a
+   `Tests` section (one row per behaviour with its layer, fixture and entry
+   point, a budget in seconds, the affected-run command): the dev follows it
+   and the reviewer checks the diff against it, both by the rules in
+   `skills/test-engineer/SKILL.md`, whose path the driver puts in their
+   prompts. The `plan` skill writes both sections from the brief template.
 7. Pick a ref: letters, digits, `.`, `_`, `-`, starting with a letter or digit
    (`^[A-Za-z0-9][A-Za-z0-9._-]*$`). It names the unit, its branch and its state
    directory.
@@ -551,7 +556,7 @@ hosts:
 
 | Key | Meaning |
 |---|---|
-| `gate` | Required, no default. Command run in the unit worktree before push and before merge; exit 0 passes. |
+| `gate` | Required, no default. Command run in the unit worktree before push and before merge; exit 0 passes. It runs twice per unit (finalize and land), so prefer the project's affected-only test command against `origin/<base>` and leave the full suite to CI on the PR (`skills/test-engineer/affected.md` shows how to set one up). |
 | `mux` | Backend file under `scripts/ship/mux/`. Default `herdr`. |
 | `units_group` | Name of the multiplexer group holding unit spaces. `<project>` becomes the space directory name. Default `<project>-units`. |
 | `base` | Branch units are rebased onto and merged into. Default `main`. |

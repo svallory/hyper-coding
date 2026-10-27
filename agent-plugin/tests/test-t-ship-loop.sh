@@ -155,6 +155,9 @@ assert_ok "READY: the develop verdict validates" validate_verdict "$SCHEMAS_DIR/
 assert_contains "READY: the dev prompt names the gate and the brief" "$(cat "$(st t1)/develop.prompt.md")" "echo gate-ran"
 assert_contains "READY: the dev prompt names the brief" "$(cat "$(st t1)/develop.prompt.md")" "$BRIEF"
 assert_not_contains "READY: no placeholder is left in the dev prompt" "$(cat "$(st t1)/develop.prompt.md")" "{ref}"
+assert_contains "READY: the dev prompt points at the test-engineer skill" "$(cat "$(st t1)/develop.prompt.md")" "$PLUGIN_DIR/skills/test-engineer/SKILL.md"
+assert_contains "READY: the review prompt points at the test-engineer skill" "$(cat "$(st t1)/review-r1.prompt.md")" "$PLUGIN_DIR/skills/test-engineer/SKILL.md"
+assert_not_contains "READY: no placeholder is left in the review prompt" "$(cat "$(st t1)/review-r1.prompt.md")" "{test_skill}"
 assert_contains "READY: the fix-style JSON example is rendered" "$(cat "$(st t1)/develop.prompt.md")" "$(st t1)/develop.json"
 assert_ok "READY: each agent got its role profile (settings file)" test -f "$HOME/.cache/hyper/roles/proj-"*/dev.json
 assert_contains "READY: claude agents are pinned to a session" "$(jq -c . "$(st t1)/agents/t1-dev.json")" '"harness":"claude"'

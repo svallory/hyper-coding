@@ -56,6 +56,7 @@ description; each can also be named directly (the plugin namespace is
 | `spec` | write `define.md` then `design.md` for a feature, each behind a gate |
 | `plan` | turn a spec or request into `tasks.md` and one brief per unit, each element checked for a consumer |
 | `kickoff` | create the tracker epic and launch the first wave of units |
+| `test-engineer` | test architecture for everything ship builds: the tests of a unit planned before its code, a diff's tests reviewed, a slow suite audited and slimmed, affected-only runs set up |
 | `unit` | run one briefed unit through the dev-review driver, or continue a parked one |
 | `land` | merge a READY unit and tear down its agents, panes and worktree; or abandon it |
 | `auto` | `auto on`: the lead rules instead of asking; `auto off`: review the rulings |

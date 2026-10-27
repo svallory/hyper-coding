@@ -14,6 +14,22 @@ Changes to the hyper agent plugin. The plugin version in
   `--model` and `--extend`, and earlier `--model` overrides are kept. The STUCK
   rows in the unit skill and `docs/ship.md` now say so.
 
+- `test-engineer` skill: the test architecture of everything ship builds.
+  Rules and budgets (one behaviour, one test, lowest layer; expensive
+  fixtures built once per file; deterministic or deleted; affected-only
+  while working), a layer decision table, and four procedures: plan the
+  tests of a unit before its code exists, review a diff's tests, audit and
+  slim an existing suite with a coverage map, set up affected-only runs.
+  Reference files `layers.md` (sizes, doubles, seams, determinism, when
+  property, snapshot and mutation testing pay, examples for
+  TypeScript/vitest, bash and Python), `affected.md` (selection per stack,
+  a path-map harness for bash suites, lanes and CI) and `audit.md`.
+- The brief template has a required `## Tests` section (a row per behaviour
+  with its layer, entry point and fixture, a budget in seconds, the
+  affected-run command, the tests not to add). The `plan` skill fills it
+  with the `test-engineer` skill and its gate checks it; the `ship` skill
+  lists it among the lead rules.
+
 ### Changed
 
 - A ship fix round's time budget now grows with the findings it must answer:
@@ -22,6 +38,17 @@ Changes to the hyper agent plugin. The plugin version in
   is only text). The new `budgets.fix_per_finding` key defaults to 2. Before,
   a fix round got a flat `budgets.fix_fraction` of the class budget, so a unit
   with several findings could park OVER-BUDGET while still making progress.
+
+- The driver renders a `{test_skill}` placeholder (the absolute path of
+  `skills/test-engineer/SKILL.md`) into the dev rules and the review prompt.
+  The dev follows the brief's `## Tests` section and reports the affected
+  run's command, counts and wall time in its summary; the reviewer runs the
+  skill's test checks (wrong layer, overlap, per-case fixtures, missing
+  timing, non-determinism, vacuous assertions, unreachable by affected
+  selection) as findings.
+- `docs/ship.md`: the `gate` row recommends an affected-only command with
+  the full suite in CI; the quickstart's brief step names the `Tests`
+  section.
 
 ## 0.6.2 — 2026-10-26
 
