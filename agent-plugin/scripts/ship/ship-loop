@@ -724,7 +724,7 @@ git_facts_status() {
     printf '## Done\n\nCommits on %s ahead of origin/%s:\n\n%s\n\nDiffstat against origin/%s:\n\n%s\n\n' "$BRANCH" "$BASE" "${ahead:-(none)}" "$BASE" "${stat:-(no changes)}"
     printf '## In progress\n\n'
     if [[ -n "$dirty" ]]; then printf 'Uncommitted changes in the worktree (git status --short):\n\n%s\n\n' "$dirty"; else printf 'No uncommitted changes. What the agent was doing when it stopped is unknown.\n\n'; fi
-    printf '## Next steps\n\nRead the brief, compare the diff with it, and continue the %s stage from there. Check the gate before you declare the stage done.\n\n' "$2"
+    printf '## Next steps\n\nRead the brief, compare the diff with it, and continue the %s stage from there. Run the tests your change affects before you declare the stage done; the driver runs the gate.\n\n' "$2"
     printf '## Open questions\n\nUnknown: the transcript was not read.\n'
   } >"$f.tmp" && mv "$f.tmp" "$f"
 }

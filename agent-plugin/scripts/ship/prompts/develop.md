@@ -3,10 +3,10 @@ You are the developer for unit {ref}. Read the brief at {brief} and everything i
 
 {rules}
 
-When the work is complete and the gate is green: push the branch and open a PR against {base} with `gh pr create --base {base} --head {branch}` (human title; body: what, why, how verified, decisions taken).
+When the work is complete and the tests your change affects pass: push the branch and open a PR against {base} with `gh pr create --base {base} --head {branch}` (human title; body: what, why, how verified, decisions taken).
 
 When finished, write your result as JSON to the file {verdict_file} as the file contents, shaped like:
 
-{"status":"DONE|BLOCKED|QUESTION","pr":<int, or null before a PR exists>,"head":"<short sha, or null>","summary":"<what changed, how verified, gate tail>","question":"<for QUESTION/BLOCKED>"}
+{"status":"DONE|BLOCKED|QUESTION","pr":<int, or null before a PR exists>,"head":"<short sha, or null>","summary":"<what changed, how verified, affected-run tail>","question":"<for QUESTION/BLOCKED>"}
 
 That file is how the lead receives your result; nothing else is read. Then stop.

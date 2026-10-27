@@ -156,6 +156,9 @@ assert_contains "READY: the dev prompt names the gate and the brief" "$(cat "$(s
 assert_contains "READY: the dev prompt names the brief" "$(cat "$(st t1)/develop.prompt.md")" "$BRIEF"
 assert_not_contains "READY: no placeholder is left in the dev prompt" "$(cat "$(st t1)/develop.prompt.md")" "{ref}"
 assert_contains "READY: the dev prompt points at the test-engineer skill" "$(cat "$(st t1)/develop.prompt.md")" "$PLUGIN_DIR/skills/test-engineer/SKILL.md"
+assert_contains "READY: the dev prompt tells the dev to leave the gate to the driver" "$(cat "$(st t1)/develop.prompt.md")" "Do not run it: the driver runs it itself"
+assert_not_contains "READY: the dev prompt no longer tells the dev to run the gate in the foreground" "$(cat "$(st t1)/develop.prompt.md")" "Run it in the foreground"
+assert_not_contains "READY: the dev prompt no longer waits on a green gate before the PR" "$(cat "$(st t1)/develop.prompt.md")" "the gate is green"
 assert_contains "READY: the review prompt points at the test-engineer skill" "$(cat "$(st t1)/review-r1.prompt.md")" "$PLUGIN_DIR/skills/test-engineer/SKILL.md"
 assert_not_contains "READY: no placeholder is left in the review prompt" "$(cat "$(st t1)/review-r1.prompt.md")" "{test_skill}"
 assert_contains "READY: the fix-style JSON example is rendered" "$(cat "$(st t1)/develop.prompt.md")" "$(st t1)/develop.json"
@@ -613,6 +616,9 @@ stub_start t17; run_loop t17; stub_stop
 check_result t17 "failing gate" 2 STUCK
 assert_eq "gate: the stage" "finalize" "$(res t17 .stage)"
 assert_contains "gate: the dev saw the gate output" "$(cat "$(st t17)/fix-r2.prompt.md")" "gate says no"
+assert_not_contains "gate: the fix prompt does not tell the dev to run the gate" "$(cat "$(st t17)/fix-r2.prompt.md")" "Commit, run the gate"
+assert_contains "gate: the fix prompt tells the dev to run only the affected tests" "$(cat "$(st t17)/fix-r2.prompt.md")" "not the gate; the driver runs it"
+assert_contains "gate: the fix prompt carries the rule to leave the gate to the driver" "$(cat "$(st t17)/fix-r2.prompt.md")" "Do not run it: the driver runs it itself"
 assert_eq "gate: a fix that changed nothing needs no review" "0" "$(starts_of t17-review-r2)"
 assert_eq "gate: nothing was pushed past the dev's commit" "$(git -C "$SPACE/worktrees/t17" rev-parse HEAD)" "$(git -C "$FIX/origin-t17.git" rev-parse refs/heads/feat-t17)"
 GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg

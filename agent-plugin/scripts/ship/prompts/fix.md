@@ -9,10 +9,10 @@ A finding on spec text (prose or a schema document among the files under {spec_p
 
 {rules}
 
-Commit, run the gate, push.
+Commit, run the tests your change affects (not the gate; the driver runs it), push.
 
 When finished, write your result as JSON to the file {verdict_file} as the file contents, shaped like:
 
-{"status":"DONE|BLOCKED|QUESTION","pr":{pr},"head":"<short sha>","summary":"<what changed, how verified, gate tail>","question":"<for QUESTION/BLOCKED>"}
+{"status":"DONE|BLOCKED|QUESTION","pr":{pr},"head":"<short sha>","summary":"<what changed, how verified, affected-run tail>","question":"<for QUESTION/BLOCKED>"}
 
 That file is how the lead receives your result; nothing else is read. Then stop.
