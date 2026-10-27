@@ -340,13 +340,59 @@ mkdir -p "$FIX/oldhyper"
 printf '# no HYPER_LIB_VERSION here\n' > "$FIX/oldhyper/hyper-lib.sh"
 printf '#!/bin/sh\necho "%s"\n' "$FIX/oldhyper/hyper-lib.sh" > "$FIX/oldhyper/hyper"
 chmod +x "$FIX/oldhyper/hyper"
-rc=0; err="$(cd "$SPACE/worktrees/wt" && PATH="$FIX/oldhyper:$REAL_PATH" env -u SHIP_SPACE_ROOT bash "$CFG" --get base 2>&1 >/dev/null)" || rc=$?
+# (from outside a space: inside a plain bare space the filesystem answers without consulting the CLI, see T15a)
+rc=0; err="$(cd "$outside" && PATH="$FIX/oldhyper:$REAL_PATH" env -u SHIP_SPACE_ROOT bash "$CFG" --get base 2>&1 >/dev/null)" || rc=$?
 assert_eq "outdated hyper: exit 1" "1" "$rc"
 assert_contains "outdated hyper: reason named" "$err" "(outdated)"
+# inside a plain bare space an outdated CLI is not consulted: the root is answered, and node is not started
+mkdir -p "$FIX/cnt-old"; : > "$FIX/hyper.calls"
+printf '#!/bin/sh\necho x >> "%s/hyper.calls"\nexec "%s/oldhyper/hyper" "$@"\n' "$FIX" "$FIX" > "$FIX/cnt-old/hyper"; chmod +x "$FIX/cnt-old/hyper"
+rc=0; out="$(cd "$SPACE/worktrees/wt" && PATH="$FIX/cnt-old:$REAL_PATH" env -u SHIP_SPACE_ROOT bash -c "source '$SHIP_DIR/lib.sh'; ship_space_root" 2>/dev/null)" || rc=$?
+assert_eq "outdated hyper inside a plain bare space: root answered (0), no hyper start" "0 $SPACE 0" "$rc $out $(wc -l < "$FIX/hyper.calls" | tr -d ' ')"
 rc=0; (cd "$outside" && PATH="$NOHYPER_PATH" env -u SHIP_SPACE_ROOT bash -c "source '$SHIP_DIR/lib.sh'; ship_space_root") >/dev/null 2>&1 || rc=$?
 assert_eq "ship_space_root returns 2 when it cannot tell" "2" "$rc"
 rc=0; (cd "$outside" && env -u SHIP_SPACE_ROOT bash -c "source '$SHIP_DIR/lib.sh'; ship_space_root") >/dev/null 2>&1 || rc=$?
 assert_eq "ship_space_root returns 1 outside a space" "1" "$rc"
+
+# T15a: the filesystem answers the common cases without spawning the hyper CLI ---
+# A counting `hyper` in front of the real one logs every start; the result must be what the CLI says.
+mkdir -p "$FIX/cnt" "$FIX/multi-ws"
+REAL_HYPER="$(command -v hyper)"
+printf '#!/bin/sh\necho x >> "%s/hyper.calls"\nexec "%s" "$@"\n' "$FIX" "$REAL_HYPER" > "$FIX/cnt/hyper"
+chmod +x "$FIX/cnt/hyper"
+# sr <dir> — ship_space_root from <dir> with the counting hyper first on PATH: "<rc> <root> <hyper starts>"
+sr() {
+  local o rc=0
+  : > "$FIX/hyper.calls"
+  o="$(cd "$1" && PATH="$FIX/cnt:$REAL_PATH" env -u SHIP_SPACE_ROOT bash -c "source '$SHIP_DIR/lib.sh'; ship_space_root" 2>/dev/null)" || rc=$?
+  echo "$rc $o $(wc -l < "$FIX/hyper.calls" | tr -d ' ')"
+}
+assert_eq "space root: found, no hyper start" "0 $SPACE 0" "$(sr "$SPACE")"
+assert_eq "worktree inside a space: the root, no hyper start" "0 $SPACE 0" "$(sr "$SPACE/worktrees/wt")"
+mkdir -p "$SPACE/worktrees/wt/deep/er"
+assert_eq "a subdirectory of a worktree: the root, no hyper start" "0 $SPACE 0" "$(sr "$SPACE/worktrees/wt/deep/er")"
+# a real linked worktree (a .git file) and a marker-only bare root
+git --git-dir="$SPACE/.git" worktree add -q --orphan -b lw "$SPACE/worktrees/lw" 2>/dev/null || mkdir -p "$SPACE/worktrees/lw"
+printf 'gitdir: %s/.git/worktrees/lw\n' "$SPACE" > "$SPACE/worktrees/lw/.git"
+assert_eq "a linked worktree (.git file): the root, no hyper start" "0 $SPACE 0" "$(sr "$SPACE/worktrees/lw")"
+git init -q --bare "$FIX/marker-only/.git" 2>/dev/null || { mkdir -p "$FIX/marker-only"; git init -q --bare "$FIX/marker-only/.git"; }
+: > "$FIX/marker-only/HYPER.md"
+assert_eq "bare .git with a HYPER.md and no worktrees/: the root, no hyper start" "0 $FIX/marker-only 0" "$(sr "$FIX/marker-only")"
+git init -q --bare "$FIX/plain-bare/.git" 2>/dev/null || { mkdir -p "$FIX/plain-bare"; git init -q --bare "$FIX/plain-bare/.git"; }
+assert_eq "bare .git with neither worktrees/ nor a marker: not a space (1), the CLI decided" "1  1" "$(sr "$FIX/plain-bare")"
+assert_eq "a directory outside any space: 1, the CLI decided" "1  1" "$(sr "$outside")"
+# a plain bare space whose parent directory is named code keeps the shortcut (it is not a multi-repo space's repo)
+mkdir -p "$FIX/in-code/code"; make_bare_space "$FIX/in-code/code/proj"
+assert_eq "bare space under a directory named code: the root, no hyper start" "0 $FIX/in-code/code/proj 0" "$(sr "$FIX/in-code/code/proj/worktrees")"
+# [core "x"] is not [core]: a bare = true there does not make the repo bare, so the CLI decides (and says not a space)
+git init -q --bare "$FIX/subsec/.git" 2>/dev/null; mkdir -p "$FIX/subsec/worktrees"
+sed -i.bak 's/^\[core\]/[core "x"]/' "$FIX/subsec/.git/config"
+assert_eq "bare = true under [core \"x\"]: the CLI decided, not a space" "1  1" "$(sr "$FIX/subsec")"
+# a multi-repo space is left to the CLI, and its answer is unchanged (the root, not the repo)
+make_multi_space "$FIX/multi-ws/ws" alpha
+MR="$(sr "$FIX/multi-ws/ws/code/alpha/worktrees")"
+assert_eq "multi-repo space, inside a repo's worktrees/: the multi root, and the CLI decided" "0 $FIX/multi-ws/ws 1" "$MR"
+assert_eq "multi-repo space root: found, the CLI decided" "0 $FIX/multi-ws/ws 1" "$(sr "$FIX/multi-ws/ws")"
 
 # T15b: SHIP_SPACE_ROOT is checked and normalised ------------------------------
 printf 'gate: "true"\n' > "$PROJECT"
