@@ -825,7 +825,7 @@ assert_contains "spec_write: a writer that hands back OPERATOR parks the unit wi
 unset -f prompt fresh_step close_agent park_result; loop_fn prompt fresh_step close_agent
 
 # --- fix_round and review_gate ---------------------------------------------------------------------------------
-loop_fn fix_round review_gate fresh_result valid_json mark_sent sent_after_result mtime_s
+loop_fn fix_round review_gate route_spec_rejection fresh_result valid_json mark_sent sent_after_result mtime_s
 # fix_round: run_step, check_verdict, dev_ok, diff_sig, budget_min, prompt and takeover_text are the collaborators
 prompt() { printf 'PROMPT[%s]' "$*"; }
 takeover_text() { printf 'TAKEOVER-TEXT'; }
@@ -947,6 +947,14 @@ printf '{"status":"WRITTEN"}\n' >"$STATE/specwriter-r1.json"
 out="$( ( review_gate; echo "SRT=$SRT gc=$GC" ) 2>&1 )"
 assert_contains "review_gate: a round whose spec writer already finished goes to the dev instead" "$out" "SRT= gc=|r1[src=gate n=1]"
 SPEC_ROUTED=""
+# the same on a replayed dev fix (a resumed driver continues fix round N over a diff the spec check already GAP'd)
+fix_round() { GC="$GC|r$1[src=$FIX_SRC n=$3]<<$2>>"; printf 'b\n' >"$STATE/fix-r$1.before"; CUR=bad; }
+SPEC_ROUTED=1 SRT=""; NEED_FIX="F" NEED_FIX_N=1 FIX_SRC=gate; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=cur
+out="$( ( review_gate; echo "SRT=$SRT gc=$GC" ) 2>&1; cat "$LOG" )"
+assert_contains "review_gate: a dev fix that leaves a diff the spec check GAP'd goes to spec_route" "$out" "SRT=$STATE/spec-r1.json|1 gc=|r1[src=gate n=1]<<F>>"
+assert_not_contains "review_gate: ...and is not counted as a restored diff or sent back to the dev" "$out" "restored the diff"
+SPEC_ROUTED=""; NEED_FIX="F" FIX_SRC=gate; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=cur
+assert_contains "review_gate: a fix that restores a rejected diff no route takes still counts and goes back to the dev" "$( ( review_gate ) 2>&1; cat "$LOG" )" "round 1: the fix restored the diff that spec-r1.json rejected (1 of 3)"
 
 # spec_route (real): GAP and spec-text REMOVE go to the writer, the rest does not. spec_write is a stub.
 loop_fn spec_route jlen rmlen fmt_removals
