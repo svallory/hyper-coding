@@ -1664,6 +1664,77 @@ _n70=0; for _r in 2 3 4; do _n70=$((_n70 + $(starts_of "t70-spec-r$_r") + $(star
 assert_eq "code review only: no spec or final stage ran after the first accept" "0" "$_n70"
 unset GATEFLAG70; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
 
+# --- 71: a GAP from the spec re-check goes to the spec writer, not to the dev ---------------------------------------------------
+reset_fake; unit t71 spec
+W71="$SPACE/worktrees/t71"
+export GATEFLAG71="$FIX/gateflag-t71"
+GATE_CMD='if [ ! -e "$GATEFLAG71" ]; then touch "$GATEFLAG71"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t71 develop.json "$DEV_DONE"; script t71 review-r1.json "$REV_OK"; script t71 spec-r1.json "$SPEC_CHG"
+script t71 fix-r2.json "$DEV_DONE"; script t71 review-r2.json "$REV_OK"; script t71 spec-r2.json "$SPEC_OK"
+script t71 fix-r3.json "$DEV_DONE"; script t71 review-r3.json "$REV_OK"; script t71 spec-r3.json "$SPEC_GAP"
+script t71 specwriter-r3.json "$SW_OK"; script t71 review-r4.json "$REV_OK"; script t71 spec-r4.json "$SPEC_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W71" "$W71" "$W71" >"$FIX/scripts/t71/fix-r2.json.hook"
+printf '#!/bin/sh\necho again >"%s/again.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$W71" "$W71" "$W71" >"$FIX/scripts/t71/fix-r3.json.hook"
+printf '#!/bin/sh\necho settled >>"%s/docs/spec/a.md"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "spec: settle it"\nexit 0\n' "$W71" "$W71" "$W71" >"$FIX/scripts/t71/specwriter-r3.json.hook"
+chmod +x "$FIX/scripts/t71"/*.hook
+stub_start t71; run_loop t71; stub_stop
+check_result t71 "spec re-check answers GAP" 0 READY
+assert_eq "GAP re-check: the spec writer ran once" "1" "$(starts_of t71-specwriter-r3)"
+assert_contains "GAP re-check: the writer's prompt carries the question" "$(cat "$(st t71)/specwriter-r3.prompt.md")" "What happens on EMPTY input?"
+assert_ok "GAP re-check: no fix round was spent on the gap" test ! -e "$(st t71)/fix-r4.json.sent"
+assert_eq "GAP re-check: the new diff was reviewed and re-checked" "1 1" "$(starts_of t71-review-r4) $(starts_of t71-spec-r4)"
+assert_eq "GAP re-check: the spec check judged the pushed diff" "$(git -C "$W71" diff -U0 --no-color origin/main...HEAD | git patch-id --verbatim | cut -d' ' -f1)" "$(cat "$(st t71)/spec-r4.sig")"
+assert_eq "GAP re-check: the push is the head" "$(git -C "$W71" rev-parse HEAD)" "$(git -C "$FIX/origin-t71.git" rev-parse refs/heads/feat-t71)"
+unset GATEFLAG71; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 72: a driver that dies at the re-check still owes it when it is restarted -------------------------------------------------
+reset_fake; unit t72 spec
+W72="$SPACE/worktrees/t72"
+export GATEFLAG72="$FIX/gateflag-t72"
+GATE_CMD='if [ ! -e "$GATEFLAG72" ]; then touch "$GATEFLAG72"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t72 develop.json "$DEV_DONE"; script t72 review-r1.json "$REV_OK"; script t72 spec-r1.json "$SPEC_CHG"
+script t72 fix-r2.json "$DEV_DONE"; script t72 review-r2.json "$REV_OK"; script t72 spec-r2.json "$SPEC_OK"
+script t72 fix-r3.json "$DEV_DONE"; script t72 review-r3.json "$REV_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W72" "$W72" "$W72" >"$FIX/scripts/t72/fix-r2.json.hook"
+printf '#!/bin/sh\necho again >"%s/again.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$W72" "$W72" "$W72" >"$FIX/scripts/t72/fix-r3.json.hook"
+chmod +x "$FIX/scripts/t72"/*.hook
+stub_start t72
+bash "$LOOP" --ref t72 --worktree "$W72" --branch feat-t72 --brief "$BRIEF" --class S >/dev/null 2>"$FIX/err-t72.log" &
+DRV=$!
+for _ in $(seq 2400); do [[ -e "$(st t72)/spec-r3.json.sent" ]] && break; sleep 0.05; done
+assert_ok "re-check restart: the driver reached the re-check" test -e "$(st t72)/spec-r3.json.sent"
+kill -9 "$DRV" 2>/dev/null; wait "$DRV" 2>/dev/null
+assert_ok "re-check restart: nothing was finalized yet" test ! -e "$(st t72)/finalize.json"
+script t72 spec-r3.json "$SPEC_OK"
+run_loop t72; stub_stop
+check_result t72 "restart at the spec re-check" 0 READY
+assert_eq "re-check restart: the re-check was reattached, not restarted" "1" "$(starts_of t72-spec-r3)"
+assert_contains "re-check restart: it was told what the spec check rejected" "$(cat "$(st t72)/spec-r3.prompt.md")" "the spec is wrong"
+assert_eq "re-check restart: the spec check judged the pushed diff" "$(git -C "$W72" diff -U0 --no-color origin/main...HEAD | git patch-id --verbatim | cut -d' ' -f1)" "$(cat "$(st t72)/spec-r3.sig")"
+assert_eq "re-check restart: the push is the head" "$(git -C "$W72" rev-parse HEAD)" "$(git -C "$FIX/origin-t72.git" rev-parse refs/heads/feat-t72)"
+unset GATEFLAG72; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 73: the final gate rejecting the fixed diff again ends STUCK under the cycle cap ----------------------------------------
+reset_fake; unit t73
+W73="$SPACE/worktrees/t73"; O73="$(git -C "$FIX/origin-t73.git" rev-parse refs/heads/feat-t73)"
+export GATEFLAG73="$FIX/gateflag-t73"
+GATE_CMD='if [ ! -e "$GATEFLAG73" ]; then touch "$GATEFLAG73"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t73 develop.json "$DEV_DONE"; script t73 review-r1.json "$REV_OK"; script t73 final-r1.json "$REV_CHANGES"
+script t73 fix-r2.json "$DEV_DONE"; script t73 review-r2.json "$REV_OK"; script t73 final-r2.json "$REV_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W73" "$W73" "$W73" >"$FIX/scripts/t73/fix-r2.json.hook"
+for _r in 3 4; do
+  script t73 fix-r$_r.json "$DEV_DONE"; script t73 review-r$_r.json "$REV_OK"; script t73 final-r$_r.json "$REV_CHANGES"
+  printf '#!/bin/sh\necho %s >"%s/again%s.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$_r" "$W73" "$_r" "$W73" "$W73" >"$FIX/scripts/t73/fix-r$_r.json.hook"
+done
+chmod +x "$FIX/scripts/t73"/*.hook
+stub_start t73; run_loop t73 --final-gate; stub_stop
+check_result t73 "the final gate rejects the fixed diff again" 2 STUCK
+assert_eq "final repeat rejection: nothing was pushed" "$O73" "$(git -C "$FIX/origin-t73.git" rev-parse refs/heads/feat-t73)"
+assert_eq "final repeat rejection: the stage is final" "final" "$(res t73 .stage)"
+assert_eq "final repeat rejection: rejected_by names the re-run verdict" "final-r4.json" "$(res t73 .rejected_by)"
+assert_contains "final repeat rejection: the dev prompt carries the re-check's findings" "$(cat "$(st t73)/fix-r4.prompt.md")" "the bug"
+unset GATEFLAG73; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"
 assert_eq "C-2: no messaging, Monitor or watchdog in ship-loop" "" "$(grep -nE 'SendMessage|claude-link|hyper msg|Monitor|stall' "$LOOP")"

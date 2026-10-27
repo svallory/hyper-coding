@@ -1478,8 +1478,9 @@ $(printf '%s\n' "$hits" | head -n 30)
    Fix: reword or remove each hit in a commit, run the gate, and push."
     return 1
   fi
-  # The one push invariant: only a diff that a READY review was shown goes out.
-  if ! reviewed_diff; then log "the diff to push has no READY review; reviewing it first"; return 2; fi
+  # The one push invariant: only a diff that a READY review was shown goes out, and, when a spec check or final
+  # gate rejected an earlier diff, only one that stage has accepted too (review_gate runs that re-check).
+  if ! reviewed_diff || ! rechecked_diff; then log "the diff to push has no READY review (or re-check); judging it first"; return 2; fi
   git -C "$WT" push -q --force-with-lease origin "HEAD:refs/heads/$BRANCH" >>"$LOG" 2>&1 \
     || die_error "git push --force-with-lease failed for $BRANCH; see loop.log"
   head="$(git -C "$WT" rev-parse --short HEAD)"
@@ -1501,18 +1502,33 @@ rejection_text() {
 # branch of review_gate). The push needs that stage's ACCEPT on the diff being pushed, as well as a READY review.
 # It is kept in the state dir so a restarted driver still owes the re-check.
 RECHECK="$(cat "$STATE/recheck" 2>/dev/null || true)"
-# recheck_diff — 0 when no stage is owed a re-check or it ACCEPTs the diff as it is now; 1 when it rejects it:
-# NEED_FIX, FIX_SRC and GATE_PRIOR then send the dev back, counting toward the same cap as every other cycle.
-recheck_diff() {
-  local f sig verdict n ng nrm rf rej prior text
+RECHECK_PRIOR="$(cat "$STATE/recheck.prior" 2>/dev/null || true)"
+# set_recheck <stage> <prior> — the stage owes a re-check; the prior is what it is told it rejected.
+set_recheck() {
+  RECHECK="$1" RECHECK_PRIOR="$2"
+  printf '%s\n' "$RECHECK" >"$STATE/recheck"
+  printf '%s\n' "$RECHECK_PRIOR" >"$STATE/recheck.prior"
+}
+# rechecked_diff — 0 when no stage is owed a re-check, or it has a fresh ACCEPT on exactly the diff as it is now.
+# Together with reviewed_diff it is the push invariant: both READYs, each on the diff being pushed.
+rechecked_diff() {
+  local f sig
   [[ -n "$RECHECK" ]] || return 0
+  if [[ "$RECHECK" == spec ]] && ! spec_required; then return 0; fi
   diff_sig
   for f in "$STATE/$RECHECK"-r*.json; do
     [[ -f "$f" ]] && fresh_result "$f" || continue
     sig="${f%.json}.sig"
     [[ -s "$sig" && "$(cat "$sig")" == "$DSIG" && "$(jq -r .verdict "$f" 2>/dev/null)" == ACCEPT ]] && return 0
   done
-  if [[ "$RECHECK" == spec ]] && ! spec_required; then return 0; fi
+  return 1
+}
+# recheck_diff — 0 when no stage is owed a re-check or it ACCEPTs the diff as it is now; 1 when it rejects it:
+# NEED_FIX, FIX_SRC and GATE_PRIOR then send the dev back, counting toward the same cap as every other cycle.
+recheck_diff() {
+  local verdict n ng nrm rf rej prior text
+  rechecked_diff && return 0
+  diff_sig
   # the review of this diff took round FR; the stage takes the same number unless it already has a verdict there
   while [[ -e "$STATE/$RECHECK-r$FR.json" ]]; do FR=$((FR + 1)); done
   rf="$STATE/$RECHECK-r$FR.json"
@@ -1545,11 +1561,24 @@ recheck_diff() {
     log "STUCK: the $RECHECK kept rejecting the fixed diff ($cycles of $MAX)"
     finish 2 "$RECHECK" STUCK "$(jq -n --arg f "$rej" --arg by "$(basename "$rf")" '{findings:$f, rejected_by:$by}')"
   fi
-  NEED_FIX="$rej" NEED_FIX_N=$((n + ng + nrm)); FIX_SRC=gate
-  [[ "$NEED_FIX_N" -gt 0 ]] || NEED_FIX_N=1
-  RECHECK_PRIOR="The $RECHECK rejected the diff the dev fixed after an earlier rejection. These are its findings, which the dev says are fixed. Check each one first:
+  set_recheck "$RECHECK" "The $RECHECK rejected the diff the dev fixed after an earlier rejection. These are its findings, which the dev says are fixed. Check each one first:
 $rej"
   GATE_PRIOR="$RECHECK_PRIOR"
+  if [[ "$RECHECK" == spec ]] && { [[ "$verdict" == GAP ]] || { [[ "$verdict" == REMOVE ]] && [[ -n "$(fmt_removals "$rf" spec)" ]]; }; }; then
+    # As in the rounds loop, spec gaps and spec-text removals belong to the spec writer (or the operator), not
+    # the dev. Its commits change the diff, so the next pass reviews and re-checks the new one. What the dev
+    # still owes (findings, code removals, and the note that the spec changed) goes back to it.
+    pending="" pending_n=0
+    spec_write "spec checker" "$rf" "$FR"
+    if [[ $((n + $(rmlen "$rf" code))) -gt 0 ]]; then
+      NEED_FIX="$pending" NEED_FIX_N=$pending_n; FIX_SRC=gate
+      [[ "$NEED_FIX_N" -gt 0 ]] || NEED_FIX_N=1
+    fi
+    pending="" pending_n=0
+    return 1
+  fi
+  NEED_FIX="$rej" NEED_FIX_N=$((n + ng + nrm)); FIX_SRC=gate
+  [[ "$NEED_FIX_N" -gt 0 ]] || NEED_FIX_N=1
   return 1
 }
 
@@ -1558,7 +1587,7 @@ $rej"
 # as it was is a failed round. Every CHANGES verdict and every failed round counts toward max_rounds.
 # When a spec check or final gate rejection is what sent the dev to fix (FIX_SRC=gate), that stage judges the
 # fixed diff too, after the review is READY and before the push (recheck_diff).
-FR=$ACC_R cycles=0 NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" RECHECK_PRIOR="" guard=0
+FR=$ACC_R cycles=0 NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" guard=0
 review_gate() {
   local before after rv rej
   while true; do
@@ -1610,8 +1639,7 @@ $rej"
 $rej"
         FIX_SRC=gate
         NEED_FIX_N=1
-        RECHECK="${REJECTED_BY%%-r*}" RECHECK_PRIOR="$GATE_PRIOR"
-        printf '%s\n' "$RECHECK" >"$STATE/recheck"
+        set_recheck "${REJECTED_BY%%-r*}" "$GATE_PRIOR"
         continue
       fi
       FR=$((FR + 1)); rv=$FR

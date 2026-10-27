@@ -659,13 +659,18 @@ verdict file. The next review of a restored diff is told about the restore.
 When the dev has fixed such a diff and the code review is READY on the new one, the
 stage that rejected it (spec check or final gate) judges the fixed diff too, before
 finalize pushes: the push needs READY from the review and from that stage, each on
-the diff being pushed. If that stage rejects again, its findings go back to the dev
-and the rejection counts toward `max_rounds` like any other; at the limit the unit
-ends `STUCK` with `rejected_by` naming the re-run verdict (for example
-`spec-r4.json`). The owed stage is kept in `recheck` in the unit's state directory.
-Finalize rebase, gate and scan failures are not re-checked this way: the next
-finalize try checks them again. A unit with no spec or final rejection runs no extra
-stage.
+the diff being pushed; finalize re-checks both just before the push. If that stage
+rejects again, its findings go back to the dev and the rejection counts toward
+`max_rounds` like any other; at the limit the unit ends `STUCK` with `rejected_by`
+naming the re-run verdict (for example `spec-r4.json`). A spec check that answers GAP,
+or REMOVE with spec-text removals, goes to the spec writer (or parks for the operator)
+as in the rounds loop, not to the dev; the next pass reviews and re-checks the new
+diff. The owed stage is kept in `recheck` (and what it rejected in `recheck.prior`) in
+the unit's state directory, so a restarted driver still owes it. Once a stage is owed
+a re-check, it judges every later diff before a push, including diffs from fixes for
+finalize rebase, gate or scan failures; those failures alone never add a re-check: the
+next finalize try checks them again. A unit with no spec or final rejection runs no
+extra stage.
 Fix rounds leave `fix-r<N>.findings`, `fix-r<N>.src` and
 `fix-r<N>.before`, which record what the dev was asked so a resumed park
 continues that fix instead of replaying it.
