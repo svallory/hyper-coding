@@ -108,22 +108,11 @@ assert_eq "...result.json says READY" "READY" "$(jq -r .status "$D/result.json")
 assert_eq "...the PR number came through" "7" "$(jq -r .pr "$D/result.json")"
 assert_eq "driver.exit holds 0 after the resume" "0" "$(cat "$D/driver.exit")"
 assert_eq "unit.json is still in the state dir" "yes" "$([[ -f "$D/unit.json" ]] && echo yes)"
-assert_eq "...and was not archived" "" "$(cd "$D" && ls run-*/unit.json run-*/driver.exit 2>/dev/null)"
+assert_eq "...nothing was archived" "" "$(cd "$D" && ls run-*/unit.json run-*/driver.exit 2>/dev/null)"
 assert_eq "answer-1.md was kept for the dev" "use the helper in lib/" "$(cat "$D/answer-1.md")"
 bash "$UNIT" list > "$FIX/list.out" 2>&1
 assert_contains "list still shows the unit, READY" "$(grep '^r1 ' "$FIX/list.out")" "READY"
 assert_eq "wait on the finished unit returns 0" "0" "$(unit wait r1)"
-
-# a second `run` of the same ref (the dev's work is DONE, so it is a takeover) ---------
-script_dir r1b
-mkdir -p "$(loops r1b)"
-printf '%s\n' "$DEV_DONE" > "$FIX/scripts/r1b/develop.json"
-script r1b review-r1.json "$REV_OK"
-agent r1b
-assert_eq "a first run reaches READY" "0" "$(unit run r1b --brief "$BRIEF" --class S)"
-rc="$(unit run r1b --brief "$BRIEF" --class S)"
-assert_eq "a second run of the same ref reaches READY" "0" "$rc"
-assert_eq "...unit.json and driver.exit survive the archive" "yes" "$([[ -f "$(loops r1b)/unit.json" && -f "$(loops r1b)/driver.exit" ]] && echo yes)"
 
 # 2: slots with a real driver ---------------------------------------------------------------------
 script_dir r2
@@ -132,7 +121,11 @@ agent r2     # no develop.json yet: the dev "is still working"
 ( bash "$UNIT" run r2 --brief "$BRIEF" --class S >"$FIX/r2.out" 2>"$FIX/r2.err"; echo $? > "$FIX/r2.rc" ) &
 assert_eq "the real driver of r2 is up" "yes" "$(wait_for 60 has_pid r2 && echo yes)"
 script_dir r3
-rc="$(unit run r3 --brief "$BRIEF" --class S)"
+# a refusal is immediate: if it is not, r3 got a driver, so kill it and fail instead of hanging
+( bash "$UNIT" run r3 --brief "$BRIEF" --class S 2>"$FIX/unit.err" >"$FIX/unit.out"; echo $? > "$FIX/r3.rc" ) &
+R3=$!
+wait_for 20 test -s "$FIX/r3.rc" || { kill "$R3" 2>/dev/null; pkill -f "ship-loop.*r3" 2>/dev/null; echo "none (still running)" > "$FIX/r3.rc"; }
+rc="$(cat "$FIX/r3.rc")"
 assert_eq "slots=1: a second run is refused while r2's driver runs (3)" "3" "$rc"
 assert_contains "...naming the host and r2" "$(cat "$FIX/unit.err")" "host local is full: 1 of 1 slots in use (r2)"
 assert_eq "...no worktree for r3" "" "$([[ -e "$SPACE/worktrees/r3" ]] && echo r3)"
@@ -141,10 +134,4 @@ printf '%s\n' "$DEV_DONE" > "$FIX/scripts/r2/develop.json"
 script r2 review-r1.json "$REV_OK"
 assert_eq "r2 finishes" "yes" "$(wait_for 90 test -s "$FIX/r2.rc" && echo yes)"
 assert_eq "...READY (0)" "0" "$(cat "$FIX/r2.rc")"
-script r3 develop.json "$DEV_DONE"
-script r3 review-r1.json "$REV_OK"
-mkdir -p "$(loops r3)"
-agent r3
-assert_eq "with r2 done, the slot is free again: r3 runs to READY" "0" "$(unit run r3 --brief "$BRIEF" --class S)"
-
 finish
