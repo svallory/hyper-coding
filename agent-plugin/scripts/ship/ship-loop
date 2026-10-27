@@ -114,23 +114,6 @@ SW_RUNS=0 SW_COMMITS='[]'
 
 usage_exit() { echo "ship-loop: $*" >&2; exit 1; }
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    -h|--help) sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
-    --final-gate) FINAL_GATE=1; shift; continue ;;
-    --preflight) PREFLIGHT=1; shift; continue ;;
-    --ref|--worktree|--branch|--brief|--class|--base|--max-rounds|--model|--clear-limit)
-      [[ $# -ge 2 ]] || usage_exit "$1 needs a value" ;;
-    *) usage_exit "unknown argument: $1" ;;
-  esac
-  case "$1" in
-    --ref) REF="$2" ;; --worktree) WT="$2" ;; --branch) BRANCH="$2" ;; --brief) BRIEF="$2" ;;
-    --class) CLASS="$2" ;; --base) BASE="$2" ;; --max-rounds) MAX="$2" ;;
-    --model) MODEL_OVERRIDES+=("$2") ;;
-    --clear-limit) CLEAR_LIMIT="$2" ;;
-  esac
-  shift 2
-done
 
 # --- preflight ---------------------------------------------------------------------------------
 preflight() {
@@ -164,35 +147,6 @@ preflight() {
   exit "$bad"
 }
 
-[[ $PREFLIGHT -eq 1 ]] && preflight
-if [[ -n "$CLEAR_LIMIT" ]]; then
-  _was="$(jq -r --arg n "$CLEAR_LIMIT" '[(.accounts[$n]?), (.models[$n]?)] | map(select(. != null)) | length' "$(ship_quota_dir)/limited.json" 2>/dev/null)"
-  ship_limit_clear "$CLEAR_LIMIT" || { echo "ship-loop: could not update limited.json" >&2; exit 1; }
-  if [[ "${_was:-0}" -gt 0 ]]; then echo "ship-loop: '$CLEAR_LIMIT' is no longer marked limited"; else echo "ship-loop: '$CLEAR_LIMIT' was not marked limited"; fi
-  exit 0
-fi
-ship_require_yq || exit 1
-ship_config_load || exit 1
-for _o in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$_o" || exit 1; done
-
-for _v in REF WT BRANCH BRIEF CLASS; do
-  [[ -n "${!_v}" ]] || usage_exit "--$(printf '%s' "$_v" | tr 'A-Z' 'a-z') is required"
-done
-case "$CLASS" in S|M|L) ;; *) usage_exit "--class must be S, M or L" ;; esac
-[[ -d "$WT" ]] || usage_exit "worktree $WT is not a directory"
-[[ -f "$BRIEF" ]] || usage_exit "brief $BRIEF is not a file"
-[[ -n "$BASE" ]] || BASE="$(ship_cfg_get base)" || usage_exit "config has no base"
-[[ -n "$MAX" ]] || MAX="$(ship_cfg_get max_rounds)" || usage_exit "config has no max_rounds"
-case "$MAX" in ''|*[!0-9]*|0) usage_exit "max rounds must be a positive integer (got '$MAX')" ;; esac
-
-SPACE_ROOT="$(ship_space_root)" || usage_exit "cannot locate the space root"
-STATE="$SPACE_ROOT/notes/loops/$REF"
-mkdir -p "$STATE/agents" || usage_exit "cannot create $STATE"
-LOG="$STATE/loop.log"
-# Atomic, so a reader never sees an empty pid file. A driver killed between the two commands leaves a
-# one-line driver.pid.tmp.<pid>: harmless (nothing reads it, and the next run archive moves it away).
-echo $$ >"$STATE/driver.pid.tmp.$$" && mv -f "$STATE/driver.pid.tmp.$$" "$STATE/driver.pid"
-HOST="${SHIP_HOST:-local}"
 
 log() { printf '%s %s\n' "$(date +%H:%M:%S)" "$*" | tee -a "$LOG" >&2; }
 
@@ -223,41 +177,10 @@ die_error() { # message
   finish 1 "$STAGE" ERROR "$(jq -n --arg why "$*" '{why:$why}')"
 }
 
-# Anything that ends the script without finish (a bug, an unbound variable) is an ERROR too.
-trap '[[ -n "$FINISHED" ]] || { log "driver exited unexpectedly"; die_error "driver exited unexpectedly; see loop.log"; }' EXIT
-
-command -v git >/dev/null 2>&1 || die_error "git not found"
-ship_require_gate || die_error "config has no usable gate (see driver output above)"
-GATE="$(ship_cfg_get gate)"
-OFFLOAD="$(ship_cfg_get offload 2>/dev/null || true)" # optional command prefix for heavy commands; unset = run locally
-git -C "$WT" rev-parse --verify -q "origin/$BASE" >/dev/null || die_error "origin/$BASE does not exist in $WT; fetch it first"
 
 # --- config -------------------------------------------------------------------------------------
 cfg() { ship_cfg_get "$1" 2>/dev/null || true; }
 abs_in_space() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$SPACE_ROOT" "$1" ;; esac; }
-RULINGS="$(abs_in_space "$(cfg rulings)")"
-# The rulings file is optional for the operator, but the agents are told to read it and to add to it:
-# an empty one is created on first use.
-if [[ ! -e "$RULINGS" ]]; then
-  mkdir -p "$(dirname "$RULINGS")" 2>/dev/null && printf '# Rulings\n' >"$RULINGS" 2>/dev/null || true
-fi
-SPEC_PATHS=()
-while IFS= read -r _p; do [[ -z "$_p" ]] || SPEC_PATHS+=("$_p"); done < <(jq -r '.spec.paths // [] | .[]' <<<"$SHIP_CONFIG_JSON")
-SPEC_PATHS_TXT="(none configured)"
-[[ ${#SPEC_PATHS[@]} -eq 0 ]] || SPEC_PATHS_TXT="${SPEC_PATHS[*]}"
-FORBIDDEN_TXT="$(jq -r '(.scan.forbidden // []) | if length == 0 then "(none configured)" else map("`" + . + "`") | join(", ") end' <<<"$SHIP_CONFIG_JSON")"
-FORBIDDEN_EXCLUDE_TXT="$(jq -r '(.scan.exclude // []) | if length == 0 then "" else " except in files matching " + (map("`" + . + "`") | join(", ")) end' <<<"$SHIP_CONFIG_JSON")"
-VERIFY_INSTR_FILE="$(cfg stages.verify.instructions)"
-REVIEW_INSTR_FILE="$(cfg stages.review.instructions)"
-[[ "$(cfg stages.final.always)" == true ]] && FINAL_GATE=1
-
-# models.override (written by the lead's resume) applies on every start, before --model.
-if [[ -s "$STATE/models.override" ]]; then
-  while IFS= read -r _o; do
-    [[ -z "$_o" ]] || ship_models_override "$_o" || die_error "bad line in models.override: $_o"
-  done <"$STATE/models.override"
-  for _o in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$_o" || die_error "bad --model $_o"; done
-fi
 
 # --- failover hooks -----------------------------------------------------------------------------
 # model_pick <list key> <agent name> — the model to launch for a stage: sets PICK_MODEL. Walks the
@@ -309,7 +232,6 @@ rules_text() {
   render rules ref="$REF" worktree="$WT" branch="$BRANCH" brief="$BRIEF" gate="$GATE" rulings="$RULINGS" offload="$(offload_text)" \
     test_skill="$TEST_SKILL" forbidden="$FORBIDDEN_TXT" forbidden_exclude="$FORBIDDEN_EXCLUDE_TXT"
 }
-RULES="$(rules_text)"
 # prompt <template> key=value... — render with the pairs every prompt gets (templates ignore the
 # ones they do not use).
 prompt() {
@@ -954,9 +876,6 @@ rmlen() { jq -r --arg k "$2" '[.removals // [] | .[] | select(.kind == $k)] | le
 add_round() { ROUNDS="$(jq -c --argjson e "$1" '. + [$e]' <<<"$ROUNDS")"; }
 
 # --- setup: the unit space and the dev ------------------------------------------------------------
-open_out="$(mux open --cwd "$WT" --label "$REF" 2>>"$LOG")" || die_error "ship-mux open failed; see loop.log"
-SPACE_ID="$(jq -r .space <<<"$open_out")"
-DEV="$(aname -dev)"
 # Files that belong to the unit, not to a run: an archive leaves them where they are (unit.json,
 # driver.exit and config.json are ship-unit's).
 KEEP_ON_ARCHIVE="mux.json loop.log driver.pid driver.err models.override unit.json driver.exit config.json"
@@ -988,36 +907,6 @@ resume_restart() {
   mv "$STATE/park.json" "$STATE/park-$n.json"
   log "resumed from park $n ($st): $agent closed, its stage restarts with a new agent"
 }
-resume_restart
-agent_lookup "$DEV"; DEV_ID="$L_ID"; agent_state "$DEV_ID"
-if [[ -z "$DEV_ID" || "$L_STATE" == gone ]]; then
-  if [[ -n "$RESTART_DEV" ]] || { valid_json "$STATE/develop.json" && [[ "$(jq -r .status "$STATE/develop.json")" == DONE ]]; }; then
-    # develop is finished: the worktree holds the work and nothing is reset. A new dev takes over, and
-    # every result stays. Prompts the old dev had in flight are forgotten so they are sent again.
-    for _s in "$STATE"/fix-r*.json.sent; do
-      [[ -e "$_s" && ! -e "${_s%.sent}" ]] && rm -f "$_s" "${_s%.sent}.clock"
-    done
-    TAKEOVER=1
-    log "$DEV is gone and its run continues (develop.json DONE, or its park was restarted): a new dev takes over, results kept"
-  else
-    # No finished develop: this is a new run. Set the results of the earlier run (answers and extensions
-    # too, they belong to its numbering) aside.
-    _old=""
-    for _f in "$STATE"/*; do
-      [[ -f "$_f" ]] || continue
-      case " $KEEP_ON_ARCHIVE " in *" ${_f##*/} "*) continue ;; esac
-      [[ -n "$_old" ]] || { _old="$STATE/run-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$_old"; }
-      mv "$_f" "$_old"/
-    done
-    [[ -z "$_old" ]] || log "archived the previous run's results to $_old"
-  fi
-  STAGE=develop
-  start_agent "$DEV" dev dev || die_error "dev agent did not start; see loop.log"
-  DEV_ID="$A_ID"
-  log "dev $DEV is $DEV_ID in space $SPACE_ID"
-else
-  log "reusing $DEV ($DEV_ID)"
-fi
 
 # --- resume: what the lead left for a parked or over-budget unit -------------------------------
 resume_park() {
@@ -1093,8 +982,6 @@ resume_budget() {
     fi
   done
 }
-resume_park
-resume_budget
 
 # --- stage helpers -------------------------------------------------------------------------------
 # dev_ok <file> <stage> — DONE continues; QUESTION and BLOCKED park the unit (the dev stays alive).
@@ -1144,32 +1031,6 @@ spec_touched() {
 }
 spec_required() { spec_touched || grep -qiE '^[[:space:]]*Spec:[[:space:]]*required' "$BRIEF"; }
 
-# --- develop ---------------------------------------------------------------------------------------
-STAGE=develop
-f="$STATE/develop.json"
-text="$(prompt develop verdict_file="$f")"
-# (a develop.json that is already in is reused: the takeover text then belongs to the first fix round)
-if ! fresh_result "$f"; then
-  if [[ -n "$TAKEOVER" ]]; then
-    text="$(takeover_text)
-
-$text"
-    TAKEOVER=""
-  fi
-  if [[ -n "$TAKEOVER_ANSWER" ]]; then
-    text="$text
-
-$TAKEOVER_ANSWER
-Continue from there."
-    TAKEOVER_ANSWER=""
-  fi
-fi
-run_step "$DEV" "$f" "$text" "$(budget_min develop "$f")" develop
-check_verdict develop "$f"
-dev_ok "$f" develop
-PR="$(jq -r '.pr // empty' "$f")"
-[[ -n "$PR" ]] || die_error "develop.json is DONE but names no pr; the dev must open the PR"
-log "PR #$PR opened"
 
 # --- spec writer: GAP and spec-text REMOVE ---------------------------------------------------------
 # Runs a fresh spec writer on the gaps and spec removals of <from> (the spec check's result), then
@@ -1327,121 +1188,6 @@ rejected_diff() {
 
 # --- rounds ------------------------------------------------------------------------------------------
 pending="" pending_n=0 spec_pending="" final_pending="" accepted="" last=review ACC_R=0
-for ((r = 1; r <= MAX; r++)); do
-  fixed=""
-  if [[ -n "$pending" ]]; then
-    fixed="$pending"
-    fix_round "$r" "$pending" "$pending_n"
-    pending=""
-  fi
-
-  # verify
-  STAGE=verify CUR_ROUND="$r"
-  vf="$STATE/verify-r$r.json"
-  if [[ -z "$VERIFY_INSTR_FILE" ]]; then
-    [[ -s "$vf" ]] || write_json "$vf" '{"verdict":"SKIP","summary":"no stages.verify.instructions configured","failures":[]}'
-  else
-    vtext="$(prompt verify round="$r" verify_instructions="$(file_text "$VERIFY_INSTR_FILE")" verdict_file="$vf")"
-    vname="$(aname "-verify-r$r")"
-    fresh_step "$vname" verify verify "$vf" "$vtext" verify "$(budget_min check "$vf")" verify keep
-    if [[ "$(jq -r .verdict "$vf")" == BLOCKED ]]; then
-      # The verifier could not verify: the unit parks with the verifier kept alive for the lead's answer.
-      park_result "$vf" BLOCKED verify "$vname" "verify was blocked: $(jq -r .summary "$vf")"
-    fi
-    close_agent "$vname"
-  fi
-  vv="$(jq -r .verdict "$vf")"
-  log "round $r verify $vv"
-  if [[ "$vv" == FAIL ]]; then
-    [[ "$(jlen "$vf" failures)" -gt 0 ]] || die_error "$(basename "$vf") is FAIL with no failures"
-    pending="$(fmt_failures "$vf")" pending_n="$(jlen "$vf" failures)"
-    add_round "$(jq -nc --argjson r "$r" '{round:$r, verdict:"VERIFY-FAIL"}')"
-    last=verify
-    continue
-  fi
-
-  # review
-  STAGE=review last=review
-  rf="$STATE/review-r$r.json"
-  prior=""
-  [[ -z "$fixed" ]] || prior="The previous round's findings, which the dev says are fixed. Verify each one against the current head before looking for new issues:
-$fixed"
-  do_review "$r" "$prior"
-  if [[ "$RV_VERDICT" != ACCEPT ]]; then
-    [[ "$RV_N" -gt 0 ]] || die_error "$(basename "$rf") is CHANGES with no findings"
-    pending="$(fmt_findings "$rf")" pending_n="$RV_N"
-    continue
-  fi
-
-  # spec check: only after the code review accepts; code changes it asks for are a normal fix round
-  if spec_required; then
-    STAGE=spec last=spec CUR_ROUND="$r"
-    sf="$STATE/spec-r$r.json"
-    SPEC_ROUNDS=$((SPEC_ROUNDS + 1))
-    write_sig "$sf"
-    stext="$(prompt spec round="$r" spec_pending="$spec_pending" verdict_file="$sf")"
-    fresh_step "$(aname "-spec-r$r")" spec spec_check "$sf" "$stext" spec "$(budget_min check "$sf")" spec
-    SPEC_VERDICT="$(jq -r .verdict "$sf")"
-    n="$(jlen "$sf" findings)"; ng="$(jlen "$sf" gaps)"; nrm="$(jlen "$sf" removals)"; nc="$(jlen "$sf" commits)"
-    add_round "$(jq -nc --argjson r "$r" --arg v "SPEC-$SPEC_VERDICT" --argjson n "$n" --argjson g "$ng" --argjson m "$nrm" --argjson c "$nc" \
-      '{round:$r, verdict:$v, findings:$n, gaps:$g, removals:$m, specCommits:$c}')"
-    log "round $r spec $SPEC_VERDICT ($n findings, $ng gaps, $nrm removals, $nc spec commits)"
-    case "$SPEC_VERDICT" in
-      ACCEPT)
-        [[ $((ng + nrm)) -eq 0 ]] || die_error "$(basename "$sf") is ACCEPT but lists gaps or removals"
-        spec_pending="" ;;
-      GAP)
-        [[ "$ng" -gt 0 ]] || die_error "$(basename "$sf") is GAP with no gaps"
-        spec_write "spec checker" "$sf" "$r"
-        continue ;;
-      REMOVE)
-        [[ "$nrm" -gt 0 ]] || die_error "$(basename "$sf") is REMOVE with no removals"
-        if [[ -n "$(fmt_removals "$sf" spec)" ]]; then
-          spec_write "spec checker" "$sf" "$r"
-        else
-          pending="The spec check found elements with no consumer." pending_n=0
-          spec_pending="In round $r the spec check asked for removals; the dev removed them. Check they are gone and nothing else broke:
-$(fmt_removals "$sf" code)
-"
-          add_dev_work "$sf" "the spec check"
-        fi
-        continue ;;
-      *)
-        [[ "$n" -gt 0 ]] || die_error "$(basename "$sf") is CHANGES with no findings"
-        SPEC_VERDICT=CHANGES
-        pending="$(fmt_findings "$sf")" pending_n="$n"
-        spec_pending="Your previous spec round's findings, which the dev says are fixed. Check each one first:
-$pending
-"
-        continue ;;
-    esac
-  else
-    SPEC_VERDICT=SKIP
-    log "round $r spec SKIP (no spec hunks, brief does not require it)"
-  fi
-
-  # final gate: the whole PR against the brief and the specs it touches
-  if [[ $FINAL_GATE -eq 0 ]]; then accepted=1; ACC_R=$r; break; fi
-  STAGE=final last=final CUR_ROUND="$r"
-  ff="$STATE/final-r$r.json"
-  FINAL_ROUNDS=$((FINAL_ROUNDS + 1))
-  write_sig "$ff"
-  ftext="$(prompt final round="$r" final_pending="$final_pending" verdict_file="$ff")"
-  fresh_step "$(aname "-final-r$r")" review final "$ff" "$ftext" review "$(budget_min check "$ff")" final
-  FINAL_VERDICT="$(jq -r .verdict "$ff")"; n="$(jlen "$ff" findings)"
-  add_round "$(jq -nc --argjson r "$r" --arg v "FINAL-$FINAL_VERDICT" --argjson n "$n" '{round:$r, verdict:$v, findings:$n}')"
-  log "round $r final $FINAL_VERDICT ($n findings)"
-  if [[ "$FINAL_VERDICT" == ACCEPT ]]; then accepted=1; ACC_R=$r; break; fi
-  [[ "$n" -gt 0 ]] || die_error "$(basename "$ff") is CHANGES with no findings"
-  pending="$(fmt_findings "$ff")" pending_n="$n"
-  final_pending="Your previous round's findings, which the dev says are fixed. Check each one first:
-$pending
-"
-done
-if [[ -z "$accepted" ]]; then
-  log "STUCK after $MAX rounds ($last)"
-  finish 2 "$last" STUCK "$(jq -n --arg f "$pending" '{findings:$f}')"
-fi
 
 # --- finalize ----------------------------------------------------------------------------------------
 # The driver rebases, runs the gate, scans the added lines and pushes. Anything wrong goes back to the
@@ -1520,8 +1266,7 @@ rejection_text() {
 # RECHECK — the stage (spec or final) that rejected a diff the dev then fixed in finalize (the gate-restore
 # branch of review_gate). The push needs that stage's ACCEPT on the diff being pushed, as well as a READY review.
 # It is kept in the state dir so a restarted driver still owes the re-check.
-RECHECK="$(cat "$STATE/recheck" 2>/dev/null || true)"
-RECHECK_PRIOR="$(cat "$STATE/recheck.prior" 2>/dev/null || true)"
+RECHECK="" RECHECK_PRIOR="" # read from the state dir at the start of main()
 # set_recheck <stage> <prior> — the stage owes a re-check; the prior is what it is told it rejected.
 set_recheck() {
   RECHECK="$1" RECHECK_PRIOR="$2"
@@ -1628,7 +1373,7 @@ route_spec_rejection() {
 # as it was is a failed round. Every CHANGES verdict and every failed round counts toward max_rounds.
 # When a spec check or final gate rejection is what sent the dev to fix (FIX_SRC=gate), that stage judges the
 # fixed diff too, after the review is READY and before the push (recheck_diff).
-FR=$ACC_R cycles=0 NEED_FIX_KEEP="" NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" guard=0
+FR=0 cycles=0 NEED_FIX_KEEP="" NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" guard=0
 review_gate() {
   local before after rv rej
   while true; do
@@ -1706,34 +1451,297 @@ $NEED_FIX"
   done
 }
 
-STAGE=finalize
-attempt=0
-# A fix that was in flight when the driver stopped (a QUESTION in the middle of it, a crash) is continued,
-# not replayed over: it is the next round of the dev's work.
-_k=$((ACC_R + 1))
-if [[ -e "$STATE/fix-r$_k.json.sent" && -s "$STATE/fix-r$_k.findings" ]]; then
-  NEED_FIX="$(cat "$STATE/fix-r$_k.findings")"; NEED_FIX_N="$(cat "$STATE/fix-r$_k.n" 2>/dev/null || echo 1)"; FIX_SRC="$(cat "$STATE/fix-r$_k.src" 2>/dev/null)"
-  FR=$((_k - 1))
-  log "continuing the dev's fix round $_k"
-fi
-while ! { valid_json "$STATE/finalize.json" && [[ "$(jq -r .status "$STATE/finalize.json")" == DONE ]]; }; do
-  review_gate
-  STAGE=finalize
-  _rc=0; finalize_try || _rc=$?
-  case $_rc in
-    0) break ;;
-    2) continue ;;
-  esac
-  attempt=$((attempt + 1))
-  if [[ $attempt -gt 2 ]]; then
-    log "finalize still failing after 2 dev fixes"
-    finish 2 finalize STUCK "$(jq -n --arg f "$FIN_MSG" '{findings:$f}')"
+# --- main --------------------------------------------------------------------------------------
+# Everything that runs the unit lives here, so that the file can be sourced for its functions.
+main() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+      --final-gate) FINAL_GATE=1; shift; continue ;;
+      --preflight) PREFLIGHT=1; shift; continue ;;
+      --ref|--worktree|--branch|--brief|--class|--base|--max-rounds|--model|--clear-limit)
+        [[ $# -ge 2 ]] || usage_exit "$1 needs a value" ;;
+      *) usage_exit "unknown argument: $1" ;;
+    esac
+    case "$1" in
+      --ref) REF="$2" ;; --worktree) WT="$2" ;; --branch) BRANCH="$2" ;; --brief) BRIEF="$2" ;;
+      --class) CLASS="$2" ;; --base) BASE="$2" ;; --max-rounds) MAX="$2" ;;
+      --model) MODEL_OVERRIDES+=("$2") ;;
+      --clear-limit) CLEAR_LIMIT="$2" ;;
+    esac
+    shift 2
+  done
+  [[ $PREFLIGHT -eq 1 ]] && preflight
+  if [[ -n "$CLEAR_LIMIT" ]]; then
+    _was="$(jq -r --arg n "$CLEAR_LIMIT" '[(.accounts[$n]?), (.models[$n]?)] | map(select(. != null)) | length' "$(ship_quota_dir)/limited.json" 2>/dev/null)"
+    ship_limit_clear "$CLEAR_LIMIT" || { echo "ship-loop: could not update limited.json" >&2; exit 1; }
+    if [[ "${_was:-0}" -gt 0 ]]; then echo "ship-loop: '$CLEAR_LIMIT' is no longer marked limited"; else echo "ship-loop: '$CLEAR_LIMIT' was not marked limited"; fi
+    exit 0
   fi
-  log "finalize problem, back to the dev (attempt $attempt)"
-  NEED_FIX="$FIN_MSG" NEED_FIX_N=1; FIX_SRC=finalize
-  GATE_PRIOR="The dev changed the PR after your last accept, to fix this: $FIN_MSG
+  ship_require_yq || exit 1
+  ship_config_load || exit 1
+  for _o in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$_o" || exit 1; done
+
+  for _v in REF WT BRANCH BRIEF CLASS; do
+    [[ -n "${!_v}" ]] || usage_exit "--$(printf '%s' "$_v" | tr 'A-Z' 'a-z') is required"
+  done
+  case "$CLASS" in S|M|L) ;; *) usage_exit "--class must be S, M or L" ;; esac
+  [[ -d "$WT" ]] || usage_exit "worktree $WT is not a directory"
+  [[ -f "$BRIEF" ]] || usage_exit "brief $BRIEF is not a file"
+  [[ -n "$BASE" ]] || BASE="$(ship_cfg_get base)" || usage_exit "config has no base"
+  [[ -n "$MAX" ]] || MAX="$(ship_cfg_get max_rounds)" || usage_exit "config has no max_rounds"
+  case "$MAX" in ''|*[!0-9]*|0) usage_exit "max rounds must be a positive integer (got '$MAX')" ;; esac
+
+  SPACE_ROOT="$(ship_space_root)" || usage_exit "cannot locate the space root"
+  STATE="$SPACE_ROOT/notes/loops/$REF"
+  mkdir -p "$STATE/agents" || usage_exit "cannot create $STATE"
+  LOG="$STATE/loop.log"
+  # Atomic, so a reader never sees an empty pid file. A driver killed between the two commands leaves a
+  # one-line driver.pid.tmp.<pid>: harmless (nothing reads it, and the next run archive moves it away).
+  echo $$ >"$STATE/driver.pid.tmp.$$" && mv -f "$STATE/driver.pid.tmp.$$" "$STATE/driver.pid"
+  HOST="${SHIP_HOST:-local}"
+  # Anything that ends the script without finish (a bug, an unbound variable) is an ERROR too.
+  trap '[[ -n "$FINISHED" ]] || { log "driver exited unexpectedly"; die_error "driver exited unexpectedly; see loop.log"; }' EXIT
+
+  command -v git >/dev/null 2>&1 || die_error "git not found"
+  ship_require_gate || die_error "config has no usable gate (see driver output above)"
+  GATE="$(ship_cfg_get gate)"
+  OFFLOAD="$(ship_cfg_get offload 2>/dev/null || true)" # optional command prefix for heavy commands; unset = run locally
+  git -C "$WT" rev-parse --verify -q "origin/$BASE" >/dev/null || die_error "origin/$BASE does not exist in $WT; fetch it first"
+  RULINGS="$(abs_in_space "$(cfg rulings)")"
+  # The rulings file is optional for the operator, but the agents are told to read it and to add to it:
+  # an empty one is created on first use.
+  if [[ ! -e "$RULINGS" ]]; then
+    mkdir -p "$(dirname "$RULINGS")" 2>/dev/null && printf '# Rulings\n' >"$RULINGS" 2>/dev/null || true
+  fi
+  SPEC_PATHS=()
+  while IFS= read -r _p; do [[ -z "$_p" ]] || SPEC_PATHS+=("$_p"); done < <(jq -r '.spec.paths // [] | .[]' <<<"$SHIP_CONFIG_JSON")
+  SPEC_PATHS_TXT="(none configured)"
+  [[ ${#SPEC_PATHS[@]} -eq 0 ]] || SPEC_PATHS_TXT="${SPEC_PATHS[*]}"
+  FORBIDDEN_TXT="$(jq -r '(.scan.forbidden // []) | if length == 0 then "(none configured)" else map("`" + . + "`") | join(", ") end' <<<"$SHIP_CONFIG_JSON")"
+  FORBIDDEN_EXCLUDE_TXT="$(jq -r '(.scan.exclude // []) | if length == 0 then "" else " except in files matching " + (map("`" + . + "`") | join(", ")) end' <<<"$SHIP_CONFIG_JSON")"
+  VERIFY_INSTR_FILE="$(cfg stages.verify.instructions)"
+  REVIEW_INSTR_FILE="$(cfg stages.review.instructions)"
+  [[ "$(cfg stages.final.always)" == true ]] && FINAL_GATE=1
+
+  # models.override (written by the lead's resume) applies on every start, before --model.
+  if [[ -s "$STATE/models.override" ]]; then
+    while IFS= read -r _o; do
+      [[ -z "$_o" ]] || ship_models_override "$_o" || die_error "bad line in models.override: $_o"
+    done <"$STATE/models.override"
+    for _o in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$_o" || die_error "bad --model $_o"; done
+  fi
+  RULES="$(rules_text)"
+  RECHECK="$(cat "$STATE/recheck" 2>/dev/null || true)"
+  RECHECK_PRIOR="$(cat "$STATE/recheck.prior" 2>/dev/null || true)"
+  open_out="$(mux open --cwd "$WT" --label "$REF" 2>>"$LOG")" || die_error "ship-mux open failed; see loop.log"
+  SPACE_ID="$(jq -r .space <<<"$open_out")"
+  DEV="$(aname -dev)"
+  resume_restart
+  agent_lookup "$DEV"; DEV_ID="$L_ID"; agent_state "$DEV_ID"
+  if [[ -z "$DEV_ID" || "$L_STATE" == gone ]]; then
+    if [[ -n "$RESTART_DEV" ]] || { valid_json "$STATE/develop.json" && [[ "$(jq -r .status "$STATE/develop.json")" == DONE ]]; }; then
+      # develop is finished: the worktree holds the work and nothing is reset. A new dev takes over, and
+      # every result stays. Prompts the old dev had in flight are forgotten so they are sent again.
+      for _s in "$STATE"/fix-r*.json.sent; do
+        [[ -e "$_s" && ! -e "${_s%.sent}" ]] && rm -f "$_s" "${_s%.sent}.clock"
+      done
+      TAKEOVER=1
+      log "$DEV is gone and its run continues (develop.json DONE, or its park was restarted): a new dev takes over, results kept"
+    else
+      # No finished develop: this is a new run. Set the results of the earlier run (answers and extensions
+      # too, they belong to its numbering) aside.
+      _old=""
+      for _f in "$STATE"/*; do
+        [[ -f "$_f" ]] || continue
+        case " $KEEP_ON_ARCHIVE " in *" ${_f##*/} "*) continue ;; esac
+        [[ -n "$_old" ]] || { _old="$STATE/run-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$_old"; }
+        mv "$_f" "$_old"/
+      done
+      [[ -z "$_old" ]] || log "archived the previous run's results to $_old"
+    fi
+    STAGE=develop
+    start_agent "$DEV" dev dev || die_error "dev agent did not start; see loop.log"
+    DEV_ID="$A_ID"
+    log "dev $DEV is $DEV_ID in space $SPACE_ID"
+  else
+    log "reusing $DEV ($DEV_ID)"
+  fi
+  resume_park
+  resume_budget
+  # --- develop ---------------------------------------------------------------------------------------
+  STAGE=develop
+  f="$STATE/develop.json"
+  text="$(prompt develop verdict_file="$f")"
+  # (a develop.json that is already in is reused: the takeover text then belongs to the first fix round)
+  if ! fresh_result "$f"; then
+    if [[ -n "$TAKEOVER" ]]; then
+      text="$(takeover_text)
+
+$text"
+      TAKEOVER=""
+    fi
+    if [[ -n "$TAKEOVER_ANSWER" ]]; then
+      text="$text
+
+$TAKEOVER_ANSWER
+Continue from there."
+      TAKEOVER_ANSWER=""
+    fi
+  fi
+  run_step "$DEV" "$f" "$text" "$(budget_min develop "$f")" develop
+  check_verdict develop "$f"
+  dev_ok "$f" develop
+  PR="$(jq -r '.pr // empty' "$f")"
+  [[ -n "$PR" ]] || die_error "develop.json is DONE but names no pr; the dev must open the PR"
+  log "PR #$PR opened"
+  for ((r = 1; r <= MAX; r++)); do
+    fixed=""
+    if [[ -n "$pending" ]]; then
+      fixed="$pending"
+      fix_round "$r" "$pending" "$pending_n"
+      pending=""
+    fi
+
+    # verify
+    STAGE=verify CUR_ROUND="$r"
+    vf="$STATE/verify-r$r.json"
+    if [[ -z "$VERIFY_INSTR_FILE" ]]; then
+      [[ -s "$vf" ]] || write_json "$vf" '{"verdict":"SKIP","summary":"no stages.verify.instructions configured","failures":[]}'
+    else
+      vtext="$(prompt verify round="$r" verify_instructions="$(file_text "$VERIFY_INSTR_FILE")" verdict_file="$vf")"
+      vname="$(aname "-verify-r$r")"
+      fresh_step "$vname" verify verify "$vf" "$vtext" verify "$(budget_min check "$vf")" verify keep
+      if [[ "$(jq -r .verdict "$vf")" == BLOCKED ]]; then
+        # The verifier could not verify: the unit parks with the verifier kept alive for the lead's answer.
+        park_result "$vf" BLOCKED verify "$vname" "verify was blocked: $(jq -r .summary "$vf")"
+      fi
+      close_agent "$vname"
+    fi
+    vv="$(jq -r .verdict "$vf")"
+    log "round $r verify $vv"
+    if [[ "$vv" == FAIL ]]; then
+      [[ "$(jlen "$vf" failures)" -gt 0 ]] || die_error "$(basename "$vf") is FAIL with no failures"
+      pending="$(fmt_failures "$vf")" pending_n="$(jlen "$vf" failures)"
+      add_round "$(jq -nc --argjson r "$r" '{round:$r, verdict:"VERIFY-FAIL"}')"
+      last=verify
+      continue
+    fi
+
+    # review
+    STAGE=review last=review
+    rf="$STATE/review-r$r.json"
+    prior=""
+    [[ -z "$fixed" ]] || prior="The previous round's findings, which the dev says are fixed. Verify each one against the current head before looking for new issues:
+$fixed"
+    do_review "$r" "$prior"
+    if [[ "$RV_VERDICT" != ACCEPT ]]; then
+      [[ "$RV_N" -gt 0 ]] || die_error "$(basename "$rf") is CHANGES with no findings"
+      pending="$(fmt_findings "$rf")" pending_n="$RV_N"
+      continue
+    fi
+
+    # spec check: only after the code review accepts; code changes it asks for are a normal fix round
+    if spec_required; then
+      STAGE=spec last=spec CUR_ROUND="$r"
+      sf="$STATE/spec-r$r.json"
+      SPEC_ROUNDS=$((SPEC_ROUNDS + 1))
+      write_sig "$sf"
+      stext="$(prompt spec round="$r" spec_pending="$spec_pending" verdict_file="$sf")"
+      fresh_step "$(aname "-spec-r$r")" spec spec_check "$sf" "$stext" spec "$(budget_min check "$sf")" spec
+      SPEC_VERDICT="$(jq -r .verdict "$sf")"
+      n="$(jlen "$sf" findings)"; ng="$(jlen "$sf" gaps)"; nrm="$(jlen "$sf" removals)"; nc="$(jlen "$sf" commits)"
+      add_round "$(jq -nc --argjson r "$r" --arg v "SPEC-$SPEC_VERDICT" --argjson n "$n" --argjson g "$ng" --argjson m "$nrm" --argjson c "$nc" \
+      '{round:$r, verdict:$v, findings:$n, gaps:$g, removals:$m, specCommits:$c}')"
+      log "round $r spec $SPEC_VERDICT ($n findings, $ng gaps, $nrm removals, $nc spec commits)"
+      case "$SPEC_VERDICT" in
+        ACCEPT)
+          [[ $((ng + nrm)) -eq 0 ]] || die_error "$(basename "$sf") is ACCEPT but lists gaps or removals"
+          spec_pending="" ;;
+        GAP)
+          [[ "$ng" -gt 0 ]] || die_error "$(basename "$sf") is GAP with no gaps"
+          spec_write "spec checker" "$sf" "$r"
+          continue ;;
+        REMOVE)
+          [[ "$nrm" -gt 0 ]] || die_error "$(basename "$sf") is REMOVE with no removals"
+          if [[ -n "$(fmt_removals "$sf" spec)" ]]; then
+            spec_write "spec checker" "$sf" "$r"
+          else
+            pending="The spec check found elements with no consumer." pending_n=0
+            spec_pending="In round $r the spec check asked for removals; the dev removed them. Check they are gone and nothing else broke:
+$(fmt_removals "$sf" code)
+"
+            add_dev_work "$sf" "the spec check"
+          fi
+          continue ;;
+        *)
+          [[ "$n" -gt 0 ]] || die_error "$(basename "$sf") is CHANGES with no findings"
+          SPEC_VERDICT=CHANGES
+          pending="$(fmt_findings "$sf")" pending_n="$n"
+          spec_pending="Your previous spec round's findings, which the dev says are fixed. Check each one first:
+$pending
+"
+          continue ;;
+      esac
+    else
+      SPEC_VERDICT=SKIP
+      log "round $r spec SKIP (no spec hunks, brief does not require it)"
+    fi
+
+    # final gate: the whole PR against the brief and the specs it touches
+    if [[ $FINAL_GATE -eq 0 ]]; then accepted=1; ACC_R=$r; break; fi
+    STAGE=final last=final CUR_ROUND="$r"
+    ff="$STATE/final-r$r.json"
+    FINAL_ROUNDS=$((FINAL_ROUNDS + 1))
+    write_sig "$ff"
+    ftext="$(prompt final round="$r" final_pending="$final_pending" verdict_file="$ff")"
+    fresh_step "$(aname "-final-r$r")" review final "$ff" "$ftext" review "$(budget_min check "$ff")" final
+    FINAL_VERDICT="$(jq -r .verdict "$ff")"; n="$(jlen "$ff" findings)"
+    add_round "$(jq -nc --argjson r "$r" --arg v "FINAL-$FINAL_VERDICT" --argjson n "$n" '{round:$r, verdict:$v, findings:$n}')"
+    log "round $r final $FINAL_VERDICT ($n findings)"
+    if [[ "$FINAL_VERDICT" == ACCEPT ]]; then accepted=1; ACC_R=$r; break; fi
+    [[ "$n" -gt 0 ]] || die_error "$(basename "$ff") is CHANGES with no findings"
+    pending="$(fmt_findings "$ff")" pending_n="$n"
+    final_pending="Your previous round's findings, which the dev says are fixed. Check each one first:
+$pending
+"
+  done
+  if [[ -z "$accepted" ]]; then
+    log "STUCK after $MAX rounds ($last)"
+    finish 2 "$last" STUCK "$(jq -n --arg f "$pending" '{findings:$f}')"
+  fi
+  FR=$ACC_R
+  STAGE=finalize
+  attempt=0
+  # A fix that was in flight when the driver stopped (a QUESTION in the middle of it, a crash) is continued,
+  # not replayed over: it is the next round of the dev's work.
+  _k=$((ACC_R + 1))
+  if [[ -e "$STATE/fix-r$_k.json.sent" && -s "$STATE/fix-r$_k.findings" ]]; then
+    NEED_FIX="$(cat "$STATE/fix-r$_k.findings")"; NEED_FIX_N="$(cat "$STATE/fix-r$_k.n" 2>/dev/null || echo 1)"; FIX_SRC="$(cat "$STATE/fix-r$_k.src" 2>/dev/null)"
+    FR=$((_k - 1))
+    log "continuing the dev's fix round $_k"
+  fi
+  while ! { valid_json "$STATE/finalize.json" && [[ "$(jq -r .status "$STATE/finalize.json")" == DONE ]]; }; do
+    review_gate
+    STAGE=finalize
+    _rc=0; finalize_try || _rc=$?
+    case $_rc in
+      0) break ;;
+      2) continue ;;
+    esac
+    attempt=$((attempt + 1))
+    if [[ $attempt -gt 2 ]]; then
+      log "finalize still failing after 2 dev fixes"
+      finish 2 finalize STUCK "$(jq -n --arg f "$FIN_MSG" '{findings:$f}')"
+    fi
+    log "finalize problem, back to the dev (attempt $attempt)"
+    NEED_FIX="$FIN_MSG" NEED_FIX_N=1; FIX_SRC=finalize
+    GATE_PRIOR="The dev changed the PR after your last accept, to fix this: $FIN_MSG
 Review the diff against origin/$BASE as it is now."
-done
-FINALIZE_JSON="$(jq -c . "$STATE/finalize.json")"
-log "finalized at $(jq -r .head "$STATE/finalize.json")"
-finish 0 "done" READY
+  done
+  FINALIZE_JSON="$(jq -c . "$STATE/finalize.json")"
+  log "finalized at $(jq -r .head "$STATE/finalize.json")"
+  finish 0 "done" READY
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

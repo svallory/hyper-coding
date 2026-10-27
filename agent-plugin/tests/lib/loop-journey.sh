@@ -125,18 +125,20 @@ live_agents() { (cd "$SPACE" && bash "$SCRIPTS_DIR/ship/ship-mux" list --ref "$1
 reset_fake() { rm -rf "$SHIP_MUX_FAKE_DIR" "$SHIP_MUX_FAKE_LOG"; }
 reset_fake
 
-# loop_fn <name>... — define the named functions of ship-loop here, in one awk pass. A function whose first line
-# is complete (ends in } or } # comment) is taken as that line; a longer one runs to the next line that is a lone }.
+# loop_fn <name>... — define the named functions of ship-loop here. The script has a main guard, so it is sourced (in a
+# subshell, once per shell) and its function text kept; each call evals the named ones out of that text. Calling it
+# again for a name brings back the real function after a test replaced it with a stub.
+LOOP_DECLS=""
 loop_fn() {
+  # shellcheck disable=SC1090  # $LOOP is the ship-loop under test
+  [[ -n "$LOOP_DECLS" ]] || LOOP_DECLS="$( set +eu; set +o pipefail; source "$LOOP"; declare -f )"
   eval "$(awk -v names="$*" '
     BEGIN { n = split(names, a, " "); for (i = 1; i <= n; i++) want[a[i]] = 1 }
-    !act && match($0, /^[a-z_0-9]+\(\) \{/) {
+    !act && match($0, /^[a-z_0-9]+ \(\) $/) {
       nm = substr($0, 1, RLENGTH - 4)
       if (!(nm in want)) next
-      print
-      if ($0 ~ /\}[ \t]*(#.*)?$/ && $0 !~ /^[a-z_0-9]+\(\) \{[ \t]*(#.*)?$/) delete want[nm]; else act = 1
-      next
+      print; act = 1; seen[nm] = 1; next
     }
-    act { print; if ($0 ~ /^\}/) { act = 0; delete want[nm] } }
-    END { for (k in want) print "fail \"loop_fn: " k " is not defined in ship-loop\"" }' "$LOOP")"
+    act { print; if ($0 ~ /^\}/) act = 0 }
+    END { for (k in want) if (!(k in seen)) print "fail \"loop_fn: " k " is not defined in ship-loop\"" }' <<<"$LOOP_DECLS")"
 }

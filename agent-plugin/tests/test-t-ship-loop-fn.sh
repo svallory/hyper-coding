@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2034,SC2154  # the lifted driver functions read these globals; _n/_fail come from helpers.sh
 # Row T (ship-loop), function level: the driver's own functions, one at a time, with no driver run, no
-# multiplexer and no stub agent. They are lifted out of scripts/ship/ship-loop with `loop_fn` (a sed slice
-# of the function's text, as the script has no main guard yet) and called against a scripted `mux`, a
+# multiplexer and no stub agent. They are taken from scripts/ship/ship-loop with `loop_fn` (the script is
+# sourced; its main guard keeps the driver from running) and called against a scripted `mux`, a
 # scratch state directory and one temp repo. (`finish` is the driver's here; the suite ends with
 # finish_suite.) What needs a whole unit (the order of stages, the exit trap, the push) stays in test-t-ship-loop.sh and test-t-ship-loop-b.sh.
 #
