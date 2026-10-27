@@ -317,6 +317,15 @@ assert_eq "final repeat rejection: rejected_by names the re-run verdict" "final-
 assert_contains "final repeat rejection: the dev prompt carries the re-check's findings" "$(cat "$(st t73)/fix-r4.prompt.md")" "the bug"
 unset GATEFLAG73; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
 
+# --- 74: a re-check owed by an earlier run is not owed by a fresh run (no develop.json: the old state is archived first) -------
+# mutation: read recheck / recheck.prior before the previous run is archived (top of main) instead of just before `FR=$ACC_R`
+reset_fake; unit t74
+mkdir -p "$(st t74)"; printf 'final\n' >"$(st t74)/recheck"; printf 'an old rejection\n' >"$(st t74)/recheck.prior"
+script t74 develop.json "$DEV_DONE"; script t74 review-r1.json "$REV_OK"
+stub_start t74; RUN_LIMIT_S=30 run_loop t74; stub_stop
+check_result t74 "a fresh run ignores the previous run's owed re-check" 0 READY
+assert_eq "stale re-check: no final gate was started" "0" "$(starts_of t74-final-r1)"
+
 # --- 11: verdicts the driver refuses (CHANGES with no findings, DONE without a PR) -----------------------------------------------------------------
 # mutation 11c: drop the `[[ "$RV_N" -gt 0 ]] || die_error` after a review (4 sites: rounds, review_gate, spec, final); 11d: drop the `[[ -n "$PR" ]] || die_error` after develop
 reset_fake; unit t11c
