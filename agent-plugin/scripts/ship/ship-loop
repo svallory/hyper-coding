@@ -1592,23 +1592,39 @@ $rej"
   return 1
 }
 
+# route_spec_rejection — REJECTED_BY (set by rejected_diff) is a spec check that settled on GAP (or spec-text
+# REMOVE) and no spec writer has finished that round yet (it parked on the operator and the driver was
+# resumed, or a resumed dev fix replayed over it): those go to the spec writer, not the dev. Returns 0 when
+# routed; the caller loops to review the diff the writer's commits produced.
+route_spec_rejection() {
+  local r sw
+  r="${REJECTED_BY##*-r}"; r="${r%.json}"
+  sw="$STATE/specwriter-r$r.json"
+  if [[ -f "$sw" && "$(jq -r .status "$sw" 2>/dev/null)" == WRITTEN ]]; then return 1; fi
+  spec_route "$STATE/$REJECTED_BY" "$r" || return 1
+  log "the diff is the one $REJECTED_BY left to the spec writer; routed there, not to the dev"
+}
 # review_gate — returns when the diff as it is now has a READY review and no fix is pending. NEED_FIX (with
 # FIX_SRC, where it came from) is work the dev still owes; a fix for a CHANGES verdict that leaves the diff
 # as it was is a failed round. Every CHANGES verdict and every failed round counts toward max_rounds.
 # When a spec check or final gate rejection is what sent the dev to fix (FIX_SRC=gate), that stage judges the
 # fixed diff too, after the review is READY and before the push (recheck_diff).
-FR=$ACC_R cycles=0 NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" guard=0
+FR=$ACC_R cycles=0 NEED_FIX_KEEP="" NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" guard=0
 review_gate() {
-  local before after rv rej sw
+  local before after rv rej
   while true; do
     guard=$((guard + 1))
     [[ $guard -le $((MAX * 4 + 8)) ]] || die_error "finalize could not settle on a reviewed diff after $guard steps"
     if [[ -n "$NEED_FIX" ]]; then
       FR=$((FR + 1))
       fix_round "$FR" "$NEED_FIX" "$NEED_FIX_N"
+      NEED_FIX_KEEP="$NEED_FIX"
       before="$(cat "$STATE/fix-r$FR.before")"
       diff_sig; after="$DSIG"
       if rejected_diff; then
+        NEED_FIX=""
+        if route_spec_rejection; then continue; fi
+        NEED_FIX="$NEED_FIX_KEEP"
         cycles=$((cycles + 1))
         log "round $FR: the fix restored the diff that $REJECTED_BY rejected ($cycles of $MAX)"
         if [[ $cycles -ge $MAX ]]; then
@@ -1634,14 +1650,7 @@ review_gate() {
     else
       if reviewed_diff; then recheck_diff && return 0; continue; fi
       if rejected_diff; then
-        # A spec check that settled on GAP (or spec-text REMOVE) and has not been through a writer yet (a
-        # writer parked on the operator and was resumed) goes to the spec writer, not the dev.
-        sw="$STATE/specwriter-r${REJECTED_BY##*-r}"; sw="${sw%.json}.json"
-        if ! { [[ -f "$sw" ]] && [[ "$(jq -r .status "$sw" 2>/dev/null)" == WRITTEN ]]; } \
-          && spec_route "$STATE/$REJECTED_BY" "$(basename "${REJECTED_BY##*-r}" .json)"; then
-          log "the diff is the one $REJECTED_BY left to the spec writer; routed there, not to the dev"
-          continue
-        fi
+        if route_spec_rejection; then continue; fi
         # No dev fix made this diff: the gate (or a rebase, or anything else) restored one that the spec
         # check or the final gate rejected. A new review would ACCEPT it without counting, so treat it as
         # the fix branch treats a restored rejected diff: it counts, goes back to the dev, and ends STUCK.
