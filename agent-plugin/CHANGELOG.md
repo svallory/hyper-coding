@@ -32,7 +32,7 @@ Changes to the hyper agent plugin. The plugin version in
 
 ### Changed
 
-- `ship_config_load` validates and merges the config layers in one jq pass: 5 process spawns per load instead of 67, same config, errors and exit codes.
+- `ship_config_load` merges and validates the config layers in one jq pass: 5 process spawns per load instead of 67 (13x fewer), with the same merged config. Validation is stricter at the edges: a model name with a trailing newline or any whitespace (including non-ASCII) is rejected, an invalid regex under an empty pattern key is rejected, and a caller's non-default `IFS` no longer breaks it.
 - A ship fix round's time budget now grows with the findings it must answer:
   `min(budgets.<class>, budgets.<class> × budgets.fix_fraction + budgets.fix_per_finding × F)`
   minutes, where F is the number of findings (1 for a finalize rejection that
