@@ -43,7 +43,7 @@ export PATH="$FIX/bin:$PATH"
 
 # --- fixtures -------------------------------------------------------------------------------------
 
-GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"' MAXR=3 BUD_S=10 CFG_EXTRA=''
+GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"' MAXR=3 BUD_S=10 BUD_EXTRA='' CFG_EXTRA=''
 write_cfg() {
   cat >"$PROJECT" <<EOF
 mux: fake
@@ -51,6 +51,7 @@ gate: '$GATE_CMD'
 max_rounds: $MAXR
 budgets:
   S: $BUD_S
+$BUD_EXTRA
 spec:
   paths: ['docs/spec/**']
 $CFG_EXTRA
@@ -1452,6 +1453,32 @@ stub_start t63; run_loop t63; stub_stop
 check_result t63 "failed send on fix-r3: answered" 0 READY
 assert_contains "answer kept: the fix-r3 prompt carries the answer" "$(cat "$(st t63)/fix-r3.prompt.md" 2>/dev/null)" "Use the second option."
 assert_contains "answer kept: and it reached the dev" "$(sent_to t63 t63-dev)" "Use the second option."
+
+# --- 64: a fix round's budget is min(class, class * fix_fraction + fix_per_finding * F) --------------------------------------------------
+# Class S is 0.02 min, fix_fraction 0.5: a round starts at 0.01 min. The fix never answers, so the round parks OVER-BUDGET.
+revn() { jq -nc --argjson n "$1" '{verdict:"CHANGES",findings:[range($n)|{severity:"BLOCKING",file:"a.go",line:3,summary:("bug \(.)"),fix:"change it"}]}'; }
+fix_budget() { # ref per_finding findings expected
+  reset_fake; unit "$1"
+  BUD_S=0.02 BUD_EXTRA="  fix_per_finding: $2"; write_cfg
+  script "$1" develop.json "$DEV_DONE"; script "$1" review-r1.json "$(revn "$3")"
+  stub_start "$1"; run_loop "$1"; stub_stop
+  check_result "$1" "fix budget F=$3 per=$2" 2 OVER-BUDGET
+  assert_eq "fix budget F=$3 per=$2: the stage" "fix" "$(jq -r .stage "$(st "$1")/budget-r1.json")"
+  assert_eq "fix budget F=$3 per=$2: budget_min" "$4" "$(jq -r .budget_min "$(st "$1")/budget-r1.json")"
+}
+fix_budget t64a 0.001 1 0.011
+fix_budget t64b 0.001 2 0.012
+fix_budget t64c 0.001 3 0.013
+fix_budget t64d 0.01 3 0.02      # 0.01 + 0.03 is capped at the class budget
+fix_budget t64e 0 2 0.01         # fix_per_finding 0: the flat fraction, as before
+# Text only (a failing gate after the rebase): F = 1
+reset_fake; unit t64f
+GATE_CMD='echo "gate says no"; exit 1'; BUD_S=0.02 BUD_EXTRA="  fix_per_finding: 0.001"; write_cfg
+script t64f develop.json "$DEV_DONE"; script t64f review-r1.json "$REV_OK"
+stub_start t64f; run_loop t64f; stub_stop
+check_result t64f "fix budget, text only" 2 OVER-BUDGET
+assert_eq "fix budget, text only: F is 1" "0.011" "$(jq -r .budget_min "$(st t64f)/budget-r1.json")"
+GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; BUD_S=10 BUD_EXTRA=''; write_cfg
 
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"

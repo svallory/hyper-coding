@@ -14,6 +14,15 @@ Changes to the hyper agent plugin. The plugin version in
   `--model` and `--extend`, and earlier `--model` overrides are kept. The STUCK
   rows in the unit skill and `docs/ship.md` now say so.
 
+### Changed
+
+- A ship fix round's time budget now grows with the findings it must answer:
+  `min(budgets.<class>, budgets.<class> × budgets.fix_fraction + budgets.fix_per_finding × F)`
+  minutes, where F is the number of findings (1 for a finalize rejection that
+  is only text). The new `budgets.fix_per_finding` key defaults to 2. Before,
+  a fix round got a flat `budgets.fix_fraction` of the class budget, so a unit
+  with several findings could park OVER-BUDGET while still making progress.
+
 ## 0.6.2 — 2026-10-26
 
 ### Fixed

@@ -280,9 +280,14 @@ Restart is resume: run it again with the same `--ref` and it reattaches to live
 agents and replays finished stages from their files. A finished stage (valid
 verdict newer than its `.sent` marker) is never re-run.
 
-Budgets: develop gets `budgets.<class>` minutes, fix rounds
-`budgets.fix_fraction` of that, every other agent stage `budgets.check`. The
-clock is wall time since the stage's prompt was sent, minus time spent parked.
+Budgets: develop gets `budgets.<class>` minutes, every other agent stage
+`budgets.check`. A fix round answering F findings gets
+`min(budgets.<class>, budgets.<class> × budgets.fix_fraction + budgets.fix_per_finding × F)`
+minutes, so a round with more findings gets more time, up to the class budget.
+F is the number of findings (or failures, or resolved spec points) the round
+carries; a problem the driver only has as text (a finalize rebase, gate or scan
+failure, or a gate-restored diff) counts as F = 1. The clock is wall time since
+the stage's prompt was sent, minus time spent parked.
 
 Exit codes and `result.json` status:
 
@@ -569,7 +574,8 @@ hosts:
 | `limits.cooldown_min` | Minutes an account or model is treated as limited when no reset time is known. Default 60. |
 | `failover.summarizer` | Models tried in order to summarise an interrupted stage into `STATUS.md`. Default `[haiku]`. |
 | `budgets.S`, `budgets.M`, `budgets.L` | Develop time budget in minutes per class. Defaults 15, 45, 90. |
-| `budgets.fix_fraction` | Fraction of the class budget a fix round gets. Default 0.5. |
+| `budgets.fix_fraction` | Fraction of the class budget a fix round starts with. Default 0.5. |
+| `budgets.fix_per_finding` | Minutes added to a fix round for each finding it must answer, capped at the class budget (formula above). A number ≥ 0. Default 2. |
 | `budgets.check` | Minutes for a check stage (verify, review, spec check, final). Default 30. The gate is not a stage. |
 | `hosts.local.slots`, `hosts.<name>.slots` | Concurrent units on that host. `hosts.local.slots` defaults to 2. |
 | `hosts.<name>.ssh` | ssh destination for a remote host (not needed for `local`). |
