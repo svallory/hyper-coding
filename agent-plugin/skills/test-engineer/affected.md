@@ -61,7 +61,7 @@ selection") or by a test failing in CI that the affected run skipped, and is
 added then.
 
 ```
-# tests/affected.map — <glob of changed path> <space> <test files or ALL>
+# tests/affected.tsv — <glob of changed path> <space> <test files or ALL>
 scripts/ship/ship-land            tests/test-t-ship-land.sh
 scripts/ship/ship-loop            tests/test-t-ship-loop.sh tests/test-t-ship-unit-driver.sh
 scripts/ship/prompts/*            tests/test-t-ship-loop.sh
@@ -93,7 +93,7 @@ while read -r pat targets; do
       *) for t in $targets; do sel["$root/$t"]=1; done ;;
     esac
   done <<<"$changed"
-done <"$here/affected.map"
+done <"$here/affected.tsv"
 if [[ $all == 1 ]]; then echo "affected: shared file changed, running everything"; exec bash "$here/run.sh"; fi
 [[ ${#sel[@]} -gt 0 ]] || { echo "affected: nothing selected"; exit 0; }
 printf 'affected: %s\n' "${!sel[@]}"

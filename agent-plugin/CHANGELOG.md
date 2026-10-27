@@ -5,6 +5,13 @@ Changes to the hyper agent plugin. The plugin version in
 
 ## Unreleased
 
+### Fixed
+
+- The test-selection map is now `tests/affected.tsv` (was `tests/affected.map`).
+  A `*.map` ignore rule matched the old name, so a copy of the repo made with
+  an ignore-aware sync lost it and `run.sh --affected` failed. The format is
+  unchanged; rename any local reference to it.
+
 ## 0.7.0 — 2026-10-27
 
 ### Added
