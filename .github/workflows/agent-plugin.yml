@@ -97,7 +97,7 @@ jobs:
         run: bash -c 'source agent-plugin/scripts/ship/lib.sh && ship_require_yq'
 
       - name: Run the plugin test suite
-        run: bash agent-plugin/tests/run.sh
+        run: bash agent-plugin/tests/run.sh --jobs 2
 
       # jq 1.7.1 ships with Ubuntu 24.04, Debian and macOS; some filter syntax only parses on 1.8.
       - name: Run the ship jq tests on jq 1.7.1

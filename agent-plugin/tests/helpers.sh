@@ -42,6 +42,12 @@ pass() { _n=$((_n + 1)); echo "ok $_n - $1"; }
 fail() { _n=$((_n + 1)); _fail=$((_fail + 1)); echo "not ok $_n - $1"; }
 skip() { _n=$((_n + 1)); echo "ok $_n - $1 # SKIP ${2:-}"; }
 
+# rsync_is_gnu3 — true when the rsync on PATH is GNU rsync 3.x or newer (macOS
+# ships openrsync at /usr/bin/rsync, which lacks flags the host-copy code uses).
+# Same rule as _ship_host_rsync_ok in scripts/ship/lib-host.sh. Tests that need
+# real rsync guard with: rsync_is_gnu3 || { skip "<case>" "rsync on PATH is not GNU 3.x (openrsync)"; ... }
+rsync_is_gnu3() { rsync --version 2>/dev/null | grep -qE '^rsync +version +([3-9]|[1-9][0-9])\.'; }
+
 # assert_ok <desc> <cmd...>   — passes when the command exits 0
 assert_ok() {
   local desc="$1"; shift
