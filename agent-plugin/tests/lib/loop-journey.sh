@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034  # globals are read by the test files that source this one
 # Shared harness for the ship-loop tests (journeys and function tests): the unit-space fixtures, the
 # stub agent, the bounded driver run and the result checks, extracted unchanged from
 # test-t-ship-loop.sh. Source it after helpers.sh (it needs $FIX, $SCRIPTS_DIR, $TESTS_DIR and the

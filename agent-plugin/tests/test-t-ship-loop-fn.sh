@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2034,SC2154  # the lifted driver functions read these globals; _n/_fail come from helpers.sh
 # Row T (ship-loop), function level: the driver's own functions, one at a time, with no driver run, no
 # multiplexer and no stub agent. They are lifted out of scripts/ship/ship-loop with `loop_fn` (a sed slice
 # of the function's text, as the script has no main guard yet) and called against a scripted `mux`, a
-# scratch state directory and one temp repo. (`finish` is the driver's here; the suite ends with finish_suite.) What needs a whole unit (the order of stages, the exit trap,
-# the push) stays in test-t-ship-loop.sh and test-t-ship-loop-b.sh.
+# scratch state directory and one temp repo. (`finish` is the driver's here; the suite ends with
+# finish_suite.) What needs a whole unit (the order of stages, the exit trap, the push) stays in test-t-ship-loop.sh and test-t-ship-loop-b.sh.
 #
 # Every group names the break it catches in a "mutation" comment: the production line that, edited out
 # or inverted, makes the group fail.
 
+# shellcheck source=helpers.sh
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 set +eu
 set +o pipefail
@@ -82,7 +84,7 @@ loop_fn model_pick aname write_json valid_json abs_in_space file_text render pro
 
 # --- small helpers -----------------------------------------------------------------------------------
 # mutation: aname keeps ${REF:0:32-len} → ${REF:0:32}
-REF=a-very-long-unit-reference-of-forty-chars
+REF="a-very-long-unit-reference-of-forty-chars"
 assert_eq "aname: a long ref is cut so the whole suffix fits in 32 chars" "a-very-long-unit-refe-review-r12" "$(aname -review-r12)"
 _nm="$(aname -review-r12)"; assert_eq "aname: the name is 32 chars" "32" "${#_nm}"
 REF=u6
@@ -193,7 +195,7 @@ assert_eq "check_verdict: a valid develop result passes" "rc=0" "$(cv develop '{
 assert_eq "check_verdict: a valid ACCEPT passes" "rc=0" "$(cv review '{"verdict":"ACCEPT","findings":[]}')"
 for row in 'review|this is not json|malformed JSON' \
            'review|{"verdict":"MAYBE","findings":[]}|a verdict outside the enum' \
-           'develop|{"status":"DONE","head":"abc1234","summary":"x"}|DONE without a PR'; do
+           'develop|{"status":"DONE","head":"abc1234","summary":"x"}|a develop result without a pr key (pr:null is an inline check in main, not the schema)'; do
   IFS='|' read -r sch js why <<<"$row"
   out="$(cv "$sch" "$js")"
   assert_contains "check_verdict: $why is an ERROR (die_error)" "$out" "DIE: cv.json is not a valid $sch result:"
@@ -303,7 +305,7 @@ NB="$TRUSTFIX/narrow-before.txt"
 assert_eq "trust_state: a trust dialog followed by a real permission prompt" "ambiguous" "$({ cat "$NB"; printf '%s\n' "$PERM2"; } | trust_state)"
 assert_eq "trust_state: ...an unnumbered permission prompt too" "ambiguous" "$({ cat "$NB"; printf '\n Allow this tool?\n ❯ Allow once\n   Deny\n'; } | trust_state)"
 assert_eq "trust_state: the dialog quoted twice (two headers, second with a prompt after it)" "ambiguous" "$({ cat "$NB"; printf '\n'; cat "$NB"; printf '\n Do you want to proceed?\n'; } | trust_state)"
-assert_eq "trust_state: a third option (unnumbered)" "ambiguous" "$(sed 's/^   Yes, I trust this folder$/   Yes, I trust this folder\n   Maybe later/' "$NB" | trust_state)"
+assert_eq "trust_state: a third option (unnumbered)" "ambiguous" "$({ sed '/^   Yes, I trust this folder$/q' "$NB"; printf '   Maybe later\n'; sed '1,/^   Yes, I trust this folder$/d' "$NB"; } | trust_state)"
 assert_eq "trust_state: a third option (numbered)" "ambiguous" "$({ sed '/Enter to confirm/d' "$NB"; printf '  3. Always\n\n Enter to confirm\n'; } | trust_state)"
 assert_eq "trust_state: Allow... after the options" "ambiguous" "$({ cat "$NB"; printf '\n Allow all edits this session?\n'; } | trust_state)"
 assert_eq "trust_state: a footer that only starts like the real one" "ambiguous" "$(sed 's/Enter to confirm.*/Enter to confirm and allow all commands/' "$NB" | trust_state)"
@@ -342,7 +344,7 @@ r="$(td 'N Y x x')"
 assert_contains "trust_dialog: cursor on No: one down, then Enter, cleared after two blank reads" "$r" "rc=0 keys=[down,enter,]"
 r="$(td 'Y x x')"
 assert_contains "trust_dialog: cursor already on Yes: Enter only" "$r" "rc=0 keys=[enter,]"
-r="$(td 'x')"; 
+r="$(td 'x')"
 assert_contains "trust_dialog: no dialog on screen: returns 1 and sends nothing" "$r" "rc=1 keys=[]"
 r="$(td 'a')"
 assert_contains "trust_dialog: an ambiguous dialog: returns 1 and sends no key" "$r" "rc=1 keys=[]"
@@ -490,7 +492,7 @@ AW() { # budget_min — await_file for develop.json of u6-dev; prints rc and FAI
 # mutation: the clock seed `acc="$(cat "$file.clock")"`, `el -gt lim`, the nudge cap `-ge 2`, the `gone`/`blocked` arms
 newstate; over_budget() { echo "OVER $1 $2 $4 $5"; exit 9; }
 printf '30\n' >"$STATE/develop.json.clock"; mux_reset; MUX_STATE=working
-out="$( ( AW 0.4 ) 2>&1 )"
+out="$( ( laps=0; sleep() { if ((++laps > 3)); then echo NO-OVER; exit 9; fi; }; AW 0.4 ) 2>&1 )"
 assert_contains "await_file: a carried clock of 30 s is over a 0.4 min budget at once" "$out" "OVER develop u6-dev 0.4 3"
 printf '1\n' >"$STATE/develop.json.clock"; mux_reset; MUX_STATE=gone
 assert_eq "await_file: time before a park is not counted: a 1 s clock is within 0.4 min; the gone agent ends the wait" "rc=1 why=u6-dev is gone sends=0" "$(AW 0.4)"
@@ -507,7 +509,6 @@ assert_eq "await_file: an idle agent whose file is not JSON: rc 2" "rc=2 why=dev
 rm -f "$STATE/develop.json"; mux_reset; MUX_STATE=blocked; MUX_SCREEN="Allow it?"
 assert_contains "await_file: a blocked agent without limit text parks DIALOG" "$( ( AW 5 ) 2>&1 )" "PARK DIALOG|develop|u6-dev|u6-dev is blocked on a dialog. Answer it in its pane"
 unset -f over_budget; loop_fn over_budget
-out="$( ( step_failed develop u6-dev "$STATE/develop.json" 2 ) 2>&1 )"
 FAIL_WHY="x is not valid JSON"
 assert_contains "step_failed: rc 2 (not JSON) is an ERROR" "$( ( step_failed develop u6-dev f 2 ) 2>&1 )" "DIE: x is not valid JSON"
 assert_contains "step_failed: any other failure parks BLOCKED with the reason and the way out" "$( ( step_failed develop u6-dev f 1 ) 2>&1 )" "PARK BLOCKED|develop|u6-dev|x is not valid JSON. See loop.log; write answer-<n>.md"
@@ -726,10 +727,12 @@ out="$(sx usage_exit "bad thing")"
 assert_eq "usage_exit: prints 'ship-loop: <message>' and exits 1" $'ship-loop: bad thing\nrc=1' "$out"
 LB() { SHIP_CONFIG_JSON="$BASE_CFG" SHIP_CONFIG_LAYERS="$BASE_LAY" bash "$LOOP" "$@" 2>&1; echo "rc=$?"; } # the driver itself (config passed in), ending in its argument checks
 assert_eq "driver: an unknown argument" $'ship-loop: unknown argument: --bogus\nrc=1' "$(LB --bogus)"
+# pins bug hyper-chp: the message should say --worktree (it names the variable WT instead)
 assert_eq "driver: --worktree is required once --ref is given" $'ship-loop: --wt is required\nrc=1' "$(LB --ref r)"
 assert_eq "driver: a class outside S, M, L" $'ship-loop: --class must be S, M or L\nrc=1' "$(LB --ref r --worktree /w --branch b --brief /b --class Q)"
 assert_eq "driver: class M and L are accepted (the next check is the worktree)" $'ship-loop: worktree /w is not a directory\nrc=1/ship-loop: worktree /w is not a directory\nrc=1' "$(LB --ref r --worktree /w --branch b --brief /b --class M)/$(LB --ref r --worktree /w --branch b --brief /b --class L)"
-assert_contains "driver: a --model for an unknown stage" "$(LB --ref r --worktree /w --branch b --brief /b --class S --model nostage=x)" "rc=1"
+assert_contains "driver: a --model for an unknown stage is refused (with a valid worktree and brief)" "$(LB --ref r --worktree "$FIX" --branch b --brief "$FIX/mux-check" --class S --model nostage=x)" "unknown stage"
+assert_contains "driver: ...with rc 1" "$(LB --ref r --worktree "$FIX" --branch b --brief "$FIX/mux-check" --class S --model nostage=x)" "rc=1"
 printf '#!/bin/sh\n[ "$1" = check ] && exit "${MUXRC:-0}"\nexit 0\n' >"$FIX/mux-check"; chmod +x "$FIX/mux-check"
 pf() { # commands to hide — preflight with those missing from PATH, on $PF_CFG
   { (
@@ -820,15 +823,105 @@ SW_RESULT='{"status":"OPERATOR","commits":[],"resolved":[],"operator_questions":
 assert_contains "spec_write: a writer that hands back OPERATOR parks the unit with its questions and recommendation" "$(sx spec_write 'spec check' "$STATE/spec-r1.json" 1)" "PARK_RESULT OPERATOR|specwriter|u6-specwriter-r1|1. docs/spec/b.md:1 — Pick one Options: A or B. Recommendation: A."
 unset -f prompt fresh_step close_agent park_result; loop_fn prompt fresh_step close_agent
 
+# --- fix_round and review_gate ---------------------------------------------------------------------------------
+loop_fn fix_round review_gate fresh_result valid_json mark_sent sent_after_result mtime_s
+# fix_round: run_step, check_verdict, dev_ok, diff_sig, budget_min, prompt and takeover_text are the collaborators
+prompt() { printf 'PROMPT[%s]' "$*"; }
+takeover_text() { printf 'TAKEOVER-TEXT'; }
+run_step() { RS_TEXT="$2|$3"; RS_ARGS="$1 $4 stage=$STAGE round=$CUR_ROUND"; }
+check_verdict() { :; }
+dev_ok() { :; }
+budget_min() { echo 7; }
+diff_sig() { DSIG="${CUR:-sig0}"; }
+FIX_SRC=review CUR=sig0
+FRT() { # round findings n — fix_round; prints the text run_step got, then TAKEOVER state
+  RS_TEXT=""; fix_round "$@"; echo "$RS_TEXT"; echo "tk=[$TAKEOVER] tka=[$TAKEOVER_ANSWER]"
+}
+# mutation: `if ! fresh_result "$f"` (always true / always false), the TAKEOVER and TAKEOVER_ANSWER clears, the
+# "Continue from there." line, the .before written once (-e .sent && -s .before), the .findings/.src/.n files
+newstate; TAKEOVER=1; TAKEOVER_ANSWER="ANSWER-TEXT"
+out="$(FRT 1 "F1" 2 2>/dev/null)"
+PR1="PROMPT[fix round=1 pending=F1 verdict_file=$STATE/fix-r1.json]"
+assert_eq "fix_round: a takeover text, the stage prompt and the lead's answer go out in one prompt" \
+  "$STATE/fix-r1.json|TAKEOVER-TEXT"$'\n\n'"$PR1"$'\n\n'"ANSWER-TEXT"$'\nContinue from there.\ntk=[] tka=[]' "$out"
+TAKEOVER=1 TAKEOVER_ANSWER="ANSWER-TEXT"; RS_TEXT=""; fix_round 1 "F1" 2 2>/dev/null
+assert_eq "fix_round: ...and both are cleared once used (in this shell)" "tk=[] tka=[]" "tk=[$TAKEOVER] tka=[$TAKEOVER_ANSWER]"
+assert_eq "fix_round: the round's findings, source and count are kept for a resume" "F1/review/2" "$(cat "$STATE/fix-r1.findings")/$(cat "$STATE/fix-r1.src")/$(cat "$STATE/fix-r1.n")"
+assert_eq "fix_round: run_step gets the dev, the budget (budget_min) and the fix stage" "u6-dev 7 stage=fix round=1" "$RS_ARGS"
+assert_eq "fix_round: the diff the dev was prompted on is recorded" "sig0" "$(cat "$STATE/fix-r1.before")"
+newstate; printf '{"status":"DONE"}\n' >"$STATE/fix-r2.json"; : >"$STATE/fix-r2.json.sent"; touch -r "$STATE/fix-r2.json" "$STATE/fix-r2.json.sent"
+TAKEOVER=1 TAKEOVER_ANSWER="ANSWER-TEXT"; RS_TEXT=""; fix_round 2 "F2" 1 2>/dev/null
+assert_eq "fix_round: a fix that is already in is replayed, not prompted: no takeover text, no answer" "$STATE/fix-r2.json|PROMPT[fix round=2 pending=F2 verdict_file=$STATE/fix-r2.json]" "$RS_TEXT"
+assert_eq "fix_round: ...and they wait for the step that is prompted" "tk=[1] tka=[ANSWER-TEXT]" "tk=[$TAKEOVER] tka=[$TAKEOVER_ANSWER]"
+newstate; TAKEOVER="" TAKEOVER_ANSWER=""; printf 'old-sig\n' >"$STATE/fix-r3.before"; : >"$STATE/fix-r3.json.sent"; CUR=new-sig
+fix_round 3 "F3" 1 2>/dev/null
+assert_eq "fix_round: a resumed fix (marker and .before present) keeps the first .before" "old-sig" "$(cat "$STATE/fix-r3.before")"
+rm -f "$STATE/fix-r3.json.sent"; fix_round 3 "F3" 1 2>/dev/null
+assert_eq "fix_round: ...but a fix not yet prompted records the diff as it is now" "new-sig" "$(cat "$STATE/fix-r3.before")"
+unset CUR
+
+# review_gate: fix_round, diff_sig, rejected_diff, reviewed_diff, rejection_text, do_review and finish are stubs.
+# The "world" is one variable, CUR (the diff signature now); each fix_round call records itself and moves CUR to NEXT.
+fix_round() { GC="$GC|r$1[src=$FIX_SRC n=$3]<<$2>>"; printf '%s\n' "$BEFORE" >"$STATE/fix-r$1.before"; CUR="$NEXT"; }
+rejected_diff() { REJECTED_BY=""; [[ "$CUR" == "$REJ" ]] || return 1; REJECTED_BY=spec-r1.json; }
+reviewed_diff() { [[ "$CUR" == "$OKSIG" ]]; }
+rejection_text() { printf 'REJTEXT(%s)' "$(basename "$1")"; }
+do_review() { echo "REVIEWED"; exit 9; }
+RG() { # prints the fix_round calls and the log (or what finish ended with)
+  newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; BEFORE="${BEFORE:-b0}"
+  ( review_gate; echo "return gc=$GC" ) 2>&1; cat "$LOG"
+}
+# mutation: the "restored the diff" note and its cycles count, `cycles -ge MAX` → STUCK (stage from REJECTED_BY),
+# the "changed nothing" branch (only after a review verdict), the gate branch's wording / FIX_SRC=gate / GATE_PRIOR
+NEED_FIX="F" NEED_FIX_N=2 FIX_SRC=review BEFORE=b0 CUR=cur REJ=bad NEXT=bad OKSIG=ok
+# first fix restores the rejected diff, the second one makes an accepted diff
+fix_round() { GC="$GC|r$1[src=$FIX_SRC n=$3]<<$2>>"; printf '%s\n' "$BEFORE" >"$STATE/fix-r$1.before"; if [[ $1 -eq 1 ]]; then CUR=bad; else CUR=ok; fi; }
+out="$(RG)"
+assert_contains "review_gate: a fix that restores a diff a stage rejected is logged and counted" "$out" "round 1: the fix restored the diff that spec-r1.json rejected (1 of 3)"
+assert_contains "review_gate: ...the dev is told in the next round (the restored note)" "$out" "|r2[src=review n=2]<<F"$'\n'"(Your last attempt restored the diff that spec-r1.json rejected. Change the code, or stop with QUESTION and say why not.)>>"
+assert_contains "review_gate: ...and an accepted diff after the second fix ends the gate" "$out" "return gc="
+NEED_FIX="F" NEED_FIX_N=1 FIX_SRC=review
+newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=1; CUR=cur
+out="$( ( review_gate ) 2>&1 )"
+assert_contains "review_gate: a restored rejected diff at max_rounds ends STUCK, naming the stage that rejected it" "$out" "FINISH 2|spec|STUCK"
+# a fix that changes nothing after a CHANGES verdict
+fix_round() { GC="$GC|r$1[src=$FIX_SRC]<<$2>>"; printf 'same\n' >"$STATE/fix-r$1.before"; if [[ $1 -eq 1 ]]; then CUR=same; else CUR=ok; fi; }
+rejected_diff() { REJECTED_BY=""; return 1; }
+diff_sig() { DSIG="$CUR"; }
+NEED_FIX="F" NEED_FIX_N=1 FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=cur
+out="$( ( review_gate; echo "return gc=$GC" ) 2>&1; cat "$LOG" )"
+assert_contains "review_gate: a fix after a CHANGES verdict that left the diff as it was is a failed round" "$out" "round 1: the fix changed nothing after a CHANGES verdict (1 of 3)"
+assert_contains "review_gate: ...the dev is told so" "$out" "(Your last attempt changed nothing in the diff. Change the code, or stop with QUESTION and say why not.)>>"
+NEED_FIX="F" NEED_FIX_N=1 FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=1; CUR=cur
+assert_contains "review_gate: ...and at max_rounds it ends STUCK on review" "$( ( review_gate ) 2>&1 )" "FINISH 2|review|STUCK"
+NEED_FIX="F" NEED_FIX_N=1 FIX_SRC=gate; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=cur
+out="$( ( review_gate; echo "return gc=$GC" ) 2>&1; cat "$LOG" )"
+assert_not_contains "review_gate: a fix for a gate-restored diff that changes nothing is not counted as a failed round" "$out" "changed nothing"
+# no fix pending: the diff was restored by something that is not a dev fix
+fix_round() { GC="$GC|r$1[src=$FIX_SRC n=$3]<<$2>>"; printf 'b\n' >"$STATE/fix-r$1.before"; CUR=ok; }
+rejected_diff() { REJECTED_BY=""; [[ "$CUR" == "$REJ" ]] || return 1; REJECTED_BY=spec-r1.json; }
+NEED_FIX="" NEED_FIX_N=1 FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=bad
+out="$( ( review_gate; echo "return gc=$GC" ) 2>&1; cat "$LOG" )"
+assert_contains "review_gate: a rejected diff restored without a dev fix is logged and counted" "$out" "the diff changed without a dev fix and is the one spec-r1.json rejected (1 of 3)"
+assert_contains "review_gate: ...the dev gets it back worded as 'not a fix of yours', with the rejection text" "$out" "|r1[src=gate n=1]<<The diff now in the PR is the one spec-r1.json rejected. The gate, a rebase or a commit outside your fixes (not a fix of yours) restored it, so the change that answered these has been undone. Address them again in the code, or stop with QUESTION and say why not:"$'\n'"REJTEXT(spec-r1.json)>>"
+NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=1; CUR=bad
+assert_contains "review_gate: ...and at max_rounds that is STUCK too" "$( ( review_gate ) 2>&1 )" "FINISH 2|spec|STUCK"
+NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=ok
+assert_eq "review_gate: nothing pending and the diff already reviewed: returns at once" "return gc=" "$( ( review_gate; echo "return gc=$GC" ) 2>&1 )"
+NEED_FIX="" FIX_SRC=review; newstate; GC=""; FR=0 cycles=0 guard=0 GATE_PRIOR=""; MAX=3; CUR=fresh
+assert_contains "review_gate: a diff nobody reviewed (not rejected either) goes to a new review" "$( ( review_gate ) 2>&1 )" "REVIEWED"
+unset -f fix_round rejected_diff reviewed_diff rejection_text do_review prompt takeover_text run_step check_verdict dev_ok budget_min diff_sig
+unset CUR REJ NEXT OKSIG BEFORE GC
+
 # --- the stub agent and the script's own constraints ---------------------------------------------------------------
 # mutation (stub): the inode+first-line identity in stub-agent; (script): add a forbidden word, a Monitor call or a bash syntax error
 S55="$FIX/stub55"; mkdir -p "$S55/state" "$S55/script"
 printf '{"n":1}\n' >"$S55/script/x.json"; printf '1000 a\n' >"$S55/state/x.json.sent"
 bash "$STUB" "$S55/state" "$S55/script" >/dev/null 2>&1 & _sp=$!
-for _ in $(seq 40); do [[ -e "$S55/state/x.json" ]] && break; sleep 0.05; done
+_dl=$((SECONDS + 3)); while [[ ! -e "$S55/state/x.json" && $SECONDS -lt $_dl ]]; do sleep 0.05; done
 assert_ok "stub: the first prompt is answered" test -e "$S55/state/x.json"
 rm -f "$S55/state/x.json"; printf '1000 b\n' >"$S55/state/x.json.sent"   # truncated in place: the same inode, one line again
-for _ in $(seq 40); do [[ -e "$S55/state/x.json" ]] && break; sleep 0.05; done
+_dl=$((SECONDS + 3)); while [[ ! -e "$S55/state/x.json" && $SECONDS -lt $_dl ]]; do sleep 0.05; done
 assert_ok "stub: a marker that reuses the inode still counts as a new prompt" test -e "$S55/state/x.json"
 kill "$_sp" 2>/dev/null; wait "$_sp" 2>/dev/null
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"
