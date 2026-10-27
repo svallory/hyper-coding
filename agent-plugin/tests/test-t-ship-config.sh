@@ -35,6 +35,19 @@ g() { ship_cfg_get "$1"; }
 # lc_try — load in a subshell; sets rc and err (stderr) without keeping the config.
 lc_try() { rc=0; err="$( { lc; } 2>&1 )" || rc=$?; }
 
+# lc_plain — the most common fixture (project `gate: "true"`, no user layer),
+# loaded once and restored from memory afterwards.
+_PLAIN_JSON="" _PLAIN_LAYERS=""
+lc_plain() {
+  reset_layers
+  printf 'gate: "true"\n' > "$PROJECT"
+  if [[ -n "$_PLAIN_JSON" ]]; then
+    SHIP_CONFIG_JSON="$_PLAIN_JSON" SHIP_CONFIG_LAYERS="$_PLAIN_LAYERS"
+  else
+    lc && { _PLAIN_JSON="$SHIP_CONFIG_JSON" _PLAIN_LAYERS="$SHIP_CONFIG_LAYERS"; }
+  fi
+}
+
 # cfg <args...> — run the real ship-config from inside the space; stdout only.
 cfg() { (cd "$SPACE/worktrees/wt" && bash "$CFG" "$@" 2>/dev/null); }
 # cfg_rc <args...> — exit code
@@ -83,9 +96,7 @@ assert_eq "new map entry merges beside default (hosts.box.slots)" "3" "$(g hosts
 assert_eq "default map entry kept (hosts.local.slots)" "2" "$(g hosts.local.slots)"
 
 # T4: defaults.yml ships the model lists AC-16 names --------------------------
-reset_layers
-printf 'gate: "true"\n' > "$PROJECT"
-lc
+lc_plain
 assert_eq "default dev" '["sonnet"]' "$(g models.dev)"
 assert_eq "default verify" '["haiku"]' "$(g models.verify)"
 assert_eq "default review" '["opus"]' "$(g models.review)"
@@ -103,11 +114,14 @@ gate_check() {
 }
 reset_layers
 # CLI: --print still prints the rest and marks gate required; --get gate fails.
-out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --print 2>&1)"; rc=$?
+out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --print 2>"$FIX/cli.err")"; rc=$?
 assert_eq "no gate: --print exits 1" "1" "$rc"
 assert_contains "no gate: --print still prints the rest" "$out" 'mux = "herdr"'
 assert_contains "no gate: --print marks gate required" "$out" "gate = <unset: required>"
-assert_contains "no gate: message names the key" "$out" "'gate'"
+assert_contains "no gate: the message is on stderr and names the key" "$(<"$FIX/cli.err")" "'gate'"
+out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --get base 2>/dev/null)"; rc=$?
+assert_eq "no gate: --get base exits 0" "0" "$rc"
+assert_eq "no gate: --get base prints the value" "main" "$out"
 out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --get gate 2>&1)"; rc=$?
 assert_eq "no gate: --get gate exits 1" "1" "$rc"
 assert_contains "no gate: --get gate names the key" "$out" "'gate'"
@@ -166,9 +180,7 @@ lc_try
 assert_eq "non-mapping top level: load fails" "1" "$rc"
 
 # T7: absent layers ----------------------------------------------------------
-reset_layers
-printf 'gate: "true"\n' > "$PROJECT"
-lc
+lc_plain
 assert_eq "no user file: still works" "true" "$(g gate)"
 reset_layers
 printf 'gate: "from-user"\n' > "$USER_CFG"
@@ -188,7 +200,8 @@ assert_eq "outside a space, user layer still used" "x" "$out"
 reset_layers
 printf 'gate: "true"\nbase: develop\nmodels:\n  dev: [opus]\n' > "$PROJECT"
 printf 'merge_method: squash\n' > "$USER_CFG"
-out="$(cfg --print)"
+out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --print 2>/dev/null)"; rc=$?
+assert_eq "valid config: --print exits 0" "0" "$rc"
 assert_contains "print: project key shows project file" "$out" "base = \"develop\"  # $PROJECT"
 assert_contains "print: user key shows user file" "$out" "merge_method = \"squash\"  # $USER_CFG"
 assert_contains "print: default key shows defaults file" "$out" "mux = \"herdr\"  # $DEFAULTS"
@@ -257,9 +270,7 @@ assert_fails "whitespace rejected" ship_model_parse "zai/glm 5"
 assert_fails "bare name with thinking rejected" ship_model_parse "sonnet:high"
 
 # T11: stage=a,b override parser -----------------------------------------------
-reset_layers
-printf 'gate: "true"\n' > "$PROJECT"
-lc   # one load; each case runs in a subshell so the override never leaks
+lc_plain
 ovr() { # ovr <spec> <stage> — models.<stage> after the override
   ( ship_models_override "$1" && ship_cfg_get "models.$2" )
 }
@@ -295,9 +306,7 @@ printf '# ok\na: 1\nb: 2\n' > "$FIX/bad.yml"
 bad="$(awk '/^[[:space:]]*[A-Za-z_][A-Za-z0-9_.-]*:/ { if (prev !~ /^[[:space:]]*#/ && $0 !~ /[[:space:]]#/) print NR": "$0 } {prev=$0}' "$FIX/bad.yml")"
 assert_eq "comment checker flags an undocumented key" "3: b: 2" "$bad"
 # Every leaf key of the merged defaults is covered by the table in the design.
-reset_layers
-printf 'gate: "true"\n' > "$PROJECT"
-lc
+lc_plain
 keys="$(ship_cfg_print | sed 's/ = .*//' | tr '\n' ' ')"
 for k in mux units_group base merge_method spec.paths scan.forbidden scan.exclude stages.final.always max_rounds \
          models.dev models.verify models.review models.spec_check models.spec_write models.final \
@@ -384,8 +393,9 @@ bad_cfg() { # bad_cfg <desc> <yaml> <expected fragment>
 }
 # One CLI row: validation failure maps to exit 1 with the message on stderr.
 printf 'gate: "true"\nmodels: {dev: []}\n' > "$PROJECT"
-assert_eq "CLI: invalid config exits 1" "1" "$(cfg_rc --print)"
-assert_contains "CLI: invalid config message" "$(cfg_err --print)" "models.dev must be a non-empty list"
+out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --print 2>&1)"; rc=$?
+assert_eq "CLI: invalid config exits 1" "1" "$rc"
+assert_contains "CLI: invalid config message" "$out" "models.dev must be a non-empty list"
 # Validation reports every bad key in one pass, so distinct keys share a load.
 # Each key keeps its own message assertion.
 bad_cfg "models: null" 'models: ~' "models.dev"

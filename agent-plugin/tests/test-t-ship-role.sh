@@ -243,6 +243,13 @@ printf 'roles:\n  dev:\n    pi_skills: []\n    pi_extensions: []\n' > "$PROJECT"
 assert_eq "empty lists give the base args" "-ne -ns -np --no-mcp --exclude-tools ask_user" "$(role dev --harness pi)"
 rm -f "$PROJECT"
 
+# C11: standalone (no preload): ship-role loads the layers itself; a malformed ship.yml is exit 1
+printf 'roles: [not, a, map\n' > "$PROJECT"
+rc=0; err="$(cd "$CWD" && bash "$ROLE" dev --harness claude 2>&1 >/dev/null)" || rc=$?
+assert_eq "standalone, malformed ship.yml: exit 1" 1 "$rc"
+assert_contains "standalone, malformed ship.yml: names the file" "$err" "$PROJECT"
+rm -f "$PROJECT"
+
 # C12: works through a (chained) symlink on PATH ---------------------------------------------
 mkdir -p "$FIX/bin"
 ln -s "$ROLE" "$FIX/bin/ship-role"
@@ -288,8 +295,10 @@ assert_eq "skill path with a space: exit 1" 1 "$R"
 assert_contains "names the path" "$E" "odd name"
 run3 review --harness pi
 assert_eq "skill path with a glob char: exit 1" 1 "$R"
+assert_contains "names the glob path" "$E" "star*"
 run3 spec --harness pi
 assert_eq "extension path with a space: exit 1" 1 "$R"
+assert_contains "names the extension path" "$E" "with space.ts"
 rm -rf "$HOME/.agents/skills/odd name"
 rm -rf "$HOME/.agents/skills/star*"
 
@@ -329,9 +338,10 @@ assert_eq "cache dir name is <basename>-<8 hex>" 1 "$(basename "$OUTDIR" | grep 
 # C20: --cwd picks the project layers; --help is whole --------------------------------------------
 mkdir -p "$FIX/wt/.claude"
 printf '{"enabledPlugins":{"wt-only@m":true}}\n' > "$FIX/wt/.claude/settings.json"
-(cd "$CWD" && SHIP_CONFIG_JSON="$(<"$_PF.json")" SHIP_CONFIG_LAYERS="$(<"$_PF.layers")" bash "$ROLE" verify --harness claude --cwd "$FIX/wt" >/dev/null 2>&1)
+rb verify --harness claude --cwd "$FIX/wt" >/dev/null 2>&1
 assert_eq "--cwd layer is read" false "$(plug verify wt-only@m)"
-assert_eq "without --cwd the layer is not read (lead profile from the run above)" null "$(plug lead wt-only@m)"
+role lead --harness claude >/dev/null
+assert_eq "without --cwd the layer is not read" null "$(plug lead wt-only@m)"
 assert_eq "--cwd without a value: exit 2" 2 "$(role_rc lead --harness claude --cwd)"
 help_out="$(role --help)"
 assert_contains "--help includes the pi docs" "$help_out" "--exclude-tools ask_user"
