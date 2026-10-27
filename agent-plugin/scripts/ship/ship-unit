@@ -108,18 +108,8 @@ usage() { echo "ship-unit: $*" >&2; exit "$E_USAGE"; }
 # UNDO_FN: set while _launch holds a branch and worktree it created, so that any failure removes them.
 UNDO_FN=""
 undo_now() { local f="$UNDO_FN"; UNDO_FN=""; [[ -z "$f" ]] || "$f" || true; }
-fail() { undo_now; echo "ship-unit: $*" >&2; exit "$E_INTERNAL"; }
+die() { undo_now; echo "ship-unit: $*" >&2; exit "$E_INTERNAL"; }
 refuse() { echo "ship-unit: refused: $*" >&2; exit "$E_REFUSED"; }
-
-sub="${1:-}"
-case "$sub" in
-  -h|--help|"") sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; [[ -n "$sub" ]] && exit 0; exit "$E_USAGE" ;;
-  run|resume|wait|list) ;;
-  _launch|_resume|_probe|_driver)
-    [[ "${SHIP_UNIT_INTERNAL:-}" == 1 ]] || usage "unknown subcommand '$sub' (try --help)" ;;
-  *) usage "unknown subcommand '$sub' (try --help)" ;;
-esac
-shift
 
 check_ref() {
   [[ -n "${1:-}" ]] || usage "a ref is required"
@@ -203,40 +193,6 @@ unit_state() {
 
 unit_live() { case "$(unit_state "$1")" in running|starting) return 0 ;; *) return 1 ;; esac; }
 
-# --- internal: probe -----------------------------------------------------------------------
-# One line per ref: "ship-unit-probe: <ref> <state>". The prefix lets the caller ignore
-# whatever a login shell prints around it.
-if [[ "$sub" == _probe ]]; then
-  [[ $# -gt 0 ]] || usage "_probe needs a ref"
-  root="$(ship_space_root)" || exit "$E_INTERNAL"
-  for ref in "$@"; do
-    check_ref "$ref"
-    echo "ship-unit-probe: $ref $(unit_state "$root/notes/loops/$ref")"
-  done
-  exit 0
-fi
-
-# --- internal: the command that runs in the unit's pane ------------------------------------
-if [[ "$sub" == _driver ]]; then
-  ref="${1:-}"; check_ref "$ref"
-  root="$(ship_space_root)" || exit "$E_INTERNAL"
-  d="$root/notes/loops/$ref"
-  [[ -f "$d/unit.json" ]] || fail "$d/unit.json is missing"
-  args=(--ref "$ref")
-  args+=(--worktree "$(jq -r .worktree "$d/unit.json")" --branch "$(jq -r .branch "$d/unit.json")")
-  args+=(--brief "$(jq -r .brief "$d/unit.json")" --class "$(jq -r .class "$d/unit.json")")
-  v="$(jq -r '.base // ""' "$d/unit.json")"; [[ -z "$v" ]] || args+=(--base "$v")
-  v="$(jq -r '.max_rounds // ""' "$d/unit.json")"; [[ -z "$v" ]] || args+=(--max-rounds "$v")
-  [[ "$(jq -r '.final_gate // false' "$d/unit.json")" != true ]] || args+=(--final-gate)
-  # Models reach ship-loop through models.override (written by run, appended by resume),
-  # so a resume --model beats the run's.
-  # Atomic: a reader must see the whole pid or no file, never an empty one.
-  echo $$ >"$d/driver.pid.tmp.$$" && mv -f "$d/driver.pid.tmp.$$" "$d/driver.pid"
-  rc=0
-  "$LOOP" "${args[@]}" || rc=$?
-  echo "$rc" >"$d/driver.exit.tmp" && mv "$d/driver.exit.tmp" "$d/driver.exit"
-  exit "$rc"
-fi
 
 # --- launching (on the host that runs the driver) ------------------------------------------
 host_name="local" slots=""
@@ -251,9 +207,9 @@ internal_cleanup() {
 # dead or it is over ten minutes old).
 lock_acquire() {
   LOCK_DIR="$root/.hyper/ship-unit.lock"
-  mkdir -p "$root/.hyper" || fail "cannot create $root/.hyper"
+  mkdir -p "$root/.hyper" || die "cannot create $root/.hyper"
   trap internal_cleanup EXIT
-  ship_lock "$LOCK_DIR" "$LOCK_WAIT_S" 600 || fail "could not get the launch lock $LOCK_DIR in ${LOCK_WAIT_S}s (held by ${SHIP_LOCK_OWNER:-?})"
+  ship_lock "$LOCK_DIR" "$LOCK_WAIT_S" 600 || die "could not get the launch lock $LOCK_DIR in ${LOCK_WAIT_S}s (held by ${SHIP_LOCK_OWNER:-?})"
   LOCK_HELD=1
 }
 
@@ -277,7 +233,7 @@ check_free() {
     refuse "the driver of $ref is already running on $host_name; use 'ship-unit wait $ref'"
   fi
   [[ "$slots" =~ ^[0-9]+$ ]] || { slots="$(ship_cfg_get "hosts.$host_name.slots" 2>/dev/null)" || slots=""; }
-  [[ "$slots" =~ ^[0-9]+$ ]] || fail "host '$host_name' has no usable hosts.$host_name.slots in the ship config"
+  [[ "$slots" =~ ^[0-9]+$ ]] || die "host '$host_name' has no usable hosts.$host_name.slots in the ship config"
   live="$(live_units "$ref" | tr '\n' ' ')"
   n="$(printf '%s' "$live" | wc -w | tr -d ' ')"
   if [[ "$n" -ge "$slots" ]]; then
@@ -296,13 +252,13 @@ write_config() {
 # launch_driver <ref> — space and driver pane. unit.json exists and its launched_at is set.
 launch_driver() {
   local ref="$1" d="$root/notes/loops/$1" wt open_out pane cmd
-  "$MUX" check || fail "the multiplexer is not usable here"
+  "$MUX" check || die "the multiplexer is not usable here"
   wt="$(jq -r .worktree "$d/unit.json")"
   rm -f "$d/driver.exit" "$d/driver.pid"
   jq --argjson t "$(date +%s)" '.launched_at = $t' "$d/unit.json" >"$d/unit.json.tmp" && mv "$d/unit.json.tmp" "$d/unit.json"
   write_config "$ref"
   if ! open_out="$("$MUX" open --ref "$ref" --cwd "$wt" --label "$ref")"; then
-    unlaunch "$ref"; fail "ship-mux open failed"
+    unlaunch "$ref"; die "ship-mux open failed"
   fi
   pane="$(jq -r .pane <<<"$open_out")"
   cmd="SHIP_UNIT_INTERNAL=1 SHIP_SPACE_ROOT=$(ship_sq "$root") SHIP_HOST=$(ship_sq "$host_name")"
@@ -312,7 +268,7 @@ launch_driver() {
   if [[ "$host_name" == local && -n "${PATH:-}" ]]; then cmd+=" PATH=$(ship_sq "$PATH")"; fi
   cmd+=" bash $(ship_sq "$_src") _driver $(ship_sq "$ref")"
   if ! "$MUX" run --ref "$ref" --pane "$pane" -- "$cmd"; then
-    unlaunch "$ref"; fail "ship-mux run failed"
+    unlaunch "$ref"; die "ship-mux run failed"
   fi
   jq -nc --arg ref "$ref" --arg host "$host_name" --arg wt "$wt" --argjson open "$open_out" \
     '{ref: $ref, host: $host, worktree: $wt, space: $open.space, pane: $open.pane}'
@@ -323,155 +279,6 @@ unlaunch() {
   local d="$root/notes/loops/$1"
   jq '.launched_at = 0' "$d/unit.json" >"$d/unit.json.tmp" && mv "$d/unit.json.tmp" "$d/unit.json"
 }
-
-if [[ "$sub" == _launch ]]; then
-  command -v wt >/dev/null 2>&1 || fail "wt (worktrunk) not found on PATH"
-  ref="${1:-}"; check_ref "$ref"; shift
-  brief="" class="" branch="" base="" max_rounds="" final_gate=false spec_dir=""
-  models=()
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --final-gate) final_gate=true; shift; continue ;;
-      --brief|--class|--branch|--base|--max-rounds|--model|--host-name|--slots|--spec-dir)
-        [[ $# -ge 2 ]] || usage "$1 needs a value" ;;
-      *) usage "unknown argument: $1" ;;
-    esac
-    case "$1" in
-      --brief) brief="$2" ;; --class) class="$2" ;; --branch) branch="$2" ;; --base) base="$2" ;;
-      --max-rounds) max_rounds="$2" ;; --model) models+=("$2") ;; --host-name) host_name="$2" ;;
-      --slots) slots="$2" ;; --spec-dir) spec_dir="$2" ;;
-    esac
-    shift 2
-  done
-  load_cfg
-  [[ -f "$brief" ]] || fail "brief $brief is not a file (on $host_name)"
-  [[ -z "$spec_dir" || -d "$spec_dir" ]] || fail "spec dir $spec_dir is not a directory"
-  [[ -n "$branch" ]] || branch="$ref"
-  [[ -n "$base" ]] || base="$(ship_cfg_get base)" || fail "config has no base"
-  d="$root/notes/loops/$ref"
-
-  # Fetching can be slow; it must not hold the lock (a wave of runs would queue behind it).
-  GIT_TERMINAL_PROMPT=0 git -C "$root" fetch -q origin >/dev/null 2>&1 || true
-  lock_acquire
-  check_free "$ref"
-
-  wt_find() {
-    git -C "$root" worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$branch" '
-      $1 == "worktree" { p = substr($0, 10) } $1 == "branch" && $2 == b { print p; exit }'
-  }
-  wt_path="$(wt_find)"
-  # What this run creates (a reused worktree or branch is never touched), so that a failure of any
-  # later step removes exactly that and the next run starts clean.
-  made_branch=0 made_wt=0
-  undo_created() {
-    local p
-    p="$(wt_find)"
-    if [[ $made_wt -eq 1 && -n "$p" ]]; then
-      git -C "$root" worktree remove --force "$p" >/dev/null 2>&1 || true
-      git -C "$root" worktree prune >/dev/null 2>&1 || true
-    fi
-    if [[ $made_branch -eq 1 ]]; then git -C "$root" branch -D "$branch" >/dev/null 2>&1 || true; fi
-    echo "ship-unit: removed the worktree and branch this run created for $ref" >&2
-  }
-  if [[ -z "$wt_path" ]]; then
-    UNDO_FN=undo_created
-    if git -C "$root" rev-parse --verify -q "refs/heads/$branch" >/dev/null 2>&1; then
-      made_wt=1
-      wt_out="$(CDPATH='' cd -- "$root" && wt switch --no-cd "$branch" 2>&1)" || fail "wt switch $branch failed:"$'\n'"$(head -c 1500 <<<"$wt_out" | sed 's/^/  /')"
-    else
-      # A new branch starts from the remote base, not from whatever the local one is.
-      from="$base"
-      git -C "$root" rev-parse --verify -q "refs/remotes/origin/$base" >/dev/null 2>&1 && from="origin/$base"
-      made_wt=1 made_branch=1
-      wt_out="$(CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$from" "$branch" 2>&1)" || fail "wt switch -c $branch failed:"$'\n'"$(head -c 1500 <<<"$wt_out" | sed 's/^/  /')"
-    fi
-    [[ -z "$wt_out" ]] || echo "$wt_out" >&2
-    wt_path="$(wt_find)"
-    [[ -n "$wt_path" && -d "$wt_path" ]] || fail "wt did not leave a worktree for branch $branch"
-  fi
-
-  mkdir -p "$d"
-  models_json="$(printf '%s\n' ${models[@]+"${models[@]}"} | jq -R 'select(. != "")' | jq -sc .)"
-  # A fresh run starts from the run's own model overrides; a later resume appends.
-  : >"$d/models.override"
-  for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
-  jq -n --arg ref "$ref" --arg host "$host_name" --arg branch "$branch" --arg wt "$wt_path" --arg brief "$brief" \
-    --arg class "$class" --arg base "$base" --arg mr "$max_rounds" --argjson fg "$final_gate" \
-    --argjson models "$models_json" --arg spec "$spec_dir" --argjson t "$(date +%s)" \
-    '{ref: $ref, host: $host, branch: $branch, worktree: $wt, brief: $brief, class: $class, base: $base,
-      max_rounds: (if $mr == "" then null else ($mr | tonumber) end), final_gate: $fg, models: $models,
-      spec_dir: (if $spec == "" then null else $spec end), launched_at: $t}' >"$d/unit.json.tmp"
-  mv "$d/unit.json.tmp" "$d/unit.json"
-  rm -f "$d/driver.exit" "$d/driver.pid"
-  launch_driver "$ref"
-  UNDO_FN=""
-  exit 0
-fi
-
-if [[ "$sub" == _resume ]]; then
-  ref="${1:-}"; check_ref "$ref"; shift
-  answer="" extend="" max_rounds="" models=()
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --answer-file|--extend|--max-rounds|--model|--host-name|--slots) [[ $# -ge 2 ]] || usage "$1 needs a value" ;;
-      *) usage "unknown argument: $1" ;;
-    esac
-    case "$1" in
-      --answer-file) answer="$2" ;; --extend) extend="$2" ;; --max-rounds) max_rounds="$2" ;;
-      --model) models+=("$2") ;; --host-name) host_name="$2" ;; --slots) slots="$2" ;;
-    esac
-    shift 2
-  done
-  load_cfg
-  # A staged answer is a copy for this call only.
-  case "$answer" in */.resume-answer) CLEAN_FILE="$answer" ;; esac
-  d="$root/notes/loops/$ref"
-  [[ -f "$d/unit.json" ]] || fail "unknown unit '$ref': $d/unit.json does not exist"
-  lock_acquire
-  check_free "$ref"
-  # Check everything before writing anything.
-  n=""
-  if [[ -n "$answer" ]]; then
-    [[ -s "$answer" ]] || fail "answer file $answer is missing or empty"
-    [[ -s "$d/park.json" ]] || refuse "$ref is not parked (no park.json); nothing is waiting for an answer"
-    case "$(jq -r '.status // ""' "$d/park.json")" in
-      LIMIT) refuse "$ref is parked on a usage limit; an answer does not help: wait for the reset or resume with --model" ;;
-      DIALOG) refuse "$ref is parked on a dialog the agent could not pass; an answer does not help: fix it in the pane, then resume without --answer" ;;
-    esac
-    n="$(jq -r '.n // empty' "$d/park.json")"
-    [[ "$n" =~ ^[0-9]+$ ]] || fail "$d/park.json has no park number"
-  fi
-  if [[ -n "$extend" ]]; then
-    positive_number "$extend" || usage "--extend takes minutes (a number above 0), got '$extend'"
-    ok=0
-    for b in "$d"/budget-r*.json; do
-      [[ -f "$b" && ! -e "$b.handled" ]] && ok=1
-    done
-    [[ $ok -eq 1 ]] || refuse "$ref has no stage over budget; nothing to extend"
-  fi
-  if [[ -n "$max_rounds" ]]; then
-    [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
-    # The limit the driver would use now: the unit's own, else the config default.
-    cur="$(jq -r '.max_rounds // ""' "$d/unit.json")"
-    [[ -n "$cur" ]] || cur="$(ship_cfg_get max_rounds 2>/dev/null)" || cur=""
-    [[ "$cur" =~ ^[1-9][0-9]*$ ]] || fail "cannot tell $ref's current round limit"
-    [[ "$max_rounds" -gt "$cur" ]] || usage "--max-rounds $max_rounds must be above the unit's current limit ($cur)"
-  fi
-  # The limit goes first: if it cannot be written, nothing else has been applied.
-  if [[ -n "$max_rounds" ]]; then
-    jq --argjson n "$max_rounds" '.max_rounds = $n' "$d/unit.json" >"$d/unit.json.tmp" || { rm -f "$d/unit.json.tmp"; fail "could not update $d/unit.json"; }
-    mv "$d/unit.json.tmp" "$d/unit.json"
-    echo "ship-unit: raised the round limit to $max_rounds" >&2
-  fi
-  if [[ -n "$answer" ]]; then
-    cp "$answer" "$d/answer-$n.md.tmp" && mv "$d/answer-$n.md.tmp" "$d/answer-$n.md"
-    echo "ship-unit: wrote answer-$n.md" >&2
-  fi
-  [[ -z "$extend" ]] || { printf '%s\n' "$extend" >"$d/extend"; echo "ship-unit: wrote extend ($extend min)" >&2; }
-  for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
-  launch_driver "$ref"
-  exit 0
-fi
 
 # --- client side: run / resume / wait / list -----------------------------------------------
 HTARGET="" HNAME=local need_sync=0 resynced=0 DRIVER_RC=""
@@ -502,7 +309,7 @@ select_host() {
   if ! ship_host_is_local "$HNAME"; then
     HTARGET="$(ship_host_target "$HNAME")" || exit "$E_INTERNAL"
     if ! ship_host_sync "$HTARGET"; then
-      [[ "${2:-}" == soft ]] || fail "could not copy the ship scripts to $HNAME ($HTARGET)"
+      [[ "${2:-}" == soft ]] || die "could not copy the ship scripts to $HNAME ($HTARGET)"
       need_sync=1
     fi
   fi
@@ -511,7 +318,7 @@ select_host() {
 host_slots() {
   local s
   s="$(ship_cfg_get "hosts.$HNAME.slots" 2>/dev/null)" || s=""
-  [[ "$s" =~ ^[0-9]+$ ]] || fail "host '$HNAME' has no usable hosts.$HNAME.slots in the ship config"
+  [[ "$s" =~ ^[0-9]+$ ]] || die "host '$HNAME' has no usable hosts.$HNAME.slots in the ship config"
   printf '%s\n' "$s"
 }
 
@@ -619,6 +426,247 @@ launch_failed() {
   exit "$E_INTERNAL"
 }
 
+# check_sub <sub> — usage unless it is a subcommand this call may use.
+check_sub() {
+  case "$1" in
+    run|resume|wait|list) ;;
+    _launch|_resume|_probe|_driver)
+      [[ "${SHIP_UNIT_INTERNAL:-}" == 1 ]] || usage "unknown subcommand '$1' (try --help)" ;;
+    *) usage "unknown subcommand '$1' (try --help)" ;;
+  esac
+}
+
+# run_args_check — the checks of `run` on its parsed options (ref brief class max_rounds spec_dir);
+# makes brief and spec_dir absolute.
+run_args_check() {
+  check_ref "$ref"
+  [[ -n "$brief" ]] || usage "--brief is required"
+  case "$class" in S|M|L) ;; *) usage "--class must be S, M or L" ;; esac
+  if [[ -n "$max_rounds" ]]; then
+    [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
+  fi
+  [[ -f "$brief" ]] || usage "brief $brief is not a file"
+  brief="$(abs_path "$brief")"
+  if [[ -n "$spec_dir" ]]; then
+    [[ -d "$spec_dir" ]] || usage "spec dir $spec_dir is not a directory"
+    spec_dir="$(CDPATH='' cd -- "$spec_dir" && pwd -P)"
+  fi
+}
+
+# resume_opts_check — the checks of `resume` on its parsed options (ref answer extend max_rounds)
+# that need no unit state; makes answer absolute.
+resume_opts_check() {
+  check_ref "$ref"
+  [[ -z "$max_rounds" || "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
+  if [[ -n "$answer" ]]; then
+    [[ -s "$answer" ]] || usage "answer file $answer is missing or empty"
+    answer="$(abs_path "$answer")"
+  fi
+  if [[ -n "$extend" ]]; then
+    positive_number "$extend" || usage "--extend takes minutes (a number above 0), got '$extend'"
+  fi
+}
+
+# resume_args_check — where the unit lives: everything a resume would write is checked before
+# anything is (uses d answer extend max_rounds); sets n, the number of the park being answered.
+resume_args_check() {
+  local ok=0 b cur
+  n=""
+  if [[ -n "$answer" ]]; then
+    [[ -s "$answer" ]] || die "answer file $answer is missing or empty"
+    [[ -s "$d/park.json" ]] || refuse "$ref is not parked (no park.json); nothing is waiting for an answer"
+    case "$(jq -r '.status // ""' "$d/park.json")" in
+      LIMIT) refuse "$ref is parked on a usage limit; an answer does not help: wait for the reset or resume with --model" ;;
+      DIALOG) refuse "$ref is parked on a dialog the agent could not pass; an answer does not help: fix it in the pane, then resume without --answer" ;;
+    esac
+    n="$(jq -r '.n // empty' "$d/park.json")"
+    [[ "$n" =~ ^[0-9]+$ ]] || die "$d/park.json has no park number"
+  fi
+  if [[ -n "$extend" ]]; then
+    positive_number "$extend" || usage "--extend takes minutes (a number above 0), got '$extend'"
+    for b in "$d"/budget-r*.json; do
+      [[ -f "$b" && ! -e "$b.handled" ]] && ok=1
+    done
+    [[ $ok -eq 1 ]] || refuse "$ref has no stage over budget; nothing to extend"
+  fi
+  if [[ -n "$max_rounds" ]]; then
+    [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
+    # The limit the driver would use now: the unit's own, else the config default.
+    cur="$(jq -r '.max_rounds // ""' "$d/unit.json")"
+    [[ -n "$cur" ]] || cur="$(ship_cfg_get max_rounds 2>/dev/null)" || cur=""
+    [[ "$cur" =~ ^[1-9][0-9]*$ ]] || die "cannot tell $ref's current round limit"
+    [[ "$max_rounds" -gt "$cur" ]] || usage "--max-rounds $max_rounds must be above the unit's current limit ($cur)"
+  fi
+}
+
+# Sourced (by tests/test-t-ship-unit-fn.sh): the functions above are all it wants.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
+
+sub="${1:-}"
+case "$sub" in
+  -h|--help|"") sed -n '2,/^$/p' "$_src" | sed '$d' | sed 's/^# \{0,1\}//'; [[ -n "$sub" ]] && exit 0; exit "$E_USAGE" ;;
+esac
+check_sub "$sub"
+shift
+
+# --- internal: probe -----------------------------------------------------------------------
+# One line per ref: "ship-unit-probe: <ref> <state>". The prefix lets the caller ignore
+# whatever a login shell prints around it.
+if [[ "$sub" == _probe ]]; then
+  [[ $# -gt 0 ]] || usage "_probe needs a ref"
+  root="$(ship_space_root)" || exit "$E_INTERNAL"
+  for ref in "$@"; do
+    check_ref "$ref"
+    echo "ship-unit-probe: $ref $(unit_state "$root/notes/loops/$ref")"
+  done
+  exit 0
+fi
+
+# --- internal: the command that runs in the unit's pane ------------------------------------
+if [[ "$sub" == _driver ]]; then
+  ref="${1:-}"; check_ref "$ref"
+  root="$(ship_space_root)" || exit "$E_INTERNAL"
+  d="$root/notes/loops/$ref"
+  [[ -f "$d/unit.json" ]] || die "$d/unit.json is missing"
+  args=(--ref "$ref")
+  args+=(--worktree "$(jq -r .worktree "$d/unit.json")" --branch "$(jq -r .branch "$d/unit.json")")
+  args+=(--brief "$(jq -r .brief "$d/unit.json")" --class "$(jq -r .class "$d/unit.json")")
+  v="$(jq -r '.base // ""' "$d/unit.json")"; [[ -z "$v" ]] || args+=(--base "$v")
+  v="$(jq -r '.max_rounds // ""' "$d/unit.json")"; [[ -z "$v" ]] || args+=(--max-rounds "$v")
+  [[ "$(jq -r '.final_gate // false' "$d/unit.json")" != true ]] || args+=(--final-gate)
+  # Models reach ship-loop through models.override (written by run, appended by resume),
+  # so a resume --model beats the run's.
+  # Atomic: a reader must see the whole pid or no file, never an empty one.
+  echo $$ >"$d/driver.pid.tmp.$$" && mv -f "$d/driver.pid.tmp.$$" "$d/driver.pid"
+  rc=0
+  "$LOOP" "${args[@]}" || rc=$?
+  echo "$rc" >"$d/driver.exit.tmp" && mv "$d/driver.exit.tmp" "$d/driver.exit"
+  exit "$rc"
+fi
+
+if [[ "$sub" == _launch ]]; then
+  command -v wt >/dev/null 2>&1 || die "wt (worktrunk) not found on PATH"
+  ref="${1:-}"; check_ref "$ref"; shift
+  brief="" class="" branch="" base="" max_rounds="" final_gate=false spec_dir=""
+  models=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --final-gate) final_gate=true; shift; continue ;;
+      --brief|--class|--branch|--base|--max-rounds|--model|--host-name|--slots|--spec-dir)
+        [[ $# -ge 2 ]] || usage "$1 needs a value" ;;
+      *) usage "unknown argument: $1" ;;
+    esac
+    case "$1" in
+      --brief) brief="$2" ;; --class) class="$2" ;; --branch) branch="$2" ;; --base) base="$2" ;;
+      --max-rounds) max_rounds="$2" ;; --model) models+=("$2") ;; --host-name) host_name="$2" ;;
+      --slots) slots="$2" ;; --spec-dir) spec_dir="$2" ;;
+    esac
+    shift 2
+  done
+  load_cfg
+  [[ -f "$brief" ]] || die "brief $brief is not a file (on $host_name)"
+  [[ -z "$spec_dir" || -d "$spec_dir" ]] || die "spec dir $spec_dir is not a directory"
+  [[ -n "$branch" ]] || branch="$ref"
+  [[ -n "$base" ]] || base="$(ship_cfg_get base)" || die "config has no base"
+  d="$root/notes/loops/$ref"
+
+  # Fetching can be slow; it must not hold the lock (a wave of runs would queue behind it).
+  GIT_TERMINAL_PROMPT=0 git -C "$root" fetch -q origin >/dev/null 2>&1 || true
+  lock_acquire
+  check_free "$ref"
+
+  wt_find() {
+    git -C "$root" worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$branch" '
+      $1 == "worktree" { p = substr($0, 10) } $1 == "branch" && $2 == b { print p; exit }'
+  }
+  wt_path="$(wt_find)"
+  # What this run creates (a reused worktree or branch is never touched), so that a failure of any
+  # later step removes exactly that and the next run starts clean.
+  made_branch=0 made_wt=0
+  undo_created() {
+    local p
+    p="$(wt_find)"
+    if [[ $made_wt -eq 1 && -n "$p" ]]; then
+      git -C "$root" worktree remove --force "$p" >/dev/null 2>&1 || true
+      git -C "$root" worktree prune >/dev/null 2>&1 || true
+    fi
+    if [[ $made_branch -eq 1 ]]; then git -C "$root" branch -D "$branch" >/dev/null 2>&1 || true; fi
+    echo "ship-unit: removed the worktree and branch this run created for $ref" >&2
+  }
+  if [[ -z "$wt_path" ]]; then
+    UNDO_FN=undo_created
+    if git -C "$root" rev-parse --verify -q "refs/heads/$branch" >/dev/null 2>&1; then
+      made_wt=1
+      wt_out="$(CDPATH='' cd -- "$root" && wt switch --no-cd "$branch" 2>&1)" || die "wt switch $branch failed:"$'\n'"$(head -c 1500 <<<"$wt_out" | sed 's/^/  /')"
+    else
+      # A new branch starts from the remote base, not from whatever the local one is.
+      from="$base"
+      git -C "$root" rev-parse --verify -q "refs/remotes/origin/$base" >/dev/null 2>&1 && from="origin/$base"
+      made_wt=1 made_branch=1
+      wt_out="$(CDPATH='' cd -- "$root" && wt switch -c --no-cd -b "$from" "$branch" 2>&1)" || die "wt switch -c $branch failed:"$'\n'"$(head -c 1500 <<<"$wt_out" | sed 's/^/  /')"
+    fi
+    [[ -z "$wt_out" ]] || echo "$wt_out" >&2
+    wt_path="$(wt_find)"
+    [[ -n "$wt_path" && -d "$wt_path" ]] || die "wt did not leave a worktree for branch $branch"
+  fi
+
+  mkdir -p "$d"
+  models_json="$(printf '%s\n' ${models[@]+"${models[@]}"} | jq -R 'select(. != "")' | jq -sc .)"
+  # A fresh run starts from the run's own model overrides; a later resume appends.
+  : >"$d/models.override"
+  for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
+  jq -n --arg ref "$ref" --arg host "$host_name" --arg branch "$branch" --arg wt "$wt_path" --arg brief "$brief" \
+    --arg class "$class" --arg base "$base" --arg mr "$max_rounds" --argjson fg "$final_gate" \
+    --argjson models "$models_json" --arg spec "$spec_dir" --argjson t "$(date +%s)" \
+    '{ref: $ref, host: $host, branch: $branch, worktree: $wt, brief: $brief, class: $class, base: $base,
+      max_rounds: (if $mr == "" then null else ($mr | tonumber) end), final_gate: $fg, models: $models,
+      spec_dir: (if $spec == "" then null else $spec end), launched_at: $t}' >"$d/unit.json.tmp"
+  mv "$d/unit.json.tmp" "$d/unit.json"
+  rm -f "$d/driver.exit" "$d/driver.pid"
+  launch_driver "$ref"
+  UNDO_FN=""
+  exit 0
+fi
+
+if [[ "$sub" == _resume ]]; then
+  ref="${1:-}"; check_ref "$ref"; shift
+  answer="" extend="" max_rounds="" models=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --answer-file|--extend|--max-rounds|--model|--host-name|--slots) [[ $# -ge 2 ]] || usage "$1 needs a value" ;;
+      *) usage "unknown argument: $1" ;;
+    esac
+    case "$1" in
+      --answer-file) answer="$2" ;; --extend) extend="$2" ;; --max-rounds) max_rounds="$2" ;;
+      --model) models+=("$2") ;; --host-name) host_name="$2" ;; --slots) slots="$2" ;;
+    esac
+    shift 2
+  done
+  load_cfg
+  # A staged answer is a copy for this call only.
+  case "$answer" in */.resume-answer) CLEAN_FILE="$answer" ;; esac
+  d="$root/notes/loops/$ref"
+  [[ -f "$d/unit.json" ]] || die "unknown unit '$ref': $d/unit.json does not exist"
+  lock_acquire
+  check_free "$ref"
+  # Check everything before writing anything.
+  resume_args_check
+  # The limit goes first: if it cannot be written, nothing else has been applied.
+  if [[ -n "$max_rounds" ]]; then
+    jq --argjson n "$max_rounds" '.max_rounds = $n' "$d/unit.json" >"$d/unit.json.tmp" || { rm -f "$d/unit.json.tmp"; die "could not update $d/unit.json"; }
+    mv "$d/unit.json.tmp" "$d/unit.json"
+    echo "ship-unit: raised the round limit to $max_rounds" >&2
+  fi
+  if [[ -n "$answer" ]]; then
+    cp "$answer" "$d/answer-$n.md.tmp" && mv "$d/answer-$n.md.tmp" "$d/answer-$n.md"
+    echo "ship-unit: wrote answer-$n.md" >&2
+  fi
+  [[ -z "$extend" ]] || { printf '%s\n' "$extend" >"$d/extend"; echo "ship-unit: wrote extend ($extend min)" >&2; }
+  for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
+  launch_driver "$ref"
+  exit 0
+fi
+
 case "$sub" in
   run)
     ref="" brief="" class="" host="local" branch="" base="" max_rounds="" final_gate=0 spec_dir=""
@@ -637,18 +685,7 @@ case "$sub" in
       esac
       shift 2
     done
-    check_ref "$ref"
-    [[ -n "$brief" ]] || usage "--brief is required"
-    case "$class" in S|M|L) ;; *) usage "--class must be S, M or L" ;; esac
-    if [[ -n "$max_rounds" ]]; then
-      [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
-    fi
-    [[ -f "$brief" ]] || usage "brief $brief is not a file"
-    brief="$(abs_path "$brief")"
-    if [[ -n "$spec_dir" ]]; then
-      [[ -d "$spec_dir" ]] || usage "spec dir $spec_dir is not a directory"
-      spec_dir="$(CDPATH='' cd -- "$spec_dir" && pwd -P)"
-    fi
+    run_args_check
     load_cfg
     for m in ${models[@]+"${models[@]}"}; do ship_models_override "$m" || exit "$E_USAGE"; done
     select_host "$host"
@@ -662,7 +699,7 @@ case "$sub" in
         push+=("$rulings")
       fi
       [[ -z "$spec_dir" ]] || push+=("$spec_dir")
-      ship_host_push "$HTARGET" "${push[@]}" || fail "could not copy the brief and spec files to $HNAME"
+      ship_host_push "$HTARGET" "${push[@]}" || die "could not copy the brief and spec files to $HNAME"
     fi
 
     largs=("$ref" --brief "$brief" --class "$class" --host-name "$HNAME" --slots "$slots")
@@ -705,18 +742,10 @@ case "$sub" in
       esac
       shift 2
     done
-    check_ref "$ref"
-    [[ -z "$max_rounds" || "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
-    if [[ -n "$answer" ]]; then
-      [[ -s "$answer" ]] || usage "answer file $answer is missing or empty"
-      answer="$(abs_path "$answer")"
-    fi
-    if [[ -n "$extend" ]]; then
-      positive_number "$extend" || usage "--extend takes minutes (a number above 0), got '$extend'"
-    fi
+    resume_opts_check
     load_cfg
     for m in ${models[@]+"${models[@]}"}; do ship_models_override "$m" || exit "$E_USAGE"; done
-    [[ -f "$root/notes/loops/$ref/unit.json" ]] || fail "unknown unit '$ref': no notes/loops/$ref/unit.json"
+    [[ -f "$root/notes/loops/$ref/unit.json" ]] || die "unknown unit '$ref': no notes/loops/$ref/unit.json"
     select_host "$(jq -r '.host // "local"' "$root/notes/loops/$ref/unit.json")"
     slots="$(host_slots)"
     rargs=("$ref" --host-name "$HNAME" --slots "$slots")
@@ -725,7 +754,7 @@ case "$sub" in
       if [[ -n "$HTARGET" ]]; then
         staged="$root/notes/loops/$ref/.resume-answer"
         cp "$answer" "$staged"
-        if ! ship_host_push "$HTARGET" "$staged"; then rm -f "$staged"; fail "could not copy the answer to $HNAME"; fi
+        if ! ship_host_push "$HTARGET" "$staged"; then rm -f "$staged"; die "could not copy the answer to $HNAME"; fi
         rargs+=(--answer-file "$staged")
       else
         rargs+=(--answer-file "$answer")
@@ -754,7 +783,7 @@ case "$sub" in
     done
     check_ref "$ref"
     load_cfg
-    [[ -f "$root/notes/loops/$ref/unit.json" ]] || fail "unknown unit '$ref': no notes/loops/$ref/unit.json"
+    [[ -f "$root/notes/loops/$ref/unit.json" ]] || die "unknown unit '$ref': no notes/loops/$ref/unit.json"
     select_host "$(jq -r '.host // "local"' "$root/notes/loops/$ref/unit.json")" soft
     wait_driver "$ref"
     finish_unit "$ref"
@@ -763,7 +792,7 @@ case "$sub" in
   list)
     [[ $# -eq 0 ]] || usage "list takes no arguments"
     load_cfg
-    tmp="$(mktemp -d "${TMPDIR:-/tmp}/ship-unit-list.XXXXXX")" || fail "cannot create a temp dir"
+    tmp="$(mktemp -d "${TMPDIR:-/tmp}/ship-unit-list.XXXXXX")" || die "cannot create a temp dir"
     hosts_seen=()
     # One probe per remote host, all at once: each lists the refs it should answer for.
     for u in "$root"/notes/loops/*/; do
