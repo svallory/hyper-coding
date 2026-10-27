@@ -585,7 +585,10 @@ assert_eq "a connection lost during the start: 75" "75" "$(unit run h9 --brief "
 assert_contains "...says the driver may be running" "$(err)" "may be running"
 assert_eq "...a unit.json stub lets wait find the unit" "yes" "$([[ -f "$(loops h9)/unit.json" ]] && echo yes)"
 release h9
-assert_eq "...wait reattaches and returns the driver's code (0)" "0" "$(unit wait h9)"
+H9RC="$(unit wait h9)"
+assert_eq "...wait reattaches and returns the driver's code (0)" "0" "$H9RC"
+# this row once exited 70 intermittently with the code as the only evidence; the stderr says why (on a pass it is empty)
+assert_eq "...and said nothing on stderr (a 70 would name its cause here)" "" "$(err)"
 cp "$FIX/bin/ssh.real" "$FIX/bin/ssh"; chmod +x "$FIX/bin/ssh"
 
 # resume on a host (its cache is gone): the answer goes over, the host restarts the driver
