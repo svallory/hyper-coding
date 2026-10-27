@@ -23,7 +23,7 @@ agent-plugin/tests/helpers.sh                    ALL
 agent-plugin/tests/run.sh                        test-w-run-timeout.sh
 agent-plugin/tests/affected.map                  ALL
 agent-plugin/tests/hyper                         ALL
-agent-plugin/tests/lib/loop-journey.sh           test-t-ship-loop.sh
+agent-plugin/tests/lib/loop-journey.sh           test-t-ship-loop.sh test-t-ship-loop-fn.sh test-t-ship-failover-fn.sh
 agent-plugin/tests/lib/land-fixture.sh          test-t-ship-land.sh test-t-ship-land-fn.sh
 agent-plugin/tests/lib/mux-contract.sh           test-t-ship-mux-fake.sh test-t-ship-mux-herdr.sh
 agent-plugin/tests/fixtures/ship/*               test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-unit-driver.sh

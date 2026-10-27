@@ -364,21 +364,6 @@ SCHEMAS="$SHIP_DIR/schemas"
 ROLE_BIN="$SHIP_DIR/ship-role"
 export SHIP_QUOTA_DIR="$FIX/quota-fo"; mkdir -p "$SHIP_QUOTA_DIR"
 
-# loop_fn <name>... — define the named functions of ship-loop here (same awk slice as test-t-ship-loop-fn.sh:
-# a one-line function is taken as that line, a longer one runs to the next line that is a lone }).
-loop_fn() {
-  eval "$(awk -v names="$*" '
-    BEGIN { n = split(names, a, " "); for (i = 1; i <= n; i++) want[a[i]] = 1 }
-    !act && match($0, /^[a-z_0-9]+\(\) \{/) {
-      nm = substr($0, 1, RLENGTH - 4)
-      if (!(nm in want)) next
-      print
-      if ($0 ~ /\}[ \t]*(#.*)?$/ && $0 !~ /^[a-z_0-9]+\(\) \{[ \t]*(#.*)?$/) delete want[nm]; else act = 1
-      next
-    }
-    act { print; if ($0 ~ /^\}/) { act = 0; delete want[nm] } }
-    END { for (k in want) print "fail \"loop_fn: " k " is not defined in ship-loop\"" }' "$LOOP")"
-}
 newstate() { STATE="$(mktemp -d "$FIX/st.XXXXXX")"; mkdir -p "$STATE/agents"; LOG="$STATE/loop.log"; : >"$LOG"; }
 log() { printf '%s\n' "$*" >>"$LOG"; }
 die_error() { echo "DIE: $1"; exit 9; }
@@ -450,8 +435,17 @@ SHIP_CONFIG_JSON="$SAVED_CFG"
 
 # the takeover prompt must not trip the pi pattern (it names a rate/usage allowance): rendered from the real template
 TKP="$(render takeover stage_prompt="do the thing" answer="" worktree="$WT" status_file="$STATE/STATUS.md" brief="$BRIEF" from=sonnet to=zai/glm-5.3)"
-assert_eq "takeover prompt: does not trip the pi pattern (positive control: a real 429 line does)" "false true" "$(m "$PI_RE" "$TKP" | tr -d '\n' | tr -s ' ') $(m "$PI_RE" "Error: 429 Too Many Requests")"
-assert_eq "takeover prompt: does not trip the claude pattern" "false" "$(m "$CL_RE" "$TKP")"
+# jq test() with ^ anchors on the whole string, so the check runs per line, as limit_hit does
+TKP_PI="$(printf '%s\n' "$TKP" | jq -Rr --arg re "$PI_RE" 'select(test($re))')"
+TKP_PI_POS="$(printf '%s\n' "$TKP" "Error: 429 Too Many Requests" | jq -Rr --arg re "$PI_RE" 'select(test($re))')"
+assert_eq "takeover prompt: no line trips the pi pattern (positive control: a 429 line appended does)" "|Error: 429 Too Many Requests" "$TKP_PI|$TKP_PI_POS"
+mux_reset; MUX_SCREEN="$TKP"
+assert_fails "takeover prompt: limit_hit on a pi agent does not see a limit in it" limit_hit hp id-hp
+MUX_SCREEN="$TKP
+Error: 429 Too Many Requests"
+assert_eq "takeover prompt: limit_hit on a pi agent still sees a real 429 below it" "Error: 429 Too Many Requests" "$(limit_hit hp id-hp)"
+MUX_SCREEN="$TKP"
+assert_fails "takeover prompt: limit_hit on a claude agent does not see a limit in it" limit_hit hc id-hc
 
 # limits.patterns validation now lives in ship_config_load (one jq pass); covered by test-t-ship-config-validate.sh
 
@@ -731,17 +725,46 @@ assert_eq "failover (nothing left): the account limit is recorded until the rese
 rm -f "$SHIP_QUOTA_DIR"/*.json
 
 # await_file keeps the budget clock across a failover (r16): the time used before it stays counted.
-# The scripted agent is idle with a limit on its screen once, then working; its verdict appears on the third state read.
-# mutation: await_file `acc="$el"` after a failover -> `acc=0` (the clock restarts: the file is below the seed)
-newstate; AW_N=0
-agent_state() { AW_N=$((AW_N + 1)); L_STATE=working; [[ $AW_N -ne 1 ]] || L_STATE=idle; [[ $AW_N -ne 3 ]] || echo '{"status":"DONE"}' >"$STATE/develop.json"; }
-limit_hit() { [[ ! -e "$STATE/lh.done" ]] || return 1; : >"$STATE/lh.done"; echo "You've hit your Sonnet limit"; }
-failover_on_limit() { FO_ID=new-id; return 0; }
-echo 7 >"$STATE/develop.json.clock"
-await_file d id-d "$STATE/develop.json" develop 10; AWRC=$?
+# The scripted agent is idle with a limit on its screen once, then working; its verdict appears on the second state read.
+# `date +%s` is scripted (one value per call, from a file: command substitution is a subshell) so the clock is exact:
+#   seg 1000 | now 1030 (el 30, limit seen, failover) | new seg 2000 | now 2005 -> clock 30 + 5 = 35
+# mutation: await_file `acc="$el"` after a failover -> `acc=0` (clock 5)
+# mutation: await_file drops `acc="$el"` after a failover (clock 5)
+# mutation: await_file drops `seg="$(date +%s)"` after a failover (the clock jumps to the scripted 1030)
+date() { # only +%s is scripted; it pops the next value of $DATE_SEQ
+  if [[ "${1:-}" != +%s ]]; then command date "$@"; return; fi
+  head -n 1 "$DATE_SEQ"; sed -i.bak 1d "$DATE_SEQ"; rm -f "$DATE_SEQ.bak"
+}
+DATE_SEQ="$FIX/date.seq"
+IDLE_GRACE_S=3600
+aw_run() { # <seeded clock or ""> — run await_file once; sets AWRC and AW_FO (failover calls)
+  newstate; AW_N=0; AW_FO=0
+  printf '%s\n' 1000 1030 2000 2005 2006 2007 2008 >"$DATE_SEQ"
+  if [[ -n "$1" ]]; then echo "$1" >"$STATE/develop.json.clock"; fi
+  agent_state() { AW_N=$((AW_N + 1)); L_STATE=working; [[ $AW_N -ne 1 ]] || L_STATE=idle; [[ $AW_N -ne 2 ]] || echo '{"status":"DONE"}' >"$STATE/develop.json"; }
+  limit_hit() { [[ ! -e "$STATE/lh.done" ]] || return 1; : >"$STATE/lh.done"; echo "You've hit your Sonnet limit"; }
+  failover_on_limit() { AW_FO=$((AW_FO + 1)); FO_ID=new-id; return 0; }
+  await_file d id-d "$STATE/develop.json" develop 100; AWRC=$?
+}
+aw_run ""
 assert_eq "await_file: returns 0 once the successor writes the verdict" 0 "$AWRC"
-assert_contains "await_file: the log says the time used before the failover stays counted" "$(cat "$LOG")" "budget: 7s used before the failover stay counted"
-assert_eq "await_file: the clock after the failover is not below the time used before it" true "$([[ "$(cat "$STATE/develop.json.clock")" -ge 7 ]] && echo true || echo false)"
+assert_contains "await_file: the log says the time used before the failover stays counted" "$(cat "$LOG")" "budget: 30s used before the failover stay counted"
+assert_eq "await_file: the clock is the time before the failover plus the time since it" 35 "$(cat "$STATE/develop.json.clock")"
+aw_run 7
+assert_eq "await_file: a seeded clock is the starting point (7 + 30 + 5)" 42 "$(cat "$STATE/develop.json.clock")"
+
+# a limit on another model (rc 3, r21): await_file does not act on it, keeps polling, and does not ask again
+# for the same screen line (the `ignored` dedupe) while the agent goes on and writes its verdict
+# mutation: await_file `if [[ $fo -eq 3 ]]; then ignored="$hit"; ...; continue; fi` -> `:` (rc 1)
+# mutation: await_file drops `ignored="$hit"` (failover_on_limit is asked on every poll)
+newstate; AW_N=0; AW_FO=0; unset -f date
+agent_state() { AW_N=$((AW_N + 1)); L_STATE=idle; [[ $AW_N -ne 4 ]] || echo '{"status":"DONE"}' >"$STATE/develop.json"; }
+limit_hit() { echo "You've hit your Opus limit"; }
+failover_on_limit() { AW_FO=$((AW_FO + 1)); return 3; }
+await_file d id-d "$STATE/develop.json" develop 100; AWRC=$?
+assert_eq "await_file (other model's limit): returns 0 once the agent writes its verdict" 0 "$AWRC"
+assert_eq "await_file (other model's limit): the limit was offered to failover_on_limit once, not on every poll" 1 "$AW_FO"
+assert_eq "await_file (other model's limit): no failover happened" "" "$(grep -c 'stay counted' "$LOG" | grep -v '^0$')"
 
 # --- constraints ------------------------------------------------------------------------------------------
 
