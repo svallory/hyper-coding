@@ -604,6 +604,8 @@ stub_start t16; run_loop t16; stub_stop
 check_result t16 "rebase conflict" 0 READY
 assert_contains "conflict: the dev is told the rebase failed" "$(cat "$(st t16)/fix-r2.prompt.md")" "rebasing onto origin/main failed"
 assert_contains "conflict: and which file conflicts" "$(cat "$(st t16)/fix-r2.prompt.md")" "f.txt"
+assert_contains "conflict: the dev is told to run the tests its change affects" "$(cat "$(st t16)/fix-r2.prompt.md")" "finish the rebase, run the tests your change affects"
+assert_not_contains "conflict: the dev is not told to run the gate" "$(cat "$(st t16)/fix-r2.prompt.md")" "run the gate"
 assert_eq "conflict: no rebase is left in progress" "no" "$([[ -d "$W16/.git" || -f "$W16/.git" ]] && git -C "$W16" status | grep -q 'rebase in progress' && echo yes || echo no)"
 assert_eq "conflict: the dev's resolution was reviewed (fresh reviewer, round 2)" "1" "$(starts_of t16-review-r2)"
 assert_eq "conflict: and the review came before the driver's push" "yes" "$([[ "$(grep -n 'round 2 review ACCEPT' "$(st t16)/loop.log" | head -n 1 | cut -d: -f1)" -lt "$(grep -n 'finalized at' "$(st t16)/loop.log" | cut -d: -f1)" ]] && echo yes || echo no)"
@@ -640,6 +642,8 @@ chmod +x "$FIX/scripts/t18/fix-r2.json.hook"
 stub_start t18; run_loop t18; stub_stop
 check_result t18 "forbidden pattern" 0 READY
 assert_contains "scan: the dev is shown the offending line" "$(cat "$(st t18)/fix-r2.prompt.md")" "leak.txt: see SECRETWORD here"
+assert_contains "scan: the dev is told to run the tests its change affects" "$(cat "$(st t18)/fix-r2.prompt.md")" "in a commit, run the tests your change affects"
+assert_not_contains "scan: the dev is not told to run the gate" "$(cat "$(st t18)/fix-r2.prompt.md")" "run the gate"
 assert_eq "scan: the rewording was reviewed before the push" "1" "$(starts_of t18-review-r2)"
 assert_contains "scan: and the reviewer is told what the dev was fixing" "$(cat "$(st t18)/review-r2.prompt.md")" "added lines match scan.forbidden"
 assert_eq "scan: a later clean run was pushed" "$(git -C "$W18" rev-parse HEAD)" "$(git -C "$FIX/origin-t18.git" rev-parse refs/heads/feat-t18)"
