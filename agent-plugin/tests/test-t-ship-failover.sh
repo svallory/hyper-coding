@@ -98,7 +98,7 @@ stub_stop() { [[ -z "$STUB_PID" ]] || { kill "$STUB_PID" 2>/dev/null; wait "$STU
 RC="" OUT=""
 # Every driver run is bounded, so a mutant that never finishes fails (124) instead of hanging the suite.
 TMO=()
-if command -v timeout >/dev/null 2>&1; then TMO=(timeout 120); elif command -v gtimeout >/dev/null 2>&1; then TMO=(gtimeout 120); fi
+if command -v timeout >/dev/null 2>&1; then TMO=(timeout 30); elif command -v gtimeout >/dev/null 2>&1; then TMO=(gtimeout 30); fi
 run_loop() {
   local ref="$1"; shift
   OUT="$("${TMO[@]}" bash "$LOOP" --ref "$ref" --worktree "$SPACE/worktrees/$ref" --branch "feat-$ref" --brief "$BRIEF" --class S "$@" 2>"$FIX/err-$ref.log")"
@@ -186,11 +186,11 @@ runit() {
 }
 GATE_PID=""
 # answer_after_takeover <ref> <verdict file> <json> — the stub agent may answer <file> once some agent has been
-# sent the takeover prompt (polls for the condition; gives up after about a minute).
+# sent the takeover prompt (polls for the condition; gives up after about 15 s).
 answer_after_takeover() {
   (
     n=0
-    while [[ $n -lt 1200 ]]; do
+    while [[ $n -lt 300 ]]; do
       if grep -qs 'taking over' "$SHIP_MUX_FAKE_DIR"/sent/* 2>/dev/null; then
         printf '%s\n' "$3" >"$FIX/scripts/$1/$2.1.tmp" && mv "$FIX/scripts/$1/$2.1.tmp" "$FIX/scripts/$1/$2.1"
         exit 0

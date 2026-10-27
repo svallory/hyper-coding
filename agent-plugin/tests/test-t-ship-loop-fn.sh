@@ -22,21 +22,6 @@ TRUSTFIX="$TESTS_DIR/fixtures/ship/trust"
 ROLE_BIN="$SHIP_DIR/ship-role"
 REAL_GIT="$(command -v git)"
 
-# loop_fn <name>... — define the named functions of ship-loop here, in one awk pass. A function whose first line
-# is complete (ends in } or } # comment) is taken as that line; a longer one runs to the next line that is a lone }.
-loop_fn() {
-  eval "$(awk -v names="$*" '
-    BEGIN { n = split(names, a, " "); for (i = 1; i <= n; i++) want[a[i]] = 1 }
-    !act && match($0, /^[a-z_0-9]+\(\) \{/) {
-      nm = substr($0, 1, RLENGTH - 4)
-      if (!(nm in want)) next
-      print
-      if ($0 ~ /\}[ \t]*(#.*)?$/ && $0 !~ /^[a-z_0-9]+\(\) \{[ \t]*(#.*)?$/) delete want[nm]; else act = 1
-      next
-    }
-    act { print; if ($0 ~ /^\}/) { act = 0; delete want[nm] } }
-    END { for (k in want) print "fail \"loop_fn: " k " is not defined in ship-loop\"" }' "$LOOP")"
-}
 
 # --- scripted collaborators --------------------------------------------------------------------------
 # Every driver function reaches the world through log, mux, die_error, park and finish. They are replaced
