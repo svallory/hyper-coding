@@ -457,15 +457,17 @@ if [[ "$sub" == _resume ]]; then
     [[ "$cur" =~ ^[1-9][0-9]*$ ]] || fail "cannot tell $ref's current round limit"
     [[ "$max_rounds" -gt "$cur" ]] || usage "--max-rounds $max_rounds must be above the unit's current limit ($cur)"
   fi
+  # The limit goes first: if it cannot be written, nothing else has been applied.
+  if [[ -n "$max_rounds" ]]; then
+    jq --argjson n "$max_rounds" '.max_rounds = $n' "$d/unit.json" >"$d/unit.json.tmp" || { rm -f "$d/unit.json.tmp"; fail "could not update $d/unit.json"; }
+    mv "$d/unit.json.tmp" "$d/unit.json"
+    echo "ship-unit: raised the round limit to $max_rounds" >&2
+  fi
   if [[ -n "$answer" ]]; then
     cp "$answer" "$d/answer-$n.md.tmp" && mv "$d/answer-$n.md.tmp" "$d/answer-$n.md"
     echo "ship-unit: wrote answer-$n.md" >&2
   fi
   [[ -z "$extend" ]] || { printf '%s\n' "$extend" >"$d/extend"; echo "ship-unit: wrote extend ($extend min)" >&2; }
-  if [[ -n "$max_rounds" ]]; then
-    jq --argjson n "$max_rounds" '.max_rounds = $n' "$d/unit.json" >"$d/unit.json.tmp" && mv "$d/unit.json.tmp" "$d/unit.json"
-    echo "ship-unit: raised the round limit to $max_rounds" >&2
-  fi
   for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
   launch_driver "$ref"
   exit 0

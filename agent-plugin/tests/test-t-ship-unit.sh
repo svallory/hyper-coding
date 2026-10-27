@@ -464,12 +464,12 @@ for bad in 3 2 0 -1 x 4.5; do
   assert_eq "resume --max-rounds '$bad': 64" "64" "$(unit resume mr --max-rounds "$bad")"
   assert_eq "...unit.json unchanged" "$before" "$(cat "$(loops mr)/unit.json")"
 done
-assert_eq "resume --max-rounds x: 64" "64" "$(unit resume mr --max-rounds x)"
+: "$(unit resume mr --max-rounds x)"
 assert_contains "...the message says positive integer" "$(err)" "positive integer"
 assert_eq "resume --max-rounds 3 (equal): 64" "64" "$(unit resume mr --max-rounds 3)"
 assert_contains "...the message names the current limit" "$(err)" "current limit (3)"
 assert_eq "...no driver was started by the refusals" "1" "$(ls "$FIX"/loopargs.mr.* | wc -l | tr -d ' ')"
-assert_eq "resume --max-rounds 4 --model --extend: still STUCK (2)" "2" "$(unit resume mr --max-rounds 4 --model review=B)"
+assert_eq "resume --max-rounds 4 --model: still STUCK (2)" "2" "$(unit resume mr --max-rounds 4 --model review=B)"
 assert_eq "...the limit is in unit.json" "4" "$(jq -r .max_rounds "$(loops mr)/unit.json")"
 assert_eq "...and the driver got it" "4" "$(grep -A1 -x -- '--max-rounds' "$FIX/loopargs.mr.2" | tail -n 1)"
 assert_eq "a plain resume keeps the raised limit" "2" "$(unit resume mr)"
@@ -481,9 +481,10 @@ assert_eq "...earlier --model overrides are kept, in order" "dev=A|review=B|dev=
 # the limit combines with --extend
 mode mr2 over
 unit run mr2 --brief "$BRIEF" --class S --max-rounds 2 >/dev/null
-assert_eq "resume --max-rounds with --extend in one call" "0" "$(unit resume mr2 --max-rounds 6 --extend 10)"
+assert_eq "resume --max-rounds with --extend in one call" "0" "$(unit resume mr2 --max-rounds 6 --extend 10 --model review=B)"
 assert_eq "...extend was applied" "10" "$(cat "$(loops mr2)/extend.applied")"
 assert_eq "...the limit was written" "6" "$(jq -r .max_rounds "$(loops mr2)/unit.json")"
+assert_eq "...and the model override" "review=B" "$(tail -n 1 "$(loops mr2)/models.override")"
 # a unit run without --max-rounds compares against the config default (3)
 mode mr3 stuck
 unit run mr3 --brief "$BRIEF" --class S >/dev/null
