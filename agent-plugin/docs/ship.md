@@ -188,7 +188,7 @@ exit is the notification.
 ship-unit run <ref> --brief FILE --class S|M|L [--host H] [--branch B] [--base B]
                     [--max-rounds N] [--final-gate] [--model STAGE=M[,M...]]...
                     [--spec-dir DIR]
-ship-unit resume <ref> [--answer FILE] [--extend MIN] [--model STAGE=M[,M...]]...
+ship-unit resume <ref> [--answer FILE] [--extend MIN] [--max-rounds N] [--model STAGE=M[,M...]]...
 ship-unit wait <ref>
 ship-unit list
 ```
@@ -206,6 +206,7 @@ ship-unit list
 | `--spec-dir DIR` | a spec directory the agents read; copied to the host in host mode. |
 | `--answer FILE` | (`resume`) the lead's answer to the current park; becomes `answer-<n>.md`. Refused for LIMIT and DIALOG parks. |
 | `--extend MIN` | (`resume`) minutes to add to the stage that went OVER-BUDGET; above 0. |
+| `--max-rounds N` | (`resume`) raise the unit's round limit to `N` and continue it where it stopped. `N` must be a positive integer above the unit's current limit (else exit 64, nothing changed). The new limit is written to `unit.json`, so later resumes keep it; it combines with `--model` and `--extend`, and earlier `--model` overrides are kept. It only helps a unit that stopped STUCK for want of rounds. |
 
 `run` creates the worktree (`wt switch -c` from `origin/<base>`), checks the
 host has a free slot, opens the unit's space, starts the driver there, and
@@ -245,6 +246,7 @@ Environment knobs: `SHIP_UNIT_POLL_S` (default 5), `SHIP_UNIT_BACKOFF_MAX_S`
 ship-unit run my-unit --brief notes/briefs/my-unit.md --class M --host buildbox &
 ship-unit resume my-unit --answer /tmp/answer.md
 ship-unit resume my-unit --extend 20
+ship-unit resume my-unit --max-rounds 6
 ship-unit resume my-unit --model dev=sonnet,provider/model-b
 ship-unit list
 ```
@@ -684,7 +686,7 @@ the stop needs, the driver re-emits the same result and exits 2 again.
 | `DIALOG` | an agent is blocked on a dialog in its pane, for one of three reasons: (1) the workspace-trust dialog, which ship answers itself, could not be cleared (the cursor would not move onto "Yes, I trust this folder", or it is still showing after Enter); (2) any other dialog (ship answers none); (3) the screen looks like the trust dialog but is **not recognised** as one alone on screen (a third option, a permission prompt below it, ...): ship sends no key, and `loop.log` says "not clearly alone" | `park.json` status `DIALOG`, with the screen text. `agent` is the agent name; `ship-mux --to` accepts it. `file` is the verdict file the park belongs to (empty when there is none) | read the pane (`ship-mux read --ref <ref> --to <agent>`). For the workspace-trust dialog only ("Quick safety check…", options "No, exit" / "Yes, I trust this folder"): `ship-mux send --ref <ref> --to <agent> --keys down`, read the pane again, and `--keys enter` only when `❯` is on "Yes, I trust this folder"; any other dialog is the operator's, with no keys sent. Then `resume` with no answer. `--answer` is refused. |
 | `LIMIT` | every model for the stage is limited or over `quota.threshold_pct`, or the limited one has no successor | `park.json` status `LIMIT`, `resets_at` when known | wait for the reset, or `--model stage=...` to name a usable list, or `ship-loop --clear-limit NAME` if the quota is back; then `resume`. `--answer` is refused. |
 | `OVER-BUDGET` | a stage ran past its budget | `budget-r<k>.json`; agent left running | `--extend MIN`. |
-| `STUCK` | `max_rounds` reached without ACCEPT, or finalize failed and the dev could not fix it | `result.json.findings` | Raise the limit and run it again: `ship-unit run <ref> --brief ... --class ... --max-rounds <higher>`. Finished rounds are replayed from their files and the driver goes on with the next round (`resume` reuses the old limit and would stop at STUCK again). Or abandon it: `ship-land <ref> --abandon --force`, then start a fresh `ship-unit run`. Read `result.json.findings` first; if the reviewer keeps asking for the same thing, rule on it or re-brief rather than raising the limit. |
+| `STUCK` | `max_rounds` reached without ACCEPT, or finalize failed and the dev could not fix it | `result.json.findings` | If it ran out of rounds, raise the limit with `ship-unit resume <ref> --max-rounds <higher>`, optionally with `--model STAGE=M`. Finished rounds are replayed from their files and the driver goes on with the next round; earlier `--model` overrides are kept. This only helps a unit that stopped for want of rounds: a plain `resume` keeps the old limit and would stop at STUCK again. Or abandon it: `ship-land <ref> --abandon --force`, then start a fresh `ship-unit run`. Read `result.json.findings` first; if the reviewer keeps asking for the same thing, rule on it or re-brief rather than raising the limit. |
 | `ERROR` | tool or script failure, or a malformed verdict (CHANGES with no findings; DONE with no PR; WRITTEN with nothing resolved; finalize found nothing ahead of `origin/<base>`) | `driver.err`, `result.json.why` | fix the cause, then `resume`; or abandon. |
 
 `resume` also refuses (exit 3) an `--answer` when there is no `park.json`, and

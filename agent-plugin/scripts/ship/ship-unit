@@ -9,7 +9,8 @@
 #   ship-unit run <ref> --brief FILE --class S|M|L [--host H] [--branch B] [--base B]
 #                       [--max-rounds N] [--final-gate] [--model STAGE=M[,M...]]...
 #                       [--spec-dir DIR]
-#   ship-unit resume <ref> [--answer FILE] [--extend MIN] [--model STAGE=M[,M...]]...
+#   ship-unit resume <ref> [--answer FILE] [--extend MIN] [--max-rounds N]
+#                          [--model STAGE=M[,M...]]...
 #   ship-unit wait <ref>
 #   ship-unit list
 #
@@ -23,7 +24,9 @@
 #           answer-<n>.md (n is park.json's "n"; refused for LIMIT and DIALOG parks),
 #           --extend becomes `extend` (minutes, above 0, for the stage that went
 #           OVER-BUDGET), --model lines are appended to models.override (so they beat
-#           run's). Then blocks like run.
+#           run's), --max-rounds raises the unit's round limit (above the current one;
+#           written to unit.json so later resumes keep it; it only helps a unit that
+#           stopped STUCK for want of rounds). Then blocks like run.
 #   wait    block on an already running driver (after the caller's session was lost).
 #   list    one line per unit under notes/loops/ (not .done): ref, host, status,
 #           stage, failovers, age, driver alive. A unit with a live driver is RUNNING;
@@ -407,15 +410,15 @@ fi
 
 if [[ "$sub" == _resume ]]; then
   ref="${1:-}"; check_ref "$ref"; shift
-  answer="" extend="" models=()
+  answer="" extend="" max_rounds="" models=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --answer-file|--extend|--model|--host-name|--slots) [[ $# -ge 2 ]] || usage "$1 needs a value" ;;
+      --answer-file|--extend|--max-rounds|--model|--host-name|--slots) [[ $# -ge 2 ]] || usage "$1 needs a value" ;;
       *) usage "unknown argument: $1" ;;
     esac
     case "$1" in
-      --answer-file) answer="$2" ;; --extend) extend="$2" ;; --model) models+=("$2") ;;
-      --host-name) host_name="$2" ;; --slots) slots="$2" ;;
+      --answer-file) answer="$2" ;; --extend) extend="$2" ;; --max-rounds) max_rounds="$2" ;;
+      --model) models+=("$2") ;; --host-name) host_name="$2" ;; --slots) slots="$2" ;;
     esac
     shift 2
   done
@@ -446,11 +449,23 @@ if [[ "$sub" == _resume ]]; then
     done
     [[ $ok -eq 1 ]] || refuse "$ref has no stage over budget; nothing to extend"
   fi
+  if [[ -n "$max_rounds" ]]; then
+    [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
+    # The limit the driver would use now: the unit's own, else the config default.
+    cur="$(jq -r '.max_rounds // ""' "$d/unit.json")"
+    [[ -n "$cur" ]] || cur="$(ship_cfg_get max_rounds 2>/dev/null)" || cur=""
+    [[ "$cur" =~ ^[1-9][0-9]*$ ]] || fail "cannot tell $ref's current round limit"
+    [[ "$max_rounds" -gt "$cur" ]] || usage "--max-rounds $max_rounds must be above the unit's current limit ($cur)"
+  fi
   if [[ -n "$answer" ]]; then
     cp "$answer" "$d/answer-$n.md.tmp" && mv "$d/answer-$n.md.tmp" "$d/answer-$n.md"
     echo "ship-unit: wrote answer-$n.md" >&2
   fi
   [[ -z "$extend" ]] || { printf '%s\n' "$extend" >"$d/extend"; echo "ship-unit: wrote extend ($extend min)" >&2; }
+  if [[ -n "$max_rounds" ]]; then
+    jq --argjson n "$max_rounds" '.max_rounds = $n' "$d/unit.json" >"$d/unit.json.tmp" && mv "$d/unit.json.tmp" "$d/unit.json"
+    echo "ship-unit: raised the round limit to $max_rounds" >&2
+  fi
   for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
   launch_driver "$ref"
   exit 0
@@ -675,20 +690,21 @@ case "$sub" in
     ;;
 
   resume)
-    ref="" answer="" extend=""
+    ref="" answer="" extend="" max_rounds=""
     models=()
     while [[ $# -gt 0 ]]; do
       case "$1" in
-        --answer|--extend|--model) [[ $# -ge 2 ]] || usage "$1 needs a value" ;;
+        --answer|--extend|--max-rounds|--model) [[ $# -ge 2 ]] || usage "$1 needs a value" ;;
         -*) usage "unknown option $1" ;;
         *) [[ -z "$ref" ]] || usage "one ref at a time"; ref="$1"; shift; continue ;;
       esac
       case "$1" in
-        --answer) answer="$2" ;; --extend) extend="$2" ;; --model) models+=("$2") ;;
+        --answer) answer="$2" ;; --extend) extend="$2" ;; --max-rounds) max_rounds="$2" ;; --model) models+=("$2") ;;
       esac
       shift 2
     done
     check_ref "$ref"
+    [[ -z "$max_rounds" || "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
     if [[ -n "$answer" ]]; then
       [[ -s "$answer" ]] || usage "answer file $answer is missing or empty"
       answer="$(abs_path "$answer")"
@@ -714,6 +730,7 @@ case "$sub" in
       fi
     fi
     [[ -z "$extend" ]] || rargs+=(--extend "$extend")
+    [[ -z "$max_rounds" ]] || rargs+=(--max-rounds "$max_rounds")
     for m in ${models[@]+"${models[@]}"}; do rargs+=(--model "$m"); done
     rc=0
     unit_exec _resume "${rargs[@]}" >/dev/null || rc=$?

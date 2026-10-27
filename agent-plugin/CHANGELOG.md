@@ -3,6 +3,17 @@
 Changes to the hyper agent plugin. The plugin version in
 `.claude-plugin/plugin.json` is bumped separately, at release.
 
+## Unreleased
+
+### Added
+
+- `ship-unit resume <ref> --max-rounds N` raises the unit's round limit and
+  continues it where it stopped, so a unit that went STUCK for want of rounds
+  can be continued. `N` must be above the current limit (else exit 64). The new
+  limit is written to `unit.json`, so later resumes keep it; it combines with
+  `--model` and `--extend`, and earlier `--model` overrides are kept. The STUCK
+  rows in the unit skill and `docs/ship.md` now say so.
+
 ## 0.6.2 — 2026-10-26
 
 ### Fixed

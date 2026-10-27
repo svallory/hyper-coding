@@ -173,6 +173,12 @@ case "$mode" in
     if [[ -s "$D/answer-$pn.md" ]]; then ready; fi
     jq -nc --argjson n "$pn" --arg s "$st" '{status: $s, stage: "develop", agent: "a", question: "q", since: "t", n: $n, file: ""}' > "$D/park.json"
     result PARKED; exit 2 ;;
+  stuck)
+    # Needs 5 rounds: STUCK below that, READY from 5 up.
+    lim=3
+    for ((i = 1; i <= $#; i++)); do [[ "${!i}" == --max-rounds ]] && { j=$((i + 1)); lim="${!j}"; }; done
+    if [[ "$lim" -ge 5 ]]; then ready; fi
+    result STUCK; exit 2 ;;
   over)
     if [[ -s "$D/extend" ]]; then mv "$D/extend" "$D/extend.applied"; touch "$D/budget-r1.json.handled"; ready; fi
     echo '{"verdict":"OVER-BUDGET","stage":"develop","agent":"a","class":"S","budget_min":15,"elapsed_min":16,"file":"develop.json"}' > "$D/budget-r1.json"
@@ -449,6 +455,40 @@ assert_eq "...the file holds Y, then X (X wins), then review" "dev=Y|dev=X|revie
 assert_eq "...and the driver read them in that order" "dev=Y|dev=X|review=opus" "$(paste -sd'|' "$FIX/loopmodels.l5.2")"
 unit run l5 --brief "$BRIEF" --class S >/dev/null
 assert_eq "a new run truncates models.override" "" "$(cat "$(loops l5)/models.override")"
+
+# 3b: resume --max-rounds raises the limit of a unit that ran out of rounds -----------------
+mode mr stuck
+assert_eq "a unit with 3 rounds stops STUCK (2)" "2" "$(unit run mr --brief "$BRIEF" --class S --max-rounds 3 --model dev=A)"
+before="$(cat "$(loops mr)/unit.json")"
+for bad in 3 2 0 -1 x 4.5; do
+  assert_eq "resume --max-rounds '$bad': 64" "64" "$(unit resume mr --max-rounds "$bad")"
+  assert_eq "...unit.json unchanged" "$before" "$(cat "$(loops mr)/unit.json")"
+done
+assert_eq "resume --max-rounds x: 64" "64" "$(unit resume mr --max-rounds x)"
+assert_contains "...the message says positive integer" "$(err)" "positive integer"
+assert_eq "resume --max-rounds 3 (equal): 64" "64" "$(unit resume mr --max-rounds 3)"
+assert_contains "...the message names the current limit" "$(err)" "current limit (3)"
+assert_eq "...no driver was started by the refusals" "1" "$(ls "$FIX"/loopargs.mr.* | wc -l | tr -d ' ')"
+assert_eq "resume --max-rounds 4 --model --extend: still STUCK (2)" "2" "$(unit resume mr --max-rounds 4 --model review=B)"
+assert_eq "...the limit is in unit.json" "4" "$(jq -r .max_rounds "$(loops mr)/unit.json")"
+assert_eq "...and the driver got it" "4" "$(grep -A1 -x -- '--max-rounds' "$FIX/loopargs.mr.2" | tail -n 1)"
+assert_eq "a plain resume keeps the raised limit" "2" "$(unit resume mr)"
+assert_eq "...the driver got 4 again" "4" "$(grep -A1 -x -- '--max-rounds' "$FIX/loopargs.mr.3" | tail -n 1)"
+assert_eq "resume --max-rounds 4 (now equal): 64" "64" "$(unit resume mr --max-rounds 4)"
+assert_eq "resume --max-rounds 5 continues to READY (0)" "0" "$(unit resume mr --max-rounds 5 --model dev=C)"
+assert_eq "...the driver got 5" "5" "$(grep -A1 -x -- '--max-rounds' "$FIX/loopargs.mr.4" | tail -n 1)"
+assert_eq "...earlier --model overrides are kept, in order" "dev=A|review=B|dev=C" "$(paste -sd'|' "$(loops mr)/models.override")"
+# the limit combines with --extend
+mode mr2 over
+unit run mr2 --brief "$BRIEF" --class S --max-rounds 2 >/dev/null
+assert_eq "resume --max-rounds with --extend in one call" "0" "$(unit resume mr2 --max-rounds 6 --extend 10)"
+assert_eq "...extend was applied" "10" "$(cat "$(loops mr2)/extend.applied")"
+assert_eq "...the limit was written" "6" "$(jq -r .max_rounds "$(loops mr2)/unit.json")"
+# a unit run without --max-rounds compares against the config default (3)
+mode mr3 stuck
+unit run mr3 --brief "$BRIEF" --class S >/dev/null
+assert_eq "no recorded limit: the config default is the floor (3 refused)" "64" "$(unit resume mr3 --max-rounds 3)"
+assert_eq "...4 is accepted" "2" "$(unit resume mr3 --max-rounds 4)"
 
 # 4: slots and liveness ------------------------------------------------------------------------
 rm_loops "$SPACE"
