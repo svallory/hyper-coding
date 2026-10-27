@@ -5,6 +5,8 @@ Changes to the hyper agent plugin. The plugin version in
 
 ## Unreleased
 
+## 0.7.0 — 2026-10-27
+
 ### Added
 
 - `offload` ship config key: a command prefix that runs one shell-string
