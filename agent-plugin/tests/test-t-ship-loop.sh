@@ -1583,6 +1583,87 @@ fb_check t66g "fix budget, finalize fix round resumed with extend" 0.25 budget-r
 assert_eq "finalize fix: the resumed round rewrote fix-r2.n from the saved count" "3" "$(cat "$(st t66g)/fix-r2.n")"
 GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; BUD_S=10 BUD_EXTRA=''; write_cfg
 
+# --- 67: a gate-restore fix of a diff the spec check rejected is judged by the spec check before the push ----------------------
+# The gate undoes the round-2 fix, so the diff is the one spec-r1 rejected; the dev fixes it again, the review is READY, and
+# the spec check must see that new diff before finalize pushes.
+reset_fake; unit t67 spec
+W67="$SPACE/worktrees/t67"
+export GATEFLAG67="$FIX/gateflag-t67"
+GATE_CMD='if [ ! -e "$GATEFLAG67" ]; then touch "$GATEFLAG67"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t67 develop.json "$DEV_DONE"; script t67 review-r1.json "$REV_OK"; script t67 spec-r1.json "$SPEC_CHG"
+script t67 fix-r2.json "$DEV_DONE"; script t67 review-r2.json "$REV_OK"; script t67 spec-r2.json "$SPEC_OK"
+script t67 fix-r3.json "$DEV_DONE"; script t67 review-r3.json "$REV_OK"; script t67 spec-r3.json "$SPEC_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W67" "$W67" "$W67" >"$FIX/scripts/t67/fix-r2.json.hook"
+printf '#!/bin/sh\necho again >"%s/again.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$W67" "$W67" "$W67" >"$FIX/scripts/t67/fix-r3.json.hook"
+chmod +x "$FIX/scripts/t67"/*.hook
+stub_start t67; run_loop t67; stub_stop
+check_result t67 "spec check re-checks a gate-restore fix" 0 READY
+assert_eq "spec re-check: the spec check ran on the fixed diff" "1" "$(starts_of t67-spec-r3)"
+assert_contains "spec re-check: it is told what it rejected" "$(cat "$(st t67)/spec-r3.prompt.md")" "the spec is wrong"
+_log67="$(cat "$(st t67)/loop.log")"
+assert_ok "spec re-check: after the READY review, before the push" bash -c '
+  l="$1"; r=$(grep -n "round 3 review ACCEPT" <<<"$l" | head -1 | cut -d: -f1); s=$(grep -n "round 3 spec re-check" <<<"$l" | head -1 | cut -d: -f1)
+  f=$(grep -n "finalized at" <<<"$l" | head -1 | cut -d: -f1); [ -n "$r" ] && [ -n "$s" ] && [ -n "$f" ] && [ "$r" -lt "$s" ] && [ "$s" -lt "$f" ]' _ "$_log67"
+assert_eq "spec re-check: the spec check judged the pushed diff" "$(git -C "$W67" diff -U0 --no-color origin/main...HEAD | git patch-id --verbatim | cut -d' ' -f1)" "$(cat "$(st t67)/spec-r3.sig")"
+assert_eq "spec re-check: the push is the head" "$(git -C "$W67" rev-parse HEAD)" "$(git -C "$FIX/origin-t67.git" rev-parse refs/heads/feat-t67)"
+unset GATEFLAG67; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 68: the same for the final gate -------------------------------------------------------------------------------------------
+reset_fake; unit t68
+W68="$SPACE/worktrees/t68"
+export GATEFLAG68="$FIX/gateflag-t68"
+GATE_CMD='if [ ! -e "$GATEFLAG68" ]; then touch "$GATEFLAG68"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t68 develop.json "$DEV_DONE"; script t68 review-r1.json "$REV_OK"; script t68 final-r1.json "$REV_CHANGES"
+script t68 fix-r2.json "$DEV_DONE"; script t68 review-r2.json "$REV_OK"; script t68 final-r2.json "$REV_OK"
+script t68 fix-r3.json "$DEV_DONE"; script t68 review-r3.json "$REV_OK"; script t68 final-r3.json "$REV_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W68" "$W68" "$W68" >"$FIX/scripts/t68/fix-r2.json.hook"
+printf '#!/bin/sh\necho again >"%s/again.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$W68" "$W68" "$W68" >"$FIX/scripts/t68/fix-r3.json.hook"
+chmod +x "$FIX/scripts/t68"/*.hook
+stub_start t68; run_loop t68 --final-gate; stub_stop
+check_result t68 "final gate re-checks a gate-restore fix" 0 READY
+assert_eq "final re-check: the final gate ran on the fixed diff" "1" "$(starts_of t68-final-r3)"
+assert_contains "final re-check: it is told what it rejected" "$(cat "$(st t68)/final-r3.prompt.md")" "the bug"
+assert_eq "final re-check: the final gate judged the pushed diff" "$(git -C "$W68" diff -U0 --no-color origin/main...HEAD | git patch-id --verbatim | cut -d' ' -f1)" "$(cat "$(st t68)/final-r3.sig")"
+assert_eq "final re-check: the push is the head" "$(git -C "$W68" rev-parse HEAD)" "$(git -C "$FIX/origin-t68.git" rev-parse refs/heads/feat-t68)"
+unset GATEFLAG68; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 69: a repeat rejection by the re-run stage goes back to the dev and ends STUCK under the cycle cap ----------------------
+reset_fake; unit t69 spec
+W69="$SPACE/worktrees/t69"; O69="$(git -C "$FIX/origin-t69.git" rev-parse refs/heads/feat-t69)"
+export GATEFLAG69="$FIX/gateflag-t69"
+GATE_CMD='if [ ! -e "$GATEFLAG69" ]; then touch "$GATEFLAG69"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; write_cfg
+script t69 develop.json "$DEV_DONE"; script t69 review-r1.json "$REV_OK"; script t69 spec-r1.json "$SPEC_CHG"
+script t69 fix-r2.json "$DEV_DONE"; script t69 review-r2.json "$REV_OK"; script t69 spec-r2.json "$SPEC_OK"
+for _r in 3 4; do
+  script t69 fix-r$_r.json "$DEV_DONE"; script t69 review-r$_r.json "$REV_OK"; script t69 spec-r$_r.json "$SPEC_CHG"
+  printf '#!/bin/sh\necho %s >"%s/again%s.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: again"\nexit 0\n' "$_r" "$W69" "$_r" "$W69" "$W69" >"$FIX/scripts/t69/fix-r$_r.json.hook"
+done
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W69" "$W69" "$W69" >"$FIX/scripts/t69/fix-r2.json.hook"
+chmod +x "$FIX/scripts/t69"/*.hook
+stub_start t69; run_loop t69; stub_stop
+check_result t69 "the re-run stage rejects again" 2 STUCK
+assert_eq "repeat rejection: nothing was pushed" "$O69" "$(git -C "$FIX/origin-t69.git" rev-parse refs/heads/feat-t69)"
+assert_eq "repeat rejection: the stage is spec" "spec" "$(res t69 .stage)"
+assert_eq "repeat rejection: rejected_by names the re-run verdict" "spec-r4.json" "$(res t69 .rejected_by)"
+assert_eq "repeat rejection: the dev was sent back after the first re-check" "1" "$(starts_of t69-spec-r3)"
+assert_contains "repeat rejection: the dev prompt carries the re-check's findings" "$(cat "$(st t69)/fix-r4.prompt.md")" "the spec is wrong"
+unset GATEFLAG69; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
+# --- 70: no spec or final re-run when only the code review rejected the fixed diff -------------------------------------------
+reset_fake; unit t70 spec
+W70="$SPACE/worktrees/t70"
+export GATEFLAG70="$FIX/gateflag-t70"
+GATE_CMD='if [ ! -e "$GATEFLAG70" ]; then touch "$GATEFLAG70"; echo g >gate-made.txt; git add -A; git commit -qm "gate made this"; fi'; write_cfg
+script t70 develop.json "$DEV_DONE"; script t70 review-r1.json "$REV_OK"; script t70 spec-r1.json "$SPEC_OK"; script t70 final-r1.json "$REV_OK"
+script t70 review-r2.json "$REV_CHANGES"; script t70 fix-r3.json "$DEV_DONE"; script t70 review-r3.json "$REV_OK"
+printf '#!/bin/sh\necho more >"%s/more.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: more"\nexit 0\n' "$W70" "$W70" "$W70" >"$FIX/scripts/t70/fix-r3.json.hook"
+chmod +x "$FIX/scripts/t70"/*.hook
+stub_start t70; run_loop t70 --final-gate; stub_stop
+check_result t70 "code review alone rejects in finalize" 0 READY
+_n70=0; for _r in 2 3 4; do _n70=$((_n70 + $(starts_of "t70-spec-r$_r") + $(starts_of "t70-final-r$_r"))); done
+assert_eq "code review only: no spec or final stage ran after the first accept" "0" "$_n70"
+unset GATEFLAG70; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; write_cfg
+
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"
 assert_eq "C-2: no messaging, Monitor or watchdog in ship-loop" "" "$(grep -nE 'SendMessage|claude-link|hyper msg|Monitor|stall' "$LOOP")"
