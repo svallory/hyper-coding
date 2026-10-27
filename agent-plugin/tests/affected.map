@@ -30,9 +30,9 @@ agent-plugin/tests/fixtures/ship/*               test-t-ship-loop.sh test-t-ship
 agent-plugin/tests/test-*.sh                     SELF
 agent-plugin/scripts/ship/lib.sh                 ALL
 agent-plugin/scripts/ship/lib-host.sh            test-t-ship-host-paths.sh test-t-ship-land.sh test-t-ship-land-fn.sh test-t-ship-unit.sh
-agent-plugin/scripts/ship/ship-loop              test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-unit-driver.sh
-agent-plugin/scripts/ship/prompts/*              test-t-ship-loop.sh test-t-ship-schemas.sh
-agent-plugin/scripts/ship/schemas/*              test-t-ship-schemas.sh test-t-ship-failover.sh test-t-ship-loop.sh test-t-ship-land.sh test-t-ship-land-fn.sh
+agent-plugin/scripts/ship/ship-loop              test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-unit-driver.sh test-t-ship-failover-fn.sh
+agent-plugin/scripts/ship/prompts/*              test-t-ship-loop.sh test-t-ship-schemas.sh test-t-ship-failover-fn.sh
+agent-plugin/scripts/ship/schemas/*              test-t-ship-schemas.sh test-t-ship-failover.sh test-t-ship-loop.sh test-t-ship-land.sh test-t-ship-land-fn.sh test-t-ship-failover-fn.sh
 agent-plugin/scripts/ship/ship-mux               test-t-ship-mux-fake.sh test-t-ship-mux-herdr.sh test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-land.sh test-t-ship-retire.sh test-t-ship-unit.sh test-t-ship-unit-driver.sh
 agent-plugin/scripts/ship/mux/fake               test-t-ship-mux-fake.sh test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-land.sh test-t-ship-retire.sh test-t-ship-unit.sh test-t-ship-unit-driver.sh
 agent-plugin/scripts/ship/mux/herdr              test-t-ship-mux-herdr.sh test-v-herdr-guard.sh
@@ -41,8 +41,8 @@ agent-plugin/scripts/ship/ship-land              test-t-ship-land.sh test-t-ship
 agent-plugin/scripts/ship/ship-retire            test-t-ship-land.sh test-t-ship-retire.sh
 agent-plugin/scripts/ship/ship-unit              test-t-ship-unit.sh test-t-ship-unit-driver.sh test-t-ship-skills.sh
 agent-plugin/scripts/ship/ship-config            test-t-ship-config.sh test-t-ship-loop.sh test-t-ship-failover.sh
-agent-plugin/scripts/ship/ship-role              test-t-ship-role.sh test-t-ship-loop.sh test-t-ship-failover.sh
-agent-plugin/scripts/ship/ship-quota-tap         test-t-ship-role.sh test-t-ship-failover.sh
+agent-plugin/scripts/ship/ship-role              test-t-ship-role.sh test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-failover-fn.sh
+agent-plugin/scripts/ship/ship-quota-tap         test-t-ship-role.sh test-t-ship-failover.sh test-t-ship-failover-fn.sh
 agent-plugin/scripts/ship/ship-auto              test-t-ship-skills.sh
 agent-plugin/scripts/ship/probe                  test-t-ship-host-paths.sh
 agent-plugin/scripts/hyper-require-lib.sh        test-a-detection.sh test-c-memory-seed.sh test-l-legacy.sh test-m-init.sh test-o-require-lib.sh test-q-hyper-md-backup.sh test-t-ship-mux-fake.sh test-t-ship-unit.sh
@@ -58,7 +58,7 @@ agent-plugin/scripts/hyper-context.sh            test-n-context.sh test-o-requir
 agent-plugin/scripts/hyper-hook.sh               test-p-drive-hook.sh
 agent-plugin/scripts/hyper-drive-session-end.sh  test-p-drive-hook.sh
 agent-plugin/stacks/*                            test-a-detection.sh test-e-stack.sh
-agent-plugin/skills/ship/defaults.yml            test-t-ship-config.sh test-t-ship-mux-fake.sh test-t-ship-unit.sh test-t-ship-role.sh test-w-ship-docs.sh test-t-ship-failover.sh
+agent-plugin/skills/ship/defaults.yml            test-t-ship-config.sh test-t-ship-mux-fake.sh test-t-ship-unit.sh test-t-ship-role.sh test-w-ship-docs.sh test-t-ship-failover.sh test-t-ship-failover-fn.sh
 agent-plugin/skills/ship/*                       test-w-ship-docs.sh test-s-ship-skills.sh test-u-skill-triggers.sh test-t-ship-skills.sh
 agent-plugin/skills/test-engineer/*              test-t-ship-unit.sh test-t-ship-loop.sh test-s-ship-skills.sh test-u-skill-triggers.sh
 agent-plugin/skills/*                            test-s-ship-skills.sh test-u-skill-triggers.sh test-r-help-listing.sh test-t-ship-skills.sh
