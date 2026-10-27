@@ -263,9 +263,9 @@ assert_eq "nothing changed: exit 0" "0" "$rc"
 assert_contains "nothing changed: says so" "$out" "affected: nothing changed"
 # every file named by a map rule exists: a unit that adds a test adds its row
 missing=""
-for t in $(grep -v '^#' "$TESTS_DIR/affected.map" | awk 'NF>=2{for(i=2;i<=NF;i++)print $i}' | grep '^test-' | sort -u); do
+for t in $(grep -v '^#' "$TESTS_DIR/affected.tsv" | awk 'NF>=2{for(i=2;i<=NF;i++)print $i}' | grep '^test-' | sort -u); do
   [[ -f "$TESTS_DIR/$t" ]] || missing="$missing $t"
 done
-assert_eq "every test file named in affected.map exists" "" "$missing"
+assert_eq "every test file named in affected.tsv exists" "" "$missing"
 
 finish

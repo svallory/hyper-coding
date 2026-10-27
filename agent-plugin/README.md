@@ -217,7 +217,7 @@ bash agent-plugin/tests/run.sh --jobs 4                   # everything, 4 files 
 bash agent-plugin/tests/run.sh --affected --dry-run       # show the selection and why, run nothing
 ```
 
-`--affected` reads `agent-plugin/tests/affected.map` (matching rules add up; an
+`--affected` reads `agent-plugin/tests/affected.tsv` (matching rules add up; an
 unmapped plugin path runs everything, so a missing rule costs time, never
 coverage; the three cheap lint files run for any plugin change). Each file prints its wall time; the run ends with the five slowest
 files and warns about any file over `--budget` seconds (default 300; `--budget-fail` makes it an error). On macOS put

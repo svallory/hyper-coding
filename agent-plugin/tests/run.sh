@@ -10,7 +10,7 @@
 #   files...          run only those (names or paths); the one-file dev loop
 #   --affected        run the files the change since `git merge-base REF HEAD`
 #                     affects (committed + uncommitted + untracked; renames
-#                     count as delete + add), chosen by tests/affected.map
+#                     count as delete + add), chosen by tests/affected.tsv
 #   --base REF        the ref for --affected (default origin/main; must resolve)
 #   --jobs N          run N files at once (default 1); every file keeps its own
 #                     process group, TMPDIR and output; blocks print on completion
@@ -130,7 +130,7 @@ if [[ $affected -eq 1 ]]; then
             plain=1; rules="${rules:+$rules, }$glob"; targets="$targets $*"
           fi ;;
       esac
-    done < "$dir/affected.map"
+    done < "$dir/affected.tsv"
     if [[ -z "$plain" && -n "$fallback" ]]; then
       rules="else ${fallback%%|*}"; targets="${fallback#*|}"
     fi
