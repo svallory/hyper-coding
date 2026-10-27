@@ -606,11 +606,12 @@ if [[ "$sub" == _launch ]]; then
       from="$base"
       git -C "$root" rev-parse --verify -q "refs/remotes/origin/$base" >/dev/null 2>&1 && from="origin/$base"
       made_wt=1 made_branch=1
-      # wt < 0.80 runs `git branch --unset-upstream` after creating the branch; with branch.autoSetupMerge
-      # false or empty git set no upstream, so the unset exits 128. Force autoSetupMerge=true for this one
-      # command only (config passed by env outranks every config file; the user's config is untouched).
+      # wt 0.73 (observed failing; 0.80 observed working) runs `git branch --unset-upstream` after creating
+      # the branch; with branch.autoSetupMerge anything but true (false, empty, simple, ...) git set no
+      # upstream, so the unset exits 128. Force autoSetupMerge=true for this one command, whatever the wt
+      # version (config passed by env outranks every config file; the user's config is untouched).
       _gcn="${GIT_CONFIG_COUNT:-0}"
-      [[ "$_gcn" =~ ^[0-9]+$ ]] || _gcn=0
+      [[ "$_gcn" =~ ^(0|[1-9][0-9]*)$ ]] || _gcn=0
       wt_out="$(CDPATH='' cd -- "$root" && env GIT_CONFIG_COUNT="$((_gcn + 1))" "GIT_CONFIG_KEY_${_gcn}=branch.autoSetupMerge" "GIT_CONFIG_VALUE_${_gcn}=true" wt switch -c --no-cd -b "$from" "$branch" 2>&1)" || die "wt switch -c $branch failed:"$'\n'"$(head -c 1500 <<<"$wt_out" | sed 's/^/  /')"
     fi
     [[ -z "$wt_out" ]] || echo "$wt_out" >&2

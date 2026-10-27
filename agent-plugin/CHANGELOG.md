@@ -48,13 +48,16 @@ Changes to the hyper agent plugin. The plugin version in
   skill) and leaves the gate to the driver, which runs it at finalize and at
   land. On a project with a slow gate, units used to park OVER-BUDGET in
   develop with their commits done, waiting on gate runs. The handover note
-  written for a successor agent says the same.
-- `ship-unit run` no longer exits 70 when `branch.autoSetupMerge` is `false`
-  or empty. worktrunk 0.73 unsets the new branch's upstream after creating it,
-  and that fails when git set none; `ship-unit` now passes
+  written for a successor agent says the same. When a finalize rejection quotes
+  a gate failure, the dev may run the failing tests it names, or the gate once
+  to confirm the fix.
+- `ship-unit run` no longer exits 70 when `branch.autoSetupMerge` is anything
+  but `true` (false, empty, simple, ...). worktrunk 0.73 unsets the new
+  branch's upstream after creating it, and that fails when git set none
+  (observed failing on 0.73, working on 0.80). `ship-unit` now passes
   `branch.autoSetupMerge=true` to its own `wt switch -c` through the
-  environment (the user's git config is untouched, an existing
-  `GIT_CONFIG_COUNT` is extended). worktrunk 0.80 no longer fails this way.
+  environment, whatever the wt version (the user's git config is untouched, an
+  existing `GIT_CONFIG_COUNT` is extended).
 
 ### Changed
 
