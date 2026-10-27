@@ -67,7 +67,14 @@ done
 case "$jobs" in ''|*[!0-9]*|0) echo "run.sh: --jobs wants a positive number" >&2; exit 2 ;; esac
 case "$budget" in ''|*[!0-9]*) echo "run.sh: --budget wants seconds" >&2; exit 2 ;; esac
 [[ $affected -eq 1 || -z "$base" ]] || { echo "run.sh: --base only goes with --affected" >&2; exit 2; }
-[[ $affected -eq 0 || ${#explicit[@]} -eq 0 ]] || { echo "run.sh: --affected and explicit files are exclusive" >&2; exit 2; }
+if [[ $affected -eq 1 && ${#explicit[@]} -gt 0 ]]; then
+  if git -C "$dir" rev-parse --verify --quiet "${explicit[0]}^{commit}" >/dev/null 2>&1 && [[ ! -e "${explicit[0]}" ]]; then
+    echo "run.sh: '${explicit[0]}' is a git ref; the base goes after --base: --affected --base ${explicit[0]}" >&2
+  else
+    echo "run.sh: --affected and explicit files are exclusive" >&2
+  fi
+  exit 2
+fi
 base="${base:-origin/main}"
 if [[ $affected -eq 1 && -z "$paths_from" ]]; then
   git -C "$dir" rev-parse --verify --quiet "$base^{commit}" >/dev/null || { echo "run.sh: --base '$base' is not a git ref here (fetch it?)" >&2; exit 2; }
@@ -308,6 +315,7 @@ run_one() {
       exit($st & 127 ? 128 + ($st & 127) : $st >> 8);
     ' "$file_timeout" bash "$f" >"$outfile" 2>&1
     status=$?
+    rm -f "$work/$idx.pgid"   # finished: its group id must never be signalled
     rm -rf "$ftmp"
     out="$(cat "$outfile")"
     if [[ $status -eq 142 ]]; then

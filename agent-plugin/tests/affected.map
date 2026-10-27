@@ -67,7 +67,10 @@ agent-plugin/docs/repo/stacks/*                  test-j-recommend.sh
 agent-plugin/resources/*                         test-j-recommend.sh
 agent-plugin/hooks/*                             test-p-drive-hook.sh
 agent-plugin/.claude-plugin/*                    test-t-ship-host-paths.sh test-t-ship-unit.sh
-agent-plugin/*.md                                NONE
+agent-plugin/docs/*.md                           NONE
+agent-plugin/CHANGELOG.md                        NONE
+agent-plugin/CLAUDE.md                           NONE
+agent-plugin/TODO.md                             NONE
 agent-plugin/README.md                           test-w-ship-docs.sh
 
 # packages the CLI is built from
