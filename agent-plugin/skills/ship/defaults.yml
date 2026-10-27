@@ -8,6 +8,10 @@ mux: herdr
 units_group: <project>-units
 # Command run in the unit worktree before push and before merge. Exit 0 = pass. Required; no default.
 # gate:
+# Optional command prefix that runs ONE shell-string argument on a build host in a synced copy of the worktree
+# (same relative directory, uncommitted files synced, gitignored files not, the remote command's exit code).
+# Agents run test runs, builds and the gate through it when set. Unset = everything runs locally.
+# offload:
 # Branch that units are rebased onto and merged into.
 base: main
 # How land merges the PR: rebase, squash or merge.

@@ -64,7 +64,7 @@ DEV=u6-dev KEEP_CLOCK="" TAKEOVER="" TAKEOVER_ANSWER="" RESTART_DEV="" FAIL_WHY=
 SHIP_CONFIG_JSON='{}'
 newstate
 
-loop_fn model_pick aname write_json valid_json abs_in_space file_text render prompt skill_call check_verdict budget_min over_budget \
+loop_fn offload_text rules_text model_pick aname write_json valid_json abs_in_space file_text render prompt skill_call check_verdict budget_min over_budget \
   fmt_findings fmt_failures fmt_gaps fmt_removals fmt_resolved fmt_opq jlen rmlen add_round add_dev_work takeover_text rejection_text
 
 # --- small helpers -----------------------------------------------------------------------------------
@@ -107,13 +107,29 @@ assert_eq "render: & and backslash in a value are literal" 'a&b\n' "$(render q a
 PROMPTS="$SHIP_DIR/prompts"
 TEST_SKILL="$SHIP_PLUGIN_ROOT/skills/test-engineer/SKILL.md" GATE="make check" RULINGS="$SPACE/notes/decisions.md"
 SPEC_PATHS_TXT="docs/spec/**" FORBIDDEN_TXT="(none configured)" FORBIDDEN_EXCLUDE_TXT=""
-RULES="$(render rules ref="$REF" worktree="$WT" branch="$BRANCH" brief="$BRIEF" gate="$GATE" rulings="$RULINGS" test_skill="$TEST_SKILL" forbidden="$FORBIDDEN_TXT" forbidden_exclude="$FORBIDDEN_EXCLUDE_TXT")"
+OFFLOAD="" RULES="$(rules_text)"
 for t in develop review; do
   extra=(); std=" ref pr worktree branch base brief gate rulings spec_paths forbidden forbidden_exclude test_skill rules "
   for k in $(tpl_keys "$t"); do case "$std" in *" $k "*) ;; *) extra+=("$k=<$k>") ;; esac; done
   out="$(prompt "$t" "${extra[@]}")"
   assert_eq "prompt $t: no placeholder is left (the standard pairs cover the template)" "" "$(grep -o '{[a-z_]*}' <<<"$out")"
 done
+# mutation: in offload_text, drop "$OFFLOAD" / the command -v hint / "say so in your summary" from a variant;
+# in rules_text (or the RULES line), stop passing offload=
+OFFLOAD="RCI_HOST=forge rci"
+r_on="$(rules_text)"
+assert_contains "rules with offload set: the prefix wraps the command" "$r_on" "RCI_HOST=forge rci '<command>'"
+assert_contains "rules with offload set: the check names the real command, past the VAR=value word" "$r_on" "command -v rci\` succeeds"
+assert_not_contains "rules with offload set: the check is not on the VAR=value word" "$r_on" "command -v RCI_HOST"
+assert_contains "rules with offload set: say so in your summary" "$r_on" "say so in your summary"
+assert_not_contains "rules with offload set: the offload line does not mention the gate" "$(offload_text)" "gate"
+OFFLOAD=""
+r_off="$(rules_text)"
+assert_eq "rules with offload unset: no placeholder is left" "" "$(grep -o '{offload}' <<<"$r_off")"
+assert_contains "rules with offload unset: heavy commands run locally" "$r_off" "run locally"
+assert_contains "rules with offload unset: say so in your summary" "$r_off" "say so in your summary"
+assert_not_contains "rules with offload unset: no build-box wording" "$r_off" "command -v"
+RULES="$r_off"
 dev="$(prompt develop verdict_file=/v.json)"
 # mutation: drop gate=$GATE / brief=$BRIEF / rules=$RULES from prompt
 assert_contains "prompt develop: names the gate" "$dev" "make check"
