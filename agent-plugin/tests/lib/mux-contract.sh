@@ -52,7 +52,7 @@ _mcd() { if declare -F mux_contract_direct >/dev/null; then mux_contract_direct 
 # _mc_rcs — stdin: lines "expected exit|description|mux arguments" (no quoting: the arguments are split on
 # spaces). Runs them side by side, then asserts each one's exit code, in order.
 _mc_rcs() {
-  local d line exp desc args i=0 n
+  local d exp desc args i=0 n
   d="$(mktemp -d "${TMPDIR:-/tmp}/mc-rcs.XXXXXX")"
   local -a exps=() descs=()
   while IFS='|' read -r exp desc args; do

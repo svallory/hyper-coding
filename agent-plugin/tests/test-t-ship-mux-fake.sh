@@ -17,7 +17,6 @@ MUX_BIN="$SCRIPTS_DIR/ship/ship-mux"
 FAKE_BE="$SCRIPTS_DIR/ship/mux/fake"
 # Each part below runs in its own space and fake backend (stream_init), in parallel with the others; par_wait
 # replays their TAP lines in order. A dispatcher call costs ~0.5-1 s (about 40 processes), so the parts overlap.
-STREAM=""
 stream_init() { # <name> — a fresh space "proj", fake dir and log of its own, under $FIX/<name>
   STREAM_DIR="$FIX/$1"
   SPACE="$STREAM_DIR/proj"
