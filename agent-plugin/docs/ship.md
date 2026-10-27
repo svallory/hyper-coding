@@ -691,6 +691,16 @@ to the dev with the rejecting stage's findings (for the spec check, its gaps and
 removals too), counts toward `max_rounds`, and when the rounds run out the unit ends
 `STUCK` with `stage` set to the stage that rejected it and `rejected_by` naming its
 verdict file. The next review of a restored diff is told about the restore.
+When the dev has fixed such a diff and the code review is READY on the new one, the
+stage that rejected it (spec check or final gate) judges the fixed diff too, before
+finalize pushes: the push needs READY from the review and from that stage, each on
+the diff being pushed. If that stage rejects again, its findings go back to the dev
+and the rejection counts toward `max_rounds` like any other; at the limit the unit
+ends `STUCK` with `rejected_by` naming the re-run verdict (for example
+`spec-r4.json`). The owed stage is kept in `recheck` in the unit's state directory.
+Finalize rebase, gate and scan failures are not re-checked this way: the next
+finalize try checks them again. A unit with no spec or final rejection runs no extra
+stage.
 Fix rounds leave `fix-r<N>.findings`, `fix-r<N>.src` and
 `fix-r<N>.before`, which record what the dev was asked so a resumed park
 continues that fix instead of replaying it.
