@@ -1480,6 +1480,85 @@ check_result t64f "fix budget, text only" 2 OVER-BUDGET
 assert_eq "fix budget, text only: F is 1" "0.011" "$(jq -r .budget_min "$(st t64f)/budget-r1.json")"
 GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; BUD_S=10 BUD_EXTRA=''; write_cfg
 
+# --- 66F: every source of F reaches the fix round's budget ---------------------------------------------------------------------------
+# Tiny scale (class 0.02 min, 0.001 per finding): the fix round that goes over budget is the first one, so budget = 0.01 + 0.001 F.
+# Medium scale (class 0.4 min, 0.05 per finding: 0.2 + 0.05 F): an earlier fix round has to finish first.
+fb_cfg() { BUD_S="$1" BUD_EXTRA="  fix_per_finding: $2"; write_cfg; } # class_min per_finding_min
+fb_check() { # ref desc expected [budget file, default budget-r1.json]
+  check_result "$1" "$2" 2 OVER-BUDGET
+  assert_eq "$2: the stage" "fix" "$(jq -r .stage "$(st "$1")/${4:-budget-r1.json}")"
+  assert_eq "$2: budget_min" "$3" "$(jq -r .budget_min "$(st "$1")/${4:-budget-r1.json}")"
+}
+findn() { jq -nc --argjson n "$1" '[range($n)|{severity:"BLOCKING",file:"docs/spec/a.md",line:1,summary:("finding \(.)"),fix:"fix it"}]'; }
+
+# a: verify FAIL with 2 failures
+reset_fake; unit t66a
+CFG_EXTRA="stages:
+  verify:
+    instructions: notes/verify.md"; fb_cfg 0.02 0.001
+script t66a develop.json "$DEV_DONE"
+script t66a verify-r1.json '{"verdict":"FAIL","summary":"ran it","failures":[{"what":"one","evidence":"e1"},{"what":"two","evidence":"e2"}]}'
+stub_start t66a; run_loop t66a; stub_stop
+fb_check t66a "fix budget, verify failures F=2" 0.012
+CFG_EXTRA=''
+
+# b: spec check CHANGES with 2 findings
+reset_fake; unit t66b spec; fb_cfg 0.02 0.001
+script t66b develop.json "$DEV_DONE"; script t66b review-r1.json "$REV_OK"
+script t66b spec-r1.json "$(jq -nc --argjson f "$(findn 2)" '{verdict:"CHANGES",findings:$f,gaps:[],removals:[],commits:[],gate:"green"}')"
+stub_start t66b; run_loop t66b; stub_stop
+fb_check t66b "fix budget, spec findings F=2" 0.012
+
+# c: final gate CHANGES with 2 findings
+reset_fake; unit t66c; fb_cfg 0.02 0.001
+script t66c develop.json "$DEV_DONE"; script t66c review-r1.json "$REV_OK"
+script t66c final-r1.json "$(jq -nc --argjson f "$(findn 2)" '{verdict:"CHANGES",findings:$f}')"
+stub_start t66c; run_loop t66c --final-gate; stub_stop
+fb_check t66c "fix budget, final findings F=2" 0.012
+
+# d: spec-writer round: 1 resolved point + 1 checker finding + 1 code removal = 3
+reset_fake; unit t66d spec; fb_cfg 0.02 0.001
+script t66d develop.json "$DEV_DONE"; script t66d review-r1.json "$REV_OK"
+script t66d spec-r1.json "$(jq -nc --argjson f "$(findn 1)" '{verdict:"GAP",findings:$f,gaps:[{where:"docs/spec/a.md:3",quotes:["silent"],question:"What?",operator_call:false}],removals:[{where:"pkg/x.go:10",kind:"code",what:"the flag",why_no_consumer:"no caller"}],commits:[],gate:"green"}')"
+script t66d specwriter-r1.json "$SW_OK"
+stub_start t66d; run_loop t66d; stub_stop
+fb_check t66d "fix budget, spec writer round F=3" 0.013
+
+# e: a post-accept review CHANGES with 2 findings, after a finalize fix that finished (medium scale)
+reset_fake; leak_unit t66e; fb_cfg 0.4 0.05
+script t66e develop.json "$DEV_DONE"; script t66e review-r1.json "$REV_OK"
+script t66e fix-r2.json "$DEV_DONE"; reword_hook t66e fix-r2.json
+script t66e review-r2.json "$(jq -nc --argjson f "$(findn 2)" '{verdict:"CHANGES",findings:$f}')"
+stub_start t66e; run_loop t66e; stub_stop
+fb_check t66e "fix budget, post-accept review F=2" 0.3
+CFG_EXTRA=''; write_cfg
+
+# f: the gate restores a diff the final gate rejected (2 findings): the round is text, F = 1, not 2
+reset_fake; unit t66f
+W66="$SPACE/worktrees/t66f"; export GATEFLAG66="$FIX/gateflag-t66f"
+GATE_CMD='if [ ! -e "$GATEFLAG66" ]; then touch "$GATEFLAG66"; git revert --no-edit HEAD >/dev/null 2>&1; fi'; fb_cfg 0.4 0.05
+script t66f develop.json "$DEV_DONE"; script t66f review-r1.json "$REV_OK"
+script t66f final-r1.json "$(jq -nc --argjson f "$(findn 2)" '{verdict:"CHANGES",findings:$f}')"
+script t66f fix-r2.json "$DEV_DONE"; script t66f review-r2.json "$REV_OK"; script t66f final-r2.json "$REV_OK"
+printf '#!/bin/sh\necho extra >"%s/extra.txt"\ngit -C "%s" add -A\ngit -C "%s" commit -qm "fix: extra"\nexit 0\n' "$W66" "$W66" "$W66" >"$FIX/scripts/t66f/fix-r2.json.hook"
+chmod +x "$FIX/scripts/t66f"/*.hook
+stub_start t66f; run_loop t66f --final-gate; stub_stop
+fb_check t66f "fix budget, gate-restored diff F=1" 0.25
+unset GATEFLAG66; GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'
+
+# g: a finalize fix round goes over budget and is extended: the resumed round keeps the count saved with it
+reset_fake; unit t66g
+GATE_CMD='echo "gate says no"; exit 1'; fb_cfg 0.6 0.05   # 0.3 + 0.05 F: 0.35 for the text round
+script t66g develop.json "$DEV_DONE"; script t66g review-r1.json "$REV_OK"
+stub_start t66g; run_loop t66g
+fb_check t66g "fix budget, finalize fix round" 0.35
+assert_eq "finalize fix: fix-r2.n holds the text round's count" "1" "$(cat "$(st t66g)/fix-r2.n")"
+printf '3\n' >"$(st t66g)/fix-r2.n"; printf '0.05\n' >"$(st t66g)/extend"   # as if the round had answered 3 findings
+run_loop t66g; stub_stop
+fb_check t66g "fix budget, finalize fix round resumed with extend" 0.5 budget-r2.json   # 0.3 + 0.05 * 3 + 0.05
+assert_eq "finalize fix: the resumed round rewrote fix-r2.n from the saved count" "3" "$(cat "$(st t66g)/fix-r2.n")"
+GATE_CMD='echo gate-ran >> "$SHIP_TEST_GATELOG"'; BUD_S=10 BUD_EXTRA=''; write_cfg
+
 # --- 21: the script's own constraints --------------------------------------------------------------------------------------------------------------
 assert_eq "C-1: no husk, forge, user path, host or model literal in ship-loop" "" "$(grep -niE 'husk|forge|/work/lab|/Users/|Users/|gopls|dolphin|sonnet|opus|haiku|fable' "$LOOP")"
 assert_eq "C-2: no messaging, Monitor or watchdog in ship-loop" "" "$(grep -nE 'SendMessage|claude-link|hyper msg|Monitor|stall' "$LOOP")"
