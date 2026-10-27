@@ -1482,8 +1482,10 @@ main() {
   ship_config_load || exit 1
   for _o in ${MODEL_OVERRIDES[@]+"${MODEL_OVERRIDES[@]}"}; do ship_models_override "$_o" || exit 1; done
 
-  for _v in REF WT BRANCH BRIEF CLASS; do
-    [[ -n "${!_v}" ]] || usage_exit "--$(printf '%s' "$_v" | tr 'A-Z' 'a-z') is required"
+  # variable:flag pairs, so the message names the flag the operator typed (WT is --worktree)
+  for _v in REF:ref WT:worktree BRANCH:branch BRIEF:brief CLASS:class; do
+    _n="${_v%%:*}"
+    [[ -n "${!_n}" ]] || usage_exit "--${_v#*:} is required"
   done
   case "$CLASS" in S|M|L) ;; *) usage_exit "--class must be S, M or L" ;; esac
   [[ -d "$WT" ]] || usage_exit "worktree $WT is not a directory"

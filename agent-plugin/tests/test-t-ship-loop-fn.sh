@@ -728,8 +728,8 @@ out="$(sx usage_exit "bad thing")"
 assert_eq "usage_exit: prints 'ship-loop: <message>' and exits 1" $'ship-loop: bad thing\nrc=1' "$out"
 LB() { SHIP_CONFIG_JSON="$BASE_CFG" SHIP_CONFIG_LAYERS="$BASE_LAY" bash "$LOOP" "$@" 2>&1; echo "rc=$?"; } # the driver itself (config passed in), ending in its argument checks
 assert_eq "driver: an unknown argument" $'ship-loop: unknown argument: --bogus\nrc=1' "$(LB --bogus)"
-# pins bug hyper-chp: the message should say --worktree (it names the variable WT instead)
-assert_eq "driver: --worktree is required once --ref is given" $'ship-loop: --wt is required\nrc=1' "$(LB --ref r)"
+# hyper-chp: the message names the flag (--worktree), not the variable WT
+assert_eq "driver: --worktree is required once --ref is given" $'ship-loop: --worktree is required\nrc=1' "$(LB --ref r)"
 assert_eq "driver: a class outside S, M, L" $'ship-loop: --class must be S, M or L\nrc=1' "$(LB --ref r --worktree /w --branch b --brief /b --class Q)"
 assert_eq "driver: class M and L are accepted (the next check is the worktree)" $'ship-loop: worktree /w is not a directory\nrc=1/ship-loop: worktree /w is not a directory\nrc=1' "$(LB --ref r --worktree /w --branch b --brief /b --class M)/$(LB --ref r --worktree /w --branch b --brief /b --class L)"
 assert_contains "driver: a --model for an unknown stage is refused (with a valid worktree and brief)" "$(LB --ref r --worktree "$FIX" --branch b --brief "$FIX/mux-check" --class S --model nostage=x)" "unknown stage"
