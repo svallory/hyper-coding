@@ -5,7 +5,7 @@
 # SHIP_LOCK_TEST_PAUSE forces the interleavings (the number of rounds does not).
 #
 # Cases:
-#   limited.json   record keeps the other entries; 8 parallel writers and a 16 x 4 race lose nothing;
+#   limited.json   record keeps the other entries; 8 parallel writers and a 16 x 10 race lose nothing;
 #                  the lock is released; a stale lock does not block the writer; clear removes a model
 #                  and an account and keeps the rest; ship-loop --clear-limit
 #   ship_lock      one winner per contended round; takeover of a dead owner's lock by 8 waiters (perl
@@ -30,17 +30,24 @@ mkdir -p "$SHIP_QUOTA_DIR"
 
 # Each part runs in a subshell of its own, in parallel with the others (separate quota dir and lock files);
 # par_wait replays their TAP lines in order.
-PAR_PIDS=(); PAR_NAMES=()
-par() { local n="$1"; shift; ( _n=0; _fail=0; "$@" ) >"$FIX/par.$n.out" 2>&1 & PAR_PIDS+=($!); PAR_NAMES+=("$n"); }
+PAR_PIDS=(); PAR_NAMES=(); PAR_DOGS=()
+par() {   # a part that ends without printing its "# part done" line crashed or timed out
+  local n="$1" pid; shift
+  ( _n=0; _fail=0; "$@"; echo "# part $n done" ) >"$FIX/par.$n.out" 2>&1 & pid=$!
+  ( sleep "${PART_MAX_S:-300}"; pkill -TERM -P "$pid" 2>/dev/null; kill "$pid" 2>/dev/null ) >/dev/null 2>&1 & PAR_DOGS+=($!)
+  PAR_PIDS+=("$pid"); PAR_NAMES+=("$n")
+}
 par_wait() {
   local i line
   for i in "${!PAR_NAMES[@]}"; do
-    wait "${PAR_PIDS[$i]}"
+    wait "${PAR_PIDS[$i]}" || fail "part ${PAR_NAMES[$i]} exited $?"
+    kill "${PAR_DOGS[$i]}" 2>/dev/null
+    grep -q "^# part ${PAR_NAMES[$i]} done$" "$FIX/par.${PAR_NAMES[$i]}.out" || fail "part ${PAR_NAMES[$i]} did not finish (crashed or timed out)"
     while IFS= read -r line; do
       case "$line" in
         "not ok "*) fail "${line#not ok * - }" ;;
         "ok "*) pass "${line#ok * - }" ;;
-        "1.."*) ;;
+        "1.."*|"# part "*" done") ;;
         *) echo "$line" ;;
       esac
     done <"$FIX/par.${PAR_NAMES[$i]}.out"
@@ -60,16 +67,16 @@ LFAIL=0; for pid in "${LPIDS[@]}"; do wait "$pid" || LFAIL=$((LFAIL + 1)); done
 assert_eq "8 parallel writers: every call succeeded" 0 "$LFAIL"
 assert_eq "8 parallel writers: every entry is there" 10 "$(jq -r '.models | length' "$SHIP_QUOTA_DIR/limited.json")"
 assert_eq "the lock is released" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json.lock" ]] && echo present || echo absent)"
-# the race: 16 writers x 4 entries each, every one must survive
+# the race: 16 writers x 10 entries each, every one must survive
 rm -f "$SHIP_QUOTA_DIR/limited.json"
 RACE_OUT="$FIX/race.out"; : >"$RACE_OUT"
 LPIDS=()
 for w in $(seq 1 16); do
-  ( for k in $(seq 1 4); do ship_limit_record model "w${w}k${k}" "$FARU" || echo "fail $w $k" >>"$RACE_OUT"; done ) & LPIDS+=($!)
+  ( for k in $(seq 1 10); do ship_limit_record model "w${w}k${k}" "$FARU" || echo "fail $w $k" >>"$RACE_OUT"; done ) & LPIDS+=($!)
 done
 for pid in "${LPIDS[@]}"; do wait "$pid"; done
-assert_eq "race, 16 writers x 4: no call failed" "" "$(cat "$RACE_OUT")"
-assert_eq "race, 16 writers x 4: all 64 entries are kept" 64 "$(jq -r '.models | length' "$SHIP_QUOTA_DIR/limited.json")"
+assert_eq "race, 16 writers x 10: no call failed" "" "$(cat "$RACE_OUT")"
+assert_eq "race, 16 writers x 10: all 160 entries are kept" 160 "$(jq -r '.models | length' "$SHIP_QUOTA_DIR/limited.json")"
 # a stale lock does not block the writer
 echo "1@elsewhere" >"$SHIP_QUOTA_DIR/limited.json.lock"; touch -t 200001010000 "$SHIP_QUOTA_DIR/limited.json.lock"
 ship_limit_record model after-stale "$FARU"
@@ -89,6 +96,11 @@ assert_contains "ship-loop --clear-limit says an unknown name was not marked" "$
 }
 
 part_locks() {
+# fast-fail guard: a stale-age regression makes the rows below wait for minutes; this row fails in seconds
+echo "1@elsewhere" >"$FIX/sg"; touch -t 200001010000 "$FIX/sg"
+timeout 15 bash -c 'source "$1"; ship_lock "$2" 0 60' _ "$SCRIPTS_DIR/ship/lib.sh" "$FIX/sg"; SGRC=$?
+assert_eq "an old foreign lock is taken over within 15 s (fast guard)" 0 "$SGRC"
+rm -f "$FIX/sg"
 # the lock itself: exactly one winner per round, on the file primitive
 WON="$FIX/won"; rm -rf "$WON"; mkdir -p "$WON"
 for round in $(seq 1 6); do
