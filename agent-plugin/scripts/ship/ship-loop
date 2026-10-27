@@ -1497,10 +1497,68 @@ rejection_text() {
   fi
 }
 
+# RECHECK — the stage (spec or final) that rejected a diff the dev then fixed in finalize (the gate-restore
+# branch of review_gate). The push needs that stage's ACCEPT on the diff being pushed, as well as a READY review.
+# It is kept in the state dir so a restarted driver still owes the re-check.
+RECHECK="$(cat "$STATE/recheck" 2>/dev/null || true)"
+# recheck_diff — 0 when no stage is owed a re-check or it ACCEPTs the diff as it is now; 1 when it rejects it:
+# NEED_FIX, FIX_SRC and GATE_PRIOR then send the dev back, counting toward the same cap as every other cycle.
+recheck_diff() {
+  local f sig verdict n ng nrm rf rej prior text
+  [[ -n "$RECHECK" ]] || return 0
+  diff_sig
+  for f in "$STATE/$RECHECK"-r*.json; do
+    [[ -f "$f" ]] && fresh_result "$f" || continue
+    sig="${f%.json}.sig"
+    [[ -s "$sig" && "$(cat "$sig")" == "$DSIG" && "$(jq -r .verdict "$f" 2>/dev/null)" == ACCEPT ]] && return 0
+  done
+  if [[ "$RECHECK" == spec ]] && ! spec_required; then return 0; fi
+  # the review of this diff took round FR; the stage takes the same number unless it already has a verdict there
+  while [[ -e "$STATE/$RECHECK-r$FR.json" ]]; do FR=$((FR + 1)); done
+  rf="$STATE/$RECHECK-r$FR.json"
+  prior="${RECHECK_PRIOR:-The dev changed the PR to answer your earlier rejection. Check each of those findings first.}"
+  STAGE=$RECHECK CUR_ROUND="$FR"
+  write_sig "$rf"
+  if [[ "$RECHECK" == spec ]]; then
+    SPEC_ROUNDS=$((SPEC_ROUNDS + 1))
+    text="$(prompt spec round="$FR" spec_pending="$prior
+" verdict_file="$rf")"
+    fresh_step "$(aname "-spec-r$FR")" spec spec_check "$rf" "$text" spec "$(budget_min check "$rf")" spec
+  else
+    FINAL_ROUNDS=$((FINAL_ROUNDS + 1))
+    text="$(prompt final round="$FR" final_pending="$prior
+" verdict_file="$rf")"
+    fresh_step "$(aname "-final-r$FR")" review final "$rf" "$text" review "$(budget_min check "$rf")" final
+  fi
+  verdict="$(jq -r .verdict "$rf")"
+  n="$(jlen "$rf" findings)"; ng="$(jlen "$rf" gaps)"; nrm="$(jlen "$rf" removals)"
+  add_round "$(jq -nc --argjson r "$FR" --arg v "$(tr a-z A-Z <<<"$RECHECK")-$verdict" --argjson n "$n" '{round:$r, verdict:$v, findings:$n}')"
+  log "round $FR $RECHECK re-check of the fixed diff: $verdict ($n findings, $ng gaps, $nrm removals)"
+  if [[ "$verdict" == ACCEPT ]]; then
+    [[ $((ng + nrm)) -eq 0 ]] || die_error "$(basename "$rf") is ACCEPT but lists gaps or removals"
+    return 0
+  fi
+  rej="$(rejection_text "$rf")"
+  [[ -n "$rej" ]] || die_error "$(basename "$rf") is $verdict with nothing to fix"
+  cycles=$((cycles + 1))
+  if [[ $cycles -ge $MAX ]]; then
+    log "STUCK: the $RECHECK kept rejecting the fixed diff ($cycles of $MAX)"
+    finish 2 "$RECHECK" STUCK "$(jq -n --arg f "$rej" --arg by "$(basename "$rf")" '{findings:$f, rejected_by:$by}')"
+  fi
+  NEED_FIX="$rej" NEED_FIX_N=$((n + ng + nrm)); FIX_SRC=gate
+  [[ "$NEED_FIX_N" -gt 0 ]] || NEED_FIX_N=1
+  RECHECK_PRIOR="The $RECHECK rejected the diff the dev fixed after an earlier rejection. These are its findings, which the dev says are fixed. Check each one first:
+$rej"
+  GATE_PRIOR="$RECHECK_PRIOR"
+  return 1
+}
+
 # review_gate — returns when the diff as it is now has a READY review and no fix is pending. NEED_FIX (with
 # FIX_SRC, where it came from) is work the dev still owes; a fix for a CHANGES verdict that leaves the diff
 # as it was is a failed round. Every CHANGES verdict and every failed round counts toward max_rounds.
-FR=$ACC_R cycles=0 NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" guard=0
+# When a spec check or final gate rejection is what sent the dev to fix (FIX_SRC=gate), that stage judges the
+# fixed diff too, after the review is READY and before the push (recheck_diff).
+FR=$ACC_R cycles=0 NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" RECHECK_PRIOR="" guard=0
 review_gate() {
   local before after rv rej
   while true; do
@@ -1532,10 +1590,10 @@ review_gate() {
         continue
       fi
       NEED_FIX=""
-      if reviewed_diff; then return 0; fi
+      if reviewed_diff; then recheck_diff && return 0; continue; fi
       rv=$FR
     else
-      if reviewed_diff; then return 0; fi
+      if reviewed_diff; then recheck_diff && return 0; continue; fi
       if rejected_diff; then
         # No dev fix made this diff: the gate (or a rebase, or anything else) restored one that the spec
         # check or the final gate rejected. A new review would ACCEPT it without counting, so treat it as
@@ -1552,6 +1610,8 @@ $rej"
 $rej"
         FIX_SRC=gate
         NEED_FIX_N=1
+        RECHECK="${REJECTED_BY%%-r*}" RECHECK_PRIOR="$GATE_PRIOR"
+        printf '%s\n' "$RECHECK" >"$STATE/recheck"
         continue
       fi
       FR=$((FR + 1)); rv=$FR
