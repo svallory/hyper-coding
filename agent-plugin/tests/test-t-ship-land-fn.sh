@@ -497,6 +497,7 @@ usage_row "one ref at a time" u1 u2
 usage_row "invalid --task 'a b'" u1 --task 'a b'
 usage_row "--task needs a value" u1 --task
 usage_row "--host needs a value" u1 --host
+usage_row "invalid --host '../x'" u1 --host ../x
 usage_row "--task has no use with --abandon" u1 --abandon --task T
 usage_row "--phase is internal" u1 --phase merge
 assert_eq "usage: --phase with a bad value: exit 2" "2" "$(SHIP_UNIT_INTERNAL=1 bash "$LAND" u1 --phase bogus 2>"$FIX/u.err" >/dev/null; echo $?)"

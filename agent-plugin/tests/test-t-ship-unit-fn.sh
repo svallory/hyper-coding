@@ -7,6 +7,10 @@
 # stand in for drivers. Whether `run`/`resume`/`wait`/`list` call these correctly is
 # test-t-ship-unit.sh's job (one spawn per wiring).
 
+# Options and state reach the sourced functions through subshell variables that the
+# linter cannot see being read (ship-unit is not followed from every cwd).
+# shellcheck disable=SC2034
+
 source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 set +eu
 set +o pipefail
@@ -32,6 +36,10 @@ root="$SPACE"
 
 # T <command...> — run in a subshell (usage/refuse/die exit); prints the exit code.
 # Stdout goes to $FIX/t.out, stderr to $FIX/t.err.
+wait_for() { # seconds command...
+  local t="$1" i=0; shift
+  while ! "$@" 2>/dev/null; do sleep 0.1; i=$((i + 1)); [[ $i -lt $((t * 10)) ]] || return 1; done
+}
 T() { ( "$@" ) >"$FIX/t.out" 2>"$FIX/t.err"; echo $?; }
 tout() { cat "$FIX/t.out"; }
 terr() { cat "$FIX/t.err"; }
@@ -123,8 +131,8 @@ assert_eq "...an answer file is made absolute" "$FIX/work/ans.md" "$(cd "$FIX/wo
 assert_eq "resume_opts_check: empty answer file: 64" "64" "$(roc "$FIX/work/empty.md" "" "")"
 assert_contains "...missing or empty" "$(terr)" "answer file $FIX/work/empty.md is missing or empty"
 assert_eq "resume_opts_check: missing answer file: 64" "64" "$(roc "$FIX/work/none.md" "" "")"
-for e in soon 0 0.0 -5 ""; do
-  [[ -n "$e" ]] || continue
+assert_contains "...missing or empty" "$(terr)" "answer file $FIX/work/none.md is missing or empty"
+for e in soon 0 0.0 -5; do
   assert_eq "resume_opts_check: --extend '$e': 64" "64" "$(roc "" "$e" "")"
   assert_contains "...says what --extend takes" "$(terr)" "--extend takes minutes (a number above 0), got '$e'"
 done
@@ -167,6 +175,7 @@ assert_eq "a park without a number: internal failure (70)" "70" "$(rac2 "$FIX/wo
 assert_contains "...no park number" "$(terr)" "has no park number"
 jq -nc '{status: "QUESTION", n: "x"}' > "$rc_d/park.json"
 assert_eq "a park number that is not a number: 70" "70" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_contains "...no park number" "$(terr)" "has no park number"
 # --extend
 assert_eq "--extend without an over-budget stage: refused (3)" "3" "$(rac2 "" 10 "")"
 assert_contains "...nothing to extend" "$(terr)" "rc1 has no stage over budget; nothing to extend"
@@ -213,7 +222,12 @@ sleeper "$FIX/bin/ship-loop-sleeper"; P_LOOP=$SLEEPER_PID
 sleeper bash "$FIX/lead/ship-unit" _driver myref; P_DRV=$SLEEPER_PID
 sleeper bash "$FIX/lead/ship-unit" wait myref; P_WAIT=$SLEEPER_PID
 sleeper sleep 120; P_OTHER=$SLEEPER_PID
-sleep 0.2     # the children have exec'd; ps shows their final command lines
+# the children have exec'd once ps shows their final command lines
+cmd_is() { [[ "$(ps -o command= -p "$1" 2>/dev/null)" == *"$2"* ]]; }
+wait_for 10 cmd_is "$P_LOOP" ship-loop-sleeper
+wait_for 10 cmd_is "$P_DRV" "_driver myref"
+wait_for 10 cmd_is "$P_WAIT" "wait myref"
+wait_for 10 cmd_is "$P_OTHER" "sleep 120"
 assert_ok "driver_proc_ok: a ship-loop process is a driver" driver_proc_ok "$P_LOOP" myref
 assert_ok "driver_proc_ok: 'ship-unit _driver <ref>' of that ref is a driver" driver_proc_ok "$P_DRV" myref
 assert_fails "driver_proc_ok: ...but not for another ref" driver_proc_ok "$P_DRV" otherref
@@ -391,7 +405,7 @@ assert_eq "probe_ref: login noise and another ref's line are ignored" "rc=0 PROB
 assert_eq "probe_ref: a failing call gives its code and no state" "rc=255 PROBE=" "$(pr 'ship-unit-probe: r1 running\n' 255)"
 assert_eq "probe_ref: no line for the ref: empty state, ok" "rc=0 PROBE=" "$(pr 'noise\n' 0)"
 ue() { # rc sequence, sync rc  -> "rc|runs|syncs"
-  ( HTARGET=fakehost HNAME=box resynced=0; RUNS=0; SYNCS=0; read -r -a rcs <<<"$1"; SRC="${2:-0}"
+  ( HTARGET=fakehost HNAME=box; RUNS=0; SYNCS=0; read -r -a rcs <<<"$1"; SRC="${2:-0}"
     ship_host_run() { local r="${rcs[$RUNS]:-0}"; RUNS=$((RUNS + 1)); return "$r"; }
     ship_host_sync() { SYNCS=$((SYNCS + 1)); return "$SRC"; }
     unit_exec _probe r1; echo "$?|$RUNS|$SYNCS" ) 2>/dev/null
@@ -441,7 +455,7 @@ assert_eq "wait_driver: ssh down past the window: 75" "75|1|0" "$(wdo "255:;255:
 assert_contains "...gave up, and 'wait' reattaches" "$(terr)" "gave up reconnecting to box after 0s; the driver keeps running there: 'ship-unit wait r1' reattaches"
 assert_eq "wait_driver: a host failing with a non-ssh code: 70" "70|1|0" "$(wdo "3:" fakehost)"
 assert_contains "...says the code" "$(terr)" "probing the driver of r1 on box failed (exit 3)"
-assert_eq "wait_driver: running between losses resets the window (never gives up at 0 s? it does: first loss)" "75|2|1" "$(wdo "0:running;255:;255:" fakehost 0)"
+assert_eq "wait_driver: a loss after a good probe is a fresh loss; with a 0 s window it gives up at once" "75|2|1" "$(wdo "0:running;255:;255:" fakehost 0)"
 assert_eq "wait_driver: a probe stub that never ends is stopped by the guard (97)" "97" "$(wd "0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running;0:running")"
 assert_eq "wait_driver: need_sync with a target: syncs, then probes (0)" "0|1|0" "$(wdo "0:exit 0" fakehost 900 1)"
 

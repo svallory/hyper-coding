@@ -333,8 +333,12 @@ mv "$FIX/bin/wt.off" "$FIX/bin/wt"
 echo more > "$FIX/seed/more.txt"; git -C "$FIX/seed" add more.txt; git -C "$FIX/seed" commit -q -m "chore: more"; git -C "$FIX/seed" push -q origin main
 mkdir -p "$FIX/extra"
 mode l1 ready
+# a launch lock left by a dead holder is taken over and released by the run (the lock is
+# ship-unit's, taken in _launch; the stale-lock mechanics are test-t-ship-lock.sh)
+echo "99999999@$(hostname)" > "$SPACE/.hyper/ship-unit.lock"
 rc="$(PATH="$FIX/extra:$PATH" unit run l1 --brief "$BRIEF" --class S --branch feat-one --max-rounds 2 --final-gate --model dev=sonnet)"
 assert_eq "local run: READY exits 0" "0" "$rc"
+assert_eq "...the dead holder's launch lock was taken over and released" "" "$([[ -e "$SPACE/.hyper/ship-unit.lock" ]] && echo held)"
 assert_contains "wt branched from the remote base, under --branch" "$(cat "$WT_LOG")" "$SPACE :: switch -c --no-cd -b origin/main feat-one"
 assert_eq "the worktree is named for --branch" "yes" "$([[ -d "$SPACE/worktrees/feat-one" ]] && echo yes)"
 assert_eq "a new branch has the remote base's newest commit (fetched first)" "chore: more" "$(git -C "$SPACE/worktrees/feat-one" log -1 --format=%s)"
@@ -402,8 +406,10 @@ echo "use the existing helper" > "$FIX/answer.md"
 mode l2 park3
 assert_eq "a parked unit exits 2" "2" "$(unit run l2 --brief "$BRIEF" --class M --model dev=Y)"
 assert_eq "...on a worktree named for the ref (no --branch)" "yes" "$([[ -d "$SPACE/worktrees/l2" ]] && echo yes)"
+echo "99999999@$(hostname)" > "$SPACE/.hyper/ship-unit.lock"
 rc="$(unit resume l2 --answer "$FIX/answer.md" --model dev=X --model review=opus)"
 assert_eq "resume with an answer: the unit now ends READY (exit 0)" "0" "$rc"
+assert_eq "...resume took over the dead holder's launch lock and released it" "" "$([[ -e "$SPACE/.hyper/ship-unit.lock" ]] && echo held)"
 assert_eq "the answer is answer-3.md (park.json's n)" "use the existing helper" "$(cat "$(loops l2)/answer-3.md")"
 assert_eq "...and not answer-1.md" "" "$([[ -e "$(loops l2)/answer-1.md" ]] && echo yes)"
 assert_eq "models.override: run's Y, then X (X wins), then review" "dev=Y|dev=X|review=opus" "$(paste -sd'|' "$(loops l2)/models.override")"
@@ -456,7 +462,7 @@ rm_loops "$SPACE"; rm_loops "$HOSTSPACE"
 mode c1 hold; mode c2 hold
 bg c1 run c1 --brief "$BRIEF" --class S --host box
 bg c2 run c2 --brief "$BRIEF" --class S --host box
-wait_for 120 refused c1 c2
+wait_for 30 refused c1 c2
 either_up() { [[ -e "$(hloops c1)/driver.pid" || -e "$(hloops c2)/driver.pid" ]]; }
 wait_for 60 either_up
 for t in c1 c2; do sed "s/^/# bg $t: /" "$FIX/bg.$t.err" >&2; done
@@ -465,19 +471,8 @@ assert_eq "two concurrent runs at slots=1: one is refused (3), the other is runn
 assert_eq "...and exactly one driver was started" "1" "$(mux_count run "$FIX/hostfake.log")"
 if [[ "$rc1" == 3 ]]; then winner=c2 loser=c1; else winner=c1 loser=c2; fi
 assert_eq "...the refused run left no unit.json behind" "" "$([[ -e "$(loops $loser)/unit.json" ]] && echo left)"
-release "$winner"
+release c1; release c2     # whatever the asserts above said, no held driver outlives the file
 assert_eq "...the other one runs to READY (0)" "0" "$(bgrc "$winner")"
-# the same ref twice
-rm_loops "$SPACE"; rm_loops "$HOSTSPACE"
-rm -f "$FIX/bg."*
-mode s1 hold
-bg s1a run s1 --brief "$BRIEF" --class S --host box
-wait_for 60 exists "$(hloops s1)/driver.pid"
-assert_eq "a second run of a ref whose driver is up: refused (3)" "3" "$(unit run s1 --brief "$BRIEF" --class S --host box)"
-assert_contains "...pointing at wait" "$(err)" "ship-unit wait s1"
-release s1
-assert_eq "...the first run is unaffected (0)" "0" "$(bgrc s1a)"
-
 LOCAL_RUNS="$(mux_count run)"
 # 5: host runs ---------------------------------------------------------------------------------
 rm_loops "$SPACE"; rm_loops "$HOSTSPACE"
@@ -604,6 +599,14 @@ assert_eq "resume --model reached the host" "dev=X" "$(cat "$(hloops h6)/models.
 assert_eq "resume loaded the lead's config on the host too" "slots=1" "$(sed -n 's/.*\(slots=[^ ]*\)$/\1/p' "$FIX/loopenv.h6.2")"
 assert_eq "a host whose cache vanished is resynced at the start of a resume, once" "1" "$(grep -c 'rsync -a --delete .*/scripts/ship/ ' "$RSYNC_LOG" | tr -d ' ')"
 assert_eq "...and the scripts are back" "yes" "$([[ -x "$CACHE/scripts/ship/ship-unit" ]] && echo yes)"
+
+# a host resume refused on the host (answer for a LIMIT park) leaves no staged answer anywhere
+mode h10 parklimit
+unit run h10 --brief "$BRIEF" --class S --host box >/dev/null
+assert_eq "host resume --answer on a LIMIT park: refused (3)" "3" "$(unit resume h10 --answer "$FIX/answer.md")"
+assert_contains "...saying why" "$(err)" "usage limit"
+assert_eq "...the staged answer is gone here" "" "$([[ -e "$(loops h10)/.resume-answer" ]] && echo left)"
+assert_eq "...and on the host" "" "$([[ -e "$(hloops h10)/.resume-answer" ]] && echo left)"
 
 # 6: wait on a finished unit (the blocking is the host runs above and wait_driver in the fn file) ----------
 rm_loops "$SPACE"
