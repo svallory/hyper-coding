@@ -40,6 +40,22 @@ Changes to the hyper agent plugin. The plugin version in
   with the `test-engineer` skill and its gate checks it; the `ship` skill
   lists it among the lead rules.
 
+### Fixed
+
+- The ship develop and fix prompts no longer tell the dev to run the project's
+  `gate` before writing its verdict. A dev now runs only the tests its change
+  affects (the affected-run command in the brief, per the `test-engineer`
+  skill) and leaves the gate to the driver, which runs it at finalize and at
+  land. On a project with a slow gate, units used to park OVER-BUDGET in
+  develop with their commits done, waiting on gate runs. The handover note
+  written for a successor agent says the same.
+- `ship-unit run` no longer exits 70 when `branch.autoSetupMerge` is `false`
+  or empty. worktrunk 0.73 unsets the new branch's upstream after creating it,
+  and that fails when git set none; `ship-unit` now passes
+  `branch.autoSetupMerge=true` to its own `wt switch -c` through the
+  environment (the user's git config is untouched, an existing
+  `GIT_CONFIG_COUNT` is extended). worktrunk 0.80 no longer fails this way.
+
 ### Changed
 
 - `ship_config_load` merges and validates the config layers in one jq pass: 5 process spawns per load instead of 67 (13x fewer), with the same merged config. Validation is stricter at the edges: a model name with a trailing newline or any whitespace (including non-ASCII) is rejected, an invalid regex under an empty pattern key is rejected, and a caller's non-default `IFS` no longer breaks it.
