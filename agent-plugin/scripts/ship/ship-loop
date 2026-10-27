@@ -876,9 +876,9 @@ rmlen() { jq -r --arg k "$2" '[.removals // [] | .[] | select(.kind == $k)] | le
 add_round() { ROUNDS="$(jq -c --argjson e "$1" '. + [$e]' <<<"$ROUNDS")"; }
 
 # --- setup: the unit space and the dev ------------------------------------------------------------
-# Files that belong to the unit, not to a run: an archive leaves them where they are (unit.json,
-# driver.exit and config.json are ship-unit's).
-KEEP_ON_ARCHIVE="mux.json loop.log driver.pid driver.err models.override unit.json driver.exit config.json"
+# Files that belong to the unit, not to a run: an archive leaves them where they are (unit.json and
+# config.json are ship-unit's).
+KEEP_ON_ARCHIVE="mux.json loop.log driver.pid driver.err models.override unit.json config.json"
 A_ID="" TAKEOVER="" TAKEOVER_ANSWER="" FIX_SRC="" RESTART_DEV="" KEEP_CLOCK=""
 # takeover_text — what a dev that replaces a gone one is told first
 takeover_text() {
