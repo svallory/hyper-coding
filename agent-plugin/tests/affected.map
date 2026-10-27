@@ -24,20 +24,21 @@ agent-plugin/tests/run.sh                        test-w-run-timeout.sh
 agent-plugin/tests/affected.map                  ALL
 agent-plugin/tests/hyper                         ALL
 agent-plugin/tests/lib/loop-journey.sh           test-t-ship-loop.sh
+agent-plugin/tests/lib/land-fixture.sh          test-t-ship-land.sh test-t-ship-land-fn.sh
 agent-plugin/tests/lib/mux-contract.sh           test-t-ship-mux-fake.sh test-t-ship-mux-herdr.sh
 agent-plugin/tests/fixtures/ship/*               test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-unit-driver.sh
 agent-plugin/tests/test-*.sh                     SELF
 agent-plugin/scripts/ship/lib.sh                 ALL
-agent-plugin/scripts/ship/lib-host.sh            test-t-ship-host-paths.sh test-t-ship-land.sh test-t-ship-unit.sh
+agent-plugin/scripts/ship/lib-host.sh            test-t-ship-host-paths.sh test-t-ship-land.sh test-t-ship-land-fn.sh test-t-ship-unit.sh
 agent-plugin/scripts/ship/ship-loop              test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-unit-driver.sh
 agent-plugin/scripts/ship/prompts/*              test-t-ship-loop.sh test-t-ship-schemas.sh
-agent-plugin/scripts/ship/schemas/*              test-t-ship-schemas.sh test-t-ship-failover.sh test-t-ship-loop.sh test-t-ship-land.sh
-agent-plugin/scripts/ship/ship-mux               test-t-ship-mux-fake.sh test-t-ship-mux-herdr.sh test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-land.sh test-t-ship-unit.sh test-t-ship-unit-driver.sh
-agent-plugin/scripts/ship/mux/fake               test-t-ship-mux-fake.sh test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-land.sh test-t-ship-unit.sh test-t-ship-unit-driver.sh
+agent-plugin/scripts/ship/schemas/*              test-t-ship-schemas.sh test-t-ship-failover.sh test-t-ship-loop.sh test-t-ship-land.sh test-t-ship-land-fn.sh
+agent-plugin/scripts/ship/ship-mux               test-t-ship-mux-fake.sh test-t-ship-mux-herdr.sh test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-land.sh test-t-ship-retire.sh test-t-ship-unit.sh test-t-ship-unit-driver.sh
+agent-plugin/scripts/ship/mux/fake               test-t-ship-mux-fake.sh test-t-ship-loop.sh test-t-ship-failover.sh test-t-ship-land.sh test-t-ship-retire.sh test-t-ship-unit.sh test-t-ship-unit-driver.sh
 agent-plugin/scripts/ship/mux/herdr              test-t-ship-mux-herdr.sh test-v-herdr-guard.sh
 agent-plugin/scripts/ship/mux/*                  test-t-ship-mux-fake.sh test-w-ship-docs.sh
-agent-plugin/scripts/ship/ship-land              test-t-ship-land.sh test-t-ship-unit.sh
-agent-plugin/scripts/ship/ship-retire            test-t-ship-land.sh
+agent-plugin/scripts/ship/ship-land              test-t-ship-land.sh test-t-ship-land-fn.sh test-t-ship-unit.sh
+agent-plugin/scripts/ship/ship-retire            test-t-ship-land.sh test-t-ship-retire.sh
 agent-plugin/scripts/ship/ship-unit              test-t-ship-unit.sh test-t-ship-unit-driver.sh test-t-ship-skills.sh
 agent-plugin/scripts/ship/ship-config            test-t-ship-config.sh test-t-ship-loop.sh test-t-ship-failover.sh
 agent-plugin/scripts/ship/ship-role              test-t-ship-role.sh test-t-ship-loop.sh test-t-ship-failover.sh
