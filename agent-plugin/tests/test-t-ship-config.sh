@@ -269,7 +269,7 @@ keys="$(cfg --print | sed 's/ = .*//' | tr '\n' ' ')"
 for k in mux units_group base merge_method spec.paths scan.forbidden scan.exclude stages.final.always max_rounds \
          models.dev models.verify models.review models.spec_check models.spec_write models.final \
          quota.threshold_pct quota.max_age_min limits.patterns.claude limits.patterns.pi limits.cooldown_min \
-         failover.summarizer budgets.S budgets.M budgets.L budgets.fix_fraction budgets.check \
+         failover.summarizer budgets.S budgets.M budgets.L budgets.fix_fraction budgets.fix_per_finding budgets.check \
          hosts.local.slots rulings tracker on_land roles.dev.pi_skills roles.lead.plugins_keep; do
   assert_contains "defaults.yml defines $k" "$keys" "$k "
 done
@@ -356,6 +356,8 @@ bad_cfg "failover.summarizer empty" 'failover: {summarizer: []}' "failover.summa
 bad_cfg "failover.summarizer bad" 'failover: {summarizer: ["a b"]}' "failover.summarizer"
 bad_cfg "max_rounds not a number" 'max_rounds: lots' "max_rounds must be a number (got string)"
 bad_cfg "budgets.S not a number" 'budgets: {S: fast}' "budgets.S must be a number"
+bad_cfg "budgets.fix_per_finding negative" 'budgets: {fix_per_finding: -1}' "budgets.fix_per_finding must not be negative"
+bad_cfg "budgets.fix_per_finding not a number" 'budgets: {fix_per_finding: lots}' "budgets.fix_per_finding must be a number (got string)"
 bad_cfg "budgets.fix_fraction null" 'budgets: {fix_fraction: ~}' "budgets.fix_fraction must be a number (got null)"
 assert_contains "validation names the project layer file" "$(cfg_err --print)" "$PROJECT"
 printf 'models: {spec_check: []}\n' > "$USER_CFG"

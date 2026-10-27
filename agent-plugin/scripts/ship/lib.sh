@@ -206,12 +206,17 @@ _ship_validate_config() {
     _ship_validate_models "models.$s" || bad=1
   done
   _ship_validate_models failover.summarizer || bad=1
-  for k in max_rounds budgets.S budgets.M budgets.L budgets.fix_fraction budgets.check; do
+  for k in max_rounds budgets.S budgets.M budgets.L budgets.fix_fraction budgets.fix_per_finding budgets.check; do
     if [[ "$(_ship_cfg_type "$k")" != number ]]; then
       _ship_err "$k must be a number (got $(_ship_cfg_type "$k")); set in $(_ship_key_src "$k")"
       bad=1
     fi
   done
+  if [[ "$(_ship_cfg_type budgets.fix_per_finding)" == number ]] \
+    && [[ "$(jq -r '.budgets.fix_per_finding < 0' <<<"$SHIP_CONFIG_JSON")" == true ]]; then
+    _ship_err "budgets.fix_per_finding must not be negative; set in $(_ship_key_src budgets.fix_per_finding)"
+    bad=1
+  fi
   _ship_validate_patterns || bad=1
   return $bad
 }

@@ -55,8 +55,10 @@
 #   models.override  lines of "stage=model[,model...]"; applied on every start
 # Without what the park needs, the driver re-emits the same result and exits 2.
 #
-# Budgets: budgets.<class> minutes for develop; fix rounds get budgets.fix_fraction of
-# it; every other agent stage gets budgets.check. The clock is wall time since the
+# Budgets: budgets.<class> minutes for develop; a fix round answering F findings gets
+# min(class, class * budgets.fix_fraction + budgets.fix_per_finding * F) (F = 1 when the
+# driver only has the problem as text: a finalize rejection); every other agent stage
+# gets budgets.check. The clock is wall time since the
 # stage's prompt was sent, without the time the unit was parked.
 #
 # Failover: every agent start goes through model_pick, which walks the stage's model
@@ -314,11 +316,12 @@ check_verdict() { # schema file — a verdict that does not match its schema is 
 }
 
 # --- budgets ------------------------------------------------------------------------------------
-budget_min() { # kind (develop|fix|check) verdict-file
+budget_min() { # kind (develop|fix|check) verdict-file [findings, for fix]
   local base extra=0
   case "$1" in
     develop) base="$(jq -r --arg c "$CLASS" '.budgets[$c]' <<<"$SHIP_CONFIG_JSON")" ;;
-    fix) base="$(jq -r --arg c "$CLASS" '.budgets[$c] * .budgets.fix_fraction' <<<"$SHIP_CONFIG_JSON")" ;;
+    fix) base="$(jq -r --arg c "$CLASS" --argjson n "${3:-1}" \
+      '.budgets[$c] as $cap | [$cap, $cap * .budgets.fix_fraction + .budgets.fix_per_finding * $n] | min' <<<"$SHIP_CONFIG_JSON")" ;;
     *) base="$(jq -r '.budgets.check' <<<"$SHIP_CONFIG_JSON")" ;;
   esac
   [[ -s "$2.extra" ]] && extra="$(cat "$2.extra")"
@@ -927,6 +930,7 @@ fmt_removals() { # file kind
 fmt_resolved() { jq -r '.resolved // [] | to_entries[] | "\(.key+1). \(.value.where // "?"): \(.value.says // "")\(if (.value.question // "") != "" then "\n   (settles: \(.value.question))" else "" end)"' "$1"; }
 fmt_opq() { jq -r '.operator_questions // [] | to_entries[] | "\(.key+1). \(.value.where // "?") — \(.value.question // "")\(if (.value.options // "") != "" then " Options: \(.value.options)." else "" end)\(if (.value.recommendation // "") != "" then " Recommendation: \(.value.recommendation)." else "" end)"' "$1"; }
 jlen() { jq -r --arg k "$2" '(.[$k] // []) | length' "$1"; }
+rmlen() { jq -r --arg k "$2" '[.removals // [] | .[] | select(.kind == $k)] | length' "$1"; } # file kind
 add_round() { ROUNDS="$(jq -c --argjson e "$1" '. + [$e]' <<<"$ROUNDS")"; }
 
 # --- setup: the unit space and the dev ------------------------------------------------------------
@@ -1082,11 +1086,13 @@ dev_ok() {
   park_result "$f" "$st" "$stage" "$DEV" "$q"
 }
 
-# fix_round <round> <findings> — the same dev fixes; file fix-r<round>.json
+# fix_round <round> <findings> <count> — the same dev fixes; file fix-r<round>.json. <count> is how many
+# findings the text holds (1 for a problem that is only text); it sets the round's budget.
 fix_round() {
-  local r="$1" findings="$2" f="$STATE/fix-r$1.json" text
+  local r="$1" findings="$2" n="$3" f="$STATE/fix-r$1.json" text
   STAGE=fix CUR_ROUND="$r"
   printf '%s\n' "$findings" >"$STATE/fix-r$r.findings"; printf '%s\n' "$FIX_SRC" >"$STATE/fix-r$r.src"
+  printf '%s\n' "$n" >"$STATE/fix-r$r.n"
   text="$(prompt fix round="$r" pending="$findings" verdict_file="$f")"
   # (a fix that is already in is replayed, not prompted: the takeover text and the lead's answer wait for the step that is)
   if ! fresh_result "$f"; then
@@ -1106,7 +1112,7 @@ Continue from there."
   fi
   # What the diff was when the dev was prompted: written once, so a resumed fix is compared with it.
   if [[ ! ( -e "$f.sent" && -s "$STATE/fix-r$r.before" ) ]]; then diff_sig; printf '%s\n' "$DSIG" >"$STATE/fix-r$r.before"; fi
-  run_step "$DEV" "$f" "$text" "$(budget_min fix "$f")" fix
+  run_step "$DEV" "$f" "$text" "$(budget_min fix "$f" "$n")" fix
   check_verdict develop "$f"
   dev_ok "$f" fix
   log "round $r fixed at $(jq -r '.head // "?"' "$f")"
@@ -1195,6 +1201,7 @@ Write the spec text that records that ruling."
   pending="The spec changed under this PR: the $src found problems, and the spec author settled them in commits already on $BRANCH in $WT (${commits:-see git log}). The spec now says:
 $(fmt_resolved "$wf")
 Make the code and tests match the spec exactly; do not edit the spec files. If the new text cannot be implemented as written, stop with status QUESTION and say why."
+  pending_n="$nres"
   spec_pending="In round $r the $src found spec problems, which the spec author settled (${commits:-see git log}). Check the new text first, against the rulings and the code at HEAD:
 $(fmt_resolved "$wf")
 "
@@ -1204,6 +1211,7 @@ $(fmt_resolved "$wf")
 add_dev_work() {
   local from="$1" who="$2" n nr
   n="$(jlen "$from" findings)"; nr="$(fmt_removals "$from" code)"
+  pending_n=$((pending_n + n + $(rmlen "$from" code)))
   if [[ "$n" -gt 0 ]]; then
     pending="$pending
 $who also asks for these code changes:
@@ -1298,12 +1306,12 @@ rejected_diff() {
 }
 
 # --- rounds ------------------------------------------------------------------------------------------
-pending="" spec_pending="" final_pending="" accepted="" last=review ACC_R=0
+pending="" pending_n=0 spec_pending="" final_pending="" accepted="" last=review ACC_R=0
 for ((r = 1; r <= MAX; r++)); do
   fixed=""
   if [[ -n "$pending" ]]; then
     fixed="$pending"
-    fix_round "$r" "$pending"
+    fix_round "$r" "$pending" "$pending_n"
     pending=""
   fi
 
@@ -1326,7 +1334,7 @@ for ((r = 1; r <= MAX; r++)); do
   log "round $r verify $vv"
   if [[ "$vv" == FAIL ]]; then
     [[ "$(jlen "$vf" failures)" -gt 0 ]] || die_error "$(basename "$vf") is FAIL with no failures"
-    pending="$(fmt_failures "$vf")"
+    pending="$(fmt_failures "$vf")" pending_n="$(jlen "$vf" failures)"
     add_round "$(jq -nc --argjson r "$r" '{round:$r, verdict:"VERIFY-FAIL"}')"
     last=verify
     continue
@@ -1341,7 +1349,7 @@ $fixed"
   do_review "$r" "$prior"
   if [[ "$RV_VERDICT" != ACCEPT ]]; then
     [[ "$RV_N" -gt 0 ]] || die_error "$(basename "$rf") is CHANGES with no findings"
-    pending="$(fmt_findings "$rf")"
+    pending="$(fmt_findings "$rf")" pending_n="$RV_N"
     continue
   fi
 
@@ -1371,7 +1379,7 @@ $fixed"
         if [[ -n "$(fmt_removals "$sf" spec)" ]]; then
           spec_write "spec checker" "$sf" "$r"
         else
-          pending="The spec check found elements with no consumer."
+          pending="The spec check found elements with no consumer." pending_n=0
           spec_pending="In round $r the spec check asked for removals; the dev removed them. Check they are gone and nothing else broke:
 $(fmt_removals "$sf" code)
 "
@@ -1381,7 +1389,7 @@ $(fmt_removals "$sf" code)
       *)
         [[ "$n" -gt 0 ]] || die_error "$(basename "$sf") is CHANGES with no findings"
         SPEC_VERDICT=CHANGES
-        pending="$(fmt_findings "$sf")"
+        pending="$(fmt_findings "$sf")" pending_n="$n"
         spec_pending="Your previous spec round's findings, which the dev says are fixed. Check each one first:
 $pending
 "
@@ -1405,7 +1413,7 @@ $pending
   log "round $r final $FINAL_VERDICT ($n findings)"
   if [[ "$FINAL_VERDICT" == ACCEPT ]]; then accepted=1; ACC_R=$r; break; fi
   [[ "$n" -gt 0 ]] || die_error "$(basename "$ff") is CHANGES with no findings"
-  pending="$(fmt_findings "$ff")"
+  pending="$(fmt_findings "$ff")" pending_n="$n"
   final_pending="Your previous round's findings, which the dev says are fixed. Check each one first:
 $pending
 "
@@ -1491,7 +1499,7 @@ rejection_text() {
 # review_gate — returns when the diff as it is now has a READY review and no fix is pending. NEED_FIX (with
 # FIX_SRC, where it came from) is work the dev still owes; a fix for a CHANGES verdict that leaves the diff
 # as it was is a failed round. Every CHANGES verdict and every failed round counts toward max_rounds.
-FR=$ACC_R cycles=0 NEED_FIX="" GATE_PRIOR="" guard=0
+FR=$ACC_R cycles=0 NEED_FIX="" NEED_FIX_N=1 GATE_PRIOR="" guard=0
 review_gate() {
   local before after rv rej
   while true; do
@@ -1499,7 +1507,7 @@ review_gate() {
     [[ $guard -le $((MAX * 4 + 8)) ]] || die_error "finalize could not settle on a reviewed diff after $guard steps"
     if [[ -n "$NEED_FIX" ]]; then
       FR=$((FR + 1))
-      fix_round "$FR" "$NEED_FIX"
+      fix_round "$FR" "$NEED_FIX" "$NEED_FIX_N"
       before="$(cat "$STATE/fix-r$FR.before")"
       diff_sig; after="$DSIG"
       if rejected_diff; then
@@ -1542,6 +1550,7 @@ $rej"
         GATE_PRIOR="The PR was restored, by the gate or another change that is not a dev fix, to the diff that ${REJECTED_BY%%-r*} rejected. Check that each of these is addressed in the diff as it is now:
 $rej"
         FIX_SRC=gate
+        NEED_FIX_N=1
         continue
       fi
       FR=$((FR + 1)); rv=$FR
@@ -1555,7 +1564,7 @@ $rej"
         log "STUCK: the post-fix review kept asking for changes"
         finish 2 review STUCK "$(jq -n --arg f "$(fmt_findings "$STATE/review-r$rv.json")" '{findings:$f}')"
       fi
-      NEED_FIX="$(fmt_findings "$STATE/review-r$rv.json")"; FIX_SRC=review
+      NEED_FIX="$(fmt_findings "$STATE/review-r$rv.json")" NEED_FIX_N="$RV_N"; FIX_SRC=review
       GATE_PRIOR="The previous findings, which the dev says are fixed. Verify each against the current head first:
 $NEED_FIX"
     fi
@@ -1568,7 +1577,7 @@ attempt=0
 # not replayed over: it is the next round of the dev's work.
 _k=$((ACC_R + 1))
 if [[ -e "$STATE/fix-r$_k.json.sent" && -s "$STATE/fix-r$_k.findings" ]]; then
-  NEED_FIX="$(cat "$STATE/fix-r$_k.findings")"; FIX_SRC="$(cat "$STATE/fix-r$_k.src" 2>/dev/null)"
+  NEED_FIX="$(cat "$STATE/fix-r$_k.findings")"; NEED_FIX_N="$(cat "$STATE/fix-r$_k.n" 2>/dev/null || echo 1)"; FIX_SRC="$(cat "$STATE/fix-r$_k.src" 2>/dev/null)"
   FR=$((_k - 1))
   log "continuing the dev's fix round $_k"
 fi
@@ -1586,7 +1595,7 @@ while ! { valid_json "$STATE/finalize.json" && [[ "$(jq -r .status "$STATE/final
     finish 2 finalize STUCK "$(jq -n --arg f "$FIN_MSG" '{findings:$f}')"
   fi
   log "finalize problem, back to the dev (attempt $attempt)"
-  NEED_FIX="$FIN_MSG"; FIX_SRC=finalize
+  NEED_FIX="$FIN_MSG" NEED_FIX_N=1; FIX_SRC=finalize
   GATE_PRIOR="The dev changed the PR after your last accept, to fix this: $FIN_MSG
 Review the diff against origin/$BASE as it is now."
 done

@@ -78,6 +78,8 @@ budgets:
   L: 90
   # Fraction of the class budget given to a fix round.
   fix_fraction: 0.5
+  # Minutes added to a fix round for each finding it must answer; the round never gets more than the class budget.
+  fix_per_finding: 2
   # Minutes allowed for a check stage (verify, review, spec check, final); the gate is not a stage.
   check: 30
 # Where units run. Each host has an optional ssh target and a number of concurrent unit slots.
