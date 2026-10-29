@@ -1044,6 +1044,22 @@ newstate; WT="$(CT)"; FIN_MSG=""
 finalize_clean_tree; rc=$?
 assert_eq "finalize_clean_tree: a clean tree: returns 0, no message, nothing logged" "0||0" "$rc|$FIN_MSG|$(wc -c <"$LOG" | tr -d ' ')"
 
+# fail closed: no origin/$BASE means nothing is restored and the driver errors (mutation: pipe the diff into tr again)
+newstate; WT="$(CT)"; FIN_MSG=""; printf 'x\n' >"$WT/lock.json"; git -C "$WT" update-ref -d refs/remotes/origin/main
+out="$( ( finalize_clean_tree ) 2>&1 )"; rc=$?
+assert_eq "finalize_clean_tree: origin/\$BASE missing: the driver errors (die_error), nothing restored" "9|x" "$rc|$(cat "$WT/lock.json")"
+assert_contains "finalize_clean_tree: ...and says which diff failed" "$out" "DIE: git diff origin/main...HEAD failed"
+# never discard silently: what is restored is first saved as a patch, and the log names it
+newstate; WT="$(CT)"; FIN_MSG=""; printf 'forgot\n' >"$WT/tool noise.txt"; printf '\000bin\n' >"$WT/lock.json"
+finalize_clean_tree; rc=$?
+pf="$(ls "$STATE"/finalize-restored-*.patch 2>/dev/null | head -1)"
+assert_eq "finalize_clean_tree: restored files leave a patch in the state dir, and the log names it" "0|yes" "$rc|$([[ -s "$pf" ]] && grep -qF "$pf" "$LOG" && echo yes || echo no)"
+assert_eq "finalize_clean_tree: ...the tree is restored" "a" "$(cat "$WT/tool noise.txt")"
+git -C "$WT" apply "$pf"; rc=$?
+assert_eq "finalize_clean_tree: ...and git apply of the patch brings both changes back (binary one too)" "0|forgot|1" "$rc|$(cat "$WT/tool noise.txt")|$(cmp -s "$WT/lock.json" <(printf '\000bin\n') && echo 1 || echo 0)"
+newstate; WT="$(CT)"; FIN_MSG=""; finalize_clean_tree
+assert_eq "finalize_clean_tree: a clean tree writes no patch" "0" "$(ls "$STATE"/finalize-restored-*.patch 2>/dev/null | wc -l | tr -d ' ')"
+
 # finalize_try with reviewed_diff true and rechecked_diff false: returns 2 and pushes nothing (mutation: drop `|| ! rechecked_diff`)
 loop_fn finalize_try finalize_clean_tree
 git() { case "$*" in *rev-list*) echo 1;; *push*) echo PUSHED >>"$STATE/pushlog";; *rev-parse*) echo abc;; esac; return 0; }

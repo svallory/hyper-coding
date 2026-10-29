@@ -1219,18 +1219,27 @@ forbidden_scan() { # prints offending added lines; returns 1 on a bad regex
 # restored to HEAD and logged. One the unit's commits touch, or one HEAD does not have yet (staged as new), is the
 # dev's work and is never discarded.
 finalize_clean_tree() {
-  local f touched real="" noise=""
-  touched="$(git -C "$WT" diff --name-only --no-renames -z "origin/$BASE...HEAD" | tr '\0' '\n')"
+  local f touched real="" noise="" patch
+  local -a noisef=()
+  git -C "$WT" diff --name-only --no-renames -z "origin/$BASE...HEAD" >"$STATE/finalize-touched" 2>>"$LOG" \
+    || die_error "git diff origin/$BASE...HEAD failed in $WT; see loop.log"
+  touched="$(tr '\0' '\n' <"$STATE/finalize-touched")"
   while IFS= read -r -d '' f; do
     if grep -qxF -- "$f" <<<"$touched" || ! git -C "$WT" cat-file -e "HEAD:$f" 2>/dev/null; then
       real+="$f "
-    elif git -C "$WT" --literal-pathspecs restore --source=HEAD --staged --worktree -- "$f" >>"$LOG" 2>&1; then
-      noise+="$f "
     else
-      real+="$f "
+      noisef+=("$f") noise+="$f "
     fi
   done < <(git -C "$WT" diff --name-only --no-renames -z HEAD)
-  [[ -z "$noise" ]] || log "restored tracked files the unit's commits do not touch (made by a tool, not the dev): $noise"
+  if [[ ${#noisef[@]} -gt 0 ]]; then
+    # kept before the restore: a file the dev edited but never committed looks like tool noise too
+    patch="$STATE/finalize-restored-$(date +%Y%m%d-%H%M%S)-$$.patch"
+    git -C "$WT" --literal-pathspecs diff --binary HEAD -- "${noisef[@]}" >"$patch" \
+      || die_error "could not save the changes finalize would restore to $patch; see loop.log"
+    git -C "$WT" --literal-pathspecs restore --source=HEAD --staged --worktree -- "${noisef[@]}" >>"$LOG" 2>&1 \
+      || die_error "could not restore $noise in $WT; see loop.log"
+    log "restored tracked files the unit's commits do not touch (made by a tool, not the dev): $noise; their changes are saved in $patch"
+  fi
   [[ -z "$real" ]] || FIN_MSG="1. [BLOCKING] $BRANCH — uncommitted changes in $WT stop the rebase onto origin/$BASE: $real
    Fix: in $WT commit them if they belong to the change, or discard them with \`git checkout -- <file>\` if they do not; then run the tests your change affects and \`git push --force-with-lease\`."
   [[ -z "$real" ]]
