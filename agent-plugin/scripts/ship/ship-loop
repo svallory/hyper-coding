@@ -1213,12 +1213,36 @@ forbidden_scan() { # prints offending added lines; returns 1 on a bad regex
   return $rc
 }
 
+# finalize_clean_tree — 0 when $WT has no tracked change left over that would stop the rebase; 1 when the dev's own
+# uncommitted work is in the way (FIN_MSG names the files). A tracked file that is dirty but that none of the unit's
+# commits touch was written by a tool (a worktrunk post-start hook rewriting a lockfile), not by the dev: it is
+# restored to HEAD and logged. One the unit's commits touch, or one HEAD does not have yet (staged as new), is the
+# dev's work and is never discarded.
+finalize_clean_tree() {
+  local f touched real="" noise=""
+  touched="$(git -C "$WT" diff --name-only --no-renames -z "origin/$BASE...HEAD" | tr '\0' '\n')"
+  while IFS= read -r -d '' f; do
+    if grep -qxF -- "$f" <<<"$touched" || ! git -C "$WT" cat-file -e "HEAD:$f" 2>/dev/null; then
+      real+="$f "
+    elif git -C "$WT" --literal-pathspecs restore --source=HEAD --staged --worktree -- "$f" >>"$LOG" 2>&1; then
+      noise+="$f "
+    else
+      real+="$f "
+    fi
+  done < <(git -C "$WT" diff --name-only --no-renames -z HEAD)
+  [[ -z "$noise" ]] || log "restored tracked files the unit's commits do not touch (made by a tool, not the dev): $noise"
+  [[ -z "$real" ]] || FIN_MSG="1. [BLOCKING] $BRANCH — uncommitted changes in $WT stop the rebase onto origin/$BASE: $real
+   Fix: in $WT commit them if they belong to the change, or discard them with \`git checkout -- <file>\` if they do not; then run the tests your change affects and \`git push --force-with-lease\`."
+  [[ -z "$real" ]]
+}
+
 # finalize_try — 0 pushed (finalize.json written); 1 the dev has to fix something (FIN_MSG says what);
 # 2 the diff after the rebase is not one a reviewer accepted: nothing was pushed
 FIN_MSG=""
 finalize_try() {
   local out files ahead gate_out hits head
   git -C "$WT" fetch origin >>"$LOG" 2>&1 || die_error "git fetch origin failed in $WT; see loop.log"
+  finalize_clean_tree || return 1
   if ! out="$(git -C "$WT" rebase "origin/$BASE" 2>&1)"; then
     files="$(git -C "$WT" diff --name-only --diff-filter=U | tr '\n' ' ')"
     git -C "$WT" rebase --abort >/dev/null 2>&1 || true
