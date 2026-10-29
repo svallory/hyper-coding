@@ -348,7 +348,7 @@ skill is the lead's playbook; `spec`, `plan`, `kickoff`, `unit`, `land` and
   signal. Exits 0 when the unit is READY, 2 when it parked, got stuck or ran
   over budget, 1 on error. The exit is the lead's notification.
 - **Parked**: the driver stopped on a question, a block, a usage limit it could
-  not route around, or a dialog. `park.json` says why; the lead answers and
+  not route around, an expired login, or a dialog. `park.json` says why; the lead answers and
   resumes the unit.
 - **Ruling**: a numbered decision, `## D<n> — <title>` with `Ruling`, `Reason`,
   `By` and `Status`, in the rulings file. Briefs and answers quote rulings by

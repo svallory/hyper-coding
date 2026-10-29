@@ -329,7 +329,8 @@ rm -f "$SHIP_QUOTA_DIR"/*.json
 
 # --- the limit patterns ---------------------------------------------------------------------------------
 # Quoted limit wording is not a limit: the default patterns are anchored to the start of a line.
-CL_RE="$(sed -n "s/^    claude: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml")"
+CL_RE="$(sed -n "s/^    claude: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml" | head -n 1)"
+AUTH_RE="$(sed -n "s/^    claude: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml" | tail -n 1)"
 PI_RE="$(sed -n "s/^    pi: '\(.*\)'$/\1/p" "$SCRIPTS_DIR/../skills/ship/defaults.yml")"
 NB="$(printf '\302\240')"   # a no-break space
 REAL_CL="  ⎿ ${NB}You've hit your weekly limit · resets Oct 24, 4pm (America/Sao_Paulo)"   # the line Claude Code prints
@@ -352,6 +353,19 @@ for l in "retry with backoff when the API answers 429 Too Many Requests" "ship-l
   "Summary: added retry with backoff when the API answers 429 Too Many Requests" "the finding at ship-loop:429 and src/x.sh:429: handler" "usage limit docs"; do
   assert_eq "pi pattern ignores: $l" false "$(m "$PI_RE" "$l")"
 done
+
+# The login-expired pattern: whole-line Claude Code messages only; text that merely mentions a login never matches, and no
+# usage-limit text does either (and the limit pattern ignores login text).
+for l in "OAuth token revoked · Please run /login" "Login expired · Please run /login" "  ⎿ ${NB}Login expired · Please run /login" "● OAuth token revoked · Please run /login" "Not logged in · Please run /login" \
+  "Please run /login" "please run /login." "OAuth token has expired · Please run /login" "Invalid API key · Please run /login" "Session expired · Please run /login" "OAuth token revoked" "Login expired" "│ Login expired · Please run /login │"; do
+  assert_eq "auth pattern fires on: $l" true "$(m "$AUTH_RE" "$l")"
+done
+for l in "You've hit your weekly limit · resets Oct 24, 4pm" "Error: 429 Too Many Requests" "I added a login page and a /login route" "Please run /login again after the deploy, then retry the test suite" "The login expired handler returns 401" \
+  "- Login expired · Please run /login" "+ OAuth token revoked · Please run /login" "> Please run /login" "\"Login expired · Please run /login\" is the message" "src/auth.sh: login expired" "Login expired · Please run /login and then more text" \
+  "the OAuth token revoked path is covered" "Logged in as me@example.com" "Run /login to authenticate"; do
+  assert_eq "auth pattern ignores: $l" false "$(m "$AUTH_RE" "$l")"
+done
+assert_eq "limit pattern ignores a login message" false "$(m "$CL_RE" "Login expired · Please run /login")"
 
 # --- the loop's functions --------------------------------------------------------------------------------
 # The rest lifts ship-loop's own functions (loop_fn) and runs them against a scripted mux, a scratch state
@@ -386,7 +400,7 @@ POLL_S=0 LIMIT_LINES=25 STOP_MS=100 SUMMARY_TIMEOUT_S=60 CUR_ROUND=0 STAGE=devel
 SHIP_CONFIG_JSON='{}'
 unit fo
 newstate
-loop_fn agent_harness limit_hit limit_word stamp_failovers stop_agent scrub_status git_facts_status write_status \
+loop_fn agent_harness limit_hit auth_hit limit_word stamp_failovers stop_agent scrub_status git_facts_status write_status \
   failover_on_limit await_file render check_verdict cfg valid_json write_json
 
 # limit_word — the word of "hit your <word> limit", lower case, empty for a plain limit.
@@ -431,6 +445,23 @@ assert_fails "limit_hit: the wording inside an edit dialog's diff is not a limit
 MUX_SCREEN="You've hit your Sonnet limit"
 SAVED_CFG="$SHIP_CONFIG_JSON"; SHIP_CONFIG_JSON='{}'
 assert_fails "limit_hit: a harness without a pattern never matches" limit_hit hc id-hc
+SHIP_CONFIG_JSON="$SAVED_CFG"
+
+# auth_hit — the matching login-expired line of the newest LIMIT_LINES of the agent's screen, cleaned
+SHIP_CONFIG_JSON="$(jq -nc --arg a "$AUTH_RE" '{auth: {patterns: {claude: $a}}}')"
+mux_reset; MUX_SCREEN="some output
+  ⎿ ${NB}OAuth token revoked · Please run /login"
+assert_eq "auth_hit: claude's login line is returned, cleaned of its glyph" "OAuth token revoked · Please run /login" "$(auth_hit hc id-hc)"
+assert_contains "auth_hit: it asked for the newest LIMIT_LINES lines only" "$(cat "$MUXLOG")" "--lines 25"
+MUX_SCREEN="Summary: the login expired handler is fixed
+Please run /login again after the deploy, then retry"
+assert_fails "auth_hit: prose about a login is not an expired login" auth_hit hc id-hc
+MUX_SCREEN="You've hit your weekly limit · resets Fri 4pm"
+assert_fails "auth_hit: a usage limit is not an expired login" auth_hit hc id-hc
+MUX_SCREEN="Login expired · Please run /login"
+assert_fails "auth_hit: a pi agent (no pattern) never matches" auth_hit hp id-hp
+SHIP_CONFIG_JSON='{}'
+assert_fails "auth_hit: no pattern configured never matches" auth_hit hc id-hc
 SHIP_CONFIG_JSON="$SAVED_CFG"
 
 # the takeover prompt must not trip the pi pattern (it names a rate/usage allowance): rendered from the real template

@@ -213,7 +213,7 @@ ship-unit list
 | `--final-gate` | run the final gate stage for this unit (otherwise only when `stages.final.always`). |
 | `--model STAGE=M[,M...]` | replace one stage's model list for this unit (repeatable). Written to `models.override`. |
 | `--spec-dir DIR` | a spec directory the agents read; copied to the host in host mode. |
-| `--answer FILE` | (`resume`) the lead's answer to the current park; becomes `answer-<n>.md`. Refused for LIMIT and DIALOG parks. |
+| `--answer FILE` | (`resume`) the lead's answer to the current park; becomes `answer-<n>.md`. Refused for LIMIT, DIALOG and AUTH parks. |
 | `--extend MIN` | (`resume`) minutes to add to the stage that went OVER-BUDGET; above 0. |
 | `--max-rounds N` | (`resume`) raise the unit's round limit to `N` and continue it where it stopped. `N` must be a positive integer above the unit's current limit (else exit 64, nothing changed). The new limit is written to `unit.json`, so later resumes keep it; it combines with `--model` and `--extend`, and earlier `--model` overrides are kept. It only helps a unit that stopped STUCK for want of rounds. |
 
@@ -241,7 +241,7 @@ launch run under one lock per host, so concurrent runs cannot overbook.
 
 Exit codes: 0 READY, 1 ERROR, 2 parked / over budget / stuck (these three are
 only ever the driver's result); 3 refused (host full, driver already running,
-nothing to answer or extend, answer for a LIMIT or DIALOG park); 64 usage;
+nothing to answer or extend, answer for a LIMIT, DIALOG or AUTH park); 64 usage;
 70 ship-unit itself failed (copy or sync failure, no ssh destination, unknown
 unit, a driver that died leaving no exit code or result); 75 the connection to
 the host was lost while the driver still runs (`ship-unit wait <ref>`
@@ -583,6 +583,7 @@ hosts:
 | `quota.max_age_min` | Quota snapshots older than this many minutes are ignored. Default 30. |
 | `limits.patterns.claude` | Regex matched against the newest lines of a Claude agent's screen to detect a usage limit. Anchored (see [below](#usage-limits-and-failover)). |
 | `limits.patterns.pi` | The same for pi agents; only error phrasing counts (for example `error: status code 429`). |
+| `auth.patterns.claude` | Regex matched against the newest lines of a Claude agent's screen to detect an expired or revoked login ("Login expired · Please run /login", "OAuth token revoked · Please run /login"). A match parks the unit `AUTH`. Same dialect and anchoring as `limits.patterns`. |
 | `limits.cooldown_min` | Minutes an account or model is treated as limited when no reset time is known. Default 60. |
 | `failover.summarizer` | Models tried in order to summarise an interrupted stage into `STATUS.md`. Default `[haiku]`. |
 | `budgets.S`, `budgets.M`, `budgets.L` | Develop time budget in minutes per class. Defaults 15, 45, 90. |
@@ -752,6 +753,7 @@ the stop needs, the driver re-emits the same result and exits 2 again.
 | `OPERATOR` | the spec writer needs a decision only the operator can make (all gaps marked `operator_call`, or `operator_questions`) | `park.json` status `OPERATOR` | `--answer FILE`; a fresh spec writer gets the answer in its prompt. |
 | `DIALOG` | an agent is blocked on a dialog in its pane, for one of three reasons: (1) the workspace-trust dialog, which ship answers itself, could not be cleared (the cursor would not move onto "Yes, I trust this folder", or it is still showing after Enter); (2) any other dialog (ship answers none); (3) the screen looks like the trust dialog but is **not recognised** as one alone on screen (a third option, a permission prompt below it, ...): ship sends no key, and `loop.log` says "not clearly alone" | `park.json` status `DIALOG`, with the screen text. `agent` is the agent name; `ship-mux --to` accepts it. `file` is the verdict file the park belongs to (empty when there is none) | read the pane (`ship-mux read --ref <ref> --to <agent>`). For the workspace-trust dialog only ("Quick safety check…", options "No, exit" / "Yes, I trust this folder"): `ship-mux send --ref <ref> --to <agent> --keys down`, read the pane again, and `--keys enter` only when `❯` is on "Yes, I trust this folder"; any other dialog is the operator's, with no keys sent. Then `resume` with no answer. `--answer` is refused. |
 | `LIMIT` | every model for the stage is limited or over `quota.threshold_pct`, or the limited one has no successor | `park.json` status `LIMIT`, `resets_at` when known | wait for the reset, or `--model stage=...` to name a usable list, or `ship-loop --clear-limit NAME` if the quota is back; then `resume`. `--answer` is refused. |
+| `AUTH` | a Claude agent's screen shows a login-expired or token-revoked message (`auth.patterns`). Parked at once: no budget is charged, the agent is not re-prompted and there is no failover, because every model of the harness shares the login | `park.json` status `AUTH`; `agent` is the agent name | the operator runs `/login`; then `resume` without an answer. The parked agent is closed and the stage restarts with a new one (the clock kept). `--answer` is refused. |
 | `OVER-BUDGET` | a stage ran past its budget | `budget-r<k>.json`; agent left running | `--extend MIN`. |
 | `STUCK` | `max_rounds` reached without ACCEPT, or finalize failed and the dev could not fix it | `result.json.findings` | If it ran out of rounds, raise the limit with `ship-unit resume <ref> --max-rounds <higher>`, optionally with `--model STAGE=M`. Finished rounds are replayed from their files and the driver goes on with the next round; earlier `--model` overrides are kept. This only helps a unit that stopped for want of rounds: a plain `resume` keeps the old limit and would stop at STUCK again. Or abandon it: `ship-land <ref> --abandon --force`, then start a fresh `ship-unit run`. Read `result.json.findings` first; if the reviewer keeps asking for the same thing, rule on it or re-brief rather than raising the limit. |
 | `ERROR` | tool or script failure, or a malformed verdict (CHANGES with no findings; DONE with no PR; WRITTEN with nothing resolved; finalize found nothing ahead of `origin/<base>`) | `driver.err`, `result.json.why` | fix the cause, then `resume`; or abandon. |
@@ -805,6 +807,16 @@ The other-model rule: a message that names another model ("You've hit your Opus
 limit") is recorded against that model in `limited.json`, but an agent running a
 different model is not stopped and not failed over; only later entries naming
 the limited model are skipped.
+
+**Expired logins.** An expired or revoked Claude login ("Login expired · Please
+run /login", "OAuth token revoked · Please run /login") is not a limit and no
+other model fixes it: every Claude model, and the next stage, runs on the same
+login. The driver matches the same newest lines against `auth.patterns` before
+it looks for a limit and parks the unit `AUTH` at once: no failover, no nudge,
+no further budget is charged. Only the operator can run `/login`. `resume`
+without an answer closes the parked agent and restarts the stage with a new one;
+`--answer` is refused. A pi agent has its own provider key and no `auth.patterns`
+entry.
 
 Marking a quota as back: `ship-loop --clear-limit NAME` removes the account or
 model `NAME` (the account name as the tap writes it, or the model as written in

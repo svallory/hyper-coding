@@ -68,6 +68,12 @@ limits:
     pi: '(?i)^[^[:alnum:]+>-]*((((api |provider |http )?error:?|✗)\s*(429\s*)?|429\s*)((too many requests|status code( 429)?)\s*([.!]|:.*|[({\[].*)?\s*$|resource_exhausted)|(((api |provider |http )?error:?|✗)\s*)?(429\b.*rate_limit_error|429\b.{0,30}rate.?limit|\{"error":\{"code":"?(1302|1308)\b|(rate|usage) limit (has been )?(reached|exceeded|hit)( for .*)?\s*[.!]?\s*$|quota (has been )?exceeded([.!,:]|\s*$|\sfor\s)|(you )?exceeded (your|the) (current )?(quota|rate limit|usage limit)([.!,:]|\s*$)))'
   # Minutes to treat an account or model as limited when the reset time is unknown.
   cooldown_min: 60
+# Login-expired detection.
+auth:
+  # Regexes matched against an agent's screen to detect an expired or revoked login. Same dialect and anchoring rules as limits.patterns. A match parks the unit AUTH for the operator: no failover, since every model of the harness shares the login.
+  patterns:
+    # Claude Code login messages: "OAuth token revoked · Please run /login", "Login expired · Please run /login", "Not logged in · Please run /login". Whole-line messages only, so text that merely mentions a login never matches.
+    claude: '(?i)^\s*([^[:alnum:]\s+>"\x27`“”‘’-]\s*)?((([a-z][a-z0-9 ]{2,40}[a-z0-9])\s*[·∙]\s*)?please run /login|(oauth token (has been )?(revoked|expired)|(login|session) (has )?expired|not logged in))\s*\.?[\s│]*$'
 # Reactive failover after a usage limit.
 failover:
   # Models tried in order to summarise an interrupted stage into STATUS.md.

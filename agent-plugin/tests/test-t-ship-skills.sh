@@ -83,7 +83,7 @@ assert_eq "ship has no remote-machine red flag" "0" "$(grep -ciE 'remote machine
 unit="$(cat "$SKILLS/unit/SKILL.md")"
 assert_contains "unit runs in the background" "$unit" "run_in_background: true"
 assert_contains "unit looks through ship-mux read" "$unit" "ship-mux read"
-for k in QUESTION BLOCKED DIALOG OPERATOR LIMIT OVER-BUDGET STUCK ERROR READY; do
+for k in QUESTION BLOCKED DIALOG OPERATOR LIMIT AUTH OVER-BUDGET STUCK ERROR READY; do
   assert_contains "unit's exit table covers $k" "$unit" "$k"
 done
 assert_contains "land covers --abandon" "$(cat "$SKILLS/land/SKILL.md")" "--abandon"

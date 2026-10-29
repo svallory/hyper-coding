@@ -93,6 +93,7 @@ bad_case failover missing '{"stage":"dev","round":1,"agent":"a","from":"x","reas
 
 # park (driver-written)
 ok_case park question '{"status":"QUESTION","stage":"develop","agent":"u-dev","question":"q?","since":"2026-10-24T18:00:00Z"}'
+ok_case park auth '{"status":"AUTH","stage":"develop","agent":"a","question":"login expired","since":"t"}'
 ok_case park limit '{"status":"LIMIT","stage":"review","agent":"a","question":"all models limited","since":"t","resets_at":"2026-10-25T00:00:00Z"}'
 bad_case park enum '{"status":"DONE","stage":"s","agent":"a","question":"q","since":"t"}' '$.status:'
 bad_case park missing '{"status":"BLOCKED","stage":"s","agent":"a","since":"t"}' '$: missing required key question'
