@@ -19,14 +19,18 @@
 #           ship-mux and start the driver in it, then block until it exits. Mirrors
 #           notes/loops/<ref>/ back (host mode), prints result.json and exits with
 #           the driver's code. --model values are written to models.override.
-#   resume  restart the driver of a parked or over-budget unit; it reattaches. First
+#   resume  restart the driver of a parked, over-budget or STUCK unit; it reattaches. First
 #           writes what ship-loop reads from notes/loops/<ref>/: --answer becomes
-#           answer-<n>.md (n is park.json's "n"; refused for LIMIT and DIALOG parks),
-#           --extend becomes `extend` (minutes, above 0, for the stage that went
-#           OVER-BUDGET), --model lines are appended to models.override (so they beat
-#           run's), --max-rounds raises the unit's round limit (above the current one;
-#           written to unit.json so later resumes keep it; it only helps a unit that
-#           stopped STUCK for want of rounds). Then blocks like run.
+#           answer-<n>.md (n is park.json's "n"; refused for LIMIT and DIALOG parks; for
+#           a STUCK unit, which has no park, the next free number, and the file is a note
+#           to the dev in its next fix prompt), --extend becomes `extend` (minutes, above
+#           0, for the stage that went OVER-BUDGET), --model lines are appended to
+#           models.override (so they beat run's), --max-rounds raises the unit's round
+#           limit (above the current one; written to unit.json so later resumes keep it).
+#           A STUCK unit is refused (3) unless it is given something new: one that ran out
+#           of rounds needs --max-rounds above the limit it stopped at, whatever else is
+#           given; another STUCK needs any of --max-rounds, --answer or --model. Then
+#           blocks like run.
 #   wait    block on an already running driver (after the caller's session was lost).
 #   list    one line per unit under notes/loops/ (not .done): ref, host, status,
 #           stage, failovers, age, driver alive. A unit with a live driver is RUNNING;
@@ -470,20 +474,44 @@ resume_opts_check() {
   fi
 }
 
+# resume_stuck <unit dir> — succeeds when the unit's last word is a STUCK result written since its last
+# launch and nothing is parked; sets stuck_lim to the round limit it stopped at, empty when it stopped
+# for another reason (ship-loop writes rounds_limit only when the rounds ran out; the other STUCKs
+# count cycles from zero and restart with a full allowance).
+resume_stuck() {
+  local u="$1" launched
+  stuck_lim=""
+  [[ -s "$u/result.json" && ! -s "$u/park.json" ]] || return 1
+  [[ "$(jq -r '.status // ""' "$u/result.json" 2>/dev/null)" == STUCK ]] || return 1
+  launched="$(jq -r '.launched_at // 0' "$u/unit.json" 2>/dev/null)" || launched=0
+  [[ "$launched" =~ ^[0-9]+$ ]] || launched=0
+  [[ "$(mtime "$u/result.json")" -ge "$launched" ]] || return 1
+  stuck_lim="$(jq -r '.rounds_limit // ""' "$u/result.json" 2>/dev/null)" || stuck_lim=""
+  [[ "$stuck_lim" =~ ^[1-9][0-9]*$ ]] || stuck_lim=""
+  return 0
+}
+
 # resume_args_check — where the unit lives: everything a resume would write is checked before
-# anything is (uses d answer extend max_rounds); sets n, the number of the park being answered.
+# anything is (uses d answer extend max_rounds models); sets n, the number of the park being answered
+# (for a STUCK unit, the next free number: its note to the dev is answer-<n>.md too).
 resume_args_check() {
-  local ok=0 b cur
+  local ok=0 b cur stuck=0
   n=""
+  resume_stuck "$d" && stuck=1
   if [[ -n "$answer" ]]; then
     [[ -s "$answer" ]] || die "answer file $answer is missing or empty"
-    [[ -s "$d/park.json" ]] || refuse "$ref is not parked (no park.json); nothing is waiting for an answer"
-    case "$(jq -r '.status // ""' "$d/park.json")" in
-      LIMIT) refuse "$ref is parked on a usage limit; an answer does not help: wait for the reset or resume with --model" ;;
-      DIALOG) refuse "$ref is parked on a dialog the agent could not pass; an answer does not help: fix it in the pane, then resume without --answer" ;;
-    esac
-    n="$(jq -r '.n // empty' "$d/park.json")"
-    [[ "$n" =~ ^[0-9]+$ ]] || die "$d/park.json has no park number"
+    if [[ $stuck -eq 1 ]]; then
+      n=1
+      while [[ -e "$d/park-$n.json" || -e "$d/answer-$n.md" ]]; do n=$((n + 1)); done
+    else
+      [[ -s "$d/park.json" ]] || refuse "$ref is not parked (no park.json); nothing is waiting for an answer"
+      case "$(jq -r '.status // ""' "$d/park.json")" in
+        LIMIT) refuse "$ref is parked on a usage limit; an answer does not help: wait for the reset or resume with --model" ;;
+        DIALOG) refuse "$ref is parked on a dialog the agent could not pass; an answer does not help: fix it in the pane, then resume without --answer" ;;
+      esac
+      n="$(jq -r '.n // empty' "$d/park.json")"
+      [[ "$n" =~ ^[0-9]+$ ]] || die "$d/park.json has no park number"
+    fi
   fi
   if [[ -n "$extend" ]]; then
     positive_number "$extend" || usage "--extend takes minutes (a number above 0), got '$extend'"
@@ -492,13 +520,25 @@ resume_args_check() {
     done
     [[ $ok -eq 1 ]] || refuse "$ref has no stage over budget; nothing to extend"
   fi
-  if [[ -n "$max_rounds" ]]; then
-    [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
+  if [[ -n "$max_rounds" || $stuck -eq 1 ]]; then
     # The limit the driver would use now: the unit's own, else the config default.
     cur="$(jq -r '.max_rounds // ""' "$d/unit.json")"
     [[ -n "$cur" ]] || cur="$(ship_cfg_get max_rounds 2>/dev/null)" || cur=""
     [[ "$cur" =~ ^[1-9][0-9]*$ ]] || die "cannot tell $ref's current round limit"
+  fi
+  if [[ -n "$max_rounds" ]]; then
+    [[ "$max_rounds" =~ ^[1-9][0-9]*$ ]] || usage "--max-rounds must be a positive integer"
     [[ "$max_rounds" -gt "$cur" ]] || usage "--max-rounds $max_rounds must be above the unit's current limit ($cur)"
+  fi
+  [[ $stuck -eq 1 ]] || return 0
+  # A STUCK unit restarts only with something new for it. One that ran out of rounds runs out again
+  # at once unless the limit rises, so no other flag stands in for --max-rounds.
+  if [[ -n "$stuck_lim" ]]; then
+    if [[ "${max_rounds:-$cur}" -le "$stuck_lim" ]]; then
+      refuse "$ref is STUCK on its round limit ($stuck_lim); resume it with --max-rounds N (above $stuck_lim), adding --answer FILE to tell the dev what changed, or abandon it"
+    fi
+  elif [[ -z "$answer$extend$max_rounds${models[*]:-}" ]]; then
+    refuse "$ref is STUCK; resume it with --max-rounds N (above $cur), --answer FILE (a note to the dev), or --model STAGE=M, or abandon it"
   fi
 }
 

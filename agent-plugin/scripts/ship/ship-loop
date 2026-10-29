@@ -51,6 +51,8 @@
 #                    agent. QUESTION, BLOCKED and OPERATOR parks wait for it; a DIALOG
 #                    park resumes once the agent is no longer blocked; a LIMIT park
 #                    resumes at once (change the models with models.override first).
+#                    With no park (a STUCK unit) it is a note to the dev, put in the next
+#                    fix prompt, and set aside as note-<n>.md.
 #   extend           minutes to add to the stage that went OVER-BUDGET (a number)
 #   models.override  lines of "stage=model[,model...]"; applied on every start
 # Without what the park needs, the driver re-emits the same result and exits 2.
@@ -963,6 +965,23 @@ Continue the task. When it is complete, write the result file ${file:-you were g
   mv "$STATE/park.json" "$STATE/park-$n.json"
   log "resumed from park $n ($st)"
 }
+# resume_note — the lead's note to a STUCK unit: ship-unit resume --answer writes answer-<n>.md with no
+# park behind it (a park's answer is archived with its park-<n>.json). It goes to the dev in the next
+# fix prompt, like a park's answer to a new dev, and is set aside under another name so that the
+# number is free for a later park.
+resume_note() {
+  local a n
+  for a in "$STATE"/answer-*.md; do
+    [[ -s "$a" ]] || continue
+    n="${a##*/answer-}"; n="${n%.md}"
+    [[ "$n" =~ ^[0-9]+$ && ! -e "$STATE/park-$n.json" && ! -s "$STATE/park.json" ]] || continue
+    TAKEOVER_ANSWER="${TAKEOVER_ANSWER:+$TAKEOVER_ANSWER
+}The lead's note, written when the unit stopped STUCK:
+$(cat "$a")"
+    mv "$a" "$STATE/note-$n.md"
+    log "answer-$n.md (a note to the dev) will go to it in the next fix prompt"
+  done
+}
 resume_budget() {
   local b stage file mins
   for b in "$STATE"/budget-r*.json; do
@@ -1601,6 +1620,7 @@ main() {
     log "reusing $DEV ($DEV_ID)"
   fi
   resume_park
+  resume_note
   resume_budget
   # --- develop ---------------------------------------------------------------------------------------
   STAGE=develop
@@ -1741,7 +1761,7 @@ $pending
   done
   if [[ -z "$accepted" ]]; then
     log "STUCK after $MAX rounds ($last)"
-    finish 2 "$last" STUCK "$(jq -n --arg f "$pending" '{findings:$f}')"
+    finish 2 "$last" STUCK "$(jq -n --arg f "$pending" --argjson lim "$MAX" '{findings:$f, rounds_limit:$lim}')"
   fi
   RECHECK="$(cat "$STATE/recheck" 2>/dev/null || true)"
   RECHECK_PRIOR="$(cat "$STATE/recheck.prior" 2>/dev/null || true)"
