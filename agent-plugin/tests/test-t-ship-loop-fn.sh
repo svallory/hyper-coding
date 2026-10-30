@@ -1005,8 +1005,63 @@ assert_eq "rechecked_diff: a spec re-check owed but the spec not required: true"
 assert_eq "rechecked_diff: ...which does not excuse the final gate" "1" "$(RCV final '' '')"
 spec_required() { return 0; }
 
+# finalize_clean_tree (real git): tool-made changes are restored, the dev's own uncommitted work is named and kept
+# (mutation: drop the touched-by-the-unit test, or restore every dirty file)
+loop_fn finalize_clean_tree
+CT() { # builds origin/main + a unit branch that commits "unit.txt" and "lock with space.json"; prints nothing
+  local r="$FIX/ct.$RANDOM"; mkdir -p "$r"; git -C "$r" init -q -b main; git -C "$r" config user.email t@t; git -C "$r" config user.name t
+  printf 'a\n' >"$r/lock.json"; printf 'a\n' >"$r/tool noise.txt"; printf 'a\n' >"$r/gone.txt"; printf 'a\n' >"$r/old.txt"; printf 'a\n' >"$r/unit.txt"; printf 'a\n' >"$r/lock with space.json"
+  git -C "$r" add -A; git -C "$r" commit -qm base; git -C "$r" update-ref refs/remotes/origin/main HEAD
+  git -C "$r" checkout -qb unit; printf 'b\n' >"$r/unit.txt"; printf 'b\n' >"$r/lock with space.json"; git -C "$r" commit -qam unit
+  echo "$r"
+}
+newstate; WT="$(CT)"; BRANCH=unit BASE=main FIN_MSG=""
+printf 'x\n' >"$WT/lock.json"; printf 'x\n' >"$WT/tool noise.txt"; rm "$WT/gone.txt"; printf 'u\n' >"$WT/untracked.txt"
+finalize_clean_tree; rc=$?
+assert_eq "finalize_clean_tree: only tool-made changes (edited, deleted, path with a space): returns 0" "0|" "$rc|$FIN_MSG"
+assert_eq "finalize_clean_tree: ...the tracked files are back at HEAD (an untracked file is left alone)" "|?? untracked.txt" "$(git -C "$WT" status --porcelain --untracked-files=no)|$(git -C "$WT" status --porcelain | tr '\n' ' ' | sed 's/ $//')"
+assert_contains "finalize_clean_tree: ...and the log names them" "$(cat "$LOG")" "tool noise.txt"
+assert_contains "finalize_clean_tree: ...including the deleted one" "$(cat "$LOG")" "gone.txt"
+newstate; WT="$(CT)"; FIN_MSG=""
+printf 'dev\n' >"$WT/unit.txt"; printf 'x\n' >"$WT/lock.json"
+finalize_clean_tree; rc=$?
+assert_eq "finalize_clean_tree: a file the unit's commits touch is dirty: returns 1" "1" "$rc"
+assert_contains "finalize_clean_tree: ...FIN_MSG names it" "$FIN_MSG" "unit.txt"
+assert_not_contains "finalize_clean_tree: ...and not the tool-made one, which was restored" "$FIN_MSG" "lock.json"
+assert_eq "finalize_clean_tree: ...the dev's edit is kept" "dev" "$(cat "$WT/unit.txt")"
+assert_eq "finalize_clean_tree: ...the tool-made file is back" "a" "$(cat "$WT/lock.json")"
+newstate; WT="$(CT)"; FIN_MSG=""
+printf 'again\n' >"$WT/lock with space.json"; git -C "$WT" add "lock with space.json"
+finalize_clean_tree; rc=$?
+assert_eq "finalize_clean_tree: a staged change to a file with a space the unit changed: returns 1, named whole, kept" "1|again" "$rc|$(cat "$WT/lock with space.json")"
+assert_contains "finalize_clean_tree: ...FIN_MSG names the path with its space" "$FIN_MSG" "lock with space.json"
+newstate; WT="$(CT)"; FIN_MSG=""
+git -C "$WT" mv old.txt new.txt
+finalize_clean_tree; rc=$?
+assert_eq "finalize_clean_tree: a file staged as new (a rename) is not provably a tool's: returns 1, kept" "1|A  new.txt" "$rc|$(git -C "$WT" status --porcelain | grep new.txt)"
+assert_contains "finalize_clean_tree: ...FIN_MSG names it" "$FIN_MSG" "new.txt"
+newstate; WT="$(CT)"; FIN_MSG=""
+finalize_clean_tree; rc=$?
+assert_eq "finalize_clean_tree: a clean tree: returns 0, no message, nothing logged" "0||0" "$rc|$FIN_MSG|$(wc -c <"$LOG" | tr -d ' ')"
+
+# fail closed: no origin/$BASE means nothing is restored and the driver errors (mutation: pipe the diff into tr again)
+newstate; WT="$(CT)"; FIN_MSG=""; printf 'x\n' >"$WT/lock.json"; git -C "$WT" update-ref -d refs/remotes/origin/main
+out="$( ( finalize_clean_tree ) 2>&1 )"; rc=$?
+assert_eq "finalize_clean_tree: origin/\$BASE missing: the driver errors (die_error), nothing restored" "9|x" "$rc|$(cat "$WT/lock.json")"
+assert_contains "finalize_clean_tree: ...and says which diff failed" "$out" "DIE: git diff origin/main...HEAD failed"
+# never discard silently: what is restored is first saved as a patch, and the log names it
+newstate; WT="$(CT)"; FIN_MSG=""; printf 'forgot\n' >"$WT/tool noise.txt"; printf '\000bin\n' >"$WT/lock.json"
+finalize_clean_tree; rc=$?
+pf="$(ls "$STATE"/finalize-restored-*.patch 2>/dev/null | head -1)"
+assert_eq "finalize_clean_tree: restored files leave a patch in the state dir, and the log names it" "0|yes" "$rc|$([[ -s "$pf" ]] && grep -qF "$pf" "$LOG" && echo yes || echo no)"
+assert_eq "finalize_clean_tree: ...the tree is restored" "a" "$(cat "$WT/tool noise.txt")"
+git -C "$WT" apply "$pf"; rc=$?
+assert_eq "finalize_clean_tree: ...and git apply of the patch brings both changes back (binary one too)" "0|forgot|1" "$rc|$(cat "$WT/tool noise.txt")|$(cmp -s "$WT/lock.json" <(printf '\000bin\n') && echo 1 || echo 0)"
+newstate; WT="$(CT)"; FIN_MSG=""; finalize_clean_tree
+assert_eq "finalize_clean_tree: a clean tree writes no patch" "0" "$(ls "$STATE"/finalize-restored-*.patch 2>/dev/null | wc -l | tr -d ' ')"
+
 # finalize_try with reviewed_diff true and rechecked_diff false: returns 2 and pushes nothing (mutation: drop `|| ! rechecked_diff`)
-loop_fn finalize_try
+loop_fn finalize_try finalize_clean_tree
 git() { case "$*" in *rev-list*) echo 1;; *push*) echo PUSHED >>"$STATE/pushlog";; *rev-parse*) echo abc;; esac; return 0; }
 forbidden_scan() { :; }
 write_json() { echo "$2" >"$1"; }
