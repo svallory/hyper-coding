@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.5.3](https://github.com/svallory/hyper-coding/compare/v0.5.2...v0.5.3) (2026-10-30)
+
+
+### Features
+
+* **drive:** content-based secret guard ([00b23a2](https://github.com/svallory/hyper-coding/commit/00b23a263c9c1b6b8028078c2cee3e4651d83c17))
+* **drive:** detached resumable transfer with progress in the session-end log ([eb78f90](https://github.com/svallory/hyper-coding/commit/eb78f90b8ed6c433af9c1485a8b05f59274d6a78))
+* **drive:** guided `hyper drive setup` with forge detection and repo creation ([#62](https://github.com/svallory/hyper-coding/issues/62)) ([6777685](https://github.com/svallory/hyper-coding/commit/6777685d704c065a3397326e676b5f65fea6b7d9))
+* **drive:** warp sends Claude data in three tiers and picks the session safely ([c9ae45e](https://github.com/svallory/hyper-coding/commit/c9ae45ebac0b2b73fc9e2c2f40b9fec31e984758))
+
+
+### Bug Fixes
+
+* **drive:** harden the session-end log against planted files and report lost saves ([#66](https://github.com/svallory/hyper-coding/issues/66)) ([a79cadf](https://github.com/svallory/hyper-coding/commit/a79cadf3f474e812e950bc18b674b11f379ac7b7))
+* **drive:** heal an interrupted pull after a fetch and publish the space lock atomically ([#70](https://github.com/svallory/hyper-coding/issues/70)) ([88c2ac7](https://github.com/svallory/hyper-coding/commit/88c2ac791e7aff03b5f69d30053145afa539760f))
+* **drive:** warp keeps expired-reflog stashes, checksums .git/index and preserves the target's .git/config ([#69](https://github.com/svallory/hyper-coding/issues/69)) ([ec7bda8](https://github.com/svallory/hyper-coding/commit/ec7bda838273062bc218ec31565e5766bfd88bef))
+* **drive:** warp tier 3 never overwrites newer target data; progress lines cannot hide a failed save ([3c86aab](https://github.com/svallory/hyper-coding/commit/3c86aab963aa003b0e26d0e5975188de92ed93aa))
+* **drive:** widen and harden the content secret guard ([4e45ba1](https://github.com/svallory/hyper-coding/commit/4e45ba170bbfb5a5e21025fef6f0df07c3dbe8bd))
+
 ## [0.5.2](https://github.com/svallory/hyper-coding/compare/v0.5.1...v0.5.2) (2026-10-08)
 
 
