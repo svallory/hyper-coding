@@ -649,5 +649,83 @@ assert_contains "...says the driver may be running" "$(terr)" "lost the connecti
 assert_eq "launch_failed: 255 on the local host is not a lost connection: 70" "70" "$(lf 255)"
 assert_eq "launch_failed: any other code: 70" "70" "$(lf 1)"
 assert_contains "...names the code" "$(terr)" "starting r1 on box failed (exit 1)"
+# --- ship_tasks_base / ship_default_branch / ship_resolve_base (lib.sh) -------------------------------------------
+# The base of a unit: --base, else tasks.md frontmatter, else the deprecated config key, else origin/HEAD, else an error.
+# mutation: swap two steps of ship_resolve_base; fall back to "main"; accept an unclosed frontmatter or a body line
+tb() { # <tasks.md text> — ship_tasks_base on a spec dir holding it; prints "<rc> <stdout>"
+  rm -rf "$FIX/sd"; mkdir -p "$FIX/sd"; printf -- "$1" >"$FIX/sd/tasks.md"
+  local out rc=0; out="$(ship_tasks_base "$FIX/sd" 2>"$FIX/t.err")" || rc=$?; echo "$rc $out"
+}
+assert_eq "ship_tasks_base: frontmatter with base" "0 feat/threads" "$(tb '---\nbase: feat/threads\n---\n# T\n')"
+assert_eq "...a double-quoted value" "0 develop" "$(tb '---\nbase: "develop"\n---\n')"
+assert_eq "...a single-quoted value" "0 develop" "$(tb "---\nbase: 'develop'\n---\n")"
+assert_eq "...a trailing comment and blanks" "0 develop" "$(tb '---\nbase:   develop   # the parent\n---\n')"
+assert_eq "...no space after the colon" "0 develop" "$(tb '---\nbase:develop\n---\n')"
+assert_eq "...CRLF line endings" "0 develop" "$(tb '---\r\nbase: develop\r\n---\r\n')"
+assert_eq "...among other keys" "0 develop" "$(tb '---\ntitle: x\nbase: develop\nowner: me\n---\n')"
+assert_eq "...the last base: wins" "0 b" "$(tb '---\nbase: a\nbase: b\n---\n')"
+assert_eq "...frontmatter without a base: 3" "3 " "$(tb '---\ntitle: x\n---\n# T\n')"
+assert_eq "...an empty value: 3" "3 " "$(tb '---\nbase:\n---\n')"
+assert_eq "...null: 3" "3 " "$(tb '---\nbase: null\n---\n')"
+assert_eq "...~: 3" "3 " "$(tb '---\nbase: ~\n---\n')"
+assert_eq "...no frontmatter: 3 (a base: line in the body does not count)" "3 " "$(tb '# T\nbase: develop\n')"
+assert_eq "...frontmatter not on the first line: 3" "3 " "$(tb '\n---\nbase: develop\n---\n')"
+assert_eq "...a base: line after the frontmatter closed: 3" "3 " "$(tb '---\ntitle: x\n---\nbase: develop\n')"
+assert_eq "...an indented (nested) base: key: 3" "3 " "$(tb '---\nparent:\n  base: develop\n---\n')"
+assert_eq "...a key that only starts with base: 3" "3 " "$(tb '---\nbasement: develop\n---\n')"
+assert_eq "...frontmatter never closed: 4" "4 " "$(tb '---\nbase: develop\n# T\n')"
+assert_eq "...an empty file: 3" "3 " "$(tb '')"
+assert_eq "...no tasks.md: 3" "3" "$(rm -rf "$FIX/sd"; mkdir -p "$FIX/sd"; ship_tasks_base "$FIX/sd" >/dev/null; echo $?)"
+
+# a remote with a default branch, a clone with and without origin/HEAD, and a remote whose HEAD points nowhere
+RB="$FIX/rb"; mkdir -p "$RB"
+git init -q --bare "$RB/remote.git"; git clone -q "$RB/remote.git" "$RB/seed" 2>/dev/null
+echo x > "$RB/seed/x"; git -C "$RB/seed" add x; git -C "$RB/seed" commit -q -m x; git -C "$RB/seed" branch -M trunk
+git -C "$RB/seed" push -q origin trunk; git -C "$RB/remote.git" symbolic-ref HEAD refs/heads/trunk
+git clone -q "$RB/remote.git" "$RB/has-head" 2>/dev/null
+git clone -q --bare "$RB/remote.git" "$RB/no-head.git"
+git -C "$RB/no-head.git" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'; git -C "$RB/no-head.git" fetch -q origin
+git init -q "$RB/no-remote"
+git init -q --bare "$RB/dangling.git"; git clone -q "$RB/dangling.git" "$RB/dangling" 2>/dev/null
+git -C "$RB/dangling.git" symbolic-ref HEAD refs/heads/nowhere
+assert_eq "ship_default_branch: a clone with origin/HEAD" "trunk" "$(ship_default_branch "$RB/has-head")"
+assert_eq "ship_default_branch: no origin/HEAD: asks the remote once (set-head --auto)" "trunk" "$(ship_default_branch "$RB/no-head.git")"
+assert_eq "...and it is recorded for the next time" "refs/remotes/origin/trunk" "$(git -C "$RB/no-head.git" symbolic-ref refs/remotes/origin/HEAD)"
+assert_eq "ship_default_branch: no remote at all: 1" "1" "$(ship_default_branch "$RB/no-remote" >/dev/null 2>&1; echo $?)"
+assert_eq "ship_default_branch: the remote's HEAD points at no branch: 1" "1" "$(ship_default_branch "$RB/dangling" >/dev/null 2>&1; echo $?)"
+assert_eq "ship_default_branch: not a git dir: 1" "1" "$(ship_default_branch "$FIX/work" >/dev/null 2>&1; echo $?)"
+
+# ship_resolve_base <explicit> <spec-dir> <git-dir>; the config comes from $CFGJ
+rb() { # <explicit> <spec dir> <git dir> — "<rc> <stdout>"; stderr in t.err
+  local out rc=0; out="$(SHIP_CONFIG_JSON="$CFGJ" ship_resolve_base "$@" 2>"$FIX/t.err")" || rc=$?; echo "$rc $out"
+}
+mkdir -p "$FIX/spec-a" "$FIX/spec-none" "$FIX/spec-bad" "$FIX/spec-open" "$FIX/spec-name"
+printf -- '---\nbase: from-tasks\n---\n' >"$FIX/spec-a/tasks.md"
+printf -- '---\ntitle: x\n---\n' >"$FIX/spec-none/tasks.md"
+printf -- '---\nbase: from-tasks\n# never closed\n' >"$FIX/spec-open/tasks.md"
+printf -- '---\nbase: not a branch\n---\n' >"$FIX/spec-name/tasks.md"
+CFGJ='{"base":"from-config"}'
+assert_eq "ship_resolve_base: --base beats tasks.md, the config and origin/HEAD" "0 explicit" "$(rb explicit "$FIX/spec-a" "$RB/has-head")"
+assert_eq "...tasks.md beats the config and origin/HEAD" "0 from-tasks" "$(rb "" "$FIX/spec-a" "$RB/has-head")"
+assert_eq "...a base without a --spec-dir comes from the config key" "0 from-config" "$(rb "" "" "$RB/has-head")"
+assert_contains "...the config key is deprecated, and it says so" "$(cat "$FIX/t.err")" "config key 'base' is deprecated"
+assert_eq "...frontmatter without a base falls to the config key" "0 from-config" "$(rb "" "$FIX/spec-none" "$RB/has-head")"
+assert_eq "...a spec dir without tasks.md falls to the config key" "0 from-config" "$(rb "" "$FIX/work" "$RB/has-head")"
+assert_eq "...an empty config value falls to origin/HEAD" "0 trunk" "$(CFGJ='{"base":""}' rb "" "" "$RB/has-head")"
+assert_eq "...frontmatter never closed: ignored with a warning, the config key decides" "0 from-config" "$(rb "" "$FIX/spec-open" "$RB/has-head")"
+assert_contains "...the warning names the file" "$(cat "$FIX/t.err")" "$FIX/spec-open/tasks.md has frontmatter that is never closed"
+assert_eq "...a base that is not a branch name: ignored with a warning" "0 from-config" "$(rb "" "$FIX/spec-name" "$RB/has-head")"
+assert_contains "...the warning names the value" "$(cat "$FIX/t.err")" "base 'not a branch' in $FIX/spec-name/tasks.md is not a branch name"
+CFGJ='{}'
+assert_eq "...no config key: origin/HEAD (trunk, not main)" "0 trunk" "$(rb "" "" "$RB/has-head")"
+assert_eq "...and no warning" "" "$(cat "$FIX/t.err")"
+assert_eq "...tasks.md without a base falls to origin/HEAD" "0 trunk" "$(rb "" "$FIX/spec-none" "$RB/has-head")"
+assert_eq "...origin/HEAD unset locally: asked of the remote" "0 trunk" "$(git -C "$RB/no-head.git" symbolic-ref --delete refs/remotes/origin/HEAD; rb "" "" "$RB/no-head.git")"
+assert_eq "...nothing knows the base: 1, never a silent main" "1 " "$(rb "" "" "$RB/no-remote")"
+assert_contains "...it says what to do" "$(cat "$FIX/t.err")" "Pass --base <branch>"
+assert_eq "...the remote's HEAD pointing nowhere is nothing either: 1" "1 " "$(rb "" "$FIX/spec-none" "$RB/dangling")"
+git -C "$RB/no-remote" commit -q --allow-empty -m e; git -C "$RB/no-remote" branch -M main
+assert_eq "...a local branch called main changes nothing: 1" "1 " "$(rb "" "" "$RB/no-remote")"
+
 
 finish

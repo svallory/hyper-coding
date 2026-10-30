@@ -352,6 +352,67 @@ ship_cfg_get() {
   esac
 }
 
+# ship_default_branch <git-dir> — the remote default branch (origin/HEAD) on stdout. When the clone
+# has no origin/HEAD, one `git remote set-head origin --auto` asks the remote; returns 1 if it is
+# still unknown.
+ship_default_branch() {
+  local gdir="${1:?ship_default_branch: git dir required}" ref
+  ref="$(git -C "$gdir" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)" || ref=""
+  if [[ -z "$ref" ]]; then
+    GIT_TERMINAL_PROMPT=0 git -C "$gdir" remote set-head origin --auto >/dev/null 2>&1 || true
+    ref="$(git -C "$gdir" symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)" || ref=""
+  fi
+  ref="${ref#refs/remotes/origin/}"
+  [[ -n "$ref" ]] || return 1
+  printf '%s\n' "$ref"
+}
+
+# ship_tasks_base <spec-dir> — `base:` from the YAML frontmatter of <spec-dir>/tasks.md on stdout.
+# Returns 3 when there is none (no file, no frontmatter, no base, an empty or null value); 4 when
+# the frontmatter is never closed.
+ship_tasks_base() {
+  local f="${1:?ship_tasks_base: spec dir required}/tasks.md" v rc=0
+  [[ -f "$f" ]] || return 3
+  v="$(awk -v q="'" '
+    NR == 1 { if ($0 ~ /^---[ \t]*\r?$/) { fm = 1; next } exit }
+    fm && /^---[ \t]*\r?$/ { closed = 1; exit }
+    fm && /^base[ \t]*:/ {
+      s = $0; sub(/^base[ \t]*:[ \t]*/, "", s); sub(/\r$/, "", s)
+      sub(/[ \t]+#.*$/, "", s); sub(/[ \t]+$/, "", s)
+      if (s ~ /^".*"$/ || (length(s) > 1 && substr(s, 1, 1) == q && substr(s, length(s), 1) == q)) s = substr(s, 2, length(s) - 2)
+      v = s
+    }
+    END { if (fm && !closed) exit 4; print v }
+  ' "$f")" || rc=$?
+  [[ $rc -eq 0 ]] || return "$rc"
+  case "$v" in ''|null|'~') return 3 ;; esac
+  printf '%s\n' "$v"
+}
+
+# ship_resolve_base <explicit> <spec-dir> <git-dir> — the base branch of a unit, on stdout. In order:
+# the explicit value; `base:` in <spec-dir>/tasks.md; the config key `base` (deprecated); the remote
+# default branch. Never a silent "main": returns 1, saying so, when none of them knows.
+ship_resolve_base() {
+  local explicit="${1:-}" spec="${2:-}" gdir="${3:?ship_resolve_base: git dir required}" v rc
+  if [[ -n "$explicit" ]]; then printf '%s\n' "$explicit"; return 0; fi
+  if [[ -n "$spec" ]]; then
+    rc=0; v="$(ship_tasks_base "$spec")" || rc=$?
+    if [[ $rc -eq 4 ]]; then
+      _ship_err "warning: $spec/tasks.md has frontmatter that is never closed; its base is ignored"
+    elif [[ $rc -eq 0 ]]; then
+      if git check-ref-format --branch "$v" >/dev/null 2>&1; then printf '%s\n' "$v"; return 0; fi
+      _ship_err "warning: base '$v' in $spec/tasks.md is not a branch name; ignored"
+    fi
+  fi
+  if v="$(ship_cfg_get base 2>/dev/null)" && [[ -n "$v" ]]; then
+    _ship_err "warning: the config key 'base' is deprecated (it applies to every feature in the space); put 'base:' in the frontmatter of the feature's tasks.md"
+    printf '%s\n' "$v"; return 0
+  fi
+  if v="$(ship_default_branch "$gdir")"; then printf '%s\n' "$v"; return 0; fi
+  _ship_err "cannot tell the base branch: no --base, no 'base:' in tasks.md, and origin/HEAD is unknown in $gdir. Pass --base <branch>"
+  return 1
+}
+
 # ship_cfg_print — "key = json  # source file" per leaf. Arrays and empty
 # objects are leaves; the source is the highest layer that sets the key.
 ship_cfg_print() {

@@ -120,14 +120,17 @@ assert_contains "no gate: --print still prints the rest" "$out" 'mux = "herdr"'
 assert_contains "no gate: --print marks gate required" "$out" "gate = <unset: required>"
 assert_contains "no gate: the message is on stderr and names the key" "$(<"$FIX/cli.err")" "'gate'"
 out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --get base 2>/dev/null)"; rc=$?
-assert_eq "no gate: --get base exits 0" "0" "$rc"
-assert_eq "no gate: --get base prints the value" "main" "$out"
+assert_eq "no gate: --get base exits 3 (no default: base is deprecated, the unit's base is resolved elsewhere)" "3" "$rc"
+assert_eq "no gate: --get base prints nothing" "" "$out"
+out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --get merge_method 2>/dev/null)"; rc=$?
+assert_eq "no gate: --get merge_method exits 0" "0" "$rc"
+assert_eq "no gate: --get merge_method prints the value" "rebase" "$out"
 out="$(cd "$SPACE/worktrees/wt" && bash "$CFG" --get gate 2>&1)"; rc=$?
 assert_eq "no gate: --get gate exits 1" "1" "$rc"
 assert_contains "no gate: --get gate names the key" "$out" "'gate'"
 gate_check "ship_require_gate without a gate" 1 "'gate'"
 lc
-assert_eq "no gate: other keys still load (base)" "main" "$(g base)"
+assert_eq "no gate: other keys still load (merge_method)" "rebase" "$(g merge_method)"
 printf 'gate: ""\n' > "$PROJECT"
 gate_check "empty gate" 1 "non-empty string"
 printf 'gate: true\n' > "$PROJECT"
@@ -308,7 +311,7 @@ assert_eq "comment checker flags an undocumented key" "3: b: 2" "$bad"
 # Every leaf key of the merged defaults is covered by the table in the design.
 lc_plain
 keys="$(ship_cfg_print | sed 's/ = .*//' | tr '\n' ' ')"
-for k in mux units_group base merge_method spec.paths scan.forbidden scan.exclude stages.final.always max_rounds \
+for k in mux units_group merge_method spec.paths scan.forbidden scan.exclude stages.final.always max_rounds \
          models.dev models.verify models.review models.spec_check models.spec_write models.final \
          quota.threshold_pct quota.max_age_min limits.patterns.claude limits.patterns.pi limits.cooldown_min auth.patterns.claude \
          failover.summarizer budgets.S budgets.M budgets.L budgets.fix_fraction budgets.fix_per_finding budgets.check \
@@ -316,6 +319,7 @@ for k in mux units_group base merge_method spec.paths scan.forbidden scan.exclud
   assert_contains "defaults.yml defines $k" "$keys" "$k "
 done
 assert_eq "gate has no default" "0" "$(grep -c '^gate:' "$DEFAULTS")"
+assert_eq "base has no default (deprecated; never a silent main)" "0" "$(grep -c '^base:' "$DEFAULTS")"
 # The limit patterns survive YAML quoting intact.
 # shellcheck disable=SC1112  # the curly quotes are part of the pattern
 assert_eq "claude limit pattern" '(?i)^\s*([^[:alnum:]\s+>"\x27`“”‘’-]\s*)?You.{1,3}ve hit your ([a-z]+ )?limit\s*($|[·∙]\s*resets)' "$(g limits.patterns.claude)"

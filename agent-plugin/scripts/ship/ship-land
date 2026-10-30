@@ -36,7 +36,14 @@
 #   3. a PR that is already MERGED (a rerun after a failed teardown) skips to
 #      step 6. The PR must be MERGED before step 6 (auto-merge or a merge queue that
 #      leaves it open fails here: rerun once it is merged). Otherwise fetch, rebase on origin/<base>; refuse an empty branch, or a rebase that
-#      drops commits (the branch is put back as it was)
+#      drops commits (the branch is put back as it was). <base> is unit.json's .base
+#      (the one ship-unit run resolved), else resolved again like run does. When that base
+#      branch is no longer live (gone on origin, its PR merged, or contained in the default
+#      branch) and is not the default branch, the unit is retargeted first: rebase --onto
+#      origin/<default> <fork point> <branch>, where the fork point is the later of the merge-base
+#      with the old base's last known tip and unit.json's .base_sha, so the parent's commits are
+#      not replayed; then gh pr edit --base <default>, and .base in unit.json and `base:` in
+#      the tasks.md of the recorded spec dir are updated. Without those signals nothing changes.
 #   4. run `gate` (config) in the worktree; git push --force-with-lease, leased
 #      on the origin/<branch> seen before the fetch (a commit pushed meanwhile
 #      from elsewhere refuses the push instead of being overwritten)
@@ -53,7 +60,7 @@
 #      both SHAs are printed); move notes/loops/<ref>/ to
 #      notes/loops/.done/<ref>/
 #
-# Config (ship.yml): gate (required to land, not to abandon), base, merge_method,
+# Config (ship.yml): gate (required to land, not to abandon), merge_method,
 # on_land, mux, units_group.
 #
 # With --host, the remote ship-land's exit code is returned; a lost connection is
@@ -91,6 +98,76 @@ refuse() { echo "ship-land: refused: $*" >&2; exit 3; }
 say() { echo "ship-land: $*"; }
 
 # --- functions (sourceable: the main body below runs only when the file is executed) -------
+
+# unit_base <loop-dir> — the unit's base branch: unit.json .base (the snapshot ship-unit run took, so a
+# config edit never moves a unit), else the resolver (the spec dir unit.json records, the deprecated config
+# key, origin/HEAD). Returns 1, with the reason on stderr, when none of them knows.
+unit_base() {
+  local uj="$1/unit.json" b="" sd=""
+  if [[ -f "$uj" ]]; then
+    b="$(jq -r '.base // ""' "$uj" 2>/dev/null)" || b=""
+    sd="$(jq -r '.spec_dir // ""' "$uj" 2>/dev/null)" || sd=""
+  fi
+  if [[ -n "$b" ]]; then printf '%s\n' "$b"; return 0; fi
+  ship_resolve_base "" "$sd" "$root"
+}
+
+# base_gone_reason <wt> <base> <default> — why the unit's base branch is no longer live, on stdout: gone on
+# origin, its PR merged, or fully contained in the default branch. Returns 1 while it is live (or when the
+# remote cannot be asked: today's behaviour is kept).
+base_gone_reason() {
+  local wt="$1" base="$2" def="$3" rc=0 st
+  git -C "$wt" ls-remote --exit-code --heads origin "refs/heads/$base" >/dev/null 2>&1 || rc=$?
+  if [[ $rc -eq 2 ]]; then echo "origin/$base no longer exists"; return 0; fi
+  [[ $rc -eq 0 ]] || return 1
+  st="$(cd -- "$wt" && gh pr view "$base" --json state -q .state 2>/dev/null)" || st=""
+  if [[ "$st" == MERGED ]]; then echo "the PR of $base is merged"; return 0; fi
+  if git -C "$wt" merge-base --is-ancestor "origin/$base" "origin/$def" 2>/dev/null; then
+    echo "origin/$base is contained in origin/$def"; return 0
+  fi
+  return 1
+}
+
+# retarget_point <wt> <base> <base_sha> — where the unit's own commits start, on stdout: the later of the fork
+# point with the old base's last known tip (the remote-tracking ref, which a deleted branch keeps unless
+# fetch pruned it) and the fork SHA unit.json recorded at run. Both are ancestors of HEAD; the later one is
+# right after the finalize rebase moved the branch onto a newer base. Returns 1 when neither is known.
+retarget_point() {
+  local wt="$1" base="$2" rec="$3" a="" b=""
+  if git -C "$wt" rev-parse -q --verify "refs/remotes/origin/$base" >/dev/null 2>&1; then
+    a="$(git -C "$wt" merge-base "refs/remotes/origin/$base" HEAD 2>/dev/null)" || a=""
+  fi
+  if [[ -n "$rec" ]] && git -C "$wt" merge-base --is-ancestor "$rec" HEAD 2>/dev/null; then b="$rec"; fi
+  if [[ -z "$a" ]]; then a="$b"
+  elif [[ -n "$b" ]] && git -C "$wt" merge-base --is-ancestor "$a" "$b" 2>/dev/null; then a="$b"
+  fi
+  [[ -n "$a" ]] || return 1
+  printf '%s\n' "$a"
+}
+
+# set_tasks_base <spec-dir> <branch> — set `base:` in the frontmatter of <spec-dir>/tasks.md (added when the
+# frontmatter has none). Prints "changed" when it wrote the file; returns 1 when there is no tasks.md or no
+# closed frontmatter.
+set_tasks_base() {
+  local f="$1/tasks.md" tmp
+  [[ -f "$f" ]] || return 1
+  tmp="$f.tmp.$$"
+  awk -v nb="$2" '
+    NR == 1 { if ($0 ~ /^---[ \t]*\r?$/) { fm = 1 } else { bad = 1 } }
+    { line[NR] = $0 }
+    NR > 1 && fm && !closed && /^---[ \t]*\r?$/ { closed = NR }
+    END {
+      if (bad || !closed) exit 1
+      for (i = 1; i <= NR; i++) {
+        if (i > 1 && i < closed && line[i] ~ /^base[ \t]*:/) { if (!done) { print "base: " nb; done = 1 } continue }
+        if (i == closed && !done) { print "base: " nb; done = 1 }
+        print line[i]
+      }
+    }
+  ' "$f" >"$tmp" || { rm -f "$tmp"; return 1; }
+  if cmp -s "$f" "$tmp"; then rm -f "$tmp"; return 0; fi
+  mv "$tmp" "$f" && echo changed
+}
 
 # acquire_lock — take the lock (ship_lock in lib.sh; waiting for a live holder) and release it on exit.
 acquire_lock() {
@@ -440,7 +517,7 @@ if [[ "$status" != READY && $force -ne 1 ]]; then
 fi
 ship_require_gate || exit 1
 gate="$(ship_cfg_get gate)" || exit 1
-base="$(ship_cfg_get base)" || fail "config key 'base' is not set"
+base="$(unit_base "$loop_dir")" || fail "cannot tell the base branch of $ref; run it with --base"
 method="$(ship_cfg_get merge_method)" || fail "config key 'merge_method' is not set"
 case "$method" in rebase|squash|merge) ;; *) fail "merge_method must be rebase, squash or merge (got '$method')" ;; esac
 load_on_land
@@ -496,11 +573,22 @@ else
 # --- 3. rebase --------------------------------------------------------------------------
 lease_sha="$(git -C "$wt_path" rev-parse -q --verify "refs/remotes/origin/$branch" 2>/dev/null || true)"
 git -C "$wt_path" fetch -q origin || fail "git fetch origin failed in $wt_path"
-git -C "$wt_path" rev-parse --verify -q "origin/$base" >/dev/null || fail "origin/$base does not exist"
 head0="$(git -C "$wt_path" rev-parse HEAD)"
-n0="$(git -C "$wt_path" rev-list --count "origin/$base..HEAD")"
-[[ "$n0" -gt 0 ]] || refuse "branch $branch has no commits on top of origin/$base"
-if ! git -C "$wt_path" rebase -q "origin/$base" >/dev/null 2>&1; then
+# The base branch of a stacked unit is gone once its parent landed. Then the unit moves to the default
+# branch, and only its own commits move: a plain rebase would replay the parent's commits, which a squash
+# merge made different from the ones on the default branch.
+old_base="" up=""
+def="$(ship_default_branch "$wt_path" 2>/dev/null)" || def=""
+if [[ -n "$def" && "$def" != "$base" ]] && why="$(base_gone_reason "$wt_path" "$base" "$def")"; then
+  up="$(retarget_point "$wt_path" "$base" "$(jq -r '.base_sha // ""' "$loop_dir/unit.json" 2>/dev/null || true)")" \
+    || refuse "$why, so $branch should move to $def, but where it forked from $base is unknown; run: git rebase --onto origin/$def <fork point> $branch, then gh pr edit $pr --base $def"
+  old_base="$base" base="$def"
+fi
+git -C "$wt_path" rev-parse --verify -q "origin/$base" >/dev/null || fail "origin/$base does not exist"
+n0="$(git -C "$wt_path" rev-list --count "${up:-origin/$base}..HEAD")"
+[[ "$n0" -gt 0 ]] || refuse "branch $branch has no commits on top of ${up:-origin/$base}"
+if [[ -n "$up" ]]; then rb=(--onto "origin/$base" "$up"); else rb=("origin/$base"); fi
+if ! git -C "$wt_path" rebase -q "${rb[@]}" >/dev/null 2>&1; then
   git -C "$wt_path" rebase --abort >/dev/null 2>&1 || true
   fail "rebase of $branch on origin/$base failed (conflicts?); the branch is unchanged"
 fi
@@ -510,6 +598,27 @@ if [[ "$n1" != "$n0" ]]; then
   refuse "rebase dropped commits ($n0 before, $n1 after); the branch is unchanged"
 fi
 say "rebased $branch on origin/$base ($n1 commits)"
+if [[ -n "$old_base" ]]; then
+  say "retargeting: $why; $branch moves from $old_base to $base (its commits since $up)"
+  if ! (CDPATH='' cd -- "$wt_path" && gh pr edit "$pr" --base "$base" >/dev/null); then
+    git -C "$wt_path" reset -q --hard "$head0"
+    fail "gh pr edit $pr --base $base failed; the branch is unchanged"
+  fi
+  say "#$pr now targets $base"
+  uj="$loop_dir/unit.json"
+  if [[ -f "$uj" ]]; then
+    jq --arg b "$base" --arg s "$(git -C "$wt_path" merge-base "origin/$base" HEAD)" '.base = $b | .base_sha = $s' "$uj" >"$uj.tmp" \
+      && mv "$uj.tmp" "$uj" && say "unit.json base is now $base"
+    sd="$(jq -r '.spec_dir // ""' "$uj" 2>/dev/null)" || sd=""
+    if [[ -n "$sd" ]]; then
+      if tb="$(set_tasks_base "$sd" "$base")"; then
+        if [[ -n "$tb" ]]; then say "$sd/tasks.md base: is now $base"; else say "$sd/tasks.md already says base: $base"; fi
+      else
+        echo "ship-land: warning: could not set base: in $sd/tasks.md (no tasks.md or frontmatter); set it to $base by hand" >&2
+      fi
+    fi
+  fi
+fi
 
 # --- 4. gate and push -------------------------------------------------------------------
 mkdir -p "$loop_dir"

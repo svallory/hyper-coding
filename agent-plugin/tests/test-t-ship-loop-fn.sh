@@ -742,6 +742,21 @@ assert_eq "driver: class M and L are accepted (the next check is the worktree)" 
 assert_contains "driver: a --model for an unknown stage is refused (with a valid worktree and brief)" "$(LB --ref r --worktree "$FIX" --branch b --brief "$FIX/mux-check" --class S --model nostage=x)" "unknown stage"
 assert_contains "driver: ...with rc 1" "$(LB --ref r --worktree "$FIX" --branch b --brief "$FIX/mux-check" --class S --model nostage=x)" "rc=1"
 printf '#!/bin/sh\n[ "$1" = check ] && exit "${MUXRC:-0}"\nexit 0\n' >"$FIX/mux-check"; chmod +x "$FIX/mux-check"
+# the base: --base, else the same resolver ship-unit run uses (no spec dir here): the deprecated config key, else origin/HEAD
+# mutation: ship-loop reads the config key only; the resolver's failure is not an error
+LBG() { SHIP_CONFIG_JSON="$(jq -c ".gate = \"true\" | $1" <<<"$BASE_CFG")" SHIP_CONFIG_LAYERS="$BASE_LAY" bash "$LOOP" --ref r --worktree "$2" --branch b --brief "$FIX/mux-check" --class S 2>&1; echo "rc=$?"; }
+mkdir -p "$FIX/lw-none" "$FIX/lw-head"
+git init -q "$FIX/lw-none"; git init -q "$FIX/lw-head"
+git -C "$FIX/lw-head" remote add origin "$FIX/no-such-remote"
+git -C "$FIX/lw-head" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/trunk
+r="$(LBG . "$FIX/lw-none")"
+assert_contains "driver: no --base, no config key, no origin/HEAD: it says so" "$r" "ship: cannot tell the base branch"
+assert_contains "driver: ...and asks for --base" "$r" "Pass --base <branch>"
+assert_contains "driver: ...and exits 1 before anything starts" "$r" $'ship-loop: cannot resolve the base (see above)\nrc=1'
+assert_contains "driver: no --base: origin/HEAD is the base (trunk), never main" "$(LBG . "$FIX/lw-head")" "origin/trunk does not exist"
+r="$(LBG '.base = "legacy"' "$FIX/lw-head")"
+assert_contains "driver: the deprecated config key beats origin/HEAD" "$r" "origin/legacy does not exist"
+assert_contains "driver: ...and warns" "$r" "'base' is deprecated"
 pf() { # commands to hide — preflight with those missing from PATH, on $PF_CFG
   { (
     HIDE=" $* "; MUX="$FIX/mux-check"; SHIP_CONFIG_JSON="$PF_CFG" SHIP_CONFIG_LAYERS="$BASE_LAY"

@@ -56,8 +56,12 @@ case "$1 $2" in
     b="$(git branch --show-current)"
     if git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then echo ""; else printf '%s\n' "${GH_PR:-}"; fi ;;
   "pr view")
-    # `pr view <number|branch> --json ... -q .number|.state`
+    # GH_VIEW_FAIL: a lookup by branch name fails (the PR of a stacked unit's parent cannot be read)
+    [[ -z "${GH_VIEW_FAIL:-}" || "${3:-}" =~ ^[0-9]+$ ]] || { echo "gh: no pull requests found (stub)" >&2; exit 1; }
+    # `pr view <number|branch> --json ... -q .number|.state`; a branch name other than the current one is another PR's
+    # (a stacked unit's parent): its state is MERGED when merged-<name> exists on the remote
     b="$(git branch --show-current)"
+    [[ -z "${3:-}" || "$3" =~ ^[0-9]+$ ]] || b="$3"
     if [[ -e "$STUB_REMOTE/merged-$b" ]] || git -C "$STUB_REMOTE" merge-base --is-ancestor "refs/heads/$b" refs/heads/main 2>/dev/null; then st=MERGED; else st=OPEN; fi
     case "$*" in
       *"-q .number"*) printf '%s\n' "${GH_PR:?gh stub: GH_PR not set}" ;;
@@ -74,6 +78,9 @@ case "$1 $2" in
         else git -C "$STUB_REMOTE" rev-parse "refs/heads/$b"; fi ;;
       *) echo "$st" ;;
     esac ;;
+  "pr edit")
+    # `pr edit <number> --base <branch>`: the call is in the log, nothing else to do
+    [[ -z "${GH_EDIT_FAIL:-}" ]] || { echo "gh: pr edit failed (stub)" >&2; exit 1; } ;;
   "pr merge")
     [[ -z "${GH_MERGE_FAIL:-}" ]] || { echo "gh: merge failed" >&2; exit 1; }
     b="$(git branch --show-current)"
@@ -180,12 +187,13 @@ mk_unit() {
 sent_file() { echo "$SHIP_MUX_FAKE_DIR/sent/$1"; }
 state_exists() { [[ -f "$SHIP_MUX_FAKE_DIR/state/$1.json" ]]; }
 
-# mk_unit_git <ref> <pr> [status] [commits] — mk_unit without the multiplexer (no unit space, no mux.json):
-# a worktree, a branch with <commits> commits (default 1, 0 = an empty branch), the pushed branch and a result.json.
+# mk_unit_git <ref> <pr> [status] [commits] [from] — mk_unit without the multiplexer (no unit space, no mux.json):
+# a worktree (branched from origin/<from>, default main), a branch with <commits> commits (default 1, 0 = an empty
+# branch), the pushed branch and a result.json.
 mk_unit_git() {
   local ref="$1" pr="$2" st="${3:-READY}" n="${4:-1}" wt="$SPACE/worktrees/$1" i
   git -C "$G" fetch -q origin
-  git -C "$G" worktree add -q -b "$ref" "$wt" origin/main
+  git -C "$G" worktree add -q -b "$ref" "$wt" "origin/${5:-main}"
   for ((i = 1; i <= n; i++)); do
     echo "$ref $i" > "$wt/$ref-$i.txt"
     git -C "$wt" add "$ref-$i.txt"
@@ -199,3 +207,38 @@ mk_unit_git() {
       failovers: 0, host: "local", worktree: $w}' > "$SPACE/notes/loops/$ref/result.json"
 }
 exists_word() { [[ -e "$1" ]] && echo yes || echo no; }
+
+# mk_unit_json <ref> <base> [spec_dir] [no_sha] — notes/loops/<ref>/unit.json as ship-unit run writes it: the base,
+# the fork point from origin/<base> (left out with no_sha=1) and the spec dir.
+mk_unit_json() {
+  local ref="$1" base="$2" spec="${3:-}" wt="$SPACE/worktrees/$1" sha=""
+  [[ "${4:-}" == 1 ]] || sha="$(git -C "$wt" merge-base "origin/$base" HEAD)"
+  jq -n --arg r "$ref" --arg b "$base" --arg sha "$sha" --arg spec "$spec" --arg w "$wt" \
+    '{ref: $r, host: "local", branch: $r, worktree: $w, brief: "/b", class: "S", base: $b,
+      base_sha: (if $sha == "" then null else $sha end), spec_dir: (if $spec == "" then null else $spec end), launched_at: 1}' \
+    >"$SPACE/notes/loops/$ref/unit.json"
+}
+
+# mk_parent <name> [commits] — a pushed branch off origin/main with <commits> commits (default 2): the parent of a
+# stacked unit. Uses the second clone ($FIX/other), which stays on main.
+mk_parent() {
+  local p="$1" n="${2:-2}" i
+  git -C "$FIX/other" fetch -q origin
+  git -C "$FIX/other" checkout -q -B "$p" origin/main
+  for ((i = 1; i <= n; i++)); do
+    echo "$p $i" > "$FIX/other/$p-$i.txt"
+    git -C "$FIX/other" add "$p-$i.txt"
+    git -C "$FIX/other" commit -q -m "feat: $p $i"
+  done
+  git -C "$FIX/other" push -q origin "$p"
+  git -C "$FIX/other" checkout -q main
+}
+# squash_parent <name> — squash-merge the parent into main on the remote (one new commit, not the parent's own) and
+# mark its PR merged for the gh stub. The remote branch stays.
+squash_parent() {
+  git -C "$FIX/other" pull -q --ff-only origin main
+  git -C "$FIX/other" merge --squash -q "origin/$1" >/dev/null
+  git -C "$FIX/other" commit -q -m "feat: $1 (squash)"
+  git -C "$FIX/other" push -q origin main
+  : > "$REMOTE/merged-$1"
+}

@@ -42,7 +42,14 @@
 #                 default is `local`. The space must exist on the host at the same
 #                 absolute path.
 #   --spec-dir D  a spec directory the unit's agents read; with --host it is copied
-#                 to the host together with the brief and the rulings file.
+#                 to the host together with the brief and the rulings file. Its
+#                 tasks.md frontmatter `base:` is the feature's base branch.
+#   --base B      the branch the unit is rebased onto and its PR targets. Else the
+#                 frontmatter `base:` of <spec-dir>/tasks.md, else the deprecated
+#                 config key `base`, else the remote default branch (origin/HEAD);
+#                 when none is known, run stops. unit.json records it (.base, plus
+#                 .base_sha, where the branch forked from it): resume, the driver
+#                 and ship-land use that, not the config.
 #
 # Slots: a unit counts toward a host's slots while its driver is alive there (a
 # driver.pid naming a ship process, or a launch in its first SHIP_UNIT_START_GRACE_S
@@ -622,7 +629,8 @@ if [[ "$sub" == _launch ]]; then
   [[ -f "$brief" ]] || die "brief $brief is not a file (on $host_name)"
   [[ -z "$spec_dir" || -d "$spec_dir" ]] || die "spec dir $spec_dir is not a directory"
   [[ -n "$branch" ]] || branch="$ref"
-  [[ -n "$base" ]] || base="$(ship_cfg_get base)" || die "config has no base"
+  # run resolves the base on the lead and passes it; this only covers a direct _launch.
+  [[ -n "$base" ]] || base="$(ship_resolve_base "" "$spec_dir" "$root")" || exit "$E_USAGE"
   d="$root/notes/loops/$ref"
 
   # Fetching can be slow; it must not hold the lock (a wave of runs would queue behind it).
@@ -671,15 +679,18 @@ if [[ "$sub" == _launch ]]; then
     [[ -n "$wt_path" && -d "$wt_path" ]] || die "wt did not leave a worktree for branch $branch"
   fi
 
+  # Where the branch forked from the base: ship-land's retarget needs it once the base branch is gone.
+  base_sha="$(git -C "$wt_path" merge-base "origin/$base" HEAD 2>/dev/null || git -C "$wt_path" merge-base "$base" HEAD 2>/dev/null || true)"
   mkdir -p "$d"
   models_json="$(printf '%s\n' ${models[@]+"${models[@]}"} | jq -R 'select(. != "")' | jq -sc .)"
   # A fresh run starts from the run's own model overrides; a later resume appends.
   : >"$d/models.override"
   for m in ${models[@]+"${models[@]}"}; do printf '%s\n' "$m" >>"$d/models.override"; done
   jq -n --arg ref "$ref" --arg host "$host_name" --arg branch "$branch" --arg wt "$wt_path" --arg brief "$brief" \
-    --arg class "$class" --arg base "$base" --arg mr "$max_rounds" --argjson fg "$final_gate" \
+    --arg class "$class" --arg base "$base" --arg bsha "$base_sha" --arg mr "$max_rounds" --argjson fg "$final_gate" \
     --argjson models "$models_json" --arg spec "$spec_dir" --argjson t "$(date +%s)" \
     '{ref: $ref, host: $host, branch: $branch, worktree: $wt, brief: $brief, class: $class, base: $base,
+      base_sha: (if $bsha == "" then null else $bsha end),
       max_rounds: (if $mr == "" then null else ($mr | tonumber) end), final_gate: $fg, models: $models,
       spec_dir: (if $spec == "" then null else $spec end), launched_at: $t}' >"$d/unit.json.tmp"
   mv "$d/unit.json.tmp" "$d/unit.json"
@@ -751,6 +762,8 @@ case "$sub" in
     for m in ${models[@]+"${models[@]}"}; do ship_models_override "$m" || exit "$E_USAGE"; done
     select_host "$host"
     slots="$(host_slots)"
+    # Resolved once, here: unit.json keeps it, so a resume or a config edit never moves a running unit.
+    base="$(ship_resolve_base "$base" "$spec_dir" "$root")" || exit "$E_USAGE"
 
     if [[ -n "$HTARGET" ]]; then
       rulings="$(ship_cfg_get rulings 2>/dev/null)" || rulings=""

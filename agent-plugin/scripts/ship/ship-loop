@@ -12,8 +12,9 @@
 #   ship-loop --clear-limit NAME        mark account or model NAME as usable again (limited.json), then exit
 #
 # Everything else (gate, models, budgets, scan rules, spec paths, ...) comes from the
-# merged ship config (see ship-config). --base and --max-rounds override `base` and
-# `max_rounds`; --model replaces one stage's model list for this run (stages: dev
+# merged ship config (see ship-config). --max-rounds overrides `max_rounds`; --base is
+# the unit's base branch (ship-unit passes unit.json's; without it: the deprecated config key
+# `base`, else the remote default branch); --model replaces one stage's model list for this run (stages: dev
 # verify review spec_check spec_write final). A bare model name launches Claude Code,
 # provider/model[:thinking] launches pi; agents are launched with the flags that
 # `ship-role <role> --harness H --cwd <worktree>` prints.
@@ -1566,7 +1567,7 @@ main() {
   case "$CLASS" in S|M|L) ;; *) usage_exit "--class must be S, M or L" ;; esac
   [[ -d "$WT" ]] || usage_exit "worktree $WT is not a directory"
   [[ -f "$BRIEF" ]] || usage_exit "brief $BRIEF is not a file"
-  [[ -n "$BASE" ]] || BASE="$(ship_cfg_get base)" || usage_exit "config has no base"
+  [[ -n "$BASE" ]] || BASE="$(ship_resolve_base "" "" "$WT")" || usage_exit "cannot resolve the base (see above)"
   [[ -n "$MAX" ]] || MAX="$(ship_cfg_get max_rounds)" || usage_exit "config has no max_rounds"
   case "$MAX" in ''|*[!0-9]*|0) usage_exit "max rounds must be a positive integer (got '$MAX')" ;; esac
 
