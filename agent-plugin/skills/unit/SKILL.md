@@ -59,11 +59,11 @@ Rules for acting:
 - `resume` blocks like `run`; start it in the background too and stop.
 - `ship-unit wait <ref>` reattaches to a driver that is still running (after
   compaction or a restart); also in the background.
-- `ship-unit list` shows ref, host, status, stage, failovers, age and whether
-  the pid is alive.
+- `ship-unit list` shows ref, host, status, stage, failovers, age, pid alive.
 
-For a unit on another host (`--host`), `run` also takes `--spec-dir <dir>`
-(the unit's spec directory, copied to the host with the brief and rulings).
+Always pass `run` `--spec-dir <dir>` (the feature's spec directory): the unit's
+base is the `base:` in its `tasks.md`. Use `--base` only to override. With
+`--host` the directory is copied over too.
 
 `resume` flags: `--answer <file>`, `--extend <minutes>`, `--max-rounds <n>`,
 `--model <stage>=<m>[,<m>...]` (stages: dev verify review spec_check

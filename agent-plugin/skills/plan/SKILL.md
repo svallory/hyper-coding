@@ -48,6 +48,10 @@ in a tracker when the project uses one. If a spec is expected but
 ## tasks.md
 
 ```markdown
+---
+base: <branch the feature's PRs target>
+---
+
 # <Feature name> - Tasks
 
 ## T-1: <title>
@@ -59,6 +63,12 @@ in a tracker when the project uses one. If a spec is expected but
 - Acceptance: how to verify this unit alone is done
 ```
 
+- **Base.** `base:` in the frontmatter is the branch every unit of the feature
+  is rebased onto and its PR targets. For a feature stacked on a branch that
+  is not merged yet, it is that parent branch. Otherwise it is the default
+  branch (`git symbolic-ref --short refs/remotes/origin/HEAD`, without
+  `origin/`), written out so a new lead sees it. Ask the caller when you
+  cannot tell. `land` moves it to the default branch once the parent merged.
 - Number tasks in dependency order. Every `AC-n` is covered by at least one
   task; every task traces to an `AC-n`, or is infrastructure a traced task
   depends on.

@@ -39,7 +39,9 @@ The first wave is the units with no unmet dependencies.
 2. Take ready units in `tasks.md` order until the slots are full. With
    several hosts, fill the first listed host first. Pass `--host` for any
    host other than `local`.
-3. Launch each with the `unit` skill, in the background. Never launch more
+3. Launch each with the `unit` skill, in the background, passing
+   `--spec-dir notes/specs/<slug>`: the base is the `base:` in `tasks.md`
+   (no `tasks.md` base: the default branch). Pass `--base` only to override. Never launch more
    than the free slots, even if more units are ready.
 4. The units that did not fit wait. Each landed unit frees a slot and may
    unblock others; the lead starts them one by one as it lands.

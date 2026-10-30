@@ -208,14 +208,53 @@ ship-unit list
 | `--class S\|M\|L` | the unit's size; picks the develop time budget (`budgets.S/M/L`). Required. |
 | `--host H` | run on host `H` from `hosts.H` instead of `local`. The space must exist on the host at the same absolute path. |
 | `--branch B` | branch to create; default is the ref. |
-| `--base B` | base branch; default config `base`. |
+| `--base B` | base branch. Without it: see [Base branch](#base-branch). |
 | `--max-rounds N` | review/fix rounds before STUCK; default config `max_rounds`. |
 | `--final-gate` | run the final gate stage for this unit (otherwise only when `stages.final.always`). |
 | `--model STAGE=M[,M...]` | replace one stage's model list for this unit (repeatable). Written to `models.override`. |
-| `--spec-dir DIR` | a spec directory the agents read; copied to the host in host mode. |
+| `--spec-dir DIR` | the feature's spec directory: the agents read it, `tasks.md` frontmatter `base:` is the unit's base, and in host mode it is copied to the host. |
 | `--answer FILE` | (`resume`) the lead's answer to the current park; becomes `answer-<n>.md`. Refused for LIMIT, DIALOG and AUTH parks. |
 | `--extend MIN` | (`resume`) minutes to add to the stage that went OVER-BUDGET; above 0. |
 | `--max-rounds N` | (`resume`) raise the unit's round limit to `N` and continue it where it stopped. `N` must be a positive integer above the unit's current limit (else exit 64, nothing changed). The new limit is written to `unit.json`, so later resumes keep it; it combines with `--model` and `--extend`, and earlier `--model` overrides are kept. It only helps a unit that stopped STUCK for want of rounds. |
+
+### Base branch
+
+The base is the branch a unit is rebased onto and its PR targets. It belongs to
+the feature, not to the space: a feature stacked on an unmerged branch needs a
+base that no other feature shares. `ship-unit run` resolves it once, in this
+order:
+
+1. `--base B`;
+2. `base:` in the YAML frontmatter of `<spec-dir>/tasks.md` (`--spec-dir`), which
+   the `plan` skill writes (the parent branch for a stacked feature, otherwise the
+   default branch). A missing file, no frontmatter, no `base:`, a `null` or empty
+   value, or frontmatter that is never closed, is skipped (the last with a
+   warning, as is a value that is not a branch name);
+3. the config key `base`. **Deprecated**: it applies to every feature in the
+   space and goes stale when its branch lands. Kept so existing spaces work;
+   there is no default any more, and a warning is printed when it is used;
+4. the remote default branch, `origin/HEAD`. When the clone has none, one
+   `git remote set-head origin --auto` asks the remote.
+
+If none of them knows the base, `run` stops and asks for `--base`. It never
+falls back to `main`.
+
+The result is written to `unit.json` (`.base`, plus `.base_sha`, the commit the
+branch forked from it, and `.spec_dir`). `resume`, the driver and `ship-land` use
+that snapshot, so editing `tasks.md` or the config does not move a unit that is
+running.
+
+`ship-land` retargets a unit whose base has landed. When the base is not the
+default branch and is no longer live (the branch is gone on origin, its PR is
+MERGED, or it is contained in the default branch), land rebases only the
+unit's own commits with `git rebase --onto origin/<default> <fork point> <branch>`,
+runs `gh pr edit <pr> --base <default>`, sets `.base` in `unit.json` and `base:` in
+`<spec dir>/tasks.md`, and says so. The fork point is the later of the merge-base
+with the old base's last known tip (the remote-tracking ref, which survives a
+deleted branch unless `fetch.prune` removed it) and `.base_sha`. If neither is
+known, land refuses (exit 3) and prints the commands to run by hand. The parent's
+commits are never replayed, which a plain rebase would do after a squash merge.
+While the base is live, nothing changes.
 
 `run` creates the worktree (`wt switch -c` from `origin/<base>`), checks the
 host has a free slot, opens the unit's space, starts the driver there, and
@@ -333,7 +372,8 @@ ship-land <ref> --abandon [--force] [--host H]
 
 Steps: (1) take `<space root>/.hyper/ship-land.lock` (one land at a time per
 space); (2) require READY; (3) a PR already MERGED skips to step 6, otherwise
-fetch and rebase on `origin/<base>`, refusing an empty branch or a rebase that
+fetch and rebase on `origin/<base>` (`<base>` is `unit.json`'s `.base`; a base that has
+landed is [retargeted](#base-branch) first), refusing an empty branch or a rebase that
 drops commits (the branch is restored); (4) run `gate`, then
 `git push --force-with-lease` leased on the remote branch as seen before the
 fetch; (5) `gh pr merge --<merge_method>`, then, with the PR MERGED, `git push origin --delete <branch>`, and pull the base; (6) run each
@@ -364,7 +404,7 @@ merge call, so the queue entry survives; with `--host` the refusal comes from th
 merge phase, also before any push. Rerun the same command once the PR is MERGED, or
 cancel auto-merge (or leave the queue) first to re-land it.
 
-Config used: `gate` (needed to land, not to abandon), `base`, `merge_method`,
+Config used: `gate` (needed to land, not to abandon), `merge_method`,
 `on_land`, `mux`, `units_group`. A rerun after a failed teardown is safe.
 
 Exit codes: 0 landed or abandoned; 1 error (gate failed, rebase conflict, merge
@@ -564,7 +604,7 @@ hosts:
 | `offload` | Optional, unset by default. A command prefix that runs one shell-string argument on a build host, in a synced copy of the current worktree. When set, the dev and fix prompts tell the agent to run test runs and builds through it (the dev does not run the gate). See [Running on other machines](#running-on-other-machines). |
 | `mux` | Backend file under `scripts/ship/mux/`. Default `herdr`. |
 | `units_group` | Name of the multiplexer group holding unit spaces. `<project>` becomes the space directory name. Default `<project>-units`. |
-| `base` | Branch units are rebased onto and merged into. Default `main`. |
+| `base` | **Deprecated**; set `base:` in the feature's `tasks.md` instead. Branch units are rebased onto and merged into, for every feature in the space. No default: without it the base is the remote default branch. See [Base branch](#base-branch). |
 | `merge_method` | `rebase`, `squash` or `merge`. Default `rebase`. |
 | `spec.paths` | Globs of spec or contract documents. A diff touching one triggers the spec check stage. Default `[]`. |
 | `scan.forbidden` | Regexes (jq/Oniguruma, matched with `test()`) that must not appear in added lines; finalize fails on a match. Default `[]`. |
