@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Row S — the plugin's skills after the team/plan-* removal: exactly the eleven
+# Row S — the plugin's skills after the team/plan-* removal: exactly the twelve
 # skills exist, nothing generated or deleted is left behind or referenced, every
 # ${CLAUDE_PLUGIN_ROOT} path a skill names exists (C-10), and no file outside the
 # Herdr backend calls the Herdr command (C-11).
@@ -9,10 +9,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/helpers.sh"
 SKILLS="$PLUGIN_DIR/skills"
 
 # --- the skill set (AC-1) ---------------------------------------------------------------
-want="auto hyper hyper-gen hyper-tooling kickoff land plan ship spec test-engineer unit"
+want="auto canvas hyper hyper-gen hyper-tooling kickoff land plan ship spec test-engineer unit"
 want="$(printf '%s\n' $want | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
 have="$(for d in "$SKILLS"/*/; do basename "$d"; done | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
-assert_eq "skills/ holds exactly the eleven skills" "$want" "$have"
+assert_eq "skills/ holds exactly the twelve skills" "$want" "$have"
 
 for n in $want; do
   f="$SKILLS/$n/SKILL.md"
