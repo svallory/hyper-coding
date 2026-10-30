@@ -21,7 +21,7 @@
 #           the driver's code. --model values are written to models.override.
 #   resume  restart the driver of a parked, over-budget or STUCK unit; it reattaches. First
 #           writes what ship-loop reads from notes/loops/<ref>/: --answer becomes
-#           answer-<n>.md (n is park.json's "n"; refused for LIMIT and DIALOG parks; for
+#           answer-<n>.md (n is park.json's "n"; refused for LIMIT, DIALOG and AUTH parks; for
 #           a STUCK unit, which has no park, the next free number, and the file is a note
 #           to the dev in its next fix prompt), --extend becomes `extend` (minutes, above
 #           0, for the stage that went OVER-BUDGET), --model lines are appended to
@@ -519,6 +519,7 @@ resume_args_check() {
       case "$(jq -r '.status // ""' "$d/park.json")" in
         LIMIT) refuse "$ref is parked on a usage limit; an answer does not help: wait for the reset or resume with --model" ;;
         DIALOG) refuse "$ref is parked on a dialog the agent could not pass; an answer does not help: fix it in the pane, then resume without --answer" ;;
+        AUTH) refuse "$ref is parked on an expired login; an answer does not help: run /login (the operator's job), then resume without --answer" ;;
       esac
       n="$(jq -r '.n // empty' "$d/park.json")"
       [[ "$n" =~ ^[0-9]+$ ]] || die "$d/park.json has no park number"

@@ -164,6 +164,10 @@ assert_eq "...but a LIMIT park resumes without an answer" "0" "$(rac2 "" "" "")"
 park DIALOG 1
 assert_eq "--answer on a DIALOG park: refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
 assert_contains "...dialog" "$(terr)" "parked on a dialog"
+park AUTH 1
+assert_eq "--answer on an AUTH park: refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_contains "...expired login" "$(terr)" "parked on an expired login"
+assert_eq "...but an AUTH park resumes without an answer" "0" "$(rac2 "" "" "")"
 park QUESTION 3
 assert_eq "--answer on a QUESTION park: ok" "0" "$(rac2 "$FIX/work/ans.md" "" "")"
 assert_eq "...n is the park's number (3)" "n=3" "$(tout)"
@@ -302,6 +306,12 @@ assert_eq "STUCK with a garbled rounds_limit counts as another reason: --model o
 jq -nc '{status: "STUCK", rounds_limit: 0}' > "$rc_d/result.json"
 assert_eq "...so does rounds_limit 0" "0" "$(rac2 "" "" "" "dev=opus")"
 assert_eq "...and a bare resume is refused (3)" "3" "$(rac2 "" "" "")"
+
+# an AUTH park beside a STUCK result.json follows the park path, not the STUCK rules (resume_stuck needs no park.json)
+fresh_rc; stuck_result STUCK 3; park AUTH 2
+assert_eq "AUTH park beside a STUCK result: bare resume ok (not refused as STUCK)" "0" "$(rac2 "" "" "")"
+assert_eq "AUTH park beside a STUCK result: --answer refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_contains "...as an AUTH park" "$(terr)" "parked on an expired login"
 
 # a result from before ship-loop wrote rounds_limit: judged by its rounds against the unit's limit (3)
 old_result() { # stage lastround [extra jq filter]

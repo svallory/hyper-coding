@@ -37,8 +37,8 @@
 # Exit codes and result.json.status
 #   0  READY        finalize passed (rebase, gate, scan, push); land it
 #   2  PARKED       park.json: a dev QUESTION/BLOCKED, a permission DIALOG, a usage
-#                   LIMIT with nothing left to fail over to, or an OPERATOR question
-#                   from the spec writer. The agent is left alive and waiting.
+#                   LIMIT with nothing left to fail over to, an expired login (AUTH),
+#                   or an OPERATOR question from the spec writer. The agent is left alive and waiting.
 #      OVER-BUDGET  budget-r<k>.json; the agent is left running
 #      STUCK        max rounds without ACCEPT, or finalize failures the dev could not fix
 #   1  ERROR        tool or script failure, malformed verdict, bad usage (driver.err)
@@ -50,7 +50,8 @@
 #   answer-<n>.md    the answer to park.json (n is park.json's "n"); sent to the parked
 #                    agent. QUESTION, BLOCKED and OPERATOR parks wait for it; a DIALOG
 #                    park resumes once the agent is no longer blocked; a LIMIT park
-#                    resumes at once (change the models with models.override first).
+#                    resumes at once (change the models with models.override first); so does
+#                    an AUTH park, once the operator has run /login.
 #                    With no park (a STUCK unit) it is a note to the dev, put in the next
 #                    fix prompt, and set aside as note-<n>.md.
 #   extend           minutes to add to the stage that went OVER-BUDGET (a number)
@@ -540,9 +541,19 @@ limit_hit() {
   printf '%s\n' "$screen" | jq -Rr --arg re "$re" 'select(test($re))' 2>/dev/null | tail -n 1 | sed -E 's/^[^[:alnum:]]*//' | tr -s ' ' | cut -c1-160 | grep .
 }
 
+# auth_hit <agent name> <agent id> — print the matching line when the newest lines of the agent's screen show its
+# harness's login-expired text (auth.patterns; a harness without a pattern never matches)
+auth_hit() {
+  local re screen
+  re="$(jq -r --arg h "$(agent_harness "$1")" '.auth.patterns[$h] // empty' <<<"$SHIP_CONFIG_JSON")"
+  [[ -n "$re" ]] || return 1
+  screen="$(mux read --to "$2" --lines "$LIMIT_LINES" 2>/dev/null)" || return 1
+  printf '%s\n' "$screen" | jq -Rr --arg re "$re" 'select(test($re))' 2>/dev/null | tail -n 1 | sed -E 's/^[^[:alnum:]]*//' | tr -s ' ' | cut -c1-160 | grep .
+}
+
 # await_file <name> <id> <file> <stage> <budget min> — wait for the agent to write its verdict.
 # 0 written; 1 the agent is gone or stopped without writing (FAIL_WHY says which); 2 not JSON.
-# Parks (DIALOG, LIMIT) and budget overruns exit the driver.
+# Parks (DIALOG, LIMIT, AUTH) and budget overruns exit the driver.
 FAIL_WHY=""
 await_file() {
   local name="$1" id="$2" file="$3" stage="$4" budget="$5" acc=0 seg now el lim st idle=0 nudges=0 hit ignored="" fo
@@ -557,6 +568,10 @@ await_file() {
     printf '%s\n' "$el" >"$file.clock"
     if [[ $el -gt $lim ]]; then over_budget "$stage" "$name" "$file" "$budget" "$el"; fi
     agent_state "$id"; st="$L_STATE"
+    # An expired login is the operator's: park at once, before any budget, re-prompt or failover (the other models share the login).
+    if [[ "$st" == blocked || "$st" == idle ]] && hit="$(auth_hit "$name" "$id")"; then
+      park AUTH "$stage" "$name" "$name's login has expired or was revoked ($hit). Run /login (in its pane, or in any claude session on the same account), then resume." "$file"
+    fi
     # Claude shows its limit as a dialog, which reads as blocked: look for the limit text before parking a dialog.
     if [[ "$st" == blocked || "$st" == idle ]] && hit="$(limit_hit "$name" "$id")" && [[ "$hit" != "$ignored" ]]; then
       fo=0; failover_on_limit "$name" "$stage" "$file" "$hit" "$id" || fo=$?
@@ -627,7 +642,7 @@ scrub_status() {
   # the scrub is stricter than the detection: loose built-in patterns, and the configured ones without their
   # line anchor, so a quotation anywhere in a line goes
   pats="$(jq -c '["you.{1,3}ve hit your ([a-z]+ )?limit", "\\b429\\b.{0,40}(too many requests|rate.?limit|status code|rate_limit_error)", "too many requests", "resource_exhausted", "(rate|usage) limit (has been )?(reached|exceeded|hit)", "quota (has been )?exceeded", "exceeded (your|the) (current )?(quota|rate limit|usage limit)"]
-    + [.limits.patterns[]? | sub("^(?<f>\\(\\?[a-z]+\\))\\^"; "\(.f)") | sub("^\\^"; "")]' <<<"$SHIP_CONFIG_JSON")" || pats='[]'
+    + [(.limits.patterns[]?, .auth.patterns[]?) | sub("^(?<f>\\(\\?[a-z]+\\))\\^"; "\(.f)") | sub("^\\^"; "")]' <<<"$SHIP_CONFIG_JSON")" || pats='[]'
   if jq -Rr --argjson p "$pats" 'if (. as $l | any($p[]; . as $re | $l | test($re; "i"))) then "[line removed: it quoted a provider message]" else . end' "$f" >"$f.tmp"; then
     mv "$f.tmp" "$f"
   else
@@ -888,7 +903,7 @@ takeover_text() {
   printf 'You are taking over unit %s (PR #%s) from a previous dev agent that is gone. Its work is all in %s on branch %s, and nothing was reset. Before anything else read the brief (%s), then run `git -C %s status` and `git -C %s log origin/%s..HEAD`. Then do what follows.' \
     "$REF" "${PR:-?}" "$WT" "$BRANCH" "$BRIEF" "$WT" "$WT" "$BASE"
 }
-# resume_restart — a LIMIT park, or a BLOCKED park the lead left without an answer, ends with the parked
+# resume_restart — a LIMIT or AUTH park, or a BLOCKED park the lead left without an answer, ends with the parked
 # agent closed and its stage cleared, so the stage starts again with a new agent (model_pick, so a
 # models.override applies). Done before the dev is looked up: the parked agent may be the dev.
 resume_restart() {
@@ -897,7 +912,7 @@ resume_restart() {
   st="$(jq -r .status "$STATE/park.json")"; agent="$(jq -r .agent "$STATE/park.json")"
   n="$(jq -r .n "$STATE/park.json")"; file="$(jq -r '.file // ""' "$STATE/park.json")"
   case "$st" in
-    LIMIT) ;;
+    LIMIT|AUTH) ;;
     BLOCKED) [[ ! -s "$STATE/answer-$n.md" ]] || return 0 ;;
     *) return 0 ;;
   esac
@@ -961,7 +976,7 @@ Continue the task. When it is complete, write the result file ${file:-you were g
         log "still parked (DIALOG): $agent is still blocked"
         finish 2 "$stage" PARKED "$(jq -c '{park:.}' "$STATE/park.json")"
       fi ;;
-    LIMIT) ;;
+    LIMIT|AUTH) ;;
   esac
   mv "$STATE/park.json" "$STATE/park-$n.json"
   log "resumed from park $n ($st)"

@@ -1,14 +1,17 @@
 {
-  "title": "park record",
-  "description": "park.json, written by the driver when it leaves a unit waiting for the lead.",
-  "type": "object",
-  "required": ["status", "stage", "agent", "question", "since"],
-  "properties": {
-    "status": {"type": "string", "enum": ["QUESTION", "BLOCKED", "DIALOG", "LIMIT", "OPERATOR"]},
-    "stage": {"type": "string"},
-    "agent": {"type": "string"},
-    "question": {"type": "string"},
-    "since": {"type": "string"},
-    "resets_at": {"type": ["string", "number"]}
-  }
+	"title": "park record",
+	"description": "park.json, written by the driver when it leaves a unit waiting for the lead.",
+	"type": "object",
+	"required": ["status", "stage", "agent", "question", "since"],
+	"properties": {
+		"status": {
+			"type": "string",
+			"enum": ["QUESTION", "BLOCKED", "DIALOG", "LIMIT", "AUTH", "OPERATOR"]
+		},
+		"stage": { "type": "string" },
+		"agent": { "type": "string" },
+		"question": { "type": "string" },
+		"since": { "type": "string" },
+		"resets_at": { "type": ["string", "number"] }
+	}
 }

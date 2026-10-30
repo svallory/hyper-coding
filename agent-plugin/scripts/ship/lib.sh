@@ -237,12 +237,13 @@ _SHIP_LOAD_JQ='
         | "ship: \($k) must be a number (got \($t)); set in \(keysrc($layers; $k))"),
     (if ($cfg | ctype("budgets.fix_per_finding")) == "number" and $cfg.budgets.fix_per_finding < 0
      then "ship: budgets.fix_per_finding must not be negative; set in \(keysrc($layers; "budgets.fix_per_finding"))" else empty end),
-    ([try ($cfg.limits.patterns // {} | keys[] | tostring) catch empty][] as $k
-        | if ($cfg | ctype("limits.patterns." + $k)) != "string"
-          then "ship: limits.patterns.\($k) must be a string (a regex); set in \(keysrc($layers; "limits.patterns." + $k))"
-          else $cfg.limits.patterns[$k] as $re
+    ("limits.patterns", "auth.patterns" | . as $p
+        | [try ($cfg | getpath($p / ".") // {} | keys[] | tostring) catch empty][] as $k
+        | if ($cfg | ctype($p + "." + $k)) != "string"
+          then "ship: \($p).\($k) must be a string (a regex); set in \(keysrc($layers; $p + "." + $k))"
+          else $cfg | getpath(($p / ".") + [$k]) as $re
             | if (try ("" | test($re) | true) catch false) then empty
-              else "ship: limits.patterns.\($k) is not a valid regex (\($re)); set in \(keysrc($layers; "limits.patterns." + $k))" end
+              else "ship: \($p).\($k) is not a valid regex (\($re)); set in \(keysrc($layers; $p + "." + $k))" end
           end)
 '
 

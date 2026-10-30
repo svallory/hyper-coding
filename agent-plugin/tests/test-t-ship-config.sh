@@ -310,7 +310,7 @@ lc_plain
 keys="$(ship_cfg_print | sed 's/ = .*//' | tr '\n' ' ')"
 for k in mux units_group base merge_method spec.paths scan.forbidden scan.exclude stages.final.always max_rounds \
          models.dev models.verify models.review models.spec_check models.spec_write models.final \
-         quota.threshold_pct quota.max_age_min limits.patterns.claude limits.patterns.pi limits.cooldown_min \
+         quota.threshold_pct quota.max_age_min limits.patterns.claude limits.patterns.pi limits.cooldown_min auth.patterns.claude \
          failover.summarizer budgets.S budgets.M budgets.L budgets.fix_fraction budgets.fix_per_finding budgets.check \
          hosts.local.slots rulings tracker on_land roles.dev.pi_skills roles.lead.plugins_keep; do
   assert_contains "defaults.yml defines $k" "$keys" "$k "

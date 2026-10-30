@@ -300,6 +300,52 @@ r_run r25
 assert_eq "(25) blocked dialog: READY after one account failover" "0 1 account" "$RC $(dev_fcount_of r25) $(jq -r .limit_kind "$(st r25)/failover-1.json")"
 assert_eq "(25) no DIALOG park" absent "$([[ -e "$(st r25)/park.json" ]] && echo present || echo absent)"
 
+# (a) An expired login ("OAuth token revoked", "Login expired", a bare "Please run /login") parks AUTH at once: the dev is
+# left alone and not re-prompted, no budget is charged (no budget-r*.json), nothing fails over (the list has a second
+# model) and no limit is recorded. Resumed once the screen is clean, the stage restarts with a new dev: READY.
+for pair in "a1|  ⎿ ${NB}OAuth token revoked · Please run /login" "a2|Login expired · Please run /login" "a3|Please run /login" "a4|Not logged in · Please run /login"; do
+  ref="${pair%%|*}"; txt="${pair#*|}"
+  reset_fake; no_quota; runit "$ref"
+  rwrite_cfg '[sonnet, zai/glm-5.3]'
+  limit_screen "$ref-dev" "$txt"
+  r_run "$ref" 2
+  assert_eq "($ref) exit 2, PARKED" "2 PARKED" "$RC $(jq -r .status "$(st "$ref")/result.json")"
+  assert_eq "($ref) park.json status AUTH" AUTH "$(jq -r .status "$(st "$ref")/park.json")"
+  assert_ok "($ref) park.json matches the park schema" validate_verdict "$SCHEMAS_DIR/park.json" "$(st "$ref")/park.json"
+  assert_contains "($ref) the question names /login" "$(jq -r .question "$(st "$ref")/park.json")" "/login"
+  assert_eq "($ref) no failover file, no summariser" "0 absent" "$(fcount_of "$ref") $([[ -e "$FIX/claude-p.args" ]] && echo present || echo absent)"
+  assert_eq "($ref) the dev was started once and prompted once" "1 1" "$(starts_of "$ref-dev") $(sent_all "$ref" "$ref-dev" | grep -c "develop.json")"
+  assert_eq "($ref) the dev was left alone (no keys sent)" 0 "$(sent_all "$ref" "$ref-dev" | grep -c keys)"
+  assert_eq "($ref) no budget file" 0 "$(ls "$(st "$ref")"/budget-r*.json 2>/dev/null | wc -l | tr -d ' ')"
+  assert_eq "($ref) no limit recorded" absent "$([[ -e "$SHIP_QUOTA_DIR/limited.json" ]] && echo present || echo absent)"
+done
+# a4 resumed: --answer is the unit's business (refused there); the driver restarts the stage with a new dev
+rm -f "$SHIP_MUX_FAKE_DIR/after-send/a4-dev" "$SHIP_MUX_FAKE_DIR/status/a4-dev"
+printf '%s\n' "$DEV_DONE" >"$FIX/scripts/a4/develop.json"
+r_run a4
+assert_eq "(a4) resumed after /login: READY" "0 READY" "$RC $(jq -r .status "$(st a4)/result.json")"
+assert_eq "(a4) the parked dev was closed and a new one started" 2 "$(starts_of a4-dev)"
+assert_eq "(a4) the park is resolved" "absent present" "$([[ -e "$(st a4)/park.json" ]] && echo present || echo absent) $([[ -e "$(st a4)/park-1.json" ]] && echo present || echo absent)"
+assert_eq "(a4) still no failover" 0 "$(fcount_of a4)"
+
+# (a5) The same text in a blocked dialog parks AUTH, not DIALOG.
+reset_fake; no_quota; runit a5
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+blocked_screen a5-dev "Login expired · Please run /login
+
+Press Enter to continue"
+r_run a5 2
+assert_eq "(a5) blocked on a login message: AUTH, not DIALOG" "AUTH" "$(jq -r .status "$(st a5)/park.json")"
+
+# (a6) Prose that mentions a login does not park: the unit finishes READY.
+reset_fake; no_quota; runit a6
+rwrite_cfg '[sonnet, zai/glm-5.3]'
+limit_screen a6-dev "I added the /login route; the login expired handler returns 401. Please run /login again after the deploy to try it."
+answer_after_takeover a6 develop.json "$DEV_DONE"
+printf '%s\n' "$DEV_DONE" >"$FIX/scripts/a6/develop.json"
+r_run a6
+assert_eq "(a6) normal text with 'login' is not an AUTH park: READY" "0 absent" "$RC $([[ -e "$(st a6)/park.json" ]] && echo present || echo absent)"
+
 no_quota
 unset SHIP_LOOP_MUX LIMITMUX_REAL FIX_DIR SHIP_FAILOVER_STOP_MS SHIP_SUMMARY_TIMEOUT_S
 rm -f "$FIX/bin/uuidgen"
