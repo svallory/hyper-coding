@@ -38,8 +38,7 @@
 #      leaves it open fails here: rerun once it is merged). Otherwise fetch, rebase on origin/<base>; refuse an empty branch, or a rebase that
 #      drops commits (the branch is put back as it was). <base> is unit.json's .base
 #      (the one ship-unit run resolved), else resolved again like run does. When that base
-#      branch is no longer live (gone on origin, its PR merged, or contained in the default
-#      branch) and is not the default branch, the unit is retargeted first: rebase --onto
+#      branch is no longer live (gone on origin, or its PR merged) and is not the default branch, the unit is retargeted first: rebase --onto
 #      origin/<default> <fork point> <branch>, where the fork point is the later of the merge-base
 #      with the old base's last known tip and unit.json's .base_sha, so the parent's commits are
 #      not replayed; then gh pr edit --base <default>, and .base in unit.json and `base:` in
@@ -112,19 +111,17 @@ unit_base() {
   ship_resolve_base "" "$sd" "$root"
 }
 
-# base_gone_reason <wt> <base> <default> — why the unit's base branch is no longer live, on stdout: gone on
-# origin, its PR merged, or fully contained in the default branch. Returns 1 while it is live (or when the
-# remote cannot be asked: today's behaviour is kept).
+# base_gone_reason <wt> <base> — why the unit's base branch is no longer live, on stdout: gone on
+# origin, or its PR merged. A base that merely sits inside the default branch is still live (a long-lived
+# branch such as main under a develop default), so it is never retargeted. Returns 1 while it is live (or when
+# the remote cannot be asked: today's behaviour is kept).
 base_gone_reason() {
-  local wt="$1" base="$2" def="$3" rc=0 st
+  local wt="$1" base="$2" rc=0 st
   git -C "$wt" ls-remote --exit-code --heads origin "refs/heads/$base" >/dev/null 2>&1 || rc=$?
   if [[ $rc -eq 2 ]]; then echo "origin/$base no longer exists"; return 0; fi
   [[ $rc -eq 0 ]] || return 1
   st="$(cd -- "$wt" && gh pr view "$base" --json state -q .state 2>/dev/null)" || st=""
   if [[ "$st" == MERGED ]]; then echo "the PR of $base is merged"; return 0; fi
-  if git -C "$wt" merge-base --is-ancestor "origin/$base" "origin/$def" 2>/dev/null; then
-    echo "origin/$base is contained in origin/$def"; return 0
-  fi
   return 1
 }
 
@@ -579,7 +576,7 @@ head0="$(git -C "$wt_path" rev-parse HEAD)"
 # merge made different from the ones on the default branch.
 old_base="" up=""
 def="$(ship_default_branch "$wt_path" 2>/dev/null)" || def=""
-if [[ -n "$def" && "$def" != "$base" ]] && why="$(base_gone_reason "$wt_path" "$base" "$def")"; then
+if [[ -n "$def" && "$def" != "$base" ]] && why="$(base_gone_reason "$wt_path" "$base")"; then
   up="$(retarget_point "$wt_path" "$base" "$(jq -r '.base_sha // ""' "$loop_dir/unit.json" 2>/dev/null || true)")" \
     || refuse "$why, so $branch should move to $def, but where it forked from $base is unknown; run: git rebase --onto origin/$def <fork point> $branch, then gh pr edit $pr --base $def"
   old_base="$base" base="$def"

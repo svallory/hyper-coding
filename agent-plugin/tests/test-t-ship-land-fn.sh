@@ -566,27 +566,25 @@ for c in plain open none; do
 done
 assert_eq "set_tasks_base: leaves no temp file behind" "1 1" "$(ls "$FIX/tb/open" | wc -l | tr -d ' ') $(ls "$FIX/tb/plain" | wc -l | tr -d ' ')"
 
-# base_gone_reason <wt> <base> <default>
+# base_gone_reason <wt> <base>
 MAINWT="$SPACE/worktrees/main"
-gone() { rc=0; fn base_gone_reason "$MAINWT" "$@" >/dev/null || rc=$?; echo "$rc"; }
+gone() { rc=0; fn base_gone_reason "$MAINWT" "$1" >/dev/null || rc=$?; echo "$rc"; }
 mk_parent bg-live
 assert_eq "base_gone_reason: a live, unmerged parent: 1" "1" "$(gone bg-live main)"
 mk_parent bg-merged
 : > "$REMOTE/merged-bg-merged"
 assert_eq "base_gone_reason: its PR is MERGED: 0" "0" "$(gone bg-merged main)"
-assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-merged main)" "the PR of bg-merged is merged"
+assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-merged)" "the PR of bg-merged is merged"
 mk_parent bg-gone
 git -C "$REMOTE" update-ref -d refs/heads/bg-gone
 assert_eq "base_gone_reason: the branch is gone on origin: 0" "0" "$(gone bg-gone main)"
-assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-gone main)" "origin/bg-gone no longer exists"
+assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-gone)" "origin/bg-gone no longer exists"
 mk_parent bg-ff
 git -C "$FIX/other" pull -q --ff-only origin main
 git -C "$FIX/other" merge -q --ff-only origin/bg-ff
 git -C "$FIX/other" push -q origin main
 git -C "$G" fetch -q origin
-assert_eq "base_gone_reason: contained in the default branch: 0" "0" "$(gone bg-ff main)"
-assert_contains "...says so (gh knows it too, but the first signal wins)" "$(fn base_gone_reason "$MAINWT" bg-ff main)" "bg-ff"
-assert_contains "...with gh unable to read the PR, git alone says it" "$(GH_VIEW_FAIL=1 fn base_gone_reason "$MAINWT" bg-ff main)" "origin/bg-ff is contained in origin/main"
+assert_eq "base_gone_reason: contained in main but its PR unreadable: 1 (not a signal)" "1" "$(GH_VIEW_FAIL=1 gone bg-ff)"
 assert_eq "base_gone_reason: gh failing on a live parent is not a signal: 1" "1" "$(GH_VIEW_FAIL=1 gone bg-live main)"
 assert_eq "base_gone_reason: the remote cannot be asked: 1 (today's behaviour, even for a merged PR)" "1" \
   "$(git -C "$G" remote set-url origin "$FIX/no-such-remote"; gone bg-merged main; git -C "$G" remote set-url origin "$REMOTE")"
@@ -693,40 +691,6 @@ assert_eq "...unit.json and tasks.md still say the old base" "sqp5 sqp5" "$(jq -
 assert_eq "a rerun lands it (the base is still gone)" "0" "$(wl sq5)"
 assert_eq "...retargeted: tasks.md says main" "main" "$(tasks_base_of "$FIX/specs/sq5")"
 
-# ff1: only git knows the parent is in main (gh cannot read its PR)
-stacked ff1 706 ffp1
-git -C "$FIX/other" pull -q --ff-only origin main
-git -C "$FIX/other" merge -q --ff-only origin/ffp1
-git -C "$FIX/other" push -q origin main
-advance_main ff-one
-: >"$GH_LOG"
-assert_eq "retarget, parent contained in main (gh pr view failing): the land exits 0" "0" "$(GH_VIEW_FAIL=1 wl ff1)"
-assert_contains "...it says the parent is contained" "$(outof)" "retargeting: origin/ffp1 is contained in origin/main"
-assert_contains "...the PR base was edited" "$(cat "$GH_LOG")" "pr edit 706 --base main"
-
-# no unit.json and no config: the remote default branch
-mk_unit_git k3 710
-assert_eq "no unit.json, no config key: the land exits 0" "0" "$(wl k3)"
-assert_contains "...it rebased on the remote default branch" "$(outof)" "rebased k3 on origin/main"
-
-# a base that is the default branch is never looked up, whatever else is true
-mk_unit_git k4 711
-mk_unit_json k4 main
-: >"$GH_LOG"
-assert_eq "unit.json base main: the land exits 0" "0" "$(wl k4)"
-assert_eq "...gh was not asked about a PR of main" "0" "$(grep -c 'pr view main' "$GH_LOG")"
-assert_eq "...nor was the PR edited" "0" "$(grep -c 'pr edit' "$GH_LOG")"
-
-# a spec dir without a usable tasks.md: the land goes on, with a warning
-stacked tw1 712 twp1
-squash_parent twp1
-rm -f "$FIX/specs/tw1/tasks.md"
-advance_main tw-one
-assert_eq "retarget with the spec dir's tasks.md missing: the land exits 0" "0" "$(wl tw1)"
-assert_contains "...it warns that tasks.md was not updated" "$(errof)" "could not set base: in $FIX/specs/tw1/tasks.md"
-assert_eq "...unit.json says main" "main" "$(done_json .base tw1)"
-
-# These three land on a parent branch, which makes the stub's merge rewrite main: they run last.
 # lv1: the parent has not merged: nothing changes, the unit lands on its base as before
 stacked lv1 707 lvp1
 advance_main lv-one
@@ -755,6 +719,18 @@ assert_eq "no unit.json: the deprecated config key still decides, land exits 0" 
 assert_contains "...it rebased on kp2" "$(outof)" "rebased k2 on origin/kp2"
 assert_contains "...and warned that the key is deprecated" "$(errof)" "deprecated"
 write_cfg
+# ff1: the parent sits inside main (a long-lived base such as main under a develop default looks the same) and its
+# PR is not MERGED: it is live, so nothing is retargeted
+stacked ff1 706 ffp1
+git -C "$FIX/other" pull -q --ff-only origin main
+git -C "$FIX/other" merge -q --ff-only origin/ffp1
+git -C "$FIX/other" push -q origin main
+: >"$GH_LOG"
+assert_eq "a base contained in main whose PR is not merged: the land exits 0" "0" "$(GH_VIEW_FAIL=1 wl ff1)"
+assert_not_contains "...no retarget" "$(outof)" "retargeting"
+assert_eq "...no PR edit" "0" "$(grep -c 'pr edit' "$GH_LOG")"
+assert_eq "...unit.json and tasks.md keep the base" "ffp1 ffp1" "$(done_json .base ff1) $(tasks_base_of "$FIX/specs/ff1")"
+
 # ===== 3. --host before the host is reached, over a stub ssh and rsync ==================================
 mkdir -p "$FIX/hstub"
 cat > "$FIX/hstub/ssh" <<'STUB'

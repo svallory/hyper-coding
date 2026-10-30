@@ -11,8 +11,8 @@ Changes to the hyper agent plugin. The plugin version in
   frontmatter of `tasks.md`; `ship-unit run --spec-dir` reads it, so a feature
   stacked on an unmerged branch no longer needs a space-wide config edit.
   `unit.json` records `.base_sha` (where the branch forked from the base).
-- `ship-land` retargets a unit whose base branch has landed (gone on origin,
-  PR merged, or contained in the default branch): it rebases only the unit's
+- `ship-land` retargets a unit whose base branch has landed (gone on origin
+  or PR merged): it rebases only the unit's
   own commits onto the default branch (`git rebase --onto`), edits the PR base,
   and updates `unit.json` and `tasks.md`.
 

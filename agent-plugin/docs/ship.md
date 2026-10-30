@@ -245,8 +245,8 @@ that snapshot, so editing `tasks.md` or the config does not move a unit that is
 running.
 
 `ship-land` retargets a unit whose base has landed. When the base is not the
-default branch and is no longer live (the branch is gone on origin, its PR is
-MERGED, or it is contained in the default branch), land rebases only the
+default branch and is no longer live (the branch is gone on origin, or its PR is
+MERGED; a merge-commit merge of the parent also shows MERGED), land rebases only the
 unit's own commits with `git rebase --onto origin/<default> <fork point> <branch>`,
 runs `gh pr edit <pr> --base <default>`, sets `.base` in `unit.json` and `base:` in
 `<spec dir>/tasks.md`, and says so. The fork point is the later of the merge-base
@@ -254,7 +254,7 @@ with the old base's last known tip (the remote-tracking ref, which survives a
 deleted branch unless `fetch.prune` removed it) and `.base_sha`. If neither is
 known, land refuses (exit 3) and prints the commands to run by hand. The parent's
 commits are never replayed, which a plain rebase would do after a squash merge.
-While the base is live, nothing changes.
+While the base is live, nothing changes. A base that is merely contained in the default branch (a long-lived `main` under a `develop` default) is live and is never retargeted.
 
 `run` creates the worktree (`wt switch -c` from `origin/<base>`), checks the
 host has a free slot, opens the unit's space, starts the driver there, and
