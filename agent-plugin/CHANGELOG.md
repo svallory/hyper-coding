@@ -3,9 +3,42 @@
 Changes to the hyper agent plugin. The plugin version in
 `.claude-plugin/plugin.json` is bumped separately, at release.
 
-## Unreleased
+## 0.8.0 — 2026-10-29
+
+### Added
+
+- AUTH park status. When a Claude agent's screen shows an expired login
+  ("Login expired · Please run /login", "OAuth token revoked", and the like),
+  the driver parks the unit as AUTH at once: no budget is charged, the agent
+  is not re-prompted, and there is no failover (every model on the harness
+  shares that login). Run `/login`, then `ship-unit resume <ref>`; `--answer`
+  is refused for AUTH. The patterns live under the new `auth.patterns` config
+  key, per harness, like `limits.patterns`.
+
+- `ship-unit resume <ref> --answer FILE` works on a STUCK unit: the note goes
+  to the dev in the next fix prompt (and is kept until that prompt is sent).
+  This is how a re-brief reaches the dev; the fix prompt does not re-read the
+  brief.
+
+### Changed
+
+- `ship-unit resume` refuses (exit 3) to restart a STUCK unit with nothing
+  new. A bare resume is refused and lists the ways forward. A unit that went
+  STUCK on its round limit needs `--max-rounds N` above that limit; `--model`
+  or `--answer` without it are refused instead of restarting a driver that
+  exits at once. `result.json` now records `rounds_limit` for such a STUCK;
+  for results written before 0.8.0 it is inferred from the recorded rounds.
 
 ### Fixed
+
+- Finalize no longer goes STUCK on files a tool dirtied in the unit worktree
+  (a worktrunk post-start hook rewriting `package-lock.json`). Before the
+  rebase, tracked files that none of the unit's commits touch are restored to
+  HEAD; a binary-safe patch of them is saved as
+  `finalize-restored-*.patch` in the unit's loop dir and named in the log.
+  Dirty files the unit's commits do touch are never discarded: the dev gets a
+  finding that names them. If the diff against `origin/<base>` fails, nothing
+  is restored and the driver errors.
 
 - The test-selection map is now `tests/affected.tsv` (was `tests/affected.map`).
   A `*.map` ignore rule matched the old name, so a copy of the repo made with
