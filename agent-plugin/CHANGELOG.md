@@ -3,6 +3,35 @@
 Changes to the hyper agent plugin. The plugin version in
 `.claude-plugin/plugin.json` is bumped separately, at release.
 
+## Unreleased
+
+### Added
+
+- A feature has its own base branch. The `plan` skill writes `base:` in the
+  frontmatter of `tasks.md`; `ship-unit run --spec-dir` reads it, so a feature
+  stacked on an unmerged branch no longer needs a space-wide config edit.
+  `unit.json` records `.base_sha` (where the branch forked from the base).
+- `ship-land` retargets a unit whose base branch has landed (gone on origin
+  or PR merged): it rebases only the unit's
+  own commits onto the default branch (`git rebase --onto`), edits the PR base,
+  and updates `unit.json` and `tasks.md`.
+
+### Changed
+
+- The base resolves as `--base`, then `tasks.md` frontmatter, then the config
+  key `base`, then the remote default branch (`origin/HEAD`). The config key
+  `base` is deprecated and no longer has a default in `defaults.yml`; it still
+  works for spaces that set it, with a warning. When nothing knows the base,
+  `ship-unit run` stops and asks for `--base` instead of assuming `main`.
+- The `kickoff` and `unit` skills pass `--spec-dir`; the `ship` skill points a
+  lead taking over a feature at `tasks.md` for its base.
+
+### Fixed
+
+- `ship-land` ignored the unit's base: it rebased onto, counted commits
+  against and fast-forwarded the config `base`, so a unit run with `--base X`
+  landed against the wrong branch. It now reads `unit.json` `.base`.
+
 ## 0.8.0 — 2026-10-29
 
 ### Added

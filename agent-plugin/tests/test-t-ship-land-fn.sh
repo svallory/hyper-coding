@@ -518,6 +518,219 @@ assert_contains "...with the saved task in the rerun hint" "$(errof)" "ship-land
 write_cfg
 wl t1 --abandon --force >/dev/null 2>&1
 
+# ===== 2b. the unit's base: reading it, retargeting when it has landed =================================
+# Functions of ship-land sourced (unit_base, base_gone_reason, retarget_point, set_tasks_base), then whole lands of
+# stacked units (a parent branch squash-merged, deleted, not merged) on the git-only unit.
+# mutation: land reads the config key instead of unit.json (k2f); drop the base != default test; replay the
+# parent's commits (rebase without --onto); skip gh pr edit; skip the unit.json or tasks.md update
+fn() { ( source "$LAND"; root="$SPACE"; "$@" ) 2>"$FIX/fn.err"; }
+mk_tasks() { # <dir> <base value, or "-" for no base line>
+  mkdir -p "$1"
+  if [[ "$2" == - ]]; then printf -- '---\ntitle: x\n---\n\n# Feature - Tasks\n\n## T-1: x\nbase: not-me\n' > "$1/tasks.md"
+  else printf -- '---\nbase: %s\ntitle: x\n---\n\n# Feature - Tasks\n\n## T-1: x\nbase: not-me\n' "$2" > "$1/tasks.md"; fi
+}
+tasks_base_of() { sed -n '/^---$/,/^---$/s/^base: *//p' "$1/tasks.md"; }
+
+# unit_base
+mkdir -p "$FIX/ub/a" "$FIX/ub/b" "$FIX/ub/c"
+jq -n '{ref: "ub", base: "feat/threads"}' > "$FIX/ub/a/unit.json"
+mk_tasks "$FIX/specs/ub" from-tasks
+jq -n --arg s "$FIX/specs/ub" '{ref: "ub", spec_dir: $s}' > "$FIX/ub/b/unit.json"
+write_cfg 'base: from-config
+'
+assert_eq "unit_base: unit.json .base beats the config key" "feat/threads" "$(fn unit_base "$FIX/ub/a")"
+assert_eq "unit_base: with no .base, the recorded spec dir's tasks.md" "from-tasks" "$(fn unit_base "$FIX/ub/b")"
+assert_eq "unit_base: with no unit.json, the deprecated config key" "from-config" "$(fn unit_base "$FIX/ub/c")"
+assert_contains "...and it says the key is deprecated" "$(cat "$FIX/fn.err")" "'base' is deprecated"
+write_cfg
+assert_eq "unit_base: nothing set: the remote default branch" "main" "$(fn unit_base "$FIX/ub/c")"
+echo '{not json' > "$FIX/ub/c/unit.json"
+assert_eq "unit_base: an unreadable unit.json falls through to the default branch" "main" "$(fn unit_base "$FIX/ub/c")"
+
+# set_tasks_base
+mk_tasks "$FIX/tb/replace" old
+assert_eq "set_tasks_base: replaces the frontmatter base: and says it changed" "changed" "$(fn set_tasks_base "$FIX/tb/replace" main)"
+assert_eq "...the frontmatter now says main" "main" "$(tasks_base_of "$FIX/tb/replace")"
+assert_eq "...a base: line in the body is untouched" "1" "$(grep -c '^base: not-me$' "$FIX/tb/replace/tasks.md")"
+assert_eq "...the other frontmatter keys are kept" "1" "$(grep -c '^title: x$' "$FIX/tb/replace/tasks.md")"
+assert_eq "set_tasks_base: already that value: nothing written" "" "$(fn set_tasks_base "$FIX/tb/replace" main)"
+mk_tasks "$FIX/tb/add" -
+assert_eq "set_tasks_base: no base: in the frontmatter: added" "changed" "$(fn set_tasks_base "$FIX/tb/add" main)"
+assert_eq "...inside the frontmatter" "main" "$(tasks_base_of "$FIX/tb/add")"
+mkdir -p "$FIX/tb/plain" "$FIX/tb/open" "$FIX/tb/none"
+printf '# Tasks\n\nbase: x\n' > "$FIX/tb/plain/tasks.md"
+printf -- '---\nbase: x\n\n# Tasks\n' > "$FIX/tb/open/tasks.md"
+for c in plain open none; do
+  before="$(cat "$FIX/tb/$c/tasks.md" 2>/dev/null)"; rc=0; fn set_tasks_base "$FIX/tb/$c" main >/dev/null || rc=$?
+  assert_eq "set_tasks_base: $c (no file, no frontmatter or never closed): 1, file unchanged" "1 $before" "$rc $(cat "$FIX/tb/$c/tasks.md" 2>/dev/null)"
+done
+assert_eq "set_tasks_base: leaves no temp file behind" "1 1" "$(ls "$FIX/tb/open" | wc -l | tr -d ' ') $(ls "$FIX/tb/plain" | wc -l | tr -d ' ')"
+
+# base_gone_reason <wt> <base>
+MAINWT="$SPACE/worktrees/main"
+gone() { rc=0; fn base_gone_reason "$MAINWT" "$1" >/dev/null || rc=$?; echo "$rc"; }
+mk_parent bg-live
+assert_eq "base_gone_reason: a live, unmerged parent: 1" "1" "$(gone bg-live main)"
+mk_parent bg-merged
+: > "$REMOTE/merged-bg-merged"
+assert_eq "base_gone_reason: its PR is MERGED: 0" "0" "$(gone bg-merged main)"
+assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-merged)" "the PR of bg-merged is merged"
+mk_parent bg-gone
+git -C "$REMOTE" update-ref -d refs/heads/bg-gone
+assert_eq "base_gone_reason: the branch is gone on origin: 0" "0" "$(gone bg-gone main)"
+assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-gone)" "origin/bg-gone no longer exists"
+mk_parent bg-ff
+git -C "$FIX/other" pull -q --ff-only origin main
+git -C "$FIX/other" merge -q --ff-only origin/bg-ff
+git -C "$FIX/other" push -q origin main
+git -C "$G" fetch -q origin
+assert_eq "base_gone_reason: contained in main but its PR unreadable: 1 (not a signal)" "1" "$(GH_VIEW_FAIL=1 gone bg-ff)"
+assert_eq "base_gone_reason: gh failing on a live parent is not a signal: 1" "1" "$(GH_VIEW_FAIL=1 gone bg-live main)"
+assert_eq "base_gone_reason: the remote cannot be asked: 1 (today's behaviour, even for a merged PR)" "1" \
+  "$(git -C "$G" remote set-url origin "$FIX/no-such-remote"; gone bg-merged main; git -C "$G" remote set-url origin "$REMOTE")"
+
+# retarget_point <wt> <base> <base_sha>
+mk_parent rp1 2
+mk_unit_git rpu 690 READY 1 rp1
+RPW="$SPACE/worktrees/rpu"
+FORK1="$(git -C "$RPW" rev-parse origin/rp1)"
+rpt() { rc=0; out="$(fn retarget_point "$RPW" "$@")" || rc=$?; echo "$rc $out"; }
+assert_eq "retarget_point: the fork point with the base's last known tip" "0 $FORK1" "$(rpt rp1 "")"
+assert_eq "...the recorded fork SHA alone (the tracking ref is not there)" "0 $FORK1" "$(rpt no-such-base "$FORK1")"
+assert_eq "...neither known: 1" "1 " "$(rpt no-such-base "")"
+assert_eq "...a recorded SHA that is not in the branch's history is ignored" "1 " "$(rpt no-such-base "$(git -C "$G" rev-parse refs/remotes/origin/bg-live)")"
+# the parent moves on and the unit is rebased onto it (finalize does): the old recorded SHA is behind the tracking ref
+echo more > "$FIX/other/rp1-more.txt"
+git -C "$FIX/other" fetch -q origin; git -C "$FIX/other" checkout -q rp1 2>/dev/null || git -C "$FIX/other" checkout -q -B rp1 origin/rp1
+git -C "$FIX/other" add rp1-more.txt; git -C "$FIX/other" commit -q -m "feat: rp1 more"; git -C "$FIX/other" push -q origin rp1
+git -C "$FIX/other" checkout -q main
+git -C "$RPW" fetch -q origin; git -C "$RPW" rebase -q origin/rp1
+FORK2="$(git -C "$RPW" rev-parse origin/rp1)"
+assert_eq "retarget_point: after the unit was rebased onto a newer base, the later of the two (not the old SHA)" "0 $FORK2" "$(rpt rp1 "$FORK1")"
+git -C "$G" update-ref -d refs/remotes/origin/rp1
+assert_eq "...with the tracking ref gone, the recorded SHA even if it is the older one" "0 $FORK1" "$(rpt rp1 "$FORK1")"
+bash "$LAND" rpu --abandon --force >/dev/null 2>&1 || true
+
+# --- whole lands of stacked units ---------------------------------------------------------------
+write_cfg
+# stacked <ref> <pr> <parent> [no_sha] — a parent branch (2 commits), a unit on it, unit.json and tasks.md saying so
+stacked() {
+  mk_parent "$3" 2
+  mk_unit_git "$1" "$2" READY 1 "$3"
+  mk_unit_json "$1" "$3" "$FIX/specs/$1" "${4:-}"
+  mk_tasks "$FIX/specs/$1" "$3"
+}
+main_subjects() { git -C "$REMOTE" log --format=%s main; }
+done_json() { jq -r "$1" "$SPACE/notes/loops/.done/$2/unit.json"; }
+
+# sq1: the parent was squash-merged, its branch is still on origin (the PR is MERGED)
+stacked sq1 701 sqp1
+squash_parent sqp1
+advance_main sq-one
+: >"$GH_LOG"
+assert_eq "retarget, parent squash-merged: the land exits 0" "0" "$(wl sq1)"
+assert_contains "...it says why" "$(outof)" "retargeting: the PR of sqp1 is merged; sq1 moves from sqp1 to main"
+assert_contains "...and that it rebased on the default branch" "$(outof)" "rebased sq1 on origin/main (1 commits)"
+assert_contains "...the PR base was edited" "$(cat "$GH_LOG")" "pr edit 701 --base main"
+assert_eq "...the unit's commit is on main" "1" "$(main_subjects | grep -c '^feat: sq1$')"
+assert_eq "...the parent's own commits were not replayed" "0" "$(main_subjects | grep -c '^feat: sqp1 [12]$')"
+assert_eq "...the squash commit is there once" "1" "$(main_subjects | grep -c '^feat: sqp1 (squash)$')"
+assert_eq "...unit.json now says main" "main" "$(done_json .base sq1)"
+assert_eq "...and its fork SHA is the default branch's tip at the rebase" "$(git -C "$REMOTE" rev-parse main~1)" "$(done_json .base_sha sq1)"
+assert_eq "...tasks.md now says base: main" "main" "$(tasks_base_of "$FIX/specs/sq1")"
+assert_eq "...the body of tasks.md was not touched" "1" "$(grep -c '^base: not-me$' "$FIX/specs/sq1/tasks.md")"
+assert_contains "...unit.json and tasks.md changes are announced" "$(outof)" "unit.json base is now main"
+assert_contains "...tasks.md too" "$(outof)" "tasks.md base: is now main"
+assert_eq "...the unit was torn down" "no" "$(exists_word "$SPACE/worktrees/sq1")"
+
+# sq2: the parent branch is deleted on origin; the tracking ref still has its last tip
+stacked sq2 702 sqp2
+squash_parent sqp2
+git -C "$REMOTE" update-ref -d refs/heads/sqp2
+advance_main sq-two
+: >"$GH_LOG"
+assert_eq "retarget, parent deleted on origin: the land exits 0" "0" "$(wl sq2)"
+assert_contains "...it says the branch is gone" "$(outof)" "retargeting: origin/sqp2 no longer exists"
+assert_contains "...the PR base was edited" "$(cat "$GH_LOG")" "pr edit 702 --base main"
+assert_eq "...the unit's commit is on main, the parent's are not replayed" "1 0" "$(main_subjects | grep -c '^feat: sq2$') $(main_subjects | grep -c '^feat: sqp2 [12]$')"
+assert_eq "...unit.json and tasks.md say main" "main main" "$(done_json .base sq2) $(tasks_base_of "$FIX/specs/sq2")"
+
+# sq3: deleted on origin and the tracking ref pruned: unit.json's base_sha is the fork point
+stacked sq3 703 sqp3
+squash_parent sqp3
+git -C "$REMOTE" update-ref -d refs/heads/sqp3
+git -C "$G" update-ref -d refs/remotes/origin/sqp3
+advance_main sq-three
+assert_eq "retarget, parent deleted and pruned: the land exits 0 (fork point from unit.json base_sha)" "0" "$(wl sq3)"
+assert_eq "...the unit's commit is on main, the parent's are not replayed" "1 0" "$(main_subjects | grep -c '^feat: sq3$') $(main_subjects | grep -c '^feat: sqp3 [12]$')"
+assert_eq "...unit.json says main" "main" "$(done_json .base sq3)"
+
+# sq4: the same with no base_sha anywhere: refused, nothing touched
+stacked sq4 704 sqp4 1
+squash_parent sqp4
+git -C "$REMOTE" update-ref -d refs/heads/sqp4
+git -C "$G" update-ref -d refs/remotes/origin/sqp4
+advance_main sq-four
+head_before="$(git -C "$SPACE/worktrees/sq4" rev-parse HEAD)"; : >"$GH_LOG"; s0="$(gate_state)"
+assert_eq "retarget with no way to find the fork point: refused (3)" "3" "$(wl sq4)"
+assert_contains "...says where it forked from the base is unknown" "$(errof)" "where it forked from sqp4 is unknown"
+assert_contains "...and the commands to run by hand" "$(errof)" "git rebase --onto origin/main <fork point> sq4"
+assert_eq "...the branch, the PR, the gate and the merge are untouched" "$head_before  $s0" "$(git -C "$SPACE/worktrees/sq4" rev-parse HEAD) $(grep 'pr edit' "$GH_LOG") $(gate_state)"
+assert_eq "...unit.json and tasks.md still say the old base" "sqp4 sqp4" "$(jq -r .base "$SPACE/notes/loops/sq4/unit.json") $(tasks_base_of "$FIX/specs/sq4")"
+wl sq4 --abandon --force >/dev/null 2>&1
+
+# sq5: gh pr edit fails: the branch is put back, nothing recorded
+stacked sq5 705 sqp5
+squash_parent sqp5
+advance_main sq-five
+head_before="$(git -C "$SPACE/worktrees/sq5" rev-parse HEAD)"; s0="$(gate_state)"
+assert_eq "retarget with gh pr edit failing: 1" "1" "$(GH_EDIT_FAIL=1 wl sq5)"
+assert_contains "...says the edit failed and the branch is unchanged" "$(errof)" "gh pr edit 705 --base main failed; the branch is unchanged"
+assert_eq "...the branch was put back, nothing gated or merged" "$head_before $s0" "$(git -C "$SPACE/worktrees/sq5" rev-parse HEAD) $(gate_state)"
+assert_eq "...unit.json and tasks.md still say the old base" "sqp5 sqp5" "$(jq -r .base "$SPACE/notes/loops/sq5/unit.json") $(tasks_base_of "$FIX/specs/sq5")"
+assert_eq "a rerun lands it (the base is still gone)" "0" "$(wl sq5)"
+assert_eq "...retargeted: tasks.md says main" "main" "$(tasks_base_of "$FIX/specs/sq5")"
+
+# lv1: the parent has not merged: nothing changes, the unit lands on its base as before
+stacked lv1 707 lvp1
+advance_main lv-one
+: >"$GH_LOG"
+assert_eq "a live parent: the land exits 0" "0" "$(wl lv1)"
+assert_contains "...rebased on the parent" "$(outof)" "rebased lv1 on origin/lvp1 (1 commits)"
+assert_not_contains "...no retarget" "$(outof)" "retargeting"
+assert_eq "...no PR edit" "0" "$(grep -c 'pr edit' "$GH_LOG")"
+assert_eq "...unit.json and tasks.md keep the parent as base" "lvp1 lvp1" "$(done_json .base lv1) $(tasks_base_of "$FIX/specs/lv1")"
+
+# k2f: land reads unit.json's base, not the config key
+mk_parent kp1 1
+mk_unit_git k1 708 READY 1 kp1
+mk_unit_json k1 kp1
+write_cfg 'base: elsewhere
+'
+assert_eq "k2f: unit.json says kp1, the config says another branch: the land exits 0" "0" "$(wl k1)"
+assert_contains "...it rebased on kp1" "$(outof)" "rebased k1 on origin/kp1"
+assert_not_contains "...never on the config's" "$(outof)$(errof)" "elsewhere"
+# no unit.json: the deprecated config key still decides
+mk_parent kp2 1
+mk_unit_git k2 709 READY 1 kp2
+write_cfg 'base: kp2
+'
+assert_eq "no unit.json: the deprecated config key still decides, land exits 0" "0" "$(wl k2)"
+assert_contains "...it rebased on kp2" "$(outof)" "rebased k2 on origin/kp2"
+assert_contains "...and warned that the key is deprecated" "$(errof)" "deprecated"
+write_cfg
+# ff1: the parent sits inside main (a long-lived base such as main under a develop default looks the same) and its
+# PR is not MERGED: it is live, so nothing is retargeted
+stacked ff1 706 ffp1
+git -C "$FIX/other" pull -q --ff-only origin main
+git -C "$FIX/other" merge -q --ff-only origin/ffp1
+git -C "$FIX/other" push -q origin main
+: >"$GH_LOG"
+assert_eq "a base contained in main whose PR is not merged: the land exits 0" "0" "$(GH_VIEW_FAIL=1 wl ff1)"
+assert_not_contains "...no retarget" "$(outof)" "retargeting"
+assert_eq "...no PR edit" "0" "$(grep -c 'pr edit' "$GH_LOG")"
+assert_eq "...unit.json and tasks.md keep the base" "ffp1 ffp1" "$(done_json .base ff1) $(tasks_base_of "$FIX/specs/ff1")"
+
 # ===== 3. --host before the host is reached, over a stub ssh and rsync ==================================
 mkdir -p "$FIX/hstub"
 cat > "$FIX/hstub/ssh" <<'STUB'

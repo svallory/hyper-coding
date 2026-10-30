@@ -88,6 +88,8 @@ it, or rule that a named consumer exists. Do not argue the gate away.
    waves) and one brief per unit, each passing the consumer gate and carrying
    its `## Tests` section (the `test-engineer` skill; a project with no
    affected-only test command gets one as its first unit).
+   `tasks.md` carries the feature's `base:` (frontmatter). A lead taking over a
+   feature reads it there; the config key `base` is deprecated.
 4. **Kick off.** Run the `kickoff` skill: tracker items when `tracker` is
    `beads`, then the first wave, within the host slots.
 5. **Run units.** Start each unit with the `unit` skill, in the background.

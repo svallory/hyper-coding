@@ -476,6 +476,73 @@ assert_eq "...the driver got 5" "5" "$(grep -A1 -x -- '--max-rounds' "$FIX/loopa
 assert_eq "...extend holds the minutes (the stub moved it to extend.applied)" "10" "$(cat "$(loops mr)/extend.applied")"
 assert_eq "...earlier --model overrides are kept, in order" "dev=A|review=B|dev=C" "$(paste -sd'|' "$(loops mr)/models.override")"
 
+# 3b: the unit's base: --base, tasks.md, the deprecated config key, origin/HEAD; unit.json freezes it ----------------
+# The resolver's table is test-t-ship-unit-fn.sh; this is the wiring: run resolves once, records it, and every start uses it.
+# mutation: run passes no resolved base; the driver reads the config; unit.json is not written with .base / .base_sha / .spec_dir
+git -C "$FIX/seed" push -q origin main:develop
+DEV_SHA="$(git -C "$REMOTE" rev-parse develop)"
+BSPEC="$SPACE/notes/specs/bs"; mkdir -p "$BSPEC"
+printf -- '---\nbase: develop\n---\n\n# Feature - Tasks\n' > "$BSPEC/tasks.md"
+# ucfg: unit with the config read from ship.yml again (this file exports the config it loaded at the top)
+ucfg() { ( unset SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS; unit "$@" ); }
+BASE_YML="$(cat "$SPACE/.hyper/ship.yml")"
+mode b1 ready
+rc="$(ucfg run b1 --brief "$BRIEF" --class S --spec-dir "$BSPEC")"
+assert_eq "run with a spec dir whose tasks.md says base: develop: 0" "0" "$rc"
+assert_eq "...unit.json records the base" "develop" "$(jq -r .base "$(loops b1)/unit.json")"
+assert_eq "...the commit the branch forked from it" "$DEV_SHA" "$(jq -r .base_sha "$(loops b1)/unit.json")"
+assert_eq "...and the spec dir" "$BSPEC" "$(jq -r .spec_dir "$(loops b1)/unit.json")"
+assert_contains "...the branch was cut from origin/develop" "$(cat "$WT_LOG")" "$SPACE :: switch -c --no-cd -b origin/develop b1"
+assert_contains "...the driver got --base develop" "$(tr '\n' ' ' <"$FIX/loopargs.b1.1")" "--base develop "
+assert_eq "...no deprecation warning (the config key is not involved)" "" "$(grep deprecated "$FIX/unit.err")"
+# a later edit of tasks.md or of the config does not move the unit: every driver start reads unit.json
+printf -- '---\nbase: main\n---\n' > "$BSPEC/tasks.md"
+printf '%s\nbase: elsewhere\n' "$BASE_YML" > "$SPACE/.hyper/ship.yml"
+(unset SHIP_CONFIG_JSON SHIP_CONFIG_LAYERS; SHIP_UNIT_INTERNAL=1 bash "$UNIT" _driver b1) >/dev/null 2>&1
+assert_contains "a driver start after tasks.md and the config changed still gets --base develop" "$(tr '\n' ' ' <"$FIX/loopargs.b1.2")" "--base develop "
+assert_eq "...and unit.json still says develop" "develop" "$(jq -r .base "$(loops b1)/unit.json")"
+# --base beats tasks.md; tasks.md (a frontmatter base) beats the config key
+mode b2 ready
+rc="$(ucfg run b2 --brief "$BRIEF" --class S --spec-dir "$BSPEC" --base develop)"
+assert_eq "run with --base develop and a tasks.md saying main: 0" "0" "$rc"
+assert_eq "...--base wins" "develop" "$(jq -r .base "$(loops b2)/unit.json")"
+mode b3 ready
+rc="$(ucfg run b3 --brief "$BRIEF" --class S --spec-dir "$BSPEC")"
+assert_eq "run with tasks.md main and the config key 'elsewhere': 0" "0" "$rc"
+assert_eq "...tasks.md wins over the config key" "main" "$(jq -r .base "$(loops b3)/unit.json")"
+assert_eq "...without a deprecation warning" "" "$(grep deprecated "$FIX/unit.err")"
+# the deprecated config key still works for a run with nothing else (and says it is deprecated)
+printf '%s\nbase: develop\n' "$BASE_YML" > "$SPACE/.hyper/ship.yml"
+mode b4 ready
+rc="$(ucfg run b4 --brief "$BRIEF" --class S)"
+assert_eq "run with only the config key base: develop: 0" "0" "$rc"
+assert_eq "...unit.json records it" "develop" "$(jq -r .base "$(loops b4)/unit.json")"
+assert_contains "...and the run warned that the key is deprecated" "$(err)" "'base' is deprecated"
+# nothing set: origin/HEAD of the clone (the remote's default branch)
+printf '%s\n' "$BASE_YML" > "$SPACE/.hyper/ship.yml"
+mode b5 ready
+rc="$(ucfg run b5 --brief "$BRIEF" --class S)"
+assert_eq "run with no --base, no tasks.md, no config key: 0" "0" "$rc"
+assert_eq "...the base is the remote default branch" "main" "$(jq -r .base "$(loops b5)/unit.json")"
+printf -- '---\ntitle: no base here\n---\n' > "$BSPEC/tasks.md"
+mode b6 ready
+rc="$(ucfg run b6 --brief "$BRIEF" --class S --spec-dir "$BSPEC")"
+assert_eq "run with a tasks.md that has no base: 0, the remote default branch" "0 main" "$rc $(jq -r .base "$(loops b6)/unit.json")"
+# nothing knows the base: run stops before it creates anything
+git -C "$REMOTE" symbolic-ref HEAD refs/heads/nowhere
+git -C "$G" symbolic-ref --delete refs/remotes/origin/HEAD
+wt0="$(wc -l <"$WT_LOG" | tr -d ' ')"; o0="$(mux_count open)"
+mode b7 ready
+rc="$(ucfg run b7 --brief "$BRIEF" --class S)"
+assert_eq "run when no source knows the base: usage error (64)" "64" "$rc"
+assert_contains "...it asks for --base" "$(err)" "Pass --base <branch>"
+assert_eq "...no worktree was made, no multiplexer space opened, no unit.json written" "$wt0 $o0 no" "$(wc -l <"$WT_LOG" | tr -d ' ') $(mux_count open) $([[ -e "$(loops b7)" ]] && echo yes || echo no)"
+rc="$(ucfg run b7 --brief "$BRIEF" --class S --base develop)"
+assert_eq "...--base gets past it: 0" "0" "$rc"
+git -C "$REMOTE" symbolic-ref HEAD refs/heads/main
+git -C "$G" remote set-head origin --auto >/dev/null 2>&1
+printf '%s\n' "$BASE_YML" > "$SPACE/.hyper/ship.yml"
+
 # 4: slots and liveness wiring (the accounting is test-t-ship-unit-fn.sh) -----------------------------------
 rm_loops "$SPACE"
 sleeper; S1=$SLEEPER_PID; sleeper; S2=$SLEEPER_PID
