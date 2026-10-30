@@ -147,7 +147,7 @@ assert_eq "resume_opts_check: bad ref: 64" "64" "$( ( ref="x y"; resume_opts_che
 rc_d="$(ld rc1)"
 fresh_rc() { rm -rf "$rc_d"; mkdir -p "$rc_d"; echo '{"ref":"rc1","host":"local","launched_at":1,"max_rounds":3}' > "$rc_d/unit.json"; }
 rac2() { # answer extend max_rounds [models, space separated]
-  ( d="$rc_d" ref=rc1 answer="$1" extend="$2" max_rounds="$3" models=(${4:-}); resume_args_check; echo "n=$n" ) >"$FIX/t.out" 2>"$FIX/t.err"; echo $?
+  ( d="$rc_d" ref=rc1 answer="$1" extend="$2" max_rounds="$3"; read -ra models <<<"${4:-}"; resume_args_check; echo "n=$n" ) >"$FIX/t.out" 2>"$FIX/t.err"; echo $?
 }
 park() { jq -nc --arg s "$1" --argjson n "$2" '{status: $s, stage: "develop", n: $n}' > "$rc_d/park.json"; }
 fresh_rc
