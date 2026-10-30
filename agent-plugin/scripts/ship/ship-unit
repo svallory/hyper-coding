@@ -477,9 +477,9 @@ resume_opts_check() {
 # resume_stuck <unit dir> — succeeds when the unit's last word is a STUCK result written since its last
 # launch and nothing is parked; sets stuck_lim to the round limit it stopped at, empty when it stopped
 # for another reason (ship-loop writes rounds_limit only when the rounds ran out; the other STUCKs
-# count cycles from zero and restart with a full allowance).
+# count cycles from zero and restart with a full allowance). An older result is judged by its rounds.
 resume_stuck() {
-  local u="$1" launched
+  local u="$1" launched lim last
   stuck_lim=""
   [[ -s "$u/result.json" && ! -s "$u/park.json" ]] || return 1
   [[ "$(jq -r '.status // ""' "$u/result.json" 2>/dev/null)" == STUCK ]] || return 1
@@ -488,6 +488,17 @@ resume_stuck() {
   [[ "$(mtime "$u/result.json")" -ge "$launched" ]] || return 1
   stuck_lim="$(jq -r '.rounds_limit // ""' "$u/result.json" 2>/dev/null)" || stuck_lim=""
   [[ "$stuck_lim" =~ ^[1-9][0-9]*$ ]] || stuck_lim=""
+  # A result from before ship-loop wrote rounds_limit: it ran out of rounds when its last round is the
+  # unit's limit and it did not stop in finalize (the rest stop short of the limit or in finalize).
+  if [[ -z "$stuck_lim" ]]; then
+    lim="$(jq -r '.max_rounds // ""' "$u/unit.json" 2>/dev/null)" || lim=""
+    [[ -n "$lim" ]] || lim="$(ship_cfg_get max_rounds 2>/dev/null)" || lim=""
+    last="$(jq -r '[.rounds[]?.round] | max // 0' "$u/result.json" 2>/dev/null)" || last=0
+    if [[ "$lim" =~ ^[1-9][0-9]*$ && "$last" =~ ^[0-9]+$ && "$last" -ge "$lim" \
+      && "$(jq -r '.stage // ""' "$u/result.json" 2>/dev/null)" != finalize ]]; then
+      stuck_lim="$lim"
+    fi
+  fi
   return 0
 }
 

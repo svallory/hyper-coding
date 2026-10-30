@@ -303,6 +303,44 @@ jq -nc '{status: "STUCK", rounds_limit: 0}' > "$rc_d/result.json"
 assert_eq "...so does rounds_limit 0" "0" "$(rac2 "" "" "" "dev=opus")"
 assert_eq "...and a bare resume is refused (3)" "3" "$(rac2 "" "" "")"
 
+# a result from before ship-loop wrote rounds_limit: judged by its rounds against the unit's limit (3)
+old_result() { # stage lastround [extra jq filter]
+  jq -nc --arg st "$1" --argjson r "$2" '{ref: "rc1", status: "STUCK", stage: $st, rounds: [range(1; $r + 1) | {round: ., verdict: "CHANGES", findings: 1}]}' > "$rc_d/result.json"
+}
+fresh_rc; old_result review 3
+assert_eq "old STUCK result, 3 rounds of 3: bare resume refused (3)" "3" "$(rac2 "" "" "")"
+assert_contains "...as STUCK on its round limit, inferred" "$(terr)" "STUCK on its round limit (3)"
+assert_eq "old STUCK result, 3 rounds of 3: --model alone refused (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+assert_contains "...names --max-rounds" "$(terr)" "--max-rounds N (above 3)"
+assert_eq "old STUCK result, 3 rounds of 3: --answer alone refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_eq "old STUCK result, 3 rounds of 3: --max-rounds 4 ok" "0" "$(rac2 "" "" 4)"
+assert_eq "old STUCK result, 3 rounds of 3: --max-rounds 4 with --answer ok" "0" "$(rac2 "$FIX/work/ans.md" "" 4)"
+old_result verify 3
+assert_eq "...stopped at verify: also on rounds (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+assert_contains "...inferred" "$(terr)" "round limit (3)"
+old_result review 2
+assert_eq "old STUCK result, 2 rounds of 3: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+assert_eq "...bare resume still refused (3)" "3" "$(rac2 "" "" "")"
+assert_contains "...as a plain STUCK" "$(terr)" "rc1 is STUCK; resume it with"
+old_result finalize 3
+assert_eq "old STUCK result in finalize, 3 rounds: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+old_result review 4
+assert_eq "old STUCK result, more rounds than the limit: on rounds (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+fresh_rc; set_limit 5; old_result review 3
+assert_eq "old STUCK result, 3 rounds, unit limit since raised to 5: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+old_result review 5
+assert_eq "...5 rounds of 5: on rounds, --max-rounds 5 is below the line (64)" "64" "$(rac2 "" "" 5)"
+assert_eq "...--max-rounds 6 ok" "0" "$(rac2 "" "" 6)"
+fresh_rc; jq -c 'del(.max_rounds)' "$rc_d/unit.json" > "$FIX/u.json" && cp "$FIX/u.json" "$rc_d/unit.json"; old_result review 3
+assert_eq "old STUCK result, no recorded limit: the config default (3) is used (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+assert_contains "...on rounds" "$(terr)" "round limit (3)"
+fresh_rc; jq -nc '{ref: "rc1", status: "STUCK", stage: "review"}' > "$rc_d/result.json"
+assert_eq "old STUCK result with no rounds at all: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+jq -nc '{ref: "rc1", status: "STUCK", stage: "review", rounds: "many"}' > "$rc_d/result.json"
+assert_eq "...rounds that is not a list: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+fresh_rc; old_result review 3; before="$(md5dir)"; rac2 "" "" "" "dev=opus" >/dev/null
+assert_eq "...the inference writes nothing" "$before" "$(md5dir)"
+
 # units that are not STUCK are unaffected, whatever rounds_limit says
 for st in READY ERROR PARKED OVER-BUDGET; do
   fresh_rc; stuck_result "$st" 3
