@@ -245,6 +245,39 @@ assert_contains "takeover: the fix prompt starts with the takeover text" "$(cat 
 assert_contains "takeover: and carries the findings after it" "$(cat "$(st t45)/fix-r2.prompt.md")" "Fix: change it"
 assert_eq "takeover: the earlier results are kept and nothing was archived" "DONE 0" "$(jq -r .status "$(st t45)/develop.json") $(ls -d "$(st t45)"/run-* 2>/dev/null | wc -l | tr -d ' ')"
 
+# --- 80: STUCK on rounds: the result says where it stopped; a note and a higher limit restart it -------------------
+# (hyper-qzo, hyper-hiu) ship-unit resume writes answer-<n>.md with no park behind it; the dev gets it in the next fix prompt.
+reset_fake; unit t80
+script t80 develop.json "$DEV_DONE"
+script t80 review-r1.json "$REV_CHANGES"; script t80 fix-r2.json "$DEV_DONE"; script t80 review-r2.json "$REV_CHANGES"
+script t80 fix-r3.json "$DEV_DONE"; script t80 review-r3.json "$REV_OK"
+stub_start t80; run_loop t80 --max-rounds 2
+check_result t80 "two rounds, both CHANGES" 2 STUCK
+assert_eq "STUCK on rounds: result.json records the limit it stopped at" "2" "$(res t80 .rounds_limit)"
+assert_ok "STUCK on rounds: no park.json" test ! -e "$(st t80)/park.json"
+printf 'The brief changed: EMPTY input now exits 3.\n' >"$(st t80)/answer-1.md"
+# Seam: at the fix-r3 prompt's lookup (before it is sent), record whether the note is still unsettled.
+printf '#!/bin/sh\ncase "$1" in */fix-r3.json) { ls "%s" | grep -E "^(answer|note)-1.md$" | tr "\\n" " "; } > "%s" ;; esac\n' "$(st t80)" "$FIX/t80.seen" >"$FIX/t80.hook"; chmod +x "$FIX/t80.hook"
+SHIP_LOOP_AFTER_LOOKUP="$FIX/t80.hook" run_loop t80 --max-rounds 4; stub_stop
+check_result t80 "restarted with a note and 4 rounds" 0 READY
+assert_contains "STUCK note: the next fix prompt carries the lead's note" "$(cat "$(st t80)/fix-r3.prompt.md")" "EMPTY input now exits 3."
+assert_contains "STUCK note: ...and the findings" "$(cat "$(st t80)/fix-r3.prompt.md")" "Fix: change it"
+assert_contains "STUCK note: ...said to be the lead's" "$(cat "$(st t80)/fix-r3.prompt.md")" "The lead's note, written when the unit stopped STUCK"
+assert_not_contains "STUCK note: the replayed round 2 prompt is not changed" "$(cat "$(st t80)/fix-r2.prompt.md")" "EMPTY input now exits 3."
+assert_eq "STUCK note: before the fix prompt went out the note was still answer-1.md" "answer-1.md " "$(cat "$FIX/t80.seen")"
+assert_ok "STUCK note: the note is set aside, so its number is free for a park" test -s "$(st t80)/note-1.md"
+assert_ok "STUCK note: answer-1.md is gone" test ! -e "$(st t80)/answer-1.md"
+assert_eq "STUCK note: the dev was not restarted" "1" "$(starts_of t80-dev)"
+assert_eq "READY result carries no rounds_limit" "null" "$(res t80 '.rounds_limit')"
+
+# --- 81: an answer-<n>.md beside an archived park is not a note ----------------------------------------------
+reset_fake; unit t81
+mkdir -p "$(st t81)"; printf 'old\n' >"$(st t81)/answer-1.md"; echo '{}' >"$(st t81)/park-1.json"
+script t81 develop.json "$DEV_DONE"; script t81 review-r1.json "$REV_OK"
+stub_start t81; run_loop t81; stub_stop
+check_result t81 "answer-1.md with park-1.json" 0 READY
+assert_ok "stale answer: not set aside as a note" test ! -e "$(st t81)/note-1.md"
+
 # --- 55: the stub agent does not miss a prompt when a recreated .sent marker has the same inode ----------------------
 S55="$FIX/stub55"; mkdir -p "$S55/state" "$S55/script"
 printf '{"n":1}\n' >"$S55/script/x.json"; printf '1000 a\n' >"$S55/state/x.json.sent"

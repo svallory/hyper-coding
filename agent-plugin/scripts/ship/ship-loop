@@ -51,6 +51,8 @@
 #                    agent. QUESTION, BLOCKED and OPERATOR parks wait for it; a DIALOG
 #                    park resumes once the agent is no longer blocked; a LIMIT park
 #                    resumes at once (change the models with models.override first).
+#                    With no park (a STUCK unit) it is a note to the dev, put in the next
+#                    fix prompt, and set aside as note-<n>.md.
 #   extend           minutes to add to the stage that went OVER-BUDGET (a number)
 #   models.override  lines of "stage=model[,model...]"; applied on every start
 # Without what the park needs, the driver re-emits the same result and exits 2.
@@ -829,6 +831,7 @@ run_step() {
     printf '%s\n' "$text" >"${file%.json}.prompt.md"
     send_prompt "$id" "$text" "$name" "$stage" || { rm -f "$file.sent"; FAIL_WHY="could not prompt $name: ship-mux send failed or the turn never started (see loop.log; the agent may be gone)"; step_failed "$stage" "$name" "$file" 1; }
     mark_sent "$file"
+    [[ -z "$NOTE_IN_PROMPT" ]] || settle_notes
   fi
   await_file "$name" "$id" "$file" "$stage" "$budget" || rc=$?
   [[ $rc -eq 0 ]] || step_failed "$stage" "$name" "$file" "$rc"
@@ -879,7 +882,7 @@ add_round() { ROUNDS="$(jq -c --argjson e "$1" '. + [$e]' <<<"$ROUNDS")"; }
 # Files that belong to the unit, not to a run: an archive leaves them where they are (unit.json and
 # config.json are ship-unit's).
 KEEP_ON_ARCHIVE="mux.json loop.log driver.pid driver.err models.override unit.json config.json"
-A_ID="" TAKEOVER="" TAKEOVER_ANSWER="" FIX_SRC="" RESTART_DEV="" KEEP_CLOCK=""
+A_ID="" TAKEOVER="" TAKEOVER_ANSWER="" NOTE_FILES=() NOTE_IN_PROMPT="" FIX_SRC="" RESTART_DEV="" KEEP_CLOCK=""
 # takeover_text — what a dev that replaces a gone one is told first
 takeover_text() {
   printf 'You are taking over unit %s (PR #%s) from a previous dev agent that is gone. Its work is all in %s on branch %s, and nothing was reset. Before anything else read the brief (%s), then run `git -C %s status` and `git -C %s log origin/%s..HEAD`. Then do what follows.' \
@@ -963,6 +966,31 @@ Continue the task. When it is complete, write the result file ${file:-you were g
   mv "$STATE/park.json" "$STATE/park-$n.json"
   log "resumed from park $n ($st)"
 }
+# resume_note — the lead's note to a STUCK unit: ship-unit resume --answer writes answer-<n>.md with no
+# park behind it (a park's answer is archived with its park-<n>.json). It goes to the dev in the next
+# fix prompt, like a park's answer to a new dev. Once that prompt is sent (settle_notes, from run_step)
+# the file is set aside as note-<n>.md, so that its number is free for a later park; a driver that
+# stops before then finds the note again on its next start.
+resume_note() {
+  local a n
+  for a in "$STATE"/answer-*.md; do
+    [[ -s "$a" ]] || continue
+    n="${a##*/answer-}"; n="${n%.md}"
+    [[ "$n" =~ ^[0-9]+$ && ! -e "$STATE/park-$n.json" && ! -s "$STATE/park.json" ]] || continue
+    TAKEOVER_ANSWER="${TAKEOVER_ANSWER:+$TAKEOVER_ANSWER
+}The lead's note, written when the unit stopped STUCK:
+$(cat "$a")"
+    NOTE_FILES+=("$a")
+    log "answer-$n.md (a note to the dev) will go to it in the next fix prompt"
+  done
+}
+settle_notes() {
+  local a
+  for a in ${NOTE_FILES[@]+"${NOTE_FILES[@]}"}; do
+    mv "$a" "$STATE/note-${a##*/answer-}"
+  done
+  NOTE_FILES=() NOTE_IN_PROMPT=""
+}
 resume_budget() {
   local b stage file mins
   for b in "$STATE"/budget-r*.json; do
@@ -1014,7 +1042,7 @@ $text"
 
 $TAKEOVER_ANSWER
 Continue from there."
-      TAKEOVER_ANSWER=""
+      TAKEOVER_ANSWER="" NOTE_IN_PROMPT=1
     fi
   fi
   # What the diff was when the dev was prompted: written once, so a resumed fix is compared with it.
@@ -1601,6 +1629,7 @@ main() {
     log "reusing $DEV ($DEV_ID)"
   fi
   resume_park
+  resume_note
   resume_budget
   # --- develop ---------------------------------------------------------------------------------------
   STAGE=develop
@@ -1619,7 +1648,7 @@ $text"
 
 $TAKEOVER_ANSWER
 Continue from there."
-      TAKEOVER_ANSWER=""
+      TAKEOVER_ANSWER="" NOTE_IN_PROMPT=1
     fi
   fi
   run_step "$DEV" "$f" "$text" "$(budget_min develop "$f")" develop
@@ -1741,7 +1770,7 @@ $pending
   done
   if [[ -z "$accepted" ]]; then
     log "STUCK after $MAX rounds ($last)"
-    finish 2 "$last" STUCK "$(jq -n --arg f "$pending" '{findings:$f}')"
+    finish 2 "$last" STUCK "$(jq -n --arg f "$pending" --argjson lim "$MAX" '{findings:$f, rounds_limit:$lim}')"
   fi
   RECHECK="$(cat "$STATE/recheck" 2>/dev/null || true)"
   RECHECK_PRIOR="$(cat "$STATE/recheck.prior" 2>/dev/null || true)"

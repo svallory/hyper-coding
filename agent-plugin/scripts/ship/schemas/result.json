@@ -1,41 +1,62 @@
 {
-  "title": "unit result",
-  "description": "result.json, written by the driver when it exits.",
-  "type": "object",
-  "required": ["ref", "pr", "stage", "status", "rounds", "spec", "final", "specwriter", "finalize", "failovers", "host", "worktree"],
-  "properties": {
-    "ref": {"type": "string"},
-    "pr": {"type": ["integer", "null"]},
-    "stage": {"type": "string"},
-    "status": {"type": "string", "enum": ["READY", "PARKED", "OVER-BUDGET", "STUCK", "ERROR"]},
-    "rounds": {"type": "array", "items": {"type": "object"}},
-    "spec": {
-      "type": "object",
-      "required": ["verdict", "rounds"],
-      "properties": {
-        "verdict": {"type": "string", "enum": ["NOT_RUN", "SKIP", "ACCEPT", "CHANGES", "GAP", "REMOVE", "BLOCKED"]},
-        "rounds": {"type": "integer"}
-      }
-    },
-    "final": {
-      "type": "object",
-      "required": ["verdict", "rounds"],
-      "properties": {
-        "verdict": {"type": "string", "enum": ["NOT_RUN", "ACCEPT", "CHANGES", "BLOCKED"]},
-        "rounds": {"type": "integer"}
-      }
-    },
-    "specwriter": {
-      "type": "object",
-      "required": ["runs", "commits"],
-      "properties": {
-        "runs": {"type": "integer"},
-        "commits": {"type": "array", "items": {"type": "string"}}
-      }
-    },
-    "finalize": {"type": ["object", "null"]},
-    "failovers": {"type": "integer"},
-    "host": {"type": "string"},
-    "worktree": {"type": "string"}
-  }
+	"title": "unit result",
+	"description": "result.json, written by the driver when it exits.",
+	"type": "object",
+	"required": [
+		"ref",
+		"pr",
+		"stage",
+		"status",
+		"rounds",
+		"spec",
+		"final",
+		"specwriter",
+		"finalize",
+		"failovers",
+		"host",
+		"worktree"
+	],
+	"properties": {
+		"ref": { "type": "string" },
+		"pr": { "type": ["integer", "null"] },
+		"stage": { "type": "string" },
+		"status": { "type": "string", "enum": ["READY", "PARKED", "OVER-BUDGET", "STUCK", "ERROR"] },
+		"rounds": { "type": "array", "items": { "type": "object" } },
+		"spec": {
+			"type": "object",
+			"required": ["verdict", "rounds"],
+			"properties": {
+				"verdict": {
+					"type": "string",
+					"enum": ["NOT_RUN", "SKIP", "ACCEPT", "CHANGES", "GAP", "REMOVE", "BLOCKED"]
+				},
+				"rounds": { "type": "integer" }
+			}
+		},
+		"final": {
+			"type": "object",
+			"required": ["verdict", "rounds"],
+			"properties": {
+				"verdict": { "type": "string", "enum": ["NOT_RUN", "ACCEPT", "CHANGES", "BLOCKED"] },
+				"rounds": { "type": "integer" }
+			}
+		},
+		"specwriter": {
+			"type": "object",
+			"required": ["runs", "commits"],
+			"properties": {
+				"runs": { "type": "integer" },
+				"commits": { "type": "array", "items": { "type": "string" } }
+			}
+		},
+		"finalize": { "type": ["object", "null"] },
+		"failovers": { "type": "integer" },
+		"rounds_limit": {
+			"type": "integer",
+			"minimum": 1,
+			"description": "STUCK only, when the rounds ran out: the limit it stopped at (ship-unit resume needs a higher --max-rounds)."
+		},
+		"host": { "type": "string" },
+		"worktree": { "type": "string" }
+	}
 }

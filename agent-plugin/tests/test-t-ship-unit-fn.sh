@@ -146,8 +146,8 @@ assert_eq "resume_opts_check: bad ref: 64" "64" "$( ( ref="x y"; resume_opts_che
 # --- resume_args_check (against the unit's own files) -----------------------------------------
 rc_d="$(ld rc1)"
 fresh_rc() { rm -rf "$rc_d"; mkdir -p "$rc_d"; echo '{"ref":"rc1","host":"local","launched_at":1,"max_rounds":3}' > "$rc_d/unit.json"; }
-rac2() { # answer extend max_rounds
-  ( d="$rc_d" ref=rc1 answer="$1" extend="$2" max_rounds="$3"; resume_args_check; echo "n=$n" ) >"$FIX/t.out" 2>"$FIX/t.err"; echo $?
+rac2() { # answer extend max_rounds [models, space separated]
+  ( d="$rc_d" ref=rc1 answer="$1" extend="$2" max_rounds="$3"; read -ra models <<<"${4:-}"; resume_args_check; echo "n=$n" ) >"$FIX/t.out" 2>"$FIX/t.err"; echo $?
 }
 park() { jq -nc --arg s "$1" --argjson n "$2" '{status: $s, stage: "develop", n: $n}' > "$rc_d/park.json"; }
 fresh_rc
@@ -215,6 +215,163 @@ assert_contains "...cannot tell" "$(terr)" "cannot tell rc1's current round limi
 fresh_rc; park QUESTION 1; before="$(find "$rc_d" -type f | sort | xargs cat | md5sum 2>/dev/null || find "$rc_d" -type f | sort | xargs cat | md5)"
 rac2 "$FIX/work/ans.md" 10 9 >/dev/null
 assert_eq "resume_args_check writes nothing, whatever it says" "$before" "$(find "$rc_d" -type f | sort | xargs cat | md5sum 2>/dev/null || find "$rc_d" -type f | sort | xargs cat | md5)"
+
+# --- resume_args_check on a STUCK unit (hyper-qzo, hyper-hiu) ---------------------------------
+# result <status> [rounds_limit] — the unit's last word, written now (after its launched_at of 1).
+stuck_result() {
+  if [[ -n "${2:-}" ]]; then jq -nc --arg s "$1" --argjson l "$2" '{ref: "rc1", status: $s, stage: "review", rounds_limit: $l}' > "$rc_d/result.json"
+  else jq -nc --arg s "$1" '{ref: "rc1", status: $s, stage: "finalize"}' > "$rc_d/result.json"; fi
+}
+set_limit() { jq -c --argjson n "$1" '.max_rounds = $n' "$rc_d/unit.json" > "$FIX/u.json" && cp "$FIX/u.json" "$rc_d/unit.json"; }
+md5dir() { find "$rc_d" -type f | sort | xargs cat | md5sum 2>/dev/null || find "$rc_d" -type f | sort | xargs cat | md5; }
+
+# ran out of rounds (limit 3, stopped at 3)
+fresh_rc; stuck_result STUCK 3
+assert_eq "STUCK on rounds: bare resume refused (3)" "3" "$(rac2 "" "" "")"
+assert_contains "...names the limit it stopped at" "$(terr)" "rc1 is STUCK on its round limit (3)"
+assert_contains "...names --max-rounds above it" "$(terr)" "--max-rounds N (above 3)"
+assert_contains "...names --answer" "$(terr)" "--answer FILE"
+assert_contains "...and abandoning" "$(terr)" "or abandon it"
+assert_eq "STUCK on rounds: --model alone refused (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+assert_contains "...names --max-rounds" "$(terr)" "--max-rounds N (above 3)"
+assert_eq "STUCK on rounds: two --model values, no --max-rounds: refused (3)" "3" "$(rac2 "" "" "" "dev=opus review=sonnet")"
+assert_eq "STUCK on rounds: --answer alone refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_contains "...names --max-rounds" "$(terr)" "--max-rounds N (above 3)"
+assert_eq "STUCK on rounds: --answer and --model, no --max-rounds: refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "" "dev=opus")"
+assert_eq "STUCK on rounds: --max-rounds 4: ok" "0" "$(rac2 "" "" 4)"
+assert_eq "...no note number without an answer" "n=" "$(tout)"
+assert_eq "STUCK on rounds: --max-rounds 4 with --model: ok" "0" "$(rac2 "" "" 4 "dev=opus")"
+assert_eq "STUCK on rounds: --max-rounds 9 with --answer: ok" "0" "$(rac2 "$FIX/work/ans.md" "" 9)"
+assert_eq "...the note takes number 1" "n=1" "$(tout)"
+assert_eq "STUCK on rounds: --max-rounds 3 (not above the limit): 64" "64" "$(rac2 "" "" 3)"
+assert_contains "...the usage error, not the refusal" "$(terr)" "must be above the unit's current limit (3)"
+assert_eq "STUCK on rounds: --max-rounds 2: 64" "64" "$(rac2 "$FIX/work/ans.md" "" 2)"
+assert_eq "STUCK on rounds: --max-rounds x: 64" "64" "$(rac2 "" "" x)"
+assert_eq "STUCK on rounds: --extend with nothing over budget: refused (3)" "3" "$(rac2 "" 10 4)"
+assert_contains "...says nothing to extend" "$(terr)" "no stage over budget"
+echo '{}' > "$rc_d/budget-r2.json"
+assert_eq "STUCK on rounds: --extend alone, a stage over budget: refused (3)" "3" "$(rac2 "" 10 "")"
+assert_contains "...for the rounds" "$(terr)" "STUCK on its round limit (3)"
+assert_eq "STUCK on rounds: --extend with --max-rounds 4: ok" "0" "$(rac2 "" 10 4)"
+rm -f "$rc_d/budget-r2.json"
+# the note's number skips the parks and notes already there
+touch "$rc_d/park-1.json" "$rc_d/answer-2.md"
+assert_eq "the note number skips park-1.json and answer-2.md" "0" "$(rac2 "$FIX/work/ans.md" "" 5)"
+assert_eq "...it is 3" "n=3" "$(tout)"
+rm -f "$rc_d/park-1.json" "$rc_d/answer-2.md"
+assert_eq "STUCK on rounds: an empty answer file is still an internal failure (70)" "70" "$(rac2 "$FIX/work/empty.md" "" 5)"
+# the limit was raised since (a resume that then ended another way): the stop point no longer binds
+set_limit 5
+assert_eq "limit already raised past the stop point (5 > 3): bare resume ok" "0" "$(rac2 "" "" "")"
+assert_eq "...--model alone ok" "0" "$(rac2 "" "" "" "dev=opus")"
+assert_eq "...--max-rounds 5 is still refused (64)" "64" "$(rac2 "" "" 5)"
+set_limit 3
+# the refusals write nothing
+before="$(md5dir)"
+rac2 "$FIX/work/ans.md" "" "" "dev=opus" >/dev/null; rac2 "" "" "" >/dev/null; rac2 "" 10 4 >/dev/null
+assert_eq "STUCK on rounds: refusing writes nothing" "$before" "$(md5dir)"
+assert_eq "STUCK on rounds: accepting writes nothing either" "$before" "$(rac2 "$FIX/work/ans.md" "" 6 >/dev/null; md5dir)"
+# no recorded limit: the config default (3) applies
+jq -c 'del(.max_rounds)' "$rc_d/unit.json" > "$FIX/u.json" && cp "$FIX/u.json" "$rc_d/unit.json"
+assert_eq "STUCK on rounds, no recorded limit: bare refused (3)" "3" "$(rac2 "" "" "")"
+assert_eq "...--max-rounds 4 ok" "0" "$(rac2 "" "" 4)"
+jq -c '.max_rounds = "many"' "$rc_d/unit.json" > "$FIX/u.json" && cp "$FIX/u.json" "$rc_d/unit.json"
+assert_eq "STUCK with an unreadable recorded limit: internal failure (70)" "70" "$(rac2 "" "" "")"
+set_limit 3
+
+# stuck for another reason (finalize failures, cycle caps): no rounds_limit
+fresh_rc; stuck_result STUCK
+assert_eq "STUCK, other reason: bare resume refused (3)" "3" "$(rac2 "" "" "")"
+assert_contains "...says it is STUCK" "$(terr)" "rc1 is STUCK; resume it with"
+assert_contains "...lists --max-rounds above the limit" "$(terr)" "--max-rounds N (above 3)"
+assert_contains "...--answer" "$(terr)" "--answer FILE (a note to the dev)"
+assert_contains "...--model" "$(terr)" "--model STAGE=M"
+assert_contains "...and abandoning" "$(terr)" "or abandon it"
+assert_eq "STUCK, other reason: --model alone: ok (today's behaviour)" "0" "$(rac2 "" "" "" "dev=opus")"
+assert_eq "STUCK, other reason: --answer alone: ok, no park needed" "0" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_eq "...the note takes number 1" "n=1" "$(tout)"
+assert_eq "STUCK, other reason: --max-rounds 4: ok" "0" "$(rac2 "" "" 4)"
+assert_eq "STUCK, other reason: --max-rounds 3: 64" "64" "$(rac2 "" "" 3)"
+assert_eq "STUCK, other reason: --answer, --model and --max-rounds: ok" "0" "$(rac2 "$FIX/work/ans.md" "" 4 "dev=opus")"
+assert_eq "STUCK, other reason: --extend with nothing over budget: refused (3)" "3" "$(rac2 "" 10 "")"
+assert_contains "...says nothing to extend" "$(terr)" "no stage over budget"
+assert_eq "STUCK, other reason: an empty answer file: internal failure (70)" "70" "$(rac2 "$FIX/work/empty.md" "" "")"
+# a rounds_limit that is not a limit is not one
+jq -nc '{status: "STUCK", rounds_limit: "x"}' > "$rc_d/result.json"
+assert_eq "STUCK with a garbled rounds_limit counts as another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+jq -nc '{status: "STUCK", rounds_limit: 0}' > "$rc_d/result.json"
+assert_eq "...so does rounds_limit 0" "0" "$(rac2 "" "" "" "dev=opus")"
+assert_eq "...and a bare resume is refused (3)" "3" "$(rac2 "" "" "")"
+
+# a result from before ship-loop wrote rounds_limit: judged by its rounds against the unit's limit (3)
+old_result() { # stage lastround [extra jq filter]
+  jq -nc --arg st "$1" --argjson r "$2" '{ref: "rc1", status: "STUCK", stage: $st, rounds: [range(1; $r + 1) | {round: ., verdict: "CHANGES", findings: 1}]}' > "$rc_d/result.json"
+}
+fresh_rc; old_result review 3
+assert_eq "old STUCK result, 3 rounds of 3: bare resume refused (3)" "3" "$(rac2 "" "" "")"
+assert_contains "...as STUCK on its round limit, inferred" "$(terr)" "STUCK on its round limit (3)"
+assert_eq "old STUCK result, 3 rounds of 3: --model alone refused (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+assert_contains "...names --max-rounds" "$(terr)" "--max-rounds N (above 3)"
+assert_eq "old STUCK result, 3 rounds of 3: --answer alone refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_eq "old STUCK result, 3 rounds of 3: --max-rounds 4 ok" "0" "$(rac2 "" "" 4)"
+assert_eq "old STUCK result, 3 rounds of 3: --max-rounds 4 with --answer ok" "0" "$(rac2 "$FIX/work/ans.md" "" 4)"
+old_result verify 3
+assert_eq "...stopped at verify: also on rounds (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+assert_contains "...inferred" "$(terr)" "round limit (3)"
+old_result review 2
+assert_eq "old STUCK result, 2 rounds of 3: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+assert_eq "...bare resume still refused (3)" "3" "$(rac2 "" "" "")"
+assert_contains "...as a plain STUCK" "$(terr)" "rc1 is STUCK; resume it with"
+old_result finalize 3
+assert_eq "old STUCK result in finalize, 3 rounds: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+old_result review 4
+assert_eq "old STUCK result, more rounds than the limit: on rounds (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+fresh_rc; set_limit 5; old_result review 3
+assert_eq "old STUCK result, 3 rounds, unit limit since raised to 5: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+old_result review 5
+assert_eq "...5 rounds of 5: on rounds, --max-rounds 5 is below the line (64)" "64" "$(rac2 "" "" 5)"
+assert_eq "...--max-rounds 6 ok" "0" "$(rac2 "" "" 6)"
+fresh_rc; jq -c 'del(.max_rounds)' "$rc_d/unit.json" > "$FIX/u.json" && cp "$FIX/u.json" "$rc_d/unit.json"; old_result review 3
+assert_eq "old STUCK result, no recorded limit: the config default (3) is used (3)" "3" "$(rac2 "" "" "" "dev=opus")"
+assert_contains "...on rounds" "$(terr)" "round limit (3)"
+fresh_rc; jq -nc '{ref: "rc1", status: "STUCK", stage: "review"}' > "$rc_d/result.json"
+assert_eq "old STUCK result with no rounds at all: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+jq -nc '{ref: "rc1", status: "STUCK", stage: "review", rounds: "many"}' > "$rc_d/result.json"
+assert_eq "...rounds that is not a list: another reason: --model ok" "0" "$(rac2 "" "" "" "dev=opus")"
+fresh_rc; old_result review 3; before="$(md5dir)"; rac2 "" "" "" "dev=opus" >/dev/null
+assert_eq "...the inference writes nothing" "$before" "$(md5dir)"
+
+# units that are not STUCK are unaffected, whatever rounds_limit says
+for st in READY ERROR PARKED OVER-BUDGET; do
+  fresh_rc; stuck_result "$st" 3
+  assert_eq "$st (rounds_limit 3): bare resume ok" "0" "$(rac2 "" "" "")"
+  assert_eq "$st: --model alone ok" "0" "$(rac2 "" "" "" "dev=opus")"
+  assert_eq "$st: --max-rounds 4 ok" "0" "$(rac2 "" "" 4)"
+  assert_eq "$st: --answer with no park: still refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+  assert_contains "...says nothing is waiting" "$(terr)" "rc1 is not parked (no park.json); nothing is waiting for an answer"
+done
+fresh_rc
+assert_eq "no result.json: bare resume ok" "0" "$(rac2 "" "" "")"
+assert_eq "no result.json: --answer with no park: refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+echo '{not json' > "$rc_d/result.json"
+assert_eq "an unreadable result.json is not STUCK: bare resume ok" "0" "$(rac2 "" "" "")"
+: > "$rc_d/result.json"
+assert_eq "an empty result.json is not STUCK: bare resume ok" "0" "$(rac2 "" "" "")"
+# a STUCK result older than the last launch is history
+fresh_rc; stuck_result STUCK 3
+jq -c '.launched_at = 4102444800' "$rc_d/unit.json" > "$FIX/u.json" && cp "$FIX/u.json" "$rc_d/unit.json"
+assert_eq "a STUCK result older than the unit's last launch is ignored: bare resume ok" "0" "$(rac2 "" "" "")"
+assert_eq "...--answer with no park: refused (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_contains "...as for any unit with no park" "$(terr)" "not parked"
+# a park beats a STUCK result: the answer is for the park
+fresh_rc; stuck_result STUCK 3; park QUESTION 2
+assert_eq "park.json present beside a STUCK result: --answer answers the park" "0" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_eq "...n is the park's" "n=2" "$(tout)"
+assert_eq "...a bare resume is not refused" "0" "$(rac2 "" "" "")"
+park LIMIT 2
+assert_eq "...a LIMIT park still refuses --answer (3)" "3" "$(rac2 "$FIX/work/ans.md" "" "")"
+assert_contains "...usage limit" "$(terr)" "parked on a usage limit"
+
 rm -rf "$rc_d"
 
 # --- driver_proc_ok -----------------------------------------------------------------------------
