@@ -20,7 +20,7 @@ claude mcp add -s user canvas -- canvas mcp
 
 To have the service always running (macOS and Linux): `canvas service install`.
 
-Start Claude Code with `CANVAS_CHANNEL=1` in the environment if you want canvas comments pushed into the
+Start Claude Code with `OPENFLOWKIT_CHANNEL=1` in the environment if you want canvas comments pushed into the
 session; without it, read them with `list_threads`. The MCP server starts the service (`canvas serve`,
 127.0.0.1:43120) itself when it is not running.
 
@@ -48,7 +48,7 @@ changed on the canvas, `get_diagram` with `diffOnly: true`.
 ## Comments
 
 `list_threads` (`unanswered: true` for the ones waiting on you), `reply_to_thread`, `resolve_thread`,
-`start_thread`. A comment pushed into the session arrives as a `<channel source="canvas" thread_id=…>`
+`start_thread`. A comment pushed into the session arrives as a `<channel source="openflowkit" thread_id=…>`
 message: answer it with `reply_to_thread` using that `thread_id`.
 
 ## DSL in one screen
