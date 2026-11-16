@@ -566,19 +566,40 @@ for c in plain open none; do
 done
 assert_eq "set_tasks_base: leaves no temp file behind" "1 1" "$(ls "$FIX/tb/open" | wc -l | tr -d ' ') $(ls "$FIX/tb/plain" | wc -l | tr -d ' ')"
 
-# base_gone_reason <wt> <base>
+# base_gone_reason <wt> <base> <def>
 MAINWT="$SPACE/worktrees/main"
-gone() { rc=0; fn base_gone_reason "$MAINWT" "$1" >/dev/null || rc=$?; echo "$rc"; }
+gone() { rc=0; fn base_gone_reason "$MAINWT" "$1" "${2:-main}" >/dev/null || rc=$?; echo "$rc"; }
 mk_parent bg-live
 assert_eq "base_gone_reason: a live, unmerged parent: 1" "1" "$(gone bg-live main)"
 mk_parent bg-merged
 : > "$REMOTE/merged-bg-merged"
 assert_eq "base_gone_reason: its PR is MERGED: 0" "0" "$(gone bg-merged main)"
-assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-merged)" "the PR of bg-merged is merged"
+assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-merged main)" "the PR of bg-merged is merged into main"
+assert_eq "...but not when the unit would move elsewhere: 1 (its PR went into main, not develop)" "1" "$(gone bg-merged develop)"
+assert_eq "...nor with no default branch to compare with: 1" "1" "$(fn base_gone_reason "$MAINWT" bg-merged "" >/dev/null; echo $?)"
+# hyper-5to: a long-lived base (dev) whose newest PR is an old, merged release PR. gh pr view <branch> returns it.
+# bg-dev1: the release went dev -> staging, then dev moved on
+mk_parent bg-dev1 1
+git -C "$REMOTE" rev-parse refs/heads/bg-dev1 > "$REMOTE/merged-bg-dev1"
+echo staging > "$REMOTE/base-bg-dev1"
+git -C "$FIX/other" checkout -q bg-dev1 && echo more > "$FIX/other/bg-dev1-more.txt" && git -C "$FIX/other" add . \
+  && git -C "$FIX/other" commit -q -m "feat: after the release" && git -C "$FIX/other" push -q origin bg-dev1 && git -C "$FIX/other" checkout -q main
+assert_eq "base_gone_reason: a long-lived base, old PR merged into staging, moved since: 1" "1" "$(gone bg-dev1 main)"
+# bg-dev2: the same release PR, nothing pushed to dev since (its tip is still the merged head): still not into main
+mk_parent bg-dev2 1
+: > "$REMOTE/merged-bg-dev2"
+echo staging > "$REMOTE/base-bg-dev2"
+assert_eq "base_gone_reason: a long-lived base, PR merged into staging, not moved since: 1" "1" "$(gone bg-dev2 main)"
+# bg-dev3: an old PR into main (a release straight to main), dev moved since
+mk_parent bg-dev3 1
+git -C "$REMOTE" rev-parse refs/heads/bg-dev3 > "$REMOTE/merged-bg-dev3"
+git -C "$FIX/other" checkout -q bg-dev3 && echo more > "$FIX/other/bg-dev3-more.txt" && git -C "$FIX/other" add . \
+  && git -C "$FIX/other" commit -q -m "feat: after the release" && git -C "$FIX/other" push -q origin bg-dev3 && git -C "$FIX/other" checkout -q main
+assert_eq "base_gone_reason: a long-lived base, old PR merged into main, moved since: 1" "1" "$(gone bg-dev3 main)"
 mk_parent bg-gone
 git -C "$REMOTE" update-ref -d refs/heads/bg-gone
 assert_eq "base_gone_reason: the branch is gone on origin: 0" "0" "$(gone bg-gone main)"
-assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-gone)" "origin/bg-gone no longer exists"
+assert_contains "...says so" "$(fn base_gone_reason "$MAINWT" bg-gone main)" "origin/bg-gone no longer exists"
 mk_parent bg-ff
 git -C "$FIX/other" pull -q --ff-only origin main
 git -C "$FIX/other" merge -q --ff-only origin/bg-ff
@@ -629,7 +650,7 @@ squash_parent sqp1
 advance_main sq-one
 : >"$GH_LOG"
 assert_eq "retarget, parent squash-merged: the land exits 0" "0" "$(wl sq1)"
-assert_contains "...it says why" "$(outof)" "retargeting: the PR of sqp1 is merged; sq1 moves from sqp1 to main"
+assert_contains "...it says why" "$(outof)" "retargeting: the PR of sqp1 is merged into main; sq1 moves from sqp1 to main"
 assert_contains "...and that it rebased on the default branch" "$(outof)" "rebased sq1 on origin/main (1 commits)"
 assert_contains "...the PR base was edited" "$(cat "$GH_LOG")" "pr edit 701 --base main"
 assert_eq "...the unit's commit is on main" "1" "$(main_subjects | grep -c '^feat: sq1$')"
@@ -700,6 +721,19 @@ assert_contains "...rebased on the parent" "$(outof)" "rebased lv1 on origin/lvp
 assert_not_contains "...no retarget" "$(outof)" "retargeting"
 assert_eq "...no PR edit" "0" "$(grep -c 'pr edit' "$GH_LOG")"
 assert_eq "...unit.json and tasks.md keep the parent as base" "lvp1 lvp1" "$(done_json .base lv1) $(tasks_base_of "$FIX/specs/lv1")"
+
+# ll1 (hyper-5to): the unit's base is a long-lived branch whose newest PR is an old release merged into staging,
+# and the branch moved since. The unit lands on it: no rebase onto main, no PR edit, unit.json and tasks.md kept.
+stacked ll1 710 llp1
+git -C "$REMOTE" rev-parse refs/heads/llp1~1 > "$REMOTE/merged-llp1"
+echo staging > "$REMOTE/base-llp1"
+advance_main ll-one
+: >"$GH_LOG"
+assert_eq "a long-lived base with an old merged PR: the land exits 0" "0" "$(wl ll1)"
+assert_contains "...rebased on the base itself" "$(outof)" "rebased ll1 on origin/llp1 (1 commits)"
+assert_not_contains "...no retarget" "$(outof)" "retargeting"
+assert_eq "...no PR edit" "0" "$(grep -c 'pr edit' "$GH_LOG")"
+assert_eq "...unit.json and tasks.md keep the base" "llp1 llp1" "$(done_json .base ll1) $(tasks_base_of "$FIX/specs/ll1")"
 
 # k2f: land reads unit.json's base, not the config key
 mk_parent kp1 1
