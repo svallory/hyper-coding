@@ -41,8 +41,30 @@ export interface Input {
 </else>
 
 <style>
+  /* The disclosure marker is drawn here, so the row's line stays on one line with it. */
   .tree-item > details > summary {
+    display: flex;
+    gap: 0.35rem;
+    align-items: baseline;
+    list-style: none;
     cursor: pointer;
+  }
+  .tree-item > details > summary::-webkit-details-marker {
+    display: none;
+  }
+  .tree-item > details > summary::before {
+    content: "\25B8";
+    flex: none;
+    width: 1ch;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .tree-item > details[open] > summary::before {
+    content: "\25BE";
+  }
+  /* A row with no children keeps the marker's width, so names line up. */
+  .tree-item > div[data-row] {
+    padding-left: calc(1ch + 0.35rem);
   }
   .row-note {
     margin: 0.2rem 0 0 3.6ch;
