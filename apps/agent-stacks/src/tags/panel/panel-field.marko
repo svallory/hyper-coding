@@ -1,0 +1,26 @@
+export interface Input {
+  label: string;
+  content?: Marko.Body;
+}
+
+<div class="panel-field" data-field=input.label.toLowerCase()>
+  <dt class="field-label">${input.label}</dt>
+  <dd class="field-body"><${input.content}/></dd>
+</div>
+
+<style>
+  .panel-field {
+    margin: 0 0 0.6rem;
+  }
+  .field-label {
+    color: var(--muted);
+    font-size: 0.6875rem;
+    font-weight: 650;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .field-body {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+</style>

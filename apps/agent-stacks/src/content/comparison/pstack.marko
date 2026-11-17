@@ -1,0 +1,595 @@
+import { pstack } from "../sources";
+import type { LaneViewInput } from "../../model/types";
+export type Input = LaneViewInput;
+
+<lane ...input id="pstack" name="pstack" by="poteto (Cursor) · Cursor, with a Claude Code adapter"
+  source=pstack>
+  <@summary>
+    <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> routes a request to one of 22 playbooks; there is no single pipeline. This lane is our synthesis of the Feature, Bug fix, Opening a PR, Babysit and Shipping playbooks.
+  </@summary>
+  <@order label="Order, per the author" lead="recommended in docs; nothing enforces it">
+    Each playbook is an ordered step list the agent copies into a todo list. Feature: trace, architect, four-item checkpoint, delegate, verify, small commits, interrogate if contested, open PR (playbooks/feature.md). Babysit, land and <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md"/> are separate requests. The guide follows the same chain: "Read the pages in order the first time." The author refuses plans and specs, not process: "the best spec is code."
+  </@order>
+  <@owner from="route-and-restate" to="route-and-restate" name="poteto-mode" note="skill"/>
+  <@owner from="understand-current-state" to="verify-real-surface" name="feature or bug-fix"
+    note="playbook; poteto-mode matches one to the task"/>
+  <@owner from="open-pr" to="open-pr" name="opening-a-pr" note="playbook"/>
+  <@owner from="babysit" to="babysit" name="babysit" note="playbook"/>
+  <@owner from="verify-and-land" to="verify-and-land" name="shipping" note="playbook"/>
+  <@owner from="learn-and-encode" to="learn-and-encode" name="reflect or correct"
+    note="skill; the human types either command"/>
+  <@cover col="req" level="implicit">goal restated; a done check is suggested, not required</@cover>
+  <@cover col="base" level="explicit">mechanism confirmed at runtime before design</@cover>
+  <@cover col="design" level="explicit">architect, arena, prototype</@cover>
+  <@cover col="tasks" level="implicit">
+    four-item checkpoint; plan file only for multi-PR work
+  </@cover>
+  <@cover col="verify" level="explicit">
+    against the stated done check, by a non-author; no requirement list to trace
+  </@cover>
+  <@cover col="learn" level="explicit">reflect and correct; run by hand</@cover>
+  <@take>
+    Only a non-author verdict counts, and an older verdict is rechecked against git patch-id.
+  </@take>
+  <@take>A finding survives only if a rerun proves it.</@take>
+  <@take>
+    Fix a repeated mistake at the highest level that works, and prove the new check fails on the old mistake.
+  </@take>
+  <@gap>No requirements artifact, so nothing to trace the final verdict to.</@gap>
+  <@gap>
+    Nearly every skill is manual; rigor depends on the operator typing <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/>.
+  </@gap>
+  <@gap>Step order is prose in 22 playbooks; nothing enforces it.</@gap>
+
+  <@step id="route-and-restate" title="Route and restate" phrase="Match the goal to a playbook"
+    group="plan">
+    <@what>
+      Restates the goal and the smallest change, picks a playbook, seeds a todo list from it.
+    </@what>
+    <@starts>
+      The human types <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> with the request. The skill is closed to model invocation.
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="3-4"/>
+    </@starts>
+    <@via><skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> skill</@via>
+    <@actor>Human states the goal; main agent routes</@actor>
+    <@input>Free-text request</@input>
+    <@output>Todo list of playbook steps</@output>
+    <@gate>
+      None. Reversible choices proceed without asking
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="76"/>
+    </@gate>
+
+    <@row own kind="skill" name="poteto-mode" path="skills/poteto-mode/SKILL.md"
+      gloss="restates the goal, matches a playbook, seeds todos">
+      <@row kind="playbook" name="playbooks" path="skills/poteto-mode/playbooks/" at="108" count=22
+        gloss="one ordered step list per kind of task"/>
+      <@row kind="skill" name="figure-it-out" path="skills/figure-it-out/SKILL.md" at="108"
+        when="no playbook fits, or the work is large or unattended"
+        gloss="designs its own phased workflow instead"/>
+      <@row kind="skill" name="principle-* skills" path="skills/" at="33" word="principle-<title>"
+        count=24 gloss="one leaf per principle, opened when it applies"/>
+      <@row kind="skill" name="show-me-your-work" path="skills/show-me-your-work/SKILL.md" at="29"
+        when="the work is long or unattended" gloss="TSV decision log, one row per decision">
+        <@row kind="reference" name="decision-log-template.tsv"
+          path="skills/show-me-your-work/references/decision-log-template.tsv" at="15"
+          gloss="the header row"/>
+        <@row kind="script" name="log.sh" path="skills/show-me-your-work/scripts/log.sh" at="38"
+          gloss="appends one timestamped, sanitised row"/>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="understand-current-state" title="Understand current state"
+    phrase="Trace, reproduce, pin behaviour" group="plan">
+    <@what>
+      Traces the subsystem; reproduces a bug and bisects; pins current behaviour with a test before a refactor.
+    </@what>
+    <@starts>
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> matches the task to one playbook and copies its steps into the todo list; this is the first item.
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="108"/>
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md" line="5"/>
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="7"/>
+    </@starts>
+    <@via>Feature, Bug fix, Refactoring playbooks; why skill</@via>
+    <@actor>Main agent; investigation delegated to subagents</@actor>
+    <@input>Routed request</@input>
+    <@output>A mechanism confirmed at runtime, or a pinning test. No named file</@output>
+    <@gate>
+      Mechanism confirmed by runtime evidence before design. "Type check and lint are not a pin"
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="8"/>
+      <file-ref of=pstack name="refactoring.md" path="skills/poteto-mode/playbooks/refactoring.md" line="7"/>
+    </@gate>
+    <@back>Itself when evidence refutes the hypothesis</@back>
+
+    <@row choice="the playbook poteto-mode matched to the task">
+      <@row own kind="playbook" name="feature" path="skills/poteto-mode/playbooks/feature.md"
+        gloss="step 1: trace the affected subsystem"/>
+      <@row own kind="playbook" name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"
+        gloss="steps 1-2: reproduce via control-ui/control-cli (external), then bisect">
+        <@row kind="skill" name="why" path="skills/why/SKILL.md" at="8"
+          gloss="regression history, to seed the hypotheses"/>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="design-the-shape" title="Design the shape"
+    phrase="Architect, compete, prototype, checkpoint" group="plan">
+    <@what>
+      An architect sketch; competing candidates from subagents judged by a model from another vendor; a throwaway prototype when a decision needs one.
+    </@what>
+    <@starts>
+      The next todo item of the playbook: Feature step 2, Bug fix step 3. A Multi-phase plan request is matched to its own playbook instead.
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md" line="6"/>
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="8-9"/>
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="110"/>
+    </@starts>
+    <@via>architect, arena skills; Prototype, Multi-phase plan playbooks</@via>
+    <@actor>Main agent owns the design; subagent candidates</@actor>
+    <@input>What step 2 established</@input>
+    <@output>Sketch, synthesis note, or a plan file with one checkbox per PR</@output>
+    <@gate>
+      A multi-PR plan waits for an explicit go from the operator; otherwise none
+      <playbook-ref of=pstack name="multi-phase-plan" path="skills/poteto-mode/playbooks/multi-phase-plan.md" line="9"/>
+    </@gate>
+    <@back>Itself when candidates diverge</@back>
+
+    <@row choice="the playbook poteto-mode matched to the task">
+      <@row own kind="playbook" name="feature" path="skills/poteto-mode/playbooks/feature.md"
+        gloss="steps 2-3: shape, then the throughput checkpoint">
+        <@row kind="skill" name="architect" path="skills/architect/SKILL.md" at="6"
+          gloss="two candidate shapes, one picked">
+          <@row kind="skill" name="arena" path="skills/arena/SKILL.md" at="11"
+            when="the design is large or contested"
+            gloss="parallel candidates, cross-vendor judge, grafted base"/>
+        </@row>
+        <@row kind="skill" name="principle-separate-before-serializing-shared-state"
+          path="skills/principle-separate-before-serializing-shared-state/SKILL.md" at="10"
+          word="separate-before-serializing-shared-state"
+          gloss="checkpoint item: shared mutable state"/>
+      </@row>
+      <@row own kind="playbook" name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"
+        gloss="step 3: plan the fix">
+        <@row kind="skill" name="architect" path="skills/architect/SKILL.md" at="9"
+          when="the fix crosses a function boundary" gloss="two candidate shapes, one picked">
+          <@row kind="skill" name="arena" path="skills/arena/SKILL.md" at="11"
+            when="the design is large or contested"
+            gloss="parallel candidates, cross-vendor judge, grafted base"/>
+        </@row>
+      </@row>
+      <@row own kind="playbook" name="multi-phase-plan"
+        path="skills/poteto-mode/playbooks/multi-phase-plan.md"
+        gloss="writes the plan file only, then stops">
+        <@row kind="playbook" name="prototype" path="skills/poteto-mode/playbooks/prototype.md" at="6"
+          gloss="settles open questions before the plan"/>
+        <@row kind="skill" name="principle-sequence-verifiable-units"
+          path="skills/principle-sequence-verifiable-units/SKILL.md" at="7"
+          word="sequence-verifiable-units" gloss="one PR, one change, its own evidence"/>
+      </@row>
+    </@row>
+    <@row kind="skill" name="poteto-mode" path="skills/poteto-mode/SKILL.md"
+      gloss="still loaded: its standing triggers">
+      <@row kind="playbook" name="prototype" path="skills/poteto-mode/playbooks/prototype.md" at="21"
+        when="a fork can be settled by running something" gloss="throwaway build in a scratch dir"/>
+      <@row kind="skill" name="interrogate" path="skills/interrogate/SKILL.md" at="22"
+        when="the design is contested" gloss="adversaries on other models; proven findings only"/>
+    </@row>
+  </@step>
+
+  <@step id="delegate-build" title="Delegate build" phrase="Fresh subagent codes small units"
+    group="build">
+    <@what>
+      A fresh subagent writes each unit; the lead reviews the diff. When the implementation admits several valid shapes, the arena skill is mandatory ("no skip-with-reason escape"). A fix round gets a new subagent with the original brief and the prior report.
+    </@what>
+    <@starts>
+      The next todo item: Feature step 4, the second half of Bug fix step 3.
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md" line="12"/>
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="9"/>
+    </@starts>
+    <@via>
+      <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/> agent; <skill-ref of=pstack name="tdd" path="skills/tdd/SKILL.md"/>, swarm, arena skills
+    </@via>
+    <@actor>Subagent (Opus, highest effort, by default)</@actor>
+    <@input>Scope, named data shape, success criteria</@input>
+    <@output>Small ordered commits</@output>
+    <@gate>
+      "do not advance until the current one is green"
+      <skill-ref of=pstack name="principle-sequence-verifiable-units" path="skills/principle-sequence-verifiable-units/SKILL.md" line="9"/>
+    </@gate>
+
+    <@row choice="the playbook poteto-mode matched to the task">
+      <@row own kind="playbook" name="feature" path="skills/poteto-mode/playbooks/feature.md"
+        gloss="steps 4 and 6: scoped brief, small commits">
+        <@row kind="skill" name="principle-model-the-domain"
+          path="skills/principle-model-the-domain/SKILL.md" at="12"
+          gloss="data structure named in the brief"/>
+        <@row kind="skill" name="arena" path="skills/arena/SKILL.md" at="12"
+          when="the implementation admits several valid shapes"
+          gloss="mandatory then; runners build the alternatives"/>
+        <@row kind="skill" name="principle-sequence-verifiable-units"
+          path="skills/principle-sequence-verifiable-units/SKILL.md" at="15"
+          word="sequence-verifiable-units" gloss="each unit green before the next"/>
+      </@row>
+      <@row own kind="playbook" name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"
+        gloss="steps 3 and 5: scoped fix, repro commit first">
+        <@row kind="skill" name="tdd" path="skills/tdd/SKILL.md" at="11"
+          when="the bug has a cheap local test path" gloss="failing test before the fix"/>
+        <@row kind="skill" name="principle-sequence-verifiable-units"
+          path="skills/principle-sequence-verifiable-units/SKILL.md" at="12"
+          word="sequence-verifiable-units" gloss="failing test first, fix on top"/>
+      </@row>
+    </@row>
+    <@row kind="skill" name="poteto-mode" path="skills/poteto-mode/SKILL.md"
+      gloss="still loaded: how every playbook step delegates">
+      <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" at="86"
+        gloss="fresh background subagent per task; writes the code">
+        <@row kind="rule" name="worker.md" path="skills/poteto-mode/worker.md" at="20"
+          namedIn="skills/poteto-mode/SKILL.md" gloss="operator rules; first line of every kickoff"/>
+        <@row kind="skill" name="poteto-mode" path="skills/poteto-mode/SKILL.md" at="10"
+          gloss="the same rules and principles, in full"/>
+      </@row>
+      <@row kind="skill" name="swarm" path="skills/swarm/SKILL.md" at="22" when="the work fans out"
+        gloss="N parallel cloud workers, one report"/>
+    </@row>
+  </@step>
+
+  <@step id="verify-real-surface" title="Verify real surface" phrase="Prove it on the real artifact"
+    group="check">
+    <@what>
+      Runs the real command or drives the real app. Adversary subagents on other models attack the change; a finding stands only if a rerun proves it.
+    </@what>
+    <@starts>
+      The next todo item: Feature step 5, Bug fix step 4.
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md" line="13"/>
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="10"/>
+    </@starts>
+    <@via>
+      <skill-ref of=pstack name="principle-prove-it-works" path="skills/principle-prove-it-works/SKILL.md"/>, interrogate
+    </@via>
+    <@actor>Main agent + adversary subagents</@actor>
+    <@input>Committed head and the done check</@input>
+    <@output>Failing-then-passing output, screenshots, interrogate report</@output>
+    <@gate>
+      "'Inconclusive' or wrong-surface is not a pass"
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md" line="13"/>
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="10"/>
+    </@gate>
+    <@back>Build on a failed check (our inference)</@back>
+
+    <@row choice="the playbook poteto-mode matched to the task">
+      <@row own kind="playbook" name="feature" path="skills/poteto-mode/playbooks/feature.md"
+        gloss="steps 5 and 7: matching surface, then adversaries">
+        <@row kind="skill" name="interrogate" path="skills/interrogate/SKILL.md" at="16"
+          when="the design is contested" gloss="adversaries on other models; reruns prove findings">
+          <@row kind="skill" name="in-your-own-words" path="skills/in-your-own-words/SKILL.md" at="13"
+            gloss="states the intent to attack"/>
+          <@row kind="skill" name="arena" path="skills/arena/SKILL.md" at="17,23"
+            gloss="its fan-out and verify phases only"/>
+        </@row>
+      </@row>
+      <@row own kind="playbook" name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"
+        gloss="step 4: the original repro now passes"/>
+    </@row>
+    <@row kind="skill" name="poteto-mode" path="skills/poteto-mode/SKILL.md"
+      gloss="still loaded; control-ui/control-cli (external) drive the app">
+      <@row kind="skill" name="principle-prove-it-works" path="skills/principle-prove-it-works/SKILL.md"
+        at="59" word="Prove It Works" gloss="the real artifact, not a proxy"/>
+      <@row kind="skill" name="benchmark-checklist" path="skills/benchmark-checklist/SKILL.md" at="26"
+        when="a number was measured" gloss="seven questions before the number is cited"/>
+    </@row>
+  </@step>
+
+  <@step id="open-pr" title="Open PR" phrase="Clean diff, small commits, briefing" group="ship">
+    <@what>
+      Removes slop and comments from the diff, then opens a ready PR whose body is at most 40 lines: Why, What changed, Scope, Tradeoffs, Blast Radius, Verification.
+    </@what>
+    <@starts>
+      Every code playbook ends by running it: Feature step 8, Bug fix step 6.
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md" line="17"/>
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md" line="13"/>
+      <playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md" line="3"/>
+    </@starts>
+    <@via>
+      Opening a PR playbook; <skill-ref of=pstack name="no-comments" path="skills/no-comments/SKILL.md"/>, <skill-ref of=pstack name="unslop" path="skills/unslop/SKILL.md"/> skills
+    </@via>
+    <@actor>Main agent</@actor>
+    <@input>Verified branch</@input>
+    <@output>PR, never draft</@output>
+    <@gate>None stated</@gate>
+
+    <@row own kind="playbook" name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md"
+      gloss="/deslop (external), small commits, 40-line body, never draft"/>
+    <@row kind="skill" name="poteto-mode" path="skills/poteto-mode/SKILL.md"
+      gloss="still loaded: its standing triggers">
+      <@row kind="skill" name="no-comments" path="skills/no-comments/SKILL.md" at="24"
+        gloss="comment purge before review">
+        <@row kind="agent" name="comment-sicko" path="agents/comment-sicko.md" at="19"
+          gloss="deletes comments, flags workarounds; no code edits">
+          <@row kind="skill" name="why" path="skills/why/SKILL.md" at="26"
+            when="a comment's claim is not obvious nearby" gloss="history behind the comment"/>
+        </@row>
+        <@row kind="skill" name="architect" path="skills/architect/SKILL.md" at="21"
+          when="a fix needs a shape" gloss="one sketch for the accepted flags"/>
+      </@row>
+      <@row kind="skill" name="technical-writing" path="skills/technical-writing/SKILL.md" at="23"
+        gloss="PR body and commit messages">
+        <@row kind="skill" name="unslop" path="skills/unslop/SKILL.md" at="67"
+          gloss="catalog of AI tells to cut"/>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="babysit" title="Babysit" phrase="Clear conflicts, threads, CI" group="ship" human>
+    <@what>
+      Starts only on request: "Opening a PR does not start a babysit." Watches the PR and clears blockers in order: conflicts, review threads, CI. Pushes each wave of fixes before replying on the thread. Never merges.
+    </@what>
+    <@starts>
+      The human asks for PR status; <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> sends that to Babysit. Opening a PR does not start it.
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="27"/>
+      <playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md" line="9"/>
+    </@starts>
+    <@via>Babysit playbook, scripts/watch-pr</@via>
+    <@actor>Main agent, or one cloud agent per PR</@actor>
+    <@input>Open PR</@input>
+    <@output>Fix pushes, thread replies, merge-ready report</@output>
+    <@gate>
+      Merge-ready. "Babysitting never authorizes merging"
+      <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md" line="10"/>
+    </@gate>
+    <@back>Build on a CI failure or a real review finding (our inference)</@back>
+
+    <@row own kind="playbook" name="babysit" path="skills/poteto-mode/playbooks/babysit.md"
+      gloss="conflicts, threads, CI in order; never merges">
+      <@row kind="script" name="watch-pr" path="skills/poteto-mode/scripts/watch-pr/watch-pr" at="6"
+        gloss="polls the PR; exit code names the blocker">
+        <@row kind="script" name="bootstrap.ts" path="skills/poteto-mode/scripts/bootstrap.ts" at="2"
+          gloss="installs dependencies once, then restarts"/>
+        <@row kind="script" name="cli.ts" path="skills/poteto-mode/scripts/watch-pr/cli.ts" at="5"
+          gloss="parses flags, picks the runner">
+          <@row kind="script" name="github.ts" path="skills/poteto-mode/scripts/watch-pr/github.ts"
+            at="9-13" gloss="gh queries only: PR, threads, checks"/>
+          <@row kind="script" name="policy.ts" path="skills/poteto-mode/scripts/watch-pr/policy.ts"
+            at="15-20" gloss="ranks blockers, polls every 60 s"/>
+          <@row kind="script" name="render.ts" path="skills/poteto-mode/scripts/watch-pr/render.ts"
+            at="21" gloss="JSON lines or human text"/>
+        </@row>
+      </@row>
+      <@row kind="reference" name="bugbot-triage.md"
+        path="skills/poteto-mode/references/bugbot-triage.md" at="9" when="a review bot commented"
+        gloss="check each bot claim against the code"/>
+    </@row>
+  </@step>
+
+  <@step id="verify-and-land" title="Verify and land" phrase="Non-author verdict, bottom-up merge"
+    group="ship" human>
+    <@what>
+      One fresh agent per PR proves the behaviour live. Verified PRs merge from the bottom of the stack. A verdict covers one patch: git patch-id is compared before trusting it, and a changed patch needs fresh checks unless only tests, docs or lint config changed.
+    </@what>
+    <@starts>
+      The operator asks to land a green stack; <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> sends that to Shipping. Babysitting never authorizes a merge.
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md" line="27"/>
+      <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md" line="10"/>
+    </@starts>
+    <@via>Shipping, Autopilot playbooks</@via>
+    <@actor>Operator says land; verifier subagents; root agent merges</@actor>
+    <@input>Merge-ready PRs</@input>
+    <@output>PASS, PASS+NOTES or FAIL per PR; merged PRs</@output>
+    <@gate>
+      "Only a verdict from an agent that did not write the code counts"
+      <playbook-ref of=pstack name="shipping" path="skills/poteto-mode/playbooks/shipping.md" line="5"/>
+    </@gate>
+    <@back>Build on FAIL (our inference; the source says only that new verdicts are needed)</@back>
+
+    <@row own kind="playbook" name="shipping" path="skills/poteto-mode/playbooks/shipping.md"
+      gloss="one non-author cloud verifier per PR; bottom-up merge">
+      <@row kind="script" name="watch-pr" path="skills/poteto-mode/scripts/watch-pr/watch-pr" at="9"
+        gloss="--queued-stack under /loop: reports until COMPLETE">
+        <@row kind="script" name="bootstrap.ts" path="skills/poteto-mode/scripts/bootstrap.ts" at="2"
+          gloss="installs dependencies once, then restarts"/>
+        <@row kind="script" name="cli.ts" path="skills/poteto-mode/scripts/watch-pr/cli.ts" at="5"
+          gloss="takes the frozen --stack-prs list">
+          <@row kind="script" name="github.ts" path="skills/poteto-mode/scripts/watch-pr/github.ts"
+            at="9-13" gloss="gh queries only; merges nothing"/>
+          <@row kind="script" name="policy.ts" path="skills/poteto-mode/scripts/watch-pr/policy.ts"
+            at="15-20" gloss="frontier poll, whole-stack sweep every 300 s"/>
+          <@row kind="script" name="render.ts" path="skills/poteto-mode/scripts/watch-pr/render.ts"
+            at="21" gloss="JSON lines or human text"/>
+        </@row>
+      </@row>
+    </@row>
+  </@step>
+
+  <@step id="learn-and-encode" title="Learn and encode" phrase="Corrections become checks and rules"
+    group="learn" human>
+    <@what>
+      Turns a repeated mistake into enforcement at the highest level that works: architecture, then types, lint, tests, docs last. Each new check is shown failing on a real past mistake. Separate commands, never a playbook step.
+    </@what>
+    <@starts>
+      The human types <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md"/> or <skill-ref of=pstack name="correct" path="skills/correct/SKILL.md"/>. No playbook names either skill.
+      <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md" line="3-4"/>
+      <skill-ref of=pstack name="correct" path="skills/correct/SKILL.md" line="3-4"/>
+    </@starts>
+    <@via>reflect, correct skills</@via>
+    <@actor>Main agent proposes; the human runs it and approves</@actor>
+    <@input>
+      reflect: the session transcript. correct: commits, reverts, review comments, instruction files
+    </@input>
+    <@output>Lint and CI checks, rule table, skill edits</@output>
+    <@gate>
+      Human approval before any skill edit
+      <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md" line="15"/>
+    </@gate>
+
+    <@row choice="the command the human types">
+      <@row own kind="skill" name="reflect" path="skills/reflect/SKILL.md"
+        gloss="transcript lessons become proposed skill edits"/>
+      <@row own kind="skill" name="correct" path="skills/correct/SKILL.md"
+        gloss="repeated mistakes become architecture, types, lints, tests"/>
+    </@row>
+  </@step>
+
+  <@connector from="route-and-restate" to="understand-current-state" pick enforced="prompt">
+    <@when>The model has matched the request to one playbook title.</@when>
+    <@by>model</@by>
+    <@how>
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/> ends with a flat list of 22 titles and one rule: "Match the task to a playbook and open its steps at playbooks/&lt;title>.md … Copy its steps into the todolist tool first." There is no trigger table and no code. Large, cross-cutting or unattended work, or a task no playbook fits, goes to the <skill-ref of=pstack name="figure-it-out" path="skills/figure-it-out/SKILL.md"/> skill instead.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="poteto-mode" path="skills/poteto-mode/SKILL.md"/>, section Playbooks
+    </@source>
+  </@connector>
+
+  <@connector from="understand-current-state" to="design-the-shape" enforced="prompt">
+    <@when>
+      Bug fix: the mechanism is confirmed with runtime evidence. Feature: the subsystem is traced. Refactoring: a behaviour pin is green.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      Each playbook lists this as the step before design. "Type check and lint are not a pin."
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"/> steps 1-2 · <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md"/> step 1 · <file-ref of=pstack name="refactoring.md" path="skills/poteto-mode/playbooks/refactoring.md"/> step 1
+    </@source>
+  </@connector>
+
+  <@connector from="design-the-shape" to="delegate-build" enforced="prompt">
+    <@when>
+      A shape is chosen. The architect skill is required when the change crosses a function boundary; it sends a large or contested design to arena. A multi-PR plan stops here until the operator says go.
+    </@when>
+    <@by>model; the operator for a multi-PR plan</@by>
+    <@how>
+      Feature then runs a four-item throughput checkpoint as todo items: blocking first steps, independent workstreams, shared mutable state, smallest safe decomposition.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md"/> steps 2-3 · <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> · <playbook-ref of=pstack name="multi-phase-plan" path="skills/poteto-mode/playbooks/multi-phase-plan.md"/>
+    </@source>
+  </@connector>
+
+  <@connector from="delegate-build" to="verify-real-surface" enforced="prompt">
+    <@when>The subagent has returned and the lead has reviewed the diff.</@when>
+    <@by>model</@by>
+    <@how>
+      "do not advance until the current one is green". A fix round gets a fresh subagent with the original brief and the prior report.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="principle-sequence-verifiable-units" path="skills/principle-sequence-verifiable-units/SKILL.md"/> · <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md"/> step 4
+    </@source>
+  </@connector>
+
+  <@connector from="verify-real-surface" to="open-pr" enforced="prompt">
+    <@when>
+      The change is verified on the surface it touches. A contested change goes through interrogate first.
+    </@when>
+    <@by>model</@by>
+    <@how>
+      "Inconclusive or wrong-surface is not a pass." Commits are rebased into small ordered ones, then the Opening a PR playbook starts.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md"/> steps 5-8 · <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"/> steps 4-6
+    </@source>
+  </@connector>
+
+  <@connector from="open-pr" to="babysit" manual enforced="prompt">
+    <@when>
+      The human asks for PR status or to <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md"/>.
+    </@when>
+    <@by>human</@by>
+    <@how>
+      "Opening a PR does not start a babysit." The mode (drive, threads-only, check) comes from the request.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="opening-a-pr" path="skills/poteto-mode/playbooks/opening-a-pr.md"/> · <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md"/>
+    </@source>
+  </@connector>
+
+  <@connector from="babysit" to="verify-and-land" manual enforced="prompt">
+    <@when>The operator says to land.</@when>
+    <@by>human</@by>
+    <@how>
+      "Babysitting never authorizes merging." <script-ref of=pstack name="watch-pr" path="skills/poteto-mode/scripts/watch-pr/watch-pr"/> exiting 0 (ready) only reports: it does not require an approval and merges nothing.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md"/> · <playbook-ref of=pstack name="shipping" path="skills/poteto-mode/playbooks/shipping.md"/> · <file-ref of=pstack name="watch-pr/" path="skills/poteto-mode/scripts/watch-pr/"/>
+    </@source>
+  </@connector>
+
+  <@connector from="verify-and-land" to="learn-and-encode" manual enforced="prompt">
+    <@when>
+      The human runs <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md"/> or <skill-ref of=pstack name="correct" path="skills/correct/SKILL.md"/>. No playbook step leads here.
+    </@when>
+    <@by>human</@by>
+    <@how>
+      Both are separate commands and no playbook names them. The disable-model-invocation flag is not what keeps them out: 57 of the 58 skills carry it, and playbooks reach those by file path.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md"/> · <skill-ref of=pstack name="correct" path="skills/correct/SKILL.md"/>
+    </@source>
+  </@connector>
+
+  <@connector from="understand-current-state" to="understand-current-state" label="hypothesis refuted"
+    enforced="prompt">
+    <@when>Evidence refutes the current hypothesis.</@when>
+    <@by>model</@by>
+    <@how>
+      "When evidence refutes a hypothesis, revert what it motivated." Then the next hypothesis.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="bug-fix" path="skills/poteto-mode/playbooks/bug-fix.md"/>
+    </@source>
+  </@connector>
+
+  <@connector from="verify-real-surface" to="delegate-build" label="check fails" inferred enforced="prompt">
+    <@when>A check fails.</@when>
+    <@by>model</@by>
+    <@how>
+      Our inference. The playbooks say a failed or inconclusive check is not a pass; none names the route back.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="feature" path="skills/poteto-mode/playbooks/feature.md"/> step 5
+    </@source>
+  </@connector>
+
+  <@connector from="babysit" to="delegate-build" label="CI or review finding" inferred enforced="prompt">
+    <@when>CI fails or a review thread holds a real finding.</@when>
+    <@by>model</@by>
+    <@how>
+      Our inference. Babysit fixes in place and pushes each wave before replying; it never says a fix returns to a build step.
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="babysit" path="skills/poteto-mode/playbooks/babysit.md"/>
+    </@source>
+  </@connector>
+
+  <@connector from="verify-and-land" to="delegate-build" label="verifier FAIL" inferred enforced="prompt">
+    <@when>A verifier posts FAIL.</@when>
+    <@by>model</@by>
+    <@how>
+      Our inference. Shipping says only that a changed patch needs a fresh verdict (git patch-id is compared).
+    </@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <playbook-ref of=pstack name="shipping" path="skills/poteto-mode/playbooks/shipping.md"/>
+    </@source>
+  </@connector>
+
+  <@connector from="learn-and-encode" to="route-and-restate" label="new checks and edited skills" inferred
+    outer enforced="prompt">
+    <@when>A later session loads the edited skills and the new checks run in CI.</@when>
+    <@by>human approves each skill edit</@by>
+    <@how>Our inference from what reflect and correct produce.</@how>
+    <@bound>none stated</@bound>
+    <@source>
+      <skill-ref of=pstack name="reflect" path="skills/reflect/SKILL.md"/>
+    </@source>
+  </@connector>
+</lane>

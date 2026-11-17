@@ -1,0 +1,52 @@
+export interface Input {
+  /** Unique on the page: it names the radio group and builds the ids. */
+  name: string;
+  tab: Marko.AttrTag<{ label: string; content?: Marko.Body }>;
+}
+
+<const/tabs=[...input.tab]/>
+<div class="panel-tabs">
+  <for|tab, i| of=tabs>
+    <input class="tab-radio" type="radio" name=`${input.name}:tab` id=`${input.name}:tab:${i}`
+      data-tab=tab.label.toLowerCase() data-i=i checked=i === 0>
+    <label class="tab-label" for=`${input.name}:tab:${i}`>${tab.label}</label>
+  </for>
+  <for|tab, i| of=tabs>
+    <div class="tab-pane" data-pane=i><${tab.content}/></div>
+  </for>
+</div>
+
+<style>
+  .tab-radio {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .tab-label {
+    display: inline-block;
+    margin: 0 0.25rem 0.6rem 0;
+    padding: 0.15rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+  .tab-radio:checked + .tab-label {
+    border-color: var(--fg);
+    color: var(--fg);
+    font-weight: 650;
+  }
+  .tab-radio:focus-visible + .tab-label {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .tab-pane {
+    display: none;
+  }
+  .panel-tabs:has(> .tab-radio[data-i="0"]:checked) > .tab-pane[data-pane="0"],
+  .panel-tabs:has(> .tab-radio[data-i="1"]:checked) > .tab-pane[data-pane="1"],
+  .panel-tabs:has(> .tab-radio[data-i="2"]:checked) > .tab-pane[data-pane="2"] {
+    display: block;
+  }
+</style>

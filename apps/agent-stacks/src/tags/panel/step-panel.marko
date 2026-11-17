@@ -1,0 +1,99 @@
+import type { Lane, Step } from "../../model/types";
+
+export interface Input {
+  lane: Lane;
+  step: Step;
+}
+
+static const LABELS = {
+  what: "What",
+  via: "Via",
+  actor: "Actor",
+  input: "Input",
+  output: "Output",
+  starts: "Starts",
+  gate: "Gate",
+  back: "Back",
+} as const;
+static const ORDER = ["what", "via", "actor", "input", "output", "starts", "gate", "back"] as const;
+
+<const/lane=input.lane/>
+<const/step=input.step/>
+<const/id=`${lane.id}/${step.id}`/>
+<section class="panel" id=id data-panel="step" data-group=step.group aria-label=step.title>
+  <header class="panel-head">
+    <a class="panel-close" href=`#${lane.id}`>Close</a>
+    <h3 class="panel-title">${step.title}</h3>
+    <p class="panel-phrase">${step.phrase}</p>
+    <if=step.human><chip tone="manual">human</chip></if>
+  </header>
+  <panel-tabs name=id>
+    <@tab label="Step">
+      <dl class="panel-fields">
+        <for|name| of=ORDER>
+          <if=step.fields[name]>
+            <panel-field label=LABELS[name]><${step.fields[name]}/></panel-field>
+          </if>
+        </for>
+        <if=step.handoffs.length>
+          <panel-field label="Hands off to">
+            <for|to, i| of=step.handoffs>
+              <if=i>, </if>
+              <a data-handoff=to href=`#${to}`>${to}</a>
+            </for>
+          </panel-field>
+        </if>
+      </dl>
+      <if=step.warning>
+        <callout title=step.warning.title><${step.warning.content}/></callout>
+      </if>
+    </@tab>
+    <@tab label="Anatomy">
+      <anatomy-tree rows=step.rows of=lane.source/>
+    </@tab>
+  </panel-tabs>
+</section>
+
+<style>
+  /* A panel shows when the link to it is the page's target, with no script. */
+  .panel {
+    display: none;
+  }
+  .panel:target {
+    display: block;
+  }
+  .panel-head {
+    margin-bottom: 0.75rem;
+  }
+  .panel-close {
+    float: right;
+    font-size: 0.8125rem;
+  }
+  .panel-title {
+    margin: 0;
+    font-size: 1.375rem;
+  }
+  .panel-phrase {
+    margin: 0 0 0.4rem;
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+  .panel-fields {
+    margin: 0;
+  }
+  .panel[data-group="plan"] .panel-title {
+    color: var(--plan-l);
+  }
+  .panel[data-group="build"] .panel-title {
+    color: var(--build-l);
+  }
+  .panel[data-group="check"] .panel-title {
+    color: var(--check-l);
+  }
+  .panel[data-group="ship"] .panel-title {
+    color: var(--ship-l);
+  }
+  .panel[data-group="learn"] .panel-title {
+    color: var(--learn-l);
+  }
+</style>

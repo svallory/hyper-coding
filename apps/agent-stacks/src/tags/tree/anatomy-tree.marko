@@ -1,0 +1,40 @@
+import type { Row, Source } from "../../model/types";
+
+export interface Input {
+  rows: Row[];
+  /** The stack the rows' files belong to; without it the rows are not linked. */
+  of?: Source;
+}
+
+<if=input.rows.length>
+  <ul class="tree">
+    <for|row| of=input.rows>
+      <tree-row row=row of=input.of/>
+    </for>
+  </ul>
+</if>
+<else>
+  <p class="tree-empty">No parts are listed for this step.</p>
+</else>
+
+<style>
+  .tree,
+  .tree-children {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .tree-children {
+    margin-left: 0.55rem;
+    padding-left: 0.6rem;
+    border-left: 1px solid var(--edge);
+  }
+  .tree-item {
+    margin: 0;
+    padding: 0.3rem 0 0;
+  }
+  .tree-empty {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+</style>
