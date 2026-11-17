@@ -4,6 +4,8 @@ FROM node:20-slim AS build
 COPY --from=oven/bun:1.3.11 /usr/local/bin/bun /usr/local/bin/bun
 WORKDIR /repo
 COPY . .
+# @babel/types is declared in the app only because the @marko/run CLI imports it without listing it;
+# the isolated install cannot reach it otherwise. Drop it once a fixed @marko/run is locked.
 RUN bun install --frozen-lockfile --ignore-scripts --filter agent-stacks
 WORKDIR /repo/apps/agent-stacks
 RUN bun run build
