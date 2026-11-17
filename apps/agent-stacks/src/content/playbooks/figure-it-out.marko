@@ -37,14 +37,14 @@ export type Input = LaneViewInput;
   <@step id="design-workflow" title="Design workflow" phrase="Atomic units, riskiest unknown first"
     group="plan">
     <@what>
-      Decompose into independently landable units. One-way-door decisions go to architect; mechanical work skips it. Decide what fans out, each worker in its own worktree or branch. "Write the designed phase list down. That list is what the human reviews."
+      Decompose into independently landable units. One-way-door decisions go to <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/>; mechanical work skips it. Decide what fans out, each worker in its own worktree or branch. "Write the designed phase list down. That list is what the human reviews."
     </@what>
     <@actor>Main agent</@actor>
     <@output>A written phase list, added to the todo list</@output>
     <@gate>None in code</@gate>
 
     <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
-      Designs the shape of a change that crosses a function boundary. It runs arena.
+      Designs the shape of a change that crosses a function boundary. It runs <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/>.
     </@row>
     <@row kind="skill" name="arena" path="skills/arena/SKILL.md" by="model, named in this step">
       Several runners on different models build the same thing; a cross-judge picks.
@@ -61,7 +61,7 @@ export type Input = LaneViewInput;
     </@row>
     <@row kind="skill" name="principle-laziness-protocol"
       path="skills/principle-laziness-protocol/SKILL.md" by="model; the step cites this principle">
-      No second arena over a settled design.
+      No second <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/> over a settled design.
     </@row>
   </@step>
 

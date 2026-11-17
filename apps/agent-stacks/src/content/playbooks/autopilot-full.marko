@@ -8,7 +8,7 @@ export type Input = LaneViewInput;
     "You own the verdicts, never the PRs. One owner carries each PR from build to merge, and nothing merges until your swarm, which never wrote the code, has proven the code that lands."
   </@summary>
   <@order label="Ends with" lead="owners merge verified PRs">
-    Reply: catch the operator up per the ketchup skill: each PR's state and verdict, what merged, countersigns and why, open operator gates, parked follow-ups, with links to each PR and the trails.
+    Reply: catch the operator up per the <skill-ref of=pstack name="ketchup" path="skills/ketchup/SKILL.md"/> skill: each PR's state and verdict, what merged, countersigns and why, open operator gates, parked follow-ups, with links to each PR and the trails.
   </@order>
 
   <@step id="operator-gates" title="Operator gates" phrase="The grant covers only queue items"
@@ -209,7 +209,7 @@ export type Input = LaneViewInput;
     <@when>Delegated work is left.</@when>
     <@by>the <tool-ref name="/loop"/> timer</@by>
     <@how>
-      A tick that changed something for the operator ends with a ketchup; one that changed nothing stays quiet.
+      A tick that changed something for the operator ends with a <skill-ref of=pstack name="ketchup" path="skills/ketchup/SKILL.md"/>; one that changed nothing stays quiet.
     </@how>
     <@bound>until no delegated work is left</@bound>
     <@source>

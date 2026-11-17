@@ -13,7 +13,7 @@ export type Input = LaneViewInput;
 
   <@step id="scope-decision" title="Scope decision" phrase="No decision means no prototype" group="plan">
     <@what>
-      Which layout, interaction or density; or for an empirical fork, which behaviour, timing or approach. "No decision means no prototype. Route to Feature."
+      Which layout, interaction or density; or for an empirical fork, which behaviour, timing or approach. "No decision means no prototype. Route to <playbook-ref of=pstack name="Feature" path="skills/poteto-mode/playbooks/feature.md"/>."
     </@what>
     <@actor>Main agent</@actor>
     <@output>The decision the prototype exists to make</@output>
@@ -68,13 +68,13 @@ export type Input = LaneViewInput;
   <@step id="recommend" title="Recommend" phrase="Decision plus the throwaway artifact" group="plan"
     human>
     <@what>
-      Present alternatives, tradeoffs and a recommendation. Hand the chosen direction to Feature, or to architect for the shape.
+      Present alternatives, tradeoffs and a recommendation. Hand the chosen direction to <playbook-ref of=pstack name="Feature" path="skills/poteto-mode/playbooks/feature.md"/>, or to <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> for the shape.
     </@what>
     <@actor>Main agent; the human decides</@actor>
     <@handoff to="feature"/>
 
     <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
-      Designs the shape of a change that crosses a function boundary. It runs arena.
+      Designs the shape of a change that crosses a function boundary. It runs <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/>.
     </@row>
   </@step>
 

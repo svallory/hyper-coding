@@ -76,7 +76,7 @@ export type Input = LaneViewInput;
   </@step>
 
   <@step id="opening-a-pr" title="Opening a PR" phrase="Run the shared PR playbook" group="ship">
-    <@what>"Run Opening a PR." "per component or per safe batch".</@what>
+    <@what>"Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>." "per component or per safe batch".</@what>
     <@actor>Main agent</@actor>
     <@output>A ready (not draft) PR</@output>
     <@gate>None in code</@gate>

@@ -8,11 +8,11 @@ export type Input = LaneViewInput;
     "You own the answer. Plan, route, write." Read-only: a cited explanation or a recommendation, not a code change.
   </@summary>
   <@order label="Ends with" lead="a reply; no PR">
-    Reply: the investigation output. For "are we sure?" answers, your real judgment with reasons; push back if the premise is wrong. "No PR, no babysit, no architect unless the investigation precedes a code change."
+    Reply: the investigation output. For "are we sure?" answers, your real judgment with reasons; push back if the premise is wrong. "No PR, no babysit, no <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> unless the investigation precedes a code change."
   </@order>
 
   <@step id="trace-code" title="Trace code" phrase="Read the code the question is about" group="plan">
-    <@what>Trace the code. For a motivation question, also route through the why skill.</@what>
+    <@what>Trace the code. For a motivation question, also route through the <skill-ref of=pstack name="why" path="skills/why/SKILL.md"/> skill.</@what>
     <@actor>Main agent</@actor>
     <@input>A question</@input>
     <@output>A trace with citations</@output>
@@ -28,7 +28,7 @@ export type Input = LaneViewInput;
 
   <@step id="checkpoint-line" title="Checkpoint line" phrase="One line: n/a, read-only" group="plan">
     <@what>
-      The throughput checkpoint that Feature writes as four items stays one line here: "throughput checkpoint: n/a, read-only investigation".
+      The throughput checkpoint that <playbook-ref of=pstack name="Feature" path="skills/poteto-mode/playbooks/feature.md"/> writes as four items stays one line here: "throughput checkpoint: n/a, read-only investigation".
     </@what>
     <@actor>Main agent</@actor>
   </@step>
@@ -44,7 +44,7 @@ export type Input = LaneViewInput;
 
   <@step id="unslop-reply" title="Unslop reply" phrase="Strip filler from the prose" group="check">
     <@what>
-      Apply the <skill-ref of=pstack name="unslop" path="skills/unslop/SKILL.md"/> skill to the reply. If the investigation was the first half of a code change: "hand back to the user and re-route to Bug fix or Feature".
+      Apply the <skill-ref of=pstack name="unslop" path="skills/unslop/SKILL.md"/> skill to the reply. If the investigation was the first half of a code change: "hand back to the user and re-route to <playbook-ref of=pstack name="Bug fix" path="skills/poteto-mode/playbooks/bug-fix.md"/> or <playbook-ref of=pstack name="Feature" path="skills/poteto-mode/playbooks/feature.md"/>".
     </@what>
     <@actor>Main agent</@actor>
     <@output>The reply</@output>

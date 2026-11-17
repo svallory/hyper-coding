@@ -5,7 +5,7 @@ export type Input = LaneViewInput;
 <lane ...input id="perf-issue" name="Perf issue" source=pstack>
   <@by><playbook-ref of=pstack name="perf-issue" path="skills/poteto-mode/playbooks/perf-issue.md"/></@by>
   <@summary>
-    "You own the measurement story." "Tie every fix to a measurement, don't read source instead of measuring." Sustained improvement belongs to Hillclimb.
+    "You own the measurement story." "Tie every fix to a measurement, don't read source instead of measuring." Sustained improvement belongs to <playbook-ref of=pstack name="Hillclimb" path="skills/poteto-mode/playbooks/hillclimb.md"/>.
   </@summary>
   <@order label="Ends with" lead="Opening a PR">
     Reply: baseline number, post-fix number, delta, artifact path.
@@ -44,14 +44,14 @@ export type Input = LaneViewInput;
   <@step id="plan-and-delegate" title="Plan and delegate" phrase="Architect if needed; subagent builds"
     group="build">
     <@what>
-      Plan the fix from the trace. Across a function boundary: architect first. A subagent on the configured perf-issue model implements; the main agent reviews the diff.
+      Plan the fix from the trace. Across a function boundary: <skill-ref of=pstack name="architect" path="skills/architect/SKILL.md"/> first. A subagent on the configured perf-issue model implements; the main agent reviews the diff.
     </@what>
     <@actor>
       Main agent leads; a <agent-ref of=pstack name="poteto-agent" path="agents/poteto-agent.md"/> subagent writes
     </@actor>
 
     <@row kind="skill" name="architect" path="skills/architect/SKILL.md" by="model, named in this step">
-      Designs the shape of a change that crosses a function boundary. It runs arena.
+      Designs the shape of a change that crosses a function boundary. It runs <skill-ref of=pstack name="arena" path="skills/arena/SKILL.md"/>.
     </@row>
     <@row kind="agent" name="poteto-agent" path="agents/poteto-agent.md" by="main agent, Task tool">
       Subagent type for any subagent a playbook step spawns. Background, fresh per task.
@@ -101,7 +101,7 @@ export type Input = LaneViewInput;
   </@step>
 
   <@step id="opening-a-pr" title="Opening a PR" phrase="Run the shared PR playbook" group="ship">
-    <@what>"Run Opening a PR."</@what>
+    <@what>"Run <playbook-ref of=pstack name="Opening a PR" path="skills/poteto-mode/playbooks/opening-a-pr.md"/>."</@what>
     <@actor>Main agent</@actor>
     <@output>A ready (not draft) PR</@output>
     <@gate>None in code</@gate>
