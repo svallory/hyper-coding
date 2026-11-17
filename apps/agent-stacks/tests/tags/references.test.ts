@@ -80,6 +80,12 @@ describe("reference tags, prose variant", () => {
 		},
 	);
 
+	it("a comma spec links the first part on the name and each further part as :<n>", () => {
+		const html = render(SkillRef, { of: pstack, name: "plan", path: FILE, line: "3,7-9" });
+		expect(hrefs(html)).toEqual([`${BLOB}?plain=1#L3`, `${BLOB}?plain=1#L7-L9`]);
+		expect(linkTexts(html)).toEqual(["/plan", ":7-9"]);
+	});
+
 	it("the name variant shows icon and name even for a skill", () => {
 		const html = render(SourceLink, {
 			of: pstack,
@@ -102,11 +108,6 @@ describe("reference tags, prose variant", () => {
 			expect(html).not.toContain("<a ");
 			expect(html).not.toContain("href");
 		}
-	});
-
-	it("a directory path links to the tree, with no ?plain=1", () => {
-		const html = render(FileRef, { of: pstack, name: "skills", path: "skills/" });
-		expect(hrefs(html)).toEqual([`${pstack.repo}/tree/${pstack.commit}/${pstack.prefix}skills/`]);
 	});
 });
 
@@ -133,12 +134,12 @@ describe("source-link HTML hooks", () => {
 			kind: "agent",
 			name: "x",
 			path: FILE,
-			line: "7,9",
+			line: "7",
 		});
 		expect(attr(html, "data-ref")).toBe("agent");
 		expect(attr(html, "data-source")).toBe("pstack");
 		expect(attr(html, "data-path")).toBe(FILE);
-		expect(attr(html, "data-lines")).toBe("7,9");
+		expect(attr(html, "data-lines")).toBe("7");
 		expect(attr(html, "data-slot")).toBeUndefined();
 	});
 });

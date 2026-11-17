@@ -26,7 +26,7 @@ export function lineLabel(part: LinePart): string {
 }
 
 /** A path ending with `/` names a directory (D22). */
-export function isDirectory(path: string): boolean {
+function isDirectory(path: string): boolean {
 	return path.endsWith("/");
 }
 

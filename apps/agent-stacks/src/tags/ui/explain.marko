@@ -5,8 +5,8 @@ export interface Input {
 }
 
 <id/uid/>
-<span class="explain">
-  <button/button class="explain-trigger" type="button" popovertarget=`${uid}-pop`
+<span/wrap class="explain">
+  <button class="explain-trigger" type="button" popovertarget=`${uid}-pop`
     aria-label=input.title title=input.title style=`anchor-name: --${uid}`>
     <ui-icon id="help"/>
   </button>
@@ -28,8 +28,9 @@ export interface Input {
     if (byHover && pop().matches(":popover-open")) pop().hidePopover();
     byHover = false;
   };
-  button().addEventListener("mouseenter", open);
-  button().addEventListener("mouseleave", close);
+  // The wrapper holds the trigger and the popover, so the pointer can move into the text.
+  wrap().addEventListener("mouseenter", open);
+  wrap().addEventListener("mouseleave", close);
   pop().addEventListener("toggle", (e) => {
     if ((e as ToggleEvent).newState === "closed") byHover = false;
   });
