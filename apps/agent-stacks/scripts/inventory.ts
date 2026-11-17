@@ -29,7 +29,16 @@ if (write) {
 			writeFileSync(expected, `${JSON.stringify(inventory, null, "\t")}\n`);
 			// The repository's formatter keeps short arrays on one line; the commit hook would
 			// apply it anyway, so apply it here and a second --write changes nothing.
-			spawnSync("bunx", ["biome", "format", "--write", expected], { cwd: app, stdio: "ignore" });
+			const r = spawnSync("bunx", ["biome", "format", "--write", expected], {
+				cwd: app,
+				stdio: ["ignore", "ignore", "inherit"],
+			});
+			if (r.error || r.status !== 0) {
+				console.error(
+					`inventory: could not format ${expected} with biome (exit ${r.status ?? r.signal}); the file is written but unformatted.`,
+				);
+				process.exit(1);
+			}
 		}
 	}
 }
