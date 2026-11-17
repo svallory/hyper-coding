@@ -120,11 +120,6 @@ export interface Lane {
 /** One attribute tag: its own attributes, its body as `content`. A repeated tag is iterable. */
 export type Tag<T = object> = Marko.AttrTag<T & { content?: Marko.Body }>;
 
-export interface RawWarning {
-	title: string;
-	content?: Marko.Body;
-}
-
 export interface RawRow {
 	/** A choice group: its label; the child rows are the alternatives. */
 	choice?: string;

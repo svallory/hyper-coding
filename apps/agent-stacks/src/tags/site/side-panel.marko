@@ -29,7 +29,13 @@ export interface Input {
 
   const panelFor = (href: string | null): HTMLElement | null => {
     if (!href || href[0] !== "#") return null;
-    const el = document.getElementById(decodeURIComponent(href.slice(1)));
+    let id: string;
+    try {
+      id = decodeURIComponent(href.slice(1));
+    } catch {
+      return null;
+    }
+    const el = document.getElementById(id);
     return el && el.classList.contains("panel") && root().contains(el) ? el : null;
   };
   const current = (): HTMLElement | null => panelFor(location.hash);
@@ -39,7 +45,7 @@ export interface Input {
     const target = current();
     const selected = target ? `#${target.id}` : "";
     for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>("a[data-step], a[data-connector]"))) {
-      if (selected && decodeURIComponent(a.getAttribute("href") ?? "") === selected) {
+      if (selected && panelFor(a.getAttribute("href")) === target) {
         a.setAttribute("aria-current", "true");
         a.scrollIntoView({ block: "nearest", inline: "nearest" });
       } else a.removeAttribute("aria-current");
@@ -95,8 +101,10 @@ export interface Input {
   const apply = (size: number) => {
     const limits = sheet.matches ? [160, innerHeight * 0.85] : [240, Math.min(720, innerWidth * 0.7)];
     const px = clamp(Math.round(size), limits[0], limits[1]);
-    root().style.setProperty(sheet.matches ? "--sheet-h" : "--aside-w", `${px}px`);
-    if (!sheet.matches) document.documentElement.style.setProperty("--aside-w", `${px}px`);
+    // On the root, so the page's own padding (main) sees it too.
+    document.documentElement.style.setProperty(sheet.matches ? "--sheet-h" : "--aside-w", `${px}px`);
+    handle.setAttribute("aria-valuemin", String(Math.round(limits[0])));
+    handle.setAttribute("aria-valuemax", String(Math.round(limits[1])));
     handle.setAttribute("aria-orientation", sheet.matches ? "horizontal" : "vertical");
     handle.setAttribute("aria-valuenow", String(px));
     return px;
@@ -125,10 +133,14 @@ export interface Input {
     const up = () => {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      handle.removeEventListener("lostpointercapture", up);
       save(last);
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
+    handle.addEventListener("lostpointercapture", up);
   }, { signal: $signal });
   handle.addEventListener("keydown", (e) => {
     const grow = sheet.matches ? "ArrowUp" : "ArrowLeft";
